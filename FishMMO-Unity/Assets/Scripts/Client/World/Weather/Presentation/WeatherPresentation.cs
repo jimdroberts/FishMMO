@@ -305,7 +305,7 @@ namespace FishMMO.Client
 
 			GlobalsMarker.Begin();
 			WeatherShaderGlobals.Apply(shown, hasContext ? context.Cover : default, hasContext ? context.Temperature : 0f, shelter, time, LightningFlash,
-				hasContext ? context.Substance : null, target[WeatherChannel.WindSpeed]);
+				hasContext ? context.Substance : null);
 			WeatherShaderGlobals.ApplyTier(tier.TerrainSnowDisplacement);
 			// The moss layer (FishMoss.hlsl): how damp the biome under the camera keeps its rock and timber, eased so an
 			// ecotone fades it rather than switching it, and which way is poleward (the shaded side of a wall).

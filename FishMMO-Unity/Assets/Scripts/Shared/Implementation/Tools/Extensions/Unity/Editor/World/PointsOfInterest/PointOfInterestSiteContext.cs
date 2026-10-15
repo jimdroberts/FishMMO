@@ -68,6 +68,9 @@ namespace FishMMO.Shared.WorldDesign
 		public SceneWater Water;
 		/// <summary>The ground at (east, north), scene metres.</summary>
 		public Func<float, float, float> GroundAt;
+		/// <summary>The scene's terrain tiles (null in a harness) and their plan, for the ground a building is dug into (<see cref="AddProp"/>).</summary>
+		public Terrain[,] Terrains;
+		public TerrainTilePlan Tiles;
 		/// <summary>
 		/// True over open sky: a cloud world's terrain holes, where <see cref="GroundAt"/> still answers (the void is filled
 		/// with its islands' rim heights) but nothing can stand. Null where every hole is a cave's or a wall's, not sky.
@@ -94,6 +97,8 @@ namespace FishMMO.Shared.WorldDesign
 			public float Scale;
 			public StructureDoorMotion Motion;
 			public bool StartsOpen;
+			/// <summary>The building's origin's height (its ground line), where its own steps up to the door start.</summary>
+			public float Base;
 		}
 
 		/// <summary>One room of a building laid at the site: the room in the building's frame, where the building stands, and its doors.</summary>
@@ -161,6 +166,7 @@ namespace FishMMO.Shared.WorldDesign
 						Scale = Mathf.Abs(scale.y),
 						Motion = door.Motion,
 						StartsOpen = door.StartsOpen,
+						Base = position.y,
 					});
 				}
 				IReadOnlyList<StructureDoor> pieceDoors = StructurePieces.DoorsOf(doorPiece, doorVariant);
@@ -175,6 +181,11 @@ namespace FishMMO.Shared.WorldDesign
 						Doors = pieceDoors,
 						Building = doorPiece.Id,
 					});
+					// Its floor clear of the ground: a building seated on a slope had the hillside up through its floor.
+					if (Terrains != null)
+					{
+						PointOfInterestTerrain.DigUnder(Terrains, Tiles, room, position, rotation, Mathf.Abs(scale.y));
+					}
 				}
 			}
 			// What the piece gives off (a chimney's smoke, a fire, a forge, a lantern), where it now stands.

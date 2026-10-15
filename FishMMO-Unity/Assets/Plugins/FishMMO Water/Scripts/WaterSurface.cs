@@ -28,7 +28,7 @@ namespace FishMMO.Water
 	[ExecuteAlways]
 	[AddComponentMenu("FishMMO/Water/Water Surface")]
 	[RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
-	public sealed class WaterSurface : MonoBehaviour, SurfaceWater.ISource
+	public sealed class WaterSurface : MonoBehaviour, SurfaceWater.IWaveSource
 	{
 		// ── Shader globals ────────────────────────────────────────────
 		private static readonly int WaveId = Shader.PropertyToID("_FishWaterWave");
@@ -735,6 +735,8 @@ namespace FishMMO.Water
 		float SurfaceWater.ISource.WaveHeight => SignificantWaveHeight;
 
 		bool SurfaceWater.ISource.IsUnder(Vector3 point) => isActiveAndEnabled && IsUnderSurface(point);
+
+		float SurfaceWater.IWaveSource.SurfaceAt(float x, float z) => isActiveAndEnabled ? HeightAt(new Vector3(x, SeaLevel, z)) : SeaLevel;
 
 		private WaterEnvironment environment;
 

@@ -771,7 +771,98 @@ namespace FishMMO.Shared
 			networkManager.ClientManager.RegisterBroadcast<AbilityObjectDestroyedBroadcast>(OnAbilityObjectDestroyedBroadcast);
 			networkManager.ClientManager.RegisterBroadcast<AbilityLearnedObserverBroadcast>(OnAbilityLearnedObserverBroadcast);
 			networkManager.ClientManager.RegisterBroadcast<AbilityForgottenObserverBroadcast>(OnAbilityForgottenObserverBroadcast);
+			// A second handler beside the nameplate's (FishNet keeps a list per broadcast): the caster's body acts it out.
+			networkManager.ClientManager.RegisterBroadcast<CharacterCastBroadcast>(OnCastAnimationBroadcast);
+			OnObservedActivationCatchUp += OnCastAnimationCatchUp;
 			activationBroadcastRegistered = true;
+		}
+
+		/// <summary>A cast another character began or ended: its body swings, casts, guards or rolls (<see cref="AnimateObservedCast"/>).</summary>
+		private static void OnCastAnimationBroadcast(CharacterCastBroadcast msg, Channel channel)
+		{
+			AnimateObservedCast(msg, live: true);
+		}
+
+		/// <summary>A cast already running when this client began watching its caster: only a held guard is still worth showing.</summary>
+		private static void OnCastAnimationCatchUp(CharacterCastBroadcast msg)
+		{
+			AnimateObservedCast(msg, live: false);
+		}
+
+		/// <summary>
+		/// Acts out, on a client that only watches the caster, what <see cref="TryStartAbility"/> acts out on the caster's own
+		/// peers (<see cref="TriggerAbilityAnimation"/>): the ability's type picks a swing, a cast, the guard or a roll.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>From the cast broadcast every observer already receives</b> (sent from the activation state machine for every
+		/// start and every ending, self-buffs and instants included), so nothing new goes on the wire. The type is READ from
+		/// the ability this client holds for the caster, as the nameplate reads its name and duration.
+		/// </para>
+		/// <para>
+		/// An ability this client cannot resolve (learned before it started watching and not yet announced, or an NPC's set it
+		/// never received) still shows: as a swing, the commonest thing anyone does. An ending lowers a guard; a consumable
+		/// plays nothing (there is no drinking clip yet). A cast caught up part-way (<paramref name="live"/> false) only raises
+		/// a guard still being held: replaying a swing that has finished would be a second swing.
+		/// </para>
+		/// </remarks>
+		internal static void AnimateObservedCast(CharacterCastBroadcast msg, bool live)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted || msg.IsConsumable)
+			{
+				return;
+			}
+			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CasterObjectID, out NetworkObject casterNob) ||
+				casterNob == null || casterNob.IsOwner)
+			{
+				return;
+			}
+			AbilityController controller = casterNob.GetComponent<AbilityController>();
+			if (controller == null || controller.Character == null ||
+				!controller.Character.TryGet(out ICharacterAnimationController animation))
+			{
+				return;
+			}
+			if (!msg.Started)
+			{
+				animation.SetBlocking(false);
+				return;
+			}
+			AbilityType type = controller.TryGetAbilityForVisuals(msg.ReferenceID, out Ability ability)
+				? ability.EffectiveType
+				: AbilityType.Physical;
+			if (!live && type != AbilityType.Block)
+			{
+				return;
+			}
+			ActOut(animation, type);
+		}
+
+		/// <summary>The animation an ability of <paramref name="type"/> plays on its caster.</summary>
+		internal static void ActOut(ICharacterAnimationController animation, AbilityType type)
+		{
+			switch (type)
+			{
+				case AbilityType.Physical:
+				case AbilityType.GroundedPhysical:
+				case AbilityType.AerialPhysical:
+					animation.TriggerAttack();
+					break;
+				case AbilityType.Magic:
+				case AbilityType.GroundedMagic:
+				case AbilityType.AerialMagic:
+					animation.TriggerCast();
+					break;
+				case AbilityType.Block:
+					animation.SetBlocking(true);
+					break;
+				case AbilityType.Roll:
+					animation.TriggerRoll();
+					break;
+				default:
+					break;
+			}
 		}
 
 		/// <summary>

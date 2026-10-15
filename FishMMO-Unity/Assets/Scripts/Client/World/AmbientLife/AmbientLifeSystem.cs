@@ -39,6 +39,12 @@ namespace FishMMO.Client
 	/// a few a frame, the near families (birds alone, bats, critters) only within their short reach.
 	/// </para>
 	/// <para>
+	/// <b>Dressed for their biome.</b> Each group wears one of the looks of the biome it is placed in (<see cref="AmbientLooks"/>,
+	/// from <see cref="FloraPaletteMap"/>): the same twelve the grass and flowers there are drawn in, moved by the world's
+	/// star and air, so a rabbit is sandy on the steppe and russet in the beech wood, and a frozen moon's beetles wear its
+	/// own colours. One float4 an instance beside the tint; the shader swaps the mesh's colour roles for the look's.
+	/// </para>
+	/// <para>
 	/// <b>Hooked like the sea life</b>: a static system started after the first scene loads, driven by the render
 	/// pipeline's callbacks; its settings on the Weather Render Profile ("Ambient life"), its shader referenced there
 	/// so a client build includes it.
@@ -66,6 +72,11 @@ namespace FishMMO.Client
 		private static readonly int SwarmStyleId = Shader.PropertyToID("_SwarmStyle");
 		private static readonly int BugSizeId = Shader.PropertyToID("_BugSize");
 		private static readonly int GlowColourId = Shader.PropertyToID("_GlowColour");
+		private static readonly int LookId = Shader.PropertyToID("_Look");
+		private static readonly int LookMixId = Shader.PropertyToID("_LookMix");
+		private static readonly int OwnBackId = Shader.PropertyToID("_OwnBack");
+		private static readonly int OwnBellyId = Shader.PropertyToID("_OwnBelly");
+		private static readonly int OwnAccentId = Shader.PropertyToID("_OwnAccent");
 
 		/// <summary>The project's shader, for the editor when the profile does not reference it yet.</summary>
 		public const string ShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishAmbientLife.shader";
@@ -123,6 +134,11 @@ namespace FishMMO.Client
 		private static readonly Matrix4x4[] matrices = new Matrix4x4[Batch];
 		private static readonly Vector4[] anims = new Vector4[Batch];
 		private static readonly Vector4[] tints = new Vector4[Batch];
+		private static readonly Vector4[] looks = new Vector4[Batch];
+		// The biome looks the placed groups wear were chosen from: re-placed when they change (a scene's palette is
+		// built a frame or so after it loads, and again when the looks are switched off or on).
+		private static string placedLooks;
+		private static bool placedLooksOn;
 		private static MaterialPropertyBlock block;
 		private static readonly Plane[] planes = new Plane[6];
 		private static readonly AmbientThreats threats = new AmbientThreats();
@@ -330,6 +346,17 @@ namespace FishMMO.Client
 			}
 			EnsureLooks(shader);
 			float cellMetres = Mathf.Max(16f, settings.CellMetres);
+			// Each group takes its look when it is placed: once the scene's biome looks are built (or switched), the
+			// cells are placed again so every group wears its biome's. Only the cells: the perches stand.
+			bool looksOn = world.LooksAvailable;
+			string looksBuilt = FloraPaletteMap.Describe();
+			if (looksOn != placedLooksOn || (looksOn && !ReferenceEquals(looksBuilt, placedLooks)))
+			{
+				placedLooksOn = looksOn;
+				placedLooks = looksBuilt;
+				cells.Clear();
+				countedSeed = 0;
+			}
 			if (scenesChanged || world.SceneSeed != placedSeed || cellMetres != placedCellMetres)
 			{
 				scenesChanged = false;
@@ -376,13 +403,20 @@ namespace FishMMO.Client
 		private static string Census()
 		{
 			var counts = new int[Kinds.Length];
-			int animals = 0;
+			int animals = 0, dressed = 0, groups = 0;
+			var variants = new int[BiomeLooks.Variants];
 			foreach (Cell cell in cells.Values)
 			{
 				foreach (AmbientGroup g in cell.Groups)
 				{
 					counts[g.Kind]++;
 					animals += g.Count;
+					groups++;
+					if (AmbientLooks.Has(g.Look))
+					{
+						dressed++;
+						variants[Mathf.Min(g.LookVariant, variants.Length - 1)]++;
+					}
 				}
 			}
 			var parts = new List<string>();
@@ -390,7 +424,8 @@ namespace FishMMO.Client
 			{
 				parts.Add($"{Kinds[k].Name} {counts[k]} (about: {activity[k]:0.00})");
 			}
-			return $"{cells.Count} cells placed: {animals} animals in groups of {string.Join(", ", parts)}";
+			string dressing = dressed > 0 ? $"{dressed}/{groups} groups in their biome's looks (by look: {string.Join(" ", variants)})" : "no biome looks (kinds' own colours)";
+			return $"{cells.Count} cells placed: {animals} animals in groups of {string.Join(", ", parts)}; {dressing}";
 		}
 
 		/// <summary>The moment, from the weather at the viewer (a mild clear day where there is no weather).</summary>
@@ -496,6 +531,11 @@ namespace FishMMO.Client
 				m.SetFloat(DihedralId, DihedralOf(kind.Shape));
 				m.SetFloat(SmoothnessId, kind.Smoothness);
 				m.SetVector(ShoulderId, new Vector4(shoulder.x, shoulder.y, shoulder.z, shoulder.z + 0.07f));
+				// The biome looks (AmbientLooks): how far this kind takes them, and its own colours the mesh's roles swap out.
+				m.SetVector(LookMixId, AmbientLooks.MixOf(kind).Shader);
+				m.SetVector(OwnBackId, (Vector4)kind.Back.linear);
+				m.SetVector(OwnBellyId, (Vector4)kind.Belly.linear);
+				m.SetVector(OwnAccentId, (Vector4)kind.Accent.linear);
 				if (kind.Shape == AmbientShape.Swarm)
 				{
 					// A swarm's insects are drawn at their own size (no SizeScale: that widens the cloud), and a firefly's light.
@@ -823,6 +863,7 @@ namespace FishMMO.Client
 						matrices[i] = Mathf.Approximately(grow, 1f) ? a.Matrix : a.Matrix * Matrix4x4.Scale(Vector3.one * grow);
 						anims[i] = a.Anim;
 						tints[i] = settings.DebugHighlight ? new Vector4(1f, 0f, 1f, a.Tint.w) : a.Tint;
+						looks[i] = settings.DebugHighlight ? Vector4.zero : a.Look;
 						if (shadows && !anyNear && ((Vector3)a.Matrix.GetColumn(3) - drawnEye).sqrMagnitude <= shadowSq)
 						{
 							anyNear = true;
@@ -831,6 +872,7 @@ namespace FishMMO.Client
 					block.Clear();
 					block.SetVectorArray(AnimId, anims);
 					block.SetVectorArray(TintId, tints);
+					block.SetVectorArray(LookId, looks);
 					Graphics.DrawMeshInstanced(meshes[k], 0, materials[k], matrices, count, block,
 						anyNear ? ShadowCastingMode.On : ShadowCastingMode.Off, true, 0, camera);
 				}
@@ -1048,6 +1090,16 @@ namespace FishMMO.Client
 			/// <summary>The blade grass standing there (GrassBladeSystem's cover map), for open-ground foraging.</summary>
 			public float CoverAt(float x, float z) => GrassBladeSystem.CoverAt(x, z);
 
+			/// <summary>Whether the scene's biome looks are built and switched on (<see cref="FloraPaletteMap"/>).</summary>
+			public bool LooksAvailable => FloraPaletteMap.Enabled && FloraPaletteMap.LookAt(Vector3.zero, out _);
+
+			/// <summary>The looks of the biome at a place: the same the grass and flowers there are drawn in.</summary>
+			public bool LookAt(Vector3 position, out BiomeLooks.Look look)
+			{
+				look = null;
+				return FloraPaletteMap.Enabled && FloraPaletteMap.LookAt(position, out look);
+			}
+
 			/// <summary>Metres past a point of interest's radius its people's (or its ruins') animals still count as at home.</summary>
 			private const float SiteMargin = 30f;
 
@@ -1085,11 +1137,7 @@ namespace FishMMO.Client
 				}
 				if (!habitats.TryGetValue(template, out habitat))
 				{
-					habitat = (template.Atmosphere & BiomeAtmosphereRequirement.Standard) == 0 ? AmbientHabitat.Barren : AmbientGating.HabitatOf(template.name);
-					if (habitat == AmbientHabitat.None)
-					{
-						habitat = AmbientGating.HabitatOf(template.ResolvedDisplayName);
-					}
+					habitat = AmbientGating.HabitatOfBiome(template.name, template.ResolvedDisplayName, template.Atmosphere);
 					habitats[template] = habitat;
 				}
 				if (habitat == AmbientHabitat.None)

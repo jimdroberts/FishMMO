@@ -106,7 +106,7 @@ namespace FishMMO.RenderScratch
 
 		/// <summary>Path of the race model the character preview photographs.</summary>
 		public const string PREVIEW_MODEL_PATH =
-			"Assets/Prefabs/Client/Models/EthanCharacter/Prefabs/Ethan.prefab";
+			"Assets/Prefabs/Client/Models/TestHuman/TestHuman.prefab";
 
 		/// <summary>Height of the stand-in used when that model is missing, in metres.</summary>
 		private const float PREVIEW_STANDIN_HEIGHT = 1.8f;

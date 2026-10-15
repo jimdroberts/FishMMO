@@ -42,7 +42,7 @@ namespace FishMMO.Water
 		public bool DriveWind = true;
 		[Tooltip("Scales the wind the weather reports, for a sheltered bay or an exposed cape.")]
 		[Range(0f, 2f)] public float Fetch = 1f;
-		[Tooltip("How quickly the sea answers a change in the wind. A real sea takes hours.")]
+		[Tooltip("How quickly the sea answers a change in the wind, per world second: its memory of the wind is 1 / this, the same on every client.")]
 		[Range(0.01f, 2f)] public float Responsiveness = 0.15f;
 		[Tooltip("Let an unstable, stormy sky raise the sea and sharpen its crests.")]
 		public bool DriveStorms = true;
@@ -90,14 +90,7 @@ namespace FishMMO.Water
 		private WorldSceneSettings settings;
 		private float windSpeed;
 		private float windHeading;
-		private bool primed;
-		private bool seaPrimed;
-		// The world clock at the last weather step, hours (NaN before one): the sea eases in world time.
-		private double easedHours = double.NaN;
-		private float fetchHeading = float.NaN;
-		private WorldBody fetchBody;
-		// The fetch at whole bins of heading, for PeakPeriodAt: a pure function of the heading, where the
-		// eased sea's own fetch is re-measured wherever its wind happened to have swung to.
+		// The fetch at whole bins of heading (FetchToward): a pure function of the heading.
 		private readonly System.Collections.Generic.Dictionary<int, float> fetchByBin = new System.Collections.Generic.Dictionary<int, float>();
 		private WorldBody fetchBinsBody;
 		private WorldSceneSettings fetchBinsSettings;
@@ -130,9 +123,8 @@ namespace FishMMO.Water
 		{
 			surface = GetComponent<WaterSurface>();
 			meshRenderer = GetComponent<MeshRenderer>();
-			primed = false;
-			seaPrimed = false;
-			easedHours = double.NaN;
+			windAtKnot.Clear();
+			windKnotSeconds = double.NaN;
 			settings = null;
 			tideSettings = null;
 			tideLava = surface != null && surface.IsLava;
@@ -262,11 +254,11 @@ namespace FishMMO.Water
 		/// (SurfaceAirDrift), and its slow sinking. The shader multiplied the eased wind by the sea's
 		/// clock, so the motes slid whenever the wind changed, and stood elsewhere for every player.
 		/// </summary>
-		private static void PublishMoteDrift(SolarSystemProfile system, WorldBody body, float latitude)
+		private void PublishMoteDrift(SolarSystemProfile system, WorldBody body, float latitude)
 		{
 			double seconds = WorldMotion.Seconds;
-			WindBelts belts = WindBelts.For(PlanetAir.For(system, body));
-			SurfaceAirDrift.At(WeatherDriver.WorldSeed, latitude, belts, MoteCurrentShare, seconds, out double x, out double z, out _);
+			// The scene's own air, with what its author and its runtime air add: the same sum the fog and the clouds ride.
+			SurfaceAirDrift.At(WeatherField.SceneAir(gameObject.scene, seconds), MoteCurrentShare, seconds, out double x, out double z, out _);
 			Shader.SetGlobalVector(MoteDriftId, new Vector4(
 				(float)WorldMotion.Repeat(x, MoteWrapMetres),
 				(float)WorldMotion.Repeat(-MoteSinkSpeed * seconds, MoteWrapMetres),
@@ -290,138 +282,196 @@ namespace FishMMO.Water
 			return Mathf.Clamp(SurfacePhysics.Gravity(body), 0.05f, 30f);
 		}
 
-		/// <summary>
-		/// Seconds the sea's easing moves by this step: the world's own, so it keeps the world's pace (still
-		/// when held, quick when raced) and a clock set either way lands it at the new sea at once, as the
-		/// set moves everything else. Held, the frame's real time instead, so a change made by hand to a
-		/// held world (an override, the bed) still settles rather than sticking half-way.
-		/// </summary>
-		private float EaseSeconds(double hours)
+		// ── The sea state, a pure function of the world clock ──────────────
+		//
+		// 2026-10-15 ("everything needs to be deterministic and properly driven by WorldTime"): the sea was eased per client
+		// on its own frame steps from whatever wind it had last held, a client that joined snapped to the wind of the
+		// moment while the others lagged it, and its fetch was re-measured whenever its own eased heading swung twelve
+		// degrees past the last — so two players on one coast could see different seas, surf and breakers for as long as
+		// they played. Every figure below is now worked out from the moment alone: the sea's memory of the wind is a
+		// weighted average over fixed knots of the world clock, and the fetch is drawn between fixed bins of heading.
+
+		/// <summary>The sea's state at a moment: what every player's sea shows then.</summary>
+		private struct SeaState
 		{
-			double last = easedHours;
-			easedHours = hours;
-			double world = double.IsNaN(last) ? 0.0 : System.Math.Abs(hours - last) * 3600.0;
-			return world > 0.0 ? (float)System.Math.Min(world, 1e6) : Time.deltaTime;
+			public float Wind, Heading, Fetch, Height, Period, Storm, Cover;
+		}
+
+		/// <summary>Weights in the sea's memory of the wind: knots back to where the oldest weighs e^-6 of the newest.</summary>
+		private const int MemoryKnots = 12;
+
+		/// <summary>The sea's memory's knot spacing, world seconds: half its time constant (1 / <see cref="Responsiveness"/>).</summary>
+		private double MemoryKnotSeconds => System.Math.Max(0.25, 0.5 / System.Math.Max(0.01f, Responsiveness));
+
+		/// <summary>The wind sampled at each knot of the world clock, by knot: a pure function of the knot, kept while asked about.</summary>
+		private readonly System.Collections.Generic.Dictionary<long, Vector2> windAtKnot = new System.Collections.Generic.Dictionary<long, Vector2>();
+		private double windKnotSeconds = double.NaN;
+		private uint windRevision;
+
+		/// <summary>
+		/// The sustained wind over this sea at a world moment, m/s (blowing toward): the scene's open air with what its
+		/// author and its runtime air add (<see cref="WeatherField.OpenAirWithOffsets"/>), not a storm's gusts — a sea is
+		/// hours of wind over kilometres of fetch and does not answer a gust. The world's own air where the scene has no
+		/// weather registered (an editor preview).
+		/// </summary>
+		private bool AirAt(double worldSeconds, out WeatherDriver.Synoptic air)
+		{
+			var position = new Vector2(transform.position.x, transform.position.z);
+			if (WeatherQuery.TryGetTimeline(gameObject.scene, out WeatherTimeline timeline)
+				&& WeatherField.OpenAirWithOffsets(timeline, settings, position, worldSeconds, out air))
+			{
+				return true;
+			}
+			float latitude = settings != null ? settings.Latitude : 0f;
+			air = WeatherDriver.Sample(WeatherDriver.WorldSeed, position, worldSeconds, latitude, 0.5f);
+			return true;
+		}
+
+		private Vector2 WindAtKnot(long knot, double spacing)
+		{
+			uint revision = WeatherQuery.TryGetTimeline(gameObject.scene, out WeatherTimeline timeline) ? timeline.Revision : 0u;
+			if (spacing != windKnotSeconds || revision != windRevision || windAtKnot.Count > 4 * MemoryKnots)
+			{
+				// Another memory, or the scene's air was changed: what was kept was of another wind.
+				windAtKnot.Clear();
+				windKnotSeconds = spacing;
+				windRevision = revision;
+			}
+			if (!windAtKnot.TryGetValue(knot, out Vector2 wind))
+			{
+				AirAt(knot * spacing, out WeatherDriver.Synoptic air);
+				wind = air.Wind;
+				windAtKnot[knot] = wind;
+			}
+			return wind;
+		}
+
+		/// <summary>
+		/// The sea's memory of the wind at a knot: the winds at it and the <see cref="MemoryKnots"/> before it, weighted
+		/// down exponentially into the past — a function of the knot alone, so every machine agrees. Speed and the wind's
+		/// way (the vector) are remembered apart, so a wind that backs does not read as a calm.
+		/// </summary>
+		private void MemoryAtKnot(long knot, double spacing, out float speed, out Vector2 way)
+		{
+			const double Decay = 0.6065306597126334; // e^-0.5: one knot is half the time constant
+			double weight = 1.0, total = 0.0, sumSpeed = 0.0;
+			Vector2 sumWay = Vector2.zero;
+			for (int i = 0; i <= MemoryKnots; i++)
+			{
+				Vector2 wind = WindAtKnot(knot - i, spacing);
+				sumSpeed += weight * wind.magnitude;
+				sumWay += (float)weight * wind;
+				total += weight;
+				weight *= Decay;
+			}
+			speed = (float)(sumSpeed / total);
+			way = sumWay / (float)total;
+		}
+
+		/// <summary>The sea at a moment of world time: its sustained wind and heading, fetch, height, period, roughness and cloud over it.</summary>
+		private SeaState SeaAt(double worldSeconds)
+		{
+			var state = new SeaState();
+			float speed;
+			Vector2 way;
+			if (WindOverride >= 0f)
+			{
+				speed = WindOverride;
+				way = Vector2.up;
+			}
+			else
+			{
+				// Between the memories at the two knots either side of the moment, so it moves smoothly.
+				double spacing = MemoryKnotSeconds;
+				long knot = (long)System.Math.Floor(worldSeconds / spacing);
+				float t = (float)((worldSeconds - knot * spacing) / spacing);
+				MemoryAtKnot(knot, spacing, out float speedA, out Vector2 wayA);
+				MemoryAtKnot(knot + 1, spacing, out float speedB, out Vector2 wayB);
+				speed = Mathf.Lerp(speedA, speedB, t) * Mathf.Max(0f, Fetch);
+				way = Vector2.Lerp(wayA, wayB, t);
+			}
+			state.Wind = speed;
+			state.Heading = HeadingOverride >= 0f ? Mathf.Repeat(HeadingOverride, 360f)
+				: way.sqrMagnitude > 1e-6f ? Mathf.Repeat(Mathf.Atan2(way.x, way.y) * Mathf.Rad2Deg, 360f) : 0f;
+
+			AirAt(worldSeconds, out WeatherDriver.Synoptic now);
+			/* An unstable, low-pressure sky is a rough sea. Wave height and steepness both go up, which is the
+			 * difference between a swell and a storm running: the same wind under a settled high makes a far gentler
+			 * sea than under a deepening low. */
+			state.Storm = Mathf.Clamp01(now.Instability * 0.7f + Mathf.Clamp01(-now.Pressure) * 0.5f);
+			state.Cover = Mathf.Clamp01(now.Mesoscale * WeatherDriver.MesoscaleAmplitude);
+
+			float gravity = surface != null ? surface.Gravity : WaterWaves.EarthGravity;
+			state.Fetch = FetchToward(state.Heading);
+			float local = WaterSeaState.SignificantHeight(state.Wind, state.Fetch, gravity);
+			/* Swell from weather elsewhere, combined in quadrature because the two are independent wave fields and it is
+			 * their ENERGIES that add. Without it an offshore wind leaves a mirror-flat sea, and no real coast is ever that. */
+			state.Height = Mathf.Sqrt(local * local + SwellMetres * SwellMetres);
+			state.Period = PeriodOf(state.Wind, state.Fetch, gravity, local);
+			return state;
+		}
+
+		/// <summary>
+		/// Open water upwind for a heading, m: measured at whole bins of heading (<see cref="FetchBinDegrees"/>) and drawn
+		/// between the two either side, so it is a smooth function of the heading alone — never a record of the heading
+		/// some client's wind last swung past.
+		/// </summary>
+		private float FetchToward(float heading)
+		{
+			WorldBody body = WorldDayNightCycle.BodyFor(settings);
+			if (fetchBinsBody != body || fetchBinsSettings != settings)
+			{
+				fetchByBin.Clear();
+				fetchBinsBody = body;
+				fetchBinsSettings = settings;
+			}
+			int bins = Mathf.RoundToInt(360f / FetchBinDegrees);
+			float at = Mathf.Repeat(heading, 360f) / FetchBinDegrees;
+			int lo = Mathf.FloorToInt(at) % bins, hi = (lo + 1) % bins;
+			return Mathf.Lerp(FetchOfBin(body, lo), FetchOfBin(body, hi), at - Mathf.Floor(at));
+		}
+
+		private float FetchOfBin(WorldBody body, int bin)
+		{
+			if (!fetchByBin.TryGetValue(bin, out float fetch))
+			{
+				fetch = MeasureFetch(body, settings, bin * FetchBinDegrees);
+				fetchByBin[bin] = fetch;
+			}
+			return fetch;
 		}
 
 		private void ApplyWeather(float latitude, double hours)
 		{
-			float ease = Mathf.Clamp01(EaseSeconds(hours) * Responsiveness);
-			/* The prevailing synoptic field: banded by latitude, drifting with the world clock, the
-			 * same numbers the clouds and the weather director run on. Nothing is random, so two
-			 * clients looking at the same coast at the same moment see the same sea.
-			 *
-			 * The SUSTAINED wind, not a storm cell's gusts, and that is physics rather than
-			 * convenience: a fully developed sea is hours of wind over kilometres of fetch and does
-			 * not answer a gust that lasts ten seconds. The gusts are already in the picture, as
-			 * the patches of ruffled water the shader drags across the surface. */
-			var position = new Vector2(transform.position.x, transform.position.z);
-			WeatherDriver.Synoptic air = WeatherDriver.Sample(
-				WeatherDriver.WorldSeed, position, hours * 3600.0, latitude, 0.5f);
-
+			SeaState sea = SeaAt(hours * 3600.0);
 			if (DriveWind)
 			{
-				float speed = WindOverride >= 0f ? WindOverride : air.Wind.magnitude * Mathf.Max(0f, Fetch);
-				float heading = HeadingOverride >= 0f
-					? Mathf.Repeat(HeadingOverride, 360f)
-					: Mathf.Repeat(Mathf.Atan2(air.Wind.x, air.Wind.y) * Mathf.Rad2Deg, 360f);
-
-				if (!primed || WindOverride >= 0f)
-				{
-					windSpeed = speed;
-					windHeading = heading;
-					primed = true;
-				}
-				else
-				{
-					/* Eased, because a sea has memory. The wind can back forty degrees in a minute
-					 * and the swell will still run the old way for hours; snapping the wave
-					 * directions to the current wind pivots the whole surface at once, which
-					 * nothing in nature does. */
-					windSpeed = Mathf.Lerp(windSpeed, speed, ease);
-					windHeading = Mathf.MoveTowardsAngle(windHeading, heading, 360f * ease);
-				}
+				windSpeed = sea.Wind;
+				windHeading = sea.Heading;
 			}
-
 			if (DriveStorms)
 			{
-				/* An unstable, low-pressure sky is a rough sea. Wave height and steepness both go
-				 * up, which is the difference between a swell and a storm running: the same wind
-				 * speed under a settled high makes a far gentler sea than under a deepening low. */
-				float storm = Mathf.Clamp01(air.Instability * 0.7f + Mathf.Clamp01(-air.Pressure) * 0.5f);
-				surface.WaveScale = Mathf.Lerp(0.85f, 1.6f, storm);
-				surface.Choppiness = Mathf.Lerp(0.45f, 0.85f, storm);
+				surface.WaveScale = Mathf.Lerp(0.85f, 1.6f, sea.Storm);
+				surface.Choppiness = Mathf.Lerp(0.45f, 0.85f, sea.Storm);
 			}
-
 			if (DriveCloudShadow)
 			{
-				float cover = Mathf.Clamp01(WeatherDriver.MesoscaleCoverAt(
-					WeatherDriver.WorldSeed, position, hours * 3600.0, latitude, 0.5f));
 				// Never to black: even under heavy cloud the sea is lit by the whole sky.
-				surface.CloudShadow = Mathf.Lerp(1f, 0.35f, cover);
+				surface.CloudShadow = Mathf.Lerp(1f, 0.35f, sea.Cover);
 			}
-
 			if (DriveWind)
 			{
-				ApplySeaState(latitude, ease);
+				FetchMetres = sea.Fetch;
+				SignificantHeight = sea.Height;
+				PeakPeriod = sea.Period;
+				/* The FFT is handed the wind that would raise THIS sea if it were developed, so its height and its peak
+				 * wavelength both come out consistent with the fetch. The direction is the real wind's. The breakers are
+				 * driven from this same sea: the surface works out where they break from SignificantHeight, and the shore
+				 * sets their rhythm from PeakPeriod. */
+				surface.WindSpeed = WaterSeaState.EquivalentWind(SignificantHeight, surface.Gravity);
+				surface.WindDirectionDegrees = windHeading;
+				surface.Rebuild();
 			}
-		}
-
-		/// <summary>
-		/// Turns the wind into a sea, through the fetch the planet actually has upwind.
-		/// </summary>
-		private void ApplySeaState(float latitude, float ease)
-		{
-			float gravity = surface.Gravity;
-			WorldBody body = WorldDayNightCycle.BodyFor(settings);
-
-			// The march is a few hundred planet samples, so it is redone only when the wind has
-			// swung far enough to be blowing across different water.
-			if (float.IsNaN(fetchHeading) || fetchBody != body
-				|| Mathf.Abs(Mathf.DeltaAngle(fetchHeading, windHeading)) > 12f)
-			{
-				FetchMetres = MeasureFetch(body, settings, windHeading);
-				fetchHeading = windHeading;
-				fetchBody = body;
-			}
-
-			float local = WaterSeaState.SignificantHeight(windSpeed, FetchMetres, gravity);
-			/* Swell from weather elsewhere, combined in quadrature because the two are independent
-			 * wave fields and it is their ENERGIES that add. Without it an offshore wind leaves a
-			 * mirror-flat sea, and no real coast is ever that. */
-			float height = Mathf.Sqrt(local * local + SwellMetres * SwellMetres);
-			/* Energy-weighted between the local sea and the swell, not the longer of the two.
-			 * Taking the maximum handed a gale's short, steep chop the swell's lazy seven-second
-			 * period — the long rolling lines of a calm day under a storm — even though the local
-			 * sea was carrying twenty times the energy. Whichever field has the energy sets the
-			 * rhythm the waves arrive to. */
-			float period = PeriodOf(windSpeed, FetchMetres, gravity, local);
-			/* Eased as the wind is, because the fetch is not: it is re-measured in one go whenever the
-			 * wind swings twelve degrees, and the sea it gave stepped with it. Every breaker along the
-			 * coast takes its place in its cycle from the period and the height (the bore's run in,
-			 * up to six waves long, FishWaterBreakerAt), so a step of a few per cent moved them all
-			 * through a tenth of a wave in one frame — a twitch — and the break line was traced again. */
-			if (!seaPrimed || WindOverride >= 0f)
-			{
-				SignificantHeight = height;
-				PeakPeriod = period;
-				seaPrimed = true;
-			}
-			else
-			{
-				SignificantHeight = Mathf.Lerp(SignificantHeight, height, ease);
-				PeakPeriod = Mathf.Lerp(PeakPeriod, period, ease);
-			}
-
-			/* The FFT is handed the wind that would raise THIS sea if it were developed, so its
-			 * height and its peak wavelength both come out consistent with the fetch. The direction
-			 * is the real wind's. */
-			surface.WindSpeed = WaterSeaState.EquivalentWind(SignificantHeight, gravity);
-			surface.WindDirectionDegrees = windHeading;
-			/* The breakers are driven from this same sea rather than from numbers somebody typed: the
-			 * surface works out where they break from SignificantHeight, and the shore sets their
-			 * rhythm from PeakPeriod. */
-			surface.Rebuild();
 		}
 
 		/// <summary>The period waves arrive at, s, from the local sea of this wind and fetch and the swell.</summary>
@@ -438,49 +488,18 @@ namespace FishMMO.Water
 		}
 
 		/// <summary>
-		/// The sea's peak period at a moment of world time, s, worked out afresh from the weather then —
-		/// not eased, and with the fetch measured at a fixed bin of the wind's heading — so it is the
-		/// same number on every client whenever it asks. What the shore holds for each window of its
-		/// wave count (WaterShore), which every player must agree on. NaN when the sea is not driven by
-		/// the weather.
+		/// The sea's peak period at a moment of world time, s: the same sea every client shows then
+		/// (<see cref="PeakPeriod"/> is this at the moment shown). What the shore holds for each window of its wave count
+		/// (WaterShore), which every player must agree on. NaN when the sea is not driven by the weather.
 		/// </summary>
-		/// <remarks>
-		/// The eased <see cref="PeakPeriod"/> is a record of each client's own frames (and its fetch of
-		/// whichever heading its wind last swung past): two clients could hold periods either side of a
-		/// rounding and count a different number of waves in the same window.
-		/// </remarks>
 		public float PeakPeriodAt(double worldSeconds)
 		{
 			if (!DriveWind || surface == null)
 			{
 				return float.NaN;
 			}
-			float latitude = settings != null ? settings.Latitude : 0f;
-			var position = new Vector2(transform.position.x, transform.position.z);
-			WeatherDriver.Synoptic air = WeatherDriver.Sample(WeatherDriver.WorldSeed, position, worldSeconds, latitude, 0.5f);
-			float speed = WindOverride >= 0f ? WindOverride : air.Wind.magnitude * Mathf.Max(0f, Fetch);
-			float heading = HeadingOverride >= 0f
-				? Mathf.Repeat(HeadingOverride, 360f)
-				: Mathf.Repeat(Mathf.Atan2(air.Wind.x, air.Wind.y) * Mathf.Rad2Deg, 360f);
-
-			WorldBody body = WorldDayNightCycle.BodyFor(settings);
-			if (fetchBinsBody != body || fetchBinsSettings != settings)
-			{
-				fetchByBin.Clear();
-				fetchBinsBody = body;
-				fetchBinsSettings = settings;
-			}
-			int bin = Mathf.RoundToInt(heading / FetchBinDegrees) % Mathf.RoundToInt(360f / FetchBinDegrees);
-			if (!fetchByBin.TryGetValue(bin, out float fetch))
-			{
-				fetch = MeasureFetch(body, settings, bin * FetchBinDegrees);
-				fetchByBin[bin] = fetch;
-			}
-			float gravity = surface.Gravity;
-			float local = WaterSeaState.SignificantHeight(speed, fetch, gravity);
-			return PeriodOf(speed, fetch, gravity, local);
+			return SeaAt(worldSeconds).Period;
 		}
-
 		/// <summary>
 		/// Open water upwind of a scene, in metres, marched across the planet's own surface.
 		/// </summary>

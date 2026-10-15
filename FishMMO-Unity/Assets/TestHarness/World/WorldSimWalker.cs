@@ -9,7 +9,8 @@ namespace FishMMO.TestHarness.World
 	/// <summary>
 	/// The body the world test bed's camera follows in walk mode: the game's own character movement, a
 	/// <see cref="KinematicCharacterMotor"/> driven by the <see cref="KCCController"/> players have, so it walks, steps,
-	/// slides, jumps, swims, dives, climbs out of water and climbs ladders and ropes exactly as a player does. What it
+	/// slides, jumps, swims, dives, climbs out of water and climbs ladders and ropes exactly as a player does. It can also
+	/// sit, on the ground or on whatever seat is behind it (the game has no sitting yet; this is the figure's). What it
 	/// looks like is <see cref="WorldSimWalkerBody"/>'s.
 	/// </summary>
 	/// <remarks>
@@ -37,6 +38,9 @@ namespace FishMMO.TestHarness.World
 		private const float CapsuleHeight = 1.6f;
 		private const float CrouchedHeight = 0.8f;
 
+		/// <summary>The capsule's height while it swims (always the full height: crouch means dive in the water).</summary>
+		public const float SwimmingHeight = CapsuleHeight;
+
 		/// <summary>On walkable ground this frame.</summary>
 		public bool Grounded => motor != null && motor.GroundingStatus.IsStableOnGround;
 
@@ -48,6 +52,29 @@ namespace FishMMO.TestHarness.World
 
 		/// <summary>Crouched.</summary>
 		public bool Crouching => controller != null && controller.IsCrouching;
+
+		/// <summary>Sitting, on the ground or a seat.</summary>
+		public bool Sitting => sitting;
+
+		/// <summary>
+		/// The still water's surface over the walker while it swims, world metres (the tide, never the waves: what the
+		/// controller floats it on); NaN when it is not swimming.
+		/// </summary>
+		public float StillWater
+		{
+			get
+			{
+				if (!Swimming)
+				{
+					return float.NaN;
+				}
+				float depth = controller.HeadDepth;
+				return float.IsInfinity(depth) ? float.NaN : transform.position.y + Height + depth;
+			}
+		}
+
+		/// <summary>How high the figure is drawn over the capsule, metres: the swell it rides, the ground it finds.</summary>
+		public float ShownLift => body != null ? body.Lift : 0f;
 
 		/// <summary>The height of the capsule in metres (less while crouching); its pivot is its feet.</summary>
 		public float Height => motor != null && motor.Capsule != null ? motor.Capsule.height : CapsuleHeight;
@@ -70,6 +97,7 @@ namespace FishMMO.TestHarness.World
 		private Transform deck;
 		private Matrix4x4 deckWas;
 		private float deckYawWas;
+		private bool sitting;
 
 		/// <summary>
 		/// A walker set up as a player is, in the same scene as <paramref name="near"/>, so its motor's queries run in
@@ -187,6 +215,7 @@ namespace FishMMO.TestHarness.World
 			controller.ResetGroundProbe();
 			transform.SetPositionAndRotation(at, facing);
 			lastSafe = at;
+			sitting = false;
 			if (body != null)
 			{
 				body.Settle();
@@ -208,6 +237,22 @@ namespace FishMMO.TestHarness.World
 			}
 			// A shader compiling on first sight stalls the frame for seconds; a step that long is a teleport, not a walk.
 			deltaTime = Mathf.Min(deltaTime, 0.1f);
+
+			if (sitting)
+			{
+				// Any move, a jump or a crouch gets up (the jump only gets up), and so does losing the ground under it.
+				bool getUp = forward != 0f || right != 0f || jump || crouch || !Grounded;
+				if (!getUp)
+				{
+					forward = right = 0f;
+					sprint = false;
+				}
+				else
+				{
+					StandUp();
+					jump = false;
+				}
+			}
 
 			int flags = 0;
 			flags.EnableBit(KCCMoveFlags.IsActualData);
@@ -251,8 +296,105 @@ namespace FishMMO.TestHarness.World
 
 			if (body != null)
 			{
-				body.Pose((position - start) / deltaTime, Grounded, Swimming, Climbing, Crouching, deltaTime);
+				body.Pose((position - start) / deltaTime, Grounded, Swimming, Climbing, Crouching, StillWater, deltaTime);
 			}
+		}
+
+		// ── Sitting ──
+
+		/// <summary>Sits down, or gets up when sitting.</summary>
+		public void ToggleSit()
+		{
+			if (sitting)
+			{
+				StandUp();
+			}
+			else
+			{
+				SitDown();
+			}
+		}
+
+		/// <summary>
+		/// Sits down: on a seat when one is near (<see cref="FindSeat"/>), its back turned to it, else on the ground where it
+		/// stands. Only standing on the ground: not swimming, climbing, crouched or in the air.
+		/// </summary>
+		public void SitDown()
+		{
+			if (sitting || motor == null || !Grounded || Swimming || Climbing || Crouching)
+			{
+				return;
+			}
+			sitting = true;
+			bool seat = FindSeat(out Vector3 toward, out float height, out float edge);
+			if (seat)
+			{
+				// Its back to the seat.
+				Quaternion facing = Quaternion.LookRotation(-toward, Vector3.up);
+				motor.SetRotation(facing);
+				transform.rotation = facing;
+			}
+			if (body != null)
+			{
+				body.SitDown(seat, height, edge);
+			}
+		}
+
+		/// <summary>Gets up.</summary>
+		public void StandUp()
+		{
+			sitting = false;
+			if (body != null)
+			{
+				body.StandUp();
+			}
+		}
+
+		/// <summary>
+		/// The nearest seat round the walker (<see cref="SitRules.IsSeat"/>: a level top seat-high over its feet and deep
+		/// enough) with room over it to sit up in, whose front edge is within <see cref="SitRules.Reach"/>. A bench, a wall's
+		/// coping, a crate, a flat rock: whatever a body would sit on. Looked for behind first, then to the sides, then ahead,
+		/// so of two seats as near the one behind wins.
+		/// </summary>
+		private bool FindSeat(out Vector3 toward, out float height, out float edge)
+		{
+			toward = -transform.forward;
+			height = 0f;
+			edge = float.MaxValue;
+			PhysicsScene physics = gameObject.scene.GetPhysicsScene();
+			Vector3 feet = transform.position;
+			for (int i = 0; i < 8; i++)
+			{
+				// 180°, then ±45° about it, ±90°, ±135°, 0°.
+				int step = (i + 1) / 2;
+				float angle = 180f + (i % 2 == 1 ? 45f : -45f) * step;
+				Vector3 direction = Quaternion.AngleAxis(angle, Vector3.up) * transform.forward;
+				for (float d = 0.2f; d <= SitRules.Reach && d < edge; d += 0.05f)
+				{
+					if (TopAt(physics, feet, feet + direction * d, out float top, out float level)
+						&& TopAt(physics, feet, feet + direction * (d + SitRules.Depth), out float back, out float levelBack)
+						&& SitRules.IsSeat(top, back, Mathf.Min(level, levelBack))
+						&& !physics.Raycast(new Vector3(feet.x, feet.y + top + 0.05f, feet.z) + direction * (d + 0.1f), Vector3.up, 1.0f, groundMask, QueryTriggerInteraction.Ignore))
+					{
+						toward = direction;
+						height = top;
+						edge = d;
+						break;
+					}
+				}
+			}
+			return edge < float.MaxValue;
+		}
+
+		/// <summary>The top of whatever is under <paramref name="at"/> up to seat height and a little over, as metres over
+		/// <paramref name="feet"/>, and how level it is (its normal's up component).</summary>
+		private bool TopAt(PhysicsScene physics, Vector3 feet, Vector3 at, out float top, out float level)
+		{
+			float reach = SitRules.MaxSeatHeight + 0.3f;
+			bool hit = physics.Raycast(new Vector3(at.x, feet.y + reach, at.z), Vector3.down, out RaycastHit found, reach, groundMask, QueryTriggerInteraction.Ignore);
+			top = hit ? found.point.y - feet.y : 0f;
+			level = hit ? found.normal.y : 0f;
+			return hit;
 		}
 
 		/// <summary>

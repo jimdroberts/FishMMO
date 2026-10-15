@@ -3,13 +3,15 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Centralized animation control interface for characters.
-	/// Abstracts Animator parameter setting and integrates with FishNet NetworkAnimator for sync.
+	/// What a character's movement, abilities and death tell its animation. The character's own peers call it (its
+	/// movement and abilities run there); a client watching someone else hears nothing from that character and reads its
+	/// body off what it can see, plus the cast and death broadcasts every observer receives. Nothing here is synced.
 	/// </summary>
 	public interface ICharacterAnimationController : ICharacterBehaviour
 	{
 		/// <summary>
-		/// Sets the locomotion speed parameter (0=Idle, 0.5=Walk, 1=Run, 1.5=Sprint).
+		/// The movement's speed band (0 idle, 0.3 crouch-walk, 0.5 walk, 1 run, 1.5 sprint). An implementation may measure the
+		/// body's real speed instead, as the game's does.
 		/// </summary>
 		void SetSpeed(float speed);
 

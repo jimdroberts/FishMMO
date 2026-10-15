@@ -52,6 +52,13 @@ namespace FishMMO.Shared.Weather
 			Vector2 CurrentAt(float x, float z);
 		}
 
+		/// <summary>Water whose drawn surface moves (the sea's waves): what a floating body is set on to ride them.</summary>
+		public interface IWaveSource : ISource
+		{
+			/// <summary>The drawn surface's height over a world position, waves and all, in world metres.</summary>
+			float SurfaceAt(float x, float z);
+		}
+
 		private static readonly List<ISource> sources = new List<ISource>();
 
 		/// <summary>True for a source Unity destroyed without it unregistering: Unity's destroyed objects are not null references.</summary>
@@ -178,6 +185,32 @@ namespace FishMMO.Shared.Weather
 				ISource sea = Sea;
 				return sea != null ? sea.WaveHeight : 0f;
 			}
+		}
+
+		/// <summary>
+		/// How far the drawn waves stand above (or below) the still water at a world position, metres: the sea's waves
+		/// where the sea is the water there, 0 under a lake or a river standing higher, on calm water, or with no sea.
+		/// </summary>
+		/// <remarks>
+		/// <b>Presentation only.</b> The movement floats on the still surface (<see cref="WaterQuery"/>, a synced tick and no
+		/// waves, so the server and every client agree); a figure drawn on that line sits still while the sea heaves through
+		/// it. Added to the still line, this is the drawn sea at the point: the figure rides the waves the player sees.
+		/// It reads the frame's camera and clock, so it is never for anything simulated.
+		/// </remarks>
+		public static float WaveOffsetAt(float x, float z)
+		{
+			ISource sea = Sea;
+			if (!(sea is IWaveSource waves))
+			{
+				return 0f;
+			}
+			float level = sea.Level;
+			if (TryGetInlandSurfaceAt(x, z, out float inland) && inland > level)
+			{
+				return 0f;
+			}
+			float offset = waves.SurfaceAt(x, z) - level;
+			return float.IsNaN(offset) || float.IsInfinity(offset) ? 0f : offset;
 		}
 
 		/// <summary>True when a point is under any water's moving surface.</summary>

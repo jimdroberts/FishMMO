@@ -147,11 +147,6 @@ namespace FishMMO.Client
 		};
 
 		/// <summary>
-		/// The country a biome offers, from its asset name: keywords, so a biome added later under an ordinary name
-		/// ("Birch Woodland", "Salt Marsh") is understood. None for a name no keyword matches (the caller falls back
-		/// on the climate, <see cref="HabitatOfClimate"/>); Barren for lifeless ground.
-		/// </summary>
-		/// <summary>
 		/// What a point of interest adds to the country it stands in: a village, town or camp people live in brings the
 		/// birds and rats that live off people (and the fields round it); a temple or shrine the pigeons and sparrows of its
 		/// courts; a ruin, a graveyard or an abandoned farm the owls, bats, crows and lizards of broken walls.
@@ -174,6 +169,11 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// The country a biome offers, from its asset name: keywords, so a biome added later under an ordinary name
+		/// ("Birch Woodland", "Salt Marsh") is understood. None for a name no keyword matches (the caller falls back
+		/// on the climate, <see cref="HabitatOfClimate"/>); Barren for lifeless ground.
+		/// </summary>
 		public static AmbientHabitat HabitatOf(string biomeName)
 		{
 			if (string.IsNullOrEmpty(biomeName))
@@ -203,6 +203,35 @@ namespace FishMMO.Client
 				}
 			}
 			return AmbientHabitat.None;
+		}
+
+		/// <summary>
+		/// The country a biome asset offers: its asset name read first (<see cref="HabitatOf"/>), then its display name; and
+		/// ground that only forms under another world's air (its <paramref name="atmosphere"/> leaves out the home world's
+		/// Standard) is <see cref="AmbientHabitat.Alien"/> as well, whatever else its name says: an ice geyser field is ice
+		/// and alien ground, a nameless thin-air plain alien ground alone. None for a home-world biome no keyword matches
+		/// (the caller falls back on the climate).
+		/// </summary>
+		/// <remarks>
+		/// It used to call every biome without Standard air Barren outright, so a dust sea, a regolith plain, a cryovolcanic
+		/// plain, a nitrogen ice field, an ice geyser field, an impact basin or a rille (Airless | Thin) never reached the
+		/// alien-ground keywords, and the thin and frozen airs' creatures (whose own country that is) could never live there.
+		/// Which world a kind lives on is the world's air (<see cref="WorldOf"/>), which already keeps every creature off an
+		/// airless one; the lifeless names (molten, sulphur, radiation, the wasteland…) are still Barren on any world.
+		/// </remarks>
+		public static AmbientHabitat HabitatOfBiome(string assetName, string displayName, BiomeAtmosphereRequirement atmosphere)
+		{
+			AmbientHabitat habitat = HabitatOf(assetName);
+			if (habitat == AmbientHabitat.None)
+			{
+				habitat = HabitatOf(displayName);
+			}
+			bool otherAir = atmosphere != BiomeAtmosphereRequirement.None && (atmosphere & BiomeAtmosphereRequirement.Standard) == 0;
+			if (otherAir && (habitat & AmbientHabitat.Barren) == 0)
+			{
+				habitat |= AmbientHabitat.Alien;
+			}
+			return habitat;
 		}
 
 		/// <summary>The country a climate would grow, for ground whose biome is unknown: cold tundra, dry desert or scrub, else grass and trees.</summary>

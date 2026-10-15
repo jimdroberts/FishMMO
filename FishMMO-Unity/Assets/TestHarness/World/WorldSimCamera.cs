@@ -216,6 +216,10 @@ namespace FishMMO.TestHarness.World
 				jump = keyboard.spaceKey.wasPressedThisFrame;
 				jumpHeld = keyboard.spaceKey.isPressed;
 				crouch = keyboard.cKey.isPressed;
+				if (keyboard.xKey.wasPressedThisFrame)
+				{
+					walker.ToggleSit();
+				}
 				// Left click punches; a click on the panel is the panel's.
 				Mouse mouse = Mouse.current;
 				if (mouse != null && mouse.leftButton.wasPressedThisFrame && !WorldSimPanel.PointerOverPanel)
@@ -344,7 +348,8 @@ namespace FishMMO.TestHarness.World
 		private void Follow(float deltaTime)
 		{
 			Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);
-			Vector3 pivot = walker.Feet + Vector3.up * PivotHeight;
+			// Riding the swell with the figure, not the still water line its capsule floats on.
+			Vector3 pivot = walker.Feet + Vector3.up * (PivotHeight + (walker.Swimming ? walker.ShownLift : 0f));
 			Vector3 back = rotation * Vector3.back;
 			float clear = followDistance;
 			if (gameObject.scene.GetPhysicsScene().SphereCast(pivot, CameraRadius, back, out RaycastHit hit, followDistance, solidMask, QueryTriggerInteraction.Ignore))

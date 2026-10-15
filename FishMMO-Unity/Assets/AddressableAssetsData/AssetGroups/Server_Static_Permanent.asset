@@ -15,6 +15,13 @@ MonoBehaviour:
   m_GroupName: Server_Static_Permanent
   m_GUID: f2edf6310b68f6b4bae56ba99aeaeab9
   m_SerializeEntries:
+  - m_GUID: 172edf814b131d57aa780fad2ca2aec6
+    m_Address: Assets/Scenes/WorldScene/Arthis/Island of Hag Terrain/Island of Hag
+      NavMesh.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 17ec716b3eb745a9bc8e26e6b64ebba0
     m_Address: Assets/Prefabs/Server/SceneServer/AbilitySystem.asset
     m_ReadOnly: 0
@@ -140,6 +147,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7c1ca08ef1e69c690af41b67d7b5167e
     m_Address: Assets/Prefabs/Server/LoginServer/LoginServerSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7d56b751c9c00b07fbcd7c88ad51d028
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Island of Hag.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent

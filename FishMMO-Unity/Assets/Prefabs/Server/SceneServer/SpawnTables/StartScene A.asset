@@ -38,6 +38,12 @@ MonoBehaviour:
     - rid: 2
     - rid: 3
     - rid: 4
+    Pack:
+      Enabled: 0
+      Tactic: 0
+      FocusTargeting: 1
+      TacticOrbitRadius: 5
+      KiteRotationSpeed: 30
   - Name: OrcSpawner
     Position: {x: 138.42906, y: 15.113663, z: -0.58421326}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -60,6 +66,12 @@ MonoBehaviour:
     - rid: 5
     - rid: 6
     - rid: 7
+    Pack:
+      Enabled: 0
+      Tactic: 0
+      FocusTargeting: 1
+      TacticOrbitRadius: 5
+      KiteRotationSpeed: 30
   references:
     version: 2
     RefIds:
@@ -72,7 +84,7 @@ MonoBehaviour:
         MinimumRespawnTime: 0
         MaximumRespawnTime: 0
         SpawnChance: 0.5
-        YOffset: 2
+        YOffset: -0
         AttributeBonusOverride: {fileID: 0}
         CorpseDecayDurationOverride: 0
         EmptyCorpseDecayDurationOverride: 0
@@ -81,6 +93,7 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 2
@@ -92,7 +105,7 @@ MonoBehaviour:
         MinimumRespawnTime: 0
         MaximumRespawnTime: 0
         SpawnChance: 0.5
-        YOffset: 2
+        YOffset: -0
         AttributeBonusOverride: {fileID: 0}
         CorpseDecayDurationOverride: 0
         EmptyCorpseDecayDurationOverride: 0
@@ -101,6 +114,7 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 3
@@ -112,7 +126,7 @@ MonoBehaviour:
         MinimumRespawnTime: 0
         MaximumRespawnTime: 0
         SpawnChance: 0.5
-        YOffset: 2
+        YOffset: -0
         AttributeBonusOverride: {fileID: 0}
         CorpseDecayDurationOverride: 0
         EmptyCorpseDecayDurationOverride: 0
@@ -121,6 +135,7 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 4
@@ -132,7 +147,7 @@ MonoBehaviour:
         MinimumRespawnTime: 0
         MaximumRespawnTime: 0
         SpawnChance: 0.5
-        YOffset: 0.25
+        YOffset: 0.125
         ItemTemplate: {fileID: 11400000, guid: d4194c9fc4a87c84cbdde10c40a67656, type: 2}
         MinimumAmount: 1
         MaximumAmount: 1
@@ -147,7 +162,7 @@ MonoBehaviour:
         MinimumRespawnTime: 0
         MaximumRespawnTime: 0
         SpawnChance: 0.5
-        YOffset: 1.2
+        YOffset: -0
         AttributeBonusOverride: {fileID: 11400000, guid: 7c33d6280baf6d94b8eee0548a749deb,
           type: 2}
         CorpseDecayDurationOverride: 0
@@ -159,6 +174,7 @@ MonoBehaviour:
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 11400000, guid: f1bedd6f4354a7e41be26aee87734d66,
           type: 2}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 6
@@ -170,7 +186,7 @@ MonoBehaviour:
         MinimumRespawnTime: 0
         MaximumRespawnTime: 0
         SpawnChance: 0.5
-        YOffset: 1.35
+        YOffset: -0
         AttributeBonusOverride: {fileID: 11400000, guid: 0f2ff92179a6d1b4c9dde7ad6a4afdb0,
           type: 2}
         CorpseDecayDurationOverride: 0
@@ -182,6 +198,7 @@ MonoBehaviour:
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 11400000, guid: f1bedd6f4354a7e41be26aee87734d66,
           type: 2}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 7
@@ -193,7 +210,7 @@ MonoBehaviour:
         MinimumRespawnTime: 0
         MaximumRespawnTime: 0
         SpawnChance: 0.5
-        YOffset: 1.35
+        YOffset: -0
         AttributeBonusOverride: {fileID: 11400000, guid: 7c33d6280baf6d94b8eee0548a749deb,
           type: 2}
         CorpseDecayDurationOverride: 0
@@ -205,5 +222,6 @@ MonoBehaviour:
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 11400000, guid: f1bedd6f4354a7e41be26aee87734d66,
           type: 2}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1

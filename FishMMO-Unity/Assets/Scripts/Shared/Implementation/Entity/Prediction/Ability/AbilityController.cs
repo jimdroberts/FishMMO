@@ -438,28 +438,7 @@ namespace FishMMO.Shared
 		private void TriggerAbilityAnimation(AbilityType abilityType)
 		{
 			if (cachedAnimationController == null) return;
-
-			switch (abilityType)
-			{
-				case AbilityType.Physical:
-				case AbilityType.GroundedPhysical:
-				case AbilityType.AerialPhysical:
-					cachedAnimationController.TriggerAttack();
-					break;
-				case AbilityType.Magic:
-				case AbilityType.GroundedMagic:
-				case AbilityType.AerialMagic:
-					cachedAnimationController.TriggerCast();
-					break;
-				case AbilityType.Block:
-					cachedAnimationController.SetBlocking(true);
-					break;
-				case AbilityType.Roll:
-					cachedAnimationController.TriggerRoll();
-					break;
-				default:
-					break;
-			}
+			ActOut(cachedAnimationController, abilityType);
 		}
 
 		public override void ResetState(bool asServer)

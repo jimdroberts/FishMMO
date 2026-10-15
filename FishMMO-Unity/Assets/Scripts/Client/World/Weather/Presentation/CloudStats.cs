@@ -237,7 +237,7 @@ namespace FishMMO.Client
 			into.Add(new Figure("Light", "Sky gets through", Pct(sky.CloudDiffuseOverhead), sky.CloudDiffuseOverhead < 0.1f ? Tone.Warn : Tone.Plain,
 				"All of it through the gaps; through the cloud, by diffusion, 1/(1 + ¾(1 − g)τ) — about 15% under a cumulus, a few per cent under a storm: dark grey, never Beer's black."));
 			into.Add(new Figure("Light", "Wind shear", $"{sky.CloudLeanShear * 1000f:0.0} m/s per km", Tone.Plain,
-				$"How fast the wind grows with height here. A heap leans about {Mathf.Rad2Deg * Mathf.Atan(sky.CloudLeanShear * Mathf.Max(100f, column.Top - column.Base) / (2f * Mathf.Max(CloudClimate.HeapUpdraught, column.Updraft))):0}° downwind; the drift of each layer is the world's own wind, which does not change with the weather."));
+				$"How fast the wind grows with height here. A heap leans about {Mathf.Rad2Deg * Mathf.Atan(sky.CloudLeanShear * Mathf.Max(100f, column.Top - column.Base) / (2f * Mathf.Max(CloudClimate.HeapUpdraught, column.Updraft))):0}° downwind; each layer drifts on the wind carrying the air (it runs in a gale and idles in a calm), times its height's share."));
 
 			// What ended up on the screen.
 			into.Add(new Figure("On screen", "Solid cloud", MeasuredCover >= 0f ? Pct(MeasuredCover) : "measuring…", MeasuredCover >= 0f ? Tone.Plain : Tone.Dim));
@@ -288,7 +288,7 @@ namespace FishMMO.Client
 				band.DropletDiameter > 0f
 					? $"Their mean diameter, from the water and how many drops share it: they throw light forward with a mean cosine of {band.Asymmetry:0.00}, a spike within a degree of the sun."
 					: $"Ice crystals scatter more broadly than drops: mean cosine {band.Asymmetry:0.00}."));
-			into.Add(new Figure(Group, "Drift", $"{sky.CloudScales.SteeringWind * band.WindScale:0.0} m/s", Tone.Plain,
+			into.Add(new Figure(Group, "Drift", $"{sky.CloudSteeringSpeed * band.WindScale:0.0} m/s", Tone.Plain,
 				$"{band.WindScale:0.00}× the column: the world's wind at this height against its wind at the base."));
 			into.Add(new Figure(Group, "Masses every", $"{band.NoiseScale:0} m", Tone.Plain, band.Stretch > 1.01f ? $"Drawn out {band.Stretch:0}× along the wind by its fall streaks: ice falling through the shear trails behind the head it fell from." : null));
 			into.Add(new Figure(Group, "Wisps every", $"{band.DetailScale:0} m", Tone.Plain, $"Mixing threshold {band.DetailStrength:0.00}: the share of dry air an edge takes before its drops are gone. Drier air frays an edge more."));

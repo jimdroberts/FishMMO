@@ -21,6 +21,10 @@ MonoBehaviour:
     Data: {fileID: 6193963920515406362, guid: 3e356a6f98eda495790f5aa8fe8a0a42, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
+  - SceneName: Island of Hag
+    Data: {fileID: -2915639495975509830, guid: 172edf814b131d57aa780fad2ca2aec6, type: 2}
+    Position: {x: 0, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Isle of Aradune
     Data: {fileID: -503823978164141886, guid: 38bcb38630edd8d5f84e23dba3385a40, type: 2}
     Position: {x: 0, y: 0, z: 0}

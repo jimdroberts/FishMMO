@@ -87,6 +87,13 @@ namespace FishMMO.Shared
 		public float Radius;
 		/// <summary>How far past the radius the pad eases back into the ground, metres.</summary>
 		public float Blend;
+		/// <summary>
+		/// A river-bank site's way to the water (x, z; unit), or zero for a pad levelled all round: past
+		/// <see cref="ShoreDistance"/> along it the ground is left as it is, so a mill's yard is levelled and its river not.
+		/// </summary>
+		public Vector2 Shore;
+		/// <summary>How far toward <see cref="Shore"/> from the centre the levelling reaches before it has handed back to the ground, metres.</summary>
+		public float ShoreDistance;
 		public float Height => Centre.y;
 	}
 

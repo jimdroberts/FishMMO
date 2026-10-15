@@ -125,11 +125,13 @@ Shader "Hidden/FishMMO/Weather/HeatShimmer"
             {
                 float t = _FishWeatherMisc.w;
                 float across = _HeatNoise.x, up = _HeatNoise.y;
-                // The wind's drift seen across a few hundred metres, in cells a second.
-                float2 drift = _FishWeatherWind.xy * (_FishWeatherWind.z * 30.0 / 200.0) * across;
+                // How far the scene's air has carried the plumes, seen across a few hundred metres, in cells: its
+                // exact travel (_FishWindWay), the same on every screen. It was the eased wind at the camera times
+                // the whole clock, which slid the pattern whenever the wind eased and differed between players.
+                float2 travel = FishWindWay() * (_FishWindWay.z / 200.0) * across;
                 float3 q = float3(d.x * across, d.y * up, d.z * across);
-                float3 q1 = q - float3(drift.x, -_HeatNoise.z, drift.y) * t + float3(0.0, 0.0, _HeatNoise.w * t * 0.37);
-                float3 q2 = q * 2.3 - float3(-0.6 * drift.x, -1.7 * _HeatNoise.z, -0.6 * drift.y) * t + float3(_HeatNoise.w * t * 0.53, 0.0, 0.0) + 17.1;
+                float3 q1 = q - float3(travel.x, -_HeatNoise.z * t, travel.y) + float3(0.0, 0.0, _HeatNoise.w * t * 0.37);
+                float3 q2 = q * 2.3 - float3(-0.6 * travel.x, -1.7 * _HeatNoise.z * t, -0.6 * travel.y) + float3(_HeatNoise.w * t * 0.53, 0.0, 0.0) + 17.1;
                 float2 n1 = float2(HeatNoise(q1), HeatNoise(q1 + float3(31.7, 11.3, 5.9)));
                 float2 n2 = float2(HeatNoise(q2), HeatNoise(q2 + float3(7.3, 23.1, 13.7)));
                 return n1 * 0.8 + n2 * 0.6;

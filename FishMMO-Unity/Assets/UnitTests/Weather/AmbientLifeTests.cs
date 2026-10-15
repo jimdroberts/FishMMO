@@ -50,8 +50,16 @@ namespace FishMMO.UnitTests.Weather
 			public float Temperature = C(16f);
 			public bool HasSea = true;
 			public AmbientWorld LifeWorld = AmbientWorld.Earthly;
+			/// <summary>The biome looks everywhere on it, or none (the kinds' own colours).</summary>
+			public BiomeLooks.Look Looks;
 
 			public AmbientWorld World => LifeWorld;
+
+			public bool LookAt(Vector3 position, out BiomeLooks.Look look)
+			{
+				look = Looks;
+				return look != null;
+			}
 
 			public bool TryGround(float x, float z, out float y)
 			{
@@ -121,6 +129,41 @@ namespace FishMMO.UnitTests.Weather
 			Assert.That(AmbientGating.HabitatOf("Molten Surface"), Is.EqualTo(AmbientHabitat.Barren));
 			Assert.That(AmbientGating.HabitatOf("Something Unheard Of"), Is.EqualTo(AmbientHabitat.None));
 			Assert.That(AmbientGating.HabitatOf(null), Is.EqualTo(AmbientHabitat.None));
+		}
+
+		[Test]
+		public void HabitatOfBiome_OtherWorldsGroundIsAlienNotBarren()
+		{
+			const BiomeAtmosphereRequirement otherAir = BiomeAtmosphereRequirement.Airless | BiomeAtmosphereRequirement.Thin;
+			// The biomes that only form under thin or no air (their assets' Atmosphere is 3): the thin and frozen airs' country.
+			foreach (string name in new[] { "Dust Sea", "Regolith Plain", "Cryovolcanic Plain", "Nitrogen Ice Field", "Impact Basin", "Rille" })
+			{
+				AmbientHabitat habitat = AmbientGating.HabitatOfBiome(name, name, otherAir);
+				Assert.That(habitat & AmbientHabitat.Alien, Is.Not.EqualTo(AmbientHabitat.None), $"{name} is alien ground");
+				Assert.That(habitat & AmbientHabitat.Barren, Is.EqualTo(AmbientHabitat.None), $"{name} is not lifeless");
+			}
+			Assert.That(AmbientGating.HabitatOfBiome("Ice Geyser Field", "Ice Geyser Field", otherAir), Is.EqualTo(AmbientHabitat.Ice | AmbientHabitat.Alien), "ice, and alien ground");
+			Assert.That(AmbientGating.HabitatOfBiome("Unnamed Thin Plain", null, BiomeAtmosphereRequirement.Thin), Is.EqualTo(AmbientHabitat.Alien), "a nameless thin-air plain");
+			// Lifeless names stay lifeless on any world, whatever air they need.
+			foreach (string name in new[] { "Radiation Plain", "Lava Tube" })
+			{
+				Assert.That(AmbientGating.HabitatOfBiome(name, name, otherAir), Is.EqualTo(AmbientHabitat.Barren), name);
+			}
+			Assert.That(AmbientGating.HabitatOfBiome("Sulphuric Cloud Deck", "Sulphuric Cloud Deck", BiomeAtmosphereRequirement.Thick), Is.EqualTo(AmbientHabitat.Barren));
+			// Home-world biomes are read as before; one no keyword matches is left to the climate.
+			Assert.That(AmbientGating.HabitatOfBiome("Forest", "Forest", BiomeAtmosphereRequirement.Standard | BiomeAtmosphereRequirement.Thick) & AmbientHabitat.Forest, Is.Not.EqualTo(AmbientHabitat.None));
+			Assert.That(AmbientGating.HabitatOfBiome("Forest", "Forest", BiomeAtmosphereRequirement.Any) & AmbientHabitat.Alien, Is.EqualTo(AmbientHabitat.None));
+			Assert.That(AmbientGating.HabitatOfBiome("Something Unheard Of", "Also Unheard Of", BiomeAtmosphereRequirement.Any), Is.EqualTo(AmbientHabitat.None));
+			Assert.That(AmbientGating.HabitatOfBiome("Rocky", null, BiomeAtmosphereRequirement.Any) & AmbientHabitat.Alien, Is.EqualTo(AmbientHabitat.None));
+
+			// And the creatures of thin and frozen air live there now.
+			AmbientHabitat dustSea = AmbientGating.HabitatOfBiome("Dust Sea", "Dust Sea", otherAir);
+			Assert.That(AmbientGating.HabitatWeight(Kind("Dust skitters"), dustSea, -1f, false, false, false), Is.GreaterThan(0f), "dust skitters on a dust sea");
+			Assert.That(AmbientGating.HabitatWeight(Kind("Sand drakelings"), AmbientGating.HabitatOfBiome("Regolith Plain", "Regolith Plain", otherAir), -1f, false, false, false), Is.GreaterThan(0f));
+			Assert.That(AmbientGating.HabitatWeight(Kind("Rime beetles"), AmbientGating.HabitatOfBiome("Ice Geyser Field", "Ice Geyser Field", otherAir), -1f, false, false, false), Is.GreaterThan(0f), "rime beetles on an ice geyser field");
+			Assert.That(AmbientGating.HabitatWeight(Kind("Rime beetles"), AmbientGating.HabitatOfBiome("Nitrogen Ice Field", "Nitrogen Ice Field", otherAir), -1f, false, false, false), Is.GreaterThan(0f));
+			// Never the home world's.
+			Assert.That(AmbientGating.HabitatWeight(Kind("Rabbit"), dustSea, C(15f), false, false, false), Is.Zero, "no rabbits on a dust sea");
 		}
 
 		[Test]
@@ -771,6 +814,123 @@ namespace FishMMO.UnitTests.Weather
 			Assert.That(empty, Is.GreaterThan(passing), "and the sky is mostly empty of it");
 		}
 
+		// ── Biome looks ───────────────────────────────────────────────
+
+		[Test]
+		public void Looks_PackExactly()
+		{
+			var coat = new Color(12f / 255f, 200f / 255f, 1f);
+			var belly = new Color(1f, 0f, 128f / 255f);
+			var mark = new Color(0f, 0f, 0f);
+			Vector4 packed = AmbientLooks.Pack(coat, belly, mark, BiomeLooks.CoatPattern.Mottled, 0.999f);
+			Assert.That(AmbientLooks.Has(packed), Is.True);
+			Assert.That(AmbientLooks.PatternOf(packed), Is.EqualTo(BiomeLooks.CoatPattern.Mottled));
+			Assert.That(Mathf.FloorToInt(packed.w), Is.EqualTo(5), "the phase never carries into the pattern");
+			AssertSame(AmbientLooks.UnpackSrgb(packed.x), coat);
+			AssertSame(AmbientLooks.UnpackSrgb(packed.y), belly);
+			AssertSame(AmbientLooks.UnpackSrgb(packed.z), mark);
+			foreach (BiomeLooks.CoatPattern pattern in System.Enum.GetValues(typeof(BiomeLooks.CoatPattern)))
+			{
+				Assert.That(AmbientLooks.PatternOf(AmbientLooks.Pack(coat, belly, mark, pattern, 0f)), Is.EqualTo(pattern));
+			}
+			// White packs to the largest number a float still holds exactly.
+			Assert.That(AmbientLooks.PackSrgb(Color.white), Is.EqualTo(16777215f));
+			Assert.That((uint)AmbientLooks.PackSrgb(Color.white), Is.EqualTo(16777215u));
+			Assert.That(AmbientLooks.Has(Vector4.zero), Is.False, "zero is the kind's own colours");
+
+			void AssertSame(Color a, Color b)
+			{
+				Assert.That(a.r, Is.EqualTo(b.r).Within(0.5f / 255f));
+				Assert.That(a.g, Is.EqualTo(b.g).Within(0.5f / 255f));
+				Assert.That(a.b, Is.EqualTo(b.b).Within(0.5f / 255f));
+			}
+		}
+
+		[Test]
+		public void Looks_TheGroundTakesThemAndTheAirKeepsItsOwn()
+		{
+			foreach (AmbientCreatureKind kind in Kinds)
+			{
+				AmbientLookMix mix = AmbientLooks.MixOf(kind);
+				foreach (float v in new[] { mix.Coat, mix.Accent, mix.Markings, mix.KeepBrightness, mix.Size })
+				{
+					Assert.That(v, Is.InRange(0f, 1f), kind.Name);
+				}
+				if (kind.Family == AmbientFamily.Critters)
+				{
+					Assert.That(mix.Coat, Is.InRange(0.65f, 0.8f), $"{kind.Name} is camouflaged for its ground");
+				}
+				if (kind.Family == AmbientFamily.Flocks || kind.Family == AmbientFamily.SoloBirds || kind.Shape == AmbientShape.Bat)
+				{
+					Assert.That(mix.Coat, Is.InRange(0.2f, 0.4f), $"{kind.Name} keeps its species' looks");
+				}
+				if (kind.Shape == AmbientShape.Swarm)
+				{
+					Assert.That(mix.Markings, Is.Zero, $"{kind.Name}: no pattern on a speck");
+					Assert.That(mix.Size, Is.Zero, $"{kind.Name}: the cloud's size is the kind's");
+				}
+			}
+			Assert.That(AmbientLooks.MixOf(Kind("Crow")).KeepBrightness, Is.EqualTo(1f), "a crow stays dark");
+			Assert.That(AmbientLooks.MixOf(Kind("Gulls")).KeepBrightness, Is.GreaterThan(0.8f), "a gull stays pale");
+			Assert.That(AmbientLooks.MixOf(Kind("Firefly swarm")).Coat, Is.LessThan(AmbientLooks.MixOf(Kind("Gnat cloud")).Coat), "a firefly is its light");
+		}
+
+		[Test]
+		public void Looks_EachGroupWearsOneOfItsBiomesLooks()
+		{
+			BiomeLooks.Look meadow = BiomeLooks.For(BiomeLookClass.Temperate, 1234u, BiomeLooks.WorldTraits.Earthlike);
+			List<AmbientGroup> a = PlaceArea(new FakeWorld { Looks = meadow }, false);
+			List<AmbientGroup> b = PlaceArea(new FakeWorld { Looks = meadow }, true);
+			List<AmbientGroup> plain = PlaceArea(new FakeWorld(), false);
+			Assert.That(a.Count, Is.GreaterThan(30));
+			Assert.That(b.Count, Is.EqualTo(a.Count));
+			Assert.That(plain.Count, Is.EqualTo(a.Count), "a look changes the coat, never who lives there");
+			var worn = new HashSet<int>();
+			for (int i = 0; i < a.Count; i++)
+			{
+				AmbientGroup g = a[i];
+				AmbientCreatureKind kind = Kinds[g.Kind];
+				Assert.That(AmbientLooks.Has(g.Look), Is.True, $"{kind.Name} wears a look");
+				Assert.That(b[i].Look, Is.EqualTo(g.Look), "the same look whichever order the cells are seen in");
+				Assert.That(b[i].Length, Is.EqualTo(g.Length));
+				Assert.That(g.LookVariant, Is.LessThan(BiomeLooks.Variants));
+				BiomeLooks.Variant v = meadow.Variants[g.LookVariant];
+				Assert.That(g.Look, Is.EqualTo(AmbientLooks.Pack(v.Coat, v.Belly, v.Marking, v.Pattern, 0f) + new Vector4(0f, 0f, 0f, g.Look.w - Mathf.Floor(g.Look.w))),
+					$"{kind.Name} wears its pick's colours and pattern");
+				worn.Add(g.LookVariant);
+				// Sized by the look, but still plainly its kind.
+				Assert.That(g.Length, Is.InRange(kind.Length.x * AmbientLooks.MinSize - 1e-5f, kind.Length.y * AmbientLooks.MaxSize + 1e-5f), kind.Name);
+				Assert.That(AmbientLooks.Has(plain[i].Look), Is.False, "no looks built: the kind's own colours");
+				Assert.That(plain[i].Length, Is.InRange(kind.Length.x, kind.Length.y), "and its own size");
+				if (AmbientLooks.MixOf(kind).Size == 0f)
+				{
+					Assert.That(g.Length, Is.EqualTo(plain[i].Length), $"{kind.Name} is not resized by a look");
+				}
+			}
+			Assert.That(worn.Count, Is.GreaterThanOrEqualTo(8), "a place's groups wear many of its looks, not one");
+		}
+
+		[Test]
+		public void Looks_OtherWorldsCreaturesWearTheirWorldsLooks()
+		{
+			BiomeWorldConditions frozen = Air(AtmosphereKind.Thick, Condensate.Methane);
+			frozen.MeanTemperature = -4f;
+			BiomeLooks.Look alien = BiomeLooks.For(BiomeLookClass.Alien, 77u, BiomeLooks.WorldTraits.Of(frozen, 3800f, 9u));
+			BiomeLooks.Look home = BiomeLooks.For(BiomeLookClass.Alien, 77u, BiomeLooks.WorldTraits.Earthlike);
+			var fake = new FakeWorld { LifeWorld = AmbientWorld.Cryogenic, Land = AmbientHabitat.Alien | AmbientHabitat.Mountain | AmbientHabitat.Ice, Temperature = -1f, HasSea = false, Looks = alien };
+			List<AmbientGroup> groups = PlaceArea(fake, false);
+			Assert.That(groups.Count, Is.GreaterThan(5));
+			bool differs = false;
+			foreach (AmbientGroup g in groups)
+			{
+				Assert.That(AmbientLooks.Has(g.Look), Is.True, $"{Kinds[g.Kind].Name} wears its world's look");
+				BiomeLooks.Variant v = alien.Variants[g.LookVariant];
+				Assert.That(AmbientLooks.UnpackSrgb(g.Look.x).r, Is.EqualTo(Mathf.Clamp01(v.Coat.r)).Within(0.5f / 255f));
+				differs |= AmbientLooks.PackSrgb(home.Variants[g.LookVariant].Coat) != g.Look.x;
+			}
+			Assert.That(differs, Is.True, "a frozen world under an orange star dresses its creatures otherwise than the home world would");
+		}
+
 		// ── Meshes ────────────────────────────────────────────────────
 
 		[Test]
@@ -785,6 +945,19 @@ namespace FishMMO.UnitTests.Weather
 					Assert.That(mesh.triangles.Length / 3, Is.InRange(20, 900), $"{kind.Name} triangles");
 					var parts = new List<Vector2>();
 					mesh.GetUVs(1, parts);
+					// Every vertex's colour roles (back, belly, accent shares) sum to at most about one, and the body has a coat.
+					var roles = new List<Vector3>();
+					mesh.GetUVs(2, roles);
+					Assert.That(roles.Count, Is.EqualTo(mesh.vertexCount), $"{kind.Name} colour roles");
+					float coat = 0f;
+					foreach (Vector3 r in roles)
+					{
+						Assert.That(r.x + r.y + r.z, Is.LessThanOrEqualTo(1.05f), $"{kind.Name} roles");
+						Assert.That(Mathf.Min(r.x, Mathf.Min(r.y, r.z)), Is.GreaterThanOrEqualTo(-1e-4f), $"{kind.Name} roles");
+						coat = Mathf.Max(coat, r.x);
+					}
+					// (A swarm's specks are each a shade between its back and belly, so the darkest is only mostly back.)
+					Assert.That(coat, Is.GreaterThan(kind.Shape == AmbientShape.Swarm ? 0.5f : 0.9f), $"{kind.Name} has a back to wear a coat on");
 					bool wings = false, legs = false;
 					foreach (Vector2 p in parts)
 					{

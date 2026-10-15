@@ -42,6 +42,10 @@ namespace FishMMO.Shared.WorldDesign
 		public float Height;
 		/// <summary>Its origin is a deck (a pier, a bridge span), not the ground line.</summary>
 		public bool Deck;
+		/// <summary>Its front (−z) stands in a river (a watermill): seated on the ground behind it, not lowered toward the channel.</summary>
+		public bool WaterFront;
+		/// <summary>Room its turning parts sweep (a tower mill's sails), x and z metres, for layouts to keep clear; zero for none.</summary>
+		public Vector2 Sweep;
 
 		/// <summary>What a piece no source can measure is taken as: a 3 m square on the ground.</summary>
 		public static PointOfInterestPieceMetrics Unknown => new PointOfInterestPieceMetrics { Footprint = new Vector2(3f, 3f), Height = 3f };
@@ -178,6 +182,8 @@ namespace FishMMO.Shared.WorldDesign
 				Depth = piece.Depth,
 				Height = piece.Height,
 				Deck = piece.Anchor == StructureAnchor.Deck,
+				WaterFront = piece.WaterFront,
+				Sweep = piece.Sweep,
 			};
 			return true;
 		}

@@ -34,6 +34,9 @@ namespace FishMMO.Client
 		/// </summary>
 		public static readonly int Season = Shader.PropertyToID("_FishSeason");
 		/// <summary>The wind held for each window of the shared motion clock (FishWeather.hlsl's _FishWindHold).</summary>
+		private static readonly int WindWay = Shader.PropertyToID("_FishWindWay");
+		/// <summary>Where the scene air's carried distance wraps before a shader's float sees it, m: a hundred kilometres, to a centimetre.</summary>
+		private const double WindWayWrapMetres = 100000.0;
 		public static readonly int WindHold = Shader.PropertyToID("_FishWindHold");
 
 		/// <summary>
@@ -42,7 +45,6 @@ namespace FishMMO.Client
 		/// short enough to follow a front coming through.
 		/// </summary>
 		public const double WindHoldSeconds = 60.0;
-		private static WorldMotion.HeldValue heldWindSpeed;
 
 		/// <summary>The wind's ground-plane direction (world x, z) for a heading in degrees.</summary>
 		public static Vector2 WindDirection(float headingDegrees)
@@ -65,13 +67,7 @@ namespace FishMMO.Client
 		/// an overlay show nitrogen snow and water snow as the different things they are, without
 		/// anything downstream having to know what a substance is.
 		/// </param>
-		/// <param name="windToHold">
-		/// The wind speed (channel units) to hold for a window that starts now: the weather's own target,
-		/// which every player works out alike, rather than the eased one a player who just joined is still
-		/// fading in from calm. NaN takes the frame's.
-		/// </param>
-		public static void Apply(in WeatherFrame frame, in WeatherCover cover, float temperature, float shelter, float time, float lightningFlash, WeatherSubstance substance = null,
-			float windToHold = float.NaN)
+		public static void Apply(in WeatherFrame frame, in WeatherCover cover, float temperature, float shelter, float time, float lightningFlash, WeatherSubstance substance = null)
 		{
 			Color tint = substance != null ? substance.Tint : Color.white;
 			float harshness = substance != null ? substance.Harshness : 0f;
@@ -89,9 +85,22 @@ namespace FishMMO.Client
 			// The wind's pace for what travels at it, held still for each window of the shared clock: every
 			// player switches window at the same moment, and the shaders snap the pace so a window holds
 			// whole bands (FishWindTravel), so nothing scrubs as the wind eases and the bands agree.
+			// The pace is the scene's wind at the window's start (AirDrift: the wind the weather reports, with what the
+			// scene's author and its runtime air add), the same number on every machine wherever its player stands
+			// (2026-10-15: it was the wind at each player's own camera, sampled on that client's own cadence, so two
+			// players saw a meadow's gust bands in different places, and one who joined mid-window another again).
 			double into = WorldMotion.Window(WindHoldSeconds, out long window);
-			float heldSpeed = heldWindSpeed.Hold(float.IsNaN(windToHold) ? frame[WeatherChannel.WindSpeed] : windToHold, window);
+			double windowStart = window * WindHoldSeconds;
+			AirDrift.Air sceneAir = SkySystem.SceneAir(windowStart);
+			float heldSpeed = Mathf.Clamp01(AirDrift.SpeedAt(sceneAir, windowStart) / AirDrift.SteeringGain / 30f);
 			Shader.SetGlobalVector(WindHold, new Vector4((float)into, (float)WindHoldSeconds, heldSpeed, 0f));
+			// And the scene's air for what is laid out across the world on the wind (FishWindWay): its way, and how far
+			// its ten-metre wind has carried it by now (FishHeatShimmer), from the shared clock.
+			double now = WorldMotion.Seconds;
+			AirDrift.Air nowAir = SkySystem.SceneAir(now);
+			Vector2 way = WeatherDriver.PrevailingWind(nowAir.Latitude, nowAir.Belts);
+			double carried = AirDrift.GroundCarried(nowAir, now);
+			Shader.SetGlobalVector(WindWay, new Vector4(way.x, way.y, (float)WorldMotion.Repeat(carried, WindWayWrapMetres), (float)WindWayWrapMetres));
 			// What is falling, kind by kind. A surface needs to know: rain rings a puddle, hail does
 			// not, and snow does neither.
 			Shader.SetGlobalVector(Mix, new Vector4(frame[WeatherChannel.RainWeight], frame[WeatherChannel.SnowWeight],

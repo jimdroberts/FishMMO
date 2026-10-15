@@ -447,6 +447,10 @@ namespace FishMMO.Client
 			{
 				gpuTried = true;
 				gpu = TerrainGpuRenderer.TryCreate();
+				if (gpu != null)
+				{
+					gpu.FloraMode = 1f;   // every detail takes the look of the patch it stands in (FishFlora.hlsl)
+				}
 			}
 
 			LightProbes probes = LightmapSettings.lightProbes;

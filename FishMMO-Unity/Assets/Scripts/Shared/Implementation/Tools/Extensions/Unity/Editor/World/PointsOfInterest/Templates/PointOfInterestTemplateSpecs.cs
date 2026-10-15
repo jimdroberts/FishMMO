@@ -211,7 +211,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const string Slipway = "=Slipway";
 		public const string Shipwreck = "=Shipwreck";
 		/// <summary>Mills and the rural works (2026-10-14).</summary>
-		public const string PostMill = "=PostMill", Watermill = "=Watermill", Sawmill = "=Sawmill", SawPit = "=SawPit", LogPile = "=LogPile",
+		public const string TowerMill = "=TowerMill", Watermill = "=Watermill", Sawmill = "=Sawmill", SawPit = "=SawPit", LogPile = "=LogPile",
 			PlankStack = "=PlankStack", Granary = "=Granary", Dovecote = "=Dovecote", Apiary = "=Apiary", CharcoalClamp = "=CharcoalClamp",
 			LimeKiln = "=LimeKiln", TanningYard = "=TanningYard";
 
@@ -462,20 +462,24 @@ namespace FishMMO.Shared.WorldDesign
 				.S(Slipway, 1, 1, Centre).S(Pier, 1, 2, Piers).S(House, 1, 1, Scatter).S(LeanTo, 1, 2, Scatter).S(Smithy, 0, 1, Scatter)
 				.S("=Woodpile", 2, 4, Scatter).S(Storage, 3, 6, Scatter).S("=Cart", 0, 1, Scatter).S(TorchPost, 1, 3, Scatter).Pad(0.6f);
 
-			// Mills (2026-10-14: "Windmills, watermills, lumbermills, and more"). The post mill on the rise the planner chose
+			// Mills (2026-10-14: "Windmills, watermills, lumbermills, and more"). The tower mill on the rise the planner chose
 			// for its wind, among the fields it grinds for (PointOfInterestFields), the miller's cottage and granary by it.
+			// (2026-10-15: the post mill it replaced stood on a mound or an open trestle, "weird platforms". The template keeps
+			// its name "Post" so re-authoring overwrites the asset: a stale template is left in place and still picked.)
 			T(a, POIType.Windmill, "Post", Single, Timber)
-				.S(PostMill, 1, 1, Centre).S(Cottage, 0, 1, Scatter).S(Granary, 0, 1, Scatter).S("=Cart", 0, 1, Scatter).S("=HayBales", 1, 2, Scatter)
+				.S(TowerMill, 1, 1, Centre, style: Stone).S(Cottage, 0, 1, Scatter).S(Granary, 0, 1, Scatter).S("=Cart", 0, 1, Scatter).S("=HayBales", 1, 2, Scatter)
 				.S(Storage, 1, 3, Scatter).Pad(0.6f);
-			// The watermill on the bank the planner sited it on, its front (the wheel's side) to the river. No pad: the site
-			// stands 7 m or so from a river's middle, and a levelled disc of its footprint filled the channel the wheel turns in.
+			// The watermill on the bank the planner sited it on, its front (the wheel's side) to the river, its floor a fixed
+			// freeboard over the water (StructurePieces.RiverBankFreeboard). The pad levels its yard to that floor and stops at
+			// the shore (PointOfInterestPad.Shore): a whole disc once filled the channel the wheel turns in, and no pad at all
+			// left the mill sunk into a bank that rose behind it (2026-10-15).
 			T(a, POIType.Watermill, "Wheel", Single, Stone)
 				.S(Watermill, 1, 1, Centre).S(Cottage, 0, 1, Scatter, style: Timber).S("=Cart", 0, 1, Scatter, style: Timber).S(Storage, 2, 4, Scatter, style: Timber)
-				.S(Apiary, 0, 1, Scatter, style: Timber).Pad(0f);
+				.S(Apiary, 0, 1, Scatter, style: Timber).Pad(1f);
 			// The sawmill likewise, its yard stacked with trunks waiting and planks seasoning, a pit for the odd job.
 			T(a, POIType.LumberMill, "Sash", Single, Timber)
 				.S(Sawmill, 1, 1, Centre).S(LogPile, 2, 4, Scatter).S(PlankStack, 2, 3, Scatter).S(SawPit, 0, 1, Scatter)
-				.S(Cottage, 0, 1, Scatter).S("=Cart", 0, 1, Scatter).S("=Woodpile", 1, 2, Scatter).Pad(0f);
+				.S(Cottage, 0, 1, Scatter).S("=Cart", 0, 1, Scatter).S("=Woodpile", 1, 2, Scatter).Pad(1f);
 		}
 
 		// ── Wild camps and lairs ────────────────────────────────────

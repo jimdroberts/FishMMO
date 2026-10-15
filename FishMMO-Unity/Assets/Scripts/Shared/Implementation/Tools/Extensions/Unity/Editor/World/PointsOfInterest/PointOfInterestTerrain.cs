@@ -99,21 +99,113 @@ namespace FishMMO.Shared.WorldDesign
 		/// the ground over its blend. Holes are kept. Returns the samples changed.
 		/// </summary>
 		/// <param name="wet">Whether a scene position is water or its bank (east, north); a bank never runs into it. Null for none.</param>
+		/// <param name="channel">
+		/// Whether a scene position is in a river's channel or a lake, for a pad with a <see cref="PointOfInterestPad.Shore"/>:
+		/// left as it is even inside the radius, where a river bends back toward the site. Null for none.
+		/// </param>
 		public static int FlattenPad(Terrain[,] terrains, TerrainTilePlan plan, PointOfInterestPad pad, float flatness = 1f,
-			Func<float, float, bool> wet = null)
+			Func<float, float, bool> wet = null, Func<float, float, bool> channel = null)
 		{
 			float reach = pad.Radius + Mathf.Max(Mathf.Max(0.01f, pad.Blend), MaxEmbankmentMetres);
 			var area = new Rect(pad.Centre.x - reach, pad.Centre.z - reach, reach * 2f, reach * 2f);
 			float height = pad.Height;
 			flatness = Mathf.Clamp01(flatness);
+			bool shore = pad.Shore.sqrMagnitude > 0.25f;
 			// How far the bank runs each way before it meets the ground, traced over the ground as it stands now.
 			float[] bank = BankReach((east, north) => GroundAt(terrains, east, north), pad.Centre, pad.Radius, pad.Blend, height, wet);
 			return EditHeights(terrains, plan, area, (east, north, metres) =>
 			{
 				float dx = east - pad.Centre.x, dz = north - pad.Centre.z;
 				float target = PadHeight(Mathf.Sqrt(dx * dx + dz * dz), metres, pad.Radius, pad.Blend, height, ReachToward(bank, dx, dz));
-				return Mathf.Lerp(metres, target, flatness);
+				float pull = flatness;
+				if (shore)
+				{
+					if (channel != null && channel(east, north))
+					{
+						return metres;
+					}
+					pull *= ShoreWeight(dx * pad.Shore.x + dz * pad.Shore.y, pad.ShoreDistance);
+				}
+				return Mathf.Lerp(metres, target, pull);
 			});
+		}
+
+		/// <summary>How far round a room's clear floor its walls are taken to stand, metres at a building's own scale (a house's 0.45 m and some).</summary>
+		public const float RoomWallAllowance = 0.7f;
+
+		/// <summary>How far under a room's floor the ground beneath it is kept, metres.</summary>
+		public const float UnderFloorMetres = 0.05f;
+
+		/// <summary>The deepest a building is dug into the ground over its floor, metres; deeper, it stands in a hollow or underground (a cave's chamber) and is left be.</summary>
+		public const float MaxDigMetres = 2.5f;
+
+		/// <summary>
+		/// Digs a laid building's room out of the hillside (2026-10-15: "House/building interiors aren't always fully
+		/// walkable"): the ground under the room and its walls lowered to just under its floor, and out past them banked back
+		/// up to the natural ground at <see cref="EmbankmentSlope"/>. A building is seated no higher than its centre's ground
+		/// (PropsFeature.SeatHeight), so on a slope the template's pad left part-flat the uphill ground rose through its floor
+		/// (a cottage's at about 4° of slope). Only ever lowers, so a site built again digs the same; a room standing over its
+		/// ground (a stilt house, an upper storey) changes nothing. Returns the samples lowered.
+		/// </summary>
+		public static int DigUnder(Terrain[,] terrains, TerrainTilePlan plan, StructureRoom room, Vector3 position, Quaternion rotation, float scale)
+		{
+			float step = SampleSpacing(terrains);
+			if (step <= 0f)
+			{
+				return 0;
+			}
+			Vector3 centre = position + rotation * (room.Centre * scale);
+			float under = centre.y - UnderFloorMetres;
+			float ground = GroundAt(terrains, centre.x, centre.z);
+			if (float.IsNaN(ground) || ground - under > MaxDigMetres)
+			{
+				return 0;
+			}
+			float wall = RoomWallAllowance * scale;
+			Vector2 half = room.Round ? Vector2.one * (room.Size.x * 0.5f * scale + wall) : room.Size * (0.5f * scale) + Vector2.one * wall;
+			// The footprint, one heightmap sample past it (so the ground between the last sample in and the first out never
+			// rises over the floor inside the walls), and the bank's run back up to the ground.
+			float reach = half.magnitude + step + MaxDigMetres / EmbankmentSlope + step;
+			var area = new Rect(centre.x - reach, centre.z - reach, reach * 2f, reach * 2f);
+			Quaternion back = Quaternion.Inverse(Quaternion.Euler(0f, rotation.eulerAngles.y, 0f));
+			return EditHeights(terrains, plan, area, (east, north, metres) =>
+			{
+				if (metres <= under)
+				{
+					return metres;
+				}
+				Vector3 local = back * new Vector3(east - centre.x, 0f, north - centre.z);
+				float outside = room.Round
+					? Mathf.Max(0f, new Vector2(local.x, local.z).magnitude - half.x)
+					: new Vector2(Mathf.Max(0f, Mathf.Abs(local.x) - half.x), Mathf.Max(0f, Mathf.Abs(local.z) - half.y)).magnitude;
+				return Mathf.Min(metres, under + Mathf.Max(0f, outside - step) * EmbankmentSlope);
+			});
+		}
+
+		/// <summary>The heightmap's sample spacing, metres (the first tile's); 0 with no terrain.</summary>
+		public static float SampleSpacing(Terrain[,] terrains)
+		{
+			foreach (Terrain terrain in terrains)
+			{
+				if (terrain != null && terrain.terrainData != null && terrain.terrainData.heightmapResolution > 1)
+				{
+					return terrain.terrainData.size.x / (terrain.terrainData.heightmapResolution - 1);
+				}
+			}
+			return 0f;
+		}
+
+		/// <summary>How far a shore pad hands back to the natural ground before its <see cref="PointOfInterestPad.ShoreDistance"/>, metres.</summary>
+		public const float ShoreHandoverMetres = 0.8f;
+
+		/// <summary>
+		/// A shore pad's pull at a distance <paramref name="along"/> its way to the water: whole on the landward side, easing
+		/// (smoothstep) to none over the <see cref="ShoreHandoverMetres"/> before <paramref name="shoreDistance"/>, none past it.
+		/// </summary>
+		public static float ShoreWeight(float along, float shoreDistance)
+		{
+			float t = Mathf.Clamp01((shoreDistance - along) / ShoreHandoverMetres);
+			return t * t * (3f - 2f * t);
 		}
 
 		/// <summary>How many directions round a pad its bank is traced along (<see cref="BankReach"/>).</summary>

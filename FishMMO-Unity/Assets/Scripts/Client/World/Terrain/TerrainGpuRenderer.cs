@@ -60,6 +60,12 @@ namespace FishMMO.Client
 		public const string CommandBasesName = "_FishCommandBases";
 		private static readonly int CommandBasesId = Shader.PropertyToID(CommandBasesName);
 		private static readonly int ContactOnId = Shader.PropertyToID("_FishContactOn");
+		/// <summary>
+		/// The per-draw switch for the biomes' looks (FishFlora.hlsl; FishVegetationPasses.hlsl VegFloraLook, FishWeatherLitForwardPass.hlsl):
+		/// 1 on the terrain's detail draws, read 0 everywhere else. Set like <c>_FishContactOn</c>, on the clone material and on
+		/// every draw's block, by this renderer (<see cref="FloraMode"/>), the detail scatter and the detail fallback.
+		/// </summary>
+		public static readonly int FloraOnId = Shader.PropertyToID("_FishFloraOn");
 		private static readonly int ModelsId = Shader.PropertyToID("_FishModels");
 		private static readonly int WorkId = Shader.PropertyToID("_FishWork");
 		private static readonly int SlotsId = Shader.PropertyToID("_FishSlots");
@@ -324,6 +330,24 @@ namespace FishMMO.Client
 		/// </summary>
 		public float ContactMode;
 
+		/// <summary>
+		/// Whether this renderer's draws take the look of the patch each instance stands in (<see cref="FloraOnId"/>): 1 for
+		/// the terrain's details (ferns, flowers, fungi, pebbles: TerrainDetailInstancing), 0 for trees and cliff rocks, whose
+		/// materials it must never touch. Set by the owner right after <see cref="TryCreate"/>, before any model is added;
+		/// written on its clones, their depth primes and every per-draw block.
+		/// </summary>
+		public float FloraMode;
+
+		/// <summary>The most a detail's look scales it about its root (FishVegetationPasses.hlsl FISH_VEG_FLORA_SCALE_MAX).</summary>
+		public const float FloraMaxScale = 1.4f;
+
+		/// <summary>
+		/// A culling radius about <paramref name="b"/>'s own centre that holds the mesh at any size its look draws it (scaled
+		/// about the root, the mesh's origin, by 0.7 to <see cref="FloraMaxScale"/>): the scaled sphere's centre moves by
+		/// |centre|·(s − 1) and its radius grows by s. The caster sphere (<see cref="CasterSphere"/>) is already wider than this.
+		/// </summary>
+		public static float FloraSphereRadius(Bounds b) => b.extents.magnitude * FloraMaxScale + b.center.magnitude * (FloraMaxScale - 1f);
+
 		private TerrainGpuRenderer(ComputeShader compute)
 		{
 			this.compute = compute;
@@ -388,6 +412,7 @@ namespace FishMMO.Client
 			}
 			clone = new Material(material) { shader = shader, name = material.name + " (indirect)", hideFlags = HideFlags.DontSave };
 			clone.SetFloat(ContactOnId, ContactMode);
+			clone.SetFloat(FloraOnId, FloraMode);
 			clones.Add(material, clone);
 			return clone;
 		}
@@ -508,7 +533,8 @@ namespace FishMMO.Client
 				LocalReference = localReference,
 				Size = size,
 				SphereCentre = localBounds.center,
-				SphereRadius = localBounds.extents.magnitude,
+				// A detail's look may draw it larger than its mesh (FloraSphereRadius): culled by the largest it can be.
+				SphereRadius = FloraMode > 0.5f ? FloraSphereRadius(localBounds) : localBounds.extents.magnitude,
 				LevelCount = (uint)levels.Length,
 				ShadowMask = shadowMask,
 			};
@@ -1552,6 +1578,7 @@ namespace FishMMO.Client
 					continue;
 				}
 				prime.SetFloat(ContactOnId, ContactMode);
+				prime.SetFloat(FloraOnId, FloraMode);
 				if (instances != null)
 				{
 					prime.SetBuffer(InstancesId, instances);
@@ -1570,6 +1597,7 @@ namespace FishMMO.Client
 		private void Bind(MaterialPropertyBlock block)
 		{
 			block.SetFloat(ContactOnId, ContactMode);
+			block.SetFloat(FloraOnId, FloraMode);
 			if (instances != null)
 			{
 				block.SetBuffer(InstancesId, instances);

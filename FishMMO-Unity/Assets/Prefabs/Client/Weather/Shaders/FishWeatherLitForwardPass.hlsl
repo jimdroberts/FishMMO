@@ -10,6 +10,21 @@
 #include "FishGroundColour.hlsl"
 // ── FishMMO edit: rock-against-rock crevices (the indirect twin's rocks only). ──
 #include "FishRockContact.hlsl"
+#if defined(FISH_INDIRECT_INSTANCED)
+// ── FishMMO edit: the biomes' looks on this world (FishFlora.hlsl, FloraPaletteMap), for the stones the terrain scatters
+// (the indirect twin's detail draws only: texel loads, no sampler). ──
+#include "FishFlora.hlsl"
+#ifndef FISH_FLORA_ON_DECLARED
+#define FISH_FLORA_ON_DECLARED
+/* Per draw, not per material: 1 on the terrain's detail draws only (DetailScatterRenderer's and TerrainDetailInstancing's
+ * clones and per-draw blocks), as _FishContactOn is set. A pebble wears the same Rock_* material as the boulders, the
+ * formations and the cliff rocks, which never set it and read 0: they draw as before. */
+float _FishFloraOn;
+#endif
+// The stones' patch size, metres, and their salt (apart from the plants' patches, FishVegetationPasses.hlsl).
+#define FISH_LIT_FLORA_PATCH 8.0
+#define FISH_LIT_FLORA_SALT 0x9b05688cu
+#endif
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 // ── FishMMO edit: the terrain's own lighting, for the ground a rock's base and crevices render (FishGroundContactLit.hlsl,
@@ -320,6 +335,15 @@ void LitPassFragment(
     half fishGroundWeight;
     FishGroundSite fishSite;
     bool fishHasGround = FishGroundContact(inputData.positionWS, input.fishContact, (half3)input.normalWS, fishGroundWeight, fishSite);
+    // ── FishMMO edit: a scattered pebble or stone takes the mineral tint of the patch it lies in (FishFlora.hlsl: a tint
+    // about white, the soil's warmth in it, a fantastic look's vein), by its own origin so a stone is one colour. Ahead of
+    // the crevices, the moss and the weather, which then lie on the tinted stone as on any other. ──
+    UNITY_BRANCH
+    if (_FishFloraOn > 0.5 && _FishFloraInfo.x > 0.5)
+    {
+        FishFloraLook fishFlora = FishFloraAt(input.fishRockOrigin.xz, FISH_LIT_FLORA_PATCH, FISH_LIT_FLORA_SALT);
+        surfaceData.albedo *= lerp(half3(1.0h, 1.0h, 1.0h), (half3)fishFlora.mineral, (half)_FishFloraStrength.w);
+    }
     half fishSoil, fishShade;
     FishRockCrevice(inputData.positionWS, input.fishRockOrigin, (half3)input.normalWS, fishSoil, fishShade);
     surfaceData.albedo *= fishShade;

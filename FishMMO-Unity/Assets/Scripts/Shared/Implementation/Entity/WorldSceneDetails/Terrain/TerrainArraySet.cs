@@ -92,5 +92,36 @@ namespace FishMMO.Shared
 			&& LayerMaskOffset != null && LayerMaskOffset.Length == TerrainArrayLayerParams.MaximumLayers
 			&& LayerMaskScale != null && LayerMaskScale.Length == TerrainArrayLayerParams.MaximumLayers
 			&& LayerSurface != null && LayerSurface.Length == TerrainArrayLayerParams.MaximumLayers;
+
+		[System.NonSerialized] private Vector4[] layerFlora;
+		[System.NonSerialized] private string[] layerFloraNames;
+
+		/// <summary>
+		/// Per layer (<see cref="TerrainArrayLayerParams.MaximumLayers"/> long) what it is made of as the planet's looks see
+		/// it, from its name (<see cref="Biomes.BiomeLooks.GroundShareOf"/>): x living, y lichen, z mineral, w 0. The terrain
+		/// shader's <c>_FishLayerFlora</c>, the grass's colour read and the contact blend all take it from here, so the three
+		/// agree on every layer.
+		/// </summary>
+		/// <remarks>
+		/// Not baked: it is a function of the names, which the set already holds, and baking it would leave every set made
+		/// before it without one. Worked out on first use and kept until the names change (a rebake writes new ones).
+		/// </remarks>
+		public Vector4[] LayerFlora()
+		{
+			if (layerFlora != null && ReferenceEquals(layerFloraNames, LayerNames))
+			{
+				return layerFlora;
+			}
+			var flora = new Vector4[TerrainArrayLayerParams.MaximumLayers];
+			int count = Mathf.Min(LayerCount, TerrainArrayLayerParams.MaximumLayers);
+			for (int i = 0; i < count && LayerNames != null && i < LayerNames.Length; i++)
+			{
+				Biomes.BiomeLooks.GroundShare share = Biomes.BiomeLooks.GroundShareOf(LayerNames[i]);
+				flora[i] = new Vector4(share.Foliage, share.Accent, share.Mineral, 0f);
+			}
+			layerFlora = flora;
+			layerFloraNames = LayerNames;
+			return flora;
+		}
 	}
 }

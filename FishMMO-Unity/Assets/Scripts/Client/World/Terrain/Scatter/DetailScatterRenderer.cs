@@ -62,6 +62,11 @@ namespace FishMMO.Client
 			public int Slot;
 			public Mesh Mesh;
 			public RenderParams Params;
+			/// <summary>
+			/// The draw's <c>_FishFloraOn</c> (TerrainGpuRenderer.FloraOnId): 1 its look's colours and size, 2 its colours only
+			/// (a bush: cover is the size it was placed at, for everyone).
+			/// </summary>
+			public float Flora;
 		}
 
 		private struct GroupRange
@@ -709,7 +714,8 @@ namespace FishMMO.Client
 				Bounds b = type.MeshBounds;
 				models[t] = new ModelData
 				{
-					Sphere = new Vector4(b.center.x, b.center.y, b.center.z, b.extents.magnitude),
+					// Culled by the largest its look can draw it (a bush keeps its size: colours only).
+					Sphere = new Vector4(b.center.x, b.center.y, b.center.z, type.Bush ? b.extents.magnitude : TerrainGpuRenderer.FloraSphereRadius(b)),
 					FootRadius = type.FootRadius,
 					Salt = type.Salt,
 					CastsShadows = type.CastsShadows ? 1f : 0f,
@@ -733,7 +739,7 @@ namespace FishMMO.Client
 						RenderParams rp = type.Template;
 						rp.material = clone;
 						rp.shadowCastingMode = v == 0 ? ShadowCastingMode.Off : ShadowCastingMode.ShadowsOnly;
-						commands.Add(new Command { Slot = slot, Mesh = mesh, Params = rp });
+						commands.Add(new Command { Slot = slot, Mesh = mesh, Params = rp, Flora = type.Bush ? 2f : 1f });
 						args.Add(new GraphicsBuffer.IndirectDrawIndexedArgs
 						{
 							indexCountPerInstance = mesh.GetIndexCount(0),
@@ -791,6 +797,10 @@ namespace FishMMO.Client
 				return null;
 			}
 			clone = new Material(material) { shader = shader, name = material.name + " (scatter)", hideFlags = HideFlags.DontSave };
+			// Every scattered thing (a pebble, a shell, litter, a bush) takes the look of the patch it lies in (FishFlora.hlsl).
+			// On the clone and on every block (Bind, per command: a bush takes its colours only), as the trees set
+			// _FishContactOn: the source material, a Rock_* the boulders and cliff rocks wear too, is never touched.
+			clone.SetFloat(TerrainGpuRenderer.FloraOnId, 1f);
 			clones.Add(material, clone);
 			return clone;
 		}
@@ -812,6 +822,7 @@ namespace FishMMO.Client
 				blocks[c].SetBuffer(InstancesId, instanceBuffer);
 				blocks[c].SetBuffer(VisibleId, visibleBuffer);
 				blocks[c].SetBuffer(CommandBasesId, commandBaseBuffer);
+				blocks[c].SetFloat(TerrainGpuRenderer.FloraOnId, commands[c].Flora);
 				// The drawn level's caster sphere, as the trees' slots carry it: a bush's or a pebble's shadow caster then
 				// skips the cascades it cannot reach (FishCasterCulling.hlsl), by the same rule as the trees'.
 				blocks[c].SetVector(TerrainGpuRenderer.CasterSphereId, commands[c].Mesh != null ? TerrainGpuRenderer.CasterSphere(commands[c].Mesh.bounds) : Vector4.zero);

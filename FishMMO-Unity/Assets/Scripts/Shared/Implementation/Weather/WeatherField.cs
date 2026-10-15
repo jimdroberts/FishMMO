@@ -80,11 +80,14 @@ namespace FishMMO.Shared.Weather
 		/// The air over a place before anything local is done to it: the drifting field, or — with the
 		/// field switched off — a still, ordinary air, so that what is added to it is all there is.
 		/// </summary>
-		public static WeatherDriver.Synoptic OpenAirAt(WeatherTimeline timeline, Vector2 position, double worldSeconds, float season01, float localTime01, in WindBelts belts)
+		public static WeatherDriver.Synoptic OpenAirAt(WeatherTimeline timeline, WorldSceneSettings settings, Vector2 position, double worldSeconds, float season01, float localTime01,
+			in WindBelts belts)
 		{
 			if (timeline != null && timeline.Driver)
 			{
-				return WeatherDriver.Sample(WeatherDriver.WorldSeed, position, worldSeconds, timeline.LatitudeDegrees, season01, localTime01, belts);
+				// Through the scene's own drift: the wind it reports, with what was added, carries its weather along.
+				AirDrift.At(DriftAir(timeline, settings, belts), worldSeconds, out double driftX, out double driftY);
+				return WeatherDriver.Sample(WeatherDriver.WorldSeed, position, worldSeconds, timeline.LatitudeDegrees, season01, localTime01, belts, driftX, driftY);
 			}
 			float latitude = timeline != null ? timeline.LatitudeDegrees : 0f;
 			return new WeatherDriver.Synoptic
@@ -95,8 +98,63 @@ namespace FishMMO.Shared.Weather
 				Instability = 0.25f,
 				ColumnType = WeatherDriver.BaseColumnType(0.25f),
 				LocalTime01 = Mathf.Repeat(localTime01, 1f),
-				Wind = WeatherDriver.PrevailingWind(latitude, belts) * 6f,
+				Wind = WeatherDriver.PrevailingWind(latitude, belts) * AirDrift.StillWind,
 			};
+		}
+
+		/// <summary>
+		/// What carries a scene's air (<see cref="AirDrift"/>): its world, latitude and belts, whether its field runs, and
+		/// the wind its author and its runtime entry add. The one place the sky, the weather and the server build it.
+		/// </summary>
+		public static AirDrift.Air DriftAir(WeatherTimeline timeline, WorldSceneSettings settings, in WindBelts belts)
+		{
+			return new AirDrift.Air
+			{
+				Seed = WeatherDriver.WorldSeed,
+				Latitude = timeline != null ? timeline.LatitudeDegrees : 0f,
+				Belts = belts,
+				Driver = timeline == null || timeline.Driver,
+				AuthoredWind = settings != null ? settings.AuthoredAir.Wind : 0f,
+				Runtime = timeline != null ? timeline.Air : default,
+			};
+		}
+
+		/// <summary>
+		/// What carries a loaded scene's air at a moment (<see cref="DriftAir"/>), from the timeline and settings registered
+		/// for it: what anything in a scene that the air moves (a windmill, the water's motes) reads.
+		/// </summary>
+		public static AirDrift.Air SceneAir(Scene scene, double worldSeconds)
+		{
+			WeatherQuery.TryGetTimeline(scene, out WeatherTimeline timeline);
+			WorldSceneSettings.TryGetForScene(scene, out WorldSceneSettings settings);
+			return DriftAir(timeline, settings, BeltsAt(timeline, settings, worldSeconds));
+		}
+
+		/// <summary>The belts a scene's air runs in: its world's (with the air's added gravity, as the sample takes it) at a moment.</summary>
+		public static WindBelts BeltsAt(WeatherTimeline timeline, WorldSceneSettings settings, double worldSeconds)
+		{
+			WorldBody weatherBody = timeline != null && timeline.BodyOverride != null ? timeline.BodyOverride : SceneTime.BodyOf(settings);
+			AirOffsets offsets = (settings != null ? settings.AuthoredAir : default) + (timeline != null ? timeline.Air.AtSeconds(worldSeconds) : default);
+			return WindBelts.For(offsets.Apply(PlanetAir.For(SolarSystemProfile.Active, weatherBody)));
+		}
+
+		/// <summary>
+		/// A new runtime entry for a scene, carrying on from the one it replaces (<see cref="AirOffsetEntry.Carried"/>): the
+		/// clouds and the weather go on from where the old wind had taken them. What every setter of the scene's air uses.
+		/// </summary>
+		public static AirOffsetEntry NextAir(WeatherTimeline timeline, WorldSceneSettings settings, AirOffsets to, double startSeconds, double endSeconds)
+		{
+			AirOffsetEntry current = timeline != null ? timeline.Air : default;
+			WindBelts belts = BeltsAt(timeline, settings, startSeconds);
+			var next = new AirOffsetEntry
+			{
+				From = current.AtSeconds(startSeconds),
+				To = to,
+				StartSeconds = startSeconds,
+				EndSeconds = endSeconds,
+			};
+			AirDrift.CarryOver(DriftAir(timeline, settings, belts), current, ref next);
+			return next;
 		}
 
 		[System.ThreadStatic] private static List<VolcanicPlume.Plume> plumeScratch;
@@ -112,14 +170,26 @@ namespace FishMMO.Shared.Weather
 		/// </remarks>
 		public static Vector2 OpenWindAtSeconds(WeatherTimeline timeline, WorldSceneSettings settings, Vector2 position, double worldSeconds)
 		{
+			return OpenAirWithOffsets(timeline, settings, position, worldSeconds, out WeatherDriver.Synoptic air) ? air.Wind : Vector2.zero;
+		}
+
+		/// <summary>
+		/// The open air at a place and moment with the scene's added air applied (<see cref="AirOffsets.Apply"/>) — its
+		/// wind, pressure, instability and formations — as <see cref="Sample"/> works them out, with no storm and no
+		/// volume: what something with memory of the weather (the sea) reads. False, and <paramref name="air"/> default,
+		/// where the scene has no weather of its own or no air.
+		/// </summary>
+		public static bool OpenAirWithOffsets(WeatherTimeline timeline, WorldSceneSettings settings, Vector2 position, double worldSeconds, out WeatherDriver.Synoptic air)
+		{
+			air = default;
 			if (timeline == null || timeline.SceneMode != WeatherSceneMode.Own)
 			{
-				return Vector2.zero;
+				return false;
 			}
 			WorldBody weatherBody = timeline.BodyOverride != null ? timeline.BodyOverride : SceneTime.BodyOf(settings);
 			if (weatherBody != null && weatherBody.Atmosphere == FishMMO.Shared.Celestial.AtmosphereKind.None)
 			{
-				return Vector2.zero;
+				return false;
 			}
 			double worldHours = worldSeconds / 3600.0;
 			SolarSystemProfile system = SolarSystemProfile.Active;
@@ -129,8 +199,8 @@ namespace FishMMO.Shared.Weather
 				: 0.5f;
 			AirOffsets offsets = (settings != null ? settings.AuthoredAir : default) + timeline.Air.AtSeconds(worldSeconds);
 			PlanetAir planet = offsets.Apply(PlanetAir.For(system, weatherBody));
-			WeatherDriver.Synoptic air = OpenAirAt(timeline, position, worldSeconds, season01, localTime01, WindBelts.For(planet));
-			return offsets.Apply(air).Wind;
+			air = offsets.Apply(OpenAirAt(timeline, settings, position, worldSeconds, season01, localTime01, WindBelts.For(planet)));
+			return true;
 		}
 
 		/// <summary>The weather at a place and tick: the world time at that tick (<see cref="WeatherTimeline.WorldSecondsAt(uint)"/>), sampled.</summary>
@@ -224,7 +294,7 @@ namespace FishMMO.Shared.Weather
 			WindBelts belts = WindBelts.For(planet);
 
 			// The air over this place.
-			WeatherDriver.Synoptic air = OpenAirAt(timeline, new Vector2(position.x, position.z), worldSeconds, season01, localTime01, belts);
+			WeatherDriver.Synoptic air = OpenAirAt(timeline, settings, new Vector2(position.x, position.z), worldSeconds, season01, localTime01, belts);
 			// Over this place: its biome's and its world's humidity lean on the air, so a desert
 			// stays mostly dry under a front that soaks the forest next door.
 			air = WeatherDriver.OverPlace(air, reading.Climate.Humidity);

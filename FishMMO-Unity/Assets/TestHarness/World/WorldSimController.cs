@@ -718,13 +718,8 @@ namespace FishMMO.TestHarness.World
 		{
 			// In world time, as the server's are: a transition holds while the world is held.
 			double now = WorldSeconds;
-			timeline.Air = new AirOffsetEntry
-			{
-				From = timeline.Air.AtSeconds(now),
-				To = offsets,
-				StartSeconds = now,
-				EndSeconds = now + Mathf.Max(0f, seconds),
-			};
+			// Carrying on from where the old wind had taken the air, so the clouds do not jump when it changes.
+			timeline.Air = WeatherField.NextAir(timeline, Settings, offsets, now, now + Mathf.Max(0f, seconds));
 			timeline.Revision++;
 			ApplyClimate();
 			if (seconds <= 0f && SkySystem.Instance != null)

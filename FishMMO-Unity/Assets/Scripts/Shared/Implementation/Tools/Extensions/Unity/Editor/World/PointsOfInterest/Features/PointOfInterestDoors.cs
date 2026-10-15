@@ -154,13 +154,46 @@ namespace FishMMO.Shared.WorldDesign
 		private const float PersonRise = 0.2f;
 
 		/// <summary>
-		/// A big race's building has steps of its own size — a giant's are half a metre high, a wall to a person. Where its
-		/// threshold stands above a person's step, a person's flight of stone steps goes up beside the giant's to the door,
-		/// so a giant's hall can still be walked into.
+		/// A person's flight of stone steps up to a door where the building's own do not reach the ground in a person's step:
+		/// <list type="bullet">
+		/// <item>A big race's building has steps of its own size — a giant's are half a metre high, a wall to a person — so a
+		/// person's flight goes up beside them from the ground to the threshold.</item>
+		/// <item>A building on a slope is seated as much as its foundation allows below its centre's ground
+		/// (PropsFeature.SeatHeight), and its own steps start at its origin: on the downhill side their first riser stood as
+		/// much as 0.65 m off the ground, more than the controller's 0.25 m step (2026-10-15: "interiors aren't always fully
+		/// walkable"). A flight goes on from their foot down to the ground.</item>
+		/// </list>
 		/// </summary>
 		private static void PersonSteps(PointOfInterestSiteContext context, PointOfInterestSiteContext.PlacedDoor door)
 		{
-			if (door.Scale <= 1.05f || context.GroundAt == null)
+			if (context.GroundAt == null)
+			{
+				return;
+			}
+			// From the doorway's middle, outward along the way in.
+			Vector3 mid = door.Hinge + door.Across * (door.Width * 0.5f);
+			Vector3 outward = -door.Inward;
+			float top, from;
+			if (door.Scale > 1.05f)
+			{
+				// Out past the wall and up beside the building's own flight, to the threshold.
+				top = mid.y;
+				from = 0.35f * door.Scale;
+			}
+			else
+			{
+				// From the foot of the building's own flight (StructurePieces.Steps: its lowest tread one riser over the
+				// origin, a tread's run per riser out from 0.12 m past the wall's face), or the wall's face with none.
+				float rise = mid.y - door.Base;
+				int own = rise > StructurePieces.StepRise + 1e-3f ? Mathf.CeilToInt(rise / StructurePieces.StepRise) : 0;
+				top = own > 0 ? door.Base + rise / own : mid.y;
+				from = WallToHinge + (own > 0 ? 0.12f + (own - 1) * StructurePieces.StepTread : 0f);
+			}
+			Vector3 face = mid + outward * from;
+			Vector3 foot = face + outward * 0.15f;
+			float ground = context.GroundAt(foot.x, foot.z);
+			float drop = top - ground;
+			if (drop <= 0.25f || drop > MaxPersonFlight)
 			{
 				return;
 			}
@@ -169,31 +202,25 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return;
 			}
-			// From the doorway's middle, outward along the way in: the threshold's height over the ground there.
-			Vector3 mid = door.Hinge + door.Across * (door.Width * 0.5f);
-			Vector3 outward = -door.Inward;
-			// Out past the wall and the building's own steps' foot (a giant's flight runs about its rise ÷ 0.2 × 0.3 m).
-			float threshold = mid.y;
-			Vector3 foot = mid + outward * (0.6f * door.Scale);
-			float ground = context.GroundAt(foot.x, foot.z);
-			float rise = threshold - ground;
-			if (rise <= 0.25f)
-			{
-				return;
-			}
-			int n = Mathf.CeilToInt(rise / PersonRise);
+			int n = Mathf.CeilToInt(drop / PersonRise);
 			Quaternion turn = Quaternion.LookRotation(outward, Vector3.up);
 			float width = Mathf.Min(1.4f, door.Width);
-			// Step i stands i risers up, set out from the wall face by (n - i) treads; the top one is the threshold.
-			Vector3 face = mid + outward * (0.35f * door.Scale);
+			// Step i stands i risers up from the ground, set out from the face by (n - i) treads; the top one is where the
+			// flight arrives (the threshold, or the building's own lowest tread).
 			for (int i = 1; i < n; i++)
 			{
-				float top = ground + rise * i / n, run = (n - i) * 0.3f;
+				float height = ground + drop * i / n, run = (n - i) * 0.3f;
 				Vector3 centre = face + outward * (run * 0.5f);
 				float bottom = context.GroundAt(centre.x, centre.z) - 0.3f;
-				context.AddProp(stone, new Vector3(centre.x, bottom, centre.z), turn, new Vector3(width, Mathf.Max(0.05f, top - bottom), run));
+				context.AddProp(stone, new Vector3(centre.x, bottom, centre.z), turn, new Vector3(width, Mathf.Max(0.05f, height - bottom), run));
 			}
 		}
+
+		/// <summary>From a door's hinge (on the wall's inside face) out to the wall's outside face, metres: a house's 0.45 m wall less the leaf's inset.</summary>
+		private const float WallToHinge = 0.4f;
+
+		/// <summary>The most a person's flight climbs, metres; more and the building stands on a drop no flight belongs on.</summary>
+		private const float MaxPersonFlight = 3f;
 
 		/// <summary>The door's interaction: a trigger asset with a <see cref="SwitchAction"/>, made the first time it is wanted.</summary>
 		public static Trigger EnsureTrigger()

@@ -150,6 +150,13 @@ namespace FishMMO.Shared
 			/// <summary>RGBA8 texels, row by row: the colour (sRGB, alpha the coverage) and the normal (linear, rgb n·0.5+0.5).</summary>
 			public byte[] Colour = new byte[0];
 			public byte[] Normals = new byte[0];
+			/// <summary>
+			/// RGBA8 texels: what the ground there is made of for the planet's looks (r living, g lichen, b mineral, by the
+			/// splat weights; a coverage). The colour above is the terrain's own; the client wears the world's looks over it by
+			/// these at load (GroundColourMap.WearLooks), so the bake depends on no world and holds for the looks on or off.
+			/// Empty in a bake made before it: the client then works the map out itself.
+			/// </summary>
+			public byte[] Shares = new byte[0];
 			/// <summary>The terrains it covers, where each stood, and the texture set each was drawn with (its albedo array and a key of its tints; null and 0 for none).</summary>
 			public TerrainData[] Terrains = new TerrainData[0];
 			public Vector3[] Positions = new Vector3[0];

@@ -169,6 +169,111 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void FloraLook_LeavesTheBladeAlone_WhenNothingIsPublished()
+		{
+			// FishFlora.hlsl's invalid look carries height and bend 1: every blade must be what it was.
+			foreach (float h in new[] { 0.05f, 0.4f, 1.3f, 2.5f, 3.9f })
+			{
+				LogAssert.AreEqual(h, GrassMath.FloraHeight(h, 1f), $"height {h} under no look");
+			}
+			foreach (float l in new[] { 0f, 0.3f, 0.75f, 1f })
+			{
+				LogAssert.AreEqual(l, GrassMath.FloraLean(l, 1f), $"lean {l} under no look");
+			}
+		}
+
+		[Test]
+		public void FloraLook_NeverOutgrowsTheRecordOrTheCullVolumes()
+		{
+			// Every type height a GrassType can have (up to the packed ceiling / 1.6, twice that for a Tall type), every
+			// clump and own scale (Shape's HeightScale, at most ~1.43, tested to 1.6), every look a world can give.
+			foreach (bool tall in new[] { false, true })
+			{
+				float maxType = GrassMath.MaxPackedHeight * (tall ? GrassMath.TallHeightScale : 1f) / 1.6f;
+				for (float type = 0.05f; type <= maxType + 1e-4f; type += 0.05f)
+				{
+					float reach = GrassMath.BladeReach(type);
+					for (float scale = 0.1f; scale <= 1.6f + 1e-4f; scale += 0.25f)
+					{
+						foreach (float look in new[] { 0f, 0.3f, 0.45f, 1f, 1.6f, 1.75f, 2.7f, 10f })
+						{
+							float h = GrassMath.FloraHeight(type * scale, look);
+							LogAssert.IsTrue(h <= GrassMath.MaxBladeHeight, $"type {type} scale {scale} look {look}: {h} m fits the record");
+							LogAssert.IsTrue(h + 0.5f <= reach + 1e-4f, $"type {type} scale {scale} look {look}: {h} m within the tiles' reach {reach}");
+							uint packed = GrassMath.Pack(3, 1f, h, 0.5f, 1f, 0.5f);
+							GrassMath.Unpack(packed, GrassMath.RecordBits(3, h), out _, out _, out float unpacked, out _, out _, out _);
+							LogAssert.IsTrue(Math.Abs(unpacked - h) <= 0.04f * Math.Max(1f, h), $"{h} m round-trips as {unpacked}");
+						}
+					}
+				}
+			}
+			foreach (float bend in new[] { 0f, 0.5f, 1.3f, 4f })
+			{
+				foreach (float l in new[] { 0f, 0.5f, 1f })
+				{
+					float lean = GrassMath.FloraLean(l, bend);
+					LogAssert.IsTrue(lean >= 0f && lean <= 1f, $"lean {l} bend {bend}: {lean} packs");
+				}
+			}
+		}
+
+		[Test]
+		public void FloraShares_RoundTripInTenBits_WithoutBleeding()
+		{
+			// The grass reads a layer's shares from the albedo header's eighth word (FishGrassBlades.compute GrassLayerFlora).
+			float step = 1f / 1023f;
+			foreach (Vector3 s in new[] { new Vector3(0f, 0f, 0f), new Vector3(1f, 0f, 0f), new Vector3(0f, 1f, 0f), new Vector3(0f, 0f, 1f),
+				new Vector3(0.55f, 0f, 0.45f), new Vector3(0f, 0.6f, 0.4f), new Vector3(0.25f, 0f, 0.225f), new Vector3(1f, 1f, 1f) })
+			{
+				uint packed = GrassMath.PackFloraShares(s.X, s.Y, s.Z);
+				Vector3 back = GrassMath.UnpackFloraShares(packed);
+				LogAssert.IsTrue(Math.Abs(back.X - s.X) <= step * 0.5f + 1e-6f && Math.Abs(back.Y - s.Y) <= step * 0.5f + 1e-6f
+					&& Math.Abs(back.Z - s.Z) <= step * 0.5f + 1e-6f, $"{s} round-trips as {back}");
+				LogAssert.AreEqual(0u, packed >> 30, $"{s}: the top two bits stay clear");
+			}
+			// Out of range clamps rather than spilling into the next share.
+			LogAssert.AreEqual(new Vector3(1f, 0f, 0f), GrassMath.UnpackFloraShares(GrassMath.PackFloraShares(7f, -2f, 0f)), "clamped to 0..1");
+		}
+
+		[Test]
+		public void FloraGround_LeavesTheGroundAlone_WithoutAShareOrAStrength()
+		{
+			// The terrain's colour readers (GroundColourMap) mirror FishFloraGround: bare ground under an ordinary air, or the looks
+			// at no strength, must come back exactly as the terrain drew it before the looks.
+			var albedo = new Vector3(0.21f, 0.17f, 0.09f);
+			var foliage = new Vector3(0.05f, 0.2f, 0.03f);
+			var accent = new Vector3(0.4f, 0.35f, 0.1f);
+			var ground = new Vector3(0.3f, 0.08f, 0.04f);
+			LogAssert.AreEqual(albedo, GrassMath.FloraGround(albedo, Vector3.Zero, foliage, accent, ground, 0.7f, 0.75f, 0.75f), "no share");
+			LogAssert.AreEqual(albedo, GrassMath.FloraGround(albedo, new Vector3(1f, 0f, 1f), foliage, accent, ground, 0f, 0.75f, 0f), "no strength");
+			LogAssert.AreEqual(albedo, GrassMath.FloraGround(albedo, new Vector3(0f, 0f, 1f), foliage, accent, ground, 0.7f, 0.75f, 0f),
+				"mineral ground under an ordinary air (_FishFloraGround.a = 0)");
+		}
+
+		[Test]
+		public void FloraGround_ShiftsLivingGround_AndRecoloursOnlyTheMineral()
+		{
+			// Living ground keeps the colour its climate gave it and is moved by the look's shift (2026-10-15: a look that
+			// replaced it turned meadows into chunks of colour that ignored the ground's dry and lush).
+			var turf = new Vector3(0.1f, 0.2f, 0.05f);
+			var shift = new Vector3(1.2f, 0.9f, 0.7f);
+			Vector3 shifted = GrassMath.FloraGround(turf, new Vector3(1f, 0f, 0f), shift, Vector3.Zero, Vector3.Zero, 1f, 0f, 0f);
+			LogAssert.IsTrue(Vector3.Distance(shifted, turf * shift) < 1e-6f, $"full strength multiplies: {shifted}");
+			Vector3 half = GrassMath.FloraGround(turf, new Vector3(0.5f, 0f, 0f), shift, Vector3.Zero, Vector3.Zero, 1f, 0f, 0f);
+			LogAssert.IsTrue(Vector3.Distance(half, turf * Vector3.Lerp(Vector3.One, shift, 0.5f)) < 1e-6f, $"half a living share, half the shift: {half}");
+			LogAssert.IsTrue(Vector3.Distance(GrassMath.FloraGround(turf, new Vector3(1f, 0f, 0f), Vector3.One, Vector3.Zero, Vector3.Zero, 1f, 0f, 0f), turf) < 1e-6f,
+				"a white shift (the common look on an Earth-like world) leaves the turf as it was");
+			// Mineral ground takes the world's ground at its own lightness, nothing of the shift.
+			var target = new Vector3(0.08f, 0.22f, 0.04f);
+			float lum = GrassMath.FloraLuminance(target);
+			var same = new Vector3(lum, lum, lum);
+			var ground = new Vector3(0.3f, 0.08f, 0.04f);
+			Vector3 rock = GrassMath.FloraGround(same, new Vector3(0f, 0f, 1f), shift, Vector3.Zero, ground, 1f, 0f, 1f);
+			LogAssert.IsTrue(Vector3.Distance(rock, ground * (1.5f * (lum / GrassMath.FloraLuminance(ground)) / (lum / GrassMath.FloraLuminance(ground) + 0.5f))) < 1e-5f,
+				$"wholly mineral ground at full strength is the world's ground at its own lightness: {rock}");
+		}
+
+		[Test]
 		public void Sprinkle_HoldsItsOwnChance_WhateverElseGrows()
 		{
 			// Channel 0 grass (a tussock species: no chance), 1 flowers at 2% a candidate, 2 reeds at 6%, half painted.

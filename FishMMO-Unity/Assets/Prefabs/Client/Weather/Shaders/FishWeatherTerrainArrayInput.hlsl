@@ -81,7 +81,19 @@ CBUFFER_START(_FishTerrainArray)
     // through desert wears to packed sand, through forest to a littered track (SceneTerrainPalette.PathLayerMap).
     float4 _FishPathEarthFor[8];
     float4 _FishPathRoadFor[8];
+    // FishMMO edit: what each layer is made of, as the planet's looks see it (BiomeLooks.GroundShareOf, by the layer's
+    // name: TerrainArraySet.LayerFlora): x living (grass, moss, heath; litter and peat partly), y lichen, z mineral. Read
+    // by FishFloraGround only while the looks are published (_FishFloraInfo.x), so a binder that has not pushed it yet
+    // (zeros) draws the ground as before.
+    float4 _FishLayerFlora[FISH_TERRAIN_ARRAY_MAX_LAYERS];
 CBUFFER_END
+
+// FishMMO edit: the biome's looks on its world (FishFlora.hlsl, published by FloraPaletteMap): the living ground takes the
+// look of the patch it lies in, the same patch the blade grass standing on it takes (FISH_FLORA_GRASS_PATCH / _SALT), so a
+// sward of golden grass grows from golden turf; lichen takes the patch's lichen colour; bare ground on an airless or
+// thin-aired world takes the world's own colour. Texel loads only, no sampler: a pass that never reads the albedo (depth,
+// shadow, depth-normals) strips it whole, with nothing left to orphan.
+#include "FishFlora.hlsl"
 
 // Unity's own alphamaps, bound as they are: terrainData.alphamapTextures[k] is control map k, channel c of
 // it is layer 4k + c. Binding them directly (rather than copying them into an array) is what keeps the
@@ -316,8 +328,10 @@ void FishHeightBlend(inout half4 weights, half4 heights)
 /// <summary>
 /// One path surface's art from the arrays: albedo (tinted) and smoothness, tangent normal, occlusion. blur widens the
 /// sampling footprint (4 = two mips down): trodden ground has lost its fine detail, the litter and crumbs trampled flat.
+/// look is the ground's patch look (FishTerrainFloraLook): a path layer takes the world's looks as the ground it crosses
+/// does (a trodden way on a rust-red airless world is rust-red too), or its edge would show the old colour.
 /// </summary>
-void FishPathLayer(int id, float2 world, float2 worldDx, float2 worldDy, float blur, out half3 albedo, out half3 normal, out half smoothness, out half occlusion)
+void FishPathLayer(int id, float2 world, float2 worldDx, float2 worldDy, float blur, FishFloraLook look, out half3 albedo, out half3 normal, out half smoothness, out half occlusion)
 {
     float4 st = _FishLayerST[id];
     float2 layerUV = world * st.xy + st.zw;
@@ -327,7 +341,7 @@ void FishPathLayer(int id, float2 world, float2 worldDx, float2 worldDy, float b
     smoothness = 0.1h;
 #ifndef FISH_TERRAIN_NORMALS_ONLY
     half4 a = SAMPLE_TEXTURE2D_ARRAY_GRAD(_FishAlbedoArray, sampler_FishAlbedoArray, layerUV, id, dx, dy);
-    albedo = a.rgb * (half3)_FishLayerTint[id].rgb;
+    albedo = (half3)FishFloraGround(a.rgb * (half3)_FishLayerTint[id].rgb, _FishLayerFlora[id].xyz, look);
     smoothness = a.a * (half)_FishLayerSurface[id].y;
 #endif
     normal = half3(0.0h, 0.0h, 1.0h);
@@ -355,7 +369,7 @@ void FishPathLayer(int id, float2 world, float2 worldDx, float2 worldDy, float b
 /// between; packed gravel; cobbles. A lost trail is broken by patches of the ground it crosses. Far off, a way narrower
 /// than a pixel fades by the share of the pixel it covers rather than shimmering.
 /// </summary>
-void FishApplyPaths(inout FishArraySurface s, float3 positionWS, float2 worldDx, float2 worldDy, int groundId)
+void FishApplyPaths(inout FishArraySurface s, float3 positionWS, float2 worldDx, float2 worldDy, int groundId, FishFloraLook look)
 {
     FishPathSample p = FishPathAt(positionWS.xz);
     // Past the furthest the frayed, broken edge reaches (FishPathFrayedEdge, FishPathEdgeBand).
@@ -419,20 +433,20 @@ void FishApplyPaths(inout FishArraySurface s, float3 positionWS, float2 worldDx,
     UNITY_BRANCH
     if (earthShare > 0.0)
     {
-        FishPathLayer(earthId, xz, worldDx, worldDy, 1.0, a, n, sm, oc);
+        FishPathLayer(earthId, xz, worldDx, worldDy, 1.0, look, a, n, sm, oc);
         a = lerp(a, s.albedo, 0.12h);
         albedo += a * earthShare; normal += n * earthShare; smoothness += sm * earthShare; occlusion += oc * earthShare;
     }
     UNITY_BRANCH
     if (gravelShare > 0.0)
     {
-        FishPathLayer(gravelId, xz, worldDx, worldDy, 1.0, a, n, sm, oc);
+        FishPathLayer(gravelId, xz, worldDx, worldDy, 1.0, look, a, n, sm, oc);
         albedo += a * gravelShare; normal += n * gravelShare; smoothness += sm * gravelShare; occlusion += oc * gravelShare;
     }
     UNITY_BRANCH
     if (stoneShare > 0.0)
     {
-        FishPathLayer(stoneId, xz, worldDx, worldDy, 1.0, a, n, sm, oc);
+        FishPathLayer(stoneId, xz, worldDx, worldDy, 1.0, look, a, n, sm, oc);
         albedo += a * stoneShare; normal += n * stoneShare; smoothness += sm * stoneShare; occlusion += oc * stoneShare;
     }
     half total = max(1e-3h, (half)(earthShare + gravelShare + stoneShare));
@@ -486,6 +500,41 @@ void FishSampleLayerPlane(int id, float2 layerUV, float2 dx, float2 dy, bool has
         n.z = sqrt(max(1.0e-3h, 1.0h - saturate(dot(n.xy, n.xy))));
         normal = n;
     }
+}
+
+/// <summary>
+/// The look of the patch a pixel lies in (FishFlora.hlsl), the blade grass's own patch, for the layers that wear it; not
+/// valid (and never looked up) while the looks are not published, or where none of the pixel's layers is living ground
+/// or lichen: bare rock, sand and snow take only the world's ground colour, which needs no look. One lookup a pixel,
+/// however many of its layers wear it.
+/// </summary>
+FishFloraLook FishTerrainFloraLook(float2 xz, int4 ids, half4 weights)
+{
+    FishFloraLook look = (FishFloraLook)0;
+    look.valid = false;
+#if !defined(FISH_TERRAIN_NORMALS_ONLY)
+    UNITY_BRANCH
+    if (_FishFloraInfo.x > 0.5)
+    {
+        float living = 0.0;
+        UNITY_UNROLL
+        for (int k = 0; k < 4; k++)
+        {
+            float4 share = _FishLayerFlora[ids[k]];
+            living += weights[k] > 0.0h ? share.x + share.y : 0.0;
+        }
+        /* FishFloraAt's own parts, not FishFloraAt: the published test is made above, and its early return of a whole
+         * look, inlined under these branches into the four-layer blend, sent FXC's optimiser (Unity's D3DCompiler_47) into
+         * a stack overflow, so the pass failed to compile at all (2026-10-15). */
+        UNITY_BRANCH
+        if (living > 0.0)
+        {
+            uint biome = FishFloraBiomeAt(xz);
+            look = FishFloraLookOf(biome, FishFloraVariantAt(xz, biome, FISH_FLORA_GRASS_PATCH, FISH_FLORA_GRASS_SALT));
+        }
+    }
+#endif
+    return look;
 }
 
 /// <summary>Ground steeper than this (the normal's height under it) starts to take its layers from the side; fully by the second.</summary>
@@ -646,13 +695,22 @@ FishArraySurface FishSampleArraySurfaceSloped(float2 uv, float3 positionWS, floa
     half smoothness = 0;
     half occlusion = 0;
 
+    /* FishMMO edit: each layer in the planet's looks (FishFloraGround), before the blend, so a pixel half turf and half
+     * rock takes the look on its turf only. The look is the patch's, found once for the pixel's four layers. Albedo here
+     * is linear (the sRGB array decodes on sampling), as the palette is. */
+    FishFloraLook look = FishTerrainFloraLook(positionWS.xz, ids, weights);
+
     UNITY_UNROLL
     for (int j = 0; j < 4; j++)
     {
         int id = ids[j];
         half w = weights[j];
         float4 surface = _FishLayerSurface[id];
-        mixedAlbedo += albedo[j].rgb * (half3)_FishLayerTint[id].rgb * w;
+        half3 layerAlbedo = albedo[j].rgb * (half3)_FishLayerTint[id].rgb;
+#if !defined(FISH_TERRAIN_NORMALS_ONLY)
+        layerAlbedo = (half3)FishFloraGround(layerAlbedo, _FishLayerFlora[id].xyz, look);
+#endif
+        mixedAlbedo += layerAlbedo * w;
         mixedNormal += normals[j] * w;
         // TerrainLit's rule: a layer with a mask map takes metallic, AO and smoothness from it; one without
         // takes its sliders, with smoothness from the albedo's alpha when the albedo has one.
@@ -673,7 +731,7 @@ FishArraySurface FishSampleArraySurfaceSloped(float2 uv, float3 positionWS, floa
     s.occlusion = saturate(occlusion);
     s.covered = saturate(covered);
 #if !defined(FISH_TERRAIN_BACKDROP)
-    FishApplyPaths(s, positionWS, worldDx, worldDy, ids.x);
+    FishApplyPaths(s, positionWS, worldDx, worldDy, ids.x, look);
 #endif
     return s;
 }
@@ -714,6 +772,13 @@ FishArraySurface FishBackdropSurface(float2 uv, float3 positionWS)
 {
     FishArraySurface s;
     s.albedo = SAMPLE_TEXTURE2D(_FishBackdropColour, sampler_FishBackdropColour, uv).rgb;
+#ifndef FISH_TERRAIN_NORMALS_ONLY
+    /* FishMMO edit: the bake knows no layers, so it takes only the world's own ground (FishFloraGround as for a wholly
+     * mineral layer): on an airless or thin-aired world, the one place that colour applies, the horizon is bare ground,
+     * and the near arrays above (each layer in its looks) fade into a bake of the same cast. Under ordinary air
+     * (_FishFloraGround.a = 0) and with the looks off it is the bake as it was. */
+    s.albedo = (half3)FishFloraGround(s.albedo, float3(0.0, 0.0, 1.0), (FishFloraLook)0);
+#endif
     s.normalTS = half3(0.0h, 0.0h, 1.0h);
     s.metallic = 0.0h;
     s.smoothness = 0.0h;

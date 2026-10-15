@@ -15,7 +15,7 @@ MonoBehaviour:
   Playable: 1
   Prefab: {fileID: 4573496687782621821, guid: 3243c87cb242a03478e9ee038f7873ed, type: 3}
   PlaceholderModel:
-    m_AssetGUID: 7737647c22c1fc64a88d5cd030c352ce
+    m_AssetGUID: 1d15572bf12df43ab8e7ed6bb68b8857
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

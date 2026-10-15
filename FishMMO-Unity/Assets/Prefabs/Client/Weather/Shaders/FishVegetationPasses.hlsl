@@ -24,6 +24,9 @@
 //                                          Params.x = 0 (not set: edit mode, no terrain) = off.
 //   _FishMoss* / _FishMistGround*          the moss layer and the fine ground map it reads (MossShaderGlobals,
 //                                          MistGroundMap; FishMoss.hlsl), on a material with _FishMoss above 0 only
+//   _FishFlora*                            the biomes' looks on this world (FloraPaletteMap; FishFlora.hlsl): a terrain
+//                                          detail's colours and size by the patch it stands in. Only on draws that set
+//                                          _FishFloraOn (the detail renderers' clones and blocks; VegFloraLook)
 // The ground reads the same cover through FishWeatherSurface, and foliage through FishWeatherFoliage,
 // both built from FishCoverLook / FishCoverAmount / FishDampen, so a meadow and its grass agree.
 //
@@ -111,6 +114,19 @@ float _FishVegetationAlphaToCoverage;
 
 // The ground colour map (GroundColourMap): xy the map's world xz origin, zw one over its xz size.
 #include "FishGroundColour.hlsl"
+
+// The looks of the scene's biomes on its world (FishFlora.hlsl, FloraPaletteMap): texel loads only, no sampler, so every
+// pass of both twins reads it alike.
+#include "FishFlora.hlsl"
+
+#ifndef FISH_FLORA_ON_DECLARED
+#define FISH_FLORA_ON_DECLARED
+/* Per draw, not per material: set on the terrain's detail draws only (TerrainDetailInstancing's clones through
+ * TerrainGpuRenderer.FloraMode, DetailScatterRenderer's clones, and the CPU fallback's per-draw block), on the clone
+ * material AND every draw's MaterialPropertyBlock as _FishContactOn is: 1 the look's colours and size, 2 its colours only
+ * (a bush). A tree, a cliff rock or a prop never sets it and reads 0: no look, drawn as before, no art regenerated. */
+float _FishFloraOn;
+#endif
 
 /* Globals, not material properties: materials generated before these existed read 0 for them, not the
  * shader's defaults, so a per-material strength silently switched the whole effect off. One scene-wide
@@ -311,9 +327,86 @@ float3 VegRotate(float3 v, float3 axis, float angle)
     return v * c + cross(axis, v) * s + axis * dot(axis, v) * (1.0 - c);
 }
 
+// ── The patch's look ──────────────────────────────────────────────────
+//
+// One material per species, shared by every biome on every world, drew a fern the same fern in a temperate wood, a
+// jungle and on a red dwarf's world; and the ground colour then pulled each one most of the way to its soil, so a
+// biome's details read as one plant in one colour. On the terrain's detail draws (_FishFloraOn) each plant now takes the
+// look of the patch it stands in (FishFlora.hlsl: twelve per biome per world, picked per patch by weight): its leaves the
+// look's foliage, its flowers the look's bloom, what is not leaf (a fungus cap, lichen, litter, a cactus's skin, a shell)
+// the look's accent, and its size a little of the look's height. Patches of about eight metres, so a glade has one look
+// and the next a rarer one; one look per plant, from where it is rooted, so its flowers and leaves belong together and
+// every pass reads the same one. Off (_FishFloraOn 0, or _FishFloraInfo.x 0 when nothing is published) every plant draws
+// exactly as before.
+
+// Patch size, metres, and the salt that keeps these patches' edges off the blade grass's and the stones'.
+#define FISH_VEG_FLORA_PATCH 8.0
+#define FISH_VEG_FLORA_SALT 0x2f6b9d17u
+// The soil a stem stands in, metres up from the root: the ground colour keeps its whole pull there (a plant still grows
+// out of the earth it stands on), the look takes over above it. At most this, and at most a quarter of the ground
+// blend's own root band (_FishGroundColourShape.x).
+#define FISH_VEG_FLORA_SOIL 0.12
+// How far a plant's size follows its look's height: the square root (a look's height is a grass blade's, against its
+// type's own), held to this range so a fern never becomes a tree nor a bush a tuft. The maximum is mirrored by
+// TerrainGpuRenderer.FloraMaxScale, which widens the detail renderers' culling spheres to hold it: change both together.
+#define FISH_VEG_FLORA_SCALE_MIN 0.7
+#define FISH_VEG_FLORA_SCALE_MAX 1.4
+
+/// The look of the patch a plant is rooted in, or an invalid one where none applies: off on this draw, nothing published,
+/// a billboard (a tree's), a vine (rooted on a wall, not the ground under its origin), or the per-plant-constant probe.
+FishFloraLook VegFloraLook(float3 originWS)
+{
+    FishFloraLook look = (FishFloraLook)0;
+    look.valid = false;
+    look.height = 1.0; look.width = 1.0; look.bend = 1.0; look.bloomSize = 1.0;
+    look.mineral = 1.0;
+    UNITY_BRANCH
+    if (_FishFloraOn > 0.5 && _FishFloraInfo.x > 0.5 && _FacingCamera < 0.5 && _Clinging < 0.5 && _FishVegPlantConst < 0.5)
+    {
+        look = FishFloraAt(originWS.xz, FISH_VEG_FLORA_PATCH, FISH_VEG_FLORA_SALT);
+    }
+    return look;
+}
+
+/// The plant's whole-size factor from its look: 1 with none, and on a colours-only draw (_FishFloraOn 2: a bush, which is
+/// cover and keeps the size it was placed at for every player).
+float VegFloraScale(FishFloraLook look, float3 originWS)
+{
+    // The world's growth and a smooth swell (FishFloraGrowth), never the patch's look: neighbouring plants should not
+    // jump in size where one patch meets the next.
+    return look.valid && _FishFloraOn < 1.5 ? clamp(sqrt(FishFloraGrowth(originWS.xz, 0.15, 0x1F83D9ABu)), FISH_VEG_FLORA_SCALE_MIN, FISH_VEG_FLORA_SCALE_MAX) : 1.0;
+}
+
+/// What this vertex is recoloured to (rgb, linear) and how far (a; 0 = left as it is), by what it is: its vertex alpha
+/// (the generators' tint mask: 1 leaves and blades, FloraMeshes.HeadAlpha 0.3 flower and seed heads, 0 everything that is
+/// not leaf) and its part kind (PlantPart). A bush's or shrub's wood (limbs and twigs) is not a fungus: it takes half the
+/// accent, enough to sit in the patch without its branches turning the colour of the toadstools under it.
+half4 VegFloraColour(FishFloraLook look, half alpha, float kind)
+{
+    if (!look.valid)
+    {
+        return half4(0.0h, 0.0h, 0.0h, 0.0h);
+    }
+    if (alpha > 0.65h)
+    {
+        /* Leaves are shifted, not recoloured (FishFloraShift), and AFTER the pull to the ground's colour: that colour (the
+         * ground colour map) already carries the biome's average shift, so a leaf takes only its patch's difference from it
+         * (shift ÷ biome average) and the planet's pigment is not applied twice. The pull itself keeps its full strength:
+         * leaves sit on their ground's climate as they did. The strength goes NEGATIVE to tell the fragment. */
+        return half4((half3)(look.shift / max(look.biomeShift, 1e-3)), -(half)_FishFloraStrength.x);
+    }
+    if (alpha > 0.15h)
+    {
+        return half4((half3)look.bloom, (half)_FishFloraStrength.y);
+    }
+    half wood = kind > 0.5 && kind < 2.5 ? 0.5h : 1.0h;
+    return half4((half3)look.accent, (half)_FishFloraStrength.z * wood);
+}
+
 /// Reshapes this plant's vertex in object space (root at the origin, y up). False when the part it belongs
 /// to is one this plant does not grow: the vertex is then put on its part's pivot, and the part draws nothing.
-bool VegVary(inout float3 positionOS, inout float3 normalOS, float4 partPivot, float4 partData, float3 originWS)
+/// floraScale is the whole plant's size from its patch's look (VegFloraScale; 1 without one).
+bool VegVary(inout float3 positionOS, inout float3 normalOS, float4 partPivot, float4 partData, float3 originWS, float floraScale)
 {
     // The plant's own figures (_FishVegPlantConst: as constants, what a per-instance precompute would hand in).
     uint plant;
@@ -392,6 +485,9 @@ bool VegVary(inout float3 positionOS, inout float3 normalOS, float4 partPivot, f
     float lean = radians(rLean * _VaryLean);
     positionOS = VegRotate(positionOS, leanAxis, lean);
     normalOS = VegRotate(normalOS, leanAxis, lean);
+    // The patch's look: the whole plant larger or smaller about its root, its proportions kept (a uniform scale leaves the
+    // normals as they are). Here, in every pass, so its shadow and its depth are the plant's own.
+    positionOS *= floraScale;
     return true;
 }
 
@@ -464,8 +560,9 @@ float2 VegSkirtUV(float2 uv, float2 wind, float drop)
 
 // Where a vertex is once the snow has buried it, the ground has taken its base and the wind has
 // bent it, and its normal there; fade is how much of it the distance leaves (x) and its dither shift (y); skirtDrop how
-// far a trunk skirt's foot went down to the ground (VegSkirtFoot; 0 for everything else).
-void VegDeform(VegAttributes input, out float3 positionWS, out half3 normalWS, out half4 tint, out half2 fade, out half4 ground, out float skirtDrop)
+// far a trunk skirt's foot went down to the ground (VegSkirtFoot; 0 for everything else); flora the colour this vertex
+// takes from its patch's look and how far (VegFloraColour; a 0 on every draw but the terrain's details).
+void VegDeform(VegAttributes input, out float3 positionWS, out half3 normalWS, out half4 tint, out half2 fade, out half4 ground, out float skirtDrop, out half4 flora)
 {
     skirtDrop = 0.0;
     // Every path below sets these; set here too, or Unity's Vulkan compile warns "potentially uninitialized" at the
@@ -477,11 +574,25 @@ void VegDeform(VegAttributes input, out float3 positionWS, out half3 normalWS, o
     float3 originWS = TransformObjectToWorld(float3(0.0, 0.0, 0.0));
     float3 positionOS = input.positionOS.xyz;
     float3 normalOS = input.normalOS;
+    // The look of the patch it stands in (VegFloraLook; invalid on every draw but the terrain's details). Its colours are
+    // only read by the lit pass: in the others the compiler keeps the variant pick and the one height load.
+    FishFloraLook look = VegFloraLook(originWS);
+    flora = VegFloraColour(look, input.color.a, input.partData.z);
     // This plant's own shape, before the snow, the distance and the wind (VegVary).
-    VegVary(positionOS, normalOS, input.partPivot, input.partData, originWS);
+    VegVary(positionOS, normalOS, input.partPivot, input.partData, originWS, VegFloraScale(look, originWS));
     // Height above the root as authored (before snow, distance shrink and wind), in world metres.
+    float heightAboveRoot = TransformObjectToWorld(input.positionOS.xyz).y - originWS.y;
     half groundCoverage;
-    ground = VegGroundColour(originWS, TransformObjectToWorld(input.positionOS.xyz).y - originWS.y, groundCoverage);
+    ground = VegGroundColour(originWS, heightAboveRoot, groundCoverage);
+    /* With a recolouring look (petals, fungi, lichen, litter: a positive strength), the ground's pull keeps the soil a
+     * stem stands in and lets the look have the rest, eased off over FISH_VEG_FLORA_SOIL from the root. Leaves (a negative
+     * strength: a shift) keep the full pull, so they sit on their ground's climate as before, and take their patch's
+     * shift over it in the fragment. */
+    if (flora.a > 0.0h)
+    {
+        half soil = 1.0h - (half)saturate(heightAboveRoot / min(FISH_VEG_FLORA_SOIL, 0.25 * max(0.05, _FishGroundColourShape.x)));
+        ground.a *= 1.0h - flora.a * (1.0h - soil * soil);
+    }
     // Debug view: every plant wholly the colour its root reads, magenta where it reads nothing (map
     // off, outside it, or no coverage) — which link of the chain is broken, at a glance.
     if (_FishGroundColourParams.y > 0.5 && _FishGroundColourParams.y < 1.5)
@@ -608,6 +719,9 @@ struct VegVaryings
     half2 fade : TEXCOORD7; // x drawn share by distance, y dither shift
     half4 ground : TEXCOORD8; // rgb the ground's colour under the plant, a how much this vertex takes
     float contact : TEXCOORD9; // metres above the terrain straight below, for the contact blend at a trunk's base (FishGroundColour.hlsl)
+#if defined(FISH_VEG_PASS_FORWARD)
+    half4 flora : TEXCOORD10; // rgb the colour of the patch's look this vertex takes, a how far (VegFloraColour; 0 off)
+#endif
     UNITY_VERTEX_INPUT_INSTANCE_ID
     UNITY_VERTEX_OUTPUT_STEREO
 };
@@ -630,9 +744,13 @@ VegVaryings VegVertex(VegAttributes input)
     half2 fade;
     half4 ground;
     float skirtDrop;
-    VegDeform(input, positionWS, normalWS, tint, fade, ground, skirtDrop);
+    half4 flora;
+    VegDeform(input, positionWS, normalWS, tint, fade, ground, skirtDrop, flora);
     output.fade = fade;
     output.ground = ground;
+#if defined(FISH_VEG_PASS_FORWARD)
+    output.flora = flora;
+#endif
     // The terrain is traced (FishContactHeight: a walk over the copied terrains, a height and a normal read) only where
     // the contact band could reach: a vertex this far above its root takes its height above the root instead. The band
     // reads the value only below its own width plus a margin (FishGroundContact), and across a triangle that spans from
@@ -817,6 +935,14 @@ half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SE
     VegFadeClip(input.positionCS, input.fade);
 
     half3 albedo = tex.rgb * _BaseColor.rgb * input.color.rgb;
+    // The patch's look (VegFloraColour) on petals and fungi, keeping their own light and dark (FishFloraRecolour), ahead of
+    // the season (leaves take theirs after the ground's colour, below):
+    // the healthy, dry and autumn tints then brown or yellow the look as they did the species' own colour. Strength 0 (every
+    // draw but the terrain's details) leaves the albedo exactly as it was.
+    if (input.flora.a > 0.0h)
+    {
+        albedo = (half3)FishFloraRecolour(albedo, input.flora.rgb, input.flora.a);
+    }
     albedo *= lerp(half3(1.0, 1.0, 1.0), input.tint.rgb, input.color.a);
     // The ground's colour, on the tintable parts only (blades and leaves; not petals or bark). The blade
     // keeps its own light and dark (texture detail, the darker root of its vertex colour) as a ±25%
@@ -829,6 +955,11 @@ half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SE
     half3 groundAlbedo = debugView > 0.5 && debugView < 1.5 ? input.ground.rgb
         : input.ground.rgb * (1.0 - (half)_FishGroundColourShape.w * (1.0 - bladeValue));
     albedo = lerp(albedo, groundAlbedo, groundMix);
+    // A leaf's patch look, over the ground's colour (VegFloraColour: a negative strength is a shift).
+    if (input.flora.a < 0.0h)
+    {
+        albedo = (half3)FishFloraShift(albedo, input.flora.rgb, -input.flora.a);
+    }
     if (debugView > 1.5)
     {
         albedo = groundMix.xxx;   // debug 2: how much ground colour the normal blend gives (white all, black none)
@@ -1044,7 +1175,8 @@ VegDepthVaryings VegDepthVertex(VegAttributes input)
     half2 fade;
     half4 ground;
     float skirtDrop;
-    VegDeform(input, positionWS, normalWS, tint, fade, ground, skirtDrop);
+    half4 flora;   // the colour's: unread here
+    VegDeform(input, positionWS, normalWS, tint, fade, ground, skirtDrop, flora);
     output.fade = fade;
 #if defined(FISH_VEG_PASS_SHADOW)
     // The shadow moves with the plant: the same bend, the same burial.

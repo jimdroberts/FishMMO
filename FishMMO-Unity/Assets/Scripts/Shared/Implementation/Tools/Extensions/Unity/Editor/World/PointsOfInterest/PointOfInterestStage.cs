@@ -344,10 +344,13 @@ namespace FishMMO.Shared.WorldDesign
 				// A pad's bank keeps off the water: a river's channel and its banks, a lake (PointOfInterestTerrain.BankReach).
 				Func<float, float, bool> padWet = water == null ? null : (Func<float, float, bool>)((x, z) =>
 					!float.IsNegativeInfinity(water.RiverSurfaceNear(x, z)) || !float.IsNegativeInfinity(water.LakeSurfaceNear(x, z)));
+				// A shore pad (a mill's yard) also leaves the channel itself alone inside its radius.
+				Func<float, float, bool> padChannel = water == null ? null : (Func<float, float, bool>)((x, z) =>
+					!float.IsNegativeInfinity(water.RiverSurfaceNear(x, z, 0f)) || !float.IsNegativeInfinity(water.LakeSurfaceNear(x, z)));
 				foreach (PointOfInterestPad pad in plan.Pads)
 				{
 					float flatness = Templates.TryGetValue(pad.Id, out PointOfInterestTemplate template) ? template.PadFlatness : 1f;
-					if (PointOfInterestTerrain.FlattenPad(terrains, tiles, pad, flatness, padWet) > 0)
+					if (PointOfInterestTerrain.FlattenPad(terrains, tiles, pad, flatness, padWet, padChannel) > 0)
 					{
 						flattened++;
 					}
@@ -866,6 +869,8 @@ namespace FishMMO.Shared.WorldDesign
 					TerrainFolder = TerrainFolder,
 					Water = water,
 					GroundAt = ground,
+					Terrains = terrains,
+					Tiles = tiles,
 					SkyAt = skyAt,
 					SlopeAt = slope,
 					BiomeAt = (east, north) => siteBiome,

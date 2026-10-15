@@ -5103,6 +5103,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7014cada788bc6084b17014e2b8cd730
+    m_Address: Island of Hag
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 703ab5952bf64d759027533e58ef069d
     m_Address: Tidewalker
     m_ReadOnly: 0
@@ -8160,11 +8166,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b235179bd2a63d1468dd430670338c55
-    m_Address: Ethan.fbx
-    m_ReadOnly: 0
-    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b29459fa1d0e54e9ee3d60ec7447b312
     m_Address: Detail_Fern

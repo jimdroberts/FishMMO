@@ -4,9 +4,6 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-#if !UNITY_SERVER
-using FishNet.Component.Animating;
-#endif
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
 namespace FishMMO.Shared
@@ -29,13 +26,6 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(NetworkTransformDistanceLod))]
 	public abstract class BaseCharacter : NetworkBehaviour, ICharacter
 	{
-#if !UNITY_SERVER
-		/// <summary>
-		/// NetworkAnimator component for synchronizing animation parameters across the network.
-		/// Configured at runtime after the character model is instantiated.
-		/// </summary>
-		public NetworkAnimator NetworkAnimator { get; private set; }
-#endif
 #if !UNITY_SERVER
 		/// <summary>
 		/// Client-side dictionary mapping character IDs to their instances for quick lookup.
@@ -216,14 +206,26 @@ namespace FishMMO.Shared
 
 			AddressableLoadProcessor.LoadPrefabAsync(raceTemplate.GetModelReference(gender, modelIndex), (go) =>
 			{
-				// Remove previous child models except for labels and special points.
+				if (go == null)
+				{
+					// A failed load answers null: keep whatever body there is rather than throw in Instantiate.
+					Log.Warning("BaseCharacter", $"{name}: the race model failed to load; keeping the current model.");
+					return;
+				}
+				if (MeshRoot == null)
+				{
+					return;
+				}
+				// Remove previous child models except for labels, special points and the equipment root (made once, in
+				// EquipmentVisualController.OnStartCharacter, before a model that loads late arrives, and never remade).
 				if (MeshRoot.childCount > 0)
 				{
 					foreach (Transform child in MeshRoot)
 					{
 						if (child.gameObject.name.Contains("Labels") ||
 							child.gameObject.name.Contains("FollowPoint") ||
-							child.gameObject.name.Contains("SpawnPoint"))
+							child.gameObject.name.Contains("SpawnPoint") ||
+							child.gameObject.name == "EquipmentRoot")
 						{
 							continue;
 						}
@@ -243,9 +245,6 @@ namespace FishMMO.Shared
 				 * body at all. Done after SetParent so the model is already in place if a
 				 * behaviour below looks at it. */
 				ApplyVisualLayer(modelInstance);
-
-				// Wire the model's Animator to NetworkAnimator for network sync
-				// NetworkAnimator auto-discovers the Animator on child GameObjects.
 
 				// Notify visual behaviours that the model is ready (skeleton, body regions, animator)
 				foreach (ICharacterBehaviour behaviour in Behaviours.Values)
@@ -299,16 +298,13 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Called after all CharacterBehaviours have called InitializeOnce. Override for custom initialization logic.
 		/// </summary>
+		/// <remarks>
+		/// It used to add a FishNet NetworkAnimator here for "animation sync". A NetworkBehaviour added at runtime is never
+		/// registered with its NetworkObject, and its Animator (looked for on this root) was always null, so it synced
+		/// nothing. Every client animates every character from what it sees instead (<see cref="CharacterAnimationController"/>).
+		/// </remarks>
 		public virtual void OnAwake()
 		{
-#if !UNITY_SERVER
-			// Ensure NetworkAnimator exists for animation sync
-			NetworkAnimator = gameObject.GetComponent<NetworkAnimator>();
-			if (NetworkAnimator == null)
-			{
-				NetworkAnimator = gameObject.AddComponent<NetworkAnimator>();
-			}
-#endif
 		}
 
 		/// <inheritdoc />

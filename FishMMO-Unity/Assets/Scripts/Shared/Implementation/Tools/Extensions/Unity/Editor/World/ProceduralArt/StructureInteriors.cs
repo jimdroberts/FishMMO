@@ -34,6 +34,22 @@ namespace FishMMO.Shared.WorldDesign
 		private const float Aisle = 0.55f;
 		/// <summary>How far in from a door the way in is kept clear, metres.</summary>
 		private const float Approach = 1.4f;
+		/// <summary>
+		/// Half the width a player needs to pass, metres: the controller's capsule (0.3) and a hand's breadth. Every part of a
+		/// room's floor must stay reachable from its way in by a body this wide (<see cref="Plan"/>'s walk check).
+		/// </summary>
+		public const float WalkRadius = 0.32f;
+		/// <summary>The walk check's grid, metres.</summary>
+		private const float WalkCell = 0.1f;
+		/// <summary>
+		/// How much nearer than its line the walk check takes a room's wall to stand, metres: a round wall is a ring of flat
+		/// blocks whose faces stand a few centimetres inside its circle, and a way along a wall no wider than that is no way.
+		/// </summary>
+		private const float WallSlack = 0.08f;
+		/// <summary>A pocket of floor smaller than this the walk check lets be cut off, in grid cells (a corner behind a chest).</summary>
+		private const int WalkPocket = 30;
+		/// <summary>How far above a room's floor a door may stand and still be its way in (a keep's door on its landing), metres.</summary>
+		private const float LandingDoor = 1f;
 
 		private enum Mode { Wall, Centre, BackCentre }
 
@@ -73,6 +89,211 @@ namespace FishMMO.Shared.WorldDesign
 				Vector2 nearest = new Vector2(Mathf.Clamp(c.Centre.x, b.Min.x, b.Max.x), Mathf.Clamp(c.Centre.y, b.Min.y, b.Max.y));
 				float rr = c.Radius + gap;
 				return (nearest - c.Centre).sqrMagnitude < rr * rr;
+			}
+		}
+
+		/// <summary>Whether a piece of furniture stops a player (a stool does not: Collides false).</summary>
+		private static bool Collides(string piece)
+		{
+			StructurePiece p = StructurePieces.Find(piece);
+			return p == null || p.Collides;
+		}
+
+		/// <summary>
+		/// A room's floor on a <see cref="WalkCell"/> grid, for the walk check: which cells a body <see cref="WalkRadius"/>
+		/// wide can stand on (inside the walls by its radius, clear of every solid piece by it), and whether those are all one
+		/// floor reachable from the way in.
+		/// </summary>
+		private sealed class WalkGrid
+		{
+			private readonly int nx, nz;
+			private readonly Vector2 origin;
+			private readonly bool[] inside;
+			private readonly bool[] free;
+			private readonly int[] queue;
+
+			public WalkGrid(StructureRoom room, Vector2 centre, Vector2 roomMin, Vector2 roomMax, float radius)
+			{
+				origin = roomMin;
+				nx = Mathf.Max(1, Mathf.CeilToInt((roomMax.x - roomMin.x) / WalkCell));
+				nz = Mathf.Max(1, Mathf.CeilToInt((roomMax.y - roomMin.y) / WalkCell));
+				inside = new bool[nx * nz];
+				free = new bool[nx * nz];
+				queue = new int[nx * nz];
+				for (int z = 0; z < nz; z++)
+				{
+					for (int x = 0; x < nx; x++)
+					{
+						Vector2 p = Cell(x, z);
+						float edge = WalkRadius + WallSlack;
+						inside[z * nx + x] = room.Round
+							? (p - centre).magnitude <= radius - edge
+							: p.x >= roomMin.x + edge && p.x <= roomMax.x - edge && p.y >= roomMin.y + edge && p.y <= roomMax.y - edge;
+					}
+				}
+			}
+
+			private Vector2 Cell(int x, int z) => origin + new Vector2((x + 0.5f) * WalkCell, (z + 0.5f) * WalkCell);
+
+			/// <summary>
+			/// With <paramref name="extra"/> laid among <paramref name="solid"/>: whether every standable cell (all but pockets
+			/// under <see cref="WalkPocket"/> cells) is reachable from an entry (a door's way in), or, with none, from the
+				/// clear areas (an upper floor's stair landing). True when there is nowhere to start from.
+			/// </summary>
+			public bool Connected(List<Laid> solid, in Laid extra, List<Vector2> entries, List<Shape> clears)
+			{
+				int standable = 0;
+				for (int z = 0; z < nz; z++)
+				{
+					for (int x = 0; x < nx; x++)
+					{
+						int i = z * nx + x;
+						bool ok = inside[i];
+						if (ok)
+						{
+							Vector2 p = Cell(x, z);
+							ok = !Near(extra, p);
+							for (int k = 0; ok && k < solid.Count; k++)
+							{
+								ok = !Near(solid[k], p);
+							}
+						}
+						free[i] = ok;
+						if (ok)
+						{
+							standable++;
+						}
+					}
+				}
+				// Seed from the ways in: the nearest standable cell to each entry, else every standable cell in a clear area.
+				int head = 0, tail = 0;
+				var seen = new bool[nx * nz];
+				void Push(int i)
+				{
+					if (i >= 0 && free[i] && !seen[i])
+					{
+						seen[i] = true;
+						queue[tail++] = i;
+					}
+				}
+				foreach (Vector2 entry in entries)
+				{
+					Push(Nearest(entry));
+				}
+				if (entries.Count == 0)
+				{
+					for (int z = 0; z < nz; z++)
+					{
+						for (int x = 0; x < nx; x++)
+						{
+							Vector2 p = Cell(x, z);
+							foreach (Shape c in clears)
+							{
+								if (p.x >= c.Min.x && p.x <= c.Max.x && p.y >= c.Min.y && p.y <= c.Max.y)
+								{
+									Push(z * nx + x);
+									break;
+								}
+							}
+						}
+					}
+				}
+				if (tail == 0)
+				{
+					// Nowhere to start from (no way in marked, or none standable even empty): nothing to judge by.
+					return true;
+				}
+				while (head < tail)
+				{
+					int i = queue[head++];
+					int x = i % nx, z = i / nx;
+					if (x > 0) Push(i - 1);
+					if (x < nx - 1) Push(i + 1);
+					if (z > 0) Push(i - nx);
+					if (z < nz - 1) Push(i + nx);
+				}
+				if (tail == standable)
+				{
+					return true;
+				}
+				// What was not reached: allowed only as small pockets.
+				for (int start = 0; start < free.Length; start++)
+				{
+					if (!free[start] || seen[start])
+					{
+						continue;
+					}
+					int size = 0;
+					head = tail = 0;
+					Push(start);
+					while (head < tail)
+					{
+						int i = queue[head++];
+						size++;
+						int x = i % nx, z = i / nx;
+						if (x > 0) Push(i - 1);
+						if (x < nx - 1) Push(i + 1);
+						if (z > 0) Push(i - nx);
+						if (z < nz - 1) Push(i + nx);
+					}
+					if (size >= WalkPocket)
+					{
+						return false;
+					}
+				}
+				return true;
+			}
+
+			/// <summary>The standable cell nearest a point (within a metre), or −1.</summary>
+			private int Nearest(Vector2 at)
+			{
+				int best = -1;
+				float bestD = 1f;
+				int cx = Mathf.FloorToInt((at.x - origin.x) / WalkCell), cz = Mathf.FloorToInt((at.y - origin.y) / WalkCell);
+				int reach = Mathf.CeilToInt(1f / WalkCell);
+				for (int z = Mathf.Max(0, cz - reach); z <= Mathf.Min(nz - 1, cz + reach); z++)
+				{
+					for (int x = Mathf.Max(0, cx - reach); x <= Mathf.Min(nx - 1, cx + reach); x++)
+					{
+						int i = z * nx + x;
+						if (!free[i])
+						{
+							continue;
+						}
+						float d = (Cell(x, z) - at).magnitude;
+						if (d < bestD)
+						{
+							bestD = d;
+							best = i;
+						}
+					}
+				}
+				return best;
+			}
+
+			/// <summary>Whether a body standing at <paramref name="p"/> would touch the piece.</summary>
+			private static bool Near(in Laid s, Vector2 p)
+			{
+				Vector2 d = p - s.Centre;
+				var local = new Vector2(d.x * s.Cos - d.y * s.Sin, d.x * s.Sin + d.y * s.Cos);
+				var nearest = new Vector2(Mathf.Clamp(local.x, -s.Half.x, s.Half.x), Mathf.Clamp(local.y, -s.Half.y, s.Half.y));
+				return (nearest - local).sqrMagnitude < WalkRadius * WalkRadius;
+			}
+		}
+
+		/// <summary>
+		/// A piece's footprint as laid, for the walk check: its box turned by its yaw, not the circle a round room fits it by
+		/// (a bed's corners stand off a curved wall, and the floor between can be shut in).
+		/// </summary>
+		private struct Laid
+		{
+			public Vector2 Centre, Half;
+			public float Cos, Sin;
+
+			public static Laid Of(Vector2 at, Vector2 size, float yawDegrees)
+			{
+				float a = yawDegrees * Mathf.Deg2Rad;
+				return new Laid { Centre = at, Half = size * 0.5f, Cos = Mathf.Cos(a), Sin = Mathf.Sin(a) };
 			}
 		}
 
@@ -119,6 +340,10 @@ namespace FishMMO.Shared.WorldDesign
 					// Upstairs in a tavern: its guests' beds round the walls and a table among them.
 					return new[] { W("Bed", 2, area > 30f ? 4 : 3, Mode.Wall), W("Chest", 1, 2, Mode.Wall), W("Table", 1, 1, Mode.Centre, -1, 2),
 						W("Shelf", 0, 1, Mode.Wall) };
+				case StructureRoomKind.Mill:
+					// The meal floor of a tower mill: what is ground and waiting round the wall, the miller's tally in the middle.
+					return new[] { W("Crate", 2, 3, Mode.Wall), W("Barrel", 1, 2, Mode.Wall), W("Chest", 1, 1, Mode.Wall), W("Shelf", 0, 1, Mode.Wall),
+						W("Table", area > 14f ? 1 : 0, area > 14f ? 1 : 0, Mode.Centre, 1, 1) };
 				default:
 					return Array.Empty<Want>();
 			}
@@ -140,15 +365,19 @@ namespace FishMMO.Shared.WorldDesign
 
 			// What the doors need clear: the leaf's swing and the way in.
 			var keepOut = new List<Shape>();
+			// Where a player comes into the room: just inside each of its doors, else (upstairs) the stair's landing.
+			var entries = new List<Vector2>();
 			foreach (StructureDoor door in doors)
 			{
 				var hinge = new Vector2(door.Hinge.x, door.Hinge.z);
 				var across = new Vector2(door.Across.x, door.Across.z);
 				var inward = new Vector2(door.Inward.x, door.Inward.z);
-				if (hinge.x < roomMin.x - 1f || hinge.x > roomMax.x + 1f || hinge.y < roomMin.y - 1f || hinge.y > roomMax.y + 1f || Mathf.Abs(door.Hinge.y - floor) > 0.6f)
+				float above = door.Hinge.y - floor;
+				if (hinge.x < roomMin.x - 1f || hinge.x > roomMax.x + 1f || hinge.y < roomMin.y - 1f || hinge.y > roomMax.y + 1f || above > LandingDoor || above < -0.6f)
 				{
 					continue; // another room's door
 				}
+				entries.Add(hinge + across * (door.Width * 0.5f) + inward * 0.5f);
 				keepOut.Add(Bounds(hinge, hinge + across * door.Width, hinge + inward * door.Width, hinge + across * door.Width + inward * door.Width, 0.1f));
 				Vector2 mid = hinge + across * (door.Width * 0.5f);
 				// The way in: 1.4 m, or a third of a small room's depth (a hut's bed may come close to its door).
@@ -158,15 +387,21 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			// What the building keeps clear: a stair and its landing, the well it climbs through.
+			var clears = new List<Shape>();
 			if (room.Clear != null)
 			{
 				foreach (Vector4 c in room.Clear)
 				{
 					var min = new Vector2(c.x, c.y);
 					var max = new Vector2(c.z, c.w);
-					keepOut.Add(Shape.Box((min + max) * 0.5f, max - min));
+					clears.Add(Shape.Box((min + max) * 0.5f, max - min));
 				}
 			}
+			keepOut.AddRange(clears);
+
+			// What a player cannot walk through: every piece that collides (a stool does not), as laid, without its clearance.
+			var solid = new List<Laid>();
+			var walk = new WalkGrid(room, centre, roomMin, roomMax, radius);
 
 			bool Fits(in Shape s)
 			{
@@ -200,9 +435,19 @@ namespace FishMMO.Shared.WorldDesign
 				return true;
 			}
 
+			// Fits, and (if it is solid) leaves every part of the floor reachable from the way in (2026-10-15: "House/building
+			// interiors aren't always fully walkable" — pieces kept 8 cm apart, and a table's walkway only from what came after
+			// it, closed off a room's back behind a bed and a table).
+			bool Clear(string piece, in Shape s, Vector2 at, float yaw) =>
+				Fits(s) && (!Collides(piece) || walk.Connected(solid, Laid.Of(at, footprint(piece), yaw), entries, clears));
+
 			void Put(string piece, int variant, Vector2 at, float yaw, in Shape shape, float clearance)
 			{
 				placed.Add(new InteriorItem { Piece = piece, Variant = variant, Position = new Vector3(at.x, floor, at.y), Yaw = yaw });
+				if (Collides(piece))
+				{
+					solid.Add(Laid.Of(at, footprint(piece), yaw));
+				}
 				Shape kept = shape;
 				if (clearance > 0f)
 				{
@@ -227,7 +472,7 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						var at = new Vector2(x, roomMax.y - stall.y * 0.5f - 0.02f);
 						Shape s = Shape.Box(at, new Vector2(Mathf.Max(0.2f, stall.x), stall.y));
-						if (Fits(s))
+						if (Clear("StallPartition", s, at, 0f))
 						{
 							Put("StallPartition", (int)(rng.NextFloat() * 2f) % 2, at, 0f, s, 0f);
 						}
@@ -304,7 +549,7 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						Vector2 at = alongX ? new Vector2(t, wallLine + inward.y * (depth * 0.5f + 0.02f)) : new Vector2(wallLine + inward.x * (depth * 0.5f + 0.02f), t);
 						Shape s = Shape.Box(at, rotated);
-						if (Fits(s))
+						if (Clear(piece, s, at, yaw))
 						{
 							Put(piece, variant, at, yaw, s, 0f);
 							return true;
@@ -328,10 +573,11 @@ namespace FishMMO.Shared.WorldDesign
 					var dir = new Vector2(Mathf.Sin(a), Mathf.Cos(a));
 					Vector2 at = centre + dir * (radius - r - 0.05f);
 					Shape s = Shape.Round(at, r);
-					if (Fits(s))
+					// Its back to the wall: its +z points out along dir.
+					float yaw = Mathf.Atan2(dir.x, dir.y) * Mathf.Rad2Deg;
+					if (Clear(piece, s, at, yaw))
 					{
-						// Its back to the wall: its +z points out along dir.
-						Put(piece, variant, at, Mathf.Atan2(dir.x, dir.y) * Mathf.Rad2Deg, s, 0f);
+						Put(piece, variant, at, yaw, s, 0f);
 						return true;
 					}
 				}
@@ -353,7 +599,7 @@ namespace FishMMO.Shared.WorldDesign
 						Vector2 r2 = across ? new Vector2(size.y, size.x) : size;
 						var at = new Vector2(centre.x, roomMax.y - r2.y * 0.5f - 0.05f);
 						Shape s2 = Shape.Box(at, r2);
-						if (Fits(s2))
+						if (Clear(want.Piece, s2, at, across ? 90f : 0f))
 						{
 							Put(want.Piece, variant, at, across ? 90f : 0f, s2, 0.25f);
 							return true;
@@ -392,7 +638,7 @@ namespace FishMMO.Shared.WorldDesign
 				foreach (Vector2 at in candidates)
 				{
 					Shape s = room.Round ? Shape.Round(at, Mathf.Max(rotated.x, rotated.y) * 0.5f) : Shape.Box(at, rotated);
-					if (!Fits(s))
+					if (!Clear(want.Piece, s, at, yaw))
 					{
 						continue;
 					}
@@ -482,7 +728,10 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			if (lectern != Vector2.zero)
 			{
-				placed.Add(new InteriorItem { Piece = "Lectern", Variant = 0, Position = new Vector3(centre.x + Mathf.Min(1.8f, (roomMax.x - roomMin.x) * 0.3f), floor, altarZ - 1.6f), Yaw = 200f });
+				// In the chancel's corner beside the altar, facing the nave: not in the walk before the altar, and no strip of
+				// floor shut in behind it.
+				var at = new Vector3(roomMax.x - lectern.x * 0.5f - 0.05f, floor, roomMax.y - lectern.y * 0.5f - 0.05f);
+				placed.Add(new InteriorItem { Piece = "Lectern", Variant = 0, Position = at, Yaw = 180f });
 			}
 			if (pew == Vector2.zero)
 			{
@@ -495,7 +744,9 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return;
 			}
-			float front = roomMin.y + Approach + 0.3f, back = altarZ - 2.4f;
+			// The front pew a walk's width (1.3 m) short of the altar, so the chancel either side of it is reachable
+			// (2026-10-15: it stood 0.9 m off, the lectern in that gap, and both front corners were shut in).
+			float front = roomMin.y + Approach + 0.3f, back = altarZ - altar.y - 1.3f - pew.y * 0.5f;
 			int index = 0;
 			for (float z = back; z >= front; z -= row)
 			{

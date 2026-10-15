@@ -1,59 +1,61 @@
+using System.Collections.Generic;
 using FishMMO.Shared.Core;
+using FishMMO.Shared.Weather;
 using UnityEngine;
 
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Centralized animation controller for characters.
-	/// Sets parameters on the character's Animator. When combined with FishNet's
-	/// NetworkAnimator component (on BaseCharacter), all parameter changes are
-	/// automatically synchronized to remote clients.
-	///
-	/// Animator parameter names are constants to ensure consistency.
-	///
-	/// Implements <see cref="IModelReadyHandler"/> to re-acquire the Animator
-	/// reference after the character model finishes loading asynchronously.
+	/// Animates a character's model on every client: a <see cref="CharacterBody"/> built on the model's
+	/// <see cref="CharacterModel"/>, fed what the character is doing.
 	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Who tells it what.</b> The character this client owns is told by its own movement (KCCController calls
+	/// <see cref="SetGrounded"/>, <see cref="SetCrouching"/>, <see cref="SetSwimming"/>, <see cref="SetClimbing"/> each
+	/// tick) and its own abilities (<see cref="TriggerAttack"/>, <see cref="TriggerCast"/>, …). Everyone else's movement
+	/// never runs here: another player is placed by its NetworkTransform (state forwarding is off) and an NPC moves on the
+	/// server alone. So a character nothing has told anything lately is read from what this client can see
+	/// (<see cref="ObservedMotion"/>: the ground under it, the water round it, the climbable it is on), its casts and attacks
+	/// come from the cast broadcast every observer already receives (<see cref="AbilityController.AnimateObservedCast"/>),
+	/// and its death from the death broadcast (<see cref="TriggerDeath"/>). Nothing extra goes on the wire.
+	/// </para>
+	/// <para>
+	/// <b>The speed is always seen, never told:</b> every body measures how far its model really went each frame, so the
+	/// feet match the ground under prediction smoothing and interpolation alike.
+	/// </para>
+	/// <para>
+	/// Client only: a dedicated server compiles none of it (the setters are empty there).
+	/// </para>
+	/// </remarks>
 	public class CharacterAnimationController : CharacterBehaviour, ICharacterAnimationController, IModelReadyHandler
 	{
-		// ── Animator parameter name constants ────────────────────────────
-
-		private static readonly int ParamSpeed = Animator.StringToHash("Speed");
-		private static readonly int ParamIsGrounded = Animator.StringToHash("IsGrounded");
-		private static readonly int ParamIsCrouching = Animator.StringToHash("IsCrouching");
-		private static readonly int ParamJump = Animator.StringToHash("Jump");
-		private static readonly int ParamAttack = Animator.StringToHash("Attack");
-		private static readonly int ParamBlock = Animator.StringToHash("Block");
-		private static readonly int ParamRoll = Animator.StringToHash("Roll");
-		private static readonly int ParamCast = Animator.StringToHash("Cast");
-		private static readonly int ParamDeath = Animator.StringToHash("Death");
-		private static readonly int ParamIsSwimming = Animator.StringToHash("IsSwimming");
-		private static readonly int ParamSwimPitch = Animator.StringToHash("SwimPitch");
-		private static readonly int ParamIsClimbing = Animator.StringToHash("IsClimbing");
-		private static readonly int ParamClimbSpeed = Animator.StringToHash("ClimbSpeed");
-
-		/// <summary>How quickly the body turns to lie along a swimmer's stroke, and back upright out of the water.</summary>
-		private const float SwimPoseSharpness = 6f;
-
-		/// <summary>
-		/// Cached Animator reference from the instantiated character model.
-		/// May be null if model hasn't loaded yet. Re-acquired in <see cref="OnModelReady"/>.
-		/// </summary>
-		private Animator animator;
-
 #if !UNITY_SERVER
-		// Whether the animator has the swimming parameters at all (no clips exist yet: code first, clips later), so
-		// setting them never logs a missing parameter.
-		private bool animatorHasSwimming;
-		// Likewise climbing: no climb clips exist yet, so these are set only on a controller that has them.
-		private bool animatorHasClimbing;
-		private bool animatorHasClimbSpeed;
-		private bool climbing;
-		private float climbRate;
-		private bool swimming;
-		private float swimPitch;
-		private float posedPitch;
-		private Quaternion modelRestRotation = Quaternion.identity;
+		/// <summary>Seconds after the movement last spoke that its word still holds; after it, the body reads what it sees.</summary>
+		private const float FedSeconds = 0.25f;
+
+		/// <summary>How quickly the measured velocity follows the model's motion, per second (it smooths a jittery transform).</summary>
+		private const float VelocityRate = 20f;
+
+		private static readonly List<int> nearClimbables = new List<int>();
+
+		private CharacterBody body;
+		private Animator bodyAnimator;
+		private Transform bodyRoot;
+		private Vector3 lastPosition;
+		private bool hasLastPosition;
+		private Vector3 velocity;
+		private int groundMask;
+
+		// What the movement last said (the owner's own character).
+		private float fedAt = float.NegativeInfinity;
+		private bool fedGrounded = true;
+		private bool fedCrouching;
+		private bool fedSwimming;
+		private bool fedClimbing;
+
+		// What was last read off a watched character.
+		private bool seenSwimming;
 #endif
 
 		/// <summary>
@@ -64,7 +66,7 @@ namespace FishMMO.Shared
 		{
 			base.OnStartCharacter();
 #if !UNITY_SERVER
-			TryAcquireAnimator();
+			TryBuildBody();
 #endif
 		}
 
@@ -72,220 +74,191 @@ namespace FishMMO.Shared
 		public void OnModelReady()
 		{
 #if !UNITY_SERVER
-			TryAcquireAnimator();
+			TryBuildBody();
 #endif
 		}
 
-		/// <summary>
-		/// Drops the cached animator before the object returns to the pool.
-		/// </summary>
-		/// <remarks>
-		/// The reference points at the Animator of a model that <c>BaseCharacter</c> destroys and
-		/// replaces on the next spawn, and nothing else clears it. Every setter here guards with
-		/// <c>animator != null</c>, which Unity answers correctly for a destroyed object — but
-		/// only after the engine has already been asked, once per call, for the rest of the
-		/// object's life in the pool. Re-acquisition happens in
-		/// <see cref="OnModelReady"/> either way, so there is nothing to lose by letting go.
-		/// </remarks>
+		/// <summary>Drops the body before the object returns to the pool: its model is destroyed and replaced on the next spawn.</summary>
 		/// <param name="asServer">True if called on the server.</param>
 		public override void ResetState(bool asServer)
 		{
 			base.ResetState(asServer);
-
 #if !UNITY_SERVER
-			animator = null;
+			DropBody();
+			fedAt = float.NegativeInfinity;
+			seenSwimming = false;
 #endif
 		}
 
 #if !UNITY_SERVER
-		/// <summary>
-		/// Attempts to find the Animator. Gets it from the NetworkAnimator if available
-		/// (set by BaseCharacter after model load), or falls back to searching MeshRoot.
-		/// </summary>
-		private void TryAcquireAnimator()
+		private void OnDestroy()
 		{
-			if (Character == null) return;
+			DropBody();
+		}
 
-			// Primary source: NetworkAnimator (wired by BaseCharacter after model load)
-			if (Character is BaseCharacter baseChar && baseChar.NetworkAnimator != null)
-			{
-				animator = baseChar.NetworkAnimator.Animator;
-				if (animator != null) return;
-			}
+		private void OnEnable()
+		{
+			body?.SetPlaying(true);
+		}
 
-			// Fallback: search MeshRoot
-			Transform meshRoot = Character.MeshRoot;
-			if (meshRoot != null)
-			{
-				animator = meshRoot.GetComponentInChildren<Animator>();
-			}
+		private void OnDisable()
+		{
+			body?.SetPlaying(false);
+		}
 
-			animatorHasSwimming = false;
-			animatorHasClimbing = false;
-			animatorHasClimbSpeed = false;
-			posedPitch = 0f;
-			if (animator != null)
-			{
-				modelRestRotation = animator.transform.localRotation;
-				foreach (AnimatorControllerParameter parameter in animator.parameters)
-				{
-					if (parameter.nameHash == ParamIsSwimming)
-					{
-						animatorHasSwimming = true;
-					}
-					else if (parameter.nameHash == ParamIsClimbing)
-					{
-						animatorHasClimbing = true;
-					}
-					else if (parameter.nameHash == ParamClimbSpeed && parameter.type == AnimatorControllerParameterType.Float)
-					{
-						animatorHasClimbSpeed = true;
-					}
-				}
-				if (animatorHasClimbing)
-				{
-					// The climb's state as this animator last had it, so a model swapped mid-climb shows it at once.
-					animator.SetBool(ParamIsClimbing, climbing);
-				}
-				if (animatorHasClimbSpeed)
-				{
-					animator.SetFloat(ParamClimbSpeed, climbRate);
-				}
-			}
-
-			RestorePoseForCurrentState();
+		private void DropBody()
+		{
+			body?.Dispose();
+			body = null;
+			bodyAnimator = null;
+			bodyRoot = null;
+			hasLastPosition = false;
 		}
 
 		/// <summary>
-		/// The swimmer's pose in code, until there are clips: the model turned to lie along its stroke. Nose down diving,
-		/// up rising, level floating; upright again out of the water. Observers learn of it through the animator's
-		/// parameters (synced by the NetworkAnimator) once the controller has them.
+		/// Builds the body on the model under MeshRoot (its <see cref="CharacterModel"/>), once per model: a model swapped
+		/// for another gets a new one.
 		/// </summary>
-		private void LateUpdate()
+		private void TryBuildBody()
 		{
+			if (Character == null || Character.MeshRoot == null)
+			{
+				return;
+			}
+			CharacterModel model = Character.MeshRoot.GetComponentInChildren<CharacterModel>(true);
+			Animator animator = model != null ? model.GetComponent<Animator>() : null;
 			if (animator == null)
 			{
 				return;
 			}
-			if (animatorHasSwimming && !base.IsOwner && !base.IsServerInitialized)
+			if (body != null && animator == bodyAnimator)
 			{
-				swimming = animator.GetBool(ParamIsSwimming);
-				swimPitch = animator.GetFloat(ParamSwimPitch);
+				return;
 			}
-			// Swimming lies the body forward along the stroke; a swimmer lying still floats a little forward of upright.
-			float target = swimming ? 70f + Mathf.Clamp(swimPitch, -60f, 20f) : 0f;
-			if (swimming && Mathf.Abs(swimPitch) < 1f && animator.GetFloat(ParamSpeed) <= 0.01f)
+			DropBody();
+			// Its own character is always animated; another off screen only keeps its bones' transforms when seen.
+			animator.cullingMode = base.IsOwner ? AnimatorCullingMode.AlwaysAnimate : AnimatorCullingMode.CullUpdateTransforms;
+			body = CharacterBody.Create(animator, model.Animations, name);
+			if (body == null)
 			{
-				target = 20f;
+				return;
 			}
-			if (posedPitch == 0f && target == 0f)
+			bodyAnimator = animator;
+			bodyRoot = animator.transform.parent != null ? animator.transform.parent : animator.transform;
+			int solid = LayerMask.GetMask("Default", "Ground");
+			groundMask = solid != 0 ? solid : Physics.DefaultRaycastLayers;
+			int playerLayer = LayerMask.NameToLayer("Player");
+			if (playerLayer >= 0)
 			{
-				return; // upright and staying so: nothing to write, as for almost every character almost always
+				groundMask &= ~(1 << playerLayer);
 			}
-			posedPitch = Mathf.Lerp(posedPitch, target, 1f - Mathf.Exp(-SwimPoseSharpness * Time.deltaTime));
-			if (Mathf.Abs(posedPitch) < 0.01f && target == 0f)
+			RestorePoseForCurrentState();
+		}
+
+		/// <summary>One frame of the body's motion, before the animation is evaluated.</summary>
+		private void Update()
+		{
+			if (body == null || bodyRoot == null)
 			{
-				posedPitch = 0f;
+				return;
 			}
-			animator.transform.localRotation = modelRestRotation * Quaternion.Euler(posedPitch, 0f, 0f);
+			float deltaTime = Time.deltaTime;
+			if (deltaTime <= 0f)
+			{
+				return;
+			}
+			Vector3 position = bodyRoot.position;
+			if (hasLastPosition)
+			{
+				Vector3 moved = (position - lastPosition) / deltaTime;
+				// A teleport (or a respawn) is not a sprint.
+				velocity = moved.sqrMagnitude > 900f ? Vector3.zero : Vector3.Lerp(velocity, moved, 1f - Mathf.Exp(-VelocityRate * deltaTime));
+			}
+			lastPosition = position;
+			hasLastPosition = true;
+
+			var motion = new CharacterMotion { Velocity = velocity, StillWater = float.NaN };
+			if (Time.time - fedAt <= FedSeconds)
+			{
+				motion.Grounded = fedGrounded;
+				motion.Crouching = fedCrouching;
+				motion.Swimming = fedSwimming;
+				motion.Climbing = fedClimbing;
+			}
+			else
+			{
+				Observe(position, ref motion);
+			}
+			body.Pose(in motion, deltaTime);
+		}
+
+		/// <summary>The figure set on the ground, its seat or the waves, after the animation has posed it.</summary>
+		private void LateUpdate()
+		{
+			body?.Place(Time.deltaTime);
+		}
+
+		/// <summary>What a watched character is doing, read off where it is (<see cref="ObservedMotion"/>).</summary>
+		private void Observe(Vector3 feet, ref CharacterMotion motion)
+		{
+			PhysicsScene physics = gameObject.scene.GetPhysicsScene();
+			motion.Grounded = physics.Raycast(feet + Vector3.up * ObservedMotion.GroundProbeHeight, Vector3.down,
+				ObservedMotion.GroundProbeHeight + ObservedMotion.GroundTolerance, groundMask, QueryTriggerInteraction.Ignore);
+
+			float still = SurfaceWater.TryGetSurfaceAt(feet.x, feet.z, out float level) ? level : float.NaN;
+			seenSwimming = ObservedMotion.Swimming(seenSwimming, still, feet.y, CharacterBody.CapsuleHeight);
+			motion.Swimming = seenSwimming;
+			motion.StillWater = still;
+			if (seenSwimming)
+			{
+				motion.Grounded = false;
+				return;
+			}
+
+			if (!motion.Grounded && SceneClimbables.Near(gameObject.scene, feet, 1.5f, nearClimbables))
+			{
+				foreach (int index in nearClimbables)
+				{
+					if (SceneClimbables.TryGet(gameObject.scene, index, out SceneClimbable climbable)
+						&& ObservedMotion.OnClimbable(in climbable, feet, 0.3f))
+					{
+						motion.Climbing = true;
+						break;
+					}
+				}
+			}
 		}
 
 		/// <summary>
-		/// Puts a character that is already dead into the death pose as soon as its animator
-		/// exists.
+		/// Lays a character that is already dead down as soon as its body exists: death is an event, and a character that
+		/// arrives dead (a corpse walked up to, a reconnect) never heard it.
 		/// </summary>
-		/// <remarks>
-		/// Death is applied through an Animator <em>trigger</em>, which is a one-shot: it is
-		/// consumed by the state machine and leaves nothing behind to restore. The only place
-		/// that fires it is <c>CharacterDamageController.Kill</c>, at the moment of dying — so a
-		/// character that arrives already dead has never had it fired for this animator and
-		/// comes up in the default state, standing and idling.
-		/// <para>
-		/// That is what a player sees after reconnecting on a corpse: health zero, death dialog
-		/// open, character standing upright. It applies equally to observers who walk up to
-		/// someone else's corpse, since their animator is created when the character enters
-		/// their observation range, long after the death.
-		/// </para>
-		/// <para>
-		/// Called from <see cref="TryAcquireAnimator"/> so it runs on both acquisition paths —
-		/// <see cref="OnStartCharacter"/> and the guaranteed <see cref="OnModelReady"/> — and
-		/// re-applies correctly if the model is swapped.
-		/// </para>
-		/// </remarks>
 		private void RestorePoseForCurrentState()
 		{
-			if (animator == null || Character == null)
+			if (body != null && Character != null && Character.IsFlagged(CharacterFlags.IsDead))
 			{
-				return;
+				body.Die(already: true);
 			}
+		}
 
-			if (Character.IsFlagged(CharacterFlags.IsDead))
-			{
-				TriggerDeath();
-			}
+		private void Fed()
+		{
+			fedAt = Time.time;
 		}
 #endif
 
 		/// <inheritdoc />
+		/// <remarks>Not used: the body measures how far its model really goes, which every peer can see.</remarks>
 		public void SetSpeed(float speed)
 		{
-#if !UNITY_SERVER
-			if (animator != null)
-			{
-				animator.SetFloat(ParamSpeed, speed);
-			}
-#endif
-		}
-
-		/// <inheritdoc />
-		public void SetSwimming(bool swimming, float pitch)
-		{
-#if !UNITY_SERVER
-			this.swimming = swimming;
-			swimPitch = pitch;
-			if (animator != null && animatorHasSwimming)
-			{
-				animator.SetBool(ParamIsSwimming, swimming);
-				animator.SetFloat(ParamSwimPitch, pitch);
-			}
-#endif
-		}
-
-		/// <inheritdoc />
-		/// <remarks>
-		/// With no climb clips the animator is told nothing (the controller lacks IsClimbing): the KCC already reports a
-		/// climber as grounded and still, so it stands upright facing the climbable while it rises, which reads as climbing
-		/// without limbs. Once clips exist, an IsClimbing bool and a ClimbSpeed float on the controller pick this up with no
-		/// code change, and the NetworkAnimator carries them to observers as it does the swim parameters.
-		/// </remarks>
-		public void SetClimbing(bool climbing, float rate)
-		{
-#if !UNITY_SERVER
-			if (this.climbing == climbing && Mathf.Approximately(climbRate, rate))
-			{
-				return;
-			}
-			this.climbing = climbing;
-			climbRate = rate;
-			if (animator != null && animatorHasClimbing)
-			{
-				animator.SetBool(ParamIsClimbing, climbing);
-			}
-			if (animator != null && animatorHasClimbSpeed)
-			{
-				animator.SetFloat(ParamClimbSpeed, rate);
-			}
-#endif
 		}
 
 		/// <inheritdoc />
 		public void SetGrounded(bool grounded)
 		{
 #if !UNITY_SERVER
-			if (animator != null)
-			{
-				animator.SetBool(ParamIsGrounded, grounded);
-			}
+			fedGrounded = grounded;
+			Fed();
 #endif
 		}
 
@@ -293,32 +266,42 @@ namespace FishMMO.Shared
 		public void SetCrouching(bool crouching)
 		{
 #if !UNITY_SERVER
-			if (animator != null)
-			{
-				animator.SetBool(ParamIsCrouching, crouching);
-			}
+			fedCrouching = crouching;
+			Fed();
 #endif
 		}
 
 		/// <inheritdoc />
-		public void TriggerJump()
+		/// <remarks>The pitch is the body's own business: it lies along the swim it can see (<see cref="SwimPose"/>).</remarks>
+		public void SetSwimming(bool swimming, float pitch)
 		{
 #if !UNITY_SERVER
-			if (animator != null)
-			{
-				animator.SetTrigger(ParamJump);
-			}
+			fedSwimming = swimming;
+			Fed();
 #endif
+		}
+
+		/// <inheritdoc />
+		/// <remarks>The rate is the body's own business: the climb is stepped by the height it sees climbed.</remarks>
+		public void SetClimbing(bool climbing, float rate)
+		{
+#if !UNITY_SERVER
+			fedClimbing = climbing;
+			Fed();
+#endif
+		}
+
+		/// <inheritdoc />
+		/// <remarks>Not used: a body in the air rises, tops out and falls by its own vertical speed.</remarks>
+		public void TriggerJump()
+		{
 		}
 
 		/// <inheritdoc />
 		public void TriggerAttack()
 		{
 #if !UNITY_SERVER
-			if (animator != null)
-			{
-				animator.SetTrigger(ParamAttack);
-			}
+			body?.Punch();
 #endif
 		}
 
@@ -326,10 +309,7 @@ namespace FishMMO.Shared
 		public void SetBlocking(bool blocking)
 		{
 #if !UNITY_SERVER
-			if (animator != null)
-			{
-				animator.SetBool(ParamBlock, blocking);
-			}
+			body?.SetBlocking(blocking);
 #endif
 		}
 
@@ -337,10 +317,7 @@ namespace FishMMO.Shared
 		public void TriggerRoll()
 		{
 #if !UNITY_SERVER
-			if (animator != null)
-			{
-				animator.SetTrigger(ParamRoll);
-			}
+			body?.Roll();
 #endif
 		}
 
@@ -348,39 +325,16 @@ namespace FishMMO.Shared
 		public void TriggerCast()
 		{
 #if !UNITY_SERVER
-			if (animator != null)
-			{
-				animator.SetTrigger(ParamCast);
-			}
+			body?.Cast();
 #endif
 		}
 
 		/// <inheritdoc />
-		/// <remarks>
-		/// Also resets all locomotion and combat animation state so death
-		/// takes priority. Speed is zeroed, root motion is disabled, blocking
-		/// is cleared, and crouching is reset. This prevents stale parameter
-		/// values from competing with the death animation.
-		/// </remarks>
+		/// <remarks>Death takes everything else's place: the body falls and lies, its guard and its actions dropped.</remarks>
 		public void TriggerDeath()
 		{
 #if !UNITY_SERVER
-			if (animator != null)
-			{
-				// Suppress all other animation state.
-				animator.SetFloat(ParamSpeed, 0f);
-				animator.SetBool(ParamIsGrounded, true);
-				animator.SetBool(ParamIsCrouching, false);
-				animator.SetBool(ParamBlock, false);
-				animator.ResetTrigger(ParamJump);
-				animator.ResetTrigger(ParamAttack);
-				animator.ResetTrigger(ParamRoll);
-				animator.ResetTrigger(ParamCast);
-				animator.applyRootMotion = false;
-
-				// Fire death trigger last.
-				animator.SetTrigger(ParamDeath);
-			}
+			body?.Die();
 #endif
 		}
 
@@ -388,31 +342,14 @@ namespace FishMMO.Shared
 		public void ResetDeath()
 		{
 #if !UNITY_SERVER
-			if (animator != null)
-			{
-				animator.ResetTrigger(ParamDeath);
-				animator.SetFloat(ParamSpeed, 0f);
-				animator.SetBool(ParamIsGrounded, true);
-				animator.SetBool(ParamIsCrouching, false);
-				animator.SetBool(ParamBlock, false);
-				animator.ResetTrigger(ParamJump);
-				animator.ResetTrigger(ParamAttack);
-				animator.ResetTrigger(ParamRoll);
-				animator.ResetTrigger(ParamCast);
-				animator.applyRootMotion = false;
-			}
+			body?.Revive();
 #endif
 		}
 
 		/// <inheritdoc />
+		/// <remarks>Not used: every clip is played in place and the movement moves the character.</remarks>
 		public void SetRootMotion(bool enabled)
 		{
-#if !UNITY_SERVER
-			if (animator != null)
-			{
-				animator.applyRootMotion = enabled;
-			}
-#endif
 		}
 	}
 }

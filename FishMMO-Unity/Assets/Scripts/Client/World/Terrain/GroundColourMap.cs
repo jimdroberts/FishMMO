@@ -31,6 +31,18 @@ namespace FishMMO.Client
 	/// loading (by address, in a player), the map is rebuilt once it arrives.
 	/// </para>
 	/// <para>
+	/// <b>In the planet's looks.</b> The terrain draws each layer in its biome's look (FishFlora.hlsl FishFloraGround: living
+	/// ground toward its patch's leaves, lichen toward its lichen colour, bare ground toward the world's own on a thin-aired
+	/// world), so the map must too, or a plant's root and the far grass would pull toward a colour the ground no longer has.
+	/// The map is built in two parts: the terrain's own colour and, per texel, how much of the ground there is living,
+	/// lichen and mineral (by the same weights; <see cref="TerrainArraySet.LayerFlora"/>). Neither depends on the world, so
+	/// the scene's bake holds both as they are, and the looks are worn over them here, at load and whenever
+	/// <see cref="FloraPaletteMap"/> changes (<see cref="WearLooks"/>): from the bake or worked out in play, the map is the
+	/// same, and with the looks off (<see cref="FloraPaletteMap.Enabled"/>) it is the terrain's own colour exactly as before.
+	/// A texel is 2 m against a patch's 6, so it takes its biome's looks averaged (FloraPaletteMap.GroundLooks), not one
+	/// patch's; the contact blend at a base, which needs the exact patch, reads the terrain's layers itself (GroundMaterialMap).
+	/// </para>
+	/// <para>
 	/// <b>Published as shader globals</b> (<c>_FishGroundColour</c>, <c>_FishGroundColourRect</c>,
 	/// <c>_FishGroundColourParams</c>). Params.x is 1 only while a map is set: in edit mode, or with no
 	/// terrain, it is 0 and the shader blends nothing. Rebuilt when scenes load or unload. Play mode,
@@ -126,6 +138,17 @@ namespace FishMMO.Client
 		private static bool hooked, dirty = true, waitingForArrays;
 		private static int builtFrame = -1, waitedFrames;
 
+		/// <summary>
+		/// The map as built, before the looks: the terrain's own colour (RGBA8 sRGB, a coverage) and per texel the ground's
+		/// shares of living, lichen and mineral (RGBA8, a coverage), the bake's own arrays when it came from the bake (never
+		/// written), with the rect they cover. The looks are worn over them into <see cref="wornColour"/>.
+		/// </summary>
+		private static byte[] rawColour, rawShares, wornColour;
+		private static Rect mapBounds;
+		private static float mapTexel;
+		/// <summary>The <see cref="FloraPaletteMap.Version"/> the map last wore.</summary>
+		private static int wornVersion = -1;
+
 		/// <summary>Frames to keep rebuilding while a terrain's array set is still loading (a player loads it by address).</summary>
 		private const int ArrayWaitFrames = 600;
 
@@ -204,6 +227,11 @@ namespace FishMMO.Client
 			}
 			if (!dirty || builtFrame == Time.frameCount)
 			{
+				// The looks were built, switched or retuned since the map last wore them.
+				if (!dirty && map != null && wornVersion != FloraPaletteMap.Version)
+				{
+					WearLooks();
+				}
 				return;
 			}
 			dirty = false;
@@ -238,6 +266,8 @@ namespace FishMMO.Client
 			}
 			means.Clear();
 			sliceMeans.Clear();
+			rawColour = rawShares = wornColour = null;
+			wornVersion = -1;
 			waitingForArrays = false;
 			GroundMaterialMap.Release();
 		}
@@ -259,13 +289,15 @@ namespace FishMMO.Client
 			Rect bounds;
 			float texel;
 			int w, h;
-			Color32[] pixels = null, normals = null;
+			Color32[] pixels = null, normals = null, shares = null;
 			TerrainDetailBake.GroundColour baked = SceneTerrainBake.GroundOf(terrains);
 			if (baked != null && !SameSets(baked, terrains, sets))
 			{
 				baked = null;
 			}
-			if (baked != null && baked.Width > 0 && baked.Height > 0 && baked.Colour.Length == baked.Width * baked.Height * 4 && baked.Normals.Length == baked.Colour.Length)
+			// A bake from before the shares were baked has none: the map is worked out here, as for no bake.
+			if (baked != null && baked.Width > 0 && baked.Height > 0 && baked.Colour.Length == baked.Width * baked.Height * 4 && baked.Normals.Length == baked.Colour.Length
+				&& baked.Shares != null && baked.Shares.Length == baked.Colour.Length)
 			{
 				bounds = baked.Bounds;
 				texel = baked.Texel;
@@ -277,7 +309,7 @@ namespace FishMMO.Client
 			else
 			{
 				baked = null;
-				if (!Compute(terrains, sets, out bounds, out texel, out w, out h, out pixels, out normals))
+				if (!Compute(terrains, sets, out bounds, out texel, out w, out h, out pixels, out normals, out shares))
 				{
 					Release();
 					return;
@@ -298,15 +330,12 @@ namespace FishMMO.Client
 					hideFlags = HideFlags.DontSave,
 				};
 			}
-			if (baked != null)
-			{
-				map.SetPixelData(baked.Colour, 0);
-			}
-			else
-			{
-				map.SetPixels32(pixels);
-			}
-			map.Apply(false, false);
+			// The terrain's own colour and its shares; the looks are worn over them (WearLooks), into the map.
+			rawColour = baked != null ? baked.Colour : Bytes(pixels);
+			rawShares = baked != null ? baked.Shares : Bytes(shares);
+			mapBounds = bounds;
+			mapTexel = texel;
+			WearLooks();
 			if (normalMap == null || normalMap.width != w || normalMap.height != h)
 			{
 				if (normalMap != null)
@@ -351,17 +380,130 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Writes the map: the terrain's own colour in the planet's looks while <see cref="FloraPaletteMap"/> draws them, else
+		/// as it is. Called when the map is built and whenever the looks change (<see cref="FloraPaletteMap.Version"/>), over
+		/// the colour and shares kept from the build, so neither a rebuild nor the bake is needed for either.
+		/// </summary>
+		private static void WearLooks()
+		{
+			wornVersion = FloraPaletteMap.Version;
+			if (map == null || rawColour == null || rawColour.Length != map.width * map.height * 4)
+			{
+				return;
+			}
+			byte[] colour = rawColour;
+			if (rawShares != null && rawShares.Length == rawColour.Length && FloraPaletteMap.GroundLooks(out FloraPaletteMap.GroundLookTable looks))
+			{
+				if (wornColour == null || wornColour.Length != rawColour.Length)
+				{
+					wornColour = new byte[rawColour.Length];
+				}
+				Wear(rawColour, rawShares, map.width, map.height, mapBounds, mapTexel, looks, wornColour);
+				colour = wornColour;
+			}
+			map.SetPixelData(colour, 0);
+			map.Apply(false, false);
+		}
+
+		/// <summary>sRGB byte to linear light.</summary>
+		private static readonly float[] SrgbToLinear = BuildSrgbToLinear();
+
+		/// <summary>Linear light (0..1 in <see cref="LinearSteps"/> steps) to the nearest sRGB byte.</summary>
+		private static readonly byte[] LinearToSrgb = BuildLinearToSrgb();
+		private const int LinearSteps = 4096;
+
+		private static float[] BuildSrgbToLinear()
+		{
+			var table = new float[256];
+			for (int i = 0; i < 256; i++)
+			{
+				double c = i / 255.0;
+				table[i] = (float)(c <= 0.04045 ? c / 12.92 : System.Math.Pow((c + 0.055) / 1.055, 2.4));
+			}
+			return table;
+		}
+
+		private static byte[] BuildLinearToSrgb()
+		{
+			var table = new byte[LinearSteps + 1];
+			for (int i = 0; i <= LinearSteps; i++)
+			{
+				double l = (double)i / LinearSteps;
+				double c = l <= 0.0031308 ? l * 12.92 : 1.055 * System.Math.Pow(l, 1.0 / 2.4) - 0.055;
+				table[i] = (byte)System.Math.Max(0, System.Math.Min(255, (int)System.Math.Round(c * 255.0)));
+			}
+			return table;
+		}
+
+		private static byte ToSrgb(float linear) => LinearToSrgb[(int)(Mathf.Clamp01(linear) * LinearSteps + 0.5f)];
+
+		/// <summary>
+		/// The looks worn over a map: each covered texel's colour (sRGB bytes, taken to linear light) through
+		/// <see cref="GrassMath.FloraGround"/> by its shares (living, lichen, mineral), toward its biome's averaged looks
+		/// (the texel centre's biome on the looks' grid) and the world's ground, at the strengths the shaders use. A texel of
+		/// bare ground under an ordinary air (no living or lichen share, no world colour) is copied as it is.
+		/// </summary>
+		private static void Wear(byte[] raw, byte[] shares, int w, int h, Rect bounds, float texel, FloraPaletteMap.GroundLookTable looks, byte[] result)
+		{
+			var ground = new System.Numerics.Vector3(looks.Ground.x, looks.Ground.y, looks.Ground.z);
+			float groundStrength = looks.Ground.w, foliageStrength = looks.Strength.x, accentStrength = looks.Strength.z;
+			for (int z = 0; z < h; z++)
+			{
+				float wz = bounds.yMin + (z + 0.5f) * texel;
+				for (int x = 0; x < w; x++)
+				{
+					int i = (z * w + x) * 4;
+					byte living = shares[i], lichen = shares[i + 1], mineral = shares[i + 2];
+					if (raw[i + 3] == 0 || (living == 0 && lichen == 0 && (mineral == 0 || groundStrength <= 0f)))
+					{
+						result[i] = raw[i];
+						result[i + 1] = raw[i + 1];
+						result[i + 2] = raw[i + 2];
+						result[i + 3] = raw[i + 3];
+						continue;
+					}
+					int index = looks.IndexAt(bounds.xMin + (x + 0.5f) * texel, wz);
+					var albedo = new System.Numerics.Vector3(SrgbToLinear[raw[i]], SrgbToLinear[raw[i + 1]], SrgbToLinear[raw[i + 2]]);
+					var share = new System.Numerics.Vector3(living, lichen, mineral) * (1f / 255f);
+					System.Numerics.Vector3 c = GrassMath.FloraGround(albedo, share, looks.Shift[index], looks.Accent[index], ground,
+						foliageStrength, accentStrength, groundStrength);
+					result[i] = ToSrgb(c.X);
+					result[i + 1] = ToSrgb(c.Y);
+					result[i + 2] = ToSrgb(c.Z);
+					result[i + 3] = raw[i + 3];
+				}
+			}
+		}
+
+		/// <summary>RGBA8 texels as bytes, in order (the layout of the bake's arrays and of SetPixelData).</summary>
+		private static byte[] Bytes(Color32[] texels)
+		{
+			var bytes = new byte[texels.Length * 4];
+			for (int i = 0, at = 0; i < texels.Length; i++)
+			{
+				Color32 c = texels[i];
+				bytes[at++] = c.r;
+				bytes[at++] = c.g;
+				bytes[at++] = c.b;
+				bytes[at++] = c.a;
+			}
+			return bytes;
+		}
+
+		/// <summary>
 		/// The map over <paramref name="terrains"/>: its rect, texel size and size, and each texel's colour (the splat-weighted
-		/// mean of the layers as drawn with <paramref name="sets"/>) and surface normal. False when there is no terrain. The
-		/// play's build and the editor's bake (TerrainDetailBaker) are this one.
+		/// mean of the layers as drawn with <paramref name="sets"/>), surface normal, and the ground's shares of living, lichen
+		/// and mineral by the same weights (r, g, b; a coverage), which the looks are worn by (<see cref="WearLooks"/>). The
+		/// colour is the terrain's own, before any look: nothing here depends on the world. False when there is no terrain.
+		/// The play's build and the editor's bake (TerrainDetailBaker) are this one.
 		/// </summary>
 		public static bool Compute(IReadOnlyList<Terrain> terrains, Dictionary<Terrain, TerrainArraySet> sets, out Rect bounds, out float texel,
-			out int w, out int h, out Color32[] pixels, out Color32[] normals)
+			out int w, out int h, out Color32[] pixels, out Color32[] normals, out Color32[] shares)
 		{
 			bounds = new Rect();
 			texel = TargetTexelMetres;
 			w = h = 0;
-			pixels = normals = null;
+			pixels = normals = shares = null;
 			bool any = false;
 			foreach (Terrain t in terrains)
 			{
@@ -395,19 +537,24 @@ namespace FishMMO.Client
 			{
 				normals[i] = flat;
 			}
+			shares = new Color32[w * h];
 			foreach (Terrain t in terrains)
 			{
 				if (t != null && t.terrainData != null)
 				{
 					sets.TryGetValue(t, out TerrainArraySet set);
-					Paint(t, set, bounds, w, h, pixels);
+					Paint(t, set, bounds, w, h, pixels, shares);
 					PaintNormals(t, bounds, w, h, normals);
 				}
 			}
 			return true;
 		}
 
-		/// <summary>A texture set's key for the bake: what of it the map's colours depend on besides its albedo (the layers and their tints).</summary>
+		/// <summary>
+		/// A texture set's key for the bake: what of it the map depends on besides its albedo (the layers, their tints, and
+		/// what each is made of for the looks: <see cref="TerrainArraySet.LayerFlora"/>, from the layers' names). A bake made
+		/// before the shares were in the key never matches it, and play works its map out instead.
+		/// </summary>
 		public static int SetKey(TerrainArraySet set)
 		{
 			if (set == null)
@@ -423,6 +570,11 @@ namespace FishMMO.Client
 					{
 						key = key * 31 + tint.GetHashCode();
 					}
+				}
+				key = key * 31 + 0x464C4F52;
+				foreach (Vector4 flora in set.LayerFlora())
+				{
+					key = key * 31 + flora.GetHashCode();
 				}
 				return key;
 			}
@@ -551,7 +703,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		private static void Paint(Terrain terrain, TerrainArraySet set, Rect bounds, int w, int h, Color32[] pixels)
+		private static void Paint(Terrain terrain, TerrainArraySet set, Rect bounds, int w, int h, Color32[] pixels, Color32[] shares)
 		{
 			TerrainData data = terrain.terrainData;
 			TerrainLayer[] layers = data.terrainLayers;
@@ -561,9 +713,22 @@ namespace FishMMO.Client
 				return;
 			}
 			var colours = new Color[layers.Length];
+			// What each layer is made of for the looks: the set's own (by its baked names, as the terrain shader is given
+			// them), or the layer's name where no set draws the terrain.
+			Vector4[] setFlora = set != null ? set.LayerFlora() : null;
+			var flora = new Vector4[layers.Length];
 			for (int l = 0; l < layers.Length; l++)
 			{
 				colours[l] = LayerColour(set, layers, l, out _);
+				if (setFlora != null && l < set.LayerCount && l < setFlora.Length)
+				{
+					flora[l] = setFlora[l];
+				}
+				else
+				{
+					Shared.Biomes.BiomeLooks.GroundShare share = Shared.Biomes.BiomeLooks.GroundShareOf(layers[l] != null ? layers[l].name : null);
+					flora[l] = new Vector4(share.Foliage, share.Accent, share.Mineral, 0f);
+				}
 			}
 			// The control maps (RGBA = four layers' weights each), read once as bytes; GetAlphamaps (floats,
 			// far more memory) only if a control map cannot be read on the CPU.
@@ -633,6 +798,7 @@ namespace FishMMO.Client
 					int cx = Mathf.Min(res - 1, (int)(u * res));
 					int k = cz * res + cx;
 					float r = 0f, g = 0f, b = 0f, total = 0f;
+					Vector4 share = Vector4.zero;
 					for (int l = 0; l < layers.Length; l++)
 					{
 						Color32 cw = weights[l >> 2][k];
@@ -645,11 +811,14 @@ namespace FishMMO.Client
 						r += colours[l].r * weight;
 						g += colours[l].g * weight;
 						b += colours[l].b * weight;
+						share += flora[l] * weight;
 						total += weight;
 					}
 					if (total > 1e-3f)
 					{
 						pixels[z * w + x] = new Color(r / total, g / total, b / total, 1f);
+						share /= total;
+						shares[z * w + x] = new Color(share.x, share.y, share.z, 1f);
 					}
 				}
 			}

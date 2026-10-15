@@ -422,6 +422,12 @@ MonoBehaviour:
   - rid: 1701798270728142852
   - rid: 1701798270728142853
   - rid: 1701798270728142855
+  Pack:
+    Enabled: 0
+    Tactic: 0
+    FocusTargeting: 1
+    TacticOrbitRadius: 5
+    KiteRotationSpeed: 30
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
   references:
     version: 2
@@ -444,6 +450,7 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 1701798270728142852
@@ -464,6 +471,7 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 1701798270728142853
@@ -484,6 +492,7 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 1701798270728142855
@@ -686,7 +695,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 1a3fc9516df07da4ebbb643fe79bc80b, type: 2}
+  - {fileID: 2100000, guid: 36866adaddfae0c4e975f65903f11405, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -1673,6 +1682,12 @@ MonoBehaviour:
   - rid: 1701798270728142848
   - rid: 1701798270728142849
   - rid: 1701798270728142850
+  Pack:
+    Enabled: 0
+    Tactic: 0
+    FocusTargeting: 1
+    TacticOrbitRadius: 5
+    KiteRotationSpeed: 30
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
   references:
     version: 2
@@ -1698,6 +1713,7 @@ MonoBehaviour:
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 11400000, guid: f1bedd6f4354a7e41be26aee87734d66,
           type: 2}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 1701798270728142849
@@ -1721,6 +1737,7 @@ MonoBehaviour:
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 11400000, guid: f1bedd6f4354a7e41be26aee87734d66,
           type: 2}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 1701798270728142850
@@ -1744,6 +1761,7 @@ MonoBehaviour:
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 11400000, guid: f1bedd6f4354a7e41be26aee87734d66,
           type: 2}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
 --- !u!4 &784079647
@@ -1852,9 +1870,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _localLevelOfDetailCalculationType: 0
+  _useLevelOfDetail: 0
+  _useRootLevelOfDetail: 1
   NetworkObserver: {fileID: 0}
   _enablePrediction: 0
   _predictionType: 0
+  _localReconcileCorrectionType: 2
   _graphicalObject: {fileID: 0}
   _detachGraphicalObject: 0
   _enableStateForwarding: 0
@@ -1892,6 +1914,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
+  _initializedTimestamp: 0
 --- !u!114 &788347307
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1912,6 +1935,7 @@ MonoBehaviour:
   Layers:
     serializedVersion: 2
     m_Bits: 65
+  InvokeStayOnEnter: 0
 --- !u!1 &795318667
 GameObject:
   m_ObjectHideFlags: 0
@@ -3301,13 +3325,13 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4131707743960135806, guid: 8056196aa1ba4f2f8e10f6616eacd914,
         type: 3}
-      propertyPath: WasActiveDuringEdit
-      value: 1
+      propertyPath: SceneId
+      value: 1983641263
       objectReference: {fileID: 0}
     - target: {fileID: 4131707743960135806, guid: 8056196aa1ba4f2f8e10f6616eacd914,
         type: 3}
-      propertyPath: SceneId
-      value: 1983641263
+      propertyPath: WasActiveDuringEdit
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4131707743960135807, guid: 8056196aa1ba4f2f8e10f6616eacd914,
         type: 3}
@@ -3429,9 +3453,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _localLevelOfDetailCalculationType: 0
+  _useLevelOfDetail: 0
+  _useRootLevelOfDetail: 1
   NetworkObserver: {fileID: 0}
   _enablePrediction: 0
   _predictionType: 0
+  _localReconcileCorrectionType: 2
   _graphicalObject: {fileID: 0}
   _detachGraphicalObject: 0
   _enableStateForwarding: 0
@@ -3469,6 +3497,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
+  _initializedTimestamp: 0
 --- !u!114 &1565944406
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4258,13 +4287,13 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4131707743960135806, guid: 8056196aa1ba4f2f8e10f6616eacd914,
         type: 3}
-      propertyPath: WasActiveDuringEdit
-      value: 1
+      propertyPath: SceneId
+      value: 3891134121
       objectReference: {fileID: 0}
     - target: {fileID: 4131707743960135806, guid: 8056196aa1ba4f2f8e10f6616eacd914,
         type: 3}
-      propertyPath: SceneId
-      value: 3891134121
+      propertyPath: WasActiveDuringEdit
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4131707743960135807, guid: 8056196aa1ba4f2f8e10f6616eacd914,
         type: 3}
@@ -4875,9 +4904,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _localLevelOfDetailCalculationType: 0
+  _useLevelOfDetail: 0
+  _useRootLevelOfDetail: 1
   NetworkObserver: {fileID: 0}
   _enablePrediction: 0
   _predictionType: 0
+  _localReconcileCorrectionType: 2
   _graphicalObject: {fileID: 0}
   _detachGraphicalObject: 0
   _enableStateForwarding: 0
@@ -4915,6 +4948,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
+  _initializedTimestamp: 0
 --- !u!65 &1729415599
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -5430,9 +5464,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _localLevelOfDetailCalculationType: 0
+  _useLevelOfDetail: 0
+  _useRootLevelOfDetail: 1
   NetworkObserver: {fileID: 0}
   _enablePrediction: 0
   _predictionType: 0
+  _localReconcileCorrectionType: 2
   _graphicalObject: {fileID: 0}
   _detachGraphicalObject: 0
   _enableStateForwarding: 0
@@ -5470,6 +5508,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
+  _initializedTimestamp: 0
 --- !u!1 &2076367145
 GameObject:
   m_ObjectHideFlags: 0
@@ -5776,6 +5815,7 @@ MonoBehaviour:
     InterpolationValue: 2
     SmoothedProperties: 4294967295
     SnapNonSmoothedProperties: 0
+  _favorPredictionNetworkTransform: 1
   _spectatorMovementSettings:
     EnableTeleport: 0
     TeleportThreshold: 0
@@ -5803,6 +5843,7 @@ MonoBehaviour:
   Layers:
     serializedVersion: 2
     m_Bits: 65
+  InvokeStayOnEnter: 0
 --- !u!4 &6317921918617611146
 Transform:
   m_ObjectHideFlags: 0
@@ -5831,9 +5872,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _localLevelOfDetailCalculationType: 0
+  _useLevelOfDetail: 0
+  _useRootLevelOfDetail: 1
   NetworkObserver: {fileID: 0}
   _enablePrediction: 1
   _predictionType: 0
+  _localReconcileCorrectionType: 2
   _graphicalObject: {fileID: 0}
   _detachGraphicalObject: 0
   _enableStateForwarding: 1
@@ -5871,6 +5916,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
+  _initializedTimestamp: 0
 --- !u!1 &8652537671077781255
 GameObject:
   m_ObjectHideFlags: 0

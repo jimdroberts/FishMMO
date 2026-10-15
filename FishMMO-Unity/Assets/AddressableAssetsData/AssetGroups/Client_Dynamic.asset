@@ -95,6 +95,12 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1d15572bf12df43ab8e7ed6bb68b8857
+    m_Address: TestHuman.prefab
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1e38f513862ee78699d551b633324e55
     m_Address: UIOptions
     m_ReadOnly: 0
@@ -369,12 +375,6 @@ MonoBehaviour:
     m_Address: UIReconnectDisplay
     m_ReadOnly: 0
     m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7737647c22c1fc64a88d5cd030c352ce
-    m_Address: Ethan.prefab
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7c00e562cb2147a9970f354c5698142c
     m_Address: UIDeathDialog

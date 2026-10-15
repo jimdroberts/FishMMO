@@ -130,6 +130,16 @@ namespace FishMMO.Shared.Weather
 		public AirOffsets To;
 		/// <summary>World seconds the move from <see cref="From"/> to <see cref="To"/> starts and ends: it holds with the world.</summary>
 		public double StartSeconds, EndSeconds;
+		/// <summary>
+		/// How far the wind added by the entries before this one had carried the air by <see cref="StartSeconds"/>, m (at
+		/// ten metres; <see cref="AirDrift.CarriedAt"/>). Worked out once by whoever sets the entry and sent with it, so the
+		/// clouds and the weather go on from where they were when the wind is changed, on every machine alike.
+		/// </summary>
+		public double Carried;
+		/// <summary>The same for the fog banks' stirring (<see cref="AirDrift.StirredBeyond"/> at <see cref="AirDrift.SurfaceShare"/>), s.</summary>
+		public double CarriedStir;
+		/// <summary>The same for a windmill's sails (<see cref="AirDrift.SailTurns"/> at <see cref="AirDrift.SailMostRpm"/>), turns.</summary>
+		public double CarriedSails;
 
 		/// <summary>What is added at a moment of world time, eased.</summary>
 		public AirOffsets AtSeconds(double worldSeconds)

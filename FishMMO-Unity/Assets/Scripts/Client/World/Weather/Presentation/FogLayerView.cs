@@ -194,7 +194,7 @@ namespace FishMMO.Client
 		/// The share of the ten-metre wind the banks drift at: the law of the wall at the middle of a
 		/// fog a few metres deep (<see cref="DriftWind"/>), about three quarters.
 		/// </summary>
-		public const float SurfaceShare = 0.75f;
+		public const float SurfaceShare = AirDrift.SurfaceShare;
 
 		/// <summary>The layer a frame carries, and how it looks.</summary>
 		public static FogLayerView Of(in WeatherFrame frame)
@@ -353,9 +353,8 @@ namespace FishMMO.Client
 			 * its own history had left it (audit 2026-10-06). The surface air follows the wind the
 			 * weather reports — still in a calm, running in a gale — at the share a fog's middle feels
 			 * (DriftWind). Stirred faster in wind: twice as fast by a fresh breeze, as before. */
-			SkySystem.AirAt(out float latitude, out WindBelts belts);
-			SurfaceAirDrift.At(WeatherDriver.WorldSeed, latitude, belts, SurfaceShare, WorldMotion.Seconds,
-				out double carriedX, out double carriedZ, out double stirred);
+			double seconds = WorldMotion.Seconds;
+			SurfaceAirDrift.At(SkySystem.SceneAir(seconds), SurfaceShare, seconds, out double carriedX, out double carriedZ, out double stirred);
 			driftX = Wrap(carriedX, BankTile);
 			driftZ = Wrap(carriedZ, BankTile);
 			bankTurn = Wrap(stirred / BankTurnSeconds, 1.0);

@@ -386,7 +386,15 @@ namespace FishMMO.Shared.WorldDesign
 				float blend = PadBlend(record.Radius);
 				if (pad)
 				{
-					Plan.Pads.Add(new PointOfInterestPad { Id = record.Id, Centre = record.Position, Radius = record.Radius, Blend = blend });
+					var levelled = new PointOfInterestPad { Id = record.Id, Centre = record.Position, Radius = record.Radius, Blend = blend };
+					if (rule.RiverBank)
+					{
+						// Levelled behind the mill only: its front faces the water, which starts BankSetback out.
+						float yaw = record.Yaw * Mathf.Deg2Rad;
+						levelled.Shore = new Vector2(Mathf.Sin(yaw), Mathf.Cos(yaw));
+						levelled.ShoreDistance = BankSetback;
+					}
+					Plan.Pads.Add(levelled);
 				}
 				Plan.KeepOuts.Add(new PointOfInterestKeepOut
 				{
@@ -666,7 +674,8 @@ namespace FishMMO.Shared.WorldDesign
 							}
 							float ground = Input.Ground(bx, bz);
 							float bank = float.IsNaN(surface) ? 1f : ground - surface;
-							if (bank < 0.2f || bank > 3.5f || G.Slope[cell] > rule.MaxSlopeDegrees)
+							// The mill is seated by the water, not the bank (below): a higher bank is cut back behind it.
+							if (bank < 0.2f || bank > MaxBankMetres || G.Slope[cell] > rule.MaxSlopeDegrees)
 							{
 								continue;
 							}
@@ -683,8 +692,12 @@ namespace FishMMO.Shared.WorldDesign
 								continue;
 							}
 							uint hash = Hash(Input.Seed, (int)rule.Kind, Mathf.RoundToInt(bx), Mathf.RoundToInt(bz));
-							float score = weight * (1f - 0.25f * Mathf.Abs(bank - 1.2f)) + 0.5f * Unit(Mix(hash ^ 0x5C0Eu));
-							Site site = Site.At(bx, bz, ground, score);
+							float score = weight * (1f - 0.25f * Mathf.Abs(bank - StructurePieces.RiverBankFreeboard)) + 0.5f * Unit(Mix(hash ^ 0x5C0Eu));
+							// The floor at the freeboard its wheel is hung for (2026-10-15: "Watermills seem to sink into the ground"):
+							// seated on the bank's own height, a mill on a 3 m bank turned its wheel in the air, and its pad-less yard
+							// rose behind it over its plinth. The pad levels the yard to this floor (PointOfInterestPad.Shore).
+							float floor = float.IsNaN(surface) ? ground : surface + StructurePieces.RiverBankFreeboard;
+							Site site = Site.At(bx, bz, floor, score);
 							site.Radius = Mathf.Lerp(rule.FootprintMin, rule.FootprintMax, Unit(Mix(hash ^ 0x7A11u)));
 							// Facing the river: a site's front faces its heading.
 							site.Yaw = Mathf.Round(YawOf(-nx * side, -nz * side));
@@ -724,8 +737,14 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 
-			/// <summary>How far back from the water's edge a river-bank site's centre stands, metres: half a mill's depth and a little.</summary>
-			private const float BankSetback = 4.2f;
+			/// <summary>
+			/// How far back from the water's edge a river-bank site's centre stands, metres: half a mill's depth and a little,
+			/// so its front wall stands at the water's edge and its wheel turns wholly over the water.
+			/// </summary>
+			private const float BankSetback = 3.8f;
+
+			/// <summary>The highest bank over the water a mill is sited on, metres: the yard is cut down to the mill's floor behind it.</summary>
+			private const float MaxBankMetres = 2.4f;
 		}
 	}
 }

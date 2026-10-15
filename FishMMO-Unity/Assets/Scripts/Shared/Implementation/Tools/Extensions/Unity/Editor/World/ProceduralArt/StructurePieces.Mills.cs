@@ -2,11 +2,12 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using FishMMO.Shared.Weather;
 
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// A part of a piece that turns (a post mill's sails, a mill's water wheel): another piece, set at a hub in the owner's
+	/// A part of a piece that turns (a tower mill's sails, a mill's water wheel): another piece, set at a hub in the owner's
 	/// frame and spun about an axis there. Built as its own piece so the owner stays a static instanced prop; the cut lays
 	/// the turning part as a client-only object (PointOfInterestRotors) that <see cref="MillRotor"/> spins.
 	/// </summary>
@@ -19,20 +20,30 @@ namespace FishMMO.Shared.WorldDesign
 		public int Variant;
 		/// <summary>The hub in the turning piece's own frame (its origin is the foot of its sweep, as every piece stands on y = 0).</summary>
 		public Vector3 PieceHub;
-		/// <summary>Turns a minute; 0 stands still (a mill with its sails furled).</summary>
+		/// <summary>Turns a minute; 0 stands still (a mill with its sails furled). For sails in the wind, the most they are let turn.</summary>
 		public float Rpm;
+		/// <summary>Sails: turned by the live wind (<see cref="MillRotor"/>), not at a steady <see cref="Rpm"/>.</summary>
+		public bool Wind;
+		/// <summary>
+		/// What turns about the vertical through <see cref="Pivot"/> to face the wind, carrying the rotor with it (a tower
+		/// mill's cap), and its variant; null when the rotor's axis is fixed. Its piece's origin sits at the pivot.
+		/// </summary>
+		public string Head;
+		public int HeadVariant;
+		/// <summary>Where the head turns, in the owner's frame; <see cref="Hub"/> is given with the head at rest, facing −z as the owner does.</summary>
+		public Vector3 Pivot;
 	}
 
 	/// <summary>
 	/// Mills and the rural work round a settlement (2026-10-14: "Windmills, watermills, lumbermills, and more ... all
-	/// medieval fantasy"): a post mill and its sails, a watermill and its wheel, a water-powered sawmill, a saw pit, log
+	/// medieval fantasy"): a tower mill, its cap and sails, a watermill and its wheel, a water-powered sawmill, a saw pit, log
 	/// and plank stacks, a granary on staddles, a dovecote, bee skeps, a charcoal clamp, a lime kiln and a tanning yard.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Medieval forms only</b> (from the record): the post mill (England from the 1180s; the tower and smock mills are
-	/// later or southern), on its mound with the trestle buried (excavated ones 15–25 m across) or on an open trestle, four
-	/// common sails of canvas over a lattice spanning 17 m, a tailpole to turn it to the wind and a ladder to its door; the
+	/// <b>Medieval forms only</b> (from the record): the stone tower mill (raised from the later 13th century; the post mill
+	/// is older, but its buck on a mound or an open trestle read as a box on a platform, 2026-10-15), its cap turned to the
+	/// wind by a tailpole, four common sails of canvas over a lattice spanning 15 m; the
 	/// watermill a stone ground floor under a timber loft with its wheel on the water side (undershot on a river, overshot
 	/// fed by a timber launder); the sawmill the water-driven sash saw Villard de Honnecourt drew about 1230, but most planks
 	/// were sawn over a pit by a top and a pit sawyer. Sizes from survivors and excavations.
@@ -53,23 +64,29 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static void AddMills(List<StructurePiece> list)
 		{
-			Piece(list, "PostMill", StructureStyle.Timber, StructureSize.Building,
-				"A medieval post mill: a weatherboarded buck 4.2×5.4 m on its post, a tailpole and a ladder to the back door, the sails' windshaft out of the front gable; v0 on a turf mound over its buried trestle, v1 on an open trestle on stone piers.",
-				PostMill, "building", "mill", "windmill", "farm");
+			// Its sails, as the cap comes round, sweep a ring about 8 m out at a cottage's roof (and its tailpole 7 m out at a
+			// man's height over the ground): nothing else is laid in it.
+			Piece(list, "TowerMill", StructureStyle.Stone, StructureSize.Building,
+				"A medieval tower mill: a battered round tower 6.6 m across at its foot on a fieldstone footing, a door into its meal floor, small windows up it and the curb its cap turns on; v0 rubble stone 9.2 m to the curb, v1 lime-washed and lower.",
+				TowerMill, "building", "mill", "windmill", "farm").Sweep = new Vector2(16.5f, 16.5f);
+			StructurePiece cap = Piece(list, "MillCap", StructureStyle.Timber, StructureSize.Medium,
+				"A tower mill's cap, turned on its curb to face the wind with the sails: v0 a boarded ogee cap, v1 a thatched cone; the windshaft out of its front and the tailpole down its back. Its origin is on the curb.",
+				MillCap, "mill");
+			cap.Collides = false;
 			StructurePiece sails = Piece(list, "MillSails", StructureStyle.Timber, StructureSize.Medium,
-				"A post mill's four common sails, 15 m across: lattices on whips through the poll end; v0 the canvas spread, v1 furled along the whips. Turned by the mill (its origin is the foot of the sweep).",
+				"A windmill's four common sails, 15 m across: lattices on whips through the poll end; v0 the canvas spread, v1 furled along the whips. Turned by the mill (its origin is the foot of the sweep).",
 				MillSails, "mill");
 			sails.Collides = false;
 			Piece(list, "Watermill", StructureStyle.Stone, StructureSize.Building,
-				"A watermill, 8×7 m: a stone ground floor under a timber loft, the wheel on its water side between stone race walls, sacks and a spare millstone by the door; v0 an undershot wheel, v1 an overshot wheel fed by a timber launder on trestles.",
-				Watermill, "building", "mill", "watermill");
+				"A watermill, 8×7 m: a stone ground floor under a timber loft on a footing down into the river, the wheel on its water side between stone race walls, sacks and a spare millstone by the door; v0 an undershot wheel, v1 an overshot wheel fed by a timber launder on trestles.",
+				Watermill, "building", "mill", "watermill").WaterFront = true;
 			StructurePiece wheel = Piece(list, "WaterWheel", StructureStyle.Timber, StructureSize.Medium,
 				"A mill's water wheel, its axle along z: v0 undershot, 4.8 m across with sixteen paddles; v1 overshot, 4.2 m with buckets between shrouds. Turned by its mill (its origin is the foot of the wheel).",
 				WaterWheel, "mill");
 			wheel.Collides = false;
 			Piece(list, "Sawmill", StructureStyle.Timber, StructureSize.Building,
 				"A water-powered sawmill, 12×6 m open-sided under its roof: the sash saw's frame between guide posts, a log on the carriage running through it on long rails, its wheel on the water side; v1 thatched.",
-				Sawmill, "building", "mill", "sawmill", "lumber");
+				Sawmill, "building", "mill", "sawmill", "lumber").WaterFront = true;
 			Piece(list, "SawPit", StructureStyle.Timber, StructureSize.Medium,
 				"A saw pit 4.6×1.2 m, its timber-lined mouth dark, a log on the cross-bearers over it with the long pit saw standing in it, sawdust and the planks it gave; v1 under a lean-to roof.",
 				SawPit, "lumber", "clutter");
@@ -110,36 +127,38 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			switch (piece.Id)
 			{
-				case "PostMill":
+				case "TowerMill":
 				{
-					// The windshaft out of the front gable, raised 8° toward the sails.
+					// The windshaft out of the cap's front, raised 8° toward the sails; the cap turns on the tower's curb.
 					float tilt = 8f * Mathf.Deg2Rad;
-					float bottom = PostMillBottom(variant);
+					float top = TowerMillHeight(variant);
 					return new[]
 					{
 						new StructureRotor
 						{
-							Hub = new Vector3(0f, bottom + PostMillWall * 0.86f, -PostMillDepth * 0.5f - 0.75f), Axis = new Vector3(0f, Mathf.Sin(tilt), -Mathf.Cos(tilt)),
-							// v1 stands idle, its sails furled.
-							Piece = "MillSails", Variant = variant == 1 ? 1 : 0, PieceHub = new Vector3(0f, SailHub, 0f), Rpm = variant == 1 ? 0f : 11f,
+							Hub = new Vector3(0f, top, 0f) + TowerMillCapHub(variant), Axis = new Vector3(0f, Mathf.Sin(tilt), -Mathf.Cos(tilt)),
+							Piece = "MillSails", Variant = 0, PieceHub = new Vector3(0f, SailHub, 0f), Rpm = AirDrift.SailMostRpm,
+							Wind = true, Head = "MillCap", HeadVariant = variant, Pivot = new Vector3(0f, top, 0f),
 						},
 					};
 				}
 				case "Watermill":
 					return new[] { MillWheel(variant, WatermillWheelX, -WatermillDepth * 0.5f) };
 				case "Sawmill":
-					return new[] { MillWheel(0, 2.2f, -SawmillDepth * 0.5f - 0.2f) };
+					return new[] { MillWheel(0, SawmillWheelX, SawmillWheelWall) };
 				default:
 					return Array.Empty<StructureRotor>();
 			}
 		}
 
-		/// <summary>A water wheel on a mill's front (−z) wall at <paramref name="x"/>: its axle square to the wall, its foot a metre under the ground.</summary>
+		/// <summary>A water wheel on a mill's front (−z) wall at <paramref name="x"/>: its axle square to the wall, its foot in the water under the mill's floor.</summary>
 		private static StructureRotor MillWheel(int variant, float x, float wallZ)
 		{
 			bool overshot = variant == 1;
 			float r = overshot ? OvershotRadius : UndershotRadius;
-			float sink = overshot ? 0.6f : 1.1f;
+			// The mill's floor stands RiverBankFreeboard over the water (PointOfInterestPlanner.PlaceRiverBanks): an undershot
+			// wheel's paddles dip 0.3 m, an overshot's buckets clear the tail water by a hand.
+			float sink = overshot ? RiverBankFreeboard - 0.1f : RiverBankFreeboard + 0.3f;
 			return new StructureRotor
 			{
 				Hub = new Vector3(x, r - sink, wallZ - WheelGap - 0.6f), Axis = Vector3.forward,
@@ -147,102 +166,161 @@ namespace FishMMO.Shared.WorldDesign
 			};
 		}
 
+		/// <summary>
+		/// How far a river-bank mill's origin (its floor's foot) stands over the river's surface, metres: the planner seats a
+		/// watermill or sawmill there, and the wheel is hung to reach the water from it.
+		/// </summary>
+		public const float RiverBankFreeboard = 0.8f;
+
+		/// <summary>How far below its origin a river-bank mill's water side is founded (its front footing, the race walls), metres: down into the bed.</summary>
+		private const float RaceFooting = 2.6f;
+
 		/// <summary>The gap between a mill's wall and its wheel's near face, metres.</summary>
 		private const float WheelGap = 0.35f;
 
-		// ── Post mill ─────────────────────────────────────────────────
+		// ── Tower mill ────────────────────────────────────────────────
 
-		private const float PostMillWidth = 4.2f, PostMillDepth = 5.4f, PostMillWall = 5.2f;
+		/// <summary>The tower's height to the curb the cap turns on, metres: v0 stone, v1 lime-washed and lower.</summary>
+		private static float TowerMillHeight(int variant) => variant == 1 ? 8.6f : 9.2f;
+		/// <summary>The tower's outer radius at its foot and at its curb.</summary>
+		private static float TowerMillFoot(int variant) => variant == 1 ? 3.1f : 3.3f;
+		private static float TowerMillCurb(int variant) => variant == 1 ? 2.35f : 2.5f;
+		/// <summary>The ground storey's wall, the floor's height (one step up from the ground) and its ceiling.</summary>
+		private const float TowerMillWall = 0.75f, TowerMillFloor = 0.2f, TowerMillStorey = 3.4f;
 
-		/// <summary>The underside of the buck: over the mound's top, or the open trestle's.</summary>
-		private static float PostMillBottom(int variant) => variant == 1 ? 4.6f : 4.1f;
+		/// <summary>The sails' hub in the cap's own frame (its origin on the curb, on the tower's axis): out over the front, so the sails clear the tower's batter.</summary>
+		private static Vector3 TowerMillCapHub(int variant) => new Vector3(0f, 1.15f, -(TowerMillCurb(variant) + 1.25f));
 
-		private static void PostMill(StructureDraft d)
+		/// <summary>
+		/// A medieval tower mill (2026-10-15: post mills "stand on weird platforms, unrealistic"): a battered round tower on its
+		/// own footing, a door into its meal floor and small windows up it, the curb on top that its cap (<c>MillCap</c>, a
+		/// turning part with the sails) turns on to face the wind. Stone-built tower mills were raised from the later 13th
+		/// century; v0 is rubble stone, v1 lime-washed and lower.
+		/// </summary>
+		private static void TowerMill(StructureDraft d)
 		{
-			float bottom = PostMillBottom(d.Variant), top = bottom + PostMillWall;
-			float halfW = PostMillWidth * 0.5f, halfD = PostMillDepth * 0.5f;
-			const float mound = 1.5f;
-			if (d.Variant == 0)
+			bool washed = d.Variant == 1;
+			float h = TowerMillHeight(d.Variant), r0 = TowerMillFoot(d.Variant), r1 = TowerMillCurb(d.Variant);
+			float inner = r0 - TowerMillWall;
+			int seg = d.Seg(24, 12);
+			StructureMaterial wall = washed ? StructureMaterial.Plaster : StructureMaterial.Stone;
+			// The footing, its top the meal floor: a solid drum a little wider than the tower.
+			d.Add(StructureShapes.Lathe(new[] { new Vector2(0f, -FoundationDepth), new Vector2(r0 + 0.22f, -FoundationDepth), new Vector2(r0 + 0.22f, TowerMillFloor - 0.04f),
+				new Vector2(r0 + 0.12f, TowerMillFloor), new Vector2(0f, TowerMillFloor) }, seg, StructureMaterial.Fieldstone, 1));
+
+			// The ground storey: its wall with the door at −z (1.5π) and a window either side, its ceiling, the room.
+			const float doorWidth = 1.2f, doorHeight = 2.3f;
+			float sill = TowerMillFloor + 1.15f;
+			var holes = new List<(float, float, float, float)>
 			{
-				// The mound over the buried cross-trees.
-				d.Add(StructureShapes.Lathe(new[] { new Vector2(0f, -0.3f), new Vector2(7.2f, -0.3f), new Vector2(6.4f, 0.25f), new Vector2(3.2f, mound - 0.1f), new Vector2(0f, mound) },
-					d.Seg(24, 10), StructureMaterial.Earth, 1));
+				(1.5f * Mathf.PI, doorWidth, TowerMillFloor, TowerMillFloor + doorHeight),
+				(0.15f * Mathf.PI, WindowWidth, sill, sill + WindowHeight),
+				(0.85f * Mathf.PI, WindowWidth, sill, sill + WindowHeight),
+			};
+			RingWallWithOpenings(d, Vector3.zero, inner, r0, TowerMillFloor, TowerMillStorey, seg, 1.5f * Mathf.PI, holes, wall, 10);
+			for (int i = 1; i < holes.Count; i++)
+			{
+				float a = holes[i].Item1;
+				var outward = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+				Window(d, outward * r0 + Vector3.up * (sill + WindowHeight * 0.5f), outward, TowerMillWall, 300 + i * 20);
+			}
+			d.Add(StructureShapes.Cylinder(inner + 0.05f, TowerMillStorey - 0.25f, TowerMillStorey, seg, StructureMaterial.Timber, 2));
+			HangDoor(d, new Vector3(0f, TowerMillFloor, -Mathf.Sqrt(inner * inner - 0.25f * doorWidth * doorWidth) + 0.05f), Vector3.right, Vector3.forward, doorWidth, doorHeight,
+				StructureDoorKind.Planks);
+			d.RoundRoom(new Vector3(0f, TowerMillFloor, 0f), inner, TowerMillStorey - TowerMillFloor - 0.25f, StructureRoomKind.Mill);
+			// The door's lintel and jambs proud of the wall.
+			if (d.Mid)
+			{
+				float face = -r0 - 0.03f;
+				d.Add(StructureShapes.Box(new Vector3(0f, TowerMillFloor + doorHeight + 0.12f, face), new Vector3(doorWidth + 0.5f, 0.24f, 0.12f), StructureMaterial.Fieldstone, 20, StructureRole.Detail));
+				for (int s = -1; s <= 1; s += 2)
+				{
+					d.Add(StructureShapes.Box(new Vector3(s * (doorWidth * 0.5f + 0.12f), TowerMillFloor + doorHeight * 0.5f, face), new Vector3(0.24f, doorHeight, 0.1f), StructureMaterial.Fieldstone,
+						21 + (s > 0 ? 1 : 0), StructureRole.Detail));
+				}
+			}
+
+			// The tower above, battered in to the curb, solid (its floors are the miller's, not the player's), a string course
+			// where the storey meets it.
+			d.Add(StructureShapes.Lathe(new[] { new Vector2(r0, TowerMillStorey), new Vector2(r1, h) }, seg, wall, 3));
+			d.Add(StructureShapes.Lathe(new[] { new Vector2(r0 + 0.1f, TowerMillStorey - 0.12f), new Vector2(r0 + 0.1f, TowerMillStorey + 0.12f) }, seg, StructureMaterial.Fieldstone, 4));
+			// The curb: a timber ring on a stone course, the cap's track.
+			d.Add(StructureShapes.Lathe(new[] { new Vector2(r1 + 0.12f, h - 0.45f), new Vector2(r1 + 0.12f, h - 0.2f), new Vector2(0f, h - 0.2f) }, seg, StructureMaterial.Fieldstone, 5));
+			d.Add(StructureShapes.Lathe(new[] { new Vector2(r1 + 0.05f, h - 0.2f), new Vector2(r1 + 0.05f, h), new Vector2(0f, h) }, seg, StructureMaterial.Timber, 6));
+			// Small windows up the tower, lighting its stair, never two on one line.
+			if (d.Mid)
+			{
+				float[] at = { 5.4f, 7.3f };
+				float[] turn = { 0.05f * Mathf.PI, 1.05f * Mathf.PI };
+				for (int i = 0; i < at.Length; i++)
+				{
+					float r = Mathf.Lerp(r0, r1, (at[i] - TowerMillStorey) / (h - TowerMillStorey));
+					var outward = new Vector3(Mathf.Cos(turn[i]), 0f, Mathf.Sin(turn[i]));
+					Window(d, outward * r + Vector3.up * at[i], outward, 400 + i * 20);
+				}
+			}
+			if (!d.Mid)
+			{
+				return;
+			}
+			// Sacks waiting by the door, and a spare millstone against the tower.
+			for (int i = 0; i < 3; i++)
+			{
+				var at = new Vector3(1.4f + i * 0.5f + (i == 2 ? -0.25f : 0f), 0.35f + (i == 2 ? 0.55f : 0f), -r0 - 0.6f);
+				d.Add(StructureShapes.Sphere(at, new Vector3(0.3f, 0.36f, 0.26f), d.Seg(8, 5), 4, StructureMaterial.Canvas, 500 + i, StructureRole.Detail));
+			}
+			d.Add(StructureShapes.Cylinder(0.65f, -0.15f, 0.15f, d.Seg(14, 8), StructureMaterial.Stone, 510)
+				.Transform(Matrix4x4.TRS(new Vector3(r0 + 0.3f, 0.65f, 1.0f), Quaternion.Euler(0f, 0f, 78f), Vector3.one)));
+		}
+
+		/// <summary>
+		/// A tower mill's cap, its origin on the tower's curb and axis (the variant matches the tower's): a boarded ogee cap
+		/// (v0) or a thatched cone (v1), the windshaft out of its front to the sails' poll end, and the tailpole down its back
+		/// the miller hauls round to luff it into the wind. Turned whole with the sails, so it is a turning part, not the tower.
+		/// </summary>
+		private static void MillCap(StructureDraft d)
+		{
+			bool thatch = d.Variant == 1;
+			float r1 = TowerMillCurb(d.Variant), h = TowerMillHeight(d.Variant);
+			float rc = r1 + 0.3f;
+			int seg = d.Seg(20, 10);
+			if (thatch)
+			{
+				d.Add(StructureShapes.Lathe(new[] { new Vector2(0f, 0f), new Vector2(rc + 0.25f, 0f), new Vector2(rc + 0.25f, 0.15f), new Vector2(0.35f, 3.0f), new Vector2(0f, 3.05f) },
+					seg, StructureMaterial.Thatch, 1, true, 0f, false, false, StructureRole.Roof));
 			}
 			else
 			{
-				// Cross-trees on four stone piers and the quarterbars up to the post.
-				for (int axis = 0; axis < 2; axis++)
-				{
-					Vector3 dir = axis == 0 ? Vector3.right : Vector3.forward;
-					d.Add(StructureShapes.Beam(-dir * 3.4f + Vector3.up * 0.75f, dir * 3.4f + Vector3.up * 0.75f, 0.36f, 0.36f, StructureMaterial.Timber, 2 + axis));
-					for (int s = -1; s <= 1; s += 2)
-					{
-						d.Add(StructureShapes.ChamferBox(dir * s * 3.0f + Vector3.up * 0.15f, new Vector3(0.9f, 0.9f, 0.9f), d.Bevel(0.05f), StructureMaterial.Fieldstone, 4 + axis * 2 + (s > 0 ? 1 : 0)));
-						d.Add(StructureShapes.Beam(dir * s * 2.9f + Vector3.up * 0.9f, Vector3.up * 3.0f, 0.24f, 0.24f, StructureMaterial.Timber, 8 + axis * 2 + (s > 0 ? 1 : 0)));
-					}
-				}
+				// Boarded, swelling out over the curb and drawn in to its finial: the ogee of the old caps.
+				d.Add(StructureShapes.Lathe(new[] { new Vector2(0f, 0f), new Vector2(rc, 0f), new Vector2(rc, 0.35f), new Vector2(rc - 0.05f, 0.75f), new Vector2(rc * 0.78f, 1.6f),
+					new Vector2(rc * 0.42f, 2.3f), new Vector2(0.18f, 2.75f), new Vector2(0f, 2.8f) }, seg, StructureMaterial.Timber, 1, true, 0f, false, false, StructureRole.Roof));
 			}
-			float postFoot = d.Variant == 0 ? mound - 0.4f : 0.6f;
-			d.Add(StructureShapes.Beam(new Vector3(0f, postFoot, 0f), new Vector3(0f, bottom - 0.25f, 0f), 0.55f, 0.55f, StructureMaterial.Timber, 12));
-			// The crown tree across the post's head, and the two sheers along the buck's floor.
-			d.Add(StructureShapes.Beam(new Vector3(-1.5f, bottom - 0.2f, 0f), new Vector3(1.5f, bottom - 0.2f, 0f), 0.42f, 0.42f, StructureMaterial.Timber, 13));
+			float tip = thatch ? 3.05f : 2.8f;
+			d.Add(StructureShapes.Sphere(new Vector3(0f, tip + 0.12f, 0f), new Vector3(0.16f, 0.2f, 0.16f), d.Seg(8, 4), d.Fine ? 4 : 2, StructureMaterial.Timber, 2));
+
+			// The windshaft from inside the cap out to the poll end, on its neck bearing at the cap's front.
+			Vector3 hub = TowerMillCapHub(d.Variant);
+			float tilt = 8f * Mathf.Deg2Rad;
+			var axis = new Vector3(0f, Mathf.Sin(tilt), -Mathf.Cos(tilt));
+			d.Add(StructureShapes.Rod(hub - axis * 3.2f, hub - axis * 0.3f, 0.22f, d.Seg(10, 6), StructureMaterial.Timber, 3));
+			d.Add(StructureShapes.ChamferBox(new Vector3(0f, hub.y - 0.15f - 1.05f * Mathf.Sin(tilt), -rc + 0.05f), new Vector3(0.9f, 0.55f, 0.5f), d.Bevel(0.03f),
+				StructureMaterial.Timber, 4));
+
+			// The tailpole: from the cap's back, down and out to a man's reach over the ground, braced from the cap's sides.
+			var head = new Vector3(0f, 0.35f, rc - 0.1f);
+			var foot = new Vector3(0f, -(h - 2.4f), rc + 4.4f);
+			d.Add(StructureShapes.Beam(head, foot, 0.22f, 0.26f, StructureMaterial.Timber, 10));
+			Vector3 brace = Vector3.Lerp(head, foot, 0.42f);
 			for (int s = -1; s <= 1; s += 2)
 			{
-				d.Add(StructureShapes.Beam(new Vector3(s * (halfW - 0.4f), bottom - 0.1f, -halfD + 0.1f), new Vector3(s * (halfW - 0.4f), bottom - 0.1f, halfD + 0.9f), 0.26f, 0.3f,
-					StructureMaterial.Timber, 14 + (s > 0 ? 1 : 0)));
+				d.Add(StructureShapes.Beam(new Vector3(s * (rc - 0.4f), 0.25f, rc * 0.55f), brace, 0.12f, 0.12f, StructureMaterial.Timber, 11 + (s > 0 ? 1 : 0)));
 			}
-
-			// The buck: weatherboarded, its floor, and a gabled roof with its ridge front to back.
-			d.Add(StructureShapes.Box(new Vector3(0f, bottom + 0.1f, 0f), new Vector3(PostMillWidth, 0.2f, PostMillDepth), StructureMaterial.Timber, 20));
-			Walls(d, new Vector3(0f, 0f, 0f), PostMillWidth, PostMillDepth, 0.14f, bottom + 0.2f, top, StructureMaterial.Timber, 21);
-			const float rise = 1.9f;
-			GableRoof(d, PostMillWidth, PostMillDepth, top, rise, 0.3f, 0.12f, d.Variant == 1 ? StructureMaterial.Timber : StructureMaterial.Timber, 30, Matrix4x4.identity);
-			Gable(d, PostMillWidth - 0.05f, top, rise - 0.1f, -halfD + 0.07f, 0.14f, StructureMaterial.Timber, 34, Matrix4x4.identity);
-			Gable(d, PostMillWidth - 0.05f, top, rise - 0.1f, halfD - 0.07f, 0.14f, StructureMaterial.Timber, 35, Matrix4x4.identity);
-			// Corner posts proud of the boards.
-			for (int sx = -1; sx <= 1; sx += 2)
-			{
-				for (int sz = -1; sz <= 1; sz += 2)
-				{
-					d.Add(StructureShapes.Beam(new Vector3(sx * (halfW + 0.02f), bottom + 0.1f, sz * (halfD + 0.02f)), new Vector3(sx * (halfW + 0.02f), top + 0.05f, sz * (halfD + 0.02f)),
-						0.2f, 0.2f, StructureMaterial.Timber, 36 + (sx > 0 ? 2 : 0) + (sz > 0 ? 1 : 0), StructureRole.Detail));
-				}
-			}
-
-			// The windshaft out of the front gable to the sails' poll end, and its bearing.
-			IReadOnlyList<StructureRotor> rotors = RotorsOf(Find("PostMill"), d.Variant);
-			Vector3 hub = rotors.Count > 0 ? rotors[0].Hub : new Vector3(0f, top - 0.7f, -halfD - 0.75f);
-			Vector3 shaft = rotors.Count > 0 ? rotors[0].Axis : Vector3.back;
-			d.Add(StructureShapes.Rod(hub - shaft * 1.6f, hub - shaft * 0.25f, 0.24f, d.Seg(10, 6), StructureMaterial.Timber, 40));
-			d.Add(StructureShapes.ChamferBox(new Vector3(0f, hub.y - 0.05f, -halfD - 0.1f), new Vector3(0.8f, 0.5f, 0.35f), d.Bevel(0.03f), StructureMaterial.Timber, 41));
-
-			// The back: a door and its porch, the ladder down, and the tailpole.
-			d.Add(StructureShapes.Box(new Vector3(0f, bottom + 1.15f, halfD + 0.09f), new Vector3(0.95f, 1.9f, 0.05f), StructureMaterial.Ash, 50, StructureRole.Detail));
-			d.Add(StructureShapes.Box(new Vector3(0f, bottom + 0.05f, halfD + 0.55f), new Vector3(1.6f, 0.12f, 0.9f), StructureMaterial.Timber, 51));
-			float ground = d.Variant == 0 ? 0.55f : 0f;
-			var ladderTop = new Vector3(0f, bottom, halfD + 1f);
-			var ladderFoot = new Vector3(0f, ground, halfD + 1f + (bottom - ground) * 0.85f);
-			for (int s = -1; s <= 1; s += 2)
-			{
-				d.Add(StructureShapes.Beam(ladderTop + Vector3.right * s * 0.5f, ladderFoot + Vector3.right * s * 0.5f, 0.1f, 0.22f, StructureMaterial.Timber, 52 + (s > 0 ? 1 : 0)));
-				d.Add(StructureShapes.Beam(ladderTop + new Vector3(s * 0.58f, 1.0f, 0f), ladderFoot + new Vector3(s * 0.58f, 1.0f, 0f), 0.06f, 0.06f, StructureMaterial.Timber, 54 + (s > 0 ? 1 : 0), StructureRole.Detail));
-			}
+			// The chain and its post-hook at the foot, for the miller to haul on.
 			if (d.Mid)
 			{
-				int treads = Mathf.FloorToInt((bottom - ground) / 0.32f);
-				for (int i = 1; i < treads; i++)
-				{
-					Vector3 p = Vector3.Lerp(ladderFoot, ladderTop, i / (float)treads);
-					d.Add(StructureShapes.Box(p, new Vector3(0.95f, 0.05f, 0.24f), StructureMaterial.Timber, 60 + i, StructureRole.Detail));
-				}
-			}
-			// The tailpole from the buck's floor down past the ladder's foot, nearly to the ground.
-			d.Add(StructureShapes.Beam(new Vector3(0f, bottom - 0.15f, halfD + 0.6f), new Vector3(0.15f, ground + 0.55f, halfD + 1.4f + (bottom - ground) * 1.15f), 0.22f, 0.26f,
-				StructureMaterial.Timber, 80));
-			// Small windows: one each side, one in the back.
-			for (int s = -1; s <= 1; s += 2)
-			{
-				d.Add(StructureShapes.Box(new Vector3(s * (halfW + 0.08f), bottom + 3.2f, 0.8f), new Vector3(0.04f, 0.55f, 0.5f), StructureMaterial.Ash, 90 + (s > 0 ? 1 : 0), StructureRole.Detail));
+				d.Add(StructureShapes.Beam(foot, foot + new Vector3(0f, -0.9f, 0.1f), 0.04f, 0.04f, StructureMaterial.Iron, 13, StructureRole.Detail));
+				// The cap's weatherboards' ends and the little door on the back the miller climbs out by.
+				d.Add(StructureShapes.Box(new Vector3(0f, 0.75f, rc - 0.02f), new Vector3(0.6f, 0.9f, 0.06f), StructureMaterial.Ash, 14, StructureRole.Detail));
 			}
 		}
 
@@ -305,6 +383,8 @@ namespace FishMMO.Shared.WorldDesign
 				RoomKind = StructureRoomKind.Hall, Key = 1,
 			};
 			BuildHouse(d, h);
+			// The water side's footing, down into the bed under the front wall, so the river's edge shows masonry, not a gap.
+			WaterFooting(d, WatermillWidth + 0.3f, -WatermillDepth * 0.5f + 0.2f, 0.5f, h.Plinth, 390);
 			StructureRotor rotor = MillWheel(d.Variant, WatermillWheelX, -WatermillDepth * 0.5f);
 			MillRace(d, rotor, overshot, 400);
 			if (overshot)
@@ -315,15 +395,21 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return;
 			}
-			// Sacks by the door and a spare millstone leant on the wall.
+			// Sacks against the side wall by the door (not on its step) and a spare millstone leant on the wall.
 			float front = -WatermillDepth * 0.5f;
 			for (int i = 0; i < 3; i++)
 			{
-				var at = new Vector3(-3.6f + i * 0.5f + (i == 2 ? -0.25f : 0f), 0.35f + (i == 2 ? 0.55f : 0f), front - 0.55f);
+				var at = new Vector3(-WatermillWidth * 0.5f - 0.5f, 0.35f + (i == 2 ? 0.55f : 0f), front + 0.7f + i * 0.5f + (i == 2 ? -0.25f : 0f));
 				d.Add(StructureShapes.Sphere(at, new Vector3(0.3f, 0.36f, 0.26f), d.Seg(8, 5), 4, StructureMaterial.Canvas, 500 + i, StructureRole.Detail));
 			}
 			d.Add(StructureShapes.Cylinder(0.65f, -0.15f, 0.15f, d.Seg(14, 8), StructureMaterial.Stone, 510)
 				.Transform(Matrix4x4.TRS(new Vector3(-WatermillWidth * 0.5f - 0.25f, 0.65f, 1.2f), Quaternion.Euler(0f, 0f, 78f), Vector3.one)));
+		}
+
+		/// <summary>A river-bank mill's footing along its water side: a stone wall from <paramref name="top"/> down to <see cref="RaceFooting"/>, centred at z.</summary>
+		private static void WaterFooting(StructureDraft d, float width, float z, float thick, float top, int key)
+		{
+			d.Add(StructureShapes.ChamferBox(new Vector3(0f, 0.5f * (top - RaceFooting), z), new Vector3(width, top + RaceFooting, thick), d.Bevel(0.04f), StructureMaterial.Fieldstone, key));
 		}
 
 		/// <summary>
@@ -338,11 +424,12 @@ namespace FishMMO.Shared.WorldDesign
 			for (int s = -1; s <= 1; s += 2)
 			{
 				float x = rotor.Hub.x + s * (r + 0.45f);
-				d.Add(StructureShapes.ChamferBox(new Vector3(x, -0.45f, 0.5f * (wallZ + outer) - 0.2f), new Vector3(0.6f, 1.6f, wallZ - outer + 0.6f), d.Bevel(0.04f),
+				// From a little over the floor down into the bed.
+				d.Add(StructureShapes.ChamferBox(new Vector3(x, 0.5f * (0.35f - RaceFooting), 0.5f * (wallZ + outer) - 0.2f), new Vector3(0.6f, 0.35f + RaceFooting, wallZ - outer + 0.6f), d.Bevel(0.04f),
 					StructureMaterial.Fieldstone, key + (s > 0 ? 1 : 0)));
 			}
 			// The bearing pier and the axle.
-			d.Add(StructureShapes.ChamferBox(new Vector3(rotor.Hub.x, 0.5f * (rotor.Hub.y - 0.3f - 1.2f), outer - 0.1f), new Vector3(0.7f, rotor.Hub.y - 0.3f + 1.2f, 0.5f), d.Bevel(0.04f),
+			d.Add(StructureShapes.ChamferBox(new Vector3(rotor.Hub.x, 0.5f * (rotor.Hub.y - 0.3f - RaceFooting), outer - 0.1f), new Vector3(0.7f, rotor.Hub.y - 0.3f + RaceFooting, 0.5f), d.Bevel(0.04f),
 				StructureMaterial.Fieldstone, key + 2));
 			d.Add(StructureShapes.Rod(new Vector3(rotor.Hub.x, rotor.Hub.y, wallZ + 0.1f), new Vector3(rotor.Hub.x, rotor.Hub.y, outer - 0.3f), 0.17f, d.Seg(10, 6), StructureMaterial.Timber, key + 3));
 			if (!overshot)
@@ -351,7 +438,7 @@ namespace FishMMO.Shared.WorldDesign
 				float x = rotor.Hub.x - r - 0.9f;
 				for (int s = -1; s <= 1; s += 2)
 				{
-					d.Add(StructureShapes.Beam(new Vector3(x, -1.1f, s > 0 ? wallZ - 0.1f : outer + 0.1f), new Vector3(x, 1.4f, s > 0 ? wallZ - 0.1f : outer + 0.1f), 0.18f, 0.18f,
+					d.Add(StructureShapes.Beam(new Vector3(x, -RaceFooting, s > 0 ? wallZ - 0.1f : outer + 0.1f), new Vector3(x, 1.4f, s > 0 ? wallZ - 0.1f : outer + 0.1f), 0.18f, 0.18f,
 						StructureMaterial.Timber, key + 4 + (s > 0 ? 1 : 0)));
 				}
 				d.Add(StructureShapes.Box(new Vector3(x, 0.9f, 0.5f * (wallZ + outer)), new Vector3(0.08f, 0.6f, wallZ - outer - 0.25f), StructureMaterial.Timber, key + 6)).Grain = Vector3.forward;
@@ -448,6 +535,8 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Sawmill ───────────────────────────────────────────────────
 
 		private const float SawmillWidth = 12f, SawmillDepth = 6f;
+		/// <summary>The sawmill's wheel: across the shed, and the race's landward end a little out from its front posts so the wheel turns wholly over the water.</summary>
+		private const float SawmillWheelX = 2.2f, SawmillWheelWall = -SawmillDepth * 0.5f - 0.6f;
 
 		private static void Sawmill(StructureDraft d)
 		{
@@ -492,8 +581,10 @@ namespace FishMMO.Shared.WorldDesign
 			d.Add(StructureShapes.Box(new Vector3(0.8f, 0.85f, 0f), new Vector3(0.12f, 0.12f, 1.6f), StructureMaterial.Timber, 64));
 			d.Add(StructureShapes.Box(new Vector3(0.8f, 1.55f, 0f), new Vector3(0.02f, 1.3f, 0.16f), StructureMaterial.Iron, 65, StructureRole.Detail));
 			// The wheel's race on the water side and the crank's pitman up to the frame.
-			StructureRotor rotor = MillWheel(0, 2.2f, -halfD - 0.2f);
+			StructureRotor rotor = MillWheel(0, SawmillWheelX, SawmillWheelWall);
 			MillRace(d, rotor, false, 100);
+			// The water side's footing under the front posts' line.
+			WaterFooting(d, SawmillWidth, -halfD + 0.2f, 0.45f, 0.1f, 90);
 			d.Add(StructureShapes.Beam(new Vector3(rotor.Hub.x, rotor.Hub.y, -halfD + 0.4f), new Vector3(0.9f, 0.9f, -0.4f), 0.14f, 0.14f, StructureMaterial.Timber, 66, StructureRole.Detail));
 			if (!d.Mid)
 			{

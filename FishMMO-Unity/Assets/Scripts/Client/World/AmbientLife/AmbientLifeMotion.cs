@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 using UnityEngine;
 
 namespace FishMMO.Client
@@ -37,6 +38,16 @@ namespace FishMMO.Client
 
 		/// <summary>What lives on this world at all (<see cref="AmbientGating.WorldOf"/>): the home world's animals unless told otherwise.</summary>
 		AmbientWorld World => AmbientWorld.Earthly;
+
+		/// <summary>
+		/// The looks of the biome at a world position (<see cref="BiomeLooks"/>), for the animals placed there to wear
+		/// (<see cref="AmbientLooks.TryChoose"/>); false where none are known, and the kinds keep their own colours.
+		/// </summary>
+		bool LookAt(Vector3 position, out BiomeLooks.Look look)
+		{
+			look = null;
+			return false;
+		}
 	}
 
 	/// <summary>One group of ambient creatures: a flock, a pair of birds, a raptor, a colony of bats, a family of rats.</summary>
@@ -65,6 +76,13 @@ namespace FishMMO.Client
 		public float Rank;
 		/// <summary>Where this group's members' fright states start in their cell's array.</summary>
 		public int StateFirst;
+		/// <summary>
+		/// The biome's look the group wears (<see cref="AmbientLooks"/>), packed as FishAmbientLife.hlsl's <c>_Look</c>; zero
+		/// for none (the kind's own colours). Chosen once, when the group is placed.
+		/// </summary>
+		public Vector4 Look;
+		/// <summary>Which of its biome's looks it is (<see cref="BiomeLooks.Variants"/>), when <see cref="Look"/> is one.</summary>
+		public byte LookVariant;
 	}
 
 	/// <summary>One member's fright: when it took flight or bolted, from where, and where it went.</summary>
@@ -144,6 +162,8 @@ namespace FishMMO.Client
 		public Vector4 Anim;
 		/// <summary>FishAmbientLife.hlsl's <c>_Tint</c>: colour, and how much is drawn.</summary>
 		public Vector4 Tint;
+		/// <summary>FishAmbientLife.hlsl's <c>_Look</c>: its group's look (<see cref="AmbientGroup.Look"/>), zero for the kind's own.</summary>
+		public Vector4 Look;
 	}
 
 	/// <summary>
@@ -307,6 +327,14 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
+				// The biome's look it wears, from its own seed: the same coat for everyone, and a little of the look's
+				// size (a look's beasts run larger or smaller), kept within a little of the kind's own range.
+				float length = Mathf.Lerp(kind.Length.x, kind.Length.y, Unit(Mix(seed ^ 0xAu)));
+				AmbientLooks.TryChoose(world, kind, seed, new Vector3(home.x, ground, home.z), out Vector4 look, out int variant, out float lookSize);
+				if (lookSize != 1f)
+				{
+					length = Mathf.Clamp(length * lookSize, kind.Length.x * AmbientLooks.MinSize, kind.Length.y * AmbientLooks.MaxSize);
+				}
 				groups.Add(new AmbientGroup
 				{
 					Kind = kindIndex,
@@ -316,8 +344,10 @@ namespace FishMMO.Client
 					Altitude = Mathf.Lerp(kind.Altitude.x, kind.Altitude.y, Unit(Mix(seed ^ 0x7u))),
 					Episode = Mathf.Lerp(kind.Episode.x, kind.Episode.y, Unit(Mix(seed ^ 0x8u))),
 					Count = Mathf.Max(1, Mathf.RoundToInt(Mathf.Lerp(kind.GroupSize.x, kind.GroupSize.y + 0.999f, Unit(Mix(seed ^ 0x9u))) - 0.5f)),
-					Length = Mathf.Lerp(kind.Length.x, kind.Length.y, Unit(Mix(seed ^ 0xAu))),
+					Length = length,
 					Rank = Unit(Mix(seed ^ 0xBu)),
+					Look = look,
+					LookVariant = (byte)Mathf.Max(0, variant),
 				});
 			}
 			return true;
@@ -365,6 +395,22 @@ namespace FishMMO.Client
 
 		/// <summary>Every member of a group at the frame's moment, appended to <paramref name="into"/>.</summary>
 		public static void Evaluate(in AmbientGroup group, AmbientCreatureKind kind, ref Frame frame, List<AmbientInstance> into)
+		{
+			int first = into.Count;
+			Members(group, kind, ref frame, into);
+			// Every member wears its group's look (each its own shade of it, by its tint).
+			if (AmbientLooks.Has(group.Look))
+			{
+				for (int i = first; i < into.Count; i++)
+				{
+					AmbientInstance instance = into[i];
+					instance.Look = group.Look;
+					into[i] = instance;
+				}
+			}
+		}
+
+		private static void Members(in AmbientGroup group, AmbientCreatureKind kind, ref Frame frame, List<AmbientInstance> into)
 		{
 			switch (kind.Behaviour)
 			{

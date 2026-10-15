@@ -131,6 +131,14 @@ namespace FishMMO.Client
 		private static readonly int FishWeatherTierId = Shader.PropertyToID("_FishWeatherTier");
 		private static readonly int FishWeatherCoverId = Shader.PropertyToID("_FishWeatherCover");
 		private static readonly int FishGroundBlendId = Shader.PropertyToID("_FishGroundBlend");
+		// The biome's looks (FloraPaletteMap, FishFlora.hlsl): the globals, handed to the compute under their own names.
+		private static readonly int FloraBiomesId = Shader.PropertyToID("_FishFloraBiomes");
+		private static readonly int FloraPaletteId = Shader.PropertyToID("_FishFloraPalette");
+		private static readonly int FloraRectId = Shader.PropertyToID("_FishFloraRect");
+		private static readonly int FloraInfoId = Shader.PropertyToID("_FishFloraInfo");
+		private static readonly int FloraStrengthId = Shader.PropertyToID("_FishFloraStrength");
+		private static readonly int FloraGroundId = Shader.PropertyToID("_FishFloraGround");
+		private static readonly int FloraWorldId = Shader.PropertyToID("_FishFloraWorld");
 		private static readonly int Capacity0Id = Shader.PropertyToID("_GrassCapacity0");
 		private static readonly int Capacity1Id = Shader.PropertyToID("_GrassCapacity1");
 		private static readonly int TilesId = Shader.PropertyToID("_GrassTiles");
@@ -629,7 +637,7 @@ namespace FishMMO.Client
 				albedoWanted.Remove(wanted);
 				if (wanted != null && wanted.IsUsable)
 				{
-					albedoTexels[wanted] = GrassAlbedoTexels.Build(wanted.Albedo, wanted.LayerCount, wanted.LayerST, wanted.LayerTint);
+					albedoTexels[wanted] = GrassAlbedoTexels.Build(wanted.Albedo, wanted.LayerCount, wanted.LayerST, wanted.LayerTint, wanted.LayerFlora());
 				}
 			}
 			// The materials only when something they hold changed: the settings are live in the inspector, so every value is
@@ -820,7 +828,7 @@ namespace FishMMO.Client
 						int tz0 = Mathf.FloorToInt(z0 / tile), tz1 = Mathf.FloorToInt(z1 / tile);
 						// Blocks of tiles first, as one: a block with no grass, out of reach, or seen by neither the view nor its
 						// shadows is passed over whole, so a regather walks the tiles of only the blocks that matter.
-						float blockReach = gt.MaxGrassHeight * 1.6f + 0.5f;
+						float blockReach = GrassMath.BladeReach(gt.MaxGrassHeight);
 						float blockPad = s.ClumpMetres + blockReach;
 						for (int blockZ = tz0; blockZ <= tz1; blockZ += GatherBlockTiles)
 						{
@@ -861,8 +869,9 @@ namespace FishMMO.Client
 										var bounds = new Bounds();
 										// Room for the clump pull (blades leave their cell toward the clump's centre) and the wind: a blade
 										// laid over reaches its full length sideways (up to 1.6 x the type height with the clump and own
-										// variation, as the top). With 0.5 m the edge tiles were culled while their bent blades showed.
-										float reach = gt.MaxGrassHeight * 1.6f + 0.5f;
+										// variation, as the top), grown by the biome's look (GrassMath.BladeReach). With 0.5 m the edge tiles
+										// were culled while their bent blades showed.
+										float reach = GrassMath.BladeReach(gt.MaxGrassHeight);
 										float pad = s.ClumpMetres + reach;
 										bounds.SetMinMax(new Vector3(bx0 - pad, heights.x - 0.2f, bz0 - pad), new Vector3(bx1 + pad, heights.y + reach, bz1 + pad));
 										float near = TerrainTreeMath.MinDistance(bounds, eye);
@@ -993,6 +1002,7 @@ namespace FishMMO.Client
 			// The scene's baked paths: blades on a worn way are thinned and trampled short (FishGroundPaths.hlsl).
 			FishMMO.Shared.ScenePathSurfaceBinder.BindCompute(cmd, compute, generateKernel);
 			BindSnow();
+			BindFlora();
 			cmd.SetComputeVectorParam(compute, ColourId, new Vector4(colourFootprint, cell, ConstantTerrainColour ? 1f : 0f, 0f));
 			if (gpuGather)
 			{
@@ -1162,7 +1172,7 @@ namespace FishMMO.Client
 					}
 					uint terrainIndex = (uint)atlas.IndexOf(gt);
 					float rx0 = gt.Origin.x, rz0 = gt.Origin.z, rx1 = rx0 + gt.Size.x, rz1 = rz0 + gt.Size.z;
-					float reach = gt.MaxGrassHeight * 1.6f + 0.5f;
+					float reach = GrassMath.BladeReach(gt.MaxGrassHeight);
 					float pad = s.ClumpMetres + reach;
 					int tx0 = Mathf.FloorToInt(rx0 / tile), tx1 = Mathf.FloorToInt(rx1 / tile);
 					int tz0 = Mathf.FloorToInt(rz0 / tile), tz1 = Mathf.FloorToInt(rz1 / tile);
@@ -1289,6 +1299,30 @@ namespace FishMMO.Client
 			cmd.SetComputeVectorParam(compute, GrassOcclusionRangeId, occlusion != null ? Shader.GetGlobalVector(FishOcclusionRangeId) : Vector4.zero);
 		}
 
+		/// <summary>
+		/// The biome's looks the generate kernel sizes and leans the blades by, and recolours the ground under their roots by
+		/// (FishGrassBlades.compute, FishFlora.hlsl), read from the globals FloraPaletteMap publishes and handed over by name, as the snow's are. Placeholders and
+		/// <c>_FishFloraInfo.x</c> = 0 where nothing is published (edit mode, the A/B off, no world scene): every blade is
+		/// then generated as it was, and the vertex shader, which reads the same globals, colours it as it was.
+		/// </summary>
+		private void BindFlora()
+		{
+			Texture biomes = Shader.GetGlobalTexture(FloraBiomesId);
+			Texture palette = Shader.GetGlobalTexture(FloraPaletteId);
+			Vector4 info = Shader.GetGlobalVector(FloraInfoId);
+			bool valid = biomes != null && palette != null && info.x > 0.5f;
+			cmd.SetComputeTextureParam(compute, generateKernel, FloraBiomesId, valid ? biomes : Texture2D.blackTexture);
+			cmd.SetComputeTextureParam(compute, generateKernel, FloraPaletteId, valid ? palette : Texture2D.blackTexture);
+			cmd.SetComputeVectorParam(compute, FloraRectId, valid ? Shader.GetGlobalVector(FloraRectId) : Vector4.zero);
+			cmd.SetComputeVectorParam(compute, FloraInfoId, valid ? info : Vector4.zero);
+			cmd.SetComputeVectorParam(compute, FloraStrengthId, Shader.GetGlobalVector(FloraStrengthId));
+			// The world's bare-ground colour (a = how far mineral layers take it): the root's ground colour wears it as the
+			// terrain does (FishFloraGround in GrassTerrainColourAt).
+			cmd.SetComputeVectorParam(compute, FloraGroundId, valid ? Shader.GetGlobalVector(FloraGroundId) : Vector4.zero);
+			// The world's growth (FishFloraGrowth: thin air low, thick air tall), which the blade heights take.
+			cmd.SetComputeVectorParam(compute, FloraWorldId, valid ? Shader.GetGlobalVector(FloraWorldId) : new Vector4(1f, 1f, 0f, 0f));
+		}
+
 		/// <summary>The gather on the GPU: counts cleared, the tile table culled into the work list, the dispatches written.</summary>
 		private void RecordGather()
 		{
@@ -1356,7 +1390,7 @@ namespace FishMMO.Client
 				return texels;
 			}
 			// The scene's bake holds the copy as it was read back when the scene was cut: no blit and readback for it.
-			texels = GrassAlbedoTexels.FromBaked(FishMMO.Shared.SceneTerrainBake.AlbedoOf(set.Albedo), set.Albedo, set.LayerCount, set.LayerST, set.LayerTint);
+			texels = GrassAlbedoTexels.FromBaked(FishMMO.Shared.SceneTerrainBake.AlbedoOf(set.Albedo), set.Albedo, set.LayerCount, set.LayerST, set.LayerTint, set.LayerFlora());
 			if (texels != null)
 			{
 				albedoTexels[set] = texels;

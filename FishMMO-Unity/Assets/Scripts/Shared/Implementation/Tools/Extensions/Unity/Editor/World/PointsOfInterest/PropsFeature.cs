@@ -1604,7 +1604,8 @@ namespace FishMMO.Shared.WorldDesign
 					count = Mathf.Max(1, Mathf.RoundToInt(count / (stature * stature)));
 				}
 				PointOfInterestPieceMetrics metrics = PointOfInterestPieceResolver.Measure(new PointOfInterestPieceRequest(slot.Tag, styles[s], 0));
-				request.Slots.Add(new PointOfInterestLayoutSlot { Role = role, Footprint = metrics.Footprint, Module = metrics.Module, Count = count });
+				// Laid out by what it sweeps as well as what it is (a tower mill's sails), seated by what it is.
+				request.Slots.Add(new PointOfInterestLayoutSlot { Role = role, Footprint = Vector2.Max(metrics.Footprint, metrics.Sweep), Module = metrics.Module, Count = count });
 			}
 			var draws = new List<Draws>();
 			for (int s = 0; s < slots; s++)
@@ -1619,7 +1620,7 @@ namespace FishMMO.Shared.WorldDesign
 					Draws d = Take(random, slot, false);
 					d.Scale *= stature;
 					PointOfInterestPieceMetrics metrics = PointOfInterestPieceResolver.Measure(new PointOfInterestPieceRequest(slot.Tag, styles[s], d.Seed, d.Decay));
-					request.Items.Add(new PointOfInterestLayoutItem { Slot = s, Footprint = metrics.Footprint * d.Scale });
+					request.Items.Add(new PointOfInterestLayoutItem { Slot = s, Footprint = Vector2.Max(metrics.Footprint, metrics.Sweep) * d.Scale });
 					draws.Add(d);
 				}
 			}
@@ -1726,7 +1727,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				else
 				{
-					at.y = SeatHeight(context, piece.Offset, piece.Yaw, metrics.Footprint * d.Scale, metrics.Depth * d.Scale) - d.Decay * MaxSinkMetres;
+					at.y = SeatHeight(context, piece.Offset, piece.Yaw, metrics.Footprint * d.Scale, metrics.Depth * d.Scale, metrics.WaterFront) - d.Decay * MaxSinkMetres;
 				}
 				float tilt = deck ? 0f : d.Decay * MaxTiltDegrees;
 				Quaternion rotation = Quaternion.Euler(d.TiltX * tilt, record.Yaw + piece.Yaw, d.TiltZ * tilt) * pitch;
@@ -2030,15 +2031,25 @@ namespace FishMMO.Shared.WorldDesign
 		/// Where a ground piece's origin goes: its centre's ground, lowered until its foundation (<paramref name="depth"/>)
 		/// reaches the lowest corner, so a slope shows plinth, never a gap.
 		/// </summary>
-		public static float SeatHeight(PointOfInterestSiteContext context, Vector2 offset, float yaw, Vector2 footprint, float depth)
+		/// <param name="landward">
+		/// The piece's front stands in a river (<see cref="PointOfInterestPieceMetrics.WaterFront"/>): only its back corners
+		/// count. Its front corners are in the channel, and lowering toward them sank a watermill a metre into the bank behind
+		/// it, its race walls' depth letting it drop that far (2026-10-15: "Watermills seem to sink into the ground").
+		/// </param>
+		public static float SeatHeight(PointOfInterestSiteContext context, Vector2 offset, float yaw, Vector2 footprint, float depth, bool landward = false)
 		{
 			float centre = context.OnGround(offset).y;
 			var corners = new Vector2[4];
 			PointOfInterestLayouts.Corners(offset, yaw, footprint, corners);
 			float lowest = centre;
-			foreach (Vector2 corner in corners)
+			for (int i = 0; i < corners.Length; i++)
 			{
-				lowest = Mathf.Min(lowest, context.OnGround(corner).y);
+				// Corners 0 and 3 are the piece's back (+z); its front faces −z.
+				if (landward && i != 0 && i != 3)
+				{
+					continue;
+				}
+				lowest = Mathf.Min(lowest, context.OnGround(corners[i]).y);
 			}
 			return Mathf.Min(centre, lowest + Mathf.Max(0f, depth) * 0.9f);
 		}

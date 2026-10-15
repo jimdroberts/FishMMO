@@ -75,6 +75,16 @@ namespace FishMMO.Shared.WorldDesign
 		public int Variants = 2;
 		/// <summary>False for ground clutter a player walks over (a bedroll, a bone pile, a fire ring): no collider.</summary>
 		public bool Collides = true;
+		/// <summary>
+		/// Stands on a river's bank with its front (−z) in the water (a watermill, its race and wheel): seated on its landward
+		/// ground, never lowered toward the channel its front reaches over.
+		/// </summary>
+		public bool WaterFront;
+		/// <summary>
+		/// Room its turning parts sweep beyond its own shape (x, z metres; zero for none): a tower mill's sails and tailpole
+		/// as its cap comes round. Layouts keep other pieces out of it; the piece is still seated by its own footprint.
+		/// </summary>
+		public Vector2 Sweep;
 		public StructureAnchor Anchor;
 		/// <summary>
 		/// For a piece laid end to end (wall, palisade, fence, pier, bridge): the length along x (along z for a pier or a
@@ -559,6 +569,8 @@ namespace FishMMO.Shared.WorldDesign
 		Chamber,
 		/// <summary>A tavern's upper storey: its guests' beds along the walls, chests, a table.</summary>
 		Lodging,
+		/// <summary>A mill's ground floor, where the meal comes down: sacks in crates and barrels, a chest, the miller's table and tally shelf.</summary>
+		Mill,
 	}
 
 	/// <summary>One room of a structure piece, in its own frame: its floor's centre, clear size, height and kind; round or rectangular.</summary>

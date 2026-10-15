@@ -13,6 +13,7 @@
 //   TEXCOORD0   x how far along the body (0 nose .. 1 tail), y across a wing's chord (0 leading .. 1 trailing edge)
 //   TEXCOORD1   x which part (birds 0 body, 1 left wing, 2 right wing, 3 legs, 4 head, 5 tail; walkers 0 body,
 //               1-4 legs FL FR HL HR, 5 tail, 6 head; crabs 1-8 legs, 9 claws), y how far out along it (0 root .. 1 tip)
+//   TEXCOORD2   the colour's roles: how much of it came from the kind's back (x), belly (y) and accent (z) (AmbientCreatureMeshes)
 //
 // Per instance (instanced properties):
 //   _Anim       x the stroke's phase in cycles (wing beat, stride), y its strength (birds: 0 gliding .. 1 beating;
@@ -20,6 +21,16 @@
 //               walkers: 1 for a bounding gait (rabbits, squirrels, frogs), w birds: the head's turn (radians);
 //               walkers: a pose (a rabbit sitting up, a lizard's push-up, sniffing)
 //   _Tint       rgb times the mesh colour, a how much of the animal is drawn (the distance and fright dither)
+//   _Look       the biome look its group wears (AmbientLooks): x coat, y belly, z markings as packed 8-bit sRGB
+//               (r + 256 g + 65536 b), w 1 + the markings' pattern (plain, stripes, spots, bands, mottled) + its phase
+//               (the fraction / 0.95); w 0 for none: the kind's own colours, exactly as the mesh has them
+//
+// The look: each colour role's own colour (_OwnBack, _OwnBelly, _OwnAccent) is swapped for the look's by the kind's
+// _LookMix (x coat, y accents toward the markings, z the markings' strength, w how much of its own brightness the
+// coat keeps), so a rabbit wears its ground's colours, a crow only a hint of its tone, and the countershading, the
+// eyes and the shading the mesh was built with all stay. The markings are drawn over the coat in the fragment from
+// the body's rest pose (object space, one unit long), so they ride the body as it moves, and fade to their average
+// where they would be finer than a pixel.
 //
 // Swarms (mode 4) are the exception: one instance is a whole cloud of insects, its matrix at the cloud's middle and
 // scaled to its radius, every insect a quad flown here about it and turned to the camera (AmbientSwarm):
@@ -40,11 +51,16 @@ CBUFFER_START(UnityPerMaterial)
     half _SwarmStyle;    // swarms: 0 column, 1 cloud, 2 buzz, 3 drift (fireflies), 4 hover (bees), 5 plague (AmbientSwarmStyle)
     float _BugSize;      // swarms: one insect's length, metres
     float4 _GlowColour;  // swarms: rgb its own light at a flash (linear, HDR), a 1 when it has one
+    float4 _LookMix;     // how far it takes a look: x coat, y accents, z markings, w its own brightness kept (AmbientLooks.MixOf)
+    float4 _OwnBack;     // the kind's own back, belly and accent (linear): what the colour roles swap out
+    float4 _OwnBelly;
+    float4 _OwnAccent;
 CBUFFER_END
 
 UNITY_INSTANCING_BUFFER_START(AmbientLifeProps)
     UNITY_DEFINE_INSTANCED_PROP(float4, _Anim)
     UNITY_DEFINE_INSTANCED_PROP(float4, _Tint)
+    UNITY_DEFINE_INSTANCED_PROP(float4, _Look)
 UNITY_INSTANCING_BUFFER_END(AmbientLifeProps)
 
 struct AmbientLifeAttributes
@@ -54,6 +70,7 @@ struct AmbientLifeAttributes
     float4 color : COLOR;
     float2 body : TEXCOORD0;
     float2 part : TEXCOORD1;
+    float3 role : TEXCOORD2;
     UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
@@ -207,6 +224,8 @@ struct AmbientLifeVertex
     float3 color;
     float visible;
     float glow;          // how much of _GlowColour it gives off (swarms)
+    float3 role;         // the colour's roles (TEXCOORD2)
+    float3 rest;         // where on the body it is, at rest (object space): the markings' coordinates
 };
 
 // ── Swarms ────────────────────────────────────────────────────────
@@ -350,6 +369,8 @@ AmbientLifeVertex AmbientSwarm(AmbientLifeAttributes input, float4 anim, float4 
     o.color = input.color.rgb * tint.rgb;
     o.visible = drawn ? tint.a * max(coverage, lit) : 0.0;
     o.glow = lit;
+    o.role = input.role;
+    o.rest = float3(0.0, 0.0, 0.0);
     return o;
 }
 
@@ -370,7 +391,127 @@ AmbientLifeVertex AmbientLifeBuild(AmbientLifeAttributes input)
     o.color = input.color.rgb * tint.rgb;
     o.visible = tint.a;
     o.glow = 0.0;
+    o.role = input.role;
+    o.rest = input.positionOS.xyz;
     return o;
+}
+
+// ── Biome looks ───────────────────────────────────────────────────
+
+// An sRGB colour packed as r + 256 g + 65536 b (AmbientLooks.PackSrgb), in linear light (a close polynomial fit). The
+// number is whole and exact; no rounding (+0.5 above 2^23, where floats step by one, rounds an odd number up: white
+// would wrap to black).
+float3 AmbientUnpackLook(float packed)
+{
+    uint u = (uint)packed;
+    float3 c = float3(u & 255u, (u >> 8) & 255u, (u >> 16) & 255u) * (1.0 / 255.0);
+    return c * (c * (c * 0.305306011 + 0.682171111) + 0.012522878);
+}
+
+float AmbientLookLuma(float3 c)
+{
+    return dot(c, float3(0.2126, 0.7152, 0.0722));
+}
+
+// 0..1 from a cell of the body's rest space and a salt (the swarm's integer hash).
+float AmbientMarkHash(float3 cell, uint salt)
+{
+    int3 i = (int3)cell + 512;
+    return AmbientSwarmHash((uint)i.x * 73856093u ^ (uint)i.y * 19349663u ^ (uint)i.z * 83492791u, salt);
+}
+
+// Smooth value noise over the rest space, 0..1.
+float AmbientMarkNoise(float3 p, uint salt)
+{
+    float3 i = floor(p);
+    float3 f = frac(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float a = lerp(AmbientMarkHash(i, salt), AmbientMarkHash(i + float3(1, 0, 0), salt), f.x);
+    float b = lerp(AmbientMarkHash(i + float3(0, 1, 0), salt), AmbientMarkHash(i + float3(1, 1, 0), salt), f.x);
+    float c = lerp(AmbientMarkHash(i + float3(0, 0, 1), salt), AmbientMarkHash(i + float3(1, 0, 1), salt), f.x);
+    float d = lerp(AmbientMarkHash(i + float3(0, 1, 1), salt), AmbientMarkHash(i + float3(1, 1, 1), salt), f.x);
+    return lerp(lerp(a, b, f.y), lerp(c, d, f.y), f.z);
+}
+
+// How much of a point of the body is marking (0..1), for a pattern (1 stripes, 2 spots, 3 bands, 4 mottled) and the
+// group's phase. Each faded toward its average where its features would be finer than about two pixels: 'pixel' is
+// how much of the rest space one pixel spans (taken before any branch, so its derivatives are sound).
+float AmbientMarking(float3 rest, float pixel, int pattern, float phase)
+{
+    float m = 0.0, mean = 0.0, frequency = 1.0;
+    if (pattern == 1)
+    {
+        // Stripes: narrow and many, across the back, a little swept back toward the flanks (a tabby, a striped lizard).
+        frequency = 7.0;
+        float t = rest.z * frequency + abs(rest.x) * 2.0 + phase;
+        m = smoothstep(0.45, 0.62, abs(frac(t) * 2.0 - 1.0));
+        mean = 0.3;
+    }
+    else if (pattern == 2)
+    {
+        // Spots: one in most cells of a jittered grid (a fawn, a spotted toad, a leopard gecko).
+        frequency = 9.0;
+        float3 p = rest * frequency + phase * 17.0;
+        float3 cell = floor(p);
+        float3 centre = 0.25 + 0.5 * float3(AmbientMarkHash(cell, 31u), AmbientMarkHash(cell, 32u), AmbientMarkHash(cell, 33u));
+        float present = step(0.3, AmbientMarkHash(cell, 34u));
+        m = present * (1.0 - smoothstep(0.17, 0.25, length(frac(p) - centre)));
+        mean = 0.12;
+    }
+    else if (pattern == 3)
+    {
+        // Bands: few and broad, round the whole body (a banded snake-lizard, a ringed tail, a wasp's livery).
+        frequency = 3.0;
+        float t = rest.z * frequency + phase;
+        m = smoothstep(0.5, 0.62, abs(frac(t) * 2.0 - 1.0));
+        mean = 0.4;
+    }
+    else if (pattern == 4)
+    {
+        // Mottled: soft blotches at two scales (a toad's back, a hen's speckle, lichen on a shell).
+        frequency = 13.0;
+        float n = AmbientMarkNoise(rest * 6.0 + phase * 31.0, 41u) * 0.65 + AmbientMarkNoise(rest * 13.0 + phase * 7.0, 42u) * 0.35;
+        m = smoothstep(0.48, 0.66, n) * 0.8;
+        mean = 0.25;
+    }
+    else
+    {
+        return 0.0;
+    }
+    return lerp(m, mean, smoothstep(0.25, 0.5, pixel * frequency));
+}
+
+// The albedo with the group's look: each colour role's own colour swapped for the look's by the kind's mix, the
+// markings over the coat. 'own' is the mesh colour times the tint, as without a look.
+float3 AmbientLookAlbedo(float3 own, float3 role, float3 rest)
+{
+    float3 spans = fwidth(rest);
+    float pixel = max(spans.x, max(spans.y, spans.z));
+    float4 look = UNITY_ACCESS_INSTANCED_PROP(AmbientLifeProps, _Look);
+    if (look.w < 0.5)
+    {
+        return own;
+    }
+    float3 tint = UNITY_ACCESS_INSTANCED_PROP(AmbientLifeProps, _Tint).rgb;
+    float3 coat = AmbientUnpackLook(look.x);
+    float3 belly = AmbientUnpackLook(look.y);
+    float3 mark = AmbientUnpackLook(look.z);
+    // Birds keep their own brightness: the look's tone at the kind's own lightness, so a crow stays dark, a gull pale.
+    float keep = saturate(_LookMix.w);
+    coat = lerp(coat, saturate(coat * clamp(AmbientLookLuma(_OwnBack.rgb) / max(1e-3, AmbientLookLuma(coat)), 0.05, 4.0)), keep);
+    belly = lerp(belly, saturate(belly * clamp(AmbientLookLuma(_OwnBelly.rgb) / max(1e-3, AmbientLookLuma(belly)), 0.05, 4.0)), keep);
+    // The markings, on the coat; a belly is mostly plain.
+    if (_Mode < 3.5 && _LookMix.z > 0.0)
+    {
+        int pattern = (int)floor(look.w) - 1;
+        float phase = saturate(frac(look.w) / 0.95);
+        float m = AmbientMarking(rest, pixel, pattern, phase) * saturate(_LookMix.z);
+        coat = lerp(coat, mark, m);
+        belly = lerp(belly, mark, m * 0.25);
+    }
+    float3 shift = role.x * (coat - _OwnBack.rgb) * _LookMix.x + role.y * (belly - _OwnBelly.rgb) * _LookMix.x
+        + role.z * (mark - _OwnAccent.rgb) * _LookMix.y;
+    return max(0.0, own + shift * tint);
 }
 
 #if defined(FISH_AMBIENT_LIFE_PASS_FORWARD) || defined(FISH_AMBIENT_LIFE_PASS_DEPTHNORMALS)
@@ -382,6 +523,8 @@ struct AmbientLifeVaryings
     float3 normalWS : TEXCOORD1;
     float3 color : TEXCOORD2;
     float3 extra : TEXCOORD3;   // x visible share, y fog, z how much of _GlowColour it gives off
+    float3 role : TEXCOORD4;    // the colour's roles, for the biome look
+    float3 rest : TEXCOORD5;    // the body at rest (object space), for the look's markings
     UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
@@ -394,6 +537,8 @@ AmbientLifeVaryings AmbientLifeVertexMain(AmbientLifeAttributes input)
     o.positionWS = v.positionWS;
     o.normalWS = v.normalWS;
     o.color = v.color;
+    o.role = v.role;
+    o.rest = v.rest;
     o.positionCS = TransformWorldToHClip(v.positionWS);
     o.extra = float3(v.visible, ComputeFogFactor(o.positionCS.z), v.glow);
     return o;
@@ -410,7 +555,7 @@ half4 AmbientLifeForwardFragment(AmbientLifeVaryings input, FRONT_FACE_TYPE face
     float facing = IS_FRONT_VFACE(face, 1.0, -1.0);
     float3 n = normalize(input.normalWS) * facing;
     float3 v = normalize(GetWorldSpaceViewDir(input.positionWS));
-    float3 albedo = input.color;
+    float3 albedo = AmbientLookAlbedo(input.color, input.role, input.rest);
 
 #if defined(_MAIN_LIGHT_SHADOWS_SCREEN)
     float4 shadowCoord = ComputeScreenPos(TransformWorldToHClip(input.positionWS));

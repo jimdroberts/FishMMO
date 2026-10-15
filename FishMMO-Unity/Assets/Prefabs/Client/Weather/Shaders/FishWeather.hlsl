@@ -26,6 +26,19 @@ float4 _FishWeatherMisc;
 // into the window, y the window's length, z the wind speed (as _FishWeatherWind.z) when it began, w unused.
 // What a phase that runs at the wind's pace reads (FishWindTravel), so it never scrubs as the wind eases.
 float4 _FishWindHold;
+// The scene's air, the same on every player's screen (WeatherShaderGlobals.Apply, AirDrift): xy the way it blows
+// (world x, z; its prevailing wind, which never turns with the weather), z how far its ten-metre wind has carried
+// it, m (summed exactly from the world clock, with what the scene adds), wrapped at w. What a pattern laid out across
+// the world on the wind reads: laid on the eased wind at the camera, it was each player's own, and turning it about
+// the world's origin moved it metres a degree far from there (2026-10-15).
+float4 _FishWindWay;
+
+// The way the scene's air blows, unit (_FishWindWay.xy); a diagonal before any weather is set.
+float2 FishWindWay()
+{
+    float2 way = _FishWindWay.xy;
+    return dot(way, way) > 1e-6 ? normalize(way) : float2(0.7071, 0.7071);
+}
 
 // What _FishWeatherMisc.w wraps at, s (WorldMotion.ShaderWrapSeconds).
 #define FISH_MOTION_WRAP 10000.0
@@ -273,11 +286,11 @@ float FishCloudOver(float3 worldPos)
 }
 
 // A cheap moving gust, 0..1, for vertex animation. `time` is unused: the gust travels on the held
-// wind (FishWindTravel), each factor snapped to its own whole turns, so it neither scrubs as the wind
-// eases nor differs between players.
+// wind (FishWindTravel), each factor snapped to its own whole turns, along the scene's own way
+// (FishWindWay), so it neither scrubs as the wind eases nor differs between players.
 float FishWindGust(float2 xz, float time)
 {
-    float2 dir = _FishWeatherWind.xy;
+    float2 dir = FishWindWay();
     float along = dot(xz, dir) * 0.08;
     float rate = 0.6 + _FishWindHold.z * 2.0;
     float a = along - FishWindTravel(rate, 6.2831853);

@@ -1881,12 +1881,19 @@ namespace FishMMO.Client
 			cloudWindSpeed = speed;
 			airLatitude = latitude;
 			airBelts = belts;
-			// Where the air has got to by now, worked out from the world clock rather than added up
-			// frame by frame, and the same drift the weather field is sampled through, so the cloud
-			// overhead and the weather underneath are the same air. Exact, in double: each band
-			// wraps it to its own period on the way to the shader.
-			WeatherDriver.DriftExact(WeatherDriver.WorldSeed, latitude, worldSeconds, belts, out double driftX, out double driftY);
-			cloudDrift = WeatherDriver.Drift(WeatherDriver.WorldSeed, latitude, worldSeconds, belts);
+			// Where the air has got to by now: the integral of the wind the weather reports, with what the scene's author
+			// and its runtime air add (AirDrift), worked out from the world clock rather than added up frame by frame, so
+			// every player has the same sky; and the same drift the weather field is sampled through, so the cloud
+			// overhead and the weather underneath are the same air. It runs in a gale and idles in a calm (2026-10-15:
+			// it was a speed fixed per latitude, whatever the wind did). Exact, in double: each band wraps it to its own
+			// period on the way to the shader.
+			airTimeline = context.Timeline;
+			airSettings = context.Settings;
+			AirDrift.Air driftAir = WeatherField.DriftAir(context.Timeline, context.Settings, WeatherField.BeltsAt(context.Timeline, context.Settings, worldSeconds));
+			AirDrift.At(driftAir, worldSeconds, out double driftX, out double driftY);
+			cloudDrift = new Vector2((float)(driftX - System.Math.Floor(driftX / WeatherDriver.DriftWrapMetres) * WeatherDriver.DriftWrapMetres),
+				(float)(driftY - System.Math.Floor(driftY / WeatherDriver.DriftWrapMetres) * WeatherDriver.DriftWrapMetres));
+			cloudSteering = AirDrift.SpeedAt(driftAir, worldSeconds);
 			Shader.SetGlobalVector(CloudWindId, new Vector4(cloudDrift.x, cloudDrift.y, 2.5f, 1f));
 			Shader.SetGlobalVector(CloudWindDirId, new Vector4(axis.x, axis.y, speed, 0f));
 			shownRain = Mathf.Clamp01(weather[WeatherChannel.Precipitation]);
@@ -2113,6 +2120,10 @@ namespace FishMMO.Client
 		}
 
 		private Vector2 cloudDrift;
+		private float cloudSteering;
+
+		/// <summary>How fast the air at the cloud base is carried now, m/s (<see cref="AirDrift.SpeedAt"/>): what the low clouds drift at.</summary>
+		public float CloudSteeringSpeed => cloudSteering;
 		/// <summary>How far the air has carried the clouds, wrapped for a float: for readouts and traces.</summary>
 		public Vector2 CloudDrift => cloudDrift;
 
@@ -2123,6 +2134,25 @@ namespace FishMMO.Client
 		/// The latitude and wind belts the sky's air is worked out at (the same the cloud drift uses), for
 		/// anything else the air carries (the fog banks); the equator of our own world before any sky.
 		/// </summary>
+		/// <summary>
+		/// What carries the air of the scene the sky is drawn for (<see cref="AirDrift"/>) at a moment: the same timeline
+		/// and settings the cloud drift is worked out from, so the fog banks and the motes ride the very air the clouds
+		/// do, with whatever the scene's author and its runtime air add. Our own world's air before any sky.
+		/// </summary>
+		public static AirDrift.Air SceneAir(double worldSeconds)
+		{
+			WeatherTimeline timeline = instance != null ? instance.airTimeline : null;
+			WorldSceneSettings settings = instance != null ? instance.airSettings : null;
+			if (instance == null)
+			{
+				return new AirDrift.Air { Seed = WeatherDriver.WorldSeed, Belts = WindBelts.Home, Driver = true };
+			}
+			return WeatherField.DriftAir(timeline, settings, WeatherField.BeltsAt(timeline, settings, worldSeconds));
+		}
+
+		private WeatherTimeline airTimeline;
+		private WorldSceneSettings airSettings;
+
 		public static void AirAt(out float latitude, out WindBelts belts)
 		{
 			if (instance != null)

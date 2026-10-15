@@ -491,6 +491,8 @@ namespace FishMMO.Shared.WorldDesign
 			Steps(d, new Vector3(0f, 0f, inside + 1.2f), Vector3.forward, 1.8f, 2f, StructureMaterial.Stone, 141, 1.2f);
 			HangDoor(d, new Vector3(0f, 2f, inside - 0.05f), Vector3.right, Vector3.forward, 1.4f, 2.4f, StructureDoorKind.Studded);
 			d.Room(new Vector3(0f, 1.2f, 0f), new Vector2(w - 2f * th, dz - 2f * th), h - 1.6f, StructureRoomKind.Hall);
+			// The landing and the steps down off it, and a stride at their foot: the only way into the hall (2026-10-15).
+			d.RoomClear(new Vector2(-1.2f, inside), new Vector2(1.2f, inside + 1.2f + 4 * StepTread + 1f));
 			d.Add(StructureShapes.Box(new Vector3(0f, h - 0.2f, 0f), new Vector3(w - 2f * th + 0.1f, 0.4f, dz - 2f * th + 0.1f), StructureMaterial.Timber, 7, StructureRole.Roof));
 			if (roofed)
 			{

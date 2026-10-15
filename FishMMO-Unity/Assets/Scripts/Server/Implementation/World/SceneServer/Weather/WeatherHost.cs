@@ -622,13 +622,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				return false;
 			}
 			double start = NowSeconds(sw) + sw.Timeline.LeadWorldSeconds;
-			QueueAir(sw, new AirOffsetEntry
-			{
-				From = sw.Timeline.Air.AtSeconds(start),
-				To = offsets,
-				StartSeconds = start,
-				EndSeconds = start + Mathf.Max(0f, transitionSeconds),
-			});
+			// Carrying on from the air as the old wind had carried it (AirOffsetEntry.Carried): worked out here once and
+			// sent, so every client's clouds and weather go on from the same place.
+			WorldSceneSettings.TryGetForScene(scene, out WorldSceneSettings settings);
+			QueueAir(sw, WeatherField.NextAir(sw.Timeline, settings, offsets, start, start + Mathf.Max(0f, transitionSeconds)));
 			return true;
 		}
 

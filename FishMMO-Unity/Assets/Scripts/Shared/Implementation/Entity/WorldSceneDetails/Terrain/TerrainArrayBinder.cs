@@ -120,6 +120,7 @@ namespace FishMMO.Shared
 		private static readonly int LayerMaskOffsetId = Shader.PropertyToID("_FishLayerMaskOffset");
 		private static readonly int LayerMaskScaleId = Shader.PropertyToID("_FishLayerMaskScale");
 		private static readonly int LayerSurfaceId = Shader.PropertyToID("_FishLayerSurface");
+		private static readonly int LayerFloraId = Shader.PropertyToID("_FishLayerFlora");
 		private static readonly int PathLayersId = Shader.PropertyToID("_FishPathLayers");
 		private static readonly int PathEarthForId = Shader.PropertyToID("_FishPathEarthFor");
 		private static readonly int PathRoadForId = Shader.PropertyToID("_FishPathRoadFor");
@@ -435,6 +436,10 @@ namespace FishMMO.Shared
 				block.SetVectorArray(LayerMaskOffsetId, set.LayerMaskOffset);
 				block.SetVectorArray(LayerMaskScaleId, set.LayerMaskScale);
 				block.SetVectorArray(LayerSurfaceId, set.LayerSurface);
+				// What each layer is made of for the planet's looks (FishFlora.hlsl FishFloraGround): living ground takes its
+				// patch's look, lichen its lichen colour, bare ground the world's own colour where the air is thin. Worked out
+				// once per set from its layer names; inert while the looks are not published.
+				block.SetVectorArray(LayerFloraId, set.LayerFlora());
 			}
 			// The slices the scene's paths are surfaced from (the scene's own palette); -1 where it has none or nothing is baked.
 			block.SetVector(PathLayersId, usable ? ScenePathSurfaceBinder.LayersOf(gameObject.scene) : new Vector4(-1f, -1f, -1f, -1f));

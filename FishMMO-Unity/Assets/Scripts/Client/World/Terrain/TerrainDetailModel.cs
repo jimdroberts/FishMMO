@@ -59,6 +59,26 @@ namespace FishMMO.Client
 			GpuId = gpu.AddModel(new[] { 0f }, new[] { 0f }, 1f, MeshBounds.center, MeshBounds, new[] { new[] { part } }, Prefab != null ? Prefab.name : null);
 		}
 
+		/// <summary>
+		/// The fallback's per-draw block: the biomes' looks on (<see cref="TerrainGpuRenderer.FloraOnId"/>), which the GPU path
+		/// sets on its clones instead. Here the draw uses the prefab's own material, shared with every other user of it, so the
+		/// switch goes on the draw alone. (The stones' tint is the indirect twin's only: a pebble on this path keeps its colour.)
+		/// </summary>
+		private static MaterialPropertyBlock floraBlock;
+
+		private static MaterialPropertyBlock FloraBlock
+		{
+			get
+			{
+				if (floraBlock == null)
+				{
+					floraBlock = new MaterialPropertyBlock();
+					floraBlock.SetFloat(TerrainGpuRenderer.FloraOnId, 1f);
+				}
+				return floraBlock;
+			}
+		}
+
 		public NativeArray<Matrix4x4> Bucket;
 		public int Count;
 		private Vector3 boundsMin, boundsMax;
@@ -175,6 +195,7 @@ namespace FishMMO.Client
 			rp.camera = camera;
 			rp.worldBounds = bounds;
 			rp.lightProbeUsage = UsesProbes ? probes : LightProbeUsage.Off;
+			rp.matProps = FloraBlock;
 			return TerrainInstancingShared.DrawBatches(rp, Mesh, 0, Bucket, Count);
 		}
 

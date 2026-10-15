@@ -298,6 +298,119 @@ namespace FishMMO.Client
 			};
 		}
 
+		// ── The biome's look (BiomeLooks via FloraPaletteMap; FishFlora.hlsl) ─────
+
+		/// <summary>
+		/// The range a patch's look may scale its blades' height by. A look's own height runs from about a third (a
+		/// dwarfed tundra sward) to well over two (a lush world's tall stand); grass past these reads as a lawn of
+		/// stubble or a crop of reeds, not as the same meadow grown in another place, so the grass takes the look's
+		/// height only within them. The upper bound is also what the cull volumes are widened by (<see cref="BladeReach"/>).
+		/// </summary>
+		public const float FloraMinHeight = 0.45f, FloraMaxHeight = 1.75f;
+
+		/// <summary>The range a look scales a blade's width by (FishGrassBlades.hlsl GrassBuild).</summary>
+		public const float FloraMinWidth = 0.6f, FloraMaxWidth = 1.6f;
+
+		/// <summary>The range a look scales a blade's lean and curl by: a wind-combed look lies over further, a stiff one stands.</summary>
+		public const float FloraMinBend = 0.5f, FloraMaxBend = 1.5f;
+
+		/// <summary>The range a look scales a flower head's size by (FishGrassBlades.hlsl GrassBuild; the compute's head sphere).</summary>
+		public const float FloraMinBloom = 0.5f, FloraMaxBloom = 1.5f;
+
+		/// <summary>The tallest blade a record can hold: a tall record packs half its height at <see cref="MaxPackedHeight"/>.</summary>
+		public const float MaxBladeHeight = MaxPackedHeight * TallHeightScale;
+
+		/// <summary>
+		/// A blade's height under its patch's look (FishGrassBlades.compute): the look's height kept within
+		/// [<see cref="FloraMinHeight"/>, <see cref="FloraMaxHeight"/>], and never past what a record holds. A look of 1
+		/// (none published) leaves the height as it was.
+		/// </summary>
+		public static float FloraHeight(float height, float lookHeight)
+		{
+			return Math.Min(MaxBladeHeight, height * Math.Max(FloraMinHeight, Math.Min(FloraMaxHeight, lookHeight)));
+		}
+
+		/// <summary>A blade's lean under its patch's look: the look's bend kept within its range, the lean within 0..1 as it packs.</summary>
+		public static float FloraLean(float lean, float lookBend)
+		{
+			return Math.Min(1f, Math.Max(0f, lean * Math.Max(FloraMinBend, Math.Min(FloraMaxBend, lookBend))));
+		}
+
+		/// <summary>
+		/// How far past a tile's edge (and above its highest ground) the blades of a terrain whose tallest type is
+		/// <paramref name="maxGrassHeight"/> can reach: a blade laid over by the wind reaches its full length sideways, up to
+		/// 1.6 times its type's height with the clump and own variation, times the most a look grows it, plus half a metre
+		/// for the clump's pull and the widened far blades. Every cull volume a tile is tested by uses it (GrassBladeRenderer's
+		/// gathers, CPU and GPU), so a look that grows the grass never leaves its bent tips outside them.
+		/// </summary>
+		public static float BladeReach(float maxGrassHeight)
+		{
+			return Math.Min(MaxBladeHeight, maxGrassHeight * 1.6f * FloraMaxHeight) + 0.5f;
+		}
+
+		// ── The ground in the looks (FishFlora.hlsl FishFloraGround) ─────
+
+		/// <summary>The bits a share is kept to in <see cref="PackFloraShares"/>: 1/1023 steps.</summary>
+		private const uint FloraShareMax = 1023u;
+
+		/// <summary>
+		/// A terrain layer's flora shares (<c>BiomeLooks.GroundShareOf</c>: living, lichen, mineral, each 0..1) as one uint,
+		/// 10 bits each from bit 0. It rides the grass's albedo header in the word the layer's normal scale took
+		/// (GrassAlbedoTexels; FishGrassBlades.compute GrassLayerFlora), which the grass never read, so the header keeps its
+		/// size and the generate kernel its eight storage buffers.
+		/// </summary>
+		public static uint PackFloraShares(float foliage, float accent, float mineral)
+		{
+			static uint Q(float v) => (uint)Math.Max(0, Math.Min((int)FloraShareMax, (int)Math.Round(Math.Max(0f, Math.Min(1f, v)) * FloraShareMax)));
+			return Q(foliage) | Q(accent) << 10 | Q(mineral) << 20;
+		}
+
+		/// <summary>The inverse of <see cref="PackFloraShares"/>.</summary>
+		public static Vector3 UnpackFloraShares(uint packed)
+		{
+			return new Vector3(packed & FloraShareMax, packed >> 10 & FloraShareMax, packed >> 20 & FloraShareMax) / FloraShareMax;
+		}
+
+		/// <summary>Rec. 709 luminance (FishFlora.hlsl FishFloraLuminance).</summary>
+		public static float FloraLuminance(Vector3 c) => 0.2126f * c.X + 0.7152f * c.Y + 0.0722f * c.Z;
+
+		/// <summary>
+		/// FishFlora.hlsl FishFloraRecolour on the CPU: <paramref name="albedo"/> (linear) toward <paramref name="target"/>,
+		/// keeping some of its own light and dark (own/target luminance x becomes 1.5x / (x + 0.5)), by
+		/// <paramref name="strength"/> (0 leaves it, 1 takes the target's colour outright).
+		/// </summary>
+		public static Vector3 FloraRecolour(Vector3 albedo, Vector3 target, float strength)
+		{
+			float x = FloraLuminance(albedo) / Math.Max(FloraLuminance(target), 1e-3f);
+			Vector3 recoloured = target * (1.5f * x / (x + 0.5f));
+			return Vector3.Lerp(albedo, recoloured, Math.Max(0f, Math.Min(1f, strength)));
+		}
+
+		/// <summary>
+		/// FishFlora.hlsl FishFloraShift on the CPU: living green's own colour (linear) times its look's
+		/// <paramref name="shift"/>, by <paramref name="strength"/> (0 leaves it). A shift moves the colour the ground's climate
+		/// already gave it, rather than replacing it.
+		/// </summary>
+		public static Vector3 FloraShift(Vector3 albedo, Vector3 shift, float strength)
+		{
+			return albedo * Vector3.Lerp(Vector3.One, shift, Math.Max(0f, Math.Min(1f, strength)));
+		}
+
+		/// <summary>
+		/// FishFlora.hlsl FishFloraGround on the CPU, for the maps that hold the ground's colour (GroundColourMap): linear
+		/// <paramref name="albedo"/> of ground made of <paramref name="shares"/> (living, lichen, mineral), its living part
+		/// shifted by <paramref name="shift"/> (shares.X × <paramref name="foliageStrength"/>), then toward
+		/// <paramref name="accent"/> by shares.Y × <paramref name="accentStrength"/>, then toward the world's
+		/// <paramref name="ground"/> by shares.Z × <paramref name="groundStrength"/>, in that order, as the shader does.
+		/// </summary>
+		public static Vector3 FloraGround(Vector3 albedo, Vector3 shares, Vector3 shift, Vector3 accent, Vector3 ground,
+			float foliageStrength, float accentStrength, float groundStrength)
+		{
+			Vector3 c = FloraShift(albedo, shift, shares.X * foliageStrength);
+			c = FloraRecolour(c, accent, shares.Y * accentStrength);
+			return FloraRecolour(c, ground, shares.Z * groundStrength);
+		}
+
 		private static float Wrap(float a)
 		{
 			const float tau = 6.2831853f;

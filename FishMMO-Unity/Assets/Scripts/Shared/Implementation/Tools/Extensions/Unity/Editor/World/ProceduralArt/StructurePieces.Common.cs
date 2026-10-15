@@ -372,14 +372,15 @@ namespace FishMMO.Shared.WorldDesign
 					float sill = floor + h.DoorHeight * 0.62f;
 					float sideLength = h.Depth - 2f * h.Wall;
 					var hole = new WallOpening { Along = sideLength * 0.5f, Width = WindowWidth, Bottom = sill - WindowHeight * 0.5f, Top = sill + WindowHeight * 0.5f };
-					// The stair up to an upper storey climbs the left wall (UpperStorey): no window behind it.
-					if (h.Upper <= 0f)
+					// The stair up to an upper storey climbs a side wall (UpperStorey, StairSide): no window behind it.
+					int stair = h.Upper > 0f ? StairSide(h, floor, top) : 0;
+					if (stair >= 0)
 					{
 						windows.Add((new Vector3(-h.Width * 0.5f, sill, 0f), Vector3.left));
 						leftHoles.Add(hole);
 					}
 					// The right gable is the chimney's when the ridge runs along the front (ChimneyStack): no window there.
-					if (!(h.Chimney && h.RidgeAlongX))
+					if (!(h.Chimney && h.RidgeAlongX) && stair <= 0)
 					{
 						windows.Add((new Vector3(h.Width * 0.5f, sill, 0f), Vector3.right));
 						rightHoles.Add(hole);
@@ -577,27 +578,78 @@ namespace FishMMO.Shared.WorldDesign
 		/// <see cref="StairHeadroom"/> over every step. Its rail stands along the well's open side and across its foot end,
 		/// the top left open to step off. The ground floor's room keeps the flight and its landing clear, the upper one the well.
 		/// </remarks>
+		/// <summary>The upper storey's floor's thickness, metres.</summary>
+		private const float UpperSlab = 0.24f;
+
+		/// <summary>How far in from the front wall a stair's foot stands when the house is deep enough, metres: the door's way in.</summary>
+		private const float StairFootClear = 1.4f;
+
+		/// <summary>The flight up to an upper storey on a side wall: its x span, and its foot and head along z.</summary>
+		private static void StairPlan(House h, float floor, float top, int side, out float x0, out float x1, out float foot, out float run, out int steps)
+		{
+			float halfW = h.Width * 0.5f, halfD = h.Depth * 0.5f;
+			float rise = top + UpperSlab - floor;
+			// As Steps lays them: risers of at most StepRise, treads of StepTread.
+			steps = Mathf.CeilToInt(rise / StepRise);
+			run = (steps - 1) * StepTread;
+			float zMin = -halfD + h.Wall, zMax = halfD - h.Wall;
+			foot = Mathf.Min(zMin + StairFootClear, zMax - run - 0.9f);
+			if (side < 0)
+			{
+				x0 = -halfW + h.Wall;
+				x1 = x0 + StairWidth;
+			}
+			else
+			{
+				x1 = halfW - h.Wall;
+				x0 = x1 - StairWidth;
+			}
+		}
+
+		/// <summary>
+		/// The wall the stair up to an upper storey climbs: the left (−1), or the right (+1) when on the left its foot would
+		/// stand in the front door's way and the right is free of the door and the chimney (2026-10-15: "interiors aren't
+		/// always fully walkable" — a watermill 7 m deep put its stair's foot 0.4 m in from its door, leaving 0.3 m of the
+		/// doorway clear of it).
+		/// </summary>
+		private static int StairSide(House h, float floor, float top)
+		{
+			bool doorway = h.DoorMaterial != StructureMaterial.Ash && h.DoorWidth > 0f;
+			StairPlan(h, floor, top, -1, out float x0, out float x1, out float foot, out _, out _);
+			float zMin = -h.Depth * 0.5f + h.Wall;
+			// A capsule's width either side of the flight to pass it.
+			const float pass = 0.7f;
+			bool inTheWay(float a, float b) => h.DoorX - h.DoorWidth * 0.5f < b + pass && h.DoorX + h.DoorWidth * 0.5f > a - pass;
+			if (!doorway || foot >= zMin + StairFootClear - 1e-3f || !inTheWay(x0, x1) || h.Chimney && h.RidgeAlongX)
+			{
+				return -1;
+			}
+			StairPlan(h, floor, top, 1, out float r0, out float r1, out _, out _, out _);
+			return inTheWay(r0, r1) ? -1 : 1;
+		}
+
 		private static float UpperStorey(StructureDraft d, House h, float floor, float top, bool doorway, ref float depth)
 		{
-			const float slab = 0.24f;
+			const float slab = UpperSlab;
 			float jetty = h.Jetty > 0f ? h.Jetty : DefaultJetty;
 			int key = h.Key;
 			float width = h.Width;
 			float halfW = width * 0.5f, halfD = h.Depth * 0.5f;
 			float upper0 = top + slab;
 			float rise = upper0 - floor;
-			// As Steps lays them: risers of at most StepRise, treads of StepTread.
-			int steps = Mathf.CeilToInt(rise / StepRise);
-			float run = (steps - 1) * StepTread;
-			// Along the left wall, its foot clear of the front wall's door, climbing toward the back.
-			float x0 = -halfW + h.Wall, x1 = x0 + StairWidth;
-			float zMin = -halfD + h.Wall, zMax = halfD - h.Wall;
-			float foot = Mathf.Min(zMin + 1.4f, zMax - run - 0.9f);
+			// Along a side wall (the left unless that stands its foot in the door's way), its foot clear of the front wall's
+			// door, climbing toward the back. The open side is the one toward the room.
+			int side = StairSide(h, floor, top);
+			StairPlan(h, floor, top, side, out float x0, out float x1, out float foot, out float run, out int steps);
+			float zMin = -halfD + h.Wall;
 			float head = foot + run;
 			// The first step whose tread a climber's head would strike the floor over: the well opens from there.
 			int firstOpen = Mathf.Clamp(Mathf.CeilToInt((top - StairHeadroom - floor) / rise * steps), 1, steps);
 			float wellFrom = Mathf.Max(zMin, head - (steps - firstOpen + 1) * StepTread - 0.1f);
-			float wellX1 = x1 + 0.05f;
+			// The well, across the flight and a little past its open side; and that side's x.
+			float wellX0 = side < 0 ? x0 : x0 - 0.05f, wellX1 = side < 0 ? x1 + 0.05f : x1;
+			float open = side < 0 ? x1 + 0.04f : x0 - 0.04f;
+			float wellOpen = side < 0 ? wellX1 + 0.04f : wellX0 - 0.04f;
 
 			// The floor: a slab over the whole house, jettied front and back, less the well.
 			float sx = width + 0.1f, sz = h.Depth + 2f * jetty + 0.1f, y = top + slab * 0.5f;
@@ -611,7 +663,7 @@ namespace FishMMO.Shared.WorldDesign
 			float sx0 = -sx * 0.5f, sx1 = sx * 0.5f, sz0 = -sz * 0.5f, sz1 = sz * 0.5f;
 			Slab(sx0, sx1, sz0, wellFrom, 0);
 			Slab(sx0, sx1, head, sz1, 1);
-			Slab(sx0, x0, wellFrom, head, 2);
+			Slab(sx0, wellX0, wellFrom, head, 2);
 			Slab(wellX1, sx1, wellFrom, head, 3);
 			JettyDetail(d, width, h.Depth, jetty, top, key + 7200);
 
@@ -620,21 +672,22 @@ namespace FishMMO.Shared.WorldDesign
 			if (d.Mid)
 			{
 				// A handrail up the flight's open side, on posts at its foot and its head.
-				var railFoot = new Vector3(x1 + 0.04f, floor + 0.9f + rise / steps, foot);
-				var railHead = new Vector3(x1 + 0.04f, upper0 + 0.9f, head);
+				var railFoot = new Vector3(open, floor + 0.9f + rise / steps, foot);
+				var railHead = new Vector3(open, upper0 + 0.9f, head);
 				d.Add(StructureShapes.Beam(railFoot, railHead, 0.06f, 0.06f, StructureMaterial.Timber, key + 7100, StructureRole.Detail));
-				d.Add(StructureShapes.Beam(new Vector3(x1 + 0.04f, floor, foot), railFoot + Vector3.up * 0.05f, 0.08f, 0.08f, StructureMaterial.Timber, key + 7101, StructureRole.Detail));
+				d.Add(StructureShapes.Beam(new Vector3(open, floor, foot), railFoot + Vector3.up * 0.05f, 0.08f, 0.08f, StructureMaterial.Timber, key + 7101, StructureRole.Detail));
 			}
 
 			// The rail round the well upstairs: along its open side and across its foot end.
 			float railY = upper0 + 0.95f;
-			d.Add(StructureShapes.Beam(new Vector3(wellX1 + 0.04f, railY, wellFrom), new Vector3(wellX1 + 0.04f, railY, head), 0.07f, 0.07f, StructureMaterial.Timber, key + 7110));
-			d.Add(StructureShapes.Beam(new Vector3(x0, railY, wellFrom - 0.04f), new Vector3(wellX1 + 0.04f, railY, wellFrom - 0.04f), 0.07f, 0.07f, StructureMaterial.Timber, key + 7111));
+			d.Add(StructureShapes.Beam(new Vector3(wellOpen, railY, wellFrom), new Vector3(wellOpen, railY, head), 0.07f, 0.07f, StructureMaterial.Timber, key + 7110));
+			d.Add(StructureShapes.Beam(new Vector3(side < 0 ? x0 : wellOpen, railY, wellFrom - 0.04f), new Vector3(side < 0 ? wellOpen : x1, railY, wellFrom - 0.04f), 0.07f, 0.07f,
+				StructureMaterial.Timber, key + 7111));
 			int posts = Mathf.Max(2, Mathf.RoundToInt((head - wellFrom) / 0.9f) + 1);
 			for (int i = 0; i < posts; i++)
 			{
 				float z = Mathf.Lerp(wellFrom, head - 0.05f, i / (float)(posts - 1));
-				d.Add(StructureShapes.Box(new Vector3(wellX1 + 0.04f, upper0 + 0.475f, z), new Vector3(0.07f, 0.95f, 0.07f), StructureMaterial.Timber, key + 7120 + i,
+				d.Add(StructureShapes.Box(new Vector3(wellOpen, upper0 + 0.475f, z), new Vector3(0.07f, 0.95f, 0.07f), StructureMaterial.Timber, key + 7120 + i,
 					i == 0 || i == posts - 1 ? StructureRole.Structure : StructureRole.Detail));
 			}
 
@@ -685,11 +738,11 @@ namespace FishMMO.Shared.WorldDesign
 			if (doorway)
 			{
 				d.Room(new Vector3(0f, floor, 0f), new Vector2(width - 2f * h.Wall, h.Depth - 2f * h.Wall), h.WallHeight, h.RoomKind);
-				d.RoomClear(new Vector2(x0, foot - 1f), new Vector2(x1 + 0.35f, head));
+				d.RoomClear(new Vector2(side < 0 ? x0 : x0 - 0.35f, foot - 1f), new Vector2(side < 0 ? x1 + 0.35f : x1, head));
 			}
 			d.Room(new Vector3(0f, upper0, 0f), new Vector2(width - 2f * h.Wall, depth - 2f * h.Wall), h.Upper,
 				h.UpperRoomKind == StructureRoomKind.Dwelling ? StructureRoomKind.Chamber : h.UpperRoomKind);
-			d.RoomClear(new Vector2(x0, wellFrom - 0.5f), new Vector2(wellX1 + 0.45f, head + 1f));
+			d.RoomClear(new Vector2(side < 0 ? x0 : wellX0 - 0.45f, wellFrom - 0.5f), new Vector2(side < 0 ? wellX1 + 0.45f : x1, head + 1f));
 			return roof;
 		}
 

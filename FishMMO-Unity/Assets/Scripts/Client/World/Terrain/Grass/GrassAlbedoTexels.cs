@@ -6,7 +6,7 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// The grass's own copy of a terrain array set's layers, for FishGrassBlades.compute's colour read, as uints that
-	/// <see cref="GrassTerrainAtlas"/> lays into the grass's one shared buffer: first a header of <see cref="HeaderUints"/> (per layer its tiling and tint, 8 floats as bits), then
+	/// <see cref="GrassTerrainAtlas"/> lays into the grass's one shared buffer: first a header of <see cref="HeaderUints"/> (per layer its tiling and tint, 7 floats as bits, and its flora shares), then
 	/// per layer a pyramid from <see cref="Width"/>² down to 1 × 1, RGBA8 sRGB bytes per texel (layer after layer; in a
 	/// layer, mip after mip; in a mip, rows bottom-up).
 	/// </summary>
@@ -23,8 +23,11 @@ namespace FishMMO.Client
 		public const int MaxWidth = 128;
 
 		/// <summary>
-		/// The header: per layer (up to 32) st xyzw and tint xyzw (FishGrassBlades.compute GRASS_ALBEDO_HEADER). The tables were
-		/// float4[32] × 2 in the compute's constants, re-uploaded for every terrain's dispatch; they are the set's, written once here.
+		/// The header: per layer (up to 32) st xyzw, tint xyz and its flora shares (FishGrassBlades.compute GRASS_ALBEDO_HEADER,
+		/// GrassLayerFlora). The tables were float4[32] × 2 in the compute's constants, re-uploaded for every terrain's dispatch;
+		/// they are the set's, written once here. The eighth word was the tint's w, the layer's normal scale, which the grass
+		/// never read: it now holds the layer's shares of living ground, lichen and mineral (GrassMath.PackFloraShares), so the
+		/// blade's root takes the planet's looks exactly as the terrain under it does, and the header keeps its size.
 		/// </summary>
 		public const int HeaderUints = FishMMO.Shared.TerrainArrayLayerParams.MaximumLayers * 8;
 
@@ -62,7 +65,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>Copies <paramref name="layers"/> slices of <paramref name="albedo"/>; null when there is nothing to copy.</summary>
-		public static GrassAlbedoTexels Build(Texture2DArray albedo, int layers, Vector4[] layerST, Vector4[] layerTint)
+		public static GrassAlbedoTexels Build(Texture2DArray albedo, int layers, Vector4[] layerST, Vector4[] layerTint, Vector4[] layerFlora)
 		{
 			layers = Math.Min(layers, albedo != null ? albedo.depth : 0);
 			if (layers <= 0)
@@ -72,7 +75,7 @@ namespace FishMMO.Client
 			int width = Mathf.ClosestPowerOfTwo(Mathf.Clamp(Math.Min(albedo.width, albedo.height), 1, MaxWidth));
 			int layerTexels = PyramidTexels(width, out int mips);
 			var data = new uint[HeaderUints + layers * layerTexels];
-			WriteHeader(data, layerST, layerTint);
+			WriteHeader(data, layerST, layerTint, layerFlora);
 			var linear = new Vector3[width * width];
 
 			// The blit samples the array's own mips (sRGB decoded), the sRGB target re-encodes: bytes as the array holds them.
@@ -133,16 +136,22 @@ namespace FishMMO.Client
 			return new GrassAlbedoTexels(albedo, data, width, mips, layerTexels, layers);
 		}
 
-		/// <summary>The per-layer tiling and tint header (<see cref="HeaderUints"/>) at the front of <paramref name="data"/>.</summary>
-		private static void WriteHeader(uint[] data, Vector4[] layerST, Vector4[] layerTint)
+		/// <summary>
+		/// The per-layer tiling, tint and flora header (<see cref="HeaderUints"/>) at the front of <paramref name="data"/>.
+		/// <paramref name="layerFlora"/> is the set's <see cref="FishMMO.Shared.TerrainArraySet.LayerFlora"/>; null writes no
+		/// shares, and the grass's colour then ignores the looks, as the terrain does with none pushed.
+		/// </summary>
+		private static void WriteHeader(uint[] data, Vector4[] layerST, Vector4[] layerTint, Vector4[] layerFlora)
 		{
 			for (int l = 0; l < FishMMO.Shared.TerrainArrayLayerParams.MaximumLayers; l++)
 			{
 				Vector4 st = layerST != null && l < layerST.Length ? layerST[l] : Vector4.zero;
 				Vector4 tint = layerTint != null && l < layerTint.Length ? layerTint[l] : Vector4.zero;
+				Vector4 flora = layerFlora != null && l < layerFlora.Length ? layerFlora[l] : Vector4.zero;
 				int h = l * 8;
 				data[h] = Bits(st.x); data[h + 1] = Bits(st.y); data[h + 2] = Bits(st.z); data[h + 3] = Bits(st.w);
-				data[h + 4] = Bits(tint.x); data[h + 5] = Bits(tint.y); data[h + 6] = Bits(tint.z); data[h + 7] = Bits(tint.w);
+				data[h + 4] = Bits(tint.x); data[h + 5] = Bits(tint.y); data[h + 6] = Bits(tint.z);
+				data[h + 7] = GrassMath.PackFloraShares(flora.x, flora.y, flora.z);
 			}
 		}
 
@@ -158,7 +167,7 @@ namespace FishMMO.Client
 		/// A copy from the scene's bake (<see cref="FishMMO.Shared.TerrainDetailBake.Albedo"/>): its pyramids as read back when it
 		/// was baked, under the set's own header now; null when it is not one of what <see cref="Build"/> would make of the set.
 		/// </summary>
-		public static GrassAlbedoTexels FromBaked(FishMMO.Shared.TerrainDetailBake.Albedo baked, Texture2DArray albedo, int layers, Vector4[] layerST, Vector4[] layerTint)
+		public static GrassAlbedoTexels FromBaked(FishMMO.Shared.TerrainDetailBake.Albedo baked, Texture2DArray albedo, int layers, Vector4[] layerST, Vector4[] layerTint, Vector4[] layerFlora)
 		{
 			layers = Math.Min(layers, albedo != null ? albedo.depth : 0);
 			if (baked == null || albedo == null || layers <= 0 || baked.Source != albedo || baked.Layers != layers)
@@ -172,7 +181,7 @@ namespace FishMMO.Client
 				return null;
 			}
 			var data = new uint[HeaderUints + layers * layerTexels];
-			WriteHeader(data, layerST, layerTint);
+			WriteHeader(data, layerST, layerTint, layerFlora);
 			Array.Copy(baked.Pyramids, 0, data, HeaderUints, baked.Pyramids.Length);
 			return new GrassAlbedoTexels(albedo, data, width, mips, layerTexels, layers);
 		}

@@ -12,7 +12,8 @@
 // a quadratic Bezier from the root (height, lean toward its facing, bend, the wind's push, scaled back
 // to its length: GrassMath.Curve), its width tapering to the tip and widened with distance as the field
 // thins (GrassMath.Widen), its colour root to tip from its type, clump and season, the ground's colour
-// near the root (GroundColourMap's globals), snow burying it, and the dithered fade at the grass distance.
+// near the root (GroundColourMap's globals), the biome's look of its patch (FishFlora.hlsl), snow burying
+// it, and the dithered fade at the grass distance.
 //
 // Lighting (forward): normals rounded across the width (a blade reads as a cylinder, not a card),
 // ambient from the sky's trilight (FishTrilight, never SampleSH: nothing binds probes to these draws),
@@ -72,6 +73,34 @@ float4 _GrassParams7;   // wind calm with distance: x start (m), y end (m), z be
 
 // The ground colour map (GroundColourMap; same globals FishVegetationPasses.hlsl reads).
 #include "FishGroundColour.hlsl"
+
+/* The biome's looks (BiomeLooks, published by FloraPaletteMap; FishFlora.hlsl): each patch of ground takes one of its
+ * biome's twelve looks, and the grass standing in it wears that look's colours, width and curl. The compute grew the
+ * blade to the look's height and lean from the same patch of the same root (FishGrassBlades.compute: GRASS_FLORA_PATCH
+ * and GRASS_FLORA_SALT must match), so nothing new rides the record. Flowers take theirs from larger drifts with their own
+ * salt, so a drift of bloom does not end where a patch of grass does. _FishFloraInfo.x = 0 (nothing published, the A/B
+ * off): every look is invalid and every blade is drawn as it was. */
+#include "FishFlora.hlsl"
+// The grass's patches are FishFlora.hlsl's own: the terrain's living ground reads the same, so the sward under a patch is
+// the patch's colour too.
+#define GRASS_FLORA_PATCH FISH_FLORA_GRASS_PATCH
+#define GRASS_FLORA_SALT FISH_FLORA_GRASS_SALT
+#define GRASS_FLORA_BLOOM_PATCH 11.0
+#define GRASS_FLORA_BLOOM_SALT 0xBB67AE85u
+// GrassMath.FloraMinWidth / FloraMaxWidth, FloraMinBend / FloraMaxBend, FloraMinBloom / FloraMaxBloom.
+// The smooth swells of the blade's shape (FishFloraSwell; the bend's salt and spread match FishGrassBlades.compute).
+#define GRASS_FLORA_BEND_SWELL 0.25
+#define GRASS_FLORA_BEND_SALT 0xA54FF53Au
+#define GRASS_FLORA_WIDTH_SWELL 0.15
+#define GRASS_FLORA_WIDTH_SALT 0x510E527Fu
+#define GRASS_FLORA_HEADSIZE_SWELL 0.25
+#define GRASS_FLORA_HEADSIZE_SALT 0x9B05688Cu
+#define GRASS_FLORA_MIN_WIDTH 0.6
+#define GRASS_FLORA_MAX_WIDTH 1.6
+#define GRASS_FLORA_MIN_BEND 0.5
+#define GRASS_FLORA_MAX_BEND 1.5
+#define GRASS_FLORA_MIN_BLOOM 0.5
+#define GRASS_FLORA_MAX_BLOOM 1.5
 
 // ── Unpacking (GrassMath.Unpack) ──────────────────────────────────────
 
@@ -218,6 +247,9 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     float r0 = GrassUnitV(h0);
     float r1 = GrassUnitV(GrassMixV(h0 ^ 0x63D83595u));
     float r2 = GrassUnitV(GrassMixV(h0 ^ 0x2C1B3C6Du));
+    // The look of the blade's patch, the one the compute grew it by (its height and lean are already in the record). Every
+    // pass asks it, so the shadow casters' blades are as wide and curled as the camera's.
+    FishFloraLook look = FishFloraAt(root.xz, GRASS_FLORA_PATCH, GRASS_FLORA_SALT);
 
     float d = distance(root, _WorldSpaceCameraPos);
     o.distance = d;
@@ -249,8 +281,11 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
      * and dying in wider gusty patches. Each blade follows a moment late (stiffer ones later), so
      * neighbours never move in lockstep. */
     float lambda = max(1.0, _GrassParams2.y);
-    float alongWind = dot(root.xz, dir);
-    float acrossWind = dot(root.xz, float2(-dir.y, dir.x));
+    // Laid out on the scene's own way (FishWindWay), not the eased wind at the camera: the bands and the swell
+    // stand where they do for every player. The blades still lean on the wind they feel (dir, below).
+    float2 way = FishWindWay();
+    float alongWind = dot(root.xz, way);
+    float acrossWind = dot(root.xz, float2(-way.y, way.x));
     // At the wind's pace, held for each window of the shared clock (FishWindTravel): the bands lie in
     // the same place for every player, and never scrub as the wind eases.
     float travel = FishWindTravel((1.5 + _FishWindHold.z * 6.0) * max(0.0, _GrassParams4.z), lambda);
@@ -258,7 +293,7 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     float stiffness = max(0.1, typeParams.x);
     float phase = (alongWind - travel + wobble) / lambda - r1 * 0.06 * stiffness;
     float crest = pow(saturate(0.5 + 0.5 * sin(phase * 6.2831853)), max(1.0, _GrassParams4.y));
-    float swell = FishSurfaceNoise(root.xz / (lambda * 4.0) - dir * time * 0.04);
+    float swell = FishSurfaceNoise(root.xz / (lambda * 4.0) - way * time * 0.04);
     float gustBand = crest * lerp(0.35, 1.0, swell);
     float strength = _GrassParams2.w + speed * 0.7 + gust * 0.8;
     // The wind's bend, an angle from vertical: a steady lean by the wind's strength, deepened in the bands.
@@ -312,7 +347,10 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     float3 tipDirection = float3(lay.x, sqrt(max(0.0, 1.0 - dot(lay, lay))), lay.y);
 
     // Bent further, the blade curves more: the base still rises before it arcs over.
-    float bend = saturate(typeParams.z * (0.5 + 0.5 * r1) + 0.6 * windAngle / max(0.1, _GrassParams4.x) + 0.5 * viewLay);
+    // A look's bend curls its patch's blades more or less (a wind-combed look arcs over, a stiff one stands straight).
+    // Shape from the smooth swell, never the patch (FishFloraSwell): the same lean the compute gave the blade.
+    float floraBend = clamp(FishFloraSwell(root.xz, GRASS_FLORA_BEND_SWELL, GRASS_FLORA_BEND_SALT), GRASS_FLORA_MIN_BEND, GRASS_FLORA_MAX_BEND);
+    float bend = saturate(typeParams.z * floraBend * (0.5 + 0.5 * r1) + 0.6 * windAngle / max(0.1, _GrassParams4.x) + 0.5 * viewLay);
     float3 control, tip;
     GrassCurve(bladeHeight, tipDirection, bend, control, tip);
     float3 curvePoint = 2.0 * t * (1.0 - t) * control + t * t * tip;
@@ -326,7 +364,7 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     float pixelMetres = d * _GrassScreen.x + _GrassScreen.y;
     float screenCap = max(1.0, pixelMetres * _GrassScreen.z);
     float widen = min(min(_GrassParams0.y, screenCap), pow(max(1e-6, GrassShareV(d)), -_GrassParams0.x));
-    float width = typeTip.a * widen * (0.75 + 0.5 * r0) * lerp(0.5, 1.0, thinFade);
+    float width = typeTip.a * widen * (0.75 + 0.5 * r0) * lerp(0.5, 1.0, thinFade) * clamp(FishFloraSwell(root.xz, GRASS_FLORA_WIDTH_SWELL, GRASS_FLORA_WIDTH_SALT) * (_FishFloraInfo.x < 0.5 ? 1.0 : _FishFloraWorld.y), GRASS_FLORA_MIN_WIDTH, GRASS_FLORA_MAX_WIDTH);
     float4 headInfo = GrassTypeRow(type, GRASS_ROW_HEAD);
     // A strap (a reed's leaf) keeps its width to a rounded end; a blade tapers to a point.
     float taper = headInfo.w > 0.5 ? 1.0 - 0.45 * pow(saturate(t), 3.0) : 1.0 - pow(saturate(t), 1.6);
@@ -355,6 +393,13 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     uint headPart = GrassHeadPart(blade.colour);
     bool isHead = headPart != 0u && headInfo.x > 0.5;
     bool isPlume = isHead && headInfo.x > 2.5;
+    bool isFlower = isHead && headInfo.x >= 1.5 && headInfo.x <= 2.5;
+    // A flower's drift: its own, larger patches (the look's bloom colour and size), read only for a flower's cards.
+    FishFloraLook bloomLook = look;
+    [branch] if (isFlower)
+    {
+        bloomLook = FishFloraAt(root.xz, GRASS_FLORA_BLOOM_PATCH, GRASS_FLORA_BLOOM_SALT);
+    }
     if (isHead)
     {
         float3 tipWS = root + tip;
@@ -398,7 +443,9 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
         }
         else
         {
-            // A flower: a disc tipped toward the sky, and one upright across it so it reads from the side too.
+            // A flower: a disc tipped toward the sky, and one upright across it so it reads from the side too. Its drift's
+            // look sizes it (the compute's sphere allows the most a look can: GRASS_FLORA_MAX_BLOOM there).
+            size *= clamp(FishFloraSwell(root.xz, GRASS_FLORA_HEADSIZE_SWELL, GRASS_FLORA_HEADSIZE_SALT), GRASS_FLORA_MIN_BLOOM, GRASS_FLORA_MAX_BLOOM);
             float3 along = float3(cos(facingAngle), 0.0, sin(facingAngle));
             float3 aside = float3(-along.z, 0.0, along.x);
             axisA = lerp(along, aside, second) * size;
@@ -429,6 +476,18 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     colour *= 0.9 + 0.2 * r2;
     // A clump's bias also leans its hue a little toward straw.
     colour = lerp(colour, colour * float3(1.12, 1.02, 0.78), (clumpColour - 0.5) * 0.4);
+    /* The look of the blade's patch, as a SHIFT of the type's own colour (FishFloraShift), before the ground's colour is
+     * blended in below: that colour (the terrain under the root, read by the compute through FishFloraGround with this
+     * same patch's look, or the ground colour map's biome average) is shifted already, so every part of the blade is
+     * shifted once. The terrain's own colour, the type's shading and the season's browning stay, so a dry slope is still
+     * straw and a wet hollow still green, and the planet and the patch move them (olive under a K star, plum under a red
+     * dwarf; a golden or silvered patch a tint of its meadow). A look that REPLACED the colour (2026-10-15, the first
+     * version) turned meadows into chunks of colour that ignored their climate. The common look of an Earth-like world
+     * shifts nothing. */
+    if (!isHead && look.valid)
+    {
+        colour = FishFloraShift(colour, look.shift, _FishFloraStrength.x);
+    }
 
     /* The terrain's own texture under the root (read by the compute pass), as Ghost of Tsushima colours
      * its grass: the blade takes the ground's colour, and keeps from its type only its shading (root dark
@@ -436,32 +495,56 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
      * hue ratio over the type's healthy tint). Grass then changes with the ground it grows from, and the
      * ground showing between blades is the same colour, so the gaps stop reading. */
     float4 terrain = GrassUnpackColour(blade.colour);
+    float3 lumWeights = float3(0.2126, 0.7152, 0.0722);
+    // The season's browning as a hue ratio over the type's healthy tint (1 when healthy), for whatever colour replaces
+    // the type's own: the ground's, then the look's.
+    float3 browning = season / max(1e-3, typeHealthy.rgb);
+    browning /= max(1e-3, dot(browning, lumWeights));
+    /* What the ground does to the stem, gathered from whichever ground it knows and applied after the look (below): the
+     * ground's colour at the very root and how much of it, and the ground-colour diagnostic's override. */
+    float3 rootGround = colour;
+    float rootGroundAmount = 0.0;
+    float3 groundView = colour;
+    bool groundViewOn = false;
     if (isHead)
     {
         // The head's own colour, one of the type's (a clump's flowers share it), browned as the season goes dormant.
         int colours = clamp((int)round(headInfo.z), 1, 4);
         int pick = min(colours - 1, (int)floor(clumpColour * (float)colours));
         colour = GrassTypeRow(type, GRASS_ROW_HEAD_COLOUR + pick).rgb * (0.85 + 0.3 * r1);
+        if (isFlower && bloomLook.valid)
+        {
+            /* A flower takes its drift's bloom instead of its type's palette: the same meadow flower opens gold in one
+             * biome, violet or ember-red in another, and moon-pale in a rare fantastic drift. A clump's flowers a shade
+             * lighter or darker than the next, so a drift is not one flat colour. */
+            float3 bloom = bloomLook.bloom * (0.8 + 0.4 * clumpColour) * (0.9 + 0.2 * r1);
+            colour = lerp(colour, bloom, saturate(_FishFloraStrength.y));
+        }
+        else if (look.valid)
+        {
+            /* A seed head or a plume keeps its type's colour (straw, silver, russet: what it is made of), leaning a little
+             * toward its patch's accent, at the head's own lightness, so a steppe's plumes pick up the biome's cast
+             * without turning into flowers. */
+            colour = lerp(colour, FishFloraRecolour(colour, look.accent, 1.0), 0.35 * saturate(_FishFloraStrength.z));
+        }
         float known = step(1e-4, _FishSeason.w);
         float dormant = saturate(-_FishSeason.y) * 0.7 * known;
-        float3 lumWeights = float3(0.2126, 0.7152, 0.0722);
         colour = lerp(colour, dot(colour, lumWeights) * float3(0.75, 0.62, 0.45), dormant);
     }
     else if (terrain.a > 0.5)
     {
-        float3 lumWeights = float3(0.2126, 0.7152, 0.0722);
         float3 typeMid = lerp(typeRoot.rgb, typeTip.rgb, 0.57) * season;
         float shade = dot(colour, lumWeights) / max(1e-3, dot(typeMid, lumWeights));
-        float3 browning = season / max(1e-3, typeHealthy.rgb);
-        browning /= max(1e-3, dot(browning, lumWeights));
         float3 target = terrain.rgb * shade * lerp(1.0, browning, 0.6) * _GrassParams6.y;
         colour = lerp(colour, target, saturate(_GrassParams6.x));
         // The very root is the ground itself.
         float rootUp = saturate(t / max(0.02, _GrassParams3.y));
-        colour = lerp(colour, terrain.rgb, _GrassParams6.z * (1.0 - rootUp) * (1.0 - rootUp));
+        rootGround = terrain.rgb;
+        rootGroundAmount = _GrassParams6.z * (1.0 - rootUp) * (1.0 - rootUp);
         if (_FishGroundColourParams.y > 0.5 && _FishGroundColourParams.y < 1.5)
         {
-            colour = terrain.rgb;
+            groundView = terrain.rgb;
+            groundViewOn = true;
         }
     }
     // Otherwise (no terrain arrays bound) the ground colour map: the root grows out of the soil (its
@@ -472,16 +555,23 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
         if (all(uv >= 0.0) && all(uv <= 1.0))
         {
             float4 ground = SAMPLE_TEXTURE2D_LOD(_FishGroundColour, sampler_FishGroundColour, uv, 0.0);
-            float lum = max(1e-3, dot(colour, float3(0.2126, 0.7152, 0.0722)));
-            float groundLum = max(1e-3, dot(ground.rgb, float3(0.2126, 0.7152, 0.0722)));
+            float lum = max(1e-3, dot(colour, lumWeights));
+            float groundLum = max(1e-3, dot(ground.rgb, lumWeights));
             colour = lerp(colour, ground.rgb * (lum / groundLum), _GrassParams3.z * ground.a);
             float up = saturate(t / max(0.02, _GrassParams3.y));
-            colour = lerp(colour, ground.rgb, _GrassParams3.x * (1.0 - up) * (1.0 - up) * ground.a);
+            rootGround = ground.rgb;
+            rootGroundAmount = _GrassParams3.x * (1.0 - up) * (1.0 - up) * ground.a;
             if (_FishGroundColourParams.y > 0.5 && _FishGroundColourParams.y < 1.5)
             {
-                colour = ground.a > 0.0 ? ground.rgb : float3(1.0, 0.0, 1.0);
+                groundView = ground.a > 0.0 ? ground.rgb : float3(1.0, 0.0, 1.0);
+                groundViewOn = true;
             }
         }
+    }
+    colour = lerp(colour, rootGround, rootGroundAmount);
+    if (groundViewOn)
+    {
+        colour = groundView;
     }
     // Gust sheen: blades laid over in a crest turn their flat side to the sky and catch the light, which
     // is what makes the waves read across a meadow; strongest toward the tips.

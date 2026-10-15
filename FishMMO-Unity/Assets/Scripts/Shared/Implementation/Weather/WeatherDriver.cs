@@ -51,10 +51,12 @@ namespace FishMMO.Shared.Weather
 
 		/// <summary>The wind a system's size is reckoned against, in metres per second.</summary>
 		/// <remarks>
-		/// The middle of what <see cref="PrevailingSpeed"/> produces. Systems are sized in time — so
-		/// many hours to pass — and this is what converts that into a distance.
+		/// The middle of what <see cref="PrevailingSpeed"/> produces (8 m/s), brought up to the steering level the
+		/// systems are carried at (<see cref="AirDrift.SteeringGain"/>). Systems are sized in time — so many hours to
+		/// pass — and this is what converts that into a distance: carried at the steering wind since 2026-10-15, they
+		/// are drawn that much larger so they still take as long to pass.
 		/// </remarks>
-		private const float TypicalSpeed = 8f;
+		private static float TypicalSpeed => 8f * AirDrift.SteeringGain;
 
 		/// <summary>
 		/// Metres one tile of the field covers: how big a weather system is.
@@ -286,25 +288,20 @@ namespace FishMMO.Shared.Weather
 		}
 
 		/// <summary>
-		/// The steady speed the whole field is carried at, in metres per second. Constant in time.
+		/// The usual speed the clouds and the field are carried at here, m/s: <see cref="PrevailingSpeed"/> with its
+		/// swell at its middle, at the steering level. Constant in time — the climate's figure, for the per-world cloud
+		/// scales, which must never change with the weather (CloudClimate.ScalesFor).
 		/// </summary>
 		/// <remarks>
-		/// This one must not vary with the clock, and the reason is worth keeping. The drift below is
-		/// <c>speed × elapsed</c>, which is only an integral of the speed while the speed holds
-		/// still; let it wobble and the derivative picks up an <c>elapsed × d(speed)/dt</c> term that
-		/// grows without bound. A wobble of one metre per second a day into the world then throws the
-		/// sampled position a hundred kilometres sideways in an instant — the field teleports, and
-		/// the weather flips several times an hour no matter how large the systems are made. That is
-		/// exactly what it did. The wind that varies is <see cref="PrevailingSpeed"/>, which is
-		/// reported to the weather and never moves the field.
+		/// It used to be the speed the field was actually carried at, held still for ever, because <c>speed × elapsed</c>
+		/// with a speed that wobbled teleported the field (the derivative picks up <c>elapsed × d(speed)/dt</c>). The
+		/// drift is now the integral of the wind itself (<see cref="AirDrift"/>), which has neither fault: it never
+		/// steps, and the sky runs in a gale and idles in a calm (2026-10-15).
 		/// </remarks>
 		public static float AdvectionSpeed(uint worldSeed, float latitudeDegrees, in WindBelts belts)
 		{
 			float band = JetBand(latitudeDegrees, belts);
-			// Seeded per latitude band, so one world's westerlies run faster than another's, and
-			// steady for ever within a world.
-			float place = Noise(latitudeDegrees * 0.05f, 61.3f, worldSeed ^ 0x3B9ACA07u);
-			return Mathf.Lerp(4f, 12f, Mathf.Clamp01(band * 0.7f + place * 0.3f));
+			return AirDrift.SteeringGain * Mathf.Lerp(1.5f, 18f, Mathf.Clamp01(band * 0.55f));
 		}
 
 		/// <summary>
@@ -355,23 +352,25 @@ namespace FishMMO.Shared.Weather
 			return new Vector2((float)x, (float)y);
 		}
 
-		/// <summary>The drift, exact, in double: what the field is sampled through.</summary>
+		/// <summary>
+		/// The drift, exact, in double, of the world's own air with nothing added (no scene offsets): what a caller with
+		/// no scene samples the field through. A scene's sky and weather take <see cref="AirDrift.At"/> with its offsets.
+		/// </summary>
 		public static void DriftExact(uint worldSeed, float latitudeDegrees, double worldSeconds, in WindBelts belts, out double x, out double y)
 		{
-			Vector2 direction = PrevailingWind(latitudeDegrees, belts);
-			float speed = AdvectionSpeed(worldSeed, latitudeDegrees, belts);
-			// The linear term grows without bound and is the whole reason this is a double: at a
-			// year in, single precision is already rounding it to sixteen metres.
-			double travelled = worldSeconds * speed;
+			var air = new AirDrift.Air { Seed = worldSeed, Latitude = latitudeDegrees, Belts = belts, Driver = true };
+			AirDrift.At(air, worldSeconds, out x, out y);
+		}
 
-			// A slow wander across the flow, bounded, so a front does not track a ruler.
-			// Slow, and bounded: a quarter-day lattice, so it bends the track of a front over hours
-			// rather than shivering it minute to minute.
+		/// <summary>
+		/// A slow wander across the flow, bounded, so a front does not track a ruler: a quarter-day lattice, so it bends
+		/// the track of a front over hours rather than shivering it minute to minute. Added to the drift, m.
+		/// </summary>
+		public static void Wander(uint worldSeed, double worldSeconds, out double x, out double y)
+		{
 			double phase = worldSeconds / 5400.0;
-			float wanderX = Noise(phase, 5.5, worldSeed ^ 0x27D4EB2Fu) - 0.5f;
-			float wanderY = Noise(phase + 19.3, 88.1, worldSeed ^ 0x165667B1u) - 0.5f;
-			x = direction.x * travelled + wanderX * 2500.0;
-			y = direction.y * travelled + wanderY * 2500.0;
+			x = (Noise(phase, 5.5, worldSeed ^ 0x27D4EB2Fu) - 0.5f) * 2500.0;
+			y = (Noise(phase + 19.3, 88.1, worldSeed ^ 0x165667B1u) - 0.5f) * 2500.0;
 		}
 
 		// ── The field ─────────────────────────────────────────────────
@@ -644,11 +643,18 @@ namespace FishMMO.Shared.Weather
 		/// </summary>
 		public static Synoptic Sample(uint worldSeed, Vector2 positionMetres, double worldSeconds, float latitudeDegrees, float season01, float localTime01, in WindBelts belts)
 		{
+			DriftExact(worldSeed, latitudeDegrees, worldSeconds, belts, out double driftX, out double driftY);
+			return Sample(worldSeed, positionMetres, worldSeconds, latitudeDegrees, season01, localTime01, belts, driftX, driftY);
+		}
+
+		/// <summary>As above, through a drift the caller has worked out (<see cref="AirDrift.At"/>, a scene's air with its offsets).</summary>
+		public static Synoptic Sample(uint worldSeed, Vector2 positionMetres, double worldSeconds, float latitudeDegrees, float season01, float localTime01, in WindBelts belts,
+			double driftX, double driftY)
+		{
 			// The field is read at the place the air came from, so the whole pattern moves downwind:
 			// the same drift the clouds use, so what the sky shows and what the weather says are the
 			// same air rather than two systems that happen to be near each other. In double, and
 			// never wrapped: the field has no period to wrap to.
-			DriftExact(worldSeed, latitudeDegrees, worldSeconds, belts, out double driftX, out double driftY);
 			double driftedX = positionMetres.x - driftX;
 			double driftedY = positionMetres.y - driftY;
 

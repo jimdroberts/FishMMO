@@ -527,9 +527,8 @@ namespace FishMMO.Client
 			// The surface air's travel since the epoch, at the share the air a couple of metres up
 			// moves at: the fog banks' own query (same share, so the same cached sums), so the motes
 			// and the mist drift together and every player's stand in the same place.
-			SkySystem.AirAt(out float latitude, out WindBelts belts);
 			double seconds = WorldMotion.Seconds;
-			SurfaceAirDrift.At(WeatherDriver.WorldSeed, latitude, belts, FogLayerView.SurfaceShare, seconds, out double airX, out double airZ, out _);
+			SurfaceAirDrift.At(SkySystem.SceneAir(seconds), FogLayerView.SurfaceShare, seconds, out double airX, out double airZ, out _);
 			// The air is turbulent near the ground: what it carries wanders further in a wind.
 			float turbulence = 1f + Mathf.Clamp01(climate.WindMetres / 8f) * 1.5f;
 			int budget = Budget(tier.Particles);

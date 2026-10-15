@@ -209,7 +209,7 @@ namespace FishMMO.Client
 					{
 						continue;
 					}
-					GrassAlbedoTexels texels = GrassAlbedoTexels.Build(set.Albedo, set.LayerCount, set.LayerST, set.LayerTint);
+					GrassAlbedoTexels texels = GrassAlbedoTexels.Build(set.Albedo, set.LayerCount, set.LayerST, set.LayerTint, set.LayerFlora());
 					if (texels == null)
 					{
 						continue;
@@ -267,7 +267,7 @@ namespace FishMMO.Client
 					}
 				}
 			}
-			if (!GroundColourMap.Compute(live, sets, out Rect bounds, out float texel, out int w, out int h, out Color32[] pixels, out Color32[] normals))
+			if (!GroundColourMap.Compute(live, sets, out Rect bounds, out float texel, out int w, out int h, out Color32[] pixels, out Color32[] normals, out Color32[] shares))
 			{
 				return false;
 			}
@@ -280,6 +280,7 @@ namespace FishMMO.Client
 			g.Height = h;
 			g.Colour = Bytes(pixels);
 			g.Normals = Bytes(normals);
+			g.Shares = Bytes(shares);
 			g.Terrains = new TerrainData[live.Count];
 			g.Positions = new Vector3[live.Count];
 			g.Albedos = new Texture2DArray[live.Count];
@@ -353,7 +354,7 @@ namespace FishMMO.Client
 			{
 				n += 4L * a.Pyramids.Length;
 			}
-			n += bake.Ground.Colour.Length + bake.Ground.Normals.Length;
+			n += bake.Ground.Colour.Length + bake.Ground.Normals.Length + (bake.Ground.Shares != null ? bake.Ground.Shares.Length : 0);
 			return n;
 		}
 

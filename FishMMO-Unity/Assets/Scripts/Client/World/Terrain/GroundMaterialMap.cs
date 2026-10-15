@@ -57,6 +57,7 @@ namespace FishMMO.Client
 		private static readonly int LayerSurfaceId = Shader.PropertyToID("_FishGroundLayerSurface");
 		private static readonly int LayerMaskOffsetId = Shader.PropertyToID("_FishGroundLayerMaskOffset");
 		private static readonly int LayerMaskScaleId = Shader.PropertyToID("_FishGroundLayerMaskScale");
+		private static readonly int LayerFloraId = Shader.PropertyToID("_FishGroundLayerFlora");
 		private static readonly int MasksId = Shader.PropertyToID("_FishGroundMasks");
 		private static readonly int BlendId = Shader.PropertyToID("_FishGroundBlend");
 
@@ -67,6 +68,7 @@ namespace FishMMO.Client
 		private static readonly Vector4[] layerSurface = new Vector4[MaxLayers];
 		private static readonly Vector4[] layerMaskOffset = new Vector4[MaxLayers];
 		private static readonly Vector4[] layerMaskScale = new Vector4[MaxLayers];
+		private static readonly Vector4[] layerFlora = new Vector4[MaxLayers];
 
 		private static Texture2DArray heights;
 		private static RenderTexture control;
@@ -170,8 +172,11 @@ namespace FishMMO.Client
 			heights.Apply(false, false);
 
 			int layers = Mathf.Min(MaxLayers, set.LayerCount);
+			Vector4[] flora = set.LayerFlora();
 			for (int l = 0; l < MaxLayers; l++)
 			{
+				// What each layer is made of for the planet's looks: the band at a base recolours as the terrain does.
+				layerFlora[l] = l < layers && l < flora.Length ? flora[l] : Vector4.zero;
 				layerST[l] = l < layers && l < set.LayerST.Length ? set.LayerST[l] : new Vector4(1f, 1f, 0f, 0f);
 				layerTint[l] = l < layers && l < set.LayerTint.Length ? set.LayerTint[l] : Vector4.one;
 				layerSurface[l] = l < layers && l < set.LayerSurface.Length ? set.LayerSurface[l] : Vector4.zero;
@@ -201,6 +206,7 @@ namespace FishMMO.Client
 			Shader.SetGlobalVectorArray(LayerSTId, layerST);
 			Shader.SetGlobalVectorArray(LayerTintId, layerTint);
 			Shader.SetGlobalVectorArray(LayerSurfaceId, layerSurface);
+			Shader.SetGlobalVectorArray(LayerFloraId, layerFlora);
 			Shader.SetGlobalVector(ResId, new Vector4(heightRes, controlRes, 0f, 0f));
 			Shader.SetGlobalVector(InfoId, new Vector4(chosen.Count, layers, set.Normal != null ? 1f : 0f, weatherAmount));
 			TileCount = chosen.Count;

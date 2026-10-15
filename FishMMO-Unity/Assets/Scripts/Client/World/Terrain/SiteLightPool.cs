@@ -126,7 +126,8 @@ namespace FishMMO.Client
 				SceneSiteEmitters.Near(eye, Reach + Refind, kind => kind != SceneEmitterKind.Smoke && kind != SceneEmitterKind.Hearth, MaxLights, near);
 			}
 			float night = Mathf.Clamp01(Shader.GetGlobalFloat(NightLightsId));
-			float time = Time.time;
+			// The shared motion clock, wrapped for a float: every player's hearths flicker together.
+			float time = FishMMO.Shared.Celestial.WorldMotion.Wrapped(FishMMO.Shared.Celestial.WorldMotion.ShaderWrapSeconds);
 			int shadowed = 0;
 			// Indoors, the room's own lights may cast; outdoors only those right beside the camera, where a light leaking
 			// through a wall would show.

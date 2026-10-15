@@ -9,7 +9,8 @@
 //                       64-thread group per CPU work item (8 x 8 candidate cells of one tile, on that tile's
 //                       lattice level, naming its terrain's row in the table); per candidate: nested-lattice
 //                       priority vs the distance share (LOD rings), clump, density (type pick + spawn),
-//                       root height, the terrain's own albedo under the root, frustum / sun-swept cull,
+//                       root height, the biome's look of the root's patch (height, lean), the terrain's own
+//                       albedo under the root, frustum / sun-swept cull,
 //                       append to the slot of its LOD and view
 //   FishGrassFinalize   write each draw's instanceCount = min(count, capacity)
 //
@@ -71,6 +72,28 @@ RWByteAddressBuffer _GrassArgs;              // IndirectDrawIndexedArgs, 5 uints
 
 // Every terrain of the dispatch's resolution group, one slice each (GrassTerrainAtlas): the item's terrain says which.
 #include "FishGroundPaths.hlsl"
+
+/* The look of the biome under each blade (BiomeLooks, published by FloraPaletteMap; FishFlora.hlsl): every patch of
+ * ground about GRASS_FLORA_PATCH across takes one of its biome's twelve looks, and the blades standing in it grow to that
+ * look's height and lean. Two small textures and three vectors, bound by name (GrassBladeRenderer.BindFlora: a compute
+ * never sees the globals), with placeholders and _FishFloraInfo.x = 0 when nothing is published, so every blade is then
+ * what it was. The blades' vertex shader (FishGrassBlades.hlsl) asks the same patch from the same root for the colour,
+ * width and curl, so nothing new rides the record. The patch and salt must match GRASS_FLORA_PATCH / _SALT there. */
+#include "FishFlora.hlsl"
+// FishFlora.hlsl's grass patches, which the vertex shader and the terrain's living ground read too.
+#define GRASS_FLORA_PATCH FISH_FLORA_GRASS_PATCH
+#define GRASS_FLORA_SALT FISH_FLORA_GRASS_SALT
+// GrassMath.FloraMinHeight / FloraMaxHeight, FloraMinBend / FloraMaxBend, FloraMaxBloom.
+// The smooth swells of grass's shape (FishFloraSwell): ±20% height, ±25% lean; salts shared with FishGrassBlades.hlsl.
+#define GRASS_FLORA_HEIGHT_SWELL 0.2
+#define GRASS_FLORA_HEIGHT_SALT 0x3C6EF372u
+#define GRASS_FLORA_BEND_SWELL 0.25
+#define GRASS_FLORA_BEND_SALT 0xA54FF53Au
+#define GRASS_FLORA_MIN_HEIGHT 0.45
+#define GRASS_FLORA_MAX_HEIGHT 1.75
+#define GRASS_FLORA_MIN_BEND 0.5
+#define GRASS_FLORA_MAX_BEND 1.5
+#define GRASS_FLORA_MAX_BLOOM 1.5
 
 Texture2DArray<float> _GrassHeightmap;       // GrassTerrain's own copy of the heights (R16 or RFloat), 0..1 of the terrain's height
 // The grass prototypes' detail layers / their max, four channels a slice: a terrain's maps are consecutive slices from
@@ -147,6 +170,13 @@ float3 GrassLayerTint(int id)
 {
     uint i = _GrassAlbedoBase + (uint)id * 8u + 4u;
     return asfloat(uint3(_GrassShared[i], _GrassShared[i + 1u], _GrassShared[i + 2u]));
+}
+/* The layer's shares of living ground, lichen and mineral (GrassMath.PackFloraShares, 10 bits each; the terrain shader's
+ * _FishLayerFlora), in the header's eighth word: the tint's w, the normal scale, which the grass never read. */
+float3 GrassLayerFlora(int id)
+{
+    uint packed = _GrassShared[_GrassAlbedoBase + (uint)id * 8u + 7u];
+    return float3(packed & 1023u, (packed >> 10) & 1023u, (packed >> 20) & 1023u) * (1.0 / 1023.0);
 }
 #endif
 float4 _GrassColour;                         // x least colour footprint (metres), y lattice cell (metres), z 1 = diagnostic constant colour
@@ -537,7 +567,7 @@ float3 GrassAlbedoBilinear(int id, float2 uv, int mip, float width)
  * every frame (wind, and the append order on depth ties). The first version picked one layer per blade;
  * the second point-sampled one texel at a mip from the cell's own lattice level, which differs between
  * neighbours (three cells in four are level 0, beside a level-5 one) — both left per-blade noise. */
-float4 GrassTerrainColourAt(float2 local, float2 world, float share)
+float4 GrassTerrainColourAt(float2 local, float2 world, float share, FishFloraLook look)
 {
     int layers = (int)_GrassArrayInfo.x;
     float4 result = 0.0;   // a = 0: no arrays bound
@@ -610,7 +640,9 @@ float4 GrassTerrainColourAt(float2 local, float2 world, float share)
                 int m1 = min(m0 + 1, (int)mips - 1);
                 float3 a = GrassAlbedoBilinear(id, uv, m0, width);
                 float3 b = GrassAlbedoBilinear(id, uv, m1, width);
-                albedo += lerp(a, b, mip - (float)m0) * GrassLayerTint(id) * weights[n];
+                /* Each layer in the planet's looks as the terrain draws it (FishFloraGround, the root's own patch look): the
+                 * very root is the ground itself, and must be the recoloured ground it stands on. */
+                albedo += FishFloraGround(lerp(a, b, mip - (float)m0) * GrassLayerTint(id), GrassLayerFlora(id), look) * weights[n];
             }
         }
         result = sum > 1e-5 ? float4(albedo, 1.0) : 0.0;
@@ -618,7 +650,7 @@ float4 GrassTerrainColourAt(float2 local, float2 world, float share)
     return result;
 }
 #else
-float4 GrassTerrainColourAt(float2 local, float2 world, float share)
+float4 GrassTerrainColourAt(float2 local, float2 world, float share, FishFloraLook look)
 {
     return 0.0;   // a = 0: the blades take the ground colour map's fallback
 }
@@ -888,6 +920,13 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     {
         return;
     }
+    /* How tall the grass stands against its type and how far it leans (GrassMath.FloraHeight, FloraLean): the world's
+     * growth and a smooth swell (FishFloraGrowth/Swell), never the patch's look, whose edges stepped the meadow's height.
+     * From the root's xz exactly as the record stores it, so the vertex shader reads the same. The look (colour) is still
+     * read here for the terrain colour under the root. Not published: height and bend 1, the blade as before. */
+    FishFloraLook look = FishFloraAt(rootXZ, GRASS_FLORA_PATCH, GRASS_FLORA_SALT);
+    float floraHeight = clamp(FishFloraGrowth(rootXZ, GRASS_FLORA_HEIGHT_SWELL, GRASS_FLORA_HEIGHT_SALT), GRASS_FLORA_MIN_HEIGHT, GRASS_FLORA_MAX_HEIGHT);
+    float floraBend = clamp(FishFloraSwell(rootXZ, GRASS_FLORA_BEND_SWELL, GRASS_FLORA_BEND_SALT), GRASS_FLORA_MIN_BEND, GRASS_FLORA_MAX_BEND);
     /* Nor in a river or a lake: none below the water line (less a wading type's depth), thinning in over the bank above
      * it. The density maps (2 m texels smoothed over 2 m) filled a creek from both banks; the cut is per blade. Nor over
      * a painted hole (GRASS_HOLE_FREEBOARD): the detail layers under a cave mouth keep what was painted before it. */
@@ -900,7 +939,7 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
      * Rooted only by its height above the water, the banks of a narrow stream or a fall's lip grew meadow up to the
      * edge and laid it over the water, hiding the stream and the top of every fall (2026-10-13). The water line round
      * the root at the blade's reach, where any water is near (a wading type stands in it anyway). */
-    float leanReach = typeShape.x * 0.6;
+    float leanReach = typeShape.x * floraHeight * 0.6;
     if (freeboard + _GrassSea.z - typeShape.w < GRASS_FREEBOARD_RANGE - 0.01 && leanReach > 0.05)
     {
         float lowest = min(
@@ -934,7 +973,9 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     float middle = 1.0 - 0.35 * min(1.0, r);
     float ownHeight = 0.72 + 0.38 * GrassUnit(GrassMix(own ^ 0x68E31DA4u));
     float lean = saturate(_GrassShapeParams.x * (0.25 + 0.75 * min(1.0, r * 1.2)) * (0.5 + 0.5 * GrassUnit(GrassMix(own ^ 0xB5297A4Du))));
-    float height = typeShape.x * max(0.1, clumpHeight * middle * ownHeight);
+    lean = saturate(lean * floraBend);
+    // The look's height, never past what a record holds (a tall record packs half its height): GrassMath.FloraHeight.
+    float height = min(typeShape.x * max(0.1, clumpHeight * middle * ownHeight) * floraHeight, GRASS_MAX_PACKED_HEIGHT * GRASS_TALL_SCALE);
     /* The scene's paths and yards (FishGroundPaths.hlsl): no blade where the terrain draws the ground bare, thinning in
      * over its edge; what stands on a way lies trampled short, which is how a lost trail's overgrown stretches still
      * read; a cart track keeps the strip between its ruts. */
@@ -969,8 +1010,10 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
      * left the tips of bent tall grass outside it: blades at the screen's edges were culled while visible
      * and popped as the camera turned or a gust passed. */
     float3 sphereCentre = root + float3(0.0, 0.3 * height, 0.0);
-    // A head reaches its own size past the tip.
-    float radius = 1.05 * height + 0.1 + (head != 0u ? typeShape2.z : 0.0);
+    // A head reaches its own size past the tip; a flower's grown by its patch's look, at most GRASS_FLORA_MAX_BLOOM (the
+    // vertex shader reads its own patch, so the sphere takes the most any look can make it).
+    float headReach = head == 2u && look.valid ? typeShape2.z * GRASS_FLORA_MAX_BLOOM : typeShape2.z;
+    float radius = 1.05 * height + 0.1 + (head != 0u ? headReach : 0.0);
     // Each blade's LOD distance moves by its own hash, so a LOD boundary is not a line on the ground.
     float lodJitter = 0.9 + 0.2 * GrassUnit(GrassMix(own ^ 0x9E3779B1u));
     float lodDistance = d / lodJitter;
@@ -981,7 +1024,7 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     {
         // Only a blade the camera draws reads the ground's texture (shadow casters are colourless).
         lit = blade;
-        lit.colour = GrassPackColour(GrassTerrainColourAt(local, rootXZ, share)) | recordBits;
+        lit.colour = GrassPackColour(GrassTerrainColourAt(local, rootXZ, share, look)) | recordBits;
         mainSlot = lod;
         mainRecords = records;
     }

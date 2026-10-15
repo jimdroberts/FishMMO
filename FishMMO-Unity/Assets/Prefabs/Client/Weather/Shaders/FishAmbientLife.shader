@@ -1,7 +1,7 @@
 // The land's background creatures (AmbientLifeSystem, FishMMO.Client/World/AmbientLife): birds alone and in
 // flocks, raptors, bats, rats, mice, squirrels, rabbits, lizards, shore crabs and frogs, beetles, and insect swarms
-// (midges, mosquitoes, flies, fireflies, bees, locusts). Pass code and the
-// vertex contract are in FishAmbientLife.hlsl. Drawn only with Graphics.DrawMeshInstanced, one runtime
+// (midges, mosquitoes, flies, fireflies, bees, locusts), each group in its biome's look (AmbientLooks). Pass code
+// and the vertex contract are in FishAmbientLife.hlsl. Drawn only with Graphics.DrawMeshInstanced, one runtime
 // material per kind; opaque, dithered out at the draw distance and when an animal goes to ground.
 Shader "FishMMO/Ambient Life"
 {
@@ -15,6 +15,11 @@ Shader "FishMMO/Ambient Life"
         _SwarmStyle("Swarm style (column, cloud, buzz, drift, hover, plague)", Float) = 0
         _BugSize("Swarm insect length (m)", Float) = 0.006
         _GlowColour("Swarm glow (rgb linear HDR, a on)", Vector) = (0, 0, 0, 0)
+        // The biome looks (AmbientLooks): how far the kind takes them, and its own colours the mesh's colour roles swap out.
+        [HideInInspector] _LookMix("Look mix (coat, accents, markings, own brightness kept)", Vector) = (0, 0, 0, 0)
+        [HideInInspector] _OwnBack("Own back (linear)", Vector) = (0, 0, 0, 0)
+        [HideInInspector] _OwnBelly("Own belly (linear)", Vector) = (0, 0, 0, 0)
+        [HideInInspector] _OwnAccent("Own accent (linear)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader

@@ -7,7 +7,7 @@ namespace FishMMO.Client
 	/// The ambient creatures' meshes, built at runtime from a few numbers: one unit long (bill to tail, nose to rump;
 	/// a crab one unit wide), nose toward +z, back up +y, standing on the origin (a bat, which never lands, is centred
 	/// on it). The vertex layout is FishAmbientLife.hlsl's: colour (linear), TEXCOORD0 x along the body (0 nose .. 1
-	/// tail) and y across a wing's chord, TEXCOORD1 which part and how far out along it.
+	/// tail) and y across a wing's chord, TEXCOORD1 which part and how far out along it, TEXCOORD2 the colour's roles.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -55,10 +55,38 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>The mesh for a kind (its shape and colours), built fresh; uploaded and dropped from the CPU unless <paramref name="keepReadable"/>.</summary>
+		/// <remarks>
+		/// <b>Colour roles</b> (TEXCOORD2, for the biome looks: <see cref="AmbientLooks"/>): every vertex colour is a blend of
+		/// the kind's back, belly and accent (lerps and shades of them) plus a few fixed colours (the eyes). Built once more with
+		/// pure red, green and blue standing in for the three, each vertex's colour IS its share of each: x of the back, y of
+		/// the belly, z of the accent, their sum under one where it is shaded (a wing's underside) and near zero for an eye.
+		/// The shader swaps each role's own colour for the look's by those shares, so the body keeps its countershading and
+		/// its shading in any coat.
+		/// </remarks>
 		public static Mesh Build(AmbientCreatureKind kind, bool keepReadable = false)
 		{
 			var b = new Builder();
-			Color back = kind.Back.linear, belly = kind.Belly.linear, accent = kind.Accent.linear;
+			Shape(b, kind, kind.Back.linear, kind.Belly.linear, kind.Accent.linear);
+			var roles = new Builder();
+			Shape(roles, kind, Color.red, Color.green, Color.blue);
+			b.TakeRoles(roles);
+			Mesh mesh = b.ToMesh(kind.Name);
+			// Wings beat and fold, legs swing, rabbits bound: room for all of it. A swarm's insects fly out to two of its
+			// radii (its instance is scaled to one), and a midge column stands taller.
+			Bounds bounds = mesh.bounds;
+			bounds.Expand(1.2f);
+			if (kind.Shape == AmbientShape.Swarm)
+			{
+				bounds = new Bounds(Vector3.zero, Vector3.one * 4f);
+			}
+			mesh.bounds = bounds;
+			mesh.UploadMeshData(!keepReadable);
+			return mesh;
+		}
+
+		/// <summary>A kind's body into a builder, in the colours given for its back, belly and accent.</summary>
+		private static void Shape(Builder b, AmbientCreatureKind kind, Color back, Color belly, Color accent)
+		{
 			switch (kind.Shape)
 			{
 				case AmbientShape.Rat:
@@ -86,18 +114,6 @@ namespace FishMMO.Client
 					Bird(b, Plan(kind.Shape), back, belly, accent);
 					break;
 			}
-			Mesh mesh = b.ToMesh(kind.Name);
-			// Wings beat and fold, legs swing, rabbits bound: room for all of it. A swarm's insects fly out to two of its
-			// radii (its instance is scaled to one), and a midge column stands taller.
-			Bounds bounds = mesh.bounds;
-			bounds.Expand(1.2f);
-			if (kind.Shape == AmbientShape.Swarm)
-			{
-				bounds = new Bounds(Vector3.zero, Vector3.one * 4f);
-			}
-			mesh.bounds = bounds;
-			mesh.UploadMeshData(!keepReadable);
-			return mesh;
 		}
 
 		// ── Birds and bats ────────────────────────────────────────────
@@ -617,9 +633,25 @@ namespace FishMMO.Client
 			private readonly List<Color> colours = new List<Color>();
 			private readonly List<Vector2> uv0 = new List<Vector2>();
 			private readonly List<Vector2> uv1 = new List<Vector2>();
+			private readonly List<Vector3> roles = new List<Vector3>();
 			private readonly List<int> triangles = new List<int>();
 
 			public int Count => positions.Count;
+
+			/// <summary>The colour roles: the same body built in pure red, green and blue for back, belly and accent.</summary>
+			public void TakeRoles(Builder basis)
+			{
+				roles.Clear();
+				if (basis.colours.Count != colours.Count)
+				{
+					Debug.LogError($"[Ambient life] colour roles built {basis.colours.Count} vertices against {colours.Count}: drawn in the kind's own colours only.");
+					return;
+				}
+				foreach (Color c in basis.colours)
+				{
+					roles.Add(new Vector3(c.r, c.g, c.b));
+				}
+			}
 
 			public int Add(Vector3 position, Color colour, Vector2 body, Vector2 part)
 			{
@@ -650,6 +682,10 @@ namespace FishMMO.Client
 				mesh.SetColors(colours);
 				mesh.SetUVs(0, uv0);
 				mesh.SetUVs(1, uv1);
+				if (roles.Count == positions.Count)
+				{
+					mesh.SetUVs(2, roles);
+				}
 				mesh.SetTriangles(triangles, 0);
 				mesh.RecalculateNormals();
 				mesh.RecalculateBounds();

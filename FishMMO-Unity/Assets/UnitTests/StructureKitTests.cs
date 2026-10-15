@@ -115,6 +115,23 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void EveryLevel_IsValid_WithinBudget_AndClosedEnough()
 		{
+			// Turning parts (a tower mill's cap and sails, a water wheel) are laid at a hub, never seated on the ground: a cap's
+			// tailpole hangs metres below its curb.
+			var turning = new HashSet<string>();
+			foreach (StructurePiece owner in StructureKit.All)
+			{
+				for (int v = 0; v < owner.Variants; v++)
+				{
+					foreach (StructureRotor rotor in StructurePieces.RotorsOf(owner, v))
+					{
+						turning.Add(rotor.Piece);
+						if (!string.IsNullOrEmpty(rotor.Head))
+						{
+							turning.Add(rotor.Head);
+						}
+					}
+				}
+			}
 			foreach (StructurePiece p in StructureKit.All)
 			{
 				for (int v = 0; v < p.Variants; v++)
@@ -143,7 +160,9 @@ namespace FishMMO.UnitTests
 						// (a climbing rope, a hanging lantern) its fixing: its height is its whole depth, not its top above the origin.
 						bool hangs = p.Anchor != StructureAnchor.Ground;
 						Assert.That(hangs ? b.size.y : b.max.y, Is.InRange(0.05f, 25f), $"{name} height");
-						Assert.That(b.min.y, Is.GreaterThanOrEqualTo(hangs ? -6f : -1.3f), $"{name} reaches too far below its origin");
+						// A river-bank mill's water side is founded down into the bed.
+						float deepest = turning.Contains(p.Id) ? -12f : hangs ? -6f : p.WaterFront ? -3f : -1.3f;
+						Assert.That(b.min.y, Is.GreaterThanOrEqualTo(deepest), $"{name} reaches too far below its origin");
 						// Centred on the origin (a ruin's rubble may pull it off by a little).
 						Assert.That(Mathf.Abs(b.center.x), Is.LessThan(0.25f * b.size.x + 0.6f), $"{name} is not centred in x");
 						Assert.That(Mathf.Abs(b.center.z), Is.LessThan(0.25f * b.size.z + 0.6f), $"{name} is not centred in z");
