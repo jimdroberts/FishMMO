@@ -1451,7 +1451,9 @@ namespace FishMMO.UnitTests.Weather
 			LogAssert.IsTrue(state.SunAltitude > 20f, "noon at the equator");
 			SkySample day = SkySystem.TintBySuns(state, profile.Evaluate(state.SunAltitude), out _);
 			SkySample authored = profile.Evaluate(state.SunAltitude);
-			LogAssert.IsTrue(day.Horizon.r / day.Horizon.b > authored.Horizon.r / authored.Horizon.b * 1.2f, "the day sky is redder");
+			// An eye adapted to a 3000 K sun sees lamplight, not a camera's orange (StarBody.Adaptation): about 1.16 redder
+			// against blue as stored, 1.4 in linear light.
+			LogAssert.IsTrue(day.Horizon.r / day.Horizon.b > authored.Horizon.r / authored.Horizon.b * 1.1f, "the day sky is redder");
 			LogAssert.IsTrue(day.SunLight.b < authored.SunLight.b, "the sunlight is redder");
 			LogAssert.IsTrue(day.AmbientSky.b < authored.AmbientSky.b, "so is the ambient light");
 

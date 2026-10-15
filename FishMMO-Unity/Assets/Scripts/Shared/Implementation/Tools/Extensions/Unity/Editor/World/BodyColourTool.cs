@@ -14,7 +14,7 @@ namespace FishMMO.Shared.WorldDesign
 	public static class BodyColourTool
 	{
 		[DashboardTool(DashboardToolAttribute.Maintenance, "Recolour worlds from their physics", Section = "Content", Order = 4,
-			Tooltip = "Sets every world's colour, sky haze colour and ring colour from its air, water and temperature, then re-bakes the planet surfaces. Logs each change.")]
+			Tooltip = "Sets every world's colour, sky haze colour and ring colour from its air, water and temperature, returns every star's tint to the reference (its temperature colours it), then re-bakes the planet surfaces. Logs each change.")]
 		public static void RecolourFromDashboard()
 		{
 			Recolour(true);
@@ -32,6 +32,7 @@ namespace FishMMO.Shared.WorldDesign
 			var log = new StringBuilder();
 			int changed = 0;
 			var seen = new HashSet<WorldBody>();
+			var seenStars = new HashSet<StarBody>();
 			foreach (SolarSystemProfile system in WorldEditorAssets.FindAll<SolarSystemProfile>())
 			{
 				if (system == null)
@@ -40,6 +41,19 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				foreach (CelestialBody body in system.Bodies)
 				{
+					// A star is coloured by its temperature (StarBody.SkyTint); generated ones were also given its colour as
+					// their tint, which coloured them twice.
+					if (body is StarBody star && seenStars.Add(star))
+					{
+						if (!Same(star.Tint, StarBody.ReferenceTint))
+						{
+							log.AppendLine($"  {star.ResolvedName} (star, {star.TemperatureK:0} K): tint #{ColorUtility.ToHtmlStringRGB(star.Tint)} → #{ColorUtility.ToHtmlStringRGB(StarBody.ReferenceTint)}");
+							star.Tint = StarBody.ReferenceTint;
+							EditorUtility.SetDirty(star);
+							changed++;
+						}
+						continue;
+					}
 					if (!(body is WorldBody world) || !seen.Add(world))
 					{
 						continue;

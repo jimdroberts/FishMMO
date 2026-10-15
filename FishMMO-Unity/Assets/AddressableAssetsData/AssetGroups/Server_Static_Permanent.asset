@@ -101,6 +101,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5d02c14ad5f07e80a8034ac8f694a30f
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Skerei Coast.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 62a744abf02944be96b0d7959d82aec2
     m_Address: LoginQueueSystem
     m_ReadOnly: 0
@@ -304,6 +310,13 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e9b8b2a3c19045247a7b70f2b23b0ca1
     m_Address: Assets/Scenes/WorldScene/StartScene A/NavMesh-Terrain.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ee7d40facc6a97ad081c8e889820d695
+    m_Address: Assets/Scenes/WorldScene/Galris/Skerei Coast Terrain/Skerei Coast
+      NavMesh.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent

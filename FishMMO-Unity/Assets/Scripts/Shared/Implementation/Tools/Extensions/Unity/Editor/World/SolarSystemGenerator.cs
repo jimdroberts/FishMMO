@@ -377,7 +377,8 @@ namespace FishMMO.Shared.WorldDesign
 				s.Luminosity = luminosity;
 				// Radius from L = R^2 T^4: R goes as sqrt(L) over T squared.
 				s.SkyRadiusKm = 696000f * Mathf.Clamp(Mathf.Sqrt(luminosity) / (relative * relative), 0.2f, 8f);
-				s.Tint = StarBody.TemperatureColor(temperature);
+				// The temperature colours it (StarBody.SkyTint); the tint is art direction on top, and a rolled star has none.
+				s.Tint = StarBody.ReferenceTint;
 			});
 		}
 

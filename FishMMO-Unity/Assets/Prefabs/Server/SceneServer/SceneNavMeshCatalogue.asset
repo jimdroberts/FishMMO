@@ -25,6 +25,10 @@ MonoBehaviour:
     Data: {fileID: -503823978164141886, guid: 38bcb38630edd8d5f84e23dba3385a40, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
+  - SceneName: Skerei Coast
+    Data: {fileID: -1247489939056210656, guid: ee7d40facc6a97ad081c8e889820d695, type: 2}
+    Position: {x: 0, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: StartScene A
     Data: {fileID: 23800000, guid: e9b8b2a3c19045247a7b70f2b23b0ca1, type: 2}
     Position: {x: -500, y: 0.21, z: -500}

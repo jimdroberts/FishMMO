@@ -2373,6 +2373,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 31b77f9b356533cf183bf1df1474f29c
+    m_Address: Skerei Coast
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 31ce5ddf3a16a313e1b0ee471be20ec8
     m_Address: Detail_SeaFan
     m_ReadOnly: 0
