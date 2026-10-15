@@ -41,6 +41,23 @@ float4 _FishCloudLayerE[FISH_CLOUD_MAX_LAYERS];
 // y the mean diameter of its drops (µm; 0 for ice), which decides how they scatter, z 1 when the band
 // is the cloud column, w the thinnest its cloud gets anywhere in view, for how far a step may climb.
 float4 _FishCloudLayerF[FISH_CLOUD_MAX_LAYERS];
+// A cloud world's deck (SceneCloudWorld; SkySystem.PublishDeck): x its band's top (m), y its floor (m), z 1 while one is
+// drawn, w its band. All zeros anywhere else.
+float4 _FishCloudDeck;
+// The deck's regime (CloudRegime.Deck): the sea of cloud under a cloud world's islands, which no weather makes. Its cover
+// is its band's own (_FishCloudLayerA.z), it has no formations, storms or lean, its billowed top fills in solid
+// under its billows, and it casts no shadow: it is under everything the light falls on.
+#define FISH_CLOUD_DECK 3
+
+/// Whether the ground bends the clouds: the terrain map is published and the scene is not a cloud world, whose
+/// terrains are islands floating over nothing — the air flows under them as well as round them, and their
+/// heightmaps under the holes cut round them are not ground at all. Lifted over those, the deck would be lifted
+/// with them and read hundreds of metres under its own floor: no deck under any island.
+bool FishCloudOverTerrain()
+{
+    return _FishCloudTerrainRect.w > 0.5 && _FishCloudDeck.z < 0.5;
+}
+
 // rgb how much more of the sun reaches this band than reaches the ground (CloudClimate.SunGainAloft):
 // the air under it, which at dusk has taken the blue out of the ground's sun and not yet out of a
 // cloud's eight kilometres up.
@@ -428,7 +445,7 @@ bool FishCloudPossibleAt(float altitude)
         // With ground under the sky a band can stand higher than its own top: a kilometre of
         // headroom covers the most any mountain lifts it. A column's top is already the highest a
         // tower climbs anywhere in view, and its shell the highest storm and lowest storm base.
-        float top = d.z + (_FishCloudTerrainRect.w > 0.5 ? 1000.0 : 0.0);
+        float top = d.z + (FishCloudOverTerrain() ? 1000.0 : 0.0);
         // Only the rain haze under a wet base reaches the ground now; the fog has its own shell.
         float bottom = column && _FishCloudSub.y >= 0.01 ? 0.0 : d.y;
         if (altitude > bottom && altitude < top)
@@ -462,7 +479,7 @@ float FishCloudFinestAt(float altitude)
             continue;
         }
         bool column = f.z > 0.5;
-        float top = d.z + (_FishCloudTerrainRect.w > 0.5 ? 1000.0 : 0.0);
+        float top = d.z + (FishCloudOverTerrain() ? 1000.0 : 0.0);
         float bottom = column && _FishCloudSub.y >= 0.01 ? 0.0 : d.y;
         if (altitude > bottom && altitude < top)
         {
@@ -513,7 +530,7 @@ float FishCloudLift(float altitude, float ground)
 /// cover), not a cloud running into rock. Read at the point itself, not at the leaned field position.
 float FishCloudClearance(float2 xz, float trueAltitude, float climb)
 {
-    if (_FishCloudRockTop <= 0.0 || _FishCloudFlowRect.w < 0.5 || trueAltitude >= _FishCloudRockTop + FISH_CLOUD_ROCK_GAP)
+    if (_FishCloudRockTop <= 0.0 || _FishCloudFlowRect.w < 0.5 || _FishCloudDeck.z > 0.5 || trueAltitude >= _FishCloudRockTop + FISH_CLOUD_ROCK_GAP)
     {
         return 1.0;
     }
@@ -542,7 +559,7 @@ float FishCloudClearance(float2 xz, float trueAltitude, float climb)
 /// included — and the empty air between costs one iteration however much of it there is.
 float FishCloudNextPossible(float3 origin, float3 direction, float travelled, float altitude)
 {
-    float headroom = _FishCloudTerrainRect.w > 0.5 ? 1000.0 : 0.0;
+    float headroom = FishCloudOverTerrain() ? 1000.0 : 0.0;
     float next = 1e9;
     UNITY_LOOP
     for (int i = 0; i < _FishCloudLayerCount; i++)
@@ -715,7 +732,7 @@ FishCloudField FishCloudFieldAt(float2 xz)
     {
         field.storm = FishStormAt(xz);
     }
-    if (_FishCloudTerrainRect.w > 0.5 && (skip & 16u) == 0u)
+    if (FishCloudOverTerrain() && (skip & 16u) == 0u)
     {
         float2 uv = (xz - _FishCloudTerrainRect.xy) / max(1.0, _FishCloudTerrainRect.z);
         float2 toEdge = min(uv, 1.0 - uv);
@@ -1051,7 +1068,7 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
     float2 across = float2(-wind.y, wind.x);
     // Where the air here came from, on the ground plane: carried round high ground it could not
     // climb, along the streamlines of the flow past it (FishFlowAround), straight through otherwise.
-    float2 source = position.xz + (FishCloudReadsTerrain ? FishFlowAround(position.xz, trueAltitude, _FishCloudFlow.y, wind) : float2(0.0, 0.0));
+    float2 source = position.xz + (FishCloudReadsTerrain && _FishCloudDeck.z < 0.5 ? FishFlowAround(position.xz, trueAltitude, _FishCloudFlow.y, wind) : float2(0.0, 0.0));
     float2 frame = float2(dot(source, wind), dot(source, across));
     // The storms the server sends, as the weather map lays out their anatomy: read once for this
     // place, in the field.
@@ -1075,6 +1092,8 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
         }
         bool column = f.z > 0.5;
         int regime = (int)(f.x + 0.5);
+        // A cloud world's deck: no weather's, so none of the air's cover, formations or storms (FISH_CLOUD_DECK).
+        bool deck = regime == FISH_CLOUD_DECK;
         float4 c = _FishCloudLayerC[i];
         // Packed: the units are the rain, and a band that grows storms carries a 2 on top, so that
         // rain alone can never trip the storm test and a storm band's rain is still legible.
@@ -1123,7 +1142,7 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
         // The cover here: what the air over this place asks for (the air map), where the formations
         // put it in banks and lanes, and what the ground does to the air — only within a couple of
         // kilometres above the terrain, which is as far up as a hill's lift reaches.
-        float airCover = regime == 0 ? field.lowCover : (regime == 1 ? field.midCover : field.highCover);
+        float airCover = deck ? a.z : (regime == 0 ? field.lowCover : (regime == 1 ? field.midCover : field.highCover));
         float overGround = trueAltitude - field.surface;
         float lifted01 = regime == 0 ? field.orographic * saturate(1.0 - (overGround - 300.0) / 1800.0) : 0.0;
         // Cap cloud and hill fog. Air that climbs a hill cools as it rises, and once the ground lifts
@@ -1140,7 +1159,7 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
             float windward = saturate(0.5 + field.orographic / 0.2);
             lifted01 += FISH_CLOUD_CAP_COVER * reaches * skin * windward * lerp(0.3, 1.0, field.over);
         }
-        float coverage = saturate(airCover + meso * (regime == 0 ? 1.0 : 0.5) + lifted01);
+        float coverage = saturate(airCover + (deck ? 0.0 : meso * (regime == 0 ? 1.0 : 0.5)) + lifted01);
         // A sky the air asks nothing of has nothing in it: the noise's own top would otherwise show
         // a few wisps under any cover at all.
         coverage *= smoothstep(0.0, 0.12, coverage);
@@ -1173,7 +1192,7 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
         // Where the air is sinking — a hurricane's eye — it is warmed and dried on the way down, and
         // no cloud stands in it at any height, whatever the air round it makes: the clear sky over
         // the eye, with the eyewall standing round it.
-        coverage *= 1.0 - stormField.clearing;
+        coverage *= deck ? 1.0 : 1.0 - stormField.clearing;
         // Tested here and not on the band's figure at the camera, so cloud rolling in from upwind is
         // drawn before it arrives. Cloud only: the hang under the base shares this loop.
         if (coverage <= 0.002 && !below)
@@ -1212,9 +1231,14 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
             // Spread over the field's own range (0.33 to 0.76), never clamped: clamping gave every
             // high column the same ceiling and the deck grew a flat table with a hard rim.
             float reach01 = (lift - 0.33) / 0.43;
+            // The deck's cells stand out of one sheet: their tops rise and fall over a quarter of the band, and
+            // the billows (its top's softness) do the rest. A layer's ceiling may fall to three tenths of its
+            // band, which over a deck is a floor of cloud with pits in it (CloudClimate.DeckCrest).
             ceilingM = reachM * (column
                 ? lerp(1.0, 0.6 + reach01 * 0.4, convection)
-                : lerp(1.0, 0.3 + reach01 * 0.7, convection));
+                : deck
+                    ? lerp(1.0, 0.75 + reach01 * 0.25, convection)
+                    : lerp(1.0, 0.3 + reach01 * 0.7, convection));
         }
         ceilingM = max(column || inAnvil ? 30.0 : 0.15 * (a.y - a.x), ceilingM);
         // Where in this cloud the point is: 0 at its base, 1 at the top it reached here.
@@ -1262,6 +1286,12 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
         float billow = shape.g * 0.625 + shape.b * 0.25 + shape.a * 0.125;
         float floorValue = (1.0 - billow) * 0.45;
         float body = saturate((shape.r - floorValue) / max(0.05, 1.0 - floorValue));
+        // The deck is solid under its billows: from one billow's depth under its top the noise is let go of, over
+        // one more, so nothing looking down into it ever sees through it to the nothing it has under it.
+        if (deck)
+        {
+            body = lerp(body, 1.0, saturate((1.0 - hIn) / max(0.05, topSoftness) - 1.0));
+        }
         // The cut, from the noise's own measured quantiles (it runs 0.33 to 0.76 about 0.57), on
         // the noise times the profile so a cloud narrows toward its top and keeps its flat floor.
         float coverCurve = coverage * coverage;
@@ -2094,11 +2124,12 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
     // it, and walks its whole budget with a light march on every sample. The steps lengthen as the
     // camera climbs into the layer — by the camera's height alone, so it is one figure for the
     // whole screen and draws no line across it.
+    // (Not a cloud world's deck, which is under the camera wherever it stands: the weather's lowest base.)
     float lowestBase = 1e6;
     UNITY_LOOP
     for (int q = 0; q < _FishCloudLayerCount; q++)
     {
-        if (_FishCloudLayerA[q].w > 0.0 && _FishCloudLayerA[q].z > 0.002)
+        if (_FishCloudLayerA[q].w > 0.0 && _FishCloudLayerA[q].z > 0.002 && (int)(_FishCloudLayerF[q].x + 0.5) != FISH_CLOUD_DECK)
         {
             lowestBase = min(lowestBase, _FishCloudLayerA[q].x);
         }
@@ -2201,7 +2232,9 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
 
     // How each regime's drops scatter along this ray. The angle to the light is the ray's, so the
     // phase function — five exponentials and two powers — is worked out once per regime here, not
-    // at every sample. Defaults for a regime with no band: ordinary cloud drops and ice.
+    // at every sample. Defaults for a regime with no band: ordinary cloud drops and ice. A cloud world's deck
+    // scatters as the column's drops do: its own are stratus drops, and one more phase per ray would cost more than
+    // the difference shows.
     float diameterLow = 16.0, diameterMid = 12.0, diameterHigh = 0.0;
     UNITY_LOOP
     for (int r = 0; r < _FishCloudLayerCount; r++)
@@ -2216,7 +2249,7 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
         {
             diameterMid = diameter;
         }
-        else
+        else if (regimeHere == 2)
         {
             diameterHigh = diameter;
         }
@@ -2925,8 +2958,8 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
             if (density > 0.0)
             {
                 int regimeHere = (int)(_FishCloudLayerF[clamp(layerIndex, 0, FISH_CLOUD_MAX_LAYERS - 1)].x + 0.5);
-                float phase = regimeHere == 0 ? phaseLow : (regimeHere == 1 ? phaseMid : phaseHigh);
-                float g = regimeHere == 0 ? gLow : (regimeHere == 1 ? gMid : gHigh);
+                float phase = regimeHere == 1 ? phaseMid : (regimeHere == 2 ? phaseHigh : phaseLow);
+                float g = regimeHere == 1 ? gMid : (regimeHere == 2 ? gHigh : gLow);
                 // The sun this band sees: whiter and brighter than the ground's by the air under it.
                 float3 sunLight = sunColour * _FishCloudLayerSun[clamp(layerIndex, 0, FISH_CLOUD_MAX_LAYERS - 1)].rgb;
                 if (!cloudHere)
@@ -3299,7 +3332,8 @@ float FishCloudShadowDepth(float3 origin, float3 toSun, int steps, float jitter,
         float4 a = _FishCloudLayerA[i];
         // A regime with no cloud anywhere in view casts no shadow — judged for the whole view, not
         // the camera: it can be clear overhead and solid at the window's edge.
-        if (a.z <= 0.002 || a.w <= 0.0)
+        // Nor a cloud world's deck: it lies under every island, and its top is the lowest anything stands on.
+        if (a.z <= 0.002 || a.w <= 0.0 || (int)(_FishCloudLayerF[i].x + 0.5) == FISH_CLOUD_DECK)
         {
             continue;
         }

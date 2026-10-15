@@ -64,7 +64,8 @@ namespace FishMMO.Client
 		/// <summary>Whether <paramref name="camera"/> is sealed in a cave this frame (worked out once a frame for it).</summary>
 		public static bool Sealed(Camera camera)
 		{
-			if (!Enabled || camera == null)
+			// Over a cloud world nothing is underground (FishUnderground is off there: MistGroundMap), so no view is sealed.
+			if (!Enabled || camera == null || SceneCloudWorld.Any)
 			{
 				return false;
 			}

@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.Animations;
 using UnityEngine.Playables;
+using UnityEngine.Rendering;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -270,6 +271,8 @@ namespace FishMMO.TestHarness.World
 			pitch = 0f;
 			punchTime = -1f;
 			climbPhase = 0f;
+			sincePlaced = 0f;
+			reported = false;
 			System.Array.Clear(weights, 0, Inputs);
 			weights[Idle] = 1f;
 		}
@@ -301,10 +304,14 @@ namespace FishMMO.TestHarness.World
 					{
 						sole = Mathf.Min(sole, toes[i].position.y - toeRest[i]);
 					}
-					if (physics.Raycast(new Vector3(foot.x, sole + GroundReach, foot.z), Vector3.down, out RaycastHit hit, GroundReach * 2f, groundMask, QueryTriggerInteraction.Ignore))
+					bool found = physics.Raycast(new Vector3(foot.x, sole + GroundReach, foot.z), Vector3.down, out RaycastHit hit, GroundReach * 2f, groundMask, QueryTriggerInteraction.Ignore);
+					if (found)
 					{
 						gap = Mathf.Min(gap, sole - hit.point.y);
 					}
+					footNotes[i] = found
+						? $"sole {sole:F3}, ground {hit.point.y:F3} on '{hit.collider.name}' (layer {LayerMask.LayerToName(hit.collider.gameObject.layer)}), bone {foot.y:F3}, rest {ankleRest[i]:F3}"
+						: $"sole {sole:F3}, no ground within {GroundReach:F1} m, bone {foot.y:F3}, rest {ankleRest[i]:F3}";
 				}
 				if (gap < float.MaxValue)
 				{
@@ -321,6 +328,38 @@ namespace FishMMO.TestHarness.World
 			Vector3 pivot = Vector3.up * SwimPivot;
 			shown.localRotation = turn;
 			shown.localPosition = shownRest + Vector3.up * lift + pivot - turn * pivot;
+			Report(deltaTime);
+		}
+
+		// ── Footing diagnostics (the figure stood a foot off the ground with no word of why) ──
+		private readonly string[] footNotes = { "not measured", "not measured" };
+		private float sincePlaced;
+		private bool reported;
+		private float pinnedFor;
+
+		/// <summary>
+		/// One line, two seconds after the walker is put down, with everything its footing rests on: whether it counts as
+		/// grounded, where its feet and the ground under them are and what that ground is, and the lift the grounding
+		/// settled on. And a warning when the lift sits at its limit, which means the grounding is being asked for more
+		/// than it may give.
+		/// </summary>
+		private void Report(float deltaTime)
+		{
+			sincePlaced += deltaTime;
+			if (!reported && sincePlaced >= 2f)
+			{
+				reported = true;
+				Vector3 at = transform.position;
+				bool under = gameObject.scene.GetPhysicsScene().Raycast(at + Vector3.up * 0.5f, Vector3.down, out RaycastHit hit, 3f, groundMask, QueryTriggerInteraction.Ignore);
+				Debug.Log($"[World Sim] Walker footing: grounded {grounded}, swimming {swimming}, climbing {climbing}; feet (capsule base) {at.y:F3}, "
+					+ (under ? $"ground under it {hit.point.y:F3} on '{hit.collider.name}'" : "no ground under it within 2.5 m")
+					+ $"; lift {lift:F3}, model rest {shownRest.y:F3}; left foot: {footNotes[0]}; right foot: {footNotes[1]}.");
+			}
+			pinnedFor = Mathf.Abs(lift) >= MaxLift - 1e-3f ? pinnedFor + deltaTime : 0f;
+			if (pinnedFor >= 1f && pinnedFor - deltaTime < 1f)
+			{
+				Debug.LogWarning($"[World Sim] Walker footing: the lift has sat at its limit ({lift:F2} m) for a second; left foot: {footNotes[0]}; right foot: {footNotes[1]}.");
+			}
 		}
 
 		private void OnEnable()
@@ -419,20 +458,24 @@ namespace FishMMO.TestHarness.World
 		/// model is exported at 1.8 m with its origin between its feet, so this normally changes
 		/// nothing; it is here so a model of any size or pivot stands right without re-exporting it.
 		/// </summary>
+		/// <remarks>
+		/// Measured from the meshes as they were modelled (their rest pose), never from the renderers' bounds: the
+		/// importer sizes a skinned renderer's bounds to hold every clip in its file, and this one's carry arms overhead
+		/// (crawl, climb) and pointed toes (the kick). By those the figure was shrunk to fit and stood a foot up on toes
+		/// it does not have at rest, and the grounding, measured from the same false sole, held it there.
+		/// </remarks>
 		private static void Stand(Transform shape, WorldSimWalker walker)
 		{
-			Renderer[] renderers = shape.GetComponentsInChildren<Renderer>();
-			if (renderers.Length == 0)
+			if (!RestExtent(shape, out float bottom, out float top))
 			{
 				return;
 			}
-			Bounds bounds = Extent(renderers);
-			if (bounds.size.y > 0.01f)
+			if (top - bottom > 0.01f)
 			{
-				shape.localScale *= FigureHeight / bounds.size.y;
-				bounds = Extent(renderers);
+				shape.localScale *= FigureHeight / (top - bottom);
+				RestExtent(shape, out bottom, out top);
 			}
-			shape.position += Vector3.up * (walker.Feet.y - bounds.min.y);
+			shape.position += Vector3.up * (walker.Feet.y - bottom);
 		}
 
 		/// <summary>The feet LateUpdate grounds, and how high each bone stands above its sole in the bind pose (stood on the capsule's base).</summary>
@@ -442,26 +485,98 @@ namespace FishMMO.TestHarness.World
 			shownRest = shape.localPosition;
 			int solid = LayerMask.GetMask("Default", "Ground");
 			groundMask = (solid != 0 ? solid : Physics.DefaultRaycastLayers) & ~(1 << gameObject.layer);
-			feet[0] = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
-			feet[1] = animator.GetBoneTransform(HumanBodyBones.RightFoot);
-			toes[0] = animator.GetBoneTransform(HumanBodyBones.LeftToes);
-			toes[1] = animator.GetBoneTransform(HumanBodyBones.RightToes);
+			feet[0] = Bone(animator, shape, HumanBodyBones.LeftFoot);
+			feet[1] = Bone(animator, shape, HumanBodyBones.RightFoot);
+			toes[0] = Bone(animator, shape, HumanBodyBones.LeftToes);
+			toes[1] = Bone(animator, shape, HumanBodyBones.RightToes);
+			if (feet[0] == null || feet[1] == null)
+			{
+				Debug.LogWarning($"[World Sim] The walker's feet were not found in {ModelPath}'s avatar; its soles are not set on the ground.");
+			}
 			float sole = walker.Feet.y;
 			for (int i = 0; i < 2; i++)
 			{
 				ankleRest[i] = feet[i] != null ? feet[i].position.y - sole : 0f;
 				toeRest[i] = toes[i] != null ? toes[i].position.y - sole : 0f;
 			}
+			/* At rest the two feet stand alike. When they do not, the model came in posed: Unity takes a model's default
+			 * pose from its file's first take, and builds its Humanoid avatar from that pose too, so every clip is
+			 * retargeted through it. A climb's first frame did that once (a knee up): the right foot never reached the
+			 * ground, and this grounding, measured from it, held the figure a quarter metre up. */
+			if (feet[0] != null && feet[1] != null && Mathf.Abs(ankleRest[0] - ankleRest[1]) > 0.03f)
+			{
+				Debug.LogWarning($"[World Sim] {ModelPath} is not at rest as imported (its feet stand {ankleRest[0]:F2} and {ankleRest[1]:F2} m up): its first take must be its rest pose, or the avatar and the grounding are built from a posed figure.");
+			}
 		}
 
-		private static Bounds Extent(Renderer[] renderers)
+		/// <summary>
+		/// A bone by the avatar's own map of it (its human description), not by <see cref="Animator.GetBoneTransform"/>:
+		/// that answers null until the Animator is initialised, which one with no controller and no graph yet is not.
+		/// Asked straight after the model was made, it gave no feet, and the grounding never ran: the figure stood as high
+		/// as the idle held its hips, a hand's breadth over the ground.
+		/// </summary>
+		private static Transform Bone(Animator animator, Transform root, HumanBodyBones bone)
 		{
-			Bounds bounds = renderers[0].bounds;
-			for (int i = 1; i < renderers.Length; i++)
+			string human = HumanTrait.BoneName[(int)bone];
+			foreach (HumanBone mapped in animator.avatar.humanDescription.human)
 			{
-				bounds.Encapsulate(renderers[i].bounds);
+				if (mapped.humanName == human)
+				{
+					Transform found = Named(root, mapped.boneName);
+					if (found != null)
+					{
+						return found;
+					}
+				}
 			}
-			return bounds;
+			return animator.isInitialized ? animator.GetBoneTransform(bone) : null;
+		}
+
+		private static Transform Named(Transform parent, string name)
+		{
+			if (parent.name == name)
+			{
+				return parent;
+			}
+			for (int i = 0; i < parent.childCount; i++)
+			{
+				Transform found = Named(parent.GetChild(i), name);
+				if (found != null)
+				{
+					return found;
+				}
+			}
+			return null;
+		}
+
+		/// <summary>
+		/// The lowest and highest world height of the figure at rest: each mesh's own bounds (its vertices as modelled),
+		/// placed by its renderer's transform, which is where a skinned mesh draws while its bones stand in their bind pose.
+		/// </summary>
+		private static bool RestExtent(Transform shape, out float bottom, out float top)
+		{
+			bottom = float.MaxValue;
+			top = float.MinValue;
+			foreach (Renderer renderer in shape.GetComponentsInChildren<Renderer>())
+			{
+				Mesh mesh = renderer is SkinnedMeshRenderer skin ? skin.sharedMesh
+					: renderer.TryGetComponent(out MeshFilter filter) ? filter.sharedMesh : null;
+				if (mesh == null)
+				{
+					continue;
+				}
+				Bounds local = mesh.bounds;
+				Matrix4x4 toWorld = renderer.transform.localToWorldMatrix;
+				for (int corner = 0; corner < 8; corner++)
+				{
+					Vector3 point = local.center + Vector3.Scale(local.extents,
+						new Vector3((corner & 1) != 0 ? 1f : -1f, (corner & 2) != 0 ? 1f : -1f, (corner & 4) != 0 ? 1f : -1f));
+					float y = toWorld.MultiplyPoint3x4(point).y;
+					bottom = Mathf.Min(bottom, y);
+					top = Mathf.Max(top, y);
+				}
+			}
+			return bottom < top;
 		}
 
 		/// <summary>The weather-lit surface the rest of the bed uses, so the character wets in rain as the ground does.</summary>
@@ -479,9 +594,16 @@ namespace FishMMO.TestHarness.World
 			material = new Material(shader) { name = "Test Human" };
 			material.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>(BaseMapPath));
 			material.SetFloat("_Smoothness", 0.3f);
+			/* Its sky light as the ground's and the rocks' is: from the light probes where the scene has some, and from the
+			 * scene's ambient where it has none, as the terrain's own renderers choose (TerrainDetailInstancing). A skinned
+			 * mesh blends probes by default, and the world scenes carry none: its shaded side took no sky at all, and with the
+			 * sun behind it the figure stood black against lit ground. */
+			LightProbes probes = LightmapSettings.lightProbes;
+			LightProbeUsage usage = probes != null && probes.count > 0 ? LightProbeUsage.BlendProbes : LightProbeUsage.Off;
 			foreach (Renderer renderer in shape.GetComponentsInChildren<Renderer>())
 			{
 				renderer.sharedMaterial = material;
+				renderer.lightProbeUsage = usage;
 			}
 		}
 

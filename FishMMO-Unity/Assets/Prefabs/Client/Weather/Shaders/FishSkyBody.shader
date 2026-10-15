@@ -6,6 +6,7 @@ Shader "FishMMO/Sky Body"
     {
         _BodyTex ("Surface (equirectangular)", 2D) = "white" {}
         [Toggle] _UseTexture ("Use texture", Float) = 0
+        _RimColour ("Atmosphere rim colour", Color) = (0.45, 0.6, 1.0, 1)
     }
     SubShader
     {
@@ -38,6 +39,7 @@ Shader "FishMMO/Sky Body"
             CBUFFER_START(UnityPerMaterial)
                 float4 _BodyTex_ST;
                 float _UseTexture;
+                float4 _RimColour;   // the body's air seen edge-on: blue for ours, butterscotch, cream, orange (BodyColours)
             CBUFFER_END
 
             // Kinds: 0 disc, 1 ring, 2 comet tail, 3 meteor, 4 point
@@ -265,7 +267,7 @@ Shader "FishMMO/Sky Body"
                     }
                     // Atmosphere rim for bodies with air (colour alpha < 1 marks it).
                     float rim = pow(1.0 - z, 3.0) * (1.0 - input.color.a) * saturate(lambert * 3.0 + 0.2);
-                    color = lit + float3(0.45, 0.6, 1.0) * rim;
+                    color = lit + _RimColour.rgb * rim;
                     // In a lit sky the air in front hides the dark side: only the lit part shows.
                     // Under a dark (or airless) sky the whole disc covers the stars.
                     float dark = max(_FishSkyParams.x, _FishSkyEclipse.z);

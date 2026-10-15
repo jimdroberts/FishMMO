@@ -57,6 +57,7 @@ namespace FishMMO.Shared.WorldDesign
 				case POIType.Capital:
 				case POIType.Monastery:
 				case POIType.AbandonedFarm:
+				case POIType.Windmill:
 					return true;
 				default:
 					return false;
@@ -72,6 +73,8 @@ namespace FishMMO.Shared.WorldDesign
 				case POIType.Capital: return (10, 14);
 				case POIType.Monastery: return (2, 4);
 				case POIType.AbandonedFarm: return (2, 3);
+				// The fields a post mill grinds for, round its mound.
+				case POIType.Windmill: return (3, 5);
 				default: return (3, 6);
 			}
 		}
@@ -156,7 +159,7 @@ namespace FishMMO.Shared.WorldDesign
 			foreach (Vector2 p in Samples(field))
 			{
 				float ground = context.GroundAt(p.x, p.y);
-				if (float.IsNaN(ground) || float.IsInfinity(ground))
+				if (float.IsNaN(ground) || float.IsInfinity(ground) || (context.SkyAt != null && context.SkyAt(p.x, p.y)))
 				{
 					return false;
 				}

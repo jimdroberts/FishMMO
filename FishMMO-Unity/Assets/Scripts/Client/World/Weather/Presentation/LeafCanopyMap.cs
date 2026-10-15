@@ -512,6 +512,11 @@ namespace FishMMO.Client
 
 		private static float GroundAt(float x, float z, float fallback)
 		{
+			// Over a cloud world, an island's ground or the deck's top: a leaf blown off the edge falls into the deck.
+			if (TerrainSet.TryCloudWorldGround(x, z, out float island))
+			{
+				return island;
+			}
 			float height = float.NegativeInfinity;
 			foreach (Terrain terrain in terrains)
 			{

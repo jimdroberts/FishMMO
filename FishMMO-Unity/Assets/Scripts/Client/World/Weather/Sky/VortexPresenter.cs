@@ -582,6 +582,12 @@ namespace FishMMO.Client
 		/// </summary>
 		internal static float GroundAt(Vector2 at, out bool water)
 		{
+			// Over a cloud world, an island's ground or the deck's top: a funnel over the void reaches down into the deck.
+			if (TerrainSet.TryCloudWorldGround(at.x, at.y, out float island))
+			{
+				water = false;
+				return island;
+			}
 			float ground = float.MinValue;
 			foreach (Terrain terrain in Terrain.activeTerrains)
 			{

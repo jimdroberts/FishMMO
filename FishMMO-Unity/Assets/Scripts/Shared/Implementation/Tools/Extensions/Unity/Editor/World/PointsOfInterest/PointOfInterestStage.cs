@@ -115,6 +115,21 @@ namespace FishMMO.Shared.WorldDesign
 		public static string AssetPath(string terrainFolder, string sceneName)
 			=> ScenePointsOfInterest.AssetPath(terrainFolder, WorldEditorAssets.Sanitize(sceneName));
 
+		/// <summary>
+		/// Discs the cut keeps clear of sites, ways, trees and rocks besides the plan's own: a cloud world's bridge ends and
+		/// landing stages, laid after the sites.
+		/// </summary>
+		public readonly List<PointOfInterestKeepOut> Reserved = new List<PointOfInterestKeepOut>();
+
+		/// <summary>Kinds this cut may not build (a cloud world's caves, which would dig out through an island's underside); null allows every kind.</summary>
+		public Func<POIType, bool> Forbids;
+
+		/// <summary>True when the scene has a capital whatever its settings say (a cloud world's city island).</summary>
+		public bool WantsCapital;
+
+		/// <summary>True when the terrain's holes are open sky (a cloud world's), handed to the site builders as <see cref="PointOfInterestSiteContext.SkyAt"/>.</summary>
+		public bool HolesAreSky;
+
 		/// <summary>The settings the scene asked for, revived by path if a refresh left the reference fake-null.</summary>
 		public PointOfInterestSettings Settings
 		{
@@ -163,6 +178,11 @@ namespace FishMMO.Shared.WorldDesign
 			get
 			{
 				Func<float, float, bool> sites = Plan != null && Plan.KeepOuts.Count > 0 ? KeepOutQuery(Plan.KeepOuts) : null;
+				if (Reserved.Count > 0)
+				{
+					Func<float, float, bool> reserved = KeepOutQuery(Reserved), planned = sites;
+					sites = planned != null ? (x, z) => planned(x, z) || reserved(x, z) : reserved;
+				}
 				if (!HasPaths)
 				{
 					return sites;
@@ -265,7 +285,8 @@ namespace FishMMO.Shared.WorldDesign
 			Func<float, float, float> ground = (east, north) => SceneGenerator.GroundAltitude(terrains, tiles, east, north);
 			Func<float, float, float, float> hardness = Hardness(system);
 			PointOfInterestPlanInput input = Input(tiles, terrains, field, water, system, rules, ground, hardness);
-			input.Builds = kind => library.Has(kind) || PointOfInterestShapers.Handles(kind);
+			Func<POIType, bool> forbids = Forbids;
+			input.Builds = kind => (forbids == null || !forbids(kind)) && (library.Has(kind) || PointOfInterestShapers.Handles(kind));
 
 			PointOfInterestPlan plan = PointOfInterestPlanner.Plan(input);
 			plan.PathLayers = previousPathLayers;
@@ -650,6 +671,14 @@ namespace FishMMO.Shared.WorldDesign
 				};
 			}
 
+			Func<float, float, bool> blocked = PointOfInterestTerrain.HoleQuery(terrains, tiles, CanyonWallClearMetres);
+			if (Reserved.Count > 0)
+			{
+				Func<float, float, bool> holes = blocked, reserved = KeepOutQuery(Reserved);
+				blocked = holes != null ? (x, z) => holes(x, z) || reserved(x, z) : reserved;
+			}
+			PointOfInterestPlanSettings settings = PointOfInterestPlanSettings.From(Settings);
+			settings.Capital |= WantsCapital;
 			return new PointOfInterestPlanInput
 			{
 				WidthMetres = tiles.WidthMetres,
@@ -663,9 +692,9 @@ namespace FishMMO.Shared.WorldDesign
 				BiomeAt = biomeAt,
 				HardnessAt = hardness,
 				PlateauAt = plateau,
-				// Clear of the canyon walls' beds as well as their holes.
-				Blocked = PointOfInterestTerrain.HoleQuery(terrains, tiles, CanyonWallClearMetres),
-				Settings = PointOfInterestPlanSettings.From(Settings),
+				// Clear of the canyon walls' beds as well as their holes, and of what the cut has reserved.
+				Blocked = blocked,
+				Settings = settings,
 				Rules = rules,
 				Seed = SeedFor(Request),
 			};
@@ -775,6 +804,7 @@ namespace FishMMO.Shared.WorldDesign
 				float dx = ground(east + 1f, north) - ground(east - 1f, north), dz = ground(east, north + 1f) - ground(east, north - 1f);
 				return Mathf.Atan(Mathf.Sqrt(dx * dx + dz * dz) * 0.5f) * Mathf.Rad2Deg;
 			};
+			Func<float, float, bool> skyAt = HolesAreSky ? PointOfInterestTerrain.HoleQuery(terrains, tiles) : null;
 			var sink = new PointOfInterestPropSink();
 			var placeContext = new PointOfInterestPlaceContext
 			{
@@ -836,6 +866,7 @@ namespace FishMMO.Shared.WorldDesign
 					TerrainFolder = TerrainFolder,
 					Water = water,
 					GroundAt = ground,
+					SkyAt = skyAt,
 					SlopeAt = slope,
 					BiomeAt = (east, north) => siteBiome,
 					Notes = notes,

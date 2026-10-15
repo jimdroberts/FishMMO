@@ -170,6 +170,8 @@ namespace FishMMO.Shared.NameGeneration
 		IceGeyserField, Cryovolcano, MethaneLake, ImpactBasin, TidalRift,
 		// Appended (the values are serialized): a shipwright's yard on the coast.
 		Dockyard,
+		// Appended (2026-10-14): mills, a post mill on a rise, a watermill and a sawmill on a river bank.
+		Windmill, Watermill, LumberMill,
 	}
 
 	/// <summary>Phonology + vocabulary for a biome.</summary>

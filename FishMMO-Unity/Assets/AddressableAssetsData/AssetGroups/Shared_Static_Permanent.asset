@@ -2331,6 +2331,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 301fcdea776e2ec7d90eb899bb5f7688
+    m_Address: The Kel Peaks
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3039a7d15cdf80ce2b2c97aa02aa723b
     m_Address: Rille
     m_ReadOnly: 0

@@ -798,26 +798,61 @@ namespace FishMMO.UnitTests.WorldDesign
 				float tilt = seed * 7f - 20f;
 				Func<float, float, float> g = Escarpment(tilt, seed);
 				var foot = new Vector3(0f, 0f, -1f);
-				Assert.That(OverhangShaper.PlanSite(POIType.Overhang, 0, foot, YawOut(tilt), seed, g, out OverhangShaper.Plan small, out string problem), Is.True, problem);
-				Assert.That(small.Build, Is.EqualTo(OverhangBuild.Slab));
-				Assert.That(OverhangShaper.PlanSite(POIType.Overhang, 2, foot, YawOut(tilt), seed, g, out OverhangShaper.Plan large, out problem), Is.True, problem);
-				Assert.That(large.Build, Is.EqualTo(OverhangBuild.Section), "a large overhang is the leaning section");
-				Assert.That(OverhangShaper.PlanSite(POIType.NaturalArch, 1, foot, YawOut(tilt), seed, g, out OverhangShaper.Plan arch, out problem), Is.True, problem);
+				float yr = YawOut(tilt) * Mathf.Deg2Rad;
+				var outward = new Vector3(Mathf.Sin(yr), 0f, Mathf.Cos(yr));
+				foreach (int size in new[] { 0, 2 })
+				{
+					Assert.That(OverhangShaper.PlanSite(POIType.Overhang, size, foot, YawOut(tilt), seed, g, out OverhangShaper.Plan perch, out string problem), Is.True, problem);
+					Assert.That(perch.Build, Is.EqualTo(OverhangBuild.Perch));
+					// The section's front (its −z) faces out, and its top is flush with the rim.
+					Vector3 front = Quaternion.Euler(0f, perch.Yaw, 0f) * Vector3.back;
+					Assert.That(Vector3.Dot(front, outward), Is.GreaterThan(0.999f));
+					OverhangShaper.MeasureFace(foot, outward, g, out float h0, out _, out float rim);
+					CliffStyle st = CliffSections.StyleOf("Overhang", perch.Variant);
+					Assert.That(perch.Position.y + OverhangShaper.PerchTop(st) * perch.Scale, Is.EqualTo(rim + 0.15f).Within(1e-3f), "the perch's top is the clifftop");
+					// This face (60 m) is taller than a perch: it stands on a plinth from the true foot.
+					Assert.That(perch.HasPlinth, Is.True);
+					Assert.That(perch.Plinth.Position.y, Is.LessThanOrEqualTo(h0));
+					Assert.That(perch.HasWings, Is.True);
+					// The cut only ever lowers, and holds the floor before the face.
+					Vector3 apron = OverhangShaper.FrontCentre(perch, st) + outward * 2f;
+					float before = g(apron.x, apron.z);
+					Assert.That(OverhangShaper.CutHeight(perch, st, apron.x, apron.z, before), Is.LessThanOrEqualTo(before));
+					Assert.That(OverhangShaper.CutHeight(perch, st, 400f, 400f, 123f), Is.EqualTo(123f), "far off, the ground is untouched");
+					// Stored and read back unchanged; planned again the same.
+					Assert.That(OverhangShaper.Plan.TryFrom(perch.ToValues(), out OverhangShaper.Plan back), Is.True);
+					Assert.That((back.Build, back.Position, back.Yaw, back.Scale, back.Floor, back.Left.Position, back.Plinth.Position),
+						Is.EqualTo((perch.Build, perch.Position, perch.Yaw, perch.Scale, perch.Floor, perch.Left.Position, perch.Plinth.Position)));
+					OverhangShaper.PlanSite(POIType.Overhang, size, foot, YawOut(tilt), seed, g, out OverhangShaper.Plan again, out _);
+					Assert.That(again.Position, Is.EqualTo(perch.Position));
+				}
+				Assert.That(OverhangShaper.PlanSite(POIType.NaturalArch, 1, foot, YawOut(tilt), seed, g, out OverhangShaper.Plan arch, out string why), Is.True, why);
 				Assert.That(arch.Build, Is.EqualTo(OverhangBuild.Arch));
 				Assert.That(arch.Variant, Is.InRange(0, CliffSections.VariantCount - 1));
 				// The arch's length (its local x) runs out of the face.
 				Vector3 x = Quaternion.Euler(0f, arch.Yaw, 0f) * Vector3.right;
-				float yr = YawOut(tilt) * Mathf.Deg2Rad;
-				Assert.That(Vector3.Dot(x, new Vector3(Mathf.Sin(yr), 0f, Mathf.Cos(yr))), Is.GreaterThan(0.999f));
-				// The leaning section's front (its −z) faces out.
-				Vector3 front = Quaternion.Euler(0f, large.Yaw, 0f) * Vector3.back;
-				Assert.That(Vector3.Dot(front, new Vector3(Mathf.Sin(yr), 0f, Mathf.Cos(yr))), Is.GreaterThan(0.999f));
-				// Stored and read back unchanged.
-				Assert.That(OverhangShaper.Plan.TryFrom(small.ToValues(), out OverhangShaper.Plan back), Is.True);
-				Assert.That((back.Build, back.Slab.Middle, back.Slab.Size), Is.EqualTo((small.Build, small.Slab.Middle, small.Slab.Size)));
-				OverhangShaper.PlanSite(POIType.Overhang, 0, foot, YawOut(tilt), seed, g, out OverhangShaper.Plan again, out _);
-				Assert.That(again.Slab.Middle, Is.EqualTo(small.Slab.Middle));
+				Assert.That(Vector3.Dot(x, outward), Is.GreaterThan(0.999f));
 			}
+		}
+
+		[Test]
+		public void APerchOnAFaceItsOwnHeightStandsOnTheCutFloor()
+		{
+			// A 16 m face over 12 m, flat above and below.
+			Func<float, float, float> g = (x, z) => 20f + 16f * Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(z / 12f));
+			var foot = new Vector3(0f, 0f, -2f);
+			Assert.That(OverhangShaper.PlanSite(POIType.Overhang, 1, foot, 180f, 5, g, out OverhangShaper.Plan perch, out string problem), Is.True, problem);
+			Assert.That(perch.HasPlinth, Is.False, "a face of its own height needs no plinth");
+			CliffStyle st = CliffSections.StyleOf("Overhang", perch.Variant);
+			Assert.That(perch.Floor, Is.EqualTo(perch.Position.y).Within(0.6f), "the shelter's floor is the section's own");
+			// In the shelter (behind the face) and under the lip the ground is cut to the floor.
+			Vector3 front = OverhangShaper.FrontCentre(perch, st);
+			Assert.That(OverhangShaper.CutHeight(perch, st, front.x, front.z + 2f, g(front.x, front.z + 2f)), Is.EqualTo(perch.Floor).Within(0.01f));
+			Assert.That(OverhangShaper.CutHeight(perch, st, front.x, front.z - 3f, g(front.x, front.z - 3f)), Is.LessThanOrEqualTo(perch.Floor + 0.01f));
+			// Too low a face is refused.
+			Func<float, float, float> low = (x, z) => 20f + 6f * Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(z / 12f));
+			Assert.That(OverhangShaper.PlanSite(POIType.Overhang, 1, foot, 180f, 5, low, out _, out problem), Is.False);
+			Assert.That(problem, Does.Contain("too low"));
 		}
 
 		[Test]
@@ -825,7 +860,10 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			Assert.That(Array.IndexOf(CliffSections.Styles, "Overhang"), Is.GreaterThanOrEqualTo(0));
 			Assert.That(Array.IndexOf(CliffSections.Styles, "Arch"), Is.GreaterThanOrEqualTo(0));
-			Assert.That(CliffSections.StyleOf("Overhang").Lean, Is.GreaterThanOrEqualTo(3f), "the shelter leans well out");
+			CliffStyle perch = CliffSections.StyleOf("Overhang");
+			Assert.That(perch.Jut, Is.GreaterThanOrEqualTo(5f), "the perch's tongue juts well out");
+			Assert.That(perch.Jut, Is.LessThanOrEqualTo(2f * perch.CapThickness), "a tongue reaching past twice its thickness calves");
+			Assert.That(perch.Undercut, Is.GreaterThan(0f), "a shelter under it");
 			Assert.That(CliffSections.StyleOf("Arch").ArchChance, Is.EqualTo(1f), "every arch section has its arch");
 			Assert.That(CliffSections.IsPointOfInterest("Overhang") && CliffSections.IsPointOfInterest("Arch") && !CliffSections.IsPointOfInterest("Wall"), Is.True);
 			// No cliff role places them: they are a point of interest's alone.

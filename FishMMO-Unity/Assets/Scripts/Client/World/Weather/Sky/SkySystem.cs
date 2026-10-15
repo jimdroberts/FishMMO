@@ -131,6 +131,7 @@ namespace FishMMO.Client
 		private static readonly int CloudAirExtinctionId = Shader.PropertyToID("_FishCloudAirExtinction");
 		private static readonly int CloudAerosolId = Shader.PropertyToID("_FishCloudAerosol");
 		private static readonly int CloudLayerCountId = Shader.PropertyToID("_FishCloudLayerCount");
+		private static readonly int CloudDeckId = Shader.PropertyToID("_FishCloudDeck");
 		private static readonly int CloudCoverageId = Shader.PropertyToID("_FishCloudCoverage");
 		private static readonly int CloudShapeTexId = Shader.PropertyToID("_FishCloudShape");
 		private static readonly int CloudDetailTexId = Shader.PropertyToID("_FishCloudDetail");
@@ -140,6 +141,10 @@ namespace FishMMO.Client
 		private static readonly int RainbowId = Shader.PropertyToID("_FishRainbow");
 		private static readonly int BodyTexId = Shader.PropertyToID("_BodyTex");
 		private static readonly int UseTextureId = Shader.PropertyToID("_UseTexture");
+		private static readonly int RimColourId = Shader.PropertyToID("_RimColour");
+		/// <summary>The rim a body's air makes on its disc when no body says otherwise: our own sky's blue.</summary>
+		private static readonly Color DefaultRim = new Color(0.45f, 0.6f, 1f, 1f);
+		private readonly Dictionary<CelestialBody, Color> rimColours = new Dictionary<CelestialBody, Color>();
 
 		private static SkySystem instance;
 		public static SkySystem Instance => instance;
@@ -734,7 +739,8 @@ namespace FishMMO.Client
 			// the sky did not ask, and drew the driver's cloud over a moon all the same. Said here as
 			// well as there, so nothing that hands the sky a frame — a preset, the bed's sliders —
 			// can rain on a world with nothing to rain out of.
-			atmosphere = state != null && state.Observer != null ? state.Observer.Atmosphere : AtmosphereKind.Standard;
+			// A giant's habitable layer has its own air (CloudWorld), as its weather does.
+			atmosphere = state != null && state.Observer != null ? CloudWorld.AtmosphereOf(state.Observer) : AtmosphereKind.Standard;
 			airless = atmosphere == AtmosphereKind.None;
 			if (airless)
 			{
@@ -994,7 +1000,10 @@ namespace FishMMO.Client
 			float fogBlend = Mathf.Clamp01((RenderSettings.fog ? 0.45f : 0f) + WeatherFogPresenter.UniformAmount(weather, FogLayerView.Drawn) * 0.55f) * (1f - airless);
 			Shader.SetGlobalVector(ZenithId, sample.Zenith);
 			Shader.SetGlobalVector(HorizonId, sample.Horizon);
-			Shader.SetGlobalVector(GroundId, sample.Ground);
+			// Under a cloud world's horizon is its deck, not ground: what the sky draws there — where the march's
+			// deck has dissolved into the haze at the edge of the drawn sky, in the sky's reflections, and with the
+			// clouds switched off — is lit cloud, hazed toward the horizon.
+			Shader.SetGlobalVector(GroundId, SceneCloudWorld.Any ? Color.Lerp(sample.Horizon, sample.CloudLit, 0.5f) : sample.Ground);
 			Color fog = RenderSettings.fogColor;
 			fog.a = fogBlend;
 			Shader.SetGlobalVector(FogColorId, fog);
@@ -1198,6 +1207,8 @@ namespace FishMMO.Client
 			WeatherTimeline timeline = context.Timeline;
 			WorldSceneSettings settings = context.Settings;
 			WeatherSample sample = context.Sample;
+			// Whether this is a cloud world, whose deck is drawn under everything (CloudClimate.Deck).
+			SceneCloudWorld deckWorld = SceneCloudWorld.First;
 			if (timeline == null || timeline.SceneMode != WeatherSceneMode.Own || !sample.Planet.HasAir || sample.Planet.Gravity <= 0f)
 			{
 				Shader.SetGlobalInt(CloudLayerCountId, 0);
@@ -1215,6 +1226,23 @@ namespace FishMMO.Client
 				bool fogAlone = alone.y > alone.x;
 				CloudShellBottom = fogAlone ? alone.x : 0f;
 				CloudShellTop = fogAlone ? alone.y : 0f;
+				// A cloud world's deck is no weather's: it is there whether or not the scene has weather of its own.
+				if (deckWorld != null)
+				{
+					CloudBand deck = CloudClimate.Deck(cloudScales, deckWorld.DeckTop, deckWorld.DeckDepth);
+					float deckHighest = CloudClimate.DeckHighest(deckWorld.DeckTop);
+					var deckAcross = new Vector2(-axis.y, axis.x);
+					WriteLayer(0, deck, deck.Bottom, deckHighest, driftX * axis.x + driftY * axis.y, driftX * deckAcross.x + driftY * deckAcross.y, Mathf.Max(0f, deckHighest));
+					ClearLayersFrom(1);
+					cloudBandCount = 1;
+					PublishLayers(1);
+					PublishDeck(deck, 0);
+					CloudShellBottom = fogAlone ? Mathf.Min(alone.x, deck.Bottom) : deck.Bottom;
+					CloudShellTop = fogAlone ? Mathf.Max(alone.y, deckHighest) : deckHighest;
+					Shader.SetGlobalVector(CloudLayerId, new Vector4(CloudShellBottom, CloudShellTop, Mathf.Max(10000f, sample.Planet.RadiusMetres), 0f));
+					return;
+				}
+				Shader.SetGlobalVector(CloudDeckId, Vector4.zero);
 				Shader.SetGlobalVector(CloudLayerId, fogAlone
 					? new Vector4(alone.x, alone.y, Mathf.Max(10000f, sample.Planet.RadiusMetres), 0f)
 					: Vector4.zero);
@@ -1243,7 +1271,7 @@ namespace FishMMO.Client
 				Settings = settings,
 				Planet = planet,
 				Offsets = (settings != null ? settings.AuthoredAir : default) + timeline.AirAt(tick),
-				Atmosphere = body != null ? body.Atmosphere : AtmosphereKind.Standard,
+				Atmosphere = CloudWorld.AtmosphereOf(body),
 				Belts = belts,
 				WorldSeconds = worldSeconds,
 				Season01 = season01,
@@ -1366,67 +1394,40 @@ namespace FishMMO.Client
 				// A hill that reaches the condensation level makes its own cloud on its windward face
 				// whatever the day's cover (FishCloudDensityAt's cap cloud), and the march skips a band
 				// whose most cover in view is nothing: so where the ground stands into the deck's base,
-				// the band is never skipped for want of cover.
-				if (band.Column && cloudFlow != null && cloudFlow.HighestRock > band.Bottom)
+				// the band is never skipped for want of cover. Not over a cloud world, whose islands the
+				// clouds take no notice of (FishCloudOverTerrain).
+				if (band.Column && deckWorld == null && cloudFlow != null && cloudFlow.HighestRock > band.Bottom)
 				{
 					band.MaxCoverage = Mathf.Max(band.MaxCoverage, CapCover);
 				}
-				float thickness = Mathf.Max(1f, band.Top - band.Bottom);
-				float verticalScale = band.Column
-					? band.NoiseScale * 0.2f * band.VerticalScale / thickness
-					: band.VerticalScale;
 				lowest = Mathf.Min(lowest, shellBottom);
 				highest = Mathf.Max(highest, shellTop);
-				layerA[count] = new Vector4(band.Bottom, band.Top, band.MaxCoverage, band.Extinction);
-				layerB[count] = new Vector4(band.NoiseScale, band.DetailScale, band.DetailStrength, Mathf.Max(1f, band.Stretch));
-				// Rain in the units and 2 on top for the band that grows storms.
-				layerC[count] = new Vector4(band.WindScale, band.BaseSoftness, band.TopSoftness,
-					(band.CarriesRain ? cloudPrecipitation : 0f) + (band.GrowsStorms ? 2f : 0f));
-				// y, z the shell: the band's own floor and top, widened by its storms'.
-				layerD[count] = new Vector4(band.Convection, shellBottom, shellTop, verticalScale);
-				// This band's drift, wrapped to its own period so the float is exact and the wrap is
-				// invisible: 42 tiles along the wind (the warp's period, which the shape's and the
-				// lift's divide) stretched by the band's own stretch, 42 across, and the detail
-				// volume's single tile — in the same wind frame, drawn out along it by the same stretch,
-				// so cirrus's fine structure is fibres along the wind like its shape and not round
-				// blobs on the world's axes (it used to be read on the world axes, unstretched). All in
-				// double until the last moment.
-				double scale = band.WindScale;
-				double alongPeriod = band.NoiseScale * Mathf.Max(1f, band.Stretch) * 42.0;
-				double acrossPeriod = band.NoiseScale * 42.0;
-				Vector2 detailPeriod = CloudClimate.DetailDriftPeriod(band.DetailScale, Mathf.Max(1f, band.Stretch));
-				layerE[count] = new Vector4(
-					(float)WrapMetres(driftAlong * scale, alongPeriod),
-					(float)WrapMetres(driftAcross * scale, acrossPeriod),
-					(float)WrapMetres(driftAlong * scale, detailPeriod.x),
-					(float)WrapMetres(driftAcross * scale, detailPeriod.y));
-				// x which regime (the shader reads its cover from the air map by it), y the mean
-				// diameter of its drops (0 for ice: how it scatters), z 1 for the column, w the
-				// thinnest this regime's cloud gets, for the stride guard.
-				layerF[count] = new Vector4((int)band.Regime, band.DropletDiameter, band.Column ? 1f : 0f, band.Thinnest);
 				// Where this band's sun is worked out for (SetCloudLight, once the light is chosen): an
 				// ordinary cloud's middle for the column, the middle of a layer.
-				layerSunHeight[count] = band.Column ? 0.5f * (column.Base + Mathf.Max(column.Base, column.Top)) : 0.5f * (band.Bottom + band.Top);
+				float sunHeight = band.Column ? 0.5f * (column.Base + Mathf.Max(column.Base, column.Top)) : 0.5f * (band.Bottom + band.Top);
+				WriteLayer(count, band, shellBottom, shellTop, driftAlong, driftAcross, sunHeight);
 				count++;
 			}
-			for (int i = count; i < MaxCloudLayers; i++)
+			// A cloud world's deck, under everything: the last band, so the air's keep their places.
+			float deckFloor = float.MaxValue;
+			if (deckWorld != null && count < MaxCloudLayers)
 			{
-				layerA[i] = Vector4.zero;
-				layerB[i] = Vector4.zero;
-				layerC[i] = Vector4.zero;
-				layerD[i] = Vector4.zero;
-				layerE[i] = Vector4.zero;
-				layerF[i] = Vector4.zero;
-				layerSunHeight[i] = 0f;
+				CloudBand deck = CloudClimate.Deck(cloudScales, deckWorld.DeckTop, deckWorld.DeckDepth);
+				// Its shell only as high as its cloud can reach, not its band's top (CloudClimate.DeckHighest).
+				float deckHighest = CloudClimate.DeckHighest(deckWorld.DeckTop);
+				WriteLayer(count, deck, deck.Bottom, deckHighest, driftAlong, driftAcross, Mathf.Max(0f, deckHighest));
+				PublishDeck(deck, count);
+				deckFloor = deck.Bottom;
+				highest = Mathf.Max(highest, deckHighest);
+				count++;
 			}
+			else
+			{
+				Shader.SetGlobalVector(CloudDeckId, Vector4.zero);
+			}
+			ClearLayersFrom(count);
 			cloudBandCount = count;
-			Shader.SetGlobalVectorArray(CloudLayerAId, layerA);
-			Shader.SetGlobalVectorArray(CloudLayerBId, layerB);
-			Shader.SetGlobalVectorArray(CloudLayerCId, layerC);
-			Shader.SetGlobalVectorArray(CloudLayerDId, layerD);
-			Shader.SetGlobalVectorArray(CloudLayerEId, layerE);
-			Shader.SetGlobalVectorArray(CloudLayerFId, layerF);
-			Shader.SetGlobalInt(CloudLayerCountId, count);
+			PublishLayers(count);
 
 			// The wind with height over the viewer, for how far a cloud leans: the weather of the
 			// moment (WindProfile.Of), since a lean does not accumulate — unlike the drift, which is the
@@ -1456,7 +1457,7 @@ namespace FishMMO.Client
 			// ground and the base are two mirrors facing, and the light between them sums as
 			// 1/(1 − ρ_ground·R_base), with R_base = 1 − T_d for a cloud that absorbs nothing. About a
 			// fifth more over land, nearly half again over snow, a few per cent over the sea.
-			float bounce = 1f / Mathf.Max(0.05f, 1f - CloudClimate.GroundAlbedo(planet) * (1f - diffuseThrough));
+			float bounce = 1f / Mathf.Max(0.05f, 1f - GroundAlbedoUnder(planet) * (1f - diffuseThrough));
 			CloudSkyThrough = Mathf.Lerp(1f, diffuseThrough * bounce, overheadCover);
 
 			// The shell the march runs through, and the deck a reprojection has to be right about. Down
@@ -1465,7 +1466,8 @@ namespace FishMMO.Client
 			// The ground mist lies on the ground, so with any about the march's floor goes down to it, as
 			// it does for the fog — and the steadying's "below every cloud" shortcut with it.
 			bool mistOn = PublishMist(viewerColumn, viewerAt, fogDrawn);
-			CloudShellBottom = CloudStackFloor(lowest, shownRain >= 0.01f, fogDrawn || mistOn, fogDrawn ? Mathf.Min(fogShell.x, -2f) : -2f);
+			// A cloud world's deck lies below sea level's place, where nothing else may: the floor goes down to it.
+			CloudShellBottom = Mathf.Min(CloudStackFloor(lowest, shownRain >= 0.01f, fogDrawn || mistOn, fogDrawn ? Mathf.Min(fogShell.x, -2f) : -2f), deckFloor);
 			CloudShellTop = Mathf.Max(Mathf.Max(CloudShellBottom + 100f, highest), fogDrawn ? fogShell.y : 0f);
 			CloudLayerCentre = column.Base + 600f;
 			// The bands curve down to the horizon over the radius of the world they are on.
@@ -1578,6 +1580,95 @@ namespace FishMMO.Client
 		private static double WrapMetres(double metres, double period)
 		{
 			return period <= 0.0 ? metres : metres - System.Math.Floor(metres / period) * period;
+		}
+
+		/// <summary>
+		/// Lays one band into the layer arrays the shader reads (<c>_FishCloudLayerA</c>–<c>F</c>) at
+		/// <paramref name="index"/>: its own floor and top, the shell it can reach (<paramref name="shellBottom"/>,
+		/// <paramref name="shellTop"/>), and its drift along and across the prevailing wind.
+		/// </summary>
+		private void WriteLayer(int index, in CloudBand band, float shellBottom, float shellTop, double driftAlong, double driftAcross, float sunHeight)
+		{
+			float thickness = Mathf.Max(1f, band.Top - band.Bottom);
+			float verticalScale = band.Column
+				? band.NoiseScale * 0.2f * band.VerticalScale / thickness
+				: band.VerticalScale;
+			layerA[index] = new Vector4(band.Bottom, band.Top, band.MaxCoverage, band.Extinction);
+			layerB[index] = new Vector4(band.NoiseScale, band.DetailScale, band.DetailStrength, Mathf.Max(1f, band.Stretch));
+			// Rain in the units and 2 on top for the band that grows storms.
+			layerC[index] = new Vector4(band.WindScale, band.BaseSoftness, band.TopSoftness,
+				(band.CarriesRain ? cloudPrecipitation : 0f) + (band.GrowsStorms ? 2f : 0f));
+			// y, z the shell: the band's own floor and top, widened by its storms'.
+			layerD[index] = new Vector4(band.Convection, shellBottom, shellTop, verticalScale);
+			// This band's drift, wrapped to its own period so the float is exact and the wrap is
+			// invisible: 42 tiles along the wind (the warp's period, which the shape's and the
+			// lift's divide) stretched by the band's own stretch, 42 across, and the detail
+			// volume's single tile — in the same wind frame, drawn out along it by the same stretch,
+			// so cirrus's fine structure is fibres along the wind like its shape and not round
+			// blobs on the world's axes (it used to be read on the world axes, unstretched). All in
+			// double until the last moment.
+			double scale = band.WindScale;
+			double alongPeriod = band.NoiseScale * Mathf.Max(1f, band.Stretch) * 42.0;
+			double acrossPeriod = band.NoiseScale * 42.0;
+			Vector2 detailPeriod = CloudClimate.DetailDriftPeriod(band.DetailScale, Mathf.Max(1f, band.Stretch));
+			layerE[index] = new Vector4(
+				(float)WrapMetres(driftAlong * scale, alongPeriod),
+				(float)WrapMetres(driftAcross * scale, acrossPeriod),
+				(float)WrapMetres(driftAlong * scale, detailPeriod.x),
+				(float)WrapMetres(driftAcross * scale, detailPeriod.y));
+			// x which regime (the shader reads its cover from the air map by it, and knows the deck by it), y the
+			// mean diameter of its drops (0 for ice: how it scatters), z 1 for the column, w the thinnest this
+			// regime's cloud gets, for the stride guard.
+			layerF[index] = new Vector4((int)band.Regime, band.DropletDiameter, band.Column ? 1f : 0f, band.Thinnest);
+			layerSunHeight[index] = sunHeight;
+		}
+
+		/// <summary>Empties the layer arrays from <paramref name="index"/> on.</summary>
+		private void ClearLayersFrom(int index)
+		{
+			for (int i = index; i < MaxCloudLayers; i++)
+			{
+				layerA[i] = Vector4.zero;
+				layerB[i] = Vector4.zero;
+				layerC[i] = Vector4.zero;
+				layerD[i] = Vector4.zero;
+				layerE[i] = Vector4.zero;
+				layerF[i] = Vector4.zero;
+				layerSunHeight[i] = 0f;
+			}
+		}
+
+		/// <summary>Hands the shader the layer arrays and how many of them are bands.</summary>
+		private void PublishLayers(int count)
+		{
+			Shader.SetGlobalVectorArray(CloudLayerAId, layerA);
+			Shader.SetGlobalVectorArray(CloudLayerBId, layerB);
+			Shader.SetGlobalVectorArray(CloudLayerCId, layerC);
+			Shader.SetGlobalVectorArray(CloudLayerDId, layerD);
+			Shader.SetGlobalVectorArray(CloudLayerEId, layerE);
+			Shader.SetGlobalVectorArray(CloudLayerFId, layerF);
+			Shader.SetGlobalInt(CloudLayerCountId, count);
+		}
+
+		/// <summary>
+		/// Tells the shader a cloud world's deck is drawn (<c>_FishCloudDeck</c>): x its band's top, y its floor, z 1,
+		/// w its band. While it is, the clouds take no notice of the ground under them (FishCloudOverTerrain): the
+		/// terrain there is islands floating over nothing, and its heightmap under the holes cut round them is not
+		/// ground at all.
+		/// </summary>
+		private static void PublishDeck(in CloudBand deck, int index)
+		{
+			Shader.SetGlobalVector(CloudDeckId, new Vector4(deck.Top, deck.Bottom, 1f, index));
+		}
+
+		/// <summary>
+		/// What the ground under the clouds sends back of the light on it: the world's open ground
+		/// (<see cref="CloudClimate.GroundAlbedo"/>), or over a cloud world its deck (<see cref="CloudClimate.DeckAlbedo"/>),
+		/// which lights every cloud over it from below as snow does.
+		/// </summary>
+		private static float GroundAlbedoUnder(in PlanetAir planet)
+		{
+			return SceneCloudWorld.Any ? CloudClimate.DeckAlbedo : CloudClimate.GroundAlbedo(planet);
 		}
 
 		/// <summary>0..1: how strongly a tower stands over the camera right now.</summary>
@@ -1752,6 +1843,7 @@ namespace FishMMO.Client
 				// no longer there to draw (the fallback passes draw it: FogLayerView.DrawnByClouds).
 				Shader.SetGlobalVector(CloudLayerId, Vector4.zero);
 				Shader.SetGlobalInt(CloudLayerCountId, 0);
+				Shader.SetGlobalVector(CloudDeckId, Vector4.zero);
 				Shader.SetGlobalVector(FogLayerView.ShellId, Vector4.zero);
 				return;
 			}
@@ -1922,7 +2014,7 @@ namespace FishMMO.Client
 			}
 			Shader.SetGlobalVectorArray(CloudLayerSunId, layerSun);
 
-			float albedo = CloudClimate.GroundAlbedo(planet);
+			float albedo = GroundAlbedoUnder(planet);
 			float onGround = Mathf.Max(0f, lightDirection.y);
 			Shader.SetGlobalVector(CloudGroundId, new Vector4(
 				albedo * (light.r * onGround + skyLight.r),
@@ -2228,6 +2320,31 @@ namespace FishMMO.Client
 			cloudLight.Update(profile.CloudMaterial, viewer, farPlane, CloudShellBottom, CloudShellTop, CloudsReady && DrawClouds);
 		}
 
+		/// <summary>
+		/// The colour of a body's air seen edge-on, for the rim on its disc: its own sky overhead with the sun well up,
+		/// brightened to full. Blue for ours, butterscotch for a dusty thin air, cream for sulphuric cloud, orange for tholin,
+		/// a giant's own colour for a giant. Worked out once a body.
+		/// </summary>
+		private Color RimOf(CelestialBody body)
+		{
+			if (!(body is WorldBody world) || world.Atmosphere == AtmosphereKind.None)
+			{
+				return DefaultRim;
+			}
+			if (rimColours.TryGetValue(body, out Color rim))
+			{
+				return rim;
+			}
+			SkySample sky = CloudWorld.Is(world)
+				? AtmosphereModel.EvaluateVeiled(CloudWorld.VeilOf(world), world.Haze, 40f)
+				: AtmosphereModel.Evaluate(world.Atmosphere, world.Haze, world.HazeColor, 40f);
+			Color c = sky.Zenith;
+			float peak = Mathf.Max(1e-3f, Mathf.Max(c.r, Mathf.Max(c.g, c.b)));
+			rim = new Color(c.r / peak, c.g / peak, c.b / peak, 1f);
+			rimColours[body] = rim;
+			return rim;
+		}
+
 		/// <summary>A directional light shining along −direction.</summary>
 		public static Quaternion LightRotation(Vector3 towardLight)
 		{
@@ -2289,7 +2406,9 @@ namespace FishMMO.Client
 			if (TargetCamera != null)
 			{
 				Vector3 eye = TargetCamera.transform.position;
-				if (TerrainSet.Current.TryHeight(eye.x, eye.z, out float ground))
+				// Not over a cloud world: under an island is the open air beneath its rock, not a cave (FishUnderground is
+				// off there too: MistGroundMap).
+				if (!SceneCloudWorld.Any && TerrainSet.Current.TryHeight(eye.x, eye.z, out float ground))
 				{
 					float t = Mathf.Clamp01((ground - eye.y - 6f) / 14f);
 					target = t * t * (3f - 2f * t);
@@ -2529,6 +2648,7 @@ namespace FishMMO.Client
 						}
 						block.Clear();
 						block.SetFloat(UseTextureId, 0f);
+						block.SetColor(RimColourId, DefaultRim);
 						properties = block;
 						mesh = bodies.Mesh;
 						subMesh = step.SubMesh;
@@ -2544,13 +2664,16 @@ namespace FishMMO.Client
 						SkyBodyState body = step.Body;
 						SkyBodyMesh quad = texturedMeshes[textured];
 						quad.Clear();
-						Color tint = body.Body.Tint;
+						/* A baked surface carries the body's colours already (PlanetSurfaceBaker, BodyColours): tinting it again
+						 * coloured every world twice. Only a hand-made texture, which may be greyscale, takes the tint. */
+						Color tint = body.Body.SurfaceTexture != null ? body.Body.Tint : Color.white;
 						tint.a = body.Body is WorldBody world && world.HasWeather ? 0.4f : 1f;
 						quad.AddQuad(body.Direction, SkyBodyMesh.Kind.Disc, body.AngularRadius * scale, body.Illumination, body.Shadowed, body.LightDirection, 1.2f, Vector3.up, 0f, tint, step.Rank, (float)body.DistanceKm);
 						properties = texturedBlocks[textured];
 						properties.Clear();
 						properties.SetTexture(BodyTexId, PlanetSurfaceLibrary.Get(body.Body));
 						properties.SetFloat(UseTextureId, 1f);
+						properties.SetColor(RimColourId, RimOf(body.Body));
 						mesh = quad.Upload();
 						textured++;
 						break;

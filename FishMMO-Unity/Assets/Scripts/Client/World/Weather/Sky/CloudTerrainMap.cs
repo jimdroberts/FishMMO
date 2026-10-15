@@ -264,10 +264,17 @@ namespace FishMMO.Client
 
 		private static TerrainSet current;
 		private static int readFrame = int.MinValue;
+		private static int readCloudWorld = int.MinValue;
 
 		private Terrain[] terrains = new Terrain[0];
 		// minX, minZ, maxX, maxZ, originY per terrain.
 		private float[] bounds = new float[0];
+
+		// Over a cloud world (SceneCloudWorld): each terrain's holes (null for one with none), read when the set
+		// changes, and the deck's top, the ground over the void between the islands. Null and unused elsewhere.
+		private TerrainHoleMask[] holes;
+		private int holesSignature;
+		private float deckTop;
 
 		// The backdrop's ground: n × n cells from (x0, z0), each `cell` metres, NaN where nothing stands.
 		private float[] backdrop;
@@ -291,11 +298,15 @@ namespace FishMMO.Client
 			get
 			{
 				int frame = Time.frameCount;
-				if (current == null || frame - readFrame >= RefreshFrames || frame < readFrame)
+				// At once when a cloud world comes or goes, not up to half a second later: until then every height
+				// over its void would be the hole-filled heightmap's.
+				int cloudWorld = FishMMO.Shared.SceneCloudWorld.Version;
+				if (current == null || frame - readFrame >= RefreshFrames || frame < readFrame || cloudWorld != readCloudWorld)
 				{
 					current ??= new TerrainSet();
 					current.Read();
 					readFrame = frame;
+					readCloudWorld = cloudWorld;
 				}
 				return current;
 			}
@@ -366,8 +377,55 @@ namespace FishMMO.Client
 				maxX = Mathf.Max(maxX, backdropX0 + span);
 				maxZ = Mathf.Max(maxZ, backdropZ0 + span);
 			}
-			Signature = unchecked(hash * 31 + backdropNow);
+			FishMMO.Shared.SceneCloudWorld world = FishMMO.Shared.SceneCloudWorld.First;
+			Signature = unchecked((hash * 31 + backdropNow) * 31 + (world != null ? world.DeckTop.GetHashCode() ^ 0x5bd1e995 : 0));
 			Extent = count > 0 || backdrop != null ? Rect.MinMaxRect(minX, minZ, maxX, maxZ) : default;
+			ReadHoles(world);
+		}
+
+		/// <summary>
+		/// Over a cloud world, each island terrain's holes, read once for each set of terrains: the heightmap under a
+		/// hole is filled in from the island's own ground, so a height read there is a floor that is not there.
+		/// Elsewhere none are read — a cave mouth's hole is a few metres of a hillside, and the heights over it are
+		/// the hillside's.
+		/// </summary>
+		private void ReadHoles(FishMMO.Shared.SceneCloudWorld world)
+		{
+			if (world == null)
+			{
+				holes = null;
+				return;
+			}
+			deckTop = world.DeckTop;
+			if (holes != null && holes.Length == terrains.Length && holesSignature == Signature)
+			{
+				return;
+			}
+			holes = new TerrainHoleMask[terrains.Length];
+			for (int k = 0; k < terrains.Length; k++)
+			{
+				holes[k] = TerrainHoleMask.Read(terrains[k].terrainData);
+			}
+			holesSignature = Signature;
+		}
+
+		/// <summary>
+		/// The ground under a point over a cloud world: an island's, or the deck's top over the void between them
+		/// (<see cref="TryHeight"/> there). False anywhere else, where the caller reads its ground its own way.
+		/// </summary>
+		public static bool TryCloudWorldGround(float x, float z, out float height)
+		{
+			height = 0f;
+			if (!FishMMO.Shared.SceneCloudWorld.Any)
+			{
+				return false;
+			}
+			TerrainSet set = Current;
+			if (!set.TryHeight(x, z, out height))
+			{
+				height = set.deckTop;
+			}
+			return true;
 		}
 
 		private static int BackdropSignature()
@@ -519,7 +577,12 @@ namespace FishMMO.Client
 			return true;
 		}
 
-		/// <summary>The highest ground at a point, m; false where no terrain covers it.</summary>
+		/// <summary>
+		/// The highest ground at a point, m; false where no terrain covers it. Over a cloud world, never false: a
+		/// hole in an island's terrain is not ground, and wherever no island's ground stands the ground is the
+		/// deck's top (<see cref="FishMMO.Shared.SceneCloudWorld.DeckTop"/>) — so the fog and the mist lie on the
+		/// deck over the void, not on the heightmap filled in under the holes at the island's own height.
+		/// </summary>
 		public bool TryHeight(float x, float z, out float height)
 		{
 			height = float.NegativeInfinity;
@@ -536,8 +599,22 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
+				if (holes != null && k < holes.Length && holes[k] != null
+					&& holes[k].HoleAt((x - bounds[b]) / Mathf.Max(1e-3f, bounds[b + 2] - bounds[b]), (z - bounds[b + 1]) / Mathf.Max(1e-3f, bounds[b + 3] - bounds[b + 1])))
+				{
+					continue;
+				}
 				height = Mathf.Max(height, t.SampleHeight(new Vector3(x, 0f, z)) + bounds[b + 4]);
 				any = true;
+			}
+			if (holes != null)
+			{
+				// A cloud world: the deck under the void, and no backdrop's mountains standing in it.
+				if (!any)
+				{
+					height = deckTop;
+				}
+				return true;
 			}
 			// Off the terrain: the backdrop's ground, where there is one.
 			return any || TryBackdrop(x, z, out height);

@@ -176,6 +176,10 @@ namespace FishMMO.Shared.WorldDesign
 			"CaveGlowMeshes.cs",
 			"ProceduralArtCatalogue.Cave.cs",
 			"BiomeArtGenerator.CaveGlow.cs",
+			// Airships and their landing stages, for the cloud worlds (2026-10-14).
+			"StructurePieces.Airships.cs",
+			// Mills and rural works (2026-10-14).
+			"StructurePieces.Mills.cs",
 		};
 
 		private static readonly Regex MetaGuid = new Regex(@"^guid:\s*([0-9a-fA-F]{32})\s*$", RegexOptions.Multiline | RegexOptions.CultureInvariant);

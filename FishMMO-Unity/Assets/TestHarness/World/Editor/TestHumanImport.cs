@@ -19,7 +19,13 @@ namespace FishMMO.TestHarness.World.Editor
 		/// <summary>The clips that cycle; the punches play once.</summary>
 		private static readonly string[] Looping = { "SwimCrawl", "SwimTread", "Climb" };
 
-		public override uint GetVersion() => 2;
+		/// <summary>
+		/// The rest pose's own take, first in the file so the importer takes the model's default pose (and so the avatar's
+		/// T-pose) from it: imported as no clip.
+		/// </summary>
+		private const string RestTake = "0Rest";
+
+		public override uint GetVersion() => 3;
 
 		private void OnPreprocessModel()
 		{
@@ -45,12 +51,17 @@ namespace FishMMO.TestHarness.World.Editor
 				return;
 			}
 			var importer = (ModelImporter)assetImporter;
-			ModelImporterClipAnimation[] clips = importer.defaultClipAnimations;
-			foreach (ModelImporterClipAnimation clip in clips)
+			var clips = new System.Collections.Generic.List<ModelImporterClipAnimation>();
+			foreach (ModelImporterClipAnimation clip in importer.defaultClipAnimations)
 			{
 				// Blender names a take "<armature>|<action>": the clip is the action.
 				int bar = clip.takeName.LastIndexOf('|');
 				clip.name = bar >= 0 ? clip.takeName.Substring(bar + 1) : clip.takeName;
+				if (clip.name == RestTake)
+				{
+					continue;
+				}
+				clips.Add(clip);
 				clip.loopTime = System.Array.IndexOf(Looping, clip.name) >= 0;
 				if (clip.loopTime && clip.lastFrame - clip.firstFrame > 2f)
 				{
@@ -65,7 +76,7 @@ namespace FishMMO.TestHarness.World.Editor
 				clip.keepOriginalPositionY = true;
 				clip.keepOriginalPositionXZ = true;
 			}
-			importer.clipAnimations = clips;
+			importer.clipAnimations = clips.ToArray();
 		}
 	}
 }

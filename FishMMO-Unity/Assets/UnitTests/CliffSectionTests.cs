@@ -141,10 +141,16 @@ namespace FishMMO.UnitTests
 				MeshBuilder[] levels = Levels(style, v);
 				Bounds b = levels[0].Bounds;
 				CliffStyle st = CliffSections.StyleOf(style, v);
-				Assert.That(Mathf.Abs(b.center.x), Is.LessThan(0.01f), $"{style} {v} centred in x");
-				Assert.That(Mathf.Abs(b.center.z), Is.LessThan(0.01f), $"{style} {v} centred in z");
+				// A perch keeps its wall's own origin (its shaper seats it by its face line and top), so it is not centred.
+				if (CliffSections.StyleOf(style).Jut <= 0f)
+				{
+					Assert.That(Mathf.Abs(b.center.x), Is.LessThan(0.01f), $"{style} {v} centred in x");
+					Assert.That(Mathf.Abs(b.center.z), Is.LessThan(0.01f), $"{style} {v} centred in z");
+				}
 				// Its foot just below the ground it stands on, and about its style's height.
-				Assert.That(b.min.y, Is.InRange(-0.5f, 0f), $"{style} {v} foot");
+				// A perch's solid runs on its root's depth under its ground, so it can be sunk into a face taller than it.
+				float root = CliffSections.StyleOf(style).Root;
+				Assert.That(b.min.y, Is.InRange(-0.5f - root, -root + 0f), $"{style} {v} foot");
 				Assert.That(b.max.y, Is.InRange(st.Height * 0.5f, st.Height * 1.2f), $"{style} {v} height");
 				// A coarser level rounds the foot off a little (a 40 m scarp's 250-triangle collider by up to ~1.3 m, underground), never far.
 				float slack = Mathf.Max(0.3f, 0.035f * Mathf.Max(b.size.x, Mathf.Max(b.size.y, b.size.z)));

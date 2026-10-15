@@ -224,7 +224,8 @@ namespace FishMMO.UnitTests.WorldDesign
 			int placed = 0;
 			foreach (PointOfInterestRecord record in plan.Records)
 			{
-				if (!IsPlaced(record, rules) || record.Kind == POIType.Bridge)
+				// A bridge spans water, and a river-bank kind (a watermill) stands with its front at the water's edge.
+				if (!IsPlaced(record, rules) || record.Kind == POIType.Bridge || rules.RuleFor(record.Kind).RiverBank)
 				{
 					continue;
 				}

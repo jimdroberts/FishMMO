@@ -400,9 +400,10 @@ namespace FishMMO.Shared.Biomes
 				: 0f;
 			return new BiomeWorldConditions
 			{
-				Atmosphere = body.Atmosphere,
+				// A giant's habitable layer, not its cloud tops (CloudWorld).
+				Atmosphere = CloudWorld.AtmosphereOf(body),
 				MeanTemperature = temperature,
-				Water = body.Water,
+				Water = CloudWorld.WaterOf(body),
 				InternalHeat = ClimateModel.InternalHeat(system, body),
 				TidalHeat = ClimateModel.TidalHeat(system, body),
 				// The orbit-mean air the weather and the moisture model already read, so the sky a

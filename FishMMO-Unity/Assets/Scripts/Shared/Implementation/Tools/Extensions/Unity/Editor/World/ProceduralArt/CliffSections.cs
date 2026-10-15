@@ -42,6 +42,19 @@ namespace FishMMO.Shared.WorldDesign
 		/// natural arch stands with its arch where the placer measured the room for it.
 		/// </summary>
 		public bool ArchCentred;
+		/// <summary>
+		/// A perch (2026-10-14, "an actual perch on a cliff face"): a tongue of the cap rock jutting this far out over the
+		/// front, metres, its top flush with the wall's top; 0 for none. <see cref="TongueWidth"/> is its width at the root
+		/// and <see cref="CapThickness"/> its thickness there (it thins to under half by the lip).
+		/// </summary>
+		public float Jut, TongueWidth, CapThickness;
+		/// <summary>
+		/// The rock shelter under a perch: how far the wall is cut back under the tongue (the back of a C-shaped alcove that
+		/// dips to the floor at its rear), metres, and its height at the front as a share of <see cref="Height"/>.
+		/// </summary>
+		public float Undercut, UndercutHeight;
+		/// <summary>How far the solid runs on below its ground, metres: room to sink a section into a face taller than it.</summary>
+		public float Root;
 
 		/// <summary>A continuous canyon wall: broad joints, coarse beds, big slabs, leaning out at the top.</summary>
 		public static CliffStyle Massif => new CliffStyle
@@ -157,19 +170,26 @@ namespace FishMMO.Shared.WorldDesign
 		};
 
 		/// <summary>
-		/// A rock shelter for a point of interest (2026-10-10: "a placeable lean/arch cliff section"): an unbroken wall
-		/// whose upper half leans 4.5 m out over its front, so the ground under its brow is roofed. No bays (a gap in the
-		/// front row would open the shelter's roof) and an even skyline.
+		/// A cliff perch over a rock shelter for a point of interest (2026-10-14, replacing 2026-10-10's leaning wall,
+		/// which read as "a rock sticking out of the ground"): a 30 m length of sheer bedded cliff whose cap rock juts out
+		/// in a tongue 7.5 m over the front, flat-topped and flush with the clifftop so it can be walked out on, thinning
+		/// toward its lip; under it the soft lower beds are worn back into a C-shaped shelter. Proportions from real ones:
+		/// the tongue reaches under twice the cap's thickness (a longer one calves), the shelter is cut back about half its
+		/// height and dips to the floor at its rear. Its solid runs 10 m on below its ground, so it can be sunk into a face
+		/// taller than itself. Unlike every other style it is not recentred: its origin is the wall's own, front at
+		/// z = −Depth/2 (<see cref="CliffSections.BuildMeshes(CliffSection, out Vector3, out string)"/>).
 		/// </summary>
 		public static CliffStyle Overhang => new CliffStyle
 		{
-			Length = 16f, Depth = 9f, Height = 12f,
-			JointSpacing = new Vector2(4.5f, 3.4f), JointGap = 0.06f,
-			BedThickness = new Vector2(1.0f, 2.6f), BedRecess = new Vector2(0f, 0.45f),
-			Bevel = 0.28f, HeightVar = 0.15f, FrontDrop = 0.05f, TopTilt = 4f,
-			Weather = 0.15f, Detail = 0.03f, Gaps = 0f, CrackDepth = 1.2f,
+			Length = 30f, Depth = 14f, Height = 16f,
+			JointSpacing = new Vector2(6.5f, 4.8f), JointGap = 0.06f,
+			// Soft beds worn back half a metre at most: deeper (1 m) opened up to 12 hidden tunnels a variant.
+			BedThickness = new Vector2(0.7f, 1.9f), BedRecess = new Vector2(0f, 0.5f),
+			Bevel = 0.3f, HeightVar = 0.04f, FrontDrop = 0f, TopTilt = 2f,
+			Weather = 0.16f, Detail = 0.03f, Gaps = 0f, CrackDepth = 1.2f,
 			SubSpacing = new Vector2(1.2f, 0.9f), SubWidth = 0.02f, SubDepth = 0.15f, SubStep = 0.08f,
-			Lean = 4.5f,
+			Lean = 0.3f,
+			Jut = 7.5f, TongueWidth = 11f, CapThickness = 5.5f, Undercut = 5f, UndercutHeight = 0.6f, Root = 10f,
 		};
 
 		/// <summary>
@@ -246,6 +266,8 @@ namespace FishMMO.Shared.WorldDesign
 		private Vector3 jointX = Vector3.right, jointZ = Vector3.forward;
 		private bool arch;
 		private float archX, archRx, archRy;
+		private bool perch;
+		private float tongueTop, tongueX, tongueWobble;
 
 		public float Evaluate(Vector3 p) => Evaluate(p, true);
 
@@ -274,6 +296,10 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				f = Union(p, ClosedColumns, true);
 			}
+			if (perch)
+			{
+				f = Perch(p, f);
+			}
 			// A soft bed is worn back unevenly along the face: deep in places, flush in others.
 			f += Recess(p.y) * Mathf.Clamp01(0.55f + 1.4f * ProceduralNoise.Fbm3(new Vector3(p.x, p.y * 0.3f, p.z) / 2.5f, 2, 0.5f, Seed + 7));
 			f -= S.Weather * ProceduralNoise.Fbm3(new Vector3(p.x, p.y * 0.6f, p.z) / 3f, 3, 0.5f, Seed + 3) * 1.8f;
@@ -288,6 +314,61 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			if (fine) f -= S.Detail * ProceduralNoise.Fbm3(p / 0.35f, 3, 0.5f, Seed + 4);
 			return Mathf.Max(f, Floor - p.y);
+		}
+
+		/// <summary>
+		/// The perch: the cap's tongue smoothly joined on, then the shelter cut back under it. In the joint frame, front at
+		/// w = −Depth/2. The tongue is a flat-topped slab, square-ended in plan with rounded corners, narrowing and thinning
+		/// toward its lip; the shelter a half-ellipsoid standing on the floor, its roof curving down to the floor at its back.
+		/// Both wear the beds and weathering laid over everything after (the same strata run through the lip and the wall).
+		/// </summary>
+		private float Perch(Vector3 p, float f)
+		{
+			float u = Vector3.Dot(p, jointX) - tongueX, w = Vector3.Dot(p, jointZ);
+			float front = -0.5f * S.Depth;
+			// The tongue: t runs 0 at its root (3 m inside the wall) to 1 at its lip.
+			float rootW = front + 3f, lipW = front - S.Jut;
+			float t = Mathf.Clamp01((rootW - w) / (rootW - lipW));
+			float wobble = tongueWobble * ProceduralNoise.Fbm3(new Vector3(u, 0f, w) / 4f, 2, 0.5f, Seed + 51);
+			float half = 0.5f * S.TongueWidth * Mathf.Lerp(1f, 0.62f, t) + wobble;
+			// Plan: the slab's sides and its lip, rounded where they meet.
+			float side = Mathf.Abs(u) - half;
+			float lip = lipW - w + 0.6f * wobble;
+			float plan = SmoothMax(side, lip, 1.6f);
+			float thick = S.CapThickness * Mathf.Lerp(1f, 0.5f, Mathf.Pow(t, 0.8f));
+			float under = tongueTop - thick - p.y;
+			float top = p.y - tongueTop;
+			float tongue = SmoothMax(SmoothMax(plan, top, 0.5f), under, 0.9f);
+			tongue -= 0.35f * ProceduralNoise.Fbm3(p / 2.2f, 2, 0.5f, Seed + 53);
+			// Only in front of the wall's root: behind it the wall itself is the rock.
+			tongue = Mathf.Max(tongue, w - rootW - 1f);
+			f = SmoothMin(f, tongue, 0.9f);
+
+			// The shelter: a half-ellipsoid centred on the wall's front at the floor, wider than the tongue.
+			float ru = 0.5f * S.TongueWidth * 1.35f, rw = S.Undercut, ry = S.UndercutHeight * S.Height;
+			float du = u / ru, dw = (w - front) / rw, dy = Mathf.Max(0f, p.y) / ry;
+			float shelter = (Mathf.Sqrt(du * du + dw * dw + dy * dy) - 1f) * Mathf.Min(rw, ry);
+			shelter += 0.45f * ProceduralNoise.Fbm3(p / 1.8f, 2, 0.5f, Seed + 57);
+			// A floor of rock under it, a little under the ground, so the shelter is not a pit into the root.
+			shelter = Mathf.Max(shelter, -0.3f - p.y);
+			f = Mathf.Max(f, -shelter);
+
+			// A joint cleft across the tongue's root, parallel to the face: the crack a perch will one day calve along.
+			float cleftW = front + 1.2f + 0.5f * ProceduralNoise.Fbm3(new Vector3(u, 0f, 0f) / 3f, 2, 0.5f, Seed + 59);
+			float cleft = Mathf.Max(Mathf.Abs(w - cleftW) - 0.28f, Mathf.Max(Mathf.Abs(u) - 0.42f * S.TongueWidth, tongueTop - 2.2f - p.y));
+			return Mathf.Max(f, -cleft);
+		}
+
+		private static float SmoothMax(float a, float b, float k)
+		{
+			float h = Mathf.Clamp01(0.5f - 0.5f * (b - a) / k);
+			return Mathf.Lerp(b, a, h) + k * h * (1f - h);
+		}
+
+		private static float SmoothMin(float a, float b, float k)
+		{
+			float h = Mathf.Clamp01(0.5f + 0.5f * (b - a) / k);
+			return Mathf.Lerp(b, a, h) - k * h * (1f - h);
 		}
 
 		/// <summary>
@@ -374,8 +455,14 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			var rng = new DeterministicRNG(seed);
 			var solid = new CliffSection { S = st, Seed = seed };
+			solid.Floor -= st.Root;
 			// The joint frame: the wall's own small yaw.
 			float yaw = rng.Range(-10f, 10f) * Mathf.Deg2Rad;
+			if (st.Jut > 0f)
+			{
+				// A perch's wall square to its placement: the shaper aims the tongue along the site's heading.
+				yaw = 0f;
+			}
 			var ax = new Vector3(Mathf.Cos(yaw), 0f, Mathf.Sin(yaw));
 			var az = new Vector3(-Mathf.Sin(yaw), 0f, Mathf.Cos(yaw));
 			solid.jointX = ax;
@@ -409,13 +496,16 @@ namespace FishMMO.Shared.WorldDesign
 			for (int s = 0; s < sites.Count; s++)
 			{
 				Vector2 c = sites[s];
-				if (Mathf.Abs(c.x) > halfL || Mathf.Abs(c.y) > halfD) continue;
+				// A perch keeps a row more in front, cut back to its face line, so no column falls short of it.
+				if (Mathf.Abs(c.x) > halfL || c.y > halfD || c.y < -halfD - (st.Jut > 0f ? st.JointSpacing.y : 0f)) continue;
 				// Back (+z) rows stand tallest; the front falls away; front columns go missing for bays.
 				float back = (c.y + halfD) / Mathf.Max(0.01f, st.Depth);
 				if (back < 0.3f && rng.NextFloat() < st.Gaps) continue;
 				// Heights from a smooth field over the footprint (neighbours alike, the skyline rolling), plus a little each.
 				float field = 0.5f + 0.9f * ProceduralNoise.Fbm3(new Vector3(c.x, 0f, c.y) / (2.2f * spacing), 2, 0.5f, seed + 41);
-				float hgt = st.Height * Mathf.Lerp(1f - st.FrontDrop, 1f, back) * (1f - st.HeightVar * Mathf.Clamp01(field)) * rng.Range(0.94f, 1.04f);
+				float jitter = rng.Range(0.94f, 1.04f);
+				// A perch's top is walked on: one even surface (the draw is still made, so no other style changes).
+				float hgt = st.Height * Mathf.Lerp(1f - st.FrontDrop, 1f, back) * (1f - st.HeightVar * Mathf.Clamp01(field)) * (st.Jut > 0f ? 1f : jitter);
 				hgt = Mathf.Max(0.8f, hgt);
 				var planes = new List<Vector4>();
 				var closed = new List<Vector4>();
@@ -445,7 +535,7 @@ namespace FishMMO.Shared.WorldDesign
 				Vector3 topN = Tilted(rng.Range(0f, st.TopTilt), rng.NextFloat() * Tau);
 				Vector3 cw = ax * c.x + az * c.y;
 				planes.Add(new Vector4(topN.x, topN.y, topN.z, Vector3.Dot(topN, cw + Vector3.up * hgt)));
-				planes.Add(new Vector4(0f, -1f, 0f, 1f));
+				planes.Add(new Vector4(0f, -1f, 0f, 1f + st.Root));
 				int jointCount = planes.Count - 2;
 				if (!PolytopeBounds(planes, out Bounds bounds)) continue;
 				// A corner or two chopped off the top.
@@ -457,7 +547,19 @@ namespace FishMMO.Shared.WorldDesign
 					Vector3 top = cw + Vector3.up * hgt;
 					float reach = Mathf.Max(bounds.extents.x, bounds.extents.z) * 0.9f;
 					Vector3 at = top + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * reach * rng.Range(0.35f, 0.75f);
+					if (st.Jut > 0f)
+					{
+						// No corners knocked off a perch's top (drawn all the same, as above).
+						continue;
+					}
 					planes.Add(new Vector4(n.x, n.y, n.z, Vector3.Dot(n, at)));
+				}
+				if (st.Jut > 0f)
+				{
+					// A perch's face stands on a known line (its shelter and tongue are cut from it, and the shaper seats it
+					// by it): each column cut there, give or take half a metre.
+					float set = 0.5f * ProceduralNoise.ToUnit(ProceduralNoise.Hash(s, 61, seed));
+					planes.Add(new Vector4(-az.x, 0f, -az.z, halfD + set));
 				}
 				if (!PolytopeBounds(planes, out bounds)) continue;
 				bounds.Expand(st.Bevel * 2f + 0.05f);
@@ -481,6 +583,15 @@ namespace FishMMO.Shared.WorldDesign
 			var ext = new Bounds(Vector3.zero, Vector3.zero);
 			foreach (Bounds b in solid.boxes) ext.Encapsulate(b);
 			ext.Encapsulate(ext.min - az * (st.Lean + 0.5f));
+			if (st.Jut > 0f)
+			{
+				solid.perch = true;
+				// The top the tongue is flush with: the columns' mean height, so the perch walks straight on from the wall.
+				solid.tongueTop = st.Height * (1f - 0.5f * st.HeightVar);
+				solid.tongueX = rng.Range(-0.08f, 0.08f) * st.Length;
+				solid.tongueWobble = rng.Range(0.6f, 1.1f);
+				ext.Encapsulate(new Vector3(-0.5f * st.Length, solid.tongueTop + 1f, -0.5f * st.Depth - st.Jut - 2f));
+			}
 			ext.Expand(st.Weather * 2f + 0.3f);
 			ext.Encapsulate(new Vector3(ext.center.x, solid.Floor - 0.1f, ext.center.z));
 			solid.Extent = ext;
@@ -599,8 +710,14 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>True for the talus styles (fallen blocks), false for the face's.</summary>
 		public static bool IsDebris(string style) => style == "Rubble" || style == "Rockfall";
 
+		/// <summary>
+		/// Triangle budget of each level of the perch: a single hero rock at a point of interest, three sections long, seen
+		/// from under its tongue and from on top of it.
+		/// </summary>
+		public static readonly int[] PerchLodTriangles = { 4800, 1800, 700 };
+
 		/// <summary>A style's triangle budget per level.</summary>
-		public static int[] LodTrianglesOf(string style) => IsDebris(style) ? DebrisLodTriangles : LodTriangles;
+		public static int[] LodTrianglesOf(string style) => IsDebris(style) ? DebrisLodTriangles : style == "Overhang" ? PerchLodTriangles : LodTriangles;
 		/// <summary>Faces meeting at more than this keep a hard normal edge.</summary>
 		public const float CreaseDegrees = 35f;
 
@@ -682,7 +799,8 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			MeshBuilder[] levels = ProceduralSurfaceNets.BuildLevels(solid.EvaluateLow, solid.Extent, solid.MeshCell, LodTrianglesOf(solid.Style), CreaseDegrees, out report);
 			Bounds b = levels[0].Bounds;
-			centre = new Vector3(b.center.x, 0f, b.center.z);
+			// A perch keeps its wall's own origin: the shaper seats it by its front and its top, not its bounds.
+			centre = solid.S.Jut > 0f ? Vector3.zero : new Vector3(b.center.x, 0f, b.center.z);
 			foreach (MeshBuilder level in levels)
 			{
 				for (int i = 0; i < level.VertexCount; i++) level.Positions[i] -= centre;

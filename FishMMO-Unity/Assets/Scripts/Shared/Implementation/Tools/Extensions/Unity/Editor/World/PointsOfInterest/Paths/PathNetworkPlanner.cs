@@ -148,6 +148,9 @@ namespace FishMMO.Shared.WorldDesign
 				case POIType.Quarry:
 				case POIType.LumberCamp:
 				case POIType.Dockyard:
+				case POIType.Windmill:
+				case POIType.Watermill:
+				case POIType.LumberMill:
 					way = ScenePathClass.CartTrack;
 					return true;
 				case POIType.AbandonedFarm:

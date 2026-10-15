@@ -237,6 +237,11 @@ namespace FishMMO.Shared.Biomes
 		/// </remarks>
 		public static double MeanSurfaceKelvin(SolarSystemProfile system, WorldBody body)
 		{
+			// A giant's scenes are in its habitable layer, warmed from within, not at the cloud tops its star lights (CloudWorld).
+			if (CloudWorld.Is(body))
+			{
+				return CloudWorld.LayerKelvin;
+			}
 			AtmosphereKind atmosphere = body != null ? body.Atmosphere : AtmosphereKind.Standard;
 			float water = body != null ? body.Water : 0.7f;
 			return MeanSurfaceKelvin(MeanInsolation(system, body), atmosphere, water);
@@ -372,8 +377,8 @@ namespace FishMMO.Shared.Biomes
 		/// </param>
 		public static ClimateParameters For(SolarSystemProfile system, WorldBody body, float landmassHeightMetres)
 		{
-			AtmosphereKind atmosphere = body != null ? body.Atmosphere : AtmosphereKind.Standard;
-			float water = body != null ? body.Water : 0.7f;
+			AtmosphereKind atmosphere = CloudWorld.AtmosphereOf(body);
+			float water = CloudWorld.WaterOf(body);
 
 			// The orbit's mean, as the climate field takes it, so the runtime's sea level and the
 			// field's sub-solar point are the same number (the season is added on top at runtime).

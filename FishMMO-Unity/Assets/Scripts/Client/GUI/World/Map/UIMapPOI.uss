@@ -168,7 +168,10 @@
 .map-marker--waystation .map-marker__icon,
 .map-marker--mine .map-marker__icon,
 .map-marker--quarry .map-marker__icon,
-.map-marker--lighthouse .map-marker__icon {
+.map-marker--lighthouse .map-marker__icon,
+.map-marker--windmill .map-marker__icon,
+.map-marker--watermill .map-marker__icon,
+.map-marker--lumbermill .map-marker__icon {
     background-color: var(--map-poi-settlement);
     border-radius: 2px;
     border-width: 2px;

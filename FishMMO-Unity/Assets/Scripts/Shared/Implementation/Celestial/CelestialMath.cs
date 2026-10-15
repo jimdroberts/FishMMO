@@ -845,21 +845,23 @@ namespace FishMMO.Shared.Celestial
 			}
 			// Relative to the home world's AVERAGE starlight, so an eccentric home orbit still makes seasons.
 			double homeLight = MeanHomeInsolation(system);
-			double relative = Insolation(system, body, hours) / Math.Max(1e-6, homeLight);
+			// A giant's habitable layer is warmed from within (CloudWorld): it reads as the home world does, with no seasons.
+			bool layer = CloudWorld.Is(body);
+			double relative = layer ? 1.0 : Insolation(system, body, hours) / Math.Max(1e-6, homeLight);
 			double homeGreenhouse = system.HomeWorld != null ? Greenhouse(system.HomeWorld.Atmosphere) : 0.0;
-			double t = 2.2 * (Math.Pow(relative, 0.25) - 1.0) + Greenhouse(body.Atmosphere) - homeGreenhouse;
+			double t = 2.2 * (Math.Pow(relative, 0.25) - 1.0) + Greenhouse(CloudWorld.AtmosphereOf(body)) - homeGreenhouse;
 			if (latitudeDegrees.HasValue)
 			{
 				t += LatitudeTemperature(system, body, hours, latitudeDegrees.Value);
 			}
 			temperature = (float)Math.Max(-1.0, Math.Min(1.0, t));
-			if (body.Atmosphere == AtmosphereKind.None)
+			if (CloudWorld.AtmosphereOf(body) == AtmosphereKind.None)
 			{
 				humidity = -1f;
 				return;
 			}
 			double homeWater = system.HomeWorld != null ? system.HomeWorld.Water : 0.7;
-			double h = (body.Water - homeWater) * 1.2 - Math.Max(0.0, t) * 0.3;
+			double h = (CloudWorld.WaterOf(body) - homeWater) * 1.2 - Math.Max(0.0, t) * 0.3;
 			humidity = (float)Math.Max(-1.0, Math.Min(1.0, h));
 		}
 

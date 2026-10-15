@@ -162,6 +162,9 @@ namespace FishMMO.Shared.NameGeneration
 			[POIType.Quarry] = new[] { "Quarry", "Stonepit", "Cut", "Delf", "Stoneworks", "Diggings" },
 			[POIType.Lighthouse] = new[] { "Lighthouse", "Light", "Beacon", "Pharos", "Lamp", "Watchlight" },
 			[POIType.Dockyard] = new[] { "Dockyard", "Shipyard", "Slipway", "Yard", "Shipwrights' Yard", "Hithe" },
+			[POIType.Windmill] = new[] { "Mill", "Windmill", "Post Mill", "Mill Hill", "Mill Mound", "Wind Mill" },
+			[POIType.Watermill] = new[] { "Mill", "Watermill", "Mill Race", "Wheel", "Mill Weir", "Millpond" },
+			[POIType.LumberMill] = new[] { "Sawmill", "Lumber Mill", "Saw Race", "Mill", "Woodmill", "Timber Mill" },
 
 			[POIType.SmugglersCove] = new[] { "Smugglers' Cove", "Hidden Cove", "Cove", "Smugglers' Hole", "Free-traders' Landing", "Run" },
 			[POIType.PirateCove] = new[] { "Pirate Cove", "Corsair Cove", "Reavers' Bay", "Raiders' Cove", "Hideaway", "Anchorage" },
@@ -332,7 +335,7 @@ namespace FishMMO.Shared.NameGeneration
 		private static readonly POIType[] Likenesses = { POIType.Monument, POIType.Statue, POIType.Obelisk };
 		private static readonly POIType[] Homes = { POIType.AbandonedFarm, POIType.Hermitage };
 		private static readonly POIType[] Towns = { POIType.Village, POIType.Town, POIType.City, POIType.Capital, POIType.Port, POIType.StiltVillage };
-		private static readonly POIType[] Works = { POIType.Tower, POIType.Bridge, POIType.Mine, POIType.Quarry, POIType.Lighthouse, POIType.Waystation, POIType.Dockyard };
+		private static readonly POIType[] Works = { POIType.Tower, POIType.Bridge, POIType.Mine, POIType.Quarry, POIType.Lighthouse, POIType.Waystation, POIType.Dockyard, POIType.Windmill, POIType.Watermill, POIType.LumberMill };
 		private static readonly POIType[] RaceWorks = { POIType.Tower, POIType.Mine, POIType.Quarry };
 		private static readonly POIType[] Coves = { POIType.SmugglersCove, POIType.PirateCove };
 		private static readonly POIType[] Wrecks = { POIType.Wreck, POIType.SunkenShip };

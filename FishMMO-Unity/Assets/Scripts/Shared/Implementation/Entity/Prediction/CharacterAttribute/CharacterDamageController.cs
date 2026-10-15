@@ -1487,6 +1487,17 @@ namespace FishMMO.Shared
 			 * corpse it creates is only correct for something already marked dead. */
 			Character.EnableFlags(CharacterFlags.IsDead);
 
+			/* The dead are at zero health, however they died. Damage only gets here with nothing left, but a death that
+			 * was not damage (an operator's kill, a fall into a cloud world's deck) found the health still standing, and
+			 * left a corpse that was alive to everything reading the value rather than the flag: KCCPlayer handed it its
+			 * controls back, regeneration kept ticking, and Revive, which ADDS its amount on the understanding that the dead
+			 * are at zero, topped up a pool that was never emptied. After the flag, so anything the change notifies finds
+			 * the character already dead. */
+			if (ResourceInstance.CurrentValue > 0.0f)
+			{
+				ResourceInstance.SetCurrentValue(0.0f);
+			}
+
 			/* Clear combat state on death — and TELL the clients. The timer-expiry path can never
 			 * fire for this engagement once the timer is cleared here, and that path was the only
 			 * sender of InCombat=false: every client that saw this character enter combat kept its

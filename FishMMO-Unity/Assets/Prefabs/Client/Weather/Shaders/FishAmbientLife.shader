@@ -1,16 +1,20 @@
 // The land's background creatures (AmbientLifeSystem, FishMMO.Client/World/AmbientLife): birds alone and in
-// flocks, raptors, bats, rats, mice, squirrels, rabbits, lizards, shore crabs and frogs. Pass code and the
+// flocks, raptors, bats, rats, mice, squirrels, rabbits, lizards, shore crabs and frogs, beetles, and insect swarms
+// (midges, mosquitoes, flies, fireflies, bees, locusts). Pass code and the
 // vertex contract are in FishAmbientLife.hlsl. Drawn only with Graphics.DrawMeshInstanced, one runtime
 // material per kind; opaque, dithered out at the draw distance and when an animal goes to ground.
 Shader "FishMMO/Ambient Life"
 {
     Properties
     {
-        [Enum(Bird, 0, Walker, 1, Lizard, 2, Crab, 3)] _Mode("Motion", Float) = 0
+        [Enum(Bird, 0, Walker, 1, Lizard, 2, Crab, 3, Swarm, 4)] _Mode("Motion", Float) = 0
         _Amplitude("Stroke (beat radians, or stride share)", Range(0.0, 1.5)) = 0.8
         _Dihedral("Glide dihedral (radians)", Range(-0.3, 0.5)) = 0.1
         _Smoothness("Smoothness", Range(0.0, 1.0)) = 0.25
         _Shoulder("Shoulder (xyz) and neck (w)", Vector) = (0.08, 0.25, 0.08, 0.15)
+        _SwarmStyle("Swarm style (column, cloud, buzz, drift, hover, plague)", Float) = 0
+        _BugSize("Swarm insect length (m)", Float) = 0.006
+        _GlowColour("Swarm glow (rgb linear HDR, a on)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader

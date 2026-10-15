@@ -18,7 +18,7 @@ MonoBehaviour:
     Position: {x: -256, y: -35, z: -256}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Flo Monolith
-    Data: {fileID: 4709689037165062, guid: 3e356a6f98eda495790f5aa8fe8a0a42, type: 2}
+    Data: {fileID: 6193963920515406362, guid: 3e356a6f98eda495790f5aa8fe8a0a42, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Isle of Aradune
@@ -36,6 +36,10 @@ MonoBehaviour:
   - SceneName: Test Dungeon
     Data: {fileID: 23800000, guid: bccc2ce460150eb43bb0d7f0db28b05b, type: 2}
     Position: {x: -500, y: 0, z: -500}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+  - SceneName: The Kel Peaks
+    Data: {fileID: -5560486835847382933, guid: a864bca73b6a3d75886e7eedb96911bf, type: 2}
+    Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Treacherous Bri Lookout
     Data: {fileID: -8821399485936347316, guid: aa6142b61c7fc2b0cb7c0a5d865e93bc, type: 2}

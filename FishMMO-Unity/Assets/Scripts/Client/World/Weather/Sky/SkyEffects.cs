@@ -823,6 +823,12 @@ namespace FishMMO.Client
 		/// </summary>
 		private static float GroundUnder(Vector2 at, out bool overSea)
 		{
+			// Over a cloud world, an island's ground or the deck's top: what falls past an island falls into the deck.
+			if (TerrainSet.TryCloudWorldGround(at.x, at.y, out float island))
+			{
+				overSea = false;
+				return island;
+			}
 			float ground = float.MinValue;
 			foreach (Terrain terrain in Terrain.activeTerrains)
 			{

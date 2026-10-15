@@ -225,6 +225,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			IPlayerCharacter.OnTeleport += IPlayerCharacter_OnTeleport;
 			ICharacterDamageController.OnKilled += CharacterDamageController_OnKilled;
 			ICharacterDamageController.OnResurrectOffered += CharacterDamageController_OnResurrectOffered;
+			ICharacterDamageController.OnResurrected += CharacterDamageController_OnResurrectedFromTheDeck;
 
 			// Periodic callbacks
 			saveRate = Mathf.Max(1f, saveRate);
@@ -234,6 +235,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				periodicSystem.RegisterPeriodicCallback(saveRate, OnPeriodicSave);
 				periodicSystem.RegisterPeriodicCallback(outOfBoundsCheckRate, OnPeriodicOutOfBoundsCheck);
+				periodicSystem.RegisterPeriodicCallback(Mathf.Max(0.05f, cloudWorldFallCheckRate), OnPeriodicCloudWorldFallCheck);
 				periodicSystem.RegisterPeriodicCallback(30f, OnPeriodicRespawnResurrectSweep);
 				periodicSystem.RegisterPeriodicCallback(sessionLeaseRefreshRate, OnPeriodicSessionLeaseRefresh);
 				periodicSystem.RegisterPeriodicCallback(PendingFlushRetryIntervalSeconds, OnPeriodicPendingFlushRetry);
@@ -296,6 +298,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			IPlayerCharacter.OnTeleport -= IPlayerCharacter_OnTeleport;
 			ICharacterDamageController.OnKilled -= CharacterDamageController_OnKilled;
 			ICharacterDamageController.OnResurrectOffered -= CharacterDamageController_OnResurrectOffered;
+			ICharacterDamageController.OnResurrected -= CharacterDamageController_OnResurrectedFromTheDeck;
 
 			// Static registry: a command left behind outlives this ScriptableObject and would
 			// run against a destroyed instance. See ChatHelper.RemoveCommands.
@@ -308,6 +311,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicSave);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicOutOfBoundsCheck);
+				periodicSystem.UnregisterPeriodicCallback(OnPeriodicCloudWorldFallCheck);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicRespawnResurrectSweep);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicSessionLeaseRefresh);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicPendingFlushRetry);

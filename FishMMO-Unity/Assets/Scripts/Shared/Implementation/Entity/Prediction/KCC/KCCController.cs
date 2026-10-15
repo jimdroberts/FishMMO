@@ -1009,6 +1009,19 @@ namespace FishMMO.Shared
 			{
 				case KCCCharacterState.Default:
 					{
+						/* A body nobody is steering, below a cloud world's death altitude, hangs where the deck took it. The
+						 * server kills whoever reaches that depth (CharacterSystem.CloudWorld), and a corpse left to gravity
+						 * would fall for as long as its player sat at the death dialog: at terminal velocity it leaves the
+						 * range network positions are written in within minutes. Both peers reach this on the same tick: the
+						 * suppression comes from replicated health and state (KCCPlayer.OnReplicate), the height from the
+						 * motor, and the deck from the scene, which the client keeps too. */
+						if (controlsSuppressedThisTick &&
+							SceneCloudWorld.IsLost(Motor.gameObject.scene, Motor.TransientPosition))
+						{
+							currentVelocity = Vector3.zero;
+							break;
+						}
+
 						AbilityType abilityType = AbilityType.None;
 
 						float moveInputMagnitude = moveInputVector.sqrMagnitude;

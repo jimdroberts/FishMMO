@@ -31,6 +31,8 @@ namespace FishMMO.Client
 		[Min(10f)] public float BatDistance = 70f;
 		[Tooltip("Rats, mice, squirrels, rabbits, lizards, crabs and frogs: tiny past this.")]
 		[Min(5f)] public float CritterDistance = 60f;
+		[Tooltip("Insect swarms (gnats, midges, mosquitoes, flies, fireflies, bees, locusts): specks past this, and a firefly's light not much further.")]
+		[Min(5f)] public float SwarmDistance = 70f;
 		[Tooltip("The last share of each draw distance over which animals dissolve.")]
 		[Range(0.05f, 0.5f)] public float FadeBand = 0.2f;
 		[Tooltip("Metres from the camera an animal casts a shadow to (kinds that cast shadows).")]
@@ -42,10 +44,13 @@ namespace FishMMO.Client
 		[Min(0f)] public float RaptorDensity = 1f;
 		[Min(0f)] public float BatDensity = 1f;
 		[Min(0f)] public float CritterDensity = 1f;
+		[Min(0f)] public float SwarmDensity = 1f;
 
 		[Header("Size")]
 		[Tooltip("Every animal drawn this many times its real size, so small birds and critters read at play distances (2026-10-10: 30-50% bigger). 1 is life size.")]
 		[Range(1f, 3f)] public float SizeScale = 1.4f;
+		[Tooltip("Each insect of a swarm drawn this many times its real size (a midge is 5 mm, a speck at any distance), so a swarm reads as a haze rather than a few stray pixels.")]
+		[Range(1f, 6f)] public float SwarmSpeckScale = 3f;
 
 		[Header("Debug")]
 		[Tooltip("Draw every animal magenta and DebugScale times its size, and log to the console every few seconds how many are drawn, how many are in the camera's view, how many above or behind it, and how far the visible ones are. For finding animals, not for play.")]
@@ -61,6 +66,7 @@ namespace FishMMO.Client
 				case AmbientFamily.SoloBirds: return SoloBirdDistance;
 				case AmbientFamily.Raptors: return RaptorDistance;
 				case AmbientFamily.Bats: return BatDistance;
+				case AmbientFamily.Swarms: return SwarmDistance;
 				default: return CritterDistance;
 			}
 		}
@@ -74,6 +80,7 @@ namespace FishMMO.Client
 				case AmbientFamily.SoloBirds: return SoloBirdDensity;
 				case AmbientFamily.Raptors: return RaptorDensity;
 				case AmbientFamily.Bats: return BatDensity;
+				case AmbientFamily.Swarms: return SwarmDensity;
 				default: return CritterDensity;
 			}
 		}

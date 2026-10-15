@@ -193,7 +193,8 @@ namespace FishMMO.Shared.Weather
 			WeatherSceneMode mode = timeline != null ? timeline.SceneMode : WeatherSceneMode.None;
 			// The body this weather is for: the scene's own, or the one a test bed stands the scene on.
 			WorldBody weatherBody = timeline != null && timeline.BodyOverride != null ? timeline.BodyOverride : SceneTime.BodyOf(settings);
-			FishMMO.Shared.Celestial.AtmosphereKind atmosphere = weatherBody != null ? weatherBody.Atmosphere : FishMMO.Shared.Celestial.AtmosphereKind.Standard;
+			// A giant's scenes have its habitable layer's air, not its whole depth's (CloudWorld).
+			FishMMO.Shared.Celestial.AtmosphereKind atmosphere = FishMMO.Shared.Celestial.CloudWorld.AtmosphereOf(weatherBody);
 			bool airless = atmosphere == FishMMO.Shared.Celestial.AtmosphereKind.None;
 			if (timeline == null || mode != WeatherSceneMode.Own || airless)
 			{

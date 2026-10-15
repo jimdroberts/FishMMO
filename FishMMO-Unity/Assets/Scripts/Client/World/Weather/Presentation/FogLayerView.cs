@@ -677,6 +677,11 @@ namespace FishMMO.Client
 		/// <summary>The ground under a point, m: the highest terrain there, or sea level where there is none (as CloudTerrainMap reads it).</summary>
 		public static float GroundUnder(Vector3 at)
 		{
+			// Over a cloud world, an island's ground or the deck's top, never the heightmap under its holes.
+			if (TerrainSet.TryCloudWorldGround(at.x, at.z, out float island))
+			{
+				return island;
+			}
 			float height = 0f;
 			Terrain[] terrains = Terrain.activeTerrains;
 			for (int i = 0; i < terrains.Length; i++)

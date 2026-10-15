@@ -16,6 +16,13 @@ namespace FishMMO.Shared.Weather
 		Layered = 1,
 		/// <summary>The top: cirrus, where every drop has frozen and the fall streaks are drawn out by the jet.</summary>
 		Ice = 2,
+		/// <summary>
+		/// The sea of cloud under a cloud world's islands (<see cref="SceneCloudWorld"/>): the giant's own water
+		/// cloud, which is always there and has no floor. Not one of the air's regimes — it is not made by the
+		/// weather over the scene and does not follow it — so <see cref="CloudClimate.Bands"/> never makes it;
+		/// <see cref="CloudClimate.Deck"/> does, for the scenes that stand over one. HLSL twin: FISH_CLOUD_DECK.
+		/// </summary>
+		Deck = 3,
 	}
 
 	/// <summary>
@@ -78,6 +85,7 @@ namespace FishMMO.Shared.Weather
 				{
 					case CloudRegime.Layered: return "Middle";
 					case CloudRegime.Ice: return "High";
+					case CloudRegime.Deck: return "Deck";
 					default: return "Low";
 				}
 			}
@@ -434,6 +442,120 @@ namespace FishMMO.Shared.Weather
 				Coverage = highCover,
 				MaxCoverage = map.Valid ? Mathf.Max(map.MaxHigh, highCover) : highCover,
 				Thinnest = iceTop - iceBottom,
+			};
+		}
+
+		// ── The deck under a cloud world ─────────────────────────────────
+
+		/// <summary>
+		/// How deep the deck's billows are, m: the share of its band (its top's softness) in which the noise
+		/// decides where its cloud ends; under them it fills in solid. What shows of them is the top's relief: a
+		/// hundred-odd metres, as a stratocumulus top's cells stand proud of the sheet they rise from.
+		/// </summary>
+		public const float DeckBillowDepth = 240f;
+
+		/// <summary>
+		/// How far over the deck's mean top (<see cref="SceneCloudWorld.DeckTop"/>) its band reaches, m: where its
+		/// highest cells could end. Its cloud's visible top sits a billow's depth and more under where each
+		/// column's cell ends (the coverage cut is met near the bottom of the billows), so this is what puts that top
+		/// about the mean: estimated over the shape noise's measured spread (CloudStats.FillForThreshold's
+		/// quantiles) at <see cref="DeckCover"/>, its median within a few tens of metres of it and nine columns in
+		/// ten within about fifty either way.
+		/// </summary>
+		public const float DeckCrest = 290f;
+
+		/// <summary>
+		/// The highest any of the deck's cloud can reach, y, over a mean top at <paramref name="top"/>: what the march
+		/// takes as the top of the deck's shell — the air it may skip over in one leap — rather than its band's top
+		/// (<see cref="DeckCrest"/> over it), so a camera on a low island is not inside the deck's band, walking
+		/// every level ray through a hundred kilometres of its empty upper air.
+		/// </summary>
+		/// <remarks>
+		/// At <see cref="DeckCover"/>'s cut (0.551 of the noise) a cell's cloud ends no higher than where its profile
+		/// is that over the noise's highest value (0.759): seven tenths of the billows under the crest. Its mixing
+		/// shell's water, an eddy's reach and a ramp further out (FishCloudDensityAt's `outermost`), lowers the cut by
+		/// about 0.08 at the deck's scales, which takes it to six tenths. Half is kept, with room to spare.
+		/// </remarks>
+		public static float DeckHighest(float top) => top + DeckCrest - 0.5f * DeckBillowDepth;
+
+		/// <summary>
+		/// The deck's extinction, 1/m: a stratus deck's (0.04–0.06 /m; Hess, Koepke and Schult 1998, as for the
+		/// column). Four hundred metres of it is an optical depth of sixteen: light from above dies in it, and
+		/// what falls in is lost to sight within a hundred metres.
+		/// </summary>
+		public const float DeckExtinction = 0.04f;
+
+		/// <summary>
+		/// How much of the deck's billowed top is cloud: broken enough to stand in cells with lanes of shadow
+		/// between, and never so little that the solid deck under it shows as a flat floor.
+		/// </summary>
+		public const float DeckCover = 0.8f;
+
+		/// <summary>
+		/// How fast the deck drifts against the column, which drifts at the free wind at its base: the deck lies
+		/// below that, in the slower air of the layer, so it is carried at a little over half of it.
+		/// </summary>
+		public const float DeckWindScale = 0.6f;
+
+		/// <summary>
+		/// What the deck sends back of the light on it, as the ground does (<see cref="GroundAlbedo"/>): a thick
+		/// water cloud's albedo, 0.6–0.8. The clouds over a cloud world are lit from below by it.
+		/// </summary>
+		public const float DeckAlbedo = 0.7f;
+
+		/// <summary>The mean diameter of the deck's drops, µm: a stratus's, smaller than a heap's.</summary>
+		public const float DeckDropletDiameter = 14f;
+
+		/// <summary>
+		/// The deck's edge's critical mixing fraction (<see cref="CriticalMixingFraction"/>): the air round its
+		/// top is the layer's own, near saturation, so its billows are soft-edged.
+		/// </summary>
+		public const float DeckEdgeCritical = 0.3f;
+
+		/// <summary>
+		/// The sea of cloud under a cloud world's islands, as a band the march draws like any other: its mean
+		/// top at <paramref name="top"/>, solid down to <paramref name="depth"/> under it. Its floor is where it
+		/// stops being drawn, not where it ends: past that the light is gone.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Not the air's: the deck is the giant's own water cloud, always there whatever the weather over the
+		/// scene, so its cover, opacity and drops are fixed (a stratus deck's), and only its shape's scale
+		/// follows the world's (<see cref="Scales"/>): its cells are a third of the column's, which from a few
+		/// hundred metres over it is what a stratocumulus top looks like from a mountain.
+		/// </para>
+		/// <para>
+		/// Its band reaches <see cref="DeckCrest"/> over the mean top, where the highest cells end, and the
+		/// top's softness is the billows' share of the band: the march's FishCloudDensityAt fills it in solid
+		/// under them (FISH_CLOUD_DECK).
+		/// </para>
+		/// </remarks>
+		public static CloudBand Deck(in Scales scales, float top, float depth)
+		{
+			float deep = Mathf.Max(DeckBillowDepth, depth);
+			float bottom = top - deep;
+			float ceiling = top + DeckCrest;
+			return new CloudBand
+			{
+				Regime = CloudRegime.Deck,
+				Present = true,
+				Bottom = bottom,
+				Top = ceiling,
+				NoiseScale = Mathf.Clamp(0.35f * scales.LowTile, 2500f, 6000f),
+				DetailScale = Mathf.Clamp(scales.LowDetail, 150f, 400f),
+				DetailStrength = DeckEdgeCritical,
+				Stretch = 1f,
+				VerticalScale = 1.5f,
+				BaseSoftness = 0.02f,
+				TopSoftness = DeckBillowDepth / (ceiling - bottom),
+				Convection = 0.7f,
+				WindScale = DeckWindScale,
+				Extinction = DeckExtinction,
+				DropletDiameter = DeckDropletDiameter,
+				Asymmetry = MieAsymmetry(DeckDropletDiameter),
+				Coverage = DeckCover,
+				MaxCoverage = DeckCover,
+				Thinnest = deep,
 			};
 		}
 

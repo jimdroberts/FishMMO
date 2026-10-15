@@ -61,6 +61,33 @@ MonoBehaviour:
   Style: stone
   Layout: 3
   Pieces:
+  - Tag: =Granary
+    MinCount: 0
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: timber
+  - Tag: =Dovecote
+    MinCount: 0
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: stone
+  - Tag: =Apiary
+    MinCount: 0
+    MaxCount: 2
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: timber
   - Tag: well
     MinCount: 1
     MaxCount: 1
@@ -143,17 +170,17 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506084311138670
-  - rid: 4061506084311138671
-  - rid: 4061506084311138672
-  - rid: 4061506084311138673
-  - rid: 4061506084311138674
-  - rid: 4061506084311138675
-  - rid: 4061506084311138676
+  - rid: 4061506132295025015
+  - rid: 4061506132295025016
+  - rid: 4061506132295025017
+  - rid: 4061506132295025018
+  - rid: 4061506132295025019
+  - rid: 4061506132295025020
+  - rid: 4061506132295025021
   references:
     version: 2
     RefIds:
-    - rid: 4061506084311138670
+    - rid: 4061506132295025015
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -166,24 +193,24 @@ MonoBehaviour:
         Clearings:
         - {x: -3, y: 2, z: 4.1499996}
         - {x: 3, y: 1.5, z: 4.1499996}
-    - rid: 4061506084311138671
+    - rid: 4061506132295025016
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506084311138672
+    - rid: 4061506132295025017
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506084311138673
+    - rid: 4061506132295025018
       type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: -3, y: 4.1499996}
-    - rid: 4061506084311138674
+    - rid: 4061506132295025019
       type: {class: RespawnFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: 3, y: 4.1499996}
-    - rid: 4061506084311138675
+    - rid: 4061506132295025020
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 1
@@ -191,7 +218,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506084311138676
+    - rid: 4061506132295025021
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 4

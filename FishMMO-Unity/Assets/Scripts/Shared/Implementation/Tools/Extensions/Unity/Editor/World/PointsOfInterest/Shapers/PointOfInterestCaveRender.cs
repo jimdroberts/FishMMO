@@ -63,12 +63,14 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The escarpment: a foot at 45 m (z under 0; well over the sea at 0, so a cave has room to descend), a face rising
-		/// 60 m over 30 m, a rolling plateau behind it.
+		/// 60 m over 30 m (18 m past x −80, for the perches), a rolling plateau behind it.
 		/// </summary>
 		private static float Escarpment(float x, float z)
 		{
 			float t = Mathf.Clamp01(z / 30f);
-			float face = 45f + 60f * (t * t * (3f - 2f * t));
+			// 60 m where the caves are, falling to 18 m past x −80: a perch on a face its own height, one on a plinth.
+			float rise = Mathf.Lerp(60f, 18f, Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(-110f, -80f, x)));
+			float face = 45f + rise * (t * t * (3f - 2f * t));
 			float roll = 3f * Mathf.Sin(x * 0.05f) + 2f * Mathf.Sin(z * 0.031f) * Mathf.Clamp01(z / 40f);
 			return face + roll * Mathf.Clamp01((z + 10f) / 30f) - 0.04f * Mathf.Max(0f, -z);
 		}
@@ -162,53 +164,66 @@ namespace FishMMO.Shared.WorldDesign
 					$"{report}, {clock.ElapsedMilliseconds} ms");
 			}
 
-			// ── A slab shelter, the leaning section, an arch ──
+			// ── A small and a large perch, an arch ──
 			float sx = -300f + 70f + wanted.Length * 85f;
 			var builds = new List<(string Name, Vector3 At)>();
-			foreach ((POIType kind, int size, string name) in new[] { (POIType.Overhang, 1, "Shelter_slab"), (POIType.Overhang, 2, "Shelter_section"), (POIType.NaturalArch, 1, "Arch") })
+			var perches = new List<(string Name, OverhangShaper.Plan Plan)>();
+			bool Section(string name, string style, int variant, Vector3 position, float yaw, float scale)
+			{
+				var meshes = new Mesh[CliffSections.LevelCount];
+				for (int lod = 0; lod < meshes.Length; lod++)
+				{
+					meshes[lod] = AssetDatabase.LoadAssetAtPath<Mesh>(ProceduralArtCatalogue.MeshPath(CliffSections.MeshName(style, variant, lod)));
+					if (meshes[lod] == null)
+					{
+						log.Add($"{name}: the {style} section art is missing (run Generate Biome Art)");
+						return false;
+					}
+				}
+				var go = new GameObject($"{name} {style}");
+				go.AddComponent<MeshFilter>().sharedMesh = meshes[0];
+				go.AddComponent<MeshRenderer>().sharedMaterial = material;
+				go.transform.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
+				go.transform.localScale = Vector3.one * scale;
+				return true;
+			}
+			foreach ((POIType kind, int size, string name) in new[] { (POIType.Overhang, 0, "Perch_small"), (POIType.Overhang, 2, "Perch_large"), (POIType.NaturalArch, 1, "Arch") })
 			{
 				var foot = new Vector3(sx, 0f, -1f);
-				sx += 60f;
-				if (!OverhangShaper.PlanSite(kind, size, foot, 180f, 77, groundAt, out OverhangShaper.Plan plan, out string problem))
+				sx += kind == POIType.Overhang ? 90f : 60f;
+				if (!OverhangShaper.PlanSite(kind, size, foot, 180f, 77 + size, groundAt, out OverhangShaper.Plan plan, out string problem))
 				{
 					log.Add($"{name}: refused, {problem}");
 					continue;
 				}
-				if (plan.Build == OverhangBuild.Slab)
+				string style = OverhangShaper.StyleOf(plan.Build);
+				if (plan.Build == OverhangBuild.Perch)
 				{
-					OverhangPlacer.CarveAlcove(terrains, tiles, plan.Slab);
-					var prefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{RiverBoulders.PrefabFolder}/{OverhangPlacer.SlabPrefab(rock)}.prefab");
-					if (prefab == null)
+					OverhangShaper.CutFace(terrains, tiles, plan);
+				}
+				if (!Section(name, style, plan.Variant, plan.Position, plan.Yaw, plan.Scale))
+				{
+					continue;
+				}
+				if (plan.Build == OverhangBuild.Perch)
+				{
+					if (plan.HasPlinth)
 					{
-						log.Add($"{name}: the slab art {OverhangPlacer.SlabPrefab(rock)} is missing");
-						continue;
+						Section(name + " plinth", OverhangShaper.PlinthStyles[plan.Plinth.Style], plan.Plinth.Variant, plan.Plinth.Position, plan.Yaw, plan.Plinth.Scale);
 					}
-					OverhangPlacer.Stretch(OverhangPlacer.ArtBounds(prefab), plan.Slab.Middle, plan.Slab.Rotation, plan.Slab.Size, out Vector3 position, out Vector3 scale);
-					var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-					go.transform.SetPositionAndRotation(position, plan.Slab.Rotation);
-					go.transform.localScale = scale;
-					log.Add($"{name}: slab {plan.Slab.Size.x:0.0} x {plan.Slab.Size.y:0.0} x {plan.Slab.Size.z:0.0} m");
+					Section(name + " left", OverhangShaper.WingStyle, plan.Left.Variant, plan.Left.Position, plan.Yaw, plan.Left.Scale);
+					Section(name + " right", OverhangShaper.WingStyle, plan.Right.Variant, plan.Right.Position, plan.Yaw, plan.Right.Scale);
+					var debris = OverhangShaper.Debris(plan, 77 + size, groundAt);
+					foreach (var block in debris)
+					{
+						Section(name + " block", block.Style, block.Variant, block.At, block.Yaw, block.Scale);
+					}
+					foot = OverhangShaper.FrontCentre(plan, CliffSections.StyleOf(style, plan.Variant));
+					perches.Add((name, plan));
+					log.Add($"{name}: perch variant {plan.Variant} at scale {plan.Scale:0.00}, floor {plan.Floor:0.0} m, {(plan.HasPlinth ? $"on a {OverhangShaper.PlinthStyles[plan.Plinth.Style]} plinth x{plan.Plinth.Scale:0.00}, " : "")}{debris.Count} fallen blocks");
 				}
 				else
 				{
-					string style = OverhangShaper.StyleOf(plan.Build);
-					var meshes = new Mesh[CliffSections.LevelCount];
-					bool missing = false;
-					for (int lod = 0; lod < meshes.Length; lod++)
-					{
-						meshes[lod] = AssetDatabase.LoadAssetAtPath<Mesh>(ProceduralArtCatalogue.MeshPath(CliffSections.MeshName(style, plan.Variant, lod)));
-						missing |= meshes[lod] == null;
-					}
-					if (missing)
-					{
-						log.Add($"{name}: the {style} section art is missing (run Generate Biome Art)");
-						continue;
-					}
-					var go = new GameObject(name);
-					go.AddComponent<MeshFilter>().sharedMesh = meshes[0];
-					go.AddComponent<MeshRenderer>().sharedMaterial = material;
-					go.transform.SetPositionAndRotation(plan.Position, Quaternion.Euler(0f, plan.Yaw, 0f));
-					go.transform.localScale = Vector3.one * plan.Scale;
 					log.Add($"{name}: {style} variant {plan.Variant} at scale {plan.Scale:0.00}");
 				}
 				builds.Add((name, foot));
@@ -267,11 +282,26 @@ namespace FishMMO.Shared.WorldDesign
 					Shot(name + "_chamber", room, o + trunk[Mathf.Max(0, trunk.Count - 5)].Centre, true);
 				}
 			}
+			foreach ((string name, OverhangShaper.Plan plan) in perches)
+			{
+				foreach ((string view, Vector3 eye, Vector3 at) in OverhangShaper.PerchViews(plan, groundAt))
+				{
+					Shot($"{name}_{view}", eye, at, view == "shelter");
+				}
+			}
 			foreach ((string name, Vector3 foot) in builds)
 			{
+				if (perches.Exists(p => p.Name == name))
+				{
+					continue;
+				}
 				float y = groundAt(foot.x, foot.z);
 				Shot(name, new Vector3(foot.x + 14f, y + 6f, foot.z - 26f), new Vector3(foot.x, y + 4f, foot.z + 3f), false);
 				Shot(name + "_under", new Vector3(foot.x - 4f, y + 1.7f, foot.z - 9f), new Vector3(foot.x + 2f, y + 3.5f, foot.z + 4f), false);
+				// From the side, far enough to see the whole face and the wings; and from the plateau, out along the tongue.
+				Shot(name + "_side", new Vector3(foot.x + 55f, y + 12f, foot.z - 30f), new Vector3(foot.x, y + 10f, foot.z + 2f), false);
+				float topY = groundAt(foot.x, foot.z + 22f);
+				Shot(name + "_top", new Vector3(foot.x + 3f, topY + 1.7f, foot.z + 16f), new Vector3(foot.x - 2f, topY - 4f, foot.z - 10f), false);
 			}
 			log.Add($"{written} of {shots} shots written to {output}");
 			File.WriteAllLines(Path.Combine(output, "index.txt"), log);

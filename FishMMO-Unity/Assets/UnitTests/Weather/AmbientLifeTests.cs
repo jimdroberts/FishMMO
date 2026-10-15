@@ -217,7 +217,7 @@ namespace FishMMO.UnitTests.Weather
 					Assert.That(kind.Flies, Is.False, $"{kind.Name} flies in air too thin to beat a wing in");
 				}
 			}
-			Assert.That(earthly, Is.EqualTo(24));
+			Assert.That(earthly, Is.EqualTo(44));
 			Assert.That(thin, Is.GreaterThanOrEqualTo(3));
 			Assert.That(frozen, Is.GreaterThanOrEqualTo(3));
 		}
@@ -278,15 +278,113 @@ namespace FishMMO.UnitTests.Weather
 		}
 
 		[Test]
-		public void NightCritters_AreAboutByDayTooButFewer()
+		public void NightCritters_KeepToTheNight()
 		{
-			// 2026-10-10: a third of the night's rats and mice are out by day, so a noon walk is not empty of them.
+			// 2026-10-14: the night's animals are the night's. A third of the rats and mice used to be out by day.
 			AmbientConditions mildNoon = At(0.5, true, 18f);
-			AmbientConditions night = At(0.0, false, 15f);
+			AmbientConditions warmNight = At(0.0, false, 20f);
 			float day = AmbientGating.Activity(Kind("Rat"), mildNoon);
-			Assert.That(day, Is.EqualTo(AmbientGating.DaytimeNocturnalShare).Within(0.05f), "about a third by day");
-			Assert.That(AmbientGating.Activity(Kind("Rat"), night), Is.GreaterThan(day * 2f), "the night is still theirs");
-			Assert.That(AmbientGating.Activity(Kind("Mouse"), mildNoon), Is.GreaterThan(0.25f));
+			Assert.That(day, Is.EqualTo(AmbientGating.DaytimeNocturnalShare).Within(0.02f), "the odd rat by day");
+			Assert.That(AmbientGating.Activity(Kind("Rat"), warmNight), Is.GreaterThan(0.8f), "the night is theirs");
+			foreach (string name in new[] { "Mouse", "Toad", "Gecko", "Ground beetles" })
+			{
+				Assert.That(AmbientGating.Activity(Kind(name), mildNoon), Is.LessThan(0.08f), $"{name} by day");
+				Assert.That(AmbientGating.Activity(Kind(name), warmNight), Is.GreaterThan(0.5f), $"{name} at night");
+			}
+			// Nothing of the night's that flies is about by day at all.
+			foreach (AmbientCreatureKind kind in Kinds)
+			{
+				if (kind.Activity == AmbientActivity.Nocturnal && kind.Flies)
+				{
+					Assert.That(AmbientGating.Activity(kind, mildNoon), Is.Zero, kind.Name);
+				}
+			}
+		}
+
+		[Test]
+		public void HalfLightAnimals_LieUpThroughTheDay()
+		{
+			AmbientCreatureKind rabbit = Kind("Rabbit");
+			float noon = AmbientGating.Activity(rabbit, At(0.5, true, 16f));
+			float dusk = AmbientGating.Activity(rabbit, At(0.76, true, 14f));
+			float night = AmbientGating.Activity(rabbit, At(0.0, false, 12f));
+			Assert.That(noon, Is.LessThan(0.1f), "few out at noon");
+			Assert.That(dusk, Is.GreaterThan(0.6f), "out at dusk");
+			Assert.That(night, Is.InRange(0.25f, 0.6f), "some through the night");
+		}
+
+		// ── Swarms ────────────────────────────────────────────────────
+
+		[Test]
+		public void Swarms_KeepToTheirOwnHours()
+		{
+			AmbientConditions sunnyNoon = At(0.5, true, 24f);
+			AmbientConditions warmDusk = At(0.79, false, 21f);
+			AmbientConditions warmNight = At(0.0, false, 20f);
+			Assert.That(AmbientGating.Activity(Kind("Firefly swarm"), warmNight), Is.GreaterThan(0.8f), "fireflies on a warm summer night");
+			Assert.That(AmbientGating.Activity(Kind("Firefly swarm"), sunnyNoon), Is.Zero, "and never by day");
+			Assert.That(AmbientGating.Activity(Kind("Firefly swarm"), At(0.0, false, 20f, summer: -0.9f)), Is.Zero, "nor in winter");
+			Assert.That(AmbientGating.Activity(Kind("Mosquito cloud"), warmDusk), Is.GreaterThan(0.6f), "mosquitoes at dusk");
+			Assert.That(AmbientGating.Activity(Kind("Mosquito cloud"), sunnyNoon), Is.Zero);
+			Assert.That(AmbientGating.Activity(Kind("Midge column"), At(0.76, true, 16f)), Is.GreaterThan(AmbientGating.Activity(Kind("Midge column"), At(0.5, true, 16f))),
+				"midges thickest in the half-light");
+			Assert.That(AmbientGating.Activity(Kind("Fly swarm"), sunnyNoon), Is.GreaterThan(0.6f), "flies in the heat of the day");
+			Assert.That(AmbientGating.Activity(Kind("Fly swarm"), warmNight), Is.Zero);
+			Assert.That(AmbientGating.Activity(Kind("Bees"), sunnyNoon), Is.GreaterThan(0.6f), "bees on a sunny day");
+			Assert.That(AmbientGating.Activity(Kind("Bees"), At(0.5, true, 24f, cloud: 1f)), Is.GreaterThan(0.3f), "under cloud too when it is warm");
+			Assert.That(AmbientGating.Activity(Kind("Bees"), At(0.5, true, 24f, rain: 0.2f)), Is.Zero, "but not in the rain");
+			Assert.That(AmbientGating.Activity(Kind("Locust swarm"), At(0.5, true, 15f)), Is.Zero, "locusts only in the heat");
+		}
+
+		[Test]
+		public void Swarms_AnOrdinaryDayHasItsBugs()
+		{
+			// 2026-10-14: a mild drizzly noon (12 °C, rain 0.11) had no insects about at all.
+			AmbientConditions mildDrizzle = At(0.5, true, 12f, rain: 0.11f);
+			Assert.That(AmbientGating.Activity(Kind("Gnat cloud"), mildDrizzle), Is.GreaterThan(0.5f), "gnats in the drizzle");
+			Assert.That(AmbientGating.Activity(Kind("Fly swarm"), mildDrizzle), Is.GreaterThan(0.2f), "and flies");
+			Assert.That(AmbientGating.Activity(Kind("Midge column"), At(0.77, true, 12f, rain: 0.11f)), Is.GreaterThan(0.5f), "midges at a damp dusk");
+			Assert.That(AmbientGating.Activity(Kind("Gnat cloud"), At(0.5, true, 12f, rain: 0.5f)), Is.Zero, "a downpour clears them");
+		}
+
+		[Test]
+		public void Swarms_BreakUpInABreeze()
+		{
+			AmbientCreatureKind midges = Kind("Midge column");
+			AmbientConditions still = At(0.76, true, 16f);
+			AmbientConditions breeze = still;
+			breeze.Wind = 0.3f; // 9 m/s
+			Assert.That(AmbientGating.Activity(midges, still), Is.GreaterThan(0.5f));
+			Assert.That(AmbientGating.Activity(midges, breeze), Is.Zero, "a midge column does not hold in a breeze");
+			Assert.That(AmbientGating.Activity(Kind("Rooks"), breeze), Is.GreaterThan(0f), "that a crow flies through");
+		}
+
+		[Test]
+		public void Swarms_AreOneCloudOverTheirGroundOrWater()
+		{
+			var world = new FakeWorld();
+			foreach (string name in new[] { "Midge column", "Mosquito cloud", "Fly swarm", "Firefly swarm", "Bees", "Locust swarm" })
+			{
+				AmbientCreatureKind kind = Kind(name);
+				int index = System.Array.IndexOf(Kinds, kind);
+				foreach (float x in new[] { 40f, -300f })
+				{
+					var group = new AmbientGroup { Kind = index, Seed = 777u, Home = new Vector3(x, 0f, 20f), Radius = kind.Roam.x, Altitude = kind.Altitude.x,
+						Episode = 40.0, Count = kind.GroupSize.x, Length = kind.Length.x };
+					var into = new List<AmbientInstance>();
+					AmbientLifeMotion.Frame frame = FrameAt(123456.7, world, new AmbientMemberState[0], new AmbientThreats());
+					AmbientLifeMotion.Evaluate(group, kind, ref frame, into);
+					Assert.That(into.Count, Is.EqualTo(1), $"{name}: one instance is the whole cloud");
+					AmbientInstance cloud = into[0];
+					Vector3 at = cloud.Matrix.GetColumn(3);
+					world.TryGround(at.x, at.z, out float ground);
+					float surface = Mathf.Max(ground, world.WaterAt(at.x, at.z, out _));
+					Assert.That(at.y - surface, Is.InRange(kind.Altitude.x - 0.2f, kind.Altitude.y + 0.2f), $"{name} hangs at its height over {(x < 0f ? "the lake" : "the plain")}");
+					Assert.That(cloud.Matrix.lossyScale.x, Is.InRange(kind.Spread * 0.79f, kind.Spread * 1.21f), $"{name} scaled to its cloud");
+					Assert.That(cloud.Anim.x, Is.InRange(0f, (float)AmbientLifeMotion.SwarmClockWrap), $"{name}: the shader's clock is wound back");
+					Assert.That(cloud.Anim.y, Is.InRange(0.01f, 1f), $"{name}: a share of its insects drawn");
+				}
+			}
 		}
 
 		[Test]
@@ -694,7 +792,13 @@ namespace FishMMO.UnitTests.Weather
 						wings |= id == 1 || id == 2;
 						legs |= id >= 1 && id <= 8;
 					}
-					if (AmbientCreatureMeshes.ModeOf(kind.Shape) == 0f)
+					if (kind.Shape == AmbientShape.Swarm)
+					{
+						// A swarm is a quad an insect, every one of the kind's largest swarm.
+						Assert.That(mesh.vertexCount, Is.EqualTo(4 * kind.GroupSize.y), $"{kind.Name}: four corners an insect");
+						Assert.That(mesh.triangles.Length / 3, Is.EqualTo(2 * kind.GroupSize.y), $"{kind.Name}: two triangles an insect");
+					}
+					else if (AmbientCreatureMeshes.ModeOf(kind.Shape) == 0f)
 					{
 						Assert.That(wings, Is.True, $"{kind.Name} has wings");
 					}

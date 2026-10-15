@@ -63,6 +63,9 @@ namespace FishMMO.Client
 		private static readonly int ShoulderId = Shader.PropertyToID("_Shoulder");
 		private static readonly int MeanLevelId = Shader.PropertyToID("_FishWaterMeanLevel");
 		private static readonly int SeasonId = Shader.PropertyToID("_FishSeason");
+		private static readonly int SwarmStyleId = Shader.PropertyToID("_SwarmStyle");
+		private static readonly int BugSizeId = Shader.PropertyToID("_BugSize");
+		private static readonly int GlowColourId = Shader.PropertyToID("_GlowColour");
 
 		/// <summary>The project's shader, for the editor when the profile does not reference it yet.</summary>
 		public const string ShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishAmbientLife.shader";
@@ -493,6 +496,14 @@ namespace FishMMO.Client
 				m.SetFloat(DihedralId, DihedralOf(kind.Shape));
 				m.SetFloat(SmoothnessId, kind.Smoothness);
 				m.SetVector(ShoulderId, new Vector4(shoulder.x, shoulder.y, shoulder.z, shoulder.z + 0.07f));
+				if (kind.Shape == AmbientShape.Swarm)
+				{
+					// A swarm's insects are drawn at their own size (no SizeScale: that widens the cloud), and a firefly's light.
+					Color glow = kind.Accent.linear * Mathf.Max(0f, kind.Glow);
+					m.SetFloat(SwarmStyleId, (float)kind.SwarmStyle);
+					m.SetFloat(BugSizeId, (kind.Length.x + kind.Length.y) * 0.5f * Mathf.Max(1f, Settings.SwarmSpeckScale));
+					m.SetVector(GlowColourId, new Vector4(glow.r, glow.g, glow.b, kind.Glow > 0f ? 1f : 0f));
+				}
 				m.renderQueue = (int)RenderQueue.Geometry;
 				materials[k] = m;
 			}
@@ -562,7 +573,7 @@ namespace FishMMO.Client
 		/// <summary>Decides the cells within reach not decided yet, a few a frame; true once all are.</summary>
 		private static bool Place(AmbientLifeSettings settings, Vector3 eye, float cellMetres)
 		{
-			float near = Mathf.Max(settings.SoloBirdDistance + 60f, Mathf.Max(settings.BatDistance + 70f, settings.CritterDistance + 12f));
+			float near = Mathf.Max(Mathf.Max(settings.SoloBirdDistance + 60f, settings.SwarmDistance + 20f), Mathf.Max(settings.BatDistance + 70f, settings.CritterDistance + 12f));
 			float far = Mathf.Max(settings.FlockDistance + 180f, settings.RaptorDistance + 400f);
 			int nearRange = Mathf.CeilToInt(near / cellMetres), farRange = Mathf.CeilToInt(far / cellMetres);
 			int cx = Mathf.FloorToInt(eye.x / cellMetres), cz = Mathf.FloorToInt(eye.z / cellMetres);
@@ -887,6 +898,12 @@ namespace FishMMO.Client
 			private Terrain last;
 			private Rect extent;
 			private WorldSceneSettings settings;
+			/// <summary>
+			/// A cloud world's island tiles' holes (open sky between them), read once a tile; empty anywhere else, where a
+			/// hole is a cave's mouth or a wall's bed and the ground's height there is still where life is placed.
+			/// </summary>
+			private readonly Dictionary<TerrainData, TerrainHoleMask> skyHoles = new Dictionary<TerrainData, TerrainHoleMask>();
+			private bool cloudWorld;
 			private bool seaPresent;
 			private float seaMean;
 
@@ -918,6 +935,12 @@ namespace FishMMO.Client
 				if (last == null || !terrains.Contains(last))
 				{
 					last = null;
+				}
+				bool cloud = SceneCloudWorld.Any;
+				if (cloud != cloudWorld)
+				{
+					cloudWorld = cloud;
+					skyHoles.Clear();
 				}
 				extent = default;
 				bool first = true;
@@ -955,7 +978,7 @@ namespace FishMMO.Client
 			{
 				if (Contains(last, x, z))
 				{
-					y = last.SampleHeight(new Vector3(x, 0f, z)) + last.transform.position.y;
+					y = OverSky(last, x, z) ? float.PositiveInfinity : last.SampleHeight(new Vector3(x, 0f, z)) + last.transform.position.y;
 					return true;
 				}
 				foreach (Terrain t in terrains)
@@ -963,7 +986,7 @@ namespace FishMMO.Client
 					if (t != last && Contains(t, x, z))
 					{
 						last = t;
-						y = t.SampleHeight(new Vector3(x, 0f, z)) + t.transform.position.y;
+						y = OverSky(t, x, z) ? float.PositiveInfinity : t.SampleHeight(new Vector3(x, 0f, z)) + t.transform.position.y;
 						return true;
 					}
 				}
@@ -971,6 +994,31 @@ namespace FishMMO.Client
 				// load with it, so this is never "not loaded yet".
 				y = float.PositiveInfinity;
 				return true;
+			}
+
+			/// <summary>
+			/// True over a cloud world's open sky: no ground there, as past the scene's edge, so nothing that walks is put
+			/// in the air between the islands (where the heightmap holds its islands' rim heights).
+			/// </summary>
+			private bool OverSky(Terrain t, float x, float z)
+			{
+				if (!cloudWorld)
+				{
+					return false;
+				}
+				TerrainData data = t.terrainData;
+				if (!skyHoles.TryGetValue(data, out TerrainHoleMask mask))
+				{
+					mask = TerrainHoleMask.Read(data);
+					skyHoles[data] = mask;
+				}
+				if (mask == null)
+				{
+					return false;
+				}
+				Vector3 origin = t.transform.position;
+				Vector3 size = data.size;
+				return mask.HoleAt((x - origin.x) / size.x, (z - origin.z) / size.z);
 			}
 
 			private static bool Contains(Terrain t, float x, float z)

@@ -302,6 +302,9 @@ namespace FishMMO.Shared
 			Add(POIType.Quarry, Se, K | P, 2);
 			Add(POIType.Lighthouse, Se, K | P, 2);
 			Add(POIType.Dockyard, Se, K | P, 2);
+			Add(POIType.Windmill, Se, K | P, 2);
+			Add(POIType.Watermill, Se, K | P, 2);
+			Add(POIType.LumberMill, Se, K | P, 2, "Lumber Mill");
 
 			Add(POIType.Wreck, Co, K, 2, "Shipwreck");
 			Add(POIType.SmugglersCove, Co, K | H, 2, "Smugglers' Cove");

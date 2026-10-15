@@ -323,7 +323,8 @@ namespace FishMMO.Shared.WorldDesign
 			"fire", "storage", "banner", "bedding", "palisade", "gate", "standing-stone", "altar", "shrine", "statue",
 			"column", "grave", "crypt", "bones", "fence", "house", "tower", "keep", "stilt", "well", "lighthouse",
 			"market", "dock", "bridge", "rubble", "monument", "military", "water", "underwater",
-			"church", "temple", "tavern", "smithy", "stable", "notice", "farm", "clutter", "town", "light", "door", "furniture", "bed", "table", "chair", "chest", "shelf", "hearth", "bar", "pew", "lectern", "sarcophagus", "stall", "step", "portcullis", "wallstair", "mine", "torch", "boat", "ship", "wreck", "shipyard", "gorge", "arch", "rope", "climb", "lantern", "cave",
+			"church", "temple", "tavern", "smithy", "stable", "notice", "farm", "clutter", "town", "light", "door", "furniture", "bed", "table", "chair", "chest", "shelf", "hearth", "bar", "pew", "lectern", "sarcophagus", "stall", "step", "portcullis", "wallstair", "mine", "torch", "boat", "ship", "wreck", "shipyard", "gorge", "arch", "rope", "climb", "lantern", "cave", "airship", "sky", "skydock",
+			"mill", "windmill", "watermill", "sawmill", "lumber", "granary", "dovecote", "apiary", "kiln", "tannery",
 		};
 
 		private static List<StructurePiece> all;
@@ -349,6 +350,10 @@ namespace FishMMO.Shared.WorldDesign
 					AddShips(list);
 					AddBridges(list);
 					AddRuins(list);
+					// Last, so adding them changed no earlier piece's place in the table.
+					AddAirships(list);
+					// The mills and rural works (2026-10-14), after everything else for the same reason.
+					AddMills(list);
 					all = list;
 				}
 				return all;

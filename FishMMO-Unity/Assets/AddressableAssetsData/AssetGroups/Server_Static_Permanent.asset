@@ -204,6 +204,13 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a864bca73b6a3d75886e7eedb96911bf
+    m_Address: Assets/Scenes/WorldScene/Peliareth/The Kel Peaks Terrain/The Kel Peaks
+      NavMesh.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: aa6142b61c7fc2b0cb7c0a5d865e93bc
     m_Address: Assets/Scenes/WorldScene/Arthis/Treacherous Bri Lookout Terrain/Treacherous
       Bri Lookout NavMesh.asset
@@ -249,6 +256,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cfab38130929316f08ac6e1f44fa64bd
     m_Address: Assets/Prefabs/Server/KickRequestSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d77f87c6d6863143d983935646c231ef
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/The Kel Peaks.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent

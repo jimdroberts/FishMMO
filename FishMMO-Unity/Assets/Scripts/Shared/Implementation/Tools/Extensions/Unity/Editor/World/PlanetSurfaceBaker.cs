@@ -347,11 +347,79 @@ namespace FishMMO.Shared.WorldDesign
 					pixels[i] = Relief(colour, land.Slopes[i], body);
 				}
 			}
+			Veil(pixels, height, body, system, seed);
+			Recolour(pixels, body, system);
 
 			texture.SetPixels32(pixels);
 			texture.Apply(false, false);
 			return Write(texture, body);
 		}
+
+		/// <summary>
+		/// What a thick air shows from space instead of the ground under it (BodyColours): its cloud deck, sulphur-yellow,
+		/// tholin-orange or white, in soft banks with the ground faint through the thinnest of them. A world with any other
+		/// air keeps its ground, as it shows it.
+		/// </summary>
+		private static void Veil(Color32[] pixels, int height, WorldBody body, SolarSystemProfile system, uint seed)
+		{
+			if (body.Atmosphere != AtmosphereKind.Thick)
+			{
+				return;
+			}
+			BodyColours.Look look = BodyColours.Of(system, body);
+			Color cloud = look.Globe;
+			for (int y = 0; y < height; y++)
+			{
+				double latitude = 90.0 - (y + 0.5) * 180.0 / height;
+				int row = y * Width;
+				for (int x = 0; x < Width; x++)
+				{
+					double longitude = (x + 0.5) * 360.0 / Width - 180.0;
+					Vector3 direction = PlanetSurface.Direction(latitude, longitude);
+					// Banks drawn out along the latitudes by the winds, as a thick air's are.
+					float bank = PlanetSurface.FieldNoiseAt(seed ^ 0x7E1A11u, new Vector3(direction.x * 1.2f, direction.y * 6f, direction.z * 1.2f), 4);
+					float cover = Mathf.Clamp01(look.Veil + (bank - 0.5f) * 0.25f);
+					Color32 ground = pixels[row + x];
+					Color shade = cloud * Mathf.Lerp(0.88f, 1.06f, bank);
+					Color mixed = Color.Lerp(new Color(ground.r / 255f, ground.g / 255f, ground.b / 255f), shade, cover);
+					pixels[row + x] = new Color32((byte)(Mathf.Clamp01(mixed.r) * 255f), (byte)(Mathf.Clamp01(mixed.g) * 255f), (byte)(Mathf.Clamp01(mixed.b) * 255f), 255);
+				}
+			}
+		}
+
+		/// <summary>How far a bare or thin-aired body's globe is drawn toward the colour its ground has (BodyColours).</summary>
+		private const float GroundRecolour = 0.75f;
+
+		/// <summary>
+		/// A body with no air or a thin one shows its ground as it is (BodyColours): ice beyond the frost line, sulphur on a
+		/// tide-heated moon, tholins on a frozen dwarf, rust under a warmer thin air. The biomes' shading here knows rock only,
+		/// so the globe is drawn toward that colour, its craters and relief kept as light and shade. Worlds with an ordinary
+		/// air keep their biomes' colours, and a thick one its cloud (<see cref="Veil"/>).
+		/// </summary>
+		private static void Recolour(Color32[] pixels, WorldBody body, SolarSystemProfile system)
+		{
+			if (body.Atmosphere != AtmosphereKind.None && body.Atmosphere != AtmosphereKind.Thin)
+			{
+				return;
+			}
+			Color ground = BodyColours.Of(system, body).Globe;
+			double sum = 0.0;
+			for (int i = 0; i < pixels.Length; i++)
+			{
+				sum += Luma(pixels[i]);
+			}
+			float mean = (float)Mathf.Max(1e-3f, (float)(sum / Mathf.Max(1, pixels.Length)));
+			for (int i = 0; i < pixels.Length; i++)
+			{
+				Color32 p = pixels[i];
+				float shade = Luma(p) / mean;
+				var target = new Color(ground.r * shade, ground.g * shade, ground.b * shade);
+				Color mixed = Color.Lerp(new Color(p.r / 255f, p.g / 255f, p.b / 255f), target, GroundRecolour);
+				pixels[i] = new Color32((byte)(Mathf.Clamp01(mixed.r) * 255f), (byte)(Mathf.Clamp01(mixed.g) * 255f), (byte)(Mathf.Clamp01(mixed.b) * 255f), 255);
+			}
+		}
+
+		private static float Luma(Color32 c) => (0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b) / 255f;
 
 		/// <summary>Writes a finished image to disk, imports it and registers it. Destroys the texture.</summary>
 		private static Texture2D Write(Texture2D texture, WorldBody body)
@@ -462,9 +530,16 @@ namespace FishMMO.Shared.WorldDesign
 			 * and a gas giant whose belts and zones differ by a few percent reads as a plain ball.
 			 * What makes Jupiter legible is the contrast BETWEEN bands, so the bands keep their
 			 * own values and the tint is a light glaze on top. */
-			Color warm = Color.Lerp(new Color(0.94f, 0.86f, 0.70f), body.Tint, 0.22f);
-			Color cool = Color.Lerp(new Color(0.55f, 0.47f, 0.40f), body.Tint, 0.30f);
-			Color deep = Color.Lerp(new Color(0.26f, 0.22f, 0.22f), body.Tint, 0.34f);
+			/* The bands' colours and how strongly they stand apart are the giant's own (BodyColours): by its cloud tops'
+			 * temperature, methane-blue and nearly featureless, ochre and red-brown in strong belts, cream water cloud,
+			 * cloudless azure, or the dark of an alkali giant. They used to be one beige set glazed a quarter of the way
+			 * toward the tint, so a methane giant came out cream. */
+			BodyColours.Look look = BodyColours.Of(SolarSystemProfile.Resolve(body), body);
+			Color warm = look.Zone;
+			Color cool = look.Belt;
+			Color deep = look.Deep;
+			// Jupiter's belts at full contrast (banding 0.55); Uranus's barely there.
+			float contrast = Mathf.Lerp(0.15f, 1f, Mathf.Clamp01(look.Banding / 0.55f));
 
 			for (int y = 0; y < height; y++)
 			{
@@ -496,7 +571,7 @@ namespace FishMMO.Shared.WorldDesign
 					float shear = (PlanetSurface.FieldNoiseAt(seed ^ 0x53EA71u,
 						new Vector3(direction.x * 0.8f, direction.y * 14f, direction.z * 0.8f), 5) - 0.5f) * 0.42f;
 
-					float band = Mathf.Clamp01(bands + shear);
+					float band = Mathf.Clamp01(0.5f + (bands + shear - 0.5f) * contrast);
 					Color colour = band < 0.42f
 						? Color.Lerp(deep, cool, Smooth(0f, 0.42f, band))
 						: Color.Lerp(cool, warm, Smooth(0.42f, 1f, band));
@@ -509,8 +584,7 @@ namespace FishMMO.Shared.WorldDesign
 						new Vector3(direction.x * 1.9f, direction.y * 7f, direction.z * 1.9f), 3);
 					if (storm > 0.66f)
 					{
-						Color eye = Color.Lerp(new Color(0.96f, 0.88f, 0.76f), new Color(0.82f, 0.40f, 0.30f), 0.45f);
-						colour = Color.Lerp(colour, eye, Smooth(0.66f, 0.84f, storm) * 0.9f);
+						colour = Color.Lerp(colour, look.Storm, Smooth(0.66f, 0.84f, storm) * Mathf.Lerp(0.4f, 0.9f, contrast));
 					}
 
 					// Polar hoods are darker and less banded: the jets break down near the axis.

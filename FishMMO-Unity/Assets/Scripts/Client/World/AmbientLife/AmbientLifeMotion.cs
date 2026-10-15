@@ -387,6 +387,9 @@ namespace FishMMO.Client
 				case AmbientBehaviour.Transit:
 					Transit(group, kind, ref frame, into);
 					break;
+				case AmbientBehaviour.Swarm:
+					Swarm(group, kind, ref frame, into);
+					break;
 				default:
 					for (int m = 0; m < group.Count; m++)
 					{
@@ -1237,6 +1240,62 @@ namespace FishMMO.Client
 				float phase = SeaLifePlacement.Cycle(t, 1.0 / Math.Max(0.1, kind.StrokeHz * Mathf.Lerp(0.85f, 1.15f, Unit(Mix(own ^ 0x79u)))), Unit(Mix(own ^ 0x7Au)));
 				Emit(into, kind, own, now, Flight(v, bank), g.Length * Mathf.Lerp(0.9f, 1.1f, Unit(Mix(own ^ 0x7Bu))), new Vector4(phase, flap, 0f, 0f), f.Visible);
 			}
+		}
+
+		// ── Swarms ────────────────────────────────────────────────────
+
+		/// <summary>
+		/// The swarm shader's clock is the world's wound back every this many seconds: a float holds a fraction of a second
+		/// over that span, where world seconds run to the millions. The shader snaps every rate to whole turns of the span,
+		/// so the wind-back is seamless.
+		/// </summary>
+		public const double SwarmClockWrap = 512.0;
+
+		/// <summary>
+		/// A swarm: one instance, at the cloud's middle, scaled to its radius (FishAmbientLife.hlsl flies its insects
+		/// about that). It keeps station over its spot, wandering slowly about it; a locust cloud streams across its range
+		/// and round again, turned the way it goes. Over water it hangs over the water.
+		/// </summary>
+		private static void Swarm(in AmbientGroup g, AmbientCreatureKind kind, ref Frame f, List<AmbientInstance> into)
+		{
+			if (f.Visible <= 0.002f)
+			{
+				return;
+			}
+			double t = f.Seconds;
+			uint own = MemberSeed(g.Seed, 0);
+			float r = Mathf.Max(0.5f, g.Radius);
+			double w = Math.Max(0.01, kind.Speed) / r;
+			float p1 = Unit(Mix(own ^ 0x91u)) * 6.28f, p2 = Unit(Mix(own ^ 0x92u)) * 6.28f, p3 = Unit(Mix(own ^ 0x93u)) * 6.28f;
+			Vector3 home = g.Home;
+			Vector3 Spot(double at)
+			{
+				float x = r * (0.7f * Mathf.Sin(Angle(at, w, p1)) + 0.3f * Mathf.Sin(Angle(at, w * 2.3, p2)));
+				float z = r * (0.7f * Mathf.Cos(Angle(at, w * 0.9, p2)) + 0.3f * Mathf.Cos(Angle(at, w * 2.1, p3)));
+				return new Vector3(home.x + x, 0f, home.z + z);
+			}
+			Vector3 now = Spot(t);
+			if (!Surface(f.World, now.x, now.z, out float surface, out _))
+			{
+				return;
+			}
+			now.y = surface + g.Altitude + 0.15f * Mathf.Sin(Angle(t, 0.4, p3));
+			float yaw;
+			if (kind.SwarmStyle == AmbientSwarmStyle.Plague)
+			{
+				Vector3 ahead = Spot(t + 1.0) - now;
+				yaw = Mathf.Atan2(ahead.x, ahead.z) * Mathf.Rad2Deg;
+			}
+			else
+			{
+				yaw = Unit(Mix(own ^ 0x94u)) * 360f + Angle(t, 0.05, p1) * Mathf.Rad2Deg;
+			}
+			float radius = kind.Spread * Mathf.Lerp(0.8f, 1.2f, Unit(Mix(own ^ 0x95u)));
+			// How many of the mesh's insects this swarm has, and how many of those are out (the activity's edge).
+			float share = Mathf.Clamp01((float)g.Count / Mathf.Max(1, kind.GroupSize.y)) * Mathf.Clamp01(f.Visible);
+			double clock = t - Math.Floor(t / SwarmClockWrap) * SwarmClockWrap;
+			Emit(into, kind, own, now, Quaternion.Euler(0f, yaw, 0f), radius,
+				new Vector4((float)clock, share, 0f, Unit(Mix(own ^ 0x96u))), 1f);
 		}
 
 		// ── Ground animals ────────────────────────────────────────────

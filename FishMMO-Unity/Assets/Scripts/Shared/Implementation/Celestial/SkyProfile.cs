@@ -173,7 +173,10 @@ namespace FishMMO.Shared.Celestial
 				// The air's own sky. A painted one cannot stand in for no air at all: with nothing to
 				// scatter the light there is nothing to paint, and the sky is black whatever the
 				// profile says.
-				sample = AtmosphereModel.Evaluate(air, body != null ? body.Haze : 1f, body != null ? body.HazeColor : Color.white, sunAltitude);
+				// A giant's scenes are in its habitable layer, under the rest of its atmosphere: the sky is the giant's colour.
+				sample = CloudWorld.Is(body)
+					? AtmosphereModel.EvaluateVeiled(CloudWorld.VeilOf(body), body.Haze, sunAltitude)
+					: AtmosphereModel.Evaluate(air, body != null ? body.Haze : 1f, body != null ? body.HazeColor : Color.white, sunAltitude);
 			}
 			sample.Zenith *= Exposure;
 			sample.Horizon *= Exposure;

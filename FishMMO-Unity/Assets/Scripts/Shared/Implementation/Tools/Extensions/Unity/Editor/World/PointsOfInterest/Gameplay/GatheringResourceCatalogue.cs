@@ -247,6 +247,7 @@ namespace FishMMO.Shared.WorldDesign
 					return new[] { GatheringFamily.Herb, GatheringFamily.Fungus };
 				case POIType.AncientTree:
 				case POIType.LumberCamp:
+				case POIType.LumberMill:
 					return new[] { GatheringFamily.Wood };
 				case POIType.Cave:
 				case POIType.Grotto:

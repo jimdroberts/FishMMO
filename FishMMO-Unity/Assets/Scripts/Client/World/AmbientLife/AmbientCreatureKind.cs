@@ -49,6 +49,31 @@ namespace FishMMO.Client
 		/// where the air is dense and cold enough to swim in.
 		/// </summary>
 		Ray,
+		/// <summary>
+		/// A swarm: a whole cloud of insects drawn as one, every one of them a speck flown by the shader about the swarm's
+		/// middle (<see cref="AmbientCreatureKind.SwarmStyle"/> says how).
+		/// </summary>
+		Swarm,
+	}
+
+	/// <summary>How a swarm's insects fly about its middle (FishAmbientLife.hlsl's swarm mode, <c>_SwarmStyle</c>).</summary>
+	public enum AmbientSwarmStyle
+	{
+		/// <summary>
+		/// Midges dancing in a column over a marker (a bush, a post, a stretch of water): bobbing up and down a hand's
+		/// breadth at a time, the column swaying as a whole.
+		/// </summary>
+		Column = 0,
+		/// <summary>Mosquitoes and gnats: a loose cloud, each one jinking on its own.</summary>
+		Cloud = 1,
+		/// <summary>Flies: tight fast loops round a spot near the ground, now and then a dart out and back.</summary>
+		Buzz = 2,
+		/// <summary>Fireflies: spread wide and low, drifting slowly, each flashing on its own rhythm.</summary>
+		Drift = 3,
+		/// <summary>Bees and hoverflies over flowers: hanging still, then darting to the next bloom.</summary>
+		Hover = 4,
+		/// <summary>Locusts: a wide low cloud all streaming one way with the wind, churning as it goes.</summary>
+		Plague = 5,
 	}
 
 	/// <summary>
@@ -88,6 +113,11 @@ namespace FishMMO.Client
 		/// and then — a skein of geese high in its V, a pair of pigeons, a few small birds bounding over the treetops.
 		/// </summary>
 		Transit,
+		/// <summary>
+		/// An insect swarm keeping station over its spot (a marker, a pool, a patch of flowers), drifting a little, drawn
+		/// as one cloud (<see cref="AmbientShape.Swarm"/>).
+		/// </summary>
+		Swarm,
 	}
 
 	/// <summary>Which of the settings' families a kind belongs to: each has its own draw distance and density.</summary>
@@ -98,6 +128,8 @@ namespace FishMMO.Client
 		Raptors,
 		Bats,
 		Critters,
+		/// <summary>Insect swarms: a cloud seen from close by, gone a short way off.</summary>
+		Swarms,
 	}
 
 	/// <summary>When in the day a kind is about.</summary>
@@ -246,6 +278,15 @@ namespace FishMMO.Client
 		public float Smoothness = 0.25f;
 		/// <summary>Casts shadows within the settings' shadow distance.</summary>
 		public bool CastShadows = true;
+
+		// ── Swarms ──
+		/// <summary>How a swarm's insects fly (<see cref="AmbientShape.Swarm"/> only).</summary>
+		public AmbientSwarmStyle SwarmStyle = AmbientSwarmStyle.Cloud;
+		/// <summary>
+		/// A swarm's own light at the height of a flash (fireflies' cold green-gold), times <see cref="Accent"/>; 0 for
+		/// insects that only show by the light they catch.
+		/// </summary>
+		public float Glow;
 	}
 
 	/// <summary>The kinds the world starts with.</summary>
@@ -263,7 +304,8 @@ namespace FishMMO.Client
 		public static float Celsius(float degrees) => degrees / 33.1f;
 
 		/// <summary>
-		/// Thirty-one kinds: twenty-four of the home world's, three of thin air and four of frozen air. Numbers are grounded in the animals': flight initiation distances from field studies
+		/// Fifty-two kinds: forty-four of the home world's (seven of them insect swarms), three of thin air and five of
+		/// frozen air. Numbers are grounded in the animals': flight initiation distances from field studies
 		/// (small passerines 4-8 m, corvids 15-25 m, gulls 10-20 m, ducks 10-20 m, rabbits ~10 m), wing beats from
 		/// high-speed footage (finches 15-20 Hz, crows 3-4 Hz, gulls 3 Hz, bats 8-12 Hz), and densities thinned to
 		/// what a player notices rather than what a census would count.
@@ -591,6 +633,273 @@ namespace FishMMO.Client
 					Palette = new[] { Hex(0xffffff), Hex(0xb0a070), Hex(0x90b0a0) },
 				},
 
+				// ── More of the home world's ground and air ──
+				new AmbientCreatureKind
+				{
+					// Brown and mountain hares: rangier than a rabbit, alone on open ground, crouched in a form by day and out
+					// grazing in the half-light; bolts far and fast.
+					Name = "Hare", Shape = AmbientShape.Rabbit, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.5f, 0.62f), GroupSize = new Vector2Int(1, 2), GroupsPerKm2 = 60f, Spread = 8f, Roam = new Vector2(5f, 12f),
+					Speed = 1.6f, StrokeHz = 2.2f, Episode = new Vector2(8f, 22f),
+					Habitats = OpenCountry | AmbientHabitat.Tundra | AmbientHabitat.Mountain | AmbientHabitat.Desert,
+					Prefers = AmbientHabitat.Grassland | AmbientHabitat.Farmland | AmbientHabitat.Tundra, PreferWeight = 2.5f, Climate = new Vector2(Celsius(-30f), 1f),
+					Activity = AmbientActivity.Crepuscular, ColdLimit = Celsius(-35f), RainLimit = 0.45f,
+					FlushMetres = 14f, FleeSpeed = 12f,
+					Back = Hex(0x8a7050), Belly = Hex(0xd8ccb8), Accent = Hex(0x2a2018), Smoothness = 0.15f,
+					// A brown hare's tawny, a mountain hare's blue-grey.
+					Palette = new[] { Hex(0xffffff), Hex(0xd8d4cc), Hex(0xf0e0c8) },
+				},
+				new AmbientCreatureKind
+				{
+					// Chipmunks: small ground squirrels of the woodland floor, darting between logs and stones by day, gone
+					// below ground for the winter.
+					Name = "Chipmunk", Shape = AmbientShape.Squirrel, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.12f, 0.15f), GroupSize = new Vector2Int(1, 2), GroupsPerKm2 = 260f, Spread = 3f, Roam = new Vector2(2f, 5f),
+					Speed = 1.8f, StrokeHz = 5f, Episode = new Vector2(5f, 12f),
+					Habitats = AmbientHabitat.Forest | AmbientHabitat.Woodland | AmbientHabitat.Scrub | AmbientHabitat.Mountain,
+					Prefers = AmbientHabitat.Woodland, PreferWeight = 2f, Climate = new Vector2(Celsius(-10f), Celsius(28f)),
+					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(2f), RainLimit = 0.3f, Hibernates = true,
+					FlushMetres = 5f, FleeSpeed = 4f,
+					Back = Hex(0x9a6a3a), Belly = Hex(0xe0c8a0), Accent = Hex(0x3a2414), Smoothness = 0.2f,
+				},
+				new AmbientCreatureKind
+				{
+					// Field voles: in short bursts round the clock, never far from their runs through the grass.
+					Name = "Vole", Shape = AmbientShape.Mouse, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.09f, 0.12f), GroupSize = new Vector2Int(1, 4), GroupsPerKm2 = 600f, Spread = 2f, Roam = new Vector2(1f, 3f),
+					Speed = 0.9f, StrokeHz = 8f, Episode = new Vector2(4f, 10f),
+					Habitats = AmbientHabitat.Grassland | AmbientHabitat.Farmland | AmbientHabitat.Wetland | AmbientHabitat.Tundra | AmbientHabitat.Woodland,
+					Prefers = AmbientHabitat.Grassland | AmbientHabitat.Wetland, PreferWeight = 2f, Climate = new Vector2(Celsius(-25f), Celsius(28f)),
+					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(-25f), RainLimit = 0.5f,
+					FlushMetres = 3f, FleeSpeed = 2f,
+					Back = Hex(0x5a4a38), Belly = Hex(0x9a8c78), Accent = Hex(0x3a2e24), Smoothness = 0.25f,
+				},
+				new AmbientCreatureKind
+				{
+					// Toads: warty and slow, walking rather than leaping, out on mild damp nights far from any water.
+					Name = "Toad", Shape = AmbientShape.Frog, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.08f, 0.12f), GroupSize = new Vector2Int(1, 2), GroupsPerKm2 = 400f, Spread = 5f, Roam = new Vector2(2f, 5f),
+					Speed = 0.4f, StrokeHz = 1.2f, Episode = new Vector2(8f, 20f),
+					Habitats = AmbientHabitat.Woodland | AmbientHabitat.Forest | AmbientHabitat.Farmland | AmbientHabitat.Grassland | AmbientHabitat.Settlement
+						| AmbientHabitat.Ruins | AmbientHabitat.Scrub,
+					Prefers = AmbientHabitat.Woodland | AmbientHabitat.Farmland, PreferWeight = 2f, Climate = new Vector2(Celsius(2f), 1f),
+					Activity = AmbientActivity.Nocturnal, ColdLimit = Celsius(6f), RainLimit = 0f, RainLover = true, Hibernates = true,
+					FlushMetres = 2f, FleeSpeed = 0.8f,
+					Back = Hex(0x6a5034), Belly = Hex(0xb8a080), Accent = Hex(0x3a2a1a), Smoothness = 0.3f,
+					Palette = new[] { Hex(0xffffff), Hex(0xb09070), Hex(0x8a8a60) },
+				},
+				new AmbientCreatureKind
+				{
+					// House geckos: pale, on warm walls and ruined stone after dark, hunting the moths that come to them.
+					Name = "Gecko", Shape = AmbientShape.Lizard, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.1f, 0.16f), GroupSize = new Vector2Int(1, 2), GroupsPerKm2 = 500f, Spread = 3f, Roam = new Vector2(1f, 4f),
+					Speed = 0.9f, StrokeHz = 8f, Episode = new Vector2(5f, 14f),
+					Habitats = AmbientHabitat.Settlement | AmbientHabitat.Ruins | AmbientHabitat.Desert | AmbientHabitat.Scrub | AmbientHabitat.Jungle | AmbientHabitat.Coast,
+					Prefers = AmbientHabitat.Settlement | AmbientHabitat.Ruins, PreferWeight = 3f, Climate = new Vector2(Celsius(18f), 1f),
+					Activity = AmbientActivity.Nocturnal, ColdLimit = Celsius(16f), RainLimit = 0.3f, Hibernates = true,
+					FlushMetres = 3f, FleeSpeed = 3f,
+					Back = Hex(0xc0b090), Belly = Hex(0xe8e0c8), Accent = Hex(0x8a7a5a), Smoothness = 0.4f,
+					Palette = new[] { Hex(0xffffff), Hex(0xd0d8b0), Hex(0xd8c0a0) },
+				},
+				new AmbientCreatureKind
+				{
+					// Ground beetles: glossy black hunters running over the leaf litter at night, a violet or green sheen in the light.
+					Name = "Ground beetles", Shape = AmbientShape.Beetle, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.02f, 0.035f), GroupSize = new Vector2Int(1, 4), GroupsPerKm2 = 900f, Spread = 3f, Roam = new Vector2(1f, 3f),
+					Speed = 0.25f, StrokeHz = 9f, Episode = new Vector2(5f, 12f),
+					Habitats = Wooded | AmbientHabitat.Grassland | AmbientHabitat.Farmland | AmbientHabitat.Settlement | AmbientHabitat.Ruins | AmbientHabitat.Wetland,
+					Prefers = AmbientHabitat.Forest | AmbientHabitat.Woodland, PreferWeight = 2f, Climate = new Vector2(Celsius(-2f), 1f),
+					Activity = AmbientActivity.Nocturnal, ColdLimit = Celsius(5f), RainLimit = 0f, Hibernates = true,
+					FlushMetres = 1f, FleeSpeed = 0.4f,
+					Back = Hex(0x14141c), Belly = Hex(0x1c1c24), Accent = Hex(0x0c0c10), Smoothness = 0.85f,
+					Palette = new[] { Hex(0xffffff), Hex(0x90a0d0), Hex(0x90c0a0) },
+				},
+				new AmbientCreatureKind
+				{
+					// Dung and scarab beetles: trundling over hot open ground in the sun.
+					Name = "Dung beetles", Shape = AmbientShape.Beetle, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.02f, 0.032f), GroupSize = new Vector2Int(1, 3), GroupsPerKm2 = 500f, Spread = 4f, Roam = new Vector2(1f, 4f),
+					Speed = 0.2f, StrokeHz = 7f, Episode = new Vector2(6f, 14f),
+					Habitats = AmbientHabitat.Grassland | AmbientHabitat.Farmland | AmbientHabitat.Scrub | AmbientHabitat.Desert,
+					Prefers = AmbientHabitat.Grassland | AmbientHabitat.Scrub, PreferWeight = 2f, Climate = new Vector2(Celsius(12f), 1f),
+					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(14f), HeatLover = true, RainLimit = 0.2f, Hibernates = true,
+					FlushMetres = 1f, FleeSpeed = 0.3f,
+					Back = Hex(0x1a1610), Belly = Hex(0x2a2418), Accent = Hex(0x0e0c08), Smoothness = 0.7f,
+					Palette = new[] { Hex(0xffffff), Hex(0x8ab070), Hex(0xb09060) },
+				},
+				new AmbientCreatureKind
+				{
+					// Grasshoppers and crickets: in the warm grass by day, springing away from a foot.
+					Name = "Grasshoppers", Shape = AmbientShape.Beetle, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.03f, 0.05f), GroupSize = new Vector2Int(2, 6), GroupsPerKm2 = 1200f, Spread = 4f, Roam = new Vector2(1f, 4f),
+					Speed = 0.5f, StrokeHz = 6f, Episode = new Vector2(4f, 10f),
+					Habitats = AmbientHabitat.Grassland | AmbientHabitat.Farmland | AmbientHabitat.Scrub | AmbientHabitat.Mountain,
+					Prefers = AmbientHabitat.Grassland, PreferWeight = 2.5f, Climate = new Vector2(Celsius(10f), 1f),
+					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(15f), HeatLover = true, RainLimit = 0.15f, Hibernates = true,
+					FlushMetres = 1.5f, FleeSpeed = 1.5f,
+					Back = Hex(0x6a8a3a), Belly = Hex(0x9ab060), Accent = Hex(0x3a4a20), Smoothness = 0.3f,
+					Palette = new[] { Hex(0xffffff), Hex(0xc0b070), Hex(0xa0c070) },
+				},
+				new AmbientCreatureKind
+				{
+					// Night moths: pale wings fluttering low over the grass and round the walls of a house after dark.
+					Name = "Moths", Shape = AmbientShape.Butterfly, Behaviour = AmbientBehaviour.Hawk, Family = AmbientFamily.Bats,
+					Length = new Vector2(0.025f, 0.04f), GroupSize = new Vector2Int(1, 4), GroupsPerKm2 = 500f, Spread = 6f, Roam = new Vector2(4f, 10f),
+					Speed = 1.3f, StrokeHz = 12f, Altitude = new Vector2(0.5f, 3f),
+					Habitats = OpenCountry | Wooded | AmbientHabitat.Settlement | AmbientHabitat.Wetland | AmbientHabitat.Ruins,
+					Prefers = AmbientHabitat.Woodland | AmbientHabitat.Settlement, PreferWeight = 2f, Climate = new Vector2(Celsius(4f), 1f),
+					Activity = AmbientActivity.Nocturnal, ColdLimit = Celsius(7f), RainLimit = 0.15f, Hibernates = true,
+					FlushMetres = 0f,
+					Back = Hex(0xc8bca0), Belly = Hex(0xb0a488), Accent = Hex(0x5a4e3a), Smoothness = 0.05f, CastShadows = false,
+					Palette = new[] { Hex(0xffffff), Hex(0xd8d0c0), Hex(0xa89880), Hex(0xe8e0d0) },
+				},
+				new AmbientCreatureKind
+				{
+					// Swallows and martins hawking insects over meadows and water: low, fast, swerving, all summer long.
+					Name = "Swallows", Shape = AmbientShape.Songbird, Behaviour = AmbientBehaviour.Hawk, Family = AmbientFamily.Bats,
+					Length = new Vector2(0.16f, 0.19f), GroupSize = new Vector2Int(2, 6), GroupsPerKm2 = 40f, Spread = 15f, Roam = new Vector2(15f, 35f),
+					Speed = 9f, StrokeHz = 9f, Altitude = new Vector2(1.5f, 14f),
+					Habitats = AmbientHabitat.Farmland | AmbientHabitat.Grassland | AmbientHabitat.Wetland | AmbientHabitat.FreshWater | AmbientHabitat.Settlement | AmbientHabitat.Coast,
+					Prefers = AmbientHabitat.Farmland | AmbientHabitat.Wetland | AmbientHabitat.FreshWater, PreferWeight = 2.5f, Climate = new Vector2(Celsius(8f), 1f),
+					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(10f), RainLimit = 0.35f, Migrates = true,
+					FlushMetres = 0f,
+					Back = Hex(0x1a2440), Belly = Hex(0xe8e0d0), Accent = Hex(0x8a3a20), Smoothness = 0.5f, CastShadows = false,
+				},
+				new AmbientCreatureKind
+				{
+					// Hummingbirds: a hum of wings at a flower, gone in a blink, back again.
+					Name = "Hummingbirds", Shape = AmbientShape.Songbird, Behaviour = AmbientBehaviour.Hawk, Family = AmbientFamily.Bats,
+					Length = new Vector2(0.08f, 0.1f), GroupSize = new Vector2Int(1, 2), GroupsPerKm2 = 200f, Spread = 4f, Roam = new Vector2(3f, 7f),
+					Speed = 3f, StrokeHz = 50f, Altitude = new Vector2(0.6f, 3f),
+					Habitats = AmbientHabitat.Jungle | AmbientHabitat.Woodland | AmbientHabitat.Scrub | AmbientHabitat.Settlement | AmbientHabitat.Mountain,
+					Prefers = AmbientHabitat.Jungle, PreferWeight = 3f, Climate = new Vector2(Celsius(16f), 1f),
+					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(12f), RainLimit = 0.3f, Migrates = true,
+					FlushMetres = 0f,
+					Back = Hex(0x2a7a50), Belly = Hex(0xc8d8c0), Accent = Hex(0x1a1a1a), Smoothness = 0.75f, CastShadows = false,
+					// A ruby throat, a violet crown, a gold.
+					Palette = new[] { Hex(0xffffff), Hex(0xd06080), Hex(0x60a0e0), Hex(0xe0c050) },
+				},
+				new AmbientCreatureKind
+				{
+					// Parrots: loud bright flocks crossing the jungle canopy morning and evening.
+					Name = "Parrots", Shape = AmbientShape.Songbird, Behaviour = AmbientBehaviour.Flock, Family = AmbientFamily.Flocks,
+					Length = new Vector2(0.3f, 0.42f), GroupSize = new Vector2Int(4, 14), GroupsPerKm2 = 10f, Spread = 6f, Roam = new Vector2(50f, 100f),
+					Speed = 11f, StrokeHz = 8f, Altitude = new Vector2(10f, 35f), Episode = new Vector2(60f, 120f),
+					Habitats = AmbientHabitat.Jungle | AmbientHabitat.Woodland | AmbientHabitat.Scrub | AmbientHabitat.Grassland,
+					Prefers = AmbientHabitat.Jungle, PreferWeight = 3f, Climate = new Vector2(Celsius(18f), 1f),
+					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(10f), RainLimit = 0.5f,
+					FlushMetres = 15f, FleeSpeed = 11f,
+					Back = Hex(0x2a9a3a), Belly = Hex(0x8ac040), Accent = Hex(0x2a2a2a), Smoothness = 0.45f,
+					// Green, a macaw's scarlet, a blue, a yellow.
+					Palette = new[] { Hex(0xffffff), Hex(0xe04040), Hex(0x4090e0), Hex(0xf0d040) },
+				},
+				new AmbientCreatureKind
+				{
+					// Terns: white and grey, black-capped, beating along the shore and dropping on fish.
+					Name = "Terns", Shape = AmbientShape.Gull, Behaviour = AmbientBehaviour.Flock, Family = AmbientFamily.Flocks,
+					Length = new Vector2(0.3f, 0.38f), GroupSize = new Vector2Int(3, 14), GroupsPerKm2 = 12f, Spread = 7f, Roam = new Vector2(50f, 110f),
+					Speed = 10f, StrokeHz = 3.6f, Altitude = new Vector2(4f, 20f), Episode = new Vector2(60f, 120f),
+					Habitats = AmbientHabitat.Coast | AmbientHabitat.Sea | AmbientHabitat.FreshWater | AmbientHabitat.Wetland,
+					Prefers = AmbientHabitat.Coast, PreferWeight = 3f, NeedsSea = true, Climate = new Vector2(Celsius(0f), 1f),
+					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(2f), RainLimit = 0.5f, Migrates = true,
+					FlushMetres = 14f, FleeSpeed = 9f,
+					Back = Hex(0xc8ccd0), Belly = Hex(0xf6f6f2), Accent = Hex(0x101012), Smoothness = 0.3f,
+				},
+
+				// ── Insect swarms: one cloud each, its insects flown by the shader (GroupSize is insects, Spread the cloud's radius) ──
+				new AmbientCreatureKind
+				{
+					// Non-biting midges dancing in a column over a marker by water or a bush, thickest at dusk and dawn, catching
+					// the low sun.
+					Name = "Midge column", Shape = AmbientShape.Swarm, Behaviour = AmbientBehaviour.Swarm, Family = AmbientFamily.Swarms, SwarmStyle = AmbientSwarmStyle.Column,
+					Length = new Vector2(0.004f, 0.006f), GroupSize = new Vector2Int(50, 110), GroupsPerKm2 = 1200f, Spread = 0.8f, Roam = new Vector2(1f, 3f),
+					Speed = 0.3f, Altitude = new Vector2(1.2f, 3.5f), Episode = new Vector2(30f, 80f),
+					Habitats = AmbientHabitat.Wetland | AmbientHabitat.FreshWater | Wooded | AmbientHabitat.Grassland | AmbientHabitat.Farmland | AmbientHabitat.Settlement
+						| AmbientHabitat.Tundra,
+					Prefers = AmbientHabitat.Wetland | AmbientHabitat.FreshWater, PreferWeight = 3f, Climate = new Vector2(Celsius(-5f), 1f),
+					Activity = AmbientActivity.Crepuscular, ColdLimit = Celsius(3f), RainLimit = 0.6f, Hibernates = true,
+					FlushMetres = 0f,
+					Back = Hex(0x3a3630), Belly = Hex(0x4a4640), Accent = Hex(0x2a2622), Smoothness = 0.2f, CastShadows = false,
+				},
+				new AmbientCreatureKind
+				{
+					// Gnats and fungus flies: small loose clouds hanging in the shade of trees and over the grass on any mild
+					// day, drizzle or not; the bugs an ordinary afternoon has.
+					Name = "Gnat cloud", Shape = AmbientShape.Swarm, Behaviour = AmbientBehaviour.Swarm, Family = AmbientFamily.Swarms, SwarmStyle = AmbientSwarmStyle.Cloud,
+					Length = new Vector2(0.003f, 0.005f), GroupSize = new Vector2Int(20, 50), GroupsPerKm2 = 1500f, Spread = 1.2f, Roam = new Vector2(1f, 4f),
+					Speed = 0.3f, Altitude = new Vector2(0.8f, 2.5f), Episode = new Vector2(30f, 70f),
+					Habitats = Wooded | AmbientHabitat.Grassland | AmbientHabitat.Farmland | AmbientHabitat.Wetland | AmbientHabitat.FreshWater | AmbientHabitat.Settlement
+						| AmbientHabitat.Scrub | AmbientHabitat.Tundra | AmbientHabitat.Mountain,
+					Prefers = Wooded | AmbientHabitat.Wetland, PreferWeight = 2f, Climate = new Vector2(Celsius(-5f), 1f),
+					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(4f), RainLimit = 0.4f, Hibernates = true,
+					FlushMetres = 0f,
+					Back = Hex(0x34302a), Belly = Hex(0x48443c), Accent = Hex(0x24201c), Smoothness = 0.2f, CastShadows = false,
+				},
+				new AmbientCreatureKind
+				{
+					// Mosquitoes: a whining cloud over marsh and still water, out from dusk into the night; the tundra's summer
+					// clouds of them.
+					Name = "Mosquito cloud", Shape = AmbientShape.Swarm, Behaviour = AmbientBehaviour.Swarm, Family = AmbientFamily.Swarms, SwarmStyle = AmbientSwarmStyle.Cloud,
+					Length = new Vector2(0.005f, 0.008f), GroupSize = new Vector2Int(25, 60), GroupsPerKm2 = 1200f, Spread = 1.6f, Roam = new Vector2(1f, 4f),
+					Speed = 0.4f, Altitude = new Vector2(0.6f, 1.8f), Episode = new Vector2(30f, 70f),
+					Habitats = AmbientHabitat.Wetland | AmbientHabitat.FreshWater | AmbientHabitat.Jungle | AmbientHabitat.Forest | AmbientHabitat.Woodland | AmbientHabitat.Tundra,
+					Prefers = AmbientHabitat.Wetland | AmbientHabitat.Jungle | AmbientHabitat.Tundra, PreferWeight = 3f, Climate = new Vector2(Celsius(-8f), 1f),
+					Activity = AmbientActivity.Dusk, ColdLimit = Celsius(8f), RainLimit = 0.35f, Hibernates = true,
+					FlushMetres = 0f,
+					Back = Hex(0x2a2622), Belly = Hex(0x3a342e), Accent = Hex(0x1a1612), Smoothness = 0.2f, CastShadows = false,
+				},
+				new AmbientCreatureKind
+				{
+					// House and blow flies buzzing round a spot by a farmyard, a midden or a carcass in the heat of the day.
+					Name = "Fly swarm", Shape = AmbientShape.Swarm, Behaviour = AmbientBehaviour.Swarm, Family = AmbientFamily.Swarms, SwarmStyle = AmbientSwarmStyle.Buzz,
+					Length = new Vector2(0.006f, 0.009f), GroupSize = new Vector2Int(10, 26), GroupsPerKm2 = 1500f, Spread = 0.6f, Roam = new Vector2(2f, 6f),
+					Speed = 0.6f, Altitude = new Vector2(0.3f, 1.2f), Episode = new Vector2(15f, 40f),
+					Habitats = AmbientHabitat.Farmland | AmbientHabitat.Settlement | AmbientHabitat.Grassland | AmbientHabitat.Scrub | AmbientHabitat.Desert
+						| AmbientHabitat.Jungle | AmbientHabitat.Ruins | AmbientHabitat.Coast | AmbientHabitat.Wetland | AmbientHabitat.Woodland | AmbientHabitat.Forest,
+					Prefers = AmbientHabitat.Farmland | AmbientHabitat.Settlement | AmbientHabitat.Ruins, PreferWeight = 3f, Climate = new Vector2(Celsius(5f), 1f),
+					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(8f), HeatLover = true, RainLimit = 0.3f, Hibernates = true,
+					FlushMetres = 0f,
+					Back = Hex(0x1a1a1e), Belly = Hex(0x26262a), Accent = Hex(0x3a5a4a), Smoothness = 0.7f, CastShadows = false,
+				},
+				new AmbientCreatureKind
+				{
+					// Fireflies: a meadow's edge or a marsh full of slow-drifting lights on a warm summer night, each flashing on
+					// its own rhythm.
+					Name = "Firefly swarm", Shape = AmbientShape.Swarm, Behaviour = AmbientBehaviour.Swarm, Family = AmbientFamily.Swarms, SwarmStyle = AmbientSwarmStyle.Drift,
+					Length = new Vector2(0.01f, 0.014f), GroupSize = new Vector2Int(14, 36), GroupsPerKm2 = 900f, Spread = 5f, Roam = new Vector2(2f, 6f),
+					Speed = 0.15f, Altitude = new Vector2(0.4f, 1.6f), Episode = new Vector2(40f, 90f),
+					Habitats = AmbientHabitat.Wetland | AmbientHabitat.FreshWater | AmbientHabitat.Grassland | Wooded | AmbientHabitat.Farmland,
+					Prefers = AmbientHabitat.Wetland | AmbientHabitat.Woodland | AmbientHabitat.Jungle, PreferWeight = 2.5f, Climate = new Vector2(Celsius(8f), 1f),
+					Activity = AmbientActivity.Nocturnal, ColdLimit = Celsius(12f), RainLimit = 0.2f, Hibernates = true,
+					FlushMetres = 0f,
+					Back = Hex(0x2a2418), Belly = Hex(0x3a3220), Accent = Hex(0xc8ff50), Smoothness = 0.3f, CastShadows = false, Glow = 6f,
+				},
+				new AmbientCreatureKind
+				{
+					// Honeybees, bumblebees and hoverflies working a patch of flowers on a sunny day.
+					Name = "Bees", Shape = AmbientShape.Swarm, Behaviour = AmbientBehaviour.Swarm, Family = AmbientFamily.Swarms, SwarmStyle = AmbientSwarmStyle.Hover,
+					Length = new Vector2(0.012f, 0.016f), GroupSize = new Vector2Int(6, 18), GroupsPerKm2 = 1200f, Spread = 2.2f, Roam = new Vector2(3f, 8f),
+					Speed = 0.25f, Altitude = new Vector2(0.25f, 0.8f), Episode = new Vector2(20f, 50f),
+					Habitats = AmbientHabitat.Grassland | AmbientHabitat.Farmland | AmbientHabitat.Settlement | AmbientHabitat.Scrub | AmbientHabitat.Woodland
+						| AmbientHabitat.Mountain | AmbientHabitat.Jungle,
+					Prefers = AmbientHabitat.Grassland | AmbientHabitat.Farmland | AmbientHabitat.Settlement, PreferWeight = 2.5f, Climate = new Vector2(Celsius(6f), 1f),
+					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(10f), HeatLover = true, RainLimit = 0.15f, Hibernates = true,
+					FlushMetres = 0f,
+					Back = Hex(0xd0a020), Belly = Hex(0x2a2010), Accent = Hex(0x1a1408), Smoothness = 0.3f, CastShadows = false,
+				},
+				new AmbientCreatureKind
+				{
+					// A locust swarm: rare, wide and low over hot dry country, streaming downwind and churning as it goes.
+					Name = "Locust swarm", Shape = AmbientShape.Swarm, Behaviour = AmbientBehaviour.Swarm, Family = AmbientFamily.Swarms, SwarmStyle = AmbientSwarmStyle.Plague,
+					Length = new Vector2(0.035f, 0.05f), GroupSize = new Vector2Int(120, 160), GroupsPerKm2 = 6f, Spread = 18f, Roam = new Vector2(40f, 90f),
+					Speed = 2.5f, Altitude = new Vector2(1f, 5f), Episode = new Vector2(60f, 140f),
+					Habitats = AmbientHabitat.Desert | AmbientHabitat.Scrub | AmbientHabitat.Grassland | AmbientHabitat.Farmland,
+					Prefers = AmbientHabitat.Scrub | AmbientHabitat.Grassland, PreferWeight = 2f, Climate = new Vector2(Celsius(22f), 1f),
+					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(20f), HeatLover = true, RainLimit = 0.2f, Hibernates = true,
+					FlushMetres = 0f,
+					Back = Hex(0x8a7040), Belly = Hex(0xb0985a), Accent = Hex(0x4a3a20), Smoothness = 0.3f, CastShadows = false,
+				},
+
 				// ── Thin air: nothing flies, everything crawls or basks ──
 				new AmbientCreatureKind
 				{
@@ -676,6 +985,19 @@ namespace FishMMO.Client
 					FlushMetres = 0f,
 					Back = Hex(0x3a3450), Belly = Hex(0xb8b8d0), Accent = Hex(0x1a1828), Smoothness = 0.4f,
 					Palette = new[] { Hex(0xffffff), Hex(0xa8c0d8), Hex(0xc8a8d0) },
+				},
+				new AmbientCreatureKind
+				{
+					// Glimmer gnats: a faint blue haze of tiny fliers over the ice, each lit from within, at any hour.
+					Name = "Glimmer gnats", Shape = AmbientShape.Swarm, Behaviour = AmbientBehaviour.Swarm, Family = AmbientFamily.Swarms, SwarmStyle = AmbientSwarmStyle.Cloud,
+					Worlds = AmbientWorld.Cryogenic,
+					Length = new Vector2(0.006f, 0.01f), GroupSize = new Vector2Int(30, 70), GroupsPerKm2 = 1000f, Spread = 2f, Roam = new Vector2(2f, 5f),
+					Speed = 0.3f, Altitude = new Vector2(0.6f, 3f), Episode = new Vector2(30f, 80f),
+					Habitats = OtherGround | AmbientHabitat.Ice | AmbientHabitat.Coast | AmbientHabitat.Wetland, Prefers = AmbientHabitat.Alien | AmbientHabitat.Ice, PreferWeight = 2f,
+					Climate = new Vector2(-1f, 1f),
+					Activity = AmbientActivity.AnyTime, ColdLimit = NeverTooCold, RainLimit = 0.3f,
+					FlushMetres = 0f,
+					Back = Hex(0x405070), Belly = Hex(0x506080), Accent = Hex(0x80c8ff), Smoothness = 0.3f, CastShadows = false, Glow = 2.5f,
 				},
 				new AmbientCreatureKind
 				{

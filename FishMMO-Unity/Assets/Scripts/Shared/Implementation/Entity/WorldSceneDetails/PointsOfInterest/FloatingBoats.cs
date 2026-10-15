@@ -78,8 +78,15 @@ namespace FishMMO.Shared
 	/// switched off: nothing can run into a ship nobody can see.
 	/// </para>
 	/// <para>
-	/// Built by the cut: a harbour's (PointOfInterestHarbour) and the sea lanes' (PointOfInterestSeaTraffic), each on an
-	/// object the server keeps, each boat's drawn hull under a ClientOnlyObject.
+	/// <b>Airships</b> (a cloud world's, 2026-10-14: "flying ships") are the same ships on lanes through the air
+	/// (<see cref="Airborne"/>): a lane point's y is the ship's own height, climbing and descending between landing
+	/// stages, and the root's frame has the deck at y 0 instead of the waterline. At a port end such a lane holds the ship
+	/// still alongside its stage and swings it only at the end of its wait (<see cref="Lane.BerthSwing"/>). Everything
+	/// else (the pose from the tick, the carry, the solid hull) is the ships' own.
+	/// </para>
+	/// <para>
+	/// Built by the cut: a harbour's (PointOfInterestHarbour), the sea lanes' (PointOfInterestSeaTraffic) and the sky's
+	/// (PointOfInterestSkyTraffic), each on an object the server keeps, each boat's drawn hull under a ClientOnlyObject.
 	/// </para>
 	/// </remarks>
 	[DisallowMultipleComponent]
@@ -113,6 +120,13 @@ namespace FishMMO.Shared
 			/// <summary>The distance along the lane to each point, metres.</summary>
 			public float[] Along = Array.Empty<float>();
 			public bool PortAtStart, PortAtEnd;
+			/// <summary>
+			/// How long a ship takes over its swing at a port end, seconds, at the END of its wait there; it lies still at its
+			/// berth until then. Zero (a sea lane's): it swings to its cable through the whole wait, as a ship at anchor does.
+			/// An airship at a landing stage holds still alongside it so its passengers can step aboard, and turns only once it
+			/// has cast off (<see cref="SwingShare"/>).
+			/// </summary>
+			public float BerthSwing;
 			public float Length => Along.Length > 0 ? Along[Along.Length - 1] : 0f;
 		}
 
@@ -131,7 +145,10 @@ namespace FishMMO.Shared
 			/// </summary>
 			public Transform Ship;
 			public Transform Furled;
-			/// <summary>The hull collider's bounds in the root's space (waterline y 0, bow +x): where a rider can stand.</summary>
+			/// <summary>
+			/// The hull collider's bounds in the root's space (bow +x; y 0 a ship's waterline, an airship's deck): where a rider
+			/// can stand.
+			/// </summary>
 			public Bounds Deck;
 			public int Lane;
 			/// <summary>Its speed through the water, metres a second.</summary>
@@ -179,6 +196,12 @@ namespace FishMMO.Shared
 		[SerializeField] private Moored[] moored = Array.Empty<Moored>();
 		[SerializeField] private Lane[] lanes = Array.Empty<Lane>();
 		[SerializeField] private Sailing[] sailing = Array.Empty<Sailing>();
+		/// <summary>
+		/// Airships (a cloud world's sky traffic, PointOfInterestSkyTraffic): no water under them, so their lanes' heights are
+		/// their own (a lake on an island they pass over is never their level), they sway on the air rather than bob on a
+		/// swell, wear no shore mark, and a rider is aboard from the deck up (there is no waterline to be under).
+		/// </summary>
+		[SerializeField] private bool airborne;
 
 		/// <summary>The share of a leg a ship spends gathering way out of port, or losing it coming in.</summary>
 		private const float PortEase = 0.12f;
@@ -257,13 +280,17 @@ namespace FishMMO.Shared
 		[NonSerialized] private Rect[] laneAreas;
 		[NonSerialized] private Lane[] laneAreasOf;
 
-		/// <summary>Set by the cut.</summary>
-		public void Configure(Moored[] boats, Lane[] ways, Sailing[] ships)
+		/// <summary>Set by the cut. <paramref name="inAir"/> for airships (<see cref="Airborne"/>).</summary>
+		public void Configure(Moored[] boats, Lane[] ways, Sailing[] ships, bool inAir = false)
 		{
 			moored = boats ?? Array.Empty<Moored>();
 			lanes = ways ?? Array.Empty<Lane>();
 			sailing = ships ?? Array.Empty<Sailing>();
+			airborne = inAir;
 		}
+
+		/// <summary>True for airships: see the field's notes.</summary>
+		public bool Airborne => airborne;
 
 		public int MooredCount => moored.Length;
 		public int SailingCount => sailing.Length;
@@ -396,10 +423,18 @@ namespace FishMMO.Shared
 				return;
 			}
 			float surface = SurfaceAt(pose.Position, waterTick);
-			Bob(seconds, ship.Length, ship.Phase, out float rise, out float roll, out float pitch);
+			float rise, roll, pitch;
+			if (airborne)
+			{
+				Sway(seconds, ship.Length, ship.Phase, out rise, out roll, out pitch);
+			}
+			else
+			{
+				Bob(seconds, ship.Length, ship.Phase, out rise, out roll, out pitch);
+			}
 			if (pose.UnderWay)
 			{
-				roll += SailingHeel;
+				roll += airborne ? AirborneHeel : SailingHeel;
 			}
 			shownShip.SetPositionAndRotation(new Vector3(pose.Position.x, surface + rise, pose.Position.z),
 				Quaternion.Euler(0f, pose.Yaw, 0f) * Quaternion.Euler(roll, 0f, pitch));
@@ -442,7 +477,7 @@ namespace FishMMO.Shared
 				shown = lane.PortAtEnd;
 				underWay = false;
 				// Swinging round to its cable, to sail back the way it came.
-				turn = 180f * Mathf.SmoothStep(0f, 1f, (t - leg) / Mathf.Max(1f, ship.DwellEnd));
+				turn = 180f * SwingShare(t - leg, ship.DwellEnd, lane.BerthSwing);
 			}
 			else if (t < 2f * leg + ship.DwellEnd)
 			{
@@ -455,7 +490,7 @@ namespace FishMMO.Shared
 				shown = lane.PortAtStart;
 				underWay = false;
 				backward = true;
-				turn = 180f * Mathf.SmoothStep(0f, 1f, (t - 2f * leg - ship.DwellEnd) / Mathf.Max(1f, ship.DwellStart));
+				turn = 180f * SwingShare(t - 2f * leg - ship.DwellEnd, ship.DwellStart, lane.BerthSwing);
 			}
 
 			Vector3 ahead = PointAt(lane, Mathf.Min(length, along + HeadingReach)) - PointAt(lane, Mathf.Max(0f, along - HeadingReach));
@@ -464,6 +499,38 @@ namespace FishMMO.Shared
 			pose.Shown = shown;
 			pose.UnderWay = underWay;
 			return pose;
+		}
+
+		/// <summary>
+		/// How long one whole round of <paramref name="ship"/> on <paramref name="lane"/> takes, seconds, as
+		/// <see cref="CourseAt"/> sails it: out, the wait at the far end, back, the wait at the start. Zero for a lane it
+		/// cannot sail.
+		/// </summary>
+		public static double RoundSeconds(Lane lane, in Sailing ship)
+		{
+			if (lane == null || lane.Points == null || lane.Points.Length == 0 || lane.Length <= 1f || ship.Speed <= 0f)
+			{
+				return 0.0;
+			}
+			float easeStart = lane.PortAtStart ? PortEase : 0f, easeEnd = lane.PortAtEnd ? PortEase : 0f;
+			float share = 1f - 0.5f * (easeStart + easeEnd);
+			float leg = lane.Length / ship.Speed / share;
+			return 2.0 * leg + ship.DwellStart + ship.DwellEnd;
+		}
+
+		/// <summary>
+		/// How far through its 180° swing a ship waiting <paramref name="elapsed"/> seconds of a <paramref name="dwell"/> is,
+		/// 0..1. With no <paramref name="berthSwing"/> (a sea lane) it swings through the whole wait; with one it lies still
+		/// until the last <paramref name="berthSwing"/> seconds (at most the whole wait) and swings then.
+		/// </summary>
+		public static float SwingShare(float elapsed, float dwell, float berthSwing)
+		{
+			if (!(berthSwing > 0f))
+			{
+				return Mathf.SmoothStep(0f, 1f, elapsed / Mathf.Max(1f, dwell));
+			}
+			float swing = Mathf.Min(berthSwing, dwell);
+			return Mathf.SmoothStep(0f, 1f, (elapsed - (dwell - swing)) / Mathf.Max(1f, swing));
 		}
 
 		/// <summary>The shared clock's seconds at a synced tick: the one time base every peer agrees on, with no timeline to wait for.</summary>
@@ -484,6 +551,14 @@ namespace FishMMO.Shared
 		/// as its feet keep their place. Zero when not carried.
 		/// </summary>
 		public static bool TryCarry(in ShipPose before, in ShipPose now, Bounds deck, Vector3 rider, float delta, out Vector3 velocity, out float turn)
+			=> TryCarry(before, now, deck, rider, delta, RiderAboveWaterline, out velocity, out turn);
+
+		/// <summary>
+		/// <see cref="TryCarry(in ShipPose, in ShipPose, Bounds, Vector3, float, out Vector3, out float)"/> with the lowest a
+		/// rider's feet may stand in the hull's frame and still be aboard: <see cref="RiderAboveWaterline"/> on the water,
+		/// negative infinity for an airship (nothing but its own hull's bounds, as nobody swims alongside it).
+		/// </summary>
+		public static bool TryCarry(in ShipPose before, in ShipPose now, Bounds deck, Vector3 rider, float delta, float lowest, out Vector3 velocity, out float turn)
 		{
 			velocity = Vector3.zero;
 			turn = 0f;
@@ -495,7 +570,7 @@ namespace FishMMO.Shared
 			Vector3 min = deck.min, max = deck.max;
 			if (local.x < min.x - DeckMargin || local.x > max.x + DeckMargin ||
 				local.z < min.z - DeckMargin || local.z > max.z + DeckMargin ||
-				local.y < Mathf.Max(RiderAboveWaterline, min.y) || local.y > max.y + DeckHeadroom)
+				local.y < Mathf.Max(lowest, min.y) || local.y > max.y + DeckHeadroom)
 			{
 				return false;
 			}
@@ -624,7 +699,7 @@ namespace FishMMO.Shared
 				{
 					continue;
 				}
-				if (!TryCarry(before, now, ship.Deck, rider, delta, out Vector3 carry, out float turned))
+				if (!TryCarry(before, now, ship.Deck, rider, delta, airborne ? float.NegativeInfinity : RiderAboveWaterline, out Vector3 carry, out float turned))
 				{
 					continue;
 				}
@@ -872,6 +947,24 @@ namespace FishMMO.Shared
 			return r < 0.0 ? 0.0 : r >= period ? 0.0 : r;
 		}
 
+		/// <summary>The list an airship under way takes from the wind on its gasbag, degrees: less than a ship's under sail.</summary>
+		private const float AirborneHeel = 1.2f;
+
+		/// <summary>
+		/// An airship's motion on the air: a slow lift and a gentle roll, slower and smaller for a big ship. Kept to a few
+		/// centimetres at the deck's edge, as a ship's bob is: the collider a rider stands on does not move with it.
+		/// </summary>
+		private static void Sway(double now, float length, float phase, out float rise, out float roll, out float pitch)
+		{
+			float small = Mathf.Clamp01((26f - length) / 12f);
+			float period = Mathf.Lerp(13f, 9f, small);
+			float a = (float)WorldMotion.Repeat(now / period + phase, 1.0) * Mathf.PI * 2f;
+			float b = (float)WorldMotion.Repeat(now / (period * 1.61) + phase * 0.73, 1.0) * Mathf.PI * 2f;
+			rise = Mathf.Lerp(0.1f, 0.08f, small) * Mathf.Sin(a);
+			roll = Mathf.Lerp(0.7f, 1.3f, small) * Mathf.Sin(b);
+			pitch = Mathf.Lerp(0.3f, 0.6f, small) * Mathf.Sin(a + 1.3f);
+		}
+
 		/// <summary>The boat's motion on the swell: a small boat bobs quicker and rolls further than a ship.</summary>
 		private static void Bob(double now, float length, float phase, out float rise, out float roll, out float pitch)
 		{
@@ -884,9 +977,16 @@ namespace FishMMO.Shared
 			pitch = Mathf.Lerp(0.5f, 1.6f, small) * Mathf.Sin(a + 1.1f);
 		}
 
-		/// <summary>The water's surface under a boat at a tick; where nothing is registered (in the editor), the level it was cut against.</summary>
+		/// <summary>
+		/// The water's surface under a boat at a tick; where nothing is registered (in the editor), the level it was cut
+		/// against. An airship's level is always its lane's: whatever water lies under it is far below.
+		/// </summary>
 		private float SurfaceAt(Vector3 at, uint tick)
 		{
+			if (airborne)
+			{
+				return at.y;
+			}
 			WaterSample sample = WaterQuery.Sample(gameObject.scene, at.x, at.z, tick);
 			return sample.Present ? sample.Surface : at.y;
 		}
@@ -928,7 +1028,8 @@ namespace FishMMO.Shared
 				return;
 			}
 			hullsMarked = true;
-			if (!HasDrawnHull())
+			// An airship never meets the sea's edge.
+			if (airborne || !HasDrawnHull())
 			{
 				return;
 			}

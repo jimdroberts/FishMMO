@@ -517,6 +517,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// but it trusted a field that is only meaningful while that flag is set.
 				string sceneName = character.CurrentSceneName();
 
+				/* Below a cloud world's islands is the deck's business, not the boundary's: a character falling there
+				 * dies (OnPeriodicCloudWorldFallCheck), and a box drawn round the islands that ends above the death
+				 * altitude would otherwise catch the fall first and set the character down on a random respawn. */
+				if (character.GameObject != null &&
+					SceneCloudWorld.TryGet(character.GameObject.scene, out SceneCloudWorld cloudWorld) &&
+					character.Transform.position.y < cloudWorld.IslandFloor)
+				{
+					continue;
+				}
+
 				if (sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(sceneName, out WorldSceneDetails details))
 				{
 					// Check if they are within some bounds, if not we need to move them to a respawn location!
@@ -832,7 +842,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 				else
 				{
-					player.Motor.SetPositionAndRotationAndVelocity(player.BindPosition, Quaternion.identity, Vector3.zero);
+					// The bind point, unless this is a cloud world and the bind point is open air in it.
+					ResolveSameSceneRespawn(player, out Vector3 respawnPosition, out Quaternion respawnRotation);
+					player.Motor.SetPositionAndRotationAndVelocity(respawnPosition, respawnRotation, Vector3.zero);
 				}
 			}
 			finally

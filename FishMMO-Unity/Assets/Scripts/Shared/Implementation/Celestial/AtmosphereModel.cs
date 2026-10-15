@@ -254,5 +254,61 @@ namespace FishMMO.Shared.Celestial
 				StarVisibility = Mathf.Max(byNight, throughDay),
 			};
 		}
+
+		// ── A giant's habitable layer ─────────────────────────────
+
+		/// <summary>How much of its colour the giant's veil puts on the light that comes through it, 0 none to 1 all.</summary>
+		public const float VeilStrength = 0.75f;
+
+		/// <summary>How much of the sky overhead is the veil's underside, lit in its own colour, rather than the layer's own air.</summary>
+		public const float VeilCover = 0.6f;
+
+		/// <summary>The haze of the giant's own aerosols in the layer's air, against a clear day's at 1.</summary>
+		public const float VeilHaze = 3f;
+
+		/// <summary>What of the sun's strength the veil lets through.</summary>
+		public const float VeilThrough = 0.85f;
+
+		/// <summary>
+		/// The sky in a giant's habitable layer (<see cref="CloudWorld"/>), in the colour of the giant's own atmosphere:
+		/// <paramref name="veil"/>, the colour its cloud tops show from space.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Under the veil.</b> Over the layer lies the rest of the giant's atmosphere, kilometres of gas and the cloud and
+		/// haze that give it its colour. Every light that reaches the layer has come down through that, and what colours the
+		/// cloud tops from outside (methane taking the red out of a cold giant, the brown and ochre hazes of a warmer one)
+		/// colours the light that comes through in the same way. So the sun's light, the sky's, the fog's and the clouds'
+		/// are all filtered by the veil's colour, and overhead the sky is partly the veil's own underside.
+		/// </para>
+		/// <para>
+		/// <b>The layer's own air</b> is the breathable air the climate takes (<see cref="CloudWorld.LayerAtmosphere"/>),
+		/// carrying the giant's aerosols in its colour; not the giant's whole depth as one thick air, which reddened every
+		/// giant's light alike to the same sepia whatever colour the giant was.
+		/// </para>
+		/// </remarks>
+		public static SkySample EvaluateVeiled(Color veil, float haze, float sunAltitude)
+		{
+			float peak = Mathf.Max(1e-3f, Mathf.Max(veil.r, Mathf.Max(veil.g, veil.b)));
+			var tone = new Color(veil.r / peak, veil.g / peak, veil.b / peak, 1f);
+			SkySample sample = Evaluate(CloudWorld.LayerAtmosphere, VeilHaze * Mathf.Max(0.5f, haze), tone, sunAltitude);
+			Color filter = Color.Lerp(Color.white, tone, VeilStrength);
+			float overhead = Luminance(new Vector3(sample.Zenith.r, sample.Zenith.g, sample.Zenith.b));
+			sample.Zenith = Color.Lerp(sample.Zenith * filter, tone * (overhead * 1.15f), VeilCover);
+			sample.Horizon *= filter;
+			sample.Ground *= filter;
+			sample.Fog *= filter;
+			sample.AmbientSky *= filter;
+			sample.AmbientEquator *= filter;
+			sample.AmbientGround *= filter;
+			sample.SunLight *= filter;
+			sample.CloudLit *= filter;
+			sample.CloudShadow *= filter;
+			sample.SunIntensity *= VeilThrough;
+			sample.Zenith.a = sample.Horizon.a = sample.Ground.a = sample.Fog.a = 1f;
+			sample.AmbientSky.a = sample.AmbientEquator.a = sample.AmbientGround.a = 1f;
+			sample.SunLight.a = sample.CloudLit.a = sample.CloudShadow.a = 1f;
+			return sample;
+		}
 	}
 }

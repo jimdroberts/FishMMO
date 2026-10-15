@@ -114,6 +114,13 @@ namespace FishMMO.Shared.WorldDesign
 		public bool Face;
 		/// <summary>Stands where a river crosses the way between two settlements (a bridge).</summary>
 		public bool RiverCrossing;
+		/// <summary>
+		/// Stands on a river's bank, its front to the water (a watermill, a sawmill: 2026-10-14), on a steady reach well
+		/// clear of any fall, where the bank stands a little over the water.
+		/// </summary>
+		public bool RiverBank;
+		/// <summary>Prefers ground standing over its surroundings, open to the wind (a windmill).</summary>
+		public bool Exposed;
 
 		/// <summary>Within this of a settlement, metres; 0 for no such rule. The site's parent is that settlement.</summary>
 		[Header("Neighbours")]
@@ -249,6 +256,18 @@ namespace FishMMO.Shared.WorldDesign
 		public PointOfInterestKindRule NearWater(float metres)
 		{
 			NearWaterMetres = metres;
+			return this;
+		}
+
+		public PointOfInterestKindRule OnRiverBank()
+		{
+			RiverBank = true;
+			return this;
+		}
+
+		public PointOfInterestKindRule OnExposedGround()
+		{
+			Exposed = true;
 			return this;
 		}
 

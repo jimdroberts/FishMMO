@@ -86,5 +86,7 @@ namespace FishMMO.Shared
 		SmugglersCove, PirateCove, CoralReef, SunkenShip, SunkenRuins, SunkenCity,
 		BossLair, OreVein, CrystalFormation, AncientTree, HerbGrove,
 		IceGeyserField, Cryovolcano, MethaneLake, ImpactBasin, TidalRift,
+		// Mills (2026-10-14).
+		Windmill, Watermill, LumberMill,
 	}
 }

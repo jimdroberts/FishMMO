@@ -40,6 +40,8 @@ namespace FishMMO.Client
 				case AmbientShape.Crab:
 				case AmbientShape.Beetle:
 					return 3f;
+				case AmbientShape.Swarm:
+					return 4f;
 				default:
 					return 0f;
 			}
@@ -77,14 +79,22 @@ namespace FishMMO.Client
 				case AmbientShape.Beetle:
 					Beetle(b, back, belly, accent);
 					break;
+				case AmbientShape.Swarm:
+					Swarm(b, kind, back, belly);
+					break;
 				default:
 					Bird(b, Plan(kind.Shape), back, belly, accent);
 					break;
 			}
 			Mesh mesh = b.ToMesh(kind.Name);
-			// Wings beat and fold, legs swing, rabbits bound: room for all of it.
+			// Wings beat and fold, legs swing, rabbits bound: room for all of it. A swarm's insects fly out to two of its
+			// radii (its instance is scaled to one), and a midge column stands taller.
 			Bounds bounds = mesh.bounds;
 			bounds.Expand(1.2f);
+			if (kind.Shape == AmbientShape.Swarm)
+			{
+				bounds = new Bounds(Vector3.zero, Vector3.one * 4f);
+			}
 			mesh.bounds = bounds;
 			mesh.UploadMeshData(!keepReadable);
 			return mesh;
@@ -479,6 +489,29 @@ namespace FishMMO.Client
 		// ── Primitives ────────────────────────────────────────────────
 
 		/// <summary>An ellipsoid: back colour above, belly below (countershading), its part and part share on every vertex.</summary>
+		/// <summary>
+		/// A swarm's insects, as many as the kind's largest swarm: a small quad each, all at the middle, which the shader
+		/// flies out to its place and turns to the camera. TEXCOORD0 is the quad's corner (-1..1), TEXCOORD1 the insect's
+		/// index and where it falls in the swarm (0..1, so a smaller swarm draws the first share of them). Each a little its
+		/// own shade, between the kind's back and belly.
+		/// </summary>
+		private static void Swarm(Builder b, AmbientCreatureKind kind, Color back, Color belly)
+		{
+			int count = Mathf.Clamp(kind.GroupSize.y, 1, 200);
+			for (int i = 0; i < count; i++)
+			{
+				uint h = SeaLifePlacement.Mix((uint)i * 0x9E3779B9u ^ 0x5EA5u);
+				Color shade = Color.Lerp(back, belly, SeaLifePlacement.Unit(h));
+				var part = new Vector2(i, (i + 0.5f) / count);
+				// A hair apart, so the quad has a facing; the shader places it.
+				int first = b.Add(new Vector3(-0.001f, -0.001f, 0f), shade, new Vector2(-1f, -1f), part);
+				b.Add(new Vector3(0.001f, -0.001f, 0f), shade, new Vector2(1f, -1f), part);
+				b.Add(new Vector3(0.001f, 0.001f, 0f), shade, new Vector2(1f, 1f), part);
+				b.Add(new Vector3(-0.001f, 0.001f, 0f), shade, new Vector2(-1f, 1f), part);
+				b.Quad(first, first + 1, first + 2, first + 3);
+			}
+		}
+
 		private static void Ellipsoid(Builder b, Vector3 centre, Vector3 radii, int rings, int sides, Color back, Color belly, float part, float partShare)
 		{
 			int first = b.Count;

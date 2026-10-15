@@ -434,7 +434,8 @@ namespace FishMMO.Shared.Weather
 			{
 				return Earthlike;
 			}
-			AtmosphereKind kind = body.Atmosphere;
+			// A giant's habitable layer, not its cloud tops (CloudWorld).
+			AtmosphereKind kind = CloudWorld.AtmosphereOf(body);
 			float relative = AtmosphereModel.Density(kind);
 			var air = new PlanetAir
 			{
@@ -442,7 +443,7 @@ namespace FishMMO.Shared.Weather
 				Gravity = Mathf.Max(0.05f, SurfacePhysics.Gravity(body)),
 				AirRelative = relative,
 				SurfacePressure = AirPhysics.StandardPressure * Mathf.Max(0.001f, relative),
-				Water = Mathf.Clamp01(body.Water),
+				Water = Mathf.Clamp01(CloudWorld.WaterOf(body)),
 				RadiusMetres = Mathf.Max(1000f, body.SkyRadiusKm * 1000f),
 				Retrograde = body.Retrograde,
 			};
@@ -471,7 +472,7 @@ namespace FishMMO.Shared.Weather
 			// The mean over the orbit, not the moment: this is what the world is, not what it is
 			// doing. The one absolute temperature the climate field and the world's conditions read.
 			double mean = ClimateModel.MeanSurfaceKelvin(system, body);
-			double greenhouse = ClimateModel.Greenhouse(kind, body.Water);
+			double greenhouse = ClimateModel.Greenhouse(kind, CloudWorld.WaterOf(body));
 			double equilibrium = Math.Max(20.0, mean - greenhouse);
 			air.MeanSurfaceKelvin = (float)mean;
 			air.SkinKelvin = (float)(equilibrium * Math.Pow(0.5, 0.25));

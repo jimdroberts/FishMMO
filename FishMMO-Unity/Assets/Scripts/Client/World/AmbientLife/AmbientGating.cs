@@ -283,8 +283,15 @@ namespace FishMMO.Client
 		/// Each group draws a fixed rank when it is placed and is drawn while its rank is under this share, so as the
 		/// light goes the bats come out one group at a time and every player sees the same ones.
 		/// </remarks>
-		/// <summary>The share of a nocturnal ground creature's night numbers about in full daylight.</summary>
-		public const float DaytimeNocturnalShare = 0.35f;
+		/// <summary>
+		/// The share of a nocturnal ground creature's night numbers about in full daylight: the odd rat disturbed from its
+		/// nest, no more. It was a third (2026-10-10, so a noon walk was not empty of them), which put rats, mice, toads and
+		/// frogs about all day; the day now has its own animals (2026-10-14).
+		/// </summary>
+		public const float DaytimeNocturnalShare = 0.04f;
+
+		/// <summary>The share of a crepuscular kind's numbers about at noon (rabbits lie up in the day) and in the dark.</summary>
+		public const float CrepuscularNoonShare = 0.06f, CrepuscularNightShare = 0.4f;
 
 		public static float Activity(AmbientCreatureKind kind, in AmbientConditions c)
 		{
@@ -300,12 +307,13 @@ namespace FishMMO.Client
 					hour = Mathf.Lerp(0f, 1f, Mathf.InverseLerp(0.2f, 0.75f, c.Light)) * (1f + (c.Evening ? 0.1f : 0.35f) * c.Twilight * c.Light);
 					break;
 				case AmbientActivity.Nocturnal:
-					// A third of the ground's night creatures (rats, mice, frogs) are about by day too, so a noon walk is not
-					// empty of them (2026-10-10); what flies keeps to the dark.
-					hour = Mathf.Lerp(1f, kind.Flies ? 0.12f : DaytimeNocturnalShare, c.Light);
+					// The night's: the odd ground animal turned out by day, and nothing that flies (an owl sleeps in its tree,
+					// fireflies and moths keep to the dark).
+					hour = Mathf.Lerp(1f, kind.Flies ? 0f : DaytimeNocturnalShare, c.Light);
 					break;
 				case AmbientActivity.Crepuscular:
-					hour = Mathf.Lerp(0.55f, 0.35f, c.Light) + 0.65f * c.Twilight;
+					// Dawn and dusk: lying up through the day, a fair number out through the night.
+					hour = Mathf.Lerp(CrepuscularNightShare, CrepuscularNoonShare, c.Light) + 0.7f * c.Twilight;
 					break;
 				case AmbientActivity.Dusk:
 					// Out as the light goes, busiest in the first hours of dark, back before dawn.
@@ -341,7 +349,11 @@ namespace FishMMO.Client
 				wet = 1f;
 			}
 			float snow = 1f - 0.85f * Mathf.Clamp01(c.Snow * 1.5f);
-			float wind = kind.Flies ? 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(kind.Family == AmbientFamily.Bats ? 0.3f : 0.5f, kind.Family == AmbientFamily.Bats ? 0.55f : 0.85f, c.Wind)) : 1f;
+			// What flies is grounded by wind: birds in a gale, bats and big insects in a strong breeze, and a swarm by little
+			// more than a breath (a midge column breaks up past about 3 m/s).
+			float calm = kind.Family == AmbientFamily.Swarms ? 0.1f : kind.Family == AmbientFamily.Bats ? 0.3f : 0.5f;
+			float gale = kind.Family == AmbientFamily.Swarms ? 0.25f : kind.Family == AmbientFamily.Bats ? 0.55f : 0.85f;
+			float wind = kind.Flies ? 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(calm, gale, c.Wind)) : 1f;
 			float winter = Mathf.Clamp01(-c.Summer);
 			float season = 1f;
 			if (kind.Hibernates)

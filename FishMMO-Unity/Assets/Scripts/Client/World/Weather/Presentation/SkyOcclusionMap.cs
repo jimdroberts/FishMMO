@@ -190,7 +190,7 @@ namespace FishMMO.Client
 		{
 			Complete();
 			int count = resolution * resolution;
-			float floor = buildTop - CastDistance;
+			float floor = MissFloor(buildTop);
 			int differ = 0;
 			for (int i = 0; i < count; i++)
 			{
@@ -213,6 +213,18 @@ namespace FishMMO.Client
 				Debug.Log($"[SkyOcclusionMap] {count} batched rays, {differ} heights differ from the single ray's.");
 			}
 			castTaken = true;
+		}
+
+		/// <summary>
+		/// Where a ray that met nothing leaves the rain: as far as it went — or over a cloud world, down in its deck,
+		/// out of sight. A ray cast between the islands meets nothing, and the rain and its splashes stopped where it
+		/// gave up, hanging in the open air a few hundred metres under the camera.
+		/// </summary>
+		private static float MissFloor(float top)
+		{
+			float floor = top - CastDistance;
+			FishMMO.Shared.SceneCloudWorld world = FishMMO.Shared.SceneCloudWorld.First;
+			return world != null ? Mathf.Min(floor, world.DeckTop - Mathf.Max(CloudClimate.DeckBillowDepth, world.DeckDepth)) : floor;
 		}
 
 		/// <summary>Waits for the batch, if one is out.</summary>

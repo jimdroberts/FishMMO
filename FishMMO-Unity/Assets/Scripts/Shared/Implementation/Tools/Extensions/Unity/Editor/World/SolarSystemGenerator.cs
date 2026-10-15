@@ -711,7 +711,32 @@ namespace FishMMO.Shared.WorldDesign
 					});
 				}
 			});
+			/* Every world's colours from what it is (BodyColours): its air, its water and how warm its star keeps it, now
+			 * the star and the orbits are known. The colour rolls above are still spent, so every body after them is the
+			 * one the seed has always given; only their colours are no longer the dice's. */
+			ApplyColours(system);
 			return system;
+		}
+
+		/// <summary>Gives every world in a system its colours from its physics (<see cref="BodyColours"/>), and saves them.</summary>
+		public static int ApplyColours(SolarSystemProfile system)
+		{
+			if (system == null)
+			{
+				return 0;
+			}
+			int count = 0;
+			foreach (CelestialBody body in system.Bodies)
+			{
+				if (body is WorldBody world)
+				{
+					BodyColours.Apply(system, world);
+					EditorUtility.SetDirty(world);
+					count++;
+				}
+			}
+			AssetDatabase.SaveAssets();
+			return count;
 		}
 	}
 }

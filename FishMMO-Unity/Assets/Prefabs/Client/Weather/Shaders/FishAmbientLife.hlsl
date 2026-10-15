@@ -20,16 +20,26 @@
 //               walkers: 1 for a bounding gait (rabbits, squirrels, frogs), w birds: the head's turn (radians);
 //               walkers: a pose (a rabbit sitting up, a lizard's push-up, sniffing)
 //   _Tint       rgb times the mesh colour, a how much of the animal is drawn (the distance and fright dither)
+//
+// Swarms (mode 4) are the exception: one instance is a whole cloud of insects, its matrix at the cloud's middle and
+// scaled to its radius, every insect a quad flown here about it and turned to the camera (AmbientSwarm):
+//   TEXCOORD0   the quad's corner (-1..1)
+//   TEXCOORD1   x the insect's index, y where it falls in the swarm (0..1)
+//   _Anim       x the world clock wound back every 512 s (AmbientLifeMotion.SwarmClockWrap), y the share of the insects
+//               drawn, w the swarm's own seed
 
 #include "FishSurface.hlsl"
 #include "FishAmbient.hlsl"
 
 CBUFFER_START(UnityPerMaterial)
-    half _Mode;          // 0 bird or bat, 1 four-legged walker, 2 lizard, 3 crab
+    half _Mode;          // 0 bird or bat, 1 four-legged walker, 2 lizard, 3 crab, 4 swarm
     half _Amplitude;     // birds: the beat's half-angle (radians); walkers: the stride, as a share of the body's length
     half _Dihedral;      // birds: the wings' angle above level while gliding (radians)
     half _Smoothness;
     float4 _Shoulder;    // birds: the wings' shoulder (x out, y up, z along), w the neck's z (the head turns about it)
+    half _SwarmStyle;    // swarms: 0 column, 1 cloud, 2 buzz, 3 drift (fireflies), 4 hover (bees), 5 plague (AmbientSwarmStyle)
+    float _BugSize;      // swarms: one insect's length, metres
+    float4 _GlowColour;  // swarms: rgb its own light at a flash (linear, HDR), a 1 when it has one
 CBUFFER_END
 
 UNITY_INSTANCING_BUFFER_START(AmbientLifeProps)
@@ -196,12 +206,161 @@ struct AmbientLifeVertex
     float3 normalWS;
     float3 color;
     float visible;
+    float glow;          // how much of _GlowColour it gives off (swarms)
 };
+
+// ── Swarms ────────────────────────────────────────────────────────
+
+#define AMBIENT_SWARM_WRAP 512.0
+
+// 0..1 from an insect and a salt: an integer hash (a sin hash stripes).
+float AmbientSwarmHash(uint insect, uint salt)
+{
+    uint h = insect * 747796405u + salt * 2891336453u + 0x9E3779B9u;
+    h ^= h >> 16;
+    h *= 0x7FEB352Du;
+    h ^= h >> 15;
+    h *= 0x846CA68Bu;
+    h ^= h >> 16;
+    return (h >> 8) * (1.0 / 16777216.0);
+}
+
+// A sine of the wound-back clock at about <rate> radians a second, snapped to whole turns in the wrap so it runs on
+// without a jump when the clock winds back.
+float AmbientSwarmWave(float t, float rate, float phase)
+{
+    float turns = max(1.0, floor(rate * AMBIENT_SWARM_WRAP / 6.2831853 + 0.5));
+    return sin(t * turns * (6.2831853 / AMBIENT_SWARM_WRAP) + phase);
+}
+
+// How far through a cycle of about <seconds> it is, 0..1, snapped the same way.
+float AmbientSwarmCycle(float t, float seconds, float phase)
+{
+    float cycles = max(1.0, floor(AMBIENT_SWARM_WRAP / max(0.05, seconds) + 0.5));
+    return frac(t * cycles / AMBIENT_SWARM_WRAP + phase);
+}
+
+// Where one insect is about its swarm's middle, in the swarm's own space (its radius one), and how brightly it glows.
+float3 AmbientSwarmPlace(uint i, uint swarm, float t, int style, out float glow, out float size)
+{
+    float r0 = AmbientSwarmHash(i, swarm + 1u), r1 = AmbientSwarmHash(i, swarm + 2u), r2 = AmbientSwarmHash(i, swarm + 3u);
+    float r3 = AmbientSwarmHash(i, swarm + 4u), r4 = AmbientSwarmHash(i, swarm + 5u), r5 = AmbientSwarmHash(i, swarm + 6u);
+    float swarmPhase = AmbientSwarmHash(0u, swarm + 7u) * 6.2831853;
+    glow = 0.0;
+    size = 1.0;
+    float3 p;
+    if (style == 0)
+    {
+        // A midge column: each dancing up and down a hand's breadth over its place in the column, round it slowly; the
+        // column swaying as one, its top the most.
+        float a = r0 * 6.2831853 + AmbientSwarmWave(t, 0.3 + 0.4 * r3, r4 * 6.2831853) * 0.6;
+        float rad = sqrt(r1) * 0.35;
+        p = float3(cos(a) * rad, -0.4 + r2 * 1.6, sin(a) * rad);
+        p.y += 0.12 * AmbientSwarmWave(t, 6.2831853 * (2.0 + 3.0 * r3), r5 * 6.2831853);
+        p.x += 0.15 * AmbientSwarmWave(t, 0.6, swarmPhase) * (p.y + 0.4);
+    }
+    else if (style == 1)
+    {
+        // A mosquito cloud: a loose ellipsoid, each jinking on its own and drifting through it.
+        float3 home = float3(r0 * 2.0 - 1.0, (r1 * 2.0 - 1.0) * 0.6, r2 * 2.0 - 1.0) * 0.8;
+        float3 jink = float3(AmbientSwarmWave(t, 1.5 + 2.5 * r3, r4 * 6.2831853), AmbientSwarmWave(t, 2.0 + 2.0 * r4, r5 * 6.2831853),
+            AmbientSwarmWave(t, 1.7 + 2.3 * r5, r3 * 6.2831853)) * 0.22;
+        float3 drift = float3(AmbientSwarmWave(t, 0.25, r3 * 6.2831853), 0.5 * AmbientSwarmWave(t, 0.3, r4 * 6.2831853), AmbientSwarmWave(t, 0.22, r5 * 6.2831853)) * 0.3;
+        p = home + jink + drift;
+        // A swarm with a light of its own (another world's gnats) glimmers, each on its own slow pulse.
+        glow = 0.55 + 0.45 * AmbientSwarmWave(t, 0.8 + 1.2 * r3, r4 * 6.2831853);
+    }
+    else if (style == 2)
+    {
+        // Flies: tight fast loops round a spot near the middle, each on its own tilted plane, now and then a dart out.
+        float3 centre = float3(r0 - 0.5, (r1 - 0.5) * 0.5, r2 - 0.5) * 0.4;
+        float loop = 0.35 + 0.55 * r3;
+        float spin = AmbientSwarmCycle(t, 0.5 + 0.7 * r4, r5) * 6.2831853;
+        float3 ring = float3(cos(spin), 0.35 * sin(spin * 2.0), sin(spin)) * loop;
+        float tilt = (r4 - 0.5) * 1.6;
+        ring.xy = float2(ring.x * cos(tilt) - ring.y * sin(tilt), ring.x * sin(tilt) + ring.y * cos(tilt));
+        float dartAt = AmbientSwarmCycle(t, 5.0 + 6.0 * r0, r1);
+        float dart = smoothstep(0.0, 0.03, dartAt) * (1.0 - smoothstep(0.06, 0.1, dartAt));
+        p = centre + ring * (1.0 + 1.2 * dart);
+    }
+    else if (style == 3)
+    {
+        // Fireflies: spread wide and low, drifting slowly; each flashes on its own rhythm, climbing a little as it does.
+        float a = r0 * 6.2831853;
+        float rad = sqrt(r1);
+        p = float3(cos(a) * rad, (r2 - 0.5) * 0.35, sin(a) * rad);
+        p += float3(AmbientSwarmWave(t, 0.2 + 0.3 * r3, r4 * 6.2831853), 0.5 * AmbientSwarmWave(t, 0.25 + 0.2 * r4, r5 * 6.2831853),
+            AmbientSwarmWave(t, 0.18 + 0.3 * r5, r3 * 6.2831853)) * 0.15;
+        float phase = AmbientSwarmCycle(t, 2.5 + 4.0 * r3, r4);
+        glow = smoothstep(0.0, 0.03, phase) * (1.0 - smoothstep(0.07, 0.16, phase));
+        p.y += 0.06 * saturate(phase / 0.16) * glow;
+        size = 1.0 + 1.5 * glow;
+    }
+    else if (style == 4)
+    {
+        // Bees over flowers: hanging at a bloom, then darting to the next.
+        float u = t / AMBIENT_SWARM_WRAP * max(1.0, floor(AMBIENT_SWARM_WRAP / (2.0 + 3.0 * r0) + 0.5)) + r1;
+        uint k = (uint)floor(u);
+        float f = frac(u);
+        uint before = k == 0u ? 0xFFFFu : k - 1u;
+        float a0 = AmbientSwarmHash(i * 131u + before, swarm + 11u) * 6.2831853, d0 = sqrt(AmbientSwarmHash(i * 131u + before, swarm + 12u));
+        float a1 = AmbientSwarmHash(i * 131u + k, swarm + 11u) * 6.2831853, d1 = sqrt(AmbientSwarmHash(i * 131u + k, swarm + 12u));
+        float3 from = float3(cos(a0) * d0, AmbientSwarmHash(i * 131u + before, swarm + 13u) * 0.3, sin(a0) * d0);
+        float3 to = float3(cos(a1) * d1, AmbientSwarmHash(i * 131u + k, swarm + 13u) * 0.3, sin(a1) * d1);
+        p = lerp(from, to, smoothstep(0.0, 0.15, f));
+        p += float3(AmbientSwarmWave(t, 9.0 + 5.0 * r2, r3 * 6.2831853), AmbientSwarmWave(t, 7.0 + 4.0 * r3, r4 * 6.2831853), AmbientSwarmWave(t, 8.0 + 6.0 * r4, r5 * 6.2831853)) * 0.015;
+    }
+    else
+    {
+        // Locusts: a wide low cloud streaming one way (+z, the swarm's heading) and round again, churning as it goes; each
+        // shrinks to nothing at the cloud's front and back, so none pops in or out.
+        float along = frac(r0 + t * max(1.0, floor(AMBIENT_SWARM_WRAP * (0.05 + 0.04 * r1) + 0.5)) / AMBIENT_SWARM_WRAP) * 2.0 - 1.0;
+        float across = (r2 * 2.0 - 1.0) * sqrt(saturate(1.0 - along * along));
+        p = float3(across, (r3 - 0.5) * 0.35, along);
+        p += float3(0.08 * AmbientSwarmWave(t, 3.0 + 3.0 * r4, r5 * 6.2831853), 0.1 * AmbientSwarmWave(t, 4.0 + 3.0 * r5, r3 * 6.2831853), 0.0);
+        size = 1.0 - smoothstep(0.8, 1.0, abs(along));
+    }
+    return p;
+}
+
+// One insect of a swarm: flown to its place, turned to the camera, never less than about a pixel and a half across. A
+// speck smaller than that is drawn at that size and thinned a little with distance, never below two in three of the
+// swarm: thinned in proportion to its true size, a swarm was gone a few metres off. A firefly's light is never thinned.
+AmbientLifeVertex AmbientSwarm(AmbientLifeAttributes input, float4 anim, float4 tint)
+{
+    uint i = (uint)(input.part.x + 0.5);
+    uint swarm = (uint)(anim.w * 65535.0);
+    int style = (int)(_SwarmStyle + 0.5);
+    float glow, size;
+    float3 offset = AmbientSwarmPlace(i, swarm, anim.x, style, glow, size);
+    // Only the first share of the swarm's insects: a smaller swarm, or one coming out or going in.
+    bool drawn = input.part.y <= anim.y;
+    float3 centreWS = TransformObjectToWorld(offset);
+    float3 toCamera = _WorldSpaceCameraPos - centreWS;
+    float distance = max(1e-3, length(toCamera));
+    float pixel = distance * 2.0 / (abs(UNITY_MATRIX_P._m11) * _ScreenParams.y);
+    float own = 0.5 * _BugSize * size;
+    float extent = max(own, 0.75 * pixel);
+    float coverage = max(0.65, saturate(4.0 * (own * own) / (extent * extent)));
+    float lit = _GlowColour.a > 0.5 ? glow : 0.0;
+    float3 right = UNITY_MATRIX_V[0].xyz, up = UNITY_MATRIX_V[1].xyz;
+    AmbientLifeVertex o;
+    o.positionWS = centreWS + (right * input.body.x + up * input.body.y) * (drawn ? extent : 0.0);
+    o.normalWS = toCamera / distance;
+    o.color = input.color.rgb * tint.rgb;
+    o.visible = drawn ? tint.a * max(coverage, lit) : 0.0;
+    o.glow = lit;
+    return o;
+}
 
 AmbientLifeVertex AmbientLifeBuild(AmbientLifeAttributes input)
 {
     float4 anim = UNITY_ACCESS_INSTANCED_PROP(AmbientLifeProps, _Anim);
     float4 tint = UNITY_ACCESS_INSTANCED_PROP(AmbientLifeProps, _Tint);
+    if (_Mode > 3.5)
+    {
+        return AmbientSwarm(input, anim, tint);
+    }
     float3 p = input.positionOS.xyz;
     float3 n = input.normalOS;
     AmbientMove(p, n, input.body, input.part, anim);
@@ -210,6 +369,7 @@ AmbientLifeVertex AmbientLifeBuild(AmbientLifeAttributes input)
     o.normalWS = TransformObjectToWorldNormal(n);
     o.color = input.color.rgb * tint.rgb;
     o.visible = tint.a;
+    o.glow = 0.0;
     return o;
 }
 
@@ -221,7 +381,7 @@ struct AmbientLifeVaryings
     float3 positionWS : TEXCOORD0;
     float3 normalWS : TEXCOORD1;
     float3 color : TEXCOORD2;
-    float2 extra : TEXCOORD3;   // x visible share, y fog
+    float3 extra : TEXCOORD3;   // x visible share, y fog, z how much of _GlowColour it gives off
     UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
@@ -235,7 +395,7 @@ AmbientLifeVaryings AmbientLifeVertexMain(AmbientLifeAttributes input)
     o.normalWS = v.normalWS;
     o.color = v.color;
     o.positionCS = TransformWorldToHClip(v.positionWS);
-    o.extra = float2(v.visible, ComputeFogFactor(o.positionCS.z));
+    o.extra = float3(v.visible, ComputeFogFactor(o.positionCS.z), v.glow);
     return o;
 }
 
@@ -271,6 +431,13 @@ half4 AmbientLifeForwardFragment(AmbientLifeVaryings input, FRONT_FACE_TYPE face
     float3 h = normalize(mainLight.direction + v);
     float spec = pow(saturate(dot(n, h)), exp2(9.0 * _Smoothness + 1.0)) * _Smoothness * 0.5;
     colour += light * spec;
+    if (_Mode > 3.5)
+    {
+        // A swarm against the low sun: every insect's wings lit through, a cloud of bright specks.
+        colour += light * 0.8 * pow(saturate(dot(-v, mainLight.direction)), 6.0);
+        // A firefly's flash (and any swarm's own light), unlit by anything else.
+        colour += _GlowColour.rgb * input.extra.z;
+    }
     colour = MixFog(colour, input.extra.y);
     return half4(colour, 1.0);
 }

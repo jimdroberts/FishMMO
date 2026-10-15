@@ -310,6 +310,12 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>Moisture of air of unknown history over far land, for this world's share of water.</summary>
 		public float FarLandMoisture;
 
+		/// <summary>
+		/// The air is wet from every side, as over open sea: a cloud world's islands float in the cloud its moisture comes
+		/// from (CloudWorld), where the planet's own profile, with no sea at all, would make every point deep inland.
+		/// </summary>
+		public bool AllSea;
+
 		/// <summary>The body's radius in km: the arcs between samples become real distances through it.</summary>
 		public float RadiusKm;
 
@@ -374,7 +380,9 @@ namespace FishMMO.Shared.Biomes
 				/ Mathf.Max(1f, AirPhysics.LatentHeat(air.Condensate) * Mathf.Max(1e-5f, lapse));
 
 			float radiusKm = body != null && body.SkyRadiusKm > 0.01f ? body.SkyRadiusKm : PlanetSurface.EarthRadiusKm;
-			return Of(seed, profile, reliefMetres, radiusKm, WindBelts.For(air), hasAir, liquid, conditions.Water, scaleHeight);
+			MoistureModel model = Of(seed, profile, reliefMetres, radiusKm, WindBelts.For(air), hasAir, liquid, conditions.Water, scaleHeight);
+			model.AllSea = CloudWorld.Is(body);
+			return model;
 		}
 
 		/// <summary>
@@ -448,6 +456,11 @@ namespace FishMMO.Shared.Biomes
 			if (!HasAir || !SurfaceLiquid)
 			{
 				return 0f;
+			}
+			if (AllSea)
+			{
+				// Saturated air on every side: what falls is decided by the lift alone (Precipitation).
+				return 1f;
 			}
 			Vector3 p = direction.sqrMagnitude > 1e-12f ? direction.normalized : Vector3.up;
 			terrain.Sample(p, out float altitude, out bool ocean);

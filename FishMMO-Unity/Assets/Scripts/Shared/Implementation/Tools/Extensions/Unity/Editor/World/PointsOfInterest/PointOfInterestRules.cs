@@ -304,6 +304,11 @@ namespace FishMMO.Shared.WorldDesign
 				// A shipwright's yard is where ships are wanted: on a low shore near a town (2026-10-12: "Harbours should
 				// probably have towns to go with them").
 				Settled(Placed(POIType.Dockyard, 0.05f, 0, 1, 1500f).Footprint(26f, 34f, 12f)).Coast(50f).NearSettlement(700f).Altitude(0.5f, 8f),
+				// Mills (2026-10-14): a post mill on a rise open to the wind near the village it grinds for; a watermill and a
+				// sawmill on a river's bank, the sawmill in the woods it cuts.
+				Settled(Placed(POIType.Windmill, 0.12f, 0, 4, 700f).Footprint(16f, 22f, 10f)).NearSettlement(900f).OnExposedGround(),
+				Settled(Placed(POIType.Watermill, 0.12f, 0, 3, 800f).Footprint(14f, 20f, 14f)).NearSettlement(1500f).OnRiverBank(),
+				Placed(POIType.LumberMill, 0.08f, 0, 2, 1000f).Footprint(16f, 22f, 14f).Only(Woods).OnRiverBank(),
 				Wild(Placed(POIType.Wreck, 0.06f, 0, 2, 800f).Footprint(14f, 20f, 12f)).Coast(25f).Altitude(0.5f, 4f),
 				Wild(Placed(POIType.SmugglersCove, 0.05f, 0, 1, 1500f).Footprint(12f, 18f, 20f)).Coast(50f).AwayFromSettlements(700f).Races(Outlaw),
 				Wild(Placed(POIType.PirateCove, 0.04f, 0, 1, 2000f).Footprint(20f, 30f, 18f)).Coast(60f).AwayFromSettlements(900f).Races(Outlaw),

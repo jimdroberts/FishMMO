@@ -25,6 +25,15 @@ MonoBehaviour:
   Style: stone
   Layout: 4
   Pieces:
+  - Tag: =LimeKiln
+    MinCount: 0
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
   - Tag: rubble
     MinCount: 4
     MaxCount: 8
@@ -71,14 +80,14 @@ MonoBehaviour:
     Role: 8
     Style: timber
   Features:
-  - rid: 4061506084311138710
-  - rid: 4061506084311138711
-  - rid: 4061506084311138712
-  - rid: 4061506084311138713
+  - rid: 4061506132295025036
+  - rid: 4061506132295025037
+  - rid: 4061506132295025038
+  - rid: 4061506132295025039
   references:
     version: 2
     RefIds:
-    - rid: 4061506084311138710
+    - rid: 4061506132295025036
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -89,16 +98,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506084311138711
+    - rid: 4061506132295025037
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506084311138712
+    - rid: 4061506132295025038
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506084311138713
+    - rid: 4061506132295025039
       type: {class: GatheringFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Families: 

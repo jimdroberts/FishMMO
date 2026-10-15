@@ -51,6 +51,11 @@ namespace FishMMO.Shared.WorldDesign
 					PlaceBridges(rule, budget);
 					return;
 				}
+				if (rule.RiverBank)
+				{
+					PlaceRiverBanks(rule, budget);
+					return;
+				}
 				if (rule.Underwater && (!Input.HasSea || !Input.SeaIsWater))
 				{
 					return;
@@ -205,6 +210,10 @@ namespace FishMMO.Shared.WorldDesign
 							if (rule.CoastMetres > 0f)
 							{
 								score += 0.3f * (1f - Mathf.Clamp01(G.SeaDistance[i] / rule.CoastMetres));
+							}
+							if (rule.Exposed)
+							{
+								score += 0.8f * Exposure(east, north, h);
 							}
 						}
 						// A little less near the scene's edge, where a site is half in the next scene's view and far from its players.
@@ -578,6 +587,145 @@ namespace FishMMO.Shared.WorldDesign
 					taken++;
 				}
 			}
+
+			/// <summary>
+			/// How far ground stands over its surroundings, 0 … 1: its height over the mean of a ring 60 m out, full at 12 m
+			/// (a windmill wants the wind off a rise, not a hollow's lee).
+			/// </summary>
+			private float Exposure(float east, float north, float h)
+			{
+				const int ring = 8;
+				float sum = 0f;
+				int n = 0;
+				for (int k = 0; k < ring; k++)
+				{
+					float a = k * (Mathf.PI * 2f / ring);
+					int c = G.CellAt(east + 60f * Mathf.Sin(a), north + 60f * Mathf.Cos(a));
+					if (c >= 0)
+					{
+						sum += G.Height[c];
+						n++;
+					}
+				}
+				return n == 0 ? 0f : Mathf.Clamp01((h - sum / n) / 12f);
+			}
+
+			/// <summary>
+			/// Sites on a river's bank (a watermill, a sawmill): along every perennial river 2.5–30 m wide, on a run or a
+			/// riffle well clear of any fall, either bank, the site standing back from the water's edge by
+			/// <see cref="BankSetback"/> so its building's front (the wheel's side) is at the edge, facing the river. The bank
+			/// must stand 0.2–3.5 m over the water and the ground behind it be dry and near level. Its pad keeps off the water
+			/// as every pad does.
+			/// </summary>
+			private void PlaceRiverBanks(PointOfInterestKindRule rule, int budget)
+			{
+				if (Input.Water == null || Input.Water.Rivers == null || Input.Water.Rivers.Count == 0)
+				{
+					return;
+				}
+				if (rule.NearSettlementMetres > 0f && settlements.Count == 0)
+				{
+					return;
+				}
+				FallReaches falls = FallReaches.Of(Input.Water.Rivers, MinFallMetres);
+				var candidates = new List<Site>();
+				foreach (RiverPath river in Input.Water.Rivers)
+				{
+					if (river == null || !river.Perennial || river.Count < 6)
+					{
+						continue;
+					}
+					for (int k = 2; k < river.Count - 2; k += 3)
+					{
+						float width = river.Width[k];
+						if (width < 2.5f || width > 30f || falls.Contains(river.X[k], river.Z[k], 40f))
+						{
+							continue;
+						}
+						if (river.Reach != null && k < river.Reach.Length && river.Reach[k] != RiverReach.Run && river.Reach[k] != RiverReach.Riffle)
+						{
+							continue;
+						}
+						float tx = river.X[k + 1] - river.X[k - 1], tz = river.Z[k + 1] - river.Z[k - 1];
+						float tl = Mathf.Max(1e-3f, Mathf.Sqrt(tx * tx + tz * tz));
+						float nx = -tz / tl, nz = tx / tl;
+						float surface = river.Surface != null && k < river.Surface.Length ? river.Surface[k] : float.NaN;
+						for (int side = -1; side <= 1; side += 2)
+						{
+							float off = width * 0.5f + BankSetback;
+							float bx = river.X[k] + nx * side * off, bz = river.Z[k] + nz * side * off;
+							int cell = G.CellAt(bx, bz);
+							if (cell < 0 || G.Blocked[cell] || G.Sea[cell] || !Inside(bx, bz, Input.EdgeMarginMetres + rule.FootprintMax))
+							{
+								continue;
+							}
+							float weight = BiomeWeight(rule, cell);
+							if (weight <= 0f)
+							{
+								continue;
+							}
+							float ground = Input.Ground(bx, bz);
+							float bank = float.IsNaN(surface) ? 1f : ground - surface;
+							if (bank < 0.2f || bank > 3.5f || G.Slope[cell] > rule.MaxSlopeDegrees)
+							{
+								continue;
+							}
+							float altitude = ground - Input.SeaLevel;
+							if (altitude < rule.MinAltitude || altitude > rule.MaxAltitude || (Input.HasSea && ground < Input.SeaLevel + Input.LandClearMetres))
+							{
+								continue;
+							}
+							// The yard behind the mill: dry, and not a bank climbing away.
+							float yx = bx + nx * side * 12f, yz = bz + nz * side * 12f;
+							int yard = G.CellAt(yx, yz);
+							if (yard < 0 || G.Water[yard] != WaterKind.None && G.Water[yard] != WaterKind.Bank || Mathf.Abs(Input.Ground(yx, yz) - ground) > 4f)
+							{
+								continue;
+							}
+							uint hash = Hash(Input.Seed, (int)rule.Kind, Mathf.RoundToInt(bx), Mathf.RoundToInt(bz));
+							float score = weight * (1f - 0.25f * Mathf.Abs(bank - 1.2f)) + 0.5f * Unit(Mix(hash ^ 0x5C0Eu));
+							Site site = Site.At(bx, bz, ground, score);
+							site.Radius = Mathf.Lerp(rule.FootprintMin, rule.FootprintMax, Unit(Mix(hash ^ 0x7A11u)));
+							// Facing the river: a site's front faces its heading.
+							site.Yaw = Mathf.Round(YawOf(-nx * side, -nz * side));
+							site.RiverId = river.Id;
+							site.PlanetRiver = river.PlanetRiver;
+							site.Cell = cell;
+							candidates.Add(site);
+						}
+					}
+				}
+				candidates.Sort((p, q) =>
+				{
+					int c = q.Score.CompareTo(p.Score);
+					if (c != 0) return c;
+					c = p.X.CompareTo(q.X);
+					return c != 0 ? c : p.Z.CompareTo(q.Z);
+				});
+				PointOfInterestKindInfo info = PointOfInterestKinds.Info(rule.Kind);
+				int taken = 0;
+				foreach (Site candidate in candidates)
+				{
+					if (taken >= budget)
+					{
+						break;
+					}
+					Site site = candidate;
+					if (!Clear(rule, ref site))
+					{
+						continue;
+					}
+					Accept(rule, info, site);
+					taken++;
+				}
+				if (taken < budget && candidates.Count > 0)
+				{
+					Plan.Notes.Add($"{info.DisplayName}: {taken} of {budget} sited on river banks; no more banks fit.");
+				}
+			}
+
+			/// <summary>How far back from the water's edge a river-bank site's centre stands, metres: half a mill's depth and a little.</summary>
+			private const float BankSetback = 4.2f;
 		}
 	}
 }

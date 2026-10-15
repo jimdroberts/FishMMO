@@ -196,7 +196,9 @@ namespace FishMMO.Client
 				Shader.SetGlobalTexture(TextureId, texture);
 				Shader.SetGlobalTexture(WaterId, waterTexture);
 			}
-			Shader.SetGlobalVector(RectId, new Vector4(corner.x, corner.y, SizeMeters, ready ? 1f : 0f));
+			// w: 1 once read, 2 over a cloud world, where nothing is underground (FishUnderground, FishGroundMap.hlsl): a
+			// floating island's underside is open air under its ground, not a cave's wall, and was drawn without sky.
+			Shader.SetGlobalVector(RectId, new Vector4(corner.x, corner.y, SizeMeters, ready ? (FishMMO.Shared.SceneCloudWorld.Any ? 2f : 1f) : 0f));
 			Shader.SetGlobalFloat(BaseId, groundBase);
 			if (shadowReady)
 			{

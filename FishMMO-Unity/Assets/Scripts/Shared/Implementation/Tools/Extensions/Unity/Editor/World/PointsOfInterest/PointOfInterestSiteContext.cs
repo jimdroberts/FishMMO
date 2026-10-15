@@ -68,6 +68,11 @@ namespace FishMMO.Shared.WorldDesign
 		public SceneWater Water;
 		/// <summary>The ground at (east, north), scene metres.</summary>
 		public Func<float, float, float> GroundAt;
+		/// <summary>
+		/// True over open sky: a cloud world's terrain holes, where <see cref="GroundAt"/> still answers (the void is filled
+		/// with its islands' rim heights) but nothing can stand. Null where every hole is a cave's or a wall's, not sky.
+		/// </summary>
+		public Func<float, float, bool> SkyAt;
 		/// <summary>The ground's steepness at (east, north), degrees.</summary>
 		public Func<float, float, float> SlopeAt;
 		/// <summary>The biome at (east, north); may answer null.</summary>

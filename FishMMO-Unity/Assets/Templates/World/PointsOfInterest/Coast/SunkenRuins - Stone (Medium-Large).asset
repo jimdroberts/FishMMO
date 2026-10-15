@@ -71,16 +71,16 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506084311138718
-  - rid: 4061506084311138719
-  - rid: 4061506084311138720
-  - rid: 4061506084311138721
-  - rid: 4061506084311138722
-  - rid: 4061506084311138723
+  - rid: 4061506132295025142
+  - rid: 4061506132295025143
+  - rid: 4061506132295025144
+  - rid: 4061506132295025145
+  - rid: 4061506132295025146
+  - rid: 4061506132295025147
   references:
     version: 2
     RefIds:
-    - rid: 4061506084311138718
+    - rid: 4061506132295025142
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -91,16 +91,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506084311138719
+    - rid: 4061506132295025143
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506084311138720
+    - rid: 4061506132295025144
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506084311138721
+    - rid: 4061506132295025145
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 5
@@ -108,7 +108,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506084311138722
+    - rid: 4061506132295025146
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 6
@@ -116,7 +116,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506084311138723
+    - rid: 4061506132295025147
       type: {class: GatheringFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Families: 

@@ -573,6 +573,15 @@ namespace FishMMO.TestHarness.World.Editor
 					look = eye + Quaternion.Euler(0f, F(3), 0f) * Vector3.forward * 10f;
 					break;
 				}
+				case "cloud-overview":
+				case "cloud-dock":
+				case "cloud-gap":
+				case "cloud-under":
+					if (CloudView(view, out eye, out look))
+					{
+						break;
+					}
+					goto default;
 				case "overview":
 					eye = new Vector3(0f, GroundAt(0f, 0f) + 350f, -600f);
 					look = new Vector3(0f, GroundAt(0f, 0f), 0f);
@@ -632,6 +641,81 @@ namespace FishMMO.TestHarness.World.Editor
 				}
 			}
 			camera.transform.SetPositionAndRotation(eye, Quaternion.LookRotation(look - eye));
+		}
+
+		/// <summary>
+		/// A cloud world's views (SceneCloudWorld): the whole archipelago from high off its corner (cloud-overview), on the
+		/// city island looking out along a landing stage (cloud-dock), from the city's edge across to its nearest island
+		/// (cloud-gap), and from beside the city's underside, just above the deck, looking up at it (cloud-under). False
+		/// when the scene is not a cloud world.
+		/// </summary>
+		private static bool CloudView(string view, out Vector3 eye, out Vector3 look)
+		{
+			eye = look = default;
+			SceneCloudWorld world = SceneCloudWorld.First;
+			if (world == null || world.Islands.Length == 0)
+			{
+				return false;
+			}
+			SceneCloudWorld.Island city = world.Islands[0];
+			switch (view)
+			{
+				case "cloud-overview":
+				{
+					float span = 0f;
+					foreach (SceneCloudWorld.Island island in world.Islands)
+					{
+						span = Mathf.Max(span, Mathf.Abs(island.Centre.x) + island.Radius, Mathf.Abs(island.Centre.z) + island.Radius);
+					}
+					eye = new Vector3(-span * 1.5f, world.IslandCeiling + span * 0.6f, -span * 1.5f);
+					look = new Vector3(0f, 0.5f * (world.IslandFloor + world.IslandCeiling) - span * 0.15f, 0f);
+					return true;
+				}
+				case "cloud-dock":
+				{
+					if (world.Docks.Length == 0)
+					{
+						return false;
+					}
+					SceneCloudWorld.Dock dock = world.Docks[0];
+					Vector3 back = dock.Position - dock.Outward * 22f;
+					eye = new Vector3(back.x, GroundAt(back.x, back.z) + 1.8f, back.z);
+					look = dock.Position + dock.Outward * 80f - Vector3.up * 12f;
+					return true;
+				}
+				case "cloud-gap":
+				{
+					if (world.Islands.Length < 2)
+					{
+						return false;
+					}
+					int nearest = 1;
+					for (int i = 2; i < world.Islands.Length; i++)
+					{
+						if (Vector3.Distance(world.Islands[i].Centre, city.Centre) - world.Islands[i].Radius
+							< Vector3.Distance(world.Islands[nearest].Centre, city.Centre) - world.Islands[nearest].Radius)
+						{
+							nearest = i;
+						}
+					}
+					SceneCloudWorld.Island other = world.Islands[nearest];
+					Vector3 toward = other.Centre - city.Centre;
+					toward.y = 0f;
+					toward.Normalize();
+					Vector3 at = city.Centre + toward * Mathf.Max(5f, city.Radius * 0.7f);
+					eye = new Vector3(at.x, GroundAt(at.x, at.z) + 1.8f, at.z);
+					look = other.Centre - Vector3.up * 6f;
+					return true;
+				}
+				default:
+				{
+					float depth = city.Centre.y - city.Keel;
+					var side = new Vector3(city.Radius * 2.2f, 0f, city.Radius * 0.6f);
+					eye = new Vector3(city.Centre.x + side.x, Mathf.Max(world.DeckTop + 25f, city.Keel + depth * 0.3f), city.Centre.z + side.z);
+					look = new Vector3(city.Centre.x, city.Centre.y - depth * 0.45f, city.Centre.z);
+					return true;
+				}
+			}
 		}
 
 		/// <summary>In front of the scene's biggest fall, as a player would stand to look at it.</summary>

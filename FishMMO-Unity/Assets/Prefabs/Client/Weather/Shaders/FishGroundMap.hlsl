@@ -13,7 +13,8 @@ TEXTURE2D(_FishMistGround);
 SAMPLER(sampler_FishMistGround);
 #define FISH_GROUND_MAP_SAMPLER sampler_FishMistGround
 #endif
-// xy the fine ground map's corner, z its size (m), w 1 once it is read (MistGroundMap). r the ground above
+// xy the fine ground map's corner, z its size (m), w 1 once it is read (2 over a cloud world, where nothing is
+// underground: MistGroundMap, FishUnderground). r the ground above
 // _FishMistGroundBase (m; over open water, the water's surface), g the hollow (m, + in a dip), b how near open
 // water is (0..1), a the canopy (0..1).
 float4 _FishMistGroundRect;
@@ -43,9 +44,10 @@ float4 FishMistGroundAt(float2 xz, out bool covered)
 /// A carved cave's walls deep in take no sky: no ambient, no reflections (the terrain over them shadows the sun).
 half FishUnderground(float3 positionWS)
 {
+    // Over a cloud world (w 2) nothing is: under a floating island's ground is its underside, open to the air.
     bool covered;
     float4 ground = FishMistGroundAt(positionWS.xz, covered);
-    return covered ? (half)smoothstep(6.0, 20.0, ground.x - positionWS.y) : 0.0h;
+    return covered && _FishMistGroundRect.w < 1.5 ? (half)smoothstep(6.0, 20.0, ground.x - positionWS.y) : 0.0h;
 }
 
 /// How much of a full-screen effect over the air (fog, clouds, mist, god rays) a pixel keeps, 0..1: none where the eye

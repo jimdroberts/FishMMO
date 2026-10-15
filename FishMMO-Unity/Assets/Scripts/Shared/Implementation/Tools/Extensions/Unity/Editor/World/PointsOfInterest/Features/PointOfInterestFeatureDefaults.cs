@@ -65,6 +65,12 @@ namespace FishMMO.Shared.WorldDesign
 					features.Add(new NpcSpawnerFeature { Role = PointOfInterestNpcRole.Guard });
 					features.Add(new NpcSpawnerFeature { Role = PointOfInterestNpcRole.Merchant });
 					break;
+				case POIType.Windmill:
+				case POIType.Watermill:
+				case POIType.LumberMill:
+					// The miller (or the sawyer), who buys grain and sells flour, or sells planks.
+					features.Add(new NpcSpawnerFeature { Role = PointOfInterestNpcRole.Merchant });
+					break;
 				case POIType.Dockyard:
 					// The shipwright.
 					features.Add(new NpcSpawnerFeature { Role = PointOfInterestNpcRole.Merchant });

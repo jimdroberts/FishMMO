@@ -335,8 +335,34 @@ namespace FishMMO.Shared.WorldDesign
 				/* The whole scene's ground as one grid before any tile exists, sampled after Revive so
 				 * the body it asks is live, and shaped on that grid — where a tile seam is just another
 				 * row — before the tiles are cut from it. */
-				SceneHeightField ground = SceneGround.Shape(request, plan, SolarSystemProfile.Resolve(request.Body), result.Notes, out SceneErosionReport erosion,
-					out SceneWater water);
+				/* A gas giant has no ground (CloudWorld): its scenes are floating islands over a bottomless cloud deck, cut
+				 * from the same tiles with everything but the islands holed out, and none of the planet's ground, erosion,
+				 * water or backdrop. */
+				bool cloud = CloudWorldCut.Applies(request);
+				CloudIslands.Plan islands = null;
+				bool[] islandCells = null;
+				SceneHeightField ground;
+				SceneErosionReport erosion;
+				SceneWater water;
+				if (cloud)
+				{
+					islands = CloudWorldCut.Lay(request, plan);
+					int perTile = plan.Resolution - 1;
+					ground = SceneHeightField.FromMetres(plan, new float[(plan.CountX * perTile + 1) * (plan.CountZ * perTile + 1)]);
+					islandCells = CloudIslands.Shape(islands, ground);
+					erosion = null;
+					water = null;
+					// The sites keep off the bridges' ends and the landing stages, dig no caves, and the city island has its city.
+					CloudWorldCut.Reserve(islands, poi.Reserved);
+					poi.Forbids = CloudWorldCut.Forbids;
+					poi.WantsCapital = true;
+					poi.HolesAreSky = true;
+					result.Notes.Add($"Cloud world: {islands.Islands.Count} island(s) laid over the deck, no ground, erosion, water or backdrop.");
+				}
+				else
+				{
+					ground = SceneGround.Shape(request, plan, SolarSystemProfile.Resolve(request.Body), result.Notes, out erosion, out water);
+				}
 				poi.Erosion = erosion;
 				poi.Field = ground;
 				/* No stretch of a river may lie under the ground it was laid in (RiverBurial). Where the shaped ground
@@ -411,6 +437,12 @@ namespace FishMMO.Shared.WorldDesign
 				Stitch(terrains, plan);
 				Func<float, float, float> tileGround = (east, north) => GroundAltitude(terrains, plan, east, north);
 				CheckRivers("cutting the tiles", tileGround);
+				if (cloud)
+				{
+					// Only the islands stand: before the paint, so the biomes, the scatter and the sites keep to them.
+					int holed = CloudWorldCut.Hole(terrains, plan, islandCells, ground.Width - 1, ground.Depth - 1);
+					result.Notes.Add($"Cloud world: {holed:N0} of {(ground.Width - 1) * (ground.Depth - 1):N0} cells holed to open sky.");
+				}
 				clock.Lap("Terrain tiles");
 
 				/* Canyon walls where the plateaus' risers stand steep: meshes with their faces stood up
@@ -432,8 +464,15 @@ namespace FishMMO.Shared.WorldDesign
 				/* The biomes, from the finished ground: which lies where, the textures that say so,
 				 * and the map the runtime reads. The flat bands only where no biome fits at all —
 				 * no template registered, or none this world allows — so the scene still reads. */
+				Func<float, float, float> paintGround = ground.MetresAt;
+				if (cloud)
+				{
+					// No planet past the edge to ask: the field's own edge, held.
+					float halfW = plan.WidthMetres * 0.5f, halfD = plan.DepthMetres * 0.5f;
+					paintGround = (east, north) => ground.MetresAt(Mathf.Clamp(east, -halfW, halfW), Mathf.Clamp(north, -halfD, halfD));
+				}
 				if (!PaintBiomes(scene, request, plan, terrains, terrainFolder, result, out Func<float, float, float, float, Color> groundColour,
-					out BackdropLayerWeigher backdropWeights, ground: ground.MetresAt, water: water, poi: poi))
+					out BackdropLayerWeigher backdropWeights, ground: paintGround, water: water, poi: poi))
 				{
 					foreach (Terrain terrain in terrains)
 					{
@@ -461,29 +500,47 @@ namespace FishMMO.Shared.WorldDesign
 				poi.Place(scene, plan, terrains, water, result.Notes, result.Wrote);
 				CheckRivers("the sites and their paths", tileGround);
 				clock.Lap("Sites, paths and vines");
+				if (cloud)
+				{
+					// The islands' rock, the bridges between them, and the record the sky, the server and the airships read.
+					CloudWorldCut.Undersides(scene, request, islands, plan, $"{terrainFolder}/{WorldEditorAssets.Sanitize(request.SceneName)} Island Undersides.asset",
+						result.Notes, result.Wrote);
+					CloudWorldCut.Bridges(scene, islands, tileGround, SceneSeed(request), result.Notes);
+					SceneCloudWorld cloudWorld = CloudWorldCut.Record(scene, islands, tileGround, result.Notes);
+					CloudWorldCut.SkyTraffic(scene, cloudWorld, request, plan, tileGround, result.Notes);
+					clock.Lap("Cloud world: undersides, bridges, sky traffic");
+				}
 
 				/* The ground past the scene's edge, out to the horizon: client-only, built from the
 				 * same request so it meets the terrain at the edge. Before the sea, because a scene
 				 * of dry land can still look out over a coast, and that sea has to be drawn. */
 				// With the planet's lakes and rivers past the edge, so the water does not stop where the scene does.
-				BackdropWater backdropWater = BackdropWater.Build(request, water, ground.MetresAt, plan.WidthMetres * 0.5f, plan.DepthMetres * 0.5f,
-					SceneBackdropBuilder.ReachFor(request));
-				// Drawn with the scene's own texture arrays wherever its layers reach past the edge (FishMMO/Backdrop Ground).
-				SceneBackdropResult backdrop = SceneBackdropBuilder.Build(scene, request, plan, lowest, relief, terrainFolder, groundColour, ground.MetresAt,
-					backdropWater, backdropWater != null && !backdropWater.Empty ? EnsureInlandWaterMaterial() : null,
-					backdropWeights, SceneLayerCount(terrains));
-				if (backdrop.WaterMeshes > 0)
+				// None for a cloud world: past its islands there is only sky and the deck.
+				SceneBackdropResult backdrop = null;
+				if (!cloud)
 				{
-					result.Notes.Add($"Backdrop water: {backdropWater.Rivers.Count} river run(s) and the lakes past the edge, in {backdrop.WaterMeshes} surface(s).");
+					BackdropWater backdropWater = BackdropWater.Build(request, water, ground.MetresAt, plan.WidthMetres * 0.5f, plan.DepthMetres * 0.5f,
+						SceneBackdropBuilder.ReachFor(request));
+					// Drawn with the scene's own texture arrays wherever its layers reach past the edge (FishMMO/Backdrop Ground).
+					backdrop = SceneBackdropBuilder.Build(scene, request, plan, lowest, relief, terrainFolder, groundColour, ground.MetresAt,
+						backdropWater, backdropWater != null && !backdropWater.Empty ? EnsureInlandWaterMaterial() : null,
+						backdropWeights, SceneLayerCount(terrains));
+					if (backdrop.WaterMeshes > 0)
+					{
+						result.Notes.Add($"Backdrop water: {backdropWater.Rivers.Count} river run(s) and the lakes past the edge, in {backdrop.WaterMeshes} surface(s).");
+					}
+					result.Wrote.AddRange(backdrop.Wrote);
+					result.BackdropReachMetres = backdrop.ReachMetres;
+					result.BackdropVertices = backdrop.Vertices;
 				}
-				result.Wrote.AddRange(backdrop.Wrote);
-				result.BackdropReachMetres = backdrop.ReachMetres;
-				result.BackdropVertices = backdrop.Vertices;
 				clock.Lap("Backdrop");
 
 				// The sea first: the boundary has to reach its surface, which on a scene cut from
 				// the sea floor is far above the highest ground.
-				AddWater(scene, plan, request, lowest, backdrop, result);
+				if (!cloud)
+				{
+					AddWater(scene, plan, request, lowest, backdrop, result);
+				}
 				AddBoundary(scene, plan, lowest, relief, result.HasWater || result.HasLava ? result.SeaLevelY : (float?)null);
 				clock.Lap("Sea and boundary");
 				// Once everything that stands is in place, and whether or not a biome painted the scene.

@@ -210,6 +210,10 @@ namespace FishMMO.Shared.WorldDesign
 		public const string Brazier = "=Brazier";
 		public const string Slipway = "=Slipway";
 		public const string Shipwreck = "=Shipwreck";
+		/// <summary>Mills and the rural works (2026-10-14).</summary>
+		public const string PostMill = "=PostMill", Watermill = "=Watermill", Sawmill = "=Sawmill", SawPit = "=SawPit", LogPile = "=LogPile",
+			PlankStack = "=PlankStack", Granary = "=Granary", Dovecote = "=Dovecote", Apiary = "=Apiary", CharcoalClamp = "=CharcoalClamp",
+			LimeKiln = "=LimeKiln", TanningYard = "=TanningYard";
 
 		// ── Styles ───────────────────────────────────────────────────
 		public const string Timber = "timber", Stone = "stone", Hide = "hide", Iron = "iron", Earth = "earth";
@@ -273,11 +277,13 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			// Villages: a street of houses round a well; longhouses in the cold, yurts on the steppe.
 			T(a, POIType.Village, "Timber", Streets, Timber)
+				.S(Granary, 0, 1, Scatter, style: Timber).S(Dovecote, 0, 1, Scatter, style: Stone).S(Apiary, 0, 2, Scatter, style: Timber)
 				.S(Well, 1, 1, Centre).S(Stall, 0, 3, Centre).S(House, 8, 18, Street)
 				.S(Church, 0, 1, Street, style: Stone).S(Tavern, 0, 1, Street, style: Timber).S(Smithy, 0, 1, Street, style: Timber).S(Notice, 1, 1, Centre, style: Timber)
 				.S(Storage, 4, 10, Scatter).S(Banner, 0, 2, Scatter)
 				.In(0.1f, Arid).In(0.5f, Highland).In(0.5f, Cold).In(0.4f, Swamp);
 			T(a, POIType.Village, "Stone", Streets, Stone)
+				.S(Granary, 0, 1, Scatter, style: Timber).S(Dovecote, 0, 1, Scatter, style: Stone).S(Apiary, 0, 2, Scatter, style: Timber)
 				.S(Well, 1, 1, Centre).S(Stall, 0, 3, Centre).S(House, 8, 16, Street)
 				.S(Church, 0, 1, Street, style: Stone).S(Tavern, 0, 1, Street, style: Timber).S(Smithy, 0, 1, Street, style: Timber).S(Notice, 1, 1, Centre, style: Timber)
 				.S(Storage, 4, 10, Scatter).S(Banner, 0, 2, Scatter)
@@ -292,18 +298,21 @@ namespace FishMMO.Shared.WorldDesign
 
 			// Towns: two or more streets, a market square.
 			T(a, POIType.Town, "Timber", Streets, Timber)
+				.S(Granary, 1, 2, Scatter, style: Timber).S(Dovecote, 0, 1, Scatter, style: Stone).S(TanningYard, 0, 1, Scatter, style: Timber).S(Apiary, 0, 1, Scatter, style: Timber)
 				.S(Well, 1, 2, Centre).S(Stall, 3, 8, Centre).S(House, 20, 40, Street)
 				.S(Church, 1, 1, Street, style: Stone).S(Temple, 0, 1, Street, style: Stone).S(Tavern, 1, 2, Street, style: Timber).S(Smithy, 1, 2, Street, style: Timber)
 				.S(Stable, 1, 2, Scatter, style: Timber).S(Notice, 1, 2, Centre, style: Timber)
 				.S(Storage, 8, 16, Scatter).S(Watchtower, 0, 2, Scatter).S(Banner, 2, 4, Scatter)
 				.In(0.1f, Arid).In(0.5f, Highland).In(0.5f, Cold);
 			T(a, POIType.Town, "Stone", Streets, Stone)
+				.S(Granary, 1, 2, Scatter, style: Timber).S(Dovecote, 0, 1, Scatter, style: Stone).S(TanningYard, 0, 1, Scatter, style: Timber).S(Apiary, 0, 1, Scatter, style: Timber)
 				.S(Well, 1, 2, Centre).S(Stall, 3, 8, Centre).S(House, 20, 36, Street)
 				.S(Church, 1, 1, Street, style: Stone).S(Temple, 0, 1, Street, style: Stone).S(Tavern, 1, 2, Street, style: Timber).S(Smithy, 1, 2, Street, style: Timber)
 				.S(Stable, 1, 2, Scatter, style: Timber).S(Notice, 1, 2, Centre, style: Timber)
 				.S(Storage, 8, 16, Scatter).S(Banner, 2, 4, Scatter)
 				.Elsewhere(0.3f).In(2f, Arid).In(2f, Highland).Races(Civil);
 			T(a, POIType.Town, "Palisaded", Walled, Timber)
+				.S(Granary, 1, 2, Scatter, style: Timber).S(Dovecote, 0, 1, Scatter, style: Stone).S(TanningYard, 0, 1, Scatter, style: Timber).S(Apiary, 0, 1, Scatter, style: Timber)
 				.S(Palisade, 1, 1, Perimeter).S(Gate, 2, 2, Gates).S(Watchtower, 2, 4, Towers)
 				.S(Well, 1, 1, Centre).S(Stall, 2, 6, Centre).S(House, 18, 34, Street).S(Storage, 6, 12, Scatter).S(Banner, 2, 4, Scatter)
 				.S(Church, 1, 1, Street, style: Stone).S(Temple, 0, 1, Street, style: Stone).S(Tavern, 1, 2, Street, style: Timber).S(Smithy, 1, 2, Street, style: Timber)
@@ -439,7 +448,7 @@ namespace FishMMO.Shared.WorldDesign
 				.S(Statue, 0, 1, Scatter).S(Rubble, 1, 3, Scatter).Pad(0.7f).Weighs(0.6f);
 
 			T(a, POIType.Quarry, "Cut Stone", Scattered, Stone)
-				.S(Rubble, 4, 8, Scatter).S(Plinth, 2, 4, Scatter).S("=FallenColumn", 1, 3, Scatter)
+				.S(LimeKiln, 0, 1, Scatter).S(Rubble, 4, 8, Scatter).S(Plinth, 2, 4, Scatter).S("=FallenColumn", 1, 3, Scatter)
 				.S(LeanTo, 1, 2, Scatter, style: Timber).S(Storage, 3, 6, Scatter, style: Timber).Pad(0.4f);
 
 			T(a, POIType.Lighthouse, "Stone", Single, Stone)
@@ -452,6 +461,21 @@ namespace FishMMO.Shared.WorldDesign
 			T(a, POIType.Dockyard, "Slipway", Single, Timber)
 				.S(Slipway, 1, 1, Centre).S(Pier, 1, 2, Piers).S(House, 1, 1, Scatter).S(LeanTo, 1, 2, Scatter).S(Smithy, 0, 1, Scatter)
 				.S("=Woodpile", 2, 4, Scatter).S(Storage, 3, 6, Scatter).S("=Cart", 0, 1, Scatter).S(TorchPost, 1, 3, Scatter).Pad(0.6f);
+
+			// Mills (2026-10-14: "Windmills, watermills, lumbermills, and more"). The post mill on the rise the planner chose
+			// for its wind, among the fields it grinds for (PointOfInterestFields), the miller's cottage and granary by it.
+			T(a, POIType.Windmill, "Post", Single, Timber)
+				.S(PostMill, 1, 1, Centre).S(Cottage, 0, 1, Scatter).S(Granary, 0, 1, Scatter).S("=Cart", 0, 1, Scatter).S("=HayBales", 1, 2, Scatter)
+				.S(Storage, 1, 3, Scatter).Pad(0.6f);
+			// The watermill on the bank the planner sited it on, its front (the wheel's side) to the river. No pad: the site
+			// stands 7 m or so from a river's middle, and a levelled disc of its footprint filled the channel the wheel turns in.
+			T(a, POIType.Watermill, "Wheel", Single, Stone)
+				.S(Watermill, 1, 1, Centre).S(Cottage, 0, 1, Scatter, style: Timber).S("=Cart", 0, 1, Scatter, style: Timber).S(Storage, 2, 4, Scatter, style: Timber)
+				.S(Apiary, 0, 1, Scatter, style: Timber).Pad(0f);
+			// The sawmill likewise, its yard stacked with trunks waiting and planks seasoning, a pit for the odd job.
+			T(a, POIType.LumberMill, "Sash", Single, Timber)
+				.S(Sawmill, 1, 1, Centre).S(LogPile, 2, 4, Scatter).S(PlankStack, 2, 3, Scatter).S(SawPit, 0, 1, Scatter)
+				.S(Cottage, 0, 1, Scatter).S("=Cart", 0, 1, Scatter).S("=Woodpile", 1, 2, Scatter).Pad(0f);
 		}
 
 		// ── Wild camps and lairs ────────────────────────────────────
@@ -487,6 +511,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Elsewhere(0.2f).In(2f, Cold).In(1.5f, Steppe);
 
 			T(a, POIType.LumberCamp, "Timber", Round, Timber)
+				.S(SawPit, 1, 1, Scatter).S(LogPile, 1, 3, Scatter).S(PlankStack, 0, 2, Scatter).S(CharcoalClamp, 0, 1, Scatter)
 				.S(LeanTo, 2, 4, Ring).S(Fire, 1, 1, Centre).S(Storage, 4, 8, Scatter).S(Cottage, 0, 1, Scatter).S(Bedding, 1, 3, Scatter, style: Hide)
 				.Pad(0.7f);
 
@@ -535,10 +560,12 @@ namespace FishMMO.Shared.WorldDesign
 
 			T(a, POIType.Monastery, "Cloister", Walled, Stone)
 				.S(Wall, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(Shrine, 1, 1, Centre).S(Statue, 1, 2, Centre).S(Well, 1, 1, Centre)
-				.S(StoneHouse, 4, 8, Street).S(Storage, 2, 5, Scatter, style: Timber);
+				.S(StoneHouse, 4, 8, Street).S(Storage, 2, 5, Scatter, style: Timber)
+				.S(Dovecote, 0, 1, Scatter).S(Apiary, 1, 2, Scatter, style: Timber).S(Granary, 0, 1, Scatter, style: Timber);
 			T(a, POIType.Monastery, "Timber", Walled, Timber)
 				.S(Palisade, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(Shrine, 1, 1, Centre, style: Stone).S(Well, 1, 1, Centre, style: Stone)
 				.S(Longhouse, 1, 2, Street).S(House, 2, 5, Street).S(Storage, 2, 5, Scatter)
+				.S(Apiary, 1, 2, Scatter).S(Granary, 0, 1, Scatter)
 				.Elsewhere(0.4f).In(1.5f, Woods).In(1.5f, Cold);
 
 			T(a, POIType.FeyRing, "Ring", Round, Stone)

@@ -127,9 +127,20 @@ namespace FishMMO.Shared.WorldDesign
 					try
 					{
 						AddUrpData(camera);
-						Overview(camera, area, records, output, report);
-						PathShots(camera, PointOfInterestProbe.Asset(scene), output, report);
-						CloseUps(camera, records, maxShots, output, report);
+						/* FISHMMO_POI_KINDS (comma-separated kinds) renders only those sites' close-ups, every site of each
+						 * kind rather than one, with no overview or path shots. */
+						string kinds = Environment.GetEnvironmentVariable("FISHMMO_POI_KINDS");
+						if (string.IsNullOrEmpty(kinds))
+						{
+							Overview(camera, area, records, output, report);
+							PathShots(camera, PointOfInterestProbe.Asset(scene), output, report);
+							CloseUps(camera, records, maxShots, output, report);
+						}
+						else
+						{
+							var wanted = new HashSet<string>(kinds.Split(',').Select(k => k.Trim()), StringComparer.OrdinalIgnoreCase);
+							CloseUps(camera, records.Where(r => wanted.Contains(r.Kind.ToString())).ToList(), maxShots, output, report, everySite: true);
+						}
 					}
 					finally
 					{
@@ -334,15 +345,17 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>One shot per kind: built and shaped sites first, then the detected ones from further out.</summary>
-		private static void CloseUps(Camera camera, List<PointOfInterestRecord> records, int maxShots, string output, List<string> report)
+		private static void CloseUps(Camera camera, List<PointOfInterestRecord> records, int maxShots, string output, List<string> report, bool everySite = false)
 		{
+			// FISHMMO_POI_ANGLES: views per site, the first from in front, the rest swung round it and one from a walker's eye.
+			int angles = int.TryParse(Environment.GetEnvironmentVariable("FISHMMO_POI_ANGLES"), out int n) ? Mathf.Clamp(n, 1, 8) : 1;
 			camera.orthographic = false;
 			camera.fieldOfView = 50f;
 			camera.nearClipPlane = 0.3f;
 			camera.farClipPlane = 6000f;
 			camera.aspect = (float)CloseWidth / CloseHeight;
 			var chosen = records
-				.GroupBy(r => r.Kind)
+				.GroupBy(r => everySite ? r.Id : (int)r.Kind)
 				.Select(g => g.OrderByDescending(r => r.SizeClass).ThenBy(r => r.Id).First())
 				.OrderBy(r => r.Info.Has(PointOfInterestTraits.Detected) ? 1 : 0)
 				.ThenBy(r => r.Info.Group)
@@ -364,6 +377,13 @@ namespace FishMMO.Shared.WorldDesign
 				// From in front of the site: its yaw faces out of a slope, and a built site's front faces -z rotated by yaw.
 				float heading = r.Yaw + 180f;
 				Vector3 focus = r.Position + Vector3.up * (detected ? 0f : face ? 3f : Mathf.Min(6f, r.Radius * 0.15f));
+				if (r.Kind == POIType.Overhang)
+				{
+					// A perch is a whole cliff: from far enough out to see its face, its tongue and the wings either side.
+					distance = 70f;
+					elevation = 10f;
+					focus = r.Position + Vector3.up * 9f;
+				}
 				Vector3 eye = Eye(focus, heading, elevation, distance, underwater);
 				// Up until nothing of the ground stands between the eye and the site (a ridge hid whole villages).
 				for (int tries = 0; tries < 6 && !underwater && Occluded(eye, focus); tries++)
@@ -376,6 +396,53 @@ namespace FishMMO.Shared.WorldDesign
 				string file = $"site_{shot++:00}_{r.Kind}_{Slug(r.Name)}.png";
 				Capture(camera, CloseWidth, CloseHeight, Path.Combine(output, file));
 				report.Add($"{file}: {r.Kind} '{r.Name}' r={r.Radius:0} template={(string.IsNullOrEmpty(r.Template) ? "-" : r.Template)} at ({r.Position.x:0}, {r.Position.y:0}, {r.Position.z:0})");
+				for (int a = 1; a < angles; a++)
+				{
+					bool walker = a == angles - 1 && angles > 2;
+					float swing = walker ? 25f : (a % 2 == 1 ? 1f : -1f) * 65f * ((a + 1) / 2);
+					float aHeading = heading + swing;
+					Vector3 aEye = walker
+						? focus + Quaternion.Euler(0f, aHeading, 0f) * Vector3.forward * -Mathf.Max(18f, distance * 0.55f)
+						: Eye(focus, aHeading, Mathf.Max(8f, elevation * 0.6f), distance, underwater);
+					if (walker)
+					{
+						aEye.y = GroundUnder(aEye) + 1.7f;
+					}
+					for (int tries = 0; tries < 6 && !underwater && !walker && Occluded(aEye, focus); tries++)
+					{
+						aEye = Eye(focus, aHeading, Mathf.Min(80f, elevation + 9f * (tries + 1)), distance, underwater);
+					}
+					camera.transform.position = aEye;
+					camera.transform.LookAt(focus);
+					string aFile = $"site_{shot++:00}_{r.Kind}_{Slug(r.Name)}_{(walker ? "walker" : "angle" + a)}.png";
+					Capture(camera, CloseWidth, CloseHeight, Path.Combine(output, aFile));
+					report.Add($"{aFile}: heading {aHeading:0}");
+				}
+
+				// The kinds whose ground matters (a perch's cut face, a mill's bank) from overhead; a perch also from its clifftop,
+				// out along the tongue.
+				if (angles > 1 && (r.Kind == POIType.Overhang || r.Kind == POIType.Watermill || r.Kind == POIType.LumberMill || r.Kind == POIType.Windmill))
+				{
+					float yr = r.Yaw * Mathf.Deg2Rad;
+					var ahead = new Vector3(Mathf.Sin(yr), 0f, Mathf.Cos(yr));
+					camera.transform.position = r.Position + Vector3.up * (r.Kind == POIType.Overhang ? 75f : 48f) + ahead * 12f;
+					camera.transform.LookAt(r.Position - ahead * (r.Kind == POIType.Overhang ? 8f : 0f));
+					string topFile = $"site_{shot++:00}_{r.Kind}_{Slug(r.Name)}_overhead.png";
+					Capture(camera, CloseWidth, CloseHeight, Path.Combine(output, topFile));
+					report.Add($"{topFile}: overhead");
+					PointOfInterestShape shape = r.Kind == POIType.Overhang ? PointOfInterestProbe.Asset(EditorSceneManager.GetActiveScene())?.Shapes.Find(x => x.SiteId == r.Id && x.Shaper == OverhangShaper.ShaperName) : null;
+					if (shape != null && OverhangShaper.Plan.TryFrom(shape.Values, out OverhangShaper.Plan plan) && plan.Build == OverhangBuild.Perch)
+					{
+						foreach ((string name, Vector3 viewEye, Vector3 at) in OverhangShaper.PerchViews(plan, (x, z) => GroundUnder(new Vector3(x, 0f, z))))
+						{
+							camera.transform.position = viewEye;
+							camera.transform.LookAt(at);
+							string viewFile = $"site_{shot++:00}_{r.Kind}_{Slug(r.Name)}_{name}.png";
+							Capture(camera, CloseWidth, CloseHeight, Path.Combine(output, viewFile));
+							report.Add($"{viewFile}: perch {name}{(plan.HasPlinth ? " (on a plinth)" : "")}, scale {plan.Scale:0.00}");
+						}
+					}
+				}
 
 				// A cave also from inside its chamber, looking back up the tunnel, lit by a lamp at the eye.
 				ScenePointsOfInterest asset = PointOfInterestProbe.Asset(EditorSceneManager.GetActiveScene());
