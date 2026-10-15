@@ -506,6 +506,76 @@ namespace FishMMO.Shared.Biomes
 			return Mathf.Lerp(local, q, steadiness);
 		}
 
+		/// <summary>How far over open sea air takes on the sea's temperature, km: a few days' drift.</summary>
+		public const float MaritimeRechargeKm = 250f;
+
+		/// <summary>How far over land air keeps the sea's mildness, km (the e-folding of Conrad's continentality inland).</summary>
+		public const float MaritimeDecayKm = 900f;
+
+		/// <summary>
+		/// How continental a point's climate is, 0 (the sea's own: an ocean, or a coast the wind blows onto from it) … 1
+		/// (deep inland, where nothing tempers the land's seasons): which of the climate table's two columns it reads.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The same upwind walk as <see cref="Supply{T}"/>, with temperature in place of vapour: air off the sea arrives
+		/// with the sea's mild seasons and loses them crossing land, over about <see cref="MaritimeDecayKm"/>. So a west coast
+		/// under westerlies is maritime and the land behind it grows more continental the further the air has come — Brest's
+		/// 11 K year beside Yakutsk's 60 — while an east coast under the same wind is continental at the water's edge, as
+		/// New York and Vladivostok are.
+		/// </para>
+		/// <para>
+		/// The sea itself is 0. Where no steady wind blows the walk is weighted toward a half: the land's own seasons, partly
+		/// tempered by whatever sea is near. A world without air is wholly continental.
+		/// </para>
+		/// </remarks>
+		public float Continentality<T>(double latitudeDegrees, Vector3 direction, in T terrain) where T : struct, IMoistureTerrain
+		{
+			Vector3 p = direction.sqrMagnitude > 1e-12f ? direction.normalized : Vector3.up;
+			terrain.Sample(p, out _, out bool ocean);
+			if (ocean || AllSea)
+			{
+				return 0f;
+			}
+			if (!HasAir)
+			{
+				return 1f;
+			}
+			float latitude = (float)latitudeDegrees;
+			float zonal = WeatherDriver.ZonalWind(latitude, Belts);
+			float steadiness = Mathf.Clamp01(Mathf.Abs(zonal) / SteadyZonal);
+			float turn = zonal > 0f ? -1f : 1f;
+			float cosLatitude = Mathf.Max(1e-3f, Mathf.Cos(latitude * Mathf.Deg2Rad));
+
+			int last = UpwindArcs.Length - 1;
+			float marine = 0f, previousArc = 0f;
+			for (int i = last; i >= 0; i--)
+			{
+				float arc = UpwindArcs[i];
+				float angle = Mathf.Min(arc / cosLatitude, MaxLongitudeSweep) * turn;
+				terrain.Sample(AboutPole(p, angle), out _, out bool sampleOcean);
+				if (i == last)
+				{
+					marine = sampleOcean ? 1f : 0f;
+				}
+				else
+				{
+					marine = Marine(marine, (previousArc - arc) * RadiusKm, sampleOcean);
+				}
+				previousArc = arc;
+			}
+			marine = Marine(marine, previousArc * RadiusKm, false);
+			return 1f - Mathf.Lerp(0.5f * marine + 0.25f, marine, steadiness);
+		}
+
+		/// <summary>One stretch of the continentality walk: toward the sea's own over open sea, away from it over land.</summary>
+		private static float Marine(float marine, float km, bool ocean)
+		{
+			return ocean
+				? 1f - (1f - marine) * Mathf.Exp(-km / MaritimeRechargeKm)
+				: marine * Mathf.Exp(-km / MaritimeDecayKm);
+		}
+
 		/// <summary>
 		/// One stretch of the walk: the air crosses <paramref name="km"/> and arrives over ground at
 		/// <paramref name="altitude"/>. Returns what it lost to lifting on the way.

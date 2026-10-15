@@ -442,6 +442,55 @@ namespace FishMMO.UnitTests.WorldDesign
 			return most;
 		}
 
+		/// <summary>
+		/// A reversal between two long chords is cut off like any other: a line that runs out and back along one straight
+		/// chord each way turns back on itself however long the chords are. Taken against the chords' mean length, a 175°
+		/// turn between a 39 m and a 30 m chord passed for a gentle bend, and Flo Monolith's river 0 ran 39 m down its own
+		/// channel and back up beside it to a fall that dropped under the stretch it had come down (2026-10-15).
+		/// </summary>
+		[Test]
+		public void ARiverLineOutAndBackAlongLongChordsIsCutOff()
+		{
+			var settings = new RiverSettings();
+			var x = new List<float>();
+			var z = new List<float>();
+			var along = new List<float>();
+			void Add(float px, float pz)
+			{
+				x.Add(px);
+				z.Add(pz);
+				along.Add(along.Count);
+			}
+			for (float e = -60f; e < 0f; e += 4f)
+			{
+				Add(e, 0f);
+			}
+			// The out-and-back: one chord 39 m south, one 30 m back north beside it, then on east.
+			Add(0f, 0f);
+			Add(4.8f, -39f);
+			Add(3f, -9f);
+			for (float e = 7f; e <= 60f; e += 4f)
+			{
+				Add(e, -9f);
+			}
+			var widths = new float[x.Count];
+			for (int i = 0; i < widths.Length; i++)
+			{
+				widths[i] = 5.4f;
+			}
+			Assert.That(MostTurn(x, z), Is.GreaterThan(170f), "the line given doubles back");
+			float firstX = x[0], firstZ = z[0], lastX = x[x.Count - 1], lastZ = z[z.Count - 1];
+			Assert.That(RiverShaping.EaseBends(x, z, along, widths, settings), Is.GreaterThan(0), "the reversal is cut off");
+			Assert.That(new Vector4(x[0], z[0], x[x.Count - 1], z[z.Count - 1]), Is.EqualTo(new Vector4(firstX, firstZ, lastX, lastZ)), "its ends are kept");
+			Assert.That(MostTurn(x, z), Is.LessThan(90f), "nowhere does the line turn back on itself");
+			for (int i = 0; i < x.Count; i++)
+			{
+				Assert.That(z[i], Is.GreaterThan(-20f), $"point {i} at ({x[i]:0.0}, {z[i]:0.0}) still runs down the spike");
+			}
+			RiverShaping.Resample(x, z, along, 2f);
+			Assert.That(MostTurn(x, z), Is.LessThan(45f), "resampled finer, it still turns nowhere sharply");
+		}
+
 		/// <summary>How far a line turns at point <paramref name="i"/>, degrees.</summary>
 		private static float Turn(List<float> x, List<float> z, int i)
 		{
@@ -718,6 +767,55 @@ namespace FishMMO.UnitTests.WorldDesign
 				path.Bed[i] = surface[i] - 1f;
 			}
 			return path;
+		}
+
+		/// <summary>
+		/// A tributary's mouth flares onto the river it joins only as wide as the stretch of that river standing at the
+		/// mouth's level: wide onto slack water, not at all onto rapids, and between in between. Never narrower than its
+		/// own channel.
+		/// </summary>
+		[TestCase(0.001f, 2.2f, 2.2f)]
+		[TestCase(0.025f, 1.25f, 1.42f)]
+		[TestCase(0.08f, 1f, 1f)]
+		public void ATributarysMouthFlaresNoFurtherThanTheRiverItJoinsStandsAtItsLevel(float slope, float least, float most)
+		{
+			// The joined river runs north along x = 0, falling at the slope; the tributary comes in from the west at its level.
+			int m = 61;
+			var joinedSurface = new float[m];
+			for (int i = 0; i < m; i++)
+			{
+				joinedSurface[i] = 10f - slope * (i * 2f - 60f);
+			}
+			RiverPath joined = Line(joinedSurface, 2f, 20f, 6f);
+			for (int i = 0; i < m; i++)
+			{
+				joined.Z[i] = joined.X[i] - 60f;
+				joined.X[i] = 0f;
+			}
+			int n = 31;
+			var surface = new float[n];
+			for (int i = 0; i < n; i++)
+			{
+				surface[i] = 10f;
+			}
+			const float Width = 9f;
+			RiverPath tributary = Line(surface, 2f, 5f, Width);
+			for (int i = 0; i < n; i++)
+			{
+				tributary.X[i] -= 60f;
+			}
+			tributary.End = RiverEnd.Confluence;
+			float room = SceneWater.MouthRoom(joined, 0f, 0f, 10f);
+			Assert.That(room, Is.EqualTo(SceneWater.MouthLevelMetres / slope).Within(0.05f * SceneWater.MouthLevelMetres / slope + 0.01f).Or.GreaterThanOrEqualTo(60f));
+			SceneWater.Flare(tributary, joined);
+			float widest = 0f;
+			for (int i = 0; i < n; i++)
+			{
+				Assert.That(tributary.Width[i], Is.GreaterThanOrEqualTo(Width - 1e-4f), $"point {i} narrower than its own channel");
+				widest = Mathf.Max(widest, tributary.Width[i]);
+			}
+			Assert.That(widest / Width, Is.InRange(least - 0.02f, most + 0.02f), $"mouth {widest:0.00} m onto a river falling {slope} (room {room:0.00} m)");
+			Assert.That(widest, Is.LessThanOrEqualTo(Mathf.Max(Width, 2f * room) + 1e-3f), "its flat water reaches no further along the river than the river stands at its level");
 		}
 
 		[Test]

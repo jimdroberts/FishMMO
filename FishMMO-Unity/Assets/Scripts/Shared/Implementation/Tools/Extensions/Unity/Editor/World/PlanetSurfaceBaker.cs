@@ -128,6 +128,8 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return null;
 			}
+			// The globe is drawn from the body's climate table: have the one the game will read.
+			ClimateTableBaker.EnsureBaked(body);
 			if (!HasGround(body))
 			{
 				/* A gas giant has no ground, but it is the most striking thing in any sky it is in.
@@ -173,6 +175,13 @@ namespace FishMMO.Shared.WorldDesign
 			 * above the melting point of rock was drawn as blue sea here whenever it had any water at all,
 			 * while every scene cut from it was a magma ocean. */
 			bool hasLava = SurfaceLiquids.For(system, body, out float lavaLevelMetres) == SurfaceLiquid.Lava;
+
+			/* Sea ice by the scene's own rule (IceOccurrence): the year-averaged pack from the monthly sea-level air,
+			 * freezing at sea water's −1.8 °C over a 6 K ramp, blended into the water rather than switched. A world
+			 * whose seas are frozen through is solid shelf, as the scene generator lays it. Seas of anything but water
+			 * keep the plain freezing test: no scene places floating ice on them. */
+			bool waterSeas = hasOcean && !hasLava && SurfaceLiquids.For(system, body) == SurfaceLiquid.Water;
+			bool frozenThrough = waterSeas && climate.Conditions.IsFrozenThrough;
 
 			int height = Width / 2;
 			var texture = new Texture2D(Width, height, TextureFormat.RGBA32, false);
@@ -240,8 +249,6 @@ namespace FishMMO.Shared.WorldDesign
 					// The same helper the terrain generator uses, so the picture and the ground
 					// agree about how high a continent is.
 					float altitude = PlanetSurface.AltitudeFromHeight(h, profile, relief);
-					Vector3 direction = PlanetSurface.Direction(latitude, longitude);
-					float temperature = climate.TemperatureAt(latitude, direction, altitude);
 					/* Slope from the neighbours already taken. Scaled by the cosine of the
 					 * latitude because an equirectangular map's columns crowd together toward the
 					 * poles: without it a gentle slope near the pole shades like a cliff. */
@@ -266,7 +273,6 @@ namespace FishMMO.Shared.WorldDesign
 					hasPreviousHeight = true;
 					rowHeights[x] = h;
 					rowAltitudes[x] = altitude;
-					rowTemperatures[x] = temperature;
 					rowSlopes[x] = ((east / cosLat) * 0.7f + north * 0.7f) * polarFade;
 					rowSteepness[x] = Mathf.Sqrt(eastGrade * eastGrade + northGrade * northGrade) * polarFade;
 					moistureOceans[x] = hasSea && h <= profile.SeaLevel;
@@ -280,6 +286,11 @@ namespace FishMMO.Shared.WorldDesign
 					float altitude = rowAltitudes[x];
 					double longitude = (x + 0.5) * 360.0 / Width - 180.0;
 					Vector3 direction = PlanetSurface.Direction(latitude, longitude);
+					/* Temperature here: the year's mean from the body's climate table for this latitude and how far
+					 * inland the place is, cooled by its altitude — the same reading the scene generator and the running
+					 * game make. Read in this pass, where the row's land and sea are known, so the upwind walk that
+					 * decides how continental it is costs lookups rather than surface samples. */
+					rowTemperatures[x] = climate.TemperatureAt(latitude, direction, altitude, climate.Moisture.Continentality(latitude, direction, rowTerrain));
 
 					switch (Classify(hasLava, lavaLevelMetres, hasOcean, profile.SeaLevel, h, altitude))
 					{
@@ -288,9 +299,15 @@ namespace FishMMO.Shared.WorldDesign
 							pixels[row + x] = Lava(direction, seed);
 							continue;
 						case GlobePixel.Sea:
-							pixels[row + x] = Shade(h, profile, body, rowTemperatures[x], rowSlopes[x], internalHeat, direction, seed,
-								SeaDepth01(-altitude / (relief / PlanetSurface.EarthReliefMetres)));
+						{
+							float seaIce = frozenThrough ? 1f
+								: waterSeas ? IceOccurrence.SeaIceConcentrationAt(climate, latitude, direction)
+								: rowTemperatures[x] <= -0.05f ? 1f : 0f;
+							// Ice floats: the sea bed's slope is not lit through it.
+							pixels[row + x] = Shade(h, profile, body, rowTemperatures[x], rowSlopes[x] * (1f - seaIce), internalHeat, direction, seed,
+								SeaDepth01(-altitude / (relief / PlanetSurface.EarthReliefMetres)), seaIce);
 							continue;
+						}
 					}
 
 					BiomeTemplate biome = climate.BiomeAt(latitude, direction, h, altitude, rowTerrain, out PlanetSurfacePoint point);
@@ -649,7 +666,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		private static Color32 Shade(float h, PlanetSurface.PlanetProfile profile, WorldBody body, float temperature,
-			float slope, float internalHeat, Vector3 direction, uint seed, float seaDepth01)
+			float slope, float internalHeat, Vector3 direction, uint seed, float seaDepth01, float seaIce = 0f)
 		{
 			/* Relief shading, last, over whatever the ground turned out to be.
 			 *
@@ -669,7 +686,7 @@ namespace FishMMO.Shared.WorldDesign
 			 * one clamp or the other and turns a moon into an engraving. A crater field has hard
 			 * edges, so the step between neighbouring texels is far larger than a smooth heightmap's
 			 * and needs a far smaller multiplier, not a larger one. */
-			return Relief(ShadeColour(h, profile, body, temperature, internalHeat, direction, seed, seaDepth01), slope, body);
+			return Relief(ShadeColour(h, profile, body, temperature, internalHeat, direction, seed, seaDepth01, seaIce), slope, body);
 		}
 
 		/// <summary>
@@ -681,7 +698,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// before it is lit; the relief must come last, or the blend would smear the slope light too.
 		/// </remarks>
 		private static Color ShadeColour(float h, PlanetSurface.PlanetProfile profile, WorldBody body, float temperature,
-			float internalHeat, Vector3 direction, uint seed, float seaDepth01)
+			float internalHeat, Vector3 direction, uint seed, float seaDepth01, float seaIce = 0f)
 		{
 			bool hasOcean = body.Water > 0f;
 			bool airless = body.Atmosphere == AtmosphereKind.None;
@@ -690,11 +707,11 @@ namespace FishMMO.Shared.WorldDesign
 			if (hasOcean && h <= profile.SeaLevel)
 			{
 				float depth = seaDepth01;
-				// Frozen over where the sea itself would freeze, which is what makes a polar cap
-				// read as a cap rather than as a white ring on the land.
-				colour = temperature <= -0.05f
-					? Color.Lerp(new Color(0.86f, 0.91f, 0.95f), new Color(0.62f, 0.74f, 0.84f), depth)
-					: Color.Lerp(new Color(0.22f, 0.48f, 0.66f), new Color(0.02f, 0.07f, 0.20f), Smooth(0f, 1f, depth));
+				// Covered by as much ice as the sea holds over its year (the caller's seaIce), which is what makes a
+				// polar cap read as a cap rather than as a white ring on the land, and its edge a pack thinning out.
+				Color water = Color.Lerp(new Color(0.22f, 0.48f, 0.66f), new Color(0.02f, 0.07f, 0.20f), Smooth(0f, 1f, depth));
+				Color ice = Color.Lerp(new Color(0.86f, 0.91f, 0.95f), new Color(0.62f, 0.74f, 0.84f), depth);
+				colour = Color.Lerp(water, ice, Mathf.Clamp01(seaIce));
 			}
 			else
 			{

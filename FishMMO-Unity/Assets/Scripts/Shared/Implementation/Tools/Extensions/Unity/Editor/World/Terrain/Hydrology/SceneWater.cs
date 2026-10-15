@@ -775,7 +775,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// accordant junction): it does not hang above it as a step, which the water shows as a hard line where
 		/// its shallows meet the deeper channel.
 		/// </summary>
-		private static void Flare(RiverPath path, RiverPath joined, float lakeFloor = float.NaN)
+		public static void Flare(RiverPath path, RiverPath joined, float lakeFloor = float.NaN)
 		{
 			int last = path.Count - 1;
 			if (last < 2)
@@ -819,6 +819,11 @@ namespace FishMMO.Shared.WorldDesign
 			 * thin stream across a beach. */
 			bool lake = path.End == RiverEnd.Lake && !float.IsNaN(lakeFloor);
 			float reach = lake ? Mathf.Max(3f * path.Width[last], 20f) : 3f * path.Width[last];
+			/* Into a river: no wider than the stretch of it that stands at the mouth's level. The mouth is flat water at the
+			 * level it meets, and flared along a river falling past the junction its downstream half stood over that river's
+			 * lower water and banks: Flo Monolith's pond outlet, 19.5 m wide on a river dropping 2 m in 26 m, a sheet hung a
+			 * metre over the grass beside the rapids below the junction (2026-10-15). */
+			float room = joined != null ? MouthRoom(joined, path.X[last], path.Z[last], path.Surface[last]) : float.PositiveInfinity;
 			float mouthDepth = lake ? Mathf.Clamp(path.Surface[last] - lakeFloor, path.Depth[last], Mathf.Max(1.5f, 4f * path.Depth[last])) : 0f;
 			for (int i = last; i >= 0; i--)
 			{
@@ -828,7 +833,8 @@ namespace FishMMO.Shared.WorldDesign
 					break;
 				}
 				float t = 1f - fromEnd / reach;
-				path.Width[i] *= 1f + (lake ? 1.6f : 1.2f) * t * t;
+				float natural = path.Width[i];
+				path.Width[i] = Mathf.Max(natural, Mathf.Min(natural * (1f + (lake ? 1.6f : 1.2f) * t * t), 2f * room));
 				if (lake)
 				{
 					path.Depth[i] = Mathf.Lerp(path.Depth[i], Mathf.Max(path.Depth[i], mouthDepth), t * t * (3f - 2f * t));
@@ -842,6 +848,44 @@ namespace FishMMO.Shared.WorldDesign
 					path.Bed[i] = path.Surface[i] - path.Depth[i];
 				}
 			}
+		}
+
+		/// <summary>How far a river's surface may stand from a tributary's mouth's level and still be the water the mouth opens onto, metres.</summary>
+		public const float MouthLevelMetres = 0.15f;
+
+		/// <summary>
+		/// How far along <paramref name="joined"/>, up and down from where a tributary ending at (<paramref name="x"/>,
+		/// <paramref name="z"/>) meets it, its surface stays within <see cref="MouthLevelMetres"/> of the mouth's
+		/// <paramref name="level"/>: the lesser of the two, metres (0 where it meets it off that level, at a fall).
+		/// </summary>
+		public static float MouthRoom(RiverPath joined, float x, float z, float level)
+		{
+			if (joined == null || joined.Count < 2 || joined.Surface == null || joined.S == null)
+			{
+				return float.PositiveInfinity;
+			}
+			Nearest(joined, x, z, out _, out _, out int at);
+			float Off(int k) => Mathf.Abs(joined.Surface[k] - level);
+			if (Off(at) > MouthLevelMetres)
+			{
+				return 0f;
+			}
+			float Room(int direction)
+			{
+				for (int k = at + direction; k >= 0 && k < joined.Count; k += direction)
+				{
+					float off = Off(k);
+					if (off > MouthLevelMetres)
+					{
+						int previous = k - direction;
+						float before = Off(previous);
+						float f = Mathf.Clamp01((MouthLevelMetres - before) / Mathf.Max(1e-5f, off - before));
+						return Mathf.Abs(joined.S[previous] - joined.S[at]) + f * Mathf.Abs(joined.S[k] - joined.S[previous]);
+					}
+				}
+				return Mathf.Abs(joined.S[direction < 0 ? 0 : joined.Count - 1] - joined.S[at]);
+			}
+			return Mathf.Min(Room(-1), Room(1));
 		}
 
 		/// <summary>

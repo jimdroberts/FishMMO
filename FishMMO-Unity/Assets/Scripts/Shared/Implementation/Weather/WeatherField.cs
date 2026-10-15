@@ -17,8 +17,13 @@ namespace FishMMO.Shared.Weather
 		/// </summary>
 		public WeatherFrame Background;
 		public BiomeTemplate Biome;
-		/// <summary>Local climate temperature, runtime offsets included.</summary>
+		/// <summary>The air's temperature on the climate scale, runtime offsets included: <see cref="Kelvin"/>, clamped to ±1.</summary>
 		public float Temperature;
+		/// <summary>
+		/// The air's temperature, K, unclamped: the climate's, the air mass's and the hour's (<see cref="SurfaceTemperature"/>).
+		/// What anything physical, and anything a player is told, reads.
+		/// </summary>
+		public float Kelvin;
 		/// <summary>0 in the open … 1 fully under cover.</summary>
 		public float Shelter;
 
@@ -87,6 +92,10 @@ namespace FishMMO.Shared.Weather
 			{
 				// Through the scene's own drift: the wind it reports, with what was added, carries its weather along.
 				AirDrift.At(DriftAir(timeline, settings, belts), worldSeconds, out double driftX, out double driftY);
+				// Read where this scene stands on its world, so two scenes far apart have their own weather and two side by side share a front.
+				PlanetOrigin(settings, out double originX, out double originY);
+				driftX -= originX;
+				driftY -= originY;
 				return WeatherDriver.Sample(WeatherDriver.WorldSeed, position, worldSeconds, timeline.LatitudeDegrees, season01, localTime01, belts, driftX, driftY);
 			}
 			float latitude = timeline != null ? timeline.LatitudeDegrees : 0f;
@@ -100,6 +109,42 @@ namespace FishMMO.Shared.Weather
 				LocalTime01 = Mathf.Repeat(localTime01, 1f),
 				Wind = WeatherDriver.PrevailingWind(latitude, belts) * AirDrift.StillWind,
 			};
+		}
+
+		/// <summary>
+		/// Where a scene stands on its world, in metres along its surface: east and north from the world's origin on the
+		/// sphere the scene was cut from. The weather field is read at a scene position plus this.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>One world's weather, not one patch of it (2026-10-15).</b> The field was read at scene-local metres, so every
+		/// scene on a world read the same patch of it — a scene at the pole and one on the equator had the same fronts at the
+		/// same moment, offset only by how differently their winds had carried them. Now each reads its own place, on the
+		/// atlas's sphere (the scale its scenes are cut at and players travel), so neighbours share a front crossing from one
+		/// to the next and the far side of the world has its own.
+		/// </para>
+		/// <para>
+		/// Folded into the drift (a feature at x0 is read at p − drift, so subtracting this reads p + origin), and the sky
+		/// subtracts the same from the drift it hands the clouds: the cloud overhead and the weather under it stay one air.
+		/// Zero for a scene placed nowhere.
+		/// </para>
+		/// </remarks>
+		public static void PlanetOrigin(WorldSceneSettings settings, out double x, out double y)
+		{
+			x = 0.0;
+			y = 0.0;
+			FishMMO.Shared.Atlas.WorldAtlasScene entry = settings != null ? settings.AtlasEntry : null;
+			if (entry == null || !entry.Placed)
+			{
+				return;
+			}
+			double radiusKm = entry.CutRadiusKm > 0f ? entry.CutRadiusKm
+				: entry.Body != null ? entry.Body.AtlasRadiusKm : 30.0;
+			double metres = radiusKm * 1000.0;
+			double latitude = entry.Latitude * System.Math.PI / 180.0;
+			double longitude = entry.Longitude * System.Math.PI / 180.0;
+			x = longitude * System.Math.Cos(latitude) * metres;
+			y = latitude * metres;
 		}
 
 		/// <summary>
@@ -258,7 +303,8 @@ namespace FishMMO.Shared.Weather
 			SceneClimate.OffsetsAt(settings, timeline, worldSeconds, out float runtimeTemperature, out float runtimeHumidity);
 			BiomeReading reading = BiomeSampler.Read(position, settings, runtimeTemperature, runtimeHumidity);
 			sample.Biome = reading.Biome;
-			sample.Temperature = reading.Climate.Temperature;
+			sample.Kelvin = reading.Climate.KelvinOrScale;
+			sample.Temperature = ClimateModel.ToScale(sample.Kelvin);
 
 			WeatherSceneMode mode = timeline != null ? timeline.SceneMode : WeatherSceneMode.None;
 			// The body this weather is for: the scene's own, or the one a test bed stands the scene on.
@@ -266,20 +312,34 @@ namespace FishMMO.Shared.Weather
 			// A giant's scenes have its habitable layer's air, not its whole depth's (CloudWorld).
 			FishMMO.Shared.Celestial.AtmosphereKind atmosphere = FishMMO.Shared.Celestial.CloudWorld.AtmosphereOf(weatherBody);
 			bool airless = atmosphere == FishMMO.Shared.Celestial.AtmosphereKind.None;
-			if (timeline == null || mode != WeatherSceneMode.Own || airless)
-			{
-				return false;
-			}
 
 			// Where and when. The season and the hour are worked out here, on both sides, from the
 			// clock anchor the server sent; sending them instead would freeze them at whatever they
 			// were when the client joined.
 			double worldHours = worldSeconds / 3600.0;
 			SolarSystemProfile system = SolarSystemProfile.Active;
-			float season01 = CelestialMath.Season01(system, weatherBody, worldHours);
-			float localTime01 = system != null && weatherBody != null
+			float localTime01 = system != null && weatherBody != null && timeline != null
 				? (float)CelestialMath.LocalTime01(system, weatherBody, worldHours, timeline.LongitudeDegrees)
 				: 0.5f;
+			float daylightShare = DaylightShare(system, weatherBody, worldHours, timeline != null ? timeline.LatitudeDegrees : 0f);
+			// The latitude the place's own climate is read at: its true one in a scene cut from the globe.
+			double climateLatitude = settings != null && (timeline == null || timeline.BodyOverride == null)
+				? settings.LatitudeAt(position)
+				: (timeline != null ? timeline.LatitudeDegrees : 0.0);
+
+			if (timeline == null || mode != WeatherSceneMode.Own || airless)
+			{
+				// No weather here, but an airless world under the sky still has its days: scorching noons, frozen nights.
+				if (airless && timeline != null && mode == WeatherSceneMode.Own)
+				{
+					sample.Kelvin += SurfaceTemperature.DayKelvin(atmosphere, reading.Climate.Continentality, 0f, localTime01, daylightShare,
+						system != null && weatherBody != null ? CelestialMath.SolarDayHours(system, weatherBody) : 24.0);
+					sample.Temperature = ClimateModel.ToScale(sample.Kelvin);
+				}
+				return false;
+			}
+
+			float season01 = CelestialMath.Season01(system, weatherBody, worldHours);
 
 			// What is added to the air here: the scene's authored offsets, the runtime ones and any
 			// volume's. Their temperature is already in the climate reading (it is the climate's); a
@@ -287,7 +347,6 @@ namespace FishMMO.Shared.Weather
 			AirOffsets volume = WeatherVolumeRegistry.OffsetsAt(scene, position);
 			AirOffsets offsets = (settings != null ? settings.AuthoredAir : default) + timeline.Air.AtSeconds(worldSeconds) + volume;
 			sample.Offsets = offsets;
-			sample.Temperature = Mathf.Clamp(sample.Temperature + volume.TemperatureScale, -1f, 1f);
 
 			PlanetAir planet = offsets.Apply(PlanetAir.For(system, weatherBody));
 			sample.Planet = planet;
@@ -302,23 +361,26 @@ namespace FishMMO.Shared.Weather
 			air = WeatherDriver.InClimate(air, reading.Climate.Temperature);
 			// And how much of a day it is having: toward the poles the sun stops setting for part of
 			// the year and stops rising for another, and the weather's daily rhythm is the sun's.
-			if (system != null && weatherBody != null)
+			if (daylightShare >= 0f)
 			{
-				double day = CelestialMath.SolarDayHours(system, weatherBody);
-				if (!double.IsInfinity(day) && day > 1e-6)
-				{
-					air = WeatherDriver.UnderSun(air, (float)(CelestialMath.DaylightHours(system, weatherBody, worldHours, timeline.LatitudeDegrees) / day));
-				}
+				air = WeatherDriver.UnderSun(air, daylightShare);
 			}
 			air = offsets.Apply(air);
-			// The field carries its own air mass's warmth on top of the place's climate.
-			sample.Temperature = Mathf.Clamp(sample.Temperature + air.Temperature * 0.35f, -1f, 1f);
+			// The place's climate, the air mass the field has brought and the hour of the day, and a volume's own warmth.
+			sample.Kelvin = SurfaceTemperature.AirKelvin(reading.Climate, air, system, weatherBody, climateLatitude, worldHours, localTime01, daylightShare)
+				+ volume.Temperature;
+			sample.Temperature = ClimateModel.ToScale(sample.Kelvin);
 			sample.OpenAir = air;
 
-			bool underWater = reading.IsGrounded && settings != null && settings.Climate != null && reading.Height < settings.Climate.WaterSurfaceHeight;
+			// Under water by the height the reading was taken on: planet-relative (water line fixed) in a scene cut from the
+			// globe, the scene's own climate asset's otherwise.
+			ScenePlacementClimate placement = settings != null ? settings.PlacementClimate : null;
+			float waterLine = placement != null && placement.Generated ? ClimateModel.DefaultWaterSurfaceHeight
+				: settings != null && settings.Climate != null ? settings.Climate.WaterSurfaceHeight : ClimateModel.DefaultWaterSurfaceHeight;
+			bool underWater = reading.IsGrounded && settings != null && reading.Height < waterLine;
 			GroundTraits ground = GroundTraits.Of(reading.IsGrounded ? reading.Biome : null, underWater);
 			sample.Ground = ground;
-			float kelvin = planet.SurfaceKelvin(sample.Temperature);
+			float kelvin = sample.Kelvin;
 			// The weather this air makes with no storm over it.
 			sample.OpenColumn = AirColumn.Of(planet, kelvin, air.Humidity, air.Pressure, air.Instability);
 			state = new OpenState
@@ -331,6 +393,21 @@ namespace FishMMO.Shared.Weather
 				Kelvin = kelvin,
 			};
 			return true;
+		}
+
+		/// <summary>How much of the day the sun is up at a latitude today, 0 … 1; -1 when the body has no day to share.</summary>
+		public static float DaylightShare(SolarSystemProfile system, WorldBody body, double worldHours, double latitude)
+		{
+			if (system == null || body == null)
+			{
+				return -1f;
+			}
+			double day = CelestialMath.SolarDayHours(system, body);
+			if (double.IsInfinity(day) || day <= 1e-6)
+			{
+				return -1f;
+			}
+			return Mathf.Clamp01((float)(CelestialMath.DaylightHours(system, body, worldHours, latitude) / day));
 		}
 
 		/// <summary>The rest of a full sample, from its open air: what falls, the storms, the volumes.</summary>

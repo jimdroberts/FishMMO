@@ -234,6 +234,11 @@ namespace FishMMO.Shared.WorldDesign
 			 * on a deferred call that never runs before a batch method returns, and a scene cut without them
 			 * came out painted in plain bands with a different planet's rivers. */
 			FishMMO.Shared.NameGeneration.Editor.NamingTemplateEditorLoader.EnsureLoaded();
+			// The ground is painted from the body's climate table: bake the one the running scene will read.
+			if (ClimateTableBaker.EnsureBaked(request.Body))
+			{
+				AssetDatabase.SaveAssetIfDirty(request.Body);
+			}
 			if (request.Body == null)
 			{
 				return SceneGenerationResult.Failed("A scene has to stand on a celestial body. Choose one on the atlas first.");
@@ -387,10 +392,10 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					// And the banks: where the ground beside a river lies under its water within its drawn margin.
 					var worstBreaches = new List<string>();
-					int breaches = RiverBurial.Breaches(water?.Rivers, groundAt, worstBreaches);
+					int breaches = RiverBurial.Breaches(water?.Rivers, groundAt, worstBreaches, water);
 					if (breaches != breached)
 					{
-						string banks = $"River banks under their water after {stage}: {breaches} point(s){(worstBreaches.Count > 0 ? ": " + string.Join("; ", worstBreaches) : string.Empty)}.";
+						string banks = $"River water its banks do not hold after {stage}: {breaches} point(s){(worstBreaches.Count > 0 ? ": " + string.Join("; ", worstBreaches) : string.Empty)}.";
 						result.Notes.Add(banks);
 						Debug.Log($"[Scene generator] '{request.SceneName}' {banks}");
 						breached = breaches;
@@ -486,7 +491,8 @@ namespace FishMMO.Shared.WorldDesign
 				CheckRivers("the paint, the cliffs and their talus", tileGround);
 				clock.Lap("Biomes: paint, scatter, cliffs and boulders");
 				// After the paint, so the boulders it placed are in it.
-				string hydrologyPath = SaveWater(request, terrainFolder, water, tileGround);
+				string hydrologyPath = SaveWater(request, terrainFolder, water, tileGround, result.Notes);
+				CheckRivers("the water measured on the finished ground", tileGround);
 				if (hydrologyPath != null)
 				{
 					result.Wrote.Add(hydrologyPath);
@@ -1347,11 +1353,23 @@ namespace FishMMO.Shared.WorldDesign
 		/// it in place when it exists so its GUID survives. Returns its path; null when there is no water.
 		/// </summary>
 		/// <param name="ground">The finished ground at (east, north), scene metres: what the rivers' shores are measured on.</param>
-		internal static string SaveWater(SceneGenerationRequest request, string terrainFolder, SceneWater water, Func<float, float, float> ground)
+		internal static string SaveWater(SceneGenerationRequest request, string terrainFolder, SceneWater water, Func<float, float, float> ground,
+			List<string> notes = null)
 		{
 			if (water == null || !water.Any)
 			{
 				return null;
+			}
+			/* The water from the ground it ends up in: every river and lake stood no higher than its banks and rim hold on the
+			 * finished ground (WaterSettle). Everything that reshapes the ground (the sites' pads and moats, the ways, the cliffs)
+			 * has run by now; the sites placed after it only hole the ground, and the NavMesh, the backdrop and the flow read this. */
+			if (ground != null)
+			{
+				foreach (string note in WaterSettle.Settle(water, ground))
+				{
+					notes?.Add(note);
+					Debug.Log($"[Scene generator] '{request.SceneName}' {note}");
+				}
 			}
 			string path = HydrologyPath(terrainFolder, request.SceneName);
 			var asset = AssetDatabase.LoadAssetAtPath<SceneHydrology>(path);

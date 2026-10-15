@@ -1891,6 +1891,10 @@ namespace FishMMO.Client
 			airSettings = context.Settings;
 			AirDrift.Air driftAir = WeatherField.DriftAir(context.Timeline, context.Settings, WeatherField.BeltsAt(context.Timeline, context.Settings, worldSeconds));
 			AirDrift.At(driftAir, worldSeconds, out double driftX, out double driftY);
+			// The scene's place on its world, as the weather field reads it (WeatherField.PlanetOrigin): the same air.
+			WeatherField.PlanetOrigin(context.Settings, out double originX, out double originY);
+			driftX -= originX;
+			driftY -= originY;
 			cloudDrift = new Vector2((float)(driftX - System.Math.Floor(driftX / WeatherDriver.DriftWrapMetres) * WeatherDriver.DriftWrapMetres),
 				(float)(driftY - System.Math.Floor(driftY / WeatherDriver.DriftWrapMetres) * WeatherDriver.DriftWrapMetres));
 			cloudSteering = AirDrift.SpeedAt(driftAir, worldSeconds);

@@ -250,14 +250,11 @@ namespace FishMMO.Client
 			uint tick = CurrentTick();
 			// The one sum the server, this client and the bed all make (SceneClimate), of this moment.
 			SceneClimate.Apply(settings, timeline, timeline.WorldSecondsAt(tick));
-			SolarSystemProfile system = SolarSystemProfile.Active;
-			WorldBody body = SceneTime.BodyOf(settings);
-			if (system != null && body != null && WorldClock.Shared.HasAnchor)
+			// The season for foliage: from the place's own climate on the same clock, and the humidity swing the climate uses.
+			if (WorldClock.Shared.HasAnchor
+				&& SceneClimate.Foliage(settings, WorldClock.Shared.WorldHoursAt(tick), out float phase, out float growing, out float winter))
 			{
-				double hours = WorldClock.Shared.WorldHoursAt(tick);
-				CelestialMath.SeasonalClimateOffsets(system, body, hours, settings.Latitude, out _, out float bh);
-				// The season for foliage: the same clock and the same humidity swing the climate uses.
-				WeatherShaderGlobals.ApplySeason(CelestialMath.Season01(system, body, hours), (float)settings.Latitude, bh);
+				WeatherShaderGlobals.ApplySeason(phase, growing, settings.RuntimeHumidityOffset, winter);
 			}
 			else
 			{

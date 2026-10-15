@@ -643,6 +643,63 @@ namespace FishMMO.Shared.WorldMaps
 		}
 
 		/// <summary>
+		/// Sets a scene up to be photographed exactly as the map bake photographs it — every level of detail held at
+		/// full, the capture staging (equinox noon sun, weather and ground cover cleared) and the scene's terrain art
+		/// bound — and returns what takes it all down again, last first.
+		/// </summary>
+		/// <remarks>
+		/// For any other overhead photograph of a scene that should show the scene rather than whatever the editor was
+		/// last left showing: the World Atlas's footprint previews took the sky, the snow and the wet ground of the last
+		/// play session into the picture, so a temperate coast could be photographed white. The scene should be the
+		/// active one, as the bake has it: the sun and the ambient are the active scene's render settings.
+		/// </remarks>
+		/// <param name="scene">The open scene.</param>
+		/// <param name="camera">The overhead camera, already placed and sized.</param>
+		public static IDisposable StageCapture(Scene scene, Camera camera)
+		{
+			var staged = new List<IDisposable>();
+			try
+			{
+				WorldSceneSettings settings = null;
+				foreach (GameObject root in scene.GetRootGameObjects())
+				{
+					settings = root.GetComponentInChildren<WorldSceneSettings>(true);
+					if (settings != null)
+					{
+						break;
+					}
+				}
+				float reach = camera.farClipPlane + camera.orthographicSize * Mathf.Sqrt(1f + camera.aspect * camera.aspect);
+				staged.Add(WorldMapDetailOverride.Apply(scene, reach, camera.orthographicSize));
+				Stage(WorldMapCaptureContext.For(scene, settings, camera), staged);
+				BindTerrainArrays(scene);
+			}
+			catch
+			{
+				Unstage(staged);
+				throw;
+			}
+			return new StagedCapture(staged);
+		}
+
+		/// <summary>What <see cref="StageCapture"/> returns: <see cref="Unstage"/> once, on dispose.</summary>
+		private sealed class StagedCapture : IDisposable
+		{
+			private List<IDisposable> staged;
+
+			public StagedCapture(List<IDisposable> staged) => this.staged = staged;
+
+			public void Dispose()
+			{
+				if (staged != null)
+				{
+					Unstage(staged);
+					staged = null;
+				}
+			}
+		}
+
+		/// <summary>
 		/// Runs every <see cref="CaptureStaging"/> hook, adding what each returns to
 		/// <paramref name="staged"/> as it goes, so that whatever has run is undone even if a later
 		/// hook throws.

@@ -13,11 +13,13 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>A ditch, mostly wet.</b> A ring <see cref="Width"/> across and <see cref="Depth"/> deep with 45° banks (the
-	/// NavMesh agent's limit, so it is a barrier to a charge, not to a climb) and a flat bottom, filled with water a little
-	/// under its lower bank (<see cref="AddWater"/>) except in a dry climate or on a slope that leaves most of it above
-	/// the level. Not every stronghold has one: a fortress most often, a keep least, and none on ground too steep to ring
-	/// (a moat on a hillside is a terrace) or where a river already runs round it.
+	/// <b>A wet ditch.</b> A ring <see cref="Width"/> across with 45° banks (the NavMesh agent's limit, so it is a barrier to a
+	/// charge, not to a climb) down to one level floor, <see cref="Depth"/> under the lowest point of its rim: on a slope the
+	/// uphill side is dug deeper, so the whole ring holds water at one level, a little under that lowest point
+	/// (<see cref="AddWater"/>), frozen where the biome is cold. Only a dry climate leaves it a dry ditch. The level is
+	/// measured again on the finished ground when the scene's water is saved (WaterSettle), so whatever later cut its rim,
+	/// the water stands under it. Not every stronghold has one: a fortress most often, a keep least, and none on ground too
+	/// steep to ring (a moat on a hillside is a terrace) or where a river already runs round it.
 	/// </para>
 	/// <para>
 	/// <b>Idempotent.</b> The banks' levels are read from the ground a little inside and outside the ring, which the ditch
@@ -77,13 +79,14 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return;
 			}
+			float floor = lo - depth;
 			var area = Rect.MinMaxRect(c.x - outer - 1f, c.z - outer - 1f, c.x + outer + 1f, c.z + outer + 1f);
 			PointOfInterestTerrain.EditHeights(context.Terrains, context.Tiles, area, (x, z, h) =>
 			{
-				float target = Ditch(x - c.x, z - c.z, inner, width, depth, rimIn, rimOut);
+				float target = Ditch(x - c.x, z - c.z, inner, width, floor, rimIn, rimOut);
 				return float.IsNaN(target) ? h : Mathf.Min(h, target);
 			});
-			bool wet = AddWater(context, site, inner, width, depth, rimIn, rimOut, rng);
+			bool wet = AddWater(context, site, inner, width, rimIn, rimOut);
 			context.AddKeepOut(site, c.x, c.z, outer + 1f);
 			context.AddShape(new PointOfInterestShape
 			{
@@ -132,16 +135,15 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Fills the ditch with water (a lake of the scene's, written with its hydrology so it is drawn, swum and kept by a
-		/// repaint), level a little under its lowest bank: where the climate is not dry, most of the time, and where at least
-		/// half the ring lies under that level (on a slope the ditch's high side stays dry, as a real one would). Frozen
-		/// where the biome is cold. False when it stays a dry ditch.
+		/// repaint), level <see cref="Freeboard"/> under its lowest bank, all round the ring (its floor is level under that bank,
+		/// <see cref="Ditch"/>). Frozen where the biome is cold; false, a dry ditch, only where the climate is dry.
 		/// </summary>
-		private static bool AddWater(PointOfInterestPlanContext context, PointOfInterestRecord site, float inner, float width, float depth,
-			float[] rimIn, float[] rimOut, DeterministicRNG rng)
+		private static bool AddWater(PointOfInterestPlanContext context, PointOfInterestRecord site, float inner, float width,
+			float[] rimIn, float[] rimOut)
 		{
 			SceneWater water = context.Water;
 			SceneWaterGrid grid = water?.Grid;
-			if (grid == null || rng.NextFloat() >= 0.75f)
+			if (grid == null)
 			{
 				return false;
 			}
@@ -160,24 +162,14 @@ namespace FishMMO.Shared.WorldDesign
 				level = Mathf.Min(level, Mathf.Min(rimIn[i], rimOut[i]));
 			}
 			level -= Freeboard;
-			int wetSpokes = 0;
+			// Seeded down the floor's middle all round (it lies Depth under the lowest bank, so under the level everywhere).
 			var seeds = new List<Vector2>();
 			Vector3 c = site.Position;
-			for (int i = 0; i < rimIn.Length; i++)
+			const int SeedCount = 8;
+			for (int k = 0; k < SeedCount; k++)
 			{
-				if (0.5f * (rimIn[i] + rimOut[i]) - depth < level - 0.5f)
-				{
-					wetSpokes++;
-					if (seeds.Count < 8 && i % 12 == 0)
-					{
-						float a = i * Mathf.PI * 2f / rimIn.Length;
-						seeds.Add(new Vector2(c.x + Mathf.Sin(a) * (inner + 0.5f * width), c.z + Mathf.Cos(a) * (inner + 0.5f * width)));
-					}
-				}
-			}
-			if (wetSpokes * 2 < rimIn.Length)
-			{
-				return false;
+				float a = k * Mathf.PI * 2f / SeedCount;
+				seeds.Add(new Vector2(c.x + Mathf.Sin(a) * (inner + 0.5f * width), c.z + Mathf.Cos(a) * (inner + 0.5f * width)));
 			}
 			float outer = inner + width;
 			int id = LakeIdBase | (site.Id & 0x00FFFFFF);
@@ -227,8 +219,14 @@ namespace FishMMO.Shared.WorldDesign
 			return true;
 		}
 
-		/// <summary>The ditch's floor at an offset from the centre, or NaN outside the ring.</summary>
-		private static float Ditch(float dx, float dz, float inner, float width, float depth, float[] rimIn, float[] rimOut)
+		/// <summary>
+		/// The ditch's ground at an offset from the centre, or NaN outside the ring: a bank down from each lip (the inner and
+		/// outer bank's own level there) to the level <paramref name="floor"/>, at 45° or, on a slope's high side where the ring
+		/// is too narrow for that, steeper, so the middle <see cref="FloorShare"/> of the ring is always floor. A floor following
+		/// the ground instead (each spoke its own depth under its own banks) held no one level on a slope: the water filled the
+		/// low side and left the high side a dry trench above it.
+		/// </summary>
+		public static float Ditch(float dx, float dz, float inner, float width, float floor, float[] rimIn, float[] rimOut)
 		{
 			float r = Mathf.Sqrt(dx * dx + dz * dz);
 			float s = (r - inner) / width;
@@ -239,13 +237,15 @@ namespace FishMMO.Shared.WorldDesign
 			float a = Mathf.Repeat(Mathf.Atan2(dx, dz), Mathf.PI * 2f) / (Mathf.PI * 2f) * rimIn.Length;
 			int i0 = (int)a % rimIn.Length, i1 = (i0 + 1) % rimIn.Length;
 			float f = a - Mathf.Floor(a);
-			float top = Mathf.Lerp(Mathf.Lerp(rimIn[i0], rimIn[i1], f), Mathf.Lerp(rimOut[i0], rimOut[i1], f), s);
-			// 45° banks (a run of the depth each side), a flat bottom between, the bank's lip softened over half a metre.
-			float bank = depth / width;
-			float t = s < bank ? s / bank : s > 1f - bank ? (1f - s) / bank : 1f;
-			float lip = Mathf.Clamp01(Mathf.Min(s, 1f - s) * width / 0.5f);
-			return top - depth * Mathf.Min(t, lip * t + (1f - lip) * t * t);
+			float lipIn = Mathf.Lerp(rimIn[i0], rimIn[i1], f), lipOut = Mathf.Lerp(rimOut[i0], rimOut[i1], f);
+			// A metre down for each metre in from either lip, or as steep as reaches the floor within its share of the width.
+			float run = 0.5f * (1f - FloorShare) * width;
+			float slopeIn = Mathf.Max(1f, (lipIn - floor) / run), slopeOut = Mathf.Max(1f, (lipOut - floor) / run);
+			return Mathf.Max(floor, Mathf.Max(lipIn - s * width * slopeIn, lipOut - (1f - s) * width * slopeOut));
 		}
+
+		/// <summary>The share of the ditch's width, across its middle, that is always its level floor.</summary>
+		public const float FloorShare = 0.2f;
 
 		/// <summary>The moat stored for a site: its inner radius, width and depth; false when it has none.</summary>
 		public static bool TryMoat(ScenePointsOfInterest points, int siteId, out Vector3 centre, out float inner, out float width, out float depth)

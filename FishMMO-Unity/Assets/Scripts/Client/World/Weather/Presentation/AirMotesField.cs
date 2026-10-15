@@ -60,7 +60,7 @@ namespace FishMMO.Client
 			float freezingKelvin = AirPhysics.FreezingKelvin(sample.Planet.Condensate);
 			float celsius = sample.Column.SurfaceKelvin > 0f
 				? sample.Column.SurfaceKelvin - 273.15f
-				: context.Temperature * (float)ClimateModel.KelvinPerUnit;
+				: sample.Kelvin > 0f ? sample.Kelvin - 273.15f : context.Temperature * (float)ClimateModel.KelvinPerUnit;
 			BiomeTemplate biome = sample.Biome;
 			TerrainProcess ground = biome != null ? biome.ResolvedTerrainProcess : default;
 			return new AirMotesClimate

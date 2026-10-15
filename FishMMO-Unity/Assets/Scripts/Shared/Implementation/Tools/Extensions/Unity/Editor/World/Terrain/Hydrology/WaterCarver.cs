@@ -194,12 +194,14 @@ namespace FishMMO.Shared.WorldDesign
 			float[] barSand = null;
 			// Per sample: which point of its owner it is most inside (for a ponded stretch, which builds nothing).
 			int[] pointOf = null;
-			// Per sample: the highest water within a levee's reach of it, from ANY river or reach, and how far out from
-			// that water's channel it stands (the levee's falloff).
-			float[] holdTop = null;
-			float[] holdOutside = null;
+			/* Per sample: the highest ground any water within a levee's reach of it needs, from ANY river or reach: that water's
+			 * levee top, less its back slope past the crest for how far out from the water's channel the sample stands. Kept as
+			 * the highest top and its distance instead, a pool's outlet 11.7 m off (back-sloped to 245.0 m) decided a sample 2.9 m
+			 * from the rapid below it (which needed 247.5 m), and the rapid ran 2 m over a scour hole beside it (Flo Monolith,
+			 * 2026-10-15). */
+			float[] holdNeed = null;
 			/* Per sample: the highest water it stands beside, from a channel it lies across from (not off a segment's end): what
-			 * the water's edge is held to. holdTop reaches a levee's distance round every point, so in a steep rapid it is the
+			 * the water's edge is held to. The levee hold (holdNeed) reaches a levee's distance round every point, so in a steep rapid it is the
 			 * water two or three points upstream, half a metre higher, and an edge held to it stood over the water beside it
 			 * (2026-10-13 re-cut: 131 pinched points, from 51). */
 			float[] edgeTop = null;
@@ -371,8 +373,7 @@ namespace FishMMO.Shared.WorldDesign
 								barWidth = new float[count];
 								barSand = new float[count];
 								pointOf = new int[count];
-								holdTop = new float[count];
-								holdOutside = new float[count];
+								holdNeed = new float[count];
 								edgeTop = new float[count];
 								noLevee = new bool[count];
 								for (int k = 0; k < count; k++)
@@ -380,7 +381,7 @@ namespace FishMMO.Shared.WorldDesign
 									limit[k] = float.PositiveInfinity;
 									inside[k] = float.PositiveInfinity;
 									owner[k] = -1;
-									holdTop[k] = float.NegativeInfinity;
+									holdNeed[k] = float.NegativeInfinity;
 									edgeTop[k] = float.NegativeInfinity;
 								}
 							}
@@ -401,11 +402,10 @@ namespace FishMMO.Shared.WorldDesign
 							if (outside > 0f && outside < leveeReach && level >= tideLine && !Drowned(river, level, settings) && v >= river.PondUntil
 								&& !holdsNothing)
 							{
-								float top = level + settings.FreeboardMetres;
-								if (top > holdTop[i] + 1e-3f || (Math.Abs(top - holdTop[i]) <= 1e-3f && outside < holdOutside[i]))
+								float need = level + settings.FreeboardMetres - Math.Max(0f, outside - leveeCrest) * bankTan;
+								if (need > holdNeed[i])
 								{
-									holdTop[i] = top;
-									holdOutside[i] = outside;
+									holdNeed[i] = need;
 								}
 								float beside = overshoot > 0f ? waterOn : level;
 								if (lyingBeside && outside < grid.Spacing && beside > edgeTop[i])
@@ -491,10 +491,10 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						shaped = Math.Max(shaped, top - Math.Max(0f, outsideMetres - leveeCrest) * bankTan);
 					}
-					// And the highest water near it, whoever owns it: holding water before a bank's cosmetic slope.
-					if (holdTop[i] > shaped)
+					// And whatever water near it needs, whoever owns it: holding water before a bank's cosmetic slope.
+					if (holdNeed[i] > shaped)
 					{
-						shaped = Math.Max(shaped, holdTop[i] - Math.Max(0f, holdOutside[i] - leveeCrest) * bankTan);
+						shaped = holdNeed[i];
 					}
 					if (outsideMetres < leveeReach || shaped < h - 0.05f)
 					{

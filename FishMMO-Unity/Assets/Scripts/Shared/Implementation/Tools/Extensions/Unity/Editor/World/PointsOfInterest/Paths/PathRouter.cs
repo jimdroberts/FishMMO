@@ -297,6 +297,12 @@ namespace FishMMO.Shared.WorldDesign
 			});
 		}
 
+		/// <summary>Marks a disc no way is routed through, not even its own site's (a moated stronghold: its ways cross on the drawbridge).</summary>
+		public void MarkBlocked(float east, float north, float radius)
+		{
+			ForDisc(east, north, radius, i => Blocked[i] = true);
+		}
+
 		/// <summary>Marks a bridge's deck: the cells along its heading within its half-span, a few metres wide.</summary>
 		public void MarkBridge(int id, Vector3 centre, float yawDegrees, float halfSpan)
 		{

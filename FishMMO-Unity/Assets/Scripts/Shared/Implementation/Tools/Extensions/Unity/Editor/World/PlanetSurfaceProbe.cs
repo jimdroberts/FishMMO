@@ -58,15 +58,19 @@ namespace FishMMO.Shared.WorldDesign
 				Debug.Log($"[Surface probe] {planet.ResolvedName}: system={(system != null ? system.name : "NONE")} " +
 					$"insolation={insolation:0.###} mean={meanK:0.#} K ({mean:+0.00;-0.00}) tilt={planet.AxialTiltDegrees:0.#}");
 
-				// The field itself, both hemispheres: the year's mean and the warmest season, exactly as biomes read them.
+				// The climate table itself, both hemispheres: the year's mean, warmest and coldest point, sea and deep inland.
 				PlanetClimateField field = PlanetClimateField.For(system, planet);
+				if (field.Table != null)
+				{
+					Debug.Log($"[Surface probe]   climate table solved to {field.Table.MeanKelvin - 273.15:0.0} °C (residual {field.Table.Residual:+0.00;-0.00} K)");
+				}
 				foreach (double lat in new[] { 85.0, 70.0, 55.0, 40.0, 20.0, 0.0, -20.0, -40.0, -55.0, -70.0, -85.0 })
 				{
 					Vector3 dir = PlanetSurface.Direction(lat, 0.0);
-					float regional = field.RegionalOffset(dir);
-					Debug.Log($"[Surface probe]   lat {lat,5:0}: yearly latTerm={field.YearlyMeanLatitudeTemperature(lat):+0.00;-0.00} " +
-						$"summer latTerm={field.WarmestLatitudeTemperature(lat):+0.00;-0.00} regional={regional:+0.000;-0.000} " +
-						$"-> sea-level T {field.TemperatureAt(lat, dir, 0f):+0.00;-0.00}, warmest season {field.WarmestSeasonAt(lat, dir, 0f):+0.00;-0.00}");
+					field.ExtremesAt(lat, dir, 0f, 0f, out float seaWarm, out float seaCold);
+					field.ExtremesAt(lat, dir, 0f, 1f, out float landWarm, out float landCold);
+					Debug.Log($"[Surface probe]   lat {lat,5:0}: sea {field.KelvinAt(lat, dir, 0f, 0f) - 273.15f:+0.0;-0.0} °C ({seaCold - 273.15f:0.0}..{seaWarm - 273.15f:0.0}), " +
+						$"inland {field.KelvinAt(lat, dir, 0f, 1f) - 273.15f:+0.0;-0.0} °C ({landCold - 273.15f:0.0}..{landWarm - 273.15f:0.0}), regional {field.RegionalOffset(dir) * (float)ClimateModel.KelvinPerUnit:+0.0;-0.0} K");
 				}
 			}
 

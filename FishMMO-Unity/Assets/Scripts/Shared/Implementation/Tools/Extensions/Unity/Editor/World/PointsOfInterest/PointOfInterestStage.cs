@@ -595,13 +595,13 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				notes?.Add($"Paths: {approaches} gorge arch(es) given approaches built up and cut to their level decks.");
 			}
-			// The ways' heights on the ground as carved.
+			// The ways' heights on the ground as carved (over a moat, its banks' level: the drawbridge's).
 			foreach (ScenePath path in Plan.Paths)
 			{
 				for (int i = 0; i < path.Count; i++)
 				{
 					Vector3 p = path.Points[i];
-					path.Points[i] = new Vector3(p.x, ground(p.x, p.z), p.z);
+					path.Points[i] = new Vector3(p.x, deck(p.x, p.z), p.z);
 				}
 			}
 			paths.Notes.ForEach(n => notes?.Add($"Paths: {n}"));

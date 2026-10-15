@@ -740,8 +740,18 @@ namespace FishMMO.TestHarness.World
 			set => timeline.Driver = value;
 		}
 
-		/// <summary>What the body stood on adds to the scene's temperature and humidity, now: see <see cref="ApplyClimate"/>.</summary>
+		/// <summary>
+		/// What the body stood on adds to the scene's temperature and humidity, now: see <see cref="ApplyClimate"/>. On a
+		/// scene's own body that is the season alone (the place's mean is already in its climate); on a body the bed
+		/// stands the scene on, the body's whole offset.
+		/// </summary>
 		public float BodyTemperature { get; private set; }
+
+		/// <summary>The year's mean temperature on the ground under the camera, K: the place's climate, no season or weather.</summary>
+		public float AnnualKelvinHere { get; private set; }
+
+		/// <summary>True when <see cref="BodyTemperature"/> is only the season (the scene stands on its own body).</summary>
+		public bool BodyTemperatureIsSeason => Settings != null && Settings.Body == Body;
 		public float BodyHumidity { get; private set; }
 
 		/// <summary>
@@ -751,30 +761,13 @@ namespace FishMMO.TestHarness.World
 		/// </summary>
 		private void ApplyClimate()
 		{
-			BodyTemperature = 0f;
-			BodyHumidity = 0f;
-			SolarSystemProfile system = SolarSystemProfile.Active;
-			if (system != null && Body != null)
-			{
-				// The scene's own climate already carries its body's orbit mean (SampleClimate adds it),
-				// so only the season on top of that is added here — the same as the server and client
-				// do. A bed scene with no atlas body of its own has no mean in it, and the bed's chosen
-				// body then contributes all of it.
-				float bodyTemperature, bodyHumidity;
-				if (Settings != null && Settings.Body == Body)
-				{
-					CelestialMath.SeasonalClimateOffsets(system, Body, Hours, latitude, out bodyTemperature, out bodyHumidity);
-				}
-				else
-				{
-					CelestialMath.ClimateOffsets(system, Body, Hours, out bodyTemperature, out bodyHumidity, latitude);
-				}
-				BodyTemperature = bodyTemperature;
-				BodyHumidity = bodyHumidity;
-			}
-			// The settings get the one sum the server and the client make (SceneClimate), on the bed's body and latitude.
+			// The settings get the one sum the server and the client make (SceneClimate), on the bed's body and latitude;
+			// its body share is shown on the panel.
 			timeline.BodyOverride = Body;
 			timeline.LatitudeDegrees = latitude;
+			SceneClimate.BodyShareAt(Settings, timeline, timeline.WorldSecondsAt(Tick), out float bodyTemperature, out float bodyHumidity);
+			BodyTemperature = bodyTemperature;
+			BodyHumidity = bodyHumidity;
 			SceneClimate.Apply(Settings, timeline, timeline.WorldSecondsAt(Tick));
 		}
 
@@ -1213,6 +1206,8 @@ namespace FishMMO.TestHarness.World
 			timeline.BodyOverride = Body;
 
 			lastSample = WeatherField.Sample(timeline, Settings, scene, viewer, tick);
+			// The year's mean on the ground here, with nothing of the moment in it: what the place IS, beside what it is doing.
+			AnnualKelvinHere = Settings != null ? BiomeSampler.Read(viewer, Settings, 0f, 0f).Climate.KelvinOrScale : 0f;
 			WeatherFrame frame = lastSample.Frame;
 			var context = new WeatherContext
 			{

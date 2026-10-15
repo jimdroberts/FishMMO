@@ -357,6 +357,17 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					router.MarkOwner(keepOut.Id, keepOut.X, keepOut.Z, keepOut.Radius);
 				}
+				/* A moated stronghold's ditch and all inside it are routed round, even by its own ways: they come in on the
+				 * drawbridge before a gate (EndFor); the site's own cells are open to its ways, so one from the gate to a
+				 * neighbour behind it would run along the dry ditch's flat bottom or through the bailey. */
+				foreach (PointOfInterestShape shape in input.Shapes)
+				{
+					if (shape != null && shape.Shaper == MoatShaper.ShaperName
+						&& MoatShaper.TryMoat(new[] { shape }, shape.SiteId, out Vector3 moat, out float moatInner, out float moatWidth, out _))
+					{
+						router.MarkBlocked(moat.x, moat.z, moatInner + moatWidth);
+					}
+				}
 				foreach (PointOfInterestRecord record in input.Records)
 				{
 					if (record != null && record.Kind == POIType.Bridge)
@@ -692,6 +703,19 @@ namespace FishMMO.Shared.WorldDesign
 					bearing = Vector2.up;
 				}
 				bearing.Normalize();
+				/* A moated stronghold is reached past its moat and crossed into on the drawbridge before the gate the way's
+				 * bearing opens (PropsFeature.AddDrawbridges): the crossing is the site's, never a bridge site or a carve of its
+				 * own. Every keep, castle and fortress is walled, so the street ends below once took them first and started
+				 * their ways at radius + 8 m, in the ditch. */
+				bool moated = MoatShaper.TryMoat(input.Shapes, record.Id, out _, out float moatInner, out float moatWidth, out _);
+				void AcrossMoat(Vector2 gate)
+				{
+					end.Outer = Clear(centre + gate * (moatInner + moatWidth + 4f), gate);
+					// From its outer lip on, so the points laid between are the site's too (not carved, nor routed).
+					end.Inner.Add(centre + gate * (moatInner + moatWidth + 0.5f));
+					end.Inner.Add(centre + gate * (moatInner + moatWidth * 0.5f));
+					end.Inner.Add(centre + gate * (moatInner - 1f));
+				}
 				if (input.HasStreets != null && input.HasStreets(record))
 				{
 					// A street town is entered at its streets' ends: its heading and the opposite, and across in a big one.
@@ -713,18 +737,23 @@ namespace FishMMO.Shared.WorldDesign
 						}
 					}
 					end.Entrance = local;
-					end.Outer = Clear(centre + dir * (record.Radius + 8f), dir);
+					if (moated)
+					{
+						AcrossMoat(dir);
+					}
+					else
+					{
+						end.Outer = Clear(centre + dir * (record.Radius + 8f), dir);
+					}
 					end.Inner.Add(centre + dir * (record.Radius * 0.7f));
 					return end;
 				}
 
-				// A moated stronghold is reached past its moat, and crossed into on its drawbridge (the gate is laid on this
-				// bearing, the drawbridge before it): the crossing is the site's, never a bridge site or a carve of its own.
-				if (MoatShaper.TryMoat(input.Shapes, record.Id, out _, out float moatInner, out float moatWidth, out _))
+				if (moated)
 				{
-					end.Outer = Clear(centre + bearing * (moatInner + moatWidth + 4f), bearing);
-					end.Inner.Add(centre + bearing * (moatInner + moatWidth * 0.5f));
-					end.Inner.Add(centre + bearing * (moatInner - 1f));
+					// Not walled: its gate is laid on the way's own bearing (the layout opens one at each entrance).
+					end.Entrance = Mathf.Repeat(Mathf.Atan2(bearing.x, bearing.y) * Mathf.Rad2Deg - record.Yaw, 360f);
+					AcrossMoat(bearing);
 					end.Inner.Add(centre + bearing * (record.Radius * 0.4f));
 					return end;
 				}
@@ -926,7 +955,9 @@ namespace FishMMO.Shared.WorldDesign
 				for (int i = 0; i < n; i++)
 				{
 					Vector2 p = points[i];
-					path.Points[i] = new Vector3(p.x, input.Ground(p.x, p.y), p.y);
+					// Over a moat at its banks' level, on the drawbridge, not down in the ditch (else CountUnwalkable notes the drop).
+					float y = MoatShaper.BankLevel(input.Shapes, p.x, p.y, input.Ground, out float bank) ? bank : input.Ground(p.x, p.y);
+					path.Points[i] = new Vector3(p.x, y, p.y);
 					float noise = PathRouter.Noise(p.x * 0.031f + input.Seed % 97, p.y * 0.031f - id);
 					float kept;
 					if (spur)

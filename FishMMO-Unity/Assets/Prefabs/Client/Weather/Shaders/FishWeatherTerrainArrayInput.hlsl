@@ -529,8 +529,8 @@ FishFloraLook FishTerrainFloraLook(float2 xz, int4 ids, half4 weights)
         UNITY_BRANCH
         if (living > 0.0)
         {
-            uint biome = FishFloraBiomeAt(xz);
-            look = FishFloraLookOf(biome, FishFloraVariantAt(xz, biome, FISH_FLORA_GRASS_PATCH, FISH_FLORA_GRASS_SALT));
+            // Blended, not the blades' dithered read: the ground is one continuous albedo (FishFloraGroundLookAt).
+            look = FishFloraGroundLookAt(xz, FISH_FLORA_GRASS_PATCH, FISH_FLORA_GRASS_SALT);
         }
     }
 #endif

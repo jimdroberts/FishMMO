@@ -7,6 +7,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using FishMMO.Shared.WorldMaps;
 
 namespace FishMMO.Shared.WorldDesign
 {
@@ -253,12 +254,31 @@ namespace FishMMO.Shared.WorldDesign
 				camera.scene = scene;
 				camera.enabled = false;
 				camera.targetTexture = target;
-				camera.Render();
 
-				RenderTexture.active = target;
+				/* Photographed as the map bake photographs it: noon on the equinox, the weather and the ground cover
+				 * cleared, full detail. Without it the preview took whatever sky, snow and wet ground the editor was
+				 * last left with, and the globe drew a temperate coast as a white one. The sun and the ambient are the
+				 * active scene's render settings, so the scene is made active for the picture. */
+				Scene wasActive = SceneManager.GetActiveScene();
 				var image = new Texture2D(width, height, TextureFormat.RGB24, false);
-				image.ReadPixels(new Rect(0f, 0f, width, height), 0, 0);
-				image.Apply();
+				try
+				{
+					SceneManager.SetActiveScene(scene);
+					using (WorldMapBaker.StageCapture(scene, camera))
+					{
+						camera.Render();
+						RenderTexture.active = target;
+						image.ReadPixels(new Rect(0f, 0f, width, height), 0, 0);
+						image.Apply();
+					}
+				}
+				finally
+				{
+					if (wasActive.IsValid() && wasActive.isLoaded)
+					{
+						SceneManager.SetActiveScene(wasActive);
+					}
+				}
 				File.WriteAllBytes(PathOf(sceneName), image.EncodeToPNG());
 				WriteFrame(sceneName, rect);
 				UnityEngine.Object.DestroyImmediate(image);

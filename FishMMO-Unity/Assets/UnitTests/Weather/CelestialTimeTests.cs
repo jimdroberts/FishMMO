@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
+using FishMMO.Shared.Biomes;
 using FishMMO.Shared.Celestial;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 using Object = UnityEngine.Object;
@@ -540,20 +541,20 @@ namespace FishMMO.UnitTests.Weather
 		// ── Climate by latitude ───────────────────────────────────────
 
 		[Test]
-		public void TheEquatorIsWarmerThanThePolesAndTheHomeOffsetIsZeroWithoutALatitude()
+		public void TheClimateTableIsWarmestAtTheEquator_AndHoldsTheWorldsOwnMean()
 		{
-			double hours = 10.0;
-			CelestialMath.ClimateOffsets(system, home, hours, out float none, out _);
-			Assert.That(none, Is.EqualTo(0f).Within(1e-4f), "no latitude: the old home offset");
-			CelestialMath.ClimateOffsets(system, home, hours, out float equator, out _, 0.0);
-			CelestialMath.ClimateOffsets(system, home, hours, out float mid, out _, 45.0);
-			CelestialMath.ClimateOffsets(system, home, hours, out float polar, out _, 85.0);
-			LogAssert.IsTrue(equator > -0.1f, $"the equator is barely cooled, got {equator}");
+			CelestialMath.ClimateOffsets(system, home, 10.0, out float none, out _);
+			Assert.That(none, Is.EqualTo(0f).Within(1e-4f), "the home world is the reference");
+			PlanetClimateTable table = PlanetClimateTable.For(system, home);
+			Assert.That(table, Is.Not.Null);
+			float equator = table.AnnualKelvin(0.0, 0.5f), mid = table.AnnualKelvin(45.0, 0.5f), polar = table.AnnualKelvin(85.0, 0.5f);
 			LogAssert.IsTrue(equator > mid && mid > polar, $"cooler toward the pole: {equator} > {mid} > {polar}");
+			Assert.That(table.MeanKelvin, Is.EqualTo(ClimateModel.MeanSurfaceKelvin(system, home)).Within(1e-6), "solved to the world's own mean");
+			Assert.That(System.Math.Abs(table.Residual), Is.LessThan(3.0), "an Earth-like world has a balanced climate at its mean");
 		}
 
 		[Test]
-		public void SeasonsAreOppositeInTheTwoHemispheres()
+		public void SeasonsAreOppositeInTheTwoHemispheres_AndTheSeaIsMilderAndLater()
 		{
 			// Find the northern summer and winter solstices in the first year.
 			double year = CelestialMath.YearHours(system);
@@ -564,11 +565,25 @@ namespace FishMMO.UnitTests.Weather
 				if (declination > highest) { highest = declination; summer = h; }
 				if (declination < lowest) { lowest = declination; winter = h; }
 			}
-			double T(double h, double lat) => CelestialMath.LatitudeTemperature(system, home, h, lat);
-			LogAssert.IsTrue(T(summer, 45.0) > T(winter, 45.0) + 0.15, $"45°N summer {T(summer, 45.0):0.00} vs winter {T(winter, 45.0):0.00}");
-			LogAssert.IsTrue(T(winter, -45.0) > T(summer, -45.0) + 0.15, "45°S has its summer in the northern winter");
-			Assert.That(T(summer, 45.0), Is.EqualTo(T(winter, -45.0)).Within(0.02), "mirror images");
-			Assert.That(T(winter, 80.0), Is.EqualTo(-CelestialMath.LatitudeCooling).Within(1e-6), "polar night is as cold as it gets");
+			PlanetClimateTable table = PlanetClimateTable.For(system, home);
+			// A month after each solstice, when the land has caught up with the sun.
+			double lag = year / 12.0;
+			float T(double h, double lat, float c) => table.SeasonKelvin(lat, h + lag, c);
+			LogAssert.IsTrue(T(summer, 45.0, 1f) > T(winter, 45.0, 1f) + 10f, $"45°N inland summer {T(summer, 45.0, 1f):0.0} K vs winter {T(winter, 45.0, 1f):0.0} K");
+			LogAssert.IsTrue(T(winter, -45.0, 1f) > T(summer, -45.0, 1f) + 10f, "45°S has its summer in the northern winter");
+			table.Extremes(45.0, 1f, out float landWarm, out float landCold);
+			table.Extremes(45.0, 0f, out float seaWarm, out float seaCold);
+			LogAssert.IsTrue(landWarm - landCold > 2f * (seaWarm - seaCold), $"the land's year swings far wider than the sea's: {landWarm - landCold:0.0} K vs {seaWarm - seaCold:0.0} K");
+			// The warmest point comes after the solstice, never before or on it: heat takes time to build.
+			float best = float.NegativeInfinity;
+			double warmestAt = summer;
+			for (int i = 0; i < 96; i++)
+			{
+				double h = summer - year / 4.0 + i * (year / 2.0) / 96.0;
+				float t = table.SeasonKelvin(45.0, h, 0f);
+				if (t > best) { best = t; warmestAt = h; }
+			}
+			LogAssert.IsTrue(warmestAt > summer + year / 24.0, $"the sea's summer lags the sun: {(warmestAt - summer) / year * 365.0:0} days");
 		}
 
 		[Test]

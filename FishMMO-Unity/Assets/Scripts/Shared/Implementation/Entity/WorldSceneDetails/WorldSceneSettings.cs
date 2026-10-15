@@ -222,6 +222,12 @@ namespace FishMMO.Shared
 		/// <summary>Latitude the sun path and auroras use, in degrees.</summary>
 		public float Latitude => AtlasEntry != null ? (float)AtlasEntry.EffectiveSunLatitude : 0f;
 
+		/// <summary>
+		/// The latitude the scene's CLIMATE is read at, degrees: its true place on the atlas. An entry may move the sun's
+		/// path for a look (<see cref="WorldAtlasScene.OverrideSunLatitude"/>); that must not move how cold the place is.
+		/// </summary>
+		public float ClimateLatitude => AtlasEntry != null ? (float)AtlasEntry.Latitude : 0f;
+
 		/// <summary>Longitude the whole scene takes its time of day at, in degrees.</summary>
 		public float Longitude => AtlasEntry != null ? (float)AtlasEntry.TimeLongitude : 0f;
 
@@ -263,60 +269,6 @@ namespace FishMMO.Shared
 			{
 				byScene.Remove(gameObject.scene.handle);
 			}
-		}
-
-		/// <summary>
-		/// How much colder or wetter this scene's world is than the home world, from where it sits.
-		/// </summary>
-		/// <remarks>
-		/// Zero for a scene on the home world, and zero when there is no solar system loaded, so
-		/// nothing authored against the old behaviour moves. Cached per frame's worth of calls would
-		/// be premature: this is a handful of multiplies and the biome sampler is not a hot path.
-		/// </remarks>
-		public void CelestialOffsets(out float temperature, out float humidity)
-		{
-			CelestialOffsets(0.5f, out temperature, out humidity);
-		}
-
-		/// <summary>
-		/// The same, at a point across the scene's own biome map.
-		/// </summary>
-		/// <param name="latitude01">
-		/// 0 at the map's south edge, 1 at its north (<see cref="SceneBiomeMap.Latitude01"/>), 0.5
-		/// at the scene's own latitude. Spread over <see cref="ClimateSettings.MapLatitudeSpanDegrees"/>,
-		/// so one hand-painted map can run from forest to tundra across its width. A scene cut from
-		/// the globe does not use this: see <see cref="SampleClimateAt"/>.
-		/// </param>
-		public void CelestialOffsets(float latitude01, out float temperature, out float humidity)
-		{
-			temperature = 0f;
-			humidity = 0f;
-			SolarSystemProfile system = SolarSystemProfile.Active;
-			// An empty atlas body means the home world, as the placement climate reads it (2026-10-10): taken
-			// literally, a hand-made scene on the home world got no latitude cooling at all.
-			WorldBody body = ScenePlacementClimate.ResolveBody(system, AtlasEntry);
-			if (system == null || body == null)
-			{
-				return;
-			}
-			/* At THIS scene's latitude, which is what gives a body more than one climate.
-			 *
-			 * The poles are cold because the sun never climbs far above their horizon, not because
-			 * they are further from it — the difference in distance across a planet is nothing, and
-			 * the difference in the angle light arrives at is everything. CelestialMath.LatitudeTemperature
-			 * already works it out properly, from the sun's noon altitude against the body's own
-			 * axial tilt and where it is in its orbit; it simply was not being asked.
-			 *
-			 * The home world is included now rather than skipped. It has a tilt of 23.4° and poles
-			 * of its own, and exempting it meant every scene on it resolved the same temperate
-			 * biome set from the equator to the ice cap. */
-			/* The scene's own latitude, offset by where in its map this point is. At true scale a
-			 * 4 km scene spans about 0.04° and the gradient would be invisible, so the span is
-			 * authored rather than derived: a scene that wants to read as a climate transition says
-			 * how many degrees it stands for, and one that does not sets it to zero. */
-			float span = (Climate != null ? Climate : ClimateSettings.Default).MapLatitudeSpanDegrees;
-			double latitude = Latitude + (Mathf.Clamp01(latitude01) - 0.5f) * span;
-			CelestialMath.MeanClimateOffsets(system, body, out temperature, out humidity, latitude);
 		}
 
 		/// <summary>What this scene's world physically offers, for the biome resolver.</summary>
@@ -441,15 +393,13 @@ namespace FishMMO.Shared
 			if (placement != null && placement.Generated)
 			{
 				ClimateSample sample = placement.SampleAt(worldPosition, out normalizedHeight);
-				sample.Temperature = Mathf.Clamp(sample.Temperature + runtimeTemperature, -1f, 1f);
-				sample.Humidity = Mathf.Clamp(sample.Humidity + runtimeHumidity, -1f, 1f);
-				return sample;
+				return WithRuntime(sample, runtimeTemperature, runtimeHumidity);
 			}
 
 			normalizedHeight = height01;
 			SceneBiomeMap map = BiomeMap;
 			float latitude01 = map != null ? map.Latitude01(worldPosition) : 0.5f;
-			ClimateSample authored = SampleClimate(height01, latitude01, runtimeTemperature, runtimeHumidity);
+			ClimateSample authored = SampleClimate(height01, latitude01, runtimeTemperature, runtimeHumidity, worldPosition.y);
 			if (placement != null)
 			{
 				authored.Humidity = Mathf.Clamp(authored.Humidity + placement.CentreMoisture, -1f, 1f);
@@ -471,7 +421,7 @@ namespace FishMMO.Shared
 			SceneBiomeMap map = BiomeMap;
 			float latitude01 = map != null ? map.Latitude01(worldPosition) : 0.5f;
 			float span = (Climate != null ? Climate : ClimateSettings.Default).MapLatitudeSpanDegrees;
-			return Latitude + (latitude01 - 0.5f) * span;
+			return ClimateLatitude + (latitude01 - 0.5f) * span;
 		}
 
 		/// <summary>This scene's placement climate, built on first use and whenever the placement changes. Null when it is placed on no body.</summary>
@@ -503,38 +453,69 @@ namespace FishMMO.Shared
 		/// <remarks>Prefer <see cref="SampleClimateAt"/>, which knows where a generated scene really is.</remarks>
 		public ClimateSample SampleClimate(float height01, float latitude01)
 		{
-			return SampleClimate(height01, latitude01, RuntimeTemperatureOffset, RuntimeHumidityOffset);
+			return SampleClimate(height01, latitude01, RuntimeTemperatureOffset, RuntimeHumidityOffset, 0f);
 		}
 
-		/// <summary>The same, with the runtime offsets given (see <see cref="SampleClimateAt(Vector3, float, out float, float, float)"/>).</summary>
-		public ClimateSample SampleClimate(float height01, float latitude01, float runtimeTemperature, float runtimeHumidity)
+		/// <summary>
+		/// The same, with the runtime offsets given (see <see cref="SampleClimateAt(Vector3, float, out float, float, float)"/>)
+		/// and the altitude the reading is taken at, metres above the scene's datum.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Anchored on the world it stands on (2026-10-15).</b> A hand-made scene used to take its temperature from its
+		/// climate asset's Earth-referenced sea level (+26 °C) less a lapse over its NORMALISED height, then add its body's
+		/// offset from the home world — so on a cool world a hand-made scene read about 8 K warmer than ground cut from the
+		/// same latitude, and a 600 m terrain cooled by 29 K from shore to summit. It now reads its body's climate table at
+		/// its latitude (spread across its map by the authored span) and how inland its place is, cools by the body's own
+		/// lapse per metre, and keeps the asset's <see cref="ClimateSettings.GlobalTemperatureOffset"/> as an authored
+		/// nudge. The asset still supplies the humidity curve, the elevation tiers and the variants.
+		/// </para>
+		/// <para>
+		/// An unplaced scene stands on the home world at latitude 0 when a solar system exists, and on the asset alone when
+		/// none does.
+		/// </para>
+		/// </remarks>
+		public ClimateSample SampleClimate(float height01, float latitude01, float runtimeTemperature, float runtimeHumidity, float altitudeMetres)
 		{
-			/* The derived model when nothing is authored, not a guess.
-			 *
-			 * This used to fall back to Temperature = -height01 * 0.8, which reads -0.4 at mid
-			 * elevation where the calibrated model reads +0.74 — below freezing over most of a
-			 * scene — with no latitude gradient at all. Since no ClimateSettings asset existed
-			 * anywhere in the project, that guess, not the model, was deciding every biome and
-			 * every rain-or-snow call in the game.
-			 *
-			 * There is nothing for it to be a fallback FROM: a body's own climate is already
-			 * derived from its orbit by CelestialOffsets below, so the asset only ever held the
-			 * shared reference model. ClimateSettings.Default is that model. */
-			ClimateSample sample = (Climate != null ? Climate : ClimateSettings.Default)
-				.Evaluate(height01, latitude01);
-			/* The world this scene is ON, before anything local to it.
-			 *
-			 * Without this a scene on a frozen outer moon resolved exactly the same biomes as one on
-			 * the home world: SampleClimate read only the authored ClimateSettings, so the body's
-			 * distance from its star — the thing that actually decides whether anything can live
-			 * there — reached the weather but never the ground. A designer had to hand-author a
-			 * colder ClimateSettings per scene and keep it in step with the orbit by hand.
-			 *
-			 * The offsets are the body's mean, so latitude and elevation still do their own work on
-			 * top; and they are derived from the orbit, so moving a planet moves its biomes. */
-			CelestialOffsets(latitude01, out float bodyTemperature, out float bodyHumidity);
-			sample.Temperature = Mathf.Clamp(sample.Temperature + bodyTemperature + runtimeTemperature, -1f, 1f);
-			sample.Humidity = Mathf.Clamp(sample.Humidity + bodyHumidity + runtimeHumidity, -1f, 1f);
+			ClimateSettings asset = Climate != null ? Climate : ClimateSettings.Default;
+			ClimateSample sample = asset.Evaluate(height01, latitude01);
+			// Somewhere between a coast and a continent, until a body says which.
+			sample.Continentality = 0.5f;
+			SolarSystemProfile system = SolarSystemProfile.Active;
+			WorldBody body = ScenePlacementClimate.ResolveBody(system, AtlasEntry);
+			PlanetClimateTable table = system != null && body != null ? PlanetClimateTable.For(system, body) : null;
+			if (table != null)
+			{
+				double latitude = ClimateLatitude + (Mathf.Clamp01(latitude01) - 0.5f) * asset.MapLatitudeSpanDegrees;
+				ScenePlacementClimate placement = PlacementClimate;
+				float continentality = placement != null ? placement.CentreContinentality : 0.5f;
+				float lapse = (float)ClimateModel.LapseRatePerMetre(system, body);
+				float kelvin = table.AnnualKelvin(latitude, continentality)
+					- Mathf.Max(0f, altitudeMetres) * lapse
+					+ asset.GlobalTemperatureOffset * (float)ClimateModel.KelvinPerUnit;
+				sample.Kelvin = kelvin;
+				sample.Temperature = ClimateModel.ToScale(kelvin);
+				sample.Continentality = continentality;
+				// The world's water against the home world's: a dry world's scenes are drier, a wet one's wetter.
+				float homeWater = system.HomeWorld != null ? system.HomeWorld.Water : 0.7f;
+				sample.Humidity = Mathf.Clamp(sample.Humidity + (FishMMO.Shared.Celestial.CloudWorld.WaterOf(body) - homeWater) * 1.2f, -1f, 1f);
+			}
+			return WithRuntime(sample, runtimeTemperature, runtimeHumidity);
+		}
+
+		/// <summary>A reading with the runtime offsets added: to the scale, clamped, and to the kelvin, which is not.</summary>
+		private static ClimateSample WithRuntime(ClimateSample sample, float runtimeTemperature, float runtimeHumidity)
+		{
+			if (sample.Kelvin > 0f)
+			{
+				sample.Kelvin += runtimeTemperature * (float)ClimateModel.KelvinPerUnit;
+				sample.Temperature = ClimateModel.ToScale(sample.Kelvin);
+			}
+			else
+			{
+				sample.Temperature = Mathf.Clamp(sample.Temperature + runtimeTemperature, -1f, 1f);
+			}
+			sample.Humidity = Mathf.Clamp(sample.Humidity + runtimeHumidity, -1f, 1f);
 			return sample;
 		}
 

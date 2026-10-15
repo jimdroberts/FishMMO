@@ -161,8 +161,15 @@ namespace FishMMO.Client
 				air = WeatherDriver.UnderSun(air, inputs.DaylightShare);
 			}
 			air = inputs.Offsets.Apply(air);
-			float temperature = Mathf.Clamp(climate.Temperature + air.Temperature * 0.35f, -1f, 1f);
-			column = AirColumn.Of(inputs.Planet, inputs.Planet.SurfaceKelvin(temperature), air.Humidity, air.Pressure, air.Instability);
+			// The same sum the weather sample makes (SurfaceTemperature): the place's climate, its air mass and its hour.
+			SolarSystemProfile system = SolarSystemProfile.Active;
+			WorldBody body = timeline != null && timeline.BodyOverride != null ? timeline.BodyOverride : SceneTime.BodyOf(settings);
+			double latitude = settings != null && (timeline == null || timeline.BodyOverride == null)
+				? settings.LatitudeAt(position)
+				: (timeline != null ? timeline.LatitudeDegrees : 0.0);
+			float kelvin = SurfaceTemperature.AirKelvin(climate, air, system, body, latitude, inputs.WorldSeconds / 3600.0,
+				inputs.LocalTime01, inputs.HasDaylight ? inputs.DaylightShare : -1f);
+			column = AirColumn.Of(inputs.Planet, kelvin, air.Humidity, air.Pressure, air.Instability);
 		}
 
 		/// <summary>Advances the build by a slice, publishing a finished map and easing it in.</summary>

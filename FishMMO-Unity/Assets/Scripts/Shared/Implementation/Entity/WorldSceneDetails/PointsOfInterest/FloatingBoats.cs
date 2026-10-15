@@ -281,6 +281,9 @@ namespace FishMMO.Shared
 		[NonSerialized] private Lane[] laneAreasOf;
 
 		/// <summary>Set by the cut. <paramref name="inAir"/> for airships (<see cref="Airborne"/>).</summary>
+		/// <summary>The ways ships sail, as cut: what the pack ice keeps its leads open along.</summary>
+		public IReadOnlyList<Lane> Lanes => lanes;
+
 		public void Configure(Moored[] boats, Lane[] ways, Sailing[] ships, bool inAir = false)
 		{
 			moored = boats ?? Array.Empty<Moored>();

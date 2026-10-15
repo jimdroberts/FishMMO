@@ -25,7 +25,7 @@ MonoBehaviour:
   Style: timber
   Layout: 0
   Pieces:
-  - Tag: =PostMill
+  - Tag: =TowerMill
     MinCount: 1
     MaxCount: 1
     MinDecay: 0
@@ -33,7 +33,7 @@ MonoBehaviour:
     MinScale: 1
     MaxScale: 1
     Role: 1
-    Style: 
+    Style: stone
   - Tag: =TimberHouseSmall
     MinCount: 0
     MaxCount: 1

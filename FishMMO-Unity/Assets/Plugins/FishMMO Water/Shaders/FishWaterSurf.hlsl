@@ -27,7 +27,37 @@ float _FishWaterOpenSeaTides;    // the highest tide the map's gaps were measure
 /// as the tide rises over its sill and closing as it falls — and less behind a narrow gap.
 /// WaterShoreField.Snapshot.OpenSeaAt, line for line.
 /// </summary>
+TEXTURE2D(_FishWaterIceCalm);
+SAMPLER(sampler_FishWaterIceCalm);
+float4 _FishWaterIceCalmRect;    // xy world minimum, zw size; z under 1: no pack ice in the scene
+
+/// <summary>
+/// How far pack ice calms the sea at a point, 0 (no swell gets through) .. 1 (open water). WaterIceCalm.CalmAt, line for
+/// line: a separate factor from the open-sea map, so the ice never feeds back into where the cut lets it lie.
+/// </summary>
+float FishWaterIceCalm(float2 xz)
+{
+	if (_FishWaterIceCalmRect.z < 1.0)
+	{
+		return 1.0;
+	}
+	float2 uv = (xz - _FishWaterIceCalmRect.xy) / _FishWaterIceCalmRect.zw;
+	if (any(uv < 0.0) || any(uv > 1.0))
+	{
+		return 1.0;
+	}
+	return saturate(SAMPLE_TEXTURE2D_LOD(_FishWaterIceCalm, sampler_FishWaterIceCalm, uv, 0).r);
+}
+
+/// <summary>How open to the swell a point is: the open-sea map's reach, calmed under pack ice.</summary>
+float FishWaterOpenSeaReach(float2 xz);
+
 float FishWaterOpenSea(float2 xz)
+{
+	return FishWaterOpenSeaReach(xz) * FishWaterIceCalm(xz);
+}
+
+float FishWaterOpenSeaReach(float2 xz)
 {
 	if (_FishWaterOpenSeaRect.z < 1.0)
 	{

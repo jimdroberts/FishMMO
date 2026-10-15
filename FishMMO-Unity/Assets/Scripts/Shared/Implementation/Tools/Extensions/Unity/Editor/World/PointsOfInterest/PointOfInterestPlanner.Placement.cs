@@ -625,6 +625,25 @@ namespace FishMMO.Shared.WorldDesign
 			/// must stand 0.2–3.5 m over the water and the ground behind it be dry and near level. Its pad keeps off the water
 			/// as every pad does.
 			/// </summary>
+			/// <summary>
+			/// The highest water of <paramref name="river"/> within <paramref name="radius"/> of (east, north), out to each point's
+			/// own bank and a metre: what a pad that far round must stand over. <paramref name="atLeast"/> where none is nearer.
+			/// </summary>
+			private static float HighestWaterNear(RiverPath river, float east, float north, float radius, float atLeast)
+			{
+				float highest = atLeast;
+				for (int j = 0; j < river.Count; j++)
+				{
+					float reach = radius + 0.5f * river.Width[j] + 1f;
+					float dx = river.X[j] - east, dz = river.Z[j] - north;
+					if (dx * dx + dz * dz <= reach * reach)
+					{
+						highest = Mathf.Max(highest, river.Surface[j]);
+					}
+				}
+				return highest;
+			}
+
 			private void PlaceRiverBanks(PointOfInterestKindRule rule, int budget)
 			{
 				if (Input.Water == null || Input.Water.Rivers == null || Input.Water.Rivers.Count == 0)
@@ -696,9 +715,13 @@ namespace FishMMO.Shared.WorldDesign
 							// The floor at the freeboard its wheel is hung for (2026-10-15: "Watermills seem to sink into the ground"):
 							// seated on the bank's own height, a mill on a 3 m bank turned its wheel in the air, and its pad-less yard
 							// rose behind it over its plinth. The pad levels the yard to this floor (PointOfInterestPad.Shore).
-							float floor = float.IsNaN(surface) ? ground : surface + StructurePieces.RiverBankFreeboard;
+							/* Over the highest water its pad reaches, not only the water beside its anchor: the river falls past a mill, and
+							 * a 19 m pad seated on the water at its middle levelled the bank upstream 0.64 m under the river there (Flo
+							 * Monolith's Sha Mill Race, 2026-10-15). */
+							float radius = Mathf.Lerp(rule.FootprintMin, rule.FootprintMax, Unit(Mix(hash ^ 0x7A11u)));
+							float floor = float.IsNaN(surface) ? ground : HighestWaterNear(river, bx, bz, radius, surface) + StructurePieces.RiverBankFreeboard;
 							Site site = Site.At(bx, bz, floor, score);
-							site.Radius = Mathf.Lerp(rule.FootprintMin, rule.FootprintMax, Unit(Mix(hash ^ 0x7A11u)));
+							site.Radius = radius;
 							// Facing the river: a site's front faces its heading.
 							site.Yaw = Mathf.Round(YawOf(-nx * side, -nz * side));
 							site.RiverId = river.Id;

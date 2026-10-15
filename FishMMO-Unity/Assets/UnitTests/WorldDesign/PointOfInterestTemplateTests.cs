@@ -11,8 +11,8 @@ namespace FishMMO.UnitTests.WorldDesign
 	/// <summary>
 	/// The point-of-interest templates and how their pieces are laid: a template for every kind the structure kit builds,
 	/// every slot resolving in the kit, race filters that never strand a site, and layouts that pack pieces without
-	/// overlap inside their footprints, close their wall rings, face sensibly and repeat for the same seed. Pure: no
-	/// assets, no scene.
+	/// overlap inside their footprints, close their wall rings, face sensibly and repeat for the same seed. Pure but for
+	/// one check of the template assets on disk: no scene.
 	/// </summary>
 	[TestFixture]
 	public class PointOfInterestTemplateTests
@@ -75,6 +75,26 @@ namespace FishMMO.UnitTests.WorldDesign
 					Assert.That(slot.MaxCount, Is.GreaterThanOrEqualTo(slot.MinCount), $"{spec.Name}: '{slot.Tag}' count range");
 				}
 			}
+		}
+
+		/// <summary>
+		/// The template assets on disk, not the specs: an asset authored before a piece was retired keeps naming it and
+		/// lays nothing in its place (2026-10-15: windmill sites without a windmill), since authoring keeps existing assets.
+		/// </summary>
+		[Test]
+		public void EveryTemplateAssetResolvesInTheKit()
+		{
+			var missing = new List<string>();
+			foreach (string guid in UnityEditor.AssetDatabase.FindAssets($"t:{nameof(PointOfInterestTemplate)}", new[] { PointOfInterestTemplate.Folder }))
+			{
+				string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+				List<string> tags = PointOfInterestTemplateAuthoring.Unresolved(UnityEditor.AssetDatabase.LoadAssetAtPath<PointOfInterestTemplate>(path));
+				if (tags.Count > 0)
+				{
+					missing.Add($"{path}: {string.Join(", ", tags)}");
+				}
+			}
+			Assert.That(missing, Is.Empty, "template assets naming pieces the kit no longer has (re-author them)");
 		}
 
 		[Test]
@@ -482,6 +502,34 @@ namespace FishMMO.UnitTests.WorldDesign
 			PointOfInterestLayoutPiece ahead = gates.Find(g => g.Offset.y > 0f && Mathf.Abs(g.Offset.x) < 0.5f);
 			Assert.That(ahead.Footprint, Is.EqualTo(GateSize), "a gate across the heading");
 			Assert.That(Mathf.DeltaAngle(ahead.Yaw, 180f), Is.EqualTo(0f).Within(0.5f), "the gate's front looks out, ahead");
+		}
+
+		/// <summary>
+		/// A gate stands exactly on the bearing its way comes in on (a moat's drawbridge before it, the way's crossing on that
+		/// line): the ring gives up a side or few rather than leave a gate half a side off the street ends.
+		/// </summary>
+		[TestCase(43f, 2)]
+		[TestCase(47f, 2)]
+		[TestCase(58f, 4)]
+		[TestCase(61f, 4)]
+		public void AWallsGatesStandOnTheirWaysBearings(float radius, int ways)
+		{
+			PointOfInterestLayoutRequest request = Request(PointOfInterestLayout.Walled, radius,
+				(PointOfInterestSlotRole.Perimeter, WallSize, 6f, 1), (PointOfInterestSlotRole.Gate, GateSize, 12f, 1));
+			for (int k = 0; k < ways; k++)
+			{
+				request.Entrances.Add(k * 360f / ways);
+			}
+			List<PointOfInterestLayoutPiece> gates = PointOfInterestLayouts.Place(request, new DeterministicRNG(3)).FindAll(p => p.Role == PointOfInterestSlotRole.Gate);
+			Assert.That(gates.Count, Is.EqualTo(ways));
+			foreach (float bearing in request.Entrances)
+			{
+				var dir = new Vector2(Mathf.Sin(bearing * Mathf.Deg2Rad), Mathf.Cos(bearing * Mathf.Deg2Rad));
+				PointOfInterestLayoutPiece gate = gates.Find(g => Vector2.Dot(g.Offset.normalized, dir) > 0.9f);
+				Assert.That(gate.Footprint, Is.EqualTo(GateSize), $"a gate toward {bearing}°");
+				Assert.That(Mathf.Abs(gate.Offset.x * dir.y - gate.Offset.y * dir.x), Is.LessThan(0.01f), $"the gate toward {bearing}° stands on its bearing: {gate.Offset}");
+				Assert.That(gate.Offset.magnitude, Is.LessThanOrEqualTo(radius), "the ring is never larger than its room");
+			}
 		}
 
 		[Test]

@@ -488,26 +488,6 @@ namespace FishMMO.Shared.Weather
 			return air;
 		}
 
-		/// <summary>
-		/// A place's temperature in kelvin, from the game's climate scale.
-		/// </summary>
-		/// <remarks>
-		/// The scale runs 240 K to 306 K and clamps there, which holds every world a person could
-		/// stand on in shirtsleeves and none of the others. A world whose mean is off the scale is
-		/// taken from its own mean instead, with whatever the scale does say added as an anomaly —
-		/// so a methane moon at 94 K is 94 K and not a clamped 240.
-		/// </remarks>
-		public float SurfaceKelvin(float climateScale)
-		{
-			double meanScale = ClimateModel.ToScaleUnclamped(MeanSurfaceKelvin);
-			if (meanScale >= -0.9 && meanScale <= 0.9)
-			{
-				return (float)ClimateModel.ToKelvin(Mathf.Clamp(climateScale, -1f, 1f));
-			}
-			float clampedMean = Mathf.Clamp((float)meanScale, -1f, 1f);
-			return Mathf.Max(20f, MeanSurfaceKelvin + (Mathf.Clamp(climateScale, -1f, 1f) - clampedMean) * (float)ClimateModel.KelvinPerUnit);
-		}
-
 		/// <summary>The air's scale height at its mean temperature, m.</summary>
 		public float ScaleHeight => AirPhysics.ScaleHeight(Gravity, MeanSurfaceKelvin, GasConstant);
 	}

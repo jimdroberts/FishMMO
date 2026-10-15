@@ -540,13 +540,33 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return null;
 				}
-				float step = Mathf.PI * 2f / sides;
-				// The circumradius that makes every side exactly one module long: neighbours meet end to end.
-				float radius = module / (2f * Mathf.Sin(step * 0.5f));
 
 				float gateLength = gate >= 0 ? Mathf.Max(request.Slots[gate].Module, gateSize.x) : EntranceMetres;
 				int span = gate >= 0 ? Math.Max(1, Mathf.RoundToInt(gateLength / module)) : Math.Max(1, Mathf.CeilToInt(EntranceMetres / module - 1e-3f));
 				int gates = gate >= 0 ? Mathf.Clamp(Math.Max(request.Slots[gate].Count, request.Entrances.Count), 1, Math.Max(1, sides / (span + 1))) : 1;
+				/* A gate lands on the side nearest its bearing, up to half a side off it, and the way (and a moat's drawbridge
+				 * before the gate) comes in on the bearing itself: a few metres beside the opening. The bearings are the street
+				 * ends' (the heading, its opposite, across), so a few sides fewer put every one exactly on a side: the fewest
+				 * dropped, the ring a little smaller, never larger than the room it had. */
+				for (int fewer = 0; fewer <= 8 && sides - fewer >= 3; fewer++)
+				{
+					float s = Mathf.PI * 2f / (sides - fewer);
+					bool exact = true;
+					for (int g = 0; g < gates && exact; g++)
+					{
+						float k = GateAngle(g, gates) / s;
+						exact = Mathf.Abs(k - Mathf.Round(k)) < 1e-3f;
+					}
+					if (exact)
+					{
+						sides -= fewer;
+						break;
+					}
+				}
+				gates = gate >= 0 ? Mathf.Min(gates, Math.Max(1, sides / (span + 1))) : 1;
+				float step = Mathf.PI * 2f / sides;
+				// The circumradius that makes every side exactly one module long: neighbours meet end to end.
+				float radius = module / (2f * Mathf.Sin(step * 0.5f));
 				// An odd span centres a side on the heading, an even one a corner.
 				float start = span % 2 == 1 ? -step * 0.5f : 0f;
 				Vector2 Vertex(int j) => Dir(start + j * step) * radius;

@@ -8,8 +8,21 @@ namespace FishMMO.Shared.Biomes
 	/// <summary>A climate reading at one point: what the world feels like there right now.</summary>
 	public struct ClimateSample
 	{
-		/// <summary>-1 coldest … 1 hottest.</summary>
+		/// <summary>-1 coldest … 1 hottest: the climate scale biome envelopes are written on, 0 = 0 °C, 1 = 33.1 K warmer (<see cref="ClimateModel.ToScale"/>).</summary>
 		public float Temperature;
+
+		/// <summary>
+		/// The same temperature in kelvin, UNCLAMPED. What anything physical reads — the weather, the water, the snow, what
+		/// a player is told — since the scale stops at ±33 °C and a desert summer, an ice cap or a frozen moon lies far past it.
+		/// Zero where a sample was made without it (a hand-made climate asset), which <see cref="KelvinOrScale"/> covers.
+		/// </summary>
+		public float Kelvin;
+
+		/// <summary>How continental the place's climate is, 0 the sea's … 1 deep inland: the reach of its seasons and its days.</summary>
+		public float Continentality;
+
+		/// <summary>The kelvin reading, or the scale's own where none was made.</summary>
+		public float KelvinOrScale => Kelvin > 0f ? Kelvin : (float)ClimateModel.ToKelvin(Temperature);
 		/// <summary>-1 driest … 1 wettest.</summary>
 		public float Humidity;
 		/// <summary>Elevation tier 0-8 of the height the sample was taken at.</summary>

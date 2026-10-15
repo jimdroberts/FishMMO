@@ -406,6 +406,53 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 		}
 
+		private static PointOfInterestShape Moat(PointOfInterestRecord site, float inner, float width)
+			=> new PointOfInterestShape { SiteId = site.Id, Shaper = MoatShaper.ShaperName, Position = site.Position, Values = new[] { 1f, inner, width, 3f, 0f } };
+
+		/// <summary>
+		/// Every way into a moated site comes in past its moat on the bearing of the gate it opens, crossing the ditch inside
+		/// the site (on the drawbridge), and none is routed through the ditch or the bailey: the way that leaves the gate
+		/// for a neighbour off to the side goes round outside the moat.
+		/// </summary>
+		[TestCase(POIType.Castle)]
+		[TestCase(POIType.Keep)]
+		public void AMoatedSitesWaysCrossOnlyAtTheirGates(POIType kind)
+		{
+			PointOfInterestRecord stronghold = Site(2, kind, 0f, 0f, 40f);
+			var records = new List<PointOfInterestRecord> { Site(1, POIType.Town, -1000f, 60f, 40f), stronghold, Site(3, POIType.Town, 1000f, -90f, 40f) };
+			PathPlanInput input = Input(records);
+			const float Inner = 41.5f, Width = 8f;
+			input.Shapes = new List<PointOfInterestShape> { Moat(stronghold, Inner, Width) };
+			PathPlan plan = PathNetworkPlanner.Plan(input);
+			List<ScenePath> ways = plan.Paths.FindAll(p => p.FromId == 2 || p.ToId == 2);
+			Assert.That(ways.Count, Is.EqualTo(2), string.Join("\n", plan.Notes));
+			foreach (ScenePath way in ways)
+			{
+				float entrance = way.FromId == 2 ? way.FromEntrance : way.ToEntrance;
+				Assert.That(float.IsNaN(entrance), Is.False, "the layout opens a gate on the way's bearing");
+				if (kind == POIType.Castle)
+				{
+					Assert.That(Mathf.Repeat(entrance, 180f), Is.EqualTo(0f).Within(1e-3f), "a walled site's ways come in at its street ends");
+				}
+				Vector2 gate = new Vector2(Mathf.Sin(entrance * Mathf.Deg2Rad), Mathf.Cos(entrance * Mathf.Deg2Rad));
+				bool crossed = false;
+				for (int i = 0; i < way.Count; i++)
+				{
+					var p = new Vector2(way.Points[i].x, way.Points[i].z);
+					if ((way.FlagsAt(i) & ScenePathPointFlags.InSite) == 0)
+					{
+						Assert.That(p.magnitude, Is.GreaterThanOrEqualTo(Inner + Width), $"way {way.Id} point {i} at {p} is routed through the moat or the bailey");
+					}
+					else if (p.magnitude > Inner && p.magnitude < Inner + Width)
+					{
+						crossed = true;
+						Assert.That(Mathf.Abs(p.x * gate.y - p.y * gate.x), Is.LessThan(0.5f), $"way {way.Id} crosses the ditch at {p}, off its gate's bearing {entrance}");
+					}
+				}
+				Assert.That(crossed, Is.True, $"way {way.Id} crosses its moat inside the site");
+			}
+		}
+
 		[Test]
 		public void ARuinTakesATrailThatFadesTowardIt()
 		{

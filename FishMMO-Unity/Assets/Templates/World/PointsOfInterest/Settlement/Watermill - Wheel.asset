@@ -21,7 +21,7 @@ MonoBehaviour:
   Small: 1
   Medium: 1
   Large: 1
-  PadFlatness: 0
+  PadFlatness: 1
   Style: stone
   Layout: 0
   Pieces:

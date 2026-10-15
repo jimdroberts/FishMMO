@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Client;
 using FishMMO.Shared;
+using FishMMO.Shared.Biomes;
 using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
 
@@ -565,6 +566,15 @@ namespace FishMMO.TestHarness.World
 
 			latitudeSlider = LabeledSlider("Latitude", -90f, 90f, Controller.Latitude, v => { Controller.Latitude = v; RefreshFacts(); });
 			page.Add(latitudeSlider);
+			/* A cut scene's latitude is its place on the atlas: its ground, and so its climate, is read at each point's
+			 * true latitude whatever the slider says, while the sun, the season and the wind belts followed the slider —
+			 * a 70° sky over 47° ground. So in a cut scene the latitude is shown, not set; move the scene on the atlas. */
+			bool placed = Controller.InCutScene;
+			if (placed)
+			{
+				latitudeSlider.SetEnabled(false);
+				latitudeSlider.tooltip = "This is a cut scene: its latitude is its place on the World Atlas, which its ground and climate are read from. Move it there.";
+			}
 			page.Add(LabeledSlider("Longitude", -180f, 180f, Controller.Longitude, v => Controller.Longitude = v));
 			page.Add(LabeledSlider("Heading", 0f, 360f, Controller.Heading, v => Controller.Heading = v));
 			var places = Row();
@@ -573,6 +583,7 @@ namespace FishMMO.TestHarness.World
 			places.Add(SmallButton("Arctic 70°N", () => SetLatitude(70f)));
 			places.Add(SmallButton("Pole 89°N", () => SetLatitude(89f)));
 			places.Add(SmallButton("45°S", () => SetLatitude(-45f)));
+			places.SetEnabled(!placed);
 			page.Add(places);
 
 			page.Add(Heading("When", "One clock. The bed's tick stands in for the server's and counts at a fixed rate; the world time is its anchor, which you set, hold and race here exactly as an admin does in the game (/admin time). The sun, the weather, the storms and the sea all read it."));
@@ -1223,12 +1234,15 @@ namespace FishMMO.TestHarness.World
 			float fog = WeatherFogPresenter.Amount(shown);
 			Stat("wx.fog", fog.ToString("0.00", culture), fog <= 0.005f ? "dim" : null);
 			Stat("wx.wind", $"{(shown[WeatherChannel.WindSpeed] * 30f).ToString("0.0", culture)} m/s");
-			// The whole, and the part of it that is the body's: how far this world is from its suns,
-			// its air, this latitude and the season. Frozen and scorched are said so, since the scale
-			// stops at one either way and a world can be well past it.
-			string body = Controller.BodyTemperature <= -0.999f ? "frozen" : Controller.BodyTemperature >= 0.999f ? "scorched" : Controller.BodyTemperature.ToString("+0.00;-0.00", culture);
-			Stat("wx.temp", $"{sample.Temperature.ToString("+0.00;-0.00", culture)} (body {body})",
-				Mathf.Abs(Controller.BodyTemperature) >= 0.999f ? "warn" : null);
+			/* In degrees, and in three parts: the air now, the year's mean on this ground (the place — latitude, height,
+			 * the world's distance from its suns), and what the moment adds to it. This read the climate scale and a
+			 * "body" figure that on a scene's own body is only the season, so in high summer a cold place could show a
+			 * larger "body" share than a warm one and read as the warmer of the two. */
+			float nowC = sample.Kelvin - 273.15f;
+			float annualC = Controller.AnnualKelvinHere - 273.15f;
+			float bodyK = Controller.BodyTemperature * (float)ClimateModel.KelvinPerUnit;
+			string share = Controller.BodyTemperatureIsSeason ? "season" : "body";
+			Stat("wx.temp", $"{nowC.ToString("0.0", culture)} °C (year's mean here {annualC.ToString("0.0", culture)} °C, {share} {bodyK.ToString("+0.0;-0.0", culture)} K)");
 			Stat("wx.exposure", sample.IsSheltered ? "sheltered" : "exposed");
 
 			RefreshCloudStats(sky, culture);

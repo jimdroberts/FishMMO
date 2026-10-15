@@ -76,10 +76,19 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>The moisture term at the scene's centre: all a hand-made scene uses.</summary>
 		public readonly float CentreMoisture;
 
+		/// <summary>How continental the climate is at the scene's centre, 0 the sea's … 1 deep inland: what its seasons are read with.</summary>
+		public readonly float CentreContinentality;
+
+		/// <summary>The body's climate table (null without a body): its seasons, for the running scene.</summary>
+		public PlanetClimateTable Table => field.Table;
+
 		/// <summary>What the body offers a biome, from the same field: the resolver's physical filter.</summary>
 		public readonly BiomeWorldConditions Conditions;
 
 		private readonly float[] moisture;
+
+		/// <summary>How continental the climate is over the grid, as <see cref="moisture"/> is laid out (<see cref="MoistureModel.Continentality{T}"/>).</summary>
+		private readonly float[] continentality;
 
 		private ScenePlacementClimate(SolarSystemProfile system, WorldBody body, in AtlasFootprint footprint, double radiusKm, bool generated)
 		{
@@ -94,12 +103,14 @@ namespace FishMMO.Shared.Biomes
 			VerticalScale = generated ? Mathf.Max(1e-6f, PlanetSurface.SceneVerticalScale(body, radiusKm)) : 1f;
 			Vector3 centre = AtlasGeometry.ToUnit(footprint.Latitude, footprint.Longitude).ToVector3();
 			CentreMoisture = field.Moisture.Anomaly(footprint.Latitude, centre);
+			CentreContinentality = field.ContinentalityAt(footprint.Latitude, centre);
 			if (!generated)
 			{
 				return;
 			}
 
 			moisture = new float[GridSize * GridSize];
+			continentality = new float[GridSize * GridSize];
 			for (int j = 0; j < GridSize; j++)
 			{
 				for (int i = 0; i < GridSize; i++)
@@ -108,6 +119,7 @@ namespace FishMMO.Shared.Biomes
 					Vector3 direction = AtlasGeometry.SceneToUnit(footprint, xKm, zKm, radiusKm).ToVector3().normalized;
 					// The latitude and direction PlanetClimateField.At(direction, altitude) itself takes.
 					moisture[j * GridSize + i] = field.Moisture.Anomaly(PlanetClimateField.LatitudeOf(direction), direction);
+					continentality[j * GridSize + i] = field.ContinentalityAt(PlanetClimateField.LatitudeOf(direction), direction);
 				}
 			}
 		}
@@ -166,7 +178,9 @@ namespace FishMMO.Shared.Biomes
 				&& footprint.Longitude == entry.Longitude
 				&& footprint.HeadingDegrees == entry.HeadingDegrees
 				&& footprint.SizeKm == entry.SizeKm
-				&& (!generated || radiusKm == Math.Max(1e-3, entry.CutRadiusKm));
+				&& (!generated || radiusKm == Math.Max(1e-3, entry.CutRadiusKm))
+				// Outside play a designer may be editing the body itself: a changed body is a new climate table.
+				&& (Application.isPlaying || ReferenceEquals(field.Table, PlanetClimateTable.For(system, body)));
 		}
 
 		/// <summary>
@@ -220,7 +234,18 @@ namespace FishMMO.Shared.Biomes
 			Vector3 direction = Generated
 				? AtlasGeometry.SceneToUnit(footprint, worldPosition.x / 1000.0, worldPosition.z / 1000.0, radiusKm).ToVector3()
 				: AtlasGeometry.ToUnit(footprint.Latitude, footprint.Longitude).ToVector3();
-			return field.ClimateAt(direction, AltitudeOf(worldPosition.y), MoistureAt(worldPosition.x, worldPosition.z), out normalizedHeight);
+			return field.ClimateAt(direction, AltitudeOf(worldPosition.y), MoistureAt(worldPosition.x, worldPosition.z),
+				ContinentalityAt(worldPosition.x, worldPosition.z), out normalizedHeight);
+		}
+
+		/// <summary>
+		/// The year's mean at a scene position, K, read with a continentality the caller gives: the sea's surface (0) at a
+		/// shore whose ground the planet's coarser surface calls land, say.
+		/// </summary>
+		public float AnnualKelvinAt(Vector3 worldPosition, float continentality)
+		{
+			Vector3 direction = DirectionAt(worldPosition.x, worldPosition.z);
+			return field.KelvinAt(PlanetClimateField.LatitudeOf(direction), direction, AltitudeOf(worldPosition.y), continentality);
 		}
 
 		/// <summary>
@@ -239,7 +264,8 @@ namespace FishMMO.Shared.Biomes
 				? AtlasGeometry.SceneToUnit(footprint, worldPosition.x / 1000.0, worldPosition.z / 1000.0, radiusKm).ToVector3().normalized
 				: AtlasGeometry.ToUnit(footprint.Latitude, footprint.Longitude).ToVector3().normalized;
 			float altitude = AltitudeOf(worldPosition.y);
-			ClimateSample climate = field.ClimateAt(direction, altitude, MoistureAt(worldPosition.x, worldPosition.z), out float normalized);
+			ClimateSample climate = field.ClimateAt(direction, altitude, MoistureAt(worldPosition.x, worldPosition.z),
+				ContinentalityAt(worldPosition.x, worldPosition.z), out float normalized);
 			var point = new PlanetSurfacePoint { AltitudeMetres = altitude, NormalizedHeight = normalized, Climate = climate };
 			return field.SelectBiome(direction, point);
 		}
@@ -250,22 +276,29 @@ namespace FishMMO.Shared.Biomes
 		/// </summary>
 		public float MoistureAt(float worldX, float worldZ)
 		{
-			if (!Generated)
-			{
-				return CentreMoisture;
-			}
+			return Generated ? Grid(moisture, worldX, worldZ) : CentreMoisture;
+		}
+
+		/// <summary>How continental the climate is at a scene position, from the grid as <see cref="MoistureAt"/> reads its.</summary>
+		public float ContinentalityAt(float worldX, float worldZ)
+		{
+			return Generated ? Grid(continentality, worldX, worldZ) : CentreContinentality;
+		}
+
+		/// <summary>A grid value at a scene position, bilinear; outside the footprint the edge holds.</summary>
+		private float Grid(float[] grid, float worldX, float worldZ)
+		{
 			/* Outside the footprint the edge holds: a character walking past the boundary is still
-			 * in this scene's climate, and extrapolating a moisture gradient would be inventing one. */
+			 * in this scene's climate, and extrapolating a gradient would be inventing one. */
 			float sizeX = Mathf.Max(1e-6f, footprint.SizeKm.x), sizeZ = Mathf.Max(1e-6f, footprint.SizeKm.y);
 			float u = Mathf.Clamp((worldX / 1000f / sizeX + 0.5f) * (GridSize - 1), 0f, GridSize - 1);
 			float v = Mathf.Clamp((worldZ / 1000f / sizeZ + 0.5f) * (GridSize - 1), 0f, GridSize - 1);
 			int i = Mathf.Min((int)u, GridSize - 2), j = Mathf.Min((int)v, GridSize - 2);
 			float fu = u - i, fv = v - j;
 			int n00 = j * GridSize + i, n10 = n00 + 1, n01 = n00 + GridSize, n11 = n01 + 1;
-			return Mathf.Lerp(Mathf.Lerp(moisture[n00], moisture[n10], fu), Mathf.Lerp(moisture[n01], moisture[n11], fu), fv);
+			return Mathf.Lerp(Mathf.Lerp(grid[n00], grid[n10], fu), Mathf.Lerp(grid[n01], grid[n11], fu), fv);
 		}
 
-		/// <summary>The scene-km position of grid node (i, j): the footprint's own frame, centred on the scene.</summary>
 		public void NodeKm(int i, int j, out double xKm, out double zKm)
 		{
 			xKm = (i / (double)(GridSize - 1) - 0.5) * footprint.SizeKm.x;

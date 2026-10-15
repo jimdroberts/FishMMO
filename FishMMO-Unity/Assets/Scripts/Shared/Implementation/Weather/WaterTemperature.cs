@@ -53,13 +53,13 @@ namespace FishMMO.Shared.Weather
 		/// <summary>How far below sea water's freezing point the air takes the sea to closed pack ice, K (IcePlacer's twin).</summary>
 		public const float PackRampKelvin = 6f;
 		/// <summary>The share of the air's seasonal swing the sea's surface follows.</summary>
-		public const float SeaSeasonalShare = 0.35f;
+		public const float SeaSeasonalShare = 1f;
 		/// <summary>How far behind the sun the sea's season runs, years.</summary>
-		public const float SeaLagYears = 1f / 6f;
+		public const float SeaLagYears = 0f;
 		/// <summary>The share of the air's seasonal swing a lake's or a river's surface follows.</summary>
 		public const float InlandSeasonalShare = 0.8f;
 		/// <summary>How far behind the sun a lake's season runs, years.</summary>
-		public const float InlandLagYears = 1f / 12f;
+		public const float InlandLagYears = 1f / 24f;
 
 		/// <summary>The sea's surface, °C, from the annual mean sea-level air and the air's season as it was <see cref="SeaLagYears"/> ago (°C off the mean).</summary>
 		public static float SeaSurfaceC(float annualMeanAirC, float laggedSeasonC)
@@ -101,82 +101,54 @@ namespace FishMMO.Shared.Weather
 		}
 
 		/// <summary>
-		/// The water at an hour: the sea's at <paramref name="seaSurface"/> (a point on it, Y its level) and
-		/// a lake's or a river's at <paramref name="inland"/> (a point on or beside it: its climate is read at
-		/// the ground there, the altitude a mountain lake is cooled by).
+		/// The water at a scene now: its sea's surface and its lakes', from the body's climate table — the sea column for the
+		/// sea, the place's own blend for inland water — with the scene's authored air.
 		/// </summary>
+		/// <remarks>
+		/// The table's sea column already IS a sea surface: its mixed layer's heat capacity damps the season to the
+		/// ocean's and lags it two months behind the sun, so the sea reads it whole (<see cref="SeaSeasonalShare"/> 1, no
+		/// lag of its own). A lake reads the ground's own column a little later and a little damped.
+		/// </remarks>
 		public static Reading At(WorldSceneSettings settings, in PlanetAir planet, Vector3 seaSurface, Vector3 inland, double worldHours)
 		{
-			float seaAnnualC = planet.SurfaceKelvin(SeaAnnualMeanScale(settings, seaSurface)) - Kelvin;
-			float inlandAnnualC = planet.SurfaceKelvin(InlandAnnualMeanScale(settings, inland)) - Kelvin;
-			float seaSeason = LaggedSeasonC(settings, worldHours, SeaLagYears);
-			float inlandSeason = LaggedSeasonC(settings, worldHours, InlandLagYears);
+			float authoredK = (settings != null ? settings.AuthoredAir.TemperatureScale : 0f) * (float)ClimateModel.KelvinPerUnit;
+			SolarSystemProfile system = SolarSystemProfile.Active;
+			WorldBody body = SceneTime.BodyOf(settings);
+			PlanetClimateTable table = system != null && body != null ? PlanetClimateTable.For(system, body) : null;
+			ScenePlacementClimate placement = settings != null ? settings.PlacementClimate : null;
+
+			float seaAnnualK, inlandAnnualK, seaSeasonK = 0f, inlandSeasonK = 0f;
+			if (placement != null)
+			{
+				seaAnnualK = placement.AnnualKelvinAt(new Vector3(seaSurface.x, 0f, seaSurface.z), 0f);
+				float inlandContinentality = placement.ContinentalityAt(inland.x, inland.z);
+				// The ground's own year at the water, with its altitude: a mountain tarn is colder than a valley pond.
+				inlandAnnualK = BiomeSampler.Read(inland, settings, 0f, 0f).Climate.KelvinOrScale;
+				if (table != null)
+				{
+					double seaLatitude = settings.LatitudeAt(seaSurface);
+					double inlandLatitude = settings.LatitudeAt(inland);
+					seaSeasonK = table.SeasonKelvin(seaLatitude, worldHours - SeaLagYears * table.YearHours, 0f);
+					inlandSeasonK = table.SeasonKelvin(inlandLatitude, worldHours - InlandLagYears * table.YearHours, inlandContinentality);
+				}
+			}
+			else
+			{
+				// No place on any body: the scene's own climate, unmoved by any season.
+				seaAnnualK = settings != null ? settings.SampleClimateAt(seaSurface, ClimateModel.DefaultWaterSurfaceHeight, out _, 0f, 0f).KelvinOrScale
+					: BiomeSampler.Read(seaSurface, null).Climate.KelvinOrScale;
+				inlandAnnualK = BiomeSampler.Read(inland, settings, 0f, 0f).Climate.KelvinOrScale;
+			}
+			float seaAnnualC = seaAnnualK + authoredK - Kelvin;
+			float inlandAnnualC = inlandAnnualK + authoredK - Kelvin;
 			return new Reading
 			{
 				AnnualAirC = seaAnnualC,
-				SeaC = SeaSurfaceC(seaAnnualC, seaSeason),
-				SeaOpen = SeaOpenWater(seaAnnualC, seaSeason),
-				InlandC = InlandSurfaceC(inlandAnnualC, inlandSeason),
-				InlandFrozen = InlandFrozen(inlandAnnualC, inlandSeason),
+				SeaC = SeaSurfaceC(seaAnnualC, seaSeasonK),
+				SeaOpen = SeaOpenWater(seaAnnualC, seaSeasonK),
+				InlandC = InlandSurfaceC(inlandAnnualC, inlandSeasonK),
+				InlandFrozen = InlandFrozen(inlandAnnualC, inlandSeasonK),
 			};
-		}
-
-		/// <summary>
-		/// The annual mean air over the sea on the climate scale: the scene's climate at the sea's surface —
-		/// its water line, not the ground under the point, which may be a cliff top or the sea floor — with
-		/// the runtime's season and added air taken back off and its authored air kept (<see cref="Annual"/>).
-		/// </summary>
-		public static float SeaAnnualMeanScale(WorldSceneSettings settings, Vector3 seaSurface)
-		{
-			if (settings == null)
-			{
-				return BiomeSampler.Read(seaSurface, null).Climate.Temperature;
-			}
-			float waterLine = settings.Climate != null ? settings.Climate.WaterSurfaceHeight : ClimateModel.DefaultWaterSurfaceHeight;
-			return Annual(settings, settings.SampleClimateAt(seaSurface, waterLine).Temperature);
-		}
-
-		/// <summary>The annual mean air at a lake or a river on the climate scale: the climate at the ground there (<see cref="Annual"/>).</summary>
-		public static float InlandAnnualMeanScale(WorldSceneSettings settings, Vector3 at)
-		{
-			return Annual(settings, BiomeSampler.Read(at, settings).Climate.Temperature);
-		}
-
-		/// <summary>
-		/// A climate reading's temperature as the annual mean: the runtime offset taken back off (the season,
-		/// and the air an admin or an event adds), the scene's authored air kept.
-		/// </summary>
-		/// <remarks>
-		/// The runtime offset is added inside the climate sample and clamped with it, so at the scale's ends
-		/// (±33 °C) this is a little off; nowhere water is open does that matter.
-		/// </remarks>
-		public static float Annual(WorldSceneSettings settings, float climateScale)
-		{
-			float runtime = settings != null ? settings.RuntimeTemperatureOffset : 0f;
-			float authored = settings != null ? settings.AuthoredAir.TemperatureScale : 0f;
-			return Mathf.Clamp(climateScale - runtime + authored, -1f, 1f);
-		}
-
-		/// <summary>
-		/// The air's season (°C off its annual mean) at the scene's latitude as it was <paramref name="lagYears"/>
-		/// of its host planet's year before <paramref name="worldHours"/>: what the clients' and the server's
-		/// climate adds for the season, read late. Zero with no world to read.
-		/// </summary>
-		public static float LaggedSeasonC(WorldSceneSettings settings, double worldHours, float lagYears)
-		{
-			SolarSystemProfile system = SolarSystemProfile.Active;
-			WorldBody body = SceneTime.BodyOf(settings);
-			if (system == null || body == null || settings == null)
-			{
-				return 0f;
-			}
-			double year = CelestialMath.OrbitHours(system, CelestialMath.HostPlanet(body));
-			if (double.IsNaN(year) || double.IsInfinity(year) || year <= 0.0)
-			{
-				return 0f;
-			}
-			CelestialMath.SeasonalClimateOffsets(system, body, worldHours - lagYears * year, settings.Latitude, out float season, out _);
-			return season * (float)ClimateModel.KelvinPerUnit;
 		}
 	}
 }

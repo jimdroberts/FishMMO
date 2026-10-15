@@ -157,8 +157,6 @@ namespace FishMMO.UnitTests
 			// When the world is an ice world, every point the globe bake shades must be ice too.
 			PlanetClimateField field = PlanetClimateField.For(null, null);
 			float warmest = field.Conditions.WarmestTemperature;
-			float excess = field.SubSolarTemperature + PlanetClimateField.RegionalVariation - field.MeanTemperature;
-			Assert.AreEqual(BiomeWorldConditions.WarmestExcess, excess, 1e-4f, "the conditions' bound is the field's own construction");
 			for (int i = 0; i < 4000; i++)
 			{
 				UnityEngine.Vector3 d = PlanetSurface.FibonacciDirection(i, 4000);

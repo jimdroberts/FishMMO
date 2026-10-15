@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using FishMMO.Shared.Biomes;
 using FishMMO.Shared.Celestial;
 
 namespace FishMMO.Shared.Weather
@@ -168,11 +169,14 @@ namespace FishMMO.Shared.Weather
 		public static int VersionOf(WeatherTimeline timeline, WorldSceneSettings settings) => CacheFor(timeline, settings).Version;
 
 		/// <summary>The weather standing over one point at a step: the open air's own, and what each storm reaching it makes in that air.</summary>
-		public static WeatherFrame FrameAt(Forcing forcing, Vector3 position)
+		public static WeatherFrame FrameAt(Forcing forcing, Vector3 position) => FrameAt(forcing, position, 0f);
+
+		/// <summary>The same at a place whose climate stands <paramref name="temperatureOffset"/> from the area's middle (<see cref="BandAt"/>).</summary>
+		public static WeatherFrame FrameAt(Forcing forcing, Vector3 position, float temperatureOffset)
 		{
 			if (!forcing.HasWeather || forcing.Cells.Count == 0)
 			{
-				return OpenFrame(forcing);
+				return OpenFrame(forcing, temperatureOffset);
 			}
 			var accumulator = new WeatherAccumulator();
 			accumulator.Add(forcing.Around.Background, 1f);
@@ -191,14 +195,16 @@ namespace FishMMO.Shared.Weather
 			if (!any)
 			{
 				// Exactly the open air's, so a point no storm reaches has the shared ground to the last bit.
-				return OpenFrame(forcing);
+				return OpenFrame(forcing, temperatureOffset);
 			}
 			WeatherFrame frame = accumulator.Resolve();
-			return Typed(frame, forcing.Temperature);
+			return Typed(frame, forcing.Temperature + temperatureOffset);
 		}
 
-		/// <summary>The open air's weather at a step, with no storm in it: what a point no storm reaches is integrated under.</summary>
-		public static WeatherFrame OpenFrame(Forcing forcing) => Typed(forcing.Around.Background, forcing.Temperature);
+		public static WeatherFrame OpenFrame(Forcing forcing) => OpenFrame(forcing, 0f);
+
+		/// <summary>The open air's frame at a place <paramref name="temperatureOffset"/> warmer or colder than the area's middle.</summary>
+		public static WeatherFrame OpenFrame(Forcing forcing, float temperatureOffset) => Typed(forcing.Around.Background, forcing.Temperature + temperatureOffset);
 
 		private static WeatherFrame Typed(WeatherFrame frame, float temperature)
 		{
@@ -208,7 +214,6 @@ namespace FishMMO.Shared.Weather
 			return frame;
 		}
 
-		/// <summary>Whether any storm of a step reaches a point at all: a point none reaches has the open air's ground.</summary>
 		public static bool Touched(Forcing forcing, Vector3 position)
 		{
 			for (int i = 0; i < forcing.Cells.Count; i++)
@@ -222,32 +227,92 @@ namespace FishMMO.Shared.Weather
 		}
 
 		/// <summary>One step of a track under the weather standing over its point.</summary>
-		public static CoverTrack Advance(in CoverTrack track, in WeatherFrame frame, Forcing forcing, in DeepSnow deep)
+		public static CoverTrack Advance(in CoverTrack track, in WeatherFrame frame, Forcing forcing, in DeepSnow deep) => Advance(track, frame, forcing, deep, 0f);
+
+		/// <summary>The same at a place <paramref name="temperatureOffset"/> from the area's middle: its snow melts and its puddles dry by its own warmth.</summary>
+		public static CoverTrack Advance(in CoverTrack track, in WeatherFrame frame, Forcing forcing, in DeepSnow deep, float temperatureOffset)
 		{
+			float temperature = forcing.Temperature + temperatureOffset;
 			CoverTrack next = track;
-			next.Cover.Integrate(frame, forcing.Temperature, (float)StepSeconds, forcing.Sunlight);
+			next.Cover.Integrate(frame, temperature, (float)StepSeconds, forcing.Sunlight);
 			if (deep.MaxMetres > 0f)
 			{
-				next.Depth = WeatherCover.AdvanceDeepSnow(track.Depth, next.Cover.Snow, frame, forcing.Temperature, (float)StepSeconds,
+				next.Depth = WeatherCover.AdvanceDeepSnow(track.Depth, next.Cover.Snow, frame, temperature, (float)StepSeconds,
 					forcing.Sunlight, deep.MaxMetres, deep.Hours);
 			}
 			return next;
 		}
 
-		/// <summary>
-		/// The ground a generation starts from: what the climate alone would leave, with no weather of the last hours in
-		/// it. Snow where it is cold enough to stay (from about −3 °C, all of it by −10 °C), in air that can snow at all;
-		/// otherwise bare, dry and clean. No deep snow: that is built by the snow the generation sees fall.
-		/// </summary>
-		public static CoverTrack Prior(Forcing atStart)
+		public static CoverTrack Prior(Forcing atStart) => Prior(atStart, 0f);
+
+		/// <summary>The ground a generation starts from at a place <paramref name="temperatureOffset"/> from the area's middle.</summary>
+		public static CoverTrack Prior(Forcing atStart, float temperatureOffset)
 		{
 			var track = new CoverTrack();
 			if (atStart.HasWeather && atStart.Around.Planet.HasAir)
 			{
-				track.Cover.Snow = Mathf.Clamp01(Mathf.InverseLerp(-0.1f, -0.3f, atStart.Temperature));
+				track.Cover.Snow = Mathf.Clamp01(Mathf.InverseLerp(-0.1f, -0.3f, atStart.Temperature + temperatureOffset));
 			}
 			return track;
 		}
+
+		// ── A place's own climate against the area's ───────────────────
+
+		/// <summary>The temperature step places are grouped by, scale units: half a kelvin.</summary>
+		public const float BandScale = (float)(0.5 / ClimateModel.KelvinPerUnit);
+
+		/// <summary>Bands either side of the area's middle: ±32 K, past which a place is held at the last.</summary>
+		public const int BandReach = 64;
+
+		/// <summary>How many bands there are, the middle's included.</summary>
+		public const int BandCount = 2 * BandReach + 1;
+
+		/// <summary>
+		/// How much warmer or colder the climate of a place is than the middle of the area the ground's forcing is read at,
+		/// on the climate scale, to the nearest band (<see cref="BandScale"/>).
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>One weather, many climates (2026-10-15).</b> The ground's forcing is read once, at the area's middle, so every
+		/// texel of the cover map snowed and melted by the middle's temperature: a ridge three hundred metres up, the far
+		/// end of a scene four degrees of latitude away, a cold inland basin and a mild coast all whitened together. The
+		/// weather over them is one air and is still read once; each place's own climate is its offset from the middle's,
+		/// static (altitude, latitude, how inland), added to the middle's moment.
+		/// </para>
+		/// <para>
+		/// Banded so the cover map can keep one shared ground per band rather than one per texel, and so the server's
+		/// points and the client's map, which both take it, agree to the band. Main thread: it reads the terrain.
+		/// </para>
+		/// </remarks>
+		public static int BandAt(WorldSceneSettings settings, Vector3 position, float middleKelvin)
+		{
+			if (settings == null || middleKelvin <= 0f)
+			{
+				return BandReach;
+			}
+			float here = BiomeSampler.Read(position, settings, 0f, 0f).Climate.KelvinOrScale;
+			return BandOf((here - middleKelvin) / (float)ClimateModel.KelvinPerUnit);
+		}
+
+		/// <summary>The climate at the middle of the area the forcing is read at, K: what <see cref="BandAt"/> measures from. 0 with no area.</summary>
+		public static float MiddleKelvin(WeatherTimeline timeline, WorldSceneSettings settings)
+		{
+			if (timeline == null || settings == null)
+			{
+				return 0f;
+			}
+			Vector2 c = timeline.Area.width > 0f ? timeline.Area.center : Vector2.zero;
+			return BiomeSampler.Read(new Vector3(c.x, 0f, c.y), settings, 0f, 0f).Climate.KelvinOrScale;
+		}
+
+		/// <summary>The band of an offset on the climate scale.</summary>
+		public static int BandOf(float offset)
+		{
+			return Mathf.Clamp(Mathf.RoundToInt(offset / BandScale), -BandReach, BandReach) + BandReach;
+		}
+
+		/// <summary>The offset a band stands for, climate scale.</summary>
+		public static float BandOffset(int band) => (band - BandReach) * BandScale;
 
 		// ── The forcing cache ──────────────────────────────────────────
 
@@ -371,6 +436,10 @@ namespace FishMMO.Shared.Weather
 	public sealed class CoverPoints
 	{
 		private Vector3[] points = Array.Empty<Vector3>();
+		// Each point's own climate against the area's middle (GroundCover.BandAt), as an offset on the climate scale.
+		private float[] offsets = Array.Empty<float>();
+		private WorldSceneSettings offsetsFor;
+		private Rect offsetsArea;
 		private CoverTrack[] oldAt = Array.Empty<CoverTrack>(), oldNext = Array.Empty<CoverTrack>();
 		private CoverTrack[] youngAt = Array.Empty<CoverTrack>(), youngNext = Array.Empty<CoverTrack>();
 		private long step = long.MinValue;
@@ -400,7 +469,27 @@ namespace FishMMO.Shared.Weather
 			oldNext = new CoverTrack[points.Length];
 			youngAt = new CoverTrack[points.Length];
 			youngNext = new CoverTrack[points.Length];
+			offsets = new float[points.Length];
+			offsetsFor = null;
 			step = long.MinValue;
+		}
+
+		/// <summary>Each point's band against the area's middle, worked out again when the scene or its area changes.</summary>
+		private bool RefreshOffsets(WeatherTimeline timeline, WorldSceneSettings settings)
+		{
+			Rect area = timeline != null ? timeline.Area : default;
+			if (ReferenceEquals(offsetsFor, settings) && area == offsetsArea && offsets.Length == points.Length)
+			{
+				return false;
+			}
+			float middle = GroundCover.MiddleKelvin(timeline, settings);
+			for (int i = 0; i < points.Length; i++)
+			{
+				offsets[i] = GroundCover.BandOffset(GroundCover.BandAt(settings, points[i], middle));
+			}
+			offsetsFor = settings;
+			offsetsArea = area;
+			return true;
 		}
 
 		/// <summary>Brings the ground at every point to <paramref name="seconds"/> of world time.</summary>
@@ -409,7 +498,8 @@ namespace FishMMO.Shared.Weather
 			long g = GroundCover.StepOf(seconds);
 			long j = GroundCover.GenerationOf(seconds);
 			int v = GroundCover.VersionOf(timeline, settings);
-			bool rebuild = step == long.MinValue || v != version || !ReferenceEquals(timeline, this.timeline)
+			bool moved = RefreshOffsets(timeline, settings);
+			bool rebuild = moved || step == long.MinValue || v != version || !ReferenceEquals(timeline, this.timeline)
 				|| deep.MaxMetres != this.deep.MaxMetres || deep.Hours != this.deep.Hours
 				|| g < step || j < generation || g - step > GroundCover.StepsPerGeneration;
 			this.timeline = timeline;
@@ -468,34 +558,29 @@ namespace FishMMO.Shared.Weather
 			long youngStart = GroundCover.StartStep(j);
 			long oldStart = youngStart - GroundCover.StepsPerGeneration;
 			GroundCover.Forcing first = GroundCover.ForcingAt(timeline, settings, scene, oldStart);
-			CoverTrack prior = GroundCover.Prior(first);
 			for (int i = 0; i < points.Length; i++)
 			{
-				oldNext[i] = prior;
+				oldNext[i] = GroundCover.Prior(first, offsets[i]);
 			}
 			for (long k = oldStart + 1; k <= g + 1; k++)
 			{
 				GroundCover.Forcing forcing = GroundCover.ForcingAt(timeline, settings, scene, k);
-				if (k == youngStart)
-				{
-					CoverTrack start = GroundCover.Prior(forcing);
-					for (int i = 0; i < points.Length; i++)
-					{
-						youngNext[i] = start;
-					}
-				}
 				for (int i = 0; i < points.Length; i++)
 				{
+					if (k == youngStart)
+					{
+						youngNext[i] = GroundCover.Prior(forcing, offsets[i]);
+					}
 					if (k == g + 1)
 					{
 						oldAt[i] = oldNext[i];
 						youngAt[i] = youngNext[i];
 					}
-					WeatherFrame frame = GroundCover.FrameAt(forcing, points[i]);
-					oldNext[i] = GroundCover.Advance(oldNext[i], frame, forcing, deep);
+					WeatherFrame frame = GroundCover.FrameAt(forcing, points[i], offsets[i]);
+					oldNext[i] = GroundCover.Advance(oldNext[i], frame, forcing, deep, offsets[i]);
 					if (k > youngStart)
 					{
-						youngNext[i] = GroundCover.Advance(youngNext[i], frame, forcing, deep);
+						youngNext[i] = GroundCover.Advance(youngNext[i], frame, forcing, deep, offsets[i]);
 					}
 				}
 			}
@@ -510,14 +595,15 @@ namespace FishMMO.Shared.Weather
 			if (next == GroundCover.StartStep(generation + 1))
 			{
 				// A new generation starts: the young one becomes the old, and the new one starts from the climate's ground.
-				CoverTrack start = GroundCover.Prior(GroundCover.ForcingAt(timeline, settings, scene, next));
+				GroundCover.Forcing atStart = GroundCover.ForcingAt(timeline, settings, scene, next);
 				for (int i = 0; i < points.Length; i++)
 				{
-					WeatherFrame frame = GroundCover.FrameAt(ahead, points[i]);
+					CoverTrack start = GroundCover.Prior(atStart, offsets[i]);
+					WeatherFrame frame = GroundCover.FrameAt(ahead, points[i], offsets[i]);
 					oldAt[i] = youngNext[i];
-					oldNext[i] = GroundCover.Advance(oldAt[i], frame, ahead, deep);
+					oldNext[i] = GroundCover.Advance(oldAt[i], frame, ahead, deep, offsets[i]);
 					youngAt[i] = start;
-					youngNext[i] = GroundCover.Advance(start, frame, ahead, deep);
+					youngNext[i] = GroundCover.Advance(start, frame, ahead, deep, offsets[i]);
 				}
 				generation++;
 			}
@@ -525,11 +611,11 @@ namespace FishMMO.Shared.Weather
 			{
 				for (int i = 0; i < points.Length; i++)
 				{
-					WeatherFrame frame = GroundCover.FrameAt(ahead, points[i]);
+					WeatherFrame frame = GroundCover.FrameAt(ahead, points[i], offsets[i]);
 					oldAt[i] = oldNext[i];
-					oldNext[i] = GroundCover.Advance(oldAt[i], frame, ahead, deep);
+					oldNext[i] = GroundCover.Advance(oldAt[i], frame, ahead, deep, offsets[i]);
 					youngAt[i] = youngNext[i];
-					youngNext[i] = GroundCover.Advance(youngAt[i], frame, ahead, deep);
+					youngNext[i] = GroundCover.Advance(youngAt[i], frame, ahead, deep, offsets[i]);
 				}
 			}
 			step = next;

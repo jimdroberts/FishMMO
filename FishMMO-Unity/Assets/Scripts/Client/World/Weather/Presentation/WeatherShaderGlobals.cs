@@ -108,43 +108,17 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(Mix2, new Vector4(frame[WeatherChannel.AshWeight], frame[WeatherChannel.SandWeight], 0f, 0f));
 		}
 
-		/// <summary>
-		/// How far into summer a place is, -1 deep winter .. 1 high summer, from the body's year phase
-		/// and the latitude.
-		/// </summary>
-		/// <remarks>
-		/// <see cref="FishMMO.Shared.Celestial.CelestialMath.Season01"/> is the northern season (it follows the sun's
-		/// declination), so the south has it reversed; and the swing fades toward the equator, where
-		/// the year brings wet and dry spells rather than summer and winter. Inverse of the weather
-		/// driver's own curve, <c>sin(season · 2π − π/2)</c>, so foliage and weather agree on when
-		/// summer is.
-		/// </remarks>
-		public static float LocalSummer(float season01, float latitudeDegrees)
-		{
-			float north = Mathf.Sin(season01 * Mathf.PI * 2f - Mathf.PI * 0.5f);
-			float hemisphere = latitudeDegrees < 0f ? -1f : 1f;
-			return north * hemisphere * SeasonStrength(latitudeDegrees);
-		}
-
-		/// <summary>The local year phase: the body's season, turned half a year round in the south.</summary>
-		public static float LocalPhase(float season01, float latitudeDegrees)
-		{
-			return Mathf.Repeat(season01 + (latitudeDegrees < 0f ? 0.5f : 0f), 1f);
-		}
-
-		/// <summary>How strongly the year swings here, 0 on the equator .. 1 from the tropics outward.</summary>
-		public static float SeasonStrength(float latitudeDegrees) => Mathf.Clamp01(Mathf.Abs(latitudeDegrees) / 23.5f);
-
 		/// <summary>Publishes the season. Season changes over days, so once a climate tick is plenty.</summary>
 		/// <remarks>
-		/// x the local year phase (0 midwinter, 0.5 midsummer, 0.75 autumn), y local summer -1..1,
-		/// z the humidity offset from the climate's mean, w the swing's strength — never quite 0 once
-		/// set, so a shader can tell an equatorial scene (no seasons) from no season known.
+		/// x how far through its thermal year the place is (0 its coldest point, 0.5 its warmest, 0.75 autumn), y how
+		/// warm it is for growing (−1 dormant … 1 growing), z the humidity offset from the climate's mean, w how hard its
+		/// winter is (0 none … 1 one that strips the trees) — never quite 0 once set, so a shader can tell a place with no
+		/// winter from no season known. All from the climate (<see cref="FishMMO.Shared.Weather.SceneClimate.Foliage"/>), not the calendar.
 		/// </remarks>
-		public static void ApplySeason(float season01, float latitudeDegrees, float humidityOffset)
+		public static void ApplySeason(float yearPhase01, float growing, float humidityOffset, float winter)
 		{
-			Shader.SetGlobalVector(Season, new Vector4(LocalPhase(season01, latitudeDegrees), LocalSummer(season01, latitudeDegrees),
-				Mathf.Clamp(humidityOffset, -1f, 1f), Mathf.Max(0.001f, SeasonStrength(latitudeDegrees))));
+			Shader.SetGlobalVector(Season, new Vector4(Mathf.Repeat(yearPhase01, 1f), Mathf.Clamp(growing, -1f, 1f),
+				Mathf.Clamp(humidityOffset, -1f, 1f), Mathf.Max(0.001f, Mathf.Clamp01(winter))));
 		}
 
 		/// <summary>No season known: foliage shows its healthy colours.</summary>

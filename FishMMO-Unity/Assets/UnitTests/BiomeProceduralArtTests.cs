@@ -954,19 +954,15 @@ namespace FishMMO.UnitTests
 		// ── The season global ─────────────────────────────────────────
 
 		[Test]
-		public void Season_IsReversedInTheSouth_AndFadesAtTheEquator()
+		public void Season_PublishesTheClimatesYear_AndAPlaceWithNoWinterStillReadsAsKnown()
 		{
-			Assert.That(WeatherShaderGlobals.LocalSummer(0.5f, 45f), Is.EqualTo(1f).Within(1e-4f));
-			Assert.That(WeatherShaderGlobals.LocalSummer(0.5f, -45f), Is.EqualTo(-1f).Within(1e-4f));
-			Assert.That(WeatherShaderGlobals.LocalSummer(0f, 60f), Is.EqualTo(-1f).Within(1e-4f));
-			Assert.That(WeatherShaderGlobals.LocalSummer(0.5f, 0f), Is.EqualTo(0f).Within(1e-4f));
-			Assert.That(WeatherShaderGlobals.LocalPhase(0.5f, -30f), Is.EqualTo(0f).Within(1e-4f));
-			Assert.That(WeatherShaderGlobals.LocalPhase(0.8f, 30f), Is.EqualTo(0.8f).Within(1e-4f));
-			WeatherShaderGlobals.ApplySeason(0.5f, 0f, -0.2f);
+			WeatherShaderGlobals.ApplySeason(1.25f, -3f, -0.2f, 0f);
 			try
 			{
 				Vector4 season = Shader.GetGlobalVector(WeatherShaderGlobals.Season);
-				Assert.That(season.w, Is.GreaterThan(0f), "an equatorial scene must still read as a known season");
+				Assert.That(season.w, Is.GreaterThan(0f), "a place with no winter must still read as a known season");
+				Assert.That(season.x, Is.EqualTo(0.25f).Within(1e-5f), "the year's phase wraps");
+				Assert.That(season.y, Is.EqualTo(-1f).Within(1e-5f), "growing is clamped to dormant");
 				Assert.That(season.z, Is.EqualTo(-0.2f).Within(1e-5f));
 			}
 			finally

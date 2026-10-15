@@ -511,6 +511,29 @@ namespace FishMMO.Shared.WorldDesign
 			return room == float.MaxValue ? magnitude : Math.Max(0f, room - margin);
 		}
 
+		/// <summary>
+		/// How far a turn of <paramref name="turn"/> radians between chords <paramref name="la"/> and <paramref name="lb"/> m
+		/// long overruns a bend of <paramref name="radius"/>: above 1, the bend is tighter. A round bend of that radius through
+		/// the turn meets each chord R·tan(θ/2) from the point, and each chord is shared with the point at its other end, so
+		/// it must fit in half the shorter chord.
+		/// </summary>
+		/// <remarks>
+		/// It was θ·R against the chords' mean length: alike for a gentle turn on even chords, but long chords let any turn
+		/// through, and a cut-off that merged chords could leave a 175° reversal between a 39 m and a 30 m chord standing as
+		/// a gentle bend (Flo Monolith's river 0 ran 39 m down its own channel and back, 2026-10-15). Toward a reversal
+		/// tan(θ/2) grows without bound, so no chord is long enough.
+		/// </remarks>
+		public static float BendExcess(float turn, float la, float lb, float radius)
+		{
+			float shorter = Math.Min(la, lb);
+			if (shorter < 1e-4f)
+			{
+				return float.PositiveInfinity;
+			}
+			float half = Math.Min(0.5f * turn, 1.5707f);
+			return radius * (float)Math.Tan(half) / (0.5f * shorter);
+		}
+
 		/// <summary>The most relaxation sweeps a stretch whose tight bend was cut off is given to round out.</summary>
 		private const int MaxEaseSweeps = 4000;
 
@@ -525,7 +548,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <para>
 		/// A tight bend is cut off as a river cuts through one: the point turning most for the chords either side of it is
 		/// removed, so the line runs on the chord between its neighbours, until each turn has room for its radius (a turn θ
-		/// over chords of mean length L needs L ≥ Rθ). That only ever shortens the line onto the inside of its bend, so it
+		/// needs R·tan(θ/2) of each chord, half the shorter at most: <see cref="BendExcess"/>). That only ever shortens the line onto the inside of its bend, so it
 		/// cannot add a loop, and a hairpin's two strands go with its tip. Each stretch the cuts reached, and as far again
 		/// as the bend's diameter beyond, is then resampled at the line's own spacing and relaxed: a point bending tighter
 		/// than its radius moves halfway toward the middle of its neighbours, sweep after sweep, until none does. The
@@ -573,7 +596,7 @@ namespace FishMMO.Shared.WorldDesign
 					return float.PositiveInfinity;
 				}
 				float turn = Math.Abs((float)Math.Atan2(ax * bz - az * bx, ax * bx + az * bz));
-				return turn * RadiusOf(widths[i]) / (0.5f * (la + lb));
+				return BendExcess(turn, la, lb, RadiusOf(widths[i]));
 			}
 			for (int i = 1; i < count - 1; i++)
 			{
@@ -667,8 +690,8 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Relaxes a stretch of line until no point bends tighter than <paramref name="radius"/> (it turns no more than its
-		/// chords' mean length over the radius): such a point moves halfway toward the middle of its neighbours, sweep after
+		/// Relaxes a stretch of line until no point bends tighter than <paramref name="radius"/> (<see cref="BendExcess"/>):
+		/// such a point moves halfway toward the middle of its neighbours, sweep after
 		/// sweep, at most <see cref="MaxEaseSweeps"/> times. The two end points never move.
 		/// </summary>
 		private static void Relax(List<float> x, List<float> z, float radius)
@@ -682,7 +705,7 @@ namespace FishMMO.Shared.WorldDesign
 					float ax = x[i] - x[i - 1], az = z[i] - z[i - 1], bx = x[i + 1] - x[i], bz = z[i + 1] - z[i];
 					float la = (float)Math.Sqrt(ax * ax + az * az), lb = (float)Math.Sqrt(bx * bx + bz * bz);
 					float turn = Math.Abs((float)Math.Atan2(ax * bz - az * bx, ax * bx + az * bz));
-					if (turn * radius <= 0.5f * (la + lb) * 1.0001f)
+					if (BendExcess(turn, la, lb, radius) <= 1.0001f)
 					{
 						continue;
 					}

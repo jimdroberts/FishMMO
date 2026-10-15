@@ -122,7 +122,7 @@ namespace FishMMO.Shared.WorldDesign
 				if (water != null && !scope.AllowsLocal)
 				{
 					string hydrologyPath = SceneGenerator.SaveWater(request, SceneGenerator.TerrainFolder(entry.Body, entry.SceneName), water,
-						(east, north) => SceneGenerator.GroundAltitude(terrains, plan, east, north));
+						(east, north) => SceneGenerator.GroundAltitude(terrains, plan, east, north), result.Notes);
 					if (hydrologyPath != null)
 					{
 						var hydrology = AssetDatabase.LoadAssetAtPath<SceneHydrology>(hydrologyPath);

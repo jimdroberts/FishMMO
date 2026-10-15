@@ -129,9 +129,9 @@ namespace FishMMO.UnitTests
 		public void AFieldWithoutABodyKnowsNoSeasons()
 		{
 			PlanetClimateField field = PlanetClimateField.For(null, null);
-			ClimateSample climate = field.ClimateAt(Vector3.up, 0f, 0f, out _);
+			ClimateSample climate = field.ClimateAt(Vector3.up, 0f, 0f, 0f, out _);
 			Assert.IsFalse(climate.SeasonKnown);
-			Assert.AreEqual(0f, field.WarmestLatitudeTemperature(-72.0));
+			Assert.IsNull(field.Table, "no body, no climate table");
 		}
 	}
 }

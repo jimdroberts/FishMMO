@@ -32,6 +32,11 @@ namespace FishMMO.Shared.WorldDesign
 			public readonly List<string> Created = new List<string>();
 			public readonly List<string> Updated = new List<string>();
 			public readonly List<string> Kept = new List<string>();
+			/// <summary>
+			/// Kept templates whose pieces, pad or sizes no longer match the code (a hand edit, or a spec changed since the
+			/// asset was written): they lay what the asset says, not what the code says, until re-authored.
+			/// </summary>
+			public readonly List<string> Drifted = new List<string>();
 			/// <summary>Template assets under the folder that no spec writes any more (left in place).</summary>
 			public readonly List<string> Stale = new List<string>();
 			public readonly List<string> Problems = new List<string>();
@@ -40,6 +45,10 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				var sb = new StringBuilder();
 				sb.Append($"{Created.Count} created, {Updated.Count} rewritten, {Kept.Count} kept as they were");
+				if (Drifted.Count > 0)
+				{
+					sb.Append($", {Drifted.Count} of them differing from the code (re-author to take the code's: {string.Join(", ", Drifted)})");
+				}
 				if (Stale.Count > 0)
 				{
 					sb.Append($", {Stale.Count} no longer written by any spec (left in place: {string.Join(", ", Stale)})");
@@ -135,6 +144,13 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					report.Stale.Add(path);
 				}
+				// A stale or drifted template is still picked, and a slot naming a piece the kit no longer has lays
+				// nothing in its place, silently (2026-10-15: windmill sites without a windmill, "=PostMill" retired).
+				List<string> unresolved = Unresolved(AssetDatabase.LoadAssetAtPath<PointOfInterestTemplate>(path));
+				if (unresolved.Count > 0)
+				{
+					report.Problems.Add($"{path} names no piece for {string.Join(", ", unresolved)}");
+				}
 			}
 			report.Stale.Sort(StringComparer.Ordinal);
 			return report;
@@ -174,6 +190,24 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			return plan;
+		}
+
+		/// <summary>The slot tags of a template that the kit has no piece for, in any style (slots that may lay something only).</summary>
+		public static List<string> Unresolved(PointOfInterestTemplate template)
+		{
+			var missing = new List<string>();
+			if (template == null || template.Pieces == null)
+			{
+				return missing;
+			}
+			foreach (PointOfInterestPieceSlot slot in template.Pieces)
+			{
+				if (slot != null && slot.MaxCount > 0 && !StructureKitPieceSource.Resolves(slot.Tag))
+				{
+					missing.Add(string.IsNullOrWhiteSpace(slot.Tag) ? "(empty tag)" : slot.Tag);
+				}
+			}
+			return missing;
 		}
 
 		public static string SizeName(int size) => size <= 0 ? "Small" : size == 1 ? "Medium" : "Large";
@@ -230,6 +264,10 @@ namespace FishMMO.Shared.WorldDesign
 			if (template != null && !force)
 			{
 				report.Kept.Add(planned.Name);
+				if (Drifted(planned, template))
+				{
+					report.Drifted.Add(planned.Name);
+				}
 				return;
 			}
 			bool created = template == null;
@@ -248,6 +286,29 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				EditorUtility.SetDirty(template);
 				report.Updated.Add(planned.Name);
+			}
+		}
+
+		/// <summary>
+		/// Whether a template's own fields (all but its features, whose managed references serialize with ids of their own)
+		/// differ from what <see cref="Apply"/> would write.
+		/// </summary>
+		private static bool Drifted(Planned planned, PointOfInterestTemplate template)
+		{
+			PointOfInterestTemplate fresh = ScriptableObject.CreateInstance<PointOfInterestTemplate>();
+			PointOfInterestTemplate copy = UnityEngine.Object.Instantiate(template);
+			try
+			{
+				Apply(planned, fresh);
+				copy.name = fresh.name;
+				fresh.Features = null;
+				copy.Features = null;
+				return EditorJsonUtility.ToJson(fresh) != EditorJsonUtility.ToJson(copy);
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(fresh);
+				UnityEngine.Object.DestroyImmediate(copy);
 			}
 		}
 

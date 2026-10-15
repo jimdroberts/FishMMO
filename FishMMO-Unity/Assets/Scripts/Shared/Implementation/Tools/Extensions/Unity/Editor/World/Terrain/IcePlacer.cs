@@ -279,25 +279,41 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── From a planet ─────────────────────────────────────────────
 
-		/// <summary>Sea-level air temperature at a point over the year, °C, one per season.</summary>
-		public static float[] SeasonalAirC(in PlanetClimateField field, SolarSystemProfile system, WorldBody body, double latitude, Vector3 direction)
+		/// <summary>Sea-level air temperature over the sea at a point through the year, °C, one per season.</summary>
+		/// <remarks>
+		/// The body's climate table's sea column (<see cref="PlanetClimateTable"/>) — its seasons, their month or two of lag
+		/// behind the sun, its sea ice's own cold — moved by the point's regional wobble: the same air the globe and the
+		/// running game read.
+		/// </remarks>
+		public static float[] SeasonalAirC(in PlanetClimateField field, double latitude, Vector3 direction)
 		{
 			var seasons = new float[Seasons];
-			double year = CelestialMath.OrbitHours(system, CelestialMath.HostPlanet(body));
-			if (double.IsNaN(year) || double.IsInfinity(year) || year <= 0.0)
+			float regional = field.RegionalOffset(direction) * (float)ClimateModel.KelvinPerUnit;
+			if (field.Table == null)
 			{
-				year = 0.0;
+				float flat = field.KelvinAt(latitude, direction, 0f, 0f) - 273.15f;
+				for (int s = 0; s < Seasons; s++)
+				{
+					seasons[s] = flat;
+				}
+				return seasons;
 			}
-			float regional = field.RegionalOffset(direction);
+			field.Table.SeaYear(latitude, seasons);
 			for (int s = 0; s < Seasons; s++)
 			{
-				double hours = year * s / Seasons;
-				float scale = Mathf.Clamp(field.SubSolarTemperature
-					+ (float)CelestialMath.LatitudeTemperature(system, body, hours, latitude)
-					+ regional, -1f, 1f);
-				seasons[s] = (float)(scale * ClimateModel.KelvinPerUnit);
+				seasons[s] += regional - 273.15f;
 			}
 			return seasons;
+		}
+
+		/// <summary>
+		/// The year-averaged sea ice concentration at a point, from the same monthly air <see cref="SeasonalAirC"/> gives a
+		/// scene: what the globe bake shades the sea by, so the cap the globe shows and the ice a scene cut from under it
+		/// holds are decided by one rule.
+		/// </summary>
+		public static float SeaIceConcentrationAt(in PlanetClimateField field, double latitude, Vector3 direction)
+		{
+			return SeaIceConcentration(SeasonalAirC(field, latitude, direction));
 		}
 
 		private static float Mean(float[] values)
@@ -346,7 +362,7 @@ namespace FishMMO.Shared.WorldDesign
 							continue;
 						}
 						// At sea level: the calving front is where the glacier meets the sea.
-						float annual = Mean(SeasonalAirC(field, system, body, ringLatitude, direction));
+						float annual = Mean(SeasonalAirC(field, ringLatitude, direction));
 						if (annual > GlacierCoastC || !IsCoast(seed, body, ringLatitude, lon))
 						{
 							continue;
@@ -402,7 +418,7 @@ namespace FishMMO.Shared.WorldDesign
 			PlanetClimateField field = PlanetClimateField.For(system, request.Body);
 			Vector3 direction = AtlasGeometry.SceneToUnit(request.Footprint, 0.0, 0.0, request.ResolvedRadiusKm).ToVector3().normalized;
 			double latitude = PlanetClimateField.LatitudeOf(direction);
-			float[] seasons = SeasonalAirC(field, system, request.Body, latitude, direction);
+			float[] seasons = SeasonalAirC(field, latitude, direction);
 			bool source = FindCalvingSource(field, system, request.Body, latitude, request.Longitude, out float drift, out float sourceC);
 			IceClimate climate = Decide(seasons, source, drift, sourceC);
 			// Its own coast calving: the source is here and no month thaws, so the ice sheet reaches this sea.
@@ -433,6 +449,8 @@ namespace FishMMO.Shared.WorldDesign
 		public float HeaveAllowanceMetres = 1f;
 		/// <summary>How far a grounded piece may stand above its float line, as a share of its draught.</summary>
 		public float MaxGroundedRise = 0.1f;
+		/// <summary>No loose sea ice pieces: the pack (<see cref="PackIcePlacer"/>) is the sea's ice; only bergs are placed.</summary>
+		public bool SkipSeaIce;
 		/// <summary>Most of the open sea sea ice may cover, whatever the concentration: the rest stays navigable.</summary>
 		public float MaxSeaIceCoverage = 0.35f;
 		/// <summary>Most sea ice pieces in one scene.</summary>
@@ -717,7 +735,23 @@ namespace FishMMO.Shared.WorldDesign
 				LowTideMetres = lowTide,
 				Surface = surface,
 			};
-			IcePlacerReport report = Place(scene, site, climate, snapshot, seed, options?.Prefabs ?? new ProjectIcePrefabs(), options);
+			/* The pack first, at the climate's own concentration, its leads kept open along the ship lanes: where it lies, the
+			 * loose pieces are only the bergs (the floes ARE the pack). A frozen-through sea is the Ice Shelf's ground, not a pack. */
+			PackIceReport pack = climate.HasSeaIce && snapshot != null && !request.FrozenSeas
+				? PackIcePlacer.Place(scene, request, site, snapshot, seed,
+					$"{SceneGenerator.TerrainFolder(request.Body, request.SceneName)}/{WorldEditorAssets.Sanitize(request.SceneName)} Pack Ice.asset")
+				: null;
+			if (pack == null)
+			{
+				PackIcePlacer.Clear(scene);
+			}
+			options ??= new IcePlacerOptions();
+			options.SkipSeaIce = pack != null && pack.Floes > 0;
+			IcePlacerReport report = Place(scene, site, climate, snapshot, seed, options.Prefabs ?? new ProjectIcePrefabs(), options);
+			if (pack != null)
+			{
+				report.Notes.InsertRange(0, pack.Notes);
+			}
 			if (report.Root != null && !Application.isBatchMode && scene.IsValid() && !EditorSceneManager.IsPreviewScene(scene))
 			{
 				EditorSceneManager.MarkSceneDirty(scene);
@@ -833,7 +867,10 @@ namespace FishMMO.Shared.WorldDesign
 			var rng = new IceRandom(seed ^ 0x51CE1CEBu);
 			var plan = new List<Planned>();
 			PlanBergs(climate, report, plan, ref rng, options);
-			PlanSeaIce(climate, report, plan, prefabs, ref rng, options);
+			if (!options.SkipSeaIce)
+			{
+				PlanSeaIce(climate, report, plan, prefabs, ref rng, options);
+			}
 
 			var placed = new List<Disc>();
 			var grid = new Dictionary<long, List<int>>();

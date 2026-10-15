@@ -96,17 +96,17 @@ uint FishFloraBiomeAt(float2 xz)
 	return min(index, (uint)max(_FishFloraInfo.w - 1.0, 0.0));
 }
 
-// The look a patch of ground takes in a biome: patches about patchMetres across, warped into blobs, each a weighted pick of
-// the twelve. salt keeps grass, flowers and fungi from sharing their patches' edges.
-uint FishFloraVariantAt(float2 xz, uint biome, float patchMetres, uint salt)
+// The patch coordinate at xz: patches about patchMetres across (one per whole unit), warped into blobs.
+float2 FishFloraPatchCoord(float2 xz, float patchMetres, uint salt)
 {
 	float2 p = xz / max(patchMetres, 0.25);
-	p += (float2(FishFloraNoise(p * 0.5, salt + 1u), FishFloraNoise(p * 0.5 + 17.3, salt + 2u)) - 0.5) * 1.6;
-	// Patches mingle at their edges rather than meeting on a line: each read is nudged by up to a third of a patch, by a
-	// hash of its own 30 cm cell, so blades and plants near a border fall either side of it (a hard edge read as "chunks").
-	uint edge = FishFloraCellHash((int2)floor(xz * 3.3), salt + 4u);
-	p += (float2((edge & 0xffffu) * (1.0 / 65535.0), (edge >> 16) * (1.0 / 65535.0)) - 0.5) * 0.66;
-	float pick = (FishFloraCellHash((int2)floor(p), salt + 3u) >> 8) * (1.0 / 16777216.0);
+	return p + (float2(FishFloraNoise(p * 0.5, salt + 1u), FishFloraNoise(p * 0.5 + 17.3, salt + 2u)) - 0.5) * 1.6;
+}
+
+// The look one patch takes in a biome: a weighted pick of the twelve, by a hash of the patch.
+uint FishFloraVariantOfPatch(int2 patch, uint biome, uint salt)
+{
+	float pick = (FishFloraCellHash(patch, salt + 3u) >> 8) * (1.0 / 16777216.0);
 	uint row = biome * FISH_FLORA_ROWS;
 	uint variant = FISH_FLORA_VARIANTS - 1u;
 	[loop] for (uint v = 0u; v < FISH_FLORA_VARIANTS; v++)
@@ -118,6 +118,18 @@ uint FishFloraVariantAt(float2 xz, uint biome, float patchMetres, uint salt)
 		}
 	}
 	return variant;
+}
+
+// The look a patch of ground takes in a biome: patches about patchMetres across, warped into blobs, each a weighted pick of
+// the twelve. salt keeps grass, flowers and fungi from sharing their patches' edges.
+uint FishFloraVariantAt(float2 xz, uint biome, float patchMetres, uint salt)
+{
+	float2 p = FishFloraPatchCoord(xz, patchMetres, salt);
+	// Patches mingle at their edges rather than meeting on a line: each read is nudged by up to a third of a patch, by a
+	// hash of its own 30 cm cell, so blades and plants near a border fall either side of it (a hard edge read as "chunks").
+	uint edge = FishFloraCellHash((int2)floor(xz * 3.3), salt + 4u);
+	p += (float2((edge & 0xffffu) * (1.0 / 65535.0), (edge >> 16) * (1.0 / 65535.0)) - 0.5) * 0.66;
+	return FishFloraVariantOfPatch((int2)floor(p), biome, salt);
 }
 
 FishFloraLook FishFloraLookOf(uint biome, uint variant)
@@ -145,6 +157,90 @@ FishFloraLook FishFloraLookOf(uint biome, uint variant)
 	look.bend = mineral.a;
 	look.shift = shift.rgb;
 	look.biomeShift = biomeShift.rgb;
+	return look;
+}
+
+// How far into its neighbour a patch's look fades on continuous ground (FishFloraGroundLookAt), in patches either side of
+// the border: the third of a patch over which FishFloraVariantAt's nudge mingles the blades.
+#define FISH_FLORA_GROUND_BAND 0.33
+
+// The look the continuous ground wears at xz (the terrain, and the terrain's contact band on rocks and trunks): the
+// blades' own patches and biomes, but BLENDED across their borders instead of dithered. The blades' dither is a per-30-cm
+// (patches) and per-60-cm (biomes) hashed read; a blade is a discrete thing either side of a border and mingles, but the
+// ground is one continuous albedo, and the same read painted it in hard squares (2026-10-15). Here the biome is weighed
+// bilinearly over its grid's four nearest texels (what the biome read's half-texel jitter averages to) and each biome's
+// patches smoothly over their four nearest, fading across FISH_FLORA_GROUND_BAND either side of a border, so the middle
+// of a patch is exactly the look its grass wears. Only shift and accent are blended (all FishFloraGround reads); the rest
+// of the look is the strongest contributor's. Callers test _FishFloraInfo.x first.
+FishFloraLook FishFloraGroundLookAt(float2 xz, float patchMetres, uint salt)
+{
+	uint4 biomes = 0u;
+	float4 biomeWeights = float4(1.0, 0.0, 0.0, 0.0);
+	float2 size = _FishFloraInfo.yz;
+	float2 uv = (xz - _FishFloraRect.xy) * _FishFloraRect.zw;
+	[branch] if (_FishFloraRect.z > 0.0 && all(uv >= 0.0) && all(uv <= 1.0))
+	{
+		float2 g = uv * size - 0.5;
+		int2 t0 = (int2)floor(g);
+		float2 f = g - floor(g);
+		int2 hi = (int2)size - 1;
+		uint top = (uint)max(_FishFloraInfo.w - 1.0, 0.0);
+		[unroll] for (int k = 0; k < 4; k++)
+		{
+			int2 o = int2(k & 1, k >> 1);
+			int2 texel = clamp(t0 + o, int2(0, 0), hi);
+			biomes[k] = min((uint)round(_FishFloraBiomes.Load(int3(texel, 0)) * 255.0), top);
+			biomeWeights[k] = (o.x != 0 ? f.x : 1.0 - f.x) * (o.y != 0 ? f.y : 1.0 - f.y);
+		}
+		// One pass of patches per distinct biome: the same biome in two texels is one weight.
+		[unroll] for (int a = 1; a < 4; a++)
+		{
+			[unroll] for (int b = 0; b < a; b++)
+			{
+				bool same = biomes[a] == biomes[b] && biomeWeights[b] > 0.0;
+				biomeWeights[b] += same ? biomeWeights[a] : 0.0;
+				biomeWeights[a] = same ? 0.0 : biomeWeights[a];
+			}
+		}
+	}
+
+	float2 q = FishFloraPatchCoord(xz, patchMetres, salt) - 0.5;
+	int2 patch0 = (int2)floor(q);
+	float2 s = smoothstep(0.5 - FISH_FLORA_GROUND_BAND, 0.5 + FISH_FLORA_GROUND_BAND, q - floor(q));
+
+	float3 shift = 0.0;
+	float3 accent = 0.0;
+	float best = -1.0;
+	uint bestBiome = 0u;
+	uint bestVariant = 0u;
+	[loop] for (int bi = 0; bi < 4; bi++)
+	{
+		float bw = biomeWeights[bi];
+		[branch] if (bw > 0.0)
+		{
+			uint biome = biomes[bi];
+			uint row = biome * FISH_FLORA_ROWS;
+			[loop] for (int k = 0; k < 4; k++)
+			{
+				int2 o = int2(k & 1, k >> 1);
+				float w = bw * (o.x != 0 ? s.x : 1.0 - s.x) * (o.y != 0 ? s.y : 1.0 - s.y);
+				[branch] if (w > 0.0)
+				{
+					uint variant = FishFloraVariantOfPatch(patch0 + o, biome, salt);
+					shift += _FishFloraPalette.Load(int3(variant, row + 5u, 0)).rgb * w;
+					accent += _FishFloraPalette.Load(int3(variant, row + 3u, 0)).rgb * w;
+					bool stronger = w > best;
+					best = stronger ? w : best;
+					bestBiome = stronger ? biome : bestBiome;
+					bestVariant = stronger ? variant : bestVariant;
+				}
+			}
+		}
+	}
+
+	FishFloraLook look = FishFloraLookOf(bestBiome, bestVariant);
+	look.shift = shift;
+	look.accent = accent;
 	return look;
 }
 

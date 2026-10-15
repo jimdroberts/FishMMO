@@ -94,9 +94,24 @@ namespace FishMMO.Client
 		private CoverTrack[] oldAt, oldNext, youngAt, youngNext;
 		private readonly Queue<int> pending = new Queue<int>();
 
-		private CoverTrack bgOldAt, bgOldNext, bgYoungAt, bgYoungNext;
-		/// <summary>The shared track of each live generation, from its start step to the step after the map's.</summary>
-		private readonly Dictionary<long, List<CoverTrack>> bgHistory = new Dictionary<long, List<CoverTrack>>();
+		/// <summary>
+		/// The open air's ground, one per temperature band (<see cref="GroundCover.BandAt"/>): a texel no storm has reached
+		/// shows its band's. Indexed by band; only the bands some texel is in are worked out.
+		/// </summary>
+		private readonly CoverTrack[] bgOldAt = new CoverTrack[GroundCover.BandCount], bgOldNext = new CoverTrack[GroundCover.BandCount],
+			bgYoungAt = new CoverTrack[GroundCover.BandCount], bgYoungNext = new CoverTrack[GroundCover.BandCount];
+		/// <summary>Each live generation's shared tracks, one per band in use (null for the rest), from its start step to the step after the map's.</summary>
+		private readonly Dictionary<long, List<CoverTrack>[]> bgHistory = new Dictionary<long, List<CoverTrack>[]>();
+		/// <summary>Each texel's band: its own climate against the area's middle.</summary>
+		private byte[] band;
+		/// <summary>Which bands some texel is in, and so are worked out; and the list of them.</summary>
+		private readonly bool[] bandUsed = new bool[GroundCover.BandCount];
+		private readonly List<int> usedBands = new List<int>();
+		// What the bands were worked out for: a change to any of these works them out again.
+		private WorldSceneSettings bandsSettings;
+		private Rect bandsArea;
+		private Vector2Int bandsOrigin;
+		private float bandsMiddle;
 
 		private long step = long.MinValue;
 		private long generation;
@@ -292,7 +307,7 @@ namespace FishMMO.Client
 			{
 				// From the ground as it is shown now.
 				Hold(valid && step != long.MinValue && !double.IsNaN(drawnSeconds)
-					? Blend(bgOldAt, bgOldNext, bgYoungAt, bgYoungNext, StepFraction(drawnSeconds), GroundCover.YoungWeight(drawnSeconds)).Cover
+					? SharedAt(band[(resolution / 2) * resolution + resolution / 2], StepFraction(drawnSeconds), GroundCover.YoungWeight(drawnSeconds)).Cover
 					: default);
 			}
 			depthMax = DeepSnowSettings().MaxMetres;
@@ -331,6 +346,8 @@ namespace FishMMO.Client
 			state = null;
 			firstTouch = null;
 			oldAt = oldNext = youngAt = youngNext = null;
+			band = null;
+			bandsSettings = null;
 			pending.Clear();
 			bgHistory.Clear();
 			resolution = 0;
@@ -397,8 +414,11 @@ namespace FishMMO.Client
 			{
 				return Blend(oldAt[index], oldNext[index], youngAt[index], youngNext[index], f, w);
 			}
-			return Blend(bgOldAt, bgOldNext, bgYoungAt, bgYoungNext, f, w);
+			return SharedAt(band[index], f, w);
 		}
+
+		/// <summary>A band's shared ground at a point between the map's step and the next.</summary>
+		private CoverTrack SharedAt(int b, float f, float w) => Blend(bgOldAt[b], bgOldNext[b], bgYoungAt[b], bgYoungNext[b], f, w);
 
 		/// <summary>How far toward the next step a moment is; a moment the map has not stepped to shows the next step.</summary>
 		private float StepFraction(double seconds)
@@ -422,12 +442,14 @@ namespace FishMMO.Client
 			Finish(true);
 			step = g;
 			generation = j;
+			RefreshBands();
 			bgHistory.Clear();
-			long youngStart = GroundCover.StartStep(j);
-			long oldStart = youngStart - GroundCover.StepsPerGeneration;
-			bgHistory[j - 1] = SharedTrack(oldStart, g + 1);
-			bgHistory[j] = SharedTrack(youngStart, g + 1);
-			SetSharedFromHistory();
+			bgHistory[j - 1] = new List<CoverTrack>[GroundCover.BandCount];
+			bgHistory[j] = new List<CoverTrack>[GroundCover.BandCount];
+			foreach (int b in usedBands)
+			{
+				BuildBandHistory(b);
+			}
 
 			pending.Clear();
 			for (int i = 0; i < state.Length; i++)
@@ -435,36 +457,89 @@ namespace FishMMO.Client
 				state[i] = TexelState.Shared;
 				firstTouch[i] = long.MaxValue;
 			}
-			MarkTouches(new RectInt(0, 0, resolution, resolution), oldStart + 1, g + 1);
+			MarkTouches(new RectInt(0, 0, resolution, resolution), GroundCover.StartStep(j - 1) + 1, g + 1);
 			valid = true;
 			dirty = true;
 		}
 
-		/// <summary>The shared (storm-free) track from a generation's start to <paramref name="last"/>.</summary>
-		private List<CoverTrack> SharedTrack(long start, long last)
+		/// <summary>A band's shared track for both live generations, from their starts to the step after the map's, and its tracks now.</summary>
+		private void BuildBandHistory(int b)
+		{
+			float offset = GroundCover.BandOffset(b);
+			bgHistory[generation - 1][b] = SharedTrack(GroundCover.StartStep(generation - 1), step + 1, offset);
+			bgHistory[generation][b] = SharedTrack(GroundCover.StartStep(generation), step + 1, offset);
+			SetSharedFromHistory(b);
+		}
+
+		/// <summary>The shared (storm-free) track of a band from a generation's start to <paramref name="last"/>.</summary>
+		private List<CoverTrack> SharedTrack(long start, long last, float offset)
 		{
 			var history = new List<CoverTrack>((int)(last - start + 2));
-			CoverTrack track = GroundCover.Prior(Forcing(start));
+			CoverTrack track = GroundCover.Prior(Forcing(start), offset);
 			history.Add(track);
 			for (long k = start + 1; k <= last; k++)
 			{
 				GroundCover.Forcing f = Forcing(k);
-				track = GroundCover.Advance(track, GroundCover.OpenFrame(f), f, deep);
+				track = GroundCover.Advance(track, GroundCover.OpenFrame(f, offset), f, deep, offset);
 				history.Add(track);
 			}
 			return history;
 		}
 
-		private void SetSharedFromHistory()
+		private void SetSharedFromHistory(int b)
 		{
-			List<CoverTrack> older = bgHistory[generation - 1];
-			List<CoverTrack> younger = bgHistory[generation];
+			List<CoverTrack> older = bgHistory[generation - 1][b];
+			List<CoverTrack> younger = bgHistory[generation][b];
 			long oldStart = GroundCover.StartStep(generation - 1);
 			long youngStart = GroundCover.StartStep(generation);
-			bgOldAt = older[(int)(step - oldStart)];
-			bgOldNext = older[(int)(step + 1 - oldStart)];
-			bgYoungAt = younger[(int)(step - youngStart)];
-			bgYoungNext = younger[(int)(step + 1 - youngStart)];
+			bgOldAt[b] = older[(int)(step - oldStart)];
+			bgOldNext[b] = older[(int)(step + 1 - oldStart)];
+			bgYoungAt[b] = younger[(int)(step - youngStart)];
+			bgYoungNext[b] = younger[(int)(step + 1 - youngStart)];
+		}
+
+		/// <summary>
+		/// Each texel's band, worked out again when the scene, its area or the window has moved (main thread: it reads the
+		/// terrain); otherwise kept.
+		/// </summary>
+		private void RefreshBands()
+		{
+			Rect area = timeline != null ? timeline.Area : default;
+			if (band != null && bandsSettings != null && ReferenceEquals(bandsSettings, settings) && area == bandsArea && origin == bandsOrigin)
+			{
+				return;
+			}
+			bandsSettings = settings;
+			bandsArea = area;
+			bandsOrigin = origin;
+			bandsMiddle = GroundCover.MiddleKelvin(timeline, settings);
+			BandRegion(new RectInt(0, 0, resolution, resolution));
+		}
+
+		/// <summary>The bands of a region's texels, and the list of bands in use after them.</summary>
+		private void BandRegion(RectInt region)
+		{
+			for (int y = region.yMin; y < region.yMax; y++)
+			{
+				for (int x = region.xMin; x < region.xMax; x++)
+				{
+					int i = y * resolution + x;
+					band[i] = (byte)GroundCover.BandAt(settings, TexelCentre(i), bandsMiddle);
+				}
+			}
+			System.Array.Clear(bandUsed, 0, bandUsed.Length);
+			for (int i = 0; i < band.Length; i++)
+			{
+				bandUsed[band[i]] = true;
+			}
+			usedBands.Clear();
+			for (int b = 0; b < bandUsed.Length; b++)
+			{
+				if (bandUsed[b])
+				{
+					usedBands.Add(b);
+				}
+			}
 		}
 
 		/// <summary>
@@ -562,8 +637,9 @@ namespace FishMMO.Client
 			{
 				Step = step,
 				Generation = generation,
-				OldHistory = bgHistory[generation - 1],
-				YoungHistory = bgHistory[generation],
+				OldHistories = bgHistory[generation - 1],
+				YoungHistories = bgHistory[generation],
+				Bands = band,
 				Forcing = batchForcing,
 				ForcingBase = first,
 				Deep = deep,
@@ -688,6 +764,10 @@ namespace FishMMO.Client
 			/// <summary>The young generation; the old is the one before it.</summary>
 			public long Generation;
 			public List<CoverTrack> OldHistory, YoungHistory;
+			/// <summary>The shared tracks of every band (<see cref="Bands"/>); null for one shared track (<see cref="OldHistory"/>) and no offsets.</summary>
+			public List<CoverTrack>[] OldHistories, YoungHistories;
+			/// <summary>Each texel's band; null for none.</summary>
+			public byte[] Bands;
 			public GroundCover.Forcing[] Forcing;
 			public long ForcingBase;
 			public DeepSnow Deep;
@@ -747,11 +827,15 @@ namespace FishMMO.Client
 			out CoverTrack oldAt, out CoverTrack oldNext, out CoverTrack youngAt, out CoverTrack youngNext)
 		{
 			Vector3 position = work.TexelCentre(index);
-			IntegrateGeneration(work, position, firstTouch, GroundCover.StartStep(work.Generation - 1), work.OldHistory, out oldAt, out oldNext);
-			IntegrateGeneration(work, position, firstTouch, GroundCover.StartStep(work.Generation), work.YoungHistory, out youngAt, out youngNext);
+			int b = work.Bands != null ? work.Bands[index] : GroundCover.BandReach;
+			float offset = work.Bands != null ? GroundCover.BandOffset(b) : 0f;
+			List<CoverTrack> older = work.OldHistories != null ? work.OldHistories[b] : work.OldHistory;
+			List<CoverTrack> younger = work.YoungHistories != null ? work.YoungHistories[b] : work.YoungHistory;
+			IntegrateGeneration(work, position, offset, firstTouch, GroundCover.StartStep(work.Generation - 1), older, out oldAt, out oldNext);
+			IntegrateGeneration(work, position, offset, firstTouch, GroundCover.StartStep(work.Generation), younger, out youngAt, out youngNext);
 		}
 
-		private static void IntegrateGeneration(in CoverWork work, Vector3 position, long firstTouch, long start, List<CoverTrack> history,
+		private static void IntegrateGeneration(in CoverWork work, Vector3 position, float offset, long firstTouch, long start, List<CoverTrack> history,
 			out CoverTrack at, out CoverTrack next)
 		{
 			long from = System.Math.Max(firstTouch - 1, start);
@@ -762,7 +846,7 @@ namespace FishMMO.Client
 			for (long k = from + 1; k <= step + 1; k++)
 			{
 				GroundCover.Forcing f = work.Forcing[k - work.ForcingBase];
-				track = GroundCover.Advance(track, GroundCover.FrameAt(f, position), f, work.Deep);
+				track = GroundCover.Advance(track, GroundCover.FrameAt(f, position, offset), f, work.Deep, offset);
 				if (k == step)
 				{
 					at = track;
@@ -807,28 +891,37 @@ namespace FishMMO.Client
 			long next = step + 1;
 			GroundCover.Forcing ahead = Forcing(next + 1);
 			WarmStorms(ahead);
-			WeatherFrame open = GroundCover.OpenFrame(ahead);
 			bool roll = next == GroundCover.StartStep(generation + 1);
+			GroundCover.Forcing atStart = roll ? Forcing(next) : null;
 			if (roll)
 			{
-				// A new generation starts: the young one becomes the old, and the new one starts from the climate's ground.
-				CoverTrack start = GroundCover.Prior(Forcing(next));
-				bgOldAt = bgYoungNext;
-				bgOldNext = GroundCover.Advance(bgOldAt, open, ahead, deep);
-				bgYoungAt = start;
-				bgYoungNext = GroundCover.Advance(start, open, ahead, deep);
 				bgHistory.Remove(generation - 1);
-				bgHistory[generation].Add(bgOldNext);
-				bgHistory[generation + 1] = new List<CoverTrack>(GroundCover.StepsPerGeneration + 2) { bgYoungAt, bgYoungNext };
+				bgHistory[generation + 1] = new List<CoverTrack>[GroundCover.BandCount];
 			}
-			else
+			foreach (int b in usedBands)
 			{
-				bgOldAt = bgOldNext;
-				bgOldNext = GroundCover.Advance(bgOldAt, open, ahead, deep);
-				bgYoungAt = bgYoungNext;
-				bgYoungNext = GroundCover.Advance(bgYoungAt, open, ahead, deep);
-				bgHistory[generation - 1].Add(bgOldNext);
-				bgHistory[generation].Add(bgYoungNext);
+				float offset = GroundCover.BandOffset(b);
+				WeatherFrame open = GroundCover.OpenFrame(ahead, offset);
+				if (roll)
+				{
+					// A new generation starts: the young one becomes the old, and the new one starts from the climate's ground.
+					CoverTrack start = GroundCover.Prior(atStart, offset);
+					bgOldAt[b] = bgYoungNext[b];
+					bgOldNext[b] = GroundCover.Advance(bgOldAt[b], open, ahead, deep, offset);
+					bgYoungAt[b] = start;
+					bgYoungNext[b] = GroundCover.Advance(start, open, ahead, deep, offset);
+					bgHistory[generation][b].Add(bgOldNext[b]);
+					bgHistory[generation + 1][b] = new List<CoverTrack>(GroundCover.StepsPerGeneration + 2) { bgYoungAt[b], bgYoungNext[b] };
+				}
+				else
+				{
+					bgOldAt[b] = bgOldNext[b];
+					bgOldNext[b] = GroundCover.Advance(bgOldAt[b], open, ahead, deep, offset);
+					bgYoungAt[b] = bgYoungNext[b];
+					bgYoungNext[b] = GroundCover.Advance(bgYoungAt[b], open, ahead, deep, offset);
+					bgHistory[generation - 1][b].Add(bgOldNext[b]);
+					bgHistory[generation][b].Add(bgYoungNext[b]);
+				}
 			}
 
 			// Each texel worked out on its own steps alone, so the rows go to the workers.
@@ -864,21 +957,23 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
-				WeatherFrame frame = GroundCover.FrameAt(ahead, TexelCentre(i));
+				int b = band[i];
+				float offset = GroundCover.BandOffset(b);
+				WeatherFrame frame = GroundCover.FrameAt(ahead, TexelCentre(i), offset);
 				if (roll)
 				{
 					oldAt[i] = youngNext[i];
-					youngAt[i] = bgYoungAt;
+					youngAt[i] = bgYoungAt[b];
 				}
 				else
 				{
 					oldAt[i] = oldNext[i];
 					youngAt[i] = youngNext[i];
 				}
-				oldNext[i] = GroundCover.Advance(oldAt[i], frame, ahead, deep);
-				youngNext[i] = GroundCover.Advance(youngAt[i], frame, ahead, deep);
-				// Back to the shared ground exactly: it shares again until a storm reaches it.
-				if (oldAt[i].SameAs(bgOldAt) && oldNext[i].SameAs(bgOldNext) && youngAt[i].SameAs(bgYoungAt) && youngNext[i].SameAs(bgYoungNext))
+				oldNext[i] = GroundCover.Advance(oldAt[i], frame, ahead, deep, offset);
+				youngNext[i] = GroundCover.Advance(youngAt[i], frame, ahead, deep, offset);
+				// Back to its band's shared ground exactly: it shares again until a storm reaches it.
+				if (oldAt[i].SameAs(bgOldAt[b]) && oldNext[i].SameAs(bgOldNext[b]) && youngAt[i].SameAs(bgYoungAt[b]) && youngNext[i].SameAs(bgYoungNext[b]))
 				{
 					state[i] = TexelState.Shared;
 					firstTouch[i] = long.MaxValue;
@@ -944,11 +1039,13 @@ namespace FishMMO.Client
 		{
 			int i = touchedScratch[t];
 			GroundCover.Forcing ahead = touchAhead;
-			WeatherFrame frame = GroundCover.FrameAt(ahead, TexelCentre(i));
-			oldAt[i] = bgOldAt;
-			youngAt[i] = bgYoungAt;
-			oldNext[i] = GroundCover.Advance(bgOldAt, frame, ahead, deep);
-			youngNext[i] = GroundCover.Advance(bgYoungAt, frame, ahead, deep);
+			int b = band[i];
+			float offset = GroundCover.BandOffset(b);
+			WeatherFrame frame = GroundCover.FrameAt(ahead, TexelCentre(i), offset);
+			oldAt[i] = bgOldAt[b];
+			youngAt[i] = bgYoungAt[b];
+			oldNext[i] = GroundCover.Advance(bgOldAt[b], frame, ahead, deep, offset);
+			youngNext[i] = GroundCover.Advance(bgYoungAt[b], frame, ahead, deep, offset);
 		}
 
 		/// <summary>
@@ -966,10 +1063,13 @@ namespace FishMMO.Client
 			if (Mathf.Abs(shiftX) >= resolution || Mathf.Abs(shiftY) >= resolution)
 			{
 				origin = wanted;
+				RefreshBands();
+				EnsureBandHistories();
 				ResetTexels();
 				return;
 			}
 			int n = resolution * resolution;
+			Shift(band, resolution, shiftX, shiftY, (byte)GroundCover.BandReach);
 			Shift(state, resolution, shiftX, shiftY, TexelState.Shared);
 			Shift(firstTouch, resolution, shiftX, shiftY, long.MaxValue);
 			Shift(oldAt, resolution, shiftX, shiftY, default);
@@ -977,6 +1077,17 @@ namespace FishMMO.Client
 			Shift(youngAt, resolution, shiftX, shiftY, default);
 			Shift(youngNext, resolution, shiftX, shiftY, default);
 			origin = wanted;
+			bandsOrigin = origin;
+			// The strips that came into view take their own bands; a band new to the window gets its shared track.
+			if (shiftX != 0)
+			{
+				BandRegion(new RectInt(shiftX > 0 ? resolution - shiftX : 0, 0, Mathf.Abs(shiftX), resolution));
+			}
+			if (shiftY != 0)
+			{
+				BandRegion(new RectInt(0, shiftY > 0 ? resolution - shiftY : 0, resolution, Mathf.Abs(shiftY)));
+			}
+			EnsureBandHistories();
 			// The queue held old indices: what still waits is found again from the states.
 			pending.Clear();
 			for (int i = 0; i < n; i++)
@@ -1034,6 +1145,22 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>A shared track for every band in use that has none yet (one a moved window brought in).</summary>
+		private void EnsureBandHistories()
+		{
+			if (!bgHistory.ContainsKey(generation - 1) || !bgHistory.ContainsKey(generation))
+			{
+				return;
+			}
+			foreach (int b in usedBands)
+			{
+				if (bgHistory[generation - 1][b] == null || bgHistory[generation][b] == null)
+				{
+					BuildBandHistory(b);
+				}
+			}
+		}
+
 		private void ResetTexels()
 		{
 			Finish(true);
@@ -1060,9 +1187,12 @@ namespace FishMMO.Client
 			depthMax = deep.MaxMetres;
 			float f = StepFraction(seconds);
 			float w = GroundCover.YoungWeight(seconds);
-			CoverTrack shared = Blend(bgOldAt, bgOldNext, bgYoungAt, bgYoungNext, f, w);
-			Color32 sharedPixel = Encode(shared.Cover);
-			byte sharedDepth = EncodeDepth(shared.Depth, depthMax);
+			foreach (int b in usedBands)
+			{
+				CoverTrack shared = SharedAt(b, f, w);
+				sharedPixels[b] = Encode(shared.Cover);
+				sharedDepths[b] = EncodeDepth(shared.Depth, depthMax);
+			}
 			for (int i = 0; i < pixels.Length; i++)
 			{
 				if (state[i] == TexelState.Own)
@@ -1073,12 +1203,16 @@ namespace FishMMO.Client
 				}
 				else
 				{
-					pixels[i] = sharedPixel;
-					depthPixels[i] = sharedDepth;
+					pixels[i] = sharedPixels[band[i]];
+					depthPixels[i] = sharedDepths[band[i]];
 				}
 			}
 			Upload();
 		}
+
+		// Each band's shared ground, encoded once a draw.
+		private readonly Color32[] sharedPixels = new Color32[GroundCover.BandCount];
+		private readonly byte[] sharedDepths = new byte[GroundCover.BandCount];
 
 		private void DrawHeld()
 		{
@@ -1147,6 +1281,9 @@ namespace FishMMO.Client
 			oldNext = new CoverTrack[n];
 			youngAt = new CoverTrack[n];
 			youngNext = new CoverTrack[n];
+			band = new byte[n];
+			System.Array.Fill(band, (byte)GroundCover.BandReach);
+			bandsSettings = null;
 			depthMax = DeepSnowSettings().MaxMetres;
 			step = long.MinValue;
 			drawnSeconds = double.NaN;

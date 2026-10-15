@@ -150,12 +150,18 @@ namespace FishMMO.Shared.WorldDesign
 		public const float BankHoldMetres = 2.6f;
 
 		/// <summary>
-		/// The points of every perennial river (falls and the points either side of them left out) where the ground between
-		/// 1.5 m past a bank and <see cref="BankHoldMetres"/> past it lies under the water: the bank does not hold the
-		/// water out to where it is drawn, so its surface ends over sunken ground. Measured after every stage that writes
-		/// the ground, as the burial is, so the cut names the stage that breaks a bank.
+		/// The points of every perennial river (falls and the points either side of them left out) whose banks do not hold its
+		/// water: walked straight out from either bank as far as its drawn shore can reach, the ground never rises to the
+		/// water (nor meets other water as high), so its surface ends over sunken ground (<see cref="WaterSettle.Hold"/>, what
+		/// the scene's water is measured with on the finished ground). Measured after every stage that writes the ground, as
+		/// the burial is, so the cut names the stage that breaks a bank.
 		/// </summary>
-		public static int Breaches(IReadOnlyList<RiverPath> rivers, Func<float, float, float> groundAt, List<string> worst = null)
+		/// <remarks>
+		/// It was any ground between 1.5 m and <see cref="BankHoldMetres"/> past a bank under the water: a plunge pool's bowl,
+		/// scoured wider than its channel and drawn to its rim (RiverShores), counted as 46 breached points on Flo Monolith,
+		/// none of them water over air (2026-10-15).
+		/// </remarks>
+		public static int Breaches(IReadOnlyList<RiverPath> rivers, Func<float, float, float> groundAt, List<string> worst = null, SceneWater water = null)
 		{
 			int count = 0;
 			if (rivers == null || groundAt == null)
@@ -168,6 +174,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					continue;
 				}
+				RiverShaping.Normals(river.X, river.Z, out float[] nx, out float[] nz);
 				for (int i = 1; i + 1 < river.Count; i++)
 				{
 					bool nearFall = false;
@@ -179,34 +186,15 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						continue;
 					}
-					float dx = river.X[i + 1] - river.X[i - 1], dz = river.Z[i + 1] - river.Z[i - 1];
-					float length = (float)Math.Sqrt(dx * dx + dz * dz);
-					if (length < 1e-4f)
-					{
-						continue;
-					}
-					float lx = -dz / length, lz = dx / length, half = 0.5f * river.Width[i];
-					bool breached = false;
-					float under = 0f;
-					for (int side = -1; side <= 1; side += 2)
-					{
-						for (float o = 1.5f; o <= BankHoldMetres + 1e-3f; o += 0.55f)
-						{
-							float g = groundAt(river.X[i] + lx * side * (half + o), river.Z[i] + lz * side * (half + o));
-							// Past the edge's own shelf under the water (RiverSettings.EdgeShelfMetres, 5 cm).
-							if (g < river.Surface[i] - 0.1f)
-							{
-								breached = true;
-								under = Math.Max(under, river.Surface[i] - g);
-							}
-						}
-					}
-					if (breached)
+					float level = river.Surface[i];
+					float held = WaterSettle.Hold(water, river, i, nx[i], nz[i], level, groundAt);
+					// Past the edge's own shelf under the water (RiverSettings.EdgeShelfMetres, 5 cm).
+					if (held < level - 0.1f)
 					{
 						count++;
-						if (worst != null && worst.Count < 8 && under > 0.3f)
+						if (worst != null && worst.Count < 8 && level - held > 0.3f)
 						{
-							worst.Add($"river {river.Id} point {i} ({river.X[i]:0}, {river.Z[i]:0}) {under:0.00} m under");
+							worst.Add($"river {river.Id} point {i} ({river.X[i]:0}, {river.Z[i]:0}) {level - held:0.00} m over its banks");
 						}
 					}
 				}

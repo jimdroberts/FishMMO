@@ -589,59 +589,6 @@ namespace FishMMO.Shared.Celestial
 			return total;
 		}
 
-		/// <summary>The home world's starlight at its mean distance: the "1.0" every climate offset is measured from.</summary>
-		/// <summary>
-		/// A body's climate offsets averaged over its orbit, rather than at one moment of it.
-		/// </summary>
-		/// <remarks>
-		/// <para>
-		/// What the TERRAIN should be built from. Biomes are the slow shape of a world — a forest
-		/// does not become tundra in winter — so they need the mean, while the weather rightly reads
-		/// the instantaneous value and gives the same world its seasons.
-		/// </para>
-		/// <para>
-		/// Sampled around the orbit rather than taken at hour zero, which would bake in whatever
-		/// phase the body happened to start at: on an eccentric orbit that is the difference between
-		/// a world's perihelion and its aphelion, and picking one of them arbitrarily would make a
-		/// world's biomes depend on where the epoch fell.
-		/// </para>
-		/// </remarks>
-		/// <param name="latitudeDegrees">
-		/// Where on the body, so the poles come out colder than the equator. Null averages the body
-		/// as a whole, which is what a question about the WORLD wants rather than about a place on it.
-		/// </param>
-		public static void MeanClimateOffsets(SolarSystemProfile system, WorldBody body, out float temperature, out float humidity, double? latitudeDegrees = null)
-		{
-			temperature = 0f;
-			humidity = 0f;
-			if (system == null || body == null)
-			{
-				return;
-			}
-			// The host's year for a moon: its own month samples a few days of its seasons (2026-10-10).
-			double period = OrbitHours(system, HostPlanet(body));
-			if (double.IsInfinity(period) || double.IsNaN(period) || period <= 0.0)
-			{
-				ClimateOffsets(system, body, 0.0, out temperature, out humidity, latitudeDegrees);
-				return;
-			}
-			/* Sampled around the orbit, which is what makes this mean anything at a latitude: the
-			 * whole point of an axial tilt is that a pole leans into its sun for half a year and
-			 * away for the other half. One sample would catch a pole in perpetual summer or
-			 * perpetual winter and call that its climate. Twenty-four (every half-month) averages a tilt out
-			 * while still separating a genuinely cold pole from a warm equator. */
-			const int Samples = 24;
-			double t = 0.0, h = 0.0;
-			for (int i = 0; i < Samples; i++)
-			{
-				ClimateOffsets(system, body, period * i / Samples, out float ti, out float hi, latitudeDegrees);
-				t += ti;
-				h += hi;
-			}
-			temperature = (float)(t / Samples);
-			humidity = (float)(h / Samples);
-		}
-
 		/// <summary>
 		/// The temperature a standard-atmosphere world would have at this distance from the system's
 		/// centre, on the same -1..1 scale everything else uses.
@@ -701,6 +648,7 @@ namespace FishMMO.Shared.Celestial
 			return total;
 		}
 
+		/// <summary>The home world's starlight at its mean distance: the "1.0" every climate offset is measured from.</summary>
 		public static double MeanHomeInsolation(SolarSystemProfile system)
 		{
 			if (system == null || system.HomeWorld == null)
@@ -717,40 +665,6 @@ namespace FishMMO.Shared.Celestial
 				}
 			}
 			return total > 0 ? total : 1.0;
-		}
-
-		/// <summary>How much colder a latitude is than the equator at equinox, at most.</summary>
-		/// <remarks>
-		/// <para>
-		/// Measured, not chosen. At 0.6 the mean sea-level temperature ran from 0.33 at the equator
-		/// to −0.18 at the pole, and NOT ONE authored biome envelope fell inside that band: Jungle
-		/// wants 0.6, Desert 0.4, Tundra −0.5, Glacier −0.6. Every biome on every world was being
-		/// picked as a nearest miss in the temperate middle, so a pole and an equator resolved to
-		/// nearly the same ground and the cold biomes could only ever be painted by hand.
-		/// </para>
-		/// <para>
-		/// At 1.8, with a sea-level anchor of 0.8, the span runs 0.73 to −0.78 and the whole
-		/// authored range is reachable from latitude alone — real tropics, real ice caps. If the
-		/// biome envelopes are ever re-authored, re-measure this against them.
-		/// </para>
-		/// </remarks>
-		public const double LatitudeCooling = 1.8;
-
-		/// <summary>
-		/// The temperature shift of a latitude right now: from how high the sun climbs at noon,
-		/// which carries both the pole-ward chill and the seasons from the body's tilt. 0 with
-		/// the sun overhead; <see cref="LatitudeCooling"/> colder when it never rises.
-		/// </summary>
-		public static double LatitudeTemperature(SolarSystemProfile system, WorldBody body, double hours, double latitudeDegrees)
-		{
-			double declination = 0.0;
-			if (system != null && body != null)
-			{
-				SunEquatorial(system, body, hours, out _, out declination);
-			}
-			double noonAltitude = 90.0 - Math.Abs(latitudeDegrees - declination * Rad2Deg);
-			double height = Math.Max(0.0, Math.Sin(noonAltitude * Deg2Rad));
-			return LatitudeCooling * (height - 1.0);
 		}
 
 		// ── Internal heat ──────────────────────────────────────────────
@@ -828,14 +742,21 @@ namespace FishMMO.Shared.Celestial
 		}
 
 		/// <summary>
-		/// Climate offsets a body's distance from its star(s), its atmosphere and its water put on
-		/// every scene standing on it. Both are clamped to ±1, the climate model's range.
+		/// Climate offsets a body's distance from its star(s), its atmosphere and its water put on it against the home world,
+		/// at a moment, for the world as a whole. Both are clamped to ±1, the climate model's range.
 		/// </summary>
 		/// <remarks>
-		/// Temperature follows the fourth root of starlight (equilibrium temperature), scaled so the
-		/// home world reads ≈0. With no atmosphere humidity is pinned to its minimum.
+		/// <para>
+		/// Temperature follows the fourth root of starlight (equilibrium temperature), scaled so the home world reads ≈0.
+		/// With no atmosphere humidity is pinned to its minimum.
+		/// </para>
+		/// <para>
+		/// <b>No latitude here any more (2026-10-15).</b> A place's temperature and its season are the body's climate table's
+		/// (<see cref="FishMMO.Shared.Biomes.PlanetClimateTable"/>): day length, heat capacity, land and sea. The noon-sun
+		/// latitude term this used to add, and the mean and seasonal offsets built on it, are gone with it.
+		/// </para>
 		/// </remarks>
-		public static void ClimateOffsets(SolarSystemProfile system, WorldBody body, double hours, out float temperature, out float humidity, double? latitudeDegrees = null)
+		public static void ClimateOffsets(SolarSystemProfile system, WorldBody body, double hours, out float temperature, out float humidity)
 		{
 			if (system == null || body == null)
 			{
@@ -850,10 +771,6 @@ namespace FishMMO.Shared.Celestial
 			double relative = layer ? 1.0 : Insolation(system, body, hours) / Math.Max(1e-6, homeLight);
 			double homeGreenhouse = system.HomeWorld != null ? Greenhouse(system.HomeWorld.Atmosphere) : 0.0;
 			double t = 2.2 * (Math.Pow(relative, 0.25) - 1.0) + Greenhouse(CloudWorld.AtmosphereOf(body)) - homeGreenhouse;
-			if (latitudeDegrees.HasValue)
-			{
-				t += LatitudeTemperature(system, body, hours, latitudeDegrees.Value);
-			}
 			temperature = (float)Math.Max(-1.0, Math.Min(1.0, t));
 			if (CloudWorld.AtmosphereOf(body) == AtmosphereKind.None)
 			{
@@ -863,46 +780,6 @@ namespace FishMMO.Shared.Celestial
 			double homeWater = system.HomeWorld != null ? system.HomeWorld.Water : 0.7;
 			double h = (CloudWorld.WaterOf(body) - homeWater) * 1.2 - Math.Max(0.0, t) * 0.3;
 			humidity = (float)Math.Max(-1.0, Math.Min(1.0, h));
-		}
-
-		private static readonly Dictionary<(WorldBody, int), (float, float)> meanClimateCache = new Dictionary<(WorldBody, int), (float, float)>();
-
-		/// <summary>
-		/// The part of a body's climate offsets that is the season and the moment rather than the
-		/// place: the instantaneous offsets less their mean over the orbit.
-		/// </summary>
-		/// <remarks>
-		/// <para>
-		/// A scene's climate is <see cref="MeanClimateOffsets"/> — the slow shape of the world the
-		/// terrain was built from — plus whatever the weather adds at runtime. The runtime share used
-		/// to be the WHOLE instantaneous offset, <see cref="ClimateOffsets"/>, so the body's distance
-		/// from its star, its greenhouse and above all its latitude cooling were counted twice: once
-		/// as the mean and again as the moment. The latitude term is calibrated to be applied once
-		/// (<see cref="LatitudeCooling"/>); at forty-five degrees the second copy took about half a
-		/// unit — sixteen kelvin — off every scene, so mid-latitudes snowed that should have rained.
-		/// What the moment adds to the mean is only how it differs from it: the season.
-		/// </para>
-		/// <para>
-		/// The mean is cached per body and latitude; nothing in it moves while the game runs.
-		/// </para>
-		/// </remarks>
-		public static void SeasonalClimateOffsets(SolarSystemProfile system, WorldBody body, double hours, double latitudeDegrees, out float temperature, out float humidity)
-		{
-			temperature = 0f;
-			humidity = 0f;
-			if (system == null || body == null)
-			{
-				return;
-			}
-			ClimateOffsets(system, body, hours, out float now, out float nowHumidity, latitudeDegrees);
-			var key = (body, (int)Math.Round(latitudeDegrees * 100.0));
-			if (!meanClimateCache.TryGetValue(key, out (float t, float h) mean))
-			{
-				MeanClimateOffsets(system, body, out mean.t, out mean.h, latitudeDegrees);
-				meanClimateCache[key] = mean;
-			}
-			temperature = now - mean.t;
-			humidity = nowHumidity - mean.h;
 		}
 
 		// ── Time conversions ───────────────────────────────────────────

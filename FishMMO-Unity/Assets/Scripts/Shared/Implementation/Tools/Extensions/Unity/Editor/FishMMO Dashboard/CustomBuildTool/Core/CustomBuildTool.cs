@@ -376,6 +376,10 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			List<string> problems = new List<string>();
 			List<string> blocking = new List<string>();
 
+			// Every body's climate table, so neither build solves one at load (ClimateTableBaker). Both builds: the weather runs on both.
+			int climates = FishMMO.Shared.WorldDesign.ClimateTableBaker.BakeAll(out int currentClimates);
+			Log.Debug("BuildLogger", $"Climate tables: {climates} baked, {currentClimates} already current.");
+
 			Log.Debug("BuildLogger", "Baking spawn tables...");
 			int baked = SpawnTableBaker.BakeAll(problems, blocking);
 

@@ -96,6 +96,11 @@ namespace FishMMO.Shared.Celestial
 		public ClimateSettings BaseClimate;
 		[Tooltip("How this body's sky looks. Empty: the default sky (black if there is no air).")]
 		public SkyProfile Sky;
+		/// <summary>
+		/// The body's climate table as last baked (FishMMO Dashboard → World → "Bake climate tables"): read at load instead of
+		/// solving the year's energy balance. Ignored, and solved afresh, when it no longer matches the body.
+		/// </summary>
+		[HideInInspector] public FishMMO.Shared.Biomes.PlanetClimateTableData ClimateTable = new FishMMO.Shared.Biomes.PlanetClimateTableData();
 
 		[Header("Atlas")]
 		[Tooltip("Auto grows the globe to fit its scenes and never shrinks it below the minimum. Manual fixes it.")]

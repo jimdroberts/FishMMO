@@ -681,7 +681,9 @@ namespace FishMMO.Water
 			}
 			// Faded with distance, then out over the shallows to flat water at the break line, and none
 			// at all in water the open sea's waves cannot reach at this tide (a pool, a lagoon).
-			float scale = fade * Calm(Depth(flat)) * (shoreField != null ? shoreField.OpenSeaAt(flat, TideMetres) : 1f);
+			// And calmed under pack ice (WaterIceCalm; FishWaterIceCalm in the shader).
+			float scale = fade * Calm(Depth(flat)) * (shoreField != null ? shoreField.OpenSeaAt(flat, TideMetres) : 1f)
+				* WaterIceCalm.CalmAt(gameObject.scene, flat);
 			height = h * scale;
 			moved = new Vector2(dx, dz) * scale;
 		}
@@ -746,6 +748,8 @@ namespace FishMMO.Water
 			meshRenderer = GetComponent<MeshRenderer>();
 			Rebuild();
 			RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
+			// The calm under this scene's pack ice, if it has one.
+			WaterIceCalm.Refresh(gameObject.scene);
 			// The open sea, the surf and the sand in the simulated foam.
 			WaterFoamField.Offer(FoamFieldShader);
 			WaterFoamField.AddSea(this);
