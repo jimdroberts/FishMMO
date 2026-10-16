@@ -17,7 +17,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Moved("main", "Trees: Palm", "Bush: Hibiscus")
 				.Accepts(RockTypes.Sandstone, RockTypes.Limestone, RockTypes.Conglomerate)
 				.Look(BiomeLookClass.Jungle)
-				.Wildlife(BiomeHabitat.Woodland | BiomeHabitat.Desert | BiomeHabitat.FreshWater);
+				.Wildlife(BiomeHabitat.Woodland | BiomeHabitat.Desert | BiomeHabitat.FreshWater)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

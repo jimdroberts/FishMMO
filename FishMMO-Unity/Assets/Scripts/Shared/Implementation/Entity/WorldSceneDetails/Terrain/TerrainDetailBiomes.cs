@@ -28,6 +28,14 @@ namespace FishMMO.Shared
 	/// in, marked <see cref="Entry.Site"/>: they take that biome's look of the prefab (or the old look where it has none), and
 	/// keep their material's tints, as they had before, since no rule of the biome chose them.
 	/// </para>
+	/// <para>
+	/// <b>A site paints its own biome's prototype</b> (2026-10-16, I4b): it reuses a tile's prototype of the plant only when
+	/// that prototype is its own biome's (a rule's or an earlier site's, <see cref="SiteLayer"/>); where the tile's prototype of
+	/// the plant is another biome's, the site adds one of its own (a copy of that one, with a noise seed of its own,
+	/// <see cref="SiteSeed"/>), so the plant takes the look of the biome the site stands in rather than whichever biome's
+	/// prototype came first. Its cover goes on as before, measured against the plant's prototype it used to paint into
+	/// (<see cref="SiteCover"/>), so a plant is no thicker for being split between two prototypes.
+	/// </para>
 	/// </remarks>
 	[DisallowMultipleComponent]
 	public sealed class TerrainDetailBiomes : MonoBehaviour
@@ -50,16 +58,19 @@ namespace FishMMO.Shared
 		public int BiomeOf(string prefabName, int noiseSeed) => TryGet(prefabName, noiseSeed, out Entry entry) ? entry.BiomeID : 0;
 
 		/// <summary>The entry recorded for a prototype of this prefab and noise seed; false when none is.</summary>
-		public bool TryGet(string prefabName, int noiseSeed, out Entry found)
+		public bool TryGet(string prefabName, int noiseSeed, out Entry found) => TryGet(Prototypes, prefabName, noiseSeed, out found);
+
+		/// <summary>The entry a list records for a prototype of this prefab and noise seed (the first); false when none is.</summary>
+		public static bool TryGet(IReadOnlyList<Entry> entries, string prefabName, int noiseSeed, out Entry found)
 		{
 			found = default;
-			if (Prototypes == null || string.IsNullOrEmpty(prefabName))
+			if (entries == null || string.IsNullOrEmpty(prefabName))
 			{
 				return false;
 			}
-			for (int i = 0; i < Prototypes.Count; i++)
+			for (int i = 0; i < entries.Count; i++)
 			{
-				Entry entry = Prototypes[i];
+				Entry entry = entries[i];
 				if (entry.NoiseSeed == noiseSeed && string.Equals(entry.Prefab, prefabName, StringComparison.Ordinal))
 				{
 					found = entry;
@@ -69,9 +80,108 @@ namespace FishMMO.Shared
 			return false;
 		}
 
+		// ── A point of interest's own prototypes (2026-10-16) ─────────
+
+		/// <summary>
+		/// The prototype a point of interest of biome <paramref name="biomeID"/> paints a plant (<paramref name="prefabName"/>)
+		/// into on a tile whose prototypes are <paramref name="prefabs"/> (their prefabs' names, null for none) and
+		/// <paramref name="seeds"/> (their noise seeds), recorded in <paramref name="entries"/>: the first prototype of the plant
+		/// recorded for the same biome (a rule's or an earlier site's), or -1 when there is none and the site adds its own.
+		/// <paramref name="first"/> is the tile's first prototype of the plant whatever its biome (-1 when it has none): the one
+		/// a site painted into before, which an added prototype copies. A site with no biome (0) takes the first, as before.
+		/// </summary>
+		public static int SiteLayer(string prefabName, int biomeID, IReadOnlyList<string> prefabs, IReadOnlyList<int> seeds, IReadOnlyList<Entry> entries,
+			out int first)
+		{
+			first = -1;
+			if (string.IsNullOrEmpty(prefabName) || prefabs == null || seeds == null)
+			{
+				return -1;
+			}
+			for (int i = 0; i < prefabs.Count && i < seeds.Count; i++)
+			{
+				if (!string.Equals(prefabs[i], prefabName, StringComparison.Ordinal))
+				{
+					continue;
+				}
+				if (first < 0)
+				{
+					first = i;
+				}
+				if (biomeID == 0)
+				{
+					return i;
+				}
+				if (TryGet(entries, prefabName, seeds[i], out Entry entry) && entry.BiomeID == biomeID)
+				{
+					return i;
+				}
+			}
+			return -1;
+		}
+
+		/// <summary>
+		/// The noise seed of a prototype a site adds for its biome: <paramref name="seed"/> (the one it copied), unless a
+		/// prototype of the same plant on the tile has it or the record names the plant with it, then hashed with the biome until
+		/// neither does, so every prototype of a plant is told apart by its seed (<see cref="Entry"/>'s key). Deterministic: a
+		/// re-cut adds the same.
+		/// </summary>
+		public static int SiteSeed(int seed, int biomeID, string prefabName, IReadOnlyList<string> prefabs, IReadOnlyList<int> seeds, IReadOnlyList<Entry> entries)
+		{
+			int candidate = seed;
+			for (int attempt = 0; attempt < 64 && SeedTaken(candidate, prefabName, prefabs, seeds, entries); attempt++)
+			{
+				unchecked
+				{
+					uint h = (uint)candidate ^ (uint)biomeID * 0x9E3779B1u ^ (uint)attempt * 0x85EBCA6Bu;
+					h ^= h >> 16;
+					h *= 0x7feb352du;
+					h ^= h >> 15;
+					h *= 0x846ca68bu;
+					h ^= h >> 16;
+					candidate = (int)(h & 0x7FFFFFFF);
+				}
+			}
+			return candidate;
+		}
+
+		private static bool SeedTaken(int seed, string prefabName, IReadOnlyList<string> prefabs, IReadOnlyList<int> seeds, IReadOnlyList<Entry> entries)
+		{
+			if (prefabs != null && seeds != null)
+			{
+				for (int i = 0; i < prefabs.Count && i < seeds.Count; i++)
+				{
+					if (seeds[i] == seed && string.Equals(prefabs[i], prefabName, StringComparison.Ordinal))
+					{
+						return true;
+					}
+				}
+			}
+			return TryGet(entries, prefabName, seed, out _);
+		}
+
+		/// <summary>
+		/// The cover a site leaves in its own prototype of a plant at one detail cell, where it wants <paramref name="want"/>
+		/// and grows only ever more: measured, as it always was, against the plant's prototype it used to paint into (the tile's
+		/// first of the plant, <paramref name="baseCover"/>) together with its own (<paramref name="ownCover"/>), and only the
+		/// difference added to its own. <paramref name="sameLayer"/>: its own is that first one (the tile had no other biome's
+		/// prototype of the plant first), so the cell is simply raised to <paramref name="want"/>. Either way the plant's cover
+		/// in the two is what one prototype held before.
+		/// </summary>
+		public static int SiteCover(int baseCover, int ownCover, bool sameLayer, int want)
+		{
+			if (sameLayer)
+			{
+				return Math.Max(ownCover, want);
+			}
+			int have = baseCover + ownCover;
+			return want > have ? ownCover + (want - have) : ownCover;
+		}
+
 		/// <summary>
 		/// Records a prototype a point of interest added for the biome it stands in (<see cref="Entry.Site"/>), unless one is
-		/// recorded already (a rule's, or an earlier site's). True when it added the entry.
+		/// recorded already under the same prefab and seed (a rule's, or an earlier site's: a site adds its own prototype, with
+		/// a seed of its own, wherever the tile's is another biome's, <see cref="SiteLayer"/>). True when it added the entry.
 		/// </summary>
 		public bool RecordSite(string prefabName, int noiseSeed, int biomeID)
 		{

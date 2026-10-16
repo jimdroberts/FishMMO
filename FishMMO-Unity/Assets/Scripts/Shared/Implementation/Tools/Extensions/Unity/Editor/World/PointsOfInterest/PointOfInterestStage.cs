@@ -330,7 +330,8 @@ namespace FishMMO.Shared.WorldDesign
 					ClimateSample sample = climate.SampleAt(record.Position, out _);
 					record.VariantIndex = PointOfInterestNaming.VariantIndexOf(biome, biome.ResolveOwnVariant(sample.Temperature, sample.Humidity));
 				}
-				PointOfInterestTemplate template = library.Pick(record, biome != null ? biome.name : null, RaceCategoryOf(record.Race));
+				// The template's weight in the site's biome is the biome template's for its variant (2026-10-16).
+				PointOfInterestTemplate template = library.Pick(record, BiomeTemplateArt.SiteVariantWeights(biome), RaceCategoryOf(record.Race));
 				if (template != null)
 				{
 					record.Template = template.name;
@@ -564,7 +565,7 @@ namespace FishMMO.Shared.WorldDesign
 				};
 				NearestRiver(input.Water, c.x, c.z, record);
 				biomes.TryGetValue(biomeId, out BiomeTemplate biome);
-				PointOfInterestTemplate template = library.Pick(record, biome != null ? biome.name : null, string.Empty);
+				PointOfInterestTemplate template = library.Pick(record, BiomeTemplateArt.SiteVariantWeights(biome), string.Empty);
 				if (template == null)
 				{
 					unbuilt++;
@@ -678,7 +679,10 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				foreach (BiomeTemplate biome in field.Biomes)
 				{
-					biomes.Add(biome != null ? new PointOfInterestBiome(biome.name, BiomeRegistry.IDOf(biome), biome.ResolvedDisplayName) : null);
+					// The kinds the biome hosts are its template's (2026-10-16), not the catalogue rows' names.
+					biomes.Add(biome != null
+						? new PointOfInterestBiome(biome.name, BiomeRegistry.IDOf(biome), biome.ResolvedDisplayName, BiomeTemplateArt.SiteKinds(biome, rules))
+						: null);
 				}
 				var scratch = new float[field.Biomes.Count];
 				biomeAt = (east, north) => field.DominantIndexAt(east, north, scratch);

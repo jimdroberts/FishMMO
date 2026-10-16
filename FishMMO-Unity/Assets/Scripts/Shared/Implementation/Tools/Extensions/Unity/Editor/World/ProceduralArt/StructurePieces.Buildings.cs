@@ -605,7 +605,10 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			int seg = d.Seg(12, 8);
 			const float inner = 2.5f, door = 0.95f;
-			RingWallWithDoor(d, Vector3.zero, inner, inner + 0.12f, deck, deck + 2.7f, seg, 1.5f * Mathf.PI, door, deck + 2.25f, StructureMaterial.Timber, 10);
+			using (d.Builds(WallRoles))
+			{
+				RingWallWithDoor(d, Vector3.zero, inner, inner + 0.12f, deck, deck + 2.7f, seg, 1.5f * Mathf.PI, door, deck + 2.25f, StructureMaterial.Timber, 10);
+			}
 			HangDoor(d, new Vector3(0f, deck, -Mathf.Sqrt(inner * inner - door * door * 0.25f) + 0.05f), Vector3.right, Vector3.forward, door, 2.25f, StructureDoorKind.Planks);
 			d.RoundRoom(new Vector3(0f, deck, 0f), inner, 2.7f, StructureRoomKind.Dwelling);
 			d.Add(StructureShapes.Lathe(new[] { new Vector2(inner + 0.82f, deck + 2.35f), new Vector2(0f, deck + 5.4f) }, seg, StructureMaterial.Thatch, 2, true, 0f, false, true, StructureRole.Roof));
@@ -763,20 +766,24 @@ namespace FishMMO.Shared.WorldDesign
 		private static void Deck(StructureDraft d, float width, float z0, float z1, int key)
 		{
 			float length = z1 - z0;
-			if (d.Fine)
+			// The planks are the deck's floor; the stringers under them stay the frame's trim.
+			using (d.Builds(DeckRoles))
 			{
-				int planks = Mathf.RoundToInt(length / 0.3f);
-				float pitch = length / planks;
-				for (int i = 0; i < planks; i++)
+				if (d.Fine)
 				{
-					float z = z0 + pitch * (i + 0.5f);
-					float wobble = d.Range(key + i, 1, -0.04f, 0.04f);
-					d.Add(StructureShapes.Box(new Vector3(wobble, -0.04f, z), new Vector3(width + d.Range(key + i, 2, -0.05f, 0.05f), 0.08f, pitch - 0.02f), StructureMaterial.Timber, key + i)).Grain = Vector3.right;
+					int planks = Mathf.RoundToInt(length / 0.3f);
+					float pitch = length / planks;
+					for (int i = 0; i < planks; i++)
+					{
+						float z = z0 + pitch * (i + 0.5f);
+						float wobble = d.Range(key + i, 1, -0.04f, 0.04f);
+						d.Add(StructureShapes.Box(new Vector3(wobble, -0.04f, z), new Vector3(width + d.Range(key + i, 2, -0.05f, 0.05f), 0.08f, pitch - 0.02f), StructureMaterial.Timber, key + i)).Grain = Vector3.right;
+					}
 				}
-			}
-			else
-			{
-				d.Add(StructureShapes.Box(new Vector3(0f, -0.04f, (z0 + z1) * 0.5f), new Vector3(width, 0.08f, length), StructureMaterial.Timber, key)).Grain = Vector3.right;
+				else
+				{
+					d.Add(StructureShapes.Box(new Vector3(0f, -0.04f, (z0 + z1) * 0.5f), new Vector3(width, 0.08f, length), StructureMaterial.Timber, key)).Grain = Vector3.right;
+				}
 			}
 			for (int s = -1; s <= 1; s += 2)
 			{

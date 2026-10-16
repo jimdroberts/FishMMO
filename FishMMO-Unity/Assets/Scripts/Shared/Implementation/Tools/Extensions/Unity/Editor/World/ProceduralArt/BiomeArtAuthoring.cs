@@ -87,6 +87,14 @@ namespace FishMMO.Shared.WorldDesign
 	/// that old code with a warning where a template has not been authored.
 	/// </para>
 	/// <para>
+	/// <b>Lists are marked entry by entry (2026-10-16, I5b).</b> A list on the template (the rocks it accepts, its cave shells,
+	/// sea life, vine species, gathering resources, point-of-interest growth, site kinds, variants and styles, crops, palette
+	/// entries and street lights) carries a mark per entry, keyed by the entry's identity (<see cref="BiomeEntryMarks"/>,
+	/// <see cref="AuthorEntries{T}"/>): the spec's new entries reach a list somebody has edited, the tool's untouched entries
+	/// follow the spec, and an entry edited, made or deleted by hand stays as it was left (a deletion is remembered). A list
+	/// still holding one mark for the whole of it is converted on the next run. Single values keep one mark each.
+	/// </para>
+	/// <para>
 	/// <b>Nothing committed points into Assets/LOCAL.</b> Before a biome is filled, any of its slots
 	/// that references an asset under <c>Assets/LOCAL</c> — a licensed texture or layer assigned on
 	/// the template by hand — has that reference moved to the biome's <see cref="BiomeLocalArt"/>
@@ -320,6 +328,7 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			var report = new Report();
 			var source = new AssetSource();
+			List<PointOfInterestTemplateSpec> handMade = HandMadeTemplates(ProjectPointOfInterestTemplates());
 			foreach (string guid in AssetDatabase.FindAssets("t:" + nameof(BiomeTemplate)))
 			{
 				var biome = AssetDatabase.LoadAssetAtPath<BiomeTemplate>(AssetDatabase.GUIDToAssetPath(guid));
@@ -339,7 +348,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				// First, so a slot emptied of its LOCAL art is filled below like any empty slot.
 				bool moved = MoveLocalReferencesToSidecar(biome, report, apply);
-				bool authored = Author(biome, entry, source, report, apply);
+				bool authored = Author(biome, entry, source, report, apply, handMade);
 				if ((moved || authored) && apply)
 				{
 					biome.InvalidateTextureLayerCache();
@@ -492,7 +501,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// Applies one spec entry to one biome. Pure apart from the source, so a test can run it on
 		/// an in-memory template. Returns true when anything changed (or would, when not applying).
 		/// </summary>
-		public static bool Author(BiomeTemplate biome, BiomeArtSpec.Entry entry, IBiomeArtSource source, Report report, bool apply)
+		/// <param name="handMadeTemplates">
+		/// The project's point-of-interest templates the catalogue does not write, as plain data (<see cref="HandMadeTemplates"/>):
+		/// a variant of theirs whose own biome list names this biome is added to its Site Variants (2026-10-16, I5b). Null for none.
+		/// </param>
+		public static bool Author(BiomeTemplate biome, BiomeArtSpec.Entry entry, IBiomeArtSource source, Report report, bool apply,
+			IReadOnlyList<PointOfInterestTemplateSpec> handMadeTemplates = null)
 		{
 			string who = biome.name;
 			int before = report.SlotsFilled + report.RulesAdded + report.RulesDisabled + report.RulesUpdated + report.ValuesFilled + report.GrassTypesPruned;
@@ -628,7 +642,9 @@ namespace FishMMO.Shared.WorldDesign
 
 			AuthorRock(biome, entry, report, apply);
 			AuthorCaveShells(biome, entry, report, apply);
+			AuthorCaveCrystals(biome, entry, report, apply);
 			AuthorWaterRole(biome, entry, report, apply);
+			AuthorWaterLook(biome, entry, report, apply);
 			AuthorGrowth(biome, entry, source, report, apply);
 			AuthorLooks(biome, entry, report, apply);
 			AuthorGrass(biome, entry, source, report, apply);
@@ -636,6 +652,7 @@ namespace FishMMO.Shared.WorldDesign
 			AuthorWildlife(biome, entry, report, apply);
 			AuthorVines(biome, entry, report, apply);
 			AuthorGathering(biome, entry, report, apply);
+			AuthorSites(biome, entry, source, report, apply, handMadeTemplates);
 
 			bool changed = report.SlotsFilled + report.RulesAdded + report.RulesDisabled + report.RulesUpdated + report.ValuesFilled + report.GrassTypesPruned != before;
 			if (changed)
@@ -974,12 +991,9 @@ namespace FishMMO.Shared.WorldDesign
 			string own = CliffRocks.OwnRock(entry);
 			AuthorValue(who, biome, BiomeTemplate.Authored.OwnRock, Mark(biome.OwnRock), Mark(own), false, () => biome.OwnRock = own, own, report, apply);
 
-			string[] rocks = entry.Rocks ?? Array.Empty<string>();
-			AuthorValue(who, biome, BiomeTemplate.Authored.AcceptedRocks, Mark(biome.AcceptedRocks), Mark(rocks), true, () =>
-			{
-				biome.AcceptedRocks.Clear();
-				biome.AcceptedRocks.AddRange(rocks);
-			}, rocks.Length > 0 ? string.Join(", ", rocks) : "none", report, apply, biome.AcceptedRocks.Count == 0);
+			var rocks = new List<string>(entry.Rocks ?? Array.Empty<string>());
+			AuthorEntries(who, biome, BiomeTemplate.Authored.AcceptedRocks, biome.AcceptedRocks, rocks, NameId, r => r ?? string.Empty,
+				l => Mark(l), report, apply);
 
 			if (biome.CliffTextureLayers == null)
 			{
@@ -1026,16 +1040,14 @@ namespace FishMMO.Shared.WorldDesign
 		/// The rock each form of cave carved in the biome is cut in, its formations included (<see cref="BiomeTemplate.CaveShells"/>),
 		/// from the spec (<see cref="BiomeArtSpec.Entry.CaveShells"/>: every form with the shell the cave shaper gave it by form
 		/// alone before, Ground where that was the ground's own rock, unless the biome's file names its own). One mark for the
-		/// whole list: a list edited by hand is kept, one emptied by hand stays empty (every form then keeps its old shell).
+		/// One mark per form (2026-10-16): a form's shell edited by hand is kept, one deleted by hand stays deleted (the form then
+		/// keeps its old shell), and the others still follow the spec.
 		/// </summary>
 		private static void AuthorCaveShells(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
 		{
 			List<BiomeCaveShell> shells = entry.CaveShells();
-			AuthorValue(biome.name, biome, BiomeTemplate.Authored.CaveShells, Mark(biome.CaveShells), Mark(shells), true, () =>
-			{
-				biome.CaveShells.Clear();
-				biome.CaveShells.AddRange(shells);
-			}, string.Join(", ", shells), report, apply, biome.CaveShells.Count == 0);
+			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.CaveShells, biome.CaveShells, shells, s => s.Form.ToString(), s => s.ToString(),
+				l => Mark(AsList(l)), report, apply);
 		}
 
 		/// <summary>
@@ -1052,6 +1064,19 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>A water role's mark: its name, empty for None (no role).</summary>
 		public static string Mark(BiomeWaterRole role) => role == BiomeWaterRole.None ? string.Empty : role.ToString();
+
+		/// <summary>
+		/// The colour and clarity of the biome's fresh water (<see cref="BiomeTemplate.WaterLook"/>, 2026-10-16, I2e) from the
+		/// spec (<see cref="BiomeArtSpec.Entry.WaterLook"/>: the inland water's own look, <see cref="BiomeWaterLooks.Today"/>,
+		/// unless the biome's file gives one). One value, marked by its signature; a look edited by hand is kept.
+		/// </summary>
+		private static void AuthorWaterLook(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			BiomeWaterLook target = entry.WaterLook();
+			string current = biome.IsAuthored(BiomeTemplate.Authored.WaterLook) ? biome.WaterLook.Signature() : string.Empty;
+			AuthorValue(biome.name, biome, BiomeTemplate.Authored.WaterLook, current, target.Signature(), false,
+				() => biome.WaterLook = target, $"water {target}", report, apply);
+		}
 
 		/// <summary>A cave shell list's mark: a hash of its "Form=Rock" entries in order.</summary>
 		public static string Mark(List<BiomeCaveShell> rocks)
@@ -1237,34 +1262,132 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The country the biome offers ambient creatures (<see cref="BiomeTemplate.Habitat"/>) and the sea creatures most at
-		/// home in its water (<see cref="BiomeTemplate.SeaLifeHomes"/>), from the spec (<see cref="BiomeArtSpec.Entry.Habitat"/>,
-		/// <see cref="BiomeArtSpec.Entry.SeaLifeHomes"/>: what the biome's name gave the client before, 2026-10-16). None and an
-		/// empty list are written and marked too, so one cleared by hand stays cleared.
+		/// The country the biome offers ambient creatures (<see cref="BiomeTemplate.Habitat"/>) and the sea creatures at home in
+		/// its water with their weights (<see cref="BiomeTemplate.SeaLife"/>), from the spec (<see cref="BiomeArtSpec.Entry.Habitat"/>,
+		/// <see cref="BiomeArtSpec.Entry.SeaLife"/>: what the biome's name gave the client before, 2026-10-16, and each kind at
+		/// the weight it gave its favourites). None and an empty list are written and marked too, so one cleared by hand stays
+		/// cleared.
 		/// </summary>
+		/// <remarks>
+		/// Never the Alien bit (2026-10-16, I4b): the client reads alien ground live from the template's air. A template this
+		/// authoring wrote before then holds it in its habitat and in the habitat's mark; both are read without it (the habitat
+		/// masks it on every read), so a habitat the tool wrote and nobody touched stays the tool's to rewrite, and a hand edit
+		/// stays a hand edit; the stored bit and the old mark are cleaned as it goes.
+		/// </remarks>
 		private static void AuthorWildlife(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
 		{
-			BiomeHabitat habitat = entry.Habitat;
-			AuthorValue(biome.name, biome, BiomeTemplate.Authored.Habitat, Mark(biome.Habitat), Mark(habitat), true,
-				() => biome.Habitat = habitat, habitat.ToString(), report, apply, biome.Habitat == BiomeHabitat.None);
-			List<string> homes = entry.SeaLifeHomes();
-			AuthorValue(biome.name, biome, BiomeTemplate.Authored.SeaLifeHomes, Mark(biome.SeaLifeHomes), Mark(homes), true, () =>
+			BiomeHabitat habitat = entry.Habitat & BiomeHabitats.Stored;
+			string mark = HabitatMarkWithoutAlien(biome.AuthoredFingerprint(BiomeTemplate.Authored.Habitat));
+			if (apply)
 			{
-				biome.SeaLifeHomes.Clear();
-				biome.SeaLifeHomes.AddRange(homes);
-			}, homes.Count > 0 ? "sea life " + string.Join(", ", homes) : "no sea life of its own", report, apply, biome.SeaLifeHomes.Count == 0);
+				if (biome.DropStoredAlien())
+				{
+					report.ValuesFilled++;
+					report.Lines.Add($"{biome.name} {BiomeTemplate.Authored.Habitat}: dropped its stored Alien bit (read live from the template's air since 2026-10-16)");
+				}
+				if (mark != null && mark != biome.AuthoredFingerprint(BiomeTemplate.Authored.Habitat))
+				{
+					biome.SetAuthoredFingerprint(BiomeTemplate.Authored.Habitat, mark);
+				}
+			}
+			AuthorValue(biome.name, biome, BiomeTemplate.Authored.Habitat, mark, Mark(biome.Habitat), Mark(habitat), true,
+				() => biome.Habitat = habitat, habitat.ToString(), report, apply, biome.Habitat == BiomeHabitat.None);
+			List<BiomeSeaLife> seaLife = entry.SeaLife();
+			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.SeaLife, biome.SeaLife, seaLife, s => NameId(s.Kind), s => s.ToString(),
+				l => Mark(AsList(l)), report, apply);
+		}
+
+		/// <summary>
+		/// A habitat mark as it reads without the Alien bit (the marks of 2026-10-16's I4 authoring named it: "Ice, Alien",
+		/// "Alien"); any other mark, and no mark (null), unchanged.
+		/// </summary>
+		public static string HabitatMarkWithoutAlien(string mark)
+		{
+			if (string.IsNullOrEmpty(mark) || !Enum.TryParse(mark, out BiomeHabitat habitat))
+			{
+				return mark;
+			}
+			return (habitat & BiomeHabitat.Alien) != 0 ? Mark(habitat & BiomeHabitats.Stored) : mark;
 		}
 
 		/// <summary>
 		/// The vines the biome grows (<see cref="BiomeTemplate.Vines"/>) from the spec (<see cref="BiomeArtSpec.Entry.VineGrowth"/>:
 		/// the vine table's row for its name, unless its file sets its own). No vines is written and marked too.
 		/// </summary>
+		/// <remarks>
+		/// Since 2026-10-16 (I5b) the four densities are one value (<see cref="BiomeTemplate.Authored.VineDensities"/>) and each
+		/// species an entry with its own mark (<see cref="BiomeEntryMarks"/>), so a species the spec adds reaches a biome whose
+		/// densities or other species were tuned by hand. A template authored before then carries one mark for the whole (the
+		/// vines' signature, which spells out what was written): its densities part becomes the densities' mark and its species
+		/// the species' marks.
+		/// </remarks>
 		private static void AuthorVines(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
 		{
 			BiomeVines vines = entry.VineGrowth();
-			BiomeVines current = biome.Vines;
-			AuthorValue(biome.name, biome, BiomeTemplate.Authored.Vines, Mark(current), Mark(vines), true,
-				() => biome.Vines = vines.Clone(), vines.Grows ? "vines " + vines.Signature() : "no vines", report, apply, current == null || current.IsEmpty);
+			if (apply && biome.Vines == null)
+			{
+				biome.Vines = new BiomeVines();
+			}
+			BiomeVines current = biome.Vines ?? new BiomeVines();
+			current.Species ??= new List<BiomeVineSpecies>();
+			string whole = biome.AuthoredFingerprint(BiomeTemplate.Authored.Vines);
+			List<(string Id, string Print)> written = null;
+			string densityMark = biome.AuthoredFingerprint(BiomeTemplate.Authored.VineDensities);
+			if (whole != null && whole != BiomeEntryMarks.PerEntry)
+			{
+				written = VineSpeciesWritten(whole, out string densities);
+				if (densityMark == null)
+				{
+					densityMark = densities;
+					if (apply)
+					{
+						// Kept even where nothing is written below, so densities zeroed by hand stay a hand edit once the old mark is gone.
+						biome.SetAuthoredFingerprint(BiomeTemplate.Authored.VineDensities, densities);
+					}
+				}
+			}
+			AuthorValue(biome.name, biome, BiomeTemplate.Authored.VineDensities, densityMark, VineDensities(current), VineDensities(vines), true,
+				() =>
+				{
+					current.Caves = vines.Caves;
+					current.Ruins = vines.Ruins;
+					current.Cliffs = vines.Cliffs;
+					current.Trees = vines.Trees;
+				}, $"vine densities {VineDensities(vines)}", report, apply, current.Caves == 0f && current.Ruins == 0f && current.Cliffs == 0f && current.Trees == 0f);
+			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.Vines, current.Species, vines.Species ?? new List<BiomeVineSpecies>(),
+				s => NameId(s.Species), VineSpeciesPrint, _ => current.Signature(), report, apply, written);
+		}
+
+		/// <summary>The vines' densities as their mark: caves, ruins, cliffs, trees to 1/10 000 (the head of <see cref="BiomeVines.Signature"/>).</summary>
+		public static string VineDensities(BiomeVines vines)
+		{
+			if (vines == null)
+			{
+				return "0,0,0,0";
+			}
+			return new BiomeVines { Caves = vines.Caves, Ruins = vines.Ruins, Cliffs = vines.Cliffs, Trees = vines.Trees }.Signature();
+		}
+
+		/// <summary>One vine species' print, as the vines' signature spells it: "Species:weight to 1/10 000".</summary>
+		public static string VineSpeciesPrint(BiomeVineSpecies species)
+			=> new BiomeVines { Species = new List<BiomeVineSpecies> { species } }.Signature().Substring("0,0,0,0|".Length);
+
+		/// <summary>
+		/// What an authoring before 2026-10-16 wrote into the vines, read back from its whole-value mark (the vines' signature):
+		/// the species, each by identity and print, and the densities' part.
+		/// </summary>
+		public static List<(string Id, string Print)> VineSpeciesWritten(string signature, out string densities)
+		{
+			var written = new List<(string, string)>();
+			string[] parts = (signature ?? string.Empty).Split('|');
+			densities = parts.Length > 0 && parts[0].Length > 0 ? parts[0] : "0,0,0,0";
+			for (int i = 1; i < parts.Length; i++)
+			{
+				int colon = parts[i].LastIndexOf(':');
+				string name = colon >= 0 ? parts[i].Substring(0, colon) : parts[i];
+				written.Add((NameId(name == "<none>" ? null : name), parts[i]));
+			}
+			return written;
 		}
 
 		/// <summary>
@@ -1275,15 +1398,201 @@ namespace FishMMO.Shared.WorldDesign
 		private static void AuthorGathering(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
 		{
 			List<string> nodes = entry.GatheringResources();
-			AuthorValue(biome.name, biome, BiomeTemplate.Authored.GatheringResources, Mark(biome.GatheringResources), Mark(nodes), true, () =>
-			{
-				biome.GatheringResources.Clear();
-				biome.GatheringResources.AddRange(nodes);
-			}, nodes.Count > 0 ? string.Join(", ", nodes) : "none", report, apply, biome.GatheringResources.Count == 0);
+			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.GatheringResources, biome.GatheringResources, nodes, NameId, n => n ?? string.Empty,
+				l => Mark(l), report, apply);
 		}
+
+		/// <summary>
+		/// The points of interest the biome hosts and how they are built (2026-10-16, phase I5), from the spec: the kinds sited on
+		/// its ground (<see cref="BiomeArtSpec.Entry.SiteKinds"/>, from the project's catalogue rows by the biome's name), its
+		/// template variants' and styles' weights (<see cref="BiomeArtSpec.Entry.SiteVariants"/>, <see cref="BiomeArtSpec.Entry.SiteStyles"/>),
+		/// its weathering (<see cref="BiomeArtSpec.Entry.Weathering"/>), its fields' crops (<see cref="BiomeArtSpec.Entry.FieldCrops"/>)
+		/// and its structure palette (<see cref="BiomeArtSpec.Entry.StructurePalette"/>). One mark each; empty lists are written
+		/// and marked too, so a list cleared by hand stays cleared.
+		/// </summary>
+		private static void AuthorSites(BiomeTemplate biome, BiomeArtSpec.Entry entry, IBiomeArtSource source, Report report, bool apply,
+			IReadOnlyList<PointOfInterestTemplateSpec> handMadeTemplates = null)
+		{
+			string who = biome.name;
+			List<BiomeSiteKind> kinds = entry.SiteKinds(SiteRules);
+			AuthorEntries(who, biome, BiomeTemplate.Authored.SiteKinds, biome.SiteKinds, kinds, SiteKindId, k => k.ToString(), l => Mark(AsList(l)), report, apply);
+
+			List<BiomeSiteVariant> variants = entry.SiteVariants(handMadeTemplates);
+			AuthorEntries(who, biome, BiomeTemplate.Authored.SiteVariants, biome.SiteVariants, variants, SiteVariantId, v => v.ToString(), l => Mark(AsList(l)), report, apply);
+
+			List<BiomeSiteStyle> styles = entry.SiteStyles();
+			AuthorEntries(who, biome, BiomeTemplate.Authored.SiteStyles, biome.SiteStyles, styles, s => s.Style.ToString(), s => s.ToString(), l => Mark(AsList(l)), report, apply);
+
+			BiomeWeathering weathering = entry.Weathering();
+			string currentWeathering = biome.IsAuthored(BiomeTemplate.Authored.Weathering) ? biome.Weathering.Signature() : string.Empty;
+			AuthorValue(who, biome, BiomeTemplate.Authored.Weathering, currentWeathering, weathering.Signature(), false,
+				() => biome.Weathering = weathering, weathering.ToString(), report, apply);
+
+			var crops = new List<BiomeFieldCrop>();
+			foreach ((string name, float weight) in entry.FieldCrops())
+			{
+				GameObject prefab = source.Prefab(name);
+				if (prefab == null)
+				{
+					report.Missing.Add($"{who} {BiomeTemplate.Authored.FieldCrops}: prefab {name}");
+					continue;
+				}
+				crops.Add(new BiomeFieldCrop(prefab, weight, entry.FieldSurface(name)));
+			}
+			AuthorEntries(who, biome, BiomeTemplate.Authored.FieldCrops, biome.FieldCrops, crops, c => c.Prefab != null ? c.Prefab.name : null, c => c.ToString(),
+				l => Mark(AsList(l)), report, apply);
+
+			BiomeStructurePalette palette = entry.StructurePalette();
+			if (apply && biome.StructurePalette.Surfaces == null)
+			{
+				biome.StructurePalette.Surfaces = new List<BiomeStructureSurface>();
+			}
+			List<BiomeStructureSurface> surfaces = biome.StructurePalette.Surfaces ?? new List<BiomeStructureSurface>();
+			AuthorEntries(who, biome, BiomeTemplate.Authored.StructurePalette, surfaces, palette.Surfaces, SurfaceId, s => s.Signature(),
+				l => Mark(new BiomeStructurePalette { Surfaces = new List<BiomeStructureSurface>(l) }), report, apply);
+
+			// What stands in a stronghold's moat (2026-10-16, I5b): one value, written and marked like any other.
+			BiomeMoatWater moat = entry.MoatWater;
+			AuthorValue(who, biome, BiomeTemplate.Authored.MoatWater, biome.IsAuthored(BiomeTemplate.Authored.MoatWater) ? biome.MoatWater.ToString() : string.Empty,
+				moat.ToString(), false, () => biome.MoatWater = moat, $"moat water {moat}", report, apply);
+
+			// How its settlements light their streets (I5b): one entry per kind.
+			AuthorEntries(who, biome, BiomeTemplate.Authored.WayLights, biome.WayLights, entry.WayLights(), l => l.Kind.ToString(), l => l.ToString(),
+				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
+
+			// How its caves and mines are lit (2026-10-16, I6c): one entry per place, the cave dressing's old rule by default.
+			AuthorEntries(who, biome, BiomeTemplate.Authored.CaveLights, biome.CaveLights, entry.CaveLights(), CaveLightId, l => l.ToString(),
+				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
+		}
+
+		/// <summary>A cave-light entry's identity: its place.</summary>
+		public static string CaveLightId(BiomeCaveLight light) => light.Place.ToString();
+
+		/// <summary>A cave-crystal entry's identity: its kind.</summary>
+		public static string CaveCrystalId(BiomeCaveCrystal crystal) => crystal.Kind.ToString();
+
+		/// <summary>
+		/// The crystals the biome's caves grow (<see cref="BiomeTemplate.CaveCrystals"/>, 2026-10-16, I6c) from the spec
+		/// (<see cref="BiomeArtSpec.Entry.CaveCrystals"/>: selenite, what every cave grew before, unless the biome's file names its
+		/// own). One mark per kind: a kind's weight edited by hand is kept, a kind deleted by hand stays deleted.
+		/// </summary>
+		private static void AuthorCaveCrystals(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.CaveCrystals, biome.CaveCrystals, entry.CaveCrystals(), CaveCrystalId, c => c.ToString(),
+				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
+		}
+
+		/// <summary>A site-kind entry's identity: its kind.</summary>
+		public static string SiteKindId(BiomeSiteKind kind) => kind.Kind.ToString();
+
+		/// <summary>A site-variant entry's identity: its kind and its variant's name, the name ignoring case and outer spaces.</summary>
+		public static string SiteVariantId(BiomeSiteVariant variant) => variant.Kind + "/" + NameId(variant.Variant);
+
+		/// <summary>A palette entry's identity: its style and part.</summary>
+		public static string SurfaceId(BiomeStructureSurface surface) => surface.Style + "/" + surface.Role;
+
+		/// <summary>A name's identity in a list: trimmed, in lower case; null for none (an entry with no name is never touched).</summary>
+		public static string NameId(string name) => string.IsNullOrWhiteSpace(name) ? null : name.Trim().ToLowerInvariant();
+
+		private static List<T> AsList<T>(IReadOnlyList<T> list) => list as List<T> ?? new List<T>(list ?? Array.Empty<T>());
+
+		/// <summary>
+		/// The project's point-of-interest template assets (sorted by path, as the cut's library loads them), for
+		/// <see cref="HandMadeTemplates"/>.
+		/// </summary>
+		public static List<PointOfInterestTemplate> ProjectPointOfInterestTemplates()
+		{
+			var paths = new List<string>();
+			foreach (string guid in AssetDatabase.FindAssets("t:" + nameof(PointOfInterestTemplate)))
+			{
+				paths.Add(AssetDatabase.GUIDToAssetPath(guid));
+			}
+			paths.Sort(StringComparer.Ordinal);
+			var templates = new List<PointOfInterestTemplate>();
+			foreach (string path in paths)
+			{
+				var template = AssetDatabase.LoadAssetAtPath<PointOfInterestTemplate>(path);
+				if (template != null)
+				{
+					templates.Add(template);
+				}
+			}
+			return templates;
+		}
+
+		/// <summary>
+		/// The templates among these the point-of-interest catalogue does not write (made by hand, or left over from an older
+		/// catalogue), as plain data for <see cref="BiomeArtSpec.Entry.SiteVariants"/>: kind, variant (<see cref="PointOfInterestTemplate.VariantKey"/>),
+		/// weight elsewhere and biome list. Only those whose biome list names a biome at all; of two of one variant, the first.
+		/// </summary>
+		public static List<PointOfInterestTemplateSpec> HandMadeTemplates(IEnumerable<PointOfInterestTemplate> templates)
+		{
+			var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			foreach (PointOfInterestTemplateSpec spec in PointOfInterestTemplateSpecs.All())
+			{
+				written.Add(spec.Kind + "/" + spec.Variant);
+			}
+			var handMade = new List<PointOfInterestTemplateSpec>();
+			if (templates == null)
+			{
+				return handMade;
+			}
+			foreach (PointOfInterestTemplate template in templates)
+			{
+				if (template == null || template.BiomeWeights == null || template.BiomeWeights.Count == 0)
+				{
+					continue;
+				}
+				string variant = template.VariantKey;
+				if (string.IsNullOrWhiteSpace(variant) || !written.Add(template.Kind + "/" + variant))
+				{
+					continue;
+				}
+				var own = new PointOfInterestTemplateSpec { Kind = template.Kind, Variant = variant, DefaultBiomeWeight = template.DefaultBiomeWeight };
+				own.BiomeWeights.AddRange(template.BiomeWeights);
+				handMade.Add(own);
+			}
+			return handMade;
+		}
+
+		/// <summary>
+		/// The point-of-interest catalogue the cut sites kinds by (the code's rows with the project's catalogue asset laid over
+		/// them): its rows' biome weights are what the authoring writes onto the templates.
+		/// </summary>
+		private static PointOfInterestRules SiteRules => PointOfInterestCatalogue.Resolve();
+
+		/// <summary>A site-kind list's mark: a hash of its "Kind×weight" entries in order.</summary>
+		public static string Mark(List<BiomeSiteKind> kinds) => Mark(kinds?.ConvertAll(k => k.ToString()));
+
+		/// <summary>A site-variant list's mark: a hash of its "Kind/Variant×weight" entries in order.</summary>
+		public static string Mark(List<BiomeSiteVariant> variants) => Mark(variants?.ConvertAll(v => v.ToString()));
+
+		/// <summary>A site-style list's mark: a hash of its "Style×weight" entries in order.</summary>
+		public static string Mark(List<BiomeSiteStyle> styles) => Mark(styles?.ConvertAll(v => v.ToString()));
+
+		/// <summary>A crop list's mark: a hash of its "Prefab×weight" entries in order.</summary>
+		public static string Mark(List<BiomeFieldCrop> crops) => Mark(crops?.ConvertAll(c => c.ToString()));
+
+		/// <summary>A structure palette's mark: a hash of its entries' signatures in order; empty for none.</summary>
+		public static string Mark(BiomeStructurePalette palette)
+			=> palette == null || palette.IsEmpty ? string.Empty : Mark(palette.Surfaces.ConvertAll(e => e.Signature()));
 
 		/// <summary>A habitat's mark: its members' names, empty for None.</summary>
 		public static string Mark(BiomeHabitat habitat) => habitat == BiomeHabitat.None ? string.Empty : habitat.ToString();
+
+		/// <summary>A sea life list's mark: a hash of its entries (kind and exact weight) in order.</summary>
+		public static string Mark(List<BiomeSeaLife> seaLife)
+		{
+			var entries = new List<string>();
+			if (seaLife != null)
+			{
+				foreach (BiomeSeaLife entry in seaLife)
+				{
+					entries.Add(entry.ToString());
+				}
+			}
+			return Mark(entries);
+		}
 
 		/// <summary>Vines' mark: every value (<see cref="BiomeVines.Signature"/>), empty for none set at all.</summary>
 		public static string Mark(BiomeVines vines) => vines == null || vines.IsEmpty ? string.Empty : vines.Signature();
@@ -1339,11 +1648,89 @@ namespace FishMMO.Shared.WorldDesign
 					prefabs.Add(prefab);
 				}
 			}
-			AuthorValue(who, biome, field, Mark(list), Mark(prefabs), true, () =>
+			AuthorEntries(who, biome, field, list, prefabs, p => p != null ? p.name : null, p => p != null ? p.name : string.Empty,
+				l => Mark(AsList(l)), report, apply);
+		}
+
+		/// <summary>
+		/// Writes one template LIST from the spec under the per-entry contract (<see cref="BiomeEntryMarks"/>, 2026-10-16, I5b):
+		/// the spec's entries the list lacks are added (unless the tool wrote one and somebody deleted it), the tool's untouched
+		/// entries are brought up to the spec's (or removed when the spec dropped them), and entries edited or made by hand are
+		/// kept. A list still holding one mark for the whole of it (2026-10-15/16 authoring) is converted first. The field's own
+		/// mark becomes <see cref="BiomeEntryMarks.PerEntry"/>: the list is authored, so empty is a decision.
+		/// </summary>
+		/// <param name="list">The template's list (written in place when <paramref name="apply"/>).</param>
+		/// <param name="id">An entry's identity (null: no identity, never touched).</param>
+		/// <param name="print">Everything about an entry the tool writes.</param>
+		/// <param name="wholeMarkOf">How the whole-list mark was made before (for converting it).</param>
+		/// <param name="written">What the whole-list mark says was written, where it spells it out (vines); else null.</param>
+		private static void AuthorEntries<T>(string who, BiomeTemplate biome, string field, List<T> list, List<T> target, Func<T, string> id,
+			Func<T, string> print, Func<IReadOnlyList<T>, string> wholeMarkOf, Report report, bool apply, IReadOnlyList<(string Id, string Print)> written = null)
+		{
+			string fieldMark = biome.AuthoredFingerprint(field);
+			Dictionary<string, string> marks;
+			bool migrated = false;
+			if (fieldMark != null && fieldMark != BiomeEntryMarks.PerEntry)
 			{
-				list.Clear();
-				list.AddRange(prefabs);
-			}, prefabs.Count > 0 ? string.Join(", ", prefabs.ConvertAll(p => p.name)) : "none", report, apply, list.Count == 0);
+				marks = BiomeEntryMarks.Migrate(list, target, id, print, fieldMark, wholeMarkOf, written);
+				migrated = true;
+			}
+			else
+			{
+				marks = biome.EntryMarks(field);
+			}
+			List<T> working = apply ? list : new List<T>(list);
+			BiomeEntryMarks.Outcome outcome = BiomeEntryMarks.Merge(working, target, id, print, marks);
+			bool wrote = migrated || fieldMark != BiomeEntryMarks.PerEntry || outcome.Wrote;
+			string done(string did, string would) => apply ? did : would;
+			if (migrated)
+			{
+				report.Lines.Add($"{who} {field}: its one mark for the whole list {done("became", "would become")} a mark per entry");
+			}
+			else if (fieldMark == null && outcome.Changes.Count == 0)
+			{
+				report.Lines.Add($"{who} {field}: '{(list.Count > 0 ? string.Join(", ", list.ConvertAll(e => print(e))) : "none")}' {done("marked", "would be marked")} as the tool's");
+			}
+			foreach (BiomeEntryMarks.Change change in outcome.Changes)
+			{
+				switch (change.Step)
+				{
+					case BiomeEntryMarks.Step.Added:
+						report.Lines.Add($"{who} {field}: {done("added", "would add")} {change.Now}");
+						break;
+					case BiomeEntryMarks.Step.Updated:
+						report.Lines.Add($"{who} {field}: {change.Was} {done("brought up to", "would be brought up to")} {change.Now}");
+						break;
+					case BiomeEntryMarks.Step.Pruned:
+						report.Lines.Add($"{who} {field}: {change.Was} {done("removed", "would be removed")} (the tool's, untouched, and the spec no longer has it)");
+						break;
+					case BiomeEntryMarks.Step.Marked:
+						report.Lines.Add($"{who} {field}: '{change.Now}' {done("marked", "would be marked")} as the tool's");
+						break;
+					case BiomeEntryMarks.Step.Tombstoned:
+						report.Lines.Add($"{who} {field}: {change.Was} was deleted by hand — {done("remembered", "would be remembered")}, so it is not added again");
+						break;
+					case BiomeEntryMarks.Step.KeptEdited:
+						report.Lines.Add($"{who} {field}: {change.Was} was edited or made by hand — kept (the spec says {change.Now})");
+						break;
+					case BiomeEntryMarks.Step.KeptDeleted:
+						report.Lines.Add($"{who} {field}: {change.Now} was deleted by hand — stays deleted");
+						break;
+				}
+			}
+			if (wrote)
+			{
+				report.ValuesFilled++;
+			}
+			if (outcome.Kept)
+			{
+				report.ValuesKept++;
+			}
+			if (apply && wrote)
+			{
+				biome.SetEntryMarks(field, marks);
+				biome.SetAuthoredFingerprint(field, BiomeEntryMarks.PerEntry);
+			}
 		}
 
 		/// <summary>
@@ -1361,7 +1748,13 @@ namespace FishMMO.Shared.WorldDesign
 		private static void AuthorValue(string who, BiomeTemplate biome, string field, string current, string target, bool emptyIsADecision,
 			Action write, string describe, Report report, bool apply, bool isEmpty = false)
 		{
-			string mark = biome.AuthoredFingerprint(field);
+			AuthorValue(who, biome, field, biome.AuthoredFingerprint(field), current, target, emptyIsADecision, write, describe, report, apply, isEmpty);
+		}
+
+		/// <summary><see cref="AuthorValue(string, BiomeTemplate, string, string, string, bool, Action, string, Report, bool, bool)"/> with the field's mark as the caller reads it.</summary>
+		private static void AuthorValue(string who, BiomeTemplate biome, string field, string mark, string current, string target, bool emptyIsADecision,
+			Action write, string describe, Report report, bool apply, bool isEmpty = false)
+		{
 			bool empty = isEmpty || !emptyIsADecision && string.IsNullOrEmpty(current);
 			if (current == target)
 			{

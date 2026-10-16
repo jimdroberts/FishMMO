@@ -17,7 +17,8 @@ namespace FishMMO.Shared.WorldDesign
 				C(Ground.Rock), Ground.Mud, Ground.Mud)
 				.Accepts(VolcanicGeology)
 				.Look(BiomeLookClass.Volcanic)
-				.Wildlife(BiomeHabitat.Grassland | BiomeHabitat.Volcanic);
+				.Wildlife(BiomeHabitat.Grassland | BiomeHabitat.Volcanic)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

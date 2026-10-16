@@ -106,6 +106,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The largest slice. 32 slices of 1024 are a 16384 x 2048 image; 2048 would need 16384 x 8192 and half a gigabyte to write.</summary>
 		public const int MaximumSliceSize = 1024;
 
+		/// <summary>
+		/// The most texels one flipbook image may hold: 16384 × 4096 (256 MB to write, and about 85 MB an array on the GPU,
+		/// block-compressed with mips). 64 slices of 1024 fit; a scene with more layers is baked at 512 (up to 256 layers,
+		/// 16384 × 4096 again), so the arrays cost the same however many layers the index map lets a scene carry.
+		/// </summary>
+		public const long MaximumFlipbookTexels = 16384L * 4096L;
+
 		/// <summary>The smallest slice: placeholder layers are 8 pixels, and mips below this are not worth a slice.</summary>
 		public const int MinimumSliceSize = 128;
 
@@ -139,7 +146,7 @@ namespace FishMMO.Shared.WorldDesign
 			int count = layers != null ? Mathf.Min(layers.Count, TerrainArrayLayerParams.MaximumLayers) : 0;
 			if (layers != null && layers.Count > TerrainArrayLayerParams.MaximumLayers)
 			{
-				plan.Problems.Add($"{layers.Count} layers; the arrays hold {TerrainArrayLayerParams.MaximumLayers} and the rest draw as layer {TerrainArrayLayerParams.MaximumLayers - 1}.");
+				plan.Problems.Add($"{layers.Count} layers; the arrays hold {TerrainArrayLayerParams.MaximumLayers} (what the index map can name) and the rest draw as layer {TerrainArrayLayerParams.MaximumLayers - 1}.");
 			}
 
 			int largest = 0;
@@ -168,7 +175,7 @@ namespace FishMMO.Shared.WorldDesign
 					plan.Problems.Add($"Layer {i} '{(resolved.Committed != null ? resolved.Committed.name : "missing")}' has no albedo; its slice is grey.");
 				}
 			}
-			plan.SliceSize = SliceSizeFor(largest);
+			plan.SliceSize = SliceSizeFor(largest, count);
 			plan.Hash = HashOf(plan);
 			return plan;
 		}
@@ -217,10 +224,10 @@ namespace FishMMO.Shared.WorldDesign
 			return true;
 		}
 
-		/// <summary>The plan's makeup as the set holds it: <see cref="TerrainArrayLayerParams.MaximumLayers"/> long.</summary>
+		/// <summary>The plan's makeup as the set holds it: <see cref="TerrainArrayLayerParams.TableLength"/> long.</summary>
 		private static Vector4[] PaddedMakeup(List<Vector4> planned)
 		{
-			var makeup = new Vector4[TerrainArrayLayerParams.MaximumLayers];
+			var makeup = new Vector4[TerrainArrayLayerParams.TableLength(planned.Count)];
 			for (int i = 0; i < planned.Count && i < makeup.Length; i++)
 			{
 				makeup[i] = planned[i];
@@ -237,6 +244,21 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			int size = Mathf.NextPowerOfTwo(Mathf.Max(1, largestSourceEdge));
 			return Mathf.Clamp(size, MinimumSliceSize, MaximumSliceSize);
+		}
+
+		/// <summary>
+		/// <see cref="SliceSizeFor(int)"/>, halved until <paramref name="count"/> slices fit
+		/// <see cref="MaximumFlipbookTexels"/> (never below <see cref="MinimumSliceSize"/>). A scene of 64 layers or fewer
+		/// is baked exactly as before.
+		/// </summary>
+		public static int SliceSizeFor(int largestSourceEdge, int count)
+		{
+			int size = SliceSizeFor(largestSourceEdge);
+			while (size > MinimumSliceSize && (long)Mathf.Max(1, count) * size * size > MaximumFlipbookTexels)
+			{
+				size >>= 1;
+			}
+			return size;
 		}
 
 		/// <summary>
@@ -330,7 +352,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Append("|s").Append(plan.SliceSize)
 				.Append("|n").Append(plan.AnyNormal ? 1 : 0)
 				.Append("|m").Append(plan.AnyMask ? 1 : 0);
-			TerrainArrayLayerParams.Allocate(out Vector4[] st, out Vector4[] tint, out Vector4[] maskOffset, out Vector4[] maskScale, out Vector4[] surface);
+			// The numbers of layer i are packed as the set holds them; a scene of 32 layers or fewer hashes as it always did.
+			TerrainArrayLayerParams.Allocate(TerrainArrayLayerParams.TableLength(plan.Layers.Count), out Vector4[] st, out Vector4[] tint, out Vector4[] maskOffset, out Vector4[] maskScale, out Vector4[] surface);
 			for (int i = 0; i < plan.Layers.Count; i++)
 			{
 				plan.Params[i].Pack(i, st, tint, maskOffset, maskScale, surface);
@@ -406,6 +429,15 @@ namespace FishMMO.Shared.WorldDesign
 					EditorUtility.SetDirty(existing);
 					AssetDatabase.SaveAssetIfDirty(existing);
 					report.Written.Add($"{TerrainArraySet.BakedAssetPath(plan.SceneName)} (ground makeup only)");
+				}
+				// So is the index map's bake shader reference (sets baked before it existed have none): also in place.
+				Shader indexBake = Shader.Find(TerrainIndexMapBaker.ShaderName);
+				if (indexBake != null && existing.IndexBakeShader != indexBake)
+				{
+					existing.IndexBakeShader = indexBake;
+					EditorUtility.SetDirty(existing);
+					AssetDatabase.SaveAssetIfDirty(existing);
+					report.Written.Add($"{TerrainArraySet.BakedAssetPath(plan.SceneName)} (index bake shader only)");
 				}
 				return report;
 			}
@@ -539,7 +571,7 @@ namespace FishMMO.Shared.WorldDesign
 			set.LayerCount = count;
 			set.LayerNames = new string[count];
 			set.LayerSources = new string[count];
-			TerrainArrayLayerParams.Allocate(out set.LayerST, out set.LayerTint, out set.LayerMaskOffset, out set.LayerMaskScale, out set.LayerSurface);
+			TerrainArrayLayerParams.Allocate(TerrainArrayLayerParams.TableLength(count), out set.LayerST, out set.LayerTint, out set.LayerMaskOffset, out set.LayerMaskScale, out set.LayerSurface);
 			for (int i = 0; i < count; i++)
 			{
 				plan.Params[i].Pack(i, set.LayerST, set.LayerTint, set.LayerMaskOffset, set.LayerMaskScale, set.LayerSurface);
@@ -547,6 +579,8 @@ namespace FishMMO.Shared.WorldDesign
 				set.LayerSources[i] = plan.Layers[i].Describe();
 			}
 			set.LayerMakeup = PaddedMakeup(plan.Makeup);
+			// Carried with the set so a player build has the shader that bakes each tile's index map from its alphamaps.
+			set.IndexBakeShader = Shader.Find(TerrainIndexMapBaker.ShaderName);
 			set.ContentHash = plan.Hash;
 			if (set.Albedo == null)
 			{

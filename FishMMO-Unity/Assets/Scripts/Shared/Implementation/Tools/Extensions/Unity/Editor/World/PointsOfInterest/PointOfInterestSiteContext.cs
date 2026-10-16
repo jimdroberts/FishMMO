@@ -15,21 +15,43 @@ namespace FishMMO.Shared.WorldDesign
 	{
 		public readonly List<ScenePropSet.Prototype> Prototypes = new List<ScenePropSet.Prototype>();
 		public readonly List<ScenePropSet.Prop> Props = new List<ScenePropSet.Prop>();
-		private readonly Dictionary<GameObject, int> prototypeOf = new Dictionary<GameObject, int>();
+		private readonly Dictionary<(GameObject, string), int> prototypeOf = new Dictionary<(GameObject, string), int>();
 
-		public void Add(GameObject prefab, Vector3 position, Quaternion rotation, Vector3 scale)
+		public void Add(GameObject prefab, Vector3 position, Quaternion rotation, Vector3 scale) => Add(prefab, position, rotation, scale, null);
+
+		/// <summary>
+		/// Adds a prop drawn in <paramref name="materials"/> instead of its prefab's own (a structure piece in its biome's
+		/// palette, StructurePaletteDressing): one prototype per prefab and set of materials, so every piece of a site laid in the
+		/// same palette shares one. Null materials: the prefab's own, the prototype every scene had before palettes.
+		/// </summary>
+		public void Add(GameObject prefab, Vector3 position, Quaternion rotation, Vector3 scale, Material[] materials)
 		{
 			if (prefab == null)
 			{
 				return;
 			}
-			if (!prototypeOf.TryGetValue(prefab, out int prototype))
+			string dress = DressKey(materials);
+			if (!prototypeOf.TryGetValue((prefab, dress), out int prototype))
 			{
 				prototype = Prototypes.Count;
-				prototypeOf[prefab] = prototype;
-				Prototypes.Add(new ScenePropSet.Prototype { Prefab = prefab, Layer = -1 });
+				prototypeOf[(prefab, dress)] = prototype;
+				Prototypes.Add(new ScenePropSet.Prototype { Prefab = prefab, Layer = -1, Materials = materials != null && materials.Length > 0 ? materials : null });
 			}
 			Props.Add(new ScenePropSet.Prop { Prototype = prototype, Position = position, Rotation = rotation, Scale = scale });
+		}
+
+		private static string DressKey(Material[] materials)
+		{
+			if (materials == null || materials.Length == 0)
+			{
+				return string.Empty;
+			}
+			var key = new System.Text.StringBuilder();
+			foreach (Material m in materials)
+			{
+				key.Append(m != null ? m.GetEntityId().ToString() : "-").Append(',');
+			}
+			return key.ToString();
 		}
 	}
 
@@ -80,6 +102,58 @@ namespace FishMMO.Shared.WorldDesign
 		public Func<float, float, float> SlopeAt;
 		/// <summary>The biome at (east, north); may answer null.</summary>
 		public Func<float, float, BiomeTemplate> BiomeAt;
+
+		private BiomeStructurePalette palette;
+		private bool paletteRead;
+
+		/// <summary>
+		/// What the site's biome builds its structures of (its template's structure palette, BiomeTemplateArt.StructurePalette,
+		/// 2026-10-16): every kit piece laid through <see cref="AddProp"/> is laid in it (StructurePaletteDressing), and the
+		/// features that make scene objects of kit pieces (doors, moored boats) dress them in it. Read once from the biome at the
+		/// site's anchor; null (the kit's own materials) without a biome lookup. Settable for a harness.
+		/// </summary>
+		public BiomeStructurePalette Palette
+		{
+			get
+			{
+				if (!paletteRead)
+				{
+					paletteRead = true;
+					palette = BiomeAt != null && Record != null ? BiomeTemplateArt.StructurePalette(BiomeAt(Record.Position.x, Record.Position.z)) : null;
+				}
+				return palette;
+			}
+			set
+			{
+				palette = value;
+				paletteRead = true;
+			}
+		}
+		private BiomeCaveCrystalKind postCrystal;
+		private bool postCrystalRead;
+
+		/// <summary>
+		/// The crystal the site's crystal posts carry (2026-10-16, I6c): its biome's (BiomeTemplateArt.PostCrystal, the heaviest
+		/// glowing kind of its Cave Crystals, else the heaviest), read once at the site's anchor; selenite without a biome lookup.
+		/// Settable for a harness.
+		/// </summary>
+		public BiomeCaveCrystalKind PostCrystal
+		{
+			get
+			{
+				if (!postCrystalRead)
+				{
+					postCrystalRead = true;
+					postCrystal = BiomeTemplateArt.PostCrystal(BiomeAt != null && Record != null ? BiomeAt(Record.Position.x, Record.Position.z) : null);
+				}
+				return postCrystal;
+			}
+			set
+			{
+				postCrystal = value;
+				postCrystalRead = true;
+			}
+		}
 		public List<string> Notes;
 		internal PointOfInterestPropSink Sink;
 
@@ -141,10 +215,10 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>A structure piece's prefab for this site's style, or null (<see cref="PointOfInterestPieces"/>).</summary>
 		public GameObject ResolvePiece(string tag, int seed) => PointOfInterestPieces.Resolve(tag, Style, seed);
 
-		/// <summary>Adds an instanced prop to the scene's POI prop set.</summary>
+		/// <summary>Adds an instanced prop to the scene's POI prop set: a structure kit piece in the site's <see cref="Palette"/>.</summary>
 		public void AddProp(GameObject prefab, Vector3 position, Quaternion rotation, Vector3 scale)
 		{
-			Sink?.Add(prefab, position, rotation, scale);
+			Sink?.Add(prefab, position, rotation, scale, Sink != null ? StructurePaletteDressing.MaterialsFor(prefab, Palette) : null);
 			if (prefab != null)
 			{
 				Laid?.Add(new PlacedProp { Prefab = prefab, Position = position, Rotation = rotation, Scale = scale });
@@ -189,18 +263,36 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			// What the piece gives off (a chimney's smoke, a fire, a forge, a lantern), where it now stands.
-			if (Points != null && prefab != null && StructurePieces.TryParsePrefab(prefab.name, out StructurePiece piece, out int variant))
+			StructurePiece piece = null;
+			int variant = 0;
+			bool isPiece = prefab != null && StructurePieces.TryParsePrefab(prefab.name, out piece, out variant);
+			if (Points != null && isPiece)
 			{
 				foreach ((Vector3 at, SceneEmitterKind kind) in StructurePieces.EmittersOf(piece, variant))
 				{
 					Vector3 world = position + rotation * Vector3.Scale(at, scale);
 					Points.Emitters ??= new System.Collections.Generic.List<SceneEmitter>();
-					Points.Emitters.Add(new SceneEmitter
+					uint seed = PointOfInterestPlanner.Hash(Record != null ? Record.Id : 0, Mathf.RoundToInt(world.x * 10f), Mathf.RoundToInt(world.z * 10f), (int)kind);
+					// A crystal's light takes its crystal's hue (a crystal post's: the site biome's crystal, 2026-10-16).
+					if (kind == SceneEmitterKind.Crystal && StructurePieces.TryCrystalSocket(piece, variant, out _, out _))
 					{
-						Position = world,
-						Kind = kind,
-						Seed = PointOfInterestPlanner.Hash(Record != null ? Record.Id : 0, Mathf.RoundToInt(world.x * 10f), Mathf.RoundToInt(world.z * 10f), (int)kind),
-					});
+						seed = CaveArt.EmitterSeed(seed, ProceduralArtCatalogue.CaveMineralOf(PostCrystal).LightHue);
+					}
+					Points.Emitters.Add(new SceneEmitter { Position = world, Kind = kind, Seed = seed });
+				}
+			}
+			// A crystal post's crystal: its biome's own kind, laid in the post's cradle (a kit piece is the same in every biome).
+			if (isPiece && StructurePieces.TryCrystalSocket(piece, variant, out Vector3 socket, out float crystalScale))
+			{
+				GameObject crystal = CaveArt.MineralPrefab(PostCrystal, unchecked((int)PointOfInterestPlanner.Hash(Record != null ? Record.Id : 0,
+					Mathf.RoundToInt(position.x * 10f), Mathf.RoundToInt(position.z * 10f), 0x5C)) & 0xFF);
+				if (crystal != null)
+				{
+					AddProp(crystal, position + rotation * Vector3.Scale(socket, scale), rotation, scale * crystalScale);
+				}
+				else
+				{
+					PointOfInterestFeatureKit.Note(this, $"crystal post: no art for its {PostCrystal} crystal yet (Generate Biome Art)");
 				}
 			}
 		}

@@ -21,8 +21,22 @@ namespace FishMMO.Shared
 	/// </remarks>
 	public struct TerrainArrayLayerParams
 	{
-		/// <summary>The most layers one scene's arrays hold: eight control maps of four channels.</summary>
-		public const int MaximumLayers = 32;
+		/// <summary>
+		/// The most layers one scene's arrays hold: what a byte of the terrain's index map can name
+		/// (<see cref="TerrainIndexMap"/>), and the depth every target graphics API guarantees a texture array.
+		/// </summary>
+		/// <remarks>It was 32 (eight control maps of four channels, all read per pixel) until 2026-10-16.</remarks>
+		public const int MaximumLayers = TerrainIndexMap.MaximumLayers;
+
+		/// <summary>
+		/// The length the per-layer arrays had when they were the shader's own fixed-size uniforms, and still have for a scene
+		/// of that many layers or fewer: a set baked then is the same set now, and every key hashed over its arrays (the
+		/// ground colour bake's) still matches.
+		/// </summary>
+		public const int LegacyTableLength = 32;
+
+		/// <summary>The length of a set's per-layer arrays for <paramref name="layerCount"/> layers.</summary>
+		public static int TableLength(int layerCount) => Mathf.Clamp(layerCount, LegacyTableLength, MaximumLayers);
 
 		/// <summary>How many float4 arrays the shader reads per layer.</summary>
 		public const int VectorsPerLayer = 5;
@@ -124,20 +138,27 @@ namespace FishMMO.Shared
 			};
 		}
 
-		/// <summary>Five arrays of <see cref="MaximumLayers"/>, with every unused slot holding a neutral layer.</summary>
-		/// <remarks>
-		/// Always the full length: a material property array's size is fixed by the first array set on
-		/// it, so a scene that grows from 4 layers to 12 must not have been sized at 4.
-		/// </remarks>
+		/// <summary>Five arrays of <see cref="LegacyTableLength"/>, with every unused slot holding a neutral layer.</summary>
 		public static void Allocate(out Vector4[] st, out Vector4[] tint, out Vector4[] maskOffset, out Vector4[] maskScale, out Vector4[] surface)
 		{
-			st = new Vector4[MaximumLayers];
-			tint = new Vector4[MaximumLayers];
-			maskOffset = new Vector4[MaximumLayers];
-			maskScale = new Vector4[MaximumLayers];
-			surface = new Vector4[MaximumLayers];
+			Allocate(LegacyTableLength, out st, out tint, out maskOffset, out maskScale, out surface);
+		}
+
+		/// <summary>Five arrays of <paramref name="length"/>, with every unused slot holding a neutral layer.</summary>
+		/// <remarks>
+		/// The shader reads them from the layer table now (<see cref="TerrainLayerTable"/>), which pads every scene to
+		/// <see cref="MaximumLayers"/> itself; a set's arrays are <see cref="TableLength"/> long.
+		/// </remarks>
+		public static void Allocate(int length, out Vector4[] st, out Vector4[] tint, out Vector4[] maskOffset, out Vector4[] maskScale, out Vector4[] surface)
+		{
+			length = Mathf.Max(1, length);
+			st = new Vector4[length];
+			tint = new Vector4[length];
+			maskOffset = new Vector4[length];
+			maskScale = new Vector4[length];
+			surface = new Vector4[length];
 			TerrainArrayLayerParams neutral = Default;
-			for (int i = 0; i < MaximumLayers; i++)
+			for (int i = 0; i < length; i++)
 			{
 				neutral.Pack(i, st, tint, maskOffset, maskScale, surface);
 			}

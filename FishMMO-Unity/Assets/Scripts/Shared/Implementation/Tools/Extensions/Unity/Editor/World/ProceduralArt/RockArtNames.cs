@@ -92,9 +92,12 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Newer small-rock materials that wear a rock type's surface: the ice cobbles (<see cref="ProceduralArtCatalogue.IceRockMaterials"/>)
-		/// are water ice, the same stone as the ice formations, rather than the Ice ground family's sheet ice.
+		/// are water ice, the same stone as the ice formations, rather than the Ice ground family's sheet ice. Flint
+		/// (2026-10-16) wears obsidian's dark glassy surface, the nearest there is to a broken flint's; river cobbles
+		/// quartzite's, the hardest and commonest cobble of a river's gravel. Each keeps a material of its own, so either can
+		/// take a surface of its own later without touching the rock it borrows from.
 		/// </summary>
-		private static readonly (string Material, string Type)[] NewerOnRockSurface = { ("Ice", "WaterIce") };
+		private static readonly (string Material, string Type)[] NewerOnRockSurface = { ("Ice", "WaterIce"), ("Flint", "Obsidian"), ("Cobble", "Quartzite") };
 
 		/// <summary>
 		/// The rock type whose surface a small-rock material wears, or null when it keeps its ground

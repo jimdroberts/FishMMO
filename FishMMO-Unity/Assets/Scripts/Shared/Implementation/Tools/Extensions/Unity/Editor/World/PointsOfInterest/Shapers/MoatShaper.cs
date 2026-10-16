@@ -16,7 +16,8 @@ namespace FishMMO.Shared.WorldDesign
 	/// <b>A wet ditch.</b> A ring <see cref="Width"/> across with 45° banks (the NavMesh agent's limit, so it is a barrier to a
 	/// charge, not to a climb) down to one level floor, <see cref="Depth"/> under the lowest point of its rim: on a slope the
 	/// uphill side is dug deeper, so the whole ring holds water at one level, a little under that lowest point
-	/// (<see cref="AddWater"/>), frozen where the biome is cold. Only a dry climate leaves it a dry ditch. The level is
+	/// (<see cref="AddWater"/>), frozen or left a dry ditch as the biome's template says (its Moat Water; until 2026-10-16
+	/// read from its climate: frozen where cold, dry where arid). The level is
 	/// measured again on the finished ground when the scene's water is saved (WaterSettle), so whatever later cut its rim,
 	/// the water stands under it. Not every stronghold has one: a fortress most often, a keep least, and none on ground too
 	/// steep to ring (a moat on a hillside is a terrace) or where a river already runs round it.
@@ -136,7 +137,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// Fills the ditch with water (a lake of the scene's, written with its hydrology so it is drawn, swum and kept by a
 		/// repaint), level <see cref="Freeboard"/> under its lowest bank, all round the ring (its floor is level under that bank,
-		/// <see cref="Ditch"/>). Frozen where the biome is cold; false, a dry ditch, only where the climate is dry.
+		/// <see cref="Ditch"/>). Frozen or a dry ditch (false) as the site's biome template says (BiomeTemplateArt.MoatWater).
 		/// </summary>
 		private static bool AddWater(PointOfInterestPlanContext context, PointOfInterestRecord site, float inner, float width,
 			float[] rimIn, float[] rimOut)
@@ -147,15 +148,14 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return false;
 			}
-			bool frozen = false;
-			if (BiomeRegistry.TryGetByID(site.BiomeID, out BiomeTemplate biome) && biome != null)
+			// What stands in it is the site biome's (its template's Moat Water, 2026-10-16), no longer worked out here from the
+			// template's climate envelope (which is what the authoring wrote onto every template).
+			BiomeMoatWater moat = BiomeTemplateArt.MoatWater(BiomeRegistry.TryGetByID(site.BiomeID, out BiomeTemplate biome) ? biome : null);
+			if (moat == BiomeMoatWater.Dry)
 			{
-				if (0.5f * (biome.MinHumidity + biome.MaxHumidity) < -0.3f)
-				{
-					return false;
-				}
-				frozen = 0.5f * (biome.MinTemperature + biome.MaxTemperature) < -0.5f;
+				return false;
 			}
+			bool frozen = moat == BiomeMoatWater.Frozen;
 			float level = float.MaxValue;
 			for (int i = 0; i < rimIn.Length; i++)
 			{

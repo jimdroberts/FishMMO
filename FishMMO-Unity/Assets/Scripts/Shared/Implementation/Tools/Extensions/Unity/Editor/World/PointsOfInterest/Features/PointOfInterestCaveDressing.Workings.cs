@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 using UnityEngine;
 
 namespace FishMMO.Shared.WorldDesign
@@ -188,6 +189,13 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				int variant = random.Range(0, 2);
 				float yaw = random.Range(0f, 360f), hand = random.NextFloat() < 0.5f ? 1f : -1f;
+				// The lamp the biome hangs here (its Cave Lights, 2026-10-16: a hanging lantern, on a wall bracket where the roof is
+				// low, in every biome before); a wall light goes straight to the wall, a ground light stands at the wall's foot.
+				if (!CaveLight(BiomeCaveLightPlace.MineLamp, out BiomeCaveLight lamp))
+				{
+					return;
+				}
+				BiomeWayLightMount mount = BiomeWayLights.MountOf(lamp.Light);
 				foreach (Vector3 lit in lights)
 				{
 					if ((lit - at).sqrMagnitude < LampSpacing * LampSpacing)
@@ -200,13 +208,13 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return;
 				}
-				if (Roof(above, 14f, out float roof))
+				if (mount == BiomeWayLightMount.Roof && Roof(above, 14f, out float roof))
 				{
 					// The long chain where it clears, else the short.
 					for (int v = variant; v <= 1; v++)
 					{
 						float drop = CaveArt.HangingLanternDrop(v);
-						if (roof - at.y - drop >= Headroom && Lay(CaveArt.HangingLantern, v, new Vector3(at.x, roof + 0.02f, at.z), Quaternion.Euler(0f, yaw, 0f), Vector3.one))
+						if (roof - at.y - drop >= Headroom && Place(LightPiece(lamp.Light, v), new Vector3(at.x, roof + 0.02f, at.z), Quaternion.Euler(0f, yaw, 0f), Vector3.one))
 						{
 							Lamps++;
 							lights.Add(new Vector3(at.x, roof - drop, at.z));
@@ -221,7 +229,19 @@ namespace FishMMO.Shared.WorldDesign
 					if (Wall(at + Vector3.up * 1.9f, side, 5f, out Vector3 surface, out Vector3 into))
 					{
 						Vector3 flat = Flat(into);
-						if (Lay(CaveArt.WallLantern, variant, surface - flat * 0.02f, Quaternion.LookRotation(flat, Vector3.up), Vector3.one))
+						bool laid;
+						if (mount == BiomeWayLightMount.Ground)
+						{
+							Vector3 foot = surface - flat * 0.5f;
+							laid = Place(LightPiece(lamp.Light, variant), new Vector3(foot.x, FloorUnder(foot, at.y), foot.z), Quaternion.LookRotation(-flat, Vector3.up), Vector3.one);
+						}
+						else
+						{
+							// A hanging lantern's wall bracket where the roof is too low for its chain (the wall lantern), else the biome's wall light.
+							BiomeWayLightKind onWall = mount == BiomeWayLightMount.Roof ? BiomeWayLightKind.WallLantern : lamp.Light;
+							laid = Place(LightPiece(onWall, variant), surface - flat * 0.02f, Quaternion.LookRotation(flat, Vector3.up), Vector3.one);
+						}
+						if (laid)
 						{
 							Lamps++;
 							lights.Add(surface);

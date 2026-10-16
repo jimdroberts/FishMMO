@@ -18,7 +18,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Moved("main", "Trees: Jungle")
 				.Accepts(TropicalGeology)
 				.Look(BiomeLookClass.Wetland)
-				.Wildlife(BiomeHabitat.Forest | BiomeHabitat.Wetland | BiomeHabitat.Coast);
+				.Wildlife(BiomeHabitat.Forest | BiomeHabitat.Wetland | BiomeHabitat.Coast)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

@@ -23,7 +23,8 @@ namespace FishMMO.Client
 		public const int MaxWidth = 128;
 
 		/// <summary>
-		/// The header: per layer (up to 32) st xyzw, tint xyz and its flora shares (FishGrassBlades.compute GRASS_ALBEDO_HEADER,
+		/// The header: per layer (up to 256, what the terrain's index map can name; 32 until 2026-10-16) st xyzw, tint xyz and
+		/// its flora shares (FishGrassBlades.compute GRASS_ALBEDO_HEADER, which must equal this,
 		/// GrassLayerFlora). The tables were float4[32] × 2 in the compute's constants, re-uploaded for every terrain's dispatch;
 		/// they are the set's, written once here. The eighth word was the tint's w, the layer's normal scale, which the grass
 		/// never read: it now holds the layer's shares of living ground, lichen and mineral (GrassMath.PackFloraShares), so the

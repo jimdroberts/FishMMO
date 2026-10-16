@@ -623,7 +623,7 @@ namespace FishMMO.UnitTests
 			Assert.IsTrue(BiomeArtAuthoring.Author(forest, entry, source, first, true));
 			Assert.That(FishMMO.Client.AmbientGating.HabitatOfTemplate(forest), Is.EqualTo(byName));
 			Assert.That(forest.Habitat, Is.EqualTo(BiomeHabitat.Forest));
-			Assert.That(forest.SeaLifeHomes, Is.Empty);
+			Assert.That(forest.SeaLife, Is.Empty);
 			VineBiomes.Habitat vines = BiomeTemplateArt.Vines(forest);
 			Assert.That(vines.Species, Is.EqualTo(VineBiomes.For("Forest").Species));
 			Assert.That(vines.Caves, Is.EqualTo(VineBiomes.For("Forest").Caves));
@@ -642,17 +642,231 @@ namespace FishMMO.UnitTests
 			Assert.That(forest.Habitat, Is.EqualTo(BiomeHabitat.Desert), "a hand-set habitat was overwritten:\n" + third);
 			Assert.That(BiomeTemplateArt.Vines(forest), Is.Null, "vines cleared by hand grew again");
 			Assert.That(BiomeTemplateArt.Gathering(forest), Is.EqualTo(new[] { "Iron Vein" }));
-			Assert.That(third.ValuesKept, Is.EqualTo(3));
+			// The habitat, the vines' densities and their species (one mark each since 2026-10-16, I5b), the gathering list.
+			Assert.That(third.ValuesKept, Is.EqualTo(4));
 
 			// A sea biome's sea life; a dry one's empty lists are decisions, not gaps.
 			BiomeTemplate reef = MakeBiome("Coral Reef");
 			BiomeArtAuthoring.Author(reef, BiomeArtSpec.For("Coral Reef"), source, new BiomeArtAuthoring.Report(), true);
-			Assert.That(reef.SeaLifeHomes, Is.EqualTo(new[] { "Reef fish", "Sea turtle", "Crab" }));
+			Assert.That(reef.SeaLife.ConvertAll(e => e.Kind), Is.EqualTo(new[] { "Reef fish", "Sea turtle", "Crab" }));
+			Assert.That(reef.SeaLife.ConvertAll(e => e.Weight), Is.EqualTo(new[] { 5f, 2f, 2f }), "each at the weight the kind gave its favourites");
 			BiomeTemplate desert = MakeBiome("Desert");
 			BiomeArtAuthoring.Author(desert, BiomeArtSpec.For("Desert"), source, new BiomeArtAuthoring.Report(), true);
 			Assert.That(desert.IsAuthored(BiomeTemplate.Authored.Vines), Is.True);
-			Assert.That(desert.IsAuthored(BiomeTemplate.Authored.SeaLifeHomes), Is.True);
+			Assert.That(desert.IsAuthored(BiomeTemplate.Authored.SeaLife), Is.True);
 			Assert.That(BiomeTemplateArt.Vines(desert), Is.Null);
+		}
+
+		/// <summary>
+		/// I4b (2026-10-16): the habitat's Alien bit is the template's air, read live, never stored. A bit stored by I4's authoring
+		/// (with its mark) is masked on read, dropped by the next authoring, and the habitat stays the tool's to rewrite; a
+		/// hand-set Alien bit is dropped too; an unauthored template takes it from its air as well.
+		/// </summary>
+		[Test]
+		public void Habitat_ReadsAlienLive_AndAuthoringDropsAStoredBit()
+		{
+			BiomeTemplate geysers = MakeBiome("Ice Geyser Field");
+			geysers.Atmosphere = BiomeAtmosphereRequirement.Airless | BiomeAtmosphereRequirement.Thin;
+			geysers.Requires = BiomeWorldRequirement.Cryovolcanic;
+			Assert.That(FishMMO.Client.AmbientGating.HabitatOfTemplate(geysers), Is.EqualTo(FishMMO.Client.AmbientHabitat.Ice | FishMMO.Client.AmbientHabitat.Alien), "unauthored: its name and its air");
+
+			// As I4's authoring left it: the bit stored, and in the mark.
+			var so = new SerializedObject(geysers);
+			so.FindProperty("habitat").intValue = (int)(BiomeHabitat.Ice | BiomeHabitat.Alien);
+			so.ApplyModifiedPropertiesWithoutUndo();
+			geysers.SetAuthoredFingerprint(BiomeTemplate.Authored.Habitat, "Ice, Alien");
+			Assert.That(geysers.Habitat, Is.EqualTo(BiomeHabitat.Ice), "masked on read");
+			Assert.That(geysers.LiveHabitat, Is.EqualTo(BiomeHabitat.Ice | BiomeHabitat.Alien));
+			var source = new FakeSource(created);
+			var report = new BiomeArtAuthoring.Report();
+			Assert.IsTrue(BiomeArtAuthoring.Author(geysers, BiomeArtSpec.For("Ice Geyser Field"), source, report, true));
+			Assert.That(new SerializedObject(geysers).FindProperty("habitat").intValue, Is.EqualTo((int)BiomeHabitat.Ice), "the stored bit is dropped:\n" + report);
+			Assert.That(geysers.AuthoredFingerprint(BiomeTemplate.Authored.Habitat), Is.EqualTo("Ice"));
+			Assert.That(report.ValuesKept, Is.Zero, "the tool's own habitat is not a hand edit:\n" + report);
+			Assert.That(FishMMO.Client.AmbientGating.HabitatOfTemplate(geysers), Is.EqualTo(FishMMO.Client.AmbientHabitat.Ice | FishMMO.Client.AmbientHabitat.Alien));
+
+			// The air moves the creatures: given home air, the same template is ice alone.
+			geysers.Atmosphere = BiomeAtmosphereRequirement.Any;
+			geysers.Requires = BiomeWorldRequirement.None;
+			Assert.That(FishMMO.Client.AmbientGating.HabitatOfTemplate(geysers), Is.EqualTo(FishMMO.Client.AmbientHabitat.Ice));
+			geysers.Habitat = BiomeHabitat.Ice | BiomeHabitat.Alien;
+			Assert.That(geysers.Habitat, Is.EqualTo(BiomeHabitat.Ice), "setting the bit does nothing");
+
+			// Alien ground alone: stored None, marked, read as Alien.
+			BiomeTemplate dust = MakeBiome("Dust Sea");
+			dust.Atmosphere = BiomeAtmosphereRequirement.Airless | BiomeAtmosphereRequirement.Thin;
+			BiomeArtAuthoring.Author(dust, BiomeArtSpec.For("Dust Sea"), source, new BiomeArtAuthoring.Report(), true);
+			Assert.That(dust.Habitat, Is.EqualTo(BiomeHabitat.None));
+			Assert.That(dust.IsAuthored(BiomeTemplate.Authored.Habitat), Is.True);
+			Assert.That(FishMMO.Client.AmbientGating.HabitatOfTemplate(dust), Is.EqualTo(FishMMO.Client.AmbientHabitat.Alien));
+		}
+
+		/// <summary>
+		/// I5 (2026-10-16): the template carries the points of interest it hosts, its template variants' weights, its weathering,
+		/// its crops and its structure palette. One run writes what the biome's name (and the kit) gave, which the cut then reads
+		/// exactly as it read the name; a second changes nothing; values edited or cleared by hand are kept. A template never
+		/// authored still reads its name.
+		/// </summary>
+		[Test]
+		public void Authoring_WritesSitesWeatheringCropsAndPalette_OnceAndKeepsHandEdits()
+		{
+			BiomeTemplate desert = MakeBiome("Desert");
+			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Desert");
+			var source = new FakeSource(created);
+			PointOfInterestRules rules = PointOfInterestRules.Default();
+			var byName = new Dictionary<FishMMO.Shared.NameGeneration.POIType, float>();
+			foreach ((FishMMO.Shared.NameGeneration.POIType kind, float weight) in rules.KindWeightsFor("Desert"))
+			{
+				byName[kind] = weight;
+			}
+			Assert.That(BiomeTemplateArt.SiteKinds(desert, rules), Is.EquivalentTo(byName), "unauthored: the rows' weights by its name");
+			Assert.That(BiomeTemplateArt.Weathering(desert), Is.EqualTo(BiomeArtSpec.WeatheringByName("Desert")), "unauthored: its name's weathering");
+
+			var first = new BiomeArtAuthoring.Report();
+			Assert.IsTrue(BiomeArtAuthoring.Author(desert, entry, source, first, true));
+			Assert.That(BiomeTemplateArt.SiteKinds(desert, null), Is.EquivalentTo(byName), "authored: the same weights, off the template");
+			Assert.That(desert.SiteVariants, Is.EqualTo(entry.SiteVariants()));
+			Assert.That(desert.SiteStyles, Is.Empty);
+			Assert.That(desert.IsAuthored(BiomeTemplate.Authored.SiteStyles), Is.True);
+			Assert.That(desert.Weathering, Is.EqualTo(new BiomeWeathering(BiomeStructureFinish.None, 0f, 0f)));
+			Assert.That(BiomeTemplateArt.Weathering(desert).Finish, Is.EqualTo(BiomeStructureFinish.None));
+			Assert.That(desert.FieldCrops.ConvertAll(c => c.ToString()), Is.EqualTo(new[] { "Detail_GrassWheat×1" }));
+			Assert.That(desert.StructurePalette.Signature(), Is.EqualTo(BiomeStructurePalette.Kit().Signature()));
+			foreach (BiomeStructureStyle style in BiomeStructurePalette.Styles)
+			{
+				Assert.That(BiomeTemplateArt.StructurePalette(desert).BuildsAsKit(style), Is.True, style.ToString());
+			}
+
+			var second = new BiomeArtAuthoring.Report();
+			Assert.IsFalse(BiomeArtAuthoring.Author(desert, entry, source, second, true), "a second run changed something:\n" + second);
+
+			desert.SiteKinds.Clear();
+			desert.SiteKinds.Add(new BiomeSiteKind(FishMMO.Shared.NameGeneration.POIType.Oasis, 3f));
+			desert.Weathering = new BiomeWeathering(BiomeStructureFinish.Charred, 0.1f, 0.2f);
+			desert.FieldCrops.Clear();
+			BiomeStructurePalette adobe = desert.StructurePalette.Clone();
+			adobe.Surfaces[0] = new BiomeStructureSurface(BiomeStructureStyle.Timber, BiomeStructureRole.Wall, BiomeStructureMaterial.Earth, Color.white);
+			desert.StructurePalette = adobe;
+			var third = new BiomeArtAuthoring.Report();
+			BiomeArtAuthoring.Author(desert, entry, source, third, true);
+			Assert.That(BiomeTemplateArt.SiteKinds(desert, null).Keys, Is.EqualTo(new[] { FishMMO.Shared.NameGeneration.POIType.Oasis }), "hand-set kinds were overwritten:\n" + third);
+			Assert.That(desert.Weathering.Finish, Is.EqualTo(BiomeStructureFinish.Charred));
+			Assert.That(BiomeTemplateArt.FieldCrops(desert), Is.Empty, "crops cleared by hand grew again");
+			Assert.That(BiomeTemplateArt.StructurePalette(desert).BuildsAsKit(BiomeStructureStyle.Timber), Is.False);
+			Assert.That(third.ValuesKept, Is.EqualTo(4));
+		}
+
+		/// <summary>
+		/// I5b (2026-10-16): lists are marked entry by entry. One run writes the moat water and street lights the code decided,
+		/// adopts a hand-made point-of-interest template naming the biome, and marks every list per entry; a hand-edited kind
+		/// is kept, a hand-deleted kind and light stay deleted, a hand-set moat is kept, and a variant added later still reaches
+		/// the hand-edited variant list. A list carrying I5's one mark for the whole of it converts.
+		/// </summary>
+		[Test]
+		public void Authoring_MarksListsPerEntry_WritesMoatAndLights_AndAdoptsHandMadeTemplates()
+		{
+			BiomeTemplate desert = MakeBiome("Desert");
+			desert.MinHumidity = -1f;
+			desert.MaxHumidity = -0.45f;
+			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Desert");
+			var source = new FakeSource(created);
+			Assert.That(BiomeTemplateArt.MoatWater(desert), Is.EqualTo(BiomeMoatWater.Dry), "unauthored: from its climate, as before");
+			Assert.That(BiomeTemplateArt.WayLight(desert, FishMMO.Shared.NameGeneration.POIType.Town, out _), Is.True, "unauthored: the old rule by kind");
+
+			var domes = new PointOfInterestTemplateSpec { Kind = FishMMO.Shared.NameGeneration.POIType.Village, Variant = "Sand Domes" }.Elsewhere(0.1f).In(4f, "Desert");
+			var first = new BiomeArtAuthoring.Report();
+			Assert.IsTrue(BiomeArtAuthoring.Author(desert, entry, source, first, true, new[] { domes }));
+			Assert.That(desert.MoatWater, Is.EqualTo(BiomeMoatWater.Dry));
+			Assert.That(desert.IsAuthored(BiomeTemplate.Authored.MoatWater), Is.True);
+			Assert.That(BiomeTemplateArt.WayLight(desert, FishMMO.Shared.NameGeneration.POIType.Town, out BiomeWayLight town), Is.True);
+			Assert.That(town.Light, Is.EqualTo(BiomeWayLightKind.LanternPost));
+			Assert.That(town.Spacing, Is.EqualTo(13f));
+			Assert.That(BiomeTemplateArt.WayLight(desert, FishMMO.Shared.NameGeneration.POIType.Keep, out _), Is.False);
+			Assert.That(BiomeSiteVariant.TryWeight(desert.SiteVariants, FishMMO.Shared.NameGeneration.POIType.Village, "Sand Domes", out float w) ? w : -1f, Is.EqualTo(4f),
+				"a hand-made template naming the biome joins its variants:\n" + first);
+			Assert.That(desert.AuthoredFingerprint(BiomeTemplate.Authored.SiteKinds), Is.EqualTo(BiomeEntryMarks.PerEntry));
+			Assert.That(desert.EntryMarks(BiomeTemplate.Authored.SiteKinds).Count, Is.EqualTo(desert.SiteKinds.Count));
+			Assert.That(desert.EntryMarks(BiomeTemplate.Authored.WayLights).Count, Is.EqualTo(BiomeWayLights.Default().Count));
+
+			var second = new BiomeArtAuthoring.Report();
+			Assert.IsFalse(BiomeArtAuthoring.Author(desert, entry, source, second, true, new[] { domes }), "a second run changed something:\n" + second);
+
+			BiomeSiteKind edited = desert.SiteKinds[0];
+			desert.SiteKinds[0] = new BiomeSiteKind(edited.Kind, edited.Weight + 5f);
+			FishMMO.Shared.NameGeneration.POIType gone = desert.SiteKinds[1].Kind;
+			desert.SiteKinds.RemoveAt(1);
+			desert.SiteVariants[0] = new BiomeSiteVariant(desert.SiteVariants[0].Kind, desert.SiteVariants[0].Variant, 7f);
+			desert.WayLights.RemoveAll(l => l.Kind == FishMMO.Shared.NameGeneration.POIType.Village);
+			desert.MoatWater = BiomeMoatWater.Wet;
+			var yurts = new PointOfInterestTemplateSpec { Kind = FishMMO.Shared.NameGeneration.POIType.Camp, Variant = "Dune Yurts" }.Elsewhere(0.5f).In(2f, "Desert");
+			var third = new BiomeArtAuthoring.Report();
+			BiomeArtAuthoring.Author(desert, entry, source, third, true, new[] { domes, yurts });
+			Assert.That(desert.SiteKinds[0].Weight, Is.EqualTo(edited.Weight + 5f), "a hand-edited kind was overwritten:\n" + third);
+			Assert.That(desert.SiteKinds.Exists(k => k.Kind == gone), Is.False, "a hand-deleted kind came back");
+			Assert.That(desert.EntryMarks(BiomeTemplate.Authored.SiteKinds)[gone.ToString()], Is.EqualTo(BiomeEntryMarks.Removed));
+			Assert.That(desert.SiteVariants[0].Weight, Is.EqualTo(7f));
+			Assert.That(BiomeSiteVariant.TryWeight(desert.SiteVariants, FishMMO.Shared.NameGeneration.POIType.Camp, "Dune Yurts", out float yw) ? yw : -1f, Is.EqualTo(2f),
+				"a new variant reaches the hand-edited list");
+			Assert.That(BiomeTemplateArt.WayLight(desert, FishMMO.Shared.NameGeneration.POIType.Village, out _), Is.False, "a deleted light came back");
+			Assert.That(BiomeTemplateArt.MoatWater(desert), Is.EqualTo(BiomeMoatWater.Wet), "a hand-set moat was overwritten");
+
+			// I5's one mark for the whole list, untouched since: converted to a mark per entry, the list as it was.
+			BiomeTemplate plains = MakeBiome("Plains");
+			BiomeArtAuthoring.Author(plains, BiomeArtSpec.For("Plains"), source, new BiomeArtAuthoring.Report(), true);
+			var kinds = new List<BiomeSiteKind>(plains.SiteKinds);
+			plains.SetEntryMarks(BiomeTemplate.Authored.SiteKinds, null);
+			plains.SetAuthoredFingerprint(BiomeTemplate.Authored.SiteKinds, BiomeArtAuthoring.Mark(plains.SiteKinds));
+			var migrated = new BiomeArtAuthoring.Report();
+			BiomeArtAuthoring.Author(plains, BiomeArtSpec.For("Plains"), source, migrated, true);
+			Assert.That(plains.AuthoredFingerprint(BiomeTemplate.Authored.SiteKinds), Is.EqualTo(BiomeEntryMarks.PerEntry), migrated.ToString());
+			Assert.That(plains.EntryMarks(BiomeTemplate.Authored.SiteKinds).Count, Is.EqualTo(kinds.Count));
+			Assert.That(plains.SiteKinds, Is.EqualTo(kinds));
+			Assert.That(migrated.ValuesKept, Is.Zero);
+		}
+
+		/// <summary>
+		/// I4b (2026-10-16): a site paints its own biome's prototype of a plant on a real tile: it reuses the tile's prototype
+		/// recorded for its biome, adds (and records) its own beside another biome's, copying it, with a seed of its own; a
+		/// second site of the same biome reuses that one.
+		/// </summary>
+		[Test]
+		public void SiteLayers_AddTheSitesOwnPrototype_BesideAnotherBiomes()
+		{
+			var plant = new GameObject("Detail_FlowersMeadow") { hideFlags = HideFlags.HideAndDontSave };
+			created.Add(plant);
+			var data = new TerrainData();
+			created.Add(data);
+			data.SetDetailResolution(64, 16);
+			data.detailPrototypes = new[]
+			{
+				new DetailPrototype { prototype = plant, usePrototypeMesh = true, noiseSeed = 7, minHeight = 0.6f, maxHeight = 1.4f, density = 2.5f },
+			};
+			var go = Terrain.CreateTerrainGameObject(data);
+			go.hideFlags = HideFlags.HideAndDontSave;
+			created.Add(go);
+			Terrain terrain = go.GetComponent<Terrain>();
+			BiomeTemplate meadow = MakeBiome("Meadow Site Test"), bog = MakeBiome("Bog Site Test");
+			TerrainDetailBiomes record = go.AddComponent<TerrainDetailBiomes>();
+			record.Prototypes.Add(new TerrainDetailBiomes.Entry { Prefab = plant.name, NoiseSeed = 7, BiomeID = BiomeRegistry.IDOf(meadow) });
+
+			PointOfInterestHerbGrove.PlantLayers same = PointOfInterestHerbGrove.LayersOf(terrain, plant, meadow);
+			Assert.That(same.Own, Is.EqualTo(0));
+			Assert.That(same.Shared, Is.True);
+			Assert.That(data.detailPrototypes.Length, Is.EqualTo(1));
+
+			PointOfInterestHerbGrove.PlantLayers own = PointOfInterestHerbGrove.LayersOf(terrain, plant, bog);
+			Assert.That(own.Own, Is.EqualTo(1));
+			Assert.That(own.Base, Is.EqualTo(0));
+			DetailPrototype added = data.detailPrototypes[1];
+			Assert.That(added.prototype, Is.SameAs(plant));
+			Assert.That(added.noiseSeed, Is.Not.EqualTo(7));
+			Assert.That(added.maxHeight, Is.EqualTo(1.4f), "a copy of the meadow's prototype");
+			Assert.That(added.density, Is.EqualTo(2.5f));
+			Assert.That(TerrainDetailBiomes.TryGet(terrain, added, out TerrainDetailBiomes.Entry entry) && entry.Site && entry.BiomeID == BiomeRegistry.IDOf(bog), Is.True);
+
+			PointOfInterestHerbGrove.PlantLayers again = PointOfInterestHerbGrove.LayersOf(terrain, plant, bog);
+			Assert.That(again.Own, Is.EqualTo(1), "the bog's second site: the first bog site's");
+			Assert.That(data.detailPrototypes.Length, Is.EqualTo(2));
 		}
 
 		/// <summary>

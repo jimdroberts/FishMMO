@@ -872,7 +872,10 @@ namespace FishMMO.Client
 					|| g.Occupied == null || g.Occupied.Length != texels || g.Sward == null || g.Sward.Length != texels
 					|| tile.HeightResolution != hres || tile.Heights == null || tile.Heights.Length != hres * hres
 					|| g.GridX != gridX || g.GridZ != gridZ || g.MinHeights == null || g.MinHeights.Length != gridX * gridZ
-					|| g.MaxHeights == null || g.MaxHeights.Length != gridX * gridZ)
+					|| g.MaxHeights == null || g.MaxHeights.Length != gridX * gridZ
+					// The surface layers name the terrain's own splat layers per alphamap texel (ids up to 255, the index map's
+					// limit): a bake from alphamaps of another size is another terrain's ground.
+					|| (g.SurfaceResolution > 0 && data.alphamapLayers > 0 && g.SurfaceResolution != data.alphamapResolution))
 				{
 					return false;
 				}

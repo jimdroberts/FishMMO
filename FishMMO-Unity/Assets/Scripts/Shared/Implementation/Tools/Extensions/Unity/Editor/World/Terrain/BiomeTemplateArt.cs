@@ -4,13 +4,15 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using FishMMO.Shared.Biomes;
+using FishMMO.Shared.NameGeneration;
 
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
 	/// What a scene cut reads off a biome template for its ground, rock, ways and river bars, for the growth a point of
-	/// interest takes from its biome, and for its vines and gathering resources: the template's own values, and the old code
-	/// mapping only where a template has never been authored with them.
+	/// interest takes from its biome, for its vines and gathering resources, and for the points of interest it hosts and how
+	/// they are built (kinds, template variants, weathering, crops, structure palette, moat water, street lights): the template's own values, and the old
+	/// code mapping only where a template has never been authored with them.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -439,6 +441,250 @@ namespace FishMMO.Shared.WorldDesign
 				Species = species.ToArray(),
 			};
 		}
+
+		// ── Points of interest and structures (2026-10-16, phase I5) ──
+
+		/// <summary>
+		/// The point-of-interest kinds sited on a biome's ground and how gladly (BiomeTemplate.SiteKinds), as the planner reads
+		/// them (PointOfInterestBiome.Kinds): the first entry for each kind, never below 0; a kind not listed is never sited
+		/// there. Null with no biome (every kind at its row's default weight, as before). A template never authored with them
+		/// takes the weight the cut's catalogue rows give it by its name (<paramref name="rules"/>, else the code's) and warns.
+		/// </summary>
+		public static IReadOnlyDictionary<POIType, float> SiteKinds(BiomeTemplate biome, PointOfInterestRules rules)
+		{
+			if (biome == null)
+			{
+				return null;
+			}
+			var kinds = new Dictionary<POIType, float>();
+			if (biome.IsAuthored(BiomeTemplate.Authored.SiteKinds) || biome.SiteKinds != null && biome.SiteKinds.Count > 0)
+			{
+				if (biome.SiteKinds != null)
+				{
+					foreach (BiomeSiteKind entry in biome.SiteKinds)
+					{
+						if (!kinds.ContainsKey(entry.Kind))
+						{
+							kinds[entry.Kind] = Mathf.Max(0f, entry.Weight);
+						}
+					}
+				}
+				return kinds;
+			}
+			foreach ((POIType kind, float weight) in (rules ?? PointOfInterestRules.Default()).KindWeightsFor(biome.name))
+			{
+				kinds[kind] = weight;
+			}
+			Fallback(biome, "Point of Interest Kinds", "the point-of-interest catalogue's rows that name it");
+			return kinds;
+		}
+
+		/// <summary>
+		/// The weight a biome gives each point-of-interest template, for the template pick (PointOfInterestTemplateLibrary.Pick):
+		/// the template's variant weight in the biome (BiomeTemplate.SiteVariants; a variant not listed at the template's weight
+		/// elsewhere) times its style's (BiomeTemplate.SiteStyles; a style not listed at 1). Null with no biome (every template
+		/// at its weight elsewhere, as before). A template never authored with its variant weights takes each template's own
+		/// biome list by the biome's name, as the pick did before, and warns.
+		/// </summary>
+		public static Func<PointOfInterestTemplate, float> SiteVariantWeights(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return null;
+			}
+			List<BiomeSiteStyle> styles = biome.SiteStyles;
+			if (biome.IsAuthored(BiomeTemplate.Authored.SiteVariants) || biome.SiteVariants != null && biome.SiteVariants.Count > 0)
+			{
+				List<BiomeSiteVariant> variants = biome.SiteVariants;
+				return template => template == null ? 0f
+					: SiteVariantWeight(variants, styles, template.Kind, template.VariantKey, template.Style, template.DefaultBiomeWeight);
+			}
+			Fallback(biome, "Point of Interest Variants", "each point-of-interest template's own biome list, by the biome's name");
+			string name = biome.name;
+			return template => template == null ? 0f
+				: template.BiomeWeightByName(name) * BiomeSiteStyle.WeightOf(styles, BiomeSiteStyle.Parse(template.Style));
+		}
+
+		/// <summary>
+		/// A template's weight in a biome from the biome's lists (pure): its variant's entry (<see cref="BiomeSiteVariant.TryWeight"/>),
+		/// else <paramref name="elsewhere"/> (the template's weight in a biome that does not weigh it), times its style's
+		/// (<see cref="BiomeSiteStyle.WeightOf"/>; a template with no style of its own at 1).
+		/// </summary>
+		public static float SiteVariantWeight(IReadOnlyList<BiomeSiteVariant> variants, IReadOnlyList<BiomeSiteStyle> styles, POIType kind,
+			string variant, string style, float elsewhere)
+		{
+			float weight = BiomeSiteVariant.TryWeight(variants, kind, variant, out float own) ? own : elsewhere;
+			return weight * BiomeSiteStyle.WeightOf(styles, BiomeSiteStyle.Parse(style));
+		}
+
+		/// <summary>
+		/// How the weather finishes a biome's buildings and stones (BiomeTemplate.Weathering). With no biome, moss on half the
+		/// worn pieces, as a name with no keyword gave before; a template never authored with it takes what its name gave
+		/// (the spec table's, BiomeArtSpec.WeatheringByName) and warns.
+		/// </summary>
+		public static BiomeWeathering Weathering(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return BiomeArtSpec.WeatheringByName(null);
+			}
+			if (biome.IsAuthored(BiomeTemplate.Authored.Weathering))
+			{
+				return biome.Weathering;
+			}
+			BiomeWeathering old = BiomeArtSpec.For(biome.name)?.Weathering() ?? BiomeArtSpec.WeatheringByName(biome.name);
+			Fallback(biome, "Weathering", $"what its name gave ({old})");
+			return old;
+		}
+
+		/// <summary>
+		/// The crops a biome's fields grow (BiomeTemplate.FieldCrops): its entries with a prefab and a weight, in order. With no
+		/// biome, wheat, as every field grew; a template never authored with them takes wheat and warns. Empty where the
+		/// template grows none (or the wheat's art is missing): the fields are cleared and left unsown.
+		/// </summary>
+		public static List<BiomeFieldCrop> FieldCrops(BiomeTemplate biome)
+		{
+			var crops = new List<BiomeFieldCrop>();
+			if (biome != null && (biome.IsAuthored(BiomeTemplate.Authored.FieldCrops) || biome.FieldCrops != null && biome.FieldCrops.Exists(c => c.Prefab != null)))
+			{
+				foreach (BiomeFieldCrop crop in biome.FieldCrops)
+				{
+					if (crop.Prefab != null && crop.Weight > 0f)
+					{
+						crops.Add(crop);
+					}
+				}
+				return crops;
+			}
+			if (biome != null)
+			{
+				Fallback(biome, "Field Crops", "wheat, as every field grew");
+			}
+			GameObject wheat = AssetDatabase.LoadAssetAtPath<GameObject>(ProceduralArtCatalogue.PrefabPath(BiomeArtSpec.WheatCrop));
+			if (wheat != null)
+			{
+				crops.Add(new BiomeFieldCrop(wheat, 1f));
+			}
+			return crops;
+		}
+
+		/// <summary>
+		/// What a biome's buildings are made of (BiomeTemplate.StructurePalette). With no biome, the structure kit's own
+		/// materials (<see cref="BiomeStructurePalette.Kit"/>); a template never authored with one takes them too and warns.
+		/// </summary>
+		public static BiomeStructurePalette StructurePalette(BiomeTemplate biome)
+		{
+			if (biome != null && biome.StructurePalette != null && (biome.IsAuthored(BiomeTemplate.Authored.StructurePalette) || !biome.StructurePalette.IsEmpty))
+			{
+				return biome.StructurePalette;
+			}
+			if (biome != null)
+			{
+				Fallback(biome, "Structure Palette", "the structure kit's own materials");
+			}
+			return BiomeStructurePalette.Kit();
+		}
+
+		/// <summary>
+		/// What stands in a stronghold's moat in a biome (BiomeTemplate.MoatWater, 2026-10-16, I5b). With no biome, water, as
+		/// before; a template never authored with it (no mark, still Wet) takes what its climate envelope gave the moat shaper
+		/// before (<see cref="BiomeMoatWaters.FromClimate"/>) and warns.
+		/// </summary>
+		public static BiomeMoatWater MoatWater(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return BiomeMoatWater.Wet;
+			}
+			if (biome.IsAuthored(BiomeTemplate.Authored.MoatWater) || biome.MoatWater != BiomeMoatWater.Wet)
+			{
+				return biome.MoatWater;
+			}
+			BiomeMoatWater old = BiomeMoatWaters.FromClimate(biome.MinHumidity, biome.MaxHumidity, biome.MinTemperature, biome.MaxTemperature);
+			Fallback(biome, "Moat Water", $"what its climate gave the moat ({old})");
+			return old;
+		}
+
+		/// <summary>
+		/// The colour and clarity of a biome's fresh water at the cut (BiomeTemplate.WaterLook, 2026-10-16, I2e). With no biome,
+		/// the inland water's own look (<see cref="BiomeWaterLooks.Today"/>); a template whose look is not filled in takes it too
+		/// and warns. The running game reads it the same way (<see cref="BiomeWaterLooks.Of"/>, InlandWaterRenderer).
+		/// </summary>
+		public static BiomeWaterLook WaterLook(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return BiomeWaterLooks.Today;
+			}
+			if (biome.WaterLook.Defined)
+			{
+				return biome.WaterLook;
+			}
+			Fallback(biome, "Water Look", "the inland water's own look");
+			return BiomeWaterLooks.Today;
+		}
+
+		/// <summary>
+		/// How a biome lights one kind of settlement's streets (BiomeTemplate.WayLights, 2026-10-16, I5b): false where the kind is
+		/// not lit there. With no biome, the props' old rule by kind (<see cref="BiomeWayLights.Default"/>); a template never
+		/// authored with its lights (no mark, empty list) takes that rule too and warns.
+		/// </summary>
+		public static bool WayLight(BiomeTemplate biome, POIType kind, out BiomeWayLight light)
+		{
+			if (biome != null && (biome.IsAuthored(BiomeTemplate.Authored.WayLights) || biome.WayLights != null && biome.WayLights.Count > 0))
+			{
+				return BiomeWayLights.TryFor(biome.WayLights, kind, out light);
+			}
+			List<BiomeWayLight> old = BiomeWayLights.Default();
+			bool lit = BiomeWayLights.TryFor(old, kind, out light);
+			if (biome != null && lit)
+			{
+				Fallback(biome, "Way Lights", "the old lights by kind (lanterns in towns, torches in villages)");
+			}
+			return lit;
+		}
+
+		/// <summary>
+		/// How a biome lights one place in its caves and mines (BiomeTemplate.CaveLights, 2026-10-16, I6c): false where the place
+		/// is not lit there. With no biome, the cave dressing's old rule (<see cref="BiomeCaveLights.Default"/>) silently; a
+		/// template never authored with its cave lights (no mark, empty list) takes that rule too and warns.
+		/// </summary>
+		public static bool CaveLight(BiomeTemplate biome, BiomeCaveLightPlace place, out BiomeCaveLight light)
+		{
+			if (biome != null && (biome.IsAuthored(BiomeTemplate.Authored.CaveLights) || biome.CaveLights != null && biome.CaveLights.Count > 0))
+			{
+				return BiomeCaveLights.TryFor(biome.CaveLights, place, out light);
+			}
+			bool lit = BiomeCaveLights.TryFor(BiomeCaveLights.Default(), place, out light);
+			if (biome != null && lit)
+			{
+				Fallback(biome, "Cave Lights", "the cave dressing's old lights (lantern stands, wall torches, torch posts, hanging lanterns)");
+			}
+			return lit;
+		}
+
+		/// <summary>
+		/// The crystals a biome's caves grow (BiomeTemplate.CaveCrystals, 2026-10-16, I6c). With no biome, selenite (what every
+		/// cave grew before) silently; a template never authored with them (no mark, empty list) takes its spec's (selenite unless
+		/// its file names its own) and warns. An authored empty list grows none.
+		/// </summary>
+		public static IReadOnlyList<BiomeCaveCrystal> CaveCrystals(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return BiomeCaveCrystals.Default();
+			}
+			if (biome.IsAuthored(BiomeTemplate.Authored.CaveCrystals) || biome.CaveCrystals != null && biome.CaveCrystals.Count > 0)
+			{
+				return biome.CaveCrystals;
+			}
+			List<BiomeCaveCrystal> spec = BiomeArtSpec.For(biome.name)?.CaveCrystals() ?? BiomeCaveCrystals.Default();
+			Fallback(biome, "Cave Crystals", $"the spec table's ({string.Join(", ", spec)})");
+			return spec;
+		}
+
+		/// <summary>The crystal a biome's crystal way-light posts carry (<see cref="BiomeCaveCrystals.PostCrystal"/> of its cave crystals).</summary>
+		public static BiomeCaveCrystalKind PostCrystal(BiomeTemplate biome) => BiomeCaveCrystals.PostCrystal(CaveCrystals(biome));
 
 		// ── Templates by id ───────────────────────────────────────────
 

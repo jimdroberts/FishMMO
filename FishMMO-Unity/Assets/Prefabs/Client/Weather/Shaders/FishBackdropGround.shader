@@ -35,6 +35,8 @@ Shader "FishMMO/Backdrop Ground"
         [HideInInspector] _FishAlbedoArray("Albedo array", 2DArray) = "" {}
         [HideInInspector] _FishNormalArray("Normal array", 2DArray) = "" {}
         [HideInInspector] _FishMaskArray("Mask array", 2DArray) = "" {}
+        // The scene's per-layer numbers (TerrainLayerTable), bound by TerrainArrayBinder as for the tiles.
+        [HideInInspector] _FishLayerTable("Layer table", 2D) = "black" {}
 
         [HideInInspector] _MainTex("BaseMap (RGB)", 2D) = "grey" {}
         [HideInInspector] _BaseColor("Main Color", Color) = (1,1,1,1)

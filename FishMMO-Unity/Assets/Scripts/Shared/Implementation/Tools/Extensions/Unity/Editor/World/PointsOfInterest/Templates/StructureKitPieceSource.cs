@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 using UnityEditor;
 using UnityEngine;
 
@@ -18,6 +19,12 @@ namespace FishMMO.Shared.WorldDesign
 		public StructureFinish Finish;
 		/// <summary>True only in a scene stored under Assets/LOCAL (LocalArtScope): LOCAL stand-ins may then replace generated pieces.</summary>
 		public bool AllowLocal;
+		/// <summary>
+		/// What the site's biome builds each part of a building in (its template's structure palette, BiomeTemplateArt.StructurePalette,
+		/// 2026-10-16); null for the structure kit's own materials. The kit's source answers the kit's prefab whatever it is
+		/// (<see cref="StructureKitPieceSource.PrefabFor"/>); the site lays it in the palette's materials (StructurePaletteDressing).
+		/// </summary>
+		public BiomeStructurePalette Palette;
 
 		public PointOfInterestPieceRequest(string tag, string style, int seed, float decay = 0f, StructureFinish finish = StructureFinish.None, bool allowLocal = false)
 		{
@@ -27,6 +34,7 @@ namespace FishMMO.Shared.WorldDesign
 			Decay = decay;
 			Finish = finish;
 			AllowLocal = allowLocal;
+			Palette = null;
 		}
 	}
 
@@ -158,13 +166,26 @@ namespace FishMMO.Shared.WorldDesign
 				return null;
 			}
 			int variant = StructureKit.PickVariant(piece, request.Seed);
-			GameObject prefab = StructureKit.Prefab(piece.Id, variant, request.Finish, request.AllowLocal);
+			GameObject prefab = PrefabFor(piece, variant, request.Finish, request.Palette, request.AllowLocal);
 			if (prefab == null && request.Finish != StructureFinish.None)
 			{
 				// Art generated before the finishes were: the plain piece rather than nothing.
-				prefab = StructureKit.Prefab(piece.Id, variant, StructureFinish.None, request.AllowLocal);
+				prefab = PrefabFor(piece, variant, StructureFinish.None, request.Palette, request.AllowLocal);
 			}
 			return prefab;
+		}
+
+		// ── The structure palette (2026-10-16) ───────────────────────
+
+		/// <summary>
+		/// The prefab of a piece's variant in a finish, for a biome's structure palette: always the kit's (or its LOCAL stand-in).
+		/// A palette makes no prefab of its own (I6a): the piece is laid in the palette's materials when it is added to the scene,
+		/// the kit's prefab with a material per submesh (StructurePaletteDressing, through PointOfInterestSiteContext.AddProp and
+		/// the features that make scene objects of pieces), so the art grows by materials only, never by pieces × palettes.
+		/// </summary>
+		public static GameObject PrefabFor(StructurePiece piece, int variant, StructureFinish finish, BiomeStructurePalette palette, bool allowLocal)
+		{
+			return piece == null ? null : StructureKit.Prefab(piece.Id, variant, finish, allowLocal);
 		}
 
 		public bool TryMeasure(in PointOfInterestPieceRequest request, out PointOfInterestPieceMetrics metrics)

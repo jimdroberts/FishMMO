@@ -782,27 +782,70 @@ namespace FishMMO.Client
 			private static bool warnedFallback;
 
 			/// <summary>
-			/// Whether a kind is most at home in a biome: its template's Sea Life Homes name it (2026-10-16). A template never
-			/// authored with them falls back on the kind's own list of biome names (<see cref="SeaLifePlacement.PrefersByName"/>),
-			/// with one warning a session.
+			/// Whether a kind is at home in a biome, and the weight the biome gives it there: its template's Sea Life lists it
+			/// (2026-10-16, with the weight since I4b). A template never authored with it falls back on the kind's own list of biome
+			/// names (<see cref="SeaLifePlacement.PrefersByName"/>) at the kind's own preferred weight, with one warning a session.
 			/// </summary>
-			private static bool IsHomeIn(SeaCreatureKind kind, BiomeTemplate biome)
+			private static bool TryHomeIn(SeaCreatureKind kind, BiomeTemplate biome, out float weight)
 			{
+				weight = 0f;
 				if (biome == null)
 				{
 					return false;
 				}
-				List<string> homes = biome.SeaLifeHomes;
-				if (biome.IsAuthored(BiomeTemplate.Authored.SeaLifeHomes) || homes != null && homes.Count > 0)
+				List<BiomeSeaLife> seaLife = biome.SeaLife;
+				if (biome.IsAuthored(BiomeTemplate.Authored.SeaLife) || seaLife != null && seaLife.Count > 0)
 				{
-					return SeaLifePlacement.IsHome(kind, homes);
+					return SeaLifePlacement.TryHomeWeight(kind, seaLife, out weight);
 				}
 				if (!warnedFallback)
 				{
 					warnedFallback = true;
-					Debug.LogWarning($"[Biome templates] '{biome.name}' has no sea life homes: the sea creatures' own lists of biome names are read instead (said once; other templates may be the same). Run Biomes → Authoring → Author biome art to write them onto the templates.");
+					Debug.LogWarning($"[Biome templates] '{biome.name}' has no sea life: the sea creatures' own lists of biome names are read instead (said once; other templates may be the same). Run Biomes → Authoring → Author biome art to write them onto the templates.");
 				}
-				return SeaLifePlacement.PrefersByName(kind, biome.name);
+				if (!SeaLifePlacement.PrefersByName(kind, biome.name))
+				{
+					return false;
+				}
+				weight = SeaLifePlacement.KindHomeWeight(kind);
+				return true;
+			}
+
+			/// <summary>The biome map the distinct ids below were read from, and those ids (every biome the map holds).</summary>
+			private SceneBiomeMap idsOf;
+			private int[] idsFrom;
+			private readonly List<int> mapBiomes = new List<int>();
+
+			public float HeaviestHome(SeaCreatureKind kind)
+			{
+				SceneBiomeMap map = settings != null ? settings.BiomeMap : null;
+				if (map == null || map.BiomeIDs == null)
+				{
+					return 0f;
+				}
+				if (map != idsOf || map.BiomeIDs != idsFrom)
+				{
+					idsOf = map;
+					idsFrom = map.BiomeIDs;
+					mapBiomes.Clear();
+					var seen = new HashSet<int>();
+					foreach (int id in map.BiomeIDs)
+					{
+						if (id != 0 && seen.Add(id))
+						{
+							mapBiomes.Add(id);
+						}
+					}
+				}
+				float heaviest = 0f;
+				foreach (int id in mapBiomes)
+				{
+					if (BiomeRegistry.TryGetByID(id, out BiomeTemplate biome) && TryHomeIn(kind, biome, out float weight))
+					{
+						heaviest = Mathf.Max(heaviest, weight);
+					}
+				}
+				return heaviest;
 			}
 
 			private static bool Contains(Terrain t, float x, float z)
@@ -816,9 +859,10 @@ namespace FishMMO.Client
 				return x >= origin.x && z >= origin.z && x <= origin.x + size.x && z <= origin.z + size.z;
 			}
 
-			public void Habitat(Vector3 position, SeaCreatureKind kind, out bool home, out float temperature)
+			public void Habitat(Vector3 position, SeaCreatureKind kind, out bool home, out float homeWeight, out float temperature)
 			{
 				home = false;
+				homeWeight = 0f;
 				temperature = 0f;
 				if (settings == null)
 				{
@@ -826,7 +870,7 @@ namespace FishMMO.Client
 				}
 				SceneBiomeMap map = settings.BiomeMap;
 				BiomeTemplate template = map != null ? map.Sample(position) : null;
-				home = IsHomeIn(kind, template);
+				home = TryHomeIn(kind, template, out homeWeight);
 				// The climate the ground was painted from, without the weather's runtime offsets: placement must
 				// not depend on the hour it is first seen.
 				ScenePlacementClimate placement = settings.PlacementClimate;

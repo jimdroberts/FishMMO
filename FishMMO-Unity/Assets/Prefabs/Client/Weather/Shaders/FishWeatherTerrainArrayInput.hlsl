@@ -16,9 +16,9 @@
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/CommonMaterial.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/SurfaceInput.hlsl"
 
-// The most layers one terrain carries: eight control maps of four channels. Matches
-// SceneTerrainPalette.MaximumLayers and TerrainArrayLayerParams.MaximumLayers on the C# side.
-#define FISH_TERRAIN_ARRAY_MAX_LAYERS 32
+// The most layers one scene carries: what a byte of the index map can name. Matches SceneTerrainPalette.MaximumLayers,
+// TerrainArrayLayerParams.MaximumLayers and TerrainLayerTable.Width on the C# side (32, eight control maps, until 2026-10-16).
+#define FISH_TERRAIN_ARRAY_MAX_LAYERS 256
 
 CBUFFER_START(UnityPerMaterial)
     float4 _MainTex_ST;
@@ -52,43 +52,25 @@ CBUFFER_END
 
 // What TerrainArrayBinder pushes per tile through Terrain.SetSplatMaterialPropertyBlock.
 //
-// The per-layer parameters are uniform arrays rather than a texture because they are a handful of numbers
-// the shader reads by layer index: an array costs no texture binding (the fragment stage is already near
-// the 16-texture floor some APIs guarantee) and no precision. They are re-pushed by the binder whenever it
-// enables, so a domain reload or a scene load cannot leave them stale; their values live in the baked
-// TerrainArraySet asset, because they depend on which art (committed or LOCAL) a layer resolved to.
+// The per-layer numbers are not here: they live in the layer table (_FishLayerTable below, TerrainLayerTable.cs), one
+// texture loaded by layer. As uniform arrays they were 27 KB at 256 layers, pushed per tile — past the 16 KB uniform block
+// OpenGL ES guarantees, and large constant arrays varied per draw are what broke the grass on OpenGL. Their values live
+// in the baked TerrainArraySet asset, because they depend on which art (committed or LOCAL) a layer resolved to.
 CBUFFER_START(_FishTerrainArray)
-    // x: layers in the arrays (0 = nothing baked yet), y: control maps bound,
-    // z: 1 when the normal array holds anything, w: 1 when the mask array does.
+    // x: layers in the arrays (0 = nothing baked yet), y: 1 when the tile's index map is bound (the backdrop: its control
+    // maps bound), z: 1 when the normal array holds anything, w: 1 when the mask array does.
     float4 _FishArrayInfo;
+    // The backdrop's control maps (FishBackdropSurface): 1 / size, size.
     float4 _FishControl0_TexelSize;
-    // x: bit k set when control map k is zero over the whole tile (TerrainArrayBinder): it can neither add a layer nor
-    // move one, so it is not sampled. 0 (nothing pushed) reads every map.
+    // x: bit k set when control map k is zero over the whole tile: it can neither add a layer nor move one, so it is not
+    // sampled. 0 (nothing pushed) reads every map. The backdrop's only, now; it never pushes it.
     float4 _FishControlEmpty;
-    // xy: 1 / tile size in metres, zw: tile offset / tile size. Applied to WORLD x/z.
-    float4 _FishLayerST[FISH_TERRAIN_ARRAY_MAX_LAYERS];
-    // rgb: diffuse remap maximum (a tint, as URP's terrain uses it), a: normal scale.
-    float4 _FishLayerTint[FISH_TERRAIN_ARRAY_MAX_LAYERS];
-    // The mask remap: value = sample * scale + offset (offset = remap min, scale = max - min).
-    float4 _FishLayerMaskOffset[FISH_TERRAIN_ARRAY_MAX_LAYERS];
-    float4 _FishLayerMaskScale[FISH_TERRAIN_ARRAY_MAX_LAYERS];
-    // x: metallic, y: smoothness (1 when the albedo's alpha holds it), z: 1 when the layer has a mask map.
-    float4 _FishLayerSurface[FISH_TERRAIN_ARRAY_MAX_LAYERS];
+    // The tile's index map (_FishIndexMap): 1 / size, size, as Unity's _TexelSize.
+    float4 _FishIndexMap_TexelSize;
     // FishMMO edit: the slices the scene's paths are surfaced from (x trodden earth, y gravel, z stone; -1 none), set
-    // per tile by TerrainArrayBinder from the scene's path surface (each scene's palette puts them elsewhere).
+    // per tile by TerrainArrayBinder from the scene's path surface (each scene's palette puts them elsewhere). Each layer's
+    // own biome's are in the layer table (FISH_LAYER_ROW_PATHS); these are what a layer without them paves with.
     float4 _FishPathLayers;
-    // Per terrain layer (four to a vector), the slice of its own biome's path ground, road ground and cobbles (-1 none): a
-    // way through desert wears to packed sand, through forest to a littered track, and each biome's streets are paved with
-    // its own stone (SceneTerrainPalette.PathLayerMap; ScenePathSurfaceBinder.Pack). A scene cut before the cobbles had a
-    // table pushes -1 for every layer there and paves with _FishPathLayers.z, as it always did.
-    float4 _FishPathEarthFor[8];
-    float4 _FishPathRoadFor[8];
-    float4 _FishPathStoneFor[8];
-    // FishMMO edit: what each layer is made of, as the planet sees it (BiomeLooks.GroundShareOf, by the layer's name:
-    // TerrainArraySet.LayerFlora): x living (grass, moss, heath; litter and peat partly), y lichen (unread), z mineral. Read
-    // by FishFloraGround only while the looks are published (_FishFloraInfo.x), so a binder that has not pushed it yet
-    // (zeros) draws the ground as before.
-    float4 _FishLayerFlora[FISH_TERRAIN_ARRAY_MAX_LAYERS];
 CBUFFER_END
 
 // FishMMO edit: the ground on its world (FishFlora.hlsl, published by FloraPaletteMap): the living ground takes its biome's
@@ -98,10 +80,12 @@ CBUFFER_END
 // (depth, shadow, depth-normals) strips it whole, with nothing left to orphan.
 #include "FishFlora.hlsl"
 
-// Unity's own alphamaps, bound as they are: terrainData.alphamapTextures[k] is control map k, channel c of
-// it is layer 4k + c. Binding them directly (rather than copying them into an array) is what keeps the
-// terrain paint tools working with no glue — a stroke writes these very textures — and it costs no second
-// copy of what can be the largest textures in the scene. One sampler serves all eight.
+// The index map and the layer table (FishTerrainIndexMap.hlsl): loads only, no sampler.
+#include "FishTerrainIndexMap.hlsl"
+
+#ifdef FISH_TERRAIN_BACKDROP
+// The backdrop's own control maps (SceneBackdropBuilder): channel c of map k is layer 4k + c. One sampler serves all
+// eight. A terrain tile reads its index map instead.
 TEXTURE2D(_FishControl0);   SAMPLER(sampler_FishControl0);
 TEXTURE2D(_FishControl1);
 TEXTURE2D(_FishControl2);
@@ -110,6 +94,20 @@ TEXTURE2D(_FishControl4);
 TEXTURE2D(_FishControl5);
 TEXTURE2D(_FishControl6);
 TEXTURE2D(_FishControl7);
+#else
+// The tile's index map: per alphamap texel its four strongest layers (TerrainIndexMap.cs), baked on the GPU from Unity's
+// own alphamaps by TerrainArrayBinder (TerrainIndexMapBaker) whenever they change — a brush stroke included, so the paint
+// tools keep working with no other glue, and the alphamaps stay the weights everything edits.
+Texture2D<uint2> _FishIndexMap;
+#endif
+
+// The scene's per-layer numbers, a column per layer (TerrainLayerTable.cs; rows FISH_LAYER_ROW_*).
+Texture2D<float4> _FishLayerTable;
+
+float4 FishLayerRow(int id, int row)
+{
+    return _FishLayerTable.Load(int3(clamp(id, 0, FISH_TERRAIN_ARRAY_MAX_LAYERS - 1), row, 0));
+}
 
 // Slice i of every array is terrainData.terrainLayers[i]. One sampler (repeat, trilinear, anisotropic, from
 // the albedo array's import settings) serves all three: they share a layout, and samplers are scarcer than
@@ -233,14 +231,11 @@ void FishConsiderLayer(half weight, int index, inout half4 top, inout int4 ids, 
     top.x = b0 ? weight : t.x;                ids.x = b0 ? index : i.x;
 }
 
+#ifdef FISH_TERRAIN_BACKDROP
 // The backdrop reads its control maps inside a branch (FishBackdropSurface), where an implicit-gradient
 // sample is not allowed; level 0 is also the right level there, since a 26 m control texel is magnified
 // everywhere the arrays are drawn.
-#ifdef FISH_TERRAIN_BACKDROP
-    #define FISH_SAMPLE_CONTROL(k) SAMPLE_TEXTURE2D_LOD(_FishControl##k, sampler_FishControl0, controlUV, 0)
-#else
-    #define FISH_SAMPLE_CONTROL(k) SAMPLE_TEXTURE2D(_FishControl##k, sampler_FishControl0, controlUV)
-#endif
+#define FISH_SAMPLE_CONTROL(k) SAMPLE_TEXTURE2D_LOD(_FishControl##k, sampler_FishControl0, controlUV, 0)
 
 // A map that is zero everywhere on the tile is skipped, exactly: its four zeros add nothing to covered, and a weight of
 // zero never displaces one of the four (FishConsiderLayer's tests are strict) nor raises the fifth (which is never below 0).
@@ -275,13 +270,8 @@ void FishConsiderLayer(half weight, int index, inout half4 top, inout int4 ids, 
 /// </remarks>
 half4 FishTopLayers(float2 uv, out int4 ids, out half covered)
 {
-#ifdef FISH_TERRAIN_BACKDROP
     // The backdrop's control maps are baked at texel centres over its own 0..1 coordinate (SceneBackdropBuilder).
     float2 controlUV = uv;
-#else
-    // Texel centres, exactly as TerrainLit addresses _Control.
-    float2 controlUV = (uv * (_FishControl0_TexelSize.zw - 1.0f) + 0.5f) * _FishControl0_TexelSize.xy;
-#endif
     int controlCount = (int)_FishArrayInfo.y;
     uint emptyControls = (uint)_FishControlEmpty.x;
 
@@ -298,6 +288,10 @@ half4 FishTopLayers(float2 uv, out int4 ids, out half covered)
     FISH_CONSIDER_CONTROL(6)
     FISH_CONSIDER_CONTROL(7)
 
+    // Channels are the scene's layers through the table: itself for 32 layers or fewer, else the 32 the backdrop's bake gave
+    // its channels (SceneBackdrop.ControlLayers).
+    ids = int4(FishLayerRow(ids.x, FISH_LAYER_ROW_BACKDROP).x, FishLayerRow(ids.y, FISH_LAYER_ROW_BACKDROP).x,
+        FishLayerRow(ids.z, FISH_LAYER_ROW_BACKDROP).x, FishLayerRow(ids.w, FISH_LAYER_ROW_BACKDROP).x);
     half4 weights = max(top - fifth, 0);
     half total = dot(weights, 1.0h);
     if (total <= 1e-4h)
@@ -307,6 +301,35 @@ half4 FishTopLayers(float2 uv, out int4 ids, out half covered)
     }
     return weights / total;
 }
+#else
+/// <summary>
+/// A tile pixel's four strongest layers, from its index map: the four texels a bilinear read of the control maps took,
+/// merged by layer (FishIndexFilter) — the control-map rule above, at four texel reads a pixel however many layers the
+/// scene has. The index map is cut where TerrainLit addresses _Control (texel 0 on the tile's edge).
+/// </summary>
+/// <remarks>
+/// <paramref name="covered"/> is 1: a tile's alphamaps always account for all of its ground (Unity keeps them summing to
+/// one), and only the backdrop reads it. No index map bound (_FishArrayInfo.y 0) is unpainted ground: layer 0, as a
+/// tile with no control maps drew.
+/// </remarks>
+half4 FishTopLayers(float2 uv, out int4 ids, out half covered)
+{
+    covered = 1.0h;
+    ids = 0;
+    if (_FishArrayInfo.y < 0.5)
+    {
+        return half4(1, 0, 0, 0);
+    }
+    int2 i0, i1;
+    float2 f;
+    FishIndexFootprint(uv, _FishIndexMap_TexelSize.zw, i0, i1, f);
+    uint2 t00 = _FishIndexMap.Load(int3(i0.x, i0.y, 0));
+    uint2 t10 = _FishIndexMap.Load(int3(i1.x, i0.y, 0));
+    uint2 t01 = _FishIndexMap.Load(int3(i0.x, i1.y, 0));
+    uint2 t11 = _FishIndexMap.Load(int3(i1.x, i1.y, 0));
+    return (half4)FishIndexFilter(t00, t10, t01, t11, f, ids);
+}
+#endif
 
 #ifdef _TERRAIN_BLEND_HEIGHT
 // URP's HeightBasedSplatModify, on the four chosen layers: heights from the mask's blue channel, the highest
@@ -324,8 +347,8 @@ void FishHeightBlend(inout half4 weights, half4 heights)
 #endif
 
 #if !defined(FISH_TERRAIN_BACKDROP)
-// FishMMO edit: the scene's paths over the ground (FishGroundPaths.hlsl; baked by the cut, ScenePathField).
-#define FISH_PATH_SAMPLER sampler_FishControl0
+// FishMMO edit: the scene's paths over the ground (FishGroundPaths.hlsl; baked by the cut, ScenePathField). Read with its
+// own inline bilinear clamp sampler: the control maps' sampler it borrowed went with them (the index map is loaded).
 #include "FishGroundPaths.hlsl"
 
 /// <summary>
@@ -336,7 +359,9 @@ void FishHeightBlend(inout half4 weights, half4 heights)
 /// </summary>
 void FishPathLayer(int id, float2 world, float2 worldDx, float2 worldDy, float blur, float3 groundShift, out half3 albedo, out half3 normal, out half smoothness, out half occlusion)
 {
-    float4 st = _FishLayerST[id];
+    float4 st = FishLayerRow(id, FISH_LAYER_ROW_ST);
+    float4 tint = FishLayerRow(id, FISH_LAYER_ROW_TINT);
+    float4 surface = FishLayerRow(id, FISH_LAYER_ROW_SURFACE);
     float2 layerUV = world * st.xy + st.zw;
     float2 dx = worldDx * st.xy * blur;
     float2 dy = worldDy * st.xy * blur;
@@ -344,8 +369,8 @@ void FishPathLayer(int id, float2 world, float2 worldDx, float2 worldDy, float b
     smoothness = 0.1h;
 #ifndef FISH_TERRAIN_NORMALS_ONLY
     half4 a = SAMPLE_TEXTURE2D_ARRAY_GRAD(_FishAlbedoArray, sampler_FishAlbedoArray, layerUV, id, dx, dy);
-    albedo = (half3)FishFloraGround(a.rgb * (half3)_FishLayerTint[id].rgb, _FishLayerFlora[id].xyz, groundShift);
-    smoothness = a.a * (half)_FishLayerSurface[id].y;
+    albedo = (half3)FishFloraGround(a.rgb * (half3)tint.rgb, FishLayerRow(id, FISH_LAYER_ROW_FLORA).xyz, groundShift);
+    smoothness = a.a * (half)surface.y;
 #endif
     normal = half3(0.0h, 0.0h, 1.0h);
     occlusion = 1.0h;
@@ -353,14 +378,14 @@ void FishPathLayer(int id, float2 world, float2 worldDx, float2 worldDy, float b
     {
         half4 packed = SAMPLE_TEXTURE2D_ARRAY_GRAD(_FishNormalArray, FISH_ARRAY_SURFACE_SAMPLER, layerUV, id, dx, dy);
         half3 n;
-        n.xy = (packed.rg * 2.0h - 1.0h) * (half)_FishLayerTint[id].a;
+        n.xy = (packed.rg * 2.0h - 1.0h) * (half)tint.a;
         n.z = sqrt(max(1.0e-3h, 1.0h - saturate(dot(n.xy, n.xy))));
         normal = n;
     }
-    if (_FishArrayInfo.w > 0.5 && _FishLayerSurface[id].z > 0.5)
+    if (_FishArrayInfo.w > 0.5 && surface.z > 0.5)
     {
         half4 m = SAMPLE_TEXTURE2D_ARRAY_GRAD(_FishMaskArray, FISH_ARRAY_SURFACE_SAMPLER, layerUV, id, dx, dy);
-        m = m * (half4)_FishLayerMaskScale[id] + (half4)_FishLayerMaskOffset[id];
+        m = m * (half4)FishLayerRow(id, FISH_LAYER_ROW_MASK_SCALE) + (half4)FishLayerRow(id, FISH_LAYER_ROW_MASK_OFFSET);
         smoothness = m.a;
         occlusion = m.g;
     }
@@ -381,11 +406,13 @@ void FishApplyPaths(inout FishArraySurface s, float3 positionWS, float2 worldDx,
     {
         return;
     }
-    // The path, road and cobble grounds of the biome this pixel's ground belongs to, else the scene's.
-    int layer = clamp(groundId, 0, 31);
-    float earthSlice = _FishPathEarthFor[layer >> 2][layer & 3];
-    float roadSlice = _FishPathRoadFor[layer >> 2][layer & 3];
-    float stoneSlice = _FishPathStoneFor[layer >> 2][layer & 3];
+    // The path, road and cobble grounds of the biome this pixel's ground belongs to (its layer's column of the table,
+    // SceneTerrainPalette.PathLayerMap), else the scene's. A scene cut before the cobbles had a map holds -1 there and
+    // paves with _FishPathLayers.z, as it always did.
+    float4 pathSlices = FishLayerRow(groundId, FISH_LAYER_ROW_PATHS);
+    float earthSlice = pathSlices.x;
+    float roadSlice = pathSlices.y;
+    float stoneSlice = pathSlices.z;
     earthSlice = earthSlice > -0.5 ? earthSlice : _FishPathLayers.x;
     roadSlice = roadSlice > -0.5 ? roadSlice : (_FishPathLayers.y > -0.5 ? _FishPathLayers.y : earthSlice);
     stoneSlice = stoneSlice > -0.5 ? stoneSlice : (_FishPathLayers.z > -0.5 ? _FishPathLayers.z : roadSlice);
@@ -486,7 +513,7 @@ void FishApplyPaths(inout FishArraySurface s, float3 positionWS, float2 worldDx,
 /// baker writes it on every platform, rather than through UnpackNormalScale, whose layout follows the platform's
 /// normal-map encoding).
 /// </summary>
-void FishSampleLayerPlane(int id, float2 layerUV, float2 dx, float2 dy, bool hasMasks, bool hasNormals, half hasMask,
+void FishSampleLayerPlane(int id, float2 layerUV, float2 dx, float2 dy, bool hasMasks, bool hasNormals, half hasMask, half normalScale,
     out half4 albedo, out half4 mask, out half3 normal)
 {
     albedo = SAMPLE_TEXTURE2D_ARRAY_GRAD(_FishAlbedoArray, sampler_FishAlbedoArray, layerUV, id, dx, dy);
@@ -500,7 +527,7 @@ void FishSampleLayerPlane(int id, float2 layerUV, float2 dx, float2 dy, bool has
     {
         half4 packed = SAMPLE_TEXTURE2D_ARRAY_GRAD(_FishNormalArray, FISH_ARRAY_SURFACE_SAMPLER, layerUV, id, dx, dy);
         half3 n;
-        n.xy = (packed.rg * 2.0h - 1.0h) * (half)_FishLayerTint[id].a;
+        n.xy = (packed.rg * 2.0h - 1.0h) * normalScale;
         n.z = sqrt(max(1.0e-3h, 1.0h - saturate(dot(n.xy, n.xy))));
         normal = n;
     }
@@ -509,23 +536,23 @@ void FishSampleLayerPlane(int id, float2 layerUV, float2 dx, float2 dy, bool has
 /// <summary>
 /// The shift the pixel's living ground takes on its world (FishFlora.hlsl FishFloraGroundShiftAt): white, and never looked
 /// up, while the looks are not published or where none of the pixel's layers is living ground. One lookup a pixel, however
-/// many of its layers take it.
+/// many of its layers take it. <paramref name="living"/>: each of the four layers' living share (FISH_LAYER_ROW_FLORA x).
 /// </summary>
-float3 FishTerrainGroundShift(float2 xz, int4 ids, half4 weights)
+float3 FishTerrainGroundShift(float2 xz, float4 living, half4 weights)
 {
     float3 shift = 1.0;
 #if !defined(FISH_TERRAIN_NORMALS_ONLY)
     UNITY_BRANCH
     if (_FishFloraInfo.x > 0.5)
     {
-        float living = 0.0;
+        float anyLiving = 0.0;
         UNITY_UNROLL
         for (int k = 0; k < 4; k++)
         {
-            living += weights[k] > 0.0h ? _FishLayerFlora[ids[k]].x : 0.0;
+            anyLiving += weights[k] > 0.0h ? living[k] : 0.0;
         }
         UNITY_BRANCH
-        if (living > 0.0)
+        if (anyLiving > 0.0)
         {
             shift = FishFloraGroundShiftAt(xz);
         }
@@ -626,24 +653,42 @@ FishArraySurface FishSampleArraySurfaceSloped(float2 uv, float3 positionWS, floa
     half4 masks[4];
     half3 normals[4];
     half4 hasMask = 0;
+    /* Each layer's numbers from the table (TerrainLayerTable), loaded once and only for a layer that is drawn: one of
+     * weight zero adds nothing to the blend whatever its numbers (the height blend weighs it by zero too), so it keeps
+     * neutral ones and costs no loads. */
+    float4 layerTint[4];
+    float4 layerSurface[4];
+    float4 layerMaskOffset[4];
+    float4 layerMaskScale[4];
+    float4 layerFlora[4];
 
     UNITY_UNROLL
     for (int k = 0; k < 4; k++)
     {
         int id = ids[k];
-        float4 st = _FishLayerST[id];
-        float2 layerUV = world * st.xy + st.zw;
-        float2 dx = worldDx * st.xy;
-        float2 dy = worldDy * st.xy;
-
         albedo[k] = half4(0.5h, 0.5h, 0.5h, 1.0h);
         masks[k] = 0.5h;
         normals[k] = half3(0.0h, 0.0h, 1.0h);
-        hasMask[k] = (half)_FishLayerSurface[id].z;
+        layerTint[k] = 1.0;
+        layerSurface[k] = 0.0;
+        layerMaskOffset[k] = 0.0;
+        layerMaskScale[k] = 1.0;
+        layerFlora[k] = 0.0;
 
         UNITY_BRANCH
         if (weights[k] > 0.0h)
         {
+            float4 st = FishLayerRow(id, FISH_LAYER_ROW_ST);
+            layerTint[k] = FishLayerRow(id, FISH_LAYER_ROW_TINT);
+            layerSurface[k] = FishLayerRow(id, FISH_LAYER_ROW_SURFACE);
+            layerMaskOffset[k] = FishLayerRow(id, FISH_LAYER_ROW_MASK_OFFSET);
+            layerMaskScale[k] = FishLayerRow(id, FISH_LAYER_ROW_MASK_SCALE);
+            layerFlora[k] = FishLayerRow(id, FISH_LAYER_ROW_FLORA);
+            hasMask[k] = (half)layerSurface[k].z;
+            half normalScale = (half)layerTint[k].a;
+            float2 layerUV = world * st.xy + st.zw;
+            float2 dx = worldDx * st.xy;
+            float2 dy = worldDy * st.xy;
             half4 a = 0, m = 0;
             half3 detail = 0;
             half4 planeAlbedo, planeMask;
@@ -651,7 +696,7 @@ FishArraySurface FishSampleArraySurfaceSloped(float2 uv, float3 positionWS, floa
             UNITY_BRANCH
             if (top > 0.0h)
             {
-                FishSampleLayerPlane(id, layerUV, dx, dy, hasMasks, hasNormals, hasMask[k], planeAlbedo, planeMask, planeNormal);
+                FishSampleLayerPlane(id, layerUV, dx, dy, hasMasks, hasNormals, hasMask[k], normalScale, planeAlbedo, planeMask, planeNormal);
                 a += planeAlbedo * top;
                 m += planeMask * top;
                 detail += planeNormal * top;
@@ -660,7 +705,7 @@ FishArraySurface FishSampleArraySurfaceSloped(float2 uv, float3 positionWS, floa
             UNITY_BRANCH
             if (facingX > 0.0h)
             {
-                FishSampleLayerPlane(id, planeX * st.xy + st.zw, planeXDx * st.xy, planeXDy * st.xy, hasMasks, hasNormals, hasMask[k], planeAlbedo, planeMask, planeNormal);
+                FishSampleLayerPlane(id, planeX * st.xy + st.zw, planeXDx * st.xy, planeXDy * st.xy, hasMasks, hasNormals, hasMask[k], normalScale, planeAlbedo, planeMask, planeNormal);
                 float3 perturb = axisXU * planeNormal.x + axisV * planeNormal.y;
                 a += planeAlbedo * facingX;
                 m += planeMask * facingX;
@@ -669,7 +714,7 @@ FishArraySurface FishSampleArraySurfaceSloped(float2 uv, float3 positionWS, floa
             UNITY_BRANCH
             if (facingZ > 0.0h)
             {
-                FishSampleLayerPlane(id, planeZ * st.xy + st.zw, planeZDx * st.xy, planeZDy * st.xy, hasMasks, hasNormals, hasMask[k], planeAlbedo, planeMask, planeNormal);
+                FishSampleLayerPlane(id, planeZ * st.xy + st.zw, planeZDx * st.xy, planeZDy * st.xy, hasMasks, hasNormals, hasMask[k], normalScale, planeAlbedo, planeMask, planeNormal);
                 float3 perturb = axisZU * planeNormal.x + axisV * planeNormal.y;
                 a += planeAlbedo * facingZ;
                 m += planeMask * facingZ;
@@ -679,7 +724,7 @@ FishArraySurface FishSampleArraySurfaceSloped(float2 uv, float3 positionWS, floa
             masks[k] = m;
             normals[k] = normalize(detail + half3(0.0h, 0.0h, 1e-4h));
         }
-        masks[k] = masks[k] * (half4)_FishLayerMaskScale[id] + (half4)_FishLayerMaskOffset[id];
+        masks[k] = masks[k] * (half4)layerMaskScale[k] + (half4)layerMaskOffset[k];
     }
 
 #ifdef _TERRAIN_BLEND_HEIGHT
@@ -695,24 +740,23 @@ FishArraySurface FishSampleArraySurfaceSloped(float2 uv, float3 positionWS, floa
     /* FishMMO edit: each layer on its planet (FishFloraGround), before the blend, so a pixel half turf and half rock takes
      * the shift on its turf only. Found once for the pixel's four layers. Albedo here is linear (the sRGB array decodes on
      * sampling), as the palette is. */
-    float3 groundShift = FishTerrainGroundShift(positionWS.xz, ids, weights);
+    float3 groundShift = FishTerrainGroundShift(positionWS.xz, float4(layerFlora[0].x, layerFlora[1].x, layerFlora[2].x, layerFlora[3].x), weights);
 
     UNITY_UNROLL
     for (int j = 0; j < 4; j++)
     {
-        int id = ids[j];
         half w = weights[j];
-        float4 surface = _FishLayerSurface[id];
-        half3 layerAlbedo = albedo[j].rgb * (half3)_FishLayerTint[id].rgb;
+        float4 surface = layerSurface[j];
+        half3 layerAlbedo = albedo[j].rgb * (half3)layerTint[j].rgb;
 #if !defined(FISH_TERRAIN_NORMALS_ONLY)
-        layerAlbedo = (half3)FishFloraGround(layerAlbedo, _FishLayerFlora[id].xyz, groundShift);
+        layerAlbedo = (half3)FishFloraGround(layerAlbedo, layerFlora[j].xyz, groundShift);
 #endif
         mixedAlbedo += layerAlbedo * w;
         mixedNormal += normals[j] * w;
         // TerrainLit's rule: a layer with a mask map takes metallic, AO and smoothness from it; one without
         // takes its sliders, with smoothness from the albedo's alpha when the albedo has one.
         half defaultSmoothness = albedo[j].a * (half)surface.y;
-        half defaultOcclusion = (half)(_FishLayerMaskScale[id].g + _FishLayerMaskOffset[id].g);
+        half defaultOcclusion = (half)(layerMaskScale[j].g + layerMaskOffset[j].g);
         metallic += lerp((half)surface.x, masks[j].r, hasMask[j]) * w;
         smoothness += lerp(defaultSmoothness, masks[j].a, hasMask[j]) * w;
         occlusion += lerp(defaultOcclusion, masks[j].g, hasMask[j]) * w;

@@ -142,29 +142,33 @@ namespace FishMMO.Shared.WorldDesign
 			float Deck(float z) => -sag * (1f - 4f * z * z / (length * length));
 
 			// The walk.
-			if (d.Lod == 2)
+			// The planks are the walk's floor (2026-10-16).
+			using (d.Builds(DeckRoles))
 			{
-				const int Slabs = 12;
-				for (int k = 0; k < Slabs; k++)
+				if (d.Lod == 2)
 				{
-					float z0 = -half + length * k / Slabs, z1 = -half + length * (k + 1) / Slabs;
-					d.Add(StructureShapes.Beam(new Vector3(0f, Deck(z0) - 0.05f, z0 - 0.05f), new Vector3(0f, Deck(z1) - 0.05f, z1 + 0.05f), Walk, 0.1f, StructureMaterial.Timber, 1 + k));
+					const int Slabs = 12;
+					for (int k = 0; k < Slabs; k++)
+					{
+						float z0 = -half + length * k / Slabs, z1 = -half + length * (k + 1) / Slabs;
+						d.Add(StructureShapes.Beam(new Vector3(0f, Deck(z0) - 0.05f, z0 - 0.05f), new Vector3(0f, Deck(z1) - 0.05f, z1 + 0.05f), Walk, 0.1f, StructureMaterial.Timber, 1 + k));
+					}
 				}
-			}
-			else
-			{
-				// Planks across at level 0, boards of three at level 1.
-				float pitch = d.Fine ? 0.4f : 1.2f, gap = d.Fine ? 0.06f : 0.04f;
-				int planks = Mathf.RoundToInt(length / pitch);
-				pitch = length / planks;
-				for (int k = 0; k < planks; k++)
+				else
 				{
-					float z0 = -half + pitch * k + gap * 0.5f, z1 = -half + pitch * (k + 1) - gap * 0.5f;
-					float wobble = d.Fine ? d.Range(k, 3, -0.05f, 0.05f) : 0f;
-					d.Add(StructureShapes.Beam(new Vector3(wobble, Deck(z0) - 0.03f, z0), new Vector3(wobble, Deck(z1) - 0.03f, z1), Walk + d.Range(k, 4, -0.08f, 0.08f), 0.06f, StructureMaterial.Timber, 1 + k)).Grain = Vector3.right;
+					// Planks across at level 0, boards of three at level 1.
+					float pitch = d.Fine ? 0.4f : 1.2f, gap = d.Fine ? 0.06f : 0.04f;
+					int planks = Mathf.RoundToInt(length / pitch);
+					pitch = length / planks;
+					for (int k = 0; k < planks; k++)
+					{
+						float z0 = -half + pitch * k + gap * 0.5f, z1 = -half + pitch * (k + 1) - gap * 0.5f;
+						float wobble = d.Fine ? d.Range(k, 3, -0.05f, 0.05f) : 0f;
+						d.Add(StructureShapes.Beam(new Vector3(wobble, Deck(z0) - 0.03f, z0), new Vector3(wobble, Deck(z1) - 0.03f, z1), Walk + d.Range(k, 4, -0.08f, 0.08f), 0.06f, StructureMaterial.Timber, 1 + k)).Grain = Vector3.right;
+					}
 				}
-			}
 
+			}
 			// The ropes: two under the planks' ends, two at hand height, each a chain of short straight runs.
 			int runs = d.Fine ? 16 : d.Mid ? 10 : 8;
 			float rope = d.Lod == 2 ? 0.12f : 0.06f;

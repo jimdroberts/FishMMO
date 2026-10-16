@@ -22,7 +22,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Accepts(RockTypes.Granite, RockTypes.Gneiss, RockTypes.Basalt, RockTypes.Slate, RockTypes.Limestone, RockTypes.Chalk, RockTypes.Sandstone)
 				.Look(BiomeLookClass.Coastal)
 				.Wildlife(BiomeHabitat.Coast)
-				.HomeTo("Crab");
+				.HomeTo("Crab")
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

@@ -17,7 +17,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Moved("main", "Trees: Spruce")
 				.Accepts(MountainGeology)
 				.Look(BiomeLookClass.Alpine)
-				.Wildlife(BiomeHabitat.Grassland | BiomeHabitat.Mountain);
+				.Wildlife(BiomeHabitat.Grassland | BiomeHabitat.Mountain)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

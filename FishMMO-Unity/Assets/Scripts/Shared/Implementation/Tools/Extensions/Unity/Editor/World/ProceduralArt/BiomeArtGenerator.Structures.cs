@@ -112,35 +112,78 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			foreach (StructureMaterial m in ProceduralArtCatalogue.StructureMaterials())
 			{
-				StructureMaterial material = m;
-				string surface = StructureSurfaces.SurfaceOf(material);
-				Texture2D normal = LoadTexture(ProceduralArtCatalogue.StructureTexture(surface, "Normal"));
-				Texture2D mask = LoadTexture(ProceduralArtCatalogue.StructureTexture(surface, "Mask"));
-				float scale = 1f / StructureSurfaces.TileMetres(surface);
-				Color tint = StructureSurfaces.TintOf(material);
-				Texture2D plainAlbedo = LoadTexture(ProceduralArtCatalogue.StructureTexture(surface, "Albedo"));
-				foreach (StructureFinish f in StructurePieces.Finishes)
+				WriteStructureMaterial(c, shader, StructureSurfaceKey.Kit(m));
+			}
+			// The structure palettes' own materials (2026-10-16, I6a): one a key (material, tint, surface variant) and finish that
+			// any palette lays, deduplicated: every spec palette's (what authoring writes onto the templates) and every template's
+			// as it stands (a hand edit's too). No prefab or mesh is made per palette: the cut lays the kit's prefabs in these.
+			List<StructureSurfaceKey> keys = StructurePalettes.KeysOf(PalettesInUse());
+			int variants = 0;
+			foreach (StructureSurfaceKey key in keys)
+			{
+				WriteStructureMaterial(c, shader, key);
+				variants += key.Surface.Length > 0 ? 1 : 0;
+			}
+			if (keys.Count > 0)
+			{
+				Debug.Log($"[Biome art] Structure palettes: {keys.Count} material key(s) beyond the kit's, {keys.Count * StructurePieces.Finishes.Length} material(s) with their finishes"
+					+ (variants > 0 ? $"; {variants} name a surface variant, drawn with the shared surface until the per-biome surface variants are generated" : string.Empty) + ".");
+			}
+		}
+
+		/// <summary>Every structure palette a cut may lay: each spec entry's, then each biome template's in the project.</summary>
+		private static IEnumerable<FishMMO.Shared.Biomes.BiomeStructurePalette> PalettesInUse()
+		{
+			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
+			{
+				yield return entry.StructurePalette();
+			}
+			foreach (string guid in AssetDatabase.FindAssets("t:" + nameof(FishMMO.Shared.Biomes.BiomeTemplate)))
+			{
+				var biome = AssetDatabase.LoadAssetAtPath<FishMMO.Shared.Biomes.BiomeTemplate>(AssetDatabase.GUIDToAssetPath(guid));
+				if (biome != null && biome.StructurePalette != null && !biome.StructurePalette.IsEmpty)
 				{
-					StructureFinish finish = f;
-					Texture2D albedo = LoadTexture(ProceduralArtCatalogue.StructureTexture(surface, "Albedo", finish));
-					WriteMaterial(c, StructurePieces.MaterialName(material, finish), shader, mat =>
-					{
-						// Moss as the material and its finish allow (MossAmounts): stone, timber and thatch green over in a
-						// damp scene; the Mossy finish keeps its baked moss and takes the most of the layer on top.
-						RockLit(mat, albedo, normal, mask, scale, MossAmounts.ForStructure(material, finish));
-						mat.SetColor("_BaseColor", tint);
-						// Weathered as a building, not set into the ground as a rock (FishStructureWeathering.hlsl); a pane lit at night.
-						mat.SetFloat("_FishStructure", material == StructureMaterial.Glass ? 2f : 1f);
-						if (material == StructureMaterial.Glass)
-						{
-							Glass(mat, tint);
-						}
-						else if (material == StructureMaterial.Lamplight)
-						{
-							Lamplight(mat, plainAlbedo);
-						}
-					});
+					yield return biome.StructurePalette;
 				}
+			}
+		}
+
+		/// <summary>
+		/// One key's material in every finish: its material's surface maps, its tint as the base colour, its moss. A kit key is
+		/// named and built exactly as the kit's materials always were.
+		/// </summary>
+		private static void WriteStructureMaterial(Context c, Shader shader, StructureSurfaceKey key)
+		{
+			StructureMaterial material = key.Material;
+			// The surface variant (I9's per-biome texture variants) names the material; until those textures exist it is drawn
+			// with the surface every biome shares.
+			string surface = StructureSurfaces.SurfaceOf(material);
+			Texture2D normal = LoadTexture(ProceduralArtCatalogue.StructureTexture(surface, "Normal"));
+			Texture2D mask = LoadTexture(ProceduralArtCatalogue.StructureTexture(surface, "Mask"));
+			float scale = 1f / StructureSurfaces.TileMetres(surface);
+			Color tint = key.Colour;
+			Texture2D plainAlbedo = LoadTexture(ProceduralArtCatalogue.StructureTexture(surface, "Albedo"));
+			foreach (StructureFinish f in StructurePieces.Finishes)
+			{
+				StructureFinish finish = f;
+				Texture2D albedo = LoadTexture(ProceduralArtCatalogue.StructureTexture(surface, "Albedo", finish));
+				WriteMaterial(c, key.MaterialName(finish), shader, mat =>
+				{
+					// Moss as the material and its finish allow (MossAmounts): stone, timber and thatch green over in a
+					// damp scene; the Mossy finish keeps its baked moss and takes the most of the layer on top.
+					RockLit(mat, albedo, normal, mask, scale, StructureSurfaces.MossOf(material, finish));
+					mat.SetColor("_BaseColor", tint);
+					// Weathered as a building, not set into the ground as a rock (FishStructureWeathering.hlsl); a pane lit at night.
+					mat.SetFloat("_FishStructure", material == StructureMaterial.Glass ? 2f : 1f);
+					if (material == StructureMaterial.Glass)
+					{
+						Glass(mat, tint);
+					}
+					else if (material == StructureMaterial.Lamplight)
+					{
+						Lamplight(mat, plainAlbedo);
+					}
+				});
 			}
 		}
 

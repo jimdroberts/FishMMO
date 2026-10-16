@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 using UnityEngine;
 
 namespace FishMMO.Shared.WorldDesign
@@ -40,6 +41,12 @@ namespace FishMMO.Shared.WorldDesign
 				public int Crystal, CrystalAccent, Fungus, FungusAccent, Ore, OreAccent, GlowOre;
 				/// <summary>Whether luminous fungi grow here, and glow-worms hang.</summary>
 				public bool Fungi, Worms;
+				/// <summary>
+				/// Whether the lining's crystals are the biome's own glowing crystals (<see cref="Mineral"/>, <see cref="MineralAccent"/>)
+				/// in place of the glow art's: where its template grows a kind that glows (2026-10-16, I6c).
+				/// </summary>
+				public bool Minerals;
+				public BiomeCaveCrystalKind Mineral, MineralAccent;
 			}
 
 			private Palette palette;
@@ -89,8 +96,52 @@ namespace FishMMO.Shared.WorldDesign
 						p.Worms = false;
 						break;
 				}
+				// A natural cave whose glow was drawn by chance (not an ice cave's ice, a lava tube's amber or a mine) where the biome
+				// grows crystals that glow: those line its ways, a lead and an accent by weight from a stream of their own (so the
+				// draws above stand as they were), and the giant crystals take the lead's and the accent's hue.
+				if (system.Form == CaveForm.Cave || system.Form == CaveForm.Grotto || system.Form == CaveForm.SeaCave)
+				{
+					IReadOnlyList<BiomeCaveCrystal> grown = BiomeTemplateArt.CaveCrystals(biome);
+					if (BiomeCaveCrystals.Total(grown, glowingOnly: true) > 0f)
+					{
+						var pick = new DeterministicRNG(unchecked(system.Seed * 0x4C1F + 0x2B95));
+						BiomeCaveCrystals.TryPick(grown, pick.NextFloat(), out p.Mineral, glowingOnly: true);
+						BiomeCaveCrystals.TryPick(grown, pick.NextFloat(), out p.MineralAccent, glowingOnly: true);
+						p.Minerals = true;
+						p.Crystal = CrystalHueOf(p.Mineral, p.Crystal);
+						p.CrystalAccent = CrystalHueOf(p.MineralAccent, p.CrystalAccent);
+					}
+				}
 				palette = p;
 				return p;
+			}
+
+			/// <summary>The glow art's crystal hue nearest a glowing crystal's light (violet, ice-blue, green or amber by its light's hue bits).</summary>
+			private static int CrystalHueOf(BiomeCaveCrystalKind kind, int fallback)
+			{
+				switch (ProceduralArtCatalogue.CaveMineralOf(kind).LightHue)
+				{
+					case 0: return HueOf(CaveGlowKind.Crystal, "Violet", fallback);
+					case 1: return HueOf(CaveGlowKind.Crystal, "IceBlue", fallback);
+					case 2: return HueOf(CaveGlowKind.Crystal, "Green", fallback);
+					case 3: return HueOf(CaveGlowKind.Crystal, "Amber", fallback);
+					default: return fallback;
+				}
+			}
+
+			/// <summary>
+			/// A piece of crystal glow art for a hue of the palette: the glow art's, or where the biome's own glowing crystals line the
+			/// ways, the lead's (the accent's for the accent's hue). False, as <see cref="CaveArt.TryGlow"/>, while the art is missing.
+			/// </summary>
+			private bool TryCrystal(CaveGlowKind kind, int hue, int variant, out CaveGlowArt art)
+			{
+				Palette p = Colours();
+				if (kind == CaveGlowKind.Crystal && p.Minerals)
+				{
+					BiomeCaveCrystalKind mineral = hue == p.CrystalAccent && hue != p.Crystal ? p.MineralAccent : p.Mineral;
+					return CaveArt.TryMineral(mineral, variant, out art);
+				}
+				return CaveArt.TryGlow(kind, hue, variant, out art);
 			}
 
 			private static int HueOf(CaveGlowKind kind, string name, int fallback)
@@ -352,7 +403,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				int variant = random.Range(0, CaveArt.VariantCount(kind));
 				float yaw = random.Range(0f, 360f), tx = random.Range(-lean, lean), tz = random.Range(-lean, lean), chance = random.NextFloat();
-				if (!CaveArt.TryGlow(kind, hue, variant, out CaveGlowArt art))
+				if (!TryCrystal(kind, hue, variant, out CaveGlowArt art))
 				{
 					Missing.Add("cave glow art");
 					return false;
@@ -385,7 +436,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return false;
 				}
-				if (!CaveArt.TryGlow(kind, hue, variant, out CaveGlowArt art))
+				if (!TryCrystal(kind, hue, variant, out CaveGlowArt art))
 				{
 					Missing.Add("cave glow art");
 					return false;

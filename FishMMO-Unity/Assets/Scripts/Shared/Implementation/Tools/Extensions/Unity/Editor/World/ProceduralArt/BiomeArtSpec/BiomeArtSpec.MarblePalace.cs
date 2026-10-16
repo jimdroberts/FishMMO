@@ -15,7 +15,8 @@ namespace FishMMO.Shared.WorldDesign
 				C(Ground.Limestone), Ground.Mud, Ground.Gravel)
 				.Accepts(RockTypes.Marble, RockTypes.Limestone)
 				.Look(BiomeLookClass.Temperate)
-				.Wildlife(BiomeHabitat.Grassland | BiomeHabitat.Settlement);
+				.Wildlife(BiomeHabitat.Grassland | BiomeHabitat.Settlement)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

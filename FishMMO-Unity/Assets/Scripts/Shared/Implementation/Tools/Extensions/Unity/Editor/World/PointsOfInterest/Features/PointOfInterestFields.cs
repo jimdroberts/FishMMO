@@ -14,10 +14,12 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Wheat is grown, not placed.</b> A field's ground has its other details cleared and the wheat detail
-	/// (Detail_GrassWheat, the grass blades' hand-masked crop) painted in, edge to edge but a headland at its rim, so the
-	/// procedural grass draws the crop with the same wind, light and season as the meadow beside it. A ploughed plot is
-	/// cleared and laid as bare yard earth (the path overlay's tilled soil); pasture keeps its grass and is only fenced.
+	/// <b>Crops are grown, not placed.</b> A field's ground has its other details cleared and its crop's detail painted in,
+	/// edge to edge but a headland at its rim, so the procedural grass draws the crop with the same wind, light and season as
+	/// the meadow beside it. The crop is one of its biome's (BiomeTemplate.FieldCrops, 2026-10-16), drawn by the site and the
+	/// field when the biome grows more than one; until then every field grew wheat (Detail_GrassWheat, the grass blades'
+	/// hand-masked crop), which the authoring writes as every biome's. A ploughed plot is cleared and laid as bare yard earth
+	/// (the path overlay's tilled soil); pasture keeps its grass and is only fenced.
 	/// </para>
 	/// <para>
 	/// <b>Fenced</b> with the kit's field fence, post and rails, a gap left in the side facing the settlement for the gate.
@@ -32,11 +34,10 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>The steepest ground a field is ploughed on, degrees.</summary>
 		public const float MaxSlopeDegrees = 7f;
-		/// <summary>The wheat's coverage in a field (0..255, the terrain's coverage mode).</summary>
-		private const int WheatCoverage = 235;
+		/// <summary>A crop's coverage in a field (0..255, the terrain's coverage mode).</summary>
+		public const int WheatCoverage = 235;
 		/// <summary>The unsown rim of a crop field, metres.</summary>
 		private const float Headland = 1.5f;
-		private const string WheatPrefab = "Detail_GrassWheat";
 
 		private enum FieldKind { Wheat, Ploughed, Pasture, Fallow }
 
@@ -115,13 +116,32 @@ namespace FishMMO.Shared.WorldDesign
 
 			List<Terrain> terrains = TerrainsOf(context);
 			int crops = 0;
-			foreach (Field field in fields)
+			for (int f = 0; f < fields.Count; f++)
 			{
+				Field field = fields[f];
 				if (field.Kind == FieldKind.Wheat || field.Kind == FieldKind.Ploughed)
 				{
-					// The wheat takes the look of the biome its field lies in (2026-10-16).
+					// The crop is one of the biome's its field lies in, and takes that biome's look (2026-10-16).
 					BiomeTemplate biome = context.BiomeAt != null ? context.BiomeAt(field.Centre.x, field.Centre.y) : null;
-					PaintDetails(terrains, field, field.Kind == FieldKind.Wheat, biome);
+					GameObject crop = null;
+					// How the crop's fields lie (2026-10-16): flat as every field was, or in lazy beds or ridge and furrow.
+					BiomeFieldSurface surface = BiomeFieldSurface.Flat;
+					if (field.Kind == FieldKind.Wheat)
+					{
+						List<BiomeFieldCrop> grown = BiomeTemplateArt.FieldCrops(biome);
+						int pick = CropIndex(grown.ConvertAll(c => c.Weight), record.SiteSeed, f);
+						crop = pick >= 0 ? grown[pick].Prefab : null;
+						surface = pick >= 0 ? grown[pick].Surface : BiomeFieldSurface.Flat;
+					}
+					if (crop == null)
+					{
+						surface = BiomeFieldSurface.Flat;
+					}
+					PaintDetails(terrains, field, crop, biome, surface);
+					if (BiomeFieldSurfaces.Ridged(surface))
+					{
+						AddFurrows(context, field, surface);
+					}
 					crops++;
 				}
 				if (field.Kind == FieldKind.Ploughed)
@@ -202,11 +222,55 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Clears every detail inside the field and, for a crop, paints the wheat in (a headland left round it), on every
-		/// tile the field crosses. A wheat prototype the field adds to a tile is recorded for <paramref name="biome"/>, whose
-		/// look of the wheat its blades then take (PointOfInterestHerbGrove.RecordBiome).
+		/// Which of a biome's crops a field grows (pure): the only one without a draw, else a draw by the crop weights seeded by
+		/// the site and the field's index (never the site's random sequence, so the fields lie as before); -1 for none.
 		/// </summary>
-		private static void PaintDetails(List<Terrain> terrains, Field field, bool wheat, BiomeTemplate biome)
+		public static int CropIndex(IReadOnlyList<float> weights, int siteSeed, int field)
+		{
+			if (weights == null || weights.Count == 0)
+			{
+				return -1;
+			}
+			if (weights.Count == 1)
+			{
+				return weights[0] > 0f ? 0 : -1;
+			}
+			float total = 0f;
+			foreach (float weight in weights)
+			{
+				total += Mathf.Max(0f, weight);
+			}
+			if (!(total > 0f))
+			{
+				return -1;
+			}
+			float roll = PointOfInterestPlanner.Unit(PointOfInterestPlanner.Hash(siteSeed, 0x43524F, field, 0)) * total;
+			int last = -1;
+			for (int i = 0; i < weights.Count; i++)
+			{
+				float weight = Mathf.Max(0f, weights[i]);
+				if (weight <= 0f)
+				{
+					continue;
+				}
+				last = i;
+				roll -= weight;
+				if (roll < 0f)
+				{
+					return i;
+				}
+			}
+			return last;
+		}
+
+		/// <summary>
+		/// Clears every detail inside the field and, for a crop, paints it in (a headland left round it), on every tile the
+		/// field crosses. The crop goes into the tile's prototype of it for <paramref name="biome"/>, or one the field adds and
+		/// records for it (PointOfInterestHerbGrove.SiteLayers), whose look of the crop its blades then take.
+		/// </summary>
+		/// <param name="crop">The crop's detail prefab; null for a ploughed plot (cleared only) or a biome growing none.</param>
+		/// <param name="surface">How the crop lies: on a ridged field it is sown along the ridges only (<see cref="SownCoverage"/>).</param>
+		private static void PaintDetails(List<Terrain> terrains, Field field, GameObject crop, BiomeTemplate biome, BiomeFieldSurface surface = BiomeFieldSurface.Flat)
 		{
 			float r = field.Yaw * Mathf.Deg2Rad;
 			var axisX = new Vector2(Mathf.Cos(r), -Mathf.Sin(r));
@@ -232,8 +296,9 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					continue;
 				}
-				int wheatLayer = wheat ? WheatLayer(data) : -1;
-				PointOfInterestHerbGrove.RecordBiome(terrain, wheatLayer, biome);
+				// Every layer is cleared inside the field (the crop of another biome's prototype too), so the field's own
+				// biome's prototype of its crop simply takes it.
+				int wheatLayer = crop != null ? CropLayer(terrain, crop, biome) : -1;
 				int layers = data.detailPrototypes.Length;
 				int w = x1 - x0 + 1, h = z1 - z0 + 1;
 				for (int layer = 0; layer < layers; layer++)
@@ -251,7 +316,7 @@ namespace FishMMO.Shared.WorldDesign
 								continue;
 							}
 							bool sown = layer == wheatLayer && Mathf.Abs(u) < halfX - Headland && Mathf.Abs(v) < halfZ - Headland;
-							int value = sown ? WheatCoverage : 0;
+							int value = !sown ? 0 : surface == BiomeFieldSurface.Flat ? WheatCoverage : SownCoverage(surface, field, u, v, texel);
 							if (map[j, i] != value)
 							{
 								map[j, i] = value;
@@ -268,30 +333,119 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/// <summary>The wheat's detail layer on a tile, added (copying a grass prototype's settings) when the tile has none.</summary>
-		private static int WheatLayer(TerrainData data)
+		/// <summary>
+		/// A crop's detail layer on a tile for a field in <paramref name="biome"/>: the tile's prototype of the crop for that
+		/// biome, else one the field adds and records for it (a copy of the tile's prototype of the crop for another biome, or a
+		/// new one copying a grass prototype's settings when the tile has none).
+		/// </summary>
+		private static int CropLayer(Terrain terrain, GameObject crop, BiomeTemplate biome)
 		{
-			DetailPrototype[] prototypes = data.detailPrototypes;
+			foreach (DetailPrototype prototype in terrain.terrainData.detailPrototypes)
+			{
+				if (prototype?.prototype != null && prototype.prototype.name == crop.name)
+				{
+					crop = prototype.prototype;
+					break;
+				}
+			}
+			return PointOfInterestHerbGrove.SiteLayers(terrain, crop, biome, NewWheat).Own;
+		}
+
+		/// <summary>
+		/// The ridges' frame of a field (pure): the ridges run its length, so across them is its short side; the band is its
+		/// sown width across them (inside the headland), and <paramref name="across"/> how far a point at (<paramref name="u"/>,
+		/// <paramref name="v"/>) along the field's own axes lies across the band from its edge.
+		/// </summary>
+		public static float RidgeBand(Vector2 size, float u, float v, out float across)
+		{
+			bool alongX = size.x >= size.y;
+			float band = Mathf.Max(0f, (alongX ? size.y : size.x) - 2f * Headland);
+			across = (alongX ? v : u) + 0.5f * band;
+			return band;
+		}
+
+		/// <summary>
+		/// A sown texel's crop coverage on a ridged field (pure): the crop's coverage times the share of the texel, a
+		/// <paramref name="texel"/> metres wide across the ridges, that lies on a ridge (<see cref="BiomeFieldSurfaces.SownShare"/>);
+		/// the whole coverage on a flat field.
+		/// </summary>
+		public static int SownCoverage(BiomeFieldSurface surface, Vector2 size, float u, float v, float texel)
+		{
+			if (!BiomeFieldSurfaces.Ridged(surface))
+			{
+				return WheatCoverage;
+			}
+			float band = RidgeBand(size, u, v, out float across);
+			float share = BiomeFieldSurfaces.SownShare(surface, band, across - 0.5f * texel, across + 0.5f * texel);
+			return Mathf.RoundToInt(WheatCoverage * share);
+		}
+
+		private static int SownCoverage(BiomeFieldSurface surface, Field field, float u, float v, float texel) => SownCoverage(surface, field.Size, u, v, texel);
+
+		/// <summary>
+		/// The bare furrows between a ridged field's ridges, as worn yard earth the path overlay draws (as a ploughed plot's): one
+		/// straight strip the length of the sown field down each furrow, its own width, square at the headland. The ground
+		/// shader draws them crisply, a texel finer than the crop's coverage, and the blades keep out of them.
+		/// </summary>
+		/// <remarks>
+		/// Painted, not dug: the cut's builders run on every repaint over ground already shaped, so a height cut here would
+		/// deepen at each, and the terrain's samples (about two metres apart) could not hold a lazy bed's 1.8 m ridges in any case.
+		/// </remarks>
+		private static void AddFurrows(PointOfInterestSiteContext context, Field field, BiomeFieldSurface surface)
+		{
+			if (context.Points == null)
+			{
+				return;
+			}
+			bool alongX = field.Size.x >= field.Size.y;
+			float band = RidgeBand(field.Size, 0f, 0f, out _);
+			List<float> furrows = BiomeFieldSurfaces.Furrows(surface, band, out float width);
+			if (furrows.Count == 0 || !(width > 0f))
+			{
+				return;
+			}
+			int id = 0;
+			foreach (ScenePath existing in context.Points.Paths)
+			{
+				id = Math.Max(id, existing != null ? existing.Id : 0);
+			}
+			float r = field.Yaw * Mathf.Deg2Rad;
+			var axisX = new Vector2(Mathf.Cos(r), -Mathf.Sin(r));
+			var axisZ = new Vector2(Mathf.Sin(r), Mathf.Cos(r));
+			Vector2 along = alongX ? axisX : axisZ, across = alongX ? axisZ : axisX;
+			float reach = 0.5f * Mathf.Max(field.Size.x, field.Size.y) - Headland;
+			float half = 0.5f * width;
+			foreach (float centre in furrows)
+			{
+				Vector2 middle = field.Centre + across * (centre - 0.5f * band);
+				Vector2 a = middle - along * reach, b = middle + along * reach;
+				context.Points.Paths.Add(new ScenePath
+				{
+					Id = ++id,
+					Class = ScenePathClass.Yard,
+					Points = new[] { new Vector3(a.x, context.GroundAt(a.x, a.y), a.y), new Vector3(b.x, context.GroundAt(b.x, b.y), b.y) },
+					HalfWidth = new[] { half, half },
+					Wear = new[] { 0.85f, 0.85f },
+					Surface = new[] { (byte)ScenePathSurface.Earth, (byte)ScenePathSurface.Earth },
+					Flags = new[] { (byte)(ScenePathPointFlags.InSite | ScenePathPointFlags.Squared), (byte)(ScenePathPointFlags.InSite | ScenePathPointFlags.Squared) },
+				});
+			}
+		}
+
+		/// <summary>A crop's prototype for a tile that grows none of it, copying a grass prototype's settings.</summary>
+		private static DetailPrototype NewWheat(DetailPrototype[] prototypes, GameObject wheat)
+		{
 			int grass = -1;
 			for (int i = 0; i < prototypes.Length; i++)
 			{
 				GameObject prefab = prototypes[i].prototype;
-				if (prefab != null && prefab.name == WheatPrefab)
-				{
-					return i;
-				}
 				if (grass < 0 && prefab != null && prefab.name.StartsWith("Detail_Grass", StringComparison.Ordinal))
 				{
 					grass = i;
 				}
 			}
-			var wheat = AssetDatabase.LoadAssetAtPath<GameObject>(ProceduralArtCatalogue.PrefabPath(ProceduralArtCatalogue.DetailPrefab("GrassWheat")));
-			if (wheat == null)
-			{
-				return -1;
-			}
 			DetailPrototype copy = grass >= 0 ? prototypes[grass] : new DetailPrototype { usePrototypeMesh = true, renderMode = DetailRenderMode.VertexLit, useInstancing = true };
-			var added = new DetailPrototype
+			return new DetailPrototype
 			{
 				prototype = wheat,
 				usePrototypeMesh = true,
@@ -309,12 +463,6 @@ namespace FishMMO.Shared.WorldDesign
 				positionJitter = copy.positionJitter,
 				useDensityScaling = copy.useDensityScaling,
 			};
-			var grown = new DetailPrototype[prototypes.Length + 1];
-			Array.Copy(prototypes, grown, prototypes.Length);
-			grown[prototypes.Length] = added;
-			data.detailPrototypes = grown;
-			data.RefreshPrototypes();
-			return prototypes.Length;
 		}
 
 		/// <summary>A ploughed plot: bare tilled earth over the whole field, as the path overlay draws worn ground.</summary>

@@ -37,9 +37,9 @@ namespace FishMMO.Shared.WorldDesign
 			// A dressed block a metre each way, its base at y = 0: scaled to each step of a person's flight up to a big race's
 			// door (PointOfInterestDoors), where the building's own steps are too high for a person to climb.
 			Piece(list, "StepStone", StructureStyle.Stone, StructureSize.Small, "A stone block, 1 m each way, base at y = 0: a step, scaled; v0 dressed, v1 a rough-hewn fieldstone.",
-				d => d.Add(d.Variant == 1
+				Under(StepRoles, d => d.Add(d.Variant == 1
 					? StructureShapes.ChamferBox(new Vector3(0f, 0.5f, 0f), Vector3.one, 0.08f, StructureMaterial.Fieldstone, 1)
-					: StructureShapes.Box(new Vector3(0f, 0.5f, 0f), Vector3.one, StructureMaterial.Stone, 1)), "step");
+					: StructureShapes.Box(new Vector3(0f, 0.5f, 0f), Vector3.one, StructureMaterial.Stone, 1))), "step");
 			Piece(list, "StallPartition", StructureStyle.Timber, StructureSize.Small, "A stable stall's side, 2.4 m deep, a post at its open end; v1 with a manger at the wall.",
 				StallPartition, "furniture", "stall");
 		}

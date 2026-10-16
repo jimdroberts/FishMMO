@@ -52,22 +52,42 @@ CBUFFER_END
 // NOTE: Dots instancing is orthogonal to the constant buffer above.
 #ifdef UNITY_DOTS_INSTANCING_ENABLED
 
+// FishMMO edit: URP's UNITY_DOTS_INSTANCED_PROP declares each property's override mode as a static const INSIDE the
+// metadata cbuffer. FXC drops it; DXC keeps it as a cbuffer member, which Unity's reflection then reports ("DOTS instancing
+// metadata constant "_Smoothness_DOTSInstancingOverrideMode" does not match expected format, ignoring"). So the cbuffer
+// holds only the metadata uints, and the modes (the same value URP's macro gives: overrides supported) sit after it.
+#define FISH_DOTS_METADATA(type, name) uint UNITY_DOTS_INSTANCED_METADATA_NAME(type, name);
+#define FISH_DOTS_OVERRIDE_MODE(name) static const int UNITY_DOTS_INSTANCED_PROP_OVERRIDE_MODE_NAME(name) = kDotsInstancedPropOverrideSupported;
 UNITY_DOTS_INSTANCING_START(MaterialPropertyMetadata)
-    UNITY_DOTS_INSTANCED_PROP(float4, _BaseColor)
-    UNITY_DOTS_INSTANCED_PROP(float4, _SpecColor)
-    UNITY_DOTS_INSTANCED_PROP(float4, _EmissionColor)
-    UNITY_DOTS_INSTANCED_PROP(float , _Cutoff)
-    UNITY_DOTS_INSTANCED_PROP(float , _Smoothness)
-    UNITY_DOTS_INSTANCED_PROP(float , _Metallic)
-    UNITY_DOTS_INSTANCED_PROP(float , _BumpScale)
-    UNITY_DOTS_INSTANCED_PROP(float , _Parallax)
-    UNITY_DOTS_INSTANCED_PROP(float , _OcclusionStrength)
-    UNITY_DOTS_INSTANCED_PROP(float , _ClearCoatMask)
-    UNITY_DOTS_INSTANCED_PROP(float , _ClearCoatSmoothness)
-    UNITY_DOTS_INSTANCED_PROP(float , _DetailAlbedoMapScale)
-    UNITY_DOTS_INSTANCED_PROP(float , _DetailNormalMapScale)
-    UNITY_DOTS_INSTANCED_PROP(float , _Surface)
+    FISH_DOTS_METADATA(float4, _BaseColor)
+    FISH_DOTS_METADATA(float4, _SpecColor)
+    FISH_DOTS_METADATA(float4, _EmissionColor)
+    FISH_DOTS_METADATA(float , _Cutoff)
+    FISH_DOTS_METADATA(float , _Smoothness)
+    FISH_DOTS_METADATA(float , _Metallic)
+    FISH_DOTS_METADATA(float , _BumpScale)
+    FISH_DOTS_METADATA(float , _Parallax)
+    FISH_DOTS_METADATA(float , _OcclusionStrength)
+    FISH_DOTS_METADATA(float , _ClearCoatMask)
+    FISH_DOTS_METADATA(float , _ClearCoatSmoothness)
+    FISH_DOTS_METADATA(float , _DetailAlbedoMapScale)
+    FISH_DOTS_METADATA(float , _DetailNormalMapScale)
+    FISH_DOTS_METADATA(float , _Surface)
 UNITY_DOTS_INSTANCING_END(MaterialPropertyMetadata)
+FISH_DOTS_OVERRIDE_MODE(_BaseColor)
+FISH_DOTS_OVERRIDE_MODE(_SpecColor)
+FISH_DOTS_OVERRIDE_MODE(_EmissionColor)
+FISH_DOTS_OVERRIDE_MODE(_Cutoff)
+FISH_DOTS_OVERRIDE_MODE(_Smoothness)
+FISH_DOTS_OVERRIDE_MODE(_Metallic)
+FISH_DOTS_OVERRIDE_MODE(_BumpScale)
+FISH_DOTS_OVERRIDE_MODE(_Parallax)
+FISH_DOTS_OVERRIDE_MODE(_OcclusionStrength)
+FISH_DOTS_OVERRIDE_MODE(_ClearCoatMask)
+FISH_DOTS_OVERRIDE_MODE(_ClearCoatSmoothness)
+FISH_DOTS_OVERRIDE_MODE(_DetailAlbedoMapScale)
+FISH_DOTS_OVERRIDE_MODE(_DetailNormalMapScale)
+FISH_DOTS_OVERRIDE_MODE(_Surface)
 
 // Here, we want to avoid overriding a property like e.g. _BaseColor with something like this:
 // #define _BaseColor UNITY_ACCESS_DOTS_INSTANCED_PROP_WITH_DEFAULT(float4, _BaseColor0)

@@ -18,7 +18,9 @@ namespace FishMMO.Shared.WorldDesign
 					D(Ground.Frost, 48f, 2f, -1f, -1f, Outcrops("Frost blooms", 0.012f, 10f, F(RockTypes.WaterIce, "Crystal")))),
 				C(Ground.Ice), Ground.Ice, Ground.Ice)
 				.Look(BiomeLookClass.Alien)
-				.Wildlife(BiomeHabitat.Ice | BiomeHabitat.Alien);
+				// Alien ground as well: the client reads that live from the template's air (BiomeHabitats.Live), never stored.
+				.Wildlife(BiomeHabitat.Ice)
+				.Moat(BiomeMoatWater.Frozen);
 		}
 	}
 }

@@ -25,9 +25,11 @@ namespace FishMMO.UnitTests
 			foreach (string biome in Biomes())
 			{
 				var families = new HashSet<GatheringFamily>();
+				// The kinds the biome hosts as the authoring writes them onto its template (2026-10-16: the template decides).
+				var hosted = new HashSet<FishMMO.Shared.NameGeneration.POIType>(BiomeArtSpec.For(biome).SiteKinds(rules).Select(k => k.Kind));
 				foreach (PointOfInterestKindRule rule in rules.Ordered(PointOfInterestPlacement.Placed))
 				{
-					if (rule.Enabled && rule.BiomeWeight(biome) > 0f)
+					if (rule.Enabled && hosted.Contains(rule.Kind))
 					{
 						families.UnionWith(GatheringResourceCatalogue.FamiliesFor(rule.Kind));
 					}
@@ -58,8 +60,9 @@ namespace FishMMO.UnitTests
 		public void EveryBiome_HasAnAmbientHabitat()
 		{
 			// The spec's habitat, which the authoring writes onto the template the client reads (2026-10-16), and the name
-			// reading a template never authored still falls back on.
-			string[] missing = BiomeArtSpec.Entries.Where(e => e.Habitat == FishMMO.Shared.Biomes.BiomeHabitat.None).Select(e => e.Biome).ToArray();
+			// reading a template never authored still falls back on. Alien ground alone names None (the Alien bit is read live
+			// from the template's air, I4b): BiomeTemplateLivingTests checks the live reading is never None.
+			string[] missing = BiomeArtSpec.Entries.Where(e => !e.WildlifeNamed).Select(e => e.Biome).ToArray();
 			Assert.IsEmpty(missing, "these biomes name no country, so their animals fall back on the climate: " + string.Join(", ", missing));
 			missing = Biomes().Where(b => AmbientGating.HabitatOf(b) == AmbientHabitat.None).ToArray();
 			Assert.IsEmpty(missing, "no keyword matches these biomes' names, so their animals fall back on the climate: " + string.Join(", ", missing));

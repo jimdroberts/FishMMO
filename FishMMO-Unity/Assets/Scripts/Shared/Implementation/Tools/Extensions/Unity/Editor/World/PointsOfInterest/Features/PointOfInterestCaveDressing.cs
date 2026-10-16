@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 using UnityEditor;
 using UnityEngine;
 
@@ -72,6 +73,11 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>The formations' heights at scale 1 (the shapes' own), metres.</summary>
 			public float FloorHeight = 2.6f, WallHeight = 1.6f;
 			public float Density = 1f, CrystalChance, BreakdownShare = 0.25f;
+			/// <summary>
+			/// The crystals the chambers grow when they are a deposit, not the cave's own stone (<see cref="CrystalRock"/> set): the
+			/// cave's biome's (its template's Cave Crystals, 2026-10-16), a kind drawn by weight for each cluster.
+			/// </summary>
+			public IReadOnlyList<BiomeCaveCrystal> Crystals;
 			/// <summary>The crystals' light's hue (SceneEmitterKind.Crystal), or −1 for one by chance.</summary>
 			public int Hue = -1;
 		}
@@ -192,7 +198,14 @@ namespace FishMMO.Shared.WorldDesign
 			Set set = SetFor(system.Form);
 			// The formations are the shell's rock: the very rock the shaper built the cave's walls in (its host site's biome's).
 			set.Rock = FormationRock(CaveShaper.ShellOf(context.Request, context.Record, system));
-			var dresser = new Dresser(context, system, set, new DeterministicRNG(unchecked(system.Seed * 0x2F6B + 0xD1E5)));
+			// The cave's biome: its host site's, as for its shell. Its crystals are the chambers' deposits where the form grows
+			// them (a cave's, a grotto's: selenite in every biome before 2026-10-16); an ice cave's crystals stay its own ice.
+			BiomeTemplate biome = PointOfInterestRock.BiomeOf(context.Record);
+			if (set.CrystalRock != null)
+			{
+				set.Crystals = BiomeTemplateArt.CaveCrystals(biome);
+			}
+			var dresser = new Dresser(context, system, set, biome, new DeterministicRNG(unchecked(system.Seed * 0x2F6B + 0xD1E5)));
 			dresser.Run();
 			// Lights counts every emitter the dressing added: the glow's own and those its lamps, torches and fires give off.
 			int lights = (context.Points != null && context.Points.Emitters != null ? context.Points.Emitters.Count : 0) - emitters;
@@ -201,6 +214,7 @@ namespace FishMMO.Shared.WorldDesign
 				+ $", glow: {dresser.Glowing} ({dresser.Lights} glow lights), lamps: {dresser.Lamps}, climbs: {dresser.Climbed}, crossings: {dresser.Crossed}, camps: {dresser.Camps}"
 				+ (dresser.Grown > 0 ? $", overgrown: {dresser.Grown} plants" : string.Empty)
 				+ (dresser.StoodIn.Count > 0 ? $"; {set.Rock} has no art for: {string.Join(", ", dresser.StoodIn)}" : string.Empty)
+				+ (dresser.Unfit.Count > 0 ? $"; cave lights that cannot stand where the biome names them: {string.Join(", ", dresser.Unfit)}" : string.Empty)
 				+ (dresser.Missing.Count > 0 ? $"; missing art: {string.Join(", ", dresser.Missing)} (Generate Biome Art, then repaint)" : string.Empty));
 		}
 
@@ -210,23 +224,31 @@ namespace FishMMO.Shared.WorldDesign
 			private readonly CaveSystem system;
 			private readonly Set set;
 			private readonly DeterministicRNG rng;
+			/// <summary>The cave's biome (its host site's), or null: what lights it (its template's Cave Lights) and its crystals.</summary>
+			private readonly BiomeTemplate biome;
+			/// <summary>Draws which of the biome's crystals each chamber cluster is, on its own stream, so the mix never moves the rest.</summary>
+			private readonly DeterministicRNG crystalPick;
 			private readonly List<(Vector3 a, Vector3 b)> lanes = new List<(Vector3, Vector3)>();
 			private readonly List<(Vector3 centre, float radius)> keepClear = new List<(Vector3, float)>();
 			public readonly HashSet<string> Missing = new HashSet<string>();
 			/// <summary>The formations the shell's rock has no art for, each as "shape (stand-in rock's)" or "shape (as alternative)".</summary>
 			public readonly SortedSet<string> StoodIn = new SortedSet<string>(System.StringComparer.Ordinal);
+			/// <summary>Cave lights the biome names for a place they cannot be set in (a wall light where one stands on the floor), each "Place: Light".</summary>
+			public readonly SortedSet<string> Unfit = new SortedSet<string>(System.StringComparer.Ordinal);
 			public int Placed, Lights, Grown;
 			/// <summary>Glow art laid, lanterns laid, climbs and crossings drawn, camps pitched.</summary>
 			public int Glowing, Lamps, Climbed, Crossed, Camps;
 			/// <summary>Where every crystal-kind light of this system stands (system frame): what keeps the glow's lights sparse.</summary>
 			private readonly List<Vector3> glowLights = new List<Vector3>();
 
-			public Dresser(PointOfInterestSiteContext context, CaveSystem system, Set set, DeterministicRNG rng)
+			public Dresser(PointOfInterestSiteContext context, CaveSystem system, Set set, BiomeTemplate biome, DeterministicRNG rng)
 			{
 				this.context = context;
 				this.system = system;
 				this.set = set;
+				this.biome = biome;
 				this.rng = rng;
+				crystalPick = new DeterministicRNG(unchecked(system.Seed * 0x3A7D + 0x51C3));
 				foreach (CavePassage passage in system.Passages)
 				{
 					for (int i = 0; i + 1 < passage.Nodes.Count; i++)
@@ -436,8 +458,10 @@ namespace FishMMO.Shared.WorldDesign
 						}
 					}
 				}
-				// Crystals: a cluster or three in some chambers, glowing.
-				if (set.Crystal != null && rng.NextFloat() < set.CrystalChance * (cavern ? 1.5f : 1f))
+				// Crystals: a cluster or three in some chambers. A deposit (a cave's, a grotto's) is the biome's crystals, a kind by
+				// weight each, lit as its kind is (selenite with a cave light beside it, as every cave's was); an ice cave's are its ice.
+				bool deposit = set.CrystalRock != null;
+				if (set.Crystal != null && (!deposit || BiomeCaveCrystals.Total(set.Crystals) > 0f) && rng.NextFloat() < set.CrystalChance * (cavern ? 1.5f : 1f))
 				{
 					int clusters = rng.Range(1, 4);
 					for (int i = 0; i < clusters; i++)
@@ -445,10 +469,22 @@ namespace FishMMO.Shared.WorldDesign
 						float a = rng.Range(0f, 2f * Mathf.PI);
 						Vector3 dir = along * Mathf.Cos(a) + across * Mathf.Sin(a);
 						Vector3 p = new Vector3(chamber.Centre.x, chamber.Floor + 0.5f, chamber.Centre.z);
-						if (WallFoot(p, dir, Mathf.Max(chamber.Radii.x, chamber.Radii.z) + 2f, out Vector3 foot, chamber)
-							&& FloorPiece(foot - dir * 0.5f, set.Crystal, 1f, rng.Range(0.8f, 1.6f), true, -dir, set.CrystalRock, out Vector3 at))
+						float reach = Mathf.Clamp(0.4f * Mathf.Max(chamber.Radii.x, chamber.Radii.z), 5f, 10f);
+						if (!deposit)
 						{
-							Glow(at + Vector3.up * 0.8f, Mathf.Clamp(0.4f * Mathf.Max(chamber.Radii.x, chamber.Radii.z), 5f, 10f));
+							if (WallFoot(p, dir, Mathf.Max(chamber.Radii.x, chamber.Radii.z) + 2f, out Vector3 foot, chamber)
+								&& FloorPiece(foot - dir * 0.5f, set.Crystal, 1f, rng.Range(0.8f, 1.6f), true, -dir, set.CrystalRock, out Vector3 at))
+							{
+								Glow(at + Vector3.up * 0.8f, reach);
+							}
+							continue;
+						}
+						BiomeCaveCrystals.TryPick(set.Crystals, BiomeCaveCrystals.NeedsRoll(set.Crystals) ? crystalPick.NextFloat() : 0f, out BiomeCaveCrystalKind kind);
+						CaveMineral mineral = ProceduralArtCatalogue.CaveMineralOf(kind);
+						if (WallFoot(p, dir, Mathf.Max(chamber.Radii.x, chamber.Radii.z) + 2f, out Vector3 depositFoot, chamber)
+							&& FloorPiece(depositFoot - dir * 0.5f, () => Mineral(kind), 1f, rng.Range(0.8f, 1.6f), true, -dir, out Vector3 laid) && mineral.Lit)
+						{
+							Glow(laid + Vector3.up * 0.8f, reach, mineral.LightHue >= 0 ? mineral.LightHue : set.Hue);
 						}
 					}
 				}
@@ -578,6 +614,14 @@ namespace FishMMO.Shared.WorldDesign
 				=> FloorPiece(near, shape, height, scale, wall, facing, rock, out _);
 
 			private bool FloorPiece(Vector3 near, string shape, float height, float scale, bool wall, Vector3 facing, string rock, out Vector3 at)
+				=> FloorPiece(near, () => Formation(shape, rock), height, scale, wall, facing, out at);
+
+			/// <summary>
+			/// A piece on the floor near a point, against a wall (facing out of it) or free: false where the floor is not found, the
+			/// roof is too low for it or it would stand in a lane. <paramref name="prefab"/> is asked for its prefab only once the
+			/// spot is taken, at the very point the formation's variant was always drawn.
+			/// </summary>
+			private bool FloorPiece(Vector3 near, System.Func<GameObject> prefab, float height, float scale, bool wall, Vector3 facing, out Vector3 at)
 			{
 				at = default;
 				if (!FloorAndRoof(near, out float floor, out float roof) || roof - floor < height * scale + 0.3f)
@@ -590,7 +634,7 @@ namespace FishMMO.Shared.WorldDesign
 					return false;
 				}
 				float yaw = facing.sqrMagnitude > 1e-4f ? Mathf.Atan2(facing.x, facing.z) * Mathf.Rad2Deg : rng.Range(0f, 360f);
-				return Place(Formation(shape, rock), at, Quaternion.Euler(0f, yaw, 0f), Vector3.one * scale);
+				return Place(prefab(), at, Quaternion.Euler(0f, yaw, 0f), Vector3.one * scale);
 			}
 
 			// ── Mines ─────────────────────────────────────────────
@@ -604,6 +648,15 @@ namespace FishMMO.Shared.WorldDesign
 					float s = mouth.Radius / 2.1f;
 					Place(StructureKit.Prefab("MinePortal", portal), mouth.Floor + Dir(mouth.Yaw) * 0.4f, Quaternion.Euler(0f, mouth.Yaw + 180f, 0f), new Vector3(s, Mathf.Max(1f, s), 1f));
 				}
+				// The drifts' lights and the stopes' (the biome's Cave Lights, 2026-10-16: torches in sconces every 14–20 m and a
+				// torch on a pole in each stope in every biome before).
+				bool driftLit = CaveLight(BiomeCaveLightPlace.MineDrift, out BiomeCaveLight drift);
+				BiomeCaveLights.DriftGap(drift.Spacing, out float gapMin, out float gapMax);
+				if (!driftLit)
+				{
+					BiomeCaveLights.DriftGap(BiomeCaveLights.DriftSpacing, out gapMin, out gapMax);
+				}
+				bool stopeLit = CaveLight(BiomeCaveLightPlace.MineStope, out BiomeCaveLight stopeLight);
 				foreach (CavePassage passage in system.Passages)
 				{
 					float nextSet = 2f, nextLamp = 8f;
@@ -638,13 +691,18 @@ namespace FishMMO.Shared.WorldDesign
 							Vector3 c = Vector3.Lerp(a.Centre, b.Centre, t);
 							Vector3 side = new Vector3(dir.z, 0f, -dir.x).normalized;
 							float floor = Mathf.Lerp(a.Floor, b.Floor, t);
-							// A torch in its sconce on the rock at head height, leaning into the drift (the piece gives off its flame).
+							// The drift's light on the rock at head height (a torch in its sconce, leaning into the drift, before): a wall light
+							// on the rock, a ground light at the wall's foot, a hanging one from the roof by the wall (the piece gives off its light).
 							float hand = rng.NextFloat() < 0.5f ? 1f : -1f;
 							if (WallFoot(new Vector3(c.x, floor + 1.8f, c.z), side * hand, 2f * StructurePieces.MineSetHalfWidth + 1f, out Vector3 rock))
 							{
-								Place(StructureKit.Prefab("WallTorch", rng.NextFloat() < 0.5f ? 1 : 0), rock - side * hand * 0.05f, Quaternion.LookRotation(side * hand, Vector3.up), Vector3.one);
+								int variant = rng.NextFloat() < 0.5f ? 1 : 0;
+								if (driftLit)
+								{
+									DriftLight(in drift, variant, rock, side * hand, floor);
+								}
 							}
-							nextLamp = along + rng.Range(14f, 20f);
+							nextLamp = along + rng.Range(gapMin, gapMax);
 						}
 					}
 					if (trunk)
@@ -661,7 +719,12 @@ namespace FishMMO.Shared.WorldDesign
 						&& FloorAndRoof(postFoot - post * 0.8f, out float postFloor, out float postRoof) && postRoof - postFloor > 3f)
 					{
 						Vector3 at = postFoot - post * 0.8f;
-						Place(StructureKit.Prefab("TorchPost", rng.NextFloat() < 0.5f ? 1 : 0), new Vector3(at.x, postFloor, at.z), Quaternion.Euler(0f, rng.Range(0f, 360f), 0f), Vector3.one);
+						int variant = rng.NextFloat() < 0.5f ? 1 : 0;
+						Quaternion turn = Quaternion.Euler(0f, rng.Range(0f, 360f), 0f);
+						if (stopeLit)
+						{
+							GroundLight(in stopeLight, variant, new Vector3(at.x, postFloor, at.z), turn);
+						}
 					}
 					int glints = rng.Range(2, 5);
 					for (int i = 0; i < glints; i++)
@@ -849,12 +912,88 @@ namespace FishMMO.Shared.WorldDesign
 
 			// ── Lights ────────────────────────────────────────────
 
-			private void Glow(Vector3 local, float reach)
+			private readonly Dictionary<BiomeCaveLightPlace, (bool lit, BiomeCaveLight light)> caveLights = new Dictionary<BiomeCaveLightPlace, (bool, BiomeCaveLight)>();
+
+			/// <summary>How the cave's biome lights a place in its caves and mines (BiomeTemplateArt.CaveLight, read once a place); false where it is unlit.</summary>
+			private bool CaveLight(BiomeCaveLightPlace place, out BiomeCaveLight light)
+			{
+				if (!caveLights.TryGetValue(place, out (bool lit, BiomeCaveLight light) known))
+				{
+					known.lit = BiomeTemplateArt.CaveLight(biome, place, out known.light);
+					caveLights[place] = known;
+				}
+				light = known.light;
+				return known.lit;
+			}
+
+			/// <summary>A light's kit piece in a variant (wrapped to the piece's own), or null until the art is generated.</summary>
+			private GameObject LightPiece(BiomeWayLightKind light, int variant)
+			{
+				string id = BiomeWayLights.PieceId(light);
+				StructurePiece piece = StructureKit.Get(id);
+				if (piece == null)
+				{
+					Missing.Add(id);
+					return null;
+				}
+				GameObject prefab = StructureKit.Prefab(id, ((variant % piece.Variants) + piece.Variants) % piece.Variants);
+				if (prefab == null)
+				{
+					Missing.Add(id);
+				}
+				return prefab;
+			}
+
+			/// <summary>A light that stands on the ground at a spot (system frame); a wall or hanging light is not stood on a floor (noted).</summary>
+			private bool GroundLight(in BiomeCaveLight light, int variant, Vector3 local, Quaternion rotation)
+			{
+				if (BiomeWayLights.MountOf(light.Light) != BiomeWayLightMount.Ground)
+				{
+					Unfit.Add($"{light.Place}: {light.Light}");
+					return false;
+				}
+				return Place(LightPiece(light.Light, variant), local, rotation, Vector3.one);
+			}
+
+			/// <summary>
+			/// A drift's light where a ray across it met the rock at head height (<paramref name="rock"/>, the ray along
+			/// <paramref name="into"/>): a wall light on the rock (its back plate to it, as the drift's torches were), a ground light
+			/// at the wall's foot, a hanging one from the roof a pace off the wall where it clears a tall person's head.
+			/// </summary>
+			private void DriftLight(in BiomeCaveLight light, int variant, Vector3 rock, Vector3 into, float floor)
+			{
+				switch (BiomeWayLights.MountOf(light.Light))
+				{
+					case BiomeWayLightMount.Wall:
+						Place(LightPiece(light.Light, variant), rock - into * 0.05f, Quaternion.LookRotation(into, Vector3.up), Vector3.one);
+						break;
+					case BiomeWayLightMount.Ground:
+					{
+						Vector3 foot = rock - into * 0.5f;
+						Place(LightPiece(light.Light, variant), new Vector3(foot.x, FloorUnder(foot, floor), foot.z), Quaternion.LookRotation(-into, Vector3.up), Vector3.one);
+						break;
+					}
+					default:
+					{
+						Vector3 under = rock - into * 0.6f;
+						if (Roof(under, 6f, out float roof) && roof - floor - CaveArt.HangingLanternDrop(variant) >= Headroom)
+						{
+							Place(LightPiece(light.Light, variant), new Vector3(under.x, roof + 0.02f, under.z), Quaternion.LookRotation(into, Vector3.up), Vector3.one);
+						}
+						break;
+					}
+				}
+			}
+
+			private void Glow(Vector3 local, float reach) => Glow(local, reach, set.Hue);
+
+			/// <summary>A crystal's cave light: its hue in bits 8–9 (<paramref name="hue"/> −1: one by the seed).</summary>
+			private void Glow(Vector3 local, float reach, int hue)
 			{
 				uint seed = PointOfInterestPlanner.Hash(system.Seed, Mathf.RoundToInt(local.x * 10f), Mathf.RoundToInt(local.z * 10f), 0xC4);
-				if (set.Hue >= 0)
+				if (hue >= 0)
 				{
-					seed = (seed & ~0x300u) | ((uint)set.Hue << 8);
+					seed = (seed & ~0x300u) | ((uint)hue << 8);
 				}
 				Emit(local, SceneEmitterKind.Crystal, seed, reach);
 			}
@@ -1059,6 +1198,22 @@ namespace FishMMO.Shared.WorldDesign
 				if (prefab == null)
 				{
 					Missing.Add($"{artRock} {artShape}");
+				}
+				return prefab;
+			}
+
+			/// <summary>
+			/// A cave crystal's prefab (CaveArt.MineralPrefab): its variant drawn first as a formation's is, so selenite (gypsum's
+			/// Crystal formation) is laid from the very same draws as before 2026-10-16.
+			/// </summary>
+			private GameObject Mineral(BiomeCaveCrystalKind kind)
+			{
+				int variant = rng.Range(0, RockTypes.VariantCount);
+				GameObject prefab = CaveArt.MineralPrefab(kind, variant);
+				if (prefab == null)
+				{
+					CaveMineral mineral = ProceduralArtCatalogue.CaveMineralOf(kind);
+					Missing.Add(mineral.Formation ? $"{mineral.FormationRock} {mineral.FormationShape}" : $"cave crystal {kind}");
 				}
 				return prefab;
 			}

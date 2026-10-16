@@ -20,7 +20,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Moved("main", "Kelp")
 				.Look(BiomeLookClass.Aquatic)
 				.Wildlife(BiomeHabitat.Sea)
-				.HomeTo("Whale");
+				.HomeTo("Whale")
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

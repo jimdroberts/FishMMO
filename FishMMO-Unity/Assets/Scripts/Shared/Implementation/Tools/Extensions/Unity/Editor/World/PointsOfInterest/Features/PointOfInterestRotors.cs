@@ -60,7 +60,7 @@ namespace FishMMO.Shared.WorldDesign
 							Quaternion.Euler(0f, laid.Rotation.eulerAngles.y, 0f));
 						yawFrame.transform.localScale = laid.Scale;
 						yawFrame.AddComponent<ClientOnlyObject>();
-						Lay(headPrefab, yawFrame.transform, Vector3.zero);
+						Lay(headPrefab, yawFrame.transform, Vector3.zero, context.Palette, piece.Style);
 						parent = yawFrame.transform;
 						head = yawFrame.transform;
 					}
@@ -80,18 +80,22 @@ namespace FishMMO.Shared.WorldDesign
 					turning.Head = head;
 					// Seeded by where it stands: the same every cut, different from the mill next door.
 					turning.Phase = Mathf.Repeat(PointOfInterestPlanner.Hash(context.Record.Id, Mathf.RoundToInt(hub.x * 10f), Mathf.RoundToInt(hub.z * 10f), count) % 3600 * 0.1f, 360f);
-					Lay(prefab, spin.transform, -rotor.PieceHub);
+					Lay(prefab, spin.transform, -rotor.PieceHub, context.Palette, piece.Style);
 					spin.transform.localRotation = Quaternion.AngleAxis(turning.Phase, Vector3.forward);
 					count++;
 				}
 			}
 		}
 
-		/// <summary>A turning part's art under <paramref name="parent"/>: no colliders (nothing stands on it, the server never sees it), not static.</summary>
-		private static void Lay(GameObject prefab, Transform parent, Vector3 offset)
+		/// <summary>
+		/// A turning part's art under <paramref name="parent"/>: no colliders (nothing stands on it, the server never sees it), not
+		/// static; in the site's structure palette as its mill's part (<paramref name="host"/>: the mill's style).
+		/// </summary>
+		private static void Lay(GameObject prefab, Transform parent, Vector3 offset, FishMMO.Shared.Biomes.BiomeStructurePalette palette, StructureStyle host)
 		{
 			GameObject part = Object.Instantiate(prefab, parent, false);
 			part.name = prefab.name;
+			StructurePaletteDressing.Dress(part, prefab, palette, host);
 			part.transform.localPosition = offset;
 			part.transform.localRotation = Quaternion.identity;
 			foreach (Collider collider in part.GetComponentsInChildren<Collider>(true))

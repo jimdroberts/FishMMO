@@ -273,9 +273,9 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					float x = river.X[0], z = river.Z[0];
-					string biome = BiomeName(G.CellAt(x, z));
-					bool isHot = hotRule != null && hotRule.Enabled && hotRule.BiomeWeight(biome) > 0f;
-					if (isHot != hot || rule.BiomeWeight(biome) <= 0f)
+					int cell = G.CellAt(x, z);
+					bool isHot = hotRule != null && hotRule.Enabled && BiomeWeight(hotRule, cell) > 0f;
+					if (isHot != hot || BiomeWeight(rule, cell) <= 0f)
 					{
 						continue;
 					}

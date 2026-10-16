@@ -27,6 +27,40 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
+	/// The ways across one ground layer of a biome (<see cref="TerrainTextureLayer.ways"/>): the path, road and cobble grounds a
+	/// way is surfaced with where this ground is the strongest under it. Each empty one is the biome's own slot (Small Path,
+	/// Road, Cobbles), as every ground was before 2026-10-16.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Decision 19 (2026-10-16, the Taiga round): "a biome's detail layer may carry its own road/path surface (e.g. Taiga
+	/// corduroy log road only across bog layers, gravel elsewhere)". The scene cut lays each override into the terrain arrays
+	/// beside the biome's own way grounds and points the ground layer's column of the layer table at it, so the terrain draws a
+	/// road over this ground with this ground's road; the way's shape (trail, cart track, road, street) still picks which of the
+	/// three it wears, exactly as it does with the biome's.
+	/// </para>
+	/// <para>
+	/// Read on the biome's main and detail layers only: cliffs, beds and bars carry no ways of their own, and the ways' own
+	/// slots (Small Path, Road, Cobbles) are the biome's. Terrain layer assets rather than whole texture layers, because a way
+	/// ground is never painted or scattered on (only its art and tiling are read) and a texture layer cannot hold another.
+	/// Biome art authoring fills them from the biome's spec (a layer's Ways) and keeps any somebody set by hand.
+	/// </para>
+	/// </remarks>
+	[Serializable]
+	public struct GroundWays
+	{
+		[Tooltip("The ground a footpath, trail or cart track wears to across this ground. Empty: the biome's Small Path layer.")]
+		public TerrainLayer path;
+		[Tooltip("The ground a road is surfaced with across this ground. Empty: the biome's Road layer.")]
+		public TerrainLayer road;
+		[Tooltip("The paving of a street, highway or old road across this ground. Empty: the biome's Cobbles layer.")]
+		public TerrainLayer cobbles;
+
+		/// <summary>True when no way has a ground of its own here.</summary>
+		public bool IsEmpty => path == null && road == null && cobbles == null;
+	}
+
+	/// <summary>
 	/// One terrain texture of a biome — its maps, tiling, blend noise, and the height and slope
 	/// bands it is confined to — plus the prefab spawn rules that apply where it dominates.
 	/// Field names match the WorldEditor asset layout so exported biome templates load unchanged.
@@ -126,6 +160,10 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>Forgets the makeup ("not set": the layer's name decides).</summary>
 		public void ClearGroundMakeup() => groundMakeup = default;
+
+		[Header("Ways Across This Ground")]
+		[Tooltip("Main and detail layers only: the path, road and cobble grounds a way takes where this ground is the strongest under it. Each empty one is the biome's own slot. Written by Author biome art from the spec; set by hand to override.")]
+		public GroundWays ways;
 
 		[Header("Prefab Spawning")]
 		[Tooltip("Prefab spawn rules that become active wherever this texture dominates.")]

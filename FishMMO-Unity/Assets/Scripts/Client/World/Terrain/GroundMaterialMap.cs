@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using FishMMO.Shared;
 using UnityEngine;
-using UnityEngine.Experimental.Rendering;
 
 namespace FishMMO.Client
 {
@@ -15,14 +14,16 @@ namespace FishMMO.Client
 	/// <remarks>
 	/// <para>
 	/// <b>Data, then GPU only.</b> At scene load every terrain's heights go into one slice of <c>_FishGroundHeights</c>
-	/// (uploaded once from <see cref="TerrainData.GetHeights"/>), and its control maps (<see cref="TerrainData.alphamapTextures"/>)
-	/// are copied GPU-to-GPU into consecutive slices of <c>_FishGroundControl</c>. Everything after that — the trace, the
+	/// (uploaded once from <see cref="TerrainData.GetHeights"/>), and its index map is baked from its alphamaps on the GPU
+	/// into one slice of <c>_FishGroundIndex</c>, as the terrain's own is (<see cref="TerrainIndexMapBaker"/>: the same four
+	/// layers per texel, the same filter). Everything after that — the trace, the
 	/// skirt, the paint — runs in the shaders; nothing is read back. The heights are NOT copied from
 	/// <see cref="TerrainData.heightmapTexture"/>: Unity fills that render texture lazily, at the terrain's first draw, so
 	/// a copy at scene load (this builds at the start of a frame) took uninitialised memory — traced ground 1–2 km in
 	/// the air, the skirt thrown into the sky (2026-10-08). The layers' art is the scene's
 	/// <see cref="TerrainArraySet"/> — the arrays and per-layer tiling, tint and surface the terrain itself is drawn
-	/// with (TerrainArrayBinder) — published under their own global names.
+	/// with (TerrainArrayBinder) — published under their own global names, the numbers as a layer table
+	/// (<see cref="TerrainLayerTable"/>, <c>_FishGroundLayerTable</c>).
 	/// </para>
 	/// <para>
 	/// <b>One set.</b> Layer indices are the set's, so only terrains drawn from the most common set in the loaded
@@ -38,40 +39,28 @@ namespace FishMMO.Client
 		public const int MaxTiles = 32;
 
 		/// <summary>Matches FISH_GROUND_MAX_LAYERS in FishGroundColour.hlsl (and the terrain array's own limit).</summary>
-		public const int MaxLayers = 32;
-
-		/// <summary>Control maps one terrain can carry (eight of four channels).</summary>
-		public const int MaxControls = 8;
+		public const int MaxLayers = TerrainArrayLayerParams.MaximumLayers;
 
 
 		private static readonly int HeightsId = Shader.PropertyToID("_FishGroundHeights");
-		private static readonly int ControlId = Shader.PropertyToID("_FishGroundControl");
+		private static readonly int IndexId = Shader.PropertyToID("_FishGroundIndex");
 		private static readonly int AlbedoId = Shader.PropertyToID("_FishGroundAlbedo");
 		private static readonly int NormalsId = Shader.PropertyToID("_FishGroundNormals");
 		private static readonly int InfoId = Shader.PropertyToID("_FishGroundInfo");
 		private static readonly int ResId = Shader.PropertyToID("_FishGroundArrayRes");
 		private static readonly int TileId = Shader.PropertyToID("_FishGroundTile");
 		private static readonly int TileDataId = Shader.PropertyToID("_FishGroundTileData");
-		private static readonly int LayerSTId = Shader.PropertyToID("_FishGroundLayerST");
-		private static readonly int LayerTintId = Shader.PropertyToID("_FishGroundLayerTint");
-		private static readonly int LayerSurfaceId = Shader.PropertyToID("_FishGroundLayerSurface");
-		private static readonly int LayerMaskOffsetId = Shader.PropertyToID("_FishGroundLayerMaskOffset");
-		private static readonly int LayerMaskScaleId = Shader.PropertyToID("_FishGroundLayerMaskScale");
-		private static readonly int LayerFloraId = Shader.PropertyToID("_FishGroundLayerFlora");
+		private static readonly int LayerTableId = Shader.PropertyToID("_FishGroundLayerTable");
 		private static readonly int MasksId = Shader.PropertyToID("_FishGroundMasks");
 		private static readonly int BlendId = Shader.PropertyToID("_FishGroundBlend");
 
 		private static readonly Vector4[] tiles = new Vector4[MaxTiles];
 		private static readonly Vector4[] tileData = new Vector4[MaxTiles];
-		private static readonly Vector4[] layerST = new Vector4[MaxLayers];
-		private static readonly Vector4[] layerTint = new Vector4[MaxLayers];
-		private static readonly Vector4[] layerSurface = new Vector4[MaxLayers];
-		private static readonly Vector4[] layerMaskOffset = new Vector4[MaxLayers];
-		private static readonly Vector4[] layerMaskScale = new Vector4[MaxLayers];
-		private static readonly Vector4[] layerFlora = new Vector4[MaxLayers];
 
 		private static Texture2DArray heights;
-		private static RenderTexture control;
+		private static RenderTexture index;
+		private static RenderTexture blankIndex;
+		private static Texture2D layerTable;
 
 		/// <summary>Terrains copied (0 when none): what a compute shader reading the heights must bind, as it does not see the render globals.</summary>
 		public static int TileCount { get; private set; }
@@ -85,7 +74,7 @@ namespace FishMMO.Client
 		/// <summary>Per copied terrain: xy world xz origin, zw 1 / size xz (<see cref="MaxTiles"/> long).</summary>
 		public static Vector4[] Tiles => tiles;
 
-		/// <summary>Per copied terrain: x world y origin, y height (m), z control maps, w first control slice.</summary>
+		/// <summary>Per copied terrain: x world y origin, y height (m), z 1 when its index map was baked, w its index slice.</summary>
 		public static Vector4[] TileData => tileData;
 
 		/// <summary>Copies every terrain drawn from the most common array set into the GPU arrays and publishes them.</summary>
@@ -93,8 +82,7 @@ namespace FishMMO.Client
 		{
 			TerrainArraySet set = MostCommon(sets);
 			var chosen = new List<Terrain>();
-			int heightRes = 0, controlRes = 0, controlSlices = 0;
-			bool mixedRes = false;
+			int heightRes = 0, controlRes = 0;
 			if (set != null)
 			{
 				foreach (Terrain t in terrains)
@@ -109,8 +97,7 @@ namespace FishMMO.Client
 						continue;
 					}
 					TerrainData data = t.terrainData;
-					int controls = Mathf.Min(MaxControls, data.alphamapTextureCount);
-					if (controls == 0)
+					if (data.alphamapTextureCount == 0)
 					{
 						continue;
 					}
@@ -120,10 +107,15 @@ namespace FishMMO.Client
 						Debug.LogWarning($"[Ground material] '{t.name}': heightmap {data.heightmapResolution}² differs from {heightRes}²; left out (average-colour blend there).");
 						continue;
 					}
-					mixedRes |= controlRes != 0 && data.alphamapResolution != controlRes;
+					if (controlRes != 0 && data.alphamapResolution != controlRes)
+					{
+						// An index map cannot be resampled (ids do not blend), and a slice holds one size. Generated scenes cut
+						// every tile alike, so this is a hand-made scene's case.
+						Debug.LogWarning($"[Ground material] '{t.name}': alphamaps {data.alphamapResolution}² differ from {controlRes}²; left out (average-colour blend there).");
+						continue;
+					}
 					heightRes = data.heightmapResolution;
-					controlRes = Mathf.Max(controlRes, data.alphamapResolution);
-					controlSlices += controls;
+					controlRes = data.alphamapResolution;
 					chosen.Add(t);
 				}
 			}
@@ -132,24 +124,18 @@ namespace FishMMO.Client
 				Release();
 				return;
 			}
-			if (mixedRes)
-			{
-				// Resampled to the largest: a smaller tile's texels then sit a fraction of a texel off. Generated scenes
-				// cut every tile alike, so this is a hand-made scene's case.
-				Debug.LogWarning("[Ground material] terrains differ in control resolution; the smaller ones are resampled.");
-			}
 
 			heights = EnsureHeights(heights, heightRes, chosen.Count);
 			var row = new ushort[heightRes * heightRes];
-			control = Ensure(control, controlRes, controlSlices, GraphicsFormat.R8G8B8A8_UNorm, "Ground control");
-			int slice = 0;
+			index = EnsureIndex(index, controlRes, chosen.Count);
+			Shader bake = TerrainIndexMapBaker.ShaderOf(set);
+			int baked = 0;
 			for (int i = 0; i < chosen.Count; i++)
 			{
 				Terrain t = chosen[i];
 				TerrainData data = t.terrainData;
 				Vector3 p = t.GetPosition();
 				Vector3 s = data.size;
-				int controls = Mathf.Min(MaxControls, data.alphamapTextureCount);
 				// Normalised 0..1 of the terrain's height, row z, column x: the slice's texel (x, z).
 				float[,] h = data.GetHeights(0, 0, heightRes, heightRes);
 				for (int z = 0; z < heightRes; z++)
@@ -160,29 +146,27 @@ namespace FishMMO.Client
 					}
 				}
 				heights.SetPixelData(row, 0, i);
-				for (int k = 0; k < controls; k++)
-				{
-					Copy(data.GetAlphamapTexture(k), control, slice + k);
-				}
+				// The tile's four strongest layers per texel, as its own terrain draws them (the terrain's binder bakes the same).
+				bool hasIndex = TerrainIndexMapBaker.Bake(data, bake, index, i);
+				baked += hasIndex ? 1 : 0;
 				tiles[i] = new Vector4(p.x, p.z, 1f / s.x, 1f / s.z);
-				tileData[i] = new Vector4(p.y, s.y, controls, slice);
-				slice += controls;
+				tileData[i] = new Vector4(p.y, s.y, hasIndex ? 1f : 0f, i);
 			}
 
 			heights.Apply(false, false);
+			if (!Application.isEditor)
+			{
+				TerrainIndexMapBaker.ReleaseScratch();
+			}
 
 			int layers = Mathf.Min(MaxLayers, set.LayerCount);
-			Vector4[] flora = set.LayerFlora();
-			for (int l = 0; l < MaxLayers; l++)
+			// Each layer's tiling, tint, surface, mask remap and what it is made of for the planet's looks (the band at a base
+			// recolours as the terrain does): the terrain's own layer table, without the paths (the band draws none).
+			if (layerTable == null)
 			{
-				// What each layer is made of for the planet's looks: the band at a base recolours as the terrain does.
-				layerFlora[l] = l < layers && l < flora.Length ? flora[l] : Vector4.zero;
-				layerST[l] = l < layers && l < set.LayerST.Length ? set.LayerST[l] : new Vector4(1f, 1f, 0f, 0f);
-				layerTint[l] = l < layers && l < set.LayerTint.Length ? set.LayerTint[l] : Vector4.one;
-				layerSurface[l] = l < layers && l < set.LayerSurface.Length ? set.LayerSurface[l] : Vector4.zero;
-				layerMaskOffset[l] = l < layers && l < set.LayerMaskOffset.Length ? set.LayerMaskOffset[l] : Vector4.zero;
-				layerMaskScale[l] = l < layers && l < set.LayerMaskScale.Length ? set.LayerMaskScale[l] : Vector4.one;
+				layerTable = TerrainLayerTable.Create("Ground layer table");
 			}
+			TerrainLayerTable.Fill(layerTable, TerrainLayerTable.Pack(set, null, null, null));
 
 			// What the terrain's own material does with them (FishWeatherTerrainArray.shader): its height blend, how deep
 			// snow lifts it, how much weather it takes — the base blend must render it the same way.
@@ -193,49 +177,23 @@ namespace FishMMO.Client
 			float weatherAmount = terrainMaterial != null && terrainMaterial.HasFloat("_FishWeatherAmount") ? terrainMaterial.GetFloat("_FishWeatherAmount") : 1f;
 
 			Shader.SetGlobalTexture(HeightsId, heights);
-			Shader.SetGlobalTexture(ControlId, control);
+			Shader.SetGlobalTexture(IndexId, index);
+			Shader.SetGlobalTexture(LayerTableId, layerTable);
 			Shader.SetGlobalTexture(AlbedoId, set.Albedo);
 			// Bound even when the set has no normals or masks (flagged off): an unbound array slot is not legal everywhere.
 			Shader.SetGlobalTexture(NormalsId, set.Normal != null ? set.Normal : (Texture)set.Albedo);
 			Shader.SetGlobalTexture(MasksId, set.Mask != null ? set.Mask : (Texture)set.Albedo);
-			Shader.SetGlobalVectorArray(LayerMaskOffsetId, layerMaskOffset);
-			Shader.SetGlobalVectorArray(LayerMaskScaleId, layerMaskScale);
 			Shader.SetGlobalVector(BlendId, new Vector4(heightTransition, heightBlend ? 1f : 0f, set.Mask != null ? 1f : 0f, snowDepth));
 			Shader.SetGlobalVectorArray(TileId, tiles);
 			Shader.SetGlobalVectorArray(TileDataId, tileData);
-			Shader.SetGlobalVectorArray(LayerSTId, layerST);
-			Shader.SetGlobalVectorArray(LayerTintId, layerTint);
-			Shader.SetGlobalVectorArray(LayerSurfaceId, layerSurface);
-			Shader.SetGlobalVectorArray(LayerFloraId, layerFlora);
 			Shader.SetGlobalVector(ResId, new Vector4(heightRes, controlRes, 0f, 0f));
 			Shader.SetGlobalVector(InfoId, new Vector4(chosen.Count, layers, set.Normal != null ? 1f : 0f, weatherAmount));
 			TileCount = chosen.Count;
 			HeightResolution = heightRes;
-			Debug.Log($"[Ground material] {chosen.Count} terrain(s) from '{set.name}': heights {heightRes}² × {chosen.Count}, control {controlRes}² × {controlSlices}, {layers} layers; masks {(set.Mask != null ? "yes" : "no")}, height blend {(heightBlend ? $"on ({heightTransition:F2})" : "off")}, snow lift {snowDepth:F2} m, weather {weatherAmount:F2}.");
+			Debug.Log($"[Ground material] {chosen.Count} terrain(s) from '{set.name}': heights {heightRes}² × {chosen.Count}, index maps {controlRes}² × {baked}, {layers} layers; masks {(set.Mask != null ? "yes" : "no")}, height blend {(heightBlend ? $"on ({heightTransition:F2})" : "off")}, snow lift {snowDepth:F2} m, weather {weatherAmount:F2}.");
 #if UNITY_EDITOR
 			CheckHeights(chosen);
 #endif
-		}
-
-		/// <summary>
-		/// Into one slice of an array, on the GPU: an exact <see cref="Graphics.CopyTexture(Texture, int, int, Texture, int, int)"/>
-		/// when size and format agree and the device copies textures, else a <see cref="Graphics.Blit(Texture, RenderTexture, int, int)"/>
-		/// (resampling).
-		/// </summary>
-		private static void Copy(Texture source, RenderTexture target, int slice)
-		{
-			bool same = source.width == target.width && source.height == target.height && source.graphicsFormat == target.graphicsFormat;
-			UnityEngine.Rendering.CopyTextureSupport support = SystemInfo.copyTextureSupport;
-			bool canCopy = (support & UnityEngine.Rendering.CopyTextureSupport.Basic) != 0
-				&& (source is RenderTexture || (support & UnityEngine.Rendering.CopyTextureSupport.TextureToRT) != 0);
-			if (same && canCopy)
-			{
-				Graphics.CopyTexture(source, 0, 0, target, slice, 0);
-			}
-			else
-			{
-				Graphics.Blit(source, target, 0, slice);
-			}
 		}
 
 #if UNITY_EDITOR
@@ -280,38 +238,10 @@ namespace FishMMO.Client
 					Debug.Log($"[Ground material] height check '{t.name}': {verdict}, worst {worst:F3} m at {worstAt}.");
 				});
 			}
-			// The control maps' first slice per terrain against the terrain's own splat weights.
-			RenderTexture controls = control;
+			// The index maps' texels against the CPU bake from each terrain's own splat weights (TerrainIndexMap.BakeTexel).
 			for (int i = 0; i < chosen.Count && i < 4; i++)
 			{
-				Terrain t = chosen[i];
-				int slice = (int)tileData[i].w;
-				int res = controls.width;
-				UnityEngine.Rendering.AsyncGPUReadback.Request(controls, 0, 0, res, 0, res, slice, 1, request =>
-				{
-					if (request.hasError || t == null || t.terrainData == null)
-					{
-						Debug.LogWarning($"[Ground material] control check {slice}: readback failed.");
-						return;
-					}
-					Unity.Collections.NativeArray<Color32> data = request.GetData<Color32>();
-					TerrainData td = t.terrainData;
-					int ares = td.alphamapResolution;
-					float worst = 0f;
-					for (int s = 0; s < 5; s++)
-					{
-						int x = (ares - 1) * (s + 1) / 6;
-						int z = (ares - 1) * ((s * 3 + 1) % 6) / 6;
-						float[,,] w = td.GetAlphamaps(x, z, 1, 1);
-						Color32 c = data[z * res + x];
-						float[] copied = { c.r / 255f, c.g / 255f, c.b / 255f, c.a / 255f };
-						for (int ch = 0; ch < 4 && ch < w.GetLength(2); ch++)
-						{
-							worst = Mathf.Max(worst, Mathf.Abs(copied[ch] - w[0, 0, ch]));
-						}
-					}
-					Debug.Log($"[Ground material] control check '{t.name}': {(worst < 0.02f ? "ok" : "MISMATCH")}, worst weight difference {worst:F3}.");
-				});
+				TerrainIndexMapBaker.Check(chosen[i], index, (int)tileData[i].w);
 			}
 		}
 #endif
@@ -326,12 +256,44 @@ namespace FishMMO.Client
 				Object.Destroy(heights);
 				heights = null;
 			}
-			if (control != null)
+			if (index != null)
 			{
-				control.Release();
-				Object.Destroy(control);
-				control = null;
+				index.Release();
+				Object.Destroy(index);
+				index = null;
 			}
+			// Never left unbound: the shaders declare it an unsigned-integer array, which Unity's default would not be.
+			Shader.SetGlobalTexture(IndexId, BlankIndex());
+		}
+
+		/// <summary>A one-slice index array of unpainted ground, bound while nothing is copied.</summary>
+		private static RenderTexture BlankIndex()
+		{
+			if (blankIndex == null || !blankIndex.IsCreated())
+			{
+				blankIndex = TerrainIndexMapBaker.Create(1, 1, 1, "Ground index (none)", array: true);
+				var clear = new UnityEngine.Rendering.CommandBuffer { name = "Ground index (none)" };
+				clear.SetRenderTarget(blankIndex, 0, CubemapFace.Unknown, 0);
+				clear.ClearRenderTarget(false, true, Color.clear);
+				Graphics.ExecuteCommandBuffer(clear);
+				clear.Release();
+			}
+			return blankIndex;
+		}
+
+		/// <summary>The index array (R32G32_UInt, a slice per terrain), reused when it already fits.</summary>
+		private static RenderTexture EnsureIndex(RenderTexture rt, int size, int depth)
+		{
+			if (rt != null && rt.IsCreated() && rt.width == size && rt.volumeDepth == depth && rt.graphicsFormat == TerrainIndexMapBaker.Format)
+			{
+				return rt;
+			}
+			if (rt != null)
+			{
+				rt.Release();
+				Object.Destroy(rt);
+			}
+			return TerrainIndexMapBaker.Create(size, size, depth, "Ground index", array: true);
 		}
 
 		/// <summary>The set most terrains are drawn from.</summary>
@@ -375,37 +337,6 @@ namespace FishMMO.Client
 				filterMode = FilterMode.Bilinear,
 				hideFlags = HideFlags.DontSave,
 			};
-		}
-
-		/// <summary>A clamped, bilinear, mip-less texture array of the given size, reused when it already fits.</summary>
-		private static RenderTexture Ensure(RenderTexture rt, int size, int depth, GraphicsFormat format, string name)
-		{
-			if (rt != null && rt.width == size && rt.volumeDepth == depth && rt.graphicsFormat == format)
-			{
-				return rt;
-			}
-			if (rt != null)
-			{
-				rt.Release();
-				Object.Destroy(rt);
-			}
-			var desc = new RenderTextureDescriptor(size, size, format, 0)
-			{
-				dimension = UnityEngine.Rendering.TextureDimension.Tex2DArray,
-				volumeDepth = depth,
-				useMipMap = false,
-				autoGenerateMips = false,
-				msaaSamples = 1,
-			};
-			rt = new RenderTexture(desc)
-			{
-				name = name,
-				wrapMode = TextureWrapMode.Clamp,
-				filterMode = FilterMode.Bilinear,
-				hideFlags = HideFlags.DontSave,
-			};
-			rt.Create();
-			return rt;
 		}
 	}
 }

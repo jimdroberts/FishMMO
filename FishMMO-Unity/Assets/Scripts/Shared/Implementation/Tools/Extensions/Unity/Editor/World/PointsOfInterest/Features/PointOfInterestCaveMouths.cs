@@ -158,7 +158,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>What grows round a mouth: the detail prefabs by part (bush, fern, creeper), and the props strewn by it.</summary>
 		internal sealed class Growth
 		{
-			/// <summary>The biome it is of: the plants it adds to a tile take its blade looks (PointOfInterestHerbGrove.RecordBiome).</summary>
+			/// <summary>The biome it is of: the plants it paints take its blade looks (PointOfInterestHerbGrove.SiteLayers).</summary>
 			public BiomeTemplate Biome;
 			public readonly List<GameObject> Species = new List<GameObject>();
 			public readonly List<int> Bushes = new List<int>(), Ferns = new List<int>();
@@ -354,14 +354,18 @@ namespace FishMMO.Shared.WorldDesign
 				return 0;
 			}
 			int count = growth.Species.Count;
-			var layers = new int[count];
+			// Each plant into its own biome's prototype on the tile, measured against the one it used to share (2026-10-16).
+			var layers = new PointOfInterestHerbGrove.PlantLayers[count];
 			var maps = new int[count][,];
+			var bases = new int[count][,];
 			int w = x1 - x0 + 1, h = z1 - z0 + 1;
 			for (int s = 0; s < count; s++)
 			{
-				layers[s] = PointOfInterestHerbGrove.LayerOf(data, growth.Species[s]);
-				PointOfInterestHerbGrove.RecordBiome(terrain, layers[s], growth.Biome);
-				maps[s] = data.GetDetailLayer(x0, z0, w, h, layers[s]);
+				layers[s] = PointOfInterestHerbGrove.LayersOf(terrain, growth.Species[s], growth.Biome);
+				if (layers[s].Own >= 0)
+				{
+					PointOfInterestHerbGrove.ReadMaps(data, x0, z0, w, h, layers[s], out maps[s], out bases[s]);
+				}
 			}
 			// The mouth's own hole: nothing is painted over it (the bore is no ground to grow on).
 			int holeRes = data.holesResolution;
@@ -414,11 +418,17 @@ namespace FishMMO.Shared.WorldDesign
 					bool grew = false;
 					for (int s = 0; s < count; s++)
 					{
-						int value = Mathf.Clamp(Mathf.RoundToInt(want[s] * unit), 0, maxValue);
-						// Only ever more: the ground's own cover of the same plant stays where it is thicker.
-						if (value > maps[s][j, i])
+						if (maps[s] == null)
 						{
-							maps[s][j, i] = value;
+							continue;
+						}
+						int value = Mathf.Clamp(Mathf.RoundToInt(want[s] * unit), 0, maxValue);
+						// Only ever more: the ground's own cover of the same plant stays where it is thicker (measured with the
+						// prototype of the plant the mouth used to paint into, when its own is another).
+						int grown = TerrainDetailBiomes.SiteCover(bases[s] != null ? bases[s][j, i] : 0, maps[s][j, i], bases[s] == null, value);
+						if (grown != maps[s][j, i])
+						{
+							maps[s][j, i] = grown;
 							changed[s] = true;
 							grew = true;
 						}
@@ -431,7 +441,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				if (changed[s])
 				{
-					data.SetDetailLayer(x0, z0, layers[s], maps[s]);
+					data.SetDetailLayer(x0, z0, layers[s].Own, maps[s]);
 					dirty = true;
 				}
 			}

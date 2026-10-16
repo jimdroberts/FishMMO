@@ -56,7 +56,8 @@ namespace FishMMO.Shared.WorldDesign
 	/// </para>
 	/// <para>
 	/// <b>Choosing.</b> Each site of a kind draws one of the kind's templates, seeded by the site, weighted by
-	/// <see cref="WeightFor"/>: the biome's weight, the race's fit, and whether its size class is allowed.
+	/// <see cref="WeightFor"/>: the biome's weight (the biome template's for the template's variant and style, 2026-10-16),
+	/// the race's fit, and whether its size class is allowed.
 	/// </para>
 	/// <para>
 	/// <b>Features</b> are <see cref="PointOfInterestFeature"/> subclasses held by reference, so another assembly's
@@ -70,12 +71,25 @@ namespace FishMMO.Shared.WorldDesign
 		public const string Folder = "Assets/Templates/World/PointsOfInterest";
 
 		public POIType Kind = POIType.Landmark;
+		/// <summary>
+		/// The variant this template is of its kind ("Stone" of "Village - Stone"): what a biome template weighs it by
+		/// (BiomeTemplate.SiteVariants). Empty: read from the asset's name (<see cref="VariantOf"/>).
+		/// </summary>
+		public string Variant;
 		/// <summary>How often this template is chosen against the kind's others, before biome and race fit.</summary>
 		[Min(0f)] public float Weight = 1f;
 
-		/// <summary>Weight of a biome <see cref="BiomeWeights"/> does not name.</summary>
+		/// <summary>
+		/// The template's weight in a biome that does not weigh its variant (BiomeTemplate.SiteVariants), and on ground with no
+		/// biome.
+		/// </summary>
 		[Header("Fit")]
 		[Min(0f)] public float DefaultBiomeWeight = 1f;
+		/// <summary>
+		/// The biomes this variant was written for, by name: the default the biome art authoring writes onto the biome templates
+		/// (2026-10-16), which the cut reads instead. Only a biome template never authored with its variant weights still
+		/// reads these, by its name, with a warning.
+		/// </summary>
 		public List<PointOfInterestBiomeWeight> BiomeWeights = new List<PointOfInterestBiomeWeight>();
 		/// <summary>RaceTemplate.Category values this template suits; empty for any.</summary>
 		public List<string> RaceCategories = new List<string>();
@@ -96,21 +110,58 @@ namespace FishMMO.Shared.WorldDesign
 		public List<PointOfInterestPieceSlot> Pieces = new List<PointOfInterestPieceSlot>();
 		[SerializeReference] public List<PointOfInterestFeature> Features = new List<PointOfInterestFeature>();
 
-		/// <summary>The template's weight for a site: 0 where it does not fit at all.</summary>
-		/// <param name="biomeName">The site's biome asset name.</param>
-		/// <param name="race">The site's race naming key (empty for none).</param>
-		/// <param name="raceCategory">That race's category (empty for none).</param>
-		public float WeightFor(PointOfInterestRecord record, string biomeName, string race, string raceCategory)
+		/// <summary>The variant a biome weighs this template by: <see cref="Variant"/>, else read from the asset's name.</summary>
+		public string VariantKey => !string.IsNullOrWhiteSpace(Variant) ? Variant.Trim() : VariantOf(name, Kind);
+
+		/// <summary>
+		/// The variant an authored template's asset name carries: "&lt;Kind&gt; - &lt;Variant&gt;", a run of sizes after it in
+		/// brackets ("Camp - Hide Tents (Medium-Large)" → "Hide Tents"). A name not of that form is its own variant. Pure.
+		/// </summary>
+		public static string VariantOf(string assetName, POIType kind)
 		{
-			if (record == null || record.Kind != Kind)
+			if (string.IsNullOrEmpty(assetName))
 			{
-				return 0f;
+				return string.Empty;
 			}
-			bool size = record.SizeClass == 0 ? Small : record.SizeClass == 1 ? Medium : Large;
-			if (!size)
+			string variant = assetName.Trim();
+			string prefix = kind + " - ";
+			if (variant.StartsWith(prefix, StringComparison.Ordinal))
 			{
-				return 0f;
+				variant = variant.Substring(prefix.Length);
 			}
+			int open = variant.LastIndexOf(" (", StringComparison.Ordinal);
+			if (open > 0 && variant.EndsWith(")", StringComparison.Ordinal) && IsSizeRun(variant.Substring(open + 2, variant.Length - open - 3)))
+			{
+				variant = variant.Substring(0, open);
+			}
+			return variant;
+		}
+
+		// "Small", "Medium", "Large", or two of them joined by a dash (PointOfInterestTemplateAuthoring.Plan's labels).
+		private static bool IsSizeRun(string run)
+		{
+			string[] parts = run.Split('-');
+			if (parts.Length < 1 || parts.Length > 2)
+			{
+				return false;
+			}
+			foreach (string part in parts)
+			{
+				if (part != "Small" && part != "Medium" && part != "Large")
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
+		/// <summary>
+		/// The weight the template's own biome list gives a biome by its asset name (<see cref="BiomeWeights"/>, a later entry
+		/// winning; <see cref="DefaultBiomeWeight"/> for a biome it does not name, or none): what the pick used until
+		/// 2026-10-16, read now only for a biome template never authored with its variant weights (BiomeTemplateArt).
+		/// </summary>
+		public float BiomeWeightByName(string biomeName)
+		{
 			float biome = DefaultBiomeWeight;
 			if (!string.IsNullOrEmpty(biomeName))
 			{
@@ -122,19 +173,50 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 			}
-			float fit = 1f;
-			if (Races.Count > 0 && !Contains(Races, race))
-			{
-				fit = 0f;
-			}
-			if (RaceCategories.Count > 0 && !Contains(RaceCategories, raceCategory))
-			{
-				fit = 0f;
-			}
-			return Mathf.Max(0f, Weight) * Mathf.Max(0f, biome) * fit;
+			return biome;
 		}
 
-		private static bool Contains(List<string> list, string value)
+		/// <summary>The template's weight for a site: 0 where it does not fit at all.</summary>
+		/// <param name="biomeWeight">
+		/// The weight the site's biome gives this template (BiomeTemplateArt.SiteVariantWeight: the biome template's weight for
+		/// its variant and style, else <see cref="DefaultBiomeWeight"/>).
+		/// </param>
+		/// <param name="race">The site's race naming key (empty for none).</param>
+		/// <param name="raceCategory">That race's category (empty for none).</param>
+		public float WeightFor(PointOfInterestRecord record, float biomeWeight, string race, string raceCategory)
+		{
+			if (record == null || record.Kind != Kind)
+			{
+				return 0f;
+			}
+			return Fit(Weight, biomeWeight, Small, Medium, Large, Races, RaceCategories, record.SizeClass, race, raceCategory);
+		}
+
+		/// <summary>
+		/// A template's weight from its parts: its own weight × the biome's × whether the site's size class and race fit (0 or 1).
+		/// Pure, for the pick and its tests.
+		/// </summary>
+		public static float Fit(float weight, float biomeWeight, bool small, bool medium, bool large, IReadOnlyList<string> races,
+			IReadOnlyList<string> raceCategories, int sizeClass, string race, string raceCategory)
+		{
+			bool size = sizeClass == 0 ? small : sizeClass == 1 ? medium : large;
+			if (!size)
+			{
+				return 0f;
+			}
+			float fit = 1f;
+			if (races != null && races.Count > 0 && !Contains(races, race))
+			{
+				fit = 0f;
+			}
+			if (raceCategories != null && raceCategories.Count > 0 && !Contains(raceCategories, raceCategory))
+			{
+				fit = 0f;
+			}
+			return Mathf.Max(0f, weight) * Mathf.Max(0f, biomeWeight) * fit;
+		}
+
+		private static bool Contains(IReadOnlyList<string> list, string value)
 		{
 			if (string.IsNullOrEmpty(value))
 			{

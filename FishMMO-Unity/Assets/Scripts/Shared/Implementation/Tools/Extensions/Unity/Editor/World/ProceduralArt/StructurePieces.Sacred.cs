@@ -34,7 +34,7 @@ namespace FishMMO.Shared.WorldDesign
 			Piece(list, "CryptEntrance", StructureStyle.Stone, StructureSize.Medium, "A door frame set into a barrow; v1 with flanking walls and a roof slab.", CryptEntrance,
 				"dead", "crypt");
 			Piece(list, "BonePile", StructureStyle.Earth, StructureSize.Small, "Bones and a skull; v1 scattered, two skulls.", BonePile, "dead", "bones").Collides = false;
-			Piece(list, "IronFence", StructureStyle.Iron, StructureSize.Small, "Three metres of spear-topped railing; v1 on a low stone wall.", IronFence,
+			Piece(list, "IronFence", StructureStyle.Iron, StructureSize.Small, "Three metres of spear-topped railing; v1 on a low stone wall.", Under(FenceRoles, IronFence),
 				"dead", "fence", "wall").ModuleLength = 3f;
 		}
 

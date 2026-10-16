@@ -18,7 +18,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Accepts(VolcanicGeology)
 				// The class the old name reading gave: its name has no keyword, so its climate's middle (warm, middling humidity) gave Temperate; a per-biome round may make it Volcanic.
 				.Look(BiomeLookClass.Temperate)
-				.Wildlife(BiomeHabitat.Mountain | BiomeHabitat.Volcanic);
+				.Wildlife(BiomeHabitat.Mountain | BiomeHabitat.Volcanic)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

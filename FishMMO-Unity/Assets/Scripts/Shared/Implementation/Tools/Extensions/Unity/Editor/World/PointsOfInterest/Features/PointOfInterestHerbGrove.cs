@@ -31,8 +31,8 @@ namespace FishMMO.Shared.WorldDesign
 	/// kin of the gatherable herbs and fungi offered there (their visuals in <see cref="GatheringResourceCatalogue"/>: a
 	/// forest grows silverleaf and morels, a bog mirewort and puffballs, the cold frostbloom; common herbs where none is);
 	/// the flowers are the biome's own (its template's Herb Grove Flowers, which the authoring fills with its flower rules,
-	/// or a meadow's where it has none). The plants a grove adds to a tile take its biome's blade looks
-	/// (<see cref="RecordBiome"/>).
+	/// or a meadow's where it has none). The plants a grove paints take its biome's blade looks: each goes into the tile's
+	/// prototype of the plant of the grove's own biome, or one the grove adds for it (<see cref="SiteLayers"/>).
 	/// </para>
 	/// <para>
 	/// <b>The nodes stand clear.</b> Each gathering node (<see cref="GatheringFeature"/>'s spawners, laid before the site
@@ -242,23 +242,28 @@ namespace FishMMO.Shared.WorldDesign
 					return 0;
 				}
 
-				var layers = new int[Species.Count];
+				// Each plant into its own biome's prototype on the tile, measured against the one it used to share (2026-10-16).
+				var layers = new PlantLayers[Species.Count];
 				for (int s = 0; s < Species.Count; ++s)
 				{
-					layers[s] = LayerOf(data, Species[s]);
-					RecordBiome(terrain, layers[s], Biome);
+					layers[s] = LayersOf(terrain, Species[s], Biome);
 				}
 				int w = x1 - x0 + 1, h = z1 - z0 + 1;
 				var maps = new int[Species.Count][,];
+				var bases = new int[Species.Count][,];
 				for (int s = 0; s < Species.Count; ++s)
 				{
-					maps[s] = data.GetDetailLayer(x0, z0, w, h, layers[s]);
+					if (layers[s].Own >= 0)
+					{
+						ReadMaps(data, x0, z0, w, h, layers[s], out maps[s], out bases[s]);
+					}
 				}
 				// Coverage is written on the terrain's own scale (TerrainScatter's rule values are 0..255 of it).
 				float unit = Mathf.Max(1, data.maxDetailScatterPerRes) / 255.0f;
 				int maxValue = Mathf.Max(1, data.maxDetailScatterPerRes);
 				var want = new float[Species.Count];
 				var changed = new bool[Species.Count];
+				var baseChanged = new bool[Species.Count];
 				// At least the cell under a node, however coarse the tile's detail grid.
 				float clearing = Mathf.Max(NodeClearing, 0.75f * Mathf.Max(texelX, texelZ));
 				int cells = 0;
@@ -285,10 +290,21 @@ namespace FishMMO.Shared.WorldDesign
 							bool any = false;
 							for (int s = 0; s < Species.Count; ++s)
 							{
+								if (maps[s] == null)
+								{
+									continue;
+								}
 								if (maps[s][j, i] != 0)
 								{
 									maps[s][j, i] = 0;
 									changed[s] = true;
+									any = true;
+								}
+								// The plant's other biome's prototype too, which the grove used to paint into and clear.
+								if (bases[s] != null && bases[s][j, i] != 0)
+								{
+									bases[s][j, i] = 0;
+									baseChanged[s] = true;
 									any = true;
 								}
 							}
@@ -320,11 +336,17 @@ namespace FishMMO.Shared.WorldDesign
 						bool grew = false;
 						for (int s = 0; s < Species.Count; ++s)
 						{
-							int value = Mathf.Clamp(Mathf.RoundToInt(want[s] * fade * unit), 0, maxValue);
-							// Only ever more: the woods' own cover of the same plant stays where it is thicker.
-							if (value > maps[s][j, i])
+							if (maps[s] == null)
 							{
-								maps[s][j, i] = value;
+								continue;
+							}
+							int value = Mathf.Clamp(Mathf.RoundToInt(want[s] * fade * unit), 0, maxValue);
+							// Only ever more: the woods' own cover of the same plant stays where it is thicker (measured with the
+							// prototype of the plant the grove used to paint into, when its own is another).
+							int grown = TerrainDetailBiomes.SiteCover(bases[s] != null ? bases[s][j, i] : 0, maps[s][j, i], bases[s] == null, value);
+							if (grown != maps[s][j, i])
+							{
+								maps[s][j, i] = grown;
 								changed[s] = true;
 								grew = true;
 							}
@@ -335,9 +357,14 @@ namespace FishMMO.Shared.WorldDesign
 				bool dirty = false;
 				for (int s = 0; s < Species.Count; ++s)
 				{
+					if (baseChanged[s])
+					{
+						data.SetDetailLayer(x0, z0, layers[s].Base, bases[s]);
+						dirty = true;
+					}
 					if (changed[s])
 					{
-						data.SetDetailLayer(x0, z0, layers[s], maps[s]);
+						data.SetDetailLayer(x0, z0, layers[s].Own, maps[s]);
 						dirty = true;
 					}
 				}
@@ -365,12 +392,103 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A plant's detail layer on a tile: the tile's own when it has one (the woods already grow it), else added with the
-		/// settings TerrainScatter gives a scattered plant, copied from a mesh detail the tile already has.
+		/// The two detail layers a point of interest paints one plant into on a tile (2026-10-16): its own (<see cref="Own"/>,
+		/// the plant's prototype of the biome the site stands in) and the one it painted into before (<see cref="Base"/>: the
+		/// tile's first prototype of the plant, whose cover a site's growth is still measured against,
+		/// <see cref="TerrainDetailBiomes.SiteCover"/>). The same layer when the tile's first prototype of the plant is the site's
+		/// own biome's or the tile had none. Both -1 when the plant cannot be painted on the tile.
 		/// </summary>
-		internal static int LayerOf(TerrainData data, GameObject prefab)
+		public struct PlantLayers
 		{
+			public int Own;
+			public int Base;
+
+			/// <summary>One layer: the site paints straight into the plant's first prototype, as every site did before.</summary>
+			public bool Shared => Own == Base;
+
+			public static PlantLayers None => new PlantLayers { Own = -1, Base = -1 };
+		}
+
+		/// <summary>
+		/// A plant's layers on a tile for a site standing in <paramref name="biome"/> (<see cref="SiteLayers"/>), a prototype the
+		/// tile lacks added with the settings TerrainScatter gives a scattered plant, copied from a mesh detail the tile has.
+		/// </summary>
+		public static PlantLayers LayersOf(Terrain terrain, GameObject prefab, BiomeTemplate biome) => SiteLayers(terrain, prefab, biome, ScatteredPrototype);
+
+		/// <summary>
+		/// The layers a site of <paramref name="biome"/> paints a plant into on a tile (<see cref="PlantLayers"/>): the tile's
+		/// prototype of the plant recorded for the same biome (a rule's or an earlier site's) when it has one; else one of the
+		/// site's own, added and recorded for its biome (<see cref="TerrainDetailBiomes.RecordSite"/>), whose blades take that
+		/// biome's look of the plant (its Grass Types entry) and keep their material's tints. The added prototype copies the
+		/// tile's first of the plant where it has one (another biome's: same sizes, density and render settings, so the plant
+		/// draws as it did there), else is <paramref name="fresh"/>'s; either way with a noise seed of its own
+		/// (<see cref="TerrainDetailBiomes.SiteSeed"/>). A site with no biome paints into the tile's first prototype of the
+		/// plant, or adds one unrecorded, as before.
+		/// </summary>
+		/// <remarks>
+		/// Until 2026-10-16 (I3b) every site took the tile's first prototype of the plant, whichever biome's it was: a grove's
+		/// flowers on a tile a neighbouring meadow's rule also grew were drawn with the meadow's look, and two sites of
+		/// different biomes on one tile shared the first one's. Limits: each added prototype is one more detail layer on the
+		/// tile; a blade plant's own look is one more grass type in the scene (GrassTypeTable, 32: past them a look merges into
+		/// the plant's first) and one more channel on the tile (GrassTerrain.MaxChannels, 16: past them it adds into its plant's
+		/// channel), each with a warning; the GPU detail scatter keeps a channel per plant, so its prototypes sum into the
+		/// plant's one. The bake (TerrainDetailBaker) chooses with the same selection as play, so it matches.
+		/// </remarks>
+		public static PlantLayers SiteLayers(Terrain terrain, GameObject prefab, BiomeTemplate biome, Func<DetailPrototype[], GameObject, DetailPrototype> fresh)
+		{
+			TerrainData data = terrain != null ? terrain.terrainData : null;
+			if (data == null || prefab == null)
+			{
+				return PlantLayers.None;
+			}
 			DetailPrototype[] prototypes = data.detailPrototypes;
+			var names = new string[prototypes.Length];
+			var seeds = new int[prototypes.Length];
+			for (int i = 0; i < prototypes.Length; i++)
+			{
+				names[i] = prototypes[i]?.prototype != null ? prototypes[i].prototype.name : null;
+				seeds[i] = prototypes[i] != null ? prototypes[i].noiseSeed : 0;
+			}
+			TerrainDetailBiomes record = terrain.GetComponent<TerrainDetailBiomes>();
+			List<TerrainDetailBiomes.Entry> entries = record != null ? record.Prototypes : null;
+			int biomeID = BiomeRegistry.IDOf(biome);
+			int reuse = TerrainDetailBiomes.SiteLayer(prefab.name, biomeID, names, seeds, entries, out int first);
+			if (reuse >= 0)
+			{
+				return new PlantLayers { Own = reuse, Base = first >= 0 ? first : reuse };
+			}
+			DetailPrototype added = first >= 0 ? new DetailPrototype(prototypes[first]) : fresh(prototypes, prefab);
+			if (added == null)
+			{
+				return PlantLayers.None;
+			}
+			added.noiseSeed = TerrainDetailBiomes.SiteSeed(added.noiseSeed, biomeID, prefab.name, names, seeds, entries);
+			var grown = new DetailPrototype[prototypes.Length + 1];
+			Array.Copy(prototypes, grown, prototypes.Length);
+			grown[prototypes.Length] = added;
+			data.detailPrototypes = grown;
+			data.RefreshPrototypes();
+			int own = prototypes.Length;
+			if (biomeID != 0)
+			{
+				if (record == null)
+				{
+					record = terrain.gameObject.AddComponent<TerrainDetailBiomes>();
+				}
+				if (record.RecordSite(prefab.name, added.noiseSeed, biomeID))
+				{
+					EditorUtility.SetDirty(record);
+				}
+			}
+			return new PlantLayers { Own = own, Base = first >= 0 ? first : own };
+		}
+
+		/// <summary>
+		/// A new prototype for a plant the tile does not grow, with the settings TerrainScatter gives a scattered plant, copied
+		/// from a mesh detail the tile already has (the first that is not a counted bush).
+		/// </summary>
+		private static DetailPrototype ScatteredPrototype(DetailPrototype[] prototypes, GameObject prefab)
+		{
 			int like = -1;
 			for (int i = 0; i < prototypes.Length; ++i)
 			{
@@ -378,10 +496,6 @@ namespace FishMMO.Shared.WorldDesign
 				if (existing == null)
 				{
 					continue;
-				}
-				if (existing == prefab || existing.name == prefab.name)
-				{
-					return i;
 				}
 				if (like < 0 && prototypes[i].usePrototypeMesh && !TerrainScatter.IsCountedDetail(existing))
 				{
@@ -391,7 +505,7 @@ namespace FishMMO.Shared.WorldDesign
 			DetailPrototype copy = like >= 0 ? prototypes[like] : new DetailPrototype { usePrototypeMesh = true, renderMode = DetailRenderMode.VertexLit, useInstancing = true, density = 1.0f, useDensityScaling = true };
 			string detail = prefab.name.StartsWith(DetailPrefix, StringComparison.Ordinal) ? prefab.name.Substring(DetailPrefix.Length) : prefab.name;
 			ProceduralArtCatalogue.TryDetail(detail, out DetailSpec spec);
-			var added = new DetailPrototype
+			return new DetailPrototype
 			{
 				prototype = prefab,
 				usePrototypeMesh = true,
@@ -411,43 +525,15 @@ namespace FishMMO.Shared.WorldDesign
 				positionJitter = 1.0f,
 				useDensityScaling = copy.useDensityScaling,
 			};
-			var grown = new DetailPrototype[prototypes.Length + 1];
-			Array.Copy(prototypes, grown, prototypes.Length);
-			grown[prototypes.Length] = added;
-			data.detailPrototypes = grown;
-			data.RefreshPrototypes();
-			return prototypes.Length;
 		}
 
 		/// <summary>
-		/// Records the biome a point of interest stands in for a detail prototype it paints on a tile, where the tile has no
-		/// record of the prototype yet (one the site added: the scatter records its own rules' prototypes, each for the biome
-		/// whose rule made it). The prototype's blades then take that biome's look of the prefab (its Grass Types entry), or
-		/// the old look where it has none, and keep their material's tints (2026-10-16: a grove's flowers and a field's wheat
-		/// take the look of the biome they grow in). Nothing for no biome, or a prototype already recorded.
+		/// The plant layers' detail maps over a window, the base's only where it is not the site's own layer (null there).
 		/// </summary>
-		internal static void RecordBiome(Terrain terrain, int layer, BiomeTemplate biome)
+		internal static void ReadMaps(TerrainData data, int x0, int z0, int w, int h, PlantLayers layers, out int[,] own, out int[,] baseMap)
 		{
-			TerrainData data = terrain != null ? terrain.terrainData : null;
-			if (data == null || biome == null || layer < 0)
-			{
-				return;
-			}
-			DetailPrototype[] prototypes = data.detailPrototypes;
-			DetailPrototype prototype = layer < prototypes.Length ? prototypes[layer] : null;
-			if (prototype?.prototype == null)
-			{
-				return;
-			}
-			TerrainDetailBiomes record = terrain.GetComponent<TerrainDetailBiomes>();
-			if (record == null)
-			{
-				record = terrain.gameObject.AddComponent<TerrainDetailBiomes>();
-			}
-			if (record.RecordSite(prototype.prototype.name, prototype.noiseSeed, BiomeRegistry.IDOf(biome)))
-			{
-				EditorUtility.SetDirty(record);
-			}
+			own = data.GetDetailLayer(x0, z0, w, h, layers.Own);
+			baseMap = layers.Shared ? null : data.GetDetailLayer(x0, z0, w, h, layers.Base);
 		}
 	}
 }

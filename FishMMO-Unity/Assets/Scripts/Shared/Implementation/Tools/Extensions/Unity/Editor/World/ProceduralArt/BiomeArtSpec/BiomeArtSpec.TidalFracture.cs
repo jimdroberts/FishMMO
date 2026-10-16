@@ -19,7 +19,8 @@ namespace FishMMO.Shared.WorldDesign
 					D(Ground.Lineae, 48f, 3f, -1f, -1f, Outcrops("Frost crystals", 0.01f, 12f, F(RockTypes.WaterIce, "Crystal")))),
 				C(Ground.Ice, 38f), Ground.Ice, Ground.Ice)
 				.Look(BiomeLookClass.Alien)
-				.Wildlife(BiomeHabitat.Barren);
+				.Wildlife(BiomeHabitat.Barren)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

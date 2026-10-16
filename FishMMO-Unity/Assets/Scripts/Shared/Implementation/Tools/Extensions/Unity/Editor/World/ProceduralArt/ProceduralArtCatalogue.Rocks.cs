@@ -55,11 +55,64 @@ namespace FishMMO.Shared.WorldDesign
 			new RockMaterialSpec { Name = "Ice", GroundFamily = Ground.Ice },
 		};
 
+		/// <summary>
+		/// The stones added for decision 6 of the biome suite (2026-10-16): every other rock of the crust, the formation
+		/// rocks volcanic and impact ground is strewn with (scoria, breccia), flint and river cobbles, so a biome can lay
+		/// its own rock's boulders, rocks and pebbles and a river its own bedrock's boulders (RiverBoulders.Material).
+		/// The rock types wear their type's own material (<see cref="RockMaterialSpec.WearsRockType"/>: a slate pebble is
+		/// the slate of the slate formations and cliffs); flint and cobbles have materials of their own over a rock
+		/// type's surface (RockArtNames.RockSurfaceTypeForLegacy). Their ground families are only what a caller asking
+		/// for one would want. Constants only, so a field is safe here.
+		/// </summary>
+		public static readonly RockMaterialSpec[] StoneRockMaterials =
+		{
+			new RockMaterialSpec { Name = "Andesite", GroundFamily = Ground.Rock, WearsRockType = "Andesite" },
+			new RockMaterialSpec { Name = "Obsidian", GroundFamily = Ground.Basalt, WearsRockType = "Obsidian" },
+			new RockMaterialSpec { Name = "Pumice", GroundFamily = Ground.Ash, WearsRockType = "Pumice" },
+			new RockMaterialSpec { Name = "Tuff", GroundFamily = Ground.Ash, WearsRockType = "Tuff" },
+			new RockMaterialSpec { Name = "Shale", GroundFamily = Ground.Rock, WearsRockType = "Shale" },
+			new RockMaterialSpec { Name = "Conglomerate", GroundFamily = Ground.Gravel, WearsRockType = "Conglomerate" },
+			new RockMaterialSpec { Name = "Chalk", GroundFamily = Ground.Limestone, WearsRockType = "Chalk" },
+			new RockMaterialSpec { Name = "Slate", GroundFamily = Ground.Rock, WearsRockType = "Slate" },
+			new RockMaterialSpec { Name = "Schist", GroundFamily = Ground.Rock, WearsRockType = "Schist" },
+			new RockMaterialSpec { Name = "Gneiss", GroundFamily = Ground.Rock, WearsRockType = "Gneiss" },
+			new RockMaterialSpec { Name = "Marble", GroundFamily = Ground.Limestone, WearsRockType = "Marble" },
+			new RockMaterialSpec { Name = "Quartzite", GroundFamily = Ground.Rock, WearsRockType = "Quartzite" },
+			new RockMaterialSpec { Name = "Scoria", GroundFamily = Ground.Cinder, WearsRockType = "Scoria" },
+			new RockMaterialSpec { Name = "Breccia", GroundFamily = Ground.Regolith, WearsRockType = "Breccia" },
+			new RockMaterialSpec { Name = "Flint", GroundFamily = Ground.Limestone },
+			new RockMaterialSpec { Name = "Cobble", GroundFamily = Ground.Pebbles },
+		};
+
+		/// <summary>The material a stone's boulders, rocks and pebbles wear: its own, or its rock type's (the same name either way).</summary>
+		public static string StoneMaterial(in RockMaterialSpec stone) => RockMaterial(stone.WearsRockType ?? stone.Name);
+
 		private static readonly string[] SurfaceMaps = { "Albedo", "Normal", "Mask" };
 
-		/// <summary>Every rock, ice and cliff payload file: surface textures and meshes.</summary>
+		/// <summary>Every stone's own meshes: three boulders at each level, its small rocks and its pebbles (StoneStyles).</summary>
+		public static IEnumerable<string> StonePayloadPaths()
+		{
+			foreach (RockMaterialSpec m in AllRockMaterials)
+			{
+				foreach (RockShape shape in BoulderShapes)
+				{
+					for (int lod = 0; lod < BoulderResolution.Length; lod++)
+					{
+						yield return MeshPath(BoulderMesh(m.Name, shape.Name, lod));
+					}
+				}
+				yield return MeshPath(SmallRocksMesh(m.Name));
+				yield return MeshPath(PebblesMesh(m.Name));
+			}
+		}
+
+		/// <summary>Every stone, rock, ice and cliff payload file: surface textures and meshes.</summary>
 		public static IEnumerable<string> RockPayloadPaths()
 		{
+			foreach (string path in StonePayloadPaths())
+			{
+				yield return path;
+			}
 			foreach (RockType t in RockTypes.All)
 			{
 				foreach (string map in SurfaceMaps)

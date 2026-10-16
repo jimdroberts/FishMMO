@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 using UnityEngine;
 
 namespace FishMMO.Shared.WorldDesign
@@ -125,11 +126,12 @@ namespace FishMMO.Shared.WorldDesign
 						Lay(CaveArt.WaterBucket, 0, waterAt, Quaternion.Euler(0f, storeYaw, 0f), Vector3.one);
 					}
 				}
-				// The lantern's stand outward of the fire, its arm (−z) leaning in over the camp.
+				// The camp's lamp outward of the fire (the biome's Cave Lights, 2026-10-16: a lantern's stand in every biome before), its
+				// arm (−z) leaning in over the camp.
 				Vector3 stand = Dir(rest + 1.4f * spread);
 				int standVariant = random.Range(0, 2);
 				if (CampPiece(at + stand * (ring - 0.2f), at.y, out Vector3 standAt) && system.Void(standAt + Vector3.up * 2.4f) < 0f
-					&& Lay(CaveArt.LanternStand, standVariant, standAt, Quaternion.LookRotation(stand, Vector3.up), Vector3.one))
+					&& CaveLight(BiomeCaveLightPlace.Camp, out BiomeCaveLight lamp) && GroundLight(in lamp, standVariant, standAt, Quaternion.LookRotation(stand, Vector3.up)))
 				{
 					Lamps++;
 				}
@@ -154,6 +156,8 @@ namespace FishMMO.Shared.WorldDesign
 			/// </summary>
 			private void RouteLanterns(DeterministicRNG random)
 			{
+				// The route's mark (the biome's Cave Lights, 2026-10-16: a lantern on a stand in every biome before).
+				bool routeLit = CaveLight(BiomeCaveLightPlace.Route, out BiomeCaveLight route);
 				var ends = new List<(Vector3 end, Vector3 toward, float half)>();
 				foreach (CaveSolid s in system.Solids)
 				{
@@ -181,7 +185,7 @@ namespace FishMMO.Shared.WorldDesign
 						Vector3 p = end - toward * 0.8f + across * (half + 0.6f);
 						if (RouteSpot(p, end.y, out Vector3 at))
 						{
-							if (Lay(CaveArt.LanternStand, variant, at, Quaternion.LookRotation(across, Vector3.up), Vector3.one))
+							if (routeLit && GroundLight(in route, variant, at, Quaternion.LookRotation(across, Vector3.up)))
 							{
 								Lamps++;
 							}
@@ -212,8 +216,9 @@ namespace FishMMO.Shared.WorldDesign
 							{
 								continue;
 							}
-							laid = Lay(CaveArt.LanternStand, variant, at, Quaternion.LookRotation(side, Vector3.up), Vector3.one);
-							Lamps += laid ? 1 : 0;
+							// Where the biome lights no route, the spot is taken all the same (as a lantern stood there), so nothing moves.
+							laid = !routeLit || GroundLight(in route, variant, at, Quaternion.LookRotation(side, Vector3.up));
+							Lamps += laid && routeLit ? 1 : 0;
 						}
 						if (laid)
 						{

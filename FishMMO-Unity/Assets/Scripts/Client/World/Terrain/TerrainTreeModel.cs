@@ -147,7 +147,14 @@ namespace FishMMO.Client
 		/// nothing to draw or something the instanced path cannot draw. <paramref name="layer"/> is the layer
 		/// every part draws on; −1 keeps each renderer's own (preserveTreePrototypeLayers).
 		/// </summary>
-		public static TerrainTreeModel Build(GameObject prefab, int layer, out string reason)
+		public static TerrainTreeModel Build(GameObject prefab, int layer, out string reason) => Build(prefab, layer, null, out reason);
+
+		/// <summary>
+		/// As <see cref="Build(GameObject, int, out string)"/>, drawing the prefab in <paramref name="dress"/> instead of its own
+		/// materials (a baked prop's ScenePropSet.Prototype.Materials, 2026-10-16: a structure piece in its biome's palette): one
+		/// material per slot of every renderer, level by level. Null, empty or the wrong length draws the prefab's own.
+		/// </summary>
+		public static TerrainTreeModel Build(GameObject prefab, int layer, Material[] dress, out string reason)
 		{
 			reason = null;
 			if (prefab == null)
@@ -203,6 +210,12 @@ namespace FishMMO.Client
 
 			bool anyBounds = false;
 			Bounds local = default;
+			if (dress != null && dress.Length > 0 && dress.Length != SlotCount(levels))
+			{
+				Debug.LogWarning($"[Props] '{prefab.name}' is drawn in its own materials: its prototype names {dress.Length} materials for {SlotCount(levels)} slots (the art changed since the scene was cut; re-cut or regenerate its points of interest).");
+				dress = null;
+			}
+			int slot = 0;
 			model.Levels = new Level[levels.Count];
 			for (int l = 0; l < levels.Count; l++)
 			{
@@ -213,6 +226,14 @@ namespace FishMMO.Client
 					{
 						continue;
 					}
+					Material[] own = renderer.sharedMaterials;
+					Material[] dressed = null;
+					if (dress != null && dress.Length > 0)
+					{
+						dressed = new Material[own.Length];
+						Array.Copy(dress, slot, dressed, 0, own.Length);
+					}
+					slot += own.Length;
 					if (!(renderer is MeshRenderer))
 					{
 						reason = $"'{prefab.name}' LOD{l} has a {renderer.GetType().Name}";
@@ -220,7 +241,7 @@ namespace FishMMO.Client
 					}
 					MeshFilter filter = renderer.GetComponent<MeshFilter>();
 					Mesh mesh = filter != null ? filter.sharedMesh : null;
-					Material[] materials = renderer.sharedMaterials;
+					Material[] materials = dressed ?? own;
 					if (mesh == null || materials == null || materials.Length == 0)
 					{
 						continue;
@@ -268,6 +289,23 @@ namespace FishMMO.Client
 				model.LocalReference = local.center;
 			}
 			return model;
+		}
+
+		/// <summary>Every renderer's material slots over every level (the length a prototype's dress must have).</summary>
+		private static int SlotCount(List<Renderer[]> levels)
+		{
+			int count = 0;
+			foreach (Renderer[] level in levels)
+			{
+				foreach (Renderer renderer in level)
+				{
+					if (renderer != null)
+					{
+						count += renderer.sharedMaterials.Length;
+					}
+				}
+			}
+			return count;
 		}
 
 		private static Part BuildPart(Renderer renderer, Mesh mesh, Material[] materials, Matrix4x4 local, int layer)

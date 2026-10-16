@@ -15,7 +15,9 @@ namespace FishMMO.Shared.WorldDesign
 					D(Ground.Regolith, 96f, 2f, -1f, -1f, With(Blocks("Crater rims", 0.002f, 30f, F(RockTypes.Breccia, "CraterRim"), 15f), r => r.Spacing = 30f))),
 				C(Ground.Rock), Ground.Regolith, Ground.Regolith)
 				.Look(BiomeLookClass.Alien)
-				.Wildlife(BiomeHabitat.Alien);
+				// Alien ground alone: the client reads that live from the template's air (BiomeHabitats.Live), never stored.
+				.Wildlife(BiomeHabitat.None)
+				.Moat(BiomeMoatWater.Dry);
 		}
 	}
 }

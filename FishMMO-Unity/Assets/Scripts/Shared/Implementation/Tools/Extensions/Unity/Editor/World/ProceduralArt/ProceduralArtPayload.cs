@@ -135,6 +135,9 @@ namespace FishMMO.Shared.WorldDesign
 			"RockArtNames.cs",
 			"RockFormations.cs",
 			"RockTypes.cs",
+			// Each stone material's own boulders, rocks and pebbles (2026-10-16).
+			"StoneMeshes.cs",
+			"StoneStyles.cs",
 			// The vegetation expansion (2026-10-10), listed before their content was written so the hash covers
 			// every one from the first line: land flora and deadwood, the sea floor's catalogue, crystal formations.
 			"FloraMeshes.cs",
@@ -180,6 +183,9 @@ namespace FishMMO.Shared.WorldDesign
 			"StructurePieces.Airships.cs",
 			// Mills and rural works (2026-10-14).
 			"StructurePieces.Mills.cs",
+			// The structure palette made art (2026-10-16): the parts and material keys, the palette's own surfaces.
+			"StructurePalettes.cs",
+			"StructureSurfaces.Palette.cs",
 		};
 
 		/// <summary>

@@ -16,7 +16,8 @@ namespace FishMMO.Shared.WorldDesign
 					Sea("SeaCucumber", 0.3f, 0f, 0f, 128), Sea("BrittleStar", 0.4f, 0f, 0f, 128), Sea("Xenophyophore", 0.3f, 0f, 0f, 128),
 					Sea("GlassSpongeStalked", 0.1f, 0f, 0f, 128), Sea("SeaPen", 0.15f, 0f, 0f, 128, 15f))
 				.Look(BiomeLookClass.Aquatic)
-				.Wildlife(BiomeHabitat.Sea);
+				.Wildlife(BiomeHabitat.Sea)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

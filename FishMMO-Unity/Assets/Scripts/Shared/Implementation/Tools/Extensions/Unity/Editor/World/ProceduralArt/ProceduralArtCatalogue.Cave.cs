@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 using UnityEngine;
 
 namespace FishMMO.Shared.WorldDesign
@@ -35,6 +36,59 @@ namespace FishMMO.Shared.WorldDesign
 		Wall,
 		/// <summary>From a roof: origin on the roof's surface, hanging down −y; it reaches up into the rock to seat on an uneven roof.</summary>
 		Roof,
+	}
+
+	/// <summary>
+	/// How a cave crystal grows (<see cref="CaveMineral"/>, 2026-10-16, I6c): the shape its meshes are built in. Append-only:
+	/// names are in generated mesh paths.
+	/// </summary>
+	public enum CaveMineralHabit
+	{
+		/// <summary>A druse: a crust of many small slender points carpeting a lump of rock, leaning outward (clear quartz).</summary>
+		Druse,
+		/// <summary>A few stout six-sided prisms with pyramid tips out of a pocket in the rock (smoky quartz).</summary>
+		Prisms,
+		/// <summary>A geode broken open: a rind of rock round a hollow lined with points growing inward (amethyst, wyrdstone).</summary>
+		Geode,
+		/// <summary>Interlocking cubes, some stood on an edge or a corner, on a lump of rock (fluorite).</summary>
+		Cubes,
+		/// <summary>Thin glassy blades and splinters jutting every way out of a mass of rock (obsidian).</summary>
+		Shards,
+		/// <summary>Rounded nodules and drops sunk in a bed of rock (amber).</summary>
+		Nodules,
+		/// <summary>Broad tabular blades with chisel tips bursting from a lump of scoria (sunstone).</summary>
+		Blades,
+	}
+
+	/// <summary>
+	/// One crystal of the cave-crystal catalogue (<see cref="BiomeCaveCrystalKind"/>, 2026-10-16, I6c): the rock formation it
+	/// already is, or the habit and material it is built in; whether and how it lights the cave.
+	/// </summary>
+	public struct CaveMineral
+	{
+		public BiomeCaveCrystalKind Kind;
+		/// <summary>
+		/// Whether it is a rock formation's crystal the rock art already makes (<see cref="FormationRock"/>'s
+		/// <see cref="FormationShape"/>): selenite is gypsum's, frost crystal water ice's. No mesh, material or prefab of its own.
+		/// </summary>
+		public bool Formation;
+		public string FormationRock, FormationShape;
+		/// <summary>The habit its own meshes are built in (when not a formation).</summary>
+		public CaveMineralHabit Habit;
+		/// <summary>Its material's colours (its own when not a formation); <see cref="CaveGlowHue.Emission"/> above black for one that glows.</summary>
+		public CaveGlowHue Hue;
+		/// <summary>
+		/// Whether a cave light goes beside its clusters in a chamber (as beside selenite's always did): the glowing kinds, selenite
+		/// and frost crystal; the plain minerals only glitter under a lamp.
+		/// </summary>
+		public bool Lit;
+		/// <summary>The hue bits of its light (<see cref="CaveArt.EmitterSeed"/>: 0 violet, 1 blue, 2 green, 3 amber), or −1 for one by chance.</summary>
+		public int LightHue;
+		/// <summary>One line for designers.</summary>
+		public string Description;
+
+		/// <summary>Whether it glows by its own material (its emission).</summary>
+		public bool Glows => !Formation && Hue.Emission.maxColorComponent > 0f;
 	}
 
 	/// <summary>One colour (or ore) a kind of glow art is made in.</summary>
@@ -191,6 +245,88 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The family of a kind.</summary>
 		public static CaveGlowFamily CaveGlow(CaveGlowKind kind) => CaveGlowFamilies[(int)kind];
 
+		// ── Cave crystals (2026-10-16, I6c) ───────────────────────────
+
+		/// <summary>
+		/// Distinct shapes of every cave crystal built in its own habit: as many as a rock formation has
+		/// (<see cref="RockTypes.VariantCount"/>), so a chamber's cluster draws its variant as a formation's always did.
+		/// </summary>
+		public const int CaveMineralVariants = RockTypes.VariantCount;
+
+		/// <summary>How far the light beside a glowing crystal reaches, metres (a cluster's, as the glow art's crystals).</summary>
+		public const float CaveMineralReach = 6f;
+
+		/// <summary>
+		/// The cave-crystal catalogue in <see cref="BiomeCaveCrystalKind"/> order: selenite and frost crystal are the gypsum and
+		/// water-ice formations the rock art already makes; every other kind its own habit and material, built with the cave
+		/// glow art (one mesh set a habit, a material and three prefabs a kind). Colours from the approved biome drafts where they
+		/// name one (smoky quartz #4a4038–#8a7a68, green fluorite #4aa070–#9ad8a8, amberlight #d88a20 glowing #ffb040 low,
+		/// wyrdstone glowing #a8f070 low).
+		/// </summary>
+		public static readonly CaveMineral[] CaveMinerals =
+		{
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Selenite, Formation = true, FormationRock = RockTypes.Gypsum.Name, FormationShape = "Crystal", Lit = true, LightHue = -1,
+				Description = "Selenite: milky gypsum blades with chisel tips (the gypsum Crystal formation), a cave light of a hue by chance beside it: every cave's crystal before 2026-10-16." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Amethyst, Habit = CaveMineralHabit.Geode, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Amethyst", Albedo = new Color(0.56f, 0.36f, 0.8f), Smoothness = 0.86f, EmitterHue = -1 },
+				Description = "Amethyst: a geode broken open, its grey rind round a hollow lined with violet points." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.ClearQuartz, Habit = CaveMineralHabit.Druse, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "ClearQuartz", Albedo = new Color(0.86f, 0.9f, 0.93f), Smoothness = 0.93f, EmitterHue = -1 },
+				Description = "Clear quartz: a druse of small water-clear points carpeting a lump of rock." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.SmokyQuartz, Habit = CaveMineralHabit.Prisms, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "SmokyQuartz", Albedo = new Color(0.47f, 0.4f, 0.34f), Smoothness = 0.9f, EmitterHue = -1 },
+				Description = "Smoky quartz: a few stout brown-grey prisms with pyramid tips out of a pegmatite pocket." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.GreenFluorite, Habit = CaveMineralHabit.Cubes, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "GreenFluorite", Albedo = new Color(0.42f, 0.74f, 0.54f), Smoothness = 0.82f, EmitterHue = -1 },
+				Description = "Green fluorite: interlocking translucent green cubes, some stood on an edge or a corner." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.FrostCrystal, Formation = true, FormationRock = RockTypes.WaterIce.Name, FormationShape = "Crystal", Lit = true, LightHue = 1,
+				Description = "Frost crystal: six-sided columns of clear ice (the water-ice Crystal formation, an ice cave's own), a blue cave light beside it." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Obsidian, Habit = CaveMineralHabit.Shards, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Obsidian", Albedo = new Color(0.07f, 0.065f, 0.08f), Smoothness = 0.96f, EmitterHue = -1 },
+				Description = "Obsidian shards: glassy black blades and splinters jutting every way out of the rock." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Amberlight, Habit = CaveMineralHabit.Nodules, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Amberlight", Albedo = new Color(0.85f, 0.54f, 0.13f), Emission = new Color(0.95f, 0.6f, 0.2f), Smoothness = 0.8f, Light = new Color(1f, 0.7f, 0.35f), EmitterHue = 3 },
+				Description = "Amberlight (fantasy): rounded nodules and drops of resin-amber sunk in a rock bed, glowing a low warm gold." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Wyrdstone, Habit = CaveMineralHabit.Geode, Lit = true, LightHue = 2,
+				Hue = new CaveGlowHue { Name = "Wyrdstone", Albedo = new Color(0.6f, 0.74f, 0.56f), Emission = new Color(0.62f, 1.05f, 0.44f), Smoothness = 0.84f, Light = new Color(0.66f, 0.94f, 0.44f), EmitterHue = 2 },
+				Description = "Wyrdstone (fantasy): a mossy geode whose green-violet points glow from within." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Sunstone, Habit = CaveMineralHabit.Blades, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Sunstone", Albedo = new Color(0.95f, 0.56f, 0.24f), Emission = new Color(1.6f, 0.62f, 0.16f), Smoothness = 0.78f, Light = new Color(1f, 0.6f, 0.28f), EmitterHue = 3 },
+				Description = "Sunstone (fantasy, volcanic): broad tabular blades of orange-gold crystal alight like embers, bursting from scoria." },
+		};
+
+		/// <summary>The catalogue's entry for a kind (a kind past the table is selenite's).</summary>
+		public static CaveMineral CaveMineralOf(BiomeCaveCrystalKind kind) => (int)kind < CaveMinerals.Length ? CaveMinerals[(int)kind] : CaveMinerals[0];
+
+		/// <summary>The habits the catalogue's own-built kinds use, each once, in habit order.</summary>
+		public static IEnumerable<CaveMineralHabit> CaveMineralHabits()
+		{
+			var used = new HashSet<CaveMineralHabit>();
+			foreach (CaveMineral m in CaveMinerals)
+			{
+				if (!m.Formation)
+				{
+					used.Add(m.Habit);
+				}
+			}
+			foreach (CaveMineralHabit habit in (CaveMineralHabit[])System.Enum.GetValues(typeof(CaveMineralHabit)))
+			{
+				if (used.Contains(habit))
+				{
+					yield return habit;
+				}
+			}
+		}
+
+		/// <summary>A cave crystal's level mesh: <c>Cave_MineralGeode_0_LOD0</c> (shared by every kind of the habit).</summary>
+		public static string CaveMineralMesh(CaveMineralHabit habit, int variant, int lod) => $"{CavePrefix}Mineral{habit}_{variant}_LOD{lod}";
+
+		/// <summary>A cave crystal's prefab under the generated prefabs folder, with its sub-folder: <c>Cave/Cave_Mineral_Amethyst_1</c>.</summary>
+		public static string CaveMineralPrefab(BiomeCaveCrystalKind kind, int variant) => $"{CavePrefabFolderName}/{CavePrefix}Mineral_{kind}_{variant}";
+
+		/// <summary>A cave crystal's material: <c>Cave_Mineral_Amethyst</c>.</summary>
+		public static string CaveMineralMaterial(BiomeCaveCrystalKind kind) => $"{CavePrefix}Mineral_{kind}";
+
 		// ── Names ─────────────────────────────────────────────────────
 
 		/// <summary>A cave glow texture: <c>Structure_CaveGlow_Albedo</c>, <c>Structure_CaveGlow_Emission</c>, <c>Structure_CaveOre_Albedo</c>.</summary>
@@ -235,6 +371,16 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 			}
+			foreach (CaveMineralHabit habit in CaveMineralHabits())
+			{
+				for (int v = 0; v < CaveMineralVariants; v++)
+				{
+					for (int lod = 0; lod < CaveGlowMeshes.Levels; lod++)
+					{
+						yield return MeshPath(CaveMineralMesh(habit, v, lod));
+					}
+				}
+			}
 		}
 
 		/// <summary>Every cave glow material: one a hue of each material set, and the gangue.</summary>
@@ -253,6 +399,13 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			yield return MaterialPath(CaveGangueMaterial);
+			foreach (CaveMineral m in CaveMinerals)
+			{
+				if (!m.Formation)
+				{
+					yield return MaterialPath(CaveMineralMaterial(m.Kind));
+				}
+			}
 		}
 
 		/// <summary>Every cave glow prefab name (with its sub-folder): each variant of each kind in each of its hues.</summary>
@@ -265,6 +418,16 @@ namespace FishMMO.Shared.WorldDesign
 					for (int v = 0; v < f.Variants; v++)
 					{
 						yield return CaveGlowPrefab(f.Kind, hue.Name, v);
+					}
+				}
+			}
+			foreach (CaveMineral m in CaveMinerals)
+			{
+				if (!m.Formation)
+				{
+					for (int v = 0; v < CaveMineralVariants; v++)
+					{
+						yield return CaveMineralPrefab(m.Kind, v);
 					}
 				}
 			}

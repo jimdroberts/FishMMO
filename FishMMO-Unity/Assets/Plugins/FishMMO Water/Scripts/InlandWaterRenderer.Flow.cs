@@ -107,7 +107,10 @@ namespace FishMMO.Water
 #endif
 		}
 
-		/// <summary>Gives each river its field: the texture, and its length in metres (0 turns the solved flow off).</summary>
+		/// <summary>
+		/// Gives each river its field: the texture, and its length in metres (0 turns the solved flow off); and each river and
+		/// lake its water's look by its biome (Looks), where that is not the material's own.
+		/// </summary>
 		private void ApplyFlow()
 		{
 			flowBlock ??= new MaterialPropertyBlock();
@@ -128,8 +131,10 @@ namespace FishMMO.Water
 				}
 				// The foam the falls above its water beat up, carried downstream (FishInlandWater.hlsl FallTrail).
 				any |= ApplyRiverFalls(pair.Key, flowBlock);
+				any |= ApplyRiverLook(pair.Key, flowBlock);
 				pair.Value.SetPropertyBlock(any ? flowBlock : null);
 			}
+			ApplyLakeLooks();
 		}
 	}
 }

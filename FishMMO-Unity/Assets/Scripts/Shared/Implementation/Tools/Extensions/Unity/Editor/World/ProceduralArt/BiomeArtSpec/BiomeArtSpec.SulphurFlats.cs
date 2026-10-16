@@ -16,7 +16,8 @@ namespace FishMMO.Shared.WorldDesign
 					D(Ground.Ash, 96f), D(Ground.Frost, 96f)),
 				C(Ground.Basalt), Ground.Sulphur, Ground.Sulphur)
 				.Look(BiomeLookClass.Volcanic)
-				.Wildlife(BiomeHabitat.Barren);
+				.Wildlife(BiomeHabitat.Barren)
+				.Moat(BiomeMoatWater.Dry);
 		}
 	}
 }

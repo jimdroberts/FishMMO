@@ -1493,7 +1493,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static void AddClutter(PointOfInterestSiteContext context,
 			List<(Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole role, string tag)> grounds,
-			PointOfInterestLayoutRequest request, DeterministicRNG random, float stature = 1f)
+			PointOfInterestLayoutRequest request, DeterministicRNG random, float stature, BiomeTemplate siteBiome)
 		{
 			PointOfInterestRecord record = context.Record;
 			PointOfInterestKindInfo info = PointOfInterestKinds.Info(record.Kind);
@@ -1640,11 +1640,11 @@ namespace FishMMO.Shared.WorldDesign
 					Put(hostile ? Pick("=WeaponRack", "=DryingRack", "=WaterButt", "=Woodpile") : Pick("=DryingRack", "=WaterButt", "=Woodpile"), at + offset, a * Mathf.Rad2Deg + 90f);
 				}
 			}
-			// Lights along the streets, either side in turn: a town's iron lanterns every dozen paces or so, a village's torches
-			// on poles every twenty (2026-10-12: "We need torches, light posts, braziers").
-			bool lanterns = record.Kind == POIType.Town || record.Kind == POIType.City || record.Kind == POIType.Capital || record.Kind == POIType.Port;
-			bool torches = record.Kind == POIType.Village;
-			if (town && (lanterns || torches))
+			// Lights along the streets, either side in turn (2026-10-12: "We need torches, light posts, braziers"): the light and
+			// spacing the site biome's template gives the kind (its Way Lights, 2026-10-16), authored from the old rule by kind,
+			// a town's iron lanterns every dozen paces or so and a village's torches on poles every twenty.
+			// A street light stands on the ground: a wall light named for a kind (a hanging bracket) leaves its streets unlit.
+			if (town && BiomeTemplateArt.WayLight(siteBiome, record.Kind, out BiomeWayLight light) && BiomeWayLights.MountOf(light.Light) == BiomeWayLightMount.Ground)
 			{
 				foreach ((Vector2 a, Vector2 b, float half) in streets)
 				{
@@ -1656,11 +1656,11 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					Vector2 along = ab / length, across = new Vector2(-along.y, along.x);
 					int side = 1;
-					for (float t = 6f; t < length - 6f; t += lanterns ? 13f : 20f, side = -side)
+					for (float t = 6f; t < length - 6f; t += light.Spacing, side = -side)
 					{
 						Vector2 p = a + along * t + across * side * (half + 0.7f);
 						float yaw = Mathf.Atan2(-across.x * side, -across.y * side) * Mathf.Rad2Deg;
-						var pieceRequest = new PointOfInterestPieceRequest(lanterns ? "=LanternPost" : "=TorchPost", "timber", 0);
+						var pieceRequest = new PointOfInterestPieceRequest(light.PieceQuery, "timber", 0);
 						GameObject prefab = PointOfInterestPieceResolver.Resolve(pieceRequest);
 						if (prefab != null && !taken.Exists(x => Vector2.Distance(x.centre, p) < Mathf.Max(x.size.x, x.size.y) * 0.5f + 0.5f))
 						{
@@ -1683,7 +1683,11 @@ namespace FishMMO.Shared.WorldDesign
 			DeterministicRNG random = context.Random;
 			PointOfInterestRecord record = context.Record;
 			bool allowLocal = context.Scene.IsValid() && LocalArtScope.IsLocalScenePath(context.Scene.path);
-			string biome = context.BiomeAt?.Invoke(record.Position.x, record.Position.z)?.name;
+			/* The site's biome decides how the weather finishes its pieces and what its buildings are made of: its template's
+			 * weathering and structure palette (2026-10-16), no longer keywords in its name. */
+			BiomeTemplate siteBiome = context.BiomeAt?.Invoke(record.Position.x, record.Position.z);
+			BiomeWeathering weathering = BiomeTemplateArt.Weathering(siteBiome);
+			BiomeStructurePalette palette = BiomeTemplateArt.StructurePalette(siteBiome);
 
 			var request = new PointOfInterestLayoutRequest { Layout = template.Layout, Radius = record.Radius, Gap = Gap };
 			if (Clearings != null)
@@ -1807,8 +1811,8 @@ namespace FishMMO.Shared.WorldDesign
 					wet++;
 					continue;
 				}
-				StructureFinish finish = FinishFor(Finish, FinishChance, record.Kind, biome, d.Decay, d.FinishRoll);
-				var pieceRequest = new PointOfInterestPieceRequest(slot.Tag, styles[piece.Slot], d.Seed, d.Decay, finish, allowLocal);
+				StructureFinish finish = FinishFor(Finish, FinishChance, record.Kind, weathering, d.Decay, d.FinishRoll);
+				var pieceRequest = new PointOfInterestPieceRequest(slot.Tag, styles[piece.Slot], d.Seed, d.Decay, finish, allowLocal) { Palette = palette };
 				GameObject prefab = PointOfInterestPieceResolver.Resolve(pieceRequest);
 				if (prefab == null)
 				{
@@ -1859,7 +1863,7 @@ namespace FishMMO.Shared.WorldDesign
 				laid++;
 			}
 			AddYards(context, grounds);
-			AddClutter(context, grounds, request, random, stature);
+			AddClutter(context, grounds, request, random, stature, siteBiome);
 			AddWallStairs(context, curtain, gateways, grounds);
 			AddDrawbridges(context, gateways, stature);
 			AddMoatBridges(context, gateways, stature);
@@ -2075,16 +2079,14 @@ namespace FishMMO.Shared.WorldDesign
 			return random.Range(min, max + 1);
 		}
 
-		private static readonly string[] Wet = { "Swamp", "Mangrove", "Bog", "Wetland", "Marsh", "Estuary" };
-		private static readonly string[] Damp = { "Forest", "Woodland", "Jungle", "Rainforest", "Taiga", "Bamboo", "Valley", "Karst", "Temperate", "Lake", "River" };
-		private static readonly string[] Dry = { "Desert", "Badlands", "Salt", "Arid", "Dust", "Wasteland", "Savanna", "Scrub", "Volcanic", "Molten", "Sulphur", "Oasis" };
-
 		/// <summary>
-		/// A piece's finish. Auto: algae on everything under water and on most of a swamp's pieces (more the more worn);
-		/// char on half a battlefield; nothing in dry country; else moss on worn pieces, more in damp country.
-		/// A forced finish is laid on <paramref name="chance"/> of the pieces. Pure.
+		/// A piece's finish. Auto: algae on everything under water and char on half a battlefield, whatever the biome; else the
+		/// biome's weathering (BiomeTemplate.Weathering, 2026-10-16: until then keywords in the biome's name): its finish on
+		/// <see cref="BiomeWeathering.ChanceAt"/> of the pieces by their decay, and where that is moss, a long-abandoned site's
+		/// (ruins, the dead) on at least 0.55 + 0.4 × decay. A forced finish is laid on <paramref name="chance"/> of the pieces.
+		/// Pure.
 		/// </summary>
-		public static StructureFinish FinishFor(PointOfInterestFinish mode, float chance, POIType kind, string biome, float decay, float roll)
+		public static StructureFinish FinishFor(PointOfInterestFinish mode, float chance, POIType kind, BiomeWeathering weathering, float decay, float roll)
 		{
 			switch (mode)
 			{
@@ -2105,16 +2107,16 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return StructureFinish.Charred;
 			}
-			biome ??= string.Empty;
-			if (Mentions(biome, Wet))
+			switch (weathering.Finish)
 			{
-				return roll < 0.3f + 0.6f * decay ? StructureFinish.Algae : StructureFinish.None;
+				case BiomeStructureFinish.None:
+					return StructureFinish.None;
+				case BiomeStructureFinish.Algae:
+					return roll < weathering.ChanceAt(decay) ? StructureFinish.Algae : StructureFinish.None;
+				case BiomeStructureFinish.Charred:
+					return roll < weathering.ChanceAt(decay) ? StructureFinish.Charred : StructureFinish.None;
 			}
-			if (Mentions(biome, Dry))
-			{
-				return StructureFinish.None;
-			}
-			float moss = decay * (Mentions(biome, Damp) ? 1f : 0.5f);
+			float moss = weathering.ChanceAt(decay);
 			PointOfInterestGroup group = PointOfInterestKinds.Info(kind).Group;
 			if (group == PointOfInterestGroup.Ruins || group == PointOfInterestGroup.Dead)
 			{
@@ -2122,18 +2124,6 @@ namespace FishMMO.Shared.WorldDesign
 				moss = Mathf.Max(moss, 0.55f + 0.4f * decay);
 			}
 			return roll < moss ? StructureFinish.Mossy : StructureFinish.None;
-		}
-
-		private static bool Mentions(string biome, string[] words)
-		{
-			foreach (string word in words)
-			{
-				if (biome.IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0)
-				{
-					return true;
-				}
-			}
-			return false;
 		}
 
 		/// <summary>

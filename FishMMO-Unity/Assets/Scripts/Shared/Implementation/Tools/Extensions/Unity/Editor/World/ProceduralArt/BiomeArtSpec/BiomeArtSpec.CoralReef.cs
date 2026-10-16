@@ -20,7 +20,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Moved("main", "Coral", "Kelp").Moved("lakebed", "Seagrass", "Kelp")
 				.Look(BiomeLookClass.Aquatic)
 				.Wildlife(BiomeHabitat.Sea)
-				.HomeTo("Reef fish", "Sea turtle", "Crab");
+				.HomeTo("Reef fish", "Sea turtle", "Crab")
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

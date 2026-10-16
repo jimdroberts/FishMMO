@@ -21,6 +21,8 @@ namespace FishMMO.Shared.WorldDesign
 		public int Meshes;
 		/// <summary>How many lake and river surfaces were drawn past the edge.</summary>
 		public int WaterMeshes;
+		/// <summary>The scene layer each control-map channel holds (<see cref="SceneBackdrop.ControlLayers"/>); empty: channel c is layer c.</summary>
+		public int[] ControlLayers = System.Array.Empty<int>();
 		public readonly List<string> Wrote = new List<string>();
 	}
 
@@ -103,6 +105,35 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The most control maps the shader reads: eight, four layers each.</summary>
 		public const int MaximumControlMaps = 8;
 
+		/// <summary>
+		/// The scene layers a backdrop's 32 channels hold when the scene has more (<see cref="SceneBackdrop.ControlLayers"/>):
+		/// the 32 that carry the most weight over the backdrop, in layer order (the lower layer between equals); null when every
+		/// layer has a channel of its own (channel c is layer c, as before 2026-10-16).
+		/// </summary>
+		/// <param name="totals">Each scene layer's weight summed over the backdrop.</param>
+		public static int[] ChannelLayersFor(float[] totals, int layerCount)
+		{
+			int channels = MaximumControlMaps * 4;
+			if (totals == null || layerCount <= channels)
+			{
+				return null;
+			}
+			var order = new int[layerCount];
+			for (int l = 0; l < layerCount; l++)
+			{
+				order[l] = l;
+			}
+			System.Array.Sort(order, (a, b) =>
+			{
+				float wa = a < totals.Length ? totals[a] : 0f, wb = b < totals.Length ? totals[b] : 0f;
+				return wa != wb ? wb.CompareTo(wa) : a.CompareTo(b);
+			});
+			var chosen = new int[channels];
+			System.Array.Copy(order, chosen, channels);
+			System.Array.Sort(chosen);
+			return chosen;
+		}
+
 		/// <summary>How far the backdrop reaches for this scene.</summary>
 		public static float ReachFor(SceneGenerationRequest request)
 		{
@@ -176,6 +207,7 @@ namespace FishMMO.Shared.WorldDesign
 			root.transform.position = Vector3.zero;
 			SceneBackdrop backdrop = root.AddComponent<SceneBackdrop>();
 			backdrop.ReachMetres = reach;
+			backdrop.ControlLayers = result.ControlLayers;
 			backdrop.FarPlaneMetres = result.FarPlaneMetres;
 			backdrop.SceneSizeMetres = new Vector2(plan.WidthMetres, plan.DepthMetres);
 
@@ -477,7 +509,7 @@ namespace FishMMO.Shared.WorldDesign
 				Shader shaded = Shader.Find(ShadedShaderName);
 				if (shaded != null)
 				{
-					List<Texture2D> controls = BakeControls(grid, layerWeights, layerCount, stem, result.Wrote);
+					List<Texture2D> controls = BakeControls(grid, layerWeights, layerCount, stem, result.Wrote, out result.ControlLayers);
 					var arrayMaterial = new Material(shaded) { name = Path.GetFileName(stem) };
 					Shade(arrayMaterial, shaded, albedo, controls);
 					string arrayMaterialPath = $"{stem}.mat";
@@ -577,11 +609,51 @@ namespace FishMMO.Shared.WorldDesign
 		/// alphamaps, so the scene's arrays draw them as they stand. Linear and uncompressed (a weight is a
 		/// number, not a colour), without mips: the shader reads level 0 (FISH_SAMPLE_CONTROL).
 		/// </summary>
+		/// <remarks>
+		/// A scene of more than 32 layers (the index map lets a tile carry up to 256) gives its 32 channels to the layers
+		/// that carry the most weight over the backdrop (<see cref="ChannelLayersFor"/>, <paramref name="channelLayers"/>:
+		/// channel c is scene layer channelLayers[c], which the shader looks up in the layer table). What the rest carry is
+		/// left to the colour bake, as ground the arrays lack always was. A scene of 32 or fewer is baked as before (empty).
+		/// </remarks>
 		private static List<Texture2D> BakeControls(BakeGrid grid, BackdropLayerWeigher layerWeights, int layerCount,
-			string stem, List<string> wrote)
+			string stem, List<string> wrote, out int[] channelLayers)
 		{
-			int maps = Mathf.Min(MaximumControlMaps, (layerCount + 3) / 4);
 			int width = grid.Width, height = grid.Height;
+			int[] chosen = null;
+			if (layerCount > MaximumControlMaps * 4)
+			{
+				// First pass: what each scene layer carries over the backdrop.
+				var totals = new float[layerCount];
+				var all = new float[layerCount];
+				for (int z = 0; z < height; z++)
+				{
+					for (int x = 0; x < width; x++)
+					{
+						float h = grid.Heights[z * width + x];
+						if (float.IsNaN(h))
+						{
+							continue;
+						}
+						System.Array.Clear(all, 0, all.Length);
+						layerWeights(grid.East(x), h, grid.North(z), grid.Steepness[z * width + x], all);
+						for (int l = 0; l < layerCount; l++)
+						{
+							totals[l] += all[l];
+						}
+					}
+				}
+				chosen = ChannelLayersFor(totals, layerCount);
+				float kept = 0f, total = 0f;
+				for (int l = 0; l < layerCount; l++)
+				{
+					total += totals[l];
+					kept += System.Array.IndexOf(chosen, l) >= 0 ? totals[l] : 0f;
+				}
+				Debug.Log($"[Scene backdrop] {layerCount} scene layers: the 32 that carry {(total > 0f ? kept / total : 1f):P1} of the backdrop's weight get its channels; the colour bake draws the rest.");
+			}
+			channelLayers = chosen ?? System.Array.Empty<int>();
+			int channels = chosen != null ? chosen.Length : layerCount;
+			int maps = Mathf.Min(MaximumControlMaps, (channels + 3) / 4);
 			var pixels = new Color32[maps][];
 			for (int k = 0; k < maps; k++)
 			{
@@ -597,8 +669,19 @@ namespace FishMMO.Shared.WorldDesign
 					System.Array.Clear(weights, 0, weights.Length);
 					if (!float.IsNaN(h))
 					{
+						System.Array.Clear(sceneWeights, 0, sceneWeights.Length);
 						layerWeights(grid.East(x), h, grid.North(z), grid.Steepness[z * width + x], sceneWeights);
-						System.Array.Copy(sceneWeights, weights, Mathf.Min(sceneWeights.Length, weights.Length));
+						if (chosen == null)
+						{
+							System.Array.Copy(sceneWeights, weights, Mathf.Min(sceneWeights.Length, weights.Length));
+						}
+						else
+						{
+							for (int c = 0; c < chosen.Length && c < weights.Length; c++)
+							{
+								weights[c] = sceneWeights[chosen[c]];
+							}
+						}
 					}
 					for (int k = 0; k < maps; k++)
 					{
@@ -717,8 +800,11 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return $"the colour bake is {bakedWidth}x{bakedHeight} but the backdrop's grid is {grid.Width}x{grid.Height}; re-cut the scene";
 			}
-			List<Texture2D> controls = BakeControls(grid, layerWeights, layerCount, stem, wrote);
+			List<Texture2D> controls = BakeControls(grid, layerWeights, layerCount, stem, wrote, out int[] channelLayers);
 			Shade(material, shaded, colour, controls);
+			backdrop.ControlLayers = channelLayers;
+			EditorUtility.SetDirty(backdrop);
+			UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(scene);
 			EditorUtility.SetDirty(material);
 			AssetDatabase.SaveAssetIfDirty(material);
 			wrote.Add(materialPath);

@@ -15,9 +15,9 @@ namespace FishMMO.Shared.WorldDesign
 			Piece(list, "LeanTo", StructureStyle.Timber, StructureSize.Medium, "A pole lean-to; v0 thatched, v1 hide with a side wall.", LeanTo, "camp", "tent");
 			Piece(list, "CampfireRing", StructureStyle.Stone, StructureSize.Small, "A ring of stones round ash and logs; v1 with a cooking tripod.", CampfireRing, "camp", "fire")
 				.Collides = false;
-			Piece(list, "PalisadeSegment", StructureStyle.Timber, StructureSize.Medium, "Four metres of sharpened logs on two rails; v1 ragged.", PalisadeSegment,
+			Piece(list, "PalisadeSegment", StructureStyle.Timber, StructureSize.Medium, "Four metres of sharpened logs on two rails; v1 ragged.", Under(FenceRoles, PalisadeSegment),
 				"camp", "wall", "palisade", "military").ModuleLength = 4f;
-			Piece(list, "PalisadeGate", StructureStyle.Timber, StructureSize.Medium, "A palisade gateway four metres wide; v0 leaves open, v1 shut.", PalisadeGate,
+			Piece(list, "PalisadeGate", StructureStyle.Timber, StructureSize.Medium, "A palisade gateway four metres wide; v0 leaves open, v1 shut.", Under(FenceRoles, PalisadeGate),
 				"camp", "wall", "palisade", "gate", "military").ModuleLength = 4f;
 			Piece(list, "Crate", StructureStyle.Timber, StructureSize.Small, "A battened crate; v1 long.", Crate, "camp", "storage");
 			Piece(list, "Barrel", StructureStyle.Timber, StructureSize.Small, "A hooped barrel; v1 lying on its side.", Barrel, "camp", "storage");

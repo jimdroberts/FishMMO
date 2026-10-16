@@ -1067,6 +1067,402 @@ namespace FishMMO.Shared.WorldDesign
 			b.RecalculateNormals(false);
 			return b;
 		}
+
+		// ── Cave crystals (2026-10-16, I6c) ───────────────────────────
+		//
+		// The cave-crystal catalogue's own habits (ProceduralArtCatalogue.CaveMinerals): every kind not already a rock formation's
+		// crystal, a mesh set a habit shared by the kinds that grow in it, as the glow art's hues share their meshes. Two submeshes:
+		// the host rock (0, the kit's fieldstone) and the crystal (1, the kind's own material, u a glow level from foot to tip as
+		// the glow art's crystals). Floor-mounted like the glow art's crystals (origin at the foot, +y up, seated a little below).
+
+		/// <summary>A level of a cave crystal habit's variant, its tangents made (variants past the catalogue's wrap round).</summary>
+		public static MeshBuilder BuildMineral(CaveMineralHabit habit, int variant, int lod, int seed)
+		{
+			lod = Mathf.Clamp(lod, 0, Levels - 1);
+			int n = ProceduralArtCatalogue.CaveMineralVariants;
+			variant = ((variant % n) + n) % n;
+			int s = ProceduralNoise.SeedFor($"CaveMineral/{habit}/{variant}", seed);
+			MeshBuilder m;
+			switch (habit)
+			{
+				case CaveMineralHabit.Druse: m = Druse(variant, lod, s); break;
+				case CaveMineralHabit.Prisms: m = Prisms(variant, lod, s); break;
+				case CaveMineralHabit.Geode: m = Geode(variant, lod, s); break;
+				case CaveMineralHabit.Cubes: m = Cubes(variant, lod, s); break;
+				case CaveMineralHabit.Shards: m = Shards(variant, lod, s); break;
+				case CaveMineralHabit.Nodules: m = Nodules(variant, lod, s); break;
+				default: m = Blades(variant, lod, s); break;
+			}
+			m.RecalculateTangents();
+			return m;
+		}
+
+		/// <summary>A matrix lump's tessellation at a level: its segments round and rings up.</summary>
+		private static void LumpDetail(int lod, out int segments, out int rings)
+		{
+			segments = lod == 0 ? 14 : lod == 1 ? 10 : 7;
+			rings = lod == 0 ? 7 : lod == 1 ? 5 : 4;
+		}
+
+		/// <summary>
+		/// Points grown from the top of an ellipsoidal matrix of <paramref name="matrix"/> radii: the longest nearest the middle
+		/// and near upright, the rest leaning out the further out they stand (as <see cref="CrystalCluster"/> grows them), each
+		/// <paramref name="girth"/> of its length round, between <paramref name="longest"/> and <paramref name="shortest"/>.
+		/// </summary>
+		private static List<CrystalPart> Grown(DeterministicRNG rng, int count, float longest, float shortest, float girth, float lean, Vector3 matrix, float spread, int seed)
+		{
+			var parts = new List<CrystalPart>(count);
+			for (int i = 0; i < count; i++)
+			{
+				float rank = count > 1 ? i / (float)(count - 1) : 0f;
+				float length = Mathf.Lerp(longest, shortest, Mathf.Pow(rank, 0.75f)) * rng.Range(0.88f, 1.08f);
+				float r = Mathf.Sqrt(Mathf.Lerp(0.02f, 1f, rank) * rng.Range(0.4f, 1f)) * spread;
+				float az = rng.NextFloat() * Tau;
+				var foot = new Vector3(Mathf.Cos(az) * r * matrix.x, 0f, Mathf.Sin(az) * r * matrix.z);
+				foot.y = matrix.y * Mathf.Sqrt(Mathf.Max(0f, 1f - r * r)) * 0.8f;
+				Vector3 dir = Tilted(Mathf.Lerp(4f, lean, r) + rng.Range(-6f, 7f), az + rng.Range(-0.45f, 0.45f));
+				parts.Add(new CrystalPart
+				{
+					Foot = foot - dir * length * 0.14f,
+					Dir = dir,
+					Length = length,
+					Radius = length * girth * rng.Range(0.85f, 1.15f),
+					Spin = rng.NextFloat() * 360f,
+					Seed = seed + 7919 * (i + 1),
+				});
+			}
+			return parts;
+		}
+
+		/// <summary>A matrix lump of rock on submesh 0.</summary>
+		private static void Matrix(MeshBuilder m, Vector3 radii, float rough, int lod, int seed)
+		{
+			LumpDetail(lod, out int segments, out int rings);
+			m.Append(Lump(radii, segments, rings, rough, seed));
+		}
+
+		/// <summary>
+		/// Clear quartz's druse: a crust of many small slender points carpeting a low lump of rock, leaning outward. v0 24 points
+		/// to 0.42 m, v1 16 to 0.32 m, v2 32 to 0.48 m, v3 26 along an elongated crust.
+		/// </summary>
+		private static MeshBuilder Druse(int variant, int lod, int seed)
+		{
+			var rng = new DeterministicRNG(seed);
+			int count;
+			float longest, shortest;
+			Vector3 matrix;
+			switch (variant)
+			{
+				case 1: count = 16; longest = 0.32f; shortest = 0.1f; matrix = new Vector3(0.36f, 0.1f, 0.3f); break;
+				case 2: count = 32; longest = 0.48f; shortest = 0.1f; matrix = new Vector3(0.6f, 0.14f, 0.5f); break;
+				case 3: count = 26; longest = 0.38f; shortest = 0.1f; matrix = new Vector3(0.7f, 0.1f, 0.28f); break;
+				default: count = 24; longest = 0.42f; shortest = 0.12f; matrix = new Vector3(0.5f, 0.12f, 0.42f); break;
+			}
+			List<CrystalPart> parts = Grown(rng, count, longest, shortest, 0.12f, 55f, matrix, 0.9f, seed);
+			var m = new MeshBuilder(2);
+			Matrix(m, matrix, 0.2f, lod, seed + 5);
+			AddCrystals(m, parts, lod, 0.25f, 1f);
+			return m;
+		}
+
+		/// <summary>
+		/// Smoky quartz's pocket: a few stout prisms with pyramid tips out of a lump of pegmatite. v0 three to 0.9 m, v1 one
+		/// great prism of 1.1 m and two small, v2 five to 0.75 m, v3 a twin pair crossed.
+		/// </summary>
+		private static MeshBuilder Prisms(int variant, int lod, int seed)
+		{
+			var rng = new DeterministicRNG(seed);
+			Vector3 matrix = variant == 1 ? new Vector3(0.4f, 0.24f, 0.36f) : new Vector3(0.45f, 0.25f, 0.4f);
+			var parts = new List<CrystalPart>();
+			float[] lengths;
+			float girth = 0.22f, lean = 30f;
+			switch (variant)
+			{
+				case 1: lengths = new[] { 1.1f, 0.38f, 0.32f }; girth = 0.24f; break;
+				case 2: lengths = new[] { 0.75f, 0.62f, 0.55f, 0.48f, 0.4f }; girth = 0.2f; lean = 45f; break;
+				case 3: lengths = new[] { 0.85f, 0.8f }; girth = 0.2f; break;
+				default: lengths = new[] { 0.9f, 0.7f, 0.55f }; break;
+			}
+			float az0 = rng.NextFloat() * Tau;
+			for (int i = 0; i < lengths.Length; i++)
+			{
+				float az = variant == 3 ? az0 + i * Mathf.PI : az0 + i * Tau / lengths.Length + rng.Range(-0.4f, 0.4f);
+				float r = i == 0 && variant != 3 ? 0.08f : rng.Range(0.25f, 0.6f);
+				float tilt = variant == 3 ? rng.Range(24f, 32f) : i == 0 ? rng.Range(3f, 10f) : lean * rng.Range(0.6f, 1.1f);
+				Vector3 dir = Tilted(tilt, az + rng.Range(-0.2f, 0.2f));
+				var foot = new Vector3(Mathf.Cos(az) * r * matrix.x, matrix.y * 0.7f, Mathf.Sin(az) * r * matrix.z);
+				parts.Add(new CrystalPart { Foot = foot - dir * lengths[i] * 0.12f, Dir = dir, Length = lengths[i], Radius = lengths[i] * girth * rng.Range(0.9f, 1.1f),
+					Spin = rng.NextFloat() * 360f, Seed = seed + 613 * (i + 1) });
+			}
+			var m = new MeshBuilder(2);
+			Matrix(m, matrix, 0.26f, lod, seed + 5);
+			AddCrystals(m, parts, lod, 0.2f, 1f);
+			return m;
+		}
+
+		/// <summary>
+		/// A geode broken open (amethyst's, wyrdstone's): a bowl of rock rind, its hollow lined with stubby points growing in
+		/// toward its middle, laid tilted so its open face looks out (+z) and up. v0 0.42 m across with 46 points, v1 0.3 m with
+		/// 30, v2 0.55 m with 60, v3 an elongated 0.38 m with 40.
+		/// </summary>
+		private static MeshBuilder Geode(int variant, int lod, int seed)
+		{
+			var rng = new DeterministicRNG(seed);
+			float radius, rind = 0.07f, stretch = 1f;
+			int count;
+			switch (variant)
+			{
+				case 1: radius = 0.3f; count = 30; rind = 0.055f; break;
+				case 2: radius = 0.55f; count = 60; rind = 0.085f; break;
+				case 3: radius = 0.38f; count = 40; stretch = 1.3f; break;
+				default: radius = 0.42f; count = 46; break;
+			}
+			float inner = radius - rind;
+			var centre = new Vector3(0f, radius, 0f);
+			var parts = new List<CrystalPart>(count);
+			for (int i = 0; i < count; i++)
+			{
+				// Over the hollow's wall, from near its floor to just under the rim, every way round.
+				float t = Mathf.Acos(Mathf.Lerp(Mathf.Cos(8f * Mathf.Deg2Rad), Mathf.Cos(78f * Mathf.Deg2Rad), rng.NextFloat()));
+				float phi = rng.NextFloat() * Tau;
+				var at = new Vector3(inner * Mathf.Sin(t) * Mathf.Cos(phi), radius - inner * Mathf.Cos(t), inner * Mathf.Sin(t) * Mathf.Sin(phi));
+				Vector3 dir = (centre - at).normalized;
+				dir = (dir + new Vector3(rng.Range(-0.25f, 0.25f), rng.Range(-0.25f, 0.25f), rng.Range(-0.25f, 0.25f))).normalized;
+				float length = inner * rng.Range(0.18f, 0.42f);
+				parts.Add(new CrystalPart { Foot = at - dir * length * 0.15f, Dir = dir, Length = length, Radius = length * rng.Range(0.28f, 0.38f), Spin = rng.NextFloat() * 360f, Seed = seed + 389 * (i + 1) });
+			}
+			float tilt = rng.Range(46f, 58f), turn = rng.Range(-20f, 20f);
+			var m = new MeshBuilder(2);
+			// The rind: up the outside from its pole to the rim, across the rim, down the inside to the hollow's floor.
+			int steps = lod == 0 ? 7 : lod == 1 ? 5 : 3;
+			var profile = new List<LP>(2 * steps + 3);
+			for (int k = 0; k <= steps; k++)
+			{
+				float a = 0.5f * Mathf.PI * k / steps;
+				profile.Add(new LP(radius * Mathf.Sin(a), radius * (1f - Mathf.Cos(a)), 0.3f, k == steps));
+			}
+			for (int k = steps; k >= 0; k--)
+			{
+				float a = 0.5f * Mathf.PI * k / steps;
+				profile.Add(new LP(inner * Mathf.Sin(a), radius - inner * Mathf.Cos(a), 0.3f, k == steps));
+			}
+			int rindFirst = m.VertexCount;
+			Lathe(m, 0, profile, lod == 0 ? 18 : lod == 1 ? 12 : 8, Matrix4x4.Scale(new Vector3(stretch, 1f, 1f)), 2f);
+			// The rind is rock: textured in metres, as a matrix lump is.
+			for (int i = rindFirst; i < m.VertexCount; i++)
+			{
+				Vector3 q = m.Positions[i];
+				m.UVs[i] = new Vector2(q.x + q.z * 0.7f, q.y + q.z * 0.3f);
+			}
+			var stretched = new List<CrystalPart>(parts.Count);
+			foreach (CrystalPart p in parts)
+			{
+				CrystalPart q = p;
+				q.Foot = new Vector3(p.Foot.x * stretch, p.Foot.y, p.Foot.z);
+				stretched.Add(q);
+			}
+			AddCrystals(m, stretched, lod, 0.35f, 1f);
+			// Tilted so the hollow looks out and up, then sat a little into the floor.
+			m.Transform(Matrix4x4.Rotate(Quaternion.Euler(tilt, turn, 0f)));
+			Bounds b = m.Bounds;
+			m.Transform(Matrix4x4.Translate(new Vector3(-b.center.x, -b.min.y - 0.06f, -b.center.z)));
+			return m;
+		}
+
+		/// <summary>
+		/// One flat-faced cube (a crystal's), its faces' normals its own, u a glow level rising with its height: in
+		/// <paramref name="place"/>'s frame, <paramref name="half"/> its half-extents.
+		/// </summary>
+		private static void Cuboid(MeshBuilder m, int sub, Matrix4x4 place, Vector3 half, float glowLow, float glowHigh, float v0)
+		{
+			int first = m.VertexCount;
+			Vector3[] axes = { Vector3.right, Vector3.left, Vector3.up, Vector3.down, Vector3.forward, Vector3.back };
+			for (int f = 0; f < 6; f++)
+			{
+				Vector3 n = axes[f];
+				Vector3 u = Mathf.Abs(n.y) > 0.5f ? Vector3.right : Vector3.up;
+				Vector3 w = Vector3.Cross(n, u);
+				var corners = new Vector3[4];
+				for (int c = 0; c < 4; c++)
+				{
+					float su = c == 0 || c == 3 ? -1f : 1f, sw = c < 2 ? -1f : 1f;
+					corners[c] = Vector3.Scale(n + u * su + w * sw, half);
+				}
+				int a = m.VertexCount;
+				for (int c = 0; c < 4; c++)
+				{
+					float level = Mathf.Lerp(glowLow, glowHigh, Mathf.InverseLerp(-half.y, half.y, corners[c].y));
+					m.AddVertex(corners[c], n, new Vector2(Glow(level), v0 + 0.13f * f + (c == 1 || c == 2 ? 0.11f : 0f)), White);
+				}
+				m.AddQuad(sub, a, a + 1, a + 2, a + 3, n);
+			}
+			m.Transform(place, first);
+		}
+
+		/// <summary>
+		/// Fluorite's interlocking cubes on a lump of rock: some square on it, some stood on an edge or a corner. v0 seven to
+		/// 0.32 m, v1 four great ones to 0.42 m, v2 twelve small, v3 six stepped up one side.
+		/// </summary>
+		private static MeshBuilder Cubes(int variant, int lod, int seed)
+		{
+			var rng = new DeterministicRNG(seed);
+			int count;
+			float largest, smallest;
+			Vector3 matrix = new Vector3(0.42f, 0.2f, 0.38f);
+			switch (variant)
+			{
+				case 1: count = 4; largest = 0.42f; smallest = 0.26f; matrix = new Vector3(0.46f, 0.22f, 0.42f); break;
+				case 2: count = 12; largest = 0.22f; smallest = 0.08f; break;
+				case 3: count = 6; largest = 0.3f; smallest = 0.14f; matrix = new Vector3(0.5f, 0.2f, 0.32f); break;
+				default: count = 7; largest = 0.32f; smallest = 0.12f; break;
+			}
+			var cubes = new List<(Matrix4x4 place, float edge, float v)>(count);
+			for (int i = 0; i < count; i++)
+			{
+				float rank = count > 1 ? i / (float)(count - 1) : 0f;
+				float edge = Mathf.Lerp(largest, smallest, rank) * rng.Range(0.9f, 1.1f);
+				float az = rng.NextFloat() * Tau, r = variant == 3 ? rank * 0.8f : Mathf.Sqrt(rng.NextFloat()) * 0.7f;
+				float roll = rng.NextFloat();
+				// Square on the rock, on an edge (45° about x), or on a corner (the body diagonal up).
+				Quaternion stand = roll < 0.5f ? Quaternion.Euler(rng.Range(-12f, 12f), 0f, rng.Range(-12f, 12f))
+					: roll < 0.8f ? Quaternion.Euler(45f, 0f, rng.Range(-10f, 10f)) : Quaternion.Euler(45f, 0f, 35.26f);
+				Quaternion turn = Quaternion.AngleAxis(rng.NextFloat() * 360f, Vector3.up) * stand;
+				float x = Mathf.Cos(az) * r * matrix.x, z = variant == 3 ? Mathf.Lerp(-matrix.z, matrix.z, rank) * 0.7f : Mathf.Sin(az) * r * matrix.z;
+				if (variant == 3)
+				{
+					x = rng.Range(-0.3f, 0.3f) * matrix.x;
+				}
+				float top = matrix.y * Mathf.Sqrt(Mathf.Max(0f, 1f - r * r)) * 0.8f + (variant == 3 ? rank * 0.12f : 0f);
+				var centre = new Vector3(x, top + edge * 0.25f, z);
+				cubes.Add((Matrix4x4.TRS(centre, turn, Vector3.one), edge, rng.NextFloat()));
+			}
+			var m = new MeshBuilder(2);
+			Matrix(m, matrix, 0.22f, lod, seed + 5);
+			int keep = lod == 2 ? Mathf.Max(1, (cubes.Count + 1) / 2) : cubes.Count;
+			for (int i = 0; i < keep; i++)
+			{
+				float h = cubes[i].edge * 0.5f;
+				Cuboid(m, 1, cubes[i].place, new Vector3(h, h, h), 0.3f, 1f, cubes[i].v);
+			}
+			return m;
+		}
+
+		/// <summary>
+		/// Obsidian's shards: thin glassy blades (flattened four-sided points) jutting every way out of a rough mass. v0 seven to
+		/// 0.9 m, v1 ten, v2 four great ones to 1.2 m, v3 twelve small splinters.
+		/// </summary>
+		private static MeshBuilder Shards(int variant, int lod, int seed)
+		{
+			var rng = new DeterministicRNG(seed);
+			int count;
+			float longest, shortest;
+			switch (variant)
+			{
+				case 1: count = 10; longest = 0.75f; shortest = 0.25f; break;
+				case 2: count = 4; longest = 1.2f; shortest = 0.6f; break;
+				case 3: count = 12; longest = 0.45f; shortest = 0.15f; break;
+				default: count = 7; longest = 0.9f; shortest = 0.3f; break;
+			}
+			var matrix = new Vector3(0.42f, 0.24f, 0.38f);
+			List<CrystalPart> parts = Grown(rng, count, longest, shortest, 0.2f, 70f, matrix, 0.85f, seed);
+			var m = new MeshBuilder(2);
+			Matrix(m, matrix, 0.32f, lod, seed + 5);
+			FlatPoints(m, parts, lod, 0.28f, 0.2f, 1f);
+			return m;
+		}
+
+		/// <summary>
+		/// Sunstone's blades: broad tabular crystals with chisel tips bursting from a lump of scoria. v0 eight to 0.9 m, v1 five
+		/// great ones to 1 m, v2 twelve, v3 six fanned in one plane.
+		/// </summary>
+		private static MeshBuilder Blades(int variant, int lod, int seed)
+		{
+			var rng = new DeterministicRNG(seed);
+			int count;
+			float longest, shortest;
+			switch (variant)
+			{
+				case 1: count = 5; longest = 1f; shortest = 0.5f; break;
+				case 2: count = 12; longest = 0.7f; shortest = 0.25f; break;
+				case 3: count = 6; longest = 0.85f; shortest = 0.4f; break;
+				default: count = 8; longest = 0.9f; shortest = 0.35f; break;
+			}
+			var matrix = new Vector3(0.4f, 0.22f, 0.36f);
+			List<CrystalPart> parts = Grown(rng, count, longest, shortest, 0.3f, 58f, matrix, 0.75f, seed);
+			if (variant == 3)
+			{
+				// A fan: every blade in the plane of the first, leaning either way in it.
+				float plane = rng.NextFloat() * Tau;
+				for (int i = 0; i < parts.Count; i++)
+				{
+					CrystalPart p = parts[i];
+					float lean = Mathf.Lerp(-55f, 55f, parts.Count > 1 ? i / (parts.Count - 1f) : 0.5f);
+					p.Dir = Tilted(Mathf.Abs(lean), plane + (lean < 0f ? Mathf.PI : 0f));
+					p.Foot = new Vector3(Mathf.Cos(plane), 0f, Mathf.Sin(plane)) * (lean / 55f * 0.18f) + Vector3.up * (matrix.y * 0.6f);
+					p.Spin = plane * Mathf.Rad2Deg;
+					parts[i] = p;
+				}
+			}
+			var m = new MeshBuilder(2);
+			Matrix(m, matrix, 0.4f, lod, seed + 5);
+			FlatPoints(m, parts, lod, 0.32f, 0.25f, 1f);
+			return m;
+		}
+
+		/// <summary>
+		/// Points flattened across their own z to <paramref name="flat"/> of their breadth (four-sided: a blade or a shard), the
+		/// smaller half dropped at the last level.
+		/// </summary>
+		private static void FlatPoints(MeshBuilder m, List<CrystalPart> parts, int lod, float flat, float glowFoot, float glowTip)
+		{
+			parts.Sort((a, b) => b.Length.CompareTo(a.Length));
+			int keep = lod == 2 ? Mathf.Max(1, (parts.Count + 1) / 2) : parts.Count;
+			for (int i = 0; i < keep; i++)
+			{
+				CrystalPart c = parts[i];
+				var crng = new DeterministicRNG(c.Seed);
+				float tip = c.Length * crng.Range(0.18f, 0.3f);
+				CrystalPoint(m, 1, Matrix4x4.TRS(c.Foot, UpTo(c.Dir, c.Spin), new Vector3(1f, 1f, flat)), c.Radius, c.Length - tip, tip, 4, crng, glowFoot, glowTip);
+			}
+		}
+
+		/// <summary>
+		/// Amber's nodules: rounded drops and lumps of resin sunk to more than half their height in a low bed of rock. v0 nine
+		/// to 0.2 m, v1 five large to 0.26 m, v2 fourteen small, v3 seven and three tall drips.
+		/// </summary>
+		private static MeshBuilder Nodules(int variant, int lod, int seed)
+		{
+			var rng = new DeterministicRNG(seed);
+			int count, drips = 0;
+			float largest, smallest;
+			switch (variant)
+			{
+				case 1: count = 5; largest = 0.26f; smallest = 0.12f; break;
+				case 2: count = 14; largest = 0.15f; smallest = 0.04f; break;
+				case 3: count = 7; largest = 0.18f; smallest = 0.07f; drips = 3; break;
+				default: count = 9; largest = 0.2f; smallest = 0.06f; break;
+			}
+			var bed = new Vector3(0.55f, 0.14f, 0.5f);
+			var beads = new List<(Vector3 centre, Vector3 radii)>(count + drips);
+			for (int i = 0; i < count + drips; i++)
+			{
+				bool drip = i >= count;
+				float rank = count > 1 ? Mathf.Min(1f, i / (float)(count - 1)) : 0f;
+				float r = Mathf.Lerp(largest, smallest, rank) * rng.Range(0.85f, 1.15f);
+				float az = rng.NextFloat() * Tau, at = Mathf.Sqrt(rng.NextFloat()) * 0.75f;
+				Vector3 radii = drip ? new Vector3(r * 0.7f, r * 2.2f, r * 0.7f) : new Vector3(r, r * rng.Range(0.65f, 0.85f), r * rng.Range(0.8f, 1f));
+				float top = bed.y * Mathf.Sqrt(Mathf.Max(0f, 1f - at * at)) * 0.85f;
+				beads.Add((new Vector3(Mathf.Cos(az) * at * bed.x, top + radii.y * 0.3f, Mathf.Sin(az) * at * bed.z), radii));
+			}
+			var m = new MeshBuilder(2);
+			Matrix(m, bed, 0.18f, lod, seed + 5);
+			int segments = lod == 0 ? 10 : lod == 1 ? 8 : 6, rings = lod == 0 ? 6 : lod == 1 ? 5 : 4;
+			foreach ((Vector3 centre, Vector3 radii) in beads)
+			{
+				Bead(m, 1, centre, radii, 0.8f, segments, rings);
+			}
+			return m;
+		}
 	}
 }
 #endif

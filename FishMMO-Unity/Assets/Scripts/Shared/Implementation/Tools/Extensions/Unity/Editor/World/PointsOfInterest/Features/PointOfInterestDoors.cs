@@ -87,6 +87,8 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				var visual = (GameObject)PrefabUtility.InstantiatePrefab(prefab, panel.transform);
 				visual.name = "Visual";
+				// In the site's structure palette, as its building's door (a stone church's door is the stone style's).
+				StructurePaletteDressing.Dress(visual, prefab, context.Palette, StructurePaletteDressing.StyleOf(door.Building));
 				visual.transform.localPosition = new Vector3(0f, -door.Height * 0.5f, 0f);
 				visual.transform.localRotation = Quaternion.identity;
 				visual.transform.localScale = new Vector3(side * door.Width, door.Height * (lift ? 1f : 0.5f), Mathf.Max(0.5f, door.Scale) * (bridge ? 3f : 1f));

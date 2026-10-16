@@ -70,6 +70,9 @@ namespace FishMMO.Shared.WorldDesign
 				case "Sandstone": return ForRockType("Sandstone");
 				case "Basalt": return ForRockType("Basalt");
 				case "Limestone": return ForRockType("Limestone");
+				// Flint and river cobbles as hard as the rock whose surface they wear (RockArtNames.RockSurfaceTypeForLegacy).
+				case "Flint": return ForRockType("Quartzite");
+				case "Cobble": return ForRockType("Quartzite");
 				// The sea floor's nodules and coral live under water, and ice holds none.
 				case "Nodule":
 				case "Coral":

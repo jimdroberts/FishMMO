@@ -531,11 +531,11 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static int StepCount()
 		{
-			// Migration, ground, bark, atlas, import, verify, layers, materials, rocks, details, bushes, trees, deadwood,
-			// built layers; the rock-formation, ice and cliff-piece steps (BiomeArtGenerator.Rocks.cs); the structure kit's
+			// Migration, ground, bark, atlas, import, verify, layers, materials, details, bushes, trees, deadwood,
+			// built layers; the stone, rock-formation, ice and cliff-piece steps (BiomeArtGenerator.Rocks.cs); the structure kit's
 			// (BiomeArtGenerator.Structures.cs).
 			// The vines: a step a species, and one for the climbers (BiomeArtGenerator.Vines.cs).
-			return SurfaceCatalogue.GroundRecipes.Length + SurfaceCatalogue.BarkRecipes.Length + 10 + ProceduralArtCatalogue.Bushes.Length + ProceduralArtCatalogue.Trees.Length + RockStepCount()
+			return SurfaceCatalogue.GroundRecipes.Length + SurfaceCatalogue.BarkRecipes.Length + 9 + ProceduralArtCatalogue.Bushes.Length + ProceduralArtCatalogue.Trees.Length + RockStepCount()
 				+ StructureStepCount() + ProceduralArtCatalogue.Vines.Length + 1;
 		}
 
@@ -584,9 +584,7 @@ namespace FishMMO.Shared.WorldDesign
 			WriteTerrainLayers(c);
 			yield return "Materials";
 			WriteMaterials(c);
-			yield return "Rocks";
-			WriteRocks(c);
-			// Rock formations, ice and cliff pieces, with their materials.
+			// Stones (each material's boulders, rocks and pebbles), rock formations, ice and cliff pieces, with their materials.
 			foreach (string step in RockSteps(c))
 			{
 				yield return step;
@@ -1070,6 +1068,10 @@ namespace FishMMO.Shared.WorldDesign
 
 			foreach (RockMaterialSpec spec in ProceduralArtCatalogue.AllRockMaterials)
 			{
+				if (spec.WearsRockType != null)
+				{
+					continue; // A stone wearing its rock type's own material, written with the formations (WriteRockMaterials).
+				}
 				// Each wears its rock type's surface (Grey: granite), the one its formations and cliffs wear, so
 				// the three read as one stone (RockArtNames.RockSurfaceTypeForLegacy).
 				string surface = RockArtNames.RockSurfaceTypeForLegacy(spec.Name);
@@ -1723,49 +1725,8 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── Rocks ─────────────────────────────────────────────────────
 
-		private static void WriteRocks(Context c)
-		{
-			var boulderMeshes = new Dictionary<string, Mesh[]>();
-			foreach (RockShape shape in ProceduralArtCatalogue.BoulderShapes)
-			{
-				var meshes = new Mesh[ProceduralArtCatalogue.BoulderResolution.Length];
-				for (int lod = 0; lod < meshes.Length; lod++)
-				{
-					RockShape s = shape;
-					MeshBuilder b = RockMeshes.Build(in s, ProceduralArtCatalogue.BoulderResolution[lod], c.Seed);
-					meshes[lod] = WriteMesh(c, b, ProceduralArtCatalogue.BoulderMesh(shape.Name, lod), true);
-				}
-				boulderMeshes[shape.Name] = meshes;
-			}
-			RockShape small = ProceduralArtCatalogue.SmallRock, pebble = ProceduralArtCatalogue.Pebble;
-			Mesh smallMesh = WriteMesh(c, RockMeshes.Build(in small, 3, c.Seed), ProceduralArtCatalogue.SmallRocksMesh, true);
-			Mesh pebbleMesh = WriteMesh(c, RockMeshes.BuildCluster(in pebble, 3, 2, 0.18f, c.Seed), ProceduralArtCatalogue.PebblesMesh, false);
-
-			foreach (RockMaterialSpec spec in ProceduralArtCatalogue.AllRockMaterials)
-			{
-				Material material = MaterialOrNull(c, ProceduralArtCatalogue.RockMaterial(spec.Name));
-				foreach (RockShape shape in ProceduralArtCatalogue.BoulderShapes)
-				{
-					Mesh[] meshes = boulderMeshes[shape.Name];
-					WritePrefab(c, ProceduralArtCatalogue.BoulderPrefab(spec.Name, shape.Name), root =>
-					{
-						var mats = new Material[meshes.Length][];
-						var shadows = new ShadowCastingMode[meshes.Length];
-						for (int i = 0; i < meshes.Length; i++)
-						{
-							mats[i] = new[] { material };
-							shadows[i] = i < meshes.Length - 1 ? ShadowCastingMode.On : ShadowCastingMode.Off;
-						}
-						Lods(root, meshes, mats, new[] { 0.25f, 0.08f, 0.01f }, shadows);
-						AddBoulderCollider(root, meshes);
-					});
-				}
-				WritePrefab(c, ProceduralArtCatalogue.SmallRocksPrefab(spec.Name), root =>
-					AddRenderer(root, smallMesh, new[] { material }, ShadowCastingMode.Off));
-				WritePrefab(c, ProceduralArtCatalogue.PebblesPrefab(spec.Name), root =>
-					AddRenderer(root, pebbleMesh, new[] { material }, ShadowCastingMode.Off));
-			}
-		}
+		// The boulders, small rocks and pebbles of every stone material are written with the rock formations, after the
+		// rock types' materials some of them wear (WriteStones, BiomeArtGenerator.Rocks.cs).
 
 		/// <summary>
 		/// A rock collides as its own shape: a mesh collider on its lowest level of detail, the coarsest mesh that still

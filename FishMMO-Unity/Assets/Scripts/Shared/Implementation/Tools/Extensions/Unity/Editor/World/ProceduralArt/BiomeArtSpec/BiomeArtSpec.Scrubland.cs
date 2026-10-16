@@ -19,7 +19,8 @@ namespace FishMMO.Shared.WorldDesign
 				C(Ground.Rock), Ground.Gravel, Ground.Gravel)
 				.Accepts(AridGeology)
 				.Look(BiomeLookClass.Arid)
-				.Wildlife(BiomeHabitat.Scrub);
+				.Wildlife(BiomeHabitat.Scrub)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

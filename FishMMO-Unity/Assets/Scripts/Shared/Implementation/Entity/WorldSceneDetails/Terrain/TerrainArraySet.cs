@@ -74,7 +74,9 @@ namespace FishMMO.Shared
 		[Tooltip("Where each layer's art came from (committed, LOCAL sidecar, LOCAL by name), for the logs.")]
 		public string[] LayerSources = new string[0];
 
-		// The shader's five per-layer arrays, packed by TerrainArrayLayerParams.
+		// The five per-layer arrays, packed by TerrainArrayLayerParams: TerrainArrayLayerParams.TableLength(LayerCount) long
+		// (32 for a scene of 32 layers or fewer, as when they were the shader's fixed-size uniforms). The shader reads them
+		// from the layer table (TerrainLayerTable) the binder builds from them.
 		public Vector4[] LayerST = new Vector4[0];
 		public Vector4[] LayerTint = new Vector4[0];
 		public Vector4[] LayerMaskOffset = new Vector4[0];
@@ -84,14 +86,17 @@ namespace FishMMO.Shared
 		[Tooltip("A hash of everything the bake read. A different hash means the set is stale.")]
 		public string ContentHash;
 
-		/// <summary>True when the per-layer arrays are the full shader length and the albedo exists.</summary>
+		/// <summary>True when the albedo exists and every per-layer array covers every layer.</summary>
 		public bool IsUsable =>
-			Albedo != null && LayerCount > 0
-			&& LayerST != null && LayerST.Length == TerrainArrayLayerParams.MaximumLayers
-			&& LayerTint != null && LayerTint.Length == TerrainArrayLayerParams.MaximumLayers
-			&& LayerMaskOffset != null && LayerMaskOffset.Length == TerrainArrayLayerParams.MaximumLayers
-			&& LayerMaskScale != null && LayerMaskScale.Length == TerrainArrayLayerParams.MaximumLayers
-			&& LayerSurface != null && LayerSurface.Length == TerrainArrayLayerParams.MaximumLayers;
+			Albedo != null && LayerCount > 0 && LayerCount <= TerrainArrayLayerParams.MaximumLayers
+			&& LayerST != null && LayerST.Length >= LayerCount
+			&& LayerTint != null && LayerTint.Length >= LayerCount
+			&& LayerMaskOffset != null && LayerMaskOffset.Length >= LayerCount
+			&& LayerMaskScale != null && LayerMaskScale.Length >= LayerCount
+			&& LayerSurface != null && LayerSurface.Length >= LayerCount;
+
+		[Tooltip("The shader that bakes each tile's index map from its alphamaps (TerrainIndexMapBaker). Referenced here so a player build carries it with the arrays; written by the bake.")]
+		public Shader IndexBakeShader;
 
 		[Tooltip("What each layer's ground is made of, from the biome slot it was painted from (TerrainTextureLayer.GroundMakeup): x living, y lichen, z mineral, w 1 where the slot had one (0: read from the layer's name). Written by the bake; not part of the content hash, refreshed in place when only it changed.")]
 		public Vector4[] LayerMakeup = new Vector4[0];
@@ -102,7 +107,7 @@ namespace FishMMO.Shared
 		[System.NonSerialized] private bool warnedNameFallback;
 
 		/// <summary>
-		/// Per layer (<see cref="TerrainArrayLayerParams.MaximumLayers"/> long) what it is made of as the planet's looks see
+		/// Per layer (<see cref="TerrainArrayLayerParams.TableLength"/> long) what it is made of as the planet's looks see
 		/// it: x living, y lichen, z mineral, w 0. The terrain shader's <c>_FishLayerFlora</c>, the grass's colour read and the
 		/// contact blend all take it from here, so the three agree on every layer.
 		/// </summary>
@@ -111,7 +116,9 @@ namespace FishMMO.Shared
 		/// From the biome slot each layer was painted from (<see cref="LayerMakeup"/>, baked from the template's
 		/// <see cref="Biomes.TerrainTextureLayer.GroundMakeup"/>; 2026-10-15). A layer with none — a set baked before then, or
 		/// hand-made art whose slot has no makeup — is read from its name as it always was
-		/// (<see cref="Biomes.BiomeLooks.GroundShareOf"/>), with one warning for the set.
+		/// (<see cref="Biomes.BiomeLooks.GroundShareOf"/>). For a generated ground (Ground_*) the name gives exactly what
+		/// authoring writes on its slot (pinned by BiomeTemplateLooksTests), so that fallback is silent; only hand-made
+		/// layers read by name get the one warning for the set, since only theirs can be wrong.
 		/// </para>
 		/// <para>
 		/// Worked out on first use and kept until the names or the makeup change (a rebake writes new ones).
@@ -123,8 +130,8 @@ namespace FishMMO.Shared
 			{
 				return layerFlora;
 			}
-			var flora = new Vector4[TerrainArrayLayerParams.MaximumLayers];
-			int count = Mathf.Min(LayerCount, TerrainArrayLayerParams.MaximumLayers);
+			var flora = new Vector4[TerrainArrayLayerParams.TableLength(LayerCount)];
+			int count = Mathf.Min(LayerCount, flora.Length);
 			int byName = 0;
 			string first = null;
 			for (int i = 0; i < count; i++)
@@ -137,13 +144,16 @@ namespace FishMMO.Shared
 				string name = LayerNames != null && i < LayerNames.Length ? LayerNames[i] : null;
 				Biomes.BiomeLooks.GroundShare share = Biomes.BiomeLooks.GroundShareOf(name);
 				flora[i] = new Vector4(share.Foliage, share.Accent, share.Mineral, 0f);
-				byName++;
-				first ??= name;
+				if (name == null || !name.StartsWith("Ground_", System.StringComparison.Ordinal))
+				{
+					byName++;
+					first ??= name;
+				}
 			}
 			if (byName > 0 && !warnedNameFallback)
 			{
 				warnedNameFallback = true;
-				Debug.LogWarning($"[Terrain arrays] '{SceneName}': {byName} of {count} layer(s) have no ground makeup from their biome slot (e.g. '{first}'), so what they are made of was read from their names. Author biome art, then repaint (or rebake the arrays) to take it from the templates; hand-made layers need Ground Makeup set on their slot.");
+				Debug.LogWarning($"[Terrain arrays] '{SceneName}': {byName} hand-made layer(s) of {count} have no ground makeup on their biome slot (e.g. '{first}'), so what they are made of was guessed from their names. Set Ground Makeup on their slot, then repaint (or rebake the arrays).");
 			}
 			layerFlora = flora;
 			layerFloraNames = LayerNames;

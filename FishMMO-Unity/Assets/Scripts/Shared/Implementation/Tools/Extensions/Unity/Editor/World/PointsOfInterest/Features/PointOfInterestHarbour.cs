@@ -150,7 +150,7 @@ namespace FishMMO.Shared.WorldDesign
 					// Kept by the server: the boats' colliders are under it.
 					holder = context.AddChild(ObjectName);
 				}
-				berth.Boat = Moor(prefab, wanted.Piece, wanted.Variant, holder.transform, berth.Position, Quaternion.Euler(0f, berth.Yaw, 0f), out berth.Visual);
+				berth.Boat = Moor(prefab, wanted.Piece, wanted.Variant, holder.transform, berth.Position, Quaternion.Euler(0f, berth.Yaw, 0f), out berth.Visual, context.Palette);
 				berth.Phase = random.NextFloat();
 				moored.Add(berth);
 				afloat++;
@@ -528,7 +528,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// server keeps, and under it the drawn hull, client-only, for <see cref="FloatingBoats"/> to bob. The sea lanes'
 		/// ships are built the same way (PointOfInterestSeaTraffic).
 		/// </summary>
-		internal static Transform Moor(GameObject prefab, string piece, int variant, Transform parent, Vector3 position, Quaternion rotation, out Transform visual)
+		/// <remarks>The drawn hull is laid in <paramref name="palette"/> (its home biome's structure palette; null: the kit's own materials).</remarks>
+		internal static Transform Moor(GameObject prefab, string piece, int variant, Transform parent, Vector3 position, Quaternion rotation, out Transform visual,
+			FishMMO.Shared.Biomes.BiomeStructurePalette palette = null)
 		{
 			var root = new GameObject(prefab.name);
 			root.transform.SetParent(parent, false);
@@ -541,7 +543,7 @@ namespace FishMMO.Shared.WorldDesign
 				collider.convex = false;
 				collider.sharedMesh = collision;
 			}
-			visual = Spawn(prefab, piece, variant, root.transform, position, rotation);
+			visual = Spawn(prefab, piece, variant, root.transform, position, rotation, palette);
 			visual.gameObject.AddComponent<ClientOnlyObject>();
 			return root.transform;
 		}
@@ -553,10 +555,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// A drawn hull's own object: the piece's renderers, unlinked from its prefab and with no collider, and over its open
 		/// top its water lid (<see cref="AddWaterLid"/>), so the sea is not drawn inside it.
 		/// </summary>
-		internal static Transform Spawn(GameObject prefab, string piece, int variant, Transform parent, Vector3 position, Quaternion rotation)
+		internal static Transform Spawn(GameObject prefab, string piece, int variant, Transform parent, Vector3 position, Quaternion rotation,
+			FishMMO.Shared.Biomes.BiomeStructurePalette palette = null)
 		{
 			GameObject boat = Object.Instantiate(prefab, position, rotation, parent);
 			boat.name = prefab.name;
+			StructurePaletteDressing.Dress(boat, prefab, palette);
 			foreach (Collider collider in boat.GetComponentsInChildren<Collider>(true))
 			{
 				Object.DestroyImmediate(collider);

@@ -75,6 +75,27 @@ namespace FishMMO.Shared.WorldDesign
 			return this;
 		}
 
+		/// <summary>
+		/// The weight the list gives a biome by its asset name (a later entry winning; <see cref="DefaultBiomeWeight"/> for one it
+		/// does not name): what the biome art authoring writes onto that biome's template for this variant where it differs from
+		/// the weight elsewhere (BiomeArtSpec.Entry.SiteVariants, 2026-10-16). The cut reads the biome template's.
+		/// </summary>
+		public float BiomeWeightByName(string biome)
+		{
+			float weight = DefaultBiomeWeight;
+			if (!string.IsNullOrEmpty(biome))
+			{
+				foreach (PointOfInterestBiomeWeight entry in BiomeWeights)
+				{
+					if (string.Equals(entry.Biome, biome, StringComparison.OrdinalIgnoreCase))
+					{
+						weight = entry.Weight;
+					}
+				}
+			}
+			return weight;
+		}
+
 		/// <summary>The weight of a biome the list does not name.</summary>
 		public PointOfInterestTemplateSpec Elsewhere(float weight)
 		{
@@ -219,6 +240,9 @@ namespace FishMMO.Shared.WorldDesign
 		public const string Timber = "timber", Stone = "stone", Hide = "hide", Iron = "iron", Earth = "earth";
 
 		// ── Biomes (asset names in Assets/Templates/Entity/Biomes, exactly: a name no biome has matches nothing) ───
+		// The variants' DEFAULT biomes (2026-10-16, phase I5): the biome art authoring writes each biome the weight these lists
+		// give it for every variant (where it differs from the variant's weight elsewhere) onto its template, and the cut picks
+		// by the template's. A change here reaches a scene once the biome templates are re-authored.
 		public static readonly string[] Swamp = { "Swamp", "Mangrove", "Peat Bog", "Wetlands", "Swamp Ruins", "Swamp Temple", "Swamp Cave" };
 		public static readonly string[] Arid = { "Desert", "High Desert", "Badlands", "Salt Flat", "Oasis", "Scrubland", "Dust Sea", "Wasteland" };
 		public static readonly string[] Highland = { "Mountain Slope", "Alpine", "Hills", "Rocky Terrain", "Scree", "Karst", "Rocky Coast", "Alpine Meadow" };

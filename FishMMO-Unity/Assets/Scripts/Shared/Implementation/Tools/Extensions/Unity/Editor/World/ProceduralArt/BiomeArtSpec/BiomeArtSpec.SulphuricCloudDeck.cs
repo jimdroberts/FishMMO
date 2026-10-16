@@ -15,7 +15,8 @@ namespace FishMMO.Shared.WorldDesign
 					D(Ground.MetalFrost, 96f, 2f, -1f, -1f, Outcrops("Pyrite", 0.012f, 14f, F(RockTypes.Pyrite, "Cubes")))),
 				C(Ground.Basalt), Ground.Sulphur, Ground.Sulphur)
 				.Look(BiomeLookClass.Alien)
-				.Wildlife(BiomeHabitat.Barren);
+				.Wildlife(BiomeHabitat.Barren)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

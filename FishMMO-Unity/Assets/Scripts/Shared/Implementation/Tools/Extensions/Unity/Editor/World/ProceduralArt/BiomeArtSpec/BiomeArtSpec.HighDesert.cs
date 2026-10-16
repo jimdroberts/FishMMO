@@ -17,7 +17,8 @@ namespace FishMMO.Shared.WorldDesign
 				C(Ground.Sandstone), Ground.Gravel, Ground.Gravel)
 				.Accepts(AridGeology)
 				.Look(BiomeLookClass.Desert)
-				.Wildlife(BiomeHabitat.Scrub | BiomeHabitat.Desert | BiomeHabitat.Mountain);
+				.Wildlife(BiomeHabitat.Scrub | BiomeHabitat.Desert | BiomeHabitat.Mountain)
+				.Moat(BiomeMoatWater.Dry);
 		}
 	}
 }

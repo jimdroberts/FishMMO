@@ -290,45 +290,46 @@ namespace FishMMO.UnitTests.WorldDesign
 		// ── Cobbles ───────────────────────────────────────────────────
 
 		/// <summary>
-		/// A per-layer slice map reaches the shader four layers to a vector, layer i at [i >> 2][i &amp; 3], always eight
-		/// vectors, −1 past the map; no map at all (a scene cut before the cobbles had one) is −1 everywhere.
+		/// A per-layer slice map reaches the shader through the layer table's paths row (TerrainLayerTable.RowPaths): layer i
+		/// in column i, for every layer an index map can name, −1 past the map; no map at all (a scene cut before the cobbles
+		/// had one) is −1 everywhere. (Until 2026-10-16 four layers to a vector of an eight-vector uniform array: 32 layers.)
 		/// </summary>
 		[Test]
-		public void CobbleTable_PacksFourLayersToAVector()
+		public void CobbleTable_PacksALayerToAColumn()
 		{
 			var map = new float[10];
 			for (int i = 0; i < map.Length; i++)
 			{
 				map[i] = 100 + i;
 			}
-			Vector4[] packed = ScenePathSurfaceBinder.Pack(map);
-			Assert.That(packed.Length, Is.EqualTo(ScenePathSurfaceBinder.MapVectors));
-			Assert.That(packed.Length * 4, Is.EqualTo(32), "a slot for every one of the arrays' 32 layers");
-			for (int layer = 0; layer < 32; layer++)
+			Vector4[] table = TerrainLayerTable.Pack(0, null, null, null, null, null, null, null, null, map);
+			Assert.That(TerrainLayerTable.Width, Is.EqualTo(TerrainArrayLayerParams.MaximumLayers), "a column for every layer the arrays can hold");
+			for (int layer = 0; layer < TerrainLayerTable.Width; layer++)
 			{
 				float expected = layer < map.Length ? 100 + layer : -1f;
-				Assert.That(packed[layer >> 2][layer & 3], Is.EqualTo(expected), $"layer {layer}");
-			}
-			foreach (Vector4 v in ScenePathSurfaceBinder.Pack(null))
-			{
-				Assert.That(v, Is.EqualTo(new Vector4(-1f, -1f, -1f, -1f)));
+				Vector4 paths = table[TerrainLayerTable.RowPaths * TerrainLayerTable.Width + layer];
+				Assert.That(paths.z, Is.EqualTo(expected), $"layer {layer}");
+				Assert.That(paths.x, Is.EqualTo(-1f), "no earth map: -1");
+				Assert.That(paths.y, Is.EqualTo(-1f), "no road map: -1");
 			}
 		}
 
 		/// <summary>
-		/// The binder pushes the cobble table the shader reads, the shader reads it by the ground layer as it reads the earth
-		/// and road tables, and a layer without one falls back on the scene's one cobble slice as before.
+		/// The binder puts the cobble map in the table the shader reads, the shader reads it by the ground layer as it reads the
+		/// earth and road slices, and a layer without one falls back on the scene's one cobble slice as before.
 		/// </summary>
 		[Test]
 		public void CobbleTable_BinderAndShaderAgree()
 		{
 			string binder = File.ReadAllText("Assets/Scripts/Shared/Implementation/Entity/WorldSceneDetails/Terrain/TerrainArrayBinder.cs");
-			Assert.That(binder, Does.Contain("Shader.PropertyToID(\"_FishPathStoneFor\")"));
-			Assert.That(binder, Does.Contain("ScenePathSurfaceBinder.StoneMapOf(gameObject.scene)"));
+			Assert.That(binder, Does.Contain("ScenePathSurfaceBinder.StoneMapOf(scene)"));
+			Assert.That(binder, Does.Contain("TerrainLayerTable.Pack("));
 			string shader = File.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishWeatherTerrainArrayInput.hlsl");
-			Assert.That(shader, Does.Contain("float4 _FishPathStoneFor[8];"));
-			Assert.That(shader, Does.Contain("_FishPathStoneFor[layer >> 2][layer & 3]"));
+			Assert.That(shader, Does.Contain("FishLayerRow(groundId, FISH_LAYER_ROW_PATHS)"));
+			Assert.That(shader, Does.Contain("float stoneSlice = pathSlices.z;"));
 			Assert.That(shader, Does.Contain("stoneSlice = stoneSlice > -0.5 ? stoneSlice : (_FishPathLayers.z > -0.5 ? _FishPathLayers.z : roadSlice);"));
+			string table = File.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishTerrainIndexMap.hlsl");
+			Assert.That(table, Does.Contain($"#define FISH_LAYER_ROW_PATHS {TerrainLayerTable.RowPaths} "));
 			string generator = File.ReadAllText(Path.Combine(WorldFolder, "SceneGenerator.cs"));
 			Assert.That(generator, Does.Contain("palette.PathLayerMap(SceneTerrainPalette.SlotPathStone, coverage)"), "the cut writes each layer's own biome's cobbles");
 		}

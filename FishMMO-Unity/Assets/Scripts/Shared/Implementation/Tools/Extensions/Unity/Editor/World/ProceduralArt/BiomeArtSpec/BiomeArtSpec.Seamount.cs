@@ -18,7 +18,8 @@ namespace FishMMO.Shared.WorldDesign
 					SeaStones(SmallRocks("Basalt"), 1.5f, 4f, 0f), SeaStones(Pebbles("Basalt"), 2f, 4f, 0f))
 				.Moved("detail/0", "Kelp")
 				.Look(BiomeLookClass.Aquatic)
-				.Wildlife(BiomeHabitat.Sea);
+				.Wildlife(BiomeHabitat.Sea)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

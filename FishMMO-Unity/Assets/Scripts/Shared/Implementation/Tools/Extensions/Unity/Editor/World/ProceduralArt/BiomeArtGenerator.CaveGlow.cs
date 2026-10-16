@@ -32,7 +32,7 @@ namespace FishMMO.Shared.WorldDesign
 	public static partial class BiomeArtGenerator
 	{
 		/// <summary>The steps the glow art adds to the structures': its maps, its materials, one a kind.</summary>
-		private static int CaveGlowStepCount() => 2 + ProceduralArtCatalogue.CaveGlowFamilies.Length;
+		private static int CaveGlowStepCount() => 3 + ProceduralArtCatalogue.CaveGlowFamilies.Length;
 
 		/// <summary>The glow ramps and ore grains: one step with the structure surfaces, before the texture import.</summary>
 		private static IEnumerable<string> CaveGlowSurfaceSteps(Context c)
@@ -51,6 +51,8 @@ namespace FishMMO.Shared.WorldDesign
 				yield return "Structure: cave " + family.Kind;
 				WriteCaveGlow(c, family);
 			}
+			yield return "Structure: cave crystals";
+			WriteCaveMinerals(c);
 		}
 
 		private static void WriteCaveGlowMaps(Context c)
@@ -102,6 +104,65 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			CaveGlowHue gangue = ProceduralArtCatalogue.Gangue;
 			WriteMaterial(c, ProceduralArtCatalogue.CaveGangueMaterial, shader, m => CaveGlowLit(m, ore, ore, in gangue, true));
+			// The cave crystals' own (2026-10-16, I6c): through the glow ramps as the glow art's crystals, glowing only where the kind does.
+			foreach (CaveMineral mineral in ProceduralArtCatalogue.CaveMinerals)
+			{
+				if (!mineral.Formation)
+				{
+					CaveGlowHue hue = mineral.Hue;
+					WriteMaterial(c, ProceduralArtCatalogue.CaveMineralMaterial(mineral.Kind), shader, m => CaveGlowLit(m, albedo, emission, in hue, false));
+				}
+			}
+		}
+
+		/// <summary>
+		/// The cave crystals (ProceduralArtCatalogue.CaveMinerals, 2026-10-16, I6c): each habit's meshes once, then a prefab a
+		/// variant of every kind built in its own habit, its rock on the kit's fieldstone and its crystal in the kind's material,
+		/// collided with as the glow art's crystals are. Selenite and frost crystal are the rock art's formations: nothing here.
+		/// </summary>
+		private static void WriteCaveMinerals(Context c)
+		{
+			WorldEditorAssets.EnsureFolder(ProceduralArtCatalogue.CavePrefabsFolder);
+			int variants = ProceduralArtCatalogue.CaveMineralVariants;
+			var meshes = new Dictionary<CaveMineralHabit, Mesh[][]>();
+			foreach (CaveMineralHabit habit in ProceduralArtCatalogue.CaveMineralHabits())
+			{
+				var levels = new Mesh[variants][];
+				for (int v = 0; v < variants; v++)
+				{
+					levels[v] = new Mesh[CaveGlowMeshes.Levels];
+					for (int lod = 0; lod < CaveGlowMeshes.Levels; lod++)
+					{
+						levels[v][lod] = WriteMesh(c, CaveGlowMeshes.BuildMineral(habit, v, lod, c.Seed), ProceduralArtCatalogue.CaveMineralMesh(habit, v, lod), true);
+					}
+				}
+				meshes[habit] = levels;
+			}
+			Material rock = MaterialOrNull(c, StructurePieces.MaterialName(StructureMaterial.Fieldstone));
+			ShadowCastingMode[] shadows = LodShadows(CaveGlowMeshes.Levels);
+			foreach (CaveMineral mineral in ProceduralArtCatalogue.CaveMinerals)
+			{
+				if (mineral.Formation)
+				{
+					continue;
+				}
+				Material crystal = MaterialOrNull(c, ProceduralArtCatalogue.CaveMineralMaterial(mineral.Kind));
+				Mesh[][] habitMeshes = meshes[mineral.Habit];
+				for (int v = 0; v < variants; v++)
+				{
+					Mesh[] levels = habitMeshes[v];
+					WritePrefab(c, ProceduralArtCatalogue.CaveMineralPrefab(mineral.Kind, v), root =>
+					{
+						var mats = new Material[levels.Length][];
+						for (int lod = 0; lod < levels.Length; lod++)
+						{
+							mats[lod] = new[] { rock, crystal };
+						}
+						Lods(root, levels, mats, ProceduralArtCatalogue.CaveGlowLodHeights, shadows);
+						AddBoulderCollider(root, levels);
+					});
+				}
+			}
 		}
 
 		/// <summary>

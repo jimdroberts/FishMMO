@@ -79,6 +79,56 @@ float4 _RiverFlowInfo;
 float4 _FishWakes[16];
 float4 _FishWakeVelocities[16];
 float _FishWakeCount;
+/// The body's water look by the biome of its shores (InlandWaterRenderer.Looks, per renderer, 2026-10-16): three looks of
+/// INLAND_LOOK_VECTORS vectors each, its own, the water it runs out of (its start) and the water it runs into (its end),
+/// each x shallow rgb + w the silt moving water carries, deep rgb, absorption per metre rgb, silt rgb, foam rgb (colours
+/// linear, as the material's). _InlandLookOn 0 (no block set): the material's own look, as every body had before.
+#define INLAND_LOOK_VECTORS 5
+float4 _InlandLooks[15];
+float _InlandLookOn;
+
+/// The colour and clarity of the water at a point (BiomeWaterLook).
+struct InlandLook
+{
+	half3 shallow;
+	half3 deep;
+	float3 density;
+	half turbidity;
+	half3 silt;
+	half3 foam;
+};
+
+/// The water's look where a river carries <paramref name="towards"/>.x of the look of the water it leaves and .y of the
+/// water it joins (its vertices', BiomeWaterLooks.Blend), the rest its own; the material's without a block.
+InlandLook InlandLookAt(float2 towards)
+{
+	InlandLook look;
+	if (_InlandLookOn < 0.5)
+	{
+		look.shallow = _ShallowColor.rgb;
+		look.deep = _DeepColor.rgb;
+		look.density = _WaterDensity.rgb;
+		look.turbidity = _Turbidity;
+		look.silt = _SiltColor.rgb;
+		look.foam = _FoamColor.rgb;
+		return look;
+	}
+	float2 share = saturate(towards);
+	float3 weights = float3(saturate(1.0 - share.x - share.y), share.x, share.y);
+	float4 v[INLAND_LOOK_VECTORS];
+	[unroll]
+	for (int i = 0; i < INLAND_LOOK_VECTORS; i++)
+	{
+		v[i] = _InlandLooks[i] * weights.x + _InlandLooks[INLAND_LOOK_VECTORS + i] * weights.y + _InlandLooks[2 * INLAND_LOOK_VECTORS + i] * weights.z;
+	}
+	look.shallow = v[0].rgb;
+	look.turbidity = v[0].w;
+	look.deep = v[1].rgb;
+	look.density = v[2].rgb;
+	look.silt = v[3].rgb;
+	look.foam = v[4].rgb;
+	return look;
+}
 
 struct Attributes
 {
@@ -89,6 +139,7 @@ struct Attributes
 	float2 state : TEXCOORD2;      // x how broken the water is (0 … 1), y how strongly a river reaches here
 	float2 tide : TEXCOORD3;       // x how far the river falls over its fade into the sea, metres; y 1 where it drains to the sea
 	float4 bank : TEXCOORD4;       // rivers: x half its width bank to bank (m), y its mean speed (m/s), zw its way downstream (world xz)
+	float2 look : TEXCOORD5;       // rivers: how much of the look of the water it leaves (x) and joins (y) it carries here (InlandLookAt)
 	UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
@@ -104,6 +155,7 @@ struct Varyings
 	float depth : TEXCOORD6;       // the water's depth here, metres
 	float minColumn : TEXCOORD7;   // the least water column it is drawn with, metres (a river draped on the far backdrop)
 	float4 bank : TEXCOORD8;       // as the attribute
+	float2 look : TEXCOORD9;       // as the attribute
 	UNITY_VERTEX_OUTPUT_STEREO
 };
 
@@ -132,6 +184,7 @@ Varyings InlandVertex(Attributes input)
 	output.flow = input.flow;
 	output.riverUV = input.uv;
 	output.bank = input.bank;
+	output.look = input.look;
 	output.depth += input.color.r * 4.0;
 	/* The far backdrop's rivers lie on its coarse ground with no channel cut for them, so the depth texture
 	 * sees a few centimetres of water and the river would draw as nearly clear. They carry the depth their
@@ -864,19 +917,20 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 
 	/* A river always carries some silt, and more the faster it runs: browner than the lake it runs into, as real ones
 	 * are, and never the clear glass that let a slow river vanish over its bed when seen from above. */
-	half silt = _Turbidity * (0.3 + 0.7 * saturate(riverSpeed / 1.5)) * input.state.y * (1.0 - pool.stir);
+	InlandLook look = InlandLookAt(input.look);
+	half silt = look.turbidity * (0.3 + 0.7 * saturate(riverSpeed / 1.5)) * input.state.y * (1.0 - pool.stir);
 	/* Bubbles under a fall scatter the light back out: milky where the curtain lands, clearing fast with distance (the
 	 * churn squared), so the pool reads as a boil round the foot rather than a pale disc; and only as milky as the fall
 	 * is strong. */
 	half milk = pool.white;
-	half3 density = max(1e-3, _WaterDensity.rgb * (1.0 + silt * 3.0) + milk * 2.5);
+	half3 density = max(1e-3, look.density * (1.0 + silt * 3.0) + milk * 2.5);
 	half3 transmittance = exp(-waterColumn * density);
 	/* The bed is lit by light that came DOWN through the water as well as seen back UP through it: the sun's path to the
 	 * bed (the depth over the sun's height) on top of the view's. A shallow bed seen from above is tinted by both. */
 	float verticalDepth = waterColumn * saturate(view.y);
 	half3 bedTransmittance = exp(-(waterColumn + verticalDepth / max(0.25, mainLight.direction.y)) * density);
-	half3 open = lerp(_DeepColor.rgb, _ShallowColor.rgb, transmittance);
-	open = lerp(open, _SiltColor.rgb, silt * (1.0 - transmittance.g));
+	half3 open = lerp(look.deep, look.shallow, transmittance);
+	open = lerp(open, look.silt, silt * (1.0 - transmittance.g));
 	// Aerated water under a fall is pale and milky: the bubbles scatter the light back out.
 	open = lerp(open, half3(0.70, 0.82, 0.80), milk * 0.6);
 	half3 bodyColor = open * waterLight;
@@ -908,7 +962,7 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	if (plumeCover > 0.001)
 	{
 		float plumeDepth = min(lerp(1.2, 0.15, pool.plume), 0.6 * waterColumn);
-		half3 plumeTint = exp(-plumeDepth * (1.0 + 1.0 / max(0.25, mainLight.direction.y)) * _WaterDensity.rgb);
+		half3 plumeTint = exp(-plumeDepth * (1.0 + 1.0 / max(0.25, mainLight.direction.y)) * look.density);
 		/* Lit only by what reaches it: the sun's light down through the water and the sky's. The water's own light
 		 * carries a floor (+0.12) that keeps a dark river from going black; on bubbles that scatter it all back up it
 		 * made every plunge pool glow turquoise at night (screenshot, 2026-10-08). */
@@ -1026,7 +1080,7 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 		FishFoam foamCut = FishFoamCutResolved(lace, saturate(amount) * 0.85, laceResolved);
 		// Fresh foam is thick froth; old foam thins to lace.
 		foamCut.body *= FishFoamFieldBody(carried);
-		half3 foamLit = FishFoamLight(_FoamColor.rgb, lightColor, NdotL, 0.0h, _GlossyEnvironmentColor.rgb * 0.6);
+		half3 foamLit = FishFoamLight(look.foam, lightColor, NdotL, 0.0h, _GlossyEnvironmentColor.rgb * 0.6);
 		color = FishFoamOver(color, foamCut, foamLit, foam);
 		if (_FishInlandDebugFoam > 2.5 && _FishInlandDebugFoam < 3.5)
 		{

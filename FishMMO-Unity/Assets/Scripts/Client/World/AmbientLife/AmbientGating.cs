@@ -239,8 +239,10 @@ namespace FishMMO.Client
 		/// <summary>
 		/// The country a biome offers: its template's <see cref="BiomeTemplate.Habitat"/>, the one source since 2026-10-16 (the
 		/// biome art authoring writes it from the spec table, which names for every biome what its name gave,
-		/// <see cref="HabitatOfBiome"/>). None for no biome, and for one authored as offering none (the caller falls back on the
-		/// climate, as for a name no keyword matched). A template never authored is read from its name, with one warning a session.
+		/// <see cref="HabitatOfBiome"/>), with Alien read live from the template's air (<see cref="BiomeTemplate.LiveHabitat"/>,
+		/// never stored). None for no biome, and for one authored as offering none on ground that is not alien (the caller falls
+		/// back on the climate, as for a name no keyword matched). A template never authored is read from its name, with one
+		/// warning a session, and takes its Alien bit from its air all the same.
 		/// </summary>
 		public static AmbientHabitat HabitatOfTemplate(BiomeTemplate biome)
 		{
@@ -250,9 +252,10 @@ namespace FishMMO.Client
 			}
 			if (biome.Habitat != BiomeHabitat.None || biome.IsAuthored(BiomeTemplate.Authored.Habitat))
 			{
-				return (AmbientHabitat)(int)biome.Habitat;
+				return (AmbientHabitat)(int)biome.LiveHabitat;
 			}
-			AmbientHabitat habitat = HabitatOfBiome(biome.name, biome.ResolvedDisplayName, biome.Atmosphere);
+			AmbientHabitat named = HabitatOfBiome(biome.name, biome.ResolvedDisplayName, biome.Atmosphere);
+			AmbientHabitat habitat = (AmbientHabitat)(int)BiomeHabitats.Live((BiomeHabitat)(int)named, biome.Atmosphere, biome.Requires);
 			lock (warnLock)
 			{
 				if (!warnedFallback)

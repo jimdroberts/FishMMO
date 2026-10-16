@@ -19,7 +19,9 @@ namespace FishMMO.Shared.WorldDesign
 					D(Ground.Dust, 96f, 2f, 0f, 10f, Stones(Pebbles("Basalt"), 2f))),
 				C(Ground.Basalt), Ground.Regolith, Ground.Regolith)
 				.Look(BiomeLookClass.Alien)
-				.Wildlife(BiomeHabitat.Alien);
+				// Alien ground alone: the client reads that live from the template's air (BiomeHabitats.Live), never stored.
+				.Wildlife(BiomeHabitat.None)
+				.Moat(BiomeMoatWater.Dry);
 		}
 	}
 }

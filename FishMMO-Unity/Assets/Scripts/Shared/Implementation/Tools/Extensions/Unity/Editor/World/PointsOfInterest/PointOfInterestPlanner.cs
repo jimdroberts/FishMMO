@@ -390,19 +390,22 @@ namespace FishMMO.Shared.WorldDesign
 
 			public bool Builds(POIType kind) => Input.Builds == null || Input.Builds(kind);
 
-			public string BiomeName(int cell)
-			{
-				int b = G.Biome[cell];
-				return b >= 0 && b < Input.Biomes.Count ? Input.Biomes[b]?.Name : null;
-			}
-
 			public int BiomeId(int cell)
 			{
 				int b = G.Biome[cell];
 				return b >= 0 && b < Input.Biomes.Count && Input.Biomes[b] != null ? Input.Biomes[b].Id : 0;
 			}
 
-			public float BiomeWeight(PointOfInterestKindRule rule, int cell) => Mathf.Max(0f, rule.BiomeWeight(BiomeName(cell)));
+			/// <summary>
+			/// How gladly a kind is sited on a cell: its biome's weight for the kind (the template's, PointOfInterestBiome.Kinds,
+			/// 2026-10-16); the kind's default weight on a cell with no biome. Never below 0.
+			/// </summary>
+			public float BiomeWeight(PointOfInterestKindRule rule, int cell)
+			{
+				int b = G.Biome[cell];
+				PointOfInterestBiome biome = b >= 0 && b < Input.Biomes.Count ? Input.Biomes[b] : null;
+				return biome != null ? biome.WeightOf(rule) : Mathf.Max(0f, rule.DefaultBiomeWeight);
+			}
 
 			public bool Inside(float x, float z, float margin)
 				=> Mathf.Abs(x) <= Input.WidthMetres * 0.5f - margin && Mathf.Abs(z) <= Input.DepthMetres * 0.5f - margin;

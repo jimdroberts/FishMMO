@@ -218,6 +218,16 @@ namespace FishMMO.Shared.Biomes
 		[SerializeField] private List<BiomeCaveShell> caveShells = new List<BiomeCaveShell>();
 
 		/// <remarks>
+		/// The crystals this biome's caves grow (<see cref="BiomeCaveCrystal"/>, 2026-10-16, I6c): the clusters in their chambers,
+		/// a kind drawn by weight for each, and, where a kind glows by itself (amberlight, wyrdstone, sunstone), the glow lining
+		/// their ways and the crystal on a crystal way-light post. Until then every cave and grotto grew selenite wherever it
+		/// was; the biome art authoring writes each biome that (its file may name its own). An ice cave's crystals are its ice and
+		/// a lava tube grows none, whatever this list says.
+		/// </remarks>
+		[Tooltip("The crystals this biome's caves and grottos grow in their chambers, each with how often (selenite, amethyst, clear or smoky quartz, green fluorite, frost crystal, obsidian shards, glowing amberlight, wyrdstone, sunstone). The glowing kinds also line the caves' ways and crown its crystal way-light posts. Empty: none grow. Written by Author biome art (selenite); edits are kept.")]
+		[SerializeField] private List<BiomeCaveCrystal> caveCrystals = new List<BiomeCaveCrystal>();
+
+		/// <remarks>
 		/// The part this biome plays for a scene's water and ice: the biome painted where a lake, a river, an estuary or a dry
 		/// lake bed lies, and the ground of the ice sheet (<see cref="BiomeWaterRole"/>). Until 2026-10-15 the cut found those
 		/// biomes by their names; the biome art authoring writes each its role, and any biome given a role is used for it.
@@ -225,6 +235,13 @@ namespace FishMMO.Shared.Biomes
 		[Header("Water and Ice")]
 		[Tooltip("The part this biome plays for the scene's water and ice: Lake, Methane Lake, River, Estuary, Salt Flat (a dry lake bed) or Ice Sheet. None for a biome chosen by climate alone. Written by Author biome art; edits are kept.")]
 		[SerializeField] private BiomeWaterRole waterRole = BiomeWaterRole.None;
+		/// <remarks>
+		/// The colour and clarity of the biome's fresh water (<see cref="BiomeWaterLook"/>, 2026-10-16): the lakes, pools,
+		/// rivers, streams and moats whose shores lie in it take it (<see cref="BiomeWaterLooks"/>). Until then every body of
+		/// inland water took the inland water material's one look, which is this field's default and what the authoring writes.
+		/// </remarks>
+		[Tooltip("The colour and clarity of this biome's fresh water: the lakes, pools, rivers, streams and moats whose shores lie in it (peat-black in a bog, milky under a glacier). Colours as the inland water material's; absorption per metre. Written by Author biome art (the inland water's own look); edits are kept.")]
+		[SerializeField] private BiomeWaterLook waterLook = BiomeWaterLooks.Today;
 
 		/// <remarks>
 		/// <para>
@@ -239,12 +256,19 @@ namespace FishMMO.Shared.Biomes
 		/// biomes itself. The biome art authoring writes both here with exactly what those gave, so nothing changes until a
 		/// template is edited; a template never authored still reads its name, with a warning.
 		/// </para>
+		/// <para>
+		/// Alien ground is not stored (2026-10-16): it is the template's air, read live (<see cref="LiveHabitat"/>,
+		/// <see cref="BiomeHabitats.Live"/>), so the habitat holds every other bit and an Alien bit set here is dropped.
+		/// The sea life is listed with its weight here: a kind listed is that many times as common in this biome's water,
+		/// whatever the climate there; one not listed lives as it does in any other water (its own elsewhere weight, by the
+		/// climate).
+		/// </para>
 		/// </remarks>
 		[Header("Wildlife")]
-		[Tooltip("The country this biome offers ambient creatures (birds, bats, small animals, insects). None: the creatures read the climate instead. Written by Author biome art; edits are kept.")]
+		[Tooltip("The country this biome offers ambient creatures (birds, bats, small animals, insects). Alien is not set here: it is read from the biome's air (Atmosphere without Standard, or Requires a methane cycle, cryogenic air or frozen nitrogen) on ground that is not Barren. None, on ground that is not alien: the creatures read the climate instead. Written by Author biome art; edits are kept.")]
 		[SerializeField] private BiomeHabitat habitat = BiomeHabitat.None;
-		[Tooltip("The sea creatures (the sea life's kind names: Reef fish, Sea turtle, Crab, Whale…) most at home in this biome's water: groups of them are their kind's preferred weight times as common here. Written by Author biome art; edits are kept.")]
-		[SerializeField] private List<string> seaLifeHomes = new List<string>();
+		[Tooltip("The sea creatures at home in this biome's water (the sea life's kind names: Reef fish, Sea turtle, Crab, Whale…), each with its weight: groups of it are that many times as common here, whatever the climate. A kind not listed lives here as in any other water. Written by Author biome art (the weight each kind had for its favourite biomes); edits are kept.")]
+		[SerializeField] private List<BiomeSeaLife> seaLife = new List<BiomeSeaLife>();
 
 		/// <remarks>
 		/// Which vines (ivy, creeper, lianas) grow here and how thickly, by the place they grow on: a cave's mouth, ruined and
@@ -288,10 +312,56 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("The fallen trunks and stumps lying by a cave mouth.")]
 		[SerializeField] private List<GameObject> caveMouthLogs = new List<GameObject>();
 
+		/// <remarks>
+		/// <para>
+		/// The points of interest this biome hosts and how they are built here (2026-10-16, phase I5): the kinds sited on its
+		/// ground (<see cref="BiomeSiteKind"/>; a kind not listed is never sited here), the weight each kind's template variants
+		/// take here (<see cref="BiomeSiteVariant"/>: a stone village in the hills, a longhouse in the cold; a variant not listed
+		/// keeps its weight elsewhere), the weight of whole structure styles (<see cref="BiomeSiteStyle"/>; a style not listed
+		/// weighs 1), how the weather finishes its buildings (<see cref="BiomeWeathering"/>), what its fields grow
+		/// (<see cref="BiomeFieldCrop"/>), what stands in a stronghold's moat (<see cref="BiomeMoatWater"/>, 2026-10-16, I5b) and
+		/// how its settlements light their streets (<see cref="BiomeWayLight"/>, I5b).
+		/// </para>
+		/// <para>
+		/// Until then each of these was decided by the biome's name: the point-of-interest catalogue's rows and templates named
+		/// their biomes, the props read wet, dry and damp country from keywords, and every field grew wheat. The biome art
+		/// authoring writes each biome exactly what those gave it, so nothing changes until a template is edited; a template
+		/// never authored with them still cuts by its name, with a warning.
+		/// </para>
+		/// </remarks>
+		[Header("Points of Interest")]
+		[Tooltip("The point-of-interest kinds sited on this biome's ground, each with how gladly (1 as anywhere, more to favour it). A kind not listed is never sited here. Written by Author biome art; edits are kept.")]
+		[SerializeField] private List<BiomeSiteKind> siteKinds = new List<BiomeSiteKind>();
+		[Tooltip("The weight a kind's template variant (Village/Stone, Camp/Hide Tents…) takes in this biome against the kind's other variants, in place of its weight elsewhere. A variant not listed keeps its weight elsewhere. Written by Author biome art; edits are kept.")]
+		[SerializeField] private List<BiomeSiteVariant> siteVariants = new List<BiomeSiteVariant>();
+		[Tooltip("How many times its variant weight every template of a structure style weighs here (a style not listed: 1). Author biome art writes none; edits are kept.")]
+		[SerializeField] private List<BiomeSiteStyle> siteStyles = new List<BiomeSiteStyle>();
+		[Tooltip("How the weather finishes this biome's buildings and stones: moss, algae, char or none, and how much (more on worn pieces). Written by Author biome art; edits are kept.")]
+		[SerializeField] private BiomeWeathering weathering;
+		[Tooltip("The crops this biome's fields grow (detail prefabs, each with its weight). Written by Author biome art (wheat); edits are kept.")]
+		[SerializeField] private List<BiomeFieldCrop> fieldCrops = new List<BiomeFieldCrop>();
+		[Tooltip("What stands in a keep's, castle's or fortress's moat here: Wet (open water), Frozen (ice) or Dry (a dry ditch). Written by Author biome art (what the biome's climate gave the moat before); edits are kept.")]
+		[SerializeField] private BiomeMoatWater moatWater = BiomeMoatWater.Wet;
+		[Tooltip("How each kind of settlement lights its streets here: the light (iron lantern post, torch post, brazier, cresset, crook lantern, glowjar, crystal post, rune stone: a light that stands on the ground) and the metres between lights. A kind not listed is not lit. Written by Author biome art (lanterns in towns, cities, capitals and ports, torches in villages); edits are kept.")]
+		[SerializeField] private List<BiomeWayLight> wayLights = new List<BiomeWayLight>();
+		[Tooltip("How each place in this biome's caves and mines is lit (a cave's route marks and camps, a mine's drifts, stopes and lamps): the light and, along a drift, the metres between lights. A place not listed is not lit. Written by Author biome art (lantern stands, wall torches every 17 m, torch posts, hanging lanterns); edits are kept.")]
+		[SerializeField] private List<BiomeCaveLight> caveLights = new List<BiomeCaveLight>();
+
+		/// <remarks>
+		/// What this biome's buildings are made of, per structure style and part (<see cref="BiomeStructurePalette"/>, 2026-10-16).
+		/// Written by the biome art authoring with the kit's own materials (<see cref="BiomeStructurePalette.Kit"/>), which are
+		/// what every biome's buildings are built of today; the art generator builds a biome's own palette from phase I6.
+		/// </remarks>
+		[Header("Structures")]
+		[Tooltip("What this biome's buildings make each part of (walls, upper walls, thatched and shingled roofs, plinth, trim, door, floor, fences, paving), per structure style, with a tint and a surface variant. Written by Author biome art (the structure kit's own materials); edits are kept. The art generator does not build per-biome palettes yet: a palette differing from the kit's is noted at the cut and built in the kit's materials until it does.")]
+		[SerializeField] private BiomeStructurePalette structurePalette = new BiomeStructurePalette();
+
 		/// <summary>
 		/// For each value the biome art authoring writes that is not a texture slot or a spawn rule (those carry their own
 		/// marks), a fingerprint of what it last wrote: while the value still matches, nobody has changed it and the authoring
 		/// may write it again; once it differs it is somebody's edit and is kept. A field with no mark was never authored.
+		/// A list carries one mark per entry ("field/identity", <see cref="EntryMarks"/>, 2026-10-16) and its own field mark is
+		/// then <see cref="BiomeEntryMarks.PerEntry"/>.
 		/// </summary>
 		[SerializeField, HideInInspector] private List<AuthoredMark> authoredMarks = new List<AuthoredMark>();
 
@@ -318,10 +388,30 @@ namespace FishMMO.Shared.Biomes
 			public const string CaveShells = nameof(caveShells);
 			public const string WaterRole = nameof(waterRole);
 			public const string Habitat = nameof(habitat);
-			public const string SeaLifeHomes = nameof(seaLifeHomes);
+			public const string SeaLife = nameof(seaLife);
 			public const string Vines = nameof(vines);
 			public const string GatheringResources = nameof(gatheringResources);
 			public const string HerbGroveHerbs = nameof(herbGroveHerbs);
+			public const string SiteKinds = nameof(siteKinds);
+			public const string SiteVariants = nameof(siteVariants);
+			public const string SiteStyles = nameof(siteStyles);
+			public const string Weathering = nameof(weathering);
+			public const string FieldCrops = nameof(fieldCrops);
+			public const string StructurePalette = nameof(structurePalette);
+			public const string MoatWater = nameof(moatWater);
+			public const string WaterLook = nameof(waterLook);
+			public const string WayLights = nameof(wayLights);
+			public const string CaveCrystals = nameof(caveCrystals);
+			public const string CaveLights = nameof(caveLights);
+
+			/// <summary>
+			/// The mark of the vines' four densities (caves, ruins, cliffs, trees), a value of its own since the species carry a
+			/// mark each (2026-10-16): not an entry key, so never read as one.
+			/// </summary>
+			public const string VineDensities = nameof(vines) + ".densities";
+
+			/// <summary>The mark of one entry of a list field, by the entry's identity (<see cref="BiomeEntryMarks"/>).</summary>
+			public static string Entry(string field, string id) => field + "/" + id;
 
 			/// <summary>The mark of the <see cref="GrassTypes"/> entry for one blade prefab.</summary>
 			public static string GrassType(string prefabName) => nameof(grassTypes) + "/" + prefabName;
@@ -357,6 +447,9 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>The rock each form of cave is cut in here, its formations included (<see cref="BiomeCaveShell"/>).</summary>
 		public List<BiomeCaveShell> CaveShells => caveShells;
 
+		/// <summary>The crystals this biome's caves grow, with their weights (<see cref="BiomeCaveCrystal"/>); read through BiomeTemplateArt.CaveCrystals.</summary>
+		public List<BiomeCaveCrystal> CaveCrystals => caveCrystals;
+
 		/// <summary>
 		/// The rock a cave of this form is cut in here (a rock type name, Ice, or <see cref="BiomeCaveShell.Ground"/>): the first
 		/// entry for the form that names one, or null.
@@ -382,15 +475,45 @@ namespace FishMMO.Shared.Biomes
 			get => waterRole;
 			set => waterRole = value;
 		}
-		/// <summary>The country this biome offers ambient creatures (<see cref="BiomeHabitat"/>); None when not authored, or authored as none.</summary>
+		/// <summary>
+		/// The country this biome offers ambient creatures as stored (<see cref="BiomeHabitat"/>), never with the Alien bit,
+		/// which is read live (<see cref="LiveHabitat"/>): one stored before 2026-10-16 is masked here, and setting it does
+		/// nothing. None when not authored, or authored as none.
+		/// </summary>
 		public BiomeHabitat Habitat
 		{
-			get => habitat;
-			set => habitat = value;
+			get => habitat & BiomeHabitats.Stored;
+			set => habitat = value & BiomeHabitats.Stored;
 		}
 
-		/// <summary>The sea life's kinds most at home in this biome's water, by kind name.</summary>
-		public List<string> SeaLifeHomes => seaLifeHomes;
+		/// <summary>
+		/// The country this biome offers as the creatures read it: <see cref="Habitat"/> and, on ground that forms only under
+		/// another world's air, Alien (<see cref="BiomeHabitats.Live"/>, from <see cref="Atmosphere"/> and <see cref="Requires"/>).
+		/// </summary>
+		public BiomeHabitat LiveHabitat => BiomeHabitats.Live(habitat, Atmosphere, Requires);
+
+		/// <summary>
+		/// Drops an Alien bit the authoring stored before it was read live (2026-10-16); true when there was one. Every read
+		/// masks it anyway; this only cleans the asset.
+		/// </summary>
+		public bool DropStoredAlien()
+		{
+			if ((habitat & BiomeHabitat.Alien) == 0)
+			{
+				return false;
+			}
+			habitat &= BiomeHabitats.Stored;
+			return true;
+		}
+
+		/// <summary>The sea life's kinds at home in this biome's water, each with its weight (<see cref="BiomeSeaLife"/>).</summary>
+		public List<BiomeSeaLife> SeaLife => seaLife;
+
+		/// <summary>
+		/// The weight this biome gives a sea life kind (by name, ignoring case) as one of its own: the first entry naming it;
+		/// false when none does (the kind lives here as in any other water).
+		/// </summary>
+		public bool TrySeaLifeWeight(string kind, out float weight) => BiomeSeaLife.TryWeight(seaLife, kind, out weight);
 
 		/// <summary>Which vines grow here and how thickly (<see cref="BiomeVines"/>).</summary>
 		public BiomeVines Vines
@@ -413,6 +536,52 @@ namespace FishMMO.Shared.Biomes
 		}
 		public List<GameObject> CaveMouthBoulders => caveMouthBoulders;
 		public List<GameObject> CaveMouthLogs => caveMouthLogs;
+
+		/// <summary>The point-of-interest kinds sited on this biome's ground, with how gladly (<see cref="BiomeSiteKind"/>).</summary>
+		public List<BiomeSiteKind> SiteKinds => siteKinds;
+
+		/// <summary>The weight each listed template variant takes here (<see cref="BiomeSiteVariant"/>).</summary>
+		public List<BiomeSiteVariant> SiteVariants => siteVariants;
+
+		/// <summary>The weight of whole structure styles' templates here (<see cref="BiomeSiteStyle"/>).</summary>
+		public List<BiomeSiteStyle> SiteStyles => siteStyles;
+
+		/// <summary>How the weather finishes this biome's buildings and stones (<see cref="BiomeWeathering"/>).</summary>
+		public BiomeWeathering Weathering
+		{
+			get => weathering;
+			set => weathering = value;
+		}
+
+		/// <summary>The crops this biome's fields grow (<see cref="BiomeFieldCrop"/>).</summary>
+		public List<BiomeFieldCrop> FieldCrops => fieldCrops;
+
+		/// <summary>What stands in a stronghold's moat here (<see cref="BiomeMoatWater"/>); read through BiomeTemplateArt.MoatWater.</summary>
+		public BiomeMoatWater MoatWater
+		{
+			get => moatWater;
+			set => moatWater = value;
+		}
+
+		/// <summary>The colour and clarity of this biome's fresh water (<see cref="BiomeWaterLook"/>); read through <see cref="BiomeWaterLooks.Of"/>.</summary>
+		public BiomeWaterLook WaterLook
+		{
+			get => waterLook;
+			set => waterLook = value;
+		}
+
+		/// <summary>How each kind of settlement lights its streets here (<see cref="BiomeWayLight"/>); a kind not listed is not lit.</summary>
+		public List<BiomeWayLight> WayLights => wayLights;
+
+		/// <summary>How each place in this biome's caves and mines is lit (<see cref="BiomeCaveLight"/>); a place not listed is not lit.</summary>
+		public List<BiomeCaveLight> CaveLights => caveLights;
+
+		/// <summary>What this biome's buildings are made of, per style and part (<see cref="BiomeStructurePalette"/>).</summary>
+		public BiomeStructurePalette StructurePalette
+		{
+			get => structurePalette;
+			set => structurePalette = value ?? new BiomeStructurePalette();
+		}
 
 		/// <summary>The biome's look class (<see cref="BiomeLookClass.Unset"/> when not authored); read through <see cref="BiomeLooks.ClassOf(BiomeTemplate)"/>.</summary>
 		public BiomeLookClass LookClass
@@ -509,6 +678,45 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>True when the authoring has written the field at least once, so an empty value is a decision, not a gap.</summary>
 		public bool IsAuthored(string field) => AuthoredFingerprint(field) != null;
+
+		/// <summary>
+		/// The marks of a list field's entries (<see cref="BiomeEntryMarks"/>): entry identity → the print the authoring wrote, or
+		/// <see cref="BiomeEntryMarks.Removed"/> for an entry it wrote that was deleted by hand. A fresh dictionary.
+		/// </summary>
+		public Dictionary<string, string> EntryMarks(string field)
+		{
+			var marks = new Dictionary<string, string>(System.StringComparer.Ordinal);
+			if (authoredMarks != null)
+			{
+				string prefix = Authored.Entry(field, string.Empty);
+				foreach (AuthoredMark mark in authoredMarks)
+				{
+					if (mark.Field != null && mark.Field.Length > prefix.Length && mark.Field.StartsWith(prefix, System.StringComparison.Ordinal))
+					{
+						marks[mark.Field.Substring(prefix.Length)] = mark.Fingerprint;
+					}
+				}
+			}
+			return marks;
+		}
+
+		/// <summary>Replaces every mark of a list field's entries with these (identity → mark), in identity order.</summary>
+		public void SetEntryMarks(string field, IReadOnlyDictionary<string, string> marks)
+		{
+			authoredMarks ??= new List<AuthoredMark>();
+			string prefix = Authored.Entry(field, string.Empty);
+			authoredMarks.RemoveAll(mark => mark.Field != null && mark.Field.Length > prefix.Length && mark.Field.StartsWith(prefix, System.StringComparison.Ordinal));
+			if (marks == null)
+			{
+				return;
+			}
+			var ids = new List<string>(marks.Keys);
+			ids.Sort(System.StringComparer.Ordinal);
+			foreach (string id in ids)
+			{
+				authoredMarks.Add(new AuthoredMark { Field = prefix + id, Fingerprint = marks[id] });
+			}
+		}
 
 		/// <summary>Normalised registry key: the asset name, lowercase letters only ("Alpine Meadow" → "alpinemeadow").</summary>
 		public string Key
@@ -732,7 +940,9 @@ namespace FishMMO.Shared.Biomes
 			lakebedTextureLayer ??= new TerrainTextureLayer();
 			acceptedRocks ??= new List<string>();
 			caveShells ??= new List<BiomeCaveShell>();
-			seaLifeHomes ??= new List<string>();
+			caveCrystals ??= new List<BiomeCaveCrystal>();
+			seaLife ??= new List<BiomeSeaLife>();
+			habitat &= BiomeHabitats.Stored;
 			vines ??= new BiomeVines();
 			vines.Species ??= new List<BiomeVineSpecies>();
 			gatheringResources ??= new List<string>();
@@ -742,6 +952,14 @@ namespace FishMMO.Shared.Biomes
 			caveMouthFerns ??= new List<GameObject>();
 			caveMouthBoulders ??= new List<GameObject>();
 			caveMouthLogs ??= new List<GameObject>();
+			siteKinds ??= new List<BiomeSiteKind>();
+			siteVariants ??= new List<BiomeSiteVariant>();
+			siteStyles ??= new List<BiomeSiteStyle>();
+			fieldCrops ??= new List<BiomeFieldCrop>();
+			wayLights ??= new List<BiomeWayLight>();
+			caveLights ??= new List<BiomeCaveLight>();
+			structurePalette ??= new BiomeStructurePalette();
+			structurePalette.Surfaces ??= new List<BiomeStructureSurface>();
 			grassTypes ??= new List<BiomeGrassType>();
 			authoredMarks ??= new List<AuthoredMark>();
 			if (MaxHeight < MinHeight) MaxHeight = MinHeight;

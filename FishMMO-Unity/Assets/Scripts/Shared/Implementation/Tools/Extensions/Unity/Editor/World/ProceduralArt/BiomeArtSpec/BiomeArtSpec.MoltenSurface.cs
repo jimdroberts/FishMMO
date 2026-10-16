@@ -17,7 +17,8 @@ namespace FishMMO.Shared.WorldDesign
 					D(Ground.Cinder, 64f, 2f, -1f, -1f, Blocks("Scoria bombs", 0.03f, 10f, F(RockTypes.Scoria, "Bomb", "Lump")))),
 				C(Ground.Basalt), Ground.Basalt, Ground.Basalt)
 				.Look(BiomeLookClass.Volcanic)
-				.Wildlife(BiomeHabitat.Barren);
+				.Wildlife(BiomeHabitat.Barren)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

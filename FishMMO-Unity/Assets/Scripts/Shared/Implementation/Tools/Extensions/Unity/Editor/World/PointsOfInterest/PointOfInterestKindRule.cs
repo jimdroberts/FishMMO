@@ -44,7 +44,10 @@ namespace FishMMO.Shared.WorldDesign
 		BiomeClusterLowest,
 	}
 
-	/// <summary>One biome's weight for a kind, matched by the biome asset's name (case ignored).</summary>
+	/// <summary>
+	/// One biome's default weight for a kind or a template variant, matched by the biome asset's name (case ignored): what the
+	/// biome art authoring writes onto the biome's template (2026-10-16); the cut reads the template's.
+	/// </summary>
 	[Serializable]
 	public struct PointOfInterestBiomeWeight
 	{
@@ -132,7 +135,15 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Within this of a river, a lake or the sea, metres; 0 for no such rule.</summary>
 		public float NearWaterMetres;
 
-		/// <summary>Weight of a biome the list does not name: 1 for a kind found anywhere, 0 for a biome-specific kind.</summary>
+		/// <summary>
+		/// Weight of a biome the list does not name: 1 for a kind found anywhere, 0 for a biome-specific kind. Also the weight on
+		/// ground with no biome.
+		/// </summary>
+		/// <remarks>
+		/// The list is the kind's DEFAULT biomes (2026-10-16): the biome art authoring writes the weight it gives each biome onto
+		/// that biome's template (BiomeTemplate.SiteKinds), and the cut reads the template's. A template never authored with
+		/// them still takes these, by its name, with a warning (BiomeTemplateArt.SiteKinds).
+		/// </remarks>
 		[Header("Biomes")]
 		public float DefaultBiomeWeight = 1f;
 		public List<PointOfInterestBiomeWeight> Biomes = new List<PointOfInterestBiomeWeight>();

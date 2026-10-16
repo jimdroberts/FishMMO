@@ -80,11 +80,11 @@ namespace FishMMO.Client
 		public Vector2 FloorClearance = new Vector2(1.5f, 3f);
 		[Tooltip("The water's temperature it lives in, -1 coldest .. 1 hottest (the scene's climate at the place).")]
 		public Vector2 Temperature = new Vector2(-1f, 1f);
-		[Tooltip("Biomes (asset names) where it is most at home, as it was decided before 2026-10-16: since then each biome template names its own sea life (Sea Life Homes, written by Author biome art from the same lists), and this is read only for a template never authored.")]
+		[Tooltip("Biomes (asset names) where it is most at home, as it was decided before 2026-10-16: since then each biome template lists its own sea life with a weight (Sea Life, written by Author biome art from the same lists), and this is read only for a template never authored.")]
 		public string[] Prefers = new string[0];
-		[Tooltip("In a biome that names it among its sea life (its template's Sea Life Homes), groups are this many times as common.")]
+		[Tooltip("The weight it had in every biome it preferred, as it was decided before 2026-10-16: since then each biome template gives the kinds it lists their own weight (Author biome art writes this one; the biome art spec keeps a copy), and this is read only for a template never authored.")]
 		[Min(1f)] public float PreferWeight = 3f;
-		[Tooltip("Elsewhere, its density is multiplied by this (0: it lives only in its preferred biomes).")]
+		[Tooltip("In any biome whose template does not list it among its sea life, its density is multiplied by this and thinned off its temperature band (0: it lives only where a biome lists it).")]
 		[Range(0f, 1f)] public float ElsewhereWeight = 1f;
 
 		[Header("Look")]

@@ -17,7 +17,8 @@ namespace FishMMO.Shared.WorldDesign
 					// Rock fallen from the walls, and gravel the turbidity currents drop on the floor.
 					SeaStones(SmallRocks("Grey"), 2f, 4f, 0f), SeaStones(Pebbles("Grey"), 3f, 4f, 0f))
 				.Look(BiomeLookClass.Aquatic)
-				.Wildlife(BiomeHabitat.Sea);
+				.Wildlife(BiomeHabitat.Sea)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

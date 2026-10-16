@@ -18,7 +18,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Moved("main", "Trees: Oak")
 				.Accepts(TemperateGeology)
 				.Look(BiomeLookClass.Forest)
-				.Wildlife(BiomeHabitat.Forest);
+				.Wildlife(BiomeHabitat.Forest)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

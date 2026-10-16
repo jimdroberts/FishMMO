@@ -18,7 +18,8 @@ namespace FishMMO.Shared.WorldDesign
 				C(Ground.Rock), Ground.Mud, Ground.Mud)
 				.Accepts(TropicalGeology)
 				.Look(BiomeLookClass.Jungle)
-				.Wildlife(BiomeHabitat.Forest | BiomeHabitat.Jungle);
+				.Wildlife(BiomeHabitat.Forest | BiomeHabitat.Jungle)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

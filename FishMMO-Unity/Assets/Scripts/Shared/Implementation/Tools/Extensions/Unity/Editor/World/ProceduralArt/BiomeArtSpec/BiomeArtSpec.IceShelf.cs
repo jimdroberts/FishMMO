@@ -15,7 +15,8 @@ namespace FishMMO.Shared.WorldDesign
 				Ds(D(Ground.Frost, 64f), D(Ground.Snow, 96f, 2f, -1f, -1f, Aligned(Blocks("Sastrugi", 0.06f, 8f, F(RockTypes.Firn, "Sastrugi"), 15f), -12f, 12f))),
 				C(Ground.Ice, 38f), Ground.Ice, Ground.Ice)
 				.Look(BiomeLookClass.Ice)
-				.Wildlife(BiomeHabitat.Coast | BiomeHabitat.Ice);
+				.Wildlife(BiomeHabitat.Coast | BiomeHabitat.Ice)
+				.Moat(BiomeMoatWater.Frozen);
 		}
 	}
 }

@@ -15,7 +15,8 @@ namespace FishMMO.Shared.WorldDesign
 				Ds(D(Ground.Ice, 96f), D(Ground.Rock, 48f, 3f, 30f, 90f, Stones(SmallRocks("Grey"), 3f))),
 				C(Ground.Rock), Ground.Ice, Ground.Ice)
 				.Look(BiomeLookClass.Ice)
-				.Wildlife(BiomeHabitat.Ice);
+				.Wildlife(BiomeHabitat.Ice)
+				.Moat(BiomeMoatWater.Frozen);
 		}
 	}
 }

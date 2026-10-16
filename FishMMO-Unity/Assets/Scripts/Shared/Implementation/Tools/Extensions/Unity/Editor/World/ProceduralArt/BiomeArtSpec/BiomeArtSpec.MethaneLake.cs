@@ -14,7 +14,9 @@ namespace FishMMO.Shared.WorldDesign
 				.Under(SeaStones(Pebbles("Ice"), 4f, 0f, 8f))
 				.Look(BiomeLookClass.Alien)
 				.Water(BiomeWaterRole.MethaneLake)
-				.Wildlife(BiomeHabitat.Alien);
+				// Alien ground alone: the client reads that live from the template's air (BiomeHabitats.Live), never stored.
+				.Wildlife(BiomeHabitat.None)
+				.Moat(BiomeMoatWater.Frozen);
 		}
 	}
 }

@@ -318,6 +318,7 @@ namespace FishMMO.Shared.WorldDesign
 			PointOfInterestTemplateSpec spec = planned.Spec;
 			template.name = planned.Name;
 			template.Kind = spec.Kind;
+			template.Variant = spec.Variant;
 			template.Weight = spec.Weight;
 			template.DefaultBiomeWeight = spec.DefaultBiomeWeight;
 			template.BiomeWeights = new List<PointOfInterestBiomeWeight>(spec.BiomeWeights);

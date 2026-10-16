@@ -31,6 +31,9 @@ namespace FishMMO.Shared
 		[Tooltip("The scene's own size in metres (X, Z), which the backdrop surrounds.")]
 		public Vector2 SceneSizeMetres;
 
+		[Tooltip("The scene layer each channel of the backdrop's control maps holds (channel c of map k is entry 4k + c), for a scene of more than 32 layers: the 32 that carry the most weight past its edge. Empty: channel c is layer c. Written by the backdrop's bake.")]
+		public int[] ControlLayers = new int[0];
+
 #if !UNITY_SERVER
 		private static readonly List<SceneBackdrop> active = new List<SceneBackdrop>();
 		private static Camera raisedCamera;

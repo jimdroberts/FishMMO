@@ -18,7 +18,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Moved("main", "Formations: Limestone pinnacles")
 				.Accepts(RockTypes.Limestone, RockTypes.Chalk, RockTypes.Marble, RockTypes.Granite)
 				.Look(BiomeLookClass.Cave)
-				.Wildlife(BiomeHabitat.Cave);
+				.Wildlife(BiomeHabitat.Cave)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

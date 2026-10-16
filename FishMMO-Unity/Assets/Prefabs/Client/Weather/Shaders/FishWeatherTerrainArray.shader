@@ -1,11 +1,12 @@
 // FishMMO/Weather Terrain Array — the generated scenes' ground: every terrain layer in one pass, from
 // texture arrays, with the weather FishWeatherTerrain applies.
 //
-// Weights stay in Unity's own alphamaps (terrainData.alphamapTextures, four layers each, up to eight maps),
-// so the terrain paint tools keep working; layer i, alphamap channel i and array slice i are the same
-// ground. TerrainArrayBinder binds the alphamaps, the arrays and the per-layer numbers to each tile;
-// TerrainArrayBaker builds the arrays (build output, never committed). Hand-made scenes keep
-// FishMMO/Weather Terrain — nothing here changes that shader.
+// Weights stay in Unity's own alphamaps (terrainData.alphamapTextures, four layers each, as many maps as
+// layers need), so the terrain paint tools keep working; layer i, alphamap channel i and array slice i are
+// the same ground. From them TerrainArrayBinder bakes each tile's index map (its four strongest layers per
+// texel, up to 256 layers a scene) and binds it with the arrays and the layer table; TerrainArrayBaker builds
+// the arrays (build output, never committed). Hand-made scenes keep FishMMO/Weather Terrain — nothing here
+// changes that shader.
 //
 // No AddPass and no BaseMap dependency, on purpose:
 //   - AddPass: every layer is already drawn in the first pass, and an add pass would draw the ground again.
@@ -27,15 +28,9 @@ Shader "FishMMO/Weather Terrain Array"
 
         [Toggle(_TERRAIN_INSTANCED_PERPIXEL_NORMAL)] _EnableInstancedPerPixelNormal("Instanced per-pixel normal", Float) = 1.0
 
-        // Bound per tile by TerrainArrayBinder; declared so an unbound tile reads defaults rather than garbage.
-        [HideInInspector] _FishControl0("Control 0", 2D) = "black" {}
-        [HideInInspector] _FishControl1("Control 1", 2D) = "black" {}
-        [HideInInspector] _FishControl2("Control 2", 2D) = "black" {}
-        [HideInInspector] _FishControl3("Control 3", 2D) = "black" {}
-        [HideInInspector] _FishControl4("Control 4", 2D) = "black" {}
-        [HideInInspector] _FishControl5("Control 5", 2D) = "black" {}
-        [HideInInspector] _FishControl6("Control 6", 2D) = "black" {}
-        [HideInInspector] _FishControl7("Control 7", 2D) = "black" {}
+        // Bound per tile by TerrainArrayBinder; declared so an unbound tile reads defaults rather than garbage. The index
+        // map (_FishIndexMap, R32G32_UInt) has no property: the binder always binds one (a blank texel when none is baked).
+        [HideInInspector] _FishLayerTable("Layer table", 2D) = "black" {}
         [HideInInspector] _FishAlbedoArray("Albedo array", 2DArray) = "" {}
         [HideInInspector] _FishNormalArray("Normal array", 2DArray) = "" {}
         [HideInInspector] _FishMaskArray("Mask array", 2DArray) = "" {}

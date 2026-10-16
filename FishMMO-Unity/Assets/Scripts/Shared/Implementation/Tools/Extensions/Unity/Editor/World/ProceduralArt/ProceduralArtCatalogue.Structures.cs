@@ -50,7 +50,11 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/// <summary>Every structure material: each material in each finish.</summary>
+		/// <summary>
+		/// Every structure material: each material in each finish, then each spec palette's own keys in each finish
+		/// (StructurePalettes.KeysOf: what authoring writes onto the templates; a template's hand-edited key is written by the
+		/// generation too, but is not listed here, so it never marks the art stale).
+		/// </summary>
 		public static IEnumerable<string> StructureWrapperPaths()
 		{
 			foreach (StructureMaterial material in StructureMaterials())
@@ -58,6 +62,13 @@ namespace FishMMO.Shared.WorldDesign
 				foreach (StructureFinish finish in StructurePieces.Finishes)
 				{
 					yield return MaterialPath(StructurePieces.MaterialName(material, finish));
+				}
+			}
+			foreach (StructureSurfaceKey key in StructurePalettes.KeysOf(SpecPalettes()))
+			{
+				foreach (StructureFinish finish in StructurePieces.Finishes)
+				{
+					yield return MaterialPath(key.MaterialName(finish));
 				}
 			}
 			foreach (string path in CaveGlowWrapperPaths())
@@ -82,6 +93,15 @@ namespace FishMMO.Shared.WorldDesign
 			foreach (string prefab in CaveGlowPrefabNames())
 			{
 				yield return prefab;
+			}
+		}
+
+		/// <summary>Every spec entry's structure palette, in the spec's order.</summary>
+		private static IEnumerable<FishMMO.Shared.Biomes.BiomeStructurePalette> SpecPalettes()
+		{
+			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
+			{
+				yield return entry.StructurePalette();
 			}
 		}
 

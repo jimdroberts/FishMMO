@@ -351,7 +351,7 @@ namespace FishMMO.Client
 			var modelOf = new TerrainTreeModel[set.Prototypes.Length];
 			for (int p = 0; p < set.Prototypes.Length; p++)
 			{
-				modelOf[p] = ModelFor(set.Prototypes[p].Prefab, set.Prototypes[p].Layer);
+				modelOf[p] = ModelFor(set.Prototypes[p].Prefab, set.Prototypes[p].Layer, null, set.Prototypes[p].Materials);
 			}
 			foreach (ScenePropSet.Prop prop in set.Props)
 			{
@@ -479,13 +479,13 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>The model for a prefab on a layer (shared by every prop of it), or null when it cannot be drawn here.</summary>
-		private static TerrainTreeModel ModelFor(GameObject prefab, int layer, string key = null)
+		private static TerrainTreeModel ModelFor(GameObject prefab, int layer, string key = null, Material[] dress = null)
 		{
 			if (prefab == null)
 			{
 				return null;
 			}
-			key ??= $"{prefab.GetEntityId()}|{layer}";
+			key ??= $"{prefab.GetEntityId()}|{layer}" + DressKey(dress);
 			if (refused.Contains(key))
 			{
 				return null;
@@ -494,7 +494,7 @@ namespace FishMMO.Client
 			{
 				return model;
 			}
-			model = TerrainTreeModel.Build(prefab, layer, out string reason);
+			model = TerrainTreeModel.Build(prefab, layer, dress, out string reason);
 			if (model != null && OnGpu)
 			{
 				model.RegisterGpu(gpu);
@@ -514,6 +514,24 @@ namespace FishMMO.Client
 			models[key] = model;
 			modelList.Add(model);
 			return model;
+		}
+
+		/// <summary>
+		/// What tells a prototype drawn in materials of its own (a structure piece in its biome's palette, ScenePropSet.Prototype
+		/// .Materials) from its prefab drawn as it is: empty for none, so an undressed prototype keys as it always did.
+		/// </summary>
+		private static string DressKey(Material[] dress)
+		{
+			if (dress == null || dress.Length == 0)
+			{
+				return string.Empty;
+			}
+			var key = new System.Text.StringBuilder("|dress");
+			foreach (Material m in dress)
+			{
+				key.Append(',').Append(m != null ? m.GetEntityId().ToString() : "-");
+			}
+			return key.ToString();
 		}
 
 		/// <summary>What makes two cliff rock objects the same model: every level's meshes and materials, the transitions and the layer.</summary>

@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 using UnityEngine;
 
 namespace FishMMO.Shared.WorldDesign
@@ -263,12 +264,47 @@ namespace FishMMO.Shared.WorldDesign
 
 		public float Range(int key, int salt, float min, float max) => min + (max - min) * Rand(key, salt);
 
-		/// <summary>Adds a solid, giving it a texture offset of its own.</summary>
+		/// <summary>Adds a solid, giving it a texture offset of its own (and the palette roles it is built under, <see cref="Builds"/>).</summary>
 		public StructureSolid Add(StructureSolid s)
 		{
 			s.UvOffset = new Vector2(Mathf.Floor(Rand(s.Key, 9101) * 16f) * 0.5f, Mathf.Floor(Rand(s.Key, 9102) * 16f) * 0.5f);
+			if (s.Hint == null && hints.Count > 0)
+			{
+				s.Hint = hints[hints.Count - 1];
+			}
 			Solids.Add(s);
 			return s;
+		}
+
+		private readonly List<BiomeStructureRole[]> hints = new List<BiomeStructureRole[]>();
+
+		/// <summary>
+		/// Builds what follows as the palette roles named, in preference (2026-10-16, I6a): every solid added until the scope is
+		/// disposed plays the first of them whose kit material is its own (BiomeStructurePalette.KitMaterial for the piece's
+		/// style), else the default for its material (StructureParts.Resolve). So a house's walls are built under
+		/// <c>Builds(Wall, GroundFloor, LogWall, Turf)</c>: plaster walls are its Wall, a stone ground floor its GroundFloor,
+		/// planks LogWall, turf Turf, and the glass and iron in them keep their own parts. Nested scopes: the innermost wins.
+		/// </summary>
+		public PartScope Builds(params BiomeStructureRole[] roles)
+		{
+			hints.Add(roles);
+			return new PartScope(this);
+		}
+
+		/// <summary>The scope <see cref="Builds"/> opens; disposing it ends it.</summary>
+		public readonly struct PartScope : IDisposable
+		{
+			private readonly StructureDraft draft;
+
+			internal PartScope(StructureDraft draft) => this.draft = draft;
+
+			public void Dispose()
+			{
+				if (draft != null && draft.hints.Count > 0)
+				{
+					draft.hints.RemoveAt(draft.hints.Count - 1);
+				}
+			}
 		}
 
 		/// <summary>Adds every solid of another list (kept keys).</summary>
@@ -281,11 +317,13 @@ namespace FishMMO.Shared.WorldDesign
 		}
 	}
 
-	/// <summary>A built level: its mesh and the material of each submesh.</summary>
+	/// <summary>A built level: its mesh, the material of each submesh, and each submesh's material and palette part.</summary>
 	public struct StructureMesh
 	{
 		public MeshBuilder Mesh;
 		public StructureMaterial[] Materials;
+		/// <summary>Index-parallel to <see cref="Materials"/>: the palette part each submesh's solids play (StructurePalettes).</summary>
+		public StructureSlot[] Slots;
 	}
 
 	/// <summary>
@@ -478,10 +516,26 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>The piece and variant a generated prefab's name names ("Structure_Tavern_1_Mossy"), or false.</summary>
-		public static bool TryParsePrefab(string prefabName, out StructurePiece piece, out int variant)
+		public static bool TryParsePrefab(string prefabName, out StructurePiece piece, out int variant) => TryParsePrefab(prefabName, out piece, out variant, out _);
+
+		/// <summary>
+		/// The piece, variant and finish a generated prefab's name names ("Structure_Tavern_1_Mossy": Tavern, 1, Mossy), or false.
+		/// A name with anything after the variant but a finish names no finish (None).
+		/// </summary>
+		public static bool TryParsePrefab(string prefabName, out StructurePiece piece, out int variant, out StructureFinish finish)
 		{
 			piece = null;
 			variant = 0;
+			finish = StructureFinish.None;
+			if (!string.IsNullOrEmpty(prefabName))
+			{
+				int under = prefabName.LastIndexOf('_');
+				if (under > 0 && Enum.TryParse(prefabName.Substring(under + 1), false, out StructureFinish named) && named != StructureFinish.None
+					&& !int.TryParse(prefabName.Substring(under + 1), out _))
+				{
+					finish = named;
+				}
+			}
 			if (string.IsNullOrEmpty(prefabName) || !prefabName.StartsWith(Prefix, StringComparison.Ordinal))
 			{
 				return false;
@@ -508,15 +562,17 @@ namespace FishMMO.Shared.WorldDesign
 			if (variant < 0 || variant >= piece.Variants) throw new ArgumentOutOfRangeException(nameof(variant));
 			var draft = new StructureDraft(piece, variant, Mathf.Clamp(lod, 0, LevelCount - 1), seed);
 			piece.Builder(draft);
+			// Each part's palette role, once the builder is done with it (a builder may change a solid's material after adding it).
+			StructureParts.Assign(piece, draft.Solids);
 			return draft.Solids;
 		}
 
-		/// <summary>A level of a variant as a mesh, one submesh per material.</summary>
+		/// <summary>A level of a variant as a mesh, one submesh per material and palette part (<see cref="StructureSlot"/>).</summary>
 		public static StructureMesh Build(StructurePiece piece, int variant, int lod, int seed)
 		{
 			List<StructureSolid> solids = BuildSolids(piece, variant, lod, seed);
-			MeshBuilder mesh = StructureShapes.ToMesh(solids, out StructureMaterial[] materials);
-			return new StructureMesh { Mesh = mesh, Materials = materials };
+			MeshBuilder mesh = StructureShapes.ToMesh(solids, out StructureSlot[] slots);
+			return new StructureMesh { Mesh = mesh, Materials = Array.ConvertAll(slots, x => x.Material), Slots = slots };
 		}
 
 		internal static Bounds BuildSolidsBounds(StructurePiece piece, int variant, int lod, int seed)
@@ -531,6 +587,18 @@ namespace FishMMO.Shared.WorldDesign
 				any = true;
 			}
 			return bounds;
+		}
+
+		/// <summary>A builder whose every solid is built as the palette roles named (<see cref="StructureDraft.Builds"/>): a fence's, a door leaf's.</summary>
+		private static Action<StructureDraft> Under(BiomeStructureRole[] roles, Action<StructureDraft> builder)
+		{
+			return d =>
+			{
+				using (d.Builds(roles))
+				{
+					builder(d);
+				}
+			};
 		}
 
 		private static StructurePiece Piece(List<StructurePiece> list, string id, StructureStyle style, StructureSize size, string description,

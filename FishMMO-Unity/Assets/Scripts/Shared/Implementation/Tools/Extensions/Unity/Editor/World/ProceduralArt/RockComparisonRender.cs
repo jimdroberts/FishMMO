@@ -109,7 +109,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			if (only.Count == 0 || only.Contains("Legacy"))
 			{
-				foreach (RockMaterialSpec material in ProceduralArtCatalogue.RockMaterials)
+				foreach (RockMaterialSpec material in ProceduralArtCatalogue.AllRockMaterials)
 				{
 					foreach (RockShape shape in ProceduralArtCatalogue.BoulderShapes)
 					{

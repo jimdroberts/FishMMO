@@ -140,7 +140,7 @@ Shader "FishMMO/Weather Lit Indirect"
             AlphaToMask[_AlphaToMask]
 
             HLSLPROGRAM
-            #pragma use_dxc vulkan
+            // FXC on purpose, not DXC: the procedural setup (FishIndirectSetup) writes unity_ObjectToWorld and the other UnityPerDraw matrices, which DXC treats as const cbuffer members.
             #pragma target 2.0
 
             // -------------------------------------
@@ -229,7 +229,7 @@ Shader "FishMMO/Weather Lit Indirect"
             Cull[_Cull]
 
             HLSLPROGRAM
-            #pragma use_dxc vulkan
+            // FXC on purpose, not DXC: the procedural setup (FishIndirectSetup) writes unity_ObjectToWorld and the other UnityPerDraw matrices, which DXC treats as const cbuffer members.
             #pragma target 2.0
 
             // -------------------------------------
@@ -286,7 +286,7 @@ Shader "FishMMO/Weather Lit Indirect"
             Cull[_Cull]
 
             HLSLPROGRAM
-            #pragma use_dxc vulkan
+            // FXC on purpose, not DXC: the procedural setup (FishIndirectSetup) writes unity_ObjectToWorld and the other UnityPerDraw matrices, which DXC treats as const cbuffer members.
             #pragma target 4.5
 
             // Deferred Rendering Path does not support the OpenGL-based graphics API:
@@ -379,7 +379,7 @@ Shader "FishMMO/Weather Lit Indirect"
             Cull[_Cull]
 
             HLSLPROGRAM
-            #pragma use_dxc vulkan
+            // FXC on purpose, not DXC: the procedural setup (FishIndirectSetup) writes unity_ObjectToWorld and the other UnityPerDraw matrices, which DXC treats as const cbuffer members.
             #pragma target 2.0
 
             // -------------------------------------
@@ -428,7 +428,7 @@ Shader "FishMMO/Weather Lit Indirect"
             Cull[_Cull]
 
             HLSLPROGRAM
-            #pragma use_dxc vulkan
+            // FXC on purpose, not DXC: the procedural setup (FishIndirectSetup) writes unity_ObjectToWorld and the other UnityPerDraw matrices, which DXC treats as const cbuffer members.
             #pragma target 2.0
 
             // -------------------------------------
@@ -554,7 +554,7 @@ Shader "FishMMO/Weather Lit Indirect"
             ColorMask RG
 
             HLSLPROGRAM
-            #pragma use_dxc vulkan
+            // FXC on purpose, not DXC: the procedural setup (FishIndirectSetup) writes unity_ObjectToWorld and the other UnityPerDraw matrices, which DXC treats as const cbuffer members.
             #pragma shader_feature_local _ALPHATEST_ON
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma shader_feature_local_vertex _ADD_PRECOMPUTED_VELOCITY
@@ -595,7 +595,7 @@ Shader "FishMMO/Weather Lit Indirect"
             }
 
             HLSLPROGRAM
-            #pragma use_dxc vulkan
+            // FXC on purpose, not DXC: the procedural setup (FishIndirectSetup) writes unity_ObjectToWorld and the other UnityPerDraw matrices, which DXC treats as const cbuffer members.
             #pragma shader_feature_local _ALPHATEST_ON
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma shader_feature_local_vertex _ADD_PRECOMPUTED_VELOCITY

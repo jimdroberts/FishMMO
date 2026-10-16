@@ -77,7 +77,11 @@ namespace FishMMO.Shared.WorldDesign
 		/// A template for a site, drawn by its site seed and weighted by <see cref="PointOfInterestTemplate.WeightFor"/>;
 		/// null (a marker-only site) when the kind has none or none fits.
 		/// </summary>
-		public PointOfInterestTemplate Pick(PointOfInterestRecord record, string biomeName, string raceCategory)
+		/// <param name="biomeWeight">
+		/// The weight the site's biome gives a template (BiomeTemplateArt.SiteVariantWeight); null for no biome (every template
+		/// at its <see cref="PointOfInterestTemplate.DefaultBiomeWeight"/>).
+		/// </param>
+		public PointOfInterestTemplate Pick(PointOfInterestRecord record, Func<PointOfInterestTemplate, float> biomeWeight, string raceCategory)
 		{
 			if (record == null || !byKind.TryGetValue(record.Kind, out List<PointOfInterestTemplate> list))
 			{
@@ -87,7 +91,8 @@ namespace FishMMO.Shared.WorldDesign
 			float total = 0f;
 			for (int i = 0; i < list.Count; i++)
 			{
-				weights[i] = list[i].WeightFor(record, biomeName, record.Race, raceCategory);
+				float biome = biomeWeight != null ? biomeWeight(list[i]) : list[i].DefaultBiomeWeight;
+				weights[i] = list[i].WeightFor(record, biome, record.Race, raceCategory);
 				total += weights[i];
 			}
 			return Pick(list, weights, total, record.SiteSeed);

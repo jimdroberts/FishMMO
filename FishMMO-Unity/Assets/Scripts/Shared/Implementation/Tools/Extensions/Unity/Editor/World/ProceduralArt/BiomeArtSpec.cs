@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Biomes;
+using FishMMO.Shared.NameGeneration;
 
 namespace FishMMO.Shared.WorldDesign
 {
@@ -343,6 +344,22 @@ namespace FishMMO.Shared.WorldDesign
 				return this;
 			}
 
+			private BiomeWaterLook? waterTint;
+
+			/// <summary>Gives the biome's fresh water its own colour and clarity (<see cref="BiomeTemplate.WaterLook"/>) in place of the inland water's.</summary>
+			public Entry WaterTint(BiomeWaterLook look)
+			{
+				waterTint = look;
+				return this;
+			}
+
+			/// <summary>
+			/// The colour and clarity of the biome's fresh water (<see cref="BiomeTemplate.WaterLook"/>, 2026-10-16, I2e): the
+			/// file's own (<see cref="WaterTint"/>), else the inland water's look every lake and river took before
+			/// (<see cref="BiomeWaterLooks.Today"/>).
+			/// </summary>
+			public BiomeWaterLook WaterLook() => waterTint ?? BiomeWaterLooks.Today;
+
 			/// <summary>
 			/// Gives caves of one form carved in this biome their own shell rock (a rock type name, Ice, or
 			/// <see cref="BiomeCaveShell.Ground"/>) in place of the form's (<see cref="DefaultCaveShell"/>).
@@ -379,6 +396,35 @@ namespace FishMMO.Shared.WorldDesign
 					shells.Add(new BiomeCaveShell((BiomeCaveForm)form, CaveShellFor(form)));
 				}
 				return shells;
+			}
+
+			// ── Cave crystals (2026-10-16, I6c) ──
+			//
+			// The crystals the biome's caves grow (BiomeTemplate.CaveCrystals): selenite in every biome before, which stays every
+			// biome's default; a biome's own file names its own with Crystals.
+
+			private (BiomeCaveCrystalKind Kind, float Weight)[] crystals;
+
+			/// <summary>Gives the biome's caves their own crystals (each with its weight) in place of selenite.</summary>
+			public Entry Crystals(params (BiomeCaveCrystalKind Kind, float Weight)[] kinds)
+			{
+				crystals = kinds ?? Array.Empty<(BiomeCaveCrystalKind, float)>();
+				return this;
+			}
+
+			/// <summary>The crystals the biome's caves grow (<see cref="BiomeTemplate.CaveCrystals"/>): the file's own, else selenite. A fresh list.</summary>
+			public List<BiomeCaveCrystal> CaveCrystals()
+			{
+				if (crystals == null)
+				{
+					return BiomeCaveCrystals.Default();
+				}
+				var list = new List<BiomeCaveCrystal>(crystals.Length);
+				foreach ((BiomeCaveCrystalKind kind, float weight) in crystals)
+				{
+					list.Add(new BiomeCaveCrystal(kind, weight));
+				}
+				return list;
 			}
 
 			/// <summary>
@@ -547,38 +593,73 @@ namespace FishMMO.Shared.WorldDesign
 
 			// ── Wildlife, vines and harvest (2026-10-16) ──────────────
 			//
-			// Columns the authoring writes onto the template (BiomeTemplate.Habitat, SeaLifeHomes, Vines, GatheringResources,
+			// Columns the authoring writes onto the template (BiomeTemplate.Habitat, SeaLife, Vines, GatheringResources,
 			// HerbGroveHerbs), which the client and the cut then read alone. Each is what was decided by the biome's name
 			// before, so authoring them changed nothing (BiomeTemplateLivingTests pins every biome against the old rules):
-			// the creatures' country every biome's file names with Wildlife (the client's keyword reading of the name, and alien
-			// ground under another world's air); the sea creatures a sea biome's file names with HomeTo (the kinds that named
-			// it as a favourite); the vines from the vine table's row (VineBiomes, by the biome's name) unless the file sets its
+			// the creatures' country every biome's file names with Wildlife (the client's keyword reading of the name; alien
+			// ground is not named here, since 2026-10-16 the client reads it live from the template's air, BiomeHabitats.Live);
+			// the sea creatures a sea biome's file names with HomeTo, each with its weight (the kinds that named it as a
+			// favourite, at the weight they gave every favourite: SeaKindPreferWeight); the vines from the vine table's row
+			// (VineBiomes, by the biome's name) unless the file sets its
 			// own with GrowsVines or NoVines; the gathering resources from the catalogue's rows that name the biome
 			// (GatheringResourceCatalogue) unless the file sets its own with Gathers; and a herb grove's herbs from those
 			// resources unless the file sets its own with Herbs.
 
-			/// <summary>The country the biome offers ambient creatures (<see cref="BiomeTemplate.Habitat"/>); None until its file names one.</summary>
+			/// <summary>
+			/// The country the biome offers ambient creatures as the template stores it (<see cref="BiomeTemplate.Habitat"/>):
+			/// never Alien, which the client reads live from the template's air. None until its file names one.
+			/// </summary>
 			public BiomeHabitat Habitat = BiomeHabitat.None;
+			/// <summary>Whether the biome's file named its country (<see cref="Wildlife"/>), None included (alien ground alone).</summary>
+			public bool WildlifeNamed;
 
-			private string[] seaLifeHomes, gathers, herbs;
+			private string[] gathers, herbs;
+			private BiomeSeaLife[] seaLife;
 			private BiomeVines vines;
 
-			/// <summary>Names the country the biome offers ambient creatures (<see cref="Habitat"/>).</summary>
+			/// <summary>
+			/// Names the country the biome offers ambient creatures (<see cref="Habitat"/>); an Alien bit is dropped (the client
+			/// reads alien ground live from the template's air, <see cref="BiomeHabitats.Live"/>).
+			/// </summary>
 			public Entry Wildlife(BiomeHabitat habitat)
 			{
-				Habitat = habitat;
+				Habitat = habitat & BiomeHabitats.Stored;
+				WildlifeNamed = true;
 				return this;
 			}
 
-			/// <summary>Names the sea creatures (the sea life's kind names) most at home in the biome's water (<see cref="SeaLifeHomes"/>).</summary>
+			/// <summary>
+			/// Names the sea creatures (the sea life's kind names) at home in the biome's water, each at the weight the kind gives
+			/// its favourite biomes (<see cref="SeaKindPreferWeight"/>, the kind's PreferWeight).
+			/// </summary>
 			public Entry HomeTo(params string[] seaKinds)
 			{
-				seaLifeHomes = seaKinds ?? Array.Empty<string>();
+				var list = new List<BiomeSeaLife>();
+				foreach (string kind in seaKinds ?? Array.Empty<string>())
+				{
+					list.Add(new BiomeSeaLife(kind, SeaKindPreferWeight(kind)));
+				}
+				seaLife = list.ToArray();
 				return this;
 			}
 
-			/// <summary>The sea creatures most at home in the biome's water (<see cref="BiomeTemplate.SeaLifeHomes"/>); none unless its file names some.</summary>
-			public List<string> SeaLifeHomes() => new List<string>(seaLifeHomes ?? Array.Empty<string>());
+			/// <summary>Names the sea creatures at home in the biome's water, each with its own weight (<see cref="BiomeSeaLife.Weight"/>).</summary>
+			public Entry HomeTo(params (string Kind, float Weight)[] seaKinds)
+			{
+				var list = new List<BiomeSeaLife>();
+				foreach ((string kind, float weight) in seaKinds ?? Array.Empty<(string, float)>())
+				{
+					list.Add(new BiomeSeaLife(kind, weight));
+				}
+				seaLife = list.ToArray();
+				return this;
+			}
+
+			/// <summary>The sea creatures at home in the biome's water, with their weights (<see cref="BiomeTemplate.SeaLife"/>); none unless its file names some.</summary>
+			public List<BiomeSeaLife> SeaLife() => new List<BiomeSeaLife>(seaLife ?? Array.Empty<BiomeSeaLife>());
+
+			/// <summary>The kinds' names of <see cref="SeaLife"/>, in order.</summary>
+			public List<string> SeaLifeKinds() => SeaLife().ConvertAll(entry => entry.Kind);
 
 			/// <summary>
 			/// Gives the biome its own vines in place of the vine table's row: how thickly they grow at a cave's mouth, on old
@@ -668,6 +749,370 @@ namespace FishMMO.Shared.WorldDesign
 			/// (<see cref="Herbs"/>), else the wild kin of the herbs and fungi gathered here (<see cref="HerbsOf"/>).
 			/// </summary>
 			public List<string> GroveHerbs() => herbs != null ? new List<string>(herbs) : HerbsOf(GatheringResources());
+
+			// ── Points of interest and structures (2026-10-16, phase I5) ──
+			//
+			// What the biome's points of interest are and how they are built, as the authoring writes them onto its template:
+			// the kinds it hosts, its template variants' and styles' weights, its weathering, its crops and its structure
+			// palette. Each defaults to exactly what the cut decided by the biome's name before (the point-of-interest
+			// catalogue's rows and templates, the props' wet/dry/damp keywords, wheat in every field, the kit's materials); a
+			// biome's own file sets its own with Hosts, Prefers, Favours, Weathers, Crops and Builds.
+
+			private List<(POIType Kind, float Weight)> hosts;
+			private List<(POIType Kind, string Variant, float Weight)> prefers;
+			private List<BiomeSiteStyle> favours;
+			private BiomeWeathering? weathers;
+			private (string Prefab, float Weight)[] crops;
+			private Dictionary<string, BiomeFieldSurface> cropSurfaces;
+			private List<BiomeStructureSurface> builds;
+			private List<(POIType Kind, BiomeWayLightKind? Light, float Spacing)> lights;
+
+			/// <summary>
+			/// What stands in a stronghold's moat in this biome (<see cref="BiomeTemplate.MoatWater"/>, 2026-10-16, I5b): Wet unless
+			/// the biome's file says otherwise (<see cref="Moat"/>). Every file names it: the value the moat shaper gave the biome
+			/// from its template's climate envelope before (<see cref="BiomeMoatWaters.FromClimate"/>, held equal by a test).
+			/// </summary>
+			public BiomeMoatWater MoatWater = BiomeMoatWater.Wet;
+
+			/// <summary>Sets what stands in the biome's moats (<see cref="MoatWater"/>).</summary>
+			public Entry Moat(BiomeMoatWater water)
+			{
+				MoatWater = water;
+				return this;
+			}
+
+			/// <summary>Gives a kind its own weight here in place of the catalogue's (0: never sited here).</summary>
+			public Entry Hosts(POIType kind, float weight)
+			{
+				(hosts ??= new List<(POIType, float)>()).Add((kind, weight));
+				return this;
+			}
+
+			/// <summary>
+			/// The point-of-interest kinds sited on the biome's ground and how gladly (<see cref="BiomeTemplate.SiteKinds"/>): the
+			/// weight every catalogue row gives the biome by its name (<see cref="PointOfInterestRules.KindWeightsFor"/>, the
+			/// code's rows unless <paramref name="rules"/> are given: the authoring passes the project's, catalogue asset and
+			/// all), with the file's own <see cref="Hosts"/> laid over them; only kinds weighing more than 0, in kind order.
+			/// </summary>
+			public List<BiomeSiteKind> SiteKinds(PointOfInterestRules rules = null)
+			{
+				var weights = new SortedDictionary<int, float>();
+				foreach ((POIType kind, float weight) in (rules ?? PointOfInterestRules.Default()).KindWeightsFor(Biome))
+				{
+					weights[(int)kind] = weight;
+				}
+				if (hosts != null)
+				{
+					foreach ((POIType kind, float weight) in hosts)
+					{
+						weights[(int)kind] = weight;
+					}
+				}
+				var list = new List<BiomeSiteKind>();
+				foreach (KeyValuePair<int, float> pair in weights)
+				{
+					if (pair.Value > 0f)
+					{
+						list.Add(new BiomeSiteKind((POIType)pair.Key, pair.Value));
+					}
+				}
+				return list;
+			}
+
+			/// <summary>Gives a kind's template variant its own weight here in place of the templates' (0: never built here).</summary>
+			public Entry Prefers(POIType kind, string variant, float weight)
+			{
+				(prefers ??= new List<(POIType, string, float)>()).Add((kind, variant, weight));
+				return this;
+			}
+
+			/// <summary>
+			/// The weight each template variant takes here (<see cref="BiomeTemplate.SiteVariants"/>): for every template the
+			/// authoring writes (<see cref="PointOfInterestTemplateSpecs.All"/>) whose biome list gives this biome, by its name,
+			/// another weight than the template's weight elsewhere, that weight; then the same for the project's other templates
+			/// (<paramref name="handMade"/>: made by hand, or left over from an older catalogue; 2026-10-16, I5b), so a hand-made
+			/// variant that names this biome is not stranded at its weight elsewhere; then the file's own <see cref="Prefers"/>.
+			/// In the templates' order. A variant not listed keeps its weight elsewhere, so the pick is the same as by the name.
+			/// </summary>
+			/// <param name="handMade">
+			/// The project's template assets as plain data (kind, variant, weight elsewhere, biome list): a variant the catalogue
+			/// writes is skipped (the catalogue's weights stand), and of two assets of one variant the first counts.
+			/// </param>
+			public List<BiomeSiteVariant> SiteVariants(IEnumerable<PointOfInterestTemplateSpec> handMade = null)
+			{
+				var list = new List<BiomeSiteVariant>();
+				void Set(POIType kind, string variant, float weight)
+				{
+					int at = list.FindIndex(v => v.Kind == kind && string.Equals(v.Variant, variant, StringComparison.OrdinalIgnoreCase));
+					if (at >= 0)
+					{
+						list[at] = new BiomeSiteVariant(kind, variant, weight);
+					}
+					else
+					{
+						list.Add(new BiomeSiteVariant(kind, variant, weight));
+					}
+				}
+				var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+				foreach (PointOfInterestTemplateSpec spec in PointOfInterestTemplateSpecs.All())
+				{
+					written.Add(spec.Kind + "/" + spec.Variant);
+					float weight = spec.BiomeWeightByName(Biome);
+					if (weight != spec.DefaultBiomeWeight)
+					{
+						Set(spec.Kind, spec.Variant, weight);
+					}
+				}
+				if (handMade != null)
+				{
+					foreach (PointOfInterestTemplateSpec own in handMade)
+					{
+						if (own == null || string.IsNullOrWhiteSpace(own.Variant) || !written.Add(own.Kind + "/" + own.Variant.Trim()))
+						{
+							continue;
+						}
+						float weight = own.BiomeWeightByName(Biome);
+						if (weight != own.DefaultBiomeWeight)
+						{
+							Set(own.Kind, own.Variant.Trim(), weight);
+						}
+					}
+				}
+				if (prefers != null)
+				{
+					foreach ((POIType kind, string variant, float weight) in prefers)
+					{
+						Set(kind, variant, weight);
+					}
+				}
+				return list;
+			}
+
+			/// <summary>Weighs every template of a structure style that many times here (<see cref="BiomeSiteStyle"/>).</summary>
+			public Entry Favours(BiomeStructureStyle style, float weight)
+			{
+				(favours ??= new List<BiomeSiteStyle>()).Add(new BiomeSiteStyle(style, weight));
+				return this;
+			}
+
+			/// <summary>The weight of whole structure styles' templates here (<see cref="BiomeTemplate.SiteStyles"/>): none (every style at 1) unless the file <see cref="Favours"/> some.</summary>
+			public List<BiomeSiteStyle> SiteStyles() => favours != null ? new List<BiomeSiteStyle>(favours) : new List<BiomeSiteStyle>();
+
+			/// <summary>Gives the biome its own weathering of buildings and stones in place of its name's (<see cref="BiomeWeathering"/>).</summary>
+			public Entry Weathers(BiomeStructureFinish finish, float chance, float chancePerDecay)
+			{
+				weathers = new BiomeWeathering(finish, chance, chancePerDecay);
+				return this;
+			}
+
+			/// <summary>
+			/// How the weather finishes the biome's buildings and stones (<see cref="BiomeTemplate.Weathering"/>): the file's own
+			/// (<see cref="Weathers"/>), else what the biome's name gave (<see cref="WeatheringByName"/>).
+			/// </summary>
+			public BiomeWeathering Weathering() => weathers ?? WeatheringByName(Biome);
+
+			/// <summary>Gives the biome's fields their own crops (detail prefab names, each with a weight) in place of wheat.</summary>
+			public Entry Crops(params (string Prefab, float Weight)[] fieldCrops)
+			{
+				crops = fieldCrops ?? Array.Empty<(string, float)>();
+				return this;
+			}
+
+			/// <summary>The crops the biome's fields grow, by detail prefab name (<see cref="BiomeTemplate.FieldCrops"/>): the file's own (<see cref="Crops"/>), else wheat.</summary>
+			public List<(string Prefab, float Weight)> FieldCrops()
+				=> crops != null ? new List<(string, float)>(crops) : new List<(string, float)> { (WheatCrop, 1f) };
+
+			/// <summary>
+			/// Lays the biome's fields of one crop (a detail prefab name, as <see cref="Crops"/> names it) on their own surface
+			/// (<see cref="BiomeFieldCrop.Surface"/>, 2026-10-16, I2e): lazy beds, ridge and furrow. Every crop is Flat otherwise.
+			/// </summary>
+			public Entry CropSurface(string prefab, BiomeFieldSurface surface)
+			{
+				(cropSurfaces ??= new Dictionary<string, BiomeFieldSurface>(StringComparer.Ordinal))[prefab ?? string.Empty] = surface;
+				return this;
+			}
+
+			/// <summary>How the biome's fields of a crop are laid (<see cref="CropSurface"/>); Flat, as every field was, unless its file says.</summary>
+			public BiomeFieldSurface FieldSurface(string prefab)
+				=> cropSurfaces != null && prefab != null && cropSurfaces.TryGetValue(prefab, out BiomeFieldSurface surface) ? surface : BiomeFieldSurface.Flat;
+
+			/// <summary>Lights a kind of settlement's streets with its own light here, every <paramref name="spacing"/> metres.</summary>
+			public Entry Lights(POIType kind, BiomeWayLightKind light, float spacing)
+			{
+				(lights ??= new List<(POIType, BiomeWayLightKind?, float)>()).Add((kind, light, spacing));
+				return this;
+			}
+
+			/// <summary>Leaves a kind of settlement's streets unlit here.</summary>
+			public Entry Unlit(POIType kind)
+			{
+				(lights ??= new List<(POIType, BiomeWayLightKind?, float)>()).Add((kind, null, 0f));
+				return this;
+			}
+
+			/// <summary>
+			/// How the biome's settlements light their streets (<see cref="BiomeTemplate.WayLights"/>, 2026-10-16, I5b): what every
+			/// biome lit them with before (<see cref="BiomeWayLights.Default"/>: lanterns in towns, cities, capitals and ports,
+			/// torches in villages) with the file's own <see cref="Lights"/> and <see cref="Unlit"/> laid over it. A fresh list.
+			/// </summary>
+			public List<BiomeWayLight> WayLights()
+			{
+				List<BiomeWayLight> list = BiomeWayLights.Default();
+				if (lights != null)
+				{
+					foreach ((POIType kind, BiomeWayLightKind? light, float spacing) in lights)
+					{
+						int at = list.FindIndex(l => l.Kind == kind);
+						if (light == null)
+						{
+							if (at >= 0)
+							{
+								list.RemoveAt(at);
+							}
+						}
+						else if (at >= 0)
+						{
+							list[at] = new BiomeWayLight(kind, light.Value, spacing);
+						}
+						else
+						{
+							list.Add(new BiomeWayLight(kind, light.Value, spacing));
+						}
+					}
+				}
+				return list;
+			}
+
+			private List<(BiomeCaveLightPlace Place, BiomeWayLightKind? Light, float Spacing)> caveLights;
+
+			/// <summary>Lights one place in the biome's caves or mines with its own light here (spacing: along a mine's drifts only).</summary>
+			public Entry CaveLight(BiomeCaveLightPlace place, BiomeWayLightKind light, float spacing = 0f)
+			{
+				(caveLights ??= new List<(BiomeCaveLightPlace, BiomeWayLightKind?, float)>()).Add((place, light, spacing));
+				return this;
+			}
+
+			/// <summary>Leaves one place in the biome's caves or mines unlit here.</summary>
+			public Entry Unlit(BiomeCaveLightPlace place)
+			{
+				(caveLights ??= new List<(BiomeCaveLightPlace, BiomeWayLightKind?, float)>()).Add((place, null, 0f));
+				return this;
+			}
+
+			/// <summary>
+			/// How the biome's caves and mines are lit (<see cref="BiomeTemplate.CaveLights"/>, 2026-10-16, I6c): what the cave
+			/// dressing laid in every biome before (<see cref="BiomeCaveLights.Default"/>) with the file's own
+			/// <see cref="CaveLight"/> and <see cref="Unlit(BiomeCaveLightPlace)"/> laid over it. A fresh list.
+			/// </summary>
+			public List<BiomeCaveLight> CaveLights()
+			{
+				List<BiomeCaveLight> list = BiomeCaveLights.Default();
+				if (caveLights != null)
+				{
+					foreach ((BiomeCaveLightPlace place, BiomeWayLightKind? light, float spacing) in caveLights)
+					{
+						int at = list.FindIndex(l => l.Place == place);
+						if (light == null)
+						{
+							if (at >= 0)
+							{
+								list.RemoveAt(at);
+							}
+						}
+						else if (at >= 0)
+						{
+							list[at] = new BiomeCaveLight(place, light.Value, spacing);
+						}
+						else
+						{
+							list.Add(new BiomeCaveLight(place, light.Value, spacing));
+						}
+					}
+				}
+				return list;
+			}
+
+			/// <summary>Gives one part of one style's buildings its own material here (tint: the kit's for the material unless given).</summary>
+			public Entry Builds(BiomeStructureStyle style, BiomeStructureRole role, BiomeStructureMaterial material, Color? tint = null, string surface = null)
+			{
+				(builds ??= new List<BiomeStructureSurface>()).Add(new BiomeStructureSurface(style, role, material, tint ?? BiomeStructurePalette.KitTint(material), surface));
+				return this;
+			}
+
+			/// <summary>Gives one part its own material here in every style's buildings (<see cref="Builds"/> for each style).</summary>
+			public Entry BuildsAll(BiomeStructureRole role, BiomeStructureMaterial material, Color? tint = null, string surface = null)
+			{
+				foreach (BiomeStructureStyle style in BiomeStructurePalette.Styles)
+				{
+					Builds(style, role, material, tint, surface);
+				}
+				return this;
+			}
+
+			/// <summary>
+			/// What the biome's buildings are made of (<see cref="BiomeTemplate.StructurePalette"/>): the structure kit's own
+			/// materials for every style and part (<see cref="BiomeStructurePalette.Kit"/>, what every biome built with until
+			/// 2026-10-16), with the file's own <see cref="Builds"/> laid over them. A fresh object each call.
+			/// </summary>
+			public BiomeStructurePalette StructurePalette()
+			{
+				BiomeStructurePalette palette = BiomeStructurePalette.Kit();
+				if (builds != null)
+				{
+					foreach (BiomeStructureSurface own in builds)
+					{
+						int at = palette.Surfaces.FindIndex(e => e.Style == own.Style && e.Role == own.Role);
+						if (at >= 0)
+						{
+							palette.Surfaces[at] = own;
+						}
+						else
+						{
+							palette.Surfaces.Add(own);
+						}
+					}
+				}
+				return palette;
+			}
+		}
+
+		/// <summary>The crop every field grew until 2026-10-16, and every biome's default (<see cref="Entry.FieldCrops"/>).</summary>
+		public const string WheatCrop = "Detail_GrassWheat";
+
+		/// <summary>
+		/// The weathering a biome's name gave its points of interest until 2026-10-16 (PropsFeature.FinishFor read the name's
+		/// keywords): a dark algal film in wet country, 0.3 + 0.6 × decay of the pieces (swamp, mangrove, bog, wetland, marsh,
+		/// estuary); nothing in dry country (desert, badlands, salt, arid, dust, wasteland, savanna, scrub, volcanic, molten,
+		/// sulphur, oasis); else moss on 1 × decay of the pieces in damp country (forest, woodland, jungle, rainforest, taiga,
+		/// bamboo, valley, karst, temperate, lake, river) and 0.5 × decay elsewhere (and with no biome at all). In that order: a
+		/// name that is both wet and dry is wet. Every biome's default (<see cref="Entry.Weathering"/>).
+		/// </summary>
+		public static BiomeWeathering WeatheringByName(string biomeName)
+		{
+			string[] wet = { "Swamp", "Mangrove", "Bog", "Wetland", "Marsh", "Estuary" };
+			string[] dry = { "Desert", "Badlands", "Salt", "Arid", "Dust", "Wasteland", "Savanna", "Scrub", "Volcanic", "Molten", "Sulphur", "Oasis" };
+			string[] damp = { "Forest", "Woodland", "Jungle", "Rainforest", "Taiga", "Bamboo", "Valley", "Karst", "Temperate", "Lake", "River" };
+			string name = biomeName ?? string.Empty;
+			bool Mentions(string[] words)
+			{
+				foreach (string word in words)
+				{
+					if (name.IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0)
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+			if (Mentions(wet))
+			{
+				return new BiomeWeathering(BiomeStructureFinish.Algae, 0.3f, 0.6f);
+			}
+			if (Mentions(dry))
+			{
+				return new BiomeWeathering(BiomeStructureFinish.None, 0f, 0f);
+			}
+			return new BiomeWeathering(BiomeStructureFinish.Mossy, 0f, Mentions(damp) ? 1f : 0.5f);
 		}
 
 		/// <summary>The herbs a herb grove grows where no herb or fungus is gathered: the commonest wayside herbs.</summary>
@@ -736,6 +1181,28 @@ namespace FishMMO.Shared.WorldDesign
 					return CliffRocks.Ice;
 				default:
 					return BiomeCaveShell.Ground;
+			}
+		}
+
+		/// <summary>
+		/// The weight a sea life kind gave every biome it named a favourite until 2026-10-16 (the client's
+		/// SeaCreatureKind.PreferWeight in SeaLifeSettings.Defaults and on the weather profile, never below 1 there): the
+		/// weight <see cref="Entry.HomeTo(string[])"/> gives a kind named without one. The editor's art tables cannot see the
+		/// client's settings, so the numbers are copied here and a test keeps them equal for every kind (BiomeTemplateLivingTests):
+		/// every other kind's is 3, a new kind's default.
+		/// </summary>
+		public static float SeaKindPreferWeight(string kind)
+		{
+			switch (kind)
+			{
+				case "Reef fish":
+					return 5f;
+				case "Sea turtle":
+				case "Crab":
+				case "Whale":
+					return 2f;
+				default:
+					return 3f;
 			}
 		}
 

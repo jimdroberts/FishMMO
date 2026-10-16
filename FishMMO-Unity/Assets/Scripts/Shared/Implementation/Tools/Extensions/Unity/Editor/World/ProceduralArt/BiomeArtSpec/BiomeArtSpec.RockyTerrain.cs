@@ -16,7 +16,8 @@ namespace FishMMO.Shared.WorldDesign
 				C(Ground.CliffRock, 38f), Ground.Gravel, Ground.Gravel)
 				.Accepts(RockTypes.Quartzite, RockTypes.Granite, RockTypes.Gneiss, RockTypes.Slate, RockTypes.Schist)
 				.Look(BiomeLookClass.Alpine)
-				.Wildlife(BiomeHabitat.Mountain);
+				.Wildlife(BiomeHabitat.Mountain)
+				.Moat(BiomeMoatWater.Dry);
 		}
 	}
 }

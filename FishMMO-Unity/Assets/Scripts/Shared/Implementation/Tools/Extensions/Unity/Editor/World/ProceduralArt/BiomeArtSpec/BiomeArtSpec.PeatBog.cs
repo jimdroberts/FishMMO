@@ -19,7 +19,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Moved("main", "Trees: Dead, Birch")
 				.Accepts(BorealGeology)
 				.Look(BiomeLookClass.Wetland)
-				.Wildlife(BiomeHabitat.Wetland | BiomeHabitat.Tundra);
+				.Wildlife(BiomeHabitat.Wetland | BiomeHabitat.Tundra)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

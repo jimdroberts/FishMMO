@@ -16,7 +16,8 @@ namespace FishMMO.Shared.WorldDesign
 					D(Ground.Frost, 48f, 2f, 15f, 40f), D(Ground.Lineae, 96f)),
 				C(Ground.Rock), Ground.Regolith, Ground.Regolith)
 				.Look(BiomeLookClass.Alien)
-				.Wildlife(BiomeHabitat.Barren);
+				.Wildlife(BiomeHabitat.Barren)
+				.Moat(BiomeMoatWater.Dry);
 		}
 	}
 }

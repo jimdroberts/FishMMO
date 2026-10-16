@@ -49,8 +49,9 @@ namespace FishMMO.Shared.WorldDesign
 	/// remembers its own biome and source, which is what the scatter keys its rules by.
 	/// </para>
 	/// <para>
-	/// <b>Capped at <see cref="MaximumLayers"/></b>, the most the array terrain shader reads (eight
-	/// control maps of four channels). Past the cap the least-covering biomes' detail layers go
+	/// <b>Capped at <see cref="MaximumLayers"/></b>, the most the terrain's index map can name (a byte per
+	/// layer; TerrainIndexMap) and a texture array every target API holds. It was 32 (eight control maps of
+	/// four channels, all read per pixel) until 2026-10-16. Past the cap the least-covering biomes' detail layers go
 	/// first, then their cliffs; a biome's main layer is never dropped while another biome's
 	/// detail layer is kept, because a biome without its base ground is unreadable and one without
 	/// its variation is merely plainer. What was dropped is reported, never silent.
@@ -59,7 +60,7 @@ namespace FishMMO.Shared.WorldDesign
 	public sealed class SceneTerrainPalette
 	{
 		/// <summary>The most layers one scene may carry: what the array terrain shader reads.</summary>
-		public const int MaximumLayers = 32;
+		public const int MaximumLayers = TerrainArrayLayerParams.MaximumLayers;
 
 		/// <summary>Slot keys; detail and cliff slots append their index (<c>detail/0</c>).</summary>
 		public const string SlotMain = "main";
@@ -377,8 +378,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public float[] PathLayerMap(string slot, float[] coverage)
 		{
-			var map = new float[MaximumLayers];
-			var share = new float[MaximumLayers];
+			// One entry per layer the scene has (the layer table takes −1 past it).
+			var map = new float[Mathf.Max(1, layers.Count)];
+			var share = new float[map.Length];
 			for (int i = 0; i < map.Length; i++)
 			{
 				map[i] = -1f;
@@ -386,7 +388,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			foreach (Entry entry in entries)
 			{
-				if (entry.Role == PaletteRole.Path || entry.LayerIndex < 0 || entry.LayerIndex >= MaximumLayers)
+				if (entry.Role == PaletteRole.Path || entry.LayerIndex < 0 || entry.LayerIndex >= map.Length)
 				{
 					continue;
 				}

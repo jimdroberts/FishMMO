@@ -4,11 +4,17 @@ using UnityEngine;
 
 namespace FishMMO.Shared.WorldDesign
 {
-	/// <summary>A rock material: a ground family's textures on a rock.</summary>
+	/// <summary>A small-rock material: a ground family's textures on a rock, or a rock type's surface.</summary>
 	public struct RockMaterialSpec
 	{
 		public string Name;
 		public string GroundFamily;
+		/// <summary>
+		/// The rock type whose own material this stone wears (<c>Rock_{Type}</c>, written with the formations; the
+		/// stone's name is the type's, so the name is the same), or null when the stone writes <c>Rock_{Name}</c> itself
+		/// (2026-10-16: the crust's other rocks as stones, ProceduralArtCatalogue.Rocks.cs).
+		/// </summary>
+		public string WearsRockType;
 	}
 
 	/// <summary>A detail prefab: one detail plant or rock mesh with its material.</summary>
@@ -134,9 +140,10 @@ namespace FishMMO.Shared.WorldDesign
 		public static string RockMaterial(string name) => "Rock_" + name;
 		public static string LeavesMaterial(string tree) => "Leaves_" + tree;
 		public static string BillboardMaterial(string tree) => "Billboard_" + tree;
-		public static string BoulderMesh(string shape, int lod) => $"Boulder_{shape}_LOD{lod}";
-		public const string SmallRocksMesh = "Rocks_Small";
-		public const string PebblesMesh = "Pebbles";
+		/// <summary>A material's own boulder, small-rock and pebble meshes (StoneStyles; until 2026-10-16 one shared mesh a slot).</summary>
+		public static string BoulderMesh(string material, string shape, int lod) => $"Boulder_{material}_{shape}_LOD{lod}";
+		public static string SmallRocksMesh(string material) => $"Rocks_Small_{material}";
+		public static string PebblesMesh(string material) => $"Pebbles_{material}";
 
 		public static string DetailPrefab(string name) => "Detail_" + name;
 		public static string TreePrefab(string name) => "Tree_" + name;
@@ -160,9 +167,11 @@ namespace FishMMO.Shared.WorldDesign
 		/// Every small-rock material the generator makes boulders, rocks and pebbles in: the four legacy ones
 		/// (<see cref="RockMaterials"/>, which keep meaning "the legacy materials" — each stands for a rock type,
 		/// RockTypes.ForLegacyMaterial) and those added since, each listed in the file of the package that owns it:
-		/// the sea's manganese nodules and coral rubble (SeaRockMaterials, ProceduralArtCatalogue.Sea.cs) and ice
-		/// cobbles (IceRockMaterials, ProceduralArtCatalogue.Rocks.cs). A newer material wears its ground family's
-		/// textures (it is not one of RockArtNames' legacy-on-rock-surface four).
+		/// the sea's manganese nodules and coral rubble (SeaRockMaterials, ProceduralArtCatalogue.Sea.cs), ice
+		/// cobbles (IceRockMaterials, ProceduralArtCatalogue.Rocks.cs) and the crust's other rocks with flint and river
+		/// cobbles (StoneRockMaterials, ProceduralArtCatalogue.Rocks.cs). A newer material wears its ground family's
+		/// textures unless RockArtNames names a rock surface for it, or it wears a rock type's own material
+		/// (<see cref="RockMaterialSpec.WearsRockType"/>), which it does not write. Each has shapes of its own (StoneStyles).
 		/// </summary>
 		/// <remarks>Built on first use for the same reason as <see cref="Details"/>: its parts are fields of other files.</remarks>
 		public static RockMaterialSpec[] AllRockMaterials
@@ -174,13 +183,18 @@ namespace FishMMO.Shared.WorldDesign
 					var all = new List<RockMaterialSpec>(RockMaterials);
 					all.AddRange(SeaRockMaterials);
 					all.AddRange(IceRockMaterials);
+					all.AddRange(StoneRockMaterials);
 					allRockMaterials = all.ToArray();
 				}
 				return allRockMaterials;
 			}
 		}
 
-		/// <summary>Boulder shapes, each built at three levels of detail for the tree channel.</summary>
+		/// <summary>
+		/// The boulder slots every stone material fills (<c>Boulder_{material}_{slot}</c>), each built at three levels of
+		/// detail for the tree channel. The shapes themselves are the material's (StoneStyles); these old shared shapes
+		/// keep only their names and their sizes, which each material's slot keeps roughly.
+		/// </summary>
 		public static readonly RockShape[] BoulderShapes =
 		{
 			new RockShape { Name = "Round", Size = 1.6f, Proportions = new Vector3(1f, 0.75f, 0.9f), Lumpiness = 0.8f, Facets = 5, FacetDepth = 0.4f },
@@ -191,8 +205,6 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Grid cells per cube face at each boulder level: 1200, 300 and 48 triangles.</summary>
 		public static readonly int[] BoulderResolution = { 10, 5, 2 };
 
-		public static readonly RockShape SmallRock = new RockShape { Name = "SmallRock", Size = 0.35f, Proportions = new Vector3(1f, 0.6f, 0.85f), Lumpiness = 0.8f, Facets = 4, FacetDepth = 0.45f };
-		public static readonly RockShape Pebble = new RockShape { Name = "Pebble", Size = 0.12f, Proportions = new Vector3(1f, 0.55f, 0.8f), Lumpiness = 0.5f, Facets = 2, FacetDepth = 0.3f };
 
 		// ── Detail plants ─────────────────────────────────────────────
 
@@ -704,15 +716,6 @@ namespace FishMMO.Shared.WorldDesign
 				yield return BarkTexture(r.Name, "Normal");
 			}
 			yield return AtlasPath;
-			foreach (RockShape shape in BoulderShapes)
-			{
-				for (int lod = 0; lod < BoulderResolution.Length; lod++)
-				{
-					yield return MeshPath(BoulderMesh(shape.Name, lod));
-				}
-			}
-			yield return MeshPath(SmallRocksMesh);
-			yield return MeshPath(PebblesMesh);
 			foreach (DetailSpec d in Details)
 			{
 				yield return MeshPath(DetailPrefab(d.Name));
@@ -759,7 +762,10 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			foreach (RockMaterialSpec m in AllRockMaterials)
 			{
-				yield return MaterialPath(RockMaterial(m.Name));
+				if (m.WearsRockType == null)
+				{
+					yield return MaterialPath(RockMaterial(m.Name)); // A stone wearing a rock type's is listed with the formations'.
+				}
 			}
 			foreach (DetailSpec d in Details)
 			{

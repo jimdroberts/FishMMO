@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using FishMMO.Shared.Biomes;
 
 namespace FishMMO.Client
 {
@@ -14,10 +15,17 @@ namespace FishMMO.Client
 		bool TryGround(float x, float z, out float y);
 
 		/// <summary>
-		/// Whether a kind is most at home at a world position (its biome names it among its sea life, BiomeTemplate.SeaLifeHomes),
-		/// and the climate's temperature (-1 .. 1) there.
+		/// Whether a kind is at home at a world position (its biome lists it among its sea life, BiomeTemplate.SeaLife) and the
+		/// weight that biome gives it there (meaningful only when <paramref name="home"/>), and the climate's temperature
+		/// (-1 .. 1) there.
 		/// </summary>
-		void Habitat(Vector3 position, SeaCreatureKind kind, out bool home, out float temperature);
+		void Habitat(Vector3 position, SeaCreatureKind kind, out bool home, out float homeWeight, out float temperature);
+
+		/// <summary>
+		/// The heaviest weight any biome of the ground gives a kind as one of its own (0 when none does): what a cell's count of
+		/// candidates is made for, so no biome's weight is cut short.
+		/// </summary>
+		float HeaviestHome(SeaCreatureKind kind);
 	}
 
 	/// <summary>One group of sea creatures: a school, a reef fish's patch, a cruising shark, a crab colony.</summary>
@@ -152,10 +160,11 @@ namespace FishMMO.Client
 				return true;
 			}
 			float area = cellMetres * cellMetres * 1e-6f;
-			// Enough candidates for the kind's home biomes' weight. Its homes are the biomes' to say (2026-10-16), so any kind may
-			// have one; a candidate past the expected count never lives (its chance is nothing), so the extra ones change no
-			// group, only what is asked of the ground.
-			float most = kind.GroupsPerKm2 * area * Mathf.Max(1f, kind.PreferWeight);
+			// Enough candidates for the heaviest weight the kind has anywhere: its own preferred weight, or more where a biome
+			// gives it more (2026-10-16: each biome lists its sea life with a weight). A candidate past the expected count never
+			// lives (its chance is nothing), so the extra ones change no group, only what is asked of the ground; and with every
+			// biome at the kind's preferred weight the count is what it always was.
+			float most = kind.GroupsPerKm2 * area * Mathf.Max(KindHomeWeight(kind), ground.HeaviestHome(kind));
 			int candidates = Mathf.CeilToInt(most);
 			for (int i = 0; i < candidates; i++)
 			{
@@ -170,8 +179,8 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
-				ground.Habitat(new Vector3(home.x, floor, home.z), kind, out bool preferred, out float temperature);
-				float weight = HabitatWeight(kind, preferred, temperature);
+				ground.Habitat(new Vector3(home.x, floor, home.z), kind, out bool preferred, out float homeWeight, out float temperature);
+				float weight = HabitatWeight(kind, preferred, homeWeight, temperature);
 				// Candidate i lives here with chance (expected count - i), so the count is the expectation on average.
 				float expected = kind.GroupsPerKm2 * area * weight;
 				if (Unit(Mix(seed ^ 0x3u)) >= Mathf.Clamp01(expected - i))
@@ -192,19 +201,30 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// How much at home a kind is at a place: 0 (not at all) .. its preferred weight. <paramref name="preferred"/>: the
-		/// place's biome is one of its homes (<see cref="IsHome"/>).
+		/// How much at home a kind is at a place: <paramref name="homeWeight"/> where the place's biome lists it among its sea
+		/// life (<paramref name="home"/>, <see cref="TryHomeWeight"/>), whatever the thermometer says (a reef is warm by being a
+		/// reef); elsewhere its elsewhere weight, thinned off its temperature band.
 		/// </summary>
-		public static float HabitatWeight(SeaCreatureKind kind, bool preferred, float temperature)
+		public static float HabitatWeight(SeaCreatureKind kind, bool home, float homeWeight, float temperature)
 		{
+			if (home)
+			{
+				return Mathf.Max(0f, homeWeight);
+			}
 			// Soft edges on the temperature band, a tenth wide; an end at the scale's end is open.
 			float warm = kind.Temperature.x <= -1f ? 1f : Mathf.Clamp01((temperature - kind.Temperature.x) / 0.1f + 0.5f);
 			float cool = kind.Temperature.y >= 1f ? 1f : Mathf.Clamp01((kind.Temperature.y - temperature) / 0.1f + 0.5f);
-			float climate = Mathf.Min(warm, cool);
-			float place = preferred ? Mathf.Max(1f, kind.PreferWeight) : kind.ElsewhereWeight;
-			// A preferred biome is home whatever the thermometer says (a reef is warm by being a reef).
-			return preferred ? place : place * climate;
+			return kind.ElsewhereWeight * Mathf.Min(warm, cool);
 		}
+
+		/// <summary>
+		/// How much at home a kind is at a place by its own preferred weight (<see cref="KindHomeWeight"/>): the weight every
+		/// favourite biome had before the templates weighed their sea life (2026-10-16), and a template's never authored still.
+		/// </summary>
+		public static float HabitatWeight(SeaCreatureKind kind, bool preferred, float temperature) => HabitatWeight(kind, preferred, KindHomeWeight(kind), temperature);
+
+		/// <summary>The weight a kind gave every biome it preferred (its PreferWeight, never below 1): a template's default for it.</summary>
+		public static float KindHomeWeight(SeaCreatureKind kind) => Mathf.Max(1f, kind.PreferWeight);
 
 		/// <summary>
 		/// How much at home a kind is in a biome by its asset name (<see cref="PrefersByName"/>): the weight before the
@@ -212,21 +232,11 @@ namespace FishMMO.Client
 		/// </summary>
 		public static float HabitatWeight(SeaCreatureKind kind, string biome, float temperature) => HabitatWeight(kind, PrefersByName(kind, biome), temperature);
 
-		/// <summary>Whether a biome's sea life (kind names, BiomeTemplate.SeaLifeHomes) names a kind, ignoring case.</summary>
-		public static bool IsHome(SeaCreatureKind kind, IReadOnlyList<string> homes)
+		/// <summary>Whether a biome's sea life (BiomeTemplate.SeaLife) lists a kind (by name, ignoring case), and its weight there.</summary>
+		public static bool TryHomeWeight(SeaCreatureKind kind, IReadOnlyList<BiomeSeaLife> seaLife, out float weight)
 		{
-			if (kind == null || homes == null || string.IsNullOrEmpty(kind.Name))
-			{
-				return false;
-			}
-			foreach (string name in homes)
-			{
-				if (string.Equals(name, kind.Name, StringComparison.OrdinalIgnoreCase))
-				{
-					return true;
-				}
-			}
-			return false;
+			weight = 0f;
+			return kind != null && BiomeSeaLife.TryWeight(seaLife, kind.Name, out weight);
 		}
 
 		/// <summary>

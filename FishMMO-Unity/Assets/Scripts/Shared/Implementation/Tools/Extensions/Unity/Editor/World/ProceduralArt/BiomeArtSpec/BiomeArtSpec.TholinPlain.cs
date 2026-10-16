@@ -13,7 +13,9 @@ namespace FishMMO.Shared.WorldDesign
 				Ds(D(Ground.Frost, 96f, 2f, -1f, -1f, Aligned(Outcrops("Bladed terrain", 0.006f, 20f, F(RockTypes.Firn, "Penitentes"), 20f), -10f, 10f)), D(Ground.Gravel, 64f), D(Ground.TholinDune, 128f)),
 				C(Ground.Rock), Ground.Tholin, Ground.Tholin)
 				.Look(BiomeLookClass.Alien)
-				.Wildlife(BiomeHabitat.Alien);
+				// Alien ground alone: the client reads that live from the template's air (BiomeHabitats.Live), never stored.
+				.Wildlife(BiomeHabitat.None)
+				.Moat(BiomeMoatWater.Frozen);
 		}
 	}
 }

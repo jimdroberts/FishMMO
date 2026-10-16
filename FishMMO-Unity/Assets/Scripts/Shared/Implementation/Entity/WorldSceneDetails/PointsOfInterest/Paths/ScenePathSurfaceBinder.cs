@@ -89,47 +89,32 @@ namespace FishMMO.Shared
 			return binder != null ? binder.Points.PathLayers : new Vector4(-1f, -1f, -1f, -1f);
 		}
 
-		/// <summary>Per terrain layer, its biome's path ground slice, packed four to a vector (eight vectors; −1 none).</summary>
-		public static Vector4[] EarthMapOf(Scene scene)
+		/// <summary>
+		/// Per terrain layer, its biome's path ground slice (−1 none), or null when the scene has no enabled binder. The
+		/// terrain reads it from the layer table's paths row (TerrainLayerTable.RowPaths), which takes −1 past the map.
+		/// </summary>
+		public static float[] EarthMapOf(Scene scene)
 		{
 			ScenePathSurfaceBinder binder = Of(scene);
-			return Pack(binder != null ? binder.Points.PathEarthMap : null);
+			return binder != null ? binder.Points.PathEarthMap : null;
 		}
 
-		/// <summary>Per terrain layer, its biome's road ground slice, packed as <see cref="EarthMapOf"/>.</summary>
-		public static Vector4[] RoadMapOf(Scene scene)
+		/// <summary>Per terrain layer, its biome's road ground slice, as <see cref="EarthMapOf"/>.</summary>
+		public static float[] RoadMapOf(Scene scene)
 		{
 			ScenePathSurfaceBinder binder = Of(scene);
-			return Pack(binder != null ? binder.Points.PathRoadMap : null);
+			return binder != null ? binder.Points.PathRoadMap : null;
 		}
 
 		/// <summary>
-		/// Per terrain layer, its biome's cobble slice, packed as <see cref="EarthMapOf"/>: each biome's streets paved with its
-		/// own stone. All −1 for a scene cut before the cobbles had a map, which paves with the scene's one slice
-		/// (<see cref="LayersOf"/>.z) as it always did.
+		/// Per terrain layer, its biome's cobble slice, as <see cref="EarthMapOf"/>: each biome's streets paved with its own
+		/// stone. Null (−1 everywhere in the table) for a scene cut before the cobbles had a map, which paves with the scene's
+		/// one slice (<see cref="LayersOf"/>.z) as it always did.
 		/// </summary>
-		public static Vector4[] StoneMapOf(Scene scene)
+		public static float[] StoneMapOf(Scene scene)
 		{
 			ScenePathSurfaceBinder binder = Of(scene);
-			return Pack(binder != null ? binder.Points.PathStoneMap : null);
-		}
-
-		/// <summary>The vectors a layer map is pushed as: always eight, so the shader array's size never changes.</summary>
-		public const int MapVectors = 8;
-
-		/// <summary>
-		/// A per-layer map (one slice per terrain layer, −1 none) as the shader's table: four layers to a vector, layer i at
-		/// vector i / 4, component i % 4, always <see cref="MapVectors"/> vectors; layers past the map (or no map) are −1.
-		/// </summary>
-		public static Vector4[] Pack(float[] map)
-		{
-			var packed = new Vector4[MapVectors];
-			for (int v = 0; v < MapVectors; v++)
-			{
-				float At(int i) => map != null && i < map.Length ? map[i] : -1f;
-				packed[v] = new Vector4(At(v * 4), At(v * 4 + 1), At(v * 4 + 2), At(v * 4 + 3));
-			}
-			return packed;
+			return binder != null ? binder.Points.PathStoneMap : null;
 		}
 
 		/// <summary>The binder whose field is bound, or null.</summary>

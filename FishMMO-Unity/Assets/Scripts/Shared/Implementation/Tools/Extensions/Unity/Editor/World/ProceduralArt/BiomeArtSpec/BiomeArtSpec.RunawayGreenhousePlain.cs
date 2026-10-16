@@ -14,7 +14,8 @@ namespace FishMMO.Shared.WorldDesign
 				Ds(D(Ground.Sulphur, 96f), D(Ground.Ash, 64f), D(Ground.Pahoehoe, 64f, 2f, -1f, -1f, Stones(Pebbles("Basalt"), 2f)), D(Ground.Cinder, 96f)),
 				C(Ground.Basalt), Ground.Basalt, Ground.Basalt)
 				.Look(BiomeLookClass.Alien)
-				.Wildlife(BiomeHabitat.Barren);
+				.Wildlife(BiomeHabitat.Barren)
+				.Moat(BiomeMoatWater.Dry);
 		}
 	}
 }

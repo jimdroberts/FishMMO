@@ -341,26 +341,30 @@ namespace FishMMO.Shared.WorldDesign
 			const float walk = 1.3f, length = CaveSpanModule, half = length * 0.5f, rope = 0.035f;
 			bool worn = d.Variant == 1;
 			float hand = worn ? 0.95f : 1.02f;
-			if (d.Lod == 2)
+			// The planks are the walk's floor (2026-10-16).
+			using (d.Builds(DeckRoles))
 			{
-				d.Add(StructureShapes.Box(new Vector3(0f, -0.05f, 0f), new Vector3(walk, 0.1f, length), StructureMaterial.Timber, 1));
-			}
-			else
-			{
-				int planks = d.Fine ? 10 : 5;
-				float pitch = length / planks, gap = d.Fine ? 0.05f : 0.03f;
-				for (int k = 0; k < planks; k++)
+				if (d.Lod == 2)
 				{
-					if (worn && d.Fine && k == 6)
+					d.Add(StructureShapes.Box(new Vector3(0f, -0.05f, 0f), new Vector3(walk, 0.1f, length), StructureMaterial.Timber, 1));
+				}
+				else
+				{
+					int planks = d.Fine ? 10 : 5;
+					float pitch = length / planks, gap = d.Fine ? 0.05f : 0.03f;
+					for (int k = 0; k < planks; k++)
 					{
-						continue;
+						if (worn && d.Fine && k == 6)
+						{
+							continue;
+						}
+						float zc = -half + pitch * (k + 0.5f);
+						float wide = walk + (d.Fine ? d.Range(k, 3, -0.08f, 0.08f) : 0f);
+						float yaw = d.Fine ? d.Range(k, 4, -2.5f, 2.5f) : 0f;
+						float shift = d.Fine ? d.Range(k, 5, -0.04f, 0.04f) : 0f;
+						d.Add(StructureShapes.Block(new Vector3(shift, -0.03f, zc), new Vector3(wide, 0.05f, pitch - gap), Quaternion.Euler(0f, yaw, 0f), StructureMaterial.Timber, 10 + k))
+							.Grain = Vector3.right;
 					}
-					float zc = -half + pitch * (k + 0.5f);
-					float wide = walk + (d.Fine ? d.Range(k, 3, -0.08f, 0.08f) : 0f);
-					float yaw = d.Fine ? d.Range(k, 4, -2.5f, 2.5f) : 0f;
-					float shift = d.Fine ? d.Range(k, 5, -0.04f, 0.04f) : 0f;
-					d.Add(StructureShapes.Block(new Vector3(shift, -0.03f, zc), new Vector3(wide, 0.05f, pitch - gap), Quaternion.Euler(0f, yaw, 0f), StructureMaterial.Timber, 10 + k))
-						.Grain = Vector3.right;
 				}
 			}
 			for (int s = -1; s <= 1; s += 2)
@@ -453,18 +457,22 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			const float width = 2f, length = CaveSpanModule, half = length * 0.5f;
 			bool track = d.Variant == 1;
-			if (d.Lod == 2)
+			// The planks are the deck's floor (2026-10-16).
+			using (d.Builds(DeckRoles))
 			{
-				d.Add(StructureShapes.Box(new Vector3(0f, -0.04f, 0f), new Vector3(width, 0.08f, length), StructureMaterial.Timber, 1));
-			}
-			else
-			{
-				int planks = d.Fine ? 16 : 8;
-				float pitch = length / planks;
-				for (int k = 0; k < planks; k++)
+				if (d.Lod == 2)
 				{
-					d.Add(StructureShapes.Box(new Vector3(0f, -0.04f, -half + pitch * (k + 0.5f)), new Vector3(width + (d.Fine ? d.Range(k, 3, -0.05f, 0.05f) : 0f), 0.08f, pitch - 0.02f),
-						StructureMaterial.Timber, 10 + k)).Grain = Vector3.right;
+					d.Add(StructureShapes.Box(new Vector3(0f, -0.04f, 0f), new Vector3(width, 0.08f, length), StructureMaterial.Timber, 1));
+				}
+				else
+				{
+					int planks = d.Fine ? 16 : 8;
+					float pitch = length / planks;
+					for (int k = 0; k < planks; k++)
+					{
+						d.Add(StructureShapes.Box(new Vector3(0f, -0.04f, -half + pitch * (k + 0.5f)), new Vector3(width + (d.Fine ? d.Range(k, 3, -0.05f, 0.05f) : 0f), 0.08f, pitch - 0.02f),
+							StructureMaterial.Timber, 10 + k)).Grain = Vector3.right;
+					}
 				}
 			}
 			for (int s = -1; s <= 1; s += 2)

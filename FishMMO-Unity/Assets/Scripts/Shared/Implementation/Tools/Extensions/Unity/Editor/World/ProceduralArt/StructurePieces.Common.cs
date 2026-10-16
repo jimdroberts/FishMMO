@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 using UnityEngine;
 
 namespace FishMMO.Shared.WorldDesign
@@ -9,6 +10,27 @@ namespace FishMMO.Shared.WorldDesign
 	{
 		/// <summary>How far below the ground line a building's plinth reaches, so it sits on a slope without a gap.</summary>
 		public const float FoundationDepth = 0.5f;
+
+		// ── Palette roles the builders name (StructureDraft.Builds, 2026-10-16, I6a) ──
+		// Each list is a preference: a solid plays the first whose kit material is its own (StructureParts), so plaster walls are
+		// the Wall, a timber house's planks its LogWall, a stone ground floor under a framed storey its GroundFloor, turf Turf.
+
+		/// <summary>A building's walls and gables.</summary>
+		internal static readonly BiomeStructureRole[] WallRoles = { BiomeStructureRole.Wall, BiomeStructureRole.GroundFloor, BiomeStructureRole.LogWall, BiomeStructureRole.Turf };
+		/// <summary>An upper storey's walls.</summary>
+		internal static readonly BiomeStructureRole[] UpperWallRoles = { BiomeStructureRole.UpperWall, BiomeStructureRole.Wall, BiomeStructureRole.LogWall, BiomeStructureRole.Turf };
+		/// <summary>A roof: thatch is the Roof, shingles and planks the ShingleRoof, turf Turf (a tent's canvas its Roof).</summary>
+		internal static readonly BiomeStructureRole[] RoofRoles = { BiomeStructureRole.Roof, BiomeStructureRole.ShingleRoof, BiomeStructureRole.Turf };
+		internal static readonly BiomeStructureRole[] PlinthRoles = { BiomeStructureRole.Plinth };
+		internal static readonly BiomeStructureRole[] FloorRoles = { BiomeStructureRole.Floor };
+		/// <summary>Steps: paving outside (fieldstone, ashlar), a floor's boards inside.</summary>
+		internal static readonly BiomeStructureRole[] StepRoles = { BiomeStructureRole.Paving, BiomeStructureRole.Floor };
+		internal static readonly BiomeStructureRole[] DoorRoles = { BiomeStructureRole.Door };
+		internal static readonly BiomeStructureRole[] FenceRoles = { BiomeStructureRole.Fence };
+		/// <summary>The frame's own timber: a turf roof's ridge beam (2026-10-16).</summary>
+		internal static readonly BiomeStructureRole[] TrimRoles = { BiomeStructureRole.Trim };
+		/// <summary>A walking deck: a pier's, a bridge's, a rope walk's planks (2026-10-16: the deck is the floor, not the trim).</summary>
+		internal static readonly BiomeStructureRole[] DeckRoles = { BiomeStructureRole.Floor };
 
 		/// <summary>A gable roof's two slabs, ridge along z, over a span of <paramref name="span"/> (x) and <paramref name="length"/> (z), centred on the origin.</summary>
 		internal static void GableRoof(StructureDraft d, float span, float length, float eaveY, float rise, float overhang, float thick,
@@ -21,6 +43,7 @@ namespace FishMMO.Shared.WorldDesign
 			float outX = half + overhang, outY = eaveY - k * overhang;
 			float ridgeY = eaveY + rise;
 			float z0 = -length * 0.5f - overhang, z1 = length * 0.5f + overhang;
+			using StructureDraft.PartScope roof = d.Builds(RoofRoles);
 			for (int side = -1; side <= 1; side += 2)
 			{
 				var outline = new[]
@@ -325,8 +348,11 @@ namespace FishMMO.Shared.WorldDesign
 			float floor = h.Floor + h.Plinth;
 			if (h.Plinth > 0f && h.Floor <= 0f)
 			{
-				d.Add(StructureShapes.ChamferBox(new Vector3(0f, (h.Plinth - FoundationDepth) * 0.5f, 0f),
-					new Vector3(h.Width + 0.24f, h.Plinth + FoundationDepth, h.Depth + 0.24f), d.Bevel(0.04f), h.PlinthMaterial, key));
+				using (d.Builds(PlinthRoles))
+				{
+					d.Add(StructureShapes.ChamferBox(new Vector3(0f, (h.Plinth - FoundationDepth) * 0.5f, 0f),
+						new Vector3(h.Width + 0.24f, h.Plinth + FoundationDepth, h.Depth + 0.24f), d.Bevel(0.04f), h.PlinthMaterial, key));
+				}
 			}
 			float top = floor + h.WallHeight;
 			// A real doorway (a tent's flap stays a dark panel): the door itself is a scene object of its own.
@@ -388,10 +414,13 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			float halfW = h.Width * 0.5f, halfD = h.Depth * 0.5f, t2 = h.Wall * 0.5f;
-			WallRun(d, new Vector3(-halfW, 0f, -halfD + t2), new Vector3(halfW, 0f, -halfD + t2), h.Wall, floor, top, frontHoles, h.WallMaterial, key + 1);
-			WallRun(d, new Vector3(-halfW, 0f, halfD - t2), new Vector3(halfW, 0f, halfD - t2), h.Wall, floor, top, null, h.WallMaterial, key + 2);
-			WallRun(d, new Vector3(-halfW + t2, 0f, -halfD + h.Wall), new Vector3(-halfW + t2, 0f, halfD - h.Wall), h.Wall, floor, top, leftHoles, h.WallMaterial, key + 3);
-			WallRun(d, new Vector3(halfW - t2, 0f, -halfD + h.Wall), new Vector3(halfW - t2, 0f, halfD - h.Wall), h.Wall, floor, top, rightHoles, h.WallMaterial, key + 4);
+			using (d.Builds(WallRoles))
+			{
+				WallRun(d, new Vector3(-halfW, 0f, -halfD + t2), new Vector3(halfW, 0f, -halfD + t2), h.Wall, floor, top, frontHoles, h.WallMaterial, key + 1);
+				WallRun(d, new Vector3(-halfW, 0f, halfD - t2), new Vector3(halfW, 0f, halfD - t2), h.Wall, floor, top, null, h.WallMaterial, key + 2);
+				WallRun(d, new Vector3(-halfW + t2, 0f, -halfD + h.Wall), new Vector3(-halfW + t2, 0f, halfD - h.Wall), h.Wall, floor, top, leftHoles, h.WallMaterial, key + 3);
+				WallRun(d, new Vector3(halfW - t2, 0f, -halfD + h.Wall), new Vector3(halfW - t2, 0f, halfD - h.Wall), h.Wall, floor, top, rightHoles, h.WallMaterial, key + 4);
+			}
 			float width = h.Width, depth = h.Depth;
 			if (h.Upper > 0f)
 			{
@@ -406,6 +435,8 @@ namespace FishMMO.Shared.WorldDesign
 			Bargeboards(d, span, length, top, rise, h.Overhang, h.RoofMaterial, key + 700, place);
 			// A door taller than the wall, in a gable end, runs up into the gable: the gable is cut round it.
 			bool doorInGable = doorway && !h.RidgeAlongX && h.Upper <= 0f && floor + h.DoorHeight > top + 0.01f;
+			// The gables are the walls' (an upper storey's when there is one: the gables stand on it).
+			StructureDraft.PartScope gables = d.Builds(h.Upper > 0f ? UpperWallRoles : WallRoles);
 			if (doorInGable)
 			{
 				GableWithDoor(d, span - 0.02f, top, rise - 0.02f, -length * 0.5f + h.Wall * 0.5f, h.Wall, h.WallMaterial, key + 12,
@@ -416,13 +447,18 @@ namespace FishMMO.Shared.WorldDesign
 				Gable(d, span - 0.02f, top, rise - 0.02f, -length * 0.5f + h.Wall * 0.5f, h.Wall, h.WallMaterial, key + 12, place);
 			}
 			Gable(d, span - 0.02f, top, rise - 0.02f, length * 0.5f - h.Wall * 0.5f, h.Wall, h.WallMaterial, key + 13, place);
+			gables.Dispose();
 			if (d.Fine)
 			{
-				// The ridge piece: a beam along the top, under the thatch's crown or the shingles' cap.
+				// The ridge piece: a beam along the top, under the thatch's crown or the shingles' cap. Under turf it is the frame's
+				// own timber, seen along the turf's crest (2026-10-16: trim, not the shingles a shingled roof's timber ridge is).
 				var r0 = new Vector3(0f, top + rise + 0.1f, -length * 0.5f - h.Overhang);
 				var r1 = new Vector3(0f, top + rise + 0.1f, length * 0.5f + h.Overhang);
-				d.Add(StructureShapes.Beam(place.MultiplyPoint3x4(r0), place.MultiplyPoint3x4(r1), 0.22f, 0.22f,
-					h.RoofMaterial == StructureMaterial.Thatch ? StructureMaterial.Thatch : StructureMaterial.Timber, key + 14, StructureRole.Roof));
+				using (d.Builds(h.RoofMaterial == StructureMaterial.Earth ? TrimRoles : RoofRoles))
+				{
+					d.Add(StructureShapes.Beam(place.MultiplyPoint3x4(r0), place.MultiplyPoint3x4(r1), 0.22f, 0.22f,
+						h.RoofMaterial == StructureMaterial.Thatch ? StructureMaterial.Thatch : StructureMaterial.Timber, key + 14, StructureRole.Roof));
+				}
 			}
 
 			// The door (front, −z): a doorway through the wall, its door hung on the inside face and opening inward (a scene
@@ -442,8 +478,11 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			else
 			{
-				d.Add(StructureShapes.Box(new Vector3(doorX, floor + h.DoorHeight * 0.5f, front - 0.04f), new Vector3(h.DoorWidth, h.DoorHeight, 0.1f),
-					h.DoorMaterial, key + 20, StructureRole.Detail)).Grain = Vector3.up;
+				using (d.Builds(DoorRoles))
+				{
+					d.Add(StructureShapes.Box(new Vector3(doorX, floor + h.DoorHeight * 0.5f, front - 0.04f), new Vector3(h.DoorWidth, h.DoorHeight, 0.1f),
+						h.DoorMaterial, key + 20, StructureRole.Detail)).Grain = Vector3.up;
+				}
 			}
 			if (d.Mid)
 			{
@@ -473,16 +512,34 @@ namespace FishMMO.Shared.WorldDesign
 		/// shingles and planks steep, turf low (it slides off a steep roof). The houses were pitched at 30–40°, which read as
 		/// modern (2026-10-12: "Are these proper medieval fantasy houses?").
 		/// </summary>
-		internal static float MinimumPitch(StructureMaterial roof)
+		/// <remarks>
+		/// The palette's surfaces (2026-10-16, I6a), from how medieval roofs were laid: reed is thatch and wants thatch's pitch;
+		/// riven shingles shed water only when steep (45°, as planks); stone slates and split slate are heavy and hold at 40°;
+		/// sandstone slabs and ice blocks lie heavier still (35°); bamboo half-culms and log roofs hang lower (30°), as do
+		/// marble slabs, laid as a temple's low gable is; bone lashed under hides wants a hide roof's steepness (45°); mud
+		/// brick roofs are flat (laid on any pitch, as turf). Every material before them is as it was.
+		/// </remarks>
+		public static float MinimumPitch(StructureMaterial roof)
 		{
 			switch (roof)
 			{
 				case StructureMaterial.Thatch:
+				case StructureMaterial.Reed:
 					return 50f;
 				case StructureMaterial.Earth:
+				case StructureMaterial.Adobe:
 					return 0f;
+				case StructureMaterial.Slate:
+					return 40f;
+				case StructureMaterial.Sandstone:
+				case StructureMaterial.IceBlock:
+					return 35f;
+				case StructureMaterial.Bamboo:
+				case StructureMaterial.Log:
+				case StructureMaterial.Marble:
+					return 30f;
 				default:
-					return 45f;
+					return 45f; // timber planks, shingles, bone work and the rest
 			}
 		}
 
@@ -657,7 +714,10 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				if (bx - ax > 1e-3f && bz - az > 1e-3f)
 				{
-					d.Add(StructureShapes.Box(new Vector3((ax + bx) * 0.5f, y, (az + bz) * 0.5f), new Vector3(bx - ax, slab, bz - az), StructureMaterial.Timber, PieceKey(key + 5, n)));
+					using (d.Builds(FloorRoles))
+					{
+						d.Add(StructureShapes.Box(new Vector3((ax + bx) * 0.5f, y, (az + bz) * 0.5f), new Vector3(bx - ax, slab, bz - az), StructureMaterial.Timber, PieceKey(key + 5, n)));
+					}
 				}
 			}
 			float sx0 = -sx * 0.5f, sx1 = sx * 0.5f, sz0 = -sz * 0.5f, sz1 = sz * 0.5f;
@@ -720,10 +780,13 @@ namespace FishMMO.Shared.WorldDesign
 				rightHoles.Add(sideHole);
 			}
 			StructureMaterial upperWall = h.UpperWallMaterial ?? h.WallMaterial;
-			WallRun(d, new Vector3(-halfW, 0f, -hd + t2), new Vector3(halfW, 0f, -hd + t2), h.Wall, upper0, roof, frontHoles, upperWall, key + 6);
-			WallRun(d, new Vector3(-halfW, 0f, hd - t2), new Vector3(halfW, 0f, hd - t2), h.Wall, upper0, roof, null, upperWall, key + 7);
-			WallRun(d, new Vector3(-halfW + t2, 0f, -hd + h.Wall), new Vector3(-halfW + t2, 0f, hd - h.Wall), h.Wall, upper0, roof, leftHoles, upperWall, key + 8);
-			WallRun(d, new Vector3(halfW - t2, 0f, -hd + h.Wall), new Vector3(halfW - t2, 0f, hd - h.Wall), h.Wall, upper0, roof, rightHoles, upperWall, key + 9);
+			using (d.Builds(UpperWallRoles))
+			{
+				WallRun(d, new Vector3(-halfW, 0f, -hd + t2), new Vector3(halfW, 0f, -hd + t2), h.Wall, upper0, roof, frontHoles, upperWall, key + 6);
+				WallRun(d, new Vector3(-halfW, 0f, hd - t2), new Vector3(halfW, 0f, hd - t2), h.Wall, upper0, roof, null, upperWall, key + 7);
+				WallRun(d, new Vector3(-halfW + t2, 0f, -hd + h.Wall), new Vector3(-halfW + t2, 0f, hd - h.Wall), h.Wall, upper0, roof, leftHoles, upperWall, key + 8);
+				WallRun(d, new Vector3(halfW - t2, 0f, -hd + h.Wall), new Vector3(halfW - t2, 0f, hd - h.Wall), h.Wall, upper0, roof, rightHoles, upperWall, key + 9);
+			}
 			for (int i = 0; i < windows.Count; i++)
 			{
 				Window(d, windows[i].at, windows[i].outward, h.Wall, key + 500 + i * 8);
@@ -830,6 +893,7 @@ namespace FishMMO.Shared.WorldDesign
 			outward = new Vector3(outward.x, 0f, outward.z).normalized;
 			Quaternion turn = Quaternion.LookRotation(outward, Vector3.up);
 			float bottom = Mathf.Min(fromY, 0f) - FoundationDepth;
+			using StructureDraft.PartScope steps = d.Builds(StepRoles);
 			for (int i = 1; i < n; i++)
 			{
 				float top = fromY + rise * i / n, run = (n - i) * StepTread;

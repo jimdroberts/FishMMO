@@ -20,7 +20,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Accepts(WatersideGeology)
 				.Look(BiomeLookClass.Aquatic)
 				.Wildlife(BiomeHabitat.Sea)
-				.HomeTo("Sea turtle", "Crab");
+				.HomeTo("Sea turtle", "Crab")
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

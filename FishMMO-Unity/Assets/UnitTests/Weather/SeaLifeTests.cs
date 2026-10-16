@@ -5,6 +5,8 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using FishMMO.Client;
+using FishMMO.Shared.Biomes;
+using FishMMO.Shared.WorldDesign;
 
 namespace FishMMO.UnitTests.Weather
 {
@@ -18,10 +20,15 @@ namespace FishMMO.UnitTests.Weather
 		private const float Mean = 0f;
 		private const uint Seed = 0xC0FFEEu;
 
-		/// <summary>A sea floor 30 m down, an island rising out of it round (200, 200), nothing past ±1000 m.</summary>
+		/// <summary>
+		/// A sea floor 30 m down, an island rising out of it round (200, 200), nothing past ±1000 m; one biome over all of it,
+		/// whose sea life is <see cref="SeaLife"/> (a template's) when set, else its kinds' own lists of biome names (by
+		/// <see cref="Biome"/>, at each kind's own preferred weight: the placement as it was before the templates weighed it).
+		/// </summary>
 		private sealed class FakeGround : ISeaGround
 		{
 			public string Biome;
+			public List<BiomeSeaLife> SeaLife;
 			public float Temperature = 0.5f;
 			public int Reads;
 
@@ -38,10 +45,27 @@ namespace FishMMO.UnitTests.Weather
 				return true;
 			}
 
-			public void Habitat(Vector3 position, SeaCreatureKind kind, out bool home, out float temperature)
+			public void Habitat(Vector3 position, SeaCreatureKind kind, out bool home, out float homeWeight, out float temperature)
 			{
-				home = SeaLifePlacement.PrefersByName(kind, Biome);
+				if (SeaLife != null)
+				{
+					home = SeaLifePlacement.TryHomeWeight(kind, SeaLife, out homeWeight);
+				}
+				else
+				{
+					home = SeaLifePlacement.PrefersByName(kind, Biome);
+					homeWeight = SeaLifePlacement.KindHomeWeight(kind);
+				}
 				temperature = Temperature;
+			}
+
+			public float HeaviestHome(SeaCreatureKind kind)
+			{
+				if (SeaLife == null)
+				{
+					return SeaLifePlacement.PrefersByName(kind, Biome) ? SeaLifePlacement.KindHomeWeight(kind) : 0f;
+				}
+				return SeaLifePlacement.TryHomeWeight(kind, SeaLife, out float weight) ? weight : 0f;
 			}
 		}
 
@@ -184,6 +208,71 @@ namespace FishMMO.UnitTests.Weather
 			Assert.That(SeaLifePlacement.HabitatWeight(reef, "Ocean", 0.8f), Is.EqualTo(reef.ElsewhereWeight).Within(1e-5f));
 			SeaCreatureKind bait = System.Array.Find(SeaLifeSettings.Defaults(), k => k.Name == "Baitfish");
 			Assert.That(SeaLifePlacement.HabitatWeight(bait, null, -1f), Is.EqualTo(1f), "an open temperature band has no edge");
+		}
+
+		/// <summary>
+		/// The sea life weighed per biome (2026-10-16, I4b): every biome's spec sea life (the weights the authoring writes onto
+		/// its template) places exactly the groups the kinds' own lists of biome names and preferred weights placed before, for
+		/// every biome, every kind and three temperatures (the seeds are fixed, so the groups are compared one for one).
+		/// </summary>
+		[Test]
+		public void Placement_WithEachBiomesSpecWeights_IsWhatTheKindsWeightsPlaced()
+		{
+			var settings = new SeaLifeSettings();
+			int biomes = 0, compared = 0;
+			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
+			{
+				foreach (float temperature in new[] { -0.6f, 0.1f, 0.7f })
+				{
+					var byName = new FakeGround { Biome = entry.Biome, Temperature = temperature };
+					var byTemplate = new FakeGround { Biome = "not read", SeaLife = entry.SeaLife(), Temperature = temperature };
+					List<SeaGroup> before = PlaceArea(settings, byName, false);
+					List<SeaGroup> after = PlaceArea(settings, byTemplate, false);
+					Assert.That(after.Count, Is.EqualTo(before.Count), $"{entry.Biome} at {temperature}");
+					for (int i = 0; i < before.Count; i++)
+					{
+						Assert.That(after[i].Seed, Is.EqualTo(before[i].Seed), $"{entry.Biome} at {temperature}");
+						Assert.That(after[i].Kind, Is.EqualTo(before[i].Kind));
+						Assert.That(after[i].Home, Is.EqualTo(before[i].Home));
+						Assert.That(after[i].Count, Is.EqualTo(before[i].Count));
+					}
+					compared += before.Count;
+				}
+				biomes++;
+			}
+			Assert.That(biomes, Is.EqualTo(83));
+			Assert.That(compared, Is.GreaterThan(1000), "the area should hold life to compare");
+		}
+
+		/// <summary>
+		/// A biome's own weight is the kind's there: heavier than the kind's preferred weight places more groups (the cell asks
+		/// for enough candidates, from the heaviest weight on the ground), nothing for a weight of 0, and a kind it does not
+		/// list lives there as in any other water.
+		/// </summary>
+		[Test]
+		public void Placement_TakesTheBiomesOwnWeight()
+		{
+			var settings = new SeaLifeSettings();
+			int reef = System.Array.FindIndex(settings.Kinds, k => k.Name == "Reef fish");
+			Assert.That(reef, Is.GreaterThanOrEqualTo(0));
+			int Count(List<SeaGroup> groups, int kind) => groups.FindAll(g => g.Kind == kind).Count;
+			List<SeaGroup> usual = PlaceArea(settings, new FakeGround { SeaLife = new List<BiomeSeaLife> { new BiomeSeaLife("Reef fish", 5f) } }, false);
+			List<SeaGroup> heavy = PlaceArea(settings, new FakeGround { SeaLife = new List<BiomeSeaLife> { new BiomeSeaLife("Reef fish", 20f) } }, false);
+			List<SeaGroup> none = PlaceArea(settings, new FakeGround { SeaLife = new List<BiomeSeaLife> { new BiomeSeaLife("reef FISH", 0f) } }, false);
+			List<SeaGroup> unlisted = PlaceArea(settings, new FakeGround { SeaLife = new List<BiomeSeaLife>() }, false);
+			List<SeaGroup> ocean = PlaceArea(settings, new FakeGround { Biome = "Ocean" }, false);
+			Assert.That(Count(usual, reef), Is.GreaterThan(0));
+			Assert.That(Count(heavy, reef), Is.GreaterThan(2 * Count(usual, reef)), "four times the weight, past the kind's own cap");
+			Assert.That(Count(none, reef), Is.EqualTo(0), "a weight of nothing, matched ignoring case");
+			Assert.That(Count(unlisted, reef), Is.EqualTo(Count(ocean, reef)), "unlisted: as in any other water");
+			// The kinds a biome does not list are placed alike whatever it gives the others.
+			for (int k = 0; k < settings.Kinds.Length; k++)
+			{
+				if (k != reef)
+				{
+					Assert.That(Count(heavy, k), Is.EqualTo(Count(unlisted, k)), settings.Kinds[k].Name);
+				}
+			}
 		}
 
 		[Test]

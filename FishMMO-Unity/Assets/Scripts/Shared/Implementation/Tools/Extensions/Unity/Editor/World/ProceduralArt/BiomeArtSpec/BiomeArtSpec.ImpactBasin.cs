@@ -15,7 +15,9 @@ namespace FishMMO.Shared.WorldDesign
 				C(Ground.CliffRock), Ground.Regolith, Ground.Regolith)
 				// The class the old name reading gave: its name has no keyword, so its dry climate gave Arid.
 				.Look(BiomeLookClass.Arid)
-				.Wildlife(BiomeHabitat.Alien);
+				// Alien ground alone: the client reads that live from the template's air (BiomeHabitats.Live), never stored.
+				.Wildlife(BiomeHabitat.None)
+				.Moat(BiomeMoatWater.Dry);
 		}
 	}
 }

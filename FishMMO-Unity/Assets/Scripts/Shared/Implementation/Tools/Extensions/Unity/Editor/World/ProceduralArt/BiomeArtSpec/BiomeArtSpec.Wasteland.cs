@@ -15,7 +15,8 @@ namespace FishMMO.Shared.WorldDesign
 					D(Ground.Reg, 96f, 2f, -1f, -1f, Stones(Pebbles("Grey"), 6f), Logs("Petrified logs", 0.01f, 16f, Wood("PetrifiedLog"), 20f))),
 				C(Ground.Rock), Ground.Mud, Ground.Gravel)
 				.Look(BiomeLookClass.Volcanic)
-				.Wildlife(BiomeHabitat.Barren);
+				.Wildlife(BiomeHabitat.Barren)
+				.Moat(BiomeMoatWater.Dry);
 		}
 	}
 }

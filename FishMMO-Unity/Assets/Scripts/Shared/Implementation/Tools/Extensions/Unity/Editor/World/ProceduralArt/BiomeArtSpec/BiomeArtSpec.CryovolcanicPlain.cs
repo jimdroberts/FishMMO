@@ -15,7 +15,9 @@ namespace FishMMO.Shared.WorldDesign
 					D(Ground.Lineae, 64f)),
 				C(Ground.Ice), Ground.Ice, Ground.Ice)
 				.Look(BiomeLookClass.Alien)
-				.Wildlife(BiomeHabitat.Alien);
+				// Alien ground alone: the client reads that live from the template's air (BiomeHabitats.Live), never stored.
+				.Wildlife(BiomeHabitat.None)
+				.Moat(BiomeMoatWater.Frozen);
 		}
 	}
 }

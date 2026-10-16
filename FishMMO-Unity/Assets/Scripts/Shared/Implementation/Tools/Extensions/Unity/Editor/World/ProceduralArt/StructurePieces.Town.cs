@@ -34,12 +34,12 @@ namespace FishMMO.Shared.WorldDesign
 			// outside face toward -z. Not baked into a building: each door is a server-run scene object (PointOfInterestDoors).
 			StructurePiece leaf = Piece(list, "DoorLeaf", StructureStyle.Timber, StructureSize.Small,
 				"A door's leaf, 1×2 m: v0 planks on ledges and a brace with strap hinges and a ring; v1 boarded oak studded with iron; v2 iron-plated, riveted.",
-				DoorLeaf, "door");
+				Under(DoorRoles, DoorLeaf), "door");
 			leaf.Variants = 3;
 			leaf.Collides = false;
 			Piece(list, "FieldFence", StructureStyle.Timber, StructureSize.Small,
 				"Three metres of field fence along x: v0 post and two rails, v1 post and three rails, weathered and a little uneven.",
-				FieldFence, "farm").ModuleLength = 3f;
+				Under(FenceRoles, FieldFence), "farm").ModuleLength = 3f;
 		}
 
 		// ── Door leaf ─────────────────────────────────────────────────
@@ -349,9 +349,12 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			GableRoof(d, depth, width, eave, 1.5f, 0.45f, 0.12f, StructureMaterial.Timber, 20, Matrix4x4.TRS(Vector3.zero, Quaternion.Euler(0f, 90f, 0f), Vector3.one));
-			// The back wall: planks, or stone.
-			d.Add(StructureShapes.Box(new Vector3(0f, eave * 0.5f - 0.15f, depth * 0.5f - 0.15f), new Vector3(width - 0.2f, eave + 0.3f, 0.18f),
-				d.Variant == 1 ? StructureMaterial.Fieldstone : StructureMaterial.Timber, 30)).Grain = Vector3.up;
+			// The back wall: planks (the smithy's log wall in a palette), or stone.
+			using (d.Builds(WallRoles))
+			{
+				d.Add(StructureShapes.Box(new Vector3(0f, eave * 0.5f - 0.15f, depth * 0.5f - 0.15f), new Vector3(width - 0.2f, eave + 0.3f, 0.18f),
+					d.Variant == 1 ? StructureMaterial.Fieldstone : StructureMaterial.Timber, 30)).Grain = Vector3.up;
+			}
 			// The forge: a stone hearth, its fire bed, a hood and a chimney through the roof.
 			var forge = new Vector3(1.4f, 0f, 1.3f);
 			d.Add(StructureShapes.ChamferBox(forge + new Vector3(0f, 0.35f, 0f), new Vector3(1.8f, 1.1f, 1.5f), d.Bevel(0.04f), StructureMaterial.Fieldstone, 40));

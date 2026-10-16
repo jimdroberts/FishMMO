@@ -35,7 +35,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				Rivers = new List<RiverPath>(),
 				Lakes = new List<PointOfInterestLake>(),
 			},
-			Biomes = new List<PointOfInterestBiome> { new PointOfInterestBiome("Plains", 11), new PointOfInterestBiome("Forest", 12) },
+			Biomes = new List<PointOfInterestBiome> { PointOfInterestPlannerTests.Hosting("Plains", 11, null), PointOfInterestPlannerTests.Hosting("Forest", 12, null) },
 			BiomeAt = (x, z) => x < 0f ? 0 : 1,
 			HardnessAt = (x, z, y) => 0.6f,
 			Settings = new PointOfInterestPlanSettings { Capital = capital },

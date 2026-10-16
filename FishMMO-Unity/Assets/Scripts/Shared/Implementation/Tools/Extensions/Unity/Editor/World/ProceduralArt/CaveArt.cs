@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 using UnityEditor;
 using UnityEngine;
 
@@ -213,6 +214,79 @@ namespace FishMMO.Shared.WorldDesign
 		/// 2 green, 3 amber); the seed unchanged for a hue of −1.
 		/// </summary>
 		public static uint EmitterSeed(uint seed, int emitterHue) => emitterHue < 0 ? seed : (seed & ~0x300u) | ((uint)(emitterHue & 3) << 8);
+
+		// ── Cave crystals (2026-10-16, I6c) ───────────────────────────
+
+		/// <summary>
+		/// The generated prefab name of a cave crystal's variant (the variant wraps round): the rock art's formation for selenite
+		/// and frost crystal (<c>Rocks/Formations/…Gypsum_Crystal_2</c>), else its own (<c>Cave/Cave_Mineral_Amethyst_2</c>).
+		/// </summary>
+		public static string MineralPrefabName(BiomeCaveCrystalKind kind, int variant)
+		{
+			CaveMineral mineral = ProceduralArtCatalogue.CaveMineralOf(kind);
+			if (mineral.Formation)
+			{
+				return RockArtNames.FormationPrefab(mineral.FormationRock, mineral.FormationShape, Wrap(variant, RockTypes.VariantCount));
+			}
+			return ProceduralArtCatalogue.CaveMineralPrefab(mineral.Kind, Wrap(variant, ProceduralArtCatalogue.CaveMineralVariants));
+		}
+
+		/// <summary>A cave crystal's prefab (null until the art is generated: a formation's by the rock art, the rest by the structures').</summary>
+		public static GameObject MineralPrefab(BiomeCaveCrystalKind kind, int variant)
+			=> AssetDatabase.LoadAssetAtPath<GameObject>(ProceduralArtCatalogue.PrefabPath(MineralPrefabName(kind, variant)));
+
+		/// <summary>
+		/// A cave crystal built in its own habit as a piece of floor glow art (its light, reach and hue its kind's), for what lines
+		/// a cave's ways where the biome grows a glowing kind. False for a formation's crystal (selenite, frost crystal: not glow
+		/// art) and, with everything but the prefab filled in, while the art is not generated.
+		/// </summary>
+		public static bool TryMineral(BiomeCaveCrystalKind kind, int variant, out CaveGlowArt art)
+		{
+			CaveMineral mineral = ProceduralArtCatalogue.CaveMineralOf(kind);
+			art = default;
+			if (mineral.Formation)
+			{
+				return false;
+			}
+			int v = Wrap(variant, ProceduralArtCatalogue.CaveMineralVariants);
+			MeasureMineral(mineral.Habit, v, out float height, out float radius, out float root);
+			string name = ProceduralArtCatalogue.CaveMineralPrefab(kind, v);
+			art = new CaveGlowArt
+			{
+				Prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProceduralArtCatalogue.PrefabPath(name)),
+				Name = name,
+				Kind = CaveGlowKind.Crystal,
+				Hue = mineral.Hue.Name,
+				Mount = CaveMount.Floor,
+				Height = height,
+				Radius = radius,
+				Root = root,
+				Light = mineral.Hue.Light,
+				SuggestedReach = mineral.Hue.EmitterHue >= 0 ? ProceduralArtCatalogue.CaveMineralReach : 0f,
+				EmitterHue = mineral.Hue.EmitterHue,
+				Collides = true,
+			};
+			return art.Prefab != null;
+		}
+
+		private static readonly Dictionary<(CaveMineralHabit, int), (float height, float radius, float root)> mineralsMeasured = new Dictionary<(CaveMineralHabit, int), (float, float, float)>();
+
+		/// <summary>A cave crystal habit's variant's extents on its floor mount, from its finest level at the art's seed (built once).</summary>
+		private static void MeasureMineral(CaveMineralHabit habit, int variant, out float height, out float radius, out float root)
+		{
+			lock (mineralsMeasured)
+			{
+				if (!mineralsMeasured.TryGetValue((habit, variant), out (float height, float radius, float root) m))
+				{
+					Bounds b = CaveGlowMeshes.BuildMineral(habit, variant, 0, ProceduralArtCatalogue.DefaultSeed).Bounds;
+					m = (b.max.y, Mathf.Max(Mathf.Max(b.max.x, -b.min.x), Mathf.Max(b.max.z, -b.min.z)), Mathf.Max(0f, -b.min.y));
+					mineralsMeasured[(habit, variant)] = m;
+				}
+				height = m.height;
+				radius = m.radius;
+				root = m.root;
+			}
+		}
 
 		private static int Wrap(int i, int n) => n <= 0 ? 0 : ((i % n) + n) % n;
 

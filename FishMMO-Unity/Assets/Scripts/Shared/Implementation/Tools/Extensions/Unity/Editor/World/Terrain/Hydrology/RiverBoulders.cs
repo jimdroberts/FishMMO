@@ -129,25 +129,32 @@ namespace FishMMO.Shared.WorldDesign
 			return result;
 		}
 
-		/// <summary>The boulder art for a geology rock name.</summary>
+		/// <summary>
+		/// The boulder art for a geology rock name: the stone of that rock (2026-10-16: every rock of the crust, scoria and
+		/// breccia have stones of their own, ProceduralArtCatalogue.StoneRockMaterials), granite's for granite (its legacy
+		/// name, Grey), ice for snow and ice, and granite's for anything without one. Until then Andesite and Tuff fell to
+		/// Basalt, Conglomerate to Sandstone, Chalk and Marble to Limestone, and every other rock to Grey.
+		/// </summary>
 		public static string Material(string rockType)
 		{
 			switch (rockType)
 			{
-				case "Basalt":
-				case "Andesite":
-				case "Tuff":
-					return "Basalt";
-				case "Sandstone":
-				case "Conglomerate":
-					return "Sandstone";
-				case "Limestone":
-				case "Chalk":
-				case "Marble":
-					return "Limestone";
-				default:
+				case null:
+				case "":
+				case "Granite":
 					return "Grey";
+				case "WaterIce":
+				case "Firn":
+					return "Ice";
 			}
+			foreach (RockMaterialSpec stone in ProceduralArtCatalogue.AllRockMaterials)
+			{
+				if (stone.WearsRockType == rockType || (stone.WearsRockType == null && stone.Name == rockType && RockTypes.TryGet(rockType, out _)))
+				{
+					return stone.Name;
+				}
+			}
+			return "Grey";
 		}
 
 		/// <summary>

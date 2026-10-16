@@ -31,7 +31,7 @@ namespace FishMMO.Shared.WorldDesign
 	public static partial class BiomeArtGenerator
 	{
 		/// <summary>The steps <see cref="RockSurfaceSteps"/> and <see cref="RockSteps"/> yield.</summary>
-		private static int RockStepCount() => 1 + 1 + RockTypes.All.Length + 3;
+		private static int RockStepCount() => 1 + 1 + ProceduralArtCatalogue.AllRockMaterials.Length + RockTypes.All.Length + 3;
 
 		/// <summary>The rock and ice surface maps: one step, before the texture import.</summary>
 		private static IEnumerable<string> RockSurfaceSteps(Context c)
@@ -49,11 +49,21 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/// <summary>Materials, formations type by type, ice, cliff rocks, then cliff sections: after the legacy rocks.</summary>
+		/// <summary>
+		/// Materials, stones material by material, formations type by type, ice, cliff rocks, then cliff sections: after
+		/// the shared materials step, which writes the stones' own materials (a stone wearing its rock type's waits for
+		/// this one's).
+		/// </summary>
 		private static IEnumerable<string> RockSteps(Context c)
 		{
 			yield return "Rock, ice and cliff materials";
 			WriteRockMaterials(c);
+			foreach (RockMaterialSpec stone in ProceduralArtCatalogue.AllRockMaterials)
+			{
+				// "Rocks" is the Rocks family's step (ProceduralArtFamilies.FamiliesOfStep).
+				yield return "Rocks: " + stone.Name;
+				WriteStones(c, stone);
+			}
 			foreach (RockType type in RockTypes.All)
 			{
 				yield return "Rock formations: " + type.Name;
@@ -181,6 +191,42 @@ namespace FishMMO.Shared.WorldDesign
 			m.SetFloat("_FishWeatherAmount", 1f);
 			// Ice holds no moss.
 			m.SetFloat("_FishMoss", 0f);
+		}
+
+		// ── Stones: each material's boulders, small rocks and pebbles ─
+
+		/// <summary>
+		/// A stone material's own shapes (<see cref="StoneStyles"/>, 2026-10-16): its three boulders, tree-channel props
+		/// with a mesh collider from the last level as before, and its small rocks and pebbles, one-mesh detail prefabs
+		/// casting no shadow as before. The prefab names are the ones they always had.
+		/// </summary>
+		private static void WriteStones(Context c, RockMaterialSpec stone)
+		{
+			Material material = MaterialOrNull(c, ProceduralArtCatalogue.StoneMaterial(in stone));
+			StoneSet set = StoneStyles.For(stone.Name);
+			if (!StoneStyles.Has(stone.Name))
+			{
+				c.Report.Problems.Add($"Stone '{stone.Name}' has no shapes of its own in StoneStyles; it was built with granite's.");
+			}
+			int[] res = ProceduralArtCatalogue.BoulderResolution;
+			foreach (RockShape slot in ProceduralArtCatalogue.BoulderShapes)
+			{
+				StoneShape shape = set.Boulder(slot.Name);
+				var meshes = new Mesh[res.Length];
+				for (int lod = 0; lod < res.Length; lod++)
+				{
+					string name = ProceduralArtCatalogue.BoulderMesh(stone.Name, slot.Name, lod);
+					MeshBuilder built = ShouldWrite(c, ProceduralArtCatalogue.MeshPath(name)) ? StoneMeshes.Build(in shape, res[lod], c.Seed) : null;
+					meshes[lod] = WriteOrLoadMesh(c, built, name, true);
+				}
+				WriteProp(c, ProceduralArtCatalogue.BoulderPrefab(stone.Name, slot.Name), meshes, material);
+			}
+			string rocksName = ProceduralArtCatalogue.SmallRocksMesh(stone.Name);
+			string pebblesName = ProceduralArtCatalogue.PebblesMesh(stone.Name);
+			Mesh rocks = WriteOrLoadMesh(c, ShouldWrite(c, ProceduralArtCatalogue.MeshPath(rocksName)) ? StoneMeshes.BuildGroup(set.Rocks, c.Seed) : null, rocksName, true);
+			Mesh pebbles = WriteOrLoadMesh(c, ShouldWrite(c, ProceduralArtCatalogue.MeshPath(pebblesName)) ? StoneMeshes.BuildGroup(set.Pebbles, c.Seed) : null, pebblesName, true);
+			WritePrefab(c, ProceduralArtCatalogue.SmallRocksPrefab(stone.Name), root => AddRenderer(root, rocks, new[] { material }, ShadowCastingMode.Off));
+			WritePrefab(c, ProceduralArtCatalogue.PebblesPrefab(stone.Name), root => AddRenderer(root, pebbles, new[] { material }, ShadowCastingMode.Off));
 		}
 
 		// ── Props: formations, ice boulders, seracs ───────────────────

@@ -16,7 +16,8 @@ namespace FishMMO.Shared.WorldDesign
 					Outcrops("Sulphide smokers", 0.01f, 16f, F(RockTypes.Sulphide, "Smoker"), 30f), Outcrops("Carbonate towers", 0.004f, 30f, F(RockTypes.Chalk, "Pinnacle"), 30f))
 				.Moved("main", "Coral").Moved("lakebed", "Coral")
 				.Look(BiomeLookClass.Aquatic)
-				.Wildlife(BiomeHabitat.Barren);
+				.Wildlife(BiomeHabitat.Barren)
+				.Moat(BiomeMoatWater.Frozen);
 		}
 	}
 }

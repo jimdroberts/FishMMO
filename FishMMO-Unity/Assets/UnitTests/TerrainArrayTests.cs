@@ -264,7 +264,7 @@ namespace FishMMO.UnitTests
 			Assert.That(back.MaskRemapMax.w, Is.EqualTo(0.9f).Within(1e-6f));
 			Assert.That(back.HasMask, Is.True);
 
-			Assert.That(st.Length, Is.EqualTo(TerrainArrayLayerParams.MaximumLayers), "always the shader's full length");
+			Assert.That(st.Length, Is.EqualTo(TerrainArrayLayerParams.LegacyTableLength), "the length the arrays had as the shader's own uniforms (the layer table pads to every layer)");
 			Assert.That(st[0], Is.EqualTo(new Vector4(1f / 15f, 1f / 15f, 0f, 0f)), "unused slots hold a neutral layer");
 		}
 

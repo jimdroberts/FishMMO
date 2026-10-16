@@ -10,8 +10,8 @@ using UnityEngine.ResourceManagement.ResourceLocations;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Hands each terrain tile of a scene what the array terrain shader reads: the tile's own
-	/// alphamaps as control maps, and the scene's baked texture arrays and per-layer numbers.
+	/// Hands each terrain tile of a scene what the array terrain shader reads: the tile's index map (its four strongest
+	/// layers per alphamap texel, baked here from its alphamaps), and the scene's baked texture arrays and layer table.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -23,8 +23,10 @@ namespace FishMMO.Shared
 	/// added in the terrain inspector) or the scene's arrays are rebaked.
 	/// </para>
 	/// <para>
-	/// <b>Painting needs nothing.</b> The control maps are the alphamap textures themselves, bound
-	/// by reference, so a brush stroke that writes them is on screen the same frame.
+	/// <b>Painting stays live.</b> The alphamaps are still the weights everything edits; each tile's index map is baked from
+	/// them on the GPU (<see cref="TerrainIndexMapBaker"/>) when it is bound and, in the editor, again whenever they change
+	/// (a brush stroke, a repaint, an undo), so a stroke is on screen the same frame. A scene may carry up to
+	/// <see cref="TerrainArrayLayerParams.MaximumLayers"/> layers and a pixel still reads four index texels.
 	/// </para>
 	/// <para>
 	/// <b>The arrays are found by the scene's name</b> (<see cref="TerrainArraySet"/>): off disk in
@@ -55,8 +57,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		public const string BackdropShaderName = "FishMMO/Backdrop Ground";
 
-		/// <summary>The most alphamaps (control maps) the shader reads.</summary>
-		public const int MaximumControlMaps = TerrainArrayLayerParams.MaximumLayers / 4;
+		/// <summary>The most control maps the backdrop's shader reads (SceneBackdropBuilder bakes its own); tiles read index maps.</summary>
+		public const int MaximumControlMaps = 8;
 
 		[Tooltip("The tiles to bind. Empty means every terrain in this scene.")]
 		[SerializeField] private List<Terrain> terrains = new List<Terrain>();
@@ -109,22 +111,18 @@ namespace FishMMO.Shared
 			Shader.PropertyToID("_FishControl6"), Shader.PropertyToID("_FishControl7"),
 		};
 		private static readonly int ControlTexelSizeId = Shader.PropertyToID("_FishControl0_TexelSize");
-		private static readonly int ControlEmptyId = Shader.PropertyToID("_FishControlEmpty");
-		private static readonly Unity.Profiling.ProfilerMarker EmptyScanMarker = new Unity.Profiling.ProfilerMarker("TerrainArrayBinder.FindEmptyControls");
+		private static readonly int IndexMapId = Shader.PropertyToID("_FishIndexMap");
+		private static readonly int IndexTexelSizeId = Shader.PropertyToID("_FishIndexMap_TexelSize");
 		private static readonly int InfoId = Shader.PropertyToID("_FishArrayInfo");
 		private static readonly int AlbedoId = Shader.PropertyToID("_FishAlbedoArray");
 		private static readonly int NormalId = Shader.PropertyToID("_FishNormalArray");
 		private static readonly int MaskId = Shader.PropertyToID("_FishMaskArray");
-		private static readonly int LayerSTId = Shader.PropertyToID("_FishLayerST");
-		private static readonly int LayerTintId = Shader.PropertyToID("_FishLayerTint");
-		private static readonly int LayerMaskOffsetId = Shader.PropertyToID("_FishLayerMaskOffset");
-		private static readonly int LayerMaskScaleId = Shader.PropertyToID("_FishLayerMaskScale");
-		private static readonly int LayerSurfaceId = Shader.PropertyToID("_FishLayerSurface");
-		private static readonly int LayerFloraId = Shader.PropertyToID("_FishLayerFlora");
+		private static readonly int LayerTableId = Shader.PropertyToID("_FishLayerTable");
 		private static readonly int PathLayersId = Shader.PropertyToID("_FishPathLayers");
-		private static readonly int PathEarthForId = Shader.PropertyToID("_FishPathEarthFor");
-		private static readonly int PathRoadForId = Shader.PropertyToID("_FishPathRoadFor");
-		private static readonly int PathStoneForId = Shader.PropertyToID("_FishPathStoneFor");
+
+		/// <summary>Tiles whose index map the editor has checked against the CPU bake this session (<see cref="TerrainIndexMapBaker.Check"/>): the first few.</summary>
+		private static int indexChecks;
+		private const int IndexChecksPerSession = 4;
 
 		// One block per tile, made on first use: Unity refuses to allocate a property block in a field
 		// initializer, and a block per tile is right whether or not the terrain copies what it is given.
@@ -132,6 +130,10 @@ namespace FishMMO.Shared
 		private TerrainArraySet set;
 		private readonly List<Terrain> bound = new List<Terrain>();
 		private readonly List<Renderer> boundBackdrop = new List<Renderer>();
+		// Each tile's index map and the terrain data it was baked from (a tile given new data is baked again).
+		private readonly Dictionary<Terrain, (RenderTexture Map, TerrainData Data)> indexMaps = new Dictionary<Terrain, (RenderTexture, TerrainData)>();
+		// The scene's per-layer numbers and path slices, one texture for every tile and backdrop renderer (TerrainLayerTable).
+		private Texture2D layerTable;
 #if !UNITY_EDITOR
 		private AsyncOperationHandle<TerrainArraySet> handle;
 #endif
@@ -158,6 +160,19 @@ namespace FishMMO.Shared
 			TerrainCallbacks.textureChanged -= OnTerrainTextureChanged;
 #endif
 			Unbind();
+			ReleaseIndexMaps(null);
+			if (layerTable != null)
+			{
+				if (Application.isPlaying)
+				{
+					Destroy(layerTable);
+				}
+				else
+				{
+					DestroyImmediate(layerTable);
+				}
+				layerTable = null;
+			}
 #if !UNITY_EDITOR
 			if (handle.IsValid())
 			{
@@ -192,12 +207,20 @@ namespace FishMMO.Shared
 		public void Push()
 		{
 			Unbind();
-			foreach (Terrain terrain in EffectiveTerrains())
+			FillLayerTable();
+			List<Terrain> terrains = EffectiveTerrains();
+			ReleaseIndexMaps(terrains);
+			foreach (Terrain terrain in terrains)
 			{
-				if (PushTo(terrain))
+				if (PushTo(terrain, rebake: Application.isEditor))
 				{
 					bound.Add(terrain);
 				}
+			}
+			if (!Application.isEditor)
+			{
+				// A player bakes once per tile: the alphamaps' scratch copy (a map's worth per four layers) is not kept.
+				TerrainIndexMapBaker.ReleaseScratch();
 			}
 			foreach (Renderer renderer in BackdropRenderers())
 			{
@@ -323,76 +346,156 @@ namespace FishMMO.Shared
 			}
 		}
 
-		private bool PushTo(Terrain terrain) => PushTo(terrain, Application.isPlaying);
-
-		/// <param name="findEmpty">
-		/// Look for control maps that are zero over the whole tile, which the shader then never samples
-		/// (<c>_FishControlEmpty</c>): a tile at the edge of a biome uses one or two of a scene's maps, and every pixel of it
-		/// read all of them. Only while playing, when nothing writes the alphamaps: in the editor a brush, a repaint or a
-		/// cut can put weight into a map the mask says is empty, so there every map is read (which draws the same picture).
+		/// <param name="rebake">
+		/// Bake the tile's index map again even when it has one. Always in the editor, where a cut, a repaint, a brush or an
+		/// undo may have written the alphamaps since; in a player only when the tile has none of its data's size (nothing
+		/// writes alphamaps there).
 		/// </param>
-		private bool PushTo(Terrain terrain, bool findEmpty)
+		private bool PushTo(Terrain terrain, bool rebake)
 		{
 			if (terrain == null || terrain.terrainData == null)
 			{
 				return false;
 			}
 			MaterialPropertyBlock block = BlockFor(terrain);
-
 			TerrainData data = terrain.terrainData;
-			int controls = Mathf.Min(data.alphamapTextureCount, MaximumControlMaps);
-			int empty = 0;
-			for (int k = 0; k < controls; k++)
-			{
-				Texture2D map = data.GetAlphamapTexture(k);
-				block.SetTexture(ControlIds[k], map);
-				if (findEmpty && IsAllZero(map))
-				{
-					empty |= 1 << k;
-				}
-			}
-			block.SetVector(ControlEmptyId, new Vector4(empty, 0f, 0f, 0f));
-			if (controls > 0)
-			{
-				Texture2D first = data.GetAlphamapTexture(0);
-				block.SetVector(ControlTexelSizeId, new Vector4(1f / first.width, 1f / first.height, first.width, first.height));
-			}
 
-			PushArrays(block, controls);
+			// The index map, baked only once there are arrays to draw it with (before then the ground is plain grey, and a
+			// player has no bake shader until the set brings it).
+			RenderTexture index = null;
+			if (set != null && set.IsUsable && data.alphamapTextureCount > 0)
+			{
+				index = IndexMapFor(terrain, data, rebake);
+			}
+			block.SetTexture(IndexMapId, index != null ? index : TerrainIndexMapBaker.Blank);
+			int res = index != null ? index.width : 1;
+			block.SetVector(IndexTexelSizeId, new Vector4(1f / res, 1f / res, res, res));
+
+			PushArrays(block, index != null ? 1 : 0);
 			terrain.SetSplatMaterialPropertyBlock(block);
 			return true;
 		}
 
 		/// <summary>
-		/// True when every texel of a control map is zero, so it adds no weight anywhere on its tile. False whenever that
-		/// cannot be read cheaply and for certain (not readable on the CPU, or a format whose zero bits are not a zero
-		/// weight), which only means the map is sampled as before.
+		/// The tile's index map, baked when it has none of its data's size, its data changed, or <paramref name="rebake"/>;
+		/// null when it cannot be baked here (the ground then draws its first layer, with one warning).
 		/// </summary>
-		public static bool IsAllZero(Texture2D map)
+		private RenderTexture IndexMapFor(Terrain terrain, TerrainData data, bool rebake)
 		{
-			if (map == null || !map.isReadable || (map.format != TextureFormat.RGBA32 && map.format != TextureFormat.ARGB32))
+			indexMaps.TryGetValue(terrain, out (RenderTexture Map, TerrainData Data) entry);
+			bool fresh = false;
+			if (!TerrainIndexMapBaker.Fits(entry.Map, data))
 			{
-				return false;
+				if (entry.Map != null)
+				{
+					entry.Map.Release();
+					DestroyMap(entry.Map);
+				}
+				entry = (TerrainIndexMapBaker.Create(data.alphamapResolution, data.alphamapResolution, 1, $"{terrain.name} index map"), data);
+				fresh = true;
 			}
-			using (EmptyScanMarker.Auto())
+			if (fresh || rebake || entry.Data != data)
 			{
-				try
+				entry.Data = data;
+				if (!TerrainIndexMapBaker.Bake(data, TerrainIndexMapBaker.ShaderOf(set), entry.Map))
 				{
-					Unity.Collections.NativeArray<uint> texels = map.GetPixelData<uint>(0);
-					for (int i = 0; i < texels.Length; i++)
-					{
-						if (texels[i] != 0u)
-						{
-							return false;
-						}
-					}
-					return texels.Length > 0;
+					entry.Map.Release();
+					DestroyMap(entry.Map);
+					indexMaps.Remove(terrain);
+					return null;
 				}
-				catch (System.Exception)
+#if UNITY_EDITOR
+				if (fresh && indexChecks < IndexChecksPerSession)
 				{
-					return false;
+					// Bound from data at rest (a load, a reload, a rebind), so the CPU copy is current: worth one look.
+					indexChecks++;
+					TerrainIndexMapBaker.Check(terrain, entry.Map);
+				}
+#endif
+			}
+			indexMaps[terrain] = entry;
+			return entry.Map;
+		}
+
+		/// <summary>
+		/// The index map bound to a terrain by any enabled binder, or null: for whatever else reads the ground's layers (the
+		/// contact blend bakes its own copies, the same way).
+		/// </summary>
+		public static RenderTexture IndexMapOf(Terrain terrain)
+		{
+			foreach (TerrainArrayBinder binder in active)
+			{
+				if (binder != null && binder.indexMaps.TryGetValue(terrain, out (RenderTexture Map, TerrainData Data) entry) && entry.Map != null)
+				{
+					return entry.Map;
 				}
 			}
+			return null;
+		}
+
+		/// <summary>Frees the index maps of tiles not in <paramref name="keep"/> (all of them for null).</summary>
+		private void ReleaseIndexMaps(List<Terrain> keep)
+		{
+			var drop = new List<Terrain>();
+			foreach (KeyValuePair<Terrain, (RenderTexture Map, TerrainData Data)> pair in indexMaps)
+			{
+				if (keep == null || pair.Key == null || !keep.Contains(pair.Key))
+				{
+					drop.Add(pair.Key);
+				}
+			}
+			foreach (Terrain terrain in drop)
+			{
+				RenderTexture map = indexMaps[terrain].Map;
+				if (map != null)
+				{
+					map.Release();
+					DestroyMap(map);
+				}
+				indexMaps.Remove(terrain);
+			}
+		}
+
+		private static void DestroyMap(Object map)
+		{
+			if (Application.isPlaying)
+			{
+				Destroy(map);
+			}
+			else
+			{
+				DestroyImmediate(map);
+			}
+		}
+
+		/// <summary>
+		/// The scene's layer table from the current set and the scene's path maps (<see cref="TerrainLayerTable"/>): built once
+		/// per push, shared by every tile and backdrop renderer.
+		/// </summary>
+		private void FillLayerTable()
+		{
+			if (layerTable == null)
+			{
+				layerTable = TerrainLayerTable.Create($"{SceneKey} layer table");
+			}
+			Scene scene = gameObject.scene;
+			TerrainLayerTable.Fill(layerTable, TerrainLayerTable.Pack(set != null && set.IsUsable ? set : null,
+				ScenePathSurfaceBinder.EarthMapOf(scene), ScenePathSurfaceBinder.RoadMapOf(scene), ScenePathSurfaceBinder.StoneMapOf(scene),
+				BackdropChannels()));
+		}
+
+		/// <summary>The scene layer each channel of the scene's backdrop holds (<see cref="SceneBackdrop.ControlLayers"/>), or null: itself.</summary>
+		private int[] BackdropChannels()
+		{
+			foreach (Renderer renderer in BackdropRenderers())
+			{
+				SceneBackdrop backdrop = renderer != null ? renderer.GetComponentInParent<SceneBackdrop>(true) : null;
+				if (backdrop != null && backdrop.ControlLayers != null && backdrop.ControlLayers.Length > 0)
+				{
+					return backdrop.ControlLayers;
+				}
+			}
+			return null;
 		}
 
 		/// <summary>
@@ -417,8 +520,9 @@ namespace FishMMO.Shared
 			renderer.SetPropertyBlock(block);
 		}
 
-		/// <summary>The scene's arrays and per-layer numbers, and the info vector that says what is bound.</summary>
-		private void PushArrays(MaterialPropertyBlock block, int controls)
+		/// <summary>The scene's arrays and layer table, and the info vector that says what is bound.</summary>
+		/// <param name="weights">For a tile, 1 when its index map is bound; for a backdrop renderer, its control maps.</param>
+		private void PushArrays(MaterialPropertyBlock block, int weights)
 		{
 			bool usable = set != null && set.IsUsable;
 			if (usable)
@@ -432,26 +536,20 @@ namespace FishMMO.Shared
 				{
 					block.SetTexture(MaskId, set.Mask);
 				}
-				block.SetVectorArray(LayerSTId, set.LayerST);
-				block.SetVectorArray(LayerTintId, set.LayerTint);
-				block.SetVectorArray(LayerMaskOffsetId, set.LayerMaskOffset);
-				block.SetVectorArray(LayerMaskScaleId, set.LayerMaskScale);
-				block.SetVectorArray(LayerSurfaceId, set.LayerSurface);
-				// What each layer is made of for its planet (FishFlora.hlsl FishFloraGround): living ground takes its biome's
-				// ground shift, bare ground the world's own colour where the air is thin. Worked out once per set from its
-				// layer names; inert while the looks are not published.
-				block.SetVectorArray(LayerFloraId, set.LayerFlora());
+			}
+			/* Every layer's tiling, tint, mask remap, surface, what it is made of for its planet (FishFlora.hlsl FishFloraGround:
+			 * living ground takes its biome's ground shift, bare ground the world's own colour where the air is thin), and its
+			 * own biome's path, road and cobble slices (a desert's way is packed sand, a forest's a littered track, and each
+			 * biome's streets are paved with its own stone): one texture, a column per layer. */
+			if (layerTable != null)
+			{
+				block.SetTexture(LayerTableId, layerTable);
 			}
 			// The slices the scene's paths are surfaced from (the scene's own palette); -1 where it has none or nothing is baked.
 			block.SetVector(PathLayersId, usable ? ScenePathSurfaceBinder.LayersOf(gameObject.scene) : new Vector4(-1f, -1f, -1f, -1f));
-			// And each ground layer's own biome's path, road and cobble slices: a desert's way is packed sand, a forest's a
-			// littered track, and each biome's streets are paved with its own stone.
-			block.SetVectorArray(PathEarthForId, ScenePathSurfaceBinder.EarthMapOf(gameObject.scene));
-			block.SetVectorArray(PathRoadForId, ScenePathSurfaceBinder.RoadMapOf(gameObject.scene));
-			block.SetVectorArray(PathStoneForId, ScenePathSurfaceBinder.StoneMapOf(gameObject.scene));
 			block.SetVector(InfoId, new Vector4(
 				usable ? set.LayerCount : 0f,
-				controls,
+				weights,
 				usable && set.Normal != null ? 1f : 0f,
 				usable && set.Mask != null ? 1f : 0f));
 		}
@@ -501,8 +599,8 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			// Written in the editor: every map read, since the stroke may have put weight in one that had none.
-			PushTo(terrain, false);
+			// Its index map baked again from what was just written (on the GPU, so a stroke still in progress shows).
+			PushTo(terrain, rebake: true);
 		}
 #else
 		private void BeginLoad()

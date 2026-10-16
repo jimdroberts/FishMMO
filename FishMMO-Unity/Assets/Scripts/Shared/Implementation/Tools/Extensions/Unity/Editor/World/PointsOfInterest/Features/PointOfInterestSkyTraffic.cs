@@ -45,8 +45,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>How much higher a lane's second ship flies over the open air than its first, metres: they pass one over the other.</summary>
 		private const float SecondShipLift = 34f;
 
+		/// <remarks>
+		/// <paramref name="palette"/>: the structure palette the airships and landing stages are laid in (2026-10-16); null, as a
+		/// cloud world gives (it has no biome), for the kit's own materials.
+		/// </remarks>
 		public static void Build(Scene scene, Transform root, SceneCloudWorld world, SceneGenerationRequest request, float width, float depth,
-			Func<float, float, float> ground, List<string> notes)
+			Func<float, float, float> ground, List<string> notes, FishMMO.Shared.Biomes.BiomeStructurePalette palette = null)
 		{
 			if (root == null || world == null || request == null)
 			{
@@ -63,7 +67,7 @@ namespace FishMMO.Shared.WorldDesign
 			SceneCloudWorld.Island[] islands = world.Islands ?? Array.Empty<SceneCloudWorld.Island>();
 			SceneCloudWorld.Dock[] docks = world.Docks ?? Array.Empty<SceneCloudWorld.Dock>();
 
-			int stages = BakeStages(scene, docks, notes, out int collidable);
+			int stages = BakeStages(scene, docks, notes, out int collidable, palette);
 
 			var planner = new SkyLanePlanner(Islands(islands, ground), width, depth);
 			var kinds = new List<string>();
@@ -127,10 +131,11 @@ namespace FishMMO.Shared.WorldDesign
 						Offset = offset + 0.5f * period * k,
 					};
 					Vector3 start = way.Points[0];
-					ship.Root = PointOfInterestHarbour.Moor(sails, piece, 0, holder.transform, start, Quaternion.identity, out ship.Ship);
+					// The kit's own materials (a cloud world has no biome to give a palette): palette-ready through Moor and Spawn.
+					ship.Root = PointOfInterestHarbour.Moor(sails, piece, 0, holder.transform, start, Quaternion.identity, out ship.Ship, palette);
 					if (moored != null && moored != sails)
 					{
-						ship.Furled = PointOfInterestHarbour.Spawn(moored, piece, 1, ship.Root, start, Quaternion.identity);
+						ship.Furled = PointOfInterestHarbour.Spawn(moored, piece, 1, ship.Root, start, Quaternion.identity, palette);
 						ship.Furled.gameObject.AddComponent<ClientOnlyObject>();
 						ship.Furled.gameObject.SetActive(false);
 					}
@@ -190,7 +195,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// The landing stages as baked props: each piece's origin at its walkway's middle, its +z along the dock's Outward, its
 		/// outer end at the dock's end. Clears the source when there are none. Returns how many were placed.
 		/// </summary>
-		private static int BakeStages(Scene scene, SceneCloudWorld.Dock[] docks, List<string> notes, out int collidable)
+		private static int BakeStages(Scene scene, SceneCloudWorld.Dock[] docks, List<string> notes, out int collidable, FishMMO.Shared.Biomes.BiomeStructurePalette palette = null)
 		{
 			collidable = 0;
 			var prototypes = new List<ScenePropSet.Prototype>();
@@ -216,7 +221,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					prototype = prototypes.Count;
 					prototypeOf[prefab] = prototype;
-					prototypes.Add(new ScenePropSet.Prototype { Prefab = prefab, Layer = -1 });
+					prototypes.Add(new ScenePropSet.Prototype { Prefab = prefab, Layer = -1, Materials = StructurePaletteDressing.MaterialsFor(prefab, palette) });
 				}
 				props.Add(new ScenePropSet.Prop
 				{

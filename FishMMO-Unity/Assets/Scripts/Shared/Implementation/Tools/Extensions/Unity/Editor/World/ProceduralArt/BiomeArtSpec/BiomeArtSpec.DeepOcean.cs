@@ -16,7 +16,8 @@ namespace FishMMO.Shared.WorldDesign
 					Sea("Crinoid", 0.3f, 0f, 0f, 128, 60f), Sea("BrittleStar", 0.5f, 0f, 0f, 128), SeaStones(Pebbles("Nodule"), 0.5f, 0f, 0f))
 				.Look(BiomeLookClass.Aquatic)
 				.Wildlife(BiomeHabitat.Sea)
-				.HomeTo("Whale");
+				.HomeTo("Whale")
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

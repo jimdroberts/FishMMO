@@ -21,7 +21,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Under(Sea("MusselBed", 4f, 0f, 3f, 180, 60f), Sea("Barnacles", 4f, 0f, 3f, 180, 70f))
 				.Accepts(RockTypes.Granite, RockTypes.Gneiss, RockTypes.Basalt, RockTypes.Slate, RockTypes.Schist, RockTypes.Quartzite)
 				.Look(BiomeLookClass.Coastal)
-				.Wildlife(BiomeHabitat.Coast | BiomeHabitat.Mountain);
+				.Wildlife(BiomeHabitat.Coast | BiomeHabitat.Mountain)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

@@ -15,7 +15,8 @@ namespace FishMMO.Shared.WorldDesign
 				C(Ground.CliffRock, 38f), Ground.Mud, Ground.Mud)
 				.Accepts(WatersideGeology)
 				.Look(BiomeLookClass.Cave)
-				.Wildlife(BiomeHabitat.Wetland);
+				.Wildlife(BiomeHabitat.Wetland)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

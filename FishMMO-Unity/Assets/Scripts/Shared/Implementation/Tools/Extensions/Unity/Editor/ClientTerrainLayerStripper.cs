@@ -23,7 +23,8 @@ namespace FishMMO.Shared
 	/// </para>
 	/// <para>
 	/// <b>What the copy keeps.</b> Heights and holes (the collider and the shape). The alphamaps —
-	/// the array shader reads them as its control maps, so they must survive exactly. The terrain
+	/// the binder bakes each tile's index map from them where it is drawn (TerrainIndexMapBaker), and
+	/// the ground colour and grass fall back on them, so they must survive exactly. The terrain
 	/// layers, in the same count and order (the alphamap channel IS the layer index IS the array
 	/// slice) with the same tiling and remaps, but as fresh layers whose albedo, normal and mask are
 	/// empty. The detail layers and prototypes, and the trees. Only the textures behind the layers go.

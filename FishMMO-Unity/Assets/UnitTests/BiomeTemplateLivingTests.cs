@@ -16,7 +16,9 @@ namespace FishMMO.UnitTests.WorldDesign
 	/// the gathering resources and a herb grove's herbs moved off the biome's NAME onto the biome template. Every spec column
 	/// the authoring copies onto the templates is what the name gave before, for every biome asset, so authoring changes
 	/// nothing; the code that places them reads the template and names a biome only in its logged fallback. With it, I3b: the
-	/// authoring prunes the grass entries it wrote for blades a biome no longer grows, and nothing else.
+	/// authoring prunes the grass entries it wrote for blades a biome no longer grows, and nothing else. And I4b (2026-10-16):
+	/// the Alien bit is read live from the template's air, the sea life carries a weight per biome, and a point of interest
+	/// paints its own biome's prototype of a plant.
 	/// </summary>
 	public class BiomeTemplateLivingTests
 	{
@@ -40,39 +42,107 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// Every biome asset's spec habitat is what the client read from it before (AmbientGating.HabitatOfBiome: the keywords
-		/// of its asset name, then its display name, and alien ground under another world's air), and never None, which would
-		/// send its animals to the climate.
+		/// Every biome asset's spec habitat, with the Alien bit the client reads live from the template's air (I4b, 2026-10-16:
+		/// <see cref="BiomeHabitats.Live"/> from its Atmosphere and Requires), is what the client read from it before
+		/// (AmbientGating.HabitatOfBiome: the keywords of its asset name, then its display name, and alien ground under another
+		/// world's air); the spec never names Alien itself (the authoring must not store it), every file names its country, and
+		/// the live reading is never None, which would send its animals to the climate.
 		/// </summary>
 		[Test]
-		public void SpecHabitat_IsWhatTheNameGave_ForEveryBiomeAsset()
+		public void SpecHabitat_WithTheLiveAlienBit_IsWhatTheNameGave_ForEveryBiomeAsset()
 		{
 			var wrong = new List<string>();
-			int count = 0;
+			int count = 0, alien = 0;
 			foreach (BiomeAsset asset in BiomeAssets())
 			{
 				BiomeArtSpec.Entry entry = BiomeArtSpec.For(asset.Name);
 				Assert.That(entry, Is.Not.Null, asset.Name);
+				Assert.That(entry.WildlifeNamed, Is.True, asset.Name + " names its country");
+				Assert.That(entry.Habitat & BiomeHabitat.Alien, Is.EqualTo(BiomeHabitat.None), asset.Name + ": Alien is never stored");
 				AmbientHabitat old = AmbientGating.HabitatOfBiome(asset.Name, asset.DisplayName, asset.Atmosphere);
-				if ((int)entry.Habitat != (int)old)
+				BiomeHabitat live = BiomeHabitats.Live(entry.Habitat, asset.Atmosphere, asset.Requires);
+				if ((int)live != (int)old)
 				{
-					wrong.Add($"{asset.Name}: spec {entry.Habitat}, its name gave {old}");
+					wrong.Add($"{asset.Name}: spec {entry.Habitat} read live as {live}, its name gave {old}");
 				}
-				Assert.That(entry.Habitat, Is.Not.EqualTo(BiomeHabitat.None), asset.Name);
+				Assert.That(live, Is.Not.EqualTo(BiomeHabitat.None), asset.Name);
+				alien += (live & BiomeHabitat.Alien) != 0 ? 1 : 0;
 				count++;
 			}
 			Assert.IsEmpty(wrong, string.Join("; ", wrong));
 			Assert.That(count, Is.EqualTo(83));
+			Assert.That(alien, Is.EqualTo(9), "Cryovolcanic Plain, Dust Sea, Ice Geyser Field, Impact Basin, Methane Lake, Nitrogen Ice Field, Regolith Plain, Rille, Tholin Plain");
+		}
+
+		/// <summary>
+		/// The live Alien bit is the template's air: ground whose atmosphere leaves out Standard, or that asks a world for a
+		/// methane cycle, cryogenic air or frozen nitrogen, is alien ground unless it is lifeless; an Alien bit stored on a
+		/// template is never trusted.
+		/// </summary>
+		[Test]
+		public void LiveAlien_IsTheTemplatesAir()
+		{
+			const BiomeAtmosphereRequirement airless = BiomeAtmosphereRequirement.Airless | BiomeAtmosphereRequirement.Thin;
+			Assert.That(BiomeHabitats.Live(BiomeHabitat.None, airless, BiomeWorldRequirement.None), Is.EqualTo(BiomeHabitat.Alien));
+			Assert.That(BiomeHabitats.Live(BiomeHabitat.Ice, airless, BiomeWorldRequirement.Cryovolcanic), Is.EqualTo(BiomeHabitat.Ice | BiomeHabitat.Alien));
+			Assert.That(BiomeHabitats.Live(BiomeHabitat.Barren, airless, BiomeWorldRequirement.None), Is.EqualTo(BiomeHabitat.Barren), "lifeless ground is not alien");
+			Assert.That(BiomeHabitats.Live(BiomeHabitat.Forest, BiomeAtmosphereRequirement.Living, BiomeWorldRequirement.None), Is.EqualTo(BiomeHabitat.Forest));
+			Assert.That(BiomeHabitats.Live(BiomeHabitat.Mountain, BiomeAtmosphereRequirement.Any, BiomeWorldRequirement.None), Is.EqualTo(BiomeHabitat.Mountain), "any air: the home world's too");
+			Assert.That(BiomeHabitats.Live(BiomeHabitat.Mountain, BiomeAtmosphereRequirement.None, BiomeWorldRequirement.None), Is.EqualTo(BiomeHabitat.Mountain), "no requirement asks nothing");
+			Assert.That(BiomeHabitats.Live(BiomeHabitat.Wetland, BiomeAtmosphereRequirement.Thick, BiomeWorldRequirement.None), Is.EqualTo(BiomeHabitat.Wetland | BiomeHabitat.Alien));
+			const BiomeAtmosphereRequirement breathing = BiomeAtmosphereRequirement.Breathing;
+			foreach (BiomeWorldRequirement other in new[] { BiomeWorldRequirement.MethaneCycle, BiomeWorldRequirement.CryogenicAir, BiomeWorldRequirement.FrozenNitrogen })
+			{
+				Assert.That(BiomeHabitats.Live(BiomeHabitat.None, breathing, other | BiomeWorldRequirement.RockSurface), Is.EqualTo(BiomeHabitat.Alien), other.ToString());
+			}
+			foreach (BiomeWorldRequirement home in new[] { BiomeWorldRequirement.IceWorld, BiomeWorldRequirement.Volcanic, BiomeWorldRequirement.SurfaceWater, BiomeWorldRequirement.RunawayGreenhouse })
+			{
+				Assert.That(BiomeHabitats.Live(BiomeHabitat.Ice, BiomeAtmosphereRequirement.Any, home), Is.EqualTo(BiomeHabitat.Ice), home.ToString());
+			}
+			// A stored bit is masked whatever the air says.
+			Assert.That(BiomeHabitats.Live(BiomeHabitat.Forest | BiomeHabitat.Alien, BiomeAtmosphereRequirement.Living, BiomeWorldRequirement.None), Is.EqualTo(BiomeHabitat.Forest));
+			Assert.That(BiomeHabitat.Alien & BiomeHabitats.Stored, Is.EqualTo(BiomeHabitat.None));
+			Assert.That(BiomeHabitat.Forest & BiomeHabitats.Stored, Is.EqualTo(BiomeHabitat.Forest));
+		}
+
+		/// <summary>
+		/// The marks I4's authoring wrote with the Alien bit read without it, so a habitat the tool wrote and nobody touched is
+		/// still the tool's (and one edited by hand still a hand edit); no other mark changes.
+		/// </summary>
+		[Test]
+		public void HabitatMarks_WrittenWithTheAlienBit_ReadWithoutIt()
+		{
+			Assert.That(BiomeArtAuthoring.HabitatMarkWithoutAlien("Ice, Alien"), Is.EqualTo(BiomeArtAuthoring.Mark(BiomeHabitat.Ice)));
+			Assert.That(BiomeArtAuthoring.HabitatMarkWithoutAlien(BiomeArtAuthoring.Mark(BiomeHabitat.Alien)), Is.EqualTo(string.Empty), "alien ground alone: None");
+			Assert.That(BiomeArtAuthoring.HabitatMarkWithoutAlien("Forest, Woodland"), Is.EqualTo("Forest, Woodland"));
+			Assert.That(BiomeArtAuthoring.HabitatMarkWithoutAlien(string.Empty), Is.EqualTo(string.Empty));
+			Assert.That(BiomeArtAuthoring.HabitatMarkWithoutAlien(null), Is.Null, "never authored stays never authored");
+			Assert.That(BiomeArtAuthoring.HabitatMarkWithoutAlien("0123abcd"), Is.EqualTo("0123abcd"), "not a habitat: untouched");
+		}
+
+		/// <summary>No biome's spec file names the Alien bit (it is the template's air, read live); the spec column drops it too.</summary>
+		[Test]
+		public void SpecFiles_NeverNameTheAlienHabitat()
+		{
+			string folder = Path.Combine(WorldFolder, "ProceduralArt", "BiomeArtSpec");
+			string[] files = Directory.GetFiles(folder, "*.cs");
+			Assert.That(files.Length, Is.EqualTo(83));
+			foreach (string file in files)
+			{
+				Assert.That(CodeOnly(File.ReadAllText(file)), Does.Not.Contain("BiomeHabitat.Alien"), Path.GetFileName(file));
+			}
 		}
 
 		// ── Sea life ──────────────────────────────────────────────────
 
 		/// <summary>
 		/// Every biome's spec sea life is the kinds that named it among their favourites (SeaCreatureKind.Prefers), in the
-		/// kinds' order, both in the code's defaults and on the weather profile the client reads (which holds the same lists).
+		/// kinds' order, both in the code's defaults and on the weather profile the client reads (which holds the same lists);
+		/// and each at the weight the kind gave its favourites (PreferWeight), so for every biome, every kind and the whole
+		/// temperature scale, the weight the template gives is the weight the kind gave by the biome's name.
 		/// </summary>
 		[Test]
-		public void SpecSeaLife_IsTheKindsThatPreferredTheBiome_ForEveryBiomeAsset()
+		public void SpecSeaLife_IsTheKindsThatPreferredTheBiome_AtTheirWeight_ForEveryBiomeAsset()
 		{
 			SeaCreatureKind[] kinds = SeaLifeSettings.Defaults();
 			Dictionary<string, List<string>> profile = ProfilePrefers();
@@ -92,30 +162,59 @@ namespace FishMMO.UnitTests.WorldDesign
 						old.Add(kind.Name);
 					}
 				}
-				List<string> spec = BiomeArtSpec.For(asset.Name).SeaLifeHomes();
-				Assert.That(spec, Is.EqualTo(old), asset.Name);
+				BiomeArtSpec.Entry entry = BiomeArtSpec.For(asset.Name);
+				List<BiomeSeaLife> spec = entry.SeaLife();
+				Assert.That(entry.SeaLifeKinds(), Is.EqualTo(old), asset.Name);
 				foreach (SeaCreatureKind kind in kinds)
 				{
-					Assert.That(SeaLifePlacement.IsHome(kind, spec), Is.EqualTo(SeaLifePlacement.PrefersByName(kind, asset.Name)), $"{asset.Name} {kind.Name}");
+					bool home = SeaLifePlacement.TryHomeWeight(kind, spec, out float weight);
+					Assert.That(home, Is.EqualTo(SeaLifePlacement.PrefersByName(kind, asset.Name)), $"{asset.Name} {kind.Name}");
+					if (home)
+					{
+						Assert.That(weight, Is.EqualTo(SeaLifePlacement.KindHomeWeight(kind)), $"{asset.Name} {kind.Name}: the kind's own weight");
+					}
+					for (float t = -1f; t <= 1.0001f; t += 0.05f)
+					{
+						Assert.That(SeaLifePlacement.HabitatWeight(kind, home, weight, t), Is.EqualTo(SeaLifePlacement.HabitatWeight(kind, asset.Name, t)),
+							$"{asset.Name} {kind.Name} at {t}");
+					}
 				}
 				homes += spec.Count;
 			}
 			Assert.That(homes, Is.EqualTo(8), "Coral Reef 3, Coastal Water 2, Beach 1, Ocean 1, Deep Ocean 1");
 		}
 
-		/// <summary>The weight from a template's homes equals the weight from the name, and a kind's homes are matched ignoring case.</summary>
+		/// <summary>
+		/// The spec's copy of each kind's preferred weight (the editor's art tables cannot see the client's settings) is the
+		/// kind's, in the code's defaults and on the weather profile, for every kind; never below 1, as the kinds' minimum.
+		/// </summary>
 		[Test]
-		public void SeaLifeWeight_FromHomes_EqualsTheWeightFromTheName()
+		public void SpecSeaKindWeights_AreTheKindsPreferredWeights()
+		{
+			Dictionary<string, float> profile = ProfilePreferWeights();
+			foreach (SeaCreatureKind kind in SeaLifeSettings.Defaults())
+			{
+				Assert.That(BiomeArtSpec.SeaKindPreferWeight(kind.Name), Is.EqualTo(SeaLifePlacement.KindHomeWeight(kind)), kind.Name);
+				Assert.That(profile.ContainsKey(kind.Name), Is.True, $"the profile holds {kind.Name}");
+				Assert.That(BiomeArtSpec.SeaKindPreferWeight(kind.Name), Is.EqualTo(Math.Max(1f, profile[kind.Name])), $"the profile's {kind.Name}");
+			}
+			Assert.That(BiomeArtSpec.SeaKindPreferWeight("A kind not yet made"), Is.EqualTo(new SeaCreatureKind().PreferWeight));
+		}
+
+		/// <summary>A template's sea life is matched ignoring case, the first entry for a kind wins, and a weight is never below nothing.</summary>
+		[Test]
+		public void SeaLifeWeight_IsTheFirstEntryNamingTheKind()
 		{
 			SeaCreatureKind reef = SeaLifeSettings.Defaults().First(k => k.Name == "Reef fish");
-			foreach (float t in new[] { -0.8f, 0f, 0.5f, 0.9f })
-			{
-				Assert.That(SeaLifePlacement.HabitatWeight(reef, SeaLifePlacement.IsHome(reef, new[] { "reef FISH" }), t),
-					Is.EqualTo(SeaLifePlacement.HabitatWeight(reef, "Coral Reef", t)));
-				Assert.That(SeaLifePlacement.HabitatWeight(reef, SeaLifePlacement.IsHome(reef, new string[0]), t),
-					Is.EqualTo(SeaLifePlacement.HabitatWeight(reef, "Ocean", t)));
-			}
-			Assert.That(SeaLifePlacement.IsHome(reef, null), Is.False);
+			var life = new List<BiomeSeaLife> { new BiomeSeaLife("Crab", 4f), new BiomeSeaLife("reef FISH", 7f), new BiomeSeaLife("Reef fish", 1f) };
+			Assert.That(SeaLifePlacement.TryHomeWeight(reef, life, out float weight), Is.True);
+			Assert.That(weight, Is.EqualTo(7f));
+			Assert.That(SeaLifePlacement.HabitatWeight(reef, true, weight, -0.9f), Is.EqualTo(7f), "a home whatever the thermometer says");
+			Assert.That(SeaLifePlacement.TryHomeWeight(reef, new List<BiomeSeaLife> { new BiomeSeaLife("Reef fish", -2f) }, out weight) && weight == 0f, Is.True);
+			Assert.That(SeaLifePlacement.TryHomeWeight(reef, null, out _), Is.False);
+			Assert.That(SeaLifePlacement.TryHomeWeight(reef, new List<BiomeSeaLife>(), out _), Is.False);
+			Assert.That(SeaLifePlacement.HabitatWeight(reef, false, 7f, 0.8f), Is.EqualTo(SeaLifePlacement.HabitatWeight(reef, "Ocean", 0.8f)), "unlisted: elsewhere");
+			Assert.That(new BiomeSeaLife("Crab", 2f).ToString(), Is.EqualTo("Crab×2"));
 		}
 
 		// ── Vines ─────────────────────────────────────────────────────
@@ -273,6 +372,135 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeArtAuthoring.PrunableGrassTypes(new List<(string, string)>(), p => null, grown), Is.Empty);
 		}
 
+		// ── I4b: a point of interest's own prototypes ─────────────────
+
+		/// <summary>
+		/// A site reuses a tile's prototype of a plant only when it is recorded for the site's own biome (a rule's or an earlier
+		/// site's); another biome's, or an unrecorded one, gets a prototype of its own (the first of the plant is what it copies
+		/// and used to paint into); a site with no biome takes the first, as before.
+		/// </summary>
+		[Test]
+		public void SiteLayer_IsTheSitesOwnBiomesPrototype()
+		{
+			const int meadow = 11, forest = 22, bog = 33;
+			string[] prefabs = { "Detail_Fern", "Detail_FlowersMeadow", "Detail_GrassLush", "Detail_FlowersMeadow", null, "Detail_Unrecorded" };
+			int[] seeds = { 5, 7, 9, 13, 0, 21 };
+			var entries = new List<TerrainDetailBiomes.Entry>
+			{
+				new TerrainDetailBiomes.Entry { Prefab = "Detail_Fern", NoiseSeed = 5, BiomeID = forest },
+				new TerrainDetailBiomes.Entry { Prefab = "Detail_FlowersMeadow", NoiseSeed = 7, BiomeID = meadow },
+				new TerrainDetailBiomes.Entry { Prefab = "Detail_GrassLush", NoiseSeed = 9, BiomeID = meadow },
+				new TerrainDetailBiomes.Entry { Prefab = "Detail_FlowersMeadow", NoiseSeed = 13, BiomeID = forest, Site = true },
+			};
+			Assert.That(TerrainDetailBiomes.SiteLayer("Detail_FlowersMeadow", meadow, prefabs, seeds, entries, out int first), Is.EqualTo(1), "the meadow's own rule");
+			Assert.That(first, Is.EqualTo(1));
+			Assert.That(TerrainDetailBiomes.SiteLayer("Detail_FlowersMeadow", forest, prefabs, seeds, entries, out first), Is.EqualTo(3), "an earlier forest site's, not the meadow's first");
+			Assert.That(first, Is.EqualTo(1));
+			Assert.That(TerrainDetailBiomes.SiteLayer("Detail_FlowersMeadow", bog, prefabs, seeds, entries, out first), Is.EqualTo(-1), "another biome's only: its own");
+			Assert.That(first, Is.EqualTo(1), "copies the first");
+			Assert.That(TerrainDetailBiomes.SiteLayer("Detail_Fern", meadow, prefabs, seeds, entries, out first), Is.EqualTo(-1));
+			Assert.That(first, Is.EqualTo(0));
+			Assert.That(TerrainDetailBiomes.SiteLayer("Detail_Unrecorded", meadow, prefabs, seeds, entries, out first), Is.EqualTo(-1), "unrecorded: not the site's biome");
+			Assert.That(first, Is.EqualTo(5));
+			Assert.That(TerrainDetailBiomes.SiteLayer("Detail_Moss", meadow, prefabs, seeds, entries, out first), Is.EqualTo(-1), "the tile grows none");
+			Assert.That(first, Is.EqualTo(-1));
+			Assert.That(TerrainDetailBiomes.SiteLayer("Detail_FlowersMeadow", 0, prefabs, seeds, entries, out first), Is.EqualTo(1), "no biome: the first, as before");
+			Assert.That(TerrainDetailBiomes.SiteLayer("Detail_FlowersMeadow", bog, prefabs, seeds, null, out first), Is.EqualTo(-1), "no record: none is the bog's");
+			Assert.That(TerrainDetailBiomes.SiteLayer(null, bog, prefabs, seeds, entries, out first), Is.EqualTo(-1));
+		}
+
+		/// <summary>
+		/// An added prototype keeps the seed it copied unless another prototype of the plant (or the record) has it; then a
+		/// seed of its own, the same every run, different per biome, so every prototype of a plant is told apart by its seed.
+		/// </summary>
+		[Test]
+		public void SiteSeed_TellsEveryPrototypeOfAPlantApart()
+		{
+			string[] prefabs = { "Detail_Fern", "Detail_FlowersMeadow" };
+			int[] seeds = { 5, 7 };
+			var entries = new List<TerrainDetailBiomes.Entry> { new TerrainDetailBiomes.Entry { Prefab = "Detail_FlowersMeadow", NoiseSeed = 40, BiomeID = 3, Site = true } };
+			Assert.That(TerrainDetailBiomes.SiteSeed(5, 9, "Detail_Moss", prefabs, seeds, entries), Is.EqualTo(5), "another plant's seed is no clash: kept, as before");
+			int own = TerrainDetailBiomes.SiteSeed(7, 9, "Detail_FlowersMeadow", prefabs, seeds, entries);
+			Assert.That(own, Is.Not.EqualTo(7));
+			Assert.That(own, Is.GreaterThanOrEqualTo(0));
+			Assert.That(TerrainDetailBiomes.SiteSeed(7, 9, "Detail_FlowersMeadow", prefabs, seeds, entries), Is.EqualTo(own), "deterministic");
+			Assert.That(TerrainDetailBiomes.SiteSeed(7, 10, "Detail_FlowersMeadow", prefabs, seeds, entries), Is.Not.EqualTo(own), "per biome");
+			Assert.That(TerrainDetailBiomes.SiteSeed(40, 9, "Detail_FlowersMeadow", prefabs, seeds, entries), Is.Not.EqualTo(40), "a seed the record holds for the plant");
+
+			// Three sites of three biomes over one tile whose meadow rule grows the flowers: each its own prototype, recorded
+			// apart, and the meadow's site reuses the rule's.
+			var tilePrefabs = new List<string> { "Detail_FlowersMeadow" };
+			var tileSeeds = new List<int> { 7 };
+			var record = new List<TerrainDetailBiomes.Entry> { new TerrainDetailBiomes.Entry { Prefab = "Detail_FlowersMeadow", NoiseSeed = 7, BiomeID = 1 } };
+			int Paint(int biome)
+			{
+				int layer = TerrainDetailBiomes.SiteLayer("Detail_FlowersMeadow", biome, tilePrefabs, tileSeeds, record, out int firstOf);
+				if (layer >= 0)
+				{
+					return layer;
+				}
+				int seed = TerrainDetailBiomes.SiteSeed(tileSeeds[firstOf], biome, "Detail_FlowersMeadow", tilePrefabs, tileSeeds, record);
+				tilePrefabs.Add("Detail_FlowersMeadow");
+				tileSeeds.Add(seed);
+				record.Add(new TerrainDetailBiomes.Entry { Prefab = "Detail_FlowersMeadow", NoiseSeed = seed, BiomeID = biome, Site = true });
+				return tilePrefabs.Count - 1;
+			}
+			Assert.That(Paint(1), Is.EqualTo(0), "the meadow's site: the meadow's rule");
+			Assert.That(Paint(2), Is.EqualTo(1));
+			Assert.That(Paint(3), Is.EqualTo(2));
+			Assert.That(Paint(2), Is.EqualTo(1), "the second forest site: the first forest site's");
+			Assert.That(tileSeeds.Distinct().Count(), Is.EqualTo(3), "every prototype of the plant has its own seed");
+			for (int i = 0; i < tilePrefabs.Count; i++)
+			{
+				Assert.That(TerrainDetailBiomes.TryGet(record, tilePrefabs[i], tileSeeds[i], out TerrainDetailBiomes.Entry entry), Is.True);
+				Assert.That(entry.BiomeID, Is.EqualTo(i + 1));
+			}
+		}
+
+		/// <summary>
+		/// A site's growth in its own prototype leaves the plant exactly as thick as painting the shared prototype did: only
+		/// ever more, measured against the prototype it used to paint into together with its own.
+		/// </summary>
+		[Test]
+		public void SiteCover_LeavesThePlantAsThickAsOnePrototypeDid()
+		{
+			for (int baseCover = 0; baseCover <= 255; baseCover += 15)
+			{
+				for (int want = 0; want <= 255; want += 17)
+				{
+					// The tile's first prototype was another biome's: the old single layer would hold max(base, want).
+					int own = TerrainDetailBiomes.SiteCover(baseCover, 0, false, want);
+					Assert.That(baseCover + own, Is.EqualTo(Math.Max(baseCover, want)), $"base {baseCover} want {want}");
+					// A second site over it: max of everything wanted, as one layer.
+					int again = TerrainDetailBiomes.SiteCover(baseCover, own, false, want / 2 + 40);
+					Assert.That(baseCover + again, Is.EqualTo(Math.Max(Math.Max(baseCover, want), want / 2 + 40)));
+					// Its own is the first (shared): raised as before.
+					Assert.That(TerrainDetailBiomes.SiteCover(0, baseCover, true, want), Is.EqualTo(Math.Max(baseCover, want)));
+				}
+			}
+		}
+
+		/// <summary>
+		/// Herb groves, cave mouths and fields paint through SiteLayers (their own biome's prototype), never the tile's first
+		/// prototype of the plant; and LayerOf/RecordBiome (the first-wins pair) are gone.
+		/// </summary>
+		[Test]
+		public void Sites_PaintTheirOwnBiomesPrototype()
+		{
+			string features = Path.Combine(WorldFolder, "PointsOfInterest", "Features");
+			string grove = CodeOnly(File.ReadAllText(Path.Combine(features, "PointOfInterestHerbGrove.cs")));
+			string mouths = CodeOnly(File.ReadAllText(Path.Combine(features, "PointOfInterestCaveMouths.cs")));
+			string fields = CodeOnly(File.ReadAllText(Path.Combine(features, "PointOfInterestFields.cs")));
+			Assert.That(grove, Does.Contain("layers[s] = LayersOf(terrain, Species[s], Biome);"));
+			Assert.That(mouths, Does.Contain("PointOfInterestHerbGrove.LayersOf(terrain, growth.Species[s], growth.Biome)"));
+			Assert.That(fields, Does.Contain("PointOfInterestHerbGrove.SiteLayers(terrain, crop, biome, NewWheat)"));
+			Assert.That(grove + mouths, Does.Contain("TerrainDetailBiomes.SiteCover("));
+			foreach (string source in new[] { grove, mouths, fields })
+			{
+				Assert.That(Regex.IsMatch(source, @"\bRecordBiome\(|\bLayerOf\("), Is.False);
+			}
+		}
+
 		// ── The consumers read the template ───────────────────────────
 
 		/// <summary>
@@ -355,7 +583,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				"SeaLifePlacement.cs: foreach (string name in kind.Prefers)",
 				"SeaLifeSystem.cs: if (kind.Prefers != null)",
 				"SeaLifeSystem.cs: foreach (string p in kind.Prefers)",
-				"SeaLifeSystem.cs: return SeaLifePlacement.PrefersByName(kind, biome.name);",
+				"SeaLifeSystem.cs: if (!SeaLifePlacement.PrefersByName(kind, biome.name))",
 			};
 			Assert.That(found.Except(allowed).ToList(), Is.Empty, "client code reading a biome's creatures by its name: " + string.Join(" | ", found.Except(allowed)));
 			// The ambient fallback is the template reader's.
@@ -372,6 +600,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			public string Name;
 			public string DisplayName;
 			public BiomeAtmosphereRequirement Atmosphere;
+			public BiomeWorldRequirement Requires;
 		}
 
 		/// <summary>Every biome asset's name, display name and atmosphere (the climate profile that shares their folder left out).</summary>
@@ -390,6 +619,7 @@ namespace FishMMO.UnitTests.WorldDesign
 					Name = Field(text, "m_Name"),
 					DisplayName = Field(text, "DisplayName"),
 					Atmosphere = (BiomeAtmosphereRequirement)int.Parse(Field(text, "Atmosphere")),
+					Requires = (BiomeWorldRequirement)int.Parse(Field(text, "Requires") ?? "0"),
 				});
 			}
 			assets.Sort((a, b) => string.CompareOrdinal(a.Name, b.Name));
@@ -436,6 +666,29 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 			}
 			return prefers;
+		}
+
+		/// <summary>Each sea kind's PreferWeight on the weather profile, by kind name.</summary>
+		private static Dictionary<string, float> ProfilePreferWeights()
+		{
+			var seaKinds = new HashSet<string>(SeaLifeSettings.Defaults().Select(k => k.Name));
+			var weights = new Dictionary<string, float>();
+			string kind = null;
+			foreach (string line in File.ReadAllText(ProfilePath).Replace("\r\n", "\n").Split('\n'))
+			{
+				Match name = Regex.Match(line, @"^\s*- Name: (.+)$");
+				if (name.Success)
+				{
+					kind = seaKinds.Contains(name.Groups[1].Value.Trim()) ? name.Groups[1].Value.Trim() : null;
+					continue;
+				}
+				Match weight = Regex.Match(line, @"^\s*PreferWeight: (.+)$");
+				if (kind != null && weight.Success)
+				{
+					weights[kind] = float.Parse(weight.Groups[1].Value.Trim(), System.Globalization.CultureInfo.InvariantCulture);
+				}
+			}
+			return weights;
 		}
 
 		/// <summary>The source with comment lines dropped, so a scan sees code and not prose.</summary>

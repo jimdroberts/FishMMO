@@ -162,7 +162,7 @@ Texture2DArray<float4> _GrassSurfaceLayers;
  * tint (8 uints a layer: st xyzw, tint xyzw as float bits; they were float4[32] × 2 constants re-uploaded per terrain,
  * and on OpenGL whole terrains' blades flickered), then per layer a pyramid of RGBA8 sRGB texels. Reading the set's own
  * Texture2DArray (the terrain material's) was replaced by this copy too. */
-#define GRASS_ALBEDO_HEADER 256u
+#define GRASS_ALBEDO_HEADER 2048u   // GrassAlbedoTexels.HeaderUints: 8 words a layer, 256 layers (the index map's limit)
 float4 GrassLayerST(int id)
 {
     uint i = _GrassAlbedoBase + (uint)id * 8u;

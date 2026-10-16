@@ -148,9 +148,31 @@ namespace FishMMO.Shared.WorldDesign
 			var holder = new GameObject(ObjectName);
 			holder.transform.SetParent(root, false);
 			var ships = new List<FloatingBoats.Sailing>();
+			// A ship is built where it puts out from: in the structure palette of the harbour nearest its lane's start (a lane
+			// in from the open sea is the nearest harbour's trade too); the kit's own materials with no harbour (2026-10-16).
+			BiomeStructurePalette PaletteOf(Vector3 start)
+			{
+				PointOfInterestRecord home = null;
+				float nearest = float.PositiveInfinity;
+				foreach (PointOfInterestRecord record in points.Points)
+				{
+					if (!IsHarbour(record.Kind))
+					{
+						continue;
+					}
+					float d = (new Vector2(record.Position.x, record.Position.z) - new Vector2(start.x, start.z)).sqrMagnitude;
+					if (d < nearest)
+					{
+						nearest = d;
+						home = record;
+					}
+				}
+				return home != null && BiomeRegistry.TryGetByID(home.BiomeID, out BiomeTemplate biome) ? BiomeTemplateArt.StructurePalette(biome) : null;
+			}
 			for (int l = 0; l < lanes.Count && ships.Count < MaxShips; l++)
 			{
 				FloatingBoats.Lane lane = lanes[l];
+				BiomeStructurePalette palette = PaletteOf(lane.Points[0]);
 				int count = lane.Length > 3000f ? 2 : 1;
 				for (int k = 0; k < count && ships.Count < MaxShips; k++)
 				{
@@ -177,10 +199,10 @@ namespace FishMMO.Shared.WorldDesign
 					ship.Offset = period * ((k + random.NextFloat() * 0.5f) / count);
 					Vector3 start = lane.Points[0];
 					// The root with the hull's collision, the drawn ship under sail (client-only) under it.
-					ship.Root = PointOfInterestHarbour.Moor(sails, piece, underSail, holder.transform, start, Quaternion.identity, out ship.Ship);
+					ship.Root = PointOfInterestHarbour.Moor(sails, piece, underSail, holder.transform, start, Quaternion.identity, out ship.Ship, palette);
 					if (atAnchor != null && atAnchor != sails)
 					{
-						ship.Furled = PointOfInterestHarbour.Spawn(atAnchor, piece, furled, ship.Root, start, Quaternion.identity);
+						ship.Furled = PointOfInterestHarbour.Spawn(atAnchor, piece, furled, ship.Root, start, Quaternion.identity, palette);
 						ship.Furled.gameObject.AddComponent<ClientOnlyObject>();
 						ship.Furled.gameObject.SetActive(false);
 					}

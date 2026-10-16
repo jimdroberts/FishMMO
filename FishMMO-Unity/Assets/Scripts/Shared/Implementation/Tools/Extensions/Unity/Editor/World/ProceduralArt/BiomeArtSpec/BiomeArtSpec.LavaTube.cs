@@ -16,7 +16,8 @@ namespace FishMMO.Shared.WorldDesign
 					D(Ground.Pahoehoe, 96f, 5f, -1f, -1f, Outcrops("Cold-trap ice", 0.004f, 20f, F(RockTypes.WaterIce, "Crystal")))),
 				C(Ground.Basalt, 35f), Ground.Basalt, Ground.Basalt)
 				.Look(BiomeLookClass.Volcanic)
-				.Wildlife(BiomeHabitat.Barren);
+				.Wildlife(BiomeHabitat.Barren)
+				.Moat(BiomeMoatWater.Dry);
 		}
 	}
 }

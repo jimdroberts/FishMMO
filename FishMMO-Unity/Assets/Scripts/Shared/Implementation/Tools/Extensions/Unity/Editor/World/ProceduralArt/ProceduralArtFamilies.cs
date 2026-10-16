@@ -68,6 +68,8 @@ namespace FishMMO.Shared.WorldDesign
 			("BiomeArtGenerator.Rocks.cs", new[] { ArtFamily.Rocks, ArtFamily.Cliffs }),
 			("ProceduralArtCatalogue.Rocks.cs", new[] { ArtFamily.Rocks, ArtFamily.Cliffs }),
 			("RockMeshes.cs", new[] { ArtFamily.Rocks }),
+			("StoneMeshes.cs", new[] { ArtFamily.Rocks }),
+			("StoneStyles.cs", new[] { ArtFamily.Rocks }),
 			("RockFormations.cs", new[] { ArtFamily.Rocks, ArtFamily.Cliffs }),
 			("RockTypes.cs", new[] { ArtFamily.Rocks, ArtFamily.Cliffs }),
 			("RockArtNames.cs", new[] { ArtFamily.Rocks, ArtFamily.Cliffs }),
@@ -93,6 +95,9 @@ namespace FishMMO.Shared.WorldDesign
 			("StructurePieces*", new[] { ArtFamily.Structures }),
 			("StructureSolids.cs", new[] { ArtFamily.Structures }),
 			("StructureSurfaces.cs", new[] { ArtFamily.Structures }),
+			// The structure palette's parts, keys and surfaces (2026-10-16).
+			("StructureSurfaces.Palette.cs", new[] { ArtFamily.Structures }),
+			("StructurePalettes.cs", new[] { ArtFamily.Structures }),
 			("StructureRuins.cs", new[] { ArtFamily.Structures }),
 			("StructureKit.cs", new[] { ArtFamily.Structures }),
 			("ProceduralArtCatalogue.Structures.cs", new[] { ArtFamily.Structures }),

@@ -92,6 +92,7 @@ namespace FishMMO.Water
 		{
 			Clear();
 			ReleaseFlow();
+			UnhookBiomes();
 		}
 
 		private void Update()
@@ -175,12 +176,15 @@ namespace FishMMO.Water
 			int order = 0;
 			// The falls first: a river's ribbon gives the falling stretch to its fall's sheet.
 			List<Fall> falls = FindFalls(hydrology, MinFallMetres);
+			// What stands round every lake and along every river, for the look each takes from its biome (Looks).
+			PrepareLooks(hydrology);
 			foreach (SceneHydrology.Lake lake in hydrology.Lakes)
 			{
 				Mesh mesh = LakeMesh(lake, water);
 				if (mesh != null)
 				{
 					Add($"Lake {lake.Id}", mesh, order);
+					lakeRenderers.Add((built[built.Count - 1].GetComponent<MeshRenderer>(), lake.Id));
 				}
 			}
 			// Larger rivers first, and every river before those joining it (DrawOrder): the water a smaller river runs into is the one that shows.
@@ -207,6 +211,7 @@ namespace FishMMO.Water
 		private void Clear()
 		{
 			riverRenderers.Clear();
+			lakeRenderers.Clear();
 			ClearFalls();
 			foreach (GameObject go in built)
 			{
@@ -548,7 +553,13 @@ namespace FishMMO.Water
 			var colours = new List<Color32>(positions.Capacity);
 			var tides = new List<Vector2>(positions.Capacity);
 			var banks = new List<Vector4>(positions.Capacity);
+			var looks = new List<Vector2>(positions.Capacity);
 			var indices = new List<int>((count - 1) * across * 6);
+			/* How much of the look of the water it runs out of and into each row carries (BiomeWaterLooks.Blend): all of it at
+			 * either end, where its water is that water, so a river and the lake or river it meets are one colour there. */
+			bool lookFromStart = LookFromStart(river), lookIntoEnd = LookIntoEnd(river);
+			float lookStart = BiomeWaterLooks.BlendMetres(river.Width != null && river.Width.Length > 0 ? river.Width[0] : 4f);
+			float lookEnd = BiomeWaterLooks.BlendMetres(river.Width != null && river.Width.Length > 0 ? river.Width[river.Width.Length - 1] : 4f);
 			// The plunge pools under this river's falls: their surface runs at the current the fall drives through them (PoolCoreSpeed).
 			List<PoolSpan> pools = PoolsOf(falls, river);
 			for (int r = 0; r < count; r++)
@@ -597,6 +608,7 @@ namespace FishMMO.Water
 				 * rounds down under the water going over (WaterCarver), and a margin laid out over it drew a pane of glass
 				 * either side of the curtain along the lip's line. */
 				bool lipRow = row.Point >= 0 && IsLipRow(falls, river.Id, row.Point);
+				Vector2 rowLook = BiomeWaterLooks.Blend(row.Along, length, lookStart, lookEnd, lookFromStart, lookIntoEnd);
 				float marginHalf = lipRow ? Mathf.Min(half, bank) : half;
 				for (int k = 0; k <= across; k++)
 				{
@@ -635,6 +647,7 @@ namespace FishMMO.Water
 					colours.Add(new Color32(shallow, hidden ? (byte)0 : (byte)255, 255, hidden ? (byte)0 : (byte)Mathf.RoundToInt(255f * fade)));
 					tides.Add(new Vector2(fall, tidal ? 1f : 0f));
 					banks.Add(new Vector4(bank, meanSpeed, forward.x, forward.z));
+					looks.Add(rowLook);
 				}
 			}
 			for (int r = 0; r + 1 < count; r++)
@@ -652,7 +665,7 @@ namespace FishMMO.Water
 					indices.Add(row + k); indices.Add(next + k + 1); indices.Add(row + k + 1);
 				}
 			}
-			return Build($"River {river.Id}", positions, uvs, flows, states, colours, tides, indices, banks);
+			return Build($"River {river.Id}", positions, uvs, flows, states, colours, tides, indices, banks, looks);
 		}
 
 		/// <summary>One row across a river's ribbon.</summary>
@@ -978,7 +991,7 @@ namespace FishMMO.Water
 		}
 
 		private static Mesh Build(string name, List<Vector3> positions, List<Vector2> uvs, List<Vector2> flows, List<Vector2> states, List<Color32> colours,
-			List<Vector2> tides, List<int> indices, List<Vector4> banks = null)
+			List<Vector2> tides, List<int> indices, List<Vector4> banks = null, List<Vector2> looks = null)
 		{
 			if (indices.Count == 0)
 			{
@@ -998,6 +1011,8 @@ namespace FishMMO.Water
 			{
 				mesh.SetUVs(4, banks);
 			}
+			// uv5: how much of the look of the water at either end it carries (rivers); a lake none, its own look throughout.
+			mesh.SetUVs(5, looks != null && looks.Count == positions.Count ? looks : new List<Vector2>(new Vector2[positions.Count]));
 			mesh.SetColors(colours);
 			mesh.SetTriangles(indices, 0);
 			var normals = new Vector3[positions.Count];

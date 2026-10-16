@@ -6,20 +6,41 @@ using UnityEngine;
 
 namespace FishMMO.Shared.WorldDesign
 {
-	/// <summary>One biome present in a scene, as the planner knows it: plain strings and the registry ID.</summary>
+	/// <summary>One biome present in a scene, as the planner knows it: plain data and the registry ID.</summary>
 	public sealed class PointOfInterestBiome
 	{
-		/// <summary>The biome asset's name, what catalogue rows match ("Pine Forest").</summary>
+		/// <summary>The biome asset's name ("Pine Forest"), for notes; the planner decides nothing by it.</summary>
 		public string Name;
 		/// <summary>The <see cref="Biomes.BiomeRegistry"/> cached ID, written to records; 0 for none.</summary>
 		public int Id;
 		public string DisplayName;
+		/// <summary>
+		/// The kinds sited on this biome's ground and how gladly (its template's SiteKinds, BiomeTemplateArt.SiteKinds): a kind
+		/// not in it is never sited here. Null: the biome's kinds are not known, and every kind takes its row's default weight
+		/// (<see cref="PointOfInterestKindRule.DefaultBiomeWeight"/>), as on ground with no biome.
+		/// </summary>
+		public IReadOnlyDictionary<POIType, float> Kinds;
 
-		public PointOfInterestBiome(string name, int id, string displayName = null)
+		public PointOfInterestBiome(string name, int id, string displayName = null, IReadOnlyDictionary<POIType, float> kinds = null)
 		{
 			Name = name;
 			Id = id;
 			DisplayName = string.IsNullOrWhiteSpace(displayName) ? name : displayName;
+			Kinds = kinds;
+		}
+
+		/// <summary>The weight this biome gives a kind (never below 0): its <see cref="Kinds"/> entry, 0 for a kind it does not host.</summary>
+		public float WeightOf(PointOfInterestKindRule rule)
+		{
+			if (rule == null)
+			{
+				return 0f;
+			}
+			if (Kinds == null)
+			{
+				return Mathf.Max(0f, rule.DefaultBiomeWeight);
+			}
+			return Kinds.TryGetValue(rule.Kind, out float weight) ? Mathf.Max(0f, weight) : 0f;
 		}
 	}
 

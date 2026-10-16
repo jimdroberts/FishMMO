@@ -20,7 +20,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Accepts(WatersideGeology)
 				.Look(BiomeLookClass.Aquatic)
 				.Water(BiomeWaterRole.Lake)
-				.Wildlife(BiomeHabitat.FreshWater);
+				.Wildlife(BiomeHabitat.FreshWater)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

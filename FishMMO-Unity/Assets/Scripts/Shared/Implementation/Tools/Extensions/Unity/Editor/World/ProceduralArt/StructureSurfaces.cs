@@ -28,7 +28,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// The normal and mask maps are shared, so a finish costs one texture per surface.
 	/// </para>
 	/// </remarks>
-	public static class StructureSurfaces
+	public static partial class StructureSurfaces
 	{
 		/// <summary>
 		/// Every surface's texture size. 1024 (2026-10-11, was 512): a 2 m plank tile at 512 was 4 mm a texel, soft at the
@@ -36,8 +36,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public const int Size = 1024;
 
-		/// <summary>Every surface, in a fixed order.</summary>
-		public static readonly string[] Names = { "Timber", "Plaster", "Thatch", "Ashlar", "Fieldstone", "Cloth", "Iron", "Earth", "Monolith" };
+		/// <summary>Every surface, in a fixed order: the kit's nine, then the structure palette's ten (StructureSurfaces.Palette.cs).</summary>
+		public static readonly string[] Names =
+		{
+			"Timber", "Plaster", "Thatch", "Ashlar", "Fieldstone", "Cloth", "Iron", "Earth", "Monolith",
+			"Log", "Shingle", "Slate", "Adobe", "Sandstone", "Bamboo", "Marble", "IceBlock", "Bone", "Reed",
+		};
 
 		/// <summary>The surface a material wears.</summary>
 		public static string SurfaceOf(StructureMaterial material)
@@ -57,6 +61,17 @@ namespace FishMMO.Shared.WorldDesign
 				case StructureMaterial.Glass: return "Iron";
 				// Scraped horn and oiled parchment: smooth, a little clouded; its own albedo is also its glow (StructureLamplight).
 				case StructureMaterial.Lamplight: return "Plaster";
+				// The structure palette's surfaces, one each (2026-10-16, I6a).
+				case StructureMaterial.Log: return "Log";
+				case StructureMaterial.Shingle: return "Shingle";
+				case StructureMaterial.Slate: return "Slate";
+				case StructureMaterial.Adobe: return "Adobe";
+				case StructureMaterial.Sandstone: return "Sandstone";
+				case StructureMaterial.Bamboo: return "Bamboo";
+				case StructureMaterial.Marble: return "Marble";
+				case StructureMaterial.IceBlock: return "IceBlock";
+				case StructureMaterial.BoneWork: return "Bone";
+				case StructureMaterial.Reed: return "Reed";
 				default: return "Earth"; // Earth, Ash
 			}
 		}
@@ -89,7 +104,7 @@ namespace FishMMO.Shared.WorldDesign
 				case "Cloth": return 1f;
 				case "Thatch": return 2f;
 				case "Iron": return 1.5f;
-				default: return 3f;
+				default: return PaletteTileMetres(surface) ?? 3f;
 			}
 		}
 
@@ -103,6 +118,15 @@ namespace FishMMO.Shared.WorldDesign
 				case "Ashlar": return Ashlar(size, s);
 				case "Cloth": return Weave(size, s);
 				case "Monolith": return Monolith(size, s);
+				case "Log": return Logs(size, s);
+				case "Shingle": return Shingles(size, s);
+				case "Slate": return Slates(size, s);
+				case "Adobe": return MudBrick(size, s);
+				case "Sandstone": return SandstoneAshlar(size, s);
+				case "Bamboo": return Culms(size, s);
+				case "Marble": return MarbleBlocks(size, s);
+				case "IceBlock": return IceBlocks(size, s);
+				case "Bone": return Bones(size, s);
 				default:
 					SurfaceRecipe recipe = Recipe(surface);
 					return SurfaceSynth.Generate(in recipe, size, seed);
@@ -136,6 +160,9 @@ namespace FishMMO.Shared.WorldDesign
 					r.Motif = SurfaceMotif.Fractured; r.MotifCells = 5; r.MotifSize = 0.05f; r.MotifWeight = 0.55f; r.MotifDark = Hex("#55524c"); r.MotifLight = Hex("#8d8a82");
 					r.Speckles = new[] { Hex("#9a9a7a"), Hex("#5d6347") }; r.SpeckleCount = 900; r.SpeckleSize = 0.003f;
 					r.Smoothness = 0.2f; r.SmoothnessVariation = 0.15f; r.Occlusion = 0.7f;
+					break;
+				case "Reed":
+					ReedRecipe(ref r);
 					break;
 				case "Iron":
 					r.ReliefMetres = 0.004f; r.Dark = Hex("#26252a"); r.Mid = Hex("#3b3a3f"); r.Light = Hex("#5a5550"); r.Warp = 0.1f;

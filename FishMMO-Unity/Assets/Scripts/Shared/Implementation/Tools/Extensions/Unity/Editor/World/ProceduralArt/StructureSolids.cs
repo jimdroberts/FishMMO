@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 using UnityEngine;
 
 namespace FishMMO.Shared.WorldDesign
@@ -42,6 +43,29 @@ namespace FishMMO.Shared.WorldDesign
 		/// where <see cref="Glass"/> is dark until _FishNightLights rises.
 		/// </summary>
 		Lamplight,
+		// The structure palette's own surfaces (2026-10-16, I6a: "new surfaces such as log, shingle, slate, adobe, sandstone,
+		// bamboo, marble, ice block, bone, reed"). No kit builder builds in them: a biome's palette gives a role one of them,
+		// and the cut lays the piece in it (StructurePalettes). Mirrored by BiomeStructureMaterial.
+		/// <summary>Round or adze-hewn logs laid in courses, their ends notched: log walls.</summary>
+		Log,
+		/// <summary>Riven oak or cedar shingles in staggered courses: a shingled roof.</summary>
+		Shingle,
+		/// <summary>Split slates hung in diminishing courses, dark blue-grey: a slated roof.</summary>
+		Slate,
+		/// <summary>Sun-dried mud brick in courses under a worn mud wash: desert walls.</summary>
+		Adobe,
+		/// <summary>Warm sandstone ashlar with its bedding lines: desert and canyon masonry.</summary>
+		Sandstone,
+		/// <summary>Bamboo culms side by side, their nodes banded: walls and roofs of the bamboo country.</summary>
+		Bamboo,
+		/// <summary>Veined white marble in great blocks: palaces and temples.</summary>
+		Marble,
+		/// <summary>Blocks of clear ice with frosted joints: the frozen lands' halls.</summary>
+		IceBlock,
+		/// <summary>Long bones and antler lashed in rows (a barren land's huts): <see cref="Bone"/> is a bone pile's ivory.</summary>
+		BoneWork,
+		/// <summary>Reed bundles laid as thatch, paler and finer than straw: the fens' roofs.</summary>
+		Reed,
 	}
 
 	/// <summary>What a part does in its structure, which decides how a ruin treats it.</summary>
@@ -55,6 +79,30 @@ namespace FishMMO.Shared.WorldDesign
 		Detail,
 		/// <summary>Fallen pieces and rubble a ruin adds; never cut again.</summary>
 		Rubble,
+	}
+
+	/// <summary>
+	/// One submesh of a structure mesh: the material its parts are built of and the palette part they play (null for none),
+	/// 2026-10-16 (I6a). Ordered by material, then part (none first).
+	/// </summary>
+	public readonly struct StructureSlot : IEquatable<StructureSlot>, IComparable<StructureSlot>
+	{
+		public readonly StructureMaterial Material;
+		public readonly BiomeStructureRole? Part;
+
+		public StructureSlot(StructureMaterial material, BiomeStructureRole? part)
+		{
+			Material = material;
+			Part = part;
+		}
+
+		private int Order => (int)Material * 256 + (Part.HasValue ? (int)Part.Value + 1 : 0);
+
+		public int CompareTo(StructureSlot other) => Order.CompareTo(other.Order);
+		public bool Equals(StructureSlot other) => Material == other.Material && Part == other.Part;
+		public override bool Equals(object obj) => obj is StructureSlot other && Equals(other);
+		public override int GetHashCode() => Order;
+		public override string ToString() => Part.HasValue ? $"{Material}/{Part.Value}" : Material.ToString();
 	}
 
 	/// <summary>One flat face of a <see cref="StructureSolid"/>: a polygon wound counter-clockwise seen from outside.</summary>
@@ -112,10 +160,23 @@ namespace FishMMO.Shared.WorldDesign
 		public Vector3 Grain;
 		/// <summary>Added to every texture coordinate, so neighbouring parts do not repeat the same patch of texture.</summary>
 		public Vector2 UvOffset;
+		/// <summary>
+		/// The palette roles the builder meant the part to play, in preference (<see cref="StructureDraft.Builds"/>): the first
+		/// whose kit material is the part's own becomes its <see cref="Part"/> (StructureParts.Resolve). Null: the default for its
+		/// material in its piece.
+		/// </summary>
+		public BiomeStructureRole[] Hint;
+		/// <summary>
+		/// The part of the building it is in a biome's structure palette (2026-10-16, I6a): the palette's material for this role
+		/// in the piece's style is what the cut lays it in. Null for a part no palette changes (glass, a lamp's pane, a fire's
+		/// ash, hay). Always one whose kit material is <see cref="Material"/>, so the kit's palette lays every part as built.
+		/// Set when the level is built (StructurePieces.BuildSolids), from <see cref="Hint"/>.
+		/// </summary>
+		public BiomeStructureRole? Part;
 
 		public StructureSolid Clone()
 		{
-			var s = new StructureSolid { Material = Material, Role = Role, Key = Key, Grain = Grain, UvOffset = UvOffset };
+			var s = new StructureSolid { Material = Material, Role = Role, Key = Key, Grain = Grain, UvOffset = UvOffset, Hint = Hint, Part = Part };
 			foreach (StructureFace f in Faces)
 			{
 				s.Faces.Add(f.Clone());
@@ -943,21 +1004,26 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public static MeshBuilder ToMesh(List<StructureSolid> solids, out StructureMaterial[] materials)
 		{
-			var used = new SortedSet<StructureMaterial>();
-			foreach (StructureSolid s in solids)
-			{
-				if (s.Faces.Count > 0)
-				{
-					used.Add(s.Material);
-				}
-			}
-			materials = new StructureMaterial[used.Count];
-			used.CopyTo(materials);
-			var builder = new MeshBuilder(Mathf.Max(1, materials.Length));
+			MeshBuilder mesh = ToMesh(solids, out StructureSlot[] slots);
+			materials = Array.ConvertAll(slots, s => s.Material);
+			return mesh;
+		}
+
+		/// <summary>
+		/// The solids as one mesh with a submesh per material and palette part used (<see cref="StructureSlot"/>, 2026-10-16,
+		/// I6a), in material order and, within a material, part order (no part first): a material's submeshes are neighbours,
+		/// and the kit's palette gives them all that material again, so the instanced renderer (which batches by material)
+		/// draws them in the calls it drew the one submesh in. The vertices are written in the solids' order whatever the
+		/// slots, so they are the same as when a submesh was a material.
+		/// </summary>
+		public static MeshBuilder ToMesh(List<StructureSolid> solids, out StructureSlot[] slots)
+		{
+			slots = SlotsOf(solids);
+			var builder = new MeshBuilder(Mathf.Max(1, slots.Length));
 			var white = new Color32(255, 255, 255, 255);
 			foreach (StructureSolid s in solids)
 			{
-				int submesh = Array.IndexOf(materials, s.Material);
+				int submesh = Array.IndexOf(slots, new StructureSlot(s.Material, s.Part));
 				foreach (StructureFace f in s.Faces)
 				{
 					int count = f.Points.Count;
@@ -996,6 +1062,22 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			builder.RecalculateTangents();
 			return builder;
+		}
+
+		/// <summary>The submeshes the solids make (<see cref="ToMesh(List{StructureSolid}, out StructureSlot[])"/>): every material and part with a face, in order.</summary>
+		public static StructureSlot[] SlotsOf(List<StructureSolid> solids)
+		{
+			var used = new SortedSet<StructureSlot>();
+			foreach (StructureSolid s in solids)
+			{
+				if (s.Faces.Count > 0)
+				{
+					used.Add(new StructureSlot(s.Material, s.Part));
+				}
+			}
+			var slots = new StructureSlot[used.Count];
+			used.CopyTo(slots);
+			return slots;
 		}
 
 		private static void AddTriangle(MeshBuilder b, int submesh, int i0, int i1, int i2, Vector3 facing)

@@ -18,7 +18,8 @@ namespace FishMMO.Shared.WorldDesign
 				C(Ground.Rock), Ground.SaltCrust, Ground.SaltCrust)
 				.Look(BiomeLookClass.Desert)
 				.Water(BiomeWaterRole.SaltFlat)
-				.Wildlife(BiomeHabitat.Desert);
+				.Wildlife(BiomeHabitat.Desert)
+				.Moat(BiomeMoatWater.Dry);
 		}
 	}
 }

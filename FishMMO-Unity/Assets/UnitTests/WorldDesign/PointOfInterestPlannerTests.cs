@@ -110,9 +110,10 @@ namespace FishMMO.UnitTests.WorldDesign
 					Rivers = new List<RiverPath> { River() },
 					Lakes = new List<PointOfInterestLake> { new PointOfInterestLake { Id = 3, X = LakeX, Z = LakeZ, Level = 30f, AreaM2 = Mathf.PI * LakeRadius * LakeRadius } },
 				},
+				// Each biome hosts the kinds its authored template lists (the spec column, from these rules by its name).
 				Biomes = new List<PointOfInterestBiome>
 				{
-					new PointOfInterestBiome("Plains", 11), new PointOfInterestBiome("Forest", 12), new PointOfInterestBiome("Glacier", 13),
+					Hosting("Plains", 11, rules), Hosting("Forest", 12, rules), Hosting("Glacier", 13, rules),
 				},
 				BiomeAt = BiomeAt,
 				HardnessAt = (x, z, y) => 0.6f,
@@ -121,6 +122,17 @@ namespace FishMMO.UnitTests.WorldDesign
 				Seed = seed,
 				Builds = builds,
 			};
+		}
+
+		/// <summary>A scene biome as the stage hands it to the planner: the kinds its authored template hosts (BiomeArtSpec.Entry.SiteKinds).</summary>
+		internal static PointOfInterestBiome Hosting(string name, int id, PointOfInterestRules rules)
+		{
+			var kinds = new Dictionary<POIType, float>();
+			foreach (FishMMO.Shared.Biomes.BiomeSiteKind kind in BiomeArtSpec.For(name).SiteKinds(rules))
+			{
+				kinds[kind.Kind] = kind.Weight;
+			}
+			return new PointOfInterestBiome(name, id, null, kinds);
 		}
 
 		private static bool IsPlaced(PointOfInterestRecord record, PointOfInterestRules rules)
@@ -249,7 +261,8 @@ namespace FishMMO.UnitTests.WorldDesign
 					float slope = Mathf.Atan(Mathf.Sqrt(gx * gx + gz * gz)) * Mathf.Rad2Deg;
 					Assert.That(slope, Is.LessThanOrEqualTo(rule.MaxSlopeDegrees + 5f), $"{record.Kind} stands on ground no steeper than its kind allows");
 				}
-				Assert.That(rule.BiomeWeight(new[] { "Plains", "Forest", "Glacier" }[BiomeAt(x, z)]), Is.GreaterThan(0f), $"{record.Kind} stands in a biome it takes");
+				string biome = new[] { "Plains", "Forest", "Glacier" }[BiomeAt(x, z)];
+				Assert.That(Hosting(biome, 0, rules).WeightOf(rule), Is.GreaterThan(0f), $"{record.Kind} stands in a biome it takes");
 			}
 			Assert.That(placed, Is.GreaterThan(5));
 		}

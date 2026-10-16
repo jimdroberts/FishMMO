@@ -79,6 +79,27 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Removes a kind's row.</summary>
 		public void Remove(POIType kind) => rules.Remove(kind);
 
+		/// <summary>
+		/// The weight every row gives a biome by its asset name (<see cref="PointOfInterestKindRule.BiomeWeight"/>), for the kinds
+		/// it gives more than 0, in <see cref="POIType"/> order: what the biome art authoring writes onto a biome template's
+		/// SiteKinds (BiomeArtSpec.Entry.SiteKinds), and what a template never authored with them falls back on at the cut
+		/// (BiomeTemplateArt.SiteKinds). The planner itself reads only the template's (2026-10-16).
+		/// </summary>
+		public List<(POIType Kind, float Weight)> KindWeightsFor(string biomeName)
+		{
+			var kinds = new List<(POIType, float)>();
+			foreach (PointOfInterestKindRule rule in rules.Values)
+			{
+				float weight = rule.BiomeWeight(biomeName);
+				if (weight > 0f)
+				{
+					kinds.Add((rule.Kind, weight));
+				}
+			}
+			kinds.Sort((a, b) => ((int)a.Item1).CompareTo((int)b.Item1));
+			return kinds;
+		}
+
 		/// <summary>Every enabled row of a placement, in siting order: tier, then <see cref="POIType"/> ordinal.</summary>
 		public List<PointOfInterestKindRule> Ordered(PointOfInterestPlacement placement)
 		{
@@ -132,6 +153,10 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		// ── The defaults ─────────────────────────────────────────────
+		//
+		// The biome names below are the kinds' DEFAULT biomes (2026-10-16, phase I5): the biome art authoring writes, onto each
+		// biome template, the weight these rows give it for every kind (KindWeightsFor), and the cut sites kinds by the
+		// template's list alone. Changing a name here changes a scene only once the templates are re-authored.
 
 		private static readonly string[] Alien =
 		{

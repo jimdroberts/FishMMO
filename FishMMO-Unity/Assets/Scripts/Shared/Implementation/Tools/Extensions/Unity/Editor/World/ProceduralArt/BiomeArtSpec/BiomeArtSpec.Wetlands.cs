@@ -17,7 +17,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Moved("main", "Trees: Birch")
 				.Accepts(WatersideGeology)
 				.Look(BiomeLookClass.Wetland)
-				.Wildlife(BiomeHabitat.Wetland);
+				.Wildlife(BiomeHabitat.Wetland)
+				.Moat(BiomeMoatWater.Wet);
 		}
 	}
 }

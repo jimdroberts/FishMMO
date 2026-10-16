@@ -169,7 +169,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				if (PointOfInterestKinds.Info(spec.Kind).Has(PointOfInterestTraits.Underwater))
 				{
 					Assert.That(spec.Finish == PointOfInterestFinish.Algae || spec.Finish == PointOfInterestFinish.Auto, Is.True, spec.Name);
-					Assert.That(PropsFeature.FinishFor(spec.Finish, spec.FinishChance, spec.Kind, "Seabed", 0f, 0.99f), Is.EqualTo(StructureFinish.Algae), spec.Name);
+					Assert.That(PropsFeature.FinishFor(spec.Finish, spec.FinishChance, spec.Kind, BiomeArtSpec.WeatheringByName("Seabed"), 0f, 0.99f), Is.EqualTo(StructureFinish.Algae), spec.Name);
 				}
 			}
 		}
@@ -693,14 +693,14 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void FinishesFollowTheSite()
 		{
-			Assert.That(PropsFeature.FinishFor(PointOfInterestFinish.Auto, 1f, POIType.SunkenShip, "Seabed", 0f, 0.99f), Is.EqualTo(StructureFinish.Algae), "under water");
-			Assert.That(PropsFeature.FinishFor(PointOfInterestFinish.Auto, 1f, POIType.Ruins, "Desert", 1f, 0f), Is.EqualTo(StructureFinish.None), "no moss in a desert");
-			Assert.That(PropsFeature.FinishFor(PointOfInterestFinish.Auto, 1f, POIType.Ruins, "Forest", 0.8f, 0.5f), Is.EqualTo(StructureFinish.Mossy), "old stone in a forest");
-			Assert.That(PropsFeature.FinishFor(PointOfInterestFinish.Auto, 1f, POIType.Village, "Forest", 0f, 0.5f), Is.EqualTo(StructureFinish.None), "a lived-in village is kept");
-			Assert.That(PropsFeature.FinishFor(PointOfInterestFinish.Auto, 1f, POIType.Village, "Swamp", 0f, 0.1f), Is.EqualTo(StructureFinish.Algae), "a swamp's damp");
-			Assert.That(PropsFeature.FinishFor(PointOfInterestFinish.Auto, 1f, POIType.Battlefield, "Plains", 0f, 0.2f), Is.EqualTo(StructureFinish.Charred), "a battlefield burned");
-			Assert.That(PropsFeature.FinishFor(PointOfInterestFinish.Charred, 0.5f, POIType.Ruins, "Plains", 0f, 0.7f), Is.EqualTo(StructureFinish.None), "a forced finish on its share");
-			Assert.That(PropsFeature.FinishFor(PointOfInterestFinish.Charred, 0.5f, POIType.Ruins, "Plains", 0f, 0.3f), Is.EqualTo(StructureFinish.Charred));
+			Assert.That(PropsFeature.FinishFor(PointOfInterestFinish.Auto, 1f, POIType.SunkenShip, BiomeArtSpec.WeatheringByName("Seabed"), 0f, 0.99f), Is.EqualTo(StructureFinish.Algae), "under water");
+			Assert.That(PropsFeature.FinishFor(PointOfInterestFinish.Auto, 1f, POIType.Ruins, BiomeArtSpec.WeatheringByName("Desert"), 1f, 0f), Is.EqualTo(StructureFinish.None), "no moss in a desert");
+			Assert.That(PropsFeature.FinishFor(PointOfInterestFinish.Auto, 1f, POIType.Ruins, BiomeArtSpec.WeatheringByName("Forest"), 0.8f, 0.5f), Is.EqualTo(StructureFinish.Mossy), "old stone in a forest");
+			Assert.That(PropsFeature.FinishFor(PointOfInterestFinish.Auto, 1f, POIType.Village, BiomeArtSpec.WeatheringByName("Forest"), 0f, 0.5f), Is.EqualTo(StructureFinish.None), "a lived-in village is kept");
+			Assert.That(PropsFeature.FinishFor(PointOfInterestFinish.Auto, 1f, POIType.Village, BiomeArtSpec.WeatheringByName("Swamp"), 0f, 0.1f), Is.EqualTo(StructureFinish.Algae), "a swamp's damp");
+			Assert.That(PropsFeature.FinishFor(PointOfInterestFinish.Auto, 1f, POIType.Battlefield, BiomeArtSpec.WeatheringByName("Plains"), 0f, 0.2f), Is.EqualTo(StructureFinish.Charred), "a battlefield burned");
+			Assert.That(PropsFeature.FinishFor(PointOfInterestFinish.Charred, 0.5f, POIType.Ruins, BiomeArtSpec.WeatheringByName("Plains"), 0f, 0.7f), Is.EqualTo(StructureFinish.None), "a forced finish on its share");
+			Assert.That(PropsFeature.FinishFor(PointOfInterestFinish.Charred, 0.5f, POIType.Ruins, BiomeArtSpec.WeatheringByName("Plains"), 0f, 0.3f), Is.EqualTo(StructureFinish.Charred));
 		}
 
 		private static string[] Ids(string query, string style)

@@ -17,7 +17,8 @@ namespace FishMMO.Shared.WorldDesign
 					// Basalt talus at the foot of the trench walls, manganese nodules on the sediment.
 					SeaStones(SmallRocks("Basalt"), 0.8f, 0f, 0f), SeaStones(Pebbles("Nodule"), 1f, 0f, 0f))
 				.Look(BiomeLookClass.Aquatic)
-				.Wildlife(BiomeHabitat.Sea);
+				.Wildlife(BiomeHabitat.Sea)
+				.Moat(BiomeMoatWater.Frozen);
 		}
 	}
 }
