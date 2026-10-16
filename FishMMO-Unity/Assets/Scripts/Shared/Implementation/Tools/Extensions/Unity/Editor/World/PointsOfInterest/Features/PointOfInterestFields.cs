@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 using FishMMO.Shared.NameGeneration;
 using UnityEditor;
 using UnityEngine;
@@ -118,7 +119,9 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				if (field.Kind == FieldKind.Wheat || field.Kind == FieldKind.Ploughed)
 				{
-					PaintDetails(terrains, field, field.Kind == FieldKind.Wheat);
+					// The wheat takes the look of the biome its field lies in (2026-10-16).
+					BiomeTemplate biome = context.BiomeAt != null ? context.BiomeAt(field.Centre.x, field.Centre.y) : null;
+					PaintDetails(terrains, field, field.Kind == FieldKind.Wheat, biome);
 					crops++;
 				}
 				if (field.Kind == FieldKind.Ploughed)
@@ -200,9 +203,10 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Clears every detail inside the field and, for a crop, paints the wheat in (a headland left round it), on every
-		/// tile the field crosses.
+		/// tile the field crosses. A wheat prototype the field adds to a tile is recorded for <paramref name="biome"/>, whose
+		/// look of the wheat its blades then take (PointOfInterestHerbGrove.RecordBiome).
 		/// </summary>
-		private static void PaintDetails(List<Terrain> terrains, Field field, bool wheat)
+		private static void PaintDetails(List<Terrain> terrains, Field field, bool wheat, BiomeTemplate biome)
 		{
 			float r = field.Yaw * Mathf.Deg2Rad;
 			var axisX = new Vector2(Mathf.Cos(r), -Mathf.Sin(r));
@@ -229,6 +233,7 @@ namespace FishMMO.Shared.WorldDesign
 					continue;
 				}
 				int wheatLayer = wheat ? WheatLayer(data) : -1;
+				PointOfInterestHerbGrove.RecordBiome(terrain, wheatLayer, biome);
 				int layers = data.detailPrototypes.Length;
 				int w = x1 - x0 + 1, h = z1 - z0 + 1;
 				for (int layer = 0; layer < layers; layer++)

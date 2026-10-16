@@ -30,6 +30,7 @@
 #pragma kernel FishArgsFence
 #pragma kernel FishHiZCopy
 #pragma kernel FishHiZReduce
+#pragma use_dxc vulkan
 
 struct FishInstance { float4 row0; float4 row1; float4 row2; };            // 48 bytes
 struct FishVisible { uint index; float lodFade; };                          // 8 bytes

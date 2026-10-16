@@ -98,6 +98,7 @@ Shader "FishMMO/Water/Breaker"
             ColorMask 0
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex BreakerVertex
             #pragma fragment BreakerDepthFragment
             #pragma target 3.5
@@ -117,6 +118,7 @@ Shader "FishMMO/Water/Breaker"
             ZTest LEqual
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex BreakerVertex
             #pragma fragment BreakerFragment
             #pragma target 3.5

@@ -9,8 +9,8 @@ namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
 	/// The stone a terrain shaper builds a site in: the same rule as the cliffs, river boulders and fall ledges beside it
-	/// (<see cref="CliffRocks.RockFor"/>: the planet geology's rock where the site's biome accepts it, else the biome's
-	/// own), so a cave mouth in a sandstone canyon is sandstone.
+	/// (<see cref="BiomeTemplateArt.RockFor"/>: the planet geology's rock where the site's biome template accepts it, else
+	/// the biome's own rock), so a cave mouth in a sandstone canyon is sandstone.
 	/// </summary>
 	public static class PointOfInterestRock
 	{
@@ -19,14 +19,19 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>The rock (a <see cref="RockTypes"/> name, or <see cref="CliffRocks.Ice"/>) at a site's position.</summary>
 		public static string At(SceneGenerationRequest request, PointOfInterestRecord site, Vector3 position)
+			=> At(request, BiomeOf(site), position);
+
+		/// <summary>The rock a biome takes at a scene position: the planet's geology there by the biome's rock rule.</summary>
+		public static string At(SceneGenerationRequest request, BiomeTemplate biome, Vector3 position)
 		{
-			BiomeArtSpec.Entry spec = null;
-			if (site != null && site.BiomeID != 0 && BiomeRegistry.TryGetByID(site.BiomeID, out BiomeTemplate biome) && biome != null)
-			{
-				spec = BiomeArtSpec.For(biome.name);
-			}
 			Func<float, float, float, string> geology = Geology(request);
-			return CliffRocks.RockFor(spec, geology?.Invoke(position.x, position.y, position.z));
+			return BiomeTemplateArt.RockFor(biome, geology?.Invoke(position.x, position.y, position.z));
+		}
+
+		/// <summary>The template of the biome a site stands in (its record's), or null.</summary>
+		public static BiomeTemplate BiomeOf(PointOfInterestRecord site)
+		{
+			return site != null && site.BiomeID != 0 && BiomeRegistry.TryGetByID(site.BiomeID, out BiomeTemplate found) ? found : null;
 		}
 
 		/// <summary>The planet's geology under a scene (cached for the request being built), or null with no planet.</summary>

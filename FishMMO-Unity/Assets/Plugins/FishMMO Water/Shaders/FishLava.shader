@@ -90,6 +90,7 @@ Shader "FishMMO/Water/Lava"
             ZWrite On
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex LavaVertex
             #pragma fragment LavaFragment
             #pragma target 3.5
@@ -114,6 +115,7 @@ Shader "FishMMO/Water/Lava"
             ColorMask R
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex LavaDepthVertex
             #pragma fragment LavaDepthFragment
             #pragma target 3.5
@@ -132,6 +134,7 @@ Shader "FishMMO/Water/Lava"
             ZWrite On
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex LavaDepthVertex
             #pragma fragment LavaDepthNormalsFragment
             #pragma target 3.5

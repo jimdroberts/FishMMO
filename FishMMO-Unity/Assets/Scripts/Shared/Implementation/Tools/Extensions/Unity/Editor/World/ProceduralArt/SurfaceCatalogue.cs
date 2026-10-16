@@ -389,6 +389,88 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
+		// ── What each ground is made of (2026-10-15) ─────────────────
+
+		/// <summary>Wholly mineral: rock, sand, soil, ash (takes a thin-aired world's own ground colour).</summary>
+		private static readonly Vector3 Mineral = new Vector3(0f, 0f, 1f);
+		/// <summary>Snow, ice and frost: mineral, but keeping most of its own white (a frost on a rust world is still white).</summary>
+		private static readonly Vector3 Frozen = new Vector3(0f, 0f, (1f - 0f) * 0.3f);
+
+		/// <summary>Living to <paramref name="share"/>, the rest mineral (dead leaves and peat keep some of their colour).</summary>
+		private static Vector3 Living(float share) => new Vector3(share, 0f, (1f - share) * 1f);
+
+		/// <summary>
+		/// What each generated ground is made of, as the planet's looks see it (x living, y lichen, z mineral): a property of the
+		/// surface, written by the biome art authoring onto every template slot holding it (TerrainTextureLayer.GroundMakeup)
+		/// and baked per terrain array layer from there. Until 2026-10-15 the runtime read it from the layer's NAME
+		/// (BiomeLooks.GroundShareOf); every value here is what that reading gave the ground's layer, Ground_&lt;Name&gt;, so
+		/// nothing changed (BiomeLooksTests pins it).
+		/// </summary>
+		private static readonly Dictionary<string, Vector3> Makeup = new Dictionary<string, Vector3>
+		{
+			{ Ground.Grass, Living(1f) },
+			{ Ground.GrassDry, Living(0.55f) },
+			{ Ground.GrassMeadow, Living(1f) },
+			{ Ground.Moss, Living(1f) },
+			{ Ground.ForestFloor, Living(0.4f) },
+			{ Ground.NeedleLitter, Living(0.3f) },
+			{ Ground.JungleFloor, Living(0.7f) },
+			{ Ground.Soil, Mineral },
+			{ Ground.Mud, Mineral },
+			{ Ground.Clay, Mineral },
+			{ Ground.Sandstone, Mineral },
+			{ Ground.Sand, Mineral },
+			{ Ground.SandBeach, Mineral },
+			{ Ground.Gravel, Mineral },
+			{ Ground.Pebbles, Mineral },
+			{ Ground.Rock, Mineral },
+			{ Ground.CliffRock, Mineral },
+			{ Ground.Basalt, Mineral },
+			// Lava glows its own colour: nothing of the planet's leaves, lichen or ground.
+			{ Ground.Lava, Vector3.zero },
+			{ Ground.Ash, Mineral },
+			{ Ground.Snow, Frozen },
+			{ Ground.Ice, Frozen },
+			{ Ground.SaltCrust, Mineral },
+			{ Ground.Regolith, Mineral },
+			{ Ground.Sulphur, Mineral },
+			{ Ground.Peat, Living(0.3f) },
+			{ Ground.Limestone, Mineral },
+			{ Ground.Lichen, new Vector3(0f, 1f, 0f) },
+			{ Ground.Silt, Mineral },
+			{ Ground.Coral, new Vector3(0f, 0.6f, 0.4f) },
+			{ Ground.Tholin, Mineral },
+			{ Ground.Frost, Frozen },
+			{ Ground.CrackedEarth, Mineral },
+			{ Ground.Flagstone, Mineral },
+			{ Ground.Sphagnum, Living(1f) },
+			{ Ground.Heath, Living(0.85f) },
+			{ Ground.Sinter, Mineral },
+			{ Ground.Cinder, Mineral },
+			{ Ground.Pahoehoe, Vector3.zero },
+			{ Ground.Reg, Mineral },
+			{ Ground.Dust, Mineral },
+			{ Ground.Lineae, Mineral },
+			{ Ground.MetalFrost, Frozen },
+			{ Ground.TholinDune, Mineral },
+			{ Ground.PathLoam, Mineral },
+			{ Ground.PathDryEarth, Mineral },
+			{ Ground.PathRedEarth, Mineral },
+			{ Ground.PathSand, Mineral },
+			{ Ground.PathGrit, Mineral },
+			{ Ground.PathSnow, Frozen },
+			{ Ground.PathMud, Mineral },
+			{ Ground.PathAsh, Mineral },
+			{ Ground.PathSalt, Mineral },
+			{ Ground.PathLitter, Living(0.25f) },
+		};
+
+		/// <summary>What a generated ground is made of (<see cref="Makeup"/>); false for a name that is no generated ground.</summary>
+		public static bool TryMakeupOf(string ground, out Vector3 makeup) => Makeup.TryGetValue(ground ?? string.Empty, out makeup);
+
+		/// <summary>Every ground with a makeup, for tests.</summary>
+		public static IEnumerable<string> GroundsWithMakeup => Makeup.Keys;
+
 		/// <summary>Every bark family. Bark tiles are one metre: a trunk's UVs run in metres round and along it.</summary>
 		public static readonly SurfaceRecipe[] BarkRecipes =
 		{

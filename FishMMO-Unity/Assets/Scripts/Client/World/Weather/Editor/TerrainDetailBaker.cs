@@ -97,7 +97,9 @@ namespace FishMMO.Client
 			bake.name = $"{SceneName(scene, path)} {AssetName}";
 			bake.BakedVersion = TerrainDetailBake.Version;
 			var grassTypes = new List<GrassType>();
-			var grassByPrefab = new Dictionary<GameObject, GrassType>();
+			var grassKeys = new List<(GameObject Prefab, string Look)>();
+			// The templates as they are now (a cut may have just authored them): the same looks play will choose.
+			GrassBladeSystem.ForgetEditorBiomes();
 			var scatterTypes = new List<DetailScatterType>();
 			var scatterByPrefab = new Dictionary<GameObject, DetailScatterType>();
 			var warned = new HashSet<string>();
@@ -119,7 +121,7 @@ namespace FishMMO.Client
 					var tile = new TerrainDetailBake.Tile { Data = data, HeightResolution = data.heightmapResolution };
 					ushort[] heights = null;
 
-					GrassBladeSystem.SelectBlades(data, grassSettings, grassTypes, grassByPrefab, warned, prototypes, chosenGrass);
+					GrassBladeSystem.SelectBlades(terrain, grassSettings, grassTypes, grassKeys, warned, prototypes, chosenGrass);
 					GrassTerrain.Builder grass = prototypes.Count > 0 ? GrassTerrain.Begin(terrain, prototypes, chosenGrass) : null;
 					if (grass != null)
 					{

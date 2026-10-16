@@ -36,9 +36,9 @@ namespace FishMMO.Client
 	public static class FloraPaletteMap
 	{
 		/// <summary>
-		/// Palette rows per biome: foliage, root, bloom, accent, mineral, the living green's shift, and the biome's average
-		/// shift (the same in every column: what the ground colour map carries, so a plant pulled to it can take only its
-		/// patch's difference from it).
+		/// Palette rows per biome: foliage, root, bloom, accent, mineral, the living green's shift, and the ground's shift
+		/// (<see cref="GroundShift"/>, the same in every column: what the terrain and the ground colour map carry, so a plant
+		/// pulled to it can take only its patch's difference from it).
 		/// </summary>
 		public const int Rows = 7;
 
@@ -102,17 +102,14 @@ namespace FishMMO.Client
 		public static int Version { get; private set; }
 
 		/// <summary>
-		/// What the CPU's ground colour (GroundColourMap: 2 m texels, far below a patch's six) takes of the looks: per biome
-		/// on the map the weighted mean of its twelve looks' ground colours, the colours FishFlora.hlsl FishFloraGround
-		/// draws the terrain's layers toward, and the grid that says which biome lies where. Linear light throughout.
+		/// What the CPU's ground colour (GroundColourMap) takes of the looks: per biome on the map the shift its living ground
+		/// takes (<see cref="GroundShift"/>, as FishFlora.hlsl FishFloraGroundShiftAt draws the terrain), and the grid that
+		/// says which biome lies where. Linear light throughout.
 		/// </summary>
 		public sealed class GroundLookTable
 		{
-			/// <summary>Per palette index: the living ground's colour (lerp(root, foliage, 0.6), FishFloraGround's), weight-averaged over the looks.</summary>
-			/// <summary>Each biome's living-green shift (<see cref="BiomeLooks.Variant.Shift"/>), linear, averaged over its looks by weight.</summary>
+			/// <summary>Per palette index: the living ground's shift (<see cref="GroundShift"/>), linear.</summary>
 			public System.Numerics.Vector3[] Shift;
-			/// <summary>Per palette index: the lichen colour, weight-averaged over the looks.</summary>
-			public System.Numerics.Vector3[] Accent;
 			/// <summary>How far each takes its look (<see cref="Strength"/>), and the world's bare ground (rgb linear, a strength).</summary>
 			public Vector4 Strength, Ground;
 			public byte[] Indices;
@@ -154,7 +151,6 @@ namespace FishMMO.Client
 				var t = new GroundLookTable
 				{
 					Shift = new System.Numerics.Vector3[looks.Count],
-					Accent = new System.Numerics.Vector3[looks.Count],
 					Indices = gridIndices,
 					Width = gridWidth,
 					Height = gridHeight,
@@ -162,22 +158,8 @@ namespace FishMMO.Client
 				};
 				for (int b = 0; b < looks.Count; b++)
 				{
-					BiomeLooks.Look look = looks[b];
-					System.Numerics.Vector3 foliage = System.Numerics.Vector3.Zero, accent = System.Numerics.Vector3.Zero;
-					float previous = 0f, total = 0f;
-					for (int v = 0; v < BiomeLooks.Variants; v++)
-					{
-						float weight = Mathf.Max(0f, look.Cumulative[v] - previous);
-						previous = look.Cumulative[v];
-						BiomeLooks.Variant variant = look.Variants[v];
-						Color living = variant.Shift;
-						Color lichen = variant.Accent.linear;
-						foliage += new System.Numerics.Vector3(living.r, living.g, living.b) * weight;
-						accent += new System.Numerics.Vector3(lichen.r, lichen.g, lichen.b) * weight;
-						total += weight;
-					}
-					t.Shift[b] = total > 0f ? foliage / total : foliage;
-					t.Accent[b] = total > 0f ? accent / total : accent;
+					Color shift = GroundShift(looks[b]);
+					t.Shift[b] = new System.Numerics.Vector3(shift.r, shift.g, shift.b);
 				}
 				groundLooks = t;
 			}
@@ -412,12 +394,12 @@ namespace FishMMO.Client
 			for (int b = 0; b < looks.Count; b++)
 			{
 				BiomeLooks.Look look = looks[b];
-				Color average = AverageShift(look);
+				Color groundShift = GroundShift(look);
 				for (int v = 0; v < BiomeLooks.Variants; v++)
 				{
 					BiomeLooks.Variant variant = look.Variants[v];
 					int row = b * Rows;
-					pixels[(row + 6) * BiomeLooks.Variants + v] = average;
+					pixels[(row + 6) * BiomeLooks.Variants + v] = groundShift;
 					pixels[(row + 0) * BiomeLooks.Variants + v] = Linear(variant.Foliage, look.Cumulative[v]);
 					pixels[(row + 1) * BiomeLooks.Variants + v] = Linear(variant.Root, variant.Height);
 					pixels[(row + 2) * BiomeLooks.Variants + v] = Linear(variant.Bloom, variant.BloomSize);
@@ -447,21 +429,16 @@ namespace FishMMO.Client
 			Debug.Log($"[Flora] {described}.");
 		}
 
-		/// <summary>A biome's looks' shifts averaged by their weights (linear).</summary>
-		public static Color AverageShift(BiomeLooks.Look look)
+		/// <summary>
+		/// The shift a biome's living ground takes (linear): its common look's, which is what the planet changes (the star's
+		/// light, the air) and nothing else, white on an Earth-like world, so the ground's own textures are drawn as made. The
+		/// other eleven looks are the patches the grass and the plants wear; the ground wears none of them, nor their mean.
+		/// </summary>
+		public static Color GroundShift(BiomeLooks.Look look)
 		{
-			Color sum = Color.black;
-			float previous = 0f, total = 0f;
-			for (int v = 0; v < BiomeLooks.Variants; v++)
-			{
-				float weight = Mathf.Max(0f, look.Cumulative[v] - previous);
-				previous = look.Cumulative[v];
-				sum += look.Variants[v].Shift * weight;
-				total += weight;
-			}
-			Color average = total > 0f ? sum / total : Color.white;
-			average.a = 1f;
-			return average;
+			Color shift = look.Variants != null && look.Variants.Length > 0 ? look.Variants[0].Shift : Color.white;
+			shift.a = 1f;
+			return shift;
 		}
 
 		/// <summary>An sRGB colour in linear light, with <paramref name="alpha"/> carrying a number.</summary>

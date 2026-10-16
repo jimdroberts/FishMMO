@@ -36,6 +36,7 @@ Shader "Hidden/FishMMO/Weather/HeightFog"
             Blend One SrcAlpha   // rgb adds the fog's own light; alpha carries what it lets through
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
 

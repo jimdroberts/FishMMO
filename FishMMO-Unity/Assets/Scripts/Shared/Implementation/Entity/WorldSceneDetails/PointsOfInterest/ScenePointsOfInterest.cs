@@ -176,11 +176,14 @@ namespace FishMMO.Shared
 		/// </summary>
 		public Vector4 PathLayers = new Vector4(-1f, -1f, -1f, -1f);
 		/// <summary>
-		/// Per terrain layer (array slice), the slice of its biome's own path ground (footpaths, trails, tracks) and road
-		/// ground, −1 for none: the overlay wears a way into the ground of the biome under each pixel. 32 entries each.
+		/// Per terrain layer (array slice), the slice of its biome's own path ground (footpaths, trails, tracks), road ground
+		/// and cobbles, −1 for none: the overlay wears a way into the ground of the biome under each pixel, and paves its
+		/// cobbled stretches with that biome's stone. 32 entries each. A scene cut before the cobbles had a map (2026-10-15)
+		/// has none, and paves with <see cref="PathLayers"/>.z everywhere until it is repainted.
 		/// </summary>
 		public float[] PathEarthMap = Array.Empty<float>();
 		public float[] PathRoadMap = Array.Empty<float>();
+		public float[] PathStoneMap = Array.Empty<float>();
 		/// <summary>Where the sites' pieces give off smoke, fire and light (chimneys, fires, forges, lanterns), as laid.</summary>
 		public List<SceneEmitter> Emitters = new List<SceneEmitter>();
 		/// <summary>The sites' rooms, as laid: where the sky's light reaches only through windows and doors.</summary>

@@ -16,6 +16,7 @@
 #pragma kernel HorizontalFFT
 #pragma kernel VerticalFFT
 #pragma kernel Assemble
+#pragma use_dxc vulkan
 
 // The spectrum, its time evolution and the assembly are shared with the render-pass version for
 // machines with no compute (FishWaterFFT.shader), so the two cannot drift apart.

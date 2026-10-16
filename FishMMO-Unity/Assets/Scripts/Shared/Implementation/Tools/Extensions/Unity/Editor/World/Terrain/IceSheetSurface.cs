@@ -25,13 +25,17 @@ namespace FishMMO.Shared.WorldDesign
 	/// </para>
 	/// <para>
 	/// Only on land (a frozen sea is the Ice Shelf's: <see cref="SceneGeneration.IceShelfMetres(uint, float, float)"/>),
-	/// only on a world with water to make ice of, and only once the Ice Sheet biome exists — before the spec
-	/// table has created it, ice would be painted as whatever grows there.
+	/// only on a world with water to make ice of, and only once a biome holds the Ice Sheet water role (its
+	/// template's Water Role; found by the name "Ice Sheet" until 2026-10-15) — without one, ice would be painted
+	/// as whatever grows there.
 	/// </para>
 	/// </remarks>
 	public readonly struct IceSheetSurface
 	{
-		/// <summary>The biome this ice is the ground of.</summary>
+		/// <summary>
+		/// The name of the biome the spec tables create as this ice's ground. Not how it is found: the cut asks for the biome
+		/// holding the Ice Sheet water role (BiomeTemplateArt.WaterBiome).
+		/// </summary>
 		public const string BiomeName = "Ice Sheet";
 
 		/// <summary>The thickest the sheet stands above the ground it buries, scene metres: the height of a calving front.</summary>
@@ -58,7 +62,7 @@ namespace FishMMO.Shared.WorldDesign
 			active = body != null
 				&& !frozenSeas
 				&& field.Conditions.HasWater
-				&& BiomeRegistry.Contains(BiomeName);
+				&& BiomeTemplateArt.WaterBiome(BiomeWaterRole.IceSheet) != null;
 			offset = ((body != null ? body.ResolvedTerrainSeed : 1u) & 0xFFFF) * 0.311f;
 		}
 

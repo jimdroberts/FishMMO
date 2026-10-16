@@ -34,6 +34,7 @@
 
 #pragma kernel Scatter
 #pragma kernel Integrate
+#pragma use_dxc vulkan
 
 #pragma multi_compile_local _ FISH_VOLFOG_SHADOWS
 

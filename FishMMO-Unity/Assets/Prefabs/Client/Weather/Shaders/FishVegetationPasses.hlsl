@@ -390,8 +390,8 @@ half4 VegFloraColour(FishFloraLook look, half alpha, float kind)
     if (alpha > 0.65h)
     {
         /* Leaves are shifted, not recoloured (FishFloraShift), and AFTER the pull to the ground's colour: that colour (the
-         * ground colour map) already carries the biome's average shift, so a leaf takes only its patch's difference from it
-         * (shift ÷ biome average) and the planet's pigment is not applied twice. The pull itself keeps its full strength:
+         * ground colour map) already carries the biome's ground shift, so a leaf takes only its patch's difference from it
+         * (shift ÷ ground shift) and the planet's pigment is not applied twice. The pull itself keeps its full strength:
          * leaves sit on their ground's climate as they did. The strength goes NEGATIVE to tell the fragment. */
         return half4((half3)(look.shift / max(look.biomeShift, 1e-3)), -(half)_FishFloraStrength.x);
     }

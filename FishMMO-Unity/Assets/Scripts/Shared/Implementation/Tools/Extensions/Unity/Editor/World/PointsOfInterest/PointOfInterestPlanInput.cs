@@ -218,9 +218,10 @@ namespace FishMMO.Shared.WorldDesign
 		public readonly List<ScenePath> Paths = new List<ScenePath>();
 		/// <summary>The palette slices the ways are surfaced from (<see cref="ScenePointsOfInterest.PathLayers"/>).</summary>
 		public Vector4 PathLayers = new Vector4(-1f, -1f, -1f, -1f);
-		/// <summary>Per layer, its biome's path and road slices (<see cref="ScenePointsOfInterest.PathEarthMap"/>).</summary>
+		/// <summary>Per layer, its biome's path, road and cobble slices (<see cref="ScenePointsOfInterest.PathEarthMap"/>).</summary>
 		public float[] PathEarthMap = Array.Empty<float>();
 		public float[] PathRoadMap = Array.Empty<float>();
+		public float[] PathStoneMap = Array.Empty<float>();
 
 		/// <summary>Whether (x, z) lies in any keep-out disc.</summary>
 		public bool IsKeptOut(float x, float z)
@@ -271,6 +272,7 @@ namespace FishMMO.Shared.WorldDesign
 			plan.PathLayers = asset.PathLayers;
 			plan.PathEarthMap = asset.PathEarthMap ?? Array.Empty<float>();
 			plan.PathRoadMap = asset.PathRoadMap ?? Array.Empty<float>();
+			plan.PathStoneMap = asset.PathStoneMap ?? Array.Empty<float>();
 			return plan;
 		}
 
@@ -288,6 +290,7 @@ namespace FishMMO.Shared.WorldDesign
 			asset.PathLayers = PathLayers;
 			asset.PathEarthMap = PathEarthMap;
 			asset.PathRoadMap = PathRoadMap;
+			asset.PathStoneMap = PathStoneMap;
 			// Laid afresh by every place (PropsFeature): what the pieces give off.
 			asset.Emitters = new List<SceneEmitter>();
 			asset.Rooms = new List<SceneRoom>();

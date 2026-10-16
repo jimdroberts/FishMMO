@@ -27,10 +27,12 @@ namespace FishMMO.Shared.WorldDesign
 	/// the beds, and the grove's own edge is ragged rather than a disc.
 	/// </para>
 	/// <para>
-	/// <b>Of its biome.</b> The herbs are the wild kin of the gatherable herbs and fungi that grow there (their visuals in
-	/// <see cref="GatheringResourceCatalogue"/>: a forest grows silverleaf and morels, a bog mirewort and puffballs, the
-	/// cold frostbloom); the flowers are the biome's own (its flower rules in <see cref="BiomeArtSpec"/>). A biome with
-	/// neither takes common herbs and a meadow's flowers.
+	/// <b>Of its biome.</b> The herbs are its template's Herb Grove Herbs, which the biome art authoring fills with the wild
+	/// kin of the gatherable herbs and fungi offered there (their visuals in <see cref="GatheringResourceCatalogue"/>: a
+	/// forest grows silverleaf and morels, a bog mirewort and puffballs, the cold frostbloom; common herbs where none is);
+	/// the flowers are the biome's own (its template's Herb Grove Flowers, which the authoring fills with its flower rules,
+	/// or a meadow's where it has none). The plants a grove adds to a tile take its biome's blade looks
+	/// (<see cref="RecordBiome"/>).
 	/// </para>
 	/// <para>
 	/// <b>The nodes stand clear.</b> Each gathering node (<see cref="GatheringFeature"/>'s spawners, laid before the site
@@ -57,9 +59,6 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The width of the grove's fade at its edge, metres.</summary>
 		private const float EdgeFade = 2.0f;
 		private const string DetailPrefix = "Detail_";
-		private const string FlowersPrefix = "Detail_Flowers";
-		private const string MeadowFlowers = "Detail_FlowersMeadow";
-		private static readonly string[] CommonHerbs = { "Detail_BroadHerb", "Detail_HerbRuderal" };
 
 		public bool Handles(PointOfInterestRecord record) => record.Kind == POIType.HerbGrove;
 
@@ -75,15 +74,10 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			PointOfInterestRecord record = context.Record;
 			DeterministicRNG random = context.Random;
-			string biome = null;
-			if (context.BiomeAt != null)
-			{
-				BiomeTemplate template = context.BiomeAt(record.Position.x, record.Position.z);
-				biome = template != null ? template.name : null;
-			}
+			BiomeTemplate template = context.BiomeAt != null ? context.BiomeAt(record.Position.x, record.Position.z) : null;
 
-			List<GameObject> herbs = Load(HerbsFor(biome));
-			List<GameObject> flowers = Load(FlowersFor(biome));
+			List<GameObject> herbs = BiomeTemplateArt.GroveHerbs(template);
+			List<GameObject> flowers = BiomeTemplateArt.GroveFlowers(template);
 			if (herbs.Count == 0 && flowers.Count == 0)
 			{
 				PointOfInterestFeatureKit.Note(context, "no herb or flower detail prefabs to grow the grove with: run the procedural art generator.");
@@ -122,6 +116,7 @@ namespace FishMMO.Shared.WorldDesign
 			var grove = new Grove
 			{
 				Context = context,
+				Biome = template,
 				Species = species,
 				Beds = beds,
 				Sprinkled = sprinkled,
@@ -147,61 +142,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── What grows there ──────────────────────────────────────────
 
-		/// <summary>
-		/// The detail prefabs of the herbs and fungi gathered in a biome (the visuals of the catalogue's resources that grow
-		/// there), else common herbs.
-		/// </summary>
-		public static List<string> HerbsFor(string biome)
-		{
-			var herbs = new List<string>();
-			foreach (GatheringResource resource in GatheringResourceCatalogue.All)
-			{
-				if ((resource.Family == GatheringFamily.Herb || resource.Family == GatheringFamily.Fungus)
-					&& resource.Suits(biome)
-					&& !string.IsNullOrEmpty(resource.Visual)
-					&& resource.Visual.StartsWith(DetailPrefix, StringComparison.Ordinal)
-					&& !herbs.Contains(resource.Visual))
-				{
-					herbs.Add(resource.Visual);
-				}
-			}
-			if (herbs.Count == 0)
-			{
-				herbs.AddRange(CommonHerbs);
-			}
-			return herbs;
-		}
-
-		/// <summary>The detail prefabs of a biome's own flowers (its flower rules), else a meadow's.</summary>
-		public static List<string> FlowersFor(string biome)
-		{
-			var flowers = new List<string>();
-			BiomeArtSpec.Entry entry = string.IsNullOrEmpty(biome) ? null : BiomeArtSpec.For(biome);
-			if (entry != null)
-			{
-				foreach ((BiomeArtSpec.Layer layer, BiomeArtSpec.Scatter rule) pair in entry.Rules())
-				{
-					BiomeArtSpec.Scatter rule = pair.rule;
-					if (rule.Channel != PrefabSpawnChannel.DetailLayer || rule.Prefabs == null)
-					{
-						continue;
-					}
-					foreach (string prefab in rule.Prefabs)
-					{
-						if (!string.IsNullOrEmpty(prefab) && prefab.StartsWith(FlowersPrefix, StringComparison.Ordinal) && !flowers.Contains(prefab))
-						{
-							flowers.Add(prefab);
-						}
-					}
-				}
-			}
-			if (flowers.Count == 0)
-			{
-				flowers.Add(MeadowFlowers);
-			}
-			return flowers;
-		}
-
+		/// <summary>Generated prefabs by name (missing ones left out, repeats once), in order.</summary>
 		internal static List<GameObject> Load(List<string> names)
 		{
 			var prefabs = new List<GameObject>(names.Count);
@@ -262,6 +203,8 @@ namespace FishMMO.Shared.WorldDesign
 		private sealed class Grove
 		{
 			public PointOfInterestSiteContext Context;
+			/// <summary>The biome the grove stands in: the one whose blade looks the plants it adds to a tile take.</summary>
+			public BiomeTemplate Biome;
 			public List<GameObject> Species;
 			public List<Bed> Beds;
 			/// <summary>The flowers sprinkled between the beds (index into <see cref="Species"/>), or −1.</summary>
@@ -303,6 +246,7 @@ namespace FishMMO.Shared.WorldDesign
 				for (int s = 0; s < Species.Count; ++s)
 				{
 					layers[s] = LayerOf(data, Species[s]);
+					RecordBiome(terrain, layers[s], Biome);
 				}
 				int w = x1 - x0 + 1, h = z1 - z0 + 1;
 				var maps = new int[Species.Count][,];
@@ -462,7 +406,7 @@ namespace FishMMO.Shared.WorldDesign
 				noiseSpread = copy.noiseSpread,
 				noiseSeed = copy.noiseSeed,
 				density = copy.density,
-				// Upright, as the biome's plants are (BiomeArtSpec.Plants).
+				// Upright, as the biome's plants are.
 				alignToGround = 0.0f,
 				positionJitter = 1.0f,
 				useDensityScaling = copy.useDensityScaling,
@@ -473,6 +417,37 @@ namespace FishMMO.Shared.WorldDesign
 			data.detailPrototypes = grown;
 			data.RefreshPrototypes();
 			return prototypes.Length;
+		}
+
+		/// <summary>
+		/// Records the biome a point of interest stands in for a detail prototype it paints on a tile, where the tile has no
+		/// record of the prototype yet (one the site added: the scatter records its own rules' prototypes, each for the biome
+		/// whose rule made it). The prototype's blades then take that biome's look of the prefab (its Grass Types entry), or
+		/// the old look where it has none, and keep their material's tints (2026-10-16: a grove's flowers and a field's wheat
+		/// take the look of the biome they grow in). Nothing for no biome, or a prototype already recorded.
+		/// </summary>
+		internal static void RecordBiome(Terrain terrain, int layer, BiomeTemplate biome)
+		{
+			TerrainData data = terrain != null ? terrain.terrainData : null;
+			if (data == null || biome == null || layer < 0)
+			{
+				return;
+			}
+			DetailPrototype[] prototypes = data.detailPrototypes;
+			DetailPrototype prototype = layer < prototypes.Length ? prototypes[layer] : null;
+			if (prototype?.prototype == null)
+			{
+				return;
+			}
+			TerrainDetailBiomes record = terrain.GetComponent<TerrainDetailBiomes>();
+			if (record == null)
+			{
+				record = terrain.gameObject.AddComponent<TerrainDetailBiomes>();
+			}
+			if (record.RecordSite(prototype.prototype.name, prototype.noiseSeed, BiomeRegistry.IDOf(biome)))
+			{
+				EditorUtility.SetDirty(record);
+			}
 		}
 	}
 }

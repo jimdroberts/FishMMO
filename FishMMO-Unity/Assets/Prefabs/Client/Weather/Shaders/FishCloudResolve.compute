@@ -21,6 +21,7 @@
 // Runs where FishCloudsFeature.ComputeResolveSupported says so; everywhere else pass 1 does the same.
 
 #pragma kernel Resolve
+#pragma use_dxc vulkan
 
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
 #include "FishCloudResolve.hlsl"

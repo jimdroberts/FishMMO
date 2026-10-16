@@ -53,6 +53,7 @@ Shader "FishMMO/Backdrop Ground"
             Name "ForwardLit"
             Tags { "LightMode" = "UniversalForward" }
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             // Texture arrays.
             #pragma target 3.5
 
@@ -105,6 +106,7 @@ Shader "FishMMO/Backdrop Ground"
             ColorMask R
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 3.5
 
             #pragma vertex DepthOnlyVertex
@@ -125,6 +127,7 @@ Shader "FishMMO/Backdrop Ground"
             ZWrite On
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 3.5
             #pragma vertex DepthNormalOnlyVertex
             #pragma fragment DepthNormalOnlyFragment

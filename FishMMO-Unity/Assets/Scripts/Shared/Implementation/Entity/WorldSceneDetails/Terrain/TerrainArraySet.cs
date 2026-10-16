@@ -93,34 +93,61 @@ namespace FishMMO.Shared
 			&& LayerMaskScale != null && LayerMaskScale.Length == TerrainArrayLayerParams.MaximumLayers
 			&& LayerSurface != null && LayerSurface.Length == TerrainArrayLayerParams.MaximumLayers;
 
+		[Tooltip("What each layer's ground is made of, from the biome slot it was painted from (TerrainTextureLayer.GroundMakeup): x living, y lichen, z mineral, w 1 where the slot had one (0: read from the layer's name). Written by the bake; not part of the content hash, refreshed in place when only it changed.")]
+		public Vector4[] LayerMakeup = new Vector4[0];
+
 		[System.NonSerialized] private Vector4[] layerFlora;
 		[System.NonSerialized] private string[] layerFloraNames;
+		[System.NonSerialized] private Vector4[] layerFloraMakeup;
+		[System.NonSerialized] private bool warnedNameFallback;
 
 		/// <summary>
 		/// Per layer (<see cref="TerrainArrayLayerParams.MaximumLayers"/> long) what it is made of as the planet's looks see
-		/// it, from its name (<see cref="Biomes.BiomeLooks.GroundShareOf"/>): x living, y lichen, z mineral, w 0. The terrain
-		/// shader's <c>_FishLayerFlora</c>, the grass's colour read and the contact blend all take it from here, so the three
-		/// agree on every layer.
+		/// it: x living, y lichen, z mineral, w 0. The terrain shader's <c>_FishLayerFlora</c>, the grass's colour read and the
+		/// contact blend all take it from here, so the three agree on every layer.
 		/// </summary>
 		/// <remarks>
-		/// Not baked: it is a function of the names, which the set already holds, and baking it would leave every set made
-		/// before it without one. Worked out on first use and kept until the names change (a rebake writes new ones).
+		/// <para>
+		/// From the biome slot each layer was painted from (<see cref="LayerMakeup"/>, baked from the template's
+		/// <see cref="Biomes.TerrainTextureLayer.GroundMakeup"/>; 2026-10-15). A layer with none — a set baked before then, or
+		/// hand-made art whose slot has no makeup — is read from its name as it always was
+		/// (<see cref="Biomes.BiomeLooks.GroundShareOf"/>), with one warning for the set.
+		/// </para>
+		/// <para>
+		/// Worked out on first use and kept until the names or the makeup change (a rebake writes new ones).
+		/// </para>
 		/// </remarks>
 		public Vector4[] LayerFlora()
 		{
-			if (layerFlora != null && ReferenceEquals(layerFloraNames, LayerNames))
+			if (layerFlora != null && ReferenceEquals(layerFloraNames, LayerNames) && ReferenceEquals(layerFloraMakeup, LayerMakeup))
 			{
 				return layerFlora;
 			}
 			var flora = new Vector4[TerrainArrayLayerParams.MaximumLayers];
 			int count = Mathf.Min(LayerCount, TerrainArrayLayerParams.MaximumLayers);
-			for (int i = 0; i < count && LayerNames != null && i < LayerNames.Length; i++)
+			int byName = 0;
+			string first = null;
+			for (int i = 0; i < count; i++)
 			{
-				Biomes.BiomeLooks.GroundShare share = Biomes.BiomeLooks.GroundShareOf(LayerNames[i]);
+				if (LayerMakeup != null && i < LayerMakeup.Length && LayerMakeup[i].w > 0.5f)
+				{
+					flora[i] = new Vector4(LayerMakeup[i].x, LayerMakeup[i].y, LayerMakeup[i].z, 0f);
+					continue;
+				}
+				string name = LayerNames != null && i < LayerNames.Length ? LayerNames[i] : null;
+				Biomes.BiomeLooks.GroundShare share = Biomes.BiomeLooks.GroundShareOf(name);
 				flora[i] = new Vector4(share.Foliage, share.Accent, share.Mineral, 0f);
+				byName++;
+				first ??= name;
+			}
+			if (byName > 0 && !warnedNameFallback)
+			{
+				warnedNameFallback = true;
+				Debug.LogWarning($"[Terrain arrays] '{SceneName}': {byName} of {count} layer(s) have no ground makeup from their biome slot (e.g. '{first}'), so what they are made of was read from their names. Author biome art, then repaint (or rebake the arrays) to take it from the templates; hand-made layers need Ground Makeup set on their slot.");
 			}
 			layerFlora = flora;
 			layerFloraNames = LayerNames;
+			layerFloraMakeup = LayerMakeup;
 			return flora;
 		}
 	}

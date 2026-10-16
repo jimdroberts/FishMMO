@@ -68,6 +68,7 @@ Shader "Hidden/FishMMO/Water/FFT"
         {
             Name "InitialSpectrum"
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
 
@@ -82,6 +83,7 @@ Shader "Hidden/FishMMO/Water/FFT"
         {
             Name "TimeSpectrum"
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
 
@@ -99,6 +101,7 @@ Shader "Hidden/FishMMO/Water/FFT"
         {
             Name "Butterfly"
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
 
@@ -144,6 +147,7 @@ Shader "Hidden/FishMMO/Water/FFT"
         {
             Name "Assemble"
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
 

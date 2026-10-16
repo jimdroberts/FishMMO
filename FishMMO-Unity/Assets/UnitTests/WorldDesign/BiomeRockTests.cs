@@ -183,7 +183,59 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(generator, Does.Contain("Func<float, float, float, string> rockAt = BiomeRockTypes(field, cliffOptions.RockTypeAt);"));
 			Assert.That(generator, Does.Not.Contain("cliffOptions.RockTypeAt, options.Seed"), "no boulder or ledge reads the geology alone");
 			string placer = System.IO.File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/Terrain/CliffPlacer.cs");
-			Assert.That(placer, Does.Contain("CliffRocks.Accepts(spec[b], bedrock)"), "a cliff takes the geology's rock only where its biome accepts it");
+			Assert.That(placer, Does.Contain("CliffRocks.Accepts(ownRock[b], accepted[b], bedrock)"), "a cliff takes the geology's rock only where its biome accepts it");
+			Assert.That(placer, Does.Contain("ownRock[b] = BiomeTemplateArt.OwnRock(entry.Biome);"), "the biome's own rock is its template's");
+			Assert.That(placer, Does.Contain("accepted[b] = BiomeTemplateArt.AcceptedRocks(entry.Biome);"), "and so are the rocks it accepts");
+			Assert.That(placer, Does.Contain("BiomeTemplateArt.CliffRock(entry, out string family)"), "each cliff layer's rock is its template layer's");
+			Assert.That(generator, Does.Contain("rules[b] = BiomeTemplateArt.RockRule(field.Biomes[b]);"), "boulders and ledges ask the template's rule");
+		}
+
+		/// <summary>
+		/// The rule a template's values feed (its own rock and the rocks it accepts, as the authoring writes them from the
+		/// spec) gives the same rock as the spec entry's rule did, for every biome on every planet lithology and on none:
+		/// moving the decision onto the template changed no cliff, boulder, ledge or site stone.
+		/// </summary>
+		[Test]
+		public void TheTemplatesRockRule_GivesWhatTheSpecsDid()
+		{
+			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
+			{
+				string own = CliffRocks.OwnRock(entry);
+				var accepted = new System.Collections.Generic.List<string>(entry.Rocks);
+				Assert.That(CliffRocks.RockFor(own, accepted, null), Is.EqualTo(CliffRocks.RockFor(entry, null)), entry.Biome);
+				foreach (Lithology lithology in PlanetGeology.Lithologies)
+				{
+					string geology = lithology.RockTypeName;
+					Assert.That(CliffRocks.RockFor(own, accepted, geology), Is.EqualTo(CliffRocks.RockFor(entry, geology)), $"{entry.Biome} on {lithology.Name}");
+					Assert.That(CliffRocks.Accepts(own, accepted, geology), Is.EqualTo(CliffRocks.Accepts(entry, geology)), $"{entry.Biome} accepts {geology}");
+				}
+			}
+			// No biome at all: granite, whatever the geology but granite itself.
+			Assert.That(CliffRocks.RockFor(CliffRocks.OwnRock((BiomeArtSpec.Entry)null), System.Array.Empty<string>(), "Basalt"), Is.EqualTo("Granite"));
+		}
+
+		/// <summary>
+		/// A cliff layer's authored rock type is what the scene cut reads, and None keeps the face plain terrain; the rock
+		/// it is authored with is the one the placer computed from the spec's family before (CliffRocks.RockTypeFor).
+		/// </summary>
+		[Test]
+		public void ACliffLayersRockType_IsWhatTheCutStandsOnIt()
+		{
+			var basalt = new SceneTerrainPalette.Entry { Slot = SceneTerrainPalette.SlotCliff + "0", Source = new CliffTextureLayer { rockType = "Basalt" } };
+			Assert.That(BiomeTemplateArt.CliffRock(basalt, out _), Is.EqualTo("Basalt"));
+			var soil = new SceneTerrainPalette.Entry { Slot = SceneTerrainPalette.SlotCliff + "0", Source = new CliffTextureLayer { rockType = CliffTextureLayer.NoRock } };
+			Assert.That(BiomeTemplateArt.CliffRock(soil, out _), Is.Null, "None stays terrain");
+			int rockFaces = 0;
+			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
+			{
+				foreach (BiomeArtSpec.Cliff cliff in entry.Cliffs)
+				{
+					string rock = CliffRocks.RockTypeFor(cliff.Family, entry);
+					Assert.That(rock == null || rock == CliffRocks.Ice || CliffRocks.IsCliffRock(rock), Is.True, $"{entry.Biome} {cliff.Family}: {rock}");
+					rockFaces += rock != null ? 1 : 0;
+				}
+			}
+			Assert.That(rockFaces, Is.GreaterThan(40), "most biomes' cliffs stand in rock");
 		}
 	}
 }

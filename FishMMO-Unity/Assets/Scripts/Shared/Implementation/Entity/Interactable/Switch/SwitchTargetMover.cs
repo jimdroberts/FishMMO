@@ -63,11 +63,15 @@ namespace FishMMO.Shared
 		[SerializeField]
 		private bool solidWhenOpenToo;
 
+		[Tooltip("The transform is authored in the OPEN pose (the closed pose is worked out from it and the offsets): a drawbridge saved lowered, so the scene, the NavMesh baked from it and the editor show the way across.")]
+		[SerializeField]
+		private bool authoredOpen;
+
 		/// <inheritdoc />
 		public bool IsActivated { get; private set; }
 
 		/// <summary>
-		/// The closed pose, captured once from the authored transform.
+		/// The closed pose, captured once from the authored transform (or worked out from it, <see cref="authoredOpen"/>).
 		/// </summary>
 		private Vector3 closedPosition;
 		private Quaternion closedRotation;
@@ -105,11 +109,20 @@ namespace FishMMO.Shared
 				movedTransform = transform;
 			}
 
-			closedPosition = movedTransform.localPosition;
-			closedRotation = movedTransform.localRotation;
-
-			openPosition = closedPosition + openPositionOffset;
-			openRotation = closedRotation * Quaternion.Euler(openRotationOffset);
+			if (authoredOpen)
+			{
+				openPosition = movedTransform.localPosition;
+				openRotation = movedTransform.localRotation;
+				closedPosition = openPosition - openPositionOffset;
+				closedRotation = openRotation * Quaternion.Inverse(Quaternion.Euler(openRotationOffset));
+			}
+			else
+			{
+				closedPosition = movedTransform.localPosition;
+				closedRotation = movedTransform.localRotation;
+				openPosition = closedPosition + openPositionOffset;
+				openRotation = closedRotation * Quaternion.Euler(openRotationOffset);
+			}
 
 			IsActivated = startActivated;
 			travel = startActivated ? 1.0f : 0.0f;

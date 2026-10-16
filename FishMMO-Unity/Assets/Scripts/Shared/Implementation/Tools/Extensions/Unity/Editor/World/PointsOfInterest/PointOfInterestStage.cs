@@ -47,7 +47,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// them afresh).
 		/// </summary>
 		private Vector4 previousPathLayers = new Vector4(-1f, -1f, -1f, -1f);
-		private float[] previousEarthMap = Array.Empty<float>(), previousRoadMap = Array.Empty<float>();
+		private float[] previousEarthMap = Array.Empty<float>(), previousRoadMap = Array.Empty<float>(), previousStoneMap = Array.Empty<float>();
 
 		public PointOfInterestPlan Plan { get; private set; }
 		/// <summary>The template each built site was given, by record id.</summary>
@@ -76,6 +76,7 @@ namespace FishMMO.Shared.WorldDesign
 				stage.previousPathLayers = old.PathLayers;
 				stage.previousEarthMap = old.PathEarthMap ?? Array.Empty<float>();
 				stage.previousRoadMap = old.PathRoadMap ?? Array.Empty<float>();
+				stage.previousStoneMap = old.PathStoneMap ?? Array.Empty<float>();
 				foreach (PointOfInterestRecord record in old.Points)
 				{
 					if (record != null)
@@ -159,13 +160,14 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/// <summary>Sets each layer's own biome's path and road slices (<see cref="ScenePointsOfInterest.PathEarthMap"/>).</summary>
-		public void SetPathLayerMaps(float[] earth, float[] road)
+		/// <summary>Sets each layer's own biome's path, road and cobble slices (<see cref="ScenePointsOfInterest.PathEarthMap"/>).</summary>
+		public void SetPathLayerMaps(float[] earth, float[] road, float[] stone)
 		{
 			if (Plan != null)
 			{
 				Plan.PathEarthMap = earth ?? Array.Empty<float>();
 				Plan.PathRoadMap = road ?? Array.Empty<float>();
+				Plan.PathStoneMap = stone ?? Array.Empty<float>();
 			}
 		}
 
@@ -292,6 +294,7 @@ namespace FishMMO.Shared.WorldDesign
 			plan.PathLayers = previousPathLayers;
 			plan.PathEarthMap = previousEarthMap;
 			plan.PathRoadMap = previousRoadMap;
+			plan.PathStoneMap = previousStoneMap;
 			if (Reused)
 			{
 				// A repaint keeps the heights: no pads.
@@ -347,10 +350,18 @@ namespace FishMMO.Shared.WorldDesign
 				// A shore pad (a mill's yard) also leaves the channel itself alone inside its radius.
 				Func<float, float, bool> padChannel = water == null ? null : (Func<float, float, bool>)((x, z) =>
 					!float.IsNegativeInfinity(water.RiverSurfaceNear(x, z, 0f)) || !float.IsNegativeInfinity(water.LakeSurfaceNear(x, z)));
+				/* Nor is a bank cut under the water beside it: a mill's yard levelled to its floor (its own water and a freeboard)
+				 * cut the bank upstream, where the river past it stands higher, 0.64 m under the river (Flo Monolith's Sha Mill Race,
+				 * 2026-10-15), and the water measured on the finished ground stood that much lower. As the ways' carve keeps it. */
+				Func<float, float, float> padFloor = water == null ? null : (Func<float, float, float>)((x, z) =>
+				{
+					float near = Mathf.Max(water.RiverSurfaceNear(x, z, PathBankReachMetres), water.LakeSurfaceNear(x, z));
+					return float.IsNegativeInfinity(near) ? float.NegativeInfinity : near + PathBankFreeboardMetres;
+				});
 				foreach (PointOfInterestPad pad in plan.Pads)
 				{
 					float flatness = Templates.TryGetValue(pad.Id, out PointOfInterestTemplate template) ? template.PadFlatness : 1f;
-					if (PointOfInterestTerrain.FlattenPad(terrains, tiles, pad, flatness, padWet, padChannel) > 0)
+					if (PointOfInterestTerrain.FlattenPad(terrains, tiles, pad, flatness, padWet, padChannel, padFloor) > 0)
 					{
 						flattened++;
 					}
@@ -567,9 +578,21 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			Plan.Paths.AddRange(paths.Paths);
+			/* Where a way crosses a moat, the far bank is levelled to the drawbridge's hinge and the way ramps down to it (MoatShaper
+			 * .Landings): before the ways are carved, so the road grades into the landing. */
+			var laid = new List<MoatShaper.Landing>();
+			int landings = MoatShaper.Landings(terrains, tiles, Plan.Shapes, Plan.Paths, ground, laid);
+			if (landings > 0)
+			{
+				notes?.Add($"Paths: {landings} moat crossing(s) given a landing at the drawbridge's level.");
+			}
 			// A way across a moat keeps the banks' level (it crosses on the drawbridge) and leaves the ditch undug.
 			List<PointOfInterestShape> shapes = Plan.Shapes;
-			Func<float, float, float> deck = (x, z) => MoatShaper.BankLevel(shapes, x, z, ground, out float bank) ? bank : ground(x, z);
+			/* And on a landing past the ditch, at the drawbridge's level, left as it was levelled: carved as any way's stretch, its
+			 * level taken from the ground either side past the landing's edges, the road filled the landing back up toward the far
+			 * bank's own height (Flo Monolith's Mossy Elkring Keep, 2026-10-15). */
+			Func<float, float, float> deck = (x, z) => MoatShaper.BankLevel(shapes, x, z, ground, out float bank) ? bank
+				: MoatShaper.OnLanding(laid, x, z, out MoatShaper.Landing landing) ? landing.Hinge : ground(x, z);
 			// Never cut under the water beside it: a way along a bank keeps the bank above the river's or lake's surface.
 			Func<float, float, float> aboveWater = water == null ? null : (Func<float, float, float>)((x, z) =>
 			{
@@ -579,7 +602,7 @@ namespace FishMMO.Shared.WorldDesign
 				return float.IsNegativeInfinity(near) ? float.NegativeInfinity : near + PathBankFreeboardMetres;
 			});
 			int carved = PathCarver.Carve(terrains, tiles, Plan.Paths, deck, (x, z) => WaterAt(x, z) != PathCellWater.Dry, Plan.Pads,
-				(x, z) => MoatShaper.Contains(shapes, x, z), aboveWater);
+				(x, z) => MoatShaper.Contains(shapes, x, z) || MoatShaper.OnLandingOrRamp(laid, x, z), aboveWater);
 			// A gorge's stone arch is laid level between raked rims: its approaches are built up on the low rim and cut into
 			// the high one here, after the ways (which would even them back toward the ground beside), so the site finds rims
 			// that meet its deck.

@@ -58,6 +58,7 @@ Shader "FishMMO/Weather Terrain"
             Name "ForwardLit"
             Tags { "LightMode" = "UniversalForward" }
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 3.0
 
             #pragma vertex SplatmapVert
@@ -123,6 +124,7 @@ Shader "FishMMO/Weather Terrain"
             ColorMask 0
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 2.0
 
             #pragma vertex ShadowPassVertex
@@ -148,6 +150,7 @@ Shader "FishMMO/Weather Terrain"
             Tags{"LightMode" = "UniversalGBuffer"}
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 4.5
 
             // Deferred Rendering Path does not support the OpenGL-based graphics API:
@@ -215,6 +218,7 @@ Shader "FishMMO/Weather Terrain"
             ColorMask R
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 2.0
 
             #pragma vertex DepthOnlyVertex
@@ -237,6 +241,7 @@ Shader "FishMMO/Weather Terrain"
             ZWrite On
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 2.0
             #pragma vertex DepthNormalOnlyVertex
             #pragma fragment DepthNormalOnlyFragment
@@ -258,6 +263,7 @@ Shader "FishMMO/Weather Terrain"
             Tags { "LightMode" = "SceneSelectionPass" }
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 2.0
 
             #pragma vertex DepthOnlyVertex
@@ -281,6 +287,7 @@ Shader "FishMMO/Weather Terrain"
             Cull Off
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex TerrainVertexMeta
             #pragma fragment TerrainFragmentMeta
 

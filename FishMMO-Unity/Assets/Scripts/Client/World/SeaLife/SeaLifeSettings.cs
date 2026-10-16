@@ -80,8 +80,9 @@ namespace FishMMO.Client
 		public Vector2 FloorClearance = new Vector2(1.5f, 3f);
 		[Tooltip("The water's temperature it lives in, -1 coldest .. 1 hottest (the scene's climate at the place).")]
 		public Vector2 Temperature = new Vector2(-1f, 1f);
-		[Tooltip("Biomes (asset names) where it is most at home: groups there are this many times as common.")]
+		[Tooltip("Biomes (asset names) where it is most at home, as it was decided before 2026-10-16: since then each biome template names its own sea life (Sea Life Homes, written by Author biome art from the same lists), and this is read only for a template never authored.")]
 		public string[] Prefers = new string[0];
+		[Tooltip("In a biome that names it among its sea life (its template's Sea Life Homes), groups are this many times as common.")]
 		[Min(1f)] public float PreferWeight = 3f;
 		[Tooltip("Elsewhere, its density is multiplied by this (0: it lives only in its preferred biomes).")]
 		[Range(0f, 1f)] public float ElsewhereWeight = 1f;

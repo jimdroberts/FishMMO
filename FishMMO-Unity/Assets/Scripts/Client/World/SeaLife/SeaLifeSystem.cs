@@ -778,6 +778,33 @@ namespace FishMMO.Client
 				return true;
 			}
 
+			/// <summary>Whether a template's own sea life was found missing (warned once a session, as every template fallback is).</summary>
+			private static bool warnedFallback;
+
+			/// <summary>
+			/// Whether a kind is most at home in a biome: its template's Sea Life Homes name it (2026-10-16). A template never
+			/// authored with them falls back on the kind's own list of biome names (<see cref="SeaLifePlacement.PrefersByName"/>),
+			/// with one warning a session.
+			/// </summary>
+			private static bool IsHomeIn(SeaCreatureKind kind, BiomeTemplate biome)
+			{
+				if (biome == null)
+				{
+					return false;
+				}
+				List<string> homes = biome.SeaLifeHomes;
+				if (biome.IsAuthored(BiomeTemplate.Authored.SeaLifeHomes) || homes != null && homes.Count > 0)
+				{
+					return SeaLifePlacement.IsHome(kind, homes);
+				}
+				if (!warnedFallback)
+				{
+					warnedFallback = true;
+					Debug.LogWarning($"[Biome templates] '{biome.name}' has no sea life homes: the sea creatures' own lists of biome names are read instead (said once; other templates may be the same). Run Biomes → Authoring → Author biome art to write them onto the templates.");
+				}
+				return SeaLifePlacement.PrefersByName(kind, biome.name);
+			}
+
 			private static bool Contains(Terrain t, float x, float z)
 			{
 				if (t == null || t.terrainData == null)
@@ -789,9 +816,9 @@ namespace FishMMO.Client
 				return x >= origin.x && z >= origin.z && x <= origin.x + size.x && z <= origin.z + size.z;
 			}
 
-			public void Habitat(Vector3 position, out string biome, out float temperature)
+			public void Habitat(Vector3 position, SeaCreatureKind kind, out bool home, out float temperature)
 			{
-				biome = null;
+				home = false;
 				temperature = 0f;
 				if (settings == null)
 				{
@@ -799,7 +826,7 @@ namespace FishMMO.Client
 				}
 				SceneBiomeMap map = settings.BiomeMap;
 				BiomeTemplate template = map != null ? map.Sample(position) : null;
-				biome = template != null ? template.name : null;
+				home = IsHomeIn(kind, template);
 				// The climate the ground was painted from, without the weather's runtime offsets: placement must
 				// not depend on the hour it is first seen.
 				ScenePlacementClimate placement = settings.PlacementClimate;

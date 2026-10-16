@@ -38,9 +38,9 @@ namespace FishMMO.UnitTests.Weather
 				return true;
 			}
 
-			public void Habitat(Vector3 position, out string biome, out float temperature)
+			public void Habitat(Vector3 position, SeaCreatureKind kind, out bool home, out float temperature)
 			{
-				biome = Biome;
+				home = SeaLifePlacement.PrefersByName(kind, Biome);
 				temperature = Temperature;
 			}
 		}

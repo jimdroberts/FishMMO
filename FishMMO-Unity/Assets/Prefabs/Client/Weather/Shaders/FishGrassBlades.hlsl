@@ -38,7 +38,7 @@ StructuredBuffer<GrassBlade> _GrassBlades;
  * constant arrays on the material (16 types, the head colours four times that); at 32 types a table read with Load
  * keeps the material's constants small and is the same floats. Rows 0..2 are the compute's. */
 Texture2D<float4> _GrassTypeTable;
-#define GRASS_ROW_ROOT 3          // rgb colour at the root, a unused
+#define GRASS_ROW_ROOT 3          // rgb colour at the root, a how much of the terrain texture's colour the type takes (its biome's BiomeGrassType.GroundTint)
 #define GRASS_ROW_TIP 4           // rgb colour at the tip, a base width (m)
 #define GRASS_ROW_HEALTHY 5       // rgb healthy tint, a tint spread between neighbours
 #define GRASS_ROW_DRY 6           // rgb dry tint, a healthy/dry patch size (m)
@@ -68,7 +68,7 @@ float4 _GrassScreen;
 // This camera's position (GrassBladeRenderer.Execute; the shadow pass's own camera is the light's): xyz.
 float4 _GrassViewer;
 float4 _GrassParams5;   // far-field blend: x start (m), y end (share of the grass distance), z ground colour pull, w normal flatten
-float4 _GrassParams6;   // terrain texture colour: x strength, y brightness, z root strength; w edge-on thickening (0..1)
+float4 _GrassParams6;   // terrain texture colour: x unused (the strength is per type: GRASS_ROW_ROOT a), y brightness, z root strength; w edge-on thickening (0..1)
 float4 _GrassParams7;   // wind calm with distance: x start (m), y end (m), z bend kept at the end (0..1); w top-down lay (sine of its angle)
 
 // The ground colour map (GroundColourMap; same globals FishVegetationPasses.hlsl reads).
@@ -477,9 +477,9 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     // A clump's bias also leans its hue a little toward straw.
     colour = lerp(colour, colour * float3(1.12, 1.02, 0.78), (clumpColour - 0.5) * 0.4);
     /* The look of the blade's patch, as a SHIFT of the type's own colour (FishFloraShift), before the ground's colour is
-     * blended in below: that colour (the terrain under the root, read by the compute through FishFloraGround with this
-     * same patch's look, or the ground colour map's biome average) is shifted already, so every part of the blade is
-     * shifted once. The terrain's own colour, the type's shading and the season's browning stay, so a dry slope is still
+     * blended in below: that colour (the terrain under the root, read by the compute through FishFloraGround, or the
+     * ground colour map) carries only the biome's ground shift, so the blend below takes it the rest of the way to the
+     * patch, and every part of the blade is shifted once; the very root stays the ground's own colour. The terrain's own colour, the type's shading and the season's browning stay, so a dry slope is still
      * straw and a wet hollow still green, and the planet and the patch move them (olive under a K star, plum under a red
      * dwarf; a golden or silvered patch a tint of its meadow). A look that REPLACED the colour (2026-10-15, the first
      * version) turned meadows into chunks of colour that ignored their climate. The common look of an Earth-like world
@@ -536,7 +536,12 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
         float3 typeMid = lerp(typeRoot.rgb, typeTip.rgb, 0.57) * season;
         float shade = dot(colour, lumWeights) / max(1e-3, dot(typeMid, lumWeights));
         float3 target = terrain.rgb * shade * lerp(1.0, browning, 0.6) * _GrassParams6.y;
-        colour = lerp(colour, target, saturate(_GrassParams6.x));
+        // The ground carries its biome's ground shift; the blade takes its patch's (the ground stays as the terrain draws it).
+        if (look.valid)
+        {
+            target = FishFloraShift(target, look.shift / max(look.biomeShift, 1e-3), _FishFloraStrength.x);
+        }
+        colour = lerp(colour, target, saturate(typeRoot.a));
         // The very root is the ground itself.
         float rootUp = saturate(t / max(0.02, _GrassParams3.y));
         rootGround = terrain.rgb;

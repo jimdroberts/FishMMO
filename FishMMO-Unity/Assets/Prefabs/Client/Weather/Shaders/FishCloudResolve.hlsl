@@ -456,8 +456,8 @@ FishCloudResolved FishCloudResolve(float2 uv, float rawHere, float here, float3 
                     float4 clipped = FishResolveClip(before, mean, gamma * sigma, units);
                     history = FishResolveFromYCoCg(clipped);
                     float change = max(abs(before.x - mean.x) / max(max(before.x, mean.x), FISH_RESOLVE_CHANGE_FLOOR), abs(before.w - mean.w));
-                    float real = _FishCloudUpsample.z > 0.0 ? smoothstep(0.5 * _FishCloudUpsample.z, 1.5 * _FishCloudUpsample.z, change) : 1.0;
-                    frames *= 1.0 - smoothstep(1.0, 3.0, units) * real;
+                    float genuine = _FishCloudUpsample.z > 0.0 ? smoothstep(0.5 * _FishCloudUpsample.z, 1.5 * _FishCloudUpsample.z, change) : 1.0;
+                    frames *= 1.0 - smoothstep(1.0, 3.0, units) * genuine;
                 }
             }
 

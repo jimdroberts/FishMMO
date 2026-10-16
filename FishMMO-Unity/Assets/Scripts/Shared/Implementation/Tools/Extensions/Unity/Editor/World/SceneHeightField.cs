@@ -105,10 +105,16 @@ namespace FishMMO.Shared.WorldDesign
 		/// From the column's index across the whole grid, in double precision, so a column shared by
 		/// two tiles is one position, not two that round differently.
 		/// </remarks>
-		public float EastOf(int x) => (float)(x * (double)Plan.TileMetres / Mathf.Max(1, Plan.Resolution - 1) - Plan.WidthMetres * 0.5);
+		public float EastOf(int x) => EastOf(Plan, x);
 
 		/// <summary>Scene metres north of the centre of row <paramref name="z"/>.</summary>
-		public float NorthOf(int z) => (float)(z * (double)Plan.TileMetres / Mathf.Max(1, Plan.Resolution - 1) - Plan.DepthMetres * 0.5);
+		public float NorthOf(int z) => NorthOf(Plan, z);
+
+		/// <summary>Scene metres east of column <paramref name="x"/> of a plan's grid (<see cref="EastOf(int)"/>, with no field to hand).</summary>
+		public static float EastOf(TerrainTilePlan plan, int x) => (float)(x * (double)plan.TileMetres / Mathf.Max(1, plan.Resolution - 1) - plan.WidthMetres * 0.5);
+
+		/// <summary>Scene metres north of row <paramref name="z"/> of a plan's grid (<see cref="NorthOf(int)"/>, with no field to hand).</summary>
+		public static float NorthOf(TerrainTilePlan plan, int z) => (float)(z * (double)plan.TileMetres / Mathf.Max(1, plan.Resolution - 1) - plan.DepthMetres * 0.5);
 
 		/// <summary>The lowest and highest sample, in scene metres above the body's sea level.</summary>
 		public void Range(out float lowest, out float highest)

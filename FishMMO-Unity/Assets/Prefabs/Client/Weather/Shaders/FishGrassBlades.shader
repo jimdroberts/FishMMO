@@ -32,6 +32,7 @@ Shader "FishMMO/Grass Blades"
             ZWrite On
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 4.5
             #pragma vertex GrassVertexMain
             #pragma fragment GrassForwardFragment
@@ -62,6 +63,7 @@ Shader "FishMMO/Grass Blades"
             Cull Off
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 4.5
             #pragma vertex GrassDepthVertex
             #pragma fragment GrassDepthFragment
@@ -83,6 +85,7 @@ Shader "FishMMO/Grass Blades"
             Cull Off
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 4.5
             #pragma vertex GrassDepthVertex
             #pragma fragment GrassDepthFragment
@@ -101,6 +104,7 @@ Shader "FishMMO/Grass Blades"
             Cull Off
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 4.5
             #pragma vertex GrassVertexMain
             #pragma fragment GrassDepthNormalsFragment

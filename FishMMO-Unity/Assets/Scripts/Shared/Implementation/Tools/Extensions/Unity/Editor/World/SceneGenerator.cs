@@ -453,13 +453,20 @@ namespace FishMMO.Shared.WorldDesign
 
 				/* Canyon walls where the plateaus' risers stand steep: meshes with their faces stood up
 				 * and their beds jutting, the terrain holed under them. Before the biomes are painted,
-				 * so the cliff rocks placed then find the holes and stand only where there is ground. */
+				 * so the cliff rocks placed then find the holes and stand only where there is ground.
+				 * Each cell of wall stands in the rock its biome takes there (the geology's where the
+				 * biome accepts it, else its own), so the biomes are read here, from the finished ground
+				 * the paint reads them from too, and the paint is handed the same field. */
+				SceneBiomeField wallBiomes = null;
 				if (erosion != null && erosion.PlateauWeight != null)
 				{
 					SceneWaterGrid waterGrid = water != null ? water.Grid : null;
+					wallBiomes = SceneBiomeField.Build(request, plan, tileGround, SolarSystemProfile.Resolve(request.Body),
+						water: water != null && water.Any ? water : null);
 					CanyonWallReport walls = CanyonWalls.Build(scene, terrains, plan, ground, erosion.PlateauWeight, erosion.Geology,
 						$"{terrainFolder}/{WorldEditorAssets.Sanitize(request.SceneName)} Canyon Walls.asset", null,
-						waterGrid != null && waterGrid.Kind.Length == ground.Metres.Length ? i => waterGrid.Kind[i] != WaterKind.None : null);
+						waterGrid != null && waterGrid.Kind.Length == ground.Metres.Length ? i => waterGrid.Kind[i] != WaterKind.None : null,
+						BiomeRocks(wallBiomes), CanyonWalls.RecordPath(terrainFolder, request.SceneName));
 					result.Notes.AddRange(walls.Notes);
 					result.Wrote.AddRange(walls.Wrote);
 					clock.Lap("Canyon walls");
@@ -478,7 +485,7 @@ namespace FishMMO.Shared.WorldDesign
 					paintGround = (east, north) => ground.MetresAt(Mathf.Clamp(east, -halfW, halfW), Mathf.Clamp(north, -halfD, halfD));
 				}
 				if (!PaintBiomes(scene, request, plan, terrains, terrainFolder, result, out Func<float, float, float, float, Color> groundColour,
-					out BackdropLayerWeigher backdropWeights, ground: paintGround, water: water, poi: poi))
+					out BackdropLayerWeigher backdropWeights, ground: paintGround, water: water, poi: poi, field: wallBiomes))
 				{
 					foreach (Terrain terrain in terrains)
 					{
@@ -964,7 +971,7 @@ namespace FishMMO.Shared.WorldDesign
 		internal static bool PaintBiomes(Scene scene, SceneGenerationRequest request, TerrainTilePlan plan, Terrain[,] terrains,
 			string terrainFolder, SceneGenerationResult result, out Func<float, float, float, float, Color> groundColour,
 			out BackdropLayerWeigher backdropWeights, LocalArtScope scope = null, Func<float, float, float> ground = null, SceneWater water = null,
-			PointOfInterestStage poi = null)
+			PointOfInterestStage poi = null, SceneBiomeField field = null)
 		{
 			if (water != null && !water.Any)
 			{
@@ -984,7 +991,9 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			var stages = new StageClock("Biomes");
-			SceneBiomeField field = SceneBiomeField.Build(request, plan, (east, north) => GroundAltitude(terrains, plan, east, north), system, water: water);
+			// Read once a cut: the canyon walls read it first (on the same ground and water) and hand it on.
+			bool wallsBuiltFromField = field != null;
+			field ??= SceneBiomeField.Build(request, plan, (east, north) => GroundAltitude(terrains, plan, east, north), system, water: water);
 			stages.Lap("biome field");
 			if (field.Biomes.Count == 0)
 			{
@@ -1006,6 +1015,14 @@ namespace FishMMO.Shared.WorldDesign
 				result.Notes.Add($"Painted with {scope.Reason}.");
 			}
 
+			/* The canyon walls in the rock the templates give them now (a repaint: a cut built them from this very field just
+			 * before). Their shape, collider and holes stay as cut; only their rock is the biomes' to change. */
+			if (!wallsBuiltFromField)
+			{
+				RedressCanyonWalls(scene, request, plan, terrainFolder, field, scope, result.Notes);
+				stages.Lap("canyon walls");
+			}
+
 			BiomeTerrainLayers.ClearCache();
 			SceneTerrainPalette palette = SceneTerrainPalette.Build(field, scope.PaletteResolver(BiomeTerrainLayers.Resolve), BiomeTerrainLayers.Placeholder,
 				water != null ? RiverSediment() : null, poi != null && poi.HasPaths ? PathSurfaces() : null);
@@ -1014,7 +1031,8 @@ namespace FishMMO.Shared.WorldDesign
 				// The arrays' slices the path overlay samples its earth, road and cobbles from, and each ground layer's own biome's.
 				float[] coverage = field.Coverage();
 				poi.PathLayers = palette.PathLayers(coverage);
-				poi.SetPathLayerMaps(palette.PathLayerMap(SceneTerrainPalette.SlotPathEarth, coverage), palette.PathLayerMap(SceneTerrainPalette.SlotPathGravel, coverage));
+				poi.SetPathLayerMaps(palette.PathLayerMap(SceneTerrainPalette.SlotPathEarth, coverage), palette.PathLayerMap(SceneTerrainPalette.SlotPathGravel, coverage),
+					palette.PathLayerMap(SceneTerrainPalette.SlotPathStone, coverage));
 				if (poi.HasPaths && poi.PathLayers.x < 0f)
 				{
 					result.Notes.Add("Paths: no path ground is in the palette (the generated Path grounds are missing: Biome Tools → Art → Generate missing biome art, then repaint), so the ways are carved and thin the grass but are not drawn on the terrain.");
@@ -1205,28 +1223,69 @@ namespace FishMMO.Shared.WorldDesign
 			return true;
 		}
 
-		/// <summary>The rock type of the planet's geology under a scene position, read on a 32 m grid.</summary>
 		/// <summary>
-		/// The rock at a scene position (x, altitude, z) as its biome takes it (<see cref="CliffRocks.RockFor"/>): the
-		/// geology's where the biome there accepts it, else the biome's own. For river boulders and fall ledges, so they
-		/// are the rock of the cliffs beside them; null geology gives every biome its own rock.
+		/// Dresses an existing scene's canyon walls in the rock the current templates give each of their cells
+		/// (<see cref="CanyonWalls.Redress"/>, with <see cref="BiomeRocks"/> of the repaint's field), from the cells and
+		/// geology the cut kept beside its terrain (<see cref="SceneCanyonWallCells"/>). A scene with walls but no record (cut
+		/// before 2026-10-16) keeps the rock it was cut with and says once that a re-cut is needed; a LOCAL copy, whose walls
+		/// are the committed scene's meshes, is left alone.
+		/// </summary>
+		private static void RedressCanyonWalls(Scene scene, SceneGenerationRequest request, TerrainTilePlan plan, string terrainFolder,
+			SceneBiomeField field, LocalArtScope scope, List<string> notes)
+		{
+			if (CanyonWalls.RootOf(scene) == null)
+			{
+				return;
+			}
+			if (scope != null && scope.AllowsLocal)
+			{
+				notes.Add("Canyon walls: a LOCAL copy shares the committed scene's wall meshes, so they keep their rock here; repaint the committed scene to dress them from the templates.");
+				return;
+			}
+			var record = AssetDatabase.LoadAssetAtPath<SceneCanyonWallCells>(CanyonWalls.RecordPath(terrainFolder, request.SceneName));
+			if (record == null)
+			{
+				notes.Add("Canyon walls: this scene was cut before its walls' cells were kept (2026-10-16), so they keep the rock they were cut with. Re-cut it to have them follow the templates.");
+				return;
+			}
+			CanyonWallReport walls = CanyonWalls.Redress(scene, plan, record, BiomeRocks(field));
+			notes.AddRange(walls.Notes);
+		}
+
+		/// <summary>
+		/// The rock at a scene position (x, altitude, z) as its biome takes it (<see cref="BiomeTemplateArt.RockRule"/>): the
+		/// geology's where the biome there accepts it (its template's Accepted Rocks), else the biome's own (its Own Rock). For
+		/// river boulders and fall ledges, so they are the rock of the cliffs beside them; null geology gives every biome its own.
 		/// </summary>
 		private static Func<float, float, float, string> BiomeRockTypes(SceneBiomeField field, Func<float, float, float, string> geology)
 		{
-			var specs = new BiomeArtSpec.Entry[field.Biomes.Count];
-			for (int b = 0; b < specs.Length; b++)
+			Func<float, float, string, string> rocks = BiomeRocks(field);
+			return (x, altitude, z) => rocks(x, z, geology?.Invoke(x, altitude, z));
+		}
+
+		/// <summary>
+		/// The rock the biome at a scene position (x, z) takes where the geology's rock there is the given one (a RockTypes
+		/// name, or null where unknown): <see cref="BiomeTemplateArt.RockRule"/> of the dominant biome there. Main thread only
+		/// (one scratch buffer); each biome's rule is resolved once, here, so a template's fallback warns here and not per rock.
+		/// </summary>
+		private static Func<float, float, string, string> BiomeRocks(SceneBiomeField field)
+		{
+			var rules = new Func<string, string>[field.Biomes.Count];
+			for (int b = 0; b < rules.Length; b++)
 			{
-				specs[b] = field.Biomes[b] != null ? BiomeArtSpec.For(field.Biomes[b].name) : null;
+				rules[b] = BiomeTemplateArt.RockRule(field.Biomes[b]);
 			}
-			var scratch = new float[Math.Max(1, specs.Length)];
-			return (x, altitude, z) =>
+			Func<string, string> none = BiomeTemplateArt.RockRule(null);
+			var scratch = new float[Math.Max(1, rules.Length)];
+			return (x, z, geology) =>
 			{
 				int b = field.DominantIndexAt(x, z, scratch);
-				BiomeArtSpec.Entry spec = b >= 0 && b < specs.Length ? specs[b] : null;
-				return CliffRocks.RockFor(spec, geology?.Invoke(x, altitude, z));
+				Func<string, string> rule = b >= 0 && b < rules.Length ? rules[b] : none;
+				return rule(geology);
 			};
 		}
 
+		/// <summary>The rock type of the planet's geology under a scene position, read on a 32 m grid.</summary>
 		/// <remarks>
 		/// Safe from several threads at once (the cliff planner asks its sites in parallel): a cell's rock is a pure function
 		/// of the cell, so two threads that both miss it compute the same answer and either may keep it.
@@ -1252,86 +1311,45 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The sand and gravel every biome's river bars are painted with: the generated Sand and Gravel ground,
-		/// borrowed from the biomes whose riverbeds use them (Desert and Forest). Empty when neither exists.
+		/// The sand and gravel a biome's river bars are painted with: its template's Bar Sand and Bar Gravel layers
+		/// (<see cref="BiomeTemplateArt.Grounds"/>). Each biome's own, so a bar across two biomes is shared between them by
+		/// their weights there as the rest of the ground is. Empty for a biome with neither.
 		/// </summary>
-		private static List<(string slot, TerrainTextureLayer source)> RiverSediment()
+		private static Func<BiomeTemplate, IReadOnlyList<(string slot, TerrainTextureLayer source)>> RiverSediment()
 		{
-			var sediment = new List<(string, TerrainTextureLayer)>();
-			TerrainTextureLayer sand = BiomeRegistry.Get("Desert")?.RiverbedTextureLayer;
-			TerrainTextureLayer gravel = BiomeRegistry.Get("Forest")?.RiverbedTextureLayer;
-			if (sand != null && sand.HasAlbedo)
+			var grounds = new BiomeTemplateArt.Grounds();
+			return biome =>
 			{
-				sediment.Add((SceneTerrainPalette.SlotSand, sand));
-			}
-			if (gravel != null && gravel.HasAlbedo)
-			{
-				sediment.Add((SceneTerrainPalette.SlotGravel, gravel));
-			}
-			return sediment;
+				var sediment = new List<(string, TerrainTextureLayer)>();
+				TerrainTextureLayer sand = grounds.BarSand(biome);
+				TerrainTextureLayer gravel = grounds.BarGravel(biome);
+				if (sand != null && sand.HasAlbedo)
+				{
+					sediment.Add((SceneTerrainPalette.SlotSand, sand));
+				}
+				if (gravel != null && gravel.HasAlbedo)
+				{
+					sediment.Add((SceneTerrainPalette.SlotGravel, gravel));
+				}
+				return sediment;
+			};
 		}
 
 		/// <summary>
-		/// The grounds a biome's ways are surfaced with: its Small Path layer (footpaths, trails, cart tracks), its Road layer
-		/// and the cobbles every biome shares. A slot the biome leaves empty takes the generated path ground for the ground it
-		/// is painted with (<see cref="SurfaceCatalogue.PathGroundFor"/>, <see cref="SurfaceCatalogue.RoadGroundFor"/>):
-		/// loam through grass, a littered track through forest, packed sand through desert, trampled snow over ice.
+		/// The grounds a biome's ways are surfaced with: its template's Small Path layer (footpaths, trails, cart tracks),
+		/// Road layer and Cobbles layer (<see cref="BiomeTemplateArt.Grounds"/>), which the biome art authoring fills with
+		/// the path grounds the spec names for it: loam through grass, a littered track through forest, packed sand through
+		/// desert, trampled snow over ice.
 		/// </summary>
 		internal static Func<BiomeTemplate, IReadOnlyList<(string slot, TerrainTextureLayer source)>> PathSurfaces()
 		{
-			var generated = new Dictionary<string, TerrainTextureLayer>();
-			TerrainTextureLayer Generated(string ground)
-			{
-				if (!generated.TryGetValue(ground, out TerrainTextureLayer layer))
-				{
-					var terrainLayer = AssetDatabase.LoadAssetAtPath<TerrainLayer>(ProceduralArtCatalogue.GroundLayerPath(ground));
-					layer = terrainLayer != null && terrainLayer.diffuseTexture != null
-						? new TerrainTextureLayer
-						{
-							terrainLayer = terrainLayer,
-							albedoTexture = terrainLayer.diffuseTexture,
-							normalTexture = terrainLayer.normalMapTexture,
-							maskTexture = terrainLayer.maskMapTexture,
-							tileSize = terrainLayer.tileSize,
-						}
-						: null;
-					generated[ground] = layer;
-				}
-				return layer;
-			}
-			// The ground family a biome is painted with: its main layer's, else its first detail's.
-			string GroundOf(BiomeTemplate biome)
-			{
-				string Name(TerrainTextureLayer layer)
-				{
-					string name = layer?.terrainLayer != null ? layer.terrainLayer.name : null;
-					return name != null && name.StartsWith("Ground_", StringComparison.Ordinal) ? name.Substring(7) : null;
-				}
-				string ground = Name(biome.MainTextureLayer);
-				if (ground == null && biome.DetailTextureLayers != null)
-				{
-					foreach (TerrainTextureLayer detail in biome.DetailTextureLayers)
-					{
-						ground = Name(detail);
-						if (ground != null)
-						{
-							break;
-						}
-					}
-				}
-				return ground ?? Ground.Grass;
-			}
-			TerrainTextureLayer stone = Generated(Ground.Flagstone);
+			var grounds = new BiomeTemplateArt.Grounds();
 			return biome =>
 			{
 				var surfaces = new List<(string, TerrainTextureLayer)>();
-				string ground = GroundOf(biome);
-				TerrainTextureLayer earth = biome.SmallPathTextureLayer != null && biome.SmallPathTextureLayer.HasAlbedo
-					? biome.SmallPathTextureLayer
-					: Generated(SurfaceCatalogue.PathGroundFor(ground)) ?? Generated(Ground.Soil);
-				TerrainTextureLayer road = biome.RoadTextureLayer != null && biome.RoadTextureLayer.HasAlbedo
-					? biome.RoadTextureLayer
-					: Generated(SurfaceCatalogue.RoadGroundFor(ground)) ?? Generated(Ground.Gravel);
+				TerrainTextureLayer earth = grounds.Path(biome);
+				TerrainTextureLayer road = grounds.Road(biome);
+				TerrainTextureLayer stone = grounds.Cobbles(biome);
 				if (earth != null)
 				{
 					surfaces.Add((SceneTerrainPalette.SlotPathEarth, earth));

@@ -120,8 +120,8 @@ float4 _FishGroundLayerTint[FISH_GROUND_MAX_LAYERS];
 float4 _FishGroundLayerSurface[FISH_GROUND_MAX_LAYERS];
 float4 _FishGroundLayerMaskOffset[FISH_GROUND_MAX_LAYERS];
 float4 _FishGroundLayerMaskScale[FISH_GROUND_MAX_LAYERS];
-// What each layer is made of for the planet's looks (TerrainArraySet.LayerFlora: x living, y lichen, z mineral), the
-// terrain's own _FishLayerFlora: the band at a trunk's or rock's base wears the looks exactly as the ground beside it.
+// What each layer is made of for its planet (TerrainArraySet.LayerFlora: x living, y lichen, z mineral), the terrain's own
+// _FishLayerFlora: the band at a trunk's or rock's base is shifted exactly as the ground beside it.
 float4 _FishGroundLayerFlora[FISH_GROUND_MAX_LAYERS];
 float4 _FishGroundBlend;                             // x the terrain's height transition, y 1 when it height-blends, z 1 when the mask array holds anything, w its snow lift (m)
 TEXTURE2D_ARRAY(_FishGroundHeights);                 // one slice per terrain, 0..1 of its height (uploaded from TerrainData.GetHeights)
@@ -322,13 +322,11 @@ void FishGroundHeightBlend(inout half4 weights, half4 heights, half transitionIn
     weights = weightedHeights / sumHeight.xxxx;
 }
 
-// The patch look the terrain's living layers wear at a point (FishWeatherTerrainArrayInput.hlsl FishTerrainFloraLook): the
-// blade grass's own patch, looked up only while the looks are published and where one of the four layers is living
-// ground or lichen.
-FishFloraLook FishGroundFloraLook(float2 xz, int4 ids, half4 weights)
+// The shift the terrain's living layers take at a point (FishWeatherTerrainArrayInput.hlsl FishTerrainGroundShift): looked
+// up only while the looks are published and where one of the four layers is living ground.
+float3 FishGroundShift(float2 xz, int4 ids, half4 weights)
 {
-    FishFloraLook look = (FishFloraLook)0;
-    look.valid = false;
+    float3 shift = 1.0;
     UNITY_BRANCH
     if (_FishFloraInfo.x > 0.5)
     {
@@ -336,20 +334,15 @@ FishFloraLook FishGroundFloraLook(float2 xz, int4 ids, half4 weights)
         UNITY_UNROLL
         for (int k = 0; k < 4; k++)
         {
-            float4 share = _FishGroundLayerFlora[ids[k]];
-            living += weights[k] > 0.0h ? share.x + share.y : 0.0;
+            living += weights[k] > 0.0h ? _FishGroundLayerFlora[ids[k]].x : 0.0;
         }
-        /* FishFloraAt's own parts, not FishFloraAt: the published test is made above, and its early return of a whole
-         * look, inlined under these branches into the four-layer blend, sent FXC's optimiser (Unity's D3DCompiler_47) into
-         * a stack overflow, so the pass failed to compile at all (2026-10-15). */
         UNITY_BRANCH
         if (living > 0.0)
         {
-            // Blended, not the blades' dithered read: the ground is one continuous albedo (FishFloraGroundLookAt).
-            look = FishFloraGroundLookAt(xz, FISH_FLORA_GRASS_PATCH, FISH_FLORA_GRASS_SALT);
+            shift = FishFloraGroundShiftAt(xz);
         }
     }
-    return look;
+    return shift;
 }
 
 // The terrain's surface at a pixel: FishSampleArraySurface line for line, on the copied control maps and the scene's
@@ -411,15 +404,15 @@ FishGroundPixel FishGroundSurface(int tile, float2 t, float3 positionWS, float2 
     half metallic = 0;
     half smoothness = 0;
     half occlusion = 0;
-    // Each layer in the planet's looks, as the terrain's FishSampleArraySurface does it, at the point the texture is read.
-    FishFloraLook look = FishGroundFloraLook(positionWS.xz, ids, weights);
+    // Each layer on its planet, as the terrain's FishSampleArraySurface does it, at the point the texture is read.
+    float3 groundShift = FishGroundShift(positionWS.xz, ids, weights);
     UNITY_UNROLL
     for (int j = 0; j < 4; j++)
     {
         int id = ids[j];
         half w = weights[j];
         float4 surface = _FishGroundLayerSurface[id];
-        mixedAlbedo += (half3)FishFloraGround(albedo[j].rgb * (half3)_FishGroundLayerTint[id].rgb, _FishGroundLayerFlora[id].xyz, look) * w;
+        mixedAlbedo += (half3)FishFloraGround(albedo[j].rgb * (half3)_FishGroundLayerTint[id].rgb, _FishGroundLayerFlora[id].xyz, groundShift) * w;
         mixedNormal += normals[j] * w;
         // TerrainLit's rule: a layer with a mask map takes metallic, AO and smoothness from it; one without takes its
         // sliders, with smoothness from the albedo's alpha.

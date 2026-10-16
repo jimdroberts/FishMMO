@@ -99,6 +99,7 @@ Shader "FishMMO/Vegetation Indirect"
             AlphaToMask On
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 3.0
             #pragma vertex VegVertex
             #pragma fragment VegForwardFragment
@@ -140,6 +141,7 @@ Shader "FishMMO/Vegetation Indirect"
             Cull [_Cull]
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 3.0
             #pragma vertex VegDepthVertex
             #pragma fragment VegDepthFragment
@@ -167,6 +169,7 @@ Shader "FishMMO/Vegetation Indirect"
             Cull [_Cull]
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 3.0
             #pragma vertex VegDepthVertex
             #pragma fragment VegDepthFragment
@@ -191,6 +194,7 @@ Shader "FishMMO/Vegetation Indirect"
             Cull [_Cull]
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 3.0
             #pragma vertex VegVertex
             #pragma fragment VegDepthNormalsFragment

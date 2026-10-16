@@ -109,6 +109,14 @@ namespace FishMMO.Shared.WorldDesign
 			moverSerialized.FindProperty("travelSeconds").floatValue = lift ? 3f : bridge ? 4f : TravelSeconds;
 			moverSerialized.FindProperty("startActivated").boolValue = door.StartsOpen;
 			moverSerialized.FindProperty("solidWhenOpenToo").boolValue = bridge;
+			/* A drawbridge that starts down is saved down: raised in the scene until the game ran, the editor showed a door
+			 * standing at the ditch's inner lip and nothing over the moat, and the NavMesh (baked from the scene's colliders)
+			 * had no way across it (2026-10-15: "missing draw bridges"). Its closed pose is worked out from this one. */
+			if (bridge && door.StartsOpen)
+			{
+				leaf.transform.localRotation = Quaternion.Euler(moverSerialized.FindProperty("openRotationOffset").vector3Value);
+				moverSerialized.FindProperty("authoredOpen").boolValue = true;
+			}
 			SerializedProperty solid = moverSerialized.FindProperty("solidWhenClosed");
 			solid.arraySize = 1;
 			solid.GetArrayElementAtIndex(0).objectReferenceValue = box;

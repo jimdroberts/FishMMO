@@ -228,9 +228,16 @@ namespace FishMMO.Shared.Biomes
 		[Header("Detail Rendering")]
 		[Tooltip("Controls how widely detail prototypes spread noise across the terrain patch.")]
 		[Range(0.05f, 5f)] public float detailNoiseSpread = 0.5f;
-		[Tooltip("Tint applied when the detail patch is considered healthy.")]
+		/// <remarks>
+		/// The scatter writes these into the rule's detail prototypes, and the blade grass reads them there (since 2026-10-15):
+		/// a blade prototype's healthy and dry tints are its rule's, so a biome's rule says how its grass, reeds and flowers
+		/// brown through the season and in drought (FishGrassBlades.hlsl GrassSeasonTint). The authoring writes the detail's
+		/// catalogue tints, the same as its material's, so nothing changed. Mesh details (ferns, shrubs, stones) still take
+		/// their material's.
+		/// </remarks>
+		[Tooltip("Blade grass, reeds and flowers: the tint of this rule's stems where their patch is healthy (the season and drought blend toward Detail Dry Color). Mesh details take their material's.")]
 		public Color detailHealthyColor = new Color(0.9f, 0.95f, 0.9f, 1f);
-		[Tooltip("Tint applied when the detail patch is considered dry.")]
+		[Tooltip("Blade grass, reeds and flowers: the tint of this rule's stems where their patch has dried (late season, drought).")]
 		public Color detailDryColor = new Color(0.75f, 0.7f, 0.55f, 1f);
 		[Tooltip("Scattered only. How much of a detail cell an accepted sample covers, out of 255 (a full cell). Terrain detail density and quality settings thin it from there without a re-bake.")]
 		[Range(64, 255)] public int detailInstancesPerSpawn = 64;

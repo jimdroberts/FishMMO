@@ -241,13 +241,14 @@ namespace FishMMO.UnitTests
 			// The terrain's colour readers (GroundColourMap) mirror FishFloraGround: bare ground under an ordinary air, or the looks
 			// at no strength, must come back exactly as the terrain drew it before the looks.
 			var albedo = new Vector3(0.21f, 0.17f, 0.09f);
-			var foliage = new Vector3(0.05f, 0.2f, 0.03f);
-			var accent = new Vector3(0.4f, 0.35f, 0.1f);
+			var shift = new Vector3(1.2f, 0.9f, 0.7f);
 			var ground = new Vector3(0.3f, 0.08f, 0.04f);
-			LogAssert.AreEqual(albedo, GrassMath.FloraGround(albedo, Vector3.Zero, foliage, accent, ground, 0.7f, 0.75f, 0.75f), "no share");
-			LogAssert.AreEqual(albedo, GrassMath.FloraGround(albedo, new Vector3(1f, 0f, 1f), foliage, accent, ground, 0f, 0.75f, 0f), "no strength");
-			LogAssert.AreEqual(albedo, GrassMath.FloraGround(albedo, new Vector3(0f, 0f, 1f), foliage, accent, ground, 0.7f, 0.75f, 0f),
+			LogAssert.AreEqual(albedo, GrassMath.FloraGround(albedo, Vector3.Zero, shift, ground, 0.7f, 0.75f), "no share");
+			LogAssert.AreEqual(albedo, GrassMath.FloraGround(albedo, new Vector3(1f, 0f, 1f), shift, ground, 0f, 0f), "no strength");
+			LogAssert.AreEqual(albedo, GrassMath.FloraGround(albedo, new Vector3(0f, 0f, 1f), shift, ground, 0.7f, 0f),
 				"mineral ground under an ordinary air (_FishFloraGround.a = 0)");
+			// Lichen keeps its own texture's colour: the looks' lichen colours are the scatter's, not the ground's (2026-10-15).
+			LogAssert.AreEqual(albedo, GrassMath.FloraGround(albedo, new Vector3(0f, 1f, 0f), shift, ground, 0.7f, 0.75f), "lichen ground");
 		}
 
 		[Test]
@@ -257,18 +258,18 @@ namespace FishMMO.UnitTests
 			// replaced it turned meadows into chunks of colour that ignored the ground's dry and lush).
 			var turf = new Vector3(0.1f, 0.2f, 0.05f);
 			var shift = new Vector3(1.2f, 0.9f, 0.7f);
-			Vector3 shifted = GrassMath.FloraGround(turf, new Vector3(1f, 0f, 0f), shift, Vector3.Zero, Vector3.Zero, 1f, 0f, 0f);
+			Vector3 shifted = GrassMath.FloraGround(turf, new Vector3(1f, 0f, 0f), shift, Vector3.Zero, 1f, 0f);
 			LogAssert.IsTrue(Vector3.Distance(shifted, turf * shift) < 1e-6f, $"full strength multiplies: {shifted}");
-			Vector3 half = GrassMath.FloraGround(turf, new Vector3(0.5f, 0f, 0f), shift, Vector3.Zero, Vector3.Zero, 1f, 0f, 0f);
+			Vector3 half = GrassMath.FloraGround(turf, new Vector3(0.5f, 0f, 0f), shift, Vector3.Zero, 1f, 0f);
 			LogAssert.IsTrue(Vector3.Distance(half, turf * Vector3.Lerp(Vector3.One, shift, 0.5f)) < 1e-6f, $"half a living share, half the shift: {half}");
-			LogAssert.IsTrue(Vector3.Distance(GrassMath.FloraGround(turf, new Vector3(1f, 0f, 0f), Vector3.One, Vector3.Zero, Vector3.Zero, 1f, 0f, 0f), turf) < 1e-6f,
+			LogAssert.IsTrue(Vector3.Distance(GrassMath.FloraGround(turf, new Vector3(1f, 0f, 0f), Vector3.One, Vector3.Zero, 1f, 0f), turf) < 1e-6f,
 				"a white shift (the common look on an Earth-like world) leaves the turf as it was");
 			// Mineral ground takes the world's ground at its own lightness, nothing of the shift.
 			var target = new Vector3(0.08f, 0.22f, 0.04f);
 			float lum = GrassMath.FloraLuminance(target);
 			var same = new Vector3(lum, lum, lum);
 			var ground = new Vector3(0.3f, 0.08f, 0.04f);
-			Vector3 rock = GrassMath.FloraGround(same, new Vector3(0f, 0f, 1f), shift, Vector3.Zero, ground, 1f, 0f, 1f);
+			Vector3 rock = GrassMath.FloraGround(same, new Vector3(0f, 0f, 1f), shift, ground, 1f, 1f);
 			LogAssert.IsTrue(Vector3.Distance(rock, ground * (1.5f * (lum / GrassMath.FloraLuminance(ground)) / (lum / GrassMath.FloraLuminance(ground) + 0.5f))) < 1e-5f,
 				$"wholly mineral ground at full strength is the world's ground at its own lightness: {rock}");
 		}

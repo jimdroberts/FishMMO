@@ -70,6 +70,7 @@ Shader "FishMMO/Water/Inland Water"
             Tags { "LightMode" = "UniversalForward" }
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex InlandVertex
             #pragma fragment InlandFragment
             #pragma target 3.5
@@ -106,6 +107,7 @@ Shader "FishMMO/Water/Inland Water"
             }
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex FoamSourceVertex
             #pragma fragment FoamSourceFragment
             #pragma target 3.5

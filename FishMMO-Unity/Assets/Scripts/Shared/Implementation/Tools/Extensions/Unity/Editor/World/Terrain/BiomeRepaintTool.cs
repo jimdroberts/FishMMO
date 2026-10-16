@@ -33,11 +33,16 @@ namespace FishMMO.Shared.WorldDesign
 	/// arrays has its control maps baked again, since they follow the scene's layer order. It marks the scene dirty and does not save it,
 	/// so nothing is written to the scene file until the designer chooses to.
 	/// </para>
+	/// <para>
+	/// <b>Canyon walls</b> keep their shape, colliders and holes, and are dressed again in the rock the templates give each
+	/// of their cells (2026-10-16), from the cells and geology the cut kept beside the terrain (SceneCanyonWallCells); a
+	/// scene cut before then keeps its walls' rock and says a re-cut is needed.
+	/// </para>
 	/// </remarks>
 	public static class BiomeRepaintTool
 	{
 		[DashboardTool(DashboardToolAttribute.WorldSceneDetails, "Repaint biomes in open scene", Section = "Generated scenes", Order = 10,
-			Tooltip = "Re-runs the biome textures, details, trees and biome map on the open generated scene against its current (sculpted) heights. Heights, sea and boundary are untouched; the scene is marked dirty, not saved.",
+			Tooltip = "Re-runs the biome textures, details, trees and biome map on the open generated scene against its current (sculpted) heights, and dresses its canyon walls in the rock the templates give them. Heights, sea and boundary are untouched; the scene is marked dirty, not saved.",
 			Confirm = "Repaint the open scene's ground from its biomes? Its terrain layers, alphamaps, details and trees are replaced; its heights are kept.")]
 		public static void RepaintOpenScene()
 		{

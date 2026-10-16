@@ -124,6 +124,7 @@ namespace FishMMO.Shared
 		private static readonly int PathLayersId = Shader.PropertyToID("_FishPathLayers");
 		private static readonly int PathEarthForId = Shader.PropertyToID("_FishPathEarthFor");
 		private static readonly int PathRoadForId = Shader.PropertyToID("_FishPathRoadFor");
+		private static readonly int PathStoneForId = Shader.PropertyToID("_FishPathStoneFor");
 
 		// One block per tile, made on first use: Unity refuses to allocate a property block in a field
 		// initializer, and a block per tile is right whether or not the terrain copies what it is given.
@@ -436,16 +437,18 @@ namespace FishMMO.Shared
 				block.SetVectorArray(LayerMaskOffsetId, set.LayerMaskOffset);
 				block.SetVectorArray(LayerMaskScaleId, set.LayerMaskScale);
 				block.SetVectorArray(LayerSurfaceId, set.LayerSurface);
-				// What each layer is made of for the planet's looks (FishFlora.hlsl FishFloraGround): living ground takes its
-				// patch's look, lichen its lichen colour, bare ground the world's own colour where the air is thin. Worked out
-				// once per set from its layer names; inert while the looks are not published.
+				// What each layer is made of for its planet (FishFlora.hlsl FishFloraGround): living ground takes its biome's
+				// ground shift, bare ground the world's own colour where the air is thin. Worked out once per set from its
+				// layer names; inert while the looks are not published.
 				block.SetVectorArray(LayerFloraId, set.LayerFlora());
 			}
 			// The slices the scene's paths are surfaced from (the scene's own palette); -1 where it has none or nothing is baked.
 			block.SetVector(PathLayersId, usable ? ScenePathSurfaceBinder.LayersOf(gameObject.scene) : new Vector4(-1f, -1f, -1f, -1f));
-			// And each ground layer's own biome's path and road slices: a desert's way is packed sand, a forest's a littered track.
+			// And each ground layer's own biome's path, road and cobble slices: a desert's way is packed sand, a forest's a
+			// littered track, and each biome's streets are paved with its own stone.
 			block.SetVectorArray(PathEarthForId, ScenePathSurfaceBinder.EarthMapOf(gameObject.scene));
 			block.SetVectorArray(PathRoadForId, ScenePathSurfaceBinder.RoadMapOf(gameObject.scene));
+			block.SetVectorArray(PathStoneForId, ScenePathSurfaceBinder.StoneMapOf(gameObject.scene));
 			block.SetVector(InfoId, new Vector4(
 				usable ? set.LayerCount : 0f,
 				controls,

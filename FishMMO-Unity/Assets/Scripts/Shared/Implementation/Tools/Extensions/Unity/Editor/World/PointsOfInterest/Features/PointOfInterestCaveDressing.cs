@@ -23,6 +23,16 @@ namespace FishMMO.Shared.WorldDesign
 	/// (lava stalactites hang from its roof); a mine none of these, only the timbering and the spoil of the ore.
 	/// </para>
 	/// <para>
+	/// <b>The shell's rock (2026-10-16).</b> The formations are the rock the cave is cut in (<see cref="CaveShaper.ShellOf"/>,
+	/// its biome template's Cave Shells: the ground's rock for a cave, grotto, sea cave or mine, basalt for a lava tube, ice
+	/// for an ice cave), so a cave in sandstone country has sandstone blocks fallen from its sandstone roof. Before, the
+	/// form alone chose them (limestone, basalt, quartzite, water ice) whatever the walls were. Where the shell's rock has no
+	/// art for a shape (dripstone exists only as limestone's sinter-dressed calcite, basalt's dribble and water ice's), the
+	/// fallen rock and spoil take that rock's nearest broken shape (<see cref="FormationArt"/>), and anything else stands in
+	/// the form's old rock (<see cref="StandInRock"/>, reported with the dressing): dripstone is calcite precipitated from
+	/// the water, not the wall rock, so calcite dripstone in a sandstone cave is what such a cave holds.
+	/// </para>
+	/// <para>
 	/// <b>Never in the way.</b> Every passage's line is a lane kept clear of anything on the floor and of anything hanging
 	/// lower than 2.4 m over it, and the middle of each site's own chamber (where its camp or den goes) is kept clear too;
 	/// formations stand in the chambers' outer rings and along the passages' walls. Stalactites hang where the roof is,
@@ -54,6 +64,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		private sealed class Set
 		{
+			/// <summary>The rock the formations are made of: the cave's shell's (<see cref="FormationRock"/>).</summary>
 			public string Rock;
 			public string Floor, Hanging, Wall, Pool, Breakdown, Crystal;
 			/// <summary>The crystals' own stone, when not the cave's (selenite in a limestone cave).</summary>
@@ -65,23 +76,103 @@ namespace FishMMO.Shared.WorldDesign
 			public int Hue = -1;
 		}
 
+		/// <summary>
+		/// The formations a cave of a form takes (their rock is the cave's shell's, set by <see cref="Build"/>; until 2026-10-16
+		/// it was the form's alone, as <see cref="StandInRock"/> still states).
+		/// </summary>
 		private static Set SetFor(CaveForm form)
 		{
 			switch (form)
 			{
 				case CaveForm.IceCave:
-					return new Set { Rock = "WaterIce", Floor = "Stalagmite", Hanging = "Stalagmite", Wall = "FrostFlowers", Crystal = "Crystal", Breakdown = "Lobe",
+					return new Set { Floor = "Stalagmite", Hanging = "Stalagmite", Wall = "FrostFlowers", Crystal = "Crystal", Breakdown = "Lobe",
 						FloorHeight = 2.2f, WallHeight = 0.6f, CrystalChance = 0.6f, Hue = 1 };
 				case CaveForm.LavaTube:
-					return new Set { Rock = "Basalt", Floor = "Dribble", Hanging = "Dribble", Breakdown = "Slabs", FloorHeight = 1.6f, Density = 0.6f, BreakdownShare = 0.5f };
+					return new Set { Floor = "Dribble", Hanging = "Dribble", Breakdown = "Slabs", FloorHeight = 1.6f, Density = 0.6f, BreakdownShare = 0.5f };
 				case CaveForm.SeaCave:
-					return new Set { Rock = "Limestone", Floor = "Stalagmite", Hanging = "Stalagmite", Breakdown = "Block", Density = 0.35f, BreakdownShare = 0.6f };
+					return new Set { Floor = "Stalagmite", Hanging = "Stalagmite", Breakdown = "Block", Density = 0.35f, BreakdownShare = 0.6f };
 				case CaveForm.Mine:
-					return new Set { Rock = "Quartzite", Breakdown = "Scree", Density = 0.3f, BreakdownShare = 1f };
+					return new Set { Breakdown = "Scree", Density = 0.3f, BreakdownShare = 1f };
 				default:
-					return new Set { Rock = "Limestone", Floor = "Stalagmite", Hanging = "Stalagmite", Wall = "Flowstone", Pool = "Gours", Breakdown = "Block",
+					return new Set { Floor = "Stalagmite", Hanging = "Stalagmite", Wall = "Flowstone", Pool = "Gours", Breakdown = "Block",
 						Crystal = "Crystal", CrystalRock = "Gypsum", CrystalChance = 0.3f };
 			}
+		}
+
+		// ── The formations' rock ──────────────────────────────────────
+
+		/// <summary>
+		/// The rock a cave's formations are made of, from the rock its shell is cut in (2026-10-16: the formations follow the
+		/// shell): the shell's own, glacier ice's formations being water ice's (the shell's Ice is the cliff rock's name for it).
+		/// </summary>
+		public static string FormationRock(string shell) => shell == CliffRocks.Ice ? RockTypes.WaterIce.Name : shell;
+
+		/// <summary>
+		/// The rock a form's formations were made of before they followed the shell (by form alone, whatever the walls): the
+		/// art every shape of the form's set exists in, so it stands in where the shell's rock has none for a shape.
+		/// </summary>
+		public static string StandInRock(CaveForm form)
+		{
+			switch (form)
+			{
+				case CaveForm.IceCave:
+					return RockTypes.WaterIce.Name;
+				case CaveForm.LavaTube:
+					return RockTypes.Basalt.Name;
+				case CaveForm.Mine:
+					return RockTypes.Quartzite.Name;
+				default:
+					return RockTypes.Limestone.Name;
+			}
+		}
+
+		/// <summary>The broken rock a roof sheds, nearest first: what fallen blocks are in a rock without blocks.</summary>
+		private static readonly string[] FallenShapes = { "Block", "Slabs", "Split", "Boulder", "Chunk", "Lump", "Stack", "Flags", "Platy", "Talus", "Scree", "Tafoni" };
+
+		/// <summary>The broken rock a working leaves, nearest first: what spoil is in a rock without scree.</summary>
+		private static readonly string[] SpoilShapes = { "Scree", "Talus", "Chunk", "Platy", "Flags", "Stack", "Slabs", "Block", "Split", "Lump", "Boulder", "Tafoni" };
+
+		/// <summary>
+		/// The (rock, shape) a formation of a cave whose formations are <paramref name="rock"/> is drawn with: that rock's own
+		/// shape where its art has it; for fallen rock (Block, Slabs) and spoil (Scree), the rock's nearest broken shape; else
+		/// the shape in the form's old rock (<see cref="StandInRock"/>). Pure: reads the rock types' shapes, not the assets.
+		/// </summary>
+		public static (string Rock, string Shape) FormationArt(string rock, string shape, CaveForm form)
+		{
+			if (!string.IsNullOrEmpty(rock) && RockTypes.TryGet(rock, out RockType type))
+			{
+				if (RockTypes.TryShape(in type, shape, out _))
+				{
+					return (rock, shape);
+				}
+				string[] alternatives = shape == "Scree" ? SpoilShapes : shape == "Block" || shape == "Slabs" ? FallenShapes : null;
+				if (alternatives != null)
+				{
+					foreach (string alternative in alternatives)
+					{
+						if (RockTypes.TryShape(in type, alternative, out _))
+						{
+							return (rock, alternative);
+						}
+					}
+				}
+			}
+			return (StandInRock(form), shape);
+		}
+
+		/// <summary>The formation shapes a form's caves place in their own rock (every one but a crystal of its own stone).</summary>
+		public static List<string> FormationShapes(CaveForm form)
+		{
+			Set set = SetFor(form);
+			var shapes = new List<string>();
+			foreach (string shape in new[] { set.Floor, set.Hanging, set.Wall, set.Pool, set.Breakdown, set.CrystalRock == null ? set.Crystal : null })
+			{
+				if (shape != null && !shapes.Contains(shape))
+				{
+					shapes.Add(shape);
+				}
+			}
+			return shapes;
 		}
 
 		public void Build(PointOfInterestSiteContext context)
@@ -98,14 +189,19 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			var clock = System.Diagnostics.Stopwatch.StartNew();
 			int emitters = context.Points != null && context.Points.Emitters != null ? context.Points.Emitters.Count : 0;
-			var dresser = new Dresser(context, system, SetFor(system.Form), new DeterministicRNG(unchecked(system.Seed * 0x2F6B + 0xD1E5)));
+			Set set = SetFor(system.Form);
+			// The formations are the shell's rock: the very rock the shaper built the cave's walls in (its host site's biome's).
+			set.Rock = FormationRock(CaveShaper.ShellOf(context.Request, context.Record, system));
+			var dresser = new Dresser(context, system, set, new DeterministicRNG(unchecked(system.Seed * 0x2F6B + 0xD1E5)));
 			dresser.Run();
 			// Lights counts every emitter the dressing added: the glow's own and those its lamps, torches and fires give off.
 			int lights = (context.Points != null && context.Points.Emitters != null ? context.Points.Emitters.Count : 0) - emitters;
 			// With the time it took, so the dressing's marches can be measured in a cut's notes.
 			PointOfInterestFeatureKit.Note(context, $"cave dressed in {clock.Elapsed.TotalSeconds:0.00} s ({system.Character}): {dresser.Placed} props, {lights} lights"
 				+ $", glow: {dresser.Glowing} ({dresser.Lights} glow lights), lamps: {dresser.Lamps}, climbs: {dresser.Climbed}, crossings: {dresser.Crossed}, camps: {dresser.Camps}"
-				+ (dresser.Grown > 0 ? $", overgrown: {dresser.Grown} plants" : string.Empty) + (dresser.Missing.Count > 0 ? $"; missing art: {string.Join(", ", dresser.Missing)} (Generate Biome Art, then repaint)" : string.Empty));
+				+ (dresser.Grown > 0 ? $", overgrown: {dresser.Grown} plants" : string.Empty)
+				+ (dresser.StoodIn.Count > 0 ? $"; {set.Rock} has no art for: {string.Join(", ", dresser.StoodIn)}" : string.Empty)
+				+ (dresser.Missing.Count > 0 ? $"; missing art: {string.Join(", ", dresser.Missing)} (Generate Biome Art, then repaint)" : string.Empty));
 		}
 
 		private sealed partial class Dresser
@@ -117,6 +213,8 @@ namespace FishMMO.Shared.WorldDesign
 			private readonly List<(Vector3 a, Vector3 b)> lanes = new List<(Vector3, Vector3)>();
 			private readonly List<(Vector3 centre, float radius)> keepClear = new List<(Vector3, float)>();
 			public readonly HashSet<string> Missing = new HashSet<string>();
+			/// <summary>The formations the shell's rock has no art for, each as "shape (stand-in rock's)" or "shape (as alternative)".</summary>
+			public readonly SortedSet<string> StoodIn = new SortedSet<string>(System.StringComparer.Ordinal);
 			public int Placed, Lights, Grown;
 			/// <summary>Glow art laid, lanterns laid, climbs and crossings drawn, camps pitched.</summary>
 			public int Glowing, Lamps, Climbed, Crossed, Camps;
@@ -936,13 +1034,31 @@ namespace FishMMO.Shared.WorldDesign
 				return new Vector3(Mathf.Sin(r), 0f, Mathf.Cos(r));
 			}
 
+			/// <summary>
+			/// A formation's prefab: in its own named rock (the crystals' selenite), else in the shell's, by the art that rock has
+			/// (<see cref="FormationArt"/>). The variant is drawn first either way, so a stand-in leaves the draws after it as they were.
+			/// </summary>
 			private GameObject Formation(string shape, string rock = null)
 			{
-				string name = RockArtNames.FormationPrefab(rock ?? set.Rock, shape, rng.Range(0, RockTypes.VariantCount));
+				int variant = rng.Range(0, RockTypes.VariantCount);
+				string artRock = rock, artShape = shape;
+				if (rock == null)
+				{
+					(artRock, artShape) = FormationArt(set.Rock, shape, system.Form);
+					if (artRock != set.Rock)
+					{
+						StoodIn.Add($"{shape} ({artRock}'s)");
+					}
+					else if (artShape != shape)
+					{
+						StoodIn.Add($"{shape} (as {artShape})");
+					}
+				}
+				string name = RockArtNames.FormationPrefab(artRock, artShape, variant);
 				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProceduralArtCatalogue.PrefabPath(name));
 				if (prefab == null)
 				{
-					Missing.Add($"{rock ?? set.Rock} {shape}");
+					Missing.Add($"{artRock} {artShape}");
 				}
 				return prefab;
 			}

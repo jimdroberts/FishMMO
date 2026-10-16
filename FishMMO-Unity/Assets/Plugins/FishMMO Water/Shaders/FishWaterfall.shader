@@ -38,6 +38,7 @@ Shader "FishMMO/Water/Waterfall"
             Cull Back
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex FallVertex
             #pragma fragment FallFragment
             #pragma target 3.5
@@ -187,6 +188,7 @@ Shader "FishMMO/Water/Waterfall"
             Cull Off
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex FallShadowVertex
             #pragma fragment FallShadowFragment
             #pragma target 3.5

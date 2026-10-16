@@ -423,7 +423,7 @@ namespace FishMMO.Shared.WorldDesign
 			IceClimate climate = Decide(seasons, source, drift, sourceC);
 			// Its own coast calving: the source is here and no month thaws, so the ice sheet reaches this sea.
 			climate.CalvingFront = climate.HasCalvingSource && drift < SourceStepDegrees && climate.AirWarmestC <= 0f
-				&& BiomeRegistry.Contains(IceSheetSurface.BiomeName);
+				&& BiomeTemplateArt.WaterBiome(BiomeWaterRole.IceSheet) != null;
 			return climate;
 		}
 	}

@@ -81,6 +81,28 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
+		/// The biome that plays a part for a scene's water or ice (<see cref="BiomeTemplate.WaterRole"/>): the first registered
+		/// biome holding the role, in key order so the answer never depends on load order; null when none does (or for
+		/// <see cref="BiomeWaterRole.None"/>).
+		/// </summary>
+		public static BiomeTemplate WithWaterRole(BiomeWaterRole role)
+		{
+			if (role == BiomeWaterRole.None)
+			{
+				return null;
+			}
+			foreach (string key in SupportedBiomes)
+			{
+				BiomeTemplate biome = byKey[key];
+				if (biome != null && biome.WaterRole == role)
+				{
+					return biome;
+				}
+			}
+			return null;
+		}
+
+		/// <summary>
 		/// Registers a biome under its key and ID. A second biome resolving to the same key
 		/// replaces the first with a warning, since names would otherwise silently come from
 		/// whichever loaded last.

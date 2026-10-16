@@ -102,6 +102,7 @@ Shader "FishMMO/Water/Ocean"
             Tags { "LightMode" = "UniversalForward" }
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex WaterVertex
             #pragma fragment WaterFragment
             #pragma target 3.5

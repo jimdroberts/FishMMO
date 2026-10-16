@@ -13,8 +13,11 @@ namespace FishMMO.Client
 		/// </summary>
 		bool TryGround(float x, float z, out float y);
 
-		/// <summary>The biome (asset name, or null) and the climate's temperature (-1 .. 1) at a world position.</summary>
-		void Habitat(Vector3 position, out string biome, out float temperature);
+		/// <summary>
+		/// Whether a kind is most at home at a world position (its biome names it among its sea life, BiomeTemplate.SeaLifeHomes),
+		/// and the climate's temperature (-1 .. 1) there.
+		/// </summary>
+		void Habitat(Vector3 position, SeaCreatureKind kind, out bool home, out float temperature);
 	}
 
 	/// <summary>One group of sea creatures: a school, a reef fish's patch, a cruising shark, a crab colony.</summary>
@@ -149,7 +152,10 @@ namespace FishMMO.Client
 				return true;
 			}
 			float area = cellMetres * cellMetres * 1e-6f;
-			float most = kind.GroupsPerKm2 * area * Mathf.Max(1f, kind.Prefers != null && kind.Prefers.Length > 0 ? kind.PreferWeight : 1f);
+			// Enough candidates for the kind's home biomes' weight. Its homes are the biomes' to say (2026-10-16), so any kind may
+			// have one; a candidate past the expected count never lives (its chance is nothing), so the extra ones change no
+			// group, only what is asked of the ground.
+			float most = kind.GroupsPerKm2 * area * Mathf.Max(1f, kind.PreferWeight);
 			int candidates = Mathf.CeilToInt(most);
 			for (int i = 0; i < candidates; i++)
 			{
@@ -164,8 +170,8 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
-				ground.Habitat(new Vector3(home.x, floor, home.z), out string biome, out float temperature);
-				float weight = HabitatWeight(kind, biome, temperature);
+				ground.Habitat(new Vector3(home.x, floor, home.z), kind, out bool preferred, out float temperature);
+				float weight = HabitatWeight(kind, preferred, temperature);
 				// Candidate i lives here with chance (expected count - i), so the count is the expectation on average.
 				float expected = kind.GroupsPerKm2 * area * weight;
 				if (Unit(Mix(seed ^ 0x3u)) >= Mathf.Clamp01(expected - i))
@@ -185,28 +191,63 @@ namespace FishMMO.Client
 			return true;
 		}
 
-		/// <summary>How much at home a kind is at a place: 0 (not at all) .. its preferred weight.</summary>
-		public static float HabitatWeight(SeaCreatureKind kind, string biome, float temperature)
+		/// <summary>
+		/// How much at home a kind is at a place: 0 (not at all) .. its preferred weight. <paramref name="preferred"/>: the
+		/// place's biome is one of its homes (<see cref="IsHome"/>).
+		/// </summary>
+		public static float HabitatWeight(SeaCreatureKind kind, bool preferred, float temperature)
 		{
 			// Soft edges on the temperature band, a tenth wide; an end at the scale's end is open.
 			float warm = kind.Temperature.x <= -1f ? 1f : Mathf.Clamp01((temperature - kind.Temperature.x) / 0.1f + 0.5f);
 			float cool = kind.Temperature.y >= 1f ? 1f : Mathf.Clamp01((kind.Temperature.y - temperature) / 0.1f + 0.5f);
 			float climate = Mathf.Min(warm, cool);
-			bool preferred = false;
-			if (biome != null && kind.Prefers != null)
-			{
-				foreach (string name in kind.Prefers)
-				{
-					if (string.Equals(name, biome, StringComparison.OrdinalIgnoreCase))
-					{
-						preferred = true;
-						break;
-					}
-				}
-			}
 			float place = preferred ? Mathf.Max(1f, kind.PreferWeight) : kind.ElsewhereWeight;
 			// A preferred biome is home whatever the thermometer says (a reef is warm by being a reef).
 			return preferred ? place : place * climate;
+		}
+
+		/// <summary>
+		/// How much at home a kind is in a biome by its asset name (<see cref="PrefersByName"/>): the weight before the
+		/// templates named their sea life (2026-10-16).
+		/// </summary>
+		public static float HabitatWeight(SeaCreatureKind kind, string biome, float temperature) => HabitatWeight(kind, PrefersByName(kind, biome), temperature);
+
+		/// <summary>Whether a biome's sea life (kind names, BiomeTemplate.SeaLifeHomes) names a kind, ignoring case.</summary>
+		public static bool IsHome(SeaCreatureKind kind, IReadOnlyList<string> homes)
+		{
+			if (kind == null || homes == null || string.IsNullOrEmpty(kind.Name))
+			{
+				return false;
+			}
+			foreach (string name in homes)
+			{
+				if (string.Equals(name, kind.Name, StringComparison.OrdinalIgnoreCase))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>
+		/// Whether a kind names a biome (by its asset name) among the ones it <see cref="SeaCreatureKind.Prefers"/>: how a
+		/// kind's homes were found until the templates named their sea life (2026-10-16). Since then only the fallback for a
+		/// template never authored, and the list the spec table's sea life was written to equal.
+		/// </summary>
+		public static bool PrefersByName(SeaCreatureKind kind, string biome)
+		{
+			if (kind == null || biome == null || kind.Prefers == null)
+			{
+				return false;
+			}
+			foreach (string name in kind.Prefers)
+			{
+				if (string.Equals(name, biome, StringComparison.OrdinalIgnoreCase))
+				{
+					return true;
+				}
+			}
+			return false;
 		}
 
 		/// <summary>

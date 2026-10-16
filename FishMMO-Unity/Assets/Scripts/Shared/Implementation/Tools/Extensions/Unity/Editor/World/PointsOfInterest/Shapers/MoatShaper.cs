@@ -330,6 +330,174 @@ namespace FishMMO.Shared.WorldDesign
 			return false;
 		}
 
+		/// <summary>How far out from the ditch a crossing's landing runs level, metres.</summary>
+		public const float LandingMetres = 4f;
+		/// <summary>How far past the drawbridge's leaf a landing runs each side, metres.</summary>
+		public const float LandingSideMetres = 1f;
+		/// <summary>The grade a way ramps from a landing back to the ground at (rise over run).</summary>
+		public const float LandingRampGrade = 0.25f;
+		/// <summary>The most a landing's ramp is carried to meet the ground, metres of height either way.</summary>
+		public const float LandingMaxRiseMetres = 10f;
+		/// <summary>The widest drawbridge leaf a landing is laid for, metres (PropsFeature: a 3.5 m passage at its stature and some).</summary>
+		public const float LandingLeafMetres = 4.2f;
+
+		/// <summary>
+		/// Levels the far bank where each way crosses a moat to the height of the ditch's inner lip there (the drawbridge's hinge,
+		/// PropsFeature.AddDrawbridges): a lowered drawbridge lies level, and laid from a lip 3.7 m under the far bank it ran
+		/// into the bank (Flo Monolith's Mossy Elkring Keep, 2026-10-15). A landing <see cref="LandingMetres"/> out and the leaf's
+		/// width and <see cref="LandingSideMetres"/> each side across; past it the way ramps back to the ground at
+		/// <see cref="LandingRampGrade"/>, its sides at 45°. Cut or filled, the ditch itself untouched; idempotent (the lip's
+		/// height is read inside the ditch's inner rim, which this never reaches). Returns the crossings landed.
+		/// </summary>
+		public static int Landings(Terrain[,] terrains, TerrainTilePlan tiles, IReadOnlyList<PointOfInterestShape> shapes, IReadOnlyList<ScenePath> paths,
+			System.Func<float, float, float> ground, List<Landing> laid = null)
+		{
+			if (shapes == null || paths == null || ground == null)
+			{
+				return 0;
+			}
+			int landed = 0;
+			foreach (PointOfInterestShape shape in shapes)
+			{
+				if (shape == null || shape.Shaper != ShaperName || shape.Values == null || shape.Values.Length < 4)
+				{
+					continue;
+				}
+				Vector3 c = shape.Position;
+				float inner = shape.Values[1], width = shape.Values[2], outer = inner + width;
+				var done = new List<Vector2>();
+				foreach (ScenePath path in paths)
+				{
+					if (path == null || (path.FromId != shape.SiteId && path.ToId != shape.SiteId) || path.Class == ScenePathClass.Street)
+					{
+						continue;
+					}
+					Vector2 sum = Vector2.zero;
+					for (int i = 0; i < path.Count; i++)
+					{
+						var d = new Vector2(path.Points[i].x - c.x, path.Points[i].z - c.z);
+						float r = d.magnitude;
+						if (r > inner - 0.5f && r < outer + 0.5f && r > 1e-3f)
+						{
+							sum += d / r;
+						}
+					}
+					if (sum.sqrMagnitude < 1e-6f)
+					{
+						continue;
+					}
+					Vector2 dir = sum.normalized;
+					if (done.Exists(o => (o - dir).magnitude * inner < LandingLeafMetres))
+					{
+						continue;
+					}
+					done.Add(dir);
+					float hinge = ground(c.x + dir.x * (inner - 0.25f), c.z + dir.y * (inner - 0.25f));
+					var side = new Vector2(dir.y, -dir.x);
+					// As wide as the leaf and a metre, or the way and its shoulders, whichever is wider.
+					float half = Mathf.Max(0.5f * LandingLeafMetres + LandingSideMetres, path.MaxHalfWidth + ScenePathStyle.For(path.Class).Shoulder);
+					// Where the ramp meets the ground again along the way: the landing's edits end there.
+					float ramp = 0f;
+					for (float u = LandingMetres; u <= LandingMetres + LandingMaxRiseMetres / LandingRampGrade; u += 1f)
+					{
+						float g = ground(c.x + dir.x * (outer + u), c.z + dir.y * (outer + u));
+						ramp = u - LandingMetres;
+						if (Mathf.Abs(g - hinge) <= (u - LandingMetres) * LandingRampGrade)
+						{
+							break;
+						}
+					}
+					// Out to where a far bank up to LandingMaxRiseMetres from the hinge has ramped back to the ground.
+					float reach = LandingMetres + LandingMaxRiseMetres / LandingRampGrade, wide = half + LandingMaxRiseMetres + 2f;
+					var area = Rect.MinMaxRect(c.x + Mathf.Min(dir.x * outer, dir.x * (outer + reach)) - wide, c.z + Mathf.Min(dir.y * outer, dir.y * (outer + reach)) - wide,
+						c.x + Mathf.Max(dir.x * outer, dir.x * (outer + reach)) + wide, c.z + Mathf.Max(dir.y * outer, dir.y * (outer + reach)) + wide);
+					laid?.Add(new Landing { Centre = new Vector2(c.x, c.z), Dir = dir, Outer = outer, Half = half, Hinge = hinge, Ramp = ramp });
+					PointOfInterestTerrain.EditHeights(terrains, tiles, area, (x, z, h) =>
+					{
+						var p = new Vector2(x - c.x, z - c.z);
+						float u = Vector2.Dot(p, dir) - outer, v = Mathf.Abs(Vector2.Dot(p, side));
+						if (u < 0f)
+						{
+							/* The ditch's own far bank, across the crossing: its top brought down to the landing, at 45° on into the
+							 * ditch (only ever lowered, never under its floor's own ground). Cut from the far bank's height, it stood
+							 * as a lip between the lowered drawbridge and the landing behind it. Only the far half of the ditch: carried on
+							 * across a narrow one it dug into the inner bank under the drawbridge's hinge. */
+							if (p.magnitude <= inner || u < -0.5f * width)
+							{
+								return h;
+							}
+							return Mathf.Min(h, hinge + u + Mathf.Max(0f, v - half));
+						}
+						float along = Mathf.Max(0f, u - LandingMetres), across = Mathf.Max(0f, v - half);
+						float give = along * LandingRampGrade + across;
+						return Mathf.Clamp(h, hinge - give, hinge + give);
+					});
+					landed++;
+				}
+			}
+			return landed;
+		}
+
+		/// <summary>A moat crossing's landing: the level ground past the ditch where its drawbridge comes down.</summary>
+		public struct Landing
+		{
+			public Vector2 Centre;
+			public Vector2 Dir;
+			public float Outer;
+			public float Half;
+			public float Hinge;
+			/// <summary>How far past the landing its ramp runs back up or down to the ground, metres.</summary>
+			public float Ramp;
+
+			/// <summary>Whether (x, z) is on the landing's level ground.</summary>
+			public bool Contains(float x, float z) => Within(x, z, LandingMetres);
+
+			/// <summary>Whether (x, z) is on the landing or the ramp from it, which the way's carve leaves as they were laid.</summary>
+			public bool ContainsRamp(float x, float z) => Within(x, z, LandingMetres + Ramp);
+
+			private bool Within(float x, float z, float reach)
+			{
+				var p = new Vector2(x - Centre.x, z - Centre.y);
+				float u = Vector2.Dot(p, Dir) - Outer, v = Mathf.Abs(p.x * Dir.y - p.y * Dir.x);
+				return u >= 0f && u <= reach && v <= Half && p.magnitude >= Outer;
+			}
+		}
+
+		/// <summary>Whether (x, z) lies on any of <paramref name="landings"/> or their ramps.</summary>
+		public static bool OnLandingOrRamp(IReadOnlyList<Landing> landings, float x, float z)
+		{
+			if (landings != null)
+			{
+				foreach (Landing l in landings)
+				{
+					if (l.ContainsRamp(x, z))
+					{
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
+		/// <summary>The landing (x, z) lies on among <paramref name="landings"/>, false for none.</summary>
+		public static bool OnLanding(IReadOnlyList<Landing> landings, float x, float z, out Landing landing)
+		{
+			landing = default;
+			if (landings == null)
+			{
+				return false;
+			}
+			foreach (Landing l in landings)
+			{
+				if (l.Contains(x, z))
+				{
+					landing = l;
+					return true;
+				}
+			}
+			return false;
+		}
+
 		public void Place(PointOfInterestPlaceContext context, PointOfInterestRecord site)
 		{
 			// The ditch is the terrain's; its crossings are the drawbridges PropsFeature lays at the gates.

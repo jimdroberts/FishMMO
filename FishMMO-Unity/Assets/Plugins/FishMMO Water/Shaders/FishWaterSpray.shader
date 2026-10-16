@@ -38,6 +38,7 @@ Shader "FishMMO/Water/Spray"
             Cull Off
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex SprayVertex
             #pragma fragment Frag
             #pragma target 3.5

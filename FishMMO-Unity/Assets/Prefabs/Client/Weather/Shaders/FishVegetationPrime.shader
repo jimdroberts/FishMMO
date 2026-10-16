@@ -91,6 +91,7 @@ Shader "FishMMO/Vegetation Prime"
             AlphaToMask On
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 3.0
             #pragma vertex VegDepthVertex
             #pragma fragment VegPrimeFragment

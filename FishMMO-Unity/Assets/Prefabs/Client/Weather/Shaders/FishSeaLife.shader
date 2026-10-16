@@ -39,6 +39,7 @@ Shader "FishMMO/Sea Life"
             Cull Off
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 3.5
             #pragma vertex SeaLifeVertexMain
             #pragma fragment SeaLifeForwardFragment
@@ -65,6 +66,7 @@ Shader "FishMMO/Sea Life"
             Cull Off
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 3.5
             #pragma vertex SeaLifeDepthVertex
             #pragma fragment SeaLifeDepthFragment
@@ -87,6 +89,7 @@ Shader "FishMMO/Sea Life"
             Cull Off
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 3.5
             #pragma vertex SeaLifeDepthVertex
             #pragma fragment SeaLifeDepthFragment
@@ -106,6 +109,7 @@ Shader "FishMMO/Sea Life"
             Cull Off
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 3.5
             #pragma vertex SeaLifeVertexMain
             #pragma fragment SeaLifeDepthNormalsFragment

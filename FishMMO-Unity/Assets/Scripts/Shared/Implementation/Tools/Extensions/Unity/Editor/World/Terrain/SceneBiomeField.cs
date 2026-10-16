@@ -179,11 +179,12 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				FishMMO.Shared.Weather.Condensate condensate = FishMMO.Shared.Weather.PlanetAir.For(system, request.Body).Condensate;
 				bool cryogenic = condensate == FishMMO.Shared.Weather.Condensate.Methane || condensate == FishMMO.Shared.Weather.Condensate.Nitrogen;
-				lakeBiome = (cryogenic ? BiomeRegistry.Get("Methane Lake") : null) ?? BiomeRegistry.Get("Lake");
+				lakeBiome = (cryogenic ? BiomeTemplateArt.WaterBiome(BiomeWaterRole.MethaneLake) : null) ?? BiomeTemplateArt.WaterBiome(BiomeWaterRole.Lake);
 			}
-			BiomeTemplate riverBiome = water != null ? BiomeRegistry.Get("River") : null;
-			BiomeTemplate estuaryBiome = water != null ? BiomeRegistry.Get("Estuary") : null;
-			BiomeTemplate saltFlatBiome = water != null ? BiomeRegistry.Get("Salt Flat") : null;
+			// The biomes that play these parts by their templates' Water Role (found by name until 2026-10-15).
+			BiomeTemplate riverBiome = water != null ? BiomeTemplateArt.WaterBiome(BiomeWaterRole.River) : null;
+			BiomeTemplate estuaryBiome = water != null ? BiomeTemplateArt.WaterBiome(BiomeWaterRole.Estuary) : null;
+			BiomeTemplate saltFlatBiome = water != null ? BiomeTemplateArt.WaterBiome(BiomeWaterRole.SaltFlat) : null;
 			for (int z = 0; z < height; z++)
 			{
 				float north = origin.y + (z + 0.5f) * cellMetres;

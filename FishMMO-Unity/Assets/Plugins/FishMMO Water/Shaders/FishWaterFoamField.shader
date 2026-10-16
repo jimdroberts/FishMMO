@@ -333,6 +333,7 @@ Shader "Hidden/FishMMO/Water/Foam Field"
         {
             Name "Step"
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 3.5
@@ -343,6 +344,7 @@ Shader "Hidden/FishMMO/Water/Foam Field"
         {
             Name "Lace"
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment LaceFrag
             #pragma target 3.5

@@ -86,8 +86,23 @@ namespace FishMMO.Shared.WorldDesign
 	/// <b>Like the cliffs:</b> each chunk carries its collider on the Ground layer, which the server
 	/// keeps, and its renderer on a <see cref="ClientOnlyObject"/> child, which server builds strip.
 	/// The holes are part of the terrain data, which the server keeps too, so both sides collide with
-	/// the same wall. It wears the rock type of the geology under it. Built before the cliff rocks
-	/// are placed, so none stand on a hole.
+	/// the same wall. Built before the cliff rocks are placed, so none stand on a hole.
+	/// </para>
+	/// <para>
+	/// <b>Its rock, cell by cell.</b> Each cell of wall wears the rock it stands in as the biome there takes it
+	/// (2026-10-15): the geology's where that biome's template accepts it, else the biome's own, as the cliff rocks, river
+	/// boulders and fall ledges beside it are (BiomeTemplateArt.RockRule), so a bog's canyon is not walled in the
+	/// province's sandstone. A wall across two biomes or two provinces changes rock where they do: each chunk's mesh has
+	/// one sub-mesh per rock in it. Before, the whole scene's walls wore the one rock most of their cells stood on, the
+	/// geology's whatever grew there.
+	/// </para>
+	/// <para>
+	/// <b>Re-dressed on a repaint (2026-10-16).</b> The cut keeps the wall cells and the geology's rock under each
+	/// (<see cref="SceneCanyonWallCells"/>, beside the wall meshes), so "Repaint biomes" gives the walls the rock the templates
+	/// give them now (<see cref="Redress"/>) without the erosion that made the geology grid. Only the rock moves: each chunk's
+	/// mesh keeps its vertices and its triangles, regrouped into one sub-mesh per rock exactly as a cut with those templates
+	/// groups them (<see cref="ChunkTopology"/>, shared by both), so its collider, the holes under it and the NavMesh baked from
+	/// it are unchanged. A scene cut before then has no record and keeps the rock it was cut with until it is re-cut.
 	/// </para>
 	/// </remarks>
 	public static class CanyonWalls
@@ -104,8 +119,18 @@ namespace FishMMO.Shared.WorldDesign
 		/// <param name="geology">The rock under every sample.</param>
 		/// <param name="assetPath">Where the wall meshes are written: one asset holds them all. Null keeps them in memory (tests).</param>
 		/// <param name="water">Per sample, true where the scene's water or the ground it shaped stands (a river's channel, banks and bars, a lake): no wall is stood there or within a few metres of it, or a river crossing a riser ran through a wall. Null for none.</param>
+		/// <param name="rockAt">
+		/// The rock a wall stands in at a scene position (east, north) given the geology's rock there (a RockTypes name, or
+		/// null where unknown): the biome's rule there (BiomeTemplateArt.RockRule). Null: the geology's rock itself, sandstone
+		/// where unknown.
+		/// </param>
+		/// <param name="recordPath">
+		/// Where the wall cells and their geology rock are kept for a repaint (<see cref="SceneCanyonWallCells"/>,
+		/// <see cref="RecordPath"/>). Null keeps none (tests).
+		/// </param>
 		public static CanyonWallReport Build(Scene scene, Terrain[,] terrains, TerrainTilePlan plan, SceneHeightField field,
-			float[] plateauWeight, SceneGeologyGrid geology, string assetPath, CanyonWallOptions options = null, Func<int, bool> water = null)
+			float[] plateauWeight, SceneGeologyGrid geology, string assetPath, CanyonWallOptions options = null, Func<int, bool> water = null,
+			Func<float, float, string, string> rockAt = null, string recordPath = null)
 		{
 			options ??= new CanyonWallOptions();
 			var report = new CanyonWallReport();
@@ -199,7 +224,11 @@ namespace FishMMO.Shared.WorldDesign
 			float[] shifts = Shifts(field, wall, cellsX, cellsZ, downhill, options);
 
 			// ── The meshes, by chunk ──
-			Material material = MaterialFor(geology, wall, width, cellsX, cellsZ, report);
+			// The geology's rock under each wall cell (at its south-west sample), then the rock the biome there takes for it.
+			int[] cellGeology = GeologyCells(wall, cellsX, cellsZ, (cx, cz) => geology.ColumnOf(cz * width + cx).Lithology.RockTypeName,
+				out List<string> geologyRocks);
+			int[] cellRock = WallRocks(wall, cellGeology, geologyRocks, field.Plan, cellsX, cellsZ, rockAt, out List<string> rocks);
+			Material[] materials = MaterialsFor(rocks, cellRock, report);
 			int k = Mathf.Max(1, options.Subdivision);
 			int chunkCells = Mathf.Max(8, Mathf.RoundToInt(options.ChunkMetres / cell));
 			int layer = CliffPlacer.ColliderLayer;
@@ -213,7 +242,8 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				for (int cx0 = 0; cx0 < cellsX; cx0 += chunkCells)
 				{
-					Mesh mesh = BuildChunk(field, geology, wall, cellsX, cellsZ, cx0, cz0, chunkCells, k, taper, shifts, downhill, options);
+					Mesh mesh = BuildChunk(field, geology, wall, cellRock, rocks.Count, cellsX, cellsZ, cx0, cz0, chunkCells, k, taper, shifts, downhill, options,
+						out List<int> chunkRocks);
 					if (mesh == null)
 					{
 						continue;
@@ -233,7 +263,13 @@ namespace FishMMO.Shared.WorldDesign
 					visual.AddComponent<ClientOnlyObject>();
 					visual.AddComponent<MeshFilter>().sharedMesh = mesh;
 					var renderer = visual.AddComponent<MeshRenderer>();
-					renderer.sharedMaterial = material;
+					// One sub-mesh per rock the chunk's cells stand in, each its rock's material.
+					var chunkMaterials = new Material[chunkRocks.Count];
+					for (int r = 0; r < chunkRocks.Count; r++)
+					{
+						chunkMaterials[r] = materials[chunkRocks[r]];
+					}
+					renderer.sharedMaterials = chunkMaterials;
 					renderer.shadowCastingMode = ShadowCastingMode.On;
 					report.Chunks++;
 				}
@@ -255,9 +291,125 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				report.Wrote.Add(assetPath);
 			}
+			// And what a repaint needs to dress them again: the cells and the geology's rock under each.
+			if (meshes.Count > 0 && recordPath != null)
+			{
+				SceneCanyonWallCells record = ScriptableObject.CreateInstance<SceneCanyonWallCells>();
+				record.Version = SceneCanyonWallCells.CurrentVersion;
+				record.CountX = field.Plan.CountX;
+				record.CountZ = field.Plan.CountZ;
+				record.TileMetres = field.Plan.TileMetres;
+				record.Resolution = field.Plan.Resolution;
+				record.ChunkCells = chunkCells;
+				record.Subdivision = k;
+				record.Rocks = geologyRocks.ConvertAll(r => r ?? string.Empty);
+				record.Runs = EncodeCells(cellGeology);
+				ScenePropBaker.Store(record, recordPath);
+				report.Wrote.Add(recordPath);
+			}
 
 			Hole(terrains, plan, wall, cellsX, cellsZ);
 			report.Notes.Add(report.ToString());
+			return report;
+		}
+
+		/// <summary>The scene's wall record (<see cref="SceneCanyonWallCells"/>): <c>&lt;Scene&gt; Canyon Wall Cells.asset</c> in its terrain folder.</summary>
+		public static string RecordPath(string terrainFolder, string sceneName) => $"{terrainFolder}/{WorldEditorAssets.Sanitize(sceneName)} Canyon Wall Cells.asset";
+
+		/// <summary>The scene's wall root, or null.</summary>
+		public static GameObject RootOf(Scene scene)
+		{
+			foreach (GameObject root in scene.GetRootGameObjects())
+			{
+				if (root.name == RootName)
+				{
+					return root;
+				}
+			}
+			return null;
+		}
+
+		/// <summary>
+		/// Dresses the scene's walls again in the rock each cell takes now (<paramref name="rockAt"/>: the biome rule of the
+		/// current templates, as <see cref="Build"/> is handed), from the cells and geology the cut kept: every chunk's
+		/// triangles regrouped into one sub-mesh per rock in place, its materials set, nothing added or removed. The meshes'
+		/// vertices, their triangle sets, the colliders and the terrain's holes are as the cut left them. Deterministic: the
+		/// same record and rule give the same meshes, as a re-cut would build them.
+		/// </summary>
+		/// <returns>The report: notes of what was dressed, or why nothing was (no walls, another plan, chunks not as cut).</returns>
+		public static CanyonWallReport Redress(Scene scene, TerrainTilePlan plan, SceneCanyonWallCells record, Func<float, float, string, string> rockAt)
+		{
+			var report = new CanyonWallReport();
+			GameObject root = RootOf(scene);
+			if (record == null || root == null)
+			{
+				return report;
+			}
+			if (record.Version != SceneCanyonWallCells.CurrentVersion || !record.Matches(plan) || record.ChunkCells < 1 || record.Subdivision < 1)
+			{
+				report.Notes.Add("Canyon walls: their record is of another layout or another tile plan than the scene's; they keep the rock they were cut with. Re-cut the scene to dress them from the templates.");
+				return report;
+			}
+			int perTile = Mathf.Max(1, plan.Resolution - 1);
+			int cellsX = plan.CountX * perTile, cellsZ = plan.CountZ * perTile;
+			int[] cellGeology = DecodeCells(record.Runs, cellsX * cellsZ);
+			var wall = new bool[cellGeology.Length];
+			for (int c = 0; c < wall.Length; c++)
+			{
+				wall[c] = cellGeology[c] >= 0;
+				report.Cells += wall[c] ? 1 : 0;
+			}
+			List<string> geologyRocks = record.Rocks.ConvertAll(r => string.IsNullOrEmpty(r) ? null : r);
+			int[] cellRock = WallRocks(wall, cellGeology, geologyRocks, record.Plan, cellsX, cellsZ, rockAt, out List<string> rocks);
+			Material[] materials = MaterialsFor(rocks, cellRock, report);
+
+			int chunkCells = record.ChunkCells, k = record.Subdivision, unmatched = 0;
+			for (int cz0 = 0; cz0 < cellsZ; cz0 += chunkCells)
+			{
+				for (int cx0 = 0; cx0 < cellsX; cx0 += chunkCells)
+				{
+					List<long> keys = ChunkTopology(wall, cellRock, rocks.Count, cellsX, cellsZ, cx0, cz0, chunkCells, k, out List<int>[] triangles, out List<int> chunkRocks);
+					if (chunkRocks.Count == 0)
+					{
+						continue;
+					}
+					Transform chunk = root.transform.Find($"Chunk {cx0 / chunkCells} {cz0 / chunkCells}");
+					MeshCollider collider = chunk != null ? chunk.GetComponent<MeshCollider>() : null;
+					Transform visual = chunk != null ? chunk.Find(CliffPlacer.VisualName) : null;
+					MeshRenderer renderer = visual != null ? visual.GetComponent<MeshRenderer>() : null;
+					Mesh mesh = collider != null ? collider.sharedMesh : null;
+					if (mesh == null || renderer == null || mesh.vertexCount != keys.Count)
+					{
+						unmatched++;
+						continue;
+					}
+					mesh.subMeshCount = chunkRocks.Count;
+					for (int m = 0; m < chunkRocks.Count; m++)
+					{
+						mesh.SetTriangles(triangles[chunkRocks[m]], m);
+					}
+					// As the cut finishes a chunk, so the regrouped mesh is the one a cut with these rocks builds.
+					mesh.RecalculateNormals();
+					mesh.RecalculateTangents();
+					mesh.RecalculateBounds();
+					EditorUtility.SetDirty(mesh);
+					// The same triangles: the collider is cooked again from them, and stands where it stood.
+					collider.sharedMesh = null;
+					collider.sharedMesh = mesh;
+					var chunkMaterials = new Material[chunkRocks.Count];
+					for (int r = 0; r < chunkRocks.Count; r++)
+					{
+						chunkMaterials[r] = materials[chunkRocks[r]];
+					}
+					renderer.sharedMaterials = chunkMaterials;
+					report.Chunks++;
+				}
+			}
+			if (unmatched > 0)
+			{
+				report.Notes.Add($"Canyon walls: {unmatched} chunk(s) are not as the cut built them (removed or edited by hand); they keep the rock they had. Re-cut the scene to rebuild them.");
+			}
+			report.Notes.Add($"[Canyon walls] re-dressed from the templates: {report.Cells:N0} cells of wall in {report.Chunks} chunk(s).");
 			return report;
 		}
 
@@ -567,18 +719,20 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// One chunk's mesh: every wall cell in it, subdivided, each vertex moved down the slope towards
-		/// its wall's middle and in or out with its bed. Null when the chunk has no wall.
+		/// One chunk's wiring: every wall cell in it, subdivided <paramref name="k"/> to a cell each way, as the keys of its
+		/// vertices (sample row × (cellsX·k + 1) + sample column) in the order the mesh holds them, and its triangles by rock
+		/// (<paramref name="cellRock"/>), listed for <paramref name="chunkRocks"/> in rock order. The vertices are shared, so the
+		/// faces meet without a seam where the rock changes, and their order depends on which cells are wall, never on the
+		/// rocks: a chunk built with one set of rocks is regrouped into another's sub-meshes by its triangles alone
+		/// (<see cref="Redress"/>). Pure.
 		/// </summary>
-		private static Mesh BuildChunk(SceneHeightField field, SceneGeologyGrid geology, bool[] wall, int cellsX, int cellsZ,
-			int cx0, int cz0, int chunkCells, int k, float[] taper, float[] shifts, Vector2[] downhill, CanyonWallOptions options)
+		public static List<long> ChunkTopology(bool[] wall, int[] cellRock, int rockCount, int cellsX, int cellsZ, int cx0, int cz0, int chunkCells, int k,
+			out List<int>[] triangles, out List<int> chunkRocks)
 		{
-			int width = field.Width;
-			float cell = field.Spacing;
+			chunkRocks = new List<int>();
 			var index = new Dictionary<long, int>();
-			var vertices = new List<Vector3>();
-			var uvs = new List<Vector2>();
-			var triangles = new List<int>();
+			var keys = new List<long>();
+			triangles = new List<int>[Math.Max(1, rockCount)];
 			int cx1 = Math.Min(cellsX, cx0 + chunkCells), cz1 = Math.Min(cellsZ, cz0 + chunkCells);
 			long stride = (long)cellsX * k + 1;
 
@@ -589,6 +743,66 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return existing;
 				}
+				int i = keys.Count;
+				keys.Add(key);
+				index[key] = i;
+				return i;
+			}
+
+			for (int cz = cz0; cz < cz1; cz++)
+			{
+				for (int cx = cx0; cx < cx1; cx++)
+				{
+					if (!wall[cz * cellsX + cx])
+					{
+						continue;
+					}
+					int r = Math.Max(0, cellRock[cz * cellsX + cx]);
+					List<int> list = triangles[r] ??= new List<int>();
+					for (int j = 0; j < k; j++)
+					{
+						for (int i = 0; i < k; i++)
+						{
+							int sx = cx * k + i, sz = cz * k + j;
+							int v00 = Vertex(sx, sz), v10 = Vertex(sx + 1, sz), v01 = Vertex(sx, sz + 1), v11 = Vertex(sx + 1, sz + 1);
+							// Clockwise seen from above, as the terrain's own: the face turns outward when it stands up.
+							list.Add(v00); list.Add(v01); list.Add(v11);
+							list.Add(v00); list.Add(v11); list.Add(v10);
+						}
+					}
+				}
+			}
+			for (int r = 0; r < triangles.Length; r++)
+			{
+				if (triangles[r] != null && triangles[r].Count > 0)
+				{
+					chunkRocks.Add(r);
+				}
+			}
+			return keys;
+		}
+
+		/// <summary>
+		/// One chunk's mesh: its wiring (<see cref="ChunkTopology"/>), each vertex moved down the slope towards its wall's
+		/// middle and in or out with its bed. One sub-mesh per rock its cells stand in, in <paramref name="chunkRocks"/>' order.
+		/// Null when the chunk has no wall.
+		/// </summary>
+		private static Mesh BuildChunk(SceneHeightField field, SceneGeologyGrid geology, bool[] wall, int[] cellRock, int rockCount, int cellsX, int cellsZ,
+			int cx0, int cz0, int chunkCells, int k, float[] taper, float[] shifts, Vector2[] downhill, CanyonWallOptions options,
+			out List<int> chunkRocks)
+		{
+			List<long> keys = ChunkTopology(wall, cellRock, rockCount, cellsX, cellsZ, cx0, cz0, chunkCells, k, out List<int>[] triangles, out chunkRocks);
+			if (chunkRocks.Count == 0)
+			{
+				return null;
+			}
+			int width = field.Width;
+			long stride = (long)cellsX * k + 1;
+			var vertices = new List<Vector3>(keys.Count);
+			var uvs = new List<Vector2>(keys.Count);
+			foreach (long key in keys)
+			{
+				int sx = (int)(key % stride), sz = (int)(key / stride);
 				// Where it is in samples, and the four samples around it.
 				float gx = sx / (float)k, gz = sz / (float)k;
 				int x0 = Math.Min((int)gx, width - 2), z0 = Math.Min((int)gz, field.Depth - 2);
@@ -614,42 +828,17 @@ namespace FishMMO.Shared.WorldDesign
 					position.x += n.x * shift * t;
 					position.z += n.y * shift * t;
 				}
-				int i = vertices.Count;
 				vertices.Add(position);
 				uvs.Add(new Vector2((position.x + position.z) / options.TextureMetres, position.y / options.TextureMetres));
-				index[key] = i;
-				return i;
-			}
-
-			for (int cz = cz0; cz < cz1; cz++)
-			{
-				for (int cx = cx0; cx < cx1; cx++)
-				{
-					if (!wall[cz * cellsX + cx])
-					{
-						continue;
-					}
-					for (int j = 0; j < k; j++)
-					{
-						for (int i = 0; i < k; i++)
-						{
-							int sx = cx * k + i, sz = cz * k + j;
-							int v00 = Vertex(sx, sz), v10 = Vertex(sx + 1, sz), v01 = Vertex(sx, sz + 1), v11 = Vertex(sx + 1, sz + 1);
-							// Clockwise seen from above, as the terrain's own: the face turns outward when it stands up.
-							triangles.Add(v00); triangles.Add(v01); triangles.Add(v11);
-							triangles.Add(v00); triangles.Add(v11); triangles.Add(v10);
-						}
-					}
-				}
-			}
-			if (triangles.Count == 0)
-			{
-				return null;
 			}
 			var mesh = new Mesh { indexFormat = vertices.Count > 65000 ? IndexFormat.UInt32 : IndexFormat.UInt16 };
 			mesh.SetVertices(vertices);
 			mesh.SetUVs(0, uvs);
-			mesh.SetTriangles(triangles, 0);
+			mesh.subMeshCount = chunkRocks.Count;
+			for (int m = 0; m < chunkRocks.Count; m++)
+			{
+				mesh.SetTriangles(triangles[chunkRocks[m]], m);
+			}
 			mesh.RecalculateNormals();
 			mesh.RecalculateTangents();
 			mesh.RecalculateBounds();
@@ -672,40 +861,185 @@ namespace FishMMO.Shared.WorldDesign
 			return Mathf.Lerp(Mathf.Lerp(x00, x10, fy), Mathf.Lerp(x01, x11, fy), fz);
 		}
 
-		/// <summary>The walls' material: the cliff rock of the rock type most of the wall cells stand in.</summary>
-		private static Material MaterialFor(SceneGeologyGrid geology, bool[] wall, int width, int cellsX, int cellsZ, CanyonWallReport report)
+		/// <summary>The rock a wall stands in where neither the geology nor a biome names one.</summary>
+		public const string DefaultRock = "Sandstone";
+
+		/// <summary>
+		/// Each wall cell's rock, as an index into <paramref name="rocks"/> (−1 for a cell that is not wall): the rocks in the
+		/// order first met, scanning the cells row by row from the south-west.
+		/// </summary>
+		/// <param name="rockOf">The rock a wall cell (x, z) stands in; null counts as <see cref="DefaultRock"/>.</param>
+		public static int[] CellRocks(bool[] wall, int cellsX, int cellsZ, Func<int, int, string> rockOf, out List<string> rocks)
 		{
-			var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+			rocks = new List<string>();
+			var index = new Dictionary<string, int>(StringComparer.Ordinal);
+			var cellRock = new int[cellsX * cellsZ];
 			for (int cz = 0; cz < cellsZ; cz++)
 			{
 				for (int cx = 0; cx < cellsX; cx++)
 				{
-					if (!wall[cz * cellsX + cx])
+					int c = cz * cellsX + cx;
+					if (!wall[c])
 					{
+						cellRock[c] = -1;
 						continue;
 					}
-					string type = geology.ColumnOf(cz * width + cx).Lithology.RockTypeName ?? "Sandstone";
-					counts[type] = (counts.TryGetValue(type, out int n) ? n : 0) + 1;
+					string type = rockOf(cx, cz) ?? DefaultRock;
+					if (!index.TryGetValue(type, out int r))
+					{
+						r = rocks.Count;
+						index[type] = r;
+						rocks.Add(type);
+					}
+					cellRock[c] = r;
 				}
 			}
-			string best = "Sandstone";
-			int most = -1;
-			foreach (KeyValuePair<string, int> kv in counts)
+			return cellRock;
+		}
+
+		/// <summary>
+		/// Each wall cell's geology rock, as an index into <paramref name="rocks"/> (−1 for a cell that is not wall): the rocks
+		/// in the order first met, null (the geology names none there) kept as its own entry, not read as the default.
+		/// </summary>
+		public static int[] GeologyCells(bool[] wall, int cellsX, int cellsZ, Func<int, int, string> geologyOf, out List<string> rocks)
+		{
+			rocks = new List<string>();
+			var index = new Dictionary<string, int>(StringComparer.Ordinal);
+			int unknown = -1;
+			var cells = new int[cellsX * cellsZ];
+			for (int cz = 0; cz < cellsZ; cz++)
 			{
-				if (kv.Value > most || (kv.Value == most && string.CompareOrdinal(kv.Key, best) < 0))
+				for (int cx = 0; cx < cellsX; cx++)
 				{
-					best = kv.Key;
-					most = kv.Value;
+					int c = cz * cellsX + cx;
+					if (!wall[c])
+					{
+						cells[c] = -1;
+						continue;
+					}
+					string type = geologyOf(cx, cz);
+					int r;
+					if (type == null)
+					{
+						if (unknown < 0)
+						{
+							unknown = rocks.Count;
+							rocks.Add(null);
+						}
+						r = unknown;
+					}
+					else if (!index.TryGetValue(type, out r))
+					{
+						r = rocks.Count;
+						index[type] = r;
+						rocks.Add(type);
+					}
+					cells[c] = r;
 				}
 			}
-			string name = CliffRocks.MaterialName(best);
-			string path = name != null ? ProceduralArtCatalogue.MaterialPath(name) : null;
-			Material material = path != null ? AssetDatabase.LoadAssetAtPath<Material>(path) : null;
-			if (material == null)
+			return cells;
+		}
+
+		/// <summary>
+		/// The rock a wall cell stands in from the geology's rock under it: <paramref name="rockAt"/> at the cell's centre (the
+		/// biome's rule there), else the geology's own, else <see cref="DefaultRock"/>. The one rule of a cut and a repaint.
+		/// </summary>
+		public static string WallRock(TerrainTilePlan plan, int cx, int cz, string geologyRock, Func<float, float, string, string> rockAt)
+		{
+			if (rockAt == null)
 			{
-				report.Notes.Add($"Canyon walls: no material for {best} rock at '{path}'; run Generate Biome Art, then re-cut. The walls render with the default material until then.");
+				return geologyRock ?? DefaultRock;
 			}
-			return material;
+			float east = 0.5f * (SceneHeightField.EastOf(plan, cx) + SceneHeightField.EastOf(plan, cx + 1));
+			float north = 0.5f * (SceneHeightField.NorthOf(plan, cz) + SceneHeightField.NorthOf(plan, cz + 1));
+			return rockAt(east, north, geologyRock) ?? geologyRock ?? DefaultRock;
+		}
+
+		/// <summary>Each wall cell's rock (<see cref="CellRocks"/>) from its geology rock (<see cref="GeologyCells"/>) by <see cref="WallRock"/>.</summary>
+		public static int[] WallRocks(bool[] wall, int[] cellGeology, List<string> geologyRocks, TerrainTilePlan plan, int cellsX, int cellsZ,
+			Func<float, float, string, string> rockAt, out List<string> rocks)
+			=> CellRocks(wall, cellsX, cellsZ, (cx, cz) => WallRock(plan, cx, cz, geologyRocks[cellGeology[cz * cellsX + cx]], rockAt), out rocks);
+
+		/// <summary>
+		/// Per-cell indices (−1 for none) as runs: (first cell, count, index) triples, row by row from the south-west, a run
+		/// for each stretch of cells in a row-major line with the same index. What the wall record keeps (<see cref="SceneCanyonWallCells.Runs"/>).
+		/// </summary>
+		public static int[] EncodeCells(int[] cells)
+		{
+			var runs = new List<int>();
+			int c = 0;
+			while (c < cells.Length)
+			{
+				int value = cells[c];
+				int start = c;
+				while (c < cells.Length && cells[c] == value)
+				{
+					c++;
+				}
+				if (value >= 0)
+				{
+					runs.Add(start);
+					runs.Add(c - start);
+					runs.Add(value);
+				}
+			}
+			return runs.ToArray();
+		}
+
+		/// <summary>
+		/// The per-cell indices of <paramref name="count"/> cells from <see cref="EncodeCells"/>' runs, −1 elsewhere. A run that
+		/// reaches past the grid (a record of another size) is cut at its edge.
+		/// </summary>
+		public static int[] DecodeCells(int[] runs, int count)
+		{
+			var cells = new int[count];
+			for (int c = 0; c < count; c++)
+			{
+				cells[c] = -1;
+			}
+			for (int i = 0; runs != null && i + 2 < runs.Length; i += 3)
+			{
+				int start = Math.Max(0, runs[i]), end = Math.Min(count, runs[i] + runs[i + 1]);
+				for (int c = start; c < end; c++)
+				{
+					cells[c] = runs[i + 2];
+				}
+			}
+			return cells;
+		}
+
+		/// <summary>
+		/// The material each rock's walls wear (its cliff rocks' material, CliffRocks.MaterialName), and a note of how many
+		/// cells stand in each; a rock whose material is not generated renders with the default material and is reported.
+		/// </summary>
+		private static Material[] MaterialsFor(List<string> rocks, int[] cellRock, CanyonWallReport report)
+		{
+			var counts = new int[rocks.Count];
+			foreach (int r in cellRock)
+			{
+				if (r >= 0)
+				{
+					counts[r]++;
+				}
+			}
+			var materials = new Material[rocks.Count];
+			var parts = new List<string>();
+			for (int r = 0; r < rocks.Count; r++)
+			{
+				string name = CliffRocks.MaterialName(rocks[r]);
+				string path = name != null ? ProceduralArtCatalogue.MaterialPath(name) : null;
+				materials[r] = path != null ? AssetDatabase.LoadAssetAtPath<Material>(path) : null;
+				if (materials[r] == null)
+				{
+					report.Notes.Add($"Canyon walls: no material for {rocks[r]} rock at '{path}'; run Generate Biome Art, then re-cut. Those walls render with the default material until then.");
+				}
+				parts.Add($"{rocks[r]} {counts[r]:N0}");
+			}
+			if (rocks.Count > 0)
+			{
+				report.Notes.Add($"Canyon walls stand in: {string.Join(", ", parts)} cells.");
+			}
+			return materials;
 		}
 
 		// ── Holes ─────────────────────────────────────────────────────

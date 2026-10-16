@@ -54,7 +54,7 @@ namespace FishMMO.Shared.WorldDesign
 				return;
 			}
 			BiomeTemplate biome = context.BiomeAt != null ? context.BiomeAt(context.Record.Position.x, context.Record.Position.z) : null;
-			VineBiomes.Habitat habitat = VineBiomes.For(biome != null ? biome.name : null);
+			VineBiomes.Habitat habitat = BiomeTemplateArt.Vines(biome);
 			if (habitat == null || habitat.Ruins <= 0f)
 			{
 				return;

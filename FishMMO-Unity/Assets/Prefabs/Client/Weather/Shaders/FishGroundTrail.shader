@@ -24,6 +24,7 @@ Shader "FishMMO/Ground Trail"
             Name "TrailFade"
             Blend Zero SrcColor
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
 
@@ -55,6 +56,7 @@ Shader "FishMMO/Ground Trail"
         {
             Name "TrailClear"
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
 
@@ -86,6 +88,7 @@ Shader "FishMMO/Ground Trail"
             BlendOp Max
             Blend One One
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
 

@@ -31,6 +31,8 @@
 #pragma kernel FishGrassGatherClear
 #pragma kernel FishGrassGather
 #pragma kernel FishGrassGatherArgs
+#pragma use_dxc vulkan
+
 // Diagnostic (GrassBladeRenderer.SkipTerrainColour): the generate kernel without the terrain-colour textures, so it
 // binds exactly what it did before the tint (heightmap + two density maps). Bisects the OpenGL-only flicker.
 #pragma multi_compile_local __ GRASS_NO_TERRAIN_COLOUR
@@ -627,6 +629,10 @@ float4 GrassTerrainColourAt(float2 local, float2 world, float share, FishFloraLo
         float width = max(1.0, _GrassArrayInfo.w);
         float mips = max(1.0, _GrassArrayInfo2.x);
         float3 albedo = 0.0;
+        /* The ground's own shift on its world, as the terrain draws it (FishFloraGround; the biome's ground shift, never the
+         * patch's look, which the vertex shader lays on the blade itself): the very root is the ground and must be its colour.
+         * The blade's biome (a dithered read at the border) rather than the terrain's bilinear blend: the same away from one. */
+        float3 groundShift = look.valid ? look.biomeShift : float3(1.0, 1.0, 1.0);
         [unroll] for (int n = 0; n < 2; n++)
         {
             if (weights[n] > 0.0)
@@ -640,9 +646,7 @@ float4 GrassTerrainColourAt(float2 local, float2 world, float share, FishFloraLo
                 int m1 = min(m0 + 1, (int)mips - 1);
                 float3 a = GrassAlbedoBilinear(id, uv, m0, width);
                 float3 b = GrassAlbedoBilinear(id, uv, m1, width);
-                /* Each layer in the planet's looks as the terrain draws it (FishFloraGround, the root's own patch look): the
-                 * very root is the ground itself, and must be the recoloured ground it stands on. */
-                albedo += FishFloraGround(lerp(a, b, mip - (float)m0) * GrassLayerTint(id), GrassLayerFlora(id), look) * weights[n];
+                albedo += FishFloraGround(lerp(a, b, mip - (float)m0) * GrassLayerTint(id), GrassLayerFlora(id), groundShift) * weights[n];
             }
         }
         result = sum > 1e-5 ? float4(albedo, 1.0) : 0.0;

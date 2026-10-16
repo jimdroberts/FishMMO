@@ -24,6 +24,7 @@
 // RasterPacked is this kernel's twin in C#, and the tests hold it to WeatherMap.SampleTexel.
 
 #pragma kernel Raster
+#pragma use_dxc vulkan
 
 #define FISH_STORM_FLOAT4S 8
 

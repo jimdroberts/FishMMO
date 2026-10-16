@@ -28,6 +28,7 @@
 #pragma kernel FishScatterGenerate
 #pragma kernel FishScatterFinalize
 #pragma kernel FishScatterArgsFence
+#pragma use_dxc vulkan
 
 #define SCATTER_ITEM_SIDE 8
 #define SCATTER_MAX_PER_BLOCK 128

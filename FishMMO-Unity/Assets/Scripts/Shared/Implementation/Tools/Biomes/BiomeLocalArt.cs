@@ -74,12 +74,15 @@ namespace FishMMO.Shared.Biomes
 		public const string SlotRiverbed = "riverbed";
 		public const string SlotRoad = "road";
 		public const string SlotPath = "path";
+		public const string SlotCobbles = "path/stone";
+		public const string SlotBarSand = "sediment/sand";
+		public const string SlotBarGravel = "sediment/gravel";
 
 		/// <summary>One slot's override. A whole terrain layer wins over the single textures.</summary>
 		[Serializable]
 		public sealed class SlotOverride
 		{
-			[Tooltip("The slot key: main, detail/<i>, cliff/<i>, riverbed, lakebed, road or path.")]
+			[Tooltip("The slot key: main, detail/<i>, cliff/<i>, riverbed, lakebed, road, path, path/stone (cobbles), sediment/sand or sediment/gravel.")]
 			public string Slot;
 			[Tooltip("Replaces the whole layer: its textures, tiling and remaps.")]
 			public TerrainLayer TerrainLayer;
@@ -310,6 +313,9 @@ namespace FishMMO.Shared.Biomes
 			keys.Add(SlotLakebed);
 			keys.Add(SlotRoad);
 			keys.Add(SlotPath);
+			keys.Add(SlotCobbles);
+			keys.Add(SlotBarSand);
+			keys.Add(SlotBarGravel);
 			return keys;
 		}
 
@@ -327,6 +333,9 @@ namespace FishMMO.Shared.Biomes
 				case SlotLakebed: return biome.LakebedTextureLayer;
 				case SlotRoad: return biome.RoadTextureLayer;
 				case SlotPath: return biome.SmallPathTextureLayer;
+				case SlotCobbles: return biome.CobbleTextureLayer;
+				case SlotBarSand: return biome.BarSandTextureLayer;
+				case SlotBarGravel: return biome.BarGravelTextureLayer;
 			}
 			if (slot.StartsWith(SlotDetail, StringComparison.Ordinal) && int.TryParse(slot.Substring(SlotDetail.Length), out int d))
 			{

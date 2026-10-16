@@ -1294,7 +1294,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Sha Mill Race Merchant Spawner [108672dd]'
-    Position: {x: -172.81335, y: 116.1051, z: -904.5635}
+    Position: {x: -172.81335, y: 113.979126, z: -904.5635}
     Rotation: {x: -0, y: 0.23344538, z: -0, w: -0.9723699}
     OrConditions: []
     TrueConditions: []

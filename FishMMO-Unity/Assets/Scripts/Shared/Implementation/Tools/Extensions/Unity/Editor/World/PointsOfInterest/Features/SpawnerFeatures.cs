@@ -197,18 +197,15 @@ namespace FishMMO.Shared.WorldDesign
 				return;
 			}
 
-			string biome = null;
-			if (context.BiomeAt != null)
-			{
-				Biomes.BiomeTemplate template = context.BiomeAt(context.Record.Position.x, context.Record.Position.z);
-				biome = template != null ? template.name : null;
-			}
+			// What the biome offers: its template's Gathering Resources (2026-10-16; the catalogue's rows named biomes before).
+			Biomes.BiomeTemplate template = context.BiomeAt != null ? context.BiomeAt(context.Record.Position.x, context.Record.Position.z) : null;
+			IReadOnlyList<string> offered = BiomeTemplateArt.Gathering(template);
 
 			int size = Mathf.Clamp(context.Record.SizeClass, 0, 2);
 			int count = Count > 0 ? Count : size == 0 ? 2 : size == 1 ? 3 : 5;
-			GatheringResource main = GatheringResourceCatalogue.Pick(families[0], biome, context.Random);
+			GatheringResource main = GatheringResourceCatalogue.Pick(families[0], offered, context.Random);
 			GatheringResource other = families.Count > 1 && count >= 3
-				? GatheringResourceCatalogue.Pick(families[1 + context.Random.Next(families.Count - 1)], biome, context.Random)
+				? GatheringResourceCatalogue.Pick(families[1 + context.Random.Next(families.Count - 1)], offered, context.Random)
 				: null;
 			NetworkObject mainNode = NodeObject(context, main, families[0]);
 			NetworkObject otherNode = other != null ? NodeObject(context, other, other.Family) : null;

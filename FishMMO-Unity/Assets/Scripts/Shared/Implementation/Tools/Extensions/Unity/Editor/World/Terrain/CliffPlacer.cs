@@ -35,8 +35,8 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The rock the ground is made of at a scene position (x, altitude, z) — a <see cref="RockTypes"/>
-		/// name — or null where unknown. Where the biome there accepts it (<see cref="CliffRocks.Accepts"/>:
-		/// its own rock or one of its <see cref="BiomeArtSpec.Entry.Rocks"/>) it wins over the biome's own,
+		/// name — or null where unknown. Where the biome there accepts it (its template's Own Rock or one of its
+		/// Accepted Rocks, <see cref="BiomeTemplateArt.RockRule"/>) it wins over the cliff layer's own rock,
 		/// so a granite country's grassland stands in granite and a desert's canyon in its sandstone; a rock
 		/// the biome does not accept (sandstone under a bog) gives way to the biome's own. Biomes whose
 		/// cliffs are ice keep their ice. Null: every cliff is its biome's rock.
@@ -210,10 +210,12 @@ namespace FishMMO.Shared.WorldDesign
 				return report;
 			}
 
-			// Each biome's cliff: the first of its cliff layers whose family stands for a rock.
+			// Each biome's cliff: the first of its cliff layers that names a rock (its template's Rock Type).
 			int biomes = field.Biomes.Count;
 			var rock = new string[biomes];
-			var spec = new BiomeArtSpec.Entry[biomes];
+			// What each biome's template says of the geology's rock under it: its own rock, and the rocks it accepts besides.
+			var ownRock = new string[biomes];
+			var accepted = new IReadOnlyList<string>[biomes];
 			var minAngle = new float[biomes];
 			var paintLayer = new int[biomes];
 			var heightBand = new CliffTextureLayer[biomes];
@@ -227,14 +229,14 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						continue;
 					}
-					string family = FamilyOf(entry);
-					spec[b] = entry.Biome != null ? BiomeArtSpec.For(entry.Biome.name) : null;
-					string type = CliffRocks.RockTypeFor(family, spec[b]);
+					string type = BiomeTemplateArt.CliffRock(entry, out string family);
 					if (type == null)
 					{
-						unmapped.Add(family ?? $"{entry.Biome?.ResolvedDisplayName} {entry.Slot} (unknown family)");
+						unmapped.Add(family);
 						continue;
 					}
+					ownRock[b] = BiomeTemplateArt.OwnRock(entry.Biome);
+					accepted[b] = BiomeTemplateArt.AcceptedRocks(entry.Biome);
 					rock[b] = type;
 					minAngle[b] = Mathf.Max(20f, cliff.minCliffAngle);
 					paintLayer[b] = entry.LayerIndex;
@@ -284,7 +286,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					// The geology's rock, where this biome accepts it; else the biome's own.
 					string bedrock = options.RockTypeAt(x, y, z);
-					if (bedrock != null && RockTypes.TryGet(bedrock, out _) && CliffRocks.Accepts(spec[b], bedrock))
+					if (bedrock != null && RockTypes.TryGet(bedrock, out _) && CliffRocks.Accepts(ownRock[b], accepted[b], bedrock))
 					{
 						type = bedrock;
 					}
@@ -669,27 +671,6 @@ namespace FishMMO.Shared.WorldDesign
 				any = true;
 			}
 			return any;
-		}
-
-		/// <summary>
-		/// The ground family a palette cliff entry paints: the spec table's entry for its biome and
-		/// slot, else the generated terrain layer's name (<c>Ground_&lt;Family&gt;</c>). Null when
-		/// neither says (hand-made art under another name).
-		/// </summary>
-		public static string FamilyOf(SceneTerrainPalette.Entry entry)
-		{
-			if (entry?.Biome != null && entry.Slot != null && entry.Slot.StartsWith(SceneTerrainPalette.SlotCliff, StringComparison.Ordinal) &&
-				int.TryParse(entry.Slot.Substring(SceneTerrainPalette.SlotCliff.Length), out int slot))
-			{
-				BiomeArtSpec.Entry spec = BiomeArtSpec.For(entry.Biome.name);
-				if (spec != null && slot >= 0 && slot < spec.Cliffs.Length)
-				{
-					return spec.Cliffs[slot].Family;
-				}
-			}
-			string layer = entry?.Source?.terrainLayer != null ? entry.Source.terrainLayer.name : null;
-			const string prefix = "Ground_";
-			return layer != null && layer.StartsWith(prefix, StringComparison.Ordinal) ? layer.Substring(prefix.Length) : null;
 		}
 
 		// ── Terrain edits ─────────────────────────────────────────────

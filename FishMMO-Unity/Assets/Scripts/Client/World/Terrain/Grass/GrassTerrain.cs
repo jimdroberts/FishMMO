@@ -2,37 +2,48 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
+using FishMMO.Shared.Biomes;
 
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// One kind of grass as blades: from a detail prototype's prefab (its mesh's height and vertex colours,
-	/// its FishMMO/Vegetation material's tints) and the profile's <see cref="GrassTypeTuning"/>. Shared by
-	/// every terrain using the prefab; at most <see cref="GrassBladeRenderer.MaxTypes"/> exist.
+	/// One kind of grass as blades in the scene's type table: a blade prefab with one biome's look for it
+	/// (<see cref="BiomeGrassType"/>, from the template of the biome whose rule made the prototype), built from the prototype's
+	/// prefab (its mesh's height and vertex colours, its FishMMO/Vegetation material's tints) and, for a rule's prototype, the
+	/// rule's healthy and dry tints. Biomes whose looks of a prefab are equal share one; at most
+	/// <see cref="GrassBladeRenderer.MaxTypes"/> exist (<see cref="GrassTypeTable"/>).
 	/// </summary>
 	public sealed class GrassType
 	{
 		public GameObject Prefab;
 		public int Index;
 		public string Name;
-		/// <summary>Typical blade height, metres (the mesh's height × the prototype's mean height scale × the tuning's).</summary>
+		/// <summary>Where its look came from, for the log: the biome(s) sharing it, or the fallback.</summary>
+		public string Source;
+		/// <summary>Typical blade height, metres (the mesh's height × the prototype's mean height scale × the look's).</summary>
 		public float Height;
+		/// <summary>The look's height scale <see cref="Height"/> was built with (the renderer rescales live edits by it).</summary>
+		public float BuiltHeightScale = 1f;
 		/// <summary>Linear colours at the root and the tip (the mesh's sRGB vertex colours, linearised, × _BaseColor).</summary>
 		public Color Root, Tip;
-		/// <summary>Linear healthy and dry tints (the material's), the spread between neighbours, the patch size.</summary>
+		/// <summary>Linear healthy and dry tints (the rule's for a rule's prototype, else the material's), the spread between neighbours, the patch size.</summary>
 		public Color Healthy, Dry;
 		public float TintSpread, PatchMetres, SnowBury;
-		public GrassTypeTuning Tuning;
-		/// <summary>True when the colours came from the mesh's vertex colours (false: the fallback greens).</summary>
+		/// <summary>
+		/// The look: the biome template's own entry (read live by the renderer, so an edit to it in play shows at once), or a
+		/// copy of the old look (<see cref="BiomeGrassDefaults"/>) where the biome has none.
+		/// </summary>
+		public BiomeGrassType Look;
+		/// <summary>True when the colours came from the mesh's vertex colours (false: the look's, or the fallback greens).</summary>
 		public bool ColoursFromMesh;
 		/// <summary>
 		/// Linear head colours, up to <see cref="MaxHeadColours"/>: a flower mesh's petal colours (its head vertices,
-		/// written with vertex alpha 0.3 by the art generator), most common first; empty when the mesh has none
-		/// (the tuning's <see cref="GrassTypeTuning.HeadColour"/> is used).
+		/// written with vertex alpha 0.3 by the art generator), most common first; empty when the mesh has none or the look's
+		/// own win (<see cref="BiomeGrassType.HeadColoursOverMesh"/>; the look's <see cref="BiomeGrassType.HeadColours"/> are used).
 		/// </summary>
 		public readonly List<Color> HeadColours = new List<Color>();
 
-		public const int MaxHeadColours = 4;
+		public const int MaxHeadColours = BiomeGrassType.MaxHeadColours;
 
 		/// <summary>Vertex alpha below this marks a head (petal) vertex; stems and leaves are written at 1.</summary>
 		public const float HeadVertexAlpha = 0.5f;
@@ -40,14 +51,45 @@ namespace FishMMO.Client
 		private static readonly Color FallbackRoot = new Color(0.035f, 0.07f, 0.012f);
 		private static readonly Color FallbackTip = new Color(0.12f, 0.26f, 0.035f);
 
-		public static GrassType Build(DetailPrototype prototype, GrassTypeTuning tuning)
+		/// <summary>The tints (linear) a type has where nothing gives it its own (no rule, no material), as it always had.</summary>
+		public static readonly Color DefaultHealthy = new Color(0.9f, 0.95f, 0.9f), DefaultDry = new Color(0.75f, 0.7f, 0.55f);
+
+		/// <summary>
+		/// The healthy and dry tints (linear) a prototype's blades take: its rule's (<paramref name="fromRule"/>: the scatter wrote
+		/// the rule's <c>detailHealthyColor</c>/<c>detailDryColor</c> into it; for a generated detail they equal its material's,
+		/// both being the catalogue's), else its prefab material's (as every type had before 2026-10-15), else the defaults.
+		/// </summary>
+		public static void TintsOf(DetailPrototype prototype, bool fromRule, out Color healthy, out Color dry)
+		{
+			if (fromRule)
+			{
+				healthy = prototype.healthyColor.linear;
+				dry = prototype.dryColor.linear;
+				return;
+			}
+			healthy = DefaultHealthy;
+			dry = DefaultDry;
+			MeshRenderer renderer = prototype.prototype != null ? prototype.prototype.GetComponent<MeshRenderer>() : null;
+			Material material = renderer != null ? renderer.sharedMaterial : null;
+			if (material != null)
+			{
+				if (material.HasProperty("_HealthyColor")) healthy = material.GetColor("_HealthyColor").linear;
+				if (material.HasProperty("_DryColor")) dry = material.GetColor("_DryColor").linear;
+			}
+		}
+
+		/// <summary>
+		/// A type of a prototype's prefab with one look, its linear tints given (<see cref="TintsOf"/>). The height is this
+		/// prototype's (the first of the prefab to be taken, as it always was); the colours the mesh's unless the look's win.
+		/// </summary>
+		public static GrassType Build(DetailPrototype prototype, BiomeGrassType look, Color healthy, Color dry)
 		{
 			GameObject prefab = prototype.prototype;
 			MeshFilter filter = prefab != null ? prefab.GetComponent<MeshFilter>() : null;
 			MeshRenderer renderer = prefab != null ? prefab.GetComponent<MeshRenderer>() : null;
 			Mesh mesh = filter != null ? filter.sharedMesh : null;
 			Material material = renderer != null ? renderer.sharedMaterial : null;
-			tuning = tuning ?? new GrassTypeTuning();
+			look = look ?? new BiomeGrassType { GroundTint = BiomeGrassType.LegacyGroundTint };
 
 			float meshHeight = mesh != null ? mesh.bounds.max.y : 0.4f;
 			if (meshHeight < 0.05f)
@@ -61,34 +103,42 @@ namespace FishMMO.Client
 				Name = prefab != null ? prefab.name : "grass",
 				// Room for the clump and own height variation (up to about 1.43x) and margin under the packed height's ceiling;
 				// a Tall type packs its tallest blades at half resolution (GrassMath.TallShift) and so may stand twice as high.
-				Height = Mathf.Clamp(meshHeight * scale * tuning.HeightScale, 0.05f, GrassMath.MaxPackedHeight * (tuning.Tall ? GrassMath.TallHeightScale : 1f) / 1.6f),
+				Height = Mathf.Clamp(meshHeight * scale * look.HeightScale, 0.05f, GrassMath.MaxPackedHeight * (look.Tall ? GrassMath.TallHeightScale : 1f) / 1.6f),
+				BuiltHeightScale = Mathf.Max(0.05f, look.HeightScale),
 				Root = FallbackRoot,
 				Tip = FallbackTip,
-				Healthy = new Color(0.9f, 0.95f, 0.9f),
-				Dry = new Color(0.75f, 0.7f, 0.55f),
+				Healthy = healthy,
+				Dry = dry,
 				TintSpread = 0.35f,
 				PatchMetres = 12f,
 				SnowBury = 0.8f,
-				Tuning = tuning,
+				Look = look,
 			};
-			if (mesh != null && mesh.isReadable)
+			bool ownColours = look.ColoursOverMesh && look.HasBladeColours;
+			if (mesh != null && mesh.isReadable && !ownColours)
 			{
 				type.ColoursFromMesh = ReadColours(mesh, out type.Root, out type.Tip, type.HeadColours);
 			}
-			// A mesh that gives no colours (none written, not readable): the tuning's own, where it has them (the new types'
-			// design colours, GrassTypeDefaults), rather than the built-in greens on a golden savanna or a grey dune grass.
-			if (!type.ColoursFromMesh && tuning.BladeRoot.a > 0f && tuning.BladeTip.a > 0f)
+			else if (mesh != null && mesh.isReadable)
 			{
-				type.Root = tuning.BladeRoot.linear;
-				type.Tip = tuning.BladeTip.linear;
+				ReadColours(mesh, out _, out _, type.HeadColours);
+			}
+			if (look.HeadColoursOverMesh)
+			{
+				type.HeadColours.Clear();
+			}
+			// A mesh that gives no colours (none written, not readable), or a look whose colours win: the look's own, where it
+			// has them (the new types' design colours), rather than the built-in greens on a golden savanna or a grey dune grass.
+			if (!type.ColoursFromMesh && look.HasBladeColours)
+			{
+				type.Root = look.RootColour.linear;
+				type.Tip = look.TipColour.linear;
 			}
 			if (material != null)
 			{
 				Color baseColour = material.HasProperty("_BaseColor") ? material.GetColor("_BaseColor").linear : Color.white;
 				type.Root *= baseColour;
 				type.Tip *= baseColour;
-				if (material.HasProperty("_HealthyColor")) type.Healthy = material.GetColor("_HealthyColor").linear;
-				if (material.HasProperty("_DryColor")) type.Dry = material.GetColor("_DryColor").linear;
 				if (material.HasProperty("_TintSpread")) type.TintSpread = material.GetFloat("_TintSpread");
 				if (material.HasProperty("_TintPatchMetres")) type.PatchMetres = material.GetFloat("_TintPatchMetres");
 				if (material.HasProperty("_SnowBury")) type.SnowBury = material.GetFloat("_SnowBury");
@@ -185,6 +235,9 @@ namespace FishMMO.Client
 		/// grasses…) ran past it, and every type past the eighth stayed meshes on that terrain.
 		/// </summary>
 		public const int MaxChannels = 16;
+
+		/// <summary>Whether a terrain past <see cref="MaxChannels"/> blade looks has been reported (once a session).</summary>
+		private static bool warnedChannels;
 
 		/// <summary>Density maps (RGBA8, four channels each) a terrain can have: only as many as its channels need are built.</summary>
 		public const int MaxDensityMaps = MaxChannels / 4;
@@ -397,7 +450,9 @@ namespace FishMMO.Client
 			internal Builder(Terrain terrain, TerrainData data, List<int> prototypes, List<GrassType> types)
 			{
 				Terrain = terrain;
-				// One channel per type, in order of first appearance; a type past the sixteenth stays meshes.
+				// One channel per type, in order of first appearance. Past the sixteenth, a type whose prefab already has a
+				// channel here adds into that one (another biome's look of the same plant, GrassTypeTable's merge per terrain);
+				// one whose prefab has none stays meshes, as every type past the sixteenth did.
 				var channelTypes = new List<GrassType>();
 				for (int i = 0; i < prototypes.Count; i++)
 				{
@@ -406,10 +461,22 @@ namespace FishMMO.Client
 					{
 						if (channelTypes.Count >= MaxChannels)
 						{
-							continue;
+							c = channelTypes.FindIndex(t => t != null && types[i] != null && t.Prefab == types[i].Prefab);
+							if (c < 0)
+							{
+								continue;
+							}
+							if (!warnedChannels)
+							{
+								warnedChannels = true;
+								Debug.LogWarning($"[Grass] Terrain '{terrain.name}' grows more than {MaxChannels} blade looks: '{types[i].Name}' of {types[i].Source} is drawn with the look of {channelTypes[c].Source} there (said once a session).");
+							}
 						}
-						c = channelTypes.Count;
-						channelTypes.Add(types[i]);
+						else
+						{
+							c = channelTypes.Count;
+							channelTypes.Add(types[i]);
+						}
 					}
 					layerPrototypes.Add(prototypes[i]);
 					layerChannels.Add(c);

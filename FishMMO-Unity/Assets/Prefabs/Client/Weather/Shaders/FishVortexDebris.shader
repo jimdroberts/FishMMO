@@ -26,6 +26,7 @@ Shader "FishMMO/Weather/Vortex Debris"
         {
             Tags { "LightMode" = "UniversalForward" }
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 3.5

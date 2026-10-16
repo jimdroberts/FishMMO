@@ -75,6 +75,18 @@ namespace FishMMO.Shared.WorldDesign
 	/// the generated folders — a committed asset assigned by hand, or LOCAL art through a sidecar.
 	/// </para>
 	/// <para>
+	/// <b>Everything the scene cut reads is on the template (2026-10-15).</b> Besides the ground layers and their rules,
+	/// the tool fills the way grounds (Small Path, Road, Cobbles) and the river bars (Bar Sand, Bar Gravel) as it fills any
+	/// slot, from the spec's columns (<see cref="BiomeArtSpec.Entry.PathGround"/> …); and it writes the biome's rock (its own,
+	/// the geology rocks it accepts, each cliff layer's rock type) and what its points of interest grow (a herb grove's
+	/// flowers, a cave mouth's bushes, ferns, creeper, boulders and deadwood). Each of those values is marked with what the
+	/// tool wrote (<see cref="BiomeTemplate.SetAuthoredFingerprint"/>; a cliff layer's own <see cref="CliffTextureLayer.rockTypeAuthored"/>):
+	/// it is written again only while it still holds that, or while it is empty and was never written; a value somebody
+	/// changed, or a list somebody emptied, is kept. The spec's columns default to what the cut decided in code before, so
+	/// the first run changes no scene; the cut (<see cref="BiomeTemplateArt"/>) reads only the template, falling back to
+	/// that old code with a warning where a template has not been authored.
+	/// </para>
+	/// <para>
 	/// <b>Nothing committed points into Assets/LOCAL.</b> Before a biome is filled, any of its slots
 	/// that references an asset under <c>Assets/LOCAL</c> — a licensed texture or layer assigned on
 	/// the template by hand — has that reference moved to the biome's <see cref="BiomeLocalArt"/>
@@ -259,6 +271,12 @@ namespace FishMMO.Shared.WorldDesign
 			public int RulesKept;
 			/// <summary>Dead rules, rules the spec retired from a slot, and rules an earlier run had switched off: removed.</summary>
 			public int RulesDisabled;
+			/// <summary>Template values written from the spec (rocks, cliff rock types, point-of-interest growth), or marked as the tool's.</summary>
+			public int ValuesFilled;
+			/// <summary>Template values the spec would change but somebody edited, so they were kept.</summary>
+			public int ValuesKept;
+			/// <summary>Grass Types entries the tool wrote, untouched since, for blade prefabs the biome no longer grows: removed.</summary>
+			public int GrassTypesPruned;
 			public int BiomesChanged;
 			public readonly List<string> Missing = new List<string>();
 			public readonly List<string> NoSpec = new List<string>();
@@ -266,7 +284,7 @@ namespace FishMMO.Shared.WorldDesign
 			public override string ToString()
 			{
 				var sb = new StringBuilder();
-				sb.AppendLine($"Biome art authoring: {BiomesChanged} biomes changed, {LocalReferencesMoved} LOCAL references moved to sidecars, {SlotsFilled} slots filled, {RulesAdded} rules added, updated {RulesUpdated} rules, {RulesKept} hand-tuned rules kept, {RulesDisabled} dead or retired rules removed.");
+				sb.AppendLine($"Biome art authoring: {BiomesChanged} biomes changed, {LocalReferencesMoved} LOCAL references moved to sidecars, {SlotsFilled} slots filled, {RulesAdded} rules added, updated {RulesUpdated} rules, {RulesKept} hand-tuned rules kept, {RulesDisabled} dead or retired rules removed, {ValuesFilled} values filled, {ValuesKept} hand-edited values kept, {GrassTypesPruned} grass types pruned.");
 				foreach (string m in NoSpec) sb.AppendLine("no spec entry: " + m);
 				foreach (string m in Missing) sb.AppendLine("missing art: " + m);
 				foreach (string l in Lines) sb.AppendLine(l);
@@ -284,7 +302,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		[DashboardTool(DashboardToolAttribute.Biomes, "Author biome art", Section = "Authoring", Order = 1,
-			Tooltip = "Generates any missing procedural art, then fills empty texture slots and empty rule lists on every biome from the spec table, and brings spec rules nobody has tuned up to date. Never overwrites authored or hand-tuned values; replaces the first biomes' colour-only photos; removes dead and retired rules.",
+			Tooltip = "Generates any missing procedural art, then fills empty texture slots (ground, ways, river bars) and empty rule lists on every biome from the spec table, writes each biome's rocks, point-of-interest growth, wildlife, vines and gathering resources, prunes its own grass entries for blades no longer grown, and brings spec rules and values nobody has tuned up to date. Never overwrites authored or hand-tuned values; replaces the first biomes' colour-only photos; removes dead and retired rules.",
 			Confirm = "Assign procedural art to every biome's empty slots and empty rule lists, and update untouched spec rules? Authored and hand-tuned values are not touched. Undoable per biome.")]
 		public static void ApplyFromDashboard()
 		{
@@ -477,7 +495,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static bool Author(BiomeTemplate biome, BiomeArtSpec.Entry entry, IBiomeArtSource source, Report report, bool apply)
 		{
 			string who = biome.name;
-			int before = report.SlotsFilled + report.RulesAdded + report.RulesDisabled + report.RulesUpdated;
+			int before = report.SlotsFilled + report.RulesAdded + report.RulesDisabled + report.RulesUpdated + report.ValuesFilled + report.GrassTypesPruned;
 
 			// A reference to a layer built from the slot's own loose textures is build output on a
 			// committed template; the loose textures resolve to the same layer without it.
@@ -601,7 +619,25 @@ namespace FishMMO.Shared.WorldDesign
 				Fill(who, "riverbed", biome.RiverbedTextureLayer, entry.Riverbed, null, source, report, apply);
 			}
 
-			bool changed = report.SlotsFilled + report.RulesAdded + report.RulesDisabled + report.RulesUpdated != before;
+			// The ways' grounds and the river bars': the generated grounds the spec names, for the cut to read off the template.
+			Fill(who, BiomeLocalArt.SlotPath, biome.SmallPathTextureLayer, entry.PathGround, null, source, report, apply);
+			Fill(who, BiomeLocalArt.SlotRoad, biome.RoadTextureLayer, entry.RoadGround, null, source, report, apply);
+			Fill(who, BiomeLocalArt.SlotCobbles, biome.CobbleTextureLayer, entry.CobbleGround, null, source, report, apply);
+			Fill(who, BiomeLocalArt.SlotBarSand, biome.BarSandTextureLayer, entry.BarSand, null, source, report, apply);
+			Fill(who, BiomeLocalArt.SlotBarGravel, biome.BarGravelTextureLayer, entry.BarGravel, null, source, report, apply);
+
+			AuthorRock(biome, entry, report, apply);
+			AuthorCaveShells(biome, entry, report, apply);
+			AuthorWaterRole(biome, entry, report, apply);
+			AuthorGrowth(biome, entry, source, report, apply);
+			AuthorLooks(biome, entry, report, apply);
+			AuthorGrass(biome, entry, source, report, apply);
+			AuthorMakeup(biome, source, report, apply);
+			AuthorWildlife(biome, entry, report, apply);
+			AuthorVines(biome, entry, report, apply);
+			AuthorGathering(biome, entry, report, apply);
+
+			bool changed = report.SlotsFilled + report.RulesAdded + report.RulesDisabled + report.RulesUpdated + report.ValuesFilled + report.GrassTypesPruned != before;
 			if (changed)
 			{
 				report.BiomesChanged++;
@@ -923,6 +959,472 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			return prefabs.ToArray();
 		}
+
+		// ── Template values ───────────────────────────────────────────
+
+		/// <summary>
+		/// The rock the scene cut stands the biome in, onto the template: its own rock (<see cref="CliffRocks.OwnRock"/>), the
+		/// geology rocks it accepts (<see cref="BiomeArtSpec.Entry.Rocks"/>), and each cliff layer's rock
+		/// (<see cref="CliffRocks.RockTypeFor"/> of the spec's family for that slot; <see cref="CliffTextureLayer.NoRock"/>
+		/// where the face stays terrain). Exactly what the cut computed from the spec before the template carried them.
+		/// </summary>
+		private static void AuthorRock(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			string who = biome.name;
+			string own = CliffRocks.OwnRock(entry);
+			AuthorValue(who, biome, BiomeTemplate.Authored.OwnRock, Mark(biome.OwnRock), Mark(own), false, () => biome.OwnRock = own, own, report, apply);
+
+			string[] rocks = entry.Rocks ?? Array.Empty<string>();
+			AuthorValue(who, biome, BiomeTemplate.Authored.AcceptedRocks, Mark(biome.AcceptedRocks), Mark(rocks), true, () =>
+			{
+				biome.AcceptedRocks.Clear();
+				biome.AcceptedRocks.AddRange(rocks);
+			}, rocks.Length > 0 ? string.Join(", ", rocks) : "none", report, apply, biome.AcceptedRocks.Count == 0);
+
+			if (biome.CliffTextureLayers == null)
+			{
+				return;
+			}
+			for (int i = 0; i < entry.Cliffs.Length && i < biome.CliffTextureLayers.Count; i++)
+			{
+				CliffTextureLayer slot = biome.CliffTextureLayers[i];
+				if (slot == null)
+				{
+					continue;
+				}
+				string rock = CliffRocks.RockTypeFor(entry.Cliffs[i].Family, entry) ?? CliffTextureLayer.NoRock;
+				if (slot.rockType == rock)
+				{
+					if (slot.rockTypeAuthored != rock)
+					{
+						report.ValuesFilled++;
+						report.Lines.Add($"{who} cliff/{i}: rock type '{rock}' {(apply ? "marked" : "would be marked")} as the tool's");
+						if (apply)
+						{
+							slot.rockTypeAuthored = rock;
+						}
+					}
+					continue;
+				}
+				if (!string.IsNullOrEmpty(slot.rockType) && slot.rockType != slot.rockTypeAuthored)
+				{
+					report.ValuesKept++;
+					report.Lines.Add($"{who} cliff/{i}: rock type '{slot.rockType}' was set by hand — kept (the spec says '{rock}')");
+					continue;
+				}
+				report.ValuesFilled++;
+				report.Lines.Add($"{who} cliff/{i}: rock type {(apply ? "set to" : "would be set to")} '{rock}'");
+				if (apply)
+				{
+					slot.rockType = rock;
+					slot.rockTypeAuthored = rock;
+				}
+			}
+		}
+
+		/// <summary>
+		/// The rock each form of cave carved in the biome is cut in, its formations included (<see cref="BiomeTemplate.CaveShells"/>),
+		/// from the spec (<see cref="BiomeArtSpec.Entry.CaveShells"/>: every form with the shell the cave shaper gave it by form
+		/// alone before, Ground where that was the ground's own rock, unless the biome's file names its own). One mark for the
+		/// whole list: a list edited by hand is kept, one emptied by hand stays empty (every form then keeps its old shell).
+		/// </summary>
+		private static void AuthorCaveShells(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			List<BiomeCaveShell> shells = entry.CaveShells();
+			AuthorValue(biome.name, biome, BiomeTemplate.Authored.CaveShells, Mark(biome.CaveShells), Mark(shells), true, () =>
+			{
+				biome.CaveShells.Clear();
+				biome.CaveShells.AddRange(shells);
+			}, string.Join(", ", shells), report, apply, biome.CaveShells.Count == 0);
+		}
+
+		/// <summary>
+		/// The part the biome plays for the scene's water and ice (<see cref="BiomeTemplate.WaterRole"/>) from the spec
+		/// (<see cref="BiomeArtSpec.Entry.WaterRole"/>: the role each biome the cut found by name played). None is written and
+		/// marked too, so a role cleared by hand after the authoring wrote one is kept cleared.
+		/// </summary>
+		private static void AuthorWaterRole(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			BiomeWaterRole target = entry.WaterRole;
+			AuthorValue(biome.name, biome, BiomeTemplate.Authored.WaterRole, Mark(biome.WaterRole), Mark(target), true,
+				() => biome.WaterRole = target, target.ToString(), report, apply, biome.WaterRole == BiomeWaterRole.None);
+		}
+
+		/// <summary>A water role's mark: its name, empty for None (no role).</summary>
+		public static string Mark(BiomeWaterRole role) => role == BiomeWaterRole.None ? string.Empty : role.ToString();
+
+		/// <summary>A cave shell list's mark: a hash of its "Form=Rock" entries in order.</summary>
+		public static string Mark(List<BiomeCaveShell> rocks)
+		{
+			var entries = new List<string>();
+			if (rocks != null)
+			{
+				foreach (BiomeCaveShell rock in rocks)
+				{
+					entries.Add(rock.ToString());
+				}
+			}
+			return Mark((IReadOnlyList<string>)entries);
+		}
+
+		/// <summary>
+		/// What a point of interest grows from the biome, onto the template: a herb grove's flowers
+		/// (<see cref="BiomeArtSpec.Entry.GroveFlowers"/>) and a cave mouth's bushes, ferns, creeper, boulders and deadwood
+		/// (<see cref="BiomeArtSpec.Entry.CaveMouth"/>), with the defaults the sites used where the spec has none.
+		/// </summary>
+		private static void AuthorGrowth(BiomeTemplate biome, BiomeArtSpec.Entry entry, IBiomeArtSource source, Report report, bool apply)
+		{
+			string who = biome.name;
+			AuthorPrefabs(who, biome, BiomeTemplate.Authored.HerbGroveFlowers, biome.HerbGroveFlowers, entry.GroveFlowers(), source, report, apply);
+			AuthorPrefabs(who, biome, BiomeTemplate.Authored.HerbGroveHerbs, biome.HerbGroveHerbs, entry.GroveHerbs(), source, report, apply);
+			BiomeArtSpec.CaveMouthGrowth mouth = entry.CaveMouth();
+			AuthorPrefabs(who, biome, BiomeTemplate.Authored.CaveMouthBushes, biome.CaveMouthBushes, mouth.Bushes, source, report, apply);
+			AuthorPrefabs(who, biome, BiomeTemplate.Authored.CaveMouthFerns, biome.CaveMouthFerns, mouth.Ferns, source, report, apply);
+			AuthorPrefabs(who, biome, BiomeTemplate.Authored.CaveMouthBoulders, biome.CaveMouthBoulders, mouth.Boulders, source, report, apply);
+			AuthorPrefabs(who, biome, BiomeTemplate.Authored.CaveMouthLogs, biome.CaveMouthLogs, mouth.Logs, source, report, apply);
+
+			GameObject creeper = null;
+			if (mouth.Creeper != null)
+			{
+				creeper = source.Prefab(mouth.Creeper);
+				if (creeper == null)
+				{
+					report.Missing.Add($"{who} {BiomeTemplate.Authored.CaveMouthCreeper}: prefab {mouth.Creeper}");
+				}
+			}
+			AuthorValue(who, biome, BiomeTemplate.Authored.CaveMouthCreeper, Mark(biome.CaveMouthCreeper), Mark(creeper), true,
+				() => biome.CaveMouthCreeper = creeper, creeper != null ? creeper.name : "none", report, apply, biome.CaveMouthCreeper == null);
+		}
+
+		/// <summary>
+		/// The biome's look class (<see cref="BiomeTemplate.LookClass"/>) from the spec (<see cref="BiomeArtSpec.Entry.LookClass"/>),
+		/// which names for every biome the class its name gave before (2026-10-15). Unset on the template is a gap and is filled.
+		/// </summary>
+		private static void AuthorLooks(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			if (entry.LookClass == BiomeLookClass.Unset)
+			{
+				return;
+			}
+			BiomeLookClass target = entry.LookClass;
+			string current = biome.LookClass != BiomeLookClass.Unset ? biome.LookClass.ToString() : string.Empty;
+			AuthorValue(biome.name, biome, BiomeTemplate.Authored.LookClass, current, target.ToString(), false, () => biome.LookClass = target,
+				target.ToString(), report, apply);
+		}
+
+		/// <summary>
+		/// How each blade prefab the biome grows looks there (<see cref="BiomeTemplate.GrassTypes"/>): every blade prefab its
+		/// template's rules name (whoever wrote them) and its spec's, each with the spec's look of it
+		/// (<see cref="BiomeArtSpec.Entry.LookOf"/>: the old look every biome had, <see cref="BiomeGrassDefaults"/>, ground
+		/// tint 0.85 included, then the biome's own tunings). One entry per prefab, each marked on its own: an entry somebody
+		/// edited is kept; a missing one is a gap and is added. An entry for a prefab the biome no longer grows is removed when
+		/// the tool wrote it and nobody has changed it since (2026-10-16); one made or edited by hand is always kept
+		/// (<see cref="PrunableGrassTypes"/>).
+		/// </summary>
+		private static void AuthorGrass(BiomeTemplate biome, BiomeArtSpec.Entry entry, IBiomeArtSource source, Report report, bool apply)
+		{
+			string who = biome.name;
+			var prefabs = new List<GameObject>();
+			foreach (string key in BiomeLocalArt.SlotsOf(biome))
+			{
+				TerrainTextureLayer slot = BiomeLocalArt.CommittedLayer(biome, key);
+				if (slot?.prefabSpawnRules == null)
+				{
+					continue;
+				}
+				foreach (PrefabSpawnRule rule in slot.prefabSpawnRules)
+				{
+					if (rule?.prefabs == null || rule.spawnChannel != PrefabSpawnChannel.DetailLayer)
+					{
+						continue;
+					}
+					foreach (GameObject prefab in rule.prefabs)
+					{
+						if (prefab != null && BiomeGrassDefaults.IsBlade(prefab.name) && !prefabs.Contains(prefab))
+						{
+							prefabs.Add(prefab);
+						}
+					}
+				}
+			}
+			foreach ((string name, BiomeGrassType _) in entry.GrassTypes())
+			{
+				GameObject prefab = source.Prefab(name);
+				if (prefab == null)
+				{
+					report.Missing.Add($"{who} grass type: prefab {name}");
+					continue;
+				}
+				if (!prefabs.Contains(prefab))
+				{
+					prefabs.Add(prefab);
+				}
+			}
+			foreach (GameObject prefab in prefabs)
+			{
+				BiomeGrassType target = entry.LookOf(prefab.name);
+				if (target == null)
+				{
+					continue;
+				}
+				target.Prefab = prefab;
+				BiomeGrassType current = biome.GrassTypeFor(prefab);
+				AuthorValue(who, biome, BiomeTemplate.Authored.GrassType(prefab.name), current != null ? Mark(current) : string.Empty, Mark(target), false, () =>
+				{
+					int at = current != null ? biome.GrassTypes.IndexOf(current) : -1;
+					if (at >= 0)
+					{
+						biome.GrassTypes[at] = target;
+					}
+					else
+					{
+						biome.GrassTypes.Add(target);
+					}
+				}, $"the look of {prefab.name} (ground tint {target.GroundTint:0.##})", report, apply);
+			}
+
+			// Entries the tool wrote for blades the biome no longer grows, untouched since: pruned (their mark goes with them, so
+			// the prefab is a gap again should the biome grow it later).
+			var entries = new List<(string Prefab, string Mark)>(biome.GrassTypes.Count);
+			var grown = new HashSet<string>(StringComparer.Ordinal);
+			foreach (GameObject prefab in prefabs)
+			{
+				grown.Add(prefab.name);
+			}
+			foreach (BiomeGrassType look in biome.GrassTypes)
+			{
+				entries.Add((look != null && look.Prefab != null ? look.Prefab.name : null, look != null ? Mark(look) : null));
+			}
+			List<int> prune = PrunableGrassTypes(entries, name => biome.AuthoredFingerprint(BiomeTemplate.Authored.GrassType(name)), grown);
+			for (int i = prune.Count - 1; i >= 0; i--)
+			{
+				string prefab = entries[prune[i]].Prefab;
+				report.GrassTypesPruned++;
+				report.Lines.Add($"{who} {BiomeTemplate.Authored.GrassType(prefab)}: {(apply ? "removed" : "would be removed")} (the tool's entry, untouched, for a blade the biome no longer grows)");
+				if (apply)
+				{
+					biome.GrassTypes.RemoveAt(prune[i]);
+					biome.ClearAuthoredFingerprint(BiomeTemplate.Authored.GrassType(prefab));
+				}
+			}
+		}
+
+		/// <summary>
+		/// Which of a template's Grass Types entries (each its prefab's name, or null where it has none, and its mark,
+		/// <see cref="Mark(BiomeGrassType)"/>) the authoring prunes, by index in order: those whose prefab the biome no longer
+		/// grows (<paramref name="grown"/>), whose mark the tool wrote (<paramref name="authoredMark"/> of the prefab's name)
+		/// and still holds. An entry with no prefab, never authored, or changed since is kept; of two entries for one prefab
+		/// only the first can hold the mark.
+		/// </summary>
+		public static List<int> PrunableGrassTypes(IReadOnlyList<(string Prefab, string Mark)> entries, Func<string, string> authoredMark, ISet<string> grown)
+		{
+			var prune = new List<int>();
+			var seen = new HashSet<string>(StringComparer.Ordinal);
+			for (int i = 0; i < entries.Count; i++)
+			{
+				(string prefab, string mark) = entries[i];
+				if (string.IsNullOrEmpty(prefab) || !seen.Add(prefab) || grown.Contains(prefab))
+				{
+					continue;
+				}
+				string written = authoredMark(prefab);
+				if (!string.IsNullOrEmpty(written) && written == mark)
+				{
+					prune.Add(i);
+				}
+			}
+			return prune;
+		}
+
+		/// <summary>
+		/// The country the biome offers ambient creatures (<see cref="BiomeTemplate.Habitat"/>) and the sea creatures most at
+		/// home in its water (<see cref="BiomeTemplate.SeaLifeHomes"/>), from the spec (<see cref="BiomeArtSpec.Entry.Habitat"/>,
+		/// <see cref="BiomeArtSpec.Entry.SeaLifeHomes"/>: what the biome's name gave the client before, 2026-10-16). None and an
+		/// empty list are written and marked too, so one cleared by hand stays cleared.
+		/// </summary>
+		private static void AuthorWildlife(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			BiomeHabitat habitat = entry.Habitat;
+			AuthorValue(biome.name, biome, BiomeTemplate.Authored.Habitat, Mark(biome.Habitat), Mark(habitat), true,
+				() => biome.Habitat = habitat, habitat.ToString(), report, apply, biome.Habitat == BiomeHabitat.None);
+			List<string> homes = entry.SeaLifeHomes();
+			AuthorValue(biome.name, biome, BiomeTemplate.Authored.SeaLifeHomes, Mark(biome.SeaLifeHomes), Mark(homes), true, () =>
+			{
+				biome.SeaLifeHomes.Clear();
+				biome.SeaLifeHomes.AddRange(homes);
+			}, homes.Count > 0 ? "sea life " + string.Join(", ", homes) : "no sea life of its own", report, apply, biome.SeaLifeHomes.Count == 0);
+		}
+
+		/// <summary>
+		/// The vines the biome grows (<see cref="BiomeTemplate.Vines"/>) from the spec (<see cref="BiomeArtSpec.Entry.VineGrowth"/>:
+		/// the vine table's row for its name, unless its file sets its own). No vines is written and marked too.
+		/// </summary>
+		private static void AuthorVines(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			BiomeVines vines = entry.VineGrowth();
+			BiomeVines current = biome.Vines;
+			AuthorValue(biome.name, biome, BiomeTemplate.Authored.Vines, Mark(current), Mark(vines), true,
+				() => biome.Vines = vines.Clone(), vines.Grows ? "vines " + vines.Signature() : "no vines", report, apply, current == null || current.IsEmpty);
+		}
+
+		/// <summary>
+		/// The gathering resources the biome's sites draw from (<see cref="BiomeTemplate.GatheringResources"/>) from the spec
+		/// (<see cref="BiomeArtSpec.Entry.GatheringResources"/>: the catalogue's rows that name the biome, unless its file sets
+		/// its own). An empty list is written and marked too.
+		/// </summary>
+		private static void AuthorGathering(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			List<string> nodes = entry.GatheringResources();
+			AuthorValue(biome.name, biome, BiomeTemplate.Authored.GatheringResources, Mark(biome.GatheringResources), Mark(nodes), true, () =>
+			{
+				biome.GatheringResources.Clear();
+				biome.GatheringResources.AddRange(nodes);
+			}, nodes.Count > 0 ? string.Join(", ", nodes) : "none", report, apply, biome.GatheringResources.Count == 0);
+		}
+
+		/// <summary>A habitat's mark: its members' names, empty for None.</summary>
+		public static string Mark(BiomeHabitat habitat) => habitat == BiomeHabitat.None ? string.Empty : habitat.ToString();
+
+		/// <summary>Vines' mark: every value (<see cref="BiomeVines.Signature"/>), empty for none set at all.</summary>
+		public static string Mark(BiomeVines vines) => vines == null || vines.IsEmpty ? string.Empty : vines.Signature();
+
+		/// <summary>
+		/// What each slot's ground is made of (<see cref="TerrainTextureLayer.GroundMakeup"/>), for every slot holding a generated
+		/// ground (the layer the art source gives for its name): the ground's own (<see cref="SurfaceCatalogue.TryMakeupOf"/>).
+		/// Hand-made art is left for somebody to describe; a makeup somebody typed is kept.
+		/// </summary>
+		private static void AuthorMakeup(BiomeTemplate biome, IBiomeArtSource source, Report report, bool apply)
+		{
+			foreach (string key in BiomeLocalArt.SlotsOf(biome))
+			{
+				TerrainTextureLayer slot = BiomeLocalArt.CommittedLayer(biome, key);
+				TerrainLayer layer = slot?.terrainLayer;
+				if (layer == null || !layer.name.StartsWith(GroundLayerPrefix, StringComparison.Ordinal))
+				{
+					continue;
+				}
+				string ground = layer.name.Substring(GroundLayerPrefix.Length);
+				if (source.Layer(ground) != layer || !SurfaceCatalogue.TryMakeupOf(ground, out Vector3 makeup))
+				{
+					continue;
+				}
+				AuthorValue(biome.name, biome, BiomeTemplate.Authored.GroundMakeup(key), slot.HasGroundMakeup ? Mark(slot.GroundMakeup) : string.Empty,
+					Mark(makeup), false, () => slot.GroundMakeup = makeup, $"{key} ground makeup {Mark(makeup)} ({ground})", report, apply);
+			}
+		}
+
+		/// <summary>The generated ground layers' name prefix (<c>Ground_&lt;Name&gt;</c>).</summary>
+		private const string GroundLayerPrefix = "Ground_";
+
+		/// <summary>A blade look's mark: its prefab's name and every value (<see cref="BiomeGrassType.Signature"/>).</summary>
+		public static string Mark(BiomeGrassType look) => look == null ? string.Empty : (look.Prefab != null ? look.Prefab.name : "<none>") + "|" + look.Signature();
+
+		/// <summary>A ground makeup's mark: living, lichen, mineral to 1/10 000.</summary>
+		public static string Mark(Vector3 makeup) => $"{Q(makeup.x)},{Q(makeup.y)},{Q(makeup.z)}";
+
+		private static void AuthorPrefabs(string who, BiomeTemplate biome, string field, List<GameObject> list, List<string> names,
+			IBiomeArtSource source, Report report, bool apply)
+		{
+			var prefabs = new List<GameObject>();
+			foreach (string name in names)
+			{
+				GameObject prefab = source.Prefab(name);
+				if (prefab == null)
+				{
+					report.Missing.Add($"{who} {field}: prefab {name}");
+					continue;
+				}
+				if (!prefabs.Contains(prefab))
+				{
+					prefabs.Add(prefab);
+				}
+			}
+			AuthorValue(who, biome, field, Mark(list), Mark(prefabs), true, () =>
+			{
+				list.Clear();
+				list.AddRange(prefabs);
+			}, prefabs.Count > 0 ? string.Join(", ", prefabs.ConvertAll(p => p.name)) : "none", report, apply, list.Count == 0);
+		}
+
+		/// <summary>
+		/// Writes one template value from the spec under the authoring contract: when the field is empty and was never
+		/// authored, or still holds what the tool last wrote (its mark, <see cref="BiomeTemplate.AuthoredFingerprint"/>);
+		/// a value somebody changed since is kept. A value already equal to the spec's is only marked as the tool's.
+		/// </summary>
+		/// <param name="current">The field's fingerprint now (<see cref="Mark(string)"/>).</param>
+		/// <param name="target">The fingerprint of what the spec writes.</param>
+		/// <param name="emptyIsADecision">
+		/// For a list or an optional reference, where empty means "none" (no flowers, no creeper, no other rock): emptied by
+		/// hand after the tool wrote it, it is kept empty. For a value that cannot be empty (a biome's own rock) an empty field
+		/// is a gap and is filled.
+		/// </param>
+		private static void AuthorValue(string who, BiomeTemplate biome, string field, string current, string target, bool emptyIsADecision,
+			Action write, string describe, Report report, bool apply, bool isEmpty = false)
+		{
+			string mark = biome.AuthoredFingerprint(field);
+			bool empty = isEmpty || !emptyIsADecision && string.IsNullOrEmpty(current);
+			if (current == target)
+			{
+				if (mark != target)
+				{
+					report.ValuesFilled++;
+					report.Lines.Add($"{who} {field}: '{describe}' {(apply ? "marked" : "would be marked")} as the tool's");
+					if (apply)
+					{
+						biome.SetAuthoredFingerprint(field, target);
+					}
+				}
+				return;
+			}
+			bool untouched = mark != null && current == mark;
+			if (!untouched && !(empty && (mark == null || !emptyIsADecision)))
+			{
+				report.ValuesKept++;
+				report.Lines.Add($"{who} {field}: edited by hand since the tool wrote it — kept (the spec says {describe})");
+				return;
+			}
+			report.ValuesFilled++;
+			report.Lines.Add($"{who} {field}: {(apply ? "set to" : "would be set to")} {describe}");
+			if (apply)
+			{
+				write();
+				biome.SetAuthoredFingerprint(field, target);
+			}
+		}
+
+		/// <summary>A string value's mark: the value itself, so a template's marks read plainly.</summary>
+		public static string Mark(string value) => value ?? string.Empty;
+
+		/// <summary>A list's mark: a hash of its entries in order.</summary>
+		public static string Mark(IReadOnlyList<string> values)
+		{
+			var text = new StringBuilder(256);
+			if (values != null)
+			{
+				foreach (string value in values)
+				{
+					text.Append(value ?? "<none>").Append('\n');
+				}
+			}
+			return Hash64(text);
+		}
+
+		/// <summary>A prefab list's mark: a hash of its prefabs' names in order (generated prefabs have fixed, unique names).</summary>
+		public static string Mark(List<GameObject> prefabs)
+		{
+			var names = new List<string>();
+			if (prefabs != null)
+			{
+				foreach (GameObject prefab in prefabs)
+				{
+					names.Add(prefab != null ? prefab.name : "<none>");
+				}
+			}
+			return Mark((IReadOnlyList<string>)names);
+		}
+
+		/// <summary>A single prefab's mark: its name, empty for none.</summary>
+		public static string Mark(GameObject prefab) => prefab != null ? prefab.name : string.Empty;
 
 		// ── Fingerprints ──────────────────────────────────────────────
 

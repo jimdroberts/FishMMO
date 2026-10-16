@@ -10,11 +10,11 @@ namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
 	/// Lays vines (2026-10-12: "vines and ivy in the world … Cave mouths, Ruins and old walls, Cliffs and outcrops,
-	/// Trees") as baked props: over cave mouths (<see cref="DrapeCaveMouth(PointOfInterestSiteContext, Vector3, Vector3, Vector3, float, string, DeterministicRNG, Func{Vector3, bool})"/>,
+	/// Trees") as baked props: over cave mouths (<see cref="DrapeCaveMouth(PointOfInterestSiteContext, Vector3, Vector3, Vector3, float, VineBiomes.Habitat, DeterministicRNG, Func{Vector3, bool})"/>,
 	/// called by the cave's own mouth builder), off crags (<see cref="HangFromCrags"/>, from CliffPlacer), on the walls beside
 	/// waterfalls (<see cref="DrapeFalls"/>, from FallLedges), up trees (<see cref="ClimbTrees"/>, from the tree bake) and over
 	/// the walls of ruins (PointOfInterestVines). What goes where is
-	/// <see cref="VineRules"/>; which biome grows what, <see cref="VineBiomes"/>.
+	/// <see cref="VineRules"/>; which biome grows what, its template's vines (<see cref="BiomeTemplateArt.Vines"/>).
 	/// </summary>
 	/// <remarks>
 	/// <b>Visual only</b> (2026-10-12: "Moss and vines should be visual only, no colliders"). A vine prefab has no
@@ -78,13 +78,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		/// <param name="outward">Out of the cave (only its horizontal part is used).</param>
 		/// <param name="openingHeight">From the floor to the middle of the lintel, metres.</param>
-		/// <param name="biome">The biome asset's name at the mouth: what grows there and how thickly (<see cref="VineBiomes"/>); none outside it.</param>
+		/// <param name="habitat">The vines of the biome at the mouth, what grows there and how thickly (its template's,
+		/// <see cref="BiomeTemplateArt.Vines"/>); null where none grows.</param>
 		/// <param name="rng">The caller's seeded generator: the same draws for the same site on every cut.</param>
 		/// <param name="solidAt">True inside rock (world); null to grow only the lintel, the jambs and the ground.</param>
 		public static int DrapeCaveMouth(PointOfInterestSiteContext context, Vector3 lintelLeft, Vector3 lintelRight, Vector3 outward, float openingHeight,
-			string biome, DeterministicRNG rng, Func<Vector3, bool> solidAt = null)
+			VineBiomes.Habitat habitat, DeterministicRNG rng, Func<Vector3, bool> solidAt = null)
 		{
-			VineBiomes.Habitat habitat = VineBiomes.For(biome);
 			if (context == null || habitat == null)
 			{
 				return 0;
@@ -153,12 +153,12 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// <see cref="DrapeCaveMouth(PointOfInterestSiteContext, Vector3, Vector3, Vector3, float, string, DeterministicRNG, Func{Vector3, bool})"/>
+		/// <see cref="DrapeCaveMouth(PointOfInterestSiteContext, Vector3, Vector3, Vector3, float, VineBiomes.Habitat, DeterministicRNG, Func{Vector3, bool})"/>
 		/// for one of a cave system's mouths, its lintel found from the cave's own field (<see cref="CaveLintel"/>), and its
 		/// rock — the outcrop and shell the mouth stands in — from the system's rock field when <paramref name="ground"/> is
 		/// given. Laid nothing (0) when no roof was found over the opening.
 		/// </summary>
-		public static int DrapeCaveMouth(PointOfInterestSiteContext context, CaveSystem system, CaveMouth mouth, string biome, DeterministicRNG rng, CaveGround ground = null)
+		public static int DrapeCaveMouth(PointOfInterestSiteContext context, CaveSystem system, CaveMouth mouth, VineBiomes.Habitat habitat, DeterministicRNG rng, CaveGround ground = null)
 		{
 			if (system == null || !CaveLintel(system, mouth, out Vector3 left, out Vector3 right, out Vector3 outward, out float height))
 			{
@@ -170,7 +170,7 @@ namespace FishMMO.Shared.WorldDesign
 				Vector3 origin = system.Origin;
 				solidAt = p => system.Field(p - origin, ground) < 0f;
 			}
-			return DrapeCaveMouth(context, left, right, outward, height, biome, rng, solidAt);
+			return DrapeCaveMouth(context, left, right, outward, height, habitat, rng, solidAt);
 		}
 
 		/// <summary>
@@ -255,6 +255,7 @@ namespace FishMMO.Shared.WorldDesign
 				return 0;
 			}
 			var scratch = new float[Mathf.Max(1, field.Biomes.Count)];
+			VineBiomes.Habitat[] habitats = HabitatsOf(field);
 			var prototypeOf = new Dictionary<GameObject, int>();
 			float GroundAt(float x, float z) => ground != null && ground.TryHeight(x, z, out float h) ? h : float.NegativeInfinity;
 			int placed = 0, crags = 0, missing = 0;
@@ -266,8 +267,7 @@ namespace FishMMO.Shared.WorldDesign
 					continue;
 				}
 				int b = field.DominantIndexAt(rock.Position.x, rock.Position.z, scratch);
-				BiomeTemplate biome = b >= 0 && b < field.Biomes.Count ? field.Biomes[b] : null;
-				VineBiomes.Habitat habitat = biome != null ? VineBiomes.For(biome.name) : null;
+				VineBiomes.Habitat habitat = b >= 0 && b < habitats.Length ? habitats[b] : null;
 				if (habitat == null || habitat.Cliffs <= 0f || VineRules.Hash(rock.Position, (int)(seed & 0x7FFFFFFF) ^ 0x51C) >= habitat.Cliffs * 0.5f)
 				{
 					continue;
@@ -346,6 +346,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			var settings = new FallLedgeSettings();
 			var scratch = new float[Mathf.Max(1, field.Biomes.Count)];
+			VineBiomes.Habitat[] habitats = HabitatsOf(field);
 			var prototypeOf = new Dictionary<GameObject, int>();
 			for (int p = 0; p < prototypes.Count; p++)
 			{
@@ -365,8 +366,7 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					int b = field.DominantIndexAt(frame.Lip.x, frame.Lip.z, scratch);
-					BiomeTemplate biome = b >= 0 && b < field.Biomes.Count ? field.Biomes[b] : null;
-					VineBiomes.Habitat habitat = biome != null ? VineBiomes.For(biome.name) : null;
+					VineBiomes.Habitat habitat = b >= 0 && b < habitats.Length ? habitats[b] : null;
 					if (VineRules.FallShare(habitat) <= 0f)
 					{
 						continue;
@@ -551,10 +551,21 @@ namespace FishMMO.Shared.WorldDesign
 			return placed;
 		}
 
+		/// <summary>Each of a scene's biomes' vines (its template's, <see cref="BiomeTemplateArt.Vines"/>), by the field's biome index.</summary>
+		private static VineBiomes.Habitat[] HabitatsOf(SceneBiomeField field)
+		{
+			var habitats = new VineBiomes.Habitat[field.Biomes.Count];
+			for (int i = 0; i < habitats.Length; i++)
+			{
+				habitats[i] = BiomeTemplateArt.Vines(field.Biomes[i]);
+			}
+			return habitats;
+		}
+
 		/// <summary>
 		/// The vines' habitat under a world position, from the scene's biome map: the one in the folder the bake writes to (a
-		/// cut or a repaint), else the scene settings'. Biome IDs are matched by name (the IDs a map holds are the templates'
-		/// type-and-name hashes), so it answers in a batch run whose biome registry is empty. Null with no map.
+		/// cut or a repaint), else the scene settings'. Each id the map holds is its template's (the registry's, else the
+		/// project's, so it answers in a batch run whose biome registry is empty), and the vines its template's. Null with no map.
 		/// </summary>
 		private static Func<Vector3, VineBiomes.Habitat> HabitatLookup(Scene scene)
 		{
@@ -586,11 +597,9 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return null;
 			}
+			// Each biome's vines once (its template's, BiomeTemplateArt.Vines), by the id the map holds: the registry's template,
+			// else the project's of that id (a batch run's registry may be empty).
 			var byId = new Dictionary<int, VineBiomes.Habitat>();
-			foreach (VineBiomes.Habitat h in VineBiomes.All)
-			{
-				byId[(nameof(BiomeTemplate) + h.Biome).GetDeterministicHashCode()] = h;
-			}
 			return p =>
 			{
 				int id = map.IDAt(p);
@@ -598,12 +607,12 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return null;
 				}
-				if (byId.TryGetValue(id, out VineBiomes.Habitat h))
+				if (!byId.TryGetValue(id, out VineBiomes.Habitat h))
 				{
-					return h;
+					h = BiomeTemplateArt.Vines(BiomeTemplateArt.TemplateById(id));
+					byId[id] = h;
 				}
-				// A template the cache gave an ID of its own: by its name.
-				return BiomeRegistry.TryGetByID(id, out BiomeTemplate biome) ? VineBiomes.For(biome.name) : null;
+				return h;
 			};
 		}
 	}

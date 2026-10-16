@@ -34,6 +34,7 @@ Shader "FishMMO/Weather/Precipitation Splash"
             Name "FishPrecipitationSplash"
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
             // Integer hashing wants shader model 4-class hardware: WebGL2 is, and so is everything else.

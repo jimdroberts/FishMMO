@@ -15,8 +15,8 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Grown where it can be.</b> The plants are the biome's own (its bushes and ferns, from its art rules; a woodland's
-	/// where it has none), painted into the terrain's detail layers as the herb grove's are, thickest at the mouth's
+	/// <b>Grown where it can be.</b> The plants are the biome's own (its template's Cave Mouth bushes, ferns and creeper,
+	/// which the biome art authoring fills from its art rules, a woodland's where it has none), painted into the terrain's detail layers as the herb grove's are, thickest at the mouth's
 	/// shoulders and over its lintel and thinning away over a dozen metres or so. The way in is left open: nothing grows or
 	/// lies in a lane straight out from the mouth as wide as its bore, nor on the trodden ways, water or steep rock.
 	/// </para>
@@ -45,9 +45,6 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The steepest ground the growth takes, degrees: banks, not faces.</summary>
 		private const float MaxSlope = 52f;
 		private const string DetailPrefix = "Detail_";
-		private static readonly string[] Ferns = { "Detail_FernBracken", "Detail_Fern", "Detail_FernHartstongue" };
-		private static readonly string[] WoodlandBushes = { ProceduralArtCatalogue.BushPrefix + "Hazel", ProceduralArtCatalogue.BushPrefix + "Bramble" };
-		private const string Creeper = "Detail_Ivy";
 
 		public bool Handles(PointOfInterestRecord record)
 			=> CaveShaper.TryForm(record.Kind, out CaveForm form) && form != CaveForm.Mine && form != CaveForm.IceCave;
@@ -71,16 +68,15 @@ namespace FishMMO.Shared.WorldDesign
 		internal static bool Overgrown(CaveSystem system)
 			=> system != null && PointOfInterestPlanner.Unit(PointOfInterestPlanner.Hash(system.Seed, 0x0E, 0x6E, 0x0B)) < OvergrownShare(system.Form);
 
-		/// <summary>The biome at the system's first mouth (its art's name), or null.</summary>
-		internal static string BiomeOf(PointOfInterestSiteContext context, CaveSystem system)
+		/// <summary>The biome at the system's first mouth, or null.</summary>
+		internal static BiomeTemplate BiomeOf(PointOfInterestSiteContext context, CaveSystem system)
 		{
 			if (context.BiomeAt == null)
 			{
 				return null;
 			}
 			Vector3 first = system.Origin + (system.Mouths.Count > 0 ? system.Mouths[0].Floor : Vector3.zero);
-			BiomeTemplate template = context.BiomeAt(first.x, first.z);
-			return template != null ? template.name : null;
+			return context.BiomeAt(first.x, first.z);
 		}
 
 		public void Build(PointOfInterestSiteContext context)
@@ -104,8 +100,10 @@ namespace FishMMO.Shared.WorldDesign
 				lush *= 1.35f;
 			}
 
-			string biome = BiomeOf(context, system);
-			Growth growth = GrowthFor(biome);
+			BiomeTemplate template = BiomeOf(context, system);
+			Growth growth = GrowthFor(template);
+			// The biome's vines (its template's, 2026-10-16), once for every mouth.
+			VineBiomes.Habitat vineHabitat = BiomeTemplateArt.Vines(template);
 
 			int props = 0, cells = 0, vines = 0;
 			var mouths = new List<Mouth>();
@@ -132,7 +130,7 @@ namespace FishMMO.Shared.WorldDesign
 				// visual only, no colliders. A sea cave's rock is the sea's edge: none there.
 				if (ground != null)
 				{
-					vines += VinePlacement.DrapeCaveMouth(context, system, mouth, biome, random, ground);
+					vines += VinePlacement.DrapeCaveMouth(context, system, mouth, vineHabitat, random, ground);
 				}
 			}
 			if (growth.Species.Count > 0)
@@ -160,6 +158,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>What grows round a mouth: the detail prefabs by part (bush, fern, creeper), and the props strewn by it.</summary>
 		internal sealed class Growth
 		{
+			/// <summary>The biome it is of: the plants it adds to a tile take its blade looks (PointOfInterestHerbGrove.RecordBiome).</summary>
+			public BiomeTemplate Biome;
 			public readonly List<GameObject> Species = new List<GameObject>();
 			public readonly List<int> Bushes = new List<int>(), Ferns = new List<int>();
 			public int Creeper = -1;
@@ -176,67 +176,31 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/// <summary>The biome's bushes, ferns, boulders and deadwood (from its art rules), with a woodland's ferns and bushes where it has none.</summary>
-		internal static Growth GrowthFor(string biome)
+		/// <summary>
+		/// The biome's bushes, ferns, creeper, boulders and deadwood (its template's Cave Mouth lists,
+		/// <see cref="BiomeTemplateArt.CaveMouth"/>), with a woodland's ferns and bushes where there is no biome.
+		/// </summary>
+		internal static Growth GrowthFor(BiomeTemplate biome)
 		{
-			var bushes = new List<string>();
-			var ferns = new List<string>();
-			var boulders = new List<string>();
-			var logs = new List<string>();
-			BiomeArtSpec.Entry entry = string.IsNullOrEmpty(biome) ? null : BiomeArtSpec.For(biome);
-			if (entry != null)
-			{
-				foreach ((BiomeArtSpec.Layer layer, BiomeArtSpec.Scatter rule) in entry.Rules())
-				{
-					if (rule.Prefabs == null)
-					{
-						continue;
-					}
-					foreach (string prefab in rule.Prefabs)
-					{
-						if (string.IsNullOrEmpty(prefab))
-						{
-							continue;
-						}
-						List<string> into = prefab.StartsWith(ProceduralArtCatalogue.BushPrefix, StringComparison.Ordinal) ? bushes
-							: prefab.StartsWith("Detail_Fern", StringComparison.Ordinal) ? ferns
-							: prefab.StartsWith("Boulder_", StringComparison.Ordinal) ? boulders
-							: prefab.StartsWith(ProceduralArtCatalogue.DeadwoodPrefix, StringComparison.Ordinal) ? logs
-							: null;
-						if (into != null && !into.Contains(prefab))
-						{
-							into.Add(prefab);
-						}
-					}
-				}
-			}
-			if (ferns.Count == 0)
-			{
-				ferns.AddRange(Ferns);
-			}
-			if (bushes.Count == 0)
-			{
-				bushes.AddRange(WoodlandBushes);
-			}
-			var growth = new Growth();
-			foreach (GameObject prefab in PointOfInterestHerbGrove.Load(bushes))
+			BiomeTemplateArt.CaveMouthArt art = BiomeTemplateArt.CaveMouth(biome);
+			var growth = new Growth { Biome = biome };
+			foreach (GameObject prefab in art.Bushes)
 			{
 				growth.Bushes.Add(growth.Species.Count);
 				growth.Species.Add(prefab);
 			}
-			foreach (GameObject prefab in PointOfInterestHerbGrove.Load(ferns))
+			foreach (GameObject prefab in art.Ferns)
 			{
 				growth.Ferns.Add(growth.Species.Count);
 				growth.Species.Add(prefab);
 			}
-			List<GameObject> creeper = PointOfInterestHerbGrove.Load(new List<string> { Creeper });
-			if (creeper.Count > 0)
+			if (art.Creeper != null)
 			{
 				growth.Creeper = growth.Species.Count;
-				growth.Species.Add(creeper[0]);
+				growth.Species.Add(art.Creeper);
 			}
-			growth.Boulders.AddRange(PointOfInterestHerbGrove.Load(boulders));
-			growth.Logs.AddRange(PointOfInterestHerbGrove.Load(logs));
+			growth.Boulders.AddRange(art.Boulders);
+			growth.Logs.AddRange(art.Logs);
 			return growth;
 		}
 
@@ -396,6 +360,7 @@ namespace FishMMO.Shared.WorldDesign
 			for (int s = 0; s < count; s++)
 			{
 				layers[s] = PointOfInterestHerbGrove.LayerOf(data, growth.Species[s]);
+				PointOfInterestHerbGrove.RecordBiome(terrain, layers[s], growth.Biome);
 				maps[s] = data.GetDetailLayer(x0, z0, w, h, layers[s]);
 			}
 			// The mouth's own hole: nothing is painted over it (the bore is no ground to grow on).

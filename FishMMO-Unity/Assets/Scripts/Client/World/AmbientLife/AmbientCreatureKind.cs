@@ -147,7 +147,10 @@ namespace FishMMO.Client
 		AnyTime,
 	}
 
-	/// <summary>The kinds of country a biome offers wildlife (<see cref="AmbientGating.HabitatOf(string)"/>).</summary>
+	/// <summary>
+	/// The kinds of country a biome offers wildlife (<see cref="AmbientGating.HabitatOfTemplate"/>). The biome template carries
+	/// it as <see cref="FishMMO.Shared.Biomes.BiomeHabitat"/>, the same members by the same bits (a test keeps them equal).
+	/// </summary>
 	[Flags]
 	public enum AmbientHabitat
 	{

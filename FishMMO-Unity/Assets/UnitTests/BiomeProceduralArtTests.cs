@@ -3,6 +3,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using FishMMO.Client;
+using FishMMO.Shared;
 using FishMMO.Shared.Biomes;
 using FishMMO.Shared.WorldDesign;
 
@@ -460,6 +461,295 @@ namespace FishMMO.UnitTests
 			var second = new BiomeArtAuthoring.Report();
 			Assert.IsFalse(BiomeArtAuthoring.Author(biome, entry, source, second, true), "a second run changed something:\n" + second);
 			Assert.That(second.SlotsFilled + second.RulesAdded + second.RulesDisabled, Is.EqualTo(0));
+		}
+
+		/// <summary>
+		/// The template carries everything the cut reads for ground, rock, ways and growth (2026-10-15): one run fills the
+		/// way and river-bar slots with the spec's grounds, the rock values, each cliff's rock and the point-of-interest
+		/// growth, with what the cut computed from the spec before; a second run changes nothing; a hand edit is kept.
+		/// </summary>
+		[Test]
+		public void Authoring_FillsWaysBarsRockAndGrowth_OnceAndKeepsHandEdits()
+		{
+			BiomeTemplate biome = MakeBiome("Desert");
+			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Desert");
+			var source = new FakeSource(created);
+
+			var first = new BiomeArtAuthoring.Report();
+			Assert.IsTrue(BiomeArtAuthoring.Author(biome, entry, source, first, true));
+			Assert.AreSame(source.Layer(SurfaceCatalogue.PathGroundFor(Ground.Sand)), biome.SmallPathTextureLayer.terrainLayer, "the path wears to what sand wears to");
+			Assert.AreSame(source.Layer(SurfaceCatalogue.RoadGroundFor(Ground.Sand)), biome.RoadTextureLayer.terrainLayer);
+			Assert.AreSame(source.Layer(Ground.Flagstone), biome.CobbleTextureLayer.terrainLayer);
+			Assert.AreSame(source.Layer(Ground.Sand), biome.BarSandTextureLayer.terrainLayer);
+			Assert.AreSame(source.Layer(Ground.Gravel), biome.BarGravelTextureLayer.terrainLayer);
+			Assert.That(biome.OwnRock, Is.EqualTo(CliffRocks.OwnRock(entry)));
+			Assert.That(biome.AcceptedRocks, Is.EqualTo(entry.Rocks));
+			Assert.That(biome.CliffTextureLayers[0].rockType, Is.EqualTo(CliffRocks.RockTypeFor(entry.Cliffs[0].Family, entry) ?? CliffTextureLayer.NoRock));
+			Assert.That(biome.HerbGroveFlowers.ConvertAll(p => p.name), Is.EqualTo(entry.GroveFlowers()));
+			Assert.That(biome.CaveMouthBushes.ConvertAll(p => p.name), Is.EqualTo(entry.CaveMouth().Bushes));
+			Assert.That(biome.CaveMouthFerns.ConvertAll(p => p.name), Is.EqualTo(entry.CaveMouth().Ferns));
+			Assert.That(biome.CaveMouthBoulders.ConvertAll(p => p.name), Is.EqualTo(entry.CaveMouth().Boulders));
+			Assert.That(biome.CaveMouthCreeper.name, Is.EqualTo(BiomeArtSpec.CaveCreeper));
+			Assert.That(BiomeTemplateArt.RockFor(biome, "Limestone"), Is.EqualTo(CliffRocks.RockFor(entry, "Limestone")), "the cut's rule over the template is the spec's");
+			Assert.That(BiomeTemplateArt.RockFor(biome, "Gneiss"), Is.EqualTo(CliffRocks.RockFor(entry, "Gneiss")));
+
+			var second = new BiomeArtAuthoring.Report();
+			Assert.IsFalse(BiomeArtAuthoring.Author(biome, entry, source, second, true), "a second run changed something:\n" + second);
+			Assert.That(second.ValuesFilled + second.ValuesKept, Is.EqualTo(0));
+
+			// Hand edits: a rock, an emptied flower list, a cliff's rock and a hand-picked bar sand are all kept.
+			biome.OwnRock = "Granite";
+			biome.HerbGroveFlowers.Clear();
+			biome.CliffTextureLayers[0].rockType = "Limestone";
+			TerrainLayer mine = new TerrainLayer { name = "MyRiverSand" };
+			created.Add(mine);
+			biome.BarSandTextureLayer.terrainLayer = mine;
+			var third = new BiomeArtAuthoring.Report();
+			BiomeArtAuthoring.Author(biome, entry, source, third, true);
+			Assert.That(biome.OwnRock, Is.EqualTo("Granite"), "a hand-set rock was overwritten:\n" + third);
+			Assert.That(biome.HerbGroveFlowers, Is.Empty, "a list emptied by hand was refilled");
+			Assert.That(biome.CliffTextureLayers[0].rockType, Is.EqualTo("Limestone"));
+			Assert.AreSame(mine, biome.BarSandTextureLayer.terrainLayer, "hand-picked bar art was replaced");
+			Assert.That(third.ValuesKept, Is.EqualTo(3));
+			Assert.That(BiomeTemplateArt.GroveFlowers(biome), Is.Empty, "the cut grows what the template says: none");
+		}
+
+		/// <summary>
+		/// The template carries its living looks too (2026-10-15): one run writes the look class the spec names, a look for
+		/// every blade prefab the biome grows (the old look, ground tint 0.85) and every generated slot's ground makeup; a
+		/// second run changes nothing; a hand-edited class, blade look or makeup is kept.
+		/// </summary>
+		[Test]
+		public void Authoring_WritesLooksBladesAndMakeup_OnceAndKeepsHandEdits()
+		{
+			BiomeTemplate biome = MakeBiome("Plains");
+			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Plains");
+			var source = new FakeSource(created);
+
+			var first = new BiomeArtAuthoring.Report();
+			Assert.IsTrue(BiomeArtAuthoring.Author(biome, entry, source, first, true));
+			Assert.That(biome.LookClass, Is.EqualTo(entry.LookClass));
+			Assert.That(BiomeLooks.ClassOf(biome), Is.EqualTo(BiomeLookClass.Temperate));
+			List<(string Prefab, BiomeGrassType Look)> blades = entry.GrassTypes();
+			Assert.That(blades, Is.Not.Empty, "the plains grow blade grass");
+			foreach ((string prefab, BiomeGrassType look) in blades)
+			{
+				BiomeGrassType written = biome.GrassTypeFor(prefab);
+				Assert.That(written, Is.Not.Null, $"{prefab} has no look on the template:\n{first}");
+				Assert.That(written.Signature(), Is.EqualTo(BiomeGrassDefaults.For(prefab).Signature()), prefab);
+				Assert.That(written.GroundTint, Is.EqualTo(BiomeGrassType.LegacyGroundTint));
+			}
+			Assert.That(biome.MainTextureLayer.HasGroundMakeup, Is.True);
+			SurfaceCatalogue.TryMakeupOf(Ground.GrassDry, out Vector3 dry);
+			Assert.That(biome.MainTextureLayer.GroundMakeup, Is.EqualTo(dry));
+
+			var second = new BiomeArtAuthoring.Report();
+			Assert.IsFalse(BiomeArtAuthoring.Author(biome, entry, source, second, true), "a second run changed something:\n" + second);
+
+			biome.LookClass = BiomeLookClass.Arid;
+			BiomeGrassType mine = biome.GrassTypeFor(blades[0].Prefab);
+			mine.GroundTint = 0.4f;
+			biome.MainTextureLayer.GroundMakeup = new Vector3(0.7f, 0f, 0.3f);
+			var third = new BiomeArtAuthoring.Report();
+			BiomeArtAuthoring.Author(biome, entry, source, third, true);
+			Assert.That(biome.LookClass, Is.EqualTo(BiomeLookClass.Arid), "a hand-set class was overwritten:\n" + third);
+			Assert.That(biome.GrassTypeFor(blades[0].Prefab).GroundTint, Is.EqualTo(0.4f), "a hand-tuned blade look was overwritten");
+			Assert.That(biome.MainTextureLayer.GroundMakeup, Is.EqualTo(new Vector3(0.7f, 0f, 0.3f)), "a hand-set makeup was overwritten");
+			Assert.That(third.ValuesKept, Is.EqualTo(3));
+		}
+
+		/// <summary>
+		/// The template carries its water role (2026-10-15) and its caves' shells (2026-10-16): one run writes the role the
+		/// biome's name played and every cave form's old shell (Ground where it was the ground's rock); a second run changes
+		/// nothing; a role cleared by hand and a hand-picked shell are kept, and the cut reads them. A template never authored
+		/// still cuts its caves as before.
+		/// </summary>
+		[Test]
+		public void Authoring_WritesWaterRoleAndCaveShells_OnceAndKeepsHandEdits()
+		{
+			BiomeTemplate biome = MakeBiome("Lake");
+			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Lake");
+			var source = new FakeSource(created);
+			Assert.That(BiomeTemplateArt.CaveShell(biome, CaveForm.LavaTube), Is.EqualTo("Basalt"), "unauthored: the spec's, as before");
+
+			var first = new BiomeArtAuthoring.Report();
+			Assert.IsTrue(BiomeArtAuthoring.Author(biome, entry, source, first, true));
+			Assert.That(biome.WaterRole, Is.EqualTo(BiomeWaterRole.Lake));
+			Assert.That(biome.CaveShells, Is.EqualTo(entry.CaveShells()));
+			foreach (CaveForm form in (CaveForm[])System.Enum.GetValues(typeof(CaveForm)))
+			{
+				Assert.That(BiomeTemplateArt.CaveShell(biome, form), Is.EqualTo(BiomeArtSpec.DefaultCaveShell(form)), form.ToString());
+			}
+
+			var second = new BiomeArtAuthoring.Report();
+			Assert.IsFalse(BiomeArtAuthoring.Author(biome, entry, source, second, true), "a second run changed something:\n" + second);
+
+			biome.WaterRole = BiomeWaterRole.None;
+			biome.CaveShells[(int)BiomeCaveForm.LavaTube] = new BiomeCaveShell(BiomeCaveForm.LavaTube, "Obsidian");
+			var third = new BiomeArtAuthoring.Report();
+			BiomeArtAuthoring.Author(biome, entry, source, third, true);
+			Assert.That(biome.WaterRole, Is.EqualTo(BiomeWaterRole.None), "a role cleared by hand was written again:\n" + third);
+			Assert.That(BiomeTemplateArt.CaveShell(biome, CaveForm.LavaTube), Is.EqualTo("Obsidian"), "the cut reads the hand-picked shell");
+			Assert.That(third.ValuesKept, Is.EqualTo(2));
+
+			// Emptied by hand: every form takes its old shell again, silently.
+			biome.CaveShells.Clear();
+			Assert.That(BiomeTemplateArt.CaveShell(biome, CaveForm.IceCave), Is.EqualTo(CliffRocks.Ice));
+			Assert.That(BiomeTemplateArt.CaveShell(biome, CaveForm.Mine), Is.EqualTo(BiomeCaveShell.Ground));
+
+			// A biome with no role is marked too, so its None is a decision and not a gap.
+			BiomeTemplate desert = MakeBiome("Desert");
+			BiomeArtAuthoring.Author(desert, BiomeArtSpec.For("Desert"), source, new BiomeArtAuthoring.Report(), true);
+			Assert.That(desert.WaterRole, Is.EqualTo(BiomeWaterRole.None));
+			Assert.That(desert.IsAuthored(BiomeTemplate.Authored.WaterRole), Is.True);
+		}
+
+		/// <summary>
+		/// The template carries its wildlife, sea life, vines, gathering resources and herb-grove herbs (2026-10-16): one run
+		/// writes what the biome's name gave (the client and the cut then read those), a second changes nothing, and values
+		/// edited or cleared by hand are kept. A template never authored still reads its name.
+		/// </summary>
+		[Test]
+		public void Authoring_WritesWildlifeVinesGatheringAndHerbs_OnceAndKeepsHandEdits()
+		{
+			BiomeTemplate forest = MakeBiome("Forest");
+			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Forest");
+			var source = new FakeSource(created);
+			FishMMO.Client.AmbientHabitat byName = FishMMO.Client.AmbientGating.HabitatOfBiome("Forest", "Forest", forest.Atmosphere);
+			Assert.That(FishMMO.Client.AmbientGating.HabitatOfTemplate(forest), Is.EqualTo(byName), "unauthored: read from its name, as before");
+			Assert.That(BiomeTemplateArt.Vines(forest).Species, Is.EqualTo(VineBiomes.For("Forest").Species), "unauthored: the vine table's row");
+
+			var first = new BiomeArtAuthoring.Report();
+			Assert.IsTrue(BiomeArtAuthoring.Author(forest, entry, source, first, true));
+			Assert.That(FishMMO.Client.AmbientGating.HabitatOfTemplate(forest), Is.EqualTo(byName));
+			Assert.That(forest.Habitat, Is.EqualTo(BiomeHabitat.Forest));
+			Assert.That(forest.SeaLifeHomes, Is.Empty);
+			VineBiomes.Habitat vines = BiomeTemplateArt.Vines(forest);
+			Assert.That(vines.Species, Is.EqualTo(VineBiomes.For("Forest").Species));
+			Assert.That(vines.Caves, Is.EqualTo(VineBiomes.For("Forest").Caves));
+			Assert.That(BiomeTemplateArt.Gathering(forest), Is.EqualTo(entry.GatheringResources()));
+			Assert.That(forest.HerbGroveHerbs.ConvertAll(p => p.name), Is.EqualTo(entry.GroveHerbs()));
+
+			var second = new BiomeArtAuthoring.Report();
+			Assert.IsFalse(BiomeArtAuthoring.Author(forest, entry, source, second, true), "a second run changed something:\n" + second);
+
+			forest.Habitat = BiomeHabitat.Desert;
+			forest.Vines = new BiomeVines();
+			forest.GatheringResources.Clear();
+			forest.GatheringResources.Add("Iron Vein");
+			var third = new BiomeArtAuthoring.Report();
+			BiomeArtAuthoring.Author(forest, entry, source, third, true);
+			Assert.That(forest.Habitat, Is.EqualTo(BiomeHabitat.Desert), "a hand-set habitat was overwritten:\n" + third);
+			Assert.That(BiomeTemplateArt.Vines(forest), Is.Null, "vines cleared by hand grew again");
+			Assert.That(BiomeTemplateArt.Gathering(forest), Is.EqualTo(new[] { "Iron Vein" }));
+			Assert.That(third.ValuesKept, Is.EqualTo(3));
+
+			// A sea biome's sea life; a dry one's empty lists are decisions, not gaps.
+			BiomeTemplate reef = MakeBiome("Coral Reef");
+			BiomeArtAuthoring.Author(reef, BiomeArtSpec.For("Coral Reef"), source, new BiomeArtAuthoring.Report(), true);
+			Assert.That(reef.SeaLifeHomes, Is.EqualTo(new[] { "Reef fish", "Sea turtle", "Crab" }));
+			BiomeTemplate desert = MakeBiome("Desert");
+			BiomeArtAuthoring.Author(desert, BiomeArtSpec.For("Desert"), source, new BiomeArtAuthoring.Report(), true);
+			Assert.That(desert.IsAuthored(BiomeTemplate.Authored.Vines), Is.True);
+			Assert.That(desert.IsAuthored(BiomeTemplate.Authored.SeaLifeHomes), Is.True);
+			Assert.That(BiomeTemplateArt.Vines(desert), Is.Null);
+		}
+
+		/// <summary>
+		/// I3b (2026-10-16): the authoring removes the Grass Types entries it wrote, untouched since, for blades the biome no
+		/// longer grows; hand-made and hand-edited entries stay.
+		/// </summary>
+		[Test]
+		public void Authoring_PrunesOnlyItsOwnUntouchedGrassEntries_ForBladesNoLongerGrown()
+		{
+			BiomeTemplate biome = MakeBiome("Plains");
+			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Plains");
+			var source = new FakeSource(created);
+			BiomeArtAuthoring.Author(biome, entry, source, new BiomeArtAuthoring.Report(), true);
+			int grown = biome.GrassTypes.Count;
+
+			BiomeGrassType Look(string prefab)
+			{
+				BiomeGrassType look = BiomeGrassDefaults.For(prefab) ?? new BiomeGrassType();
+				look.Prefab = source.Prefab(prefab);
+				biome.GrassTypes.Add(look);
+				return look;
+			}
+			BiomeGrassType gone = Look("Detail_GrassAlpine");
+			biome.SetAuthoredFingerprint(BiomeTemplate.Authored.GrassType("Detail_GrassAlpine"), BiomeArtAuthoring.Mark(gone));
+			Look("Detail_GrassDune");
+			BiomeGrassType edited = Look("Detail_GrassTundra");
+			biome.SetAuthoredFingerprint(BiomeTemplate.Authored.GrassType("Detail_GrassTundra"), BiomeArtAuthoring.Mark(edited));
+			edited.GroundTint = 0.2f;
+
+			var report = new BiomeArtAuthoring.Report();
+			BiomeArtAuthoring.Author(biome, entry, source, report, true);
+			Assert.That(report.GrassTypesPruned, Is.EqualTo(1), report.ToString());
+			Assert.That(biome.GrassTypeFor("Detail_GrassAlpine"), Is.Null, "the tool's untouched entry for a blade no longer grown");
+			Assert.That(biome.IsAuthored(BiomeTemplate.Authored.GrassType("Detail_GrassAlpine")), Is.False, "its mark went with it");
+			Assert.That(biome.GrassTypeFor("Detail_GrassDune"), Is.Not.Null, "a hand-made entry is kept");
+			Assert.That(biome.GrassTypeFor("Detail_GrassTundra"), Is.Not.Null, "a hand-edited entry is kept");
+			Assert.That(biome.GrassTypes.Count, Is.EqualTo(grown + 2));
+			var again = new BiomeArtAuthoring.Report();
+			BiomeArtAuthoring.Author(biome, entry, source, again, true);
+			Assert.That(again.GrassTypesPruned, Is.Zero);
+		}
+
+		/// <summary>
+		/// A point of interest's own detail prototype is recorded for its site's biome, marked as a site's, and only where the
+		/// tile has no record of it: a rule's record (and an earlier site's) stands.
+		/// </summary>
+		[Test]
+		public void DetailRecord_TakesASitesPrototype_OnlyWhereNoneIsRecorded()
+		{
+			var go = new GameObject("tile") { hideFlags = HideFlags.HideAndDontSave };
+			created.Add(go);
+			TerrainDetailBiomes record = go.AddComponent<TerrainDetailBiomes>();
+			record.Prototypes.Add(new TerrainDetailBiomes.Entry { Prefab = "Detail_GrassLush", NoiseSeed = 7, BiomeID = 5 });
+			Assert.That(record.RecordSite("Detail_GrassLush", 7, 9), Is.False, "the rule's record stands");
+			Assert.That(record.RecordSite("Detail_GrassWheat", 7, 9), Is.True);
+			Assert.That(record.RecordSite("Detail_GrassWheat", 7, 3), Is.False, "an earlier site's stands");
+			Assert.That(record.RecordSite("Detail_FlowersMeadow", 7, 0), Is.False, "no biome, no record");
+			Assert.That(record.TryGet("Detail_GrassWheat", 7, out TerrainDetailBiomes.Entry wheat), Is.True);
+			Assert.That(wheat.BiomeID, Is.EqualTo(9));
+			Assert.That(wheat.Site, Is.True);
+			Assert.That(record.TryGet("Detail_GrassLush", 7, out TerrainDetailBiomes.Entry lush) && !lush.Site, Is.True);
+		}
+
+		/// <summary>A river bar is each biome's own: the palette gives each biome its template's bar sand and gravel.</summary>
+		[Test]
+		public void Palette_GivesEachBiomeItsOwnRiverBars()
+		{
+			BiomeTemplate west = MakeBiome("West"), east = MakeBiome("East");
+			TerrainLayer grass = new TerrainLayer { name = "Ground_Grass", diffuseTexture = MakeTexture("grass") };
+			TerrainLayer sand = new TerrainLayer { name = "Ground_Sand", diffuseTexture = MakeTexture("sand") };
+			TerrainLayer black = new TerrainLayer { name = "Ground_BlackSand", diffuseTexture = MakeTexture("black") };
+			created.AddRange(new Object[] { grass, sand, black });
+			west.MainTextureLayer.terrainLayer = grass;
+			east.MainTextureLayer.terrainLayer = grass;
+			west.BarSandTextureLayer.terrainLayer = sand;
+			east.BarSandTextureLayer.terrainLayer = black;
+			var cells = new byte[16];
+			for (int i = 0; i < cells.Length; i++)
+			{
+				cells[i] = (byte)(i % 4 < 2 ? 0 : 1);
+			}
+			SceneBiomeField field = SceneBiomeField.FromCells(4, 4, 16f, Vector2.zero, new[] { west, east }, cells, 16f);
+			SceneTerrainPalette palette = SceneTerrainPalette.Build(field, (b, slot, layer) => layer?.terrainLayer, null,
+				b => new List<(string, TerrainTextureLayer)> { (SceneTerrainPalette.SlotSand, b.BarSandTextureLayer) });
+			SceneTerrainPalette.Entry westBar = null, eastBar = null;
+			foreach (SceneTerrainPalette.Entry e in palette.Entries)
+			{
+				if (e.Role == PaletteRole.Sediment)
+				{
+					if (e.Biome == west) westBar = e; else eastBar = e;
+				}
+			}
+			Assert.That(westBar, Is.Not.Null);
+			Assert.That(eastBar, Is.Not.Null);
+			Assert.AreSame(sand, palette.Layers[westBar.LayerIndex]);
+			Assert.AreSame(black, palette.Layers[eastBar.LayerIndex], "the east bank's bars are its own black sand");
+			Assert.AreSame(west.BarSandTextureLayer, SceneTerrainPalette.SlotLayer(west, westBar.Slot), "the slot key finds the template's layer");
 		}
 
 		[Test]

@@ -52,7 +52,7 @@ namespace FishMMO.Client
 	}
 
 	/// <summary>
-	/// Which ambient creatures belong where and when: habitat from the biome's name, how much at home a kind is at a
+	/// Which ambient creatures belong where and when: habitat from the biome's template, how much at home a kind is at a
 	/// place, how many are about in the moment's light and weather, and when one takes fright. Pure functions, so
 	/// the rules are tested without a scene.
 	/// </summary>
@@ -172,7 +172,9 @@ namespace FishMMO.Client
 		/// <summary>
 		/// The country a biome offers, from its asset name: keywords, so a biome added later under an ordinary name
 		/// ("Birch Woodland", "Salt Marsh") is understood. None for a name no keyword matches (the caller falls back
-		/// on the climate, <see cref="HabitatOfClimate"/>); Barren for lifeless ground.
+		/// on the climate, <see cref="HabitatOfClimate"/>); Barren for lifeless ground. Since 2026-10-16 only the reading
+		/// the spec table's habitats were written to equal, and the fallback for a template never authored
+		/// (<see cref="HabitatOfTemplate"/>).
 		/// </summary>
 		public static AmbientHabitat HabitatOf(string biomeName)
 		{
@@ -233,6 +235,38 @@ namespace FishMMO.Client
 			}
 			return habitat;
 		}
+
+		/// <summary>
+		/// The country a biome offers: its template's <see cref="BiomeTemplate.Habitat"/>, the one source since 2026-10-16 (the
+		/// biome art authoring writes it from the spec table, which names for every biome what its name gave,
+		/// <see cref="HabitatOfBiome"/>). None for no biome, and for one authored as offering none (the caller falls back on the
+		/// climate, as for a name no keyword matched). A template never authored is read from its name, with one warning a session.
+		/// </summary>
+		public static AmbientHabitat HabitatOfTemplate(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return AmbientHabitat.None;
+			}
+			if (biome.Habitat != BiomeHabitat.None || biome.IsAuthored(BiomeTemplate.Authored.Habitat))
+			{
+				return (AmbientHabitat)(int)biome.Habitat;
+			}
+			AmbientHabitat habitat = HabitatOfBiome(biome.name, biome.ResolvedDisplayName, biome.Atmosphere);
+			lock (warnLock)
+			{
+				if (!warnedFallback)
+				{
+					warnedFallback = true;
+					Debug.LogWarning($"[Biome templates] '{biome.name}' has no wildlife habitat: read from its name as {habitat} (said once; other templates may be the same). Run Biomes → Authoring → Author biome art to write it onto the templates.");
+				}
+			}
+			return habitat;
+		}
+
+		/// <summary>Whether a template without a habitat has been reported (once a session, as every template fallback is).</summary>
+		private static bool warnedFallback;
+		private static readonly object warnLock = new object();
 
 		/// <summary>The country a climate would grow, for ground whose biome is unknown: cold tundra, dry desert or scrub, else grass and trees.</summary>
 		public static AmbientHabitat HabitatOfClimate(float temperature, float humidity)

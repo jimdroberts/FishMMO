@@ -5,6 +5,7 @@ using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Profiling;
 using UnityEngine.Rendering;
+using FishMMO.Shared.Biomes;
 using Object = UnityEngine.Object;
 
 namespace FishMMO.Client
@@ -32,7 +33,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Rows of the per-type table (<see cref="typeTable"/>, FishGrassBlades.compute / .hlsl GRASS_ROW_*): a texel per
 		/// type per row. 0 shape, 1 shape2, 2 more (read by the compute), 3 root, 4 tip, 5 healthy, 6 dry, 7 params, 8 head,
-		/// 9..12 the head colours (the blades').
+		/// 9..12 the head colours (the blades'). The root row's alpha is the type's ground tint (BiomeGrassType.GroundTint).
 		/// </summary>
 		public const int TypeRows = 9 + GrassType.MaxHeadColours;
 		private const int RowShape = 0, RowShape2 = 1, RowMore = 2, RowRoot = 3, RowTip = 4, RowHealthy = 5, RowDry = 6, RowParams = 7, RowHead = 8, RowHeadColour = 9;
@@ -529,6 +530,9 @@ namespace FishMMO.Client
 
 		// ── Settings and types ───────────────────────────────────────
 
+		/// <summary>A type with no look at all (never, in practice): the plain defaults at the old ground tint.</summary>
+		private static readonly BiomeGrassType FallbackLook = new BiomeGrassType { GroundTint = BiomeGrassType.LegacyGroundTint };
+
 		/// <summary>Takes the profile's settings (every frame: live in the inspector) and the types into the material and the compute's arrays.</summary>
 		public void Publish(GrassBladeSettings s, IReadOnlyList<GrassType> types, float grassDistance)
 		{
@@ -574,31 +578,35 @@ namespace FishMMO.Client
 					}
 					continue;
 				}
-				GrassTypeTuning tuning = s.TuningFor(type.Name) ?? type.Tuning;
-				SetType(t, RowShape, new Vector4(type.Height * (tuning?.HeightScale ?? 1f) / Mathf.Max(0.05f, type.Tuning?.HeightScale ?? 1f), Mathf.Clamp(tuning?.Density ?? 1f, 0.01f, 1f), Mathf.Clamp(tuning?.ClumpPull ?? 0.3f, 0f, 0.95f), Mathf.Max(0f, tuning?.Wade ?? 0f)));
-				SetType(t, RowRoot, new Vector4(type.Root.r, type.Root.g, type.Root.b, 0f));
-				SetType(t, RowTip, new Vector4(type.Tip.r, type.Tip.g, type.Tip.b, s.BladeWidth * (tuning?.Width ?? 1f)));
+				// The type's look: its biome template's entry, read live (an edit to it in play shows at once; the height rescaled
+				// by the scale it was built with), or the old look where the biome has none.
+				BiomeGrassType look = type.Look ?? FallbackLook;
+				SetType(t, RowShape, new Vector4(type.Height * look.HeightScale / Mathf.Max(0.05f, type.BuiltHeightScale), Mathf.Clamp(look.Density, 0.01f, 1f), Mathf.Clamp(look.ClumpPull, 0f, 0.95f), Mathf.Max(0f, look.Wade)));
+				// The root row's alpha is how much of the terrain texture's colour the type takes (per type and biome since
+				// 2026-10-15; one global 0.85 before, _GrassParams6.x).
+				SetType(t, RowRoot, new Vector4(type.Root.r, type.Root.g, type.Root.b, Mathf.Clamp01(look.GroundTint)));
+				SetType(t, RowTip, new Vector4(type.Tip.r, type.Tip.g, type.Tip.b, s.BladeWidth * look.Width));
 				SetType(t, RowHealthy, new Vector4(type.Healthy.r, type.Healthy.g, type.Healthy.b, type.TintSpread));
 				SetType(t, RowDry, new Vector4(type.Dry.r, type.Dry.g, type.Dry.b, type.PatchMetres));
-				SetType(t, RowParams, new Vector4(tuning?.Stiffness ?? 1f, type.SnowBury, tuning?.Bend ?? 0.4f, 1f));
+				SetType(t, RowParams, new Vector4(look.Stiffness, type.SnowBury, look.Bend, 1f));
 				// Sprinkled species: stems per square metre at full paint, as a chance per candidate of the near lattice.
-				float sprinkle = tuning != null && tuning.Sprinkle > 0f ? Mathf.Clamp01(tuning.Sprinkle / s.NearDensity) : 0f;
-				GrassHead head = tuning?.Head ?? GrassHead.None;
-				float headSize = Mathf.Max(0.002f, tuning?.HeadSize ?? 0.035f);
-				SetType(t, RowShape2, new Vector4(sprinkle, (float)head, head != GrassHead.None ? headSize : 0f, Mathf.Clamp01(type.SnowBury)));
-				// The share of stems with a head (1 for every type tuned before HeadShare existed).
-				SetType(t, RowMore, new Vector4(head != GrassHead.None ? (tuning?.EffectiveHeadShare ?? 1f) : 0f, 0f, 0f, 0f));
-				// The head's colours: the mesh's petals, else the tuning's palette (the new types' design colours), else its one colour.
+				float sprinkle = look.Sprinkle > 0f ? Mathf.Clamp01(look.Sprinkle / s.NearDensity) : 0f;
+				GrassBladeHead head = look.Head;
+				float headSize = Mathf.Max(0.002f, look.HeadSize);
+				SetType(t, RowShape2, new Vector4(sprinkle, (float)head, head != GrassBladeHead.None ? headSize : 0f, Mathf.Clamp01(type.SnowBury)));
+				// The share of stems with a head.
+				SetType(t, RowMore, new Vector4(head != GrassBladeHead.None ? Mathf.Clamp01(look.HeadShare) : 0f, 0f, 0f, 0f));
+				// The head's colours: the mesh's petals (unless the look's win: GrassType.Build left none), else the look's.
 				int colours = Mathf.Clamp(type.HeadColours.Count, 0, GrassType.MaxHeadColours);
-				Color[] palette = colours == 0 ? tuning?.HeadPalette : null;
+				Color[] palette = colours == 0 ? look.HeadColours : null;
 				int paletteColours = palette != null ? Mathf.Min(palette.Length, GrassType.MaxHeadColours) : 0;
-				Color fallback = (tuning?.HeadColour ?? new Color(0.36f, 0.25f, 0.14f)).linear;
+				Color fallback = (look.HeadColours != null && look.HeadColours.Length > 0 ? look.HeadColours[0] : BiomeGrassType.DefaultHeadColour).linear;
 				for (int k = 0; k < GrassType.MaxHeadColours; k++)
 				{
 					Color c = k < colours ? type.HeadColours[k] : k < paletteColours ? palette[k].linear : fallback;
 					SetType(t, RowHeadColour + k, new Vector4(c.r, c.g, c.b, 1f));
 				}
-				SetType(t, RowHead, new Vector4((float)head, headSize, Mathf.Max(1, Mathf.Max(colours, paletteColours)), tuning != null && tuning.BluntTip ? 1f : 0f));
+				SetType(t, RowHead, new Vector4((float)head, headSize, Mathf.Max(1, Mathf.Max(colours, paletteColours)), look.BluntTip ? 1f : 0f));
 			}
 			bool changed = !typeTableUploaded;
 			for (int i = 0; i < typeTexels.Length && !changed; i++)
@@ -618,7 +626,8 @@ namespace FishMMO.Client
 			publishedParams[3] = new Vector4(s.RootGroundBlend, s.RootGroundHeight, s.GroundHueTint, s.Specular);
 			publishedParams[4] = new Vector4(s.MaxWindBendDegrees * Mathf.Deg2Rad, s.GustSharpness, s.GustSpeed, s.GustSheen);
 			publishedParams[5] = new Vector4(s.FarBlendStart, s.FarBlendEnd, s.FarGroundPull, s.FarNormalFlatten);
-			publishedParams[6] = new Vector4(s.TerrainTextureTint, s.TerrainTextureBrightness, s.TerrainTextureRoot, Mathf.Clamp01(s.EdgeOnThicken));
+			// x unused: how much of the terrain's colour a blade takes is its type's (the root row's alpha, BiomeGrassType.GroundTint).
+			publishedParams[6] = new Vector4(0f, s.TerrainTextureBrightness, s.TerrainTextureRoot, Mathf.Clamp01(s.EdgeOnThicken));
 			publishedParams[7] = new Vector4(s.WindCalmStart, Mathf.Max(s.WindCalmStart + 1f, s.WindCalmEnd), s.FarWind,
 				Mathf.Sin(Mathf.Clamp(s.TopDownLayDegrees, 0f, 80f) * Mathf.Deg2Rad));
 			colourFootprint = Mathf.Max(0.01f, s.TerrainTextureFootprint);

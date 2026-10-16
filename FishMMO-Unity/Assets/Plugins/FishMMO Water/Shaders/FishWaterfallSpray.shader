@@ -42,6 +42,7 @@ Shader "FishMMO/Water/Waterfall Spray"
             Tags { "LightMode" = "UniversalForward" }
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex SprayVertex
             #pragma fragment SprayFragment
             #pragma target 3.5

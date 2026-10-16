@@ -31,16 +31,16 @@ namespace FishMMO.Client
 	/// loading (by address, in a player), the map is rebuilt once it arrives.
 	/// </para>
 	/// <para>
-	/// <b>In the planet's looks.</b> The terrain draws each layer in its biome's look (FishFlora.hlsl FishFloraGround: living
-	/// ground toward its patch's leaves, lichen toward its lichen colour, bare ground toward the world's own on a thin-aired
-	/// world), so the map must too, or a plant's root and the far grass would pull toward a colour the ground no longer has.
+	/// <b>On its planet.</b> The terrain draws each layer on its world (FishFlora.hlsl FishFloraGround: living ground shifted
+	/// by its biome's ground shift, bare ground toward the world's own on a thin-aired world; never a patch's look), so the
+	/// map must too, or a plant's root and the far grass would pull toward a colour the ground does not have.
 	/// The map is built in two parts: the terrain's own colour and, per texel, how much of the ground there is living,
 	/// lichen and mineral (by the same weights; <see cref="TerrainArraySet.LayerFlora"/>). Neither depends on the world, so
 	/// the scene's bake holds both as they are, and the looks are worn over them here, at load and whenever
 	/// <see cref="FloraPaletteMap"/> changes (<see cref="WearLooks"/>): from the bake or worked out in play, the map is the
 	/// same, and with the looks off (<see cref="FloraPaletteMap.Enabled"/>) it is the terrain's own colour exactly as before.
-	/// A texel is 2 m against a patch's 6, so it takes its biome's looks averaged (FloraPaletteMap.GroundLooks), not one
-	/// patch's; the contact blend at a base, which needs the exact patch, reads the terrain's layers itself (GroundMaterialMap).
+	/// The shift is one per biome (FloraPaletteMap.GroundShift); the contact blend at a base reads the terrain's layers
+	/// itself (GroundMaterialMap) and takes the same shift there.
 	/// </para>
 	/// <para>
 	/// <b>Published as shader globals</b> (<c>_FishGroundColour</c>, <c>_FishGroundColourRect</c>,
@@ -439,14 +439,15 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// The looks worn over a map: each covered texel's colour (sRGB bytes, taken to linear light) through
-		/// <see cref="GrassMath.FloraGround"/> by its shares (living, lichen, mineral), toward its biome's averaged looks
-		/// (the texel centre's biome on the looks' grid) and the world's ground, at the strengths the shaders use. A texel of
-		/// bare ground under an ordinary air (no living or lichen share, no world colour) is copied as it is.
+		/// <see cref="GrassMath.FloraGround"/> by its shares (living, lichen, mineral: lichen keeps its own colour), shifted by
+		/// its biome's ground shift (the texel centre's biome on the looks' grid) and toward the world's ground, at the
+		/// strengths the shaders use. A texel of bare ground under an ordinary air (no living share, no world colour) is copied
+		/// as it is.
 		/// </summary>
 		private static void Wear(byte[] raw, byte[] shares, int w, int h, Rect bounds, float texel, FloraPaletteMap.GroundLookTable looks, byte[] result)
 		{
 			var ground = new System.Numerics.Vector3(looks.Ground.x, looks.Ground.y, looks.Ground.z);
-			float groundStrength = looks.Ground.w, foliageStrength = looks.Strength.x, accentStrength = looks.Strength.z;
+			float groundStrength = looks.Ground.w, foliageStrength = looks.Strength.x;
 			for (int z = 0; z < h; z++)
 			{
 				float wz = bounds.yMin + (z + 0.5f) * texel;
@@ -454,7 +455,7 @@ namespace FishMMO.Client
 				{
 					int i = (z * w + x) * 4;
 					byte living = shares[i], lichen = shares[i + 1], mineral = shares[i + 2];
-					if (raw[i + 3] == 0 || (living == 0 && lichen == 0 && (mineral == 0 || groundStrength <= 0f)))
+					if (raw[i + 3] == 0 || (living == 0 && (mineral == 0 || groundStrength <= 0f)))
 					{
 						result[i] = raw[i];
 						result[i + 1] = raw[i + 1];
@@ -465,8 +466,7 @@ namespace FishMMO.Client
 					int index = looks.IndexAt(bounds.xMin + (x + 0.5f) * texel, wz);
 					var albedo = new System.Numerics.Vector3(SrgbToLinear[raw[i]], SrgbToLinear[raw[i + 1]], SrgbToLinear[raw[i + 2]]);
 					var share = new System.Numerics.Vector3(living, lichen, mineral) * (1f / 255f);
-					System.Numerics.Vector3 c = GrassMath.FloraGround(albedo, share, looks.Shift[index], looks.Accent[index], ground,
-						foliageStrength, accentStrength, groundStrength);
+					System.Numerics.Vector3 c = GrassMath.FloraGround(albedo, share, looks.Shift[index], ground, foliageStrength, groundStrength);
 					result[i] = ToSrgb(c.X);
 					result[i + 1] = ToSrgb(c.Y);
 					result[i + 2] = ToSrgb(c.Z);

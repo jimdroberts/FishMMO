@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 using FishMMO.Shared.NameGeneration;
 using UnityEngine;
 
@@ -42,7 +43,11 @@ namespace FishMMO.Shared.WorldDesign
 		public float GatherSeconds = 2.0f;
 		public int MinAmount = 1;
 		public int MaxAmount = 2;
-		/// <summary>Biome asset names the resource belongs in; empty for anywhere its family fits.</summary>
+		/// <summary>
+		/// Biome asset names the resource belongs in; empty for every biome. Since 2026-10-16 the biome art authoring copies
+		/// this onto the templates (each named biome's Gathering Resources lists the resource) and the sites read the
+		/// templates, so a change here reaches a scene after the next Author biome art.
+		/// </summary>
 		public string[] Biomes = Array.Empty<string>();
 		public string Description;
 
@@ -263,27 +268,67 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Draws one resource of a family for a site, from those that grow in its biome.
+		/// Draws one resource of a family for a site, from those its biome offers: the biome template's Gathering Resources
+		/// (node names, <see cref="BiomeTemplate.GatheringResources"/>, read through BiomeTemplateArt.Gathering).
 		/// </summary>
 		/// <remarks>
-		/// <para>Only the family's resources that grow in the biome (<see cref="GrowsIn"/>) are drawn when any does; every one
-		/// of the family when none does, so a site still gets its family's node in a biome no row names (an alien world's
-		/// mine). Rarer tiers weigh less: tier 4 a quarter, tier 3 a half. Deterministic in <paramref name="random"/>; rows
-		/// are walked in authoring order.</para>
+		/// <para>Only the family's resources the biome offers are drawn when it offers any; every one of the family when it
+		/// offers none, so a site still gets its family's node in a biome that offers none of it (an alien world's mine). Rarer
+		/// tiers weigh less: tier 4 a quarter, tier 3 a half. Deterministic in <paramref name="random"/>; rows are walked in
+		/// authoring order.</para>
 		/// <para>Off-biome rows used to stay in the draw at a twentieth of the weight. With five other herbs beside the one a
 		/// forest grows, that drew a stranger at one site in five: Flo Monolith's forest herb grove Bri Wortgarth grew bog
 		/// Mirewort (2026-10-12).</para>
+		/// <para>Until 2026-10-16 the biome was given by its name, matched against each row's <see cref="GatheringResource.Biomes"/>
+		/// (<see cref="Pick(GatheringFamily, string, DeterministicRNG)"/>, kept for what the rows say themselves); the authoring
+		/// now writes those rows' answer onto every template, and the draw is the same for the same offer.</para>
 		/// </remarks>
 		/// <returns>The resource, or null when the family has none.</returns>
+		public static GatheringResource Pick(GatheringFamily family, IReadOnlyCollection<string> offered, DeterministicRNG random)
+		{
+			return Pick(family, resource => Offers(offered, resource), random);
+		}
+
+		/// <summary>
+		/// Draws one resource of a family for a biome by its name, from the rows that name it (<see cref="GrowsIn"/>): the
+		/// catalogue's own answer, which the biome art authoring copies onto each template (BiomeArtSpec.Entry.GatheringResources).
+		/// A site draws from its template's offer instead (<see cref="Pick(GatheringFamily, IReadOnlyCollection{string}, DeterministicRNG)"/>).
+		/// </summary>
 		public static GatheringResource Pick(GatheringFamily family, string biomeName, DeterministicRNG random)
 		{
-			bool grown = AnyGrowsIn(family, biomeName);
+			return Pick(family, resource => GrowsIn(resource, biomeName), random);
+		}
+
+		/// <summary>Whether a set of offered resources (node names) holds a resource; none is offered by a null set.</summary>
+		public static bool Offers(IReadOnlyCollection<string> offered, GatheringResource resource)
+		{
+			if (offered == null || resource == null)
+			{
+				return false;
+			}
+			foreach (string node in offered)
+			{
+				if (string.Equals(node, resource.Node, StringComparison.OrdinalIgnoreCase))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		private static GatheringResource Pick(GatheringFamily family, Func<GatheringResource, bool> grows, DeterministicRNG random)
+		{
+			bool grown = false;
+			foreach (GatheringResource resource in all)
+			{
+				grown |= resource.Family == family && grows(resource);
+			}
 			float total = 0.0f;
 			foreach (GatheringResource resource in all)
 			{
 				if (resource.Family == family)
 				{
-					total += Weight(resource, biomeName, grown);
+					total += Weight(resource, grows(resource), grown);
 				}
 			}
 			if (total <= 0.0f)
@@ -298,7 +343,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					continue;
 				}
-				float weight = Weight(resource, biomeName, grown);
+				float weight = Weight(resource, grows(resource), grown);
 				if (weight <= 0.0f)
 				{
 					continue;
@@ -335,12 +380,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>A resource's draw weight in a biome (see <see cref="Pick"/>): 0 when it does not grow there but another of its family does.</summary>
 		public static float Weight(GatheringResource resource, string biomeName)
 		{
-			return resource == null ? 0.0f : Weight(resource, biomeName, AnyGrowsIn(resource.Family, biomeName));
+			return resource == null ? 0.0f : Weight(resource, GrowsIn(resource, biomeName), AnyGrowsIn(resource.Family, biomeName));
 		}
 
-		private static float Weight(GatheringResource resource, string biomeName, bool familyGrows)
+		private static float Weight(GatheringResource resource, bool grows, bool familyGrows)
 		{
-			if (resource == null || familyGrows && !GrowsIn(resource, biomeName))
+			if (resource == null || familyGrows && !grows)
 			{
 				return 0.0f;
 			}

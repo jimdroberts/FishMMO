@@ -551,7 +551,7 @@ namespace FishMMO.Shared.WorldDesign
 				context.Notes?.Add($"{summary}; unchanged since its last build: its {meshes.Length} pieces ({kept} triangles) kept, checked in {clock.Elapsed.TotalSeconds:0.00} s.");
 			}
 
-			string rock = RockOf(system.Form, context.Request, site, system.Origin);
+			string rock = ShellOf(context.Request, site, system);
 			Material material = PointOfInterestRock.MaterialOf(rock);
 			if (material == null)
 			{
@@ -561,9 +561,28 @@ namespace FishMMO.Shared.WorldDesign
 			WritePool(context, site, system, ground);
 		}
 
-		/// <summary>The rock a cave is cut in: basalt for a lava tube, ice for an ice cave, else the ground's own.</summary>
+		/// <summary>
+		/// The rock a cave system is cut in, its formations included (<see cref="RockOf"/> at the system's origin, for the
+		/// biome of the site that hosts it). The shaper builds the shell from it and the dressing its formations, so the two
+		/// are one rock by construction.
+		/// </summary>
+		public static string ShellOf(SceneGenerationRequest request, PointOfInterestRecord site, CaveSystem system)
+			=> RockOf(system.Form, request, site, system.Origin);
+
+		/// <summary>
+		/// The rock a cave of a form is cut in at a point: its biome template's shell for the form (BiomeTemplateArt.CaveShell,
+		/// 2026-10-16; until then basalt for a lava tube and glacier ice for an ice cave were decided here), the ground's own
+		/// rock there by the biome's rock rule where the template says Ground.
+		/// </summary>
 		public static string RockOf(CaveForm form, SceneGenerationRequest request, PointOfInterestRecord site, Vector3 at)
-			=> form == CaveForm.LavaTube ? "Basalt" : form == CaveForm.IceCave ? CliffRocks.Ice : PointOfInterestRock.At(request, site, at);
+		{
+			BiomeTemplate biome = PointOfInterestRock.BiomeOf(site);
+			return ResolveShell(BiomeTemplateArt.CaveShell(biome, form), () => PointOfInterestRock.At(request, biome, at));
+		}
+
+		/// <summary>A shell as the template names it, with <see cref="BiomeCaveShell.Ground"/> read as the ground's own rock.</summary>
+		public static string ResolveShell(string shell, System.Func<string> groundRock)
+			=> string.IsNullOrEmpty(shell) || shell == BiomeCaveShell.Ground ? groundRock() : shell;
 
 		/// <summary>The scene's cave mesh asset: <c>&lt;Scene&gt; Caves.asset</c> in its terrain folder.</summary>
 		public static string AssetPath(string terrainFolder, string sceneName) => $"{terrainFolder}/{WorldEditorAssets.Sanitize(sceneName)} Caves.asset";

@@ -46,7 +46,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Blade height is packed in 7 bits on a square-root scale up to this many metres. A blade taller than this (a
-		/// <see cref="GrassTypeTuning.Tall"/> type: Phragmites, elephant grass) packs half its height and sets
+		/// <see cref="FishMMO.Shared.Biomes.BiomeGrassType.Tall"/> type: Phragmites, elephant grass) packs half its height and sets
 		/// <see cref="TallShift"/> in its colour word, so it reaches <see cref="TallHeightScale"/> times this; every blade
 		/// at or under it packs exactly as it always did.
 		/// </summary>
@@ -399,15 +399,13 @@ namespace FishMMO.Client
 		/// <summary>
 		/// FishFlora.hlsl FishFloraGround on the CPU, for the maps that hold the ground's colour (GroundColourMap): linear
 		/// <paramref name="albedo"/> of ground made of <paramref name="shares"/> (living, lichen, mineral), its living part
-		/// shifted by <paramref name="shift"/> (shares.X × <paramref name="foliageStrength"/>), then toward
-		/// <paramref name="accent"/> by shares.Y × <paramref name="accentStrength"/>, then toward the world's
-		/// <paramref name="ground"/> by shares.Z × <paramref name="groundStrength"/>, in that order, as the shader does.
+		/// shifted by its biome's ground <paramref name="shift"/> (shares.X × <paramref name="foliageStrength"/>), then toward
+		/// the world's <paramref name="ground"/> by shares.Z × <paramref name="groundStrength"/>, in that order, as the shader
+		/// does. Lichen (shares.Y) keeps its own colour.
 		/// </summary>
-		public static Vector3 FloraGround(Vector3 albedo, Vector3 shares, Vector3 shift, Vector3 accent, Vector3 ground,
-			float foliageStrength, float accentStrength, float groundStrength)
+		public static Vector3 FloraGround(Vector3 albedo, Vector3 shares, Vector3 shift, Vector3 ground, float foliageStrength, float groundStrength)
 		{
 			Vector3 c = FloraShift(albedo, shift, shares.X * foliageStrength);
-			c = FloraRecolour(c, accent, shares.Y * accentStrength);
 			return FloraRecolour(c, ground, shares.Z * groundStrength);
 		}
 
@@ -428,7 +426,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// The sprinkled channel a candidate holds, or −1 (it is then a tussock species' candidate, or bare). A
-		/// sprinkled type (<see cref="GrassTypeTuning.Sprinkle"/>) has its own chance per candidate,
+		/// sprinkled type (<see cref="FishMMO.Shared.Biomes.BiomeGrassType.Sprinkle"/>) has its own chance per candidate,
 		/// <c>min(1, weight / fullness) × chance</c> with chance = stems per square metre × density factor / the
 		/// near density, whatever else grows there; the chances stack in channel order and one uniform number
 		/// <paramref name="u"/> (the cell's <see cref="SaltSprinkle"/> hash) picks among them.

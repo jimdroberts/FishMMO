@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using FishMMO.Shared;
+using FishMMO.Shared.Biomes;
 using Unity.Profiling;
 
 namespace FishMMO.Client
@@ -80,7 +81,8 @@ namespace FishMMO.Client
 		private static readonly List<GrassTerrain> grassTerrains = new List<GrassTerrain>();
 		/// <summary>Terrains with no blade grass (or refused), with the data they had: not looked at again until it changes.</summary>
 		private static readonly Dictionary<Terrain, TerrainData> none = new Dictionary<Terrain, TerrainData>();
-		private static readonly Dictionary<GameObject, GrassType> typesByPrefab = new Dictionary<GameObject, GrassType>();
+		/// <summary>The type table's keys, parallel to <see cref="types"/>: each entry's prefab and look (<see cref="GrassTypeTable"/>).</summary>
+		private static readonly List<(GameObject Prefab, string Look)> typeKeys = new List<(GameObject, string)>();
 		private static readonly List<GrassType> types = new List<GrassType>();
 		private static readonly List<Terrain> active = new List<Terrain>();
 		private static readonly List<int> prototypeScratch = new List<int>();
@@ -99,6 +101,11 @@ namespace FishMMO.Client
 		/// <summary>The next frame to look for terrains' array sets while any taken terrain has none (a binder loads its set by address).</summary>
 		private static int arraysCheckAt;
 		private const int ArraysCheckInterval = 30;
+		/// <summary>
+		/// True when a prototype took the old look because its biome was not registered yet (the registry loads by address):
+		/// the terrains are taken again when it changes, so every blade wears its own biome's look.
+		/// </summary>
+		private static bool biomesPending;
 
 		/// <summary>The session's switch (A/B); off gives every grass prototype back to the mesh renderer.</summary>
 		public static bool Enabled
@@ -160,7 +167,7 @@ namespace FishMMO.Client
 			s.Append($"Procedural grass ON: {taken.Count} terrain(s){(building != null ? $" (building '{building.Terrain?.name}': {building.Progress}, {building.Frames} frames, {building.Milliseconds:F0} ms)" : "")}, {types.Count} type(s) [");
 			for (int i = 0; i < types.Count; i++)
 			{
-				s.Append(i > 0 ? ", " : "").Append(types[i].Name).Append($" {types[i].Height:F2} m{(types[i].ColoursFromMesh ? "" : " (fallback colours)")}");
+				s.Append(i > 0 ? ", " : "").Append(types[i].Name).Append($" {types[i].Height:F2} m{(types[i].ColoursFromMesh ? "" : " (fallback colours)")} [{types[i].Source}]");
 			}
 			s.Append($"]; last game camera {renderer.LastCamera}: {renderer.LastTiles} tiles, {renderer.LastItems} work items, {renderer.LastCandidates} candidate threads; GPU buffers {renderer.GpuBytes / (1024f * 1024f):F1} MiB");
 			if (renderer.LastBlades[0] >= 0)
@@ -227,6 +234,7 @@ namespace FishMMO.Client
 			Application.quitting += Shutdown;
 			grassDistance = ClientGrassSettings.Distance;
 			ClientGrassSettings.OnChanged += OnGrassSettingsChanged;
+			BiomeRegistry.Changed += OnBiomesChanged;
 #if UNITY_EDITOR
 			UnityEditor.EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
 #endif
@@ -243,6 +251,7 @@ namespace FishMMO.Client
 			RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
 			Application.quitting -= Shutdown;
 			ClientGrassSettings.OnChanged -= OnGrassSettingsChanged;
+			BiomeRegistry.Changed -= OnBiomesChanged;
 #if UNITY_EDITOR
 			UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
 #endif
@@ -265,6 +274,33 @@ namespace FishMMO.Client
 		}
 
 		private static void OnGrassSettingsChanged() => grassDistance = ClientGrassSettings.Distance;
+
+		/// <summary>A biome registered (or left): terrains taken while a prototype's biome was missing are taken again.</summary>
+		private static void OnBiomesChanged()
+		{
+			if (!biomesPending)
+			{
+				return;
+			}
+			biomesPending = false;
+			RetakeAll();
+		}
+
+		/// <summary>Gives every terrain back and forgets the type table, keeping the renderer: they are all taken again, from the bake where there is one.</summary>
+		private static void RetakeAll()
+		{
+			building?.Abandon();
+			building = null;
+			foreach (Taken t in new List<Taken>(taken.Values))
+			{
+				Release(t);
+			}
+			none.Clear();
+			failedOnce.Clear();
+			types.Clear();
+			typeKeys.Clear();
+			syncedFrame = -1;
+		}
 
 		/// <summary>This system's once-a-frame work before the cameras render, named in the profiler (StartupTimeline reads it).</summary>
 		private static readonly ProfilerMarker ContextMarker = new ProfilerMarker("GrassBladeSystem.BeginContext");
@@ -325,6 +361,13 @@ namespace FishMMO.Client
 			foreach (Taken t in releasing)
 			{
 				Release(t);
+			}
+			// The type table is the loaded scene's: once no terrain holds an entry, it starts again, so a session that walks
+			// through many scenes never fills the GPU's 32 with looks of scenes long gone.
+			if (taken.Count == 0 && building == null && types.Count > 0)
+			{
+				types.Clear();
+				typeKeys.Clear();
 			}
 
 			// One terrain at a time, a few milliseconds a frame: its density maps read every grass layer at full
@@ -478,7 +521,7 @@ namespace FishMMO.Client
 		private static bool TryTake(Terrain terrain, GrassBladeSettings settings)
 		{
 			TerrainData data = terrain.terrainData;
-			SelectBlades(data, settings, types, typesByPrefab, warned, prototypeScratch, typeScratch);
+			SelectBlades(terrain, settings, types, typeKeys, warned, prototypeScratch, typeScratch);
 			building = prototypeScratch.Count > 0 ? GrassTerrain.Begin(terrain, prototypeScratch, typeScratch) : null;
 			if (building == null)
 			{
@@ -495,15 +538,30 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// A terrain's blade prototypes and each one's type (several share one: a prototype per biome rule, summed by the build
-		/// into a channel per type), new types made and added to <paramref name="types"/> (up to the renderer's
-		/// <see cref="GrassBladeRenderer.MaxTypes"/>). The play's choice and the editor's bake (TerrainDetailBaker) are this one.
+		/// A terrain's blade prototypes and each one's type, new types made and added to <paramref name="types"/> (the scene's
+		/// table, <paramref name="keys"/> parallel to it; up to the renderer's <see cref="GrassBladeRenderer.MaxTypes"/>). The
+		/// play's choice and the editor's bake (TerrainDetailBaker) are this one, so a bake made from the same templates is taken.
 		/// </summary>
-		public static void SelectBlades(TerrainData data, GrassBladeSettings settings, List<GrassType> types, Dictionary<GameObject, GrassType> typesByPrefab,
+		/// <remarks>
+		/// A prototype's type is its prefab with the look of the biome whose rule made it (<see cref="TerrainDetailBiomes"/>,
+		/// <see cref="BiomeTemplate.GrassTypeFor(GameObject)"/>) and that rule's healthy and dry tints. Several prototypes share a
+		/// type wherever their prefab and look are equal (a prototype per biome rule, summed by the build into a channel per
+		/// type). A prototype with no recorded biome (a scene cut before 2026-10-15) or whose biome has no look for its prefab
+		/// draws the old look (<see cref="BiomeGrassDefaults"/>) with its material's tints, as every blade did before, and says
+		/// so once. A point of interest's own prototype (recorded since 2026-10-16 for the biome the site stands in,
+		/// <see cref="TerrainDetailBiomes.Entry.Site"/>) takes that biome's look of the prefab where it has one, else the old
+		/// look silently, and always its material's tints.
+		/// </remarks>
+		public static void SelectBlades(Terrain terrain, GrassBladeSettings settings, List<GrassType> types, List<(GameObject Prefab, string Look)> keys,
 			HashSet<string> warned, List<int> prototypes, List<GrassType> chosen)
 		{
 			prototypes.Clear();
 			chosen.Clear();
+			TerrainData data = terrain != null ? terrain.terrainData : null;
+			if (data == null)
+			{
+				return;
+			}
 			DetailPrototype[] all = data.detailPrototypes;
 			for (int p = 0; p < all.Length; p++)
 			{
@@ -513,25 +571,143 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
-				if (!typesByPrefab.TryGetValue(prefab, out GrassType type))
+				BiomeGrassType look = LookOf(terrain, proto, warned, out bool fromRule, out string source);
+				GrassType.TintsOf(proto, fromRule, out Color healthy, out Color dry);
+				string signature = look.Signature() + "|t" + Tint(healthy) + Tint(dry);
+				int index = GrassTypeTable.Place(keys, prefab, signature, GrassBladeRenderer.MaxTypes, out GrassTypeTable.Placement how);
+				if (how == GrassTypeTable.Placement.Refused)
 				{
-					if (types.Count >= GrassBladeRenderer.MaxTypes)
+					if (warned.Add("types"))
 					{
-						if (warned.Add("types"))
-						{
-							Debug.LogWarning($"[Grass] More than {GrassBladeRenderer.MaxTypes} grass types: '{prefab.name}' and later ones stay meshes.");
-						}
-						continue;
+						Debug.LogWarning($"[Grass] More than {GrassBladeRenderer.MaxTypes} blade looks in the scene: '{prefab.name}' and later prefabs stay meshes.");
 					}
-					type = GrassType.Build(proto, settings.TuningFor(prefab.name));
+					continue;
+				}
+				if (how == GrassTypeTable.Placement.Merged)
+				{
+					if (warned.Add("merged " + prefab.name + " " + source))
+					{
+						Debug.LogWarning($"[Grass] The scene's {GrassBladeRenderer.MaxTypes} blade looks are taken: '{prefab.name}' in {source} is drawn with the look of {types[index].Source}. Fewer distinct looks of one prefab across the scene's biomes would give each its own.");
+					}
+				}
+				else if (how == GrassTypeTable.Placement.Added)
+				{
+					GrassType type = GrassType.Build(proto, look, healthy, dry);
 					type.Index = types.Count;
+					type.Source = source;
 					types.Add(type);
-					typesByPrefab.Add(prefab, type);
+				}
+				else if (types[index].Source != null && !types[index].Source.Contains(source))
+				{
+					types[index].Source += ", " + source;
 				}
 				prototypes.Add(p);
-				chosen.Add(type);
+				chosen.Add(types[index]);
 			}
 		}
+
+		private static string Tint(Color c) => $"({Mathf.RoundToInt(c.r * 10000f)},{Mathf.RoundToInt(c.g * 10000f)},{Mathf.RoundToInt(c.b * 10000f)})";
+
+		/// <summary>
+		/// The look a prototype's blades take: the template's entry of the biome whose rule made it, else the old look (with one
+		/// warning for each reason). <paramref name="fromRule"/> when the prototype is a rule's (its tints are the rule's);
+		/// <paramref name="source"/> names where the look came from, for the log.
+		/// </summary>
+		private static BiomeGrassType LookOf(Terrain terrain, DetailPrototype proto, HashSet<string> warned, out bool fromRule, out string source)
+		{
+			GameObject prefab = proto.prototype;
+			TerrainDetailBiomes.TryGet(terrain, proto, out TerrainDetailBiomes.Entry entry);
+			int id = entry.BiomeID;
+			// A point of interest's own prototype (a grove's flowers, a field's wheat) takes its site's biome's look but keeps
+			// its material's tints: no rule of the biome chose them.
+			fromRule = id != 0 && !entry.Site;
+			BiomeTemplate biome = id != 0 ? BiomeById(id) : null;
+			BiomeGrassType look = biome != null ? biome.GrassTypeFor(prefab) : null;
+			if (look != null)
+			{
+				source = biome.name;
+				return look;
+			}
+			if (id == 0)
+			{
+				source = "no biome";
+				if (terrain.GetComponent<TerrainDetailBiomes>() == null && warned.Add("record"))
+				{
+					Debug.LogWarning($"[Grass] Terrain '{terrain.name}' (and perhaps the scene's others) has no record of which biome made its detail prototypes (cut before 2026-10-15): its blades draw the old look of each prefab. Repaint or re-cut the scene to give each biome's its own.");
+				}
+			}
+			else if (biome == null)
+			{
+				source = $"biome #{id}";
+				biomesPending = true;
+			}
+			else if (entry.Site)
+			{
+				// The site's biome grows no such blades of its own: the prefab's old look, as before (no gap to author).
+				source = biome.name + " (site, old look)";
+			}
+			else
+			{
+				source = biome.name + " (old look)";
+				if (warned.Add("look " + biome.name))
+				{
+					Debug.LogWarning($"[Grass] Biome '{biome.name}' has no Grass Types entry for '{prefab.name}' (said once for the biome): drawn with the old look. Run Biomes → Authoring → Author biome art to write its blade looks onto the template.");
+				}
+			}
+			return DefaultLook(prefab.name);
+		}
+
+		private static readonly Dictionary<string, BiomeGrassType> defaultLooks = new Dictionary<string, BiomeGrassType>();
+
+		/// <summary>The old look of a prefab (<see cref="BiomeGrassDefaults"/>), one shared copy per prefab name.</summary>
+		private static BiomeGrassType DefaultLook(string prefabName)
+		{
+			if (!defaultLooks.TryGetValue(prefabName, out BiomeGrassType look))
+			{
+				look = BiomeGrassDefaults.For(prefabName) ?? new BiomeGrassType { GroundTint = BiomeGrassType.LegacyGroundTint };
+				defaultLooks[prefabName] = look;
+			}
+			return look;
+		}
+
+		/// <summary>
+		/// A biome by its id: the registry's (play). In the editor, where the registry may not hold every template (the bake runs
+		/// at the end of a cut), the project's templates by the same id, so the bake chooses as play will.
+		/// </summary>
+		private static BiomeTemplate BiomeById(int id)
+		{
+			if (BiomeRegistry.TryGetByID(id, out BiomeTemplate biome) && biome != null)
+			{
+				return biome;
+			}
+#if UNITY_EDITOR
+			if (editorBiomes == null)
+			{
+				editorBiomes = new Dictionary<int, BiomeTemplate>();
+				foreach (string guid in UnityEditor.AssetDatabase.FindAssets("t:" + nameof(BiomeTemplate)))
+				{
+					var template = UnityEditor.AssetDatabase.LoadAssetAtPath<BiomeTemplate>(UnityEditor.AssetDatabase.GUIDToAssetPath(guid));
+					if (template != null)
+					{
+						editorBiomes[BiomeRegistry.IDOf(template)] = template;
+					}
+				}
+			}
+			if (editorBiomes.TryGetValue(id, out biome))
+			{
+				return biome;
+			}
+#endif
+			return null;
+		}
+
+#if UNITY_EDITOR
+		/// <summary>The project's templates by id, for the editor's lookups (<see cref="BiomeById"/>); rebuilt each session.</summary>
+		private static Dictionary<int, BiomeTemplate> editorBiomes;
+
+		/// <summary>Forgets the editor's template lookup (a bake after templates were added or renamed).</summary>
+		public static void ForgetEditorBiomes() => editorBiomes = null;
+#endif
 
 		/// <summary>Hands a finished terrain from the mesh grass to the blades.</summary>
 		private static void Finish(GrassTerrain.Builder done)
@@ -584,7 +760,9 @@ namespace FishMMO.Client
 			none.Clear();
 			failedOnce.Clear();
 			types.Clear();
-			typesByPrefab.Clear();
+			typeKeys.Clear();
+			defaultLooks.Clear();
+			biomesPending = false;
 			renderer?.Dispose();
 			renderer = null;
 			rendererTried = false;

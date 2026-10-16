@@ -38,6 +38,7 @@ Shader "FishMMO/Weather/Volcanic Plume"
             Cull Off
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma multi_compile_fog

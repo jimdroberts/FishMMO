@@ -103,8 +103,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// Whether a scene position is in a river's channel or a lake, for a pad with a <see cref="PointOfInterestPad.Shore"/>:
 		/// left as it is even inside the radius, where a river bends back toward the site. Null for none.
 		/// </param>
+		/// <param name="floor">
+		/// The lowest the pad may cut the ground (east, north), metres; negative infinity for no limit. Beside water, its surface
+		/// and a little: a bank is never cut under the water it holds. Ground already lower is left as it is.
+		/// </param>
 		public static int FlattenPad(Terrain[,] terrains, TerrainTilePlan plan, PointOfInterestPad pad, float flatness = 1f,
-			Func<float, float, bool> wet = null, Func<float, float, bool> channel = null)
+			Func<float, float, bool> wet = null, Func<float, float, bool> channel = null, Func<float, float, float> floor = null)
 		{
 			float reach = pad.Radius + Mathf.Max(Mathf.Max(0.01f, pad.Blend), MaxEmbankmentMetres);
 			var area = new Rect(pad.Centre.x - reach, pad.Centre.z - reach, reach * 2f, reach * 2f);
@@ -126,7 +130,12 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					pull *= ShoreWeight(dx * pad.Shore.x + dz * pad.Shore.y, pad.ShoreDistance);
 				}
-				return Mathf.Lerp(metres, target, pull);
+				float levelled = Mathf.Lerp(metres, target, pull);
+				if (floor != null && levelled < metres)
+				{
+					levelled = Mathf.Max(levelled, Mathf.Min(metres, floor(east, north)));
+				}
+				return levelled;
 			});
 		}
 

@@ -83,6 +83,7 @@ Shader "FishMMO/Water/Lava Light"
             Cull Off
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex LavaLightVertex
             #pragma fragment LavaLightFragment
             #pragma target 3.5

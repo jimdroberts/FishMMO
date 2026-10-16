@@ -9,6 +9,11 @@ namespace FishMMO.Client
 	/// On the Weather Render Profile ("GPU detail scatter"); read every frame, so changes apply while playing (the
 	/// prototype list when a terrain is next taken).
 	/// </summary>
+	/// <remarks>
+	/// The prefixes here (and <see cref="BushPrefix"/>) are a rendering-path rule — which renderer draws a kind of mesh —
+	/// not a biome's decision, so they stay global (2026-10-15, when blade looks moved onto the biome templates): what a
+	/// biome grows is its template's rules; how a pebble or a bush is drawn is the same everywhere.
+	/// </remarks>
 	[Serializable]
 	public class DetailScatterSettings : ISerializationCallbackReceiver
 	{

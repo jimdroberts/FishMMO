@@ -1337,6 +1337,94 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
+		/// <summary>
+		/// A fixed timber bridge (the kit's BridgeSpan, fitted end to end) over the site's moat wherever one of its ways crosses
+		/// the ditch with no drawbridge there: no gate on that line (a site without a wall, a gate the layout could not fit), or
+		/// a gate that laid nothing. Its deck runs from bank to bank, pitched to the line between them.
+		/// </summary>
+		private static void AddMoatBridges(PointOfInterestSiteContext context, List<Vector3> gateways, float stature)
+		{
+			if (context.Record == null || context.Points == null || context.Points.Paths == null
+				|| !MoatShaper.TryMoat(context.Points, context.Record.Id, out Vector3 centre, out float inner, out float width, out _))
+			{
+				return;
+			}
+			float leafWidth = 3.5f * stature + 0.3f;
+			var covered = new List<Vector2>();
+			foreach (Vector3 gate in gateways)
+			{
+				var outward = new Vector2(gate.x - centre.x, gate.z - centre.z);
+				if (outward.sqrMagnitude > 1e-4f)
+				{
+					covered.Add(outward.normalized);
+				}
+			}
+			var bridged = new List<Vector2>();
+			foreach (ScenePath path in context.Points.Paths)
+			{
+				if (path == null || path.Class == ScenePathClass.Street || (path.FromId != context.Record.Id && path.ToId != context.Record.Id))
+				{
+					continue;
+				}
+				// Where it crosses the ditch: the mean bearing of its points over the ring.
+				Vector2 sum = Vector2.zero;
+				int over = 0;
+				for (int i = 0; i < path.Count; i++)
+				{
+					var d = new Vector2(path.Points[i].x - centre.x, path.Points[i].z - centre.z);
+					float r = d.magnitude;
+					if (r > inner - 0.5f && r < inner + width + 0.5f && r > 1e-3f)
+					{
+						sum += d / r;
+						over++;
+					}
+				}
+				if (over == 0 || sum.sqrMagnitude < 1e-6f)
+				{
+					continue;
+				}
+				Vector2 dir = sum.normalized;
+				// Over the drawbridge's own width at the lip a gate's leaf covers it; so does a bridge already laid.
+				bool Near(Vector2 other) => (dir - other).magnitude * inner < 0.75f * leafWidth;
+				if (covered.Exists(Near) || bridged.Exists(Near))
+				{
+					continue;
+				}
+				if (LayMoatBridge(context, centre, inner, width, dir, stature))
+				{
+					bridged.Add(dir);
+				}
+			}
+		}
+
+		/// <summary>Lays BridgeSpan modules over a moat along <paramref name="dir"/>, bank to bank; false when the art is missing.</summary>
+		private static bool LayMoatBridge(PointOfInterestSiteContext context, Vector3 centre, float inner, float width, Vector2 dir, float stature)
+		{
+			GameObject span = StructureKit.Prefab("BridgeSpan", 1);
+			if (span == null || context.GroundAt == null)
+			{
+				PointOfInterestFeatureKit.Note(context, "a moat's bridge (Structure_BridgeSpan) is not generated yet: Biome Tools → Generate biome art, then regenerate.");
+				return false;
+			}
+			const float Bearing = 0.6f, Module = 4f;
+			float from = inner - Bearing, to = inner + width + Bearing;
+			var a = new Vector3(centre.x + dir.x * from, 0f, centre.z + dir.y * from);
+			var b = new Vector3(centre.x + dir.x * to, 0f, centre.z + dir.y * to);
+			a.y = context.GroundAt(a.x, a.z);
+			b.y = context.GroundAt(b.x, b.z);
+			float length = to - from;
+			int count = Mathf.Max(1, Mathf.CeilToInt(length / Module - 1e-3f));
+			float module = length / count;
+			Vector3 along = b - a;
+			Quaternion turn = Quaternion.LookRotation(along.normalized, Vector3.up);
+			for (int k = 0; k < count; k++)
+			{
+				Vector3 at = Vector3.Lerp(a, b, (k + 0.5f) / count);
+				context.AddProp(span, at, turn, new Vector3(Mathf.Max(0.8f, stature), 1f, module / Module));
+			}
+			return true;
+		}
+
 		private static void AddWallStairs(PointOfInterestSiteContext context, List<(Vector3 at, Quaternion turn)> curtain, List<Vector3> gateways,
 			List<(Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole role, string tag)> grounds)
 		{
@@ -1774,6 +1862,7 @@ namespace FishMMO.Shared.WorldDesign
 			AddClutter(context, grounds, request, random, stature);
 			AddWallStairs(context, curtain, gateways, grounds);
 			AddDrawbridges(context, gateways, stature);
+			AddMoatBridges(context, gateways, stature);
 			int dropped = request.Items.Count;
 			foreach (PointOfInterestLayoutPiece piece in pieces)
 			{

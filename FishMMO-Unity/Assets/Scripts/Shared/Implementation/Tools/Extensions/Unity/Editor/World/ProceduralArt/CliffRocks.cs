@@ -514,15 +514,35 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Whether a biome accepts a rock: its own, or one of <see cref="BiomeArtSpec.Entry.Rocks"/>.</summary>
 		public static bool Accepts(BiomeArtSpec.Entry entry, string rock)
 		{
+			return Accepts(OwnRock(entry), entry?.Rocks, rock);
+		}
+
+		/// <summary>
+		/// Whether a biome whose own rock is <paramref name="own"/> and which accepts <paramref name="accepted"/> besides
+		/// takes <paramref name="rock"/>: the rule <see cref="Accepts(BiomeArtSpec.Entry, string)"/> states for a spec entry,
+		/// for a biome template's values (BiomeTemplate.OwnRock, AcceptedRocks).
+		/// </summary>
+		public static bool Accepts(string own, IReadOnlyList<string> accepted, string rock)
+		{
 			if (rock == null)
 			{
 				return false;
 			}
-			if (rock == OwnRock(entry))
+			if (rock == own)
 			{
 				return true;
 			}
-			return entry != null && Array.IndexOf(entry.Rocks, rock) >= 0;
+			if (accepted != null)
+			{
+				for (int i = 0; i < accepted.Count; i++)
+				{
+					if (accepted[i] == rock)
+					{
+						return true;
+					}
+				}
+			}
+			return false;
 		}
 
 		/// <summary>
@@ -536,12 +556,20 @@ namespace FishMMO.Shared.WorldDesign
 		/// </remarks>
 		public static string RockFor(BiomeArtSpec.Entry entry, string geology)
 		{
-			string own = OwnRock(entry);
+			return RockFor(OwnRock(entry), entry?.Rocks, geology);
+		}
+
+		/// <summary>
+		/// <see cref="RockFor(BiomeArtSpec.Entry, string)"/> for a biome given by its own rock and the geology rocks it accepts
+		/// (a biome template's values): the geology's where accepted, else <paramref name="own"/>; ice stays ice.
+		/// </summary>
+		public static string RockFor(string own, IReadOnlyList<string> accepted, string geology)
+		{
 			if (own == Ice)
 			{
 				return Ice;
 			}
-			return IsCliffRock(geology) && Accepts(entry, geology) ? geology : own;
+			return IsCliffRock(geology) && Accepts(own, accepted, geology) ? geology : own;
 		}
 	}
 }

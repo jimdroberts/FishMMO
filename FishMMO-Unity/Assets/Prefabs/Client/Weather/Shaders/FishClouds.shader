@@ -226,6 +226,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         {
             Name "CloudTemporal"
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 3.5
@@ -313,6 +314,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             Name "CloudComposite"
             Blend One SrcAlpha            // scattered light added, what is behind kept by transmittance
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 3.5
@@ -455,6 +457,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         {
             Name "CloudShadow"
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 3.5
@@ -514,6 +517,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         {
             Name "CloudGodRays"
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 3.5
@@ -726,6 +730,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             Name "CloudGodRayComposite"
             Blend One SrcAlpha, Zero One
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 3.5
@@ -803,6 +808,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         {
             Name "CloudShadowSoften"
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 3.5
@@ -862,6 +868,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         {
             Name "CloudOverhead"
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 3.5
@@ -905,6 +912,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         {
             Name "CloudLightVolume"
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 3.5
@@ -954,6 +962,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         {
             Name "CloudFieldTile"
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 3.5
@@ -1429,6 +1438,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         {
             Name "CloudFarImposter"
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 3.5

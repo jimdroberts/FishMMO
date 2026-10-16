@@ -12,6 +12,7 @@ using UnityEngine;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
+using FishMMO.Shared.Biomes;
 using Object = UnityEngine.Object;
 
 namespace FishMMO.Shared.WorldDesign
@@ -30,6 +31,11 @@ namespace FishMMO.Shared.WorldDesign
 		public string SceneName;
 		public readonly List<ResolvedTerrainArrayLayer> Layers = new List<ResolvedTerrainArrayLayer>();
 		public readonly List<TerrainArrayLayerParams> Params = new List<TerrainArrayLayerParams>();
+		/// <summary>
+		/// Each layer's ground makeup from the biome slots that paint with it (<see cref="TerrainArraySet.LayerMakeup"/>): x living,
+		/// y lichen, z mineral, w 1 where a slot had one, all 0 where none did (the runtime reads that layer's name).
+		/// </summary>
+		public readonly List<Vector4> Makeup = new List<Vector4>();
 		/// <summary>LOCAL overrides that disagreed, and overrides that had to fall back. For the log.</summary>
 		public readonly List<string> Conflicts = new List<string>();
 		public readonly List<string> Problems = new List<string>();
@@ -141,6 +147,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				ResolvedTerrainArrayLayer resolved = TerrainArrayResolver.Resolve(i, layers[i], lookup, plan.Conflicts);
 				plan.Layers.Add(resolved);
+				plan.Makeup.Add(MakeupOf(layers[i]));
 				bool hasAlpha = AlbedoHasAlpha(resolved.Albedo);
 				// A layer with an albedo and no normal or mask gets them worked out from the albedo
 				// (TerrainSurfaceDerivation), so no ground with art draws flat.
@@ -164,6 +171,61 @@ namespace FishMMO.Shared.WorldDesign
 			plan.SliceSize = SliceSizeFor(largest);
 			plan.Hash = HashOf(plan);
 			return plan;
+		}
+
+		/// <summary>
+		/// What a layer's ground is made of: the makeup of the first biome slot using it that has one (the uses are listed with
+		/// the biome covering most of the scene first, as for its LOCAL art), w 1; all 0 when no slot has one.
+		/// </summary>
+		/// <remarks>
+		/// Not part of the content hash: it changes no texture, so a set whose only change is its makeup is updated in place
+		/// (<see cref="Bake"/>) rather than baked again.
+		/// </remarks>
+		public static Vector4 MakeupOf(TerrainArrayLayerSource source)
+		{
+			if (source?.Uses == null)
+			{
+				return Vector4.zero;
+			}
+			foreach (TerrainArrayLayerUse use in source.Uses)
+			{
+				TerrainTextureLayer slot = use != null ? BiomeLocalArt.CommittedLayer(use.Biome, use.Slot) : null;
+				if (slot != null && slot.HasGroundMakeup)
+				{
+					Vector3 m = slot.GroundMakeup;
+					return new Vector4(m.x, m.y, m.z, 1f);
+				}
+			}
+			return Vector4.zero;
+		}
+
+		/// <summary>True when a set's baked makeup is the plan's (padded to the set's full length).</summary>
+		private static bool SameMakeup(Vector4[] baked, List<Vector4> planned)
+		{
+			Vector4[] wanted = PaddedMakeup(planned);
+			if (baked == null || baked.Length != wanted.Length)
+			{
+				return false;
+			}
+			for (int i = 0; i < wanted.Length; i++)
+			{
+				if (baked[i] != wanted[i])
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
+		/// <summary>The plan's makeup as the set holds it: <see cref="TerrainArrayLayerParams.MaximumLayers"/> long.</summary>
+		private static Vector4[] PaddedMakeup(List<Vector4> planned)
+		{
+			var makeup = new Vector4[TerrainArrayLayerParams.MaximumLayers];
+			for (int i = 0; i < planned.Count && i < makeup.Length; i++)
+			{
+				makeup[i] = planned[i];
+			}
+			return makeup;
 		}
 
 		/// <summary>
@@ -336,6 +398,15 @@ namespace FishMMO.Shared.WorldDesign
 			if (!force && existing != null && existing.IsUsable && existing.ContentHash == plan.Hash)
 			{
 				report.UpToDate = true;
+				// Its textures are current; what its layers are made of may not be (a template's Ground Makeup authored or
+				// edited since): that is written in place, no rebake.
+				if (!SameMakeup(existing.LayerMakeup, plan.Makeup))
+				{
+					existing.LayerMakeup = PaddedMakeup(plan.Makeup);
+					EditorUtility.SetDirty(existing);
+					AssetDatabase.SaveAssetIfDirty(existing);
+					report.Written.Add($"{TerrainArraySet.BakedAssetPath(plan.SceneName)} (ground makeup only)");
+				}
 				return report;
 			}
 
@@ -475,6 +546,7 @@ namespace FishMMO.Shared.WorldDesign
 				set.LayerNames[i] = plan.Layers[i].Committed != null ? plan.Layers[i].Committed.name : string.Empty;
 				set.LayerSources[i] = plan.Layers[i].Describe();
 			}
+			set.LayerMakeup = PaddedMakeup(plan.Makeup);
 			set.ContentHash = plan.Hash;
 			if (set.Albedo == null)
 			{

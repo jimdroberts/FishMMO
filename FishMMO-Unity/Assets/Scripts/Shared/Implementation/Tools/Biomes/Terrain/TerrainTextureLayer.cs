@@ -12,6 +12,20 @@ namespace FishMMO.Shared.Biomes
 		Bilinear,
 	}
 
+	/// <summary>What a ground is made of, as the planet's looks see it (<see cref="TerrainTextureLayer.GroundMakeup"/>).</summary>
+	[Serializable]
+	public struct SurfaceMakeup
+	{
+		[Tooltip("Off: not set — the layer's name decides what it is made of, as before 2026-10-15, with a warning.")]
+		public bool Set;
+		[Tooltip("Living plant matter: grass sward, moss, heath (1); litter and peat partly. Wears the planet's and the patch's leaves.")]
+		[Range(0f, 1f)] public float Living;
+		[Tooltip("Lichen and coral: wears the patch's lichen colour.")]
+		[Range(0f, 1f)] public float Lichen;
+		[Tooltip("Rock, sand, soil, ash: takes the world's own ground colour where its air is thin or absent. Snow and ice keep most of their white (0.3).")]
+		[Range(0f, 1f)] public float Mineral;
+	}
+
 	/// <summary>
 	/// One terrain texture of a biome — its maps, tiling, blend noise, and the height and slope
 	/// bands it is confined to — plus the prefab spawn rules that apply where it dominates.
@@ -76,6 +90,42 @@ namespace FishMMO.Shared.Biomes
 		public MinMaxRange slopeRange = new MinMaxRange(0f, 90f);
 		[Tooltip("How sharply the texture blends at the edges of its slope range.")]
 		[Range(1f, 20f)] public float slopeFalloff = 5f;
+
+		/// <remarks>
+		/// <para>
+		/// What the ground in this slot is made of, as the planet's looks see it (2026-10-15: moved off the layer's NAME, which
+		/// BiomeLooks.GroundShareOf read by keywords): x the share of living plant matter (grass sward, moss, heath: it wears
+		/// the planet's and the patch's leaves), y of lichen and coral (the lichen colour), z of mineral (rock, sand, soil, ash:
+		/// the world's own ground colour where its air is thin or absent). A frozen ground keeps most of its own white (a small
+		/// mineral share); lava none of anything (it glows its own colour).
+		/// </para>
+		/// <para>
+		/// A property of the art in the slot: the biome art authoring writes the generated ground's own (SurfaceCatalogue
+		/// .MakeupOf) whenever the slot holds generated art, and keeps a value somebody typed. Not set, the terrain array bake
+		/// has none for the layer and the runtime reads the layer's name, as before, with a warning. Hand-made art needs one
+		/// typed here (and Set ticked).
+		/// </para>
+		/// <para>
+		/// A struct with its own Set flag rather than a sentinel value, so a slot serialised before the field existed reads as
+		/// "not set" however the deserialiser fills it in (all zeros is a real makeup: lava's).
+		/// </para>
+		/// </remarks>
+		[Header("Ground Makeup")]
+		[Tooltip("What this ground is made of for the planet's looks. Written by Author biome art for generated grounds; for hand-made art, tick Set and type it.")]
+		[SerializeField] private SurfaceMakeup groundMakeup;
+
+		/// <summary>What the ground is made of (x living, y lichen, z mineral); only meaningful when <see cref="HasGroundMakeup"/>.</summary>
+		public Vector3 GroundMakeup
+		{
+			get => new Vector3(groundMakeup.Living, groundMakeup.Lichen, groundMakeup.Mineral);
+			set => groundMakeup = new SurfaceMakeup { Set = true, Living = value.x, Lichen = value.y, Mineral = value.z };
+		}
+
+		/// <summary>True when <see cref="GroundMakeup"/> holds a makeup rather than "not set".</summary>
+		public bool HasGroundMakeup => groundMakeup.Set;
+
+		/// <summary>Forgets the makeup ("not set": the layer's name decides).</summary>
+		public void ClearGroundMakeup() => groundMakeup = default;
 
 		[Header("Prefab Spawning")]
 		[Tooltip("Prefab spawn rules that become active wherever this texture dominates.")]

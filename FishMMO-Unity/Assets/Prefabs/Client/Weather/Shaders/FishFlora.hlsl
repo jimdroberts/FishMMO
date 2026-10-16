@@ -11,7 +11,7 @@
 
 Texture2D<float> _FishFloraBiomes;     // R8: the biome map grid, each texel the biome's palette index (0 = the scene's own look)
 Texture2D<float4> _FishFloraPalette;   // 12 wide, 7 rows a biome, linear: foliage (a running weight), root (a height),
-                                       // bloom (a bloom size), accent (a width), mineral (a bend), living green's shift, the biome's average shift
+                                       // bloom (a bloom size), accent (a width), mineral (a bend), living green's shift, the biome's ground shift
 float4 _FishFloraRect;                 // xy the grid's world xz origin, zw one over its xz size (0 when the scene has no map)
 float4 _FishFloraInfo;                 // x 1 when on, y grid width, z grid height, w biomes in the palette
 float4 _FishFloraStrength;             // how far each takes its look: x foliage, y bloom, z accent, w mineral
@@ -37,7 +37,7 @@ struct FishFloraLook
 	float3 accent;
 	float3 mineral;  // about white
 	float3 shift;    // living green's multiplier: this look against the biome's common look on the home world (white there)
-	float3 biomeShift; // the biome's looks' shifts averaged by weight: what the ground colour map carries
+	float3 biomeShift; // the biome's ground shift (its common look's, FloraPaletteMap.GroundShift): what the terrain and the ground colour map carry
 	float height;    // against the type's own
 	float width;
 	float bend;
@@ -160,88 +160,36 @@ FishFloraLook FishFloraLookOf(uint biome, uint variant)
 	return look;
 }
 
-// How far into its neighbour a patch's look fades on continuous ground (FishFloraGroundLookAt), in patches either side of
-// the border: the third of a patch over which FishFloraVariantAt's nudge mingles the blades.
-#define FISH_FLORA_GROUND_BAND 0.33
-
-// The look the continuous ground wears at xz (the terrain, and the terrain's contact band on rocks and trunks): the
-// blades' own patches and biomes, but BLENDED across their borders instead of dithered. The blades' dither is a per-30-cm
-// (patches) and per-60-cm (biomes) hashed read; a blade is a discrete thing either side of a border and mingles, but the
-// ground is one continuous albedo, and the same read painted it in hard squares (2026-10-15). Here the biome is weighed
-// bilinearly over its grid's four nearest texels (what the biome read's half-texel jitter averages to) and each biome's
-// patches smoothly over their four nearest, fading across FISH_FLORA_GROUND_BAND either side of a border, so the middle
-// of a patch is exactly the look its grass wears. Only shift and accent are blended (all FishFloraGround reads); the rest
-// of the look is the strongest contributor's. Callers test _FishFloraInfo.x first.
-FishFloraLook FishFloraGroundLookAt(float2 xz, float patchMetres, uint salt)
+// The planet's cast on the living ground at xz (the terrain, and the terrain's contact band on rocks and trunks): the
+// shift of the biome's looks averaged by weight (palette row 6, BiomeLooks.Variant.Shift), the same for the whole biome
+// and weighed bilinearly over the biome grid's four nearest texels, so it changes only as smoothly as the biomes do. The
+// ground takes no patch's look: the twelve looks are the grass's and the plants' (FishFloraAt), and laid on the ground
+// they painted its own textures in six-metre blotches of russet, green and blue (2026-10-15: "a bunch of different
+// colored textures of the same thing"). White (no shift) while the looks are not published.
+float3 FishFloraGroundShiftAt(float2 xz)
 {
-	uint4 biomes = 0u;
-	float4 biomeWeights = float4(1.0, 0.0, 0.0, 0.0);
+	float3 shift = 1.0;
 	float2 size = _FishFloraInfo.yz;
 	float2 uv = (xz - _FishFloraRect.xy) * _FishFloraRect.zw;
-	[branch] if (_FishFloraRect.z > 0.0 && all(uv >= 0.0) && all(uv <= 1.0))
+	[branch] if (_FishFloraInfo.x >= 0.5 && _FishFloraRect.z > 0.0 && all(uv >= 0.0) && all(uv <= 1.0))
 	{
 		float2 g = uv * size - 0.5;
 		int2 t0 = (int2)floor(g);
 		float2 f = g - floor(g);
 		int2 hi = (int2)size - 1;
 		uint top = (uint)max(_FishFloraInfo.w - 1.0, 0.0);
+		shift = 0.0;
 		[unroll] for (int k = 0; k < 4; k++)
 		{
 			int2 o = int2(k & 1, k >> 1);
 			int2 texel = clamp(t0 + o, int2(0, 0), hi);
-			biomes[k] = min((uint)round(_FishFloraBiomes.Load(int3(texel, 0)) * 255.0), top);
-			biomeWeights[k] = (o.x != 0 ? f.x : 1.0 - f.x) * (o.y != 0 ? f.y : 1.0 - f.y);
-		}
-		// One pass of patches per distinct biome: the same biome in two texels is one weight.
-		[unroll] for (int a = 1; a < 4; a++)
-		{
-			[unroll] for (int b = 0; b < a; b++)
-			{
-				bool same = biomes[a] == biomes[b] && biomeWeights[b] > 0.0;
-				biomeWeights[b] += same ? biomeWeights[a] : 0.0;
-				biomeWeights[a] = same ? 0.0 : biomeWeights[a];
-			}
+			uint biome = min((uint)round(_FishFloraBiomes.Load(int3(texel, 0)) * 255.0), top);
+			float w = (o.x != 0 ? f.x : 1.0 - f.x) * (o.y != 0 ? f.y : 1.0 - f.y);
+			// Every column of row 6 holds the biome's average; column 0 is as good as any.
+			shift += _FishFloraPalette.Load(int3(0, biome * FISH_FLORA_ROWS + 6u, 0)).rgb * w;
 		}
 	}
-
-	float2 q = FishFloraPatchCoord(xz, patchMetres, salt) - 0.5;
-	int2 patch0 = (int2)floor(q);
-	float2 s = smoothstep(0.5 - FISH_FLORA_GROUND_BAND, 0.5 + FISH_FLORA_GROUND_BAND, q - floor(q));
-
-	float3 shift = 0.0;
-	float3 accent = 0.0;
-	float best = -1.0;
-	uint bestBiome = 0u;
-	uint bestVariant = 0u;
-	[loop] for (int bi = 0; bi < 4; bi++)
-	{
-		float bw = biomeWeights[bi];
-		[branch] if (bw > 0.0)
-		{
-			uint biome = biomes[bi];
-			uint row = biome * FISH_FLORA_ROWS;
-			[loop] for (int k = 0; k < 4; k++)
-			{
-				int2 o = int2(k & 1, k >> 1);
-				float w = bw * (o.x != 0 ? s.x : 1.0 - s.x) * (o.y != 0 ? s.y : 1.0 - s.y);
-				[branch] if (w > 0.0)
-				{
-					uint variant = FishFloraVariantOfPatch(patch0 + o, biome, salt);
-					shift += _FishFloraPalette.Load(int3(variant, row + 5u, 0)).rgb * w;
-					accent += _FishFloraPalette.Load(int3(variant, row + 3u, 0)).rgb * w;
-					bool stronger = w > best;
-					best = stronger ? w : best;
-					bestBiome = stronger ? biome : bestBiome;
-					bestVariant = stronger ? variant : bestVariant;
-				}
-			}
-		}
-	}
-
-	FishFloraLook look = FishFloraLookOf(bestBiome, bestVariant);
-	look.shift = shift;
-	look.accent = accent;
-	return look;
+	return shift;
 }
 
 // How living things grow at xz, as a multiplier on their own size: a smooth swell of about ±spread over some ten metres
@@ -306,21 +254,18 @@ float3 FishFloraShift(float3 albedo, float3 shift, float strength)
 	return albedo * lerp(1.0, shift, saturate(strength));
 }
 
-// A terrain ground layer's albedo in its patch's look. shares = (foliage, accent, mineral) of the layer (BiomeLooks.
-// GroundShareOf, per layer from the binder): living sward shifted as the grass on it is (FishFloraShift), lichen toward its lichen colour, mineral toward the world's own ground where the air is thin
-// or absent. look comes from FishFloraAt(xz, FISH_FLORA_GRASS_PATCH, FISH_FLORA_GRASS_SALT), once per pixel.
-float3 FishFloraGround(float3 albedo, float3 shares, FishFloraLook look)
+// A terrain ground layer's albedo on its planet. shares = (foliage, accent, mineral) of the layer (BiomeLooks.GroundShareOf,
+// per layer from the binder): its living part shifted by groundShift (FishFloraGroundShiftAt: the biome's averaged cast,
+// never a patch's look), its mineral part toward the world's own ground where the air is thin or absent. The layer's own
+// texture stays what it is otherwise: lichen keeps its own colour (the share's y is not read; the looks' lichen colours
+// are for the lichen the scatter places). groundShift is white, and nothing changes, while the looks are not published.
+float3 FishFloraGround(float3 albedo, float3 shares, float3 groundShift)
 {
 	if (_FishFloraInfo.x < 0.5)
 	{
 		return albedo;
 	}
-	float3 c = albedo;
-	if (look.valid)
-	{
-		c = FishFloraShift(c, look.shift, shares.x * _FishFloraStrength.x);
-		c = FishFloraRecolour(c, look.accent, shares.y * _FishFloraStrength.z);
-	}
+	float3 c = FishFloraShift(albedo, groundShift, shares.x * _FishFloraStrength.x);
 	return FishFloraRecolour(c, _FishFloraGround.rgb, shares.z * _FishFloraGround.a);
 }
 

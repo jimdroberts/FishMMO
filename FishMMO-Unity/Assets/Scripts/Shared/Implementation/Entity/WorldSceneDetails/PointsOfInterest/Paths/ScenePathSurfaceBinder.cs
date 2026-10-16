@@ -103,10 +103,25 @@ namespace FishMMO.Shared
 			return Pack(binder != null ? binder.Points.PathRoadMap : null);
 		}
 
+		/// <summary>
+		/// Per terrain layer, its biome's cobble slice, packed as <see cref="EarthMapOf"/>: each biome's streets paved with its
+		/// own stone. All −1 for a scene cut before the cobbles had a map, which paves with the scene's one slice
+		/// (<see cref="LayersOf"/>.z) as it always did.
+		/// </summary>
+		public static Vector4[] StoneMapOf(Scene scene)
+		{
+			ScenePathSurfaceBinder binder = Of(scene);
+			return Pack(binder != null ? binder.Points.PathStoneMap : null);
+		}
+
 		/// <summary>The vectors a layer map is pushed as: always eight, so the shader array's size never changes.</summary>
 		public const int MapVectors = 8;
 
-		private static Vector4[] Pack(float[] map)
+		/// <summary>
+		/// A per-layer map (one slice per terrain layer, −1 none) as the shader's table: four layers to a vector, layer i at
+		/// vector i / 4, component i % 4, always <see cref="MapVectors"/> vectors; layers past the map (or no map) are −1.
+		/// </summary>
+		public static Vector4[] Pack(float[] map)
 		{
 			var packed = new Vector4[MapVectors];
 			for (int v = 0; v < MapVectors; v++)

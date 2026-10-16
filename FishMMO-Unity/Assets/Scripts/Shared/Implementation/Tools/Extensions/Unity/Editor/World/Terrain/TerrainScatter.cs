@@ -227,9 +227,11 @@ namespace FishMMO.Shared.WorldDesign
 			var workspace = new Workspace(field.Biomes.Count, attributionEntries.Count) { TreeFootprints = treeFootprints.ToArray(), Placement = placement };
 			DetailPrototype[] detailArray = detailPrototypes.ToArray();
 			TreePrototype[] treeArray = treePrototypes.ToArray();
+			List<TerrainDetailBiomes.Entry> prototypeBiomes = PrototypeBiomes(rules, detailArray);
 			bool firstTile = true;
 			foreach (Terrain terrain in ordered)
 			{
+				RecordBiomes(terrain, prototypeBiomes);
 				ScatterTile(terrain, rules, detailArray, treeArray, palette, field, layerBiomes, attributionEntries,
 					normalizedHeight, options, workspace, firstTile, report);
 				firstTile = false;
@@ -962,6 +964,43 @@ namespace FishMMO.Shared.WorldDesign
 				// Let the terrain's and the quality preset's density scale thin it.
 				useDensityScaling = true,
 			};
+		}
+
+		/// <summary>
+		/// Which biome's rule made each detail prototype (every tile carries the same prototypes): the record the client reads
+		/// to give a prototype's blades its own biome's look and its rule's healthy and dry tints (<see cref="TerrainDetailBiomes"/>).
+		/// </summary>
+		private static List<TerrainDetailBiomes.Entry> PrototypeBiomes(List<ScatterRule> rules, DetailPrototype[] prototypes)
+		{
+			var entries = new List<TerrainDetailBiomes.Entry>();
+			foreach (ScatterRule rule in rules)
+			{
+				if (!rule.Runnable || rule.Rule.spawnChannel != PrefabSpawnChannel.DetailLayer || rule.Entry?.Biome == null)
+				{
+					continue;
+				}
+				int biome = BiomeRegistry.IDOf(rule.Entry.Biome);
+				foreach (int p in rule.Prototypes)
+				{
+					if (p >= 0 && p < prototypes.Length && prototypes[p]?.prototype != null)
+					{
+						entries.Add(new TerrainDetailBiomes.Entry { Prefab = prototypes[p].prototype.name, NoiseSeed = prototypes[p].noiseSeed, BiomeID = biome });
+					}
+				}
+			}
+			return entries;
+		}
+
+		/// <summary>Writes a tile's <see cref="TerrainDetailBiomes"/> (made when it has none), replacing what an earlier cut wrote.</summary>
+		private static void RecordBiomes(Terrain terrain, List<TerrainDetailBiomes.Entry> entries)
+		{
+			TerrainDetailBiomes record = terrain.GetComponent<TerrainDetailBiomes>();
+			if (record == null)
+			{
+				record = terrain.gameObject.AddComponent<TerrainDetailBiomes>();
+			}
+			record.Prototypes = new List<TerrainDetailBiomes.Entry>(entries);
+			EditorUtility.SetDirty(record);
 		}
 
 		/// <summary>For each layer, which biomes have an entry on it.</summary>

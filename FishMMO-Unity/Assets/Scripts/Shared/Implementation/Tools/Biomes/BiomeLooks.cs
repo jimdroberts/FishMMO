@@ -22,6 +22,32 @@ namespace FishMMO.Shared.Biomes
 		Cave = 11,
 		Alien = 12,
 		Aquatic = 13,
+		/// <summary>
+		/// Not a theme: a biome template whose look class has not been authored yet (<see cref="BiomeTemplate.LookClass"/>).
+		/// Its looks fall back on the biome's name (<see cref="BiomeLooks.ClassOf(string, float, float)"/>), with a warning.
+		/// Never passed to <see cref="BiomeLooks.For"/>.
+		/// </summary>
+		Unset = 255,
+	}
+
+	/// <summary>
+	/// A biome's choice of one of its two rare fantastic looks (<see cref="BiomeLooks.FirstFantastic"/>): <see cref="Auto"/>
+	/// leaves it to the biome's hash, as every biome had it before the choice existed; the others name one outright.
+	/// The order is <c>BiomeLooks.Fantastic</c>'s, plus one.
+	/// </summary>
+	public enum BiomeRareLook : byte
+	{
+		Auto = 0,
+		Moonsilver = 1,
+		Arcane = 2,
+		Gilded = 3,
+		Bloodleaf = 4,
+		Frostazure = 5,
+		Emberleaf = 6,
+		Witchmoss = 7,
+		Duskbloom = 8,
+		Faerie = 9,
+		Copperleaf = 10,
 	}
 
 	/// <summary>
@@ -149,12 +175,22 @@ namespace FishMMO.Shared.Biomes
 			public float Mineral;
 		}
 
+		/// <summary>A ground's makeup as the template stores it (<see cref="TerrainTextureLayer.GroundMakeup"/>: x living, y lichen, z mineral).</summary>
+		public static GroundShare ShareOf(Vector3 makeup) => new GroundShare { Foliage = makeup.x, Accent = makeup.y, Mineral = makeup.z };
+
 		/// <summary>
 		/// What a ground layer is made of, from its name (the generated layers are Ground_&lt;Kind&gt;): living ground is plant
 		/// matter and wears the planet's leaves — grass, moss and heath wholly, litter and peat partly (dead leaves keep some of
 		/// their colour); lichen and coral wear the lichen colour; everything else is mineral. Snow and ice take only a little
 		/// of the world's ground (a frost on a rust world is still white), lava none (it glows its own colour).
 		/// </summary>
+		/// <remarks>
+		/// Since 2026-10-15 a FALLBACK only. A ground's makeup is a property of its surface: each generated ground declares it
+		/// (SurfaceCatalogue.MakeupOf, written to equal this for every ground), the biome art authoring writes it onto every
+		/// template slot holding that ground (<see cref="TerrainTextureLayer.GroundMakeup"/>), and the terrain array bake
+		/// carries it per layer (<c>TerrainArraySet.LayerMakeup</c>). A layer read by its name here is one whose set was baked
+		/// before that, or hand-made art whose slot nobody has given a makeup.
+		/// </remarks>
 		public static GroundShare GroundShareOf(string layerName)
 		{
 			string n = (layerName ?? string.Empty).ToLowerInvariant();
@@ -251,9 +287,51 @@ namespace FishMMO.Shared.Biomes
 		// ── Classes ─────────────────────────────────────────────────
 
 		/// <summary>
-		/// A biome's class from its name, the way it reads to a player (keywords, as the ambient life reads habitats), or from
-		/// its climate where the name says nothing: <paramref name="temperature"/> and <paramref name="humidity"/> are the
-		/// middle of its envelope.
+		/// A biome's class: its template's <see cref="BiomeTemplate.LookClass"/>, the one source since 2026-10-15 (the biome
+		/// art authoring writes it from the spec table, which names every biome's class). A template not authored yet falls
+		/// back on its name (<see cref="ClassFromName"/>) and says so once.
+		/// </summary>
+		public static BiomeLookClass ClassOf(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return BiomeLookClass.Temperate;
+			}
+			BiomeLookClass authored = biome.LookClass;
+			return authored <= BiomeLookClass.Aquatic ? authored : ClassFromName(biome);
+		}
+
+		/// <summary>Whether a template without a look class has been reported (once a session, as every template fallback is).</summary>
+		private static bool warnedFallback;
+		private static readonly object warnLock = new object();
+
+		/// <summary>
+		/// The fallback for a template whose look class has not been authored: the old reading of its name and climate
+		/// (<see cref="ClassOf(string, float, float)"/>), with one warning a session. The only caller of the keyword table
+		/// outside the authoring's tests.
+		/// </summary>
+		private static BiomeLookClass ClassFromName(BiomeTemplate biome)
+		{
+			float temperature = 0.5f * (biome.MinTemperature + biome.MaxTemperature);
+			float humidity = 0.5f * (biome.MinHumidity + biome.MaxHumidity);
+			BiomeLookClass c = ClassOf(biome.ResolvedDisplayName, temperature, humidity);
+			lock (warnLock)
+			{
+				if (!warnedFallback)
+				{
+					warnedFallback = true;
+					Debug.LogWarning($"[Biome templates] '{biome.name}' has no look class: read from its name as {c} (said once; other templates may be the same). Run Biomes → Authoring → Author biome art to write it onto the templates.");
+				}
+			}
+			return c;
+		}
+
+		/// <summary>
+		/// The old keyword reading of a biome's class from its name, the way it reads to a player (keywords, as the ambient
+		/// life reads habitats), or from its climate where the name says nothing: <paramref name="temperature"/> and
+		/// <paramref name="humidity"/> are the middle of its envelope. Since 2026-10-15 only the fallback for a template not
+		/// yet authored (<see cref="ClassOf(BiomeTemplate)"/>); the spec table's look classes were written to equal it for
+		/// every biome, so authoring changed no biome's looks.
 		/// </summary>
 		public static BiomeLookClass ClassOf(string name, float temperature, float humidity)
 		{
@@ -500,28 +578,43 @@ namespace FishMMO.Shared.Biomes
 
 		// ── The looks ───────────────────────────────────────────────
 
-		/// <summary>A biome's looks on a world, from the biome asset.</summary>
+		/// <summary>
+		/// A biome's looks on a world, from the biome asset: its look class (<see cref="ClassOf(BiomeTemplate)"/>) and its
+		/// choice of rare looks (<see cref="BiomeTemplate.RareLookA"/>, <see cref="BiomeTemplate.RareLookB"/>), told apart from
+		/// its kin by its key.
+		/// </summary>
 		public static Look Of(BiomeTemplate biome, in WorldTraits world)
 		{
 			if (biome == null)
 			{
 				return For(BiomeLookClass.Temperate, 0u, world);
 			}
-			float temperature = 0.5f * (biome.MinTemperature + biome.MaxTemperature);
-			float humidity = 0.5f * (biome.MinHumidity + biome.MaxHumidity);
-			BiomeLookClass c = ClassOf(biome.ResolvedDisplayName, temperature, humidity);
-			return For(c, Hash(biome.Key), world);
+			return For(ClassOf(biome), Hash(biome.Key), world, biome.RareLookA, biome.RareLookB);
 		}
 
-		/// <summary>The looks of a biome of class <paramref name="c"/>, told apart from its kin by <paramref name="biomeHash"/>, on a world.</summary>
-		public static Look For(BiomeLookClass c, uint biomeHash, in WorldTraits world)
+		/// <summary>The fantastic looks' names, in <see cref="BiomeRareLook"/>'s order (less its <c>Auto</c>).</summary>
+		public static string FantasticName(int index) => index >= 0 && index < Fantastic.Length ? Fantastic[index].name : null;
+
+		/// <summary>How many fantastic looks there are to choose a biome's two from.</summary>
+		public static int FantasticCount => Fantastic.Length;
+
+		/// <summary>
+		/// The looks of a biome of class <paramref name="c"/>, told apart from its kin by <paramref name="biomeHash"/>, on a world.
+		/// <paramref name="rareA"/> and <paramref name="rareB"/> name its two rare fantastic looks outright; <see cref="BiomeRareLook.Auto"/>
+		/// (the default) leaves each to the hash, so a biome that chooses nothing has exactly the looks it always had.
+		/// </summary>
+		public static Look For(BiomeLookClass c, uint biomeHash, in WorldTraits world, BiomeRareLook rareA = BiomeRareLook.Auto, BiomeRareLook rareB = BiomeRareLook.Auto)
 		{
-			Look look = Build(c, biomeHash, world);
+			if ((int)c >= Themes.Length)
+			{
+				c = BiomeLookClass.Temperate;
+			}
+			Look look = Build(c, biomeHash, world, rareA, rareB);
 			// The same biome on the home world under the reference sun, with this world's seed: the shift is what the planet
-			// changes, never the per-world nudge every biome takes anyway.
+			// changes, never the per-world nudge every biome takes anyway. (The common look, which the rare choice never moves.)
 			WorldTraits home = WorldTraits.Earthlike;
 			home.Seed = world.Seed;
-			Color reference = Build(c, biomeHash, home).Variants[0].Foliage;
+			Color reference = Build(c, biomeHash, home, rareA, rareB).Variants[0].Foliage;
 			for (int i = 0; i < Variants; i++)
 			{
 				look.Variants[i].Shift = ShiftOf(look.Variants[i].Foliage, reference);
@@ -548,7 +641,7 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>The sRGB transfer curve, decoded (managed: the shift is worked out off the engine too).</summary>
 		private static float ToLinear(float c) => c <= 0.04045f ? c / 12.92f : (float)Math.Pow((c + 0.055f) / 1.055f, 2.4f);
 
-		private static Look Build(BiomeLookClass c, uint biomeHash, in WorldTraits world)
+		private static Look Build(BiomeLookClass c, uint biomeHash, in WorldTraits world, BiomeRareLook rareA, BiomeRareLook rareB)
 		{
 			Theme theme = Themes[(int)c];
 			uint seed = biomeHash * 0x9E3779B1u ^ world.Seed * 0x85EBCA77u ^ 0x2545F491u;
@@ -572,8 +665,11 @@ namespace FishMMO.Shared.Biomes
 			}
 			// Each biome its own: a nudge of its hue, and its own pair of the fantastic.
 			foliage.x = Wrap(foliage.x + (Unit(seed, 1u) - 0.5f) * 0.04f * spread);
-			int fantasticA = (int)(Next(seed, 2u) % (uint)Fantastic.Length);
-			int fantasticB = (int)((fantasticA + 1 + Next(seed, 3u) % (uint)(Fantastic.Length - 1)) % (uint)Fantastic.Length);
+			// The pair is the biome's to choose (BiomeTemplate.RareLookA/B); what it leaves to the hash is drawn as it always
+			// was, and the second never repeats the first.
+			int fantasticA = rareA != BiomeRareLook.Auto && (int)rareA <= Fantastic.Length ? (int)rareA - 1 : (int)(Next(seed, 2u) % (uint)Fantastic.Length);
+			int fantasticB = rareB != BiomeRareLook.Auto && (int)rareB <= Fantastic.Length && (int)rareB - 1 != fantasticA ? (int)rareB - 1
+				: (int)((fantasticA + 1 + Next(seed, 3u) % (uint)(Fantastic.Length - 1)) % (uint)Fantastic.Length);
 
 			var look = new Look { Class = c, Variants = new Variant[Variants], Cumulative = new float[Variants] };
 			Vector3[] blooms = WorldBlooms(theme.Blooms, world);

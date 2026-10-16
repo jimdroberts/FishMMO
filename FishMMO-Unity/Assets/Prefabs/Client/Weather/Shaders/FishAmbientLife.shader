@@ -41,6 +41,7 @@ Shader "FishMMO/Ambient Life"
             Cull Off
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 3.5
             #pragma vertex AmbientLifeVertexMain
             #pragma fragment AmbientLifeForwardFragment
@@ -67,6 +68,7 @@ Shader "FishMMO/Ambient Life"
             Cull Off
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 3.5
             #pragma vertex AmbientLifeDepthVertex
             #pragma fragment AmbientLifeDepthFragment
@@ -89,6 +91,7 @@ Shader "FishMMO/Ambient Life"
             Cull Off
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 3.5
             #pragma vertex AmbientLifeDepthVertex
             #pragma fragment AmbientLifeDepthFragment
@@ -108,6 +111,7 @@ Shader "FishMMO/Ambient Life"
             Cull Off
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 3.5
             #pragma vertex AmbientLifeVertexMain
             #pragma fragment AmbientLifeDepthNormalsFragment

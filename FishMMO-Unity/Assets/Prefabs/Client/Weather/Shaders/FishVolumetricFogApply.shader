@@ -16,6 +16,7 @@ Shader "Hidden/FishMMO/Weather/VolumetricFogApply"
             Blend One SrcAlpha   // rgb adds the scattered light; alpha carries transmittance
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
 

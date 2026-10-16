@@ -1137,7 +1137,7 @@ namespace FishMMO.Client
 				}
 				if (!habitats.TryGetValue(template, out habitat))
 				{
-					habitat = AmbientGating.HabitatOfBiome(template.name, template.ResolvedDisplayName, template.Atmosphere);
+					habitat = AmbientGating.HabitatOfTemplate(template);
 					habitats[template] = habitat;
 				}
 				if (habitat == AmbientHabitat.None)

@@ -132,6 +132,7 @@ Shader "FishMMO/Weather Lit"
             AlphaToMask[_AlphaToMask]
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 2.0
 
             // -------------------------------------
@@ -218,6 +219,7 @@ Shader "FishMMO/Weather Lit"
             Cull[_Cull]
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 2.0
 
             // -------------------------------------
@@ -272,6 +274,7 @@ Shader "FishMMO/Weather Lit"
             Cull[_Cull]
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 4.5
 
             // Deferred Rendering Path does not support the OpenGL-based graphics API:
@@ -362,6 +365,7 @@ Shader "FishMMO/Weather Lit"
             Cull[_Cull]
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 2.0
 
             // -------------------------------------
@@ -408,6 +412,7 @@ Shader "FishMMO/Weather Lit"
             Cull[_Cull]
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 2.0
 
             // -------------------------------------
@@ -460,6 +465,7 @@ Shader "FishMMO/Weather Lit"
             Cull Off
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 2.0
 
             // -------------------------------------
@@ -501,6 +507,7 @@ Shader "FishMMO/Weather Lit"
             Cull[_Cull]
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 2.0
 
             // -------------------------------------
@@ -529,6 +536,7 @@ Shader "FishMMO/Weather Lit"
             ColorMask RG
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma shader_feature_local _ALPHATEST_ON
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma shader_feature_local_vertex _ADD_PRECOMPUTED_VELOCITY
@@ -567,6 +575,7 @@ Shader "FishMMO/Weather Lit"
             }
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma shader_feature_local _ALPHATEST_ON
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma shader_feature_local_vertex _ADD_PRECOMPUTED_VELOCITY

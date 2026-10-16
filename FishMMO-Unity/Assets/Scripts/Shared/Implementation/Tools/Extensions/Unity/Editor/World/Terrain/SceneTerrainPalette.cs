@@ -18,8 +18,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Ground under the sea: the biome's lakebed layer, else its riverbed layer.</summary>
 		Submerged,
 		/// <summary>
-		/// A river's bars and beaches: sand or gravel the water laid, the same art whatever biome the river
-		/// runs through (<see cref="SceneTerrainPalette.SlotSand"/>, <see cref="SceneTerrainPalette.SlotGravel"/>).
+		/// A river's bars and beaches: sand or gravel the water laid, each biome's own (its template's bar sand and bar
+		/// gravel, <see cref="SceneTerrainPalette.SlotSand"/>, <see cref="SceneTerrainPalette.SlotGravel"/>), so a bar
+		/// across two biomes takes each one's by its weight there.
 		/// </summary>
 		Sediment,
 		/// <summary>
@@ -66,16 +67,16 @@ namespace FishMMO.Shared.WorldDesign
 		public const string SlotCliff = "cliff/";
 		public const string SlotLakebed = "lakebed";
 		public const string SlotRiverbed = "riverbed";
-		/// <summary>The scene's river sediment slots: the sand and gravel every biome's bars are painted with.</summary>
-		public const string SlotSand = "sediment/sand";
-		public const string SlotGravel = "sediment/gravel";
+		/// <summary>The river sediment slots: the sand and gravel a biome's bars are painted with, its Bar Sand and Bar Gravel.</summary>
+		public const string SlotSand = BiomeLocalArt.SlotBarSand;
+		public const string SlotGravel = BiomeLocalArt.SlotBarGravel;
 		/// <summary>
-		/// The path surface slots (PathSurfaces in SceneGenerator): each biome's trodden ground and road ground, keyed as the
-		/// biome's own Small Path and Road slots so a LOCAL sidecar dresses them; and the cobbles every biome shares.
+		/// The path surface slots (PathSurfaces in SceneGenerator): each biome's trodden ground, road ground and cobbles,
+		/// keyed as the biome's own Small Path, Road and Cobbles slots so a LOCAL sidecar dresses them.
 		/// </summary>
 		public const string SlotPathEarth = BiomeLocalArt.SlotPath;
 		public const string SlotPathGravel = BiomeLocalArt.SlotRoad;
-		public const string SlotPathStone = "path/stone";
+		public const string SlotPathStone = BiomeLocalArt.SlotCobbles;
 
 		/// <summary>The texture layer a slot key names on a biome, or null when the biome has no such slot.</summary>
 		public static TerrainTextureLayer SlotLayer(BiomeTemplate biome, string slot)
@@ -89,6 +90,9 @@ namespace FishMMO.Shared.WorldDesign
 			if (slot == SlotRiverbed) return biome.RiverbedTextureLayer;
 			if (slot == SlotPathEarth) return biome.SmallPathTextureLayer;
 			if (slot == SlotPathGravel) return biome.RoadTextureLayer;
+			if (slot == SlotPathStone) return biome.CobbleTextureLayer;
+			if (slot == SlotSand) return biome.BarSandTextureLayer;
+			if (slot == SlotGravel) return biome.BarGravelTextureLayer;
 			if (slot.StartsWith(SlotDetail, StringComparison.Ordinal) && int.TryParse(slot.Substring(SlotDetail.Length), out int d))
 			{
 				return biome.DetailTextureLayers != null && d >= 0 && d < biome.DetailTextureLayers.Count ? biome.DetailTextureLayers[d] : null;
@@ -186,13 +190,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// conjure one a biome lacks.
 		/// </remarks>
 		/// <param name="sediment">
-		/// The scene's river sediment, slot and texture layer (<see cref="SlotSand"/>, <see cref="SlotGravel"/>),
-		/// given to every biome so a bar is sand or gravel by the water that laid it, not by the biome it lies
-		/// in; null or empty for a scene with no rivers.
+		/// A biome's river sediment, slot and texture layer (<see cref="SlotSand"/>, <see cref="SlotGravel"/>): its own
+		/// bar sand and bar gravel, so a bar is sand or gravel by the water that laid it and the biome's art by the biome it
+		/// lies in (the painter shares a bar between biomes by their weights). Null for a scene with no rivers.
 		/// </param>
 		public static SceneTerrainPalette Build(SceneBiomeField field,
 			Func<BiomeTemplate, string, TerrainTextureLayer, TerrainLayer> resolveSlot, Func<BiomeTemplate, TerrainLayer> placeholder,
-			IReadOnlyList<(string slot, TerrainTextureLayer source)> sediment = null,
+			Func<BiomeTemplate, IReadOnlyList<(string slot, TerrainTextureLayer source)>> sediment = null,
 			Func<BiomeTemplate, IReadOnlyList<(string slot, TerrainTextureLayer source)>> paths = null)
 		{
 			if (field == null)
@@ -235,9 +239,10 @@ namespace FishMMO.Shared.WorldDesign
 					candidates.Add((new Entry { BiomeIndex = b, Biome = biome, Source = submergedSource, Role = PaletteRole.Submerged, Slot = lakebed ? SlotLakebed : SlotRiverbed }, lakebed ? lakebedLayer : riverbedLayer, 1));
 				}
 
-				if (sediment != null)
+				IReadOnlyList<(string slot, TerrainTextureLayer source)> biomeSediment = sediment?.Invoke(biome);
+				if (biomeSediment != null)
 				{
-					foreach ((string slot, TerrainTextureLayer source) in sediment)
+					foreach ((string slot, TerrainTextureLayer source) in biomeSediment)
 					{
 						TerrainLayer layer = Resolve(resolveSlot, biome, slot, source);
 						if (layer != null)
@@ -340,8 +345,10 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The fallback path slices: x earth, y road, z cobbles (the most-covering biome's earth and road), −1 for one the
-		/// palette lacks. Where a pixel's ground has its own biome's, <see cref="PathLayerMap"/> wins.
+		/// The fallback path slices: x earth, y road, z cobbles (the most-covering biome's of each), −1 for one the palette
+		/// lacks. Where a pixel's ground has its own biome's earth, road or cobbles, <see cref="PathLayerMap"/> wins (the
+		/// cobbles have had their own map since 2026-10-15, so each biome's streets are paved with its template's Cobbles
+		/// layer; before, this one slice paved every biome's).
 		/// </summary>
 		public Vector4 PathLayers(float[] coverage)
 		{

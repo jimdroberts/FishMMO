@@ -20,6 +20,7 @@ Shader "Hidden/FishMMO/RockSdf"
         {
             Name "RockSdf"
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 4.5

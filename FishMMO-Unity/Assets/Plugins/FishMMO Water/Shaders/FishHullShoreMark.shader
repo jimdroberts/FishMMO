@@ -44,6 +44,7 @@ Shader "FishMMO/Water/Hull Shore Mark"
             }
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
             // Drawn as the hull is: by the GPU resident drawer where it takes the hull (the mark sits in the hull's LOD

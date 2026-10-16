@@ -23,6 +23,23 @@ namespace FishMMO.Shared.Biomes
 		[MinMaxRange(0f, 1f)]
 		public MinMaxRange cliffHeightRange = new MinMaxRange(0.2f, 1f);
 
+		/// <summary>What <see cref="rockType"/> holds for a cliff whose faces stay painted terrain: soil banks, sand, sulphur.</summary>
+		public const string NoRock = "None";
+
+		/// <remarks>
+		/// What the scene cut stands on this layer's faces: the cliff rocks are this type's pieces, and where the planet's
+		/// geology under them is a rock the biome accepts (<see cref="BiomeTemplate.AcceptedRocks"/>) they are the
+		/// geology's instead. Ice keeps its ice. The first of a biome's cliff layers that names a rock is the one its cliffs
+		/// stand on. Written by the biome art authoring from the spec table (a rock-named family is that rock, a generic Rock
+		/// or CliffRock face the biome's own bedrock); a value typed here is kept.
+		/// </remarks>
+		[Header("Cliff Rock")]
+		[Tooltip("The rock type this cliff's faces stand in at a scene cut (Granite, Basalt, Sandstone, Limestone… or Ice), or None where the face stays painted terrain (soil banks, sand). The planet's geology replaces it where the biome accepts the geology's rock. Empty: not authored yet (the cut falls back to the old mapping and warns).")]
+		public string rockType;
+
+		/// <summary>The value the biome art authoring last wrote into <see cref="rockType"/>: while the two agree it may write again.</summary>
+		[HideInInspector] public string rockTypeAuthored;
+
 		public CliffTextureLayer()
 		{
 			useSlopeConstraint = true;
