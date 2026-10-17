@@ -252,9 +252,9 @@ namespace FishMMO.Client
 			SceneClimate.Apply(settings, timeline, timeline.WorldSecondsAt(tick));
 			// The season for foliage: from the place's own climate on the same clock, and the humidity swing the climate uses.
 			if (WorldClock.Shared.HasAnchor
-				&& SceneClimate.Foliage(settings, WorldClock.Shared.WorldHoursAt(tick), out float phase, out float growing, out float winter))
+				&& SceneClimate.Foliage(settings, WorldClock.Shared.WorldHoursAt(tick), out SceneClimate.FoliageState season))
 			{
-				WeatherShaderGlobals.ApplySeason(phase, growing, settings.RuntimeHumidityOffset, winter);
+				WeatherShaderGlobals.ApplySeason(season, settings.RuntimeHumidityOffset);
 			}
 			else
 			{

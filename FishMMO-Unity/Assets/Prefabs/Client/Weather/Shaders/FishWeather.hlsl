@@ -77,19 +77,47 @@ float4 _FishWeatherTier;
 // mean (negative = drier than usual: drought), w how hard its winter is (0 none .. 1 one that strips
 // a deciduous tree, never quite 0 once set). All zero means no season is known.
 float4 _FishSeason;
+// The season's air for plants (WeatherShaderGlobals.SeasonAir, SceneClimate.FoliageState): x °C at sea level under the
+// scene now, y the year's coldest there, z °C colder per metre up, w 1 when set. Unset, every plant takes _FishSeason's.
+float4 _FishSeasonAir;
+
+// SceneClimate.GrowthC / DormantC / StripC / LeafyC.
+#define FISH_GROWTH_C 5.0
+#define FISH_DORMANT_C 1.0
+#define FISH_STRIP_C 5.0
+#define FISH_LEAFY_C 12.0
+
+/* How warm it is for growing at a plant's height (world y, metres above the sea): −1 dormant .. 1 growing
+ * (SceneClimate.GrowingAt of the season's air cooled up to it). One figure for every plant once: the scene's at sea level,
+ * so an alpine meadow flowered and cured on the valley's dates. */
+float FishSeasonGrowing(float worldY)
+{
+    float t = _FishSeasonAir.x - max(0.0, worldY) * _FishSeasonAir.z;
+    float growing = clamp(t >= FISH_GROWTH_C ? (t - FISH_GROWTH_C) / 10.0 : (t - FISH_GROWTH_C) / (FISH_GROWTH_C - FISH_DORMANT_C), -1.0, 1.0);
+    return _FishSeasonAir.w > 0.5 ? growing : _FishSeason.y;
+}
+
+// How hard the winter is at a plant's height (SceneClimate.WinterAt of the year's coldest cooled up to it): 0 none .. 1
+// strips a deciduous tree; never quite 0 once a season is known, as _FishSeason.w.
+float FishSeasonWinter(float worldY)
+{
+    float coldest = _FishSeasonAir.y - max(0.0, worldY) * _FishSeasonAir.z;
+    float winter = max(0.001, saturate((FISH_LEAFY_C - coldest) / (FISH_LEAFY_C - FISH_STRIP_C)));
+    return _FishSeasonAir.w > 0.5 ? winter : _FishSeason.w;
+}
 
 /* How far open a flower is now: 0 closed (gone over, nothing showing) .. 1 in full bloom. Flowers open once the place is
- * warm enough to grow (_FishSeason.y past 0: 5 °C, SceneClimate.Foliage) and close again as it cools, each at its own
+ * warm enough to grow (FishSeasonGrowing past 0: 5 °C at the flower's height) and close again as it cools, each at its own
  * point (`own`, 0..1, its hash) between FISH_BLOOM_FIRST and FISH_BLOOM_LAST, so a meadow comes into flower over weeks and
  * goes over the same way. A tundra whose summer barely passes 8 °C flowers only around its warmest weeks; no season known,
  * every flower is open. */
 #define FISH_BLOOM_FIRST 0.0
 #define FISH_BLOOM_LAST 0.25
 #define FISH_BLOOM_RAMP 0.05
-float FishBloom(float own)
+float FishBloom(float own, float worldY)
 {
     float opensAt = lerp(FISH_BLOOM_FIRST, FISH_BLOOM_LAST, saturate(own));
-    float open = saturate((_FishSeason.y - opensAt) / FISH_BLOOM_RAMP);
+    float open = saturate((FishSeasonGrowing(worldY) - opensAt) / FISH_BLOOM_RAMP);
     return _FishSeason.w < 1e-4 ? 1.0 : open;
 }
 
@@ -100,17 +128,38 @@ float4 _FishCoverParams;    // x 1 when the map is valid, y metres per texel
 TEXTURE2D(_FishCoverTex);
 SAMPLER(sampler_FishCoverTex);
 
-// The cover at a world position: from the map where it reaches, the scene's own figure elsewhere.
+// The seasonal snow line (WeatherCoverMap.SnowLineId, GroundCover.SnowLine): x the height the snowpack starts at, y where
+// it is whole (world y), z 1 while snow may lie anywhere in view, w how much of a cold enough place it covers (0: none).
+float4 _FishSnowLine;
+
+// The season's snowpack at a height, 0..1: what lies past the cover map, where the map's own bands (each its own climate,
+// altitude and all) do not reach. A distant range stands white above its snow line.
+float FishSnowpackAt(float worldY)
+{
+    return _FishSnowLine.w * saturate((worldY - _FishSnowLine.x) / max(1e-3, _FishSnowLine.y - _FishSnowLine.x));
+}
+
+// Whether snow may lie anywhere in view: the scene's own figure, the map's, or ground reaching the snow line. What the snow
+// lift and the ground's snow blend are gated on; the scene's own figure alone shut them off under snow-capped peaks.
+bool FishSnowAnywhere()
+{
+    return _FishWeatherCover.x > 0.0 || _FishSnowLine.z > 0.5;
+}
+
+// The cover at a world position: from the map where it reaches, the scene's own figure elsewhere, with the season's
+// snowpack by height over it.
 float4 FishCoverAt(float3 worldPos)
 {
+    float4 scene = _FishWeatherCover;
+    scene.x = max(scene.x, FishSnowpackAt(worldPos.y));
     if (_FishCoverParams.x < 0.5)
     {
-        return _FishWeatherCover;
+        return scene;
     }
     float2 uv = (worldPos.xz - _FishCoverRect.xy) / max(_FishCoverRect.zw, 1e-3);
     if (any(uv < 0.0) || any(uv > 1.0))
     {
-        return _FishWeatherCover;
+        return scene;
     }
     return SAMPLE_TEXTURE2D_LOD(_FishCoverTex, sampler_FishCoverTex, uv, 0);
 }

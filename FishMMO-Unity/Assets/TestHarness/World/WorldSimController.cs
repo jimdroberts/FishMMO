@@ -772,13 +772,16 @@ namespace FishMMO.TestHarness.World
 			/* And the season foliage shows, from the place's climate on the bed's clock: in the game ClientWeather publishes
 			 * it, but the bed presents its own weather, so without this the shaders never had a season and the season
 			 * buttons left grass, flowers and leaves as they were (healthy, in bloom, in leaf). */
-			FoliageKnown = SceneClimate.Foliage(Settings, Hours, out float phase, out float growing, out float winter, out float celsius);
-			FoliageGrowing = growing;
-			FoliageWinter = winter;
-			FoliageCelsius = celsius;
+			FoliageKnown = SceneClimate.Foliage(Settings, Hours, out SceneClimate.FoliageState season);
+			Foliage = season;
+			// At the camera's height: what the plants round it read (each its own height's, FishSeasonGrowing).
+			float here = Camera != null ? Camera.transform.position.y : 0f;
+			FoliageCelsius = season.CelsiusAt(here);
+			FoliageGrowing = SceneClimate.GrowingAt(FoliageCelsius);
+			FoliageWinter = SceneClimate.WinterAt(season.ColdestCelsius - Mathf.Max(0f, here) * season.CoolingPerMetre);
 			if (FoliageKnown)
 			{
-				WeatherShaderGlobals.ApplySeason(phase, growing, Settings.RuntimeHumidityOffset, winter);
+				WeatherShaderGlobals.ApplySeason(season, Settings.RuntimeHumidityOffset);
 			}
 			else
 			{
@@ -789,14 +792,32 @@ namespace FishMMO.TestHarness.World
 		/// <summary>Whether the plants were given a season (<see cref="SceneClimate.Foliage(WorldSceneSettings, double, out float, out float, out float, out float)"/>).</summary>
 		public bool FoliageKnown { get; private set; }
 
-		/// <summary>The season the plants were given: −1 dormant … 1 growing.</summary>
+		/// <summary>The season the plants were given, at sea level, with the cooling up from it.</summary>
+		public SceneClimate.FoliageState Foliage { get; private set; }
+
+		/// <summary>The season at the camera's height: −1 dormant … 1 growing.</summary>
 		public float FoliageGrowing { get; private set; }
 
-		/// <summary>How hard the place's winter is: 0 none … 1 strips a deciduous tree.</summary>
+		/// <summary>How hard the winter is at the camera's height: 0 none … 1 strips a deciduous tree.</summary>
 		public float FoliageWinter { get; private set; }
 
-		/// <summary>The air's temperature the plants' season was read from, °C (the season's, no day or weather).</summary>
+		/// <summary>The season's air at the camera's height, °C (no day or weather): what the plants round it read.</summary>
 		public float FoliageCelsius { get; private set; }
+
+		/// <summary>
+		/// Where the season's snowpack lies now (<see cref="GroundCover.SnowLine"/>): false with none. The heights are world y,
+		/// metres above the sea: where it starts and where it is whole.
+		/// </summary>
+		public bool SnowLine(out float startY, out float wholeY)
+		{
+			startY = wholeY = 0f;
+			if (timeline == null || Settings == null)
+			{
+				return false;
+			}
+			GroundCover.Forcing forcing = GroundCover.ForcingAt(timeline, Settings, gameObject.scene, GroundCover.StepOf(timeline.WorldSecondsAt(Tick)));
+			return GroundCover.SnowLine(forcing, out startY, out wholeY, out _);
+		}
 
 		/// <summary>
 		/// Starts a storm of a kind upwind, drifting over the camera — or, <paramref name="overhead"/>,

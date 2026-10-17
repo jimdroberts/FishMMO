@@ -282,7 +282,7 @@ float FishGroundSurfaceY(int tile, float2 t, float3 positionWS, float3 groundNor
 {
     float y = FishGroundHeightAt(tile, t);
 #if defined(FISHMMO_SURFACE_INCLUDED)
-    if (_FishGroundBlend.w > 0.0 && _FishWeatherTier.x > 0.0 && _FishWeatherCover.x > 0.0)
+    if (_FishGroundBlend.w > 0.0 && _FishWeatherTier.x > 0.0 && FishSnowAnywhere())
     {
         float3 at = float3(positionWS.x, y, positionWS.z);
         y += FishSnowLiftMetres(at, groundNormal, _FishGroundBlend.w);

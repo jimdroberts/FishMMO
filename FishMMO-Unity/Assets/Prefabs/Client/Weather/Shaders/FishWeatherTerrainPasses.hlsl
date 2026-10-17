@@ -321,7 +321,7 @@ Varyings SplatmapVert(Attributes v)
 
     // ── FishMMO edit 2 of 3: deep snow lifts the ground it lies on. Off unless the quality tier
     // asks for it (_FishSnowDepth is 0 below High), and only where the sky can reach. ──
-    if (_FishSnowDepth > 0.0 && _FishWeatherTier.x > 0.0 && _FishWeatherCover.x > 0.0)
+    if (_FishSnowDepth > 0.0 && _FishWeatherTier.x > 0.0 && FishSnowAnywhere())
     {
         float3 snowWorld = TransformObjectToWorld(v.positionOS.xyz);
         float3 snowNormal = TransformObjectToWorldNormal(v.normalOS);

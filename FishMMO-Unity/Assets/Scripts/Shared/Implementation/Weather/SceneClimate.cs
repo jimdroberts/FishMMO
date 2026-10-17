@@ -156,10 +156,63 @@ namespace FishMMO.Shared.Weather
 		/// <summary><see cref="Foliage(WorldSceneSettings, double, out float, out float, out float)"/>, with the air's temperature it read the season from, °C.</summary>
 		public static bool Foliage(WorldSceneSettings settings, double worldHours, out float phase01, out float growing, out float winter, out float celsius)
 		{
-			celsius = 0f;
-			phase01 = 0f;
-			growing = 0f;
-			winter = 0f;
+			bool known = Foliage(settings, worldHours, out FoliageState state);
+			phase01 = state.Phase01;
+			growing = state.Growing;
+			winter = state.Winter;
+			celsius = state.Celsius;
+			return known;
+		}
+
+		/// <summary>Plants grow above this, °C, and go dormant below it.</summary>
+		public const float GrowthC = 5f;
+		/// <summary>Wholly dormant at and below this, °C.</summary>
+		public const float DormantC = 1f;
+		/// <summary>A coldest month at or below this, °C, strips a deciduous tree.</summary>
+		public const float StripC = 5f;
+		/// <summary>A coldest month at or above this, °C, keeps broadleaves in leaf all year.</summary>
+		public const float LeafyC = 12f;
+
+		/// <summary>How warm it is for growing at <paramref name="celsius"/>: −1 dormant … 1 growing. FishWeather.hlsl FishSeasonGrowing mirrors it.</summary>
+		public static float GrowingAt(float celsius)
+		{
+			return Mathf.Clamp(celsius >= GrowthC ? (celsius - GrowthC) / 10f : (celsius - GrowthC) / (GrowthC - DormantC), -1f, 1f);
+		}
+
+		/// <summary>How hard a winter whose coldest month is <paramref name="coldestCelsius"/> is: 0 none … 1 strips a deciduous tree. FishSeasonWinter mirrors it.</summary>
+		public static float WinterAt(float coldestCelsius) => Mathf.Clamp01((LeafyC - coldestCelsius) / (LeafyC - StripC));
+
+		/// <summary>
+		/// The season for plants at sea level under a scene, and how fast the air cools above it: what the shaders work each
+		/// plant's own season out from at its own height (<see cref="FishMMO.Shared.Weather.SceneClimate.GrowingAt"/>).
+		/// </summary>
+		public struct FoliageState
+		{
+			/// <summary>How far through its thermal year the place is: 0 its coldest point, 0.5 its warmest.</summary>
+			public float Phase01;
+			/// <summary><see cref="GrowingAt"/> of <see cref="Celsius"/>: the season at sea level.</summary>
+			public float Growing;
+			/// <summary><see cref="WinterAt"/> of <see cref="ColdestCelsius"/>.</summary>
+			public float Winter;
+			/// <summary>The season's air at sea level under the scene now, °C (no day, no weather).</summary>
+			public float Celsius;
+			/// <summary>The year's coldest point there, °C.</summary>
+			public float ColdestCelsius;
+			/// <summary>How much colder each metre up is, °C (the body's lapse rate; 0 with no air).</summary>
+			public float CoolingPerMetre;
+
+			/// <summary>The air's season at a height (world y, metres above the sea), °C.</summary>
+			public float CelsiusAt(float worldY) => Celsius - Mathf.Max(0f, worldY) * CoolingPerMetre;
+		}
+
+		/// <summary>
+		/// <see cref="Foliage(WorldSceneSettings, double, out float, out float, out float)"/> as a temperature at sea level
+		/// and a lapse rate, so each plant reads its own height's season: an alpine meadow flowers weeks after the valley and
+		/// goes over weeks before it, and a peak's dwarf willow stands bare while the lowland's is still in leaf.
+		/// </summary>
+		public static bool Foliage(WorldSceneSettings settings, double worldHours, out FoliageState state)
+		{
+			state = default;
 			SolarSystemProfile system = SolarSystemProfile.Active;
 			WorldBody body = SceneTime.BodyOf(settings);
 			PlanetClimateTable table = system != null && body != null ? PlanetClimateTable.For(system, body) : null;
@@ -170,18 +223,19 @@ namespace FishMMO.Shared.Weather
 			double latitude = settings.ClimateLatitude;
 			ScenePlacementClimate placement = settings.PlacementClimate;
 			float continentality = placement != null ? placement.CentreContinentality : 0.5f;
-			// The place's own year: the scene's centre on the ground, mean and season.
+			// The place's own year at sea level under the scene's centre (a generated scene reads world y as altitude), mean and season.
 			float annual = settings.SampleClimateAt(Vector3.zero, 0.5f, out _, 0f, 0f).KelvinOrScale;
 			float now = annual + table.SeasonKelvin(latitude, worldHours, continentality);
 			table.Extremes(latitude, continentality, out float warmest, out float coldest);
 			float shift = annual - table.AnnualKelvin(latitude, continentality);
 			float coldestC = coldest + shift - 273.15f;
-			const float GrowthC = 5f, DormantC = 1f, StripC = 5f, LeafyC = 12f;
 			float nowC = now - 273.15f;
-			celsius = nowC;
-			growing = Mathf.Clamp(nowC >= GrowthC ? (nowC - GrowthC) / 10f : (nowC - GrowthC) / (GrowthC - DormantC), -1f, 1f);
-			winter = Mathf.Clamp01((LeafyC - coldestC) / (LeafyC - StripC));
-			phase01 = Mathf.Repeat((table.PhaseAt(worldHours) - table.ColdestPhase(latitude, continentality)) / PlanetClimateTable.Phases, 1f);
+			state.Celsius = nowC;
+			state.ColdestCelsius = coldestC;
+			state.Growing = GrowingAt(nowC);
+			state.Winter = WinterAt(coldestC);
+			state.CoolingPerMetre = (float)ClimateModel.LapseRatePerMetre(system, body);
+			state.Phase01 = Mathf.Repeat((table.PhaseAt(worldHours) - table.ColdestPhase(latitude, continentality)) / PlanetClimateTable.Phases, 1f);
 			return true;
 		}
 

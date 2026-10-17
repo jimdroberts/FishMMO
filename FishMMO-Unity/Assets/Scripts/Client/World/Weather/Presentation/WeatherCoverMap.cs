@@ -56,6 +56,12 @@ namespace FishMMO.Client
 		public static readonly int ParamsId = Shader.PropertyToID("_FishCoverParams");
 		public static readonly int DepthTextureId = Shader.PropertyToID("_FishSnowDepthTex");
 		public static readonly int DepthParamsId = Shader.PropertyToID("_FishSnowDepthParams");
+		/// <summary>
+		/// The seasonal snow line (GroundCover.SnowLine) for what lies past the map: x the height the pack starts at, y where
+		/// it is whole (world y), z 1 while snow may lie anywhere in view (the map's own, or terrain reaching the line: the
+		/// gate the snow lift and the ground's snow blend take), w how much of a cold enough place it covers (0: no line).
+		/// </summary>
+		public static readonly int SnowLineId = Shader.PropertyToID("_FishSnowLine");
 
 		/// <summary>Milliseconds a frame spends working storm-reached texels in.</summary>
 		public const float BudgetMilliseconds = 3f;
@@ -128,6 +134,12 @@ namespace FishMMO.Client
 
 		private bool held;
 		private WeatherCover heldCover;
+		// The snow line now (GroundCover.SnowLine), the most snow on the map at its last draw, and the scene's highest ground.
+		private bool lineOn;
+		private float lineStart, lineWhole, lineShare;
+		private float mapMostSnow;
+		private Scene topScene;
+		private float terrainTop = float.PositiveInfinity;
 		private float heldDepth;
 
 		// The batch of storm-reached texels being worked out on workers: their indices in queue order, what they read,
@@ -184,12 +196,14 @@ namespace FishMMO.Client
 			seenSnaps = WeatherClient.Snaps;
 			if (held)
 			{
+				lineOn = false;
 				Publish();
 				return;
 			}
 			if (timeline == null)
 			{
 				valid = false;
+				lineOn = false;
 				Publish();
 				return;
 			}
@@ -230,6 +244,7 @@ namespace FishMMO.Client
 				}
 			}
 
+			lineOn = GroundCover.SnowLine(Forcing(g), out lineStart, out lineWhole, out lineShare);
 			// The snap's batch is waited for, so the ground lands with the rest of the weather; any other runs on until the
 			// next frame.
 			WorkPending(snap ? SnapBudgetMilliseconds : BudgetMilliseconds, snap);
@@ -330,8 +345,11 @@ namespace FishMMO.Client
 		public void Clear()
 		{
 			valid = false;
+			lineOn = false;
+			mapMostSnow = 0f;
 			Shader.SetGlobalVector(ParamsId, Vector4.zero);
 			Shader.SetGlobalVector(DepthParamsId, Vector4.zero);
+			Shader.SetGlobalVector(SnowLineId, Vector4.zero);
 		}
 
 		public void Dispose()
@@ -1193,6 +1211,7 @@ namespace FishMMO.Client
 				sharedPixels[b] = Encode(shared.Cover);
 				sharedDepths[b] = EncodeDepth(shared.Depth, depthMax);
 			}
+			byte most = 0;
 			for (int i = 0; i < pixels.Length; i++)
 			{
 				if (state[i] == TexelState.Own)
@@ -1206,7 +1225,9 @@ namespace FishMMO.Client
 					pixels[i] = sharedPixels[band[i]];
 					depthPixels[i] = sharedDepths[band[i]];
 				}
+				most = pixels[i].r > most ? pixels[i].r : most;
 			}
+			mapMostSnow = most / 255f;
 			Upload();
 		}
 
@@ -1218,6 +1239,7 @@ namespace FishMMO.Client
 		{
 			Color32 pixel = Encode(heldCover);
 			byte depthByte = EncodeDepth(heldDepth, depthMax);
+			mapMostSnow = Mathf.Clamp01(heldCover.Snow);
 			for (int i = 0; i < pixels.Length; i++)
 			{
 				pixels[i] = pixel;
@@ -1297,6 +1319,42 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(ParamsId, new Vector4(valid ? 1f : 0f, texel, 0f, 0f));
 			Shader.SetGlobalTexture(DepthTextureId, depthTexture);
 			Shader.SetGlobalVector(DepthParamsId, new Vector4(valid ? depthMax : 0f, 0f, 0f, 0f));
+			bool line = lineOn && lineShare > 0f;
+			bool anywhere = (valid && mapMostSnow > 0f) || (line && TerrainTop() > lineStart);
+			Shader.SetGlobalVector(SnowLineId, new Vector4(lineStart, lineWhole, anywhere ? 1f : 0f, line ? lineShare : 0f));
 		}
+
+		/// <summary>The highest ground of the map's scene, world y (its terrains' tops): whether any of it reaches the snow line.</summary>
+		/// <remarks>Looked over again every <see cref="TerrainTopSeconds"/> (terrains stream in); +∞ while none is found, so the gate stays open rather than shut.</remarks>
+		private float TerrainTop()
+		{
+			float now = Time.realtimeSinceStartup;
+			if (topScene != scene || now >= terrainTopAt)
+			{
+				topScene = scene;
+				terrainTopAt = now + TerrainTopSeconds;
+				terrainTop = float.PositiveInfinity;
+				float top = float.NegativeInfinity;
+				Terrain.GetActiveTerrains(terrains);
+				foreach (Terrain terrain in terrains)
+				{
+					if (terrain != null && terrain.terrainData != null && terrain.gameObject.scene == scene)
+					{
+						top = Mathf.Max(top, terrain.GetPosition().y + terrain.terrainData.bounds.max.y);
+					}
+				}
+				terrains.Clear();
+				if (!float.IsNegativeInfinity(top))
+				{
+					terrainTop = top;
+				}
+			}
+			return terrainTop;
+		}
+
+		/// <summary>Real seconds between looks at the scene's highest ground.</summary>
+		private const float TerrainTopSeconds = 2f;
+		private float terrainTopAt;
+		private readonly List<Terrain> terrains = new List<Terrain>();
 	}
 }

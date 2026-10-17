@@ -448,7 +448,7 @@ namespace FishMMO.TestHarness.World
 			var pair = new VisualElement();
 			pair.AddToClassList("ws-card-pair");
 			pair.Add(Card("Clock", false,
-				("clock.time", "Time"), ("clock.date", "Date"), ("clock.season", "Season"), ("clock.plants", "Plants"), ("clock.hours", "World hours"), ("clock.rate", "Rate")));
+				("clock.time", "Time"), ("clock.date", "Date"), ("clock.season", "Season"), ("clock.plants", "Plants here"), ("clock.snowline", "Snow line"), ("clock.hours", "World hours"), ("clock.rate", "Rate")));
 			pair.Add(Card("Sun & sky", false,
 				("sky.sun", "Sun"), ("sky.stars", "Stars"), ("sky.meteors", "Meteors"), ("sky.eclipse", "Eclipse"), ("sky.aurora", "Aurora")));
 			stats.Add(pair);
@@ -1187,6 +1187,9 @@ namespace FishMMO.TestHarness.World
 			Stat("clock.plants", Controller.FoliageKnown
 				? $"{Controller.FoliageCelsius.ToString("0.0", culture)} °C · {GrowthWords(Controller.FoliageGrowing)} · flowers {FlowersOpen(Controller.FoliageGrowing).ToString("0%", culture)} open · leaf drop {Controller.FoliageWinter.ToString("0.00", culture)}"
 				: "no season (the shaders show summer)", Controller.FoliageKnown ? null : "warn");
+			Stat("clock.snowline", Controller.SnowLine(out float snowStart, out float snowWhole)
+				? $"starts {snowStart.ToString("0", culture)} m · whole {snowWhole.ToString("0", culture)} m{(Controller.Camera != null ? $" · you are at {Controller.Camera.transform.position.y.ToString("0", culture)} m" : string.Empty)}"
+				: "no snowpack (no air, or no season)", null);
 			Stat("clock.hours", Controller.Hours.ToString("0.00", culture));
 			Stat("clock.rate", Controller.Paused ? "held" : WorldTimeText.Pace(Controller.Rate), Controller.Paused ? "dim" : null);
 

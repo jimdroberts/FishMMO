@@ -187,7 +187,7 @@ void FishSnowLift(inout float4 positionOS, float3 normalOS)
 {
     // FishMMO edit: off unless the quality tier asks for it (_FishSnowDepth is 0 below High), and only
     // where the sky can reach.
-    if (_FishSnowDepth > 0.0 && _FishWeatherTier.x > 0.0 && _FishWeatherCover.x > 0.0)
+    if (_FishSnowDepth > 0.0 && _FishWeatherTier.x > 0.0 && FishSnowAnywhere())
     {
         float3 snowWorld = TransformObjectToWorld(positionOS.xyz);
         float3 snowNormal = TransformObjectToWorldNormal(normalOS);

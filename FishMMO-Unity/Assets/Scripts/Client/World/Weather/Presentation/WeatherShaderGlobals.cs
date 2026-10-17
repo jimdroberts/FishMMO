@@ -33,6 +33,8 @@ namespace FishMMO.Client
 		/// it to dry, brown, turn and drop its leaves.
 		/// </summary>
 		public static readonly int Season = Shader.PropertyToID("_FishSeason");
+		/// <summary>The season's air for plants: x °C at sea level now, y the year's coldest there, z °C colder per metre up, w 1 when set (FishWeather.hlsl).</summary>
+		public static readonly int SeasonAir = Shader.PropertyToID("_FishSeasonAir");
 		/// <summary>The wind held for each window of the shared motion clock (FishWeather.hlsl's _FishWindHold).</summary>
 		private static readonly int WindWay = Shader.PropertyToID("_FishWindWay");
 		/// <summary>Where the scene air's carried distance wraps before a shader's float sees it, m: a hundred kilometres, to a centimetre.</summary>
@@ -119,12 +121,25 @@ namespace FishMMO.Client
 		{
 			Shader.SetGlobalVector(Season, new Vector4(Mathf.Repeat(yearPhase01, 1f), Mathf.Clamp(growing, -1f, 1f),
 				Mathf.Clamp(humidityOffset, -1f, 1f), Mathf.Max(0.001f, Mathf.Clamp01(winter))));
+			// One season for every plant, whatever its height.
+			Shader.SetGlobalVector(SeasonAir, Vector4.zero);
+		}
+
+		/// <summary>
+		/// Publishes the season as the scene's (<see cref="ApplySeason(float, float, float, float)"/>, at sea level) and as its
+		/// air (<see cref="SeasonAir"/>), so each plant works its own height's season out (FishSeasonGrowing, FishSeasonWinter).
+		/// </summary>
+		public static void ApplySeason(in SceneClimate.FoliageState state, float humidityOffset)
+		{
+			ApplySeason(state.Phase01, state.Growing, humidityOffset, state.Winter);
+			Shader.SetGlobalVector(SeasonAir, new Vector4(state.Celsius, state.ColdestCelsius, Mathf.Max(0f, state.CoolingPerMetre), 1f));
 		}
 
 		/// <summary>No season known: foliage shows its healthy colours.</summary>
 		public static void ClearSeason()
 		{
 			Shader.SetGlobalVector(Season, Vector4.zero);
+			Shader.SetGlobalVector(SeasonAir, Vector4.zero);
 		}
 
 		/// <summary>Calm, dry, clear.</summary>

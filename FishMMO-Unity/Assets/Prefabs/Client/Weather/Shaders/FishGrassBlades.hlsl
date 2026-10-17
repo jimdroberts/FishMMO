@@ -227,7 +227,7 @@ float3 GrassSeasonTint(float3 rootWS, float4 healthy, float4 dryTint, float own,
     float known = step(1e-4, _FishSeason.w);
     float drought = saturate(-_FishSeason.z * 3.0);
     float dry = saturate(variation * healthy.a + drought * known);
-    cure = saturate(-_FishSeason.y) * known;
+    cure = saturate(-FishSeasonGrowing(rootWS.y)) * known;
     return lerp(healthy.rgb, dryTint.rgb, dry);
 }
 
@@ -454,7 +454,7 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
             size *= clamp(FishFloraSwell(root.xz, GRASS_FLORA_HEADSIZE_SWELL, GRASS_FLORA_HEADSIZE_SALT), GRASS_FLORA_MIN_BLOOM, GRASS_FLORA_MAX_BLOOM);
             // Only in its season (FishBloom): out of it the head closes to nothing and the stem stands bare. A clump's
             // flowers open close together, each a little on its own.
-            size *= FishBloom(0.6 * clumpColour + 0.4 * GrassUnitV(GrassMixV(h0 ^ 0x1B873593u)));
+            size *= FishBloom(0.6 * clumpColour + 0.4 * GrassUnitV(GrassMixV(h0 ^ 0x1B873593u)), root.y);
             float3 along = float3(cos(facingAngle), 0.0, sin(facingAngle));
             float3 aside = float3(-along.z, 0.0, along.x);
             axisA = lerp(along, aside, second) * size;
@@ -538,7 +538,7 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
             colour = lerp(colour, FishFloraRecolour(colour, look.accent, 1.0), 0.35 * saturate(_FishFloraStrength.z));
         }
         float known = step(1e-4, _FishSeason.w);
-        float dormant = saturate(-_FishSeason.y) * 0.7 * known;
+        float dormant = saturate(-FishSeasonGrowing(root.y)) * 0.7 * known;
         colour = lerp(colour, dot(colour, lumWeights) * float3(0.75, 0.62, 0.45), dormant);
     }
     else if (terrain.a > 0.5)

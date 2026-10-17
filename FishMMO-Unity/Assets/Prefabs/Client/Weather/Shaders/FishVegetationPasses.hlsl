@@ -210,13 +210,15 @@ half4 VegSeasonTint(float3 originWS)
         return half4(_HealthyColor.rgb, 0.0);
     }
     float variation = VegTintVariation(originWS);
-    float strength = _FishSeason.w;
-    float known = step(1e-4, strength);
+    // The season at the plant's own height (FishSeasonGrowing, FishSeasonWinter): the same species bare on the ridge
+    // and still in leaf in the valley.
+    float strength = FishSeasonWinter(originWS.y);
+    float known = step(1e-4, _FishSeason.w);
     float phase = _FishSeason.x;
 
     // Winter browns what grows; a drier year than usual browns it more, and does so in any season. An evergreen tree or
     // shrub (pine, spruce, holly, heather) keeps its leaves green through the winter: only a little of the dormancy.
-    float dormant = saturate(-_FishSeason.y) * 0.7 * (1.0 - 0.8 * _Evergreen);
+    float dormant = saturate(-FishSeasonGrowing(originWS.y)) * 0.7 * (1.0 - 0.8 * _Evergreen);
     float drought = saturate(-_FishSeason.z * 3.0);
     // _TintSpread is how far apart neighbours start (Unity's "noise spread"): 0 all alike, 1 the
     // whole healthy-to-dry range across a patch.
@@ -401,7 +403,7 @@ half4 VegFloraColour(FishFloraLook look, half alpha, float kind, float3 originWS
     }
     if (alpha > 0.15h)
     {
-        half open = (half)FishBloom(VegRandom(VegPlantKey(originWS), 16u));
+        half open = (half)FishBloom(VegRandom(VegPlantKey(originWS), 16u), originWS.y);
         return half4(lerp(VEG_WITHERED, (half3)look.bloom, open), lerp(1.0h, (half)_FishFloraStrength.y, open));
     }
     half wood = kind > 0.5 && kind < 2.5 ? 0.5h : 1.0h;

@@ -117,6 +117,16 @@ namespace FishMMO.Shared.Weather
 			public float Temperature;
 			public float Sunlight;
 			public bool HasWeather;
+			/// <summary>The area middle's seasonal snowpack temperature, climate scale (<see cref="Snowpack"/>); NaN with none.</summary>
+			public float PackTemperature = float.NaN;
+			/// <summary>How much of a cold enough place a pack covers, by how wet the climate is (0.35 arid … 1).</summary>
+			public float PackShare;
+			/// <summary>The area middle's own climate (the year's, at its ground), climate scale.</summary>
+			public float PackMiddle;
+			/// <summary>The sea-level climate under the area's middle, climate scale (<see cref="SnowLine"/>).</summary>
+			public float PackSeaLevel;
+			/// <summary>How fast the climate cools with height, climate scale per metre; 0 with no air to cool.</summary>
+			public float PackLapse;
 			public StormFrames Storms;
 			public readonly List<StormCell> Cells = new List<StormCell>();
 		}
@@ -143,6 +153,10 @@ namespace FishMMO.Shared.Weather
 				forcing.HasWeather = true;
 				forcing.Storms = new StormFrames(forcing.Around);
 				StormSchedule.CellsBetween(timeline, settings, scene, seconds, seconds, forcing.Cells);
+				if (forcing.Around.Planet.HasAir)
+				{
+					PackAt(cache, timeline, settings, seconds, forcing);
+				}
 				for (int i = 0; i < timeline.Cells.Count; i++)
 				{
 					StormCell cell = timeline.Cells[i];
@@ -240,6 +254,21 @@ namespace FishMMO.Shared.Weather
 				next.Depth = WeatherCover.AdvanceDeepSnow(track.Depth, next.Cover.Snow, frame, temperature, (float)StepSeconds,
 					forcing.Sunlight, deep.MaxMetres, deep.Hours);
 			}
+			return Packed(next, forcing, deep, temperatureOffset);
+		}
+
+		/// <summary>The same at a place <paramref name="temperatureOffset"/> from the area's middle, with the seasonal snowpack floored in.</summary>
+		private static CoverTrack Packed(CoverTrack next, Forcing forcing, in DeepSnow deep, float temperatureOffset)
+		{
+			float pack = Snowpack(forcing, temperatureOffset);
+			if (pack > 0f)
+			{
+				next.Cover.Snow = Mathf.Max(next.Cover.Snow, pack);
+				if (deep.MaxMetres > 0f)
+				{
+					next.Depth = Mathf.Max(next.Depth, deep.MaxMetres * pack * pack);
+				}
+			}
 			return next;
 		}
 
@@ -253,7 +282,98 @@ namespace FishMMO.Shared.Weather
 			{
 				track.Cover.Snow = Mathf.Clamp01(Mathf.InverseLerp(-0.1f, -0.3f, atStart.Temperature + temperatureOffset));
 			}
-			return track;
+			return Packed(track, atStart, default, temperatureOffset);
+		}
+
+		// ── The seasonal snowpack ──────────────────────────────────────
+
+		/// <summary>The seasonal temperature (climate scale, +1 °C) above which no pack lies.</summary>
+		public const float PackWarm = (float)(1.0 / ClimateModel.KelvinPerUnit);
+		/// <summary>The seasonal temperature (climate scale, −2 °C) at and below which the pack is whole.</summary>
+		public const float PackCold = (float)(-2.0 / ClimateModel.KelvinPerUnit);
+		/// <summary>The share of the year the pack's temperature is averaged over: it builds and lingers about a month behind the air.</summary>
+		public const double PackMemoryYears = 1.0 / 12.0;
+		/// <summary>Moments the pack's temperature is averaged over, the step's own the last.</summary>
+		public const int PackSamples = 6;
+
+		/// <summary>
+		/// The snow a place keeps through its cold season, 0..1, whatever the hour does: where the seasonal temperature there
+		/// (<see cref="Forcing.PackTemperature"/>, the area middle's, plus the place's <paramref name="temperatureOffset"/>:
+		/// its altitude, latitude and how inland) has stood below freezing for weeks.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Why the ground needed it (2026-10-16).</b> The ground remembers six hours (<see cref="MemorySeconds"/>), and its
+		/// prior is the hour's air, so a peak's snow came and went with the day: the afternoon's warmth took a mountain's
+		/// snowfield in a few hours, as it takes a dusting off a road, and no snow line ever stood on the hills. A snowpack is
+		/// a season's snowfall: it lies where the season is cold, from the season (the climate table's, sun-driven and
+		/// lagged, as the plants read it: <see cref="SceneClimate.Foliage(WorldSceneSettings, double, out float, out float, out float)"/>),
+		/// averaged over the month before, so it builds after the cold comes and goes after the thaw. The hour still lays
+		/// fresh snow over it and melts that; it never takes the pack.
+		/// </para>
+		/// <para>Whole at −2 °C, none above +1 °C (about 450 m of slope on an Earth-like world), and thinner in a dry climate.</para>
+		/// </remarks>
+		public static float Snowpack(Forcing forcing, float temperatureOffset)
+		{
+			if (float.IsNaN(forcing.PackTemperature))
+			{
+				return 0f;
+			}
+			return Mathf.Clamp01(Mathf.InverseLerp(PackWarm, PackCold, forcing.PackTemperature + temperatureOffset)) * forcing.PackShare;
+		}
+
+		/// <summary>
+		/// The heights (world y, metres above the sea) where the pack starts (<paramref name="startY"/>) and is whole
+		/// (<paramref name="wholeY"/>) under the area's middle: what lies past the cover map, read by height alone. False with no pack.
+		/// </summary>
+		public static bool SnowLine(Forcing forcing, out float startY, out float wholeY, out float share)
+		{
+			startY = wholeY = 0f;
+			share = 0f;
+			if (float.IsNaN(forcing.PackTemperature) || forcing.PackLapse <= 0f || forcing.PackShare <= 0f)
+			{
+				return false;
+			}
+			// The middle's seasonal temperature at sea level, cooled by the lapse up to each threshold.
+			float season = forcing.PackTemperature - forcing.PackMiddle + forcing.PackSeaLevel;
+			startY = (season - PackWarm) / forcing.PackLapse;
+			wholeY = (season - PackCold) / forcing.PackLapse;
+			share = forcing.PackShare;
+			return true;
+		}
+
+		/// <summary>The step's snowpack figures (<see cref="Snowpack"/>), from the area middle's climate and the season. Main thread.</summary>
+		private static void PackAt(Cache cache, WeatherTimeline timeline, WorldSceneSettings settings, double seconds, Forcing forcing)
+		{
+			if (settings == null)
+			{
+				return;
+			}
+			if (float.IsNaN(cache.PackMiddle))
+			{
+				Vector2 c = timeline.Area.width > 0f ? timeline.Area.center : Vector2.zero;
+				ClimateSample middle = BiomeSampler.Read(new Vector3(c.x, 0f, c.y), settings, 0f, 0f).Climate;
+				cache.PackMiddle = (float)ClimateModel.ToScaleUnclamped(middle.KelvinOrScale);
+				cache.PackShare = Mathf.Lerp(0.35f, 1f, Mathf.Clamp01(middle.Humidity + 1f));
+				cache.PackSeaLevel = (float)ClimateModel.ToScaleUnclamped(settings.SampleClimateAt(new Vector3(c.x, 0f, c.y), 0.5f, out _, 0f, 0f).KelvinOrScale);
+				SolarSystemProfile system = SolarSystemProfile.Active;
+				WorldBody body = timeline.BodyOverride != null ? timeline.BodyOverride : SceneTime.BodyOf(settings);
+				cache.PackLapse = system != null && body != null ? (float)(ClimateModel.LapseRatePerMetre(system, body) / ClimateModel.KelvinPerUnit) : 0f;
+				cache.PackYearSeconds = system != null ? CelestialMath.YearHours(system) * 3600.0 : 365.25 * 86400.0;
+			}
+			// The season, averaged over the month before the step: the pack lags the air it falls from and melts in.
+			double span = cache.PackYearSeconds * PackMemoryYears;
+			float season = 0f;
+			for (int k = 0; k < PackSamples; k++)
+			{
+				SceneClimate.OffsetsAt(settings, timeline, seconds - span * (PackSamples - 1 - k) / (PackSamples - 1), out float temperature, out _);
+				season += temperature;
+			}
+			forcing.PackMiddle = cache.PackMiddle;
+			forcing.PackTemperature = cache.PackMiddle + season / PackSamples;
+			forcing.PackShare = cache.PackShare;
+			forcing.PackSeaLevel = cache.PackSeaLevel;
+			forcing.PackLapse = cache.PackLapse;
 		}
 
 		// ── A place's own climate against the area's ───────────────────
@@ -331,6 +451,9 @@ namespace FishMMO.Shared.Weather
 			public AirOffsetEntry Air;
 			public long SentCells;
 			public int Version;
+			// The area middle's climate for the snowpack (GroundCover.PackAt): NaN until read, again whenever the cache resets.
+			public float PackMiddle = float.NaN, PackShare, PackSeaLevel, PackLapse;
+			public double PackYearSeconds;
 			public readonly Dictionary<long, Forcing> Steps = new Dictionary<long, Forcing>();
 		}
 
@@ -364,6 +487,7 @@ namespace FishMMO.Shared.Weather
 				cache.Body = timeline.BodyOverride;
 				cache.SentCells = sent;
 				cache.Air = air;
+				cache.PackMiddle = float.NaN;
 				cache.Version++;
 			}
 			return cache;
