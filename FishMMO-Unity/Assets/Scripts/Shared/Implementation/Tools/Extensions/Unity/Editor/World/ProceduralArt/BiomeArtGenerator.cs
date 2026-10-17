@@ -972,10 +972,11 @@ namespace FishMMO.Shared.WorldDesign
 		/// <param name="facingCamera">A tree billboard: the shader turns its quad to face the camera about the tree's up axis.</param>
 		/// <param name="groundSink">Metres the shader pushes the plant into the ground, min..max per instance (details; <see cref="DetailSinkRange"/>).</param>
 		/// <param name="tintPatchMetres">The size of the healthy/dry patches the shader browns a stand in (<c>_TintPatchMetres</c>; details take <see cref="DetailTintPatchMetres"/>).</param>
+		/// <param name="evergreen">A tree, shrub or vine that keeps its leaves green through the winter (<c>_Evergreen</c>): not a deciduous species, and not a herb or grass, which brown.</param>
 		private static void Vegetation(Material m, Texture2D map, float cutoff, bool twoSided, float sway, float flutter, float translucency,
 			Color healthy, Color dry, float tintSpread, float snowBury, bool deciduous, Texture2D normal = null, bool clip = true,
 			bool expectNormal = false, float distanceFade = FadeNone, bool facingCamera = false, Vector2 groundSink = default,
-			float tintPatchMetres = DefaultTintPatchMetres)
+			float tintPatchMetres = DefaultTintPatchMetres, bool evergreen = false)
 		{
 			m.SetTexture("_BaseMap", map);
 			m.SetColor("_BaseColor", Color.white);
@@ -995,6 +996,7 @@ namespace FishMMO.Shared.WorldDesign
 			m.SetFloat("_TintSpread", tintSpread);
 			m.SetFloat("_SnowBury", snowBury);
 			m.SetFloat("_Deciduous", deciduous ? 1f : 0f);
+			m.SetFloat("_Evergreen", evergreen ? 1f : 0f);
 			m.SetColor("_AutumnColor", new Color(1.6f, 0.8f, 0.3f, 1f));
 			m.SetFloat("_FishWeatherAmount", 1f);
 			m.SetTexture("_BumpMap", normal);
@@ -1143,7 +1145,8 @@ namespace FishMMO.Shared.WorldDesign
 					continue;
 				}
 				WriteMaterial(c, ProceduralArtCatalogue.LeavesMaterial(species.Name), veg, m =>
-					Vegetation(m, atlas, 0.5f, true, 0.35f, 0.04f, 0.6f, new Color(0.95f, 1f, 0.95f), new Color(0.8f, 0.75f, 0.55f), 0.25f, 0f, species.Deciduous, distanceFade: FadeTree));
+					Vegetation(m, atlas, 0.5f, true, 0.35f, 0.04f, 0.6f, new Color(0.95f, 1f, 0.95f), new Color(0.8f, 0.75f, 0.55f), 0.25f, 0f, species.Deciduous, distanceFade: FadeTree,
+						evergreen: !species.Deciduous));
 			}
 		}
 
@@ -1848,7 +1851,7 @@ namespace FishMMO.Shared.WorldDesign
 			// camera may see it from behind, and a culled back face would drop the tree there.
 			Material billboardMaterial = WriteMaterial(c, ProceduralArtCatalogue.BillboardMaterial(species.Name), VegetationShader, m =>
 				Vegetation(m, billboardTexture, 0.5f, true, 0.35f, 0f, 0.3f, new Color(0.95f, 1f, 0.95f), new Color(0.8f, 0.75f, 0.55f), 0.25f, 0f, species.Deciduous,
-					distanceFade: FadeTree, facingCamera: true));
+					distanceFade: FadeTree, facingCamera: true, evergreen: !species.Deciduous));
 
 			string prefix = ProceduralArtCatalogue.TreePrefab(species.Name);
 			Mesh m0 = WriteMesh(c, lod0, prefix + "_LOD0", false);

@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: RuinedTower - Keep
   m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
   Kind: 70
+  Variant: Keep
   Weight: 0.5
   DefaultBiomeWeight: 1
   BiomeWeights: []
@@ -44,13 +45,13 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506132295024651
-  - rid: 4061506132295024652
-  - rid: 4061506132295024653
+  - rid: 4061506175559009014
+  - rid: 4061506175559009015
+  - rid: 4061506175559009016
   references:
     version: 2
     RefIds:
-    - rid: 4061506132295024651
+    - rid: 4061506175559009014
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -61,12 +62,12 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506132295024652
+    - rid: 4061506175559009015
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506132295024653
+    - rid: 4061506175559009016
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 

@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: LavaTube - Den (Small)
   m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
   Kind: 47
+  Variant: Den
   Weight: 1
   DefaultBiomeWeight: 1
   BiomeWeights: []
@@ -61,30 +62,30 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506132295025233
-  - rid: 4061506132295025234
-  - rid: 4061506132295025235
+  - rid: 4061506175562416447
+  - rid: 4061506175562416448
+  - rid: 4061506175562416449
   references:
     version: 2
     RefIds:
-    - rid: 4061506132295025233
+    - rid: 4061506175562416447
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506132295025234
+    - rid: 4061506175562416448
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506132295025235
+    - rid: 4061506175562416449
       type: {class: PointOfInterestChamberFeature, ns: FishMMO.Shared.WorldDesign,
         asm: FishMMO.Shared.Tools.Editor}
       data:
         MinRadius: 3
         Features:
-        - rid: 4061506132295025236
-        - rid: 4061506132295025237
-    - rid: 4061506132295025236
+        - rid: 4061506175562416450
+        - rid: 4061506175562416451
+    - rid: 4061506175562416450
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -95,7 +96,7 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506132295025237
+    - rid: 4061506175562416451
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 5

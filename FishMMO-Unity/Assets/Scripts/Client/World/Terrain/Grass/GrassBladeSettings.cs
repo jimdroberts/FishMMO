@@ -43,6 +43,8 @@ namespace FishMMO.Client
 
 		[Tooltip("The detail-layer density (as a share of its maximum) at and above which grass grows at the FULL ring density. The scatter paints biome grass at roughly 20–40% of the maximum; read as a straight spawn chance that thinned the near field to a few dozen blades per square metre, which looked like the old clumps. Below this the field thins in proportion, so painted edges still fade.")]
 		[Range(0.05f, 1f)] public float Fullness = 0.35f;
+		[Tooltip("The coarsest candidate lattice level sprinkled species (flowers, reeds) stand on. Each level holds a quarter of the cells, so their chance per candidate is four times higher and the distance thinning keeps all of them four times further down the share. 0: they thin with the lawn from the first ring, and a flower grew out of the ground a few metres ahead of the camera. 2 (with the default rings): full count to about 75 m, where a flower head is under a pixel. A type never goes so coarse that its chance passes 1 (reeds stop at 1).")]
+		[Range(0, 3)] public int SprinkleLevel = 2;
 
 		[Header("River and lake banks")]
 		[Tooltip("How far above a river's or lake's water a blade must root, metres (each terrain's water line, cut per blade). The density maps are 2 m texels smoothed over 2 m and filled narrow creeks from both banks; this cuts the grass where the water meets the ground.")]

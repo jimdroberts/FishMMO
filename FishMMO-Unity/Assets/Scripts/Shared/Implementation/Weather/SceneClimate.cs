@@ -136,9 +136,27 @@ namespace FishMMO.Shared.Weather
 		/// winters are cold enough to need to; both are read straight off the climate table here.
 		/// </para>
 		/// <para>The phase follows the temperature, a month or two behind the sun, as the leaves do.</para>
+		/// <para>
+		/// <b>Dormancy is steeper than growth (2026-10-16).</b> One ramp of 10 K either side of 5 °C left a +3 °C winter at
+		/// −0.2, a seventh of the way to its dry colour: a mild maritime tundra stayed summer-green all year. Grass stops
+		/// growing and cures over a few degrees above freezing, so the ramp below 5 °C runs to fully dormant at 1 °C.
+		/// </para>
+		/// <para>
+		/// <b>Any real winter strips a deciduous tree (2026-10-16).</b> The winter was (5 °C − the coldest month) ÷ 10, so a
+		/// +3 °C winter stripped a fifth of an oak's leaves; but oak, birch and willow go bare in Ireland's +6 °C winters too.
+		/// It is now whole where the coldest month is 5 °C or colder, easing off to none at 12 °C, where broadleaves keep
+		/// their leaves through the year.
+		/// </para>
 		/// </remarks>
 		public static bool Foliage(WorldSceneSettings settings, double worldHours, out float phase01, out float growing, out float winter)
 		{
+			return Foliage(settings, worldHours, out phase01, out growing, out winter, out _);
+		}
+
+		/// <summary><see cref="Foliage(WorldSceneSettings, double, out float, out float, out float)"/>, with the air's temperature it read the season from, °C.</summary>
+		public static bool Foliage(WorldSceneSettings settings, double worldHours, out float phase01, out float growing, out float winter, out float celsius)
+		{
+			celsius = 0f;
 			phase01 = 0f;
 			growing = 0f;
 			winter = 0f;
@@ -158,9 +176,11 @@ namespace FishMMO.Shared.Weather
 			table.Extremes(latitude, continentality, out float warmest, out float coldest);
 			float shift = annual - table.AnnualKelvin(latitude, continentality);
 			float coldestC = coldest + shift - 273.15f;
-			const float GrowthC = 5f;
-			growing = Mathf.Clamp((now - 273.15f - GrowthC) / 10f, -1f, 1f);
-			winter = Mathf.Clamp01((GrowthC - coldestC) / 10f);
+			const float GrowthC = 5f, DormantC = 1f, StripC = 5f, LeafyC = 12f;
+			float nowC = now - 273.15f;
+			celsius = nowC;
+			growing = Mathf.Clamp(nowC >= GrowthC ? (nowC - GrowthC) / 10f : (nowC - GrowthC) / (GrowthC - DormantC), -1f, 1f);
+			winter = Mathf.Clamp01((LeafyC - coldestC) / (LeafyC - StripC));
 			phase01 = Mathf.Repeat((table.PhaseAt(worldHours) - table.ColdestPhase(latitude, continentality)) / PlanetClimateTable.Phases, 1f);
 			return true;
 		}

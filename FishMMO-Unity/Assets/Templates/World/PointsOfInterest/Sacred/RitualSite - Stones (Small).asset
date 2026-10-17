@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: RitualSite - Stones (Small)
   m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
   Kind: 55
+  Variant: Stones
   Weight: 1
   DefaultBiomeWeight: 1
   BiomeWeights: []
@@ -71,14 +72,14 @@ MonoBehaviour:
     Role: 8
     Style: timber
   Features:
-  - rid: 4061506132295025306
-  - rid: 4061506132295025307
-  - rid: 4061506132295025308
-  - rid: 4061506132295025309
+  - rid: 4061506175562416517
+  - rid: 4061506175562416518
+  - rid: 4061506175562416519
+  - rid: 4061506175562416520
   references:
     version: 2
     RefIds:
-    - rid: 4061506132295025306
+    - rid: 4061506175562416517
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -89,16 +90,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506132295025307
+    - rid: 4061506175562416518
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506132295025308
+    - rid: 4061506175562416519
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506132295025309
+    - rid: 4061506175562416520
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 5

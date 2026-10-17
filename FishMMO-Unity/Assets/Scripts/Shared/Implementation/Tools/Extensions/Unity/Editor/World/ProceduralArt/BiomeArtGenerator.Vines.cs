@@ -51,7 +51,7 @@ namespace FishMMO.Shared.WorldDesign
 			// The bark's own sway (1) for a climber, so it moves with its trunk; a curtain's strands carry their sway in metres hung.
 			float sway = climber ? 1f : 0.5f;
 			Vegetation(m, atlas, 0.45f, true, sway, 0.025f, 0.4f, new Color(0.94f, 0.98f, 0.94f), new Color(0.82f, 0.76f, 0.56f), 0.18f, 0f,
-				species.Deciduous, distanceFade: climber ? FadeTree : FadeNone, tintPatchMetres: 18f);
+				species.Deciduous, distanceFade: climber ? FadeTree : FadeNone, tintPatchMetres: 18f, evergreen: !species.Deciduous);
 			m.SetColor("_AutumnColor", species.Autumn);
 			m.SetFloat("_Clinging", 1f);
 			if (!climber)

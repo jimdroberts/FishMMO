@@ -41,7 +41,7 @@ namespace FishMMO.Shared.WorldDesign
 			Material material = WriteMaterial(c, name, VegetationShader, m =>
 			{
 				Vegetation(m, atlas, 0.45f, true, 0.3f, 0.03f, 0.45f, new Color(0.92f, 0.97f, 0.92f), new Color(0.8f, 0.76f, 0.58f), 0.25f, 0.15f,
-					species.Deciduous, distanceFade: FadeNone, groundSink: sink, tintPatchMetres: 24f);
+					species.Deciduous, distanceFade: FadeNone, groundSink: sink, tintPatchMetres: 24f, evergreen: !species.Deciduous);
 				BushVariation(m);
 			});
 

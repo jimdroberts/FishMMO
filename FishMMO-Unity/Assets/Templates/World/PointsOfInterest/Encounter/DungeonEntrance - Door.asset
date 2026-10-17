@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: DungeonEntrance - Door
   m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
   Kind: 96
+  Variant: Door
   Weight: 1
   DefaultBiomeWeight: 1
   BiomeWeights: []
@@ -62,14 +63,14 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506132295025193
-  - rid: 4061506132295025194
-  - rid: 4061506132295025195
-  - rid: 4061506132295025196
+  - rid: 4061506175562416397
+  - rid: 4061506175562416398
+  - rid: 4061506175562416399
+  - rid: 4061506175562416400
   references:
     version: 2
     RefIds:
-    - rid: 4061506132295025193
+    - rid: 4061506175562416397
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -81,16 +82,16 @@ MonoBehaviour:
         KeepOutOfWater: 1
         Clearings:
         - {x: 0, y: 1.5, z: 7.147218}
-    - rid: 4061506132295025194
+    - rid: 4061506175562416398
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506132295025195
+    - rid: 4061506175562416399
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506132295025196
+    - rid: 4061506175562416400
       type: {class: DungeonEntranceFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: 0, y: 7.147218}

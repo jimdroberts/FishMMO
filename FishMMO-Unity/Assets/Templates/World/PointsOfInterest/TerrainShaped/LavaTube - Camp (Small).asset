@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: LavaTube - Camp (Small)
   m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
   Kind: 47
+  Variant: Camp
   Weight: 1
   DefaultBiomeWeight: 1
   BiomeWeights: []
@@ -71,30 +72,30 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506132295025241
-  - rid: 4061506132295025242
-  - rid: 4061506132295025243
+  - rid: 4061506175562416452
+  - rid: 4061506175562416453
+  - rid: 4061506175562416454
   references:
     version: 2
     RefIds:
-    - rid: 4061506132295025241
+    - rid: 4061506175562416452
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506132295025242
+    - rid: 4061506175562416453
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506132295025243
+    - rid: 4061506175562416454
       type: {class: PointOfInterestChamberFeature, ns: FishMMO.Shared.WorldDesign,
         asm: FishMMO.Shared.Tools.Editor}
       data:
         MinRadius: 3
         Features:
-        - rid: 4061506132295025244
-        - rid: 4061506132295025245
-    - rid: 4061506132295025244
+        - rid: 4061506175562416455
+        - rid: 4061506175562416456
+    - rid: 4061506175562416455
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -105,7 +106,7 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506132295025245
+    - rid: 4061506175562416456
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 5

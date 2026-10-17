@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Camp - Lean-tos (Medium-Large)
   m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
   Kind: 2
+  Variant: Lean-tos
   Weight: 1
   DefaultBiomeWeight: 1
   BiomeWeights:
@@ -78,15 +79,15 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506132295024975
-  - rid: 4061506132295024976
-  - rid: 4061506132295024977
-  - rid: 4061506132295024978
-  - rid: 4061506132295024979
+  - rid: 4061506175562416179
+  - rid: 4061506175562416180
+  - rid: 4061506175562416181
+  - rid: 4061506175562416182
+  - rid: 4061506175562416183
   references:
     version: 2
     RefIds:
-    - rid: 4061506132295024975
+    - rid: 4061506175562416179
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -97,16 +98,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506132295024976
+    - rid: 4061506175562416180
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506132295024977
+    - rid: 4061506175562416181
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506132295024978
+    - rid: 4061506175562416182
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 5
@@ -114,7 +115,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506132295024979
+    - rid: 4061506175562416183
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 6

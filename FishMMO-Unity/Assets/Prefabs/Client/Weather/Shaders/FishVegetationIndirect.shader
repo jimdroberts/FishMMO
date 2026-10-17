@@ -51,6 +51,7 @@ Shader "FishMMO/Vegetation Indirect"
         _DryColor("Dry tint", Color) = (0.75, 0.7, 0.55, 1)
         _TintSpread("Tint spread between neighbours", Range(0.0, 1.0)) = 0.35
         [Toggle] _Deciduous("Deciduous (turns in autumn, bare in winter)", Float) = 0.0
+        [Toggle] _Evergreen("Evergreen (a tree or shrub that keeps its leaves green through the winter)", Float) = 0.0
         [HDR] _AutumnColor("Autumn multiplier", Color) = (1.6, 0.8, 0.3, 1)
 
         [Header(Weather)]

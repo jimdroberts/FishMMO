@@ -36,8 +36,9 @@ StructuredBuffer<GrassBlade> _GrassBlades;
 
 /* Per type (GrassBladeRenderer.Publish): the table the compute reads too, a texel per type (x) per row (y). It was seven
  * constant arrays on the material (16 types, the head colours four times that); at 32 types a table read with Load
- * keeps the material's constants small and is the same floats. Rows 0..2 are the compute's. */
+ * keeps the material's constants small and is the same floats. Rows 0..2 are the compute's (row 2's sprinkle level is read here too). */
 Texture2D<float4> _GrassTypeTable;
+#define GRASS_ROW_MORE 2          // y a sprinkled type's lattice level (GrassMath.SprinkleLevel): its stems thin at 4^level times the share
 #define GRASS_ROW_ROOT 3          // rgb colour at the root, a how much of the terrain texture's colour the type takes (its biome's BiomeGrassType.GroundTint)
 #define GRASS_ROW_TIP 4           // rgb colour at the tip, a base width (m)
 #define GRASS_ROW_HEALTHY 5       // rgb healthy tint, a tint spread between neighbours
@@ -95,6 +96,8 @@ float4 _GrassParams7;   // wind calm with distance: x start (m), y end (m), z be
 #define GRASS_FLORA_WIDTH_SALT 0x510E527Fu
 #define GRASS_FLORA_HEADSIZE_SWELL 0.25
 #define GRASS_FLORA_HEADSIZE_SALT 0x9B05688Cu
+// Cured (dormant) grass: straw, as a multiple of the blade's own lightness (Rec. 709 luminance 1.1).
+#define GRASS_CURED float3(1.30, 1.09, 0.67)
 #define GRASS_FLORA_MIN_WIDTH 0.6
 #define GRASS_FLORA_MAX_WIDTH 1.6
 #define GRASS_FLORA_MIN_BEND 0.5
@@ -208,8 +211,9 @@ void GrassCurve(float height, float3 tipDirection, float bend, out float3 contro
 }
 
 // VegSeasonTint's arithmetic (FishVegetationPasses.hlsl) with the type's own colours: patches of
-// healthy and dry ground over metres, a quarter of each blade's own, browned by winter and drought.
-float3 GrassSeasonTint(float3 rootWS, float4 healthy, float4 dryTint, float own)
+// healthy and dry ground over metres, a quarter of each blade's own, browned by drought. Winter is not
+// in the tint but in `cure` (0 growing .. 1 dormant), which GrassBuild applies last (GRASS_CURED).
+float3 GrassSeasonTint(float3 rootWS, float4 healthy, float4 dryTint, float own, out float cure)
 {
     float patchMetres = dryTint.a;
     float variation = own;
@@ -221,9 +225,9 @@ float3 GrassSeasonTint(float3 rootWS, float4 healthy, float4 dryTint, float own)
         variation = lerp(patch, own, 0.25);
     }
     float known = step(1e-4, _FishSeason.w);
-    float dormant = saturate(-_FishSeason.y) * 0.7;
     float drought = saturate(-_FishSeason.z * 3.0);
-    float dry = saturate(variation * healthy.a + max(dormant, drought) * known);
+    float dry = saturate(variation * healthy.a + drought * known);
+    cure = saturate(-_FishSeason.y) * known;
     return lerp(healthy.rgb, dryTint.rgb, dry);
 }
 
@@ -360,10 +364,12 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     float3 sideWS = float3(across.x, 0.0, across.y);
     /* Thinned blades widen to stand for the ones thinned out (share^-exponent), but never past MaxBladePixels on
      * this camera's screen, nor MaxWiden. Widening in metres alone left blades one or two pixels wide past 8 m and
-     * under one past 100 m: the field read as smaller and sparser the further it went. */
+     * under one past 100 m: the field read as smaller and sparser the further it went. A sprinkled type on a coarser
+     * lattice level is thinned only at 4^level times the share (GrassMath.SprinkleLevel): it widens by its own share. */
     float pixelMetres = d * _GrassScreen.x + _GrassScreen.y;
     float screenCap = max(1.0, pixelMetres * _GrassScreen.z);
-    float widen = min(min(_GrassParams0.y, screenCap), pow(max(1e-6, GrassShareV(d)), -_GrassParams0.x));
+    float share = min(1.0, GrassShareV(d) * exp2(2.0 * round(GrassTypeRow(type, GRASS_ROW_MORE).y)));
+    float widen = min(min(_GrassParams0.y, screenCap), pow(max(1e-6, share), -_GrassParams0.x));
     float width = typeTip.a * widen * (0.75 + 0.5 * r0) * lerp(0.5, 1.0, thinFade) * clamp(FishFloraSwell(root.xz, GRASS_FLORA_WIDTH_SWELL, GRASS_FLORA_WIDTH_SALT) * (_FishFloraInfo.x < 0.5 ? 1.0 : _FishFloraWorld.y), GRASS_FLORA_MIN_WIDTH, GRASS_FLORA_MAX_WIDTH);
     float4 headInfo = GrassTypeRow(type, GRASS_ROW_HEAD);
     // A strap (a reed's leaf) keeps its width to a rounded end; a blade tapers to a point.
@@ -407,7 +413,7 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
         tipTangent = dot(tipTangent, tipTangent) > 1e-10 ? normalize(tipTangent) : float3(0.0, 1.0, 0.0);
         // A head keeps its AREA as the field thins (share^-0.5), whatever the blades' widening: a disc grown by the
         // blades' width factor would grow by its square.
-        float headWiden = min(_GrassParams0.y, rsqrt(max(1e-6, GrassShareV(d))));
+        float headWiden = min(_GrassParams0.y, rsqrt(max(1e-6, share)));
         float size = max(0.002, headInfo.y) * headWiden * thinFade * lerp(0.35, 1.0, visible) * (0.85 + 0.3 * r2);
         float second = headPart == 2u ? 1.0 : 0.0;
         float3 axisA, axisB, centre;
@@ -446,6 +452,9 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
             // A flower: a disc tipped toward the sky, and one upright across it so it reads from the side too. Its drift's
             // look sizes it (the compute's sphere allows the most a look can: GRASS_FLORA_MAX_BLOOM there).
             size *= clamp(FishFloraSwell(root.xz, GRASS_FLORA_HEADSIZE_SWELL, GRASS_FLORA_HEADSIZE_SALT), GRASS_FLORA_MIN_BLOOM, GRASS_FLORA_MAX_BLOOM);
+            // Only in its season (FishBloom): out of it the head closes to nothing and the stem stands bare. A clump's
+            // flowers open close together, each a little on its own.
+            size *= FishBloom(0.6 * clumpColour + 0.4 * GrassUnitV(GrassMixV(h0 ^ 0x1B873593u)));
             float3 along = float3(cos(facingAngle), 0.0, sin(facingAngle));
             float3 aside = float3(-along.z, 0.0, along.x);
             axisA = lerp(along, aside, second) * size;
@@ -470,7 +479,8 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
 
     // Colour, root to tip, with the clump's and the blade's own variation and the season.
     float3 colour = lerp(typeRoot.rgb, typeTip.rgb, pow(saturate(t), 0.8));
-    float3 season = GrassSeasonTint(root, typeHealthy, GrassTypeRow(type, GRASS_ROW_DRY), r1);
+    float cure;
+    float3 season = GrassSeasonTint(root, typeHealthy, GrassTypeRow(type, GRASS_ROW_DRY), r1, cure);
     colour *= season;
     colour *= 0.85 + 0.3 * clumpColour;
     colour *= 0.9 + 0.2 * r2;
@@ -572,6 +582,14 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
                 groundViewOn = true;
             }
         }
+    }
+    /* Winter cures the blade: dormant grass loses its green to straw at its own lightness (a little lighter, as cured grass
+     * is), whatever colour the ground lent it. Last, so nothing dilutes it: it rode the dry tint once, and on terrain-
+     * coloured grass the terrain blend left a few per cent of it, so the seasons did nothing visible to a meadow. Heads
+     * brown on their own (above). */
+    if (!isHead)
+    {
+        colour = lerp(colour, dot(colour, lumWeights) * GRASS_CURED, cure);
     }
     colour = lerp(colour, rootGround, rootGroundAmount);
     if (groundViewOn)

@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: AbandonedFarm - Burned
   m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
   Kind: 74
+  Variant: Burned
   Weight: 0.5
   DefaultBiomeWeight: 1
   BiomeWeights: []
@@ -53,13 +54,13 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506132295024702
-  - rid: 4061506132295024703
-  - rid: 4061506132295024704
+  - rid: 4061506175559009065
+  - rid: 4061506175559009066
+  - rid: 4061506175559009067
   references:
     version: 2
     RefIds:
-    - rid: 4061506132295024702
+    - rid: 4061506175559009065
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -70,12 +71,12 @@ MonoBehaviour:
         FinishChance: 0.7
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506132295024703
+    - rid: 4061506175559009066
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506132295024704
+    - rid: 4061506175559009067
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 

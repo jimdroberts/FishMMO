@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Windmill - Post
   m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
   Kind: 108
+  Variant: Post
   Weight: 1
   DefaultBiomeWeight: 1
   BiomeWeights: []
@@ -80,14 +81,14 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506132295025071
-  - rid: 4061506132295025072
-  - rid: 4061506132295025073
-  - rid: 4061506132295025074
+  - rid: 4061506175562416288
+  - rid: 4061506175562416289
+  - rid: 4061506175562416290
+  - rid: 4061506175562416291
   references:
     version: 2
     RefIds:
-    - rid: 4061506132295025071
+    - rid: 4061506175562416288
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -98,16 +99,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506132295025072
+    - rid: 4061506175562416289
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506132295025073
+    - rid: 4061506175562416290
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506132295025074
+    - rid: 4061506175562416291
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 1

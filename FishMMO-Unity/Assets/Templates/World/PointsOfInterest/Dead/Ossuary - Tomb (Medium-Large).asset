@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Ossuary - Tomb (Medium-Large)
   m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
   Kind: 68
+  Variant: Tomb
   Weight: 1
   DefaultBiomeWeight: 1
   BiomeWeights: []
@@ -53,15 +54,15 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506132295024682
-  - rid: 4061506132295024683
-  - rid: 4061506132295024684
-  - rid: 4061506132295024685
-  - rid: 4061506132295024686
+  - rid: 4061506175559009045
+  - rid: 4061506175559009046
+  - rid: 4061506175559009047
+  - rid: 4061506175559009048
+  - rid: 4061506175559009049
   references:
     version: 2
     RefIds:
-    - rid: 4061506132295024682
+    - rid: 4061506175559009045
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -72,16 +73,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506132295024683
+    - rid: 4061506175559009046
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506132295024684
+    - rid: 4061506175559009047
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506132295024685
+    - rid: 4061506175559009048
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 5
@@ -89,7 +90,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506132295024686
+    - rid: 4061506175559009049
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 6

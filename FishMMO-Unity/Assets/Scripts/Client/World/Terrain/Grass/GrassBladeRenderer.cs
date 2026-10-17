@@ -589,13 +589,15 @@ namespace FishMMO.Client
 				SetType(t, RowHealthy, new Vector4(type.Healthy.r, type.Healthy.g, type.Healthy.b, type.TintSpread));
 				SetType(t, RowDry, new Vector4(type.Dry.r, type.Dry.g, type.Dry.b, type.PatchMetres));
 				SetType(t, RowParams, new Vector4(look.Stiffness, type.SnowBury, look.Bend, 1f));
-				// Sprinkled species: stems per square metre at full paint, as a chance per candidate of the near lattice.
+				// Sprinkled species: stems per square metre at full paint, as a chance per candidate of the near lattice, then of
+				// the coarser level they stand on (GrassMath.SprinkleLevel).
 				float sprinkle = look.Sprinkle > 0f ? Mathf.Clamp01(look.Sprinkle / s.NearDensity) : 0f;
+				int sprinkleLevel = GrassMath.SprinkleLevel(sprinkle, s.SprinkleLevel);
 				GrassBladeHead head = look.Head;
 				float headSize = Mathf.Max(0.002f, look.HeadSize);
-				SetType(t, RowShape2, new Vector4(sprinkle, (float)head, head != GrassBladeHead.None ? headSize : 0f, Mathf.Clamp01(type.SnowBury)));
-				// The share of stems with a head.
-				SetType(t, RowMore, new Vector4(head != GrassBladeHead.None ? Mathf.Clamp01(look.HeadShare) : 0f, 0f, 0f, 0f));
+				SetType(t, RowShape2, new Vector4(GrassMath.SprinkleChance(sprinkle, sprinkleLevel), (float)head, head != GrassBladeHead.None ? headSize : 0f, Mathf.Clamp01(type.SnowBury)));
+				// The share of stems with a head, and the sprinkled type's lattice level.
+				SetType(t, RowMore, new Vector4(head != GrassBladeHead.None ? Mathf.Clamp01(look.HeadShare) : 0f, sprinkleLevel, 0f, 0f));
 				// The head's colours: the mesh's petals (unless the look's win: GrassType.Build left none), else the look's.
 				int colours = Mathf.Clamp(type.HeadColours.Count, 0, GrassType.MaxHeadColours);
 				Color[] palette = colours == 0 ? look.HeadColours : null;

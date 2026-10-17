@@ -73,6 +73,7 @@ CBUFFER_START(UnityPerMaterial)
     half _TintSpread;
     half _SnowBury;
     half _Deciduous;
+    half _Evergreen;
     half4 _AutumnColor;
     half _FishWeatherAmount;
     half _DistanceFade;
@@ -213,8 +214,9 @@ half4 VegSeasonTint(float3 originWS)
     float known = step(1e-4, strength);
     float phase = _FishSeason.x;
 
-    // Winter browns what grows; a drier year than usual browns it more, and does so in any season.
-    float dormant = saturate(-_FishSeason.y) * 0.7;
+    // Winter browns what grows; a drier year than usual browns it more, and does so in any season. An evergreen tree or
+    // shrub (pine, spruce, holly, heather) keeps its leaves green through the winter: only a little of the dormancy.
+    float dormant = saturate(-_FishSeason.y) * 0.7 * (1.0 - 0.8 * _Evergreen);
     float drought = saturate(-_FishSeason.z * 3.0);
     // _TintSpread is how far apart neighbours start (Unity's "noise spread"): 0 all alike, 1 the
     // whole healthy-to-dry range across a patch.
@@ -380,8 +382,10 @@ float VegFloraScale(FishFloraLook look, float3 originWS)
 /// What this vertex is recoloured to (rgb, linear) and how far (a; 0 = left as it is), by what it is: its vertex alpha
 /// (the generators' tint mask: 1 leaves and blades, FloraMeshes.HeadAlpha 0.3 flower and seed heads, 0 everything that is
 /// not leaf) and its part kind (PlantPart). A bush's or shrub's wood (limbs and twigs) is not a fungus: it takes half the
-/// accent, enough to sit in the patch without its branches turning the colour of the toadstools under it.
-half4 VegFloraColour(FishFloraLook look, half alpha, float kind)
+/// accent, enough to sit in the patch without its branches turning the colour of the toadstools under it. Out of their
+/// season (FishBloom, by the plant's own hash) heads wither: recoloured toward VEG_WITHERED, wholly once closed.
+#define VEG_WITHERED half3(0.30h, 0.22h, 0.14h)
+half4 VegFloraColour(FishFloraLook look, half alpha, float kind, float3 originWS)
 {
     if (!look.valid)
     {
@@ -397,7 +401,8 @@ half4 VegFloraColour(FishFloraLook look, half alpha, float kind)
     }
     if (alpha > 0.15h)
     {
-        return half4((half3)look.bloom, (half)_FishFloraStrength.y);
+        half open = (half)FishBloom(VegRandom(VegPlantKey(originWS), 16u));
+        return half4(lerp(VEG_WITHERED, (half3)look.bloom, open), lerp(1.0h, (half)_FishFloraStrength.y, open));
     }
     half wood = kind > 0.5 && kind < 2.5 ? 0.5h : 1.0h;
     return half4((half3)look.accent, (half)_FishFloraStrength.z * wood);
@@ -577,7 +582,7 @@ void VegDeform(VegAttributes input, out float3 positionWS, out half3 normalWS, o
     // The look of the patch it stands in (VegFloraLook; invalid on every draw but the terrain's details). Its colours are
     // only read by the lit pass: in the others the compiler keeps the variant pick and the one height load.
     FishFloraLook look = VegFloraLook(originWS);
-    flora = VegFloraColour(look, input.color.a, input.partData.z);
+    flora = VegFloraColour(look, input.color.a, input.partData.z, originWS);
     // This plant's own shape, before the snow, the distance and the wind (VegVary).
     VegVary(positionOS, normalOS, input.partPivot, input.partData, originWS, VegFloraScale(look, originWS));
     // Height above the root as authored (before snow, distance shrink and wind), in world metres.

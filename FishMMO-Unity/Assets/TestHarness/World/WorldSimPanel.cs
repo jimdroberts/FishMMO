@@ -303,6 +303,27 @@ namespace FishMMO.TestHarness.World
 			return card;
 		}
 
+		/// <summary>How far the plants are growing or dormant, in words, with the figure the shaders read.</summary>
+		private static string GrowthWords(float growing)
+		{
+			string figure = growing.ToString("+0.00;-0.00", System.Globalization.CultureInfo.InvariantCulture);
+			return growing >= 0f ? $"growing {figure}" : $"dormant {figure} (grass {Mathf.Clamp01(-growing).ToString("0%", System.Globalization.CultureInfo.InvariantCulture)} cured)";
+		}
+
+		/// <summary>The share of flowers open: FishBloom (FishWeather.hlsl) averaged over every flower's own threshold.</summary>
+		private static float FlowersOpen(float growing)
+		{
+			const float First = 0f, Last = 0.25f, Ramp = 0.05f;
+			const int Steps = 64;
+			float open = 0f;
+			for (int i = 0; i < Steps; i++)
+			{
+				float opensAt = Mathf.Lerp(First, Last, (i + 0.5f) / Steps);
+				open += Mathf.Clamp01((growing - opensAt) / Ramp);
+			}
+			return open / Steps;
+		}
+
 		/// <summary>The season in words, for the hemisphere stood in. The figure itself is the northern one.</summary>
 		private static string SeasonName(float season01, float latitude)
 		{
@@ -427,7 +448,7 @@ namespace FishMMO.TestHarness.World
 			var pair = new VisualElement();
 			pair.AddToClassList("ws-card-pair");
 			pair.Add(Card("Clock", false,
-				("clock.time", "Time"), ("clock.date", "Date"), ("clock.season", "Season"), ("clock.hours", "World hours"), ("clock.rate", "Rate")));
+				("clock.time", "Time"), ("clock.date", "Date"), ("clock.season", "Season"), ("clock.plants", "Plants"), ("clock.hours", "World hours"), ("clock.rate", "Rate")));
 			pair.Add(Card("Sun & sky", false,
 				("sky.sun", "Sun"), ("sky.stars", "Stars"), ("sky.meteors", "Meteors"), ("sky.eclipse", "Eclipse"), ("sky.aurora", "Aurora")));
 			stats.Add(pair);
@@ -1163,6 +1184,9 @@ namespace FishMMO.TestHarness.World
 				? "none (upright axis)"
 				: SeasonName(CelestialMath.Season01(SolarSystemProfile.Active, Controller.Body, Controller.Hours), Controller.Latitude),
 				upright ? "dim" : null);
+			Stat("clock.plants", Controller.FoliageKnown
+				? $"{Controller.FoliageCelsius.ToString("0.0", culture)} °C · {GrowthWords(Controller.FoliageGrowing)} · flowers {FlowersOpen(Controller.FoliageGrowing).ToString("0%", culture)} open · leaf drop {Controller.FoliageWinter.ToString("0.00", culture)}"
+				: "no season (the shaders show summer)", Controller.FoliageKnown ? null : "warn");
 			Stat("clock.hours", Controller.Hours.ToString("0.00", culture));
 			Stat("clock.rate", Controller.Paused ? "held" : WorldTimeText.Pace(Controller.Rate), Controller.Paused ? "dim" : null);
 

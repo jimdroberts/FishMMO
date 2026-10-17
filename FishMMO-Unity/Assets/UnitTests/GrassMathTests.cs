@@ -302,6 +302,43 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void Sprinkle_OnItsOwnLevel_KeepsItsStemsAndOutlastsTheThinning()
+		{
+			// Flowers at 14 stems/m² of a 1600/m² lattice go to level 2 (a sixteenth of the cells); reeds at 110/m² stop at 1.
+			LogAssert.AreEqual(2, GrassMath.SprinkleLevel(14f / 1600f, 2), "flowers stand on level 2");
+			LogAssert.AreEqual(1, GrassMath.SprinkleLevel(110f / 1600f, 2), "reeds stop where their chance would pass 1");
+			LogAssert.AreEqual(0, GrassMath.SprinkleLevel(14f / 1600f, 0), "cap 0: on the full lattice, as before");
+			LogAssert.AreEqual(0, GrassMath.SprinkleLevel(0f, 3), "a tussock species has no level");
+			LogAssert.IsTrue(GrassMath.SprinkleChance(14f / 1600f, 2) <= 1f && GrassMath.SprinkleChance(110f / 1600f, 1) <= 1f, "a chance never passes 1");
+
+			const float fullness = 0.35f;
+			var weights = new[] { 1f };
+			float chance = 14f / 1600f;
+			int level = GrassMath.SprinkleLevel(chance, 2);
+			var scaled = new[] { GrassMath.SprinkleChance(chance, level) };
+			var levels = new[] { level };
+			// The same stems per square metre, and every one of them on a cell its level's share still keeps.
+			int stems = 0, keptAtLevelShare = 0;
+			const int side = 512;
+			float levelShare = GrassMath.Quarter(level);
+			for (int j = 0; j < side; j++)
+			{
+				for (int i = 0; i < side; i++)
+				{
+					float u = GrassMath.Unit(GrassMath.Hash(i, j, GrassMath.SaltSprinkle));
+					if (GrassMath.PickSprinkle(u, weights, scaled, 1, fullness, levels, GrassMath.CellLevel(i, j)) == 0)
+					{
+						stems++;
+						keptAtLevelShare += GrassMath.CellPriority(i, j) < levelShare ? 1 : 0;
+					}
+				}
+			}
+			float n = side * side;
+			LogAssert.IsTrue(Math.Abs(stems / n - chance) < 0.0015f, $"stems per candidate on its own level: {stems / n} (want {chance})");
+			LogAssert.AreEqual(stems, keptAtLevelShare, "every stem is kept until the share falls to 4^-level");
+		}
+
+		[Test]
 		public void PickChannel_FallsBackToTheLastPaintedChannel()
 		{
 			// A pick of exactly 1 runs past the end: the last channel with any weight, never an empty one.

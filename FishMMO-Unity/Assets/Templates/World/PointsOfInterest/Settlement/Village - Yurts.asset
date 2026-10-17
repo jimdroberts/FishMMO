@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Village - Yurts
   m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
   Kind: 77
+  Variant: Yurts
   Weight: 1
   DefaultBiomeWeight: 0.02
   BiomeWeights:
@@ -107,17 +108,17 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506132295024988
-  - rid: 4061506132295024989
-  - rid: 4061506132295024990
-  - rid: 4061506132295024991
-  - rid: 4061506132295024992
-  - rid: 4061506132295024993
-  - rid: 4061506132295024994
+  - rid: 4061506175562416219
+  - rid: 4061506175562416220
+  - rid: 4061506175562416221
+  - rid: 4061506175562416222
+  - rid: 4061506175562416223
+  - rid: 4061506175562416224
+  - rid: 4061506175562416225
   references:
     version: 2
     RefIds:
-    - rid: 4061506132295024988
+    - rid: 4061506175562416219
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -130,24 +131,24 @@ MonoBehaviour:
         Clearings:
         - {x: -3, y: 2, z: 6.6078205}
         - {x: 3, y: 1.5, z: 6.6078205}
-    - rid: 4061506132295024989
+    - rid: 4061506175562416220
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506132295024990
+    - rid: 4061506175562416221
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506132295024991
+    - rid: 4061506175562416222
       type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: -3, y: 6.6078205}
-    - rid: 4061506132295024992
+    - rid: 4061506175562416223
       type: {class: RespawnFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: 3, y: 6.6078205}
-    - rid: 4061506132295024993
+    - rid: 4061506175562416224
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 1
@@ -155,7 +156,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506132295024994
+    - rid: 4061506175562416225
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 4

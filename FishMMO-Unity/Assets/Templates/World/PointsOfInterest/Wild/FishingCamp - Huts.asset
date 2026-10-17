@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: FishingCamp - Huts
   m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
   Kind: 52
+  Variant: Huts
   Weight: 1
   DefaultBiomeWeight: 0.6
   BiomeWeights:
@@ -76,13 +77,13 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506132295025075
-  - rid: 4061506132295025076
-  - rid: 4061506132295025077
+  - rid: 4061506175562416240
+  - rid: 4061506175562416241
+  - rid: 4061506175562416242
   references:
     version: 2
     RefIds:
-    - rid: 4061506132295025075
+    - rid: 4061506175562416240
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -93,12 +94,12 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506132295025076
+    - rid: 4061506175562416241
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506132295025077
+    - rid: 4061506175562416242
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 

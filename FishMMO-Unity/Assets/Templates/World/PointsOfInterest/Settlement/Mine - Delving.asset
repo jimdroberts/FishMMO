@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Mine - Delving
   m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
   Kind: 87
+  Variant: Delving
   Weight: 0.6
   DefaultBiomeWeight: 1
   BiomeWeights: []
@@ -71,14 +72,14 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506132295025040
-  - rid: 4061506132295025041
-  - rid: 4061506132295025042
-  - rid: 4061506132295025043
+  - rid: 4061506175562416250
+  - rid: 4061506175562416251
+  - rid: 4061506175562416252
+  - rid: 4061506175562416253
   references:
     version: 2
     RefIds:
-    - rid: 4061506132295025040
+    - rid: 4061506175562416250
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -89,23 +90,23 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506132295025041
+    - rid: 4061506175562416251
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506132295025042
+    - rid: 4061506175562416252
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506132295025043
+    - rid: 4061506175562416253
       type: {class: PointOfInterestChamberFeature, ns: FishMMO.Shared.WorldDesign,
         asm: FishMMO.Shared.Tools.Editor}
       data:
         MinRadius: 3
         Features:
-        - rid: 4061506132295025044
-    - rid: 4061506132295025044
+        - rid: 4061506175562416254
+    - rid: 4061506175562416254
       type: {class: GatheringFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Families: 

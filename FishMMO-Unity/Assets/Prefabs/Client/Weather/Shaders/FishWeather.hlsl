@@ -73,10 +73,25 @@ float4 _FishWeatherTier;
 // The season where the camera is, from the world clock (WeatherShaderGlobals.ApplySeason, called by
 // ClientWeather with the scene's climate): x the local year phase (0 midwinter, 0.25 spring,
 // 0.5 midsummer, 0.75 autumn: CelestialMath.Season01, turned half a year in the south), y local
-// summer (-1 deep winter .. 1 high summer, scaled by w), z the climate's humidity offset from its
-// mean (negative = drier than usual: drought), w how strongly the year swings here (0 on the
-// equator .. 1 past the tropics, never quite 0 once set). All zero means no season is known.
+// summer (-1 dormant .. 1 growing: SceneClimate.Foliage), z the climate's humidity offset from its
+// mean (negative = drier than usual: drought), w how hard its winter is (0 none .. 1 one that strips
+// a deciduous tree, never quite 0 once set). All zero means no season is known.
 float4 _FishSeason;
+
+/* How far open a flower is now: 0 closed (gone over, nothing showing) .. 1 in full bloom. Flowers open once the place is
+ * warm enough to grow (_FishSeason.y past 0: 5 °C, SceneClimate.Foliage) and close again as it cools, each at its own
+ * point (`own`, 0..1, its hash) between FISH_BLOOM_FIRST and FISH_BLOOM_LAST, so a meadow comes into flower over weeks and
+ * goes over the same way. A tundra whose summer barely passes 8 °C flowers only around its warmest weeks; no season known,
+ * every flower is open. */
+#define FISH_BLOOM_FIRST 0.0
+#define FISH_BLOOM_LAST 0.25
+#define FISH_BLOOM_RAMP 0.05
+float FishBloom(float own)
+{
+    float opensAt = lerp(FISH_BLOOM_FIRST, FISH_BLOOM_LAST, saturate(own));
+    float open = saturate((_FishSeason.y - opensAt) / FISH_BLOOM_RAMP);
+    return _FishSeason.w < 1e-4 ? 1.0 : open;
+}
 
 // Where the cover lies: a top-down map around the camera, r snow, g wet, b ash, a sand. The
 // scene-wide _FishWeatherCover is the average of it, and stands in wherever the map does not reach.

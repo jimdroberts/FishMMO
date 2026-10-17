@@ -131,7 +131,7 @@ float4 _GrassRingDensity[GRASS_RINGS];       // x blades per square metre; [0].y
 Texture2D<float4> _GrassTypeTable;
 #define GRASS_ROW_SHAPE 0                    // x height (m), y density factor (0..1], z clump pull, w wade (m)
 #define GRASS_ROW_SHAPE2 1                   // x sprinkle chance per candidate where fully painted (0: a tussock species), y head (0 none, 1 seed head, 2 flower, 3 plume), z head size (m), w how far snow buries it (GrassType.SnowBury)
-#define GRASS_ROW_MORE 2                     // x the share of stems with a head (1 for every type tuned before GrassTypeTuning.HeadShare)
+#define GRASS_ROW_MORE 2                     // x the share of stems with a head (1 for every type tuned before GrassTypeTuning.HeadShare), y a sprinkled type's lattice level (GrassMath.SprinkleLevel)
 float4 GrassTypeRow(int type, int row)
 {
     return _GrassTypeTable.Load(int3(type, row, 0));
@@ -311,9 +311,10 @@ float GrassThinFade(float priority, float share)
 
 // ── Clumps (GrassMath.NearestClump / Shape) ───────────────────────────
 
-float2 GrassCellRoot(int i, int j, float cell)
+// GrassMath.CellRoot: jittered over `span` cells (a sprinkled stem on a coarser level spans its level's block).
+float2 GrassCellRoot(int i, int j, float cell, float span)
 {
-    return float2(((float)i + GrassUnit(GrassHash(i, j, SALT_JITTER_X))) * cell, ((float)j + GrassUnit(GrassHash(i, j, SALT_JITTER_Z))) * cell);
+    return float2(((float)i + GrassUnit(GrassHash(i, j, SALT_JITTER_X)) * span) * cell, ((float)j + GrassUnit(GrassHash(i, j, SALT_JITTER_Z)) * span) * cell);
 }
 
 void GrassNearestClump(float2 p, float clumpMetres, out int ci, out int cj, out float2 centre)
@@ -806,8 +807,9 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     float clumpMetres = _GrassLattice.y;
 
     // The priority first: most far candidates end here, before any texture is read.
-    float priority = GrassPriority(GrassCellLevel(ci, cj), GrassUnit(GrassHash(ci, cj, SALT_PRIORITY)));
-    float2 cellRoot = GrassCellRoot(ci, cj, cell);
+    int cellLevel = GrassCellLevel(ci, cj);
+    float priority = GrassPriority(cellLevel, GrassUnit(GrassHash(ci, cj, SALT_PRIORITY)));
+    float2 cellRoot = GrassCellRoot(ci, cj, cell, 1.0);
     float2 eyeXZ = _GrassCamera.xz;
     // A first share from the ground distance (it is never larger than the 3D one's).
     float groundDistance = distance(cellRoot, eyeXZ);
@@ -845,10 +847,12 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     /* Sprinkled types (flowers, reeds: GrassTypeTuning.Sprinkle) first: each has its own chance per candidate where
      * its layer is painted, whatever else grows there, stacked in channel order and picked by one number
      * (GrassMath.PickSprinkle). They are then taken out of the tussock pick below, so a clump is never a whole
-     * patch of flowers. */
+     * patch of flowers. Each stands only on the cells of its own lattice level (GrassMath.SprinkleLevel), its chance
+     * scaled to match, so the thinning keeps all of its stems far past the first ring. */
     float sprinkleU = GrassUnit(GrassHash(ci, cj, SALT_SPRINKLE));
     float sprinkleAt = 0.0;
     int sprinkleChannel = -1;
+    float sprinkleLevel = 0.0;
     // Spawn: the summed density of the tussock types (each channel times its type's density factor) is the chance a
     // cell holds a blade.
     float total = 0.0;
@@ -860,17 +864,26 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
         // The table is read only for a painted channel (most of a terrain's channels are empty at any one point).
         float chance = 0.0;
         float density = 0.0;
+        float level = 0.0;
         [branch] if (w > 0.0)
         {
             chance = GrassTypeRow(t, GRASS_ROW_SHAPE2).x;
             density = GrassTypeRow(t, GRASS_ROW_SHAPE).y;
+            [branch] if (chance > 0.0)
+            {
+                level = GrassTypeRow(t, GRASS_ROW_MORE).y;
+            }
         }
         if (chance > 0.0)
         {
-            sprinkleAt += min(1.0, w / fullness) * chance;
-            if (sprinkleChannel < 0 && sprinkleU < sprinkleAt)
+            if ((float)cellLevel >= level - 0.5)
             {
-                sprinkleChannel = c;
+                sprinkleAt += min(1.0, w / fullness) * chance;
+                if (sprinkleChannel < 0 && sprinkleU < sprinkleAt)
+                {
+                    sprinkleChannel = c;
+                    sprinkleLevel = level;
+                }
             }
             w = 0.0;
         }
@@ -883,6 +896,15 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     }
     spawn /= fullness;
     int channel = sprinkleChannel;
+    [branch] if (channel >= 0 && sprinkleLevel > 0.5)
+    {
+        // A stem on a coarser level stands anywhere in its level's block, and in the clump it lands in.
+        cellRoot = GrassCellRoot(ci, cj, cell, exp2(round(sprinkleLevel)));
+        GrassNearestClump(cellRoot, clumpMetres, ki, kj, centre);
+        clump = GrassHash(ki, kj, SALT_CLUMP);
+        toRoot = cellRoot - centre;
+        r = length(toRoot) / max(1e-4, clumpMetres);
+    }
     if (channel < 0)
     {
         if (total <= 0.0 || GrassUnit(GrassHash(ci, cj, SALT_SPAWN)) >= min(1.0, spawn))

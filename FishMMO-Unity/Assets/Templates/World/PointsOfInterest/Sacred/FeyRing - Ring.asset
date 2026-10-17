@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: FeyRing - Ring
   m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
   Kind: 59
+  Variant: Ring
   Weight: 1
   DefaultBiomeWeight: 1
   BiomeWeights: []
@@ -35,14 +36,14 @@ MonoBehaviour:
     Role: 2
     Style: 
   Features:
-  - rid: 4061506132295024647
-  - rid: 4061506132295024648
-  - rid: 4061506132295024649
-  - rid: 4061506132295024650
+  - rid: 4061506175559009010
+  - rid: 4061506175559009011
+  - rid: 4061506175559009012
+  - rid: 4061506175559009013
   references:
     version: 2
     RefIds:
-    - rid: 4061506132295024647
+    - rid: 4061506175559009010
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -53,16 +54,16 @@ MonoBehaviour:
         FinishChance: 0.7
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506132295024648
+    - rid: 4061506175559009011
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506132295024649
+    - rid: 4061506175559009012
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506132295024650
+    - rid: 4061506175559009013
       type: {class: GatheringFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Families: 

@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Graveyard - Earthen (Medium-Large)
   m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
   Kind: 64
+  Variant: Earthen
   Weight: 1
   DefaultBiomeWeight: 0.6
   BiomeWeights:
@@ -73,15 +74,15 @@ MonoBehaviour:
     Role: 1
     Style: 
   Features:
-  - rid: 4061506132295025256
-  - rid: 4061506132295025257
-  - rid: 4061506132295025258
-  - rid: 4061506132295025259
-  - rid: 4061506132295025260
+  - rid: 4061506175562416467
+  - rid: 4061506175562416468
+  - rid: 4061506175562416469
+  - rid: 4061506175562416470
+  - rid: 4061506175562416471
   references:
     version: 2
     RefIds:
-    - rid: 4061506132295025256
+    - rid: 4061506175562416467
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -92,16 +93,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506132295025257
+    - rid: 4061506175562416468
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506132295025258
+    - rid: 4061506175562416469
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506132295025259
+    - rid: 4061506175562416470
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 5
@@ -109,7 +110,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506132295025260
+    - rid: 4061506175562416471
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 6

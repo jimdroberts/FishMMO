@@ -211,10 +211,14 @@ namespace FishMMO.Client
 
 		// ── Candidates and clumps ────────────────────────────────────
 
-		/// <summary>A candidate's root on the ground plane before clumping: its cell, jittered by the cell's hash.</summary>
-		public static Vector2 CellRoot(int i, int j, float cell)
+		/// <summary>
+		/// A candidate's root on the ground plane before clumping: its cell, jittered by the cell's hash over
+		/// <paramref name="span"/> cells. A sprinkled stem on a coarser level (<see cref="SprinkleLevel"/>) spans its level's
+		/// whole block (2^level cells a side, which no other cell of that level shares), or its stems stood on a grid.
+		/// </summary>
+		public static Vector2 CellRoot(int i, int j, float cell, int span = 1)
 		{
-			return new Vector2((i + Unit(Hash(i, j, SaltJitterX))) * cell, (j + Unit(Hash(i, j, SaltJitterZ))) * cell);
+			return new Vector2((i + Unit(Hash(i, j, SaltJitterX)) * span) * cell, (j + Unit(Hash(i, j, SaltJitterZ)) * span) * cell);
 		}
 
 		/// <summary>The clump a point belongs to: the nearest jittered centre of the 3 × 3 clump cells around it.</summary>
@@ -432,14 +436,15 @@ namespace FishMMO.Client
 		/// <paramref name="u"/> (the cell's <see cref="SaltSprinkle"/> hash) picks among them.
 		/// FishGrassBlades.compute FishGrassGenerate mirrors it.
 		/// </summary>
-		public static int PickSprinkle(float u, float[] weights, float[] chances, int count, float fullness)
+		public static int PickSprinkle(float u, float[] weights, float[] chances, int count, float fullness, int[] levels = null, int cellLevel = MaxLevel)
 		{
 			float at = 0f;
 			fullness = Math.Max(0.05f, fullness);
 			for (int c = 0; c < count; c++)
 			{
 				float w = Math.Max(0f, weights[c]);
-				if (w <= 0f || chances[c] <= 0f)
+				// A type on a coarser level stands only on that level's cells (its chance there is SprinkleChance's).
+				if (w <= 0f || chances[c] <= 0f || (levels != null && cellLevel < levels[c]))
 				{
 					continue;
 				}
@@ -451,6 +456,27 @@ namespace FishMMO.Client
 			}
 			return -1;
 		}
+
+		/// <summary>
+		/// The lattice level a sprinkled type stands on: only cells of that level or coarser (4^-level of them) are its
+		/// candidates, so the distance thinning, which keeps every cell whose priority is under the share, keeps all of its
+		/// stems until the share falls to 4^-level, not from the first ring on. A sprinkled species is a few stems in a
+		/// hundred candidates: thinned with the lawn, its flowers grew out of the ground a few metres ahead of the camera.
+		/// As coarse as <paramref name="cap"/> allows while its chance there (<see cref="SprinkleChance"/>) stays at most 1.
+		/// </summary>
+		public static int SprinkleLevel(float chance, int cap)
+		{
+			int most = Math.Min(cap, MaxLevel);
+			int level = 0;
+			while (chance > 0f && level < most && chance <= Quarter(level + 1))
+			{
+				level++;
+			}
+			return level;
+		}
+
+		/// <summary>A sprinkled type's chance per candidate of its own level (<see cref="SprinkleLevel"/>): the same stems per square metre.</summary>
+		public static float SprinkleChance(float chance, int level) => Math.Min(1f, chance / Quarter(level));
 
 		/// <summary>The type a pick lands on among channel densities (cumulative), or −1 when they are all 0.</summary>
 		public static int PickChannel(float pick, float[] weights, int count)

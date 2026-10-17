@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Portal - Arch
   m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
   Kind: 63
+  Variant: Arch
   Weight: 1
   DefaultBiomeWeight: 1
   BiomeWeights: []
@@ -44,14 +45,14 @@ MonoBehaviour:
     Role: 2
     Style: 
   Features:
-  - rid: 4061506132295025022
-  - rid: 4061506132295025023
-  - rid: 4061506132295025024
-  - rid: 4061506132295025025
+  - rid: 4061506175562416233
+  - rid: 4061506175562416234
+  - rid: 4061506175562416235
+  - rid: 4061506175562416236
   references:
     version: 2
     RefIds:
-    - rid: 4061506132295025022
+    - rid: 4061506175562416233
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -62,16 +63,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506132295025023
+    - rid: 4061506175562416234
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506132295025024
+    - rid: 4061506175562416235
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506132295025025
+    - rid: 4061506175562416236
       type: {class: PortalFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         CrossSceneChance: 0.5

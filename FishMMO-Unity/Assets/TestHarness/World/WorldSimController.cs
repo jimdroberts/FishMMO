@@ -769,7 +769,34 @@ namespace FishMMO.TestHarness.World
 			BodyTemperature = bodyTemperature;
 			BodyHumidity = bodyHumidity;
 			SceneClimate.Apply(Settings, timeline, timeline.WorldSecondsAt(Tick));
+			/* And the season foliage shows, from the place's climate on the bed's clock: in the game ClientWeather publishes
+			 * it, but the bed presents its own weather, so without this the shaders never had a season and the season
+			 * buttons left grass, flowers and leaves as they were (healthy, in bloom, in leaf). */
+			FoliageKnown = SceneClimate.Foliage(Settings, Hours, out float phase, out float growing, out float winter, out float celsius);
+			FoliageGrowing = growing;
+			FoliageWinter = winter;
+			FoliageCelsius = celsius;
+			if (FoliageKnown)
+			{
+				WeatherShaderGlobals.ApplySeason(phase, growing, Settings.RuntimeHumidityOffset, winter);
+			}
+			else
+			{
+				WeatherShaderGlobals.ClearSeason();
+			}
 		}
+
+		/// <summary>Whether the plants were given a season (<see cref="SceneClimate.Foliage(WorldSceneSettings, double, out float, out float, out float, out float)"/>).</summary>
+		public bool FoliageKnown { get; private set; }
+
+		/// <summary>The season the plants were given: −1 dormant … 1 growing.</summary>
+		public float FoliageGrowing { get; private set; }
+
+		/// <summary>How hard the place's winter is: 0 none … 1 strips a deciduous tree.</summary>
+		public float FoliageWinter { get; private set; }
+
+		/// <summary>The air's temperature the plants' season was read from, °C (the season's, no day or weather).</summary>
+		public float FoliageCelsius { get; private set; }
 
 		/// <summary>
 		/// Starts a storm of a kind upwind, drifting over the camera — or, <paramref name="overhead"/>,

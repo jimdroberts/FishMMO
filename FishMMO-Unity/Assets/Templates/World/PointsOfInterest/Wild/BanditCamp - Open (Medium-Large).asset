@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: BanditCamp - Open (Medium-Large)
   m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
   Kind: 49
+  Variant: Open
   Weight: 1
   DefaultBiomeWeight: 1
   BiomeWeights: []
@@ -80,15 +81,15 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506132295025368
-  - rid: 4061506132295025369
-  - rid: 4061506132295025370
-  - rid: 4061506132295025371
-  - rid: 4061506132295025372
+  - rid: 4061506175562416571
+  - rid: 4061506175562416572
+  - rid: 4061506175562416573
+  - rid: 4061506175562416574
+  - rid: 4061506175562416575
   references:
     version: 2
     RefIds:
-    - rid: 4061506132295025368
+    - rid: 4061506175562416571
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -99,16 +100,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506132295025369
+    - rid: 4061506175562416572
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506132295025370
+    - rid: 4061506175562416573
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506132295025371
+    - rid: 4061506175562416574
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 5
@@ -116,7 +117,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506132295025372
+    - rid: 4061506175562416575
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 6

@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: PirateCove - Hideout (Small)
   m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
   Kind: 91
+  Variant: Hideout
   Weight: 1
   DefaultBiomeWeight: 1
   BiomeWeights: []
@@ -80,14 +81,14 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506132295024735
-  - rid: 4061506132295024736
-  - rid: 4061506132295024737
-  - rid: 4061506132295024738
+  - rid: 4061506175559009094
+  - rid: 4061506175559009095
+  - rid: 4061506175559009096
+  - rid: 4061506175559009097
   references:
     version: 2
     RefIds:
-    - rid: 4061506132295024735
+    - rid: 4061506175559009094
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -98,16 +99,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506132295024736
+    - rid: 4061506175559009095
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506132295024737
+    - rid: 4061506175559009096
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506132295024738
+    - rid: 4061506175559009097
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 5

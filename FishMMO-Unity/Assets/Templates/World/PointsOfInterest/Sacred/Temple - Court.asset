@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Temple - Court
   m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
   Kind: 57
+  Variant: Court
   Weight: 1
   DefaultBiomeWeight: 1
   BiomeWeights: []
@@ -80,13 +81,13 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506132295025053
-  - rid: 4061506132295025054
-  - rid: 4061506132295025055
+  - rid: 4061506175562416263
+  - rid: 4061506175562416264
+  - rid: 4061506175562416265
   references:
     version: 2
     RefIds:
-    - rid: 4061506132295025053
+    - rid: 4061506175562416263
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -97,12 +98,12 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506132295025054
+    - rid: 4061506175562416264
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506132295025055
+    - rid: 4061506175562416265
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 

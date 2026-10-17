@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: BossLair - Warcamp
   m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
   Kind: 97
+  Variant: Warcamp
   Weight: 0.6
   DefaultBiomeWeight: 1
   BiomeWeights: []
@@ -80,15 +81,15 @@ MonoBehaviour:
     Role: 8
     Style: hide
   Features:
-  - rid: 4061506132295024829
-  - rid: 4061506132295024830
-  - rid: 4061506132295024831
-  - rid: 4061506132295024832
-  - rid: 4061506132295024833
+  - rid: 4061506175559009195
+  - rid: 4061506175559009196
+  - rid: 4061506175559009197
+  - rid: 4061506175559009198
+  - rid: 4061506175559009199
   references:
     version: 2
     RefIds:
-    - rid: 4061506132295024829
+    - rid: 4061506175559009195
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -99,16 +100,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506132295024830
+    - rid: 4061506175559009196
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506132295024831
+    - rid: 4061506175559009197
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506132295024832
+    - rid: 4061506175559009198
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 5
@@ -116,7 +117,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506132295024833
+    - rid: 4061506175559009199
       type: {class: BossSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         ArenaShare: 0.6

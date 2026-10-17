@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: MonsterDen - Lair (Small)
   m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
   Kind: 53
+  Variant: Lair
   Weight: 1
   DefaultBiomeWeight: 1
   BiomeWeights: []
@@ -71,14 +72,14 @@ MonoBehaviour:
     Role: 8
     Style: stone
   Features:
-  - rid: 4061506132295024731
-  - rid: 4061506132295024732
-  - rid: 4061506132295024733
-  - rid: 4061506132295024734
+  - rid: 4061506175559009125
+  - rid: 4061506175559009126
+  - rid: 4061506175559009127
+  - rid: 4061506175559009128
   references:
     version: 2
     RefIds:
-    - rid: 4061506132295024731
+    - rid: 4061506175559009125
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -89,16 +90,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506132295024732
+    - rid: 4061506175559009126
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506132295024733
+    - rid: 4061506175559009127
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506132295024734
+    - rid: 4061506175559009128
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 5
