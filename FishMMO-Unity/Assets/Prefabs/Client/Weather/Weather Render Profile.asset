@@ -253,6 +253,7 @@ MonoBehaviour:
     - {x: 400, y: 2}
     - {x: 600, y: 1}
     Fullness: 0.215
+    SprinkleLevel: 2
     BankClearance: 0.03
     BankThinning: 0.25
     WidenExponent: 1

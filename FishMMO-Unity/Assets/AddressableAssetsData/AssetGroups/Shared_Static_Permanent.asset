@@ -321,6 +321,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 07c731dfa8c85e4f98f5ca1ad31d3145
+    m_Address: Galris 1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 07d0a5b3f65e989778996ececdbd2d92
     m_Address: Lava Tube
     m_ReadOnly: 0
@@ -369,20 +375,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 09539997ece989849b26f55b8e9df1b1
-    m_Address: Soluris System - Rheis
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 096c0d426d564912918b89c3cb5d554a
     m_Address: Gargoyle
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 0999355467f5cf4faa30e989db47158d
-    m_Address: Soluris System - Soluris
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -563,12 +557,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0d1614bd5e4149dfbc05906dbbd0928d
     m_Address: Void Spawn
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 0d20f37d4b8f469d9ed40a32ac03f75f
-    m_Address: Soluris System - Test Comet
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -875,6 +863,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 12bbec3bf77b461db4887efe23b3281d
     m_Address: Gnoll
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 12beec407c7b6a256a84a8f22be9b6e0
+    m_Address: Yrenara System - Ithaewyn
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1227,6 +1221,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 198774a458aed4db888c6aacadc622f7
+    m_Address: Yrenara System - Quorowyn
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 19a5717c971a75710847b0208089bf9e
     m_Address: Silver Vein
     m_ReadOnly: 0
@@ -1247,6 +1247,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1a20ed298e69bcd863cfbf7037573d25
     m_Address: Formation_Basalt_Scree_0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1a2a221a9a55dc42b88ea50259871352
+    m_Address: Yrenara System - Loranven
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2097,12 +2103,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 2a5a8a099e0de5c7c99847ad5b3e651a
-    m_Address: Isle of Aradune
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2a666181fba14f54a8a1e2729e38e44e
     m_Address: Test Sword
     m_ReadOnly: 0
@@ -2153,12 +2153,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2b2557fb954cbc6cbe355f19abd93e03
     m_Address: Detail_FlowersAlpine
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 2b8b5891e0145f299be1e3aaa38f071c
-    m_Address: Soluris System - Galris
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2331,12 +2325,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 301fcdea776e2ec7d90eb899bb5f7688
-    m_Address: The Kel Peaks
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3039a7d15cdf80ce2b2c97aa02aa723b
     m_Address: Rille
     m_ReadOnly: 0
@@ -2369,12 +2357,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 31669d38034d4aa7aaaba79d2c4efe02
     m_Address: Mire Shambler
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 31b77f9b356533cf183bf1df1474f29c
-    m_Address: Skerei Coast
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2601,18 +2583,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 37011cbeeab6d57bea1f4ee8a9fdb70a
-    m_Address: Soluris System - Orreth
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 370f94a99bca6a9b8a114fa943a63857
-    m_Address: Soluris System - Helis
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3737eca27f7b45dd98b8d9acae7d596b
     m_Address: Ember Drake
     m_ReadOnly: 0
@@ -2823,6 +2793,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3cad864457347603a91498f9edc3c3eb
+    m_Address: Yrenara System - Heleoreth
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3cbcc14eaac65e6c04b0591825f0a4a0
     m_Address: Tree_Pinyon_LOD1
     m_ReadOnly: 0
@@ -3017,6 +2993,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4130c22e7f80629344c6931dcc007641
     m_Address: Tree_Bristlecone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 414d5ca8bbaa3f1138dceff7b7d78e8d
+    m_Address: Yrenara System - Galris
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3903,12 +3885,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 5354bfec9033eea6f930810c7e60c731
-    m_Address: Soluris System - Fenirreth
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 53f25c952bedf708eedced1109f8757f
     m_Address: Detail_Bush_Hazel
     m_ReadOnly: 0
@@ -3935,6 +3911,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 543cf5032ac024bc15bde6b8c382e0a5
     m_Address: Detail_FlowersMeadow
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 543f62470ae0b2df78be52ea74a0bac6
+    m_Address: Yrenara System - Pelorron
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3989,12 +3971,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5586bdbd20966fa70cf7eeeeef71f151
     m_Address: Ground_Basalt
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 55d4efcbcd8731fafa3711d5518251e8
-    m_Address: Soluris System - Peliareth
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4209,6 +4185,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 59a424e0a799b47f0ab1e2fbabddf604
+    m_Address: Yrenara System
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 59a81cb39534f6a6efaf0c2b83bc673e
     m_Address: Formation_Anorthosite_Boulder_2_LOD0
     m_ReadOnly: 0
@@ -4307,12 +4289,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5b7b7c4247022387047ff4c856d756e5
     m_Address: Tree_DragonTree_LOD0
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 5b82e5b68a0eef3f0853e75b4255f9ac
-    m_Address: Soluris System - Orirvar
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4827,6 +4803,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6818c35ffa5aaa9f1bd3e230dcd00656
+    m_Address: Yrenara System - Naris
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 688cf6924ff8054291e2c7ea0f6c2488
     m_Address: Detail_Bush_Gorse
     m_ReadOnly: 0
@@ -4977,6 +4959,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6d7ebb8f0960ebea3a67383f861cd274
+    m_Address: Moron 1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6dfdb28d2366490c9cf53c3d6e870bf9
     m_Address: Chimera
     m_ReadOnly: 0
@@ -5085,6 +5073,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6fa636778c98d40aea8a361bba0929e7
+    m_Address: Yrenara System - Yrenara
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6fc3329cd21567e74a206e38935e6671
     m_Address: Impact Basin
     m_ReadOnly: 0
@@ -5099,12 +5093,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6fe49b6f5aee6acb4e302b7e433a219f
     m_Address: Detail_Bush_Rhododendron_LOD2
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7014cada788bc6084b17014e2b8cd730
-    m_Address: Island of Hag
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5746,6 +5734,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7fc76947d08143b687b837bbfb134c5a
     m_Address: Tree_Larch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 801a398bb4b7e2b54a3ccef77a1ab8c3
+    m_Address: Yrenara System - Narris
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6578,6 +6572,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9131b538631f0ebe5ba4ae74dc80c9d2
+    m_Address: Belron 1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9139404bf0b589fbbd4f0c32d200d1e4
     m_Address: Formation_Basalt_Columns_2
     m_ReadOnly: 0
@@ -7070,6 +7070,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9b1326e821fac3330a824209f3983af1
+    m_Address: Yrenara System - Oramar
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9b15394da2e5e39f99a90bfccc952e14
     m_Address: Ground_GrassDry
     m_ReadOnly: 0
@@ -7369,12 +7375,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a0686d83c9cd73e5892c4b65dae35453
-    m_Address: Flo Monolith
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a09ca72e0d076445a2e1bd0c52401d32
     m_Address: Formation_Halite_Terrace_0
     m_ReadOnly: 0
@@ -7579,12 +7579,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a53448f955c4060a08fde3dc7e2d59a3
-    m_Address: Soluris System - Beliaron
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a595703a5257032db27a607134acd8aa
     m_Address: Formation_Granite_Split_1
     m_ReadOnly: 0
@@ -7593,6 +7587,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a5cd478735d3dc90ebc5eb2f1a9ec272
     m_Address: Silver Ore
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a617364db4d0e8444abef6855bb9db37
+    m_Address: Yrenara System - Xanaex
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7611,12 +7611,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a62df59b3cd36268c925ba6d3587433a
     m_Address: Detail_MusselBedOyster
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a6376d356d9fe9d1b80f42ad5e90d4a5
-    m_Address: Soluris System
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7665,6 +7659,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a6e41707e0d1b8981157324d64539486
     m_Address: Formation_Scoria_Cone_3_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a715e6bf2bb30bf1b9814deb21b15a3c
+    m_Address: Ithaewyn 1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8563,12 +8563,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: bb04c58701877ded790a830f7cf4a6b6
-    m_Address: Soluris System - Taldor
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bb0ae43dffda32580c997677cd023680
     m_Address: Raging Personality
     m_ReadOnly: 0
@@ -8601,12 +8595,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bbeef579bf4ad0d483a15c8ccb2581dd
     m_Address: Deadwood_FallenLog_Oak
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: bc000dd2493d4cbf399632910437f8bc
-    m_Address: Soluris System - Arthis
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8743,6 +8731,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bed82351f675d7130a7ea8bd27d1bbe1
+    m_Address: Yrenara System - Orvar
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bf79c3a44e6071b9c9c8a9211fe68b05
     m_Address: Places Discovered
     m_ReadOnly: 0
@@ -8787,12 +8781,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c06e47a45b1d4d4b4eed473dca550bda
     m_Address: Formation_Anorthosite_Boulder_2
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c08c017cac7c17c9296dc5d6ad18b862
-    m_Address: Volax Obelisk
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9037,6 +9025,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c6414f96346f91bfc9dc83c8f604d2ef
+    m_Address: Yrenara System - Lorenra
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c65137fe1e26f4e65c9b1c675293bf3a
     m_Address: Detail_SandDollar
     m_ReadOnly: 0
@@ -9147,6 +9141,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c8d55dbf68d647a682a1dbbe2f722884
     m_Address: Name Grammar
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c8e56fbd5ee04fd55920ae69dd10058a
+    m_Address: Yrenara System - Oronos
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9367,6 +9367,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cf62262d3214c380bbbb1005a6f798aa
+    m_Address: Yrenara System - Elreth
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cf6695c0536344e083dd0a871b0c7304
     m_Address: Earth Elemental
     m_ReadOnly: 0
@@ -9465,12 +9471,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d22eb9cf41454244a755fb7bbbdd0316
     m_Address: Demon
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d23a0e9172f26063e81ec5928067b111
-    m_Address: Soluris System - Kelara
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10027,6 +10027,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dfe478feb529ec0dfa53934977dd59c6
+    m_Address: Yrenara System - Joruven
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e0373a1e7fe14dae9d9713d2978be8d2
     m_Address: Formation_Conglomerate_Boulder_3
     m_ReadOnly: 0
@@ -10041,12 +10047,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e0d004d1b5e90374fa54e7f9aec2166a
     m_Address: Fire Damage
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e0d3a874d772f47d380097df6f67b18c
-    m_Address: Treacherous Bri Lookout
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10813,12 +10813,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f1417dc26537352919d05f1d27dd4075
-    m_Address: Soluris System - Helatha
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f17bfd828632b634996a225b91c913f7
     m_Address: Camp - Lean-tos (Medium-Large)
     m_ReadOnly: 0
@@ -11058,6 +11052,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f6e4e4bb32b8eef61b31f8890297b5a8
+    m_Address: Yrenara System - Orwyn
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f6e937b757cf3074cb6781f142abab98
     m_Address: Fire Resistance
     m_ReadOnly: 0
@@ -11162,6 +11162,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f920852a8ade3ea718600dae84663b06
     m_Address: Monument - Obelisk
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f924fcb355515b27fa25c47b2c5ecfd4
+    m_Address: Yrenara System - Belron
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -11372,6 +11378,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: fe3425a466033e34ead49fcfc3204895
     m_Address: Small World Item
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fec5db7dc37602365a93c1db1ea1a002
+    m_Address: Yrenara System - Moron
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

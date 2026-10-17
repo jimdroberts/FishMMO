@@ -13,24 +13,24 @@ MonoBehaviour:
   m_Name: SceneNavMeshCatalogue
   m_EditorClassIdentifier: FishMMO.Server::FishMMO.Server.Implementation.World.SceneServer.Navigation.SceneNavMeshCatalogue
   Entries:
+  - SceneName: Belron 1
+    Data: {fileID: -8638594133073205230, guid: 2d2e99e66683ef7c69d80dd5f004dec6, type: 2}
+    Position: {x: 0, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Dungeon
     Data: {fileID: 23800000, guid: c43b6eb487815084ca437ada41086fa4, type: 2}
     Position: {x: -256, y: -35, z: -256}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
-  - SceneName: Flo Monolith
-    Data: {fileID: -4216869221232871257, guid: 3e356a6f98eda495790f5aa8fe8a0a42, type: 2}
+  - SceneName: Galris 1
+    Data: {fileID: -4920747176065391094, guid: 37b79cefd7bee57f3b0ad533ca570851, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
-  - SceneName: Island of Hag
-    Data: {fileID: -2915639495975509830, guid: 172edf814b131d57aa780fad2ca2aec6, type: 2}
+  - SceneName: Ithaewyn 1
+    Data: {fileID: -734056120612313442, guid: f97399325986d3f1bb73fd8884745c66, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
-  - SceneName: Isle of Aradune
-    Data: {fileID: -503823978164141886, guid: 38bcb38630edd8d5f84e23dba3385a40, type: 2}
-    Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 1}
-  - SceneName: Skerei Coast
-    Data: {fileID: -1247489939056210656, guid: ee7d40facc6a97ad081c8e889820d695, type: 2}
+  - SceneName: Moron 1
+    Data: {fileID: 5489690419996309047, guid: 83b7302d3becafc62b241ba674ce663d, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: StartScene A
@@ -45,19 +45,7 @@ MonoBehaviour:
     Data: {fileID: 23800000, guid: bccc2ce460150eb43bb0d7f0db28b05b, type: 2}
     Position: {x: -500, y: 0, z: -500}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
-  - SceneName: The Kel Peaks
-    Data: {fileID: 8850784539960337614, guid: a864bca73b6a3d75886e7eedb96911bf, type: 2}
-    Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 1}
-  - SceneName: Treacherous Bri Lookout
-    Data: {fileID: -8821399485936347316, guid: aa6142b61c7fc2b0cb7c0a5d865e93bc, type: 2}
-    Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Tutorial Spawners
     Data: {fileID: 23800000, guid: 9bb793da43a030e459af61d22643af10, type: 2}
-    Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 1}
-  - SceneName: Volax Obelisk
-    Data: {fileID: -7846174126199278974, guid: 7a3730f3cbc747a039e70782308f6220, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}

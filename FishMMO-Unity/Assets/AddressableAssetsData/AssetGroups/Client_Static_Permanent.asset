@@ -343,12 +343,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 1c6528260f519fa1985ec5e759c18e66
-    m_Address: Isle of Aradune Backdrop Control 2
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1d18c71f26eef667b01c2a066d0b8ce5
     m_Address: Billboard_WeepingWillow
     m_ReadOnly: 0
@@ -498,12 +492,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 29c757cdadfd2e4928f1bb045fc5b13b
-    m_Address: Isle of Aradune Backdrop Control 5
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 29d402664d2a58016de2c344d0fdeeb4
     m_Address: Detail_BacterialMat
     m_ReadOnly: 0
@@ -630,12 +618,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 340c2ccd01ed497e691c1f4bc49cd842
     m_Address: Boundary Glass
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 34200d3cd9a5ee0cab65c2da8cc695ef
-    m_Address: Isle of Aradune Backdrop
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1377,12 +1359,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 6dd784ba41e9cba4a88adb1bf1fdc556
-    m_Address: Treacherous Bri Lookout Backdrop Control 2
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6e289d3446076e35da6fd32d6ac0d080
     m_Address: Billboard_Pinyon
     m_ReadOnly: 0
@@ -1406,12 +1382,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7008d4227441a95589839590d7ff3677
-    m_Address: Isle of Aradune Backdrop Control 4
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 70eeeadb6186fa22a80675c90ac8cff9
     m_Address: Ground
     m_ReadOnly: 0
@@ -1419,12 +1389,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 713c81c490c74311b936e0315f3029c4
     m_Address: FishGrassBlades
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 71c79bdad0f6178fabcdb601bb1a4f52
-    m_Address: Isle of Aradune Backdrop
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1595,12 +1559,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 860a6b9324098a7bfbfd0b156b3ab1af
-    m_Address: Isle of Aradune Backdrop Control 0
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 880ecc3bf473abd4da332ec06e2b5ff2
     m_Address: Snow
     m_ReadOnly: 0
@@ -1644,12 +1602,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8a39aca35296f546feb19082e169f2d8
     m_Address: RockSurface_Slate_Mask
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 8b7d47c20988583409e353f9f6ce024a
-    m_Address: Isle of Aradune Backdrop Control 3
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1961,12 +1913,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a68048da264f17ebcb0ab30db7af5a41
-    m_Address: Treacherous Bri Lookout Backdrop Control 0
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a6da49cc714d6e6998c17c337a14ad94
     m_Address: Billboard_Beech_Albedo
     m_ReadOnly: 0
@@ -2174,12 +2120,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b717a72ff889b64d76d294c116c9bba9
     m_Address: RockSurface_Slate_Normal
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b7725aa710597723a9e469e2b04e1626
-    m_Address: Treacherous Bri Lookout Backdrop
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -2680,18 +2620,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e6f9e01475574a5ae898780e16900786
-    m_Address: Isle of Aradune Backdrop Control 1
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e7452179b91c3d90bae8246f8ee8dec8
-    m_Address: Treacherous Bri Lookout Backdrop Control 1
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e7ebe6ff4984d70a9d552d6caba91844
     m_Address: Ground_Cinder_Albedo
     m_ReadOnly: 0
@@ -2706,12 +2634,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e85444d0198397c15b45f5dac874fd8d
     m_Address: Rock_Anorthosite
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e8f3c0fa3b1179168b7fe3d0271b0ab1
-    m_Address: Treacherous Bri Lookout Backdrop
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent

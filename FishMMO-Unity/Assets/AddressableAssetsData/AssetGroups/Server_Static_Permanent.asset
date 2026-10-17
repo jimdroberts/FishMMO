@@ -15,13 +15,6 @@ MonoBehaviour:
   m_GroupName: Server_Static_Permanent
   m_GUID: f2edf6310b68f6b4bae56ba99aeaeab9
   m_SerializeEntries:
-  - m_GUID: 172edf814b131d57aa780fad2ca2aec6
-    m_Address: Assets/Scenes/WorldScene/Arthis/Island of Hag Terrain/Island of Hag
-      NavMesh.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Server_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 17ec716b3eb745a9bc8e26e6b64ebba0
     m_Address: Assets/Prefabs/Server/SceneServer/AbilitySystem.asset
     m_ReadOnly: 0
@@ -40,9 +33,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 38bcb38630edd8d5f84e23dba3385a40
-    m_Address: Assets/Scenes/WorldScene/Arthis/Isle of Aradune Terrain/Isle of Aradune
-      NavMesh.asset
+  - m_GUID: 260f705e0b783a22a98703d7337d55c6
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Belron 1.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2d2e99e66683ef7c69d80dd5f004dec6
+    m_Address: Assets/Scenes/WorldScene/Belron/Belron 1 Terrain/Belron 1 NavMesh.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 37b79cefd7bee57f3b0ad533ca570851
+    m_Address: Assets/Scenes/WorldScene/Galris/Galris 1 Terrain/Galris 1 NavMesh.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
@@ -53,15 +57,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 3cfe401ccb6fbd445a4d7da9c623957d
-    m_Address: Assets/Prefabs/Server/WorldServer/WorldServerSystem.asset
+  - m_GUID: 3a83c745060e9e1e1aaf0c5d896b0cce
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Moron 1.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 3e356a6f98eda495790f5aa8fe8a0a42
-    m_Address: Assets/Scenes/WorldScene/Arthis/Flo Monolith Terrain/Flo Monolith
-      NavMesh.asset
+  - m_GUID: 3cfe401ccb6fbd445a4d7da9c623957d
+    m_Address: Assets/Prefabs/Server/WorldServer/WorldServerSystem.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
@@ -138,13 +141,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7a3730f3cbc747a039e70782308f6220
-    m_Address: Assets/Scenes/WorldScene/Rheis/Volax Obelisk Terrain/Volax Obelisk
-      NavMesh.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Server_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7c1ca08ef1e69c690af41b67d7b5167e
     m_Address: Assets/Prefabs/Server/LoginServer/LoginServerSystem.asset
     m_ReadOnly: 0
@@ -165,6 +161,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 81dcf0a7a5664a1c83d8b72c607d5648
     m_Address: LeaderboardSystem
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 83b7302d3becafc62b241ba674ce663d
+    m_Address: Assets/Scenes/WorldScene/Moron/Moron 1 Terrain/Moron 1 NavMesh.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
@@ -223,20 +225,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a864bca73b6a3d75886e7eedb96911bf
-    m_Address: Assets/Scenes/WorldScene/Peliareth/The Kel Peaks Terrain/The Kel Peaks
-      NavMesh.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Server_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: aa6142b61c7fc2b0cb7c0a5d865e93bc
-    m_Address: Assets/Scenes/WorldScene/Arthis/Treacherous Bri Lookout Terrain/Treacherous
-      Bri Lookout NavMesh.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Server_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ab11fc8547112b3f8b0737445814913c
     m_Address: Assets/Prefabs/Server/SceneServer/ChatSystem.asset
     m_ReadOnly: 0
@@ -269,6 +257,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c43b6eb487815084ca437ada41086fa4
     m_Address: Assets/Scenes/WorldScene/Dungeon/NavMesh-Terrain.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c4e5a1102aa0390f5ae33ec5318dae23
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Ithaewyn 1.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c9a33a64870ade470a077bafb3cd53fc
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Galris 1.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
@@ -327,13 +327,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: ee7d40facc6a97ad081c8e889820d695
-    m_Address: Assets/Scenes/WorldScene/Galris/Skerei Coast Terrain/Skerei Coast
-      NavMesh.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Server_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f23e4e47e1bcac9b18d2d3bee4159f51
     m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/StartScene A.asset
     m_ReadOnly: 0
@@ -348,6 +341,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f8dd271abfab0f44287f337e86b02aa5
     m_Address: Assets/Scenes/WorldScene/StartScene B/NavMesh-Terrain.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f97399325986d3f1bb73fd8884745c66
+    m_Address: Assets/Scenes/WorldScene/Ithaewyn/Ithaewyn 1 Terrain/Ithaewyn 1 NavMesh.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
