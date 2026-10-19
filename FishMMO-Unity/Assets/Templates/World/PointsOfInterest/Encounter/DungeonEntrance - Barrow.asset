@@ -1,0 +1,107 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5d5ab720ab15d69083f3901ff8f111f, type: 3}
+  m_Name: DungeonEntrance - Barrow
+  m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
+  Kind: 96
+  Variant: Barrow
+  Weight: 1
+  DefaultBiomeWeight: 0.5
+  BiomeWeights:
+  - Biome: Tundra
+    Weight: 1.6
+  - Biome: Taiga
+    Weight: 1.6
+  - Biome: Snow
+    Weight: 1.6
+  - Biome: Glacier
+    Weight: 1.6
+  - Biome: Ice Sheet
+    Weight: 1.6
+  - Biome: Ice Shelf
+    Weight: 1.6
+  - Biome: Permanent Ice
+    Weight: 1.6
+  - Biome: Steppe
+    Weight: 1.6
+  - Biome: Savanna
+    Weight: 1.6
+  - Biome: Tundra
+    Weight: 1.6
+  - Biome: Forest
+    Weight: 1.2
+  - Biome: Woodland
+    Weight: 1.2
+  - Biome: Taiga
+    Weight: 1.2
+  - Biome: Jungle
+    Weight: 1.2
+  - Biome: Bamboo Forest
+    Weight: 1.2
+  - Biome: Forest Ruins
+    Weight: 1.2
+  - Biome: Jungle Ruins
+    Weight: 1.2
+  - Biome: Jungle Temple
+    Weight: 1.2
+  RaceCategories: []
+  Races: []
+  Small: 1
+  Medium: 1
+  Large: 1
+  PadFlatness: 1
+  Style: stone
+  Layout: 0
+  Pieces:
+  - Tag: =DungeonBarrow
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 1
+    Style: 
+  Features:
+  - rid: 4061506230068184039
+  - rid: 4061506230068184040
+  - rid: 4061506230068184041
+  - rid: 4061506230068184042
+  references:
+    version: 2
+    RefIds:
+    - rid: 4061506230068184039
+      type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        MaxSinkMetres: 0.4
+        MaxTiltDegrees: 8
+        Gap: 1
+        CountsFollowSize: 1
+        Finish: 2
+        FinishChance: 0.6
+        KeepOutOfWater: 1
+        Clearings: []
+    - rid: 4061506230068184040
+      type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        RadiusShare: 1.25
+        Height: 60
+        ShowName: 1
+    - rid: 4061506230068184041
+      type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data: 
+    - rid: 4061506230068184042
+      type: {class: DungeonEntranceFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Offset: {x: 0, y: 0}
+        Architecture: =DungeonGate
+        Dressing: 1

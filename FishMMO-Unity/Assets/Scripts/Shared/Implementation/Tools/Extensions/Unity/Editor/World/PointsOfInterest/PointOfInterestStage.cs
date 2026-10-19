@@ -491,12 +491,14 @@ namespace FishMMO.Shared.WorldDesign
 				Records = Plan.Records,
 				KeepOuts = Plan.KeepOuts,
 				Shapes = Plan.Shapes,
+				Pads = Plan.Pads,
 				HasStreets = r => Templates.TryGetValue(r.Id, out PointOfInterestTemplate t)
 					&& (t.Layout == PointOfInterestLayout.Street || t.Layout == PointOfInterestLayout.Walled),
 				Seed = input.Seed,
 			};
 			var clock = System.Diagnostics.Stopwatch.StartNew();
 			PathPlan paths = PathNetworkPlanner.Plan(pathInput);
+			MarkBoardwalks(paths.Paths, input, ground, biomes, (x, z) => WaterAt(x, z) == PathCellWater.Dry, notes);
 
 			// A bridge the rule placed between two towns that no way was laid over stands on no path: it is dropped.
 			var unused = new HashSet<int>();
@@ -538,7 +540,11 @@ namespace FishMMO.Shared.WorldDesign
 				int biomeId = 0;
 				if (input.BiomeAt != null && input.Biomes.Count > 0)
 				{
-					int b = Mathf.Clamp(input.BiomeAt(c.x, c.z), 0, input.Biomes.Count - 1);
+					/* A bridge belongs to the banks it joins, not to the water under its middle (decision 35 (i), 2026-10-18): over a
+					 * river 8 m and more wide the centre is the River biome's, which built every such bridge in the River's palette. */
+					int b = Mathf.Clamp(PathCrossings.BridgeBiome(c, site.Yaw, site.Span, input.BiomeAt,
+						i => input.Biomes[i] != null && biomes.TryGetValue(input.Biomes[i].Id, out BiomeTemplate t) && PathCrossings.IsWaterBiome(t != null ? t.WaterRole : BiomeWaterRole.None),
+						input.Biomes.Count), 0, input.Biomes.Count - 1);
 					biomeId = input.Biomes[b] != null ? input.Biomes[b].Id : 0;
 				}
 				var record = new PointOfInterestRecord
@@ -633,6 +639,41 @@ namespace FishMMO.Shared.WorldDesign
 				(unbuilt > 0 ? $" {unbuilt} crossing(s) found no bridge template and are waded." : string.Empty));
 		}
 
+		/// <summary>
+		/// Flags the stretches of the ways their biomes raise as boardwalks (2026-10-18, I2i; PathBoardwalks.MarkWays), before they
+		/// are carved, so the carve and the path field leave the ground under each deck as it lies. Nothing when no biome of the
+		/// scene raises a way (every biome's default).
+		/// </summary>
+		private static void MarkBoardwalks(List<ScenePath> ways, PointOfInterestPlanInput input, Func<float, float, float> ground,
+			Dictionary<int, BiomeTemplate> biomes, Func<float, float, bool> dry, List<string> notes)
+		{
+			if (ways == null || input.BiomeAt == null || input.Biomes.Count == 0 || biomes == null)
+			{
+				return;
+			}
+			var settings = new BiomeBoardwalks[input.Biomes.Count];
+			bool any = false;
+			for (int b = 0; b < settings.Length; b++)
+			{
+				settings[b] = input.Biomes[b] != null && biomes.TryGetValue(input.Biomes[b].Id, out BiomeTemplate biome) ? BiomeTemplateArt.Boardwalks(biome) : BiomeBoardwalks.None;
+				any |= settings[b] != BiomeBoardwalks.None;
+			}
+			if (!any)
+			{
+				return;
+			}
+			float Slope(float x, float z)
+			{
+				float dx = ground(x + 1f, z) - ground(x - 1f, z), dz = ground(x, z + 1f) - ground(x, z - 1f);
+				return Mathf.Atan(Mathf.Sqrt(dx * dx + dz * dz) * 0.5f) * Mathf.Rad2Deg;
+			}
+			int marked = PathBoardwalks.MarkWays(ways, (x, z) => settings[Mathf.Clamp(input.BiomeAt(x, z), 0, settings.Length - 1)], Slope, dry);
+			if (marked > 0)
+			{
+				notes?.Add($"Paths: {marked:N0} point(s) of way raised on boardwalks.");
+			}
+		}
+
 		/// <summary>Gives a bridge the river it spans: the nearest river point within 40 m.</summary>
 		private static void NearestRiver(PointOfInterestWater water, float x, float z, PointOfInterestRecord record)
 		{
@@ -677,11 +718,14 @@ namespace FishMMO.Shared.WorldDesign
 			Func<float, float, int> biomeAt = null;
 			if (field != null && field.Biomes.Count > 0)
 			{
+				// Lived-in kinds only where the world's air is breathable (decision 39, 2026-10-18): a thin or airless world's biomes
+				// place their natural sites and relics alone.
+				bool breathable = BiomeAir.IsBreathable(BiomeWorldConditions.For(system, Request.Body).Atmosphere);
 				foreach (BiomeTemplate biome in field.Biomes)
 				{
 					// The kinds the biome hosts are its template's (2026-10-16), not the catalogue rows' names.
 					biomes.Add(biome != null
-						? new PointOfInterestBiome(biome.name, BiomeRegistry.IDOf(biome), biome.ResolvedDisplayName, BiomeTemplateArt.SiteKinds(biome, rules))
+						? new PointOfInterestBiome(biome.name, BiomeRegistry.IDOf(biome), biome.ResolvedDisplayName, BiomeTemplateArt.SiteKinds(biome, rules, breathable))
 						: null);
 				}
 				var scratch = new float[field.Biomes.Count];
@@ -825,6 +869,12 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				PlanSites(scene, tiles, terrains, null, water, notes);
 			}
+			/* The last run's ridge and furrow out of the ground before the root that records it is replaced (a repaint and
+			 * Regenerate POIs have taken it out already, before anything read the ground): the fields carve it again from the
+			 * ground as it was (PointOfInterestFieldCarve), never on top of itself. */
+			PointOfInterestFieldCarve.Restore(scene, terrains, notes);
+			// And the last run's paddies' water (2026-10-18, I2i): each field lays its own again below.
+			PointOfInterestPaddies.ClearWater(TerrainFolder, Request.SceneName);
 			ScenePointsOfInterest asset = WriteAsset(wrote);
 			GameObject root = EnsureRoot(scene, asset);
 
@@ -849,6 +899,8 @@ namespace FishMMO.Shared.WorldDesign
 				Notes = notes,
 				Sink = sink,
 			};
+			// Every site's fields claim their ground as they are laid, so a later site's keep off them (2026-10-18, I2k).
+			var fieldClaims = new PointOfInterestFieldClaims();
 
 			foreach (PointOfInterestRecord record in asset.Points)
 			{
@@ -901,6 +953,7 @@ namespace FishMMO.Shared.WorldDesign
 					SkyAt = skyAt,
 					SlopeAt = slope,
 					BiomeAt = (east, north) => siteBiome,
+					FieldClaims = fieldClaims,
 					Notes = notes,
 					Sink = sink,
 				};
@@ -955,6 +1008,19 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			// The ways (with the streets the layouts just laid) baked for the client's path surface.
+			// The boardwalks along the routed ways their biomes raise (2026-10-18, I2i; a settlement laid its streets' own).
+			PathBoardwalks.LayWays(asset.Paths, sink, ground, PathBoardwalks.MapBiomes(TerrainFolder, Request.SceneName), unchecked((int)SceneGenerator.SceneSeed(Request)), notes);
+			// The linear features but the fields' edges (2026-10-18, I2f): lanes' hedges and walls, woods' edges, small sites' bounds,
+			// folds and the leats to the fields, in their biomes' styles; nothing (and nothing read) where no biome names one.
+			try
+			{
+				PointOfInterestLinearFeatures.LayScene(scene, root.transform, asset, Request, TerrainFolder, terrains, tiles, water, ground, slope, fieldClaims, sink, notes);
+			}
+			catch (Exception ex)
+			{
+				Debug.LogException(ex);
+				notes?.Add($"Linear features threw: {ex.Message}");
+			}
 			ScenePathBake.Write(scene, root.transform, TerrainFolder, Request.SceneName, asset, wrote, notes);
 			// And what the laid pieces give off (chimney smoke, fires, forges, lanterns), offered to the client.
 			if (asset.Emitters != null && asset.Emitters.Count > 0)

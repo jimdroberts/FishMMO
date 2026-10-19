@@ -45,6 +45,8 @@
 #include "FishAmbient.hlsl"
 // The sea's surface and surge, for plants with _Aquatic set (kelp, corals, sea fans).
 #include "FishSea.hlsl"
+// A lake's or a river's surface and current round the camera, for the aquatic plants rooted in them (2026-10-18).
+#include "FishChannelFlow.hlsl"
 // The instanced tree channels' per-instance LOD cross-fade (_FishLodFade; contract in the file).
 #include "FishLodFade.hlsl"
 
@@ -661,6 +663,35 @@ void VegDeform(VegAttributes input, out float3 positionWS, out half3 normalWS, o
 
     if (_Aquatic > 0.5)
     {
+        /* Under a lake or a river (decision 35 (a)/(k), 2026-10-18): the plant streams with the current where it is rooted and is
+         * kept under THAT water's surface. Off the inland window, a plant rooted well above the sea's reach is taken to be in a
+         * lake or a river too and only drifts, never pulled down to the sea's ceiling (which would bury a lake's weeds); near the
+         * sea, or on a world with none, the sea's own surge and ceiling exactly as before. */
+        float4 channel = FishChannelFlowAt(originWS.xz);
+        // Water the sea's tide reaches (an estuary's channel, a lagoon) is the sea's: its surge and its ceiling, as before.
+        bool inland = channel.w > 0.5 && (!FishSeaPresent() || channel.z > FishSeaCeiling() + 6.0);
+        if (inland || FishSeaPresent() && originWS.y > FishSeaCeiling() + 6.0)
+        {
+            float clock = _FishWeatherMisc.w;
+            float lagIn = FishSurfaceHash(originWS.xz * 0.23) * 0.3 + input.wind.x * 0.04;
+            float2 stream = FishChannelStream(inland ? channel.xy : float2(0.0, 0.0), positionWS, _WindSway * input.wind.x, clock, lagIn);
+            float3 bend = float3(stream.x, 0.0, stream.y);
+            bend += normalWS * (sin(clock * FishWrapAngular(1.6) + lagIn * 6.2831853 + dot(positionWS, float3(0.9, 1.2, 0.6))) * _WindFlutter * flutter * 0.5);
+            // A bent stem is no longer: what moves sideways comes down a little, as in the wind.
+            bend.y -= dot(bend.xz, bend.xz) * 0.5 / max(0.5, input.wind.x * 4.0);
+            positionWS += bend;
+            if (inland)
+            {
+                // What would break the surface is eased under it and the length it loses laid down the current (or any way, still).
+                float loweredIn = FishKeepUnder(positionWS, channel.z - 0.05, 0.4);
+                float2 down = dot(channel.xy, channel.xy) > 1e-6 ? normalize(channel.xy) : float2(0.7071, 0.7071);
+                positionWS.xz += down * (loweredIn * 0.8);
+            }
+            tint = VegSeasonTint(originWS);
+            fade = half2(visible, fadeShift);
+            return;
+        }
+
         /* Under the sea there is no wind: the swell's surge rocks the plant back and forth (its sway
          * weight is how far each vertex goes with it, 0 at the holdfast), fronds shiver on their own,
          * and nothing breaks the surface — what would rise past the low-tide ceiling is eased under it

@@ -19,7 +19,9 @@ namespace FishMMO.Shared.WorldDesign
 				// The class the old name reading gave: its name has no keyword, so its climate's middle (warm, middling humidity) gave Temperate; a per-biome round may make it Volcanic.
 				.Look(BiomeLookClass.Temperate)
 				.Wildlife(BiomeHabitat.Mountain | BiomeHabitat.Volcanic)
-				.Moat(BiomeMoatWater.Wet);
+				.Moat(BiomeMoatWater.Wet)
+				// An impact crater gives the air no ash (decision 39, the Crater round: the weather content generator's volcanic row is gone).
+				.Emits(null);
 		}
 	}
 }

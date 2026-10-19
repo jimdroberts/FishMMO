@@ -43,7 +43,7 @@ namespace FishMMO.Shared.WorldDesign
 			"bar", "pew", "lectern", "clutter", "door", "step", "light", "torch", "boat", "ship", "wreck", "portal", "market", "stall",
 		};
 
-		private static readonly Dictionary<(string, int), List<VineRules.WallFace>> faces = new Dictionary<(string, int), List<VineRules.WallFace>>();
+		private static readonly Dictionary<(string, int, int), List<VineRules.WallFace>> faces = new Dictionary<(string, int, int), List<VineRules.WallFace>>();
 
 		public bool Handles(PointOfInterestRecord record) => !PointOfInterestKinds.Info(record.Kind).Has(PointOfInterestTraits.Underwater);
 
@@ -73,7 +73,7 @@ namespace FishMMO.Shared.WorldDesign
 			for (int i = 0; i < laid && mats < MaxMats; i++)
 			{
 				PointOfInterestSiteContext.PlacedProp prop = context.Laid[i];
-				if (!StructurePieces.TryParsePrefab(prop.Prefab.name, out StructurePiece piece, out int variant))
+				if (!StructurePieces.TryParsePrefab(prop.Prefab.name, out StructurePiece piece, out int variant, out _, out StructureRoofPitch? roof))
 				{
 					continue;
 				}
@@ -82,7 +82,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					continue;
 				}
-				foreach (VineRules.WallFace face in FacesOf(piece, variant))
+				foreach (VineRules.WallFace face in FacesOf(piece, variant, roof))
 				{
 					Vector3 normal = prop.Rotation * face.Normal;
 					// North faces (+z) are in the shade, where ivy thrives.
@@ -198,14 +198,18 @@ namespace FishMMO.Shared.WorldDesign
 			return piece.Style == StructureStyle.Timber || piece.Style == StructureStyle.Hide ? weight * 0.5f : weight;
 		}
 
-		/// <summary>The faces a piece's variant offers (its first reduced level's solids: the walls as built, fewer small parts), cached.</summary>
-		private static List<VineRules.WallFace> FacesOf(StructurePiece piece, int variant)
+		/// <summary>
+		/// The faces a piece's variant offers (its first reduced level's solids: the walls as built, fewer small parts), cached;
+		/// a roof variant's own (StructureRoofs: a flat roof's parapets, no gables).
+		/// </summary>
+		private static List<VineRules.WallFace> FacesOf(StructurePiece piece, int variant, StructureRoofPitch? roof)
 		{
-			if (!faces.TryGetValue((piece.Id, variant), out List<VineRules.WallFace> list))
+			var key = (piece.Id, variant, roof == null ? -1 : (int)roof.Value);
+			if (!faces.TryGetValue(key, out List<VineRules.WallFace> list))
 			{
-				List<StructureSolid> solids = StructurePieces.BuildSolids(piece, variant, Mathf.Min(1, StructurePieces.LevelCount - 1), StructurePieces.DefaultSeed);
+				List<StructureSolid> solids = StructurePieces.BuildSolids(piece, variant, Mathf.Min(1, StructurePieces.LevelCount - 1), StructurePieces.DefaultSeed, roof);
 				list = VineRules.WallFaces(solids, StructurePieces.DoorsOf(piece, variant), StructurePieces.RoomsOf(piece, variant));
-				faces[(piece.Id, variant)] = list;
+				faces[key] = list;
 			}
 			return list;
 		}

@@ -58,6 +58,13 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
+		/// <summary>Whether a point of the site's frame is in the water, or within 0.1 m of its highest level.</summary>
+		private static bool Wet(PointOfInterestSiteContext context, Vector2 local)
+		{
+			Vector3 at = context.OnGround(local);
+			return context.IsWet(at.x, at.z, 0.1f);
+		}
+
 		/// <summary>Whether a role spawns standing on one spot (a vendor at a stall) rather than scattered.</summary>
 		public static bool StandsOnSpot(PointOfInterestNpcRole role)
 		{
@@ -77,6 +84,15 @@ namespace FishMMO.Shared.WorldDesign
 
 			bool onSpot = StandsOnSpot(Role);
 			Vector2 local = Offset != Vector2.zero ? Offset : PointOfInterestFeatureKit.RandomLocal(context, onSpot ? 0.45f : 0.25f);
+			// Not in the water (the sea and the highest tide too, context.IsWet): drawn again a few times where it was, which only
+			// moves a spawner that stood in it. Not for a site under water, nor in a cave's chamber (its ground is the chamber's).
+			if (Offset == Vector2.zero && !PointOfInterestKinds.Info(context.Record.Kind).Has(PointOfInterestTraits.Underwater) && !CaveShaper.TryForm(context.Record.Kind, out _))
+			{
+				for (int tries = 0; tries < 8 && Wet(context, local); tries++)
+				{
+					local = PointOfInterestFeatureKit.RandomLocal(context, onSpot ? 0.45f : 0.25f);
+				}
+			}
 			int count = Count > 0 ? Count : DefaultCount(Role, context.Record.SizeClass);
 			float area = onSpot ? 0.0f : Mathf.Max(3.0f, context.Record.Radius * AreaShare);
 			ObjectSpawner spawner = PointOfInterestFeatureKit.AddSpawner(context, PointOfInterestFeatureKit.UniqueName(context, $"{Role} Spawner"), local, spawnables, count, area);
@@ -289,7 +305,8 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						score = Mathf.Min(score, Vector2.Distance(world, new Vector2(prop.x, prop.y)) - prop.z);
 					}
-					if (!underwater && context.Water != null && context.Water.KindAt(world.x, world.y) != WaterKind.None)
+					if (!underwater && (context.Water != null && context.Water.KindAt(world.x, world.y) != WaterKind.None
+						|| !CaveShaper.TryForm(record.Kind, out _) && context.IsWet(world.x, world.y, 0.05f)))
 					{
 						score -= 100.0f;
 					}

@@ -46,11 +46,13 @@ namespace FishMMO.Shared.WorldDesign
 		private const float SecondShipLift = 34f;
 
 		/// <remarks>
-		/// <paramref name="palette"/>: the structure palette the airships and landing stages are laid in (2026-10-16); null, as a
-		/// cloud world gives (it has no biome), for the kit's own materials.
+		/// <paramref name="palette"/>: the structure palette the airships and landing stages are laid in (2026-10-16): a cloud
+		/// world's own, from its world body (it stands in no biome; CloudWorldStructures, 2026-10-18), null for the kit's own
+		/// materials. <paramref name="structures"/>: the body's settings, for the light beside each stage's landward end.
 		/// </remarks>
 		public static void Build(Scene scene, Transform root, SceneCloudWorld world, SceneGenerationRequest request, float width, float depth,
-			Func<float, float, float> ground, List<string> notes, FishMMO.Shared.Biomes.BiomeStructurePalette palette = null)
+			Func<float, float, float> ground, List<string> notes, FishMMO.Shared.Biomes.BiomeStructurePalette palette = null,
+			FishMMO.Shared.Celestial.CloudWorldStructures structures = null)
 		{
 			if (root == null || world == null || request == null)
 			{
@@ -67,7 +69,7 @@ namespace FishMMO.Shared.WorldDesign
 			SceneCloudWorld.Island[] islands = world.Islands ?? Array.Empty<SceneCloudWorld.Island>();
 			SceneCloudWorld.Dock[] docks = world.Docks ?? Array.Empty<SceneCloudWorld.Dock>();
 
-			int stages = BakeStages(scene, docks, notes, out int collidable, palette);
+			int stages = BakeStages(scene, docks, notes, out int collidable, palette, StageLight(structures), world, ground);
 
 			var planner = new SkyLanePlanner(Islands(islands, ground), width, depth);
 			var kinds = new List<string>();
@@ -195,13 +197,25 @@ namespace FishMMO.Shared.WorldDesign
 		/// The landing stages as baked props: each piece's origin at its walkway's middle, its +z along the dock's Outward, its
 		/// outer end at the dock's end. Clears the source when there are none. Returns how many were placed.
 		/// </summary>
-		private static int BakeStages(Scene scene, SceneCloudWorld.Dock[] docks, List<string> notes, out int collidable, FishMMO.Shared.Biomes.BiomeStructurePalette palette = null)
+		private static int BakeStages(Scene scene, SceneCloudWorld.Dock[] docks, List<string> notes, out int collidable, FishMMO.Shared.Biomes.BiomeStructurePalette palette = null,
+			string lightQuery = null, SceneCloudWorld world = null, Func<float, float, float> ground = null)
 		{
 			collidable = 0;
 			var prototypes = new List<ScenePropSet.Prototype>();
 			var props = new List<ScenePropSet.Prop>();
 			var prototypeOf = new Dictionary<GameObject, int>();
-			int missing = 0;
+			int missing = 0, lights = 0, unlit = 0;
+			int stagesLaid = 0;
+			void Add(GameObject prefab, Vector3 at, Quaternion rotation)
+			{
+				if (!prototypeOf.TryGetValue(prefab, out int index))
+				{
+					index = prototypes.Count;
+					prototypeOf[prefab] = index;
+					prototypes.Add(new ScenePropSet.Prototype { Prefab = prefab, Layer = -1, Materials = StructurePaletteDressing.MaterialsFor(prefab, palette) });
+				}
+				props.Add(new ScenePropSet.Prop { Prototype = index, Position = at, Rotation = rotation, Scale = Vector3.one });
+			}
 			for (int i = 0; i < docks.Length; i++)
 			{
 				SceneCloudWorld.Dock dock = docks[i];
@@ -217,26 +231,63 @@ namespace FishMMO.Shared.WorldDesign
 					missing++;
 					continue;
 				}
-				if (!prototypeOf.TryGetValue(prefab, out int prototype))
+				Add(prefab, dock.Position - outward * (StructurePieces.SkyDockLength * 0.5f), Quaternion.LookRotation(outward, Vector3.up));
+				stagesLaid++;
+				// The light beside its landward end, where the world body names one (2026-10-18, I6e).
+				if (lightQuery != null)
 				{
-					prototype = prototypes.Count;
-					prototypeOf[prefab] = prototype;
-					prototypes.Add(new ScenePropSet.Prototype { Prefab = prefab, Layer = -1, Materials = StructurePaletteDressing.MaterialsFor(prefab, palette) });
+					if (StageLight(dock, outward, world, ground, out Vector3 at))
+					{
+						GameObject light = PointOfInterestPieceResolver.Resolve(new PointOfInterestPieceRequest(lightQuery, "timber", (int)(StableHash($"light:{at.x:0}:{at.z:0}") & 0x7fffffff)));
+						if (light != null)
+						{
+							Add(light, at, Quaternion.LookRotation(outward, Vector3.up));
+							lights++;
+						}
+						else
+						{
+							missing++;
+						}
+					}
+					else
+					{
+						unlit++;
+					}
 				}
-				props.Add(new ScenePropSet.Prop
-				{
-					Prototype = prototype,
-					Position = dock.Position - outward * (StructurePieces.SkyDockLength * 0.5f),
-					Rotation = Quaternion.LookRotation(outward, Vector3.up),
-					Scale = Vector3.one,
-				});
 			}
 			collidable = ScenePropBaker.Write(scene, PropSource, prototypes, props);
 			if (missing > 0)
 			{
-				notes?.Add($"Sky traffic: {missing} landing stage(s) skipped, their art is missing (run Generate biome art, then re-cut).");
+				notes?.Add($"Sky traffic: {missing} landing stage piece(s) skipped, their art is missing (run Generate biome art, then re-cut).");
 			}
-			return props.Count;
+			if (lightQuery != null)
+			{
+				notes?.Add($"Sky traffic: {lights} landing-stage light(s){(unlit > 0 ? $", {unlit} stage(s) with no island ground beside its end for one" : string.Empty)}.");
+			}
+			return stagesLaid;
+		}
+
+		/// <summary>The kit piece query of the light a body names for its landing stages, standing on the ground; null for none.</summary>
+		private static string StageLight(FishMMO.Shared.Celestial.CloudWorldStructures structures)
+		{
+			return structures != null && structures.TryLight(FishMMO.Shared.Celestial.CloudWorldWayPlace.LandingStage, out FishMMO.Shared.Celestial.CloudWorldWayLight light)
+				&& FishMMO.Shared.Biomes.BiomeWayLights.MountOf(light.Light) == FishMMO.Shared.Biomes.BiomeWayLightMount.Ground ? light.PieceQuery : null;
+		}
+
+		/// <summary>How far inland of a stage's landward end its light stands, and how far to the side of its walkway, metres.</summary>
+		public const float StageLightInland = 1f, StageLightAside = 0.8f;
+
+		/// <summary>
+		/// Where a landing stage's light stands (2026-10-18, I6e): beside its landward end on the side away from its mast (+x of
+		/// the stage), a metre inland of the end, on its island's ground (the record's island the dock is on). False off the island.
+		/// </summary>
+		public static bool StageLight(SceneCloudWorld.Dock dock, Vector3 outward, SceneCloudWorld world, Func<float, float, float> ground, out Vector3 at)
+		{
+			var way = new Vector3(outward.x, 0f, outward.z).normalized;
+			var right = new Vector3(way.z, 0f, -way.x);
+			Vector3 p = dock.Position - way * (StructurePieces.SkyDockLength + StageLightInland) + right * (StructurePieces.SkyDockWidth * 0.5f + StageLightAside);
+			at = new Vector3(p.x, ground != null ? ground(p.x, p.z) : dock.Position.y, p.z);
+			return world == null || world.IslandAt(p.x, p.z) == dock.Island;
 		}
 
 		/// <summary>The islands as the planner sees them: each one's top found from its ground (the highest of its outline's reach).</summary>

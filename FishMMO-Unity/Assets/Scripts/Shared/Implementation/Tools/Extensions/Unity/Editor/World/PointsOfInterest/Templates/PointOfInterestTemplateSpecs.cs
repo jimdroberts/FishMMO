@@ -204,6 +204,8 @@ namespace FishMMO.Shared.WorldDesign
 		public const string Gravestone = "=Gravestone";
 		public const string Mound = "=GraveMound";
 		public const string CryptDoor = "=CryptEntrance";
+		/// <summary>Dungeon doors set into a face, anchored at their thresholds (StructurePieces.Dungeon.cs, 2026-10-18).</summary>
+		public const string DungeonPortal = "=DungeonPortal", DungeonBarrow = "=DungeonBarrow";
 		public const string Mausoleum = "=Mausoleum";
 		public const string Bones = "bones";
 		public const string Fence = "fence";
@@ -244,7 +246,9 @@ namespace FishMMO.Shared.WorldDesign
 		// give it for every variant (where it differs from the variant's weight elsewhere) onto its template, and the cut picks
 		// by the template's. A change here reaches a scene once the biome templates are re-authored.
 		public static readonly string[] Swamp = { "Swamp", "Mangrove", "Peat Bog", "Wetlands", "Swamp Ruins", "Swamp Temple", "Swamp Cave" };
-		public static readonly string[] Arid = { "Desert", "High Desert", "Badlands", "Salt Flat", "Oasis", "Scrubland", "Dust Sea", "Wasteland" };
+		// Dust Sea left the arid list 2026-10-18 (decision 44, the Dust Sea round): a sea of dust on airless and thin-aired worlds,
+		// nobody lives there, so it takes no arid settlement, inn or lodge variants (its template's own weights, from its file, rule).
+		public static readonly string[] Arid = { "Desert", "High Desert", "Badlands", "Salt Flat", "Oasis", "Scrubland", "Wasteland" };
 		public static readonly string[] Highland = { "Mountain Slope", "Alpine", "Hills", "Rocky Terrain", "Scree", "Karst", "Rocky Coast", "Alpine Meadow" };
 		public static readonly string[] Cold = { "Tundra", "Taiga", "Snow", "Glacier", "Ice Sheet", "Ice Shelf", "Permanent Ice" };
 		public static readonly string[] Woods = { "Forest", "Woodland", "Taiga", "Jungle", "Bamboo Forest", "Forest Ruins", "Jungle Ruins", "Jungle Temple" };
@@ -776,8 +780,10 @@ namespace FishMMO.Shared.WorldDesign
 				T(a, kind, "Den", Scattered, Earth)
 					.S(Bones, 3, 6, Scatter).S(Rubble, 0, 2, Scatter, style: Stone).S(Mound, 0, 1, Scatter)
 					.Sized(true, true, false).Races(Monster).Chamber().Pad(0f);
+				// The gate against the great cavern's wall, its braziers, guardians, banners and fallen stone are the dungeon
+				// entrance's own (DungeonEntranceFeature): what the props strew is the bones of whatever went in.
 				T(a, kind, "Deep", Scattered, Earth)
-					.S(Bones, 2, 5, Scatter).S(Rubble, 1, 3, Scatter, style: Stone).S(Banner, 0, 2, Scatter, 0.3f, 0.7f, style: Timber)
+					.S(Bones, 2, 5, Scatter)
 					.Sized(false, false, true).Chamber().Pad(0f);
 			}
 			T(a, POIType.Grotto, "Shrine", Single, Stone)
@@ -794,9 +800,14 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static void Encounters(List<PointOfInterestTemplateSpec> a)
 		{
-			// The door faces out of the rock face the planner found; the dungeon behind it is hand-made (2026-10-10).
+			// The door set into the rock face the planner found, at the threshold its shaper cut there (DungeonEntranceShaper):
+			// the centrepiece only, laid square to the face; its forecourt is dressed about the door's axis by the dungeon
+			// entrance feature, never strewn up the cliff (2026-10-18). The dungeon behind it is hand-made (2026-10-10).
 			T(a, POIType.DungeonEntrance, "Door", Single, Stone)
-				.S(CryptDoor, 1, 1, Centre).S(Statue, 0, 2, Scatter, 0.3f, 0.7f).S(Rubble, 1, 3, Scatter).S(Bones, 0, 3, Scatter).Pad(0.5f);
+				.S(DungeonPortal, 1, 1, Centre).In(1.4f, Highland).In(1.3f, Arid);
+			T(a, POIType.DungeonEntrance, "Barrow", Single, Stone)
+				.S(DungeonBarrow, 1, 1, Centre).Weathered(PointOfInterestFinish.Mossy, 0.6f)
+				.Elsewhere(0.5f).In(1.6f, Cold).In(1.6f, Steppe).In(1.2f, Woods);
 
 			T(a, POIType.BossLair, "Stones", Round, Stone)
 				.S(Menhir, 6, 10, Ring, 0.2f, 0.6f).S(Altar, 1, 1, Centre).S(Bones, 8, 16, Scatter).S(RuinedStatue, 1, 2, Scatter)

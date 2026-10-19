@@ -38,7 +38,7 @@ StructuredBuffer<GrassBlade> _GrassBlades;
  * constant arrays on the material (16 types, the head colours four times that); at 32 types a table read with Load
  * keeps the material's constants small and is the same floats. Rows 0..2 are the compute's (row 2's sprinkle level is read here too). */
 Texture2D<float4> _GrassTypeTable;
-#define GRASS_ROW_MORE 2          // y a sprinkled type's lattice level (GrassMath.SprinkleLevel): its stems thin at 4^level times the share
+#define GRASS_ROW_MORE 2          // y a sprinkled type's lattice level (GrassMath.SprinkleLevel): its stems thin at 4^level times the share; z 1 = rigid (BiomeGrassType.Rigid: never sways)
 #define GRASS_ROW_ROOT 3          // rgb colour at the root, a how much of the terrain texture's colour the type takes (its biome's BiomeGrassType.GroundTint)
 #define GRASS_ROW_TIP 4           // rgb colour at the tip, a base width (m)
 #define GRASS_ROW_HEALTHY 5       // rgb healthy tint, a tint spread between neighbours
@@ -300,8 +300,12 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     float swell = FishSurfaceNoise(root.xz / (lambda * 4.0) - way * time * 0.04);
     float gustBand = crest * lerp(0.35, 1.0, swell);
     float strength = _GrassParams2.w + speed * 0.7 + gust * 0.8;
+    /* A rigid type (a mineral blade: ice needles, salt quills; BiomeGrassType.Rigid, 2026-10-18) never sways: no bend, no flutter,
+     * no sheen, no combing by the wind. 1 for every other type. The world's air (none, thin, Earth-like) is already in
+     * _GrassParams2 (GrassBladeRenderer.AirSway), so an airless world's blades stand still too. */
+    float typeSway = 1.0 - saturate(GrassTypeRow(type, GRASS_ROW_MORE).z);
     // The wind's bend, an angle from vertical: a steady lean by the wind's strength, deepened in the bands.
-    float fullAngle = max(0.0, _GrassParams4.x) * saturate(strength * (0.3 + 0.7 * gustBand) * _GrassParams2.x / stiffness);
+    float fullAngle = max(0.0, _GrassParams4.x) * saturate(strength * (0.3 + 0.7 * gustBand) * _GrassParams2.x / stiffness) * typeSway;
     /* Far blades barely move. A blade thinner than a pixel swinging through a gust crest flips each pixel
      * between blade and ground: the far field shimmered, and from a low view the laid-over crests bared
      * the darker soil as long dark streaks. The waves still read there through the sheen (below), which
@@ -312,7 +316,7 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
      * the band's crest lies, not to the band's travel, which restarts each window a whole band on
      * (phase × 2 radians would jump every blade then). */
     float flutterPhase = (alongWind + wobble) / lambda;
-    float flutter = sin(time * FishWrapAngular(2.0 + 1.5 * r1) + r0 * 6.2831853 + flutterPhase * 2.0) * _GrassParams2.z * (0.3 + speed + gust) * calm;
+    float flutter = sin(time * FishWrapAngular(2.0 + 1.5 * r1) + r0 * 6.2831853 + flutterPhase * 2.0) * _GrassParams2.z * (0.3 + speed + gust) * calm * typeSway;
     float2 facing = float2(cos(facingAngle), sin(facingAngle));
     float2 across = float2(facing.y, -facing.x);
     // The tip's direction: its own lean toward its facing plus the wind's angle downwind and the flutter.
@@ -328,7 +332,7 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
      * (outward from its clump's centre) every clump burst into a star round a dark middle: polka dots from above
      * (render 2026-10-07). */
     float combAngle = (FishSurfaceNoise(root.xz / 3.0) * 0.7 + FishSurfaceNoise(root.xz / 1.1 + 31.7) * 0.3) * 12.566371;
-    float2 comb = float2(cos(combAngle), sin(combAngle)) + dir * (0.4 + 1.5 * speed);
+    float2 comb = float2(cos(combAngle), sin(combAngle)) + dir * (0.4 + 1.5 * speed) * typeSway;
     comb = dot(comb, comb) > 1e-6 ? normalize(comb) : facing;
     float2 lay = facing * lean + comb * viewLay + dir * sin(windAngle) + across * flutter;
     /* Trodden (GroundTrailMap): pushed over away from where a body stands or has just gone through, lying almost flat

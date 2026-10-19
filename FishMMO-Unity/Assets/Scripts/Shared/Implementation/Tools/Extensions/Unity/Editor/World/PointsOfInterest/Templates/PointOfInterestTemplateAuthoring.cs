@@ -386,9 +386,11 @@ namespace FishMMO.Shared.WorldDesign
 						Clear(respawn.Offset, 1.5f);
 						break;
 					case DungeonEntranceFeature door:
-						// In a chamber "ahead" is back toward the mouth, so the door stands behind the middle, deeper in.
-						door.Offset = Spot(0f, spec.InChamber ? -(front + 2f) : front + 2f, 1.5f);
-						Clear(door.Offset, 1.5f);
+						// At its own site the door is the centrepiece, at the threshold (DungeonEntranceShaper), and its box stands in
+						// the doorway; in a cave's chamber the feature lays a gate against the cavern's wall (2026-10-18). The offset
+						// is only where no door stands.
+						door.Offset = Vector2.zero;
+						door.Architecture = "=DungeonGate";
 						break;
 					case PortalFeature portal:
 						if (front <= 0f)

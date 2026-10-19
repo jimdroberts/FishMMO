@@ -22,13 +22,23 @@ namespace FishMMO.Shared.WorldDesign
 		public IReadOnlyList<PointOfInterestRecord> Records = Array.Empty<PointOfInterestRecord>();
 		public IReadOnlyList<PointOfInterestKeepOut> KeepOuts = Array.Empty<PointOfInterestKeepOut>();
 		public IReadOnlyList<PointOfInterestShape> Shapes = Array.Empty<PointOfInterestShape>();
-		/// <summary>True for a site laid out along streets (a walled town, a street village): its ways come in at the street ends.</summary>
+		/// <summary>The sites' pads: a terraced one holds a way's end on the terrace it comes in on (<see cref="SiteEntrances.EndDistance"/>).</summary>
+		public IReadOnlyList<PointOfInterestPad> Pads = Array.Empty<PointOfInterestPad>();
+		/// <summary>
+		/// True for a site laid out along streets (a walled town, a street village): its ways come in on their own bearings, a
+		/// street run in from each (<see cref="SiteEntrances"/>).
+		/// </summary>
 		public Func<PointOfInterestRecord, bool> HasStreets;
 		public int Seed;
 		/// <summary>The router's cell, metres.</summary>
 		public float CellMetres = 4f;
 		/// <summary>No way within this of the scene's edge, metres.</summary>
 		public float EdgeMarginMetres = 24f;
+		/// <summary>
+		/// The widest river a way of a class bridges before it takes a rope ferry, metres (<see cref="PathCrossings.FerryOverMetres"/>,
+		/// decision 35 (i)); null for none: every crossing a ford or a bridge, as before. Left unset until the ferry's pieces exist.
+		/// </summary>
+		public Func<ScenePathClass, float> FerryOver;
 	}
 
 	/// <summary>A bridge a way needs where no bridge stands: the stage turns each into a Bridge site.</summary>
@@ -57,6 +67,8 @@ namespace FishMMO.Shared.WorldDesign
 	{
 		public readonly List<ScenePath> Paths = new List<ScenePath>();
 		public readonly List<PathBridgeSite> Bridges = new List<PathBridgeSite>();
+		/// <summary>The rope ferries the ways need (<see cref="PathPlanInput.FerryOver"/>; none while it is unset).</summary>
+		public readonly List<PathFerrySite> Ferries = new List<PathFerrySite>();
 		/// <summary>The standing Bridge sites (<see cref="PathPlanInput.Records"/>) some way was laid over: the others serve no path.</summary>
 		public readonly HashSet<int> UsedBridges = new HashSet<int>();
 		public readonly List<string> Notes = new List<string>();
@@ -275,7 +287,8 @@ namespace FishMMO.Shared.WorldDesign
 			for (int k = Mathf.Max(1, from + 1); k <= to; k++)
 			{
 				ScenePathPointFlags fa = path.FlagsAt(k - 1), fb = path.FlagsAt(k);
-				if ((fa & fb & ScenePathPointFlags.Bridge) != 0 || ((fa | fb) & ScenePathPointFlags.InSite) != 0)
+				// A boardwalk's stretch (2026-10-18) is walked on its deck, which ramps and runs at its own gentle grade.
+				if ((fa & fb & (ScenePathPointFlags.Bridge | ScenePathPointFlags.Boardwalk | ScenePathPointFlags.Ferry)) != 0 || ((fa | fb) & ScenePathPointFlags.InSite) != 0)
 				{
 					continue;
 				}
@@ -355,7 +368,8 @@ namespace FishMMO.Shared.WorldDesign
 				router.Fill(input.Ground, input.WaterAt, input.WaterDepth, input.Blocked, input.EdgeMarginMetres);
 				foreach (PointOfInterestKeepOut keepOut in input.KeepOuts)
 				{
-					router.MarkOwner(keepOut.Id, keepOut.X, keepOut.Z, keepOut.Radius);
+					// The site's own outline (grown by its margin), its disc where it has none.
+					router.MarkOwner(keepOut);
 				}
 				/* A moated stronghold's ditch and all inside it are routed round, even by its own ways: they come in on the
 				 * drawbridge before a gate (EndFor); the site's own cells are open to its ways, so one from the gate to a
@@ -365,7 +379,8 @@ namespace FishMMO.Shared.WorldDesign
 					if (shape != null && shape.Shaper == MoatShaper.ShaperName
 						&& MoatShaper.TryMoat(new[] { shape }, shape.SiteId, out Vector3 moat, out float moatInner, out float moatWidth, out _))
 					{
-						router.MarkBlocked(moat.x, moat.z, moatInner + moatWidth);
+						// Round the wall's outline as the ditch is dug (MoatShaper, format 2), a ring for an older one.
+						router.MarkBlocked(moat.x, moat.z, MoatShaper.OuterOutline(shape), moatInner + moatWidth);
 					}
 				}
 				foreach (PointOfInterestRecord record in input.Records)
@@ -393,8 +408,9 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						ancient.Add(record);
 					}
-					else if (SpurOf(record.Kind, out ScenePathClass way, out float wear))
+					else if (SpurOf(record.Kind, out ScenePathClass way, out float wear) && !CaveShaper.DivedOnly(input.Shapes, record.Id))
 					{
+						// A cave whose mouth lies under water is dived to: no way is laid to it.
 						spurs.Add((record, way, wear));
 					}
 				}
@@ -525,6 +541,16 @@ namespace FishMMO.Shared.WorldDesign
 					c = p.distance.CompareTo(q.distance);
 					return c != 0 ? c : p.record.Id.CompareTo(q.record.Id);
 				});
+				// A cave through its hill has a mouth on each side (2026-10-18): the far one gets a spur of its own, after every other
+				// site's (it may join the way laid to the first).
+				for (int i = 0, count = order.Count; i < count; i++)
+				{
+					if (CaveShaper.LandableMouths(input.Shapes, order[i].record.Id) >= 2)
+					{
+						order.Add((order[i].record, order[i].way, 0.8f * order[i].wear, order[i].distance));
+					}
+				}
+				var spurred = new HashSet<int>();
 
 				foreach ((PointOfInterestRecord record, ScenePathClass way, float wear, float _) in order)
 				{
@@ -540,7 +566,10 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						continue;
 					}
+					// A cave's second spur leaves from its other mouth.
+					caveMouthRank = spurred.Add(record.Id) ? 0 : 1;
 					End site = EndFor(record, new Vector2(hub.Position.x, hub.Position.z));
+					caveMouthRank = 0;
 					End target = EndFor(hub, site.Outer);
 					var request = new PathRouter.Request
 					{
@@ -672,6 +701,49 @@ namespace FishMMO.Shared.WorldDesign
 
 			// ── Ends ───────────────────────────────────────────────
 
+			/// <summary>Which of a cave site's mouths the next end is laid at: 0 the nearest the way's other end, 1 the next (its far mouth's spur).</summary>
+			private int caveMouthRank;
+
+			/// <summary>
+			/// A cave site's end (2026-10-18): at the mouth of its own nearest <paramref name="toward"/> (a cave through a hill
+			/// has one each side), out along the way it faces; for one behind a waterfall, on the bank its shelf lands on, the
+			/// shelf the rest of the way. None under water: those are dived to. False where the site has no mouth a way can end
+			/// at.
+			/// </summary>
+			private bool CaveEnd(PointOfInterestRecord record, Vector2 toward, ref End end)
+			{
+				var landable = new List<(float d, CaveMouth mouth, Vector2 landing)>();
+				foreach (CaveMouth m in CaveShaper.OwnMouths(input.Shapes, record.Id))
+				{
+					if (CaveSystem.LandingOf(m, out Vector3 landing))
+					{
+						var at = new Vector2(landing.x, landing.z);
+						landable.Add(((at - toward).sqrMagnitude, m, at));
+					}
+				}
+				if (landable.Count == 0)
+				{
+					return false;
+				}
+				landable.Sort((p, q) => p.d.CompareTo(q.d));
+				(float _, CaveMouth best, Vector2 bestLanding) = landable[Mathf.Min(caveMouthRank, landable.Count - 1)];
+				var floor = new Vector2(best.Floor.x, best.Floor.z);
+				if (best.Kind == CaveMouthKind.Shelf)
+				{
+					Vector2 away = bestLanding - floor;
+					away = away.sqrMagnitude > 1e-4f ? away.normalized : Vector2.up;
+					end.Outer = Clear(bestLanding + away * 4f, away);
+					end.Inner.Add(bestLanding);
+					return true;
+				}
+				float yr = best.Yaw * Mathf.Deg2Rad;
+				var outward = new Vector2(Mathf.Sin(yr), Mathf.Cos(yr));
+				Vector2 front = floor + outward * best.Radius;
+				end.Outer = Clear(front + outward * 6f, outward);
+				end.Inner.Add(front + outward * 1f);
+				return true;
+			}
+
 			private End EndFor(PointOfInterestRecord record, Vector2 toward)
 			{
 				var centre = new Vector2(record.Position.x, record.Position.z);
@@ -688,12 +760,21 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				if (cave != null)
 				{
+					if (CaveEnd(record, toward, ref end))
+					{
+						return end;
+					}
 					// A cave is entered at its mouth: out along the way it faces.
 					float yr = cave.Yaw * Mathf.Deg2Rad;
 					var outward = new Vector2(Mathf.Sin(yr), Mathf.Cos(yr));
 					Vector2 front = new Vector2(cave.Position.x, cave.Position.z) + outward * (cave.Size.x * 0.5f);
 					end.Outer = Clear(front + outward * 6f, outward);
 					end.Inner.Add(front + outward * 1f);
+					return end;
+				}
+
+				if (DungeonEnd(record, ref end))
+				{
 					return end;
 				}
 
@@ -707,9 +788,12 @@ namespace FishMMO.Shared.WorldDesign
 				 * bearing opens (PropsFeature.AddDrawbridges): the crossing is the site's, never a bridge site or a carve of its
 				 * own. Every keep, castle and fortress is walled, so the street ends below once took them first and started
 				 * their ways at radius + 8 m, in the ditch. */
-				bool moated = MoatShaper.TryMoat(input.Shapes, record.Id, out _, out float moatInner, out float moatWidth, out _);
+				bool moated = MoatShaper.TryMoat(input.Shapes, record.Id, out PointOfInterestShape moatShape);
+				float moatWidth = moated ? moatShape.Values[2] : 0f;
 				void AcrossMoat(Vector2 gate)
 				{
+					// The ring's reach on the gate's own bearing: the ditch follows the wall's outline.
+					float moatInner = MoatShaper.InnerToward(moatShape, gate.x, gate.y);
 					end.Outer = Clear(centre + gate * (moatInner + moatWidth + 4f), gate);
 					// From its outer lip on, so the points laid between are the site's too (not carved, nor routed).
 					end.Inner.Add(centre + gate * (moatInner + moatWidth + 0.5f));
@@ -718,24 +802,11 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				if (input.HasStreets != null && input.HasStreets(record))
 				{
-					// A street town is entered at its streets' ends: its heading and the opposite, and across in a big one.
-					int ways = record.Radius >= 55f ? 4 : 2;
-					float bestDot = float.NegativeInfinity;
-					Vector2 dir = bearing;
-					float local = 0f;
-					for (int k = 0; k < ways; k++)
-					{
-						float a = k * 360f / ways;
-						float yr = (record.Yaw + a) * Mathf.Deg2Rad;
-						var d = new Vector2(Mathf.Sin(yr), Mathf.Cos(yr));
-						float dot = Vector2.Dot(d, bearing);
-						if (dot > bestDot)
-						{
-							bestDot = dot;
-							dir = d;
-							local = a;
-						}
-					}
+					/* A street town is entered on the way's own bearing, or by an entrance a way near it already takes; the layout
+					 * runs a street in from each, through the way's last point (SiteEntrances), and opens a gate there in a wall. */
+					entrances.TryGetValue(record.Id, out List<float> taken);
+					float local = SiteEntrances.Choose(record, Mathf.Atan2(bearing.x, bearing.y) * Mathf.Rad2Deg, taken);
+					Vector2 dir = SiteEntrances.Direction(record, local);
 					end.Entrance = local;
 					if (moated)
 					{
@@ -743,9 +814,9 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					else
 					{
-						end.Outer = Clear(centre + dir * (record.Radius + 8f), dir);
+						end.Outer = Clear(centre + dir * (SiteEntrances.Reach(record, local) + SiteEntrances.OuterMetres), dir);
 					}
-					end.Inner.Add(centre + dir * (record.Radius * 0.7f));
+					end.Inner.Add(centre + dir * SiteEntrances.EndDistance(record, SiteEntrances.PadOf(input.Pads, record.Id), local));
 					return end;
 				}
 
@@ -754,7 +825,7 @@ namespace FishMMO.Shared.WorldDesign
 					// Not walled: its gate is laid on the way's own bearing (the layout opens one at each entrance).
 					end.Entrance = Mathf.Repeat(Mathf.Atan2(bearing.x, bearing.y) * Mathf.Rad2Deg - record.Yaw, 360f);
 					AcrossMoat(bearing);
-					end.Inner.Add(centre + bearing * (record.Radius * 0.4f));
+					end.Inner.Add(centre + bearing * (Reach(record, bearing) * 0.4f));
 					return end;
 				}
 
@@ -765,17 +836,43 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					float turn = ((k + 1) / 2) * 30f * (k % 2 == 1 ? 1f : -1f) * Mathf.Deg2Rad;
 					var dir = new Vector2(bearing.x * Mathf.Cos(turn) + bearing.y * Mathf.Sin(turn), -bearing.x * Mathf.Sin(turn) + bearing.y * Mathf.Cos(turn));
-					Vector2 inner = centre + dir * (record.Radius * 0.4f);
-					if (TryClear(inner, centre + dir * (record.Radius * 0.9f + 4f), dir, out Vector2 outer))
+					float reach = Reach(record, dir);
+					Vector2 inner = centre + dir * (reach * 0.4f);
+					if (TryClear(inner, centre + dir * (reach * 0.9f + 4f), dir, out Vector2 outer))
 					{
 						end.Outer = outer;
 						end.Inner.Add(Ashore(inner, outer));
 						return end;
 					}
 				}
-				end.Outer = Clear(centre + bearing * (record.Radius * 0.9f + 4f), bearing);
-				end.Inner.Add(Ashore(centre + bearing * (record.Radius * 0.4f), end.Outer));
+				float edgeReach = Reach(record, bearing);
+				end.Outer = Clear(centre + bearing * (edgeReach * 0.9f + 4f), bearing);
+				end.Inner.Add(Ashore(centre + bearing * (edgeReach * 0.4f), end.Outer));
 				return end;
+			}
+
+			/// <summary>How far a site's outline reaches toward a direction (its radius for a disc), metres.</summary>
+			private static float Reach(PointOfInterestRecord record, Vector2 dir) => PointOfInterestOutline.Reach(record.Outline, record.Radius, dir.x, dir.y);
+
+			/// <summary>The entrances each street site's laid ways came in by (degrees in its frame), so a later way may share one.</summary>
+			private readonly Dictionary<int, List<float>> entrances = new Dictionary<int, List<float>>();
+
+			/// <summary>Records an entrance a laid way came into a site by.</summary>
+			private void Claim(PointOfInterestRecord record, float entrance)
+			{
+				if (record == null || float.IsNaN(entrance) || input.HasStreets == null || !input.HasStreets(record))
+				{
+					return;
+				}
+				if (!entrances.TryGetValue(record.Id, out List<float> list))
+				{
+					list = new List<float>();
+					entrances[record.Id] = list;
+				}
+				if (!list.Exists(e => Mathf.Abs(Mathf.DeltaAngle(e, entrance)) < 0.01f))
+				{
+					list.Add(entrance);
+				}
 			}
 
 			/// <summary>
@@ -796,6 +893,25 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				return outer;
+			}
+
+			/// <summary>
+			/// A dungeon entrance is come to head-on (DungeonEntranceShaper, 2026-10-18): straight in along its door's heading,
+			/// from past its levelled forecourt to the forecourt's flagstones, whatever side the way comes from (from the hub's
+			/// bearing it once came down the cliff over the door). False for a site with no door plan.
+			/// </summary>
+			private bool DungeonEnd(PointOfInterestRecord record, ref End end)
+			{
+				if (!DungeonEntranceShaper.TryPlan(input.Shapes, record.Id, out DungeonEntranceShaper.Plan door))
+				{
+					return false;
+				}
+				Vector3 o = door.Outward;
+				var outward = new Vector2(o.x, o.z);
+				var threshold = new Vector2(door.Threshold.x, door.Threshold.z);
+				end.Outer = Clear(threshold + outward * (DungeonEntranceShaper.PadDepth + 4f), outward);
+				end.Inner.Add(threshold + outward * StructurePieces.DungeonFrontReach);
+				return true;
 			}
 
 			/// <summary>The first point from <paramref name="at"/> outward a way may start from (not water, not holed, no cliff in it).</summary>
@@ -926,6 +1042,8 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return;
 				}
+				Claim(from, fromEntrance);
+				Claim(to, toEntrance);
 				int id = plan.Paths.Count + 1;
 				int n = points.Count;
 				var path = new ScenePath
@@ -1086,6 +1204,12 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					float yr = acrossYaw * Mathf.Deg2Rad;
 					var axis = new Vector2(Mathf.Sin(yr), Mathf.Cos(yr));
+					// Wider than this way bridges: a rope ferry (decision 35 (i)), when the input asks for ferries.
+					if (input.FerryOver != null && PathCrossings.Choose(false, width, input.FerryOver(style.Class)) == PathCrossingKind.Ferry)
+					{
+						Ferry(path, first, last, middle, axis, acrossYaw, width);
+						continue;
+					}
 					Vector2 bankA = middle - axis * (width * 0.5f + 1f), bankB = middle + axis * (width * 0.5f + 1f);
 					float bank = Mathf.Max(input.Ground(bankA.x, bankA.y), input.Ground(bankB.x, bankB.y));
 					// Where the way steps off the deck at each end.
@@ -1140,6 +1264,26 @@ namespace FishMMO.Shared.WorldDesign
 						i++;
 					}
 				}
+			}
+
+			/// <summary>Flags a run of river as a rope ferry's crossing and records the ferry, its landings where the way steps off each bank.</summary>
+			private void Ferry(ScenePath path, int first, int last, Vector2 middle, Vector2 axis, float yaw, float width)
+			{
+				for (int k = first; k <= last; k++)
+				{
+					path.Flags[k] |= (byte)ScenePathPointFlags.Ferry;
+				}
+				Vector2 a = middle - axis * (width * 0.5f + BridgeAbutmentMetres), b = middle + axis * (width * 0.5f + BridgeAbutmentMetres);
+				float groundA = input.Ground(a.x, a.y), groundB = input.Ground(b.x, b.y);
+				plan.Ferries.Add(new PathFerrySite
+				{
+					PathId = path.Id,
+					Centre = new Vector3(middle.x, Mathf.Max(groundA, groundB), middle.y),
+					Yaw = yaw,
+					Span = width,
+					LandingA = new Vector3(a.x, groundA, a.y),
+					LandingB = new Vector3(b.x, groundB, b.y),
+				});
 			}
 
 			/// <summary>

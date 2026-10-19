@@ -450,6 +450,8 @@ namespace FishMMO.Client
 				GrassBladeRenderer.StatsEnabled = statsWereOn;
 			}
 			ResolveArrays();
+			// The world's air sways the blades (decision 41): none airless, a third under a thin sky, all of it under Earth-like air.
+			renderer.AirSway = AirSway();
 			renderer.Publish(settings, types, grassDistance);
 			// The ground under the blades takes their roots' shade (it glowed between them, lit as open ground).
 			Camera eye = Camera.main;
@@ -458,6 +460,42 @@ namespace FishMMO.Client
 				GrassSwardMap.Update(settings, grassDistance, grassTerrains, eye.transform.position);
 			}
 			TerrainInstancingProbe.SyncMs += TerrainInstancingProbe.Now - start;
+		}
+
+		/// <summary>The scene the air sway was last read for (its handle), and the frame to read it again by.</summary>
+		private static int airScene = int.MinValue, airCheckAt;
+		private static float airSway = 1f;
+
+		/// <summary>How often the air sway is read again for the same scene, frames (a designer may edit the body in the editor).</summary>
+		private const int AirCheckInterval = 600;
+
+		/// <summary>
+		/// How hard the world's air moves the blades (BiomeAir.Sway of the scene's world, decision 41, 2026-10-18): the scene of the
+		/// first taken terrain, its WorldSceneSettings' world conditions; 1 (Earth-like) for a scene without them. Read when the
+		/// scene changes and every <see cref="AirCheckInterval"/> frames, not every frame (working the world out walks its orbit).
+		/// One value for every player in the scene, so the blades of every client sway alike.
+		/// </summary>
+		private static float AirSway()
+		{
+			Terrain any = null;
+			for (int i = 0; i < active.Count && any == null; i++)
+			{
+				any = active[i];
+			}
+			if (any == null)
+			{
+				return airSway;
+			}
+			UnityEngine.SceneManagement.Scene scene = any.gameObject.scene;
+			if (scene.handle != airScene || Time.frameCount >= airCheckAt)
+			{
+				airScene = scene.handle;
+				airCheckAt = Time.frameCount + AirCheckInterval;
+				airSway = WorldSceneSettings.TryGetForScene(scene, out WorldSceneSettings world) && world != null
+					? BiomeAir.Sway(world.WorldConditions.Atmosphere)
+					: 1f;
+			}
+			return airSway;
 		}
 
 		/// <summary>

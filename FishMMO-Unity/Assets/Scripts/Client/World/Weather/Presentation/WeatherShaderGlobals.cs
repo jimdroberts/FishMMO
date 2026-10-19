@@ -40,6 +40,12 @@ namespace FishMMO.Client
 		/// <summary>Where the scene air's carried distance wraps before a shader's float sees it, m: a hundred kilometres, to a centimetre.</summary>
 		private const double WindWayWrapMetres = 100000.0;
 		public static readonly int WindHold = Shader.PropertyToID("_FishWindHold");
+		/// <summary>
+		/// What is falling's share of the pipeline's distance fog, 1/m (<see cref="WeatherFogPresenter.UniformFallingExtinction"/>):
+		/// the rain at the camera, which that fog lays over every surface and never over the sky. A storm's curtain
+		/// (FishCurtain.shader) draws only what its storm holds beyond it in front of a surface, and the whole of it over the sky.
+		/// </summary>
+		public static readonly int FallingFog = Shader.PropertyToID("_FishFallingFog");
 
 		/// <summary>
 		/// How long the wind's pace is held for what travels at it (the gust bands in the grass, the
@@ -108,6 +114,7 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(Mix, new Vector4(frame[WeatherChannel.RainWeight], frame[WeatherChannel.SnowWeight],
 				frame[WeatherChannel.HailWeight], frame[WeatherChannel.AshWeight] + frame[WeatherChannel.SandWeight]));
 			Shader.SetGlobalVector(Mix2, new Vector4(frame[WeatherChannel.AshWeight], frame[WeatherChannel.SandWeight], 0f, 0f));
+			Shader.SetGlobalFloat(FallingFog, WeatherFogPresenter.UniformFallingExtinction(frame));
 		}
 
 		/// <summary>Publishes the season. Season changes over days, so once a climate tick is plenty.</summary>

@@ -63,6 +63,16 @@ namespace FishMMO.Shared
 		/// (<see cref="ScenePathField"/>), so no grass or detail comes up indoors whatever path or apron crosses it.
 		/// </summary>
 		Floor = 1 << 4,
+		/// <summary>
+		/// On a boardwalk (2026-10-18): a segment between two such points is walked on a plank deck on piles laid along it, so,
+		/// as under a bridge's deck, nothing is drawn or carved on the ground beneath (Biomes.BiomeBoardwalks).
+		/// </summary>
+		Boardwalk = 1 << 5,
+		/// <summary>
+		/// On a rope ferry's crossing (decision 35 (i), 2026-10-18): a segment between two such points is travelled on the ferry
+		/// flat, so, as under a bridge's deck, nothing is drawn or carved on the river's bed beneath.
+		/// </summary>
+		Ferry = 1 << 6,
 	}
 
 	/// <summary>

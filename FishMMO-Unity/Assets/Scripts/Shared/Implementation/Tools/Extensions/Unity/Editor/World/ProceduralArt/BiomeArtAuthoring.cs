@@ -1,11 +1,13 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 using FishMMO.Shared.Biomes;
+using FishMMO.Shared.NameGeneration;
 using Object = UnityEngine.Object;
 
 namespace FishMMO.Shared.WorldDesign
@@ -492,7 +494,70 @@ namespace FishMMO.Shared.WorldDesign
 				BiomeLocalArtIndex.Invalidate();
 				report.Lines.Add($"{biome.name} {key}: art under Assets/LOCAL moved to '{art.name}' and cleared on the template{(conflict != null ? " — " + conflict : string.Empty)}");
 			}
+
+			// A ground layer's own ways (2026-10-16) hold terrain layers of their own, under keys of their own.
+			foreach ((string key, TerrainTextureLayer ground, string way) in WaysOf(biome))
+			{
+				TerrainLayer layer = BiomeLocalArt.WayGround(ground.ways, way);
+				if (!IsLocal(layer, BiomeLocalArtIndex.IsLocal))
+				{
+					continue;
+				}
+				any = true;
+				report.LocalReferencesMoved++;
+				if (!apply)
+				{
+					report.Lines.Add($"{biome.name} {key}: references art under Assets/LOCAL — would move it to the biome's LOCAL sidecar and clear the way (the biome's own until the template names one there)");
+					continue;
+				}
+				BiomeLocalArt art = BiomeLocalArtIndex.GetOrCreate(biome);
+				if (art == null)
+				{
+					continue;
+				}
+				Undo.RecordObject(art, "Move LOCAL art to sidecar");
+				var dropped = new List<string>();
+				BiomeLocalArt.SlotOverride target = art.GetOrAdd(key);
+				target.TerrainLayer = Merge(target.TerrainLayer, layer, dropped);
+				BiomeLocalArt.SetWayGround(ref ground.ways, way, null);
+				EditorUtility.SetDirty(art);
+				AssetDatabase.SaveAssetIfDirty(art);
+				BiomeLocalArtIndex.Invalidate();
+				report.Lines.Add($"{biome.name} {key}: art under Assets/LOCAL moved to '{art.name}' and cleared on the template; the sidecar dresses this way only "
+					+ $"while the template names a ground there{(dropped.Count > 0 ? " — the sidecar keeps its own " + string.Join(", ", dropped) : string.Empty)}");
+			}
 			return any;
+		}
+
+		/// <summary>
+		/// Every way of every ground layer that may carry ways of its own (the main layer, each detail layer), with its key
+		/// (<see cref="BiomeLocalArt.WaySlot"/>), the layer and the way's slot, set or not.
+		/// </summary>
+		public static IEnumerable<(string Key, TerrainTextureLayer Ground, string Way)> WaysOf(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				yield break;
+			}
+			var grounds = new List<(string, TerrainTextureLayer)> { (BiomeLocalArt.SlotMain, biome.MainTextureLayer) };
+			if (biome.DetailTextureLayers != null)
+			{
+				for (int i = 0; i < biome.DetailTextureLayers.Count; i++)
+				{
+					grounds.Add((BiomeLocalArt.DetailSlot(i), biome.DetailTextureLayers[i]));
+				}
+			}
+			foreach ((string slot, TerrainTextureLayer ground) in grounds)
+			{
+				if (ground == null)
+				{
+					continue;
+				}
+				foreach (string way in BiomeLocalArt.WaySlots)
+				{
+					yield return (BiomeLocalArt.WaySlot(slot, way), ground, way);
+				}
+			}
 		}
 
 		// ── One biome ─────────────────────────────────────────────────
@@ -545,6 +610,13 @@ namespace FishMMO.Shared.WorldDesign
 				for (int i = 0; i < biome.CliffTextureLayers.Count; i++)
 				{
 					DisableDeadRules(who, "cliff/" + i, biome.CliffTextureLayers[i], report, apply);
+				}
+			}
+			foreach (string key in BiomeLocalArt.SlotsOf(biome))
+			{
+				if (key.StartsWith(BiomeLocalArt.SlotVariant, StringComparison.Ordinal))
+				{
+					DisableDeadRules(who, key, BiomeLocalArt.CommittedLayer(biome, key), report, apply);
 				}
 			}
 
@@ -632,6 +704,15 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				Fill(who, "riverbed", biome.RiverbedTextureLayer, entry.Riverbed, null, source, report, apply);
 			}
+			/* What lives on a river's bed (decision 35, 2026-10-18): rules on the riverbed, painted under rivers since then (the lakebed
+			 * took every river before), grown by their depth below the river's own surface and by its current. And the extra beds by
+			 * depth (and current) under lakes, rivers and the sea. None for any biome until its round adds them. */
+			DisableDeadRules(who, "riverbed", biome.RiverbedTextureLayer, report, apply);
+			if (entry.RiverBed != null)
+			{
+				AddRules(who, "riverbed", biome.RiverbedTextureLayer, entry.RiverBed, source, report, apply);
+			}
+			AuthorBedLayers(biome, entry, source, report, apply);
 
 			// The ways' grounds and the river bars': the generated grounds the spec names, for the cut to read off the template.
 			Fill(who, BiomeLocalArt.SlotPath, biome.SmallPathTextureLayer, entry.PathGround, null, source, report, apply);
@@ -639,12 +720,20 @@ namespace FishMMO.Shared.WorldDesign
 			Fill(who, BiomeLocalArt.SlotCobbles, biome.CobbleTextureLayer, entry.CobbleGround, null, source, report, apply);
 			Fill(who, BiomeLocalArt.SlotBarSand, biome.BarSandTextureLayer, entry.BarSand, null, source, report, apply);
 			Fill(who, BiomeLocalArt.SlotBarGravel, biome.BarGravelTextureLayer, entry.BarGravel, null, source, report, apply);
+			AuthorLayerWays(biome, entry, source, report, apply);
+			AuthorClimateVariants(biome, entry, source, report, apply);
+			AuthorLayerClimate(biome, entry, source, report, apply);
+			AuthorDescription(biome, entry, report, apply);
+			AuthorNaming(biome, entry, report, apply);
+			AuthorEmission(biome, entry, report, apply);
 
 			AuthorRock(biome, entry, report, apply);
 			AuthorCaveShells(biome, entry, report, apply);
 			AuthorCaveCrystals(biome, entry, report, apply);
+			AuthorFloatingPlants(biome, entry, report, apply);
 			AuthorWaterRole(biome, entry, report, apply);
 			AuthorWaterLook(biome, entry, report, apply);
+			AuthorSeaLook(biome, entry, report, apply);
 			AuthorGrowth(biome, entry, source, report, apply);
 			AuthorLooks(biome, entry, report, apply);
 			AuthorGrass(biome, entry, source, report, apply);
@@ -653,8 +742,11 @@ namespace FishMMO.Shared.WorldDesign
 			AuthorVines(biome, entry, report, apply);
 			AuthorGathering(biome, entry, report, apply);
 			AuthorSites(biome, entry, source, report, apply, handMadeTemplates);
+			AuthorLinearFeatures(biome, entry, source, report, apply);
+			AuthorFieldKinds(biome, entry, source, report, apply);
+			AuthorLandforms(biome, entry, report, apply);
 
-			bool changed = report.SlotsFilled + report.RulesAdded + report.RulesDisabled + report.RulesUpdated + report.ValuesFilled + report.GrassTypesPruned != before;
+			bool changed =report.SlotsFilled + report.RulesAdded + report.RulesDisabled + report.RulesUpdated + report.ValuesFilled + report.GrassTypesPruned != before;
 			if (changed)
 			{
 				report.BiomesChanged++;
@@ -773,6 +865,11 @@ namespace FishMMO.Shared.WorldDesign
 			if (slotName == "main") return biome.MainTextureLayer;
 			if (slotName == "lakebed") return biome.LakebedTextureLayer;
 			if (slotName == "riverbed") return biome.RiverbedTextureLayer;
+			int bed = BiomeLocalArt.BedIndexOf(slotName);
+			if (bed >= 0)
+			{
+				return biome.BedTextureLayers != null && bed < biome.BedTextureLayers.Count ? biome.BedTextureLayers[bed] : null;
+			}
 			if (slotName.StartsWith("detail/", System.StringComparison.Ordinal) && int.TryParse(slotName.Substring(7), out int index)
 				&& biome.DetailTextureLayers != null && index >= 0 && index < biome.DetailTextureLayers.Count)
 			{
@@ -940,7 +1037,8 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			// Fields a pre-fingerprint run could not have set: anything but their defaults is somebody's.
 			if (rule.detailPlacement != DetailPlacement.Scattered || rule.sinkRange != Vector2.zero || rule.sinkSlopeFactor != 0f || rule.clusterMetres != 0f || rule.forestMetres != 0f
-				|| rule.depthRange != Vector2.zero || rule.useClimateBand)
+				|| rule.depthRange != Vector2.zero || rule.useClimateBand || rule.waters != BiomeBedWaters.Default || rule.currentRange != Vector2.zero
+				|| !rule.worldGate.IsOpen)
 			{
 				return false;
 			}
@@ -1076,6 +1174,19 @@ namespace FishMMO.Shared.WorldDesign
 			string current = biome.IsAuthored(BiomeTemplate.Authored.WaterLook) ? biome.WaterLook.Signature() : string.Empty;
 			AuthorValue(biome.name, biome, BiomeTemplate.Authored.WaterLook, current, target.Signature(), false,
 				() => biome.WaterLook = target, $"water {target}", report, apply);
+		}
+
+		/// <summary>
+		/// The sea off the biome's coast as a diver sees it (<see cref="BiomeTemplate.SeaLook"/>, 2026-10-18, I2h) from the spec
+		/// (<see cref="BiomeArtSpec.Entry.SeaLook"/>: the underwater look every sea had, <see cref="BiomeSeaLooks.Today"/>, unless
+		/// the biome's file gives one). One value, marked by its signature; a look edited by hand is kept.
+		/// </summary>
+		private static void AuthorSeaLook(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			BiomeSeaLook target = entry.SeaLook();
+			string current = biome.IsAuthored(BiomeTemplate.Authored.SeaLook) ? biome.SeaLook.Signature() : string.Empty;
+			AuthorValue(biome.name, biome, BiomeTemplate.Authored.SeaLook, current, target.Signature(), false,
+				() => biome.SeaLook = target, $"{target}", report, apply);
 		}
 
 		/// <summary>A cave shell list's mark: a hash of its "Form=Rock" entries in order.</summary>
@@ -1437,7 +1548,7 @@ namespace FishMMO.Shared.WorldDesign
 					report.Missing.Add($"{who} {BiomeTemplate.Authored.FieldCrops}: prefab {name}");
 					continue;
 				}
-				crops.Add(new BiomeFieldCrop(prefab, weight, entry.FieldSurface(name)));
+				crops.Add(new BiomeFieldCrop(prefab, weight, entry.FieldSurface(name), entry.FieldRiser(name), entry.FieldRows(name)));
 			}
 			AuthorEntries(who, biome, BiomeTemplate.Authored.FieldCrops, biome.FieldCrops, crops, c => c.Prefab != null ? c.Prefab.name : null, c => c.ToString(),
 				l => Mark(AsList(l)), report, apply);
@@ -1456,12 +1567,21 @@ namespace FishMMO.Shared.WorldDesign
 			AuthorValue(who, biome, BiomeTemplate.Authored.MoatWater, biome.IsAuthored(BiomeTemplate.Authored.MoatWater) ? biome.MoatWater.ToString() : string.Empty,
 				moat.ToString(), false, () => biome.MoatWater = moat, $"moat water {moat}", report, apply);
 
+			// Which of its ways are raised boardwalks (2026-10-18, I2i): one value, None unless the biome's file raises some.
+			BiomeBoardwalks boardwalks = entry.Boardwalks;
+			AuthorValue(who, biome, BiomeTemplate.Authored.Boardwalks, biome.IsAuthored(BiomeTemplate.Authored.Boardwalks) ? biome.Boardwalks.ToString() : string.Empty,
+				boardwalks.ToString(), false, () => biome.Boardwalks = boardwalks, $"boardwalks {boardwalks}", report, apply);
+
+			/* No flame where no world it stands on has the air to burn one (decision 41, 2026-10-18): a biome whose template admits only
+			 * thin air or none is lit with the cold Glow lights in the same places; every other biome as before. */
+			bool glowOnly = BiomeAir.OnlyThinAir(biome.Atmosphere);
+
 			// How its settlements light their streets (I5b): one entry per kind.
-			AuthorEntries(who, biome, BiomeTemplate.Authored.WayLights, biome.WayLights, entry.WayLights(), l => l.Kind.ToString(), l => l.ToString(),
+			AuthorEntries(who, biome, BiomeTemplate.Authored.WayLights, biome.WayLights, entry.WayLights(glowOnly), l => l.Kind.ToString(), l => l.ToString(),
 				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
 
 			// How its caves and mines are lit (2026-10-16, I6c): one entry per place, the cave dressing's old rule by default.
-			AuthorEntries(who, biome, BiomeTemplate.Authored.CaveLights, biome.CaveLights, entry.CaveLights(), CaveLightId, l => l.ToString(),
+			AuthorEntries(who, biome, BiomeTemplate.Authored.CaveLights, biome.CaveLights, entry.CaveLights(glowOnly), CaveLightId, l => l.ToString(),
 				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
 		}
 
@@ -1479,6 +1599,100 @@ namespace FishMMO.Shared.WorldDesign
 		private static void AuthorCaveCrystals(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
 		{
 			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.CaveCrystals, biome.CaveCrystals, entry.CaveCrystals(), CaveCrystalId, c => c.ToString(),
+				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
+		}
+
+		/// <summary>A floating-plant entry's identity: its kind.</summary>
+		public static string FloatingPlantId(BiomeFloatingPlant plant) => plant.Kind.ToString();
+
+		/// <summary>
+		/// The plants the biome's still water carries (<see cref="BiomeTemplate.FloatingPlants"/>, 2026-10-18, I2i) from the spec
+		/// (<see cref="BiomeArtSpec.Entry.FloatingPlants"/>: none, as no water carried anything before, unless the biome's file names
+		/// its own). One mark per kind: a kind's weight edited by hand is kept, a kind deleted by hand stays deleted.
+		/// </summary>
+		private static void AuthorFloatingPlants(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.FloatingPlants, biome.FloatingPlants, entry.FloatingPlants(), FloatingPlantId, p => p.ToString(),
+				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
+		}
+
+		/// <summary>A linear-feature entry's identity: its kind, form and place (<see cref="BiomeLinearFeatures.Id"/>).</summary>
+		public static string LinearFeatureId(BiomeLinearStyle style) => BiomeLinearFeatures.Id(style);
+
+		/// <summary>
+		/// The biome's hedges, walls, fences, tree rows, channels and clearance rows (<see cref="BiomeTemplate.LinearFeatures"/>, 2026-10-18,
+		/// I2f) from the spec (<see cref="BiomeArtSpec.Entry.LinearFeatures"/>: none, as nothing was laid before, unless the biome's file
+		/// names its own), each species resolved to its generated prefab (one missing is reported and left out). One mark per kind, form
+		/// and place: an entry edited by hand is kept, one deleted by hand stays deleted.
+		/// </summary>
+		private static void AuthorLinearFeatures(BiomeTemplate biome, BiomeArtSpec.Entry entry, IBiomeArtSource source, Report report, bool apply)
+		{
+			var missing = new List<string>();
+			List<BiomeLinearStyle> styles = entry.LinearFeatures(name => source.Prefab(name), missing);
+			foreach (string name in missing)
+			{
+				report.Missing.Add($"{biome.name} {BiomeTemplate.Authored.LinearFeatures}: prefab {name}");
+			}
+			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.LinearFeatures, biome.LinearFeatures, styles, LinearFeatureId, s => s.ToString(),
+				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
+		}
+
+		/// <summary>An orchard entry's identity: its tree's prefab name.</summary>
+		public static string OrchardId(BiomeOrchard orchard) => orchard.Tree != null ? orchard.Tree.name : null;
+
+		/// <summary>
+		/// The biome's orchards, the layout of its fields, the old terraces round its settlements and the ground it paints along its
+		/// channels (<see cref="BiomeTemplate.Orchards"/>, <see cref="BiomeTemplate.FieldLayout"/>, <see cref="BiomeTemplate.AbandonedTerraces"/>,
+		/// <see cref="BiomeTemplate.ChannelMargin"/>, 2026-10-18, I2j-b) from the spec: none, anywhere, none and none unless the biome's
+		/// file names its own, as fields were laid before. Orchards carry a mark per tree (an entry edited by hand is kept, one deleted
+		/// stays deleted); the other three a mark for the whole value.
+		/// </summary>
+		private static void AuthorFieldKinds(BiomeTemplate biome, BiomeArtSpec.Entry entry, IBiomeArtSource source, Report report, bool apply)
+		{
+			string who = biome.name;
+			var missing = new List<string>();
+			List<BiomeOrchard> orchards = entry.FieldOrchards(name => source.Prefab(name), missing);
+			foreach (string name in missing)
+			{
+				report.Missing.Add($"{who} {BiomeTemplate.Authored.Orchards}: prefab {name}");
+			}
+			AuthorEntries(who, biome, BiomeTemplate.Authored.Orchards, biome.Orchards, orchards, OrchardId, o => o.ToString(),
+				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
+
+			BiomeFieldLayout layout = entry.FieldLayout();
+			AuthorValue(who, biome, BiomeTemplate.Authored.FieldLayout, biome.IsAuthored(BiomeTemplate.Authored.FieldLayout) ? biome.FieldLayout.Signature() : string.Empty,
+				layout.Signature(), false, () => biome.FieldLayout = layout, layout.ToString(), report, apply);
+
+			BiomeAbandonedTerraces terraces = entry.OldTerraces();
+			AuthorValue(who, biome, BiomeTemplate.Authored.AbandonedTerraces,
+				biome.IsAuthored(BiomeTemplate.Authored.AbandonedTerraces) ? biome.AbandonedTerraces.Signature() : string.Empty,
+				terraces.Signature(), false, () => biome.AbandonedTerraces = terraces, $"old terraces {terraces}", report, apply);
+
+			BiomeChannelMargin margin = entry.WetMargin();
+			AuthorValue(who, biome, BiomeTemplate.Authored.ChannelMargin, biome.IsAuthored(BiomeTemplate.Authored.ChannelMargin) ? biome.ChannelMargin.Signature() : string.Empty,
+				margin.Signature(), false, () => biome.ChannelMargin = margin, $"channel margin {margin}", report, apply);
+		}
+
+		/// <summary>A landform entry's identity: its name (<see cref="BiomeLandform.Kind"/>), trimmed, in lower case.</summary>
+		public static string LandformId(BiomeLandform form) => NameId(form.Kind);
+
+		/// <summary>
+		/// The landforms the cut carves into the biome's ground (<see cref="BiomeTemplate.Landforms"/>, 2026-10-18, I2g) from the spec
+		/// (<see cref="BiomeArtSpec.Entry.LandformList"/>: none, as no ground was sculpted before, unless the biome's file names its own).
+		/// One mark per name: an entry edited by hand is kept, one deleted by hand stays deleted. A name no preset answers that carves
+		/// nothing is reported as missing.
+		/// </summary>
+		private static void AuthorLandforms(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			List<BiomeLandform> forms = entry.LandformList();
+			foreach (BiomeLandform form in forms)
+			{
+				if (!form.Carves && !BiomeLandformPresets.Knows(form.Kind))
+				{
+					report.Missing.Add($"{biome.name} {BiomeTemplate.Authored.Landforms}: no landform preset named '{form.Kind}'");
+				}
+			}
+			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.Landforms, biome.Landforms, forms, LandformId, f => f.ToString(),
 				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
 		}
 
@@ -1596,6 +1810,637 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>Vines' mark: every value (<see cref="BiomeVines.Signature"/>), empty for none set at all.</summary>
 		public static string Mark(BiomeVines vines) => vines == null || vines.IsEmpty ? string.Empty : vines.Signature();
+
+		/// <summary>
+		/// The ways across each ground layer (<see cref="TerrainTextureLayer.ways"/>, decision 19, 2026-10-16): the path, road
+		/// and cobble grounds the spec gives the main layer and each detail layer (<see cref="BiomeArtSpec.Layer.Ways"/>), each
+		/// way marked on its own (<see cref="BiomeTemplate.Authored.GroundWay"/>). Unset in the spec, a way stays empty — the
+		/// biome's own Small Path, Road or Cobbles, as every ground was before — and nothing is marked.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A detail slot's ways are written only while it holds the spec's ground, as its rules are: a corduroy road meant for
+		/// a bog layer does not belong on whatever hand-made ground sits in that slot. The main layer's are written whoever
+		/// painted it, as its rules are. Empty is a decision (the biome's own way): a way the tool wrote and somebody cleared
+		/// stays clear; one somebody set to other art is kept.
+		/// </para>
+		/// </remarks>
+		private static void AuthorLayerWays(BiomeTemplate biome, BiomeArtSpec.Entry entry, IBiomeArtSource source, Report report, bool apply)
+		{
+			var layers = new List<(string slot, TerrainTextureLayer ground, BiomeArtSpec.Layer spec)>();
+			if (entry.Main != null)
+			{
+				layers.Add((BiomeLocalArt.SlotMain, biome.MainTextureLayer, entry.Main));
+			}
+			for (int i = 0; i < entry.Details.Length; i++)
+			{
+				BiomeArtSpec.Layer spec = entry.Details[i];
+				TerrainTextureLayer slot = biome.DetailTextureLayers != null && i < biome.DetailTextureLayers.Count ? biome.DetailTextureLayers[i] : null;
+				if (spec == null || slot == null)
+				{
+					continue;
+				}
+				if (slot.terrainLayer == null || slot.terrainLayer != source.Layer(spec.Family))
+				{
+					if (spec.WayPath != null || spec.WayRoad != null || spec.WayCobbles != null)
+					{
+						report.Lines.Add($"{biome.name} {BiomeLocalArt.DetailSlot(i)}: holds authored art, so its spec ways were not written");
+					}
+					continue;
+				}
+				layers.Add((BiomeLocalArt.DetailSlot(i), slot, spec));
+			}
+
+			foreach ((string slotName, TerrainTextureLayer ground, BiomeArtSpec.Layer spec) in layers)
+			{
+				if (ground == null)
+				{
+					continue;
+				}
+				foreach (string way in BiomeLocalArt.WaySlots)
+				{
+					string key = BiomeLocalArt.WaySlot(slotName, way);
+					string field = BiomeTemplate.Authored.GroundWay(key);
+					string family = spec.WayGround(way);
+					TerrainLayer target = family != null ? source.Layer(family) : null;
+					if (family != null && target == null)
+					{
+						report.Missing.Add($"{biome.name} {key}: Ground_{family}");
+						continue;
+					}
+					string current = WayMark(BiomeLocalArt.WayGround(ground.ways, way));
+					string wanted = WayMark(target);
+					if (current.Length == 0 && wanted.Length == 0 && biome.AuthoredFingerprint(field) == null)
+					{
+						// Nothing set, nothing wanted, nothing written before: the biome's own way, with no mark to record.
+						continue;
+					}
+					TerrainTextureLayer on = ground;
+					AuthorValue(biome.name, biome, field, current, wanted, true, () => BiomeLocalArt.SetWayGround(ref on.ways, way, target),
+						target != null ? $"{key} Ground_{family}" : $"{key} the biome's own", report, apply, isEmpty: current.Length == 0);
+				}
+			}
+		}
+
+		/// <summary>
+		/// The climate variants the spec declares (<see cref="BiomeArtSpec.Entry.ClimateVariant"/>) and the ground overrides it gives
+		/// them (<see cref="BiomeArtSpec.Entry.ClimateGround"/>), decision 29, 2026-10-18. Nothing declared, nothing written: every
+		/// template's variants stay exactly as they are.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Variants</b>, one mark each (<see cref="BiomeTemplate.Authored.ClimateVariant"/>, its envelope's print): one the
+		/// template lacks is added (name, envelope, texture falloff; no names of its own, which a round gives by hand or in a later
+		/// column) unless the tool added it once and somebody deleted it since; one still as the tool left it follows the spec's
+		/// envelope; one made or edited by hand is kept. Never removed.
+		/// </para>
+		/// <para>
+		/// <b>Overrides</b>, slot by slot (key BiomeLocalArt.VariantSlot): filled and given their rules exactly as a detail slot is
+		/// (<see cref="Fill"/>: an empty slot or the tool's generated art; <see cref="AddRules"/> while it holds the spec's ground),
+		/// the list padded with empty layers (which keep the biome's own ground) up to the slot.
+		/// </para>
+		/// </remarks>
+		private static void AuthorClimateVariants(BiomeTemplate biome, BiomeArtSpec.Entry entry, IBiomeArtSource source, Report report, bool apply)
+		{
+			string who = biome.name;
+			foreach (BiomeArtSpec.Entry.VariantSpec spec in entry.Variants)
+			{
+				string key = BiomeClimateVariant.Normalize(spec.Name);
+				if (key.Length == 0)
+				{
+					report.Lines.Add($"{who}: a climate variant in the spec has no name — skipped");
+					continue;
+				}
+				string field = BiomeTemplate.Authored.ClimateVariant(key);
+				string mark = biome.AuthoredFingerprint(field);
+				string target = VariantMark(spec.Name, spec.Temperature, spec.Humidity, spec.TextureFalloff);
+				BiomeClimateVariant existing = biome.FindOwnVariant(key);
+				if (existing == null)
+				{
+					if (mark != null)
+					{
+						report.ValuesKept++;
+						report.Lines.Add($"{who} {field}: deleted by hand since the tool added it — stays deleted");
+						continue;
+					}
+					report.ValuesFilled++;
+					report.Lines.Add($"{who} {field}: {(apply ? "added" : "would add")} climate variant '{spec.Name}' (t {spec.Temperature.x:0.##} … {spec.Temperature.y:0.##}, h {spec.Humidity.x:0.##} … {spec.Humidity.y:0.##})");
+					if (apply)
+					{
+						biome.ClimateVariants ??= new List<BiomeClimateVariant>();
+						biome.ClimateVariants.Add(new BiomeClimateVariant
+						{
+							Name = spec.Name,
+							MinTemperature = spec.Temperature.x,
+							MaxTemperature = spec.Temperature.y,
+							MinHumidity = spec.Humidity.x,
+							MaxHumidity = spec.Humidity.y,
+							TextureFalloff = spec.TextureFalloff,
+						});
+						biome.SetAuthoredFingerprint(field, target);
+					}
+					continue;
+				}
+				BiomeClimateVariant on = existing;
+				AuthorValue(who, biome, field, VariantMark(existing), target, false, () =>
+				{
+					on.MinTemperature = spec.Temperature.x;
+					on.MaxTemperature = spec.Temperature.y;
+					on.MinHumidity = spec.Humidity.x;
+					on.MaxHumidity = spec.Humidity.y;
+					on.TextureFalloff = spec.TextureFalloff;
+				}, $"climate variant '{spec.Name}' envelope", report, apply);
+			}
+
+			foreach (BiomeArtSpec.Entry.VariantGrounds grounds in entry.VariantLayers)
+			{
+				BiomeClimateVariant variant = biome.FindOwnVariant(grounds.Variant);
+				int index = variant != null ? biome.ClimateVariants.IndexOf(variant) : -1;
+				if (variant == null)
+				{
+					bool declared = entry.Variants.Exists(v => BiomeClimateVariant.Normalize(v.Name) == BiomeClimateVariant.Normalize(grounds.Variant));
+					report.Lines.Add(declared && !apply
+						? $"{who}: climate variant '{grounds.Variant}' would be added first; its grounds are filled when applied"
+						: $"{who}: the spec gives climate variant '{grounds.Variant}' grounds, but the template has no such variant — skipped (declare it with ClimateVariant)");
+					continue;
+				}
+				string id = BiomeLocalArt.VariantId(variant, index);
+				for (int g = 0; g < grounds.Layers.Length; g++)
+				{
+					BiomeArtSpec.Layer spec = grounds.Layers[g];
+					if (spec == null)
+					{
+						continue;
+					}
+					string key = BiomeLocalArt.VariantSlot(id, g);
+					TerrainTextureLayer slot = variant.TextureOverrideFor(g);
+					if (slot == null)
+					{
+						if (source.Layer(spec.Family) == null)
+						{
+							report.Missing.Add($"{who} {key}: Ground_{spec.Family}");
+							continue;
+						}
+						slot = new TerrainTextureLayer();
+						if (apply)
+						{
+							variant.TextureLayerOverrides ??= new List<TerrainTextureLayer>();
+							while (variant.TextureLayerOverrides.Count <= g)
+							{
+								variant.TextureLayerOverrides.Add(new TerrainTextureLayer());
+							}
+							variant.TextureLayerOverrides[g] = slot;
+						}
+					}
+					bool fillable = IsFillable(slot, source.Layer(spec.Family), IsGenerated);
+					// The main layer's override is a ground slot like a detail: its noise and bands are the spec's.
+					Fill(who, key, slot, spec.Family, spec, source, report, apply);
+					if (slot.terrainLayer != null && slot.terrainLayer == source.Layer(spec.Family) || !apply && fillable)
+					{
+						AddRules(who, key, slot, spec, source, report, apply);
+					}
+					else if (spec.Scatter.Count > 0)
+					{
+						report.Lines.Add($"{who} {key}: holds authored art, so its spec rules ({spec.Scatter.Count}) were not added");
+					}
+				}
+			}
+		}
+
+		/// <summary>A climate variant's mark: its name and envelope (and texture falloff) to 1/10 000.</summary>
+		public static string VariantMark(BiomeClimateVariant variant)
+		{
+			return variant == null ? string.Empty
+				: VariantMark(variant.Name, new Vector2(variant.MinTemperature, variant.MaxTemperature), new Vector2(variant.MinHumidity, variant.MaxHumidity), variant.TextureFalloff);
+		}
+
+		/// <summary>A climate variant's mark from its parts.</summary>
+		public static string VariantMark(string name, Vector2 temperature, Vector2 humidity, float textureFalloff)
+		{
+			return $"{BiomeClimateVariant.Normalize(name)}|t{Q(temperature.x)},{Q(temperature.y)}|h{Q(humidity.x)},{Q(humidity.y)}|f{Q(textureFalloff)}";
+		}
+
+		/// <summary>
+		/// Each ground layer's climate band (<see cref="TerrainTextureLayer.useClimateBand"/>) from the spec (<see cref="BiomeArtSpec.Layer.Temp"/>,
+		/// <see cref="BiomeArtSpec.Layer.Humid"/>), decision 29, 2026-10-18: the main layer always, a detail slot or a climate variant's
+		/// override while it holds the spec's ground (as their rules are). One mark per slot
+		/// (<see cref="BiomeTemplate.Authored.GroundClimate"/>); no band is a decision too (a band the tool wrote and somebody switched
+		/// off stays off). With no band in the spec and none on the layer nothing is written or marked: every layer paints as before.
+		/// </summary>
+		/// <summary>
+		/// The biome's extra bed layers by depth (decision 35 (b), 2026-10-18; <see cref="BiomeArtSpec.Entry.BedLayer"/>): each spec bed
+		/// fills slot <c>bed/i</c> (the template's list grown to it, at most <see cref="BiomeTemplate.MaximumBedLayers"/>) with its
+		/// ground as an empty slot is filled, adds its rules as a detail layer's are (only while the slot holds the spec's art), and
+		/// writes its bands (waters, depth, current) under one mark a slot (<see cref="BiomeTemplate.Authored.BedBands"/>): written
+		/// while untouched or still at a new layer's defaults, a hand edit kept. A spec with no beds writes nothing.
+		/// </summary>
+		private static void AuthorBedLayers(BiomeTemplate biome, BiomeArtSpec.Entry entry, IBiomeArtSource source, Report report, bool apply)
+		{
+			string who = biome.name;
+			if (biome.BedTextureLayers != null)
+			{
+				for (int i = 0; i < biome.BedTextureLayers.Count; i++)
+				{
+					DisableDeadRules(who, BiomeLocalArt.BedSlot(i), biome.BedTextureLayers[i], report, apply);
+				}
+			}
+			int count = Mathf.Min(entry.BedLayers.Count, BiomeTemplate.MaximumBedLayers);
+			for (int i = 0; i < count; i++)
+			{
+				BiomeArtSpec.Entry.BedSpec spec = entry.BedLayers[i];
+				string slotName = BiomeLocalArt.BedSlot(i);
+				BedTextureLayer slot = biome.BedTextureLayers != null && i < biome.BedTextureLayers.Count ? biome.BedTextureLayers[i] : null;
+				if (slot == null)
+				{
+					if (source.Layer(spec.Layer.Family) == null)
+					{
+						report.Missing.Add($"{who} {slotName}: Ground_{spec.Layer.Family}");
+						continue;
+					}
+					slot = new BedTextureLayer();
+					if (apply)
+					{
+						while (biome.BedTextureLayers.Count < i)
+						{
+							biome.BedTextureLayers.Add(new BedTextureLayer());
+						}
+						if (biome.BedTextureLayers.Count == i)
+						{
+							biome.BedTextureLayers.Add(slot);
+						}
+						else
+						{
+							biome.BedTextureLayers[i] = slot;
+						}
+					}
+				}
+				bool fillable = IsFillable(slot, source.Layer(spec.Layer.Family), IsGenerated);
+				Fill(who, slotName, slot, spec.Layer.Family, null, source, report, apply);
+				if (slot.terrainLayer != null && slot.terrainLayer == source.Layer(spec.Layer.Family) || !apply && fillable)
+				{
+					AddRules(who, slotName, slot, spec.Layer, source, report, apply);
+					BedTextureLayer on = slot;
+					string current = BedMark(slot);
+					string wanted = BedMark(spec);
+					AuthorValue(who, biome, BiomeTemplate.Authored.BedBands(slotName), current, wanted, false, () => WriteBedBands(on, spec),
+						$"{slotName} bands {wanted}", report, apply, isEmpty: current == BedMark(new BedTextureLayer()));
+				}
+				else if (spec.Layer.Scatter.Count > 0)
+				{
+					report.Lines.Add($"{who} {slotName}: holds authored art, so its spec rules ({spec.Layer.Scatter.Count}) and bands were not written");
+				}
+			}
+		}
+
+		/// <summary>Writes a spec bed's bands onto a template bed layer.</summary>
+		public static void WriteBedBands(BedTextureLayer layer, BiomeArtSpec.Entry.BedSpec spec)
+		{
+			layer.waters = spec.Waters;
+			layer.depthRange = new Vector2(Mathf.Max(0f, spec.Depth.x), Mathf.Max(0f, spec.Depth.y));
+			layer.depthFalloff = Mathf.Max(0f, spec.DepthFalloff);
+			layer.useCurrentBand = spec.Current.HasValue;
+			layer.currentRange = spec.Current.HasValue ? new Vector2(Mathf.Max(0f, spec.Current.Value.x), Mathf.Max(0f, spec.Current.Value.y)) : Vector2.zero;
+			layer.currentFalloff = Mathf.Max(0f, spec.CurrentFalloff);
+		}
+
+		/// <summary>A bed layer's bands' mark: its waters, depth band and current band to 1/10 000.</summary>
+		public static string BedMark(BedTextureLayer layer)
+		{
+			if (layer == null)
+			{
+				return string.Empty;
+			}
+			return BedMark(layer.waters, layer.depthRange, layer.depthFalloff, layer.useCurrentBand ? layer.currentRange : (Vector2?)null, layer.currentFalloff);
+		}
+
+		/// <summary>A spec bed's bands' mark (<see cref="BedMark(BedTextureLayer)"/>'s form).</summary>
+		public static string BedMark(BiomeArtSpec.Entry.BedSpec spec)
+		{
+			if (spec == null)
+			{
+				return string.Empty;
+			}
+			return BedMark(spec.Waters, new Vector2(Mathf.Max(0f, spec.Depth.x), Mathf.Max(0f, spec.Depth.y)), Mathf.Max(0f, spec.DepthFalloff),
+				spec.Current.HasValue ? new Vector2(Mathf.Max(0f, spec.Current.Value.x), Mathf.Max(0f, spec.Current.Value.y)) : (Vector2?)null, Mathf.Max(0f, spec.CurrentFalloff));
+		}
+
+		private static string BedMark(BiomeBedWaters waters, Vector2 depth, float depthFalloff, Vector2? current, float currentFalloff)
+		{
+			// The current's falloff means nothing without a current band, so it is not in a mark that has none.
+			string c = current.HasValue ? $"c{Q(current.Value.x)},{Q(current.Value.y)},{Q(currentFalloff)}" : "c-";
+			return $"w{(int)waters}|d{Q(depth.x)},{Q(depth.y)},{Q(depthFalloff)}|{c}";
+		}
+
+		private static void AuthorLayerClimate(BiomeTemplate biome, BiomeArtSpec.Entry entry, IBiomeArtSource source, Report report, bool apply)
+		{
+			var layers = new List<(string slot, TerrainTextureLayer ground, BiomeArtSpec.Layer spec)>();
+			if (entry.Main != null)
+			{
+				layers.Add((BiomeLocalArt.SlotMain, biome.MainTextureLayer, entry.Main));
+			}
+			void Spec(string slotName, TerrainTextureLayer slot, BiomeArtSpec.Layer spec)
+			{
+				if (spec == null || slot == null)
+				{
+					return;
+				}
+				if (slot.terrainLayer == null || slot.terrainLayer != source.Layer(spec.Family))
+				{
+					if (spec.HasClimateBand || spec.AirBand != BiomeAtmosphereRequirement.None)
+					{
+						report.Lines.Add($"{biome.name} {slotName}: holds authored art, so its spec climate/air band was not written");
+					}
+					return;
+				}
+				layers.Add((slotName, slot, spec));
+			}
+			for (int i = 0; i < entry.Details.Length; i++)
+			{
+				Spec(BiomeLocalArt.DetailSlot(i), biome.DetailTextureLayers != null && i < biome.DetailTextureLayers.Count ? biome.DetailTextureLayers[i] : null, entry.Details[i]);
+			}
+			/* Cliffs carry an air band only (decision 44, 2026-10-18: one biome's grey and rust scarps); their climate fields stay at
+			 * the defaults the write leaves them at. A cliff spec without one, on a cliff without one, writes and marks nothing. */
+			for (int i = 0; i < entry.Cliffs.Length; i++)
+			{
+				BiomeArtSpec.Cliff cliff = entry.Cliffs[i];
+				Spec(BiomeLocalArt.SlotCliff + i, biome.CliffTextureLayers != null && i < biome.CliffTextureLayers.Count ? biome.CliffTextureLayers[i] : null,
+					cliff != null ? new BiomeArtSpec.Layer { Family = cliff.Family, AirBand = cliff.AirBand } : null);
+			}
+			foreach (BiomeArtSpec.Entry.VariantGrounds grounds in entry.VariantLayers)
+			{
+				BiomeClimateVariant variant = biome.FindOwnVariant(grounds.Variant);
+				if (variant == null)
+				{
+					continue;
+				}
+				string id = BiomeLocalArt.VariantId(variant, biome.ClimateVariants.IndexOf(variant));
+				for (int g = 0; g < grounds.Layers.Length; g++)
+				{
+					Spec(BiomeLocalArt.VariantSlot(id, g), variant.TextureOverrideFor(g), grounds.Layers[g]);
+				}
+			}
+
+			foreach ((string slotName, TerrainTextureLayer ground, BiomeArtSpec.Layer spec) in layers)
+			{
+				if (ground == null)
+				{
+					continue;
+				}
+				string field = BiomeTemplate.Authored.GroundClimate(slotName);
+				string current = ClimateMark(ground);
+				string wanted = ClimateMark(spec);
+				if (current.Length == 0 && wanted.Length == 0 && biome.AuthoredFingerprint(field) == null)
+				{
+					// No band set, none wanted, none written before: the layer paints as it always did, with no mark to record.
+					continue;
+				}
+				TerrainTextureLayer on = ground;
+				AuthorValue(biome.name, biome, field, current, wanted, true, () => WriteClimateBand(on, spec),
+					wanted.Length > 0 ? $"{slotName} climate band {wanted}" : $"{slotName} no climate band", report, apply, isEmpty: current.Length == 0);
+			}
+		}
+
+		/// <summary>Writes a spec layer's climate band onto a template layer (off, ranges open, when the spec has none).</summary>
+		public static void WriteClimateBand(TerrainTextureLayer layer, BiomeArtSpec.Layer spec)
+		{
+			// The air band rides with the climate's (decision 44): the same slot, the same mark.
+			layer.airBand = spec != null ? spec.AirBand : BiomeAtmosphereRequirement.None;
+			layer.useClimateBand = spec != null && spec.HasClimateBand;
+			layer.temperatureRange = spec?.Temperature ?? new Vector2(-1f, 1f);
+			layer.humidityRange = spec?.Humidity ?? new Vector2(-1f, 1f);
+			layer.temperatureFalloff = spec != null ? spec.TemperatureFalloff : BiomeClimateBand.DefaultFalloff;
+			layer.humidityFalloff = spec != null ? spec.HumidityFalloff : BiomeClimateBand.DefaultFalloff;
+		}
+
+		/// <summary>A layer's climate band's mark: empty for none (off, or open at every end), else its ranges and falloffs to 1/10 000.</summary>
+		public static string ClimateMark(TerrainTextureLayer layer)
+		{
+			if (layer == null)
+			{
+				return string.Empty;
+			}
+			string climate = layer.HasClimateBand ? ClimateMark(layer.temperatureRange, layer.temperatureFalloff, layer.humidityRange, layer.humidityFalloff) : string.Empty;
+			return WithAir(climate, layer.airBand);
+		}
+
+		/// <summary>
+		/// A climate mark with a layer's air band after it ("|a" and the mask, decision 44), the climate part "t-|h-" when it has
+		/// none; unchanged without an air band, so every mark written before air bands existed reads the same.
+		/// </summary>
+		private static string WithAir(string climate, BiomeAtmosphereRequirement air)
+		{
+			if (air == BiomeAtmosphereRequirement.None)
+			{
+				return climate;
+			}
+			return (climate.Length > 0 ? climate : "t-|h-") + "|a" + (int)air;
+		}
+
+		/// <summary>A spec layer's climate band's mark (<see cref="ClimateMark(TerrainTextureLayer)"/>'s form).</summary>
+		public static string ClimateMark(BiomeArtSpec.Layer spec)
+		{
+			if (spec == null)
+			{
+				return string.Empty;
+			}
+			string climate = spec.HasClimateBand
+				? ClimateMark(spec.Temperature ?? new Vector2(-1f, 1f), spec.TemperatureFalloff, spec.Humidity ?? new Vector2(-1f, 1f), spec.HumidityFalloff)
+				: string.Empty;
+			return WithAir(climate, spec.AirBand);
+		}
+
+		private static string ClimateMark(Vector2 temperature, float temperatureFalloff, Vector2 humidity, float humidityFalloff)
+		{
+			// An open axis reads the same whatever its falloff: the falloff of an axis that bands nothing changes nothing.
+			string t = BiomeClimateBand.Closes(temperature) ? $"t{Q(Mathf.Min(temperature.x, temperature.y))},{Q(Mathf.Max(temperature.x, temperature.y))},{Q(temperatureFalloff)}" : "t-";
+			string h = BiomeClimateBand.Closes(humidity) ? $"h{Q(Mathf.Min(humidity.x, humidity.y))},{Q(Mathf.Max(humidity.x, humidity.y))},{Q(humidityFalloff)}" : "h-";
+			return t + "|" + h;
+		}
+
+		/// <summary>
+		/// The template's Description from the spec's column (<see cref="BiomeArtSpec.Entry.Describe"/>, decision 23): one whole value,
+		/// marked by its text. No column, nothing written. A description never authored is the one the template was made with, and
+		/// a round that writes the column means to replace it, so it is written over once; after that, a hand edit is kept.
+		/// </summary>
+		private static void AuthorDescription(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			if (entry.Description == null)
+			{
+				return;
+			}
+			string target = entry.Description;
+			AuthorText(biome, BiomeTemplate.Authored.Description, Mark(biome.Description), Mark(target), () => biome.Description = target,
+				$"description \"{Shorten(target)}\"", report, apply);
+		}
+
+		/// <summary>
+		/// What the ground gives the air (<see cref="BiomeTemplate.Emits"/>, <see cref="BiomeTemplate.EmissionRate"/>) from the spec's
+		/// column (<see cref="BiomeArtSpec.Entry.Emits"/>, 2026-10-18, I2o): one whole value, marked "substance@rate" ("none" for
+		/// nothing), under the description's rule (the weather content generator's first writing is written over once, a hand edit
+		/// kept after). No column, nothing written. A substance the project lacks is reported missing and nothing is written.
+		/// </summary>
+		private static void AuthorEmission(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			if (!entry.Emission.HasValue)
+			{
+				return;
+			}
+			(string substance, float rate) = entry.Emission.Value;
+			FishMMO.Shared.Weather.WeatherSubstance target = null;
+			if (substance != null)
+			{
+				target = SubstanceNamed(substance);
+				if (target == null)
+				{
+					report.Missing.Add($"{biome.name} {BiomeTemplate.Authored.Emission}: weather substance {substance}");
+					return;
+				}
+			}
+			string current = EmissionMark(biome.Emits != null ? biome.Emits.name : null, biome.Emits != null ? biome.EmissionRate : 0f);
+			string wanted = EmissionMark(substance, rate);
+			AuthorText(biome, BiomeTemplate.Authored.Emission, current, wanted, () =>
+			{
+				biome.Emits = target;
+				biome.EmissionRate = target != null ? rate : 0f;
+			}, $"emits {wanted}", report, apply);
+		}
+
+		/// <summary>An emission's mark: "substance@rate" (the rate to 1/10 000), "none" for nothing.</summary>
+		public static string EmissionMark(string substance, float rate)
+		{
+			return string.IsNullOrEmpty(substance) ? "none" : substance + "@" + Q(rate).ToString(CultureInfo.InvariantCulture);
+		}
+
+		/// <summary>The project's weather substance of that asset name, or null.</summary>
+		private static FishMMO.Shared.Weather.WeatherSubstance SubstanceNamed(string name)
+		{
+			foreach (string guid in AssetDatabase.FindAssets("t:" + nameof(FishMMO.Shared.Weather.WeatherSubstance)))
+			{
+				var substance = AssetDatabase.LoadAssetAtPath<FishMMO.Shared.Weather.WeatherSubstance>(AssetDatabase.GUIDToAssetPath(guid));
+				if (substance != null && substance.name == name)
+				{
+					return substance;
+				}
+			}
+			return null;
+		}
+
+		/// <summary>
+		/// The parts of the naming block the spec's column rewrites (<see cref="BiomeArtSpec.Entry.Names"/>, decision 23): each part
+		/// a whole value with its own mark (<see cref="BiomeTemplate.Authored.NamingPart"/>), under the description's rule (written
+		/// over once, a hand edit kept after). A part left unset is not touched.
+		/// </summary>
+		private static void AuthorNaming(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			BiomeArtSpec.NamingColumns naming = entry.Naming;
+			if (naming == null || naming.IsEmpty)
+			{
+				return;
+			}
+			biome.Naming ??= new BiomeNamingData();
+			biome.Naming.Phonology ??= new SerializableBiomePhonology();
+			SerializableBiomePhonology ph = biome.Naming.Phonology;
+			bool wrote = false;
+			void Words(string part, string[] target, Func<string[]> read, Action<string[]> write)
+			{
+				if (target == null)
+				{
+					return;
+				}
+				string[] copy = (string[])target.Clone();
+				wrote |= AuthorText(biome, BiomeTemplate.Authored.NamingPart(part), Mark(read()), Mark(copy), () => write(copy),
+					$"naming {part} ({copy.Length}: {Shorten(string.Join(", ", copy))})", report, apply);
+			}
+			void Number(string part, int? target, Func<int> read, Action<int> write)
+			{
+				if (target == null)
+				{
+					return;
+				}
+				int value = target.Value;
+				wrote |= AuthorText(biome, BiomeTemplate.Authored.NamingPart(part), read().ToString(CultureInfo.InvariantCulture),
+					value.ToString(CultureInfo.InvariantCulture), () => write(value), $"naming {part} {value}", report, apply);
+			}
+			Words(nameof(ph.Onsets), naming.Onsets, () => ph.Onsets, v => ph.Onsets = v);
+			Words(nameof(ph.Nuclei), naming.Nuclei, () => ph.Nuclei, v => ph.Nuclei = v);
+			Words(nameof(ph.Codas), naming.Codas, () => ph.Codas, v => ph.Codas = v);
+			Words(nameof(ph.Middles), naming.Middles, () => ph.Middles, v => ph.Middles = v);
+			Number(nameof(ph.SyllMin), naming.SyllablesMin, () => ph.SyllMin, v => ph.SyllMin = v);
+			Number(nameof(ph.SyllMax), naming.SyllablesMax, () => ph.SyllMax, v => ph.SyllMax = v);
+			Words(nameof(ph.DungeonSuffixes), naming.DungeonSuffixes, () => ph.DungeonSuffixes, v => ph.DungeonSuffixes = v);
+			Words(nameof(ph.DungeonPrefixes), naming.DungeonPrefixes, () => ph.DungeonPrefixes, v => ph.DungeonPrefixes = v);
+			Words(nameof(ph.POISuffixes), naming.POISuffixes, () => ph.POISuffixes, v => ph.POISuffixes = v);
+			Words(nameof(ph.Adjectives), naming.Adjectives, () => ph.Adjectives, v => ph.Adjectives = v);
+			if (naming.POIWords != null)
+			{
+				List<StringListMapping> rows = PoiWordRows(naming.POIWords);
+				wrote |= AuthorText(biome, BiomeTemplate.Authored.NamingPart(nameof(ph.POITypeWords)), PoiWordsMark(ph.POITypeWords), PoiWordsMark(rows),
+					() => ph.POITypeWords = rows, $"naming {nameof(ph.POITypeWords)} ({rows.Count} kinds)", report, apply);
+			}
+			if (naming.About != null)
+			{
+				string about = naming.About;
+				wrote |= AuthorText(biome, BiomeTemplate.Authored.NamingPart(nameof(ph.Description)), Mark(ph.Description), Mark(about),
+					() => ph.Description = about, $"naming description \"{Shorten(about)}\"", report, apply);
+			}
+			if (wrote && apply)
+			{
+				// The runtime view is built once and cached: rebuilt so this session names with what was just written.
+				biome.Naming.BuildRuntime();
+			}
+		}
+
+		/// <summary>
+		/// <see cref="AuthorValue(string, BiomeTemplate, string, string, string, bool, Action, string, Report, bool, bool)"/> for a
+		/// text column (description, naming): a value never authored counts as untouched (the template's original text, which the
+		/// round's column replaces); once written, the usual contract. True when it wrote (or would write) the value.
+		/// </summary>
+		private static bool AuthorText(BiomeTemplate biome, string field, string current, string target, Action write, string describe, Report report, bool apply)
+		{
+			string mark = biome.AuthoredFingerprint(field);
+			bool writes = current != target && (mark == null || current == mark);
+			// Never authored: the template's original text stands in for the mark, so it reads as untouched and is written over
+			// (when it already equals the spec's, no stand-in, and it is only marked).
+			string asMark = mark ?? (current == target ? null : current);
+			AuthorValue(biome.name, biome, field, asMark, current, target, false, write, describe, report, apply);
+			return writes;
+		}
+
+		/// <summary>A word list's mark (<see cref="Mark(IReadOnlyList{string})"/>): a hash of its words in order; null and empty alike.</summary>
+		public static string Mark(string[] words) => Mark((IReadOnlyList<string>)(words ?? Array.Empty<string>()));
+
+		/// <summary>The spec's point-of-interest words as the template's rows, in the spec's order, each list copied.</summary>
+		public static List<StringListMapping> PoiWordRows((string Kind, string[] Words)[] words)
+		{
+			var rows = new List<StringListMapping>();
+			if (words != null)
+			{
+				foreach ((string kind, string[] list) in words)
+				{
+					rows.Add(new StringListMapping(kind, list != null ? (string[])list.Clone() : Array.Empty<string>()));
+				}
+			}
+			return rows;
+		}
+
+		/// <summary>A point-of-interest word table's mark: a hash of "kind=word|word" rows in order.</summary>
+		public static string PoiWordsMark(List<StringListMapping> rows)
+		{
+			var lines = new List<string>();
+			if (rows != null)
+			{
+				foreach (StringListMapping row in rows)
+				{
+					lines.Add(row == null ? "<none>" : (row.Key ?? string.Empty) + "=" + string.Join("|", row.Values ?? Array.Empty<string>()));
+				}
+			}
+			return Mark((IReadOnlyList<string>)lines);
+		}
+
+		private static string Shorten(string text) => text == null ? string.Empty : text.Length <= 60 ? text : text.Substring(0, 57) + "...";
+
+		/// <summary>A way ground's mark: the terrain layer's name (generated grounds have fixed, unique names), empty for the biome's own.</summary>
+		public static string WayMark(TerrainLayer ground) => ground != null ? ground.name : string.Empty;
 
 		/// <summary>
 		/// What each slot's ground is made of (<see cref="TerrainTextureLayer.GroundMakeup"/>), for every slot holding a generated
@@ -1864,6 +2709,15 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				text.Append("|D").Append(Q(rule.depthRange.x)).Append(',').Append(Q(rule.depthRange.y));
 			}
+			// A bed rule's waters and current (decision 35, 2026-10-18): only when set, so every rule marked before still hashes to its mark.
+			if (rule.waters != BiomeBedWaters.Default)
+			{
+				text.Append("|W").Append((int)rule.waters);
+			}
+			if (rule.currentRange != Vector2.zero)
+			{
+				text.Append("|C").Append(Q(rule.currentRange.x)).Append(',').Append(Q(rule.currentRange.y));
+			}
 			/* Climate bands likewise, and keyed on the switch, not the ranges: a rule marked before bands
 			 * existed (switch off) still hashes to its mark, and ranges edited while the switch is off are
 			 * inert, as a group's settings are without a radius. Switching a band on, or moving one, is a
@@ -1874,6 +2728,11 @@ namespace FishMMO.Shared.WorldDesign
 					.Append(',').Append(Q(rule.temperatureFalloff))
 					.Append(',').Append(QBound(rule.humidityRange.x)).Append(',').Append(QBound(rule.humidityRange.y))
 					.Append(',').Append(Q(rule.humidityFalloff));
+			}
+			// The world gate (decision 41, 2026-10-18) likewise: only a rule that has one hashes it, so every mark made before still holds.
+			if (!rule.worldGate.IsOpen)
+			{
+				text.Append("|G").Append(rule.worldGate.Signature());
 			}
 			return Hash64(text);
 		}
@@ -2011,12 +2870,16 @@ namespace FishMMO.Shared.WorldDesign
 				forestMix = Mathf.Clamp01(s.ForestMix),
 				forestScaleBias = Mathf.Clamp01(s.ForestScaleBias),
 				depthRange = new Vector2(Mathf.Max(0f, s.Depth.x), Mathf.Max(0f, s.Depth.y)),
+				waters = s.Waters,
+				currentRange = new Vector2(Mathf.Max(0f, s.Current.x), Mathf.Max(0f, s.Current.y)),
 				// No band leaves every band field at its default, so a rule without one is exactly what it was.
 				useClimateBand = s.Temperature.HasValue || s.Humidity.HasValue,
 				temperatureRange = s.Temperature ?? new Vector2(-1f, 1f),
 				temperatureFalloff = s.Temperature.HasValue || s.Humidity.HasValue ? Mathf.Clamp01(s.TemperatureFalloff) : 0.1f,
 				humidityRange = s.Humidity ?? new Vector2(-1f, 1f),
 				humidityFalloff = s.Temperature.HasValue || s.Humidity.HasValue ? Mathf.Clamp01(s.HumidityFalloff) : 0.1f,
+				// Open (the default) for every rule without one: the rule is exactly what it was (decision 41, 2026-10-18).
+				worldGate = s.World,
 			});
 			rule.SpecFingerprint = Fingerprint(rule);
 		}
@@ -2070,11 +2933,14 @@ namespace FishMMO.Shared.WorldDesign
 			to.forestMix = from.forestMix;
 			to.forestScaleBias = from.forestScaleBias;
 			to.depthRange = from.depthRange;
+			to.waters = from.waters;
+			to.currentRange = from.currentRange;
 			to.useClimateBand = from.useClimateBand;
 			to.temperatureRange = from.temperatureRange;
 			to.temperatureFalloff = from.temperatureFalloff;
 			to.humidityRange = from.humidityRange;
 			to.humidityFalloff = from.humidityFalloff;
+			to.worldGate = from.worldGate;
 		}
 	}
 }

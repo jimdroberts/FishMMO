@@ -54,8 +54,17 @@ namespace FishMMO.Shared.WorldDesign
 		public static SceneHeightField Shape(SceneGenerationRequest request, TerrainTilePlan plan, SolarSystemProfile system, List<string> notes,
 			out SceneErosionReport erosion, out SceneWater water)
 		{
+			return Shape(request, plan, system, notes, out erosion, out water, out _);
+		}
+
+		/// <summary>The same, also handing back the sculpted landforms carved into the ground (2026-10-18, I2g).</summary>
+		/// <param name="landforms">What the landform stage placed and carved; null when no biome names a landform (or erosion did not run).</param>
+		public static SceneHeightField Shape(SceneGenerationRequest request, TerrainTilePlan plan, SolarSystemProfile system, List<string> notes,
+			out SceneErosionReport erosion, out SceneWater water, out SceneLandformRecord landforms)
+		{
 			erosion = null;
 			water = null;
+			landforms = null;
 			SceneHeightField field = SceneHeightField.Sample(request, plan);
 			Observer?.Invoke("sampled from the planet", field, null);
 			if (!request.Erosion)
@@ -100,6 +109,15 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				// Erosion did not run, so nothing laid the water: it still runs where the planet sends it.
 				lay(field);
+			}
+			/* The biomes' sculpted landforms (2026-10-18, I2g): placed on the patches the erosion's biome field painted and carved into
+			 * the worn ground, kept off the first water's channels and lakes, before the final water is worked out from the ground (so
+			 * a crater's bowl or a playa can hold a lake, and rivers find their way round a mound). Nothing when no biome names one. */
+			landforms = SceneLandforms.Carve(request, system, field, process.Biomes, laid, settings.Aeolian, BaseLevel(request, system),
+				SceneGenerator.SceneSeed(request), notes);
+			if (landforms != null && landforms.Sites.Count > 0)
+			{
+				Observer?.Invoke("sculpted landforms", field, laid);
 			}
 			if (laid != null)
 			{

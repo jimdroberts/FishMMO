@@ -51,6 +51,7 @@ namespace FishMMO.Water
 			{ "_FishWaterDerivatives0", "_FishWaterDerivatives1", "_FishWaterDerivatives2" };
 		private static readonly int UnderwaterTintId = Shader.PropertyToID("_UnderwaterTint");
 		private static readonly int UnderwaterDepthId = Shader.PropertyToID("_UnderwaterDepth");
+		private static readonly int UnderwaterDensityId = Shader.PropertyToID("_UnderwaterDensity");
 		private static readonly int UnderwaterShaftsId = Shader.PropertyToID("_Shafts");
 		private static readonly int UnderwaterMotesId = Shader.PropertyToID("_Motes");
 
@@ -246,6 +247,10 @@ namespace FishMMO.Water
 		private MeshRenderer underwaterRenderer;
 		private Material underwaterMaterial;
 		private Mesh underwaterMesh;
+		/// <summary>The sea's look at the eye by the coast round it (2026-10-18), and the pass's own murk it falls back to.</summary>
+		private readonly WaterSeaLook seaLook = new WaterSeaLook();
+		private float underwaterMurk = 1f;
+		private bool underwaterMurkSet;
 
 		/// <summary>
 		/// Mean sea level in world metres — this object's own height, and what the scene was
@@ -886,6 +891,8 @@ namespace FishMMO.Water
 			causticsHost = null;
 			causticsMaterial = null;
 			DiscardLavaLight();
+			seaLook.Dispose();
+			Shader.SetGlobalVector(SeaCoastRectId, Vector4.zero);
 			if (mesh != null)
 			{
 				// HideAndDontSave, so nothing else will ever clean it up.
@@ -1215,6 +1222,7 @@ namespace FishMMO.Water
 			UpdateBreakDepth();
 			UpdateUnderwater(camera);
 			UpdateCaustics();
+			PublishSeaCoast();
 
 			/* Centred on the camera in XZ only, and NOT snapped to a grid. Snapping a radial mesh
 			 * makes the whole ring pattern jump by a step; letting the vertices slide is invisible
@@ -1578,6 +1586,9 @@ namespace FishMMO.Water
 					return;
 				}
 				underwaterMaterial = new Material(shader) { name = "Underwater", hideFlags = HideFlags.HideAndDontSave };
+				// The pass's own murk (the surface never set it before the coasts' looks): what a sea with no look of its own keeps.
+				underwaterMurk = underwaterMaterial.GetFloat(UnderwaterDensityId);
+				underwaterMurkSet = false;
 
 				EnsureScreenTriangle();
 
@@ -1592,11 +1603,54 @@ namespace FishMMO.Water
 				underwaterRenderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
 			}
 
-			underwaterMaterial.SetColor(UnderwaterTintId, UnderwaterTint);
-			underwaterMaterial.SetFloat(UnderwaterDepthId, UnderwaterVisibility);
+			/* Off a coast whose biomes give the sea a look of their own (a bog's peat-brown, a glacier's milk), the water round
+			 * the eye takes it, blended along the coast (WaterSeaLook, BiomeSeaLooks, 2026-10-18); everywhere else, and in every
+			 * scene until a biome is given one, the scene's own settings exactly as before. */
+			if (seaLook.TryAt(gameObject.scene, camera.transform.position,
+				new FishMMO.Shared.Biomes.BiomeSeaLook(UnderwaterTint, UnderwaterVisibility, underwaterMurk), out FishMMO.Shared.Biomes.BiomeSeaLook coast))
+			{
+				underwaterMaterial.SetColor(UnderwaterTintId, coast.Tint);
+				underwaterMaterial.SetFloat(UnderwaterDepthId, coast.Visibility);
+				underwaterMaterial.SetFloat(UnderwaterDensityId, coast.Murk);
+				underwaterMurkSet = true;
+			}
+			else
+			{
+				underwaterMaterial.SetColor(UnderwaterTintId, UnderwaterTint);
+				underwaterMaterial.SetFloat(UnderwaterDepthId, UnderwaterVisibility);
+				if (underwaterMurkSet)
+				{
+					underwaterMaterial.SetFloat(UnderwaterDensityId, underwaterMurk);
+					underwaterMurkSet = false;
+				}
+			}
 			underwaterMaterial.SetFloat(UnderwaterShaftsId, UnderwaterShafts);
 			underwaterMaterial.SetFloat(UnderwaterMotesId, UnderwaterMotes);
 			underwaterHost.SetActive(true);
+		}
+
+		private static readonly int SeaCoastId = Shader.PropertyToID("_FishSeaCoast");
+		private static readonly int SeaCoastRectId = Shader.PropertyToID("_FishSeaCoastRect");
+		private static readonly int SeaCoastTexelId = Shader.PropertyToID("_FishSeaCoastTexel");
+
+		/// <summary>
+		/// The coast's look on the sea's surface (2026-10-18, I2k): the scene's baked coastal look (BiomeSeaCoast, WaterSeaLook) for
+		/// the ocean and its breakers (FishWaterShading.hlsl FishSeaCoastLook), which tint the climate's colours by it near a coast
+		/// with a look of its own; the rectangle's zw 0 where the scene has none, when the shader reads no texture and the sea draws
+		/// exactly as it always did.
+		/// </summary>
+		private void PublishSeaCoast()
+		{
+			if (seaLook.SurfaceCoast(gameObject.scene, out Texture2D coast, out Vector4 rect, out Vector4 texel))
+			{
+				Shader.SetGlobalTexture(SeaCoastId, coast);
+				Shader.SetGlobalVector(SeaCoastRectId, rect);
+				Shader.SetGlobalVector(SeaCoastTexelId, texel);
+			}
+			else
+			{
+				Shader.SetGlobalVector(SeaCoastRectId, Vector4.zero);
+			}
 		}
 
 		private static readonly int CausticsId = Shader.PropertyToID("_FishWaterCaustics");

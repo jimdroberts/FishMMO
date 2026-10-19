@@ -165,8 +165,18 @@ void FishCoverLook(float4 here, out float depth, out half3 colour, out half cove
 // slope, and its edge wanders instead of ringing the world at one height.
 float FishCoverAmount(float depth, float3 worldPos, float3 normalWS)
 {
-    float drift = FishSurfaceNoise(worldPos.xz * 0.6) * 0.25;
-    float facing = FishCoverFacing(normalWS, worldPos, lerp(0.75, 0.15, saturate(depth + drift)));
+    /* The drift is a metre and a half across: let go before it is smaller than a pixel, where it only shimmered. */
+    float far = smoothstep(150.0, 450.0, distance(worldPos, _WorldSpaceCameraPos));
+    float drift = FishSurfaceNoise(worldPos.xz * 0.6) * 0.25 * (1.0 - far);
+    /* The season's pack deepens up the mountain (FishSnowpackDepthAt) and climbs steeper ground as it does, so a range
+     * whitens to its crags toward its summit and not only on its ledges. By height alone, without the line's lift: over
+     * the few hundred metres it deepens across, the lift's tens of metres do not show, and its noise is not paid twice. */
+    float packDeep = 0.0;
+    if (_FishSnowLine.w > 0.0 && worldPos.y >= _FishSnowDeep.w)
+    {
+        packDeep = saturate((worldPos.y - _FishSnowLine.y) / max(1e-3, _FishSnowDeep.x - _FishSnowLine.y)) * _FishSnowLine.w;
+    }
+    float facing = FishCoverFacing(normalWS, worldPos, lerp(0.75, 0.15, saturate(depth + drift + packDeep * 0.6)));
     return saturate(facing * (depth * 1.4 - 0.1));
 }
 

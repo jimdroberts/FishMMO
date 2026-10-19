@@ -100,7 +100,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// climate where the candidate stands — the mean annual temperature at its true place on the
 	/// globe and its true altitude, and the humidity there — so a biome whose envelope spans thirty
 	/// degrees grows its palms only where it is warm, and a band climbs a slope with the lapse rate.
-	/// The climate is read from a per-tile grid (<see cref="ClimateGrid"/>), built only when a banded
+	/// The climate is read from a per-tile grid (<see cref="TerrainClimateGrid"/>), built only when a banded
 	/// rule reaches the tile. It is applied like the height and slope bands, after the draw's cheap
 	/// refusals and before the final comparison, and draws nothing of its own, so a rule without a
 	/// band takes exactly the path, and places exactly the instances, it did before bands existed.
@@ -188,7 +188,10 @@ namespace FishMMO.Shared.WorldDesign
 			var attributionEntries = new List<SceneTerrainPalette.Entry>();
 			// Only a scene cut from its globe has a climate at every point; see ScenePlacementClimate.SampleAt.
 			ScenePlacementClimate placement = climate != null && climate.Generated ? climate : null;
-			List<ScatterRule> rules = GatherRules(palette, field, seed, options, placement, attributionEntries, report);
+			/* The world the scene stands on, for the rules' world gates (decision 41, 2026-10-18): its body's conditions, placed or
+			 * cut, else the home world's (what a scene with no body has always been). */
+			BiomeWorldConditions world = climate != null ? climate.Conditions : BiomeWorldConditions.Earthlike;
+			List<ScatterRule> rules = GatherRules(palette, field, seed, options, placement, world, attributionEntries, report);
 
 			/* Run order: by biome key, then GUID. Independent of palette and list order on purpose,
 			 * and fixed before the prototypes are built so their indices are too. */
@@ -299,6 +302,18 @@ namespace FishMMO.Shared.WorldDesign
 			/// shallowest and deepest, 0 for an open end; both 0 for none.
 			/// </summary>
 			public Vector2 Depth;
+			/// <summary>
+			/// A bed rule's own reading of the water over it (decision 35 (a), 2026-10-18): the waters it grows under (its own, else its
+			/// slot's, <see cref="BiomeBedBands.RuleWaters"/>), its current band, and where an inland water's surface is
+			/// (<see cref="BedInland"/>, null with none) so its depth band is read below THAT surface; the sea's case keeps the sea-level
+			/// arithmetic it always had.
+			/// </summary>
+			public bool Aquatic;
+			public BiomeBedWaters Waters;
+			public Vector2 Current;
+			public Func<float, float, float> BedInland;
+			public Func<float, float, Vector3> RiverAt;
+			public float BedInlandFrom, BedInlandTo;
 			/// <summary>A river's or lake's surface at (x, z), for a land rule kept above it (see <see cref="TerrainScatterOptions.InlandWaterSurface"/>); null for none.</summary>
 			public Func<float, float, float> Inland;
 			public float InlandFrom, InlandTo;
@@ -336,7 +351,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		private static List<ScatterRule> GatherRules(SceneTerrainPalette palette, SceneBiomeField field, uint seed, TerrainScatterOptions options,
-			ScenePlacementClimate climate, List<SceneTerrainPalette.Entry> attributionEntries, TerrainScatterReport report)
+			ScenePlacementClimate climate, in BiomeWorldConditions world, List<SceneTerrainPalette.Entry> attributionEntries, TerrainScatterReport report)
 		{
 			var rules = new List<ScatterRule>();
 			var seen = new HashSet<(int, PrefabSpawnRule)>();
@@ -434,6 +449,19 @@ namespace FishMMO.Shared.WorldDesign
 						scatterRule.WaterTo = aquatic ? options.AquaticFullMetres : options.LandFullMetres;
 						// Kelp and seagrass where the light reaches, sponges below: the rule's own depth band.
 						scatterRule.Depth = aquatic ? rule.depthRange : Vector2.zero;
+						if (aquatic)
+						{
+							/* Under a lake or a river its depth is below that water's own surface, and it grows only under the waters it
+							 * names (decision 35 (a), 2026-10-18): a lakebed's rules the sea alone unless they say otherwise, so a coast's
+							 * kelp never comes up in its ponds and the sea floor grows exactly as it did. */
+							scatterRule.Aquatic = true;
+							scatterRule.Waters = BiomeBedBands.RuleWaters(rule.waters, SlotWaters(entry));
+							scatterRule.Current = rule.currentRange;
+							scatterRule.BedInland = options.InlandWaterSurface;
+							scatterRule.RiverAt = options.RiverAt;
+							scatterRule.BedInlandFrom = options.InlandAquaticFadeStartMetres;
+							scatterRule.BedInlandTo = options.InlandAquaticFullMetres;
+						}
 					}
 					if (rule.useClimateBand)
 					{
@@ -463,6 +491,12 @@ namespace FishMMO.Shared.WorldDesign
 						Skip(scatterRule, scatterRule.Carpet ? "its carpet coverage is zero" : "its density is zero");
 						continue;
 					}
+					// Not on this world (its air, temperature or nature): skipped whole, no draw taken, like a rule with no prefabs.
+					if (!GrowsOn(rule, world))
+					{
+						Skip(scatterRule, $"its world gate ({rule.worldGate.Signature()}) does not admit this world");
+						continue;
+					}
 					scatterRule.Prefabs = options.Prefabs != null ? options.Prefabs(entry, rule) : rule.prefabs;
 					if (!AnyPrefab(scatterRule.Prefabs))
 					{
@@ -489,6 +523,15 @@ namespace FishMMO.Shared.WorldDesign
 				report.Warnings.Add($"{unbanded} rule(s) have a climate band, but the scene has no placement climate (not cut from a world); they grew without their bands.");
 			}
 			return rules;
+		}
+
+		/// <summary>
+		/// True when a rule grows on a world (its <see cref="PrefabSpawnRule.worldGate"/>, decision 41): always for an open gate, so
+		/// every rule without one is gathered exactly as before.
+		/// </summary>
+		public static bool GrowsOn(PrefabSpawnRule rule, in BiomeWorldConditions world)
+		{
+			return rule != null && (rule.worldGate.IsOpen || rule.worldGate.Admits(world));
 		}
 
 		/// <summary>True when the array holds at least one prefab (as <see cref="PrefabSpawnRule.HasValidPrefabs"/>, for a resolved array).</summary>
@@ -1075,8 +1118,8 @@ namespace FishMMO.Shared.WorldDesign
 			public readonly List<ScatterRule> TileCarpets = new List<ScatterRule>();
 			/// <summary>The scene's placement climate, for climate-banded rules; null when it has none.</summary>
 			public ScenePlacementClimate Placement;
-			/// <summary>The climate over the current tile, built the first time a banded rule asks.</summary>
-			public readonly ClimateGrid Climate = new ClimateGrid();
+			/// <summary>The climate over the current tile, built the first time a banded rule asks (null until then).</summary>
+			public TerrainClimateGrid Climate;
 			/// <summary>One chunk of a rule's visiting order, worked out before it is walked (<see cref="SampleRule"/>).</summary>
 			public readonly CellPick[] Picks = new CellPick[PickChunk];
 			/// <summary>The units a carpet wrote into each cell, for counting what it covered in row order.</summary>
@@ -1179,7 +1222,7 @@ namespace FishMMO.Shared.WorldDesign
 			report.SetupSeconds += Lap();
 			ReadGround(data, frame, work);
 			// Last tile's climate is not this one's; rebuilt only if a banded rule reaches this tile.
-			work.Climate.Ready = false;
+			work.Climate = null;
 			ReadAlphamaps(data, frame, rules, palette.Layers.Count, work, terrain.name, report);
 			ReadBiomes(field, frame, layerBiomes, attributionEntries, work);
 			report.ReadSeconds += Lap();
@@ -1983,7 +2026,7 @@ namespace FishMMO.Shared.WorldDesign
 				if (scatterRule.WaterGated)
 				{
 					// Counted with the height rejections: the water line is a height band of its own.
-					float shore = WaterBand(scatterRule, worldY) * DepthBand(scatterRule, worldY);
+					float shore = ShoreBand(scatterRule, worldX, worldY, worldZ);
 					if (shore <= 0f)
 					{
 						pick.Outcome = CellOutcome.NoHeight;
@@ -2481,7 +2524,7 @@ namespace FishMMO.Shared.WorldDesign
 				if (scatterRule.WaterGated)
 				{
 					float bedY = frame.Origin.y + Bilinear(heights, heightRes, u, v) * frame.Size.y;
-					float shore = WaterBand(scatterRule, bedY) * DepthBand(scatterRule, bedY);
+					float shore = ShoreBand(scatterRule, worldX, bedY, worldZ);
 					if (shore <= 0f)
 					{
 						outcome = CarpetOutcome.NoHeight;
@@ -3051,19 +3094,19 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// How fully a climate-banded rule grows at a point of the current tile: its band
 		/// (<see cref="ClimateBand(PrefabSpawnRule, float, float)"/>) at the climate there, read from the
-		/// tile's <see cref="ClimateGrid"/>, which is built on the first call for the tile.
+		/// tile's <see cref="TerrainClimateGrid"/>, which is built on the first call for the tile.
 		/// </summary>
 		/// <param name="worldY">The candidate's own world height: the band reads the temperature at it, not at a grid node's.</param>
 		/// <remarks>The grid is built by <see cref="EnsureClimate"/> before any worker reads it; here it is only read.</remarks>
 		private static float ClimateAt(ScatterRule rule, TileFrame frame, Workspace work, float u, float v, float worldY)
 		{
-			ClimateGrid grid = work.Climate;
-			if (!grid.Ready)
+			TerrainClimateGrid grid = work.Climate;
+			if (grid == null)
 			{
 				throw new InvalidOperationException("The tile's climate grid is read before it was built.");
 			}
-			grid.Read(u, v, worldY, out float temperature, out float humidity);
-			return ClimateBand(rule.Rule, temperature, humidity);
+			Vector2 at = grid.Read(u, v, worldY);
+			return ClimateBand(rule.Rule, at.x, at.y);
 		}
 
 		/// <summary>
@@ -3072,9 +3115,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		private static void EnsureClimate(TileFrame frame, Workspace work)
 		{
-			if (!work.Climate.Ready)
+			if (work.Climate == null)
 			{
-				work.Climate.Build(work.Placement, frame, work.Heights);
+				work.Climate = BuildClimate(work.Placement, frame, work.Heights);
 			}
 		}
 
@@ -3154,105 +3197,75 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The scene's climate over one tile, on a coarse grid of the ground, for climate-banded rules:
-		/// the temperature and humidity at each node's ground, and how each changes per metre up.
+		/// The scene's climate over one tile for climate-banded rules (<see cref="TerrainClimateGrid"/>: nodes 16 m apart at the
+		/// ground's own height and 25 m above it, read back at a candidate's true height), the grid the splat painter's banded ground
+		/// layers read too, so a layer and its plants authored with one band change over at one place. The scatter had a private copy
+		/// of the same construction until 2026-10-18 (decision 35 rides along: one grid, not two); the arithmetic is the same to the bit.
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// <b>Why a grid.</b> A carpet visits every detail cell of its ground, twice — a million cells a
-		/// tile at one-metre cells — and a climate sample is a direction off the globe, a few noise
-		/// octaves and a latitude table. Horizontally the climate barely moves inside a tile: its
-		/// regional noise and its moisture grid (<see cref="ScenePlacementClimate.GridSize"/>) vary over
-		/// kilometres. What moves within metres is the altitude. So the grid takes the field at its
-		/// nodes, <see cref="NodeMetres"/> apart, at the ground's own height there and again
-		/// <see cref="RiseMetres"/> higher, and a candidate reads it bilinearly and then moves the
-		/// reading up or down by the local per-metre change to its own height: the lapse rate (and the
-		/// humidity's dependence on temperature and height) followed exactly to first order, at the
-		/// candidate's true altitude, not a node's. Measured against <see cref="ScenePlacementClimate.SampleAt"/>
-		/// on a 1 km tile of rolling relief (2026-10-10): the temperature agrees to 10⁻⁵ anywhere, the
-		/// humidity to 0.006 at the ground. Off the ground by hundreds of metres the humidity's curve
-		/// (its height tiers) is no longer linear and the reading drifts, which is why the grid is only
-		/// ever read at the ground a candidate stands on.
+		/// <b>Why a grid.</b> A carpet visits every detail cell of its ground, twice, and a climate sample is a direction off the globe,
+		/// a few noise octaves and a latitude table; horizontally the climate barely moves inside a tile, what moves within metres is
+		/// the altitude, which the grid follows to first order (measured against <see cref="ScenePlacementClimate.SampleAt"/> on a 1 km
+		/// tile of rolling relief, 2026-10-10: temperature to 10⁻⁵ anywhere, humidity to 0.006 at the ground, so it is only ever read
+		/// at the ground a candidate stands on).
 		/// </para>
 		/// <para>
-		/// Built lazily, once per tile, only when a banded rule reaches the tile; a scene with no
-		/// banded rules never samples the climate at all. It is a function of the tile's position and
-		/// heights alone, so it is deterministic, and two tiles' nodes on their shared edge stand at
-		/// the same places on the same ground, so a band runs straight through a seam.
+		/// Built lazily, once per tile, only when a banded rule reaches the tile; deterministic, and seamless across tiles.
 		/// </para>
 		/// </remarks>
-		private sealed class ClimateGrid
+		private static TerrainClimateGrid BuildClimate(ScenePlacementClimate climate, TileFrame frame, float[] heights)
 		{
-			/// <summary>Spacing of the nodes, metres; a tile gets at least two a side and at most <see cref="MaximumNodes"/>.</summary>
-			public const float NodeMetres = 16f;
-			/// <summary>Most nodes along either side: a 4 km tile still costs about 130,000 climate samples, once.</summary>
-			public const int MaximumNodes = 257;
-			/// <summary>How far above the ground the second sample is taken, scene metres: the per-metre change is the difference over it.</summary>
-			public const float RiseMetres = 25f;
-
-			public bool Ready;
-			private int nodesX, nodesZ;
-			private float[] ground = Array.Empty<float>();
-			private float[] temperature = Array.Empty<float>();
-			private float[] humidity = Array.Empty<float>();
-			private float[] temperatureRise = Array.Empty<float>();
-			private float[] humidityRise = Array.Empty<float>();
-
-			public void Build(ScenePlacementClimate climate, TileFrame frame, float[] heights)
+			Func<float, float, float, Vector2> climateAt = (x, y, z) =>
 			{
-				nodesX = Mathf.Clamp(Mathf.CeilToInt(frame.Size.x / NodeMetres) + 1, 2, MaximumNodes);
-				nodesZ = Mathf.Clamp(Mathf.CeilToInt(frame.Size.z / NodeMetres) + 1, 2, MaximumNodes);
-				int count = nodesX * nodesZ;
-				ground = Workspace.Fit(ground, count);
-				temperature = Workspace.Fit(temperature, count);
-				humidity = Workspace.Fit(humidity, count);
-				temperatureRise = Workspace.Fit(temperatureRise, count);
-				humidityRise = Workspace.Fit(humidityRise, count);
-				for (int b = 0; b < nodesZ; b++)
+				if (climate == null)
 				{
-					float v = b / (nodesZ - 1f);
-					float z = frame.Origin.z + v * frame.Size.z;
-					for (int a = 0; a < nodesX; a++)
-					{
-						float u = a / (nodesX - 1f);
-						float x = frame.Origin.x + u * frame.Size.x;
-						float y = frame.Origin.y + Bilinear(heights, frame.HeightResolution, u, v) * frame.Size.y;
-						int n = b * nodesX + a;
-						ground[n] = y;
-						if (climate == null)
-						{
-							// Unreachable while ScatterRule.Climate requires a climate; kept so the grid can never throw.
-							temperature[n] = humidity[n] = float.NaN;
-							temperatureRise[n] = humidityRise[n] = 0f;
-							continue;
-						}
-						ClimateSample at = climate.SampleAt(new Vector3(x, y, z), out _);
-						ClimateSample above = climate.SampleAt(new Vector3(x, y + RiseMetres, z), out _);
-						temperature[n] = at.Temperature;
-						humidity[n] = at.Humidity;
-						temperatureRise[n] = (above.Temperature - at.Temperature) / RiseMetres;
-						humidityRise[n] = (above.Humidity - at.Humidity) / RiseMetres;
-					}
+					// Unreachable while ScatterRule.Climate requires a climate; kept so the grid can never throw.
+					return new Vector2(float.NaN, float.NaN);
 				}
-				Ready = true;
-			}
+				ClimateSample sample = climate.SampleAt(new Vector3(x, y, z), out _);
+				return new Vector2(sample.Temperature, sample.Humidity);
+			};
+			return TerrainClimateGrid.Build(climateAt, frame.Origin, new Vector2(frame.Size.x, frame.Size.z),
+				(u, v) => frame.Origin.y + Bilinear(heights, frame.HeightResolution, u, v) * frame.Size.y);
+		}
 
-			/// <summary>The climate at (u, v) of the tile and world height <paramref name="worldY"/>, clamped to the climate's own −1 … 1.</summary>
-			public void Read(float u, float v, float worldY, out float meanTemperature, out float meanHumidity)
+		/// <summary>
+		/// How fully a water-gated rule grows at a point against the water line: a land rule above the sea's tides, a bed rule under
+		/// the waters it names (decision 35 (a), 2026-10-18) — under the sea by its depth below mean sea level exactly as always, under
+		/// a lake or a river by its depth below that water's own surface (<see cref="BiomeBedBands.InlandRule"/>).
+		/// </summary>
+		private static float ShoreBand(ScatterRule rule, float worldX, float worldY, float worldZ)
+		{
+			if (!rule.Aquatic)
 			{
-				float fx = Mathf.Clamp01(u) * (nodesX - 1);
-				float fz = Mathf.Clamp01(v) * (nodesZ - 1);
-				int x0 = Math.Min((int)fx, nodesX - 2);
-				int z0 = Math.Min((int)fz, nodesZ - 2);
-				float tx = fx - x0, tz = fz - z0;
-				int a = z0 * nodesX + x0, b = a + nodesX;
-				float w00 = (1f - tx) * (1f - tz), w10 = tx * (1f - tz), w01 = (1f - tx) * tz, w11 = tx * tz;
-				float rise = worldY - (ground[a] * w00 + ground[a + 1] * w10 + ground[b] * w01 + ground[b + 1] * w11);
-				meanTemperature = Mathf.Clamp(temperature[a] * w00 + temperature[a + 1] * w10 + temperature[b] * w01 + temperature[b + 1] * w11
-					+ rise * (temperatureRise[a] * w00 + temperatureRise[a + 1] * w10 + temperatureRise[b] * w01 + temperatureRise[b + 1] * w11), -1f, 1f);
-				meanHumidity = Mathf.Clamp(humidity[a] * w00 + humidity[a + 1] * w10 + humidity[b] * w01 + humidity[b + 1] * w11
-					+ rise * (humidityRise[a] * w00 + humidityRise[a + 1] * w10 + humidityRise[b] * w01 + humidityRise[b + 1] * w11), -1f, 1f);
+				return WaterBand(rule, worldY) * DepthBand(rule, worldY);
 			}
+			float inland = rule.BedInland != null ? rule.BedInland(worldX, worldZ) : float.NegativeInfinity;
+			// No inland water, or water the sea's tide reaches (an estuary's channel, a lagoon): the sea's floor.
+			if (float.IsNegativeInfinity(inland) || float.IsNaN(inland) || !float.IsPositiveInfinity(inland) && BiomeBedBands.IsSeas(inland, 0f))
+			{
+				// The sea's own case, as it always was; a rule that does not grow under the sea, or wants a current, grows nothing here.
+				if ((rule.Waters & BiomeBedWaters.Sea) == 0)
+				{
+					return 0f;
+				}
+				float sea = WaterBand(rule, worldY) * DepthBand(rule, worldY);
+				return BiomeBedBands.Closes(rule.Current) ? sea * BiomeBedBands.Band(rule.Current, BiomeBedBands.DefaultCurrentFalloff, 0f) : sea;
+			}
+			Vector3 river = rule.RiverAt != null && !float.IsPositiveInfinity(inland) ? rule.RiverAt(worldX, worldZ) : Vector3.zero;
+			BedWater water = BedWater.At(worldY, true, 0f, inland, river);
+			return BiomeBedBands.InlandRule(in water, rule.Waters, rule.BedInlandFrom, rule.BedInlandTo, rule.Depth, rule.Current);
+		}
+
+		/// <summary>The waters a bed slot's rules grow under when they name none: the lakebed's the sea, the riverbed's a river, a bed layer's its own.</summary>
+		private static BiomeBedWaters SlotWaters(SceneTerrainPalette.Entry entry)
+		{
+			if (entry.Source is BedTextureLayer bed)
+			{
+				return bed.waters == BiomeBedWaters.Default ? BiomeBedWaters.Any : bed.waters;
+			}
+			return entry.Slot == SceneTerrainPalette.SlotRiverbed ? BiomeBedBands.RiverbedWaters : BiomeBedBands.LakebedWaters;
 		}
 
 		private static float WaterBand(ScatterRule rule, float worldY)

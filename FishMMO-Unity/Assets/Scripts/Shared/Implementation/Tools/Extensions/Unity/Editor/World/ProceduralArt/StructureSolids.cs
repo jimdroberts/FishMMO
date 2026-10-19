@@ -66,6 +66,12 @@ namespace FishMMO.Shared.WorldDesign
 		BoneWork,
 		/// <summary>Reed bundles laid as thatch, paler and finer than straw: the fens' roofs.</summary>
 		Reed,
+		// The cold glows (2026-10-18, I6g): lit as Lamplight is by its emission, but cool, and pulsing with its piece's light
+		// (SceneEmitterKind.Glow) and dark by day (a material marked _FishStructure = 3, FishStructureWeathering.hlsl).
+		/// <summary>Rune-light: the pale blue-white lacquer glowing in a rune stone's cut runes.</summary>
+		Runelight,
+		/// <summary>Faerie-light: the soft green-gold mote in a glowjar.</summary>
+		Faelight,
 	}
 
 	/// <summary>What a part does in its structure, which decides how a ruin treats it.</summary>

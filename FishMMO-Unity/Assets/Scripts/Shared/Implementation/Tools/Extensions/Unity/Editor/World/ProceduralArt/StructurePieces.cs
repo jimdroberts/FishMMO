@@ -239,13 +239,32 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The generation's seed, for building another piece this one is made from (a ruin's intact piece).</summary>
 		public readonly int GenerationSeed;
 
-		public StructureDraft(StructurePiece piece, int variant, int lod, int seed)
+		/// <summary>
+		/// The pitch this build lays its roofs at when not their kit one (StructureRoofs, 2026-10-18, I6e for houses, I6h for every
+		/// roofed piece): a roof variant a palette asked for. Null builds the kit's own roofs.
+		/// </summary>
+		public readonly StructureRoofPitch? RoofPitch;
+
+		/// <summary>
+		/// Every roof the builder laid that follows its palette (StructurePieces.BuildHouse, StructurePieces.OwnRoof): its kit
+		/// material, and for a roof a piece builds for itself the rise it gave and the run that rise is over (0 and 0 for a
+		/// house's). What the tests hold StructureRoofs.Followers to.
+		/// </summary>
+		public readonly List<(StructureMaterial Roof, float KitRise, float Half)> FollowingRoofs = new List<(StructureMaterial, float, float)>();
+
+		public StructureDraft(StructurePiece piece, int variant, int lod, int seed) : this(piece, variant, lod, seed, null)
+		{
+		}
+
+		/// <summary>A build whose house roofs are laid at <paramref name="roofPitch"/> (null: the kit's own).</summary>
+		public StructureDraft(StructurePiece piece, int variant, int lod, int seed, StructureRoofPitch? roofPitch)
 		{
 			Piece = piece;
 			Variant = variant;
 			Lod = lod;
 			GenerationSeed = seed;
 			Seed = ProceduralNoise.SeedFor($"Structure/{piece.Id}/{variant}", seed);
+			RoofPitch = roofPitch;
 		}
 
 		/// <summary>Level 0: bevels, trim, the small parts.</summary>
@@ -373,6 +392,13 @@ namespace FishMMO.Shared.WorldDesign
 			"market", "dock", "bridge", "rubble", "monument", "military", "water", "underwater",
 			"church", "temple", "tavern", "smithy", "stable", "notice", "farm", "clutter", "town", "light", "door", "furniture", "bed", "table", "chair", "chest", "shelf", "hearth", "bar", "pew", "lectern", "sarcophagus", "stall", "step", "portcullis", "wallstair", "mine", "torch", "boat", "ship", "wreck", "shipyard", "gorge", "arch", "rope", "climb", "lantern", "cave", "airship", "sky", "skydock",
 			"mill", "windmill", "watermill", "sawmill", "lumber", "granary", "dovecote", "apiary", "kiln", "tannery",
+			// Boardwalks (2026-10-18): laid along ways by PathBoardwalks, never drawn by a template's query.
+			"boardwalk",
+			// Dungeon entrances (2026-10-18): laid by id, never drawn by a template's query.
+			"dungeon",
+			// Linear features (2026-10-18, I2f): hedges, walls, fences, gates, clearance rows and channels, laid along lines by
+			// PointOfInterestLinearFeatures, never drawn by a template's query.
+			"linear",
 		};
 
 		private static List<StructurePiece> all;
@@ -402,6 +428,12 @@ namespace FishMMO.Shared.WorldDesign
 					AddAirships(list);
 					// The mills and rural works (2026-10-14), after everything else for the same reason.
 					AddMills(list);
+					// Boardwalks (2026-10-18, I2i), last again.
+					AddBoardwalk(list);
+					// Dungeon entrances (2026-10-18), last again.
+					AddDungeon(list);
+					// Linear features (2026-10-18, I2f), last again.
+					AddLinear(list);
 					all = list;
 				}
 				return all;
@@ -429,10 +461,29 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>A level's payload mesh name.</summary>
 		public static string MeshName(string id, int variant, int lod) => $"{Prefix}{id}_{variant}_LOD{lod}";
 
+		/// <summary>A level's payload mesh name with its roof at a pitch (null: the kit's, <see cref="MeshName(string, int, int)"/>), e.g. <c>Structure_Tavern_0_Flat_LOD1</c>.</summary>
+		public static string MeshName(string id, int variant, int lod, StructureRoofPitch? roof)
+		{
+			return roof == null ? MeshName(id, variant, lod) : $"{Prefix}{id}_{variant}_{StructureRoofs.Suffix(roof.Value)}_LOD{lod}";
+		}
+
 		/// <summary>A prefab's name under the generated prefabs folder (with its sub-folder), e.g. <c>Structures/Structure_Tent_0_Mossy</c>.</summary>
 		public static string PrefabName(string id, int variant, StructureFinish finish = StructureFinish.None)
 		{
 			return $"{PrefabFolderName}/{Prefix}{id}_{variant}{(finish == StructureFinish.None ? string.Empty : "_" + finish)}";
+		}
+
+		/// <summary>
+		/// A prefab's name with its roof at a pitch (null: the kit's, <see cref="PrefabName(string, int, StructureFinish)"/>), the
+		/// pitch after the variant and before the finish: <c>Structures/Structure_Tavern_0_Pitch50_Mossy</c>.
+		/// </summary>
+		public static string PrefabName(string id, int variant, StructureFinish finish, StructureRoofPitch? roof)
+		{
+			if (roof == null)
+			{
+				return PrefabName(id, variant, finish);
+			}
+			return $"{PrefabFolderName}/{Prefix}{id}_{variant}_{StructureRoofs.Suffix(roof.Value)}{(finish == StructureFinish.None ? string.Empty : "_" + finish)}";
 		}
 
 		/// <summary>A material's name: the material, and its finish unless plain.</summary>
@@ -515,6 +566,33 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
+		private static readonly Dictionary<(string, int, StructureRoofPitch), IReadOnlyList<(Vector3 at, SceneEmitterKind kind)>> roofEmitters =
+			new Dictionary<(string, int, StructureRoofPitch), IReadOnlyList<(Vector3, SceneEmitterKind)>>();
+
+		/// <summary>
+		/// Where a variant with its roof at a pitch gives off smoke, fire or light (null: the kit's roof, <see cref="EmittersOf(StructurePiece, int)"/>):
+		/// a chimney stands clear of the roof it is built through, so its smoke rises from a flat roof's stack lower than a
+		/// thatched one's (2026-10-18, I6e). Built once.
+		/// </summary>
+		public static IReadOnlyList<(Vector3 at, SceneEmitterKind kind)> EmittersOf(StructurePiece piece, int variant, StructureRoofPitch? roof)
+		{
+			if (roof == null || piece == null || variant < 0 || variant >= piece.Variants)
+			{
+				return EmittersOf(piece, variant);
+			}
+			lock (roofEmitters)
+			{
+				if (!roofEmitters.TryGetValue((piece.Id, variant, roof.Value), out IReadOnlyList<(Vector3, SceneEmitterKind)> list))
+				{
+					var draft = new StructureDraft(piece, variant, 0, DefaultSeed, roof);
+					piece.Builder(draft);
+					list = draft.Emitters.ToArray();
+					roofEmitters[(piece.Id, variant, roof.Value)] = list;
+				}
+				return list;
+			}
+		}
+
 		/// <summary>The piece and variant a generated prefab's name names ("Structure_Tavern_1_Mossy"), or false.</summary>
 		public static bool TryParsePrefab(string prefabName, out StructurePiece piece, out int variant) => TryParsePrefab(prefabName, out piece, out variant, out _);
 
@@ -523,6 +601,38 @@ namespace FishMMO.Shared.WorldDesign
 		/// A name with anything after the variant but a finish names no finish (None).
 		/// </summary>
 		public static bool TryParsePrefab(string prefabName, out StructurePiece piece, out int variant, out StructureFinish finish)
+		{
+			return TryParsePrefab(prefabName, out piece, out variant, out finish, out _);
+		}
+
+		/// <summary>
+		/// The piece, variant, finish and roof pitch a generated prefab's name names ("Structure_Tavern_0_Flat_Mossy": Tavern, 0,
+		/// Mossy, a flat roof; "Structure_Tavern_0": the kit's roof, null), or false. A roof variant is its piece's variant in every
+		/// other way, so every reader that only wants the piece and variant reads it as before.
+		/// </summary>
+		public static bool TryParsePrefab(string prefabName, out StructurePiece piece, out int variant, out StructureFinish finish, out StructureRoofPitch? roof)
+		{
+			roof = null;
+			bool parsed = TryParseKitPrefab(prefabName, out piece, out variant, out finish);
+			if (parsed)
+			{
+				// The pitch, when there is one, is the part straight after the variant.
+				string rest = prefabName.Substring(Prefix.Length);
+				string[] parts = rest.Split('_');
+				string tail = $"{piece.Id}_{variant}_";
+				if (rest.StartsWith(tail, StringComparison.Ordinal))
+				{
+					int at = piece.Id.Split('_').Length + 1;
+					if (at < parts.Length && StructureRoofs.TryParseSuffix(parts[at], out StructureRoofPitch pitch))
+					{
+						roof = pitch;
+					}
+				}
+			}
+			return parsed;
+		}
+
+		private static bool TryParseKitPrefab(string prefabName, out StructurePiece piece, out int variant, out StructureFinish finish)
 		{
 			piece = null;
 			variant = 0;
@@ -556,21 +666,33 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>A level of a variant as solids.</summary>
-		public static List<StructureSolid> BuildSolids(StructurePiece piece, int variant, int lod, int seed)
+		public static List<StructureSolid> BuildSolids(StructurePiece piece, int variant, int lod, int seed) => BuildSolids(piece, variant, lod, seed, null);
+
+		/// <summary>A level of a variant as solids, its house roofs at <paramref name="roof"/> (null: the kit's own; StructureRoofs).</summary>
+		public static List<StructureSolid> BuildSolids(StructurePiece piece, int variant, int lod, int seed, StructureRoofPitch? roof)
+		{
+			return Draft(piece, variant, lod, seed, roof).Solids;
+		}
+
+		/// <summary>A level of a variant built (its parts assigned), with everything the builder marked: what the tests read a draft's roofs from.</summary>
+		public static StructureDraft Draft(StructurePiece piece, int variant, int lod, int seed, StructureRoofPitch? roof = null)
 		{
 			if (piece == null) throw new ArgumentNullException(nameof(piece));
 			if (variant < 0 || variant >= piece.Variants) throw new ArgumentOutOfRangeException(nameof(variant));
-			var draft = new StructureDraft(piece, variant, Mathf.Clamp(lod, 0, LevelCount - 1), seed);
+			var draft = new StructureDraft(piece, variant, Mathf.Clamp(lod, 0, LevelCount - 1), seed, roof);
 			piece.Builder(draft);
 			// Each part's palette role, once the builder is done with it (a builder may change a solid's material after adding it).
 			StructureParts.Assign(piece, draft.Solids);
-			return draft.Solids;
+			return draft;
 		}
 
 		/// <summary>A level of a variant as a mesh, one submesh per material and palette part (<see cref="StructureSlot"/>).</summary>
-		public static StructureMesh Build(StructurePiece piece, int variant, int lod, int seed)
+		public static StructureMesh Build(StructurePiece piece, int variant, int lod, int seed) => Build(piece, variant, lod, seed, null);
+
+		/// <summary>A level of a variant as a mesh with its house roofs at <paramref name="roof"/> (null: the kit's own).</summary>
+		public static StructureMesh Build(StructurePiece piece, int variant, int lod, int seed, StructureRoofPitch? roof)
 		{
-			List<StructureSolid> solids = BuildSolids(piece, variant, lod, seed);
+			List<StructureSolid> solids = BuildSolids(piece, variant, lod, seed, roof);
 			MeshBuilder mesh = StructureShapes.ToMesh(solids, out StructureSlot[] slots);
 			return new StructureMesh { Mesh = mesh, Materials = Array.ConvertAll(slots, x => x.Material), Slots = slots };
 		}

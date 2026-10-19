@@ -79,6 +79,10 @@ namespace FishMMO.Shared.WorldDesign
 		public readonly IReadOnlyList<BiomeTemplate> Biomes;
 
 		private readonly byte[] cells;
+		/// <summary>The body's metres above its sea level each cell's biome was chosen at; null for a field from cells.</summary>
+		private float[] groundAltitudes;
+		/// <summary>Scene metres per metre of the body's altitude the ground was read at; 0 for a field from cells.</summary>
+		private float verticalScale;
 		private readonly float[][] coverage;
 		private readonly float warpMetres;
 		private readonly float warpFrequency;
@@ -172,6 +176,7 @@ namespace FishMMO.Shared.WorldDesign
 			float verticalScale = request.VerticalScale > 1e-6f ? request.VerticalScale : 1f;
 
 			var chosen = new BiomeTemplate[width * height];
+			var altitudes = new float[width * height];
 			var present = new HashSet<BiomeTemplate>();
 			// Lakes of what this world's air condenses: methane on a Titan, water on a temperate world.
 			BiomeTemplate lakeBiome = null;
@@ -185,6 +190,10 @@ namespace FishMMO.Shared.WorldDesign
 			BiomeTemplate riverBiome = water != null ? BiomeTemplateArt.WaterBiome(BiomeWaterRole.River) : null;
 			BiomeTemplate estuaryBiome = water != null ? BiomeTemplateArt.WaterBiome(BiomeWaterRole.Estuary) : null;
 			BiomeTemplate saltFlatBiome = water != null ? BiomeTemplateArt.WaterBiome(BiomeWaterRole.SaltFlat) : null;
+			// The scene's own say, applied to every choice so the paint, the scatter and the baked map agree.
+			SceneBiomeOverrides.Substitution overrides = request.BiomeOverrides != null ? request.BiomeOverrides.Resolve() : null;
+			float liquidLevel = 0f;
+			SurfaceLiquid liquid = overrides != null ? SurfaceLiquids.For(system, request.Body, out liquidLevel) : SurfaceLiquid.None;
 			for (int z = 0; z < height; z++)
 			{
 				float north = origin.y + (z + 0.5f) * cellMetres;
@@ -193,9 +202,14 @@ namespace FishMMO.Shared.WorldDesign
 					float east = origin.x + (x + 0.5f) * cellMetres;
 					Vector3 direction = AtlasGeometry.SceneToUnit(footprint, east / 1000.0, north / 1000.0, radiusKm).ToVector3();
 					float altitude = sceneAltitude(east, north) / verticalScale;
+					altitudes[z * width + x] = altitude;
 					BiomeTemplate biome = water != null && water.Any
 						? WaterBiome(field, water, direction, altitude, east, north, cellMetres, lakeBiome, riverBiome, estuaryBiome, saltFlatBiome)
 						: field.BiomeAt(direction, altitude, out _);
+					if (overrides != null)
+					{
+						biome = overrides.Apply(biome, liquid != SurfaceLiquid.None && altitude < liquidLevel);
+					}
 					chosen[z * width + x] = biome;
 					if (biome != null)
 					{
@@ -224,7 +238,11 @@ namespace FishMMO.Shared.WorldDesign
 
 			uint seed = request.Body != null ? request.Body.ResolvedTerrainSeed : 1u;
 			seed ^= unchecked((uint)(request.SceneName ?? string.Empty).GetDeterministicHashCode());
-			return new SceneBiomeField(width, height, cellMetres, origin, Mathf.Max(0f, blendMetres), biomes, cells, seed);
+			return new SceneBiomeField(width, height, cellMetres, origin, Mathf.Max(0f, blendMetres), biomes, cells, seed)
+			{
+				groundAltitudes = altitudes,
+				verticalScale = verticalScale,
+			};
 		}
 
 		/// <summary>
@@ -374,7 +392,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// The field as a <see cref="SceneBiomeMap"/>'s grid: template IDs, row-major from the
 		/// south-west, at the field's own resolution. The map stores what the cells chose, not the
-		/// blur — a runtime lookup wants an identity, and an identity has no half-way.
+		/// blur — a runtime lookup wants an identity, and an identity has no half-way. With them goes the
+		/// altitude each cell was chosen at and the scene's vertical scale, so the running scene reads
+		/// its climate from the same ground (<see cref="SceneBiomeMap.TryGroundAltitude"/>).
 		/// </summary>
 		public void WriteTo(SceneBiomeMap map)
 		{
@@ -387,7 +407,18 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				ids[i] = cells[i] != None ? BiomeRegistry.IDOf(Biomes[cells[i]]) : 0;
 			}
-			map.Set(Width, Height, ids, Origin, Size);
+			map.Set(Width, Height, ids, Origin, Size, groundAltitudes, verticalScale);
+			/* And the sea surface's coastal look (2026-10-18, I2k, BiomeSeaCoast) from these biomes' sea looks, with the grid on every
+			 * cut and repaint: none at all while every biome's look is today's, when the sea draws exactly as before. */
+			var looks = new Dictionary<int, BiomeSeaLook?>();
+			foreach (BiomeTemplate biome in Biomes)
+			{
+				if (biome != null)
+				{
+					looks[BiomeRegistry.IDOf(biome)] = BiomeSeaLooks.Of(biome);
+				}
+			}
+			map.BakeCoastLook(id => looks.TryGetValue(id, out BiomeSeaLook? look) ? look : null);
 		}
 
 		private void Warp(ref float x, ref float z)

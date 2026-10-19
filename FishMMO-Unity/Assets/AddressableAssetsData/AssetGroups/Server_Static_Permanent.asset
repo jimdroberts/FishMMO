@@ -39,6 +39,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 268d2092a85849776835ece515531890
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Moron 2.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2d2e99e66683ef7c69d80dd5f004dec6
     m_Address: Assets/Scenes/WorldScene/Belron/Belron 1 Terrain/Belron 1 NavMesh.asset
     m_ReadOnly: 0
@@ -75,12 +81,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 45cf76d33b3483ad18899f848128f2a0
-    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Flo Monolith.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Server_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 48e90ed169b30a433adb7716340a2cb0
     m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/StartScene B.asset
     m_ReadOnly: 0
@@ -107,12 +107,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 57662a393a0b3c42fb835c4b66b3710f
     m_Address: Assets/Prefabs/Server/LoginServer/CharacterSelectSystem.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Server_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 5d02c14ad5f07e80a8034ac8f694a30f
-    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Skerei Coast.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
@@ -147,14 +141,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7d56b751c9c00b07fbcd7c88ad51d028
-    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Island of Hag.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Server_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 8046fc0b000fb5e9cb8c33eb0adac31b
-    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Volax Obelisk.asset
+  - m_GUID: 7d05afec765a37c51a30bb8b8c501b38
+    m_Address: Assets/Scenes/WorldScene/Moron/Moron 2 Terrain/Moron 2 NavMesh.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
@@ -275,12 +263,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cfab38130929316f08ac6e1f44fa64bd
     m_Address: Assets/Prefabs/Server/KickRequestSystem.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Server_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d77f87c6d6863143d983935646c231ef
-    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/The Kel Peaks.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent

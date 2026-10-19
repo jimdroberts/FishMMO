@@ -38,6 +38,25 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>Face scores per cell, worked out once and shared by every face kind: (score, yaw).</summary>
 			private Dictionary<int, (float score, float yaw)> faces;
 
+			/// <summary>
+			/// How deep a point lies under the water an underwater kind stands in: below a lake's own level where the kind lies under
+			/// lakes (<see cref="PointOfInterestKindRule.InLakes"/>) and a lake covers it, else below the sea's (NaN with no sea of
+			/// water), exactly as every sunken kind was sited before (decision 35 (d), 2026-10-18).
+			/// </summary>
+			private float UnderwaterDepth(PointOfInterestKindRule rule, float east, float north, float ground, WaterKind water)
+			{
+				float lake = float.NaN;
+				if (rule.InLakes && water == WaterKind.Lake && Input.Water?.SurfaceAt != null)
+				{
+					lake = Input.Water.SurfaceAt(east, north);
+				}
+				if (!rule.InLakes)
+				{
+					return Input.SeaLevel - ground;
+				}
+				return PointOfInterestWaterSites.SunkenDepth(ground, lake, Input.HasSea && Input.SeaIsWater, Input.SeaLevel);
+			}
+
 			/// <summary>Sites a placed kind on the best cells it may stand on.</summary>
 			public void Place(PointOfInterestKindRule rule)
 			{
@@ -56,7 +75,8 @@ namespace FishMMO.Shared.WorldDesign
 					PlaceRiverBanks(rule, budget);
 					return;
 				}
-				if (rule.Underwater && (!Input.HasSea || !Input.SeaIsWater))
+				// A kind under lakes too (decision 35 (d): InLakes) is sited under a lake by its own level even with no sea.
+				if (rule.Underwater && (!Input.HasSea || !Input.SeaIsWater) && !(rule.InLakes && Input.Water != null && Input.Water.SurfaceAt != null))
 				{
 					return;
 				}
@@ -66,6 +86,10 @@ namespace FishMMO.Shared.WorldDesign
 				}
 
 				PointOfInterestKindInfo info = PointOfInterestKinds.Info(rule.Kind);
+				// Caves where their water is first (behind a waterfall, under water: PointOfInterestPlanner.CaveWater), in the room
+				// the kind's most leaves past its budget: the fall or the shore decides where they stand, and a dry face found first
+				// beside the gorge took it. The dry caves' budget is unchanged.
+				PlaceWaterCaves(rule, info, rule.Max - budget);
 				int taken = SiteKind(rule, info, budget, out int candidateCount);
 				/* A kind the scene MUST have (the capital asked for before the cut, a kind's minimum) is not given up on
 				 * because no spot meets its ideal: rugged, river-cut ground has no 400 m disc that is flat and dry. It is
@@ -113,6 +137,8 @@ namespace FishMMO.Shared.WorldDesign
 			private int SiteKind(PointOfInterestKindRule rule, PointOfInterestKindInfo info, int budget, out int candidateCount)
 			{
 				bool settlement = info.Has(PointOfInterestTraits.Settlement);
+				// An outlined site may reach past its drawn radius where its ground runs on level: kept that far from the edge.
+				float stretch = Outlines(rule, info) ? OutlineStretch : 1f;
 				var candidates = new List<Site>();
 				for (int z = 0; z < G.Depth; z++)
 				{
@@ -123,7 +149,7 @@ namespace FishMMO.Shared.WorldDesign
 						uint cellHash = Hash(Input.Seed, (int)rule.Kind, x, z);
 						float radius = Mathf.Lerp(rule.FootprintMin, rule.FootprintMax, Unit(Mix(cellHash ^ 0x7A11u)));
 						float blend = info.Has(PointOfInterestTraits.Pad) ? PadBlend(radius) : 0f;
-						if (!Inside(east, north, Input.EdgeMarginMetres + radius + blend) || G.Blocked[i])
+						if (!Inside(east, north, Input.EdgeMarginMetres + radius * stretch + blend) || G.Blocked[i])
 						{
 							continue;
 						}
@@ -136,8 +162,8 @@ namespace FishMMO.Shared.WorldDesign
 						float altitude = h - Input.SeaLevel;
 						if (rule.Underwater)
 						{
-							float depth = Input.SeaLevel - h;
-							if (depth < rule.MinDepth || depth > rule.MaxDepth)
+							float depth = UnderwaterDepth(rule, east, north, h, G.Water[i]);
+							if (!(depth >= rule.MinDepth) || depth > rule.MaxDepth)
 							{
 								continue;
 							}
@@ -241,7 +267,7 @@ namespace FishMMO.Shared.WorldDesign
 						break;
 					}
 					Site site = candidate;
-					if (!Clear(rule, ref site) || !Footprint(rule, info, ref site))
+					if (!Shape(rule, info, ref site) || !Clear(rule, ref site) || !Footprint(rule, info, ref site))
 					{
 						continue;
 					}
@@ -311,22 +337,25 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// Whether the whole footprint is ground the kind may stand on, read at its centre and on two rings of eight;
-			/// sets the site's height (a pad's: the median of what it covers).
+			/// Whether the whole footprint is ground the kind may stand on, read at its centre and on two rings (its edge and half
+			/// way in: eight bearings each for a disc, sixteen along an outline); sets the site's height (a pad's: the median of
+			/// what it covers).
 			/// </summary>
 			private bool Footprint(PointOfInterestKindRule rule, PointOfInterestKindInfo info, ref Site site)
 			{
-				const int ring = 8;
+				bool outlined = PointOfInterestOutline.Drawn(site.Outline);
+				int ring = outlined ? 16 : 8;
 				var heights = new float[1 + 2 * ring];
 				int n = 0;
-				float r = site.Radius;
+				float r = outlined ? site.Drawn : site.Radius;
 				for (int k = -1; k < 2 * ring; k++)
 				{
 					float x = site.X, z = site.Z;
 					if (k >= 0)
 					{
 						float a = (k % ring) * (Mathf.PI * 2f / ring) + (k >= ring ? Mathf.PI / ring : 0f);
-						float rr = k >= ring ? r * 0.5f : r;
+						float edge = outlined ? PointOfInterestOutline.ReachAt(site.Outline, a) : r;
+						float rr = k >= ring ? edge * 0.5f : edge;
 						x += rr * Mathf.Sin(a);
 						z += rr * Mathf.Cos(a);
 					}
@@ -337,7 +366,8 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					if (rule.Underwater)
 					{
-						if (h > Input.SeaLevel - 1f)
+						// Under its water all over: a lake's own level for a kind that lies under lakes (decision 35 (d)), else the sea's.
+						if (rule.InLakes ? !(UnderwaterDepth(rule, x, z, h, Input.Water?.KindAt != null ? Input.Water.KindAt(x, z) : WaterKind.None) >= 1f) : h > Input.SeaLevel - 1f)
 						{
 							return false;
 						}
@@ -386,7 +416,7 @@ namespace FishMMO.Shared.WorldDesign
 				float blend = PadBlend(record.Radius);
 				if (pad)
 				{
-					var levelled = new PointOfInterestPad { Id = record.Id, Centre = record.Position, Radius = record.Radius, Blend = blend };
+					var levelled = new PointOfInterestPad { Id = record.Id, Centre = record.Position, Radius = record.Radius, Blend = blend, Outline = record.Outline };
 					if (rule.RiverBank)
 					{
 						// Levelled behind the mill only: its front faces the water, which starts BankSetback out.
@@ -394,14 +424,19 @@ namespace FishMMO.Shared.WorldDesign
 						levelled.Shore = new Vector2(Mathf.Sin(yaw), Mathf.Cos(yaw));
 						levelled.ShoreDistance = BankSetback;
 					}
+					// On a hillside a town's pad steps up it in terraces (the site then stands at its centre's level).
+					Terrace(record, ref levelled);
 					Plan.Pads.Add(levelled);
 				}
+				float kept = pad ? blend * 0.5f : 2f;
 				Plan.KeepOuts.Add(new PointOfInterestKeepOut
 				{
 					Id = record.Id,
 					X = record.Position.x,
 					Z = record.Position.z,
-					Radius = record.Radius + (pad ? blend * 0.5f : 2f),
+					Radius = record.Radius + kept,
+					// The site's own outline, grown by the same margin all round.
+					Outline = PointOfInterestOutline.Grown(record.Outline, kept),
 				});
 			}
 

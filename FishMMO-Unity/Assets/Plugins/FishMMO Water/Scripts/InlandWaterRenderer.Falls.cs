@@ -486,7 +486,9 @@ namespace FishMMO.Water
 						// stretched down a sheet is the look of every waterfall of twenty years ago.
 						block.SetTexture(FoamTextureId, FallTextures.Streaks);
 						block.SetTexture(NormalMapId, FallTextures.Ripples);
-						AddFallPart($"Fall {fall.River}.{fall.Lip}", build.Mesh, FallMaterial, CurtainSortingOrder, block, ShadowCastingMode.On);
+						MeshRenderer sheet = AddFallPart($"Fall {fall.River}.{fall.Lip}", build.Mesh, FallMaterial, CurtainSortingOrder, block, ShadowCastingMode.On);
+						// The look of the water it pours from, set on this block by ApplyFallLooks (Looks).
+						fallLookParts.Add((sheet, block, fall.River, fall.LipPoint, false));
 						fall.Landing = build.Landing;
 						fall.Strikes = build.Strikes;
 						fall.Parts = build.Parts;
@@ -526,7 +528,8 @@ namespace FishMMO.Water
 							block.SetVector(FallPathId, new Vector4(build.Strips, build.PathSeconds, build.PoolLevel, fall.BreakupLength));
 							block.SetVector(FallOriginId, new Vector4(fall.LipPoint.x, fall.LipPoint.y, fall.LipPoint.z, fall.ImpactSpeed));
 						}
-						AddFallPart($"Spray {fall.River}.{fall.Lip}", spray, SprayMaterial, SpraySortingOrder, block, ShadowCastingMode.Off);
+						MeshRenderer sprayRenderer = AddFallPart($"Spray {fall.River}.{fall.Lip}", spray, SprayMaterial, SpraySortingOrder, block, ShadowCastingMode.Off);
+						fallLookParts.Add((sprayRenderer, block, fall.River, fall.LipPoint, true));
 					}
 				}
 				Vector3 downstream = fall.FootPoint - fall.LipPoint;
@@ -661,7 +664,7 @@ namespace FishMMO.Water
 		/// </summary>
 		private const int CurtainSortingOrder = 30000, SpraySortingOrder = 30001;
 
-		private void AddFallPart(string name, Mesh mesh, Material material, int sortingOrder, MaterialPropertyBlock block, ShadowCastingMode shadows)
+		private MeshRenderer AddFallPart(string name, Mesh mesh, Material material, int sortingOrder, MaterialPropertyBlock block, ShadowCastingMode shadows)
 		{
 			var go = new GameObject(name) { hideFlags = HideFlags.DontSave };
 			go.transform.SetParent(transform, false);
@@ -678,6 +681,7 @@ namespace FishMMO.Water
 				renderer.SetPropertyBlock(block);
 			}
 			built.Add(go);
+			return renderer;
 		}
 
 		/// <summary>Destroys what the falls own beyond their meshes, and withdraws them from <see cref="Waterfalls"/>.</summary>
@@ -691,6 +695,7 @@ namespace FishMMO.Water
 				}
 			}
 			fallTextures.Clear();
+			fallLookParts.Clear();
 			riverFalls.Clear();
 			riverFallCounts.Clear();
 			Waterfalls.Withdraw(this);

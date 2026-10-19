@@ -36,9 +36,11 @@ namespace FishMMO.Shared
 	/// at most the texels' own fifth weights.
 	/// </para>
 	/// <para>
-	/// Baked on the GPU from the live alphamaps (TerrainIndexMapBaker, FishTerrainIndexBake.shader), so a brush stroke
-	/// is on screen the same frame. This class is the same bake on the CPU — the reference the GPU bake is checked
-	/// against and the tests run — and the shader's filter, line for line.
+	/// Baked on the GPU from the live alphamaps (TerrainIndexMapBaker, FishTerrainIndexBake.shader) while the ground is
+	/// edited, so a brush stroke is on screen the same frame. This class is the same bake on the CPU — the reference the
+	/// GPU bake is checked against, the bake the cut STORES with the scene's terrain (<see cref="TerrainDetailBake.IndexMap"/>,
+	/// what a player binds, so client builds need not ship the alphamaps), and the tests' — and the shader's filter, line
+	/// for line.
 	/// </para>
 	/// </remarks>
 	public static class TerrainIndexMap
@@ -111,6 +113,81 @@ namespace FishMMO.Shared
 				BakeTexel(weights, 0, layers, out map[2 * i], out map[2 * i + 1]);
 			}
 			return map;
+		}
+
+		/// <summary>
+		/// The layout of a stored index map (<see cref="TerrainDetailBake.IndexMap"/>): bumped whenever <see cref="BakeTexel"/>
+		/// or the texel packing changes, so every map stored before reads as absent (the ground is baked live from the
+		/// alphamaps where it has them; a client build keeps the alphamaps of a scene whose maps are not current).
+		/// </summary>
+		public const int StoredFormat = 1;
+
+		/// <summary>
+		/// A splat weight as a byte, as the alphamaps hold it: <see cref="TerrainData.GetAlphamaps"/> returns each byte over
+		/// 255, so this gives the byte back exactly (the GPU bake reads the same bytes off the alphamap textures).
+		/// </summary>
+		public static byte ByteOf(float weight) => (byte)Mathf.Clamp(Mathf.RoundToInt(weight * 255f), 0, 255);
+
+		/// <summary>
+		/// A whole tile from its alphamaps as <see cref="TerrainData.GetAlphamaps"/> returns them (<c>[y, x, layer]</c>): two
+		/// words a texel, texel (x, y) at 2 (y × width + x) — the GPU bake's texels, bit for bit (the same bytes through the
+		/// same <see cref="BakeTexel"/>). What the cut stores.
+		/// </summary>
+		public static uint[] Bake(float[,,] alphas)
+		{
+			int height = alphas.GetLength(0), width = alphas.GetLength(1), layers = alphas.GetLength(2);
+			var map = new uint[width * height * 2];
+			var weights = new byte[Mathf.Max(layers, 1)];
+			for (int y = 0; y < height; y++)
+			{
+				for (int x = 0; x < width; x++)
+				{
+					for (int l = 0; l < layers; l++)
+					{
+						weights[l] = ByteOf(alphas[y, x, l]);
+					}
+					int i = y * width + x;
+					BakeTexel(weights, 0, layers, out map[2 * i], out map[2 * i + 1]);
+				}
+			}
+			return map;
+		}
+
+		/// <summary>
+		/// Whether a stored index map may be drawn on a tile: of this <see cref="StoredFormat"/>, not marked stale since it was
+		/// stored, whole (two words per texel of a square <paramref name="resolution"/>), and — where the tile still has its
+		/// alphamaps — of their resolution and layer count. A tile without alphamaps (a client build's copy) has nothing to
+		/// compare: the build checked the map against them before it left them out.
+		/// </summary>
+		public static bool IsUsable(int format, bool stale, int resolution, int layers, int words, int dataResolution, int dataLayers)
+		{
+			if (format != StoredFormat || stale || resolution <= 0 || layers <= 0 || layers > MaximumLayers
+				|| words != resolution * resolution * 2)
+			{
+				return false;
+			}
+			return dataLayers <= 0 || (dataResolution == resolution && dataLayers == layers);
+		}
+
+		/// <summary>True when two maps hold the same texels (both null counts as the same).</summary>
+		public static bool Same(uint[] a, uint[] b)
+		{
+			if (a == null || b == null)
+			{
+				return a == b;
+			}
+			if (a.Length != b.Length)
+			{
+				return false;
+			}
+			for (int i = 0; i < a.Length; i++)
+			{
+				if (a[i] != b[i])
+				{
+					return false;
+				}
+			}
+			return true;
 		}
 
 		/// <summary>Layer id in slot <paramref name="slot"/> of a texel's id word.</summary>

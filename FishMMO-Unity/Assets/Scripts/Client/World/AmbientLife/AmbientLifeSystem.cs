@@ -45,6 +45,12 @@ namespace FishMMO.Client
 	/// own colours. One float4 an instance beside the tint; the shader swaps the mesh's colour roles for the look's.
 	/// </para>
 	/// <para>
+	/// <b>And under the hill.</b> A cave's animals are placed from the cut's cave-life spots (<see cref="SceneCaveLife"/>, filed
+	/// by the same cells) and kept to them (<see cref="AmbientCaveLife"/>), never from the terrain's height; their moment is the
+	/// cave's (no day past the twilight, no weather, the year's mean air). From outside only a mouth's and the twilight's are
+	/// evaluated: the deep cave is behind the rock until the camera is in it (<see cref="CaveVisibility"/>).
+	/// </para>
+	/// <para>
 	/// <b>Hooked like the sea life</b>: a static system started after the first scene loads, driven by the render
 	/// pipeline's callbacks; its settings on the Weather Render Profile ("Ambient life"), its shader referenced there
 	/// so a client build includes it.
@@ -106,8 +112,23 @@ namespace FishMMO.Client
 			public List<Vector4> Perches;
 			/// <summary>The same trees' trunks, index for index with <see cref="Perches"/>.</summary>
 			public List<AmbientTrunk> Trunks;
+			/// <summary>The cave-life spots in the cell (AmbientCaveLife), indexed from a cave group's <see cref="AmbientGroup.Cave"/> − 1; null for none.</summary>
+			public List<SceneCaveLifeSpot> CaveSpots;
 			public bool Near, Far;
 		}
+
+		/// <summary>One cave-life spot filed by cell: the scene it is in (its placement seed) and its index there.</summary>
+		private struct CaveSpotRef
+		{
+			public uint SceneSeed;
+			public int Index;
+			public SceneCaveLifeSpot Spot;
+		}
+		private static readonly Dictionary<long, List<CaveSpotRef>> caveCells = new Dictionary<long, List<CaveSpotRef>>();
+		private static int caveVersion = -1;
+		private static float caveCellMetres;
+		/// <summary>Whether the camera is inside a cave this frame (CaveVisibility): from outside, the deep cave's life is behind the hill.</summary>
+		private static bool eyeInCave;
 		private static readonly Dictionary<long, Cell> cells = new Dictionary<long, Cell>();
 		private static uint placedSeed;
 		private static float placedCellMetres;
@@ -122,6 +143,8 @@ namespace FishMMO.Client
 			public Cell Cell;
 			public int Group;
 			public float Distance;
+			/// <summary>The share of its kind about where it is (the land's moment, or its cave's).</summary>
+			public float About;
 		}
 		private sealed class ByDistance : IComparer<Candidate>
 		{
@@ -248,6 +271,8 @@ namespace FishMMO.Client
 			builtWith = null;
 			cells.Clear();
 			perches.Clear();
+			caveCells.Clear();
+			caveVersion = -1;
 			lastThreatPositions.Clear();
 			scenesChanged = true;
 			for (int k = 0; k < byKind.Length; k++)
@@ -367,6 +392,16 @@ namespace FishMMO.Client
 				countedSeed = 0;
 				Debug.Log($"[Ambient life] indexed {perches.Count:N0} trees as perches.");
 			}
+			IndexCaves(cellMetres);
+			eyeInCave = false;
+			foreach (CaveVisibility cave in CaveVisibility.Live)
+			{
+				if (cave != null && cave.Holds(eye))
+				{
+					eyeInCave = true;
+					break;
+				}
+			}
 
 			AmbientConditions conditions = Conditions();
 			for (int k = 0; k < Kinds.Length; k++)
@@ -403,7 +438,7 @@ namespace FishMMO.Client
 		private static string Census()
 		{
 			var counts = new int[Kinds.Length];
-			int animals = 0, dressed = 0, groups = 0;
+			int animals = 0, dressed = 0, groups = 0, underground = 0;
 			var variants = new int[BiomeLooks.Variants];
 			foreach (Cell cell in cells.Values)
 			{
@@ -412,6 +447,7 @@ namespace FishMMO.Client
 					counts[g.Kind]++;
 					animals += g.Count;
 					groups++;
+					underground += g.Cave > 0 ? 1 : 0;
 					if (AmbientLooks.Has(g.Look))
 					{
 						dressed++;
@@ -425,7 +461,7 @@ namespace FishMMO.Client
 				parts.Add($"{Kinds[k].Name} {counts[k]} (about: {activity[k]:0.00})");
 			}
 			string dressing = dressed > 0 ? $"{dressed}/{groups} groups in their biome's looks (by look: {string.Join(" ", variants)})" : "no biome looks (kinds' own colours)";
-			return $"{cells.Count} cells placed: {animals} animals in groups of {string.Join(", ", parts)}; {dressing}";
+			return $"{cells.Count} cells placed: {animals} animals in groups of {string.Join(", ", parts)}; {underground} of the groups in caves; {dressing}";
 		}
 
 		/// <summary>The moment, from the weather at the viewer (a mild clear day where there is no weather).</summary>
@@ -576,6 +612,8 @@ namespace FishMMO.Client
 				case AmbientShape.Dragonfly: return 0.3f;
 				case AmbientShape.Ray: return 0.5f;
 				case AmbientShape.Beetle: return 0.14f;
+				case AmbientShape.Spider: return 0.1f;
+				case AmbientShape.Cricket: return 0.16f;
 				default: return 0.12f;
 			}
 		}
@@ -697,6 +735,24 @@ namespace FishMMO.Client
 					return false;
 				}
 			}
+			// The caves under the cell, with the near tier (their life is all near: critters, bats, swarms).
+			if (!far && caveCells.TryGetValue(AmbientPerchIndex.Key(x, z), out List<CaveSpotRef> caves))
+			{
+				cell.CaveSpots ??= new List<SceneCaveLifeSpot>();
+				foreach (CaveSpotRef cave in caves)
+				{
+					cell.CaveSpots.Add(cave.Spot);
+					int slot = cell.CaveSpots.Count;
+					for (int k = 0; k < Kinds.Length; k++)
+					{
+						AmbientCreatureKind kind = Kinds[k];
+						if (AmbientCaveLife.LivesInCaves(kind))
+						{
+							AmbientCaveLife.TryPlace(kind, k, settings.DensityOf(kind.Family), cave.SceneSeed, cave.Index, cave.Spot, slot, world, scratchGroups);
+						}
+					}
+				}
+			}
 			int states = cell.States.Length;
 			for (int i = 0; i < scratchGroups.Count; i++)
 			{
@@ -710,6 +766,47 @@ namespace FishMMO.Client
 				Array.Resize(ref cell.States, states);
 			}
 			return true;
+		}
+
+		/// <summary>
+		/// Files the loaded scenes' cave-life spots (<see cref="SceneCaveLife"/>) by cell, again whenever they change; the cells are
+		/// placed afresh then, so a cave scene loaded after its terrain's cells were placed still gets its life.
+		/// </summary>
+		private static void IndexCaves(float cellMetres)
+		{
+			if (SceneCaveLife.Version == caveVersion && cellMetres == caveCellMetres)
+			{
+				return;
+			}
+			caveVersion = SceneCaveLife.Version;
+			caveCellMetres = cellMetres;
+			caveCells.Clear();
+			int count = 0;
+			foreach (SceneCaveLife.Set set in SceneCaveLife.Sets)
+			{
+				if (set.Spots == null)
+				{
+					continue;
+				}
+				uint seed = SeaLifePlacement.SceneSeed(set.Scene.name);
+				for (int i = 0; i < set.Spots.Count; i++)
+				{
+					SceneCaveLifeSpot spot = set.Spots[i];
+					long key = AmbientPerchIndex.Key(Mathf.FloorToInt(spot.Position.x / cellMetres), Mathf.FloorToInt(spot.Position.z / cellMetres));
+					if (!caveCells.TryGetValue(key, out List<CaveSpotRef> list))
+					{
+						caveCells[key] = list = new List<CaveSpotRef>();
+					}
+					list.Add(new CaveSpotRef { SceneSeed = seed, Index = i, Spot = spot });
+					count++;
+				}
+			}
+			cells.Clear();
+			countedSeed = 0;
+			if (count > 0)
+			{
+				Debug.Log($"[Ambient life] indexed {count:N0} cave-life spots in {SceneCaveLife.Sets.Count} scene(s).");
+			}
 		}
 
 		private static readonly List<Vector2Int> offsets = new List<Vector2Int>();
@@ -747,13 +844,21 @@ namespace FishMMO.Client
 				{
 					AmbientGroup g = cell.Groups[i];
 					AmbientCreatureKind kind = Kinds[g.Kind];
-					if (!kind.Enabled || activity[g.Kind] <= g.Rank)
+					bool underground = g.Cave > 0 && cell.CaveSpots != null && g.Cave <= cell.CaveSpots.Count;
+					SceneCaveLifeSpot spot = underground ? cell.CaveSpots[g.Cave - 1] : default;
+					// From outside, the cave past its twilight is behind the hill: only a mouth's and the twilight's life is seen.
+					if (underground && !eyeInCave && spot.Kind != SceneCaveLifeKind.Mouth && spot.Dark > 0.35f)
 					{
 						continue;
 					}
-					float reach = Reach(kind, g);
-					float lift = kind.Behaviour == AmbientBehaviour.Flock || kind.Behaviour == AmbientBehaviour.Soar || kind.Behaviour == AmbientBehaviour.Transit ? g.Altitude : 0f;
-					Vector3 middle = g.Home + Vector3.up * lift;
+					float about = underground ? AmbientCaveLife.Activity(kind, conditions, g.Steady, spot.Dark) : activity[g.Kind];
+					if (!kind.Enabled || about <= g.Rank)
+					{
+						continue;
+					}
+					float reach = underground ? AmbientCaveLife.Reach(kind, g, spot) : Reach(kind, g);
+					float lift = !underground && (kind.Behaviour == AmbientBehaviour.Flock || kind.Behaviour == AmbientBehaviour.Soar || kind.Behaviour == AmbientBehaviour.Transit) ? g.Altitude : 0f;
+					Vector3 middle = underground ? spot.Position : g.Home + Vector3.up * lift;
 					float distance = Vector3.Distance(eye, middle) - reach;
 					if (distance > settings.DistanceOf(kind.Family))
 					{
@@ -767,7 +872,7 @@ namespace FishMMO.Client
 							continue;
 						}
 					}
-					candidates.Add(new Candidate { Cell = cell, Group = i, Distance = Mathf.Max(0f, distance) });
+					candidates.Add(new Candidate { Cell = cell, Group = i, Distance = Mathf.Max(0f, distance), About = about });
 				}
 			}
 			candidates.Sort(byDistance);
@@ -792,13 +897,16 @@ namespace FishMMO.Client
 				frame.Perches = c.Cell.Perches;
 				frame.Trunks = c.Cell.Trunks;
 				frame.States = c.Cell.States;
+				frame.CaveSpots = c.Cell.CaveSpots;
 				// A group comes out (and goes back) by dissolving as the moment's share crosses its rank.
-				frame.Visible = Mathf.Clamp01((activity[g.Kind] - g.Rank) / 0.06f);
+				frame.Visible = Mathf.Clamp01((c.About - g.Rank) / 0.06f);
 				scratch.Clear();
 				AmbientLifeMotion.Evaluate(g, kind, ref frame, scratch);
 				float distance = settings.DistanceOf(kind.Family);
 				float fadeStart = distance * (1f - Mathf.Clamp(settings.FadeBand, 0.05f, 0.5f));
-				bool grounded = kind.Family == AmbientFamily.Critters || kind.Behaviour == AmbientBehaviour.Perch;
+				// Underground the water is the cave's own (an olm swims under its pool's surface), and a lake on the hill over a
+				// cave is not over its floor.
+				bool grounded = g.Cave == 0 && (kind.Family == AmbientFamily.Critters || kind.Behaviour == AmbientBehaviour.Perch);
 				List<AmbientInstance> list = byKind[g.Kind];
 				foreach (AmbientInstance instance in scratch)
 				{

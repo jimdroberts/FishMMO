@@ -97,7 +97,8 @@ namespace FishMMO.Client
 						continue;
 					}
 					TerrainData data = t.terrainData;
-					if (data.alphamapTextureCount == 0)
+					int indexRes = IndexResolutionOf(t, data);
+					if (indexRes <= 0)
 					{
 						continue;
 					}
@@ -107,15 +108,15 @@ namespace FishMMO.Client
 						Debug.LogWarning($"[Ground material] '{t.name}': heightmap {data.heightmapResolution}² differs from {heightRes}²; left out (average-colour blend there).");
 						continue;
 					}
-					if (controlRes != 0 && data.alphamapResolution != controlRes)
+					if (controlRes != 0 && indexRes != controlRes)
 					{
 						// An index map cannot be resampled (ids do not blend), and a slice holds one size. Generated scenes cut
 						// every tile alike, so this is a hand-made scene's case.
-						Debug.LogWarning($"[Ground material] '{t.name}': alphamaps {data.alphamapResolution}² differ from {controlRes}²; left out (average-colour blend there).");
+						Debug.LogWarning($"[Ground material] '{t.name}': alphamaps {indexRes}² differ from {controlRes}²; left out (average-colour blend there).");
 						continue;
 					}
 					heightRes = data.heightmapResolution;
-					controlRes = data.alphamapResolution;
+					controlRes = indexRes;
 					chosen.Add(t);
 				}
 			}
@@ -146,8 +147,8 @@ namespace FishMMO.Client
 					}
 				}
 				heights.SetPixelData(row, 0, i);
-				// The tile's four strongest layers per texel, as its own terrain draws them (the terrain's binder bakes the same).
-				bool hasIndex = TerrainIndexMapBaker.Bake(data, bake, index, i);
+				// The tile's four strongest layers per texel, as its own terrain draws them.
+				bool hasIndex = FillIndex(t, data, bake, index, i);
 				baked += hasIndex ? 1 : 0;
 				tiles[i] = new Vector4(p.x, p.z, 1f / s.x, 1f / s.z);
 				tileData[i] = new Vector4(p.y, s.y, hasIndex ? 1f : 0f, i);
@@ -245,6 +246,53 @@ namespace FishMMO.Client
 			}
 		}
 #endif
+
+		/// <summary>
+		/// The size of a terrain's index map: the one its binder draws, else its stored one, else its alphamaps'; 0 when it has
+		/// none of them (a terrain with no layers).
+		/// </summary>
+		private static int IndexResolutionOf(Terrain t, TerrainData data)
+		{
+			Texture own = TerrainArrayBinder.IndexMapOf(t);
+			if (own != null)
+			{
+				return own.width;
+			}
+			TerrainDetailBake.IndexMap stored = SceneTerrainBake.IndexOf(data);
+			if (stored != null)
+			{
+				return stored.Resolution;
+			}
+			return data.alphamapTextureCount > 0 ? data.alphamapResolution : 0;
+		}
+
+		/// <summary>
+		/// Slice <paramref name="slice"/> of the index array: the map the terrain's binder draws (baked or stored), copied;
+		/// else the scene's stored map, uploaded and copied; else baked from the terrain's alphamaps. A client build's tile
+		/// has no alphamaps, so one of the first two must serve it.
+		/// </summary>
+		private static bool FillIndex(Terrain t, TerrainData data, Shader bake, RenderTexture target, int slice)
+		{
+			if (TerrainIndexMapBaker.CopyInto(TerrainArrayBinder.IndexMapOf(t), target, slice))
+			{
+				return true;
+			}
+			TerrainDetailBake.IndexMap stored = SceneTerrainBake.IndexOf(data);
+			if (stored != null)
+			{
+				Texture2D uploaded = TerrainIndexMapBaker.Upload(stored, $"{t.name} index map (stored, contact)");
+				bool copied = TerrainIndexMapBaker.CopyInto(uploaded, target, slice);
+				if (uploaded != null)
+				{
+					Object.Destroy(uploaded);
+				}
+				if (copied)
+				{
+					return true;
+				}
+			}
+			return data.alphamapTextureCount > 0 && TerrainIndexMapBaker.Bake(data, bake, target, slice);
+		}
 
 		/// <summary>Switches the terrain-material contact off (the shader falls back to the ground colour map) and frees the arrays.</summary>
 		public static void Release()

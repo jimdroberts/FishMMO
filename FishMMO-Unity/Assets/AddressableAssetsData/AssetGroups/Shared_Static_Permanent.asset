@@ -10399,6 +10399,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e6232eadef2cfc7749b5411c508712bb
+    m_Address: Moron 2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e63df7a9ffa84d21a3516cf9da961e6e
     m_Address: Dreamtouched
     m_ReadOnly: 0

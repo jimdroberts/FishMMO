@@ -35,6 +35,11 @@ namespace FishMMO.Shared
 				active.Add(this);
 				Version++;
 			}
+			// The caves' animals' places, for the ambient life: client-only data, offered by this client-only object.
+			if (Points != null && Points.CaveLife != null)
+			{
+				SceneCaveLife.Register(gameObject.scene, this, Points.CaveLife);
+			}
 		}
 
 		private void OnDisable()
@@ -43,6 +48,7 @@ namespace FishMMO.Shared
 			{
 				Version++;
 			}
+			SceneCaveLife.Unregister(gameObject.scene, this);
 		}
 
 		/// <summary>

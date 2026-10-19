@@ -110,7 +110,17 @@ namespace FishMMO.Shared.WorldDesign
 				if (!mineral.Formation)
 				{
 					CaveGlowHue hue = mineral.Hue;
-					WriteMaterial(c, ProceduralArtCatalogue.CaveMineralMaterial(mineral.Kind), shader, m => CaveGlowLit(m, albedo, emission, in hue, false));
+					bool flickers = mineral.Flickers;
+					WriteMaterial(c, ProceduralArtCatalogue.CaveMineralMaterial(mineral.Kind), shader, m =>
+					{
+						CaveGlowLit(m, albedo, emission, in hue, false);
+						// A crystal whose glow flickers (stormglass, 2026-10-18, decision 33): _FishStructure −1, not weathered as a
+						// building, its emission crackling with the light beside it (FishWeatherLitForwardPass.hlsl FishGlowFlicker).
+						if (flickers)
+						{
+							m.SetFloat("_FishStructure", FlickeringCrystalFlag);
+						}
+					});
 				}
 			}
 		}
@@ -198,6 +208,9 @@ namespace FishMMO.Shared.WorldDesign
 			m.SetFloat("_FishWeatherAmount", 0f);
 			m.SetFloat("_FishMoss", 0f);
 		}
+
+		/// <summary>The <c>_FishStructure</c> mark of a flickering crystal's material (FishWeatherLitForwardPass.hlsl: below −0.5).</summary>
+		public const float FlickeringCrystalFlag = -1f;
 
 		/// <summary>A kind's meshes (when they are its own) and its prefabs, a variant in every hue.</summary>
 		private static void WriteCaveGlow(Context c, CaveGlowFamily family)

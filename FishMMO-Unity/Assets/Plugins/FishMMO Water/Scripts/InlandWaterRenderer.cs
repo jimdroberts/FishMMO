@@ -93,6 +93,7 @@ namespace FishMMO.Water
 			Clear();
 			ReleaseFlow();
 			UnhookBiomes();
+			ReleaseChannelFlow();
 		}
 
 		private void Update()
@@ -104,6 +105,8 @@ namespace FishMMO.Water
 			Shader.SetGlobalFloat(TimeId, WorldMotion.Wrapped(WorldMotion.ShaderWrapSeconds));
 			ApplyQuality();
 			UpdateWakes();
+			// Where the lakes and rivers stand and run round the camera, for the plants rooted in them (Channel).
+			UpdateChannelFlow();
 		}
 
 		/// <summary>

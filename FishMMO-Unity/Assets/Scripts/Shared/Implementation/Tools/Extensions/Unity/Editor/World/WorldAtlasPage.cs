@@ -57,6 +57,15 @@ namespace FishMMO.Shared.WorldDesign
 		private InspectorElement inspector;
 		private IVisualElementScheduledItem ticker;
 
+		// ── Cut tool ──
+		private bool cutMode;
+		/// <summary>The rectangle last dragged in cut mode, as the cut would be asked for; null until one is dragged.</summary>
+		private SceneGenerationRequest cutPreview;
+		/// <summary>Biome overrides the next cut is made with, written to the new scene's entry.</summary>
+		private readonly List<BiomeOverride> cutOverrides = new List<BiomeOverride>();
+		private VisualElement cutPredictionHost;
+		private IVisualElementScheduledItem cutPredictionPending;
+
 		public WorldAtlasPage()
 		{
 			style.flexGrow = 1f;
@@ -111,9 +120,11 @@ namespace FishMMO.Shared.WorldDesign
 			Toggle(tools, "Cut scene", false, v =>
 			{
 				globe.CutMode = v;
+				cutMode = v;
 				globe.tooltip = v
 					? "Drag a rectangle on the globe to cut a new scene from it."
 					: string.Empty;
+				RebuildInspector();
 			});
 			tools.Add(new ToolbarButton(RemoveOrphans)
 			{
@@ -172,6 +183,7 @@ namespace FishMMO.Shared.WorldDesign
 			globe.TimeLabel = TimeLabelOf;
 			globe.SceneClicked += OnSceneClicked;
 			globe.RectangleDrawn += OnRectangleDrawn;
+			globe.RectangleChanging += OnRectangleChanging;
 			globe.EmptyClicked += OnEmptyClicked;
 			globe.SceneMoveStarted += e => { dragging = true; Undo.RecordObject(e, "Move scene"); globe.Routes.Clear(); };
 			globe.SceneMoving += OnSceneMoving;
@@ -501,15 +513,11 @@ namespace FishMMO.Shared.WorldDesign
 				return;
 			}
 
-			WorldAtlasLayer layer = model.Atlas != null ? model.Atlas.SurfaceLayerOf(body) : null;
-			var request = new SceneGenerationRequest
-			{
-				Body = body,
-				Layer = layer,
-				Latitude = latitude,
-				Longitude = longitude,
-				SizeKm = sizeKm,
-			};
+			SceneGenerationRequest request = CutRequest(latitude, longitude, sizeKm);
+			WorldAtlasLayer layer = request.Layer;
+			cutPreview = request;
+			List<SceneBiomePrediction.Share> predicted = SceneBiomePrediction.Predict(request);
+			ShowCutPrediction(predicted);
 
 			List<WorldAtlasScene> hits = SceneGeneration.Collisions(request, model.Entries, AtlasModel.RadiusOf(body), model.BodyOf);
 			if (hits.Count > 0)
@@ -528,7 +536,8 @@ namespace FishMMO.Shared.WorldDesign
 
 			TerrainTilePlan plan = SceneGeneration.PlanTiles(sizeKm);
 			string sceneName = SceneNamePrompt.Ask(
-				$"{sizeKm.x:0.##} x {sizeKm.y:0.##} km on {body.ResolvedName}, at {latitude:0.##}°, {longitude:0.##}°.\n{plan}",
+				$"{sizeKm.x:0.##} x {sizeKm.y:0.##} km on {body.ResolvedName}, at {latitude:0.##}°, {longitude:0.##}°.\n{plan}\n" +
+				$"Predicted biomes{(request.BiomeOverrides != null ? $" ({request.BiomeOverrides.Count} override(s))" : string.Empty)}: {SceneBiomePrediction.Describe(predicted)}.",
 				SuggestSceneName(), out bool fineDetail,
 				SceneNamePrompt.NamerFor(body, layer, latitude, longitude));
 			if (string.IsNullOrEmpty(sceneName))
@@ -594,7 +603,8 @@ namespace FishMMO.Shared.WorldDesign
 					: "\nThe sea is at y = 0, where this body's water line falls; y is metres above sea level.";
 			EditorUtility.DisplayDialog("Cut scene",
 				$"\"{sceneName}\" is ready.\n\n{plan}\n" +
-				$"{result.ReliefMetres:0} m of relief, standing at {result.BaseAltitudeMetres:0} m above sea level.{sea}\n\n" +
+				$"{result.ReliefMetres:0} m of relief, standing at {result.BaseAltitudeMetres:0} m above sea level.{sea}\n" +
+				(string.IsNullOrEmpty(result.BiomeSummary) ? "\n" : $"Biomes: {result.BiomeSummary}.\n\n") +
 				$"Wrote {result.Wrote.Count} file(s) under {SceneGenerator.WorldFolder(body)}.\n\n" +
 				"Rebuild the world scene details cache to bring it into the game.",
 				"OK");
@@ -618,10 +628,13 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			/* One modal: the re-cut warning and the pre-cut questions together (2026-10-10). It
 			 * opens on the scene's current settings; a re-cut regenerates every point of interest. */
+			string biomesNow = SceneBiomePrediction.Describe(SceneBiomePrediction.Current(CurrentBiomeMap(entry)), "no biome map");
+			string biomesAfter = SceneBiomePrediction.Describe(SceneBiomePrediction.Predict(SceneCutSnapshot.RequestFor(entry)));
 			if (!PointOfInterestPrompt.Ask(
 				$"Generate \"{entry.SceneName}\" again from the globe, where its rectangle is now?\n\n" +
 				"The scene file is replaced, so anything added to it by hand is lost, and every point of interest is " +
-				$"generated again. The old scene and terrain are copied to {SceneGenerator.RecutBackupRoot} first.",
+				$"generated again. The old scene and terrain are copied to {SceneGenerator.RecutBackupRoot} first.\n\n" +
+				$"Biomes now: {biomesNow}.\nPredicted: {biomesAfter}.",
 				"Re-cut", AtlasPointsOfInterest.SettingsOf(entry), out PointOfInterestChoice choice))
 			{
 				return;
@@ -698,13 +711,12 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Deletes a scene and everything that belongs only to it, after asking.
+		/// Deletes a scene and everything kept for it alone, after showing the full list (<see cref="SceneDeletion"/>).
 		/// </summary>
 		/// <remarks>
-		/// Lists exactly what will go before it goes. The terrain data lives in a folder beside the
-		/// scene and is useless without it; the atlas entry is what puts the rectangle on the globe
-		/// and blocks anything else being cut there. Leaving either behind is the state that had to
-		/// be cleaned up by hand.
+		/// Deleting only the scene file, its terrain and its atlas entry left the rest behind: its entries in the scene
+		/// details, teleporter, NavMesh and spawn table catalogues, teleporters in other scenes still leading into it,
+		/// its baked arrays and maps, its LOCAL copy and its editor caches.
 		/// </remarks>
 		private void DeleteScene(WorldAtlasScene entry)
 		{
@@ -714,75 +726,62 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			string sceneName = entry.SceneName;
 			model.ScenePaths.TryGetValue(sceneName ?? string.Empty, out string scenePath);
-			WorldBody owner = model.BodyOf(entry);
-			string terrainFolder = owner != null ? SceneGenerator.TerrainFolder(owner, sceneName) : null;
-			string entryPath = AssetDatabase.GetAssetPath(entry);
-
-			var doomed = new List<string>();
-			if (!string.IsNullOrEmpty(scenePath))
+			SceneDeletion.Plan plan;
+			try
 			{
-				doomed.Add(scenePath);
+				EditorUtility.DisplayProgressBar("Delete scene", $"Finding everything that belongs to {sceneName}...", 0.5f);
+				plan = SceneDeletion.For(entry, scenePath);
 			}
-			if (!string.IsNullOrEmpty(terrainFolder) && AssetDatabase.IsValidFolder(terrainFolder))
+			finally
 			{
-				doomed.Add(terrainFolder + " (terrain data)");
+				EditorUtility.ClearProgressBar();
 			}
-			if (!string.IsNullOrEmpty(entryPath))
-			{
-				doomed.Add(entryPath + " (atlas entry)");
-			}
-			if (doomed.Count == 0)
+			if (plan.IsEmpty)
 			{
 				EditorUtility.DisplayDialog("Delete scene", $"Nothing left to delete for \"{sceneName}\".", "OK");
 				return;
 			}
 
-			if (!EditorUtility.DisplayDialog("Delete scene",
-				$"Delete \"{sceneName}\" and everything that belongs to it?\n\n" +
-				string.Join("\n", doomed) +
-				"\n\nThis cannot be undone.",
-				"Delete", "Cancel"))
+			string question = $"Delete \"{sceneName}\" and everything that belongs to it?\n\n";
+			bool keepBackups;
+			if (plan.Backups.Count > 0)
 			{
-				return;
-			}
-
-			// Closed first: the asset database will not delete a scene that is open, and reports
-			// that by returning false rather than by failing loudly.
-			if (!string.IsNullOrEmpty(scenePath))
-			{
-				UnityEngine.SceneManagement.Scene open = UnityEngine.SceneManagement.SceneManager.GetSceneByPath(scenePath);
-				if (open.IsValid() && open.isLoaded)
+				// The re-cut backups are the only way back, so keeping them is offered.
+				int choice = EditorUtility.DisplayDialogComplex("Delete scene",
+					question + plan.Describe(false) + "\n\nThis cannot be undone, except from a re-cut backup if you keep them.",
+					"Delete everything", "Cancel", "Delete, keep backups");
+				if (choice == 1)
 				{
-					// Closed without saving: it is about to be deleted, so offering to save it first
-					// would only ask somebody to write a file and then watch it go.
-					UnityEditor.SceneManagement.EditorSceneManager.CloseScene(open, true);
+					return;
 				}
+				keepBackups = choice == 2;
 			}
-
-			foreach (string path in new[] { scenePath, terrainFolder, entryPath })
+			else
 			{
-				if (!string.IsNullOrEmpty(path) && (System.IO.File.Exists(path) || System.IO.Directory.Exists(path)))
+				if (!EditorUtility.DisplayDialog("Delete scene", question + plan.Describe(false) + "\n\nThis cannot be undone.", "Delete", "Cancel"))
 				{
-					AssetDatabase.DeleteAsset(path);
+					return;
 				}
+				keepBackups = false;
 			}
 
-			// The world folder, if this was the last scene in it.
-			if (owner != null)
+			List<string> failures;
+			try
 			{
-				string worldFolder = SceneGenerator.WorldFolder(owner);
-				if (System.IO.Directory.Exists(worldFolder) && System.IO.Directory.GetFileSystemEntries(worldFolder).Length == 0)
-				{
-					AssetDatabase.DeleteAsset(worldFolder);
-				}
+				EditorUtility.DisplayProgressBar("Delete scene", $"Deleting {sceneName}...", 0.5f);
+				failures = SceneDeletion.Execute(plan, keepBackups);
+			}
+			finally
+			{
+				EditorUtility.ClearProgressBar();
 			}
 
-			AssetDatabase.SaveAssets();
-			AssetDatabase.Refresh();
-			WorldAtlasScene.EditorLookup.Invalidate();
-
-			Debug.Log($"[World atlas] Deleted '{sceneName}':\n  " + string.Join("\n  ", doomed) +
-				"\n  Rebuild the world scene details cache so the game stops expecting it.");
+			Debug.Log($"[World atlas] Deleted '{sceneName}':\n{plan.Describe(keepBackups)}");
+			if (failures.Count > 0)
+			{
+				Debug.LogWarning($"[World atlas] Deleting '{sceneName}' left {failures.Count} thing(s) behind:\n  " + string.Join("\n  ", failures));
+				EditorUtility.DisplayDialog("Delete scene", $"\"{sceneName}\" is deleted, but not all of it:\n\n" + string.Join("\n", failures), "OK");
+			}
 
 			selected = null;
 			model.Reload();
@@ -1128,6 +1127,11 @@ namespace FishMMO.Shared.WorldDesign
 			inspector?.RemoveFromHierarchy();
 			inspector = null;
 			inspectorHost.Clear();
+			cutPredictionHost = null;
+			if (cutMode)
+			{
+				BuildCutSection();
+			}
 			if (selected != null)
 			{
 				BuildSceneInspector(selected);
@@ -1161,8 +1165,14 @@ namespace FishMMO.Shared.WorldDesign
 			 * on the globe for ground that no longer exists. There was no way to do it from here at
 			 * all, so it had to be done by hand in the Project window, where the terrain folder and
 			 * the entry are easy to miss. */
-			var delete = new Button(() => DeleteScene(entry)) { text = "Delete scene…" };
+			var delete = new Button(() => DeleteScene(entry))
+			{
+				text = "Delete scene…",
+				tooltip = "Deletes the scene and everything kept for it: terrain, atlas entry, POI settings, spawn table, NavMesh and cache entries, " +
+					"baked arrays and maps, its LOCAL copy, editor caches, and the links of teleporters leading into it. Lists it all first.",
+			};
 			delete.style.marginLeft = 8f;
+			delete.style.color = new Color(1f, 0.55f, 0.5f, 1f);
 			actions.Add(delete);
 			inspectorHost.Add(actions);
 
@@ -1240,6 +1250,7 @@ namespace FishMMO.Shared.WorldDesign
 				inspectorHost.Add(row);
 			}
 
+			BuildBiomesSection(entry, path);
 			BuildPointsOfInterestSection(entry, path);
 
 			var settings = new Label("Settings");
@@ -1315,6 +1326,339 @@ namespace FishMMO.Shared.WorldDesign
 			inspectorHost.Add(filters);
 			inspectorHost.Add(preview);
 			inspectorHost.Add(hint);
+		}
+
+		// ── Biomes ──
+
+		/// <summary>
+		/// The scene's biomes: what its baked map holds now, what a cut from the globe would give it with its overrides, the
+		/// overrides themselves, and the two ways to apply them.
+		/// </summary>
+		private void BuildBiomesSection(WorldAtlasScene entry, string scenePath)
+		{
+			SubHeader(inspectorHost, "Biomes", 8f);
+
+			SceneBiomeMap map = CurrentBiomeMap(entry);
+			SubHeader(inspectorHost, "Now", 2f, 0.8f);
+			if (map == null)
+			{
+				Line(inspectorHost, "No biome map: the scene has not been cut or repainted.", 0.8f);
+			}
+			else
+			{
+				ShareLines(inspectorHost, SceneBiomePrediction.Current(map));
+			}
+
+			SubHeader(inspectorHost, "Predicted", 4f, 0.8f);
+			if (entry.Body == null || !entry.Placed)
+			{
+				Line(inspectorHost, "Place the scene on a body to predict its biomes.", 0.8f);
+			}
+			else
+			{
+				ShareLines(inspectorHost, SceneBiomePrediction.Predict(SceneCutSnapshot.RequestFor(entry)));
+				Line(inspectorHost, "Read from the globe's ground with the overrides below. The cut adds erosion, finer relief and the lake and river biomes.", 0.65f);
+			}
+
+			SubHeader(inspectorHost, "Overrides", 4f, 0.8f);
+			inspectorHost.Add(OverridesEditor(entry.BiomeOverrides, change =>
+			{
+				// The page rebuilds itself from the entry's dirty count on the next tick.
+				Undo.RecordObject(entry, "Biome override");
+				entry.BiomeOverrides ??= new List<BiomeOverride>();
+				change(entry.BiomeOverrides);
+				EditorUtility.SetDirty(entry);
+			}));
+
+			var actions = new VisualElement();
+			actions.style.flexDirection = FlexDirection.Row;
+			actions.style.flexWrap = Wrap.Wrap;
+			if (SceneGenerator.IsGenerated(entry))
+			{
+				actions.Add(new Button(() => RecutScene(entry))
+				{
+					text = "Re-cut…",
+					tooltip = "Generates the scene again from the globe with these overrides. Its heights are cut again too, so sculpting is lost.",
+				});
+			}
+			actions.Add(new Button(() => RepaintBiomes(entry, scenePath))
+			{
+				text = "Repaint biomes…",
+				tooltip = "Repaints the open scene's ground, details, trees and biome map from its biomes, these overrides included. Its heights are kept. The scene must be the active scene; it is marked dirty, not saved.",
+			});
+			inspectorHost.Add(actions);
+		}
+
+		/// <summary>The cut tool: what the rectangle being dragged would hold, and the overrides the next cut is made with.</summary>
+		private void BuildCutSection()
+		{
+			var title = new Label("Cut scene");
+			title.style.fontSize = 15;
+			title.style.unityFontStyleAndWeight = FontStyle.Bold;
+			title.style.marginTop = 6f;
+			inspectorHost.Add(title);
+			Line(inspectorHost, "Drag a rectangle on empty ground. Its biomes are predicted as you drag; the overrides below are painted over them and kept on the new scene.", 0.8f);
+
+			SubHeader(inspectorHost, "Predicted biomes", 6f, 0.8f);
+			cutPredictionHost = new VisualElement();
+			inspectorHost.Add(cutPredictionHost);
+			ShowCutPrediction();
+
+			SubHeader(inspectorHost, "Overrides for the next cut", 6f, 0.8f);
+			inspectorHost.Add(OverridesEditor(cutOverrides, change =>
+			{
+				change(cutOverrides);
+				RebuildInspector();
+			}));
+
+			var rule = new VisualElement();
+			rule.style.height = 1f;
+			rule.style.marginTop = 10f;
+			rule.style.backgroundColor = new Color(0f, 0f, 0f, 0.3f);
+			inspectorHost.Add(rule);
+		}
+
+		/// <summary>The request a rectangle drawn now would be cut with: the surface layer of the current body, the cut tool's overrides.</summary>
+		private SceneGenerationRequest CutRequest(double latitude, double longitude, Vector2 sizeKm)
+		{
+			return new SceneGenerationRequest
+			{
+				Body = body,
+				Layer = model.Atlas != null ? model.Atlas.SurfaceLayerOf(body) : null,
+				Latitude = latitude,
+				Longitude = longitude,
+				SizeKm = sizeKm,
+				BiomeOverrides = SceneBiomeOverrides.Of(cutOverrides),
+			};
+		}
+
+		private void OnRectangleChanging(double latitude, double longitude, Vector2 sizeKm)
+		{
+			if (body == null)
+			{
+				return;
+			}
+			cutPreview = CutRequest(latitude, longitude, sizeKm);
+			// Throttled: each answer reads the planet a few hundred times, and a drag moves many times a frame.
+			cutPredictionPending ??= schedule.Execute(() =>
+			{
+				cutPredictionPending = null;
+				ShowCutPrediction();
+			}).StartingIn(120);
+		}
+
+		/// <summary>Shows the cut tool's prediction for the last rectangle dragged, worked out now unless given.</summary>
+		private void ShowCutPrediction(List<SceneBiomePrediction.Share> shares = null)
+		{
+			if (cutPredictionHost == null)
+			{
+				return;
+			}
+			cutPredictionHost.Clear();
+			if (cutPreview == null || cutPreview.Body == null)
+			{
+				Line(cutPredictionHost, "Drag a rectangle on the globe to see the biomes it would hold.", 0.8f);
+				return;
+			}
+			cutPreview.BiomeOverrides = SceneBiomeOverrides.Of(cutOverrides);
+			Line(cutPredictionHost, $"{cutPreview.SizeKm.x:0.##} × {cutPreview.SizeKm.y:0.##} km at {cutPreview.Latitude:0.##}°, {cutPreview.Longitude:0.##}° on {cutPreview.Body.ResolvedName}", 0.75f);
+			ShareLines(cutPredictionHost, shares ?? SceneBiomePrediction.Predict(cutPreview));
+		}
+
+		/// <summary>
+		/// Rows of "From → To" pickers over a list of overrides, with remove buttons and an add button. Every change goes
+		/// through <paramref name="edit"/>, which applies it to the list it owns and refreshes whatever shows it.
+		/// </summary>
+		private VisualElement OverridesEditor(List<BiomeOverride> rules, Action<Action<List<BiomeOverride>>> edit)
+		{
+			var host = new VisualElement();
+			List<BiomeTemplate> biomes = RegisteredBiomes();
+			int count = rules != null ? rules.Count : 0;
+			if (count == 0)
+			{
+				Line(host, "None: the planet's own biomes.", 0.8f);
+			}
+			for (int i = 0; i < count; i++)
+			{
+				int index = i;
+				BiomeOverride current = rules[i];
+
+				var fromChoices = new List<BiomeTemplate> { null };
+				fromChoices.AddRange(biomes);
+				if (current.From != null && !fromChoices.Contains(current.From))
+				{
+					fromChoices.Add(current.From);
+				}
+				var toChoices = new List<BiomeTemplate>(biomes);
+				if (current.To == null || !toChoices.Contains(current.To))
+				{
+					toChoices.Insert(0, current.To);
+				}
+
+				var row = new VisualElement();
+				row.style.flexDirection = FlexDirection.Row;
+				row.style.alignItems = Align.Center;
+				var from = new PopupField<BiomeTemplate>(fromChoices, current.From, b => b != null ? b.ResolvedDisplayName : "Every land biome", b => b != null ? b.ResolvedDisplayName : "Every land biome");
+				from.tooltip = "The biome the planet chose. Every land biome: all ground the climate chose above the sea; the sea floor and the lake, river, estuary and salt-flat biomes are kept unless named.";
+				from.style.flexGrow = 1f;
+				from.style.flexBasis = 0f;
+				from.RegisterValueChangedCallback(evt =>
+				{
+					BiomeTemplate value = evt.newValue;
+					from.schedule.Execute(() => edit(list => { BiomeOverride r = list[index]; r.From = value; list[index] = r; }));
+				});
+				var arrow = new Label("→");
+				arrow.style.marginLeft = 2f;
+				arrow.style.marginRight = 2f;
+				var to = new PopupField<BiomeTemplate>(toChoices, current.To, b => b != null ? b.ResolvedDisplayName : "(choose a biome)", b => b != null ? b.ResolvedDisplayName : "(choose a biome)");
+				to.tooltip = "The biome painted in its place.";
+				to.style.flexGrow = 1f;
+				to.style.flexBasis = 0f;
+				if (current.To == null)
+				{
+					to.style.color = new Color(1f, 0.6f, 0.5f, 1f);
+				}
+				to.RegisterValueChangedCallback(evt =>
+				{
+					BiomeTemplate value = evt.newValue;
+					to.schedule.Execute(() => edit(list => { BiomeOverride r = list[index]; r.To = value; list[index] = r; }));
+				});
+				var remove = new Button(() => edit(list => list.RemoveAt(index))) { text = "×", tooltip = "Remove this override." };
+				row.Add(from);
+				row.Add(arrow);
+				row.Add(to);
+				row.Add(remove);
+				host.Add(row);
+			}
+			var add = new Button(() => edit(list => list.Add(new BiomeOverride()))) { text = "+ Override" };
+			add.style.alignSelf = Align.FlexStart;
+			host.Add(add);
+			return host;
+		}
+
+		/// <summary>Repaints the scene's ground from its biomes, after asking, when it is the active scene.</summary>
+		private void RepaintBiomes(WorldAtlasScene entry, string scenePath)
+		{
+			UnityEngine.SceneManagement.Scene active = UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene();
+			if (string.IsNullOrEmpty(scenePath) || !string.Equals(active.path, scenePath, StringComparison.Ordinal))
+			{
+				EditorUtility.DisplayDialog("Repaint biomes", $"Open \"{entry.SceneName}\" as the active scene first (Open scene, above).", "OK");
+				return;
+			}
+			if (!EditorUtility.DisplayDialog("Repaint biomes",
+				$"Repaint \"{entry.SceneName}\"'s ground from its biomes, overrides included? Its terrain layers, alphamaps, details and trees are replaced; its heights are kept. The scene is marked dirty, not saved.",
+				"Repaint", "Cancel"))
+			{
+				return;
+			}
+			string problem;
+			SceneGenerationResult result;
+			try
+			{
+				EditorUtility.DisplayProgressBar("Repaint biomes", $"Repainting {entry.SceneName}...", 0.5f);
+				problem = BiomeRepaintTool.Repaint(active, out result);
+			}
+			finally
+			{
+				EditorUtility.ClearProgressBar();
+			}
+			if (problem != null)
+			{
+				EditorUtility.DisplayDialog("Repaint biomes", problem, "OK");
+				return;
+			}
+			Debug.Log($"[World atlas] Repainted '{entry.SceneName}': {result.BiomeSummary}.");
+			foreach (string note in result.Notes)
+			{
+				Debug.LogWarning($"[World atlas] {note}");
+			}
+			model.Reload();
+			Rebuild();
+		}
+
+		/// <summary>The biome map the scene was painted from: its entry's, else the one a cut writes beside its terrain.</summary>
+		private static SceneBiomeMap CurrentBiomeMap(WorldAtlasScene entry)
+		{
+			if (entry == null)
+			{
+				return null;
+			}
+			if (entry.BiomeMap != null)
+			{
+				return entry.BiomeMap;
+			}
+			WorldBody owner = entry.Body;
+			return owner != null
+				? AssetDatabase.LoadAssetAtPath<SceneBiomeMap>($"{SceneGenerator.TerrainFolder(owner, entry.SceneName)}/{WorldEditorAssets.Sanitize(entry.SceneName)} Biome Map.asset")
+				: null;
+		}
+
+		/// <summary>Every registered biome, by name, for the override pickers.</summary>
+		private static List<BiomeTemplate> RegisteredBiomes()
+		{
+			FishMMO.Shared.NameGeneration.Editor.NamingTemplateEditorLoader.EnsureLoaded();
+			var biomes = new List<BiomeTemplate>();
+			foreach (string key in BiomeRegistry.SupportedBiomes)
+			{
+				if (BiomeRegistry.TryGet(key, out BiomeTemplate biome) && biome != null)
+				{
+					biomes.Add(biome);
+				}
+			}
+			biomes.Sort((a, b) => string.Compare(a.ResolvedDisplayName, b.ResolvedDisplayName, StringComparison.OrdinalIgnoreCase));
+			return biomes;
+		}
+
+		/// <summary>One row per share: a swatch in the biome's colour, its name and percentage, and what it was painted over.</summary>
+		private static void ShareLines(VisualElement parent, List<SceneBiomePrediction.Share> shares)
+		{
+			if (shares == null || shares.Count == 0)
+			{
+				Line(parent, "None: no biome fits this ground.", 0.8f);
+				return;
+			}
+			foreach (SceneBiomePrediction.Share share in shares)
+			{
+				var row = new VisualElement();
+				row.style.flexDirection = FlexDirection.Row;
+				row.style.alignItems = Align.Center;
+				var swatch = new VisualElement();
+				swatch.style.width = 10f;
+				swatch.style.height = 10f;
+				swatch.style.marginRight = 5f;
+				swatch.style.flexShrink = 0f;
+				Color colour = share.Biome != null ? share.Biome.GizmoColor : Color.clear;
+				colour.a = colour.a > 0f ? 1f : 0f;
+				swatch.style.backgroundColor = colour;
+				var edge = new Color(0f, 0f, 0f, 0.4f);
+				swatch.style.borderTopWidth = 1f;
+				swatch.style.borderBottomWidth = 1f;
+				swatch.style.borderLeftWidth = 1f;
+				swatch.style.borderRightWidth = 1f;
+				swatch.style.borderTopColor = edge;
+				swatch.style.borderBottomColor = edge;
+				swatch.style.borderLeftColor = edge;
+				swatch.style.borderRightColor = edge;
+				row.Add(swatch);
+				var label = new Label(SceneBiomePrediction.Describe(share));
+				label.style.whiteSpace = WhiteSpace.Normal;
+				label.style.flexShrink = 1f;
+				if (share.Biome == null)
+				{
+					label.style.opacity = 0.7f;
+				}
+				row.Add(label);
+				parent.Add(row);
+			}
+		}
+
+		private static void SubHeader(VisualElement parent, string text, float marginTop, float opacity = 1f)
+		{
+			var label = new Label(text);
+			label.style.unityFontStyleAndWeight = FontStyle.Bold;
+			label.style.marginTop = marginTop;
+			label.style.opacity = opacity;
+			parent.Add(label);
 		}
 
 		private void BuildBodyInspector()
@@ -1784,6 +2128,7 @@ namespace FishMMO.Shared.WorldDesign
 				menu.AddItem(new GUIContent("Turn 90°"), false, () => { selected = captured; Turn(90f); });
 				menu.AddItem(new GUIContent("Turn 15°"), false, () => { selected = captured; Turn(15f); });
 				menu.AddItem(new GUIContent("Remove from map"), false, () => RemoveFromMap(captured));
+				menu.AddItem(new GUIContent("Delete scene…"), false, () => DeleteScene(captured));
 				foreach (WorldAtlasLayer l in model.LayersOf(model.BodyOf(captured)))
 				{
 					WorldAtlasLayer target = l;

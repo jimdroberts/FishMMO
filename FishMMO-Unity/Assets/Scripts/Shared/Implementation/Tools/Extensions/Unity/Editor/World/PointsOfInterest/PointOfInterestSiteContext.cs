@@ -102,6 +102,8 @@ namespace FishMMO.Shared.WorldDesign
 		public Func<float, float, float> SlopeAt;
 		/// <summary>The biome at (east, north); may answer null.</summary>
 		public Func<float, float, BiomeTemplate> BiomeAt;
+		/// <summary>The fields every site laid before this one in this placing (2026-10-18), shared by all of them; null in a harness (no other sites).</summary>
+		public PointOfInterestFieldClaims FieldClaims;
 
 		private BiomeStructurePalette palette;
 		private bool paletteRead;
@@ -215,9 +217,16 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>A structure piece's prefab for this site's style, or null (<see cref="PointOfInterestPieces"/>).</summary>
 		public GameObject ResolvePiece(string tag, int seed) => PointOfInterestPieces.Resolve(tag, Style, seed);
 
-		/// <summary>Adds an instanced prop to the scene's POI prop set: a structure kit piece in the site's <see cref="Palette"/>.</summary>
+		/// <summary>
+		/// Adds an instanced prop to the scene's POI prop set: a structure kit piece in the site's <see cref="Palette"/>, a house
+		/// with the roof its palette's roof material is built at (its roof variant, StructurePaletteDressing.RoofVariant).
+		/// </summary>
 		public void AddProp(GameObject prefab, Vector3 position, Quaternion rotation, Vector3 scale)
 		{
+			if (prefab != null)
+			{
+				prefab = StructurePaletteDressing.RoofVariant(prefab, Palette);
+			}
 			Sink?.Add(prefab, position, rotation, scale, Sink != null ? StructurePaletteDressing.MaterialsFor(prefab, Palette) : null);
 			if (prefab != null)
 			{
@@ -265,18 +274,26 @@ namespace FishMMO.Shared.WorldDesign
 			// What the piece gives off (a chimney's smoke, a fire, a forge, a lantern), where it now stands.
 			StructurePiece piece = null;
 			int variant = 0;
-			bool isPiece = prefab != null && StructurePieces.TryParsePrefab(prefab.name, out piece, out variant);
+			StructureRoofPitch? roof = null;
+			bool isPiece = prefab != null && StructurePieces.TryParsePrefab(prefab.name, out piece, out variant, out _, out roof);
 			if (Points != null && isPiece)
 			{
-				foreach ((Vector3 at, SceneEmitterKind kind) in StructurePieces.EmittersOf(piece, variant))
+				// A roof variant's chimney stands clear of its own roof (a flat roof's lower than a thatched one's).
+				foreach ((Vector3 at, SceneEmitterKind kind) in StructurePieces.EmittersOf(piece, variant, roof))
 				{
 					Vector3 world = position + rotation * Vector3.Scale(at, scale);
 					Points.Emitters ??= new System.Collections.Generic.List<SceneEmitter>();
 					uint seed = PointOfInterestPlanner.Hash(Record != null ? Record.Id : 0, Mathf.RoundToInt(world.x * 10f), Mathf.RoundToInt(world.z * 10f), (int)kind);
-					// A crystal's light takes its crystal's hue (a crystal post's: the site biome's crystal, 2026-10-16).
-					if (kind == SceneEmitterKind.Crystal && StructurePieces.TryCrystalSocket(piece, variant, out _, out _))
+					// A cold glow's tint (2026-10-18, I6g): a crystal post's its crystal's hue (the site biome's crystal, 2026-10-16),
+					// a rune stone's and a glowjar's their own; it flickers only where the post's crystal does (stormglass,
+					// decision 33), else it pulses (the bit always written, never the hash's).
+					if (kind == SceneEmitterKind.Glow)
 					{
-						seed = CaveArt.EmitterSeed(seed, ProceduralArtCatalogue.CaveMineralOf(PostCrystal).LightHue);
+						SceneGlowHue? own = StructurePieces.GlowHueOf(piece.Id);
+						bool cradled = !own.HasValue && StructurePieces.TryCrystalSocket(piece, variant, out _, out _);
+						CaveMineral postMineral = cradled ? ProceduralArtCatalogue.CaveMineralOf(PostCrystal) : default;
+						seed = own.HasValue ? SceneGlow.WithHue(seed, own.Value) : SceneGlow.WithCrystalHue(seed, cradled ? postMineral.LightHue : -1);
+						seed = SceneGlow.WithFlicker(seed, cradled && postMineral.Flickers);
 					}
 					Points.Emitters.Add(new SceneEmitter { Position = world, Kind = kind, Seed = seed });
 				}
@@ -295,6 +312,37 @@ namespace FishMMO.Shared.WorldDesign
 					PointOfInterestFeatureKit.Note(this, $"crystal post: no art for its {PostCrystal} crystal yet (Generate Biome Art)");
 				}
 			}
+		}
+
+		private float highWater = float.NaN;
+
+		/// <summary>
+		/// The highest the water stands at a point, scene metres: an inland surface (river, lake, moat) or the sea at its
+		/// highest tide, whichever is higher; negative infinity where there is none. The sea is no WaterKind on the water
+		/// grid — its floor is only ground under sea level — so a test of the grid alone finds the ocean dry.
+		/// </summary>
+		public float WaterLevelAt(float x, float z)
+		{
+			if (float.IsNaN(highWater))
+			{
+				float sea = PropsFeature.SeaLevelOf(this);
+				highWater = float.IsNegativeInfinity(sea) ? sea : sea + PropsFeature.HighestTideOf(this);
+			}
+			float inland = Water != null ? Water.SurfaceAt(x, z) : float.NegativeInfinity;
+			return Mathf.Max(inland, highWater);
+		}
+
+		/// <summary>
+		/// Whether the ground at a point lies under water, or within <paramref name="clearance"/> metres of its highest
+		/// level: where anything that is not a water prop must not stand.
+		/// </summary>
+		public bool IsWet(float x, float z, float clearance)
+		{
+			if (GroundAt == null)
+			{
+				return false;
+			}
+			return GroundAt(x, z) < WaterLevelAt(x, z) + clearance;
 		}
 
 		/// <summary>The world position of an offset in the site's own frame (x right, z ahead along its heading), on the ground.</summary>

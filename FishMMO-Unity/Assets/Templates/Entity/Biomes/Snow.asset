@@ -257,6 +257,7 @@ MonoBehaviour:
   Emits: {fileID: 0}
   EmissionRate: 0
   TerrainProcess: {fileID: 11400000, guid: 3f2dfed1eabacae5ab0cae1a92dc0117, type: 2}
+  landforms: []
   lookClass: 9
   rareLookA: 0
   rareLookB: 0
@@ -290,6 +291,12 @@ MonoBehaviour:
       Living: 0
       Lichen: 0
       Mineral: 0.3
+    useClimateBand: 0
+    temperatureRange: {x: -1, y: 1}
+    temperatureFalloff: 0.1
+    humidityRange: {x: -1, y: 1}
+    humidityFalloff: 0.1
+    airBand: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -344,11 +351,18 @@ MonoBehaviour:
       sinkRange: {x: 0, y: 0.05}
       sinkSlopeFactor: 0.5
       depthRange: {x: 0, y: 0}
+      waters: 0
+      currentRange: {x: 0, y: 0}
       useClimateBand: 0
       temperatureRange: {x: -1, y: 1}
       temperatureFalloff: 0.1
       humidityRange: {x: -1, y: 1}
       humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
       specFingerprint: fbc5e36e29a39e60
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -405,11 +419,18 @@ MonoBehaviour:
       sinkRange: {x: 0, y: 0.05}
       sinkSlopeFactor: 0.5
       depthRange: {x: 0, y: 0}
+      waters: 0
+      currentRange: {x: 0, y: 0}
       useClimateBand: 0
       temperatureRange: {x: -1, y: 1}
       temperatureFalloff: 0.1
       humidityRange: {x: -1, y: 1}
       humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
       specFingerprint: 55c2b848837952df
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -463,11 +484,18 @@ MonoBehaviour:
       sinkRange: {x: 0, y: 0.05}
       sinkSlopeFactor: 0.5
       depthRange: {x: 0, y: 0}
+      waters: 0
+      currentRange: {x: 0, y: 0}
       useClimateBand: 0
       temperatureRange: {x: -1, y: 1}
       temperatureFalloff: 0.1
       humidityRange: {x: -1, y: 1}
       humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
       specFingerprint: 3c57e92fa3347c87
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -528,11 +556,18 @@ MonoBehaviour:
       sinkRange: {x: 0, y: 0.05}
       sinkSlopeFactor: 0.5
       depthRange: {x: 0, y: 0}
+      waters: 0
+      currentRange: {x: 0, y: 0}
       useClimateBand: 0
       temperatureRange: {x: -1, y: 1}
       temperatureFalloff: 0.1
       humidityRange: {x: -1, y: 1}
       humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
       specFingerprint: 5d3c627bd936f6de
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -589,11 +624,18 @@ MonoBehaviour:
       sinkRange: {x: 0, y: 0.05}
       sinkSlopeFactor: 0.5
       depthRange: {x: 0, y: 0}
+      waters: 0
+      currentRange: {x: 0, y: 0}
       useClimateBand: 0
       temperatureRange: {x: -1, y: 1}
       temperatureFalloff: 0.1
       humidityRange: {x: -1, y: 1}
       humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
       specFingerprint: be990c235c79e187
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -628,6 +670,12 @@ MonoBehaviour:
       Living: 0
       Lichen: 0
       Mineral: 0.3
+    useClimateBand: 0
+    temperatureRange: {x: -1, y: 1}
+    temperatureFalloff: 0.1
+    humidityRange: {x: -1, y: 1}
+    humidityFalloff: 0.1
+    airBand: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -661,6 +709,12 @@ MonoBehaviour:
       Living: 0
       Lichen: 0
       Mineral: 1
+    useClimateBand: 0
+    temperatureRange: {x: -1, y: 1}
+    temperatureFalloff: 0.1
+    humidityRange: {x: -1, y: 1}
+    humidityFalloff: 0.1
+    airBand: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -714,11 +768,18 @@ MonoBehaviour:
       sinkRange: {x: 0, y: 0}
       sinkSlopeFactor: 0
       depthRange: {x: 0, y: 0}
+      waters: 0
+      currentRange: {x: 0, y: 0}
       useClimateBand: 0
       temperatureRange: {x: -1, y: 1}
       temperatureFalloff: 0.1
       humidityRange: {x: -1, y: 1}
       humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
       specFingerprint: 28c3021d15b1ee27
       detailNoiseSpread: 2.5
       detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
@@ -753,6 +814,12 @@ MonoBehaviour:
       Living: 0
       Lichen: 0
       Mineral: 0.3
+    useClimateBand: 0
+    temperatureRange: {x: -1, y: 1}
+    temperatureFalloff: 0.1
+    humidityRange: {x: -1, y: 1}
+    humidityFalloff: 0.1
+    airBand: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -787,6 +854,12 @@ MonoBehaviour:
       Living: 0
       Lichen: 0
       Mineral: 0.3
+    useClimateBand: 0
+    temperatureRange: {x: -1, y: 1}
+    temperatureFalloff: 0.1
+    humidityRange: {x: -1, y: 1}
+    humidityFalloff: 0.1
+    airBand: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -821,6 +894,12 @@ MonoBehaviour:
       Living: 0
       Lichen: 0
       Mineral: 1
+    useClimateBand: 0
+    temperatureRange: {x: -1, y: 1}
+    temperatureFalloff: 0.1
+    humidityRange: {x: -1, y: 1}
+    humidityFalloff: 0.1
+    airBand: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -855,6 +934,12 @@ MonoBehaviour:
       Living: 0
       Lichen: 0
       Mineral: 1
+    useClimateBand: 0
+    temperatureRange: {x: -1, y: 1}
+    temperatureFalloff: 0.1
+    humidityRange: {x: -1, y: 1}
+    humidityFalloff: 0.1
+    airBand: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -898,6 +983,12 @@ MonoBehaviour:
       Living: 0
       Lichen: 0
       Mineral: 0.3
+    useClimateBand: 0
+    temperatureRange: {x: -1, y: 1}
+    temperatureFalloff: 0.1
+    humidityRange: {x: -1, y: 1}
+    humidityFalloff: 0.1
+    airBand: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -932,6 +1023,12 @@ MonoBehaviour:
       Living: 0
       Lichen: 0
       Mineral: 1
+    useClimateBand: 0
+    temperatureRange: {x: -1, y: 1}
+    temperatureFalloff: 0.1
+    humidityRange: {x: -1, y: 1}
+    humidityFalloff: 0.1
+    airBand: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -966,6 +1063,12 @@ MonoBehaviour:
       Living: 0
       Lichen: 0
       Mineral: 1
+    useClimateBand: 0
+    temperatureRange: {x: -1, y: 1}
+    temperatureFalloff: 0.1
+    humidityRange: {x: -1, y: 1}
+    humidityFalloff: 0.1
+    airBand: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1000,11 +1103,18 @@ MonoBehaviour:
       Living: 0
       Lichen: 0
       Mineral: 0.3
+    useClimateBand: 0
+    temperatureRange: {x: -1, y: 1}
+    temperatureFalloff: 0.1
+    humidityRange: {x: -1, y: 1}
+    humidityFalloff: 0.1
+    airBand: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
       cobbles: {fileID: 0}
     prefabSpawnRules: []
+  bedTextureLayers: []
   ownRock: Granite
   acceptedRocks: []
   caveShells:
@@ -1031,6 +1141,11 @@ MonoBehaviour:
     Turbidity: 0.35
     Silt: {r: 0.36, g: 0.33, b: 0.24, a: 1}
     Foam: {r: 0.92, g: 0.94, b: 0.95, a: 1}
+  seaLook:
+    Tint: {r: 0.05, g: 0.28, b: 0.36, a: 1}
+    Visibility: 22
+    Murk: 1
+  floatingPlants: []
   habitat: 8192
   seaLife: []
   vines:
@@ -1062,126 +1177,187 @@ MonoBehaviour:
   siteKinds:
   - Kind: 2
     Weight: 0.2
+    NeedsBreathableAir: 1
   - Kind: 3
     Weight: 0.2
+    NeedsBreathableAir: 1
   - Kind: 5
     Weight: 1
+    NeedsBreathableAir: 1
   - Kind: 7
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 8
     Weight: 0.2
+    NeedsBreathableAir: 0
   - Kind: 9
     Weight: 0.2
+    NeedsBreathableAir: 0
   - Kind: 10
     Weight: 0.2
+    NeedsBreathableAir: 0
   - Kind: 11
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 12
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 13
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 14
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 16
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 17
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 18
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 19
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 20
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 21
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 22
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 24
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 25
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 26
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 27
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 44
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 45
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 46
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 48
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 49
     Weight: 0.2
+    NeedsBreathableAir: 1
   - Kind: 50
     Weight: 0.2
+    NeedsBreathableAir: 1
   - Kind: 52
     Weight: 0.2
+    NeedsBreathableAir: 1
   - Kind: 53
     Weight: 0.2
+    NeedsBreathableAir: 0
   - Kind: 54
     Weight: 0.2
+    NeedsBreathableAir: 1
   - Kind: 55
     Weight: 0.2
+    NeedsBreathableAir: 0
   - Kind: 56
     Weight: 0.2
+    NeedsBreathableAir: 0
   - Kind: 57
     Weight: 0.2
+    NeedsBreathableAir: 1
   - Kind: 60
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 61
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 63
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 64
     Weight: 0.2
+    NeedsBreathableAir: 0
   - Kind: 65
     Weight: 0.2
+    NeedsBreathableAir: 0
   - Kind: 66
     Weight: 0.2
+    NeedsBreathableAir: 0
   - Kind: 67
     Weight: 0.2
+    NeedsBreathableAir: 0
   - Kind: 68
     Weight: 0.2
+    NeedsBreathableAir: 0
   - Kind: 69
     Weight: 0.2
+    NeedsBreathableAir: 0
   - Kind: 70
     Weight: 0.2
+    NeedsBreathableAir: 0
   - Kind: 71
     Weight: 0.2
+    NeedsBreathableAir: 0
   - Kind: 72
     Weight: 0.2
+    NeedsBreathableAir: 0
   - Kind: 73
     Weight: 0.2
+    NeedsBreathableAir: 0
   - Kind: 75
     Weight: 0.2
+    NeedsBreathableAir: 1
   - Kind: 87
     Weight: 0.2
+    NeedsBreathableAir: 1
   - Kind: 88
     Weight: 0.2
+    NeedsBreathableAir: 1
   - Kind: 89
     Weight: 0.2
+    NeedsBreathableAir: 1
   - Kind: 90
     Weight: 0.2
+    NeedsBreathableAir: 1
   - Kind: 91
     Weight: 0.2
+    NeedsBreathableAir: 1
   - Kind: 93
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 94
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 95
     Weight: 1
+    NeedsBreathableAir: 0
   - Kind: 96
     Weight: 0.2
+    NeedsBreathableAir: 0
   - Kind: 97
     Weight: 0.2
+    NeedsBreathableAir: 0
   - Kind: 98
     Weight: 0.2
+    NeedsBreathableAir: 0
   - Kind: 99
     Weight: 0.2
+    NeedsBreathableAir: 0
   - Kind: 101
     Weight: 0.2
+    NeedsBreathableAir: 1
   siteVariants:
   - Kind: 77
     Variant: Timber
@@ -1222,6 +1398,9 @@ MonoBehaviour:
   - Kind: 64
     Variant: Earthen
     Weight: 1.5
+  - Kind: 96
+    Variant: Barrow
+    Weight: 1.6
   siteStyles: []
   weathering:
     Finish: 1
@@ -1232,6 +1411,21 @@ MonoBehaviour:
       type: 3}
     Weight: 1
     Surface: 0
+    Riser: 0
+    Rows: 0
+  orchards: []
+  fieldLayout:
+    Bottomland: 0
+    Centuriation: 0
+  abandonedTerraces:
+    Flights: 0
+    Riser: 1
+    SlopeMin: 8
+    SlopeMax: 25
+    Breaks: 0.5
+  channelMargin:
+    DetailLayer: -1
+    Width: 0
   moatWater: 2
   wayLights:
   - Kind: 77
@@ -1265,6 +1459,8 @@ MonoBehaviour:
   - Place: 4
     Light: 5
     Spacing: 0
+  boardwalks: 0
+  linearFeatures: []
   structurePalette:
     Surfaces:
     - Style: 0
@@ -1272,476 +1468,571 @@ MonoBehaviour:
       Material: 1
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 0
       Role: 1
       Material: 1
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 0
       Role: 2
       Material: 2
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 0
       Role: 3
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 0
       Role: 4
       Material: 4
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 0
       Role: 5
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 0
       Role: 6
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 0
       Role: 7
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 0
       Role: 8
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 0
       Role: 9
       Material: 4
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 0
       Role: 10
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 0
       Role: 11
       Material: 3
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 0
       Role: 12
       Material: 8
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 0
       Role: 13
       Material: 3
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 0
       Role: 14
       Material: 11
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 0
       Role: 15
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 0
       Role: 16
       Material: 7
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 0
       Role: 17
       Material: 5
       Tint: {r: 0.86, g: 0.78, b: 0.62, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 0
       Role: 18
       Material: 6
       Tint: {r: 0.62, g: 0.14, b: 0.11, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 1
       Role: 0
       Material: 3
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 1
       Role: 1
       Material: 1
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 1
       Role: 2
       Material: 2
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 1
       Role: 3
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 1
       Role: 4
       Material: 4
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 1
       Role: 5
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 1
       Role: 6
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 1
       Role: 7
       Material: 3
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 1
       Role: 8
       Material: 3
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 1
       Role: 9
       Material: 3
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 1
       Role: 10
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 1
       Role: 11
       Material: 3
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 1
       Role: 12
       Material: 8
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 1
       Role: 13
       Material: 3
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 1
       Role: 14
       Material: 11
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 1
       Role: 15
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 1
       Role: 16
       Material: 7
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 1
       Role: 17
       Material: 5
       Tint: {r: 0.86, g: 0.78, b: 0.62, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 1
       Role: 18
       Material: 6
       Tint: {r: 0.62, g: 0.14, b: 0.11, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 2
       Role: 0
       Material: 5
       Tint: {r: 0.86, g: 0.78, b: 0.62, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 2
       Role: 1
       Material: 5
       Tint: {r: 0.86, g: 0.78, b: 0.62, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 2
       Role: 2
       Material: 5
       Tint: {r: 0.86, g: 0.78, b: 0.62, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 2
       Role: 3
       Material: 5
       Tint: {r: 0.86, g: 0.78, b: 0.62, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 2
       Role: 4
       Material: 8
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 2
       Role: 5
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 2
       Role: 6
       Material: 10
       Tint: {r: 0.3, g: 0.29, b: 0.28, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 2
       Role: 7
       Material: 8
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 2
       Role: 8
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 2
       Role: 9
       Material: 8
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 2
       Role: 10
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 2
       Role: 11
       Material: 3
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 2
       Role: 12
       Material: 8
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 2
       Role: 13
       Material: 3
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 2
       Role: 14
       Material: 11
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 2
       Role: 15
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 2
       Role: 16
       Material: 7
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 2
       Role: 17
       Material: 5
       Tint: {r: 0.86, g: 0.78, b: 0.62, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 2
       Role: 18
       Material: 6
       Tint: {r: 0.62, g: 0.14, b: 0.11, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 3
       Role: 0
       Material: 7
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 3
       Role: 1
       Material: 7
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 3
       Role: 2
       Material: 7
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 3
       Role: 3
       Material: 7
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 3
       Role: 4
       Material: 3
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 3
       Role: 5
       Material: 7
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 3
       Role: 6
       Material: 7
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 3
       Role: 7
       Material: 3
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 3
       Role: 8
       Material: 7
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 3
       Role: 9
       Material: 3
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 3
       Role: 10
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 3
       Role: 11
       Material: 3
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 3
       Role: 12
       Material: 8
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 3
       Role: 13
       Material: 3
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 3
       Role: 14
       Material: 11
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 3
       Role: 15
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 3
       Role: 16
       Material: 7
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 3
       Role: 17
       Material: 5
       Tint: {r: 0.86, g: 0.78, b: 0.62, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 3
       Role: 18
       Material: 6
       Tint: {r: 0.62, g: 0.14, b: 0.11, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 4
       Role: 0
       Material: 8
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 4
       Role: 1
       Material: 8
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 4
       Role: 2
       Material: 8
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 4
       Role: 3
       Material: 8
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 4
       Role: 4
       Material: 4
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 4
       Role: 5
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 4
       Role: 6
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 4
       Role: 7
       Material: 8
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 4
       Role: 8
       Material: 8
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 4
       Role: 9
       Material: 8
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 4
       Role: 10
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 4
       Role: 11
       Material: 3
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 4
       Role: 12
       Material: 8
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 4
       Role: 13
       Material: 3
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 4
       Role: 14
       Material: 11
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 4
       Role: 15
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 4
       Role: 16
       Material: 7
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 4
       Role: 17
       Material: 5
       Tint: {r: 0.86, g: 0.78, b: 0.62, a: 1}
       Surface: 
+      Pitch: 0
     - Style: 4
       Role: 18
       Material: 6
       Tint: {r: 0.62, g: 0.14, b: 0.11, a: 1}
       Surface: 
+      Pitch: 0
   authoredMarks:
   - Field: ownRock
     Fingerprint: Granite
@@ -1839,156 +2130,8 @@ MonoBehaviour:
     Fingerprint: Frostpine Elder
   - Field: gatheringResources
     Fingerprint: <entries>
-  - Field: siteKinds/AncientRoad
-    Fingerprint: "AncientRoad\xD70.2"
-  - Field: siteKinds/BanditCamp
-    Fingerprint: "BanditCamp\xD70.2"
-  - Field: siteKinds/Barrow
-    Fingerprint: "Barrow\xD70.2"
-  - Field: siteKinds/Battlefield
-    Fingerprint: "Battlefield\xD70.2"
-  - Field: siteKinds/Bay
-    Fingerprint: "Bay\xD71"
-  - Field: siteKinds/BossLair
-    Fingerprint: "BossLair\xD70.2"
-  - Field: siteKinds/Bridge
-    Fingerprint: "Bridge\xD71"
-  - Field: siteKinds/Butte
-    Fingerprint: "Butte\xD71"
-  - Field: siteKinds/Camp
-    Fingerprint: "Camp\xD70.2"
-  - Field: siteKinds/Cave
-    Fingerprint: "Cave\xD70.2"
-  - Field: siteKinds/Crypt
-    Fingerprint: "Crypt\xD70.2"
-  - Field: siteKinds/CrystalFormation
-    Fingerprint: "CrystalFormation\xD70.2"
-  - Field: siteKinds/Delta
-    Fingerprint: "Delta\xD71"
-  - Field: siteKinds/DungeonEntrance
-    Fingerprint: "DungeonEntrance\xD70.2"
-  - Field: siteKinds/FallenStar
-    Fingerprint: "FallenStar\xD71"
-  - Field: siteKinds/FishingCamp
-    Fingerprint: "FishingCamp\xD70.2"
-  - Field: siteKinds/Gorge
-    Fingerprint: "Gorge\xD71"
-  - Field: siteKinds/Graveyard
-    Fingerprint: "Graveyard\xD70.2"
-  - Field: siteKinds/Grotto
-    Fingerprint: "Grotto\xD71"
-  - Field: siteKinds/Headland
-    Fingerprint: "Headland\xD71"
-  - Field: siteKinds/HerbGrove
-    Fingerprint: "HerbGrove\xD70.2"
-  - Field: siteKinds/Hermitage
-    Fingerprint: "Hermitage\xD70.2"
-  - Field: siteKinds/HuntingLodge
-    Fingerprint: "HuntingLodge\xD70.2"
-  - Field: siteKinds/IceCave
-    Fingerprint: "IceCave\xD71"
-  - Field: siteKinds/Island
-    Fingerprint: "Island\xD71"
-  - Field: siteKinds/Lake
-    Fingerprint: "Lake\xD71"
-  - Field: siteKinds/LeyNexus
-    Fingerprint: "LeyNexus\xD71"
-  - Field: siteKinds/Lighthouse
-    Fingerprint: "Lighthouse\xD70.2"
-  - Field: siteKinds/Mesa
-    Fingerprint: "Mesa\xD71"
-  - Field: siteKinds/Mine
-    Fingerprint: "Mine\xD70.2"
-  - Field: siteKinds/MonsterDen
-    Fingerprint: "MonsterDen\xD70.2"
-  - Field: siteKinds/Monument
-    Fingerprint: "Monument\xD70.2"
-  - Field: siteKinds/NaturalArch
-    Fingerprint: "NaturalArch\xD71"
-  - Field: siteKinds/Nest
-    Fingerprint: "Nest\xD70.2"
-  - Field: siteKinds/Obelisk
-    Fingerprint: "Obelisk\xD70.2"
-  - Field: siteKinds/OreVein
-    Fingerprint: "OreVein\xD70.2"
-  - Field: siteKinds/Ossuary
-    Fingerprint: "Ossuary\xD70.2"
-  - Field: siteKinds/Overhang
-    Fingerprint: "Overhang\xD71"
-  - Field: siteKinds/Pass
-    Fingerprint: "Pass\xD71"
-  - Field: siteKinds/Peak
-    Fingerprint: "Peak\xD71"
-  - Field: siteKinds/PirateCove
-    Fingerprint: "PirateCove\xD70.2"
-  - Field: siteKinds/Portal
-    Fingerprint: "Portal\xD71"
-  - Field: siteKinds/Quarry
-    Fingerprint: "Quarry\xD70.2"
-  - Field: siteKinds/Rapids
-    Fingerprint: "Rapids\xD71"
-  - Field: siteKinds/RitualSite
-    Fingerprint: "RitualSite\xD70.2"
-  - Field: siteKinds/River
-    Fingerprint: "River\xD71"
-  - Field: siteKinds/RiverMouth
-    Fingerprint: "RiverMouth\xD71"
-  - Field: siteKinds/RuinedTower
-    Fingerprint: "RuinedTower\xD70.2"
-  - Field: siteKinds/Ruins
-    Fingerprint: "Ruins\xD70.2"
-  - Field: siteKinds/SeaCave
-    Fingerprint: "SeaCave\xD71"
-  - Field: siteKinds/Shrine
-    Fingerprint: "Shrine\xD70.2"
-  - Field: siteKinds/SmugglersCove
-    Fingerprint: "SmugglersCove\xD70.2"
-  - Field: siteKinds/Spring
-    Fingerprint: "Spring\xD71"
-  - Field: siteKinds/Statue
-    Fingerprint: "Statue\xD70.2"
-  - Field: siteKinds/StoneCircle
-    Fingerprint: "StoneCircle\xD70.2"
-  - Field: siteKinds/SunkenCity
-    Fingerprint: "SunkenCity\xD71"
-  - Field: siteKinds/SunkenRuins
-    Fingerprint: "SunkenRuins\xD71"
-  - Field: siteKinds/SunkenShip
-    Fingerprint: "SunkenShip\xD71"
-  - Field: siteKinds/Temple
-    Fingerprint: "Temple\xD70.2"
-  - Field: siteKinds/Waterfall
-    Fingerprint: "Waterfall\xD71"
-  - Field: siteKinds/Wreck
-    Fingerprint: "Wreck\xD70.2"
   - Field: siteKinds
     Fingerprint: <entries>
-  - Field: siteVariants/Camp/yurts
-    Fingerprint: "Camp/Yurts\xD72"
-  - Field: siteVariants/Capital/timber
-    Fingerprint: "Capital/Timber\xD71"
-  - Field: siteVariants/Castle/highland
-    Fingerprint: "Castle/Highland\xD71.5"
-  - Field: siteVariants/City/timber
-    Fingerprint: "City/Timber\xD71"
-  - Field: siteVariants/FishingCamp/huts
-    Fingerprint: "FishingCamp/Huts\xD71.5"
-  - Field: siteVariants/Graveyard/earthen
-    Fingerprint: "Graveyard/Earthen\xD71.5"
-  - Field: siteVariants/HuntingLodge/hide lodge
-    Fingerprint: "HuntingLodge/Hide Lodge\xD72"
-  - Field: siteVariants/Keep/palisade
-    Fingerprint: "Keep/Palisade\xD71.5"
-  - Field: siteVariants/Monastery/timber
-    Fingerprint: "Monastery/Timber\xD71.5"
-  - Field: siteVariants/Town/timber
-    Fingerprint: "Town/Timber\xD70.5"
-  - Field: siteVariants/Village/longhouse
-    Fingerprint: "Village/Longhouse\xD72.5"
-  - Field: siteVariants/Village/timber
-    Fingerprint: "Village/Timber\xD70.5"
-  - Field: siteVariants/Village/yurts
-    Fingerprint: "Village/Yurts\xD71"
   - Field: siteVariants
     Fingerprint: <entries>
   - Field: siteStyles
@@ -2216,4 +2359,172 @@ MonoBehaviour:
   - Field: caveLights/Route
     Fingerprint: Route=LanternStand@0
   - Field: caveLights
+    Fingerprint: <entries>
+  - Field: seaLook
+    Fingerprint: 0.05|0.28|0.36|1|22|1|
+  - Field: floatingPlants
+    Fingerprint: <entries>
+  - Field: siteKinds/AncientRoad
+    Fingerprint: "AncientRoad\xD70.2"
+  - Field: siteKinds/BanditCamp
+    Fingerprint: "BanditCamp\xD70.2\xD7air"
+  - Field: siteKinds/Barrow
+    Fingerprint: "Barrow\xD70.2"
+  - Field: siteKinds/Battlefield
+    Fingerprint: "Battlefield\xD70.2"
+  - Field: siteKinds/Bay
+    Fingerprint: "Bay\xD71"
+  - Field: siteKinds/BossLair
+    Fingerprint: "BossLair\xD70.2"
+  - Field: siteKinds/Bridge
+    Fingerprint: "Bridge\xD71\xD7air"
+  - Field: siteKinds/Butte
+    Fingerprint: "Butte\xD71"
+  - Field: siteKinds/Camp
+    Fingerprint: "Camp\xD70.2\xD7air"
+  - Field: siteKinds/Cave
+    Fingerprint: "Cave\xD70.2"
+  - Field: siteKinds/Crypt
+    Fingerprint: "Crypt\xD70.2"
+  - Field: siteKinds/CrystalFormation
+    Fingerprint: "CrystalFormation\xD70.2"
+  - Field: siteKinds/Delta
+    Fingerprint: "Delta\xD71"
+  - Field: siteKinds/DungeonEntrance
+    Fingerprint: "DungeonEntrance\xD70.2"
+  - Field: siteKinds/FallenStar
+    Fingerprint: "FallenStar\xD71"
+  - Field: siteKinds/FishingCamp
+    Fingerprint: "FishingCamp\xD70.2\xD7air"
+  - Field: siteKinds/Gorge
+    Fingerprint: "Gorge\xD71"
+  - Field: siteKinds/Graveyard
+    Fingerprint: "Graveyard\xD70.2"
+  - Field: siteKinds/Grotto
+    Fingerprint: "Grotto\xD71"
+  - Field: siteKinds/Headland
+    Fingerprint: "Headland\xD71"
+  - Field: siteKinds/HerbGrove
+    Fingerprint: "HerbGrove\xD70.2\xD7air"
+  - Field: siteKinds/Hermitage
+    Fingerprint: "Hermitage\xD70.2\xD7air"
+  - Field: siteKinds/HuntingLodge
+    Fingerprint: "HuntingLodge\xD70.2\xD7air"
+  - Field: siteKinds/IceCave
+    Fingerprint: "IceCave\xD71"
+  - Field: siteKinds/Island
+    Fingerprint: "Island\xD71"
+  - Field: siteKinds/Lake
+    Fingerprint: "Lake\xD71"
+  - Field: siteKinds/LeyNexus
+    Fingerprint: "LeyNexus\xD71"
+  - Field: siteKinds/Lighthouse
+    Fingerprint: "Lighthouse\xD70.2\xD7air"
+  - Field: siteKinds/Mesa
+    Fingerprint: "Mesa\xD71"
+  - Field: siteKinds/Mine
+    Fingerprint: "Mine\xD70.2\xD7air"
+  - Field: siteKinds/MonsterDen
+    Fingerprint: "MonsterDen\xD70.2"
+  - Field: siteKinds/Monument
+    Fingerprint: "Monument\xD70.2"
+  - Field: siteKinds/NaturalArch
+    Fingerprint: "NaturalArch\xD71"
+  - Field: siteKinds/Nest
+    Fingerprint: "Nest\xD70.2\xD7air"
+  - Field: siteKinds/Obelisk
+    Fingerprint: "Obelisk\xD70.2"
+  - Field: siteKinds/OreVein
+    Fingerprint: "OreVein\xD70.2"
+  - Field: siteKinds/Ossuary
+    Fingerprint: "Ossuary\xD70.2"
+  - Field: siteKinds/Overhang
+    Fingerprint: "Overhang\xD71"
+  - Field: siteKinds/Pass
+    Fingerprint: "Pass\xD71"
+  - Field: siteKinds/Peak
+    Fingerprint: "Peak\xD71"
+  - Field: siteKinds/PirateCove
+    Fingerprint: "PirateCove\xD70.2\xD7air"
+  - Field: siteKinds/Portal
+    Fingerprint: "Portal\xD71"
+  - Field: siteKinds/Quarry
+    Fingerprint: "Quarry\xD70.2\xD7air"
+  - Field: siteKinds/Rapids
+    Fingerprint: "Rapids\xD71"
+  - Field: siteKinds/RitualSite
+    Fingerprint: "RitualSite\xD70.2"
+  - Field: siteKinds/River
+    Fingerprint: "River\xD71"
+  - Field: siteKinds/RiverMouth
+    Fingerprint: "RiverMouth\xD71"
+  - Field: siteKinds/RuinedTower
+    Fingerprint: "RuinedTower\xD70.2"
+  - Field: siteKinds/Ruins
+    Fingerprint: "Ruins\xD70.2"
+  - Field: siteKinds/SeaCave
+    Fingerprint: "SeaCave\xD71"
+  - Field: siteKinds/Shrine
+    Fingerprint: "Shrine\xD70.2\xD7air"
+  - Field: siteKinds/SmugglersCove
+    Fingerprint: "SmugglersCove\xD70.2\xD7air"
+  - Field: siteKinds/Spring
+    Fingerprint: "Spring\xD71"
+  - Field: siteKinds/Statue
+    Fingerprint: "Statue\xD70.2"
+  - Field: siteKinds/StoneCircle
+    Fingerprint: "StoneCircle\xD70.2"
+  - Field: siteKinds/SunkenCity
+    Fingerprint: "SunkenCity\xD71"
+  - Field: siteKinds/SunkenRuins
+    Fingerprint: "SunkenRuins\xD71"
+  - Field: siteKinds/SunkenShip
+    Fingerprint: "SunkenShip\xD71"
+  - Field: siteKinds/Temple
+    Fingerprint: "Temple\xD70.2\xD7air"
+  - Field: siteKinds/Waterfall
+    Fingerprint: "Waterfall\xD71"
+  - Field: siteKinds/Wreck
+    Fingerprint: "Wreck\xD70.2"
+  - Field: siteVariants/Camp/yurts
+    Fingerprint: "Camp/Yurts\xD72"
+  - Field: siteVariants/Capital/timber
+    Fingerprint: "Capital/Timber\xD71"
+  - Field: siteVariants/Castle/highland
+    Fingerprint: "Castle/Highland\xD71.5"
+  - Field: siteVariants/City/timber
+    Fingerprint: "City/Timber\xD71"
+  - Field: siteVariants/DungeonEntrance/barrow
+    Fingerprint: "DungeonEntrance/Barrow\xD71.6"
+  - Field: siteVariants/FishingCamp/huts
+    Fingerprint: "FishingCamp/Huts\xD71.5"
+  - Field: siteVariants/Graveyard/earthen
+    Fingerprint: "Graveyard/Earthen\xD71.5"
+  - Field: siteVariants/HuntingLodge/hide lodge
+    Fingerprint: "HuntingLodge/Hide Lodge\xD72"
+  - Field: siteVariants/Keep/palisade
+    Fingerprint: "Keep/Palisade\xD71.5"
+  - Field: siteVariants/Monastery/timber
+    Fingerprint: "Monastery/Timber\xD71.5"
+  - Field: siteVariants/Town/timber
+    Fingerprint: "Town/Timber\xD70.5"
+  - Field: siteVariants/Village/longhouse
+    Fingerprint: "Village/Longhouse\xD72.5"
+  - Field: siteVariants/Village/timber
+    Fingerprint: "Village/Timber\xD70.5"
+  - Field: siteVariants/Village/yurts
+    Fingerprint: "Village/Yurts\xD71"
+  - Field: boardwalks
+    Fingerprint: None
+  - Field: linearFeatures
+    Fingerprint: <entries>
+  - Field: orchards
+    Fingerprint: <entries>
+  - Field: fieldLayout
+    Fingerprint: 0|0
+  - Field: abandonedTerraces
+    Fingerprint: 0|Drystone|8|25|0.5
+  - Field: channelMargin
+    Fingerprint: -1|0
+  - Field: landforms
     Fingerprint: <entries>

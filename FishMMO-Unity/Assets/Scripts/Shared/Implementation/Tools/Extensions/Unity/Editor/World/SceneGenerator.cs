@@ -54,6 +54,8 @@ namespace FishMMO.Shared.WorldDesign
 		public int BackdropVertices;
 		/// <summary>Which biome lies where, baked for the runtime. Null when no biome fitted the scene.</summary>
 		public SceneBiomeMap BiomeMap;
+		/// <summary>Where the scene keeps the rain off (<see cref="SceneShelterMap"/>). Null when nothing in it does.</summary>
+		public SceneShelterMap Shelter;
 		/// <summary>The biomes the scene resolved and how much of it each covers, e.g. "Forest 62%, Alpine 38%".</summary>
 		public string BiomeSummary;
 		/// <summary>Things a person should know about the ground that did not stop generation: missing art, dropped layers.</summary>
@@ -349,6 +351,7 @@ namespace FishMMO.Shared.WorldDesign
 				float[] islandRolled = null;
 				SceneHeightField ground;
 				SceneErosionReport erosion;
+				SceneLandformRecord landforms = null;
 				SceneWater water;
 				if (cloud)
 				{
@@ -367,7 +370,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				else
 				{
-					ground = SceneGround.Shape(request, plan, SolarSystemProfile.Resolve(request.Body), result.Notes, out erosion, out water);
+					ground = SceneGround.Shape(request, plan, SolarSystemProfile.Resolve(request.Body), result.Notes, out erosion, out water, out landforms);
 				}
 				poi.Erosion = erosion;
 				poi.Field = ground;
@@ -450,6 +453,11 @@ namespace FishMMO.Shared.WorldDesign
 					result.Notes.Add($"Cloud world: {holed:N0} of {(ground.Width - 1) * (ground.Depth - 1):N0} cells holed to open sky.");
 				}
 				clock.Lap("Terrain tiles");
+				if (landforms != null)
+				{
+					// The landforms carved into the ground (2026-10-18, I2g), kept with the scene: the paint below and every repaint read them.
+					SceneLandforms.Store(scene, landforms);
+				}
 
 				/* Canyon walls where the plateaus' risers stand steep: meshes with their faces stood up
 				 * and their beds jutting, the terrain holed under them. Before the biomes are painted,
@@ -509,6 +517,10 @@ namespace FishMMO.Shared.WorldDesign
 					// And the flow down every river, solved round its boulders, kept in the biome map for clients.
 					RiverFlowBake.Bake(hydrology, result.BiomeMap, result.Notes);
 				}
+				/* The plants floating on the still water (2026-10-18, I2i), on the surfaces just measured and saved: each body's its
+				 * shore biome's (FloatingPlants). None in any biome by default, when this only clears an earlier cut's. */
+				FloatingPlants.Lay(scene, water, hydrologyPath != null ? AssetDatabase.LoadAssetAtPath<SceneHydrology>(hydrologyPath) : null, result.BiomeMap,
+					tileGround, poi.DetailExcludes, SceneSeed(request), result.Notes);
 				clock.Lap("Water assets and river flow");
 				// The sites, built on the finished ground: the POI asset, their objects and their props (in the NavMesh below).
 				poi.Place(scene, plan, terrains, water, result.Notes, result.Wrote);
@@ -522,7 +534,8 @@ namespace FishMMO.Shared.WorldDesign
 					CloudWorldCut.RimProfile[] rims = CloudWorldCut.Undersides(scene, request, islands, plan,
 						$"{terrainFolder}/{WorldEditorAssets.Sanitize(request.SceneName)} Island Undersides.asset",
 						tileGround, PointOfInterestTerrain.HoleQuery(terrains, plan), CloudIslands.Unrolled(ground, islandRolled), result.Notes, result.Wrote);
-					List<SceneCloudWorld.Crossing> crossings = CloudWorldCut.Bridges(scene, islands, rims, tileGround, SceneSeed(request), result.Notes);
+					List<SceneCloudWorld.Crossing> crossings = CloudWorldCut.Bridges(scene, islands, rims, tileGround, SceneSeed(request), result.Notes,
+						request.Body != null ? request.Body.CloudWorldStructures : null);
 					SceneCloudWorld cloudWorld = CloudWorldCut.Record(scene, islands, tileGround, result.Notes, crossings);
 					CloudWorldCut.SkyTraffic(scene, cloudWorld, request, plan, tileGround, result.Notes);
 					clock.Lap("Cloud world: undersides, bridges, sky traffic");
@@ -564,6 +577,15 @@ namespace FishMMO.Shared.WorldDesign
 				BakePropsAndNavMesh(scene, plan, terrains, water, result.Notes);
 				CheckRivers("the props and the NavMesh", tileGround);
 				clock.Lap("Props, collision and NavMesh");
+				// From the collision just baked: what fires, and later characters, stay dry under.
+				string shelterPath = $"{terrainFolder}/{WorldEditorAssets.Sanitize(request.SceneName)} Shelter.asset";
+				result.Shelter = SceneShelterBaker.Bake(scene, (east, north) => GroundAltitude(terrains, plan, east, north),
+					PointOfInterestTerrain.HoleQuery(terrains, plan), shelterPath, result.Notes);
+				if (result.Shelter != null)
+				{
+					result.Wrote.Add(shelterPath);
+				}
+				clock.Lap("Shelter");
 
 				// The same components the audit adds to a scene somebody forgot to finish.
 				bool wantsSky = request.Layer == null || !request.Layer.Underground;
@@ -1024,8 +1046,9 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			BiomeTerrainLayers.ClearCache();
+			// The world's air picks between a biome's air-banded grounds (decision 44, 2026-10-18); nothing banded, nothing changes.
 			SceneTerrainPalette palette = SceneTerrainPalette.Build(field, scope.PaletteResolver(BiomeTerrainLayers.Resolve), BiomeTerrainLayers.Placeholder,
-				water != null ? RiverSediment() : null, poi != null && poi.HasPaths ? PathSurfaces() : null);
+				water != null ? RiverSediment() : null, poi != null && poi.HasPaths ? PathSurfaces() : null, WorldAir(system, request.Body));
 			if (poi != null)
 			{
 				// The arrays' slices the path overlay samples its earth, road and cobbles from, and each ground layer's own biome's.
@@ -1046,6 +1069,9 @@ namespace FishMMO.Shared.WorldDesign
 
 			PlanetClimateField climate = PlanetClimateField.For(system, request.Body);
 			float verticalScale = request.VerticalScale > 1e-6f ? request.VerticalScale : 1f;
+			/* The scene's placement climate, the field the biomes were chosen from: the splat reads it for the ground layers that
+			 * carry a climate band (and the climate variants' ground overrides), the scatter below for the rules that do. */
+			ScenePlacementClimate placementClimate = ScenePlacementClimate.For(system, request.Body, request.Footprint, request.ResolvedRadiusKm, true);
 			var options = new BiomeSplatOptions
 			{
 				// Planet-relative, so a layer's height band means the same height in every scene.
@@ -1055,8 +1081,15 @@ namespace FishMMO.Shared.WorldDesign
 				InlandWaterSurface = inland,
 				BarAt = water != null ? water.BarAt : (Func<float, float, Vector2>)null,
 				RockAt = FallRock(water),
+				ClimateAt = ClimateOf(placementClimate),
+				// Which of the bed is a river's, and its current: the riverbed under rivers, the lakebed under lakes (decision 35 (h)).
+				RiverAt = RiverBed(water),
 			};
 			BiomeSplatReport splat = BiomeSplatPainter.Paint(tiles, palette, field, options);
+			// The wet margins along the channels the scene's last placing stored (2026-10-18, I2j-b, decision 38): nothing where it stores none.
+			ChannelMarginPaint.Paint(scene, tiles, palette, result.Notes);
+			// The ground layers the scene's sculpted landforms paint over their parts (2026-10-18, I2g): nothing where it stores none.
+			LandformPaint.Paint(scene, tiles, palette, field, result.Notes);
 			stages.Lap("palette and splat");
 
 			/* The ground's renderer: the array terrain material on every tile and the binder that
@@ -1076,10 +1109,9 @@ namespace FishMMO.Shared.WorldDesign
 			 * placement climate, the field the biomes were chosen from, gates the rules that carry a
 			 * climate band (a wide biome's warm and cold sets: palms on a tropical beach only, larch
 			 * on a cold slope only); without it every band passes. */
-			ScenePlacementClimate placementClimate = ScenePlacementClimate.For(system, request.Body, request.Footprint, request.ResolvedRadiusKm, true);
 			TerrainScatterReport scatter = TerrainScatter.Scatter(tiles, palette, field, options.Seed,
 				new TerrainScatterOptions { NormalizedHeight = options.NormalizedHeight, Prefabs = scope.ScatterPrefabs, HasLiquidWater = options.HasLiquidWater,
-					InlandWaterSurface = inland, Excluded = keptOut, DetailExcluded = detailKeptOut }, placementClimate);
+					InlandWaterSurface = inland, RiverAt = options.RiverAt, Excluded = keptOut, DetailExcluded = detailKeptOut }, placementClimate);
 			result.Notes.AddRange(scatter.InvalidPrefabs);
 			result.Notes.AddRange(scatter.BudgetCaps);
 			result.Notes.AddRange(scatter.Warnings);
@@ -1339,7 +1371,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// The grounds a biome's ways are surfaced with: its template's Small Path layer (footpaths, trails, cart tracks),
 		/// Road layer and Cobbles layer (<see cref="BiomeTemplateArt.Grounds"/>), which the biome art authoring fills with
 		/// the path grounds the spec names for it: loam through grass, a littered track through forest, packed sand through
-		/// desert, trampled snow over ice.
+		/// desert, trampled snow over ice. Then the ways its ground layers carry of their own (<see cref="BiomeTemplateArt.Grounds.LayerWays"/>,
+		/// 2026-10-16: a Taiga bog layer's corduroy road), which the palette's path maps prefer on their ground.
 		/// </summary>
 		internal static Func<BiomeTemplate, IReadOnlyList<(string slot, TerrainTextureLayer source)>> PathSurfaces()
 		{
@@ -1362,6 +1395,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					surfaces.Add((SceneTerrainPalette.SlotPathStone, stone));
 				}
+				surfaces.AddRange(grounds.LayerWays(biome));
 				return surfaces;
 			};
 		}
@@ -1523,6 +1557,23 @@ namespace FishMMO.Shared.WorldDesign
 			return falls.Count > 0 ? falls.RockAt : (Func<float, float, float, float>)null;
 		}
 
+		/// <summary>
+		/// How much of the water at (x, z) is a river's, its current, and whether its mouth is on the sea, for the beds
+		/// (<see cref="SceneWater.RiverBedAt"/>); a grid river cell no river's line answers for is wholly a river's. Null with no rivers.
+		/// </summary>
+		private static Func<float, float, Vector3> RiverBed(SceneWater water)
+		{
+			if (water == null || water.Rivers.Count == 0)
+			{
+				return null;
+			}
+			return (x, z) =>
+			{
+				Vector3 river = water.RiverBedAt(x, z);
+				return river == Vector3.zero && water.KindAt(x, z) == WaterKind.River ? new Vector3(1f, 0f, 0f) : river;
+			};
+		}
+
 		private static Func<float, float, float> InlandSurface(SceneWater water)
 		{
 			return (x, z) =>
@@ -1654,16 +1705,46 @@ namespace FishMMO.Shared.WorldDesign
 
 			if (sceneLayers != null && sceneLayers.Count > 0 && resolveSlot != null && horizon.Biomes.Count > 0)
 			{
-				SceneTerrainPalette palette = SceneTerrainPalette.Build(horizon, resolveSlot, BiomeTerrainLayers.Placeholder);
+				SceneTerrainPalette palette = SceneTerrainPalette.Build(horizon, resolveSlot, BiomeTerrainLayers.Placeholder, worldAir: WorldAir(system, request.Body));
 				var options = new BiomeSplatOptions
 				{
 					NormalizedHeight = (x, y, z) => climate.HeightOfAltitude(y / verticalScale),
 					HasLiquidWater = climate.Conditions.HasLiquidWater,
 					Seed = SceneSeed(request),
+					// The same climate the scene's own ground is weighed with, so a climate-banded layer carries on past the edge.
+					ClimateAt = palette.NeedsClimate ? ClimateOf(ScenePlacementClimate.For(system, request.Body, request.Footprint, request.ResolvedRadiusKm, true)) : null,
 				};
 				weigher = HorizonWeigher(palette, horizon, options, sceneLayers);
 			}
 			return (east, north, altitude, steepness) => colours.At(east, north, steepness, climate.HeightOfAltitude(altitude / verticalScale));
+		}
+
+		/// <summary>
+		/// The air of the world a scene is cut on, as the ground layers' air bands read it (TerrainTextureLayer.airBand, decision 44):
+		/// its body's (BiomeWorldConditions.For, the conditions its biomes were chosen by); the home world's for no body.
+		/// </summary>
+		internal static BiomeAtmosphereRequirement WorldAir(SolarSystemProfile system, WorldBody body)
+		{
+			return BiomeAir.MaskOf(BiomeWorldConditions.For(system, body).Atmosphere);
+		}
+
+		/// <summary>
+		/// The splat painter's climate (<see cref="BiomeSplatOptions.ClimateAt"/>) from a scene's placement climate: the mean
+		/// annual temperature and the humidity at a world point's true place on its globe and at its true altitude
+		/// (<see cref="ScenePlacementClimate.SampleAt"/>), what climate-banded spawn rules read. Null for a scene not cut from a
+		/// globe (no placement climate at every point), when every climate band passes.
+		/// </summary>
+		internal static Func<float, float, float, Vector2> ClimateOf(ScenePlacementClimate climate)
+		{
+			if (climate == null || !climate.Generated)
+			{
+				return null;
+			}
+			return (x, y, z) =>
+			{
+				ClimateSample sample = climate.SampleAt(new Vector3(x, y, z), out _);
+				return new Vector2(sample.Temperature, sample.Humidity);
+			};
 		}
 
 		/// <summary>The horizon's weights folded onto the scene's layers (see <see cref="HorizonShading"/>).</summary>
@@ -1899,6 +1980,7 @@ namespace FishMMO.Shared.WorldDesign
 				Erosion = erosion,
 				ErosionStrength = entry.ErosionStrength,
 				PointsOfInterest = entry.PointsOfInterest,
+				BiomeOverrides = SceneBiomeOverrides.Of(entry),
 				ReplaceExisting = true,
 			});
 		}
@@ -2019,6 +2101,14 @@ namespace FishMMO.Shared.WorldDesign
 			if (entry.BiomeMap == null && result.BiomeMap != null)
 			{
 				entry.BiomeMap = result.BiomeMap;
+			}
+			// Always the cut's: shelter is the scene's own geometry, never a decision to keep.
+			entry.Shelter = result.Shelter;
+			/* The overrides it was cut with, so a re-cut or a repaint paints the same biomes. Loaded fresh: see
+			 * SceneBiomeOverrides. A request without any leaves the entry's alone (its inert rows included). */
+			if (request.BiomeOverrides != null)
+			{
+				entry.BiomeOverrides = request.BiomeOverrides.ToEntries();
 			}
 			// Placed, because the rectangle IS the placement. Climate and client cap keep their
 			// defaults: they are overrides, and empty means "whatever my body and my layer say".

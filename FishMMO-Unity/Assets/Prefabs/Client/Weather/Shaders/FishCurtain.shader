@@ -1,5 +1,5 @@
-// What a distant storm drops, and the dust a storm's outflow lifts: a volume under a storm cell,
-// marched through a box round the cell's footprint, for the nearest cells beyond the particle field.
+// What a storm drops, and the dust a storm's outflow lifts: a volume under a storm cell, marched
+// through a box round the cell's footprint, for the nearest cells and the one the camera stands in.
 //
 // It was an open cylinder 1300 m tall with streaks scrolled round its wall, the same for every storm
 // whatever its shape, standing up from the camera's own height into nothing. Every storm read as a
@@ -15,6 +15,11 @@
 // outside and inside alike, and every fragment is pinned to the far plane: a storm is often further
 // off than the camera's far clip, and a box cut off there would vanish from the sky. The world in
 // front of it stops the march at the scene's depth.
+//
+// From inside, the march starts at the eye. In front of a surface it draws only what the storm holds
+// beyond the rain at the camera, which the pipeline's distance fog already lays there; over the sky,
+// which that fog never touches, it draws all of it. Left to the fog and the particle field alone, a
+// storm the camera stood in was clear to the horizon.
 //
 // What falls from cloud is lit as the white, lossless scatterer water is, by the day round the storm
 // (the light the sky gives the storm's own cloud), and seen through the same air as that cloud. Lit by
@@ -61,7 +66,7 @@ Shader "FishMMO/Weather/Curtain"
             float4 _CurtainAmount;  // x what falls at its heart now (precipitation × envelope × peak), y water's share of the extinction (rain + 5 snow + ½ hail), z dust's (0.03 ash + 0.04 sand), w forward scatter g
             float4 _CurtainColor;   // rgb the colour of what falls, in this air
             float4 _CurtainBox;     // xy the box's middle (world x/z), zw its half-sizes along the facing and across it (m)
-            float4 _CurtainMarch;   // x strides, y the nearest the march starts (m from the camera), z 1 with a noise volume bound, w the shape's own size (m)
+            float4 _CurtainMarch;   // x strides, y unused, z 1 with a noise volume bound, w the shape's own size (m)
             float4 _CurtainStorm;   // x 1 when it falls from a storm's own cloud, which the weather map lays out: it falls only under that cloud, and is lit by it; y 1 when the sky has published the open day's light (SkySystem.CloudsReady)
             TEXTURE3D(_CurtainNoise);
             SAMPLER(sampler_CurtainNoise);
@@ -76,6 +81,9 @@ Shader "FishMMO/Weather/Curtain"
             float4 _FishCloudGround;        // w the open ground's albedo (CloudClimate.GroundAlbedo)
             float4 _FishCloudAirExtinction; // xyz the air's molecules' extinction at sea level (1/m, red, green, blue), w their scale height (m)
             float4 _FishCloudAerosol;       // x the haze's extinction at the ground (1/m), y its scale height (m)
+            // What is falling's share of the pipeline's distance fog, 1/m: the rain at the camera, laid
+            // evenly over every surface and never over the sky (WeatherShaderGlobals.FallingFog).
+            float _FishFallingFog;
 
             // The share of the light a sunlit storm's rain gets from the sun beside the sky's. Only the
             // brightness: the colour is what falls, and the direction the phase function's.
@@ -582,6 +590,28 @@ Shader "FishMMO/Weather/Curtain"
             }
 
             // ── The air between ───────────────────────────────────────────────────────────
+            /* What the distance fog lays over a surface of what is falling, 1/m: the rain at the camera,
+             * while that fog is on (WeatherFogPresenter.UniformFallingExtinction). It is this very rain,
+             * so in front of a surface the curtain takes out only what its storm holds beyond it — or
+             * standing in the storm the rain round the camera was counted twice, once by each. */
+            float CurtainSurfaceFog()
+            {
+                bool fogOn = false;
+                #if defined(FOG_LINEAR_KEYWORD_DECLARED)
+                if (FOG_LINEAR)
+                    fogOn = true;
+                #endif
+                #if defined(FOG_EXP_KEYWORD_DECLARED)
+                if (FOG_EXP)
+                    fogOn = true;
+                #endif
+                #if defined(FOG_EXP2_KEYWORD_DECLARED)
+                if (FOG_EXP2)
+                    fogOn = true;
+                #endif
+                return fogOn ? max(0.0, _FishFallingFog) : 0.0;
+            }
+
             // Twins of FishCloudThinShare and FishCloudAirDepth (FishCloudVolume.hlsl): the storm's
             // cloud is seen through this air, and the rain hanging from it has to be seen through the
             // same, or the base goes pale with distance and the shaft under it stays as dark as it is
@@ -638,9 +668,11 @@ Shader "FishMMO/Weather/Curtain"
                 #endif
                 float3 cameraForward = -UNITY_MATRIX_V[2].xyz;
                 float sceneDistance = isSky ? 1e9 : LinearEyeDepth(rawDepth, _ZBufferParams) / max(1e-4, dot(direction, cameraForward));
-                // Not the first stretch round the camera: the particle field and the weather's own fog show that.
-                float start = max(enter, _CurtainMarch.y);
+                // From where the ray comes into the box: the eye, from inside. The distance fog's share
+                // is taken off in front of a surface (CurtainSurfaceFog); over the sky nothing else draws it.
+                float start = enter;
                 float end = min(leave, sceneDistance);
+                float surfaceFog = isSky ? 0.0 : CurtainSurfaceFog();
                 if (end <= start)
                 {
                     discard;
@@ -700,7 +732,9 @@ Shader "FishMMO/Weather/Curtain"
                     float footprint = t * perMetre;
                     float topHere;
                     float cloudOver;
-                    float extinction = CurtainDensity(position, footprint, true, topHere, cloudOver);
+                    float medium = CurtainDensity(position, footprint, true, topHere, cloudOver);
+                    // What is drawn of it: all of it over the sky, what the distance fog does not already lay over a surface.
+                    float extinction = max(0.0, medium - surfaceFog);
                     /* Out of clear air into something on a long stride: go back and come through its
                      * edge in short ones. A dust wall is opaque within a few tens of metres, and a
                      * stride of a few hundred put its face wherever the stride happened to land — a
@@ -721,7 +755,7 @@ Shader "FishMMO/Weather/Curtain"
                     if (extinction > 0.0)
                     {
                         float through = exp(-extinction * advance);
-                        float3 source = CurtainSource(position, extinction, topHere, cloudOver, phase, lights, footprint);
+                        float3 source = CurtainSource(position, medium, topHere, cloudOver, phase, lights, footprint);
                         // The light scattered in over the stride, of which what gets out is the share
                         // the stride itself did not take: exact for a stride of one medium.
                         float taken = transmittance * (1.0 - through);

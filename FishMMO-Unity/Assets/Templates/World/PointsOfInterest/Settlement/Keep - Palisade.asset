@@ -59,8 +59,6 @@ MonoBehaviour:
     Weight: 0.1
   - Biome: Scrubland
     Weight: 0.1
-  - Biome: Dust Sea
-    Weight: 0.1
   - Biome: Wasteland
     Weight: 0.1
   RaceCategories:
@@ -149,16 +147,16 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506175559009039
-  - rid: 4061506175559009040
-  - rid: 4061506175559009041
-  - rid: 4061506175559009042
-  - rid: 4061506175559009043
-  - rid: 4061506175559009044
+  - rid: 4061506230068183827
+  - rid: 4061506230068183828
+  - rid: 4061506230068183829
+  - rid: 4061506230068183830
+  - rid: 4061506230068183831
+  - rid: 4061506230068183832
   references:
     version: 2
     RefIds:
-    - rid: 4061506175559009039
+    - rid: 4061506230068183827
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -170,20 +168,20 @@ MonoBehaviour:
         KeepOutOfWater: 1
         Clearings:
         - {x: -3, y: 2, z: 5.499623}
-    - rid: 4061506175559009040
+    - rid: 4061506230068183828
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506175559009041
+    - rid: 4061506230068183829
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506175559009042
+    - rid: 4061506230068183830
       type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: -3, y: 5.499623}
-    - rid: 4061506175559009043
+    - rid: 4061506230068183831
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 3
@@ -191,7 +189,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506175559009044
+    - rid: 4061506230068183832
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 1

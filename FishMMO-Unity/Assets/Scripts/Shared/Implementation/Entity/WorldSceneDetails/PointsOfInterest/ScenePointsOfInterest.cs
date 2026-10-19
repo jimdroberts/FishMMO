@@ -23,8 +23,13 @@ namespace FishMMO.Shared
 		public Vector3 Position;
 		/// <summary>The site's heading in degrees about +y.</summary>
 		public float Yaw;
-		/// <summary>The footprint radius in metres.</summary>
+		/// <summary>The footprint's bounding radius in metres: no point of <see cref="Outline"/> reaches farther.</summary>
 		public float Radius;
+		/// <summary>
+		/// The footprint's outline (<see cref="PointOfInterestOutline"/>): its reach toward each of a ring of bearings from
+		/// <see cref="Position"/>, metres. Empty for a circle of <see cref="Radius"/> (a site planned before outlines, a bridge).
+		/// </summary>
+		public float[] Outline = Array.Empty<float>();
 		/// <summary>0 = small, 1 = medium, 2 = large; picks layouts, pack sizes and cave depth.</summary>
 		public byte SizeClass;
 
@@ -78,13 +83,19 @@ namespace FishMMO.Shared
 			};
 	}
 
-	/// <summary>A flattened pad under a site: the ground eased to <see cref="Height"/> inside the radius.</summary>
+	/// <summary>
+	/// A flattened pad under a site: the ground eased to <see cref="Height"/> inside its outline (or radius), or to its terraces'
+	/// levels (<see cref="PointOfInterestTerraces"/>).
+	/// </summary>
 	[Serializable]
 	public struct PointOfInterestPad
 	{
 		public int Id;
 		public Vector3 Centre;
+		/// <summary>The bounding radius: no point of <see cref="Outline"/> reaches farther.</summary>
 		public float Radius;
+		/// <summary>The site's outline (<see cref="PointOfInterestRecord.Outline"/>); empty for a disc of <see cref="Radius"/>.</summary>
+		public float[] Outline;
 		/// <summary>How far past the radius the pad eases back into the ground, metres.</summary>
 		public float Blend;
 		/// <summary>
@@ -94,10 +105,26 @@ namespace FishMMO.Shared
 		public Vector2 Shore;
 		/// <summary>How far toward <see cref="Shore"/> from the centre the levelling reaches before it has handed back to the ground, metres.</summary>
 		public float ShoreDistance;
+		/// <summary>Up the hill, unit (x east, y north), for a terraced pad; zero for one level.</summary>
+		public Vector2 TerraceAxis;
+		/// <summary>Where the levels change, metres along <see cref="TerraceAxis"/> from the centre, rising; empty for one level.</summary>
+		public float[] TerraceSteps;
+		/// <summary>Each terrace's height, lowest first: one more than <see cref="TerraceSteps"/>.</summary>
+		public float[] TerraceLevels;
+		/// <summary>Where each step's ramp climbs it, metres across the axis (<see cref="PointOfInterestTerraces.Across"/>).</summary>
+		public float[] TerraceRamps;
+		/// <summary>Half a ramp's width, metres.</summary>
+		public float RampHalfWidth;
 		public float Height => Centre.y;
+
+		/// <summary>Whether a scene position (x, z) lies on the pad: inside its outline.</summary>
+		public bool Contains(float x, float z) => PointOfInterestOutline.Contains(Outline, Radius, x - Centre.x, z - Centre.z);
 	}
 
-	/// <summary>A disc nothing else is placed in (scatter, cliff rocks, boulders): x, z, radius.</summary>
+	/// <summary>
+	/// Ground nothing else is placed in (scatter, cliff rocks, boulders): a disc at x, z, or the site's outline grown by its
+	/// margin (<see cref="Outline"/>), the radius then its bounding reach.
+	/// </summary>
 	[Serializable]
 	public struct PointOfInterestKeepOut
 	{
@@ -105,11 +132,17 @@ namespace FishMMO.Shared
 		public float X;
 		public float Z;
 		public float Radius;
+		/// <summary>The kept ground's own outline round (x, z) (<see cref="PointOfInterestOutline"/>); empty for the disc.</summary>
+		public float[] Outline;
 
 		public bool Contains(float x, float z)
 		{
 			float dx = x - X, dz = z - Z;
-			return dx * dx + dz * dz <= Radius * Radius;
+			if (dx * dx + dz * dz > Radius * Radius)
+			{
+				return false;
+			}
+			return !PointOfInterestOutline.Drawn(Outline) || PointOfInterestOutline.Contains(Outline, Radius, dx, dz);
 		}
 	}
 
@@ -194,6 +227,12 @@ namespace FishMMO.Shared
 		/// the server's NavMesh links its NPCs climb come from these (<see cref="SceneClimbables"/>).
 		/// </summary>
 		public List<SceneClimbable> Climbables = new List<SceneClimbable>();
+		/// <summary>
+		/// Where the caves' animals live (<see cref="SceneCaveLifeSpot"/>): flat patches of their floors, walls and roofs, boxes of
+		/// clear air, pools, mouths, baked by the cave dressing from each system's field. Read by the client's ambient life only
+		/// (<see cref="SceneCaveLife"/>); a scene cut before them has none, and its caves are empty until it is cut again.
+		/// </summary>
+		public List<SceneCaveLifeSpot> CaveLife = new List<SceneCaveLifeSpot>();
 
 		/// <summary>The record with this id, or null.</summary>
 		public PointOfInterestRecord Find(int id)

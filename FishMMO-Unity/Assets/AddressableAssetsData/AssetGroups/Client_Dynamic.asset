@@ -345,12 +345,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 6d732b0806ef623d59077ef5f800e253
-    m_Address: Seli Waste Terrain Arrays
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6e2b3a63bbde435996b3ac74eab39434
     m_Address: UIGathering
     m_ReadOnly: 0
@@ -396,12 +390,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 803eb5bfbe00f3aaa91756c80259a535
-    m_Address: Cov Viaduct Terrain Arrays
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 826021c4fa63bc380b9162b7e4405054
     m_Address: UIChat
     m_ReadOnly: 0
@@ -411,12 +399,6 @@ MonoBehaviour:
     m_Address: UIOptions
     m_ReadOnly: 0
     m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 8500df0f2569ffc14a14d4247ab310a9
-    m_Address: Isle of Aradune Terrain Arrays
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 868803874ca36864a8f2825459be3cea
     m_Address: UILoot
@@ -437,12 +419,6 @@ MonoBehaviour:
     m_Address: UIWorldQueueDisplay
     m_ReadOnly: 0
     m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 91a04fe3321898a0283561d92c7fdcee
-    m_Address: Flo Monolith Terrain Arrays
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 91f2120783e5985ac9d2c33e75e3b707
     m_Address: UICrosshair
@@ -698,12 +674,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e47ab7470c4f44421ae8141ce8191f93
-    m_Address: Baoakraal Hyena-den Terrain Arrays
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e48eab42eacc528ac874692cc04cf0ad
     m_Address: UIColorPicker
     m_ReadOnly: 0
@@ -738,18 +708,6 @@ MonoBehaviour:
     m_Address: UIInstance
     m_ReadOnly: 0
     m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f5363c1e16c7a1d10b976ac09dd7251c
-    m_Address: Volax Obelisk Terrain Arrays
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f53a4c15de3fd69fcb084f97a9137a21
-    m_Address: Treacherous Bri Lookout Terrain Arrays
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f9f15f51447a4e7e93a5e950fb59fb2f
     m_Address: UIArenaScoreboard

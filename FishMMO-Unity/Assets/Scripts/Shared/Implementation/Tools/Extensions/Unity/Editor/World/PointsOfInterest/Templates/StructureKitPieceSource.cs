@@ -178,14 +178,22 @@ namespace FishMMO.Shared.WorldDesign
 		// ── The structure palette (2026-10-16) ───────────────────────
 
 		/// <summary>
-		/// The prefab of a piece's variant in a finish, for a biome's structure palette: always the kit's (or its LOCAL stand-in).
-		/// A palette makes no prefab of its own (I6a): the piece is laid in the palette's materials when it is added to the scene,
-		/// the kit's prefab with a material per submesh (StructurePaletteDressing, through PointOfInterestSiteContext.AddProp and
-		/// the features that make scene objects of pieces), so the art grows by materials only, never by pieces × palettes.
+		/// The prefab of a piece's variant in a finish, for a biome's structure palette: the kit's (or its LOCAL stand-in, which
+		/// always wins), or for a house whose palette roofs it in a material of another pitch, that roof's variant
+		/// (StructureRoofs, 2026-10-18, I6e: a reed roof steep, a mud one flat). Beyond the roof a palette makes no prefab of its
+		/// own (I6a): the piece is laid in the palette's materials when it is added to the scene, the prefab with a material per
+		/// submesh (StructurePaletteDressing, through PointOfInterestSiteContext.AddProp, which picks the roof variant again for
+		/// the site's own palette, and the features that make scene objects of pieces), so the art grows by materials and the few
+		/// roofs palettes ask for, never by pieces × palettes.
 		/// </summary>
 		public static GameObject PrefabFor(StructurePiece piece, int variant, StructureFinish finish, BiomeStructurePalette palette, bool allowLocal)
 		{
-			return piece == null ? null : StructureKit.Prefab(piece.Id, variant, finish, allowLocal);
+			if (piece == null)
+			{
+				return null;
+			}
+			GameObject prefab = StructureKit.Prefab(piece.Id, variant, finish, allowLocal);
+			return palette != null ? StructurePaletteDressing.RoofVariant(prefab, palette) : prefab;
 		}
 
 		public bool TryMeasure(in PointOfInterestPieceRequest request, out PointOfInterestPieceMetrics metrics)

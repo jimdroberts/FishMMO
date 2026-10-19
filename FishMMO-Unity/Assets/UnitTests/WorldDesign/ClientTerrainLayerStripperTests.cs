@@ -283,6 +283,105 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 		}
 
+		/// <summary>A scene of one array-drawn tile on <paramref name="data"/> with a terrain detail bake holding <paramref name="index"/> for it.</summary>
+		private (Scene Scene, Terrain Terrain, SceneTerrainBake Holder, TerrainDetailBake Bake) SceneWithStoredMap(TerrainData data, TerrainDetailBake.IndexMap index)
+		{
+			Scene scene = EditorSceneManager.NewPreviewScene();
+			GameObject tile = Terrain.CreateTerrainGameObject(data);
+			SceneManager.MoveGameObjectToScene(tile, scene);
+			Terrain terrain = tile.GetComponent<Terrain>();
+			terrain.materialTemplate = ArrayMaterial();
+			TerrainDetailBake bake = Track(ScriptableObject.CreateInstance<TerrainDetailBake>());
+			bake.BakedVersion = TerrainDetailBake.Version;
+			bake.Tiles.Add(new TerrainDetailBake.Tile { Data = data, Index = index });
+			var go = new GameObject(SceneTerrainBake.ObjectName);
+			SceneManager.MoveGameObjectToScene(go, scene);
+			SceneTerrainBake holder = go.AddComponent<SceneTerrainBake>();
+			holder.Bake = bake;
+			return (scene, terrain, holder, bake);
+		}
+
+		private static TerrainDetailBake.IndexMap StoredFrom(TerrainData data)
+		{
+			int res = data.alphamapResolution;
+			return new TerrainDetailBake.IndexMap
+			{
+				Format = TerrainIndexMap.StoredFormat,
+				Resolution = res,
+				Layers = data.alphamapLayers,
+				Map = TerrainIndexMap.Bake(data.GetAlphamaps(0, 0, res, res)),
+			};
+		}
+
+		[Test]
+		public void AMatchingStoredIndexMap_LetsTheCopyLeaveOutItsAlphamaps_AndTheBakeNamesTheCopy()
+		{
+			TerrainData original = Generated();
+			TerrainDetailBake.IndexMap stored = StoredFrom(original);
+			(Scene scene, Terrain terrain, SceneTerrainBake holder, TerrainDetailBake bake) = SceneWithStoredMap(original, stored);
+			try
+			{
+				Assert.That(ClientTerrainLayerStripper.Strip(scene), Is.EqualTo(1));
+				TerrainData copy = Track(terrain.terrainData);
+				Assert.That(copy, Is.Not.SameAs(original));
+				Assert.That(copy.alphamapLayers, Is.EqualTo(0), "no alphamaps in the client build");
+				Assert.That(copy.alphamapTextureCount, Is.EqualTo(0));
+				Assert.That(copy.terrainLayers.Length, Is.EqualTo(0), "nor layers (they would bring alphamaps back)");
+				Assert.That(copy.alphamapResolution, Is.EqualTo(original.alphamapResolution), "the resolution is kept for what reads it");
+				Assert.That(copy.GetHeights(0, 0, HeightResolution, HeightResolution)[4, 9], Is.EqualTo(original.GetHeights(0, 0, HeightResolution, HeightResolution)[4, 9]).Within(1e-4f));
+				Assert.That(copy.GetDetailLayer(0, 0, DetailResolution, DetailResolution, 0)[3, 4], Is.EqualTo(7));
+
+				Assert.That(holder.Bake, Is.Not.SameAs(bake), "the scene's bake is a clone on the build's copy");
+				Track(holder.Bake);
+				Assert.That(holder.Bake.Tiles[0].Data, Is.SameAs(copy), "the clone names the copy, so a player finds its tile");
+				Assert.That(TerrainIndexMap.Same(holder.Bake.Tiles[0].Index.Map, stored.Map), Is.True, "with the same index map");
+				Assert.That(bake.Tiles[0].Data, Is.SameAs(original), "the committed bake is untouched");
+				Assert.That(original.alphamapLayers, Is.EqualTo(2), "and so is the committed terrain data");
+			}
+			finally
+			{
+				EditorSceneManager.ClosePreviewScene(scene);
+			}
+		}
+
+		[Test]
+		public void AStaleMissingOrDifferentStoredMap_KeepsTheAlphamaps()
+		{
+			for (int c = 0; c < 3; c++)
+			{
+				TerrainData original = Generated();
+				TerrainDetailBake.IndexMap stored = c == 0 ? new TerrainDetailBake.IndexMap() : StoredFrom(original);
+				if (c == 1)
+				{
+					stored.Stale = true;
+				}
+				if (c == 2)
+				{
+					stored.Map[2 * 37 + 1] ^= 1u;
+				}
+				(Scene scene, Terrain terrain, SceneTerrainBake holder, TerrainDetailBake bake) = SceneWithStoredMap(original, stored);
+				try
+				{
+					Assert.That(ClientTerrainLayerStripper.Strip(scene), Is.EqualTo(1));
+					TerrainData copy = Track(terrain.terrainData);
+					foreach (TerrainLayer l in copy.terrainLayers)
+					{
+						Track(l);
+					}
+					Track(holder.Bake);
+					Assert.That(copy.alphamapLayers, Is.EqualTo(2), $"case {c}: alphamaps kept");
+					Assert.That(copy.terrainLayers.Length, Is.EqualTo(2), $"case {c}: texture-less layers as before");
+					Assert.That(holder.Bake.Tiles[0].Data, Is.SameAs(copy), $"case {c}: the bake still follows the copy");
+					Assert.That(holder.Bake.Tiles[0].Index.Format, Is.EqualTo(0), $"case {c}: a refused map is not shipped, so a player bakes from the kept alphamaps");
+					Assert.That(bake.Tiles[0].Index.Format, Is.EqualTo(c == 0 ? 0 : TerrainIndexMap.StoredFormat), $"case {c}: the committed bake keeps its map");
+				}
+				finally
+				{
+					EditorSceneManager.ClosePreviewScene(scene);
+				}
+			}
+		}
+
 		[Test]
 		public void ItRunsAfterTheClientOnlyStripper()
 		{

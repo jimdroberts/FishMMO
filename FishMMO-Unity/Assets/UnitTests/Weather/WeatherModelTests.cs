@@ -423,6 +423,87 @@ namespace FishMMO.UnitTests.Weather
 			LogAssert.AreEqual(-4f, timeline.Air.To.Temperature);
 		}
 
+		/// <summary>An instant change to <paramref name="temperature"/> K at <paramref name="seconds"/>, as every setter makes it.</summary>
+		private static AirOffsetEntry ChangeTo(WeatherTimeline timeline, float temperature, double seconds)
+		{
+			return new AirOffsetEntry
+			{
+				From = timeline.AirAtSeconds(seconds),
+				To = new AirOffsets { Temperature = temperature },
+				StartSeconds = seconds,
+				EndSeconds = seconds,
+			};
+		}
+
+		[Test]
+		public void PuttingTheAirBack_DoesNotRewriteThePast()
+		{
+			/* A cold spell set at 1000 s and taken away at 1060 s. An entry alone knows only what it moved from, so the
+			 * whole past read the cold spell after it was taken away, and the ground's memory snowed over. */
+			WeatherTimeline timeline = TimelineAt(1);
+			timeline.ReplaceAir(ChangeTo(timeline, -40f, 1000.0));
+			timeline.ReplaceAir(ChangeTo(timeline, 0f, 1060.0));
+
+			LogAssert.AreEqual(0f, timeline.AirAtSeconds(500.0).Temperature, "before the cold spell");
+			LogAssert.AreEqual(-40f, timeline.AirAtSeconds(1030.0).Temperature, "during it");
+			LogAssert.AreEqual(0f, timeline.AirAtSeconds(2000.0).Temperature, "after it");
+		}
+
+		[Test]
+		public void TheAirHistory_ReachesTheSameStateByDeltaAndByFullTimeline()
+		{
+			WeatherTimeline server = TimelineAt(1);
+			WeatherTimeline early = TimelineAt(1);
+			for (int i = 0; i < 4; i++)
+			{
+				AirOffsetEntry next = ChangeTo(server, -10f * (i + 1), 1000.0 + 600.0 * i);
+				server.ReplaceAir(next);
+				server.Revision++;
+				LogAssert.IsTrue(early.TryApply(new WeatherDeltaBroadcast { SceneName = "Test", Revision = server.Revision, HasAir = true, Air = next }));
+			}
+			WeatherTimeline late = TimelineAt(1);
+			late.Apply(server.ToBroadcast());
+
+			foreach (double seconds in new[] { 0.0, 1300.0, 1900.0, 2500.0, 3100.0, 9000.0 })
+			{
+				float expected = server.AirAtSeconds(seconds).Temperature;
+				LogAssert.AreEqual(expected, early.AirAtSeconds(seconds).Temperature, $"by delta at {seconds}");
+				LogAssert.AreEqual(expected, late.AirAtSeconds(seconds).Temperature, $"by full timeline at {seconds}");
+			}
+		}
+
+		[Test]
+		public void TheAirHistory_ForgetsWhatTheGroundNoLongerRemembers()
+		{
+			WeatherTimeline timeline = TimelineAt(1);
+			timeline.ReplaceAir(ChangeTo(timeline, -5f, 100.0));
+			timeline.ReplaceAir(ChangeTo(timeline, -10f, 200.0));
+			double later = 200.0 + WeatherTimeline.AirHistorySeconds + 3600.0;
+			timeline.ReplaceAir(ChangeTo(timeline, -20f, later));
+
+			LogAssert.AreEqual(1, timeline.AirHistory.Count, "only the entry the window opens on is kept");
+			LogAssert.AreEqual(-10f, timeline.AirAtSeconds(later - WeatherTimeline.AirHistorySeconds).Temperature);
+		}
+
+		[Test]
+		public void ShiftingTheAir_MovesEveryEntryPastAndPresent()
+		{
+			// What authoring part of the runtime air into the scene takes back off it: authored + runtime is unchanged.
+			WeatherTimeline timeline = TimelineAt(1);
+			timeline.ReplaceAir(ChangeTo(timeline, -30f, 1000.0));
+			timeline.ReplaceAir(new AirOffsetEntry { From = timeline.AirAtSeconds(2000.0), To = new AirOffsets { Temperature = -10f }, StartSeconds = 2000.0, EndSeconds = 2600.0 });
+			var before = new Dictionary<double, float>();
+			foreach (double seconds in new[] { 500.0, 1500.0, 2300.0, 3000.0 })
+			{
+				before[seconds] = timeline.AirAtSeconds(seconds).Temperature;
+			}
+			timeline.ShiftAir(new AirOffsets { Temperature = 10f });
+			foreach (KeyValuePair<double, float> pair in before)
+			{
+				Assert.AreEqual(pair.Value + 10f, timeline.AirAtSeconds(pair.Key).Temperature, Tolerance, $"at {pair.Key}");
+			}
+		}
+
 		[Test]
 		public void ADuplicateDeltaIsHarmless()
 		{

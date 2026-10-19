@@ -585,51 +585,23 @@ namespace FishMMO.TestHarness.Weather.Editor
 		/// <summary>Why the stage running now cannot happen in the bed, or null when it can.</summary>
 		private static string stageSkipped;
 
-		private static SceneBiomeMap groundMap;
-		private static SceneBiomeMap bedGround;
-		private static bool bedGroundKept;
-
 		/// <summary>
-		/// Stands the bed on one biome for a stage — a map of that biome alone, a hundred kilometres
-		/// round the camera — or back on its own ground when <paramref name="biomeName"/> is empty.
+		/// Stands the bed on one biome for a stage (WorldSimController.StandOn), or back on its own
+		/// ground when <paramref name="biomeName"/> is empty.
 		/// </summary>
 		private static void StandOn(WorldSimController controller, string biomeName)
 		{
-			WorldSceneSettings settings = controller.Settings;
-			if (settings == null)
-			{
-				return;
-			}
-			if (!bedGroundKept)
-			{
-				bedGround = settings.BiomeMap;
-				bedGroundKept = true;
-			}
 			if (string.IsNullOrEmpty(biomeName))
 			{
-				settings.BiomeMap = bedGround;
+				controller.StandOn(null);
 				return;
 			}
 			var biome = AssetDatabase.LoadAssetAtPath<BiomeTemplate>($"Assets/Templates/Entity/Biomes/{biomeName}.asset");
 			if (biome == null)
 			{
 				Debug.LogWarning($"[WeatherSimRender] no biome named {biomeName}; the stage stands on the bed's own ground.");
-				settings.BiomeMap = bedGround;
-				return;
 			}
-			int id = BiomeRegistry.IDOf(biome);
-			if (!BiomeRegistry.TryGetByID(id, out _))
-			{
-				BiomeRegistry.Register(biome);
-			}
-			if (groundMap == null)
-			{
-				groundMap = ScriptableObject.CreateInstance<SceneBiomeMap>();
-				groundMap.hideFlags = HideFlags.DontSave;
-			}
-			Vector3 at = controller.Camera.transform.position;
-			groundMap.Set(1, 1, new[] { id }, new Vector2(at.x - 50000f, at.z - 50000f), new Vector2(100000f, 100000f));
-			settings.BiomeMap = groundMap;
+			controller.StandOn(biome);
 		}
 
 		private static string Lin(Color c) => $"({c.r:0.000},{c.g:0.000},{c.b:0.000})";

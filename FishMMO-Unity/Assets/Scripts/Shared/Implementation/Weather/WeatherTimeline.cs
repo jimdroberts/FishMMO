@@ -39,6 +39,24 @@ namespace FishMMO.Shared.Weather
 		/// </summary>
 		public AirOffsetEntry Air;
 		/// <summary>
+		/// The entries <see cref="Air"/> replaced, oldest first, as far back as anything reads the air
+		/// (<see cref="AirHistorySeconds"/>): what <see cref="AirAtSeconds"/> answers with before <see cref="Air"/> began.
+		/// </summary>
+		/// <remarks>
+		/// An entry alone knows only the value it moved from, so without these every change rewrote all of the past to
+		/// that value: putting the air back after a cold spell read the whole past as the cold spell, and the ground's
+		/// six hours of memory snowed over again the moment the cold was taken away. Both sides append to it by the same
+		/// rule (<see cref="ReplaceAir"/>) and a full timeline carries it, so a player who joins reads the same past.
+		/// </remarks>
+		public readonly List<AirOffsetEntry> AirHistory = new List<AirOffsetEntry>();
+		/// <summary>
+		/// How far back the air is ever read: the ground's memory (<see cref="GroundCover.MemorySeconds"/>) and a
+		/// generation of margin for the forcing it is rebuilt from.
+		/// </summary>
+		public const double AirHistorySeconds = GroundCover.MemorySeconds + GroundCover.GenerationSeconds;
+		/// <summary>The most replaced entries kept, whatever their age: a burst of edits cannot grow the timeline without end.</summary>
+		public const int AirHistoryLimit = 32;
+		/// <summary>
 		/// The scene's snow, wetness, ash and sand now, averaged over its cover points: worked out by each side from
 		/// the world time (<see cref="SceneCover"/>), never sent.
 		/// </summary>
@@ -113,7 +131,69 @@ namespace FishMMO.Shared.Weather
 		// ── Evaluation ────────────────────────────────────────────────
 
 		/// <summary>What has been added to the scene's air at runtime, at a tick.</summary>
-		public AirOffsets AirAt(uint tick) => Air.AtSeconds(WorldSecondsAt(tick));
+		public AirOffsets AirAt(uint tick) => AirAtSeconds(WorldSecondsAt(tick));
+
+		/// <summary>
+		/// What had been added to the scene's air at runtime at a moment of world time: <see cref="Air"/> from its start,
+		/// and before that the entry that was in force then (<see cref="AirHistory"/>).
+		/// </summary>
+		public AirOffsets AirAtSeconds(double worldSeconds)
+		{
+			if (worldSeconds >= Air.StartSeconds || AirHistory.Count == 0)
+			{
+				return Air.AtSeconds(worldSeconds);
+			}
+			for (int i = AirHistory.Count - 1; i >= 0; i--)
+			{
+				if (worldSeconds >= AirHistory[i].StartSeconds)
+				{
+					return AirHistory[i].AtSeconds(worldSeconds);
+				}
+			}
+			return AirHistory[0].From;
+		}
+
+		/// <summary>
+		/// Moves every runtime entry, the one in force and those it replaced, by <paramref name="delta"/>: what moving part
+		/// of the runtime air into the scene's authored air takes away here, so the sum of the two is what it was at every
+		/// moment, past and future.
+		/// </summary>
+		public void ShiftAir(in AirOffsets delta)
+		{
+			Air.From += delta;
+			Air.To += delta;
+			for (int i = 0; i < AirHistory.Count; i++)
+			{
+				AirOffsetEntry entry = AirHistory[i];
+				entry.From += delta;
+				entry.To += delta;
+				AirHistory[i] = entry;
+			}
+		}
+
+		/// <summary>
+		/// Puts a new runtime entry in force, keeping the one it replaces in <see cref="AirHistory"/>. Every setter of the
+		/// scene's air goes through this, on the server and on every client applying the delta, so the history is the same
+		/// everywhere: pruned against the new entry's start, never against a local clock.
+		/// </summary>
+		public void ReplaceAir(in AirOffsetEntry next)
+		{
+			AirHistory.Add(Air);
+			double oldest = next.StartSeconds - AirHistorySeconds;
+			// An entry still matters while any of it, or the value it settled to, lies inside the window; the one before
+			// the first that does is the value the window opens on, so it is kept too.
+			int drop = 0;
+			while (drop + 1 < AirHistory.Count && AirHistory[drop + 1].StartSeconds <= oldest)
+			{
+				drop++;
+			}
+			drop = System.Math.Max(drop, AirHistory.Count - AirHistoryLimit);
+			if (drop > 0)
+			{
+				AirHistory.RemoveRange(0, drop);
+			}
+			Air = next;
+		}
 
 		/// <summary>Where a cell is at a (fractional) tick.</summary>
 		public Vector2 CentreOf(in StormCell cell, double tick) => cell.CentreAtSeconds(WorldSecondsAt(tick));
@@ -164,6 +244,7 @@ namespace FishMMO.Shared.Weather
 				// Only the cells that were started by hand: the schedule's are worked out by the client itself.
 				Cells = Cells.FindAll(c => !StormSchedule.IsScheduled(c.ID)),
 				Air = Air,
+				AirHistory = new List<AirOffsetEntry>(AirHistory),
 				Director = Director,
 				AreaX = Area.x,
 				AreaZ = Area.y,
@@ -189,6 +270,8 @@ namespace FishMMO.Shared.Weather
 			Cells.Clear();
 			if (msg.Cells != null) Cells.AddRange(msg.Cells);
 			Air = msg.Air;
+			AirHistory.Clear();
+			if (msg.AirHistory != null) AirHistory.AddRange(msg.AirHistory);
 			Generation++;
 			Director = msg.Director;
 			Area = new Rect(msg.AreaX, msg.AreaZ, msg.AreaWidth, msg.AreaDepth);
@@ -223,7 +306,7 @@ namespace FishMMO.Shared.Weather
 			}
 			if (msg.HasAir)
 			{
-				Air = msg.Air;
+				ReplaceAir(msg.Air);
 			}
 			if (msg.HasDirector)
 			{

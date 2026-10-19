@@ -121,6 +121,14 @@ namespace FishMMO.Client
 		private static readonly int GrassCoverRectId = Shader.PropertyToID("_GrassCoverRect");
 		private static readonly int GrassOcclusionRectId = Shader.PropertyToID("_GrassOcclusionRect");
 		private static readonly int GrassOcclusionRangeId = Shader.PropertyToID("_GrassOcclusionRange");
+		private static readonly int GrassSnowLineId = Shader.PropertyToID("_GrassSnowLine");
+		private static readonly int GrassSnowDeepId = Shader.PropertyToID("_GrassSnowDeep");
+		private static readonly int GrassSnowFieldId = Shader.PropertyToID("_GrassSnowField");
+		private static readonly int GrassSnowFieldRectId = Shader.PropertyToID("_GrassSnowFieldRect");
+		private static readonly int FishSnowLineId = Shader.PropertyToID("_FishSnowLine");
+		private static readonly int FishSnowDeepId = Shader.PropertyToID("_FishSnowDeep");
+		private static readonly int FishSnowFieldTexId = Shader.PropertyToID("_FishSnowFieldTex");
+		private static readonly int FishSnowFieldRectId = Shader.PropertyToID("_FishSnowFieldRect");
 		private static readonly int FishCoverTexId = Shader.PropertyToID("_FishCoverTex");
 		private static readonly int FishCoverRectId = Shader.PropertyToID("_FishCoverRect");
 		private static readonly int FishCoverParamsId = Shader.PropertyToID("_FishCoverParams");
@@ -533,6 +541,14 @@ namespace FishMMO.Client
 		/// <summary>A type with no look at all (never, in practice): the plain defaults at the old ground tint.</summary>
 		private static readonly BiomeGrassType FallbackLook = new BiomeGrassType { GroundTint = BiomeGrassType.LegacyGroundTint };
 
+		/// <summary>
+		/// How hard the world's air moves the blades, as a share of the wind's sway (BiomeAir.Sway, decision 41, 2026-10-18): 0 on
+		/// an airless world (no blade moves), 0.3 under a thin sky, 1 under Earth-like air (exactly as before). Set by the blade
+		/// system from the scene's world before each <see cref="Publish"/>; it scales the published wind strength, flutter and idle
+		/// breeze, so no material property is added.
+		/// </summary>
+		public float AirSway = 1f;
+
 		/// <summary>Takes the profile's settings (every frame: live in the inspector) and the types into the material and the compute's arrays.</summary>
 		public void Publish(GrassBladeSettings s, IReadOnlyList<GrassType> types, float grassDistance)
 		{
@@ -596,8 +612,8 @@ namespace FishMMO.Client
 				GrassBladeHead head = look.Head;
 				float headSize = Mathf.Max(0.002f, look.HeadSize);
 				SetType(t, RowShape2, new Vector4(GrassMath.SprinkleChance(sprinkle, sprinkleLevel), (float)head, head != GrassBladeHead.None ? headSize : 0f, Mathf.Clamp01(type.SnowBury)));
-				// The share of stems with a head, and the sprinkled type's lattice level.
-				SetType(t, RowMore, new Vector4(head != GrassBladeHead.None ? Mathf.Clamp01(look.HeadShare) : 0f, sprinkleLevel, 0f, 0f));
+				// The share of stems with a head, the sprinkled type's lattice level, and 1 for a rigid (mineral) type that never sways.
+				SetType(t, RowMore, new Vector4(head != GrassBladeHead.None ? Mathf.Clamp01(look.HeadShare) : 0f, sprinkleLevel, look.Rigid ? 1f : 0f, 0f));
 				// The head's colours: the mesh's petals (unless the look's win: GrassType.Build left none), else the look's.
 				int colours = Mathf.Clamp(type.HeadColours.Count, 0, GrassType.MaxHeadColours);
 				Color[] palette = colours == 0 ? look.HeadColours : null;
@@ -624,7 +640,9 @@ namespace FishMMO.Client
 			}
 			publishedParams[0] = new Vector4(s.WidenExponent, Mathf.Max(1f, s.MaxWiden), grassDistance, s.DistanceFadeBand);
 			publishedParams[1] = new Vector4(s.NormalRounding * Mathf.Deg2Rad, s.RootOcclusion, s.Translucency, s.Smoothness);
-			publishedParams[2] = new Vector4(s.WindStrength, s.GustWaveMetres, s.Flutter, s.IdleBreeze);
+			// The world's air scales the sway (AirSway: none airless, 1 under Earth-like air, where x·1 is x exactly).
+			float air = Mathf.Clamp01(AirSway);
+			publishedParams[2] = new Vector4(s.WindStrength * air, s.GustWaveMetres, s.Flutter * air, s.IdleBreeze * air);
 			publishedParams[3] = new Vector4(s.RootGroundBlend, s.RootGroundHeight, s.GroundHueTint, s.Specular);
 			publishedParams[4] = new Vector4(s.MaxWindBendDegrees * Mathf.Deg2Rad, s.GustSharpness, s.GustSpeed, s.GustSheen);
 			publishedParams[5] = new Vector4(s.FarBlendStart, s.FarBlendEnd, s.FarGroundPull, s.FarNormalFlatten);
@@ -1299,7 +1317,12 @@ namespace FishMMO.Client
 			Vector4 deepParams = Shader.GetGlobalVector(FishSnowDepthParamsId);
 			bool coverValid = CullBuried && cover != null && coverParams.x > 0.5f;
 			bool deepValid = coverValid && deep != null;
-			bool lifts = Shader.GetGlobalVector(FishWeatherTierId).x > 0f && Shader.GetGlobalVector(FishWeatherCoverId).x > 0f;
+			Vector4 snowLine = CullBuried ? Shader.GetGlobalVector(FishSnowLineId) : Vector4.zero;
+			Vector4 snowDeep = Shader.GetGlobalVector(FishSnowDeepId);
+			Texture snowField = Shader.GetGlobalTexture(FishSnowFieldTexId);
+			bool fielded = snowDeep.z > 0.5f && snowField != null;
+			// Snow anywhere in view (FishSnowAnywhere): the scene's figure, or ground reaching the seasonal line.
+			bool lifts = Shader.GetGlobalVector(FishWeatherTierId).x > 0f && (Shader.GetGlobalVector(FishWeatherCoverId).x > 0f || snowLine.z > 0.5f);
 			float blanket = lifts ? Mathf.Max(0f, Shader.GetGlobalVector(FishGroundBlendId).w) : 0f;
 			cmd.SetComputeTextureParam(compute, generateKernel, GrassCoverId, coverValid ? cover : Texture2D.blackTexture);
 			cmd.SetComputeTextureParam(compute, generateKernel, GrassDeepSnowId, deepValid ? deep : Texture2D.blackTexture);
@@ -1308,6 +1331,10 @@ namespace FishMMO.Client
 			cmd.SetComputeVectorParam(compute, GrassCoverRectId, Shader.GetGlobalVector(FishCoverRectId));
 			cmd.SetComputeVectorParam(compute, GrassOcclusionRectId, Shader.GetGlobalVector(FishOcclusionRectId));
 			cmd.SetComputeVectorParam(compute, GrassOcclusionRangeId, occlusion != null ? Shader.GetGlobalVector(FishOcclusionRangeId) : Vector4.zero);
+			cmd.SetComputeVectorParam(compute, GrassSnowLineId, snowLine);
+			cmd.SetComputeVectorParam(compute, GrassSnowDeepId, new Vector4(snowDeep.x, snowDeep.y, fielded ? 1f : 0f, snowDeep.w));
+			cmd.SetComputeTextureParam(compute, generateKernel, GrassSnowFieldId, fielded ? snowField : Texture2D.blackTexture);
+			cmd.SetComputeVectorParam(compute, GrassSnowFieldRectId, fielded ? Shader.GetGlobalVector(FishSnowFieldRectId) : Vector4.zero);
 		}
 
 		/// <summary>

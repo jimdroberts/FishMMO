@@ -161,6 +161,62 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>Forgets the makeup ("not set": the layer's name decides).</summary>
 		public void ClearGroundMakeup() => groundMakeup = default;
 
+		/// <remarks>
+		/// <para>
+		/// <b>A ground that changes with the local climate</b> (2026-10-18, decision 29, the Hills round: "temperature bands on
+		/// ground layers so a biome's ground changes with climate"): one biome stretching from a cold valley head to a warm
+		/// mouth paints its frost turf only where the year is cold and its burnt slope only where it is warm. With the band on,
+		/// the layer's strength at a point is multiplied by <see cref="BiomeClimateBand.Weight(Vector2, float, Vector2, float, float, float)"/>
+		/// at the scene's placement climate there (the mean annual temperature at the ground's true place on its globe and its
+		/// true altitude, and the humidity): the very climate a spawn rule's climate band reads, with the same numbers meaning
+		/// the same place, so a reach's ground and the plants authored for it change over together.
+		/// </para>
+		/// <para>
+		/// On a DETAIL layer the band confines its patches, like its height and slope bands. On the MAIN layer it says where
+		/// the base ground stands: outside its band the biome's detail layers carry the ground between them (in proportion to
+		/// their strengths there), and where no detail does the main layer stays. To swap the main ground for another under a
+		/// climate, give a climate variant a texture override instead (<see cref="BiomeClimateVariant.TextureLayerOverrides"/>).
+		/// Off (the default) the layer paints exactly as it did before the band existed; a scene with no placement climate
+		/// (a hand-painted one) paints every band as if it were off. Cliffs, beds, bars and way grounds ignore it.
+		/// </para>
+		/// </remarks>
+		[Header("Climate Band")]
+		[Tooltip("Main and detail layers: paint this ground only within a band of the local climate (the scene's mean annual temperature at the ground's true place and altitude, and the humidity there; the same climate spawn rules' climate bands read). Off = everywhere its other bands allow, as before. Written by Author biome art from the spec (a layer's Temp/Humid); set by hand to override.")]
+		public bool useClimateBand = false;
+		[Tooltip("Climate band only. Mean annual temperature the ground is painted between, on the climate's scale: 0 = 0 °C, 1 = 33.1 °C, −1 = −33.1 °C. x the coldest, y the warmest. An end at or past ±1 is open.")]
+		public Vector2 temperatureRange = new Vector2(-1f, 1f);
+		[Tooltip("Climate band only. Width of the soft edge at each closed end of the temperature range, centred on the end (0.1 ≈ 3.3 °C). 0 = a hard line.")]
+		[Range(0f, 1f)] public float temperatureFalloff = BiomeClimateBand.DefaultFalloff;
+		[Tooltip("Climate band only. Humidity the ground is painted between, −1 driest … 1 wettest. x the driest, y the wettest. An end at or past ±1 is open.")]
+		public Vector2 humidityRange = new Vector2(-1f, 1f);
+		[Tooltip("Climate band only. Width of the soft edge at each closed end of the humidity range, centred on the end. 0 = a hard line.")]
+		[Range(0f, 1f)] public float humidityFalloff = BiomeClimateBand.DefaultFalloff;
+
+		/// <summary>True when the layer's climate band is on and closes at least one end, so the climate changes its strength.</summary>
+		public bool HasClimateBand => useClimateBand && (BiomeClimateBand.Closes(temperatureRange) || BiomeClimateBand.Closes(humidityRange));
+
+		/// <summary>How fully the layer is painted in a climate, by its band: 1 without one (or for a NaN reading, no climate known).</summary>
+		public float ClimateWeight(float temperature, float humidity)
+		{
+			return useClimateBand
+				? BiomeClimateBand.Weight(temperatureRange, temperatureFalloff, humidityRange, humidityFalloff, temperature, humidity)
+				: 1f;
+		}
+
+		/// <remarks>
+		/// <b>A ground for one kind of sky</b> (2026-10-18, decision 44, the Dust Sea round: "AIR BANDS on ground layers, so one biome
+		/// carries an Airless and a Thin palette"): with a band set, the layer is in a scene's palette only when the scene's world
+		/// has one of the airs ticked (BiomeAir.Admits), its spawn rules with it. A main layer whose air the world lacks hands its
+		/// place to the first detail layer whose band names that air (it is painted as the main ground: grey moondust on an airless
+		/// moon, rust dust under a thin sky); with no such detail the main layer stays. Main, detail and cliff layers; beds, bars and
+		/// way grounds ignore it (a ground layer's own ways carry its air's road). None ticked (the default) = every air, as before.
+		/// </remarks>
+		[Tooltip("Main, detail and cliff layers: paint this ground only on worlds with one of these airs (the scene's body). A main layer whose air the world lacks gives its place to the first air-banded detail layer that names the world's air. Nothing ticked = every world, as before. Written by Author biome art from the spec (a layer's Air); set by hand to override.")]
+		public BiomeAtmosphereRequirement airBand;
+
+		/// <summary>True when the layer is painted on a world of this air (<see cref="airBand"/>; an unknown air, None, passes).</summary>
+		public bool AdmitsAir(BiomeAtmosphereRequirement worldAir) => BiomeAir.Admits(airBand, worldAir);
+
 		[Header("Ways Across This Ground")]
 		[Tooltip("Main and detail layers only: the path, road and cobble grounds a way takes where this ground is the strongest under it. Each empty one is the biome's own slot. Written by Author biome art from the spec; set by hand to override.")]
 		public GroundWays ways;

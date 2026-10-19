@@ -21,10 +21,11 @@ namespace FishMMO.Shared.WorldDesign
 	/// lies in a lane straight out from the mouth as wide as its bore, nor on the trodden ways, water or steep rock.
 	/// </para>
 	/// <para>
-	/// <b>Boulders at the walls' feet.</b> Where the mouth opens in a notch cut into the hillside (CaveSystem.HasNotch),
-	/// boulders lie heaped against the foot of its rock walls on the notch's floor, leaving the way in clear, and more at the
-	/// walls' outer ends; a fallen trunk beside it now and then (reference photos, 2026-10-12). The turf-and-roots lip once
-	/// hung over the opening was taken out ("look unnatural"); vines drape the lintel instead (VinePlacement).
+	/// <b>No rocky border.</b> The mouth opens straight in the hillside, the ground before it graded to its floor
+	/// (CaveSystem.Approach); the notch, the block outcrop and the boulders heaped at its shoulders are gone (2026-10-18:
+	/// "remove the rocky border and allow a smoother transition into the cave"). Now and then a boulder lies out on the
+	/// slope off to one side, and a fallen trunk beside it. The turf-and-roots lip once hung over the opening was taken out
+	/// ("look unnatural"); vines drape the lintel instead (VinePlacement).
 	/// </para>
 	/// <para>
 	/// By form: a cave in full; a lava tube thinner (the ground about it is young rock); a grotto and a sea cave only their
@@ -107,7 +108,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			int props = 0, cells = 0, vines = 0;
 			var mouths = new List<Mouth>();
-			// The ground round the system, for the vines to find the outcrop's and shell's faces round each mouth.
+			// The ground round the system, for the vines to find the shell's faces round each mouth.
 			CaveGround ground = null;
 			if (system.Form != CaveForm.SeaCave)
 			{
@@ -117,6 +118,12 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			foreach (CaveMouth mouth in system.Mouths)
 			{
+				// A mouth under water grows nothing and has nothing strewn before it; one behind a fall stands on its shelf, its
+				// boulders would fall in the pool or block the way.
+				if (mouth.Kind == CaveMouthKind.Submerged)
+				{
+					continue;
+				}
 				var m = new Mouth
 				{
 					At = system.Origin + mouth.Floor,
@@ -124,7 +131,10 @@ namespace FishMMO.Shared.WorldDesign
 					Radius = mouth.Radius,
 				};
 				mouths.Add(m);
-				props += Strew(context, system, mouth, m, growth, random, lush);
+				if (mouth.Kind == CaveMouthKind.Ground)
+				{
+					props += Strew(context, system, mouth, m, growth, random, lush);
+				}
 				// Ivy and creepers over the lintel and down the jambs, now and then a curtain across the whole opening, and on
 				// the rock round it (Jim, 2026-10-12: "occasionally curtain cave entrances, and around the cave entrances");
 				// visual only, no colliders. A sea cave's rock is the sea's edge: none there.
@@ -229,52 +239,29 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── Boulders and a fallen trunk ───────────────────────────
 
-		/// <summary>A few boulders half sunk at the mouth's shoulders and perhaps a fallen trunk; how many.</summary>
+		/// <summary>
+		/// Now and then a boulder or two lying out on the slope off to the side of the way in, and perhaps a fallen trunk; how
+		/// many. Never heaped at the opening's shoulders (2026-10-18: "remove the rocky border"): a ring of boulders round
+		/// the mouth framed it like a wall, where the hillside should run into it.
+		/// </summary>
 		private static int Strew(PointOfInterestSiteContext context, CaveSystem system, CaveMouth caveMouth, Mouth mouth, Growth growth, DeterministicRNG random, float lush)
 		{
 			int placed = 0;
 			var across = new Vector3(mouth.Out.z, 0f, -mouth.Out.x);
-			if (growth.Boulders.Count > 0 && system.HasNotch)
+			if (growth.Boulders.Count > 0)
 			{
-				// Heaped against the foot of each of the notch's walls, on its floor, and at the walls' outer ends.
-				float depth = CaveSystem.NotchDepth(caveMouth);
-				for (int sideIndex = 0; sideIndex < 2; sideIndex++)
-				{
-					float side = sideIndex == 0 ? 1f : -1f;
-					int heap = random.Range(2, 5);
-					for (int i = 0; i < heap; i++)
-					{
-						float size = random.Range(0.6f, 1.35f);
-						bool outer = i == heap - 1 && random.NextFloat() < 0.7f;
-						float w = outer ? random.Range(0.85f * depth, depth + 2f) : random.Range(0.8f, 0.85f * depth);
-						float half = CaveSystem.NotchHalfWidthAt(caveMouth, w);
-						float u = outer ? half + random.Range(0.2f, 1.2f) : half - 0.45f * size;
-						// The way in stays a good bore wide.
-						if (!outer && u - 0.6f * size < 0.9f * mouth.Radius)
-						{
-							continue;
-						}
-						Vector3 p = mouth.At + mouth.Out * w + across * (side * u);
-						float ground = outer ? context.GroundAt(p.x, p.z) : Mathf.Min(context.GroundAt(p.x, p.z), mouth.At.y);
-						p.y = ground - 0.3f * size;
-						GameObject prefab = growth.Boulders[random.Next(growth.Boulders.Count)];
-						context.AddProp(prefab, p, Quaternion.Euler(random.Range(-12f, 12f), random.Range(0f, 360f), random.Range(-12f, 12f)), Vector3.one * size);
-						placed++;
-					}
-				}
-			}
-			else if (growth.Boulders.Count > 0)
-			{
-				int boulders = random.Range(2, 5);
+				// Clear of the arch's foot by a few metres, and out from the face: scree come down the hill, not a frame.
+				float foot = caveMouth.Radius * (1f + CaveSystem.ArchSpread);
+				int boulders = random.Range(0, 3);
 				for (int i = 0; i < boulders; i++)
 				{
-					float side = i % 2 == 0 ? 1f : -1f;
-					Vector3 p = mouth.At + across * side * (mouth.Radius + random.Range(1.2f, 4.5f)) + mouth.Out * random.Range(-0.5f, 4f);
+					float side = random.NextFloat() < 0.5f ? 1f : -1f;
+					Vector3 p = mouth.At + across * side * (foot + random.Range(3f, 9f)) + mouth.Out * random.Range(2f, 10f);
 					if (!OpenGround(context, p, mouth))
 					{
 						continue;
 					}
-					float size = random.Range(0.55f, 1.1f);
+					float size = random.Range(0.5f, 1f);
 					GameObject prefab = growth.Boulders[random.Next(growth.Boulders.Count)];
 					p.y = context.GroundAt(p.x, p.z) - 0.3f * size;
 					context.AddProp(prefab, p, Quaternion.Euler(random.Range(-10f, 10f), random.Range(0f, 360f), random.Range(-10f, 10f)), Vector3.one * size);

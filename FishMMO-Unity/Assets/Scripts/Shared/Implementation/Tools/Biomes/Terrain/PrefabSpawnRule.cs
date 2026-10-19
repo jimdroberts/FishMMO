@@ -210,6 +210,18 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("Rules on a biome's submerged (lakebed) layer only. Metres below mean sea level the rule grows between: x the shallowest, y the deepest; 0 for either end leaves that end open. The rule thins out over the outer fifth of the range at each closed end, as light fades for kelp and seagrass. (0, 0) = no depth band; the shore gate still keeps it under water at every tide.")]
 		public Vector2 depthRange = Vector2.zero;
 
+		/// <remarks>
+		/// Decision 35 (2026-10-18): under a lake or a river a bed rule's depth is measured below THAT water's surface, not below
+		/// mean sea level (before, nothing ever grew under an inland lake: its bed stood above the sea's line). Which waters a rule
+		/// grows under is its own: <see cref="BiomeBedWaters.Default"/> keeps the slot's (a lakebed's rules the sea alone, as they
+		/// always were, so a coast biome's kelp never comes up in its ponds; a riverbed's a river; a bed layer's its own waters).
+		/// </remarks>
+		[Tooltip("Bed rules only. The waters the rule grows under: the sea, a lake (ponds, moats), a river. Nothing ticked = its slot's: the lakebed's rules the sea only, the riverbed's a river, a bed layer's that layer's waters. Under a lake or a river the depth band is read below that water's own surface.")]
+		public BiomeBedWaters waters = BiomeBedWaters.Default;
+
+		[Tooltip("Bed rules only. The river's current the rule grows in, m/s: x the slowest, y the quickest; 0 leaves that end open ((0, 0) = any current). Still water (a lake, the sea) has none.")]
+		public Vector2 currentRange = Vector2.zero;
+
 		[Header("Climate Band")]
 		[Tooltip("Grow only within a band of the climate where each instance stands: the scene's mean annual temperature at its true place on the globe and its true altitude (so the band climbs a slope with the lapse rate), and the humidity there. Off = the rule grows in every climate its biome reaches, exactly as before the band existed. A scene with no placement climate grows the rule as if it were off.")]
 		public bool useClimateBand = false;
@@ -221,6 +233,14 @@ namespace FishMMO.Shared.Biomes
 		public Vector2 humidityRange = new Vector2(-1f, 1f);
 		[Tooltip("Climate band only. Width of the soft edge at each closed end of the humidity range, centred on the end like the temperature's. 0 = a hard line.")]
 		[Range(0f, 1f)] public float humidityFalloff = 0.1f;
+
+		/// <remarks>
+		/// Decision 41 (2026-10-18): which WORLDS the rule grows on, by their air, mean temperature and flags (BiomeWorldGate). One
+		/// answer for a whole scene, so the rule is grown or skipped; open (the default) grows it on every world, as before.
+		/// </remarks>
+		[Header("World Gate")]
+		[Tooltip("Grow only on worlds whose air, mean temperature and nature the gate admits (the scene's body: a glowing lichen only under a thin sky, a frost flower only in a giant planet's magnetosphere). Everything empty/off = every world, exactly as before the gate existed. A scene with no body counts as the home world.")]
+		public BiomeWorldGate worldGate;
 
 		[SerializeField, HideInInspector]
 		private string specFingerprint = string.Empty;

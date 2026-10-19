@@ -116,6 +116,24 @@ namespace FishMMO.Shared.Celestial
 		[Tooltip("Layers scenes on this body can sit in. Empty: the atlas's default layers.")]
 		public List<FishMMO.Shared.Atlas.WorldAtlasLayer> Layers = new List<FishMMO.Shared.Atlas.WorldAtlasLayer>();
 
+		[Header("Cloud World")]
+		[Tooltip("A gas giant's scenes are cloud worlds: what their landing stages, airships and rope bridges are built of and lit by (they stand in no biome). Empty: the structure kit's own materials, no lights.")]
+		public CloudWorldStructures CloudWorldStructures = new CloudWorldStructures();
+
+		/// <summary>Fills an empty cloud-world palette with the structure kit's entries, every style and role, ready to edit.</summary>
+		[ContextMenu("Cloud World: Fill The Palette With The Kit's")]
+		private void FillCloudWorldPalette()
+		{
+			CloudWorldStructures ??= new CloudWorldStructures();
+			if (!CloudWorldStructures.FillWithKit())
+			{
+				Debug.LogWarning($"[{name}] The cloud world's palette already names its entries: left as it is.");
+			}
+#if UNITY_EDITOR
+			UnityEditor.EditorUtility.SetDirty(this);
+#endif
+		}
+
 		public bool HasWeather => Atmosphere != AtmosphereKind.None;
 
 		/// <summary>The atlas radius in km, as last baked (or the manual value).</summary>

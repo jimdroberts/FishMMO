@@ -54,6 +54,47 @@ namespace FishMMO.Client
 		/// middle (<see cref="AmbientCreatureKind.SwarmStyle"/> says how).
 		/// </summary>
 		Swarm,
+		/// <summary>A spider: a small head-and-body before a round abdomen, eight long legs bent high at the knee. Walks like a beetle.</summary>
+		Spider,
+		/// <summary>
+		/// A cave cricket: a humped, wingless body on long spiny hind legs, its feelers twice its length sweeping ahead of it in
+		/// the dark. Walks like a beetle.
+		/// </summary>
+		Cricket,
+	}
+
+	/// <summary>
+	/// The places in a cave a kind lives at (<see cref="FishMMO.Shared.SceneCaveLifeKind"/>, one bit each by its ordinal), for
+	/// the cave creatures placed from the cut's cave-life spots rather than the terrain (AmbientCaveLife).
+	/// </summary>
+	[Flags]
+	public enum AmbientCaveNiche
+	{
+		None = 0,
+		Floor = 1 << 0,
+		Wall = 1 << 1,
+		Roost = 1 << 2,
+		Flight = 1 << 3,
+		Pool = 1 << 4,
+		Mouth = 1 << 5,
+		Glow = 1 << 6,
+	}
+
+	/// <summary>The kinds of cave a kind lives in (<see cref="FishMMO.Shared.SceneCaveForm"/>, one bit each by its ordinal).</summary>
+	[Flags]
+	public enum AmbientCaveForms
+	{
+		None = 0,
+		Cave = 1 << 0,
+		Grotto = 1 << 1,
+		SeaCave = 1 << 2,
+		IceCave = 1 << 3,
+		LavaTube = 1 << 4,
+		Mine = 1 << 5,
+		/// <summary>The caves water made in limestone: a cave, a grotto, a sea cave.</summary>
+		Limestone = Cave | Grotto | SeaCave,
+		/// <summary>Every dry cave but ice: the stone caves and a mine.</summary>
+		Rock = Cave | Grotto | SeaCave | LavaTube | Mine,
 	}
 
 	/// <summary>How a swarm's insects fly about its middle (FishAmbientLife.hlsl's swarm mode, <c>_SwarmStyle</c>).</summary>
@@ -290,6 +331,24 @@ namespace FishMMO.Client
 		/// insects that only show by the light they catch.
 		/// </summary>
 		public float Glow;
+
+		// ── Caves ──
+		/// <summary>
+		/// The places in a carved cave it lives at (the cut's cave-life spots: AmbientCaveLife); none for a kind that never goes
+		/// underground. A kind only of the caves has <see cref="GroupsPerKm2"/> 0: the open land never places it.
+		/// </summary>
+		public AmbientCaveNiche CaveNiche;
+		/// <summary>The caves it lives in.</summary>
+		public AmbientCaveForms CaveForms = AmbientCaveForms.Rock;
+		/// <summary>Groups at a spot of its niche, on average, where the cave suits it (before the family's density).</summary>
+		public float CavePerSpot = 0.5f;
+		/// <summary>
+		/// How far from the daylight it lives, min..max (<see cref="FishMMO.Shared.SceneCaveLifeSpot.Dark"/>: 0 in a mouth's
+		/// light, 1 in the dark for good): the entrance's moths and spiders, the deep cave's blind white things.
+		/// </summary>
+		public Vector2 CaveDark = new Vector2(0f, 1f);
+		/// <summary>Only where the cave is wet (by its water, under a dripping roof): salamanders, olms.</summary>
+		public bool CaveNeedsDamp;
 	}
 
 	/// <summary>The kinds the world starts with.</summary>
@@ -307,8 +366,8 @@ namespace FishMMO.Client
 		public static float Celsius(float degrees) => degrees / 33.1f;
 
 		/// <summary>
-		/// Fifty-two kinds: forty-four of the home world's (seven of them insect swarms), three of thin air and five of
-		/// frozen air. Numbers are grounded in the animals': flight initiation distances from field studies
+		/// Sixty kinds: fifty-two of the home world's (seven of them insect swarms, eight of them the caves'), three of thin
+		/// air and five of frozen air. Numbers are grounded in the animals': flight initiation distances from field studies
 		/// (small passerines 4-8 m, corvids 15-25 m, gulls 10-20 m, ducks 10-20 m, rabbits ~10 m), wing beats from
 		/// high-speed footage (finches 15-20 Hz, crows 3-4 Hz, gulls 3 Hz, bats 8-12 Hz), and densities thinned to
 		/// what a player notices rather than what a census would count.
@@ -561,6 +620,9 @@ namespace FishMMO.Client
 					Activity = AmbientActivity.Nocturnal, ColdLimit = Celsius(-10f), RainLimit = 0.6f,
 					FlushMetres = 4f, FleeSpeed = 3f,
 					Back = Hex(0x4a4038), Belly = Hex(0x7a7064), Accent = Hex(0xb08a80), Smoothness = 0.25f,
+					// And into the caves and old workings from the mouth, as far as the dark goes before there is nothing to eat.
+					CaveNiche = AmbientCaveNiche.Floor, CaveForms = AmbientCaveForms.Cave | AmbientCaveForms.Grotto | AmbientCaveForms.Mine | AmbientCaveForms.LavaTube,
+					CavePerSpot = 0.2f, CaveDark = new Vector2(0f, 0.75f),
 				},
 				new AmbientCreatureKind
 				{
@@ -621,6 +683,8 @@ namespace FishMMO.Client
 					FlushMetres = 4f, FleeSpeed = 1.5f,
 					Back = Hex(0x8a4428), Belly = Hex(0xc87a4a), Accent = Hex(0x5a2a18), Smoothness = 0.5f,
 					Palette = new[] { Hex(0xffffff), Hex(0xa8b070), Hex(0xd09070) },
+					// The wet rock of a sea cave the tide works over, and a sea grotto's.
+					CaveNiche = AmbientCaveNiche.Floor, CaveForms = AmbientCaveForms.SeaCave | AmbientCaveForms.Grotto, CavePerSpot = 0.6f, CaveDark = new Vector2(0f, 1f),
 				},
 				new AmbientCreatureKind
 				{
@@ -1015,6 +1079,122 @@ namespace FishMMO.Client
 					FlushMetres = 10f, FleeSpeed = 6f,
 					Back = Hex(0x4a5a78), Belly = Hex(0xd0d8e8), Accent = Hex(0x20283a), Smoothness = 0.35f,
 					Palette = new[] { Hex(0xffffff), Hex(0xb0d0f0), Hex(0xd0c0f0), Hex(0xa0e0d0) },
+				},
+
+				// ── The caves: placed from the cut's cave-life spots, never on the open land (GroupsPerKm2 0). Underground the
+				// hour, the weather and the season's heat do not reach (AmbientGating.CaveActivity): the air is the year's mean. ──
+				new AmbientCreatureKind
+				{
+					// Horseshoe and long-eared bats: colonies hanging wing-wrapped from the high roofs by day and through the
+					// winter's sleep, circling the cave at dusk and streaming out of its mouth into the night, back before dawn.
+					// GroupSize is a roost's colony (a box of air or a mouth's stream has its own share of it).
+					Name = "Cave bats", Shape = AmbientShape.Bat, Behaviour = AmbientBehaviour.Hawk, Family = AmbientFamily.Bats,
+					Length = new Vector2(0.07f, 0.1f), GroupSize = new Vector2Int(6, 28), GroupsPerKm2 = 0f, Spread = 1.2f, Roam = new Vector2(2f, 6f),
+					Speed = 5.5f, StrokeHz = 11f, Altitude = new Vector2(0f, 0f),
+					Habitats = AmbientHabitat.Cave, Climate = new Vector2(Celsius(-2f), 1f),
+					// Always in the cave (hanging when not flying: AmbientCaveLife reads the night outside for when they go).
+					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(-6f), RainLimit = 0f,
+					FlushMetres = 0f,
+					Back = Hex(0x3a2e26), Belly = Hex(0x5a4a3e), Accent = Hex(0x1e1814), Smoothness = 0.2f, CastShadows = false,
+					Palette = new[] { Hex(0xffffff), Hex(0xd8c8b8), Hex(0xb0a8a0) },
+					CaveNiche = AmbientCaveNiche.Roost | AmbientCaveNiche.Flight | AmbientCaveNiche.Mouth,
+					CaveForms = AmbientCaveForms.Rock | AmbientCaveForms.IceCave, CavePerSpot = 0.7f, CaveDark = new Vector2(0f, 1f),
+				},
+				new AmbientCreatureKind
+				{
+					// Cave crickets: humped and wingless, on long legs, feelers sweeping; in loose crowds on the walls and floors
+					// from the twilight inward, the commonest thing alive in a cave.
+					Name = "Cave crickets", Shape = AmbientShape.Cricket, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.025f, 0.04f), GroupSize = new Vector2Int(2, 7), GroupsPerKm2 = 0f, Spread = 0.6f, Roam = new Vector2(0.3f, 0.9f),
+					Speed = 0.35f, StrokeHz = 6f, Episode = new Vector2(5f, 14f),
+					Habitats = AmbientHabitat.Cave, Climate = new Vector2(Celsius(1f), 1f),
+					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(0f), RainLimit = 0f,
+					FlushMetres = 1.2f, FleeSpeed = 1.2f,
+					Back = Hex(0x8a6a48), Belly = Hex(0xb89a78), Accent = Hex(0x5a4430), Smoothness = 0.35f, CastShadows = false,
+					Palette = new[] { Hex(0xffffff), Hex(0xd8c8a8), Hex(0xc0a888) },
+					CaveNiche = AmbientCaveNiche.Floor | AmbientCaveNiche.Wall, CaveForms = AmbientCaveForms.Rock, CavePerSpot = 0.55f, CaveDark = new Vector2(0.15f, 1f),
+				},
+				new AmbientCreatureKind
+				{
+					// Cave spiders: long-legged and dark, waiting on the walls of the twilight and a little past it for what
+					// blunders in from outside.
+					Name = "Cave spiders", Shape = AmbientShape.Spider, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.018f, 0.03f), GroupSize = new Vector2Int(1, 3), GroupsPerKm2 = 0f, Spread = 0.5f, Roam = new Vector2(0.15f, 0.5f),
+					Speed = 0.3f, StrokeHz = 5f, Episode = new Vector2(10f, 30f),
+					Habitats = AmbientHabitat.Cave, Climate = new Vector2(Celsius(1f), 1f),
+					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(0f), RainLimit = 0f,
+					FlushMetres = 0.8f, FleeSpeed = 0.8f,
+					Back = Hex(0x3a2e24), Belly = Hex(0x5a4a3a), Accent = Hex(0x7a5a3a), Smoothness = 0.5f, CastShadows = false,
+					Palette = new[] { Hex(0xffffff), Hex(0xc8b098), Hex(0x9a9088) },
+					CaveNiche = AmbientCaveNiche.Wall | AmbientCaveNiche.Floor, CaveForms = AmbientCaveForms.Rock, CavePerSpot = 0.45f, CaveDark = new Vector2(0.05f, 0.85f),
+				},
+				new AmbientCreatureKind
+				{
+					// Cave salamanders: slow, slender and slick, on the dripping walls and wet floors of a limestone cave where the
+					// air never dries and never warms.
+					Name = "Cave salamander", Shape = AmbientShape.Lizard, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.09f, 0.13f), GroupSize = new Vector2Int(1, 2), GroupsPerKm2 = 0f, Spread = 0.6f, Roam = new Vector2(0.3f, 0.8f),
+					Speed = 0.12f, StrokeHz = 2.5f, Episode = new Vector2(12f, 30f), RainLover = true,
+					Habitats = AmbientHabitat.Cave, Climate = new Vector2(Celsius(3f), Celsius(20f)),
+					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(2f), RainLimit = 0f,
+					FlushMetres = 1f, FleeSpeed = 0.5f,
+					Back = Hex(0x5a3a2a), Belly = Hex(0x8a6a4a), Accent = Hex(0xa87a3a), Smoothness = 0.75f, CastShadows = false,
+					Palette = new[] { Hex(0xffffff), Hex(0xc0a890), Hex(0x9a8a7a) },
+					CaveNiche = AmbientCaveNiche.Floor | AmbientCaveNiche.Wall, CaveForms = AmbientCaveForms.Cave | AmbientCaveForms.Grotto,
+					CavePerSpot = 0.35f, CaveDark = new Vector2(0.3f, 1f), CaveNeedsDamp = true,
+				},
+				new AmbientCreatureKind
+				{
+					// Olms: blind pink-white cave salamanders a hand and more long, red gill-tufts, swimming slowly in the
+					// still fresh water of a cave's pools.
+					Name = "Olm", Shape = AmbientShape.Lizard, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.2f, 0.28f), GroupSize = new Vector2Int(1, 3), GroupsPerKm2 = 0f, Spread = 0.8f, Roam = new Vector2(0.5f, 1.5f),
+					Speed = 0.08f, StrokeHz = 1.6f, Episode = new Vector2(20f, 50f), RainLover = true,
+					Habitats = AmbientHabitat.Cave, Climate = new Vector2(Celsius(3f), Celsius(18f)),
+					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(2f), RainLimit = 0f,
+					FlushMetres = 0f,
+					Back = Hex(0xe8c8c0), Belly = Hex(0xf0dcd4), Accent = Hex(0xd06a6a), Smoothness = 0.8f, CastShadows = false,
+					CaveNiche = AmbientCaveNiche.Pool, CaveForms = AmbientCaveForms.Cave | AmbientCaveForms.Grotto, CavePerSpot = 0.6f, CaveDark = new Vector2(0f, 1f),
+					CaveNeedsDamp = true,
+				},
+				new AmbientCreatureKind
+				{
+					// Herald moths and their kin: wintering in a cave's mouth, fluttering in the half-light just inside it.
+					Name = "Cave moths", Shape = AmbientShape.Butterfly, Behaviour = AmbientBehaviour.Hawk, Family = AmbientFamily.Bats,
+					Length = new Vector2(0.03f, 0.045f), GroupSize = new Vector2Int(1, 4), GroupsPerKm2 = 0f, Spread = 2f, Roam = new Vector2(2f, 4f),
+					Speed = 1f, StrokeHz = 10f, Altitude = new Vector2(0f, 0f),
+					Habitats = AmbientHabitat.Cave, Climate = new Vector2(Celsius(0f), 1f),
+					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(1f), RainLimit = 0f,
+					FlushMetres = 0f,
+					Back = Hex(0xb08050), Belly = Hex(0xc8a070), Accent = Hex(0x6a4a2a), Smoothness = 0.05f, CastShadows = false,
+					Palette = new[] { Hex(0xffffff), Hex(0xe0c0a0), Hex(0xc8b8a0) },
+					CaveNiche = AmbientCaveNiche.Flight, CaveForms = AmbientCaveForms.Rock, CavePerSpot = 0.6f, CaveDark = new Vector2(0f, 0.6f),
+				},
+				new AmbientCreatureKind
+				{
+					// Fungus gnats: the glow-worms' grown flies, a faint blue-green dance in the still damp air under a high roof,
+					// each lit from within as the larvae on the roof are.
+					Name = "Fungus gnats", Shape = AmbientShape.Swarm, Behaviour = AmbientBehaviour.Swarm, Family = AmbientFamily.Swarms, SwarmStyle = AmbientSwarmStyle.Cloud,
+					Length = new Vector2(0.004f, 0.007f), GroupSize = new Vector2Int(14, 40), GroupsPerKm2 = 0f, Spread = 1.4f, Roam = new Vector2(0.5f, 1.5f),
+					Speed = 0.15f, Altitude = new Vector2(0f, 0f), Episode = new Vector2(30f, 80f),
+					Habitats = AmbientHabitat.Cave, Climate = new Vector2(Celsius(2f), 1f),
+					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(1f), RainLimit = 0f,
+					FlushMetres = 0f,
+					Back = Hex(0x304048), Belly = Hex(0x405058), Accent = Hex(0x60e0c8), Smoothness = 0.3f, CastShadows = false, Glow = 3f,
+					CaveNiche = AmbientCaveNiche.Glow, CaveForms = AmbientCaveForms.Cave | AmbientCaveForms.Grotto, CavePerSpot = 0.8f, CaveDark = new Vector2(0.3f, 1f),
+				},
+				new AmbientCreatureKind
+				{
+					// Bent-toed cave geckos: pale and banded, flat to the walls of warm caves, hunting the crickets.
+					Name = "Cave geckos", Shape = AmbientShape.Lizard, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.1f, 0.16f), GroupSize = new Vector2Int(1, 2), GroupsPerKm2 = 0f, Spread = 0.8f, Roam = new Vector2(0.4f, 1.2f),
+					Speed = 0.6f, StrokeHz = 7f, Episode = new Vector2(6f, 16f),
+					Habitats = AmbientHabitat.Cave, Climate = new Vector2(Celsius(17f), 1f),
+					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(15f), RainLimit = 0f,
+					FlushMetres = 2f, FleeSpeed = 2f,
+					Back = Hex(0xb0a080), Belly = Hex(0xd8d0b8), Accent = Hex(0x6a5a40), Smoothness = 0.4f, CastShadows = false,
+					Palette = new[] { Hex(0xffffff), Hex(0xd8d0c0), Hex(0xc8b8a0) },
+					CaveNiche = AmbientCaveNiche.Wall | AmbientCaveNiche.Floor, CaveForms = AmbientCaveForms.Rock, CavePerSpot = 0.35f, CaveDark = new Vector2(0f, 0.85f),
 				},
 			};
 		}

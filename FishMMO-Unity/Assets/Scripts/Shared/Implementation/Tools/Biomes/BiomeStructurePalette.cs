@@ -68,6 +68,11 @@ namespace FishMMO.Shared.Biomes
 		BoneWork,
 		/// <summary>Reed bundles laid as thatch.</summary>
 		Reed,
+		// The cold glows (2026-10-18, I6g): a lamp's pane in cool light, no palette role builds in them.
+		/// <summary>Rune-light: a rune stone's glowing runes.</summary>
+		Runelight,
+		/// <summary>Faerie-light: a glowjar's mote.</summary>
+		Faelight,
 	}
 
 	/// <summary>The part a material plays in a building, which a biome's palette gives its own material (<see cref="BiomeStructurePalette"/>).</summary>
@@ -116,8 +121,29 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
+	/// The pitch a palette builds a roof role at (2026-10-18, I6h): the material's own (its least pitch: thatch and reed 50°,
+	/// shingles 45°, slate 40°, sandstone and sod 35°, bamboo and logs 30°, mud brick flat), or a class named for the biome
+	/// (the Valley's broad 30° shingle roofs, the Carpathian pastures' 60° shakes). The runtime mirror of the structure kit's
+	/// StructureRoofPitch, one value on (a test holds them equal). Every roofed piece follows it (StructureRoofs).
+	/// </summary>
+	/// <remarks>Append-only: the values are serialized.</remarks>
+	public enum BiomeRoofPitch : byte
+	{
+		/// <summary>The material's own pitch.</summary>
+		Material,
+		/// <summary>Flat behind a parapet.</summary>
+		Flat,
+		Pitch30,
+		Pitch35,
+		Pitch40,
+		Pitch45,
+		Pitch50,
+		Pitch60,
+	}
+
+	/// <summary>
 	/// One role's material in one structure style (<see cref="BiomeStructurePalette"/>): what that style's buildings make the role
-	/// of here, its colour over the surface, and the surface variant it is drawn with.
+	/// of here, its colour over the surface, the surface variant it is drawn with, and for a roof the pitch it is built at.
 	/// </summary>
 	[Serializable]
 	public struct BiomeStructureSurface
@@ -132,18 +158,26 @@ namespace FishMMO.Shared.Biomes
 		public Color Tint;
 		[Tooltip("The biome's own variant of the material's surface (its grain, palette and wear), by id. Empty: the surface every biome shares.")]
 		public string Surface;
+		[Tooltip("A roof role's pitch here (Roof, ShingleRoof, Turf): the material's own, or a class the biome builds its roofs at. Every roofed piece follows it. Other roles ignore it.")]
+		public BiomeRoofPitch Pitch;
 
-		public BiomeStructureSurface(BiomeStructureStyle style, BiomeStructureRole role, BiomeStructureMaterial material, Color tint, string surface = null)
+		public BiomeStructureSurface(BiomeStructureStyle style, BiomeStructureRole role, BiomeStructureMaterial material, Color tint, string surface = null,
+			BiomeRoofPitch pitch = BiomeRoofPitch.Material)
 		{
 			Style = style;
 			Role = role;
 			Material = material;
 			Tint = tint;
 			Surface = surface ?? string.Empty;
+			Pitch = pitch;
 		}
 
-		/// <summary>Every value, exactly: "Style/Role=Material(r,g,b,a)@surface", the tint's channels round-tripped.</summary>
-		public string Signature() => $"{Style}/{Role}={Material}({R(Tint.r)},{R(Tint.g)},{R(Tint.b)},{R(Tint.a)})@{Surface ?? string.Empty}";
+		/// <summary>
+		/// Every value, exactly: "Style/Role=Material(r,g,b,a)@surface", the tint's channels round-tripped, then "^pitch" when a
+		/// pitch is named (2026-10-18: an entry at the material's own pitch signs as it always did, so no authoring mark moves).
+		/// </summary>
+		public string Signature() => $"{Style}/{Role}={Material}({R(Tint.r)},{R(Tint.g)},{R(Tint.b)},{R(Tint.a)})@{Surface ?? string.Empty}"
+			+ (Pitch == BiomeRoofPitch.Material ? string.Empty : "^" + Pitch);
 
 		private static string R(float value) => value.ToString("R", CultureInfo.InvariantCulture);
 
@@ -213,14 +247,14 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>
 		/// Whether a style's buildings come out here exactly as the kit builds them: every role's material, tint and surface the
-		/// kit's (<see cref="KitSurface"/>), a role with no entry counting as the kit's.
+		/// kit's (<see cref="KitSurface"/>) and no roof's pitch named, a role with no entry counting as the kit's.
 		/// </summary>
 		public bool BuildsAsKit(BiomeStructureStyle style)
 		{
 			foreach (BiomeStructureRole role in Roles)
 			{
 				BiomeStructureSurface mine = For(style, role), kit = KitSurface(style, role);
-				if (mine.Material != kit.Material || mine.Tint != kit.Tint || !string.IsNullOrEmpty(mine.Surface))
+				if (mine.Material != kit.Material || mine.Tint != kit.Tint || !string.IsNullOrEmpty(mine.Surface) || mine.Pitch != BiomeRoofPitch.Material)
 				{
 					return false;
 				}
@@ -370,6 +404,8 @@ namespace FishMMO.Shared.Biomes
 				case BiomeStructureMaterial.Ash: return new Color(0.3f, 0.29f, 0.28f);
 				case BiomeStructureMaterial.Glass: return new Color(0.42f, 0.37f, 0.3f);
 				case BiomeStructureMaterial.Lamplight: return new Color(1f, 0.82f, 0.55f);
+				case BiomeStructureMaterial.Runelight: return new Color(0.78f, 0.86f, 0.92f);
+				case BiomeStructureMaterial.Faelight: return new Color(0.86f, 0.92f, 0.62f);
 				default: return Color.white;
 			}
 		}

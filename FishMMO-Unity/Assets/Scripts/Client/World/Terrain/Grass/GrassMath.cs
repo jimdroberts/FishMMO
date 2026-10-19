@@ -648,6 +648,26 @@ namespace FishMMO.Client
 			return (uint)id0 | (uint)id1 << 8 | q << 16 | 255u << 24;
 		}
 
+		/// <summary>
+		/// <see cref="PackSurfaceLayers"/> from a texel of the terrain's stored index map (FishMMO.Shared.TerrainIndexMap: four
+		/// ids strongest first, weight bytes less the fifth) instead of its alphamaps — what a client build's tile has once its
+		/// alphamaps are left out. The index texel's first three slots are the alphamaps' three strongest, each less the same
+		/// fifth, so the two less the third are the same bytes: the same ids, and the share within one step of rounding. Only
+		/// where the strongest is tied with a fifth layer (its stored weight 0) does it read as unpainted.
+		/// </summary>
+		public static uint PackSurfaceFromIndex(uint ids, uint packedWeights)
+		{
+			int s0 = (int)(packedWeights & 255u), s1 = (int)(packedWeights >> 8 & 255u), s2 = (int)(packedWeights >> 16 & 255u);
+			if (s0 <= 0)
+			{
+				return 0u;
+			}
+			int a = s0 - s2, b = Math.Max(0, s1 - s2);
+			float share = a + b > 0 ? a / (float)(a + b) : 1f;
+			uint q = (uint)Math.Max(0, Math.Min(255, (int)Math.Round(share * 255f)));
+			return (ids & 255u) | (ids >> 8 & 255u) << 8 | q << 16 | 255u << 24;
+		}
+
 		// ── The blade's curve ────────────────────────────────────────
 
 		/// <summary>

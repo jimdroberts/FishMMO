@@ -54,13 +54,13 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506175559009258
-  - rid: 4061506175559009259
-  - rid: 4061506175559009260
+  - rid: 4061506230070018060
+  - rid: 4061506230070018061
+  - rid: 4061506230070018062
   references:
     version: 2
     RefIds:
-    - rid: 4061506175559009258
+    - rid: 4061506230070018060
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -71,12 +71,12 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506175559009259
+    - rid: 4061506230070018061
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506175559009260
+    - rid: 4061506230070018062
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 

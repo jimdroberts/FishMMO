@@ -137,6 +137,86 @@ namespace FishMMO.UnitTests
 			Assert.Less(humidityError / Points, 0.02, "mean humidity error from the interpolated moisture");
 		}
 
+		/// <summary>
+		/// A 3 × 2 map of 20 m cells centred on the scene, with the ground the cut would have stored: cell centres at
+		/// x −20, 0, 20 and z −10, 10. Every altitude is exact in half precision.
+		/// </summary>
+		private SceneBiomeMap MakeBakedMap(float verticalScale)
+		{
+			var map = ScriptableObject.CreateInstance<SceneBiomeMap>();
+			created.Add(map);
+			float[] altitudes = { 100f, 300f, 1200f, -40f, 0f, 2048f };
+			map.Set(3, 2, new int[6], new Vector2(-30f, -20f), new Vector2(60f, 40f), altitudes, verticalScale);
+			return map;
+		}
+
+		[Test]
+		public void AGeneratedScene_WithABakedMap_ReadsTheCutsGroundAndVerticalScale()
+		{
+			SolarSystemProfile system = MakeSystem(out WorldBody home);
+			var footprint = new AtlasFootprint(25.0, 40.0, 30f, new Vector2(6f, 4f));
+			const double Radius = 30.0;
+			// Not the body's own scale, as it would be after the body's relief was edited since the cut.
+			const float CutScale = 0.5f;
+			Assume.That(PlanetSurface.SceneVerticalScale(home, Radius), Is.Not.EqualTo(CutScale));
+			SceneBiomeMap map = MakeBakedMap(CutScale);
+			ScenePlacementClimate placement = ScenePlacementClimate.For(system, home, footprint, Radius, true, map);
+
+			Assert.IsTrue(map.HasGroundAltitudes);
+			Assert.IsTrue(placement.HasBakedGround);
+			Assert.AreEqual(CutScale, placement.VerticalScale, "the scale the scene's heights were laid at, not the body's today");
+
+			void GroundIs(float x, float z, float altitude, string what)
+			{
+				Assert.IsTrue(placement.TryGroundY(x, z, out float y), what);
+				Assert.AreEqual(altitude * CutScale, y, 1e-4f, what + ": world y");
+				Assert.AreEqual(altitude, placement.AltitudeOf(y), 1e-3f, what + ": back to the body's metres");
+			}
+			GroundIs(0f, -10f, 300f, "a cell's centre");
+			GroundIs(-10f, -10f, 200f, "halfway between two centres along x");
+			GroundIs(0f, 0f, 150f, "halfway between two centres along z");
+			GroundIs(-500f, 500f, -40f, "past the north-west corner the edge holds");
+			GroundIs(500f, -500f, 1200f, "past the south-east corner the edge holds");
+		}
+
+		[Test]
+		public void AMapThatWasNotCut_LeavesTheGroundToTheTerrainAndTheScaleToTheBody()
+		{
+			SolarSystemProfile system = MakeSystem(out WorldBody home);
+			var footprint = new AtlasFootprint(25.0, 40.0, 30f, new Vector2(6f, 4f));
+			const double Radius = 30.0;
+			SceneBiomeMap map = MakeBakedMap(0.5f);
+			// Painted or imported: Set without altitudes clears what was baked.
+			map.Set(3, 2, new int[6], new Vector2(-30f, -20f), new Vector2(60f, 40f));
+			ScenePlacementClimate placement = ScenePlacementClimate.For(system, home, footprint, Radius, true, map);
+
+			Assert.IsFalse(map.HasGroundAltitudes);
+			Assert.IsFalse(map.TryGroundAltitude(0f, 0f, out _));
+			Assert.IsFalse(placement.HasBakedGround);
+			Assert.IsFalse(placement.TryGroundY(0f, 0f, out _));
+			Assert.AreEqual(PlanetSurface.SceneVerticalScale(home, Radius), placement.VerticalScale);
+		}
+
+		[Test]
+		public void AGeneratedScene_CoolsPerWorldMetreAtTheBodysLapseOverItsVerticalScale()
+		{
+			/* What the plants' season and the snow line are drawn with (SceneClimate.FoliageState, GroundCover.SnowLine)
+			 * against what the cut chose the biomes from: the same fall per metre of world y. With the body's lapse alone
+			 * they cooled at the vertical scale's share of it, and a peak the biomes call alpine kept its summer. */
+			SolarSystemProfile system = MakeSystem(out WorldBody home);
+			var footprint = new AtlasFootprint(25.0, 40.0, 30f, new Vector2(6f, 4f));
+			ScenePlacementClimate placement = ScenePlacementClimate.For(system, home, footprint, 30.0, true);
+			Assume.That(placement.VerticalScale, Is.LessThan(1f), "a scale of one would not tell the two apart");
+
+			float lapse = (float)ClimateModel.LapseRatePerMetre(system, home);
+			float low = placement.AnnualKelvinAt(new Vector3(400f, 800f, -300f), 0.5f);
+			float high = placement.AnnualKelvinAt(new Vector3(400f, 900f, -300f), 0.5f);
+			float perWorldMetre = (low - high) / 100f;
+
+			Assert.AreEqual(perWorldMetre, placement.CoolingPerSceneMetre(lapse), perWorldMetre * 1e-3f);
+			Assert.Greater(placement.CoolingPerSceneMetre(lapse), lapse * 1.5f, "steeper than the body's own lapse in a scene squeezed below its relief");
+		}
+
 		[Test]
 		public void AHandMadeScene_OnlyPlaced_KeepsItsAuthoredClimate()
 		{

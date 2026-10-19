@@ -29,6 +29,12 @@ namespace FishMMO.Shared
 	/// <see cref="TerrainArrayLayerParams.MaximumLayers"/> layers and a pixel still reads four index texels.
 	/// </para>
 	/// <para>
+	/// <b>Stored for play.</b> In play (the editor's and a player's) a tile takes the index map the cut stored with the
+	/// scene (<see cref="SceneTerrainBake.IndexOf"/>) instead of baking one, while it is still the alphamaps' own — the
+	/// same texels, so the ground looks the same either way — and a client build may then leave the alphamaps out
+	/// (ClientTerrainLayerStripper). A tile with no usable stored map is baked from its alphamaps as before.
+	/// </para>
+	/// <para>
 	/// <b>The arrays are found by the scene's name</b> (<see cref="TerrainArraySet"/>): off disk in
 	/// the editor, by address in a player. Nothing here holds a reference to them, because they are
 	/// build output that each machine regenerates.
@@ -131,7 +137,12 @@ namespace FishMMO.Shared
 		private readonly List<Terrain> bound = new List<Terrain>();
 		private readonly List<Renderer> boundBackdrop = new List<Renderer>();
 		// Each tile's index map and the terrain data it was baked from (a tile given new data is baked again).
-		private readonly Dictionary<Terrain, (RenderTexture Map, TerrainData Data)> indexMaps = new Dictionary<Terrain, (RenderTexture, TerrainData)>();
+		// Stored: the map is the scene's stored one, uploaded (a Texture2D); otherwise one baked here (a render texture).
+		private readonly Dictionary<Terrain, (Texture Map, TerrainData Data, bool Stored)> indexMaps = new Dictionary<Terrain, (Texture, TerrainData, bool)>();
+		// Tiles told once that they have no index map to draw (no stored map and no alphamaps), and that their stored map was out of date.
+		private static readonly HashSet<string> warnedIndex = new HashSet<string>();
+		// What the last push bound: tiles from stored maps, tiles baked here (for its one log line in play).
+		private int pushedStored, pushedBaked;
 		// The scene's per-layer numbers and path slices, one texture for every tile and backdrop renderer (TerrainLayerTable).
 		private Texture2D layerTable;
 #if !UNITY_EDITOR
@@ -210,9 +221,12 @@ namespace FishMMO.Shared
 			FillLayerTable();
 			List<Terrain> terrains = EffectiveTerrains();
 			ReleaseIndexMaps(terrains);
+			pushedStored = pushedBaked = 0;
 			foreach (Terrain terrain in terrains)
 			{
-				if (PushTo(terrain, rebake: Application.isEditor))
+				// Edit mode bakes every push (a cut, a repaint, a brush or an undo may have written the alphamaps since); play
+				// takes each tile's stored map where it is still good.
+				if (PushTo(terrain, rebake: Application.isEditor && !Application.isPlaying))
 				{
 					bound.Add(terrain);
 				}
@@ -221,6 +235,10 @@ namespace FishMMO.Shared
 			{
 				// A player bakes once per tile: the alphamaps' scratch copy (a map's worth per four layers) is not kept.
 				TerrainIndexMapBaker.ReleaseScratch();
+			}
+			if (Application.isPlaying && pushedStored + pushedBaked > 0)
+			{
+				Debug.Log($"[Terrain index] '{SceneKey}': {pushedStored} tile(s) drawn from stored index maps, {pushedBaked} baked from their alphamaps.");
 			}
 			foreach (Renderer renderer in BackdropRenderers())
 			{
@@ -347,9 +365,9 @@ namespace FishMMO.Shared
 		}
 
 		/// <param name="rebake">
-		/// Bake the tile's index map again even when it has one. Always in the editor, where a cut, a repaint, a brush or an
-		/// undo may have written the alphamaps since; in a player only when the tile has none of its data's size (nothing
-		/// writes alphamaps there).
+		/// Bake the tile's index map from its alphamaps again even when it has one, and never take the stored one: in edit mode
+		/// on every push, and in play when the alphamaps were just written (a stroke in play mode). Otherwise (play) the tile
+		/// takes its stored map, or keeps the one it has, or is baked when it has none of its data's size.
 		/// </param>
 		private bool PushTo(Terrain terrain, bool rebake)
 		{
@@ -360,10 +378,10 @@ namespace FishMMO.Shared
 			MaterialPropertyBlock block = BlockFor(terrain);
 			TerrainData data = terrain.terrainData;
 
-			// The index map, baked only once there are arrays to draw it with (before then the ground is plain grey, and a
-			// player has no bake shader until the set brings it).
-			RenderTexture index = null;
-			if (set != null && set.IsUsable && data.alphamapTextureCount > 0)
+			// The index map, only once there are arrays to draw it with (before then the ground is plain grey, and a player has
+			// no bake shader until the set brings it).
+			Texture index = null;
+			if (set != null && set.IsUsable)
 			{
 				index = IndexMapFor(terrain, data, rebake);
 			}
@@ -377,30 +395,59 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// The tile's index map, baked when it has none of its data's size, its data changed, or <paramref name="rebake"/>;
-		/// null when it cannot be baked here (the ground then draws its first layer, with one warning).
+		/// The tile's index map. In play, unless <paramref name="rebake"/>: the scene's stored map
+		/// (<see cref="SceneTerrainBake.IndexOf"/>), uploaded once, while it is still this data's. Otherwise one baked here from
+		/// the alphamaps, again when it has none of its data's size, its data changed, or <paramref name="rebake"/>. Null when
+		/// there is neither (the ground then draws its first layer, with one warning).
 		/// </summary>
-		private RenderTexture IndexMapFor(Terrain terrain, TerrainData data, bool rebake)
+		private Texture IndexMapFor(Terrain terrain, TerrainData data, bool rebake)
 		{
-			indexMaps.TryGetValue(terrain, out (RenderTexture Map, TerrainData Data) entry);
-			bool fresh = false;
-			if (!TerrainIndexMapBaker.Fits(entry.Map, data))
+			indexMaps.TryGetValue(terrain, out (Texture Map, TerrainData Data, bool Stored) entry);
+			if (!rebake && Application.isPlaying)
 			{
-				if (entry.Map != null)
+				if (entry.Stored && entry.Data == data && entry.Map != null)
 				{
-					entry.Map.Release();
-					DestroyMap(entry.Map);
+					pushedStored++;
+					return entry.Map;
 				}
-				entry = (TerrainIndexMapBaker.Create(data.alphamapResolution, data.alphamapResolution, 1, $"{terrain.name} index map"), data);
+				TerrainDetailBake.IndexMap stored = SceneTerrainBake.IndexOf(data);
+				if (stored != null && StoredStillGood(terrain, data, stored))
+				{
+					Texture2D uploaded = TerrainIndexMapBaker.Upload(stored, $"{terrain.name} index map (stored)");
+					if (uploaded != null)
+					{
+						FreeMap(entry.Map);
+						indexMaps[terrain] = (uploaded, data, true);
+						pushedStored++;
+						return uploaded;
+					}
+				}
+			}
+			if (data.alphamapTextureCount == 0)
+			{
+				// A client build's copy, whose alphamaps were left out because a stored map stood in for them, but that map
+				// is not usable here (this device cannot hold it, or the bake did not load): nothing to bake from.
+				FreeMap(entry.Map);
+				indexMaps.Remove(terrain);
+				if (!Application.isEditor && warnedIndex.Add("none " + terrain.name))
+				{
+					Debug.LogWarning($"[Terrain index] '{terrain.name}' has no usable stored index map and no alphamaps: it draws its first layer.");
+				}
+				return null;
+			}
+			RenderTexture baked = entry.Stored ? null : entry.Map as RenderTexture;
+			bool fresh = false;
+			if (!TerrainIndexMapBaker.Fits(baked, data))
+			{
+				FreeMap(entry.Map);
+				baked = TerrainIndexMapBaker.Create(data.alphamapResolution, data.alphamapResolution, 1, $"{terrain.name} index map");
 				fresh = true;
 			}
 			if (fresh || rebake || entry.Data != data)
 			{
-				entry.Data = data;
-				if (!TerrainIndexMapBaker.Bake(data, TerrainIndexMapBaker.ShaderOf(set), entry.Map))
+				if (!TerrainIndexMapBaker.Bake(data, TerrainIndexMapBaker.ShaderOf(set), baked))
 				{
-					entry.Map.Release();
-					DestroyMap(entry.Map);
+					FreeMap(baked);
 					indexMaps.Remove(terrain);
 					return null;
 				}
@@ -409,23 +456,44 @@ namespace FishMMO.Shared
 				{
 					// Bound from data at rest (a load, a reload, a rebind), so the CPU copy is current: worth one look.
 					indexChecks++;
-					TerrainIndexMapBaker.Check(terrain, entry.Map);
+					TerrainIndexMapBaker.Check(terrain, baked);
 				}
 #endif
 			}
-			indexMaps[terrain] = entry;
-			return entry.Map;
+			indexMaps[terrain] = (baked, data, false);
+			pushedBaked++;
+			return baked;
 		}
 
 		/// <summary>
-		/// The index map bound to a terrain by any enabled binder, or null: for whatever else reads the ground's layers (the
-		/// contact blend bakes its own copies, the same way).
+		/// In the editor, a stored map is drawn only while a sample of its texels still matches the alphamaps (a stroke made
+		/// with no terrain callback would otherwise go unseen until the scene is baked again); a player trusts it, as the
+		/// build checked every texel before it left the alphamaps out.
 		/// </summary>
-		public static RenderTexture IndexMapOf(Terrain terrain)
+		private static bool StoredStillGood(Terrain terrain, TerrainData data, TerrainDetailBake.IndexMap stored)
+		{
+#if UNITY_EDITOR
+			if (!TerrainIndexMapBaker.MatchesAlphamaps(data, stored, 32, out string bad))
+			{
+				if (warnedIndex.Add("stale " + terrain.name))
+				{
+					Debug.LogWarning($"[Terrain index] '{terrain.name}': its stored index map is out of date ({bad}); baked from its alphamaps instead. Repaint the scene or bake its terrain details again to store it.");
+				}
+				return false;
+			}
+#endif
+			return true;
+		}
+
+		/// <summary>
+		/// The index map bound to a terrain by any enabled binder (baked here, or the scene's stored one), or null: for whatever
+		/// else reads the ground's layers (the contact blend copies it into its own array).
+		/// </summary>
+		public static Texture IndexMapOf(Terrain terrain)
 		{
 			foreach (TerrainArrayBinder binder in active)
 			{
-				if (binder != null && binder.indexMaps.TryGetValue(terrain, out (RenderTexture Map, TerrainData Data) entry) && entry.Map != null)
+				if (binder != null && binder.indexMaps.TryGetValue(terrain, out (Texture Map, TerrainData Data, bool Stored) entry) && entry.Map != null)
 				{
 					return entry.Map;
 				}
@@ -437,7 +505,7 @@ namespace FishMMO.Shared
 		private void ReleaseIndexMaps(List<Terrain> keep)
 		{
 			var drop = new List<Terrain>();
-			foreach (KeyValuePair<Terrain, (RenderTexture Map, TerrainData Data)> pair in indexMaps)
+			foreach (KeyValuePair<Terrain, (Texture Map, TerrainData Data, bool Stored)> pair in indexMaps)
 			{
 				if (keep == null || pair.Key == null || !keep.Contains(pair.Key))
 				{
@@ -446,14 +514,23 @@ namespace FishMMO.Shared
 			}
 			foreach (Terrain terrain in drop)
 			{
-				RenderTexture map = indexMaps[terrain].Map;
-				if (map != null)
-				{
-					map.Release();
-					DestroyMap(map);
-				}
+				FreeMap(indexMaps[terrain].Map);
 				indexMaps.Remove(terrain);
 			}
+		}
+
+		/// <summary>Frees an index map this binder made (a baked render texture or an uploaded stored map).</summary>
+		private static void FreeMap(Texture map)
+		{
+			if (map == null)
+			{
+				return;
+			}
+			if (map is RenderTexture rt)
+			{
+				rt.Release();
+			}
+			DestroyMap(map);
 		}
 
 		private static void DestroyMap(Object map)

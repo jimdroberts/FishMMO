@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
 using FishMMO.Shared.Biomes;
 using FishMMO.Shared.NameGeneration;
@@ -23,6 +24,12 @@ namespace FishMMO.Shared.WorldDesign
 	/// steep to ring (a moat on a hillside is a terrace) or where a river already runs round it.
 	/// </para>
 	/// <para>
+	/// <b>Round the wall's outline.</b> The ditch follows the site's footprint (<see cref="PointOfInterestRecord.Outline"/>):
+	/// its inner bank stands <see cref="Berm"/> outside the outline's edge along every bearing, so a castle drawn long on its
+	/// ridge is moated long, its wall inside it. Everything measures across the ring along the ray from the site's centre
+	/// (<see cref="InnerToward"/>), as the drawbridges before the gates do.
+	/// </para>
+	/// <para>
 	/// <b>Idempotent.</b> The banks' levels are read from the ground a little inside and outside the ring, which the ditch
 	/// never touches, and the ground is only ever lowered to the ditch's profile between them: cutting again digs the same
 	/// ditch, never a deeper one. The roads keep out of the ring (they would fill it as a causeway): their carve skips it
@@ -34,7 +41,10 @@ namespace FishMMO.Shared.WorldDesign
 		public static readonly MoatShaper Instance = new MoatShaper();
 
 		public const string ShaperName = "Moat";
-		private const int Format = 1;
+		/// <summary>2 (2026-10-18): the ring's inner reach per bearing follows <see cref="Values"/>[5…]; 1 was a circle.</summary>
+		private const int Format = 2;
+		/// <summary>Where a format-2 moat's inner reaches start in its values.</summary>
+		private const int InnerFrom = 5;
 		/// <summary>The berm between the footprint's edge and the ditch's inner bank, metres.</summary>
 		public const float Berm = 1.5f;
 
@@ -54,8 +64,11 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return;
 			}
-			float inner = site.Radius + Berm, width = Width(site.SizeClass), depth = Depth(site.SizeClass);
-			float outer = inner + width;
+			// The inner bank a berm outside the site's outline all round (its disc when it has none).
+			float[] innerReach = PointOfInterestOutline.Grown(site.Outline, Berm);
+			float innerMost = PointOfInterestOutline.Max(innerReach, site.Radius + Berm);
+			float width = Width(site.SizeClass), depth = Depth(site.SizeClass);
+			float outer = innerMost + width;
 			Vector3 c = site.Position;
 			// The banks' levels round the ring, from ground the ditch never reaches; refused where the ring is too steep or wet.
 			const int Spokes = 180;
@@ -66,8 +79,9 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				float a = i * Mathf.PI * 2f / Spokes;
 				var dir = new Vector2(Mathf.Sin(a), Mathf.Cos(a));
+				float inner = PointOfInterestOutline.Reach(innerReach, innerMost, dir.x, dir.y);
 				rimIn[i] = context.GroundAt(c.x + dir.x * (inner - 1f), c.z + dir.y * (inner - 1f));
-				rimOut[i] = context.GroundAt(c.x + dir.x * (outer + 2f), c.z + dir.y * (outer + 2f));
+				rimOut[i] = context.GroundAt(c.x + dir.x * (inner + width + 2f), c.z + dir.y * (inner + width + 2f));
 				lo = Mathf.Min(lo, Mathf.Min(rimIn[i], rimOut[i]));
 				hi = Mathf.Max(hi, Mathf.Max(rimIn[i], rimOut[i]));
 				if (context.Water != null && (context.Water.SurfaceAt(c.x + dir.x * (inner + 0.5f * width), c.z + dir.y * (inner + 0.5f * width)) > float.NegativeInfinity))
@@ -84,21 +98,81 @@ namespace FishMMO.Shared.WorldDesign
 			var area = Rect.MinMaxRect(c.x - outer - 1f, c.z - outer - 1f, c.x + outer + 1f, c.z + outer + 1f);
 			PointOfInterestTerrain.EditHeights(context.Terrains, context.Tiles, area, (x, z, h) =>
 			{
+				float inner = PointOfInterestOutline.Reach(innerReach, innerMost, x - c.x, z - c.z);
 				float target = Ditch(x - c.x, z - c.z, inner, width, floor, rimIn, rimOut);
 				return float.IsNaN(target) ? h : Mathf.Min(h, target);
 			});
-			bool wet = AddWater(context, site, inner, width, rimIn, rimOut);
-			context.AddKeepOut(site, c.x, c.z, outer + 1f);
+			bool wet = AddWater(context, site, innerReach, innerMost, width, rimIn, rimOut);
+			context.Plan.KeepOuts.Add(new PointOfInterestKeepOut
+			{
+				Id = site.Id,
+				X = c.x,
+				Z = c.z,
+				Radius = outer + 1f,
+				Outline = PointOfInterestOutline.Grown(innerReach, width + 1f),
+			});
+			var values = new float[InnerFrom + innerReach.Length];
+			values[0] = Format;
+			values[1] = innerMost;
+			values[2] = width;
+			values[3] = depth;
+			values[4] = wet ? 1f : 0f;
+			Array.Copy(innerReach, 0, values, InnerFrom, innerReach.Length);
 			context.AddShape(new PointOfInterestShape
 			{
 				SiteId = site.Id,
 				Shaper = ShaperName,
 				Position = c,
 				Yaw = site.Yaw,
-				Size = new Vector3(width, depth, inner),
-				Values = new float[] { Format, inner, width, depth, wet ? 1f : 0f },
+				Size = new Vector3(width, depth, innerMost),
+				Values = values,
 			});
 		}
+
+		/// <summary>
+		/// How far from its centre a moat's inner bank stands toward an offset (dx, dz), metres: along the outline it follows
+		/// (format 2), or its one radius (a format-1 ring).
+		/// </summary>
+		public static float InnerToward(PointOfInterestShape shape, float dx, float dz)
+		{
+			float[] reach = InnerOutline(shape);
+			return PointOfInterestOutline.Reach(reach, shape.Values[1], dx, dz);
+		}
+
+		/// <summary>A moat's inner bank as an outline round its centre; empty for a ring of one radius (<see cref="PointOfInterestShape.Values"/>[1]).</summary>
+		public static float[] InnerOutline(PointOfInterestShape shape)
+		{
+			if (shape == null || shape.Values == null || shape.Values.Length < InnerFrom + 3 || shape.Values[0] < 2f)
+			{
+				return Array.Empty<float>();
+			}
+			var reach = new float[shape.Values.Length - InnerFrom];
+			Array.Copy(shape.Values, InnerFrom, reach, 0, reach.Length);
+			return reach;
+		}
+
+		/// <summary>The moat shape stored for a site, or false when it has none.</summary>
+		public static bool TryMoat(IEnumerable<PointOfInterestShape> shapes, int siteId, out PointOfInterestShape moat)
+		{
+			moat = null;
+			if (shapes == null)
+			{
+				return false;
+			}
+			foreach (PointOfInterestShape shape in shapes)
+			{
+				if (shape != null && shape.SiteId == siteId && shape.Shaper == ShaperName && shape.Values != null && shape.Values.Length >= 4)
+				{
+					moat = shape;
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>The outline everything a moat holds lies within (its outer bank), round its centre; empty for a ring.</summary>
+		public static float[] OuterOutline(PointOfInterestShape shape)
+			=> PointOfInterestOutline.Grown(InnerOutline(shape), shape.Values[2]);
 
 		/// <summary>
 		/// Takes a moat's water (or, with <paramref name="id"/> negative, every moat's) out of a scene's water: a plan made
@@ -139,7 +213,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// repaint), level <see cref="Freeboard"/> under its lowest bank, all round the ring (its floor is level under that bank,
 		/// <see cref="Ditch"/>). Frozen or a dry ditch (false) as the site's biome template says (BiomeTemplateArt.MoatWater).
 		/// </summary>
-		private static bool AddWater(PointOfInterestPlanContext context, PointOfInterestRecord site, float inner, float width,
+		private static bool AddWater(PointOfInterestPlanContext context, PointOfInterestRecord site, float[] innerReach, float innerMost, float width,
 			float[] rimIn, float[] rimOut)
 		{
 			SceneWater water = context.Water;
@@ -169,9 +243,10 @@ namespace FishMMO.Shared.WorldDesign
 			for (int k = 0; k < SeedCount; k++)
 			{
 				float a = k * Mathf.PI * 2f / SeedCount;
+				float inner = PointOfInterestOutline.Reach(innerReach, innerMost, Mathf.Sin(a), Mathf.Cos(a));
 				seeds.Add(new Vector2(c.x + Mathf.Sin(a) * (inner + 0.5f * width), c.z + Mathf.Cos(a) * (inner + 0.5f * width)));
 			}
-			float outer = inner + width;
+			float outer = innerMost + width;
 			int id = LakeIdBase | (site.Id & 0x00FFFFFF);
 			ClearWater(water, id);
 			// Its water on the scene's water grid: every sample in the ring whose dug ground is under the level.
@@ -184,8 +259,9 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					float east = grid.EastOf(x), north = grid.NorthOf(z);
 					float r = Mathf.Sqrt((east - c.x) * (east - c.x) + (north - c.z) * (north - c.z));
+					float inner = PointOfInterestOutline.Reach(innerReach, innerMost, east - c.x, north - c.z);
 					int i = z * grid.Width + x;
-					if (r <= inner || r >= outer || grid.Kind[i] != WaterKind.None || context.GroundAt(east, north) >= level)
+					if (r <= inner || r >= inner + width || grid.Kind[i] != WaterKind.None || context.GroundAt(east, north) >= level)
 					{
 						continue;
 					}
@@ -199,7 +275,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return false;
 			}
-			float cx = c.x, cz = c.z, lo = inner - 0.5f, hi = outer + 0.5f;
+			float cx = c.x, cz = c.z;
 			water.Lakes.Add(new SceneLake
 			{
 				Id = id,
@@ -212,7 +288,8 @@ namespace FishMMO.Shared.WorldDesign
 				MayCover = (e, n) =>
 				{
 					float d = Mathf.Sqrt((e - cx) * (e - cx) + (n - cz) * (n - cz));
-					return d > lo && d < hi;
+					float inner = PointOfInterestOutline.Reach(innerReach, innerMost, e - cx, n - cz);
+					return d > inner - 0.5f && d < inner + width + 0.5f;
 				},
 				Covered = covered,
 			});
@@ -289,7 +366,12 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				float dx = x - shape.Position.x, dz = z - shape.Position.z;
 				float r = Mathf.Sqrt(dx * dx + dz * dz);
-				if (r > shape.Values[1] - 0.5f && r < shape.Values[1] + shape.Values[2] + 0.5f)
+				if (r > shape.Values[1] + shape.Values[2] + 0.5f)
+				{
+					continue;
+				}
+				float inner = InnerToward(shape, dx, dz);
+				if (r > inner - 0.5f && r < inner + shape.Values[2] + 0.5f)
 				{
 					return true;
 				}
@@ -316,7 +398,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				float dx = x - shape.Position.x, dz = z - shape.Position.z;
 				float r = Mathf.Sqrt(dx * dx + dz * dz);
-				float inner = shape.Values[1], width = shape.Values[2];
+				float inner = InnerToward(shape, dx, dz), width = shape.Values[2];
 				if (r <= inner - 0.5f || r >= inner + width + 0.5f || r < 1e-3f)
 				{
 					continue;
@@ -364,7 +446,7 @@ namespace FishMMO.Shared.WorldDesign
 					continue;
 				}
 				Vector3 c = shape.Position;
-				float inner = shape.Values[1], width = shape.Values[2], outer = inner + width;
+				float width = shape.Values[2];
 				var done = new List<Vector2>();
 				foreach (ScenePath path in paths)
 				{
@@ -376,8 +458,8 @@ namespace FishMMO.Shared.WorldDesign
 					for (int i = 0; i < path.Count; i++)
 					{
 						var d = new Vector2(path.Points[i].x - c.x, path.Points[i].z - c.z);
-						float r = d.magnitude;
-						if (r > inner - 0.5f && r < outer + 0.5f && r > 1e-3f)
+						float r = d.magnitude, lip = InnerToward(shape, d.x, d.y);
+						if (r > lip - 0.5f && r < lip + width + 0.5f && r > 1e-3f)
 						{
 							sum += d / r;
 						}
@@ -387,6 +469,8 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					Vector2 dir = sum.normalized;
+					// The ring's own reach where this way crosses it.
+					float inner = InnerToward(shape, dir.x, dir.y), outer = inner + width;
 					if (done.Exists(o => (o - dir).magnitude * inner < LandingLeafMetres))
 					{
 						continue;

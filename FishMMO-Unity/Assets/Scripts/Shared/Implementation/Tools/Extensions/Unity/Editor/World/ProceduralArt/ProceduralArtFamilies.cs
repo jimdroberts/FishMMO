@@ -65,6 +65,9 @@ namespace FishMMO.Shared.WorldDesign
 			("SeaFloorMeshes.cs", new[] { ArtFamily.Plants }),
 			("ProceduralArtCatalogue.Flora.cs", new[] { ArtFamily.Plants, ArtFamily.Deadwood }),
 			("ProceduralArtCatalogue.Sea.cs", new[] { ArtFamily.Plants }),
+			// The plants floating on still water (2026-10-18): details like the rest.
+			("FloatingPlantMeshes.cs", new[] { ArtFamily.Plants }),
+			("ProceduralArtCatalogue.Floating.cs", new[] { ArtFamily.Plants }),
 			("BiomeArtGenerator.Rocks.cs", new[] { ArtFamily.Rocks, ArtFamily.Cliffs }),
 			("ProceduralArtCatalogue.Rocks.cs", new[] { ArtFamily.Rocks, ArtFamily.Cliffs }),
 			("RockMeshes.cs", new[] { ArtFamily.Rocks }),
@@ -98,6 +101,11 @@ namespace FishMMO.Shared.WorldDesign
 			// The structure palette's parts, keys and surfaces (2026-10-16).
 			("StructureSurfaces.Palette.cs", new[] { ArtFamily.Structures }),
 			("StructurePalettes.cs", new[] { ArtFamily.Structures }),
+			// The house roofs built at their palette's pitch (2026-10-18).
+			("StructureRoofs.cs", new[] { ArtFamily.Structures }),
+			// Sources outside the generator's folder whose values the structures bake (ProceduralArtPayload.ForeignSources, 2026-10-18).
+			("SceneGlow.cs", new[] { ArtFamily.Structures }),
+			("BiomeStructurePalette.cs", new[] { ArtFamily.Structures }),
 			("StructureRuins.cs", new[] { ArtFamily.Structures }),
 			("StructureKit.cs", new[] { ArtFamily.Structures }),
 			("ProceduralArtCatalogue.Structures.cs", new[] { ArtFamily.Structures }),

@@ -162,6 +162,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>A rectangle was drawn: its centre in degrees and its size in kilometres.</summary>
 		public event Action<double, double, Vector2> RectangleDrawn;
 
+		/// <summary>The rectangle being dragged changed: its centre in degrees and its size in kilometres.</summary>
+		public event Action<double, double, Vector2> RectangleChanging;
+
 		private bool cutting;
 		private Vector3d cutFrom;
 		private Vector3d cutTo;
@@ -1326,6 +1329,10 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					cutTo = corner;
 					Refresh();
+					if (RectangleChanging != null && TryPendingRectangle(out double lat, out double lon, out Vector2 sizeKm))
+					{
+						RectangleChanging(lat, lon, sizeKm);
+					}
 				}
 			}
 			else if (rotating)

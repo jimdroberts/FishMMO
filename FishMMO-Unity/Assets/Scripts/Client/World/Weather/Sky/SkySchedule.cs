@@ -533,7 +533,7 @@ namespace FishMMO.Client
 			Sweep(timeline);
 			double seconds = ReferenceSeconds(cell);
 			Vector2 centre = cell.CentreAtSeconds(seconds);
-			AirOffsets offsets = timeline.Air.AtSeconds(seconds);
+			AirOffsets offsets = timeline.AirAtSeconds(seconds);
 			// Kept while what it was read from stands: an edit that moves the cell, or the air an admin
 			// adds, reads it again — on every client alike.
 			if (known.TryGetValue(cell.ID, out Air air) && air.Timeline == timeline && air.Settings == settings && air.Seconds == seconds

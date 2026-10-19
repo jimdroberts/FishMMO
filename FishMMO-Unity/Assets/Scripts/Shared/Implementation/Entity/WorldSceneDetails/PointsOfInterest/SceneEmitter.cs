@@ -29,6 +29,13 @@ namespace FishMMO.Shared
 		Crystal,
 		/// <summary>A lantern or torch underground (a mine's lamps, a cave camp's): a warm flicker, lit day and night, reaching <see cref="SceneEmitter.Reach"/>.</summary>
 		Torch,
+		/// <summary>
+		/// A cold glow of faerie, rune or crystal light (2026-10-18, I6g: a glowjar, a rune stone, a crystal post): a cool tint
+		/// from bits 8–10 of the seed (<see cref="SceneGlow"/>: a crystal's hue, rune-light or faerie-light), a soft slow pulse
+		/// on the shared world clock, faintly showing from dusk and full at night (<c>_FishGlowLights</c>), day and night alike
+		/// underground. Its piece's glowing parts pulse with it (FishStructureWeathering.hlsl, a material marked _FishStructure = 3).
+		/// </summary>
+		Glow,
 	}
 
 	/// <summary>

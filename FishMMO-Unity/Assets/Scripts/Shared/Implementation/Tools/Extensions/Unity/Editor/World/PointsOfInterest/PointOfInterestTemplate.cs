@@ -15,11 +15,11 @@ namespace FishMMO.Shared.WorldDesign
 		Ring,
 		/// <summary>Rows and columns square to the site's heading (a farm, a graveyard).</summary>
 		Grid,
-		/// <summary>Two rows facing each other across a street along the heading.</summary>
+		/// <summary>Houses fronting streets laid by a town plan (PointOfInterestTownPlan): a street village, a green, a market town, a port.</summary>
 		Street,
 		/// <summary>Loosely spread, no two too close (ruins, a battlefield).</summary>
 		Scattered,
-		/// <summary>The first slot round the edge as a wall, facing out; the rest in rows inside.</summary>
+		/// <summary>The first slot round the edge as a wall, facing out, its gates on the roads in; streets (a walled city, a bailey) or rows inside.</summary>
 		Walled,
 		/// <summary>In a line along the heading (a road, a bridge's spans).</summary>
 		Linear,

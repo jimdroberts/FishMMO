@@ -1,6 +1,7 @@
 // The land's background creatures (AmbientLifeSystem, FishMMO.Client/World/AmbientLife): birds alone and in
 // flocks, raptors, bats, rats, mice, squirrels, rabbits, lizards, shore crabs and frogs, beetles, and insect swarms
-// (midges, mosquitoes, flies, fireflies, bees, locusts), each group in its biome's look (AmbientLooks). Pass code
+// (midges, mosquitoes, flies, fireflies, bees, locusts), each group in its biome's look (AmbientLooks), and the caves'
+// creatures (AmbientCaveLife), lit underground only by the cave's own lights (FishUnderground, additional lights). Pass code
 // and the vertex contract are in FishAmbientLife.hlsl. Drawn only with Graphics.DrawMeshInstanced, one runtime
 // material per kind; opaque, dithered out at the draw distance and when an animal goes to ground.
 Shader "FishMMO/Ambient Life"
@@ -49,6 +50,9 @@ Shader "FishMMO/Ambient Life"
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
             #pragma multi_compile_fragment _ _LIGHT_COOKIES
+            // The cave's torches and crystals and a carried light (additional lights; Forward+ clusters them).
+            #pragma multi_compile_fragment _ _ADDITIONAL_LIGHTS
+            #pragma multi_compile _ _CLUSTER_LIGHT_LOOP
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
 
             #define FISH_AMBIENT_LIFE_PASS_FORWARD

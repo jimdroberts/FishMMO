@@ -115,6 +115,8 @@ namespace FishMMO.Shared.WorldDesign
 			ScenePropBaker.BakeFolder = terrainFolder;
 			try
 			{
+				// The old plan's ridge and furrow taken out first: the new plan reads the ground the cut's did, and its fields carve their own.
+				PointOfInterestFieldCarve.Restore(scene, terrains, notes);
 				// The old plan's cave mouths closed first: the new plan opens its own (and a moved or dropped cave leaves none).
 				int refilled = CaveShaper.RefillMouths(terrains, plan, PointOfInterestProbe.Asset(scene));
 				if (refilled > 0)
@@ -132,7 +134,11 @@ namespace FishMMO.Shared.WorldDesign
 					string hydrologyPath = SceneGenerator.SaveWater(request, terrainFolder, water, (east, north) => SceneGenerator.GroundAltitude(terrains, plan, east, north), notes);
 					if (hydrologyPath != null)
 					{
-						SceneGenerator.EnsureInlandWater(scene, AssetDatabase.LoadAssetAtPath<SceneHydrology>(hydrologyPath));
+						var hydrology = AssetDatabase.LoadAssetAtPath<SceneHydrology>(hydrologyPath);
+						SceneGenerator.EnsureInlandWater(scene, hydrology);
+						// The new plan's moats float their biome's plants too (2026-10-18, I2i; nothing in any biome by default).
+						FloatingPlants.Lay(scene, water, hydrology, entry.BiomeMap, (east, north) => SceneGenerator.GroundAltitude(terrains, plan, east, north),
+							stage.DetailExcludes, SceneGenerator.SceneSeed(request), notes);
 					}
 				}
 				stage.Place(scene, plan, terrains, water, notes, null);

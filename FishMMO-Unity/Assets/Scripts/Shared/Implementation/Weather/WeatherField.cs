@@ -179,7 +179,7 @@ namespace FishMMO.Shared.Weather
 		public static WindBelts BeltsAt(WeatherTimeline timeline, WorldSceneSettings settings, double worldSeconds)
 		{
 			WorldBody weatherBody = timeline != null && timeline.BodyOverride != null ? timeline.BodyOverride : SceneTime.BodyOf(settings);
-			AirOffsets offsets = (settings != null ? settings.AuthoredAir : default) + (timeline != null ? timeline.Air.AtSeconds(worldSeconds) : default);
+			AirOffsets offsets = (settings != null ? settings.AuthoredAir : default) + (timeline != null ? timeline.AirAtSeconds(worldSeconds) : default);
 			return WindBelts.For(offsets.Apply(PlanetAir.For(SolarSystemProfile.Active, weatherBody)));
 		}
 
@@ -242,7 +242,7 @@ namespace FishMMO.Shared.Weather
 			float localTime01 = system != null && weatherBody != null
 				? (float)CelestialMath.LocalTime01(system, weatherBody, worldHours, timeline.LongitudeDegrees)
 				: 0.5f;
-			AirOffsets offsets = (settings != null ? settings.AuthoredAir : default) + timeline.Air.AtSeconds(worldSeconds);
+			AirOffsets offsets = (settings != null ? settings.AuthoredAir : default) + timeline.AirAtSeconds(worldSeconds);
 			PlanetAir planet = offsets.Apply(PlanetAir.For(system, weatherBody));
 			air = offsets.Apply(OpenAirAt(timeline, settings, position, worldSeconds, season01, localTime01, WindBelts.For(planet)));
 			return true;
@@ -345,7 +345,7 @@ namespace FishMMO.Shared.Weather
 			// volume's. Their temperature is already in the climate reading (it is the climate's); a
 			// volume's is local, so it is added here.
 			AirOffsets volume = WeatherVolumeRegistry.OffsetsAt(scene, position);
-			AirOffsets offsets = (settings != null ? settings.AuthoredAir : default) + timeline.Air.AtSeconds(worldSeconds) + volume;
+			AirOffsets offsets = (settings != null ? settings.AuthoredAir : default) + timeline.AirAtSeconds(worldSeconds) + volume;
 			sample.Offsets = offsets;
 
 			PlanetAir planet = offsets.Apply(PlanetAir.For(system, weatherBody));
@@ -461,6 +461,13 @@ namespace FishMMO.Shared.Weather
 			StormsInHeavyRain(ref frame, sample.Temperature);
 			float shelter = 0f;
 			WeatherVolumeRegistry.Apply(scene, position, ref frame, ref shelter);
+			/* And the scene's own cover, baked by the cut (SceneShelterMap): a generated roof, rock shelter, bridge or cave
+			 * keeps a character dry as a hand-placed shelter volume does, the same on the server and the predicting client. */
+			SceneShelterMap roofs = settings != null ? settings.Shelter : null;
+			if (roofs != null)
+			{
+				shelter = Mathf.Max(shelter, 1f - roofs.Exposure(position));
+			}
 			frame.DeriveSurfaceRates();
 			sample.Frame = frame;
 			sample.Shelter = shelter;

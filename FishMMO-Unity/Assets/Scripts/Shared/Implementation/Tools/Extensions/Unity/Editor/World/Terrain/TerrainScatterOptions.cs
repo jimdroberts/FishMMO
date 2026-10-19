@@ -177,6 +177,21 @@ namespace FishMMO.Shared.WorldDesign
 		public float InlandFullMetres = 0.9f;
 
 		/// <summary>
+		/// Aquatic plants under a lake or a river (decision 35 (a), 2026-10-18) fade in from this height relative to THAT water's
+		/// surface to <see cref="InlandAquaticFullMetres"/> (both at or below 0): fresh water has no tide, so a few centimetres under
+		/// it is under water for good. Their depth bands are read below the same surface.
+		/// </summary>
+		public float InlandAquaticFadeStartMetres = -0.05f;
+		public float InlandAquaticFullMetres = -0.25f;
+
+		/// <summary>
+		/// How much of the inland water at (x, z) is a river's, its current (m/s) and whether its mouth is on the sea
+		/// (BiomeSplatOptions.RiverAt, SceneWater.RiverBedAt): the waters a bed rule grows under and its current band read it.
+		/// Thread-safe. Null: every inland water is a lake's, still.
+		/// </summary>
+		public Func<float, float, Vector3> RiverAt;
+
+		/// <summary>
 		/// True where nothing may be scattered at a world position (x, z): a point of interest's footprint
 		/// (<see cref="PointOfInterestStage.Excludes"/>). Null for nowhere. Called from the scatter's workers, so it must
 		/// be safe to call from several threads.

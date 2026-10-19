@@ -108,8 +108,11 @@ namespace FishMMO.Shared.WorldDesign
 			ScenePropBaker.BakeFolder = terrainFolder;
 			try
 			{
-				/* The old talus cones down first: the biome field, the water's marks, the splat and the scatter all read the
-				 * ground, and with the cones still raised they would paint scree and steepness on ground the placer then lowers. */
+				/* The fields' ridge and furrow out of the ground first, and then the old talus cones (the reverse of the order
+				 * the cut raised them in): the biome field, the water's marks, the splat and the scatter all read the ground, and
+				 * with either still raised they would paint scree and steepness on ground the placer then lowers, and refuse
+				 * fields the cut laid (PointOfInterestFieldCarve). The sites carve the ridges again below. */
+				PointOfInterestFieldCarve.Restore(scene, terrains, result.Notes);
 				CliffPlacer.Clear(scene);
 				// The rivers and lakes the scene was cut with, marked on its ground as it stands now.
 				SceneWater water = SceneGenerator.LoadWater(request, plan, terrains, result.Notes);
@@ -136,6 +139,12 @@ namespace FishMMO.Shared.WorldDesign
 						RiverFlowBake.Bake(hydrology, result.BiomeMap != null ? result.BiomeMap : entry.BiomeMap, result.Notes);
 					}
 				}
+				/* The plants floating on the still water again (2026-10-18, I2i), on the water as just saved (a LOCAL copy's: the
+				 * committed hydrology it shares), each body's its shore biome's as the templates say now. */
+				FloatingPlants.Lay(scene, water,
+					AssetDatabase.LoadAssetAtPath<SceneHydrology>(SceneGenerator.HydrologyPath(SceneGenerator.TerrainFolder(entry.Body, entry.SceneName), entry.SceneName)),
+					result.BiomeMap != null ? result.BiomeMap : entry.BiomeMap, (east, north) => SceneGenerator.GroundAltitude(terrains, plan, east, north),
+					poi.DetailExcludes, SceneGenerator.SceneSeed(request), result.Notes);
 				poi.Place(scene, plan, terrains, water, result.Notes, result.Wrote);
 				SceneGenerator.BakePropsAndNavMesh(scene, plan, terrains, water, result.Notes);
 				/* A backdrop drawn with the arrays reads the scene's layers by index, and the repaint may have
@@ -184,6 +193,7 @@ namespace FishMMO.Shared.WorldDesign
 				SizeKm = entry.SizeKm,
 				HeadingDegrees = entry.HeadingDegrees,
 				PointsOfInterest = entry.PointsOfInterest,
+				BiomeOverrides = SceneBiomeOverrides.Of(entry),
 				// The radius it was cut at, so a point maps back to exactly the ground it came from.
 				RadiusKm = entry.CutRadiusKm > 0f ? entry.CutRadiusKm : 0.0,
 			};

@@ -123,7 +123,9 @@ Shader "FishMMO/Water/Waterfall"
                 float3 reflectVector = reflect(-view, bumped);
                 // Falling water is rough: the sky in it is blurred and weak, never a mirror.
                 half3 reflection = GlossyEnvironmentReflection(reflectVector, positionWS, max(0.25, 1.0 - _Smoothness), 1.0h) * 0.45;
-                half3 body = _WaterColor.rgb * (lightColor * saturate(NdotL * 0.5 + 0.5) + ambient * 0.8);
+                // The water's own colour: the look of the water it pours from (FallWaterColor), else the material's.
+                half3 waterColor = FallWaterColor();
+                half3 body = waterColor * (lightColor * saturate(NdotL * 0.5 + 0.5) + ambient * 0.8);
                 half glassAlpha = 0.4;
                 #if defined(_WATER_REFRACTION)
                     float2 screenUV = input.screenPos.xy / input.screenPos.w;
@@ -131,6 +133,8 @@ Shader "FishMMO/Water/Waterfall"
                     /* Water lets through what is behind it by how much of it there is: the whole river's depth rolling over
                      * the brink is green and deep, a thin sheet lower down nearly clear. */
                     half absorb = 1.0 - exp(-max(0.02, input.sheetDepth.x) * 2.2);
+                    // A stained water (peat, glacial milk) takes more of it out on the way through (FallStain: none more by default).
+                    behind *= FallStain(input.sheetDepth.x);
                     body = lerp(behind * lerp(half3(0.95, 0.99, 0.98), half3(0.72, 0.86, 0.85), absorb), body, lerp(0.12, 0.7, absorb));
                     glassAlpha = 1.0;
                 #endif
@@ -143,11 +147,11 @@ Shader "FishMMO/Water/Waterfall"
                 half wrap = saturate(NdotL * 0.5 + 0.5);
                 half thickness = rope ? 2.0 * input.sheetDepth.x : max(0.02, input.sheetDepth.x);
                 half through = ForwardScatter(dot(-view, mainLight.direction), 0.6) * 0.09 * exp(-thickness * 1.5);
-                half3 foamLit = _FoamColor.rgb * (lightColor * (wrap * 0.8 + through) + ambient * 0.9 + 0.03);
+                half3 foamLit = FallFoamColor() * (lightColor * (wrap * 0.8 + through) + ambient * 0.9 + 0.03);
                 // Darker in the hollows between strands, so the sheet has depth; brightest at a jet's head.
                 foamLit *= lerp(0.55, 1.1, s.strand) * lerp(1.0, lerp(0.85, 1.12, s.jet), s.broken);
                 // Where it thins between jets the white takes the water's own colour: bubbles in green water, not chalk.
-                foamLit *= lerp(saturate(_WaterColor.rgb * 3.2 + 0.25), half3(1.0, 1.0, 1.0), saturate(s.strand * 1.2));
+                foamLit *= lerp(saturate(waterColor * 3.2 + 0.25), half3(1.0, 1.0, 1.0), saturate(s.strand * 1.2));
                 // Seen face on, light has come through more water than at a thin edge: a thick curtain's body is blue-grey.
                 half faceOn = saturate(abs(dot(normalize(input.normalWS), view)));
                 foamLit *= rope ? 1.0 : lerp(1.0, lerp(1.05, 0.82, faceOn), saturate(input.fall.y / 6.0) * (1.0 - saturate(input.flowShare.y) * 0.6));

@@ -213,8 +213,8 @@ namespace FishMMO.Client
 	}
 
 	/// <summary>
-	/// What a distant storm drops, and what a storm's outflow lifts: a volume under each of the nearest
-	/// cells beyond the particle field, in the shape the cell covers the ground in.
+	/// What a storm drops, and what a storm's outflow lifts: a volume under each of the nearest cells,
+	/// the one the camera stands in among them, in the shape the cell covers the ground in.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -248,9 +248,6 @@ namespace FishMMO.Client
 	/// </remarks>
 	public sealed class CurtainPresenter
 	{
-		/// <summary>Inside this much of the camera the particle field and the weather's own fog show what is falling, and the march starts beyond it.</summary>
-		public const float NearFieldMeters = 120f;
-
 		/// <summary>The long strides through a curtain's box. The march shortens them through an edge it has just found and wherever the medium is thick.</summary>
 		public const int Strides = 24;
 
@@ -586,15 +583,13 @@ namespace FishMMO.Client
 					}
 				}
 				Vector2 offset = viewer2 - centre;
-				/* The camera is in this one: the particle field and the weather's own fog show it. Asked
-				 * of the shape and not the distance to the centre, which is only a disc's test: a front's
-				 * centre can be ten kilometres down its line from someone standing in its dust, and
-				 * someone in a hurricane's eye is nearer its centre than anyone and in none of its rain,
-				 * with the eyewall standing round them. */
-				if (footprint.Coverage(offset) >= 0.5f)
-				{
-					continue;
-				}
+				/* The one the camera stands in is drawn as well, and first. It was left to the particle
+				 * field and the weather's own fog, and neither shows the storm past a few tens of metres
+				 * over the sky: the field is the drops round the camera, and the fog is the pipeline's
+				 * distance fog, which lays the rain at the camera over the world's surfaces and never
+				 * over the sky. So the dense wall seen from outside cleared to the horizon the moment
+				 * the camera walked into it. The shader leaves the surfaces the share that fog already
+				 * lays (WeatherShaderGlobals.FallingFog) and draws the whole storm over the sky. */
 				nearest.Add(new Curtain
 				{
 					Cell = cell,
@@ -800,7 +795,7 @@ namespace FishMMO.Client
 				block.SetVector(FallId, new Vector4(fallSpeed, time, drift.x, drift.y));
 				block.SetVector(AmountId, new Vector4(Mathf.Clamp01(amount), waterShare, dustShare, forwardScatter));
 				block.SetColor(ColorId, color);
-				block.SetVector(MarchId, new Vector4(Strides, NearFieldMeters, noise != null ? 1f : 0f, size));
+				block.SetVector(MarchId, new Vector4(Strides, 0f, noise != null ? 1f : 0f, size));
 				block.SetVector(BoxId, new Vector4(middle.x, middle.y, 0.5f * sizeF, 0.5f * sizeA));
 				// x 1 when it falls from a storm's own cloud: the shader then lets it fall only under
 				// that cloud as the weather map lays it out, and lights it by that cloud. y 1 when the
@@ -878,6 +873,8 @@ namespace FishMMO.Client
 		private static readonly int OverheadRectId = Shader.PropertyToID("_FishCloudOverheadRect");
 		private static readonly int OverheadId = Shader.PropertyToID("_FishCloudOverhead");
 		private static readonly int OverheadFromId = Shader.PropertyToID("_FishCloudOverheadFrom");
+		/// <summary>1 while the main light's cookie is the cloud's shadow, 0 while it is the white stand-in (FishWaterSun.hlsl).</summary>
+		public static readonly int CloudCookieId = Shader.PropertyToID("_FishCloudCookie");
 		private RenderTexture cookie;
 		private RenderTexture raw;
 		private RenderTexture overhead;
@@ -990,6 +987,7 @@ namespace FishMMO.Client
 				boundLight = light;
 			}
 			light.cookie = cookie;
+			Shader.SetGlobalFloat(CloudCookieId, 1f);
 			// The light's URP data, found once for the light it belongs to.
 			if (boundData == null || boundDataLight != light)
 			{
@@ -1058,14 +1056,29 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(OverheadRectId, new Vector4(centre.x, centre.y, areaMeters, 1f));
 		}
 
+		/// <summary>
+		/// Takes the cloud's shadow off <paramref name="light"/>, leaving it the white stand-in (<see cref="Unshadowed"/>): never no
+		/// cookie at all.
+		/// </summary>
+		/// <remarks>
+		/// A light without a cookie draws every lit shader without _LIGHT_COOKIES, so each time the cloud shadow came off (the
+		/// first frames of Play while the clouds load, a tier without cloud shadows, the switch, an airless world, the shadow
+		/// moving from sun to moon) every material changed to another variant, which the editor compiled there and then
+		/// (2026-10-18). White lets every light through: the same lighting, the same variant. The sun is not brightened for
+		/// the cloud while its shadow is off (SkySystem: <c>far</c> is 1), so nothing is to be dimmed back.
+		/// </remarks>
 		public void Clear(Light light)
 		{
-			if (light != null && light.cookie == cookie && cookie != null)
+			if (light != null && (light.cookie == null || (light.cookie == cookie && cookie != null)))
 			{
-				light.cookie = null;
+				light.cookie = Unshadowed;
 			}
+			Shader.SetGlobalFloat(CloudCookieId, 0f);
 			drawnCover = -1f;
 		}
+
+		/// <summary>The cookie a light wears while the cloud throws no shadow: white, so all of the light gets through.</summary>
+		public static Texture Unshadowed => Texture2D.whiteTexture;
 
 		public void Dispose()
 		{

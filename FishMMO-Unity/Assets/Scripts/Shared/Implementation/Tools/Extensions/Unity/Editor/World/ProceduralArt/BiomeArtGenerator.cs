@@ -1134,6 +1134,19 @@ namespace FishMMO.Shared.WorldDesign
 						m.SetFloat("_WindFlutter", give.y);
 						m.SetFloat("_FishWeatherAmount", 0f);
 					}
+					if (FloatingPlantMeshes.IsFloating(spec.Plant.Kind))
+					{
+						/* On the water (2026-10-18, I2i): laid as baked props at the surface, so held still (a pad does not lean in a
+						 * breeze), not rooted where its origin is (no ground colour or contact band from the lake bed under it: the
+						 * vines' _Clinging), no lean to tip a pad under the surface, and no detail fade (a prop has its own draw
+						 * distance). Not _Aquatic, which would keep it under the water. */
+						m.SetFloat("_WindSway", 0f);
+						m.SetFloat("_WindFlutter", 0f);
+						m.SetFloat("_Clinging", 1f);
+						m.SetFloat("_VaryLean", 0f);
+						m.SetFloat("_VaryPartDroop", 0f);
+						m.SetFloat("_DistanceFade", FadeNone);
+					}
 				});
 			}
 

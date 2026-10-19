@@ -74,6 +74,11 @@ Shader "FishMMO/Water/Waterfall Spray"
             float _FishInlandCameraInSea;   // 1 under the sea (InlandWaterRenderer.MarkCamera): no falls are seen from there
             float _FishFallMistVolumetric;  // 1 when the volumetric fog carries the falls' mist this frame (FishVolumetricFogFeature)
             float4 _FishWeatherWind;        // xy the wind's way, z its speed over 30 m/s, w gusts
+            // The look of the water the fall pours from (InlandWaterRenderer.Looks ApplyFallLooks, per fall, 2026-10-18):
+            // _FallLookOn 0 (water of the inland water's own look, or no block), the material's colours as before. Linear.
+            float _FallLookOn;
+            float4 _FallSpray;              // rgb the drops and strands, in place of _SprayColor
+            float4 _FallMist;               // rgb the mist, in place of _MistColor
 
             // Per fall (InlandWaterRenderer.BuildFalls): the traced paths, and what they need.
             TEXTURE2D(_FallPathTex);
@@ -234,7 +239,7 @@ Shader "FishMMO/Water/Waterfall Spray"
                 /* Spray mist is dense and white: most of the light in it has been turned more than once, so it is nearly as
                  * bright as what lights it from every side, the sky's light most of all, and glows looking toward the sun.
                  * Lit like a sparse drop (the beam and a little sky) it was a dull grey-brown in a shaded gorge. */
-                half3 tint = mist ? _MistColor.rgb : _SprayColor.rgb;
+                half3 tint = _FallLookOn > 0.5 ? (half3)(mist ? _FallMist.rgb : _FallSpray.rgb) : (mist ? _MistColor.rgb : _SprayColor.rgb);
                 sun = tint * sunColor * (mist ? 0.55 + 0.3 * forward : 0.45 + 0.12 * forward);
                 sky = tint * ambient * (mist ? 1.6 : 0.9);
 

@@ -125,6 +125,32 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Prefers ground standing over its surroundings, open to the wind (a windmill).</summary>
 		public bool Exposed;
 
+		/// <summary>
+		/// May stand IN a river's current (decision 35 (g), 2026-10-18; <see cref="PointOfInterestWaterSites.TryChannelSpot"/>): a ship
+		/// mill, a lift-net stage, a toll keep, moored <see cref="ChannelBankMetres"/> off a bank where the channel is
+		/// <see cref="ChannelMinDepth"/> deep and runs <see cref="ChannelMinSpeed"/>. Off for every rule until the in-stream pieces exist.
+		/// </summary>
+		[Header("In the Water (decision 35)")]
+		public bool InStream;
+		public float ChannelMinDepth = 1.5f;
+		public float ChannelMinSpeed = 0.8f;
+		public float ChannelBankMetres = 10f;
+		/// <summary>May stand astride a river's bank, half over the water (a river staple's quay: <see cref="PointOfInterestWaterSites.TryBankQuay"/>).</summary>
+		public bool BankStraddle;
+		/// <summary>
+		/// May stand on piles over a lake's shallows, <see cref="ShallowsMinDepth"/> … <see cref="ShallowsMaxDepth"/> deep, joined to the
+		/// strand by a causeway no longer than <see cref="ShallowsShoreMetres"/> (<see cref="PointOfInterestWaterSites.TryShallows"/>).
+		/// </summary>
+		public bool Shallows;
+		public float ShallowsMinDepth = 0.5f;
+		public float ShallowsMaxDepth = 3f;
+		public float ShallowsShoreMetres = 300f;
+		/// <summary>
+		/// An underwater kind (<see cref="Underwater"/>) that may also lie under a lake, by its depth below THAT lake's level
+		/// (decision 35 (d)); off: under the sea only, as every sunken kind was.
+		/// </summary>
+		public bool InLakes;
+
 		/// <summary>Within this of a settlement, metres; 0 for no such rule. The site's parent is that settlement.</summary>
 		[Header("Neighbours")]
 		public float NearSettlementMetres;
@@ -279,6 +305,40 @@ namespace FishMMO.Shared.WorldDesign
 		public PointOfInterestKindRule OnExposedGround()
 		{
 			Exposed = true;
+			return this;
+		}
+
+		/// <summary>May stand in a river's current (<see cref="InStream"/>).</summary>
+		public PointOfInterestKindRule InChannel(float minDepth = 1.5f, float minSpeed = 0.8f, float bankMetres = 10f)
+		{
+			InStream = true;
+			ChannelMinDepth = minDepth;
+			ChannelMinSpeed = minSpeed;
+			ChannelBankMetres = bankMetres;
+			return this;
+		}
+
+		/// <summary>May stand astride a river's bank (<see cref="BankStraddle"/>).</summary>
+		public PointOfInterestKindRule StraddlesBank()
+		{
+			BankStraddle = true;
+			return this;
+		}
+
+		/// <summary>May stand on piles over a lake's shallows (<see cref="Shallows"/>).</summary>
+		public PointOfInterestKindRule OverShallows(float minDepth = 0.5f, float maxDepth = 3f, float shoreMetres = 300f)
+		{
+			Shallows = true;
+			ShallowsMinDepth = minDepth;
+			ShallowsMaxDepth = maxDepth;
+			ShallowsShoreMetres = shoreMetres;
+			return this;
+		}
+
+		/// <summary>An underwater kind that may also lie under a lake, by the lake's own depth (<see cref="InLakes"/>).</summary>
+		public PointOfInterestKindRule UnderLakes()
+		{
+			InLakes = true;
 			return this;
 		}
 

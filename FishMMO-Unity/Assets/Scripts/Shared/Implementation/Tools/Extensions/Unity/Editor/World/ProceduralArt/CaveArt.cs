@@ -33,6 +33,8 @@ namespace FishMMO.Shared.WorldDesign
 		public float SuggestedReach;
 		/// <summary>The hue bits (8–9 of the seed) of a <see cref="SceneEmitterKind.Crystal"/> emitter for its light (<see cref="CaveArt.EmitterSeed"/>); −1 for none.</summary>
 		public int EmitterHue;
+		/// <summary>Whether its light flickers (a cave crystal whose kind does, <see cref="CaveMineral.Flickers"/>): a cold glow's, not a crystal light's.</summary>
+		public bool Flickers;
 		/// <summary>Whether its prefab carries a collider (crystals, giant fungi).</summary>
 		public bool Collides;
 	}
@@ -264,6 +266,7 @@ namespace FishMMO.Shared.WorldDesign
 				Light = mineral.Hue.Light,
 				SuggestedReach = mineral.Hue.EmitterHue >= 0 ? ProceduralArtCatalogue.CaveMineralReach : 0f,
 				EmitterHue = mineral.Hue.EmitterHue,
+				Flickers = mineral.Flickers,
 				Collides = true,
 			};
 			return art.Prefab != null;

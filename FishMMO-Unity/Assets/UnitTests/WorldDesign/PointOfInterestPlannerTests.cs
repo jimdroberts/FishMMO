@@ -246,14 +246,19 @@ namespace FishMMO.UnitTests.WorldDesign
 				float x = record.Position.x, z = record.Position.z;
 				Assert.That(Mathf.Abs(x) + record.Radius, Is.LessThanOrEqualTo(Size * 0.5f - 48f + 0.01f), $"{record.Kind} keeps its footprint 48 m inside the edge");
 				Assert.That(Mathf.Abs(z) + record.Radius, Is.LessThanOrEqualTo(Size * 0.5f - 48f + 0.01f), $"{record.Kind} keeps its footprint 48 m inside the edge");
-				for (int k = 0; k < 8; k++)
+				// Its footprint's edge (its outline's, or its disc's) all round, and half way in, is dry.
+				for (int k = 0; k < 16; k++)
 				{
-					float a = k * Mathf.PI / 4f;
-					WaterKind kind = KindAt(x + record.Radius * Mathf.Sin(a), z + record.Radius * Mathf.Cos(a));
-					Assert.That(kind == WaterKind.None || kind == WaterKind.Bank, Is.True, $"{record.Kind} at ({x:F0}, {z:F0}) has no water in its footprint");
+					float a = k * Mathf.PI / 8f;
+					float edge = PointOfInterestOutline.ReachToward(record.Outline, record.Radius, a * Mathf.Rad2Deg);
+					foreach (float share in new[] { 1f, 0.5f })
+					{
+						WaterKind kind = KindAt(x + edge * share * Mathf.Sin(a), z + edge * share * Mathf.Cos(a));
+						Assert.That(kind == WaterKind.None || kind == WaterKind.Bank, Is.True, $"{record.Kind} at ({x:F0}, {z:F0}) has no water in its footprint");
+					}
 				}
 				Assert.That(KindAt(x, z), Is.EqualTo(WaterKind.None).Or.EqualTo(WaterKind.Bank));
-				Assert.That(DistanceAt(x, z), Is.GreaterThanOrEqualTo(record.Radius), $"{record.Kind} at ({x:F0}, {z:F0}) does not straddle the river or the lake");
+				Assert.That(DistanceAt(x, z), Is.GreaterThanOrEqualTo(PointOfInterestOutline.Min(record.Outline, record.Radius)), $"{record.Kind} at ({x:F0}, {z:F0}) does not straddle the river or the lake");
 				if (!rule.Face)
 				{
 					// The planner's own measure: across a 16 m cell each way.
@@ -285,6 +290,100 @@ namespace FishMMO.UnitTests.WorldDesign
 						Assert.That(d, Is.GreaterThanOrEqualTo(rules.RuleFor(a.Kind).SpacingMetres - 0.05f), $"two {a.Kind} keep their spacing");
 					}
 					Assert.That(d, Is.GreaterThanOrEqualTo(a.Radius + b.Radius + input.SiteGapMetres - 0.05f), $"{a.Kind} and {b.Kind} footprints keep their gap");
+				}
+			}
+		}
+
+		/// <summary>
+		/// Every outlined site's outline (2026-10-18: footprints not circles) is closed and drawn at every bearing, inside its
+		/// radius (the bounding reach), never under the least share of its drawn radius, and not a disc; its pad and keep-out
+		/// carry it (the keep-out grown by its margin), and the keep-out holds every point of it.
+		/// </summary>
+		[Test]
+		public void OutlinedSitesAreDrawnInsideTheirReach()
+		{
+			PointOfInterestPlan plan = PointOfInterestPlanner.Plan(Input());
+			int outlined = 0, irregular = 0;
+			foreach (PointOfInterestRecord record in plan.Records)
+			{
+				if (!PointOfInterestOutline.Drawn(record.Outline))
+				{
+					continue;
+				}
+				outlined++;
+				Assert.That(record.Outline.Length, Is.EqualTo(PointOfInterestOutline.Bearings), $"{record.Kind}: drawn at every bearing");
+				float most = PointOfInterestOutline.Max(record.Outline, record.Radius), least = PointOfInterestOutline.Min(record.Outline, record.Radius);
+				Assert.That(most, Is.LessThanOrEqualTo(record.Radius + 0.01f), $"{record.Kind}: no point past its radius");
+				Assert.That(least, Is.GreaterThan(0.25f * record.Radius), $"{record.Kind}: never pinched to nothing");
+				irregular += most - least > 0.05f * most ? 1 : 0;
+				PointOfInterestPad pad = plan.Pads.Find(p => p.Id == record.Id);
+				Assert.That(pad.Outline, Is.EqualTo(record.Outline), $"{record.Kind}: the pad is the site's footprint");
+				PointOfInterestKeepOut keepOut = plan.KeepOuts.Find(k => k.Id == record.Id);
+				for (int k = 0; k < record.Outline.Length; k++)
+				{
+					Vector2 dir = PointOfInterestOutline.Direction(k, record.Outline.Length);
+					Vector2 at = new Vector2(record.Position.x, record.Position.z) + dir * (record.Outline[k] * 0.99f);
+					Assert.That(keepOut.Contains(at.x, at.y), Is.True, $"{record.Kind}: its keep-out holds its outline");
+					Assert.That(pad.Contains(at.x, at.y), Is.True, $"{record.Kind}: its pad holds its outline");
+					Vector2 past = new Vector2(record.Position.x, record.Position.z) + dir * (record.Outline[k] + keepOut.Radius - record.Radius + 1f);
+					Assert.That(keepOut.Contains(past.x, past.y), Is.False, $"{record.Kind}: its keep-out ends past its margin");
+				}
+			}
+			Assert.That(outlined, Is.GreaterThan(3), "pad kinds are outlined");
+			Assert.That(irregular, Is.GreaterThan(0), "the outlines are not discs");
+		}
+
+		/// <summary>
+		/// A town on a steady hillside is terraced (2026-10-18: hill towns): two to four levels rising up the hill, each a
+		/// metre or more over the one below, a ramp up every bank at the ramp's grade, and the site standing at its centre's level.
+		/// </summary>
+		[Test]
+		public void ATownOnAHillsideStepsUpItInTerraces()
+		{
+			var rules = PointOfInterestRules.Default();
+			var input = new PointOfInterestPlanInput
+			{
+				WidthMetres = 1600f,
+				DepthMetres = 1600f,
+				// A hillside climbing 0.05 m per metre to the north (within a town's relief), and nothing else.
+				Ground = (x, z) => 100f + 0.05f * z,
+				// Plains, which host towns.
+				Biomes = new List<PointOfInterestBiome> { Hosting("Plains", 11, rules) },
+				BiomeAt = (x, z) => 0,
+				// One town, whatever the budget draws.
+				Settings = new PointOfInterestPlanSettings { Overrides = { new PointOfInterestKindOverride { Kind = POIType.Town, Min = 1, Max = 1 } } },
+				Rules = rules,
+				Seed = 99,
+				Builds = kind => kind == POIType.Town,
+			};
+			PointOfInterestPlan plan = PointOfInterestPlanner.Plan(input);
+			PointOfInterestRecord town = plan.Records.Find(r => r.Kind == POIType.Town);
+			Assume.That(town, Is.Not.Null, "a town is sited on the hillside");
+			PointOfInterestPad pad = plan.Pads.Find(p => p.Id == town.Id);
+			Assert.That(PointOfInterestTerraces.Terraced(pad), Is.True, "the hillside town is terraced");
+			Assert.That(pad.TerraceLevels.Length, Is.InRange(2, 4));
+			Assert.That(pad.TerraceAxis.y, Is.GreaterThan(0.95f), "its terraces step up the hill (north)");
+			for (int i = 1; i < pad.TerraceLevels.Length; i++)
+			{
+				Assert.That(pad.TerraceLevels[i] - pad.TerraceLevels[i - 1], Is.GreaterThanOrEqualTo(1f), "each terrace stands over the one below");
+			}
+			Assert.That(pad.Height, Is.EqualTo(town.Position.y), "the site stands on its pad");
+			Assert.That(pad.Height, Is.EqualTo(PointOfInterestTerraces.LevelAt(pad, pad.Centre.x, pad.Centre.z)).Within(0.01f), "at its centre's level");
+			// Up each ramp's middle the ground climbs no steeper than a ramp's grade.
+			Vector2 across = PointOfInterestTerraces.Across(pad.TerraceAxis);
+			for (int s = 0; s < pad.TerraceSteps.Length; s++)
+			{
+				float previous = float.NaN;
+				for (float u = pad.TerraceSteps[s] - 30f; u <= pad.TerraceSteps[s] + 30f; u += 0.5f)
+				{
+					Vector2 p = new Vector2(pad.Centre.x, pad.Centre.z) + pad.TerraceAxis * u + across * pad.TerraceRamps[s];
+					float h = PointOfInterestTerraces.LevelAt(pad, p.x, p.y);
+					if (!float.IsNaN(previous))
+					{
+						Assert.That(h - previous, Is.LessThanOrEqualTo(PointOfInterestTerraces.RampGrade * 0.5f + 1e-3f), $"the ramp up bank {s} at {u:0.0} m");
+						Assert.That(h - previous, Is.GreaterThanOrEqualTo(-1e-3f), "it only climbs");
+					}
+					previous = h;
 				}
 			}
 		}

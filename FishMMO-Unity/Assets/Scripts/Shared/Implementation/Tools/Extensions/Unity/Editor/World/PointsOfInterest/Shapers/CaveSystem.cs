@@ -21,6 +21,26 @@ namespace FishMMO.Shared.WorldDesign
 		public float Collar, CollarLow;
 		/// <summary>The shell's thickness at this mouth.</summary>
 		public float Shell;
+		/// <summary>How the mouth is come to (2026-10-18): over the ground before it, by diving, or along a shelf behind a waterfall.</summary>
+		public CaveMouthKind Kind;
+		/// <summary>The water's surface over a <see cref="CaveMouthKind.Submerged"/> mouth, world y; unused otherwise.</summary>
+		public float Water;
+		/// <summary>
+		/// Where the way to a <see cref="CaveMouthKind.Shelf"/> mouth ends, on the dry bank beside the fall's pool (the system's
+		/// frame): the shelf runs from there behind the curtain to the mouth. Unused otherwise (<see cref="CaveSystem.LandingOf"/>).
+		/// </summary>
+		public Vector3 Landing;
+	}
+
+	/// <summary>How a cave mouth is come to.</summary>
+	public enum CaveMouthKind : byte
+	{
+		/// <summary>Over the ground before it, graded to its floor.</summary>
+		Ground,
+		/// <summary>Under a lake or the sea: dived into, a flooded passage (a sump) rising from it to dry chambers.</summary>
+		Submerged,
+		/// <summary>Behind a waterfall's curtain, along a shelf over its pool from the dry bank beside it.</summary>
+		Shelf,
 	}
 
 	/// <summary>What a passage is in the system.</summary>
@@ -104,8 +124,13 @@ namespace FishMMO.Shared.WorldDesign
 	/// </remarks>
 	public sealed partial class CaveSystem
 	{
-		/// <summary>4 (2026-10-13): characters, solids, rifts, shafts, crossings, climbs, tall nodes, rough chambers.</summary>
-		public const int Format = 4;
+		/// <summary>
+		/// 6 (2026-10-18, later): each mouth's kind, water and landing (mouths under water and behind waterfalls, second mouths
+		/// through a hill). 5 (2026-10-18): mouths' floors at the ground's own height with the approach graded to them, no outcrop or notch, and
+		/// greater halls (a cave stored before is cut again: its floor stood a rim over the ground). 4 (2026-10-13): characters,
+		/// solids, rifts, shafts, crossings, climbs, tall nodes, rough chambers.
+		/// </summary>
+		public const int Format = 6;
 		public const float MinCover = 3f;
 		public const float FloorDepth = 0.45f;
 		public const float ApronBand = 2.5f;
@@ -174,7 +199,8 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The forms at their sizes: a grotto a short passage into one chamber; caves 90–480 m of trunk falling 20–140 m below
-		/// their mouths through two to five rooms to a cavern, with side passages; ice caves a little smaller and smoother; lava
+		/// their mouths through two to five rooms to a cavern, with side passages (rooms and caverns a third greater since
+		/// 2026-10-18, "Caves need even bigger hallows": a large cave's cavern up to eight bores, ~110 m across); ice caves a little smaller and smoother; lava
 		/// tubes long, low, wide and nearly level; sea caves at the waterline and shallow; mines straight, level adits with
 		/// drifts at right angles and stopes.
 		/// </summary>
@@ -188,7 +214,7 @@ namespace FishMMO.Shared.WorldDesign
 						RoomEveryMin = 999f, RoomEveryMax = 999f, CavernMin = 1.9f, CavernMax = 2.6f };
 				case CaveForm.LavaTube:
 					return new Profile { RadiusMin = 3f + size, RadiusMax = 4.5f + 1.5f * size, TrunkMin = 160f + 80f * size, TrunkMax = 260f + 160f * size, DepthMin = 6f, DepthMax = 14f + 6f * size,
-						Pitch = 5f, Turn = 6f, Flat = 0.62f, Noise = 0.18f, RoomEveryMin = 70f, RoomEveryMax = 140f, RoomMin = 1.3f, RoomMax = 1.7f, CavernMin = 1.6f, CavernMax = 2.2f,
+						Pitch = 5f, Turn = 6f, Flat = 0.62f, Noise = 0.18f, RoomEveryMin = 70f, RoomEveryMax = 140f, RoomMin = 1.4f, RoomMax = 2f, CavernMin = 2f, CavernMax = 3f,
 						BranchesMin = 0, BranchesMax = size, BranchMin = 30f, BranchMax = 80f };
 				case CaveForm.Mine:
 					return new Profile { RadiusMin = 1.9f, RadiusMax = 2.3f, TrunkMin = 70f + 40f * size, TrunkMax = 120f + 60f * size, DepthMin = 10f + 10f * size, DepthMax = 25f + 15f * size,
@@ -200,12 +226,12 @@ namespace FishMMO.Shared.WorldDesign
 					float noise = form == CaveForm.IceCave ? 0.2f : 0.3f;
 					Profile p = size == 0
 						? new Profile { RadiusMin = 2f, RadiusMax = 3.5f, TrunkMin = 90f, TrunkMax = 160f, DepthMin = 20f, DepthMax = 40f, RoomEveryMin = 45f, RoomEveryMax = 80f,
-							RoomMin = 1.6f, RoomMax = 2.4f, CavernMin = 2.6f, CavernMax = 3.6f, BranchesMin = 0, BranchesMax = 1, BranchMin = 20f, BranchMax = 45f }
+							RoomMin = 2f, RoomMax = 3f, CavernMin = 3.4f, CavernMax = 4.8f, BranchesMin = 0, BranchesMax = 1, BranchMin = 20f, BranchMax = 45f }
 						: size == 1
 						? new Profile { RadiusMin = 3f, RadiusMax = 5f, TrunkMin = 180f, TrunkMax = 300f, DepthMin = 40f, DepthMax = 80f, RoomEveryMin = 50f, RoomEveryMax = 95f,
-							RoomMin = 1.7f, RoomMax = 2.6f, CavernMin = 3f, CavernMax = 4.5f, BranchesMin = 1, BranchesMax = 3, BranchMin = 25f, BranchMax = 70f }
+							RoomMin = 2.2f, RoomMax = 3.4f, CavernMin = 4f, CavernMax = 6.5f, BranchesMin = 1, BranchesMax = 3, BranchMin = 25f, BranchMax = 70f }
 						: new Profile { RadiusMin = 4f, RadiusMax = 7f, TrunkMin = 280f, TrunkMax = 480f, DepthMin = 70f, DepthMax = 140f, RoomEveryMin = 55f, RoomEveryMax = 110f,
-							RoomMin = 1.8f, RoomMax = 2.8f, CavernMin = 3.2f, CavernMax = 5.5f, BranchesMin = 2, BranchesMax = 5, BranchMin = 30f, BranchMax = 90f };
+							RoomMin = 2.4f, RoomMax = 3.8f, CavernMin = 4.5f, CavernMax = 8f, BranchesMin = 2, BranchesMax = 5, BranchMin = 30f, BranchMax = 90f };
 					p.TrunkMin *= scale;
 					p.TrunkMax *= scale;
 					p.DepthMin *= scale;
@@ -225,13 +251,21 @@ namespace FishMMO.Shared.WorldDesign
 		/// Plans a system from a mouth into the slope behind it. Null, with <paramref name="problem"/> saying why, where the rock
 		/// is too thin or too low. Deterministic in its inputs.
 		/// </summary>
+		/// <param name="opening">How the mouth is come to when not over the ground before it (2026-10-18): dived to under a lake
+		/// or the sea (a sump rising from it to dry chambers), or behind a waterfall on a shelf over its pool. Either is a
+		/// classic system (one line), its bore no wider than its water hides.</param>
 		public static CaveSystem Plan(CaveForm form, int size, Vector3 mouth, float yaw, int seed, int siteId, CaveGround ground, float seaLevel, out string problem,
-			float waterLevel = float.NaN)
+			float waterLevel = float.NaN, CaveOpening opening = default)
 		{
 			problem = null;
 			var rng = new DeterministicRNG(seed);
 			Profile pf = ProfileFor(form, size);
 			float r0 = rng.Range(pf.RadiusMin, pf.RadiusMax);
+			if (opening.MaxRadius > 0f)
+			{
+				r0 = Mathf.Max(MinBore, Mathf.Min(r0, opening.MaxRadius));
+			}
+			bool submerged = opening.Kind == CaveMouthKind.Submerged, shelf = opening.Kind == CaveMouthKind.Shelf;
 			var system = new CaveSystem
 			{
 				Form = form,
@@ -262,7 +296,24 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			float foot = ground.At(mx, mz);
-			float floor0 = foot + system.Rim;
+			// The floor at the ground's own height (2026-10-18): it stood a rim over it, a step up at the threshold. The ground
+			// before the mouth is graded to meet it (Approach), so the way in runs on from the terrain onto the floor level.
+			float floor0 = shelf ? opening.Floor : foot;
+			if (submerged)
+			{
+				// Wholly under its water, the arch's top too, and no deeper than a breath's dive.
+				float under = opening.Water - foot;
+				if (under < 2f * r0 * pf.Flat + SubmergedClear)
+				{
+					problem = $"its mouth lies {under:0.#} m under the water, too shallow to be wholly under it";
+					return null;
+				}
+				if (under > MaxDive)
+				{
+					problem = $"its mouth lies {under:0.#} m under the water, too deep to dive to";
+					return null;
+				}
+			}
 			if (form == CaveForm.SeaCave)
 			{
 				if (foot > seaLevel + SeaFootMetres)
@@ -290,11 +341,13 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				floor0 = waterLevel - 0.6f;
 			}
-			system.WaterLevel = awash ? water : float.NaN;
+			system.WaterLevel = awash ? water : submerged ? opening.Water : float.NaN;
 			// Every other cave keeps its floors over the sea, all of them (2026-10-11): the sea's surface stands at its
-			// level everywhere, so a passage under it would be a flooded one.
-			system.LowestFloor = awash ? water - AwashDepth : seaLevel + AboveSea;
-			if (!awash && floor0 < system.LowestFloor)
+			// level everywhere, so a passage under it would be a flooded one. A submerged mouth's system keeps them over its
+			// own water too, all but its sump (Walker.RiseTo): the ocean fills whatever lies under the sea, and a lake's pool
+			// is written over whatever of the system lies under the lake (CaveShaper.WritePool).
+			system.LowestFloor = awash ? water - AwashDepth : submerged ? Mathf.Max(seaLevel, opening.Water) + AboveSea : seaLevel + AboveSea;
+			if (!awash && !submerged && floor0 < system.LowestFloor)
 			{
 				problem = $"its mouth stands {floor0 - seaLevel:0.#} m over the sea; a cave that low is the sea's (a sea cave or a grotto)";
 				return null;
@@ -302,7 +355,11 @@ namespace FishMMO.Shared.WorldDesign
 			system.Origin = new Vector3(mx, floor0, mz);
 			var walker = new Walker(system, ground, pf, rng);
 			float zone = Mathf.Max(14f, 3.5f * r0);
-			system.Mouths.Add(new CaveMouth { Floor = Vector3.zero, Yaw = Mathf.Repeat(yaw, 360f), SiteId = siteId, Radius = r0, Zone = zone, Collar = 1.5f, CollarLow = 1.5f, Shell = 3f });
+			system.Mouths.Add(new CaveMouth
+			{
+				Floor = Vector3.zero, Yaw = Mathf.Repeat(yaw, 360f), SiteId = siteId, Radius = r0, Zone = zone, Collar = 1.5f, CollarLow = 1.5f, Shell = 3f,
+				Kind = opening.Kind, Water = opening.Water, Landing = shelf ? opening.Landing - system.Origin : Vector3.zero,
+			});
 
 			// The trunk: level through the mouth, then down toward its depth, rooms along it, the cavern at its end.
 			float trunkLength = rng.Range(pf.TrunkMin, pf.TrunkMax);
@@ -310,6 +367,10 @@ namespace FishMMO.Shared.WorldDesign
 			// Its character, from the seed hashed (a fresh stream's first draw follows its seed too closely): what kind of
 			// system the rest of the plan lays (CaveSystem.Layout).
 			system.Character = CharacterFor(form, size, Unit(unchecked((uint)seed), 0x2C1Bu));
+			if (opening.Kind != CaveMouthKind.Ground)
+			{
+				system.Character = CaveCharacter.Classic;
+			}
 			bool graph = form != CaveForm.Mine && system.Character != CaveCharacter.Classic;
 			int levels = graph ? LevelsFor(system.Character, size, rng) : 1;
 			if (system.Character == CaveCharacter.Abyss)
@@ -321,8 +382,24 @@ namespace FishMMO.Shared.WorldDesign
 			float shortest = form == CaveForm.Grotto ? 8f : Mathf.Max(zone + 5f, 0.35f * pf.TrunkMin);
 			// A graph's trunk is only its way down to the first hub; the rest of its length goes to the hubs' branches.
 			float trunkWalk = graph ? Mathf.Max(shortest + 12f, trunkLength * rng.Range(0.3f, 0.45f)) : trunkLength;
-			CavePassage trunk = walker.Walk(CavePassageKind.Trunk, start, Mathf.Repeat(yaw + 180f, 360f), trunkWalk, graph ? depth / levels : depth, level, zone, awash);
+			// Under water, the trunk is first a sump climbing from the mouth to dry floors, then winds on a few metres over them.
+			// Behind a waterfall, the river's bed is over its threshold: it keeps its full cover from there in.
+			if (submerged)
+			{
+				walker.RiseTo = system.LowestFloor - system.Origin.y + SumpClear;
+				depth = -(walker.RiseTo + Mathf.Lerp(1f, 6f, Unit(unchecked((uint)seed), 0x5A3Du)));
+			}
+			CavePassage trunk = walker.Walk(CavePassageKind.Trunk, start, Mathf.Repeat(yaw + 180f, 360f), trunkWalk, graph ? depth / levels : depth, level, shelf ? level : zone, awash);
 			float along = trunk.Nodes[trunk.Nodes.Count - 1].Along;
+			if (submerged)
+			{
+				walker.RiseTo = float.NegativeInfinity;
+				if (trunk.Nodes[trunk.Nodes.Count - 1].Floor < system.LowestFloor - system.Origin.y)
+				{
+					problem = "its sump finds no dry rock to rise into under the hill";
+					return null;
+				}
+			}
 			if (along < shortest && form == CaveForm.Mine)
 			{
 				// No face to drive an adit into: a decline instead, sunk from the site at a walkable 15° through an open cut
@@ -361,6 +438,8 @@ namespace FishMMO.Shared.WorldDesign
 				return system;
 			}
 			system.Passages.Add(trunk);
+			// The field as it stands, for the chambers to keep clear of (Walker.Crosses), and again after each one.
+			system.PrepareField();
 
 			// Rooms along the trunk, each where the rock over it holds one.
 			float next = form == CaveForm.Grotto ? float.MaxValue : zone + rng.Range(pf.RoomEveryMin, pf.RoomEveryMax) * 0.6f;
@@ -374,6 +453,7 @@ namespace FishMMO.Shared.WorldDesign
 				if (walker.TryChamber(trunk, i, rng.Range(pf.RoomMin, pf.RoomMax), roomKind, siteId, out CaveChamber room))
 				{
 					system.Chambers.Add(room);
+					system.PrepareField();
 					next = trunk.Nodes[i].Along + rng.Range(pf.RoomEveryMin, pf.RoomEveryMax);
 				}
 				else
@@ -390,6 +470,7 @@ namespace FishMMO.Shared.WorldDesign
 					form == CaveForm.Grotto ? GrottoSlope : (float?)null))
 				{
 					system.Chambers.Add(cavern);
+					system.PrepareField();
 					ended = true;
 					break;
 				}
@@ -428,12 +509,14 @@ namespace FishMMO.Shared.WorldDesign
 					continue;
 				}
 				system.Passages.Add(branch);
+				system.PrepareField();
 				// An alcove at its end most of the time; otherwise it narrows and stops.
 				if (rng.NextFloat() < 0.6f || pf.Square)
 				{
 					if (walker.TryChamber(branch, branch.Nodes.Count - 1, rng.Range(1.4f, 2f), pf.Square ? CaveKind.Stope : CaveKind.Alcove, siteId, out CaveChamber alcove))
 					{
 						system.Chambers.Add(alcove);
+						system.PrepareField();
 					}
 				}
 				else
@@ -491,6 +574,11 @@ namespace FishMMO.Shared.WorldDesign
 			public float AvoidFrom;
 			/// <summary>The steepest the next walk runs, degrees, in place of the profile's (a mine's incline); 0 for the profile's.</summary>
 			public float PitchLimit;
+			/// <summary>
+			/// A submerged mouth's sump (system frame; −∞ for none): while its floor is under this the walk climbs as steeply as it
+			/// may, under <see cref="LowestFloor"/> (the flooded part), never down.
+			/// </summary>
+			public float RiseTo = float.NegativeInfinity;
 
 			public float Ground(Vector3 local) => ground.At(local.x + system.Origin.x, local.z + system.Origin.z) - system.Origin.y;
 			public bool Inside(Vector3 local, float reach) => ground.Contains(local.x + system.Origin.x, local.z + system.Origin.z, reach);
@@ -538,7 +626,8 @@ namespace FishMMO.Shared.WorldDesign
 					bool entering = along + step <= level || (sea && along + step <= zone);
 					// Down toward the depth while above it; about level, wandering, once there.
 					float below = -floor - depth;
-					float want = entering ? 0f : below < -1f ? -steepest : below > 2f ? steepest * 0.5f : tilt * 0.5f;
+					bool rising = floor < RiseTo;
+					float want = entering ? 0f : rising ? steepest : below < -1f ? -steepest : below > 2f ? steepest * 0.5f : tilt * 0.5f;
 					float wanderPitch = Mathf.Clamp(Mathf.MoveTowards(pitch, want, 8f) + tilt * 0.4f, -steepest, steepest);
 					var candidates = new (float heading, float pitch)[]
 					{
@@ -555,7 +644,8 @@ namespace FishMMO.Shared.WorldDesign
 						float run = step * Mathf.Cos(p * Mathf.Deg2Rad);
 						float nextFloor = floor + step * Mathf.Sin(p * Mathf.Deg2Rad);
 						var next = new Vector3(centre.x + Mathf.Sin(hr) * run, nextFloor + FloorDepth * nextRadius * pf.Flat * Tall, centre.z + Mathf.Cos(hr) * run);
-						if (nextFloor < MinFloor || !Inside(next, nextRadius + 12f))
+						// The sump alone lies under the lowest floor, and only ever climbs.
+						if (nextFloor < MinFloor && !(rising && nextFloor >= floor - 0.01f) || !Inside(next, nextRadius + 12f))
 						{
 							continue;
 						}
@@ -594,7 +684,11 @@ namespace FishMMO.Shared.WorldDesign
 				return passage;
 			}
 
-			/// <summary>A chamber round node <paramref name="index"/> of a passage, its radius <paramref name="scale"/> of the bore's, if the rock holds it (shrinking up to four times).</summary>
+			/// <summary>
+			/// A chamber round node <paramref name="index"/> of a passage, its radius <paramref name="scale"/> of the bore's, if
+			/// the rock holds it (shrinking up to six times). A cavern too tall for the rock over it is first given a lower vault
+			/// (no lower than <see cref="LowestVault"/> of its breadth): a wide, low cavern before a small one.
+			/// </summary>
 			/// <param name="slopeOverride">The floor's slope to give it instead of the passage's (a grotto's rising out of its pool).</param>
 			public bool TryChamber(CavePassage passage, int index, float scale, CaveKind kind, int siteId, out CaveChamber chamber, float? slopeOverride = null)
 			{
@@ -610,7 +704,8 @@ namespace FishMMO.Shared.WorldDesign
 				CaveNode lo = passage.Nodes[Mathf.Max(0, end ? index - 2 : index - 1)], hi = passage.Nodes[Mathf.Min(passage.Nodes.Count - 1, index + 1)];
 				float run = new Vector2(hi.Centre.x - lo.Centre.x, hi.Centre.z - lo.Centre.z).magnitude;
 				float slope = slopeOverride ?? (run > 0.5f ? Mathf.Clamp((hi.Floor - lo.Floor) / run, -MaxSlope, MaxSlope) : 0f);
-				for (int shrink = 0; shrink < 5; shrink++, scale *= 0.85f)
+				var side = new Vector3(dir.z, 0f, -dir.x);
+				for (int shrink = 0; shrink < 7; shrink++, scale *= 0.85f)
 				{
 					float rx = at.Radius * scale, rz = rx * across;
 					// A cavern is tall; a room a little over the bore; a stope low.
@@ -620,6 +715,10 @@ namespace FishMMO.Shared.WorldDesign
 					float shift = end ? 0.55f * rx : 0f;
 					Vector3 c = at.Centre + dir * shift;
 					float floor = at.Floor + slope * shift;
+					if (kind == CaveKind.Cavern)
+					{
+						ry = Mathf.Min(ry, Mathf.Max(Mathf.Max(6f, LowestVault * rx), RoomVault(c, dir, side, floor, rx, rz, slope) - 0.01f));
+					}
 					// Its low end no lower than the lowest floor (the sea's reach): smaller, or a step back up the passage, where
 					// it would run under it. Never flattened to fit: a floor flatter than the passage it opens off leaves a drop.
 					if (floor - Mathf.Abs(slope) * rx < MinFloor)
@@ -629,7 +728,6 @@ namespace FishMMO.Shared.WorldDesign
 					c.y = floor + 0.4f * ry;
 					float top = c.y + ry + amp;
 					float cover = Ground(c) - top;
-					var side = new Vector3(dir.z, 0f, -dir.x);
 					for (int k = 0; k < 8; k++)
 					{
 						float a = k * Mathf.PI / 4f, x = Mathf.Cos(a) * 0.9f * rx;
@@ -637,7 +735,8 @@ namespace FishMMO.Shared.WorldDesign
 						// The vault is sheared with the floor: its roof here no higher than the centre's, moved by the slope.
 						cover = Mathf.Min(cover, Ground(p) - (top + Mathf.Max(0f, slope * x)));
 					}
-					if (cover >= MinCover && Inside(c, Mathf.Max(rx, rz) + 12f))
+					if (cover >= MinCover && Inside(c, Mathf.Max(rx, rz) + 12f)
+						&& !Crosses(c, floor, Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg, new Vector3(rx, ry, rz), slope, q => NearChain(passage, q)))
 					{
 						chamber = new CaveChamber
 						{
@@ -656,11 +755,121 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
+			/// Whether a chamber planned here would open into the void already cut at another floor (or leave less than two
+			/// metres of rock between its vault and a passage over it): sampled through its volume and over its vault, a point
+			/// in the void whose floor is not this chamber's own there is a crossing. A chamber opening on a passage at its own
+			/// floor is a junction, and allowed; so is whatever <paramref name="exempt"/> lets be. With halls 250 m across
+			/// (2026-10-18), a hall at a trunk's foot reached back under the trunk's first stretch and its vault broke up through
+			/// the trunk's floor beside the mouth.
+			/// </summary>
+			public bool Crosses(Vector3 centre, float floor, float yaw, Vector3 radii, float slope, Func<Vector3, bool> exempt)
+			{
+				float yr = yaw * Mathf.Deg2Rad;
+				var dir = new Vector3(Mathf.Sin(yr), 0f, Mathf.Cos(yr));
+				var side = new Vector3(dir.z, 0f, -dir.x);
+				for (int ring = 0; ring < 3; ring++)
+				{
+					float reach = 0.45f * ring;
+					int spokes = ring == 0 ? 1 : 12;
+					// Up through the vault and two metres of rock over it, the vault falling toward its rim.
+					float height = (0.4f + Mathf.Sqrt(Mathf.Max(0f, 1f - reach * reach))) * radii.y + amp + 2f;
+					for (int k = 0; k < spokes; k++)
+					{
+						float a = k * Mathf.PI / 6f, x = Mathf.Cos(a) * reach * radii.x;
+						Vector3 at = new Vector3(centre.x, 0f, centre.z) + dir * x + side * (Mathf.Sin(a) * reach * radii.z);
+						float own = floor + slope * x;
+						for (float h = 1f; h <= height; h += 2.5f)
+						{
+							var p = new Vector3(at.x, own + h, at.z);
+							if (system.Smooth(p) < 0.5f && Mathf.Abs(system.FloorNear(p) - own) > 0.6f && (exempt == null || !exempt(p)))
+							{
+								return true;
+							}
+						}
+					}
+				}
+				return false;
+			}
+
+			/// <summary>Whether a point lies in or just round a passage's bore (the passage a chamber is entered by).</summary>
+			public static bool NearChain(CavePassage passage, Vector3 p)
+			{
+				if (passage == null)
+				{
+					return false;
+				}
+				foreach (CaveNode n in passage.Nodes)
+				{
+					float r = n.Radius * Mathf.Max(1f, n.Height) + 2.5f;
+					if ((p - n.Centre).sqrMagnitude < r * r)
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+
+			/// <summary>The lowest a great chamber's vault is let down to fit under the rock over it, a share of its breadth.</summary>
+			public const float LowestVault = 0.22f;
+			/// <summary>The cover a vault let down to the rock keeps past <see cref="MinCover"/>, a share of the noise's amplitude.</summary>
+			private const float VaultMargin = 0.5f;
+
+			/// <summary>
+			/// The tallest vault (its half-height) the rock holds over a room or cavern of these radii about <paramref name="c"/>'s
+			/// x/z on <paramref name="floor"/>: <see cref="TryChamber"/>'s own cover test (its middle and eight points round it at
+			/// nine tenths of its reach, each under the vault's top raised by the floor's slope) solved for the height.
+			/// </summary>
+			private float RoomVault(Vector3 c, Vector3 dir, Vector3 side, float floor, float rx, float rz, float slope)
+			{
+				// The top stands 1.4 half-heights over the floor (the middle 0.4 up) and the noise over that; a vault let down
+				// to the rock's limit keeps a margin past it, as the noise's sum of octaves can reach a little over its amplitude.
+				float cover = MinCover + VaultMargin * amp + 0.25f;
+				float best = (Ground(c) - floor - amp - cover) / 1.4f;
+				for (int k = 0; k < 8; k++)
+				{
+					float a = k * Mathf.PI / 4f, x = Mathf.Cos(a) * 0.9f * rx;
+					Vector3 p = c + dir * x + side * (Mathf.Sin(a) * 0.9f * rz);
+					best = Mathf.Min(best, (Ground(p) - floor - amp - Mathf.Max(0f, slope * x) - cover) / 1.4f);
+				}
+				return best;
+			}
+
+			/// <summary>
+			/// The tallest vault (its half-height) the rock holds over a hall's lobe of these radii (<see cref="TryLobe"/>'s cover
+			/// test solved for the height: over its outer ring only the vault's own height there need be covered).
+			/// </summary>
+			public float LobeVault(Vector3 centre, float floor, float yaw, float rx, float rz, float slope, float rough)
+			{
+				float yr = yaw * Mathf.Deg2Rad;
+				var dir = new Vector3(Mathf.Sin(yr), 0f, Mathf.Cos(yr));
+				var side = new Vector3(dir.z, 0f, -dir.x);
+				float noise = amp * Mathf.Max(1f, rough);
+				float cover = MinCover + VaultMargin * noise + 0.25f;
+				var c = new Vector3(centre.x, floor, centre.z);
+				float best = (Ground(c) - floor - noise - cover) / 1.4f;
+				for (int k = 0; k < 12; k++)
+				{
+					float a = k * Mathf.PI / 6f;
+					for (float reach = 0.45f; reach <= 0.91f; reach += 0.45f)
+					{
+						float x = Mathf.Cos(a) * reach * rx;
+						Vector3 p = c + dir * x + side * (Mathf.Sin(a) * reach * rz);
+						float rise = 0.4f + Mathf.Sqrt(Mathf.Max(0f, 1f - reach * reach));
+						best = Mathf.Min(best, (Ground(p) - floor - noise - Mathf.Max(0f, slope * x) - cover) / rise);
+					}
+				}
+				return best;
+			}
+
+			/// <summary>
 			/// A chamber of the given radii (along its heading, up, across) on a floor at <paramref name="floor"/> under
 			/// <paramref name="centre"/>'s x/z, if the rock over it holds it and the ground's sample reaches round it: one lobe
 			/// of a hall. No shrinking: the caller tries again smaller.
 			/// </summary>
-			public bool TryLobe(Vector3 centre, float floor, float yaw, Vector3 radii, float slope, CaveChamberKind kind, int siteId, float rough, out CaveChamber chamber)
+			/// <param name="exempt">Points of the void already cut that this lobe may open into at another floor: the passage it is
+			/// entered by, the hall's other lobes (their terraces are ramped). Null for none.</param>
+			public bool TryLobe(Vector3 centre, float floor, float yaw, Vector3 radii, float slope, CaveChamberKind kind, int siteId, float rough, out CaveChamber chamber,
+				Func<Vector3, bool> exempt = null)
 			{
 				chamber = default;
 				float rx = radii.x, ry = radii.y, rz = radii.z;
@@ -686,7 +895,7 @@ namespace FishMMO.Shared.WorldDesign
 						cover = Mathf.Min(cover, Ground(p) - (c.y + rise + amp * Mathf.Max(1f, rough) + Mathf.Max(0f, slope * x)));
 					}
 				}
-				if (cover < MinCover || !Inside(c, Mathf.Max(rx, rz) + 12f))
+				if (cover < MinCover || !Inside(c, Mathf.Max(rx, rz) + 12f) || Crosses(c, floor, yaw, radii, slope, exempt))
 				{
 					return false;
 				}
@@ -707,155 +916,8 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── Joining two systems ───────────────────────────────────
 
-		/// <summary>
-		/// Joins <paramref name="other"/> (a system planned before, from another cave site) into this one, deep down: a link
-		/// passage from this system's deepest chamber to the other's nearest, walkable and under the rock all the way. On
-		/// success the other's mouths, passages and chambers become this system's (in its frame) and the link is added;
-		/// false (and nothing changed) where no link fits.
-		/// </summary>
 		/// <summary>Why the last <see cref="TryJoin"/> found no link, for the notes.</summary>
 		public string JoinProblem;
-
-		public bool TryJoin(CaveSystem other, CaveGround ground, float maxLength, int seed)
-		{
-			if (other == null || other.Chambers.Count == 0 || Chambers.Count == 0)
-			{
-				JoinProblem = "no chambers to join";
-				return false;
-			}
-			Vector3 shift = other.Origin - Origin;
-			// From this system's deepest chamber to the other's chamber nearest it across and in depth.
-			CaveChamber from = Chambers[0];
-			foreach (CaveChamber c in Chambers)
-			{
-				if (c.Floor < from.Floor)
-				{
-					from = c;
-				}
-			}
-			CaveChamber to = other.Chambers[0];
-			float best = float.MaxValue;
-			foreach (CaveChamber c in other.Chambers)
-			{
-				// Near across and near in depth: a link climbing far to a shallow chamber runs out of rock over it.
-				Vector3 apart = c.Centre + shift - from.Centre;
-				float d = new Vector2(apart.x, apart.z).magnitude + 3f * Mathf.Abs(c.Floor + shift.y - from.Floor);
-				if (d < best)
-				{
-					best = d;
-					to = c;
-				}
-			}
-			Vector3 target = to.Centre + shift;
-			Vector3 flat = target - from.Centre;
-			flat.y = 0f;
-			if (flat.magnitude > maxLength)
-			{
-				JoinProblem = $"the chambers are {flat.magnitude:0} m apart";
-				return false;
-			}
-			var rng = new DeterministicRNG(seed);
-			Profile pf = ProfileFor(Form, SizeClass);
-			float r = Mathf.Max(MinBore, Radius * 0.8f);
-			float amp = NoiseShare * Radius;
-			float step = Mathf.Clamp(0.9f * r, 2.5f, 5f);
-			var link = new CavePassage { Kind = CavePassageKind.Link };
-			Vector3 dir0 = flat.normalized;
-			var centre = from.Centre + dir0 * (Mathf.Max(from.Radii.x, from.Radii.z) * 0.7f);
-			float floor = FloorOf(from, centre);
-			centre.y = floor + FloorDepth * r * Flat;
-			link.Nodes.Add(new CaveNode { Centre = centre, Radius = r, Floor = floor, Along = 0f });
-			float along = 0f;
-			float heading = Mathf.Atan2(dir0.x, dir0.z) * Mathf.Rad2Deg;
-			float GroundAt(Vector3 local) => ground.At(local.x + Origin.x, local.z + Origin.z) - Origin.y;
-			for (int guard = 0; guard < 400 && along < maxLength * 1.6f; guard++)
-			{
-				Vector3 toTarget = target - centre;
-				toTarget.y = 0f;
-				float reach = Mathf.Max(to.Radii.x, to.Radii.z) * 0.6f;
-				// The target chamber's floor under here (its floor is a sloping plane).
-				float targetFloor = FloorOf(to, centre - shift) + shift.y;
-				float gap = targetFloor - floor;
-				if (toTarget.magnitude <= reach && Mathf.Abs(gap) <= 0.4f)
-				{
-					Passages.Add(link);
-					Absorb(other, shift);
-					Prepare();
-					return true;
-				}
-				float aim = Mathf.Atan2(toTarget.x, toTarget.z) * Mathf.Rad2Deg;
-				// Toward the target's floor, no steeper than a walk: where the drop is too much for the way left, it winds
-				// (a switchback) until it is not.
-				float remaining = Mathf.Max(step, toTarget.magnitude - reach);
-				if (Mathf.Abs(gap) > remaining * 0.33f)
-				{
-					aim += 75f;
-				}
-				heading += Mathf.Clamp(DeltaAngle(heading, aim), -20f, 20f) + rng.Range(-8f, 8f);
-				float wantPitch = Mathf.Atan2(gap, remaining) * Mathf.Rad2Deg;
-				// 2° gentler than a trunk: a link meets chambers at both ends, and each junction's crease steepens it.
-				float p = Mathf.Clamp(wantPitch, -(WalkPitch - 2f), WalkPitch - 2f);
-				float run = step * Mathf.Cos(p * Mathf.Deg2Rad);
-				float nextFloor = 0f;
-				Vector3 next = default;
-				bool found = false;
-				// Round the two systems' other passages and chambers, never through them: where it crossed a sloping room at
-				// an angle, the two floors met in a drop. Only the chamber it leaves and the one it reaches are its to touch.
-				foreach (float turn in LinkTurns)
-				{
-					float h = heading + turn, hr = h * Mathf.Deg2Rad;
-					float nf = floor + step * Mathf.Sin(p * Mathf.Deg2Rad);
-					var n = new Vector3(centre.x + Mathf.Sin(hr) * run, nf + FloorDepth * r * Flat, centre.z + Mathf.Cos(hr) * run);
-					if (!ground.Contains(n.x + Origin.x, n.z + Origin.z, r + 12f))
-					{
-						continue;
-					}
-					if (GroundAt(n) - (n.y + r * Flat + amp) < MinCover)
-					{
-						// Too near the surface here: go deeper first.
-						nf = floor - step * Mathf.Sin((WalkPitch - 2f) * Mathf.Deg2Rad);
-						n.y = nf + FloorDepth * r * Flat;
-						if (GroundAt(n) - (n.y + r * Flat + amp) < MinCover)
-						{
-							continue;
-						}
-					}
-					var fromXz = new Vector2(n.x - from.Centre.x, n.z - from.Centre.z);
-					var toXz = new Vector2(n.x - target.x, n.z - target.z);
-					bool leaving = fromXz.magnitude < Mathf.Max(from.Radii.x, from.Radii.z) * 1.3f;
-					bool arriving = toXz.magnitude < Mathf.Max(to.Radii.x, to.Radii.z) * 2f;
-					// Crossing another passage or chamber is a junction only where their floors agree; elsewhere it is a drop.
-					float clearance = r + 2f;
-					if (!leaving && Smooth(n) < clearance && Mathf.Abs(FloorNear(n) - nf) > 0.5f
-						|| !arriving && other.Smooth(n - shift) < clearance && Mathf.Abs(other.FloorNear(n - shift) + shift.y - nf) > 0.5f)
-					{
-						continue;
-					}
-					next = n;
-					nextFloor = nf;
-					heading = h;
-					found = true;
-					break;
-				}
-				if (!found)
-				{
-					JoinProblem = $"blocked {along:0} m along (cover, the ground's edge or another passage at another floor), floor {floor:0.#}, gap {gap:0.#}";
-					return false;
-				}
-				// Never under the lower of the two systems' floors (the sea's level for a dry cave).
-				if (nextFloor + Origin.y < Mathf.Max(LowestFloor, other.LowestFloor))
-				{
-					JoinProblem = "it would run under the sea's reach";
-					return false;
-				}
-				centre = next;
-				floor = nextFloor;
-				along += step;
-				link.Nodes.Add(new CaveNode { Centre = centre, Radius = r * rng.Range(0.92f, 1.08f), Floor = floor, Along = along });
-			}
-			JoinProblem = $"it wandered {along:0} m without arriving";
-			return false;
-		}
 
 		/// <summary>The headings a link tries off its course, degrees, in turn, to keep round the other passages and chambers.</summary>
 		private static readonly float[] LinkTurns = { 0f, 35f, -35f, 70f, -70f, 105f, -105f, 140f, -140f };
@@ -924,6 +986,92 @@ namespace FishMMO.Shared.WorldDesign
 				moved.Top += shift;
 				Climbs.Add(moved);
 			}
+		}
+
+		// ── The way in ────────────────────────────────────────────
+
+		/// <summary>The grade the ground before a mouth ramps back to its own at, rise over run (about 18°).</summary>
+		public const float ApproachGrade = 0.32f;
+		/// <summary>The grade the approach's sides ease back to the ground at, rise over run (35°).</summary>
+		public const float ApproachSideGrade = 0.7f;
+		/// <summary>The most the approach cuts or fills the ground, metres; past it the ground is left as it is.</summary>
+		public const float ApproachMaxGive = 10f;
+
+		/// <summary>
+		/// Whether this system's mouths are entered over the ground before them, which <see cref="Approach"/> then grades to
+		/// their floors: every dry cave's. An awash cave (a sea cave, a grotto) is entered from its water, its floor under it;
+		/// its shore is left as it is. Ask the system that planned a mouth (a joined host may be of another form).
+		/// </summary>
+		public bool GradesApproach => float.IsNaN(WaterLevel);
+
+		/// <summary>
+		/// A mouth's approach in plan (world x/z): its floor's point, the way out, the level run out to (metres from the
+		/// floor's point, past the bore's end, its cut and the collar over it), its half-width (the arch's foot and a
+		/// margin), and how far out from the face the hill's own foot is eased into it.
+		/// </summary>
+		private void ApproachFrame(CaveMouth mouth, out Vector2 at, out Vector2 outward, out float flat, out float half, out float face)
+		{
+			at = new Vector2(Origin.x + mouth.Floor.x, Origin.z + mouth.Floor.z);
+			float yr = mouth.Yaw * Mathf.Deg2Rad;
+			outward = new Vector2(Mathf.Sin(yr), Mathf.Cos(yr));
+			// The trunk's first node stands a fifth of the bore out of the face, its cap a bore further; the hole runs a margin
+			// past that, and the collar a margin and its wander past the hole.
+			flat = 1.2f * mouth.Radius + HoleMargin + CollarMargin + CollarWander + 1f;
+			half = mouth.Radius * (1f + ArchSpread) + 1.5f;
+			face = 0.6f * mouth.Radius;
+		}
+
+		/// <summary>
+		/// The ground's height at (x, z) (world metres) with the approach before a mouth graded into it, given its height
+		/// <paramref name="h"/> there now (2026-10-18: "allow a smoother transition into the cave itself"): level with the
+		/// mouth's floor over a lane straight out from the opening, as wide as the arch's foot and running past the cut, then
+		/// ramping back to the ground at <see cref="ApproachGrade"/>, its sides at <see cref="ApproachSideGrade"/>. Cut where
+		/// the ground stood over the floor and filled where it fell away (a talus apron), never more than
+		/// <see cref="ApproachMaxGive"/>; the hill's own foot is eased into it at the face, and nothing behind the face (the
+		/// hill over the bore) is touched.
+		/// </summary>
+		/// <remarks>
+		/// <b>Idempotent:</b> the ground is clamped into a band about the floor that depends on the position alone, so grading
+		/// graded ground leaves it as it is, and a cut made again (or a Regenerate) never digs or builds it up further. Pure: a
+		/// test grades a ground function with it exactly as the shaper grades the terrain's samples.
+		/// </remarks>
+		public float Approach(int mouthIndex, float x, float z, float h)
+		{
+			CaveMouth mouth = Mouths[mouthIndex];
+			ApproachFrame(mouth, out Vector2 at, out Vector2 outward, out float flat, out float half, out float face);
+			var d = new Vector2(x - at.x, z - at.y);
+			float u = Vector2.Dot(d, outward);
+			if (u < 0f)
+			{
+				return h;
+			}
+			float v = Mathf.Abs(d.x * outward.y - d.y * outward.x);
+			float give = Mathf.Max(0f, u - flat) * ApproachGrade + Mathf.Max(0f, v - half) * ApproachSideGrade + Mathf.Max(0f, face - u);
+			// The band widens without limit toward the most it gives, so the edit fades into the ground continuously and the
+			// clamp stays one to a band fixed by position alone.
+			float s = Mathf.Clamp01((give - 0.7f * ApproachMaxGive) / (0.3f * ApproachMaxGive));
+			if (s >= 1f)
+			{
+				return h;
+			}
+			float band = give / (1f - s * s * (3f - 2f * s) + 1e-4f);
+			float floor = Origin.y + mouth.Floor.y;
+			return Mathf.Clamp(h, floor - band, floor + band);
+		}
+
+		/// <summary>The plan box (world x/z) <see cref="Approach"/> can change the ground in before a mouth.</summary>
+		public Rect ApproachArea(int mouthIndex)
+		{
+			ApproachFrame(Mouths[mouthIndex], out Vector2 at, out Vector2 outward, out float flat, out float half, out _);
+			float run = flat + ApproachMaxGive / ApproachGrade, wide = half + ApproachMaxGive / ApproachSideGrade;
+			var side = new Vector2(outward.y, -outward.x);
+			Vector2 lo = at, hi = at;
+			foreach (Vector2 corner in new[] { at + side * wide, at - side * wide, at + outward * run + side * wide, at + outward * run - side * wide })
+			{
+				lo = Vector2.Min(lo, corner);
+				hi = Vector2.Max(hi, corner);
+			}
+			return Rect.MinMaxRect(lo.x, lo.y, hi.x, hi.y);
 		}
 
 		// ── The holes at a mouth ──────────────────────────────────
@@ -1202,32 +1350,19 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The rock noise's amplitude, metres.</summary>
 		public float Amp => NoiseShare * Radius;
 
-		/// <summary>Builds the segment tables and the 16 m buckets the field reads; call after the passages or chambers change.</summary>
-		public void Prepare()
-		{
-			PrepareField();
-			// The outcrops' blocks, laid out here once (the mesher reads the field from several threads; nothing may fill a
-			// cache under it).
-			outcrops.Clear();
-			if (HasNotch)
-			{
-				float pad = Amp * MaxRough + Mathf.Max(ShellDeep, MaxMouthShell) + 2f * blend + 2f * MeshCell + MouthReach;
-				for (int m = 0; m < Mouths.Count; m++)
-				{
-					outcrops[m] = LayOutcrop(m, Mouths[m]);
-				}
-				for (int m = 0; m < Mouths.Count; m++)
-				{
-					NotchBounds(Mouths[m], out Vector3 lo, out Vector3 hi);
-					AddToBuckets(lo - Vector3.one * pad, hi + Vector3.one * pad, NotchId - m);
-				}
-			}
-		}
-
 		/// <summary>
-		/// The segment tables and buckets alone, without the mouths' outcrops and notches: what the planner reads between its
-		/// steps (the outcrops are laid once the system is finished).
+		/// Builds the segment tables and the 16 m buckets the field reads; call after the passages or chambers change. Fills
+		/// every table the field reads, here and never lazily: the mesher reads the field from several threads.
 		/// </summary>
+		/// <remarks>
+		/// The mouths' outcrops (a mound of coursed blocks the opening was set in) and notches (a slot cut out over the apron,
+		/// rock walls either side of it) are gone (2026-10-18: "Caves entrances need to remove the rocky border and allow a
+		/// smoother transition into the cave itself"): the hillside runs into the opening itself, and the ground before it is
+		/// graded to the mouth's floor (<see cref="Approach"/>).
+		/// </remarks>
+		public void Prepare() => PrepareField();
+
+		/// <summary>The segment tables and buckets: what the planner reads between its steps, and the finished field.</summary>
 		private void PrepareField()
 		{
 			var a = new List<Vector3>();
@@ -1284,61 +1419,8 @@ namespace FishMMO.Shared.WorldDesign
 			AddFeaturesToBuckets(pad);
 		}
 
-		// ── The notch before a mouth ─────────────────────────────
-
-		/// <summary>Bucket ids at and under this are mouths' notches (NotchId − mouth index).</summary>
-		private const int NotchId = -1000000;
-		/// <summary>How far the notch runs back into the face behind the mouth, so it meets the bore, metres.</summary>
-		private const float NotchBack = 0.6f;
-		/// <summary>How much the notch widens per metre out from the face.</summary>
-		private const float NotchFlare = 0.35f;
-		/// <summary>The notch's highest reach over the mouth's floor, metres (above that the hillside is open sky anyway).</summary>
-		private const float NotchTop = 40f;
-
-		/// <summary>
-		/// Whether this system's mouths open through a notch cut into the hillside: a natural cave's, a lava tube's and an ice
-		/// cave's (reference photos, 2026-10-12: the mouth stands in a rock face that rises above it). A grotto and a sea
-		/// cave open at the water, and a mine at its own timbered portal.
-		/// </summary>
-		public bool HasNotch => Form == CaveForm.Cave || Form == CaveForm.LavaTube || Form == CaveForm.IceCave;
-
-		/// <summary>How far out from its face a mouth's notch runs, metres.</summary>
-		public static float NotchDepth(CaveMouth mouth) => Mathf.Max(4f, 1.6f * mouth.Radius);
-
-		/// <summary>The notch's half-width at the face, metres: the arch's foot.</summary>
-		private static float NotchHalfWidth(CaveMouth mouth) => 1.15f * mouth.Radius;
-
-		/// <summary>The notch's half-width <paramref name="outward"/> metres out from its face (what the mouth's dressing lines).</summary>
-		public static float NotchHalfWidthAt(CaveMouth mouth, float outward) => NotchHalfWidth(mouth) + NotchFlare * Mathf.Max(0f, outward);
-
-		private static void NotchBounds(CaveMouth mouth, out Vector3 lo, out Vector3 hi)
-		{
-			float reach = NotchDepth(mouth) + NotchBack + NotchHalfWidth(mouth) + NotchFlare * NotchDepth(mouth);
-			lo = mouth.Floor - new Vector3(reach, 1f, reach);
-			hi = mouth.Floor + new Vector3(reach, NotchTop, reach);
-		}
-
-		/// <summary>
-		/// The notch before a mouth as a void (negative inside): a slot cut into the hillside from the mouth's face out over
-		/// its apron, its floor the mouth's own, its sides widening outward, open to the sky. Its back is the face the arch
-		/// opens in, and its sides the rock walls either side of the way in (reference photos, 2026-10-12): the hole cutting,
-		/// the collar and the shell all see it as cave, so its walls are rock, flush at their tops with the hill.
-		/// </summary>
-		private static float Notch(CaveMouth mouth, Vector3 p)
-		{
-			float yaw = mouth.Yaw * Mathf.Deg2Rad;
-			var outward = new Vector3(Mathf.Sin(yaw), 0f, Mathf.Cos(yaw));
-			var side = new Vector3(outward.z, 0f, -outward.x);
-			Vector3 q = p - mouth.Floor;
-			float w = q.x * outward.x + q.z * outward.z;
-			float u = Mathf.Abs(q.x * side.x + q.z * side.z);
-			float half = NotchHalfWidth(mouth) + NotchFlare * Mathf.Max(0f, w);
-			float along = Mathf.Max(-NotchBack - w, w - NotchDepth(mouth));
-			return Mathf.Max(Mathf.Max(along, u - half), -q.y);
-		}
-
 		/// <summary>How much further a mouth's rock reaches than its passage's: the arch's spread and the collar's wander.</summary>
-		private float MouthReach => ArchSpread * (Radius + MaxMouthShell) + CollarWander + (HasNotch ? (OutcropWidth + OutcropBack) * Radius + 4f : 0f);
+		private float MouthReach => ArchSpread * (Radius + MaxMouthShell) + CollarWander;
 
 		private float MaxMouthShell
 		{
@@ -1454,13 +1536,6 @@ namespace FishMMO.Shared.WorldDesign
 					prim = RiftField(rift, p, out primFloor);
 					primRadius = 2f * rift.Width;
 				}
-				else if (id <= NotchId)
-				{
-					CaveMouth mouth = Mouths[NotchId - id];
-					prim = Notch(mouth, p);
-					primRadius = mouth.Radius;
-					primFloor = mouth.Floor.y;
-				}
 				else if (id >= 0)
 				{
 					Vector3 ap = p - segA[id];
@@ -1498,7 +1573,7 @@ namespace FishMMO.Shared.WorldDesign
 				n++;
 				// A shaft or a chasm meets the floor it opens through at a crisp lip: a rounded one let a climb's top down a
 				// metre short of the floor it steps off onto.
-				float k = id <= RiftId ? LipBlend : id >= 0 || id <= NotchId ? blend : 1.5f * blend;
+				float k = id <= RiftId ? LipBlend : id >= 0 ? blend : 1.5f * blend;
 				d = d == float.MaxValue ? prim : SMin(d, prim, k);
 			}
 			if (d == float.MaxValue)
@@ -1646,179 +1721,6 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The outcrop a natural cave's mouth opens in (reference photos, 2026-10-12: the opening set in a rugged mass of rock
-		/// rising out of the hillside, broken into great blocks): a mound of overlapping blocks across the mouth's face,
-		/// tallest over the arch and falling away to either side, every block tilted along one bedding the rock splits on (with
-		/// some play), stepped in and out along the front. Each block is an exact box, so its faces mesh flat and its edges
-		/// crisp, as no noise on a smooth field could at the mesher's cell size. The mound is filled solid round and over the
-		/// arch and the opening and notch are carved through it by the void, so nothing frames the arch like masonry and no
-		/// window opens between it and the rock over it. It only adds rock, so the cut stays covered. Negative inside.
-		/// </summary>
-		private float Outcrop(int mouthIndex, CaveMouth mouth, Vector3 p)
-		{
-			if (!outcrops.TryGetValue(mouthIndex, out Outcropping o))
-			{
-				return float.MaxValue;
-			}
-			Vector3 q = p - mouth.Floor;
-			float u = q.x * o.Side.x + q.z * o.Side.z;
-			int cu = Mathf.FloorToInt((u - o.U0) / OutcropCell), cy = Mathf.FloorToInt((q.y - o.Y0) / OutcropCell);
-			float d = float.MaxValue;
-			// Every block is listed in each cell its reach touches, so a point's own cell holds every block near it.
-			if (cu >= 0 && cy >= 0 && cu < o.Columns && cy < o.Rows)
-			{
-				List<int> ids = o.Cells[cy * o.Columns + cu];
-				if (ids != null)
-				{
-					for (int i = 0; i < ids.Count; i++)
-					{
-						// Joined softly, so two blocks that nearly touch fill the hairline between them (a pinch the mesher would
-						// make a non-manifold edge of) as rock fills a joint.
-						float b = o.Blocks[ids[i]].Distance(p);
-						d = d == float.MaxValue ? b : SMin(d, b, BlockJoin);
-					}
-				}
-			}
-			return d;
-		}
-
-		/// <summary>How softly an outcrop's blocks are joined to each other and to the hillside's rock, metres.</summary>
-		private const float BlockJoin = 0.3f;
-
-		/// <summary>The lookup grid's cell across a mouth's face (u, height), metres: as big as the largest block's reach.</summary>
-		private const float OutcropCell = 3.2f;
-
-		/// <summary>How far an outcrop reaches either side of its mouth and back from its face, a share of the bore's radius (for the buckets).</summary>
-		public const float OutcropWidth = 2.6f, OutcropBack = 1.2f;
-
-		/// <summary>One block of an outcrop: a box at a centre, with its own axes and half-extents.</summary>
-		private struct Block
-		{
-			public Vector3 Centre, X, Y, Z, Half;
-			/// <summary>How far its edges are rounded, metres.</summary>
-			public float Bevel;
-
-			public float Distance(Vector3 p)
-			{
-				Vector3 o = p - Centre;
-				float qx = Mathf.Abs(Vector3.Dot(o, X)) - (Half.x - Bevel), qy = Mathf.Abs(Vector3.Dot(o, Y)) - (Half.y - Bevel), qz = Mathf.Abs(Vector3.Dot(o, Z)) - (Half.z - Bevel);
-				float outside = new Vector3(Mathf.Max(qx, 0f), Mathf.Max(qy, 0f), Mathf.Max(qz, 0f)).magnitude;
-				return outside + Mathf.Min(Mathf.Max(qx, Mathf.Max(qy, qz)), 0f) - Bevel;
-			}
-		}
-
-		/// <summary>A mouth's outcrop: its blocks, and a grid across its face (u, height) of the blocks each cell may meet.</summary>
-		private sealed class Outcropping
-		{
-			public Block[] Blocks;
-			public Vector3 Side;
-			public float U0, Y0;
-			public int Columns, Rows;
-			public List<int>[] Cells;
-		}
-
-		private readonly Dictionary<int, Outcropping> outcrops = new Dictionary<int, Outcropping>();
-
-		/// <summary>Lays out a mouth's outcrop from the mouth and the system's seed.</summary>
-		private Outcropping LayOutcrop(int mouthIndex, CaveMouth mouth)
-		{
-			uint h = (uint)(Seed * 2654435761u) ^ (uint)(mouthIndex * 40503);
-			int salt = 0;
-			float R(float lo, float hi) => lo + (hi - lo) * Unit(h, (uint)(++salt));
-			float yaw = mouth.Yaw * Mathf.Deg2Rad;
-			var outward = new Vector3(Mathf.Sin(yaw), 0f, Mathf.Cos(yaw));
-			var side = new Vector3(outward.z, 0f, -outward.x);
-			float r = mouth.Radius;
-			float crown = 2f * r * Mathf.Max(0.2f, Flat);
-			// The mound: its half-width across the face, its height over the floor at the middle, its depth into the hill.
-			float halfWidth = r * (1f + ArchSpread) + R(3f, 5f) + 0.5f * r;
-			float peak = crown + R(1.8f, 3.2f) + 0.2f * r;
-			float depth = R(2.5f, 3.5f) + 0.4f * r;
-			// The bedding every block is tilted along (a dip across the face), and how much each block strays from it.
-			float dip = R(-0.32f, 0.32f), pitch = R(-0.12f, 0.05f);
-			var blocks = new List<Block>();
-			void Add(Vector3 centre, Vector3 size)
-			{
-				float turn = R(-0.15f, 0.15f), roll = dip + R(-0.12f, 0.12f), lean = pitch + R(-0.1f, 0.1f);
-				Vector3 x = (side * Mathf.Cos(turn) + outward * Mathf.Sin(turn)).normalized;
-				Vector3 z = (outward * Mathf.Cos(turn) - side * Mathf.Sin(turn)).normalized;
-				// Lean (about x) and roll (about z), by hand: no engine rotation here, so the field stays pure.
-				Vector3 y1 = (Vector3.up * Mathf.Cos(lean) + z * Mathf.Sin(lean)).normalized;
-				Vector3 z1 = Vector3.Cross(x, y1).normalized;
-				Vector3 y2 = (y1 * Mathf.Cos(roll) - x * Mathf.Sin(roll)).normalized;
-				Vector3 x2 = Vector3.Cross(y2, z1).normalized;
-				blocks.Add(new Block
-				{
-					Centre = centre,
-					X = x2,
-					Y = y2,
-					Z = z1,
-					Half = size * 0.5f,
-					Bevel = Mathf.Min(0.3f, 0.12f * Mathf.Min(size.x, Mathf.Min(size.y, size.z))),
-				});
-			}
-			// Courses of blocks up the mound, each course's blocks laid across it at random widths, the front ones stepped
-			// in and out, a second course of blocks behind them into the hill.
-			float y0 = -1.2f;
-			for (float y = y0; y < peak; )
-			{
-				float course = R(1.1f, 2.1f);
-				float t = Mathf.Clamp01((y + course * 0.5f) / Mathf.Max(1f, peak));
-				// Narrower with height: the mound's shoulders fall away from the middle.
-				float half = halfWidth * Mathf.Sqrt(Mathf.Max(0f, 1f - t * t)) + 0.5f;
-				for (float u = -half; u < half; )
-				{
-					float width = R(1.5f, 3.2f);
-					float cu = u + width * 0.5f;
-					for (int layer = 0; layer < 2; layer++)
-					{
-						float bd = layer == 0 ? R(1.4f, 2.4f) : depth;
-						float front = layer == 0 ? R(-0.5f, 0.6f) : R(-1.2f, -0.6f);
-						Vector3 centre = mouth.Floor + side * cu + Vector3.up * (y + course * 0.5f) + outward * (front - bd * 0.5f);
-						Add(centre, new Vector3(width * R(1f, 1.25f), course * R(1.05f, 1.3f), bd));
-					}
-					u += width * R(0.8f, 1f);
-				}
-				y += course * R(0.8f, 0.95f);
-			}
-			var o = new Outcropping { Blocks = blocks.ToArray(), Side = side };
-			// The lookup grid: each block listed in every cell its reach (half-diagonal) touches.
-			float uMin = float.MaxValue, uMax = float.MinValue, yMin = float.MaxValue, yMax = float.MinValue;
-			var reach = new float[o.Blocks.Length];
-			var at = new Vector2[o.Blocks.Length];
-			for (int i = 0; i < o.Blocks.Length; i++)
-			{
-				Vector3 c = o.Blocks[i].Centre - mouth.Floor;
-				at[i] = new Vector2(c.x * side.x + c.z * side.z, c.y);
-				reach[i] = o.Blocks[i].Half.magnitude + 0.5f;
-				uMin = Mathf.Min(uMin, at[i].x - reach[i]);
-				uMax = Mathf.Max(uMax, at[i].x + reach[i]);
-				yMin = Mathf.Min(yMin, at[i].y - reach[i]);
-				yMax = Mathf.Max(yMax, at[i].y + reach[i]);
-			}
-			o.U0 = uMin;
-			o.Y0 = yMin;
-			o.Columns = Mathf.Max(1, Mathf.CeilToInt((uMax - uMin) / OutcropCell));
-			o.Rows = Mathf.Max(1, Mathf.CeilToInt((yMax - yMin) / OutcropCell));
-			o.Cells = new List<int>[o.Columns * o.Rows];
-			for (int i = 0; i < o.Blocks.Length; i++)
-			{
-				int c0 = Mathf.Clamp(Mathf.FloorToInt((at[i].x - reach[i] - uMin) / OutcropCell), 0, o.Columns - 1);
-				int c1 = Mathf.Clamp(Mathf.FloorToInt((at[i].x + reach[i] - uMin) / OutcropCell), 0, o.Columns - 1);
-				int r0 = Mathf.Clamp(Mathf.FloorToInt((at[i].y - reach[i] - yMin) / OutcropCell), 0, o.Rows - 1);
-				int r1 = Mathf.Clamp(Mathf.FloorToInt((at[i].y + reach[i] - yMin) / OutcropCell), 0, o.Rows - 1);
-				for (int row = r0; row <= r1; row++)
-				{
-					for (int col = c0; col <= c1; col++)
-					{
-						(o.Cells[row * o.Columns + col] ??= new List<int>()).Add(i);
-					}
-				}
-			}
-			return o;
-		}
-
-		/// <summary>
 		/// Faceted rock in [-1, 1]: the signed distance of a point from the fracture plane of the nearest of a jittered grid of
 		/// blocks (each block a random plane through a random point in it), so the surface it displaces is made of flat,
 		/// tilted faces that step where blocks meet.
@@ -1922,6 +1824,7 @@ namespace FishMMO.Shared.WorldDesign
 			float shell = Mathf.Max(-v, Mathf.Min(smooth - thickness, Mathf.Max(cut, (g - CutSlab) - p.y)));
 			// Within a mouth's zone (or over its cut) the shell may stand its rim over the ground; elsewhere it stays buried.
 			float collar = float.MaxValue;
+			float k = edgeBlend;
 			if (fromMouth < mouth.Zone + 4f * mouth.Radius || cut < 1f)
 			{
 				float b = Mathf.Clamp01((p.y - mouth.Floor.y - (ApronBand - 2f)) / 2f);
@@ -1932,18 +1835,46 @@ namespace FishMMO.Shared.WorldDesign
 				// stays covered), so it is not an ellipse.
 				float lip = Mathf.Clamp01(smooth / LipBand);
 				float rim = Mathf.Lerp(Rim, FlushRim, lip * lip * (3f - 2f * lip));
+				// Flush wherever the ground stands at the mouth's floor (2026-10-18: "allow a smoother transition into the
+				// cave itself"): that is where the way in crosses from the terrain onto the rock, and a lip there was a step to
+				// climb at the threshold. The lip stands only up the opening's sides and over its brow.
+				// An awash mouth is waded into at its water, not at its floor under it.
+				float walkLevel = float.IsNaN(WaterLevel) ? mouth.Floor.y : Mathf.Max(mouth.Floor.y, WaterLevel - Origin.y);
+				float level = Mathf.Clamp01((g - walkLevel - WalkFlushHeight) / WalkFlushBand);
+				level = level * level * (3f - 2f * level);
+				rim = Mathf.Lerp(FlushRim, rim, level);
+				// And joined crisply there: the soft join rounded the edge where the collar's top meets the floor's end, and
+				// ate a dip half a metre deep into the threshold (the two meet nearly level, so the rounding reached far).
+				k = Mathf.Lerp(WalkBlend * MeshCell, edgeBlend, level);
 				float reach = mapped ? cut : smooth - (width + wander);
-				collar = Mathf.Max(reach, p.y - (g + rim));
+				collar = Mathf.Max(reach, p.y - (g + rim) + ClipLift(rim, k));
 			}
-			float clip = collar == float.MaxValue ? buried : SMin(buried, collar, edgeBlend);
-			float rock = SMax(shell, clip, edgeBlend);
-			if (HasNotch)
+			float clip = collar == float.MaxValue ? buried : SMin(buried, collar, k);
+			return SMax(shell, clip, k);
+		}
+
+		/// <summary>The collar's join to the shell and the ground where the way in crosses it, a share of the mesher's cell.</summary>
+		private const float WalkBlend = 0.4f;
+
+		/// <summary>The ground's height over the mouth's floor under which the collar lies flush (the way in), metres, and the band it rises to its lip over.</summary>
+		private const float WalkFlushHeight = 0.8f, WalkFlushBand = 1.2f;
+
+		/// <summary>
+		/// How much the soft union of the collar with the buried shell under it lifts the collar's top (metres), for a collar
+		/// whose top stands <paramref name="rim"/> over the ground, joined over <paramref name="k"/>: the two are level planes <c>rim + Skin</c> apart, and a
+		/// smooth minimum of two such planes lies under both by a constant. Taken off the collar beforehand, so its top stands
+		/// at its rim and not a fifth of a metre over it (a step at the threshold with the large caves' coarser cells).
+		/// </summary>
+		private float ClipLift(float rim, float k)
+		{
+			float lift = 0f;
+			// A fixed point: lifting the collar narrows the gap the lift is reckoned from (converged in two steps to < 1 mm).
+			for (int i = 0; i < 3; i++)
 			{
-				// The outcrop the mouth stands in, its opening and notch cut through it.
-				float outcrop = Outcrop(mouthIndex, mouth, p);
-				rock = Mathf.Max(outcrop == float.MaxValue ? rock : SMin(rock, outcrop, BlockJoin), -v);
+				float h = Mathf.Max(k - (rim + Skin - lift), 0f) / k;
+				lift = h * h * k * 0.25f;
 			}
-			return rock;
+			return lift;
 		}
 
 		public static float SMin(float a, float b, float k)
@@ -2064,6 +1995,87 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Stored for "none" (no water, no floor limit): plain floats keep no NaN or infinity well.</summary>
 		private const float NoWater = -1e6f;
 
+		/// <summary>The values one stored mouth takes.</summary>
+		private const int MouthValues = 16;
+
+		/// <summary>The values before the first mouth: the header <see cref="ToValues"/> writes.</summary>
+		private const int HeaderValues = 21;
+
+		private static CaveMouth MouthAt(float[] v, int o)
+			=> new CaveMouth
+			{
+				Floor = new Vector3(v[o], v[o + 1], v[o + 2]), Yaw = v[o + 3], SiteId = IdOf(v[o + 4], v[o + 5]), Radius = v[o + 6],
+				Zone = v[o + 7], Collar = v[o + 8], CollarLow = v[o + 9], Shell = v[o + 10],
+				Kind = (CaveMouthKind)Mathf.RoundToInt(v[o + 11]), Water = v[o + 12], Landing = new Vector3(v[o + 13], v[o + 14], v[o + 15]),
+			};
+
+		/// <summary>
+		/// The mouths stored values hold, read without building the system (its field is costly to prepare): what the way
+		/// planner asks of a cave. Empty when the values are not a system of this format.
+		/// </summary>
+		public static List<CaveMouth> MouthsFromValues(float[] v)
+		{
+			var mouths = new List<CaveMouth>();
+			if (v == null || v.Length < HeaderValues || Mathf.RoundToInt(v[0]) != Format)
+			{
+				return mouths;
+			}
+			int count = Mathf.RoundToInt(v[10]);
+			for (int i = 0, o = HeaderValues; i < count && o + MouthValues <= v.Length; i++, o += MouthValues)
+			{
+				mouths.Add(MouthAt(v, o));
+			}
+			return mouths;
+		}
+
+		/// <summary>
+		/// Every mouth's floor point (system frame), zone and radius in stored values of this format or the two before it (4 and
+		/// 5 stored a mouth in 11 values after the same header): what a plan cut in an older format holed, for Regenerate POIs to
+		/// fill again before it plans afresh. Empty for values that are none of these.
+		/// </summary>
+		public static List<(Vector3 Floor, float Zone, float Radius)> StoredMouths(float[] v)
+		{
+			var mouths = new List<(Vector3, float, float)>();
+			int format = v != null && v.Length >= HeaderValues ? Mathf.RoundToInt(v[0]) : 0;
+			int stride = format == Format ? MouthValues : format == 4 || format == 5 ? 11 : 0;
+			if (stride == 0 || Mathf.RoundToInt(v[1]) == -1)
+			{
+				return mouths;
+			}
+			int count = Mathf.RoundToInt(v[10]);
+			for (int i = 0, o = HeaderValues; i < count && o + stride <= v.Length; i++, o += stride)
+			{
+				mouths.Add((new Vector3(v[o], v[o + 1], v[o + 2]), v[o + 7], v[o + 6]));
+			}
+			return mouths;
+		}
+
+		/// <summary>How far out from a mouth's floor point the way to it ends over the ground, metres: past its lane (Approach).</summary>
+		public static float LaneEnd(in CaveMouth mouth) => 1.2f * mouth.Radius + 6f;
+
+		/// <summary>
+		/// Where the way to a mouth ends, in the system's frame: on the bank for a shelf behind a waterfall, out along its lane
+		/// for one over the ground; false for one under water, which is dived to and has no way.
+		/// </summary>
+		public static bool LandingOf(in CaveMouth mouth, out Vector3 landing)
+		{
+			switch (mouth.Kind)
+			{
+				case CaveMouthKind.Submerged:
+					landing = mouth.Floor;
+					return false;
+				case CaveMouthKind.Shelf:
+					landing = mouth.Landing;
+					return true;
+				default:
+				{
+					float yr = mouth.Yaw * Mathf.Deg2Rad;
+					landing = mouth.Floor + new Vector3(Mathf.Sin(yr), 0f, Mathf.Cos(yr)) * LaneEnd(mouth);
+					return true;
+				}
+			}
+		}
+
 		/// <summary>Everything needed to build the same system again, as plain floats (a shape's values).</summary>
 		public float[] ToValues()
 		{
@@ -2076,7 +2088,8 @@ namespace FishMMO.Shared.WorldDesign
 			};
 			foreach (CaveMouth m in Mouths)
 			{
-				v.AddRange(new[] { m.Floor.x, m.Floor.y, m.Floor.z, m.Yaw, IdHigh(m.SiteId), IdLow(m.SiteId), m.Radius, m.Zone, m.Collar, m.CollarLow, m.Shell });
+				v.AddRange(new[] { m.Floor.x, m.Floor.y, m.Floor.z, m.Yaw, IdHigh(m.SiteId), IdLow(m.SiteId), m.Radius, m.Zone, m.Collar, m.CollarLow, m.Shell,
+					(float)m.Kind, m.Water, m.Landing.x, m.Landing.y, m.Landing.z });
 			}
 			foreach (CavePassage p in Passages)
 			{
@@ -2117,7 +2130,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The system stored by <see cref="ToValues"/>, its frame at <paramref name="origin"/>; null if they are not one.</summary>
 		public static CaveSystem FromValues(float[] v, Vector3 origin, int seed)
 		{
-			if (v == null || v.Length < 21 || Mathf.RoundToInt(v[0]) != Format)
+			if (v == null || v.Length < HeaderValues || Mathf.RoundToInt(v[0]) != Format)
 			{
 				return null;
 			}
@@ -2143,15 +2156,11 @@ namespace FishMMO.Shared.WorldDesign
 				s.Character = (CaveCharacter)Mathf.RoundToInt(v[15]);
 				int solids = Mathf.RoundToInt(v[16]), rifts = Mathf.RoundToInt(v[17]), shafts = Mathf.RoundToInt(v[18]);
 				int crossings = Mathf.RoundToInt(v[19]), climbs = Mathf.RoundToInt(v[20]);
-				int o = 21;
+				int o = HeaderValues;
 				Vector3 V(int at) => new Vector3(v[at], v[at + 1], v[at + 2]);
-				for (int i = 0; i < mouths; i++, o += 11)
+				for (int i = 0; i < mouths; i++, o += MouthValues)
 				{
-					s.Mouths.Add(new CaveMouth
-					{
-						Floor = V(o), Yaw = v[o + 3], SiteId = IdOf(v[o + 4], v[o + 5]), Radius = v[o + 6],
-						Zone = v[o + 7], Collar = v[o + 8], CollarLow = v[o + 9], Shell = v[o + 10],
-					});
+					s.Mouths.Add(MouthAt(v, o));
 				}
 				for (int i = 0; i < passages; i++)
 				{

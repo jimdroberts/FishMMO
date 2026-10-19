@@ -70,6 +70,7 @@ namespace FishMMO.Shared.WorldDesign
 				HeadingDegrees = entry.HeadingDegrees,
 				FineDetail = fineDetail,
 				ErosionStrength = entry.ErosionStrength,
+				BiomeOverrides = SceneBiomeOverrides.Of(entry),
 				RadiusKm = entry.CutRadiusKm > 0f ? entry.CutRadiusKm : 0.0,
 			};
 		}

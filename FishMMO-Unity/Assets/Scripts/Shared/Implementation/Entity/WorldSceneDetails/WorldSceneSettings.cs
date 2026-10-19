@@ -126,6 +126,9 @@ namespace FishMMO.Shared
 			set => biomeMap = value;
 		}
 
+		/// <summary>Where the scene keeps the rain off, baked by the cut (<see cref="SceneShelterMap"/>); null for a scene with none.</summary>
+		public SceneShelterMap Shelter => AtlasEntry != null ? AtlasEntry.Shelter : null;
+
 		/// <summary>
 		/// Runtime shift on top of <see cref="Climate"/>'s global temperature offset. Mutable: a
 		/// weather or season system writes it, and every climate reading in the scene moves with it.

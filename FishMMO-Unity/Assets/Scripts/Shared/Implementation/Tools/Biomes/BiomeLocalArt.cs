@@ -38,6 +38,13 @@ namespace FishMMO.Shared.Biomes
 	/// <c>cliff/&lt;i&gt;</c>, <c>riverbed</c>, <c>lakebed</c>, plus <c>road</c> and <c>path</c>,
 	/// so a scene's record of where a layer came from finds the same slot here.
 	/// </para>
+	/// <para>
+	/// <b>A ground layer's own ways (2026-10-16)</b> are keyed by the ground's slot and the way's: <c>main/road</c>,
+	/// <c>detail/2/path</c>, <c>detail/2/path/stone</c> (<see cref="WaySlot"/>; a main or detail layer's
+	/// <see cref="TerrainTextureLayer.ways"/>). They hold a terrain layer, not a texture layer, so
+	/// <see cref="CommittedLayer"/> has none for them and <see cref="SlotsOf"/> leaves them out; a sidecar entry under
+	/// such a key dresses that way's art as any other slot's does, but only where the template names a way there.
+	/// </para>
 	/// </remarks>
 	public sealed class BiomeLocalArt : ScriptableObject
 	{
@@ -77,12 +84,37 @@ namespace FishMMO.Shared.Biomes
 		public const string SlotCobbles = "path/stone";
 		public const string SlotBarSand = "sediment/sand";
 		public const string SlotBarGravel = "sediment/gravel";
+		/// <summary>
+		/// The prefix of a climate variant's ground override (<see cref="VariantSlot"/>: <c>variant/frozen/main</c>,
+		/// <c>variant/scorched/detail/1</c>), 2026-10-18.
+		/// </summary>
+		public const string SlotVariant = "variant/";
+		/// <summary>The prefix of a biome's extra bed layers by depth (<see cref="BedSlot"/>: <c>bed/0</c> … <c>bed/2</c>), 2026-10-18.</summary>
+		public const string SlotBed = "bed/";
+
+		/// <summary>The slot key of a biome's extra bed layer <paramref name="index"/> (<see cref="BiomeTemplate.BedTextureLayers"/>).</summary>
+		public static string BedSlot(int index) => SlotBed + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+		/// <summary>The index of a bed layer's slot key (<see cref="BedSlot"/>), or −1 for every other key.</summary>
+		public static int BedIndexOf(string slot)
+		{
+			if (slot == null || !slot.StartsWith(SlotBed, StringComparison.Ordinal))
+			{
+				return -1;
+			}
+			string digits = slot.Substring(SlotBed.Length);
+			return int.TryParse(digits, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int index)
+				&& index.ToString(System.Globalization.CultureInfo.InvariantCulture) == digits ? index : -1;
+		}
+
+		/// <summary>The three ways a ground layer may surface with its own ground, as the biome's own way slots name them.</summary>
+		public static readonly string[] WaySlots = { SlotPath, SlotRoad, SlotCobbles };
 
 		/// <summary>One slot's override. A whole terrain layer wins over the single textures.</summary>
 		[Serializable]
 		public sealed class SlotOverride
 		{
-			[Tooltip("The slot key: main, detail/<i>, cliff/<i>, riverbed, lakebed, road, path, path/stone (cobbles), sediment/sand or sediment/gravel.")]
+			[Tooltip("The slot key: main, detail/<i>, cliff/<i>, riverbed, lakebed, road, path, path/stone (cobbles), sediment/sand or sediment/gravel; or a ground layer's own way: main/road, detail/<i>/path, detail/<i>/path/stone.")]
 			public string Slot;
 			[Tooltip("Replaces the whole layer: its textures, tiling and remaps.")]
 			public TerrainLayer TerrainLayer;
@@ -291,6 +323,147 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>The slot key of a cliff layer.</summary>
 		public static string CliffSlot(int index) => SlotCliff + index;
 
+		/// <summary>
+		/// The slot key of a ground layer's own way (<see cref="TerrainTextureLayer.ways"/>): the ground's slot (<c>main</c>,
+		/// <c>detail/&lt;i&gt;</c>), a slash, and the way's (<see cref="SlotPath"/>, <see cref="SlotRoad"/>, <see cref="SlotCobbles"/>).
+		/// </summary>
+		public static string WaySlot(string groundSlot, string waySlot) => groundSlot + "/" + waySlot;
+
+		/// <summary>
+		/// Splits a ground layer's way key (<see cref="WaySlot"/>) into the ground's slot and the way's. False for every other
+		/// key, the biome's own way slots (<c>road</c>, <c>path/stone</c>) included.
+		/// </summary>
+		public static bool TryParseWaySlot(string slot, out string groundSlot, out string waySlot)
+		{
+			groundSlot = null;
+			waySlot = null;
+			if (string.IsNullOrEmpty(slot))
+			{
+				return false;
+			}
+			// The longest way first: "detail/2/path/stone" is the cobbles of detail/2, not a path of "detail/2/path".
+			foreach (string way in new[] { SlotCobbles, SlotRoad, SlotPath })
+			{
+				if (slot.Length <= way.Length + 1 || !slot.EndsWith(way, StringComparison.Ordinal) || slot[slot.Length - way.Length - 1] != '/')
+				{
+					continue;
+				}
+				string ground = slot.Substring(0, slot.Length - way.Length - 1);
+				if (IsGroundSlot(ground))
+				{
+					groundSlot = ground;
+					waySlot = way;
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>The slot key of ground slot <paramref name="ground"/>: 0 the main layer, k detail k − 1 (a variant override's order).</summary>
+		public static string GroundSlot(int ground) => ground <= 0 ? SlotMain : DetailSlot(ground - 1);
+
+		/// <summary>The ground index of a main or detail slot key (0 main, k detail k − 1), or −1 for any other key.</summary>
+		public static int GroundIndexOf(string slot)
+		{
+			if (slot == SlotMain)
+			{
+				return 0;
+			}
+			return IsGroundSlot(slot) ? int.Parse(slot.Substring(SlotDetail.Length)) + 1 : -1;
+		}
+
+		/// <summary>
+		/// How a variant is named in a slot key: its key (<see cref="BiomeClimateVariant.Key"/>, letters only), or its index
+		/// in the template's list when it has no name (digits only, so the two never collide).
+		/// </summary>
+		public static string VariantId(BiomeClimateVariant variant, int index)
+		{
+			string key = variant != null ? variant.Key : string.Empty;
+			return key.Length > 0 ? key : index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+		}
+
+		/// <summary>
+		/// The slot key of a climate variant's override for one ground slot (<see cref="BiomeClimateVariant.TextureLayerOverrides"/>,
+		/// 0 the main layer): <c>variant/&lt;id&gt;/main</c>, <c>variant/&lt;id&gt;/detail/&lt;i&gt;</c>. Keyed by the variant's name
+		/// rather than its place in the list, so reordering the variants keeps a LOCAL sidecar's and the marks' keys.
+		/// </summary>
+		public static string VariantSlot(string variantId, int ground) => SlotVariant + variantId + "/" + GroundSlot(ground);
+
+		/// <summary>Splits a variant override's key (<see cref="VariantSlot"/>) into the variant's id and the ground index. False for every other key.</summary>
+		public static bool TryParseVariantSlot(string slot, out string variantId, out int ground)
+		{
+			variantId = null;
+			ground = -1;
+			if (string.IsNullOrEmpty(slot) || !slot.StartsWith(SlotVariant, StringComparison.Ordinal))
+			{
+				return false;
+			}
+			int slash = slot.IndexOf('/', SlotVariant.Length);
+			if (slash <= SlotVariant.Length)
+			{
+				return false;
+			}
+			int index = GroundIndexOf(slot.Substring(slash + 1));
+			if (index < 0)
+			{
+				return false;
+			}
+			variantId = slot.Substring(SlotVariant.Length, slash - SlotVariant.Length);
+			ground = index;
+			return true;
+		}
+
+		/// <summary>The template's own variant a slot key's id names (<see cref="VariantId"/>), with its index; null when none does.</summary>
+		public static BiomeClimateVariant VariantNamed(BiomeTemplate biome, string variantId, out int index)
+		{
+			index = -1;
+			if (biome?.ClimateVariants == null || string.IsNullOrEmpty(variantId))
+			{
+				return null;
+			}
+			for (int i = 0; i < biome.ClimateVariants.Count; i++)
+			{
+				if (biome.ClimateVariants[i] != null && VariantId(biome.ClimateVariants[i], i) == variantId)
+				{
+					index = i;
+					return biome.ClimateVariants[i];
+				}
+			}
+			return null;
+		}
+
+		/// <summary>True for the slots that may carry ways of their own: the main layer and the detail layers.</summary>
+		public static bool IsGroundSlot(string slot)
+		{
+			return slot == SlotMain
+				|| slot != null && slot.StartsWith(SlotDetail, StringComparison.Ordinal) && int.TryParse(slot.Substring(SlotDetail.Length), out int d) && d >= 0
+				&& d.ToString() == slot.Substring(SlotDetail.Length);
+		}
+
+		/// <summary>The ground a ground layer's ways give one way (<see cref="WaySlots"/>), or null for the biome's own.</summary>
+		public static TerrainLayer WayGround(GroundWays ways, string waySlot)
+		{
+			switch (waySlot)
+			{
+				case SlotPath: return ways.path;
+				case SlotRoad: return ways.road;
+				case SlotCobbles: return ways.cobbles;
+			}
+			return null;
+		}
+
+		/// <summary>Sets one way's ground on a ground layer's ways (null: the biome's own again).</summary>
+		public static void SetWayGround(ref GroundWays ways, string waySlot, TerrainLayer ground)
+		{
+			switch (waySlot)
+			{
+				case SlotPath: ways.path = ground; break;
+				case SlotRoad: ways.road = ground; break;
+				case SlotCobbles: ways.cobbles = ground; break;
+				default: throw new ArgumentException($"'{waySlot}' is not a way slot", nameof(waySlot));
+			}
+		}
+
 		/// <summary>Every slot a biome has, in the order its inspector lists them.</summary>
 		public static List<string> SlotsOf(BiomeTemplate biome)
 		{
@@ -316,6 +489,28 @@ namespace FishMMO.Shared.Biomes
 			keys.Add(SlotCobbles);
 			keys.Add(SlotBarSand);
 			keys.Add(SlotBarGravel);
+			// Each climate variant's ground overrides that are listed (2026-10-18): texture layers of the biome like any other.
+			if (biome.ClimateVariants != null)
+			{
+				for (int v = 0; v < biome.ClimateVariants.Count; v++)
+				{
+					BiomeClimateVariant variant = biome.ClimateVariants[v];
+					int overrides = variant?.TextureLayerOverrides != null ? variant.TextureLayerOverrides.Count : 0;
+					for (int g = 0; g < overrides; g++)
+					{
+						if (variant.TextureLayerOverrides[g] != null)
+						{
+							keys.Add(VariantSlot(VariantId(variant, v), g));
+						}
+					}
+				}
+			}
+			// The extra bed layers by depth (2026-10-18), none until a round adds them.
+			int beds = biome.BedTextureLayers != null ? biome.BedTextureLayers.Count : 0;
+			for (int i = 0; i < beds; i++)
+			{
+				keys.Add(BedSlot(i));
+			}
 			return keys;
 		}
 
@@ -344,6 +539,15 @@ namespace FishMMO.Shared.Biomes
 			if (slot.StartsWith(SlotCliff, StringComparison.Ordinal) && int.TryParse(slot.Substring(SlotCliff.Length), out int c))
 			{
 				return biome.CliffTextureLayers != null && c >= 0 && c < biome.CliffTextureLayers.Count ? biome.CliffTextureLayers[c] : null;
+			}
+			if (TryParseVariantSlot(slot, out string variantId, out int ground))
+			{
+				return VariantNamed(biome, variantId, out _)?.TextureOverrideFor(ground);
+			}
+			int bed = BedIndexOf(slot);
+			if (bed >= 0)
+			{
+				return biome.BedTextureLayers != null && bed < biome.BedTextureLayers.Count ? biome.BedTextureLayers[bed] : null;
 			}
 			return null;
 		}

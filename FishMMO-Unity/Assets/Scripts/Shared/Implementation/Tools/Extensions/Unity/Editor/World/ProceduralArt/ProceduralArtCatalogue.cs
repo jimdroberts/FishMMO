@@ -296,8 +296,12 @@ namespace FishMMO.Shared.WorldDesign
 			var traits = new DetailKindTraits();
 			FloraKindTraits(kind, ref traits);
 			SeaKindTraits(kind, ref traits);
+			FloatingKindTraits(kind, ref traits);
 			return traits;
 		}
+
+		/// <summary>The floating plants' kinds' traits (ProceduralArtCatalogue.Floating.cs, 2026-10-18). Sets only the kinds it owns.</summary>
+		static partial void FloatingKindTraits(DetailKind kind, ref DetailKindTraits traits);
 
 		/// <summary>The land flora's kinds' traits (ProceduralArtCatalogue.Flora.cs). Sets only the kinds it owns.</summary>
 		static partial void FloraKindTraits(DetailKind kind, ref DetailKindTraits traits);
@@ -329,6 +333,8 @@ namespace FishMMO.Shared.WorldDesign
 					var all = new List<DetailSpec>(CoreDetails);
 					all.AddRange(FloraDetails());
 					all.AddRange(SeaDetails());
+					// The plants floating on still water (2026-10-18), last so every earlier detail keeps its place.
+					all.AddRange(FloatingDetails());
 					details = all.ToArray();
 				}
 				return details;

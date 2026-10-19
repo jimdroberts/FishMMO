@@ -67,6 +67,10 @@ namespace FishMMO.Shared.Atlas
 		public ClimateSettings Climate;
 		[Tooltip("Empty: the scene's own.")]
 		public SceneBiomeMap BiomeMap;
+		[Tooltip("Where the scene keeps the rain off (roofs, rock shelters, bridges, caves), baked by the cut from its collision. Fires stay lit under it.")]
+		public SceneShelterMap Shelter;
+		[Tooltip("Biomes painted in place of the ones the planet chose: applied when the scene is cut, re-cut or its biomes are repainted. A rule naming its From wins over a catch-all (From empty), which replaces every land biome the climate chose.")]
+		public List<BiomeOverride> BiomeOverrides = new List<BiomeOverride>();
 
 		[Header("Weather")]
 		[Tooltip("Auto: the layer's default, and then dungeons get none and everything else its own.")]

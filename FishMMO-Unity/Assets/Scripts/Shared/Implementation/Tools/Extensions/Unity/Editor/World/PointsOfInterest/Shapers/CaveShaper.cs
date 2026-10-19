@@ -55,11 +55,14 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The sea's surface, world y: generated scenes put it at 0 (fishmmo-world-scale).</summary>
 		public const float SeaLevel = 0f;
 
-		/// <summary>How far apart two caves' mouths may be and still be joined into one system, metres.</summary>
-		public const float JoinReach = 420f;
+		/// <summary>
+		/// How far apart two caves' mouths may be and still be joined into one system, metres: past the spacing the planner keeps
+		/// between caves of a kind (500–600 m), so neighbours on one hill do join (2026-10-18: at 420 m next to none could).
+		/// </summary>
+		public const float JoinReach = 760f;
 
-		/// <summary>The longest passage that joins two systems, metres (flat).</summary>
-		public const float LinkLength = 320f;
+		/// <summary>The farthest apart (in plan) two places on two systems may be for a link to be walked between them, metres.</summary>
+		public const float LinkLength = 560f;
 
 		public bool Handles(POIType kind) => TryForm(kind, out _);
 
@@ -106,11 +109,21 @@ namespace FishMMO.Shared.WorldDesign
 			TryForm(site.Kind, out CaveForm form);
 			TerrainTilePlan tiles = context.Tiles;
 			CaveSystem.Profile profile = CaveSystem.ProfileFor(form, site.SizeClass);
-			// Wide enough for a graph's branches and halls to wander off the trunk's line (CaveSystem.Layout), not only its length.
-			float spread = form == CaveForm.Grotto || form == CaveForm.SeaCave ? 0f : site.SizeClass >= 2 ? 200f : 120f;
+			// Wide enough for a graph's branches and halls to wander off the trunk's line (CaveSystem.Layout), not only its length:
+			// a large cave's hall runs to 250 m across with its lobes round it (2026-10-18), and every lobe must lie in the sample.
+			float spread = form == CaveForm.Grotto || form == CaveForm.SeaCave ? 0f : site.SizeClass >= 2 ? 320f : 180f;
 			CaveGround ground = SampleGround(context.GroundAt, tiles, site.Position.x, site.Position.z, profile.TrunkMax + 60f + spread);
 			float water = form == CaveForm.Grotto ? WaterBefore(context, site) : float.NaN;
-			CaveSystem system = CaveSystem.Plan(form, site.SizeClass, site.Position, site.Yaw, SeedOf(site), site.Id, ground, SeaLevel, out string problem, water);
+			// Behind a waterfall or under water (2026-10-18), where the planner sited it so (PointOfInterestPlanner.CaveWater).
+			CaveOpening opening = OpeningFor(context, site, form, out CaveFallMouth fall, out string refused);
+			if (refused != null)
+			{
+				context.Reject(site, refused);
+				return;
+			}
+			Vector3 at = opening.Kind == CaveMouthKind.Shelf ? fall.Mouth : site.Position;
+			float yaw = opening.Kind == CaveMouthKind.Shelf ? fall.Yaw : site.Yaw;
+			CaveSystem system = CaveSystem.Plan(form, site.SizeClass, at, yaw, SeedOf(site), site.Id, ground, SeaLevel, out string problem, water, opening);
 			if (system == null)
 			{
 				context.Reject(site, problem);
@@ -121,16 +134,215 @@ namespace FishMMO.Shared.WorldDesign
 				context.Reject(site, "the scene has no terrain to open it in");
 				return;
 			}
+			// The ground before the mouth graded to its floor, before the holes are reckoned from it: the way in runs level
+			// from the terrain onto the cave's floor. From this site's own system (joined, its mouth stays where it is).
+			GradeApproach(context, site, system, 0);
+			if (opening.Kind == CaveMouthKind.Shelf)
+			{
+				GradeShelf(context, site, fall);
+			}
+			// A way through its hill, where the hill has a far face: a second mouth there, its passage walked in to the trunk.
+			TryThrough(context, site, system);
 
 			// Joined to a system already carved near it, where a passage fits between them deep down.
 			if (TryJoin(context, site, system, step, gridX, gridZ))
 			{
 				return;
 			}
-			List<Vector2Int> cells = system.HoleCells(0, context.GroundAt, step, gridX, gridZ);
-			CutHoles(context.Terrains, tiles, cells, step, gridX, gridZ);
-			AddMouthKeepOut(context, site, system, 0);
+			for (int m = 0; m < system.Mouths.Count; m++)
+			{
+				List<Vector2Int> cells = system.HoleCells(m, context.GroundAt, step, gridX, gridZ);
+				CutHoles(context.Terrains, tiles, cells, step, gridX, gridZ);
+				AddMouthKeepOut(context, site, system, m);
+			}
 			context.AddShape(ShapeOf(site, system));
+		}
+
+		/// <summary>How near its site a fall's cave mouth (<see cref="CaveFallMouth"/>) must stand to be that site's, metres.</summary>
+		private const float FallSiteReach = 8f;
+
+		/// <summary>
+		/// How a cave site's mouth is opened: behind the waterfall the planner set it by (on its record's river, the fall whose
+		/// mouth stands at the site), under the water it stands in (a lake's surface over it, or the sea's), or over the ground
+		/// before it. <paramref name="refused"/> says why a site sited by a fall no longer fits there (a pad moved its ground).
+		/// </summary>
+		private static CaveOpening OpeningFor(PointOfInterestPlanContext context, PointOfInterestRecord site, CaveForm form, out CaveFallMouth fall, out string refused)
+		{
+			fall = default;
+			refused = null;
+			if (form != CaveForm.Cave)
+			{
+				return default;
+			}
+			if (site.RiverId >= 0)
+			{
+				if (TryFallMouth(context.Water?.Rivers, site.RiverId, site.Position, context.GroundAt, WetIn(context.Water), out fall))
+				{
+					return CaveOpening.Behind(fall);
+				}
+				refused = "the waterfall it was sited behind has no room for a cave any more";
+				return default;
+			}
+			float surface = WaterOver(context.Water, context.GroundAt, site.Position.x, site.Position.z);
+			return !float.IsNegativeInfinity(surface) && surface > context.GroundAt(site.Position.x, site.Position.z) + 1f ? CaveOpening.Submerged(surface) : default;
+		}
+
+		/// <summary>The fall of a river (by id) whose cave mouth (<see cref="CaveFallMouth"/>) stands nearest a point, within <see cref="FallSiteReach"/>.</summary>
+		public static bool TryFallMouth(IReadOnlyList<RiverPath> rivers, int riverId, Vector3 near, System.Func<float, float, float> ground, System.Func<float, float, bool> wet,
+			out CaveFallMouth fall)
+		{
+			fall = default;
+			if (rivers == null)
+			{
+				return false;
+			}
+			float best = FallSiteReach * FallSiteReach;
+			bool found = false;
+			foreach (RiverPath river in rivers)
+			{
+				if (river == null || river.Id != riverId)
+				{
+					continue;
+				}
+				foreach (CaveFallMouth mouth in CaveFallMouth.Along(river, ground, wet))
+				{
+					float dx = mouth.Mouth.x - near.x, dz = mouth.Mouth.z - near.z;
+					if (dx * dx + dz * dz < best)
+					{
+						best = dx * dx + dz * dz;
+						fall = mouth;
+						found = true;
+					}
+				}
+			}
+			return found;
+		}
+
+		/// <summary>Where a river or a lake stands (not its dry bank): what a fall's shelf must leave behind it to land.</summary>
+		public static System.Func<float, float, bool> WetIn(SceneWater water)
+			=> water == null ? (System.Func<float, float, bool>)((x, z) => false) : (x, z) =>
+			{
+				WaterKind kind = water.KindAt(x, z);
+				return kind != WaterKind.None && kind != WaterKind.Bank;
+			};
+
+		/// <summary>The water's surface over (x, z): a lake's or a river's, else the sea's where the ground lies under it; −∞ for none.</summary>
+		public static float WaterOver(SceneWater water, System.Func<float, float, float> ground, float x, float z)
+		{
+			float inland = water != null ? water.SurfaceAt(x, z) : float.NegativeInfinity;
+			if (!float.IsNegativeInfinity(inland) && inland > SeaLevel)
+			{
+				return inland;
+			}
+			return ground(x, z) < SeaLevel ? SeaLevel : float.NegativeInfinity;
+		}
+
+		/// <summary>
+		/// Levels a waterfall cave's shelf into the ground (<see cref="CaveFallMouth.Grade"/>), from the mouth behind the
+		/// curtain to the bank, and keeps it clear: no fall rock, scatter or prop is laid on it.
+		/// </summary>
+		private static void GradeShelf(PointOfInterestPlanContext context, PointOfInterestRecord site, in CaveFallMouth fall)
+		{
+			CaveFallMouth shelf = fall;
+			if (context.Terrains != null)
+			{
+				PointOfInterestTerrain.EditHeights(context.Terrains, context.Tiles, shelf.GradeArea, (x, z, h) => shelf.Grade(x, z, h));
+			}
+			for (int i = 0; i + 1 < shelf.Shelf.Count; i++)
+			{
+				Vector3 a = shelf.Shelf[i], b = shelf.Shelf[i + 1];
+				int steps = Mathf.Max(1, Mathf.CeilToInt(Vector3.Distance(a, b) / 2.5f));
+				for (int s = 0; s < steps; s++)
+				{
+					Vector3 p = Vector3.Lerp(a, b, s / (float)steps);
+					context.AddKeepOut(site, p.x, p.z, CaveFallMouth.HalfWidth + 1f);
+				}
+			}
+			context.AddKeepOut(site, shelf.Landing.x, shelf.Landing.z, CaveFallMouth.HalfWidth + 1f);
+			context.Notes?.Add($"{PointOfInterestKinds.Info(site.Kind).DisplayName} at ({site.Position.x:F0}, {site.Position.z:F0}): behind the curtain of a {fall.Drop:0} m fall, "
+				+ $"its floor {fall.Floor - fall.Pool:0.#} m over the pool, a shelf of {shelf.Shelf.Count} m to the bank.");
+		}
+
+		/// <summary>How far from any water a second mouth through a hill opens, metres.</summary>
+		private const float ThroughWaterClear = 12f;
+
+		/// <summary>How far past another site's footprint a second mouth through a hill opens, metres.</summary>
+		private const float ThroughSiteClear = 20f;
+
+		/// <summary>
+		/// Opens a second mouth on the far side of a cave's hill (<see cref="CaveSystem.TryAddThrough"/>) where one fits, clear
+		/// of the water and of every other site, and grades the ground before it as the first mouth's. On its own random
+		/// stream, so the rest of the cave is as it was.
+		/// </summary>
+		private static void TryThrough(PointOfInterestPlanContext context, PointOfInterestRecord site, CaveSystem system)
+		{
+			if (!CaveSystem.GoesThrough(system.Form))
+			{
+				return;
+			}
+			// Wide enough to reach the hill's far side and walk the way in from it (the plan's own sample stays as it was).
+			CaveGround wide = SampleGround(context.GroundAt, context.Tiles, system.Origin.x, system.Origin.z, CaveSystem.ThroughReach + 80f);
+			bool Refused(float x, float z) => NearWater(context, x, z, ThroughWaterClear) || OnOtherSite(context, site.Id, x, z, ThroughSiteClear);
+			int seed = unchecked(SeedOf(site) * 0x2F1B + 0x51ED);
+			if (!system.TryAddThrough(site.Id, wide, seed, Refused, out _))
+			{
+				return;
+			}
+			int mouth = system.Mouths.Count - 1;
+			GradeApproach(context, site, system, mouth);
+			Vector3 far = system.Origin + system.Mouths[mouth].Floor;
+			context.Notes?.Add($"{PointOfInterestKinds.Info(site.Kind).DisplayName} at ({site.Position.x:F0}, {site.Position.z:F0}): a way through its hill, "
+				+ $"its second mouth at ({far.x:F0}, {far.z:F0}).");
+		}
+
+		/// <summary>Whether water (a river, a lake, the sea's reach) lies within <paramref name="clear"/> of (x, z).</summary>
+		private static bool NearWater(PointOfInterestPlanContext context, float x, float z, float clear)
+		{
+			if (context.GroundAt(x, z) < SeaLevel + CaveSystem.AboveSea)
+			{
+				return true;
+			}
+			if (context.Water == null)
+			{
+				return false;
+			}
+			for (int k = 0; k < 9; k++)
+			{
+				float a = k * (Mathf.PI / 4f), d = k == 8 ? 0f : clear;
+				float px = x + Mathf.Sin(a) * d, pz = z + Mathf.Cos(a) * d;
+				if (context.Water.KindAt(px, pz) != WaterKind.None || !float.IsNegativeInfinity(context.Water.SurfaceAt(px, pz)))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>Whether (x, z) lies within <paramref name="clear"/> of another site's footprint (its pad or its keep-out).</summary>
+		private static bool OnOtherSite(PointOfInterestPlanContext context, int siteId, float x, float z, float clear)
+		{
+			PointOfInterestPlan plan = context.Plan;
+			if (plan == null)
+			{
+				return false;
+			}
+			foreach (PointOfInterestKeepOut k in plan.KeepOuts)
+			{
+				float dx = x - k.X, dz = z - k.Z, r = k.Radius + clear;
+				if (k.Id != siteId && dx * dx + dz * dz < r * r)
+				{
+					return true;
+				}
+			}
+			foreach (PointOfInterestPad pad in plan.Pads)
+			{
+				float dx = x - pad.Centre.x, dz = z - pad.Centre.z, r = pad.Radius + pad.Blend + clear;
+				if (pad.Id != siteId && dx * dx + dz * dz < r * r)
+				{
+					return true;
+				}
+			}
+			return false;
 		}
 
 		/// <summary>
@@ -140,7 +352,8 @@ namespace FishMMO.Shared.WorldDesign
 		private static bool TryJoin(PointOfInterestPlanContext context, PointOfInterestRecord site, CaveSystem system, float step, float gridX, float gridZ)
 		{
 			int family = Family(system.Form);
-			if (family < 0)
+			// A submerged mouth's system keeps its own water (its pool, its dry limit over it): it may take others in, not be taken.
+			if (family < 0 || system.HasSump)
 			{
 				return false;
 			}
@@ -158,7 +371,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			candidates.Sort((a, b) => a.distance.CompareTo(b.distance));
-			foreach ((float _, PointOfInterestShape hostShape) in candidates)
+			foreach ((float d, PointOfInterestShape hostShape) in candidates)
 			{
 				CaveSystem host = CaveSystem.FromValues(hostShape.Values, hostShape.Position, hostShape.Seed);
 				if (host == null || Family(host.Form) != family)
@@ -171,14 +384,20 @@ namespace FishMMO.Shared.WorldDesign
 				CaveGround both = SampleGround(context.GroundAt, context.Tiles, minX, minZ, maxX, maxZ);
 				if (!host.TryJoin(system, both, LinkLength, unchecked(SeedOf(site) * 31 + hostShape.SiteId)))
 				{
+					context.Notes?.Add($"{PointOfInterestKinds.Info(site.Kind).DisplayName} at ({site.Position.x:F0}, {site.Position.z:F0}): not joined to the cave of site "
+						+ $"{hostShape.SiteId} {d:0} m off: {host.JoinProblem}.");
 					continue;
 				}
+				// Every mouth the joined system brought (a second one through its hill too), holed and kept clear.
 				int mouth = host.Mouths.Count - system.Mouths.Count;
-				List<Vector2Int> cells = host.HoleCells(mouth, context.GroundAt, step, gridX, gridZ);
-				CutHoles(context.Terrains, context.Tiles, cells, step, gridX, gridZ);
+				for (int k = mouth; k < host.Mouths.Count; k++)
+				{
+					List<Vector2Int> cells = host.HoleCells(k, context.GroundAt, step, gridX, gridZ);
+					CutHoles(context.Terrains, context.Tiles, cells, step, gridX, gridZ);
+					AddMouthKeepOut(context, site, host, k);
+				}
 				hostShape.Values = host.ToValues();
 				hostShape.Size = SizeOf(host);
-				AddMouthKeepOut(context, site, host, mouth);
 				CaveMouth m = host.Mouths[mouth];
 				context.AddShape(new PointOfInterestShape
 				{
@@ -231,10 +450,20 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		private static void WritePool(PointOfInterestPlaceContext context, PointOfInterestRecord site, CaveSystem system, CaveGround ground)
 		{
-			if (system.Form != CaveForm.Grotto || float.IsNaN(system.WaterLevel) || system.WaterLevel <= SeaLevel + 0.05f
+			if (system.Form != CaveForm.Grotto && !system.HasSump || float.IsNaN(system.WaterLevel) || system.WaterLevel <= SeaLevel + 0.05f
 				|| string.IsNullOrEmpty(context.TerrainFolder) || context.Request == null)
 			{
 				return;
+			}
+			// A sump under a lake is flooded through its whole height, its roof under the surface too: every column of it down to
+			// its lowest floor is the lake's (else a swimmer in it would stand on its floor, dry).
+			float deepest = system.WaterLevel - 0.05f;
+			if (system.HasSump)
+			{
+				foreach (CaveNode node in system.Passages[0].Nodes)
+				{
+					deepest = Mathf.Min(deepest, system.Origin.y + node.Floor);
+				}
 			}
 			var hydrology = AssetDatabase.LoadAssetAtPath<SceneHydrology>(SceneGenerator.HydrologyPath(context.TerrainFolder, context.Request.SceneName));
 			if (hydrology == null)
@@ -255,8 +484,16 @@ namespace FishMMO.Shared.WorldDesign
 				for (int x = 0; x < width; x++)
 				{
 					float east = origin.x + (x + 0.5f) * cell, north = origin.y + (z + 0.5f) * cell;
-					var local = new Vector3(east - system.Origin.x, level - 0.05f - system.Origin.y, north - system.Origin.z);
-					if (system.Void(local) >= 0f || ground.At(east, north) < level + 0.5f)
+					if (ground.At(east, north) < level + 0.5f)
+					{
+						continue;
+					}
+					bool open = false;
+					for (float y = level - 0.05f; y >= deepest - 0.5f && !open; y -= 1f)
+					{
+						open = system.Void(new Vector3(east - system.Origin.x, y - system.Origin.y, north - system.Origin.z)) < 0f;
+					}
+					if (!open)
 					{
 						continue;
 					}
@@ -287,6 +524,42 @@ namespace FishMMO.Shared.WorldDesign
 			AssetDatabase.SaveAssetIfDirty(hydrology);
 		}
 
+		/// <summary>
+		/// Grades the ground before one of a system's mouths to its floor (<see cref="CaveSystem.Approach"/>), where the
+		/// system is entered over the ground (<see cref="CaveSystem.GradesApproach"/>): never in water, nor on another site's
+		/// pad, nor under a hole already cut. Call before the mouth's holes are reckoned (<see cref="CaveSystem.HoleCells"/>),
+		/// which read the ground as graded. Returns the heightmap samples changed.
+		/// </summary>
+		public static int GradeApproach(PointOfInterestPlanContext context, PointOfInterestRecord site, CaveSystem system, int mouth)
+		{
+			if (!system.GradesApproachOf(mouth) || context.Terrains == null)
+			{
+				return 0;
+			}
+			List<PointOfInterestPad> pads = context.Plan?.Pads;
+			bool Kept(float x, float z)
+			{
+				if (context.Water != null && (context.Water.KindAt(x, z) != WaterKind.None || !float.IsNegativeInfinity(context.Water.SurfaceAt(x, z))))
+				{
+					return true;
+				}
+				if (pads != null)
+				{
+					foreach (PointOfInterestPad pad in pads)
+					{
+						float dx = x - pad.Centre.x, dz = z - pad.Centre.z, r = pad.Radius + pad.Blend;
+						if (pad.Id != site.Id && dx * dx + dz * dz < r * r)
+						{
+							return true;
+						}
+					}
+				}
+				return false;
+			}
+			return PointOfInterestTerrain.EditHeights(context.Terrains, context.Tiles, system.ApproachArea(mouth),
+				(x, z, h) => Kept(x, z) ? h : system.Approach(mouth, x, z, h));
+		}
+
 		/// <summary>Nothing grows, falls or is stood in a mouth or on the lip round it.</summary>
 		private static void AddMouthKeepOut(PointOfInterestPlanContext context, PointOfInterestRecord site, CaveSystem system, int mouth)
 		{
@@ -294,7 +567,9 @@ namespace FishMMO.Shared.WorldDesign
 			float yr = m.Yaw * Mathf.Deg2Rad;
 			var outward = new Vector3(Mathf.Sin(yr), 0f, Mathf.Cos(yr));
 			Vector3 front = system.Origin + m.Floor + outward * m.Radius;
-			context.AddKeepOut(site, front.x, front.z, Mathf.Max(site.Radius, 1.5f * m.Radius + m.Collar));
+			// A mouth behind a fall or under water keeps only its own opening: the fall's rock and the sea floor round it stay.
+			float radius = 1.5f * m.Radius + m.Collar;
+			context.AddKeepOut(site, front.x, front.z, m.Kind == CaveMouthKind.Ground ? Mathf.Max(site.Radius, radius) : radius);
 		}
 
 		/// <summary>The stored form of a planned system.</summary>
@@ -402,13 +677,14 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					continue;
 				}
-				CaveSystem system = IsLink(shape.Values, out _) ? null : CaveSystem.FromValues(shape.Values, shape.Position, shape.Seed);
-				if (system != null)
+				// Every mouth of a system stored in this format or one just before it (a second mouth through a hill included).
+				List<(Vector3 Floor, float Zone, float Radius)> mouths = IsLink(shape.Values, out _) ? null : CaveSystem.StoredMouths(shape.Values);
+				if (mouths != null && mouths.Count > 0)
 				{
-					foreach (CaveMouth mouth in system.Mouths)
+					foreach ((Vector3 floor, float zone, float radius) in mouths)
 					{
-						Vector3 at = system.Origin + mouth.Floor;
-						discs.Add(new Vector3(at.x, at.z, mouth.Zone + 2f * mouth.Radius + 6f));
+						Vector3 at = shape.Position + floor;
+						discs.Add(new Vector3(at.x, at.z, zone + 2f * radius + 6f));
 					}
 				}
 				else
@@ -602,6 +878,73 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			return null;
+		}
+
+		/// <summary>
+		/// A site's own cave mouths, their floors and landings in world space (a site through a hill has two; a joined site's are
+		/// in its host's system): read from the stored values without building the system. Empty for a site that is no cave.
+		/// </summary>
+		public static List<CaveMouth> OwnMouths(IReadOnlyList<PointOfInterestShape> shapes, int siteId)
+		{
+			var own = new List<CaveMouth>();
+			PointOfInterestShape shape = null;
+			foreach (PointOfInterestShape s in shapes ?? System.Array.Empty<PointOfInterestShape>())
+			{
+				if (s != null && s.SiteId == siteId && s.Shaper == ShaperName)
+				{
+					shape = s;
+					break;
+				}
+			}
+			if (shape != null && IsLink(shape.Values, out int host))
+			{
+				shape = null;
+				foreach (PointOfInterestShape s in shapes)
+				{
+					if (s != null && s.SiteId == host && s.Shaper == ShaperName && !IsLink(s.Values, out _))
+					{
+						shape = s;
+						break;
+					}
+				}
+			}
+			if (shape == null)
+			{
+				return own;
+			}
+			foreach (CaveMouth m in CaveSystem.MouthsFromValues(shape.Values))
+			{
+				if (m.SiteId != siteId)
+				{
+					continue;
+				}
+				CaveMouth world = m;
+				world.Floor += shape.Position;
+				world.Landing += shape.Position;
+				own.Add(world);
+			}
+			return own;
+		}
+
+		/// <summary>How many of a site's own mouths a way can end at (all but those under water).</summary>
+		public static int LandableMouths(IReadOnlyList<PointOfInterestShape> shapes, int siteId)
+		{
+			int count = 0;
+			foreach (CaveMouth m in OwnMouths(shapes, siteId))
+			{
+				if (CaveSystem.LandingOf(m, out _))
+				{
+					count++;
+				}
+			}
+			return count;
+		}
+
+		/// <summary>Whether a site's every mouth lies under water: dived to, no way is laid to it.</summary>
+		public static bool DivedOnly(IReadOnlyList<PointOfInterestShape> shapes, int siteId)
+		{
+			List<CaveMouth> mouths = OwnMouths(shapes, siteId);
+			return mouths.Count > 0 && mouths.TrueForAll(m => m.Kind == CaveMouthKind.Submerged);
 		}
 
 		/// <summary>The system a site's cave is part of (its own, or its host's when it was joined to one), or null.</summary>
@@ -1076,6 +1419,7 @@ namespace FishMMO.Shared.WorldDesign
 			PointOfInterestShapers.Register(CaveShaper.Instance);
 			PointOfInterestShapers.Register(OverhangShaper.Instance);
 			PointOfInterestShapers.Register(MoatShaper.Instance);
+			PointOfInterestShapers.Register(DungeonEntranceShaper.Instance);
 		}
 	}
 }

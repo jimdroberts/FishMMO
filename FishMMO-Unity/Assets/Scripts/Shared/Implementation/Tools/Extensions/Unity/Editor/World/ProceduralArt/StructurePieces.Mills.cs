@@ -558,7 +558,8 @@ namespace FishMMO.Shared.WorldDesign
 				d.Add(StructureShapes.Beam(new Vector3(-halfW, eave, s * (halfD - 0.2f)), new Vector3(halfW, eave, s * (halfD - 0.2f)), 0.24f, 0.26f, StructureMaterial.Timber, 30 + (s > 0 ? 1 : 0)));
 			}
 			d.Add(StructureShapes.Box(new Vector3(0f, 1.05f, halfD - 0.2f), new Vector3(SawmillWidth - 0.4f, 1.3f, 0.1f), StructureMaterial.Timber, 32)).Grain = Vector3.right;
-			GableRoof(d, SawmillDepth, SawmillWidth, eave, 2f, 0.55f, 0.12f, d.Variant == 1 ? StructureMaterial.Thatch : StructureMaterial.Timber, 40,
+			// At its palette's pitch, or a flat canopy (StructureRoofs, I6h).
+			OwnGable(d, SawmillDepth, SawmillWidth, eave, 2f, 0.55f, 0.12f, d.Variant == 1 ? StructureMaterial.Thatch : StructureMaterial.Timber, 40,
 				Matrix4x4.TRS(Vector3.zero, Quaternion.Euler(0f, 90f, 0f), Vector3.one));
 			// The floor the carriage runs on: a plank deck the length of the shed.
 			d.Add(StructureShapes.Box(new Vector3(0f, 0.35f, 0f), new Vector3(SawmillWidth - 0.6f, 0.12f, 2.6f), StructureMaterial.Timber, 50)).Grain = Vector3.right;
@@ -736,9 +737,13 @@ namespace FishMMO.Shared.WorldDesign
 			d.Add(StructureShapes.Box(new Vector3(0f, floor - 0.08f, 0f), new Vector3(width + 0.1f, 0.2f, depth + 0.1f), StructureMaterial.Timber, 20)).Grain = Vector3.right;
 			Walls(d, Vector3.zero, width, depth, 0.1f, floor, floor + wall, StructureMaterial.Timber, 21);
 			const float rise = 1.9f;
-			GableRoof(d, width, depth, floor + wall, rise, 0.4f, d.Variant == 1 ? 0.12f : 0.3f, d.Variant == 1 ? StructureMaterial.Timber : StructureMaterial.Thatch, 30, Matrix4x4.identity);
-			Gable(d, width - 0.05f, floor + wall, rise - 0.1f, -depth * 0.5f + 0.05f, 0.1f, StructureMaterial.Timber, 34, Matrix4x4.identity);
-			Gable(d, width - 0.05f, floor + wall, rise - 0.1f, depth * 0.5f - 0.05f, 0.1f, StructureMaterial.Timber, 35, Matrix4x4.identity);
+			// At its palette's pitch, its gable boards with it, or a flat canopy over the walls (StructureRoofs, I6h).
+			OwnRoofPlan roof = OwnGable(d, width, depth, floor + wall, rise, 0.4f, d.Variant == 1 ? 0.12f : 0.3f, d.Variant == 1 ? StructureMaterial.Timber : StructureMaterial.Thatch, 30, Matrix4x4.identity);
+			if (!roof.Flat)
+			{
+				Gable(d, width - 0.05f, floor + wall, roof.Rise - 0.1f, -depth * 0.5f + 0.05f, 0.1f, StructureMaterial.Timber, 34, Matrix4x4.identity);
+				Gable(d, width - 0.05f, floor + wall, roof.Rise - 0.1f, depth * 0.5f - 0.05f, 0.1f, StructureMaterial.Timber, 35, Matrix4x4.identity);
+			}
 			// The door in the front gable, and stone steps that stop a stride short of it.
 			d.Add(StructureShapes.Box(new Vector3(0f, floor + 0.85f, -depth * 0.5f - 0.04f), new Vector3(0.9f, 1.6f, 0.04f), StructureMaterial.Ash, 40, StructureRole.Detail));
 			d.Add(StructureShapes.Box(new Vector3(0f, floor + 0.85f, -depth * 0.5f - 0.07f), new Vector3(0.85f, 1.55f, 0.04f), StructureMaterial.Timber, 41, StructureRole.Detail)).Grain = Vector3.up;
@@ -756,11 +761,27 @@ namespace FishMMO.Shared.WorldDesign
 			RingWallWithDoor(d, Vector3.zero, inner, outer, -0.3f, height, d.Seg(24, 12), 1.5f * Mathf.PI, 0.9f, 1.9f, StructureMaterial.Stone, 1);
 			// A string course halfway, and the eaves' course.
 			d.Add(StructureShapes.Lathe(new[] { new Vector2(0f, 3f), new Vector2(outer + 0.1f, 3f), new Vector2(outer + 0.1f, 3.2f), new Vector2(0f, 3.2f) }, d.Seg(24, 12), StructureMaterial.Fieldstone, 20));
-			// The roof, a cone, and its louvre: a little timber lantern the birds come and go by.
+			// The roof, a cone, and its louvre: a little timber lantern the birds come and go by. The thatched cone is at its palette's
+			// pitch (StructureRoofs, I6h), or flat with the louvre on its deck; the corbelled stone one is the stone's own.
 			float roofRise = thatch ? 3.4f : 3f;
-			d.Add(StructureShapes.Lathe(new[] { new Vector2(0f, height - 0.1f), new Vector2(outer + 0.45f, height - 0.1f), new Vector2(outer + 0.45f, height + 0.05f), new Vector2(0.5f, height + roofRise - 0.35f), new Vector2(0f, height + roofRise - 0.3f) },
-				d.Seg(24, 12), thatch ? StructureMaterial.Thatch : StructureMaterial.Stone, 30, true, 0f, false, false, StructureRole.Roof));
-			float lt = height + roofRise - 0.4f;
+			bool flat = false;
+			if (thatch)
+			{
+				OwnRoofPlan roof = OwnRoof(d, StructureMaterial.Thatch, roofRise, outer + 0.45f);
+				roofRise = roof.Rise;
+				flat = roof.Flat;
+			}
+			if (flat)
+			{
+				d.Add(StructureShapes.Lathe(new[] { new Vector2(0f, height - 0.1f), new Vector2(outer + 0.45f, height - 0.1f), new Vector2(outer + 0.45f, height + 0.15f), new Vector2(0f, height + 0.15f) },
+					d.Seg(24, 12), StructureMaterial.Thatch, 30, true, 0f, false, false, StructureRole.Roof));
+			}
+			else
+			{
+				d.Add(StructureShapes.Lathe(new[] { new Vector2(0f, height - 0.1f), new Vector2(outer + 0.45f, height - 0.1f), new Vector2(outer + 0.45f, height + 0.05f), new Vector2(0.5f, height + roofRise - 0.35f), new Vector2(0f, height + roofRise - 0.3f) },
+					d.Seg(24, 12), thatch ? StructureMaterial.Thatch : StructureMaterial.Stone, 30, true, 0f, false, false, StructureRole.Roof));
+			}
+			float lt = flat ? height + 0.15f : height + roofRise - 0.4f;
 			d.Add(StructureShapes.Box(new Vector3(0f, lt + 0.4f, 0f), new Vector3(0.9f, 0.8f, 0.9f), StructureMaterial.Timber, 31, StructureRole.Roof));
 			for (int s = 0; s < 4; s++)
 			{

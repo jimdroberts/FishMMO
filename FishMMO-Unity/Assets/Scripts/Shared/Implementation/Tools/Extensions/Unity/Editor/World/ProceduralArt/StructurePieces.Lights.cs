@@ -26,10 +26,12 @@ namespace FishMMO.Shared.WorldDesign
 				"A fire bowl: v0 an iron brazier on three splayed legs, v1 a stone bowl on a pedestal.",
 				Brazier, "light", "military", "sacred");
 			// The lights of the biome suite (2026-10-16, I6c): what a biome's streets, gates, groves, caves and mines may be lit
-			// with besides the lantern post, the torch post and the brazier (BiomeWayLightKind names each by its id).
+			// with besides the lantern post, the torch post and the brazier (BiomeWayLightKind names each by its id). They are laid
+			// by id only (=Cresset…), so none carries a tag a template's slot queries by ("fire" is a camp's fire or a kiln): a new
+			// light joining a query's candidates would move every pick the query makes in every site.
 			Piece(list, "Cresset", StructureStyle.Timber, StructureSize.Small,
 				"A cresset, 3.4 m: an iron fire basket of burning resin-pine knots high on a pole: v0 on a squared timber pole, v1 on an iron pole in a fieldstone footing.",
-				Cresset, "light", "fire", "military", "town");
+				Cresset, "light", "torch", "military", "town");
 			Piece(list, "CrookLantern", StructureStyle.Timber, StructureSize.Small,
 				"An iron lantern hung on a short chain from a bent oak shepherd's-crook post, 3 m: v0 a square lantern, v1 a round horn lantern and an iron ferrule on the post.",
 				CrookLantern, "light", "lantern", "town");
@@ -49,6 +51,23 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>The crystal post's piece id.</summary>
 		public const string CrystalPostId = "CrystalPost";
+
+		/// <summary>
+		/// The tint of a piece's cold glow (SceneEmitterKind.Glow, 2026-10-18, I6g): a rune stone's rune-light, a glowjar's
+		/// faerie-light; null for a crystal post, whose glow is its crystal's (the site's biome's, laid by the site: SceneGlow.WithCrystalHue),
+		/// and for a piece with no glow.
+		/// </summary>
+		public static SceneGlowHue? GlowHueOf(string pieceId)
+		{
+			switch (pieceId)
+			{
+				case "RuneStone": return SceneGlowHue.Rune;
+				// A dungeon door's rune frieze or lintel (StructurePieces.Dungeon.cs).
+				case "DungeonPortal": case "DungeonGate": return SceneGlowHue.Rune;
+				case "Glowjar": return SceneGlowHue.Faerie;
+				default: return null;
+			}
+		}
 
 		/// <summary>A crystal post's cradle over its foot, per variant, metres: where the crystal is laid.</summary>
 		private static readonly float[] CrystalPostCradles = { 1.82f, 1.76f };
@@ -143,7 +162,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/// <summary>A glowjar: faerie light (a glowing mote, Lamplight) in a stoppered glass jar on a crooked stake.</summary>
+		/// <summary>A glowjar: faerie light (a glowing mote, Faelight: a cold glow, SceneEmitterKind.Glow) in a stoppered glass jar on a crooked stake.</summary>
 		private static void Glowjar(StructureDraft d)
 		{
 			int seg = d.Seg(10, 6);
@@ -179,14 +198,14 @@ namespace FishMMO.Shared.WorldDesign
 			d.Add(StructureShapes.Lathe(new[] { new Vector2(0.05f, 0f), new Vector2(0.075f, 0.06f), new Vector2(0.07f, 0.13f), new Vector2(0.035f, 0.17f), new Vector2(0.035f, 0.19f) },
 				seg, StructureMaterial.Glass, 10, true, 0f, false, false, StructureRole.Detail).Transform(at));
 			d.Add(StructureShapes.Cylinder(0.03f, 0.18f, 0.22f, d.Seg(8, 4), StructureMaterial.Timber, 11, false, StructureRole.Detail).Transform(at));
-			d.Add(StructureShapes.Sphere(jar + Vector3.up * 0.075f, new Vector3(0.035f, 0.04f, 0.035f), d.Seg(8, 5), d.Fine ? 5 : 3, StructureMaterial.Lamplight, 12, StructureRole.Detail));
-			d.Emit(jar + Vector3.up * 0.075f, SceneEmitterKind.Lamp);
+			d.Add(StructureShapes.Sphere(jar + Vector3.up * 0.075f, new Vector3(0.035f, 0.04f, 0.035f), d.Seg(8, 5), d.Fine ? 5 : 3, StructureMaterial.Faelight, 12, StructureRole.Detail));
+			d.Emit(jar + Vector3.up * 0.075f, SceneEmitterKind.Glow);
 		}
 
 		/// <summary>
 		/// A crystal post: an iron cradle on a carved stone pillar (v0) or an iron-banded timber post (v1). The crystal is the site
-		/// biome's own and laid by the site in the cradle (<see cref="TryCrystalSocket"/>); its light is a crystal's (its hue the
-		/// crystal's, set where it is laid).
+		/// biome's own and laid by the site in the cradle (<see cref="TryCrystalSocket"/>); its light a cold glow (SceneEmitterKind.Glow,
+		/// 2026-10-18) in the crystal's hue, set where it is laid (<see cref="GlowHueOf"/>).
 		/// </summary>
 		private static void CrystalPost(StructureDraft d)
 		{
@@ -223,12 +242,13 @@ namespace FishMMO.Shared.WorldDesign
 				d.Add(StructureShapes.Beam(rim, knee, 0.022f, 0.022f, StructureMaterial.Iron, 11 + 2 * i, StructureRole.Detail));
 				d.Add(StructureShapes.Beam(knee, tipAt, 0.018f, 0.018f, StructureMaterial.Iron, 12 + 2 * i, StructureRole.Detail));
 			}
-			d.Emit(new Vector3(0f, cradle + 0.16f, 0f), SceneEmitterKind.Crystal);
+			d.Emit(new Vector3(0f, cradle + 0.16f, 0f), SceneEmitterKind.Glow);
 		}
 
 		/// <summary>
-		/// A rune stone: a standing stone with runes cut into it and filled with a glowing lacquer (Lamplight), lit at night as a
-		/// lamp. The runes are strokes of the elder futhark's shapes, set proud of the face by a few millimetres.
+		/// A rune stone: a standing stone with runes cut into it and filled with a glowing lacquer (Runelight), giving off a cold
+		/// glow (SceneEmitterKind.Glow, 2026-10-18) that shows faintly from before dusk. The runes are strokes of the elder
+		/// futhark's shapes, set proud of the face by a few millimetres.
 		/// </summary>
 		private static void RuneStone(StructureDraft d)
 		{
@@ -265,7 +285,7 @@ namespace FishMMO.Shared.WorldDesign
 				float s = 0.09f;
 				Rune(d, centre, s, r, z, 100 + 10 * r);
 			}
-			d.Emit(new Vector3(0f, tall ? height * 0.55f : height * 0.6f, -thick * 0.5f - 0.35f), SceneEmitterKind.Lamp);
+			d.Emit(new Vector3(0f, tall ? height * 0.55f : height * 0.6f, -thick * 0.5f - 0.35f), SceneEmitterKind.Glow);
 		}
 
 		/// <summary>One rune of three strokes at most, flat on the face at <paramref name="z"/>, its stave <paramref name="size"/> tall either side of the centre.</summary>
@@ -275,7 +295,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				Vector2 mid = (a + b) * 0.5f, run = b - a;
 				float angle = Mathf.Atan2(run.y, run.x) * Mathf.Rad2Deg;
-				d.Add(StructureShapes.Block(new Vector3(mid.x, mid.y, z), new Vector3(run.magnitude + 0.016f, 0.016f, 0.008f), Quaternion.Euler(0f, 0f, angle), StructureMaterial.Lamplight, k, StructureRole.Detail));
+				d.Add(StructureShapes.Block(new Vector3(mid.x, mid.y, z), new Vector3(run.magnitude + 0.016f, 0.016f, 0.008f), Quaternion.Euler(0f, 0f, angle), StructureMaterial.Runelight, k, StructureRole.Detail));
 			}
 			Vector2 top = centre + new Vector2(0f, size), bottom = centre - new Vector2(0f, size);
 			Stroke(bottom, top, key);

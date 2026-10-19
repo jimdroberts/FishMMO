@@ -171,7 +171,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 				switch (key)
 				{
-					case "temperature": case "temp": case "t": offsets.Temperature = Mathf.Clamp(value, -150f, 150f); break;
+					case "temperature": case "temp": case "t": offsets.Temperature = Mathf.Clamp(value, -SceneClimate.MaxOffsetKelvin, SceneClimate.MaxOffsetKelvin); break;
 					case "humidity": case "hum": case "h": offsets.Humidity = Mathf.Clamp(value, -1f, 1f); break;
 					case "pressure": case "p": offsets.Pressure = Mathf.Clamp(value, -2f, 2f); break;
 					case "instability": case "i": offsets.Instability = Mathf.Clamp(value, -1f, 1f); break;

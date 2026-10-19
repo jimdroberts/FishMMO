@@ -165,7 +165,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			// The kit's own, as built since 2026-10-12.
 			Assert.That(StructurePieces.MinimumPitch(StructureMaterial.Thatch), Is.EqualTo(50f));
-			Assert.That(StructurePieces.MinimumPitch(StructureMaterial.Earth), Is.EqualTo(0f));
+			// Turf was laid on any pitch until 2026-10-18 (I6h: "earth roofs are pitched sod/turf, only adobe gives flat roofs"):
+			// sod at 35°. No kit roof is built differently for it (the turf longhouse's own rise is the larger).
+			Assert.That(StructurePieces.MinimumPitch(StructureMaterial.Earth), Is.EqualTo(35f));
 			foreach (StructureMaterial m in AllMaterials.Except(PaletteMaterials).Except(new[] { StructureMaterial.Thatch, StructureMaterial.Earth }))
 			{
 				Assert.That(StructurePieces.MinimumPitch(m), Is.EqualTo(45f), m.ToString());

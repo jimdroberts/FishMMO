@@ -65,6 +65,8 @@ namespace FishMMO.Shared.WorldDesign
 		public Func<float, float, WaterKind> KindAt;
 		/// <summary>Metres from (east, north) to the nearest river or lake (out to a few hundred metres); null derives it from <see cref="KindAt"/>.</summary>
 		public Func<float, float, float> DistanceAt;
+		/// <summary>The inland water's surface at (east, north), −∞ where there is none; null reads as none anywhere.</summary>
+		public Func<float, float, float> SurfaceAt;
 		public IReadOnlyList<RiverPath> Rivers = Array.Empty<RiverPath>();
 		public IReadOnlyList<PointOfInterestLake> Lakes = Array.Empty<PointOfInterestLake>();
 
@@ -119,6 +121,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				KindAt = water.KindAt,
 				DistanceAt = water.DistanceAt,
+				SurfaceAt = water.SurfaceAt,
 				Rivers = water.Rivers,
 				Lakes = lakes,
 			};
@@ -317,6 +320,8 @@ namespace FishMMO.Shared.WorldDesign
 			asset.Rooms = new List<SceneRoom>();
 			// And by the cave dressing: the ladders and ropes its layouts need (CaveSystem.Climbs).
 			asset.Climbables = new List<SceneClimbable>();
+			// And the places its animals live (PointOfInterestCaveDressing.Life).
+			asset.CaveLife = new List<SceneCaveLifeSpot>();
 		}
 	}
 }

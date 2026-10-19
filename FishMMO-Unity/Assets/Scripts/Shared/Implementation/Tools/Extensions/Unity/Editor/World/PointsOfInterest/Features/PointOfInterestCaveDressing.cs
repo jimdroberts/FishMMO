@@ -213,6 +213,7 @@ namespace FishMMO.Shared.WorldDesign
 			PointOfInterestFeatureKit.Note(context, $"cave dressed in {clock.Elapsed.TotalSeconds:0.00} s ({system.Character}): {dresser.Placed} props, {lights} lights"
 				+ $", glow: {dresser.Glowing} ({dresser.Lights} glow lights), lamps: {dresser.Lamps}, climbs: {dresser.Climbed}, crossings: {dresser.Crossed}, camps: {dresser.Camps}"
 				+ (dresser.Grown > 0 ? $", overgrown: {dresser.Grown} plants" : string.Empty)
+				+ $", cave life: {dresser.LifeSpots} spots"
 				+ (dresser.StoodIn.Count > 0 ? $"; {set.Rock} has no art for: {string.Join(", ", dresser.StoodIn)}" : string.Empty)
 				+ (dresser.Unfit.Count > 0 ? $"; cave lights that cannot stand where the biome names them: {string.Join(", ", dresser.Unfit)}" : string.Empty)
 				+ (dresser.Missing.Count > 0 ? $"; missing art: {string.Join(", ", dresser.Missing)} (Generate Biome Art, then repaint)" : string.Empty));
@@ -263,6 +264,13 @@ namespace FishMMO.Shared.WorldDesign
 					if (system.TryChamberOf(mouth.SiteId, out CaveChamber own))
 					{
 						keepClear.Add((new Vector3(own.Centre.x, own.Floor, own.Centre.z), Mathf.Max(4.5f, 0.6f * Mathf.Min(own.Radii.x, own.Radii.z))));
+						// A large cave's dungeon gate against its great cavern's wall, and its forecourt (DungeonEntranceShaper).
+						PointOfInterestRecord site = context.Points != null ? context.Points.Find(mouth.SiteId) : null;
+						if (site != null && DungeonEntranceShaper.HasCavernGate(site.Kind, site.SizeClass)
+							&& DungeonEntranceShaper.TryCavernGateClearing(system, mouth.SiteId, out Vector3 gate, out float gateClear))
+						{
+							keepClear.Add((gate, gateClear));
+						}
 						if (system.Form == CaveForm.Grotto)
 						{
 							// A grotto's shrine or camp stands on the dry ledge at its back (CaveShaper.TryChamber).
@@ -304,6 +312,8 @@ namespace FishMMO.Shared.WorldDesign
 					GlowAll();
 					Encampments();
 				}
+				// Where its animals live: measured, not placed, on a stream of its own (PointOfInterestCaveDressing.Life.cs).
+				Life();
 			}
 
 			// ── Overgrowth ────────────────────────────────────────
@@ -484,7 +494,7 @@ namespace FishMMO.Shared.WorldDesign
 						if (WallFoot(p, dir, Mathf.Max(chamber.Radii.x, chamber.Radii.z) + 2f, out Vector3 depositFoot, chamber)
 							&& FloorPiece(depositFoot - dir * 0.5f, () => Mineral(kind), 1f, rng.Range(0.8f, 1.6f), true, -dir, out Vector3 laid) && mineral.Lit)
 						{
-							Glow(laid + Vector3.up * 0.8f, reach, mineral.LightHue >= 0 ? mineral.LightHue : set.Hue);
+							Glow(laid + Vector3.up * 0.8f, reach, mineral.LightHue >= 0 ? mineral.LightHue : set.Hue, mineral.Flickers);
 						}
 					}
 				}
@@ -987,10 +997,18 @@ namespace FishMMO.Shared.WorldDesign
 
 			private void Glow(Vector3 local, float reach) => Glow(local, reach, set.Hue);
 
-			/// <summary>A crystal's cave light: its hue in bits 8–9 (<paramref name="hue"/> −1: one by the seed).</summary>
-			private void Glow(Vector3 local, float reach, int hue)
+			/// <summary>
+			/// A crystal's cave light: its hue in bits 8–9 (<paramref name="hue"/> −1: one by the seed); a crystal that flickers
+			/// (stormglass, 2026-10-18) gives a cold glow with the flicker in the same hue instead (SceneGlow).
+			/// </summary>
+			private void Glow(Vector3 local, float reach, int hue, bool flickers = false)
 			{
 				uint seed = PointOfInterestPlanner.Hash(system.Seed, Mathf.RoundToInt(local.x * 10f), Mathf.RoundToInt(local.z * 10f), 0xC4);
+				if (flickers)
+				{
+					Emit(local, SceneEmitterKind.Glow, SceneGlow.WithFlicker(SceneGlow.WithCrystalHue(seed, hue), true), reach);
+					return;
+				}
 				if (hue >= 0)
 				{
 					seed = (seed & ~0x300u) | ((uint)hue << 8);
@@ -1007,7 +1025,7 @@ namespace FishMMO.Shared.WorldDesign
 				context.Points.Emitters ??= new List<SceneEmitter>();
 				context.Points.Emitters.Add(new SceneEmitter { Position = system.Origin + local, Kind = kind, Seed = seed, Reach = reach });
 				Lights++;
-				if (kind == SceneEmitterKind.Crystal)
+				if (kind == SceneEmitterKind.Crystal || kind == SceneEmitterKind.Glow)
 				{
 					glowLights.Add(local);
 				}

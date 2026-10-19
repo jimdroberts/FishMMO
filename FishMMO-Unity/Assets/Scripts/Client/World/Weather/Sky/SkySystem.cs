@@ -48,6 +48,7 @@ namespace FishMMO.Client
 		private static readonly int EclipseBodyId = Shader.PropertyToID("_FishSkyEclipseBody");
 		private static readonly int SunDirId = Shader.PropertyToID("_FishSunDir");
 		private static readonly int NightLightsId = Shader.PropertyToID("_FishNightLights");
+		private static readonly int GlowLightsId = Shader.PropertyToID("_FishGlowLights");
 		private static readonly int SunColorId = Shader.PropertyToID("_FishSunColor");
 		private static readonly int SunCountId = Shader.PropertyToID("_FishSunCount");
 		private static readonly int StarMatrixId = Shader.PropertyToID("_FishStarMatrix");
@@ -347,6 +348,9 @@ namespace FishMMO.Client
 				// casts the shadows on every frame it runs.
 				light.intensity = 0f;
 				light.shadows = LightShadows.None;
+				// Never without a cookie: the cloud's shadow or the white stand-in (CloudShadowPresenter.Clear), so the
+				// main light's shader variant does not change with it.
+				light.cookie = CloudShadowPresenter.Unshadowed;
 			}
 			light.enabled = true;
 			return light;
@@ -414,6 +418,8 @@ namespace FishMMO.Client
 				light.type = LightType.Directional;
 				light.shadows = LightShadows.None;
 				light.intensity = 0f;
+				// Any of these may lead and carry the cloud's shadow: the white stand-in until then (OwnLight).
+				light.cookie = CloudShadowPresenter.Unshadowed;
 				pool.Add(light);
 			}
 			return pool[index];
@@ -997,7 +1003,7 @@ namespace FishMMO.Client
 			// rays by the cloud march, out to where the world curves from under them, and a band painted
 			// on the dome as well was a second fog at the horizon — flat, and as thick in a mist as in a
 			// dense fog (WeatherFogPresenter.UniformAmount).
-			float fogBlend = Mathf.Clamp01((RenderSettings.fog ? 0.45f : 0f) + WeatherFogPresenter.UniformAmount(weather, FogLayerView.Drawn) * 0.55f) * (1f - airless);
+			float fogBlend = Mathf.Clamp01((FogComposer.Active ? 0.45f : 0f) + WeatherFogPresenter.UniformAmount(weather, FogLayerView.Drawn) * 0.55f) * (1f - airless);
 			Shader.SetGlobalVector(ZenithId, sample.Zenith);
 			Shader.SetGlobalVector(HorizonId, sample.Horizon);
 			// Under a cloud world's horizon is its deck, not ground: what the sky draws there — where the march's
@@ -1096,6 +1102,8 @@ namespace FishMMO.Client
 			Shader.SetGlobalFloat(SunCountId, count);
 			// Lamps and lit windows (FishStructureWeathering.hlsl): lit from dusk, as the main sun goes down, out by sunrise.
 			Shader.SetGlobalFloat(NightLightsId, 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(-0.04f, 0.12f, sunDirections[0].y)));
+			// Faerie, rune and crystal glows (SceneGlow, 2026-10-18): faintly from before the lamps, full at night.
+			Shader.SetGlobalFloat(GlowLightsId, SceneGlow.Visibility(sunDirections[0].y));
 
 			Shader.SetGlobalVector(CloudLitId, sample.CloudLit);
 			Shader.SetGlobalVector(CloudShadowId, sample.CloudShadow);

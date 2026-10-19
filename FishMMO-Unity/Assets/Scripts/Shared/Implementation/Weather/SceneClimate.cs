@@ -26,6 +26,12 @@ namespace FishMMO.Shared.Weather
 		private static float cachedContinentality = float.NaN;
 		private static float cachedTemperature, cachedHumidity;
 
+		/// <summary>The most the climate is moved either way, climate scale: what is added to the air and the season together.</summary>
+		public const float MaxOffsetScale = 2f;
+
+		/// <summary><see cref="MaxOffsetScale"/> in kelvin (about 66 K): the most an admin or the bed can add to the air's temperature and have it count.</summary>
+		public const float MaxOffsetKelvin = (float)(MaxOffsetScale * ClimateModel.KelvinPerUnit);
+
 		/// <summary>
 		/// The runtime climate offsets of a scene at <paramref name="worldSeconds"/>, on the climate scale: the air authored
 		/// on it and added at runtime, and its season.
@@ -44,9 +50,9 @@ namespace FishMMO.Shared.Weather
 		public static void OffsetsAt(WorldSceneSettings settings, WeatherTimeline timeline, double worldSeconds,
 			out float temperature, out float humidity)
 		{
-			float added = ((settings != null ? settings.AuthoredAir : default) + (timeline != null ? timeline.Air.AtSeconds(worldSeconds) : default)).TemperatureScale;
+			float added = ((settings != null ? settings.AuthoredAir : default) + (timeline != null ? timeline.AirAtSeconds(worldSeconds) : default)).TemperatureScale;
 			BodyShareAt(settings, timeline, worldSeconds, out float bodyTemperature, out float bodyHumidity);
-			temperature = Mathf.Clamp(added + bodyTemperature, -2f, 2f);
+			temperature = Mathf.Clamp(added + bodyTemperature, -MaxOffsetScale, MaxOffsetScale);
 			humidity = Mathf.Clamp(bodyHumidity, -2f, 2f);
 		}
 
@@ -198,7 +204,7 @@ namespace FishMMO.Shared.Weather
 			public float Celsius;
 			/// <summary>The year's coldest point there, °C.</summary>
 			public float ColdestCelsius;
-			/// <summary>How much colder each metre up is, °C (the body's lapse rate; 0 with no air).</summary>
+			/// <summary>How much colder each metre of world y up is, °C (the body's lapse rate over a cut scene's vertical scale; 0 with no air).</summary>
 			public float CoolingPerMetre;
 
 			/// <summary>The air's season at a height (world y, metres above the sea), °C.</summary>
@@ -210,31 +216,42 @@ namespace FishMMO.Shared.Weather
 		/// and a lapse rate, so each plant reads its own height's season: an alpine meadow flowers weeks after the valley and
 		/// goes over weeks before it, and a peak's dwarf willow stands bare while the lowland's is still in leaf.
 		/// </summary>
-		public static bool Foliage(WorldSceneSettings settings, double worldHours, out FoliageState state)
+		/// <param name="timeline">The scene's weather timeline, for what is added to its air at runtime; null adds only what is authored.</param>
+		public static bool Foliage(WorldSceneSettings settings, double worldHours, out FoliageState state, WeatherTimeline timeline = null)
 		{
 			state = default;
 			SolarSystemProfile system = SolarSystemProfile.Active;
-			WorldBody body = SceneTime.BodyOf(settings);
+			/* The body the weather is for: the timeline's when the bed stands the scene on another, at its latitude, as the
+			 * snowpack and the rest of the weather read it (BodyShareAt); the scene's own otherwise. */
+			bool borrowed = timeline != null && timeline.BodyOverride != null;
+			WorldBody body = borrowed ? timeline.BodyOverride : SceneTime.BodyOf(settings);
 			PlanetClimateTable table = system != null && body != null ? PlanetClimateTable.For(system, body) : null;
 			if (table == null || settings == null)
 			{
 				return false;
 			}
-			double latitude = settings.ClimateLatitude;
+			double latitude = borrowed ? timeline.LatitudeDegrees : settings.ClimateLatitude;
 			ScenePlacementClimate placement = settings.PlacementClimate;
 			float continentality = placement != null ? placement.CentreContinentality : 0.5f;
 			// The place's own year at sea level under the scene's centre (a generated scene reads world y as altitude), mean and season.
-			float annual = settings.SampleClimateAt(Vector3.zero, 0.5f, out _, 0f, 0f).KelvinOrScale;
+			// On a borrowed body, that body's own year there: the scene's climate is its home world's.
+			float annual = borrowed ? table.AnnualKelvin(latitude, continentality) : settings.SampleClimateAt(Vector3.zero, 0.5f, out _, 0f, 0f).KelvinOrScale;
 			float now = annual + table.SeasonKelvin(latitude, worldHours, continentality);
 			table.Extremes(latitude, continentality, out float warmest, out float coldest);
 			float shift = annual - table.AnnualKelvin(latitude, continentality);
-			float coldestC = coldest + shift - 273.15f;
-			float nowC = now - 273.15f;
+			/* What is added to the air moves the plants' season with everything else it moves (the snowpack, the rain
+			 * and snow, the cloud): a scene authored ten kelvin colder had its snow line down and its meadows in flower. */
+			float added = (settings.AuthoredAir + (timeline != null ? timeline.AirAtSeconds(worldHours * 3600.0) : default)).Temperature;
+			float coldestC = coldest + shift + added - 273.15f;
+			float nowC = now + added - 273.15f;
 			state.Celsius = nowC;
 			state.ColdestCelsius = coldestC;
 			state.Growing = GrowingAt(nowC);
 			state.Winter = WinterAt(coldestC);
-			state.CoolingPerMetre = (float)ClimateModel.LapseRatePerMetre(system, body);
+			/* Per metre of world y, which in a scene cut from the globe is the body's altitude times the cut's vertical
+			 * scale: the body's lapse alone made every hill cool at a third of the rate its biomes were chosen at. */
+			float lapse = (float)ClimateModel.LapseRatePerMetre(system, body);
+			state.CoolingPerMetre = placement != null && placement.Generated ? placement.CoolingPerSceneMetre(lapse) : lapse;
 			state.Phase01 = Mathf.Repeat((table.PhaseAt(worldHours) - table.ColdestPhase(latitude, continentality)) / PlanetClimateTable.Phases, 1f);
 			return true;
 		}

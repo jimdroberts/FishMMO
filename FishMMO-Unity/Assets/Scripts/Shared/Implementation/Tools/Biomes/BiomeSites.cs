@@ -24,15 +24,27 @@ namespace FishMMO.Shared.Biomes
 		public POIType Kind;
 		[Tooltip("How gladly the kind is sited on this biome's ground: 1 as anywhere, more to favour it, 0 never.")]
 		[Min(0f)] public float Weight;
+		/// <remarks>
+		/// Decision 39 (2026-10-18, the Crater round): a kind people live in or keep (a village, a shrine, a herb garden) is not
+		/// sited on a world whose air is not breathable (thin or none, BiomeAir.IsBreathable), so a biome painted on an airless
+		/// moon places only natural sites and relics there. Written by the authoring from BiomeSiteAir.NeedsAirByDefault unless the
+		/// biome's file says otherwise; off (every entry before 2026-10-18) the kind is sited on every world.
+		/// </remarks>
+		[Tooltip("Only sited where the world's air is breathable (Earth-like or thick): settlements, camps, kept shrines, living groves. Off: on every world, natural sites and relics.")]
+		public bool NeedsBreathableAir;
 
-		public BiomeSiteKind(POIType kind, float weight)
+		public BiomeSiteKind(POIType kind, float weight, bool needsBreathableAir = false)
 		{
 			Kind = kind;
 			Weight = weight;
+			NeedsBreathableAir = needsBreathableAir;
 		}
 
-		/// <summary>The entry as the authoring marks and reports it: "Kind×weight" (the weight round-tripped exactly).</summary>
-		public override string ToString() => Kind + "×" + Weight.ToString("R", CultureInfo.InvariantCulture);
+		/// <summary>
+		/// The entry as the authoring marks and reports it: "Kind×weight" (the weight round-tripped exactly), "×air" after it when it
+		/// needs breathable air (so every mark written before the flag existed still reads the same).
+		/// </summary>
+		public override string ToString() => Kind + "×" + Weight.ToString("R", CultureInfo.InvariantCulture) + (NeedsBreathableAir ? "×air" : string.Empty);
 	}
 
 	/// <summary>
@@ -226,22 +238,32 @@ namespace FishMMO.Shared.Biomes
 		public GameObject Prefab;
 		[Tooltip("How often a field here grows this crop against the biome's other crops.")]
 		[Min(0f)] public float Weight;
-		[Tooltip("How its fields are laid on the ground: Flat (sown edge to edge), Lazy Bed (narrow sown ridges with bare trenches between) or Ridge And Furrow (the open field's broad ridges).")]
+		[Tooltip("How its fields are laid on the ground: Flat (sown edge to edge), Lazy Bed (narrow sown ridges with bare trenches between), Ridge And Furrow (the open field's broad ridges), Paddy (flooded behind a bund), Terraced (benches stepped into a slope), Corn Hills (mounds on a grid), Baulatura (wide cambered beds between ditches), Marcita (a water meadow's beds with a rill along each crown) or Raised Beds (a garden's wattle-edged beds).")]
 		public BiomeFieldSurface Surface;
+		[Tooltip("How its terraced fields' steps are faced (2026-10-18): Drystone, Earth Bund (a grassed lip) or Grass Bank. A Flat field or a Paddy with a riser is terraced with it on slopes; a Terraced field with none is drystone.")]
+		public BiomeTerraceRiser Riser;
+		[Tooltip("Sow it in rows this many metres apart along the field (vines, tea, cabbages: 0 edge to edge, as a grain).")]
+		[Min(0f)] public float Rows;
 
-		public BiomeFieldCrop(GameObject prefab, float weight, BiomeFieldSurface surface = BiomeFieldSurface.Flat)
+		public BiomeFieldCrop(GameObject prefab, float weight, BiomeFieldSurface surface = BiomeFieldSurface.Flat, BiomeTerraceRiser riser = BiomeTerraceRiser.None,
+			float rows = 0f)
 		{
 			Prefab = prefab;
 			Weight = weight;
 			Surface = surface;
+			Riser = riser;
+			Rows = rows;
 		}
 
 		/// <summary>
-		/// The entry as the authoring marks and reports it: "Prefab×weight", and "|Surface" when it is not flat (so the marks
-		/// written before fields had a surface still read as the tool's).
+		/// The entry as the authoring marks and reports it: "Prefab×weight", and "|Surface" when it is not flat, "|Riser" when it has
+		/// one, "|rows N" when it is sown in rows (so the marks written before fields had a surface, a riser or rows still read as the
+		/// tool's).
 		/// </summary>
 		public override string ToString() => (Prefab != null ? Prefab.name : "<none>") + "×" + Weight.ToString("R", CultureInfo.InvariantCulture)
-			+ (Surface == BiomeFieldSurface.Flat ? string.Empty : "|" + Surface);
+			+ (Surface == BiomeFieldSurface.Flat ? string.Empty : "|" + Surface)
+			+ (Riser == BiomeTerraceRiser.None ? string.Empty : "|" + Riser)
+			+ (Rows > 0f ? "|rows " + Rows.ToString("R", CultureInfo.InvariantCulture) : string.Empty);
 	}
 
 	/// <summary>
@@ -543,6 +565,23 @@ namespace FishMMO.Shared.Biomes
 					return BiomeWayLightMount.Roof;
 				default:
 					return BiomeWayLightMount.Ground;
+			}
+		}
+
+		/// <summary>
+		/// The light that stands on the ground in a light's stead where it cannot be hung (2026-10-18, I6g: a street with no wall
+		/// near a light's place): a wall torch's torch on a pole, a wall lantern's lantern post, a hanging bracket's lantern on a
+		/// crook post, the hanging lantern's lantern post; a light that stands on the ground is its own.
+		/// </summary>
+		public static BiomeWayLightKind PostFor(BiomeWayLightKind light)
+		{
+			switch (light)
+			{
+				case BiomeWayLightKind.WallTorch: return BiomeWayLightKind.TorchPost;
+				case BiomeWayLightKind.WallLantern: return BiomeWayLightKind.LanternPost;
+				case BiomeWayLightKind.HangingBracket: return BiomeWayLightKind.CrookLantern;
+				case BiomeWayLightKind.HangingLantern: return BiomeWayLightKind.LanternPost;
+				default: return light;
 			}
 		}
 	}

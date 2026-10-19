@@ -358,11 +358,21 @@ void LitPassFragment(
         fishSoil = 0.0h;
         FishStructureWeather(inputData.positionWS, (half3)input.normalWS, input.fishContact, input.fishRockOrigin,
             surfaceData.albedo, surfaceData.smoothness, surfaceData.occlusion);
-        if (_FishStructure > 1.5h)
+        if (_FishStructure > 2.5h)
+        {
+            // A glowing part (faerie, rune or crystal light): its emission pulses with its piece's light, from before dusk.
+            surfaceData.emission *= FishStructureGlowLight(input.fishRockOrigin, fishUnderground);
+        }
+        else if (_FishStructure > 1.5h)
         {
             // A pane: lit at night.
             surfaceData.emission += FishStructureGlow(inputData.positionWS, input.fishRockOrigin);
         }
+    }
+    else if (_FishStructure < -0.5h)
+    {
+        // A flickering crystal (stormglass, 2026-10-18): its glow crackles with the light beside it (FishGlowFlicker).
+        surfaceData.emission *= FishGlowFlicker(input.fishRockOrigin);
     }
     if (fishSoil > fishGroundWeight)
     {

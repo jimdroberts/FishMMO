@@ -155,7 +155,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// <see cref="DrapeCaveMouth(PointOfInterestSiteContext, Vector3, Vector3, Vector3, float, VineBiomes.Habitat, DeterministicRNG, Func{Vector3, bool})"/>
 		/// for one of a cave system's mouths, its lintel found from the cave's own field (<see cref="CaveLintel"/>), and its
-		/// rock — the outcrop and shell the mouth stands in — from the system's rock field when <paramref name="ground"/> is
+		/// rock — the shell round the opening — from the system's rock field when <paramref name="ground"/> is
 		/// given. Laid nothing (0) when no roof was found over the opening.
 		/// </summary>
 		public static int DrapeCaveMouth(PointOfInterestSiteContext context, CaveSystem system, CaveMouth mouth, VineBiomes.Habitat habitat, DeterministicRNG rng, CaveGround ground = null)

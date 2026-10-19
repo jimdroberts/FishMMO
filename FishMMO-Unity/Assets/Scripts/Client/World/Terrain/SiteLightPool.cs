@@ -19,7 +19,7 @@ namespace FishMMO.Client
 	/// </para>
 	/// <para>
 	/// <b>When.</b> Lamps from dusk (<c>_FishNightLights</c>, SkySystem), underground always; fires all day, faint in daylight, flickering;
-	/// forges low and steady with a slow breath. Shadows only from the nearest few indoor lights, and only with the camera
+	/// forges low and steady with a slow breath; faerie, rune and crystal glows cool and pulsing, faint from before dusk (SceneGlow). Shadows only from the nearest few indoor lights, and only with the camera
 	/// indoors or beside them (<see cref="IndoorShadowMetres"/>); GPU-drawn vegetation never casts into them
 	/// (FishVegetationPasses.hlsl). Dozens of small lights otherwise cast none worth their cost.
 	/// </para>
@@ -32,6 +32,7 @@ namespace FishMMO.Client
 		private const float Refind = 8f;
 
 		private static readonly int NightLightsId = Shader.PropertyToID("_FishNightLights");
+		private static readonly int GlowLightsId = Shader.PropertyToID("_FishGlowLights");
 		private static readonly List<Light> pool = new List<Light>();
 		private static readonly List<SceneEmitter> near = new List<SceneEmitter>();
 		private static Vector3 foundAt = new Vector3(float.MaxValue, 0f, 0f);
@@ -126,6 +127,8 @@ namespace FishMMO.Client
 				SceneSiteEmitters.Near(eye, Reach + Refind, kind => kind != SceneEmitterKind.Smoke && kind != SceneEmitterKind.Hearth, MaxLights, near);
 			}
 			float night = Mathf.Clamp01(Shader.GetGlobalFloat(NightLightsId));
+			// Faerie, rune and crystal glows show earlier than the lamps (SceneGlow.Visibility, from SkySystem).
+			float glow = Mathf.Clamp01(Shader.GetGlobalFloat(GlowLightsId));
 			// The shared motion clock, wrapped for a float: every player's hearths flicker together.
 			float time = FishMMO.Shared.Celestial.WorldMotion.Wrapped(FishMMO.Shared.Celestial.WorldMotion.ShaderWrapSeconds);
 			int shadowed = 0;
@@ -190,7 +193,20 @@ namespace FishMMO.Client
 						bool buried = TerrainSet.Current.TryHeight(e.Position.x, e.Position.z, out float ground) && e.Position.y < ground - 3f;
 						color = new Color(1f, 0.66f, 0.36f);
 						range = e.Reach > 0f ? e.Reach : 8f;
-						intensity = 1.6f * flick * (buried ? 1f : Mathf.Lerp(0.3f, 1f, night));
+						// Out in a downpour or a gale (SiteFireState); under cover it burns on.
+						intensity = 1.6f * flick * (buried ? 1f : Mathf.Lerp(0.3f, 1f, night)) * SiteFireState.Of(e).Burn;
+						break;
+					}
+					case SceneEmitterKind.Glow:
+					{
+						// A glowjar's mote, a rune stone's runes, a crystal post's crystal (2026-10-18): a cool tint from the seed, a soft
+						// slow pulse on the shared clock that its glowing parts share (SceneGlow; FishStructureWeathering.hlsl), or the
+						// stormglass's crackling flicker where its seed asks (decision 33), faintly from before dusk, full at night, and
+						// day and night alike underground.
+						bool buried = TerrainSet.Current.TryHeight(e.Position.x, e.Position.z, out float ground) && e.Position.y < ground - 3f;
+						color = SceneGlow.Colour(SceneGlow.HueOf(e.Seed));
+						range = e.Reach > 0f ? e.Reach : SceneGlow.Range;
+						intensity = SceneGlow.Light(time, e.Position, glow, buried, SceneGlow.Flickers(e.Seed));
 						break;
 					}
 					case SceneEmitterKind.Fire:
@@ -198,7 +214,10 @@ namespace FishMMO.Client
 						float flicker = 0.8f + 0.1f * Mathf.Sin(time * 11.3f + phase) + 0.06f * Mathf.Sin(time * 17.9f + phase * 2.1f) + 0.04f * Mathf.Sin(time * 5.1f + phase * 3.7f);
 						color = new Color(1f, 0.56f, 0.24f);
 						range = 11f;
-						intensity = 3.2f * Mathf.Lerp(0.3f, 1f, night) * flicker;
+						// Doused, a fire sinks to a red smoulder before it goes out (SiteFireState).
+						SiteFireState.State fire = SiteFireState.Of(e);
+						intensity = 3.2f * Mathf.Lerp(0.3f, 1f, night) * flicker * Mathf.Lerp(0.06f, 1f, fire.Burn) * (fire.Burn > 0.02f || fire.Doused < 0.5f ? 1f : 0f);
+						color = Color.Lerp(new Color(1f, 0.28f, 0.1f), color, fire.Burn);
 						break;
 					case SceneEmitterKind.Forge:
 						color = new Color(1f, 0.45f, 0.16f);

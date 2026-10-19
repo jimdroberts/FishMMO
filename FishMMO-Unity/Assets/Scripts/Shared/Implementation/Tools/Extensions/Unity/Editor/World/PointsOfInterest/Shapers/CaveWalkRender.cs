@@ -560,6 +560,12 @@ namespace FishMMO.Shared.WorldDesign
 					intensity = 1.4f;
 					return;
 				}
+				case SceneEmitterKind.Glow:
+					// Underground a glow is all lit (SceneGlow.Light), at the top of its pulse in a still.
+					colour = SceneGlow.Colour(SceneGlow.HueOf(e.Seed));
+					range = e.Reach > 0f ? e.Reach : SceneGlow.Range;
+					intensity = SceneGlow.Intensity;
+					return;
 				case SceneEmitterKind.Torch:
 					colour = new Color(1f, 0.66f, 0.36f);
 					range = e.Reach > 0f ? e.Reach : 8f;

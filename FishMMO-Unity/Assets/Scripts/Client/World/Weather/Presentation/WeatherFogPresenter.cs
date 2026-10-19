@@ -76,12 +76,26 @@ namespace FishMMO.Client
 			{
 				return 0f;
 			}
-			float falling = FallingExtinction(frame);
+			float falling = UniformFallingExtinction(frame);
 			if (layerDrawn && FogLayerView.Of(frame).Visible)
 			{
 				return falling;
 			}
 			return falling + AirPhysics.FogExtinction(frame[WeatherChannel.FogDensity]);
+		}
+
+		/// <summary>
+		/// What is falling's share of <see cref="UniformExtinction"/>, 1/m: the rain at the camera, which the
+		/// distance fog lays evenly over every surface. None with the fog switched off.
+		/// </summary>
+		/// <remarks>
+		/// A storm's curtain is the same rain, and so leaves this much of itself to the distance fog in
+		/// front of a surface, drawing only what its storm holds beyond it; over the sky, which the
+		/// distance fog never touches, it draws all of it (<see cref="WeatherShaderGlobals.FallingFog"/>).
+		/// </remarks>
+		public static float UniformFallingExtinction(in WeatherFrame frame)
+		{
+			return SkySystem.DrawFog ? FallingExtinction(frame) : 0f;
 		}
 
 		/// <summary>How strongly the weather fogs the view, 0..1: the contrast it takes out over 250 m.</summary>

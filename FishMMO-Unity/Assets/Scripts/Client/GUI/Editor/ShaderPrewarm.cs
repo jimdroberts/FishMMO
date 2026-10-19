@@ -372,6 +372,7 @@ namespace FishMMO.Client
 				Debug.Log($"[Shader prewarm] Dropped {stale} learned variant(s) whose shader or keywords are gone ({list.LastSeen.Count} known).");
 			}
 			var shaders = new Dictionary<string, Shader>(StringComparer.Ordinal);
+			var wanted = new HashSet<string>(StringComparer.Ordinal);
 			foreach (string line in list.LastSeen.Keys)
 			{
 				string[] parts = line.Split('\t');
@@ -388,19 +389,11 @@ namespace FishMMO.Client
 					continue;
 				}
 				known++;
-				var material = new Material(shader)
+				foreach (string[] keywords in WithEveryShadowState(shader, parts[2].Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)))
 				{
-					hideFlags = HideFlags.HideAndDontSave,
-					shaderKeywords = parts[2].Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries),
-				};
-				materials.Add(material);
-				var passType = (PassType)passTypeValue;
-				for (int p = 0; p < material.passCount; p++)
-				{
-					string lightMode = shader.FindPassTagValue(p, new ShaderTagId("LightMode")).name;
-					if ((ProceduralArtVariants.PassTypeOf(lightMode) ?? PassType.Meta) == passType)
+					if (wanted.Add(Line(parts[0], passTypeValue, string.Join(" ", keywords))))
 					{
-						queue.Enqueue(new Request(material, p));
+						Enqueue(shader, (PassType)passTypeValue, keywords);
 					}
 				}
 			}
@@ -417,6 +410,86 @@ namespace FishMMO.Client
 			clock.Restart();
 			EditorApplication.update -= Tick;
 			EditorApplication.update += Tick;
+		}
+
+		/// <summary>
+		/// URP's main-light shadow keywords, by group: which of each a frame draws with is the sky's to say (which light leads,
+		/// whether any is bright enough to cast at dusk or by night, the tier's cascades), not the material's. A Play sees some
+		/// of them; the rest compiled the first time the evening came (2026-10-18).
+		/// </summary>
+		private static readonly string[][] ShadowStates =
+		{
+			new[] { null, "_MAIN_LIGHT_SHADOWS", "_MAIN_LIGHT_SHADOWS_CASCADE" },
+			new[] { null, "_SHADOWS_SOFT" },
+		};
+
+		/// <summary>
+		/// A learned variant in every main-light shadow state its shader declares (<see cref="ShadowStates"/>): its other
+		/// keywords as drawn, the shadow ones in each combination. A shader that declares none is the variant alone.
+		/// </summary>
+		internal static IEnumerable<string[]> WithEveryShadowState(Shader shader, string[] keywords)
+		{
+			var groups = new List<string[]>();
+			foreach (string[] group in ShadowStates)
+			{
+				if (group.Any(k => k != null && shader.keywordSpace.FindKeyword(k).isValid))
+				{
+					groups.Add(group);
+				}
+			}
+			if (groups.Count == 0)
+			{
+				yield return keywords;
+				yield break;
+			}
+			var shadowKeywords = new HashSet<string>(groups.SelectMany(g => g).Where(k => k != null), StringComparer.Ordinal);
+			string[] rest = keywords.Where(k => !shadowKeywords.Contains(k)).ToArray();
+			var picked = new int[groups.Count];
+			while (true)
+			{
+				var combination = new List<string>(rest);
+				for (int g = 0; g < groups.Count; g++)
+				{
+					string chosen = groups[g][picked[g]];
+					if (chosen != null)
+					{
+						combination.Add(chosen);
+					}
+				}
+				yield return combination.ToArray();
+				int i = 0;
+				while (i < groups.Count && ++picked[i] == groups[i].Length)
+				{
+					picked[i] = 0;
+					i++;
+				}
+				if (i == groups.Count)
+				{
+					yield break;
+				}
+			}
+		}
+
+		/// <summary>Queues each pass of <paramref name="shader"/> a variant of this pass type draws, with these keywords.</summary>
+		private static void Enqueue(Shader shader, PassType passType, string[] keywords)
+		{
+			var material = new Material(shader)
+			{
+				hideFlags = HideFlags.HideAndDontSave,
+				shaderKeywords = keywords,
+			};
+			materials.Add(material);
+			for (int p = 0; p < material.passCount; p++)
+			{
+				string lightMode = shader.FindPassTagValue(p, new ShaderTagId("LightMode")).name;
+				/* A shader drawn by pass index (a render graph blit, a procedural draw: the clouds, the sky, the fogs, URP's
+				 * post) is recorded as PassType.Normal, which no LightMode maps to: its passes were never queued, so every
+				 * one of them compiled in Play (2026-10-18). Which of its passes a frame draws is the code's choice, so all. */
+				if (passType == PassType.Normal || (ProceduralArtVariants.PassTypeOf(lightMode) ?? PassType.Meta) == passType)
+				{
+					queue.Enqueue(new Request(material, p));
+				}
+			}
 		}
 
 		private static void Tick()

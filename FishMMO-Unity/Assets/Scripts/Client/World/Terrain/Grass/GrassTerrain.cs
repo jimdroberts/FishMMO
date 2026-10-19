@@ -430,6 +430,9 @@ namespace FishMMO.Client
 			/// <summary>The scene's lakes and rivers that reach this terrain; null for none.</summary>
 			private List<FishMMO.Shared.Biomes.SceneWaterBodies> waters;
 			private Color32[] surfacePixels;
+			// A tile without alphamaps (a client build's copy): its stored index map, looked up once (null when it has none).
+			private FishMMO.Shared.TerrainDetailBake.IndexMap surfaceIndex;
+			private bool surfaceIndexLooked;
 			/// <summary>Set by the worker when any layer has grass (read on the main thread once the queue is idle).</summary>
 			private bool any;
 			private bool textures;
@@ -744,6 +747,23 @@ namespace FishMMO.Client
 						}
 						uint packed = GrassMath.PackSurfaceLayers(weights, alayers);
 						pixels[(rowBase + r) * ares + x] = new Color32((byte)packed, (byte)(packed >> 8), (byte)(packed >> 16), (byte)(packed >> 24));
+					}
+				}
+			}
+
+			/// <summary>
+			/// Packs a strip of a stored index map (rows <paramref name="rowBase"/>.., <paramref name="ares"/> wide, two words a
+			/// texel) into the surface-layer texels: a client build's tile, whose alphamaps were left out.
+			/// </summary>
+			public static void PackSurfaceStrip(uint[] index, int rows, int rowBase, int ares, Color32[] pixels)
+			{
+				for (int r = 0; r < rows; r++)
+				{
+					for (int x = 0; x < ares; x++)
+					{
+						int i = (rowBase + r) * ares + x;
+						uint packed = GrassMath.PackSurfaceFromIndex(index[2 * i], index[2 * i + 1]);
+						pixels[i] = new Color32((byte)packed, (byte)(packed >> 8), (byte)(packed >> 16), (byte)(packed >> 24));
 					}
 				}
 			}
@@ -1105,8 +1125,19 @@ namespace FishMMO.Client
 					return true;
 				}
 				int ares = data.alphamapResolution, alayers = data.alphamapLayers;
-				surfaceRows = alayers > 0 ? ares : 0;
-				if (alayers > 0 && surfaceRow < ares)
+				if (alayers <= 0)
+				{
+					// A client build's tile keeps no alphamaps once its stored index map stands in for them: the same layers,
+					// read off that (GrassMath.PackSurfaceFromIndex).
+					if (!surfaceIndexLooked)
+					{
+						surfaceIndexLooked = true;
+						surfaceIndex = FishMMO.Shared.SceneTerrainBake.IndexOf(data);
+					}
+					ares = surfaceIndex != null ? surfaceIndex.Resolution : 0;
+				}
+				surfaceRows = alayers > 0 || surfaceIndex != null ? ares : 0;
+				if (surfaceRow < surfaceRows)
 				{
 					if (queue.Pending >= MaxPendingStrips)
 					{
@@ -1114,10 +1145,18 @@ namespace FishMMO.Client
 					}
 					surfacePixels ??= new Color32[ares * ares];
 					int rows = Mathf.Min(StripRows, ares - surfaceRow);
-					float[,,] maps = data.GetAlphamaps(0, surfaceRow, ares, rows);
 					int rowBase = surfaceRow;
 					Color32[] pixels = surfacePixels;
-					queue.Enqueue(() => PackSurfaceStrip(maps, rows, rowBase, ares, alayers, pixels, new float[alayers]));
+					if (alayers > 0)
+					{
+						float[,,] maps = data.GetAlphamaps(0, surfaceRow, ares, rows);
+						queue.Enqueue(() => PackSurfaceStrip(maps, rows, rowBase, ares, alayers, pixels, new float[alayers]));
+					}
+					else
+					{
+						uint[] index = surfaceIndex.Map;
+						queue.Enqueue(() => PackSurfaceStrip(index, rows, rowBase, ares, pixels));
+					}
 					surfaceRow += rows;
 					return true;
 				}

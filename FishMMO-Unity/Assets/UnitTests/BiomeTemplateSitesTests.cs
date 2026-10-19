@@ -510,7 +510,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			string poi = Path.Combine(WorldFolder, "PointsOfInterest");
 			string Code(string relative) => CodeOnly(File.ReadAllText(Path.Combine(poi, relative)));
-			Assert.That(Code("PointOfInterestStage.cs"), Does.Contain("BiomeTemplateArt.SiteKinds(biome, rules)"));
+			Assert.That(Code("PointOfInterestStage.cs"), Does.Contain("BiomeTemplateArt.SiteKinds(biome, rules, breathable)"));
 			Assert.That(Regex.Matches(Code("PointOfInterestStage.cs"), Regex.Escape("library.Pick(record, BiomeTemplateArt.SiteVariantWeights(biome),")).Count, Is.EqualTo(2));
 			Assert.That(Code("PropsFeature.cs"), Does.Contain("BiomeTemplateArt.Weathering(siteBiome)"));
 			Assert.That(Code("PropsFeature.cs"), Does.Contain("{ Palette = palette }"));

@@ -169,7 +169,8 @@ namespace FishMMO.Shared.WorldDesign
 			private readonly float[] levelFloor;
 			private readonly int levels;
 			private readonly int maxChambers;
-			private readonly HashSet<int> hallLevels = new HashSet<int>();
+			/// <summary>How many halls each level still wants (by level).</summary>
+			private readonly Dictionary<int, int> hallLevels = new Dictionary<int, int>();
 			private readonly Queue<Hub> frontier = new Queue<Hub>();
 			private readonly List<Hub> hubs = new List<Hub>();
 			private float budget;
@@ -209,16 +210,21 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					levelFloor[i] = Mathf.Max(lowest, -depth * (i + 1) / this.levels);
 				}
-				maxChambers = size >= 2 ? 26 : size == 1 ? 18 : 10;
+				maxChambers = size >= 2 ? 34 : size == 1 ? 24 : 12;
+				// More halls, and more of them to a system (2026-10-18: "Caves need even bigger hallows"): a halls cave has two
+				// on its deepest level at the largest size and most often one higher up too; an abyss, a crystal cave and a rift
+				// one now and then.
 				CaveCharacter c = system.Character;
-				if (size >= 1 && (c == CaveCharacter.Halls || c == CaveCharacter.Crystal && size >= 2
-					|| c == CaveCharacter.Abyss && rng.NextFloat() < 0.35f || c == CaveCharacter.Classic && size >= 2 && rng.NextFloat() < 0.3f))
+				int last = this.levels - 1;
+				if (size >= 1 && (c == CaveCharacter.Halls || c == CaveCharacter.Crystal && (size >= 2 || rng.NextFloat() < 0.5f)
+					|| c == CaveCharacter.Abyss && rng.NextFloat() < 0.5f || c == CaveCharacter.Rift && rng.NextFloat() < 0.3f
+					|| c == CaveCharacter.Classic && size >= 2 && rng.NextFloat() < 0.3f))
 				{
-					hallLevels.Add(this.levels - 1);
+					hallLevels[last] = c == CaveCharacter.Halls && size >= 2 ? 2 : 1;
 				}
-				if (c == CaveCharacter.Halls && size >= 2 && this.levels >= 2 && rng.NextFloat() < 0.5f)
+				if (c == CaveCharacter.Halls && this.levels >= 2 && rng.NextFloat() < (size >= 2 ? 0.75f : 0.4f))
 				{
-					hallLevels.Add(0);
+					hallLevels[0] = 1;
 				}
 			}
 
@@ -388,12 +394,12 @@ namespace FishMMO.Shared.WorldDesign
 			private Hub HubAt(CavePassage passage, int level, bool final)
 			{
 				Vector3 entry = EndDir(passage);
-				if (hallLevels.Contains(level))
+				if (hallLevels.TryGetValue(level, out int wanted) && wanted > 0)
 				{
 					Hub hall = Hall(passage, level, entry);
 					if (hall != null)
 					{
-						hallLevels.Remove(level);
+						hallLevels[level] = wanted - 1;
 						return hall;
 					}
 				}
@@ -424,14 +430,17 @@ namespace FishMMO.Shared.WorldDesign
 			// ── Halls ──────────────────────────────────────────────
 
 			/// <summary>
-			/// An enormous hall at a passage's end (up to ~160 m across): a middle lobe entered at its edge, and lobes round it
-			/// on terraces of their own, each joined to the middle by a ramp; null where the rock over it will not hold one.
+			/// An enormous hall at a passage's end (up to ~250 m across, its vault up to ~90 m high, 2026-10-18; ~160 m before):
+			/// a middle lobe entered at its edge, and lobes round it on terraces of their own, each joined to the middle by a
+			/// ramp; null where the rock over it will not hold one. Where the rock is too thin for the vault its breadth would
+			/// give it, the vault is let down to what the rock holds (no lower than <see cref="Walker.LowestVault"/> of its
+			/// breadth) before the hall is made smaller: a broad, low hall rather than a small one.
 			/// </summary>
 			private Hub Hall(CavePassage passage, int level, Vector3 entry)
 			{
 				CaveNode end = passage.Nodes[passage.Nodes.Count - 1];
 				bool lava = system.Form == CaveForm.LavaTube;
-				float rx = size >= 2 ? rng.Range(34f, 64f) : rng.Range(20f, 36f);
+				float rx = size >= 2 ? rng.Range(60f, 125f) : rng.Range(36f, 70f);
 				if (system.Character == CaveCharacter.Crystal)
 				{
 					rx *= 0.75f;
@@ -440,15 +449,16 @@ namespace FishMMO.Shared.WorldDesign
 				float yaw = Yaw(entry);
 				CaveChamber middle = default;
 				bool fits = false;
-				for (int shrink = 0; shrink < 7 && !fits; shrink++, rx *= 0.86f)
+				for (int shrink = 0; shrink < 10 && !fits; shrink++, rx *= 0.86f)
 				{
 					if (rx < 14f)
 					{
 						break;
 					}
-					var radii = new Vector3(rx, Mathf.Clamp(rx * tall, 8f, 45f), rx * across);
 					Vector3 c = end.Centre + entry * (0.62f * rx);
-					fits = walker.TryLobe(c, end.Floor, yaw, radii, 0f, CaveChamberKind.Hall, siteId, 1f, out middle);
+					float ry = Vault(c, end.Floor, yaw, rx, rx * across, rx * tall, MaxVault);
+					var radii = new Vector3(rx, ry, rx * across);
+					fits = walker.TryLobe(c, end.Floor, yaw, radii, 0f, CaveChamberKind.Hall, siteId, 1f, out middle, q => Walker.NearChain(passage, q));
 				}
 				if (!fits)
 				{
@@ -460,7 +470,7 @@ namespace FishMMO.Shared.WorldDesign
 				hub.Lobes.Add(system.Chambers.Count - 1);
 				hubs.Add(hub);
 				system.PrepareField();
-				int lobes = size >= 2 ? rng.Range(3, 7) : rng.Range(2, 5);
+				int lobes = size >= 2 ? rng.Range(4, 9) : rng.Range(2, 6);
 				for (int k = 0; k < lobes; k++)
 				{
 					float turn = rng.Range(-150f, 150f);
@@ -471,10 +481,12 @@ namespace FishMMO.Shared.WorldDesign
 					Vector3 at = middle.Centre + dir * ((reach + lrx) * rng.Range(0.5f, 0.68f));
 					// Terraced most of the time: a step up or down from the middle's floor, ramped.
 					float rise = rng.NextFloat() < 0.65f ? rng.Range(1.5f, 7f) * (rng.NextFloat() < 0.5f ? -1f : 1f) : 0f;
-					var radii = new Vector3(lrx, Mathf.Clamp(lrx * tall * rng.Range(0.85f, 1.2f), 6f, 40f), lrz);
 					float lobeYaw = Yaw(dir) + rng.Range(-30f, 30f);
-					if (!walker.TryLobe(at, middle.Floor + rise, lobeYaw, radii, 0f, CaveChamberKind.Hall, siteId, 1f, out CaveChamber lobe)
-						&& (rise == 0f || !walker.TryLobe(at, middle.Floor, lobeYaw, radii, 0f, CaveChamberKind.Hall, siteId, 1f, out lobe)))
+					var radii = new Vector3(lrx, Vault(at, middle.Floor + rise, lobeYaw, lrx, lrz, lrx * tall * rng.Range(0.85f, 1.2f), 0.8f * MaxVault), lrz);
+					// It may open into the hall's other lobes at another floor (their terraces are ramped) and over its way in.
+					bool Ours(Vector3 q) => Walker.NearChain(passage, q) || InHall(mark.Chambers, q);
+					if (!walker.TryLobe(at, middle.Floor + rise, lobeYaw, radii, 0f, CaveChamberKind.Hall, siteId, 1f, out CaveChamber lobe, Ours)
+						&& (rise == 0f || !walker.TryLobe(at, middle.Floor, lobeYaw, radii, 0f, CaveChamberKind.Hall, siteId, 1f, out lobe, Ours)))
 					{
 						continue;
 					}
@@ -494,6 +506,38 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				return hub;
+			}
+
+			/// <summary>Whether a point lies within (a little past) one of a hall's lobes as they stand: the chambers from <paramref name="first"/> on.</summary>
+			private bool InHall(int first, Vector3 p)
+			{
+				for (int i = first; i < system.Chambers.Count; i++)
+				{
+					CaveChamber c = system.Chambers[i];
+					float yr = c.Yaw * Mathf.Deg2Rad;
+					Vector3 o = p - c.Centre;
+					float along = o.x * Mathf.Sin(yr) + o.z * Mathf.Cos(yr), across = o.x * Mathf.Cos(yr) - o.z * Mathf.Sin(yr);
+					var e = new Vector3(along / (c.Radii.x + 3f), (o.y - c.Slope * along) / (c.Radii.y + 3f), across / (c.Radii.z + 3f));
+					if (e.sqrMagnitude < 1f)
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+
+			/// <summary>The tallest a hall's vault stands over its floor (its half-height), metres.</summary>
+			private const float MaxVault = 90f;
+
+			/// <summary>
+			/// A hall lobe's vault (half-height): as tall as its breadth would make it (<paramref name="want"/>, at least 8 m and
+			/// at most <paramref name="most"/>), let down to what the rock over it holds but no lower than a share of its breadth.
+			/// </summary>
+			private float Vault(Vector3 centre, float floor, float yaw, float rx, float rz, float want, float most)
+			{
+				float ry = Mathf.Clamp(want, 8f, most);
+				float holds = walker.LobeVault(centre, floor, yaw, rx, rz, 0f, 1f) - 0.01f;
+				return Mathf.Min(ry, Mathf.Max(Mathf.Max(6f, Walker.LowestVault * rx), holds));
 			}
 
 			/// <summary>
@@ -1410,7 +1454,7 @@ namespace FishMMO.Shared.WorldDesign
 				for (int shrink = 0; shrink < 4 && !fits; shrink++, rx *= 0.85f)
 				{
 					var radii = new Vector3(rx, Mathf.Clamp(0.6f * rx, 6f, 14f), rx * rng.Range(0.7f, 0.95f));
-					fits = walker.TryLobe(end.Centre + dir * (0.7f * rx), end.Floor, Yaw(dir), radii, 0f, CaveChamberKind.Hall, siteId, rough, out cavern);
+					fits = walker.TryLobe(end.Centre + dir * (0.7f * rx), end.Floor, Yaw(dir), radii, 0f, CaveChamberKind.Hall, siteId, rough, out cavern, q => Walker.NearChain(drift, q));
 				}
 				if (!fits)
 				{

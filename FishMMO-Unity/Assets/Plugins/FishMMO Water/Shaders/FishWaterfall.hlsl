@@ -29,6 +29,27 @@ float _FishInlandTime;
 float _FishFallDebug;           // debug: alpha, fallen and the brink as colour
 float _FishInlandCameraInSea;   // 1 under the sea (InlandWaterRenderer.MarkCamera): no falls are seen from there
 
+/// The look of the water a fall pours from (InlandWaterRenderer.Looks ApplyFallLooks, per renderer, 2026-10-18): its biome's
+/// water look carried into the curtain's own colours. _FallLookOn 0 (water of the inland water's own look, or no block): the
+/// material's colours and nothing more absorbed, as every fall was drawn before. Colours linear, as the material's are.
+float _FallLookOn;
+float4 _FallWater;              // rgb the glassy water over the brink, in place of _WaterColor
+float4 _FallFoam;               // rgb the aerated water, in place of _FoamColor
+float4 _FallAbsorb;             // rgb what a metre of this water absorbs beyond the inland water's own (negative: clearer)
+
+/// The glassy water's colour: the look of the water it pours from, else the material's.
+half3 FallWaterColor() { return _FallLookOn > 0.5 ? (half3)_FallWater.rgb : _WaterColor.rgb; }
+
+/// The aerated water's colour: the look of the water it pours from, else the material's.
+half3 FallFoamColor() { return _FallLookOn > 0.5 ? (half3)_FallFoam.rgb : _FoamColor.rgb; }
+
+/// How much more (or less) of what is behind a sheet <paramref name="metres"/> thick its water takes out than the inland
+/// water's own would: 1 with no look of its own. Held under 1.25, so a clearer water never glows.
+half3 FallStain(float metres)
+{
+    return _FallLookOn > 0.5 ? (half3)min(exp(-max(0.02, metres) * _FallAbsorb.rgb), 1.25) : half3(1.0, 1.0, 1.0);
+}
+
 struct Attributes
 {
     float4 positionOS : POSITION;

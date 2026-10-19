@@ -104,4 +104,41 @@ half3 FishStructureGlow(float3 positionWS, float3 originWS)
     return warm * (1.6h + 1.2h * pane) * night * home;
 }
 
+// How much of a faerie, rune or crystal glow shows (SkySystem, SceneGlow.Visibility): faintly from before dusk, 1 at night.
+float _FishGlowLights;
+
+/// <summary>
+/// A glowing part's light (a material marked _FishStructure = 3: a glowjar's mote, a rune stone's runes, 2026-10-18): what
+/// its emission is scaled by. The very pulse its piece's light pulses with (SceneGlow.Pulse, constant for constant: a pure
+/// function of the shared motion clock, _FishWeatherMisc.w from FishWeather.hlsl, and the piece's origin on the ground), times
+/// how much of a glow shows now (_FishGlowLights), all of it underground. Needs FishWeather.hlsl included first.
+/// </summary>
+half FishStructureGlowLight(float3 originWS, half underground)
+{
+    half shows = max((half)saturate(_FishGlowLights), underground);
+    float seconds = _FishWeatherMisc.w;
+    float slow = frac(0.11 * seconds + frac(originWS.x * 0.037 + originWS.z * 0.029));
+    float slower = frac(0.043 * seconds + frac(originWS.x * -0.021 + originWS.z * 0.033));
+    float pulse = 0.78 + 0.14 * sin(6.28318530718 * slow) + 0.08 * sin(6.28318530718 * slower);
+    return shows * (half)pulse;
+}
+
+/// <summary>
+/// The stormglass's flicker (2026-10-18, decision 33; SceneGlow.Flicker, constant for constant): a low steady glow and bright
+/// uneven flashes where three crackles on the shared motion clock meet, phased by the glowing piece's origin on the ground,
+/// so a crystal and the light beside it flash together. 0.45 between flashes, 1 at a flash's height. What a flickering
+/// crystal's emission is scaled by (a material marked _FishStructure = -1: a glowing mineral, not weathered as a building).
+/// Needs FishWeather.hlsl included first.
+/// </summary>
+half FishGlowFlicker(float3 originWS)
+{
+    float seconds = _FishWeatherMisc.w;
+    float a = sin(6.28318530718 * frac(2.3 * seconds + frac(originWS.x * 0.13 + originWS.z * 0.17)));
+    float b = sin(6.28318530718 * frac(3.7 * seconds + frac(originWS.x * -0.11 + originWS.z * 0.07)));
+    float c = sin(6.28318530718 * frac(0.7 * seconds + frac(originWS.x * 0.05 + originWS.z * -0.09)));
+    float flash = saturate((a * b * c - 0.3) / 0.7);
+    float shiver = 0.5 + 0.5 * sin(6.28318530718 * frac(11.3 * seconds + frac(originWS.x * 0.13 + originWS.z * 0.17)));
+    return (half)(0.45 + 0.55 * flash * flash * (0.7 + 0.3 * shiver));
+}
+
 #endif

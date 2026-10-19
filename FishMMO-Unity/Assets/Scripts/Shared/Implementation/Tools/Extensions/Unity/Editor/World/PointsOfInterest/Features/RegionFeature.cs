@@ -52,6 +52,31 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>The site's region, made (with the default size) if no feature has made it yet.</summary>
+		/// <summary>
+		/// A site's outline's extent in its own frame (x to its right, y ahead; metres from its anchor): the square of its radius
+		/// for a disc.
+		/// </summary>
+		public static Rect Extent(PointOfInterestRecord record)
+		{
+			if (!PointOfInterestOutline.Drawn(record.Outline))
+			{
+				return Rect.MinMaxRect(-record.Radius, -record.Radius, record.Radius, record.Radius);
+			}
+			float minX = float.PositiveInfinity, minZ = float.PositiveInfinity, maxX = float.NegativeInfinity, maxZ = float.NegativeInfinity;
+			int n = record.Outline.Length;
+			for (int k = 0; k < n; k++)
+			{
+				// Bearing k turned into the site's frame: its heading is 0.
+				float a = k * (2.0f * Mathf.PI / n) - record.Yaw * Mathf.Deg2Rad;
+				float x = Mathf.Sin(a) * record.Outline[k], z = Mathf.Cos(a) * record.Outline[k];
+				minX = Mathf.Min(minX, x);
+				maxX = Mathf.Max(maxX, x);
+				minZ = Mathf.Min(minZ, z);
+				maxZ = Mathf.Max(maxZ, z);
+			}
+			return Rect.MinMaxRect(minX, minZ, maxX, maxZ);
+		}
+
 		public static Region Ensure(PointOfInterestSiteContext context, float radiusShare = 1.25f, float height = 60.0f)
 		{
 			Region existing = context.Root.GetComponentInChildren<Region>(true);
@@ -65,11 +90,13 @@ namespace FishMMO.Shared.WorldDesign
 			host.transform.SetPositionAndRotation(context.Record.Position, Quaternion.Euler(0.0f, context.Record.Yaw, 0.0f));
 			NetworkObject networkObject = PointOfInterestFeatureKit.AddNetworkObject(host);
 
-			float halfWidth = Mathf.Max(8.0f, context.Record.Radius * radiusShare);
+			// The box round the site's outline in its own frame (its disc's square where it has none), grown by the share.
+			Rect extent = Extent(context.Record);
+			float halfX = Mathf.Max(8.0f, extent.width * 0.5f * radiusShare), halfZ = Mathf.Max(8.0f, extent.height * 0.5f * radiusShare);
 			BoxCollider box = host.AddComponent<BoxCollider>();
 			box.isTrigger = true;
-			box.size = new Vector3(halfWidth * 2.0f, height, halfWidth * 2.0f);
-			box.center = new Vector3(0.0f, height * 0.25f, 0.0f);
+			box.size = new Vector3(halfX * 2.0f, height, halfZ * 2.0f);
+			box.center = new Vector3(extent.center.x, height * 0.25f, extent.center.y);
 
 			Region region = host.AddComponent<Region>();
 			region.Collider = box;

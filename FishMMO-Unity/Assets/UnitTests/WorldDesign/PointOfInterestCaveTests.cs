@@ -50,7 +50,10 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>The ground round the origin, 2 m samples: wide enough for the longest trunk.</summary>
 		private static CaveGround Patch(Func<float, float, float> g, float reach = 560f) => CaveGround.Sample(g, -reach, -reach, reach, reach, 2f);
 
-		private static CaveSystem PlanCave(CaveForm form, int size, int seed, out Func<float, float, float> g, float x = 0f)
+		/// <summary>As <see cref="Patch"/>, on the hole grid's own lines: as the shaper samples the terrain's heightmap, so the mouth's foot is read from the samples the holes and the rock read.</summary>
+		private static CaveGround AlignedPatch(Func<float, float, float> g, float reach = 560f) => CaveGround.Sample(g, -reach, -reach, reach, reach, HoleStep, GridX, GridZ);
+
+		private static CaveSystem PlanCave(CaveForm form, int size, int seed, out Func<float, float, float> g, float x = 0f, bool aligned = false)
 		{
 			float tilt = seed * 13f % 40f - 20f;
 			bool sea = form == CaveForm.SeaCave || form == CaveForm.Grotto;
@@ -59,7 +62,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			g = sea ? SeaCliff() : (px, pz) => face(px, pz) + CaveLift;
 			var mouth = new Vector3(x, 0f, sea ? -4f : -1f);
 			float yaw = sea ? 180f : YawOut(tilt);
-			CaveSystem system = CaveSystem.Plan(form, size, mouth, yaw, seed * 7919, seed, Patch(g), 0f, out string problem, form == CaveForm.Grotto ? 0f : float.NaN);
+			CaveSystem system = CaveSystem.Plan(form, size, mouth, yaw, seed * 7919, seed, aligned ? AlignedPatch(g) : Patch(g), 0f, out string problem, form == CaveForm.Grotto ? 0f : float.NaN);
 			Assert.That(system, Is.Not.Null, $"{form} size {size} seed {seed} was refused: {problem}");
 			return system;
 		}
@@ -178,7 +181,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			CaveSystem b = CaveSystem.Plan(CaveForm.Cave, 1, new Vector3(140f, 0f, -1f), YawOut(1f * 13f % 40f - 20f), 4242, 2, Patch(g), 0f, out string problem);
 			Assert.That(b, Is.Not.Null, problem);
 			int passages = a.Passages.Count + b.Passages.Count, chambers = a.Chambers.Count + b.Chambers.Count;
-			Assert.That(a.TryJoin(b, Patch(g, 700f), CaveShaper.LinkLength, 99), Is.True, "a link fits between them");
+			Assert.That(a.TryJoin(b, Patch(g, 700f), CaveShaper.LinkLength, 99), Is.True, $"a link fits between them ({a.JoinProblem})");
 			Assert.That(a.Mouths.Count, Is.EqualTo(2), "one system, two mouths");
 			Assert.That(a.Mouths[1].SiteId, Is.EqualTo(2));
 			Assert.That(a.Passages.Count, Is.EqualTo(passages + 1));
@@ -462,6 +465,566 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 		}
 
+		// ── The way in (2026-10-18) ───────────────────────────────
+
+		/// <summary>The ground as the plan leaves it before a dry cave's mouth: graded to its floor, as CaveShaper grades the terrain's samples.</summary>
+		private static Func<float, float, float> Graded(CaveSystem system, Func<float, float, float> g, int mouth = 0)
+			=> system.GradesApproach ? (x, z) => system.Approach(mouth, x, z, g(x, z)) : g;
+
+		/// <summary>
+		/// <see cref="Escarpment"/> lifted over the sea with the ground before its face changed: <paramref name="before"/> metres
+		/// of rise (or, negative, of fall) over the 8 m out from the foot, a terrace or a hollow at the mouth.
+		/// </summary>
+		private static Func<float, float, float> Fronted(int seed, float before)
+		{
+			Func<float, float, float> face = Escarpment(0f, seed);
+			return (x, z) =>
+			{
+				float t = Mathf.Clamp01(-z / 8f);
+				return face(x, z) + CaveLift + before * (t * t * (3f - 2f * t));
+			};
+		}
+
+		[Test]
+		public void TheWayInRunsOnFromTheGroundOntoTheFloor()
+		{
+			var cases = new List<(string What, CaveSystem System, Func<float, float, float> Ground)>();
+			foreach ((CaveForm form, int size) in new[] { (CaveForm.Cave, 0), (CaveForm.Cave, 1), (CaveForm.Cave, 2), (CaveForm.LavaTube, 1), (CaveForm.IceCave, 1), (CaveForm.Mine, 1), (CaveForm.Grotto, 1) })
+			{
+				for (int seed = 1; seed <= 3; seed++)
+				{
+					CaveSystem system = PlanCave(form, size, seed, out Func<float, float, float> g, aligned: true);
+					cases.Add(($"{form} {size} seed {seed}", system, g));
+				}
+			}
+			// A terrace the ground falls away from before the face, and a hollow it rises out of.
+			foreach (float before in new[] { -3f, 1.5f })
+			{
+				for (int seed = 1; seed <= 2; seed++)
+				{
+					Func<float, float, float> g = Fronted(seed, before);
+					CaveSystem system = CaveSystem.Plan(CaveForm.Cave, 1, new Vector3(0f, 0f, -1f), 180f, seed * 101, seed, AlignedPatch(g), 0f, out string problem);
+					Assert.That(system, Is.Not.Null, $"fronted {before} seed {seed}: {problem}");
+					cases.Add(($"a cave with {before} m before its face, seed {seed}", system, g));
+				}
+			}
+			foreach ((string what, CaveSystem system, Func<float, float, float> g) in cases)
+			{
+				WalkIn(system, Graded(system, g), what);
+			}
+		}
+
+		/// <summary>
+		/// Walks from the ground 10 m out before a mouth, through it and on along its trunk past its zone, on whatever is
+		/// underfoot (the terrain where it is not holed, else the rock): no step over <see cref="MaxStep"/> and nothing steeper
+		/// than 42° over a metre, and never a gap to fall through. An awash cave's wading (either foot under its water, or on the bank at its edge) is let be.
+		/// </summary>
+		private static void WalkIn(CaveSystem system, Func<float, float, float> g, string what, int mouthIndex = 0, int passageIndex = 0, List<Vector3> lead = null)
+		{
+			Vector3 o = system.Origin;
+			Vector3 at = o + system.Mouths[mouthIndex].Floor;
+			CaveGround ground = CaveGround.Sample(g, at.x - 90f, at.z - 90f, at.x + 90f, at.z + 90f, HoleStep, GridX, GridZ);
+			var holes = new HashSet<Vector2Int>(system.HoleCells(mouthIndex, ground.At, HoleStep, GridX, GridZ));
+			bool Solid(Vector3 p)
+			{
+				float x = p.x + o.x, z = p.z + o.z;
+				var cell = new Vector2Int(Mathf.FloorToInt((x - GridX) / HoleStep), Mathf.FloorToInt((z - GridZ) / HoleStep));
+				// The terrain is a sheet, not a solid: the cave runs on under it.
+				float under = ground.At(x, z) - (p.y + o.y);
+				return !holes.Contains(cell) && under > 0f && under < 0.5f || system.Field(p, ground) < 0f;
+			}
+			CaveMouth mouth = system.Mouths[mouthIndex];
+			float yr = mouth.Yaw * Mathf.Deg2Rad;
+			var outward = new Vector3(Mathf.Sin(yr), 0f, Mathf.Cos(yr));
+			// From 10 m out before it, or along the way given (system frame: a fall's shelf).
+			var line = lead != null ? new List<Vector3>(lead) : new List<Vector3> { mouth.Floor + outward * 10f };
+			List<CaveNode> trunk = system.Passages[passageIndex].Nodes;
+			for (int i = 0; i < trunk.Count; i++)
+			{
+				line.Add(trunk[i].Centre);
+				if (trunk[i].Along > mouth.Zone)
+				{
+					break;
+				}
+			}
+			var path = new List<Vector3>();
+			for (int i = 1; i < line.Count; i++)
+			{
+				Vector3 a = line[i - 1], b = line[i];
+				a.y = b.y = 0f;
+				int steps = Mathf.Max(1, Mathf.CeilToInt(Vector3.Distance(a, b) / 0.2f));
+				for (int s = 0; s < steps; s++)
+				{
+					path.Add(Vector3.Lerp(a, b, s / (float)steps));
+				}
+			}
+			bool awash = !float.IsNaN(system.WaterLevel);
+			var heights = new List<float>();
+			float previous = g(path[0].x + o.x, path[0].z + o.z) - o.y;
+			foreach (Vector3 q in path)
+			{
+				// Down from a metre over the last footing: rock or ground there already is a wall or a step past climbing.
+				float y = previous + 1f;
+				Assert.That(Solid(new Vector3(q.x, y, q.z)), Is.False, $"{what}: a wall or a step of over a metre at {q} (from {previous:0.00})");
+				float bottom = previous - 6f;
+				while (y > bottom && !Solid(new Vector3(q.x, y - 0.05f, q.z)))
+				{
+					y -= 0.05f;
+				}
+				Assert.That(y, Is.GreaterThan(bottom), $"{what}: nothing underfoot at {q} (a gap between the terrain and the rock?)");
+				float lo = y - 0.05f, hi = y;
+				for (int k = 0; k < 14; k++)
+				{
+					float mid = 0.5f * (lo + hi);
+					if (Solid(new Vector3(q.x, mid, q.z)))
+					{
+						lo = mid;
+					}
+					else
+					{
+						hi = mid;
+					}
+				}
+				heights.Add(hi);
+				previous = hi;
+			}
+			for (int i = 1; i < heights.Count; i++)
+			{
+				bool wading = awash && Mathf.Min(heights[i], heights[i - 1]) + o.y < system.WaterLevel + Shore;
+				if (wading)
+				{
+					continue;
+				}
+				Assert.That(Mathf.Abs(heights[i] - heights[i - 1]), Is.LessThanOrEqualTo(MaxStep), $"{what}: a step of {heights[i] - heights[i - 1]:0.00} m at {path[i]}");
+				if (i >= 5)
+				{
+					float run = new Vector2(path[i].x - path[i - 5].x, path[i].z - path[i - 5].z).magnitude;
+					bool wet = awash && Mathf.Min(heights[i], heights[i - 5]) + o.y < system.WaterLevel + Shore;
+					if (run > 0.5f && !wet)
+					{
+						Assert.That(Mathf.Atan2(Mathf.Abs(heights[i] - heights[i - 5]), run) * Mathf.Rad2Deg, Is.LessThanOrEqualTo(42f), $"{what}: too steep to walk at {path[i]}");
+					}
+				}
+			}
+		}
+
+		/// <summary>The most the footing may rise or fall between two points 0.2 m apart on the way in: a kerb, not a lip.</summary>
+		private const float MaxStep = 0.25f;
+		/// <summary>How far over an awash cave's water its shore's bank is let be (waded down from), metres.</summary>
+		private const float Shore = 0.6f;
+
+		[Test]
+		public void TheApproachIsGradedOnceAndOnlyBeforeTheMouth()
+		{
+			foreach (float before in new[] { -3f, 0f, 1.5f })
+			{
+				Func<float, float, float> g = Fronted(1, before);
+				CaveSystem system = CaveSystem.Plan(CaveForm.Cave, 1, new Vector3(0f, 0f, -1f), 180f, 101, 1, Patch(g), 0f, out string problem);
+				Assert.That(system, Is.Not.Null, problem);
+				Assert.That(system.GradesApproach, Is.True);
+				CaveMouth mouth = system.Mouths[0];
+				Vector3 at = system.Origin + mouth.Floor;
+				float yr = mouth.Yaw * Mathf.Deg2Rad;
+				var outward = new Vector2(Mathf.Sin(yr), Mathf.Cos(yr));
+				Rect area = system.ApproachArea(0);
+				for (float x = area.xMin - 4f; x <= area.xMax + 4f; x += 0.7f)
+				{
+					for (float z = area.yMin - 4f; z <= area.yMax + 4f; z += 0.7f)
+					{
+						float h = g(x, z), once = system.Approach(0, x, z, h);
+						Assert.That(system.Approach(0, x, z, once), Is.EqualTo(once).Within(1e-4f), $"{before}: graded twice at ({x:0.0}, {z:0.0})");
+						float u = (x - at.x) * outward.x + (z - at.z) * outward.y;
+						if (u < 0f || !area.Contains(new Vector2(x, z)))
+						{
+							Assert.That(once, Is.EqualTo(h), $"{before}: the ground behind the face or outside the area changed at ({x:0.0}, {z:0.0})");
+						}
+					}
+				}
+				// Level with the floor straight out from the opening, past the cut.
+				for (float u = 0.6f * mouth.Radius; u < 1.2f * mouth.Radius + 2f; u += 0.5f)
+				{
+					float x = at.x + outward.x * u, z = at.z + outward.y * u;
+					Assert.That(system.Approach(0, x, z, g(x, z)), Is.EqualTo(at.y).Within(1e-4f), $"{before}: the lane {u:0.0} m out");
+				}
+			}
+		}
+
+		// ── Ways through (2026-10-18) ─────────────────────────────
+
+		/// <summary>
+		/// A ridge running east–west: its feet at 70 m on both sides (|z| = <paramref name="half"/>), each face rising 60 m over
+		/// 30 m as the escarpment's does, a rolling top between, the ground falling gently away beyond either foot.
+		/// </summary>
+		private static Func<float, float, float> Ridge(float half = 150f)
+			=> (x, z) =>
+			{
+				float u = half - Mathf.Abs(z);
+				float t = Mathf.Clamp01(u / 30f);
+				float roll = 3f * Mathf.Sin(x * 0.05f) + 2f * Mathf.Sin(z * 0.031f + 0.7f);
+				return 70f + 60f * (t * t * (3f - 2f * t)) + roll * Mathf.Clamp01((u + 10f) / 30f) - 0.04f * Mathf.Max(0f, -u);
+			};
+
+		/// <summary>A cave in the ridge's south foot, facing south, with a second mouth opened through it.</summary>
+		private static CaveSystem ThroughRidge(int size, int seed, out Func<float, float, float> g, out bool through, out string problem)
+		{
+			g = Ridge();
+			CaveGround ground = Patch(g, 760f);
+			CaveSystem system = CaveSystem.Plan(CaveForm.Cave, size, new Vector3(0f, 0f, -151f), 180f, seed * 7919, seed, ground, 0f, out problem);
+			Assert.That(system, Is.Not.Null, $"size {size} seed {seed} was refused: {problem}");
+			through = system.TryAddThrough(seed, ground, seed * 31 + 5, null, out problem);
+			return system;
+		}
+
+		[Test]
+		public void ACaveOpensASecondMouthOnItsHillsFarSideAndTheWayThroughCanBeWalked()
+		{
+			int opened = 0;
+			foreach (int size in new[] { 0, 1, 2 })
+			{
+				for (int seed = 1; seed <= 3; seed++)
+				{
+					CaveSystem system = ThroughRidge(size, seed, out Func<float, float, float> g, out bool through, out string problem);
+					if (!through)
+					{
+						TestContextWrite($"size {size} seed {seed}: no way through ({problem})");
+						continue;
+					}
+					opened++;
+					string what = $"size {size} seed {seed}";
+					Assert.That(system.Mouths.Count, Is.EqualTo(2), $"{what}: two mouths");
+					CaveMouth far = system.Mouths[1];
+					Vector3 farAt = system.Origin + far.Floor;
+					Assert.That(farAt.z, Is.GreaterThan(140f), $"{what}: the second mouth is on the ridge's far (north) side, at {farAt}");
+					Assert.That(Mathf.Abs(Mathf.DeltaAngle(far.Yaw, 0f)), Is.LessThanOrEqualTo(50f), $"{what}: and faces out of it ({far.Yaw:0}°)");
+					Assert.That(far.SiteId, Is.EqualTo(seed), $"{what}: both mouths are the site's own");
+					CavePassage way = system.Passages[system.Passages.Count - 1];
+					Assert.That(way.Kind, Is.EqualTo(CavePassageKind.Trunk), $"{what}: the way in from it is a trunk of its own");
+					Assert.That((way.Nodes[0].Centre - far.Floor).magnitude, Is.LessThan(2f * far.Radius), $"{what}: starting at its mouth");
+
+					// The whole way through: in at the first mouth along its trunk to where the way from the far mouth joins it, and
+					// out along that way to the far mouth.
+					// The trunk's node it arrived at: on that node's bore, at its floor.
+					List<CaveNode> trunk = system.Passages[0].Nodes;
+					CaveNode last = way.Nodes[way.Nodes.Count - 1];
+					int at = -1;
+					for (int i = 0; i < trunk.Count; i++)
+					{
+						bool near = new Vector2(trunk[i].Centre.x - last.Centre.x, trunk[i].Centre.z - last.Centre.z).magnitude <= 1.2f * trunk[i].Radius;
+						if (near && (at < 0 || Mathf.Abs(trunk[i].Floor - last.Floor) < Mathf.Abs(trunk[at].Floor - last.Floor)))
+						{
+							at = i;
+						}
+					}
+					Assert.That(at, Is.GreaterThan(0), $"{what}: the way in from the far mouth ends on the trunk");
+					Assert.That(Mathf.Abs(trunk[at].Floor - last.Floor), Is.LessThanOrEqualTo(0.6f), $"{what}: the two meet at one floor");
+					var route = new List<CaveNode>(trunk.GetRange(0, at + 1));
+					for (int i = way.Nodes.Count - 1; i >= 0; i--)
+					{
+						route.Add(way.Nodes[i]);
+					}
+					AssertWalkable(system, route, $"{what}: the way through");
+					foreach (CaveNode node in way.Nodes)
+					{
+						if (node.Along < far.Zone)
+						{
+							continue;
+						}
+						float ground = g(node.Centre.x + system.Origin.x, node.Centre.z + system.Origin.z) - system.Origin.y;
+						Assert.That(ground - RoofOver(system, node.Centre), Is.GreaterThanOrEqualTo(CaveSystem.MinCover - 0.05f), $"{what}: the way's roof at {node.Centre}");
+					}
+					// Walked in from the ground before the far mouth too, as before the first.
+					WalkIn(system, Graded(system, g, 1), $"{what}: the far mouth", 1, system.Passages.Count - 1);
+
+					CaveSystem back = CaveSystem.FromValues(system.ToValues(), system.Origin, system.Seed);
+					Assert.That(back, Is.Not.Null);
+					Assert.That(back.Mouths.Count, Is.EqualTo(2), $"{what}: stored with both mouths");
+					Assert.That(back.Mouths[1].Floor, Is.EqualTo(far.Floor));
+					Assert.That(CaveSystem.MouthsFromValues(system.ToValues()).Count, Is.EqualTo(2), $"{what}: and read back without the field");
+				}
+			}
+			Assert.That(opened, Is.GreaterThanOrEqualTo(6), "most caves in a ridge go through it");
+		}
+
+		[Test]
+		public void AHillWithNoFarFaceOpensNoSecondMouth()
+		{
+			CaveSystem system = PlanCave(CaveForm.Cave, 1, 1, out Func<float, float, float> g);
+			Assert.That(system.TryAddThrough(1, Patch(g, 760f), 77, null, out string problem), Is.False, "the escarpment's top runs on: no far face");
+			Assert.That(system.Mouths.Count, Is.EqualTo(1));
+			Assert.That(problem, Is.Not.Empty);
+			// Nor where the far side is refused (water, another site there).
+			CaveSystem ridge = CaveSystem.Plan(CaveForm.Cave, 1, new Vector3(0f, 0f, -151f), 180f, 7919, 1, Patch(Ridge(), 760f), 0f, out string why);
+			Assert.That(ridge, Is.Not.Null, why);
+			Assert.That(ridge.TryAddThrough(1, Patch(Ridge(), 760f), 36, (x, z) => z > 0f, out _), Is.False);
+			Assert.That(CaveSystem.GoesThrough(CaveForm.Mine) || CaveSystem.GoesThrough(CaveForm.Grotto) || CaveSystem.GoesThrough(CaveForm.SeaCave), Is.False);
+		}
+
+		[Test]
+		public void CavesSitedAKindsSpacingApartAreWithinReachToJoin()
+		{
+			PointOfInterestRules rules = PointOfInterestRules.Default();
+			foreach (POIType kind in new[] { POIType.Cave, POIType.Grotto, POIType.SeaCave, POIType.IceCave, POIType.LavaTube })
+			{
+				PointOfInterestKindRule rule = rules.RuleFor(kind);
+				Assert.That(rule, Is.Not.Null, kind.ToString());
+				Assert.That(CaveShaper.JoinReach, Is.GreaterThanOrEqualTo(1.25f * rule.SpacingMetres), $"{kind}: two of them at their spacing are within the reach a join is tried at");
+			}
+		}
+
+		[Test]
+		public void TwoCavesAKindsSpacingApartJoinIntoOneSystem()
+		{
+			Func<float, float, float> g = (x, z) => Escarpment(0f, 3)(x, z) + CaveLift;
+			CaveGround ground = CaveGround.Sample(g, -400f, -400f, 1000f, 700f, 2f);
+			int joined = 0;
+			for (int seed = 1; seed <= 4; seed++)
+			{
+				CaveSystem a = CaveSystem.Plan(CaveForm.Cave, 1, new Vector3(0f, 0f, -1f), 180f, seed * 7919, 1, ground, 0f, out string pa);
+				CaveSystem b = CaveSystem.Plan(CaveForm.Cave, 1, new Vector3(520f, 0f, -1f), 180f, seed * 4243, 2, ground, 0f, out string pb);
+				Assert.That(a, Is.Not.Null, pa);
+				Assert.That(b, Is.Not.Null, pb);
+				if (!a.TryJoin(b, ground, CaveShaper.LinkLength, seed * 99))
+				{
+					TestContextWrite($"seed {seed}: not joined ({a.JoinProblem})");
+					continue;
+				}
+				joined++;
+				CavePassage link = a.Passages.Find(p => p.Kind == CavePassageKind.Link);
+				Assert.That(link, Is.Not.Null);
+				AssertWalkable(a, link.Nodes, $"seed {seed}: the link");
+				Assert.That(a.Mouths.Count, Is.EqualTo(2));
+			}
+			Assert.That(joined, Is.GreaterThanOrEqualTo(2), "caves 520 m apart (the kind's spacing, past the old reach) join");
+		}
+
+		// ── Under water and behind falls (2026-10-18) ─────────────
+
+		/// <summary>A floor 8 m under <paramref name="water"/> running in to a cliff that rises out of it to a hill 60 m over it (north).</summary>
+		private static Func<float, float, float> DrownedCliff(float water, float depth = 8f)
+			=> (x, z) =>
+			{
+				float t = Mathf.Clamp01((z + 10f) / 30f);
+				return water - depth + (60f + depth) * (t * t * (3f - 2f * t)) + 0.6f * Mathf.Sin(x * 0.07f) * t;
+			};
+
+		[Test]
+		public void ACaveUnderWaterRisesThroughItsSumpToDryChambers()
+		{
+			foreach (float water in new[] { 0f, 30f })
+			{
+				Func<float, float, float> g = DrownedCliff(water);
+				float dry = Mathf.Max(0f, water) + CaveSystem.AboveSea;
+				for (int seed = 1; seed <= 3; seed++)
+				{
+					string what = $"{(water > 0f ? "a lake" : "the sea")}, seed {seed}";
+					CaveSystem system = CaveSystem.Plan(CaveForm.Cave, seed == 3 ? 1 : 0, new Vector3(0f, 0f, -12f), 180f, seed * 7919, seed, Patch(g), 0f, out string problem,
+						float.NaN, CaveOpening.Submerged(water));
+					Assert.That(system, Is.Not.Null, $"{what}: refused: {problem}");
+					CaveMouth mouth = system.Mouths[0];
+					Assert.That(mouth.Kind, Is.EqualTo(CaveMouthKind.Submerged));
+					Assert.That(system.HasSump && !system.GradesApproachOf(0), Is.True, $"{what}: dived to, its bed not graded");
+					float floor = system.Origin.y + mouth.Floor.y;
+					Assert.That(floor + 2f * mouth.Radius * system.Flat, Is.LessThanOrEqualTo(water - CaveSystem.SubmergedClear + 1e-3f), $"{what}: the opening lies wholly under the water");
+					Assert.That(water - floor, Is.LessThanOrEqualTo(CaveSystem.MaxDive), $"{what}: within a dive");
+					Assert.That(system.LowestFloor, Is.EqualTo(dry).Within(1e-4f), $"{what}: dry floors over the water");
+					// The sump climbs from the mouth and never falls back until it is dry; nothing past it lies under the dry limit.
+					List<CaveNode> trunk = system.Passages[0].Nodes;
+					bool dried = false;
+					float previous = float.NegativeInfinity;
+					foreach (CaveNode node in trunk)
+					{
+						float y = system.Origin.y + node.Floor;
+						if (!dried)
+						{
+							Assert.That(y, Is.GreaterThanOrEqualTo(previous - 0.01f), $"{what}: the sump only climbs ({node.Along:0} m in)");
+							dried = y >= dry;
+						}
+						else
+						{
+							Assert.That(y, Is.GreaterThanOrEqualTo(dry - 0.01f), $"{what}: past the sump the floor stays dry ({node.Along:0} m in)");
+						}
+						previous = y;
+					}
+					Assert.That(dried, Is.True, $"{what}: the sump rises out of the water");
+					for (int p = 1; p < system.Passages.Count; p++)
+					{
+						foreach (CaveNode node in system.Passages[p].Nodes)
+						{
+							Assert.That(system.Origin.y + node.Floor, Is.GreaterThanOrEqualTo(dry - 0.01f), $"{what}: a {system.Passages[p].Kind} under the water");
+						}
+					}
+					Assert.That(system.Chambers.Count, Is.GreaterThanOrEqualTo(1), $"{what}: a dry chamber beyond");
+					foreach (CaveChamber chamber in system.Chambers)
+					{
+						float r = Mathf.Max(chamber.Radii.x, chamber.Radii.z);
+						Assert.That(system.Origin.y + chamber.Floor - Mathf.Abs(chamber.Slope) * r, Is.GreaterThanOrEqualTo(dry - 0.01f), $"{what}: the {chamber.Kind} is dry");
+					}
+					// Swum up the sump and walked on: its floor is a walk the whole way, flooded or dry.
+					AssertWalkable(system, trunk, $"{what}: the sump and the trunk");
+					CaveSystem back = CaveSystem.FromValues(system.ToValues(), system.Origin, system.Seed);
+					Assert.That(back.Mouths[0].Kind, Is.EqualTo(CaveMouthKind.Submerged), $"{what}: stored as dived to");
+					Assert.That(back.Mouths[0].Water, Is.EqualTo(water));
+					Assert.That(CaveSystem.LandingOf(back.Mouths[0], out _), Is.False, $"{what}: no way is laid to it");
+				}
+			}
+			Assert.That(CaveSystem.Plan(CaveForm.Cave, 0, new Vector3(0f, 0f, -12f), 180f, 7919, 1, Patch(DrownedCliff(0f, 3f)), 0f, out string shallow, float.NaN, CaveOpening.Submerged(0f)),
+				Is.Null, "a mouth only 3 m down is not wholly under the water");
+			Assert.That(shallow, Is.Not.Empty);
+		}
+
+		private const float GorgeDrop = 14f, GorgeLipX = LipIndex * FallSpacing;
+
+		/// <summary>
+		/// <see cref="FallWater"/>'s fall into a gorge: the channel's bed and its banks over the lip, a headwall a metre past it down
+		/// to a plunge pool's basin (3 m deep, 7 m round its middle 7 m out), the channel on downstream, dry banks a metre over the
+		/// pool beside it, and the gorge's walls rising beyond 18 m either side.
+		/// </summary>
+		private static Func<float, float, float> Gorge()
+		{
+			float pool = LipSurface - GorgeDrop;
+			return (x, z) =>
+			{
+				float az = Mathf.Abs(z);
+				float above = az < 5f ? LipSurface - FallDepth : LipSurface + 2f + Mathf.Min(60f, 0.2f * (az - 5f));
+				float r = new Vector2(x - (GorgeLipX + 7f), z).magnitude;
+				float basin = Mathf.Lerp(pool - 3f, pool + 1f, Mathf.Clamp01((r - 7f) / 3f));
+				float channel = Mathf.Lerp(pool - 1f, pool + 1f, Mathf.Clamp01((az - 4f) / 2f));
+				float below = Mathf.Min(basin, channel);
+				if (az > 18f)
+				{
+					below = Mathf.Max(below, pool + 1f + Mathf.Min(60f, 2f * (az - 18f)));
+				}
+				return Mathf.Lerp(above, below, Mathf.Clamp01((x - (GorgeLipX + 1f)) / 0.5f));
+			};
+		}
+
+		/// <summary>The gorge's water: the river over the lip, the pool and the channel below it where the ground lies under the pool.</summary>
+		private static bool GorgeWet(float x, float z) => x < GorgeLipX + 1f ? Mathf.Abs(z) < 4f : Gorge()(x, z) < LipSurface - GorgeDrop;
+
+		[Test]
+		public void ACaveBehindAFallOpensUnderItsLipOverItsPoolWithAShelfToTheBank()
+		{
+			RiverPath river = FallWater(GorgeDrop).Rivers[0];
+			Func<float, float, float> g = Gorge();
+			List<FallLedges.FallSpan> falls = FallLedges.FindFalls(river, CaveFallMouth.MinDrop);
+			Assert.That(falls.Count, Is.EqualTo(1));
+			Assert.That(CaveFallMouth.Find(river, falls[0], g, GorgeWet, out CaveFallMouth fall), Is.True, "the fall has room for a cave behind it");
+			float pool = LipSurface - GorgeDrop;
+			Assert.That(fall.Pool, Is.EqualTo(pool).Within(1e-4f));
+			Assert.That(fall.Floor, Is.EqualTo(pool + CaveFallMouth.Rise).Within(1e-4f), "its floor a shelf's height over the pool");
+			Assert.That(fall.Mouth.x - GorgeLipX, Is.InRange(0f, 2f), "behind the lip's line: under the brink the curtain leaves");
+			Assert.That(Mathf.Abs(fall.Mouth.z), Is.LessThan(0.01f), "on the fall's own line");
+			Assert.That(Mathf.Abs(Mathf.DeltaAngle(fall.Yaw, 90f)), Is.LessThan(1f), "facing downstream, out through the curtain");
+			Assert.That(fall.MaxRadius * (1f + CaveSystem.ArchSpread), Is.LessThanOrEqualTo(0.5f * FallWidth), "no wider than the curtain hides");
+			// The landing: on the dry bank, clear of the fall's channel (where no way is laid), the ground there near the shelf's level.
+			Assert.That(GorgeWet(fall.Landing.x, fall.Landing.z), Is.False, "the shelf lands on dry ground");
+			Assert.That(Mathf.Abs(fall.Landing.z), Is.GreaterThan(0.5f * FallWidth + FallReaches.MarginMetres), "beside the fall, off its channel");
+			Assert.That(g(fall.Landing.x, fall.Landing.z), Is.GreaterThanOrEqualTo(fall.Floor - 0.75f));
+
+			// The shelf graded in: level the whole way, and graded once only.
+			Func<float, float, float> graded = (x, z) => fall.Grade(x, z, g(x, z));
+			for (int i = 0; i + 1 < fall.Shelf.Count; i++)
+			{
+				for (float s = 0f; s <= 1f; s += 0.1f)
+				{
+					Vector3 p = Vector3.Lerp(fall.Shelf[i], fall.Shelf[i + 1], s);
+					Assert.That(graded(p.x, p.z), Is.EqualTo(fall.Floor).Within(1e-3f), $"the shelf is level at {p}");
+				}
+			}
+			Rect area = fall.GradeArea;
+			for (float x = area.xMin; x <= area.xMax; x += 0.9f)
+			{
+				for (float z = area.yMin; z <= area.yMax; z += 0.9f)
+				{
+					float once = graded(x, z);
+					Assert.That(fall.Grade(x, z, once), Is.EqualTo(once).Within(1e-4f), $"graded twice at ({x:0.0}, {z:0.0})");
+				}
+			}
+
+			// The cave: behind the curtain, its floor over the pool, entered along the shelf from the bank.
+			CaveGround ground = AlignedPatch(graded, 400f);
+			CaveSystem system = CaveSystem.Plan(CaveForm.Cave, 0, fall.Mouth, fall.Yaw, 4242, 9, ground, 0f, out string problem, float.NaN, CaveOpening.Behind(fall));
+			Assert.That(system, Is.Not.Null, problem);
+			CaveMouth mouth = system.Mouths[0];
+			Assert.That(mouth.Kind, Is.EqualTo(CaveMouthKind.Shelf));
+			Assert.That(system.GradesApproachOf(0), Is.False, "the shelf, not the ground before it, is its way in");
+			Assert.That(system.Origin.y, Is.EqualTo(fall.Floor).Within(1e-4f));
+			Assert.That(mouth.Radius, Is.LessThanOrEqualTo(fall.MaxRadius + 1e-4f));
+			Assert.That(CaveSystem.LandingOf(mouth, out Vector3 landing), Is.True);
+			Assert.That((system.Origin + landing - fall.Landing).magnitude, Is.LessThan(1e-3f), "the way to it ends where the shelf lands");
+			var lead = new List<Vector3>();
+			for (int i = fall.Shelf.Count - 1; i >= 0; i--)
+			{
+				lead.Add(fall.Shelf[i] - system.Origin);
+			}
+			WalkIn(system, graded, "along the shelf and in behind the curtain", lead: lead);
+		}
+
+		/// <summary>A scene for the planner: 3 km square, one biome taking caves only, the ground and water given.</summary>
+		private static PointOfInterestPlanInput WaterScene(Func<float, float, float> g, bool sea, Func<float, float, WaterKind> kind, List<RiverPath> rivers)
+			=> new PointOfInterestPlanInput
+			{
+				WidthMetres = 3000f,
+				DepthMetres = 3000f,
+				Ground = g,
+				SeaLevel = 0f,
+				HasSea = sea,
+				Water = new PointOfInterestWater
+				{
+					KindAt = kind,
+					DistanceAt = (x, z) => kind(x, z) == WaterKind.None ? 400f : 0f,
+					Rivers = rivers,
+				},
+				Biomes = new List<PointOfInterestBiome> { new PointOfInterestBiome("Hills", 11, null, new Dictionary<POIType, float> { { POIType.Cave, 1f } }) },
+				BiomeAt = (x, z) => 0,
+				HardnessAt = (x, z, y) => 0.6f,
+				Settings = new PointOfInterestPlanSettings(),
+				Rules = PointOfInterestRules.Default(),
+				Seed = 99,
+			};
+
+		[Test]
+		public void ThePlannerSitesACaveBehindAFallAndOneUnderTheSea()
+		{
+			// Behind the gorge's fall: the site at the mouth the shaper opens, its river the fall's.
+			RiverPath river = FallWater(GorgeDrop).Rivers[0];
+			float pool = LipSurface - GorgeDrop;
+			Func<float, float, float> gorge = Gorge();
+			Func<float, float, WaterKind> gorgeWater = (x, z) => GorgeWet(x, z) ? WaterKind.River : WaterKind.None;
+			PointOfInterestPlan plan = PointOfInterestPlanner.Plan(WaterScene(gorge, false, gorgeWater, new List<RiverPath> { river }));
+			Assert.That(CaveFallMouth.Find(river, FallLedges.FindFalls(river, CaveFallMouth.MinDrop)[0], gorge, GorgeWet, out CaveFallMouth fall), Is.True);
+			PointOfInterestRecord behind = plan.Records.Find(r => r.Kind == POIType.Cave && r.RiverId == river.Id);
+			Assert.That(behind, Is.Not.Null, "a cave is sited behind the fall");
+			Assert.That(new Vector2(behind.Position.x - fall.Mouth.x, behind.Position.z - fall.Mouth.z).magnitude, Is.LessThan(0.1f), "at the mouth the shaper opens");
+			Assert.That(behind.Position.y, Is.EqualTo(pool + CaveFallMouth.Rise).Within(0.01f));
+			Assert.That(Mathf.Abs(Mathf.DeltaAngle(behind.Yaw, fall.Yaw)), Is.LessThanOrEqualTo(0.5f));
+			Assert.That(CaveShaper.TryFallMouth(new List<RiverPath> { river }, behind.RiverId, behind.Position, gorge, GorgeWet, out _), Is.True, "and the shaper finds its fall again");
+			foreach (PointOfInterestRecord other in plan.Records)
+			{
+				Assert.That(other.Kind == POIType.Cave && other != behind && other.RiverId >= 0, Is.False, "one cave behind a fall");
+			}
+
+			// Under the sea: on the bed at the foot of a sea cliff, facing out to the open water.
+			Func<float, float, float> cliff = DrownedCliff(0f);
+			plan = PointOfInterestPlanner.Plan(WaterScene(cliff, true, (x, z) => WaterKind.None, new List<RiverPath>()));
+			PointOfInterestRecord drowned = plan.Records.Find(r => r.Kind == POIType.Cave && cliff(r.Position.x, r.Position.z) < -1f);
+			Assert.That(drowned, Is.Not.Null, "a cave is sited under the sea");
+			float depth = -cliff(drowned.Position.x, drowned.Position.z);
+			Assert.That(depth, Is.InRange(PointOfInterestPlanner.DrownedDepthMin - 0.01f, PointOfInterestPlanner.DrownedDepthMax + 0.01f));
+			Assert.That(Mathf.Abs(Mathf.DeltaAngle(drowned.Yaw, 180f)), Is.LessThanOrEqualTo(25f), "facing out to the open water");
+			Assert.That(CaveShaper.WaterOver(null, cliff, drowned.Position.x, drowned.Position.z), Is.EqualTo(0f), "the shaper reads the sea over it");
+			int under = plan.Records.FindAll(r => r.Kind == POIType.Cave && cliff(r.Position.x, r.Position.z) < -1f).Count;
+			Assert.That(under, Is.EqualTo(1), "one cave under the water");
+			// And the shaper's own plan of it: dived to, a sump up to dry chambers.
+			CaveSystem system = CaveSystem.Plan(CaveForm.Cave, drowned.SizeClass, drowned.Position, drowned.Yaw, 4141, drowned.Id,
+				CaveGround.Sample(cliff, drowned.Position.x - 560f, drowned.Position.z - 560f, drowned.Position.x + 560f, drowned.Position.z + 560f, 2f), 0f, out string problem,
+				float.NaN, CaveOpening.Submerged(0f));
+			Assert.That(system, Is.Not.Null, problem);
+		}
+
+		/// <summary>A test's own line (purerun prints Console, NUnit its context).</summary>
+		private static void TestContextWrite(string line) => Console.WriteLine(line);
+
 		// ── Characters and their features (2026-10-13) ────────────
 
 		private static List<(CaveSystem System, Func<float, float, float> Ground)> variety;
@@ -651,7 +1214,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void TheRockStaysWithinItsBudget()
 		{
 			// Measured 2026-10-13: 30k–170k triangles a system, ~2–7 MB of render mesh and as much collider, ≤ 21k a piece.
-			foreach ((CaveForm form, int size, int seed) in new[] { (CaveForm.Cave, 2, 3), (CaveForm.Cave, 2, 4), (CaveForm.LavaTube, 2, 4), (CaveForm.Mine, 1, 4) })
+			// 2026-10-18, halls to 250 m across: a halls cave nets 430k–480k triangles, thinned (CaveMesher.Simplify) to
+			// 140k–165k, 11–14 MB; the others 28k–61k, ≤ 12k a piece. The caps stand as they were.
+			foreach ((CaveForm form, int size, int seed) in new[] { (CaveForm.Cave, 2, 3), (CaveForm.Cave, 2, 4), (CaveForm.LavaTube, 2, 4), (CaveForm.Mine, 1, 4), (CaveForm.Cave, 2, 6) })
 			{
 				CaveSystem system = PlanCave(form, size, seed, out Func<float, float, float> g);
 				List<CaveMesher.Piece> pieces = Mesh(system, g);

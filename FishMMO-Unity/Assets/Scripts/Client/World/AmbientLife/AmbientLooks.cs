@@ -85,6 +85,8 @@ namespace FishMMO.Client
 				case AmbientShape.Crab:
 					return Mix(0.65f, 0.4f, 0.7f, 0.15f, 1f);
 				case AmbientShape.Beetle:
+				case AmbientShape.Spider:
+				case AmbientShape.Cricket:
 					return Mix(0.7f, 0.4f, 0.8f, 0.2f, 1f);
 				// Winged insects: a butterfly's wings are the flowers' (the look's markings borrow its blooms).
 				case AmbientShape.Butterfly:

@@ -62,6 +62,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The module length of a piece laid end to end; 0 for none.</summary>
 		public float Module;
 		public int Count;
+		/// <summary>A landmark (a church, a temple): laid before the houses, fronting the market's plaza where it can.</summary>
+		public bool Landmark;
 	}
 
 	/// <summary>One counted piece a layout places (any role but the made-up ones).</summary>
@@ -75,8 +77,27 @@ namespace FishMMO.Shared.WorldDesign
 	public sealed class PointOfInterestLayoutRequest
 	{
 		public PointOfInterestLayout Layout;
-		/// <summary>The site's footprint radius, metres.</summary>
+		/// <summary>The site's footprint radius, metres: its outline's bounding reach.</summary>
 		public float Radius;
+		/// <summary>
+		/// The site's outline (<see cref="PointOfInterestRecord.Outline"/>, world bearings); empty for a disc of
+		/// <see cref="Radius"/>. The layout's boundary is its <see cref="PointOfInterestLayouts.Inset"/> share along every bearing.
+		/// </summary>
+		public float[] Outline = Array.Empty<float>();
+		/// <summary>The site's heading, degrees: turns the outline's world bearings into the site's frame.</summary>
+		public float Yaw;
+		/// <summary>The site's pad, for its terraces (<see cref="PointOfInterestTerraces"/>); null for none.</summary>
+		public PointOfInterestPad? Pad;
+		/// <summary>The site's moat (MoatShaper), whose inner bank the wall keeps inside; null for none.</summary>
+		public PointOfInterestShape Moat;
+		/// <summary>The site's kind, which the town plan is chosen by; null chooses by size alone.</summary>
+		public POIType? Kind;
+		/// <summary>The town plan; Auto chooses (<see cref="PointOfInterestTownPlan"/>).</summary>
+		public PointOfInterestTownPlan Plan;
+		/// <summary>The plan the layout laid (filled by the packer).</summary>
+		public PointOfInterestTownPlan ChosenPlan;
+		/// <summary>The town plan's own seed: its draws move nothing else the layout lays.</summary>
+		public int Seed;
 		/// <summary>The least clear ground between two pieces, metres.</summary>
 		public float Gap = 1f;
 		public readonly List<PointOfInterestLayoutSlot> Slots = new List<PointOfInterestLayoutSlot>();
@@ -103,8 +124,16 @@ namespace FishMMO.Shared.WorldDesign
 		/// walled site opens its gates there first.
 		/// </summary>
 		public readonly List<float> Entrances = new List<float>();
-		/// <summary>The streets the layout laid (filled by the packer): centre, axis, width and half length, in the site's frame.</summary>
-		public readonly List<(Vector2 centre, Vector2 axis, float width, float half)> Streets = new List<(Vector2, Vector2, float, float)>();
+		/// <summary>
+		/// How far in from the centre each way's last point stands along its entrance's bearing, metres
+		/// (<see cref="SiteEntrances.EndDistance"/>), parallel to <see cref="Entrances"/>: the street in from it passes through it.
+		/// Missing entries take <see cref="SiteEntrances.EntryDepth"/> of the outline's reach.
+		/// </summary>
+		public readonly List<float> EntranceDepths = new List<float>();
+		/// <summary>The streets the layout laid (filled by the packer), in the site's frame.</summary>
+		public readonly List<PointOfInterestLayoutStreet> Streets = new List<PointOfInterestLayoutStreet>();
+		/// <summary>The plazas the layout kept open (a green, a market place, a square; filled by the packer): convex polygons, site frame.</summary>
+		public readonly List<Vector2[]> Plazas = new List<Vector2[]>();
 	}
 
 	/// <summary>
@@ -119,16 +148,21 @@ namespace FishMMO.Shared.WorldDesign
 	/// fronts, the rows and last the scatter. A piece with no room left is dropped, never forced into an overlap.
 	/// </para>
 	/// <para>
-	/// <b>A wall ring closes.</b> Its modules are the chords of a regular polygon whose side is exactly the module
-	/// length, so neighbouring modules meet end to end; a gate takes the place of as many whole modules as its own
-	/// module spans, and a site with no gate slot keeps one module open at the heading as its way in.
+	/// <b>A wall ring closes.</b> It follows the site's boundary (its outline's <see cref="Inset"/> share, inside any moat's
+	/// berm): each gate stands on its way's own bearing, and between two gates the wall's modules are equal chords of the
+	/// line from jamb to jamb, each fitted to its chord and run on past its corner so its face meets its neighbour's; a site
+	/// with no gate slot keeps an opening at the heading (or its first way's bearing) as its way in.
+	/// </para>
+	/// <para>
+	/// <b>Streets</b> follow a town plan (<see cref="PointOfInterestTownPlan"/>): a street village, a green village, a market
+	/// town, a hill town on its terraces, a walled city, a port, a bailey; each road in runs on as a street.
 	/// </para>
 	/// <para>
 	/// <b>Facing.</b> A kit piece's front looks down its −z (StructureKit's convention), so a piece facing a direction
 	/// <c>d</c> (degrees, 0 ahead) has yaw <c>d + 180</c> (<see cref="FacingYaw"/>).
 	/// </para>
 	/// </remarks>
-	public static class PointOfInterestLayouts
+	public static partial class PointOfInterestLayouts
 	{
 		/// <summary>Pieces stay this share of the footprint radius in, so nothing hangs over a pad's edge.</summary>
 		public const float Inset = 0.9f;
@@ -247,808 +281,7 @@ namespace FishMMO.Shared.WorldDesign
 			return packer.Pieces;
 		}
 
-		// ── Packing ──────────────────────────────────────────────────
-
-		/// <summary>A footprint as an oriented rectangle grown by half the gap.</summary>
-		private struct Box
-		{
-			public Vector2 C, Ax, Az, Half;
-			public float Bound;
-			/// <summary>Pieces of one non-zero group may touch (a wall ring's modules, a bridge's spans).</summary>
-			public int Group;
-
-			public static Box Of(Vector2 centre, float yaw, Vector2 size, float gap, int group)
-			{
-				Vector2 half = new Vector2(Mathf.Max(0f, size.x) * 0.5f + gap * 0.5f, Mathf.Max(0f, size.y) * 0.5f + gap * 0.5f);
-				return new Box
-				{
-					C = centre,
-					Ax = Rotate(Vector2.right, yaw),
-					Az = Rotate(Vector2.up, yaw),
-					Half = half,
-					Bound = half.magnitude,
-					Group = group,
-				};
-			}
-
-			private float Project(Vector2 axis) => Mathf.Abs(Vector2.Dot(Ax, axis)) * Half.x + Mathf.Abs(Vector2.Dot(Az, axis)) * Half.y;
-
-			public bool Overlaps(in Box other)
-			{
-				Vector2 d = other.C - C;
-				float reach = Bound + other.Bound;
-				if (d.sqrMagnitude >= reach * reach)
-				{
-					return false;
-				}
-				return !(Separated(Ax, d, other) || Separated(Az, d, other) || Separated(other.Ax, d, other) || Separated(other.Az, d, other));
-			}
-
-			private bool Separated(Vector2 axis, Vector2 d, in Box other)
-				=> Mathf.Abs(Vector2.Dot(d, axis)) >= Project(axis) + other.Project(axis) - 1e-3f;
-		}
-
-		private sealed class Packer
-		{
-			private const int PerimeterGroup = 1, SpanGroup = 2, PierGroup = 3, StreetGroup = -1, ClearingGroup = -2;
-
-			private readonly PointOfInterestLayoutRequest request;
-			private readonly DeterministicRNG random;
-			private readonly PointOfInterestSlotRole[] roles;
-			private readonly List<Box> boxes = new List<Box>();
-			private readonly List<(Vector2 a, Vector2 b, float width, float half)> streets = new List<(Vector2, Vector2, float, float)>();
-			public readonly List<PointOfInterestLayoutPiece> Pieces = new List<PointOfInterestLayoutPiece>();
-			private readonly float r;
-			private float interior;
-
-			public Packer(PointOfInterestLayoutRequest request, DeterministicRNG random)
-			{
-				this.request = request;
-				this.random = random;
-				r = Mathf.Max(0f, request.Radius) * Inset;
-				interior = r;
-				roles = new PointOfInterestSlotRole[request.Slots.Count];
-				for (int s = 0; s < roles.Length; s++)
-				{
-					roles[s] = RoleFor(request.Layout, s, request.Slots[s].Role);
-				}
-			}
-
-			private float Gap => Mathf.Max(0f, request.Gap);
-
-			public void Run()
-			{
-				int perimeter = FirstSlot(PointOfInterestSlotRole.Perimeter), gate = FirstSlot(PointOfInterestSlotRole.Gate), tower = FirstSlot(PointOfInterestSlotRole.WallTower);
-				if (perimeter >= 0)
-				{
-					Perimeter(perimeter, gate, tower);
-				}
-				else
-				{
-					Loose(gate, tower);
-				}
-				for (int s = 0; s < roles.Length; s++)
-				{
-					if (roles[s] == PointOfInterestSlotRole.Span)
-					{
-						Span(s);
-					}
-				}
-				for (int s = 0; s < roles.Length; s++)
-				{
-					if (roles[s] == PointOfInterestSlotRole.Pier)
-					{
-						Pier(s);
-					}
-				}
-				if (HasItems(PointOfInterestSlotRole.Street))
-				{
-					Streets();
-				}
-				foreach (Vector3 clearing in request.Clearings)
-				{
-					boxes.Add(Box.Of(new Vector2(clearing.x, clearing.z), 0f, Vector2.one * (2f * Mathf.Max(0f, clearing.y)), 0f, ClearingGroup));
-				}
-				Centre();
-				Line();
-				for (int s = 0; s < roles.Length; s++)
-				{
-					if (roles[s] == PointOfInterestSlotRole.Ring)
-					{
-						Ring(s);
-					}
-				}
-				Fronts();
-				Rows();
-				Scatter();
-			}
-
-			private int FirstSlot(PointOfInterestSlotRole role)
-			{
-				for (int s = 0; s < roles.Length; s++)
-				{
-					if (roles[s] == role)
-					{
-						return s;
-					}
-				}
-				return -1;
-			}
-
-			private bool HasItems(PointOfInterestSlotRole role)
-			{
-				foreach (PointOfInterestLayoutItem item in request.Items)
-				{
-					if (Of(item) == role)
-					{
-						return true;
-					}
-				}
-				return false;
-			}
-
-			private PointOfInterestSlotRole Of(PointOfInterestLayoutItem item)
-				=> item.Slot >= 0 && item.Slot < roles.Length ? roles[item.Slot] : PointOfInterestSlotRole.Scatter;
-
-			private bool Inside(Vector2 centre, float yaw, Vector2 size, float limit) => Reach(centre, yaw, size) <= limit + 1e-3f;
-
-			private bool Fits(in Box box, bool ignoreStreets = false)
-			{
-				foreach (Box other in boxes)
-				{
-					if (other.Group != 0 && other.Group == box.Group)
-					{
-						continue;
-					}
-					if (ignoreStreets && other.Group == StreetGroup)
-					{
-						continue;
-					}
-					if (box.Overlaps(other))
-					{
-						return false;
-					}
-				}
-				return true;
-			}
-
-			/// <summary>Lays a piece when it fits inside <paramref name="limit"/> and clear of everything; returns whether it did.</summary>
-			private bool TryLay(int slot, int item, Vector2 centre, float yaw, Vector2 size, float limit, int group = 0, bool ignoreStreets = false)
-			{
-				if (limit > 0f && !Inside(centre, yaw, size, limit))
-				{
-					return false;
-				}
-				Box box = Box.Of(centre, yaw, size, Gap, group);
-				if (!Fits(box, ignoreStreets))
-				{
-					return false;
-				}
-				Lay(slot, item, centre, yaw, size, box);
-				return true;
-			}
-
-			private void Lay(int slot, int item, Vector2 centre, float yaw, Vector2 size, in Box box)
-			{
-				boxes.Add(box);
-				Pieces.Add(new PointOfInterestLayoutPiece
-				{
-					Slot = slot,
-					Item = item,
-					Role = roles[slot],
-					Offset = centre,
-					Yaw = Mathf.Repeat(yaw, 360f),
-					Footprint = size,
-				});
-			}
-
-			private static Vector2 Dir(float radians) => new Vector2(Mathf.Sin(radians), Mathf.Cos(radians));
-
-			// ── The perimeter ───────────────────────────────────────
-
-			private struct Planned
-			{
-				public int Slot;
-				public Vector2 C;
-				public float Yaw;
-				public Vector2 Size;
-			}
-
-			/// <summary>The wall ring, its gates and its towers; shrunk until every corner lies inside the footprint.</summary>
-			private void Perimeter(int wall, int gate, int tower)
-			{
-				float limit = r;
-				List<Planned> plan = null;
-				float inner = r;
-				for (int attempt = 0; attempt < 8 && limit > 1f; attempt++)
-				{
-					plan = PlanPerimeter(wall, gate, tower, limit, out inner);
-					if (plan == null)
-					{
-						return;
-					}
-					float far = 0f;
-					foreach (Planned p in plan)
-					{
-						far = Mathf.Max(far, Reach(p.C, p.Yaw, p.Size));
-					}
-					if (far <= r + 1e-3f)
-					{
-						break;
-					}
-					limit -= far - r + 0.05f;
-					plan = null;
-				}
-				if (plan == null)
-				{
-					return;
-				}
-				foreach (Planned p in plan)
-				{
-					Lay(p.Slot, -1, p.C, p.Yaw, p.Size, Box.Of(p.C, p.Yaw, p.Size, Gap, PerimeterGroup));
-				}
-				interior = Mathf.Max(0f, Mathf.Min(r, inner));
-			}
-
-			private List<Planned> PlanPerimeter(int wall, int gate, int tower, float limit, out float inner)
-			{
-				PointOfInterestLayoutSlot w = request.Slots[wall];
-				var plan = new List<Planned>();
-				Vector2 towerSize = tower >= 0 ? request.Slots[tower].Footprint : Vector2.zero;
-				Vector2 gateSize = gate >= 0 ? request.Slots[gate].Footprint : Vector2.zero;
-				float depth = Mathf.Max(0f, w.Footprint.y);
-				float module = w.Module;
-				inner = limit;
-
-				if (module <= 0f)
-				{
-					// Free-standing pieces round the edge (stones, posts): evenly, facing out; gates across the heading first.
-					int n = Math.Max(0, w.Count);
-					float ring = Mathf.Max(0f, limit - w.Footprint.magnitude * 0.5f);
-					int ways = gate >= 0 ? Math.Max(Math.Max(1, request.Slots[gate].Count), request.Entrances.Count) : 0;
-					for (int g = 0; g < ways; g++)
-					{
-						float a = GateAngle(g, ways);
-						plan.Add(new Planned { Slot = gate, C = Dir(a) * Mathf.Max(0f, limit - gateSize.magnitude * 0.5f), Yaw = FacingYaw(a * Mathf.Rad2Deg), Size = gateSize });
-					}
-					for (int i = 0; i < n; i++)
-					{
-						float a = (i + 0.5f) * Mathf.PI * 2f / Math.Max(1, n);
-						plan.Add(new Planned { Slot = wall, C = Dir(a) * ring, Yaw = FacingYaw(a * Mathf.Rad2Deg), Size = w.Footprint });
-					}
-					int towers = tower >= 0 ? Math.Max(0, request.Slots[tower].Count) : 0;
-					for (int t = 0; t < towers; t++)
-					{
-						float a = (t + 0.25f) * Mathf.PI * 2f / towers;
-						plan.Add(new Planned { Slot = tower, C = Dir(a) * Mathf.Max(0f, limit - towerSize.magnitude * 0.5f), Yaw = FacingYaw(a * Mathf.Rad2Deg), Size = towerSize });
-					}
-					inner = ring - Mathf.Max(w.Footprint.magnitude, Mathf.Max(gateSize.magnitude, towerSize.magnitude)) * 0.5f - Gap;
-					return plan;
-				}
-
-				float circum = limit - depth * 0.5f;
-				if (tower >= 0)
-				{
-					circum = Mathf.Min(circum, Mathf.Sqrt(Mathf.Max(0f, limit * limit - towerSize.x * towerSize.x * 0.25f)) - towerSize.y * 0.5f);
-				}
-				if (circum <= 0f || module >= 2f * circum)
-				{
-					return null;
-				}
-				int sides = Mathf.FloorToInt(Mathf.PI / Mathf.Asin(module / (2f * circum)));
-				if (sides < 3)
-				{
-					return null;
-				}
-
-				float gateLength = gate >= 0 ? Mathf.Max(request.Slots[gate].Module, gateSize.x) : EntranceMetres;
-				int span = gate >= 0 ? Math.Max(1, Mathf.RoundToInt(gateLength / module)) : Math.Max(1, Mathf.CeilToInt(EntranceMetres / module - 1e-3f));
-				int gates = gate >= 0 ? Mathf.Clamp(Math.Max(request.Slots[gate].Count, request.Entrances.Count), 1, Math.Max(1, sides / (span + 1))) : 1;
-				/* A gate lands on the side nearest its bearing, up to half a side off it, and the way (and a moat's drawbridge
-				 * before the gate) comes in on the bearing itself: a few metres beside the opening. The bearings are the street
-				 * ends' (the heading, its opposite, across), so a few sides fewer put every one exactly on a side: the fewest
-				 * dropped, the ring a little smaller, never larger than the room it had. */
-				for (int fewer = 0; fewer <= 8 && sides - fewer >= 3; fewer++)
-				{
-					float s = Mathf.PI * 2f / (sides - fewer);
-					bool exact = true;
-					for (int g = 0; g < gates && exact; g++)
-					{
-						float k = GateAngle(g, gates) / s;
-						exact = Mathf.Abs(k - Mathf.Round(k)) < 1e-3f;
-					}
-					if (exact)
-					{
-						sides -= fewer;
-						break;
-					}
-				}
-				gates = gate >= 0 ? Mathf.Min(gates, Math.Max(1, sides / (span + 1))) : 1;
-				float step = Mathf.PI * 2f / sides;
-				// The circumradius that makes every side exactly one module long: neighbours meet end to end.
-				float radius = module / (2f * Mathf.Sin(step * 0.5f));
-				// An odd span centres a side on the heading, an even one a corner.
-				float start = span % 2 == 1 ? -step * 0.5f : 0f;
-				Vector2 Vertex(int j) => Dir(start + j * step) * radius;
-				int Wrap(int j) => ((j % sides) + sides) % sides;
-
-				var covered = new bool[sides];
-				var gateStarts = new List<int>();
-				for (int g = 0; g < gates; g++)
-				{
-					// The ways' bearings first (a gate where each road comes in), the rest evenly.
-					int first = Wrap(-(span / 2) + Mathf.RoundToInt(GateAngle(g, gates) / step));
-					if (gateStarts.Contains(first))
-					{
-						continue;
-					}
-					gateStarts.Add(first);
-					for (int c = 0; c < span; c++)
-					{
-						covered[Wrap(first + c)] = true;
-					}
-				}
-				for (int c = 0; c < sides; c++)
-				{
-					if (covered[c])
-					{
-						continue;
-					}
-					Vector2 mid = (Vertex(c) + Vertex(c + 1)) * 0.5f;
-					plan.Add(new Planned { Slot = wall, C = mid, Yaw = FacingYaw(DirectionOf(mid)), Size = new Vector2(module, depth) });
-				}
-				float gateInner = float.PositiveInfinity;
-				if (gate >= 0)
-				{
-					foreach (int first in gateStarts)
-					{
-						Vector2 mid = (Vertex(first) + Vertex(first + span)) * 0.5f;
-						plan.Add(new Planned { Slot = gate, C = mid, Yaw = FacingYaw(DirectionOf(mid)), Size = gateSize });
-						gateInner = Mathf.Min(gateInner, mid.magnitude - gateSize.y * 0.5f);
-					}
-				}
-				float towerInner = float.PositiveInfinity;
-				int towerCount = tower >= 0 ? Math.Max(0, request.Slots[tower].Count) : 0;
-				if (towerCount > 0)
-				{
-					// Corners a gate does not take: a gatehouse carries its own towers, an opening is flanked by them.
-					var corners = new List<int>();
-					for (int j = 0; j < sides; j++)
-					{
-						bool free = true;
-						foreach (int first in gateStarts)
-						{
-							for (int c = gate >= 0 ? 0 : 1; c <= (gate >= 0 ? span : span - 1); c++)
-							{
-								free &= Wrap(first + c) != j;
-							}
-						}
-						if (free)
-						{
-							corners.Add(j);
-						}
-					}
-					int count = Math.Min(towerCount, corners.Count);
-					for (int t = 0; t < count; t++)
-					{
-						int j = corners[Mathf.Min(corners.Count - 1, Mathf.RoundToInt(t * corners.Count / (float)count))];
-						Vector2 at = Vertex(j);
-						plan.Add(new Planned { Slot = tower, C = at, Yaw = FacingYaw(DirectionOf(at)), Size = towerSize });
-						towerInner = radius - towerSize.magnitude * 0.5f;
-					}
-				}
-				inner = Mathf.Min(radius * Mathf.Cos(step * 0.5f) - depth * 0.5f, Mathf.Min(gateInner, towerInner)) - Gap;
-				return plan;
-			}
-
-			/// <summary>
-			/// Gate <paramref name="g"/> of <paramref name="count"/>'s bearing, radians: the ways' entrances first
-			/// (<see cref="PointOfInterestLayoutRequest.Entrances"/>), then evenly round from the heading.
-			/// </summary>
-			private float GateAngle(int g, int count)
-			{
-				if (g < request.Entrances.Count)
-				{
-					return Mathf.Repeat(request.Entrances[g], 360f) * Mathf.Deg2Rad;
-				}
-				return g * Mathf.PI * 2f / Math.Max(1, count);
-			}
-
-			/// <summary>Gates and towers with no wall: a lone gateway across the heading at the edge, towers round it.</summary>
-			private void Loose(int gate, int tower)
-			{
-				if (gate >= 0)
-				{
-					PointOfInterestLayoutSlot g = request.Slots[gate];
-					int n = Math.Max(Math.Max(1, g.Count), request.Entrances.Count);
-					for (int i = 0; i < n; i++)
-					{
-						float a = GateAngle(i, n);
-						Vector2 at = Dir(a) * Mathf.Max(0f, r - g.Footprint.y * 0.5f - 0.5f);
-						TryLay(gate, -1, at, FacingYaw(a * Mathf.Rad2Deg), g.Footprint, r, PerimeterGroup);
-					}
-				}
-				if (tower >= 0)
-				{
-					PointOfInterestLayoutSlot t = request.Slots[tower];
-					int n = Math.Max(0, t.Count);
-					for (int i = 0; i < n; i++)
-					{
-						float a = (i + 0.5f) * Mathf.PI * 2f / n;
-						Vector2 at = Dir(a) * Mathf.Max(0f, r - t.Footprint.magnitude * 0.5f);
-						TryLay(tower, -1, at, FacingYaw(a * Mathf.Rad2Deg), t.Footprint, r, PerimeterGroup);
-					}
-				}
-			}
-
-			// ── Spans and piers ─────────────────────────────────────
-
-			/// <summary>A bridge: modules end to end along the heading (across the river), centred on the site.</summary>
-			private void Span(int s)
-			{
-				PointOfInterestLayoutSlot slot = request.Slots[s];
-				float module = slot.Module > 0f ? slot.Module : Mathf.Max(1f, slot.Footprint.y);
-				float from, to;
-				if (!float.IsNaN(request.SpanFrom) && !float.IsNaN(request.SpanTo) && request.SpanTo > request.SpanFrom)
-				{
-					from = Mathf.Max(request.SpanFrom, -2f * request.Radius);
-					to = Mathf.Min(request.SpanTo, 2f * request.Radius);
-				}
-				else
-				{
-					float half = request.SpanHalf > 0f ? Mathf.Min(request.SpanHalf, 2f * request.Radius) : r;
-					from = -half;
-					to = half;
-				}
-				/* Exactly from one end to the other: as many modules as come nearest the length, each stretched or shrunk a
-				 * little to fit (its footprint's depth says by how much, PropsFeature.Build). Whole modules centred on the
-				 * crossing ran up to most of a module past each end, over the path that comes to it (2026-10-11). */
-				int n = Math.Max(1, Mathf.RoundToInt((to - from) / module));
-				float length = (to - from) / n;
-				float middle = 0.5f * (from + to);
-				for (int i = 0; i < n; i++)
-				{
-					var at = new Vector2(0f, middle + (i - (n - 1) * 0.5f) * length);
-					TryLay(s, -1, at, 0f, new Vector2(slot.Footprint.x, length), 0f, SpanGroup);
-				}
-			}
-
-			/// <summary>Piers from the shore ahead out over the water, side by side; none where the site has no shore.</summary>
-			private void Pier(int s)
-			{
-				if (float.IsNaN(request.ShoreAhead))
-				{
-					return;
-				}
-				PointOfInterestLayoutSlot slot = request.Slots[s];
-				float module = slot.Module > 0f ? slot.Module : Mathf.Max(1f, slot.Footprint.y);
-				int piers = Mathf.Clamp(slot.Count, 1, 4);
-				bool measured = !float.IsNaN(request.PierFrom) && !float.IsNaN(request.PierTo);
-				int modules = measured
-					? Math.Max(2, Mathf.RoundToInt((request.PierTo - request.PierFrom) / module))
-					: Math.Max(2, Mathf.RoundToInt(request.Radius * 0.6f / module));
-				float spacing = Mathf.Max(slot.Footprint.x * 3f, 8f);
-				for (int p = 0; p < piers; p++)
-				{
-					float x = (p - (piers - 1) * 0.5f) * spacing;
-					for (int i = 0; i < modules; i++)
-					{
-						// From the bank at the deck's height, module by module out over the water; unmeasured, the first
-						// module stands half on the shore.
-						var at = new Vector2(x, measured ? request.PierFrom + (i + 0.5f) * module : request.ShoreAhead + i * module);
-						TryLay(s, -1, at, 0f, new Vector2(slot.Footprint.x, module), 0f, PierGroup);
-					}
-				}
-			}
-
-			// ── Streets ─────────────────────────────────────────────
-
-			/// <summary>
-			/// The street plan inside the walls (or the footprint): a main street along the heading, a cross street once
-			/// there is room, and two more each way in a city. Kept clear of everything but the first piece in the middle.
-			/// </summary>
-			private void Streets()
-			{
-				float width = Mathf.Clamp(interior * 0.08f, 4f, 10f);
-				void Add(bool alongZ, float offset)
-				{
-					float half = Mathf.Sqrt(Mathf.Max(0f, interior * interior - offset * offset));
-					if (half < 4f)
-					{
-						return;
-					}
-					Vector2 axis = alongZ ? Vector2.up : Vector2.right, across = alongZ ? Vector2.right : Vector2.up;
-					Vector2 centre = across * offset;
-					streets.Add((centre, axis, width, half));
-					request.Streets.Add((centre, axis, width, half));
-					Vector2 size = alongZ ? new Vector2(width, 2f * half) : new Vector2(2f * half, width);
-					boxes.Add(Box.Of(centre, 0f, size, 0f, StreetGroup));
-				}
-				Add(true, 0f);
-				if (request.Layout != PointOfInterestLayout.Linear)
-				{
-					if (interior >= 35f)
-					{
-						Add(false, 0f);
-					}
-					if (interior >= 90f)
-					{
-						Add(true, -interior * 0.5f);
-						Add(true, interior * 0.5f);
-						Add(false, -interior * 0.5f);
-						Add(false, interior * 0.5f);
-					}
-				}
-			}
-
-			/// <summary>Street fronts: each piece where the nearest free frontage to the middle has room, its front to the street.</summary>
-			private void Fronts()
-			{
-				if (streets.Count == 0)
-				{
-					return;
-				}
-				// One cursor per street, side and direction, from the street's middle outward.
-				int frontages = streets.Count * 4;
-				var cursor = new float[frontages];
-				var closed = new bool[frontages];
-				for (int i = 0; i < request.Items.Count; i++)
-				{
-					PointOfInterestLayoutItem item = request.Items[i];
-					if (Of(item) != PointOfInterestSlotRole.Street)
-					{
-						continue;
-					}
-					Vector2 size = item.Footprint;
-					int best = -1;
-					float bestDistance = float.PositiveInfinity, bestT = 0f;
-					Vector2 bestAt = default;
-					float bestYaw = 0f;
-					for (int f = 0; f < frontages; f++)
-					{
-						if (closed[f])
-						{
-							continue;
-						}
-						(Vector2 centre, Vector2 axis, float width, float half) = streets[f / 4];
-						float side = (f & 1) == 0 ? 1f : -1f, direction = (f & 2) == 0 ? 1f : -1f;
-						Vector2 across = new Vector2(axis.y, axis.x);
-						// Facing the street: from the +side the front looks back across it.
-						float yaw = FacingYaw(DirectionOf(-across * side));
-						float set = width * 0.5f + Gap + size.y * 0.5f;
-						for (float t = cursor[f]; ; t += direction * 0.5f)
-						{
-							float along = t + direction * size.x * 0.5f;
-							if (Mathf.Abs(along) + size.x * 0.5f > half)
-							{
-								break;
-							}
-							Vector2 at = centre + across * (side * set) + axis * along;
-							if (!Inside(at, yaw, size, interior))
-							{
-								break;
-							}
-							float distance = at.magnitude;
-							if (distance >= bestDistance)
-							{
-								break;
-							}
-							if (Fits(Box.Of(at, yaw, size, Gap, 0)))
-							{
-								best = f;
-								bestDistance = distance;
-								bestT = t;
-								bestAt = at;
-								bestYaw = yaw;
-								break;
-							}
-						}
-					}
-					if (best < 0)
-					{
-						continue;
-					}
-					float dir = (best & 2) == 0 ? 1f : -1f;
-					cursor[best] = bestT + dir * (size.x + Gap);
-					Lay(item.Slot, i, bestAt, bestYaw, size, Box.Of(bestAt, bestYaw, size, Gap, 0));
-				}
-			}
-
-			// ── Middle, lines, rings, rows, scatter ────────────────
-
-			/// <summary>The first middle piece at the centre facing ahead; the rest spiralled out round it, facing in.</summary>
-			private void Centre()
-			{
-				bool first = true;
-				for (int i = 0; i < request.Items.Count; i++)
-				{
-					PointOfInterestLayoutItem item = request.Items[i];
-					if (Of(item) != PointOfInterestSlotRole.Centre)
-					{
-						continue;
-					}
-					float turn = random.NextFloat() * 360f;
-					if (first)
-					{
-						// The centrepiece always stands, a lighthouse wider than its little footprint included.
-						first = false;
-						if (TryLay(item.Slot, i, Vector2.zero, 180f, item.Footprint, 0f, 0, true))
-						{
-							continue;
-						}
-					}
-					Spiral(item, i, turn);
-				}
-			}
-
-			private void Spiral(PointOfInterestLayoutItem item, int index, float turn)
-			{
-				for (float rho = 1f; rho <= interior; rho += 1f)
-				{
-					int steps = Math.Max(6, Mathf.CeilToInt(2f * Mathf.PI * rho / 1.5f));
-					for (int k = 0; k < steps; k++)
-					{
-						float a = (turn + k * 360f / steps) * Mathf.Deg2Rad;
-						Vector2 at = Dir(a) * rho;
-						if (TryLay(item.Slot, index, at, FacingYaw(DirectionOf(-at)), item.Footprint, interior))
-						{
-							return;
-						}
-					}
-				}
-			}
-
-			/// <summary>End to end along the heading, centred.</summary>
-			private void Line()
-			{
-				float total = 0f;
-				foreach (PointOfInterestLayoutItem item in request.Items)
-				{
-					if (Of(item) == PointOfInterestSlotRole.Line)
-					{
-						total += item.Footprint.y + Gap;
-					}
-				}
-				float z = -total * 0.5f;
-				for (int i = 0; i < request.Items.Count; i++)
-				{
-					PointOfInterestLayoutItem item = request.Items[i];
-					if (Of(item) != PointOfInterestSlotRole.Line)
-					{
-						continue;
-					}
-					float pitch = item.Footprint.y + Gap;
-					TryLay(item.Slot, i, new Vector2(0f, z + pitch * 0.5f), 0f, item.Footprint, interior);
-					z += pitch;
-				}
-			}
-
-			/// <summary>One slot's pieces evenly round a ring outside what is already in the middle, facing in.</summary>
-			private void Ring(int slot)
-			{
-				var indices = new List<int>();
-				float widths = 0f, deepest = 0f, widest = 0f;
-				for (int i = 0; i < request.Items.Count; i++)
-				{
-					if (request.Items[i].Slot == slot)
-					{
-						indices.Add(i);
-						widths += request.Items[i].Footprint.x + Gap;
-						deepest = Mathf.Max(deepest, request.Items[i].Footprint.y);
-						widest = Mathf.Max(widest, request.Items[i].Footprint.magnitude * 0.5f);
-					}
-				}
-				if (indices.Count == 0)
-				{
-					return;
-				}
-				float middle = 0f;
-				foreach (Box box in boxes)
-				{
-					if (box.Group == 0)
-					{
-						middle = Mathf.Max(middle, box.C.magnitude + box.Bound);
-					}
-				}
-				float rho = Mathf.Max(middle > 0f ? middle + deepest * 0.5f + Gap : 0f, widths / (2f * Mathf.PI), interior * 0.6f);
-				rho = Mathf.Min(rho, Mathf.Max(0f, interior - widest));
-				if (rho <= 0f)
-				{
-					rho = 0.01f;
-				}
-				float slack = Mathf.Max(0f, Mathf.PI * 2f - widths / rho) / indices.Count;
-				float a = random.NextFloat() * Mathf.PI * 2f;
-				foreach (int i in indices)
-				{
-					PointOfInterestLayoutItem item = request.Items[i];
-					float arc = (item.Footprint.x + Gap) / rho;
-					Vector2 at = Dir(a + arc * 0.5f) * rho;
-					TryLay(item.Slot, i, at, FacingYaw(DirectionOf(-at)), item.Footprint, interior);
-					a += arc + slack;
-				}
-			}
-
-			/// <summary>Rows square to the heading, all facing ahead, filled from the middle out.</summary>
-			private void Rows()
-			{
-				Vector2 largest = Vector2.zero;
-				bool any = false;
-				foreach (PointOfInterestLayoutItem item in request.Items)
-				{
-					if (Of(item) == PointOfInterestSlotRole.Rows)
-					{
-						largest = Vector2.Max(largest, item.Footprint);
-						any = true;
-					}
-				}
-				if (!any)
-				{
-					return;
-				}
-				float px = largest.x + Gap, pz = largest.y + Gap + RowAisleMetres;
-				int kx = Mathf.CeilToInt(interior / px), kz = Mathf.CeilToInt(interior / pz);
-				var lattice = new List<Vector2>();
-				for (int j = -kz; j <= kz; j++)
-				{
-					for (int i = -kx; i <= kx; i++)
-					{
-						var at = new Vector2(i * px, j * pz);
-						if (Inside(at, 180f, largest, interior))
-						{
-							lattice.Add(at);
-						}
-					}
-				}
-				lattice.Sort((p, q) =>
-				{
-					int c = p.sqrMagnitude.CompareTo(q.sqrMagnitude);
-					if (c != 0) return c;
-					c = p.y.CompareTo(q.y);
-					return c != 0 ? c : p.x.CompareTo(q.x);
-				});
-				var used = new bool[lattice.Count];
-				for (int i = 0; i < request.Items.Count; i++)
-				{
-					PointOfInterestLayoutItem item = request.Items[i];
-					if (Of(item) != PointOfInterestSlotRole.Rows)
-					{
-						continue;
-					}
-					for (int k = 0; k < lattice.Count; k++)
-					{
-						if (!used[k] && TryLay(item.Slot, i, lattice[k], 180f, item.Footprint, interior))
-						{
-							used[k] = true;
-							break;
-						}
-					}
-				}
-			}
-
-			/// <summary>Dart throwing: each piece at the first of 48 throws that is clear, any way round.</summary>
-			private void Scatter()
-			{
-				for (int i = 0; i < request.Items.Count; i++)
-				{
-					PointOfInterestLayoutItem item = request.Items[i];
-					if (Of(item) != PointOfInterestSlotRole.Scatter)
-					{
-						continue;
-					}
-					float reach = Mathf.Max(0f, interior - item.Footprint.magnitude * 0.5f);
-					for (int attempt = 0; attempt < 48; attempt++)
-					{
-						float a = random.NextFloat() * Mathf.PI * 2f;
-						float d = Mathf.Sqrt(random.NextFloat()) * reach;
-						float yaw = random.NextFloat() * 360f;
-						if (TryLay(item.Slot, i, Dir(a) * d, yaw, item.Footprint, interior))
-						{
-							break;
-						}
-					}
-				}
-			}
-		}
+		// The packer (its boxes, the perimeter, the town plans) is PointOfInterestLayouts.Packer.cs.
 	}
 
 	/// <summary>A piece's weathering: Auto reads the site's kind and biome; the rest force one finish, laid on a share of the pieces.</summary>
@@ -1148,9 +381,21 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				id = Math.Max(id, existing != null ? existing.Id : 0);
 			}
-			foreach ((Vector2 centre, Vector2 axis, float width, float half) in request.Streets)
+			// Walked on raised plank decks between the houses where the site's biome raises its streets (2026-10-18, I2i).
+			bool boardwalks = BiomeBoardwalkRules.Raises(BiomeTemplateArt.Boardwalks(context.BiomeAt?.Invoke(record.Position.x, record.Position.z)), ScenePathClass.Street);
+			var streetPaths = boardwalks ? new List<ScenePath>() : null;
+			foreach (PointOfInterestLayoutStreet street in request.Streets)
 			{
-				int n = Math.Max(2, Mathf.CeilToInt(2f * half / PathNetworkPlanner.PointSpacing) + 1);
+				List<Vector2> line = Resampled(street.Points, PathNetworkPlanner.PointSpacing);
+				int n = line.Count;
+				if (n < 2)
+				{
+					continue;
+				}
+				float width = street.Width;
+				// A back lane is trodden, not paved, and worn less.
+				ScenePathSurface laneSurface = street.Rank >= 2 && surface == ScenePathSurface.Stone ? ScenePathSurface.Gravel : surface;
+				float laneWear = street.Rank >= 2 ? wear * 0.85f : wear;
 				var path = new ScenePath
 				{
 					Id = ++id,
@@ -1165,16 +410,162 @@ namespace FishMMO.Shared.WorldDesign
 				};
 				for (int i = 0; i < n; i++)
 				{
-					Vector2 local = centre + axis * Mathf.Lerp(-half, half, i / (float)(n - 1));
-					path.Points[i] = context.OnGround(local);
+					path.Points[i] = context.OnGround(line[i]);
 					// Narrower than the strip kept clear for it: the houses' fronts keep a verge.
 					path.HalfWidth[i] = width * 0.4f;
-					path.Wear[i] = wear;
-					path.Surface[i] = (byte)surface;
-					path.Flags[i] = (byte)ScenePathPointFlags.InSite;
+					path.Wear[i] = laneWear;
+					path.Surface[i] = (byte)laneSurface;
+					path.Flags[i] = (byte)(ScenePathPointFlags.InSite | (boardwalks ? ScenePathPointFlags.Boardwalk : ScenePathPointFlags.None));
 				}
 				context.Points.Paths.Add(path);
+				streetPaths?.Add(path);
 			}
+			// The market places and squares paved (a four-cornered plaza; a green's seven corners are left to the grass): one
+			// squared stretch from the middle of its narrow end to the middle of its wide one, as wide as its wide end.
+			foreach (Vector2[] plaza in request.Plazas)
+			{
+				if (plaza == null || plaza.Length != 4 || boardwalks)
+				{
+					continue;
+				}
+				Vector2 a = (plaza[0] + plaza[1]) * 0.5f, b = (plaza[2] + plaza[3]) * 0.5f;
+				float half = 0.5f * Mathf.Max(Vector2.Distance(plaza[0], plaza[1]), Vector2.Distance(plaza[2], plaza[3]));
+				byte flags = (byte)(ScenePathPointFlags.InSite | ScenePathPointFlags.Squared);
+				context.Points.Paths.Add(new ScenePath
+				{
+					Id = ++id,
+					Class = ScenePathClass.Street,
+					FromId = record.Id,
+					ToId = record.Id,
+					Points = new[] { context.OnGround(a), context.OnGround(b) },
+					HalfWidth = new[] { half, half },
+					Wear = new[] { wear, wear },
+					Surface = new[] { (byte)surface, (byte)surface },
+					Flags = new[] { flags, flags },
+				});
+			}
+			if (streetPaths != null)
+			{
+				LayStreetBoardwalks(context, streetPaths);
+			}
+		}
+
+		/// <summary>
+		/// The plank decks of a boardwalk settlement's streets (2026-10-18, I2i; PathBoardwalks.Lay): each street's whole length, ramped
+		/// down to the ground at an end that stops on its own and held at deck height into an end that meets another street.
+		/// </summary>
+		private static void LayStreetBoardwalks(PointOfInterestSiteContext context, List<ScenePath> streets)
+		{
+			bool Meets(ScenePath street, Vector3 end)
+			{
+				foreach (ScenePath other in streets)
+				{
+					if (other == street)
+					{
+						continue;
+					}
+					for (int k = 1; k < other.Count; k++)
+					{
+						Vector3 a = other.Points[k - 1], b = other.Points[k];
+						var ab = new Vector2(b.x - a.x, b.z - a.z);
+						var ap = new Vector2(end.x - a.x, end.z - a.z);
+						float t = ab.sqrMagnitude > 1e-6f ? Mathf.Clamp01(Vector2.Dot(ap, ab) / ab.sqrMagnitude) : 0f;
+						if ((ap - ab * t).magnitude <= PathBoardwalks.DeckHalfWidth(other.HalfWidth[k]) + 1.5f)
+						{
+							return true;
+						}
+					}
+				}
+				return false;
+			}
+			var missing = new List<string>();
+			int laid = 0;
+			foreach (ScenePath street in streets)
+			{
+				laid += PathBoardwalks.Lay(street, 0, street.Count - 1, context.GroundAt, context.AddProp, context.Record.SiteSeed ^ street.Id, missing,
+					!Meets(street, street.Points[0]), !Meets(street, street.Points[street.Count - 1]));
+				if (missing.Count > 0)
+				{
+					PointOfInterestFeatureKit.Note(context, missing[0]);
+					return;
+				}
+			}
+			PointOfInterestFeatureKit.Note(context, $"{streets.Count} street(s) raised on boardwalks ({laid} deck module(s) and bent(s))");
+		}
+
+		/// <summary>A polyline's fewest points (Douglas–Peucker) that keep every dropped one within <paramref name="tolerance"/> metres of it.</summary>
+		private static List<Vector2> Simplified(Vector2[] points, float tolerance)
+		{
+			var kept = new List<Vector2>();
+			if (points == null || points.Length == 0)
+			{
+				return kept;
+			}
+			var keep = new bool[points.Length];
+			keep[0] = keep[points.Length - 1] = true;
+			var stack = new Stack<(int a, int b)>();
+			stack.Push((0, points.Length - 1));
+			while (stack.Count > 0)
+			{
+				(int a, int b) = stack.Pop();
+				Vector2 pa = points[a], ab = points[b] - pa;
+				float worst = -1f;
+				int at = -1;
+				for (int i = a + 1; i < b; i++)
+				{
+					float t = Mathf.Clamp01(Vector2.Dot(points[i] - pa, ab) / Mathf.Max(1e-6f, ab.sqrMagnitude));
+					float d = Vector2.Distance(pa + ab * t, points[i]);
+					if (d > worst)
+					{
+						worst = d;
+						at = i;
+					}
+				}
+				if (at > 0 && worst > tolerance)
+				{
+					keep[at] = true;
+					stack.Push((a, at));
+					stack.Push((at, b));
+				}
+			}
+			for (int i = 0; i < points.Length; i++)
+			{
+				if (keep[i])
+				{
+					kept.Add(points[i]);
+				}
+			}
+			return kept;
+		}
+
+		/// <summary>A polyline resampled at (about) even spacing, its ends kept.</summary>
+		private static List<Vector2> Resampled(Vector2[] points, float spacing)
+		{
+			var line = new List<Vector2>();
+			if (points == null || points.Length < 2)
+			{
+				return line;
+			}
+			float total = 0f;
+			for (int i = 1; i < points.Length; i++)
+			{
+				total += Vector2.Distance(points[i - 1], points[i]);
+			}
+			int n = Math.Max(2, Mathf.CeilToInt(total / Mathf.Max(0.1f, spacing)) + 1);
+			int seg = 1;
+			float before = 0f;
+			for (int k = 0; k < n; k++)
+			{
+				float at = total * k / (n - 1);
+				while (seg < points.Length - 1 && before + Vector2.Distance(points[seg - 1], points[seg]) < at)
+				{
+					before += Vector2.Distance(points[seg - 1], points[seg]);
+					seg++;
+				}
+				float length = Mathf.Max(1e-4f, Vector2.Distance(points[seg - 1], points[seg]));
+				line.Add(Vector2.Lerp(points[seg - 1], points[seg], Mathf.Clamp01((at - before) / length)));
+			}
+			return line;
 		}
 
 		/// <summary>
@@ -1318,7 +709,9 @@ namespace FishMMO.Shared.WorldDesign
 				// The doors' convention: the hinge is the leaf's corner on one jamb, Across runs along it to the other.
 				var across = new Vector3(outward.z, 0f, -outward.x);
 				float leafWidth = Passage * stature + 0.3f;
-				var lip = new Vector3(centre.x + outward.x * inner, 0f, centre.z + outward.z * inner);
+				// The ditch's inner lip on the gate's own line: the ring follows the wall's outline (MoatShaper.InnerToward).
+				float reach = MoatShaper.TryMoat(context.Points.Shapes, context.Record.Id, out PointOfInterestShape moat) ? MoatShaper.InnerToward(moat, outward.x, outward.z) : inner;
+				var lip = new Vector3(centre.x + outward.x * reach, 0f, centre.z + outward.z * reach);
 				lip.y = context.GroundAt != null ? context.GroundAt(lip.x, lip.z) : gate.y;
 				context.Doors.Add(new PointOfInterestSiteContext.PlacedDoor
 				{
@@ -1345,7 +738,8 @@ namespace FishMMO.Shared.WorldDesign
 		private static void AddMoatBridges(PointOfInterestSiteContext context, List<Vector3> gateways, float stature)
 		{
 			if (context.Record == null || context.Points == null || context.Points.Paths == null
-				|| !MoatShaper.TryMoat(context.Points, context.Record.Id, out Vector3 centre, out float inner, out float width, out _))
+				|| !MoatShaper.TryMoat(context.Points, context.Record.Id, out Vector3 centre, out float inner, out float width, out _)
+				|| !MoatShaper.TryMoat(context.Points.Shapes, context.Record.Id, out PointOfInterestShape moatShape))
 			{
 				return;
 			}
@@ -1372,8 +766,8 @@ namespace FishMMO.Shared.WorldDesign
 				for (int i = 0; i < path.Count; i++)
 				{
 					var d = new Vector2(path.Points[i].x - centre.x, path.Points[i].z - centre.z);
-					float r = d.magnitude;
-					if (r > inner - 0.5f && r < inner + width + 0.5f && r > 1e-3f)
+					float r = d.magnitude, ring = MoatShaper.InnerToward(moatShape, d.x, d.y);
+					if (r > ring - 0.5f && r < ring + width + 0.5f && r > 1e-3f)
 					{
 						sum += d / r;
 						over++;
@@ -1385,12 +779,13 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				Vector2 dir = sum.normalized;
 				// Over the drawbridge's own width at the lip a gate's leaf covers it; so does a bridge already laid.
-				bool Near(Vector2 other) => (dir - other).magnitude * inner < 0.75f * leafWidth;
+				float lipReach = MoatShaper.InnerToward(moatShape, dir.x, dir.y);
+				bool Near(Vector2 other) => (dir - other).magnitude * lipReach < 0.75f * leafWidth;
 				if (covered.Exists(Near) || bridged.Exists(Near))
 				{
 					continue;
 				}
-				if (LayMoatBridge(context, centre, inner, width, dir, stature))
+				if (LayMoatBridge(context, centre, lipReach, width, dir, stature))
 				{
 					bridged.Add(dir);
 				}
@@ -1491,6 +886,9 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
+		/// <summary>How far over the highest water a land prop's ground must stand, metres (PointOfInterestSiteContext.IsWet).</summary>
+		private const float ClutterFreeboard = 0.1f;
+
 		private static void AddClutter(PointOfInterestSiteContext context,
 			List<(Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole role, string tag)> grounds,
 			PointOfInterestLayoutRequest request, DeterministicRNG random, float stature, BiomeTemplate siteBiome)
@@ -1517,11 +915,18 @@ namespace FishMMO.Shared.WorldDesign
 			var streets = new List<(Vector2 a, Vector2 b, float half)>();
 			Quaternion siteTurn = Quaternion.Euler(0f, record.Yaw, 0f);
 			var origin = new Vector2(record.Position.x, record.Position.z);
-			foreach ((Vector2 centre, Vector2 axis, float width, float half) in request.Streets)
+			foreach (PointOfInterestLayoutStreet street in request.Streets)
 			{
-				Vector3 a = siteTurn * new Vector3(centre.x - axis.x * half, 0f, centre.y - axis.y * half);
-				Vector3 b = siteTurn * new Vector3(centre.x + axis.x * half, 0f, centre.y + axis.y * half);
-				streets.Add((origin + new Vector2(a.x, a.z), origin + new Vector2(b.x, b.z), width * 0.5f));
+				/* Each straight stretch of the street's line, world xz: the curve drawn as the fewest chords within a metre of it,
+				 * so the lights along a street (and the wall lights' spans) see stretches long enough to be lit. */
+				List<Vector2> chords = Simplified(street.Points, 1f);
+				for (int i = 1; i < chords.Count; i++)
+				{
+					Vector2 p = chords[i - 1], q = chords[i];
+					Vector3 a = siteTurn * new Vector3(p.x, 0f, p.y);
+					Vector3 b = siteTurn * new Vector3(q.x, 0f, q.y);
+					streets.Add((origin + new Vector2(a.x, a.z), origin + new Vector2(b.x, b.z), street.Width * 0.5f));
+				}
 			}
 			bool OnStreet(Vector2 p, float pad)
 			{
@@ -1558,7 +963,8 @@ namespace FishMMO.Shared.WorldDesign
 						return false;
 					}
 				}
-				if (context.Water != null && context.Water.KindAt(at.x, at.z) != WaterKind.None)
+				// Nor in water: the sea is no kind on the water grid, so the grid alone stood crates in the surf (context.IsWet).
+				if (context.Water != null && context.Water.KindAt(at.x, at.z) != WaterKind.None || context.IsWet(at.x, at.z, ClutterFreeboard))
 				{
 					return false;
 				}
@@ -1662,7 +1068,8 @@ namespace FishMMO.Shared.WorldDesign
 						float yaw = Mathf.Atan2(-across.x * side, -across.y * side) * Mathf.Rad2Deg;
 						var pieceRequest = new PointOfInterestPieceRequest(light.PieceQuery, "timber", 0);
 						GameObject prefab = PointOfInterestPieceResolver.Resolve(pieceRequest);
-						if (prefab != null && !taken.Exists(x => Vector2.Distance(x.centre, p) < Mathf.Max(x.size.x, x.size.y) * 0.5f + 0.5f))
+						if (prefab != null && !taken.Exists(x => Vector2.Distance(x.centre, p) < Mathf.Max(x.size.x, x.size.y) * 0.5f + 0.5f)
+							&& !context.IsWet(p.x, p.y, ClutterFreeboard))
 						{
 							context.AddProp(prefab, new Vector3(p.x, context.GroundAt(p.x, p.y), p.y), Quaternion.Euler(0f, yaw, 0f), Vector3.one * stature);
 							taken.Add((p, yaw, new Vector2(0.4f, 0.8f)));
@@ -1670,6 +1077,52 @@ namespace FishMMO.Shared.WorldDesign
 						}
 					}
 				}
+			}
+			// A wall light named for the kind (2026-10-18, I6g: a torch in a sconce, a lantern on a bracket): hung on the street-facing
+			// walls of the buildings laid along the streets at the light's spacing, a post of its kind where no wall is near
+			// (PointOfInterestWallLights). After the buildings and the clutter; each street's variant of the light (and of its post)
+			// drawn from a stream of the pass's own (PointOfInterestWallLights.StreetSeeds), so the site's stream is never drawn on.
+			else if (town && BiomeTemplateArt.WayLight(siteBiome, record.Kind, out light) && BiomeWayLights.MountOf(light.Light) == BiomeWayLightMount.Wall)
+			{
+				string postQuery = BiomeWayLights.PieceQuery(BiomeWayLights.PostFor(light.Light));
+				int[] streetSeeds = PointOfInterestWallLights.StreetSeeds(record.Id, streets.Count);
+				var hungOf = new GameObject[streets.Count];
+				var postOf = new GameObject[streets.Count];
+				bool artMissing = false;
+				for (int s = 0; s < streets.Count; s++)
+				{
+					hungOf[s] = PointOfInterestPieceResolver.Resolve(new PointOfInterestPieceRequest(light.PieceQuery, "timber", streetSeeds[s]));
+					postOf[s] = PointOfInterestPieceResolver.Resolve(new PointOfInterestPieceRequest(postQuery, "timber", streetSeeds[s]));
+					artMissing |= hungOf[s] == null;
+				}
+				List<PointOfInterestWallLights.WallSpan> walls = PointOfInterestWallLights.StreetWalls(context.Laid);
+				int onWalls = 0, posts = 0;
+				foreach (PointOfInterestWallLights.WallLight spot in PointOfInterestWallLights.Plan(streets, walls, light.Spacing, PointOfInterestWallLights.Reach * stature))
+				{
+					GameObject hung = hungOf[spot.Street], post = postOf[spot.Street];
+					if (spot.OnWall)
+					{
+						if (hung != null)
+						{
+							context.AddProp(hung, new Vector3(spot.At.x, spot.Height, spot.At.y), Quaternion.Euler(0f, spot.Yaw, 0f), Vector3.one * stature);
+							onWalls++;
+							placed++;
+						}
+					}
+					else if (post != null && !taken.Exists(x => Vector2.Distance(x.centre, spot.At) < Mathf.Max(x.size.x, x.size.y) * 0.5f + 0.5f)
+						&& !context.IsWet(spot.At.x, spot.At.y, ClutterFreeboard))
+					{
+						context.AddProp(post, new Vector3(spot.At.x, context.GroundAt(spot.At.x, spot.At.y), spot.At.y), Quaternion.Euler(0f, spot.Yaw, 0f), Vector3.one * stature);
+						taken.Add((spot.At, spot.Yaw, new Vector2(0.4f, 0.8f)));
+						posts++;
+						placed++;
+					}
+				}
+				if (artMissing && walls.Count > 0)
+				{
+					PointOfInterestFeatureKit.Note(context, $"street lights: no art for the wall light {light.Light} yet (Generate Biome Art)");
+				}
+				context.Notes?.Add($"{record.Name}: {onWalls} {light.Light} street light(s) hung on walls, {posts} {BiomeWayLights.PostFor(light.Light)} post(s) where no wall was near.");
 			}
 		}
 
@@ -1689,7 +1142,20 @@ namespace FishMMO.Shared.WorldDesign
 			BiomeWeathering weathering = BiomeTemplateArt.Weathering(siteBiome);
 			BiomeStructurePalette palette = BiomeTemplateArt.StructurePalette(siteBiome);
 
-			var request = new PointOfInterestLayoutRequest { Layout = template.Layout, Radius = record.Radius, Gap = Gap };
+			PointOfInterestPad? sitePad = context.Points != null ? SiteEntrances.PadOf(context.Points.Pads, record.Id) : null;
+			var request = new PointOfInterestLayoutRequest
+			{
+				Layout = template.Layout,
+				Radius = record.Radius,
+				Gap = Gap,
+				// The site's own outline and terraces (one footprint, PointOfInterestOutline), its moat's inner bank, and its kind.
+				Outline = record.Outline ?? Array.Empty<float>(),
+				Yaw = record.Yaw,
+				Pad = sitePad,
+				Moat = context.Points != null && MoatShaper.TryMoat(context.Points.Shapes, record.Id, out PointOfInterestShape moat) ? moat : null,
+				Kind = record.Kind,
+				Seed = (int)(PointOfInterestPlanner.Mix(unchecked((uint)record.SiteSeed ^ 0x70A115u)) & 0x7FFFFFFFu),
+			};
 			if (Clearings != null)
 			{
 				request.Clearings.AddRange(Clearings);
@@ -1717,7 +1183,14 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				PointOfInterestPieceMetrics metrics = PointOfInterestPieceResolver.Measure(new PointOfInterestPieceRequest(slot.Tag, styles[s], 0));
 				// Laid out by what it sweeps as well as what it is (a tower mill's sails), seated by what it is.
-				request.Slots.Add(new PointOfInterestLayoutSlot { Role = role, Footprint = Vector2.Max(metrics.Footprint, metrics.Sweep), Module = metrics.Module, Count = count });
+				request.Slots.Add(new PointOfInterestLayoutSlot
+				{
+					Role = role,
+					Footprint = Vector2.Max(metrics.Footprint, metrics.Sweep),
+					Module = metrics.Module,
+					Count = count,
+					Landmark = slot.Tag == PointOfInterestTemplateSpecs.Church || slot.Tag == PointOfInterestTemplateSpecs.Temple,
+				});
 			}
 			var draws = new List<Draws>();
 			for (int s = 0; s < slots; s++)
@@ -1773,6 +1246,11 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				request.Entrances.Sort();
+				// Where each way ends inside, by the rule its planner used: the street in from its entrance passes through it.
+				foreach (float entrance in request.Entrances)
+				{
+					request.EntranceDepths.Add(SiteEntrances.EndDistance(record, sitePad, entrance));
+				}
 			}
 
 			List<PointOfInterestLayoutPiece> pieces = PointOfInterestLayouts.Place(request, random);
@@ -1782,6 +1260,7 @@ namespace FishMMO.Shared.WorldDesign
 			var curtain = new List<(Vector3 at, Quaternion turn)>();
 			var gateways = new List<Vector3>();
 			int laid = 0, missing = 0, ruined = 0, wet = 0;
+			var ringSeeds = new Dictionary<int, int>();
 			bool dryOnly = KeepOutOfWater && !PointOfInterestKinds.Info(record.Kind).Has(PointOfInterestTraits.Underwater);
 			float sea = dryOnly ? SeaLevelOf(context) : float.NegativeInfinity;
 			// A gorge is crossed by one piece rim to rim (a stone arch, or ropes where it is wide or wild), not plank spans
@@ -1799,6 +1278,20 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				PointOfInterestPieceSlot slot = template.Pieces[piece.Slot];
 				Draws d = piece.Item >= 0 ? draws[piece.Item] : Take(random, slot, true);
+				if (piece.Role == PointOfInterestSlotRole.Perimeter)
+				{
+					/* One piece and variant for the whole ring: each module drew its own, so a stone curtain changed part way round
+					 * from the wall-walk to a coped field wall with no walk, and a palisade from straight logs to ragged ones that
+					 * did not meet (2026-10-18). Its decay and finish stay each module's own. */
+					if (ringSeeds.TryGetValue(piece.Slot, out int ringSeed))
+					{
+						d.Seed = ringSeed;
+					}
+					else
+					{
+						ringSeeds[piece.Slot] = d.Seed;
+					}
+				}
 				if (d.LeaveOut < d.Decay * 0.5f)
 				{
 					ruined++;
@@ -1818,6 +1311,10 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					missing++;
 					continue;
+				}
+				if (piece.Role == PointOfInterestSlotRole.Perimeter)
+				{
+					prefab = CurtainVariant(prefab, pieceRequest);
 				}
 				PointOfInterestPieceMetrics metrics = PointOfInterestPieceResolver.Measure(pieceRequest);
 				Quaternion pitch = Quaternion.identity;
@@ -1849,6 +1346,11 @@ namespace FishMMO.Shared.WorldDesign
 					// A span is fitted end to end: its own size, stretched along the deck to the module the layout gave it.
 					float module = metrics.Module > 0f ? metrics.Module : Mathf.Max(0.01f, metrics.Footprint.y);
 					scale = new Vector3(1f, 1f, piece.Footprint.y / module);
+				}
+				else if (piece.Role == PointOfInterestSlotRole.Perimeter && metrics.Module > 0f)
+				{
+					// A wall module is fitted to its chord of the ring (and run on past a corner to meet its neighbour's face).
+					scale = new Vector3(piece.Footprint.x / metrics.Module, 1f, 1f);
 				}
 				context.AddProp(prefab, at, rotation, scale);
 				grounds.Add((at, Quaternion.Euler(0f, record.Yaw + piece.Yaw, 0f), metrics.Footprint * d.Scale, piece.Role, slot.Tag));
@@ -2051,6 +1553,28 @@ namespace FishMMO.Shared.WorldDesign
 				other = StructureKit.Prefab(kit.Id, wanted, StructureFinish.None, request.AllowLocal);
 			}
 			return other != null ? other : prefab;
+		}
+
+		/// <summary>The walkable curtain's variant (StructurePieces: the crenellated wall with its walk) the wall stairs climb to.</summary>
+		private const string CurtainPiece = "WallSegment";
+
+		/// <summary>
+		/// A curtain's module as the variant with the wall-walk: a ring of a walled site keeps its walk all the way round, the
+		/// towers' upper doors and the wall stairs meeting it, rather than whatever variant the ring's seed drew (the coped
+		/// field wall has none). Any other piece, or art not generated yet, is returned as it is.
+		/// </summary>
+		private static GameObject CurtainVariant(GameObject prefab, in PointOfInterestPieceRequest request)
+		{
+			if (prefab == null || !StructurePieces.TryParsePrefab(prefab.name, out StructurePiece kit, out int variant) || kit.Id != CurtainPiece || variant == 0)
+			{
+				return prefab;
+			}
+			GameObject walk = StructureKit.Prefab(kit.Id, 0, request.Finish, request.AllowLocal);
+			if (walk == null && request.Finish != StructureFinish.None)
+			{
+				walk = StructureKit.Prefab(kit.Id, 0, StructureFinish.None, request.AllowLocal);
+			}
+			return walk != null ? walk : prefab;
 		}
 
 		/// <summary>Pieces built to stand in water: stilts, piers, bridges.</summary>

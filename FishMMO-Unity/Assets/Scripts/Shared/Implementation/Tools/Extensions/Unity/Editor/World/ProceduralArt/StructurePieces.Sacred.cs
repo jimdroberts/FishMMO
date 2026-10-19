@@ -31,7 +31,7 @@ namespace FishMMO.Shared.WorldDesign
 				"Six headstones: rounded, cross, small obelisk, leaning tablet, ringed cross, block.", Gravestone, "dead", "grave").Variants = 6;
 			Piece(list, "GraveMound", StructureStyle.Earth, StructureSize.Small, "An earth mound over a grave; v1 a cairn.", GraveMound, "dead", "grave");
 			Piece(list, "Mausoleum", StructureStyle.Stone, StructureSize.Building, "A gabled tomb with a columned porch; v1 domed.", Mausoleum, "dead", "crypt", "building");
-			Piece(list, "CryptEntrance", StructureStyle.Stone, StructureSize.Medium, "A door frame set into a barrow; v1 with flanking walls and a roof slab.", CryptEntrance,
+			Piece(list, "CryptEntrance", StructureStyle.Stone, StructureSize.Medium, "An open door into a barrow, steps down into the dark behind it; v1 with flanking walls and a roof slab over the approach.", CryptEntrance,
 				"dead", "crypt");
 			Piece(list, "BonePile", StructureStyle.Earth, StructureSize.Small, "Bones and a skull; v1 scattered, two skulls.", BonePile, "dead", "bones").Collides = false;
 			Piece(list, "IronFence", StructureStyle.Iron, StructureSize.Small, "Three metres of spear-topped railing; v1 on a low stone wall.", Under(FenceRoles, IronFence),
@@ -105,7 +105,8 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				d.Add(StructureShapes.Box(new Vector3(0f, 2.29f, 0f), new Vector3(2.5f, 0.18f, 2.5f), StructureMaterial.Timber, 20));
-				GableRoof(d, 2.4f, 2.4f, 2.38f, 1f, 0.35f, 0.22f, StructureMaterial.Thatch, 21, Matrix4x4.identity);
+				// At its palette's pitch, or a flat canopy (StructureRoofs, I6h).
+				OwnGable(d, 2.4f, 2.4f, 2.38f, 1f, 0.35f, 0.22f, StructureMaterial.Thatch, 21, Matrix4x4.identity);
 				if (d.Mid)
 				{
 					d.Add(StructureShapes.ChamferBox(new Vector3(0f, 0.65f, 0.3f), new Vector3(0.8f, 0.9f, 0.6f), d.Bevel(0.03f), StructureMaterial.Monolith, 30, StructureRole.Detail));
@@ -118,7 +119,7 @@ namespace FishMMO.Shared.WorldDesign
 			d.Add(StructureShapes.Beam(new Vector3(0f, -0.3f, 0f), new Vector3(0f, 1.35f, 0f), 0.16f, 0.16f, StructureMaterial.Timber, 2));
 			d.Add(StructureShapes.ChamferBox(new Vector3(0f, 1.62f, 0f), new Vector3(0.55f, 0.6f, 0.42f), d.Bevel(0.015f), StructureMaterial.Timber, 3));
 			d.Add(StructureShapes.Box(new Vector3(0f, 1.6f, -0.2f), new Vector3(0.36f, 0.42f, 0.04f), StructureMaterial.Ash, 4, StructureRole.Detail));
-			GableRoof(d, 0.55f, 0.42f, 1.92f, 0.28f, 0.1f, 0.05f, StructureMaterial.Timber, 5, Matrix4x4.identity);
+			OwnGable(d, 0.55f, 0.42f, 1.92f, 0.28f, 0.1f, 0.05f, StructureMaterial.Timber, 5, Matrix4x4.identity);
 		}
 
 		private static void Obelisk(StructureDraft d)
@@ -453,28 +454,38 @@ namespace FishMMO.Shared.WorldDesign
 			d.Add(StructureShapes.ChamferBox(new Vector3(0f, 2.85f, -2.1f), new Vector3(1.7f, 0.3f, 0.25f), d.Bevel(0.02f), stone, 8, StructureRole.Detail));
 		}
 
+		/// <summary>
+		/// A crypt's door in its barrow (2026-10-18: it was a door frame with a solid iron slab in it, and its frame stood off
+		/// its footprint's middle): an OPEN doorway, its iron door swung back against the passage wall, steps down into a short
+		/// passage that ends soot-black, and the barrow split round the passage so the way in is not filled. Centred on its
+		/// footprint like every free-standing piece; its doorway is <see cref="TryDoorwayOf"/>'s.
+		/// </summary>
 		private static void CryptEntrance(StructureDraft d)
 		{
 			const StructureMaterial stone = StructureMaterial.Stone;
-			// The barrow behind it.
-			StructureSolid barrow = StructureShapes.Sphere(new Vector3(0f, -0.6f, 2.6f), new Vector3(3.6f, 3f, 4.2f), d.Seg(14, 8), d.Fine ? 8 : 5, StructureMaterial.Earth, 1);
-			barrow.Clip(Vector3.down, 0.5f);
-			d.Add(barrow);
+			FrontOf("CryptEntrance", d.Variant, out DungeonFront f);
+			const float z0 = CryptDoorZ;
+			float p = f.Half, top = f.Sill + f.Height, mid = z0 + 0.5f * f.Reveal;
+			// The barrow behind it, split round the passage.
+			Mound(d, new Vector3(0f, -0.6f, z0 + 3.6f), new Vector3(3.8f, 3.6f, 4.4f), p + PassageWall, top + 0.4f, z0, 40);
 			for (int s = -1; s <= 1; s += 2)
 			{
-				d.Add(StructureShapes.ChamferBox(new Vector3(s * 0.95f, 1.05f, -1.1f), new Vector3(0.55f, 2.7f, 0.8f), d.Bevel(0.03f), stone, 3 + s));
+				d.Add(StructureShapes.ChamferBox(new Vector3(s * (p + 0.275f), 0.5f * (top - 0.45f), mid), new Vector3(0.55f, top + 0.55f, f.Reveal), d.Bevel(0.03f), stone, 3 + s));
 			}
-			d.Add(StructureShapes.ChamferBox(new Vector3(0f, 2.65f, -1.1f), new Vector3(2.7f, 0.55f, 0.9f), d.Bevel(0.03f), stone, 6));
-			Gable(d, 2.7f, 2.92f, 0.6f, -1.1f, 0.8f, stone, 7, Matrix4x4.identity);
-			d.Add(StructureShapes.Box(new Vector3(0f, 1.1f, -0.85f), new Vector3(1.4f, 2.4f, 0.3f), StructureMaterial.Iron, 8, StructureRole.Detail));
+			d.Add(StructureShapes.ChamferBox(new Vector3(0f, top + 0.275f, mid), new Vector3(2f * p + 1.4f, 0.55f, f.Reveal + 0.1f), d.Bevel(0.03f), stone, 6));
+			Gable(d, 2f * p + 1.4f, top + 0.55f, 0.6f, mid, f.Reveal, stone, 7, Matrix4x4.identity);
+			// The iron door, open: back on its hinges against the passage's right wall.
+			d.Add(StructureShapes.Block(new Vector3(p - 0.08f, 0.5f * top, z0 + f.Reveal + 0.5f * (2f * p - 0.1f)), new Vector3(0.08f, top - 0.1f, 2f * p - 0.1f),
+				Quaternion.Euler(0f, -5f, 0f), StructureMaterial.Iron, 8, StructureRole.Detail));
+			DungeonPassage(d, f, z0, stone, 20);
 			if (d.Variant == 1)
 			{
-				// Low walls flanking the approach and a slab roofing it.
+				// Walls flanking the approach and a slab roofing it, high enough to walk under to the door.
 				for (int s = -1; s <= 1; s += 2)
 				{
-					d.Add(StructureShapes.ChamferBox(new Vector3(s * 1.45f, 0.55f, -2.4f), new Vector3(0.5f, 1.4f, 2.4f), d.Bevel(0.03f), stone, 10 + s));
+					d.Add(StructureShapes.ChamferBox(new Vector3(s * 1.5f, 0.5f * (top + 0.15f - 0.5f), z0 - 1.3f), new Vector3(0.5f, top + 0.65f, 2.5f), d.Bevel(0.03f), stone, 10 + s));
 				}
-				d.Add(StructureShapes.ChamferBox(new Vector3(0f, 1.38f, -2.6f), new Vector3(3.5f, 0.28f, 2.2f), d.Bevel(0.03f), stone, 13, StructureRole.Roof));
+				d.Add(StructureShapes.ChamferBox(new Vector3(0f, top + 0.29f, z0 - 1.4f), new Vector3(3.5f, 0.28f, 2.8f), d.Bevel(0.03f), stone, 13, StructureRole.Roof));
 			}
 		}
 

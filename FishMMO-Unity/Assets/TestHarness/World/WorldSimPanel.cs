@@ -45,6 +45,7 @@ namespace FishMMO.TestHarness.World
 		private Label bodyFacts;
 		private Label skyList;
 		private Label coverLabel;
+		private Label stormLabel;
 		private Slider timeSlider;
 		private Slider daySlider;
 		private Slider yearSlider;
@@ -756,13 +757,24 @@ namespace FishMMO.TestHarness.World
 			// it is that air's.
 			page.Add(Heading("Storms", "A storm of a kind starts upwind and drifts across the camera. What falls in it, and whether it thunders, is the air's."));
 			var cells = Row(true);
+			stormLabel = Small(string.Empty);
 			foreach (StormKind kind in StormPhysics.Kinds)
 			{
 				StormKind captured = kind;
-				cells.Add(SmallButton(StormPhysics.NameOf(kind), () => Controller.SpawnCell(captured)));
+				// A tornado is a supercell's: the cell is the tornado, and the storm it hangs from is drawn round it.
+				string name = kind == StormKind.Supercell ? "Tornado (supercell)" : StormPhysics.NameOf(kind);
+				cells.Add(SmallButton(name, () => stormLabel.text = Controller.SpawnCell(captured)));
 			}
 			page.Add(cells);
-			page.Add(Small("A storm starts upwind and drifts on the world's clock: while the clock is held it stands where it started. Run to bring it over."));
+			page.Add(stormLabel);
+			page.Add(Small("A storm starts upwind and drifts on the world's clock: while the clock is held it stands where it started. Run to bring it over. A haboob or a dust devil is only the dust it lifts, and an eruption only what its ground emits: stand on such ground in the Ground tab."));
+
+			page.Add(Heading("Running storms", "Each storm is a record in the weather timeline — the one the server sends — not an object in the scene. These edit that record."));
+			stormList = new VisualElement();
+			page.Add(stormList);
+			var endAll = Row();
+			endAll.Add(SmallButton("End all storms", () => Controller.RemoveAllStorms()));
+			page.Add(endAll);
 
 			page.Add(Heading("The air", "Where the air comes from."));
 			fieldToggle = LabeledToggle("Drifting weather", Controller.FieldDriven, v => Controller.FieldDriven = v,
@@ -779,6 +791,136 @@ namespace FishMMO.TestHarness.World
 			}));
 			page.Add(reset);
 			page.Add(Small("Reset takes away everything added to the air, ends the storms and dries the ground. The air changes over the transition while the clock runs, and at once while it is held."));
+		}
+
+		/// <summary>One running storm's card: its line of figures and the controls that edit it.</summary>
+		private sealed class StormRow
+		{
+			public VisualElement Card;
+			public Label Title, Status;
+			public Button Hold;
+			public Slider Strength, Speed, Radius;
+		}
+
+		private VisualElement stormList;
+		private readonly Dictionary<ushort, StormRow> stormRows = new Dictionary<ushort, StormRow>();
+		private readonly List<StormCell> aliveStorms = new List<StormCell>();
+
+		/// <summary>
+		/// The running storms, one card each. Rebuilt only when a storm starts or ends; otherwise its figures are set in
+		/// place, and a slider in the hand is left alone.
+		/// </summary>
+		private void RefreshStorms(CultureInfo culture)
+		{
+			if (stormList == null)
+			{
+				return;
+			}
+			double now = Controller.WorldSeconds;
+			aliveStorms.Clear();
+			foreach (StormCell cell in Controller.Storms)
+			{
+				// A storm that has ended is kept a while for the ground's memory of it (WeatherTimeline.Prune); it is not running.
+				if (!cell.IsDeadAtSeconds(now))
+				{
+					aliveStorms.Add(cell);
+				}
+			}
+			bool same = aliveStorms.Count == stormRows.Count;
+			foreach (StormCell cell in aliveStorms)
+			{
+				same &= stormRows.ContainsKey(cell.ID);
+			}
+			if (!same)
+			{
+				stormList.Clear();
+				stormRows.Clear();
+				foreach (StormCell cell in aliveStorms)
+				{
+					StormRow row = BuildStormRow(cell);
+					stormRows[cell.ID] = row;
+					stormList.Add(row.Card);
+				}
+				if (aliveStorms.Count == 0)
+				{
+					stormList.Add(Small("None. Start one above."));
+				}
+			}
+			Vector3 eye = Controller.Camera != null ? Controller.Camera.transform.position : Vector3.zero;
+			foreach (StormCell cell in aliveStorms)
+			{
+				StormRow row = stormRows[cell.ID];
+				Vector2 centre = cell.CentreAtSeconds(now);
+				Vector2 offset = centre - new Vector2(eye.x, eye.z);
+				// How far to its nearest part, roughly: a front's centre says little about where its wall is.
+				float distance = Mathf.Max(0f, offset.magnitude - (cell.Shape == StormCellShape.Front ? cell.RadiusMeters * 0.45f : cell.RadiusMeters));
+				// The scene's +Z is north only at heading 0 (CelestialState.SceneDirection).
+				float bearing = ((Mathf.Atan2(offset.x, offset.y) * Mathf.Rad2Deg + Controller.Heading) % 360f + 360f) % 360f;
+				var velocity = new Vector2(cell.VelocityX, cell.VelocityZ);
+				bool closing = Vector2.Dot(velocity, -offset) > 0f;
+				string phase = now < cell.MatureSeconds ? "growing" : now <= cell.DecaySeconds ? "full" : "fading";
+				bool held = Controller.IsStormHeld(cell.ID);
+				double left = cell.DeathSeconds - now;
+				row.Title.text = $"#{cell.ID} {StormPhysics.NameOf(cell.Kind)}".ToUpperInvariant();
+				row.Status.text = (distance <= 0f ? "over the camera" : $"{(distance / 1000f).ToString("0.0", culture)} km {Compass(bearing)}, {(closing ? "closing" : "moving off")}")
+					+ $" · {phase} {(cell.EnvelopeAtSeconds(now) * cell.PeakIntensity * 100f).ToString("0", culture)}%"
+					+ (held ? " · held" : $" · {(left / 60.0).ToString("0", culture)} min left");
+				row.Hold.text = held ? "Let go" : "Hold";
+				row.Hold.EnableInClassList(ActiveClass, held);
+				Show(row.Strength, cell.PeakIntensity);
+				Show(row.Speed, velocity.magnitude);
+				Show(row.Radius, cell.RadiusMeters);
+			}
+		}
+
+		private StormRow BuildStormRow(StormCell cell)
+		{
+			ushort id = cell.ID;
+			var row = new StormRow { Card = new VisualElement() };
+			row.Card.AddToClassList("ws-card");
+			var body = new VisualElement();
+			body.AddToClassList("fish-well");
+			body.AddToClassList("ws-card__body");
+			row.Card.Add(body);
+			row.Title = new Label();
+			row.Title.AddToClassList("fish-label--caption");
+			row.Title.AddToClassList("ws-card__title");
+			body.Add(row.Title);
+			row.Status = Small(string.Empty);
+			body.Add(row.Status);
+
+			var buttons = Row();
+			row.Hold = SmallButton("Hold", () => Controller.HoldStorm(id, !Controller.IsStormHeld(id)));
+			row.Hold.tooltip = "Held, it stands where it is at the strength it has while the world runs on.";
+			buttons.Add(row.Hold);
+			Button steer = SmallButton("Steer here", () => Controller.SteerStormHere(id));
+			steer.tooltip = "Turns it toward the camera at its own pace.";
+			buttons.Add(steer);
+			Button move = SmallButton("Move here", () => Controller.MoveStormHere(id));
+			move.tooltip = "Stands it on the camera, keeping its course.";
+			buttons.Add(move);
+			Button extend = SmallButton("+10 min", () => Controller.ExtendStorm(id, 600.0));
+			extend.tooltip = "Ten more world minutes at full strength before it fades.";
+			buttons.Add(extend);
+			buttons.Add(SmallButton("End", () => Controller.RemoveStorm(id)));
+			body.Add(buttons);
+
+			row.Strength = LabeledSlider("Strength", 0f, 1f, cell.PeakIntensity, v => Controller.SetStormStrength(id, v));
+			body.Add(row.Strength);
+			row.Speed = LabeledSlider("Speed m/s", 0f, 40f, new Vector2(cell.VelocityX, cell.VelocityZ).magnitude, v => Controller.SetStormSpeed(id, v));
+			body.Add(row.Speed);
+			// From a quarter to four times the size it started at: a tornado is tens of metres, a squall line kilometres.
+			float radius = Mathf.Max(1f, cell.RadiusMeters);
+			row.Radius = LabeledSlider("Radius m", radius * 0.25f, radius * 4f, radius, v => Controller.SetStormRadius(id, v));
+			row.Radius.tooltip = cell.Shape == StormCellShape.Front ? "A front's depth across its line; its length keeps in proportion." : "Its length or reach keeps in proportion.";
+			body.Add(row.Radius);
+			return row;
+		}
+
+		private static string Compass(float bearing)
+		{
+			string[] points = { "N", "NE", "E", "SE", "S", "SW", "W", "NW" };
+			return points[Mathf.RoundToInt(bearing / 45f) % 8];
 		}
 
 		// ── Climate ───────────────────────────────────────────────────
@@ -798,7 +940,7 @@ namespace FishMMO.TestHarness.World
 				return;
 			}
 			climateSection.Clear();
-			ClimateControls.Build(climateSection, () => Controller.Air, v => Controller.Air = v, Controller.Settings, BuildClimateSection);
+			ClimateControls.Build(climateSection, () => Controller.Air, v => Controller.Air = v, Controller.Settings, BuildClimateSection, Controller.ShiftAir);
 		}
 
 		// ── Ground ────────────────────────────────────────────────────
@@ -822,6 +964,9 @@ namespace FishMMO.TestHarness.World
 			deepSnowSlider.tooltip = "Snow this deep past the white blanket, at once — only where the ground is white, so hold Snow at 1 first. Height on the High tier only; the weather builds and melts it from here. Footprints show in it from any character, or the walker (V).";
 			page.Add(deepSnowSlider);
 
+			page.Add(Heading("Stands on", "The biome under the bed. Its own ground is none: nothing on it is loose and nothing emits, so no haboob, dust devil or eruption shows over it."));
+			page.Add(GroundPicker());
+
 			page.Add(Heading("On the ground"));
 			coverLabel = Well(string.Empty);
 			page.Add(coverLabel);
@@ -835,6 +980,54 @@ namespace FishMMO.TestHarness.World
 			toolRow.Add(SmallButton("Let it settle", () => Controller.CoverOverride = null));
 			toolRow.Add(SmallButton("+15 min", () => Controller.FastForward(900f)));
 			page.Add(toolRow);
+		}
+
+		/// <summary>
+		/// The biomes the bed can stand on, by name, with the ground a haboob lifts or a vent pours out
+		/// named after each one that has it.
+		/// </summary>
+		private DropdownField GroundPicker()
+		{
+			const string own = "The bed's own ground";
+			var choices = new List<string> { own };
+			var biomes = new Dictionary<string, BiomeTemplate>();
+			foreach (string key in BiomeRegistry.SupportedBiomes)
+			{
+				BiomeTemplate biome = BiomeRegistry.Get(key);
+				if (biome == null)
+				{
+					continue;
+				}
+				string text = BiomeRegistry.GetDisplayName(key);
+				if (biome.LooseGround != null)
+				{
+					text += $" · loose {biome.LooseGround.name}";
+				}
+				// A geyser basin's steam is not weather (GroundTraits.Of): it rises off its vents.
+				if (biome.Emits != null && !biome.Emits.Vapour)
+				{
+					text += $" · emits {biome.Emits.name}";
+				}
+				if (biomes.ContainsKey(text))
+				{
+					text += $" ({key})";
+				}
+				biomes[text] = biome;
+				choices.Add(text);
+			}
+			string current = own;
+			foreach (KeyValuePair<string, BiomeTemplate> pair in biomes)
+			{
+				if (pair.Value == Controller.StoodOn)
+				{
+					current = pair.Key;
+				}
+			}
+			var picker = new DropdownField(choices, current);
+			picker.AddToClassList("fish-dropdown");
+			picker.tooltip = "Storms already running keep the ground they started over; the next one reads this.";
+			picker.RegisterValueChangedCallback(evt => Controller.StandOn(biomes.TryGetValue(evt.newValue, out BiomeTemplate chosen) ? chosen : null));
+			return picker;
 		}
 
 		/// <summary>
@@ -1164,6 +1357,10 @@ namespace FishMMO.TestHarness.World
 			}
 
 			CultureInfo culture = CultureInfo.InvariantCulture;
+			if (activeTab == 1)
+			{
+				RefreshStorms(culture);
+			}
 			CelestialState state = Controller.State;
 			SkySystem sky = Controller.Sky;
 			if (state == null)

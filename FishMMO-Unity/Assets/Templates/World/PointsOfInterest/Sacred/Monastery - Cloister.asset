@@ -117,17 +117,17 @@ MonoBehaviour:
     Role: 8
     Style: timber
   Features:
-  - rid: 4061506175562416472
-  - rid: 4061506175562416473
-  - rid: 4061506175562416474
-  - rid: 4061506175562416475
-  - rid: 4061506175562416476
-  - rid: 4061506175562416477
-  - rid: 4061506175562416478
+  - rid: 4061506230070018401
+  - rid: 4061506230070018402
+  - rid: 4061506230070018403
+  - rid: 4061506230070018404
+  - rid: 4061506230070018405
+  - rid: 4061506230070018406
+  - rid: 4061506230070018407
   references:
     version: 2
     RefIds:
-    - rid: 4061506175562416472
+    - rid: 4061506230070018401
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -140,24 +140,24 @@ MonoBehaviour:
         Clearings:
         - {x: -3, y: 2, z: 4.675}
         - {x: 3, y: 1.5, z: 4.675}
-    - rid: 4061506175562416473
+    - rid: 4061506230070018402
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506175562416474
+    - rid: 4061506230070018403
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506175562416475
+    - rid: 4061506230070018404
       type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: -3, y: 4.675}
-    - rid: 4061506175562416476
+    - rid: 4061506230070018405
       type: {class: RespawnFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: 3, y: 4.675}
-    - rid: 4061506175562416477
+    - rid: 4061506230070018406
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 1
@@ -165,7 +165,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506175562416478
+    - rid: 4061506230070018407
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 4

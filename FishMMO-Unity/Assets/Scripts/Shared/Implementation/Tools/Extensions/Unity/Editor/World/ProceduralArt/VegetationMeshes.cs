@@ -100,6 +100,17 @@ namespace FishMMO.Shared.WorldDesign
 		BacterialMat,
 		/// <summary>The bacterial mat's land variant: orange slime-mould and biofilm in caves (NOT aquatic).</summary>
 		SlimeMat,
+
+		// Floating plants on still fresh water (FloatingPlantMeshes, 2026-10-18, I2i): laid as baked props at the water's surface,
+		// never as terrain details (a detail stands on the heightmap). Not aquatic: they lie on the surface, in the air.
+		/// <summary>A carpet of duckweed: hundreds of tiny round fronds lying flat on the water.</summary>
+		Duckweed,
+		/// <summary>Water-lily pads: round notched discs lying on the water, a flower or two standing among them.</summary>
+		WaterLily,
+		/// <summary>Water hyacinth: rosettes of glossy rounded leaves on swollen stalks, a lilac flower spike now and then.</summary>
+		WaterHyacinth,
+		/// <summary>Frogbit: little kidney-shaped floating leaves in rosettes, a few three-petalled white flowers.</summary>
+		Frogbit,
 	}
 
 	/// <summary>One detail plant's recipe.</summary>
@@ -185,7 +196,7 @@ namespace FishMMO.Shared.WorldDesign
 					// Every other kind is built by the file that owns it: the sea floor's (SeaFloorMeshes), then the land
 					// flora's (FloraMeshes). Neither touches the stream before it knows the kind is its own, so the order
 					// changes nothing. A kind no file builds yet comes out empty, which the generator reports.
-					if (!SeaFloorMeshes.Build(mesh, in p, rng))
+					if (!SeaFloorMeshes.Build(mesh, in p, rng) && !FloatingPlantMeshes.Build(mesh, in p, rng))
 					{
 						FloraMeshes.Build(mesh, in p, rng);
 					}

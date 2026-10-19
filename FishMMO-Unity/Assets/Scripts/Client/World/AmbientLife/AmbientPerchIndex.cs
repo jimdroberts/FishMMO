@@ -26,7 +26,12 @@ namespace FishMMO.Client
 		/// <summary>Perches kept per cell at most.</summary>
 		public const int PerCell = 32;
 
-		private static readonly string[] NotTrees = { "Formation", "Boulder", "Iceberg", "IceBoulder", "Serac", "SeaIce", "Rocks", "Cliff", "Rock" };
+		/// <summary>
+		/// Prefab names that are never trees, however tall and narrow: rock, ice, and a cave's own pieces (Cave_*: its giant
+		/// crystals, glow columns and lantern posts stand tall and thin in the halls, and were taken for crowns, so birds sat
+		/// on them underground).
+		/// </summary>
+		private static readonly string[] NotTrees = { "Formation", "Boulder", "Iceberg", "IceBoulder", "Serac", "SeaIce", "Rocks", "Cliff", "Rock", "Cave_" };
 
 		private readonly Dictionary<long, List<Vector4>> cells = new Dictionary<long, List<Vector4>>();
 		private readonly Dictionary<long, List<AmbientTrunk>> trunkCells = new Dictionary<long, List<AmbientTrunk>>();

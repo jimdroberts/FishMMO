@@ -23,6 +23,8 @@ namespace FishMMO.Shared
 		public List<StormCell> Cells;
 		/// <summary>What has been added to the scene's air at runtime.</summary>
 		public AirOffsetEntry Air;
+		/// <summary>The entries <see cref="Air"/> replaced, oldest first (WeatherTimeline.AirHistory): the past the ground remembers.</summary>
+		public List<AirOffsetEntry> AirHistory;
 		/// <summary>
 		/// Whether the scene makes storms of its own, and the rectangle it makes them in (world X/Z): with these and
 		/// the world clock a client works out the same storms as the server (StormSchedule) without one being sent.

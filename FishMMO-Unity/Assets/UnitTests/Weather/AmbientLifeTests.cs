@@ -260,7 +260,7 @@ namespace FishMMO.UnitTests.Weather
 					Assert.That(kind.Flies, Is.False, $"{kind.Name} flies in air too thin to beat a wing in");
 				}
 			}
-			Assert.That(earthly, Is.EqualTo(44));
+			Assert.That(earthly, Is.EqualTo(52), "forty-four of the land and air, eight of the caves");
 			Assert.That(thin, Is.GreaterThanOrEqualTo(3));
 			Assert.That(frozen, Is.GreaterThanOrEqualTo(3));
 		}

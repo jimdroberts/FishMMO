@@ -297,6 +297,60 @@ namespace FishMMO.Shared.WorldDesign
 			});
 		}
 
+		/// <summary>
+		/// Marks a site's kept ground as its footprint, entered only by that site's own ways: its outline (grown by its margin)
+		/// where it has one, else its disc. A cell counts when any of it may lie inside (its centre within half a cell).
+		/// </summary>
+		public void MarkOwner(in PointOfInterestKeepOut keepOut)
+		{
+			if (!PointOfInterestOutline.Drawn(keepOut.Outline))
+			{
+				MarkOwner(keepOut.Id, keepOut.X, keepOut.Z, keepOut.Radius);
+				return;
+			}
+			float radius = keepOut.Radius, half = Cell * 0.5f;
+			int x0 = Mathf.Max(0, Mathf.FloorToInt((keepOut.X - radius - OriginX) / Cell)), x1 = Mathf.Min(Width - 1, Mathf.FloorToInt((keepOut.X + radius - OriginX) / Cell));
+			int z0 = Mathf.Max(0, Mathf.FloorToInt((keepOut.Z - radius - OriginZ) / Cell)), z1 = Mathf.Min(Depth - 1, Mathf.FloorToInt((keepOut.Z + radius - OriginZ) / Cell));
+			for (int z = z0; z <= z1; z++)
+			{
+				for (int x = x0; x <= x1; x++)
+				{
+					int i = Index(x, z);
+					if (Owner[i] == 0 && PointOfInterestOutline.Contains(keepOut.Outline, radius, XOf(x) - keepOut.X, ZOf(z) - keepOut.Z, half))
+					{
+						Owner[i] = keepOut.Id;
+					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// Marks everything within an outline round a centre as no way's, not even its own site's (a moat that follows a wall's
+		/// outline, and the bailey inside it): every cell that may lie inside <paramref name="outer"/>; its disc of
+		/// <paramref name="radius"/> when it has no outline.
+		/// </summary>
+		public void MarkBlocked(float east, float north, float[] outer, float radius)
+		{
+			if (!PointOfInterestOutline.Drawn(outer))
+			{
+				MarkBlocked(east, north, radius);
+				return;
+			}
+			float most = PointOfInterestOutline.Max(outer, radius), half = Cell * 0.5f;
+			int x0 = Mathf.Max(0, Mathf.FloorToInt((east - most - OriginX) / Cell)), x1 = Mathf.Min(Width - 1, Mathf.FloorToInt((east + most - OriginX) / Cell));
+			int z0 = Mathf.Max(0, Mathf.FloorToInt((north - most - OriginZ) / Cell)), z1 = Mathf.Min(Depth - 1, Mathf.FloorToInt((north + most - OriginZ) / Cell));
+			for (int z = z0; z <= z1; z++)
+			{
+				for (int x = x0; x <= x1; x++)
+				{
+					if (PointOfInterestOutline.Contains(outer, radius, XOf(x) - east, ZOf(z) - north, half))
+					{
+						Blocked[Index(x, z)] = true;
+					}
+				}
+			}
+		}
+
 		/// <summary>Marks a disc no way is routed through, not even its own site's (a moated stronghold: its ways cross on the drawbridge).</summary>
 		public void MarkBlocked(float east, float north, float radius)
 		{

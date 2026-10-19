@@ -65,7 +65,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					foreach (SceneEmitter e in context.Points.Emitters)
 					{
-						if (e.Kind == SceneEmitterKind.Fire || e.Kind == SceneEmitterKind.Lamp)
+						if (e.Kind == SceneEmitterKind.Fire || e.Kind == SceneEmitterKind.Lamp || e.Kind == SceneEmitterKind.Glow)
 						{
 							lights.Add(e.Position - system.Origin);
 						}

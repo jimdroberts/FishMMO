@@ -149,4 +149,14 @@ float _FishWaterShoreTexel;    // metres per texel of the shore field
 TEXTURE2D(_FishWaterFoamMemory);
 SAMPLER(sampler_FishWaterFoamMemory);
 
+// ── The coast's look ───────────────────────────────────────────────────
+//
+// How the water off each stretch of coast differs from the planet's sea (2026-10-18; BiomeSeaCoast, baked with the scene's
+// biome map, published by WaterSurface): RGBA8, RGB the tint's ratio to today's sea and A the absorption's, each coded as
+// doublings, (byte − 128) ÷ 32. Read through the caustics' inline sampler (no sampler slot of its own), the uv held half a texel
+// inside the rectangle, whose edge texels are exactly 1: past it, the planet's sea.
+TEXTURE2D(_FishSeaCoast);
+float4 _FishSeaCoastRect;    // xy world minimum, zw one over its size in metres; zw 0: no look in this scene, nothing is read
+float4 _FishSeaCoastTexel;   // xy half a texel in uv
+
 #endif

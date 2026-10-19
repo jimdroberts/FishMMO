@@ -84,6 +84,12 @@ namespace FishMMO.Shared.WorldDesign
 		public bool Lit;
 		/// <summary>The hue bits of its light (<see cref="CaveArt.EmitterSeed"/>: 0 violet, 1 blue, 2 green, 3 amber), or −1 for one by chance.</summary>
 		public int LightHue;
+		/// <summary>
+		/// Whether its glow FLICKERS instead of breathing (2026-10-18, decision 33: stormglass's threads of lightning): its light
+		/// a cold glow with the flicker (SceneEmitterKind.Glow, SceneGlow.FlickerBit) wherever it lights a cave or stands in a
+		/// crystal post, its material's emission crackling with it (_FishStructure −1). No kind flickers before its biome's round.
+		/// </summary>
+		public bool Flickers;
 		/// <summary>One line for designers.</summary>
 		public string Description;
 

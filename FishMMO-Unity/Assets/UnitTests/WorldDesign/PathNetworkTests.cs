@@ -392,18 +392,66 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(roads.Exists(p => (p.FromId == 1 || p.ToId == 1) && (p.FromId == 3 || p.ToId == 3)), Is.False, "the end towns meet through the middle one");
 		}
 
+		/// <summary>
+		/// A street town's ways come in on their own bearings toward where they go (2026-10-18: the road decides the street),
+		/// each ending inside on that bearing <see cref="SiteEntrances.EntryDepth"/> of the town's reach in, where the layout's
+		/// street from that entrance passes.
+		/// </summary>
 		[Test]
-		public void AStreetTownsWaysComeInAtItsStreetEnds()
+		public void AStreetTownsWaysComeInOnTheirOwnBearings()
 		{
-			PathPlan plan = PathNetworkPlanner.Plan(Input(ThreeTowns()));
+			List<PointOfInterestRecord> towns = ThreeTowns();
+			PathPlan plan = PathNetworkPlanner.Plan(Input(towns));
 			foreach (ScenePath road in plan.Paths)
 			{
-				foreach (float entrance in new[] { road.FromEntrance, road.ToEntrance })
+				for (int end = 0; end < 2; end++)
 				{
+					PointOfInterestRecord site = towns.Find(t => t.Id == (end == 0 ? road.FromId : road.ToId));
+					PointOfInterestRecord other = towns.Find(t => t.Id == (end == 0 ? road.ToId : road.FromId));
+					float entrance = end == 0 ? road.FromEntrance : road.ToEntrance;
 					Assert.That(float.IsNaN(entrance), Is.False);
-					Assert.That(Mathf.Repeat(entrance, 90f), Is.EqualTo(0f).Within(1e-3f), "at a street's end");
+					float toward = Mathf.Atan2(other.Position.x - site.Position.x, other.Position.z - site.Position.z) * Mathf.Rad2Deg - site.Yaw;
+					Assert.That(Mathf.Abs(Mathf.DeltaAngle(entrance, toward)), Is.LessThanOrEqualTo(1f), "on the way's own bearing");
+					Vector2 dir = SiteEntrances.Direction(site, entrance);
+					Vector2 expected = new Vector2(site.Position.x, site.Position.z) + dir * (SiteEntrances.EntryDepth * site.Radius);
+					float nearest = float.PositiveInfinity;
+					for (int i = 0; i < road.Count; i++)
+					{
+						if ((road.FlagsAt(i) & ScenePathPointFlags.InSite) != 0)
+						{
+							nearest = Mathf.Min(nearest, Vector2.Distance(new Vector2(road.Points[i].x, road.Points[i].z), expected));
+						}
+					}
+					Assert.That(nearest, Is.LessThan(0.5f), $"way {road.Id} ends inside on its bearing, where the street from it runs");
 				}
 			}
+		}
+
+		/// <summary>Two roads reaching a town from near bearings come in by one entrance (they meet outside its gate).</summary>
+		[Test]
+		public void WaysFromNearBearingsShareAnEntrance()
+		{
+			var towns = new List<PointOfInterestRecord>
+			{
+				Site(1, POIType.Town, 0f, 0f, 40f),
+				Site(2, POIType.Town, 1000f, -200f, 40f),
+				Site(3, POIType.Town, 1000f, 200f, 40f),
+			};
+			PathPlan plan = PathNetworkPlanner.Plan(Input(towns));
+			var entrances = new List<float>();
+			foreach (ScenePath road in plan.Paths)
+			{
+				if (road.FromId == 1)
+				{
+					entrances.Add(road.FromEntrance);
+				}
+				else if (road.ToId == 1)
+				{
+					entrances.Add(road.ToEntrance);
+				}
+			}
+			Assert.That(entrances.Count, Is.EqualTo(2), string.Join("\n", plan.Notes));
+			Assert.That(entrances[1], Is.EqualTo(entrances[0]), "the second road takes the first's entrance, 23° from its own");
 		}
 
 		private static PointOfInterestShape Moat(PointOfInterestRecord site, float inner, float width)
@@ -432,7 +480,10 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(float.IsNaN(entrance), Is.False, "the layout opens a gate on the way's bearing");
 				if (kind == POIType.Castle)
 				{
-					Assert.That(Mathf.Repeat(entrance, 180f), Is.EqualTo(0f).Within(1e-3f), "a walled site's ways come in at its street ends");
+					// A walled site's ways come in on their own bearings; its gates open there.
+					PointOfInterestRecord other = records.Find(r => r.Id == (way.FromId == 2 ? way.ToId : way.FromId));
+					float toward = Mathf.Atan2(other.Position.x, other.Position.z) * Mathf.Rad2Deg;
+					Assert.That(Mathf.Abs(Mathf.DeltaAngle(entrance, toward)), Is.LessThanOrEqualTo(1f), "a walled site's way comes in on its own bearing");
 				}
 				Vector2 gate = new Vector2(Mathf.Sin(entrance * Mathf.Deg2Rad), Mathf.Cos(entrance * Mathf.Deg2Rad));
 				bool crossed = false;
@@ -595,10 +646,32 @@ namespace FishMMO.UnitTests.WorldDesign
 			PathPlan plan = PathNetworkPlanner.Plan(Input(records, river, 1.5f));
 			Assert.That(plan.Bridges.Count, Is.EqualTo(1), string.Join("\n", plan.Notes));
 			PathBridgeSite bridge = plan.Bridges[0];
-			float off = Mathf.Min(Mathf.Abs(Mathf.DeltaAngle(bridge.Yaw, 150f)), Mathf.Abs(Mathf.DeltaAngle(bridge.Yaw, 330f)));
-			Assert.That(off, Is.LessThan(10f), $"square across the river (yaw {bridge.Yaw:0.0})");
-			Assert.That(bridge.Span, Is.InRange(9f, 14f), "the water's width across it, not the way's slant through it");
 			ScenePath road = plan.Paths.Find(p => p.Id == bridge.PathId);
+			// The way's own heading over the river, from 40 m before the bridge to 40 m past it: the bridge turns from it toward
+			// square by as much as BridgeTurnDegrees (40°) allows. (Since 2026-10-18 the towns' ways come in on their own
+			// bearings, due east here, so the way meets the river 60° off square and the bridge turns the full 40°.)
+			Vector3 before = road.Points[0], after = road.Points[road.Count - 1];
+			float bestBefore = float.PositiveInfinity, bestAfter = float.PositiveInfinity;
+			foreach (Vector3 p in road.Points)
+			{
+				float d = Vector2.Distance(new Vector2(p.x, p.z), new Vector2(bridge.Centre.x, bridge.Centre.z));
+				bool ahead = Vector2.Dot(new Vector2(p.x - bridge.Centre.x, p.z - bridge.Centre.z), new Vector2(after.x - before.x, after.z - before.z)) > 0f;
+				if (ahead && Mathf.Abs(d - 40f) < bestAfter)
+				{
+					bestAfter = Mathf.Abs(d - 40f);
+					after = p;
+				}
+				else if (!ahead && Mathf.Abs(d - 40f) < bestBefore)
+				{
+					bestBefore = Mathf.Abs(d - 40f);
+					before = p;
+				}
+			}
+			float wayYaw = Mathf.Atan2(after.x - before.x, after.z - before.z) * Mathf.Rad2Deg;
+			float Off(float yaw) => Mathf.Min(Mathf.Abs(Mathf.DeltaAngle(yaw, 150f)), Mathf.Abs(Mathf.DeltaAngle(yaw, 330f)));
+			float allowed = Mathf.Max(0f, Off(wayYaw) - 40f);
+			Assert.That(Off(bridge.Yaw), Is.LessThan(allowed + 10f), $"square across the river as far as its turn allows (yaw {bridge.Yaw:0.0}, way {wayYaw:0.0})");
+			Assert.That(bridge.Span, Is.InRange(9f, 14f), "the water's width across it, not the way's slant through it");
 			for (int i = 1; i < road.Count; i++)
 			{
 				Assert.That(Vector3.Distance(road.Points[i], road.Points[i - 1]), Is.LessThan(6f), $"no jump in the way at point {i}");

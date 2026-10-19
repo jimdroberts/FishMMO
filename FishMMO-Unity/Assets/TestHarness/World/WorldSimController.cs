@@ -713,13 +713,28 @@ namespace FishMMO.TestHarness.World
 			set => SetAir(value, 0f);
 		}
 
+		/// <summary>
+		/// Moves every runtime air entry, past ones included, by <paramref name="delta"/> (<see cref="WeatherTimeline.ShiftAir"/>):
+		/// what authoring part of the runtime air into the scene takes back off it.
+		/// </summary>
+		public void ShiftAir(AirOffsets delta)
+		{
+			timeline.ShiftAir(delta);
+			timeline.Revision++;
+			ApplyClimate();
+			if (SkySystem.Instance != null)
+			{
+				SkySystem.Instance.RebuildCloudAir();
+			}
+		}
+
 		/// <summary>Moves what is added to the air to new values over a transition.</summary>
 		public void SetAir(AirOffsets offsets, float seconds)
 		{
 			// In world time, as the server's are: a transition holds while the world is held.
 			double now = WorldSeconds;
 			// Carrying on from where the old wind had taken the air, so the clouds do not jump when it changes.
-			timeline.Air = WeatherField.NextAir(timeline, Settings, offsets, now, now + Mathf.Max(0f, seconds));
+			timeline.ReplaceAir(WeatherField.NextAir(timeline, Settings, offsets, now, now + Mathf.Max(0f, seconds)));
 			timeline.Revision++;
 			ApplyClimate();
 			if (seconds <= 0f && SkySystem.Instance != null)
@@ -772,7 +787,7 @@ namespace FishMMO.TestHarness.World
 			/* And the season foliage shows, from the place's climate on the bed's clock: in the game ClientWeather publishes
 			 * it, but the bed presents its own weather, so without this the shaders never had a season and the season
 			 * buttons left grass, flowers and leaves as they were (healthy, in bloom, in leaf). */
-			FoliageKnown = SceneClimate.Foliage(Settings, Hours, out SceneClimate.FoliageState season);
+			FoliageKnown = SceneClimate.Foliage(Settings, Hours, out SceneClimate.FoliageState season, timeline);
 			Foliage = season;
 			// At the camera's height: what the plants round it read (each its own height's, FishSeasonGrowing).
 			float here = Camera != null ? Camera.transform.position.y : 0f;
@@ -816,18 +831,66 @@ namespace FishMMO.TestHarness.World
 				return false;
 			}
 			GroundCover.Forcing forcing = GroundCover.ForcingAt(timeline, Settings, gameObject.scene, GroundCover.StepOf(timeline.WorldSecondsAt(Tick)));
-			return GroundCover.SnowLine(forcing, out startY, out wholeY, out _);
+			return GroundCover.SnowLine(forcing, out startY, out wholeY, out _, out _);
+		}
+
+		/// <summary>The biome the bed stands on in place of its own ground (<see cref="StandOn"/>), or null on its own.</summary>
+		public BiomeTemplate StoodOn { get; private set; }
+
+		private SceneBiomeMap standMap;
+		private SceneBiomeMap ownGround;
+		private bool ownGroundKept;
+
+		/// <summary>
+		/// Stands the bed on one biome — a map of that biome alone, a hundred kilometres round the camera — or back on its
+		/// own ground when <paramref name="biome"/> is null. The bed's own ground is no biome at all: nothing on it is
+		/// loose, so a haboob or a dust devil lifts nothing over it, and nothing on it emits. Storms already running keep
+		/// the air they were read in; the next one started reads the new ground.
+		/// </summary>
+		public void StandOn(BiomeTemplate biome)
+		{
+			if (Settings == null)
+			{
+				return;
+			}
+			if (!ownGroundKept)
+			{
+				ownGround = Settings.BiomeMap;
+				ownGroundKept = true;
+			}
+			StoodOn = biome;
+			if (biome == null || Camera == null)
+			{
+				StoodOn = null;
+				Settings.BiomeMap = ownGround;
+				return;
+			}
+			int id = BiomeRegistry.IDOf(biome);
+			if (!BiomeRegistry.TryGetByID(id, out _))
+			{
+				BiomeRegistry.Register(biome);
+			}
+			if (standMap == null)
+			{
+				standMap = ScriptableObject.CreateInstance<SceneBiomeMap>();
+				standMap.hideFlags = HideFlags.DontSave;
+			}
+			Vector3 at = Camera.transform.position;
+			standMap.Set(1, 1, new[] { id }, new Vector2(at.x - 50000f, at.z - 50000f), new Vector2(100000f, 100000f));
+			Settings.BiomeMap = standMap;
 		}
 
 		/// <summary>
 		/// Starts a storm of a kind upwind, drifting over the camera — or, <paramref name="overhead"/>,
-		/// standing on it. Its size and life come from the air where it starts unless a radius is given.
+		/// standing on it. Its size and life come from the air where it starts unless a radius is given,
+		/// and its pace is the steering wind's unless one is given (a haboob runs at its outflow's own).
 		/// </summary>
-		public void SpawnCell(StormKind kind, float radius = 0f, float speed = 6f, bool overhead = false)
+		/// <returns>What was started and when it arrives, or why nothing will show.</returns>
+		public string SpawnCell(StormKind kind, float radius = 0f, float speed = -1f, bool overhead = false)
 		{
 			if (Camera == null)
 			{
-				return;
+				return "There is no camera to start a storm at.";
 			}
 			Vector3 at = Camera.transform.position;
 			float angle = (Tick % 360) * Mathf.Deg2Rad;
@@ -837,7 +900,7 @@ namespace FishMMO.TestHarness.World
 			// The game's rule (WeatherHost.SpawnCell): no air, no storm of any kind.
 			if (!StormPhysics.CanForm(here.Planet))
 			{
-				return;
+				return "No storm forms here: the world has no air to make one.";
 			}
 			StormPhysics.Dimensions(kind, here.OpenColumn, 0.5f, 0.5f, out float airRadius, out float extent, out float life);
 			if (radius > 0f)
@@ -848,7 +911,16 @@ namespace FishMMO.TestHarness.World
 			{
 				radius = airRadius;
 			}
-			float reach = Mathf.Max(radius, extent);
+			if (speed < 0f)
+			{
+				// A haboob is a density current and runs at its own pace, not the steering wind's.
+				speed = kind == StormKind.Haboob ? Mathf.Max(3f, StormPhysics.OutflowSpeed(here.OpenColumn, StormPhysics.OutflowDepth(here.OpenColumn))) : 6f;
+			}
+			/* How far it has to start to come in from clear of the camera: a front advances across its
+			 * line, so what has to clear is its depth across it (StormCell.FrontCoverage: 0.45 of its
+			 * radius ahead, 1.6 behind), not its length along it. Measured by its length, a haboob 30 km
+			 * long started 45 km off and took two hours to arrive. */
+			float reach = StormPhysics.ShapeOf(kind) == StormCellShape.Front ? radius * 1.6f : Mathf.Max(radius, extent);
 			float distance = overhead ? 0f : reach * 1.5f;
 			if (overhead || kind == StormKind.Eruption)
 			{
@@ -883,6 +955,216 @@ namespace FishMMO.TestHarness.World
 				DeathSeconds = born + lifetime,
 			});
 			timeline.Revision++;
+
+			string name = StormPhysics.NameOf(kind);
+			bool lifts = kind == StormKind.Haboob || kind == StormKind.DustDevil;
+			if (lifts && (here.Ground.Loose == null || here.Ground.Water))
+			{
+				return $"{name} started, but it is only the dust it lifts and nothing here is loose: stand on loose ground (Ground tab) to see one.";
+			}
+			if (kind == StormKind.Eruption && here.Ground.Emits == null)
+			{
+				return $"{name} started, but the ground here emits nothing: stand on ground that does (Ground tab) to see one.";
+			}
+			if (distance <= 0f || speed <= 0f)
+			{
+				return $"{name} started overhead.";
+			}
+			return $"{name} started {distance / 1000f:0.0} km upwind at {speed:0} m/s: over the camera in about {distance / speed / 60f:0} world minutes.";
+		}
+
+		// ── Storms by hand ────────────────────────────────────────────
+		// A storm is not an object in the scene: it is a StormCell in the timeline, the record the
+		// server sends, and everything that draws or feels it reads that list. These edit the record,
+		// as the admin commands do on a server (WeatherHost.SteerCell/RetireCell).
+
+		/// <summary>The storms that are running: the timeline's cells.</summary>
+		public IReadOnlyList<StormCell> Storms => timeline.Cells;
+
+		/// <summary>The held storms, each with the world second it was last held at.</summary>
+		private readonly Dictionary<ushort, double> heldStorms = new Dictionary<ushort, double>();
+
+		/// <summary>Whether a storm is held: standing where it is, at the strength it has, while the world runs on.</summary>
+		public bool IsStormHeld(ushort id) => heldStorms.ContainsKey(id);
+
+		/// <summary>Holds a storm where it is and as it is, or lets it go on from there.</summary>
+		public void HoldStorm(ushort id, bool held)
+		{
+			if (held)
+			{
+				heldStorms[id] = WorldSeconds;
+			}
+			else
+			{
+				heldStorms.Remove(id);
+			}
+		}
+
+		/// <summary>
+		/// Keeps each held storm as it was: its motion and its whole life move on with the clock, so where it stands
+		/// and how strong it is are those of the moment it was held. Through a jump of the clock too.
+		/// </summary>
+		private void KeepHeldStorms()
+		{
+			if (heldStorms.Count == 0)
+			{
+				return;
+			}
+			double now = WorldSeconds;
+			bool changed = false;
+			var ids = new List<ushort>(heldStorms.Keys);
+			foreach (ushort id in ids)
+			{
+				if (!timeline.TryGetCell(id, out int index))
+				{
+					heldStorms.Remove(id);
+					continue;
+				}
+				double shift = now - heldStorms[id];
+				heldStorms[id] = now;
+				if (shift == 0.0)
+				{
+					continue;
+				}
+				StormCell cell = timeline.Cells[index];
+				cell.MotionSeconds += shift;
+				cell.BirthSeconds += shift;
+				cell.MatureSeconds += shift;
+				cell.DecaySeconds += shift;
+				cell.DeathSeconds += shift;
+				timeline.Cells[index] = cell;
+				changed = true;
+			}
+			if (changed)
+			{
+				timeline.Revision++;
+			}
+		}
+
+		/// <summary>Ends a storm at once.</summary>
+		public void RemoveStorm(ushort id)
+		{
+			if (timeline.TryGetCell(id, out int index))
+			{
+				timeline.Cells.RemoveAt(index);
+				heldStorms.Remove(id);
+				timeline.Revision++;
+			}
+		}
+
+		/// <summary>Ends every storm, leaving the air and the ground as they are.</summary>
+		public void RemoveAllStorms()
+		{
+			timeline.Cells.Clear();
+			heldStorms.Clear();
+			timeline.Revision++;
+		}
+
+		/// <summary>
+		/// Re-bases a storm's motion where it stands now, as WeatherHost.SteerCell does, so a change of course or pace
+		/// moves it on from there rather than from where it started.
+		/// </summary>
+		private static void Rebase(ref StormCell cell, double now)
+		{
+			Vector2 from = cell.CentreAtSeconds(now);
+			cell.OriginX = from.x;
+			cell.OriginZ = from.y;
+			cell.MotionSeconds = now;
+			cell.MeanderMeters = 0f;
+		}
+
+		private bool EditStorm(ushort id, RefCell edit)
+		{
+			if (!timeline.TryGetCell(id, out int index))
+			{
+				return false;
+			}
+			StormCell cell = timeline.Cells[index];
+			edit(ref cell);
+			timeline.Cells[index] = cell;
+			timeline.Revision++;
+			return true;
+		}
+
+		private delegate void RefCell(ref StormCell cell);
+
+		/// <summary>Turns a storm toward the camera at its own pace (6 m/s if it was standing).</summary>
+		public void SteerStormHere(ushort id)
+		{
+			if (Camera == null)
+			{
+				return;
+			}
+			Vector3 at = Camera.transform.position;
+			double now = WorldSeconds;
+			EditStorm(id, (ref StormCell cell) =>
+			{
+				Rebase(ref cell, now);
+				float speed = new Vector2(cell.VelocityX, cell.VelocityZ).magnitude;
+				Vector2 way = new Vector2(at.x - cell.OriginX, at.z - cell.OriginZ);
+				Vector2 velocity = way.sqrMagnitude > 1f ? way.normalized * (speed > 0.01f ? speed : 6f) : Vector2.zero;
+				cell.VelocityX = velocity.x;
+				cell.VelocityZ = velocity.y;
+			});
+		}
+
+		/// <summary>Stands a storm on the camera, keeping its course and pace.</summary>
+		public void MoveStormHere(ushort id)
+		{
+			if (Camera == null)
+			{
+				return;
+			}
+			Vector3 at = Camera.transform.position;
+			double now = WorldSeconds;
+			EditStorm(id, (ref StormCell cell) =>
+			{
+				cell.OriginX = at.x;
+				cell.OriginZ = at.z;
+				cell.MotionSeconds = now;
+				cell.MeanderMeters = 0f;
+			});
+		}
+
+		/// <summary>A storm's pace along its course, m/s. A front's facing is its course, so a standing one keeps a crawl to keep it.</summary>
+		public void SetStormSpeed(ushort id, float speed)
+		{
+			double now = WorldSeconds;
+			EditStorm(id, (ref StormCell cell) =>
+			{
+				Rebase(ref cell, now);
+				Vector2 course = cell.Facing;
+				float pace = Mathf.Max(0.001f, speed);
+				cell.VelocityX = course.x * pace;
+				cell.VelocityZ = course.y * pace;
+			});
+		}
+
+		/// <summary>A storm's peak strength, 0..1.</summary>
+		public void SetStormStrength(ushort id, float strength) =>
+			EditStorm(id, (ref StormCell cell) => cell.PeakIntensity = Mathf.Clamp01(strength));
+
+		/// <summary>A storm's size: its radius, with its second measure kept in proportion.</summary>
+		public void SetStormRadius(ushort id, float radius) =>
+			EditStorm(id, (ref StormCell cell) =>
+			{
+				float to = Mathf.Max(1f, radius);
+				cell.ExtentMeters *= to / Mathf.Max(1f, cell.RadiusMeters);
+				cell.RadiusMeters = to;
+			});
+
+		/// <summary>Gives a storm more life: it holds at full strength that much longer before it fades.</summary>
+		public void ExtendStorm(ushort id, double seconds)
+		{
+			double now = WorldSeconds;
+			EditStorm(id, (ref StormCell cell) =>
+			{
+				double fade = Math.Max(10.0, cell.DeathSeconds - cell.DecaySeconds);
+				// A storm already fading comes back to full from now.
+				double from = Math.Max(cell.DecaySeconds, now);
+				cell.DecaySeconds = from + seconds;
+				cell.DeathSeconds = cell.DecaySeconds + fade;
+			});
 		}
 
 		/// <summary>The bed's reset: the air back to the world's own, no storms, bare ground.</summary>
@@ -891,8 +1173,7 @@ namespace FishMMO.TestHarness.World
 			// The transition runs in world seconds, so under a held clock it never ran and the air
 			// stayed as it was: held, the reset is immediate.
 			SetAir(default, Paused ? 0f : seconds);
-			timeline.Cells.Clear();
-			timeline.Revision++;
+			RemoveAllStorms();
 			// Clear means clear: the ground goes back to bare as well. Weather stopping does not dry
 			// the ground — that takes a quarter of an hour, and the panel can fast-forward it — but
 			// this button is the bed's reset, not a forecast.
@@ -1069,6 +1350,14 @@ namespace FishMMO.TestHarness.World
 
 		private void OnDestroy()
 		{
+			if (ownGroundKept && Settings != null)
+			{
+				Settings.BiomeMap = ownGround;
+			}
+			if (standMap != null)
+			{
+				Destroy(standMap);
+			}
 			WorldDayNightCycle.PreviewHours = null;
 			WorldDayNightCycle.PreviewLocalTime01 = null;
 			if (LocalWorldClock.Active == clock)
@@ -1174,6 +1463,7 @@ namespace FishMMO.TestHarness.World
 			 * than real time (WorldMotion). */
 			clock?.Advance(Time.unscaledDeltaTime);
 			ReadCalendar();
+			KeepHeldStorms();
 
 			uint tick = Tick;
 			float dt = Time.deltaTime;

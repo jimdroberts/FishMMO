@@ -336,7 +336,8 @@ namespace FishMMO.UnitTests.WorldDesign
 					float min = rule != null ? rule.FootprintMin : 10f, max = rule != null ? rule.FootprintMax : 10f;
 					float radius = Mathf.Lerp(min, max, size / 2f);
 					var random = new DeterministicRNG(1000 + size);
-					var request = new PointOfInterestLayoutRequest { Layout = spec.Layout, Radius = radius, Gap = 1f, SpanHalf = radius, ShoreAhead = radius * 0.5f };
+					// The shore at the site's edge ahead: a port's outline is drawn on dry land up to its water (PointOfInterestPlanner.Shape).
+					var request = new PointOfInterestLayoutRequest { Layout = spec.Layout, Radius = radius, Gap = 1f, SpanHalf = radius, ShoreAhead = radius * PointOfInterestLayouts.Inset };
 					for (int s = 0; s < spec.Pieces.Count; s++)
 					{
 						PointOfInterestPieceSlot slot = spec.Pieces[s];
@@ -385,7 +386,16 @@ namespace FishMMO.UnitTests.WorldDesign
 								laid += pieces.Exists(p => p.Item == i) ? 1 : 0;
 							}
 						}
-						Assert.That(laid, Is.GreaterThanOrEqualTo(asked * 0.6f), $"{name}: {laid} of {asked} houses found room on its streets");
+						var sizes = new List<string>();
+						for (int i = 0; i < request.Items.Count; i++)
+						{
+							if (spec.Pieces[request.Items[i].Slot].Role == PointOfInterestSlotRole.Street)
+							{
+								sizes.Add($"{request.Items[i].Footprint.x:0.0}x{request.Items[i].Footprint.y:0.0}{(pieces.Exists(p => p.Item == i) ? "" : "!")}");
+							}
+						}
+						Assert.That(laid, Is.GreaterThanOrEqualTo(asked * 0.6f),
+							$"{name}: {laid} of {asked} houses found room on its streets ({request.ChosenPlan}, {request.Streets.Count} streets; {string.Join(" ", sizes)}; ! = not laid)");
 					}
 				}
 			}
@@ -394,14 +404,19 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>No two pieces overlap (a wall ring's own modules, a bridge's spans and a pier's modules meet end to end), all inside the footprint.</summary>
 		private static void AssertPacked(string name, PointOfInterestLayoutRequest request, List<PointOfInterestLayoutPiece> pieces)
 		{
-			float limit = request.Radius * PointOfInterestLayouts.Inset + 0.01f;
+			var four = new Vector2[4];
 			for (int i = 0; i < pieces.Count; i++)
 			{
 				PointOfInterestLayoutPiece a = pieces[i];
 				bool centrepiece = a.Role == PointOfInterestSlotRole.Centre && a.Offset == Vector2.zero;
 				if (!PointOfInterestLayouts.Reaches(a.Role) && !centrepiece)
 				{
-					Assert.That(PointOfInterestLayouts.Reach(a.Offset, a.Yaw, a.Footprint), Is.LessThanOrEqualTo(limit), $"{name}: a {a.Role} piece at {a.Offset} stays inside");
+					// Every corner inside the boundary that way: the outline's (or the disc's) inset share.
+					PointOfInterestLayouts.Corners(a.Offset, a.Yaw, a.Footprint, four);
+					foreach (Vector2 c in four)
+					{
+						Assert.That(c.magnitude, Is.LessThanOrEqualTo(Boundary(request, c) + 0.01f), $"{name}: a {a.Role} piece at {a.Offset} stays inside");
+					}
 				}
 				for (int j = i + 1; j < pieces.Count; j++)
 				{
@@ -414,6 +429,10 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 			}
 		}
+
+		/// <summary>The layout's boundary toward a site-frame offset: its outline's reach that way (its radius for a disc), inset.</summary>
+		private static float Boundary(PointOfInterestLayoutRequest request, Vector2 toward)
+			=> PointOfInterestLayouts.Inset * PointOfInterestOutline.ReachToward(request.Outline, request.Radius, PointOfInterestLayouts.DirectionOf(toward) + request.Yaw);
 
 		private static int Group(PointOfInterestLayoutPiece piece)
 		{
@@ -476,7 +495,8 @@ namespace FishMMO.UnitTests.WorldDesign
 				Vector2 along = PointOfInterestLayouts.Rotate(Vector2.right, wall.Yaw) * (wall.Footprint.x * 0.5f);
 				ends.Add(wall.Offset + along);
 				ends.Add(wall.Offset - along);
-				Assert.That(wall.Footprint.x, Is.EqualTo(6f).Within(1e-4f), "a module is laid at its own length");
+				// Fitted to its chord of the ring (stretched or shrunk a little), and run on past a corner to meet its neighbour.
+				Assert.That(wall.Footprint.x, Is.EqualTo(6f).Within(6f * 0.15f), "a module is laid near its own length");
 			}
 			var gateEnds = new List<Vector2>();
 			foreach (PointOfInterestLayoutPiece gate in gates)
@@ -490,7 +510,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				bool met = false;
 				for (int j = 0; j < ends.Count && !met; j++)
 				{
-					met = j != i && j / 2 != i / 2 && Vector2.Distance(ends[i], ends[j]) < 0.01f;
+					met = j != i && j / 2 != i / 2 && Vector2.Distance(ends[i], ends[j]) < 0.2f;
 				}
 				foreach (Vector2 end in gateEnds)
 				{
@@ -537,13 +557,142 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			PointOfInterestLayoutRequest request = Request(PointOfInterestLayout.Walled, 20f, (PointOfInterestSlotRole.Perimeter, new Vector2(3f, 0.4f), 3f, 1));
 			List<PointOfInterestLayoutPiece> walls = PointOfInterestLayouts.Place(request, new DeterministicRNG(5));
+			Assert.That(walls.Count, Is.GreaterThan(20), "the ring closes all round but for its way in");
 			float side = walls[0].Offset.magnitude;
-			int sides = Mathf.RoundToInt(Mathf.PI / Mathf.Atan(1.5f / side));
-			Assert.That(walls.Count, Is.EqualTo(sides - 2), "a 3 m railing leaves two modules out (at least 4 m) for the way in");
+			// A 3 m railing leaves two modules out (at least 4 m) for the way in: no module end within 2 m of the heading.
 			foreach (PointOfInterestLayoutPiece wall in walls)
 			{
-				Assert.That(wall.Offset.y < side * 0.9f || Mathf.Abs(wall.Offset.x) > 2f, Is.True, $"nothing at the heading: {wall.Offset}");
+				Vector2 along = PointOfInterestLayouts.Rotate(Vector2.right, wall.Yaw) * (wall.Footprint.x * 0.5f);
+				foreach (Vector2 end in new[] { wall.Offset + along, wall.Offset - along, wall.Offset })
+				{
+					Assert.That(end.y < side * 0.8f || Mathf.Abs(end.x) > 2.9f, Is.True, $"nothing at the heading: {wall.Offset}");
+				}
 			}
+		}
+
+		/// <summary>
+		/// Gates stand on the ways' own bearings whatever they are (2026-10-18: a road comes in on its own bearing), round an
+		/// outline that is no circle, every module of the ring meeting the next (or a gate's side) within a few centimetres,
+		/// and nothing of the ring outside the outline.
+		/// </summary>
+		[TestCase(37f, 160f, 250f)]
+		[TestCase(5f, 95f, 300f)]
+		public void AnIrregularWallsGatesStandOnTheRoadsBearings(float a, float b, float c)
+		{
+			PointOfInterestLayoutRequest request = Request(PointOfInterestLayout.Walled, 70f,
+				(PointOfInterestSlotRole.Perimeter, WallSize, 6f, 1), (PointOfInterestSlotRole.Gate, GateSize, 12f, 3), (PointOfInterestSlotRole.WallTower, TowerSize, 0f, 6));
+			request.Outline = Oval(70f, 0.7f, 30f);
+			request.Yaw = 20f;
+			request.Entrances.AddRange(new[] { a, b, c });
+			List<PointOfInterestLayoutPiece> pieces = PointOfInterestLayouts.Place(request, new DeterministicRNG(8));
+			AssertPacked("irregular wall", request, pieces);
+			List<PointOfInterestLayoutPiece> gates = pieces.FindAll(p => p.Role == PointOfInterestSlotRole.Gate);
+			Assert.That(gates.Count, Is.EqualTo(3));
+			foreach (float bearing in request.Entrances)
+			{
+				var dir = new Vector2(Mathf.Sin(bearing * Mathf.Deg2Rad), Mathf.Cos(bearing * Mathf.Deg2Rad));
+				PointOfInterestLayoutPiece gate = gates.Find(g => Vector2.Dot(g.Offset.normalized, dir) > 0.99f);
+				Assert.That(gate.Footprint, Is.EqualTo(GateSize), $"a gate toward {bearing}°");
+				Assert.That(Mathf.Abs(gate.Offset.x * dir.y - gate.Offset.y * dir.x), Is.LessThan(0.01f), $"the gate toward {bearing}° stands on its bearing");
+			}
+			// Every module meets the next: its outer face's end on its neighbour's (or, where the ring bends outward, its inner
+			// face's: the modules mitred by running on past the corner), or its line's end on a gate's jamb.
+			List<PointOfInterestLayoutPiece> walls = pieces.FindAll(p => p.Role == PointOfInterestSlotRole.Perimeter);
+			Assert.That(walls.Count, Is.GreaterThan(20));
+			var faces = new List<Vector2>();
+			var backs = new List<Vector2>();
+			var lines = new List<Vector2>();
+			foreach (PointOfInterestLayoutPiece wall in walls)
+			{
+				Vector2 along = PointOfInterestLayouts.Rotate(Vector2.right, wall.Yaw) * (wall.Footprint.x * 0.5f);
+				Vector2 outward = PointOfInterestLayouts.Rotate(Vector2.down, wall.Yaw) * (wall.Footprint.y * 0.5f);
+				faces.Add(wall.Offset + along + outward);
+				faces.Add(wall.Offset - along + outward);
+				backs.Add(wall.Offset + along - outward);
+				backs.Add(wall.Offset - along - outward);
+				lines.Add(wall.Offset + along);
+				lines.Add(wall.Offset - along);
+			}
+			var jambs = new List<Vector2>();
+			foreach (PointOfInterestLayoutPiece gate in gates)
+			{
+				Vector2 along = PointOfInterestLayouts.Rotate(Vector2.right, gate.Yaw) * (gate.Footprint.x * 0.5f);
+				jambs.Add(gate.Offset + along);
+				jambs.Add(gate.Offset - along);
+			}
+			for (int i = 0; i < faces.Count; i++)
+			{
+				float nearest = float.PositiveInfinity;
+				for (int j = 0; j < faces.Count; j++)
+				{
+					if (j / 2 != i / 2)
+					{
+						nearest = Mathf.Min(nearest, Mathf.Min(Vector2.Distance(faces[i], faces[j]), Vector2.Distance(backs[i], backs[j])));
+					}
+				}
+				foreach (Vector2 jamb in jambs)
+				{
+					nearest = Mathf.Min(nearest, Vector2.Distance(lines[i], jamb));
+				}
+				Assert.That(nearest, Is.LessThan(0.08f), $"the wall end at {lines[i]} meets its neighbour");
+			}
+		}
+
+		/// <summary>
+		/// A moated site's wall keeps to its berm (2026-10-18: "Palisades and town walls land in moats sometimes"): every
+		/// corner of the ring stands inside the ditch's inner bank by the footing's clearance, even where the moat runs
+		/// nearer than the outline's edge.
+		/// </summary>
+		[Test]
+		public void AMoatedWallStandsClearOfItsDitch()
+		{
+			PointOfInterestLayoutRequest request = Request(PointOfInterestLayout.Walled, 50f,
+				(PointOfInterestSlotRole.Perimeter, new Vector2(4f, 1f), 4f, 1), (PointOfInterestSlotRole.Gate, new Vector2(4f, 2f), 4f, 1), (PointOfInterestSlotRole.WallTower, TowerSize, 0f, 4));
+			request.Outline = Oval(50f, 0.75f, 0f);
+			// A moat drawn tighter than the outline on one side: its inner bank 0.85 of the outline's reach there.
+			float[] inner = new float[request.Outline.Length];
+			for (int k = 0; k < inner.Length; k++)
+			{
+				inner[k] = request.Outline[k] * (k < inner.Length / 2 ? 0.85f : 1.02f);
+			}
+			var values = new float[5 + inner.Length];
+			values[0] = 2f;
+			values[1] = PointOfInterestOutline.Max(inner, 50f);
+			values[2] = 7f;
+			values[3] = 3f;
+			Array.Copy(inner, 0, values, 5, inner.Length);
+			request.Moat = new PointOfInterestShape { SiteId = 1, Shaper = MoatShaper.ShaperName, Values = values };
+			List<PointOfInterestLayoutPiece> pieces = PointOfInterestLayouts.Place(request, new DeterministicRNG(2));
+			var four = new Vector2[4];
+			int ring = 0;
+			foreach (PointOfInterestLayoutPiece piece in pieces)
+			{
+				if (piece.Role != PointOfInterestSlotRole.Perimeter && piece.Role != PointOfInterestSlotRole.Gate && piece.Role != PointOfInterestSlotRole.WallTower)
+				{
+					continue;
+				}
+				ring++;
+				PointOfInterestLayouts.Corners(piece.Offset, piece.Yaw, piece.Footprint, four);
+				foreach (Vector2 c in four)
+				{
+					float lip = MoatShaper.InnerToward(request.Moat, c.x, c.y);
+					Assert.That(c.magnitude, Is.LessThanOrEqualTo(lip - PointOfInterestLayouts.MoatClearMetres + 0.01f), $"a {piece.Role} corner at {c} stands on the berm, not in the ditch");
+				}
+			}
+			Assert.That(ring, Is.GreaterThan(15), "the ring is laid");
+		}
+
+		/// <summary>An outline drawn as an oval (world bearings): <paramref name="radius"/> along its long axis at <paramref name="axis"/>°, <paramref name="ratio"/> of it across.</summary>
+		private static float[] Oval(float radius, float ratio, float axis)
+		{
+			var outline = new float[PointOfInterestOutline.Bearings];
+			for (int k = 0; k < outline.Length; k++)
+			{
+				float a = k * 2f * Mathf.PI / outline.Length - axis * Mathf.Deg2Rad;
+				float x = Mathf.Sin(a) / (radius * ratio), z = Mathf.Cos(a) / radius;
+				outline[k] = 1f / Mathf.Sqrt(x * x + z * z);
+			}
+			return outline;
 		}
 
 		[Test]
@@ -563,12 +712,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			PointOfInterestLayoutRequest street = Request(PointOfInterestLayout.Street, 50f, (PointOfInterestSlotRole.Street, HouseSize, 0f, 16));
 			foreach (PointOfInterestLayoutPiece piece in PointOfInterestLayouts.Place(street, new DeterministicRNG(2)))
 			{
-				// A 45 m street plan is two 4 m streets crossing at the middle: a house's front looks square onto the
-				// centre line of one of them across its set-back (the gap) and half the street.
-				Vector2 front = PointOfInterestLayouts.Rotate(Vector2.down, piece.Yaw);
-				Assert.That(Mathf.Max(Mathf.Abs(front.x), Mathf.Abs(front.y)), Is.EqualTo(1f).Within(1e-4f), "square to the streets");
-				Vector2 kerb = piece.Offset + front * (piece.Footprint.y * 0.5f + 1f + 2f);
-				Assert.That(Mathf.Abs(front.x) > 0.5f ? Mathf.Abs(kerb.x) : Mathf.Abs(kerb.y), Is.LessThan(0.01f), $"the house at {piece.Offset} fronts its street");
+				// A house's front looks (to within its few degrees of turn) square onto the street before it, across its
+				// set-back (the gap and up to most of a metre more) and half the street.
+				AssertFronts(street, piece);
 			}
 
 			PointOfInterestLayoutRequest graves = Request(PointOfInterestLayout.Grid, 15f, (PointOfInterestSlotRole.Rows, GraveSize, 0f, 20));
@@ -581,6 +727,234 @@ namespace FishMMO.UnitTests.WorldDesign
 				lines.Add(Mathf.Round(grave.Offset.y * 100f));
 			}
 			Assert.That(lines.Count, Is.LessThan(rows.Count / 2), "graves stand in rows");
+		}
+
+		/// <summary>
+		/// A street house fronts a street (or a plaza's edge): straight out of its front, past its set-back (the gap and up to
+		/// most of a metre more) and half the street, the street's line crosses square to it.
+		/// </summary>
+		private static void AssertFronts(PointOfInterestLayoutRequest request, PointOfInterestLayoutPiece piece)
+		{
+			Vector2 front = PointOfInterestLayouts.Rotate(Vector2.down, piece.Yaw);
+			Vector2 door = piece.Offset + front * (piece.Footprint.y * 0.5f);
+			bool Crosses(Vector2[] line, bool closed, float half)
+			{
+				int n = closed ? line.Length : line.Length - 1;
+				for (int i = 0; i < n; i++)
+				{
+					Vector2 a = line[i], b = line[(i + 1) % line.Length], e = b - a;
+					float den = front.x * e.y - front.y * e.x;
+					if (Mathf.Abs(den) < 1e-6f)
+					{
+						continue;
+					}
+					Vector2 d = a - door;
+					float s = (d.x * e.y - d.y * e.x) / den, u = (d.x * front.y - d.y * front.x) / den;
+					// Square to within the few degrees a house is turned and a curving street bends across its width.
+					if (u >= -0.02f && u <= 1.02f && s >= half + 0.85f && s <= half + 2f && Mathf.Abs(Vector2.Dot(front, e.normalized)) < 0.35f)
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+			bool fronts = false;
+			foreach (PointOfInterestLayoutStreet street in request.Streets)
+			{
+				fronts |= Crosses(street.Points, false, street.Width * 0.5f);
+			}
+			foreach (Vector2[] plaza in request.Plazas)
+			{
+				fronts |= Crosses(plaza, true, 0f);
+			}
+			if (!fronts)
+			{
+				// What it does face, for the message: the nearest street line to its door.
+				float nearest = float.PositiveInfinity, square = 0f;
+				foreach (PointOfInterestLayoutStreet street in request.Streets)
+				{
+					for (int i = 1; i < street.Points.Length; i++)
+					{
+						Vector2 a = street.Points[i - 1], ab = street.Points[i] - a;
+						float t = Mathf.Clamp01(Vector2.Dot(door - a, ab) / Mathf.Max(1e-6f, ab.sqrMagnitude));
+						float d = Vector2.Distance(a + ab * t, door) - street.Width * 0.5f;
+						if (d < nearest)
+						{
+							nearest = d;
+							square = Vector2.Dot(front, ab.normalized);
+						}
+					}
+				}
+				Assert.Fail($"the house at {piece.Offset} (yaw {piece.Yaw:0.0}) faces square onto a street (or a plaza) across its set-back; nearest kerb {nearest:0.00} m, cos {square:0.00}");
+			}
+		}
+
+		/// <summary>
+		/// Every town plan lays its houses on an outlined, entered site: inside the outline, none overlapping another or
+		/// standing on a street, each fronting its street, most of them laid, the streets inside the outline, and every road's
+		/// end on a street.
+		/// </summary>
+		[TestCase(PointOfInterestTownPlan.StreetVillage, 50f, 18)]
+		[TestCase(PointOfInterestTownPlan.GreenVillage, 50f, 18)]
+		[TestCase(PointOfInterestTownPlan.MarketTown, 85f, 36)]
+		[TestCase(PointOfInterestTownPlan.RadialCity, 130f, 70)]
+		[TestCase(PointOfInterestTownPlan.Port, 65f, 24)]
+		[TestCase(PointOfInterestTownPlan.Bailey, 55f, 8)]
+		[TestCase(PointOfInterestTownPlan.Auto, 85f, 36)]
+		public void EveryTownPlanLaysItsHousesOnItsStreets(PointOfInterestTownPlan plan, float radius, int houses)
+		{
+			bool walled = plan == PointOfInterestTownPlan.RadialCity || plan == PointOfInterestTownPlan.Bailey;
+			var slots = new List<(PointOfInterestSlotRole, Vector2, float, int)>();
+			if (walled)
+			{
+				slots.Add((PointOfInterestSlotRole.Perimeter, WallSize, 6f, 1));
+				slots.Add((PointOfInterestSlotRole.Gate, GateSize, 12f, 2));
+				slots.Add((PointOfInterestSlotRole.WallTower, TowerSize, 0f, 6));
+			}
+			if (plan == PointOfInterestTownPlan.Port)
+			{
+				slots.Add((PointOfInterestSlotRole.Pier, new Vector2(3f, 6f), 6f, 2));
+			}
+			slots.Add((PointOfInterestSlotRole.Centre, plan == PointOfInterestTownPlan.Bailey || plan == PointOfInterestTownPlan.RadialCity ? KeepSize : new Vector2(3f, 3f), 0f, 1));
+			slots.Add((PointOfInterestSlotRole.Centre, new Vector2(3f, 2f), 0f, 4));
+			slots.Add((PointOfInterestSlotRole.Street, HouseSize, 0f, houses));
+			slots.Add((PointOfInterestSlotRole.Scatter, CrateSize, 0f, 10));
+			PointOfInterestLayoutRequest request = Request(walled ? PointOfInterestLayout.Walled : PointOfInterestLayout.Street, radius, slots.ToArray());
+			request.Plan = plan;
+			request.Outline = Oval(radius, 0.72f, 55f);
+			request.Yaw = 15f;
+			request.Seed = 31;
+			request.Entrances.AddRange(new[] { 70f, 230f });
+			if (plan == PointOfInterestTownPlan.Port)
+			{
+				request.ShoreAhead = radius * 0.6f;
+			}
+			for (int i = 0; i < request.Entrances.Count; i++)
+			{
+				float reach = PointOfInterestOutline.ReachToward(request.Outline, radius, request.Entrances[i] + request.Yaw);
+				request.EntranceDepths.Add(reach * SiteEntrances.EntryDepth);
+			}
+			List<PointOfInterestLayoutPiece> pieces = PointOfInterestLayouts.Place(request, new DeterministicRNG(17));
+			string name = $"{plan} ({request.ChosenPlan})";
+			AssertPacked(name, request, pieces);
+			Assert.That(request.Streets, Is.Not.Empty, $"{name}: streets laid");
+			// The streets inside the outline.
+			foreach (PointOfInterestLayoutStreet street in request.Streets)
+			{
+				foreach (Vector2 p in street.Points)
+				{
+					Assert.That(p.magnitude, Is.LessThanOrEqualTo(Boundary(request, p) + 0.01f), $"{name}: a street point at {p} stays inside");
+				}
+			}
+			int houseSlot = slots.FindIndex(x => x.Item1 == PointOfInterestSlotRole.Street);
+			List<PointOfInterestLayoutPiece> laid = pieces.FindAll(p => p.Slot == houseSlot);
+			Assert.That(laid.Count, Is.GreaterThanOrEqualTo((int)(houses * 0.6f)), $"{name}: {laid.Count} of {houses} houses found room");
+			var four = new Vector2[4];
+			foreach (PointOfInterestLayoutPiece house in laid)
+			{
+				// A bailey's buildings stand backed onto the curtain, facing the ward; everywhere else a house fronts its street.
+				if (request.ChosenPlan != PointOfInterestTownPlan.Bailey)
+				{
+					AssertFronts(request, house);
+				}
+				// No street's line runs within half its width of the house's walls.
+				foreach (PointOfInterestLayoutStreet street in request.Streets)
+				{
+					for (int i = 1; i < street.Points.Length; i++)
+					{
+						for (float t = 0f; t <= 1f; t += 0.25f)
+						{
+							Vector2 p = Vector2.Lerp(street.Points[i - 1], street.Points[i], t);
+							Vector2 local = PointOfInterestLayouts.Rotate(p - house.Offset, -house.Yaw);
+							float dx = Mathf.Max(0f, Mathf.Abs(local.x) - house.Footprint.x * 0.5f), dz = Mathf.Max(0f, Mathf.Abs(local.y) - house.Footprint.y * 0.5f);
+							Assert.That(Mathf.Sqrt(dx * dx + dz * dz), Is.GreaterThanOrEqualTo(street.Width * 0.5f - 0.05f), $"{name}: the house at {house.Offset} stands off the street at {p}");
+						}
+					}
+				}
+			}
+			// Each road's end inside lies on a street (the street in from its entrance passes through it).
+			for (int i = 0; i < request.Entrances.Count; i++)
+			{
+				float e = request.Entrances[i] * Mathf.Deg2Rad;
+				Vector2 end = new Vector2(Mathf.Sin(e), Mathf.Cos(e)) * request.EntranceDepths[i];
+				float nearest = float.PositiveInfinity;
+				foreach (PointOfInterestLayoutStreet street in request.Streets)
+				{
+					for (int k = 1; k < street.Points.Length; k++)
+					{
+						Vector2 a = street.Points[k - 1], ab = street.Points[k] - a;
+						float t = Mathf.Clamp01(Vector2.Dot(end - a, ab) / Mathf.Max(1e-6f, ab.sqrMagnitude));
+						nearest = Mathf.Min(nearest, Vector2.Distance(a + ab * t, end));
+					}
+				}
+				Assert.That(nearest, Is.LessThan(1f), $"{name}: the road from {request.Entrances[i]}° ends on a street");
+			}
+		}
+
+		/// <summary>The streets are a function of the site's plan seed: another seed lays another town, the same seed the same.</summary>
+		[Test]
+		public void TheTownPlanFollowsItsSeed()
+		{
+			PointOfInterestLayoutRequest Make(int seed)
+			{
+				PointOfInterestLayoutRequest request = Request(PointOfInterestLayout.Street, 80f, (PointOfInterestSlotRole.Centre, new Vector2(3f, 3f), 0f, 1),
+					(PointOfInterestSlotRole.Street, HouseSize, 0f, 30));
+				request.Outline = Oval(80f, 0.8f, 10f);
+				request.Seed = seed;
+				request.Plan = PointOfInterestTownPlan.MarketTown;
+				return request;
+			}
+			PointOfInterestLayoutRequest a = Make(5), b = Make(5), c = Make(6);
+			PointOfInterestLayouts.Place(a, new DeterministicRNG(1));
+			PointOfInterestLayouts.Place(b, new DeterministicRNG(1));
+			PointOfInterestLayouts.Place(c, new DeterministicRNG(1));
+			Assert.That(b.Streets.Count, Is.EqualTo(a.Streets.Count));
+			for (int i = 0; i < a.Streets.Count; i++)
+			{
+				Assert.That(b.Streets[i].Points, Is.EqualTo(a.Streets[i].Points));
+			}
+			bool differs = c.Streets.Count != a.Streets.Count;
+			for (int i = 0; !differs && i < a.Streets.Count; i++)
+			{
+				differs = c.Streets[i].Points.Length != a.Streets[i].Points.Length || c.Streets[i].Points[c.Streets[i].Points.Length / 2] != a.Streets[i].Points[a.Streets[i].Points.Length / 2];
+			}
+			Assert.That(differs, Is.True, "another seed, another town");
+		}
+
+		/// <summary>A terraced site's pieces keep off its banks: nothing straddles a step between two terraces.</summary>
+		[Test]
+		public void NothingIsBuiltAcrossATerracesBank()
+		{
+			PointOfInterestLayoutRequest request = Request(PointOfInterestLayout.Street, 85f, (PointOfInterestSlotRole.Centre, new Vector2(3f, 3f), 0f, 1),
+				(PointOfInterestSlotRole.Street, HouseSize, 0f, 36), (PointOfInterestSlotRole.Scatter, CrateSize, 0f, 20));
+			var pad = new PointOfInterestPad
+			{
+				Id = 1,
+				Centre = new Vector3(0f, 50f, 0f),
+				Radius = 85f,
+				TerraceAxis = Vector2.up,
+				TerraceSteps = new[] { -22f, 24f },
+				TerraceLevels = new[] { 45f, 49f, 53f },
+				TerraceRamps = new[] { 20f, -20f },
+				RampHalfWidth = 4f,
+			};
+			request.Pad = pad;
+			request.Seed = 3;
+			List<PointOfInterestLayoutPiece> pieces = PointOfInterestLayouts.Place(request, new DeterministicRNG(4));
+			Assert.That(request.ChosenPlan, Is.EqualTo(PointOfInterestTownPlan.HillTown));
+			AssertPacked("hill town", request, pieces);
+			var four = new Vector2[4];
+			int houses = 0;
+			foreach (PointOfInterestLayoutPiece piece in pieces)
+			{
+				houses += piece.Role == PointOfInterestSlotRole.Street ? 1 : 0;
+				PointOfInterestLayouts.Corners(piece.Offset, piece.Yaw, piece.Footprint, four);
+				foreach (Vector2 c in four)
+				{
+					Assert.That(PointOfInterestTerraces.OnSlope(pad, c.x, c.y, 0f), Is.False, $"a {piece.Role} corner at {c} is on a bank");
+				}
+			}
+			Assert.That(houses, Is.GreaterThanOrEqualTo(20), "the terraces hold the town");
 		}
 
 		[Test]

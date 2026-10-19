@@ -74,6 +74,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public PointOfInterestSettings PointsOfInterest;
 
+		/// <summary>
+		/// Biomes to paint in place of the ones the planet chooses (<see cref="WorldAtlasScene.BiomeOverrides"/>), applied
+		/// wherever the cut reads its biomes. Null paints the planet's own. Written to the atlas entry with the placement.
+		/// </summary>
+		public SceneBiomeOverrides BiomeOverrides;
+
 		/// <summary>The radius actually used: <see cref="RadiusKm"/>, or the body's atlas radius.</summary>
 		public double ResolvedRadiusKm => RadiusKm > 0.0 ? RadiusKm : PlanetSurface.SceneRadiusKm(Body);
 

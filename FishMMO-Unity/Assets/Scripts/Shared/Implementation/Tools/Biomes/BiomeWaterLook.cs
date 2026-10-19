@@ -71,10 +71,21 @@ namespace FishMMO.Shared.Biomes
 			return Mathf.Abs(a.r - b.r) <= tolerance && Mathf.Abs(a.g - b.g) <= tolerance && Mathf.Abs(a.b - b.b) <= tolerance;
 		}
 
-		/// <summary>The look <paramref name="t"/> of the way from <paramref name="a"/> to <paramref name="b"/>, value by value.</summary>
+		/// <summary>
+		/// The look <paramref name="t"/> of the way from <paramref name="a"/> to <paramref name="b"/>, value by value; exactly
+		/// <paramref name="a"/> or <paramref name="b"/> at either end (a + (b − a)·1 can miss b by a rounding), so a river wholly
+		/// in the water it joins is that water's look bit for bit.
+		/// </summary>
 		public static BiomeWaterLook Lerp(BiomeWaterLook a, BiomeWaterLook b, float t)
 		{
-			t = Mathf.Clamp01(t);
+			if (!(t > 0f))
+			{
+				return a;
+			}
+			if (t >= 1f)
+			{
+				return b;
+			}
 			return new BiomeWaterLook(Color.Lerp(a.Shallow, b.Shallow, t), Color.Lerp(a.Deep, b.Deep, t), Vector3.Lerp(a.Absorption, b.Absorption, t),
 				Mathf.Lerp(a.Turbidity, b.Turbidity, t), Color.Lerp(a.Silt, b.Silt, t), Color.Lerp(a.Foam, b.Foam, t));
 		}

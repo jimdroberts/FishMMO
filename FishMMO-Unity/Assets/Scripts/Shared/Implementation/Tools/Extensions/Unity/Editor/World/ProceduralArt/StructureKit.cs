@@ -96,6 +96,12 @@ namespace FishMMO.Shared.WorldDesign
 			return ProceduralArtCatalogue.PrefabPath(StructurePieces.PrefabName(pieceId, variant, finish));
 		}
 
+		/// <summary>The generated prefab's project path with its roof at a pitch (null: the kit's roof; StructureRoofs).</summary>
+		public static string PrefabPath(string pieceId, int variant, StructureFinish finish, StructureRoofPitch? roof)
+		{
+			return ProceduralArtCatalogue.PrefabPath(StructurePieces.PrefabName(pieceId, variant, finish, roof));
+		}
+
 		/// <summary>The LOCAL stand-in's path for a piece (it may not exist).</summary>
 		public static string LocalPrefabPath(string pieceId, int variant, StructureFinish finish = StructureFinish.None)
 		{

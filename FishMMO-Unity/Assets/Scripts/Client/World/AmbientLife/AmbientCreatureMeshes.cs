@@ -19,7 +19,7 @@ namespace FishMMO.Client
 	/// <para>
 	/// Parts (TEXCOORD1.x): birds 0 body, 1 left wing, 2 right wing, 3 legs, 4 head and bill, 5 tail; walkers 0 body,
 	/// 1-4 legs (front left, front right, hind left, hind right), 5 tail, 6 head and ears; crabs 1-8 legs, 9 claws;
-	/// beetles 1-6 legs, 9 feelers.
+	/// beetles 1-6 legs, 9 feelers; spiders 1-8 legs, 9 palps; crickets 1-6 legs, 9 feelers.
 	/// </para>
 	/// </remarks>
 	public static class AmbientCreatureMeshes
@@ -39,6 +39,8 @@ namespace FishMMO.Client
 					return 2f;
 				case AmbientShape.Crab:
 				case AmbientShape.Beetle:
+				case AmbientShape.Spider:
+				case AmbientShape.Cricket:
 					return 3f;
 				case AmbientShape.Swarm:
 					return 4f;
@@ -106,6 +108,12 @@ namespace FishMMO.Client
 					break;
 				case AmbientShape.Beetle:
 					Beetle(b, back, belly, accent);
+					break;
+				case AmbientShape.Spider:
+					Spider(b, back, belly, accent);
+					break;
+				case AmbientShape.Cricket:
+					Cricket(b, back, belly, accent);
 					break;
 				case AmbientShape.Swarm:
 					Swarm(b, kind, back, belly);
@@ -499,6 +507,53 @@ namespace FishMMO.Client
 				// A feeler: forward and up from the head, swaying (part 9).
 				Limb(b, new[] { new Vector3(side * 0.05f, 0.19f, 0.48f), new Vector3(side * 0.14f, 0.3f, 0.62f), new Vector3(side * 0.2f, 0.34f, 0.74f) },
 					new[] { 0.016f, 0.012f, 0.008f }, accent, 9f);
+			}
+		}
+
+		private static void Spider(Builder b, Color back, Color belly, Color accent)
+		{
+			// The head-and-body small and low in front, the abdomen round behind it; eight long legs out of the front part, bent
+			// high at the knee and down to the feet well out to the sides, the front pairs reaching forward, the back ones back.
+			Ellipsoid(b, new Vector3(0f, 0.16f, 0.12f), new Vector3(0.16f, 0.1f, 0.18f), 4, 7, back, belly, 0f, 0f);
+			Ellipsoid(b, new Vector3(0f, 0.22f, -0.22f), new Vector3(0.22f, 0.19f, 0.27f), 5, 8, back, belly, 0f, 0f);
+			for (int side = -1; side <= 1; side += 2)
+			{
+				Disc(b, new Vector3(side * 0.04f, 0.24f, 0.28f), new Vector3(side * 0.3f, 0.6f, 0.75f).normalized, 0.022f, new Color(0.01f, 0.01f, 0.012f), 0f);
+				for (int leg = 0; leg < 4; leg++)
+				{
+					float z = Mathf.Lerp(0.22f, 0.02f, leg / 3f);
+					float reach = Mathf.Lerp(0.35f, -0.4f, leg / 3f);
+					float part = 1f + leg * 2f + (side < 0 ? 0f : 1f);
+					Limb(b, new[] { new Vector3(side * 0.12f, 0.15f, z), new Vector3(side * 0.42f, 0.44f, z + reach * 0.45f), new Vector3(side * 0.78f, 0f, z + reach) },
+						new[] { 0.03f, 0.026f, 0.014f }, Color.Lerp(back, accent, 0.5f), part);
+				}
+				// A palp, short and forward (part 9).
+				Limb(b, new[] { new Vector3(side * 0.05f, 0.12f, 0.28f), new Vector3(side * 0.08f, 0.1f, 0.38f) }, new[] { 0.025f, 0.018f }, accent, 9f);
+			}
+		}
+
+		private static void Cricket(Builder b, Color back, Color belly, Color accent)
+		{
+			// A humped body in bands, a small head tucked under its front, long spiny hind legs folded high (the knees over the
+			// back), short front legs, and feelers twice the body's length sweeping out ahead (part 9).
+			Ellipsoid(b, new Vector3(0f, 0.2f, -0.05f), new Vector3(0.16f, 0.17f, 0.42f), 6, 8, back, belly, 0f, 0f);
+			Ellipsoid(b, new Vector3(0f, 0.14f, 0.38f), new Vector3(0.1f, 0.11f, 0.1f), 4, 6, Color.Lerp(back, accent, 0.3f), belly, 0f, 0f);
+			for (int side = -1; side <= 1; side += 2)
+			{
+				Disc(b, new Vector3(side * 0.08f, 0.17f, 0.43f), new Vector3(side, 0.2f, 0.4f).normalized, 0.022f, new Color(0.01f, 0.01f, 0.012f), 0f);
+				// Front and middle legs.
+				for (int leg = 0; leg < 2; leg++)
+				{
+					float z = leg == 0 ? 0.26f : 0.08f;
+					float part = 1f + leg * 2f + (side < 0 ? 0f : 1f);
+					Limb(b, new[] { new Vector3(side * 0.1f, 0.1f, z), new Vector3(side * 0.28f, 0.16f, z + 0.08f), new Vector3(side * 0.36f, 0f, z + 0.12f) },
+						new[] { 0.026f, 0.022f, 0.014f }, Color.Lerp(back, accent, 0.5f), part);
+				}
+				// The hind leg: the thigh up and back to a knee over the body, the shin down to the ground far behind.
+				Limb(b, new[] { new Vector3(side * 0.12f, 0.14f, -0.12f), new Vector3(side * 0.24f, 0.46f, -0.42f), new Vector3(side * 0.3f, 0f, -0.82f) },
+					new[] { 0.06f, 0.035f, 0.016f }, Color.Lerp(back, accent, 0.4f), side < 0 ? 5f : 6f);
+				Limb(b, new[] { new Vector3(side * 0.04f, 0.18f, 0.46f), new Vector3(side * 0.3f, 0.42f, 0.95f), new Vector3(side * 0.62f, 0.3f, 1.5f), new Vector3(side * 0.9f, 0.16f, 2f) },
+					new[] { 0.014f, 0.01f, 0.007f, 0.004f }, accent, 9f);
 			}
 		}
 

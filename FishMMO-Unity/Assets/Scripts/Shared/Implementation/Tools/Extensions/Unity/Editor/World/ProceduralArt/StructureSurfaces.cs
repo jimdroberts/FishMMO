@@ -61,6 +61,9 @@ namespace FishMMO.Shared.WorldDesign
 				case StructureMaterial.Glass: return "Iron";
 				// Scraped horn and oiled parchment: smooth, a little clouded; its own albedo is also its glow (StructureLamplight).
 				case StructureMaterial.Lamplight: return "Plaster";
+				// The cold glows' lacquer and mote (2026-10-18): as a lamp's pane, their albedo also their glow.
+				case StructureMaterial.Runelight:
+				case StructureMaterial.Faelight: return "Plaster";
 				// The structure palette's surfaces, one each (2026-10-16, I6a).
 				case StructureMaterial.Log: return "Log";
 				case StructureMaterial.Shingle: return "Shingle";
@@ -89,7 +92,27 @@ namespace FishMMO.Shared.WorldDesign
 				case StructureMaterial.Glass: return new Color(0.42f, 0.37f, 0.3f);
 				// A lit horn pane: warm amber.
 				case StructureMaterial.Lamplight: return new Color(1f, 0.82f, 0.55f);
+				// The cold glows by day, unlit: a pale blue-grey lacquer, a pale green-gold mote.
+				case StructureMaterial.Runelight: return new Color(0.78f, 0.86f, 0.92f);
+				case StructureMaterial.Faelight: return new Color(0.86f, 0.92f, 0.62f);
 				default: return Color.white;
+			}
+		}
+
+		/// <summary>
+		/// A material's <c>_FishStructure</c> flag (FishWeatherLitForwardPass.hlsl): 2 a pane lit at night (glass), 3 a cold glow
+		/// that pulses with its piece's light (<see cref="TryGlow"/>), 1 every other part (weathered as a building).
+		/// </summary>
+		public static float StructureFlag(StructureMaterial material) => material == StructureMaterial.Glass ? 2f : TryGlow(material, out _) ? 3f : 1f;
+
+		/// <summary>The cold glow a material gives off (2026-10-18, I6g: rune-light, faerie-light); false for every other material.</summary>
+		public static bool TryGlow(StructureMaterial material, out SceneGlowHue hue)
+		{
+			switch (material)
+			{
+				case StructureMaterial.Runelight: hue = SceneGlowHue.Rune; return true;
+				case StructureMaterial.Faelight: hue = SceneGlowHue.Faerie; return true;
+				default: hue = SceneGlowHue.Rune; return false;
 			}
 		}
 

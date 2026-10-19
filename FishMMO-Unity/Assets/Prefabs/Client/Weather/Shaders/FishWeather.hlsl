@@ -131,12 +131,47 @@ SAMPLER(sampler_FishCoverTex);
 // The seasonal snow line (WeatherCoverMap.SnowLineId, GroundCover.SnowLine): x the height the snowpack starts at, y where
 // it is whole (world y), z 1 while snow may lie anywhere in view, w how much of a cold enough place it covers (0: none).
 float4 _FishSnowLine;
+// x the height the pack lies deepest at (world y), y the metres it then lies, z 1 when the climate field is published, w the
+// lowest the line comes anywhere (world y): ground below it skips the line's noise and field altogether.
+float4 _FishSnowDeep;
+// Each place's sea-level climate against the middle's, K (SnowLineField): what lifts the line from place to place. Read
+// with the cover's own sampler (bilinear, clamped): the ground's passes are near the limit of samplers.
+TEXTURE2D(_FishSnowFieldTex);
+float4 _FishSnowFieldRect;  // xy its world x/z corner, zw one over its size in metres
 
-// The season's snowpack at a height, 0..1: what lies past the cover map, where the map's own bands (each its own climate,
-// altitude and all) do not reach. A distant range stands white above its snow line.
-float FishSnowpackAt(float worldY)
+#include "FishSnowLine.hlsl"
+
+// How far the snow line is lifted at a world position, metres: the place's climate and the wander.
+float FishSnowLift(float3 worldPos)
 {
-    return _FishSnowLine.w * saturate((worldY - _FishSnowLine.x) / max(1e-3, _FishSnowLine.y - _FishSnowLine.x));
+    float kelvin = 0.0;
+    if (_FishSnowDeep.z > 0.5)
+    {
+        float2 uv = saturate((worldPos.xz - _FishSnowFieldRect.xy) * _FishSnowFieldRect.zw);
+        kelvin = SAMPLE_TEXTURE2D_LOD(_FishSnowFieldTex, sampler_FishCoverTex, uv, 0).r;
+    }
+    return FishSnowLineLift(worldPos.xz, kelvin, _FishSnowLine);
+}
+
+// The season's snowpack at a world position, 0..1, by its own height: everywhere, the cover map's ground included, whose
+// texels hold only what the weather laid. A range stands white above a snow line that follows the ground, near and far.
+float FishSnowpackAt(float3 worldPos)
+{
+    if (_FishSnowLine.w <= 0.0 || worldPos.y < _FishSnowDeep.w)
+    {
+        return 0.0;
+    }
+    return FishPackCover(worldPos.y, FishSnowLift(worldPos), _FishSnowLine);
+}
+
+// The season's snowpack's depth past the blanket at a world position, metres: none at the line, deepest on the summits.
+float FishSnowpackDepthAt(float3 worldPos)
+{
+    if (_FishSnowLine.w <= 0.0 || _FishSnowDeep.y <= 0.0 || worldPos.y < _FishSnowDeep.w)
+    {
+        return 0.0;
+    }
+    return FishPackDepth(worldPos.y, FishSnowLift(worldPos), _FishSnowLine, _FishSnowDeep);
 }
 
 // Whether snow may lie anywhere in view: the scene's own figure, the map's, or ground reaching the snow line. What the snow
@@ -146,22 +181,51 @@ bool FishSnowAnywhere()
     return _FishWeatherCover.x > 0.0 || _FishSnowLine.z > 0.5;
 }
 
+// The burning fires near the camera (SiteEmbers.PublishHeat, from SiteFireState): xyz where, w how far round it the snow
+// melts, metres. Each clears the snow round itself and wets the ground it melted.
+float4 _FishHeat[16];
+float _FishHeatCount;
+
+// How much of the snow survives a fire's heat at a point, 0 at the fire … 1 past its ring; `wet` the melt round its edge.
+float FishHeatClear(float3 worldPos, out float wet)
+{
+    float keep = 1.0;
+    wet = 0.0;
+    int count = (int)_FishHeatCount;
+    for (int i = 0; i < count; i++)
+    {
+        float4 h = _FishHeat[i];
+        float d = distance(worldPos.xz, h.xz);
+        if (d < h.w * 1.5 && abs(worldPos.y - h.y) < 3.0)
+        {
+            keep = min(keep, smoothstep(h.w, h.w * 1.4, d));
+            wet = max(wet, 1.0 - smoothstep(h.w * 1.1, h.w * 1.5, d));
+        }
+    }
+    return keep;
+}
+
 // The cover at a world position: from the map where it reaches, the scene's own figure elsewhere, with the season's
-// snowpack by height over it.
+// snowpack by height over either, and none in the ring a burning fire melts.
 float4 FishCoverAt(float3 worldPos)
 {
-    float4 scene = _FishWeatherCover;
-    scene.x = max(scene.x, FishSnowpackAt(worldPos.y));
-    if (_FishCoverParams.x < 0.5)
+    float4 here = _FishWeatherCover;
+    if (_FishCoverParams.x >= 0.5)
     {
-        return scene;
+        float2 uv = (worldPos.xz - _FishCoverRect.xy) / max(_FishCoverRect.zw, 1e-3);
+        if (all(uv >= 0.0) && all(uv <= 1.0))
+        {
+            here = SAMPLE_TEXTURE2D_LOD(_FishCoverTex, sampler_FishCoverTex, uv, 0);
+        }
     }
-    float2 uv = (worldPos.xz - _FishCoverRect.xy) / max(_FishCoverRect.zw, 1e-3);
-    if (any(uv < 0.0) || any(uv > 1.0))
+    here.x = max(here.x, FishSnowpackAt(worldPos));
+    if (_FishHeatCount > 0.5 && here.x > 0.0)
     {
-        return scene;
+        float melt = 0.0;
+        here.x *= FishHeatClear(worldPos, melt);
+        here.y = max(here.y, melt);
     }
-    return SAMPLE_TEXTURE2D_LOD(_FishCoverTex, sampler_FishCoverTex, uv, 0);
+    return here;
 }
 
 // The blade grass standing on the ground round the camera (GrassSwardMap): how closed the sward is, 0..1, read with
@@ -196,19 +260,22 @@ float4 _FishSnowDepthParams;    // x metres the map's 1 stands for (the deepest 
 // samplers a pass may have.
 TEXTURE2D(_FishSnowDepthTex);
 
-// Metres of snow past the blanket at a world position; none past the map.
+// Metres of snow past the blanket at a world position: the weather's from the map where it reaches, and the season's
+// pack by height everywhere.
 float FishSnowDepthAt(float3 worldPos)
 {
-    if (_FishCoverParams.x < 0.5 || _FishSnowDepthParams.x <= 0.0)
+    float depth = FishSnowpackDepthAt(worldPos);
+    float melt = 0.0;
+    float keep = _FishHeatCount > 0.5 ? FishHeatClear(worldPos, melt) : 1.0;
+    if (_FishCoverParams.x >= 0.5 && _FishSnowDepthParams.x > 0.0)
     {
-        return 0.0;
+        float2 uv = (worldPos.xz - _FishCoverRect.xy) / max(_FishCoverRect.zw, 1e-3);
+        if (all(uv >= 0.0) && all(uv <= 1.0))
+        {
+            depth = max(depth, SAMPLE_TEXTURE2D_LOD(_FishSnowDepthTex, sampler_FishCoverTex, uv, 0).r * _FishSnowDepthParams.x);
+        }
     }
-    float2 uv = (worldPos.xz - _FishCoverRect.xy) / max(_FishCoverRect.zw, 1e-3);
-    if (any(uv < 0.0) || any(uv > 1.0))
-    {
-        return 0.0;
-    }
-    return SAMPLE_TEXTURE2D_LOD(_FishSnowDepthTex, sampler_FishCoverTex, uv, 0).r * _FishSnowDepthParams.x;
+    return depth * keep;
 }
 
 // Trails (GroundTrailMap): r how hard the ground is trodden (0..1), g how flat the grass lies (0..1). A world-aligned

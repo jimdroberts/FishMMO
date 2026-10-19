@@ -95,9 +95,15 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Flattens a pad: the ground inside its radius eased to its height by <paramref name="flatness"/>, easing back to
-		/// the ground over its blend. Holes are kept. Returns the samples changed.
+		/// Flattens a pad: the ground inside its outline (its radius for a disc) eased to its height, or its terraces' levels,
+		/// by <paramref name="flatness"/>, banked back to the ground past its edge. Holes are kept. Returns the samples changed.
 		/// </summary>
+		/// <remarks>
+		/// Past the edge everything is measured along the ray from the pad's centre: how far past the outline a sample lies,
+		/// the bank traced out along that ray (<see cref="BankReach(Func{float, float, float}, in PointOfInterestPad, Func{float, float, bool})"/>),
+		/// and the height the bank starts from, the level the outline's edge stands at there (a terraced pad's bank climbs
+		/// with its terraces). A disc is the outline whose reach is its radius every way, and is banked exactly as before.
+		/// </remarks>
 		/// <param name="wet">Whether a scene position is water or its bank (east, north); a bank never runs into it. Null for none.</param>
 		/// <param name="channel">
 		/// Whether a scene position is in a river's channel or a lake, for a pad with a <see cref="PointOfInterestPad.Shore"/>:
@@ -112,15 +118,18 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			float reach = pad.Radius + Mathf.Max(Mathf.Max(0.01f, pad.Blend), MaxEmbankmentMetres);
 			var area = new Rect(pad.Centre.x - reach, pad.Centre.z - reach, reach * 2f, reach * 2f);
-			float height = pad.Height;
 			flatness = Mathf.Clamp01(flatness);
 			bool shore = pad.Shore.sqrMagnitude > 0.25f;
 			// How far the bank runs each way before it meets the ground, traced over the ground as it stands now.
-			float[] bank = BankReach((east, north) => GroundAt(terrains, east, north), pad.Centre, pad.Radius, pad.Blend, height, wet);
+			float[] bank = BankReach((east, north) => GroundAt(terrains, east, north), pad, wet);
+			PointOfInterestPad levels = pad;
 			return EditHeights(terrains, plan, area, (east, north, metres) =>
 			{
-				float dx = east - pad.Centre.x, dz = north - pad.Centre.z;
-				float target = PadHeight(Mathf.Sqrt(dx * dx + dz * dz), metres, pad.Radius, pad.Blend, height, ReachToward(bank, dx, dz));
+				float dx = east - levels.Centre.x, dz = north - levels.Centre.z;
+				float distance = Mathf.Sqrt(dx * dx + dz * dz);
+				float rim = PointOfInterestOutline.Reach(levels.Outline, levels.Radius, dx, dz);
+				float height = EdgeLevel(levels, east, north, dx, dz, distance, rim);
+				float target = PadHeight(distance, metres, rim, levels.Blend, height, ReachToward(bank, dx, dz));
 				float pull = flatness;
 				if (shore)
 				{
@@ -256,14 +265,53 @@ namespace FishMMO.Shared.WorldDesign
 		/// </param>
 		public static float[] BankReach(Func<float, float, float> groundAt, Vector3 centre, float radius, float blend, float height,
 			Func<float, float, bool> wet = null)
+			=> BankReach(groundAt, centre, blend, (cos, sin) => (radius, height), wet);
+
+		/// <summary>
+		/// <see cref="BankReach(Func{float, float, float}, Vector3, float, float, float, Func{float, float, bool})"/> for a pad
+		/// as it is drawn: each ray's bank starts at the outline's edge that way, from the level the pad stands at there.
+		/// </summary>
+		public static float[] BankReach(Func<float, float, float> groundAt, in PointOfInterestPad pad, Func<float, float, bool> wet = null)
+		{
+			PointOfInterestPad levels = pad;
+			return BankReach(groundAt, pad.Centre, pad.Blend, (cos, sin) =>
+			{
+				float rim = PointOfInterestOutline.Reach(levels.Outline, levels.Radius, cos, sin);
+				return (rim, EdgeLevel(levels, levels.Centre.x + cos * rim, levels.Centre.z + sin * rim, cos * rim, sin * rim, rim, rim));
+			}, wet);
+		}
+
+		/// <summary>
+		/// The level a pad's ground is eased to at a scene position (east, north) a <paramref name="distance"/> from its centre
+		/// (offset dx, dz), its edge <paramref name="rim"/> out that way: its height, or its terraces' level there, and past
+		/// the edge the level the edge stands at on the same ray.
+		/// </summary>
+		private static float EdgeLevel(in PointOfInterestPad pad, float east, float north, float dx, float dz, float distance, float rim)
+		{
+			if (!PointOfInterestTerraces.Terraced(pad))
+			{
+				return pad.Height;
+			}
+			if (distance <= rim || distance < 1e-3f)
+			{
+				return PointOfInterestTerraces.LevelAt(pad, east, north);
+			}
+			float k = rim / distance;
+			return PointOfInterestTerraces.LevelAt(pad, pad.Centre.x + dx * k, pad.Centre.z + dz * k);
+		}
+
+		/// <summary>The rays' bank, each ray starting at its own rim and height (<paramref name="edge"/>(cos, sin)).</summary>
+		private static float[] BankReach(Func<float, float, float> groundAt, Vector3 centre, float blend, Func<float, float, (float rim, float height)> edge,
+			Func<float, float, bool> wet)
 		{
 			var reach = new float[BankRays];
-			float most = radius + MaxEmbankmentMetres;
 			const float Step = 1f;
 			for (int r = 0; r < BankRays; r++)
 			{
 				float angle = r * (2f * Mathf.PI / BankRays);
 				float cos = Mathf.Cos(angle), sin = Mathf.Sin(angle);
+				(float radius, float height) = edge(cos, sin);
+				float most = radius + MaxEmbankmentMetres;
 				float found = most;
 				for (float d = radius; d <= most; d += Step)
 				{

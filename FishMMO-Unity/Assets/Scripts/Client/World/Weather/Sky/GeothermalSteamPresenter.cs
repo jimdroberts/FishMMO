@@ -263,6 +263,8 @@ namespace FishMMO.Client
 		private static readonly int NightLightsId = Shader.PropertyToID("_FishNightLights");
 		private static readonly Color ChimneySmoke = new Color(0.62f, 0.6f, 0.58f, 0f);
 		private static readonly Color FireSmoke = new Color(0.5f, 0.48f, 0.46f, 0f);
+		/// <summary>What a fire the rain or snow has caught gives off: steam, paler and thicker than its smoke.</summary>
+		private static readonly Color DousedSteam = new Color(0.8f, 0.8f, 0.82f, 0f);
 
 		/// <summary>The chimneys and fires round the camera (SceneSiteEmitters), again when it has moved far or the scenes changed.</summary>
 		private void FindHearths(Vector3 viewer)
@@ -310,9 +312,20 @@ namespace FishMMO.Client
 				float cold = Mathf.InverseLerp(14f, -4f, air.AirC);
 				bool fire = e.Kind == SceneEmitterKind.Fire;
 				float strength;
+				// A fire the weather has caught (SiteFireState): it hisses and steams while it smoulders, and once it is out
+				// only a wisp rises off the wet char; its glow goes with its flames.
+				SiteFireState.State state = fire ? SiteFireState.Of(e) : SiteFireState.State.Lit;
+				float steaming = state.Doused * (1f - state.Burn);
+				float glow = fire ? 1.4f * state.Burn : 0f;
+				Color colour = fire ? Color.Lerp(FireSmoke, DousedSteam, steaming) : ChimneySmoke;
 				if (fire)
 				{
-					strength = 0.55f;
+					float smoulder = state.Burn > 0.03f ? 1f : 0.2f;
+					strength = Mathf.Max(0.55f * state.Burn, 0.9f * steaming * smoulder);
+					if (strength < 0.02f)
+					{
+						continue;
+					}
 				}
 				else
 				{
@@ -325,8 +338,8 @@ namespace FishMMO.Client
 					strength = 0.25f + 0.25f * cold + 0.2f * Mathf.Max(meal, night);
 				}
 				float length = (fire ? 9f : 12f) * (1f + 0.6f * cold);
-				DrawSteam(site, e.Position, length, fire ? 0.35f : 0.22f, 0.13f, fire ? 1.4f : 1.1f, air.Wind, strength, 0, fire ? FireSmoke : ChimneySmoke,
-					camera, material, profile, true, 0f, fire ? 1.4f : 0f);
+				DrawSteam(site, e.Position, length, fire ? 0.35f : 0.22f, 0.13f, fire ? 1.4f : 1.1f, air.Wind, strength, 0, colour,
+					camera, material, profile, true, 0f, glow);
 				drawn++;
 			}
 		}

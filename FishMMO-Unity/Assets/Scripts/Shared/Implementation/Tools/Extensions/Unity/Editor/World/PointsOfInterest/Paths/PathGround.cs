@@ -206,7 +206,8 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				ScenePath way = index.Paths[path];
 				ScenePathPointFlags fa = way.FlagsAt(point - 1), fb = way.FlagsAt(point);
-				if (((fa | fb) & ScenePathPointFlags.InSite) != 0 || (fa & fb & ScenePathPointFlags.Bridge) != 0)
+				// A boardwalk's stretch (2026-10-18) is not carved either: its deck stands on piles over the ground as it lies.
+				if (((fa | fb) & ScenePathPointFlags.InSite) != 0 || (fa & fb & (ScenePathPointFlags.Bridge | ScenePathPointFlags.Boardwalk | ScenePathPointFlags.Ferry)) != 0)
 				{
 					continue;
 				}
@@ -267,8 +268,8 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				foreach (PointOfInterestPad pad in pads)
 				{
-					float dx = x - pad.Centre.x, dz = z - pad.Centre.z;
-					if (dx * dx + dz * dz < pad.Radius * pad.Radius)
+					// Inside the pad's outline (its disc when it has none): the site's own ground, already levelled.
+					if (pad.Contains(x, z))
 					{
 						return true;
 					}

@@ -25,6 +25,13 @@ namespace FishMMO.Client
 	/// and their maps kept as they are made: what play would have built, byte for byte.
 	/// </para>
 	/// <para>
+	/// <b>Index maps.</b> Every array-drawn terrain's index map is stored with it (<see cref="TerrainDetailBake.IndexMap"/>,
+	/// the CPU bake <see cref="TerrainIndexMap.Bake(float[,,])"/> of the alphamaps the cut just wrote: the GPU bake's texels
+	/// exactly), so play binds it instead of baking, and a client build may leave the alphamaps out. Writing a terrain's
+	/// alphamaps afterwards (a brush, an undo, a script) marks its map stale, in edit mode and in play; the editor keeps
+	/// baking live from the alphamaps until the scene is repainted or baked again here.
+	/// </para>
+	/// <para>
 	/// <b>Going stale.</b> Editing a terrain's heights or textures by hand marks its entry stale (Unity's terrain callbacks),
 	/// and the client builds that terrain as before. Painting details by hand raises no callback: rebake with Dashboard →
 	/// Biomes → "Bake terrain grass and scatter (open scene)", or repaint. An entry also goes unused when anything it was
@@ -54,7 +61,7 @@ namespace FishMMO.Client
 		private static void OnTerrainFinished(Scene scene, IReadOnlyList<Terrain> terrains, List<string> notes) => Bake(scene, terrains, notes);
 
 		[DashboardTool(DashboardToolAttribute.Biomes, "Bake terrain grass and scatter (open scene)", Section = "Diagnostics", Order = 117,
-			Tooltip = "Bakes the active scene's blade grass and detail scatter maps beside its terrain (what a cut or repaint does at its end), so play takes them at once instead of building them. Save the scene after.")]
+			Tooltip = "Bakes the active scene's blade grass and detail scatter maps, and stores each array terrain's index map, beside its terrain (what a cut or repaint does at its end), so play takes them at once instead of building them and client builds can leave the alphamaps out. Run it after painting the ground by hand. Save the scene after.")]
 		public static void BakeActiveScene()
 		{
 			Scene scene = SceneManager.GetActiveScene();
@@ -106,7 +113,7 @@ namespace FishMMO.Client
 			var prototypes = new List<int>();
 			var chosenGrass = new List<GrassType>();
 			var chosenScatter = new List<DetailScatterType>();
-			int grassTerrains = 0, scatterTerrains = 0;
+			int grassTerrains = 0, scatterTerrains = 0, indexTerrains = 0;
 			bool wasInline = TerrainBuildQueue.Inline;
 			TerrainBuildQueue.Inline = true;
 			try
@@ -120,6 +127,7 @@ namespace FishMMO.Client
 					}
 					var tile = new TerrainDetailBake.Tile { Data = data, HeightResolution = data.heightmapResolution };
 					ushort[] heights = null;
+					indexTerrains += StoreIndex(terrain, tile.Index) ? 1 : 0;
 
 					GrassBladeSystem.SelectBlades(terrain, grassSettings, grassTypes, grassKeys, warned, prototypes, chosenGrass);
 					GrassTerrain.Builder grass = prototypes.Count > 0 ? GrassTerrain.Begin(terrain, prototypes, chosenGrass) : null;
@@ -151,7 +159,7 @@ namespace FishMMO.Client
 						scatter.Result?.Dispose();
 					}
 
-					if (tile.Grass.Baked || tile.Scatter.Baked)
+					if (tile.Grass.Baked || tile.Scatter.Baked || tile.Index.Format != 0)
 					{
 						tile.Heights = heights ?? new ushort[0];
 						bake.Tiles.Add(tile);
@@ -166,7 +174,7 @@ namespace FishMMO.Client
 				EditorUtility.SetDirty(bake);
 				EditorSceneManager.MarkSceneDirty(scene);
 				long bytes = Bytes(bake);
-				notes?.Add($"Terrain grass and scatter baked for {bake.Tiles.Count} terrain(s) ({grassTerrains} with blade grass, {scatterTerrains} with scatter, " +
+				notes?.Add($"Terrain grass and scatter baked for {bake.Tiles.Count} terrain(s) ({grassTerrains} with blade grass, {scatterTerrains} with scatter, {indexTerrains} index map(s) stored, " +
 					$"{albedos} texture set colour cop{(albedos == 1 ? "y" : "ies")}, {(ground ? $"the {bake.Ground.Width}×{bake.Ground.Height} ground colour map" : "no ground colour map")}; " +
 					$"{bytes / 1048576.0:0.0} MB) in {watch.Elapsed.TotalSeconds:0.0} s: play takes them at once.");
 				return bake;
@@ -175,6 +183,28 @@ namespace FishMMO.Client
 			{
 				TerrainBuildQueue.Inline = wasInline;
 			}
+		}
+
+		/// <summary>
+		/// Stores an array-drawn terrain's index map in <paramref name="index"/>: the CPU bake of its alphamaps as they are now
+		/// (read once, whole). False, and <paramref name="index"/> left empty, for a terrain on another material or without
+		/// layers.
+		/// </summary>
+		public static bool StoreIndex(Terrain terrain, TerrainDetailBake.IndexMap index)
+		{
+			TerrainData data = terrain != null ? terrain.terrainData : null;
+			if (data == null || index == null || !ClientTerrainLayerStripper.IsArrayTerrain(terrain) || data.alphamapLayers <= 0
+				|| data.alphamapLayers > TerrainIndexMap.MaximumLayers)
+			{
+				return false;
+			}
+			int res = data.alphamapResolution;
+			index.Map = TerrainIndexMap.Bake(data.GetAlphamaps(0, 0, res, res));
+			index.Resolution = res;
+			index.Layers = data.alphamapLayers;
+			index.Stale = false;
+			index.Format = TerrainIndexMap.StoredFormat;
+			return true;
 		}
 
 		/// <summary>Steps a build (inline, so nothing waits on a worker) until it is done; false if it never finished.</summary>
@@ -351,6 +381,7 @@ namespace FishMMO.Client
 				n += g.Density.Length + g.Occupied.Length + g.Sward.Length + g.Freeboard.Length + g.Surface.Length + 4L * (g.MinHeights.Length + g.MaxHeights.Length);
 				TerrainDetailBake.Scatter s = t.Scatter;
 				n += 2L * (s.Slice0.Length + s.Slice1.Length) + s.Holes.Length + 4L * (s.ItemBounds.Length + s.ItemMin.Length + s.ItemMax.Length);
+				n += t.Index != null && t.Index.Map != null ? 4L * t.Index.Map.Length : 0L;
 			}
 			foreach (TerrainDetailBake.Albedo a in bake.Albedos)
 			{
@@ -364,7 +395,40 @@ namespace FishMMO.Client
 
 		private static void OnHeightsChanged(Terrain terrain, RectInt region, bool synched) => MarkStale(terrain);
 
-		private static void OnTextureChanged(Terrain terrain, string textureName, RectInt region, bool synched) => MarkStale(terrain);
+		private static void OnTextureChanged(Terrain terrain, string textureName, RectInt region, bool synched)
+		{
+			if (textureName == TerrainData.AlphamapTextureName)
+			{
+				MarkIndexStale(terrain);
+			}
+			MarkStale(terrain);
+		}
+
+		/// <summary>
+		/// A terrain's alphamaps were written (a stroke, an undo, a script; in edit mode or play, as both keep the change): its
+		/// stored index map no longer says what they say. The binder bakes live meanwhile; a client build keeps the alphamaps
+		/// of a tile whose map is stale.
+		/// </summary>
+		private static void MarkIndexStale(Terrain terrain)
+		{
+			if (terrain == null || terrain.terrainData == null || !terrain.gameObject.scene.IsValid() || !terrain.gameObject.scene.isLoaded)
+			{
+				return;
+			}
+			foreach (GameObject root in terrain.gameObject.scene.GetRootGameObjects())
+			{
+				if (root.name != SceneTerrainBake.ObjectName || !root.TryGetComponent(out SceneTerrainBake holder) || holder.Bake == null)
+				{
+					continue;
+				}
+				TerrainDetailBake.Tile tile = holder.Bake.TileOf(terrain.terrainData);
+				if (tile != null && tile.Index != null && tile.Index.Format != 0 && !tile.Index.Stale)
+				{
+					tile.Index.Stale = true;
+					EditorUtility.SetDirty(holder.Bake);
+				}
+			}
+		}
 
 		/// <summary>An edit-mode change to a terrain's heights, paint or holes: its baked entry is no longer what play would build.</summary>
 		private static void MarkStale(Terrain terrain)

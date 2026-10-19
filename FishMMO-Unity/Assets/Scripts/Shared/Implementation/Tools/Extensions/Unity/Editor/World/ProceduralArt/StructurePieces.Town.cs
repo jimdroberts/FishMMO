@@ -134,7 +134,7 @@ namespace FishMMO.Shared.WorldDesign
 				Frame = false, RidgeAlongX = false, Chimney = false, Windows = 0,
 				DoorWidth = 1.6f, DoorHeight = 3f, DoorX = 0f, DoorKind = StructureDoorKind.Studded, RoomKind = StructureRoomKind.Church, Key = 1,
 			};
-			BuildHouse(d, h);
+			HouseRoof roof = BuildHouse(d, h);
 			float floor = h.Plinth;
 			// Lancet windows down both sides, and buttresses between them.
 			for (int i = 0; i < 4; i++)
@@ -200,8 +200,9 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			else if (d.Mid)
 			{
-				// A bell-cote on the west gable: two piers and a little gable over the bell.
-				float y0 = floor + h.WallHeight + h.Rise - 0.3f;
+				// A bell-cote on the west gable: two piers and a little gable over the bell (on a flat roof, over the west parapet:
+				// the bell-cote moves with the roof its palette re-pitched, StructureRoofs).
+				float y0 = floor + h.WallHeight + h.Rise - 0.3f + roof.Shift;
 				for (int s = -1; s <= 1; s += 2)
 				{
 					d.Add(StructureShapes.Box(new Vector3(s * 0.45f, y0 + 0.7f, front + 0.1f), new Vector3(0.25f, 1.4f, 0.4f), StructureMaterial.Stone, 180 + (s > 0 ? 1 : 0)));
@@ -348,7 +349,8 @@ namespace FishMMO.Shared.WorldDesign
 						0.22f, 0.22f, StructureMaterial.Timber, 10 + (sx > 0 ? 2 : 0) + (sz > 0 ? 1 : 0)));
 				}
 			}
-			GableRoof(d, depth, width, eave, 1.5f, 0.45f, 0.12f, StructureMaterial.Timber, 20, Matrix4x4.TRS(Vector3.zero, Quaternion.Euler(0f, 90f, 0f), Vector3.one));
+			// At its palette's pitch, or a flat canopy (StructureRoofs, I6h): the forge's stack stands clear of either.
+			OwnGable(d, depth, width, eave, 1.5f, 0.45f, 0.12f, StructureMaterial.Timber, 20, Matrix4x4.TRS(Vector3.zero, Quaternion.Euler(0f, 90f, 0f), Vector3.one));
 			// The back wall: planks (the smithy's log wall in a palette), or stone.
 			using (d.Builds(WallRoles))
 			{

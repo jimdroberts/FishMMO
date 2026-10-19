@@ -8,7 +8,8 @@ namespace FishMMO.Shared
 	/// A scene's terrain detail maps, baked by the cut (TerrainDetailBaker, client editor): per terrain, what the client's
 	/// blade grass (GrassTerrain) and GPU detail scatter (DetailScatterTerrain) used to build from the terrain data on every
 	/// Play — the summed, smoothed and packed density maps, the heights, the water line and holes, the surface layers, the
-	/// work items' bounds — plus the grass's colour copies of the terrain texture sets. The client takes a terrain from here
+	/// work items' bounds — and the terrain's index map (<see cref="IndexMap"/>, what the array terrain draws in a player),
+	/// plus the grass's colour copies of the terrain texture sets. The client takes a terrain from here
 	/// in a frame instead of reading it back over ~1,400 frames, and falls back to building it whenever an entry does not
 	/// match what it would build (<see cref="Version"/>, the prototypes and their prefabs, the resolutions, the scatter's
 	/// density scale) or is marked <see cref="Tile.Stale"/>.
@@ -54,6 +55,40 @@ namespace FishMMO.Shared
 			public ushort[] Heights = new ushort[0];
 			public Grass Grass = new Grass();
 			public Scatter Scatter = new Scatter();
+			/// <summary>The terrain's index map (empty when none was stored: an old bake, or a terrain not drawn by arrays).</summary>
+			public IndexMap Index = new IndexMap();
+		}
+
+		/// <summary>
+		/// One terrain's index map (<see cref="TerrainIndexMap"/>) as the cut stored it: every alphamap texel's four strongest
+		/// layers and their weights, two words a texel, row by row — the CPU bake from the alphamaps the cut wrote, the GPU
+		/// bake's texels bit for bit. A player binds it instead of baking from the alphamaps, so a client build can leave the
+		/// alphamaps out (ClientTerrainLayerStripper, which checks the map against them first).
+		/// </summary>
+		/// <remarks>
+		/// Its own validity, apart from the tile's <see cref="Tile.Stale"/> (a height edit leaves the map good) and from
+		/// <see cref="Version"/> (the grass and scatter arithmetic): <see cref="Format"/> and <see cref="Stale"/>, set in the
+		/// editor when the terrain's alphamaps are written after the bake (TerrainDetailBaker).
+		/// </remarks>
+		[Serializable]
+		public sealed class IndexMap
+		{
+			/// <summary><see cref="TerrainIndexMap.StoredFormat"/> when stored; 0 for none.</summary>
+			public int Format;
+			/// <summary>Set in the editor when the terrain's alphamaps were written after the map was stored.</summary>
+			public bool Stale;
+			/// <summary>The alphamap resolution it was baked at (square) and the layer count it names.</summary>
+			public int Resolution;
+			public int Layers;
+			/// <summary>Two words a texel (ids, weights), texel (x, y) at 2 (y × <see cref="Resolution"/> + x).</summary>
+			public uint[] Map = new uint[0];
+
+			/// <summary>True when it may be drawn on a tile of this data (<see cref="TerrainIndexMap.IsUsable"/>).</summary>
+			public bool UsableFor(TerrainData data)
+			{
+				return data != null && TerrainIndexMap.IsUsable(Format, Stale, Resolution, Layers, Map != null ? Map.Length : 0,
+					data.alphamapResolution, data.alphamapLayers);
+			}
 		}
 
 		/// <summary>The blade grass's maps of one terrain (GrassTerrain).</summary>

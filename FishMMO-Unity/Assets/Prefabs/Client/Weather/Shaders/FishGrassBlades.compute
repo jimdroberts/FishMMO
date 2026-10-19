@@ -404,13 +404,37 @@ float4 _GrassSnow;                           // x 1 when the cover map is valid,
 float4 _GrassCoverRect;                      // xy the cover map's corner (world x/z), zw its size (m)
 float4 _GrassOcclusionRect;                  // xy the occlusion map's corner, zw its size
 float4 _GrassOcclusionRange;                 // x lowest height, y height range, z 1 when valid, w metres per texel
+// The seasonal snow line, as the surfaces draw it (FishSnowLine.hlsl, FishWeather.hlsl's _FishSnowLine/_FishSnowDeep and
+// its climate field), bound by name: the cover map holds only what the weather laid, the pack is by height.
+float4 _GrassSnowLine;                       // _FishSnowLine
+float4 _GrassSnowDeep;                       // _FishSnowDeep
+Texture2D<float> _GrassSnowField;            // _FishSnowFieldTex
+float4 _GrassSnowFieldRect;                  // _FishSnowFieldRect
 
-// The cover's snow and the deep snow at a point, bilinear by hand (FishCoverAt and FishSnowDepthAt read them filtered).
-// One exit, like GrassFreeboardAt: FXC flagged the early return as "potentially uninitialized" once inlined.
-bool GrassSnowAt(float2 xz, out float snow, out float deep)
+#include "FishSnowLine.hlsl"
+
+// The climate field at a point, bilinear by hand: K against the middle's.
+float GrassSnowFieldAt(float2 xz)
+{
+    uint w = 1u, h = 1u;
+    _GrassSnowField.GetDimensions(w, h);
+    int2 last = int2(w, h) - 1;
+    float2 st = saturate((xz - _GrassSnowFieldRect.xy) * _GrassSnowFieldRect.zw) * float2(w, h) - 0.5;
+    int2 i = (int2)floor(st);
+    float2 f = st - floor(st);
+    int2 a = clamp(i, 0, last), b = clamp(i + 1, 0, last);
+    return lerp(lerp(_GrassSnowField.Load(int3(a.x, a.y, 0)), _GrassSnowField.Load(int3(b.x, a.y, 0)), f.x),
+        lerp(_GrassSnowField.Load(int3(a.x, b.y, 0)), _GrassSnowField.Load(int3(b.x, b.y, 0)), f.x), f.y);
+}
+
+// The cover's snow and the deep snow at a point, bilinear by hand (FishCoverAt and FishSnowDepthAt read them filtered),
+// with the season's pack by the root's height over them. One exit, like GrassFreeboardAt: FXC flagged the early return
+// as "potentially uninitialized" once inlined.
+bool GrassSnowAt(float3 root, out float snow, out float deep)
 {
     snow = 0.0;
     deep = 0.0;
+    float2 xz = root.xz;
     float2 uv = (xz - _GrassCoverRect.xy) / max(_GrassCoverRect.zw, 1e-3);
     bool valid = _GrassSnow.x >= 0.5 && all(uv >= 0.0) && all(uv <= 1.0);
     [branch] if (valid)
@@ -426,6 +450,13 @@ bool GrassSnowAt(float2 xz, out float snow, out float deep)
             lerp(_GrassCover.Load(int3(a.x, b.y, 0)).r, _GrassCover.Load(int3(b.x, b.y, 0)).r, f.x), f.y);
         deep = lerp(lerp(_GrassDeepSnow.Load(int3(a.x, a.y, 0)), _GrassDeepSnow.Load(int3(b.x, a.y, 0)), f.x),
             lerp(_GrassDeepSnow.Load(int3(a.x, b.y, 0)), _GrassDeepSnow.Load(int3(b.x, b.y, 0)), f.x), f.y) * _GrassSnow.z;
+    }
+    [branch] if (_GrassSnowLine.w > 0.0 && root.y >= _GrassSnowDeep.w)
+    {
+        float lift = FishSnowLineLift(xz, _GrassSnowDeep.z > 0.5 ? GrassSnowFieldAt(xz) : 0.0, _GrassSnowLine);
+        snow = max(snow, FishPackCover(root.y, lift, _GrassSnowLine));
+        deep = max(deep, FishPackDepth(root.y, lift, _GrassSnowLine, _GrassSnowDeep));
+        valid = true;
     }
     return valid;
 }
@@ -466,7 +497,7 @@ bool GrassBuried(float3 root, float2 local, int type, float height)
     // One exit (see GrassSnowAt).
     bool buried = false;
     float snow = 0.0, deep = 0.0;
-    bool covered = GrassSnowAt(root.xz, snow, deep);
+    bool covered = GrassSnowAt(root, snow, deep);
     [branch] if (covered && snow > 0.0)
     {
         float exposure = GrassExposure(root);

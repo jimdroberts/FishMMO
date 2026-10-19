@@ -67,6 +67,43 @@ float3 WaterRippleNormal(float2 xz, float strength)
 }
 
 /// <summary>
+/// The water's colours in the look of the coast at <paramref name="xz"/> (2026-10-18; BiomeSeaCoast): the climate's shallow, deep,
+/// sediment and scatter colours tinted, and its absorption scaled, by how the coast's water differs from today's sea. A peat
+/// coast browns and darkens the sea off it; offshore, and in every scene whose biomes all have today's look, nothing changes.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>One texture read, and none at all without a look.</b> The rectangle's zw are 0 in a scene that has none (WaterSurface),
+/// a branch the whole draw takes the same way: the colours then come out of here untouched, and the sea is drawn bit for bit as
+/// it was before.
+/// </para>
+/// <para>
+/// The tint's ratios are of gamma colours, as the biomes' looks are authored and as the falls' are taken (InlandWaterRenderer):
+/// in a linear project the material's colours arrive linear, where the same scaling is the ratio to the 2.2. Clamped to one
+/// after, as a material's colour is.
+/// </para>
+/// </remarks>
+void FishSeaCoastLook(float2 xz, inout half3 shallow, inout half3 deep, inout half3 shore, inout half3 scatter, inout half3 density)
+{
+	if (_FishSeaCoastRect.z <= 0.0)
+	{
+		return;
+	}
+	float2 uv = clamp((xz - _FishSeaCoastRect.xy) * _FishSeaCoastRect.zw, _FishSeaCoastTexel.xy, 1.0 - _FishSeaCoastTexel.xy);
+	float4 doublings = (SAMPLE_TEXTURE2D_LOD(_FishSeaCoast, sampler_linear_repeat, uv, 0) * 255.0 - 128.0) / 32.0;
+	#if defined(UNITY_COLORSPACE_GAMMA)
+		half3 tint = exp2(doublings.rgb);
+	#else
+		half3 tint = exp2(doublings.rgb * 2.2);
+	#endif
+	shallow = saturate(shallow * tint);
+	deep = saturate(deep * tint);
+	shore = saturate(shore * tint);
+	scatter = saturate(scatter * tint);
+	density *= exp2(doublings.a);
+}
+
+/// <summary>
 /// Shades a piece of the sea: the open ocean, or a breaker rising out of it.
 /// </summary>
 /// <param name="positionWS">The point being drawn, where it actually is.</param>
@@ -177,19 +214,23 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 	 * two a window (FishWaterHeldScroll): wind × clock slid the patches whenever the wind turned. */
 	float2 clarityUV = flatXZ / max(20.0, _ClarityScale) - FishWaterHeldScroll(_FishWaterRippleWindow.xy * 0.004);
 	float clarityField = SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, clarityUV).g;
-	half3 density = max(1e-3, _WaterDensity.rgb * lerp(1.0 + _Clarity, 1.0 - _Clarity, clarityField));
+	// The climate's colours and absorption, in the look of the coast here (FishSeaCoastLook): untouched where it has none.
+	half3 shallowColor = _ShallowColor.rgb, deepColor = _DeepColor.rgb, shoreColor = _ShoreColor.rgb, scatterColor = _ScatterColor.rgb;
+	half3 waterDensity = _WaterDensity.rgb;
+	FishSeaCoastLook(flatXZ, shallowColor, deepColor, shoreColor, scatterColor, waterDensity);
+	half3 density = max(1e-3, waterDensity * lerp(1.0 + _Clarity, 1.0 - _Clarity, clarityField));
 
 	/* Beer-Lambert, PER CHANNEL. Red is absorbed in the first couple of metres and blue survives
 	 * tens, which is the entire reason deep water is blue and a hand held underwater goes grey.
 	 * A single scalar density makes shallow water a paler version of deep water instead. */
 	half3 transmittance = exp(-waterColumn * density);
-	half3 open = lerp(_DeepColor.rgb, _ShallowColor.rgb, transmittance);
+	half3 open = lerp(deepColor, shallowColor, transmittance);
 
 	/* Shore sediment, separate from absorption on purpose. Absorption alone only makes shallow
 	 * water paler; real shallows are GREENER and browner, because a shore stirs sand and silt into
 	 * water that is clear half a kilometre out. Squared so it stays in the surf zone. */
 	half sediment = 1.0 - saturate(wave.depth / max(0.05, _ShoreDepth));
-	half3 bodyColor = lerp(open, _ShoreColor.rgb, sediment * sediment) * waterLight;
+	half3 bodyColor = lerp(open, shoreColor, sediment * sediment) * waterLight;
 
 	// ── What is behind it ─────────────────────────────────────────────
 	half3 behind = bodyColor;
@@ -211,8 +252,8 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 			float seabedRaw = straight ? rawDepth : refractedRaw;
 			waterColumn = max(0.0, max(refractedEye, sceneEye) - surfaceEye);
 			transmittance = exp(-waterColumn * density);
-			open = lerp(_DeepColor.rgb, _ShallowColor.rgb, transmittance);
-			bodyColor = lerp(open, _ShoreColor.rgb, sediment * sediment) * waterLight;
+			open = lerp(deepColor, shallowColor, transmittance);
+			bodyColor = lerp(open, shoreColor, sediment * sediment) * waterLight;
 		#endif
 
 		half3 refracted = SampleSceneColor(refractedUV);
@@ -267,7 +308,7 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 	// wave glow green with the sun behind it. Keyed to the wave's own height, so only on crests.
 	half back = pow(saturate(dot(view, -mainLight.direction)) * 0.5 + 0.5, 3.0);
 	half crestLift = saturate(wave.height * 0.5 + 0.35);
-	half3 scatter = _ScatterColor.rgb * lightColor * back * crestLift * _ScatterStrength;
+	half3 scatter = scatterColor * lightColor * back * crestLift * _ScatterStrength;
 
 	half3 color = lerp(behind + scatter, reflection, fresnel) + glint;
 
@@ -280,7 +321,7 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 	if (underwater)
 	{
 		float3 transmitted = refract(-view, normalWS, 1.333);
-		half3 mirrored = _ShallowColor.rgb * waterLight * 0.45;
+		half3 mirrored = shallowColor * waterLight * 0.45;
 
 		/* How much of the world above comes through: nothing outside the window, where every ray
 		 * is reflected back down, and a Fresnel falloff inside it taken on the WATER's side — the

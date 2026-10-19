@@ -338,10 +338,12 @@ namespace FishMMO.Shared.WorldDesign
 		 * blows. The beach is sand by name, but the old weather forbade sand on it outright.
 		 *
 		 * Emissions. The volcanic three spawned ashfall more than half the time under a standing
-		 * haze of 0.15, and emit ash at that. Everything else emitting did it only through its
-		 * storms, and gets a trickle of 0.08 that the eruptions the physics raises over it then
-		 * multiply. The methane lake's tholin was the planet's haze settling on it one storm in
-		 * five; kept, since that is what it did. */
+		 * haze of 0.15, and emit ash at that (Crater was a fourth until 2026-10-18: it is an impact
+		 * crater, not a volcano, and its spec file now writes its template's emission through
+		 * BiomeArtSpec.Entry.Emits). Everything else emitting did it only through its storms, and
+		 * gets a trickle of 0.08 that the eruptions the physics raises over it then multiply. The
+		 * methane lake's tholin was the planet's haze settling on it one storm in five; kept, since
+		 * that is what it did. */
 		private static readonly Dictionary<string, GroundSpec> Ground = new Dictionary<string, GroundSpec>(StringComparer.Ordinal)
 		{
 			{ "Badlands", LooseOnly("Silicate Sand") },
@@ -354,7 +356,6 @@ namespace FishMMO.Shared.WorldDesign
 			{ "Rille", LooseOnly("Regolith Dust") },
 			{ "Radiation Plain", LooseOnly("Irradiated Dust") },
 
-			{ "Crater", Emitting("Volcanic Ash", 0.15f) },
 			{ "Volcanic", Emitting("Volcanic Ash", 0.15f) },
 			{ "Volcanic Temple", Emitting("Volcanic Ash", 0.15f) },
 			{ "Cryovolcanic Plain", Emitting("Cryo Tephra", 0.08f) },

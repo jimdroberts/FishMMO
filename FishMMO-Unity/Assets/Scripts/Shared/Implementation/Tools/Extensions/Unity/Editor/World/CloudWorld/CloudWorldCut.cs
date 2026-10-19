@@ -987,17 +987,22 @@ namespace FishMMO.Shared.WorldDesign
 		/// the walk run out over the rim and hung between, as baked props (with their collision) so a player crosses on them.
 		/// Returns each bridge's two landings, end post to end post, for the record.
 		/// </summary>
+		/// <remarks>
+		/// <paramref name="structures"/>: the world body's own (2026-10-18, I6e; a cloud world stands in no biome): the palette the
+		/// bridges are laid in, and the light beside each end (<see cref="CloudWorldWayPlace.BridgeEnd"/>). Null or empty, the kit's
+		/// own materials and no lights, as before.
+		/// </remarks>
 		public static List<SceneCloudWorld.Crossing> Bridges(Scene scene, CloudIslands.Plan islands, RimProfile[] rims, Func<float, float, float> ground,
-			uint seed, List<string> notes)
+			uint seed, List<string> notes, CloudWorldStructures structures = null)
 		{
 			var prototypes = new List<ScenePropSet.Prototype>();
 			var props = new List<ScenePropSet.Prop>();
 			var prototypeOf = new Dictionary<GameObject, int>();
 			var crossings = new List<SceneCloudWorld.Crossing>();
 			int missing = 0;
-			void Lay(string piece, int variant, Vector3 at, Quaternion rotation, Vector3 scale)
+			FishMMO.Shared.Biomes.BiomeStructurePalette palette = structures?.Laid;
+			void LayPrefab(GameObject prefab, Vector3 at, Quaternion rotation, Vector3 scale)
 			{
-				GameObject prefab = StructureKit.Prefab(piece, variant);
 				if (prefab == null)
 				{
 					missing++;
@@ -1007,9 +1012,33 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					prototype = prototypes.Count;
 					prototypeOf[prefab] = prototype;
-					prototypes.Add(new ScenePropSet.Prototype { Prefab = prefab, Layer = -1 });
+					prototypes.Add(new ScenePropSet.Prototype { Prefab = prefab, Layer = -1, Materials = StructurePaletteDressing.MaterialsFor(prefab, palette) });
 				}
 				props.Add(new ScenePropSet.Prop { Prototype = prototype, Position = at, Rotation = rotation, Scale = scale });
+			}
+			void Lay(string piece, int variant, Vector3 at, Quaternion rotation, Vector3 scale) => LayPrefab(StructureKit.Prefab(piece, variant), at, rotation, scale);
+			// The light beside each bridge end, where the body names one that stands on the ground.
+			string lightQuery = structures != null && structures.TryLight(CloudWorldWayPlace.BridgeEnd, out CloudWorldWayLight endLight)
+				&& FishMMO.Shared.Biomes.BiomeWayLights.MountOf(endLight.Light) == FishMMO.Shared.Biomes.BiomeWayLightMount.Ground ? endLight.PieceQuery : null;
+			int lights = 0, unlit = 0;
+			void LightEnd(CloudIslands.Island island, Vector3 post, Vector3 outward, List<Vector3> taken)
+			{
+				if (lightQuery == null || island == null)
+				{
+					return;
+				}
+				if (BridgeEndLight(island, post, outward, ground, taken, out Vector3 at))
+				{
+					Quaternion facing = Quaternion.LookRotation(new Vector3(outward.x, 0f, outward.z), Vector3.up);
+					GameObject prefab = PointOfInterestPieceResolver.Resolve(new PointOfInterestPieceRequest(lightQuery, "timber",
+						unchecked((int)(seed ^ (uint)Mathf.RoundToInt(at.x * 10f) * 0x9E3779B1u ^ (uint)Mathf.RoundToInt(at.z * 10f)))));
+					LayPrefab(prefab, at, facing, Vector3.one);
+					lights += prefab != null ? 1 : 0;
+				}
+				else
+				{
+					unlit++;
+				}
 			}
 
 			var random = new DeterministicRNG(unchecked((int)(seed * 0x2C1B3C6Du ^ 0xB81D6Eu)));
@@ -1046,6 +1075,8 @@ namespace FishMMO.Shared.WorldDesign
 				// The posts at each end, the landing behind them on the grass, the span leaving toward +z.
 				Lay(CaveArt.RopeBridgeEnd, variant, first, Quaternion.LookRotation(flat, Vector3.up) * Quaternion.Euler(LandingPitch(first, flat, ground), 0f, 0f), Vector3.one);
 				Lay(CaveArt.RopeBridgeEnd, variant, last, Quaternion.LookRotation(-flat, Vector3.up) * Quaternion.Euler(LandingPitch(last, -flat, ground), 0f, 0f), Vector3.one);
+				LightEnd(islands.Islands[bridge.A], first, flat, PostsOn(bridge.A));
+				LightEnd(islands.Islands[bridge.B], last, -flat, PostsOn(bridge.B));
 				for (int i = 0; i < joints.Count - 1; i++)
 				{
 					Vector3 p0 = joints[i], p1 = joints[i + 1];
@@ -1065,7 +1096,8 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				int collidable = ScenePropBaker.Write(scene, BridgeSource, prototypes, props);
 				notes?.Add($"Cloud world: {laid} rope bridge(s), {metres:0} m of walk, {collidable:N0} collidable piece(s)" +
-					(crowded > 0 ? $"; {crowded} left out, no footing for their posts clear of the island's other bridges" : string.Empty) + ".");
+					(crowded > 0 ? $"; {crowded} left out, no footing for their posts clear of the island's other bridges" : string.Empty) +
+					(lightQuery != null ? $"; {lights} bridge-end light(s){(unlit > 0 ? $", {unlit} end(s) with no grass for one" : string.Empty)}" : string.Empty) + ".");
 			}
 			else
 			{
@@ -1076,6 +1108,63 @@ namespace FishMMO.Shared.WorldDesign
 				notes?.Add($"Cloud world: {missing} bridge piece(s) skipped, their art is missing (run Generate biome art, then re-cut).");
 			}
 			return crossings;
+		}
+
+		/// <summary>How far to the side of a bridge's line its end's light stands, metres: clear of the posts (0.85 m out) and their cairn or guy.</summary>
+		public const float EndLightAside = 1.75f;
+
+		/// <summary>How far behind its posts, inland along the landing, a bridge end's light stands, metres.</summary>
+		public const float EndLightBehind = 0.7f;
+
+		/// <summary>
+		/// Where a bridge end's light stands (2026-10-18, I6e): beside the landing behind the posts, to the right of the way out
+		/// (else the left), on the island's own ground at least a metre and a half in from its outline and clear of every bridge
+		/// post already on the island (it faces the way out). False when neither side has the ground. Pure.
+		/// </summary>
+		public static bool BridgeEndLight(CloudIslands.Island island, Vector3 post, Vector3 outward, Func<float, float, float> ground, List<Vector3> taken,
+			out Vector3 at)
+		{
+			var way = new Vector3(outward.x, 0f, outward.z);
+			at = default;
+			if (island == null || way.sqrMagnitude < 1e-8f)
+			{
+				return false;
+			}
+			way.Normalize();
+			var right = new Vector3(way.z, 0f, -way.x);
+			for (int side = 1; side >= -1; side -= 2)
+			{
+				Vector3 p = post - way * EndLightBehind + right * (side * EndLightAside);
+				if (island.Beyond(p.x, p.z) > -1.5f || Crowds(p, post, taken))
+				{
+					continue;
+				}
+				at = new Vector3(p.x, ground != null ? ground(p.x, p.z) : post.y, p.z);
+				return true;
+			}
+			return false;
+		}
+
+		// Within a metre and a half of another bridge's post on the island (its own end's posts are the ones it stands beside).
+		private static bool Crowds(Vector3 p, Vector3 own, List<Vector3> taken)
+		{
+			if (taken == null)
+			{
+				return false;
+			}
+			foreach (Vector3 other in taken)
+			{
+				if ((other - own).sqrMagnitude < 1e-4f)
+				{
+					continue;
+				}
+				float dx = other.x - p.x, dz = other.z - p.z;
+				if (dx * dx + dz * dz < 1.5f * 1.5f)
+				{
+					return true;
+				}
+			}
+			return false;
 		}
 
 		// ── Sky traffic ───────────────────────────────────────────
@@ -1090,7 +1179,9 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			try
 			{
-				PointOfInterestSkyTraffic.Build(scene, world.transform, world, request, tiles.WidthMetres, tiles.DepthMetres, ground, notes);
+				// The world body's own palette and lights (2026-10-18, I6e): a cloud world stands in no biome. Empty: the kit's.
+				CloudWorldStructures structures = request.Body != null ? request.Body.CloudWorldStructures : null;
+				PointOfInterestSkyTraffic.Build(scene, world.transform, world, request, tiles.WidthMetres, tiles.DepthMetres, ground, notes, structures?.Laid, structures);
 			}
 			catch (Exception ex)
 			{

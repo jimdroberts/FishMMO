@@ -514,6 +514,13 @@ float3 AmbientLookAlbedo(float3 own, float3 role, float3 rest)
     return max(0.0, own + shift * tint);
 }
 
+#if defined(FISH_AMBIENT_LIFE_PASS_FORWARD)
+// The fine ground map, for how far underground a creature is (a cave's bats, crickets and olms): the sky's light, the sun's
+// and the weather's fog reach none of it there, as none reaches the cave's walls (FishWeatherLitForwardPass.hlsl). Its own
+// sampler: this pass is far below D3D11's sixteen.
+#include "FishGroundMap.hlsl"
+#endif
+
 #if defined(FISH_AMBIENT_LIFE_PASS_FORWARD) || defined(FISH_AMBIENT_LIFE_PASS_DEPTHNORMALS)
 
 struct AmbientLifeVaryings
@@ -522,7 +529,7 @@ struct AmbientLifeVaryings
     float3 positionWS : TEXCOORD0;
     float3 normalWS : TEXCOORD1;
     float3 color : TEXCOORD2;
-    float3 extra : TEXCOORD3;   // x visible share, y fog, z how much of _GlowColour it gives off
+    float4 extra : TEXCOORD3;   // x visible share, y fog, z how much of _GlowColour it gives off, w how far underground (FishUnderground)
     float3 role : TEXCOORD4;    // the colour's roles, for the biome look
     float3 rest : TEXCOORD5;    // the body at rest (object space), for the look's markings
     UNITY_VERTEX_INPUT_INSTANCE_ID
@@ -540,13 +547,52 @@ AmbientLifeVaryings AmbientLifeVertexMain(AmbientLifeAttributes input)
     o.role = v.role;
     o.rest = v.rest;
     o.positionCS = TransformWorldToHClip(v.positionWS);
-    o.extra = float3(v.visible, ComputeFogFactor(o.positionCS.z), v.glow);
+    // Per vertex: a creature is a few centimetres to a metre, the ground map's cells five metres.
+#if defined(FISH_AMBIENT_LIFE_PASS_FORWARD)
+    float under = FishUnderground(v.positionWS);
+#else
+    float under = 0.0;
+#endif
+    o.extra = float4(v.visible, ComputeFogFactor(o.positionCS.z), v.glow, under);
     return o;
 }
 
 #endif
 
 #if defined(FISH_AMBIENT_LIFE_PASS_FORWARD)
+
+#if defined(_ADDITIONAL_LIGHTS)
+// The lights other than the sun at a point (a cave's torches, lanterns and crystals, a carried torch): wrapped Lambert as the
+// sun's, no shadows (a creature is small and the lights are near), through the cluster loop under Forward+ (the
+// directional ones first, as URP's own loop does) or the per-object list otherwise.
+float3 AmbientAdditionalLight(float3 positionWS, float3 n, float2 screenUV, out float3 specular, float3 v)
+{
+    InputData inputData = (InputData)0;
+    inputData.positionWS = positionWS;
+    inputData.normalizedScreenSpaceUV = screenUV;
+    float3 sum = 0.0;
+    specular = 0.0;
+    float power = exp2(9.0 * _Smoothness + 1.0);
+    uint pixelLightCount = GetAdditionalLightsCount();
+#if USE_CLUSTER_LIGHT_LOOP
+    [loop] for (uint lightIndex = 0; lightIndex < min(URP_FP_DIRECTIONAL_LIGHTS_COUNT, MAX_VISIBLE_LIGHTS); lightIndex++)
+    {
+        Light light = GetAdditionalLight(lightIndex, positionWS);
+        float3 lit = light.color * light.distanceAttenuation;
+        sum += lit * saturate((dot(n, light.direction) + 0.35) / 1.35);
+        specular += lit * pow(saturate(dot(n, normalize(light.direction + v))), power);
+    }
+#endif
+    LIGHT_LOOP_BEGIN(pixelLightCount)
+        Light light = GetAdditionalLight(lightIndex, positionWS);
+        float3 lit = light.color * light.distanceAttenuation;
+        sum += lit * saturate((dot(n, light.direction) + 0.35) / 1.35);
+        specular += lit * pow(saturate(dot(n, normalize(light.direction + v))), power);
+    LIGHT_LOOP_END
+    specular *= _Smoothness * 0.5;
+    return sum;
+}
+#endif
 
 half4 AmbientLifeForwardFragment(AmbientLifeVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SEMANTIC) : SV_Target
 {
@@ -564,18 +610,26 @@ half4 AmbientLifeForwardFragment(AmbientLifeVaryings input, FRONT_FACE_TYPE face
 #endif
     // With the cloud shadow (the main light's cookie): under cloud the light is boosted for the cookie to dim (FishGrassBlades.hlsl).
     Light mainLight = GetMainLight(shadowCoord, input.positionWS, half4(1.0, 1.0, 1.0, 1.0));
-    float3 light = mainLight.color * (mainLight.shadowAttenuation * mainLight.distanceAttenuation);
+    // Deep underground the sun does not reach (the hill over a cave casts no shadow of its own here), nor the sky: what lights
+    // a cave's creatures is its torches and crystals, and the light carried in.
+    float under = saturate(input.extra.w);
+    float3 light = mainLight.color * (mainLight.shadowAttenuation * mainLight.distanceAttenuation) * (1.0 - under);
     float nl = dot(n, mainLight.direction);
     // Wrapped: fur and feathers scatter light round the body's edge.
     float diffuse = saturate((nl + 0.35) / 1.35);
     float3 colour = albedo * light * diffuse;
     // Ambient from the sky's trilight (not SampleSH, which reads zero for a DrawMeshInstanced draw here).
-    colour += albedo * FishTrilight((half3)n);
+    colour += albedo * FishTrilight((half3)n) * (1.0 - 0.96 * under);
     // A thin wing or ear lit from behind glows a little through.
     colour += albedo * light * 0.25 * saturate(-nl) * saturate(1.0 - abs(dot(n, v)));
     float3 h = normalize(mainLight.direction + v);
     float spec = pow(saturate(dot(n, h)), exp2(9.0 * _Smoothness + 1.0)) * _Smoothness * 0.5;
     colour += light * spec;
+#if defined(_ADDITIONAL_LIGHTS)
+    float3 extraSpecular;
+    float3 extraLight = AmbientAdditionalLight(input.positionWS, n, GetNormalizedScreenSpaceUV(input.positionCS), extraSpecular, v);
+    colour += albedo * extraLight + extraSpecular;
+#endif
     if (_Mode > 3.5)
     {
         // A swarm against the low sun: every insect's wings lit through, a cloud of bright specks.
@@ -583,7 +637,8 @@ half4 AmbientLifeForwardFragment(AmbientLifeVaryings input, FRONT_FACE_TYPE face
         // A firefly's flash (and any swarm's own light), unlit by anything else.
         colour += _GlowColour.rgb * input.extra.z;
     }
-    colour = MixFog(colour, input.extra.y);
+    // The weather's fog is the open air's: none in a cave.
+    colour = lerp(MixFog(colour, input.extra.y), colour, under);
     return half4(colour, 1.0);
 }
 

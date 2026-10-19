@@ -29,8 +29,6 @@ MonoBehaviour:
     Weight: 2
   - Biome: Scrubland
     Weight: 2
-  - Biome: Dust Sea
-    Weight: 2
   - Biome: Wasteland
     Weight: 2
   - Biome: Mountain Slope
@@ -95,16 +93,16 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506175562416303
-  - rid: 4061506175562416304
-  - rid: 4061506175562416305
-  - rid: 4061506175562416306
-  - rid: 4061506175562416307
-  - rid: 4061506175562416308
+  - rid: 4061506230070018232
+  - rid: 4061506230070018233
+  - rid: 4061506230070018234
+  - rid: 4061506230070018235
+  - rid: 4061506230070018236
+  - rid: 4061506230070018237
   references:
     version: 2
     RefIds:
-    - rid: 4061506175562416303
+    - rid: 4061506230070018232
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -117,24 +115,24 @@ MonoBehaviour:
         Clearings:
         - {x: -2.3846583, y: 2, z: 6.77243}
         - {x: 2.5507212, y: 1.5, z: 7.244048}
-    - rid: 4061506175562416304
+    - rid: 4061506230070018233
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506175562416305
+    - rid: 4061506230070018234
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506175562416306
+    - rid: 4061506230070018235
       type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: -2.3846583, y: 6.77243}
-    - rid: 4061506175562416307
+    - rid: 4061506230070018236
       type: {class: RespawnFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: 2.5507212, y: 7.244048}
-    - rid: 4061506175562416308
+    - rid: 4061506230070018237
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 1

@@ -223,8 +223,9 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// A biome's way and river-bar grounds as the cut paints them: its template's slots (Small Path, Road, Cobbles, Bar
-		/// Sand, Bar Gravel), and for a slot it has never been given, what the cut used before the template carried them. One
-		/// per cut: it keeps the generated layers it loads for those fallbacks.
+		/// Sand, Bar Gravel), and for a slot it has never been given, what the cut used before the template carried them; and
+		/// the ways its ground layers carry of their own (<see cref="LayerWays"/>). One per cut: it keeps the generated layers
+		/// it loads for those fallbacks.
 		/// </summary>
 		public sealed class Grounds
 		{
@@ -251,6 +252,82 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>The gravel on a river's quick bars.</summary>
 			public TerrainTextureLayer BarGravel(BiomeTemplate biome) => Slot(biome, biome?.BarGravelTextureLayer, "Bar Gravel layer",
 				() => { ReadLegacyBars(); return legacyGravel; }, "the Forest biome's riverbed");
+
+			/// <summary>
+			/// The ways a biome's ground layers carry of their own (<see cref="TerrainTextureLayer.ways"/>, decision 19,
+			/// 2026-10-16): for its main layer and each detail layer that is painted, every way given a ground there, keyed
+			/// <see cref="BiomeLocalArt.WaySlot"/> (<c>detail/2/road</c>), as a texture layer for the palette to carry beside the
+			/// biome's own way grounds. Empty where none is set: such a ground's ways are the biome's (<see cref="Path"/>,
+			/// <see cref="Road"/>, <see cref="Cobbles"/>), as every ground's were before, which is no fallback but the field's
+			/// meaning, so nothing is logged.
+			/// </summary>
+			public List<(string slot, TerrainTextureLayer source)> LayerWays(BiomeTemplate biome)
+			{
+				var ways = new List<(string, TerrainTextureLayer)>();
+				if (biome == null)
+				{
+					return ways;
+				}
+				AddWays(ways, BiomeLocalArt.SlotMain, biome.MainTextureLayer);
+				if (biome.DetailTextureLayers != null)
+				{
+					for (int i = 0; i < biome.DetailTextureLayers.Count; i++)
+					{
+						AddWays(ways, BiomeLocalArt.DetailSlot(i), biome.DetailTextureLayers[i]);
+					}
+				}
+				return ways;
+			}
+
+			private void AddWays(List<(string, TerrainTextureLayer)> ways, string groundSlot, TerrainTextureLayer ground)
+			{
+				// A ground the biome does not paint (no art) has no pixels for its ways to cross.
+				if (ground == null || !ground.HasAlbedo || ground.ways.IsEmpty)
+				{
+					return;
+				}
+				foreach (string way in BiomeLocalArt.WaySlots)
+				{
+					TerrainTextureLayer layer = Wrapped(BiomeLocalArt.WayGround(ground.ways, way));
+					if (layer != null)
+					{
+						ways.Add((BiomeLocalArt.WaySlot(groundSlot, way), layer));
+					}
+				}
+			}
+
+			private readonly Dictionary<TerrainLayer, TerrainTextureLayer> wrapped = new Dictionary<TerrainLayer, TerrainTextureLayer>();
+
+			// A way's terrain layer as the texture layer a palette entry is sourced from: one per layer a cut, so two grounds
+			// (or biomes) naming the same corduroy share it.
+			private TerrainTextureLayer Wrapped(TerrainLayer terrainLayer)
+			{
+				if (terrainLayer == null)
+				{
+					return null;
+				}
+				if (!wrapped.TryGetValue(terrainLayer, out TerrainTextureLayer layer))
+				{
+					layer = AsTextureLayer(terrainLayer);
+					wrapped[terrainLayer] = layer;
+				}
+				return layer;
+			}
+
+			// A terrain layer with art as a texture layer carrying it whole; null without art.
+			private static TerrainTextureLayer AsTextureLayer(TerrainLayer terrainLayer)
+			{
+				return terrainLayer != null && terrainLayer.diffuseTexture != null
+					? new TerrainTextureLayer
+					{
+						terrainLayer = terrainLayer,
+						albedoTexture = terrainLayer.diffuseTexture,
+						normalTexture = terrainLayer.normalMapTexture,
+						maskTexture = terrainLayer.maskMapTexture,
+						tileSize = terrainLayer.tileSize,
+					}
+					: null;
+			}
 
 			private static TerrainTextureLayer Slot(BiomeTemplate biome, TerrainTextureLayer slot, string field, Func<TerrainTextureLayer> fallback, string instead)
 			{
@@ -279,17 +356,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				if (!generated.TryGetValue(ground, out TerrainTextureLayer layer))
 				{
-					var terrainLayer = AssetDatabase.LoadAssetAtPath<TerrainLayer>(ProceduralArtCatalogue.GroundLayerPath(ground));
-					layer = terrainLayer != null && terrainLayer.diffuseTexture != null
-						? new TerrainTextureLayer
-						{
-							terrainLayer = terrainLayer,
-							albedoTexture = terrainLayer.diffuseTexture,
-							normalTexture = terrainLayer.normalMapTexture,
-							maskTexture = terrainLayer.maskMapTexture,
-							tileSize = terrainLayer.tileSize,
-						}
-						: null;
+					layer = AsTextureLayer(AssetDatabase.LoadAssetAtPath<TerrainLayer>(ProceduralArtCatalogue.GroundLayerPath(ground)));
 					generated[ground] = layer;
 				}
 				return layer;
@@ -452,6 +519,17 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public static IReadOnlyDictionary<POIType, float> SiteKinds(BiomeTemplate biome, PointOfInterestRules rules)
 		{
+			return SiteKinds(biome, rules, true);
+		}
+
+		/// <summary>
+		/// <see cref="SiteKinds(BiomeTemplate, PointOfInterestRules)"/> on a world whose air is or is not breathable
+		/// (BiomeAir.IsBreathable, decision 39, 2026-10-18): where it is not, every kind whose entry needs breathable air
+		/// (<see cref="BiomeSiteKind.NeedsBreathableAir"/>) weighs 0 there, so only natural sites and relics are placed. A template
+		/// never authored with its kinds takes BiomeSiteAir's default for each kind instead. Breathable air changes nothing.
+		/// </summary>
+		public static IReadOnlyDictionary<POIType, float> SiteKinds(BiomeTemplate biome, PointOfInterestRules rules, bool breathable)
+		{
 			if (biome == null)
 			{
 				return null;
@@ -465,7 +543,7 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						if (!kinds.ContainsKey(entry.Kind))
 						{
-							kinds[entry.Kind] = Mathf.Max(0f, entry.Weight);
+							kinds[entry.Kind] = BiomeSiteAir.WeightOn(entry, breathable);
 						}
 					}
 				}
@@ -473,7 +551,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			foreach ((POIType kind, float weight) in (rules ?? PointOfInterestRules.Default()).KindWeightsFor(biome.name))
 			{
-				kinds[kind] = weight;
+				kinds[kind] = breathable || !BiomeSiteAir.NeedsAirByDefault(kind) ? weight : 0f;
 			}
 			Fallback(biome, "Point of Interest Kinds", "the point-of-interest catalogue's rows that name it");
 			return kinds;
@@ -685,6 +763,195 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>The crystal a biome's crystal way-light posts carry (<see cref="BiomeCaveCrystals.PostCrystal"/> of its cave crystals).</summary>
 		public static BiomeCaveCrystalKind PostCrystal(BiomeTemplate biome) => BiomeCaveCrystals.PostCrystal(CaveCrystals(biome));
+
+		/// <summary>
+		/// The plants a biome's still water carries (BiomeTemplate.FloatingPlants, 2026-10-18, I2i). With no biome, none; a template
+		/// never authored with them (no mark, empty list) takes its spec's and warns when the spec names any. An authored empty list
+		/// carries none, which is every biome's default.
+		/// </summary>
+		public static IReadOnlyList<BiomeFloatingPlant> FloatingPlants(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return BiomeFloatingPlants.None();
+			}
+			if (biome.IsAuthored(BiomeTemplate.Authored.FloatingPlants) || biome.FloatingPlants != null && biome.FloatingPlants.Count > 0)
+			{
+				return biome.FloatingPlants ?? BiomeFloatingPlants.None();
+			}
+			List<BiomeFloatingPlant> spec = BiomeArtSpec.For(biome.name)?.FloatingPlants() ?? BiomeFloatingPlants.None();
+			if (spec.Count > 0)
+			{
+				Fallback(biome, "Floating Plants", $"the spec table's ({string.Join(", ", spec)})");
+			}
+			return spec;
+		}
+
+		/// <summary>
+		/// The landforms the cut sculpts into a biome's ground (BiomeTemplate.Landforms, 2026-10-18, I2g). With no biome, none; a template
+		/// never authored with them (no mark, empty list) takes its spec's and warns when the spec names any. An authored empty list
+		/// carves none, which is every biome's default.
+		/// </summary>
+		public static IReadOnlyList<BiomeLandform> Landforms(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return BiomeLandforms.None();
+			}
+			if (biome.IsAuthored(BiomeTemplate.Authored.Landforms) || biome.Landforms.Count > 0)
+			{
+				return biome.Landforms;
+			}
+			List<BiomeLandform> spec = BiomeArtSpec.For(biome.name)?.LandformList() ?? BiomeLandforms.None();
+			if (spec.Count > 0)
+			{
+				Fallback(biome, "Landforms", $"the spec table's ({string.Join(", ", spec.ConvertAll(f => f.Kind))})");
+			}
+			return spec;
+		}
+
+		/// <summary>
+		/// Which of a biome's ways are raised boardwalks (BiomeTemplate.Boardwalks, 2026-10-18, I2i). With no biome, none; a template
+		/// never authored with it takes its spec's and warns when that raises any.
+		/// </summary>
+		public static BiomeBoardwalks Boardwalks(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return BiomeBoardwalks.None;
+			}
+			if (biome.IsAuthored(BiomeTemplate.Authored.Boardwalks) || biome.Boardwalks != BiomeBoardwalks.None)
+			{
+				return biome.Boardwalks;
+			}
+			BiomeBoardwalks spec = BiomeArtSpec.For(biome.name)?.Boardwalks ?? BiomeBoardwalks.None;
+			if (spec != BiomeBoardwalks.None)
+			{
+				Fallback(biome, "Boardwalks", $"the spec table's ({spec})");
+			}
+			return spec;
+		}
+
+		/// <summary>
+		/// A biome's hedges, walls, fences, tree rows, channels and clearance rows (BiomeTemplate.LinearFeatures, 2026-10-18, I2f). With no
+		/// biome, none; a template never authored with them (no mark, empty list) takes its spec's, its species loaded from the generated
+		/// prefabs, and warns when the spec names any. An authored empty list lays none, which is every biome's default.
+		/// </summary>
+		public static IReadOnlyList<BiomeLinearStyle> LinearFeatures(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return BiomeLinearFeatures.None();
+			}
+			if (biome.IsAuthored(BiomeTemplate.Authored.LinearFeatures) || biome.LinearFeatures.Count > 0)
+			{
+				return biome.LinearFeatures;
+			}
+			BiomeArtSpec.Entry entry = BiomeArtSpec.For(biome.name);
+			if (entry == null || entry.LinearLines().Count == 0)
+			{
+				return BiomeLinearFeatures.None();
+			}
+			List<BiomeLinearStyle> spec = entry.LinearFeatures(name => AssetDatabase.LoadAssetAtPath<GameObject>(ProceduralArtCatalogue.PrefabPath(name)));
+			Fallback(biome, "Linear Features", $"the spec table's ({string.Join("; ", spec)})");
+			return spec;
+		}
+
+		/// <summary>
+		/// A biome's orchards (BiomeTemplate.Orchards, 2026-10-18, I2j-b): its entries with a tree and a weight, in order. With no biome,
+		/// none; a template never authored with them (no mark, empty list) takes its spec's, its prefabs loaded from the generated art,
+		/// with a warning only when the spec names any (none did before).
+		/// </summary>
+		public static List<BiomeOrchard> Orchards(BiomeTemplate biome)
+		{
+			var orchards = BiomeOrchards.None();
+			if (biome == null)
+			{
+				return orchards;
+			}
+			if (biome.IsAuthored(BiomeTemplate.Authored.Orchards) || biome.Orchards.Count > 0)
+			{
+				foreach (BiomeOrchard orchard in biome.Orchards)
+				{
+					if (orchard.Tree != null && orchard.Weight > 0f)
+					{
+						orchards.Add(orchard);
+					}
+				}
+				return orchards;
+			}
+			BiomeArtSpec.Entry entry = BiomeArtSpec.For(biome.name);
+			if (entry == null || entry.OrchardEntries().Count == 0)
+			{
+				return orchards;
+			}
+			foreach (BiomeOrchard orchard in entry.FieldOrchards(name => AssetDatabase.LoadAssetAtPath<GameObject>(ProceduralArtCatalogue.PrefabPath(name))))
+			{
+				if (orchard.Weight > 0f)
+				{
+					orchards.Add(orchard);
+				}
+			}
+			Fallback(biome, "Orchards", $"the spec table's ({string.Join("; ", orchards)})");
+			return orchards;
+		}
+
+		/// <summary>How a biome lays its fields out (BiomeTemplate.FieldLayout, 2026-10-18, I2j-b): anywhere, as drawn, with no biome; a template never authored with it takes its spec's (a warning only when that says anything).</summary>
+		public static BiomeFieldLayout FieldLayout(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return default;
+			}
+			if (biome.IsAuthored(BiomeTemplate.Authored.FieldLayout) || biome.FieldLayout.Any)
+			{
+				return biome.FieldLayout;
+			}
+			BiomeFieldLayout spec = BiomeArtSpec.For(biome.name)?.FieldLayout() ?? default;
+			if (spec.Any)
+			{
+				Fallback(biome, "Field Layout", $"the spec table's ({spec})");
+			}
+			return spec;
+		}
+
+		/// <summary>The old terraces round a biome's settlements (BiomeTemplate.AbandonedTerraces, 2026-10-18, I2j-b): none with no biome; a template never authored with them takes its spec's (a warning only when that names any).</summary>
+		public static BiomeAbandonedTerraces AbandonedTerraces(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return BiomeAbandonedTerraces.None;
+			}
+			if (biome.IsAuthored(BiomeTemplate.Authored.AbandonedTerraces) || biome.AbandonedTerraces.Any)
+			{
+				return biome.AbandonedTerraces;
+			}
+			BiomeAbandonedTerraces spec = BiomeArtSpec.For(biome.name)?.OldTerraces() ?? BiomeAbandonedTerraces.None;
+			if (spec.Any)
+			{
+				Fallback(biome, "Abandoned Terraces", $"the spec table's ({spec})");
+			}
+			return spec;
+		}
+
+		/// <summary>The ground a biome paints along its channels (BiomeTemplate.ChannelMargin, 2026-10-18, I2j-b): none with no biome; a template never authored with it takes its spec's (a warning only when that names one).</summary>
+		public static BiomeChannelMargin ChannelMargin(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return BiomeChannelMargin.None;
+			}
+			if (biome.IsAuthored(BiomeTemplate.Authored.ChannelMargin) || biome.ChannelMargin.Defined)
+			{
+				return biome.ChannelMargin;
+			}
+			BiomeChannelMargin spec = BiomeArtSpec.For(biome.name)?.WetMargin() ?? BiomeChannelMargin.None;
+			if (spec.Defined)
+			{
+				Fallback(biome, "Channel Margin", $"the spec table's ({spec})");
+			}
+			return spec;
+		}
 
 		// ── Templates by id ───────────────────────────────────────────
 

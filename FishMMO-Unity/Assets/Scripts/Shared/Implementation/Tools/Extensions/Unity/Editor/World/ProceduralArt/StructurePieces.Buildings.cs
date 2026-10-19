@@ -112,9 +112,10 @@ namespace FishMMO.Shared.WorldDesign
 				PlinthMaterial = StructureMaterial.Fieldstone, Frame = false, RidgeAlongX = false, Chimney = false, Windows = 0,
 				DoorWidth = 1.4f, DoorHeight = 2.3f, DoorX = 0f, RoomKind = StructureRoomKind.Hall, Key = 1,
 			};
-			BuildHouse(d, house);
-			float top = house.Plinth + house.WallHeight;
-			float ridge = top + house.Rise;
+			HouseRoof roof = BuildHouse(d, house);
+			// Where the walls end and the gables' horns stand: the kit's, moved with a roof its palette re-pitched (StructureRoofs).
+			float top = roof.Flat ? roof.WallTop : house.Plinth + house.WallHeight;
+			float ridge = top + house.Rise + roof.Shift;
 			if (turf)
 			{
 				// The timber gable fronts a turf house shows, front and back.
@@ -126,9 +127,9 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 			}
-			if (d.Mid)
+			if (d.Mid && !roof.Flat)
 			{
-				// Crossed horns at both gable peaks.
+				// Crossed horns at both gable peaks (a flat roof has no gables to cross them on).
 				for (int e = -1; e <= 1; e += 2)
 				{
 					float z = e * (house.Depth * 0.5f + house.Overhang - 0.1f);
@@ -217,8 +218,24 @@ namespace FishMMO.Shared.WorldDesign
 						StructureMaterial.Timber, 45 + face, StructureRole.Detail));
 				}
 			}
-			d.Add(StructureShapes.Lathe(new[] { new Vector2((half + 0.9f) * 1.414f, platform + 2.4f), new Vector2(0f, platform + 4.2f) }, 4,
-				stoneBase ? StructureMaterial.Timber : StructureMaterial.Thatch, 50, false, Mathf.PI * 0.25f, false, false, StructureRole.Roof));
+			// The roof: a pyramid on the legs' heads (its palette's pitch, or flat, where the palette asks: StructureRoofs, I6h).
+			StructureMaterial roofMaterial = stoneBase ? StructureMaterial.Timber : StructureMaterial.Thatch;
+			const float roofRise = 1.8f;
+			OwnRoofPlan roof = OwnRoof(d, roofMaterial, roofRise, half + 0.9f);
+			using (d.Builds(RoofRoles))
+			{
+				if (roof.Flat)
+				{
+					d.Add(StructureShapes.Box(new Vector3(0f, platform + 2.48f, 0f), new Vector3((half + 0.9f) * 2f, 0.16f, (half + 0.9f) * 2f), roofMaterial, 50, StructureRole.Roof)).Grain = Vector3.forward;
+				}
+				else
+				{
+					// The kit's own sum, to the bit, wherever the rise is the kit's.
+					float peak = roof.Rise == roofRise ? platform + 4.2f : platform + 2.4f + roof.Rise;
+					d.Add(StructureShapes.Lathe(new[] { new Vector2((half + 0.9f) * 1.414f, platform + 2.4f), new Vector2(0f, peak) }, 4,
+						roofMaterial, 50, false, Mathf.PI * 0.25f, false, false, StructureRole.Roof));
+				}
+			}
 			// A ladder up the front.
 			float ladderZ = -(stoneBase ? half + 0.25f : foot - 0.1f);
 			float ladderFrom = stoneBase ? 2.2f : -0.1f;
@@ -344,7 +361,30 @@ namespace FishMMO.Shared.WorldDesign
 			HangDoor(d, new Vector3(0f, 1f, -w * 0.5f + th - 0.05f), Vector3.right, Vector3.forward, 1.2f, 2.3f, StructureDoorKind.Iron);
 			d.Room(new Vector3(0f, 1f, 0f), new Vector2(w - 2f * th, w - 2f * th), 4f, StructureRoomKind.Guard);
 			d.Add(StructureShapes.Box(new Vector3(0f, hs + 0.15f, 0f), new Vector3(w + 0.5f, 0.3f, w + 0.5f), StructureMaterial.Stone, 7, StructureRole.Roof));
-			d.Add(StructureShapes.Lathe(new[] { new Vector2((w * 0.5f + 0.5f) * 1.414f, hs + 0.3f), new Vector2(0f, hs + 4f) }, 4, StructureMaterial.Timber, 8, false, Mathf.PI * 0.25f, false, false, StructureRole.Roof));
+			// The pyramid roof at its palette's pitch (StructureRoofs, I6h); flat, a timber deck behind merlons.
+			const float roofRise = 3.7f;
+			OwnRoofPlan roof = OwnRoof(d, StructureMaterial.Timber, roofRise, w * 0.5f + 0.5f);
+			using (d.Builds(RoofRoles))
+			{
+				if (roof.Flat)
+				{
+					d.Add(StructureShapes.Box(new Vector3(0f, hs + 0.36f, 0f), new Vector3(w + 0.3f, 0.12f, w + 0.3f), StructureMaterial.Timber, 8, StructureRole.Roof)).Grain = Vector3.forward;
+				}
+				else
+				{
+					float peak = roof.Rise == roofRise ? hs + 4f : hs + 0.3f + roof.Rise;
+					d.Add(StructureShapes.Lathe(new[] { new Vector2((w * 0.5f + 0.5f) * 1.414f, hs + 0.3f), new Vector2(0f, peak) }, 4, StructureMaterial.Timber, 8, false, Mathf.PI * 0.25f, false, false, StructureRole.Roof));
+				}
+			}
+			if (roof.Flat)
+			{
+				for (int f = 0; f < 4; f++)
+				{
+					Quaternion q = Quaternion.Euler(0f, f * 90f, 0f);
+					float e = w * 0.5f;
+					Crenellate(d, q * new Vector3(-e + 0.3f, hs + 0.42f, -e + 0.3f), q * new Vector3(e - 0.3f, hs + 0.42f, -e + 0.3f), 0.5f, 0.85f, 0.8f, 0.6f, StructureMaterial.Stone, 60 + f * 10);
+				}
+			}
 			if (d.Mid)
 			{
 				Window(d, new Vector3(0f, 6.5f, -w * 0.5f), Vector3.back, 20);
@@ -508,15 +548,37 @@ namespace FishMMO.Shared.WorldDesign
 						d.Add(StructureShapes.ChamferBox(new Vector3(i * 3.6f, h * 0.45f, s * (dz * 0.5f + 0.3f)), new Vector3(1.1f, h * 0.9f, 0.6f), d.Bevel(0.04f), StructureMaterial.Stone, 20 + i + 3 * s));
 					}
 				}
-				var ridge = new[] { new Vector2(-(w * 0.5f + 0.5f), h), new Vector2(w * 0.5f + 0.5f, h), new Vector2(w * 0.5f - 2.5f, h + 4f), new Vector2(-(w * 0.5f - 2.5f), h + 4f) };
-				StructureSolid roof = StructureShapes.Prism(ridge, -dz * 0.5f - 0.5f, dz * 0.5f + 0.5f, StructureMaterial.Timber, 30, StructureRole.Roof);
-				// Hip the ends: cut each gable end back to a slope.
-				float k = 4f / (dz * 0.5f + 0.5f);
-				var n0 = new Vector3(0f, 1f, k).normalized;
-				var n1 = new Vector3(0f, 1f, -k).normalized;
-				roof.Clip(n0, Vector3.Dot(n0, new Vector3(0f, h + 4f, 0f)));
-				roof.Clip(n1, Vector3.Dot(n1, new Vector3(0f, h + 4f, 0f)));
-				d.Add(roof);
+				// Its rise is its palette's pitch over the half depth (StructureRoofs, I6h); flat, a deck behind merlons.
+				OwnRoofPlan plan = OwnRoof(d, StructureMaterial.Timber, 4f, dz * 0.5f + 0.5f);
+				using (d.Builds(RoofRoles))
+				{
+					if (plan.Flat)
+					{
+						d.Add(StructureShapes.Box(new Vector3(0f, h + 0.08f, 0f), new Vector3(w, 0.16f, dz), StructureMaterial.Timber, 30, StructureRole.Roof)).Grain = Vector3.forward;
+					}
+					else
+					{
+						float r = plan.Rise;
+						var ridge = new[] { new Vector2(-(w * 0.5f + 0.5f), h), new Vector2(w * 0.5f + 0.5f, h), new Vector2(w * 0.5f - 2.5f, h + r), new Vector2(-(w * 0.5f - 2.5f), h + r) };
+						StructureSolid roof = StructureShapes.Prism(ridge, -dz * 0.5f - 0.5f, dz * 0.5f + 0.5f, StructureMaterial.Timber, 30, StructureRole.Roof);
+						// Hip the ends: cut each gable end back to a slope.
+						float k = r / (dz * 0.5f + 0.5f);
+						var n0 = new Vector3(0f, 1f, k).normalized;
+						var n1 = new Vector3(0f, 1f, -k).normalized;
+						roof.Clip(n0, Vector3.Dot(n0, new Vector3(0f, h + r, 0f)));
+						roof.Clip(n1, Vector3.Dot(n1, new Vector3(0f, h + r, 0f)));
+						d.Add(roof);
+					}
+				}
+				if (plan.Flat)
+				{
+					for (int f = 0; f < 4; f++)
+					{
+						Quaternion q = Quaternion.Euler(0f, f * 90f, 0f);
+						float hx = (f % 2 == 0 ? w : dz) * 0.5f, hz = (f % 2 == 0 ? dz : w) * 0.5f;
+						Crenellate(d, q * new Vector3(-hx + 0.3f, h + 0.16f, -hz + 0.3f), q * new Vector3(hx - 0.3f, h + 0.16f, -hz + 0.3f), 0.6f, 1f, 0.9f, 0.6f, StructureMaterial.Stone, 40 + f * 10);
+					}
+				}
 			}
 			else
 			{
@@ -611,7 +673,22 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			HangDoor(d, new Vector3(0f, deck, -Mathf.Sqrt(inner * inner - door * door * 0.25f) + 0.05f), Vector3.right, Vector3.forward, door, 2.25f, StructureDoorKind.Planks);
 			d.RoundRoom(new Vector3(0f, deck, 0f), inner, 2.7f, StructureRoomKind.Dwelling);
-			d.Add(StructureShapes.Lathe(new[] { new Vector2(inner + 0.82f, deck + 2.35f), new Vector2(0f, deck + 5.4f) }, seg, StructureMaterial.Thatch, 2, true, 0f, false, true, StructureRole.Roof));
+			// The cone at its palette's pitch (StructureRoofs, I6h); flat, a round deck over the wall.
+			const float roofRise = 3.05f;
+			OwnRoofPlan roof = OwnRoof(d, StructureMaterial.Thatch, roofRise, inner + 0.82f);
+			using (d.Builds(RoofRoles))
+			{
+				if (roof.Flat)
+				{
+					d.Add(StructureShapes.Lathe(new[] { new Vector2(0f, deck + 2.7f), new Vector2(inner + 0.45f, deck + 2.7f), new Vector2(inner + 0.45f, deck + 2.95f), new Vector2(0f, deck + 2.95f) },
+						seg, StructureMaterial.Thatch, 2, true, 0f, false, true, StructureRole.Roof));
+				}
+				else
+				{
+					float peak = roof.Rise == roofRise ? deck + 5.4f : deck + 2.35f + roof.Rise;
+					d.Add(StructureShapes.Lathe(new[] { new Vector2(inner + 0.82f, deck + 2.35f), new Vector2(0f, peak) }, seg, StructureMaterial.Thatch, 2, true, 0f, false, true, StructureRole.Roof));
+				}
+			}
 		}
 
 		private static void StiltHouse(StructureDraft d)
@@ -645,7 +722,8 @@ namespace FishMMO.Shared.WorldDesign
 			d.Add(StructureShapes.Lathe(new[] { new Vector2(0.12f, 0.8f), new Vector2(0.15f, 1.1f), new Vector2(0f, 1.1f) }, d.Seg(8, 5), StructureMaterial.Timber, 8, true, 0f, false, true, StructureRole.Detail));
 			if (d.Variant == 0)
 			{
-				GableRoof(d, 2f, 1.4f, 2.1f, 0.6f, 0.15f, 0.07f, StructureMaterial.Timber, 10, Matrix4x4.Rotate(Quaternion.Euler(0f, 90f, 0f)));
+				// Its palette's pitch, or a flat canopy (StructureRoofs, I6h).
+				OwnGable(d, 2f, 1.4f, 2.1f, 0.6f, 0.15f, 0.07f, StructureMaterial.Timber, 10, Matrix4x4.Rotate(Quaternion.Euler(0f, 90f, 0f)));
 				d.Add(StructureShapes.Beam(new Vector3(-0.95f, 2.15f, 0f), new Vector3(0.95f, 2.15f, 0f), 0.14f, 0.14f, StructureMaterial.Timber, 12));
 				return;
 			}

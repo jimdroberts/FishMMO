@@ -362,6 +362,12 @@ namespace FishMMO.UnitTests
 					missing.Add(biome.name);
 					continue;
 				}
+				if (BiomeNamingGenerator.IsSpecNamed(biome.name))
+				{
+					// Its words are its spec file's naming column's (2026-10-18, I2o): the table gives it none.
+					Assert.AreEqual(0, words.Count, $"{biome.name} is spec-named but the table gives it words.");
+					continue;
+				}
 				Assert.Greater(words.Count, 0, $"{biome.name} is in the table but gets no words.");
 				foreach (KeyValuePair<string, string[]> pair in words)
 				{

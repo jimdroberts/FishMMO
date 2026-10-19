@@ -36,7 +36,12 @@ namespace FishMMO.Client
 		/// <param name="set">Adds these instead.</param>
 		/// <param name="settings">The scene's settings, for authoring into its atlas entry. May be null.</param>
 		/// <param name="rebuild">Redraws the section, after a reset.</param>
-		public static void Build(VisualElement parent, Func<AirOffsets> get, Action<AirOffsets> set, WorldSceneSettings settings, Action rebuild)
+		/// <param name="shift">
+		/// Moves every runtime entry, past ones included, by an amount (<see cref="WeatherTimeline.ShiftAir"/>): how
+		/// "Author into this scene" takes away what it authored. Null hides the button.
+		/// </param>
+		public static void Build(VisualElement parent, Func<AirOffsets> get, Action<AirOffsets> set, WorldSceneSettings settings, Action rebuild,
+			Action<AirOffsets> shift = null)
 		{
 			if (parent == null || get == null || set == null)
 			{
@@ -70,12 +75,16 @@ namespace FishMMO.Client
 				rebuild?.Invoke();
 			}));
 			WorldAtlasScene entry = settings != null ? settings.AtlasEntry : null;
-			if (entry != null)
+			if (entry != null && shift != null)
 			{
 				row.Add(Button("Author into this scene", () =>
 				{
-					entry.Air = entry.Air + get();
-					set(default);
+					/* Moved, not copied and reset: the authored air applies at every moment, so resetting the runtime entry
+					 * left the moments before the click with both, and the ground's memory and the snowpack read the
+					 * offset twice. Taking it off every runtime entry keeps the sum exactly what it was. */
+					AirOffsets added = get();
+					entry.Air = entry.Air + added;
+					shift(added * -1f);
 #if UNITY_EDITOR
 					UnityEditor.EditorUtility.SetDirty(entry);
 #endif
@@ -265,13 +274,29 @@ namespace FishMMO.Client
 			return label;
 		}
 
+		/// <summary>How long a slider must rest before its value is applied, ms.</summary>
+		/// <remarks>
+		/// A drag sends a value every frame, and every one applied is a change to the air with a history of its own
+		/// (<see cref="WeatherTimeline.AirHistory"/>): a drag through the range then filled the history with a hundred
+		/// steps and pushed the start of the change out of it. Applied once it rests, a drag is one change, as a typed
+		/// value is.
+		/// </remarks>
+		private const long SettleMilliseconds = 250;
+
 		/// <summary>A slider that adds to the air: zero in the middle, less to the left and more to the right.</summary>
 		private static Slider Offset(string text, float low, float high, float value, Action<float> changed, string tooltip)
 		{
 			var slider = new Slider(text, low, high) { value = Mathf.Clamp(value, low, high), showInputField = true, tooltip = tooltip + " Zero adds nothing." };
 			slider.AddToClassList("fish-slider");
 			slider.AddToClassList("ws-slider");
-			slider.RegisterValueChangedCallback(evt => changed(evt.newValue));
+			float latest = slider.value;
+			IVisualElementScheduledItem settle = null;
+			slider.RegisterValueChangedCallback(evt =>
+			{
+				latest = evt.newValue;
+				settle ??= slider.schedule.Execute(() => changed(latest));
+				settle.ExecuteLater(SettleMilliseconds);
+			});
 			return slider;
 		}
 

@@ -28,12 +28,12 @@ namespace FishMMO.Shared.WorldDesign
 	/// </para>
 	/// <para>
 	/// <b>Pieces.</b> Triangles go to the 32 m cube their centre is in (the scene's collider chunk size); each piece's
-	/// vertices are its own copies, projected for metre UVs along their triangle's dominant axis. No decimation: a
-	/// decimated piece would crack against its neighbour, and the pieces are culled whole by
-	/// <see cref="CaveVisibility"/> instead.
+	/// vertices are its own copies, projected for metre UVs along their triangle's dominant axis. No piece is decimated on
+	/// its own (it would crack against its neighbour); the whole welded net is thinned once before it is cut into pieces
+	/// (<see cref="Simplify"/>, 2026-10-18), and the pieces are culled whole by <see cref="CaveVisibility"/>.
 	/// </para>
 	/// </remarks>
-	public static class CaveMesher
+	public static partial class CaveMesher
 	{
 		/// <summary>Cells along each side of a sampled chunk.</summary>
 		public const int ChunkCells = 24;
@@ -214,6 +214,8 @@ namespace FishMMO.Shared.WorldDesign
 				chunk.Samples = null;
 			}
 			KeepLargestPiece(total, tris);
+			// Thinned where the rock is plain: the floors' flats and the vaults (CaveMesher.Simplify).
+			int thinned = Simplify(system, ground, positions, normals, tris, h);
 			double wound = clock.Elapsed.TotalSeconds;
 
 			// Which triangles to keep: everything near a mouth; elsewhere only the void's own face.
@@ -291,8 +293,8 @@ namespace FishMMO.Shared.WorldDesign
 			result.Sort((x, y) => x.Key.z != y.Key.z ? x.Key.z.CompareTo(y.Key.z) : x.Key.y != y.Key.y ? x.Key.y.CompareTo(y.Key.y) : x.Key.x.CompareTo(y.Key.x));
 			double built = clock.Elapsed.TotalSeconds;
 			// The time each phase took, so the mesher's cost in a cut can be read from its notes.
-			report = $"{list.Count} chunks sampled, {result.Count} pieces, {triangles} triangles ({dropped} buried dropped); meshed in {built:0.00} s "
-				+ $"(field {sampled:0.00}, net and surface {projected - sampled:0.00}, faces {wound - projected:0.00}, buried test {tested - wound:0.00}, pieces {built - tested:0.00})";
+			report = $"{list.Count} chunks sampled, {result.Count} pieces, {triangles} triangles ({thinned} thinned out, {dropped} buried dropped); meshed in {built:0.00} s "
+				+ $"(field {sampled:0.00}, net and surface {projected - sampled:0.00}, faces and thinning {wound - projected:0.00}, buried test {tested - wound:0.00}, pieces {built - tested:0.00})";
 			if (result.Count == 0)
 			{
 				throw new InvalidOperationException("the field has no surface");

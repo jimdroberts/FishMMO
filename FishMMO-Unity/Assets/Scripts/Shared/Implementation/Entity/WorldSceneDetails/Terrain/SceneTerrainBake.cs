@@ -6,7 +6,8 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Holds a scene's <see cref="TerrainDetailBake"/> on a client-only object at its root (<see cref="ObjectName"/>), and
 	/// lists every loaded scene's while enabled, so the client's grass and detail scatter can find a terrain's baked maps
-	/// (<see cref="TileOf"/>) and a texture set's colour copy (<see cref="AlbedoOf"/>).
+	/// (<see cref="TileOf"/>), the array terrain its stored index map (<see cref="IndexOf"/>), and the grass a texture set's
+	/// colour copy (<see cref="AlbedoOf"/>).
 	/// </summary>
 	/// <remarks>
 	/// Under a <see cref="ClientOnlyObject"/>, so server builds drop it and the bake with it. The editor never enables it
@@ -59,6 +60,52 @@ namespace FishMMO.Shared
 				{
 					bake = b;
 					return tile;
+				}
+			}
+			return null;
+		}
+
+		/// <summary>
+		/// The stored index map of a terrain's data (<see cref="TerrainDetailBake.IndexMap"/>) in any loaded scene's bake, when
+		/// it may be drawn on that data (<see cref="TerrainDetailBake.IndexMap.UsableFor"/>); null otherwise. Play only (the
+		/// holder registers in play). Independent of the bake's <see cref="TerrainDetailBake.Version"/> and of the tile's own
+		/// staleness, which are the grass's and the scatter's.
+		/// </summary>
+		/// <remarks>
+		/// A holder whose OnEnable has not run yet (a binder binding from its own OnEnable while the scene loads) is found
+		/// among the loaded objects instead, so the first push of a scene already sees its maps.
+		/// </remarks>
+		public static TerrainDetailBake.IndexMap IndexOf(TerrainData data)
+		{
+			if (data == null || !Application.isPlaying)
+			{
+				return null;
+			}
+			TerrainDetailBake.IndexMap found = IndexIn(loaded, data);
+			if (found != null)
+			{
+				return found;
+			}
+			var waiting = new List<SceneTerrainBake>();
+			foreach (SceneTerrainBake holder in FindObjectsByType<SceneTerrainBake>(FindObjectsInactive.Include))
+			{
+				if (holder != null && !loaded.Contains(holder))
+				{
+					waiting.Add(holder);
+				}
+			}
+			return waiting.Count > 0 ? IndexIn(waiting, data) : null;
+		}
+
+		private static TerrainDetailBake.IndexMap IndexIn(List<SceneTerrainBake> holders, TerrainData data)
+		{
+			for (int i = 0; i < holders.Count; i++)
+			{
+				TerrainDetailBake b = holders[i] != null ? holders[i].Bake : null;
+				TerrainDetailBake.Tile tile = b != null ? b.TileOf(data) : null;
+				if (tile != null && tile.Index != null && tile.Index.UsableFor(data))
+				{
+					return tile.Index;
 				}
 			}
 			return null;

@@ -328,6 +328,10 @@ namespace FishMMO.Shared.WorldDesign
 		internal struct Site
 		{
 			public float X, Z, Y, Yaw, Score, Radius;
+			/// <summary>The radius the kind's rule drew (its size class's), before an outline made <see cref="Radius"/> its bounding reach.</summary>
+			public float Drawn;
+			/// <summary>The site's outline (<see cref="PointOfInterestOutline"/>), or null for a disc of <see cref="Radius"/>.</summary>
+			public float[] Outline;
 			public int Cell;
 			public int RiverId, PlanetRiver, LakeId, ParentId;
 
@@ -433,7 +437,8 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				PointOfInterestKindInfo info = PointOfInterestKinds.Info(rule.Kind);
 				int cell = G.CellAt(site.X, site.Z);
-				float t = rule.FootprintMax > rule.FootprintMin ? Mathf.InverseLerp(rule.FootprintMin, rule.FootprintMax, site.Radius) : 0.5f;
+				float drawn = site.Drawn > 0f ? site.Drawn : site.Radius;
+				float t = rule.FootprintMax > rule.FootprintMin ? Mathf.InverseLerp(rule.FootprintMin, rule.FootprintMax, drawn) : 0.5f;
 				var record = new PointOfInterestRecord
 				{
 					Id = id,
@@ -441,6 +446,7 @@ namespace FishMMO.Shared.WorldDesign
 					Position = new Vector3(Round(site.X), Round(site.Y), Round(site.Z)),
 					Yaw = Mathf.Round(site.Yaw),
 					Radius = Round(site.Radius),
+					Outline = site.Outline != null ? (float[])site.Outline.Clone() : Array.Empty<float>(),
 					SizeClass = (byte)(rule.Kind == POIType.Capital ? 2 : t < 0.34f ? 0 : t < 0.67f ? 1 : 2),
 					BiomeID = BiomeId(cell),
 					DetailTier = info.DetailTier,

@@ -335,7 +335,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 
 		private void QueueAir(SceneWeather sw, AirOffsetEntry air)
 		{
-			sw.Timeline.Air = air;
+			sw.Timeline.ReplaceAir(air);
 			ref WeatherDeltaBroadcast d = ref Pending(sw);
 			d.HasAir = true;
 			d.Air = air;

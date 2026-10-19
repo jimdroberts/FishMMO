@@ -69,9 +69,12 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>True when the scene was cut from the globe, so every point has its own place and altitude on it.</summary>
 		public readonly bool Generated;
 
-		/// <summary>Scene metres per metre of the planet's altitude: <see cref="PlanetSurface.SceneVerticalScale"/> at the cut radius.</summary>
+		/// <summary>Scene metres per metre of the planet's altitude, as the scene was cut (<see cref="ResolveVerticalScale"/>).</summary>
 		/// <remarks>1 for a scene that is only placed: its Y was never scaled from anything.</remarks>
 		public readonly float VerticalScale;
+
+		/// <summary>The baked map the ground and the vertical scale were read from, when it carries them; else null.</summary>
+		private readonly SceneBiomeMap groundMap;
 
 		/// <summary>The moisture term at the scene's centre: all a hand-made scene uses.</summary>
 		public readonly float CentreMoisture;
@@ -90,7 +93,8 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>How continental the climate is over the grid, as <see cref="moisture"/> is laid out (<see cref="MoistureModel.Continentality{T}"/>).</summary>
 		private readonly float[] continentality;
 
-		private ScenePlacementClimate(SolarSystemProfile system, WorldBody body, in AtlasFootprint footprint, double radiusKm, bool generated)
+		private ScenePlacementClimate(SolarSystemProfile system, WorldBody body, in AtlasFootprint footprint, double radiusKm, bool generated,
+			SceneBiomeMap map)
 		{
 			this.system = system;
 			this.body = body;
@@ -100,7 +104,8 @@ namespace FishMMO.Shared.Biomes
 
 			field = PlanetClimateField.For(system, body);
 			Conditions = field.Conditions;
-			VerticalScale = generated ? Mathf.Max(1e-6f, PlanetSurface.SceneVerticalScale(body, radiusKm)) : 1f;
+			groundMap = generated && map != null && map.HasGroundAltitudes ? map : null;
+			VerticalScale = generated ? ResolveVerticalScale(body, radiusKm, map) : 1f;
 			Vector3 centre = AtlasGeometry.ToUnit(footprint.Latitude, footprint.Longitude).ToVector3();
 			CentreMoisture = field.Moisture.Anomaly(footprint.Latitude, centre);
 			CentreContinentality = field.ContinentalityAt(footprint.Latitude, centre);
@@ -135,14 +140,34 @@ namespace FishMMO.Shared.Biomes
 			{
 				return null;
 			}
-			return For(system, ResolveBody(system, entry), AtlasFootprint.Of(entry), entry.CutRadiusKm, entry.CutRadiusKm > 0f);
+			return For(system, ResolveBody(system, entry), AtlasFootprint.Of(entry), entry.CutRadiusKm, entry.CutRadiusKm > 0f, entry.BiomeMap);
 		}
 
 		/// <summary>The same from its parts, for tests and tools.</summary>
 		/// <param name="radiusKm">The atlas radius the scene was cut at. Ignored unless <paramref name="generated"/>.</param>
-		public static ScenePlacementClimate For(SolarSystemProfile system, WorldBody body, in AtlasFootprint footprint, double radiusKm, bool generated)
+		/// <param name="map">The scene's baked biome map: its ground and vertical scale, where the cut stored them. Null reads both from the body.</param>
+		public static ScenePlacementClimate For(SolarSystemProfile system, WorldBody body, in AtlasFootprint footprint, double radiusKm, bool generated,
+			SceneBiomeMap map = null)
 		{
-			return new ScenePlacementClimate(system, body, footprint, Math.Max(1e-3, radiusKm), generated && radiusKm > 0.0);
+			return new ScenePlacementClimate(system, body, footprint, Math.Max(1e-3, radiusKm), generated && radiusKm > 0.0, map);
+		}
+
+		/// <summary>
+		/// Scene metres per metre of the planet's altitude for a scene cut at <paramref name="radiusKm"/>: the scale its baked
+		/// map recorded at the cut, else <see cref="PlanetSurface.SceneVerticalScale"/> worked out from the body now.
+		/// </summary>
+		/// <remarks>
+		/// The recorded one first because the scene's heights were laid at it. Worked out again, a body whose relief or
+		/// atlas radius was edited after the cut would read every height of the scene as a different altitude, and so a
+		/// different temperature, from the one its biomes were chosen at.
+		/// </remarks>
+		public static float ResolveVerticalScale(WorldBody body, double radiusKm, SceneBiomeMap map)
+		{
+			if (map != null && map.HasGroundAltitudes)
+			{
+				return map.VerticalScale;
+			}
+			return Mathf.Max(1e-6f, PlanetSurface.SceneVerticalScale(body, Math.Max(1e-3, radiusKm)));
 		}
 
 		/// <summary>
@@ -179,6 +204,9 @@ namespace FishMMO.Shared.Biomes
 				&& footprint.HeadingDegrees == entry.HeadingDegrees
 				&& footprint.SizeKm == entry.SizeKm
 				&& (!generated || radiusKm == Math.Max(1e-3, entry.CutRadiusKm))
+				// A re-cut rewrites the map in place: same asset, new ground.
+				&& ReferenceEquals(groundMap, generated && entry.BiomeMap != null && entry.BiomeMap.HasGroundAltitudes ? entry.BiomeMap : null)
+				&& (groundMap == null || VerticalScale == groundMap.VerticalScale)
 				// Outside play a designer may be editing the body itself: a changed body is a new climate table.
 				&& (Application.isPlaying || ReferenceEquals(field.Table, PlanetClimateTable.For(system, body)));
 		}
@@ -200,6 +228,29 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>The planet's altitude, in its own metres, of a scene world Y: Y ÷ <see cref="VerticalScale"/>.</summary>
 		public float AltitudeOf(float worldY) => worldY / VerticalScale;
+
+		/// <summary>How much colder each scene metre up is, K: the body's lapse rate per metre of its altitude over <see cref="VerticalScale"/>.</summary>
+		/// <param name="lapsePerMetre">The body's lapse rate, K per metre of its own altitude (<see cref="ClimateModel.LapseRatePerMetre(SolarSystemProfile, WorldBody)"/>).</param>
+		public float CoolingPerSceneMetre(float lapsePerMetre) => lapsePerMetre / VerticalScale;
+
+		/// <summary>True when the cut baked the ground into the scene's map, so <see cref="TryGroundY"/> answers from it.</summary>
+		public bool HasBakedGround => groundMap != null;
+
+		/// <summary>
+		/// The world Y of the ground under a scene position as the cut measured it (<see cref="SceneBiomeMap.TryGroundAltitude"/>
+		/// times <see cref="VerticalScale"/>). False for a scene whose map carries no ground: ask the terrain then.
+		/// </summary>
+		/// <remarks>Allocation-free and engine-free, so the server and every client read the same ground wherever they ask.</remarks>
+		public bool TryGroundY(float worldX, float worldZ, out float worldY)
+		{
+			worldY = 0f;
+			if (groundMap == null || !groundMap.TryGroundAltitude(worldX, worldZ, out float altitude))
+			{
+				return false;
+			}
+			worldY = altitude * VerticalScale;
+			return true;
+		}
 
 		/// <summary>
 		/// The true latitude of a scene position, degrees: through the footprint for a generated

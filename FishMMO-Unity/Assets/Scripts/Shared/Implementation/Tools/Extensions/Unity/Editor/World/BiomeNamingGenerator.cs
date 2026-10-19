@@ -650,6 +650,13 @@ namespace FishMMO.Shared.WorldDesign
 			W(POIType.Island, "Ait", "Eyot", "Holm", "Isle", "Bar", "Ham"));
 
 		/// <summary>
+		/// The row of a biome whose point-of-interest words come from its spec file's naming column alone (BiomeArtSpec.Entry.Names,
+		/// decision 23): no family, so <see cref="FillMissingPOIWords"/> adds none of the table's words to it. Declared before the
+		/// table, which reads it as it is built (static fields are set in file order).
+		/// </summary>
+		private static readonly Dictionary<POIType, string[]>[] SpecNamed = Array.Empty<Dictionary<POIType, string[]>>();
+
+		/// <summary>
 		/// Every biome by its exact asset name, and the word families it takes, first family first. Explicit,
 		/// like <see cref="Voices"/>, for the same reason: a keyword guess over names is how biomes got
 		/// corrupted before, and a biome missing here is reported rather than guessed at.
@@ -667,11 +674,14 @@ namespace FishMMO.Shared.WorldDesign
 			["Cave"] = new[] { Underground },
 			["Coastal Water"] = new[] { Sea, Coast },
 			["Coral Reef"] = new[] { Sea },
-			["Crater"] = new[] { Volcanic },
+			// Named by its own spec file's naming column (BiomeArtSpec.Entry.Names, the Crater round, decision 39): an impact crater, not
+			// a volcano, so the volcanic words ("Ash Camp", "Fire Temple") are no longer offered to it.
+			["Crater"] = SpecNamed,
 			["Cryovolcanic Plain"] = new[] { Cryo },
 			["Deep Ocean"] = new[] { Sea },
 			["Desert"] = new[] { Desert },
-			["Dust Sea"] = new[] { Airless },
+			// Named by its own spec file's naming column (the Dust Sea round, decision 44): not the survey-station words of the airless set.
+			["Dust Sea"] = SpecNamed,
 			["Estuary"] = new[] { Wetland, Coast, Riverside },
 			["Farmland"] = new[] { Farmland, Grassland },
 			["Forest"] = new[] { Forest },
@@ -740,6 +750,12 @@ namespace FishMMO.Shared.WorldDesign
 			["Wetlands"] = new[] { Wetland, Riverside },
 			["Woodland"] = new[] { Forest, Grassland },
 		};
+
+		/// <summary>True when the table leaves a biome's point-of-interest words to its spec file's naming column (<see cref="SpecNamed"/>).</summary>
+		public static bool IsSpecNamed(string biomeName)
+		{
+			return biomeName != null && PoiFamiliesByBiome.TryGetValue(biomeName, out Dictionary<POIType, string[]>[] families) && families.Length == 0;
+		}
 
 		/// <summary>Most words one biome keeps per kind after its families are merged.</summary>
 		private const int MaxWordsPerKind = 10;
@@ -819,6 +835,12 @@ namespace FishMMO.Shared.WorldDesign
 				if (words == null)
 				{
 					unknown.Add(biome.name);
+					continue;
+				}
+				/* The spec's naming column wins (decision 23; 2026-10-18, I2o): words the authoring wrote from a biome's file are the
+				 * whole of its table, and a kind its file leaves out is left out, not filled with the generic family's words. */
+				if (words.Count == 0 || biome.IsAuthored(BiomeTemplate.Authored.NamingPart(nameof(SerializableBiomePhonology.POITypeWords))))
+				{
 					continue;
 				}
 				biome.Naming ??= new BiomeNamingData();

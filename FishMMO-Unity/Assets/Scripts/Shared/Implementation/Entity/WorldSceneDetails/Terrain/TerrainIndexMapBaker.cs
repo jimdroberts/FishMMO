@@ -17,10 +17,14 @@ namespace FishMMO.Shared
 	/// copies and one small draw; nothing is read back.
 	/// </para>
 	/// <para>
-	/// <b>Not stored.</b> Every tile is baked where it is drawn — the editor, play mode and a player alike — from the
-	/// alphamaps the client build keeps (ClientTerrainLayerStripper), so there is no asset to go stale and nothing new to
-	/// commit or ship. Ground that shipped only its index maps would need the CPU readers of the alphamaps moved first
-	/// (GroundColourMap's fallback, the grass's take-on fallback).
+	/// <b>Baked live while the ground is edited, stored for play</b> (2026-10-16: "store index maps with the terrain at
+	/// cut/repaint, still re-baked live while painting in the editor"). In edit mode every tile is baked here from its
+	/// alphamaps, on every change. The cut also stores each tile's map, baked on the CPU by the same rule
+	/// (<see cref="TerrainIndexMap.Bake(float[,,])"/>), in the scene's <see cref="TerrainDetailBake"/>; in play (the
+	/// editor's and a player's) the binder uploads that (<see cref="Upload"/>) when it is still the alphamaps' own, and bakes
+	/// here only when it is not. A client build then leaves the alphamaps out of every tile whose stored map it has checked
+	/// against them (ClientTerrainLayerStripper), and the CPU readers that used them (GroundColourMap, the grass's surface
+	/// layers) read the stored map on such a tile.
 	/// </para>
 	/// <para>
 	/// Integer arithmetic on bytes, so the GPU bake is <see cref="TerrainIndexMap.BakeTexel"/> exactly; the editor checks a
@@ -170,6 +174,87 @@ namespace FishMMO.Shared
 			return true;
 		}
 
+		/// <summary>Whether <see cref="Upload"/> has said once that this device cannot hold a stored map.</summary>
+		private static bool warnedUpload;
+
+		/// <summary>True when this device can sample (load) an index map held as a texture of <see cref="Format"/>.</summary>
+		public static bool CanUpload()
+		{
+			return SystemInfo.graphicsDeviceType != GraphicsDeviceType.Null && SystemInfo.IsFormatSupported(Format, GraphicsFormatUsage.Sample);
+		}
+
+		/// <summary>
+		/// A stored index map (<see cref="TerrainDetailBake.IndexMap"/>) as a GPU texture of <see cref="Format"/>, point
+		/// filtered and clamped like a baked one, its CPU copy dropped once uploaded (the stored words stay in the bake);
+		/// null, with one warning a session, where the device cannot hold it. The caller owns and destroys it.
+		/// </summary>
+		public static Texture2D Upload(TerrainDetailBake.IndexMap stored, string name)
+		{
+			if (stored == null || stored.Resolution <= 0 || stored.Map == null || stored.Map.Length != stored.Resolution * stored.Resolution * 2)
+			{
+				return null;
+			}
+			if (!CanUpload())
+			{
+				WarnUpload($"{Format} cannot be sampled here");
+				return null;
+			}
+			Texture2D texture = null;
+			try
+			{
+				texture = new Texture2D(stored.Resolution, stored.Resolution, Format, TextureCreationFlags.DontInitializePixels)
+				{
+					name = name,
+					filterMode = FilterMode.Point,
+					wrapMode = TextureWrapMode.Clamp,
+					hideFlags = HideFlags.HideAndDontSave,
+				};
+				texture.SetPixelData(stored.Map, 0);
+				texture.Apply(false, true);
+				return texture;
+			}
+			catch (System.Exception e)
+			{
+				Destroy(texture);
+				WarnUpload(e.Message);
+				return null;
+			}
+		}
+
+		private static void WarnUpload(string why)
+		{
+			if (!warnedUpload)
+			{
+				warnedUpload = true;
+				Debug.LogWarning($"[Terrain index] Cannot upload stored index maps ({why}): tiles are baked from their alphamaps where they have them.");
+			}
+		}
+
+		/// <summary>
+		/// Copies a tile's index map (a baked one or an uploaded stored one, of <see cref="Format"/>) into slice
+		/// <paramref name="slice"/> of an index array of its size: an exact texture copy, nothing converted. False where the
+		/// sizes or formats differ or the device cannot copy into a render texture.
+		/// </summary>
+		public static bool CopyInto(Texture source, RenderTexture target, int slice)
+		{
+			if (source == null || target == null || source.width != target.width || source.height != target.height
+				|| source.graphicsFormat != Format || target.graphicsFormat != Format)
+			{
+				return false;
+			}
+			// A 2D map into an element of a 2D array is a basic copy; render texture to render texture too.
+			CopyTextureSupport support = SystemInfo.copyTextureSupport;
+			CopyTextureSupport needed = CopyTextureSupport.Basic | (source is RenderTexture ? 0 : CopyTextureSupport.TextureToRT);
+			bool planar = (source.dimension == TextureDimension.Tex2D || source.dimension == TextureDimension.Tex2DArray)
+				&& (target.dimension == TextureDimension.Tex2D || target.dimension == TextureDimension.Tex2DArray);
+			if ((support & needed) != needed || (!planar && (support & CopyTextureSupport.DifferentTypes) == 0))
+			{
+				return false;
+			}
+			Graphics.CopyTexture(source, 0, 0, target, slice, 0);
+			return true;
+		}
+
 		/// <summary>The scratch array the alphamaps are copied into, reused while it is big enough and of their format.</summary>
 		private static void EnsureScratch(int res, int maps, GraphicsFormat format)
 		{
@@ -287,6 +372,52 @@ namespace FishMMO.Shared
 				Destroy(copy);
 				return null;
 			}
+		}
+
+		/// <summary>
+		/// Whether a stored map still says what the tile's CPU alphamaps say, at <paramref name="samples"/> texels spread over
+		/// the tile, edges included (the CPU bake of each, <see cref="TerrainIndexMap.BakeTexel"/>, against the stored words):
+		/// the editor's guard against a map whose staleness was missed (an alphamap written with no terrain callback). True,
+		/// with nothing compared, for a tile without alphamaps. Reads a texel at a time, so it is cheap.
+		/// </summary>
+		public static bool MatchesAlphamaps(TerrainData data, TerrainDetailBake.IndexMap stored, int samples, out string firstBad)
+		{
+			firstBad = null;
+			if (data == null || stored == null)
+			{
+				firstBad = "nothing to compare";
+				return false;
+			}
+			int layers = data.alphamapLayers;
+			int res = data.alphamapResolution;
+			if (layers <= 0)
+			{
+				return true;
+			}
+			if (res != stored.Resolution || stored.Map == null || stored.Map.Length != res * res * 2)
+			{
+				firstBad = $"stored {stored.Resolution}² against alphamaps {res}²";
+				return false;
+			}
+			var weights = new byte[layers];
+			for (int s = 0; s < samples; s++)
+			{
+				int x = (int)((long)(res - 1) * ((s * 7 + 3) % samples) / Mathf.Max(1, samples - 1));
+				int y = (int)((long)(res - 1) * s / Mathf.Max(1, samples - 1));
+				float[,,] alphas = data.GetAlphamaps(x, y, 1, 1);
+				for (int l = 0; l < layers; l++)
+				{
+					weights[l] = TerrainIndexMap.ByteOf(alphas[0, 0, l]);
+				}
+				TerrainIndexMap.BakeTexel(weights, 0, layers, out uint ids, out uint packed);
+				int at = 2 * (y * res + x);
+				if (stored.Map[at] != ids || stored.Map[at + 1] != packed)
+				{
+					firstBad = $"texel ({x},{y}) stored ids {stored.Map[at]:X8} weights {stored.Map[at + 1]:X8}, alphamaps ids {ids:X8} weights {packed:X8}";
+					return false;
+				}
+			}
+			return true;
 		}
 
 		/// <summary>

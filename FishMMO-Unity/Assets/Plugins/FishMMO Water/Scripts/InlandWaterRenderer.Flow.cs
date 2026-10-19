@@ -109,7 +109,8 @@ namespace FishMMO.Water
 
 		/// <summary>
 		/// Gives each river its field: the texture, and its length in metres (0 turns the solved flow off); and each river and
-		/// lake its water's look by its biome (Looks), where that is not the material's own.
+		/// lake its water's look by its biome (Looks), where that is not the material's own, and each fall the look of the water
+		/// it pours from.
 		/// </summary>
 		private void ApplyFlow()
 		{
@@ -135,6 +136,8 @@ namespace FishMMO.Water
 				pair.Value.SetPropertyBlock(any ? flowBlock : null);
 			}
 			ApplyLakeLooks();
+			// And each fall's sheet and spray, the look of the water it pours from (Looks, 2026-10-18).
+			ApplyFallLooks();
 		}
 	}
 }

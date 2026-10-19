@@ -379,7 +379,8 @@ namespace FishMMO.Shared.WorldDesign
 			private bool Grows(Vector2 p)
 			{
 				PointOfInterestSiteContext context = Context;
-				if (context.Water != null && context.Water.KindAt(p.x, p.y) != WaterKind.None)
+				// The water grid has no sea in it: the sea and the highest tide are the context's (IsWet).
+				if (context.Water != null && context.Water.KindAt(p.x, p.y) != WaterKind.None || context.IsWet(p.x, p.y, 0.05f))
 				{
 					return false;
 				}

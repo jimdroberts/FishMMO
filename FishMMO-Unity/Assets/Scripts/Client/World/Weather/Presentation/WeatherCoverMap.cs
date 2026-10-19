@@ -62,6 +62,12 @@ namespace FishMMO.Client
 		/// gate the snow lift and the ground's snow blend take), w how much of a cold enough place it covers (0: no line).
 		/// </summary>
 		public static readonly int SnowLineId = Shader.PropertyToID("_FishSnowLine");
+		/// <summary>The pack's depth and the line's place-to-place lift (FishSnowLine.hlsl): x the height it lies deepest at (world y), y metres it then lies, z 1 when the climate field is published, w the lowest the line comes anywhere (world y).</summary>
+		public static readonly int SnowDeepId = Shader.PropertyToID("_FishSnowDeep");
+		/// <summary>The climate field (<see cref="SnowLineField"/>): each place's sea-level climate against the middle's, K.</summary>
+		public static readonly int SnowFieldTextureId = Shader.PropertyToID("_FishSnowFieldTex");
+		/// <summary>Its rectangle: xy the world x/z of its south-west corner, zw one over its size in metres.</summary>
+		public static readonly int SnowFieldRectId = Shader.PropertyToID("_FishSnowFieldRect");
 
 		/// <summary>Milliseconds a frame spends working storm-reached texels in.</summary>
 		public const float BudgetMilliseconds = 3f;
@@ -136,7 +142,14 @@ namespace FishMMO.Client
 		private WeatherCover heldCover;
 		// The snow line now (GroundCover.SnowLine), the most snow on the map at its last draw, and the scene's highest ground.
 		private bool lineOn;
-		private float lineStart, lineWhole, lineShare;
+		private float lineStart, lineWhole, lineDeep, lineShare;
+		// The climate field the line is lifted by from place to place (SnowLineField), the settings and middle it was read
+		// for, and its texture.
+		private SnowLineField field;
+		private WorldSceneSettings fieldSettings;
+		private FishMMO.Shared.Biomes.ScenePlacementClimate fieldPlacement;
+		private Vector2 fieldMiddle;
+		private Texture2D fieldTexture;
 		private float mapMostSnow;
 		private Scene topScene;
 		private float terrainTop = float.PositiveInfinity;
@@ -174,6 +187,8 @@ namespace FishMMO.Client
 			{
 				MaxMetres = profile != null ? Mathf.Max(0f, profile.DeepSnowMetres) : 1f,
 				Hours = profile != null ? Mathf.Max(0.1f, profile.DeepSnowHours) : 4f,
+				// The texels hold what the weather laid; the pack is drawn by height at every point (FishSnowLine.hlsl).
+				PackByHeight = true,
 			};
 		}
 
@@ -244,7 +259,8 @@ namespace FishMMO.Client
 				}
 			}
 
-			lineOn = GroundCover.SnowLine(Forcing(g), out lineStart, out lineWhole, out lineShare);
+			lineOn = GroundCover.SnowLine(Forcing(g), out lineStart, out lineWhole, out lineDeep, out lineShare);
+			EnsureField(timeline, settings);
 			// The snap's batch is waited for, so the ground lands with the rest of the weather; any other runs on until the
 			// next frame.
 			WorkPending(snap ? SnapBudgetMilliseconds : BudgetMilliseconds, snap);
@@ -281,7 +297,8 @@ namespace FishMMO.Client
 			{
 				return Mathf.Min(heldDepth, depthMax * Mathf.Clamp01(heldCover.Snow));
 			}
-			return TryIndex(position, out int index) ? TrackAt(index, drawnSeconds).Depth : 0f;
+			float weather = TryIndex(position, out int index) ? TrackAt(index, drawnSeconds).Depth : 0f;
+			return Mathf.Max(weather, PackDepthAt(position));
 		}
 
 		/// <summary>The cover at a world position, or <paramref name="fallback"/> where the map has nothing.</summary>
@@ -295,7 +312,88 @@ namespace FishMMO.Client
 			{
 				return heldCover;
 			}
-			return TryIndex(position, out int index) ? TrackAt(index, drawnSeconds).Cover : fallback;
+			WeatherCover cover = TryIndex(position, out int index) ? TrackAt(index, drawnSeconds).Cover : fallback;
+			cover.Snow = Mathf.Max(cover.Snow, PackAt(position));
+			return cover;
+		}
+
+		/// <summary>
+		/// What the weather alone has left at a position (no seasonal pack): its wetness and its fresh snow's depth past the
+		/// blanket, metres. What a fire is doused or smothered by; a tended camp clears the season's pack. False off the map.
+		/// </summary>
+		public bool TryWeatherGround(Vector3 position, out WeatherCover cover, out float depth)
+		{
+			cover = default;
+			depth = 0f;
+			if (!valid || held || !TryIndex(position, out int index))
+			{
+				return false;
+			}
+			CoverTrack track = TrackAt(index, drawnSeconds);
+			cover = track.Cover;
+			depth = track.Depth;
+			return true;
+		}
+
+		/// <summary>How far the snow line is lifted at a place, world metres, as FishSnowLineLift lifts it.</summary>
+		private float LiftAt(Vector3 position)
+		{
+			float kelvin = field != null ? field.KelvinAt(position.x, position.z) : 0f;
+			return SnowLineShape.LiftAt(position.x, position.z, kelvin, lineStart, lineWhole);
+		}
+
+		/// <summary>The seasonal pack's cover at a position, as every surface draws it (FishPackCover); 0 with no line.</summary>
+		private float PackAt(Vector3 position)
+		{
+			return lineOn && lineShare > 0f ? SnowLineShape.CoverAt(position.y, LiftAt(position), lineStart, lineWhole, lineShare) : 0f;
+		}
+
+		/// <summary>The seasonal pack's depth past the blanket at a position, metres, as FishPackDepth draws it.</summary>
+		private float PackDepthAt(Vector3 position)
+		{
+			return lineOn && lineShare > 0f && depthMax > 0f
+				? SnowLineShape.DepthAt(position.y, LiftAt(position), lineWhole, lineDeep, lineShare, depthMax)
+				: 0f;
+		}
+
+		/// <summary>
+		/// The climate field for the scene and middle the line is read at, built when either changes (a scene's first
+		/// frame, a re-cut, a weather area moved) and uploaded once.
+		/// </summary>
+		private void EnsureField(WeatherTimeline timeline, WorldSceneSettings settings)
+		{
+			Vector2 middle = timeline != null && timeline.Area.width > 0f ? timeline.Area.center : Vector2.zero;
+			// The same settings can be re-placed or re-cut under it: a new placement is a new climate.
+			FishMMO.Shared.Biomes.ScenePlacementClimate placement = settings != null ? settings.PlacementClimate : null;
+			if (ReferenceEquals(settings, fieldSettings) && middle == fieldMiddle && ReferenceEquals(placement, fieldPlacement))
+			{
+				return;
+			}
+			fieldSettings = settings;
+			fieldMiddle = middle;
+			fieldPlacement = placement;
+			field = SnowLineField.For(settings, middle);
+			if (field == null)
+			{
+				return;
+			}
+			if (fieldTexture == null)
+			{
+				fieldTexture = new Texture2D(SnowLineField.Resolution, SnowLineField.Resolution, TextureFormat.RHalf, false, true)
+				{
+					name = "Snow line climate field",
+					wrapMode = TextureWrapMode.Clamp,
+					filterMode = FilterMode.Bilinear,
+					hideFlags = HideFlags.HideAndDontSave,
+				};
+			}
+			var halves = new ushort[field.Kelvin.Length];
+			for (int i = 0; i < halves.Length; i++)
+			{
+				halves[i] = FishMMO.Shared.Biomes.PlanetClimateTableData.ToHalf(field.Kelvin[i]);
+			}
+			fieldTexture.SetPixelData(halves, 0);
+			fieldTexture.Apply(false, false);
 		}
 
 		/// <summary>
@@ -350,6 +448,7 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(ParamsId, Vector4.zero);
 			Shader.SetGlobalVector(DepthParamsId, Vector4.zero);
 			Shader.SetGlobalVector(SnowLineId, Vector4.zero);
+			Shader.SetGlobalVector(SnowDeepId, Vector4.zero);
 		}
 
 		public void Dispose()
@@ -359,6 +458,9 @@ namespace FishMMO.Client
 			Clear();
 			Destroy(ref texture);
 			Destroy(ref depthTexture);
+			Destroy(ref fieldTexture);
+			field = null;
+			fieldSettings = null;
 			pixels = null;
 			depthPixels = null;
 			state = null;
@@ -493,7 +595,7 @@ namespace FishMMO.Client
 		private List<CoverTrack> SharedTrack(long start, long last, float offset)
 		{
 			var history = new List<CoverTrack>((int)(last - start + 2));
-			CoverTrack track = GroundCover.Prior(Forcing(start), offset);
+			CoverTrack track = GroundCover.Prior(Forcing(start), offset, deep);
 			history.Add(track);
 			for (long k = start + 1; k <= last; k++)
 			{
@@ -923,7 +1025,7 @@ namespace FishMMO.Client
 				if (roll)
 				{
 					// A new generation starts: the young one becomes the old, and the new one starts from the climate's ground.
-					CoverTrack start = GroundCover.Prior(atStart, offset);
+					CoverTrack start = GroundCover.Prior(atStart, offset, deep);
 					bgOldAt[b] = bgYoungNext[b];
 					bgOldNext[b] = GroundCover.Advance(bgOldAt[b], open, ahead, deep, offset);
 					bgYoungAt[b] = start;
@@ -1320,8 +1422,18 @@ namespace FishMMO.Client
 			Shader.SetGlobalTexture(DepthTextureId, depthTexture);
 			Shader.SetGlobalVector(DepthParamsId, new Vector4(valid ? depthMax : 0f, 0f, 0f, 0f));
 			bool line = lineOn && lineShare > 0f;
-			bool anywhere = (valid && mapMostSnow > 0f) || (line && TerrainTop() > lineStart);
+			// The lowest the line comes anywhere: the coldest place's lift and the wander's furthest reach down.
+			float lowest = lineStart
+				+ ((field != null ? field.Coldest : 0f) - SnowLineShape.WanderKelvin) * Mathf.Max(1e-3f, lineWhole - lineStart) / SnowLineShape.SpanKelvin;
+			bool anywhere = (valid && mapMostSnow > 0f) || (line && TerrainTop() > lowest);
 			Shader.SetGlobalVector(SnowLineId, new Vector4(lineStart, lineWhole, anywhere ? 1f : 0f, line ? lineShare : 0f));
+			bool fielded = line && field != null && fieldTexture != null;
+			Shader.SetGlobalVector(SnowDeepId, new Vector4(lineDeep, line ? depthMax : 0f, fielded ? 1f : 0f, lowest));
+			if (fielded)
+			{
+				Shader.SetGlobalTexture(SnowFieldTextureId, fieldTexture);
+				Shader.SetGlobalVector(SnowFieldRectId, new Vector4(field.Area.xMin, field.Area.yMin, 1f / field.Area.width, 1f / field.Area.height));
+			}
 		}
 
 		/// <summary>The highest ground of the map's scene, world y (its terrains' tops): whether any of it reaches the snow line.</summary>

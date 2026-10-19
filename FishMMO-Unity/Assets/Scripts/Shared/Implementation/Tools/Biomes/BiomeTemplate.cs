@@ -104,6 +104,8 @@ namespace FishMMO.Shared.Biomes
 		[Header("How the ground wears")]
 		[Tooltip("How erosion, drainage and plateaus shape this biome's ground in a generated scene. Empty wears like temperate soil.")]
 		public TerrainProcessProfile TerrainProcess;
+		[Tooltip("The landforms sculpted into this biome's ground at the cut (2026-10-18): pingos, tells, craters, dune fields, creek networks, moraines… each a shape family with its density, sizes, conditions and the ground layer it paints, by name from the landform presets. Empty: the ground is carved as before. Written by Author biome art; edits are kept.")]
+		[SerializeField] private List<BiomeLandform> landforms = new List<BiomeLandform>();
 
 		/// <remarks>
 		/// <para>
@@ -187,6 +189,20 @@ namespace FishMMO.Shared.Biomes
 		[SerializeField] private TerrainTextureLayer lakebedTextureLayer = new TerrainTextureLayer();
 
 		/// <remarks>
+		/// Decision 35 (b), 2026-10-18: up to <see cref="MaximumBedLayers"/> more beds, each painted under the waters it names by its
+		/// depth below THAT water's own surface (and in a river by its current): a lake's shelf, slope and deeps, a river's riffles,
+		/// pools and reefs (<see cref="BedTextureLayer"/>). What they leave under a river is the Riverbed layer's, under a lake or the
+		/// sea the Lakebed's. Empty for every biome until its round adds some (filled by the biome art authoring), so a scene is
+		/// painted as before.
+		/// </remarks>
+		[Header("Bed Layers by Depth")]
+		[Tooltip("Up to three more bed grounds, each under the waters it names and within its band of depth below that water's own surface (and of a river's current). What they leave is the Riverbed's under a river, the Lakebed's under a lake or the sea.")]
+		[SerializeField] private List<BedTextureLayer> bedTextureLayers = new List<BedTextureLayer>();
+
+		/// <summary>The most bed layers a biome may have (<see cref="BedTextureLayers"/>); the cut paints no more than these.</summary>
+		public const int MaximumBedLayers = 3;
+
+		/// <remarks>
 		/// <para>
 		/// The rock a scene cut stands in this biome: its cliffs (each cliff layer names its own, <see cref="CliffTextureLayer.rockType"/>),
 		/// the boulders in its rivers, the ledges of its falls and the stone a point of interest is shaped from. The planet's
@@ -242,6 +258,23 @@ namespace FishMMO.Shared.Biomes
 		/// </remarks>
 		[Tooltip("The colour and clarity of this biome's fresh water: the lakes, pools, rivers, streams and moats whose shores lie in it (peat-black in a bog, milky under a glacier). Colours as the inland water material's; absorption per metre. Written by Author biome art (the inland water's own look); edits are kept.")]
 		[SerializeField] private BiomeWaterLook waterLook = BiomeWaterLooks.Today;
+		/// <remarks>
+		/// The sea as a diver sees it off this biome's coast (<see cref="BiomeSeaLook"/>, 2026-10-18): the underwater pass blends
+		/// the looks of the biomes within <see cref="BiomeSeaLooks.ReachMetres"/> of the eye (<see cref="BiomeSeaLooks.Coast"/>).
+		/// Until then every sea took its scene's one underwater look, which is this field's default and what the authoring
+		/// writes; a biome with that look leaves the sea its scene's own.
+		/// </remarks>
+		[Tooltip("The sea seen from under its surface off this biome's coast and over its own waters (peat-brown off a bog, milky off a glacier, clear over a reef): colour, visibility and murk as the underwater pass's. Blended along the coast out to 160 m; a biome with the default look leaves the sea its scene's own. Written by Author biome art (the default); edits are kept.")]
+		[SerializeField] private BiomeSeaLook seaLook = BiomeSeaLooks.Today;
+		/// <remarks>
+		/// What the biome's still fresh water carries on its surface (<see cref="BiomeFloatingPlant"/>, 2026-10-18, I2i): duckweed,
+		/// water-lilies, water hyacinth, frogbit, laid by the cut as baked props on the lakes, ponds, moats and slack river pools
+		/// whose water lies in the biome, each patch's kind drawn by weight and how thickly by the water's depth, shelter and
+		/// distance from the shore (<see cref="BiomeFloatingPlants.Cover"/>). Until then no water carried anything, which is
+		/// this field's default (empty) and what the authoring writes until the biome's file names its own.
+		/// </remarks>
+		[Tooltip("The plants this biome's still fresh water carries on its surface (duckweed carpets, water-lily pads with flowers, water hyacinth mats, frogbit), each with how often: on its lakes, ponds, moats and slack river pools. Empty: none. Written by Author biome art; edits are kept.")]
+		[SerializeField] private List<BiomeFloatingPlant> floatingPlants = new List<BiomeFloatingPlant>();
 
 		/// <remarks>
 		/// <para>
@@ -340,12 +373,35 @@ namespace FishMMO.Shared.Biomes
 		[SerializeField] private BiomeWeathering weathering;
 		[Tooltip("The crops this biome's fields grow (detail prefabs, each with its weight). Written by Author biome art (wheat); edits are kept.")]
 		[SerializeField] private List<BiomeFieldCrop> fieldCrops = new List<BiomeFieldCrop>();
+		[Tooltip("The orchards this biome's fields are planted as (2026-10-18): a tree in a grid, drawn against the crops by its weight, with its spacing, what is sown under it and how its ground is laid. Empty: none. Written by Author biome art; edits are kept.")]
+		[SerializeField] private List<BiomeOrchard> orchards = new List<BiomeOrchard>();
+		[Tooltip("How its settlements' fields are laid out (2026-10-18): kept near rivers and lakes (bottomland, metres) and set square to a centuriation grid (metres a side). Zero: anywhere, as drawn. Written by Author biome art; edits are kept.")]
+		[SerializeField] private BiomeFieldLayout fieldLayout;
+		[Tooltip("The flights of old, given-up terraces stepped into the slopes round its settlements (2026-10-18): how many, their risers, the slopes they are cut into and how tumbled. None by default. Written by Author biome art; edits are kept.")]
+		[SerializeField] private BiomeAbandonedTerraces abandonedTerraces = BiomeAbandonedTerraces.None;
+		[Tooltip("The detail ground layer painted along its water channels (2026-10-18; a wet margin), and how wide; −1 none. Painted by the repaint after the channels are laid. Written by Author biome art; edits are kept.")]
+		[SerializeField] private BiomeChannelMargin channelMargin = BiomeChannelMargin.None;
 		[Tooltip("What stands in a keep's, castle's or fortress's moat here: Wet (open water), Frozen (ice) or Dry (a dry ditch). Written by Author biome art (what the biome's climate gave the moat before); edits are kept.")]
 		[SerializeField] private BiomeMoatWater moatWater = BiomeMoatWater.Wet;
 		[Tooltip("How each kind of settlement lights its streets here: the light (iron lantern post, torch post, brazier, cresset, crook lantern, glowjar, crystal post, rune stone: a light that stands on the ground) and the metres between lights. A kind not listed is not lit. Written by Author biome art (lanterns in towns, cities, capitals and ports, torches in villages); edits are kept.")]
 		[SerializeField] private List<BiomeWayLight> wayLights = new List<BiomeWayLight>();
 		[Tooltip("How each place in this biome's caves and mines is lit (a cave's route marks and camps, a mine's drifts, stopes and lamps): the light and, along a drift, the metres between lights. A place not listed is not lit. Written by Author biome art (lantern stands, wall torches every 17 m, torch posts, hanging lanterns); edits are kept.")]
 		[SerializeField] private List<BiomeCaveLight> caveLights = new List<BiomeCaveLight>();
+		[Tooltip("Which of this biome's ways are raised boardwalks (plank walks on piles with a pole handrail): its Roads (cart tracks, roads, highways), its Paths (footpaths, trails) across level ground, and the Streets of the settlements built here. None: every way lies on the ground. Written by Author biome art (None); edits are kept.")]
+		[SerializeField] private BiomeBoardwalks boardwalks = BiomeBoardwalks.None;
+
+		/// <remarks>
+		/// The long, narrow things this biome's country is divided and watered by (2026-10-18, phase I2f, decisions 23 and 29;
+		/// <see cref="BiomeLinearStyle"/>): hedges of its own bushes round its fields and along its lanes and wood edges, drystone,
+		/// mortared and earth-bank walls, fences of every kind, rows of trees, irrigation channels carried at a gentle fall from the
+		/// water to the fields, and the clearance rows of stones picked off them, each with where it goes and how it is built. Laid
+		/// by the cut as baked props (PointOfInterestLinearFeatures). Until then a field had the kit's post-and-rail fence and
+		/// nothing else was laid, which is this list's default (empty) and what the authoring writes until the biome's file names its
+		/// own.
+		/// </remarks>
+		[Header("Linear Features")]
+		[Tooltip("The hedges, walls, fences, tree rows, water channels and clearance rows of this biome: what each is (kind and form), where it is laid (round fields, along lanes, along wood edges, round small sites, as folds, along terraces), how much, how high, its gates and gaps, what it is grown of and the material it is built in. Empty: none (fields keep the kit's fence). Written by Author biome art; edits are kept.")]
+		[SerializeField] private List<BiomeLinearStyle> linearFeatures = new List<BiomeLinearStyle>();
 
 		/// <remarks>
 		/// What this biome's buildings are made of, per structure style and part (<see cref="BiomeStructurePalette"/>, 2026-10-16).
@@ -397,12 +453,21 @@ namespace FishMMO.Shared.Biomes
 			public const string SiteStyles = nameof(siteStyles);
 			public const string Weathering = nameof(weathering);
 			public const string FieldCrops = nameof(fieldCrops);
+			public const string Orchards = nameof(orchards);
+			public const string FieldLayout = nameof(fieldLayout);
+			public const string AbandonedTerraces = nameof(abandonedTerraces);
+			public const string ChannelMargin = nameof(channelMargin);
 			public const string StructurePalette = nameof(structurePalette);
 			public const string MoatWater = nameof(moatWater);
 			public const string WaterLook = nameof(waterLook);
+			public const string SeaLook = nameof(seaLook);
 			public const string WayLights = nameof(wayLights);
 			public const string CaveCrystals = nameof(caveCrystals);
 			public const string CaveLights = nameof(caveLights);
+			public const string FloatingPlants = nameof(floatingPlants);
+			public const string Boardwalks = nameof(boardwalks);
+			public const string LinearFeatures = nameof(linearFeatures);
+			public const string Landforms = nameof(landforms);
 
 			/// <summary>
 			/// The mark of the vines' four densities (caves, ruins, cliffs, trees), a value of its own since the species carry a
@@ -418,6 +483,30 @@ namespace FishMMO.Shared.Biomes
 
 			/// <summary>The mark of one texture slot's <see cref="TerrainTextureLayer.GroundMakeup"/> (slot keys as BiomeLocalArt's).</summary>
 			public static string GroundMakeup(string slotKey) => "groundMakeup/" + slotKey;
+
+			/// <summary>The mark of one way of a ground layer's <see cref="TerrainTextureLayer.ways"/> (key BiomeLocalArt.WaySlot: <c>detail/2/road</c>).</summary>
+			public static string GroundWay(string waySlotKey) => "groundWays/" + waySlotKey;
+
+			/// <summary>
+			/// The mark of one ground layer's climate band (<see cref="TerrainTextureLayer.useClimateBand"/> and its ranges, 2026-10-18;
+			/// slot keys as BiomeLocalArt's, a climate variant's override included: <c>variant/frozen/main</c>).
+			/// </summary>
+			public static string GroundClimate(string slotKey) => "groundClimate/" + slotKey;
+
+			/// <summary>The mark of one bed layer's bands (<see cref="BedTextureLayer"/>'s waters, depth and current, 2026-10-18), by its slot key (<c>bed/0</c>).</summary>
+			public static string BedBands(string slotKey) => "bedBands/" + slotKey;
+
+			/// <summary>The mark of one climate variant the authoring added or keeps up to date (its envelope), by its key (<see cref="BiomeClimateVariant.Key"/>).</summary>
+			public static string ClimateVariant(string variantKey) => nameof(ClimateVariants) + "/" + variantKey;
+
+			/// <summary>The mark of the template's <see cref="BiomeTemplate.Description"/> (a spec column since 2026-10-18).</summary>
+			public const string Description = nameof(BiomeTemplate.Description);
+
+			/// <summary>The mark of one part of the naming block (<see cref="BiomeTemplate.Naming"/>'s phonology: <c>naming/Onsets</c>…), a spec column since 2026-10-18.</summary>
+			public static string NamingPart(string part) => "naming/" + part;
+
+			/// <summary>The mark of what the ground gives the air (<see cref="BiomeTemplate.Emits"/> and its rate), a spec column since 2026-10-18 (I2o).</summary>
+			public const string Emission = nameof(BiomeTemplate.Emits);
 		}
 
 		[System.NonSerialized]
@@ -434,6 +523,9 @@ namespace FishMMO.Shared.Biomes
 		public TerrainTextureLayer BarSandTextureLayer => barSandTextureLayer;
 		public TerrainTextureLayer BarGravelTextureLayer => barGravelTextureLayer;
 		public TerrainTextureLayer LakebedTextureLayer => lakebedTextureLayer;
+
+		/// <summary>The biome's extra bed layers by depth (and current), at most <see cref="MaximumBedLayers"/> painted (decision 35, 2026-10-18).</summary>
+		public List<BedTextureLayer> BedTextureLayers => bedTextureLayers;
 
 		/// <summary>The biome's own rock (a rock type name, or Ice); null or empty when not authored.</summary>
 		public string OwnRock
@@ -556,6 +648,30 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>The crops this biome's fields grow (<see cref="BiomeFieldCrop"/>).</summary>
 		public List<BiomeFieldCrop> FieldCrops => fieldCrops;
 
+		/// <summary>The orchards this biome's fields are planted as (<see cref="BiomeOrchard"/>); read through BiomeTemplateArt.Orchards.</summary>
+		public List<BiomeOrchard> Orchards => orchards ??= new List<BiomeOrchard>();
+
+		/// <summary>How this biome's fields are laid out (<see cref="BiomeFieldLayout"/>); read through BiomeTemplateArt.FieldLayout.</summary>
+		public BiomeFieldLayout FieldLayout
+		{
+			get => fieldLayout;
+			set => fieldLayout = value;
+		}
+
+		/// <summary>The old terraces round this biome's settlements (<see cref="BiomeAbandonedTerraces"/>); read through BiomeTemplateArt.AbandonedTerraces.</summary>
+		public BiomeAbandonedTerraces AbandonedTerraces
+		{
+			get => abandonedTerraces;
+			set => abandonedTerraces = value;
+		}
+
+		/// <summary>The ground this biome paints along its water channels (<see cref="BiomeChannelMargin"/>); read through BiomeTemplateArt.ChannelMargin.</summary>
+		public BiomeChannelMargin ChannelMargin
+		{
+			get => channelMargin;
+			set => channelMargin = value;
+		}
+
 		/// <summary>What stands in a stronghold's moat here (<see cref="BiomeMoatWater"/>); read through BiomeTemplateArt.MoatWater.</summary>
 		public BiomeMoatWater MoatWater
 		{
@@ -570,11 +686,34 @@ namespace FishMMO.Shared.Biomes
 			set => waterLook = value;
 		}
 
+		/// <summary>The sea seen from under it off this biome's coast (<see cref="BiomeSeaLook"/>); read through <see cref="BiomeSeaLooks.Of"/>.</summary>
+		public BiomeSeaLook SeaLook
+		{
+			get => seaLook;
+			set => seaLook = value;
+		}
+
 		/// <summary>How each kind of settlement lights its streets here (<see cref="BiomeWayLight"/>); a kind not listed is not lit.</summary>
 		public List<BiomeWayLight> WayLights => wayLights;
 
 		/// <summary>How each place in this biome's caves and mines is lit (<see cref="BiomeCaveLight"/>); a place not listed is not lit.</summary>
 		public List<BiomeCaveLight> CaveLights => caveLights;
+
+		/// <summary>The plants this biome's still fresh water carries, with their weights (<see cref="BiomeFloatingPlant"/>); read through BiomeTemplateArt.FloatingPlants.</summary>
+		public List<BiomeFloatingPlant> FloatingPlants => floatingPlants;
+
+		/// <summary>The landforms sculpted into this biome's ground at the cut (<see cref="BiomeLandform"/>); read through BiomeTemplateArt.Landforms.</summary>
+		public List<BiomeLandform> Landforms => landforms ??= new List<BiomeLandform>();
+
+		/// <summary>Which of this biome's ways are raised boardwalks (<see cref="BiomeBoardwalks"/>); read through BiomeTemplateArt.Boardwalks.</summary>
+		public BiomeBoardwalks Boardwalks
+		{
+			get => boardwalks;
+			set => boardwalks = value;
+		}
+
+		/// <summary>This biome's hedges, walls, fences, tree rows, channels and clearance rows (<see cref="BiomeLinearStyle"/>); read through BiomeTemplateArt.LinearFeatures.</summary>
+		public List<BiomeLinearStyle> LinearFeatures => linearFeatures ??= new List<BiomeLinearStyle>();
 
 		/// <summary>What this biome's buildings are made of, per style and part (<see cref="BiomeStructurePalette"/>).</summary>
 		public BiomeStructurePalette StructurePalette
@@ -868,6 +1007,7 @@ namespace FishMMO.Shared.Biomes
 			if (barSandTextureLayer != null && barSandTextureLayer.HasAlbedo) layers.Add(barSandTextureLayer);
 			if (barGravelTextureLayer != null && barGravelTextureLayer.HasAlbedo) layers.Add(barGravelTextureLayer);
 			if (lakebedTextureLayer != null && lakebedTextureLayer.HasAlbedo) layers.Add(lakebedTextureLayer);
+			AddWithAlbedo(layers, bedTextureLayers);
 
 			cachedTextureLayersInOrder = layers;
 			return layers;
@@ -924,6 +1064,7 @@ namespace FishMMO.Shared.Biomes
 			if (barSandTextureLayer != null) yield return barSandTextureLayer;
 			if (barGravelTextureLayer != null) yield return barGravelTextureLayer;
 			if (lakebedTextureLayer != null) yield return lakebedTextureLayer;
+			if (bedTextureLayers != null) foreach (BedTextureLayer l in bedTextureLayers) if (l != null) yield return l;
 		}
 
 		private void OnValidate()
@@ -938,6 +1079,7 @@ namespace FishMMO.Shared.Biomes
 			barSandTextureLayer ??= new TerrainTextureLayer();
 			barGravelTextureLayer ??= new TerrainTextureLayer();
 			lakebedTextureLayer ??= new TerrainTextureLayer();
+			bedTextureLayers ??= new List<BedTextureLayer>();
 			acceptedRocks ??= new List<string>();
 			caveShells ??= new List<BiomeCaveShell>();
 			caveCrystals ??= new List<BiomeCaveCrystal>();
@@ -956,8 +1098,11 @@ namespace FishMMO.Shared.Biomes
 			siteVariants ??= new List<BiomeSiteVariant>();
 			siteStyles ??= new List<BiomeSiteStyle>();
 			fieldCrops ??= new List<BiomeFieldCrop>();
+			orchards ??= new List<BiomeOrchard>();
 			wayLights ??= new List<BiomeWayLight>();
 			caveLights ??= new List<BiomeCaveLight>();
+			floatingPlants ??= new List<BiomeFloatingPlant>();
+			landforms ??= new List<BiomeLandform>();
 			structurePalette ??= new BiomeStructurePalette();
 			structurePalette.Surfaces ??= new List<BiomeStructureSurface>();
 			grassTypes ??= new List<BiomeGrassType>();

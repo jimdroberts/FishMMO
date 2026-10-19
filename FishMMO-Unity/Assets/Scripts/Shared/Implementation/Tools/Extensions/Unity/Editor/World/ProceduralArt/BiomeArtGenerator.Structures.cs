@@ -55,10 +55,18 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			yield return "Structure materials";
 			WriteStructureMaterials(c);
+			// The house roofs the palettes in use build at another pitch than the kit's (StructureRoofs, 2026-10-18, I6e), each once:
+			// written with their piece.
+			List<StructureRoofVariant> roofs = StructureRoofs.Needed(PalettesInUse());
+			if (roofs.Count > 0)
+			{
+				Debug.Log($"[Biome art] Structure roofs: {roofs.Count} house roof variant(s) a palette builds at another pitch than the kit's, "
+					+ $"{roofs.Count * StructurePieces.Finishes.Length} prefab(s) with their finishes: {string.Join(", ", roofs)}.");
+			}
 			foreach (StructurePiece piece in StructurePieces.All)
 			{
 				yield return "Structure: " + piece.Id;
-				WriteStructurePiece(c, piece);
+				WriteStructurePiece(c, piece, roofs);
 			}
 			// The cave kit's glowing crystals, fungi, glow-worms and ore veins (BiomeArtGenerator.CaveGlow.cs): after the
 			// pieces' materials, whose fieldstone a crystal's matrix wears.
@@ -131,12 +139,20 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/// <summary>Every structure palette a cut may lay: each spec entry's, then each biome template's in the project.</summary>
+		/// <summary>
+		/// Every structure palette a cut may lay: each spec entry's, then each biome template's in the project, then each world
+		/// body's cloud-world palette (its sky docks, airships and rope bridges, 2026-10-18).
+		/// </summary>
 		private static IEnumerable<FishMMO.Shared.Biomes.BiomeStructurePalette> PalettesInUse()
 		{
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
 				yield return entry.StructurePalette();
+				// The linear features that name their own material (2026-10-18, I2f): their walls', fences' and gates' keys.
+				foreach (FishMMO.Shared.Biomes.BiomeStructurePalette linear in StructurePieces.LinearPalettes(entry.LinearFeatures(null)))
+				{
+					yield return linear;
+				}
 			}
 			foreach (string guid in AssetDatabase.FindAssets("t:" + nameof(FishMMO.Shared.Biomes.BiomeTemplate)))
 			{
@@ -144,6 +160,22 @@ namespace FishMMO.Shared.WorldDesign
 				if (biome != null && biome.StructurePalette != null && !biome.StructurePalette.IsEmpty)
 				{
 					yield return biome.StructurePalette;
+				}
+				if (biome != null)
+				{
+					foreach (FishMMO.Shared.Biomes.BiomeStructurePalette linear in StructurePieces.LinearPalettes(biome.LinearFeatures))
+					{
+						yield return linear;
+					}
+				}
+			}
+			foreach (string guid in AssetDatabase.FindAssets("t:" + nameof(FishMMO.Shared.Celestial.WorldBody)))
+			{
+				var body = AssetDatabase.LoadAssetAtPath<FishMMO.Shared.Celestial.WorldBody>(AssetDatabase.GUIDToAssetPath(guid));
+				FishMMO.Shared.Biomes.BiomeStructurePalette palette = body != null && body.CloudWorldStructures != null ? body.CloudWorldStructures.Palette : null;
+				if (palette != null && !palette.IsEmpty)
+				{
+					yield return palette;
 				}
 			}
 		}
@@ -174,7 +206,7 @@ namespace FishMMO.Shared.WorldDesign
 					RockLit(mat, albedo, normal, mask, scale, StructureSurfaces.MossOf(material, finish));
 					mat.SetColor("_BaseColor", tint);
 					// Weathered as a building, not set into the ground as a rock (FishStructureWeathering.hlsl); a pane lit at night.
-					mat.SetFloat("_FishStructure", material == StructureMaterial.Glass ? 2f : 1f);
+					mat.SetFloat("_FishStructure", StructureSurfaces.StructureFlag(material));
 					if (material == StructureMaterial.Glass)
 					{
 						Glass(mat, tint);
@@ -182,6 +214,10 @@ namespace FishMMO.Shared.WorldDesign
 					else if (material == StructureMaterial.Lamplight)
 					{
 						Lamplight(mat, plainAlbedo);
+					}
+					else if (StructureSurfaces.TryGlow(material, out SceneGlowHue glow))
+					{
+						Glowlight(mat, plainAlbedo, glow);
 					}
 				});
 			}
@@ -200,6 +236,23 @@ namespace FishMMO.Shared.WorldDesign
 			mat.EnableKeyword("_EMISSION");
 			mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
 			mat.SetFloat("_Smoothness", 0.45f);
+			mat.SetFloat("_FishMoss", 0f);
+		}
+
+		/// <summary>
+		/// A cold glow's part (a rune stone's runes, a glowjar's mote; 2026-10-18, I6g): lit as a lamp's pane by its emission, in
+		/// its glow's own cool colour (SceneGlow.Colour) a little over one, which the shader scales by the very pulse and dusk
+		/// fade its piece's light has (_FishStructure = 3, FishStructureWeathering.hlsl FishStructureGlowLight): dark by day,
+		/// faint from before dusk, full at night and underground.
+		/// </summary>
+		private static void Glowlight(Material mat, Texture2D plainAlbedo, SceneGlowHue glow)
+		{
+			Color c = SceneGlow.Colour(glow);
+			mat.SetTexture("_EmissionMap", plainAlbedo);
+			mat.SetColor("_EmissionColor", new Color(c.r * 1.7f, c.g * 1.7f, c.b * 1.7f, 1f));
+			mat.EnableKeyword("_EMISSION");
+			mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+			mat.SetFloat("_Smoothness", 0.5f);
 			mat.SetFloat("_FishMoss", 0f);
 		}
 
@@ -239,40 +292,60 @@ namespace FishMMO.Shared.WorldDesign
 			mat.SetFloat("_Smoothness", 0.85f);
 		}
 
-		/// <summary>A piece's meshes (every variant, every level) and its prefabs (every variant in every finish).</summary>
-		private static void WriteStructurePiece(Context c, StructurePiece piece)
+		/// <summary>
+		/// A piece's meshes (every variant, every level) and its prefabs (every variant in every finish), then the roof variants
+		/// of its houses that <paramref name="roofs"/> names (StructureRoofs), each the same in every way but its roof.
+		/// </summary>
+		private static void WriteStructurePiece(Context c, StructurePiece piece, List<StructureRoofVariant> roofs)
 		{
 			ShadowCastingMode[] shadows = LodShadows(StructurePieces.LevelCount);
 			for (int v = 0; v < piece.Variants; v++)
 			{
-				var meshes = new Mesh[StructurePieces.LevelCount];
-				var materials = new StructureMaterial[StructurePieces.LevelCount][];
-				for (int lod = 0; lod < StructurePieces.LevelCount; lod++)
+				WriteStructureVariant(c, piece, v, null, shadows);
+			}
+			if (roofs == null)
+			{
+				return;
+			}
+			foreach (StructureRoofVariant roof in roofs)
+			{
+				if (string.Equals(roof.Piece, piece.Id, StringComparison.Ordinal) && roof.Variant >= 0 && roof.Variant < piece.Variants)
 				{
-					// Always built (milliseconds): the prefab needs each level's material list even when the mesh is current.
-					StructureMesh built = StructurePieces.Build(piece, v, lod, c.Seed);
-					materials[lod] = built.Materials;
-					meshes[lod] = WriteMesh(c, built.Mesh, StructurePieces.MeshName(piece.Id, v, lod), true);
+					WriteStructureVariant(c, piece, roof.Variant, roof.Pitch, shadows);
 				}
-				foreach (StructureFinish f in StructurePieces.Finishes)
+			}
+		}
+
+		/// <summary>One variant's meshes and its prefab in every finish, its house roofs at <paramref name="roof"/> (null: the kit's).</summary>
+		private static void WriteStructureVariant(Context c, StructurePiece piece, int v, StructureRoofPitch? roof, ShadowCastingMode[] shadows)
+		{
+			var meshes = new Mesh[StructurePieces.LevelCount];
+			var materials = new StructureMaterial[StructurePieces.LevelCount][];
+			for (int lod = 0; lod < StructurePieces.LevelCount; lod++)
+			{
+				// Always built (milliseconds): the prefab needs each level's material list even when the mesh is current.
+				StructureMesh built = StructurePieces.Build(piece, v, lod, c.Seed, roof);
+				materials[lod] = built.Materials;
+				meshes[lod] = WriteMesh(c, built.Mesh, StructurePieces.MeshName(piece.Id, v, lod, roof), true);
+			}
+			foreach (StructureFinish f in StructurePieces.Finishes)
+			{
+				StructureFinish finish = f;
+				var mats = new Material[meshes.Length][];
+				for (int lod = 0; lod < meshes.Length; lod++)
 				{
-					StructureFinish finish = f;
-					var mats = new Material[meshes.Length][];
-					for (int lod = 0; lod < meshes.Length; lod++)
+					mats[lod] = Array.ConvertAll(materials[lod], m => MaterialOrNull(c, StructurePieces.MaterialName(m, finish)));
+				}
+				bool collides = piece.Collides;
+				WritePrefab(c, StructurePieces.PrefabName(piece.Id, v, finish, roof), root =>
+				{
+					// Furniture stands under a roof that already shades it: it casts no sun shadow (nor costs the shadow map one).
+					Lods(root, meshes, mats, StructureLodHeights, piece.HasTag("furniture") ? NoShadows(meshes.Length) : shadows);
+					if (collides)
 					{
-						mats[lod] = Array.ConvertAll(materials[lod], m => MaterialOrNull(c, StructurePieces.MaterialName(m, finish)));
+						AddBoulderCollider(root, meshes);
 					}
-					bool collides = piece.Collides;
-					WritePrefab(c, StructurePieces.PrefabName(piece.Id, v, finish), root =>
-					{
-						// Furniture stands under a roof that already shades it: it casts no sun shadow (nor costs the shadow map one).
-						Lods(root, meshes, mats, StructureLodHeights, piece.HasTag("furniture") ? NoShadows(meshes.Length) : shadows);
-						if (collides)
-						{
-							AddBoulderCollider(root, meshes);
-						}
-					});
-				}
+				});
 			}
 		}
 

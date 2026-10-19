@@ -1139,6 +1139,85 @@ namespace FishMMO.Shared.WorldDesign
 			return level;
 		}
 
+		/// <summary>The least stretch over which a river's bed hands over to the lake's or the sea's at its mouth, metres (<see cref="RiverBedAt"/>).</summary>
+		public const float MouthBlendMetres = 20f;
+
+		/// <summary>The stretch above a river's mouth over which its bed hands over, in its own widths at the mouth.</summary>
+		public const float MouthBlendWidths = 2f;
+
+		/// <summary>
+		/// How much of the water at a scene position is a perennial river's, for its bed (decision 35 (h), 2026-10-18): x 1 within its
+		/// banks and <see cref="RiverSurfaceReachMetres"/> past them, easing to 0 over its last <see cref="MouthBlendWidths"/> widths
+		/// (at least <see cref="MouthBlendMetres"/>) where it ends in a lake or the sea, so the riverbed runs out into the lakebed as
+		/// a delta's sediment does rather than stopping at a line; y the river's current there (m/s, <see cref="RiverPath.SpeedAt"/>
+		/// along its line); z 1 when it ends in the sea (the rest of the water at its mouth is the sea's), else 0. Zero where no
+		/// river's line comes near. The nearest river's line answers, as <see cref="RiverSurfaceNear(float, float)"/>'s does. Safe
+		/// from the painter's and the scatter's worker threads.
+		/// </summary>
+		public Vector3 RiverBedAt(float east, float north)
+		{
+			Dictionary<long, List<(int river, int point)>> index = RiverIndex();
+			long key = ((long)Mathf.FloorToInt(east / RiverIndexCell) << 32) ^ (uint)Mathf.FloorToInt(north / RiverIndexCell);
+			if (!index.TryGetValue(key, out List<(int river, int point)> near))
+			{
+				return Vector3.zero;
+			}
+			float nearest = float.PositiveInfinity;
+			int bestRiver = -1, bestPoint = -1;
+			float bestT = 0f;
+			foreach ((int r, int i) in near)
+			{
+				RiverPath river = Rivers[r];
+				float ax = river.X[i], az = river.Z[i], bx = river.X[i + 1], bz = river.Z[i + 1];
+				float abx = bx - ax, abz = bz - az;
+				float length2 = abx * abx + abz * abz;
+				float t = length2 > 1e-8f ? Mathf.Clamp01(((east - ax) * abx + (north - az) * abz) / length2) : 0f;
+				float dx = ax + abx * t - east, dz = az + abz * t - north;
+				float distance = Mathf.Sqrt(dx * dx + dz * dz);
+				float half = 0.5f * Mathf.Lerp(river.Width[i], river.Width[i + 1], t);
+				if (distance <= half + RiverSurfaceReachMetres && distance < nearest)
+				{
+					nearest = distance;
+					bestRiver = r;
+					bestPoint = i;
+					bestT = t;
+				}
+			}
+			if (bestRiver < 0)
+			{
+				return Vector3.zero;
+			}
+			RiverPath best = Rivers[bestRiver];
+			return RiverBedShare(best, bestPoint, bestT);
+		}
+
+		/// <summary>
+		/// <see cref="RiverBedAt"/> at a point of one river's line (<paramref name="point"/> and the share <paramref name="t"/> of the
+		/// way to the next): its bed's share, its current and whether it ends in the sea. Pure: the mouth's hand-over by the distance
+		/// left along the line.
+		/// </summary>
+		public static Vector3 RiverBedShare(RiverPath river, int point, float t)
+		{
+			if (river == null || river.Count < 2)
+			{
+				return Vector3.zero;
+			}
+			point = Mathf.Clamp(point, 0, river.Count - 2);
+			float speed = Mathf.Lerp(river.SpeedAt(point), river.SpeedAt(point + 1), t);
+			float share = 1f;
+			bool intoSea = river.End == RiverEnd.Sea;
+			if ((river.End == RiverEnd.Lake || intoSea) && river.S != null && river.S.Length == river.Count)
+			{
+				int last = river.Count - 1;
+				float along = Mathf.Lerp(river.S[point], river.S[point + 1], t);
+				float left = river.S[last] - along;
+				float blend = Mathf.Max(MouthBlendMetres, MouthBlendWidths * (river.Width != null ? river.Width[last] : 0f));
+				float u = Mathf.Clamp01(left / blend);
+				share = u * u * (3f - 2f * u);
+			}
+			return new Vector3(share, Mathf.Max(0f, speed), intoSea ? 1f : 0f);
+		}
+
 		/// <summary>Every perennial river segment filed in 32 m cells within its banks and the reach; built once, under a lock.</summary>
 		private Dictionary<long, List<(int river, int point)>> RiverIndex()
 		{
@@ -1549,6 +1628,12 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			foreach (SceneHydrology.Lake lake in asset.Lakes)
 			{
+				/* A paddy's water is its field's (2026-10-18, PointOfInterestPaddies): laid again with the field in the place stage, never
+				 * part of the water the cut measures, settles and keeps the sites off (the field would refuse its own ground). */
+				if (lake == null || PointOfInterestPaddies.IsPaddy(lake.Id))
+				{
+					continue;
+				}
 				water.Lakes.Add(new SceneLake
 				{
 					Id = lake.Id,

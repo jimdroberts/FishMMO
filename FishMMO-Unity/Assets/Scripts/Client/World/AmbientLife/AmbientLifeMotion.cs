@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using FishMMO.Shared;
 using FishMMO.Shared.Biomes;
 using UnityEngine;
 
@@ -83,6 +84,13 @@ namespace FishMMO.Client
 		public Vector4 Look;
 		/// <summary>Which of its biome's looks it is (<see cref="BiomeLooks.Variants"/>), when <see cref="Look"/> is one.</summary>
 		public byte LookVariant;
+		/// <summary>
+		/// Underground: the cave-life spot it lives at, as its index + 1 in its cell's (<see cref="AmbientLifeMotion.Frame.CaveSpots"/>);
+		/// 0 for a group of the open land (AmbientCaveLife).
+		/// </summary>
+		public int Cave;
+		/// <summary>Underground: the cave's air, the year's mean there (-1..1, the painted climate's), steady whatever the weather outside.</summary>
+		public float Steady;
 	}
 
 	/// <summary>One member's fright: when it took flight or bolted, from where, and where it went.</summary>
@@ -200,8 +208,8 @@ namespace FishMMO.Client
 
 		// ── Hashing and clocks ────────────────────────────────────────
 
-		private static uint Mix(uint x) => SeaLifePlacement.Mix(x);
-		private static float Unit(uint h) => SeaLifePlacement.Unit(h);
+		internal static uint Mix(uint x) => SeaLifePlacement.Mix(x);
+		internal static float Unit(uint h) => SeaLifePlacement.Unit(h);
 
 		/// <summary>A member's own seed.</summary>
 		public static uint MemberSeed(uint groupSeed, int member) => Mix(groupSeed ^ ((uint)member * 0x9E3779B9u) ^ 0xA3B1E5u);
@@ -226,7 +234,7 @@ namespace FishMMO.Client
 			return (float)a;
 		}
 
-		private static Vector3 Disk(uint h, float radius)
+		internal static Vector3 Disk(uint h, float radius)
 		{
 			float a = Unit(h) * Mathf.PI * 2f;
 			float r = Mathf.Sqrt(Unit(Mix(h ^ 0x51u))) * radius;
@@ -391,6 +399,8 @@ namespace FishMMO.Client
 			public AmbientThreats Threats;
 			/// <summary>How much of the group is drawn (the activity's edge), 0..1.</summary>
 			public float Visible;
+			/// <summary>The cell's cave-life spots, indexed from a cave group's <see cref="AmbientGroup.Cave"/> − 1; null where it has none.</summary>
+			public List<SceneCaveLifeSpot> CaveSpots;
 		}
 
 		/// <summary>Every member of a group at the frame's moment, appended to <paramref name="into"/>.</summary>
@@ -412,6 +422,15 @@ namespace FishMMO.Client
 
 		private static void Members(in AmbientGroup group, AmbientCreatureKind kind, ref Frame frame, List<AmbientInstance> into)
 		{
+			// Underground its spot is its world (the terrain's height is the hill over it).
+			if (group.Cave > 0)
+			{
+				if (frame.CaveSpots != null && group.Cave <= frame.CaveSpots.Count)
+				{
+					AmbientCaveLife.Members(group, kind, frame.CaveSpots[group.Cave - 1], ref frame, into);
+				}
+				return;
+			}
 			switch (kind.Behaviour)
 			{
 				case AmbientBehaviour.Flock:
@@ -445,7 +464,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		private static void Emit(List<AmbientInstance> into, AmbientCreatureKind kind, uint own, Vector3 position, Quaternion rotation, float length, Vector4 anim, float visible)
+		internal static void Emit(List<AmbientInstance> into, AmbientCreatureKind kind, uint own, Vector3 position, Quaternion rotation, float length, Vector4 anim, float visible)
 		{
 			if (visible <= 0.002f)
 			{
@@ -475,7 +494,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>A bird's rotation in flight: nose along its velocity, rolled into its turn.</summary>
-		private static Quaternion Flight(Vector3 velocity, float bankDegrees)
+		internal static Quaternion Flight(Vector3 velocity, float bankDegrees)
 		{
 			if (velocity.sqrMagnitude < 1e-8f)
 			{
@@ -488,7 +507,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>Wing beats with glides between: <paramref name="duty"/> of each cycle flapping (1 = steady flapping).</summary>
-		private static float FlapStrength(double seconds, float period, float duty, float offset)
+		internal static float FlapStrength(double seconds, float period, float duty, float offset)
 		{
 			if (duty >= 0.999f)
 			{
@@ -500,7 +519,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>Flap rhythm per body: bounding finches, gliding gulls, rowing crows, soaring raptors.</summary>
-		private static void Rhythm(AmbientShape shape, out float period, out float duty)
+		internal static void Rhythm(AmbientShape shape, out float period, out float duty)
 		{
 			switch (shape)
 			{
@@ -784,7 +803,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>A sitting bird's head turning to look about: a new direction every second or two, snapped to quickly (radians).</summary>
-		private static float HeadTurn(uint own, double seconds)
+		internal static float HeadTurn(uint own, double seconds)
 		{
 			double period = 0.9 + 1.4 * Unit(Mix(own ^ 0x65u));
 			double e = seconds / period + Unit(Mix(own ^ 0x66u));

@@ -133,6 +133,11 @@ namespace FishMMO.Shared
 					{
 						continue;
 					}
+					// Nor under a boardwalk's deck (2026-10-18): the way is walked on its planks, the ground beneath left as it grew.
+					if ((path.FlagsAt(i - 1) & path.FlagsAt(i) & (ScenePathPointFlags.Boardwalk | ScenePathPointFlags.Ferry)) != 0)
+					{
+						continue;
+					}
 					field.Segment(pages, path, i - 1, i, half, wear);
 				}
 			}

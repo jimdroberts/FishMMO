@@ -492,6 +492,12 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				uint seed = PointOfInterestPlanner.Hash(system.Seed, Mathf.RoundToInt(local.x * 10f), Mathf.RoundToInt(local.z * 10f), 0xC7);
+				if (art.Flickers)
+				{
+					// A crystal that flickers (stormglass, 2026-10-18): a cold glow with the flicker, in its hue.
+					Emit(local, SceneEmitterKind.Glow, SceneGlow.WithFlicker(SceneGlow.WithCrystalHue(seed, art.EmitterHue), true), art.SuggestedReach);
+					return;
+				}
 				Emit(local, SceneEmitterKind.Crystal, CaveArt.EmitterSeed(seed, art.EmitterHue), art.SuggestedReach);
 			}
 

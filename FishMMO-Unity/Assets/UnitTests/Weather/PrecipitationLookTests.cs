@@ -217,5 +217,33 @@ namespace FishMMO.UnitTests.Weather
 			LogAssert.IsTrue(presenter.Contains("SkySystem.CloudsReady ? 1f : 0f, 0f, 0f));"), "and told when the sky has published that day");
 			LogAssert.IsTrue(presenter.Contains("ScatteringColour(kind, "), "and what falls is given its own albedo");
 		}
+
+		[Test]
+		public void AStormStaysDenseFromInside()
+		{
+			/* Inside a storm only the curtain draws it over the sky: the distance fog lays the rain at the
+			 * camera over surfaces alone, and the particle field is the drops round the camera. Skipped
+			 * there, a storm cleared to the horizon as the camera walked in. */
+			string presenter = SourceScanPins.ReadCode("Assets/Scripts/Client/World/Weather/Sky/SkyEffects.cs");
+			LogAssert.IsFalse(presenter.Contains("footprint.Coverage(offset) >= 0.5f"), "the storm the camera stands in is drawn too");
+			string curtain = SourceScanPins.ReadCode(CurtainShader);
+			LogAssert.IsTrue(curtain.Contains("float start = enter;"), "from the eye, from inside");
+			LogAssert.IsTrue(curtain.Contains("float surfaceFog = isSky ? 0.0 : CurtainSurfaceFog();")
+				&& curtain.Contains("float extinction = max(0.0, medium - surfaceFog);"),
+				"all of it over the sky, and only what the distance fog does not already lay in front of a surface");
+		}
+
+		[Test]
+		public void TheCurtainLeavesTheDistanceFogOnlyWhatFallsInIt()
+		{
+			var frame = new WeatherFrame();
+			frame[WeatherChannel.FogDensity] = 0.5f;
+			frame[WeatherChannel.Precipitation] = 0.7f;
+			frame[WeatherChannel.RainWeight] = 1f;
+			float falling = WeatherFogPresenter.UniformFallingExtinction(frame);
+			LogAssert.IsTrue(falling > 0f, "heavy rain thins the view");
+			Assert.That(falling, Is.EqualTo(WeatherFogPresenter.FallingExtinction(frame)).Within(1e-9f));
+			LogAssert.IsTrue(WeatherFogPresenter.UniformExtinction(frame, false) > falling, "the fog's drops are not the curtain's");
+		}
 	}
 }

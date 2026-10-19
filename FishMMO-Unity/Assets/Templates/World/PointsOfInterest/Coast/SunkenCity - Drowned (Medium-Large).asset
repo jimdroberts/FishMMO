@@ -90,16 +90,16 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506175562416324
-  - rid: 4061506175562416325
-  - rid: 4061506175562416326
-  - rid: 4061506175562416327
-  - rid: 4061506175562416328
-  - rid: 4061506175562416329
+  - rid: 4061506230070018257
+  - rid: 4061506230070018258
+  - rid: 4061506230070018259
+  - rid: 4061506230070018260
+  - rid: 4061506230070018261
+  - rid: 4061506230070018262
   references:
     version: 2
     RefIds:
-    - rid: 4061506175562416324
+    - rid: 4061506230070018257
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -110,16 +110,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506175562416325
+    - rid: 4061506230070018258
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506175562416326
+    - rid: 4061506230070018259
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506175562416327
+    - rid: 4061506230070018260
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 5
@@ -127,7 +127,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506175562416328
+    - rid: 4061506230070018261
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 6
@@ -135,7 +135,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506175562416329
+    - rid: 4061506230070018262
       type: {class: GatheringFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Families: 

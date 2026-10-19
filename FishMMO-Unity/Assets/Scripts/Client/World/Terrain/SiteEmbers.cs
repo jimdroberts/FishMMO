@@ -183,16 +183,21 @@ namespace FishMMO.Client
 				float burn = forge
 					? Mathf.Clamp01(0.35f + 0.65f * Mathf.Sin((float)(t * 0.9 % 6283.0) + phase))
 					: 0.65f + 0.35f * Mathf.Sin((float)(t * 0.05 % 6283.0) + phase);
+				// Rain, snow and wind on an outdoor fire (SiteFireState): doused, it dies to a smoulder; out, nothing rises.
+				SiteFireState.State fire = SiteFireState.Of(e);
+				burn *= fire.Burn;
+				heat[i] = fire.MeltRadius > 0f ? new Vector4(e.Position.x, e.Position.y, e.Position.z, fire.MeltRadius) : Vector4.zero;
 				sources[i] = new Vector4(e.Position.x, e.Position.y, e.Position.z, forge ? 2f : 1f);
 				// A hearth under its hood and a torch spit only a few sparks (a stream of them rose into the ceiling as a cloud
 				// of orange dots); a campfire and a forge their full share.
 				float sparks = forge ? 0.25f + 0.6f * burn : 0.35f + 0.4f * burn;
-				strengths[i] = new Vector4(fade, hearth || torch ? sparks * 0.18f : sparks, 0f, 0f);
+				strengths[i] = new Vector4(fade, (hearth || torch ? sparks * 0.18f : sparks) * fire.Burn, 0f, 0f);
 				flameSources[i] = new Vector4(e.Position.x, e.Position.y, e.Position.z, forge ? 2f : hearth ? 3f : torch ? 4f : 1f);
 				// The flames: the same fade, and the fire's own burn as their height (a forge's bursts too).
 				flameStrengths[i] = new Vector4(fade, forge ? burn : Mathf.InverseLerp(0.3f, 1f, burn), 0f, 0f);
 				bounds.Encapsulate(new Bounds(e.Position + Vector3.up * 3f, new Vector3(10f, 8f, 10f)));
 			}
+			PublishHeat(near.Count);
 			// The wind near the ground: the weather's direction and speed (0..1 of 30 m/s), the plume's share of it.
 			Vector4 wind = Shader.GetGlobalVector(WeatherWindId);
 			float speed = wind.z * 30f * 0.35f;
@@ -211,6 +216,32 @@ namespace FishMMO.Client
 			};
 			Graphics.RenderMesh(rp, mesh, 0, Matrix4x4.identity);
 			DrawFlames(camera, bounds, night, wind.x * speed, wind.y * speed);
+		}
+
+		private static readonly Vector4[] heat = new Vector4[MaxSources];
+		private static readonly int HeatId = Shader.PropertyToID("_FishHeat");
+		private static readonly int HeatCountId = Shader.PropertyToID("_FishHeatCount");
+
+		/// <summary>
+		/// The burning fires as heat for the snow (FishWeather.hlsl FishHeatClear): each melts a ring round itself while it
+		/// burns, so a campfire in the snow stands on bare, wet ground.
+		/// </summary>
+		private static void PublishHeat(int count)
+		{
+			int lit = 0;
+			for (int i = 0; i < MaxSources; i++)
+			{
+				if (i < count && heat[i].w > 0f)
+				{
+					heat[lit++] = heat[i];
+				}
+			}
+			for (int i = lit; i < MaxSources; i++)
+			{
+				heat[i] = Vector4.zero;
+			}
+			Shader.SetGlobalVectorArray(HeatId, heat);
+			Shader.SetGlobalFloat(HeatCountId, lit);
 		}
 
 		/// <summary>

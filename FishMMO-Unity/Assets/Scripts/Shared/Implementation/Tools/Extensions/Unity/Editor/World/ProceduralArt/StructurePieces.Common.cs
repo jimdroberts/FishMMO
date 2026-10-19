@@ -33,9 +33,11 @@ namespace FishMMO.Shared.WorldDesign
 		internal static readonly BiomeStructureRole[] DeckRoles = { BiomeStructureRole.Floor };
 
 		/// <summary>A gable roof's two slabs, ridge along z, over a span of <paramref name="span"/> (x) and <paramref name="length"/> (z), centred on the origin.</summary>
+		/// <remarks><paramref name="soft"/>: laid as thatch is, its grain down the slope (null: when it is thatch; a house roof re-pitched for reed, StructureRoofs).</remarks>
 		internal static void GableRoof(StructureDraft d, float span, float length, float eaveY, float rise, float overhang, float thick,
-			StructureMaterial material, int key, Matrix4x4 place)
+			StructureMaterial material, int key, Matrix4x4 place, bool? soft = null)
 		{
+			bool thatched = soft ?? material == StructureMaterial.Thatch;
 			float half = span * 0.5f;
 			float k = rise / half;
 			float slope = Mathf.Sqrt(1f + k * k);
@@ -55,9 +57,96 @@ namespace FishMMO.Shared.WorldDesign
 				};
 				StructureSolid slab = StructureShapes.Prism(outline, z0, z1, material, key + (side > 0 ? 1 : 0), StructureRole.Roof);
 				// Thatch runs down the slope, shingles and planks along the eave.
-				slab.Grain = material == StructureMaterial.Thatch ? new Vector3(side, -k, 0f).normalized : Vector3.forward;
+				slab.Grain = thatched ? new Vector3(side, -k, 0f).normalized : Vector3.forward;
 				d.Add(slab.Transform(place));
 			}
+		}
+
+		/// <summary>
+		/// The roof a piece builds for itself, as its palette has it (<see cref="OwnRoof"/>): flat, or pitched at a rise, laid soft
+		/// (thatch's grain down the slope) or hard; <see cref="Repitched"/> false for the kit's own roof, built exactly as before.
+		/// </summary>
+		internal struct OwnRoofPlan
+		{
+			public bool Flat;
+			public bool Repitched;
+			public float Rise;
+			public bool Soft;
+
+			/// <summary>GableRoof's grain argument: the kit's own (null) unless re-pitched.</summary>
+			public bool? Grain => Repitched ? Soft : (bool?)null;
+		}
+
+		/// <summary>
+		/// A roof a piece builds for itself follows its palette (2026-10-18, I6h: "all roofed pieces follow the palette's roof
+		/// pitch too, not only houses"): the rise its builder gives it (<paramref name="kitRise"/> over the run
+		/// <paramref name="half"/>: half a gable's span, a pyramid's apothem, a cone's radius) in every kit build; at a pitch
+		/// a palette asked for (StructureDraft.RoofPitch) the rise StructureRoofs.Rise gives, or flat. Recorded on the draft so
+		/// the tests hold StructureRoofs.Followers to what the builders do.
+		/// </summary>
+		internal static OwnRoofPlan OwnRoof(StructureDraft d, StructureMaterial kitRoof, float kitRise, float half)
+		{
+			d.FollowingRoofs.Add((kitRoof, kitRise, half));
+			StructureRoofPitch kit = StructureRoofs.PitchOf(kitRoof);
+			if (d.RoofPitch == null || d.RoofPitch.Value == kit)
+			{
+				return new OwnRoofPlan { Rise = kitRise, Soft = kitRoof == StructureMaterial.Thatch };
+			}
+			StructureRoofPitch pitch = d.RoofPitch.Value;
+			if (pitch == StructureRoofPitch.Flat)
+			{
+				return new OwnRoofPlan { Flat = true, Repitched = true };
+			}
+			return new OwnRoofPlan { Repitched = true, Rise = StructureRoofs.Rise(kit, kitRise, pitch, half), Soft = StructureRoofs.Soft(pitch) };
+		}
+
+		/// <summary>
+		/// A flat roof on posts or low walls (2026-10-18, I6h: a piece's own roof where its palette roofs flat, as mud and timber
+		/// roofs of the dry lands are): a deck of the roof's material over the gable roof's footprint (<paramref name="span"/> +
+		/// overhang across, <paramref name="length"/> + overhang along, in the roof's frame <paramref name="place"/>), its foot at
+		/// <paramref name="eaveY"/>, and from the middle level in a timber fascia round its edge.
+		/// </summary>
+		internal static void FlatCanopy(StructureDraft d, float span, float length, float eaveY, float overhang, float thick,
+			StructureMaterial material, int key, Matrix4x4 place)
+		{
+			float deck = Mathf.Max(0.12f, thick);
+			float w = span + 2f * overhang, l = length + 2f * overhang;
+			using (d.Builds(RoofRoles))
+			{
+				StructureSolid slab = StructureShapes.Box(new Vector3(0f, eaveY + deck * 0.5f, 0f), new Vector3(w, deck, l), material, key, StructureRole.Roof);
+				slab.Grain = Vector3.forward;
+				d.Add(slab.Transform(place));
+			}
+			if (d.Mid)
+			{
+				// The fascia: a board round the deck's edge (within its footprint), standing a little proud of it as a kerb.
+				float t = 0.06f, hgt = deck + 0.12f, y = eaveY + hgt * 0.5f - 0.01f;
+				for (int s = -1; s <= 1; s += 2)
+				{
+					d.Add(StructureShapes.Box(new Vector3(s * (w * 0.5f - t * 0.5f), y, 0f), new Vector3(t, hgt, l), StructureMaterial.Timber, key + 1 + (s > 0 ? 1 : 0), StructureRole.Roof).Transform(place));
+					d.Add(StructureShapes.Box(new Vector3(0f, y, s * (l * 0.5f - t * 0.5f)), new Vector3(w - 2f * t, hgt, t), StructureMaterial.Timber, key + 3 + (s > 0 ? 1 : 0), StructureRole.Roof).Transform(place));
+				}
+			}
+		}
+
+		/// <summary>
+		/// A piece's own gable roof as its palette has it (<see cref="OwnRoof"/>): <see cref="GableRoof"/> at the kit's rise (exactly
+		/// as before) or the palette's, or a <see cref="FlatCanopy"/>. Returns the plan, so the builder can move what stands on or
+		/// under the roof (a granary's gables) with it.
+		/// </summary>
+		internal static OwnRoofPlan OwnGable(StructureDraft d, float span, float length, float eaveY, float rise, float overhang, float thick,
+			StructureMaterial material, int key, Matrix4x4 place)
+		{
+			OwnRoofPlan plan = OwnRoof(d, material, rise, span * 0.5f);
+			if (plan.Flat)
+			{
+				FlatCanopy(d, span, length, eaveY, overhang, thick, material, key, place);
+			}
+			else
+			{
+				GableRoof(d, span, length, eaveY, plan.Rise, overhang, thick, material, key, place, plan.Grain);
+			}
+			return plan;
 		}
 
 		/// <summary>The triangle of wall under a gable, ridge along z, at z = <paramref name="z"/>.</summary>
@@ -342,10 +431,32 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>Builds a house: plinth (none when it stands on a platform, <see cref="House.Floor"/> &gt; 0), walls, gables, roof, door, windows, frame, chimney.</summary>
-		internal static void BuildHouse(StructureDraft d, House h)
+		/// <summary>
+		/// The roof a house was built with (<see cref="BuildHouse"/>): where its walls end under it, its top (the ridge, or a
+		/// flat roof's parapet), and where the kit's own roof's ridge is, so what a builder sets on the roof after (a gable's
+		/// horns, a bell-cote) moves with a roof a palette re-pitched (<see cref="Shift"/>, 0 for every kit build).
+		/// </summary>
+		internal struct HouseRoof
+		{
+			public bool Flat;
+			public float WallTop;
+			public float Ridge;
+			public float KitRidge;
+
+			public float Shift => Ridge - KitRidge;
+		}
+
+		internal static HouseRoof BuildHouse(StructureDraft d, House h)
 		{
 			int key = h.Key;
 			float floor = h.Floor + h.Plinth;
+			// The roof a palette asks for (StructureRoofs, 2026-10-18, I6e: "roof geometry follows the palette's roof material"):
+			// a house roof of thatch, timber planks or (I6h) turf laid at another pitch, or flat behind a parapet. Null in every
+			// kit build, which then lays exactly the roof it always has.
+			bool follows = StructureRoofs.Follows(h.RoofMaterial);
+			StructureRoofPitch kitPitch = StructureRoofs.PitchOf(h.RoofMaterial);
+			StructureRoofPitch? repitched = follows && d.RoofPitch != null && d.RoofPitch.Value != kitPitch ? d.RoofPitch : null;
+			bool flat = repitched == StructureRoofPitch.Flat;
 			if (h.Plinth > 0f && h.Floor <= 0f)
 			{
 				using (d.Builds(PlinthRoles))
@@ -414,41 +525,77 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			float halfW = h.Width * 0.5f, halfD = h.Depth * 0.5f, t2 = h.Wall * 0.5f;
+			// A flat roof has no gable for a tall door to run up into (a longhouse's in its front gable): its walls rise over the door.
+			float groundTop = flat && doorway && !h.RidgeAlongX && h.Upper <= 0f && floor + h.DoorHeight > top + 0.01f
+				? floor + h.DoorHeight + StructureRoofs.FlatLintel : top;
 			using (d.Builds(WallRoles))
 			{
-				WallRun(d, new Vector3(-halfW, 0f, -halfD + t2), new Vector3(halfW, 0f, -halfD + t2), h.Wall, floor, top, frontHoles, h.WallMaterial, key + 1);
-				WallRun(d, new Vector3(-halfW, 0f, halfD - t2), new Vector3(halfW, 0f, halfD - t2), h.Wall, floor, top, null, h.WallMaterial, key + 2);
-				WallRun(d, new Vector3(-halfW + t2, 0f, -halfD + h.Wall), new Vector3(-halfW + t2, 0f, halfD - h.Wall), h.Wall, floor, top, leftHoles, h.WallMaterial, key + 3);
-				WallRun(d, new Vector3(halfW - t2, 0f, -halfD + h.Wall), new Vector3(halfW - t2, 0f, halfD - h.Wall), h.Wall, floor, top, rightHoles, h.WallMaterial, key + 4);
+				WallRun(d, new Vector3(-halfW, 0f, -halfD + t2), new Vector3(halfW, 0f, -halfD + t2), h.Wall, floor, groundTop, frontHoles, h.WallMaterial, key + 1);
+				WallRun(d, new Vector3(-halfW, 0f, halfD - t2), new Vector3(halfW, 0f, halfD - t2), h.Wall, floor, groundTop, null, h.WallMaterial, key + 2);
+				WallRun(d, new Vector3(-halfW + t2, 0f, -halfD + h.Wall), new Vector3(-halfW + t2, 0f, halfD - h.Wall), h.Wall, floor, groundTop, leftHoles, h.WallMaterial, key + 3);
+				WallRun(d, new Vector3(halfW - t2, 0f, -halfD + h.Wall), new Vector3(halfW - t2, 0f, halfD - h.Wall), h.Wall, floor, groundTop, rightHoles, h.WallMaterial, key + 4);
 			}
 			float width = h.Width, depth = h.Depth;
 			if (h.Upper > 0f)
 			{
 				top = UpperStorey(d, h, floor, top, doorway, ref depth);
+				groundTop = top;
 			}
 			Matrix4x4 place = h.RidgeAlongX ? Matrix4x4.TRS(Vector3.zero, Quaternion.Euler(0f, 90f, 0f), Vector3.one) : Matrix4x4.identity;
 			float span = h.RidgeAlongX ? depth : width, length = h.RidgeAlongX ? width : depth;
-			// Pitched as medieval roofs were, to shed rain and snow (thatch steepest); a turf roof lies low, as the turf needs.
+			// Pitched as medieval roofs were, to shed rain and snow (thatch steepest); a turf roof lies lower, as the turf needs.
 			float pitch = MinimumPitch(h.RoofMaterial);
 			float rise = Mathf.Max(h.Rise, Mathf.Tan(pitch * Mathf.Deg2Rad) * span * 0.5f);
-			GableRoof(d, span, length, top, rise, h.Overhang, h.RoofMaterial == StructureMaterial.Thatch ? 0.32f : 0.14f, h.RoofMaterial, key + 10, place);
-			Bargeboards(d, span, length, top, rise, h.Overhang, h.RoofMaterial, key + 700, place);
-			// A door taller than the wall, in a gable end, runs up into the gable: the gable is cut round it.
-			bool doorInGable = doorway && !h.RidgeAlongX && h.Upper <= 0f && floor + h.DoorHeight > top + 0.01f;
-			// The gables are the walls' (an upper storey's when there is one: the gables stand on it).
-			StructureDraft.PartScope gables = d.Builds(h.Upper > 0f ? UpperWallRoles : WallRoles);
-			if (doorInGable)
+			var roof = new HouseRoof { WallTop = top, Ridge = top + rise, KitRidge = top + rise };
+			if (follows)
 			{
-				GableWithDoor(d, span - 0.02f, top, rise - 0.02f, -length * 0.5f + h.Wall * 0.5f, h.Wall, h.WallMaterial, key + 12,
-					doorX - h.DoorWidth * 0.5f, doorX + h.DoorWidth * 0.5f, floor + h.DoorHeight);
+				// Recorded for the tests (StructureRoofs.Followers): a house whose builder asks a rise above its material's class
+				// gives it and its half span, so a class between the two is known to build the kit's own roof (StructureRoofs.SameAsKit).
+				bool own = h.Rise >= Mathf.Tan(pitch * Mathf.Deg2Rad) * span * 0.5f;
+				d.FollowingRoofs.Add((h.RoofMaterial, own ? h.Rise : 0f, own ? span * 0.5f : 0f));
+			}
+			if (flat)
+			{
+				// Mud brick and packed earth: a flat roof behind a parapet, drained by spouts, the walls ending flush with no eaves.
+				FlatRoof(d, h, width, depth, groundTop, h.Upper > 0f, doorX, key);
+				roof.Flat = true;
+				roof.WallTop = groundTop;
+				roof.Ridge = groundTop + StructureRoofs.Parapet;
 			}
 			else
 			{
-				Gable(d, span - 0.02f, top, rise - 0.02f, -length * 0.5f + h.Wall * 0.5f, h.Wall, h.WallMaterial, key + 12, place);
+				// The kit's roof, or one re-pitched for its palette's material: reed and thatch steep and laid thick, slate at 40°…
+				bool soft = h.RoofMaterial == StructureMaterial.Thatch;
+				float overhang = h.Overhang;
+				if (repitched != null)
+				{
+					float kitRise = rise;
+					rise = StructureRoofs.Rise(kitPitch, rise, repitched.Value, span * 0.5f);
+					soft = StructureRoofs.Soft(repitched.Value);
+					roof.Ridge = top + rise;
+					// A steeper roof's bargeboards lean further out at the eaves (half their depth times the slope's sine): its overhang
+					// is drawn in by as much, so the house stands on the kit's footprint (2026-10-18, I6h: the 60° shake roofs).
+					overhang -= Mathf.Max(0f, BargeboardDepth * 0.5f * (Mathf.Sin(Mathf.Atan2(rise, span * 0.5f)) - Mathf.Sin(Mathf.Atan2(kitRise, span * 0.5f))));
+				}
+				GableRoof(d, span, length, top, rise, overhang, soft ? 0.32f : 0.14f, h.RoofMaterial, key + 10, place, soft);
+				Bargeboards(d, span, length, top, rise, overhang, h.RoofMaterial, key + 700, place);
+				// A door taller than the wall, in a gable end, runs up into the gable: the gable is cut round it.
+				bool doorInGable = doorway && !h.RidgeAlongX && h.Upper <= 0f && floor + h.DoorHeight > top + 0.01f;
+				// The gables are the walls' (an upper storey's when there is one: the gables stand on it).
+				StructureDraft.PartScope gables = d.Builds(h.Upper > 0f ? UpperWallRoles : WallRoles);
+				if (doorInGable)
+				{
+					GableWithDoor(d, span - 0.02f, top, rise - 0.02f, -length * 0.5f + h.Wall * 0.5f, h.Wall, h.WallMaterial, key + 12,
+						doorX - h.DoorWidth * 0.5f, doorX + h.DoorWidth * 0.5f, floor + h.DoorHeight);
+				}
+				else
+				{
+					Gable(d, span - 0.02f, top, rise - 0.02f, -length * 0.5f + h.Wall * 0.5f, h.Wall, h.WallMaterial, key + 12, place);
+				}
+				Gable(d, span - 0.02f, top, rise - 0.02f, length * 0.5f - h.Wall * 0.5f, h.Wall, h.WallMaterial, key + 13, place);
+				gables.Dispose();
 			}
-			Gable(d, span - 0.02f, top, rise - 0.02f, length * 0.5f - h.Wall * 0.5f, h.Wall, h.WallMaterial, key + 13, place);
-			gables.Dispose();
-			if (d.Fine)
+			if (d.Fine && !flat)
 			{
 				// The ridge piece: a beam along the top, under the thatch's crown or the shingles' cap. Under turf it is the frame's
 				// own timber, seen along the turf's crest (2026-10-16: trim, not the shingles a shingled roof's timber ridge is).
@@ -500,7 +647,76 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			if (h.Chimney)
 			{
-				ChimneyStack(d, h, floor, top + rise, doorway, key + 15);
+				// Clear of the ridge, or of a flat roof's parapet.
+				ChimneyStack(d, h, floor, roof.Ridge, doorway, key + 15);
+			}
+			return roof;
+		}
+
+		/// <summary>
+		/// A flat roof (2026-10-18, I6e: mud brick and packed earth, as the houses of the dry south and the pueblos are roofed):
+		/// the walls run on up past the roof as its parapet, flush with their faces; the deck of the roof's material within them,
+		/// on beams whose ends stand out of the front and back walls under it; spouts through the parapet's foot at the back and
+		/// sides to throw the rain clear. Over <paramref name="width"/> × <paramref name="depth"/> (an upper storey's, jettied, when
+		/// <paramref name="storeyed"/>), its walls' top at <paramref name="top"/>.
+		/// </summary>
+		private static void FlatRoof(StructureDraft d, House h, float width, float depth, float top, bool storeyed, float doorX, int key)
+		{
+			float halfW = width * 0.5f, halfD = depth * 0.5f, t2 = h.Wall * 0.5f, parapet = top + StructureRoofs.Parapet;
+			StructureMaterial wall = storeyed ? h.UpperWallMaterial ?? h.WallMaterial : h.WallMaterial;
+			using (d.Builds(storeyed ? UpperWallRoles : WallRoles))
+			{
+				WallRun(d, new Vector3(-halfW, 0f, -halfD + t2), new Vector3(halfW, 0f, -halfD + t2), h.Wall, top, parapet, null, wall, key + 3000);
+				WallRun(d, new Vector3(-halfW, 0f, halfD - t2), new Vector3(halfW, 0f, halfD - t2), h.Wall, top, parapet, null, wall, key + 3001);
+				WallRun(d, new Vector3(-halfW + t2, 0f, -halfD + h.Wall), new Vector3(-halfW + t2, 0f, halfD - h.Wall), h.Wall, top, parapet, null, wall, key + 3002);
+				WallRun(d, new Vector3(halfW - t2, 0f, -halfD + h.Wall), new Vector3(halfW - t2, 0f, halfD - h.Wall), h.Wall, top, parapet, null, wall, key + 3003);
+			}
+			// The deck: the roof's own material (its palette part, so the palette lays its mud or earth here), a little under the
+			// parapet's foot, tucked into the walls all round.
+			using (d.Builds(RoofRoles))
+			{
+				d.Add(StructureShapes.Box(new Vector3(0f, top - 0.1f, 0f), new Vector3(width - 2f * h.Wall + 0.04f, 0.3f, depth - 2f * h.Wall + 0.04f),
+					h.RoofMaterial, key + 3010, StructureRole.Roof)).Grain = Vector3.forward;
+			}
+			using (d.Builds(TrimRoles))
+			{
+				if (d.Mid)
+				{
+					// The spouts, timber troughs through the parapet's foot, falling a little: two at the back, one each side toward the
+					// back (clear of the door at the front and of a chimney on the middle of a gable wall).
+					float y = top + 0.12f;
+					int n = 0;
+					for (int s = -1; s <= 1; s += 2)
+					{
+						float x = s * width * 0.25f;
+						d.Add(StructureShapes.Beam(new Vector3(x, y, halfD - h.Wall), new Vector3(x, y - 0.06f, halfD + StructureRoofs.SpoutReach), 0.18f, 0.12f,
+							StructureMaterial.Timber, key + 3020 + n++, StructureRole.Detail));
+						float z = depth * 0.25f;
+						d.Add(StructureShapes.Beam(new Vector3(s * (halfW - h.Wall), y, z), new Vector3(s * (halfW + StructureRoofs.SpoutReach), y - 0.06f, z), 0.18f, 0.12f,
+							StructureMaterial.Timber, key + 3020 + n++, StructureRole.Detail));
+					}
+				}
+				if (d.Fine)
+				{
+					// The beams' ends out of the front and back walls under the deck, a beam to a metre or so, none over the door's
+					// lintel or through a chimney stack on the back wall.
+					int count = Mathf.Clamp(Mathf.RoundToInt((width - 1.2f) / 1.2f) + 1, 3, StructureRoofs.MostBeamEnds);
+					float y = top - 0.14f;
+					bool chimneyBack = h.Chimney && !h.RidgeAlongX;
+					for (int e = -1; e <= 1; e += 2)
+					{
+						for (int i = 0; i < count; i++)
+						{
+							float x = Mathf.Lerp(-halfW + 0.6f, halfW - 0.6f, i / (count - 1f));
+							if (e > 0 ? chimneyBack && Mathf.Abs(x) < 0.85f : !storeyed && Mathf.Abs(x - doorX) < h.DoorWidth * 0.5f + 0.3f)
+							{
+								continue;
+							}
+							d.Add(StructureShapes.Beam(new Vector3(x, y, e * (halfD - h.Wall * 0.5f)), new Vector3(x, y, e * (halfD + StructureRoofs.BeamEnd)), 0.16f, 0.16f,
+								StructureMaterial.Timber, key + 3040 + i + (e > 0 ? 20 : 0), StructureRole.Detail));
+						}
+					}
+				}
 			}
 		}
 
@@ -517,7 +733,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// riven shingles shed water only when steep (45°, as planks); stone slates and split slate are heavy and hold at 40°;
 		/// sandstone slabs and ice blocks lie heavier still (35°); bamboo half-culms and log roofs hang lower (30°), as do
 		/// marble slabs, laid as a temple's low gable is; bone lashed under hides wants a hide roof's steepness (45°); mud
-		/// brick roofs are flat (laid on any pitch, as turf). Every material before them is as it was.
+		/// brick roofs are flat. Every material before them is as it was.
+		/// <para>
+		/// Packed earth (2026-10-18, I6h: "earth roofs are pitched sod/turf, only adobe gives flat roofs") is sod laid on boards
+		/// and birch bark, as the turf roofs of the north are, at 35°: steep enough to shed water, low enough that the turf holds.
+		/// No kit roof is built lower for it: the turf longhouse's own rise (42°) is the larger. No material wants 60° of itself
+		/// (StructureRoofPitch.Pitch60 is a palette's to name: the Carpathian shake roofs).
+		/// </para>
 		/// </remarks>
 		public static float MinimumPitch(StructureMaterial roof)
 		{
@@ -526,13 +748,13 @@ namespace FishMMO.Shared.WorldDesign
 				case StructureMaterial.Thatch:
 				case StructureMaterial.Reed:
 					return 50f;
-				case StructureMaterial.Earth:
 				case StructureMaterial.Adobe:
 					return 0f;
 				case StructureMaterial.Slate:
 					return 40f;
 				case StructureMaterial.Sandstone:
 				case StructureMaterial.IceBlock:
+				case StructureMaterial.Earth:
 					return 35f;
 				case StructureMaterial.Bamboo:
 				case StructureMaterial.Log:
@@ -542,6 +764,9 @@ namespace FishMMO.Shared.WorldDesign
 					return 45f; // timber planks, shingles, bone work and the rest
 			}
 		}
+
+		/// <summary>How deep a bargeboard is across its slope, metres.</summary>
+		internal const float BargeboardDepth = 0.24f;
 
 		/// <summary>
 		/// The bargeboards under a gable roof's verges, a finial at each gable's peak, and on a thatched roof the ridge's
@@ -564,7 +789,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					var eave = new Vector3(side * outX, outY - 0.12f, z);
 					var peak = new Vector3(0f, ridgeY - 0.1f, z);
-					d.Add(StructureShapes.Beam(place.MultiplyPoint3x4(eave), place.MultiplyPoint3x4(peak), 0.06f, 0.24f, StructureMaterial.Timber, key + n++, StructureRole.Roof));
+					d.Add(StructureShapes.Beam(place.MultiplyPoint3x4(eave), place.MultiplyPoint3x4(peak), 0.06f, BargeboardDepth, StructureMaterial.Timber, key + n++, StructureRole.Roof));
 				}
 				if (d.Fine)
 				{

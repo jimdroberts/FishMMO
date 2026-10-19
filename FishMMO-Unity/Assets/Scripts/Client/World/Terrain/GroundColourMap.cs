@@ -706,36 +706,44 @@ namespace FishMMO.Client
 		private static void Paint(Terrain terrain, TerrainArraySet set, Rect bounds, int w, int h, Color32[] pixels, Color32[] shares)
 		{
 			TerrainData data = terrain.terrainData;
-			TerrainLayer[] layers = data.terrainLayers;
+			TerrainLayer[] layers = data.terrainLayers ?? new TerrainLayer[0];
 			Texture2D[] controls = data.alphamapTextures;
-			if (layers == null || layers.Length == 0 || controls == null || controls.Length == 0)
+			bool hasControls = layers.Length > 0 && controls != null && controls.Length > 0;
+			/* A client build's tile keeps no alphamaps (nor layers) once its stored index map stands in for them
+			 * (ClientTerrainLayerStripper): the map says which of the set's layers lie where, four a texel. Where a texel has
+			 * four layers or fewer that is its whole paint, so the colour is the same; past four, the fifth and later are left
+			 * out, as the terrain itself draws them. */
+			TerrainDetailBake.IndexMap stored = hasControls ? null : SceneTerrainBake.IndexOf(data);
+			int count = hasControls ? layers.Length : stored != null && set != null ? Mathf.Min(stored.Layers, set.LayerCount) : 0;
+			if (count == 0)
 			{
 				return;
 			}
-			var colours = new Color[layers.Length];
+			var colours = new Color[count];
 			// What each layer is made of for the looks: the set's own (by its baked names, as the terrain shader is given
 			// them), or the layer's name where no set draws the terrain.
 			Vector4[] setFlora = set != null ? set.LayerFlora() : null;
-			var flora = new Vector4[layers.Length];
-			for (int l = 0; l < layers.Length; l++)
+			var flora = new Vector4[count];
+			for (int l = 0; l < count; l++)
 			{
-				colours[l] = LayerColour(set, layers, l, out _);
+				bool drawable = l < layers.Length || (set != null && set.Albedo != null && l < set.LayerCount && l < set.Albedo.depth);
+				colours[l] = drawable ? LayerColour(set, layers, l, out _) : new Color(0.5f, 0.5f, 0.5f, 1f);
 				if (setFlora != null && l < set.LayerCount && l < setFlora.Length)
 				{
 					flora[l] = setFlora[l];
 				}
 				else
 				{
-					Shared.Biomes.BiomeLooks.GroundShare share = Shared.Biomes.BiomeLooks.GroundShareOf(layers[l] != null ? layers[l].name : null);
+					Shared.Biomes.BiomeLooks.GroundShare share = Shared.Biomes.BiomeLooks.GroundShareOf(l < layers.Length && layers[l] != null ? layers[l].name : null);
 					flora[l] = new Vector4(share.Foliage, share.Accent, share.Mineral, 0f);
 				}
 			}
 			// The control maps (RGBA = four layers' weights each), read once as bytes; GetAlphamaps (floats,
 			// far more memory) only if a control map cannot be read on the CPU.
-			var weights = new Color32[controls.Length][];
-			int res = 0;
+			var weights = new Color32[hasControls ? controls.Length : 0][];
+			int res = stored != null ? stored.Resolution : 0;
 			bool readable = true;
-			for (int c = 0; c < controls.Length && readable; c++)
+			for (int c = 0; c < weights.Length && readable; c++)
 			{
 				Texture2D control = controls[c];
 				readable = control != null && control.isReadable;
@@ -745,7 +753,7 @@ namespace FishMMO.Client
 					res = control.width;
 				}
 			}
-			if (!readable)
+			if (hasControls && !readable)
 			{
 				res = data.alphamapResolution;
 				float[,,] alphas = data.GetAlphamaps(0, 0, res, res);
@@ -799,7 +807,11 @@ namespace FishMMO.Client
 					int k = cz * res + cx;
 					float r = 0f, g = 0f, b = 0f, total = 0f;
 					Vector4 share = Vector4.zero;
-					for (int l = 0; l < layers.Length; l++)
+					if (stored != null)
+					{
+						WeighIndexTexel(stored.Map[2 * k], stored.Map[2 * k + 1], count, colours, flora, ref r, ref g, ref b, ref share, ref total);
+					}
+					for (int l = 0; l < weights.Length * 4 && l < count; l++)
 					{
 						Color32 cw = weights[l >> 2][k];
 						byte wb = (l & 3) == 0 ? cw.r : (l & 3) == 1 ? cw.g : (l & 3) == 2 ? cw.b : cw.a;
@@ -821,6 +833,31 @@ namespace FishMMO.Client
 						shares[z * w + x] = new Color(share.x, share.y, share.z, 1f);
 					}
 				}
+			}
+		}
+
+		/// <summary>
+		/// One texel of a stored index map (<see cref="TerrainIndexMap"/>) into a colour sum: each of its four layers' colour and
+		/// make-up by its weight byte over 255, as the alphamap path weighs each layer's byte. Ids past
+		/// <paramref name="count"/> (zero-weight phantoms of a palette under four layers) add nothing.
+		/// </summary>
+		public static void WeighIndexTexel(uint ids, uint packedWeights, int count, Color[] colours, Vector4[] flora,
+			ref float r, ref float g, ref float b, ref Vector4 share, ref float total)
+		{
+			for (int s = 0; s < TerrainIndexMap.Slots; s++)
+			{
+				int wb = TerrainIndexMap.WeightOf(packedWeights, s);
+				int l = TerrainIndexMap.IdOf(ids, s);
+				if (wb == 0 || l >= count)
+				{
+					continue;
+				}
+				float weight = wb / 255f;
+				r += colours[l].r * weight;
+				g += colours[l].g * weight;
+				b += colours[l].b * weight;
+				share += flora[l] * weight;
+				total += weight;
 			}
 		}
 

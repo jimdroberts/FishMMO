@@ -12,9 +12,10 @@ namespace FishMMO.Client
 		public float StartDistance;
 		public float EndDistance;
 
+		/// <remarks>Exponential fog at no density fogs nothing: read as off (it is what <see cref="FogComposer"/> writes for none).</remarks>
 		public static FogState FromRenderSettings() => new FogState
 		{
-			Enabled = RenderSettings.fog,
+			Enabled = RenderSettings.fog && !(RenderSettings.fogMode != FogMode.Linear && RenderSettings.fogDensity <= 0f),
 			Mode = RenderSettings.fogMode,
 			Color = RenderSettings.fogColor,
 			Density = RenderSettings.fogDensity,
@@ -49,6 +50,11 @@ namespace FishMMO.Client
 		private static float weatherDensity;
 		private static float weatherEnd = 100f;
 
+		/// <summary>
+		/// Whether the fog written fogs anything: what <c>RenderSettings.fog</c> said before it stayed on. Read this, not
+		/// <c>RenderSettings.fog</c>, which is now on whatever the fog does.
+		/// </summary>
+		public static bool Active { get; private set; }
 		/// <summary>The region fog, before weather. Taken from the scene on first use.</summary>
 		public static FogState Base
 		{
@@ -165,6 +171,16 @@ namespace FishMMO.Client
 			FogState composed = Compose(region, weatherAmount, weather, weatherDensity, weatherEnd);
 			// The fog switch (SkySystem.DrawFog) takes the region's fog out too.
 			composed.Enabled &= SkySystem.DrawFog;
+			Active = composed.Enabled;
+			/* No fog is written as exponential fog at no density, never as fog switched off: switched off, URP draws every
+			 * lit shader without FOG_EXP, so each clear spell and each weather's start flipped every material to another
+			 * shader variant, which the editor compiled then and there in Play (2026-10-18). Density 0 fogs nothing. */
+			if (!composed.Enabled)
+			{
+				composed.Enabled = true;
+				composed.Mode = FogMode.Exponential;
+				composed.Density = 0f;
+			}
 			composed.WriteToRenderSettings();
 		}
 	}

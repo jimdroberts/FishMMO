@@ -43,6 +43,15 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 			}
+			// The house roofs the spec's palettes build at another pitch (StructureRoofs; a template's hand-edited roof is written
+			// by the generation too, but is not listed, as its materials are not).
+			foreach (StructureRoofVariant roof in SpecRoofs())
+			{
+				for (int lod = 0; lod < StructurePieces.LevelCount; lod++)
+				{
+					yield return MeshPath(StructurePieces.MeshName(roof.Piece, roof.Variant, lod, roof.Pitch));
+				}
+			}
 			// The cave kit's glow art, built in the structures' steps (ProceduralArtCatalogue.Cave.cs).
 			foreach (string path in CaveGlowPayloadPaths())
 			{
@@ -90,11 +99,21 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 			}
+			foreach (StructureRoofVariant roof in SpecRoofs())
+			{
+				foreach (StructureFinish finish in StructurePieces.Finishes)
+				{
+					yield return StructurePieces.PrefabName(roof.Piece, roof.Variant, finish, roof.Pitch);
+				}
+			}
 			foreach (string prefab in CaveGlowPrefabNames())
 			{
 				yield return prefab;
 			}
 		}
+
+		/// <summary>The house roof variants the spec's palettes need (StructureRoofs.Needed): none while every biome builds as the kit.</summary>
+		public static List<StructureRoofVariant> SpecRoofs() => StructureRoofs.Needed(SpecPalettes());
 
 		/// <summary>Every spec entry's structure palette, in the spec's order.</summary>
 		private static IEnumerable<FishMMO.Shared.Biomes.BiomeStructurePalette> SpecPalettes()

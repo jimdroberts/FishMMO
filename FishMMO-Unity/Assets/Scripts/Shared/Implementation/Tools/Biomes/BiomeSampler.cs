@@ -73,7 +73,19 @@ namespace FishMMO.Shared.Biomes
 			 * sample. */
 			Scene scene = settings != null ? settings.OwnScene : default;
 			Vector3 ground = worldPosition;
-			if (TrySampleTerrainHeight(worldPosition, scene, out float height, out float groundY))
+			/* A scene cut from the globe stored the ground its biomes were chosen at: read from that, the
+			 * altitude — and so the temperature — is the cut's, the same on the server and every client, and
+			 * defined wherever it is asked, terrain loaded or not. The terrain is asked only where none was
+			 * baked. */
+			ScenePlacementClimate baked = settings != null ? settings.PlacementClimate : null;
+			if (baked != null && baked.Generated && baked.TryGroundY(worldPosition.x, worldPosition.z, out float bakedY))
+			{
+				ground.y = bakedY;
+				reading.HeightKnown = true;
+				// Replaced below by the planet-relative height the field reads off this altitude.
+				reading.Height = 0.5f;
+			}
+			else if (TrySampleTerrainHeight(worldPosition, scene, out float height, out float groundY))
 			{
 				reading.Height = height;
 				reading.HeightKnown = true;

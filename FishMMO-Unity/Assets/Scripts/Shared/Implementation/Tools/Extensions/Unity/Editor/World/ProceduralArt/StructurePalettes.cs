@@ -280,20 +280,24 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── A piece's submeshes ──────────────────────────────────────
 
-		private static readonly Dictionary<(string, int, int), StructureSlot[]> slots = new Dictionary<(string, int, int), StructureSlot[]>();
+		private static readonly Dictionary<(string, int, int, int), StructureSlot[]> slots = new Dictionary<(string, int, int, int), StructureSlot[]>();
 
 		/// <summary>
 		/// A level's submeshes as the art generator built them (the generation seed, <see cref="StructurePieces.DefaultSeed"/>),
 		/// built from the piece's solids once and cached.
 		/// </summary>
-		public static StructureSlot[] SlotsOf(StructurePiece piece, int variant, int lod)
+		public static StructureSlot[] SlotsOf(StructurePiece piece, int variant, int lod) => SlotsOf(piece, variant, lod, null);
+
+		/// <summary>As <see cref="SlotsOf(StructurePiece, int, int)"/>, for the variant with its house roof at a pitch (null: the kit's; StructureRoofs).</summary>
+		public static StructureSlot[] SlotsOf(StructurePiece piece, int variant, int lod, StructureRoofPitch? roof)
 		{
 			lock (slots)
 			{
-				if (!slots.TryGetValue((piece.Id, variant, lod), out StructureSlot[] list))
+				var key = (piece.Id, variant, lod, roof == null ? -1 : (int)roof.Value);
+				if (!slots.TryGetValue(key, out StructureSlot[] list))
 				{
-					list = StructureShapes.SlotsOf(StructurePieces.BuildSolids(piece, variant, lod, StructurePieces.DefaultSeed));
-					slots[(piece.Id, variant, lod)] = list;
+					list = StructureShapes.SlotsOf(StructurePieces.BuildSolids(piece, variant, lod, StructurePieces.DefaultSeed, roof));
+					slots[key] = list;
 				}
 				return list;
 			}
@@ -306,14 +310,15 @@ namespace FishMMO.Shared.WorldDesign
 		/// the stone style's door): a part takes the host's entry where its kit material is the same in the host's style, and its
 		/// own piece's otherwise, so the kit's palette still lays every part as built. Pure but for building the slots.
 		/// </summary>
+		/// <remarks><paramref name="roof"/>: the prefab's house roof pitch when it is a roof variant (StructureRoofs), null for the kit's.</remarks>
 		public static string[][] MaterialNames(StructurePiece piece, int variant, StructureFinish finish, BiomeStructurePalette palette,
-			StructureStyle? host, out bool differs)
+			StructureStyle? host, out bool differs, StructureRoofPitch? roof = null)
 		{
 			differs = false;
 			var names = new string[StructurePieces.LevelCount][];
 			for (int lod = 0; lod < names.Length; lod++)
 			{
-				StructureSlot[] level = SlotsOf(piece, variant, lod);
+				StructureSlot[] level = SlotsOf(piece, variant, lod, roof);
 				names[lod] = new string[level.Length];
 				for (int i = 0; i < level.Length; i++)
 				{
@@ -336,7 +341,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// The pitch a roof role is built at by the kit, degrees (StructurePieces.MinimumPitch of its kit material): a palette lays
 		/// another material on the same roof, so a material that wants it steeper (reed or thatch on a shingle roof) is laid
-		/// too flat for it. Null for a role that is no roof.
+		/// too flat for it. Null for a role that is no roof. Since 2026-10-18 a house's roof (I6e) and every roof a piece builds
+		/// for itself (I6h) is built at its palette's pitch instead (StructureRoofs); this is the rule for the roofs that do not
+		/// follow (a lean-to's, a lid's, an awning's).
 		/// </summary>
 		public static float? BuiltPitch(BiomeStructureStyle style, BiomeStructureRole role)
 		{

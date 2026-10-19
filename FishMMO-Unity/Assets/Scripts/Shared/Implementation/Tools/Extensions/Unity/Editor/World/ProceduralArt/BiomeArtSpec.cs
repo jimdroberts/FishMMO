@@ -89,6 +89,93 @@ namespace FishMMO.Shared.WorldDesign
 			public Vector2? Slope;
 			public Vector2? Height;
 			public readonly List<Scatter> Scatter = new List<Scatter>();
+
+			/// <summary>
+			/// The grounds a footpath, a road and a way's cobbled stretches wear to where this layer is the strongest ground
+			/// (TerrainTextureLayer.ways, 2026-10-16): null is the biome's own (<see cref="Entry.PathGround"/>,
+			/// <see cref="Entry.RoadGround"/>, <see cref="Entry.CobbleGround"/>), as every layer was before. Main and detail
+			/// layers only; set with <see cref="Ways"/>.
+			/// </summary>
+			public string WayPath, WayRoad, WayCobbles;
+
+			/// <summary>
+			/// Gives the ways across this ground their own grounds (a Taiga bog layer's corduroy log road); null keeps the
+			/// biome's. For a main (<c>L</c>) or detail (<c>D</c>) layer: <c>D(Ground.Moss, 48f).Ways(road: Ground.X)</c>.
+			/// </summary>
+			public Layer Ways(string path = null, string road = null, string cobbles = null)
+			{
+				WayPath = path ?? WayPath;
+				WayRoad = road ?? WayRoad;
+				WayCobbles = cobbles ?? WayCobbles;
+				return this;
+			}
+
+			/// <summary>The ground this layer names for one way slot (BiomeLocalArt.WaySlots), or null for the biome's own.</summary>
+			public string WayGround(string waySlot)
+			{
+				switch (waySlot)
+				{
+					case BiomeLocalArt.SlotPath: return WayPath;
+					case BiomeLocalArt.SlotRoad: return WayRoad;
+					case BiomeLocalArt.SlotCobbles: return WayCobbles;
+				}
+				return null;
+			}
+
+			/// <summary>
+			/// Climate band (TerrainTextureLayer.useClimateBand, decision 29, 2026-10-18): the mean annual temperature this ground
+			/// is painted between, x the coldest and y the warmest, on the climate's scale (0 = 0 °C, 1 = 33.1 °C); an end at or
+			/// past ±1 is open. Null for no temperature band, as every layer was before. Set through <see cref="Temp"/>.
+			/// </summary>
+			public Vector2? Temperature;
+			/// <summary>Climate band: the humidity this ground is painted between, −1 driest … 1 wettest; null for none. Set through <see cref="Humid"/>.</summary>
+			public Vector2? Humidity;
+			/// <summary>The soft edge's width at each closed end of the temperature band, centred on the end (0.1 ≈ 3.3 °C).</summary>
+			public float TemperatureFalloff = BiomeClimateBand.DefaultFalloff;
+			/// <summary>The soft edge's width at each closed end of the humidity band.</summary>
+			public float HumidityFalloff = BiomeClimateBand.DefaultFalloff;
+
+			/// <summary>True when the layer is banded by the climate on either axis.</summary>
+			public bool HasClimateBand => Temperature.HasValue || Humidity.HasValue;
+
+			/// <summary>
+			/// Paints this ground only where the year's mean temperature lies between <paramref name="min"/> and
+			/// <paramref name="max"/> (an end at or past ±1 open; both open is no band): a valley's cold larch-meadow reach,
+			/// <c>D(Ground.NeedleLitter, 110f).Temp(-1f, -0.35f)</c>. On the main layer it says where the base ground stands
+			/// (the details carry the ground outside it). The same numbers as a rule's <c>Band(rule, tMin, tMax)</c> mean the same
+			/// place, so a reach's ground and its plants change over together.
+			/// </summary>
+			public Layer Temp(float min, float max, float falloff = BiomeClimateBand.DefaultFalloff)
+			{
+				Temperature = min <= -1f && max >= 1f ? (Vector2?)null : new Vector2(Mathf.Max(-1f, min), Mathf.Min(1f, max));
+				TemperatureFalloff = Mathf.Clamp01(falloff);
+				return this;
+			}
+
+			/// <summary>Paints this ground only where the humidity lies between <paramref name="min"/> and <paramref name="max"/> (see <see cref="Temp"/>).</summary>
+			public Layer Humid(float min, float max, float falloff = BiomeClimateBand.DefaultFalloff)
+			{
+				Humidity = min <= -1f && max >= 1f ? (Vector2?)null : new Vector2(Mathf.Max(-1f, min), Mathf.Min(1f, max));
+				HumidityFalloff = Mathf.Clamp01(falloff);
+				return this;
+			}
+
+			/// <summary>
+			/// Air band (TerrainTextureLayer.airBand, decision 44, 2026-10-18): the worlds' airs this ground is painted under; None (the
+			/// default) every air. Set through <see cref="Air"/>.
+			/// </summary>
+			public BiomeAtmosphereRequirement AirBand;
+
+			/// <summary>
+			/// Paints this ground only on worlds with one of these airs (the Dust Sea's grey moondust: <c>L(...).Air(BiomeAtmosphereRequirement.Airless)</c>,
+			/// its rust dust: <c>D(...).Air(BiomeAtmosphereRequirement.Thin)</c>). A main layer banded so gives its place on the other
+			/// worlds to the first detail layer banded to their air (SceneTerrainPalette.AirStandIn); its rules go with it.
+			/// </summary>
+			public Layer Air(BiomeAtmosphereRequirement air)
+			{
+				AirBand = air;
+				return this;
+			}
 		}
 
 		/// <summary>A cliff layer: a family on faces steeper than an angle.</summary>
@@ -97,6 +184,15 @@ namespace FishMMO.Shared.WorldDesign
 			public string Family;
 			public float MinAngle = 42f;
 			public float MaxAngle = 90f;
+			/// <summary>The worlds' airs this rock face is painted under (TerrainTextureLayer.airBand, decision 44); None every air.</summary>
+			public BiomeAtmosphereRequirement AirBand;
+
+			/// <summary>Paints this cliff only on worlds with one of these airs (one biome's grey and rust scarps: <see cref="Entry.AddCliff"/>).</summary>
+			public Cliff Air(BiomeAtmosphereRequirement air)
+			{
+				AirBand = air;
+				return this;
+			}
 		}
 
 		/// <summary>One spawn rule, in the fields <see cref="PrefabSpawnRule"/> has.</summary>
@@ -162,6 +258,14 @@ namespace FishMMO.Shared.WorldDesign
 			/// </summary>
 			public Vector2 Depth;
 			/// <summary>
+			/// Bed rules: the waters the rule grows under (<see cref="PrefabSpawnRule.waters"/>, decision 35, 2026-10-18); Default keeps
+			/// its slot's (the lakebed's the sea, the riverbed's a river, a bed layer's its own). Under a lake or a river its
+			/// <see cref="Depth"/> is read below that water's own surface. Set through <see cref="In"/>.
+			/// </summary>
+			public BiomeBedWaters Waters;
+			/// <summary>Bed rules: the river's current the rule grows in, m/s, x the slowest and y the quickest, 0 open (<see cref="PrefabSpawnRule.currentRange"/>). Set through <see cref="Flowing"/>.</summary>
+			public Vector2 Current;
+			/// <summary>
 			/// Climate band: the mean annual temperature the rule grows between, x the coldest and y the
 			/// warmest, on the climate's scale (0 = 0 °C, 1 = 33.1 °C); an end at or past ±1 is open. Null
 			/// for no temperature band (<see cref="PrefabSpawnRule.temperatureRange"/>). Set through
@@ -177,6 +281,11 @@ namespace FishMMO.Shared.WorldDesign
 			public float TemperatureFalloff = 0.1f;
 			/// <summary><see cref="PrefabSpawnRule.humidityFalloff"/>.</summary>
 			public float HumidityFalloff = 0.1f;
+			/// <summary>
+			/// The worlds the rule grows on (<see cref="PrefabSpawnRule.worldGate"/>, decision 41, 2026-10-18): open (the default) every
+			/// world. Set through <see cref="OnWorlds"/>.
+			/// </summary>
+			public BiomeWorldGate World;
 			/// <summary>
 			/// Tree-channel rules: the heading range instances are turned to, degrees about the vertical
 			/// (<see cref="PrefabSpawnRule.yRotationRange"/>). Any heading unless set through <see cref="Aligned"/>.
@@ -195,6 +304,24 @@ namespace FishMMO.Shared.WorldDesign
 				copy.Earlier = new List<Scatter>();
 				return copy;
 			}
+		}
+
+		/// <summary>
+		/// The parts of a template's naming block a biome's file rewrites (<see cref="Entry.Names"/>; SerializableBiomePhonology's
+		/// fields): each one null leaves the template's.
+		/// </summary>
+		public sealed class NamingColumns
+		{
+			public string[] Onsets, Nuclei, Codas, Middles;
+			public int? SyllablesMin, SyllablesMax;
+			public string[] DungeonSuffixes, DungeonPrefixes, POISuffixes, Adjectives;
+			public (string Kind, string[] Words)[] POIWords;
+			/// <summary>The phonology's own description (its notes on the voice).</summary>
+			public string About;
+
+			/// <summary>True when no part is set.</summary>
+			public bool IsEmpty => Onsets == null && Nuclei == null && Codas == null && Middles == null && SyllablesMin == null && SyllablesMax == null
+				&& DungeonSuffixes == null && DungeonPrefixes == null && POISuffixes == null && Adjectives == null && POIWords == null && About == null;
 		}
 
 		/// <summary>A biome's whole entry.</summary>
@@ -241,6 +368,64 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				Bed = new Layer { Family = Lakebed };
 				Bed.Scatter.AddRange(scatter);
+				return this;
+			}
+
+			// ── Beds under rivers and lakes (decision 35, 2026-10-18) ─────
+			//
+			// The riverbed is painted under rivers since 2026-10-18 (the lakebed took every river before) and the lakebed under lakes and
+			// the sea; a biome's file may add rules to its riverbed (UnderRiver) and up to three more beds by depth below the water's own
+			// surface, and in a river by its current (BedLayer): a lake's shelf, slope and deeps, a river's riffles, pools and reefs.
+			// Bed rules grow under the waters they name (In), the lakebed's under the sea only by default, so nothing changes until a
+			// round uses these.
+
+			/// <summary>What lives on the riverbed: rules on the biome's riverbed layer (family <see cref="Riverbed"/>). Null for none.</summary>
+			public Layer RiverBed;
+
+			/// <summary>Sets what lives on the riverbed (<see cref="RiverBed"/>): by depth below the river's surface, and current (<see cref="Flowing"/>).</summary>
+			public Entry UnderRiver(params Scatter[] scatter)
+			{
+				RiverBed = new Layer { Family = Riverbed };
+				RiverBed.Scatter.AddRange(scatter);
+				return this;
+			}
+
+			/// <summary>One extra bed layer (<see cref="BedLayer"/>; BedTextureLayer on the template).</summary>
+			public sealed class BedSpec
+			{
+				public Layer Layer;
+				public BiomeBedWaters Waters = BiomeBedWaters.Inland;
+				/// <summary>Metres below the water's own surface, x shallowest, y deepest, 0 open.</summary>
+				public Vector2 Depth;
+				public float DepthFalloff = BiomeBedBands.DefaultDepthFalloff;
+				/// <summary>The current band, m/s, x slowest, y quickest, 0 open; null for none.</summary>
+				public Vector2? Current;
+				public float CurrentFalloff = BiomeBedBands.DefaultCurrentFalloff;
+			}
+
+			/// <summary>The extra beds the file gives, in slot order (bed/0, bed/1, bed/2). Empty for every biome until a round gives one.</summary>
+			public readonly List<BedSpec> BedLayers = new List<BedSpec>();
+
+			/// <summary>
+			/// Adds an extra bed (at most three): <paramref name="family"/> painted under <paramref name="waters"/> between
+			/// <paramref name="depthMin"/> and <paramref name="depthMax"/> metres below the water's own surface (0 open), and, with a
+			/// current band (<paramref name="speedMin"/> or <paramref name="speedMax"/> above 0), only where the river runs that fast:
+			/// a lake's Halde <c>.BedLayer(Ground.Silt, BiomeBedWaters.Lake, 3f, 9f)</c>, a river's reef
+			/// <c>.BedLayer(Ground.X, BiomeBedWaters.River, 0f, 1.2f, speedMin: 1.6f)</c>. Its rules grow on it as on a detail layer
+			/// (under the waters it names unless they name their own).
+			/// </summary>
+			public Entry BedLayer(string family, BiomeBedWaters waters, float depthMin, float depthMax, float speedMin = 0f, float speedMax = 0f,
+				params Scatter[] scatter)
+			{
+				var layer = new Layer { Family = family };
+				layer.Scatter.AddRange(scatter);
+				BedLayers.Add(new BedSpec
+				{
+					Layer = layer,
+					Waters = waters,
+					Depth = new Vector2(Mathf.Max(0f, depthMin), Mathf.Max(0f, depthMax)),
+					Current = speedMin > 0f || speedMax > 0f ? new Vector2(Mathf.Max(0f, speedMin), Mathf.Max(0f, speedMax)) : (Vector2?)null,
+				});
 				return this;
 			}
 
@@ -324,6 +509,116 @@ namespace FishMMO.Shared.WorldDesign
 				return this;
 			}
 
+			// ── Climate variants' grounds (decision 29, 2026-10-18) ─────
+			//
+			// A ground layer banded by the climate (Layer.Temp / Humid) changes WHERE a ground is painted; a climate variant's
+			// ground override (BiomeClimateVariant.TextureLayerOverrides, painted since 2026-10-18) changes WHAT a slot is painted
+			// with under that climate: the Plains' main grass becomes a snow-crust sward where the year is Frozen. The variants
+			// themselves are the template's (they carry its climate names too); a file may declare one the template lacks
+			// (ClimateVariant), which the authoring adds, and gives any variant its grounds (ClimateGround).
+
+			/// <summary>A climate variant the biome's template should have (<see cref="ClimateVariant"/>).</summary>
+			public sealed class VariantSpec
+			{
+				public string Name;
+				public Vector2 Temperature = new Vector2(-1f, 1f);
+				public Vector2 Humidity = new Vector2(-1f, 1f);
+				public float TextureFalloff = BiomeClimateBand.DefaultFalloff;
+			}
+
+			/// <summary>One variant's ground overrides (<see cref="ClimateGround"/>): one per ground slot, 0 the main layer, k detail k − 1; null keeps the biome's.</summary>
+			public sealed class VariantGrounds
+			{
+				public string Variant;
+				public Layer[] Layers = Array.Empty<Layer>();
+			}
+
+			/// <summary>The variants the file declares, in order. Empty for every biome until a round declares one.</summary>
+			public readonly List<VariantSpec> Variants = new List<VariantSpec>();
+
+			/// <summary>The variants' ground overrides the file gives, in order. Empty for every biome until a round gives one.</summary>
+			public readonly List<VariantGrounds> VariantLayers = new List<VariantGrounds>();
+
+			/// <summary>
+			/// Declares a climate variant the template should have: added by the authoring when the template has none of that
+			/// name (and nobody deleted the one it added), its envelope kept up to date while untouched. A variant the template
+			/// already has by hand is left as it is. Note: a template with any variant of its own no longer takes the scene
+			/// climate's default variants for its names.
+			/// </summary>
+			public Entry ClimateVariant(string name, float tMin, float tMax, float hMin = -1f, float hMax = 1f, float textureFalloff = BiomeClimateBand.DefaultFalloff)
+			{
+				Variants.Add(new VariantSpec
+				{
+					Name = name,
+					Temperature = new Vector2(Mathf.Max(-1f, tMin), Mathf.Min(1f, tMax)),
+					Humidity = new Vector2(Mathf.Max(-1f, hMin), Mathf.Min(1f, hMax)),
+					TextureFalloff = Mathf.Clamp01(textureFalloff),
+				});
+				return this;
+			}
+
+			/// <summary>
+			/// Gives a climate variant (by name: one of the template's, or one <see cref="ClimateVariant"/> declares) its own
+			/// grounds: <paramref name="main"/> for the main layer, <paramref name="details"/> for the detail layers in order
+			/// (null keeps the biome's there): <c>.ClimateGround("Frozen", L(Ground.Snow, …))</c>. Each is a whole layer, its own
+			/// noise, bands and rules included, painted within the variant's envelope in place of the slot's own.
+			/// </summary>
+			public Entry ClimateGround(string variant, Layer main = null, params Layer[] details)
+			{
+				var layers = new Layer[1 + (details != null ? details.Length : 0)];
+				layers[0] = main;
+				for (int i = 1; i < layers.Length; i++)
+				{
+					layers[i] = details[i - 1];
+				}
+				VariantLayers.Add(new VariantGrounds { Variant = variant, Layers = layers });
+				return this;
+			}
+
+			// ── Description and naming (decision 23, 2026-10-16/18) ─────
+			//
+			// A round rewrites the template's description and its naming block (the phonology names are built from, its
+			// suffixes, prefixes and point-of-interest words) here instead of by hand in the asset. Each part set is written as
+			// a whole value with its own mark; a part not set leaves the template's value exactly as it is.
+
+			/// <summary>The template's Description, when the file rewrites it (<see cref="Describe"/>); null leaves it as it is.</summary>
+			public string Description;
+
+			/// <summary>The naming parts the file rewrites (<see cref="Names"/>); null, or a part left null, leaves the template's.</summary>
+			public NamingColumns Naming;
+
+			/// <summary>Rewrites the template's Description.</summary>
+			public Entry Describe(string description)
+			{
+				Description = description;
+				return this;
+			}
+
+			/// <summary>
+			/// Rewrites parts of the template's naming block (BiomeTemplate.Naming.Phonology); each part left null stays as the
+			/// template has it. <paramref name="poiWords"/>: the biome's own words per point-of-interest kind (lowercase POIType
+			/// name → words), replacing the whole table.
+			/// </summary>
+			public Entry Names(string[] onsets = null, string[] nuclei = null, string[] codas = null, string[] middles = null,
+				int? syllablesMin = null, int? syllablesMax = null, string[] dungeonSuffixes = null, string[] dungeonPrefixes = null,
+				string[] poiSuffixes = null, string[] adjectives = null, (string Kind, string[] Words)[] poiWords = null, string about = null)
+			{
+				Naming ??= new NamingColumns();
+				Naming.Onsets = onsets ?? Naming.Onsets;
+				Naming.Nuclei = nuclei ?? Naming.Nuclei;
+				Naming.Codas = codas ?? Naming.Codas;
+				Naming.Middles = middles ?? Naming.Middles;
+				Naming.SyllablesMin = syllablesMin ?? Naming.SyllablesMin;
+				Naming.SyllablesMax = syllablesMax ?? Naming.SyllablesMax;
+				Naming.DungeonSuffixes = dungeonSuffixes ?? Naming.DungeonSuffixes;
+				Naming.DungeonPrefixes = dungeonPrefixes ?? Naming.DungeonPrefixes;
+				Naming.POISuffixes = poiSuffixes ?? Naming.POISuffixes;
+				Naming.Adjectives = adjectives ?? Naming.Adjectives;
+				Naming.POIWords = poiWords ?? Naming.POIWords;
+				Naming.About = about ?? Naming.About;
+				return this;
+			}
+
 			// ── Water role and cave shell (2026-10-15, 2026-10-16) ────
 			//
 			// Two more decisions the cut made in code, written onto the template by the authoring: which biomes the scene's
@@ -359,6 +654,22 @@ namespace FishMMO.Shared.WorldDesign
 			/// (<see cref="BiomeWaterLooks.Today"/>).
 			/// </summary>
 			public BiomeWaterLook WaterLook() => waterTint ?? BiomeWaterLooks.Today;
+
+			private BiomeSeaLook? seaTint;
+
+			/// <summary>Gives the sea off the biome's coast its own look under the surface (<see cref="BiomeTemplate.SeaLook"/>) in place of the scene's own.</summary>
+			public Entry SeaTint(BiomeSeaLook look)
+			{
+				seaTint = look;
+				return this;
+			}
+
+			/// <summary>
+			/// The sea as a diver sees it off the biome's coast (<see cref="BiomeTemplate.SeaLook"/>, 2026-10-18, I2h): the file's
+			/// own (<see cref="SeaTint"/>), else the underwater look every sea had before (<see cref="BiomeSeaLooks.Today"/>), which
+			/// leaves the sea its scene's own.
+			/// </summary>
+			public BiomeSeaLook SeaLook() => seaTint ?? BiomeSeaLooks.Today;
 
 			/// <summary>
 			/// Gives caves of one form carved in this biome their own shell rock (a rock type name, Ice, or
@@ -425,6 +736,151 @@ namespace FishMMO.Shared.WorldDesign
 					list.Add(new BiomeCaveCrystal(kind, weight));
 				}
 				return list;
+			}
+
+			// ── Floating plants (2026-10-18, I2i) ──
+			//
+			// What the biome's still fresh water carries on its surface (BiomeTemplate.FloatingPlants): nothing in every biome
+			// before, which stays every biome's default; a biome's own file names its own with Floats.
+
+			private (BiomeFloatingPlantKind Kind, float Weight)[] floats;
+
+			/// <summary>Gives the biome's still water its floating plants (each with its weight): duckweed, water-lilies, water hyacinth, frogbit.</summary>
+			public Entry Floats(params (BiomeFloatingPlantKind Kind, float Weight)[] kinds)
+			{
+				floats = kinds ?? Array.Empty<(BiomeFloatingPlantKind, float)>();
+				return this;
+			}
+
+			/// <summary>The plants the biome's still water carries (<see cref="BiomeTemplate.FloatingPlants"/>): the file's own, else none. A fresh list.</summary>
+			public List<BiomeFloatingPlant> FloatingPlants()
+			{
+				if (floats == null)
+				{
+					return BiomeFloatingPlants.None();
+				}
+				var list = new List<BiomeFloatingPlant>(floats.Length);
+				foreach ((BiomeFloatingPlantKind kind, float weight) in floats)
+				{
+					list.Add(new BiomeFloatingPlant(kind, weight));
+				}
+				return list;
+			}
+
+			// ── Sculpted landforms (2026-10-18, I2g) ──
+			//
+			// What the cut carves into the biome's ground (BiomeTemplate.Landforms): nothing in every biome before, which stays every
+			// biome's default; a biome's own file names its own by preset (BiomeLandformPresets) with Landforms.
+
+			private BiomeLandform[] landforms;
+
+			/// <summary>Gives the biome its sculpted landforms, each a preset (BiomeLandformPresets.Named, tuned with Painted/AtDensity/Capped) or made by hand.</summary>
+			public Entry Landforms(params BiomeLandform[] forms)
+			{
+				landforms = forms ?? Array.Empty<BiomeLandform>();
+				return this;
+			}
+
+			/// <summary>Gives the biome its sculpted landforms by preset name, as the presets give them (a name no preset answers carves nothing and is reported by the authoring).</summary>
+			public Entry Landforms(params string[] presets)
+			{
+				var forms = new BiomeLandform[presets?.Length ?? 0];
+				for (int i = 0; i < forms.Length; i++)
+				{
+					forms[i] = BiomeLandformPresets.Named(presets[i]);
+				}
+				return Landforms(forms);
+			}
+
+			/// <summary>The landforms the biome's ground is carved with (<see cref="BiomeTemplate.Landforms"/>): the file's own, else none. A fresh list.</summary>
+			public List<BiomeLandform> LandformList() => landforms != null ? new List<BiomeLandform>(landforms) : BiomeLandforms.None();
+
+			// ── Linear features (2026-10-18, I2f) ──
+			//
+			// The biome's hedges, walls, fences, tree rows, channels and clearance rows (BiomeTemplate.LinearFeatures): none in every
+			// biome before, which stays every biome's default; a biome's own file names its own with Lines.
+
+			/// <summary>
+			/// One linear-feature style as a biome's file names it (<see cref="Lines"/>): the template's <see cref="BiomeLinearStyle"/>
+			/// with its plants by species name (a hedge's bushes as the spec's Bush names them, "Hawthorn"; a row's trees and a hedge's
+			/// standards as its tree species, "Oak"), resolved to the generated prefabs by the authoring.
+			/// </summary>
+			public sealed class Line
+			{
+				public BiomeLinearStyle Style;
+				/// <summary>A hedge's bushes (bush species) or a row's trees (tree species).</summary>
+				public string[] Species = Array.Empty<string>();
+				/// <summary>A hedge's standard trees (tree species).</summary>
+				public string[] Standards = Array.Empty<string>();
+
+				public Line(BiomeLinearForm form, BiomeLinearPlace where, params string[] species)
+				{
+					Style = new BiomeLinearStyle(form, where);
+					Species = species ?? Array.Empty<string>();
+				}
+
+				/// <summary>The prefab name a species is generated under for this line: a hedge's bushes are bush details, everything else trees.</summary>
+				public string PrefabOf(string species, bool standard)
+				{
+					if (string.IsNullOrEmpty(species) || species.StartsWith("Detail_", StringComparison.Ordinal) || species.StartsWith("Tree_", StringComparison.Ordinal))
+					{
+						return species;
+					}
+					return !standard && Style.Kind == BiomeLinearKind.Hedge ? ProceduralArtCatalogue.BushPrefab(species) : ProceduralArtCatalogue.TreePrefab(species);
+				}
+			}
+
+			private Line[] linearLines;
+
+			/// <summary>Gives the biome its linear features (<see cref="Line"/>), in the order a field's edge is offered them.</summary>
+			public Entry Lines(params Line[] styles)
+			{
+				linearLines = styles ?? Array.Empty<Line>();
+				return this;
+			}
+
+			/// <summary>The biome's linear features as its file names them (<see cref="Lines"/>), else none. The lines themselves (not copies).</summary>
+			public IReadOnlyList<Line> LinearLines() => linearLines ?? Array.Empty<Line>();
+
+			/// <summary>
+			/// The biome's linear features (<see cref="BiomeTemplate.LinearFeatures"/>): the file's own with each species resolved by
+			/// <paramref name="prefab"/> (a name it cannot find is left out and added to <paramref name="missing"/>), else none. A fresh list.
+			/// </summary>
+			public List<BiomeLinearStyle> LinearFeatures(Func<string, GameObject> prefab, List<string> missing = null)
+			{
+				var list = BiomeLinearFeatures.None();
+				foreach (Line line in LinearLines())
+				{
+					if (line == null)
+					{
+						continue;
+					}
+					BiomeLinearStyle style = line.Style;
+					style.Species = ResolveLine(line, line.Species, false, prefab, missing);
+					style.Standards = ResolveLine(line, line.Standards, true, prefab, missing);
+					style.Vine ??= string.Empty;
+					list.Add(style);
+				}
+				return list;
+			}
+
+			private static List<GameObject> ResolveLine(Line line, string[] names, bool standard, Func<string, GameObject> prefab, List<string> missing)
+			{
+				var found = new List<GameObject>();
+				foreach (string name in names ?? Array.Empty<string>())
+				{
+					string path = line.PrefabOf(name, standard);
+					GameObject p = prefab != null && !string.IsNullOrEmpty(path) ? prefab(path) : null;
+					if (p != null)
+					{
+						found.Add(p);
+					}
+					else if (!string.IsNullOrEmpty(path))
+					{
+						missing?.Add(path);
+					}
+				}
+				return found;
 			}
 
 			/// <summary>
@@ -781,10 +1237,67 @@ namespace FishMMO.Shared.WorldDesign
 				return this;
 			}
 
+			/// <summary>
+			/// Which of the biome's ways are raised boardwalks (<see cref="BiomeTemplate.Boardwalks"/>, 2026-10-18, I2i): none unless
+			/// the biome's file says otherwise (<see cref="RaisesBoardwalks"/>), as no way was a boardwalk before.
+			/// </summary>
+			public BiomeBoardwalks Boardwalks = BiomeBoardwalks.None;
+
+			/// <summary>Raises the biome's roads, paths and/or settlement streets as boardwalks (<see cref="Boardwalks"/>).</summary>
+			public Entry RaisesBoardwalks(BiomeBoardwalks ways)
+			{
+				Boardwalks = ways;
+				return this;
+			}
+
 			/// <summary>Gives a kind its own weight here in place of the catalogue's (0: never sited here).</summary>
 			public Entry Hosts(POIType kind, float weight)
 			{
 				(hosts ??= new List<(POIType, float)>()).Add((kind, weight));
+				return this;
+			}
+
+			private Dictionary<POIType, bool> breathes;
+
+			/// <summary>
+			/// Says whether a kind needs breathable air here (<see cref="BiomeSiteKind.NeedsBreathableAir"/>, decision 39, 2026-10-18)
+			/// in place of BiomeSiteAir's default: <c>.Air(POIType.Hermitage, false)</c> for a dead hermit's hearth that stands on an
+			/// airless moon, <c>.Air(POIType.Ruins, true)</c> for ruins that are somebody's home.
+			/// </summary>
+			public Entry Air(POIType kind, bool needsBreathableAir)
+			{
+				(breathes ??= new Dictionary<POIType, bool>())[kind] = needsBreathableAir;
+				return this;
+			}
+
+			/// <summary>True when a kind needs breathable air here: the file's own word, else BiomeSiteAir's default.</summary>
+			public bool NeedsAir(POIType kind) => breathes != null && breathes.TryGetValue(kind, out bool needs) ? needs : BiomeSiteAir.NeedsAirByDefault(kind);
+
+			/// <summary>
+			/// Adds a cliff layer after the first (a cliff of another air: <c>.AddCliff(C(Ground.X, 34f).Air(BiomeAtmosphereRequirement.Thin))</c>
+			/// beside a first cliff banded Airless). Authored into slot <c>cliff/k</c> as the first is.
+			/// </summary>
+			public Entry AddCliff(Cliff cliff)
+			{
+				if (cliff != null)
+				{
+					var cliffs = new List<Cliff>(Cliffs ?? new Cliff[0]) { cliff };
+					Cliffs = cliffs.ToArray();
+				}
+				return this;
+			}
+
+			/// <summary>
+			/// What the ground gives the air, when the file says (<see cref="BiomeTemplate.Emits"/> and <see cref="BiomeTemplate.EmissionRate"/>):
+			/// the substance's asset name (null: nothing) and its rate. Unset (the default) leaves the template's, as the weather
+			/// content generator first wrote it. Set through <see cref="Emits"/>.
+			/// </summary>
+			public (string Substance, float Rate)? Emission;
+
+			/// <summary>Rewrites what the ground emits (null substance: nothing), once over the template's original, then hand edits kept.</summary>
+			public Entry Emits(string substance, float rate = 0f)
+			{
+				Emission = (string.IsNullOrEmpty(substance) ? null : substance, string.IsNullOrEmpty(substance) ? 0f : Mathf.Clamp01(rate));
 				return this;
 			}
 
@@ -813,7 +1326,8 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					if (pair.Value > 0f)
 					{
-						list.Add(new BiomeSiteKind((POIType)pair.Key, pair.Value));
+						// Lived-in kinds need breathable air (decision 39): the file's word, else BiomeSiteAir's default.
+						list.Add(new BiomeSiteKind((POIType)pair.Key, pair.Value, NeedsAir((POIType)pair.Key)));
 					}
 				}
 				return list;
@@ -936,6 +1450,149 @@ namespace FishMMO.Shared.WorldDesign
 			public BiomeFieldSurface FieldSurface(string prefab)
 				=> cropSurfaces != null && prefab != null && cropSurfaces.TryGetValue(prefab, out BiomeFieldSurface surface) ? surface : BiomeFieldSurface.Flat;
 
+			// ── Terraces, rows, orchards and the fields' layout (2026-10-18, I2j-b) ──
+
+			private Dictionary<string, BiomeTerraceRiser> cropRisers;
+			private Dictionary<string, float> cropRows;
+			private Orchard[] orchards;
+			private BiomeFieldLayout fieldLayout;
+			private BiomeAbandonedTerraces oldTerraces = BiomeAbandonedTerraces.None;
+			private BiomeChannelMargin wetMargin = BiomeChannelMargin.None;
+
+			/// <summary>
+			/// Faces the steps of a crop's terraced fields (<see cref="BiomeFieldCrop.Riser"/>): drystone, an earth bund or a grass bank. A
+			/// Flat or Paddy crop given a riser is terraced on slopes (terraced paddies); a <see cref="BiomeFieldSurface.Terraced"/> crop
+			/// given none is drystone.
+			/// </summary>
+			public Entry CropRiser(string prefab, BiomeTerraceRiser riser)
+			{
+				(cropRisers ??= new Dictionary<string, BiomeTerraceRiser>(StringComparer.Ordinal))[prefab ?? string.Empty] = riser;
+				return this;
+			}
+
+			/// <summary>How a crop's terraced fields' steps are faced (<see cref="CropRiser"/>); none unless its file says.</summary>
+			public BiomeTerraceRiser FieldRiser(string prefab)
+				=> cropRisers != null && prefab != null && cropRisers.TryGetValue(prefab, out BiomeTerraceRiser riser) ? riser : BiomeTerraceRiser.None;
+
+			/// <summary>Sows a crop (a vine, tea, an enset garden, cabbages) in rows <paramref name="metres"/> apart (<see cref="BiomeFieldCrop.Rows"/>).</summary>
+			public Entry CropRows(string prefab, float metres)
+			{
+				(cropRows ??= new Dictionary<string, float>(StringComparer.Ordinal))[prefab ?? string.Empty] = metres;
+				return this;
+			}
+
+			/// <summary>How far apart a crop's rows are sown (<see cref="CropRows"/>); 0 (edge to edge) unless its file says.</summary>
+			public float FieldRows(string prefab) => cropRows != null && prefab != null && cropRows.TryGetValue(prefab, out float rows) ? rows : 0f;
+
+			/// <summary>One orchard as a biome's file names it (<see cref="BiomeOrchard"/>): a tree species, its weight against the crops, its spacing, its understorey and ground.</summary>
+			public sealed class Orchard
+			{
+				/// <summary>The tree: a species name (Olive → Tree_Olive) or a prefab name.</summary>
+				public string Tree;
+				public float Weight;
+				/// <summary>Metres between trees; 0 the default (6).</summary>
+				public float Spacing;
+				/// <summary>The detail prefab sown under the trees (Detail_…), or null to leave the meadow.</summary>
+				public string Understorey;
+				public BiomeFieldSurface Surface;
+				public BiomeTerraceRiser Riser;
+
+				public Orchard(string tree, float weight, float spacing = 0f, string understorey = null, BiomeFieldSurface surface = BiomeFieldSurface.Flat,
+					BiomeTerraceRiser riser = BiomeTerraceRiser.None)
+				{
+					Tree = tree;
+					Weight = weight;
+					Spacing = spacing;
+					Understorey = understorey;
+					Surface = surface;
+					Riser = riser;
+				}
+
+				/// <summary>The prefab name the tree is generated under (a species name becomes Tree_&lt;species&gt;).</summary>
+				public string TreePrefab => string.IsNullOrEmpty(Tree) || Tree.StartsWith("Tree_", StringComparison.Ordinal) ? Tree : ProceduralArtCatalogue.TreePrefab(Tree);
+			}
+
+			/// <summary>Plants the biome's fields as orchards too (<see cref="Orchard"/>), each drawn against the crops by its weight.</summary>
+			public Entry Orchards(params Orchard[] planted)
+			{
+				orchards = planted ?? Array.Empty<Orchard>();
+				return this;
+			}
+
+			/// <summary>The biome's orchards as its file names them, else none.</summary>
+			public IReadOnlyList<Orchard> OrchardEntries() => orchards ?? Array.Empty<Orchard>();
+
+			/// <summary>
+			/// The biome's orchards (<see cref="BiomeTemplate.Orchards"/>): the file's own, each tree and understorey resolved by
+			/// <paramref name="prefab"/> (an orchard whose tree cannot be found is left out and named in <paramref name="missing"/>; an
+			/// understorey that cannot is dropped and named), else none. A fresh list.
+			/// </summary>
+			public List<BiomeOrchard> FieldOrchards(Func<string, GameObject> prefab, List<string> missing = null)
+			{
+				var list = BiomeOrchards.None();
+				foreach (Orchard orchard in OrchardEntries())
+				{
+					if (orchard == null)
+					{
+						continue;
+					}
+					GameObject tree = prefab != null && !string.IsNullOrEmpty(orchard.TreePrefab) ? prefab(orchard.TreePrefab) : null;
+					if (tree == null)
+					{
+						missing?.Add(orchard.TreePrefab ?? "<no tree>");
+						continue;
+					}
+					GameObject under = null;
+					if (!string.IsNullOrEmpty(orchard.Understorey))
+					{
+						under = prefab(orchard.Understorey);
+						if (under == null)
+						{
+							missing?.Add(orchard.Understorey);
+						}
+					}
+					list.Add(new BiomeOrchard(tree, orchard.Weight, orchard.Spacing, under, orchard.Surface, orchard.Riser));
+				}
+				return list;
+			}
+
+			/// <summary>Keeps the biome's fields within <paramref name="metres"/> of a river or lake where the ground allows (<see cref="BiomeFieldLayout.Bottomland"/>).</summary>
+			public Entry FieldsNearRivers(float metres)
+			{
+				fieldLayout.Bottomland = Mathf.Max(0f, metres);
+				return this;
+			}
+
+			/// <summary>Sets the biome's fields square to a centuriation grid <paramref name="metres"/> a side (<see cref="BiomeFieldLayout.Centuriation"/>; the Roman 710 m).</summary>
+			public Entry Centuriation(float metres = 710f)
+			{
+				fieldLayout.Centuriation = Mathf.Max(0f, metres);
+				return this;
+			}
+
+			/// <summary>How the biome's fields are laid out (<see cref="BiomeTemplate.FieldLayout"/>): anywhere, as drawn, unless its file says.</summary>
+			public BiomeFieldLayout FieldLayout() => fieldLayout;
+
+			/// <summary>Cuts flights of old terraces into the slopes round the biome's settlements (<see cref="BiomeAbandonedTerraces"/>).</summary>
+			public Entry AbandonedTerraces(int flights, BiomeTerraceRiser riser = BiomeTerraceRiser.Drystone, float slopeMin = 8f, float slopeMax = 25f, float breaks = 0.5f)
+			{
+				oldTerraces = new BiomeAbandonedTerraces(flights, riser, slopeMin, slopeMax, breaks);
+				return this;
+			}
+
+			/// <summary>The old terraces round the biome's settlements (<see cref="BiomeTemplate.AbandonedTerraces"/>): none unless its file says.</summary>
+			public BiomeAbandonedTerraces OldTerraces() => oldTerraces;
+
+			/// <summary>Paints the biome's detail ground layer <paramref name="detailLayer"/> (d0 = 0) along its water channels, <paramref name="width"/> metres out (<see cref="BiomeChannelMargin"/>).</summary>
+			public Entry ChannelMargin(int detailLayer, float width = 3f)
+			{
+				wetMargin = new BiomeChannelMargin(detailLayer, width);
+				return this;
+			}
+
+			/// <summary>The ground the biome paints along its channels (<see cref="BiomeTemplate.ChannelMargin"/>): none unless its file says.</summary>
+			public BiomeChannelMargin WetMargin() => wetMargin;
+
 			/// <summary>Lights a kind of settlement's streets with its own light here, every <paramref name="spacing"/> metres.</summary>
 			public Entry Lights(POIType kind, BiomeWayLightKind light, float spacing)
 			{
@@ -955,9 +1612,16 @@ namespace FishMMO.Shared.WorldDesign
 			/// biome lit them with before (<see cref="BiomeWayLights.Default"/>: lanterns in towns, cities, capitals and ports,
 			/// torches in villages) with the file's own <see cref="Lights"/> and <see cref="Unlit"/> laid over it. A fresh list.
 			/// </summary>
-			public List<BiomeWayLight> WayLights()
+			public List<BiomeWayLight> WayLights() => WayLights(false);
+
+			/// <summary>
+			/// <see cref="WayLights()"/> for a biome whose template admits only worlds of thin air or none (<paramref name="glowOnly"/>,
+			/// BiomeAir.OnlyThinAir, decision 41, 2026-10-18): the same places and spacing with the cold Glow lights in place of every
+			/// flame (BiomeGlowLights.WayLights), the file's own lights laid over them. False: exactly <see cref="WayLights()"/>.
+			/// </summary>
+			public List<BiomeWayLight> WayLights(bool glowOnly)
 			{
-				List<BiomeWayLight> list = BiomeWayLights.Default();
+				List<BiomeWayLight> list = glowOnly ? BiomeGlowLights.WayLights() : BiomeWayLights.Default();
 				if (lights != null)
 				{
 					foreach ((POIType kind, BiomeWayLightKind? light, float spacing) in lights)
@@ -1004,9 +1668,15 @@ namespace FishMMO.Shared.WorldDesign
 			/// dressing laid in every biome before (<see cref="BiomeCaveLights.Default"/>) with the file's own
 			/// <see cref="CaveLight"/> and <see cref="Unlit(BiomeCaveLightPlace)"/> laid over it. A fresh list.
 			/// </summary>
-			public List<BiomeCaveLight> CaveLights()
+			public List<BiomeCaveLight> CaveLights() => CaveLights(false);
+
+			/// <summary>
+			/// <see cref="CaveLights()"/> for a biome found only under thin air or none (<paramref name="glowOnly"/>, decision 41): crystal
+			/// posts and glowjars in place of the lanterns and torches (BiomeGlowLights.CaveLights), the file's own laid over them.
+			/// </summary>
+			public List<BiomeCaveLight> CaveLights(bool glowOnly)
 			{
-				List<BiomeCaveLight> list = BiomeCaveLights.Default();
+				List<BiomeCaveLight> list = glowOnly ? BiomeGlowLights.CaveLights() : BiomeCaveLights.Default();
 				if (caveLights != null)
 				{
 					foreach ((BiomeCaveLightPlace place, BiomeWayLightKind? light, float spacing) in caveLights)
@@ -1032,19 +1702,24 @@ namespace FishMMO.Shared.WorldDesign
 				return list;
 			}
 
-			/// <summary>Gives one part of one style's buildings its own material here (tint: the kit's for the material unless given).</summary>
-			public Entry Builds(BiomeStructureStyle style, BiomeStructureRole role, BiomeStructureMaterial material, Color? tint = null, string surface = null)
+			/// <summary>
+			/// Gives one part of one style's buildings its own material here (tint: the kit's for the material unless given); for a
+			/// roof role, the pitch its roofs are built at too (2026-10-18, I6h; default the material's own, StructureRoofs).
+			/// </summary>
+			public Entry Builds(BiomeStructureStyle style, BiomeStructureRole role, BiomeStructureMaterial material, Color? tint = null, string surface = null,
+				BiomeRoofPitch pitch = BiomeRoofPitch.Material)
 			{
-				(builds ??= new List<BiomeStructureSurface>()).Add(new BiomeStructureSurface(style, role, material, tint ?? BiomeStructurePalette.KitTint(material), surface));
+				(builds ??= new List<BiomeStructureSurface>()).Add(new BiomeStructureSurface(style, role, material, tint ?? BiomeStructurePalette.KitTint(material), surface, pitch));
 				return this;
 			}
 
 			/// <summary>Gives one part its own material here in every style's buildings (<see cref="Builds"/> for each style).</summary>
-			public Entry BuildsAll(BiomeStructureRole role, BiomeStructureMaterial material, Color? tint = null, string surface = null)
+			public Entry BuildsAll(BiomeStructureRole role, BiomeStructureMaterial material, Color? tint = null, string surface = null,
+				BiomeRoofPitch pitch = BiomeRoofPitch.Material)
 			{
 				foreach (BiomeStructureStyle style in BiomeStructurePalette.Styles)
 				{
-					Builds(style, role, material, tint, surface);
+					Builds(style, role, material, tint, surface, pitch);
 				}
 				return this;
 			}
@@ -1411,6 +2086,23 @@ namespace FishMMO.Shared.WorldDesign
 				r.Depth = new Vector2(shallowest, deepest);
 				r.AlignToNormal = lying;
 			});
+			return s;
+		}
+
+		/// <summary>
+		/// A bed rule grown under other waters than its slot's (decision 35, 2026-10-18): <c>In(BiomeBedWaters.Lake, Sea("Quillwort",
+		/// 4f, 1f, 6f))</c> on a lakebed grows quillwort under lakes (by depth below the lake's level), not under the sea.
+		/// </summary>
+		private static Scatter In(BiomeBedWaters waters, Scatter s)
+		{
+			s.Waters = waters;
+			return s;
+		}
+
+		/// <summary>A bed rule grown only where a river runs between <paramref name="speedMin"/> and <paramref name="speedMax"/> m/s (0 open).</summary>
+		private static Scatter Flowing(Scatter s, float speedMin, float speedMax = 0f)
+		{
+			s.Current = new Vector2(Mathf.Max(0f, speedMin), Mathf.Max(0f, speedMax));
 			return s;
 		}
 
@@ -1877,6 +2569,23 @@ namespace FishMMO.Shared.WorldDesign
 				r.Temperature = temperature;
 				r.Humidity = humidity;
 			});
+			return rule;
+		}
+
+		/// <summary>
+		/// Keeps a rule to some worlds (<see cref="PrefabSpawnRule.worldGate"/>, decision 41, 2026-10-18): their air
+		/// (<paramref name="air"/>, None any), their MEAN surface temperature on the climate's unclamped scale
+		/// (<paramref name="minTemperature"/> … <paramref name="maxTemperature"/>, infinite open) and what they are
+		/// (<paramref name="requires"/>, None any). One answer for a whole scene: <c>OnWorlds(Plants("Starwort", 1.5f), BiomeAtmosphereRequirement.Thin)</c>
+		/// grows the starwort only under a thin sky; <c>OnWorlds(rule, requires: BiomeWorldRequirement.GiantMagnetosphere)</c> only on
+		/// a giant planet's moons. Where a plant must also change ACROSS a scene (t ≥ −0.4 on its north slopes), give it a climate
+		/// band too (<see cref="Band"/>). Everything open writes the rule exactly as without this call.
+		/// </summary>
+		private static Scatter OnWorlds(Scatter rule, BiomeAtmosphereRequirement air = BiomeAtmosphereRequirement.None,
+			float minTemperature = float.NegativeInfinity, float maxTemperature = float.PositiveInfinity, BiomeWorldRequirement requires = BiomeWorldRequirement.None)
+		{
+			BiomeWorldGate gate = BiomeWorldGate.Of(air, minTemperature, maxTemperature, requires);
+			AndEarlier(rule, r => r.World = gate);
 			return rule;
 		}
 

@@ -238,9 +238,10 @@ namespace FishMMO.UnitTests.WorldDesign
 			[BiomeWayLightKind.WallLantern] = SceneEmitterKind.Lamp,
 			[BiomeWayLightKind.Cresset] = SceneEmitterKind.Fire,
 			[BiomeWayLightKind.CrookLantern] = SceneEmitterKind.Lamp,
-			[BiomeWayLightKind.Glowjar] = SceneEmitterKind.Lamp,
-			[BiomeWayLightKind.CrystalPost] = SceneEmitterKind.Crystal,
-			[BiomeWayLightKind.RuneStone] = SceneEmitterKind.Lamp,
+			// The cold glows (2026-10-18, I6g): faerie, crystal and rune light.
+			[BiomeWayLightKind.Glowjar] = SceneEmitterKind.Glow,
+			[BiomeWayLightKind.CrystalPost] = SceneEmitterKind.Glow,
+			[BiomeWayLightKind.RuneStone] = SceneEmitterKind.Glow,
 			[BiomeWayLightKind.HangingBracket] = SceneEmitterKind.Lamp,
 		};
 
@@ -284,9 +285,62 @@ namespace FishMMO.UnitTests.WorldDesign
 			// The new lights' looks: an iron fire basket, a lantern on a crook, a glowjar's mote, a crystal's cradle, glowing runes.
 			Assert.That(StructurePieces.Build(StructureKit.Get("Cresset"), 0, 0, Seed).Materials, Does.Contain(StructureMaterial.Iron).And.Member(StructureMaterial.Ash));
 			Assert.That(StructurePieces.Build(StructureKit.Get("CrookLantern"), 0, 0, Seed).Materials, Does.Contain(StructureMaterial.Timber).And.Member(StructureMaterial.Lamplight));
-			Assert.That(StructurePieces.Build(StructureKit.Get("Glowjar"), 0, 0, Seed).Materials, Does.Contain(StructureMaterial.Glass).And.Member(StructureMaterial.Lamplight));
-			Assert.That(StructurePieces.Build(StructureKit.Get("RuneStone"), 0, 0, Seed).Materials, Does.Contain(StructureMaterial.Monolith).And.Member(StructureMaterial.Lamplight));
+			Assert.That(StructurePieces.Build(StructureKit.Get("Glowjar"), 0, 0, Seed).Materials, Does.Contain(StructureMaterial.Glass).And.Member(StructureMaterial.Faelight));
+			Assert.That(StructurePieces.Build(StructureKit.Get("RuneStone"), 0, 0, Seed).Materials, Does.Contain(StructureMaterial.Monolith).And.Member(StructureMaterial.Runelight));
 			Assert.That(StructurePieces.Build(StructureKit.Get("HangingBracket"), 0, 0, Seed).Materials, Does.Contain(StructureMaterial.Iron).And.Member(StructureMaterial.Lamplight));
+		}
+
+		/// <summary>The lights before 2026-10-16 (the street lights and the cave kit's lamps): every kind past them is I6c's.</summary>
+		private const BiomeWayLightKind LastOldLight = BiomeWayLightKind.WallLantern;
+
+		[Test]
+		public void NewLights_JoinNoTemplateQuery_SoNoSitesPickMoves()
+		{
+			// A slot's piece is drawn by hash among its query's candidates: a new piece among them moves every pick the query makes.
+			// The new lights are laid by id only (=Cresset), so no query a template or the template specs make may name one.
+			var newLights = new HashSet<string>(((BiomeWayLightKind[])Enum.GetValues(typeof(BiomeWayLightKind)))
+				.Where(l => l > LastOldLight).Select(BiomeWayLights.PieceId), StringComparer.Ordinal);
+			Assert.That(newLights, Has.Count.EqualTo(6));
+			var queries = new SortedSet<string>(StringComparer.Ordinal);
+			foreach (System.Reflection.FieldInfo f in typeof(PointOfInterestTemplateSpecs).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
+			{
+				if (f.IsLiteral && f.FieldType == typeof(string))
+				{
+					queries.Add((string)f.GetRawConstantValue());
+				}
+			}
+			int fromAssets = 0;
+			foreach (string asset in Directory.GetFiles("Assets/Templates/World/PointsOfInterest", "*.asset", SearchOption.AllDirectories))
+			{
+				foreach (string line in File.ReadLines(asset))
+				{
+					string t = line.Trim();
+					if (t.StartsWith("- Tag: ", StringComparison.Ordinal) || t.StartsWith("Tag: ", StringComparison.Ordinal))
+					{
+						queries.Add(t.Substring(t.IndexOf(':') + 1).Trim());
+						fromAssets++;
+					}
+				}
+			}
+			Assert.That(fromAssets, Is.GreaterThan(100), "the templates' slots were read");
+			Assert.That(queries, Does.Contain("fire"));
+			foreach (string query in queries)
+			{
+				if (query.Length == 0 || query[0] == '=')
+				{
+					continue;
+				}
+				foreach (string style in new[] { null, "timber", "stone", "hide", "iron", "earth" })
+				{
+					foreach (StructurePiece p in StructureKitPieceSource.Candidates(query, style))
+					{
+						Assert.That(newLights.Contains(p.Id), Is.False, $"'{query}' ({style ?? "any style"}) now draws among {p.Id}");
+					}
+				}
+			}
+			// A camp's fire: the very pieces it drew among before (a cresset is no camp fire).
+			Assert.That(StructureKitPieceSource.Candidates("fire", null).Select(p => p.Id).OrderBy(id => id, StringComparer.Ordinal),
+				Is.EqualTo(new[] { "CampfireRing", "CharcoalClamp", "CookingTripod", "LimeKiln" }));
 		}
 
 		[Test]
@@ -300,14 +354,15 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(socket.y, Is.InRange(b.max.y - 0.45f, b.max.y), $"v{v}: the crystal sits in the cradle at the top");
 				Assert.That(Mathf.Abs(socket.x) + Mathf.Abs(socket.z), Is.LessThan(0.01f));
 				Assert.That(scale, Is.InRange(0.2f, 0.6f));
-				(Vector3 at, SceneEmitterKind kind) light = StructurePieces.EmittersOf(post, v).Single(e => e.kind == SceneEmitterKind.Crystal);
+				(Vector3 at, SceneEmitterKind kind) light = StructurePieces.EmittersOf(post, v).Single(e => e.kind == SceneEmitterKind.Glow);
 				Assert.That(light.at.y, Is.GreaterThan(socket.y), "its light is the crystal's");
 			}
 			Assert.That(StructurePieces.TryCrystalSocket(StructureKit.Get("LanternPost"), 0, out _, out _), Is.False, "only the crystal post holds one");
 			Assert.That(StructurePieces.TryCrystalSocket(post, post.Variants, out _, out _), Is.False);
 			string site = Code("PointsOfInterest/PointOfInterestSiteContext.cs");
 			Assert.That(site, Does.Contain("StructurePieces.TryCrystalSocket(piece, variant, out Vector3 socket, out float crystalScale)"), "every lay of a crystal post lays its crystal");
-			Assert.That(site, Does.Contain("CaveArt.EmitterSeed(seed, ProceduralArtCatalogue.CaveMineralOf(PostCrystal).LightHue)"), "its light takes the crystal's hue");
+			Assert.That(site, Does.Contain("CaveMineral postMineral = cradled ? ProceduralArtCatalogue.CaveMineralOf(PostCrystal) : default;")
+				.And.Contain("SceneGlow.WithCrystalHue(seed, cradled ? postMineral.LightHue : -1)"), "its glow takes the crystal's hue");
 			Assert.That(site, Does.Contain("BiomeTemplateArt.PostCrystal("), "the crystal is the site biome's");
 		}
 
@@ -391,7 +446,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(glow, Does.Contain("if (!TryCrystal(kind, hue, variant, out CaveGlowArt art))"));
 			string authoring = Code("ProceduralArt/BiomeArtAuthoring.cs");
 			Assert.That(authoring, Does.Contain("BiomeTemplate.Authored.CaveCrystals, biome.CaveCrystals, entry.CaveCrystals()"));
-			Assert.That(authoring, Does.Contain("BiomeTemplate.Authored.CaveLights, biome.CaveLights, entry.CaveLights()"));
+			Assert.That(authoring, Does.Contain("BiomeTemplate.Authored.CaveLights, biome.CaveLights, entry.CaveLights(glowOnly)"));
 			string props = Code("PointsOfInterest/PropsFeature.cs");
 			Assert.That(props, Does.Contain("BiomeWayLights.MountOf(light.Light) == BiomeWayLightMount.Ground"), "a street light stands on the ground");
 		}

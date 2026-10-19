@@ -95,6 +95,12 @@ namespace FishMMO.Shared.Biomes
 		[Range(0f, 1f)] public float HeadShare = 1f;
 		[Tooltip("A strap that keeps its width to a rounded end (a reed's leaf) instead of tapering to a point.")]
 		public bool BluntTip;
+		/// <remarks>
+		/// Decision 41 (2026-10-18, the Cryovolcanic Plain round): mineral blades (hoar-frost needles, salt quills) stand as they grew
+		/// and never sway, whatever the wind and the world's air (the blade shader reads it per type, GrassBladeRenderer's MORE row).
+		/// </remarks>
+		[Tooltip("Never sways: a mineral blade (ice needles, salt quills) stands as it grew whatever the wind. Off: sways with the wind and the world's air, as every blade did.")]
+		public bool Rigid;
 
 		[Header("Colours (sRGB)")]
 		[Tooltip("The blade's colour at the root. Used where the prototype mesh gives no colours, or always when Colours Over Mesh is ticked. Alpha 0: none (the built-in greens where the mesh gives none).")]
@@ -186,6 +192,13 @@ namespace FishMMO.Shared.Biomes
 			return this;
 		}
 
+		/// <summary>Never swaying (<see cref="Rigid"/>): a mineral blade.</summary>
+		public BiomeGrassType Rigidly()
+		{
+			Rigid = true;
+			return this;
+		}
+
 		/// <summary>True when <see cref="RootColour"/> and <see cref="TipColour"/> are colours (alpha above 0), not "none".</summary>
 		public bool HasBladeColours => RootColour.a > 0f && TipColour.a > 0f;
 
@@ -219,6 +232,11 @@ namespace FishMMO.Shared.Biomes
 				}
 			}
 			text.Append(HeadColoursOverMesh ? 'M' : 'm').Append("|g").Append(Q(GroundTint));
+			// Only a rigid look says so (2026-10-18), so every signature and mark made before reads the same.
+			if (Rigid)
+			{
+				text.Append("|R");
+			}
 			return text.ToString();
 		}
 
