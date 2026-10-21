@@ -61,6 +61,8 @@ namespace FishMMO.Shared.WorldDesign
 			public PointOfInterestFieldTerraces.Plan Terraces;
 			public float Rows;
 			public bool Mesh;
+			/// <summary>The share of its crop's coverage it is painted at (2026-10-19: a reaped field's stubble, PointOfInterestFarmsteads); 0 the whole crop.</summary>
+			public float Cover;
 		}
 
 		public bool Handles(PointOfInterestRecord record)
@@ -183,6 +185,8 @@ namespace FishMMO.Shared.WorldDesign
 
 			List<Terrain> terrains = TerrainsOf(context);
 			int crops = 0, carved = 0, paddies = 0, terraced = 0, orchards = 0, pieces = 0;
+			// Every field as laid, for the farmsteads and the dressing laid after them all (2026-10-19, PointOfInterestFarmsteads).
+			var laidFields = new List<PointOfInterestFarmsteads.LaidField>();
 			for (int f = 0; f < fields.Count; f++)
 			{
 				Field drawn = fields[f];
@@ -201,6 +205,11 @@ namespace FishMMO.Shared.WorldDesign
 				bool drawnFenced = !same && !WouldFlood(context, drawn, f);
 				bool flooded = false;
 				bool benched = false;
+				// What it is used for, for the farmsteads and the dressing (2026-10-19): a grain crop is found below as it is sown.
+				PointOfInterestFarmsteads.FieldUse use = field.Kind == FieldKind.Pasture ? PointOfInterestFarmsteads.FieldUse.Pasture
+					: field.Kind == FieldKind.Fallow ? PointOfInterestFarmsteads.FieldUse.Fallow
+					: field.Kind == FieldKind.Ploughed ? PointOfInterestFarmsteads.FieldUse.Ploughed : PointOfInterestFarmsteads.FieldUse.Crop;
+				bool reaped = false, inOrchard = false;
 				if (field.Kind == FieldKind.Wheat || field.Kind == FieldKind.Ploughed)
 				{
 					// The crop is one of the biome's its field lies in, and takes that biome's look (2026-10-16).
@@ -259,6 +268,15 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					field.Rows = orchard.HasValue ? 0f : picked.Rows;
 					field.Mesh = crop != null && !BiomeGrassDefaults.IsBlade(crop.name);
+					/* A grain crop the blades draw is reaped in some fields (2026-10-19: "fenced areas but they aren't really farm land"):
+					 * painted as its stubble, a share of the crop, and stood in stooks after every field (PointOfInterestFarmsteads.Dress),
+					 * by a hash of its own, so nothing else changes. */
+					if (field.Kind == FieldKind.Wheat && crop != null && !field.Mesh && !orchard.HasValue && !flooded && !benched)
+					{
+						use = PointOfInterestFarmsteads.FieldUse.Grain;
+						reaped = PointOfInterestFarmsteads.Reaped(record.SiteSeed, f);
+						field.Cover = reaped ? PointOfInterestFarmsteads.StubbleCover : 0f;
+					}
 					if (!orchard.HasValue || crop != null)
 					{
 						PaintDetails(terrains, field, crop, biome, surface);
@@ -272,6 +290,7 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						pieces += PointOfInterestFieldKinds.LayOrchard(context, biome, orchard.Value, field.Centre, field.Yaw, field.Size, field.Terraces, record.SiteSeed, f, Headland);
 						orchards++;
+						inOrchard = true;
 					}
 					crops++;
 				}
@@ -298,6 +317,7 @@ namespace FishMMO.Shared.WorldDesign
 					bool lined = PointOfInterestLinearFeatures.LayFieldEdges(context, field.Centre, field.Yaw, field.Size, site, abandoned, f);
 					Fence(context, field, site, abandoned, same ? context.Random : new DeterministicRNG(unchecked((int)PointOfInterestPlanner.Hash(record.SiteSeed, 0x46454E, f, 0))), dry: lined);
 				}
+				laidFields.Add(new PointOfInterestFarmsteads.LaidField { Centre = field.Centre, Yaw = field.Yaw, Size = field.Size, Use = use, Reaped = reaped, Index = f, Orchard = inOrchard });
 			}
 			/* The old terraces round a hamlet (2026-10-18, I2j-b): flights of benches on the slopes about it, carved as a terraced field's,
 			 * nothing sown, their walls tumbled; on draws of their own after every field, so the fields lie as before. */
@@ -311,6 +331,12 @@ namespace FishMMO.Shared.WorldDesign
 				(pieces > 0 ? $", {pieces} wall, tree and edging piece(s)" : string.Empty) +
 				(left + shrunk > 0 ? $", {shrunk} shrunk and {left} left out off another site's fields" : string.Empty) +
 				(carved > 0 ? $", ridge and furrow, terraces or paddy bunds carved into {carved:N0} heightmap sample(s)." : "."));
+			/* Worked farmland (2026-10-19, PointOfInterestFarmsteads): stooks on the reaped corn, ricks, scarecrows and troughs, then the
+			 * farmsteads beside the fields, each on draws of its own after everything above, so the fields, fences and terraces lie as
+			 * they did; then the outskirts' lone holdings, wayside crosses, gallows and cemetery (PointOfInterestOutskirts), after those. */
+			PointOfInterestFarmsteads.Dress(context, laidFields, abandoned);
+			PointOfInterestFarmsteads.Lay(context, laidFields);
+			PointOfInterestOutskirts.Lay(context, laidFields);
 		}
 
 		/// <summary>
@@ -697,6 +723,11 @@ namespace FishMMO.Shared.WorldDesign
 								float share = sown ? CropShare(surface, field.Size, u, v, texel, field.Rows, field.Terraces, world) : 0f;
 								value = Mathf.Clamp(Mathf.RoundToInt(WheatCoverage * share * unit), 0, maxValue);
 							}
+							// A reaped field's stubble (2026-10-19): a share of the standing crop.
+							if (field.Cover > 0f && field.Cover < 1f)
+							{
+								value = Mathf.RoundToInt(value * field.Cover);
+							}
 							if (map[j, i] != value)
 							{
 								map[j, i] = value;
@@ -982,6 +1013,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// from <paramref name="random"/>. <paramref name="dry"/> makes every draw and lays nothing: a field left out or shrunk off
 		/// another site's keeps the site's sequence where it was for the fences after it (2026-10-18).
 		/// </summary>
+		/// <remarks>
+		/// Joined up (2026-10-19: "fences aren't fully connecting in some cases"; PointOfInterestLinearFeatures.Joins): each module is laid
+		/// between its two ends on the ground, pitched to the chord (it was laid level at its middle's ground, so on a slope its rails
+		/// stepped at every post), round the field the same way so each corner takes exactly one module's post (one corner had none, the
+		/// opposite two), a closing post wherever a run stops with no post (a module left in the water, a break, the gate's sides when
+		/// it cannot stand), and the field gateway in the gate's gap, swung into the field. The draws are as they were, module by module.
+		/// </remarks>
 		private static void Fence(PointOfInterestSiteContext context, Field field, Vector2 site, bool broken, DeterministicRNG random, bool dry = false)
 		{
 			GameObject[] prefabs =
@@ -1017,30 +1055,47 @@ namespace FishMMO.Shared.WorldDesign
 					gateSide = s;
 				}
 			}
+			var joins = dry ? null : new PointOfInterestLinearFeatures.Joins();
+			GameObject gatePiece = dry ? null : StructureKit.Prefab("LinearGate", 0);
 			for (int s = 0; s < 4; s++)
 			{
-				(Vector2 middle, Vector2 along, float length, Vector2 _) = sides[s];
+				(Vector2 middle, Vector2 along, float length, Vector2 outward) = sides[s];
 				int count = Mathf.Max(1, Mathf.RoundToInt(length / module));
 				float step = length / count;
 				int gate = s == gateSide ? count / 2 : -1;
-				float yaw = Mathf.Atan2(along.y, -along.x) * Mathf.Rad2Deg + 180f;
+				// Laid round the field with the field on the left (its outward normal on the right), whichever way the draws count.
+				Vector2 round = Vector2.Dot(PointOfInterestLinearFeatures.Left(outward), along) > 0f ? along : -along;
 				for (int k = 0; k < count; k++)
 				{
-					if (k == gate || broken && random.NextDouble() < 0.35)
+					Vector2 p = middle + along * ((k + 0.5f) * step - length * 0.5f);
+					Vector2 a = p - round * (step * 0.5f), b = p + round * (step * 0.5f);
+					if (k == gate)
+					{
+						// The gateway in its gap, as wide as the gap; no draw, as before.
+						if (joins != null && gatePiece != null && !context.IsWet(p.x, p.y, 0f))
+						{
+							joins.Gate(context, context.Palette, gatePiece, PointOfInterestLinearFeatures.Joint(context, a), PointOfInterestLinearFeatures.Joint(context, b),
+								StructurePieces.GateModule);
+						}
+						continue;
+					}
+					if (broken && random.NextDouble() < 0.35)
 					{
 						continue;
 					}
-					Vector2 p = middle + along * ((k + 0.5f) * step - length * 0.5f);
-					GameObject prefab = prefabs[random.NextDouble() < 0.5 || prefabs[1] == null ? 0 : 1] ?? prefabs[1];
+					int variant = random.NextDouble() < 0.5 || prefabs[1] == null ? 0 : 1;
+					GameObject prefab = prefabs[variant] ?? prefabs[1];
 					float tilt = broken ? (float)(random.NextDouble() - 0.5) * 20f : 0f;
 					// After the draws, so a module left out of the water moves none of the others.
 					if (dry || context.IsWet(p.x, p.y, 0f))
 					{
 						continue;
 					}
-					context.AddProp(prefab, new Vector3(p.x, context.GroundAt(p.x, p.y), p.y), Quaternion.Euler(0f, yaw, tilt), new Vector3(step / module, 1f, 1f));
+					joins.Module(context, context.Palette, prefab, "FieldFence", variant, PointOfInterestLinearFeatures.Joint(context, a), PointOfInterestLinearFeatures.Joint(context, b),
+						module, 0f, 1f, tilt);
 				}
 			}
+			joins?.Close();
 		}
 	}
 }

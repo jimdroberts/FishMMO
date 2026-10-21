@@ -234,6 +234,11 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				built.Add(feature);
 			}
+			// A door down into the dark is a dungeon's way in, whatever the site (2026-10-20: a crypt's stood as scenery).
+			if (LaysDungeonDoor(spec) && !built.Exists(f => f is DungeonEntranceFeature))
+			{
+				built.Add(new DungeonEntranceFeature());
+			}
 			ReserveGameplaySpots(spec, built);
 			if (!spec.InChamber)
 			{
@@ -241,6 +246,20 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			site.Add(new PointOfInterestChamberFeature { Features = built });
 			return site;
+		}
+
+		/// <summary>Whether the spec lays a door with a stair down behind it (the dungeon doors, the crypt's): a dungeon's way in.</summary>
+		public static bool LaysDungeonDoor(PointOfInterestTemplateSpec spec)
+		{
+			foreach (PointOfInterestPieceSlot slot in spec.Pieces)
+			{
+				if (slot.MaxCount > 0 && (slot.Tag == PointOfInterestTemplateSpecs.CryptDoor
+					|| slot.Tag == PointOfInterestTemplateSpecs.DungeonPortal || slot.Tag == PointOfInterestTemplateSpecs.DungeonBarrow))
+				{
+					return true;
+				}
+			}
+			return false;
 		}
 
 		/// <summary>What the features at a size are, for telling sizes apart: each one's type and serialized fields.</summary>

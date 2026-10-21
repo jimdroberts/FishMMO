@@ -70,20 +70,74 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		[Test]
-		public void AJunctionTakesTheNearerEdge()
+		public void AJunctionTakesTheNearerEdgeAndBlendsTheWaysNearIt()
 		{
 			ScenePath road = Line(new Vector3(-40f, 0f, 0f), new Vector3(40f, 0f, 0f), 2.4f, ScenePathClass.Road);
 			ScenePath trail = Line(new Vector3(1.8f, 0f, -30f), new Vector3(1.8f, 0f, 30f), 0.4f, ScenePathClass.Trail);
 			trail.Id = 2;
 			ScenePathField field = ScenePathField.Build(new[] { road, trail });
-			// 1 m off the road's centre (1.4 m inside its edge) and on the trail's centre (0.4 m inside its): the road's.
-			Assert.That(field.Sample(1.8f, 1f, out float edge, out float half, out _, out _), Is.True);
-			Assert.That(edge, Is.EqualTo(-1.4f).Within(0.08f));
+			// On the road's centre (2.4 m inside its edge, 2 m deeper than the trail's): the road's alone.
+			Assert.That(field.Sample(1.8f, 0f, out float edge, out float half, out _, out float surface), Is.True);
+			// (The centre line's crease, read between texels a quarter metre either side of it.)
+			Assert.That(edge, Is.EqualTo(-2.15f).Within(0.08f));
 			Assert.That(half, Is.EqualTo(2.4f).Within(0.05f));
+			Assert.That(surface, Is.EqualTo(ScenePathStyle.SurfaceCode(ScenePathStyle.For(ScenePathClass.Road).Surface)).Within(0.01f));
+			// 1 m off it (1.4 m inside the road's edge, 0.4 m inside the trail's): the nearer edge, mostly the road, some trail.
+			Assert.That(field.Sample(1.8f, 1f, out edge, out half, out _, out _), Is.True);
+			Assert.That(edge, Is.EqualTo(-1.4f).Within(0.08f));
+			Assert.That(half, Is.GreaterThan(1.9f).And.LessThan(2.35f), "the trail blends in at the road's margin");
 			// Off the road, the trail's own.
-			Assert.That(field.Sample(1.8f, 12f, out edge, out half, out _, out _), Is.True);
+			Assert.That(field.Sample(1.8f, 12f, out edge, out half, out _, out surface), Is.True);
 			Assert.That(half, Is.EqualTo(0.4f).Within(0.05f));
 			Assert.That(edge, Is.EqualTo(-0.4f).Within(0.08f));
+			Assert.That(surface, Is.EqualTo(ScenePathStyle.SurfaceCode(ScenePathStyle.For(ScenePathClass.Trail).Surface)).Within(0.01f));
+		}
+
+		[Test]
+		public void WaysMeetingBlendAcrossTheirSeamRatherThanSwitchingAtIt()
+		{
+			// Two ways of one width side by side, a gravel road and a stone street, 3 m apart: the seam runs down z = 0.
+			ScenePath road = Line(new Vector3(-40f, 0f, -1.5f), new Vector3(40f, 0f, -1.5f), 1.5f, ScenePathClass.Road);
+			ScenePath street = Line(new Vector3(-40f, 0f, 1.5f), new Vector3(40f, 0f, 1.5f), 1.5f, ScenePathClass.Street);
+			street.Id = 2;
+			for (int i = 0; i < street.Count; i++)
+			{
+				street.Wear[i] = 0.2f;
+			}
+			ScenePathField field = ScenePathField.Build(new[] { road, street });
+			float gravel = ScenePathStyle.SurfaceCode(ScenePathSurface.Gravel), stone = ScenePathStyle.SurfaceCode(ScenePathSurface.Stone);
+			// Even on the seam.
+			Assert.That(field.Sample(5.1f, 0f, out _, out _, out float wear, out float surface), Is.True);
+			Assert.That(surface, Is.EqualTo((gravel + stone) / 2f).Within(0.02f));
+			Assert.That(wear, Is.EqualTo(0.5f).Within(0.02f));
+			// No step anywhere across it: a quarter metre at a time, nothing jumps.
+			float last = -1f;
+			for (float z = -2f; z <= 2f; z += 0.25f)
+			{
+				Assert.That(field.Sample(5.1f, z, out _, out _, out _, out surface), Is.True);
+				Assert.That(surface, Is.InRange(gravel - 0.01f, stone + 0.01f), "a blend of the two, never another surface");
+				if (last >= 0f)
+				{
+					Assert.That(Mathf.Abs(surface - last), Is.LessThan((stone - gravel) * 0.3f), $"a step at z = {z}");
+				}
+				last = surface;
+			}
+			// Each its own past the blend.
+			Assert.That(field.Sample(5.1f, -2.5f, out _, out _, out _, out surface), Is.True);
+			Assert.That(surface, Is.EqualTo(gravel).Within(0.01f));
+			Assert.That(field.Sample(5.1f, 2.5f, out _, out _, out _, out surface), Is.True);
+			Assert.That(surface, Is.EqualTo(stone).Within(0.01f));
+		}
+
+		[Test]
+		public void EarthAndGravelBlendWithoutPassingThroughATrack()
+		{
+			// The track's ruts and median would show wherever a blend's code passed it: it is coded past the earth's end.
+			float track = ScenePathStyle.SurfaceCode(ScenePathSurface.Track), earth = ScenePathStyle.SurfaceCode(ScenePathSurface.Earth);
+			float gravel = ScenePathStyle.SurfaceCode(ScenePathSurface.Gravel), stone = ScenePathStyle.SurfaceCode(ScenePathSurface.Stone);
+			Assert.That(track, Is.LessThan(earth));
+			Assert.That(earth, Is.LessThan(gravel));
+			Assert.That(gravel, Is.LessThan(stone));
 		}
 
 		[Test]

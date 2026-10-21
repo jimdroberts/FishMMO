@@ -108,19 +108,15 @@ namespace FishMMO.Shared.WorldDesign
 
 			int props = 0, cells = 0, vines = 0;
 			var mouths = new List<Mouth>();
-			// The ground round the system, for the vines to find the shell's faces round each mouth.
-			CaveGround ground = null;
-			if (system.Form != CaveForm.SeaCave)
-			{
-				Bounds e = system.Extent;
-				ground = CaveGround.Sample(context.GroundAt, system.Origin.x + e.min.x - 4f, system.Origin.z + e.min.z - 4f,
-					system.Origin.x + e.max.x + 4f, system.Origin.z + e.max.z + 4f, 2f);
-			}
+			// The ground round the system and the holes cut at its mouths, as the cut meshed it: the vines find the rock round
+			// each mouth where the mesh has it. A 2 m sample without the cut's holes put the shell elsewhere (2026-10-19).
+			CaveGround ground = system.Form != CaveForm.SeaCave ? CaveShaper.GroundAsCut(system, context.GroundAt, context.Terrains, context.Tiles) : null;
 			foreach (CaveMouth mouth in system.Mouths)
 			{
 				// A mouth under water grows nothing and has nothing strewn before it; one behind a fall stands on its shelf, its
-				// boulders would fall in the pool or block the way.
-				if (mouth.Kind == CaveMouthKind.Submerged)
+				// boulders would fall in the pool or block the way. An opening in a roof is no way in: its rim is the dressing's
+				// (PointOfInterestCaveDressing.Skylights.cs).
+				if (mouth.Kind == CaveMouthKind.Submerged || mouth.Kind == CaveMouthKind.Skylight)
 				{
 					continue;
 				}

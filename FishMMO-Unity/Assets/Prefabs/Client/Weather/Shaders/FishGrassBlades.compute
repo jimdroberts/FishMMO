@@ -124,7 +124,7 @@ float4 _GrassLight;                          // xyz the sun's direction of trave
 float4 _GrassLattice;                        // x cell metres, y clump metres, z clump facing strength, w clump height variation
 float4 _GrassShapeParams;                    // x max lean, y LOD0 distance, z LOD1 distance, w max blade height (cull)
 float4 _GrassRingDistance[GRASS_RINGS];      // x distance (metres); count in _GrassRingCount
-float4 _GrassRingDensity[GRASS_RINGS];       // x blades per square metre; [0].y the fullness (density share that grows the full field)
+float4 _GrassRingDensity[GRASS_RINGS];       // x blades per square metre; [0].y sprinkled fullness, z the coverage that grows the full field, w tufting
 /* The per-type table (GrassBladeRenderer.typeTable): a texel per type (x) per row (y), shared with the blades' vertex
  * shader. It was constant arrays set on this compute every camera; at 32 types they were 64 float4s a dispatch, and
  * per-dispatch constant arrays are what made whole terrains' blades flicker on OpenGL. */
@@ -872,9 +872,11 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
         weights[4u * m + 2u] = dm.z;     channelTypes[4u * m + 2u] = tm.z;
         weights[4u * m + 3u] = dm.w;     channelTypes[4u * m + 3u] = tm.w;
     }
-    // Fullness: grass painted at or above this share of its layer's maximum grows the full ring density;
-    // the detail layers say where grass grows, the rings how thick it is.
+    // Fullness: a sprinkled species painted at or above this share of its layer's typical density has its full chance.
+    // Tussock grass is the biome's own coverage (never rescaled per terrain): at or above fullCoverage it grows the full
+    // ring density; the detail layers say where grass grows and how much, the rings how thick full grass is.
     float fullness = max(0.05, _GrassRingDensity[0].y);
+    float fullCoverage = max(0.05, _GrassRingDensity[0].z);
     /* Sprinkled types (flowers, reeds: GrassTypeTuning.Sprinkle) first: each has its own chance per candidate where
      * its layer is painted, whatever else grows there, stacked in channel order and picked by one number
      * (GrassMath.PickSprinkle). They are then taken out of the tussock pick below, so a clump is never a whole
@@ -925,7 +927,7 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
             spawn += w * density;
         }
     }
-    spawn /= fullness;
+    spawn /= fullCoverage;
     int channel = sprinkleChannel;
     [branch] if (channel >= 0 && sprinkleLevel > 0.5)
     {
@@ -938,7 +940,13 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     }
     if (channel < 0)
     {
-        if (total <= 0.0 || GrassUnit(GrassHash(ci, cj, SALT_SPAWN)) >= min(1.0, spawn))
+        /* A thin field gathers into tufts (GrassMath.Spawns): at share p a clump stands with p^tufting and its blades
+         * with the rest, so the bare ground between tufts shows (a desert's bunchgrass) instead of a lawn of evenly
+         * spaced blades. The clump's hash is world-placed, so every lattice level agrees on which tufts stand. */
+        float p = min(1.0, spawn);
+        float clumpChance = p > 0.0 ? pow(p, _GrassRingDensity[0].w) : 0.0;
+        if (total <= 0.0 || GrassUnit(GrassMix(clump ^ SALT_SPAWN)) >= clumpChance
+            || GrassUnit(GrassHash(ci, cj, SALT_SPAWN)) * clumpChance >= p)
         {
             return;
         }

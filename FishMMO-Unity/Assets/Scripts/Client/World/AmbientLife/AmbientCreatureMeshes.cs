@@ -7,7 +7,9 @@ namespace FishMMO.Client
 	/// The ambient creatures' meshes, built at runtime from a few numbers: one unit long (bill to tail, nose to rump;
 	/// a crab one unit wide), nose toward +z, back up +y, standing on the origin (a bat, which never lands, is centred
 	/// on it). The vertex layout is FishAmbientLife.hlsl's: colour (linear), TEXCOORD0 x along the body (0 nose .. 1
-	/// tail) and y across a wing's chord, TEXCOORD1 which part and how far out along it, TEXCOORD2 the colour's roles.
+	/// tail) and y across a wing's chord, TEXCOORD1 which part and how far out along it, TEXCOORD2 the colour's roles; the
+	/// colour's alpha is how much of the vertex gives off the creature's own light (its emission mask: <see cref="AmbientGlowParts"/>,
+	/// 0 for every vertex of a creature without one), and on a glowing lamp TEXCOORD0.y is that lamp's own twinkle offset.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -19,7 +21,9 @@ namespace FishMMO.Client
 	/// <para>
 	/// Parts (TEXCOORD1.x): birds 0 body, 1 left wing, 2 right wing, 3 legs, 4 head and bill, 5 tail; walkers 0 body,
 	/// 1-4 legs (front left, front right, hind left, hind right), 5 tail, 6 head and ears; crabs 1-8 legs, 9 claws;
-	/// beetles 1-6 legs, 9 feelers; spiders 1-8 legs, 9 palps; crickets 1-6 legs, 9 feelers.
+	/// beetles 1-6 legs, 9 feelers; spiders 1-8 legs, 9 palps; crickets 1-6 legs, 9 feelers; millipedes 1-8 legs (round and
+	/// round down the body, so they step in waves); snails 1-2 feelers, 9 eye-stalks; fish 1-2 pectoral and 3-4 pelvic fins,
+	/// 5 tail fin; jellies 1-8 tentacles; worms 1-4 bristles.
 	/// </para>
 	/// </remarks>
 	public static class AmbientCreatureMeshes
@@ -37,13 +41,20 @@ namespace FishMMO.Client
 					return 1f;
 				case AmbientShape.Lizard:
 					return 2f;
+				case AmbientShape.Fish:
+				case AmbientShape.Worm:
+					return 2f;
 				case AmbientShape.Crab:
 				case AmbientShape.Beetle:
 				case AmbientShape.Spider:
 				case AmbientShape.Cricket:
+				case AmbientShape.Millipede:
+				case AmbientShape.Snail:
 					return 3f;
 				case AmbientShape.Swarm:
 					return 4f;
+				case AmbientShape.Jelly:
+					return 5f;
 				default:
 					return 0f;
 			}
@@ -71,6 +82,11 @@ namespace FishMMO.Client
 			Shape(b, kind, kind.Back.linear, kind.Belly.linear, kind.Accent.linear);
 			var roles = new Builder();
 			Shape(roles, kind, Color.red, Color.green, Color.blue);
+			if (kind.Shape == AmbientShape.Jelly)
+			{
+				// A jelly's light runs out from its crown: its 'along' is the distance from the crown, not nose to tail.
+				b.AlongFromCrown(JellyCrown, 1.3f);
+			}
 			b.TakeRoles(roles);
 			Mesh mesh = b.ToMesh(kind.Name);
 			// Wings beat and fold, legs swing, rabbits bound: room for all of it. A swarm's insects fly out to two of its
@@ -86,9 +102,24 @@ namespace FishMMO.Client
 			return mesh;
 		}
 
+		/// <summary>
+		/// A kind's emission mask vertex for vertex (COLOR.a), with its triangle count: what <see cref="Build"/> would give the mesh,
+		/// worked out without one (a Mesh is native: this checks a kind's lamps and budget outside the editor).
+		/// </summary>
+		public static float[] MaskOf(AmbientCreatureKind kind, out int triangles)
+		{
+			var b = new Builder();
+			Shape(b, kind, kind.Back.linear, kind.Belly.linear, kind.Accent.linear);
+			triangles = b.Triangles;
+			return b.Masks();
+		}
+
 		/// <summary>A kind's body into a builder, in the colours given for its back, belly and accent.</summary>
 		private static void Shape(Builder b, AmbientCreatureKind kind, Color back, Color belly, Color accent)
 		{
+			// A creature that glows all over glows from every vertex (its eyes too: none of these have any to speak of).
+			AmbientGlowParts glow = kind.Shape == AmbientShape.Swarm ? AmbientGlowParts.None : kind.GlowParts;
+			b.Glow = glow == AmbientGlowParts.Body ? 1f : 0f;
 			switch (kind.Shape)
 			{
 				case AmbientShape.Rat:
@@ -101,13 +132,13 @@ namespace FishMMO.Client
 					Frog(b, back, belly, accent);
 					break;
 				case AmbientShape.Lizard:
-					Lizard(b, back, belly, accent);
+					Lizard(b, back, belly, accent, glow == AmbientGlowParts.Spots);
 					break;
 				case AmbientShape.Crab:
 					Crab(b, back, belly, accent);
 					break;
 				case AmbientShape.Beetle:
-					Beetle(b, back, belly, accent);
+					Beetle(b, back, belly, accent, glow == AmbientGlowParts.Lanterns);
 					break;
 				case AmbientShape.Spider:
 					Spider(b, back, belly, accent);
@@ -118,10 +149,26 @@ namespace FishMMO.Client
 				case AmbientShape.Swarm:
 					Swarm(b, kind, back, belly);
 					break;
+				case AmbientShape.Millipede:
+					Millipede(b, back, belly, accent);
+					break;
+				case AmbientShape.Snail:
+					Snail(b, back, belly, accent, glow == AmbientGlowParts.Foot);
+					break;
+				case AmbientShape.Fish:
+					Fish(b, back, belly, accent, glow == AmbientGlowParts.LateralLines);
+					break;
+				case AmbientShape.Jelly:
+					Jelly(b, back, belly, accent, glow == AmbientGlowParts.Bell);
+					break;
+				case AmbientShape.Worm:
+					Worm(b, back, belly, accent);
+					break;
 				default:
-					Bird(b, Plan(kind.Shape), back, belly, accent);
+					Bird(b, Plan(kind.Shape), back, belly, accent, glow == AmbientGlowParts.WingEdges);
 					break;
 			}
+			b.Glow = 0f;
 		}
 
 		// ── Birds and bats ────────────────────────────────────────────
@@ -264,9 +311,10 @@ namespace FishMMO.Client
 			}
 		}
 
-		private static void Bird(Builder b, BirdPlan plan, Color back, Color belly, Color accent)
+		private static void Bird(Builder b, BirdPlan plan, Color back, Color belly, Color accent, bool glowingEdges = false)
 		{
-			// The body and the head: countershaded ellipsoids, the head turning (part 4) on its own.
+			// The body and the head: countershaded ellipsoids, the head turning (part 4) on its own. A wisp moth's body glows softly.
+			b.Glow = glowingEdges ? 0.45f : b.Glow;
 			Ellipsoid(b, plan.BodyCentre, plan.BodyRadii, 6, 8, back, belly, 0f, 0f);
 			if (plan.NeckRadii.sqrMagnitude > 0f)
 			{
@@ -336,8 +384,20 @@ namespace FishMMO.Client
 					{
 						top = Color.Lerp(back, accent, 0.6f);
 					}
+					// A wisp moth's light is in its wings' outer edges: the trailing edge brightening out to the tip, the leading edge
+					// only at the tip (the light shades across the chord between them).
+					float lead = b.Glow, trail = b.Glow;
+					if (glowingEdges)
+					{
+						lead = Mathf.SmoothStep(0.1f, 1f, Mathf.InverseLerp(0.6f, 1f, s));
+						trail = Mathf.Lerp(0.3f, 1f, s);
+					}
+					float keep = b.Glow;
+					b.Glow = lead;
 					b.Add(new Vector3(x, y, plan.Shoulder.z + plan.Lead[c] - 0.08f), top, new Vector2(0.4f, 0f), new Vector2(part, s));
+					b.Glow = trail;
 					b.Add(new Vector3(x, y - 0.005f, plan.Shoulder.z + plan.Trail[c] - 0.08f), top * 0.92f, new Vector2(0.55f, 1f), new Vector2(part, s));
+					b.Glow = keep;
 				}
 				for (int c = 0; c < columns - 1; c++)
 				{
@@ -448,7 +508,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		private static void Lizard(Builder b, Color back, Color belly, Color accent)
+		private static void Lizard(Builder b, Color back, Color belly, Color accent, bool spots = false)
 		{
 			// Low and flat, a tail longer than the body (the loft's continuation), legs sprawled out to the sides.
 			Ellipsoid(b, new Vector3(0f, 0.06f, 0f), new Vector3(0.11f, 0.06f, 0.3f), 6, 8, back, belly, 0f, 0f);
@@ -463,6 +523,30 @@ namespace FishMMO.Client
 			}
 			Limb(b, new[] { new Vector3(0f, 0.05f, -0.28f), new Vector3(0f, 0.035f, -0.65f), new Vector3(0.05f, 0.02f, -1.05f), new Vector3(0.12f, 0.01f, -1.4f) },
 				new[] { 0.09f, 0.055f, 0.025f, 0.006f }, Color.Lerp(back, accent, 0.3f), 5f);
+			if (spots)
+			{
+				// A lantern newt's lamps: a double row of round spots down the back (a fire salamander's livery, lit), each with
+				// its own twinkle offset, and two more on the tail's root.
+				float keep = b.Glow;
+				b.Glow = 1f;
+				for (int i = 0; i < 6; i++)
+				{
+					float z = Mathf.Lerp(0.24f, -0.24f, i / 5f);
+					for (int side = -1; side <= 1; side += 2)
+					{
+						float x = side * 0.045f;
+						float top = 0.06f + 0.06f * Mathf.Sqrt(Mathf.Max(0f, 1f - (x / 0.11f) * (x / 0.11f) - (z / 0.3f) * (z / 0.3f)));
+						float spark = SeaLifePlacement.Unit(SeaLifePlacement.Mix((uint)(i * 2 + (side + 1) / 2) * 0x9E3779B9u ^ 0x5B07u));
+						Disc(b, new Vector3(x, top + 0.003f, z), new Vector3(side * 0.35f, 1f, 0f).normalized, 0.022f, accent, 0f, spark);
+					}
+				}
+				for (int i = 0; i < 2; i++)
+				{
+					float spark = SeaLifePlacement.Unit(SeaLifePlacement.Mix((uint)(20 + i) * 0x9E3779B9u ^ 0x5B07u));
+					Disc(b, new Vector3(0f, 0.065f, -0.38f - 0.14f * i), Vector3.up, 0.018f, accent, 5f, spark);
+				}
+				b.Glow = keep;
+			}
 		}
 
 		private static void Crab(Builder b, Color back, Color belly, Color accent)
@@ -485,7 +569,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		private static void Beetle(Builder b, Color back, Color belly, Color accent)
+		private static void Beetle(Builder b, Color back, Color belly, Color accent, bool lanterns = false)
 		{
 			// A domed shell (the wing cases, a seam down the middle), the shield behind the head, a small head with
 			// feelers, and six legs splayed out from under the shell.
@@ -507,6 +591,17 @@ namespace FishMMO.Client
 				// A feeler: forward and up from the head, swaying (part 9).
 				Limb(b, new[] { new Vector3(side * 0.05f, 0.19f, 0.48f), new Vector3(side * 0.14f, 0.3f, 0.62f), new Vector3(side * 0.2f, 0.34f, 0.74f) },
 					new[] { 0.016f, 0.012f, 0.008f }, accent, 9f);
+			}
+			if (lanterns)
+			{
+				// A click beetle's headlamps: two round lamps on the shield's hind corners, shining up and out.
+				float keep = b.Glow;
+				b.Glow = 1f;
+				for (int side = -1; side <= 1; side += 2)
+				{
+					Disc(b, new Vector3(side * 0.11f, 0.3f, 0.27f), new Vector3(side * 0.45f, 1f, 0f).normalized, 0.06f, Color.Lerp(belly, accent, 0.3f), 0f, side < 0 ? 0.13f : 0.61f);
+				}
+				b.Glow = keep;
 			}
 		}
 
@@ -554,6 +649,214 @@ namespace FishMMO.Client
 					new[] { 0.06f, 0.035f, 0.016f }, Color.Lerp(back, accent, 0.4f), side < 0 ? 5f : 6f);
 				Limb(b, new[] { new Vector3(side * 0.04f, 0.18f, 0.46f), new Vector3(side * 0.3f, 0.42f, 0.95f), new Vector3(side * 0.62f, 0.3f, 1.5f), new Vector3(side * 0.9f, 0.16f, 2f) },
 					new[] { 0.014f, 0.01f, 0.007f, 0.004f }, accent, 9f);
+			}
+		}
+
+		// ── The caves' light-makers (2026-10-20) ─────────────────────
+
+		private static void Millipede(Builder b, Color back, Color belly, Color accent)
+		{
+			// A string of round segments low to the ground from the head (+z) back, a pair of short legs under each, stepping in
+			// waves: the parts go round 1..8 down the body, so the crawler's per-part offset runs a wave along it.
+			const int segments = 12;
+			for (int i = 0; i < segments; i++)
+			{
+				float z = Mathf.Lerp(0.4f, -0.44f, i / (float)(segments - 1));
+				float r = i == segments - 1 ? 0.036f : 0.046f;
+				Ellipsoid(b, new Vector3(0f, 0.045f, z), new Vector3(r, 0.04f, 0.045f), 3, 6, back, belly, 0f, 0f);
+				for (int side = -1; side <= 1; side += 2)
+				{
+					float part = 1f + (i * 2 + (side < 0 ? 0 : 1)) % 8;
+					Limb(b, new[] { new Vector3(side * 0.035f, 0.025f, z), new Vector3(side * 0.08f, 0f, z + 0.012f) }, new[] { 0.014f, 0.01f }, Color.Lerp(belly, accent, 0.4f), part, true);
+				}
+			}
+			// The head, a little narrower, with short elbowed feelers.
+			Ellipsoid(b, new Vector3(0f, 0.04f, 0.47f), new Vector3(0.04f, 0.034f, 0.04f), 3, 6, Color.Lerp(back, accent, 0.4f), belly, 0f, 0f);
+			for (int side = -1; side <= 1; side += 2)
+			{
+				Limb(b, new[] { new Vector3(side * 0.02f, 0.05f, 0.5f), new Vector3(side * 0.05f, 0.08f, 0.55f), new Vector3(side * 0.07f, 0.05f, 0.6f) },
+					new[] { 0.01f, 0.008f, 0.006f }, accent, 9f, true);
+			}
+		}
+
+		private static void Snail(Builder b, Color back, Color belly, Color accent, bool lamp)
+		{
+			// The soft foot (one unit long), the head at its front, the shell's coil riding the back: a big whorl and two smaller
+			// toward its apex, in the shell's colour (the back) with its darker banding (the accent).
+			Ellipsoid(b, new Vector3(0f, 0.045f, 0f), new Vector3(0.13f, 0.055f, 0.5f), 4, 8, belly, belly, 0f, 0f);
+			Ellipsoid(b, new Vector3(0f, 0.3f, -0.1f), new Vector3(0.13f, 0.24f, 0.27f), 5, 8, back, Color.Lerp(back, accent, 0.5f), 0f, 0f);
+			Ellipsoid(b, new Vector3(0.02f, 0.4f, -0.03f), new Vector3(0.09f, 0.15f, 0.17f), 4, 7, Color.Lerp(back, accent, 0.35f), back, 0f, 0f);
+			Ellipsoid(b, new Vector3(0.035f, 0.47f, 0.02f), new Vector3(0.05f, 0.08f, 0.08f), 3, 6, accent, back, 0f, 0f);
+			// The light organ under the head (a glowing land snail flashes from the front of its foot).
+			float keep = b.Glow;
+			b.Glow = lamp ? 1f : keep;
+			Ellipsoid(b, new Vector3(0f, 0.07f, 0.4f), new Vector3(0.1f, 0.075f, 0.13f), 4, 7, Color.Lerp(belly, accent, 0.2f), belly, 0f, 0f);
+			b.Glow = lamp ? 0.5f : keep;
+			for (int side = -1; side <= 1; side += 2)
+			{
+				// The lower feelers, short and forward (parts 1, 2); the eye-stalks up and out (part 9).
+				Limb(b, new[] { new Vector3(side * 0.04f, 0.07f, 0.5f), new Vector3(side * 0.09f, 0.05f, 0.6f) }, new[] { 0.022f, 0.014f }, belly, side < 0 ? 1f : 2f, true);
+				Limb(b, new[] { new Vector3(side * 0.04f, 0.12f, 0.46f), new Vector3(side * 0.08f, 0.26f, 0.56f), new Vector3(side * 0.1f, 0.36f, 0.6f) },
+					new[] { 0.026f, 0.018f, 0.016f }, belly, 9f);
+			}
+			b.Glow = keep;
+		}
+
+		private static void Fish(Builder b, Color back, Color belly, Color accent, bool lines)
+		{
+			// A slim fusiform body (nose +z), a forked tail fin (part 5), a low back fin, pectoral (1, 2) and pelvic (3, 4) fins.
+			var centre = new Vector3(0f, 0f, 0.04f);
+			var radii = new Vector3(0.085f, 0.13f, 0.4f);
+			Ellipsoid(b, centre, radii, 6, 8, back, belly, 0f, 0f);
+			Color fin = Color.Lerp(belly, accent, 0.5f);
+			int r0 = b.Add(new Vector3(0f, 0.05f, -0.3f), fin, new Vector2(0.8f, 0f), new Vector2(5f, 0f));
+			int r1 = b.Add(new Vector3(0f, -0.05f, -0.3f), fin, new Vector2(0.8f, 0f), new Vector2(5f, 0f));
+			int t0 = b.Add(new Vector3(0f, 0.17f, -0.56f), fin, new Vector2(1f, 0f), new Vector2(5f, 1f));
+			int notch = b.Add(new Vector3(0f, 0f, -0.46f), fin, new Vector2(0.96f, 0f), new Vector2(5f, 0.6f));
+			int t1 = b.Add(new Vector3(0f, -0.17f, -0.56f), fin, new Vector2(1f, 0f), new Vector2(5f, 1f));
+			b.Tri(r0, t0, notch);
+			b.Tri(r0, notch, r1);
+			b.Tri(r1, notch, t1);
+			int d0 = b.Add(new Vector3(0f, 0.12f, 0.06f), fin, new Vector2(0.44f, 0f), new Vector2(0f, 0f));
+			int d1 = b.Add(new Vector3(0f, 0.11f, -0.12f), fin, new Vector2(0.62f, 0f), new Vector2(0f, 0f));
+			int d2 = b.Add(new Vector3(0f, 0.2f, -0.08f), fin, new Vector2(0.58f, 0f), new Vector2(0f, 0f));
+			b.Tri(d0, d1, d2);
+			for (int side = -1; side <= 1; side += 2)
+			{
+				Limb(b, new[] { new Vector3(side * 0.07f, -0.03f, 0.2f), new Vector3(side * 0.17f, -0.07f, 0.1f) }, new[] { 0.07f, 0.04f }, fin, side < 0 ? 1f : 2f, true);
+				Limb(b, new[] { new Vector3(side * 0.035f, -0.11f, -0.06f), new Vector3(side * 0.07f, -0.17f, -0.14f) }, new[] { 0.045f, 0.025f }, fin, side < 0 ? 3f : 4f, true);
+			}
+			if (!lines)
+			{
+				return;
+			}
+			// The lateral lines: a narrow band of light down each flank, just proud of the scales, from behind the head to the tail's
+			// root; and three lamps under where the eye would be (a blind fish's, lit).
+			float keep = b.Glow;
+			b.Glow = 1f;
+			for (int side = -1; side <= 1; side += 2)
+			{
+				int first = b.Count;
+				const int steps = 7;
+				for (int i = 0; i < steps; i++)
+				{
+					float z = Mathf.Lerp(0.3f, -0.3f, i / (float)(steps - 1));
+					float u = (z - centre.z) / radii.z;
+					float x = side * (radii.x * Mathf.Sqrt(Mathf.Max(0f, 1f - u * u)) + 0.004f);
+					float h = 0.012f * (1f - 0.4f * Mathf.Abs(u));
+					b.Add(new Vector3(x, 0.01f + h, z), belly, new Vector2(Mathf.Clamp01(0.5f - z), 0f), new Vector2(0f, 0f));
+					b.Add(new Vector3(x, 0.01f - h, z), belly, new Vector2(Mathf.Clamp01(0.5f - z), 0f), new Vector2(0f, 0f));
+				}
+				for (int i = 0; i < steps - 1; i++)
+				{
+					int a0 = first + i * 2;
+					b.Quad(a0, a0 + 1, a0 + 3, a0 + 2);
+				}
+				for (int i = 0; i < 3; i++)
+				{
+					float z = 0.3f + 0.04f * i;
+					float u = (z - centre.z) / radii.z;
+					float x = side * (radii.x * 0.8f * Mathf.Sqrt(Mathf.Max(0f, 1f - u * u)) + 0.003f);
+					Disc(b, new Vector3(x, -0.05f, z), new Vector3(side, -0.4f, 0f).normalized, 0.012f, belly, 0f, 0.3f * i);
+				}
+			}
+			b.Glow = keep;
+		}
+
+		/// <summary>The crown of a jelly's bell (its mesh's top), whence its light runs out (the vertices' 'along').</summary>
+		private static readonly Vector3 JellyCrown = new Vector3(0f, 0.32f, 0f);
+
+		private static void Jelly(Builder b, Color back, Color belly, Color accent, bool lit)
+		{
+			// The bell (one unit across) from its crown down past the rim's turn, countershaded crown to rim; TEXCOORD1.y how far
+			// down it the vertex is (0 crown .. 1 rim), which the shader's squeeze works on. Lit: the rim and four canals glow,
+			// the rest of the bell a little; the tentacles (parts 1-8) hang from the rim, glowing toward their tips.
+			const int rings = 5, sides = 10;
+			const float turn = 100f * Mathf.Deg2Rad;
+			float keep = b.Glow;
+			int first = b.Count;
+			for (int r = 0; r <= rings; r++)
+			{
+				float down = r / (float)rings;
+				float theta = down * turn;
+				for (int s = 0; s <= sides; s++)
+				{
+					float a = s * Mathf.PI * 2f / sides;
+					var p = new Vector3(Mathf.Sin(theta) * 0.5f * Mathf.Cos(a), 0.32f * Mathf.Cos(theta), Mathf.Sin(theta) * 0.5f * Mathf.Sin(a));
+					float canal = Mathf.Pow(Mathf.Abs(Mathf.Cos(2f * a)), 8f);
+					b.Glow = lit ? Mathf.Max(Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.7f, 1f, down)), Mathf.Max(0.8f * canal * down, 0.2f)) : keep;
+					b.Add(p, Color.Lerp(back, belly, down), new Vector2(0f, 0f), new Vector2(0f, down));
+				}
+			}
+			for (int r = 0; r < rings; r++)
+			{
+				for (int s = 0; s < sides; s++)
+				{
+					int a0 = first + r * (sides + 1) + s;
+					int a1 = a0 + sides + 1;
+					b.Quad(a0, a1, a1 + 1, a0 + 1);
+				}
+			}
+			// The mouth-arms hanging under the middle.
+			b.Glow = lit ? 0.6f : keep;
+			Ellipsoid(b, new Vector3(0f, 0.02f, 0f), new Vector3(0.07f, 0.16f, 0.07f), 3, 6, Color.Lerp(belly, accent, 0.5f), belly, 0f, 1f);
+			for (int k = 0; k < 8; k++)
+			{
+				float a = (k + 0.5f) * Mathf.PI * 2f / 8f;
+				var rim = new Vector3(0.48f * Mathf.Cos(a), 0.32f * Mathf.Cos(turn), 0.48f * Mathf.Sin(a));
+				var points = new Vector3[4];
+				for (int i = 0; i < 4; i++)
+				{
+					float t = i / 3f;
+					points[i] = rim + new Vector3(-0.1f * t * Mathf.Cos(a), -0.85f * t, -0.1f * t * Mathf.Sin(a));
+				}
+				int start = b.Count;
+				b.Glow = lit ? 0.5f : keep;
+				Limb(b, points, new[] { 0.02f, 0.014f, 0.01f, 0.006f }, Color.Lerp(belly, accent, 0.6f), 1f + k);
+				if (lit)
+				{
+					b.GlowFrom(start, 0.4f, 1f);
+				}
+			}
+			b.Glow = keep;
+		}
+
+		private static void Worm(Builder b, Color back, Color belly, Color accent)
+		{
+			// A slender round body tapering to both ends (nose +z), ringed, a few bristles near the front (parts 1-4).
+			const int rings = 12, sides = 6;
+			int first = b.Count;
+			for (int r = 0; r <= rings; r++)
+			{
+				float t = r / (float)rings;
+				float z = Mathf.Lerp(0.5f, -0.5f, t);
+				float radius = 0.008f + 0.034f * Mathf.Sqrt(Mathf.Max(0f, 1f - (2f * t - 1f) * (2f * t - 1f)));
+				for (int s = 0; s <= sides; s++)
+				{
+					float a = s * Mathf.PI * 2f / sides;
+					float sin = Mathf.Sin(a);
+					var p = new Vector3(Mathf.Cos(a) * radius, 0.04f + sin * radius, z);
+					Color c = Color.Lerp(belly, back, Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(sin * 0.9f + 0.55f)));
+					b.Add(p, c, new Vector2(Mathf.Clamp01(0.5f - z), 0f), new Vector2(r == 0 ? 6f : 0f, 0f));
+				}
+			}
+			for (int r = 0; r < rings; r++)
+			{
+				for (int s = 0; s < sides; s++)
+				{
+					int a0 = first + r * (sides + 1) + s;
+					int a1 = a0 + sides + 1;
+					b.Quad(a0, a0 + 1, a1 + 1, a1);
+				}
+			}
+			for (int i = 0; i < 2; i++)
+			{
+				for (int side = -1; side <= 1; side += 2)
+				{
+					float z = 0.32f - 0.12f * i;
+					float part = 1f + i * 2f + (side < 0 ? 0f : 1f);
+					Limb(b, new[] { new Vector3(side * 0.03f, 0.03f, z), new Vector3(side * 0.06f, 0.01f, z - 0.01f) }, new[] { 0.006f, 0.003f }, accent, part, true);
+				}
 			}
 		}
 
@@ -632,18 +935,18 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>A flat disc facing a direction (eyes, round ears).</summary>
-		private static void Disc(Builder b, Vector3 centre, Vector3 normal, float radius, Color colour, float part)
+		private static void Disc(Builder b, Vector3 centre, Vector3 normal, float radius, Color colour, float part, float spark = 0f)
 		{
 			Vector3 u = Vector3.Cross(normal, Mathf.Abs(normal.y) < 0.9f ? Vector3.up : Vector3.right).normalized;
 			Vector3 w = Vector3.Cross(normal, u);
-			int middle = b.Add(centre + normal * 0.002f, colour, new Vector2(Mathf.Clamp01(0.5f - centre.z), 0f), new Vector2(part, 0f));
+			int middle = b.Add(centre + normal * 0.002f, colour, new Vector2(Mathf.Clamp01(0.5f - centre.z), spark), new Vector2(part, 0f));
 			const int sides = 6;
 			int first = b.Count;
 			for (int s = 0; s <= sides; s++)
 			{
 				float a = s * Mathf.PI * 2f / sides;
 				Vector3 p = centre + (u * Mathf.Cos(a) + w * Mathf.Sin(a)) * radius;
-				b.Add(p, colour, new Vector2(Mathf.Clamp01(0.5f - p.z), 0f), new Vector2(part, 0f));
+				b.Add(p, colour, new Vector2(Mathf.Clamp01(0.5f - p.z), spark), new Vector2(part, 0f));
 			}
 			for (int s = 0; s < sides; s++)
 			{
@@ -691,7 +994,43 @@ namespace FishMMO.Client
 			private readonly List<Vector3> roles = new List<Vector3>();
 			private readonly List<int> triangles = new List<int>();
 
+			/// <summary>The emission mask (COLOR.a) every vertex added from now on carries, 0..1.</summary>
+			public float Glow;
+
 			public int Count => positions.Count;
+
+			public int Triangles => triangles.Count / 3;
+
+			/// <summary>Every vertex's emission mask (COLOR.a), in order.</summary>
+			public float[] Masks()
+			{
+				var masks = new float[colours.Count];
+				for (int i = 0; i < masks.Length; i++)
+				{
+					masks[i] = colours[i].a;
+				}
+				return masks;
+			}
+
+			/// <summary>Grades the emission mask of the vertices from <paramref name="first"/> on by how far out along their part they are (TEXCOORD1.y).</summary>
+			public void GlowFrom(int first, float root, float tip)
+			{
+				for (int i = first; i < colours.Count; i++)
+				{
+					Color c = colours[i];
+					c.a = Mathf.Lerp(root, tip, uv1[i].y);
+					colours[i] = c;
+				}
+			}
+
+			/// <summary>Rewrites every vertex's 'along' (TEXCOORD0.x) as its distance from a point over a span, 0..1.</summary>
+			public void AlongFromCrown(Vector3 crown, float span)
+			{
+				for (int i = 0; i < positions.Count; i++)
+				{
+					uv0[i] = new Vector2(Mathf.Clamp01(Vector3.Distance(positions[i], crown) / span), uv0[i].y);
+				}
+			}
 
 			/// <summary>The colour roles: the same body built in pure red, green and blue for back, belly and accent.</summary>
 			public void TakeRoles(Builder basis)
@@ -711,7 +1050,7 @@ namespace FishMMO.Client
 			public int Add(Vector3 position, Color colour, Vector2 body, Vector2 part)
 			{
 				positions.Add(position);
-				colours.Add(new Color(colour.r, colour.g, colour.b, 1f));
+				colours.Add(new Color(colour.r, colour.g, colour.b, Mathf.Clamp01(Glow)));
 				uv0.Add(body);
 				uv1.Add(part);
 				return positions.Count - 1;

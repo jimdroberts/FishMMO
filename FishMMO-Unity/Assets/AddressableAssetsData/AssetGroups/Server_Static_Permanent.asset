@@ -99,6 +99,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 517e0f903b1298e60bc29ac228329c07
+    m_Address: Assets/Scenes/WorldScene/Moron/Moron 3 Terrain/Moron 3 NavMesh.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 52b7d40e4f9b4f8abf005afa870e8ad2
     m_Address: Assets/Prefabs/Server/SceneServer/AISystem.asset
     m_ReadOnly: 0
@@ -305,6 +311,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e9b8b2a3c19045247a7b70f2b23b0ca1
     m_Address: Assets/Scenes/WorldScene/StartScene A/NavMesh-Terrain.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ea0caf7cc0c91d3fb92ab04aa7161880
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Moron 3.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent

@@ -3123,6 +3123,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 451ead66a3120d845b8a6b8070f1301f
+    m_Address: Steam
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4553b046864021b3d99f32074999d1b0
     m_Address: Formation_Sulphur_Crystals_0_LOD1
     m_ReadOnly: 0
@@ -3947,6 +3953,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 550dbf6c4faec814d90892a954354921
     m_Address: Alpine
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 552d920e3bb65db01be605465c755511
+    m_Address: Moron 3
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

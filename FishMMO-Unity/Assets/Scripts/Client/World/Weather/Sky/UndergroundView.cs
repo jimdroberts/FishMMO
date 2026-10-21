@@ -23,19 +23,21 @@ namespace FishMMO.Client
 	/// inside the cave stands inside those boxes.
 	/// </para>
 	/// <para>
-	/// <b>Why no water.</b> The water (and the spray off a fall) lays the clouds and the fogs over itself from what those
-	/// passes publish, with no fade underground: a grotto's pool, a sea cave's sea or a river's spray in view would lose
-	/// them. So no piece in view may come down to the sea's top or into any lake's or river's reach.
+	/// <b>Why no sea.</b> The sea lays the clouds and the fogs over itself from what those passes publish, with no fade
+	/// underground: a sea cave's sea in view would lose them. So no piece in view may come down to the sea's top. A cave's
+	/// lakes, rivers and falls (a grotto's pool, its streams and pools, 2026-10-20) fade what they lay over themselves as the
+	/// passes do underground (FishWaterFog.hlsl's FISH_WATER_OPEN_AIR), to nothing deep in: they never unseal a view. Lava is
+	/// not water here: opaque, it is covered through its depth as the rock is.
 	/// </para>
 	/// <para>
-	/// <b>Not the light shafts.</b> Their composite takes no fade underground, and from a cave they still lay a faint glow
-	/// toward the sun: they are drawn as before (FishCloudsFeature), with the clouds' buffer standing in, which the gather
-	/// reads only at the sky, of which a sealed view has none.
+	/// <b>Not the light shafts.</b> Their composite fades by FishOpenAir as the clouds' does (2026-10-21; before, a cave's far
+	/// walls glowed toward the sun), but they are drawn as before (FishCloudsFeature), with the clouds' buffer standing in,
+	/// which the gather reads only at the sky, of which a sealed view has none.
 	/// </para>
 	/// <para>
 	/// When in doubt it says no and everything is drawn. A mouth within <see cref="MouthClearance"/> of the camera says no
 	/// whichever way it looks, so the clouds' history is running again before an opening can turn into view. Not from
-	/// SkySystem's eased underground share: that follows its own TargetCamera, which nothing in the game sets.
+	/// SkySystem's eased underground share: that is eased over seconds, and a view turns in a frame.
 	/// </para>
 	/// </remarks>
 	public static class UndergroundView
@@ -49,17 +51,12 @@ namespace FishMMO.Client
 		public const float MouthClearance = 48f;
 		/// <summary>How far above the sea's still level every piece in view must stand, its waves aside, m.</summary>
 		private const float SeaClearance = 2f;
-		/// <summary>Seconds between looks for the scene's lakes and rivers (they come with the terrains, and stay).</summary>
-		private const float WatersEvery = 5f;
 
 		private static readonly Unity.Profiling.ProfilerMarker WorkMarker = new Unity.Profiling.ProfilerMarker("Sky.UndergroundView");
 		private static readonly Plane[] planes = new Plane[6];
 		private static Camera lastCamera;
 		private static int lastFrame = -1;
 		private static bool lastSealed;
-
-		private static SceneWaterBodies[] waters = System.Array.Empty<SceneWaterBodies>();
-		private static float watersAt = float.NegativeInfinity;
 
 		/// <summary>Whether <paramref name="camera"/> is sealed in a cave this frame (worked out once a frame for it).</summary>
 		public static bool Sealed(Camera camera)
@@ -121,7 +118,6 @@ namespace FishMMO.Client
 
 			bool sea = SurfaceWater.TryGetLevel(out float seaLevel);
 			float seaTop = seaLevel + SurfaceWater.WaveHeight + SeaClearance;
-			RefreshWaters();
 			GeometryUtility.CalculateFrustumPlanes(camera, planes);
 			float clearance2 = MouthClearance * MouthClearance;
 			for (int i = 0; i < cave.PieceCount; i++)
@@ -146,44 +142,12 @@ namespace FishMMO.Client
 				{
 					return false;
 				}
-				if ((sea && box.min.y <= seaTop) || Wet(box))
+				if (sea && box.min.y <= seaTop)
 				{
 					return false;
 				}
 			}
 			return true;
-		}
-
-		/// <summary>Whether any lake or river may stand within a box's footprint, its banks and reach included.</summary>
-		private static bool Wet(in Bounds box)
-		{
-			var area = new Rect(box.min.x, box.min.z, box.size.x, box.size.z);
-			for (int w = 0; w < waters.Length; w++)
-			{
-				SceneWaterBodies bodies = waters[w];
-				if (bodies == null)
-				{
-					// Gone since it was found: look again, and say wet meanwhile.
-					watersAt = float.NegativeInfinity;
-					return true;
-				}
-				if (bodies.isActiveAndEnabled && bodies.Reaches(area))
-				{
-					return true;
-				}
-			}
-			return false;
-		}
-
-		private static void RefreshWaters()
-		{
-			float now = Time.unscaledTime;
-			if (now - watersAt < WatersEvery && now >= watersAt)
-			{
-				return;
-			}
-			watersAt = now;
-			waters = Object.FindObjectsByType<SceneWaterBodies>();
 		}
 	}
 }

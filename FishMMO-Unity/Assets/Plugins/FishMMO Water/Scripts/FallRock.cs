@@ -43,14 +43,25 @@ namespace FishMMO.Water
 		/// <summary>How many prop triangles it holds: for logs and tests.</summary>
 		public int TriangleCount => triangles.Count / 3;
 
-		/// <summary>Reads the rock in <paramref name="bounds"/> from <paramref name="scene"/>.</summary>
-		public FallRock(Scene scene, Bounds bounds)
+		/// <summary>How far under the terrain over it a fall's lip must lie to be a cave's (its rock the cave's, not the terrain), metres.</summary>
+		public const float UndergroundMetres = 2f;
+
+		/// <summary>
+		/// Whether the fall is a cave's (2026-10-20, caves livened): its lip lies under the terrain over it, so the terrain is not
+		/// the ground it falls on but the hill over it. Its rock is the cave's own (live colliders, its pieces' meshes), and rock it
+		/// comes down on facing up is the ground it spreads over and soaks into.
+		/// </summary>
+		public readonly bool Underground;
+
+		/// <summary>Reads the rock in <paramref name="bounds"/> from <paramref name="scene"/>; a fall whose <paramref name="lip"/> lies under the terrain reads no terrain (<see cref="Underground"/>).</summary>
+		public FallRock(Scene scene, Bounds bounds, Vector3? lip = null)
 		{
 			min = bounds.min;
-			columns = Mathf.Max(2, Mathf.CeilToInt(bounds.size.x / GridMetres) + 1);
-			rows = Mathf.Max(2, Mathf.CeilToInt(bounds.size.z / GridMetres) + 1);
+			Underground = lip.HasValue && TerrainHeight(scene, lip.Value.x, lip.Value.z) > lip.Value.y + UndergroundMetres;
+			columns = Underground ? 2 : Mathf.Max(2, Mathf.CeilToInt(bounds.size.x / GridMetres) + 1);
+			rows = Underground ? 2 : Mathf.Max(2, Mathf.CeilToInt(bounds.size.z / GridMetres) + 1);
 			heights = new float[columns * rows];
-			for (int z = 0; z < rows; z++)
+			for (int z = 0; z < rows && !Underground; z++)
 			{
 				for (int x = 0; x < columns; x++)
 				{

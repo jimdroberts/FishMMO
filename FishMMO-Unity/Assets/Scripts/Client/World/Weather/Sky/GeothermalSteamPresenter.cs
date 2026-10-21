@@ -61,6 +61,10 @@ namespace FishMMO.Client
 		public static readonly Color SteamWhite = new Color(0.96f, 0.97f, 0.98f, 1f);
 		/// <summary>A geyser's water: white with spray.</summary>
 		public static readonly Color WaterWhite = new Color(0.9f, 0.93f, 0.95f, 1f);
+		/// <summary>A mud pot's spatter: wet grey clay.</summary>
+		public static readonly Color MudGrey = new Color(0.42f, 0.4f, 0.37f, 1f);
+		/// <summary>How much deeper than its own funnel a spring's water may stand and still be its own pool, m.</summary>
+		private const float OwnPoolSlack = 0.5f;
 
 		private const int SteamPopulation = 4;
 		private const int WaterPopulation = 5;
@@ -369,9 +373,19 @@ namespace FishMMO.Client
 					continue;
 				}
 				// A vent under the sea or a lake puts its heat into the water, not the air.
-				if ((sea && ground < seaLevel) || (SurfaceWater.TryGetInlandSurfaceAt(site.Position.x, site.Position.y, out float lake) && lake > ground + 0.3f))
+				if (sea && ground < seaLevel)
 				{
 					continue;
+				}
+				if (SurfaceWater.TryGetInlandSurfaceAt(site.Position.x, site.Position.y, out float lake) && lake > ground + 0.3f)
+				{
+					/* Unless the water is the spring's own pool, which the cut dug and flooded under it (2026-10-18, I2q,
+					 * GeothermalVents.PoolDepth): then its steam rises off the pool's surface. */
+					if (site.Kind != GeothermalKind.HotSpring || lake > ground + GeothermalVents.PoolDepth(site) + OwnPoolSlack)
+					{
+						continue;
+					}
+					ground = lake;
 				}
 				found.Add(new Found { Site = site, Ground = ground });
 			}
@@ -432,6 +446,28 @@ namespace FishMMO.Client
 			Color steam = site.Substance != null ? site.Substance.Tint : SteamWhite;
 			float radius = GeothermalVents.SourceRadius(site);
 			float spread = site.Kind == GeothermalKind.HotSpring ? PoolSpread : PlumeSpread;
+
+			if (site.Kind == GeothermalKind.MudPot)
+			{
+				// A thin steam off the mud, and its plops on the shared clock (GeothermalVents.Plop): every player sees the same one.
+				DrawSteam(site, vent, visible.Quiet, radius, PoolSpread, GeothermalVents.RiseSpeed(site), air.Wind, 0.45f, 0, steam, camera, material, profile, true);
+				for (int lane = 0; lane < GeothermalVents.PlopLanes; lane++)
+				{
+					MudPlop plop = GeothermalVents.Plop(site, motionSeconds, lane);
+					if (!plop.Bursting)
+					{
+						continue;
+					}
+					float speed = Mathf.Sqrt(2f * gravity * plop.Height);
+					float flight = Mathf.Max(plop.Flight, 2f * speed / gravity);
+					var at = new Vector3(vent.x + plop.Offset.x, vent.y, vent.z + plop.Offset.y);
+					var bounds = new Bounds(at + Vector3.up * (0.5f * plop.Height), new Vector3(2f, plop.Height + 1f, 2f));
+					Draw(material, profile, camera, bounds, at, WaterPopulation, 0.06f, 0.8f,
+						new Vector4(0.12f, 0f, 0f, 0f), Vector4.zero, new Vector4(plop.Since, plop.Duration, 0f, 0f),
+						new Vector4(speed, gravity, 0.5f, 1.1f * flight), new Color(MudGrey.r, MudGrey.g, MudGrey.b, 0f), Vector4.zero);
+				}
+				return;
+			}
 
 			if (site.Kind != GeothermalKind.Geyser)
 			{

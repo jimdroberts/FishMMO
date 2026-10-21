@@ -22,7 +22,7 @@ namespace FishMMO.Client
 	/// <para>
 	/// <b>No sky, no weather, no season's heat.</b> Below the twilight there is no day (<see cref="Activity"/> darkens the
 	/// moment's light by a spot's <see cref="SceneCaveLifeSpot.Dark"/>), rain, snow, wind and storms do not reach, and the air
-	/// is the year's mean (the painted climate at the place). Only the bats read the night outside, for when to go out to
+	/// is the ground's year mean (<see cref="CaveAir"/>), not the open air's. Only the bats read the night outside, for when to go out to
 	/// feed and when to come back (<see cref="BatHours"/>); in winter they hang asleep.
 	/// </para>
 	/// </remarks>
@@ -45,10 +45,67 @@ namespace FishMMO.Client
 			switch (form)
 			{
 				case SceneCaveForm.Mine: return 0.7f;
-				case SceneCaveForm.LavaTube: return 0.3f;
-				case SceneCaveForm.IceCave: return 0.12f;
+				case SceneCaveForm.LavaTube: return 0.45f;
+				case SceneCaveForm.IceCave: return 0.18f;
 				default: return 1f;
 			}
+		}
+
+		/// <summary>
+		/// The share of the air's frost the ground feels under deep snow on wet country (a winter n-factor: the snow keeps the
+		/// cold off the ground; 0.2-0.4 measured under deep snow).
+		/// </summary>
+		public const float DeepSnowFrost = 0.35f;
+
+		/// <summary>The same under thin, wind-scoured snow on dry country (0.5-0.9 measured on tundra).</summary>
+		public const float ThinSnowFrost = 0.85f;
+
+		/// <summary>
+		/// A cave's air on the climate scale (-1..1): the rock's, which is the ground's year mean at the place
+		/// (<see cref="GroundYearMean"/>) — a cave's air is steady because the rock around it is. Wet country's winters bury
+		/// the ground in deeper snow than dry country's. Where the seasons are not known, the air's own year mean.
+		/// </summary>
+		/// <param name="yearMean">The open air's year mean (the painted climate).</param>
+		/// <param name="warmest">The warmest season's temperature, same scale.</param>
+		/// <param name="humidity">The country's humidity, -1 driest .. 1 wettest.</param>
+		public static float CaveAir(float yearMean, float warmest, bool seasonKnown, float humidity)
+		{
+			if (!seasonKnown)
+			{
+				return yearMean;
+			}
+			float snow = Mathf.Lerp(ThinSnowFrost, DeepSnowFrost, Mathf.InverseLerp(-0.6f, 0.4f, humidity));
+			return GroundYearMean(yearMean, warmest, snow);
+		}
+
+		/// <summary>
+		/// The ground's year mean under a year of air: the air's own where it never freezes; where it does, warmer by the share
+		/// of the frost the snow keeps off (<paramref name="snowFrost"/> of it reaches the ground). The year is a sine about
+		/// <paramref name="yearMean"/> peaking at <paramref name="warmest"/>, and its frost (the year's mean of the air below
+		/// freezing) is that sine's, exactly: with α = acos(−mean / amplitude), (mean·(π − α) − amplitude·sin α) / π.
+		/// </summary>
+		/// <remarks>
+		/// Why caves under cold mountains are not frozen through: a −3 °C year with a +10 °C summer under deep snow keeps
+		/// its ground at about 0 °C, the edge of permafrost — as measured, where the year's air is between about −1 and −4 °C.
+		/// </remarks>
+		public static float GroundYearMean(float yearMean, float warmest, float snowFrost)
+		{
+			float amplitude = Mathf.Max(0f, warmest - yearMean);
+			float frost;
+			if (yearMean >= amplitude)
+			{
+				frost = 0f;
+			}
+			else if (yearMean <= -amplitude)
+			{
+				frost = yearMean;
+			}
+			else
+			{
+				float alpha = Mathf.Acos(-yearMean / amplitude);
+				frost = (yearMean * (Mathf.PI - alpha) - amplitude * Mathf.Sin(alpha)) / Mathf.PI;
+			}
+			return yearMean - (1f - Mathf.Clamp01(snowFrost)) * frost;
 		}
 
 		/// <summary>Whether a kind lives underground at all.</summary>
@@ -141,7 +198,7 @@ namespace FishMMO.Client
 			return new CaveBatHours
 			{
 				Out = 0.9f * night * fit,
-				Stirring = awake * (0.03f + (c.Evening ? 0.35f * c.Twilight : 0f) + 0.08f * (1f - c.Light) * (1f - fit)),
+				Stirring = awake * (0.1f + (c.Evening ? 0.35f * c.Twilight : 0f) + 0.08f * (1f - c.Light) * (1f - fit)),
 				Leaving = c.Evening ? edge * fit : 0f,
 				Returning = c.Evening ? 0f : edge * fit,
 			};
@@ -166,7 +223,7 @@ namespace FishMMO.Client
 			{
 				return 0;
 			}
-			world.Habitat(spot.Position, out AmbientHabitat habitat, out float temperature);
+			world.CaveHabitat(spot.Position, out AmbientHabitat habitat, out float temperature);
 			float expected = kind.CavePerSpot * density * Weight(kind, spot, habitat, temperature);
 			int added = 0;
 			int candidates = Mathf.Min(3, Mathf.CeilToInt(expected));
@@ -201,8 +258,9 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Members of a group at a spot: a roost's whole colony; the few of it that wheel in a box of air; a mouth's stream half
-		/// as many again (each a place in the stream, not a bat of the roost); anything else its kind's own number.
+		/// Members of a group at a spot: a roost's whole colony; as many that may wheel in a box of air (a roost is usually high
+		/// in the dark, 20 m up in a hall: the ones flying are the ones seen); a mouth's stream half as many again (each a place
+		/// in the stream, not a bat of the roost); anything else its kind's own number.
 		/// </summary>
 		public static int CountAt(AmbientCreatureKind kind, SceneCaveLifeKind spot, float roll)
 		{
@@ -213,7 +271,7 @@ namespace FishMMO.Client
 			}
 			switch (spot)
 			{
-				case SceneCaveLifeKind.Flight: return Mathf.Max(2, count / 4);
+				case SceneCaveLifeKind.Flight: return Mathf.Max(6, count);
 				case SceneCaveLifeKind.Mouth: return Mathf.Clamp(count * 3 / 2, 12, 48);
 				default: return count;
 			}
@@ -254,12 +312,27 @@ namespace FishMMO.Client
 					Stream(g, kind, spot, ref f, into);
 					break;
 				case SceneCaveLifeKind.Glow:
-					Glow(g, kind, spot, ref f, into);
+					// A swarm hangs in its glow's air as one cloud; a wisp moth wheels in it as in any box of air.
+					if (kind.Shape == AmbientShape.Swarm)
+					{
+						Glow(g, kind, spot, ref f, into);
+					}
+					else
+					{
+						Wheel(g, kind, spot, ref f, into);
+					}
 					break;
 				case SceneCaveLifeKind.Pool:
 					for (int m = 0; m < g.Count; m++)
 					{
-						Swim(g, kind, spot, m, ref f, into);
+						if (kind.Shape == AmbientShape.Jelly)
+						{
+							Drift(g, kind, spot, m, ref f, into);
+						}
+						else
+						{
+							Swim(g, kind, spot, m, ref f, into);
+						}
 					}
 					break;
 				default:
@@ -446,6 +519,30 @@ namespace FishMMO.Client
 				new Vector4(phase, 1f, 0f, 0f), f.Visible);
 		}
 
+		/// <summary>
+		/// A jelly: hanging in its pool's water bell up, rowing by its bell's beat (each squeeze lifts it a little, and it sinks
+		/// back as the bell relaxes), wandering a slow loop and turning slowly about itself. Its beat's phase is its light's
+		/// (<see cref="AmbientGlow.PhaseAt"/>: the same seed), so the light runs out from the crown as the bell squeezes.
+		/// </summary>
+		private static void Drift(in AmbientGroup g, AmbientCreatureKind kind, in SceneCaveLifeSpot spot, int m, ref AmbientLifeMotion.Frame f, List<AmbientInstance> into)
+		{
+			double t = f.Seconds;
+			uint own = AmbientLifeMotion.MemberSeed(g.Seed, m);
+			float size = g.Length * Mathf.Lerp(0.85f, 1.15f, Unit(Mix(own ^ 0x81u)));
+			float r = Mathf.Max(0.15f, spot.Extent.x * 0.7f * Mathf.Lerp(0.4f, 1f, Unit(Mix(own ^ 0x90u))) - size);
+			// Deep enough that the tentacles (a body's length under the bell) stay in the water, never past the bed.
+			float depth = Mathf.Clamp(spot.Extent.y * Mathf.Lerp(0.3f, 0.6f, Unit(Mix(own ^ 0x91u))), Mathf.Min(0.12f + 0.5f * size, spot.Extent.y * 0.5f),
+				Mathf.Max(0.12f, spot.Extent.y - 1.6f * size));
+			double w = Math.Max(0.01, kind.Speed) / r;
+			float p1 = Unit(Mix(own ^ 0x92u)) * 6.28f, p2 = Unit(Mix(own ^ 0x93u)) * 6.28f, p3 = Unit(Mix(own ^ 0x94u)) * 6.28f;
+			float phase = SeaLifePlacement.Cycle(t, 1.0 / Math.Max(0.1, kind.StrokeHz), Unit(Mix(own ^ 0x95u)));
+			float x = r * (0.7f * Mathf.Sin(AmbientLifeMotion.Angle(t, w, p1)) + 0.25f * Mathf.Sin(AmbientLifeMotion.Angle(t, w * 2.1, p2)));
+			float z = r * (0.7f * Mathf.Cos(AmbientLifeMotion.Angle(t, w * 0.87, p2)) + 0.25f * Mathf.Cos(AmbientLifeMotion.Angle(t, w * 1.9, p3)));
+			float y = -depth + 0.04f * Mathf.Sin(AmbientLifeMotion.Angle(t, 0.11, p3)) + 0.25f * size * AmbientGlow.Squeeze(phase);
+			float yaw = Unit(Mix(own ^ 0x96u)) * 360f + AmbientLifeMotion.Angle(t, 0.05, p1) * Mathf.Rad2Deg;
+			AmbientLifeMotion.Emit(into, kind, own, spot.Position + new Vector3(x, y, z), Quaternion.Euler(0f, yaw, 0f), size, new Vector4(phase, 1f, 0f, 0f), f.Visible);
+		}
+
 		// ── Bats ──────────────────────────────────────────────────────
 
 		/// <summary>A member's rank in its colony: the same bats are out (or hanging) for everyone, and go and come back in the same order.</summary>
@@ -499,7 +596,7 @@ namespace FishMMO.Client
 			if (bat)
 			{
 				CaveBatHours hours = BatHours(f.Conditions);
-				share = Mathf.Clamp01(hours.Stirring * 2.5f + (spot.Dark < 0.6f ? 1.5f * hours.Leaving + hours.Returning : 0f));
+				share = Mathf.Clamp01(hours.Stirring * 3f + (spot.Dark < 0.6f ? 1.5f * hours.Leaving + hours.Returning : 0f));
 			}
 			Axes(spot.Yaw, out Vector3 along, out Vector3 across);
 			Vector3 half = spot.Extent, middle = spot.Position;

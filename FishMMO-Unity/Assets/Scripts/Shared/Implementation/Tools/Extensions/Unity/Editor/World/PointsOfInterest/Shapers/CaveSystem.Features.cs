@@ -37,6 +37,21 @@ namespace FishMMO.Shared.WorldDesign
 		Column,
 		/// <summary>A ledge wound down the wall of a pit, walkable all the way.</summary>
 		Spiral,
+		/// <summary>
+		/// A terrace's slab (2026-10-20, <see cref="CaveTerrace"/>): a capsule in plan along A→B (its walking top on that line,
+		/// <see cref="CaveSolid.Width"/> either side), its underside <see cref="CaveSolid.Depth"/> under its top.
+		/// </summary>
+		Terrace,
+		/// <summary>
+		/// A breakdown mound (2026-10-20): fallen blocks of the roof heaped on the floor at A, <see cref="CaveSolid.Width"/>
+		/// across its foot, <see cref="CaveSolid.Depth"/> high, its blocks drawn from <see cref="CaveSolid.Angle"/> (its salt).
+		/// </summary>
+		Rubble,
+		/// <summary>
+		/// A natural arch (2026-10-20): a rib of rock on a half-ellipse from its foot A to its foot B (on the floor), its
+		/// underside <see cref="CaveSolid.Depth"/> over them at its crown, the rib <see cref="CaveSolid.Width"/> round.
+		/// </summary>
+		Arch,
 	}
 
 	/// <summary>
@@ -127,7 +142,7 @@ namespace FishMMO.Shared.WorldDesign
 		public readonly List<CaveCrossing> Crossings = new List<CaveCrossing>();
 		public readonly List<CaveClimb> Climbs = new List<CaveClimb>();
 
-		/// <summary>Bucket ids at and under these are rifts (RiftId − index), shafts, solids and climbs; a notch's lie above them.</summary>
+		/// <summary>Bucket ids at and under these are rifts (RiftId − index), shafts, solids and climbs; the variety's hollows lie above them (HollowId).</summary>
 		private const int RiftId = -2000000, ShaftId = -3000000, SolidId = -4000000, ClimbId = -5000000;
 
 		/// <summary>
@@ -201,6 +216,12 @@ namespace FishMMO.Shared.WorldDesign
 			top = float.MaxValue;
 			switch (s.Kind)
 			{
+				case CaveSolidKind.Terrace:
+					return TerraceField(s, p, out top);
+				case CaveSolidKind.Rubble:
+					return RubbleField(s, p);
+				case CaveSolidKind.Arch:
+					return ArchField(s, p);
 				case CaveSolidKind.Bridge:
 				case CaveSolidKind.Ramp:
 				{
@@ -261,9 +282,13 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>The solids near a point, unioned (negative inside rock they leave); 1e4 where none is near.</summary>
-		private float Solid(Vector3 p, out float top)
+		private float Solid(Vector3 p, out float top) => Solid(p, out top, out _);
+
+		/// <summary>As above, with the nearest solid's kind (how rough its sides are, and whether a climb stills them).</summary>
+		private float Solid(Vector3 p, out float top, out CaveSolidKind kind)
 		{
 			top = float.MaxValue;
+			kind = CaveSolidKind.Bridge;
 			if (Solids.Count == 0 || buckets == null)
 			{
 				return 1e4f;
@@ -279,11 +304,13 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					continue;
 				}
-				float s = SolidField(Solids[SolidId - id], p, out float t);
+				CaveSolid solid = Solids[SolidId - id];
+				float s = SolidField(solid, p, out float t);
 				if (s < d)
 				{
 					d = s;
 					top = t;
+					kind = solid.Kind;
 				}
 			}
 			return d;
@@ -315,6 +342,11 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return true;
 				}
+			}
+			// The basins, trenches and raises the variety pass sank (2026-10-20).
+			if (Hollows.Count > 0 && NearHollow(p, margin))
+			{
+				return true;
 			}
 			// The rock left standing: a way laid across a ramp or a bridge, or through a column or a pit, ran into it.
 			foreach (CaveSolid s in Solids)
@@ -406,12 +438,22 @@ namespace FishMMO.Shared.WorldDesign
 				Vector3 lo = Vector3.Min(Climbs[c].Bottom, Climbs[c].Top), hi = Vector3.Max(Climbs[c].Bottom, Climbs[c].Top);
 				AddToBuckets(lo - Vector3.one * QuietFade, hi + Vector3.one * QuietFade, ClimbId - c);
 			}
+			for (int h = 0; h < Hollows.Count; h++)
+			{
+				HollowBounds(Hollows[h], out Vector3 lo, out Vector3 hi);
+				AddToBuckets(lo - Vector3.one * pad, hi + Vector3.one * pad, HollowId - h);
+			}
 		}
 
 		private static void SolidBounds(in CaveSolid s, out Vector3 lo, out Vector3 hi)
 		{
 			switch (s.Kind)
 			{
+				case CaveSolidKind.Terrace:
+				case CaveSolidKind.Rubble:
+				case CaveSolidKind.Arch:
+					NewSolidBounds(s, out lo, out hi);
+					return;
 				case CaveSolidKind.Column:
 				{
 					float r = s.Width * (1f + s.Depth);
@@ -484,6 +526,27 @@ namespace FishMMO.Shared.WorldDesign
 				b.Encapsulate(new Vector3(shaft.Bottom.x, shaft.Top + 1f, shaft.Bottom.z) + Origin);
 				boxes.Add(b);
 			}
+			// A skylight's shaft (2026-10-20), from the floor under it to a little under the ground: one standing in it is in the
+			// cave, and its far walls stay drawn. Not the opening on the ground, where one stands outside.
+			foreach (CaveMouth m in Mouths)
+			{
+				if (m.Kind != CaveMouthKind.Skylight)
+				{
+					continue;
+				}
+				float r = m.Radius * 1.5f + 1f;
+				var b = new Bounds(m.Floor + Origin, Vector3.zero);
+				Grow(ref b, m.Floor + Origin, new Vector3(r, 1f, r));
+				b.Encapsulate(new Vector3(m.Floor.x, Mathf.Max(m.Floor.y + 2f, m.Landing.y - 1.5f), m.Floor.z) + Origin);
+				boxes.Add(b);
+			}
+			foreach (CaveHollow h in Hollows)
+			{
+				HollowBounds(h, out Vector3 lo, out Vector3 hi);
+				var b = new Bounds();
+				b.SetMinMax(lo + Origin - Vector3.one, hi + Origin + Vector3.one);
+				boxes.Add(b);
+			}
 			return boxes.ToArray();
 		}
 
@@ -501,6 +564,12 @@ namespace FishMMO.Shared.WorldDesign
 				float r = shaft.Radius * 1.415f + grow;
 				b.Encapsulate(new Vector3(shaft.Bottom.x - r, shaft.Bottom.y - grow, shaft.Bottom.z - r));
 				b.Encapsulate(new Vector3(shaft.Bottom.x + r, shaft.Top + grow, shaft.Bottom.z + r));
+			}
+			foreach (CaveHollow h in Hollows)
+			{
+				HollowBounds(h, out Vector3 lo, out Vector3 hi);
+				b.Encapsulate(lo - Vector3.one * grow);
+				b.Encapsulate(hi + Vector3.one * grow);
 			}
 		}
 	}

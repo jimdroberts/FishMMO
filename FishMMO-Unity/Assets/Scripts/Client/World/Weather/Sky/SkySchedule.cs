@@ -16,6 +16,8 @@ namespace FishMMO.Client
 		public float CloudHeight;
 		public uint Seed;
 		public float Intensity;
+		/// <summary>From a storm cell (seen at any distance), not from the scene's patches round the viewer.</summary>
+		public bool Cell;
 	}
 
 	/// <summary>A meteor: when, where it starts, where it heads, how long it lasts.</summary>
@@ -115,8 +117,10 @@ namespace FishMMO.Client
 		/// does, so whether a strike happens never depends on who is looking.
 		/// </summary>
 		/// <param name="tick">Unused: every strike is read at the tick of its own moment.</param>
+		/// <param name="reach">How far round the viewer the scene's patches are looked through, metres: as far as a flash
+		/// is seen (<see cref="SceneReachMeters"/>), or further for the thunder.</param>
 		public static void Lightning(WeatherTimeline timeline, uint tick, double from, double to, Vector3 viewer, List<LightningStrike> into, in WeatherSample around,
-			StormFrames storms, LightningAir air)
+			StormFrames storms, LightningAir air, float reach = SceneReachMeters)
 		{
 			if (timeline == null || to <= from)
 			{
@@ -133,11 +137,11 @@ namespace FishMMO.Client
 			if (air != null || uniform > 0.001f)
 			{
 				float share = ScenePatchMeters * ScenePatchMeters / ReferenceArea;
-				int minI = Mathf.FloorToInt((viewer.x - SceneReachMeters) / ScenePatchMeters);
-				int maxI = Mathf.FloorToInt((viewer.x + SceneReachMeters) / ScenePatchMeters);
-				int minJ = Mathf.FloorToInt((viewer.z - SceneReachMeters) / ScenePatchMeters);
-				int maxJ = Mathf.FloorToInt((viewer.z + SceneReachMeters) / ScenePatchMeters);
-				float reachSq = SceneReachMeters * SceneReachMeters;
+				int minI = Mathf.FloorToInt((viewer.x - reach) / ScenePatchMeters);
+				int maxI = Mathf.FloorToInt((viewer.x + reach) / ScenePatchMeters);
+				int minJ = Mathf.FloorToInt((viewer.z - reach) / ScenePatchMeters);
+				int maxJ = Mathf.FloorToInt((viewer.z + reach) / ScenePatchMeters);
+				float reachSq = reach * reach;
 				for (int i = minI; i <= maxI; i++)
 				{
 					for (int j = minJ; j <= maxJ; j++)
@@ -247,6 +251,7 @@ namespace FishMMO.Client
 						CloudHeight = Mathf.Lerp(900f, 1500f, Unit(Hash(h, 4))),
 						Seed = h,
 						Intensity = Mathf.Lerp(0.7f, 1f, Unit(Hash(h, 5))),
+						Cell = true,
 					});
 				}
 			}

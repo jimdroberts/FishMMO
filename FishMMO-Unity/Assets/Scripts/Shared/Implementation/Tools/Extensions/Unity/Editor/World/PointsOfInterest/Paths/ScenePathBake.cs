@@ -59,7 +59,7 @@ namespace FishMMO.Shared.WorldDesign
 			binder.Points = asset;
 			binder.Table = table;
 			binder.Atlas = atlas;
-			binder.Parameters = new Vector4(field.Origin.x, field.Origin.y, 1f / ScenePathField.PageMetres, 1f);
+			binder.Parameters = new Vector4(field.Origin.x, field.Origin.y, 1f / ScenePathField.PageMetres, ScenePathField.Encoding);
 			binder.Size = new Vector4(field.TableWidth, field.TableDepth, 1f / field.AtlasTexels, ScenePathField.StoredTexels);
 			EditorUtility.SetDirty(binder);
 			ScenePathSurfaceBinder.Publish();

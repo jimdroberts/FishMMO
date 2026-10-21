@@ -19,6 +19,51 @@ TEXTURE3D(_FishAirFogVolume);
 SAMPLER(sampler_FishAirFogVolume);
 float4 _FishAirFogVolumeRange;  // x near, y far, z depth-curve exponent, w 1 when the volume is live
 
+// ── Under the hill (2026-10-20, caves livened) ──────────────────────────
+//
+// A cave's water (its streams, pools and falls, a grotto's pool) lies under the hillside, where the
+// weather's fog and clouds are not: the fog passes and the cloud composite fade themselves there by how far
+// underground the eye and the surface both are (FishOpenAir, Prefabs/Client/Weather/Shaders/FishGroundMap.hlsl).
+// A water shader that defines FISH_WATER_OPEN_AIR before including this fades what it lays over itself by
+// the same share, read from the same fine ground map MistGroundMap publishes, so a cave's water takes no fog
+// or mist and a view sealed in a cave (UndergroundView) is not unsealed by it. Without the map (its rect's
+// w 0) or over a cloud world (w 2) every point is in the open, as before; without the define, nothing changes.
+#if defined(FISH_WATER_OPEN_AIR)
+	#ifndef FISH_GROUND_MAP_INCLUDED
+		TEXTURE2D(_FishMistGround);
+		float4 _FishMistGroundRect;
+		float _FishMistGroundBase;
+	#endif
+
+	/// How far underground a point is, 0..1, as FishUnderground has it: 0 within six metres of the ground over it, 1 from twenty.
+	half FishWaterUnderground(float3 positionWS)
+	{
+		if (_FishMistGroundRect.w < 0.5 || _FishMistGroundRect.w > 1.5)
+		{
+			return 0.0h;
+		}
+		float2 uv = (positionWS.xz - _FishMistGroundRect.xy) / max(1.0, _FishMistGroundRect.z);
+		if (any(uv <= 0.0) || any(uv >= 1.0))
+		{
+			return 0.0h;
+		}
+		// The bilinear clamp sampler every URP shader already has (no sampler slot of its own).
+		float ground = SAMPLE_TEXTURE2D_LOD(_FishMistGround, sampler_LinearClamp, uv, 0).x + _FishMistGroundBase;
+		return (half)smoothstep(6.0, 20.0, ground - positionWS.y);
+	}
+
+	/// How much of the open air's fog and clouds a surface seen from the camera keeps, 0..1 (FishOpenAir).
+	half FishWaterOpenAir(float3 positionWS)
+	{
+		return 1.0h - min(FishWaterUnderground(_WorldSpaceCameraPos), FishWaterUnderground(positionWS));
+	}
+#else
+	half FishWaterOpenAir(float3 positionWS)
+	{
+		return 1.0h;
+	}
+#endif
+
 /// <summary>
 /// The height fog's integral of density · exp(-(y - base)/H) along a ray, as FishHeightFog.shader
 /// has it, and the share of what lies at the end of the ray that it hides.
@@ -52,6 +97,7 @@ float FishAirFogSlice(float eyeDepth)
 half3 FishWaterAirFogParts(half3 color, float3 positionWS, float2 screenUV, bool layer, out half keep)
 {
 	keep = 1.0;
+	half open = FishWaterOpenAir(positionWS);
 	if (layer && _FishAirFogParams.x > 1e-5)
 	{
 		float3 camera = _WorldSpaceCameraPos;
@@ -61,7 +107,7 @@ half3 FishWaterAirFogParts(half3 color, float3 positionWS, float2 screenUV, bool
 		distance = max(0.0, min(distance, _FishAirFogRange.y) - _FishAirFogRange.x);
 
 		float fog = min(FishAirFogAmount(camera, direction, distance, _FishAirFogParams.x, _FishAirFogParams.y, _FishAirFogParams.z),
-			_FishAirFogParams.w);
+			_FishAirFogParams.w) * open;
 		half3 fogColor = _FishAirFogColor.rgb;
 		if (_FishAirFogSun.w > 0.0)
 		{
@@ -77,8 +123,9 @@ half3 FishWaterAirFogParts(half3 color, float3 positionWS, float2 screenUV, bool
 		float eyeDepth = -TransformWorldToView(positionWS).z;
 		float4 volume = SAMPLE_TEXTURE3D_LOD(_FishAirFogVolume, sampler_FishAirFogVolume,
 			float3(screenUV, FishAirFogSlice(eyeDepth)), 0);
-		color = color * saturate(volume.a) + volume.rgb;
-		keep *= saturate(volume.a);
+		half through = lerp(1.0h, (half)saturate(volume.a), open);
+		color = color * through + volume.rgb * open;
+		keep *= through;
 	}
 	return color;
 }
@@ -167,6 +214,17 @@ half3 FishWaterBehindClouds(half3 color, float2 screenUV)
 {
 	float4 clouds = FishWaterCloudsInFront(screenUV);
 	return color * clouds.a + clouds.rgb;
+}
+
+/// <summary>
+/// As above, for a surface at a world point: faded as the cloud composite fades itself underground (FishWaterOpenAir,
+/// with FISH_WATER_OPEN_AIR; the same as above without it).
+/// </summary>
+half3 FishWaterBehindClouds(half3 color, float2 screenUV, float3 positionWS)
+{
+	float4 clouds = FishWaterCloudsInFront(screenUV);
+	half open = FishWaterOpenAir(positionWS);
+	return color * lerp(1.0h, (half)clouds.a, open) + clouds.rgb * open;
 }
 
 #endif

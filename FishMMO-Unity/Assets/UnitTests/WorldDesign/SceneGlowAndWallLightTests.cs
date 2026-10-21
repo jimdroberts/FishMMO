@@ -33,8 +33,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void GlowKind_IsAppended_AndItsHuesAreStable()
 		{
-			string[] kinds = { "Smoke", "Fire", "Forge", "Lamp", "Hearth", "Indoor", "Crystal", "Torch", "Glow" };
-			Assert.That(Enum.GetNames(typeof(SceneEmitterKind)), Is.EqualTo(kinds), "append only: scene assets store the kind");
+			string[] kinds = { "Smoke", "Fire", "Forge", "Lamp", "Hearth", "Indoor", "Crystal", "Torch", "Glow", "Beacon", "Magma", "Fumes" };
+			// Its first members exactly: later kinds append after them (2026-10-20, caves livened: Drip and others).
+			Assert.That(Enum.GetNames(typeof(SceneEmitterKind)).Take(kinds.Length), Is.EqualTo(kinds), "append only: scene assets store the kind");
 			Assert.That((int)SceneEmitterKind.Glow, Is.EqualTo(8));
 			Assert.That(Enum.GetNames(typeof(SceneGlowHue)), Is.EqualTo(new[] { "Violet", "Blue", "Green", "Amber", "Rune", "Faerie" }));
 			Assert.That((int)SceneGlowHue.Faerie, Is.EqualTo(5));

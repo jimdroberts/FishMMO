@@ -216,6 +216,12 @@ namespace FishMMO.Water
 						normal += liveNormal;
 						contact = centre - liveNormal * radius;
 						touching = true;
+						// In a cave its rock is the ground too: the floor the water comes down on, it spreads over and soaks into.
+						if (rock.Underground && liveNormal.y > 0.5f)
+						{
+							touchingGround = true;
+							onLevelGround |= liveNormal.y > 0.6f;
+						}
 					}
 					if (touching && normal.sqrMagnitude > 1e-8f)
 					{
@@ -364,7 +370,8 @@ namespace FishMMO.Water
 				bounds.Encapsulate(corner + Vector3.up * 3f);
 				bounds.Encapsulate(new Vector3(corner.x, poolLevel - 3f, corner.z));
 			}
-			var rock = new FallRock(scene, bounds);
+			// A cave's fall (its lip under the hill) meets the cave's rock, not the terrain over it.
+			var rock = new FallRock(scene, bounds, lip);
 
 			// ── The strips ──────────────────────────────────────────────────
 			float[] profile = LipProfile(river, fall, solved, 32);

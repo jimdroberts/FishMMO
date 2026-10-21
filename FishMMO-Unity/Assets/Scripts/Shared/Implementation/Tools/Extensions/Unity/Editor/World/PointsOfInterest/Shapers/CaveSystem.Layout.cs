@@ -72,6 +72,120 @@ namespace FishMMO.Shared.WorldDesign
 			return size <= 0 ? Mathf.Min(levels, 2) : levels;
 		}
 
+		// ── Depth (2026-10-21) ────────────────────────────────────
+
+		/// <summary>The deepest a limestone or ice cave goes under its mouth, metres.</summary>
+		public const float MaxCaveDepth = 500f;
+		/// <summary>The deepest a lava tube's stacked tubes go under its mouth, metres.</summary>
+		public const float MaxLavaDepth = 120f;
+		/// <summary>The shallowest a rolled depth runs, metres: a pocket in the hill.</summary>
+		public const float LeastDepth = 3f;
+		/// <summary>Shallower than this a cave is a pocket: one short passage into one chamber (<see cref="CaveCharacter.Classic"/>).</summary>
+		public const float PocketDepth = 12f;
+		/// <summary>A lava tube's pocket depth: a tube runs long and nearly level, so only the shallowest is a pocket.</summary>
+		public const float PocketTubeDepth = 7f;
+		/// <summary>How far a level's floor may wander from its even share of the depth, as a share of the gap between levels.</summary>
+		private const float LevelJitter = 0.2f;
+
+		/// <summary>Whether a form's depth is rolled by <see cref="DepthFor"/> (limestone and ice caves, lava tubes); the rest keep their profile's.</summary>
+		public static bool RollsDepth(CaveForm form) => form == CaveForm.Cave || form == CaveForm.IceCave || form == CaveForm.LavaTube;
+
+		/// <summary>The deepest a form's system goes under its mouth, metres.</summary>
+		public static float MaxDepthOf(CaveForm form) => form == CaveForm.LavaTube ? MaxLavaDepth : MaxCaveDepth;
+
+		/// <summary>
+		/// How deep a system goes under its mouth (2026-10-21: "randomness in depth up to 500m but also really small caves"): a
+		/// log-logistic roll from the seed (heavy-tailed: most tens of metres, a rare few hundreds), its median by the site's size,
+		/// cut to <see cref="LeastDepth"/> .. <see cref="MaxDepthOf"/> without piling up at either end. Limestone and ice caves:
+		/// medians 22 / 45 / 80 m by size, about one in 65 / 24 / 10 past 300 m and one in 4 / 10 / 26 under 12 m (a pocket). Lava
+		/// tubes: 14 / 23 / 32 m, stacked up to 120 m. Before the sea's cap (the plan keeps every floor over the sea).
+		/// </summary>
+		public static float DepthFor(CaveForm form, int size, int seed) => DepthFor(form, size, seed, LeastDepth, MaxCaveDepth);
+
+		/// <summary>
+		/// As <see cref="DepthFor(CaveForm, int, int)"/>, within a scene's own range (2026-10-21, the pre-cut prompt's cave depth,
+		/// PointOfInterestSettings.CaveDepthRange): the same distribution cut to the range, so its shape holds inside it. The
+		/// form's own bounds still hold (a lava tube's 5–120 m): a range wholly past them takes the form's nearest end.
+		/// </summary>
+		public static float DepthFor(CaveForm form, int size, int seed, float rangeLeast, float rangeMost)
+		{
+			size = Mathf.Clamp(size, 0, 2);
+			bool lava = form == CaveForm.LavaTube;
+			float median = lava ? 14f + 9f * size : size == 0 ? 22f : size == 1 ? 45f : 80f;
+			float shape = lava ? 1.8f : 1.6f + 0.05f * size;
+			RangeOf(form, rangeLeast, rangeMost, out float least, out float most);
+			// The distribution's own cumulative share at each end; the roll is spread between them (a truncated quantile).
+			float Share(float x) => 1f / (1f + Mathf.Pow(median / x, shape));
+			float p = Mathf.Lerp(Share(least), Share(most), Unit(unchecked((uint)seed), 0xDE97u));
+			return Mathf.Clamp(median * Mathf.Pow(p / (1f - p), 1f / shape), least, most);
+		}
+
+		/// <summary>A form's depth bounds within a scene's range: the overlap of the two, or the form's end nearest a range past it.</summary>
+		public static void RangeOf(CaveForm form, float rangeLeast, float rangeMost, out float least, out float most)
+		{
+			float formLeast = form == CaveForm.LavaTube ? 5f : LeastDepth, formMost = MaxDepthOf(form);
+			if (rangeMost < rangeLeast)
+			{
+				(rangeLeast, rangeMost) = (rangeMost, rangeLeast);
+			}
+			least = Mathf.Clamp(rangeLeast, formLeast, formMost);
+			most = Mathf.Clamp(rangeMost, formLeast, formMost);
+		}
+
+		/// <summary>The deepest a single line (<see cref="CaveCharacter.Classic"/>) is laid; deeper, the system is a graph of levels.</summary>
+		private static float ClassicDeepest(CaveForm form) => form == CaveForm.LavaTube ? 20f : 45f;
+
+		/// <summary>A deep system's character in place of a classic one: rolled again on its own salt until it is a graph.</summary>
+		private static CaveCharacter DeepCharacter(CaveForm form, int size, int seed)
+		{
+			for (uint k = 1; k <= 8; k++)
+			{
+				CaveCharacter c = CharacterFor(form, size, Unit(unchecked((uint)seed), 0x2C1Bu + 0x101u * k));
+				if (c != CaveCharacter.Classic)
+				{
+					return c;
+				}
+			}
+			return CaveCharacter.Halls;
+		}
+
+		/// <summary>
+		/// How many levels a system of a depth goes down through (2026-10-21): about one every 35–60 m (a lava tube's stacked
+		/// tubes every 18–32 m), the spacing its seed's; up to eight (four stacked tubes).
+		/// </summary>
+		public static int LevelsForDepth(CaveForm form, float depth, int seed)
+		{
+			float u = Unit(unchecked((uint)seed), 0x1E7E1u);
+			if (form == CaveForm.LavaTube)
+			{
+				return Mathf.Clamp(1 + Mathf.FloorToInt((depth - 8f) / Mathf.Lerp(18f, 32f, u)), 1, 4);
+			}
+			return Mathf.Clamp(1 + Mathf.FloorToInt((depth - 10f) / Mathf.Lerp(35f, 60f, u)), 1, 8);
+		}
+
+		/// <summary>
+		/// Each level's floor (system frame, falling): the depth shared out evenly, each but the last moved by up to
+		/// <see cref="LevelJitter"/> of the gap by its own hash of the seed, and none under <paramref name="lowest"/>.
+		/// </summary>
+		public static float[] LevelFloors(float depth, int levels, int seed, float lowest)
+		{
+			levels = Mathf.Max(1, levels);
+			var floors = new float[levels];
+			float gap = depth / levels;
+			for (int i = 0; i < levels; i++)
+			{
+				float jitter = i < levels - 1 ? LevelJitter * (2f * Unit(unchecked((uint)seed), 0x1E7E2u + (uint)i * 0x9E37u) - 1f) : 0f;
+				floors[i] = Mathf.Max(lowest, -gap * (i + 1 + jitter));
+			}
+			return floors;
+		}
+
+		/// <summary>
+		/// How many times the passage of a two-level system (the most most characters had before depth was rolled) a system of
+		/// <paramref name="levels"/> is given: half as much again for each level past two.
+		/// </summary>
+		private static float LevelBudget(int levels) => 1f + 0.5f * Mathf.Max(0, levels - 2);
+
 		/// <summary>How many metres of passage a character's system is given, against the profile's trunk.</summary>
 		private static float BudgetShare(CaveCharacter character)
 		{
@@ -185,7 +299,23 @@ namespace FishMMO.Shared.WorldDesign
 				/// <summary>The heading of a chasm split across it (degrees), or NaN: its branches keep off the chasm's line.</summary>
 				public float RiftYaw = float.NaN;
 				public bool Hall;
+				/// <summary>A landing partway down a chained descent (2026-10-21): a small room the next drop leaves from, no hub of a level's own.</summary>
+				public bool Landing;
 			}
+
+			/// <summary>One drop of a descent: the floor it goes down to, the level of the hub at its foot, and whether that is a landing.</summary>
+			private struct Leg
+			{
+				public float Floor;
+				public int Level;
+				public bool Landing;
+			}
+
+			/// <summary>
+			/// The most one drop of a descent falls, metres (a chasm's climb, a pit's ledge or a chimney's rope): a level farther
+			/// down is reached by drops chained through landings partway down.
+			/// </summary>
+			private const float LegDrop = 34f;
 
 			/// <summary>The lists' lengths at a point, to take a feature back out whole when its climb does not fit.</summary>
 			private struct Mark
@@ -194,7 +324,8 @@ namespace FishMMO.Shared.WorldDesign
 				public float Budget;
 			}
 
-			public Layout(CaveSystem system, Walker walker, Profile pf, DeterministicRNG rng, int siteId, int size, float depth, int levels, float budget)
+			/// <param name="floors">Each level's floor, falling (<see cref="LevelFloors"/>): as many levels as it holds.</param>
+			public Layout(CaveSystem system, Walker walker, Profile pf, DeterministicRNG rng, int siteId, int size, float[] floors, float budget)
 			{
 				this.system = system;
 				this.walker = walker;
@@ -202,15 +333,11 @@ namespace FishMMO.Shared.WorldDesign
 				this.rng = rng;
 				this.siteId = siteId;
 				this.size = size;
-				this.levels = Mathf.Max(1, levels);
+				this.levels = Mathf.Max(1, floors.Length);
 				this.budget = budget;
-				levelFloor = new float[this.levels];
-				float lowest = system.LowestFloor - system.Origin.y + 1f;
-				for (int i = 0; i < this.levels; i++)
-				{
-					levelFloor[i] = Mathf.Max(lowest, -depth * (i + 1) / this.levels);
-				}
-				maxChambers = size >= 2 ? 34 : size == 1 ? 24 : 12;
+				levelFloor = floors;
+				// A deeper system more chambers, a few more for each level (2026-10-21), to a cap that keeps its rock in budget.
+				maxChambers = Mathf.Min(MostChambers, (size >= 2 ? 34 : size == 1 ? 24 : 12) + Mathf.Max(0, this.levels - 2) * (size >= 2 ? 5 : size == 1 ? 4 : 3));
 				// More halls, and more of them to a system (2026-10-18: "Caves need even bigger hallows"): a halls cave has two
 				// on its deepest level at the largest size and most often one higher up too; an abyss, a crystal cave and a rift
 				// one now and then.
@@ -226,7 +353,17 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					hallLevels[0] = 1;
 				}
+				// A deep system (four levels or more) now and then has one more on a level between, on a stream of its own so the
+				// draws above hold.
+				if (this.levels >= 4 && size >= 1 && Unit(unchecked((uint)system.Seed), 0x4A11u) < (c == CaveCharacter.Halls ? 0.7f : 0.35f))
+				{
+					int middle = 1 + (int)(Unit(unchecked((uint)system.Seed), 0x4A12u) * (this.levels - 2));
+					hallLevels[middle] = hallLevels.TryGetValue(middle, out int had) ? had + 1 : 1;
+				}
 			}
+
+			/// <summary>The most chambers any system is given, however deep.</summary>
+			private const int MostChambers = 64;
 
 			private float Depth(int level) => -levelFloor[Mathf.Clamp(level, 0, levels - 1)];
 
@@ -323,6 +460,20 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				frontier.Enqueue(first);
 				var descended = new bool[levels];
+				// The way down first, level under level (2026-10-21), so the budget reaches the bottom of a deep system before the
+				// branches on its upper levels spend it; each level's hub then branches in turn (the queue goes round the levels).
+				Hub at = first;
+				for (int level = 0; level < levels - 1 && budget > 12f && system.Chambers.Count < maxChambers; level++)
+				{
+					Hub down = Descend(at);
+					if (down == null)
+					{
+						break;
+					}
+					descended[level] = true;
+					frontier.Enqueue(down);
+					at = down;
+				}
 				while (frontier.Count > 0 && budget > 12f && system.Chambers.Count < maxChambers)
 				{
 					Hub hub = frontier.Dequeue();
@@ -390,11 +541,17 @@ namespace FishMMO.Shared.WorldDesign
 				system.PrepareField();
 			}
 
-			/// <summary>The hub at a passage's end: a hall where one is wanted on this level and fits, else a room (a cavern at the bottom).</summary>
-			private Hub HubAt(CavePassage passage, int level, bool final)
+			/// <summary>The hub at the foot of a descent's drop: the next level's, or a landing on the way to it.</summary>
+			private Hub HubAt(CavePassage passage, Leg leg) => HubAt(passage, leg.Level, !leg.Landing && leg.Level == levels - 1, leg.Landing);
+
+			/// <summary>
+			/// The hub at a passage's end: a hall where one is wanted on this level and fits, else a room (a cavern at the bottom);
+			/// a landing's a small room.
+			/// </summary>
+			private Hub HubAt(CavePassage passage, int level, bool final, bool landing = false)
 			{
 				Vector3 entry = EndDir(passage);
-				if (hallLevels.TryGetValue(level, out int wanted) && wanted > 0)
+				if (!landing && hallLevels.TryGetValue(level, out int wanted) && wanted > 0)
 				{
 					Hub hall = Hall(passage, level, entry);
 					if (hall != null)
@@ -406,13 +563,13 @@ namespace FishMMO.Shared.WorldDesign
 				bool small = system.Character == CaveCharacter.Warren;
 				for (int attempt = 0; attempt < 4 && passage.Nodes.Count >= 3; attempt++)
 				{
-					float scale = final ? rng.Range(pf.CavernMin, pf.CavernMax) * (small ? 0.8f : 1f) : rng.Range(pf.RoomMin, pf.RoomMax) * (small ? 0.85f : 1.1f);
+					float scale = final ? rng.Range(pf.CavernMin, pf.CavernMax) * (small ? 0.8f : 1f) : rng.Range(pf.RoomMin, pf.RoomMax) * (small ? 0.85f : landing ? 0.8f : 1.1f);
 					if (walker.TryChamber(passage, passage.Nodes.Count - 1, scale, final ? CaveKind.Cavern : CaveKind.Room, siteId, out CaveChamber room))
 					{
 						room.Rough = system.Character == CaveCharacter.Rift ? 1.25f : 1f;
 						system.Chambers.Add(room);
 						system.PrepareField();
-						var hub = new Hub { Level = level, Entry = entry };
+						var hub = new Hub { Level = level, Entry = entry, Landing = landing };
 						hub.Lobes.Add(system.Chambers.Count - 1);
 						hubs.Add(hub);
 						return hub;
@@ -804,8 +961,40 @@ namespace FishMMO.Shared.WorldDesign
 
 			private enum Descent { Rift, Pit, Chimney, Steep }
 
-			/// <summary>One way down from a hub to the level under it, by what suits the character, falling back to a steep passage.</summary>
+			/// <summary>
+			/// The way down from a hub to the level under it: one drop where it is no farther than <see cref="LegDrop"/>, else drops
+			/// chained through landings partway down (2026-10-21: levels 35–60 m apart in caves up to 500 m deep). Where a later drop
+			/// does not fit, the last landing is taken as the next level's way in (its branches walk on down to that level).
+			/// </summary>
 			private Hub Descend(Hub hub)
+			{
+				int next = hub.Level + 1;
+				float from = system.Chambers[hub.Lobes[0]].Floor;
+				float drop = from - levelFloor[next];
+				int legs = drop > LegDrop ? Mathf.CeilToInt(drop / LegDrop) : 1;
+				Hub at = hub;
+				for (int k = 1; k <= legs; k++)
+				{
+					bool last = k == legs;
+					var leg = new Leg { Floor = last ? levelFloor[next] : Mathf.Lerp(from, levelFloor[next], k / (float)legs), Level = last ? next : hub.Level, Landing = !last };
+					Hub down = DescendLeg(at, leg);
+					if (down == null)
+					{
+						if (at == hub)
+						{
+							return null;
+						}
+						at.Level = next;
+						at.Landing = false;
+						return at;
+					}
+					at = down;
+				}
+				return at;
+			}
+
+			/// <summary>One drop down from a hub, by what suits the character, falling back to a steep passage.</summary>
+			private Hub DescendLeg(Hub hub, Leg leg)
 			{
 				var order = new List<(Descent kind, float weight)>();
 				switch (system.Character)
@@ -828,7 +1017,7 @@ namespace FishMMO.Shared.WorldDesign
 				foreach ((Descent kind, float _) in keyed)
 				{
 					Mark mark = Save();
-					Hub down = kind == Descent.Rift ? RiftDown(hub) : kind == Descent.Pit ? PitDown(hub) : kind == Descent.Chimney ? ChimneyDown(hub) : SteepDown(hub);
+					Hub down = kind == Descent.Rift ? RiftDown(hub, leg) : kind == Descent.Pit ? PitDown(hub, leg) : kind == Descent.Chimney ? ChimneyDown(hub, leg) : SteepDown(hub, leg);
 					if (down != null)
 					{
 						return down;
@@ -838,23 +1027,30 @@ namespace FishMMO.Shared.WorldDesign
 				return null;
 			}
 
-			/// <summary>A steep passage down to the next level, and the hub at its foot.</summary>
-			private Hub SteepDown(Hub hub)
+			/// <summary>How far the way on from a drop's foot runs: a short way to a landing, a branch's length to a level's hub.</summary>
+			private float OnLength(Leg leg) => leg.Landing ? rng.Range(14f, 28f) : rng.Range(pf.BranchMin, pf.BranchMax);
+
+			/// <summary>
+			/// A steep passage down to a drop's floor, and the hub at its foot: at a walk's full pitch whatever the form's own (a
+			/// lava tube's nearly level profile would need a passage kilometres long).
+			/// </summary>
+			private Hub SteepDown(Hub hub, Leg leg)
 			{
 				float br = BranchRadius();
 				if (!Exit(hub, out CaveNode start, out float heading, br))
 				{
 					return null;
 				}
-				float drop = start.Floor - levelFloor[hub.Level + 1];
-				float length = Mathf.Max(rng.Range(pf.BranchMin, pf.BranchMax), drop / Mathf.Tan((pf.Pitch - 4f) * Mathf.Deg2Rad) * 1.25f);
-				CavePassage way = Walk(CavePassageKind.Branch, start, heading, length, Depth(hub.Level + 1), 1f, br + 4f);
+				float pitch = Mathf.Max(pf.Pitch, WalkPitch);
+				float drop = start.Floor - leg.Floor;
+				float length = Mathf.Max(rng.Range(pf.BranchMin, pf.BranchMax), drop / Mathf.Tan((pitch - 4f) * Mathf.Deg2Rad) * 1.25f);
+				CavePassage way = Walk(CavePassageKind.Branch, start, heading, length, -leg.Floor, 1f, br + 4f, pitch);
 				if (way.Nodes.Count < 4 || start.Floor - way.Nodes[way.Nodes.Count - 1].Floor < 0.6f * drop)
 				{
 					return null;
 				}
 				Add(way);
-				return HubAt(way, hub.Level + 1, final: hub.Level + 1 == levels - 1);
+				return HubAt(way, leg);
 			}
 
 			/// <summary>
@@ -862,7 +1058,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// in the rock, now and then planks on ropes), a climb down into it beside the bridge, and a passage on from one of
 			/// its ends at its floor.
 			/// </summary>
-			private Hub RiftDown(Hub hub)
+			private Hub RiftDown(Hub hub, Leg leg)
 			{
 				// The hub's room, or the hall lobe farthest out.
 				int index = hub.Lobes[0];
@@ -885,7 +1081,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return null;
 				}
-				float bottom = Mathf.Clamp(levelFloor[hub.Level + 1], top - 40f, top - 10f);
+				float bottom = Mathf.Clamp(leg.Floor, top - 40f, top - 10f);
 				if (bottom < system.LowestFloor - system.Origin.y + 0.5f)
 				{
 					return null;
@@ -940,13 +1136,13 @@ namespace FishMMO.Shared.WorldDesign
 				Vector3 from = m + axis * (sign * (half - 3f));
 				var start = new CaveNode { Centre = new Vector3(from.x, bottom, from.z), Radius = br, Floor = bottom, Along = 0f };
 				// Clear of the chasm it starts in before it keeps off chasms.
-				CavePassage on = Walk(CavePassageKind.Branch, start, Yaw(axis * sign), rng.Range(pf.BranchMin, pf.BranchMax), Depth(hub.Level + 1), 1f, br + width + 10f);
+				CavePassage on = Walk(CavePassageKind.Branch, start, Yaw(axis * sign), OnLength(leg), -leg.Floor, 1f, br + width + 10f);
 				if (on.Nodes.Count < 4)
 				{
 					return null;
 				}
 				Add(on);
-				Hub down = HubAt(on, hub.Level + 1, final: hub.Level + 1 == levels - 1);
+				Hub down = HubAt(on, leg);
 				if (down == null || !RiftClimb(m, e, axis, top, bottom, width, rope ? 1.2f : system.Solids[system.Solids.Count - 1].Width))
 				{
 					return null;
@@ -1083,7 +1279,9 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return null;
 				}
-				CavePassage way = Walk(CavePassageKind.Branch, start, heading, rng.Range(10f, 26f), Depth(hub.Level), 1f, br + 4f);
+				// Level from a landing (its floor lies under its level's): on toward the lip, not back up.
+				float depth = hub.Landing ? -system.Chambers[hub.Lobes[0]].Floor : Depth(hub.Level);
+				CavePassage way = Walk(CavePassageKind.Branch, start, heading, rng.Range(10f, 26f), depth, 1f, br + 4f);
 				if (way.Nodes.Count < 3)
 				{
 					return null;
@@ -1127,7 +1325,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// A great pit ahead of a short way from the hub, wound round by a ledge from the way's floor down to the pit's,
 			/// and a passage on from the ledge's foot to the next level's hub.
 			/// </summary>
-			private Hub PitDown(Hub hub)
+			private Hub PitDown(Hub hub, Leg leg)
 			{
 				CavePassage way = Approach(hub, out _);
 				if (way == null)
@@ -1139,8 +1337,12 @@ namespace FishMMO.Shared.WorldDesign
 				float ledge = rng.Range(2.2f, 3f);
 				float pitch = rng.Range(1.1f, 1.8f);
 				float radius = Mathf.Clamp(pitch / LedgeGrade + ledge + rng.Range(0.5f, 3f), 7f, size >= 2 ? 15f : 11f);
-				float floor = end.Floor;
-				float bottom = Mathf.Clamp(levelFloor[hub.Level + 1], floor - 45f, floor - 10f);
+				// The ledge starts level with the floor the way actually has at its end (2026-10-20): the smooth unions of its
+				// segments and the chamber it leaves let that floor down as much as a metre under the nodes' own, and a ledge
+				// started at the nodes' floor stood a metre-high step (52°) over the way's end.
+				float found = system.FloorBelow(new Vector3(end.Centre.x, end.Floor + 1.2f, end.Centre.z), 3f);
+				float floor = float.IsNaN(found) ? end.Floor : found;
+				float bottom = Mathf.Clamp(leg.Floor, floor - 45f, floor - 10f);
 				if (bottom < system.LowestFloor - system.Origin.y + 0.5f)
 				{
 					return null;
@@ -1173,32 +1375,50 @@ namespace FishMMO.Shared.WorldDesign
 				float br = BranchRadius();
 				Vector3 from = centre + outward * (radius - 0.5f);
 				var exit = new CaveNode { Centre = new Vector3(from.x, bottom, from.z), Radius = br, Floor = bottom, Along = 0f };
-				CavePassage on = Walk(CavePassageKind.Branch, exit, footYaw, rng.Range(pf.BranchMin, pf.BranchMax), Depth(hub.Level + 1), 1f, radius + 4f);
+				CavePassage on = Walk(CavePassageKind.Branch, exit, footYaw, OnLength(leg), -leg.Floor, 1f, radius + 4f);
 				if (on.Nodes.Count < 4)
 				{
 					return null;
 				}
 				Add(on);
-				return HubAt(on, hub.Level + 1, final: hub.Level + 1 == levels - 1);
+				// Off the ledge's foot onto the way on, walked (2026-10-21): the smooth union of the pit's floor and the way's first
+				// segment let the floor down half a metre under the ledge's end, a 47° step; such a pit is taken back out.
+				float line = radius - 0.5f * ledge, last = (floor - bottom) / pitch;
+				var walk = new List<Vector3>();
+				foreach (float back in new[] { 2f, 1f, 0f })
+				{
+					float phi = Mathf.Max(0f, last - back / line);
+					float yaw = start * Mathf.Deg2Rad + hand * phi;
+					walk.Add(new Vector3(centre.x + Mathf.Sin(yaw) * line, floor - phi * pitch + 0.3f, centre.z + Mathf.Cos(yaw) * line));
+				}
+				for (int i = 0; i < Mathf.Min(4, on.Nodes.Count); i++)
+				{
+					walk.Add(new Vector3(on.Nodes[i].Centre.x, on.Nodes[i].Floor + 0.3f, on.Nodes[i].Centre.z));
+				}
+				if (!system.WalkFits(walk, out _))
+				{
+					return null;
+				}
+				return HubAt(on, leg);
 			}
 
 			/// <summary>
 			/// A narrow chimney ahead of a short way from the hub, a rope (a ladder in a mine) down its wall under the way's
 			/// mouth, and a passage on from its foot to the next level's hub.
 			/// </summary>
-			private Hub ChimneyDown(Hub hub)
+			private Hub ChimneyDown(Hub hub, Leg leg)
 			{
 				CavePassage way = Approach(hub, out _);
 				if (way == null)
 				{
 					return null;
 				}
-				return ShaftDown(way, hub.Level, Mathf.Clamp(levelFloor[hub.Level + 1], way.Nodes[way.Nodes.Count - 1].Floor - 35f, way.Nodes[way.Nodes.Count - 1].Floor - 8f),
+				return ShaftDown(way, leg, Mathf.Clamp(leg.Floor, way.Nodes[way.Nodes.Count - 1].Floor - 35f, way.Nodes[way.Nodes.Count - 1].Floor - 8f),
 					system.Form == CaveForm.Mine);
 			}
 
-			/// <summary>A shaft at a way's end down to <paramref name="bottom"/>, its climb, a way on from its foot and the hub there.</summary>
-			private Hub ShaftDown(CavePassage way, int level, float bottom, bool mine)
+			/// <summary>A shaft at a way's end down to <paramref name="bottom"/>, its climb, a way on from its foot and the hub there (<paramref name="leg"/>'s).</summary>
+			private Hub ShaftDown(CavePassage way, Leg leg, float bottom, bool mine)
 			{
 				CaveNode end = way.Nodes[way.Nodes.Count - 1];
 				Vector3 dir = EndDir(way);
@@ -1236,7 +1456,7 @@ namespace FishMMO.Shared.WorldDesign
 				Vector3 from = centre + dir * (radius - 0.3f);
 				var exit = new CaveNode { Centre = new Vector3(from.x, bottom, from.z), Radius = br, Floor = bottom, Along = 0f };
 				float heading = Yaw(dir) + (mine ? (rng.NextFloat() < 0.5f ? 0f : rng.NextFloat() < 0.5f ? 90f : -90f) : rng.Range(-40f, 40f));
-				float length = mine ? rng.Range(40f, 90f) : rng.Range(pf.BranchMin, pf.BranchMax);
+				float length = mine ? rng.Range(40f, 90f) : OnLength(leg);
 				CavePassage on = Walk(CavePassageKind.Branch, exit, heading, length, -bottom, 1f, radius + 4f);
 				if (on.Nodes.Count < 4)
 				{
@@ -1245,7 +1465,7 @@ namespace FishMMO.Shared.WorldDesign
 				Add(on);
 				if (mine)
 				{
-					var hub = new Hub { Level = level + 1, Entry = EndDir(on) };
+					var hub = new Hub { Level = leg.Level, Entry = EndDir(on) };
 					hubs.Add(hub);
 					// A mine's level is its drift: the stopes along it are its rooms.
 					RoomsAlong(on);
@@ -1257,7 +1477,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					return hub;
 				}
-				return HubAt(on, level + 1, final: level + 1 == levels - 1);
+				return HubAt(on, leg);
 			}
 
 			// ── Loops ──────────────────────────────────────────────
@@ -1276,7 +1496,7 @@ namespace FishMMO.Shared.WorldDesign
 				for (int k = 0, tries = 0; k < want && tries < want * 6 && hubs.Count >= 2; tries++)
 				{
 					Hub a = hubs[rng.Range(0, hubs.Count)], b = hubs[rng.Range(0, hubs.Count)];
-					if (a == b || a.Level != b.Level || a.Lobes.Count == 0 || b.Lobes.Count == 0)
+					if (a == b || a.Level != b.Level || a.Landing || b.Landing || a.Lobes.Count == 0 || b.Lobes.Count == 0)
 					{
 						continue;
 					}
@@ -1404,7 +1624,8 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				Add(crosscut);
 				int before = system.Passages.Count;
-				Hub down = ShaftDown(crosscut, index, crosscut.Nodes[crosscut.Nodes.Count - 1].Floor - drop, mine: true);
+				float shaftFoot = crosscut.Nodes[crosscut.Nodes.Count - 1].Floor - drop;
+				Hub down = ShaftDown(crosscut, new Leg { Floor = shaftFoot, Level = index + 1 }, shaftFoot, mine: true);
 				if (down == null || system.Passages.Count == before)
 				{
 					return null;

@@ -192,6 +192,12 @@ namespace FishMMO.Shared.WorldDesign
 		public Func<float, float, Vector3> RiverAt;
 
 		/// <summary>
+		/// The ground's heat at (x, z), 0 cold … 1 boiling (2026-10-18, phase I2q; the scene's heat mask, GeothermalGroundCarve): what
+		/// a rule's heat band (PrefabSpawnRule.useHeatBand) reads. Thread-safe (an array read). Null: every heat band passes.
+		/// </summary>
+		public Func<float, float, float> HeatAt;
+
+		/// <summary>
 		/// True where nothing may be scattered at a world position (x, z): a point of interest's footprint
 		/// (<see cref="PointOfInterestStage.Excludes"/>). Null for nowhere. Called from the scatter's workers, so it must
 		/// be safe to call from several threads.

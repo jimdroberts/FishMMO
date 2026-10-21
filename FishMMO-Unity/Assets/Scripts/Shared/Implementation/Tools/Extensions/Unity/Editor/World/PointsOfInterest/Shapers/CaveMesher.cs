@@ -32,6 +32,11 @@ namespace FishMMO.Shared.WorldDesign
 	/// its own (it would crack against its neighbour); the whole welded net is thinned once before it is cut into pieces
 	/// (<see cref="Simplify"/>, 2026-10-18), and the pieces are culled whole by <see cref="CaveVisibility"/>.
 	/// </para>
+	/// <para>
+	/// <b>The habitat on every vertex (2026-10-20).</b> Each vertex carries its <see cref="CaveHabitat"/> sample — COLOR = (wet,
+	/// daylight, sediment, trodden), UV channel 3 = (organic, glow) — measured on the welded net before it is thinned, so the
+	/// rock's shading (FishCaveRock.hlsl) and the run-time cover read where the cave is damp, lit, silted, worn, rich and glowing.
+	/// </para>
 	/// </remarks>
 	public static partial class CaveMesher
 	{
@@ -49,9 +54,15 @@ namespace FishMMO.Shared.WorldDesign
 		public sealed class Piece
 		{
 			public Vector3Int Key;
+			/// <summary>The rock; its vertex colours are the habitat's first half (<see cref="CaveHabitat.ToColour"/>).</summary>
 			public MeshBuilder Mesh;
 			/// <summary>Within reach of a mouth: seen from outside, so always drawn.</summary>
 			public bool Mouth;
+			/// <summary>
+			/// The habitat's second half per vertex of <see cref="Mesh"/> (<see cref="CaveHabitat.ToUv"/>), written to mesh UV
+			/// channel <see cref="CaveHabitat.UvChannel"/> when the piece becomes a mesh (CaveShaper.WriteMeshes).
+			/// </summary>
+			public readonly List<Vector2> Habitat = new List<Vector2>();
 		}
 
 		private sealed class Chunk
@@ -214,8 +225,31 @@ namespace FishMMO.Shared.WorldDesign
 				chunk.Samples = null;
 			}
 			KeepLargestPiece(total, tris);
+			double kept = clock.Elapsed.TotalSeconds;
+			// The habitat at every vertex of the net (2026-10-20, CaveHabitat: the cave's own "terrain paint"), before it is thinned,
+			// so the thinning keeps the edges of the lanes, the drip clusters and the glow's patches (see Simplify). Read-only and
+			// measured once, so the workers share it.
+			var habitat = CaveHabitat.For(system);
+			var colours = new Color32[total];
+			var extra = new Vector2[total];
+			var usedVertex = new bool[total];
+			foreach (int v in tris)
+			{
+				usedVertex[v] = true;
+			}
+			Parallel.For(0, total, idx =>
+			{
+				if (!usedVertex[idx])
+				{
+					return;
+				}
+				CaveHabitatSample s = habitat.Sample(positions[idx], normals[idx]);
+				colours[idx] = CaveHabitat.ToColour(in s);
+				extra[idx] = CaveHabitat.ToUv(in s);
+			});
+			double lived = clock.Elapsed.TotalSeconds;
 			// Thinned where the rock is plain: the floors' flats and the vaults (CaveMesher.Simplify).
-			int thinned = Simplify(system, ground, positions, normals, tris, h);
+			int thinned = Simplify(system, ground, positions, normals, tris, h, colours, extra);
 			double wound = clock.Elapsed.TotalSeconds;
 
 			// Which triangles to keep: everything near a mouth; elsewhere only the void's own face.
@@ -232,14 +266,14 @@ namespace FishMMO.Shared.WorldDesign
 				Parallel.For(0, buried.Length, q =>
 				{
 					int t = 3 * q;
-					Vector3 centre = (positions[tris[t]] + positions[tris[t + 1]] + positions[tris[t + 2]]) / 3f;
-					buried[q] = !NearMouth(system, centre) && Buried(system, ground, centre, h);
+					Vector3 pa = positions[tris[t]], pb = positions[tris[t + 1]], pc = positions[tris[t + 2]];
+					Vector3 centre = (pa + pb + pc) / 3f;
+					buried[q] = !NearMouth(system, centre) && Buried(system, ground, centre, Vector3.Cross(pb - pa, pc - pa), h);
 				});
 			}
 			double tested = clock.Elapsed.TotalSeconds;
-			var pieces = new Dictionary<Vector3Int, (MeshBuilder mesh, Dictionary<long, int> map)>();
+			var pieces = new Dictionary<Vector3Int, (MeshBuilder mesh, Dictionary<long, int> map, List<Vector2> habitat)>();
 			float inv = 1f / RockMeshes.TextureMetres;
-			var white = new Color32(255, 255, 255, 0);
 			int dropped = 0;
 			for (int t = 0; t < tris.Count; t += 3)
 			{
@@ -257,7 +291,7 @@ namespace FishMMO.Shared.WorldDesign
 				Vector3Int key = Vector3Int.FloorToInt(centre / PieceMetres);
 				if (!pieces.TryGetValue(key, out var piece))
 				{
-					pieces[key] = piece = (new MeshBuilder(1), new Dictionary<long, int>());
+					pieces[key] = piece = (new MeshBuilder(1), new Dictionary<long, int>(), new List<Vector2>());
 				}
 				int Map(int v)
 				{
@@ -267,7 +301,8 @@ namespace FishMMO.Shared.WorldDesign
 						Vector3 p = positions[v];
 						Vector3 w = p + system.Origin;
 						Vector2 uv = axis == 1 ? new Vector2(w.x, w.z) : axis == 0 ? new Vector2(w.z, w.y) : new Vector2(w.x, w.y);
-						id = piece.mesh.AddVertex(p, normals[v], uv * inv, white);
+						id = piece.mesh.AddVertex(p, normals[v], uv * inv, colours[v]);
+						piece.habitat.Add(extra[v]);
 						piece.map[k] = id;
 					}
 					return id;
@@ -287,14 +322,16 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				kv.Value.mesh.RecalculateTangents();
 				Bounds bounds = kv.Value.mesh.Bounds;
-				result.Add(new Piece { Key = kv.Key, Mesh = kv.Value.mesh, Mouth = NearMouth(system, bounds.center, PieceMetres) });
+				var made = new Piece { Key = kv.Key, Mesh = kv.Value.mesh, Mouth = NearMouth(system, bounds.center, PieceMetres) };
+				made.Habitat.AddRange(kv.Value.habitat);
+				result.Add(made);
 				triangles += kv.Value.mesh.TriangleCount;
 			}
 			result.Sort((x, y) => x.Key.z != y.Key.z ? x.Key.z.CompareTo(y.Key.z) : x.Key.y != y.Key.y ? x.Key.y.CompareTo(y.Key.y) : x.Key.x.CompareTo(y.Key.x));
 			double built = clock.Elapsed.TotalSeconds;
 			// The time each phase took, so the mesher's cost in a cut can be read from its notes.
 			report = $"{list.Count} chunks sampled, {result.Count} pieces, {triangles} triangles ({thinned} thinned out, {dropped} buried dropped); meshed in {built:0.00} s "
-				+ $"(field {sampled:0.00}, net and surface {projected - sampled:0.00}, faces and thinning {wound - projected:0.00}, buried test {tested - wound:0.00}, pieces {built - tested:0.00})";
+				+ $"(field {sampled:0.00}, net and surface {projected - sampled:0.00}, faces {kept - projected:0.00}, habitat {lived - kept:0.00}, thinning {wound - lived:0.00}, buried test {tested - wound:0.00}, pieces {built - tested:0.00})";
 			if (result.Count == 0)
 			{
 				throw new InvalidOperationException("the field has no surface");
@@ -302,7 +339,7 @@ namespace FishMMO.Shared.WorldDesign
 			return result;
 		}
 
-		/// <summary>A hash of the pieces' positions (rounded to 0.1 mm) and triangles, for determinism checks.</summary>
+		/// <summary>A hash of the pieces' positions (rounded to 0.1 mm), triangles and habitat, for determinism checks.</summary>
 		public static ulong Hash(IEnumerable<Piece> pieces)
 		{
 			ulong h = 1469598103934665603UL;
@@ -329,6 +366,14 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					Mix(i);
 				}
+				foreach (Color32 c in piece.Mesh.Colors)
+				{
+					Mix(c.r | c.g << 8 | c.b << 16 | (long)c.a << 24);
+				}
+				foreach (Vector2 u in piece.Habitat)
+				{
+					Mix(Mathf.RoundToInt(u.x * 255f) | Mathf.RoundToInt(u.y * 255f) << 8);
+				}
 			}
 			return h;
 		}
@@ -343,13 +388,38 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return true;
 				}
+				// A skylight's reach runs all the way up its throat to its lip (CaveSystem.Skylights.cs).
+				if (m.Kind == CaveMouthKind.Skylight && CaveSystem.MouthDistance(m, p) < reach)
+				{
+					return true;
+				}
 			}
 			return false;
 		}
 
-		/// <summary>A point on the shell's outer face or its buried top, not the void's face: never seen.</summary>
-		private static bool Buried(CaveSystem system, CaveGround ground, Vector3 p, float h)
-			=> system.Void(p) > 1.5f * h && p.y < ground.At(p.x + system.Origin.x, p.z + system.Origin.z) - system.Origin.y - 0.5f * system.Skin;
+		/// <summary>
+		/// A face on the shell's outer face or its buried top, not the void's face: never seen. Its centre lies well off the void,
+		/// under the ground's skin, and no cave air lies out of its seen side within a cell and a half: the void's distance can
+		/// jump where a far primitive drops out of its reckoning (2026-10-21, a lava tube's branch beside a cavern on Moron 2, "we
+		/// see issues around these coordinates with cave walls"), and a face of the cave's own wall read as 4 m into the rock and
+		/// was dropped — a hole a player saw the world through. Looking out of the face settles it: an outer face looks out at
+		/// the hill's rock, a wall at the cave.
+		/// </summary>
+		/// <param name="normal">The face's normal, unnormalised, toward its seen side (the side away from the rock).</param>
+		private static bool Buried(CaveSystem system, CaveGround ground, Vector3 p, Vector3 normal, float h)
+		{
+			if (!(system.Void(p) > 1.5f * h) || !(p.y < ground.At(p.x + system.Origin.x, p.z + system.Origin.z) - system.Origin.y - 0.5f * system.Skin))
+			{
+				return false;
+			}
+			float length = normal.magnitude;
+			if (length < 1e-8f)
+			{
+				return true;
+			}
+			Vector3 n = normal / length;
+			return !(system.Void(p + n * (0.5f * h)) < 0f) && !(system.Void(p + n * (1.5f * h)) < 0f);
+		}
 
 		private static int FloorDiv(int a, int b) => a >= 0 ? a / b : -((-a + b - 1) / b);
 

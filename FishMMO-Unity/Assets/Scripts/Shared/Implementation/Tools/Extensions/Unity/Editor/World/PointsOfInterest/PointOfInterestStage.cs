@@ -875,6 +875,8 @@ namespace FishMMO.Shared.WorldDesign
 			PointOfInterestFieldCarve.Restore(scene, terrains, notes);
 			// And the last run's paddies' water (2026-10-18, I2i): each field lays its own again below.
 			PointOfInterestPaddies.ClearWater(TerrainFolder, Request.SceneName);
+			// The hot springs' pools the biome stage dug (2026-10-18, I2q): in the paddies' range, so cleared just now; written again.
+			GeothermalGroundCarve.WriteWater(scene, TerrainFolder, Request.SceneName, notes);
 			ScenePointsOfInterest asset = WriteAsset(wrote);
 			GameObject root = EnsureRoot(scene, asset);
 
@@ -994,6 +996,16 @@ namespace FishMMO.Shared.WorldDesign
 						notes?.Add($"{site.name}: site builder {builder.GetType().Name} threw: {ex.Message}");
 					}
 				}
+				// Every way in on the map (2026-10-20): a dungeon door always an entrance, each of a cave's mouths its own entry.
+				try
+				{
+					PointOfInterestEntrances.Mark(Context(PointOfInterestEntrances.Salt));
+				}
+				catch (Exception ex)
+				{
+					Debug.LogException(ex);
+					notes?.Add($"{site.name}: marking its entrances threw: {ex.Message}");
+				}
 			}
 
 			// Ships under way between the harbours and out to sea, solid on every peer (PointOfInterestSeaTraffic, FloatingBoats).
@@ -1021,6 +1033,8 @@ namespace FishMMO.Shared.WorldDesign
 				Debug.LogException(ex);
 				notes?.Add($"Linear features threw: {ex.Message}");
 			}
+			// The scatter's trees and bushes off the buildings' floors, as the grass is (before the trees are baked into props).
+			PointOfInterestTreeClearance.Clear(terrains, asset.Paths, notes);
 			ScenePathBake.Write(scene, root.transform, TerrainFolder, Request.SceneName, asset, wrote, notes);
 			// And what the laid pieces give off (chimney smoke, fires, forges, lanterns), offered to the client.
 			if (asset.Emitters != null && asset.Emitters.Count > 0)

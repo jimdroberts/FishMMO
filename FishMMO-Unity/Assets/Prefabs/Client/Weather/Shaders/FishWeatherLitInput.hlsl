@@ -44,6 +44,16 @@ half _FishStructure;
 // FishMMO edit: how much moss this surface grows, 0..1 (FishMoss.hlsl; 0, the default, is none and costs one branch).
 // Times the scene's dampness, a global. Set by the art generator on rock, cliff, cave rock and the structure kit.
 half _FishMoss;
+// FishMMO edit: cave rock (keyword _FISH_CAVE_ROCK, FishCaveRock.hlsl; set by the cave shaper's CaveRockMaterials): the floor
+// grounds' tiling (1/m: silt, gravel, litter, worn way), the walls' stain (a its strength) and crust, the glow crust's colour
+// (HDR), the guano's, and x moss in the twilight, y wet gloss, z 1 when the grounds' textures are bound. In every variant so the
+// buffer's layout never changes (the SRP batcher); read only with the keyword.
+float4 _FishCaveTiles;
+half4 _FishCaveStain;
+half4 _FishCaveCrust;
+half4 _FishCaveGlow;
+half4 _FishCaveGuano;
+half4 _FishCaveParams;
 UNITY_TEXTURE_STREAMING_DEBUG_VARS;
 CBUFFER_END
 

@@ -114,6 +114,8 @@ namespace FishMMO.Shared.WorldDesign
 				 * fields the cut laid (PointOfInterestFieldCarve). The sites carve the ridges again below. */
 				PointOfInterestFieldCarve.Restore(scene, terrains, result.Notes);
 				CliffPlacer.Clear(scene);
+				// And the hot ground the cut dug first of all (2026-10-18, I2q): the field below reads the ground as the cut's did.
+				GeothermalGroundCarve.Restore(scene, terrains, result.Notes);
 				// The rivers and lakes the scene was cut with, marked on its ground as it stands now.
 				SceneWater water = SceneGenerator.LoadWater(request, plan, terrains, result.Notes);
 				/* The points of interest the scene was cut with, read back: the scatter and rocks keep out of them again, and

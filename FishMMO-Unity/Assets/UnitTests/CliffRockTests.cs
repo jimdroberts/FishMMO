@@ -567,6 +567,164 @@ namespace FishMMO.UnitTests
 			}
 		}
 
+		// ── Excluded ground ───────────────────────────────────────────
+
+		/// <summary>A site's disc across the middle of the band: a cave mouth or a way's clearance in the cliff.</summary>
+		private static bool InKeepOut(float x, float z) => (x - 120f) * (x - 120f) + (z - 64f) * (z - 64f) < 16f * 16f;
+
+		private static readonly Dictionary<string, CliffRockPlan> keptOutPlans = new Dictionary<string, CliffRockPlan>();
+		private static CliffRockPlan KeptOutPlanOf(string type)
+		{
+			if (!keptOutPlans.TryGetValue(type, out CliffRockPlan p))
+			{
+				keptOutPlans[type] = p = Plan(type, new CliffRockPlacementOptions { Excluded = InKeepOut });
+			}
+			return p;
+		}
+
+		/// <summary>
+		/// No rock's footprint as seated (its seating mesh's bounds, turned and scaled, on a 5 × 5 grid at mid height) covers
+		/// excluded ground: the planner refuses it as it is seated, so the scene side has nothing to take out afterwards.
+		/// It used to drop such rocks once the plan was made, and the rocks seated on their tops stayed in the air
+		/// (2026-10-21: a gneiss block 8 m over the slope beside a cave mouth).
+		/// </summary>
+		[Test]
+		public void Excluded_NoRockStandsOverIt([Values("Granite", "Sandstone", "Ice")] string type)
+		{
+			CliffRockPlan plan = KeptOutPlanOf(type);
+			int near = 0;
+			foreach (PlacedCliffRock r in plan.Rocks)
+			{
+				Bounds b = Seating(r.Piece).Bounds;
+				for (int ix = 0; ix <= 4; ix++)
+				{
+					for (int iz = 0; iz <= 4; iz++)
+					{
+						Vector3 at = r.World(new Vector3(Mathf.Lerp(b.min.x, b.max.x, ix / 4f), b.center.y, Mathf.Lerp(b.min.z, b.max.z, iz / 4f)));
+						Assert.That(InKeepOut(at.x, at.z), Is.False, $"{CliffRocks.MeshName(r.Piece, CliffRocks.CollisionLod)} at {r.Position} reaches over the excluded disc at ({at.x:0.0}, {at.z:0.0})");
+					}
+				}
+				if (new Vector2(r.Position.x - 120f, r.Position.z - 64f).magnitude < 40f)
+				{
+					near++;
+				}
+			}
+			Assert.That(near, Is.GreaterThan(3), "the cliff still stands either side of the disc");
+		}
+
+		/// <summary>
+		/// Every rock rests on the ground (raised by the cones) or on a rock still in the plan: the lowest of its lowest
+		/// fifth stands no more than a metre over the highest of them. A rock seated on one taken out after it floats.
+		/// Ice, whose fill and middle blocks stand on its bigger ones on this slope (the other types' sit on the ground here).
+		/// </summary>
+		[Test]
+		public void Excluded_EveryRockRestsOnTheGroundOrARockStillInThePlan()
+		{
+			CliffRockPlan plan = KeptOutPlanOf("Ice");
+			var ground = new Slope();
+			int count = plan.Rocks.Count;
+			var world = new Vector3[count][];
+			var lo = new Vector3[count];
+			var hi = new Vector3[count];
+			var tops = new Dictionary<long, float>[count];
+			long Cell(float x, float z) => ((long)Mathf.FloorToInt(x) << 32) ^ (uint)Mathf.FloorToInt(z);
+			for (int i = 0; i < count; i++)
+			{
+				PlacedCliffRock r = plan.Rocks[i];
+				MeshBuilder m = Seating(r.Piece);
+				var w = new Vector3[m.VertexCount];
+				Vector3 min = Vector3.positiveInfinity, max = Vector3.negativeInfinity;
+				for (int v = 0; v < w.Length; v++)
+				{
+					w[v] = r.World(m.Positions[v]);
+					min = Vector3.Min(min, w[v]);
+					max = Vector3.Max(max, w[v]);
+				}
+				world[i] = w;
+				lo[i] = min;
+				hi[i] = max;
+				// Its top per metre cell, from each triangle's highest corner over the cells its footprint box covers: never lower than the rock.
+				var top = new Dictionary<long, float>();
+				foreach (List<int> tri in m.Submeshes)
+				{
+					for (int t = 0; t < tri.Count; t += 3)
+					{
+						Vector3 a = w[tri[t]], b = w[tri[t + 1]], c = w[tri[t + 2]];
+						float y = Mathf.Max(a.y, Mathf.Max(b.y, c.y));
+						for (int x = Mathf.FloorToInt(Mathf.Min(a.x, Mathf.Min(b.x, c.x))); x <= Mathf.FloorToInt(Mathf.Max(a.x, Mathf.Max(b.x, c.x))); x++)
+						{
+							for (int z = Mathf.FloorToInt(Mathf.Min(a.z, Mathf.Min(b.z, c.z))); z <= Mathf.FloorToInt(Mathf.Max(a.z, Mathf.Max(b.z, c.z))); z++)
+							{
+								long k = Cell(x, z);
+								if (!top.TryGetValue(k, out float h) || y > h)
+								{
+									top[k] = y;
+								}
+							}
+						}
+					}
+				}
+				tops[i] = top;
+			}
+			int onRock = 0;
+			for (int i = 0; i < count; i++)
+			{
+				var under = new List<int>();
+				for (int j = 0; j < count; j++)
+				{
+					if (j != i && hi[j].x >= lo[i].x && lo[j].x <= hi[i].x && hi[j].z >= lo[i].z && lo[j].z <= hi[i].z)
+					{
+						under.Add(j);
+					}
+				}
+				float band = lo[i].y + 0.2f * (hi[i].y - lo[i].y), gap = float.MaxValue, overGround = float.MaxValue;
+				foreach (Vector3 v in world[i])
+				{
+					if (v.y > band)
+					{
+						continue;
+					}
+					ground.TryHeight(v.x, v.z, out float support);
+					support += plan.HeightDelta(v.x, v.z);
+					overGround = Mathf.Min(overGround, v.y - support);
+					long k = Cell(v.x, v.z);
+					foreach (int j in under)
+					{
+						if (tops[j].TryGetValue(k, out float h))
+						{
+							support = Mathf.Max(support, h);
+						}
+					}
+					gap = Mathf.Min(gap, v.y - support);
+				}
+				PlacedCliffRock r = plan.Rocks[i];
+				Assert.That(gap, Is.LessThanOrEqualTo(1f), $"{CliffRocks.MeshName(r.Piece, CliffRocks.CollisionLod)} at {r.Position} floats {gap:0.0} m over the ground and every rock under it");
+				if (overGround > 1f)
+				{
+					onRock++;
+				}
+			}
+			Assert.That(onRock, Is.GreaterThan(0), "some rocks stand on others, so a missing one would show");
+		}
+
+		/// <summary>The scene side lays the plan as it is: taking a rock out of it would leave the rocks seated on it in the air.</summary>
+		[Test]
+		public void CliffPlacer_TakesNoRockOutOfThePlan()
+		{
+			const string path = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/Terrain/CliffPlacer.cs";
+			Assert.That(System.IO.File.Exists(path), Is.True, $"{path} (run from the project root)");
+			var code = new System.Text.StringBuilder();
+			foreach (string line in System.IO.File.ReadAllText(path).Replace("\r\n", "\n").Split('\n'))
+			{
+				string trimmed = line.TrimStart();
+				if (!trimmed.StartsWith("//", StringComparison.Ordinal) && !trimmed.StartsWith("/*", StringComparison.Ordinal) && !trimmed.StartsWith("*", StringComparison.Ordinal))
+				{
+					code.Append(line).Append('\n');
+				}
+			}
+			Assert.That(code.ToString(), Does.Not.Contain("Rocks.Remove"), "a rock that may not stand is refused by the planner as it is seated (CliffRockPlacementOptions.Excluded)");
+		}
+
 		// ── Equivalence of the fast paths ─────────────────────────────
 
 		/// <summary>Two mesas and a long scarp, 420 × 380 m: enough rocks, backdrops and cones to fill several index cells.</summary>

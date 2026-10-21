@@ -183,6 +183,12 @@ namespace FishMMO.Water
 			PrepareLooks(hydrology);
 			foreach (SceneHydrology.Lake lake in hydrology.Lakes)
 			{
+				// Lava (a lava tube's pit): drawn as lava, none of the water's looks (Lava).
+				if (lake.Lava)
+				{
+					AddLavaLake(lake, water);
+					continue;
+				}
 				Mesh mesh = LakeMesh(lake, water);
 				if (mesh != null)
 				{
@@ -195,6 +201,11 @@ namespace FishMMO.Water
 			{
 				if (!river.Perennial || river.Points == null || river.Points.Length < 2)
 				{
+					continue;
+				}
+				if (river.Lava)
+				{
+					AddLavaRiver(river, water, falls);
 					continue;
 				}
 				Mesh mesh = RiverMesh(river, water, falls);
@@ -371,14 +382,14 @@ namespace FishMMO.Water
 					return index;
 				}
 				float px = lake.MaskOrigin.x + fx * (lake.MaskCell / n), pz = lake.MaskOrigin.y + fz * (lake.MaskCell / n);
-				Vector2 flow = water.FlowAt(px, pz, out float reach, out float broken);
+				Vector2 flow = water.FlowAt(px, pz, out float reach, out float broken, lake.Lava);
 				index = positions.Count;
 				vertexOf[key] = index;
 				positions.Add(new Vector3(px, lake.Level, pz));
 				flows.Add(flow);
 				states.Add(new Vector2(broken, reach));
 				uvs.Add(new Vector2(px, pz));
-				colours.Add(new Color32(255, ChannelClaim(water.OutsideChannels(px, pz, lake.Id)), 255, 255));
+				colours.Add(new Color32(255, ChannelClaim(water.OutsideChannels(px, pz, lake.Id, lake.Lava)), 255, 255));
 				tides.Add(Vector2.zero);
 				return index;
 			}
@@ -404,7 +415,7 @@ namespace FishMMO.Water
 						continue;
 					}
 					float cx = lake.MaskOrigin.x + (x + 0.5f) * lake.MaskCell, cz = lake.MaskOrigin.y + (z + 0.5f) * lake.MaskCell;
-					if (water.OutsideChannels(cx, cz, lake.Id) >= near)
+					if (water.OutsideChannels(cx, cz, lake.Id, lake.Lava) >= near)
 					{
 						Quad(x * n, z * n, n);
 						continue;
@@ -620,7 +631,7 @@ namespace FishMMO.Water
 						? (k == 0 ? -(marginHalf + shoreRight) : marginHalf + shoreLeft)
 						: Mathf.Lerp(-(bank + shoreRight), bank + shoreLeft, (k - 1) / (float)(across - 2));
 					Vector3 at = p + left * (offset * (offset > 0f ? leftScale : rightScale));
-					Vector2 flow = water.FlowAt(at.x, at.z, out float reach, out float broken);
+					Vector2 flow = water.FlowAt(at.x, at.z, out float reach, out float broken, river.Lava);
 					/* For the solved flow: the half-width bank to bank, the river's mean speed here, and its way downstream. A row
 					 * run on past the river's own points takes the speed of the end it runs on from: the lake rows before its
 					 * start (counted back, so negative along) its first point's. Only the first of them did: the rest took the

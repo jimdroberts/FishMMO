@@ -347,13 +347,20 @@ namespace FishMMO.Shared.WorldDesign
 		/// the wall leans in over it, the nearest heading round from it that takes one; its face a little proud of the rock, its
 		/// floor the field's, scaled to the roof over it. False where no wall of the chamber takes a gate.
 		/// </summary>
-		public static bool TryCavernGate(CaveSystem system, int siteId, out CavernGate gate)
+		public static bool TryCavernGate(CaveSystem system, int siteId, out CavernGate gate) => TryCavernGate(system, siteId, null, out gate);
+
+		/// <summary>
+		/// <see cref="TryCavernGate(CaveSystem, int, out CavernGate)"/> on a field of the caller's (<paramref name="voidAt"/>, the
+		/// system's frame; null for the system's own): the lava's plan finds the gate on the field without its lava.
+		/// </summary>
+		internal static bool TryCavernGate(CaveSystem system, int siteId, Func<Vector3, float> voidAt, out CavernGate gate)
 		{
 			gate = default;
 			if (system == null || !system.TryChamberOf(siteId, out CaveChamber chamber))
 			{
 				return false;
 			}
+			voidAt ??= system.Void;
 			float reach = Mathf.Max(chamber.Radii.x, chamber.Radii.z) + 20f;
 			foreach (float off in new[] { 0f, 25f, -25f, 50f, -50f, 75f, -75f, 105f, -105f })
 			{
@@ -367,13 +374,13 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					Vector3 p = centre + dir * r;
 					p.y = CaveSystem.FloorOf(chamber, p) + 1f;
-					if (system.Void(p) >= 0f)
+					if (voidAt(p) >= 0f)
 					{
 						for (float back = 0f; back <= 0.5f; back += 0.1f)
 						{
 							Vector3 q = centre + dir * (r - back);
 							q.y = CaveSystem.FloorOf(chamber, q) + 1f;
-							if (system.Void(q) < 0f)
+							if (voidAt(q) < 0f)
 							{
 								wall = r - back;
 								break;
@@ -390,16 +397,16 @@ namespace FishMMO.Shared.WorldDesign
 				for (float inset = GateInset; inset <= GateInset + 6f; inset += 0.5f)
 				{
 					Vector3 t = centre + dir * (wall - inset);
-					if (!FloorUnder(system, t, out float floor) || Mathf.Abs(floor - CaveSystem.FloorOf(chamber, t)) > 0.8f)
+					if (!FloorUnder(voidAt, t, out float floor) || Mathf.Abs(floor - CaveSystem.FloorOf(chamber, t)) > 0.8f)
 					{
 						continue;
 					}
 					t.y = floor;
-					if (!Clear(system, t, -dir, floor))
+					if (!Clear(voidAt, t, -dir, floor))
 					{
 						continue;
 					}
-					float roof = RoofOver(system, t - dir * 1.5f + Vector3.up * 1f, floor);
+					float roof = RoofOver(voidAt, t - dir * 1.5f + Vector3.up * 1f, floor);
 					gate = new CavernGate
 					{
 						Threshold = system.Origin + t,
@@ -414,17 +421,17 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>The floor under a point in the void (system frame), marched down; false where the point is rock or no floor is within 6 m.</summary>
-		private static bool FloorUnder(CaveSystem system, Vector3 p, out float floor)
+		private static bool FloorUnder(Func<Vector3, float> voidAt, Vector3 p, out float floor)
 		{
 			floor = p.y;
 			Vector3 q = p + Vector3.up * 1.5f;
-			if (system.Void(q) >= 0f)
+			if (voidAt(q) >= 0f)
 			{
 				return false;
 			}
 			for (float y = q.y; y > p.y - 6f; y -= 0.05f)
 			{
-				if (system.Void(new Vector3(p.x, y, p.z)) >= 0f)
+				if (voidAt(new Vector3(p.x, y, p.z)) >= 0f)
 				{
 					floor = y + 0.05f;
 					return true;
@@ -437,7 +444,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static bool CavernFloor(CaveSystem system, Vector3 world, out float y)
 		{
 			y = world.y;
-			if (system == null || !FloorUnder(system, world - system.Origin + Vector3.up * 0.5f, out float floor))
+			if (system == null || !FloorUnder(system.Void, world - system.Origin + Vector3.up * 0.5f, out float floor))
 			{
 				return false;
 			}
@@ -446,11 +453,11 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>The roof over a point in the void (system frame), marched up to 60 m over the floor.</summary>
-		private static float RoofOver(CaveSystem system, Vector3 p, float floor)
+		private static float RoofOver(Func<Vector3, float> voidAt, Vector3 p, float floor)
 		{
 			for (float y = p.y; y < floor + 60f; y += 0.1f)
 			{
-				if (system.Void(new Vector3(p.x, y, p.z)) >= 0f)
+				if (voidAt(new Vector3(p.x, y, p.z)) >= 0f)
 				{
 					return y;
 				}
@@ -459,7 +466,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>Whether the cavern is open before a gate whose threshold is <paramref name="t"/>: across its width, up its doorway, out over its apron.</summary>
-		private static bool Clear(CaveSystem system, Vector3 t, Vector3 outward, float floor)
+		private static bool Clear(Func<Vector3, float> voidAt, Vector3 t, Vector3 outward, float floor)
 		{
 			var side = new Vector3(outward.z, 0f, -outward.x);
 			for (float u = GateClearAhead; u <= GateClearAhead + 3f; u += 1.5f)
@@ -470,7 +477,7 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						Vector3 q = t + outward * u + side * v;
 						q.y = floor + h;
-						if (system.Void(q) >= 0f)
+						if (voidAt(q) >= 0f)
 						{
 							return false;
 						}
@@ -481,11 +488,14 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>The keep-clear disc of a site's cavern gate (system frame: centre on the floor, radius), for the cave's dressing; false for none.</summary>
-		public static bool TryCavernGateClearing(CaveSystem system, int siteId, out Vector3 centre, out float radius)
+		public static bool TryCavernGateClearing(CaveSystem system, int siteId, out Vector3 centre, out float radius) => TryCavernGateClearing(system, siteId, null, out centre, out radius);
+
+		/// <summary><see cref="TryCavernGateClearing(CaveSystem, int, out Vector3, out float)"/> on a field of the caller's (null for the system's own).</summary>
+		internal static bool TryCavernGateClearing(CaveSystem system, int siteId, Func<Vector3, float> voidAt, out Vector3 centre, out float radius)
 		{
 			centre = default;
 			radius = 0f;
-			if (!TryCavernGate(system, siteId, out CavernGate gate))
+			if (!TryCavernGate(system, siteId, voidAt, out CavernGate gate))
 			{
 				return false;
 			}

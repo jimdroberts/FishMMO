@@ -13,6 +13,9 @@ namespace FishMMO.Shared.WorldDesign
 		public bool Capital;
 		public PointOfInterestDensity Density = PointOfInterestDensity.Normal;
 		public float Multiplier = 1f;
+		/// <summary>How deep the scene's caves may go, metres: the range their random depth is rolled in.</summary>
+		public float CaveDepthMin = PointOfInterestSettings.DefaultCaveDepthMin;
+		public float CaveDepthMax = PointOfInterestSettings.DefaultCaveDepthMax;
 		public readonly List<PointOfInterestKindOverride> Overrides = new List<PointOfInterestKindOverride>();
 
 		/// <summary>The settings' current values, or the defaults for none; the overrides are copies.</summary>
@@ -26,6 +29,9 @@ namespace FishMMO.Shared.WorldDesign
 			choice.Capital = settings.Capital;
 			choice.Density = settings.Density;
 			choice.Multiplier = settings.Multiplier;
+			Vector2 depths = settings.CaveDepthRange;
+			choice.CaveDepthMin = depths.x;
+			choice.CaveDepthMax = depths.y;
 			if (settings.Overrides != null)
 			{
 				foreach (PointOfInterestKindOverride entry in settings.Overrides)
@@ -48,6 +54,12 @@ namespace FishMMO.Shared.WorldDesign
 			settings.Capital = Capital;
 			settings.Density = Density;
 			settings.Multiplier = Mathf.Clamp(Multiplier, 0f, 4f);
+			settings.CaveDepthMin = CaveDepthMin;
+			settings.CaveDepthMax = CaveDepthMax;
+			// In order and within the planner's own range.
+			Vector2 depths = settings.CaveDepthRange;
+			settings.CaveDepthMin = depths.x;
+			settings.CaveDepthMax = depths.y;
 			settings.Overrides = new List<PointOfInterestKindOverride>();
 			foreach (PointOfInterestKindOverride entry in Overrides)
 			{
@@ -178,6 +190,8 @@ namespace FishMMO.Shared.WorldDesign
 
 			EditorGUILayout.HelpBox(Describe(choice.Density), MessageType.None);
 
+			DrawCaveDepths();
+
 			if (choice.Density == PointOfInterestDensity.Custom)
 			{
 				DrawOverrides();
@@ -224,6 +238,32 @@ namespace FishMMO.Shared.WorldDesign
 				case PointOfInterestDensity.Dense: return "Many sites: settled, busy country.";
 				case PointOfInterestDensity.Custom: return "Each kind below can be switched off or given its own budget; a value of -1 keeps the catalogue's.";
 				default: return "The catalogue's budgets.";
+			}
+		}
+
+		/// <summary>
+		/// How deep the scene's caves may go (2026-10-21): each cave's depth is still rolled at random from its seed, within this
+		/// range (CaveSystem.DepthFor), so a scene of shallow pockets or one of abysses is a choice made here.
+		/// </summary>
+		private void DrawCaveDepths()
+		{
+			EditorGUILayout.Space(4f);
+			const float least = PointOfInterestSettings.DefaultCaveDepthMin, most = PointOfInterestSettings.DefaultCaveDepthMax;
+			var label = new GUIContent("Cave depth (m)",
+				"How far under its mouth a cave, ice cave or lava tube may go. Each cave's depth is still random, rolled within this " +
+				"range: under 12 m makes shallow pockets possible; the deepest have the most levels and cost the most to cut. A lava " +
+				"tube goes no deeper than 120 m, and a cave whose mouth stands low over the sea stays shallower.");
+			using (new EditorGUILayout.HorizontalScope())
+			{
+				EditorGUILayout.PrefixLabel(label);
+				float min = choice.CaveDepthMin, max = choice.CaveDepthMax;
+				min = Mathf.Round(EditorGUILayout.FloatField(min, GUILayout.Width(48f)));
+				EditorGUILayout.MinMaxSlider(ref min, ref max, least, most);
+				max = Mathf.Round(EditorGUILayout.FloatField(max, GUILayout.Width(48f)));
+				min = Mathf.Clamp(Mathf.Round(min), least, most);
+				max = Mathf.Clamp(Mathf.Round(max), least, most);
+				choice.CaveDepthMin = Mathf.Min(min, max);
+				choice.CaveDepthMax = Mathf.Max(min, max);
 			}
 		}
 

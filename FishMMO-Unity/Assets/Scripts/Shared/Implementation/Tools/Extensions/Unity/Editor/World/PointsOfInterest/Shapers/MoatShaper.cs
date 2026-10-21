@@ -229,7 +229,8 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return false;
 			}
-			bool frozen = moat == BiomeMoatWater.Frozen;
+			// Hot water never ices (2026-10-18, I2q): a moat in a biome whose water look is Hot stands open whatever its moat says.
+			bool frozen = moat == BiomeMoatWater.Frozen && !(biome != null && biome.WaterLook.Hot);
 			float level = float.MaxValue;
 			for (int i = 0; i < rimIn.Length; i++)
 			{

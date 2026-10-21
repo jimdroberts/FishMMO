@@ -383,6 +383,11 @@ namespace FishMMO.Shared.WorldDesign
 						router.MarkBlocked(moat.x, moat.z, MoatShaper.OuterOutline(shape), moatInner + moatWidth);
 					}
 				}
+				// An opening in a cave's roof (2026-10-20) is a pit in the hill: no way runs over it, not even its own cave's.
+				foreach ((Vector3 pit, float pitRadius) in CaveShaper.SkylightPits(input.Shapes))
+				{
+					router.MarkBlocked(pit.x, pit.z, pitRadius);
+				}
 				foreach (PointOfInterestRecord record in input.Records)
 				{
 					if (record != null && record.Kind == POIType.Bridge)

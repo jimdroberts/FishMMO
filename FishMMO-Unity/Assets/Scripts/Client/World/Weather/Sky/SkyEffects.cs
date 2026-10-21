@@ -9,7 +9,8 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// Lightning: schedules strikes from the weather, flashes the sky and the sun light, draws
-	/// the bolts and asks for thunder once the sound would arrive.
+	/// the bolts, and hands every strike within earshot to the thunder (<see cref="ThunderPresenter"/>),
+	/// which plays it when its sound arrives.
 	/// </summary>
 	public sealed class LightningPresenter
 	{
@@ -19,7 +20,6 @@ namespace FishMMO.Client
 
 		private readonly List<LightningStrike> strikes = new List<LightningStrike>();
 		private readonly List<LightningStrike> fresh = new List<LightningStrike>();
-		private readonly List<(double at, WeatherAudioCue cue, float volume)> thunder = new List<(double, WeatherAudioCue, float)>();
 		private readonly List<Vector3> trunk = new List<Vector3>();
 		private readonly List<List<Vector3>> branches = new List<List<Vector3>>();
 		private readonly List<Vector3> vertices = new List<Vector3>();
@@ -29,6 +29,7 @@ namespace FishMMO.Client
 		private readonly MaterialPropertyBlock block = new MaterialPropertyBlock();
 		private Mesh mesh;
 		private double lastTime = double.NaN;
+		private double lastReal = double.NaN;
 		private readonly LightningAir air = new LightningAir();
 
 		/// <summary>0..1 flash brightness now.</summary>
@@ -42,9 +43,10 @@ namespace FishMMO.Client
 		public void Reset()
 		{
 			strikes.Clear();
-			thunder.Clear();
 			air.Clear();
 			lastTime = double.NaN;
+			lastReal = double.NaN;
+			WorldAudio.Instance?.Thunder?.Clear();
 			Flash = 0f;
 		}
 
@@ -66,29 +68,40 @@ namespace FishMMO.Client
 
 		private void Update(WeatherTimeline timeline, uint tick, double now, Vector3 viewer, Camera camera, Material material, in WeatherSample around, LightningAir where)
 		{
+			double real = Time.realtimeSinceStartupAsDouble;
+			// World seconds per real second this frame: a preview races the clock, and a strike's age is real seconds to its sound.
+			double pace = double.IsNaN(lastReal) || real <= lastReal || double.IsNaN(lastTime) ? 1.0 : System.Math.Max(1.0, (now - lastTime) / (real - lastReal));
+			lastReal = real;
+			ThunderPresenter thunder = WorldAudio.Instance != null ? WorldAudio.Instance.Thunder : null;
+			Vector3 ear = WorldAudio.Instance != null ? WorldAudio.Instance.ListenerPosition : viewer;
 			if (double.IsNaN(lastTime) || now < lastTime || now - lastTime > 5.0)
 			{
+				// Arriving (or after a stall, or the clock set back): what struck before now is not flashed, but its thunder
+				// may still be on its way here, and every other player is hearing it.
+				if (thunder != null && pace <= 1.5)
+				{
+					fresh.Clear();
+					SkySchedule.Lightning(timeline, tick, now - ThunderPresenter.LookbackSeconds, now, ear, fresh, around, null, where, ThunderPresenter.AudibleMetres);
+					foreach (LightningStrike strike in fresh)
+					{
+						thunder.Strike(strike, (float)(now - strike.Time), ear);
+					}
+				}
 				lastTime = now;
 			}
 			fresh.Clear();
-			SkySchedule.Lightning(timeline, tick, lastTime, now, viewer, fresh, around, null, where);
+			// Out to where thunder is still heard; only the old reach's (and the cells') are seen.
+			SkySchedule.Lightning(timeline, tick, lastTime, now, viewer, fresh, around, null, where, thunder != null ? ThunderPresenter.AudibleMetres : SkySchedule.SceneReachMeters);
 			lastTime = now;
 			foreach (LightningStrike strike in fresh)
 			{
-				strikes.Add(strike);
-				TotalStrikes++;
-				float distance = Vector3.Distance(new Vector3(strike.Ground.x, viewer.y, strike.Ground.z), viewer);
-				WeatherAudioCue cue = distance < 1200f ? WeatherAudioCue.ThunderNear : WeatherAudioCue.ThunderFar;
-				float volume = Mathf.Clamp01(1.2f - distance / 5000f) * strike.Intensity;
-				thunder.Add((strike.Time + distance / SpeedOfSound, cue, volume));
-			}
-			for (int i = thunder.Count - 1; i >= 0; i--)
-			{
-				if (now >= thunder[i].at)
+				float ground = Vector3.Distance(new Vector3(strike.Ground.x, viewer.y, strike.Ground.z), viewer);
+				if (strike.Cell || ground <= SkySchedule.SceneReachMeters)
 				{
-					WeatherClient.RaiseAudioCue(thunder[i].cue, thunder[i].volume);
-					thunder.RemoveAt(i);
+					strikes.Add(strike);
+					TotalStrikes++;
 				}
+				thunder?.Strike(strike, (float)System.Math.Max(0.0, (now - strike.Time) / pace), ear);
 			}
 
 			float flash = 0f;

@@ -29,6 +29,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// carries more of the frame's close studding and more window openings).
 		/// </summary>
 		Building,
+		/// <summary>
+		/// At most 6500 (appended 2026-10-19: "Keeps are single story… you can't get to the top of a keep to look out?"): a
+		/// fortification walked through from its door to its battlements, floor over floor with the stairs between them — a keep,
+		/// a gatehouse, a great tower.
+		/// </summary>
+		Stronghold,
 	}
 
 	/// <summary>Where a piece's origin sits.</summary>
@@ -102,7 +108,7 @@ namespace FishMMO.Shared.WorldDesign
 		internal Action<StructureDraft> Builder;
 
 		/// <summary>The level-0 triangle budget of its <see cref="Size"/>.</summary>
-		public int TriangleBudget => Size == StructureSize.Small ? 600 : Size == StructureSize.Medium ? 1500 : 3500;
+		public int TriangleBudget => Size == StructureSize.Small ? 600 : Size == StructureSize.Medium ? 1500 : Size == StructureSize.Stronghold ? 6500 : 3500;
 
 		public bool HasTag(string tag) => Array.IndexOf(Tags, tag) >= 0;
 
@@ -206,6 +212,15 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			Rooms.Add(new StructureRoom { Centre = floorCentre, Size = new Vector2(radius * 2f, radius * 2f), Height = height, Kind = kind, Round = true });
 		}
+
+		/// <summary>
+		/// Named places on the piece, in its own frame (<see cref="StructurePieces.MarksOf"/>, 2026-10-19): where something laid with it
+		/// goes, such as a shop's trade sign on its bracket or the goods on its stall-board, so one building can serve many trades.
+		/// </summary>
+		public readonly List<StructureMark> Marks = new List<StructureMark>();
+
+		/// <summary>Marks a named place: where it is, and the way it faces (degrees about +y; 0 looks down −z, as a piece's front does).</summary>
+		public void Mark(string name, Vector3 at, float yaw = 0f) => Marks.Add(new StructureMark { Name = name, At = at, Yaw = yaw });
 
 		/// <summary>The piece's doors, in its own frame (<see cref="StructurePieces.DoorsOf"/>): each a real, server-run door in the scene.</summary>
 		public readonly List<StructureDoor> Doors = new List<StructureDoor>();
@@ -399,6 +414,18 @@ namespace FishMMO.Shared.WorldDesign
 			// Linear features (2026-10-18, I2f): hedges, walls, fences, gates, clearance rows and channels, laid along lines by
 			// PointOfInterestLinearFeatures, never drawn by a template's query.
 			"linear",
+			// The town's other buildings (2026-10-19), one line per part of the kit (StructurePieces.Arcane/Military/Farm/Trades/Civic.cs).
+			"wizard", "arcane", "library", "bookcase", "desk", "alchemy",
+			"barracks", "archery", "training", "bunk", "armour", "cornertower",
+			"barn", "haystack", "stooks", "scarecrow", "pigsty", "henhouse", "sacks", "farmstead",
+			"healer", "bakery", "workshop", "dyeworks", "pottery", "brewery", "workbench", "herbs",
+			"guildhall", "shop", "warehouse", "pillory", "marketcross", "fountain",
+			// The trades a shop-house is let to, and the professions' own houses (2026-10-19, StructurePieces.Professions.cs, Landmarks.cs).
+			"tradesign", "tailor", "leather", "fletcher", "cobbler", "jeweller", "chandler", "cartographer", "scribe", "bank", "observatory", "telescope", "excavation",
+			// The cathedral and what stands round a settlement's edges (2026-10-19, StructurePieces.Outskirts.cs): laid by id, each its own tag, so no older query draws one.
+			"cathedral", "lychgate", "gallows", "waysidecross", "maypole", "shepherd", "sheepfold", "bothy",
+			// A capital's palace (2026-10-19, StructurePieces.Palace.cs): laid by id, each its own tag, so no older query draws one.
+			"palace", "throne", "garden",
 		};
 
 		private static List<StructurePiece> all;
@@ -434,6 +461,22 @@ namespace FishMMO.Shared.WorldDesign
 					AddDungeon(list);
 					// Linear features (2026-10-18, I2f), last again.
 					AddLinear(list);
+					// The town's other buildings (2026-10-19: "more structure types for towns, villages, and cities"), last again:
+					// the wizard's tower and the library, the garrison's, the farm's, the trades' and the town's own.
+					AddArcane(list);
+					AddMilitary(list);
+					AddFarm(list);
+					AddTrades(list);
+					AddCivic(list);
+					// The trades a shop-house is let to, and the professions' own houses (2026-10-19), last again.
+					AddProfessions(list);
+					AddLandmarks(list);
+					AddOutskirts(list);
+					AddPalace(list);
+					// The corner tower (2026-10-19, StructurePieces.Towers.cs), last again.
+					AddTowers(list);
+					// What others left in the caves and mines (2026-10-20, StructurePieces.CaveStory.cs), last again.
+					AddCaveStory(list);
 					all = list;
 				}
 				return all;
@@ -542,6 +585,28 @@ namespace FishMMO.Shared.WorldDesign
 					piece.Builder(draft);
 					list = draft.Doors.ToArray();
 					doors[(piece.Id, variant)] = list;
+				}
+				return list;
+			}
+		}
+
+		private static readonly Dictionary<(string, int), IReadOnlyList<StructureMark>> marks = new Dictionary<(string, int), IReadOnlyList<StructureMark>>();
+
+		/// <summary>A piece's named places, in its own frame, from its finest build at the default seed (cached). A ruin has none.</summary>
+		public static IReadOnlyList<StructureMark> MarksOf(StructurePiece piece, int variant)
+		{
+			if (piece == null || variant < 0 || variant >= piece.Variants || piece.RuinOf != null)
+			{
+				return Array.Empty<StructureMark>();
+			}
+			lock (marks)
+			{
+				if (!marks.TryGetValue((piece.Id, variant), out IReadOnlyList<StructureMark> list))
+				{
+					var draft = new StructureDraft(piece, variant, 0, DefaultSeed);
+					piece.Builder(draft);
+					list = draft.Marks.ToArray();
+					marks[(piece.Id, variant)] = list;
 				}
 				return list;
 			}
@@ -761,6 +826,55 @@ namespace FishMMO.Shared.WorldDesign
 		Lodging,
 		/// <summary>A mill's ground floor, where the meal comes down: sacks in crates and barrels, a chest, the miller's table and tally shelf.</summary>
 		Mill,
+		// Appended 2026-10-19 (the town's other buildings).
+		/// <summary>A wizard's study: a writing desk, bookcases, an alchemist's bench, a scrying focus, a chest and a bed.</summary>
+		Study,
+		/// <summary>A library's hall: bookcases round the walls, reading tables and a lectern in the middle, desks.</summary>
+		Library,
+		/// <summary>A barracks' dormitory: bunks along the walls, racks of arms and armour stands, chests, a table.</summary>
+		Barracks,
+		/// <summary>A healer's ward: pallets along the walls, a shelf of herbs and jars, a table, a chest.</summary>
+		Infirmary,
+		/// <summary>A barn's threshing floor and bays: hay, sacks of grain, crates and barrels, perhaps a cart.</summary>
+		Barn,
+		/// <summary>A bakehouse: kneading tables in the middle, flour sacks, shelves of loaves, a hearth.</summary>
+		Bakery,
+		/// <summary>A craftsman's shop floor: workbenches, crates and barrels of stock, a shelf of tools.</summary>
+		Workshop,
+		/// <summary>A warehouse's floor: crates, barrels and sacks stacked round the walls.</summary>
+		Storehouse,
+		/// <summary>A shop behind its stall-board: a counter, shelves of wares, crates and barrels.</summary>
+		Shop,
+		// Appended 2026-10-19: a shop-house let to a trade is furnished as that trade's (PointOfInterestTrades), and the professions' own houses.
+		/// <summary>A tailor's: a cutting table, a dressed form, bolts of cloth on shelves.</summary>
+		Tailor,
+		/// <summary>A leatherworker's: a stitching bench, hides on racks, saddles and harness hung up.</summary>
+		Leatherworker,
+		/// <summary>A fletcher's and bowyer's: a bench of shafts and feathers, bins of arrows, bows on a rack.</summary>
+		Fletcher,
+		/// <summary>A cobbler's: a bench with lasts, boots on shelves.</summary>
+		Cobbler,
+		/// <summary>A jeweller's or goldsmith's: a fine bench with a little furnace, a locked display, a strongbox.</summary>
+		Jeweller,
+		/// <summary>A chandler's: racks of hanging candles, a tallow vat, barrels of oil and tallow.</summary>
+		Chandler,
+		/// <summary>A cartographer's: a broad map table, chart presses, a globe, maps hung on the walls.</summary>
+		Cartographer,
+		/// <summary>A scribe's: writing desks and shelves of scrolls.</summary>
+		Scribe,
+		/// <summary>A counting house or bank: the counting table behind its grille, strongboxes, ledgers on shelves.</summary>
+		CountingHouse,
+		/// <summary>An astronomer's room under the great telescope: star charts on a table, an armillary, desks and books.</summary>
+		Observatory,
+		/// <summary>A guild's or a town's council chamber: long tables with benches, chests of charters, a lectern, a hearth (no beds, unlike a lord's hall).</summary>
+		Guildhall,
+		// Appended 2026-10-19: a capital's palace (StructurePieces.Palace.cs).
+		/// <summary>
+		/// A palace's throne room: the throne on a dais across the room's back (StructurePieces.ThroneDaisDepth deep,
+		/// ThroneDaisRise up), braziers and the guard's armour beside it, the court's benches down the side walls facing the
+		/// aisle, braziers at the dais' foot; the way from the door to the dais kept clear.
+		/// </summary>
+		ThroneRoom,
 	}
 
 	/// <summary>One room of a structure piece, in its own frame: its floor's centre, clear size, height and kind; round or rectangular.</summary>
@@ -785,6 +899,15 @@ namespace FishMMO.Shared.WorldDesign
 		/// the well it climbs through (<see cref="StructureDraft.RoomClear"/>).
 		/// </summary>
 		public Vector4[] Clear;
+	}
+
+	/// <summary>A named place on a structure piece, in its own frame (<see cref="StructureDraft.Mark"/>).</summary>
+	public struct StructureMark
+	{
+		public string Name;
+		public Vector3 At;
+		/// <summary>Degrees about +y; 0 faces down −z.</summary>
+		public float Yaw;
 	}
 
 	/// <summary>How a door opens.</summary>

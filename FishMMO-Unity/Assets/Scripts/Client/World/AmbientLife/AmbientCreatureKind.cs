@@ -61,6 +61,22 @@ namespace FishMMO.Client
 		/// the dark. Walks like a beetle.
 		/// </summary>
 		Cricket,
+		/// <summary>
+		/// A millipede: a long low string of round segments, two pairs of short legs to each, a pair of short feelers. Its legs
+		/// step in waves down its length (FishAmbientLife.hlsl's crawler mode, each pair a little behind the one before).
+		/// </summary>
+		Millipede,
+		/// <summary>A land snail: a coiled shell on a long soft foot, two eye-stalks and two shorter feelers. Glides as a crawler.</summary>
+		Snail,
+		/// <summary>A small fish: a fusiform body, a forked tail fin, pectoral and pelvic fins. Swims with a lizard's body wave.</summary>
+		Fish,
+		/// <summary>
+		/// A jellyfish: a bell a little wider than deep, tentacles trailing from its rim; it rows by the bell's quick squeeze and
+		/// slow relaxing (FishAmbientLife.hlsl's own mode 5).
+		/// </summary>
+		Jelly,
+		/// <summary>A worm: a slender round body tapering to both ends, a few bristles. Writhes with a lizard's body wave.</summary>
+		Worm,
 	}
 
 	/// <summary>
@@ -115,6 +131,52 @@ namespace FishMMO.Client
 		Hover = 4,
 		/// <summary>Locusts: a wide low cloud all streaming one way with the wind, churning as it goes.</summary>
 		Plague = 5,
+		/// <summary>
+		/// Luminous spores and springtails in a cave's still air: a wide slow haze, each mote sinking and lifting on the faintest
+		/// draught and kindling and fading on a slow breath of its own.
+		/// </summary>
+		Spores = 6,
+	}
+
+	/// <summary>
+	/// Which parts of a creature give off its own light (bioluminescence), as its mesh's emission mask (COLOR.a, AmbientCreatureMeshes):
+	/// the shader's emission (FishAmbientLife.hlsl, <c>_EmitColour</c>) lights only those.
+	/// </summary>
+	public enum AmbientGlowParts
+	{
+		/// <summary>No light of its own.</summary>
+		None,
+		/// <summary>The whole body (a luminous millipede's armour, an ice worm, an ember mite).</summary>
+		Body,
+		/// <summary>Two lamps on the shield behind the head (a click beetle's headlamps).</summary>
+		Lanterns,
+		/// <summary>The front of the foot under the head (a glowing land snail's light organ).</summary>
+		Foot,
+		/// <summary>A line of light down each flank (a cave fish's lateral lines) and a few lamps under the eye.</summary>
+		LateralLines,
+		/// <summary>The wings' outer edges and the body (a wisp moth).</summary>
+		WingEdges,
+		/// <summary>A double row of spots down the back, each twinkling on its own (a lantern newt).</summary>
+		Spots,
+		/// <summary>The bell's rim and canals and the tentacles (a jelly): the light runs out from the crown as it squeezes.</summary>
+		Bell,
+	}
+
+	/// <summary>How a creature's own light comes and goes over time (<see cref="AmbientGlow"/>), on the shared clock.</summary>
+	public enum AmbientGlowPattern
+	{
+		/// <summary>A steady glow that breathes slowly brighter and dimmer.</summary>
+		Pulse,
+		/// <summary>Trains of a few short flashes, then dark a while (a firefly's, a glowing snail's).</summary>
+		FlashTrain,
+		/// <summary>Waves of light running nose to tail along the body, again and again (a millipede).</summary>
+		Wave,
+		/// <summary>The light running out from the crown to the rim and down the tentacles with each squeeze of the bell.</summary>
+		Ripple,
+		/// <summary>Each lamp twinkling on its own slow rhythm, the body's whole glow steady.</summary>
+		Twinkle,
+		/// <summary>A restless ember's flicker: incommensurate wavers that never settle.</summary>
+		Flicker,
 	}
 
 	/// <summary>
@@ -332,6 +394,23 @@ namespace FishMMO.Client
 		/// </summary>
 		public float Glow;
 
+		// ── Its own light (2026-10-20) ──
+		/// <summary>Which parts of it glow (none for a creature with no light of its own; swarms use <see cref="Glow"/>).</summary>
+		public AmbientGlowParts GlowParts;
+		/// <summary>How its light comes and goes.</summary>
+		public AmbientGlowPattern GlowPattern;
+		/// <summary>Its light's colour (sRGB): a millipede's cyan, a click beetle's yellow-green, an ember's orange.</summary>
+		public Color GlowColour = new Color(0.4f, 1f, 0.8f);
+		/// <summary>Its light at its brightest, times <see cref="GlowColour"/> (linear, HDR: past one the bloom catches it).</summary>
+		public float GlowStrength = 2f;
+		/// <summary>
+		/// Seconds one round of its pattern takes (a breath, a flash train and the dark after it, a wave's run down the body, a
+		/// flicker's slowest waver); each animal a little its own about it.
+		/// </summary>
+		public float GlowPeriod = 4f;
+		/// <summary>The share of its light it keeps between pulses and flashes, 0 dark .. 1 steady.</summary>
+		public float GlowRest = 0.3f;
+
 		// ── Caves ──
 		/// <summary>
 		/// The places in a carved cave it lives at (the cut's cave-life spots: AmbientCaveLife); none for a kind that never goes
@@ -366,8 +445,8 @@ namespace FishMMO.Client
 		public static float Celsius(float degrees) => degrees / 33.1f;
 
 		/// <summary>
-		/// Sixty kinds: fifty-two of the home world's (seven of them insect swarms, eight of them the caves'), three of thin
-		/// air and five of frozen air. Numbers are grounded in the animals': flight initiation distances from field studies
+		/// Seventy kinds: sixty-two of the home world's (eight of them insect swarms, eighteen of them the caves', eleven of those
+		/// with a light of their own), three of thin air and five of frozen air. Numbers are grounded in the animals': flight initiation distances from field studies
 		/// (small passerines 4-8 m, corvids 15-25 m, gulls 10-20 m, ducks 10-20 m, rabbits ~10 m), wing beats from
 		/// high-speed footage (finches 15-20 Hz, crows 3-4 Hz, gulls 3 Hz, bats 8-12 Hz), and densities thinned to
 		/// what a player notices rather than what a census would count.
@@ -622,7 +701,7 @@ namespace FishMMO.Client
 					Back = Hex(0x4a4038), Belly = Hex(0x7a7064), Accent = Hex(0xb08a80), Smoothness = 0.25f,
 					// And into the caves and old workings from the mouth, as far as the dark goes before there is nothing to eat.
 					CaveNiche = AmbientCaveNiche.Floor, CaveForms = AmbientCaveForms.Cave | AmbientCaveForms.Grotto | AmbientCaveForms.Mine | AmbientCaveForms.LavaTube,
-					CavePerSpot = 0.2f, CaveDark = new Vector2(0f, 0.75f),
+					CavePerSpot = 0.35f, CaveDark = new Vector2(0f, 0.9f),
 				},
 				new AmbientCreatureKind
 				{
@@ -1082,7 +1161,7 @@ namespace FishMMO.Client
 				},
 
 				// ── The caves: placed from the cut's cave-life spots, never on the open land (GroupsPerKm2 0). Underground the
-				// hour, the weather and the season's heat do not reach (AmbientGating.CaveActivity): the air is the year's mean. ──
+				// hour, the weather and the season's heat do not reach (AmbientGating.CaveActivity): the air is the ground's year mean (AmbientCaveLife.CaveAir). ──
 				new AmbientCreatureKind
 				{
 					// Horseshoe and long-eared bats: colonies hanging wing-wrapped from the high roofs by day and through the
@@ -1098,35 +1177,37 @@ namespace FishMMO.Client
 					Back = Hex(0x3a2e26), Belly = Hex(0x5a4a3e), Accent = Hex(0x1e1814), Smoothness = 0.2f, CastShadows = false,
 					Palette = new[] { Hex(0xffffff), Hex(0xd8c8b8), Hex(0xb0a8a0) },
 					CaveNiche = AmbientCaveNiche.Roost | AmbientCaveNiche.Flight | AmbientCaveNiche.Mouth,
-					CaveForms = AmbientCaveForms.Rock | AmbientCaveForms.IceCave, CavePerSpot = 0.7f, CaveDark = new Vector2(0f, 1f),
+					CaveForms = AmbientCaveForms.Rock | AmbientCaveForms.IceCave, CavePerSpot = 1f, CaveDark = new Vector2(0f, 1f),
 				},
 				new AmbientCreatureKind
 				{
-					// Cave crickets: humped and wingless, on long legs, feelers sweeping; in loose crowds on the walls and floors
-					// from the twilight inward, the commonest thing alive in a cave.
+					// Cave crickets: humped and wingless, on long legs, feelers sweeping; in crowds on the walls and floors from
+					// just inside the mouth inward, the commonest thing alive in a cave, up to the cold mountains' caves at the
+					// edge of the frost (as the alpine cave wētā).
 					Name = "Cave crickets", Shape = AmbientShape.Cricket, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
-					Length = new Vector2(0.025f, 0.04f), GroupSize = new Vector2Int(2, 7), GroupsPerKm2 = 0f, Spread = 0.6f, Roam = new Vector2(0.3f, 0.9f),
+					Length = new Vector2(0.035f, 0.055f), GroupSize = new Vector2Int(4, 12), GroupsPerKm2 = 0f, Spread = 0.6f, Roam = new Vector2(0.3f, 0.9f),
 					Speed = 0.35f, StrokeHz = 6f, Episode = new Vector2(5f, 14f),
-					Habitats = AmbientHabitat.Cave, Climate = new Vector2(Celsius(1f), 1f),
-					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(0f), RainLimit = 0f,
+					Habitats = AmbientHabitat.Cave, Climate = new Vector2(Celsius(0f), 1f),
+					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(-1f), RainLimit = 0f,
 					FlushMetres = 1.2f, FleeSpeed = 1.2f,
 					Back = Hex(0x8a6a48), Belly = Hex(0xb89a78), Accent = Hex(0x5a4430), Smoothness = 0.35f, CastShadows = false,
 					Palette = new[] { Hex(0xffffff), Hex(0xd8c8a8), Hex(0xc0a888) },
-					CaveNiche = AmbientCaveNiche.Floor | AmbientCaveNiche.Wall, CaveForms = AmbientCaveForms.Rock, CavePerSpot = 0.55f, CaveDark = new Vector2(0.15f, 1f),
+					CaveNiche = AmbientCaveNiche.Floor | AmbientCaveNiche.Wall, CaveForms = AmbientCaveForms.Rock, CavePerSpot = 1.4f, CaveDark = new Vector2(0.05f, 1f),
 				},
 				new AmbientCreatureKind
 				{
-					// Cave spiders: long-legged and dark, waiting on the walls of the twilight and a little past it for what
-					// blunders in from outside.
+					// Cave spiders: long-legged and dark, waiting on the walls for what blunders in from outside, and pale blind
+					// kin of theirs all the way into the deep dark hunting the crickets; the sheet-web kin hunt on in caves
+					// barely above freezing.
 					Name = "Cave spiders", Shape = AmbientShape.Spider, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
-					Length = new Vector2(0.018f, 0.03f), GroupSize = new Vector2Int(1, 3), GroupsPerKm2 = 0f, Spread = 0.5f, Roam = new Vector2(0.15f, 0.5f),
+					Length = new Vector2(0.025f, 0.04f), GroupSize = new Vector2Int(1, 4), GroupsPerKm2 = 0f, Spread = 0.5f, Roam = new Vector2(0.15f, 0.5f),
 					Speed = 0.3f, StrokeHz = 5f, Episode = new Vector2(10f, 30f),
-					Habitats = AmbientHabitat.Cave, Climate = new Vector2(Celsius(1f), 1f),
-					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(0f), RainLimit = 0f,
+					Habitats = AmbientHabitat.Cave, Climate = new Vector2(Celsius(-1f), 1f),
+					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(-2f), RainLimit = 0f,
 					FlushMetres = 0.8f, FleeSpeed = 0.8f,
 					Back = Hex(0x3a2e24), Belly = Hex(0x5a4a3a), Accent = Hex(0x7a5a3a), Smoothness = 0.5f, CastShadows = false,
 					Palette = new[] { Hex(0xffffff), Hex(0xc8b098), Hex(0x9a9088) },
-					CaveNiche = AmbientCaveNiche.Wall | AmbientCaveNiche.Floor, CaveForms = AmbientCaveForms.Rock, CavePerSpot = 0.45f, CaveDark = new Vector2(0.05f, 0.85f),
+					CaveNiche = AmbientCaveNiche.Wall | AmbientCaveNiche.Floor, CaveForms = AmbientCaveForms.Rock, CavePerSpot = 0.9f, CaveDark = new Vector2(0.05f, 1f),
 				},
 				new AmbientCreatureKind
 				{
@@ -1141,7 +1222,7 @@ namespace FishMMO.Client
 					Back = Hex(0x5a3a2a), Belly = Hex(0x8a6a4a), Accent = Hex(0xa87a3a), Smoothness = 0.75f, CastShadows = false,
 					Palette = new[] { Hex(0xffffff), Hex(0xc0a890), Hex(0x9a8a7a) },
 					CaveNiche = AmbientCaveNiche.Floor | AmbientCaveNiche.Wall, CaveForms = AmbientCaveForms.Cave | AmbientCaveForms.Grotto,
-					CavePerSpot = 0.35f, CaveDark = new Vector2(0.3f, 1f), CaveNeedsDamp = true,
+					CavePerSpot = 0.8f, CaveDark = new Vector2(0.2f, 1f), CaveNeedsDamp = true,
 				},
 				new AmbientCreatureKind
 				{
@@ -1154,7 +1235,7 @@ namespace FishMMO.Client
 					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(2f), RainLimit = 0f,
 					FlushMetres = 0f,
 					Back = Hex(0xe8c8c0), Belly = Hex(0xf0dcd4), Accent = Hex(0xd06a6a), Smoothness = 0.8f, CastShadows = false,
-					CaveNiche = AmbientCaveNiche.Pool, CaveForms = AmbientCaveForms.Cave | AmbientCaveForms.Grotto, CavePerSpot = 0.6f, CaveDark = new Vector2(0f, 1f),
+					CaveNiche = AmbientCaveNiche.Pool, CaveForms = AmbientCaveForms.Cave | AmbientCaveForms.Grotto, CavePerSpot = 1.2f, CaveDark = new Vector2(0f, 1f),
 					CaveNeedsDamp = true,
 				},
 				new AmbientCreatureKind
@@ -1168,7 +1249,7 @@ namespace FishMMO.Client
 					FlushMetres = 0f,
 					Back = Hex(0xb08050), Belly = Hex(0xc8a070), Accent = Hex(0x6a4a2a), Smoothness = 0.05f, CastShadows = false,
 					Palette = new[] { Hex(0xffffff), Hex(0xe0c0a0), Hex(0xc8b8a0) },
-					CaveNiche = AmbientCaveNiche.Flight, CaveForms = AmbientCaveForms.Rock, CavePerSpot = 0.6f, CaveDark = new Vector2(0f, 0.6f),
+					CaveNiche = AmbientCaveNiche.Flight, CaveForms = AmbientCaveForms.Rock, CavePerSpot = 1.2f, CaveDark = new Vector2(0f, 0.6f),
 				},
 				new AmbientCreatureKind
 				{
@@ -1181,7 +1262,7 @@ namespace FishMMO.Client
 					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(1f), RainLimit = 0f,
 					FlushMetres = 0f,
 					Back = Hex(0x304048), Belly = Hex(0x405058), Accent = Hex(0x60e0c8), Smoothness = 0.3f, CastShadows = false, Glow = 3f,
-					CaveNiche = AmbientCaveNiche.Glow, CaveForms = AmbientCaveForms.Cave | AmbientCaveForms.Grotto, CavePerSpot = 0.8f, CaveDark = new Vector2(0.3f, 1f),
+					CaveNiche = AmbientCaveNiche.Glow, CaveForms = AmbientCaveForms.Cave | AmbientCaveForms.Grotto, CavePerSpot = 1f, CaveDark = new Vector2(0.2f, 1f),
 				},
 				new AmbientCreatureKind
 				{
@@ -1194,7 +1275,161 @@ namespace FishMMO.Client
 					FlushMetres = 2f, FleeSpeed = 2f,
 					Back = Hex(0xb0a080), Belly = Hex(0xd8d0b8), Accent = Hex(0x6a5a40), Smoothness = 0.4f, CastShadows = false,
 					Palette = new[] { Hex(0xffffff), Hex(0xd8d0c0), Hex(0xc8b8a0) },
-					CaveNiche = AmbientCaveNiche.Wall | AmbientCaveNiche.Floor, CaveForms = AmbientCaveForms.Rock, CavePerSpot = 0.35f, CaveDark = new Vector2(0f, 0.85f),
+					CaveNiche = AmbientCaveNiche.Wall | AmbientCaveNiche.Floor, CaveForms = AmbientCaveForms.Rock, CavePerSpot = 0.7f, CaveDark = new Vector2(0f, 1f),
+				},
+
+				// ── The caves' light-makers (2026-10-20: "Bioluminescent creatures should also exist in caves"; "more glow is good
+				// inside the caves"): each lit by the emission (GlowParts, GlowPattern: AmbientGlow) or, a swarm, by its own light.
+				// Realism first — the luminous millipedes, glowing snails, click beetles and ice worms are real animals, their
+				// colours and rhythms the real ones' — and the rest fantasy kin of real things (blind cave fish and freshwater jellies
+				// given light, a newt with a fire salamander's livery lit, moths and mites of a world with more magic in its dark).
+				// Kept to the walking level where they can be seen (floors, walls, the low glow air: PointOfInterestCaveDressing.Life). ──
+				new AmbientCreatureKind
+				{
+					// Lantern beetles: click beetles with two headlamps on the shield (Pyrophorus), a steady yellow-green that
+					// breathes slowly, creeping over the damp rock and the fungus where the glow gathers.
+					Name = "Lantern beetles", Shape = AmbientShape.Beetle, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.025f, 0.04f), GroupSize = new Vector2Int(1, 3), GroupsPerKm2 = 0f, Spread = 0.5f, Roam = new Vector2(0.2f, 0.6f),
+					Speed = 0.06f, StrokeHz = 4f, Episode = new Vector2(12f, 30f),
+					Habitats = AmbientHabitat.Cave, Climate = new Vector2(Celsius(6f), 1f),
+					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(4f), RainLimit = 0f,
+					FlushMetres = 0.8f, FleeSpeed = 0.4f,
+					Back = Hex(0x3a2a1c), Belly = Hex(0x4a3a2a), Accent = Hex(0x2a1e14), Smoothness = 0.55f, CastShadows = false,
+					GlowParts = AmbientGlowParts.Lanterns, GlowPattern = AmbientGlowPattern.Pulse, GlowColour = Hex(0xc0ff50), GlowStrength = 5f, GlowPeriod = 6f, GlowRest = 0.55f,
+					CaveNiche = AmbientCaveNiche.Floor | AmbientCaveNiche.Wall, CaveForms = AmbientCaveForms.Limestone | AmbientCaveForms.Mine, CavePerSpot = 0.9f,
+					CaveDark = new Vector2(0.15f, 1f),
+				},
+				new AmbientCreatureKind
+				{
+					// Luminous millipedes (Motyxia): the whole armour lit a cold cyan-green (about 495 nm), here a light that runs
+					// down the body in waves as its legs do; on the walls and floors of the deep cave.
+					Name = "Glow millipedes", Shape = AmbientShape.Millipede, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.035f, 0.06f), GroupSize = new Vector2Int(1, 4), GroupsPerKm2 = 0f, Spread = 0.5f, Roam = new Vector2(0.2f, 0.7f),
+					Speed = 0.025f, StrokeHz = 3f, Episode = new Vector2(15f, 40f),
+					Habitats = AmbientHabitat.Cave, Climate = new Vector2(Celsius(3f), Celsius(26f)),
+					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(2f), RainLimit = 0f,
+					FlushMetres = 0.5f, FleeSpeed = 0.15f,
+					Back = Hex(0x3e3a34), Belly = Hex(0x5a5248), Accent = Hex(0x26221e), Smoothness = 0.6f, CastShadows = false,
+					GlowParts = AmbientGlowParts.Body, GlowPattern = AmbientGlowPattern.Wave, GlowColour = Hex(0x50f0d8), GlowStrength = 3.5f, GlowPeriod = 3.5f, GlowRest = 0.35f,
+					CaveNiche = AmbientCaveNiche.Floor | AmbientCaveNiche.Wall, CaveForms = AmbientCaveForms.Limestone | AmbientCaveForms.Mine, CavePerSpot = 1f,
+					CaveDark = new Vector2(0.2f, 1f),
+				},
+				new AmbientCreatureKind
+				{
+					// Glowing land snails (Quantula): an amber shell on a pale foot whose front flashes yellow-green in short trains,
+					// on the damp rock of a limestone cave; withdrawn into the shell when disturbed.
+					Name = "Glowing snails", Shape = AmbientShape.Snail, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.03f, 0.05f), GroupSize = new Vector2Int(1, 3), GroupsPerKm2 = 0f, Spread = 0.4f, Roam = new Vector2(0.1f, 0.3f),
+					Speed = 0.005f, StrokeHz = 0.6f, Episode = new Vector2(40f, 120f),
+					Habitats = AmbientHabitat.Cave, Climate = new Vector2(Celsius(6f), 1f),
+					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(4f), RainLimit = 0f,
+					FlushMetres = 0.4f, FleeSpeed = 0.02f,
+					Back = Hex(0x9a7040), Belly = Hex(0xb8a890), Accent = Hex(0x5a3a1e), Smoothness = 0.8f, CastShadows = false,
+					GlowParts = AmbientGlowParts.Foot, GlowPattern = AmbientGlowPattern.FlashTrain, GlowColour = Hex(0xa8ff90), GlowStrength = 6f, GlowPeriod = 6f, GlowRest = 0.1f,
+					CaveNiche = AmbientCaveNiche.Floor | AmbientCaveNiche.Wall, CaveForms = AmbientCaveForms.Limestone, CavePerSpot = 0.9f, CaveDark = new Vector2(0.1f, 1f),
+					CaveNeedsDamp = true,
+				},
+				new AmbientCreatureKind
+				{
+					// Spore motes: luminous spores and springtails hanging in a cave's still damp air (and foxfire's in a mine's,
+					// off its rotting props), a pale green haze each mote of which kindles and fades on its own slow breath.
+					Name = "Spore motes", Shape = AmbientShape.Swarm, Behaviour = AmbientBehaviour.Swarm, Family = AmbientFamily.Swarms, SwarmStyle = AmbientSwarmStyle.Spores,
+					Length = new Vector2(0.002f, 0.004f), GroupSize = new Vector2Int(30, 90), GroupsPerKm2 = 0f, Spread = 2.5f, Roam = new Vector2(0.5f, 1.5f),
+					Speed = 0.05f, Altitude = new Vector2(0f, 0f), Episode = new Vector2(30f, 80f),
+					Habitats = AmbientHabitat.Cave, Climate = new Vector2(Celsius(1f), 1f),
+					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(0f), RainLimit = 0f, Flies = false,
+					FlushMetres = 0f,
+					Back = Hex(0x3a4a40), Belly = Hex(0x4a5a50), Accent = Hex(0x90f0b8), Smoothness = 0.2f, CastShadows = false, Glow = 2.5f,
+					CaveNiche = AmbientCaveNiche.Glow, CaveForms = AmbientCaveForms.Cave | AmbientCaveForms.Grotto | AmbientCaveForms.Mine, CavePerSpot = 1.2f,
+					CaveDark = new Vector2(0.15f, 1f),
+				},
+				new AmbientCreatureKind
+				{
+					// Lanternfish of the caves: blind, pale, a finger long, schooling slowly in the still fresh water; a line of blue
+					// light runs down each flank (the lateral line that feels the water, lit) and three lamps under the blind eye.
+					Name = "Cave lanternfish", Shape = AmbientShape.Fish, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.05f, 0.09f), GroupSize = new Vector2Int(2, 6), GroupsPerKm2 = 0f, Spread = 0.8f, Roam = new Vector2(0.5f, 1.5f),
+					Speed = 0.12f, StrokeHz = 3f, Episode = new Vector2(20f, 50f),
+					Habitats = AmbientHabitat.Cave, Climate = new Vector2(Celsius(4f), Celsius(24f)),
+					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(2f), RainLimit = 0f,
+					FlushMetres = 0f,
+					Back = Hex(0xd8ccc8), Belly = Hex(0xf0e8e4), Accent = Hex(0xb89898), Smoothness = 0.85f, CastShadows = false,
+					GlowParts = AmbientGlowParts.LateralLines, GlowPattern = AmbientGlowPattern.Wave, GlowColour = Hex(0x60c0ff), GlowStrength = 3.5f, GlowPeriod = 4f, GlowRest = 0.45f,
+					CaveNiche = AmbientCaveNiche.Pool, CaveForms = AmbientCaveForms.Cave | AmbientCaveForms.Grotto, CavePerSpot = 1.2f, CaveDark = new Vector2(0f, 1f),
+					CaveNeedsDamp = true,
+				},
+				new AmbientCreatureKind
+				{
+					// Lantern jellies: thumbnail jellies (the freshwater jelly's kin, and the sea's in a sea cave's pools) whose
+					// rim, canals and tentacles glow blue-violet, the light running out from the crown at each beat of the bell.
+					Name = "Lantern jellies", Shape = AmbientShape.Jelly, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.03f, 0.06f), GroupSize = new Vector2Int(1, 4), GroupsPerKm2 = 0f, Spread = 1f, Roam = new Vector2(0.5f, 1.5f),
+					Speed = 0.03f, StrokeHz = 0.8f, Episode = new Vector2(30f, 80f),
+					Habitats = AmbientHabitat.Cave, Climate = new Vector2(Celsius(3f), 1f),
+					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(1f), RainLimit = 0f,
+					FlushMetres = 0f,
+					Back = Hex(0xc0d0e8), Belly = Hex(0xe0e8f4), Accent = Hex(0x8098c8), Smoothness = 0.9f, CastShadows = false,
+					GlowParts = AmbientGlowParts.Bell, GlowPattern = AmbientGlowPattern.Ripple, GlowColour = Hex(0x8098ff), GlowStrength = 4f, GlowRest = 0.35f,
+					CaveNiche = AmbientCaveNiche.Pool, CaveForms = AmbientCaveForms.Limestone, CavePerSpot = 1f, CaveDark = new Vector2(0f, 1f),
+				},
+				new AmbientCreatureKind
+				{
+					// Wisp moths: pale moths of the deep dark whose wing edges glow a cold blue-white, wheeling slow in the glow air
+					// and the halls' open air (the "will-o'-the-wisps" seen deep in caves).
+					Name = "Wisp moths", Shape = AmbientShape.Butterfly, Behaviour = AmbientBehaviour.Hawk, Family = AmbientFamily.Bats,
+					Length = new Vector2(0.04f, 0.06f), GroupSize = new Vector2Int(1, 3), GroupsPerKm2 = 0f, Spread = 2f, Roam = new Vector2(2f, 4f),
+					Speed = 0.6f, StrokeHz = 7f, Altitude = new Vector2(0f, 0f),
+					Habitats = AmbientHabitat.Cave, Climate = new Vector2(Celsius(2f), 1f),
+					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(1f), RainLimit = 0f,
+					FlushMetres = 0f,
+					Back = Hex(0xd0d4e0), Belly = Hex(0xe4e8f0), Accent = Hex(0x8090b8), Smoothness = 0.1f, CastShadows = false,
+					GlowParts = AmbientGlowParts.WingEdges, GlowPattern = AmbientGlowPattern.Pulse, GlowColour = Hex(0xa8ccff), GlowStrength = 3f, GlowPeriod = 5f, GlowRest = 0.4f,
+					CaveNiche = AmbientCaveNiche.Flight | AmbientCaveNiche.Glow, CaveForms = AmbientCaveForms.Cave | AmbientCaveForms.Grotto | AmbientCaveForms.Mine,
+					CavePerSpot = 1f, CaveDark = new Vector2(0.3f, 1f),
+				},
+				new AmbientCreatureKind
+				{
+					// Lantern newts: slate-dark newts with a fire salamander's double row of spots down the back, each a warm gold
+					// lamp twinkling on its own, on the wet rock of the deep cave.
+					Name = "Lantern newts", Shape = AmbientShape.Lizard, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.08f, 0.12f), GroupSize = new Vector2Int(1, 2), GroupsPerKm2 = 0f, Spread = 0.6f, Roam = new Vector2(0.3f, 0.8f),
+					Speed = 0.1f, StrokeHz = 2.5f, Episode = new Vector2(12f, 30f), RainLover = true,
+					Habitats = AmbientHabitat.Cave, Climate = new Vector2(Celsius(3f), Celsius(20f)),
+					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(2f), RainLimit = 0f,
+					FlushMetres = 1f, FleeSpeed = 0.5f,
+					Back = Hex(0x2a2a32), Belly = Hex(0x4a3a30), Accent = Hex(0xe0a040), Smoothness = 0.75f, CastShadows = false,
+					GlowParts = AmbientGlowParts.Spots, GlowPattern = AmbientGlowPattern.Twinkle, GlowColour = Hex(0xffc060), GlowStrength = 3f, GlowPeriod = 4f, GlowRest = 0.35f,
+					CaveNiche = AmbientCaveNiche.Floor | AmbientCaveNiche.Wall, CaveForms = AmbientCaveForms.Cave | AmbientCaveForms.Grotto,
+					CavePerSpot = 0.6f, CaveDark = new Vector2(0.25f, 1f), CaveNeedsDamp = true,
+				},
+				new AmbientCreatureKind
+				{
+					// Ember mites: fire-touched mites of the lava tubes, crowds of red-orange specks flickering like the last
+					// coals over the bare basalt (a lava tube's only light-makers; the fantasy's, with the mites of the real tubes).
+					Name = "Ember mites", Shape = AmbientShape.Spider, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.012f, 0.02f), GroupSize = new Vector2Int(5, 14), GroupsPerKm2 = 0f, Spread = 0.5f, Roam = new Vector2(0.2f, 0.6f),
+					Speed = 0.08f, StrokeHz = 8f, Episode = new Vector2(6f, 18f),
+					Habitats = AmbientHabitat.Cave, Climate = new Vector2(-1f, 1f),
+					Activity = AmbientActivity.AnyTime, ColdLimit = NeverTooCold, RainLimit = 0f,
+					FlushMetres = 0.6f, FleeSpeed = 0.5f,
+					Back = Hex(0x3a1a10), Belly = Hex(0x5a2a14), Accent = Hex(0x8a3a10), Smoothness = 0.4f, CastShadows = false,
+					GlowParts = AmbientGlowParts.Body, GlowPattern = AmbientGlowPattern.Flicker, GlowColour = Hex(0xff7020), GlowStrength = 4f, GlowPeriod = 1.6f, GlowRest = 0.4f,
+					CaveNiche = AmbientCaveNiche.Floor | AmbientCaveNiche.Wall, CaveForms = AmbientCaveForms.LavaTube, CavePerSpot = 2.2f, CaveDark = new Vector2(0f, 1f),
+				},
+				new AmbientCreatureKind
+				{
+					// Ice worms (Mesenchytraeus): finger-joint-long dark worms that live in glacier ice at its melting point and die
+					// above about 5 °C, here glowing ice-blue as they writhe over an ice cave's walls and floors. A cold-trap ice
+					// cave keeps its ice under a ground year mean of several degrees, hence the band's top.
+					Name = "Ice worms", Shape = AmbientShape.Worm, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Length = new Vector2(0.015f, 0.03f), GroupSize = new Vector2Int(3, 10), GroupsPerKm2 = 0f, Spread = 0.5f, Roam = new Vector2(0.1f, 0.4f),
+					Speed = 0.01f, StrokeHz = 1.2f, Episode = new Vector2(20f, 60f),
+					Habitats = AmbientHabitat.Cave, Climate = new Vector2(-1f, Celsius(9f)),
+					Activity = AmbientActivity.AnyTime, ColdLimit = Celsius(-12f), RainLimit = 0f,
+					FlushMetres = 0f,
+					Back = Hex(0x24283a), Belly = Hex(0x343a4c), Accent = Hex(0x181a26), Smoothness = 0.8f, CastShadows = false,
+					GlowParts = AmbientGlowParts.Body, GlowPattern = AmbientGlowPattern.Pulse, GlowColour = Hex(0x60b8ff), GlowStrength = 3f, GlowPeriod = 6f, GlowRest = 0.4f,
+					CaveNiche = AmbientCaveNiche.Floor | AmbientCaveNiche.Wall, CaveForms = AmbientCaveForms.IceCave, CavePerSpot = 4f, CaveDark = new Vector2(0f, 1f),
 				},
 			};
 		}

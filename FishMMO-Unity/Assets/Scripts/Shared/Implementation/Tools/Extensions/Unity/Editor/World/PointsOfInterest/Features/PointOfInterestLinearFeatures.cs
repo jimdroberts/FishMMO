@@ -236,7 +236,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// A rectangle's four sides (pure; a field or a fold: centre, yaw degrees, size along its own x and z), each moved out by
 		/// <paramref name="outset"/> metres, the gate in the side whose outward normal faces <paramref name="toward"/> most (the
-		/// settlement), the same rule as the kit's field fence. Order: +z, −z, +x, −x, as the fence's.
+		/// settlement), the same rule as the kit's field fence. Order: +z, −z, +x, −x, as the fence's. Each runs round the rectangle the
+		/// same way, its inside on the left (2026-10-19): every corner is one side's end and the next's start, so a fence whose modules
+		/// carry their post at their start has exactly one post on each, and a gate swung to its left swings in.
 		/// </summary>
 		public static Side[] RectangleSides(Vector2 centre, float yaw, Vector2 size, Vector2 toward, float outset = 0f)
 		{
@@ -246,10 +248,10 @@ namespace FishMMO.Shared.WorldDesign
 			float hx = size.x * 0.5f + outset, hz = size.y * 0.5f + outset;
 			var sides = new[]
 			{
-				new Side { From = centre + axisZ * hz - axisX * hx, To = centre + axisZ * hz + axisX * hx, Outward = axisZ },
+				new Side { From = centre + axisZ * hz + axisX * hx, To = centre + axisZ * hz - axisX * hx, Outward = axisZ },
 				new Side { From = centre - axisZ * hz - axisX * hx, To = centre - axisZ * hz + axisX * hx, Outward = -axisZ },
 				new Side { From = centre + axisX * hx - axisZ * hz, To = centre + axisX * hx + axisZ * hz, Outward = axisX },
-				new Side { From = centre - axisX * hx - axisZ * hz, To = centre - axisX * hx + axisZ * hz, Outward = -axisX },
+				new Side { From = centre - axisX * hx + axisZ * hz, To = centre - axisX * hx - axisZ * hz, Outward = -axisX },
 			};
 			Vector2 to = (toward - centre).sqrMagnitude > 1e-8f ? (toward - centre).normalized : Vector2.up;
 			int gate = 0;
@@ -515,16 +517,19 @@ namespace FishMMO.Shared.WorldDesign
 		/// edging, a baulatura's ditch banks; I2j-b): the same laying as every other place, seeded by <paramref name="seed"/>. Inside
 		/// <paramref name="ownField"/> (a field's centre, yaw and size) its own claim and keep-out stop nothing; <paramref name="seat"/>,
 		/// where given, is the height each module is seated at (a terrace wall on the bench below its step) in place of the ground's.
-		/// Returns the props laid.
+		/// Given <paramref name="joins"/>, its modules are queued there to be laid with the other lines meeting them (a yard's runs: the
+		/// caller closes it); else they are laid, with their closing posts, before it returns. <paramref name="planned"/>: a layout already
+		/// kept the line off the ways, the fields and the keep-outs, so only water, no ground and too steep a pitch leave a module out.
+		/// Returns the props laid (queued, with <paramref name="joins"/>).
 		/// </summary>
 		public static int LayAlong(PointOfInterestSiteContext context, BiomeTemplate biome, BiomeLinearStyle style, IReadOnlyList<Vector2> line, int seed,
-			(Vector2 Centre, float Yaw, Vector2 Size)? ownField = null, Func<Vector2, float> seat = null)
+			(Vector2 Centre, float Yaw, Vector2 Size)? ownField = null, Func<Vector2, float> seat = null, Joins joins = null, bool planned = false)
 		{
 			if (context == null || line == null || line.Count < 2 || !BiomeLinearFeatures.IsLaid(style))
 			{
 				return 0;
 			}
-			var layer = new Layer(Copy(context), biome, style, seed) { OwnField = ownField, Seat = seat };
+			var layer = new Layer(Copy(context), biome, style, seed, joins) { OwnField = ownField, Seat = seat, Planned = planned };
 			layer.Lay(line, false);
 			layer.Report();
 			return layer.Laid;
@@ -1049,6 +1054,11 @@ namespace FishMMO.Shared.WorldDesign
 			public ScenePath OwnWay;
 			/// <summary>The height a module is seated at, where given (an outside builder's line, LayAlong), in place of the ground's.</summary>
 			public Func<Vector2, float> Seat;
+			/// <summary>A line a layout already kept off the ways, the fields and the keep-outs (LayAlong): only water, no ground and steepness stop it.</summary>
+			public bool Planned;
+			/// <summary>Where its modules are queued until their joints are known; its own (laid by <see cref="Report"/>) unless a caller's.</summary>
+			private readonly Joins joins;
+			private readonly bool ownJoins;
 			private PathSegmentIndex ways;
 			private readonly List<string> missing = new List<string>();
 			private List<(Vector2 A, Vector2 B)> hedge;
@@ -1056,13 +1066,15 @@ namespace FishMMO.Shared.WorldDesign
 			public BiomeTemplate Biome => biome;
 			public BiomeLinearStyle Style => style;
 
-			public Layer(PointOfInterestSiteContext context, BiomeTemplate biome, BiomeLinearStyle style, int seed)
+			public Layer(PointOfInterestSiteContext context, BiomeTemplate biome, BiomeLinearStyle style, int seed, Joins joins = null)
 			{
 				this.context = context;
 				this.biome = biome;
 				this.style = style;
 				this.seed = seed;
 				roll = BiomeLinearFeatures.Unit(BiomeLinearFeatures.Hash(seed, 3, 0, 0));
+				ownJoins = joins == null;
+				this.joins = joins ?? new Joins();
 			}
 
 			private PathSegmentIndex Ways()
@@ -1129,6 +1141,10 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return true;
 				}
+				if (Planned)
+				{
+					return false;
+				}
 				if (!KeepOutsFree && OwnField == null && context.Points != null && context.Points.IsKeptOut(p.x, p.y))
 				{
 					return true;
@@ -1137,6 +1153,9 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			private float Ground(Vector2 p) => context.GroundAt != null ? context.GroundAt(p.x, p.y) : 0f;
+
+			/// <summary>A joint on the line: on its seat where it has one, else sunk a little into the ground.</summary>
+			private Vector3 Joint(Vector2 p) => Seat != null ? new Vector3(p.x, Seat(p), p.y) : new Vector3(p.x, Ground(p) - SinkMetres, p.y);
 
 			/// <summary>Lays the style along one line, its gate (when <paramref name="gate"/>) in its middle module.</summary>
 			public void Lay(IReadOnlyList<Vector2> line, bool gate)
@@ -1195,7 +1214,7 @@ namespace FishMMO.Shared.WorldDesign
 						Missing(id);
 						return;
 					}
-					Place(prefab, a, b, piece.ModuleLength, yScale, Broken ? BiomeLinearFeatures.Unit(BiomeLinearFeatures.Hash(seed, k, lines, 9)) * 14f - 7f : 0f);
+					Place(prefab, id, v, a, b, piece.ModuleLength, yScale, Broken ? BiomeLinearFeatures.Unit(BiomeLinearFeatures.Hash(seed, k, lines, 9)) * 14f - 7f : 0f);
 					if (style.Kind == BiomeLinearKind.Hedge)
 					{
 						(hedge ??= new List<(Vector2, Vector2)>()).Add((a, b));
@@ -1218,17 +1237,16 @@ namespace FishMMO.Shared.WorldDesign
 				return run > 1e-3f && Mathf.Abs(Ground(b) - Ground(a)) / run > MaxGrade;
 			}
 
-			/// <summary>A piece built along x laid between two ground points, scaled along x to the gap and in y to the style's height.</summary>
-			private void Place(GameObject prefab, Vector2 a, Vector2 b, float module, float yScale, float tilt)
+			/// <summary>
+			/// A piece built along x queued between two joints (PointOfInterestLinearFeatures.Joins.cs): its ends on them, scaled along x to
+			/// the chord and in y to the style's height; how far the ground dips under its middle below the chord goes with it, so a solid
+			/// piece's joints are sunk to cover it (its neighbours' with them).
+			/// </summary>
+			private void Place(GameObject prefab, string id, int variant, Vector2 a, Vector2 b, float module, float yScale, float tilt)
 			{
-				var pa = new Vector3(a.x, Seat != null ? Seat(a) : Ground(a), a.y);
-				var pb = new Vector3(b.x, Seat != null ? Seat(b) : Ground(b), b.y);
-				Vector3 mid = 0.5f * (pa + pb);
-				// Seated on the lower of the chord and the ground under its middle, a little sunk: its footing covers the rest.
-				mid.y = Seat != null ? Mathf.Min(mid.y, Seat(0.5f * (a + b))) : Mathf.Min(mid.y, Ground(0.5f * (a + b))) - 0.04f;
-				Quaternion rotation = AlongX(pa, pb) * Quaternion.Euler(tilt, 0f, 0f);
-				float length = new Vector2(b.x - a.x, b.y - a.y).magnitude;
-				context.AddProp(prefab, mid, rotation, new Vector3(length / module, yScale, 1f));
+				Vector3 pa = Joint(a), pb = Joint(b);
+				float dip = 0.5f * (pa.y + pb.y) - Joint(0.5f * (a + b)).y;
+				joins.Module(context, context.Palette, prefab, id, variant, pa, pb, module, dip, yScale, tilt);
 				Laid++;
 			}
 
@@ -1246,10 +1264,9 @@ namespace FishMMO.Shared.WorldDesign
 					Missing("LinearGate");
 					return;
 				}
-				BiomeStructurePalette palette = context.Palette;
-				context.Palette = StructurePieces.LinearPalette(BiomeTemplateArt.StructurePalette(biome), style, "LinearGate");
-				Place(prefab, a, b, StructurePieces.GateModule, 1f, 0f);
-				context.Palette = palette;
+				// Its posts close the modules either side of it; one that cannot stand leaves them to their closing posts.
+				joins.Gate(context, StructurePieces.LinearPalette(BiomeTemplateArt.StructurePalette(biome), style, "LinearGate"), prefab, Joint(a), Joint(b), StructurePieces.GateModule);
+				Laid++;
 			}
 
 			/// <summary>A hedge's leaves: its bushes painted thick along every module laid, into the biome's own prototypes of them.</summary>
@@ -1477,9 +1494,19 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 
-			/// <summary>One note for what this place laid, and one for what its art lacked.</summary>
+			/// <summary>Lays what it queued (its own joins), then one note for what this place laid, and one for what its art lacked.</summary>
 			public void Report()
 			{
+				if (ownJoins && joins.Count > 0)
+				{
+					// Its modules were counted as they were queued: what closing adds is its posts.
+					int queued = joins.Count;
+					Laid += joins.Close() - queued;
+					if (joins.MissingPosts > 0)
+					{
+						Missing(StructurePieces.LinearPost);
+					}
+				}
 				if (missing.Count > 0)
 				{
 					context.Notes?.Add($"Linear features: {Label(biome)} {BiomeLinearFeatures.Id(style)}: not generated yet: {string.Join(", ", missing)} (Biome Tools → Generate biome art, then regenerate).");

@@ -30,6 +30,11 @@ namespace FishMMO.TestHarness.World
 	/// finds it. Prop collision is streamed: the walker registers itself as a focus, so the rocks and trunks round it are
 	/// built the moment it is put down rather than on the streamer's next tick.
 	/// </para>
+	/// <para>
+	/// <b>The boundary glass a player sees</b> (<see cref="FishMMO.Client.ClientBoundaryWarning"/>, the game's own) stands
+	/// round it while it walks, from the scene's boundaries, so where a scene ends can be seen on foot. Shown only: nothing
+	/// stops the walker or puts it back, as nothing in the bed is the server.
+	/// </para>
 	/// </remarks>
 	public sealed class WorldSimWalker : MonoBehaviour
 	{
@@ -98,6 +103,8 @@ namespace FishMMO.TestHarness.World
 		private Matrix4x4 deckWas;
 		private float deckYawWas;
 		private bool sitting;
+		/// <summary>The scene boundary's glass round the walker, for as long as it is enabled.</summary>
+		private FishMMO.Client.ClientBoundaryWarning boundaryWarning;
 
 		/// <summary>
 		/// A walker set up as a player is, in the same scene as <paramref name="near"/>, so its motor's queries run in
@@ -179,12 +186,24 @@ namespace FishMMO.TestHarness.World
 			PropColliderStreamer.AddFocus(transform, PropColliderStreamer.ImmediateRadius);
 			// It treads the ground and parts the grass as a character does.
 			FishMMO.Client.GroundTrailMap.AddSource(transform);
+			// And sees the scene's edge as glass, as a player does.
+			boundaryWarning = new FishMMO.Client.ClientBoundaryWarning();
+			boundaryWarning.Initialize(transform);
 		}
 
 		private void OnDisable()
 		{
 			PropColliderStreamer.RemoveFocus(transform);
 			FishMMO.Client.GroundTrailMap.RemoveSource(transform);
+			// The panes, their material and the camera's scene textures go with it.
+			boundaryWarning?.Shutdown();
+			boundaryWarning = null;
+		}
+
+		/// <summary>After the frame's step (the camera moves the walker in its Update), so the glass is where it now stands.</summary>
+		private void LateUpdate()
+		{
+			boundaryWarning?.Tick();
 		}
 
 		/// <summary>

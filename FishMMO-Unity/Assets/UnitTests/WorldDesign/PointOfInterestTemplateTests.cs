@@ -157,7 +157,8 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				Assert.That(spec.Layout, Is.EqualTo(PointOfInterestLayout.Walled), spec.Name);
 				Assert.That(spec.Pieces.Exists(p => p.Role == PointOfInterestSlotRole.Street), Is.True, $"{spec.Name} has streets");
-				Assert.That(spec.Pieces.Exists(p => p.Role == PointOfInterestSlotRole.Centre && p.Tag == PointOfInterestTemplateSpecs.Keep), Is.True, $"{spec.Name} has its keep at the centre");
+				// (2026-10-19) Its palace compound where the keep was (PointOfInterestPalace).
+				Assert.That(spec.Pieces.Exists(p => p.Role == PointOfInterestSlotRole.Centre && p.Tag == PointOfInterestTemplateSpecs.Palace), Is.True, $"{spec.Name} has its palace at the centre");
 			}
 		}
 
@@ -314,6 +315,40 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		[Test]
+		public void WellsStandWellSpacingApart_AndASmallVillageKeepsOne()
+		{
+			var city = Request(PointOfInterestLayout.Walled, 130f,
+				(PointOfInterestSlotRole.Perimeter, WallSize, 6f, 1), (PointOfInterestSlotRole.Gate, GateSize, 12f, 4), (PointOfInterestSlotRole.WallTower, TowerSize, 0f, 10),
+				(PointOfInterestSlotRole.Centre, KeepSize, 0f, 1), (PointOfInterestSlotRole.Centre, new Vector2(2.4f, 2.4f), 0f, 4),
+				(PointOfInterestSlotRole.Street, HouseSize, 0f, 70), (PointOfInterestSlotRole.Scatter, CrateSize, 0f, 15));
+			var village = Request(PointOfInterestLayout.Street, 40f,
+				(PointOfInterestSlotRole.Centre, new Vector2(2.4f, 2.4f), 0f, 2), (PointOfInterestSlotRole.Street, HouseSize, 0f, 12));
+			foreach ((string name, PointOfInterestLayoutRequest request, int well, int least) in new[] { ("city", city, 4, 2), ("village", village, 0, 1) })
+			{
+				PointOfInterestLayoutSlot slot = request.Slots[well];
+				slot.Well = true;
+				request.Slots[well] = slot;
+				for (int seed = 1; seed <= 6; seed++)
+				{
+					List<PointOfInterestLayoutPiece> wells = PointOfInterestLayouts.Place(request, new DeterministicRNG(seed)).FindAll(p => p.Slot == well);
+					Assert.That(wells.Count, Is.GreaterThanOrEqualTo(least), $"{name} seed {seed}: wells laid");
+					for (int i = 0; i < wells.Count; i++)
+					{
+						for (int j = i + 1; j < wells.Count; j++)
+						{
+							Assert.That(Vector2.Distance(wells[i].Offset, wells[j].Offset), Is.GreaterThanOrEqualTo(PointOfInterestLayouts.WellSpacing),
+								$"{name} seed {seed}: wells {i} and {j}");
+						}
+					}
+					if (name == "village")
+					{
+						Assert.That(wells.Count, Is.EqualTo(1), $"village seed {seed}: a second well 50 m off would stand outside it");
+					}
+				}
+			}
+		}
+
+		[Test]
 		public void EveryLayoutPacksWithoutOverlapInsideItsFootprint()
 		{
 			foreach ((string name, PointOfInterestLayoutRequest request) in Requests())
@@ -345,7 +380,14 @@ namespace FishMMO.UnitTests.WorldDesign
 						PointOfInterestSlotRole role = PointOfInterestLayouts.RoleFor(spec.Layout, s, slot.Role);
 						int count = PropsFeature.CountFor(slot, size, true, random);
 						PointOfInterestPieceMetrics metrics = PointOfInterestPieceResolver.Measure(new PointOfInterestPieceRequest(slot.Tag, style, 0));
-						request.Slots.Add(new PointOfInterestLayoutSlot { Role = role, Footprint = metrics.Footprint, Module = metrics.Module, Count = count });
+						// As PropsFeature builds them: a stone curtain's walk (its towers stand on it), its gates' and towers' joins.
+						bool station = role == PointOfInterestSlotRole.Gate || role == PointOfInterestSlotRole.WallTower;
+						request.Slots.Add(new PointOfInterestLayoutSlot
+						{
+							Role = role, Footprint = metrics.Footprint, Module = metrics.Module, Count = count,
+							Walk = role == PointOfInterestSlotRole.Perimeter ? PropsFeature.PerimeterWalk(slot.Tag, style) : 0f,
+							Join = station ? PropsFeature.StationJoin(slot.Tag, style, 0) : 0f,
+						});
 						if (PointOfInterestLayouts.Generates(role))
 						{
 							continue;
@@ -510,7 +552,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				bool met = false;
 				for (int j = 0; j < ends.Count && !met; j++)
 				{
-					met = j != i && j / 2 != i / 2 && Vector2.Distance(ends[i], ends[j]) < 0.2f;
+					// Within each one's run on past the corner (2026-10-19: the module off a gate leaves along its x, so the next
+					// joint turns a little more than the ring's own curve).
+					met = j != i && j / 2 != i / 2 && Vector2.Distance(ends[i], ends[j]) < 0.3f;
 				}
 				foreach (Vector2 end in gateEnds)
 				{

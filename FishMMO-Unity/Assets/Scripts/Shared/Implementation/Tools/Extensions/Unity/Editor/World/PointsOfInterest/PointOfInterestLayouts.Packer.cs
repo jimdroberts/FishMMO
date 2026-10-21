@@ -120,7 +120,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// the ways' own bearings; the streets follow the town plan (<see cref="PointOfInterestTownPlan"/>); everything else
 		/// packs round them inside the boundary.
 		/// </summary>
-		private sealed class Packer
+		private sealed partial class Packer
 		{
 			private const int PerimeterGroup = 1, SpanGroup = 2, PierGroup = 3, StreetGroup = -1, ClearingGroup = -2, PlazaGroup = -3, PlotGroup = -4, BankGroup = -5;
 
@@ -247,6 +247,8 @@ namespace FishMMO.Shared.WorldDesign
 			private Vector2 market;
 			/// <summary>Where the first centrepiece stands when it is not the market's (a citadel's keep).</summary>
 			private Vector2? citadel;
+			/// <summary>The citadel's yaw as laid (its footprint's turn, for <see cref="NearCitadel"/>).</summary>
+			private float citadelYaw;
 
 			// The terraces in the site's frame.
 			private readonly bool terraced;
@@ -397,7 +399,8 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 
-			private bool Fits(in Box box, Allow allow = Allow.None)
+			/// <summary>Whether a box is clear of everything kept clear but what <paramref name="allow"/> admits and the boxes <paramref name="skipA"/> and <paramref name="skipB"/> (a yard's own house and plot).</summary>
+			private bool Fits(in Box box, Allow allow = Allow.None, int skipA = -1, int skipB = -1)
 			{
 				stamp++;
 				int x0 = Mathf.FloorToInt((box.C.x - box.Bound) / CellMetres), x1 = Mathf.FloorToInt((box.C.x + box.Bound) / CellMetres);
@@ -417,6 +420,10 @@ namespace FishMMO.Shared.WorldDesign
 								continue;
 							}
 							seen[i] = stamp;
+							if (i == skipA || i == skipB)
+							{
+								continue;
+							}
 							Box other = boxes[i];
 							if (other.Group != 0 && other.Group == box.Group)
 							{
@@ -450,7 +457,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>Lays a piece when it fits inside <paramref name="bound"/> and clear of everything; returns whether it did.</summary>
 			private bool TryLay(int slot, int item, Vector2 centre, float yaw, Vector2 size, Bound bound, int group = 0, Allow allow = Allow.None)
 			{
-				if (!Inside(centre, yaw, size, bound))
+				if (NearAWell(slot, centre) || !Inside(centre, yaw, size, bound))
 				{
 					return false;
 				}
@@ -461,6 +468,24 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				Lay(slot, item, centre, yaw, size, box);
 				return true;
+			}
+
+			/// <summary>Whether a well of <paramref name="slot"/> at <paramref name="centre"/> would stand within <see cref="WellSpacing"/> of one laid.</summary>
+			private bool NearAWell(int slot, Vector2 centre)
+			{
+				if (slot < 0 || slot >= request.Slots.Count || !request.Slots[slot].Well)
+				{
+					return false;
+				}
+				foreach (PointOfInterestLayoutPiece piece in Pieces)
+				{
+					if (piece.Slot >= 0 && piece.Slot < request.Slots.Count && request.Slots[piece.Slot].Well
+						&& (piece.Offset - centre).sqrMagnitude < WellSpacing * WellSpacing)
+					{
+						return true;
+					}
+				}
+				return false;
 			}
 
 			private void Lay(int slot, int item, Vector2 centre, float yaw, Vector2 size, in Box box)
@@ -529,6 +554,8 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				Fronts();
+				Edge();
+				Yards();
 				Rows();
 				Scatter();
 			}
@@ -568,6 +595,16 @@ namespace FishMMO.Shared.WorldDesign
 				public Vector2 C;
 				public float Yaw;
 				public Vector2 Size;
+				/// <summary>A wall module's joints, its −x and +x ends on the wall's line (<see cref="PointOfInterestLayoutPiece.From"/>).</summary>
+				public Vector2 From, To;
+			}
+
+			/// <summary>A wall stair planned along a straight pair of modules: its centre, yaw, and its foot's and landing's modules (indices into the planned list).</summary>
+			private struct PlannedStair
+			{
+				public Vector2 C;
+				public float Yaw;
+				public int Foot, Landing;
 			}
 
 			/// <summary>The wall ring, its gates and its towers; drawn in until every corner lies inside the boundary.</summary>
@@ -575,10 +612,11 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				float pull = 0f;
 				List<Planned> planned = null;
+				List<PlannedStair> stairs = null;
 				float inset = 0f;
 				for (int attempt = 0; attempt < 8; attempt++)
 				{
-					planned = PlanPerimeter(wall, gate, tower, pull, out inset);
+					planned = PlanPerimeter(wall, gate, tower, pull, out inset, out stairs);
 					if (planned == null)
 					{
 						return;
@@ -606,17 +644,40 @@ namespace FishMMO.Shared.WorldDesign
 					return;
 				}
 				gateInner.Clear();
+				int first = Pieces.Count;
 				foreach (Planned p in planned)
 				{
 					Lay(p.Slot, -1, p.C, p.Yaw, p.Size, Box.Of(p.C, p.Yaw, p.Size, Gap, PerimeterGroup));
+					if (p.From != p.To)
+					{
+						PointOfInterestLayoutPiece laid = Pieces[Pieces.Count - 1];
+						laid.From = p.From;
+						laid.To = p.To;
+						Pieces[Pieces.Count - 1] = laid;
+					}
 					if (p.Slot == gate)
 					{
 						gateInner[Mathf.Round(DirectionOf(p.C) * 100f) / 100f] = p.C.magnitude - p.Size.y * 0.5f;
 					}
 				}
+				// Each wall stair's ground kept clear: the flight, a stride before its foot and before its front.
+				request.Stairs.Clear();
+				if (stairs != null)
+				{
+					foreach (PlannedStair s in stairs)
+					{
+						Vector2 bailey = Rotate(Vector2.up, s.Yaw);
+						var size = new Vector2(StructurePieces.WallStairLength + 2f * StairApproach, StructurePieces.WallStairWidth + StairApproach);
+						Add(Box.Of(s.C + bailey * (0.5f * StairApproach), s.Yaw, size, 0f, PerimeterGroup));
+						request.Stairs.Add(new PointOfInterestLayoutStair { Offset = s.C, Yaw = s.Yaw, FootModule = first + s.Foot, LandingModule = first + s.Landing });
+					}
+				}
 				walled = request.Slots[wall].Module > 0f;
 				wallInset = Mathf.Max(0f, inset);
 			}
+
+			/// <summary>The clear ground kept before a wall stair's foot and along its front, metres.</summary>
+			private const float StairApproach = 1.2f;
 
 			/// <summary>
 			/// The gates' bearings, degrees in the site's frame: the ways' entrances first, then the heading, then into the widest
@@ -655,16 +716,33 @@ namespace FishMMO.Shared.WorldDesign
 				return bearings;
 			}
 
+			/// <summary>A gate, a tower or an opening a wall's run ends on: where it stands on the line (arc length), its side, and how far each side the run stops.</summary>
+			private struct Station
+			{
+				public float U, Join;
+				public Vector2 At, Side;
+				public bool Gate;
+			}
+
 			/// <summary>
-			/// Plans the ring along the boundary <paramref name="pull"/> metres further in: the wall's line follows the outline,
-			/// each gate on its bearing square to it (its front facing out along the bearing), and between each pair of gates the
-			/// wall's modules laid as equal chords of the line from jamb to jamb, each fitted to its chord (its own length within a
-			/// few per cent) and run on past the corner by what keeps its outer face meeting its neighbour's.
+			/// Plans the ring along the boundary <paramref name="pull"/> metres further in (2026-10-19, the fortification contract: "palisades
+			/// aren't properly configured and aligned", "guard tower interiors are not always enterable"). The wall's line follows the
+			/// outline. Each gate stands on its way's bearing square to the line there (its front facing out); a walked curtain's towers
+			/// stand ON the line between the gates, each square to the line where it stands (−z out, ±x along the curtain), at the
+			/// sharpest corner near its even share of the way, so many whole modules from the last that every module of a stretch is
+			/// the same length. The wall runs from station to station and ends on each one's side (its "curtain" marks), never through
+			/// it, so a tower's rooms and its walk doors stay open, and every station is square to the line, in line with its curtain
+			/// either side. The modules are equal chords of the line between, each
+			/// run on past a corner by what keeps its outer face meeting its neighbour's. A curtain with no walk (a palisade) runs on
+			/// from gate to gate and its towers stand inside it, their backs off its inner face, their doors to the bailey. A walked
+			/// curtain keeps a stair up to its walk beside each gate (both sides where no tower carries a stair of its own), against the
+			/// first two modules off the gate laid as one straight chord (<paramref name="stairs"/>).
 			/// </summary>
-			private List<Planned> PlanPerimeter(int wall, int gate, int tower, float pull, out float inset)
+			private List<Planned> PlanPerimeter(int wall, int gate, int tower, float pull, out float inset, out List<PlannedStair> stairs)
 			{
 				PointOfInterestLayoutSlot w = request.Slots[wall];
 				var planned = new List<Planned>();
+				stairs = new List<PlannedStair>();
 				Vector2 towerSize = tower >= 0 ? request.Slots[tower].Footprint : Vector2.zero;
 				Vector2 gateSize = gate >= 0 ? request.Slots[gate].Footprint : Vector2.zero;
 				float depth = Mathf.Max(0f, w.Footprint.y);
@@ -699,29 +777,90 @@ namespace FishMMO.Shared.WorldDesign
 					return planned;
 				}
 
-				// The wall's line: the boundary less the deepest half of anything standing on it.
-				float off = pull + Mathf.Max(depth * 0.5f, towerSize.magnitude * 0.5f);
+				bool walked = w.Walk > 0f;
+				int towerCount = tower >= 0 ? Math.Max(0, request.Slots[tower].Count) : 0;
+				// The wall's line: the boundary less the deepest half of anything standing on it (a walked curtain's towers stand on
+				// it; a palisade's stand inside it).
+				float off = pull + Mathf.Max(depth * 0.5f, walked && towerCount > 0 ? towerSize.magnitude * 0.5f : 0f);
 				const int M = 720;
 				var line = new Vector2[M];
+				var arc = new float[M + 1];
 				float circumference = 0f;
-				for (int j = 0; j < M; j++)
+				// Where a gatehouse reaches further out than the line is set in (a deep gatehouse on a ring with no towers), the line
+				// steps in round it rather than the whole ring drawing in: a recessed gate (Dent).
+				var dents = new List<float>();
+				float dentDepth = 0f, dentHalf = 0f, dentRamp = 1f;
+				float Dent(float degrees)
 				{
-					Vector2 dir = Dir(j * Mathf.PI * 2f / M);
-					line[j] = dir * Mathf.Max(0.5f, Edge(dir) - off);
-				}
-				for (int j = 0; j < M; j++)
-				{
-					circumference += Vector2.Distance(line[j], line[(j + 1) % M]);
-				}
-				if (circumference < module * 3f)
-				{
-					return null;
+					float most = 0f;
+					foreach (float b in dents)
+					{
+						float away = Mathf.Abs(Mathf.DeltaAngle(degrees, b));
+						float share = away <= dentHalf ? 1f : away >= dentHalf + dentRamp ? 0f : 0.5f * (1f + Mathf.Cos(Mathf.PI * (away - dentHalf) / dentRamp));
+						most = Mathf.Max(most, share);
+					}
+					return dentDepth * most;
 				}
 				Vector2 LineAt(float degrees)
 				{
 					Vector2 dir = Dir(degrees * Mathf.Deg2Rad);
-					return dir * Mathf.Max(0.5f, Edge(dir) - off);
+					return dir * Mathf.Max(0.5f, Edge(dir) - off - Dent(degrees));
 				}
+				void Build()
+				{
+					for (int j = 0; j < M; j++)
+					{
+						line[j] = LineAt(j * 0.5f);
+					}
+					for (int j = 0; j < M; j++)
+					{
+						arc[j + 1] = arc[j] + Vector2.Distance(line[j], line[(j + 1) % M]);
+					}
+					circumference = arc[M];
+				}
+				Build();
+				if (circumference < module * 3f)
+				{
+					return null;
+				}
+				// Arc length along the line (from bearing 0, growing with the bearing) of a bearing, and the line's point at an arc length.
+				float ArcAt(float degrees)
+				{
+					float f = Mathf.Repeat(degrees, 360f) * 2f;
+					int j = Mathf.Min(M - 1, (int)f);
+					return Mathf.Lerp(arc[j], arc[j + 1], f - j);
+				}
+				int SampleAfter(float u)
+				{
+					int lo = 0, hi = M;
+					while (lo < hi)
+					{
+						int mid = (lo + hi) >> 1;
+						if (arc[mid] > u)
+						{
+							hi = mid;
+						}
+						else
+						{
+							lo = mid + 1;
+						}
+					}
+					return lo;
+				}
+				Vector2 PointAt(float u)
+				{
+					u = Mathf.Repeat(u, circumference);
+					int j = Mathf.Clamp(SampleAfter(u) - 1, 0, M - 1);
+					float t = (u - arc[j]) / Mathf.Max(1e-5f, arc[j + 1] - arc[j]);
+					return Vector2.Lerp(line[j], line[(j + 1) % M], Mathf.Clamp01(t));
+				}
+				// The line's direction there over a reach either side (toward the higher bearing).
+				Vector2 SideAt(float u, float reach)
+				{
+					Vector2 d = PointAt(u + reach) - PointAt(u - reach);
+					return d.sqrMagnitude > 1e-8f ? d.normalized : Vector2.right;
+				}
+				float TurnAt(float u) => Turn(PointAt(u - module), PointAt(u), PointAt(u + module));
 
 				// A gatehouse spans whole modules; a ring with no gate keeps an opening at the heading (or its first way's).
 				float gateLength = gate >= 0 ? Mathf.Max(request.Slots[gate].Module, gateSize.x) : Math.Max(1, Mathf.CeilToInt(EntranceMetres / module - 1e-3f)) * module;
@@ -729,114 +868,432 @@ namespace FishMMO.Shared.WorldDesign
 				int count = gate >= 0 ? Mathf.Clamp(Math.Max(request.Slots[gate].Count, request.Entrances.Count), 1, most) : 1;
 				List<float> bearings = GateBearings(count);
 				bearings.Sort();
-
-				// Each gate (or opening) on its bearing, square to the bearing; its jambs where the wall's runs end.
-				var jambs = new List<(Vector2 left, Vector2 right)>();
+				if (gate >= 0 && gateSize.y * 0.5f > off - pull + 0.05f)
+				{
+					float reach = Mathf.Max(1f, circumference / (2f * Mathf.PI));
+					dents.AddRange(bearings);
+					dentDepth = gateSize.y * 0.5f - (off - pull);
+					dentHalf = Mathf.Atan2(0.5f * gateLength + 1f, reach) * Mathf.Rad2Deg;
+					dentRamp = Mathf.Atan2(3f * module, reach) * Mathf.Rad2Deg;
+					Build();
+				}
+				// A walked curtain meets a gatehouse at its "curtain" marks; anything else stops at the gateway's sides.
+				float gateJoin = walked && gate >= 0 ? StationJoin(request.Slots[gate]) : gateLength * 0.5f;
+				var stations = new List<Station>();
 				foreach (float b in bearings)
 				{
-					Vector2 dir = Dir(b * Mathf.Deg2Rad);
+					// On its way's bearing, square to the wall's line there (in line with the curtain either side of it); the side
+					// vector points along the line toward the higher bearing: the gate's −x.
 					Vector2 at = LineAt(b);
-					Vector2 side = new Vector2(dir.y, -dir.x);
-					// The side vector points a right angle round toward the higher bearing: the left jamb is the one toward the lower.
-					jambs.Add((at - side * (gateLength * 0.5f), at + side * (gateLength * 0.5f)));
+					float u = ArcAt(b);
+					Vector2 side = SideAt(u, gateJoin);
+					stations.Add(new Station { U = u, At = at, Side = side, Join = gateJoin, Gate = true });
 					if (gate >= 0)
 					{
-						planned.Add(new Planned { Slot = gate, C = at, Yaw = FacingYaw(b), Size = gateSize });
+						planned.Add(new Planned { Slot = gate, C = at, Yaw = FacingYaw(DirectionOf(new Vector2(-side.y, side.x))), Size = gateSize });
 					}
 				}
 
-				// The runs between consecutive gates: jamb, the line's points between, the next jamb.
-				var vertices = new List<(Vector2 at, bool jamb)>();
-				for (int g = 0; g < bearings.Count; g++)
+				// The stretches between consecutive gates, and how many towers each takes: one at a time to the stretch whose towers
+				// stand farthest apart, as many as leave each run two modules or more (a walked ring) or room behind it (a palisade).
+				int gates = stations.Count;
+				var stretchFrom = new float[gates];
+				var stretch = new float[gates];
+				var stretchTowers = new int[gates];
+				for (int g = 0; g < gates; g++)
 				{
-					float from = bearings[g], to = g + 1 < bearings.Count ? bearings[g + 1] : bearings[0] + 360f;
-					Vector2 start = jambs[g].right, end = jambs[(g + 1) % bearings.Count].left;
-					var run = new List<Vector2> { start };
-					float a0 = DirectionOf(start), a1 = DirectionOf(end);
-					float s0 = Mathf.Repeat(a0 - from, 360f) + from, s1 = Mathf.Repeat(a1 - from, 360f) + from;
-					if (s1 <= s0 || s1 > to + 1f)
+					Station a = stations[g], b = stations[(g + 1) % gates];
+					float gap = gates == 1 ? circumference : Mathf.Repeat(b.U - a.U, circumference);
+					stretchFrom[g] = a.U + a.Join;
+					stretch[g] = Mathf.Max(0f, gap - a.Join - b.Join);
+				}
+				float towerJoin = tower >= 0 ? StationJoin(request.Slots[tower]) : 0f;
+				for (int t = 0; t < towerCount; t++)
+				{
+					int best = -1;
+					float widest = 0f;
+					for (int g = 0; g < gates; g++)
+					{
+						int k = stretchTowers[g] + 1;
+						float room = walked ? stretch[g] - k * 2f * towerJoin - 2f * module * (k + 1) : stretch[g] - k * towerSize.x - 2f * module * (k + 1);
+						float apart = stretch[g] / (k + 1);
+						if (room >= 0f && apart > widest + 1e-3f)
+						{
+							widest = apart;
+							best = g;
+						}
+					}
+					if (best < 0)
+					{
+						break;
+					}
+					stretchTowers[best]++;
+				}
+				float towerInner = 0f;
+				for (int g = 0; g < gates; g++)
+				{
+					int k = stretchTowers[g];
+					if (k == 0)
 					{
 						continue;
 					}
-					for (int j = Mathf.CeilToInt(s0 * 2f + 1e-3f); j < s1 * 2f; j++)
+					if (walked)
 					{
-						run.Add(line[((j % M) + M) % M]);
+						// Whole modules between them, every module of the stretch one length; each tower nudged a module or two toward
+						// the sharpest corner of the line near its even share.
+						float rest = stretch[g] - k * 2f * towerJoin;
+						int n = Math.Max(k + 1, Mathf.RoundToInt(rest / module));
+						float c = rest / n;
+						var m = new int[k];
+						for (int t = 0; t < k; t++)
+						{
+							int even = Mathf.RoundToInt((t + 1f) * n / (k + 1f));
+							int lo = (t > 0 ? m[t - 1] : 0) + 2, hi = n - 2 * (k - t);
+							if (lo > hi)
+							{
+								lo = (t > 0 ? m[t - 1] : 0) + 1;
+								hi = n - (k - t);
+							}
+							int pick = Mathf.Clamp(even, lo, hi);
+							float bestScore = float.NegativeInfinity;
+							for (int x = even - 2; x <= even + 2; x++)
+							{
+								if (x < lo || x > hi)
+								{
+									continue;
+								}
+								float score = TurnAt(stretchFrom[g] + x * c + (2 * t + 1) * towerJoin) - 0.05f * Mathf.Abs(x - even);
+								if (score > bestScore + 1e-4f)
+								{
+									bestScore = score;
+									pick = x;
+								}
+							}
+							m[t] = pick;
+							float u = stretchFrom[g] + pick * c + (2 * t + 1) * towerJoin;
+							Vector2 side = SideAt(u, towerJoin);
+							var outward = new Vector2(-side.y, side.x);
+							stations.Add(new Station { U = Mathf.Repeat(u, circumference), At = PointAt(u), Side = side, Join = towerJoin });
+							planned.Add(new Planned { Slot = tower, C = PointAt(u), Yaw = FacingYaw(DirectionOf(outward)), Size = towerSize });
+						}
+						towerInner = towerSize.magnitude * 0.5f;
+						continue;
 					}
-					run.Add(end);
-					List<Vector2> chords = Chords(run, module);
-					if (chords == null)
+					// A palisade's towers inside it, evenly along the stretch, each where the line runs straightest near its share,
+					// its back off the palisade's inner face by what the line bows in under it and a hand more.
+					float share = stretch[g] / k, halfX = towerSize.x * 0.5f;
+					for (int t = 0; t < k; t++)
+					{
+						float even = stretchFrom[g] + (t + 0.5f) * share, pick = even, bestScore = float.PositiveInfinity;
+						float lo = stretchFrom[g] + module + halfX, hi = stretchFrom[g] + stretch[g] - module - halfX;
+						for (int x = -4; x <= 4; x++)
+						{
+							float u = even + x * share * 0.0625f;
+							if (u < lo || u > hi)
+							{
+								continue;
+							}
+							float score = TurnAt(u) + 0.02f * Mathf.Abs(x);
+							if (score < bestScore - 1e-4f)
+							{
+								bestScore = score;
+								pick = u;
+							}
+						}
+						Vector2 at = PointAt(pick), side = SideAt(pick, halfX);
+						var outward = new Vector2(-side.y, side.x);
+						float bow = 0f;
+						for (float x = -halfX - 0.5f; x <= halfX + 0.5f; x += 0.25f)
+						{
+							bow = Mathf.Max(bow, -Vector2.Dot(PointAt(pick + x) - at, outward));
+						}
+						float back = depth * 0.5f + bow + 0.1f + TowerStandOff;
+						planned.Add(new Planned { Slot = tower, C = at - outward * (back + towerSize.y * 0.5f), Yaw = FacingYaw(DirectionOf(outward)), Size = towerSize });
+						towerInner = Mathf.Max(towerInner, back + towerSize.y);
+					}
+				}
+
+				// The runs from station to station, in order round the ring.
+				stations.Sort((p, q) => p.U.CompareTo(q.U));
+				int S = stations.Count;
+				var runModules = new int[S];
+				var runLength = new float[S];
+				for (int i = 0; i < S; i++)
+				{
+					Station a = stations[i], b = stations[(i + 1) % S];
+					float gap = S == 1 ? circumference : Mathf.Repeat(b.U - a.U, circumference);
+					runLength[i] = gap - a.Join - b.Join;
+					runModules[i] = runLength[i] < module * 0.5f ? 0 : ModulesFor(runLength[i], module);
+				}
+				// A walked curtain's stairs: beside each gate, on alternate sides round the ring (both where no tower stands on it),
+				// against the first two modules off the gate, laid straight for it.
+				var stairStart = new bool[S];
+				var stairEnd = new bool[S];
+				if (walked)
+				{
+					bool towered = stations.Exists(s => !s.Gate);
+					int nth = 0;
+					// Two modules for the stair (a run of two is one straight line), and a chord between it and a stair at the other end.
+					bool Room(int run, bool atStart) => runModules[run] >= ((atStart ? stairEnd[run] : stairStart[run]) ? 5 : 2)
+						&& 2f * runLength[run] / Math.Max(1, runModules[run]) >= StructurePieces.WallStairLength + 0.6f;
+					for (int i = 0; i < S; i++)
+					{
+						if (!stations[i].Gate)
+						{
+							continue;
+						}
+						// Its own side first; the other where that run is too short for one.
+						bool afterFirst = (nth++ & 1) == 0;
+						int after = i, before = (i - 1 + S) % S;
+						bool doAfter = (afterFirst || !towered) && Room(after, true);
+						stairStart[after] |= doAfter;
+						bool doBefore = (!afterFirst || !towered) && Room(before, false);
+						stairEnd[before] |= doBefore;
+						if (!doAfter && !doBefore)
+						{
+							if (Room(after, true))
+							{
+								stairStart[after] = true;
+							}
+							else if (Room(before, false))
+							{
+								stairEnd[before] = true;
+							}
+						}
+					}
+				}
+				for (int i = 0; i < S; i++)
+				{
+					int n = runModules[i];
+					if (n < 1)
 					{
 						continue;
 					}
-					for (int k = 0; k + 1 < chords.Count; k++)
+					Station a = stations[i], b = stations[(i + 1) % S];
+					/* Off each station the curtain leaves along its x as near as the line lets it: the first module (the first two, laid
+					 * as one straight chord, where a stair climbs) aimed at the line a module on, but turned no more than
+					 * MaxStationBend from the station's x, so a gate or tower stands in line with its curtain; the line between is
+					 * chorded. A run of one module is one chord; a run of two with a stair, one straight line. */
+					float cr = runLength[i] / n;
+					float uStart = a.U + a.Join, uEnd = a.U + a.Join + runLength[i];
+					Vector2 start = a.At + a.Side * a.Join, end = b.At - b.Side * b.Join;
+					var points = new List<Vector2> { start };
+					int rS = stairStart[i] ? 2 : 1, rE = stairEnd[i] ? 2 : 1;
+					if (n == 1)
 					{
-						Vector2 a = chords[k], b = chords[k + 1];
-						Vector2 d = b - a, mid = (a + b) * 0.5f;
+						rS = rE = 0;
+						points.Add(end);
+					}
+					else if (n == 2 && (stairStart[i] || stairEnd[i]))
+					{
+						rS = stairStart[i] ? 2 : 0;
+						rE = rS > 0 ? 0 : 2;
+						points.Add(0.5f * (start + end));
+						points.Add(end);
+					}
+					else
+					{
+						if (n == 2)
+						{
+							// Two modules between two stations: chords of the line, each end bending as the line does.
+							rS = rE = 0;
+						}
+						while (rS + rE > n - 1)
+						{
+							if (rS == 1 && (rE != 1 || !stairEnd[i]))
+							{
+								rS = 0;
+							}
+							else if (rE == 1)
+							{
+								rE = 0;
+							}
+							else if (rE == 2)
+							{
+								rE = 0;
+							}
+							else
+							{
+								rS = 0;
+							}
+						}
+						Vector2 Leave(Vector2 jamb, Vector2 along, float target)
+						{
+							Vector2 aim = PointAt(target) - jamb;
+							float reach = aim.magnitude;
+							if (reach < 1e-4f)
+							{
+								return jamb + along * (Mathf.Abs(target - (target > uStart ? uStart : uEnd)));
+							}
+							// Held to MaxStationBend unless that would carry the curtain more than MaxStationDrift off the line (a tight
+							// ring's sharp curve, a small keep's): there it bends as it must.
+							float bend = Vector2.SignedAngle(along, aim);
+							float drift = walked ? MaxStationDrift : MaxPalisadeDrift;
+							float limit = Mathf.Max(MaxStationBend, Mathf.Abs(bend) - Mathf.Asin(Mathf.Min(1f, drift / reach)) * Mathf.Rad2Deg);
+							float held = Mathf.Clamp(bend, -limit, limit);
+							return jamb + Rotate(along, -held) * reach;
+						}
+						Vector2 from = start, to = end;
+						if (rS > 0)
+						{
+							from = Leave(start, a.Side, uStart + rS * cr);
+							for (int k = 1; k < rS; k++)
+							{
+								points.Add(Vector2.Lerp(start, from, k / (float)rS));
+							}
+							points.Add(from);
+						}
+						if (rE > 0)
+						{
+							to = Leave(end, -b.Side, uEnd - rE * cr);
+						}
+						// The line between, chorded: past where the straight ends reach (a straight end runs off the curve's tangent,
+						// and the line just beside where it ends would turn the wall back on itself).
+						float u0 = uStart + rS * cr, u1 = uEnd - rE * cr;
+						var middle = new List<Vector2> { from };
+						float baseU = Mathf.Floor(u0 / circumference) * circumference;
+						int jj = SampleAfter(u0 - baseU);
+						for (int guard = 0; guard <= M; guard++)
+						{
+							if (jj >= M)
+							{
+								jj -= M;
+								baseU += circumference;
+							}
+							float uj = arc[jj] + baseU;
+							if (uj >= u1 - 0.25f)
+							{
+								break;
+							}
+							if (uj > u0 + 0.25f && Vector2.Distance(line[jj], from) > 0.5f * cr && Vector2.Distance(line[jj], to) > 0.5f * cr)
+							{
+								middle.Add(line[jj]);
+							}
+							jj++;
+						}
+						middle.Add(to);
+						int between = n - rS - rE;
+						List<Vector2> chords = Chords(middle, between);
+						bool even = chords != null && chords.Count == between + 1;
+						for (int k = 1; even && k < chords.Count; k++)
+						{
+							// A line doubling back between a big gate's off-line jambs (a small keep's tight ring) chords to nothing.
+							even = Vector2.Distance(chords[k - 1], chords[k]) > 0.25f * cr;
+						}
+						if (!even)
+						{
+							chords = new List<Vector2>();
+							for (int k = 0; k <= between; k++)
+							{
+								chords.Add(Vector2.Lerp(from, to, k / (float)between));
+							}
+						}
+						for (int k = 1; k < chords.Count; k++)
+						{
+							points.Add(chords[k]);
+						}
+						for (int k = rE - 1; k >= 0; k--)
+						{
+							points.Add(Vector2.Lerp(end, to, k / (float)Math.Max(1, rE)));
+						}
+					}
+					int firstModule = planned.Count;
+					for (int k = 0; k + 1 < points.Count; k++)
+					{
+						Vector2 p = points[k], q = points[k + 1];
+						Vector2 d = q - p, mid = (p + q) * 0.5f;
+						if (d.sqrMagnitude < 1e-6f)
+						{
+							continue;
+						}
 						var normal = new Vector2(d.y, -d.x).normalized;
 						if (Vector2.Dot(normal, mid) < 0f)
 						{
 							normal = -normal;
 						}
-						// Run on past each corner by what closes the wedge its outer face would leave there (half each side).
-						float turnIn = k > 0 ? Turn(chords[k - 1], a, b) : 0f, turnOut = k + 2 < chords.Count ? Turn(a, b, chords[k + 2]) : 0f;
-						float extra = depth * 0.5f * (Mathf.Tan(Mathf.Min(turnIn, 1f) * 0.5f) + Mathf.Tan(Mathf.Min(turnOut, 1f) * 0.5f));
+						// Run on past each corner by what closes the wedge its outer face would leave there (half each side); a run's
+						// ends are on its stations, straight on from their sides.
+						float turnIn = k > 0 ? Turn(points[k - 1], p, q) : 0f, turnOut = k + 2 < points.Count ? Turn(p, q, points[k + 2]) : 0f;
+						float extra = depth * 0.5f * (Mathf.Tan(Mathf.Min(turnIn, MaxMitre) * 0.5f) + Mathf.Tan(Mathf.Min(turnOut, MaxMitre) * 0.5f));
 						Vector2 along = d.normalized;
-						Vector2 centre = mid + along * (depth * 0.25f * (Mathf.Tan(Mathf.Min(turnOut, 1f) * 0.5f) - Mathf.Tan(Mathf.Min(turnIn, 1f) * 0.5f)));
-						planned.Add(new Planned { Slot = wall, C = centre, Yaw = FacingYaw(DirectionOf(normal)), Size = new Vector2(d.magnitude + extra, depth) });
-						if (k > 0)
+						Vector2 centre = mid + along * (depth * 0.25f * (Mathf.Tan(Mathf.Min(turnOut, MaxMitre) * 0.5f) - Mathf.Tan(Mathf.Min(turnIn, MaxMitre) * 0.5f)));
+						float yaw = FacingYaw(DirectionOf(normal));
+						bool forward = Vector2.Dot(d, Rotate(Vector2.right, yaw)) > 0f;
+						planned.Add(new Planned { Slot = wall, C = centre, Yaw = yaw, Size = new Vector2(d.magnitude + extra, depth), From = forward ? p : q, To = forward ? q : p });
+					}
+					if (planned.Count - firstModule != points.Count - 1)
+					{
+						continue;
+					}
+					// The stairs against the straight pairs: centred on the joint between the two, the flight's back on the inner face.
+					if (stairStart[i] && rS == 2)
+					{
+						if (StairAt(planned, points[1], firstModule, firstModule + 1, module, out PlannedStair atStart))
 						{
-							vertices.Add((a, false));
+							stairs.Add(atStart);
 						}
 					}
-					if (gate < 0)
+					if (stairEnd[i] && rE == 2)
 					{
-						// An opening is flanked by towers: its jambs are corners too.
-						vertices.Add((start, true));
-						vertices.Add((end, true));
+						if (StairAt(planned, points[points.Count - 2], planned.Count - 2, planned.Count - 1, module, out PlannedStair atEnd))
+						{
+							stairs.Add(atEnd);
+						}
 					}
 				}
-
-				int towerCount = tower >= 0 ? Math.Max(0, request.Slots[tower].Count) : 0;
-				float towerInner = 0f;
-				if (towerCount > 0 && vertices.Count > 0)
-				{
-					// Evenly round the ring, each at the sharpest corner near its share of the way round.
-					vertices.Sort((p, q) => DirectionOf(p.at).CompareTo(DirectionOf(q.at)));
-					var used = new bool[vertices.Count];
-					int n = Math.Min(towerCount, vertices.Count);
-					float offset = bearings.Count > 0 ? bearings[0] : 0f;
-					for (int t = 0; t < n; t++)
-					{
-						float target = Mathf.Repeat(offset + (t + 0.5f) * 360f / n, 360f);
-						int best = -1;
-						float bestScore = float.PositiveInfinity;
-						for (int i = 0; i < vertices.Count; i++)
-						{
-							if (used[i])
-							{
-								continue;
-							}
-							float gap = Mathf.Abs(Mathf.DeltaAngle(DirectionOf(vertices[i].at), target)) / (180f / n);
-							float sharp = Corner(vertices, i);
-							float score = gap - 0.6f * sharp;
-							if (score < bestScore)
-							{
-								bestScore = score;
-								best = i;
-							}
-						}
-						if (best < 0)
-						{
-							break;
-						}
-						used[best] = true;
-						Vector2 at = vertices[best].at;
-						planned.Add(new Planned { Slot = tower, C = at, Yaw = FacingYaw(DirectionOf(at)), Size = towerSize });
-						towerInner = towerSize.magnitude * 0.5f;
-					}
-				}
-				inset = off + Mathf.Max(Mathf.Max(depth * 0.5f, gate >= 0 ? gateSize.y * 0.5f : 0f), towerInner) + Gap;
+				float stairBand = walked ? StructurePieces.CurtainHalfThickness + StructurePieces.WallStairWidth + StairApproach : 0f;
+				// Everything else keeps inside the wall, its towers and its stairs' band. A gatehouse reaching further in keeps its own
+				// ground by its box (2026-10-19: a deep gatehouse no longer takes its depth from the whole bailey all round).
+				inset = off + Mathf.Max(Mathf.Max(depth * 0.5f, gate >= 0 ? Mathf.Min(gateSize.y * 0.5f, GateInsetMost) : 0f), Mathf.Max(towerInner, stairBand)) + Gap;
 				return planned;
+			}
+
+			/// <summary>The most of a gate's inner half depth the whole ring keeps clear inside the wall, metres (the old gatehouse's 4.7 m depth).</summary>
+			private const float GateInsetMost = 2.35f;
+
+			/// <summary>The most a curtain turns off a gate's or tower's x where it leaves it, degrees: past it the line bends at the next joint.</summary>
+			private const float MaxStationBend = 10f;
+
+			/// <summary>
+			/// The farthest a curtain's straight end off a gate or tower may stand off the wall's line, metres: a walked curtain's line
+			/// is set in by its towers' reach, so it may bow out further than a palisade's, which stands at the boundary.
+			/// </summary>
+			private const float MaxStationDrift = 1.5f, MaxPalisadeDrift = 0.8f;
+
+			/// <summary>The sharpest turn a curtain's corner is closed for by running its modules on, radians (beyond, the run on would pass the wall's own thickness).</summary>
+			private const float MaxMitre = 1.6f;
+
+			/// <summary>How many modules of <paramref name="module"/> a run of <paramref name="length"/> takes: the count whose chord is nearest the module by ratio.</summary>
+			private static int ModulesFor(float length, float module)
+			{
+				int lo = Math.Max(1, Mathf.FloorToInt(length / module)), hi = lo + 1;
+				return Mathf.Abs(Mathf.Log(length / lo / module)) <= Mathf.Abs(Mathf.Log(length / hi / module)) ? lo : hi;
+			}
+
+			/// <summary>
+			/// A wall stair against two straight modules <paramref name="a"/> and <paramref name="b"/> meeting at <paramref name="joint"/>:
+			/// its back on their inner face, climbing along their +x, its landing centred on the opening in the landing module's rail
+			/// (StructurePieces.CurtainLandingGap, as that module is stretched to its chord). False where it would not lie wholly
+			/// along the two.
+			/// </summary>
+			private static bool StairAt(List<Planned> planned, Vector2 joint, int a, int b, float module, out PlannedStair stair)
+			{
+				float yaw = planned[a].Yaw;
+				Vector2 outward = Rotate(Vector2.down, yaw), x = Rotate(Vector2.right, yaw);
+				bool bLands = Vector2.Dot(planned[b].C - joint, x) > 0f;
+				Planned foot = planned[bLands ? a : b], landing = planned[bLands ? b : a];
+				float length = StructurePieces.WallStairLength, half = 0.5f * length;
+				Vector2 opening = landing.C + x * (StructurePieces.CurtainLandingGap * landing.Size.x / Mathf.Max(0.01f, module));
+				float t = Vector2.Dot(opening - joint, x) - (half - 0.5f * StructurePieces.WallStairLanding);
+				stair = new PlannedStair
+				{
+					C = joint + x * t - outward * (StructurePieces.CurtainHalfThickness + 0.5f * StructurePieces.WallStairWidth),
+					Yaw = yaw,
+					Foot = bLands ? a : b,
+					Landing = bLands ? b : a,
+				};
+				// Wholly along the two: its foot a stride short of the far end of the foot's module, its landing on its own.
+				return t - half >= -Vector2.Distance(foot.From, foot.To) + 0.3f && t + half <= Vector2.Distance(landing.From, landing.To);
 			}
 
 			/// <summary>The turn at <paramref name="b"/> from a→b to b→c, radians (0 straight on).</summary>
@@ -850,32 +1307,18 @@ namespace FishMMO.Shared.WorldDesign
 				return Mathf.Acos(Mathf.Clamp(Vector2.Dot(u.normalized, v.normalized), -1f, 1f));
 			}
 
-			/// <summary>How sharp a ring corner is, 0 … 1 (a right angle and sharper is 1).</summary>
-			private static float Corner(List<(Vector2 at, bool jamb)> vertices, int i)
-			{
-				if (vertices[i].jamb)
-				{
-					return 1f;
-				}
-				int n = vertices.Count;
-				Vector2 a = vertices[(i + n - 1) % n].at, b = vertices[i].at, c = vertices[(i + 1) % n].at;
-				return Mathf.Clamp01(Turn(a, b, c) / (Mathf.PI * 0.5f));
-			}
-
 			/// <summary>
-			/// Points along a polyline from its first to its last, each the same straight distance from the one before, that
-			/// distance as near <paramref name="module"/> as a whole number of them allows: the ends of a wall's modules laid
-			/// end to end along a curved line. Null when the run is shorter than half a module.
+			/// Points along a polyline from its first to its last, each the same straight distance from the one before, <paramref name="n"/>
+			/// of them: the ends of a wall's modules laid end to end along a curved line. Null when n &lt; 1.
 			/// </summary>
-			private static List<Vector2> Chords(List<Vector2> run, float module)
+			private static List<Vector2> Chords(List<Vector2> run, int n)
 			{
 				float length = 0f;
 				for (int i = 1; i < run.Count; i++)
 				{
 					length += Vector2.Distance(run[i - 1], run[i]);
 				}
-				int n = Mathf.RoundToInt(length / module);
-				if (n < 1)
+				if (n < 1 || length < 1e-4f)
 				{
 					return null;
 				}
@@ -1334,11 +1777,18 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return;
 				}
-				// The village's little green: the street widening at its middle, where the well stands.
+				// The village's green: the street widening at its middle into a green beside it, on the side toward the village's middle,
+				// where the well stands clear of the road (2026-10-20: it stood in the street, the green no wider than a verge either side).
 				float t = main.Nearest(middle);
 				(Vector2 green, Vector2 tangent) = main.At(t);
-				market = green;
-				AddPlaza(green, tangent, Mathf.Clamp(size * 0.22f, 8f, 14f), MainWidth * 0.5f + Mathf.Clamp(size * 0.08f, 3f, 6f), 0.35f);
+				Vector2 beside = new Vector2(tangent.y, -tangent.x);
+				if (Vector2.Dot(beside, -green) < 0f)
+				{
+					beside = -beside;
+				}
+				float kerb = MainWidth * 0.5f, reach = Mathf.Clamp(size * 0.34f, 10f, 18f);
+				market = green + beside * (kerb + reach * 0.5f);
+				AddPlaza(green + beside * (reach * 0.5f), tangent, Mathf.Clamp(size * 0.34f, 11f, 19f), kerb + reach * 0.5f, 0.7f);
 				foreach (Entry e in entries)
 				{
 					if (e.Bearing == a.Bearing || e.Bearing == b.Bearing)
@@ -1360,7 +1810,7 @@ namespace FishMMO.Shared.WorldDesign
 				List<Entry> entries = Entries(true);
 				float size = MeanInner;
 				Vector2 centre = Pull(new Vector2(plan.Range(-0.1f, 0.1f), plan.Range(-0.1f, 0.1f)) * size, 0.3f);
-				float rho = Mathf.Clamp(size * 0.3f, 9f, 20f);
+				float rho = Mathf.Clamp(size * 0.32f, 10f, 21f);
 				// The green: seven corners each a little in or out, kept convex.
 				const int Corners7 = 7;
 				var green = new Vector2[Corners7];
@@ -1373,6 +1823,8 @@ namespace FishMMO.Shared.WorldDesign
 				market = centre;
 				areas.Add((green, PlazaGroup));
 				request.Plazas.Add(green);
+				marketSquare = green;
+				marketLie = Dir(turn);
 				// The lane round it, a little out from its edge, rounded off.
 				var ring = new List<Vector2>();
 				float push = LaneWidth * 0.5f + 1f;
@@ -1409,9 +1861,20 @@ namespace FishMMO.Shared.WorldDesign
 				Vector2 lie = (b.End - a.End).sqrMagnitude > 1e-4f ? (b.End - a.End).normalized : Vector2.up;
 				Vector2 centre = Pull(new Vector2(plan.Range(-0.1f, 0.1f), plan.Range(-0.1f, 0.1f)) * size, 0.3f);
 				market = centre;
-				float length = Mathf.Clamp(size * 0.26f, 12f, 28f), width = Mathf.Clamp(size * 0.11f, 6f, 13f);
-				// The market place: a funnel, wide where the main roads meet, narrowing toward the far end.
-				Vector2[] place = AddPlaza(centre, plan.NextFloat() < 0.5f ? lie : -lie, length, width, 0.4f);
+				// The market place: a funnel, wide where the main roads meet, narrowing toward the far end. A market town's a third of
+				// its reach long and more where its market wants the room (2026-10-20: a quarter of it, and a third narrower, was too
+				// cramped for its stalls); a place that keeps no market (a drowned town's statues) keeps the square it had.
+				float length = Mathf.Clamp(size * 0.26f, 12f, 28f), width = Mathf.Clamp(size * 0.11f, 6f, 13f), taper = 0.4f;
+				if (KeepsMarket)
+				{
+					length = Mathf.Clamp(size * 0.34f, 14f, 34f);
+					width = Mathf.Clamp(size * 0.17f, 8f, 18f);
+					taper = 0.55f;
+					float grow = MarketScale(length, width, taper, 1.25f);
+					length *= grow;
+					width *= grow;
+				}
+				Vector2[] place = AddPlaza(centre, plan.NextFloat() < 0.5f ? lie : -lie, length, width, taper);
 				Vector2 PlaceEdge(Vector2 from) => Toward(place, centre, from, 1f);
 				AddWay(Spline(a.Start, a.End, Bend(a.End, PlaceEdge(a.End), 0.08f), PlaceEdge(a.End)), MainWidth, 0, 3, true);
 				AddWay(Spline(b.Start, b.End, Bend(b.End, PlaceEdge(b.End), 0.08f), PlaceEdge(b.End)), MainWidth, 0, 3, true);
@@ -1449,9 +1912,14 @@ namespace FishMMO.Shared.WorldDesign
 				float size = MeanInner;
 				Vector2 centre = Pull(new Vector2(plan.Range(-0.06f, 0.06f), plan.Range(-0.06f, 0.06f)) * size, 0.2f);
 				market = centre;
-				float half = Mathf.Clamp(size * 0.15f, 12f, 30f);
+				// A city's market square a fifth of its reach each way from its middle, and more where its market wants the room
+				// (2026-10-20: three twentieths of it was too cramped for a city's stalls, cross, fountains and stocks); a place that keeps
+				// no market keeps the square it had.
+				float half = KeepsMarket ? Mathf.Clamp(size * 0.19f, 14f, 40f) : Mathf.Clamp(size * 0.15f, 12f, 30f);
 				Vector2 lie = Dir(plan.NextFloat() * Mathf.PI);
-				Vector2[] square = AddPlaza(centre, lie, half, half * plan.Range(0.7f, 0.95f), 0.85f);
+				float across = plan.Range(0.7f, 0.95f);
+				half *= KeepsMarket ? MarketScale(half, half * across, 0.85f, 1.25f) : 1f;
+				Vector2[] square = AddPlaza(centre, lie, half, half * across, 0.85f);
 				// The citadel against the wall, in the widest stretch between the gates' streets.
 				Citadel(entries, 0.66f);
 				foreach (Entry e in entries)
@@ -1459,8 +1927,11 @@ namespace FishMMO.Shared.WorldDesign
 					Vector2 to = Toward(square, centre, e.End, 1f);
 					AddWay(Spline(e.Start, e.End, Bend(e.End, to, 0.06f), to), MainWidth, 0, 3, false);
 				}
-				// Ring streets following the wall: one half way out, and in a large city one near the wall.
-				RingStreet(0.5f, SecondWidth, 1);
+				// Ring streets following the wall: one half way out, and in a large city one near the wall. The inner ring stands
+				// out far enough that the deepest landmark fronting the square stands between them (2026-10-19: a cathedral 39 m
+				// deep had 22 m behind a small city's square), never past 0.72 of the way out.
+				float ringFloor = half + Gap + DeepestLandmark() + SecondWidth * 0.5f + 1f;
+				RingStreet(0.5f, SecondWidth, 1, ringFloor);
 				if (size >= 80f)
 				{
 					RingStreet(0.8f, SecondWidth, 1);
@@ -1482,7 +1953,7 @@ namespace FishMMO.Shared.WorldDesign
 						float bearing = a + gap * l / (lanes + 1f);
 						Vector2 dir = Dir(bearing * Mathf.Deg2Rad);
 						float inner = InnerEdge(dir);
-						Vector2 from = dir * (inner * 0.5f), to = dir * (inner * (size >= 80f ? 0.8f : 0.92f));
+						Vector2 from = dir * RingRadius(inner, 0.5f, ringFloor), to = dir * (inner * (size >= 80f ? 0.8f : 0.92f));
 						if (!NearCitadel(from) && !NearCitadel(to))
 						{
 							AddWay(new List<Vector2> { from, Vector2.Lerp(from, to, 0.5f) + new Vector2(dir.y, -dir.x) * plan.Range(-2f, 2f), to }, SecondWidth * 0.8f, 2, 3, false);
@@ -1540,7 +2011,9 @@ namespace FishMMO.Shared.WorldDesign
 					Vector2 from = axis * middles[i] + across * ramps[i], to = axis * middles[i + 1] + across * ramps[i];
 					AddWay(new List<Vector2> { from, axis * steps[i] + across * ramps[i], to }, Mathf.Min(SecondWidth, 2f * rampWidth - 1f), 1, 3, false);
 				}
-				// The market: on the middle terrace's street, nearest the middle.
+				// The market: on the middle terrace's street, nearest the middle; where the terrace has the room, a market place beside the
+				// street on its roomier side, the well in it clear of the road (2026-10-20: the street's own width and five metres either
+				// side held the well in the road and little else).
 				Way middle = contour[middleBand];
 				if (middle != null)
 				{
@@ -1548,8 +2021,31 @@ namespace FishMMO.Shared.WorldDesign
 					market = at;
 					float lo = middleBand == 0 ? uLow : steps[middleBand - 1];
 					float hi = middleBand == bands - 1 ? uHigh : steps[middleBand];
-					float room = Mathf.Min(U(at) - lo, hi - U(at)) - 3f;
-					AddPlaza(at, tangent, Mathf.Clamp(size * 0.18f, 9f, 16f), Mathf.Clamp(Mathf.Min(MainWidth * 0.5f + 5f, room), MainWidth * 0.5f + 1f, 14f), 0.8f);
+					// Each side's flat ground from the street's middle to the bank's foot, less a walk.
+					float below = U(at) - (middleBand == 0 ? uLow : lo + bankHalf[middleBand - 1]) - 2f;
+					float above = (middleBand == bands - 1 ? uHigh : hi - bankHalf[middleBand]) - U(at) - 2f;
+					float kerb = MainWidth * 0.5f, reach = Mathf.Min(Mathf.Max(below, above) - kerb, Mathf.Clamp(size * 0.3f, 10f, 18f));
+					if (KeepsMarket && reach >= 8f)
+					{
+						Vector2 beside = new Vector2(tangent.y, -tangent.x);
+						if (Vector2.Dot(beside, axis) * (above >= below ? 1f : -1f) < 0f)
+						{
+							beside = -beside;
+						}
+						// Drawn out along the street, the terrace being no deeper, as far as its market wants (half the town's reach at most).
+						float along = Mathf.Clamp(size * 0.26f, 10f, 22f);
+						while (along < size * 0.5f && !Holds(along, reach * 0.5f + 1f, 0.8f))
+						{
+							along += 1f;
+						}
+						market = at + beside * (kerb + reach * 0.5f);
+						AddPlaza(at + beside * (reach * 0.5f), tangent, along, kerb + reach * 0.5f, 0.8f);
+					}
+					else
+					{
+						float room = Mathf.Min(U(at) - lo, hi - U(at)) - 3f;
+						AddPlaza(at, tangent, Mathf.Clamp(size * 0.18f, 9f, 16f), Mathf.Clamp(Mathf.Min(MainWidth * 0.5f + 5f, room), MainWidth * 0.5f + 1f, 14f), 0.8f);
+					}
 				}
 				// The roads in, held on the terrace they arrive at, turning to its street.
 				foreach (Entry e in entries)
@@ -1591,18 +2087,44 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				// Houses front the quay from the land (it runs along +x, so its +side looks −y, inland); its seaward side is the warehouses' (scatter).
 				front.Sides = 1;
-				(Vector2 head, Vector2 tangent) = front.At(front.Nearest(new Vector2(0f, quay)));
-				market = head + Vector2.down * (MainWidth * 0.5f + 4f);
-				AddPlaza(market, tangent, Mathf.Clamp(size * 0.2f, 9f, 16f), 5f, 0.9f);
+				// Where the streets in meet the quay. No street comes in from the sea's side (a made-up entrance ahead would run out
+				// along the piers).
+				var ins = new List<(Entry e, Vector2 join)>();
 				foreach (Entry e in entries)
 				{
 					Vector2 join = front.At(front.Nearest(e.End)).point;
-					// No street comes in from the sea's side (a made-up entrance ahead would run out along the piers).
-					if (Vector2.Distance(join, e.End) < 4f || (request.Entrances.Count == 0 && e.Dir.y > 0.3f))
+					if (Vector2.Distance(join, e.End) >= 4f && !(request.Entrances.Count == 0 && e.Dir.y > 0.3f))
 					{
-						continue;
+						ins.Add((e, join));
 					}
-					AddWay(Spline(e.Start, e.End, Bend(e.End, join, 0.1f), join), MainWidth, 0, 3, false);
+				}
+				// The market at the quay's head, its seaward edge on the quay street as before, reaching inland as far as its stalls and
+				// its well want (2026-10-20: ten metres deep, it held the well and little else; the rest stood among the houses, and the
+				// street in from behind ran through the middle of it). A street in that would cross it ends at its edge, as a market
+				// town's do.
+				float halfLength = Mathf.Clamp(size * 0.26f, 10f, 20f), halfWidth = Mathf.Clamp(size * 0.1f, 6f, 8f);
+				float grow = MarketScale(halfLength, halfWidth, 0.9f, 1.3f);
+				halfLength *= grow;
+				halfWidth = Mathf.Min(halfWidth * grow, 10f);
+				float headAt = front.Nearest(new Vector2(0f, quay));
+				(Vector2 head, Vector2 tangent) = front.At(headAt);
+				market = head + Vector2.down * (MainWidth * 0.5f + halfWidth - 1f);
+				// Drawn back from the quay as far as the site's edge would otherwise draw its seaward corners in (AddPlaza), up to half its depth.
+				for (int k = 0; k < Mathf.CeilToInt(halfWidth * 0.5f); k++)
+				{
+					Vector2 side = tangent * (halfLength * 1.1f), sea = -Vector2.down * (halfWidth * 1.1f);
+					Vector2 left = market - side + sea, right = market + side + sea;
+					if (left.magnitude <= InnerEdge(left) * 0.85f && right.magnitude <= InnerEdge(right) * 0.85f)
+					{
+						break;
+					}
+					market += Vector2.down;
+				}
+				Vector2[] place = AddPlaza(market, tangent, halfLength, halfWidth, 0.9f);
+				foreach ((Entry e, Vector2 join) in ins)
+				{
+					Vector2 to = Mathf.Abs(front.Nearest(join) - headAt) < halfLength + MainWidth * 0.5f ? Toward(place, market, e.End, 1f) : join;
+					AddWay(Spline(e.Start, e.End, Bend(e.End, to, 0.1f), to), MainWidth, 0, 3, false);
 				}
 				// Streets behind the quay's houses, each a block back from the last, as a harbour town climbs from its waterfront,
 				// and alleys down through the blocks to the quay.
@@ -1799,6 +2321,11 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				areas.Add((polygon, PlazaGroup));
 				request.Plazas.Add(polygon);
+				if (marketSquare == null)
+				{
+					marketSquare = polygon;
+					marketLie = lie;
+				}
 				// Its edge is a frontage: market houses and a church face the plaza from outside.
 				var edgeWay = new Way { Width = 0f, Rank = 0 };
 				foreach (Vector2 p in polygon)
@@ -1924,14 +2451,17 @@ namespace FishMMO.Shared.WorldDesign
 				return length;
 			}
 
-			/// <summary>A ring street at a share of the inner boundary all round, broken round the citadel.</summary>
-			private void RingStreet(float share, float width, int rank)
+			/// <summary>
+			/// A ring street at a share of the inner boundary all round, broken round the citadel; never nearer the middle than
+			/// <paramref name="floor"/> metres where the boundary leaves room (<see cref="RingRadius"/>).
+			/// </summary>
+			private void RingStreet(float share, float width, int rank, float floor = 0f)
 			{
 				var ring = new List<Vector2>();
 				for (int k = 0; k < 180; k++)
 				{
 					Vector2 dir = Dir(k * Mathf.PI * 2f / 180);
-					ring.Add(dir * (InnerEdge(dir) * share));
+					ring.Add(dir * RingRadius(InnerEdge(dir), share, floor));
 				}
 				foreach (List<Vector2> run in CutAroundCitadel(ring, true))
 				{
@@ -1940,6 +2470,23 @@ namespace FishMMO.Shared.WorldDesign
 						AddWay(run, width, rank, 3, false);
 					}
 				}
+			}
+
+			/// <summary>A ring's reach where the boundary's is <paramref name="inner"/>: its share of it, out to the floor, but never past 0.72 of it.</summary>
+			private static float RingRadius(float inner, float share, float floor) => Mathf.Max(inner * share, Mathf.Min(floor, inner * 0.72f));
+
+			/// <summary>The deepest street landmark's depth (a church's, a cathedral's), metres; 0 with none.</summary>
+			private float DeepestLandmark()
+			{
+				float deepest = 0f;
+				for (int i = 0; i < request.Items.Count; i++)
+				{
+					if (Of(request.Items[i]) == PointOfInterestSlotRole.Street && IsLandmark(i))
+					{
+						deepest = Mathf.Max(deepest, request.Items[i].Footprint.y);
+					}
+				}
+				return deepest;
 			}
 
 			/// <summary>A ring's runs with the stretch over the citadel (and its approach) cut out; the whole ring, closed, with none.</summary>
@@ -1996,7 +2543,24 @@ namespace FishMMO.Shared.WorldDesign
 				return index >= 0 ? request.Items[index].Footprint.magnitude * 0.5f : 0f;
 			}
 
-			private bool NearCitadel(Vector2 p) => citadel.HasValue && Vector2.Distance(p, citadel.Value) < CitadelReach() + SecondWidth + Gap + 2f;
+			/// <summary>
+			/// Whether a point is within a street's width and a margin of the citadel's footprint (its turned rectangle as laid). Measured
+			/// from the rectangle, not from a circle round it (2026-10-19): a capital's palace compound, 72 by 89 m, cut a circle of its
+			/// half diagonal and more out of the ring streets, and with them the frontage of a quarter of a small capital's houses.
+			/// </summary>
+			private bool NearCitadel(Vector2 p)
+			{
+				int index = CitadelItem();
+				if (!citadel.HasValue || index < 0)
+				{
+					return false;
+				}
+				Vector2 local = Rotate(p - citadel.Value, -citadelYaw), half = request.Items[index].Footprint * 0.5f;
+				float dx = Mathf.Max(0f, Mathf.Abs(local.x) - half.x), dz = Mathf.Max(0f, Mathf.Abs(local.y) - half.y);
+				return dx * dx + dz * dz < Sq(SecondWidth + Gap + 2f);
+			}
+
+			private static float Sq(float v) => v * v;
 
 			/// <summary>The first centrepiece when it is a keep's size (a footprint ten metres or more across): a citadel, not a well.</summary>
 			private int CitadelItem()
@@ -2056,6 +2620,7 @@ namespace FishMMO.Shared.WorldDesign
 					if (TryLay(item.Slot, index, at, facing, item.Footprint, at == Vector2.zero ? Bound.None : Bound.Interior))
 					{
 						citadel = at;
+						citadelYaw = facing;
 						return;
 					}
 				}
@@ -2107,18 +2672,30 @@ namespace FishMMO.Shared.WorldDesign
 
 			// ── Middle, lines, rings, fronts, rows, scatter ───────
 
-			/// <summary>The first middle piece at the market facing ahead (a citadel's keep is laid already); the rest spiralled out round the market, facing in.</summary>
+			/// <summary>
+			/// The first middle piece at the market facing ahead (a citadel's keep is laid already); the rest spiralled out round the
+			/// market, facing in. A settlement's market square is laid as a market place instead (<see cref="MarketPlace"/>).
+			/// </summary>
 			private void Centre()
 			{
-				bool first = true;
+				// One turn drawn for every middle piece, in order, whichever way it is laid: what is laid after keeps its draws.
+				var middle = new List<(int item, float turn)>();
 				for (int i = 0; i < request.Items.Count; i++)
 				{
-					PointOfInterestLayoutItem item = request.Items[i];
-					if (Of(item) != PointOfInterestSlotRole.Centre)
+					if (Of(request.Items[i]) == PointOfInterestSlotRole.Centre)
 					{
-						continue;
+						middle.Add((i, random.NextFloat() * 360f));
 					}
-					float turn = random.NextFloat() * 360f;
+				}
+				if (marketSquare != null && KeepsMarket)
+				{
+					MarketPlace(middle);
+					return;
+				}
+				bool first = true;
+				foreach ((int i, float turn) in middle)
+				{
+					PointOfInterestLayoutItem item = request.Items[i];
 					if (laidItems.Contains(i))
 					{
 						first = false;
@@ -2133,11 +2710,15 @@ namespace FishMMO.Shared.WorldDesign
 							continue;
 						}
 					}
-					Spiral(item, i, turn);
+					Spiral(item, i, turn, 0f);
 				}
 			}
 
-			private void Spiral(PointOfInterestLayoutItem item, int index, float turn)
+			/// <summary>
+			/// A piece on the first clear spot of a spiral out from the market, facing it; kept <paramref name="room"/> metres from the
+			/// market's stands where that is more than nothing (<see cref="ClearOfStands"/>). Returns whether it was laid.
+			/// </summary>
+			private bool Spiral(PointOfInterestLayoutItem item, int index, float turn, float room)
 			{
 				float most = MostInner + market.magnitude;
 				for (float rho = 1f; rho <= most; rho += 1f)
@@ -2147,11 +2728,512 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						float a = (turn + k * 360f / count) * Mathf.Deg2Rad;
 						Vector2 at = market + Dir(a) * rho;
-						if (TryLay(item.Slot, index, at, FacingYaw(DirectionOf(market - at)), item.Footprint, Bound.Interior, 0, Allow.Plaza))
+						float yaw = StandYaw(item, at);
+						if (room > 0f && !ClearOfStands(at, yaw, item.Footprint, room))
 						{
-							return;
+							continue;
+						}
+						if (TryLay(item.Slot, index, at, yaw, item.Footprint, Bound.Interior, 0, Allow.Plaza))
+						{
+							if (room > 0f)
+							{
+								stands.Add((Box.Of(at, yaw, item.Footprint, 0f, 0), MarketWalkMetres));
+							}
+							return true;
 						}
 					}
+				}
+				return false;
+			}
+
+			// ── The market place ────────────────────────────────────
+
+			/// <summary>The market's square as its town plan laid it (a green, a market place, a city's square); null where it has none.</summary>
+			private Vector2[] marketSquare;
+			/// <summary>The square's long way (its plan's lie), the way its rows of stalls run.</summary>
+			private Vector2 marketLie = Vector2.up;
+			/// <summary>The way the market's stalls face, across their rows (<see cref="Stalls"/>), either way.</summary>
+			private Vector2 stallAcross = Vector2.right;
+			/// <summary>The market's laid pieces (their bare footprints) and the clear ground each keeps round it, metres.</summary>
+			private readonly List<(Box box, float room)> stands = new List<(Box, float)>();
+
+			/// <summary>
+			/// A settlement's market place (2026-10-20: "Town centers (market area with well?) are generally too cramped and need to be
+			/// spread out a bit more"; they were spiralled out from the well a metre apart): the well (or the first centrepiece) at the
+			/// market, with walking room all round it (<see cref="CentreRoomMetres"/>); the fountains, the cross, the statues and the
+			/// stocks down the square's middle line about it, each <see cref="MarketWalkMetres"/> clear of the rest
+			/// (<see cref="Fixture"/>); then the stalls in rows, back to back in pairs facing aisles a cart passes
+			/// (<see cref="AisleMetres"/>, <see cref="Stalls"/>); then the notice boards into what is left; everything
+			/// <see cref="SquareEdgeMetres"/> in from the square's edge, before the houses' fronts. What finds no room so is set in the
+			/// square with half the room, else spiralled out from the market with half the room, and last as close as it fits.
+			/// </summary>
+			private void MarketPlace(List<(int item, float turn)> middle)
+			{
+				var fixtures = new List<(int item, float turn)>();
+				var stalls = new List<(int item, float turn)>();
+				foreach ((int i, float turn) in middle)
+				{
+					if (laidItems.Contains(i))
+					{
+						continue;
+					}
+					PointOfInterestLayoutSlot slot = request.Slots[request.Items[i].Slot];
+					if (slot.Stall)
+					{
+						stalls.Add((i, turn));
+					}
+					else
+					{
+						fixtures.Add((i, turn));
+					}
+				}
+				// The well the square grew round, where it has one; else its first centrepiece (a cross, a fountain, a statue).
+				int pick = fixtures.FindIndex(f => request.Slots[request.Items[f.item].Slot].Well);
+				pick = pick >= 0 ? pick : fixtures.Count > 0 ? 0 : -1;
+				if (pick >= 0)
+				{
+					(int focal, float _) = fixtures[pick];
+					PointOfInterestLayoutItem item = request.Items[focal];
+					if (TryLay(item.Slot, focal, market, 180f, item.Footprint, market == Vector2.zero ? Bound.None : Bound.Interior, 0, Allow.Streets | Allow.Plaza))
+					{
+						stands.Add((Box.Of(market, 180f, item.Footprint, 0f, 0), CentreRoomMetres(MeanInner)));
+						fixtures.RemoveAt(pick);
+					}
+				}
+				// The largest first, ties in the slots' order.
+				fixtures.Sort((p, q) =>
+				{
+					Vector2 fp = request.Items[p.item].Footprint, fq = request.Items[q.item].Footprint;
+					int c = (fq.x * fq.y).CompareTo(fp.x * fp.y);
+					return c != 0 ? c : p.item.CompareTo(q.item);
+				});
+				// The fountains, the cross, the statues and the stocks down the middle before the stalls are set out either side, or (where
+				// that leaves the stalls no rows: a narrow square) the stalls down the middle and the rest round them; whichever leaves
+				// fewer without room, the first on a tie. The notice boards last, into what is left.
+				(int boxes, int pieces, int stands) mark = Mark();
+				var leftover = new List<(int item, float turn)>();
+				SetOutMarket(fixtures, stalls, true, leftover);
+				if (leftover.Count > 0)
+				{
+					var other = new List<(int item, float turn)>();
+					Undo(mark);
+					SetOutMarket(fixtures, stalls, false, other);
+					if (other.Count < leftover.Count)
+					{
+						leftover = other;
+					}
+					else
+					{
+						Undo(mark);
+						leftover.Clear();
+						SetOutMarket(fixtures, stalls, true, leftover);
+					}
+				}
+				// What found no room so: in the square with half the room, then half the walk in from its edge too, else out from the
+				// market with half the room, else as close as it fits.
+				foreach ((int i, float turn) in leftover)
+				{
+					if (!Fixture(i, MarketWalkMetres * 0.5f, SquareEdgeMetres) && !Fixture(i, MarketWalkMetres * 0.5f, SquareEdgeMetres * 0.5f)
+						&& !Spiral(request.Items[i], i, turn, MarketWalkMetres * 0.5f))
+					{
+						Spiral(request.Items[i], i, turn, 0f);
+					}
+				}
+			}
+
+			/// <summary>A market piece this long or more is set out with the well's before the notice boards (a cross, a fountain, the stocks), metres.</summary>
+			private const float MonumentMetres = 3f;
+
+			/// <summary>
+			/// Sets the market out but its well: the pieces <see cref="MonumentMetres"/> long or more before the stalls
+			/// (<paramref name="monumentsFirst"/>) or after them, the smaller last; lists what found no room in <paramref name="left"/>.
+			/// </summary>
+			private void SetOutMarket(List<(int item, float turn)> fixtures, List<(int item, float turn)> stalls, bool monumentsFirst, List<(int item, float turn)> left)
+			{
+				var monuments = new List<(int item, float turn)>();
+				var after = new List<(int item, float turn)>();
+				foreach ((int i, float turn) in fixtures)
+				{
+					Vector2 f = request.Items[i].Footprint;
+					(Mathf.Max(f.x, f.y) < MonumentMetres ? after : monuments).Add((i, turn));
+				}
+				if (!monumentsFirst)
+				{
+					left.AddRange(Stalls(stalls));
+				}
+				foreach ((int i, float turn) in monuments)
+				{
+					if (!Fixture(i, MarketWalkMetres, SquareEdgeMetres))
+					{
+						left.Add((i, turn));
+					}
+				}
+				if (monumentsFirst)
+				{
+					left.AddRange(Stalls(stalls));
+				}
+				foreach ((int i, float turn) in after)
+				{
+					if (!Fixture(i, MarketWalkMetres, SquareEdgeMetres))
+					{
+						left.Add((i, turn));
+					}
+				}
+			}
+
+			/// <summary>How much is laid so far: the boxes kept clear, the pieces, the market's stands (for <see cref="Undo"/>).</summary>
+			private (int boxes, int pieces, int stands) Mark() => (boxes.Count, Pieces.Count, stands.Count);
+
+			/// <summary>Takes back everything laid since <paramref name="mark"/>: its boxes (and their cells), its pieces and their items, the market's stands.</summary>
+			private void Undo((int boxes, int pieces, int stands) mark)
+			{
+				for (int b = boxes.Count - 1; b >= mark.boxes; b--)
+				{
+					Box box = boxes[b];
+					int x0 = Mathf.FloorToInt((box.C.x - box.Bound) / CellMetres), x1 = Mathf.FloorToInt((box.C.x + box.Bound) / CellMetres);
+					int z0 = Mathf.FloorToInt((box.C.y - box.Bound) / CellMetres), z1 = Mathf.FloorToInt((box.C.y + box.Bound) / CellMetres);
+					for (int z = z0; z <= z1; z++)
+					{
+						for (int x = x0; x <= x1; x++)
+						{
+							// Each cell's list was added to in the boxes' order, so the box is its last.
+							List<int> list = cells[Key(x, z)];
+							list.RemoveAt(list.Count - 1);
+						}
+					}
+				}
+				boxes.RemoveRange(mark.boxes, boxes.Count - mark.boxes);
+				for (int p = mark.pieces; p < Pieces.Count; p++)
+				{
+					laidItems.Remove(Pieces[p].Item);
+				}
+				Pieces.RemoveRange(mark.pieces, Pieces.Count - mark.pieces);
+				stands.RemoveRange(mark.stands, stands.Count - mark.stands);
+			}
+
+			/// <summary>
+			/// A market piece that is no stall, on the spot of the square nearest the market that keeps it <paramref name="room"/> clear
+			/// of everything else of the market (and of the centrepiece its own room) and <paramref name="edge"/> in from the square's
+			/// edge, facing the market; the clearer the better up to twice the market's walk, then the nearer the square's long middle
+			/// line the better (the stalls' rows stand either side of it), then the nearer the market; a stall in line with the rows, facing
+			/// across them toward the market. Returns whether it was laid.
+			/// </summary>
+			private bool Fixture(int index, float room, float edge)
+			{
+				PointOfInterestLayoutItem item = request.Items[index];
+				float own = item.Footprint.magnitude * 0.5f;
+				Vector2 u = marketLie, v = new Vector2(marketLie.y, -marketLie.x);
+				SquareExtent(u, v, out float u0, out float u1, out float v0, out float v1);
+				float best = float.NegativeInfinity;
+				Vector2 bestAt = default;
+				float bestYaw = 0f;
+				for (float b = Mathf.Ceil(v0); b <= v1; b += 1f)
+				{
+					for (float a = Mathf.Ceil(u0); a <= u1; a += 1f)
+					{
+						Vector2 at = market + u * a + v * b;
+						float clear = float.PositiveInfinity;
+						foreach ((Box box, float _) in stands)
+						{
+							clear = Mathf.Min(clear, Vector2.Distance(at, box.C) - box.Bound - own);
+						}
+						// As clear as twice the walk between them, then on the square's long middle line (the aisle the stalls' rows leave
+						// down it), then as near the market as that allows.
+						float score = Mathf.Min(clear, 2f * MarketWalkMetres) - 0.25f * Mathf.Abs(b) - 0.05f * Vector2.Distance(at, market);
+						if (score <= best)
+						{
+							continue;
+						}
+						float yaw = at == market ? 180f : StandYaw(item, at);
+						if (InSquare(at, yaw, item.Footprint, edge) && ClearOfStands(at, yaw, item.Footprint, room)
+							&& Inside(at, yaw, item.Footprint, Bound.Interior) && !NearAWell(item.Slot, at) && Fits(Box.Of(at, yaw, item.Footprint, Gap, 0), Allow.Plaza))
+						{
+							best = score;
+							bestAt = at;
+							bestYaw = yaw;
+						}
+					}
+				}
+				if (float.IsNegativeInfinity(best) || !TryLay(item.Slot, index, bestAt, bestYaw, item.Footprint, Bound.Interior, 0, Allow.Plaza))
+				{
+					return false;
+				}
+				stands.Add((Box.Of(bestAt, bestYaw, item.Footprint, 0f, 0), room));
+				return true;
+			}
+
+			/// <summary>
+			/// The stalls in rows: a pair of rows back to back (a porter's way between), then an aisle a cart passes, then the next pair,
+			/// each row facing its aisle; laid from the market out, along a row before out to the next, each clear of the market's other
+			/// pieces by their room. The rows run along the square's long way or across it, an aisle down the middle through the market
+			/// or a pair of rows astride it, whichever sets out the most stalls (the first on a tie: along, an aisle through the market).
+			/// Returns the stalls that found no room.
+			/// </summary>
+			private List<(int item, float turn)> Stalls(List<(int item, float turn)> stalls)
+			{
+				var left = new List<(int item, float turn)>();
+				if (stalls.Count == 0)
+				{
+					return left;
+				}
+				Vector2 largest = Vector2.zero;
+				foreach ((int i, float _) in stalls)
+				{
+					largest = Vector2.Max(largest, request.Items[i].Footprint);
+				}
+				List<(Vector2 at, float yaw, float order)> best = null;
+				int most = -1;
+				stallAcross = new Vector2(marketLie.y, -marketLie.x);
+				for (int way = 0; way < 4 && most < stalls.Count; way++)
+				{
+					Vector2 u = way < 2 ? marketLie : new Vector2(marketLie.y, -marketLie.x);
+					List<(Vector2 at, float yaw, float order)> cells = StallCells(u, largest, way % 2 == 1, way);
+					int count = SetOut(cells, stalls, null);
+					if (count > most)
+					{
+						best = cells;
+						most = count;
+						stallAcross = new Vector2(u.y, -u.x);
+					}
+				}
+				SetOut(best, stalls, left);
+				return left;
+			}
+
+			/// <summary>
+			/// The spots a market's rows of stalls of <paramref name="largest"/> could stand on, rows along <paramref name="u"/> (an aisle
+			/// through the market, or a pair of rows astride it), each with its yaw (facing its aisle) and its order (from the market out,
+			/// along a row before out to the next).
+			/// </summary>
+			private List<(Vector2 at, float yaw, float order)> StallCells(Vector2 u, Vector2 largest, bool astride, int salt)
+			{
+				Vector2 v = new Vector2(u.y, -u.x);
+				SquareExtent(u, v, out float u0, out float u1, out float v0, out float v1);
+				float spacing = Mathf.Max(Gap, StallSpacingMetres), along = largest.x + spacing, pair = 2f * largest.y + spacing + AisleMetres;
+				float back = 0.5f * (largest.y + spacing), shift = astride ? 0f : 0.5f * pair, reach = Mathf.Max(-v0, v1) + pair;
+				int n = Mathf.CeilToInt(Mathf.Max(-u0, u1) / along) + 1, m = Mathf.CeilToInt(reach / pair);
+				var cells = new List<(Vector2 at, float yaw, float order)>();
+				for (int k = -m; k <= m; k++)
+				{
+					for (int row = 0; row < 2; row++)
+					{
+						// A pair's rows back to back about its middle, the lower facing the aisle below it, the upper the aisle above.
+						float across = shift + k * pair + (row == 0 ? -back : back);
+						Vector2 facing = row == 0 ? -v : v;
+						for (int j = -n; j <= n; j++)
+						{
+							uint h = PointOfInterestPlanner.Hash(request.Seed, j, k * 2 + row, 0x51A1 + salt);
+							float give = (PointOfInterestPlanner.Unit(h) - 0.5f) * 0.5f;
+							float turn = (PointOfInterestPlanner.Unit(h * 2654435761u) - 0.5f) * 4f;
+							Vector2 at = market + u * (j * along + give) + v * across;
+							cells.Add((at, FacingYaw(DirectionOf(facing)) + turn, Mathf.Abs(j * along) + 3f * Mathf.Abs(across) + 0.001f * cells.Count));
+						}
+					}
+				}
+				cells.Sort((p, q) => p.order.CompareTo(q.order));
+				return cells;
+			}
+
+			/// <summary>
+			/// Sets the stalls out on the first free spots of <paramref name="cells"/> that are in the square, clear of the market's other
+			/// pieces and of everything laid; lays them and lists in <paramref name="left"/> those that found none, or with no list only
+			/// counts how many would be laid. Returns how many were (or would be) laid.
+			/// </summary>
+			private int SetOut(List<(Vector2 at, float yaw, float order)> cells, List<(int item, float turn)> stalls, List<(int item, float turn)> left)
+			{
+				var used = new bool[cells.Count];
+				var chosen = new List<Box>();
+				int laid = 0;
+				foreach ((int i, float turn) in stalls)
+				{
+					PointOfInterestLayoutItem item = request.Items[i];
+					bool found = false;
+					for (int c = 0; c < cells.Count && !found; c++)
+					{
+						(Vector2 at, float yaw, float _) = cells[c];
+						if (used[c] || !InSquare(at, yaw, item.Footprint, SquareEdgeMetres) || !ClearOfStands(at, yaw, item.Footprint, 0f))
+						{
+							continue;
+						}
+						Box box = Box.Of(at, yaw, item.Footprint, Gap, 0);
+						if (left == null)
+						{
+							// Counted only: as TryLay would find it, and clear of the stalls already counted.
+							if (!Inside(at, yaw, item.Footprint, Bound.Interior) || !Fits(box, Allow.Plaza) || chosen.Exists(o => o.Overlaps(box)))
+							{
+								continue;
+							}
+							chosen.Add(box);
+						}
+						else if (TryLay(item.Slot, i, at, yaw, item.Footprint, Bound.Interior, 0, Allow.Plaza))
+						{
+							chosen.Add(Box.Of(at, yaw, item.Footprint, 0f, 0));
+						}
+						else
+						{
+							continue;
+						}
+						used[c] = true;
+						found = true;
+						laid++;
+					}
+					if (!found)
+					{
+						left?.Add((i, turn));
+					}
+				}
+				if (left != null)
+				{
+					// A stall keeps no room of its own past its row's: what is set out after keeps its own from it.
+					foreach (Box box in chosen)
+					{
+						stands.Add((box, 0f));
+					}
+				}
+				return laid;
+			}
+
+			/// <summary>Whether the site keeps a market: a well or a stall among its middle pieces (not a drowned town's statues, a ruin's altar).</summary>
+			private bool KeepsMarket
+			{
+				get
+				{
+					foreach (PointOfInterestLayoutItem item in request.Items)
+					{
+						if (Of(item) == PointOfInterestSlotRole.Centre && (request.Slots[item.Slot].Stall || request.Slots[item.Slot].Well))
+						{
+							return true;
+						}
+					}
+					return false;
+				}
+			}
+
+			/// <summary>
+			/// The open ground the market's pieces want, square metres: the centrepiece with its room all round, each stall with its
+			/// share of the spacing behind and beside it and of the aisle before it, each other piece with its walk; none for a citadel.
+			/// </summary>
+			private float MarketArea()
+			{
+				float area = 0f;
+				bool focal = false;
+				int citadelItem = CitadelItem();
+				for (int i = 0; i < request.Items.Count; i++)
+				{
+					PointOfInterestLayoutItem item = request.Items[i];
+					if (Of(item) != PointOfInterestSlotRole.Centre || i == citadelItem)
+					{
+						continue;
+					}
+					Vector2 f = item.Footprint;
+					float most = Mathf.Max(f.x, f.y);
+					if (request.Slots[item.Slot].Stall)
+					{
+						area += (f.x + StallSpacingMetres) * (f.y + 0.5f * (StallSpacingMetres + AisleMetres));
+					}
+					else if (!focal)
+					{
+						focal = true;
+						area += Sq(most + 2f * CentreRoomMetres(MeanInner));
+					}
+					else
+					{
+						area += Sq(most + MarketWalkMetres);
+					}
+				}
+				return area;
+			}
+
+			/// <summary>
+			/// How much a plaza of <paramref name="halfLength"/> by <paramref name="halfWidth"/> (its narrow end <paramref name="taper"/>
+			/// of its wide one) is grown, at most <paramref name="most"/> times, so its ground inside the walk round its edge holds
+			/// what the market wants with a share to spare (<see cref="MarketArea"/>); 1 where it does already.
+			/// </summary>
+			private float MarketScale(float halfLength, float halfWidth, float taper, float most)
+			{
+				float f = 1f;
+				while (f < most && !Holds(f * halfLength, f * halfWidth, taper))
+				{
+					f += 0.02f;
+				}
+				return Mathf.Min(f, most);
+			}
+
+			/// <summary>Whether a plaza's ground inside the walk round its edge holds what the market wants with a share to spare.</summary>
+			private bool Holds(float halfLength, float halfWidth, float taper)
+				=> 2f * (halfLength - SquareEdgeMetres) * (halfWidth - SquareEdgeMetres) * (1f + taper) >= 1.3f * MarketArea();
+
+			/// <summary>
+			/// The way a middle piece at <paramref name="at"/> faces: toward the market; a stall in line with the market's rows instead,
+			/// facing across them toward the market (<see cref="stallAcross"/>).
+			/// </summary>
+			private float StandYaw(PointOfInterestLayoutItem item, Vector2 at)
+			{
+				if (marketSquare != null && request.Slots[item.Slot].Stall)
+				{
+					return FacingYaw(DirectionOf(Vector2.Dot(market - at, stallAcross) >= 0f ? stallAcross : -stallAcross));
+				}
+				return FacingYaw(DirectionOf(market - at));
+			}
+
+			/// <summary>Whether a footprint is clear of every market stand by the larger of <paramref name="room"/> and that stand's own room.</summary>
+			private bool ClearOfStands(Vector2 at, float yaw, Vector2 size, float room)
+			{
+				foreach ((Box box, float keep) in stands)
+				{
+					float need = Mathf.Max(room, keep);
+					if (Box.Of(at, yaw, size, 2f * need, 0).Overlaps(box))
+					{
+						return false;
+					}
+				}
+				return true;
+			}
+
+			/// <summary>Whether a footprint lies inside the market's square at least <paramref name="margin"/> metres in from every edge.</summary>
+			private bool InSquare(Vector2 at, float yaw, Vector2 size, float margin)
+			{
+				Vector2[] square = marketSquare;
+				float twice = 0f;
+				for (int i = 0; i < square.Length; i++)
+				{
+					Vector2 a = square[i], b = square[(i + 1) % square.Length];
+					twice += a.x * b.y - a.y * b.x;
+				}
+				float inward = twice >= 0f ? 1f : -1f;
+				var four = new Vector2[4];
+				Corners(at, yaw, size, four);
+				for (int i = 0; i < square.Length; i++)
+				{
+					Vector2 a = square[i], e = square[(i + 1) % square.Length] - a;
+					if (e.sqrMagnitude < 1e-8f)
+					{
+						continue;
+					}
+					Vector2 n = new Vector2(-e.y, e.x).normalized * inward;
+					foreach (Vector2 c in four)
+					{
+						if (Vector2.Dot(c - a, n) < margin)
+						{
+							return false;
+						}
+					}
+				}
+				return true;
+			}
+
+			/// <summary>The market's square's reach from the market along <paramref name="u"/> and <paramref name="v"/>, metres.</summary>
+			private void SquareExtent(Vector2 u, Vector2 v, out float u0, out float u1, out float v0, out float v1)
+			{
+				u0 = v0 = float.PositiveInfinity;
+				u1 = v1 = float.NegativeInfinity;
+				foreach (Vector2 p in marketSquare)
+				{
+					float a = Vector2.Dot(p - market, u), b = Vector2.Dot(p - market, v);
+					u0 = Mathf.Min(u0, a);
+					u1 = Mathf.Max(u1, a);
+					v0 = Mathf.Min(v0, b);
+					v1 = Mathf.Max(v1, b);
 				}
 			}
 
@@ -2280,72 +3362,80 @@ namespace FishMMO.Shared.WorldDesign
 					float bestScore = float.PositiveInfinity, bestT = 0f, bestYaw = 0f;
 					Vector2 bestAt = default, bestNormal = default;
 					float bestAlong = size.x;
-					foreach (Front f in frontages)
+					// A landmark deeper than any frontage leaves it (a cathedral behind a city's square, 2026-10-19) is tried a second
+					// time turned a quarter, its long side to the street: only when it found no place square to one, so every site that
+					// laid it before lays it as it did, and the turned search closes no frontage (it is no measure of what a house fits).
+					bool deepLandmark = landmark && size.y > size.x * 1.4f;
+					for (int pass = 0; pass < (deepLandmark ? 2 : 1) && best == null; pass++)
 					{
-						if (f.Closed)
+						bool turned = pass == 1;
+						foreach (Front f in frontages)
 						{
-							continue;
-						}
-						Way way = f.Way;
-						// A long building backed onto a curtain may stand with its long side to it, its end to the ward.
-						int turns = way.Backed && size.y > size.x * 1.4f ? 2 : 1;
-						for (int quarter = 0; quarter < turns; quarter++)
-						{
-							float along = quarter == 0 ? size.x : size.y, deep = quarter == 0 ? size.y : size.x;
-							// Along the way past what stands in it (a cross street, a plaza, a gate's street), as far as it runs.
-							float reach = Mathf.Min(way.Length, way.Backed ? way.Length : 120f);
-							for (float scanned = 0f; scanned <= reach; scanned += 0.75f)
+							if (f.Closed)
 							{
-								float t = f.Cursor + f.Direction * scanned;
-								float middle = t + f.Direction * along * 0.5f;
-								if (middle - along * 0.5f < 0f || middle + along * 0.5f > way.Length)
+								continue;
+							}
+							Way way = f.Way;
+							// A long building backed onto a curtain may stand with its long side to it, its end to the ward.
+							int turns = (way.Backed || turned) && size.y > size.x * 1.4f ? 2 : 1;
+							for (int quarter = turned ? 1 : 0; quarter < turns; quarter++)
+							{
+								float along = quarter == 0 ? size.x : size.y, deep = quarter == 0 ? size.y : size.x;
+								// Along the way past what stands in it (a cross street, a plaza, a gate's street), as far as it runs.
+								float reach = Mathf.Min(way.Length, way.Backed ? way.Length : 120f);
+								for (float scanned = 0f; scanned <= reach; scanned += 0.75f)
 								{
-									if (scanned == 0f && quarter == turns - 1)
+									float t = f.Cursor + f.Direction * scanned;
+									float middle = t + f.Direction * along * 0.5f;
+									if (middle - along * 0.5f < 0f || middle + along * 0.5f > way.Length)
 									{
-										f.Closed = true;
-									}
-									break;
-								}
-								(Vector2 p, Vector2 tangent) = way.At(middle);
-								Vector2 normal = new Vector2(tangent.y, -tangent.x) * (f.Side == 1 ? 1f : -1f);
-								float set = way.Width * 0.5f + Gap + setback + deep * 0.5f;
-								// Backed onto the line (its fronted side looks outward): the house stands inside it, its back to it, facing in.
-								Vector2 at = way.Backed ? p - normal * (deep * 0.5f + 0.3f) : p + normal * set;
-								float score = Vector2.Distance(at, market) + penalty[Mathf.Clamp(way.Rank, 0, 2)] + quarter * 6f;
-								if (landmark)
-								{
-									// A church faces the plaza if it can, else stands as near the market as there is room; on terraces, the higher the better.
-									score += plazaFronts.Contains(way) ? -1000f : 0f;
-									score -= terraced ? 2f * U(at) : 0f;
-								}
-								if (score >= bestScore)
-								{
-									break;
-								}
-								float yaw = FacingYaw(DirectionOf(-normal)) + turn + quarter * 90f;
-								if (way.Backed)
-								{
-									// A straight building's ends stand out past a curved curtain: drawn in until its corners are inside it.
-									for (int pull = 0; pull < 4; pull++)
-									{
-										float over = Overshoot(at, yaw, size);
-										if (over <= 0f)
+										if (scanned == 0f && quarter == turns - 1 && !turned)
 										{
-											break;
+											f.Closed = true;
 										}
-										at -= normal * (over + 0.05f);
+										break;
 									}
-								}
-								if (Inside(at, yaw, size, Bound.Interior) && Fits(Box.Of(at, yaw, size, Gap, 0)))
-								{
-									best = f;
-									bestScore = score;
-									bestT = t;
-									bestAt = at;
-									bestYaw = yaw;
-									bestNormal = normal;
-									bestAlong = along;
-									break;
+									(Vector2 p, Vector2 tangent) = way.At(middle);
+									Vector2 normal = new Vector2(tangent.y, -tangent.x) * (f.Side == 1 ? 1f : -1f);
+									float set = way.Width * 0.5f + Gap + setback + deep * 0.5f;
+									// Backed onto the line (its fronted side looks outward): the house stands inside it, its back to it, facing in.
+									Vector2 at = way.Backed ? p - normal * (deep * 0.5f + 0.3f) : p + normal * set;
+									float score = Vector2.Distance(at, market) + penalty[Mathf.Clamp(way.Rank, 0, 2)] + quarter * 6f;
+									if (landmark)
+									{
+										// A church faces the plaza if it can, else stands as near the market as there is room; on terraces, the higher the better.
+										score += plazaFronts.Contains(way) ? -1000f : 0f;
+										score -= terraced ? 2f * U(at) : 0f;
+									}
+									if (score >= bestScore)
+									{
+										break;
+									}
+									float yaw = FacingYaw(DirectionOf(-normal)) + turn + quarter * 90f;
+									if (way.Backed)
+									{
+										// A straight building's ends stand out past a curved curtain: drawn in until its corners are inside it.
+										for (int pull = 0; pull < 4; pull++)
+										{
+											float over = Overshoot(at, yaw, size);
+											if (over <= 0f)
+											{
+												break;
+											}
+											at -= normal * (over + 0.05f);
+										}
+									}
+									if (Inside(at, yaw, size, Bound.Interior) && Fits(Box.Of(at, yaw, size, Gap, 0)))
+									{
+										best = f;
+										bestScore = score;
+										bestT = t;
+										bestAt = at;
+										bestYaw = yaw;
+										bestNormal = normal;
+										bestAlong = along;
+										break;
+									}
 								}
 							}
 						}
@@ -2355,11 +3445,13 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					best.Cursor = bestT + best.Direction * (bestAlong + Gap + spacing);
+					var laid = new Fronted { Item = i, Piece = Pieces.Count, HouseBox = boxes.Count, PlotBox = -1, Backed = best.Way.Backed, Centre = bestAt, Yaw = bestYaw, Size = size };
 					Lay(item.Slot, i, bestAt, bestYaw, size, Box.Of(bestAt, bestYaw, size, Gap, 0));
 					if (best.Way.Plots)
 					{
-						Plot(bestAt, bestNormal, bestYaw, size);
+						laid.PlotBox = Plot(bestAt, bestNormal, bestYaw, size);
 					}
+					fronted.Add(laid);
 				}
 			}
 
@@ -2397,8 +3489,8 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 
-			/// <summary>The plot behind a house (a burgage plot, a croft): kept from other houses, open to the back yard's sheds.</summary>
-			private void Plot(Vector2 house, Vector2 normal, float yaw, Vector2 size)
+			/// <summary>The plot behind a house (a burgage plot, a croft): kept from other houses, open to the back yard's sheds. Returns its box's index, −1 for none.</summary>
+			private int Plot(Vector2 house, Vector2 normal, float yaw, Vector2 size)
 			{
 				float deep = Mathf.Clamp(MeanInner * 0.2f, 6f, 14f) * plan.Range(0.8f, 1.2f);
 				foreach (float share in new[] { 1f, 0.6f, 0.3f })
@@ -2409,9 +3501,10 @@ namespace FishMMO.Shared.WorldDesign
 					if (Inside(at, yaw, new Vector2(size.x, d), Bound.Interior) && Fits(plot))
 					{
 						Add(plot);
-						return;
+						return boxes.Count - 1;
 					}
 				}
+				return -1;
 			}
 
 			/// <summary>Rows square to the heading, all facing ahead, filled from the middle out.</summary>
@@ -2435,6 +3528,7 @@ namespace FishMMO.Shared.WorldDesign
 				float px = largest.x + Gap, pz = largest.y + Gap + RowAisleMetres;
 				int kx = Mathf.CeilToInt(interior / px), kz = Mathf.CeilToInt(interior / pz);
 				var lattice = new List<Vector2>();
+				var order = new Dictionary<Vector2, float>();
 				for (int j = -kz; j <= kz; j++)
 				{
 					for (int i = -kx; i <= kx; i++)
@@ -2443,12 +3537,17 @@ namespace FishMMO.Shared.WorldDesign
 						if (Inside(at, 180f, largest, Bound.Interior))
 						{
 							lattice.Add(at);
+							// Out by the share of the boundary's reach that way, not by metres: the filled rows take the
+							// site's shape (a long plot's graves run its length) rather than a disc in its middle; a little
+							// seeded give, so a row's ends are ragged.
+							float share = at.sqrMagnitude > 1e-6f ? at.magnitude / Mathf.Max(0.5f, InnerEdge(at)) : 0f;
+							order[at] = share + 0.08f * PointOfInterestPlanner.Unit(PointOfInterestPlanner.Hash(request.Seed, i, j, 0x6A7E));
 						}
 					}
 				}
 				lattice.Sort((p, q) =>
 				{
-					int c = p.sqrMagnitude.CompareTo(q.sqrMagnitude);
+					int c = order[p].CompareTo(order[q]);
 					if (c != 0) return c;
 					c = p.y.CompareTo(q.y);
 					return c != 0 ? c : p.x.CompareTo(q.x);

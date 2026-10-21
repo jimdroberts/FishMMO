@@ -26,6 +26,9 @@ namespace FishMMO.Client
 		public const string FallingLeavesShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishFallingLeaves.shader";
 		public const string SiteEmbersShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishSiteEmbers.shader";
 		public const string SiteFlamesShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishSiteFlames.shader";
+		public const string LighthouseBeamsShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishLighthouseBeams.shader";
+		public const string CaveDripsShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishCaveDrips.shader";
+		public const string CaveSkylightShaftsShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishSkylightShafts.shader";
 		public const string IndirectShaderVariantsPath = "Assets/Prefabs/Shared/Biomes/Generated/Variants/FishIndirectVariants.shadervariants";
 		public const string AudioPath = Folder + "/Weather Audio Profile.asset";
 		public const string ShaderName = "FishMMO/Weather/Precipitation";
@@ -192,12 +195,25 @@ namespace FishMMO.Client
 			// The sparks off the sites' fires and forges: same rule.
 			if (profile.SiteEmbersShader == null) profile.SiteEmbersShader = AssetDatabase.LoadAssetAtPath<Shader>(SiteEmbersShaderPath);
 			if (profile.SiteFlamesShader == null) profile.SiteFlamesShader = AssetDatabase.LoadAssetAtPath<Shader>(SiteFlamesShaderPath);
+			// The lighthouses' turning beams: same rule.
+			if (profile.LighthouseBeamsShader == null) profile.LighthouseBeamsShader = AssetDatabase.LoadAssetAtPath<Shader>(LighthouseBeamsShaderPath);
+			// The caves' drips (2026-10-20): same rule.
+			if (profile.CaveDripsShader == null) profile.CaveDripsShader = AssetDatabase.LoadAssetAtPath<Shader>(CaveDripsShaderPath);
+			// The daylight's shafts under the caves' skylights (2026-10-20): same rule.
+			if (profile.CaveSkylightShaftsShader == null) profile.CaveSkylightShaftsShader = AssetDatabase.LoadAssetAtPath<Shader>(CaveSkylightShaftsShaderPath);
 			// Generated with the biome art (gitignored, path-derived GUID), so it may not exist yet; assigned once it does.
 			if (profile.IndirectShaderVariants == null) profile.IndirectShaderVariants = AssetDatabase.LoadAssetAtPath<ShaderVariantCollection>(IndirectShaderVariantsPath);
 			// The moss layer's surface (FishMoss.hlsl): generated with the biome art too, same rule. Referenced here so a
 			// client build ships it; until then the editor loads it by path and a build draws a plain green.
 			if (profile.MossAlbedo == null) profile.MossAlbedo = AssetDatabase.LoadAssetAtPath<Texture2D>(MossShaderGlobals.AlbedoPath);
 			if (profile.MossNormal == null) profile.MossNormal = AssetDatabase.LoadAssetAtPath<Texture2D>(MossShaderGlobals.NormalPath);
+			// The cave cover (2026-10-20): its compute and shader, and its art, generated with the structures (same rule as the moss).
+			if (profile.CaveCoverCompute == null) profile.CaveCoverCompute = AssetDatabase.LoadAssetAtPath<ComputeShader>(CaveCoverRenderer.ComputeAssetPath);
+			if (profile.CaveCoverShader == null) profile.CaveCoverShader = AssetDatabase.LoadAssetAtPath<Shader>(CaveCoverRenderer.ShaderAssetPath);
+			if (profile.CaveCoverMesh == null) profile.CaveCoverMesh = AssetDatabase.LoadAssetAtPath<Mesh>(CaveCoverRenderer.MeshAssetPath);
+			// The rock seam fillets (2026-10-21): their compute and shader, same rule.
+			if (profile.RockFilletsCompute == null) profile.RockFilletsCompute = AssetDatabase.LoadAssetAtPath<ComputeShader>(RockFillets.ComputeAssetPath);
+			if (profile.RockFilletShader == null) profile.RockFilletShader = AssetDatabase.LoadAssetAtPath<Shader>(RockFillets.ShaderAssetPath);
 			EditorUtility.SetDirty(profile);
 			WorldEditorAssets.RegisterAddressable(profile, WorldEditorAssets.ClientStaticGroup);
 			AssetDatabase.SaveAssets();

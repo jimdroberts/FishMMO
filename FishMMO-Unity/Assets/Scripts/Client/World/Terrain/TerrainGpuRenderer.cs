@@ -117,6 +117,8 @@ namespace FishMMO.Client
 			public int WorkInstances;
 			/// <summary>Its shape in the rock crevice field (<see cref="RockContactField"/>), −1 when it is not a rock taking part.</summary>
 			public int RockShape = -1;
+			/// <summary>Its look there (<see cref="RockContactField.RegisterLook"/>: its material, which its seam fillets wear), −1 none.</summary>
+			public int RockLook = -1;
 		}
 
 		/// <summary>An upload buffer, released once the GPU is surely done with it.</summary>
@@ -291,7 +293,8 @@ namespace FishMMO.Client
 		private bool layoutDirty = true;
 
 		/// <summary>
-		/// Per instance, the shape (+1) of the rock it is in the crevice field (0: not a rock), alongside the mirror;
+		/// Per instance, the shape (+1) of the rock it is in the crevice field (0: not a rock) and its look
+		/// (<see cref="RockContactField.TagOf"/>), alongside the mirror;
 		/// the GPU copy (<see cref="RockSource"/>) is replaced whole when it changes, a frame late, so the instances it
 		/// tags have been uploaded by then. Only renderers that registered a rock keep one.
 		/// </summary>
@@ -549,6 +552,10 @@ namespace FishMMO.Client
 			if (ContactMode > 0.5f && IsRock(resolved))
 			{
 				model.RockShape = RockContactField.RegisterShape(levels, localBounds);
+				if (model.RockShape >= 0)
+				{
+					model.RockLook = RockContactField.RegisterLook(levels[0].Length > 0 ? levels[0][0].Material : null);
+				}
 				if (model.RockShape >= 0 && !anyRock)
 				{
 					anyRock = true;
@@ -581,7 +588,7 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			uint tag = (uint)models[model].RockShape + 1u;
+			uint tag = RockContactField.TagOf(models[model].RockShape, models[model].RockLook);
 			int end = Mathf.Min(offset + count, tagMirror.Length);
 			for (int i = offset; i < end; i++)
 			{

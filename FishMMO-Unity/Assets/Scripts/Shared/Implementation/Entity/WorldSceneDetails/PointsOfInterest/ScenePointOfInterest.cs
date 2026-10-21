@@ -1,8 +1,24 @@
+using System;
+using System.Collections.Generic;
 using FishMMO.Shared.NameGeneration;
 using UnityEngine;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// A second way into a site the world map draws as its own entry (2026-10-20): another mouth of a cave, the dungeon gate in
+	/// a large cave's great cavern. Its tier and discovery are the site's.
+	/// </summary>
+	[Serializable]
+	public struct ScenePointOfInterestEntrance
+	{
+		public Vector3 Position;
+		public MapMarkerType Type;
+		public string Name;
+		[TextArea(1, 3)]
+		public string Description;
+	}
+
 	/// <summary>
 	/// A generated point of interest in its scene: the transform the site stands at, and the landmark the
 	/// world map draws for it.
@@ -35,6 +51,13 @@ namespace FishMMO.Shared
 		public bool RequiresDiscovery = true;
 		/// <summary>The race's naming key, when the site has one.</summary>
 		public string Race;
+		/// <summary>
+		/// The site is a dungeon's way in (a crypt or a barrow over its stair, 2026-10-20): its own entry is drawn as a dungeon
+		/// entrance, whatever its kind, so every dungeon reads as one on the map and under its filter.
+		/// </summary>
+		public bool HoldsDungeon;
+		/// <summary>The site's other ways in, each drawn as its own entry: written by the generator after the site is built.</summary>
+		public List<ScenePointOfInterestEntrance> Entrances = new List<ScenePointOfInterestEntrance>();
 
 		/// <summary>The name drawn on the map: the generated name, else the GameObject's.</summary>
 		public string ResolvedName => string.IsNullOrWhiteSpace(PointName) ? gameObject.name : PointName;
@@ -50,21 +73,56 @@ namespace FishMMO.Shared
 			DetailTier = record.DetailTier;
 			RequiresDiscovery = record.RequiresDiscovery;
 			Race = record.Race;
+			HoldsDungeon = record.Kind == POIType.DungeonEntrance;
+			Entrances = new List<ScenePointOfInterestEntrance>();
 			transform.SetPositionAndRotation(record.Position, Quaternion.Euler(0f, record.Yaw, 0f));
 		}
 
-		/// <summary>The map entry this POI is drawn as.</summary>
+		/// <summary>The map entry this POI is drawn as: a dungeon entrance when it <see cref="HoldsDungeon"/>, else its kind.</summary>
 		public MapPointOfInterestDetails ToDetails()
-			=> new MapPointOfInterestDetails
+		{
+			bool dungeon = HoldsDungeon && Kind != POIType.DungeonEntrance;
+			return new MapPointOfInterestDetails
 			{
 				Name = ResolvedName,
-				Description = Description,
+				Description = dungeon ? DungeonLine(PointOfInterestKinds.Info(Kind).DisplayName, Description) : Description,
 				Position = transform.position,
-				Type = PointOfInterestKinds.MarkerFor(Kind),
+				Type = HoldsDungeon ? MapMarkerType.DungeonEntrance : PointOfInterestKinds.MarkerFor(Kind),
 				DetailTier = Mathf.Max(0, DetailTier),
 				RequiresDiscovery = RequiresDiscovery,
 				ShowOnMinimap = true,
 			};
+		}
+
+		/// <summary>Adds the site's own entry and one for each of its <see cref="Entrances"/>.</summary>
+		public void AppendDetails(List<MapPointOfInterestDetails> into)
+		{
+			into.Add(ToDetails());
+			if (Entrances == null)
+			{
+				return;
+			}
+			foreach (ScenePointOfInterestEntrance entrance in Entrances)
+			{
+				into.Add(new MapPointOfInterestDetails
+				{
+					Name = string.IsNullOrWhiteSpace(entrance.Name) ? ResolvedName : entrance.Name,
+					Description = entrance.Description,
+					Position = entrance.Position,
+					Type = entrance.Type,
+					DetailTier = Mathf.Max(0, DetailTier),
+					RequiresDiscovery = RequiresDiscovery,
+					ShowOnMinimap = true,
+				});
+			}
+		}
+
+		/// <summary>The tooltip of a site that is a dungeon's way in: what it is first, then its own description.</summary>
+		public static string DungeonLine(string kindName, string description)
+		{
+			string line = string.IsNullOrEmpty(kindName) ? "Dungeon entrance" : $"Dungeon entrance ({kindName.ToLowerInvariant()})";
+			return string.IsNullOrEmpty(description) ? line : line + "\n" + description;
+		}
 
 #if UNITY_EDITOR
 		/// <summary>How high the marker line rises above the site, metres, with the label at its top (2026-10-10).</summary>
@@ -101,7 +159,20 @@ namespace FishMMO.Shared
 				labelStyle.normal.background = backing;
 			}
 			labelStyle.normal.textColor = colour;
-			UnityEditor.Handles.Label(top + Vector3.up * 0.8f, $"{ResolvedName}\n{info.DisplayName}", labelStyle);
+			UnityEditor.Handles.Label(top + Vector3.up * 0.8f, $"{ResolvedName}\n{(HoldsDungeon ? "Dungeon entrance" : info.DisplayName)}", labelStyle);
+
+			// Each other way in: a shorter line, labelled with what it is.
+			if (Entrances == null)
+			{
+				return;
+			}
+			foreach (ScenePointOfInterestEntrance entrance in Entrances)
+			{
+				Vector3 head = entrance.Position + Vector3.up * (MarkerHeight * 0.5f);
+				Gizmos.DrawLine(entrance.Position, head);
+				Gizmos.DrawWireSphere(entrance.Position, 1f);
+				UnityEditor.Handles.Label(head + Vector3.up * 0.8f, entrance.Type == MapMarkerType.DungeonEntrance ? "Dungeon entrance" : "Entrance", labelStyle);
+			}
 		}
 
 		private void OnDrawGizmosSelected()

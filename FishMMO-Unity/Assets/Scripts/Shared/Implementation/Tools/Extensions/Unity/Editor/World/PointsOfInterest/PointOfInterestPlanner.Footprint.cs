@@ -50,6 +50,12 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
+		/// <summary>
+		/// True for a kind whose outline is a walled plot, straight-sided (<see cref="State.Plot"/>), not a blob: a graveyard,
+		/// a field fenced off and filled in rows (2026-10-19: "Graveyards are always circular fields").
+		/// </summary>
+		internal static bool Plots(POIType kind) => kind == POIType.Graveyard;
+
 		/// <summary>How irregular a kind's outline is drawn: (elongation, ripple, how strongly it follows the ground).</summary>
 		private static (float elongation, float ripple, float follow) Irregularity(POIType kind, PointOfInterestKindInfo info)
 		{
@@ -137,6 +143,10 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					grade[k] = n > 0 ? sum / n : 0f;
 				}
+				if (Plots(rule.Kind))
+				{
+					return Plot(r0, limit, grade, hash, ref site);
+				}
 
 				// The lie of the land: along a near shore, else across the slope (its contour), else the seed's.
 				float axis = Unit(Mix(hash ^ 0xA715u)) * Mathf.PI;
@@ -205,6 +215,106 @@ namespace FishMMO.Shared.WorldDesign
 				site.Outline = outline;
 				site.Radius = PointOfInterestOutline.Max(outline, r0);
 				return true;
+			}
+
+			/// <summary>
+			/// A walled plot's outline (<see cref="Plots"/>): four sides square to an axis (across the hillside's slope, else the
+			/// seed's), up to two to one long, the anchor off its middle, each side's line turned a few degrees and on some plots
+			/// a corner cut off by a fifth, so no two are the same quadrilateral. A side whose ground climbs or falls away is drawn
+			/// in, nothing passes water, a holed wall or the scene's edge, and the area stays near the drawn disc's. Leaves the
+			/// plot's axis, whole degrees, on the site's yaw for <see cref="PlotYaw"/>, so its rows run square to its sides.
+			/// </summary>
+			private bool Plot(float r0, float[] limit, float[] grade, uint hash, ref Site site)
+			{
+				const int N = PointOfInterestOutline.Bearings;
+				Vector2 slope = Gradient(site.X, site.Z, r0 * 0.6f);
+				float axis = slope.sqrMagnitude > 0.03f * 0.03f ? YawOf(slope.x, slope.y) : Unit(Mix(hash ^ 0xA715u)) * 90f;
+				axis = Mathf.Repeat(Mathf.Round(axis), 360f);
+
+				// The sides as lines (bearing of the outward normal, degrees; distance from the anchor, unitless).
+				float aspect = 1f + Unit(Mix(hash ^ 0xE10Bu));
+				float along = Mathf.Sqrt(aspect), across = 1f / along;
+				float shiftAlong = (Unit(Mix(hash ^ 0x0FF5u)) - 0.5f) * 0.3f * along;
+				float shiftAcross = (Unit(Mix(hash ^ 0x0FF6u)) - 0.5f) * 0.3f * across;
+				var sides = new List<(float normal, float distance)>
+				{
+					(axis, along - shiftAlong),
+					(axis + 90f, across - shiftAcross),
+					(axis + 180f, along + shiftAlong),
+					(axis + 270f, across + shiftAcross),
+				};
+				for (int s = 0; s < 4; s++)
+				{
+					float turn = (Unit(Mix(hash ^ (0x5D1u + (uint)s * 0x9E3779B1u))) - 0.5f) * 10f;
+					// Ground falling or climbing at 12 % beyond a side draws it in by a third at most.
+					int k = Mathf.RoundToInt(Mathf.Repeat(sides[s].normal, 360f) / (360f / N)) % N;
+					float lie = Mathf.Exp(Mathf.Max(-0.5f * grade[k] / 0.12f * Mathf.Log(2f), -0.4f));
+					sides[s] = (sides[s].normal + turn, sides[s].distance * lie);
+				}
+				if (Unit(Mix(hash ^ 0xC0E7u)) < 0.4f)
+				{
+					// A corner cut off across its diagonal: the plot's extension met a lane or a neighbour's hedge.
+					int corner = Mathf.FloorToInt(Unit(Mix(hash ^ 0xC0E8u)) * 4f) & 3;
+					(float n0, float d0) = sides[corner];
+					(float n1, float d1) = sides[(corner + 1) & 3];
+					float t = 0.8f + 0.12f * Unit(Mix(hash ^ 0xC0E9u));
+					sides.Add((n0 + Mathf.DeltaAngle(n0, n1) * 0.5f, t * (d0 + d1) * 0.70710678f));
+				}
+
+				var share = new float[N];
+				for (int k = 0; k < N; k++)
+				{
+					float bearing = k * (360f / N);
+					float reach = float.PositiveInfinity;
+					foreach ((float normal, float distance) in sides)
+					{
+						float c = Mathf.Cos(Mathf.DeltaAngle(bearing, normal) * Mathf.Deg2Rad);
+						if (c > 1e-3f)
+						{
+							reach = Mathf.Min(reach, distance / c);
+						}
+					}
+					share[k] = reach;
+				}
+				float products = 0f;
+				for (int k = 0; k < N; k++)
+				{
+					products += share[k] * share[(k + 1) % N];
+				}
+				float scale = Mathf.Sqrt(N / Mathf.Max(1e-4f, products));
+				var outline = new float[N];
+				for (int k = 0; k < N; k++)
+				{
+					// Only the corners are held in: a side's middle may come nearer than a blob's least without bulging.
+					float r = Mathf.Min(share[k] * scale, OutlineStretch) * r0;
+					outline[k] = Mathf.Round(Mathf.Min(r, limit[k]) * 100f) / 100f;
+				}
+				if (PointOfInterestOutline.Area(outline, r0) < OutlineLeastArea * Mathf.PI * r0 * r0)
+				{
+					return false;
+				}
+				site.Outline = outline;
+				site.Radius = PointOfInterestOutline.Max(outline, r0);
+				site.Yaw = axis;
+				return true;
+			}
+
+			/// <summary>
+			/// A plot's heading: its axis (<see cref="Plot"/>, on the site's yaw) turned by the quarter that faces its settlement
+			/// most nearly, so the gate in its wall opens toward the houses; the axis itself when it has none.
+			/// </summary>
+			private float PlotYaw(in Site site)
+			{
+				foreach (PointOfInterestRecord town in settlements)
+				{
+					if (town.Id == site.ParentId)
+					{
+						float toward = YawOf(town.Position.x - site.X, town.Position.z - site.Z);
+						float quarters = Mathf.Round(Mathf.DeltaAngle(site.Yaw, toward) / 90f);
+						return Mathf.Repeat(site.Yaw + quarters * 90f, 360f);
+					}
+				}
+				return site.Yaw;
 			}
 
 			/// <summary>The ground's mean slope across a ring of <paramref name="reach"/> round a point (rise per metre, x east, y north).</summary>

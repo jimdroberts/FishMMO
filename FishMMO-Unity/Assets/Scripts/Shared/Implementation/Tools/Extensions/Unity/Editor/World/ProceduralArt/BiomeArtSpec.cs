@@ -176,6 +176,27 @@ namespace FishMMO.Shared.WorldDesign
 				AirBand = air;
 				return this;
 			}
+
+			/// <summary>
+			/// Heat band (TerrainTextureLayer.useHeatBand, 2026-10-18, phase I2q): the ground's heat this DETAIL ground is painted
+			/// between, 0 cold … 1 a spring's throat (an end at or past 0 or 1 open); null for none, as every layer was before. Set
+			/// through <see cref="Heat"/>.
+			/// </summary>
+			public Vector2? HeatBand;
+			/// <summary>The heat band's soft edge at each closed end, centred on the end.</summary>
+			public float HeatFalloff = BiomeHeatBand.DefaultFalloff;
+
+			/// <summary>
+			/// Paints this detail ground only where the scene's heat mask lies between <paramref name="min"/> and <paramref name="max"/>
+			/// (a geyser basin's sinter apron: <c>D(Ground.Sinter, 64f).Heat(0.65f, 1f)</c>; its green halo <c>.Heat(0.1f, 0.4f)</c>).
+			/// Both ends open is no band. Main layers ignore it.
+			/// </summary>
+			public Layer Heat(float min, float max, float falloff = BiomeHeatBand.DefaultFalloff)
+			{
+				HeatBand = min <= 0f && max >= 1f ? (Vector2?)null : new Vector2(Mathf.Max(0f, min), Mathf.Min(1f, max));
+				HeatFalloff = Mathf.Clamp01(falloff);
+				return this;
+			}
 		}
 
 		/// <summary>A cliff layer: a family on faces steeper than an angle.</summary>
@@ -210,6 +231,8 @@ namespace FishMMO.Shared.WorldDesign
 			public bool NonUniform;
 			public Vector2 WidthScale = new Vector2(0.85f, 1.15f);
 			public Vector2 HeightScale = new Vector2(0.85f, 1.25f);
+			/// <summary><see cref="PrefabSpawnRule.scaleSkew"/>: 1 even; above 1 the odd one large among many ordinary (<see cref="Massive"/>).</summary>
+			public float ScaleSkew = 1f;
 			public bool AlignToNormal;
 			public int Coverage = 255;
 			public int MaxPerChunk;
@@ -286,6 +309,13 @@ namespace FishMMO.Shared.WorldDesign
 			/// world. Set through <see cref="OnWorlds"/>.
 			/// </summary>
 			public BiomeWorldGate World;
+			/// <summary>
+			/// Heat band (<see cref="PrefabSpawnRule.useHeatBand"/>, 2026-10-18, phase I2q): the ground's heat the rule grows between,
+			/// 0 … 1; null for none. Set through <see cref="Hot"/>.
+			/// </summary>
+			public Vector2? Heat;
+			/// <summary><see cref="PrefabSpawnRule.heatFalloff"/>.</summary>
+			public float HeatFalloff = BiomeHeatBand.DefaultFalloff;
 			/// <summary>
 			/// Tree-channel rules: the heading range instances are turned to, degrees about the vertical
 			/// (<see cref="PrefabSpawnRule.yRotationRange"/>). Any heading unless set through <see cref="Aligned"/>.
@@ -653,7 +683,37 @@ namespace FishMMO.Shared.WorldDesign
 			/// file's own (<see cref="WaterTint"/>), else the inland water's look every lake and river took before
 			/// (<see cref="BiomeWaterLooks.Today"/>).
 			/// </summary>
-			public BiomeWaterLook WaterLook() => waterTint ?? BiomeWaterLooks.Today;
+			public BiomeWaterLook WaterLook()
+			{
+				BiomeWaterLook look = waterTint ?? BiomeWaterLooks.Today;
+				look.Hot |= hotWater;
+				return look;
+			}
+
+			private bool hotWater;
+
+			/// <summary>
+			/// Makes the biome's fresh water HOT (<see cref="BiomeWaterLook.Hot"/>, 2026-10-18, phase I2q, decision 47): its lakes, pools,
+			/// streams and moats never ice and always steam. Its colours stay the file's (<see cref="WaterTint"/>) or the inland water's.
+			/// </summary>
+			public Entry HotWater()
+			{
+				hotWater = true;
+				return this;
+			}
+
+			/// <summary>
+			/// How the biome's hot ground divides among geysers, hot springs, fumaroles and mud pots, when the file says
+			/// (<see cref="BiomeTemplate.Geothermal"/>, 2026-10-18, phase I2q); null leaves the template's (today's split).
+			/// </summary>
+			public BiomeGeothermalShares? GeothermalShares;
+
+			/// <summary>Sets the split of the biome's hot ground among its kinds of site (shares, divided by their sum). Read only where the ground steams (<see cref="Emits"/> a vapour).</summary>
+			public Entry Geothermal(float geyser, float hotSpring, float fumarole, float mudPot)
+			{
+				GeothermalShares = new BiomeGeothermalShares(Mathf.Max(0f, geyser), Mathf.Max(0f, hotSpring), Mathf.Max(0f, fumarole), Mathf.Max(0f, mudPot));
+				return this;
+			}
 
 			private BiomeSeaLook? seaTint;
 
@@ -2589,6 +2649,22 @@ namespace FishMMO.Shared.WorldDesign
 			return rule;
 		}
 
+		/// <summary>
+		/// Keeps a rule to a band of the ground's heat (<see cref="PrefabSpawnRule.useHeatBand"/>, 2026-10-18, phase I2q): the scene's
+		/// heat mask from its geothermal sites, 0 cold … 1 a spring's throat, ends at or past 0 and 1 open. <c>Hot(Plants("Thermal moss", 3f), 0.1f, 0.4f)</c>
+		/// grows the moss in a hot spring's green halo only. Both ends open writes the rule exactly as without this call.
+		/// </summary>
+		private static Scatter Hot(Scatter rule, float min, float max, float falloff = BiomeHeatBand.DefaultFalloff)
+		{
+			Vector2? heat = min <= 0f && max >= 1f ? (Vector2?)null : new Vector2(Mathf.Max(0f, min), Mathf.Min(1f, max));
+			AndEarlier(rule, r =>
+			{
+				r.Heat = heat;
+				r.HeatFalloff = Mathf.Clamp01(falloff);
+			});
+			return rule;
+		}
+
 		/// <summary>Makes a change to a rule and to every earlier version of it, for helpers built on other helpers.</summary>
 		private static void AndEarlier(Scatter s, Action<Scatter> change)
 		{
@@ -2647,7 +2723,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static Entry[] Build()
 		{
-			return new[]
+			Entry[] entries = new[]
 			{
 				// ── Under the sea (tiers 0–2) ──
 				// What lives on the sea floor rides on the lakebed (Entry.Bed), by depth: kelp and seaweed where
@@ -2749,6 +2825,142 @@ namespace FishMMO.Shared.WorldDesign
 				Snow(),
 				IcePalace(),
 			};
+			foreach (Entry entry in entries)
+			{
+				Massive(entry);
+			}
+			return entries;
+		}
+
+		// ── Size: the odd giant ─────────────────────────────────────────
+		//
+		// 2026-10-20: "All detail objects (crystals, rocks, etc) besides the standard stuff like firepits, camp sites, etc, need
+		// significantly larger variance (we want massive crystals)." Applied over every finished entry, after each biome's own
+		// tuning (an ice palace's crystals start larger than a frost field's), to the scatter that is the ground's own rock and
+		// crystal: formations, boulders, ice blocks, seracs and the small stones. Plants, trees, deadwood and the sea's life keep
+		// theirs; the sites' props (fires, camps, crates) are no scatter at all. The tree-channel rules lean their size draw
+		// (Scatter.ScaleSkew) so most stay ordinary and the odd one reaches the top: a few massive crystals and great boulders in
+		// a field of ordinary ones, the largest at a group's heart (the groups' scale bias), never a field of giants. The old
+		// output is kept as an earlier version, so a rule an earlier run wrote is brought up to this one, not taken for tuning.
+
+		/// <summary>Range and lean of the crystals: from about half the old smallest to about 4.5× the old largest, at most 7×.</summary>
+		private const float CrystalLow = 0.55f, CrystalHigh = 4.5f, CrystalMost = 7f, CrystalSkew = 2.4f;
+		/// <summary>Rock formations, boulders and ice blocks: about 0.6× to 2.6× the old range, at most 4.2×.</summary>
+		private const float RockLow = 0.6f, RockHigh = 2.6f, RockMost = 4.2f, RockSkew = 1.8f;
+		/// <summary>Seracs, already 8–16 m towers: a modest widening.</summary>
+		private const float SeracLow = 0.8f, SeracHigh = 1.6f, SeracSkew = 1.5f;
+		/// <summary>Small stones (the detail layer, which draws its sizes evenly: no lean).</summary>
+		private const float StoneLow = 0.65f, StoneHigh = 1.5f;
+
+		/// <summary>What a scatter rule places, for <see cref="Massive"/>.</summary>
+		private enum Mass { None, Crystal, Rock, Serac, Stone }
+
+		private static Mass MassOf(Scatter s)
+		{
+			if (s == null || s.Prefabs == null || s.Prefabs.Length == 0)
+			{
+				return Mass.None;
+			}
+			if (s.Channel == PrefabSpawnChannel.DetailLayer)
+			{
+				string first = s.Prefabs[0] ?? string.Empty;
+				return first.StartsWith(SmallRocks(string.Empty), StringComparison.Ordinal) || first.StartsWith(Pebbles(string.Empty), StringComparison.Ordinal)
+					? Mass.Stone : Mass.None;
+			}
+			if (s.Channel != PrefabSpawnChannel.TreeInstance || s.Name == null)
+			{
+				return Mass.None;
+			}
+			if (s.Name == "Seracs")
+			{
+				return Mass.Serac;
+			}
+			bool rock = s.Name.StartsWith("Formations: ", StringComparison.Ordinal) || s.Name == "Boulders" || s.Name == "Ice boulders";
+			if (!rock)
+			{
+				return Mass.None;
+			}
+			foreach (string prefab in s.Prefabs)
+			{
+				if (prefab != null && prefab.IndexOf("Crystal", StringComparison.OrdinalIgnoreCase) >= 0)
+				{
+					return Mass.Crystal;
+				}
+			}
+			return Mass.Rock;
+		}
+
+		/// <summary>Every scatter rule of an entry, on every ground it writes (main, details, beds, climate variants).</summary>
+		private static IEnumerable<Scatter> AllScatter(Entry e)
+		{
+			var layers = new List<Layer> { e.Main, e.Bed, e.RiverBed };
+			layers.AddRange(e.Details);
+			foreach (Entry.BedSpec bed in e.BedLayers)
+			{
+				layers.Add(bed.Layer);
+			}
+			foreach (Entry.VariantGrounds variant in e.VariantLayers)
+			{
+				layers.AddRange(variant.Layers);
+			}
+			foreach (Layer layer in layers)
+			{
+				if (layer == null)
+				{
+					continue;
+				}
+				foreach (Scatter s in layer.Scatter)
+				{
+					yield return s;
+				}
+			}
+		}
+
+		/// <summary>Widens and leans the sizes of an entry's rock and crystal scatter (see the section's note).</summary>
+		private static void Massive(Entry e)
+		{
+			var done = new HashSet<Scatter>();
+			foreach (Scatter s in AllScatter(e))
+			{
+				if (!done.Add(s))
+				{
+					continue;
+				}
+				Mass mass = MassOf(s);
+				if (mass == Mass.None)
+				{
+					continue;
+				}
+				Scatter before = s.Clone();
+				switch (mass)
+				{
+					case Mass.Crystal:
+						Widen(s, CrystalLow, CrystalHigh, CrystalMost);
+						s.ScaleSkew = CrystalSkew;
+						break;
+					case Mass.Rock:
+						Widen(s, RockLow, RockHigh, RockMost);
+						s.ScaleSkew = RockSkew;
+						break;
+					case Mass.Serac:
+						Widen(s, SeracLow, SeracHigh, float.PositiveInfinity);
+						s.ScaleSkew = SeracSkew;
+						break;
+					case Mass.Stone:
+						Widen(s, StoneLow, StoneHigh, float.PositiveInfinity);
+						break;
+				}
+				s.Earlier.Add(before);
+			}
+		}
+
+		/// <summary>Each of a rule's scale ranges from (lo, hi) to (lo·low, hi·high), the top no more than <paramref name="most"/> (nor below hi).</summary>
+		private static void Widen(Scatter s, float low, float high, float most)
+		{
+			Vector2 Wide(Vector2 r) => new Vector2(r.x * low, Mathf.Max(r.y, Mathf.Min(r.y * high, most)));
+			s.Scale = Wide(s.Scale);
+			s.WidthScale = Wide(s.WidthScale);
+			s.HeightScale = Wide(s.HeightScale);
 		}
 
 		// ── Geology sets ──────────────────────────────────────────────

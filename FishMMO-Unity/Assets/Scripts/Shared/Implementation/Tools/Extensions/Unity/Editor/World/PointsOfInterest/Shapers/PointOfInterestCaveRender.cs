@@ -147,9 +147,9 @@ namespace FishMMO.Shared.WorldDesign
 				CaveGround meshGround = CaveShaper.SampleGround(groundAt, tiles, system.Origin.x + e.min.x - 4f, system.Origin.z + e.min.z - 4f, system.Origin.x + e.max.x + 4f, system.Origin.z + e.max.z + 4f);
 				var clock = System.Diagnostics.Stopwatch.StartNew();
 				List<CaveMesher.Piece> pieces = CaveMesher.Build(system, meshGround, out string report);
-				Mesh[] meshes = CaveShaper.WriteMeshes(null, c, pieces, null);
+				Mesh[] meshes = CaveShaper.WriteMeshes(null, c, pieces, null, out Mesh[] colliders);
 				var root = new GameObject(name).transform;
-				CaveShaper.Build(root, system, pieces, meshes, material);
+				CaveShaper.Build(root, system, pieces, meshes, material, colliders);
 				// In the game the rock takes the ground where it comes up through the hillside (CaveVisibility's cave mode of
 				// the shader's ground contact); this render has no ground map, so it shows the same by colour.
 				if (Env("FISHMMO_CAVE_RENDER_CONTACT", "1") == "1")

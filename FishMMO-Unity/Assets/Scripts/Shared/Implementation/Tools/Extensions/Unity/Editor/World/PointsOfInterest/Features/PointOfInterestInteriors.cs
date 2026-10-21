@@ -23,19 +23,42 @@ namespace FishMMO.Shared.WorldDesign
 
 		public void Build(PointOfInterestSiteContext context)
 		{
+			// The shop-houses' trades first: their signs and stall-boards (2026-10-19, here rather than in a site builder of their
+			// own, which would move the draws of every builder registered after it).
+			PointOfInterestTrades.Lay(context);
 			if (context.Rooms.Count == 0)
 			{
 				return;
 			}
 			int furnished = 0, items = 0;
+			// The trades the site's shop-houses are let to (PointOfInterestTrades, worked out again here: the builders' order is undefined).
+			Dictionary<(int, int, int), StructureTrade> trades = null;
 			for (int i = 0; i < context.Rooms.Count; i++)
 			{
 				PointOfInterestSiteContext.PlacedRoom placed = context.Rooms[i];
 				AddRoomBox(context, placed);
 				int seed = (int)PointOfInterestPlanner.Hash(context.Record != null ? context.Record.Id : 0, i, (int)placed.Room.Kind, 0x1A7E);
-				List<InteriorItem> plan = StructureInteriors.Plan(placed.Room, placed.Doors ?? System.Array.Empty<StructureDoor>(), seed, Footprint);
-				foreach (InteriorItem item in plan)
+				// A shop let to a trade is furnished as that trade's (2026-10-19), its plain shelves its trade's stocked ones.
+				StructureRoom room = placed.Room;
+				StructureTrade? trade = null;
+				if (room.Kind == StructureRoomKind.Shop)
 				{
+					trades ??= PointOfInterestTrades.TradesOf(context);
+					if (trades.TryGetValue(PointOfInterestTrades.PlaceKey(placed.Position), out StructureTrade let))
+					{
+						trade = let;
+						room.Kind = StructurePieces.TradeRoom(let);
+					}
+				}
+				List<InteriorItem> plan = StructureInteriors.Plan(room, placed.Doors ?? System.Array.Empty<StructureDoor>(), seed, trade.HasValue ? TradeFootprint : Footprint);
+				foreach (InteriorItem planned in plan)
+				{
+					InteriorItem item = planned;
+					if (trade.HasValue && item.Piece == "Shelf")
+					{
+						item.Piece = "TradeShelf";
+						item.Variant = (int)trade.Value;
+					}
 					StructurePiece piece = StructurePieces.Find(item.Piece);
 					if (piece == null)
 					{
@@ -116,6 +139,23 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			StructurePiece piece = StructurePieces.Find(pieceId);
 			return piece != null ? piece.Footprint : Vector2.zero;
+		}
+
+		/// <summary>
+		/// A trade's shop's footprints: its plain shelves are laid as its stocked ones (TradeShelf), so they are planned at
+		/// that piece's size, the wares that stand proud of the shelf's front included.
+		/// </summary>
+		private static Vector2 TradeFootprint(string pieceId)
+		{
+			if (pieceId == "Shelf")
+			{
+				Vector2 stocked = Footprint("TradeShelf");
+				if (stocked != Vector2.zero)
+				{
+					return stocked;
+				}
+			}
+			return Footprint(pieceId);
 		}
 	}
 }

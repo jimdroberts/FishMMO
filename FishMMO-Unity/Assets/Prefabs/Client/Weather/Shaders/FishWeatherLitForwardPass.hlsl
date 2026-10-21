@@ -43,6 +43,12 @@ float _FishFloraOn;
 #include "FishGroundContactLit.hlsl"
 // ── FishMMO edit: the rooms round the camera, darker than the day outside them (FishIndoor). ──
 #include "FishIndoor.hlsl"
+// ── FishMMO edit: a cave's rock dressed by its habitat (FishCaveRock.hlsl): the plain shader's cave rock materials only (the
+// indirect twin never draws cave rock, and its contact and rock-origin interpolators take the same slots). ──
+#if defined(_FISH_CAVE_ROCK) && !defined(FISH_INDIRECT_INSTANCED)
+#define FISH_CAVE_ROCK_ON
+#include "FishCaveRock.hlsl"
+#endif
 // How much of the sky's ambient a room's inside loses (SkySystem dims the camera's own ambient by a share of it).
 #define FISH_INDOOR_DIM 0.65h
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
@@ -69,6 +75,11 @@ struct Attributes
     float2 texcoord     : TEXCOORD0;
     float2 staticLightmapUV   : TEXCOORD1;
     float2 dynamicLightmapUV  : TEXCOORD2;
+#if defined(FISH_CAVE_ROCK_ON)
+    // ── FishMMO edit: the cave habitat the mesher wrote (CaveHabitat): wet, daylight, sediment, trodden; organic, glow. ──
+    half4 fishHabitat               : COLOR;
+    float2 fishHabitat2             : TEXCOORD3;
+#endif
     UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
@@ -89,6 +100,10 @@ struct Varyings
     // ── FishMMO edit: metres above the terrain straight below, for the contact blend (FishGroundColour.hlsl). ──
     float fishContact               : TEXCOORD4;
     float3 fishRockOrigin           : TEXCOORD11;   // this rock's world position, to tell it from its neighbours
+#elif defined(FISH_CAVE_ROCK_ON)
+    // ── FishMMO edit: the cave habitat, per vertex (FishCaveRock.hlsl). ──
+    half4 fishHabitat               : TEXCOORD4;
+    half2 fishHabitat2              : TEXCOORD11;
 #endif
 
 #ifdef _ADDITIONAL_LIGHTS_VERTEX
@@ -274,6 +289,9 @@ Varyings LitPassVertex(Attributes input)
 #if defined(FISH_INDIRECT_INSTANCED)
     output.fishContact = FishContactHeight(vertexInput.positionWS, TransformObjectToWorld(float3(0.0, 0.0, 0.0)));
     output.fishRockOrigin = TransformObjectToWorld(float3(0.0, 0.0, 0.0));
+#elif defined(FISH_CAVE_ROCK_ON)
+    output.fishHabitat = input.fishHabitat;
+    output.fishHabitat2 = (half2)input.fishHabitat2;
 #endif
 
 #if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
@@ -393,6 +411,12 @@ void LitPassFragment(
         fishGround = FishGroundSurfaceAtSite(fishSite, inputData.positionWS, fishWorldDx, fishWorldDy);
     }
 #endif
+#if defined(FISH_CAVE_ROCK_ON)
+    // ── FishMMO edit: a cave's rock dressed by its habitat (FishCaveRock.hlsl): its floors' grounds, its walls' wet and stains,
+    // the twilight's moss and the glow crust. Ahead of the material's moss and the weather, as a surface of its own. ──
+    FishCaveRockSurface(inputData.positionWS, (half3)input.normalWS, input.fishHabitat, input.fishHabitat2,
+        surfaceData.albedo, inputData.normalWS, surfaceData.smoothness, surfaceData.metallic, surfaceData.occlusion, surfaceData.emission);
+#endif
     // ── FishMMO edit: moss (FishMoss.hlsl), ahead of the weather so rain darkens it and snow covers it like the rest.
     // After the crevices and the structure's weathering, whose shade it reads as where damp collects. A GPU-drawn rock
     // knows its height over the terrain exactly; anything else reads the fine ground map's. ──
@@ -436,7 +460,10 @@ void LitPassFragment(
 
     // ── FishMMO edit: deep underground (a cave's walls) the sky does not reach: no ambient, no reflections, no sun (taken
     // off below), and the distance fog's sky colour not laid over them either. ──
-    surfaceData.occlusion *= 1.0h - 0.96h * fishUnderground;
+    // All of it (2026-10-21; it was 0.96): what the occlusion leaves includes the sky's reflection probe, a full-sky cubemap that
+    // RenderSettings.reflectionIntensity does not dim, and four hundredths of it at a grazing Fresnel lit a cave's far floors
+    // grey, fading as they were walked up to. The sky's ambient underground is the eye's (SkySystem), not the rock's.
+    surfaceData.occlusion *= 1.0h - fishUnderground;
     // Indoors the sky comes in only at the windows and the door: most of its ambient and reflection gone.
     surfaceData.occlusion *= 1.0h - FISH_INDOOR_DIM * FishIndoor(inputData.positionWS);
 
@@ -450,7 +477,10 @@ void LitPassFragment(
         BRDFData fishSunBrdf;
         InitializeBRDFData(fishSunSurface, fishSunBrdf);
         Light fishSun = GetMainLight(inputData.shadowCoord, inputData.positionWS, inputData.shadowMask);
-        color.rgb = max(0.0h, color.rgb - fishUnderground * LightingPhysicallyBased(fishSunBrdf, fishSun, inputData.normalWS, inputData.viewDirectionWS));
+        // Not where the sun falls through an opening in the roof (2026-10-20, FishSkylights.hlsl): there its shadowed light is
+        // the beam, the terrain's holed shadow and the opening's rock drawing its edge.
+        half fishSunTaken = fishUnderground * (half)(1.0 - FishSkylightSun(inputData.positionWS, fishSun.direction));
+        color.rgb = max(0.0h, color.rgb - fishSunTaken * LightingPhysicallyBased(fishSunBrdf, fishSun, inputData.normalWS, inputData.viewDirectionWS));
     }
 #if defined(FISH_INDIRECT_INSTANCED)
     // ── FishMMO edit: the ground's lit colour over the band and in the crevices (above). ──

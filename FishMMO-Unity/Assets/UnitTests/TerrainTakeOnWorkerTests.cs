@@ -142,7 +142,10 @@ namespace FishMMO.UnitTests
 			{
 				SameBits(oldSums[c], fresh[c], $"channel {c} summed");
 			}
-			GrassTerrain.Builder.DensityResult built = GrassTerrain.Builder.BuildDensity(fresh, count, dres, radius, heights, true);
+			// Every channel a point channel, as the old build normalised them all.
+			var points = new bool[count];
+			Array.Fill(points, true);
+			GrassTerrain.Builder.DensityResult built = GrassTerrain.Builder.BuildDensity(fresh, count, dres, radius, heights, points, true);
 
 			for (int c = 0; c < count; c++)
 			{

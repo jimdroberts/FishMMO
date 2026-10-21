@@ -110,16 +110,21 @@ namespace FishMMO.Shared.WorldDesign
 		private static void FieldFence(StructureDraft d)
 		{
 			int rails = d.Variant == 1 ? 3 : 2;
-			// One post at the module's start (the next module's start closes it), rails to the next.
-			float lean = d.Range(1, 1, -4f, 4f);
-			Vector3 top = Quaternion.Euler(0f, 0f, lean) * new Vector3(0f, 1.25f, 0f);
-			d.Add(StructureShapes.Beam(new Vector3(-1.5f, -0.35f, 0f), new Vector3(-1.5f, 0f, 0f) + top, 0.12f, 0.12f, StructureMaterial.Timber, 1));
+			// One post at the module's start (the next module's start closes it; a run's last end takes LinearPost v0), rails to the next.
+			d.Add(FieldFencePost(-1.5f, d.Range(1, 1, -4f, 4f)));
 			for (int r = 0; r < rails; r++)
 			{
 				float y = 0.4f + r * (0.75f / Mathf.Max(1, rails - 1));
 				float sag = d.Range(2 + r, 3, -0.04f, 0.04f);
 				d.Add(StructureShapes.Beam(new Vector3(-1.55f, y, -0.07f), new Vector3(1.55f, y + sag, -0.07f), 0.07f, 0.09f, StructureMaterial.Timber, 2 + r, StructureRole.Detail));
 			}
+		}
+
+		/// <summary>The field fence's post at <paramref name="x"/> along its line, leaning <paramref name="lean"/> degrees along it: its foot 0.35 m in the ground, 1.25 m standing.</summary>
+		private static StructureSolid FieldFencePost(float x, float lean)
+		{
+			Vector3 top = Quaternion.Euler(0f, 0f, lean) * new Vector3(0f, 1.25f, 0f);
+			return StructureShapes.Beam(new Vector3(x, -0.35f, 0f), new Vector3(x, 0f, 0f) + top, 0.12f, 0.12f, StructureMaterial.Timber, 1);
 		}
 
 		// ── Church ────────────────────────────────────────────────────

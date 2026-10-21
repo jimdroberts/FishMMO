@@ -408,7 +408,9 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <param name="tone">A colour the spray takes in place of the species' leaf colour (a rosette's browning skirt), shaded by
 			/// its place in the crown the same way; null for the leaf colour.</param>
-			private void Spray(Vector3 root, Vector3 direction, float length, float width, Vector3 crown, FoliageCell cell, float bend = 0.6f, Color? tone = null)
+			/// <param name="tintable">False for wood drawn as a card (vertex alpha 0, read with <paramref name="tone"/>): it
+			/// neither turns in autumn nor drops in winter with the leaves.</param>
+			private void Spray(Vector3 root, Vector3 direction, float length, float width, Vector3 crown, FoliageCell cell, float bend = 0.6f, Color? tone = null, bool tintable = true)
 			{
 				// A card on its part: a frond or a bough is kept or dropped whole by the branch fullness; a leaf
 				// card on a limb by the leaf fullness too, by its own rank.
@@ -418,7 +420,7 @@ namespace FishMMO.Shared.WorldDesign
 				width *= leafScale;
 				mesh.SetCard(Hash(partId * 4099 + card, 11), leaf ? 0.02f + 0.98f * Hash(partId * 4099 + card, 13) : 0f);
 				float pick = rng.NextFloat();
-				Color32 shaded = tone.HasValue ? ShadedTone(tone.Value, root + direction * length * 0.5f, crown) : ShadedLeaf(pick, root + direction * length * 0.5f, crown);
+				Color32 shaded = tone.HasValue ? ShadedTone(tone.Value, root + direction * length * 0.5f, crown, tintable ? 1f : 0f) : ShadedLeaf(pick, root + direction * length * 0.5f, crown);
 				PlantParts.SprayCard(mesh, LeafSubmesh, root, direction, length, width, rng.Range(-30f, 30f), cell, shaded,
 					Sway(root, 0.3f), Sway(root + direction * length, 1f), crown, bend);
 				// A second card across the first gives the spray depth from every side. On every level: alone, a card
@@ -471,6 +473,10 @@ namespace FishMMO.Shared.WorldDesign
 							// A dead bough: a bare crooked stick with a few twigs (half a bristlecone's crown is these).
 							BareBough(root, dir * reach * 0.85f, crown);
 							continue;
+						}
+						if (sp.Deciduous)
+						{
+							WinterBough(root, dir, reach, crown, 50000 + w * 64 + a);
 						}
 						// Wide boughs: at real sizes a spray half as wide as it was long read as a bare stick.
 						Spray(root, dir, reach, Mathf.Max(0.6f, reach * 0.8f), crown, sp.LeafCell, 0.5f);
@@ -986,6 +992,35 @@ namespace FishMMO.Shared.WorldDesign
 						Limb(at, at + (to - at) * 0.4f + Vector3.up * 0.25f, to, radius * 0.7f, radius * 0.55f, 4, lod == 0 ? 4 : 3, false);
 					}
 				}
+			}
+
+			/// <summary>The bark colour of a deciduous conifer's bare shoots (sRGB): a larch's winter twigs, grey-brown.</summary>
+			private static readonly Color WinterTwig = new Color(0.42f, 0.36f, 0.3f);
+
+			/// <summary>
+			/// The wood under a deciduous conifer's needle bough (a larch, a bald cypress): a tapering stick along the
+			/// spray and a card of fine twigs over its outer part, neither tintable. A conifer's boughs were needle cards
+			/// alone, so when winter clipped them the tree stood as a bare spike of trunk (2026-10-19); bare, it now
+			/// shows its tiers of boughs as a broadleaf shows its limbs. The card on every level, so a reduced level's leaf
+			/// area (<see cref="BuildReduced"/>) still matches the full tree's. Drawn from a stream of its own, part
+			/// <paramref name="stream"/>, so the needles hang where they always did.
+			/// </summary>
+			private void WinterBough(Vector3 root, Vector3 dir, float reach, Vector3 crown, int stream)
+			{
+				DeterministicRNG outer = rng;
+				Reseed(stream);
+				Vector3 tip = root + dir * reach * 0.9f;
+				if (lod == 0)
+				{
+					// Straight, as the card it lies along is flat: one segment, three sides, a pointed cone. Not on the
+					// reduced level, where a stick a few centimetres thick is under a pixel: the twig card runs from the
+					// trunk there instead, its drawn stem the bough.
+					float radius = Mathf.Max(0.015f, sp.TrunkRadius * 0.09f);
+					Limb(root, Vector3.Lerp(root, tip, 0.5f), tip, radius, radius * 0.25f, 3, 1, true);
+				}
+				float from = lod == 0 ? 0.3f : 0f;
+				Spray(Vector3.Lerp(root, tip, from), dir, reach * 0.9f * (1f - from), Mathf.Max(0.4f, reach * 0.5f), crown, FoliageCell.Twigs, 0.3f, WinterTwig, false);
+				rng = outer;
 			}
 
 			/// <summary>A dead bough on a gnarled conifer: a bare crooked stick to <paramref name="reach"/> with a spray of twigs at its end.</summary>

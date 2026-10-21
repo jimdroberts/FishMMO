@@ -472,16 +472,18 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(span, Is.Not.Null);
 			Assert.That(bent, Is.Not.Null);
 			// Appended, so no earlier piece moved in the table; only the families appended after them (dungeon entrances, the linear
-			// features of 2026-10-18) follow them.
-			int at = -1;
+			// features of 2026-10-18, then the town's other buildings of 2026-10-19, after the last linear piece) follow them.
+			int at = -1, lastLinear = -1;
 			for (int i = 0; i < all.Count; i++)
 			{
 				at = all[i] == span ? i : at;
+				lastLinear = all[i].HasTag("linear") ? i : lastLinear;
 			}
 			Assert.That(all[at + 1], Is.SameAs(bent));
 			for (int i = at + 2; i < all.Count; i++)
 			{
-				Assert.That(all[i].HasTag("dungeon") || all[i].HasTag("linear"), Is.True, $"{all[i].Id} was appended after the boardwalks by a later family");
+				Assert.That(all[i].HasTag("dungeon") || all[i].HasTag("linear") || i > lastLinear, Is.True, $"{all[i].Id} was appended after the boardwalks by a later family");
+				Assert.That(all[i].HasTag("boardwalk"), Is.False, $"{all[i].Id}");
 			}
 			Assert.That(span.Tags, Is.EqualTo(new[] { "boardwalk" }));
 			Assert.That(bent.Tags, Is.EqualTo(new[] { "boardwalk" }));

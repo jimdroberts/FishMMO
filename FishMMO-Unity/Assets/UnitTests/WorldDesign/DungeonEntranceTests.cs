@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using FishMMO.Shared;
@@ -245,6 +246,65 @@ namespace FishMMO.UnitTests.WorldDesign
 					}
 				}
 			}
+		}
+
+		// ── Marked as entrances (2026-10-20) ──────────────────────
+
+		private static IEnumerable<PointOfInterestFeature> Flat(IEnumerable<PointOfInterestFeature> features)
+		{
+			foreach (PointOfInterestFeature feature in features)
+			{
+				if (feature is PointOfInterestChamberFeature chamber)
+				{
+					foreach (PointOfInterestFeature inner in Flat(chamber.Features))
+					{
+						yield return inner;
+					}
+				}
+				else
+				{
+					yield return feature;
+				}
+			}
+		}
+
+		[Test]
+		public void EveryTemplateThatLaysADungeonDoorBuildsOneEntranceInIt()
+		{
+			// "Every dungeon entrance or marker should be clearly marked as a dungeon entrance. Some are simply generated as
+			// background meshes?": the crypt's and the ringed barrow's open door over a stair was scenery.
+			var laying = new List<string>();
+			foreach (PointOfInterestTemplateSpec spec in PointOfInterestTemplateSpecs.All())
+			{
+				bool lays = PointOfInterestTemplateAuthoring.LaysDungeonDoor(spec);
+				if (lays)
+				{
+					laying.Add($"{spec.Kind} - {spec.Variant}");
+				}
+				for (int size = 0; size <= 2; size++)
+				{
+					int doors = Flat(PointOfInterestTemplateAuthoring.FeaturesFor(spec, size)).Count(f => f is DungeonEntranceFeature);
+					if (lays)
+					{
+						Assert.That(doors, Is.EqualTo(1), $"{spec.Kind} - {spec.Variant} (size {size}) lays a dungeon's door: one entrance in it");
+					}
+				}
+			}
+			Assert.That(laying, Does.Contain("Crypt - Tomb").And.Contain("Barrow - Ringed").And.Contain("DungeonEntrance - Door").And.Contain("DungeonEntrance - Barrow"));
+		}
+
+		[Test]
+		public void EachWayIntoACaveSaysHowItIsReached()
+		{
+			Assert.That(PointOfInterestEntrances.IsWayIn(new CaveMouth { Kind = CaveMouthKind.Ground }), Is.True);
+			Assert.That(PointOfInterestEntrances.IsWayIn(new CaveMouth { Kind = CaveMouthKind.Submerged }), Is.True);
+			Assert.That(PointOfInterestEntrances.IsWayIn(new CaveMouth { Kind = CaveMouthKind.Shelf }), Is.True);
+			Assert.That(PointOfInterestEntrances.WayIn(CaveMouthKind.Submerged, "cave"), Does.Contain("diving"));
+			Assert.That(PointOfInterestEntrances.WayIn(CaveMouthKind.Shelf, "cave"), Does.Contain("waterfall"));
+			Assert.That(PointOfInterestEntrances.Line("Another way into the cave.", 3, "Deepmere and Owlroost"),
+				Is.EqualTo("Another way into the cave. One of 3 ways in and out. Its passages join Deepmere and Owlroost."));
+			Assert.That(PointOfInterestEntrances.Line(null, 1, null), Is.Empty, "one mouth and no joins: nothing to say");
+			Assert.That(ScenePointOfInterest.DungeonLine("Crypt", "Old bones."), Is.EqualTo("Dungeon entrance (crypt)\nOld bones."));
 		}
 	}
 }

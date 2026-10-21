@@ -7,7 +7,9 @@ namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
 	/// The cave kit's glow art as meshes (<see cref="CaveGlowKind"/>, 2026-10-13): glowing crystal clusters and giant
-	/// columns, luminous fungi (Mycena tufts, giant glowcaps, Panellus brackets), glow-worm snares and ore seams. Pure
+	/// columns, luminous fungi (Mycena tufts, giant glowcaps, Panellus brackets), glow-worm snares and ore seams; since
+	/// 2026-10-20 also mushroom trees to 15 m and glowcaps of 3–5 m, puffballs and morels, tall bracket tiers, glowroot
+	/// curtains, glow-vines and the tree roots that hang through a thin roof. Pure
 	/// geometry, three levels each; names, hues and materials are ProceduralArtCatalogue.Cave.cs's.
 	/// </summary>
 	/// <remarks>
@@ -26,7 +28,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// size), so the levels share one form and differ only in tessellation and in how many of the smallest parts they keep.
 	/// </para>
 	/// </remarks>
-	public static class CaveGlowMeshes
+	public static partial class CaveGlowMeshes
 	{
 		public const int Levels = 3;
 
@@ -49,6 +51,25 @@ namespace FishMMO.Shared.WorldDesign
 				case CaveGlowKind.ShelfFungus: m = ShelfFungi(variant, lod, s); break;
 				case CaveGlowKind.GlowWorms: m = GlowWorms(variant, lod, s); break;
 				case CaveGlowKind.OreVein: m = OreSeam(variant, lod, s); break;
+				case CaveGlowKind.TowerFungus: m = TowerFungi(variant, lod, s); break;
+				case CaveGlowKind.MidFungus: m = MidFungi(variant, lod, s); break;
+				case CaveGlowKind.Puffballs: m = Puffballs(variant, lod, s); break;
+				case CaveGlowKind.ShelfTiers: m = ShelfTiers(variant, lod, s); break;
+				case CaveGlowKind.GlowRoots: m = GlowRoots(variant, lod, s); break;
+				case CaveGlowKind.HangingRoots: m = HangingRoots(variant, lod, s); break;
+				case CaveGlowKind.GlowVine: m = GlowVine(variant, lod, s); break;
+				case CaveGlowKind.MagmaCrack: m = MagmaCracks(variant, lod, s); break;
+				case CaveGlowKind.MagmaSeep: m = MagmaSeeps(variant, lod, s); break;
+				case CaveGlowKind.Lavacicle: m = Lavacicles(variant, lod, s); break;
+				case CaveGlowKind.LavaCrust: m = LavaCrusts(variant, lod, s); break;
+				// 2026-10-20 (caves livened, hanging): CaveGlowMeshes.Hanging.cs.
+				case CaveGlowKind.GlowSilk: m = GlowSilk(variant, lod, s); break;
+				case CaveGlowKind.TapRoots: m = TapRoots(variant, lod, s); break;
+				case CaveGlowKind.GuanoHeap: m = GuanoHeap(variant, lod, s); break;
+				case CaveGlowKind.IceFall: m = IceFalls(variant, lod, s); break;
+				case CaveGlowKind.IcicleCurtain: m = IcicleCurtains(variant, lod, s); break;
+				case CaveGlowKind.FrozenPool: m = FrozenPools(variant, lod, s); break;
+				case CaveGlowKind.Hoarfrost: m = Hoarfrosts(variant, lod, s); break;
 				default: throw new ArgumentOutOfRangeException(nameof(shape), $"{shape} wears another kind's meshes");
 			}
 			m.RecalculateTangents();
@@ -737,6 +758,571 @@ namespace FishMMO.Shared.WorldDesign
 			return top[top.Length - 1].y;
 		}
 
+		// ── Towering fungi (2026-10-20) ───────────────────────────────
+
+		/// <summary>The shape of a mushroom tree's cap.</summary>
+		private enum CapStyle
+		{
+			/// <summary>A broad convex dome with a low umbo (a fly agaric's, grown old).</summary>
+			Dome,
+			/// <summary>A wide, nearly flat parasol with a little umbo (Macrolepiota's).</summary>
+			Parasol,
+			/// <summary>A tall conical bell (a bonnet's, grown to a tree).</summary>
+			Bell,
+		}
+
+		/// <summary>One mushroom tree of a piece: where it stands and how it is made.</summary>
+		private struct FungusTree
+		{
+			public Vector3 Foot;
+			/// <summary>From its foot to its cap's crown, metres.</summary>
+			public float Height;
+			/// <summary>How far its stalk leans (degrees) and toward which heading (radians).</summary>
+			public float Lean, Azimuth;
+			/// <summary>The cap's radius and the stalk's, as shares of its height.</summary>
+			public float CapShare, StalkShare;
+			public CapStyle Style;
+			/// <summary>Bracket tiers up its stalk.</summary>
+			public int Shelves;
+			/// <summary>Glowing warts on its cap's top (half of them at the middle level).</summary>
+			public int Warts;
+			/// <summary>A drooping veil of glowing strands under its cap; buttress roots at its foot; mycelium threads out over the floor.</summary>
+			public bool Veil, Roots, Mycelium;
+		}
+
+		private static FungusTree Tree(Vector3 foot, float height, float lean, float azimuth, float cap, float stalk, CapStyle style,
+			int shelves, int warts, bool veil, bool roots, bool mycelium) => new FungusTree
+		{
+			Foot = foot, Height = height, Lean = lean, Azimuth = azimuth, CapShare = cap, StalkShare = stalk, Style = style,
+			Shelves = shelves, Warts = warts, Veil = veil, Roots = roots, Mycelium = mycelium,
+		};
+
+		/// <summary>A point on the floor <paramref name="distance"/> metres out along heading <paramref name="azimuth"/> (radians).</summary>
+		private static Vector3 Out(float azimuth, float distance) => new Vector3(Mathf.Cos(azimuth), 0f, Mathf.Sin(azimuth)) * distance;
+
+		/// <summary>
+		/// A cap's underside from the stalk out to the rim, and its top from the rim in to its crown, as (radius, height) shares
+		/// of its radius (the cap's origin where the stalk enters it). The dome's top is the glowcap's.
+		/// </summary>
+		private static void CapShape(CapStyle style, out Vector2[] under, out Vector2[] top)
+		{
+			switch (style)
+			{
+				case CapStyle.Parasol:
+					under = new[] { new Vector2(0f, -0.03f), new Vector2(0.5f, -0.06f), new Vector2(0.9f, -0.07f), new Vector2(1f, -0.05f) };
+					top = new[] { new Vector2(1f, -0.05f), new Vector2(0.97f, 0.02f), new Vector2(0.75f, 0.08f), new Vector2(0.4f, 0.14f), new Vector2(0.15f, 0.2f), new Vector2(0f, 0.22f) };
+					break;
+				case CapStyle.Bell:
+					under = new[] { new Vector2(0f, -0.05f), new Vector2(0.45f, -0.18f), new Vector2(0.85f, -0.32f), new Vector2(1f, -0.42f) };
+					top = new[] { new Vector2(1f, -0.42f), new Vector2(0.96f, -0.2f), new Vector2(0.85f, 0.15f), new Vector2(0.62f, 0.45f), new Vector2(0.32f, 0.68f), new Vector2(0f, 0.8f) };
+					break;
+				default:
+					under = new[] { new Vector2(0f, -0.04f), new Vector2(0.45f, -0.12f), new Vector2(0.88f, -0.2f), new Vector2(1f, -0.26f) };
+					top = GlowcapTop;
+					break;
+			}
+		}
+
+		/// <summary>A profile's height at a share of the radius, its points in either order of radius.</summary>
+		private static float ProfileAt(Vector2[] points, float share)
+		{
+			for (int i = 0; i + 1 < points.Length; i++)
+			{
+				float a = points[i].x, b = points[i + 1].x;
+				if (share >= Mathf.Min(a, b) && share <= Mathf.Max(a, b))
+				{
+					return Mathf.Lerp(points[i].y, points[i + 1].y, Mathf.Abs(b - a) < 1e-6f ? 0f : (share - a) / (b - a));
+				}
+			}
+			return Mathf.Abs(share - points[0].x) < Mathf.Abs(share - points[points.Length - 1].x) ? points[0].y : points[points.Length - 1].y;
+		}
+
+		private static Vector3 Bezier(Vector3 a, Vector3 b, Vector3 c, float t) => (1f - t) * (1f - t) * a + 2f * (1f - t) * t * b + t * t * c;
+
+		private static Vector3 BezierTangent(Vector3 a, Vector3 b, Vector3 c, float t) => 2f * (1f - t) * (b - a) + 2f * t * (c - b);
+
+		/// <summary>A mushroom tree's stalk radius a share <paramref name="t"/> of the way up it: swollen at the foot, a little bellied, slimmer under the cap.</summary>
+		private static float StalkRadius(float stalk, float t) => stalk * (1.3f - 0.45f * t + 0.1f * Mathf.Sin(Mathf.PI * t));
+
+		/// <summary>
+		/// One mushroom tree (fantasy, after the giant fungi of the deep in legend and the Prototaxites of the Devonian): a stout
+		/// fibrous stalk curving up from a flared, buttress-rooted foot set into the floor (its mycelium threading out over the
+		/// rock round it), a ring hanging under its cap, tiers of bracket fungi up its stalk, a broad cap whose radial gills
+		/// glow brightest and whose top carries glowing warts, and under it a drooping veil of glowing strands beaded at their
+		/// tips. Every draw is made before any depends on the level, so the levels are one form.
+		/// </summary>
+		private static void AddFungusTree(MeshBuilder m, in FungusTree f, int lod, DeterministicRNG rng)
+		{
+			var roots = new Vector3[8];
+			for (int i = 0; i < roots.Length; i++)
+			{
+				roots[i] = new Vector3(rng.Range(-0.25f, 0.25f), rng.Range(0.8f, 1.25f), rng.Range(0.7f, 1.2f));
+			}
+			var threads = new Vector3[10];
+			for (int i = 0; i < threads.Length; i++)
+			{
+				threads[i] = new Vector3(rng.NextFloat() * Tau, rng.Range(0.12f, 0.3f), rng.NextFloat() * Tau);
+			}
+			var shelves = new Vector4[4];
+			for (int i = 0; i < shelves.Length; i++)
+			{
+				shelves[i] = new Vector4(rng.Range(0.22f, 0.7f), rng.NextFloat() * Tau, rng.Range(0.75f, 1.15f), rng.Range(-6f, 10f));
+			}
+			var warts = new Vector3[24];
+			for (int i = 0; i < warts.Length; i++)
+			{
+				warts[i] = new Vector3(rng.NextFloat() * Tau, rng.Range(0.15f, 0.86f), rng.Range(0.03f, 0.06f));
+			}
+			var veil = new Vector3[20];
+			for (int i = 0; i < veil.Length; i++)
+			{
+				veil[i] = new Vector3(rng.NextFloat() * Tau, rng.Range(0.3f, 0.62f), rng.Range(0.08f, 0.22f));
+			}
+			float spin = rng.NextFloat() * 360f, gillPhase = rng.NextFloat() * Tau;
+
+			float h = f.Height, c = h * f.CapShare, s = h * f.StalkShare;
+			CapShape(f.Style, out Vector2[] under, out Vector2[] top);
+			float length = h - top[top.Length - 1].y * c;
+			Vector3 lean = Tilted(f.Lean, f.Azimuth);
+			var flat = new Vector3(lean.x, 0f, lean.z);
+			Vector3 p0 = f.Foot + Vector3.down * 0.3f, p1 = f.Foot + Vector3.up * (0.55f * length) + flat * (0.12f * length), p2 = f.Foot + lean * length;
+			int sides = lod == 0 ? 14 : lod == 1 ? 9 : 6;
+
+			// The stalk: fibrous (its mottle streaks along it), dim at the foot, brightening toward the cap.
+			int stations = lod == 0 ? 9 : lod == 1 ? 5 : 3;
+			var path = new List<Vector3>(stations);
+			var radius = new List<float>(stations);
+			var glow = new List<float>(stations);
+			for (int i = 0; i < stations; i++)
+			{
+				float t = i / (float)(stations - 1);
+				path.Add(Bezier(p0, p1, p2, t));
+				radius.Add(StalkRadius(s, t));
+				glow.Add(Mathf.Lerp(0.12f, 0.42f, t));
+			}
+			Tube(m, 0, path, radius, glow, sides, true, false);
+			float stalkTop = radius[radius.Count - 1];
+
+			// The flared foot, set into the floor.
+			var flare = new List<LP> { new LP(s * 2.4f, -0.45f, 0.1f), new LP(s * 2.1f, -0.02f, 0.12f) };
+			if (lod < 2) flare.Add(new LP(s * 1.65f, 0.035f * h, 0.14f));
+			flare.Add(new LP(s * 1.22f, 0.09f * h, 0.17f));
+			Lathe(m, 0, flare, sides, Matrix4x4.TRS(f.Foot, Quaternion.identity, Vector3.one), 6f);
+
+			// Buttress roots from the foot down into the floor, as a strangler fig's; the mycelium threading out over the rock.
+			if (f.Roots && lod < 2)
+			{
+				int n = lod == 0 ? 7 : 5, rs = lod == 0 ? 4 : 3;
+				for (int i = 0; i < n; i++)
+				{
+					float az = f.Azimuth + Tau * i / n + roots[i].x;
+					var dir = new Vector3(Mathf.Cos(az), 0f, Mathf.Sin(az));
+					float reach = (s * 2.2f + 0.12f * h) * roots[i].y;
+					Vector3 a = f.Foot + Vector3.up * (0.07f * h * roots[i].z) + dir * (s * 0.9f);
+					Vector3 b = f.Foot + Vector3.up * (0.015f * h) + dir * (s * 1.9f + 0.04f * h);
+					Vector3 e = f.Foot + Vector3.down * 0.3f + dir * reach;
+					var rp = new List<Vector3>(rs);
+					var rr = new List<float>(rs);
+					var rg = new List<float>(rs);
+					for (int k = 0; k < rs; k++)
+					{
+						float t = k / (float)(rs - 1);
+						rp.Add(Bezier(a, b, e, t));
+						rr.Add(s * Mathf.Lerp(0.42f, 0.1f, t));
+						rg.Add(Mathf.Lerp(0.16f, 0.26f, t));
+					}
+					Tube(m, 0, rp, rr, rg, lod == 0 ? 6 : 4, true, true);
+				}
+			}
+			if (f.Mycelium && lod == 0)
+			{
+				foreach (Vector3 th in threads)
+				{
+					var dir = new Vector3(Mathf.Cos(th.x), 0f, Mathf.Sin(th.x));
+					var side = new Vector3(-dir.z, 0f, dir.x);
+					float run = th.y * h;
+					var tp = new List<Vector3>(5);
+					var tr = new List<float>(5);
+					var tg = new List<float>(5);
+					for (int k = 0; k < 5; k++)
+					{
+						float t = k / 4f;
+						tp.Add(f.Foot + dir * (s * 2.1f + run * t) + side * (0.12f * run * Mathf.Sin(th.z + 3f * t)) + Vector3.down * (0.012f + 0.03f * t));
+						tr.Add(h * Mathf.Lerp(0.005f, 0.002f, t));
+						tg.Add(Mathf.Lerp(0.8f, 0.6f, t));
+					}
+					Tube(m, 0, tp, tr, tg, 3, false, true);
+				}
+			}
+
+			// The ring (annulus) hanging from the stalk under the cap.
+			if (lod < 2)
+			{
+				const float at = 0.84f;
+				Vector3 q = Bezier(p0, p1, p2, at), axis = BezierTangent(p0, p1, p2, at);
+				float r = StalkRadius(s, at);
+				var skirt = new List<LP>
+				{
+					new LP(r * 0.98f, -0.045f * h, 0.5f), new LP(r * 1.9f, -0.09f * h, 0.64f, true),
+					new LP(r * 2f, -0.075f * h, 0.64f, true), new LP(r * 1.02f, 0f, 0.5f, true),
+				};
+				Lathe(m, 0, skirt, sides, Matrix4x4.TRS(q, UpTo(axis, 0f), Vector3.one), 6f, 0f, true);
+			}
+
+			// The cap, turned to the stalk's end: gills glowing under it, the rim crisp, the top dimmer to its crown.
+			Matrix4x4 capPlace = Matrix4x4.TRS(p2, UpTo(BezierTangent(p0, p1, p2, 1f), spin), Vector3.one);
+			var cap = new List<LP> { new LP(stalkTop * 0.95f, under[0].y * c, 0.92f, true) };
+			if (lod < 2) cap.Add(new LP(under[1].x * c, under[1].y * c, 1f));
+			cap.Add(new LP(under[2].x * c, under[2].y * c, 0.96f));
+			cap.Add(new LP(c, under[3].y * c, 0.85f, true));
+			cap.Add(new LP(top[1].x * c, top[1].y * c, 0.7f));
+			if (lod == 0) cap.Add(new LP(top[2].x * c, top[2].y * c, 0.55f));
+			cap.Add(new LP(top[3].x * c, top[3].y * c, 0.5f));
+			if (lod < 2) cap.Add(new LP(top[4].x * c, top[4].y * c, 0.54f));
+			cap.Add(new LP(0f, top[5].y * c, 0.6f));
+			Lathe(m, 0, cap, lod == 0 ? 24 : lod == 1 ? 14 : 8, capPlace, 10f);
+
+			if (lod == 2)
+			{
+				return;
+			}
+
+			// The gills: thin radial plates under the cap, brightest at their edges (two-faced, so seen from either side).
+			int gills = (lod == 0 ? 36 : 18) * Mathf.Clamp(Mathf.RoundToInt(h / 4f), 1, 3) / 3;
+			gills = Mathf.Max(lod == 0 ? 12 : 8, gills);
+			int segs = lod == 0 ? 3 : 2;
+			float depth = (f.Style == CapStyle.Bell ? 0.06f : 0.075f) * c;
+			var plates = new MeshBuilder(1);
+			for (int k = 0; k < gills; k++)
+			{
+				float az = gillPhase + Tau * k / gills;
+				var d = new Vector3(Mathf.Cos(az), 0f, Mathf.Sin(az));
+				var across = new Vector3(-d.z, 0f, d.x);
+				float r0 = stalkTop * 1.05f, r1 = 0.92f * c;
+				for (int face = -1; face <= 1; face += 2)
+				{
+					Vector3 n = across * face;
+					int first = plates.VertexCount;
+					for (int j = 0; j <= segs; j++)
+					{
+						float u = j / (float)segs, r = Mathf.Lerp(r0, r1, u);
+						Vector3 upper = d * r + Vector3.up * (ProfileAt(under, r / c) * c + 0.01f * c);
+						Vector3 lower = upper + Vector3.down * (depth * (0.3f + 0.7f * Mathf.Sin(Mathf.PI * Mathf.Lerp(0.1f, 0.9f, u))) + 0.01f * c);
+						plates.AddVertex(upper, n, new Vector2(Glow(0.9f), 0.37f * k + 0.2f * u), White);
+						plates.AddVertex(lower, n, new Vector2(Glow(1f), 0.37f * k + 0.2f * u), White);
+					}
+					for (int j = 0; j < segs; j++)
+					{
+						int a = first + 2 * j;
+						plates.AddQuad(0, a, a + 2, a + 3, a + 1, n);
+					}
+				}
+			}
+			plates.Transform(capPlace);
+			m.Append(plates);
+
+			// Glowing warts over the cap's top (on its finest profile, so both levels put them in the same place), a little sunk.
+			int wartCount = Mathf.Min(warts.Length, lod == 0 ? f.Warts : f.Warts / 2);
+			for (int w = 0; w < wartCount; w++)
+			{
+				float r = warts[w].y * c, size = warts[w].z * c;
+				var local = new Vector3(Mathf.Cos(warts[w].x) * r, ProfileAt(top, warts[w].y) * c + size * 0.25f, Mathf.Sin(warts[w].x) * r);
+				Bead(m, 0, capPlace.MultiplyPoint3x4(local), new Vector3(size, size * 0.6f, size), 1f, lod == 0 ? 5 : 4, 3);
+			}
+
+			// The veil: strands drooping from under the cap, each beaded with a glowing drop at its tip.
+			if (f.Veil)
+			{
+				int strands = lod == 0 ? 18 : 9;
+				for (int k = 0; k < strands; k++)
+				{
+					Vector3 v = veil[k];
+					var from = new Vector3(Mathf.Cos(v.x) * v.y * c, ProfileAt(under, v.y) * c + 0.01f * c, Mathf.Sin(v.x) * v.y * c);
+					Vector3 start = capPlace.MultiplyPoint3x4(from);
+					var outward = new Vector3(Mathf.Cos(v.x), 0f, Mathf.Sin(v.x));
+					float hang = v.z * h;
+					int vs = lod == 0 ? 4 : 3;
+					var vp = new List<Vector3>(vs);
+					var vr = new List<float>(vs);
+					var vg = new List<float>(vs);
+					for (int j = 0; j < vs; j++)
+					{
+						float t = j / (float)(vs - 1);
+						vp.Add(start + Vector3.down * (hang * t) + outward * (0.05f * hang * t * t));
+						vr.Add(h * Mathf.Lerp(0.007f, 0.003f, t));
+						vg.Add(Mathf.Lerp(0.62f, 0.95f, t));
+					}
+					Tube(m, 0, vp, vr, vg, lod == 0 ? 4 : 3, false, true);
+					if (lod == 0)
+					{
+						float drop = 0.008f * h;
+						Bead(m, 0, vp[vs - 1] + Vector3.down * drop, new Vector3(drop, drop * 1.5f, drop), 1f, 4, 3);
+					}
+				}
+			}
+
+			// Tiers of bracket fungi up the stalk, their roots in it.
+			for (int i = 0; i < Mathf.Min(f.Shelves, shelves.Length); i++)
+			{
+				Vector4 sh = shelves[i];
+				Vector3 q = Bezier(p0, p1, p2, sh.x);
+				var outward = new Vector3(Mathf.Cos(sh.y), 0f, Mathf.Sin(sh.y));
+				float size = 0.075f * h * sh.z;
+				var bracket = new Bracket { At = Vector3.zero, Out = size, Half = size * 1.25f, Thick = size * 0.22f, Droop = size * 0.16f, Tilt = sh.w, Lobe = sh.y };
+				var part = new MeshBuilder(1);
+				AddBracket(part, in bracket, lod);
+				part.Transform(Matrix4x4.TRS(q + outward * (StalkRadius(s, sh.x) * 0.8f), Quaternion.LookRotation(-outward, Vector3.up), Vector3.one));
+				m.Append(part);
+			}
+		}
+
+		/// <summary>
+		/// Towering glowcaps, mushroom trees of the deep (2026-10-20: "Largest mushrooms should get up to 15m tall"): v0 one
+		/// 12 m dome on a stalk tiered with brackets, its veil hanging; v1 a stand of three (11, 7.5 and 5 m), the lesser
+		/// leaning out from under the greatest; v2 a 10 m parasol leaning 11°, four tiers of brackets up it; v3 a 14 m slender
+		/// bell, veiled, with a 4.5 m one at its foot. The dressing scales a piece so its tallest stands 5–15 m
+		/// (PointOfInterestCaveDressing CaveFungi).
+		/// </summary>
+		private static MeshBuilder TowerFungi(int variant, int lod, int seed)
+		{
+			var rng = new DeterministicRNG(seed);
+			float az = rng.NextFloat() * Tau;
+			FungusTree[] trees;
+			switch (variant)
+			{
+				case 1:
+					trees = new[]
+					{
+						Tree(Vector3.zero, 11f, 5f, az, 0.4f, 0.05f, CapStyle.Dome, 2, 22, true, true, true),
+						Tree(Out(az + 2.2f, 3.4f), 7.5f, 9f, az + 2.2f, 0.4f, 0.05f, CapStyle.Dome, 1, 12, false, true, false),
+						Tree(Out(az - 2f, 2.9f), 5f, 12f, az - 2f, 0.44f, 0.055f, CapStyle.Parasol, 0, 8, false, true, false),
+					};
+					break;
+				case 2:
+					trees = new[] { Tree(Vector3.zero, 10f, 11f, az, 0.46f, 0.048f, CapStyle.Parasol, 4, 14, false, true, true) };
+					break;
+				case 3:
+					trees = new[]
+					{
+						Tree(Vector3.zero, 14f, 3f, az, 0.3f, 0.04f, CapStyle.Bell, 2, 16, true, true, false),
+						Tree(Out(az + 2.6f, 2.6f), 4.5f, 10f, az + 2.6f, 0.32f, 0.05f, CapStyle.Bell, 0, 8, false, true, false),
+					};
+					break;
+				default:
+					trees = new[] { Tree(Vector3.zero, 12f, 4f, az, 0.42f, 0.05f, CapStyle.Dome, 3, 22, true, true, true) };
+					break;
+			}
+			var m = new MeshBuilder(1);
+			foreach (FungusTree t in trees)
+			{
+				AddFungusTree(m, in t, lod, rng);
+			}
+			return m;
+		}
+
+		/// <summary>
+		/// Glowcaps of the middle size, 3–5 m (2026-10-20), as the mushroom trees are made: v0 one 4.4 m dome with a tier of
+		/// brackets, v1 a pair of parasols (4.2 and 3 m), v2 a clump of three bells (4, 3.3 and 2.6 m).
+		/// </summary>
+		private static MeshBuilder MidFungi(int variant, int lod, int seed)
+		{
+			var rng = new DeterministicRNG(seed);
+			float az = rng.NextFloat() * Tau;
+			FungusTree[] trees;
+			switch (variant)
+			{
+				case 1:
+					trees = new[]
+					{
+						Tree(Vector3.zero, 4.2f, 6f, az, 0.46f, 0.06f, CapStyle.Parasol, 0, 10, false, true, false),
+						Tree(Out(az + 2.4f, 1.7f), 3f, 12f, az + 2.4f, 0.44f, 0.065f, CapStyle.Parasol, 0, 8, false, false, false),
+					};
+					break;
+				case 2:
+					trees = new[]
+					{
+						Tree(Vector3.zero, 4f, 5f, az, 0.32f, 0.055f, CapStyle.Bell, 1, 8, false, false, false),
+						Tree(Out(az + 2.1f, 1.25f), 3.3f, 11f, az + 2.1f, 0.32f, 0.06f, CapStyle.Bell, 0, 6, false, false, false),
+						Tree(Out(az - 2.2f, 1.1f), 2.6f, 14f, az - 2.2f, 0.34f, 0.065f, CapStyle.Bell, 0, 5, false, false, false),
+					};
+					break;
+				default:
+					trees = new[] { Tree(Vector3.zero, 4.4f, 5f, az, 0.42f, 0.06f, CapStyle.Dome, 1, 14, true, true, false) };
+					break;
+			}
+			var m = new MeshBuilder(1);
+			foreach (FungusTree t in trees)
+			{
+				AddFungusTree(m, in t, lod, rng);
+			}
+			return m;
+		}
+
+		/// <summary>
+		/// Puffballs and morels of the cave floor (2026-10-20), fantasy-sized: v0 a cluster of seven puffballs (Calvatia), 0.25–0.9
+		/// m across, to 0.6 m tall, glowing warts on their tops; v1 six morels, 0.3–0.8 m, their honeycombed heads pitted with glowing cells; v2 a
+		/// giant puffball burst open at its crown, its spores drifting glowing over it, three small ones at its foot.
+		/// </summary>
+		private static MeshBuilder Puffballs(int variant, int lod, int seed)
+		{
+			var rng = new DeterministicRNG(seed);
+			var m = new MeshBuilder(1);
+			int seg = lod == 0 ? 12 : lod == 1 ? 8 : 6;
+			if (variant == 1)
+			{
+				for (int i = 0; i < 6; i++)
+				{
+					float rank = i / 5f, h = Mathf.Lerp(0.8f, 0.3f, rank) * rng.Range(0.9f, 1.1f);
+					float az = rng.NextFloat() * Tau, at = i == 0 ? 0f : rng.Range(0.15f, 0.45f);
+					float lean = rng.Range(3f, 12f), spin = rng.NextFloat() * 360f;
+					int pitSeed = rng.Next();
+					if (lod == 2 && i >= 4)
+					{
+						continue;
+					}
+					Quaternion turn = UpTo(Tilted(lean, az), spin);
+					var place = Matrix4x4.TRS(Out(az, at), turn, Vector3.one);
+					float stem = 0.12f * h, head = 0.2f * h;
+					// The hollow white stem, then the conical head on it.
+					var stalk = new List<LP> { new LP(stem * 1.2f, -0.05f, 0.25f), new LP(stem, 0.4f * h, 0.32f), new LP(stem * 0.9f, 0.45f * h, 0.35f) };
+					Lathe(m, 0, stalk, seg, place, 3f);
+					var cone = new List<LP> { new LP(stem * 0.85f, 0.4f * h, 0.45f, true), new LP(head, 0.44f * h, 0.5f, true) };
+					if (lod < 2) cone.Add(new LP(head * 0.92f, 0.7f * h, 0.52f));
+					cone.Add(new LP(head * 0.55f, 0.9f * h, 0.55f));
+					cone.Add(new LP(0f, h, 0.6f));
+					Lathe(m, 0, cone, seg, place, 4f);
+					if (lod == 2)
+					{
+						continue;
+					}
+					// The pits, glowing, in rows round the head.
+					var prng = new DeterministicRNG(pitSeed);
+					int rows = lod == 0 ? 4 : 2, round = lod == 0 ? 7 : 5;
+					for (int row = 0; row < rows; row++)
+					{
+						float t = (row + 0.5f) / rows, y = Mathf.Lerp(0.5f, 0.86f, t) * h;
+						float r = Mathf.Lerp(head * 0.95f, head * 0.62f, t);
+						for (int k = 0; k < round; k++)
+						{
+							float a = Tau * (k + 0.5f * (row & 1) + prng.Range(-0.15f, 0.15f)) / round;
+							float pit = head * 0.16f;
+							Bead(m, 0, place.MultiplyPoint3x4(new Vector3(Mathf.Cos(a) * r * 0.97f, y, Mathf.Sin(a) * r * 0.97f)), new Vector3(pit, pit * 1.3f, pit), 1f, 4, 2);
+						}
+					}
+				}
+				return m;
+			}
+			int count = variant == 2 ? 4 : 7;
+			for (int i = 0; i < count; i++)
+			{
+				float rank = count > 1 ? i / (count - 1f) : 0f;
+				float r = (variant == 2 && i == 0 ? 0.62f : Mathf.Lerp(0.42f, 0.13f, rank)) * rng.Range(0.88f, 1.1f);
+				if (variant == 2 && i > 0)
+				{
+					r *= 0.45f;
+				}
+				float az = rng.NextFloat() * Tau, at = i == 0 ? 0f : rng.Range(0.4f, 0.9f) + r;
+				float squash = rng.Range(0.75f, 0.95f);
+				int wartSeed = rng.Next();
+				if (lod == 2 && i >= count - 2)
+				{
+					continue;
+				}
+				Vector3 foot = Out(az, at);
+				bool burst = variant == 2 && i == 0;
+				var ball = new List<LP> { new LP(0f, -0.08f * r, 0.2f), new LP(0.5f * r, -0.02f * r, 0.24f) };
+				if (lod < 2) ball.Add(new LP(0.86f * r, 0.3f * r * squash, 0.38f));
+				ball.Add(new LP(r, 0.75f * r * squash, 0.5f));
+				if (lod < 2) ball.Add(new LP(0.88f * r, 1.2f * r * squash, 0.6f));
+				if (burst)
+				{
+					// Torn open at the crown: a ragged lip turning in to the spore mass, glowing inside.
+					ball.Add(new LP(0.62f * r, 1.42f * r * squash, 0.7f, true));
+					ball.Add(new LP(0.5f * r, 1.32f * r * squash, 0.95f, true));
+					ball.Add(new LP(0f, 1.2f * r * squash, 1f));
+				}
+				else
+				{
+					ball.Add(new LP(0.5f * r, 1.5f * r * squash, 0.68f));
+					ball.Add(new LP(0f, 1.6f * r * squash, 0.72f));
+				}
+				Lathe(m, 0, ball, seg, Matrix4x4.TRS(foot, Quaternion.identity, Vector3.one), 3f);
+				if (lod == 2 || burst)
+				{
+					continue;
+				}
+				var prng = new DeterministicRNG(wartSeed);
+				int warts = lod == 0 ? 9 : 4;
+				for (int w = 0; w < warts; w++)
+				{
+					float a = prng.NextFloat() * Tau, lat = prng.Range(0.25f, 1f);
+					float size = r * prng.Range(0.05f, 0.09f);
+					float rr = Mathf.Lerp(r, 0.35f * r, lat), y = Mathf.Lerp(0.8f, 1.52f, lat) * r * squash;
+					Bead(m, 0, foot + new Vector3(Mathf.Cos(a) * rr, y, Mathf.Sin(a) * rr), new Vector3(size, size * 0.6f, size), 1f, 4, 2);
+				}
+			}
+			if (variant == 2 && lod < 2)
+			{
+				// The spores drifting over the burst one: specks of light, thinning upward.
+				int motes = lod == 0 ? 26 : 12;
+				for (int k = 0; k < motes; k++)
+				{
+					float t = rng.NextFloat(), a = rng.NextFloat() * Tau, rr = rng.Range(0f, 0.35f + 0.6f * t);
+					float size = rng.Range(0.012f, 0.028f) * (1f - 0.5f * t);
+					Bead(m, 0, new Vector3(Mathf.Cos(a) * rr, 1.05f + 1.2f * t, Mathf.Sin(a) * rr), Vector3.one * size, 1f, 4, 2);
+				}
+			}
+			return m;
+		}
+
+		/// <summary>
+		/// Tall tiers of great bracket fungi on a wall (2026-10-20; Ganoderma and Laetiporus grown fantasy-large): overlapping
+		/// shelves standing out along −z, their pores glowing underneath, their roots in the wall. v0 a column of ten 1.8 m tall,
+		/// v1 a staircase of twelve climbing 2.8 m, v2 a broad fan of fourteen over 2.4 by 1.6 m.
+		/// </summary>
+		private static MeshBuilder ShelfTiers(int variant, int lod, int seed)
+		{
+			var rng = new DeterministicRNG(seed);
+			int count;
+			Vector2 patch;
+			float big;
+			switch (variant)
+			{
+				case 1: count = 12; patch = new Vector2(1.2f, 2.8f); big = 0.5f; break;
+				case 2: count = 14; patch = new Vector2(2.4f, 1.6f); big = 0.55f; break;
+				default: count = 10; patch = new Vector2(0.7f, 1.8f); big = 0.45f; break;
+			}
+			var all = new List<Bracket>(count);
+			for (int i = 0; i < count; i++)
+			{
+				float rank = count > 1 ? i / (float)(count - 1) : 0f;
+				float size = big * Mathf.Lerp(1f, 0.45f, rank) * rng.Range(0.85f, 1.1f);
+				float y = rng.Range(-0.5f, 0.5f), x = rng.Range(-0.5f, 0.5f);
+				if (variant == 1)
+				{
+					// The staircase: up and across together, as the tiers climb a seep.
+					x = Mathf.Lerp(-0.5f, 0.5f, (y + 0.5f)) + rng.Range(-0.15f, 0.15f);
+				}
+				all.Add(new Bracket
+				{
+					At = new Vector3(x * patch.x, (y + 0.5f) * patch.y, 0f),
+					Out = size,
+					Half = size * rng.Range(1.1f, 1.5f),
+					Thick = size * rng.Range(0.16f, 0.22f),
+					Droop = size * rng.Range(0.08f, 0.18f),
+					Tilt = rng.Range(-6f, 10f),
+					Lobe = rng.NextFloat() * Tau,
+				});
+			}
+			int keep = lod == 2 ? Mathf.Max(1, count / 2) : lod == 1 ? count * 3 / 4 : count;
+			var m = new MeshBuilder(1);
+			for (int i = 0; i < keep; i++)
+			{
+				AddBracket(m, all[i], lod);
+			}
+			return m;
+		}
+
 		private struct Bracket
 		{
 			public Vector3 At;
@@ -939,6 +1525,275 @@ namespace FishMMO.Shared.WorldDesign
 					float size = Mathf.Lerp(0.0035f, 0.0065f, t) * (lod == 1 ? 1.3f : 1f) * prng.Range(0.8f, 1.2f);
 					Vector3 c = Vector3.Lerp(at, bottom, t);
 					Bead(m, 0, c, new Vector3(size, size * 1.25f, size), 0.75f, 4, 2);
+				}
+			}
+			return m;
+		}
+
+		// ── Roots and glow-vines (2026-10-20) ─────────────────────────
+
+		/// <summary>Seating: how far a hanging root's top reaches up into the roof above the origin.</summary>
+		public const float RootSeat = 0.22f;
+
+		/// <summary>One hanging strand: where its top is (on the roof), how long it hangs, how thick it starts, its own seed.</summary>
+		private struct Strand
+		{
+			public Vector3 Top;
+			public float Length, Radius;
+			public int Seed;
+		}
+
+		/// <summary>
+		/// Strands hanging from a roof patch <paramref name="size"/> across (x, z), longest first: thick where they leave the rock
+		/// (reaching <see cref="RootSeat"/> up into it), tapering to their tips.
+		/// </summary>
+		private static List<Strand> Strands(DeterministicRNG rng, int count, Vector2 size, float shortest, float longest, float thick, float thin)
+		{
+			var all = new List<Strand>(count);
+			for (int i = 0; i < count; i++)
+			{
+				float u = rng.NextFloat();
+				all.Add(new Strand
+				{
+					Top = new Vector3(rng.Range(-0.5f, 0.5f) * size.x, 0f, rng.Range(-0.5f, 0.5f) * size.y),
+					Length = Mathf.Lerp(shortest, longest, u * u),
+					Radius = rng.Range(thin, thick),
+					Seed = rng.Next(),
+				});
+			}
+			all.Sort((a, b) => b.Length.CompareTo(a.Length));
+			return all;
+		}
+
+		/// <summary>
+		/// A hanging strand's path from up in the roof down, wandering as roots do (a random walk biased down, kinking more the
+		/// thinner it is), <paramref name="stations"/> points, its radius tapering to <paramref name="tip"/> of its start.
+		/// </summary>
+		private static void HangingPath(in Strand s, int stations, float wander, float tip, float glowTop, float glowTip,
+			List<Vector3> path, List<float> radius, List<float> glow)
+		{
+			var prng = new DeterministicRNG(s.Seed);
+			float phase = prng.NextFloat() * Tau, phase2 = prng.NextFloat() * Tau;
+			Vector3 drift = new Vector3(prng.Range(-1f, 1f), 0f, prng.Range(-1f, 1f)) * wander;
+			path.Clear();
+			radius.Clear();
+			glow.Clear();
+			for (int i = 0; i < stations; i++)
+			{
+				float t = i / (float)(stations - 1);
+				float d = s.Length * t;
+				var sway = new Vector3(Mathf.Sin(phase + 4.1f * t), 0f, Mathf.Sin(phase2 + 3.3f * t)) * (wander * 0.35f * t);
+				path.Add(s.Top + Vector3.up * (RootSeat * (1f - t) * (i == 0 ? 1f : 0.2f)) + Vector3.down * d + drift * (t * t) + sway);
+				radius.Add(s.Radius * Mathf.Lerp(1f, tip, t));
+				glow.Add(Mathf.Lerp(glowTop, glowTip, t * t));
+			}
+		}
+
+		/// <summary>
+		/// A glowroot curtain (fantasy, 2026-10-20: the deep dark's bioluminescent roots): strands hanging from a roof patch,
+		/// faint where they leave the rock and brightening down them, beaded with glowing nodules and ending in a bright
+		/// bulb; a few thick runners along the roof hold them. v0 a curtain 2 m across to 2.2 m long, v1 a deep one 3 m across
+		/// to 3.5 m, v2 a fringe along a 2.6 m line to 1.4 m. Fewer strands at each level, the longest kept.
+		/// </summary>
+		private static MeshBuilder GlowRoots(int variant, int lod, int seed)
+		{
+			var rng = new DeterministicRNG(seed);
+			int count;
+			Vector2 size;
+			float shortest, longest;
+			switch (variant)
+			{
+				case 1: count = 34; size = new Vector2(3f, 1.2f); shortest = 0.8f; longest = 3.5f; break;
+				case 2: count = 18; size = new Vector2(2.6f, 0.3f); shortest = 0.4f; longest = 1.4f; break;
+				default: count = 24; size = new Vector2(2f, 0.8f); shortest = 0.6f; longest = 2.2f; break;
+			}
+			List<Strand> strands = Strands(rng, count, size, shortest, longest, 0.022f, 0.012f);
+			var runners = new List<(float x0, float z0, float x1, float z1)>();
+			for (int i = 0; i < 4; i++)
+			{
+				runners.Add((rng.Range(-0.6f, -0.3f) * size.x, rng.Range(-0.5f, 0.5f) * size.y, rng.Range(0.3f, 0.6f) * size.x, rng.Range(-0.5f, 0.5f) * size.y));
+			}
+			var m = new MeshBuilder(1);
+			int keep = lod == 0 ? count : lod == 1 ? count * 2 / 3 : Mathf.Max(3, count / 3);
+			int stations = lod == 0 ? 6 : lod == 1 ? 4 : 3, sides = lod == 0 ? 4 : 3;
+			var path = new List<Vector3>();
+			var radius = new List<float>();
+			var glow = new List<float>();
+			for (int i = 0; i < keep; i++)
+			{
+				Strand s = strands[i];
+				HangingPath(in s, stations, 0.12f, 0.35f, 0.3f, 0.9f, path, radius, glow);
+				Tube(m, 0, path, radius, glow, sides, false, true);
+				Vector3 tip = path[path.Count - 1];
+				float bulb = s.Radius * 1.7f;
+				Bead(m, 0, tip + Vector3.down * bulb, new Vector3(bulb, bulb * 1.6f, bulb), 1f, lod == 2 ? 4 : 5, lod == 2 ? 2 : 3);
+				if (lod == 2)
+				{
+					continue;
+				}
+				// Nodules down the strand, brighter lower.
+				var prng = new DeterministicRNG(s.Seed ^ 0x5bd1);
+				int nodules = Mathf.Clamp(Mathf.RoundToInt(s.Length / 0.7f), 1, 4);
+				for (int k = 0; k < nodules; k++)
+				{
+					float t = (k + 0.4f + 0.4f * prng.NextFloat()) / (nodules + 0.5f);
+					if (lod == 1 && (k & 1) == 1)
+					{
+						continue;
+					}
+					int at = Mathf.Clamp(Mathf.RoundToInt(t * (path.Count - 1)), 1, path.Count - 1);
+					Vector3 p = Vector3.Lerp(path[at - 1], path[at], 0.5f);
+					float r = s.Radius * prng.Range(1.3f, 1.7f);
+					Bead(m, 0, p, new Vector3(r, r * 1.4f, r), Mathf.Lerp(0.75f, 1f, t), 4, 2);
+				}
+			}
+			if (lod < 2)
+			{
+				// The runners along the roof, half sunk in it.
+				foreach ((float x0, float z0, float x1, float z1) in runners)
+				{
+					var rp = new List<Vector3> { new Vector3(x0, 0.05f, z0), new Vector3((x0 + x1) * 0.5f, -0.03f, (z0 + z1) * 0.5f), new Vector3(x1, 0.06f, z1) };
+					Tube(m, 0, rp, new[] { 0.035f, 0.04f, 0.03f }, new[] { 0.25f, 0.3f, 0.25f }, lod == 0 ? 5 : 4, true, true);
+				}
+			}
+			return m;
+		}
+
+		/// <summary>
+		/// Tree roots come down through a cave's thin roof near its mouth (2026-10-20), as they hang in shallow caves under a
+		/// wood: a few thick roots kinking down from the rock, forking, thinning to a fringe of hair roots at their ends, and
+		/// runners along the roof. Not lit: the root material only (pale at the growing tips). v0 a few thick roots over 1.5 m,
+		/// to 1.6 m long; v1 a dense hairy curtain 2.5 m across, to 2.4 m; v2 one great root knot and its many fine rootlets.
+		/// </summary>
+		private static MeshBuilder HangingRoots(int variant, int lod, int seed)
+		{
+			var rng = new DeterministicRNG(seed);
+			int count;
+			Vector2 size;
+			float shortest, longest, thick, thin;
+			switch (variant)
+			{
+				case 1: count = 22; size = new Vector2(2.5f, 1f); shortest = 0.5f; longest = 2.4f; thick = 0.045f; thin = 0.012f; break;
+				case 2: count = 14; size = new Vector2(1.2f, 1.2f); shortest = 0.4f; longest = 1.8f; thick = 0.08f; thin = 0.015f; break;
+				default: count = 8; size = new Vector2(1.5f, 0.8f); shortest = 0.6f; longest = 1.6f; thick = 0.06f; thin = 0.02f; break;
+			}
+			List<Strand> strands = Strands(rng, count, size, shortest, longest, thick, thin);
+			var m = new MeshBuilder(1);
+			int keep = lod == 0 ? count : lod == 1 ? count * 2 / 3 : Mathf.Max(3, count / 3);
+			int stations = lod == 0 ? 6 : lod == 1 ? 4 : 3, sides = lod == 0 ? 5 : lod == 1 ? 4 : 3;
+			var path = new List<Vector3>();
+			var radius = new List<float>();
+			var glow = new List<float>();
+			var fork = new List<Vector3>();
+			var forkRadius = new List<float>();
+			var forkGlow = new List<float>();
+			for (int i = 0; i < keep; i++)
+			{
+				Strand s = strands[i];
+				HangingPath(in s, stations, 0.3f, 0.25f, 0.3f, 0.62f, path, radius, glow);
+				Tube(m, 0, path, radius, glow, sides, false, true);
+				if (lod == 2)
+				{
+					continue;
+				}
+				var prng = new DeterministicRNG(s.Seed ^ 0x2c49);
+				// A fork from part way down, thinner, wandering off its own way.
+				if (s.Length > 0.8f && prng.NextFloat() < 0.7f)
+				{
+					int from = Mathf.Clamp(stations / 2 - 1, 1, stations - 2);
+					var branch = new Strand { Top = path[from], Length = s.Length * prng.Range(0.35f, 0.6f), Radius = radius[from] * 0.6f, Seed = prng.Next() };
+					HangingPath(in branch, lod == 0 ? 4 : 3, 0.25f, 0.3f, glow[from], 0.65f, fork, forkRadius, forkGlow);
+					fork[0] = path[from];
+					Tube(m, 0, fork, forkRadius, forkGlow, Mathf.Max(3, sides - 1), false, true);
+				}
+				// The hair roots at its end.
+				if (lod == 0)
+				{
+					Vector3 end = path[path.Count - 1];
+					for (int k = 0; k < 3; k++)
+					{
+						var d = new Vector3(prng.Range(-1f, 1f), -1.6f, prng.Range(-1f, 1f)).normalized;
+						float hair = prng.Range(0.12f, 0.3f);
+						Tube(m, 0, new List<Vector3> { end, end + d * hair }, new[] { radius[radius.Count - 1] * 0.7f, 0.0025f }, new[] { 0.62f, 0.7f }, 3, false, false);
+					}
+				}
+			}
+			if (lod < 2)
+			{
+				// The runners along the roof, half sunk.
+				for (int k = 0; k < 3; k++)
+				{
+					Vector3 a = strands[k % strands.Count].Top, b = strands[(k + 1) % strands.Count].Top;
+					var rp = new List<Vector3> { a + Vector3.up * 0.06f, (a + b) * 0.5f + Vector3.down * 0.02f, b + Vector3.up * 0.06f };
+					if ((b - a).sqrMagnitude < 0.04f)
+					{
+						continue;
+					}
+					Tube(m, 0, rp, new[] { thick * 0.9f, thick, thick * 0.9f }, new[] { 0.28f, 0.3f, 0.28f }, sides, true, true);
+				}
+			}
+			return m;
+		}
+
+		/// <summary>
+		/// A glow-vine on a wet wall (fantasy, 2026-10-20): creeping stems laid on the rock (along the wall's face, a little into
+		/// it), meandering up and across it, set with small rounded leaves that glow, brightest at the growing tips. v0 a patch
+		/// 1.5 m across and tall, v1 a sheet 2.5 by 2 m, v2 a cascade hanging 2.4 m down from its top (origin at the top).
+		/// </summary>
+		private static MeshBuilder GlowVine(int variant, int lod, int seed)
+		{
+			var rng = new DeterministicRNG(seed);
+			Vector2 size;
+			int stems;
+			bool down = variant == 2;
+			switch (variant)
+			{
+				case 1: size = new Vector2(2.5f, 2f); stems = 7; break;
+				case 2: size = new Vector2(1.6f, 2.4f); stems = 6; break;
+				default: size = new Vector2(1.5f, 1.5f); stems = 5; break;
+			}
+			var plans = new List<(float x, float lengthShare, float phase, int seed)>(stems);
+			for (int i = 0; i < stems; i++)
+			{
+				plans.Add((rng.Range(-0.45f, 0.45f) * size.x, rng.Range(0.55f, 1f), rng.NextFloat() * Tau, rng.Next()));
+			}
+			var m = new MeshBuilder(1);
+			int stations = lod == 0 ? 9 : lod == 1 ? 6 : 4;
+			int keep = lod == 2 ? Mathf.Max(2, stems / 2) : stems;
+			for (int i = 0; i < keep; i++)
+			{
+				(float x, float share, float phase, int pseed) = plans[i];
+				var prng = new DeterministicRNG(pseed);
+				float length = share * size.y;
+				var path = new List<Vector3>(stations);
+				var radius = new List<float>(stations);
+				var glow = new List<float>(stations);
+				for (int k = 0; k < stations; k++)
+				{
+					float t = k / (float)(stations - 1);
+					float y = down ? -length * t : length * t;
+					float sx = x + 0.18f * size.x * Mathf.Sin(phase + 3.4f * t) * t;
+					path.Add(new Vector3(sx, y, -0.006f));
+					radius.Add(Mathf.Lerp(0.016f, 0.007f, t));
+					glow.Add(Mathf.Lerp(0.4f, 0.9f, t));
+				}
+				Tube(m, 0, path, radius, glow, 3, true, true);
+				if (lod == 2)
+				{
+					continue;
+				}
+				// The leaves: flat ovals lying on the rock beside the stem, glowing more toward its tip.
+				int leaves = Mathf.RoundToInt(length / (lod == 0 ? 0.11f : 0.22f));
+				for (int k = 0; k < leaves; k++)
+				{
+					float t = (k + prng.Range(0.1f, 0.9f)) / Mathf.Max(1, leaves);
+					int at = Mathf.Clamp(Mathf.FloorToInt(t * (stations - 1)), 0, stations - 2);
+					float f = t * (stations - 1) - at;
+					Vector3 p = Vector3.Lerp(path[at], path[at + 1], f);
+					float side = (k & 1) == 0 ? 1f : -1f;
+					float leaf = prng.Range(0.03f, 0.05f) * Mathf.Lerp(1f, 0.7f, t);
+					p += new Vector3(side * leaf * 0.9f, prng.Range(-0.5f, 0.5f) * leaf, -0.016f);
+					Bead(m, 0, p, new Vector3(leaf, leaf * 0.8f, 0.007f), Mathf.Lerp(0.7f, 1f, t), lod == 0 ? 5 : 4, 2);
 				}
 			}
 			return m;
@@ -1461,6 +2316,574 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				Bead(m, 1, centre, radii, 0.8f, segments, rings);
 			}
+			return m;
+		}
+
+		// ── Cave lava (2026-10-20) ────────────────────────────────────
+		//
+		// What a lava tube that still runs shows round its lava ("glowing floor/wall cracks, magma seeping from walls, glowing
+		// lavacicles"): fissures in a black crust glowing in their depths, runnels of magma down a wall, lava stalactites with
+		// dripping glowing tips, and ropy pahoehoe crust cooled at the lava's edge. One submesh each, in the Magma hues (glassy
+		// black crust; the glow its own blackbody light through the shared glow ramp, u a glow level as everywhere here).
+
+		/// <summary>How far a lava piece's edges sink under the surface it lies on (floor, wall), metres: seated on uneven rock without a gap.</summary>
+		public const float LavaSeat = 0.04f;
+
+		/// <summary>How tall each magma seep variant stands over its foot (its source crack's height), metres: what the placer fits to a wall.</summary>
+		public static readonly float[] MagmaSeepHeights = { 1.2f, 2.2f, 1.6f };
+
+		/// <summary>The longest drop of each lavacicle variant under its roof at scale 1, metres.</summary>
+		public static readonly float[] LavacicleDrops = { 0.6f, 0.9f, 0.4f };
+
+		/// <summary>How far each magma crack variant reaches from its origin at scale 1, metres (along x; the star every way).</summary>
+		public static readonly float[] MagmaCrackReach = { 0.85f, 1.25f, 0.7f, 1.65f };
+
+		/// <summary>Each lava crust variant's length along its flow (x) and width across it at scale 1, metres.</summary>
+		public static readonly Vector2[] LavaCrustSizes = { new Vector2(1.6f, 1f), new Vector2(2.4f, 1.6f), new Vector2(3f, 0.9f) };
+
+		/// <summary>One point of a strip's section across (<see cref="Ribbon"/>).</summary>
+		private struct RibbonPoint
+		{
+			/// <summary>Across, in the station's half-widths (−1 .. 1, increasing).</summary>
+			public float Across;
+			/// <summary>Out of the surface, in the station's lift; ignored where <see cref="Sunk"/>.</summary>
+			public float Lift;
+			public float Glow;
+			/// <summary>Sunk <see cref="LavaSeat"/> under the surface: an edge that seats the strip on uneven rock.</summary>
+			public bool Sunk;
+
+			public RibbonPoint(float across, float lift, float glow, bool sunk = false)
+			{
+				Across = across;
+				Lift = lift;
+				Glow = glow;
+				Sunk = sunk;
+			}
+		}
+
+		/// <summary>A fissure's section, finest first: sunk edges, the crust's raised lips, its inner walls glowing deeper down, the molten floor.</summary>
+		private static readonly RibbonPoint[][] CrackSections =
+		{
+			new[]
+			{
+				new RibbonPoint(-1f, 0f, 0f, true), new RibbonPoint(-0.72f, 0.7f, 0f), new RibbonPoint(-0.5f, 1f, 0f), new RibbonPoint(-0.36f, 0.75f, 0.12f),
+				new RibbonPoint(-0.25f, 0.45f, 0.55f), new RibbonPoint(-0.12f, 0.3f, 1f), new RibbonPoint(0.12f, 0.3f, 1f), new RibbonPoint(0.25f, 0.45f, 0.55f),
+				new RibbonPoint(0.36f, 0.75f, 0.12f), new RibbonPoint(0.5f, 1f, 0f), new RibbonPoint(0.72f, 0.7f, 0f), new RibbonPoint(1f, 0f, 0f, true),
+			},
+			new[]
+			{
+				new RibbonPoint(-1f, 0f, 0f, true), new RibbonPoint(-0.5f, 1f, 0f), new RibbonPoint(-0.28f, 0.5f, 0.35f), new RibbonPoint(-0.1f, 0.3f, 1f),
+				new RibbonPoint(0.1f, 0.3f, 1f), new RibbonPoint(0.28f, 0.5f, 0.35f), new RibbonPoint(0.5f, 1f, 0f), new RibbonPoint(1f, 0f, 0f, true),
+			},
+			new[]
+			{
+				new RibbonPoint(-1f, 0f, 0f, true), new RibbonPoint(-0.45f, 1f, 0f), new RibbonPoint(-0.12f, 0.35f, 1f), new RibbonPoint(0.12f, 0.35f, 1f),
+				new RibbonPoint(0.45f, 1f, 0f), new RibbonPoint(1f, 0f, 0f, true),
+			},
+		};
+
+		/// <summary>A runnel's section, finest first: a bead of molten rock, a dull crusted bank either side, brightest down its middle.</summary>
+		private static readonly RibbonPoint[][] RunnelSections =
+		{
+			new[]
+			{
+				new RibbonPoint(-1f, 0f, 0.05f, true), new RibbonPoint(-0.7f, 0.55f, 0.15f), new RibbonPoint(-0.35f, 0.9f, 0.6f), new RibbonPoint(0f, 1f, 1f),
+				new RibbonPoint(0.35f, 0.9f, 0.6f), new RibbonPoint(0.7f, 0.55f, 0.15f), new RibbonPoint(1f, 0f, 0.05f, true),
+			},
+			new[]
+			{
+				new RibbonPoint(-1f, 0f, 0.05f, true), new RibbonPoint(-0.5f, 0.8f, 0.35f), new RibbonPoint(0f, 1f, 1f), new RibbonPoint(0.5f, 0.8f, 0.35f),
+				new RibbonPoint(1f, 0f, 0.05f, true),
+			},
+			new[] { new RibbonPoint(-1f, 0f, 0.1f, true), new RibbonPoint(0f, 1f, 1f), new RibbonPoint(1f, 0f, 0.1f, true) },
+		};
+
+		/// <summary>
+		/// A strip lofted through stations (each a centre, the way out of the surface there, a half-width and a lift), its section
+		/// a height field across (<see cref="RibbonPoint"/>), its ends closed by a fan to a point sunk just past them. Built apart,
+		/// normals from its faces, then appended: it lies on the rock as a skin, every face turned out of the surface. v runs in
+		/// metres along it. <paramref name="hard"/>: each band across its own vertices, so a crust's lips keep their edges (and a
+		/// narrow crack's steep walls never bend the normals of the slopes beside them).
+		/// </summary>
+		private static void Ribbon(MeshBuilder m, IList<Vector3> centre, IList<Vector3> outward, IList<float> half, IList<float> lift, RibbonPoint[] section, bool hard = false)
+		{
+			int n = centre.Count, k = section.Length;
+			if (n < 2)
+			{
+				return;
+			}
+			var points = new Vector3[n, k];
+			var uvs = new Vector2[n, k];
+			float along = 0f;
+			for (int i = 0; i < n; i++)
+			{
+				if (i > 0)
+				{
+					along += Vector3.Distance(centre[i], centre[i - 1]);
+				}
+				Vector3 tangent = (centre[Mathf.Min(i + 1, n - 1)] - centre[Mathf.Max(i - 1, 0)]).normalized;
+				Vector3 side = Vector3.Cross(outward[i], tangent).normalized;
+				for (int j = 0; j < k; j++)
+				{
+					RibbonPoint p = section[j];
+					float up = p.Sunk ? -LavaSeat : p.Lift * lift[i];
+					points[i, j] = centre[i] + side * (p.Across * half[i]) + outward[i] * up;
+					uvs[i, j] = new Vector2(Glow(p.Glow), along * 1.7f + p.Across * 0.15f);
+				}
+			}
+			var b = new MeshBuilder(1);
+			// Smooth: one vertex a point. Hard: every band (j to j + 1) its own copy of its two columns.
+			var shared = new int[n, k];
+			var bands = new int[n, k - 1, 2];
+			for (int i = 0; i < n; i++)
+			{
+				if (!hard)
+				{
+					for (int j = 0; j < k; j++)
+					{
+						shared[i, j] = b.AddVertex(points[i, j], Vector3.zero, uvs[i, j], White);
+					}
+				}
+				for (int j = 0; j + 1 < k; j++)
+				{
+					for (int e = 0; e < 2; e++)
+					{
+						bands[i, j, e] = hard ? b.AddVertex(points[i, j + e], Vector3.zero, uvs[i, j + e], White) : shared[i, j + e];
+					}
+				}
+			}
+			for (int i = 0; i + 1 < n; i++)
+			{
+				Vector3 facing = outward[i] + outward[i + 1];
+				for (int j = 0; j + 1 < k; j++)
+				{
+					b.AddQuad(0, bands[i, j, 0], bands[i, j, 1], bands[i + 1, j, 1], bands[i + 1, j, 0], facing);
+				}
+			}
+			// The ends: a fan to a point sunk just past each, on its own copy of the end's row, so the cap's slopes never bend
+			// the strip's normals.
+			for (int end = 0; end < 2; end++)
+			{
+				int i = end == 0 ? 0 : n - 1;
+				Vector3 beyond = (end == 0 ? centre[0] - centre[1] : centre[n - 1] - centre[n - 2]).normalized;
+				Vector3 tip = centre[i] + beyond * Mathf.Max(0.01f, half[i] * 0.6f) - outward[i] * LavaSeat;
+				int t = b.AddVertex(tip, Vector3.zero, new Vector2(Glow(0.05f), along * 1.7f * end), White);
+				int ring = b.VertexCount;
+				for (int j = 0; j < k; j++)
+				{
+					b.AddVertex(points[i, j], Vector3.zero, uvs[i, j], White);
+				}
+				for (int j = 0; j + 1 < k; j++)
+				{
+					b.AddTriangle(0, t, ring + j, ring + j + 1, outward[i] + beyond * 0.5f);
+				}
+			}
+			b.RecalculateNormals(false);
+			m.Append(b);
+		}
+
+		/// <summary>The plane a fissure lies in: two directions in it and the way out of it (a floor's: x, z, up; a wall's: x, y, −z).</summary>
+		private struct LavaPlane
+		{
+			public Vector3 U, V, Out;
+
+			public static LavaPlane Floor => new LavaPlane { U = Vector3.right, V = Vector3.forward, Out = Vector3.up };
+			public static LavaPlane Wall => new LavaPlane { U = Vector3.right, V = Vector3.up, Out = Vector3.back };
+		}
+
+		/// <summary>One fissure's shape, drawn before any level is built: where it starts and heads (radians in its plane), how long and wide, its lips' height, its noise.</summary>
+		private struct FissureShape
+		{
+			public Vector2 Start;
+			public float Heading, Length, Half, Lip;
+			public int Seed;
+		}
+
+		/// <summary>A point of a fissure's centre line in its plane, <paramref name="s"/> metres along it: wandering as a crack runs, a slow bend and a jag.</summary>
+		private static Vector2 FissureAt(in FissureShape f, float s)
+		{
+			float wander = 0.06f * ProceduralNoise.Fbm3(new Vector3(s * 0.8f, 1.3f, 0f), 2, 0.5f, f.Seed)
+				+ 0.012f * ProceduralNoise.Fbm3(new Vector3(s * 2.5f, 4.7f, 2f), 2, 0.5f, f.Seed + 1);
+			var dir = new Vector2(Mathf.Cos(f.Heading), Mathf.Sin(f.Heading));
+			var across = new Vector2(-dir.y, dir.x);
+			return f.Start + dir * s + across * wander;
+		}
+
+		/// <summary>A fissure lofted in its plane: its half-width swelling and pinching along it, tapering to its ends.</summary>
+		private static void Fissure(MeshBuilder m, in FissureShape f, LavaPlane plane, int lod)
+		{
+			float step = lod == 0 ? 0.05f : lod == 1 ? 0.1f : 0.2f;
+			int n = Mathf.Max(3, Mathf.CeilToInt(f.Length / step) + 1);
+			var centre = new List<Vector3>(n);
+			var outward = new List<Vector3>(n);
+			var half = new List<float>(n);
+			var lift = new List<float>(n);
+			float taper = Mathf.Min(0.25f, 0.3f * f.Length);
+			for (int i = 0; i < n; i++)
+			{
+				float s = f.Length * i / (n - 1);
+				Vector2 p = FissureAt(in f, s);
+				centre.Add(plane.U * p.x + plane.V * p.y);
+				outward.Add(plane.Out);
+				float ends = Mathf.SmoothStep(0f, 1f, Mathf.Min(s, f.Length - s) / taper);
+				float swell = 0.75f + 0.5f * ProceduralNoise.Fbm3(new Vector3(s * 1.9f, 7.1f, 0f), 2, 0.5f, f.Seed + 2);
+				float h = f.Half * swell * Mathf.Lerp(0.3f, 1f, ends);
+				half.Add(h);
+				// The lips as high as the crack is wide allows: a narrow crack's walls no steeper than a wide one's.
+				lift.Add(f.Lip * (0.85f + 0.3f * ProceduralNoise.Fbm3(new Vector3(s * 2.3f, 3.3f, 5f), 2, 0.5f, f.Seed + 3)) * Mathf.Clamp(h / 0.12f, 0.3f, 1f));
+			}
+			Ribbon(m, centre, outward, half, lift, CrackSections[Mathf.Clamp(lod, 0, CrackSections.Length - 1)], hard: true);
+		}
+
+		/// <summary>A fissure starting off another, <paramref name="share"/> of the way along it, heading <paramref name="turn"/> radians off it.</summary>
+		private static FissureShape Branch(in FissureShape from, float share, float turn, float length, float half, DeterministicRNG rng)
+		{
+			return new FissureShape
+			{
+				Start = FissureAt(in from, share * from.Length),
+				Heading = from.Heading + turn,
+				Length = length,
+				Half = half,
+				Lip = rng.Range(0.055f, 0.08f),
+				Seed = rng.Next(),
+			};
+		}
+
+		/// <summary>
+		/// A fissure in a crust of cooling lava, glowing molten in its depths, flat on the rock (its lips 6–8 cm proud), along x:
+		/// v0 1.6 m with a short branch, v1 a fork 2.4 m, v2 a star of three arms 1.2 m across, v3 a long crack 3.2 m with two
+		/// side cracks. Every shape drawn before the level is built.
+		/// </summary>
+		private static MeshBuilder MagmaCracks(int variant, int lod, int seed)
+		{
+			var rng = new DeterministicRNG(seed);
+			var cracks = new List<FissureShape>();
+			FissureShape Main(Vector2 start, float heading, float length, float half) => new FissureShape
+			{
+				Start = start, Heading = heading, Length = length, Half = half, Lip = rng.Range(0.06f, 0.08f), Seed = rng.Next(),
+			};
+			float Side() => rng.NextFloat() < 0.5f ? -1f : 1f;
+			switch (variant)
+			{
+				case 1:
+				{
+					FissureShape trunk = Main(new Vector2(-1.2f, 0f), 0f, 1.25f, 0.13f);
+					cracks.Add(trunk);
+					cracks.Add(Branch(in trunk, 1f, rng.Range(0.35f, 0.5f), rng.Range(1.1f, 1.3f), 0.1f, rng));
+					cracks.Add(Branch(in trunk, 1f, -rng.Range(0.35f, 0.5f), rng.Range(1.1f, 1.3f), 0.1f, rng));
+					break;
+				}
+				case 2:
+				{
+					float a0 = rng.Range(0f, Tau);
+					for (int i = 0; i < 3; i++)
+					{
+						cracks.Add(Main(Vector2.zero, a0 + i * 2.094f + rng.Range(-0.25f, 0.25f), rng.Range(0.5f, 0.65f), 0.12f));
+					}
+					break;
+				}
+				case 3:
+				{
+					FissureShape trunk = Main(new Vector2(-1.6f, 0f), 0f, 3.2f, 0.14f);
+					cracks.Add(trunk);
+					cracks.Add(Branch(in trunk, 0.3f, Side() * rng.Range(0.6f, 0.9f), rng.Range(0.5f, 0.7f), 0.07f, rng));
+					cracks.Add(Branch(in trunk, 0.72f, Side() * rng.Range(0.6f, 0.9f), rng.Range(0.5f, 0.7f), 0.07f, rng));
+					break;
+				}
+				default:
+				{
+					FissureShape trunk = Main(new Vector2(-0.8f, 0f), 0f, 1.6f, 0.12f);
+					cracks.Add(trunk);
+					cracks.Add(Branch(in trunk, 0.42f, Side() * rng.Range(0.5f, 0.8f), rng.Range(0.55f, 0.7f), 0.07f, rng));
+					break;
+				}
+			}
+			var m = new MeshBuilder(1);
+			foreach (FissureShape f in cracks)
+			{
+				Fissure(m, in f, LavaPlane.Floor, lod);
+			}
+			return m;
+		}
+
+		/// <summary>One runnel of a seep: where it leaves its crack (x, y on the wall), where it meets the floor (x), how far its foot spreads out, its widths and lift, its noise.</summary>
+		private struct Runnel
+		{
+			public float TopX, TopY, FootX, Spread, Width, FootWidth, Lift;
+			public int Seed;
+		}
+
+		/// <summary>The bend at a runnel's foot, metres: where it turns from the wall onto the floor.</summary>
+		private const float RunnelBend = 0.12f;
+
+		/// <summary>
+		/// A runnel's centre, the way out of the rock and its half-width and lift at <paramref name="t"/> (0 its top on the wall,
+		/// 1 the end of its foot's lobe on the floor): down the wall in a gravity-led meander, round a quarter bend onto the floor,
+		/// then out in a widening lobe that rounds off at its end.
+		/// </summary>
+		private static void RunnelAt(in Runnel r, float t, out Vector3 centre, out Vector3 outward, out float half, out float lift)
+		{
+			float wall = r.TopY - RunnelBend, bend = 0.5f * Mathf.PI * RunnelBend, total = wall + bend + r.Spread;
+			float s = t * total;
+			float meander = 0.035f * ProceduralNoise.Fbm3(new Vector3(s * 1.6f, 2.1f, 0f), 2, 0.5f, r.Seed);
+			float x = Mathf.Lerp(r.TopX, r.FootX, Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(s / Mathf.Max(0.01f, wall)))) + meander;
+			float swell = 0.85f + 0.3f * ProceduralNoise.Fbm3(new Vector3(s * 2.7f, 5.5f, 1f), 2, 0.5f, r.Seed + 1);
+			if (s <= wall)
+			{
+				centre = new Vector3(x, r.TopY - s, 0f);
+				outward = Vector3.back;
+				float top = Mathf.SmoothStep(0f, 1f, s / 0.15f);
+				half = Mathf.Lerp(r.Width, r.FootWidth * 0.6f, s / Mathf.Max(0.01f, wall)) * swell * Mathf.Lerp(0.5f, 1f, top);
+				lift = r.Lift * Mathf.Lerp(0.6f, 1f, top);
+				return;
+			}
+			if (s <= wall + bend)
+			{
+				float a = (s - wall) / RunnelBend;
+				centre = new Vector3(x, RunnelBend * (1f - Mathf.Sin(a)), -RunnelBend * (1f - Mathf.Cos(a)));
+				outward = new Vector3(0f, Mathf.Sin(a), -Mathf.Cos(a));
+				half = r.FootWidth * 0.6f * swell;
+				lift = r.Lift;
+				return;
+			}
+			float u = (s - wall - bend) / Mathf.Max(0.01f, r.Spread);
+			centre = new Vector3(x, 0f, -RunnelBend - (s - wall - bend));
+			outward = Vector3.up;
+			// The lobe widens, then rounds off to its end.
+			float round = Mathf.Sqrt(Mathf.Max(0f, 1f - Mathf.Pow(Mathf.Max(0f, (u - 0.55f) / 0.45f), 2f)));
+			half = Mathf.Lerp(r.FootWidth * 0.6f, r.FootWidth, Mathf.SmoothStep(0f, 1f, Mathf.Min(1f, u / 0.55f))) * Mathf.Max(0.15f, round) * swell;
+			lift = r.Lift * Mathf.Lerp(1.15f, 0.7f, u);
+		}
+
+		/// <summary>
+		/// Magma seeping out of a crack in a wall (fantasy, as hot lava would in a tube still running): runnels of molten rock down
+		/// to the wall's foot, each spreading in a small lobe out over the floor there, drops hanging off their bulges. Wall
+		/// mount, origin at the wall's foot: v0 one runnel 1.2 m, v1 one 2.2 m splitting in two, v2 three from a crack 1.6 m
+		/// across, 1.6 m up (<see cref="MagmaSeepHeights"/>).
+		/// </summary>
+		private static MeshBuilder MagmaSeeps(int variant, int lod, int seed)
+		{
+			var rng = new DeterministicRNG(seed);
+			float height = MagmaSeepHeights[Mathf.Clamp(variant, 0, MagmaSeepHeights.Length - 1)];
+			var runnels = new List<Runnel>();
+			FissureShape source;
+			Runnel Make(float topX, float topY, float footX) => new Runnel
+			{
+				TopX = topX, TopY = topY, FootX = footX, Spread = rng.Range(0.35f, 0.55f), Width = rng.Range(0.025f, 0.035f),
+				FootWidth = rng.Range(0.16f, 0.24f), Lift = rng.Range(0.025f, 0.04f), Seed = rng.Next(),
+			};
+			switch (variant)
+			{
+				case 1:
+					source = new FissureShape { Start = new Vector2(-0.22f, height), Heading = rng.Range(-0.15f, 0.15f), Length = 0.45f, Half = 0.07f, Lip = 0.05f, Seed = rng.Next() };
+					runnels.Add(Make(0f, height, rng.Range(-0.15f, 0.05f)));
+					runnels.Add(Make(rng.Range(-0.02f, 0.04f), rng.Range(0.95f, 1.1f), rng.Range(0.25f, 0.4f)));
+					break;
+				case 2:
+					source = new FissureShape { Start = new Vector2(-0.8f, height), Heading = rng.Range(-0.08f, 0.08f), Length = 1.6f, Half = 0.08f, Lip = 0.055f, Seed = rng.Next() };
+					foreach (float x in new[] { -0.5f, 0.05f, 0.55f })
+					{
+						float top = FissureAt(in source, x + 0.8f).y;
+						runnels.Add(Make(x, top, x + rng.Range(-0.12f, 0.12f)));
+					}
+					break;
+				default:
+					source = new FissureShape { Start = new Vector2(-0.17f, height), Heading = rng.Range(-0.2f, 0.2f), Length = 0.35f, Half = 0.06f, Lip = 0.05f, Seed = rng.Next() };
+					runnels.Add(Make(0f, height, rng.Range(-0.1f, 0.1f)));
+					break;
+			}
+			// Drops hanging off the runnels' bulges on the wall: drawn whatever the level, built at the finest.
+			var drops = new List<(int runnel, float t, float size)>();
+			for (int i = 0; i < runnels.Count; i++)
+			{
+				int count = rng.Range(1, 4);
+				for (int k = 0; k < count; k++)
+				{
+					drops.Add((i, rng.Range(0.15f, 0.7f), rng.Range(0.014f, 0.024f)));
+				}
+			}
+			var m = new MeshBuilder(1);
+			Fissure(m, in source, LavaPlane.Wall, lod);
+			int stations = lod == 0 ? 36 : lod == 1 ? 20 : 10;
+			RibbonPoint[] section = RunnelSections[Mathf.Clamp(lod, 0, RunnelSections.Length - 1)];
+			foreach (Runnel r in runnels)
+			{
+				var centre = new List<Vector3>(stations);
+				var outward = new List<Vector3>(stations);
+				var half = new List<float>(stations);
+				var lift = new List<float>(stations);
+				for (int i = 0; i < stations; i++)
+				{
+					RunnelAt(in r, i / (stations - 1f), out Vector3 c, out Vector3 o, out float h, out float l);
+					centre.Add(c);
+					outward.Add(o);
+					half.Add(h);
+					lift.Add(l);
+				}
+				Ribbon(m, centre, outward, half, lift, section);
+			}
+			if (lod == 0)
+			{
+				foreach ((int runnel, float t, float size) in drops)
+				{
+					Runnel r = runnels[runnel];
+					float wallShare = (r.TopY - RunnelBend) / (r.TopY - RunnelBend + 0.5f * Mathf.PI * RunnelBend + r.Spread);
+					RunnelAt(in r, t * wallShare, out Vector3 c, out Vector3 o, out _, out float l);
+					Bead(m, 0, c + o * (l + size * 0.6f) + Vector3.down * size, new Vector3(size, size * 1.5f, size), 1f, 6, 4);
+				}
+			}
+			return m;
+		}
+
+		/// <summary>One lava stalactite: where it leaves the roof (x, z), how far it hangs, how thick it starts, its noise; or a stout cone (a shark's tooth).</summary>
+		private struct LavaDrip
+		{
+			public Vector2 At;
+			public float Length, Radius;
+			public bool Tooth;
+			public int Seed;
+		}
+
+		/// <summary>
+		/// Lava stalactites (lavacicles) over molten lava, hung from a crusted roof patch: dark where they leave the rock,
+		/// brightening down to their dripping tips, still glowing. Roof mount: v0 seven to 0.6 m, v1 a fringe of twelve along
+		/// 1.6 m to 0.9 m, v2 five stout shark's teeth to 0.4 m (<see cref="LavacicleDrops"/>). The shorter ones go first at the
+		/// coarser levels.
+		/// </summary>
+		private static MeshBuilder Lavacicles(int variant, int lod, int seed)
+		{
+			var rng = new DeterministicRNG(seed);
+			float longest = LavacicleDrops[Mathf.Clamp(variant, 0, LavacicleDrops.Length - 1)];
+			int count;
+			Vector2 patch;
+			switch (variant)
+			{
+				case 1: count = 12; patch = new Vector2(0.85f, 0.22f); break;
+				case 2: count = 5; patch = new Vector2(0.4f, 0.32f); break;
+				default: count = 7; patch = new Vector2(0.5f, 0.38f); break;
+			}
+			var drips = new List<LavaDrip>(count);
+			for (int i = 0; i < count; i++)
+			{
+				float u = rng.NextFloat();
+				Vector2 at = variant == 1
+					? new Vector2(rng.Range(-0.9f, 0.9f) * patch.x, rng.Range(-0.4f, 0.4f) * patch.y)
+					: Random2(rng) * 0.75f;
+				if (variant != 1)
+				{
+					at = Vector2.Scale(at, patch);
+				}
+				drips.Add(new LavaDrip
+				{
+					At = at,
+					Length = i == 0 ? longest : Mathf.Lerp(0.25f * longest, longest, u * u),
+					Radius = variant == 2 ? rng.Range(0.05f, 0.09f) : rng.Range(0.022f, 0.045f),
+					Tooth = variant == 2,
+					Seed = rng.Next(),
+				});
+			}
+			drips.Sort((a, b) => b.Length.CompareTo(a.Length));
+			int kept = lod == 0 ? count : Mathf.Max(1, Mathf.RoundToInt(count * (lod == 1 ? 0.7f : 0.4f)));
+			var m = new MeshBuilder(1);
+			// The crusted patch the drips hang from: a low dome of dark crust, its rim up in the rock.
+			var crust = new List<LP> { new LP(1f, -0.12f, 0.02f), new LP(0.9f, 0f, 0.04f), new LP(0.55f, 0.035f, 0.06f), new LP(0f, 0.045f, 0.08f) };
+			Lathe(m, 0, crust, lod == 0 ? 14 : lod == 1 ? 10 : 7, Matrix4x4.TRS(Vector3.zero, Quaternion.Euler(180f, 0f, 0f), new Vector3(patch.x, 1f, patch.y)), 2f);
+			int sides = lod == 0 ? 7 : lod == 1 ? 5 : 4;
+			int stations = lod == 0 ? 7 : lod == 1 ? 5 : 3;
+			for (int i = 0; i < kept; i++)
+			{
+				LavaDrip d = drips[i];
+				var top = new Vector3(d.At.x, 0f, d.At.y);
+				if (d.Tooth)
+				{
+					var cone = new List<LP>
+					{
+						new LP(d.Radius, -0.1f, 0.03f), new LP(d.Radius, 0f, 0.05f), new LP(0.6f * d.Radius, 0.5f * d.Length, 0.35f),
+						new LP(0.25f * d.Radius, 0.88f * d.Length, 0.75f), new LP(0f, d.Length, 1f),
+					};
+					Lathe(m, 0, cone, sides + 1, Matrix4x4.TRS(top, Quaternion.Euler(180f, 0f, 0f), Vector3.one), 1f);
+					continue;
+				}
+				var prng = new DeterministicRNG(d.Seed);
+				Vector3 drift = new Vector3(prng.Range(-1f, 1f), 0f, prng.Range(-1f, 1f)) * (0.06f * d.Length);
+				float phase = prng.NextFloat() * Tau;
+				var path = new List<Vector3>(stations);
+				var radius = new List<float>(stations);
+				var glow = new List<float>(stations);
+				for (int k = 0; k < stations; k++)
+				{
+					float t = k / (stations - 1f);
+					var wiggle = new Vector3(Mathf.Sin(phase + 7f * t), 0f, Mathf.Cos(phase * 1.3f + 5f * t)) * (0.012f * t);
+					path.Add(top + Vector3.up * (0.12f * (1f - t)) + Vector3.down * (d.Length * t) + drift * (t * t) + wiggle);
+					radius.Add(d.Radius * Mathf.Lerp(1f, 0.35f, t));
+					glow.Add(Mathf.Lerp(0.04f, 0.85f, t * t));
+				}
+				bool bead = lod < 2;
+				Tube(m, 0, path, radius, glow, sides, false, !bead);
+				if (bead)
+				{
+					float r = d.Radius * 0.55f;
+					Bead(m, 0, path[stations - 1] + Vector3.down * (0.6f * r), new Vector3(r, r * 1.35f, r), 1f, sides, lod == 0 ? 4 : 3);
+				}
+			}
+			return m;
+		}
+
+		/// <summary>A point in the unit disc (area-uniform).</summary>
+		private static Vector2 Random2(DeterministicRNG rng)
+		{
+			float a = rng.NextFloat() * Tau, r = Mathf.Sqrt(rng.NextFloat());
+			return new Vector2(Mathf.Cos(a) * r, Mathf.Sin(a) * r);
+		}
+
+		/// <summary>
+		/// A low lobe of ropy pahoehoe crust, cooled black at molten lava's edge: its rope folds arc toward its front (the way it
+		/// flowed, +x), its toes still glowing in their creases, its rim sunk into the rock. At most 12 cm tall at scale 1:
+		/// v0 1.6 by 1 m, v1 a broad sheet 2.4 by 1.6 m, v2 a long tongue 3 by 0.9 m. The ropes are the finest level's alone.
+		/// </summary>
+		private static MeshBuilder LavaCrusts(int variant, int lod, int seed)
+		{
+			var rng = new DeterministicRNG(seed);
+			Vector2 size = LavaCrustSizes[Mathf.Clamp(variant, 0, LavaCrustSizes.Length - 1)];
+			float length = size.x, width = size.y, height = variant == 1 ? 0.12f : variant == 2 ? 0.09f : 0.1f;
+			float ropePitch = rng.Range(0.11f, 0.15f), ropeBend = rng.Range(0.8f, 1.4f), toes = rng.Range(0.1f, 0.2f);
+			int noise = rng.Next();
+			int rows = lod == 0 ? Mathf.Clamp(Mathf.CeilToInt(length / ropePitch * 4f), 24, 72) : lod == 1 ? 16 : 8;
+			int cols = lod == 0 ? 16 : lod == 1 ? 10 : 6;
+			float ropes = lod == 0 ? 1f : 0f;
+			var b = new MeshBuilder(1);
+			var grid = new int[rows + 1, cols + 1];
+			for (int i = 0; i <= rows; i++)
+			{
+				float u = i / (float)rows;
+				// Narrow at its back where it left the flow, broad toward its rounded front.
+				float w = 0.5f * width * (0.3f + 0.7f * Mathf.Sin(0.5f * Mathf.PI * Mathf.Min(1f, u * 1.2f)));
+				for (int j = 0; j <= cols; j++)
+				{
+					float v = -1f + 2f * j / cols;
+					float x = length * (u - 0.5f) + toes * length * Mathf.Pow(u, 4f) * (Mathf.Sqrt(Mathf.Max(0f, 1f - v * v)) - 1f);
+					float z = v * w;
+					bool rim = i == 0 || i == rows || j == 0 || j == cols;
+					float rope = Mathf.Sin(Tau * ((u * length - ropeBend * 0.12f * v * v) / ropePitch));
+					float trough = 0.5f - 0.5f * rope;
+					float dome = Mathf.Sqrt(Mathf.Max(0f, 1f - Mathf.Pow(Mathf.Abs(v), 2.2f))) * Mathf.SmoothStep(0f, 1f, Mathf.Min(1f, u / 0.25f)) * Mathf.SmoothStep(0f, 1f, Mathf.Min(1f, (1f - u) / 0.1f));
+					float lump = 0.12f * ProceduralNoise.Fbm3(new Vector3(x * 1.7f, 0f, z * 1.7f), 2, 0.5f, noise);
+					float y = rim ? -LavaSeat : height * dome * (0.82f + lump + 0.18f * ropes * rope);
+					float g = Mathf.Clamp01(0.75f * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.78f, 0.97f, u)) * (0.55f + 0.45f * (ropes > 0f ? trough : 0.5f))
+						+ 0.25f * (ropes > 0f ? trough : 0.5f) * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.5f, 0.9f, u)));
+					grid[i, j] = b.AddVertex(new Vector3(x, y, z), Vector3.zero, new Vector2(Glow(g), x * 1.3f + z * 0.4f), White);
+				}
+			}
+			for (int i = 0; i < rows; i++)
+			{
+				for (int j = 0; j < cols; j++)
+				{
+					b.AddQuad(0, grid[i, j], grid[i, j + 1], grid[i + 1, j + 1], grid[i + 1, j], Vector3.up);
+				}
+			}
+			b.RecalculateNormals(true);
+			var m = new MeshBuilder(1);
+			m.Append(b);
 			return m;
 		}
 	}

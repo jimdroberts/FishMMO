@@ -332,6 +332,11 @@ MonoBehaviour:
   LooseGround: {fileID: 0}
   Emits: {fileID: 0}
   EmissionRate: 0
+  geothermal:
+    Geyser: 0.25
+    HotSpring: 0.4
+    Fumarole: 0.35
+    MudPot: 0
   TerrainProcess: {fileID: 11400000, guid: 71fd23fd5807a4862b6fbe3830ec6168, type: 2}
   landforms: []
   lookClass: 4
@@ -396,6 +401,13 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -461,6 +473,9 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
       specFingerprint: d5e063a75bb66a51
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -526,6 +541,9 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
       specFingerprint: dea9bcb871ad6b84
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -591,6 +609,9 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
       specFingerprint: 08ff5ea3e214c7a2
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -656,6 +677,9 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
       specFingerprint: f6c4a5fed2a54e28
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -721,6 +745,9 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
       specFingerprint: 7c628586b445a259
       detailNoiseSpread: 1.5
       detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
@@ -786,6 +813,9 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
       specFingerprint: 2dcf1a9e7e52e475
       detailNoiseSpread: 1.5
       detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
@@ -851,6 +881,9 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
       specFingerprint: 6f4dcc55491aa3d2
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -916,6 +949,9 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
       specFingerprint: 1ad774ebd2ef43d1
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -981,6 +1017,9 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
       specFingerprint: bd993fd62e175d64
       detailNoiseSpread: 1.5
       detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
@@ -1046,6 +1085,9 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
       specFingerprint: ee9ad18597a6ab62
       detailNoiseSpread: 1.5
       detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
@@ -1111,6 +1153,9 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
       specFingerprint: f3c095cf70c43867
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -1151,6 +1196,13 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1216,6 +1268,9 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
       specFingerprint: f2ffd5180da808bc
       detailNoiseSpread: 1.5
       detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
@@ -1281,6 +1336,9 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
       specFingerprint: 2300bc9ec4047dcf
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -1346,6 +1404,9 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
       specFingerprint: c07de8559feec7b2
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -1385,6 +1446,13 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1452,6 +1520,9 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
       specFingerprint: aca41d7572e6809e
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -1524,6 +1595,9 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
       specFingerprint: ed17508cee86f36d
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -1564,6 +1638,13 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1604,6 +1685,13 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1644,6 +1732,13 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1684,6 +1779,13 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1733,6 +1835,13 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1773,6 +1882,13 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1813,6 +1929,13 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1853,6 +1976,13 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1891,10 +2021,13 @@ MonoBehaviour:
     Turbidity: 0.35
     Silt: {r: 0.36, g: 0.33, b: 0.24, a: 1}
     Foam: {r: 0.92, g: 0.94, b: 0.95, a: 1}
+    Hot: 0
   seaLook:
     Tint: {r: 0.05, g: 0.28, b: 0.36, a: 1}
     Visibility: 22
     Murk: 1
+  seaFloor: 0
+  tideStrength: 1
   floatingPlants: []
   habitat: 32
   seaLife: []
@@ -2209,6 +2342,9 @@ MonoBehaviour:
   - Kind: 4
     Variant: Stone
     Weight: 2
+  - Kind: 4
+    Variant: Observatory
+    Weight: 1.6
   - Kind: 50
     Variant: Lodge
     Weight: 0.3
@@ -2218,6 +2354,9 @@ MonoBehaviour:
   - Kind: 69
     Variant: Temple
     Weight: 1.5
+  - Kind: 69
+    Variant: Excavation
+    Weight: 1.3
   - Kind: 75
     Variant: Stone
     Weight: 2
@@ -3365,6 +3504,20 @@ MonoBehaviour:
     Fingerprint: "Windmill\xD70.5\xD7air"
   - Field: siteKinds/Wreck
     Fingerprint: "Wreck\xD71"
+  - Field: boardwalks
+    Fingerprint: None
+  - Field: linearFeatures
+    Fingerprint: <entries>
+  - Field: orchards
+    Fingerprint: <entries>
+  - Field: fieldLayout
+    Fingerprint: 0|0
+  - Field: abandonedTerraces
+    Fingerprint: 0|Drystone|8|25|0.5
+  - Field: channelMargin
+    Fingerprint: -1|0
+  - Field: landforms
+    Fingerprint: <entries>
   - Field: siteVariants/Capital/stone
     Fingerprint: "Capital/Stone\xD71.5"
   - Field: siteVariants/Capital/timber
@@ -3387,8 +3540,12 @@ MonoBehaviour:
     Fingerprint: "Port/Timber\xD70.2"
   - Field: siteVariants/Ruins/burned
     Fingerprint: "Ruins/Burned\xD70.3"
+  - Field: siteVariants/Ruins/excavation
+    Fingerprint: "Ruins/Excavation\xD71.3"
   - Field: siteVariants/Ruins/temple
     Fingerprint: "Ruins/Temple\xD71.5"
+  - Field: siteVariants/Tower/observatory
+    Fingerprint: "Tower/Observatory\xD71.6"
   - Field: siteVariants/Tower/stone
     Fingerprint: "Tower/Stone\xD72"
   - Field: siteVariants/Town/palisaded
@@ -3407,17 +3564,3 @@ MonoBehaviour:
     Fingerprint: "Village/Yurts\xD70.6"
   - Field: siteVariants/Waystation/stone inn
     Fingerprint: "Waystation/Stone Inn\xD72"
-  - Field: boardwalks
-    Fingerprint: None
-  - Field: linearFeatures
-    Fingerprint: <entries>
-  - Field: orchards
-    Fingerprint: <entries>
-  - Field: fieldLayout
-    Fingerprint: 0|0
-  - Field: abandonedTerraces
-    Fingerprint: 0|Drystone|8|25|0.5
-  - Field: channelMargin
-    Fingerprint: -1|0
-  - Field: landforms
-    Fingerprint: <entries>

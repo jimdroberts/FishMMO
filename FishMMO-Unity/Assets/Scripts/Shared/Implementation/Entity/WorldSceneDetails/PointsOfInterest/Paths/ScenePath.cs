@@ -229,7 +229,25 @@ namespace FishMMO.Shared
 			}
 		}
 
-		/// <summary>The surface as the shader's code: earth 0, track ⅓, gravel ⅔, stone 1.</summary>
-		public static float SurfaceCode(ScenePathSurface surface) => (byte)surface / 3f;
+		/// <summary>
+		/// The surface as the shader's code: track 0, earth ⅓, gravel ⅔, stone 1. Where two ways meet the field blends their
+		/// codes, so the order is the order a blend passes through: the track (earth with ruts and a grass median) sits at
+		/// the end, where the bake's first order (earth 0, track ⅓) put it between earth and gravel — a footpath running into
+		/// a road grew a stretch of ruts and median grass at the seam (field encoding 2, <see cref="ScenePathField.Encoding"/>).
+		/// </summary>
+		public static float SurfaceCode(ScenePathSurface surface)
+		{
+			switch (surface)
+			{
+				case ScenePathSurface.Track:
+					return 0f;
+				case ScenePathSurface.Earth:
+					return 1f / 3f;
+				case ScenePathSurface.Gravel:
+					return 2f / 3f;
+				default:
+					return 1f;
+			}
+		}
 	}
 }

@@ -1,5 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using FishMMO.Client;
+using FishMMO.Shared.Weather;
 #if UNITY_EDITOR
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
@@ -51,6 +53,10 @@ namespace FishMMO.TestHarness.World
 		public bool Walking => walker != null && walker.isActiveAndEnabled;
 
 		private const float CameraRadius = 0.25f;
+		/// <summary>The share of the follow distance one wheel notch takes off or puts on, as a log step: about 15%, so 1.2 m to 30 m is some twenty notches.</summary>
+		private const float FollowZoomPerNotch = 0.15f;
+		/// <summary>Degrees of field of view one wheel notch narrows or widens.</summary>
+		private const float FieldOfViewPerNotch = 2.5f;
 
 		private float yaw;
 		private float pitch;
@@ -140,15 +146,17 @@ namespace FishMMO.TestHarness.World
 				// Over the panel the wheel scrolls the panel. It used to do both.
 				if (Mathf.Abs(scroll) > 0.01f && !WorldSimPanel.PointerOverPanel)
 				{
-					// Walking, the wheel is how far behind the camera sits; Ctrl keeps it the zoom.
+					// Walking, the wheel is how far behind the camera sits; Ctrl keeps it the zoom. The delta arrives
+					// normalised to about 1 a notch (the Input System's default ScrollDeltaBehavior), not the raw 120 these
+					// rates were once sized for, which made a notch move the camera a thousandth of the way.
 					bool zoom = !walking || (keyboard != null && keyboard.ctrlKey.isPressed);
 					if (!zoom)
 					{
-						followDistance = Mathf.Clamp(followDistance * Mathf.Exp(-scroll * 0.001f), MinFollowDistance, MaxFollowDistance);
+						followDistance = Mathf.Clamp(followDistance * Mathf.Exp(-scroll * FollowZoomPerNotch), MinFollowDistance, MaxFollowDistance);
 					}
 					else if (camera != null)
 					{
-						camera.fieldOfView = Mathf.Clamp(camera.fieldOfView - scroll * 0.02f, 8f, 90f);
+						camera.fieldOfView = Mathf.Clamp(camera.fieldOfView - scroll * FieldOfViewPerNotch, 8f, 90f);
 					}
 				}
 			}
@@ -343,7 +351,7 @@ namespace FishMMO.TestHarness.World
 
 		/// <summary>
 		/// Puts the camera behind the walker. Anything solid between them pulls it in at once; it
-		/// eases back out, so passing a trunk does not snap the view in and out.
+		/// eases back out, so passing a trunk does not snap the view in and out. The wheel's own changes ease both ways.
 		/// </summary>
 		private void Follow(float deltaTime)
 		{
@@ -352,11 +360,13 @@ namespace FishMMO.TestHarness.World
 			Vector3 pivot = walker.Feet + Vector3.up * (PivotHeight + (walker.Swimming ? walker.ShownLift : 0f));
 			Vector3 back = rotation * Vector3.back;
 			float clear = followDistance;
+			bool blocked = false;
 			if (gameObject.scene.GetPhysicsScene().SphereCast(pivot, CameraRadius, back, out RaycastHit hit, followDistance, solidMask, QueryTriggerInteraction.Ignore))
 			{
 				clear = Mathf.Max(0.1f, hit.distance);
+				blocked = true;
 			}
-			shownDistance = clear < shownDistance || deltaTime <= 0f
+			shownDistance = (blocked && clear < shownDistance) || deltaTime <= 0f
 				? clear
 				: Mathf.Lerp(shownDistance, clear, 1f - Mathf.Exp(-6f * deltaTime));
 			Vector3 position = pivot + back * shownDistance;
@@ -390,6 +400,13 @@ namespace FishMMO.TestHarness.World
 		/// </remarks>
 		internal static float GroundBelow(Vector3 position)
 		{
+			return GroundBelow(position, out _);
+		}
+
+		/// <summary><see cref="GroundBelow(Vector3)"/>, and the tile it was read from (null where it is negative infinity).</summary>
+		private static float GroundBelow(Vector3 position, out Terrain under)
+		{
+			under = null;
 			Terrain.GetActiveTerrains(terrains);
 			for (int i = 0; i < terrains.Count; i++)
 			{
@@ -402,6 +419,7 @@ namespace FishMMO.TestHarness.World
 				Vector3 size = terrain.terrainData.size;
 				if (position.x >= origin.x && position.x <= origin.x + size.x && position.z >= origin.z && position.z <= origin.z + size.z)
 				{
+					under = terrain;
 					return IsHole(terrain.terrainData, (position.x - origin.x) / size.x, (position.z - origin.z) / size.z)
 						? float.NegativeInfinity
 						: origin.y + terrain.SampleHeight(position);
@@ -411,17 +429,65 @@ namespace FishMMO.TestHarness.World
 		}
 
 		/// <summary>
-		/// The height a point is held to, at least <paramref name="clearance"/> above the terrain under it, unless the point is
-		/// sheltered (<see cref="Sheltered"/>): then it is left where it is.
+		/// The height a point is held to, at least <paramref name="clearance"/> above the terrain under it as it is drawn (the
+		/// snow lying on it included, <see cref="SnowLift"/>), unless the point is sheltered (<see cref="Sheltered"/>): then it
+		/// is left where it is.
 		/// </summary>
+		/// <remarks>
+		/// The floor was the heightmap alone, but the terrain shader lifts the ground under snow by its blanket and the deep
+		/// snow past it, a metre and more: the camera went down through the white surface and looked up at it from inside.
+		/// </remarks>
 		private static float AboveGround(PhysicsScene physics, Vector3 position, float clearance, int mask)
 		{
-			float ground = GroundBelow(position);
-			if (float.IsNegativeInfinity(ground) || position.y >= ground + clearance || Sheltered(physics, position, ground, mask))
+			float ground = GroundBelow(position, out Terrain under);
+			if (float.IsNegativeInfinity(ground))
 			{
 				return position.y;
 			}
-			return ground + clearance;
+			float surface = ground + SnowLift(under, new Vector3(position.x, ground, position.z));
+			if (position.y >= surface + clearance || Sheltered(physics, position, ground, mask))
+			{
+				return position.y;
+			}
+			return surface + clearance;
+		}
+
+		private static readonly int SnowDepthProperty = Shader.PropertyToID("_FishSnowDepth");
+
+		/// <summary>
+		/// How high the drawn snow stands over the terrain at a point on it, metres, as the terrain shader lifts it
+		/// (FishSnowLift / FishSnowLiftMetres): the tile's blanket where the cover is white, the deep snow past it, none on
+		/// ground too steep to hold it, and none unless this quality tier lifts the ground and there is snow in the scene.
+		/// Read from the cover map's own copy of what it publishes. Footprints and the sky's shelter are left out: both only
+		/// lower the snow, so the camera errs above the surface, never under it.
+		/// </summary>
+		private static float SnowLift(Terrain terrain, Vector3 ground)
+		{
+			Material material = terrain != null ? terrain.materialTemplate : null;
+			float blanket = material != null && material.HasFloat(SnowDepthProperty) ? material.GetFloat(SnowDepthProperty) : 0f;
+			if (blanket <= 0f || Shader.GetGlobalVector(WeatherShaderGlobals.Tier).x <= 0f)
+			{
+				return 0f;
+			}
+			Vector4 everywhere = Shader.GetGlobalVector(WeatherShaderGlobals.Cover);
+			if (everywhere.x <= 0f && Shader.GetGlobalVector(WeatherCoverMap.SnowLineId).z <= 0.5f)
+			{
+				return 0f;
+			}
+			WeatherCoverMap map = WeatherPresentation.Instance != null ? WeatherPresentation.Instance.CoverMap : null;
+			float cover = map != null ? map.Sample(ground, new WeatherCover { Snow = everywhere.x }).Snow : everywhere.x;
+			float deep = map != null ? map.SampleDeepSnow(ground) : 0f;
+			float lift = Mathf.Clamp01(cover) * blanket + deep;
+			if (lift <= 0f)
+			{
+				return 0f;
+			}
+			// FishCoverFacing at a slope bias of 0.5: all of it on the level, none past 60°.
+			Vector3 size = terrain.terrainData.size;
+			Vector3 origin = terrain.GetPosition();
+			float up = terrain.terrainData.GetInterpolatedNormal((ground.x - origin.x) / size.x, (ground.z - origin.z) / size.z).y;
+			float facing = Mathf.Clamp01((up - 0.5f) / 0.5f);
+			return lift * facing * facing;
 		}
 
 		/// <summary>

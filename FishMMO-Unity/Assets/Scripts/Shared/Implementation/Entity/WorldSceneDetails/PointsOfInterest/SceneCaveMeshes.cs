@@ -6,7 +6,8 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// The main object of a scene's <c>&lt;Scene&gt; Caves.asset</c>: its cave systems' rock meshes are sub-assets of it
-	/// (<c>Cave &lt;site id&gt; P&lt;n&gt;</c>), and it keeps, per cave, the key of the inputs those meshes were built from,
+	/// (<c>Cave &lt;site id&gt; P&lt;n&gt;</c>, stored unreadable, each with its collider <c>Cave &lt;site id&gt; C&lt;n&gt;</c>: the same
+	/// triangles on positions alone, since 2026-10-20), and it keeps, per cave, the key of the inputs those meshes were built from,
 	/// so a repaint or re-cut that changes nothing about a cave keeps its meshes instead of building them again.
 	/// </summary>
 	/// <remarks>

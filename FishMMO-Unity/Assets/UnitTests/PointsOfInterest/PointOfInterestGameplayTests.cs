@@ -326,6 +326,47 @@ namespace FishMMO.UnitTests.PointsOfInterest
 			Assert.IsEmpty(entrance.DungeonName);
 			Assert.IsTrue(entrance.GetComponent<NetworkObject>().IsSceneObject);
 			Assert.IsFalse(entrance.GetComponent<MapMarker>().ShowOnWorldMap, "the site is the map entry, behind discovery");
+			Assert.IsFalse(entrance.GetComponent<MapMarker>().ShowOnMinimap, "the baked entry marks it on the minimap too; the streamed marker would draw it twice");
+		}
+
+		[Test]
+		public void ACryptsDoor_IsMadeADungeonEntrance_AndTheSiteIsMarkedOne()
+		{
+			// 2026-10-20: a crypt's open door over its stair stood as scenery, no entrance, no mark.
+			PointOfInterestSiteContext context = Site(POIType.Crypt);
+			ScenePointOfInterest point = context.Root.gameObject.AddComponent<ScenePointOfInterest>();
+			point.Apply(context.Record);
+			var door = new GameObject(StructurePieces.Prefix + "CryptEntrance_0");
+			SceneManager.MoveGameObjectToScene(door, scene);
+			context.Laid.Add(new PointOfInterestSiteContext.PlacedProp { Prefab = door, Position = context.Record.Position, Rotation = Quaternion.identity, Scale = Vector3.one });
+
+			PointOfInterestEntrances.Mark(context);
+
+			Assert.IsNotNull(context.Root.GetComponentInChildren<DungeonEntrance>(true), "its door is an entrance");
+			Assert.IsTrue(point.HoldsDungeon);
+			MapPointOfInterestDetails entry = point.ToDetails();
+			Assert.AreEqual(MapMarkerType.DungeonEntrance, entry.Type, "drawn as a dungeon entrance, on the map and under its filter");
+			StringAssert.StartsWith("Dungeon entrance (crypt)", entry.Description);
+
+			PointOfInterestEntrances.Mark(context);
+			Assert.AreEqual(1, context.Root.GetComponentsInChildren<DungeonEntrance>(true).Length, "never a second entrance");
+		}
+
+		[Test]
+		public void ASiteWithNoDungeonDoor_GetsNoEntrance()
+		{
+			PointOfInterestSiteContext context = Site(POIType.Graveyard);
+			ScenePointOfInterest point = context.Root.gameObject.AddComponent<ScenePointOfInterest>();
+			point.Apply(context.Record);
+			var tomb = new GameObject(StructurePieces.Prefix + "Mausoleum_0");
+			SceneManager.MoveGameObjectToScene(tomb, scene);
+			context.Laid.Add(new PointOfInterestSiteContext.PlacedProp { Prefab = tomb, Position = context.Record.Position, Rotation = Quaternion.identity, Scale = Vector3.one });
+
+			PointOfInterestEntrances.Mark(context);
+
+			Assert.IsNull(context.Root.GetComponentInChildren<DungeonEntrance>(true));
+			Assert.IsFalse(point.HoldsDungeon);
+			Assert.AreEqual(MapMarkerType.Graveyard, point.ToDetails().Type);
 		}
 
 		#endregion

@@ -191,8 +191,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void Followers_AreEveryRoofOfTheKit_ThatchPlanksOrTurf()
 		{
-			Assert.That(StructureRoofs.Followers.Length, Is.EqualTo(34));
-			Assert.That(StructureRoofs.Followers.Count(f => f.Shape == StructureRoofShape.House), Is.EqualTo(19), "the 18 house roofs of I6e and the turf longhouse");
+			Assert.That(StructureRoofs.Followers.Length, Is.EqualTo(71), "34, the 26 roofs of the town's other buildings, the 6 of the cathedral and the outskirts, the 4 of the palace and the corner tower's (2026-10-19)");
+			Assert.That(StructureRoofs.Followers.Count(f => f.Shape == StructureRoofShape.House), Is.EqualTo(33),
+				"the 18 house roofs of I6e, the turf longhouse, 13 house-kit roofs of the town's other buildings and the shepherd's turf bothy (2026-10-19)");
 			var seen = new HashSet<(string, int)>();
 			foreach (StructureRoofFollower f in StructureRoofs.Followers)
 			{
@@ -417,7 +418,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 			List<StructureRoofVariant> all = StructureRoofs.Needed(every);
 			Assert.That(all, Is.EquivalentTo(StructureRoofs.EveryVariant()));
-			Assert.That(all.Count, Is.EqualTo(190), "34 roofs × 6 pitches, less 14 a class leaves as the kit builds them (2026-10-18): the art's worst case");
+			Assert.That(all.Count, Is.EqualTo(410), "71 roofs × 6 pitches, less 16 a class leaves as the kit builds them (2026-10-18; 26 roofs of the town's other buildings, the keep's and the square tower's re-pitched, 6 of the cathedral and the outskirts, 4 of the palace and the corner tower's, 2026-10-19): the art's worst case");
 			Assert.That(all.Count, Is.LessThan(StructureRoofs.Followers.Length * (StructureRoofs.Pitches.Length - 1)));
 		}
 
@@ -544,7 +545,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(ProceduralArtPayload.SourceFiles, Does.Contain("StructureRoofs.cs"));
 			Assert.That(ProceduralArtFamilies.FamiliesOfFile("StructureRoofs.cs"), Is.EqualTo(new[] { ArtFamily.Structures }));
 			// Every builder of a roof that follows lays it through the plan (StructurePieces.OwnRoof / OwnGable, or BuildHouse).
-			foreach ((string file, int calls) in new[] { ("Buildings", 5), ("Town", 1), ("Sacred", 2), ("Mills", 3) })
+			foreach ((string file, int calls) in new[] { ("Buildings", 2), ("Towers", 2), ("Keep", 1), ("Town", 1), ("Sacred", 2), ("Mills", 3), ("Outskirts", 4), ("Palace", 4) })
 			{
 				string code = Code($"ProceduralArt/StructurePieces.{file}.cs");
 				int n = code.Split(new[] { "OwnRoof(d, ", "OwnGable(d, " }, StringSplitOptions.None).Length - 1;

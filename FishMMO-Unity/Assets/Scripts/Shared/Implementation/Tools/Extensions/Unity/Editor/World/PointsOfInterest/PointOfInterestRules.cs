@@ -255,7 +255,7 @@ namespace FishMMO.Shared.WorldDesign
 				Settled(Placed(POIType.City, 0.03f, 0, 1, 2500f).Footprint(110f, 150f, 14f)),
 				Settled(Placed(POIType.Town, 0.08f, 0, 2, 1500f).Footprint(70f, 100f, 15f)),
 				Settled(Placed(POIType.Village, 0.25f, 1, 5, 900f).Footprint(40f, 60f, 16f)),
-				Settled(Placed(POIType.Port, 0.1f, 0, 2, 1500f).Footprint(50f, 80f, 14f)).Coast(120f),
+				Settled(Placed(POIType.Port, 0.1f, 0, 2, 1500f).Footprint(50f, 80f, 14f)).Coast(120f).OpenWater(),
 				Settled(Placed(POIType.Keep, 0.06f, 0, 2, 1200f).Footprint(25f, 35f, 20f)),
 				Settled(Placed(POIType.Castle, 0.04f, 0, 1, 2000f).Footprint(45f, 65f, 18f)),
 				Settled(Placed(POIType.Fortress, 0.03f, 0, 1, 2000f).Footprint(55f, 75f, 18f)),
@@ -302,7 +302,7 @@ namespace FishMMO.Shared.WorldDesign
 				Placed(POIType.Portal, 0.03f, 0, 1, 2500f).Footprint(10f, 14f, 16f).Weigh(0.5f, Alien),
 
 				// ── Placed: the dead ──
-				Wild(Placed(POIType.Graveyard, 0.1f, 0, 3, 600f).Footprint(15f, 25f, 14f)).NearSettlement(400f).Races("Undead"),
+				Wild(Placed(POIType.Graveyard, 0.1f, 0, 3, 600f).Footprint(10f, 34f, 14f)).NearSettlement(400f).Races("Undead"),
 				Wild(Placed(POIType.Barrow, 0.06f, 0, 2, 800f).Footprint(10f, 16f, 20f)).Races("Undead"),
 				Wild(Placed(POIType.Crypt, 0.05f, 0, 1, 1200f).Footprint(12f, 18f, 18f)).Hard(0.5f).Races("Undead"),
 				Wild(Placed(POIType.Battlefield, 0.04f, 0, 1, 2000f).Footprint(40f, 70f, 14f)).Races("Undead"),
@@ -328,7 +328,7 @@ namespace FishMMO.Shared.WorldDesign
 				Wild(Placed(POIType.Lighthouse, 0.05f, 0, 1, 2000f).Footprint(6f, 9f, 25f)).Coast(60f).Altitude(3f, PointOfInterestKindRule.Unbounded),
 				// A shipwright's yard is where ships are wanted: on a low shore near a town (2026-10-12: "Harbours should
 				// probably have towns to go with them").
-				Settled(Placed(POIType.Dockyard, 0.05f, 0, 1, 1500f).Footprint(26f, 34f, 12f)).Coast(50f).NearSettlement(700f).Altitude(0.5f, 8f),
+				Settled(Placed(POIType.Dockyard, 0.05f, 0, 1, 1500f).Footprint(26f, 34f, 12f)).Coast(50f).OpenWater().NearSettlement(700f).Altitude(0.5f, 8f),
 				// Mills (2026-10-14): a post mill on a rise open to the wind near the village it grinds for; a watermill and a
 				// sawmill on a river's bank, the sawmill in the woods it cuts.
 				Settled(Placed(POIType.Windmill, 0.12f, 0, 4, 700f).Footprint(16f, 22f, 10f)).NearSettlement(900f).OnExposedGround(),

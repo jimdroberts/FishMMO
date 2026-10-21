@@ -50,14 +50,14 @@ namespace FishMMO.Shared.WorldDesign
 	/// <see cref="SceneEmitterKind.Crystal"/> emitter with <see cref="CaveGlowArt.SuggestedReach"/> and
 	/// <see cref="EmitterSeed"/> (SiteLightPool's sixteen pooled lights take the nearest). Mounts:
 	/// <list type="bullet">
-	/// <item><b>Floor</b> (Crystal, GiantCrystal, Fungus, GiantFungus): origin at the foot, up +y; rotate +y to the surface's
+	/// <item><b>Floor</b> (Crystal, GiantCrystal, Fungus, GiantFungus, TowerFungus, MidFungus, Puffballs): origin at the foot, up +y; rotate +y to the surface's
 	/// normal to set a crystal on a wall or a roof, as geodes grow.</item>
-	/// <item><b>Wall</b> (ShelfFungus, OreVein, GlowOreVein): origin on the wall's surface, +z into the rock, the piece
+	/// <item><b>Wall</b> (ShelfFungus, OreVein, GlowOreVein, ShelfTiers, GlowVine): origin on the wall's surface, +z into the rock, the piece
 	/// standing out along −z, up +y; a seam runs along x.</item>
-	/// <item><b>Roof</b> (GlowWorms): origin on the roof, hanging down −y.</item>
+	/// <item><b>Roof</b> (GlowWorms, GlowRoots, HangingRoots, GlowSilk, TapRoots): origin on the roof, hanging down −y (a tap root is stretched in y to the floor).</item>
 	/// </list>
-	/// Hues: crystals IceBlue, Green, Violet, Amber; fungi Teal, Blue, Gold; glow-worms Blue; ore Copper, Iron, Silver,
-	/// Gold; glowing ore Starmetal, Emberstone. A hue or variant index past the end wraps round.
+	/// Hues: crystals IceBlue, Green, Violet, Amber; fungi (every fungus, glowroot and glow-vine kind) Teal, Blue, Gold; glow-worms Blue; ore Copper, Iron, Silver,
+	/// Gold; glowing ore Starmetal, Emberstone; hanging tree roots and tap roots Earth, Pale; glow-worm silk the fungi's; guano heaps (a floor piece) Fresh, Dry. A hue or variant index past the end wraps round.
 	/// </para>
 	/// <para>
 	/// <b>Structure pieces</b> (<see cref="Piece"/>, StructurePieces.Cave.cs). Ladders: <see cref="Ladder"/> and

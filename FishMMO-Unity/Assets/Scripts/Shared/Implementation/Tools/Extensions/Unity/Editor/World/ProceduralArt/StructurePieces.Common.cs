@@ -291,13 +291,20 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				float a0 = phaseA + k * stepA, a1 = a0 + stepA;
 				// The cuts in this block, along it: where each hole starts and stops, and its sill and head.
+				// A hole is its width along this block's inner face (a chord: the parts either side lie on it, RingFacetPart).
 				var cuts = new List<(float lo, float hi, float bottom, float top)>();
+				float mid = (a0 + a1) * 0.5f, chord = Mathf.Max(0.1f, inner) * Mathf.Cos(stepA * 0.5f);
 				foreach ((float angle, float width, float bottom, float top) in holes)
 				{
-					float halfA = Mathf.Asin(Mathf.Clamp(width * 0.5f / Mathf.Max(0.1f, inner), 0f, 0.95f));
 					foreach (float shift in new[] { 0f, 2f * Mathf.PI, -2f * Mathf.PI, 4f * Mathf.PI, -4f * Mathf.PI })
 					{
-						float l = Mathf.Max(a0, angle - halfA + shift), h = Mathf.Min(a1, angle + halfA + shift);
+						float off = angle + shift - mid;
+						if (Mathf.Abs(off) > Mathf.PI * 0.5f - 0.05f)
+						{
+							continue;
+						}
+						float along = chord * Mathf.Tan(off);
+						float l = Mathf.Max(a0, mid + Mathf.Atan((along - width * 0.5f) / chord)), h = Mathf.Min(a1, mid + Mathf.Atan((along + width * 0.5f) / chord));
 						if (h > l)
 						{
 							cuts.Add((l, h, bottom, top));
@@ -316,23 +323,60 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					if (lo - at > 1e-4f)
 					{
-						d.Add(RingBlock(centre, inner, outer, y0, y1, at, lo, material, PieceKey(key, k * 8 + n++), role));
+						d.Add(RingFacetPart(centre, inner, outer, y0, y1, a0, a1, at, lo, material, PieceKey(key, k * 8 + n++), role));
 					}
 					if (bottom - y0 > 1e-3f)
 					{
-						d.Add(RingBlock(centre, inner, outer, y0, bottom, lo, hi, material, PieceKey(key, k * 8 + n++), role));
+						d.Add(RingFacetPart(centre, inner, outer, y0, bottom, a0, a1, lo, hi, material, PieceKey(key, k * 8 + n++), role));
 					}
 					if (y1 - top > 1e-3f)
 					{
-						d.Add(RingBlock(centre, inner, outer, top, y1, lo, hi, material, PieceKey(key, k * 8 + n++), role));
+						d.Add(RingFacetPart(centre, inner, outer, top, y1, a0, a1, lo, hi, material, PieceKey(key, k * 8 + n++), role));
 					}
 					at = Mathf.Max(at, hi);
 				}
 				if (a1 - at > 1e-4f)
 				{
-					d.Add(RingBlock(centre, inner, outer, y0, y1, at, a1, material, PieceKey(key, k * 8 + n), role));
+					d.Add(RingFacetPart(centre, inner, outer, y0, y1, a0, a1, at, a1, material, PieceKey(key, k * 8 + n), role));
 				}
 			}
+		}
+
+		/// <summary>
+		/// The part from angle <paramref name="from"/> to <paramref name="to"/> of the ring block <paramref name="a0"/>..<paramref name="a1"/>,
+		/// its faces on that block's flat faces (2026-10-19: the jambs and sills either side of a hole were whole ring blocks of their
+		/// own narrower span, so their outer faces stood out toward the circle, ~0.24 m proud of an octagon's facet beside a door).
+		/// The whole span is the block itself.
+		/// </summary>
+		private static StructureSolid RingFacetPart(Vector3 centre, float inner, float outer, float y0, float y1, float a0, float a1, float from, float to,
+			StructureMaterial material, int key, StructureRole role)
+		{
+			float mid = (a0 + a1) * 0.5f, half = (a1 - a0) * 0.5f;
+			// Along a facet's chord the radius at angle θ is r·cos(half)/cos(θ − mid).
+			float Chord(float r, float a) => r * Mathf.Cos(half) / Mathf.Cos(a - mid);
+			var d0 = new Vector3(Mathf.Cos(from), 0f, Mathf.Sin(from));
+			var d1 = new Vector3(Mathf.Cos(to), 0f, Mathf.Sin(to));
+			Vector3 up = Vector3.up;
+			Vector3 i0 = centre + d0 * Chord(inner, from), i1 = centre + d1 * Chord(inner, to), o0 = centre + d0 * Chord(outer, from), o1 = centre + d1 * Chord(outer, to);
+			var s = new StructureSolid { Material = material, Role = role, Key = key };
+			var facing = new Vector3(Mathf.Cos(mid), 0f, Mathf.Sin(mid));
+			StructureFace outside = StructureShapes.Face(facing, o0 + up * y0, o1 + up * y0, o1 + up * y1, o0 + up * y1);
+			outside.Normals = new List<Vector3>();
+			foreach (Vector3 p in outside.Points)
+			{
+				outside.Normals.Add(new Vector3(p.x - centre.x, 0f, p.z - centre.z).normalized);
+			}
+			s.Faces.Add(outside);
+			s.Faces.Add(StructureShapes.Face(Vector3.up, o0 + up * y1, o1 + up * y1, i1 + up * y1, i0 + up * y1));
+			s.Faces.Add(StructureShapes.Face(Vector3.down, o0 + up * y0, o1 + up * y0, i1 + up * y0, i0 + up * y0));
+			s.Faces.Add(StructureShapes.Face(Vector3.Cross(Vector3.up, d0), o0 + up * y0, o0 + up * y1, i0 + up * y1, i0 + up * y0));
+			s.Faces.Add(StructureShapes.Face(Vector3.Cross(d1, Vector3.up), o1 + up * y0, o1 + up * y1, i1 + up * y1, i1 + up * y0));
+			if (inner > 1e-4f)
+			{
+				s.Faces.Add(StructureShapes.Face(-facing, i0 + up * y0, i1 + up * y0, i1 + up * y1, i0 + up * y1));
+			}
+			s.Faces.RemoveAll(f => StructureShapes.Newell(f.Points).sqrMagnitude < 1e-12f);
+			return s;
 		}
 
 		/// <summary>Merlons along a line from <paramref name="a"/> to <paramref name="b"/> (their feet), centred, gaps between.</summary>
@@ -866,16 +910,49 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>How far in from the front wall a stair's foot stands when the house is deep enough, metres: the door's way in.</summary>
 		private const float StairFootClear = 1.4f;
 
+		/// <summary>
+		/// Floor kept in front of a stair's foot, between it and the front wall, metres: a body (0.6 m across) walks along it
+		/// to the first step. And the floor kept past its head before the back wall, where a climber steps off onto the storey.
+		/// </summary>
+		private const float StairFootRoom = 0.85f, StairHeadRoom = 0.9f;
+
+		/// <summary>The shallowest tread a house's stair is laid with when the house is too shallow for full ones, metres (a steep medieval stair).</summary>
+		private const float MinStairTread = 0.22f;
+
 		/// <summary>The flight up to an upper storey on a side wall: its x span, and its foot and head along z.</summary>
 		private static void StairPlan(House h, float floor, float top, int side, out float x0, out float x1, out float foot, out float run, out int steps)
+			=> StairPlan(h, floor, top, side, out x0, out x1, out foot, out run, out steps, out _);
+
+		/// <summary>
+		/// The flight up to an upper storey on a side wall: its x span, its foot and head along z, and its treads. A house too
+		/// shallow for full treads with room at both ends gets shallower ones (2026-10-19, round 3: "the stairs don't fit properly"
+		/// — a watermill 7 m deep put the foot of its 17-step flight 0.4 m from the front wall, too tight to stand in, and the
+		/// second riser stopped anyone stepping on from the side, so its upper floor could not be reached).
+		/// </summary>
+		private static void StairPlan(House h, float floor, float top, int side, out float x0, out float x1, out float foot, out float run, out int steps, out float tread)
 		{
 			float halfW = h.Width * 0.5f, halfD = h.Depth * 0.5f;
 			float rise = top + UpperSlab - floor;
-			// As Steps lays them: risers of at most StepRise, treads of StepTread.
+			// As Steps lays them: risers of at most StepRise, treads of StepTread where the house is deep enough.
 			steps = Mathf.CeilToInt(rise / StepRise);
-			run = (steps - 1) * StepTread;
 			float zMin = -halfD + h.Wall, zMax = halfD - h.Wall;
-			foot = Mathf.Min(zMin + StairFootClear, zMax - run - 0.9f);
+			tread = StepTread;
+			run = (steps - 1) * tread;
+			foot = Mathf.Min(zMin + StairFootClear, zMax - run - StairHeadRoom);
+			if (foot < zMin + StairFootRoom)
+			{
+				// Too long to leave room at both ends inside the ground floor's walls: the storey over is jettied out past the
+				// back wall, so its floor beyond the head is that much longer, and the head may run on toward the back wall.
+				float jetty = h.Jetty > 0f ? h.Jetty : DefaultJetty;
+				float headMax = Mathf.Min(zMax, zMax + jetty - StairHeadRoom);
+				float room = headMax - zMin - StairFootRoom;
+				if (steps > 1 && run > room)
+				{
+					tread = Mathf.Max(MinStairTread, room / (steps - 1));
+					run = (steps - 1) * tread;
+				}
+				foot = Mathf.Min(zMin + StairFootClear, headMax - run);
+			}
 			if (side < 0)
 			{
 				x0 = -halfW + h.Wall;
@@ -922,12 +999,12 @@ namespace FishMMO.Shared.WorldDesign
 			// Along a side wall (the left unless that stands its foot in the door's way), its foot clear of the front wall's
 			// door, climbing toward the back. The open side is the one toward the room.
 			int side = StairSide(h, floor, top);
-			StairPlan(h, floor, top, side, out float x0, out float x1, out float foot, out float run, out int steps);
+			StairPlan(h, floor, top, side, out float x0, out float x1, out float foot, out float run, out int steps, out float tread);
 			float zMin = -halfD + h.Wall;
 			float head = foot + run;
 			// The first step whose tread a climber's head would strike the floor over: the well opens from there.
 			int firstOpen = Mathf.Clamp(Mathf.CeilToInt((top - StairHeadroom - floor) / rise * steps), 1, steps);
-			float wellFrom = Mathf.Max(zMin, head - (steps - firstOpen + 1) * StepTread - 0.1f);
+			float wellFrom = Mathf.Max(zMin, head - (steps - firstOpen + 1) * tread - 0.1f);
 			// The well, across the flight and a little past its open side; and that side's x.
 			float wellX0 = side < 0 ? x0 : x0 - 0.05f, wellX1 = side < 0 ? x1 + 0.05f : x1;
 			float open = side < 0 ? x1 + 0.04f : x0 - 0.04f;
@@ -953,10 +1030,10 @@ namespace FishMMO.Shared.WorldDesign
 			JettyDetail(d, width, h.Depth, jetty, top, key + 7200);
 
 			// The stair: solid steps from the ground floor up to the top step, which is the upper floor at the well's head.
-			Steps(d, new Vector3((x0 + x1) * 0.5f, 0f, head), Vector3.back, StairWidth, upper0, StructureMaterial.Timber, key + 7000, floor);
-			if (d.Mid)
+			Steps(d, new Vector3((x0 + x1) * 0.5f, 0f, head), Vector3.back, StairWidth, upper0, StructureMaterial.Timber, key + 7000, floor, tread);
 			{
-				// A handrail up the flight's open side, on posts at its foot and its head.
+				// A handrail up the flight's open side, on posts at its foot and its head. At every level (2026-10-19, round 3: it
+				// was LOD0-1 only, so the collider let a climber step off the flight's open side halfway up, 1.1 m over the floor).
 				var railFoot = new Vector3(open, floor + 0.9f + rise / steps, foot);
 				var railHead = new Vector3(open, upper0 + 0.9f, head);
 				d.Add(StructureShapes.Beam(railFoot, railHead, 0.06f, 0.06f, StructureMaterial.Timber, key + 7100, StructureRole.Detail));
@@ -1027,6 +1104,9 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				d.Room(new Vector3(0f, floor, 0f), new Vector2(width - 2f * h.Wall, h.Depth - 2f * h.Wall), h.WallHeight, h.RoomKind);
 				d.RoomClear(new Vector2(side < 0 ? x0 : x0 - 0.35f, foot - 1f), new Vector2(side < 0 ? x1 + 0.35f : x1, head));
+				// And the way to its foot from the room, a body's width and more beside the flight's first steps (2026-10-19: a bed
+				// against the front wall shut off the floor before a foot laid near that wall).
+				d.RoomClear(new Vector2(side < 0 ? x0 : x0 - 1f, foot - 1f), new Vector2(side < 0 ? x1 + 1f : x1, foot + 0.6f));
 			}
 			d.Room(new Vector3(0f, upper0, 0f), new Vector2(width - 2f * h.Wall, depth - 2f * h.Wall), h.Upper,
 				h.UpperRoomKind == StructureRoomKind.Dwelling ? StructureRoomKind.Chamber : h.UpperRoomKind);
@@ -1107,7 +1187,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// higher than <see cref="StepRise"/>. Solid to below the ground, the same at every level: the last level is the
 		/// collider, and a riser the controller can't climb is a wall.
 		/// </summary>
-		internal static void Steps(StructureDraft d, Vector3 edge, Vector3 outward, float width, float toY, StructureMaterial material, int key, float fromY = 0f)
+		internal static void Steps(StructureDraft d, Vector3 edge, Vector3 outward, float width, float toY, StructureMaterial material, int key, float fromY = 0f,
+			float tread = StepTread)
 		{
 			float rise = toY - fromY;
 			if (rise <= StepRise + 1e-3f)
@@ -1121,9 +1202,42 @@ namespace FishMMO.Shared.WorldDesign
 			using StructureDraft.PartScope steps = d.Builds(StepRoles);
 			for (int i = 1; i < n; i++)
 			{
-				float top = fromY + rise * i / n, run = (n - i) * StepTread;
+				float top = fromY + rise * i / n, run = (n - i) * tread;
 				Vector3 centre = new Vector3(edge.x, 0f, edge.z) + outward * (run * 0.5f) + Vector3.up * ((top + bottom) * 0.5f);
 				d.Add(StructureShapes.Block(centre, new Vector3(width, top - bottom, run), turn, material, PieceKey(key, i)));
+			}
+		}
+
+		/// <summary>
+		/// Handrails up the sides of a flight laid by <see cref="Steps"/> with the same edge, way out, width, rise and treads: a
+		/// rail 0.95 m over the treads just inside each side, on a post at the foot. At every level (2026-10-19, round 3: "you just
+		/// fall off"): the last level is the collider, and a flight a metre and more up with open sides is a ledge to walk off.
+		/// </summary>
+		internal static void StepRails(StructureDraft d, Vector3 edge, Vector3 outward, float width, float toY, StructureMaterial material, int key, float fromY = 0f,
+			float tread = StepTread, bool left = true, bool right = true)
+		{
+			float rise = toY - fromY;
+			if (rise <= StepRise + 1e-3f)
+			{
+				return;
+			}
+			int n = Mathf.CeilToInt(rise / StepRise);
+			outward = new Vector3(outward.x, 0f, outward.z).normalized;
+			// Left and right as a climber coming up the flight sees them (facing back along outward).
+			var across = new Vector3(outward.z, 0f, -outward.x);
+			float run = (n - 1) * tread;
+			var foot0 = new Vector3(edge.x, 0f, edge.z);
+			for (int s = -1; s <= 1; s += 2)
+			{
+				if (s < 0 && !left || s > 0 && !right)
+				{
+					continue;
+				}
+				Vector3 side = foot0 + across * (s * (width * 0.5f - 0.05f));
+				Vector3 head = side + Vector3.up * (toY + 0.95f);
+				Vector3 foot = side + outward * Mathf.Max(0.15f, run - 0.15f) + Vector3.up * (fromY + rise / n + 0.95f);
+				d.Add(StructureShapes.Beam(head, foot, 0.07f, 0.07f, material, PieceKey(key, 28 + (s > 0 ? 1 : 0)), StructureRole.Detail));
+				d.Add(StructureShapes.Beam(new Vector3(foot.x, fromY, foot.z), foot + Vector3.up * 0.05f, 0.09f, 0.09f, material, PieceKey(key, 30 + (s > 0 ? 1 : 0)), StructureRole.Detail));
 			}
 		}
 

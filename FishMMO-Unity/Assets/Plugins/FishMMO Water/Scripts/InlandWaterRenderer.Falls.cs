@@ -165,7 +165,8 @@ namespace FishMMO.Water
 			foreach (SceneHydrology.River river in hydrology.Rivers)
 			{
 				int n = river.Points != null ? river.Points.Length : 0;
-				if (!river.Perennial || n < 3 || river.Reach == null || river.Reach.Length != n)
+				// Lava pours down its own ribbon (Lava): no water's sheet, spray or roar.
+				if (!river.Perennial || river.Lava || n < 3 || river.Reach == null || river.Reach.Length != n)
 				{
 					continue;
 				}

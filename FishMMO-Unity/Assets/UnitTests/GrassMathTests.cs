@@ -302,6 +302,45 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void Spawns_KeepsTheShare_AndGathersAThinFieldIntoTufts()
+		{
+			// Clumps of 16 candidates: the share of blades is p whatever the tufting; the share of clumps with any blade falls with it.
+			const int clumps = 4096, perClump = 16;
+			foreach (float share in new[] { 1f, 0.6f, 0.25f, 0.08f })
+			{
+				float evenClumps = 0f, tuftClumps = 0f;
+				foreach (float tufting in new[] { 0f, 0.6f, 1f })
+				{
+					int blades = 0, standing = 0;
+					for (int k = 0; k < clumps; k++)
+					{
+						float clumpUnit = GrassMath.Unit(GrassMath.Hash(k, 7, GrassMath.SaltClump));
+						int here = 0;
+						for (int b = 0; b < perClump; b++)
+						{
+							here += GrassMath.Spawns(share, tufting, clumpUnit, GrassMath.Unit(GrassMath.Hash(k, b, GrassMath.SaltSpawn))) ? 1 : 0;
+						}
+						blades += here;
+						standing += here > 0 ? 1 : 0;
+					}
+					float got = blades / (float)(clumps * perClump);
+					LogAssert.IsTrue(Math.Abs(got - share) < 0.02f, $"share {share}, tufting {tufting}: {got} of the candidates grow");
+					if (tufting == 0f) evenClumps = standing / (float)clumps;
+					if (tufting == 1f) tuftClumps = standing / (float)clumps;
+				}
+				if (share >= 1f)
+				{
+					LogAssert.AreEqual(1f, tuftClumps, "a full field keeps every clump");
+				}
+				else
+				{
+					LogAssert.IsTrue(Math.Abs(tuftClumps - share) < 0.03f && tuftClumps < evenClumps, $"share {share}: whole tufts come and go ({tuftClumps} of the clumps stand, {evenClumps} untufted)");
+				}
+			}
+			LogAssert.IsFalse(GrassMath.Spawns(0f, 0.6f, 0f, 0f), "no coverage, no blade");
+		}
+
+		[Test]
 		public void Sprinkle_OnItsOwnLevel_KeepsItsStemsAndOutlastsTheThinning()
 		{
 			// Flowers at 14 stems/m² of a 1600/m² lattice go to level 2 (a sixteenth of the cells); reeds at 110/m² stop at 1.

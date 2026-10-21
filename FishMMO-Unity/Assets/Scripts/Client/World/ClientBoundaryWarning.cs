@@ -36,6 +36,13 @@ namespace FishMMO.Client
 	/// walker meets a side, and sees the same glass overhead.
 	/// </para>
 	/// <para>
+	/// <b>Whose glass it is.</b> <see cref="Initialize()"/> follows the local player's character as
+	/// it starts and stops; <see cref="Initialize(Transform)"/> follows one transform for as long as
+	/// its owner keeps it, which is how the world test bed shows the glass round its walker, with no
+	/// player and no client. Either way the owner calls <see cref="Tick"/> once a frame and
+	/// <see cref="Shutdown"/> when done, which takes the panes down and gives the camera back.
+	/// </para>
+	/// <para>
 	/// Presentation only: it never moves the player or blocks anything. Client-only by assembly:
 	/// <c>FishMMO.Client</c> is not compiled into the server.
 	/// </para>
@@ -89,7 +96,11 @@ namespace FishMMO.Client
 		private static readonly int AxisUId = Shader.PropertyToID("_AxisU");
 		private static readonly int AxisVId = Shader.PropertyToID("_AxisV");
 
+		/// <summary>Following the local player's character, rather than <see cref="subject"/>.</summary>
+		private bool followsLocalPlayer;
 		private IPlayerCharacter localCharacter;
+		/// <summary>The one transform followed when not following the local player.</summary>
+		private Transform subject;
 		private readonly List<Bounds> boxes = new List<Bounds>();
 		private int boxesSceneHandle = -1;
 		private string boxesSceneName;
@@ -116,10 +127,24 @@ namespace FishMMO.Client
 			public float Distance;
 		}
 
+		/// <summary>Shows the glass round the local player's character, whenever there is one.</summary>
 		public void Initialize()
 		{
+			followsLocalPlayer = true;
 			IPlayerCharacter.OnStartLocalClient += OnStartLocalClient;
 			IPlayerCharacter.OnStopLocalClient += OnStopLocalClient;
+			LoadTunedMaterial();
+		}
+
+		/// <summary>
+		/// Shows the glass round <paramref name="subject"/> (its pivot at the feet, as a character's is),
+		/// measured against the boundaries of the scene it is in.
+		/// </summary>
+		public void Initialize(Transform subject)
+		{
+			followsLocalPlayer = false;
+			this.subject = subject;
+			boxesSceneHandle = -1;
 			LoadTunedMaterial();
 		}
 
@@ -148,6 +173,7 @@ namespace FishMMO.Client
 			IPlayerCharacter.OnStopLocalClient -= OnStopLocalClient;
 			RequestSceneTextures(false);
 			localCharacter = null;
+			subject = null;
 			if (root != null)
 			{
 				Object.Destroy(root);
@@ -189,15 +215,16 @@ namespace FishMMO.Client
 
 		public void Tick()
 		{
-			if (!Enabled || localCharacter == null || localCharacter.Transform == null)
+			Transform at = followsLocalPlayer ? (localCharacter != null ? localCharacter.Transform : null) : subject;
+			if (!Enabled || at == null)
 			{
 				HideFrom(0);
 				RequestSceneTextures(false);
 				return;
 			}
 
-			RefreshBoxes();
-			FindFaces(localCharacter.Transform.position);
+			RefreshBoxes(at);
+			FindFaces(at.position);
 			if (faces.Count == 0 || !EnsurePanes())
 			{
 				HideFrom(0);
@@ -257,14 +284,17 @@ namespace FishMMO.Client
 
 		// ── The boxes ─────────────────────────────────────────────────
 
-		/// <summary>Reads the boundaries of the scene the player is standing in, once per scene.</summary>
-		private void RefreshBoxes()
+		/// <summary>
+		/// Reads the boundaries of the scene the player is standing in, once per scene: the one the
+		/// character says it is in, else the one <paramref name="at"/> is in.
+		/// </summary>
+		private void RefreshBoxes(Transform at)
 		{
-			string sceneName = localCharacter.CurrentSceneName();
+			string sceneName = followsLocalPlayer ? localCharacter.CurrentSceneName() : null;
 			Scene scene = string.IsNullOrEmpty(sceneName) ? default : SceneManager.GetSceneByName(sceneName);
 			if (!scene.IsValid())
 			{
-				scene = localCharacter.Transform.gameObject.scene;
+				scene = at.gameObject.scene;
 			}
 			if (!scene.IsValid() || (scene.handle == boxesSceneHandle && sceneName == boxesSceneName))
 			{

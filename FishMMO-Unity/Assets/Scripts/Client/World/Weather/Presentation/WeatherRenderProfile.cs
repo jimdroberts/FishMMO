@@ -552,6 +552,28 @@ namespace FishMMO.Client
 		[Tooltip("Hidden/FishMMO/RockSdf: draws each rock shape's distance field. Referenced here so it ships to clients only.")]
 		public Shader RockSdfShader;
 
+		[Header("Rock seam fillets (rocks joined into walls)")]
+		[Tooltip("Near the camera, the seams where rocks meet are filled with a smooth surface of rock (RockFillets: the smooth union of their distance fields, built on the GPU and kept until the camera moves on), so stacked boulders, cliff rocks and sections read as one wall. Every rock keeps its own mesh and its own collider: the fillet adds a little in front of a concave seam only, never more than Width/4 − Inset outside the rocks. Lit, shadowed and weathered as the rocks are, wearing the nearer rock's material, with the crevice's soil in its bottom. Needs compute shaders. Live.")]
+		public bool RockFillets = true;
+		[Tooltip("How wide a seam the fillet fills, metres (the smooth minimum's width k): it meets each face about this far from the other rock and stands at most k/4 out of the corner.")]
+		[Range(0.2f, 1.5f)] public float RockFilletWidth = 1f;
+		[Tooltip("A pair of rocks blends no wider than this share of the smaller one's size, so a stone against a wall is not buried in a mound.")]
+		[Range(0.1f, 1f)] public float RockFilletSizeShare = 0.5f;
+		[Tooltip("Metres the fillet's surface lies under the rocks' own faces away from the seam (hidden there), so it comes out of them only where it fills the seam and never fights a face for depth. Its distance-field cut follows the fields' accuracy: larger hides more of a big rock's field error at the cost of a thinner fillet.")]
+		[Range(0.01f, 0.3f)] public float RockFilletInset = 0.06f;
+		[Tooltip("Metres from the camera where the fillets are gone (dissolved over the last quarter). They are built round the camera out to this plus the rebuild step, so they never pop in view.")]
+		[Range(12f, 48f)] public float RockFilletDistance = 36f;
+		[Tooltip("The lowest quality level (0 Performant, 1 Balanced, 2 High Fidelity) that draws them.")]
+		[Range(0, 2)] public int RockFilletMinQuality = 1;
+		[Tooltip("Seam cells meshed per frame while a build runs (each 2 m cell is 1331 field samples): the build's cost per frame against how many frames it takes.")]
+		[Range(16, 1024)] public int RockFilletCellsPerFrame = 192;
+		[Tooltip("The most fillet triangles held (64 bytes each, twice: the build and the drawn set). A build with more keeps the first this many and warns.")]
+		[Range(8192, 262144)] public int RockFilletTriangles = 131072;
+		[Tooltip("FishRockFillets.compute: finds the seam cells and meshes their fillets. Referenced here so it ships to clients only.")]
+		public ComputeShader RockFilletsCompute;
+		[Tooltip("FishMMO/Rock Fillet: draws them. Referenced here so it ships to clients only.")]
+		public Shader RockFilletShader;
+
 		[Header("Moss (rock, cliffs, caves, stone, timber and deadwood)")]
 		[Tooltip("How much moss the world grows, times each scene's dampness (MossClimate: the biome under the camera — swamp and forest a lot, desert, volcanic and ice next to none) and each material's own Moss amount (_FishMoss, set by the art generator). A waterfall's spray grows it at this strength whatever the climate, on that rock and on the ground round the fall. 0 turns it off everywhere. Live (2026-10-12).")]
 		[Range(0f, 2f)] public float MossStrength = 1f;
@@ -575,6 +597,15 @@ namespace FishMMO.Client
 		[Tooltip("FishDetailScatter.compute: generates the visible mesh details named below (pebbles, small rocks, shells, litter) around each camera every frame instead of the CPU's detail chunks. Referenced here, not from Resources, so it ships to clients only.")]
 		public ComputeShader DetailScatterCompute;
 		public DetailScatterSettings DetailScatter = new DetailScatterSettings();
+
+		[Header("Cave cover")]
+		[Tooltip("FishCaveCover.compute: scatters the small cover (moss, glow moss, grit, mushrooms, crusts, soda straws, glow-worm threads; a mine's timber, iron and candles) on carved caves' rock around each camera every frame (CaveCoverSystem). Referenced here so a client build includes it; empty, the editor loads it by path.")]
+		public ComputeShader CaveCoverCompute;
+		[Tooltip("FishMMO/Cave Cover: draws the cave cover. Referenced here so a client build includes it; empty, the editor loads it by path.")]
+		public Shader CaveCoverShader;
+		[Tooltip("CaveCover_Set (Generate Biome Art writes it with the structures): every cave cover type at every level, a submesh each. Referenced here so a client build includes it; empty, the editor loads it by path.")]
+		public Mesh CaveCoverMesh;
+		public CaveCoverSettings CaveCover = new CaveCoverSettings();
 
 		[Header("Deep snow and trails")]
 		[Tooltip("How deep snow can lie past the white blanket the cover stands for, metres. It builds once the ground is white and melts when the blanket does (WeatherCover.AdvanceDeepSnow); only the quality tier that lifts the ground under snow (TerrainSnowDisplacement) shows it as height.")]
@@ -605,6 +636,12 @@ namespace FishMMO.Client
 		public Shader SiteEmbersShader;
 		[Tooltip("FishMMO/World/Site Flames: the flames on the campfires, hearths, forges and torches near the camera (SiteEmbers). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
 		public Shader SiteFlamesShader;
+		[Tooltip("FishMMO/World/Lighthouse Beams: the turning beams and flash of the lighthouses' lanterns at night (LighthouseBeams). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
+		public Shader LighthouseBeamsShader;
+		[Tooltip("FishMMO/World/Cave Drips: the drops falling from the caves' roofs, their spatter and the rings on their puddles near the camera (CaveDripField). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
+		public Shader CaveDripsShader;
+		[Tooltip("FishMMO/World/Cave Skylight Shafts: the daylight's shafts and the dust motes in them under the openings in caves' roofs near the camera (CaveSkylights). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
+		public Shader CaveSkylightShaftsShader;
 
 		[Header("Falling leaves")]
 		[Tooltip("FishMMO/Weather/Falling Leaves: leaves coming down under and downwind of the trees near the camera, mostly in autumn (FallingLeavesPresenter). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]

@@ -1013,6 +1013,9 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			var stages = new StageClock("Biomes");
+			/* The last run's hot ground out of the ground before anything reads it (2026-10-18, I2q; a repaint has taken it out
+			 * already, so this finds nothing): the field, the sites and the carve below then come out exactly as the cut's. */
+			GeothermalGroundCarve.Restore(scene, terrains, result.Notes);
 			// Read once a cut: the canyon walls read it first (on the same ground and water) and hand it on.
 			bool wallsBuiltFromField = field != null;
 			field ??= SceneBiomeField.Build(request, plan, (east, north) => GroundAltitude(terrains, plan, east, north), system, water: water);
@@ -1072,6 +1075,18 @@ namespace FishMMO.Shared.WorldDesign
 			/* The scene's placement climate, the field the biomes were chosen from: the splat reads it for the ground layers that
 			 * carry a climate band (and the climate variants' ground overrides), the scatter below for the rules that do. */
 			ScenePlacementClimate placementClimate = ScenePlacementClimate.For(system, request.Body, request.Footprint, request.ResolvedRadiusKm, true);
+			/* The hot ground (2026-10-18, I2q, decision 47): the geothermal sites the client steams, found on the map this field is
+			 * written as below (same name, same seed), dug into the ground (pools, cones, rims, runoff) before the splat and the
+			 * scatter read it, and its heat baked for their heat bands and the map. No steaming biome: no site, heat 0 everywhere. */
+			bool sea = climate.Conditions.HasLiquidWater;
+			GeothermalGroundCarve.Plan hotGround = GeothermalGroundCarve.Lay(scene, terrains, plan, field, $"{WorldEditorAssets.Sanitize(request.SceneName)} Biome Map",
+				(east, north) =>
+				{
+					float at = GroundAltitude(terrains, plan, east, north);
+					return (sea && at < 0f) || (inland != null && inland(east, north) > at + 0.3f);
+				}, keptOut, result.Notes);
+			BiomeHeatMask heat = hotGround.Heat;
+			stages.Lap("hot ground");
 			var options = new BiomeSplatOptions
 			{
 				// Planet-relative, so a layer's height band means the same height in every scene.
@@ -1084,6 +1099,7 @@ namespace FishMMO.Shared.WorldDesign
 				ClimateAt = ClimateOf(placementClimate),
 				// Which of the bed is a river's, and its current: the riverbed under rivers, the lakebed under lakes (decision 35 (h)).
 				RiverAt = RiverBed(water),
+				HeatAt = (east, north) => heat.At(east, north),
 			};
 			BiomeSplatReport splat = BiomeSplatPainter.Paint(tiles, palette, field, options);
 			// The wet margins along the channels the scene's last placing stored (2026-10-18, I2j-b, decision 38): nothing where it stores none.
@@ -1111,7 +1127,7 @@ namespace FishMMO.Shared.WorldDesign
 			 * on a cold slope only); without it every band passes. */
 			TerrainScatterReport scatter = TerrainScatter.Scatter(tiles, palette, field, options.Seed,
 				new TerrainScatterOptions { NormalizedHeight = options.NormalizedHeight, Prefabs = scope.ScatterPrefabs, HasLiquidWater = options.HasLiquidWater,
-					InlandWaterSurface = inland, RiverAt = options.RiverAt, Excluded = keptOut, DetailExcluded = detailKeptOut }, placementClimate);
+					InlandWaterSurface = inland, RiverAt = options.RiverAt, Excluded = keptOut, DetailExcluded = detailKeptOut, HeatAt = options.HeatAt }, placementClimate);
 			result.Notes.AddRange(scatter.InvalidPrefabs);
 			result.Notes.AddRange(scatter.BudgetCaps);
 			result.Notes.AddRange(scatter.Warnings);
@@ -1245,6 +1261,8 @@ namespace FishMMO.Shared.WorldDesign
 				field.WriteTo(map);
 				AssetDatabase.CreateAsset(map, mapPath);
 			}
+			// The ground's heat with it (2026-10-18, I2q), after the grid (writing the grid clears it).
+			map.SetHeat(heat);
 			result.Wrote.Add(mapPath);
 			result.BiomeMap = map;
 
@@ -1442,6 +1460,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The lakes' and rivers' shared material.</summary>
 		public const string InlandWaterMaterialPath = "Assets/Plugins/FishMMO Water/Materials/InlandWater.mat";
 		public const string InlandWaterShaderName = "FishMMO/Water/Inland Water";
+		/// <summary>The lava lakes' and rivers' material (a lava tube's: CaveLavaWater), FishMMO/Water/Inland Lava.</summary>
+		public const string InlandLavaMaterialPath = "Assets/Plugins/FishMMO Water/Materials/InlandLava.mat";
 		public const string WaterfallMaterialPath = "Assets/Plugins/FishMMO Water/Materials/Waterfall.mat";
 		public const string WaterfallShaderName = "FishMMO/Water/Waterfall";
 		public const string WaterfallSprayMaterialPath = "Assets/Plugins/FishMMO Water/Materials/WaterfallSpray.mat";
@@ -1485,6 +1505,7 @@ namespace FishMMO.Shared.WorldDesign
 				renderer = host.AddComponent<FishMMO.Water.InlandWaterRenderer>();
 			}
 			renderer.Material = EnsureInlandWaterMaterial();
+			renderer.LavaMaterial = AssetDatabase.LoadAssetAtPath<Material>(InlandLavaMaterialPath);
 			renderer.FoamFieldShader = AssetDatabase.LoadAssetAtPath<Shader>(WaterFoamFieldPath);
 			renderer.FallMaterial = EnsureWaterfallMaterial(WaterfallMaterialPath, WaterfallShaderName, "Waterfall");
 			renderer.SprayMaterial = EnsureWaterfallMaterial(WaterfallSprayMaterialPath, WaterfallSprayShaderName, "WaterfallSpray");

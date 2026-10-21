@@ -12,7 +12,9 @@
 #if defined(_WATER_REFRACTION)
 	#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareOpaqueTexture.hlsl"
 #endif
-// The weather's clouds and fog, laid over the frame before the water was drawn: the same as the sea's.
+// The weather's clouds and fog, laid over the frame before the water was drawn: the same as the sea's; faded under the hill
+// as the fog passes fade themselves (a cave's streams and pools, 2026-10-20: FishWaterFog.hlsl's FISH_WATER_OPEN_AIR).
+#define FISH_WATER_OPEN_AIR 1
 #include "FishWaterFog.hlsl"
 #include "FishWaterSun.hlsl"
 #include "FishWaterFoam.hlsl"
@@ -1127,7 +1129,7 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	color = MixFog(color, input.fogFactor);
 	if (!below)
 	{
-		color = FishWaterBehindClouds(color, screenUV);
+		color = FishWaterBehindClouds(color, screenUV, positionWS);
 		half fogKeep;
 		color = FishWaterAirFogOver(color, positionWS, screenUV, fogKeep);
 	}

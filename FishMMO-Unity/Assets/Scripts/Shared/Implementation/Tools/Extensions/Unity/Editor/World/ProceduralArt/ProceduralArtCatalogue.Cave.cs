@@ -25,6 +25,42 @@ namespace FishMMO.Shared.WorldDesign
 		OreVein,
 		/// <summary>A seam of a glowing fantasy ore (starmetal, emberstone) in quartz.</summary>
 		GlowOreVein,
+		/// <summary>A towering glowcap, a mushroom tree of the deep, 5–15 m as the dressing scales it (2026-10-20).</summary>
+		TowerFungus,
+		/// <summary>A glowcap of the middle size, 3–5 m (2026-10-20).</summary>
+		MidFungus,
+		/// <summary>A cluster of glowing puffballs or morels on a floor, 0.3–1 m (2026-10-20).</summary>
+		Puffballs,
+		/// <summary>Tall tiers of great bracket fungi on a wall, 1.6–2.8 m (2026-10-20).</summary>
+		ShelfTiers,
+		/// <summary>A curtain of glowing roots hung from a roof (fantasy, 2026-10-20).</summary>
+		GlowRoots,
+		/// <summary>Tree roots hanging through a thin roof near a mouth (2026-10-20); they do not glow.</summary>
+		HangingRoots,
+		/// <summary>A glowing creeper on a wet wall (fantasy, 2026-10-20).</summary>
+		GlowVine,
+		/// <summary>A fissure in a crust of cooling lava, glowing molten in its depths (2026-10-20, cave lava): on a floor, or on a wall turned out of it.</summary>
+		MagmaCrack,
+		/// <summary>Magma seeping out of a wall in glowing runnels down to its foot (2026-10-20, cave lava).</summary>
+		MagmaSeep,
+		/// <summary>Lava stalactites (lavacicles) hung from a roof over molten lava, their dripping tips still glowing (2026-10-20, cave lava).</summary>
+		Lavacicle,
+		/// <summary>A low skin of ropy pahoehoe crust cooled black at molten lava's edge, its toes still glowing (2026-10-20, cave lava).</summary>
+		LavaCrust,
+		/// <summary>Glow-worm silk hung along a damp roof joint, long beaded threads lit by their larvae (2026-10-20, caves livened).</summary>
+		GlowSilk,
+		/// <summary>Tree roots come down through a thin roof all the way to the floor and spreading over it (2026-10-20, caves livened); they do not glow.</summary>
+		TapRoots,
+		/// <summary>A heap of bat guano on a floor under a roost (2026-10-20, caves livened); it does not glow.</summary>
+		GuanoHeap,
+		/// <summary>A frozen waterfall down a wall or a drop: fused, bulging columns of ice and a cone at the foot (2026-10-20, caves livened: ice).</summary>
+		IceFall,
+		/// <summary>A fringe of rippled icicles along a roof's edge (2026-10-20, caves livened: ice).</summary>
+		IcicleCurtain,
+		/// <summary>A frozen pool: a dead-level sheet of glassy ice on a floor, walked on (2026-10-20, caves livened: ice).</summary>
+		FrozenPool,
+		/// <summary>Hoarfrost: feathery hoar crystals on a wall near the ice (2026-10-20, caves livened: ice).</summary>
+		Hoarfrost,
 	}
 
 	/// <summary>How a piece of glow art is set against the cave's rock.</summary>
@@ -216,6 +252,37 @@ namespace FishMMO.Shared.WorldDesign
 			new CaveGlowHue { Name = "Emberstone", Albedo = new Color(0.5f, 0.16f, 0.08f), Emission = new Color(1.7f, 0.5f, 0.14f), Smoothness = 0.5f, Metallic = 0.3f, Light = new Color(1f, 0.5f, 0.22f), EmitterHue = 3 },
 		};
 
+		/// <summary>
+		/// Tree roots as they hang through a cave's thin roof (2026-10-20): the dark earth-brown of living roots and the pale
+		/// buff of roots that have hung long in still air. They do not glow.
+		/// </summary>
+		public static readonly CaveGlowHue[] RootHues =
+		{
+			new CaveGlowHue { Name = "Earth", Albedo = new Color(0.4f, 0.29f, 0.2f), Smoothness = 0.22f, EmitterHue = -1 },
+			new CaveGlowHue { Name = "Pale", Albedo = new Color(0.66f, 0.58f, 0.46f), Smoothness = 0.2f, EmitterHue = -1 },
+		};
+
+		/// <summary>
+		/// Molten rock as cave lava shows it (2026-10-20): a glassy black basalt crust over a glow that is its own blackbody light —
+		/// Molten a fresh yellow-orange (~1150 °C, its brightest clipped to yellow as hot lava looks), Banked a deep red-orange
+		/// (~1000 °C, cooling). Their light is amber (hue 3), as the placer's lava lights are (SceneMagma).
+		/// </summary>
+		public static readonly CaveGlowHue[] MagmaHues =
+		{
+			new CaveGlowHue { Name = "Molten", Albedo = new Color(0.085f, 0.07f, 0.065f), Emission = new Color(2.1f, 0.78f, 0.16f), Smoothness = 0.62f, Light = new Color(1f, 0.54f, 0.2f), EmitterHue = 3 },
+			new CaveGlowHue { Name = "Banked", Albedo = new Color(0.075f, 0.065f, 0.06f), Emission = new Color(1.5f, 0.38f, 0.07f), Smoothness = 0.55f, Light = new Color(1f, 0.42f, 0.14f), EmitterHue = 3 },
+		};
+
+		/// <summary>
+		/// Bat guano as it piles under a roost (2026-10-20, caves livened): the dark moist brown of a heap still fed, and the pale
+		/// buff crust of one long dry. It does not glow.
+		/// </summary>
+		public static readonly CaveGlowHue[] GuanoHues =
+		{
+			new CaveGlowHue { Name = "Fresh", Albedo = new Color(0.4f, 0.31f, 0.22f), Smoothness = 0.35f, EmitterHue = -1 },
+			new CaveGlowHue { Name = "Dry", Albedo = new Color(0.82f, 0.74f, 0.6f), Smoothness = 0.12f, EmitterHue = -1 },
+		};
+
 		/// <summary>The milky quartz an ore seam runs in (<c>Cave_Gangue</c>, the seams' first submesh).</summary>
 		public static readonly CaveGlowHue Gangue = new CaveGlowHue { Name = "Gangue", Albedo = new Color(0.82f, 0.8f, 0.74f), Smoothness = 0.55f, EmitterHue = -1 };
 
@@ -246,6 +313,68 @@ namespace FishMMO.Shared.WorldDesign
 			new CaveGlowFamily { Kind = CaveGlowKind.GlowOreVein, Mount = CaveMount.Wall, Shape = CaveGlowKind.OreVein, Variants = 4, Hues = GlowOreHues, MaterialSet = "GlowOre",
 				Collides = false, CastsShadows = false, Reach = 4f,
 				Description = "A seam of glowing ore in quartz, the ore veins' shapes: v0 1.5 m, v1 2.5 m, v2 4 m, v3 3 m with a branch." },
+			// 2026-10-20 (cave realism: "Largest mushrooms should get up to 15m tall", "More glow is good inside the caves", "More
+			// vines and stuff inside caves"). Appended, so no older kind's variants or hues move.
+			new CaveGlowFamily { Kind = CaveGlowKind.TowerFungus, Mount = CaveMount.Floor, Shape = CaveGlowKind.TowerFungus, Variants = 4, Hues = FungusHues, MaterialSet = "Fungus",
+				Collides = true, CastsShadows = true, Reach = 14f,
+				Description = "Mushroom trees: fibrous stalks on buttress-rooted feet, brackets up them, gilled glowing caps, veils of glowing strands: v0 one 12 m dome, v1 a stand of 11, 7.5 and 5 m, v2 a leaning 10 m parasol, v3 a 14 m bell and a 4.5 m one. Scaled 5–15 m." },
+			new CaveGlowFamily { Kind = CaveGlowKind.MidFungus, Mount = CaveMount.Floor, Shape = CaveGlowKind.MidFungus, Variants = 3, Hues = FungusHues, MaterialSet = "Fungus",
+				Collides = true, CastsShadows = true, Reach = 9f,
+				Description = "Glowcaps of 3–5 m, made as the mushroom trees: v0 a 4.4 m dome, v1 two parasols (4.2, 3 m), v2 three bells (4, 3.3, 2.6 m)." },
+			new CaveGlowFamily { Kind = CaveGlowKind.Puffballs, Mount = CaveMount.Floor, Shape = CaveGlowKind.Puffballs, Variants = 3, Hues = FungusHues, MaterialSet = "Fungus",
+				Collides = false, CastsShadows = false, Reach = 4f,
+				Description = "v0 seven puffballs to 0.6 m tall with glowing warts, v1 six morels with glowing pits, v2 a burst giant puffball, its spores drifting glowing over it." },
+			new CaveGlowFamily { Kind = CaveGlowKind.ShelfTiers, Mount = CaveMount.Wall, Shape = CaveGlowKind.ShelfTiers, Variants = 3, Hues = FungusHues, MaterialSet = "Fungus",
+				Collides = false, CastsShadows = false, Reach = 5f,
+				Description = "Tiers of great brackets on a wall, pores glowing under them: v0 a column 1.8 m tall, v1 a staircase climbing 2.8 m, v2 a fan 2.4 by 1.6 m." },
+			new CaveGlowFamily { Kind = CaveGlowKind.GlowRoots, Mount = CaveMount.Roof, Shape = CaveGlowKind.GlowRoots, Variants = 3, Hues = FungusHues, MaterialSet = "Fungus",
+				Collides = false, CastsShadows = false, Reach = 5f,
+				Description = "Glowroots (fantasy) hung from a roof, brightening down to a glowing bulb: v0 2 m across to 2.2 m long, v1 3 m across to 3.5 m, v2 a fringe 2.6 m along to 1.4 m." },
+			new CaveGlowFamily { Kind = CaveGlowKind.HangingRoots, Mount = CaveMount.Roof, Shape = CaveGlowKind.HangingRoots, Variants = 3, Hues = RootHues, MaterialSet = "Root",
+				Collides = false, CastsShadows = false, Reach = 0f,
+				Description = "Tree roots hanging through a thin roof: v0 a few thick roots to 1.6 m, v1 a hairy curtain 2.5 m across to 2.4 m, v2 a root knot and its rootlets. Not lit." },
+			new CaveGlowFamily { Kind = CaveGlowKind.GlowVine, Mount = CaveMount.Wall, Shape = CaveGlowKind.GlowVine, Variants = 3, Hues = FungusHues, MaterialSet = "Fungus",
+				Collides = false, CastsShadows = false, Reach = 4f,
+				Description = "A glowing creeper (fantasy) on a wet wall: v0 a patch 1.5 m, v1 a sheet 2.5 by 2 m, v2 a cascade hanging 2.4 m from its top." },
+			// 2026-10-20 (cave lava: "glowing floor/wall cracks, magma seeping from walls, glowing lavacicles"). Appended, so no older
+			// kind's variants or hues move. Lit by the placer's lava lights (SceneEmitterKind.Magma), not by a light of their own.
+			new CaveGlowFamily { Kind = CaveGlowKind.MagmaCrack, Mount = CaveMount.Floor, Shape = CaveGlowKind.MagmaCrack, Variants = 4, Hues = MagmaHues, MaterialSet = "Magma",
+				Collides = false, CastsShadows = false, Reach = 4f,
+				Description = "A fissure in black crust, its raised lips parting on a glowing molten floor, flat on the rock (4 cm proud): v0 1.6 m with a short branch, v1 a fork 2.4 m, v2 a star of three 1.2 m, v3 a long crack 3.2 m. Along x." },
+			new CaveGlowFamily { Kind = CaveGlowKind.MagmaSeep, Mount = CaveMount.Wall, Shape = CaveGlowKind.MagmaSeep, Variants = 3, Hues = MagmaHues, MaterialSet = "Magma",
+				Collides = false, CastsShadows = false, Reach = 4f,
+				Description = "Magma seeping from a crack in a wall in glowing runnels down to its foot, spreading in a small lobe there: v0 one runnel 1.2 m, v1 one 2.2 m splitting in two, v2 three from a crack 1.6 m across, 1.6 m tall." },
+			new CaveGlowFamily { Kind = CaveGlowKind.Lavacicle, Mount = CaveMount.Roof, Shape = CaveGlowKind.Lavacicle, Variants = 3, Hues = MagmaHues, MaterialSet = "Magma",
+				Collides = false, CastsShadows = false, Reach = 4f,
+				Description = "Lava stalactites on a crusted roof patch, dark where they leave the rock and glowing to their dripping tips: v0 seven to 0.6 m, v1 a fringe of twelve along 1.6 m to 0.9 m, v2 five stout shark's teeth to 0.4 m." },
+			new CaveGlowFamily { Kind = CaveGlowKind.LavaCrust, Mount = CaveMount.Floor, Shape = CaveGlowKind.LavaCrust, Variants = 3, Hues = MagmaHues, MaterialSet = "Magma",
+				Collides = false, CastsShadows = false, Reach = 4f,
+				Description = "A low lobe of ropy pahoehoe crust, its rope folds arcing toward its front, its toes still glowing in their creases (≤ 12 cm tall): v0 1.6 by 1 m, v1 a broad sheet 2.4 by 1.6 m, v2 a long tongue 3 by 0.9 m. Flowing along +x." },
+			// 2026-10-20 (caves livened: what hangs from the roof). Appended, so no older kind's variants or hues move. Silk in the
+			// fungi's hues, so it glows as the cave's cover threads do (CaveGlowPalette); the roots wear the hanging roots' material.
+			new CaveGlowFamily { Kind = CaveGlowKind.GlowSilk, Mount = CaveMount.Roof, Shape = CaveGlowKind.GlowSilk, Variants = 3, Hues = FungusHues, MaterialSet = "Fungus",
+				Collides = false, CastsShadows = false, Reach = 0f,
+				Description = "Glow-worm silk along a damp roof joint: long threads 0.25–1.6 m beaded with glowing droplets, a larva at each top; v0 a fringe along 2.4 m, v1 a band along 3.6 m, v2 a cluster 1.2 m across under a drip point. Along x." },
+			new CaveGlowFamily { Kind = CaveGlowKind.TapRoots, Mount = CaveMount.Roof, Shape = CaveGlowKind.TapRoots, Variants = 3, Hues = RootHues, MaterialSet = "Root",
+				Collides = false, CastsShadows = false, Reach = 0f,
+				Description = "Tree roots hanging 4 m from a thin roof to the floor (scaled in y to it), spreading in rootlets over it: v0 three thick forking roots, v1 a curtain of twelve thin ones (half reach the floor), v2 a column of five twisted together. Not lit." },
+			new CaveGlowFamily { Kind = CaveGlowKind.GuanoHeap, Mount = CaveMount.Floor, Shape = CaveGlowKind.GuanoHeap, Variants = 3, Hues = GuanoHues, MaterialSet = "Guano",
+				Collides = false, CastsShadows = false, Reach = 0f,
+				Description = "Bat guano under a roost, dark on top and pale crust at its foot: v0 a peaked heap 0.7 m round, 0.3 m high; v1 a low spread 1.3 m round with four cones; v2 an old terraced heap 1 m round, 0.4 m high. Not lit." },
+			// 2026-10-20 (caves livened: an ice cave's ice, CaveGlowMeshes.Ice.cs). Appended, so no older kind's variants or hues move.
+			// The "Ice" set's glassy, faintly glowing materials; a blue light only where the placer gives a tall fall one.
+			new CaveGlowFamily { Kind = CaveGlowKind.IceFall, Mount = CaveMount.Wall, Shape = CaveGlowKind.IceFall, Variants = 3, Hues = IceHues, MaterialSet = "Ice",
+				Collides = true, CastsShadows = true, Reach = 9f,
+				Description = "A frozen waterfall 4 m tall (scaled in y to its face): fused columns bulging every 0.6-0.9 m, standing further out toward a cone of ice at the foot, a rolled lip at the top: v0 four stout columns 1.4 m wide, v1 a curtain of nine 3 m wide (a third end short in points), v2 two streams meeting in one great cone." },
+			new CaveGlowFamily { Kind = CaveGlowKind.IcicleCurtain, Mount = CaveMount.Roof, Shape = CaveGlowKind.IcicleCurtain, Variants = 3, Hues = IceHues, MaterialSet = "Ice",
+				Collides = false, CastsShadows = false, Reach = 0f,
+				Description = "Rippled icicles hung from a ridge of ice along a roof's edge, longest toward the middle, a drop at each tip: v0 fourteen along 2 m to 1 m, v1 twenty-two along 2.4 m to 1.6 m with a frozen drapery between them, v2 six great ones along 1.4 m to 2.2 m. Along x." },
+			new CaveGlowFamily { Kind = CaveGlowKind.FrozenPool, Mount = CaveMount.Floor, Shape = CaveGlowKind.FrozenPool, Variants = 3, Hues = IceHues, MaterialSet = "Ice",
+				Collides = true, CastsShadows = false, Reach = 0f,
+				Description = "A frozen pool, its surface at the origin and widest 1 m (scaled in x and z to the pool, never in y): clear dark ice with pale rings of trapped bubbles, frosted at the rim, bevelled 0.1 m down and skirted 0.6 m into the rock: v0 lobed round, v1 long (0.6 as wide), v2 two pools frozen into one." },
+			new CaveGlowFamily { Kind = CaveGlowKind.Hoarfrost, Mount = CaveMount.Wall, Shape = CaveGlowKind.Hoarfrost, Variants = 3, Hues = RimeHues, MaterialSet = "Ice",
+				Collides = false, CastsShadows = false, Reach = 0f,
+				Description = "Hoarfrost: feathery six-sided hoar plates 2-8 cm out of a wall, thickest in the middle: v0 a patch 1 by 0.8 m, v1 a streak 0.7 by 1.5 m, v2 a band 1.9 by 0.7 m." },
 		};
 
 		/// <summary>The family of a kind.</summary>

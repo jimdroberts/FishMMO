@@ -184,6 +184,12 @@ namespace FishMMO.Shared.WorldDesign
 		public const string WallTower = "tower+wall";
 		public const string Watchtower = "tower+military!wall!keep";
 		public const string Keep = "keep";
+		/// <summary>
+		/// A capital's palace (2026-10-19: "massive palace style castles with interiors (kings chair?) for capitals"), by its throne
+		/// hall's id: PropsFeature keeps the whole compound's ground for the slot and lays the compound there (PointOfInterestPalace),
+		/// its gatehouse, towers and curtain round a court with the garden, the two wings and the throne hall.
+		/// </summary>
+		public const string Palace = "=ThroneHall";
 		public const string Tent = "tent";
 		public const string Yurt = "=TentLarge";
 		public const string LeanTo = "=LeanTo";
@@ -237,6 +243,50 @@ namespace FishMMO.Shared.WorldDesign
 		public const string TowerMill = "=TowerMill", Watermill = "=Watermill", Sawmill = "=Sawmill", SawPit = "=SawPit", LogPile = "=LogPile",
 			PlankStack = "=PlankStack", Granary = "=Granary", Dovecote = "=Dovecote", Apiary = "=Apiary", CharcoalClamp = "=CharcoalClamp",
 			LimeKiln = "=LimeKiln", TanningYard = "=TanningYard";
+		/// <summary>
+		/// The town's other buildings (2026-10-19), by id: none carries a tag an older query matches, so no site that does not
+		/// name them changes. A shop-house's trade, sign and wares are PointOfInterestTrades'; a farmstead is the fields'.
+		/// </summary>
+		public const string WizardTower = "=WizardTower", Library = "=Library", Observatory = "=Observatory",
+			Barracks = "=Barracks", GuardHouse = "=GuardHouse", ArcheryRange = "=ArcheryRange", TrainingYard = "=TrainingYard",
+			Barn = "=Barn", HayRick = "=HayRick", Pigsty = "=Pigsty", HenHouse = "=HenHouse",
+			Healer = "=Healer", Bakery = "=Bakery", Workshop = "=Workshop", DyeWorks = "=DyeWorks", PotteryKiln = "=PotteryKiln", Brewhouse = "=Brewhouse",
+			MarketHall = "=MarketHall", ShopHouse = "=ShopHouse", Warehouse = "=Warehouse", Pillory = "=Pillory", MarketCross = "=MarketCross",
+			CountingHouse = "=CountingHouse", DigSite = "=DigSite", DigCamp = "=DigCamp";
+		/// <summary>Light and lore round a wizard's tower (StructurePieces.Lights.cs).</summary>
+		public const string RuneStone = "=RuneStone", Glowjar = "=Glowjar";
+		/// <summary>
+		/// A settlement's churches by its size and its square's centrepieces (2026-10-19: "more variation for town group types"), by
+		/// variant (StructureKitPieceSource's "#" pin): a village's chapel with its bell-cote (the parish church a time in four), a
+		/// town's parish church under its spire, a city's or the capital's cathedral fronting its square (tagged "cathedral", so no
+		/// "church" query lays one); the stone market cross and the fountain (MarketCross's two variants) and a village green's maypole.
+		/// </summary>
+		public const string Chapel = "=Church#1", ParishChurch = "=Church#0", VillageChurch = "=Church#1110", Cathedral = "=Cathedral",
+			StoneCross = "=MarketCross#0", Fountain = "=MarketCross#1", Maypole = "=Maypole";
+
+		/// <summary>
+		/// Whether a slot's query lays a church (any church query, a pinned variant, or the cathedral): it fronts the square as a
+		/// landmark and keeps a churchyard (PropsFeature).
+		/// </summary>
+		public static bool IsChurch(string tag)
+		{
+			string query = StructureKitPieceSource.BaseQuery(tag);
+			return query == Church || query == "=Church" || query == Cathedral;
+		}
+
+		/// <summary>
+		/// Whether a slot's pieces are a site's landmarks (PointOfInterestLayoutSlot.Landmark: laid before its houses, fronting its square
+		/// where it has one): its churches, temple, market hall and library; in a castle's ward its barracks and its stable too, which
+		/// are its garrison's and must find room before the houses fill it (2026-10-19).
+		/// </summary>
+		public static bool IsLandmark(string tag, POIType kind)
+		{
+			if (IsChurch(tag) || tag == Temple || tag == MarketHall || tag == Library)
+			{
+				return true;
+			}
+			return kind == POIType.Castle && (tag == Barracks || tag == Stable);
+		}
 
 		// ── Styles ───────────────────────────────────────────────────
 		public const string Timber = "timber", Stone = "stone", Hide = "hide", Iron = "iron", Earth = "earth";
@@ -265,7 +315,7 @@ namespace FishMMO.Shared.WorldDesign
 			Ring = PointOfInterestSlotRole.Ring, Perimeter = PointOfInterestSlotRole.Perimeter, Gates = PointOfInterestSlotRole.Gate,
 			Towers = PointOfInterestSlotRole.WallTower, Street = PointOfInterestSlotRole.Street, Rows = PointOfInterestSlotRole.Rows,
 			Scatter = PointOfInterestSlotRole.Scatter, Line = PointOfInterestSlotRole.Line, Span = PointOfInterestSlotRole.Span,
-			Piers = PointOfInterestSlotRole.Pier;
+			Piers = PointOfInterestSlotRole.Pier, Edges = PointOfInterestSlotRole.Edge;
 
 		private const PointOfInterestLayout Single = PointOfInterestLayout.Single, Round = PointOfInterestLayout.Ring,
 			Grid = PointOfInterestLayout.Grid, Streets = PointOfInterestLayout.Street, Scattered = PointOfInterestLayout.Scattered,
@@ -303,82 +353,149 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static void Settlements(List<PointOfInterestTemplateSpec> a)
 		{
-			// Villages: a street of houses round a well; longhouses in the cold, yurts on the steppe.
+			// Villages: a street of houses round a well; longhouses in the cold, yurts on the steppe. (2026-10-19: "more structure
+			// types for towns, villages, and cities": a village may keep a healer, a bakehouse, a brewhouse, a craftsman's shop and a
+			// shop or two among its houses, a kiln at its edge, a cross and the stocks on its green. Its barns, sties, hen houses and
+			// ricks are its farmsteads', beside its fields (PointOfInterestFarmsteads; 2026-10-19: "Farm houses and barns should be
+			// placed next to farm fields and crops"), never among its houses.) Its church is mostly a chapel under a bell-cote, now and
+			// then a parish church with its spire; a maypole stands on some greens (2026-10-19: "more variation for town group types").
+			// Its lone beekeepers, shepherds, woodcutters and wayside crosses are its outskirts' (PointOfInterestOutskirts).
 			T(a, POIType.Village, "Timber", Streets, Timber)
 				.S(Granary, 0, 1, Scatter, style: Timber).S(Dovecote, 0, 1, Scatter, style: Stone).S(Apiary, 0, 2, Scatter, style: Timber)
-				.S(Well, 1, 1, Centre).S(Stall, 0, 3, Centre).S(House, 8, 18, Street)
-				.S(Church, 0, 1, Street, style: Stone).S(Tavern, 0, 1, Street, style: Timber).S(Smithy, 0, 1, Street, style: Timber).S(Notice, 1, 1, Centre, style: Timber)
+				.S(Well, 1, 1, Centre).S(Stall, 0, 3, Centre).S(House, 7, 15, Street)
+				.S(VillageChurch, 0, 1, Street, style: Stone).S(Tavern, 0, 1, Street, style: Timber).S(Smithy, 0, 1, Street, style: Timber).S(Notice, 1, 1, Centre, style: Timber)
 				.S(Storage, 4, 10, Scatter).S(Banner, 0, 2, Scatter)
+				.S(Healer, 0, 1, Street).S(Bakery, 0, 1, Street).S(Brewhouse, 0, 1, Street).S(Workshop, 0, 1, Street).S(ShopHouse, 0, 2, Street)
+				.S(StoneCross, 0, 1, Centre).S(Pillory, 0, 1, Centre)
+				.S(PotteryKiln, 0, 1, Edges)
+				.S(Maypole, 0, 1, Centre)
 				.In(0.1f, Arid).In(0.5f, Highland).In(0.5f, Cold).In(0.4f, Swamp);
 			T(a, POIType.Village, "Stone", Streets, Stone)
 				.S(Granary, 0, 1, Scatter, style: Timber).S(Dovecote, 0, 1, Scatter, style: Stone).S(Apiary, 0, 2, Scatter, style: Timber)
-				.S(Well, 1, 1, Centre).S(Stall, 0, 3, Centre).S(House, 8, 16, Street)
-				.S(Church, 0, 1, Street, style: Stone).S(Tavern, 0, 1, Street, style: Timber).S(Smithy, 0, 1, Street, style: Timber).S(Notice, 1, 1, Centre, style: Timber)
+				.S(Well, 1, 1, Centre).S(Stall, 0, 3, Centre).S(House, 7, 14, Street)
+				.S(VillageChurch, 0, 1, Street, style: Stone).S(Tavern, 0, 1, Street, style: Timber).S(Smithy, 0, 1, Street, style: Timber).S(Notice, 1, 1, Centre, style: Timber)
 				.S(Storage, 4, 10, Scatter).S(Banner, 0, 2, Scatter)
+				.S(Healer, 0, 1, Street).S(Bakery, 0, 1, Street).S(Brewhouse, 0, 1, Street).S(Workshop, 0, 1, Street).S(ShopHouse, 0, 2, Street)
+				.S(StoneCross, 0, 1, Centre).S(Pillory, 0, 1, Centre)
+				.S(PotteryKiln, 0, 1, Edges)
+				.S(Maypole, 0, 1, Centre)
 				.Elsewhere(0.3f).In(2f, Arid).In(2f, Highland).Races(Civil);
 			T(a, POIType.Village, "Longhouse", Streets, Timber)
 				.S(Fire, 1, 1, Centre).S(Longhouse, 3, 6, Street).S(Cottage, 2, 6, Street)
 				.S(Storage, 3, 8, Scatter).S(Banner, 1, 2, Scatter)
+				.S(Healer, 0, 1, Street).S(Brewhouse, 0, 1, Street)
 				.Elsewhere(0.05f).In(2.5f, Cold).In(0.4f, Woods).Races(Civil);
 			T(a, POIType.Village, "Yurts", Round, Hide)
 				.S(Yurt, 6, 12, Ring).S(Fire, 1, 2, Centre).S(Stall, 0, 2, Scatter).S(Storage, 3, 8, Scatter).S(Bedding, 2, 6, Scatter)
 				.Elsewhere(0.02f).In(1.2f, Steppe).In(0.6f, Arid).In(1f, Cold).Pad(0.8f);
 
 			// Towns: two or more streets, a market square.
+			// (2026-10-19) A town's shops line its streets among the houses, its healer, bakehouse, brewhouse and workshops, a counting
+			// house, perhaps a market hall on the square and a guard's barracks; the wizard's tower, the butts and the practice yard,
+			// the dyers and the potters at its edge, where there is room and the smoke and the stink are least in the way.
+			// (2026-10-19) Its parish church, its town hall on the square and a fountain on the market every town keeps; a stone cross
+			// beside it in some.
 			T(a, POIType.Town, "Timber", Streets, Timber)
 				.S(Granary, 1, 2, Scatter, style: Timber).S(Dovecote, 0, 1, Scatter, style: Stone).S(TanningYard, 0, 1, Scatter, style: Timber).S(Apiary, 0, 1, Scatter, style: Timber)
-				.S(Well, 1, 2, Centre).S(Stall, 3, 8, Centre).S(House, 20, 40, Street)
-				.S(Church, 1, 1, Street, style: Stone).S(Temple, 0, 1, Street, style: Stone).S(Tavern, 1, 2, Street, style: Timber).S(Smithy, 1, 2, Street, style: Timber)
+				.S(Well, 1, 2, Centre).S(Stall, 3, 8, Centre).S(House, 14, 28, Street)
+				.S(ParishChurch, 1, 1, Street, style: Stone).S(Temple, 0, 1, Street, style: Stone).S(Tavern, 1, 2, Street, style: Timber).S(Smithy, 1, 2, Street, style: Timber)
 				.S(Stable, 1, 2, Scatter, style: Timber).S(Notice, 1, 2, Centre, style: Timber)
 				.S(Storage, 8, 16, Scatter).S(Watchtower, 0, 2, Scatter).S(Banner, 2, 4, Scatter)
+				.S(MarketHall, 1, 1, Street).S(ShopHouse, 2, 5, Street).S(Healer, 1, 1, Street).S(Bakery, 1, 1, Street).S(Workshop, 1, 2, Street)
+				.S(Brewhouse, 0, 1, Street).S(CountingHouse, 0, 1, Street).S(Barracks, 0, 1, Street).S(Library, 0, 1, Street)
+				.S(Pillory, 1, 1, Centre).S(StoneCross, 0, 1, Centre)
+				.S(WizardTower, 0, 1, Edges).S(ArcheryRange, 0, 1, Edges).S(TrainingYard, 0, 1, Edges).S(DyeWorks, 0, 1, Edges).S(PotteryKiln, 0, 1, Edges)
+				.S(Fountain, 1, 1, Centre)
 				.In(0.1f, Arid).In(0.5f, Highland).In(0.5f, Cold);
 			T(a, POIType.Town, "Stone", Streets, Stone)
 				.S(Granary, 1, 2, Scatter, style: Timber).S(Dovecote, 0, 1, Scatter, style: Stone).S(TanningYard, 0, 1, Scatter, style: Timber).S(Apiary, 0, 1, Scatter, style: Timber)
-				.S(Well, 1, 2, Centre).S(Stall, 3, 8, Centre).S(House, 20, 36, Street)
-				.S(Church, 1, 1, Street, style: Stone).S(Temple, 0, 1, Street, style: Stone).S(Tavern, 1, 2, Street, style: Timber).S(Smithy, 1, 2, Street, style: Timber)
+				.S(Well, 1, 2, Centre).S(Stall, 3, 8, Centre).S(House, 14, 26, Street)
+				.S(ParishChurch, 1, 1, Street, style: Stone).S(Temple, 0, 1, Street, style: Stone).S(Tavern, 1, 2, Street, style: Timber).S(Smithy, 1, 2, Street, style: Timber)
 				.S(Stable, 1, 2, Scatter, style: Timber).S(Notice, 1, 2, Centre, style: Timber)
 				.S(Storage, 8, 16, Scatter).S(Banner, 2, 4, Scatter)
+				.S(MarketHall, 1, 1, Street).S(ShopHouse, 2, 5, Street).S(Healer, 1, 1, Street).S(Bakery, 1, 1, Street).S(Workshop, 1, 2, Street)
+				.S(Brewhouse, 0, 1, Street).S(CountingHouse, 0, 1, Street).S(Barracks, 0, 1, Street).S(Library, 0, 1, Street)
+				.S(Pillory, 1, 1, Centre).S(StoneCross, 0, 1, Centre)
+				.S(WizardTower, 0, 1, Edges).S(ArcheryRange, 0, 1, Edges).S(TrainingYard, 0, 1, Edges).S(DyeWorks, 0, 1, Edges).S(PotteryKiln, 0, 1, Edges)
+				.S(Fountain, 1, 1, Centre)
 				.Elsewhere(0.3f).In(2f, Arid).In(2f, Highland).Races(Civil);
 			T(a, POIType.Town, "Palisaded", Walled, Timber)
 				.S(Granary, 1, 2, Scatter, style: Timber).S(Dovecote, 0, 1, Scatter, style: Stone).S(TanningYard, 0, 1, Scatter, style: Timber).S(Apiary, 0, 1, Scatter, style: Timber)
 				.S(Palisade, 1, 1, Perimeter).S(Gate, 2, 2, Gates).S(Watchtower, 2, 4, Towers)
-				.S(Well, 1, 1, Centre).S(Stall, 2, 6, Centre).S(House, 18, 34, Street).S(Storage, 6, 12, Scatter).S(Banner, 2, 4, Scatter)
-				.S(Church, 1, 1, Street, style: Stone).S(Temple, 0, 1, Street, style: Stone).S(Tavern, 1, 2, Street, style: Timber).S(Smithy, 1, 2, Street, style: Timber)
+				.S(Well, 1, 1, Centre).S(Stall, 2, 6, Centre).S(House, 13, 25, Street).S(Storage, 6, 12, Scatter).S(Banner, 2, 4, Scatter)
+				.S(ParishChurch, 1, 1, Street, style: Stone).S(Temple, 0, 1, Street, style: Stone).S(Tavern, 1, 2, Street, style: Timber).S(Smithy, 1, 2, Street, style: Timber)
 				.S(Stable, 1, 2, Scatter, style: Timber).S(Notice, 1, 2, Centre, style: Timber)
+				.S(ShopHouse, 2, 4, Street).S(Healer, 1, 1, Street).S(Bakery, 1, 1, Street).S(Workshop, 1, 2, Street)
+				.S(Brewhouse, 0, 1, Street).S(Barracks, 0, 1, Street).S(GuardHouse, 0, 2, Street)
+				.S(Pillory, 1, 1, Centre).S(StoneCross, 0, 1, Centre)
+				.S(ArcheryRange, 0, 1, Edges).S(TrainingYard, 0, 1, Edges).S(PotteryKiln, 0, 1, Edges)
+				.S(MarketHall, 1, 1, Street).S(Fountain, 1, 1, Centre)
 				.Elsewhere(0.6f).In(1.2f, Woods).In(0.2f, Arid).Races(Civil);
 
-			// Cities: walled in stone, gatehouses on the main streets, a keep in the middle.
+			// Cities: walled in stone, gatehouses on the main streets, a keep in the middle. (2026-10-19) A cathedral fronting the square
+			// and a parish church or two; fountains on the market in place of the second and third wells (wells stand
+			// PointOfInterestLayouts.WellSpacing apart; a fountain is no well); its cemetery outside the walls (PointOfInterestOutskirts).
 			T(a, POIType.City, "Stone", Walled, Stone)
 				.S(Wall, 1, 1, Perimeter).S(Gate, 2, 4, Gates).S(WallTower, 6, 12, Towers)
-				.S(Keep, 1, 1, Centre).S(Well, 2, 3, Centre).S(Stall, 6, 12, Centre)
-				.S(House, 25, 45, Street).S(House, 25, 45, Street, style: Timber)
-				.S(Church, 1, 2, Street, style: Stone).S(Temple, 1, 1, Street, style: Stone).S(Tavern, 2, 4, Street, style: Timber).S(Smithy, 2, 3, Street, style: Timber)
-				.S(Stable, 1, 3, Scatter, style: Timber).S(Notice, 2, 3, Centre, style: Timber)
+				.S(Keep, 1, 1, Centre).S(Well, 1, 1, Centre).S(Stall, 6, 12, Centre)
+				.S(House, 20, 36, Street).S(House, 18, 34, Street, style: Timber)
+				.S(ParishChurch, 1, 1, Street, style: Stone).S(Temple, 1, 1, Street, style: Stone).S(Tavern, 2, 2, Street, style: Timber).S(Smithy, 2, 2, Street, style: Timber)
+				.S(Stable, 1, 2, Scatter, style: Timber).S(Notice, 2, 3, Centre, style: Timber)
 				.S(Storage, 10, 20, Scatter).S(Banner, 4, 8, Scatter)
+				// (2026-10-19) Every trade and calling a city keeps.
+				.S(MarketHall, 1, 1, Street).S(Library, 1, 1, Street).S(ShopHouse, 4, 8, Street).S(Healer, 1, 2, Street).S(Bakery, 1, 2, Street)
+				.S(Workshop, 2, 2, Street).S(Brewhouse, 1, 2, Street).S(CountingHouse, 1, 1, Street).S(Barracks, 1, 1, Street).S(GuardHouse, 0, 2, Street)
+				.S(Warehouse, 0, 1, Street).S(Pillory, 1, 1, Centre).S(StoneCross, 1, 1, Centre)
+				.S(WizardTower, 1, 1, Edges).S(Observatory, 0, 1, Edges).S(TrainingYard, 1, 1, Edges).S(ArcheryRange, 0, 1, Edges)
+				.S(DyeWorks, 0, 1, Edges).S(PotteryKiln, 0, 1, Edges)
+				.S(Cathedral, 1, 1, Street).S(Fountain, 1, 2, Centre)
 				.Elsewhere(1f).In(1.5f, Arid).In(1.5f, Highland);
 			T(a, POIType.City, "Timber", Walled, Timber)
 				.S(Palisade, 1, 1, Perimeter).S(Gate, 2, 4, Gates).S(Watchtower, 6, 10, Towers)
-				.S(Keep, 1, 1, Centre, style: Stone).S(Well, 2, 3, Centre).S(Stall, 6, 12, Centre)
-				.S(House, 50, 90, Street).S(Storage, 10, 20, Scatter).S(Banner, 4, 8, Scatter)
-				.S(Church, 1, 2, Street, style: Stone).S(Temple, 1, 1, Street, style: Stone).S(Tavern, 2, 4, Street, style: Timber).S(Smithy, 2, 3, Street, style: Timber)
-				.S(Stable, 1, 3, Scatter, style: Timber).S(Notice, 2, 3, Centre, style: Timber)
+				.S(Keep, 1, 1, Centre, style: Stone).S(Well, 1, 1, Centre).S(Stall, 6, 12, Centre)
+				.S(House, 38, 68, Street).S(Storage, 10, 20, Scatter).S(Banner, 4, 8, Scatter)
+				.S(ParishChurch, 1, 1, Street, style: Stone).S(Temple, 1, 1, Street, style: Stone).S(Tavern, 2, 2, Street, style: Timber).S(Smithy, 2, 2, Street, style: Timber)
+				.S(Stable, 1, 2, Scatter, style: Timber).S(Notice, 2, 3, Centre, style: Timber)
+				.S(MarketHall, 1, 1, Street).S(Library, 0, 1, Street).S(ShopHouse, 4, 8, Street).S(Healer, 1, 2, Street).S(Bakery, 1, 2, Street)
+				.S(Workshop, 2, 2, Street).S(Brewhouse, 1, 2, Street).S(CountingHouse, 1, 1, Street).S(Barracks, 1, 1, Street).S(GuardHouse, 0, 2, Street)
+				.S(Warehouse, 0, 1, Street).S(Pillory, 1, 1, Centre).S(StoneCross, 1, 1, Centre)
+				.S(WizardTower, 1, 1, Edges).S(Observatory, 0, 1, Edges).S(TrainingYard, 1, 1, Edges).S(ArcheryRange, 0, 1, Edges)
+				.S(DyeWorks, 0, 1, Edges).S(PotteryKiln, 0, 1, Edges)
+				.S(Cathedral, 1, 1, Street).S(Fountain, 1, 2, Centre)
 				.Elsewhere(0.4f).In(1.5f, Woods).In(1f, Cold).In(0.05f, Arid).Races(Civil);
 
-			// The capital: larger than a city (the planner's footprint), more of everything, the keep at its heart.
+			// The capital: larger than a city (the planner's footprint), more of everything, the palace at its heart (2026-10-19: its
+			// centre slot was the keep; the palace compound, PointOfInterestPalace, stands where the keep stood, the slot changed in place).
+			// (2026-10-20: "There should only be one or two of the same type of structure in a town, city, village, capital, etc.") Not
+			// more of each building, though: a city and the capital keep one of each landmark and at most two of any other building
+			// (PointOfInterestStructureCaps, which PropsFeature holds every slot to), their size in their houses and shop-houses.
 			T(a, POIType.Capital, "Stone", Walled, Stone)
 				.S(Wall, 1, 1, Perimeter).S(Gate, 4, 4, Gates).S(WallTower, 12, 20, Towers)
-				.S(Keep, 1, 1, Centre).S(Statue, 2, 4, Centre).S(Obelisk, 1, 1, Centre).S(Well, 3, 5, Centre).S(Stall, 12, 20, Centre)
-				.S(House, 50, 80, Street).S(House, 40, 70, Street, style: Timber)
-				.S(Church, 2, 3, Street, style: Stone).S(Temple, 1, 2, Street, style: Stone).S(Tavern, 3, 6, Street, style: Timber).S(Smithy, 3, 4, Street, style: Timber)
-				.S(Stable, 2, 4, Scatter, style: Timber).S(Notice, 3, 5, Centre, style: Timber)
+				.S(Palace, 1, 1, Centre).S(Statue, 2, 2, Centre).S(Obelisk, 1, 1, Centre).S(Well, 1, 1, Centre).S(Stall, 12, 20, Centre)
+				.S(House, 40, 64, Street).S(House, 32, 56, Street, style: Timber)
+				.S(ParishChurch, 1, 2, Street, style: Stone).S(Temple, 1, 1, Street, style: Stone).S(Tavern, 2, 2, Street, style: Timber).S(Smithy, 2, 2, Street, style: Timber)
+				.S(Stable, 2, 2, Scatter, style: Timber).S(Notice, 3, 5, Centre, style: Timber)
 				.S(Storage, 20, 30, Scatter).S(Banner, 8, 12, Scatter)
+				// (2026-10-19) The realm's seat: every trade and calling, its astronomer's tower and its mage's.
+				.S(MarketHall, 1, 1, Street).S(Library, 1, 1, Street).S(ShopHouse, 6, 10, Street).S(Healer, 2, 2, Street).S(Bakery, 2, 2, Street)
+				.S(Workshop, 2, 2, Street).S(Brewhouse, 2, 2, Street).S(CountingHouse, 1, 1, Street).S(Barracks, 1, 2, Street).S(GuardHouse, 2, 2, Street)
+				.S(Warehouse, 1, 2, Street).S(Pillory, 1, 1, Centre).S(StoneCross, 1, 1, Centre)
+				.S(WizardTower, 1, 1, Edges).S(Observatory, 1, 1, Edges).S(TrainingYard, 1, 2, Edges).S(ArcheryRange, 1, 1, Edges)
+				.S(DyeWorks, 1, 1, Edges).S(PotteryKiln, 1, 1, Edges)
+				.S(Cathedral, 1, 1, Street).S(Fountain, 2, 2, Centre)
 				.Sized(false, false, true).In(1.5f, Arid).In(1.5f, Highland);
 			T(a, POIType.Capital, "Timber", Walled, Timber)
 				.S(Wall, 1, 1, Perimeter, style: Stone).S(Gate, 4, 4, Gates, style: Stone).S(WallTower, 12, 20, Towers, style: Stone)
-				.S(Keep, 1, 1, Centre, style: Stone).S(Statue, 2, 4, Centre).S(Well, 3, 5, Centre).S(Stall, 12, 20, Centre)
-				.S(House, 80, 140, Street).S(Storage, 20, 30, Scatter).S(Banner, 8, 12, Scatter)
-				.S(Church, 2, 3, Street, style: Stone).S(Temple, 1, 2, Street, style: Stone).S(Tavern, 3, 6, Street, style: Timber).S(Smithy, 3, 4, Street, style: Timber)
-				.S(Stable, 2, 4, Scatter, style: Timber).S(Notice, 3, 5, Centre, style: Timber)
+				.S(Palace, 1, 1, Centre, style: Stone).S(Statue, 2, 2, Centre).S(Well, 1, 1, Centre).S(Stall, 12, 20, Centre)
+				.S(House, 64, 112, Street).S(Storage, 20, 30, Scatter).S(Banner, 8, 12, Scatter)
+				.S(ParishChurch, 1, 2, Street, style: Stone).S(Temple, 1, 1, Street, style: Stone).S(Tavern, 2, 2, Street, style: Timber).S(Smithy, 2, 2, Street, style: Timber)
+				.S(Stable, 2, 2, Scatter, style: Timber).S(Notice, 3, 5, Centre, style: Timber)
+				.S(MarketHall, 1, 1, Street).S(Library, 1, 1, Street).S(ShopHouse, 6, 10, Street).S(Healer, 2, 2, Street).S(Bakery, 2, 2, Street)
+				.S(Workshop, 2, 2, Street).S(Brewhouse, 2, 2, Street).S(CountingHouse, 1, 1, Street).S(Barracks, 1, 2, Street).S(GuardHouse, 2, 2, Street)
+				.S(Warehouse, 1, 2, Street).S(Pillory, 1, 1, Centre).S(StoneCross, 1, 1, Centre)
+				.S(WizardTower, 1, 1, Edges).S(Observatory, 1, 1, Edges).S(TrainingYard, 1, 2, Edges).S(ArcheryRange, 1, 1, Edges)
+				.S(DyeWorks, 1, 1, Edges).S(PotteryKiln, 1, 1, Edges)
+				.S(Cathedral, 1, 1, Street).S(Fountain, 2, 2, Centre)
 				.Sized(false, false, true).Elsewhere(0.4f).In(1.5f, Woods).In(1f, Cold).In(0.05f, Arid).Races(Civil);
 
 			// Ports: a waterfront street, piers out from the shore ahead (the planner turns a port to the sea).
@@ -386,14 +503,19 @@ namespace FishMMO.Shared.WorldDesign
 			// waterfront has the taverns, chapel, smithy and warehouses a town's has, and the ships at its piers and in its
 			// roads are PointOfInterestHarbour's.
 			T(a, POIType.Port, "Timber", Streets, Timber)
-				.S(Pier, 2, 4, Piers).S(Well, 1, 1, Centre).S(Stall, 3, 6, Centre).S(Notice, 1, 1, Centre).S(House, 16, 30, Street)
+				.S(Pier, 2, 4, Piers).S(Well, 1, 1, Centre).S(Stall, 3, 6, Centre).S(Notice, 1, 1, Centre).S(House, 12, 22, Street)
 				.S(Tavern, 1, 2, Street).S(Church, 0, 1, Street, style: Stone).S(Smithy, 1, 1, Street).S(Stable, 0, 1, Scatter)
 				.S(Storage, 12, 22, Scatter).S("=Woodpile", 1, 3, Scatter).S(Lighthouse, 0, 1, Scatter).S(Banner, 1, 3, Scatter)
+				// (2026-10-19) The merchants' warehouses and counting house, the ship-chandlers' and coopers' shops (PointOfInterestTrades).
+				.S(Warehouse, 1, 2, Street).S(ShopHouse, 3, 6, Street).S(Workshop, 1, 2, Street).S(Bakery, 0, 1, Street).S(Healer, 0, 1, Street)
+				.S(CountingHouse, 0, 1, Street).S(Pillory, 0, 1, Centre)
 				.In(0.2f, Arid).In(0.6f, Highland);
 			T(a, POIType.Port, "Stone", Streets, Stone)
-				.S(Pier, 2, 4, Piers, style: Timber).S(Well, 1, 1, Centre).S(Stall, 3, 6, Centre).S(Notice, 1, 1, Centre, style: Timber).S(House, 16, 28, Street)
+				.S(Pier, 2, 4, Piers, style: Timber).S(Well, 1, 1, Centre).S(Stall, 3, 6, Centre).S(Notice, 1, 1, Centre, style: Timber).S(House, 12, 20, Street)
 				.S(Tavern, 1, 2, Street, style: Timber).S(Church, 1, 1, Street).S(Smithy, 1, 1, Street, style: Timber).S(Stable, 0, 1, Scatter, style: Timber)
 				.S(Storage, 12, 22, Scatter).S(Lighthouse, 0, 1, Scatter).S(Banner, 1, 3, Scatter)
+				.S(Warehouse, 1, 2, Street).S(ShopHouse, 3, 6, Street).S(Workshop, 1, 2, Street).S(Bakery, 0, 1, Street).S(Healer, 0, 1, Street)
+				.S(CountingHouse, 0, 1, Street).S(Pillory, 0, 1, Centre)
 				.Elsewhere(0.3f).In(2f, Arid).In(2f, Highland).Races(Civil);
 
 			T(a, POIType.TradingPost, "Market", Single, Timber)
@@ -414,32 +536,45 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static void Strongholds(List<PointOfInterestTemplateSpec> a)
 		{
+			// (2026-10-19) A garrison drills: a practice yard in a keep's ward, a castle's barracks and its butts. (2026-10-19: "the large
+			// castles should have an interior town/village with at least a barracks and stable") Every castle's ward is its village:
+			// the garrison's barracks and the stable for its horses, a smithy, a bakehouse, houses backed onto the curtain round the
+			// keep, perhaps a chapel; its well out in the open ward, laid after the buildings (beside the keep, where a centrepiece
+			// goes, it took the room a small bailey's barracks or stable needed). A keep's ward stays as it was.
 			T(a, POIType.Keep, "Stone", Walled, Stone)
 				.S(Wall, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(WallTower, 0, 4, Towers)
-				.S(Keep, 1, 1, Centre).S(Well, 0, 1, Centre).S(Storage, 3, 6, Scatter).S(Banner, 2, 4, Scatter).S(Brazier, 1, 3, Scatter);
+				.S(Keep, 1, 1, Centre).S(Well, 0, 1, Centre).S(Storage, 3, 6, Scatter).S(Banner, 2, 4, Scatter).S(Brazier, 1, 3, Scatter)
+				.S(TrainingYard, 0, 1, Edges);
 			T(a, POIType.Keep, "Palisade", Walled, Timber)
 				.S(Palisade, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(Watchtower, 1, 1, Centre).S(Longhouse, 1, 2, Rows)
 				.S(Storage, 3, 6, Scatter).S(Banner, 2, 4, Scatter).S(Fire, 0, 1, Scatter).S(TorchPost, 2, 4, Scatter)
+				.S(TrainingYard, 0, 1, Edges)
 				.Elsewhere(0.4f).In(1.5f, Woods).In(1.5f, Cold).In(0.1f, Arid).Races(Civil);
 
 			T(a, POIType.Castle, "Stone", Walled, Stone)
 				.S(Wall, 1, 1, Perimeter).S(Gate, 1, 2, Gates).S(WallTower, 4, 8, Towers)
-				.S(Keep, 1, 1, Centre).S(Well, 1, 1, Centre).S(House, 4, 10, Street)
-				.S(Storage, 4, 8, Scatter).S(Banner, 3, 6, Scatter).S(Brazier, 2, 4, Scatter);
+				.S(Keep, 1, 1, Centre).S(Well, 1, 1, Scatter).S(House, 4, 10, Street)
+				.S(Storage, 4, 8, Scatter).S(Banner, 3, 6, Scatter).S(Brazier, 2, 4, Scatter)
+				.S(Barracks, 1, 1, Street).S(Bakery, 1, 1, Street).S(TrainingYard, 1, 1, Edges).S(ArcheryRange, 0, 1, Edges)
+				.S(Stable, 1, 1, Street, style: Timber).S(Smithy, 1, 1, Street, style: Timber).S(Chapel, 0, 1, Street, style: Stone);
 			T(a, POIType.Castle, "Highland", Walled, Stone)
 				.S(Wall, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(WallTower, 6, 10, Towers)
-				.S(Keep, 1, 1, Centre).S(Well, 1, 1, Centre).S(Longhouse, 2, 4, Street, style: Timber)
+				.S(Keep, 1, 1, Centre).S(Well, 1, 1, Scatter).S(Longhouse, 2, 4, Street, style: Timber)
 				.S(Storage, 4, 8, Scatter).S(Banner, 3, 6, Scatter).S(Brazier, 2, 4, Scatter)
+				.S(Barracks, 1, 1, Street).S(TrainingYard, 1, 1, Edges)
+				.S(Stable, 1, 1, Street, style: Timber).S(Smithy, 1, 1, Street, style: Timber).S(Bakery, 1, 1, Street).S(Chapel, 0, 1, Street, style: Stone).S(House, 0, 4, Street)
 				.Elsewhere(0.3f).In(2f, Highland).In(1.5f, Cold).Races(Civil);
 
 			T(a, POIType.Fortress, "Stone", Walled, Stone)
 				.S(Wall, 1, 1, Perimeter).S(Gate, 2, 2, Gates).S(WallTower, 6, 10, Towers)
 				.S(Keep, 1, 1, Centre).S(Watchtower, 2, 4, Scatter, style: Timber).S(Longhouse, 3, 6, Street, style: Timber)
-				.S(Tent, 4, 10, Rows, style: Hide).S(Storage, 6, 12, Scatter).S(Banner, 6, 10, Scatter).S(Brazier, 2, 5, Scatter).S(TorchPost, 2, 4, Scatter);
+				.S(Tent, 4, 10, Rows, style: Hide).S(Storage, 6, 12, Scatter).S(Banner, 6, 10, Scatter).S(Brazier, 2, 5, Scatter).S(TorchPost, 2, 4, Scatter)
+				.S(Barracks, 1, 2, Street).S(GuardHouse, 0, 2, Street).S(TrainingYard, 1, 1, Edges).S(ArcheryRange, 1, 1, Edges);
 			T(a, POIType.Fortress, "Palisade", Walled, Timber)
 				.S(Palisade, 1, 1, Perimeter).S(Gate, 2, 2, Gates).S(Watchtower, 4, 8, Towers)
 				.S(Longhouse, 2, 4, Street).S(Tent, 6, 14, Rows, style: Hide).S(Fire, 1, 2, Centre)
 				.S(Storage, 6, 12, Scatter).S(Banner, 6, 10, Scatter).S(TorchPost, 3, 6, Scatter)
+				.S(TrainingYard, 0, 1, Edges).S(ArcheryRange, 0, 1, Edges)
 				.Elsewhere(0.5f).In(1.5f, Woods).In(1.5f, Steppe).Races(Outlaw);
 
 			T(a, POIType.Tower, "Timber", Single, Timber)
@@ -447,6 +582,16 @@ namespace FishMMO.Shared.WorldDesign
 			T(a, POIType.Tower, "Stone", Single, Stone)
 				.S(WallTower, 1, 1, Centre).S(Storage, 1, 3, Scatter).S(Banner, 0, 1, Scatter)
 				.Elsewhere(0.4f).In(2f, Arid).In(2f, Highland);
+			// A mage's tower alone in the wilds (2026-10-19: "Wizard tower (with optional library?)"): its rune stones and glowing jars
+			// about it, a hive and a well for the long years. And an astronomer's tower ("giant telescopes to see the stars?"), best
+			// under the dry, clear skies of the high and arid places.
+			T(a, POIType.Tower, "Wizard", Single, Stone)
+				.S(WizardTower, 1, 1, Centre).S(RuneStone, 2, 4, Scatter).S(Glowjar, 1, 3, Scatter, style: Timber).S(Well, 0, 1, Scatter)
+				.S(Apiary, 0, 1, Scatter, style: Timber).S(Storage, 1, 2, Scatter, style: Timber).S(Statue, 0, 1, Scatter)
+				.Weighs(0.5f).Elsewhere(1f).In(1.4f, Woods).In(1.2f, Swamp);
+			T(a, POIType.Tower, "Observatory", Single, Stone)
+				.S(Observatory, 1, 1, Centre).S(Storage, 1, 2, Scatter, style: Timber).S(Brazier, 0, 2, Scatter).S(Well, 0, 1, Scatter)
+				.Weighs(0.35f).Elsewhere(0.6f).In(2f, Highland).In(1.6f, Arid);
 		}
 
 		// ── Works: bridges, mines, quarries, lighthouses ────────────
@@ -592,12 +737,16 @@ namespace FishMMO.Shared.WorldDesign
 
 			T(a, POIType.Monastery, "Cloister", Walled, Stone)
 				.S(Wall, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(Shrine, 1, 1, Centre).S(Statue, 1, 2, Centre).S(Well, 1, 1, Centre)
-				.S(StoneHouse, 4, 8, Street).S(Storage, 2, 5, Scatter, style: Timber)
-				.S(Dovecote, 0, 1, Scatter).S(Apiary, 1, 2, Scatter, style: Timber).S(Granary, 0, 1, Scatter, style: Timber);
+				.S(StoneHouse, 3, 6, Street).S(Storage, 2, 5, Scatter, style: Timber)
+				.S(Dovecote, 0, 1, Scatter).S(Apiary, 1, 2, Scatter, style: Timber).S(Granary, 0, 1, Scatter, style: Timber)
+				// (2026-10-19) The house's scriptorium, its infirmary and its brewhouse; its tithe barn is its grange's, by its fields
+				// (PointOfInterestFarmsteads).
+				.S(Library, 0, 1, Street).S(Healer, 0, 1, Street).S(Brewhouse, 0, 1, Street);
 			T(a, POIType.Monastery, "Timber", Walled, Timber)
 				.S(Palisade, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(Shrine, 1, 1, Centre, style: Stone).S(Well, 1, 1, Centre, style: Stone)
 				.S(Longhouse, 1, 2, Street).S(House, 2, 5, Street).S(Storage, 2, 5, Scatter)
 				.S(Apiary, 1, 2, Scatter).S(Granary, 0, 1, Scatter)
+				.S(Healer, 0, 1, Street)
 				.Elsewhere(0.4f).In(1.5f, Woods).In(1.5f, Cold);
 
 			T(a, POIType.FeyRing, "Ring", Round, Stone)
@@ -632,6 +781,11 @@ namespace FishMMO.Shared.WorldDesign
 
 			T(a, POIType.Barrow, "Ringed", Round, Stone)
 				.S(Menhir, 5, 9, Ring, 0f, 0.3f).S(CryptDoor, 1, 1, Centre).S(Mound, 1, 3, Scatter);
+			// A barrow being opened (2026-10-19: "archeologists"): the trench cut into its mound, the diggers' finds and their tents.
+			T(a, POIType.Barrow, "Excavated", Round, Stone)
+				.S(Menhir, 4, 7, Ring, 0.1f, 0.5f).S(DigSite, 1, 1, Centre, style: Earth).S(DigCamp, 1, 2, Scatter, style: Timber)
+				.S(Tent, 1, 2, Scatter, style: Hide).S(Storage, 1, 3, Scatter, style: Timber).S(Mound, 0, 2, Scatter)
+				.Weighs(0.3f).Pad(0.7f);
 
 			T(a, POIType.Crypt, "Tomb", Single, Stone)
 				.S(CryptDoor, 1, 1, Centre).S(Mausoleum, 0, 1, Scatter).S(Gravestone, 3, 8, Scatter, 0.2f, 0.6f).S(Bones, 1, 3, Scatter);
@@ -659,6 +813,11 @@ namespace FishMMO.Shared.WorldDesign
 			T(a, POIType.Ruins, "Temple", Round, Stone)
 				.S(Column, 6, 10, Ring, 0.3f, 0.9f).S(Altar, 1, 1, Centre, 0.2f, 0.5f).S(Rubble, 2, 4, Scatter).S(RuinedStatue, 0, 2, Scatter)
 				.Weighs(0.5f).In(1.5f, Arid).Pad(0.5f);
+			// Ruins under excavation (2026-10-19: "archeologists"): an ancient floor being bared, a trench, the finds and the diggers' camp.
+			T(a, POIType.Ruins, "Excavation", Scattered, Stone)
+				.S(DigSite, 1, 2, Scatter, style: Earth).S(DigCamp, 1, 3, Scatter, style: Timber).S(RuinedWall, 2, 5, Scatter).S(BrokenColumn, 2, 4, Scatter)
+				.S(RuinedHouse, 0, 2, Scatter).S(Tent, 1, 2, Scatter, style: Hide).S(Storage, 2, 4, Scatter, style: Timber).S(Rubble, 2, 4, Scatter)
+				.Weighs(0.4f).In(1.3f, Arid).Pad(0.6f);
 
 			T(a, POIType.RuinedTower, "Tower", Single, Stone)
 				.S(CollapsedTower, 1, 1, Centre).S(Rubble, 1, 3, Scatter).S(RuinedWall, 0, 2, Scatter);

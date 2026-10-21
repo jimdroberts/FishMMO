@@ -36,6 +36,26 @@ namespace FishMMO.Shared.WorldDesign
 		Span,
 		/// <summary>From the shore ahead out over the water, at deck height; the count is how many piers.</summary>
 		Pier,
+		/// <summary>
+		/// In the band just inside the site's boundary (from 65 % of its inner reach out to it), the long side along the boundary
+		/// where there is room, else anywhere free (2026-10-19): what wants room or is best kept downwind of the houses (an archery
+		/// range, a training yard, a dye works, a kiln, a barn within a site).
+		/// </summary>
+		Edge,
+	}
+
+	/// <summary>
+	/// Whether a street slot's houses may keep a fenced yard (2026-10-19, PointOfInterestLayouts' yards): none, a front garden with a
+	/// gate to the street and the plot behind fenced, or the plot behind fenced only (a shop whose front stays on the street).
+	/// </summary>
+	/// <remarks>Append only: may be stored by ordinal.</remarks>
+	public enum PointOfInterestYardKind : byte
+	{
+		None,
+		/// <summary>Set back behind a fenced front garden, its gate on the line from the door to the street, the plot behind it fenced too.</summary>
+		Fronted,
+		/// <summary>Its front on the street as it is, the plot behind it fenced, a gate at the back.</summary>
+		Behind,
 	}
 
 	/// <summary>One piece a layout places: which slot it fills, where in the site's frame, and which way it faces.</summary>
@@ -51,6 +71,24 @@ namespace FishMMO.Shared.WorldDesign
 		public float Yaw;
 		/// <summary>Width (along the piece's x) and depth (z) it was laid with, metres.</summary>
 		public Vector2 Footprint;
+		/// <summary>
+		/// A perimeter module's joints (2026-10-19): the ends of its chord on the wall's line at its −x (<see cref="From"/>) and +x
+		/// (<see cref="To"/>) ends, site frame, before the run past a corner that closes its face. Both modules meeting at a joint, and
+		/// a gate or tower the run ends on, share it, so they are seated at one height there. Zero for any other piece.
+		/// </summary>
+		public Vector2 From, To;
+	}
+
+	/// <summary>
+	/// A stair up the inside of a walled curtain to its walk (2026-10-19), as the layout keeps room for it: the WallStair piece's
+	/// centre (site frame) and yaw (the curtain's: its back to the wall's inner face, climbing along its +x to the landing), and the
+	/// perimeter modules (indices into the laid pieces) its foot and its landing stand against.
+	/// </summary>
+	public struct PointOfInterestLayoutStair
+	{
+		public Vector2 Offset;
+		public float Yaw;
+		public int FootModule, LandingModule;
 	}
 
 	/// <summary>A slot as a layout sees it: its role, its pieces' size, and how many it asks for.</summary>
@@ -62,8 +100,28 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The module length of a piece laid end to end; 0 for none.</summary>
 		public float Module;
 		public int Count;
-		/// <summary>A landmark (a church, a temple): laid before the houses, fronting the market's plaza where it can.</summary>
+		/// <summary>A landmark (a church, a temple, a market hall, a library): laid before the houses, fronting the market's plaza where it can.</summary>
 		public bool Landmark;
+		/// <summary>A well: laid no nearer than <see cref="PointOfInterestLayouts.WellSpacing"/> to any other well, else dropped.</summary>
+		public bool Well;
+		/// <summary>
+		/// A market stall (2026-10-20): laid in rows across the market place with aisles between them, not packed round its
+		/// centrepiece (<see cref="PointOfInterestLayouts.AisleMetres"/>).
+		/// </summary>
+		public bool Stall;
+		/// <summary>Whether its street pieces may keep a fenced yard (a share of them do, <see cref="PointOfInterestLayoutRequest.YardShare"/>).</summary>
+		public PointOfInterestYardKind Yard;
+		/// <summary>
+		/// A perimeter's walk, metres over a module's base (StructurePieces.CurtainWalk; 0 for none: a palisade, a coped wall, a
+		/// fence). A walked curtain ends on its towers' sides (their doors open onto the walk) and keeps room for its wall stairs;
+		/// a curtain with no walk runs on behind its towers, which stand inside it.
+		/// </summary>
+		public float Walk;
+		/// <summary>
+		/// A gate's or a tower's half width where a walked curtain meets it, metres from its centre along its x (its "curtain"
+		/// marks); 0 takes its footprint's half width less <see cref="PointOfInterestLayouts.StationEmbed"/>.
+		/// </summary>
+		public float Join;
 	}
 
 	/// <summary>One counted piece a layout places (any role but the made-up ones).</summary>
@@ -134,6 +192,16 @@ namespace FishMMO.Shared.WorldDesign
 		public readonly List<PointOfInterestLayoutStreet> Streets = new List<PointOfInterestLayoutStreet>();
 		/// <summary>The plazas the layout kept open (a green, a market place, a square; filled by the packer): convex polygons, site frame.</summary>
 		public readonly List<Vector2[]> Plazas = new List<Vector2[]>();
+		/// <summary>
+		/// The share of the houses that may keep a yard (<see cref="PointOfInterestLayoutSlot.Yard"/>) that do, 0 … 1; NaN takes the
+		/// town plan's (<see cref="PointOfInterestLayouts.YardShareOf"/>): a village's crofts half fenced, a market town's a third, a
+		/// city's few.
+		/// </summary>
+		public float YardShare = float.NaN;
+		/// <summary>The fenced yards the layout laid (filled by the packer), in the site's frame.</summary>
+		public readonly List<PointOfInterestLayoutYard> Yards = new List<PointOfInterestLayoutYard>();
+		/// <summary>The stairs up a walked curtain the layout kept room for (filled by the packer), in the site's frame.</summary>
+		public readonly List<PointOfInterestLayoutStair> Stairs = new List<PointOfInterestLayoutStair>();
 	}
 
 	/// <summary>
@@ -167,11 +235,51 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Pieces stay this share of the footprint radius in, so nothing hangs over a pad's edge.</summary>
 		public const float Inset = 0.9f;
 
+		/// <summary>
+		/// The least distance between two wells, metres (2026-10-19: "only one well within a 50m radius"): a town's second well
+		/// stands out in another quarter of it, else is not laid. A farmstead near one keeps a water butt instead (PointOfInterestFarmsteads).
+		/// </summary>
+		public const float WellSpacing = 50f;
+
 		/// <summary>The opening a perimeter with no gate slot leaves at its heading, at least, metres.</summary>
 		public const float EntranceMetres = 4f;
 
+		/// <summary>
+		/// How far a walked curtain runs into a gate or tower that has no "curtain" marks, past its footprint's side, metres: a round
+		/// tower's face falls away from its widest point by this much where the curtain's faces meet it.
+		/// </summary>
+		public const float StationEmbed = 0.35f;
+
+		/// <summary>How far a walked curtain runs past a gate's or tower's "curtain" mark into its wall, metres (a round tower's face falls back 0.14 m at the curtain's corners).</summary>
+		public const float MarkEmbed = 0.15f;
+
+		/// <summary>How far a palisade's (a no-walk curtain's) towers stand off its inner face, metres.</summary>
+		public const float TowerStandOff = 0.15f;
+
+		/// <summary>Where a walked curtain meets a gate or tower of <paramref name="slot"/>, metres each side of its centre along its x.</summary>
+		public static float StationJoin(in PointOfInterestLayoutSlot slot)
+			=> slot.Join > 0f ? slot.Join : Mathf.Max(0.5f, slot.Footprint.x * 0.5f - StationEmbed);
+
 		/// <summary>The walk between two rows, beyond the gap, metres.</summary>
 		public const float RowAisleMetres = 1f;
+
+		/// <summary>The aisle between a market's rows of stalls, metres: room for a cart and the folk either side of it.</summary>
+		public const float AisleMetres = 4f;
+
+		/// <summary>The clear ground between neighbouring stalls along a market's row, and between a pair of rows back to back, metres.</summary>
+		public const float StallSpacingMetres = 2f;
+
+		/// <summary>The clear ground a market's cross, stocks, notice boards and fountains keep from each other and from its stalls, metres.</summary>
+		public const float MarketWalkMetres = 3f;
+
+		/// <summary>The walk kept clear inside a market square's edge, before the fronts of the houses round it, metres.</summary>
+		public const float SquareEdgeMetres = 2.5f;
+
+		/// <summary>
+		/// The walking room kept clear all round a market's centrepiece (its well, its cross), metres: more in a larger place, from a
+		/// village's three to a city's six (<paramref name="reach"/>: the settlement's mean inner reach, metres).
+		/// </summary>
+		public static float CentreRoomMetres(float reach) => Mathf.Clamp(reach * 0.05f, 3f, 6f);
 
 		/// <summary>A slot's role, its Auto resolved by the template's layout.</summary>
 		public static PointOfInterestSlotRole RoleFor(PointOfInterestLayout layout, int slot, PointOfInterestSlotRole role)
@@ -690,7 +798,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// the site's middle through the gate, as wide as the gate's passage and long enough to rest on the far bank, lowered
 		/// to begin with. A real door (PointOfInterestDoors builds it, the server works it): raised, the ditch is a ditch.
 		/// </summary>
-		private static void AddDrawbridges(PointOfInterestSiteContext context, List<Vector3> gateways, float stature)
+		private static void AddDrawbridges(PointOfInterestSiteContext context, List<(Vector3 at, Vector3 outward)> gateways, float stature)
 		{
 			if (gateways.Count == 0 || context.Record == null
 				|| !MoatShaper.TryMoat(context.Points, context.Record.Id, out Vector3 centre, out float inner, out float width, out _))
@@ -698,9 +806,11 @@ namespace FishMMO.Shared.WorldDesign
 				return;
 			}
 			const float Passage = 3.5f;
-			foreach (Vector3 gate in gateways)
+			bool shaped = MoatShaper.TryMoat(context.Points.Shapes, context.Record.Id, out PointOfInterestShape moat);
+			foreach ((Vector3 gate, Vector3 front) in gateways)
 			{
-				var outward = new Vector3(gate.x - centre.x, 0f, gate.z - centre.z);
+				// Out along the gate's own passage (square to the wall's line there, 2026-10-19), not the bearing from the middle.
+				var outward = new Vector3(front.x, 0f, front.z);
 				if (outward.sqrMagnitude < 1e-4f)
 				{
 					continue;
@@ -709,9 +819,21 @@ namespace FishMMO.Shared.WorldDesign
 				// The doors' convention: the hinge is the leaf's corner on one jamb, Across runs along it to the other.
 				var across = new Vector3(outward.z, 0f, -outward.x);
 				float leafWidth = Passage * stature + 0.3f;
-				// The ditch's inner lip on the gate's own line: the ring follows the wall's outline (MoatShaper.InnerToward).
-				float reach = MoatShaper.TryMoat(context.Points.Shapes, context.Record.Id, out PointOfInterestShape moat) ? MoatShaper.InnerToward(moat, outward.x, outward.z) : inner;
-				var lip = new Vector3(centre.x + outward.x * reach, 0f, centre.z + outward.z * reach);
+				// The ditch's inner lip on the gate's own line: the ring follows the wall's outline (MoatShaper.InnerToward), walked
+				// out to from the gate along its passage.
+				var lip = new Vector3(gate.x, 0f, gate.z);
+				for (int k = 0; k < 4; k++)
+				{
+					var d = new Vector2(lip.x - centre.x, lip.z - centre.z);
+					float r = d.magnitude;
+					if (r < 1e-3f)
+					{
+						break;
+					}
+					float reach = shaped ? MoatShaper.InnerToward(moat, d.x / r, d.y / r) : inner;
+					float step = (reach - r) / Mathf.Max(0.3f, Vector2.Dot(d / r, new Vector2(outward.x, outward.z)));
+					lip += outward * step;
+				}
 				lip.y = context.GroundAt != null ? context.GroundAt(lip.x, lip.z) : gate.y;
 				context.Doors.Add(new PointOfInterestSiteContext.PlacedDoor
 				{
@@ -735,7 +857,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// the ditch with no drawbridge there: no gate on that line (a site without a wall, a gate the layout could not fit), or
 		/// a gate that laid nothing. Its deck runs from bank to bank, pitched to the line between them.
 		/// </summary>
-		private static void AddMoatBridges(PointOfInterestSiteContext context, List<Vector3> gateways, float stature)
+		private static void AddMoatBridges(PointOfInterestSiteContext context, List<(Vector3 at, Vector3 outward)> gateways, float stature)
 		{
 			if (context.Record == null || context.Points == null || context.Points.Paths == null
 				|| !MoatShaper.TryMoat(context.Points, context.Record.Id, out Vector3 centre, out float inner, out float width, out _)
@@ -745,7 +867,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			float leafWidth = 3.5f * stature + 0.3f;
 			var covered = new List<Vector2>();
-			foreach (Vector3 gate in gateways)
+			foreach ((Vector3 gate, Vector3 _) in gateways)
 			{
 				var outward = new Vector2(gate.x - centre.x, gate.z - centre.z);
 				if (outward.sqrMagnitude > 1e-4f)
@@ -820,70 +942,252 @@ namespace FishMMO.Shared.WorldDesign
 			return true;
 		}
 
-		private static void AddWallStairs(PointOfInterestSiteContext context, List<(Vector3 at, Quaternion turn)> curtain, List<Vector3> gateways,
-			List<(Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole role, string tag)> grounds)
+		// ── A walked curtain's seat (2026-10-19) ───────────────────────
+
+		/// <summary>The most a walked curtain's module may stand over a dip in the ground under it before its joints sink: its plinth's reach, less a hand.</summary>
+		private const float CurtainDipAllowance = 0.4f;
+
+		/// <summary>The most a joint is sunk to bring the walk down to a wall stair's landing, metres; past it the stair is left out.</summary>
+		private const float StairSinkLimit = 1.5f;
+
+		/// <summary>
+		/// The heights a walked curtain is laid at (<see cref="SeatCurtain"/>): each gate's and tower's base, each module's two joints
+		/// (world; its −x end first), and each wall stair's base and height scale, by their indices in the layout and its stairs.
+		/// </summary>
+		internal sealed class CurtainSeat
 		{
-			if (curtain.Count < 4)
+			public float Walk;
+			public readonly Dictionary<int, float> Stations = new Dictionary<int, float>();
+			public readonly Dictionary<int, (Vector3 from, Vector3 to)> Modules = new Dictionary<int, (Vector3 from, Vector3 to)>();
+			public readonly Dictionary<int, (float y, float scaleY)> Stairs = new Dictionary<int, (float y, float scaleY)>();
+		}
+
+		/// <summary>
+		/// Seats a walked curtain (2026-10-19: "the stairs don't fit", the walk stepping at every joint on a slope): every gate and tower
+		/// on its footprint's ground as any building; every joint its modules share at one height, the ground's there, or the base of
+		/// the gate or tower the run ends on, so the walk meets their doors; a joint sunk where a module would stand over a dip deeper
+		/// than its plinth reaches, and the joint a wall stair stands on sunk until the walk is no higher over the stair's foot than
+		/// the stair climbs. Null when the site has no walked curtain. Pure but for the context's ground.
+		/// </summary>
+		internal static CurtainSeat SeatCurtain(PointOfInterestSiteContext context, PointOfInterestLayoutRequest request, List<PointOfInterestLayoutPiece> pieces)
+		{
+			float walk = 0f;
+			foreach (PointOfInterestLayoutPiece p in pieces)
 			{
-				return;
-			}
-			GameObject stair = StructureKit.Prefab("WallStair", 0);
-			if (stair == null)
-			{
-				return;
-			}
-			StructurePiece piece = StructurePieces.Find("WallStair");
-			Vector2 size = piece != null ? piece.Footprint : new Vector2(7.5f, 1.5f);
-			Vector3 centre = context.Record.Position;
-			float Bearing(Vector3 p) => Mathf.Atan2(p.x - centre.x, p.z - centre.z) * Mathf.Rad2Deg;
-			var wanted = new List<float>();
-			foreach (Vector3 g in gateways)
-			{
-				wanted.Add(Bearing(g) + 360f / curtain.Count * 2.2f);
-			}
-			wanted.Add((gateways.Count > 0 ? Bearing(gateways[0]) : context.Record.Yaw) + 180f);
-			var used = new HashSet<int>();
-			foreach (float bearing in wanted)
-			{
-				int best = -1;
-				float bestGap = float.MaxValue;
-				for (int i = 0; i < curtain.Count; i++)
+				if (p.Role == PointOfInterestSlotRole.Perimeter && p.From != p.To && p.Slot >= 0 && p.Slot < request.Slots.Count)
 				{
-					float gap = Mathf.Abs(Mathf.DeltaAngle(Bearing(curtain[i].at), bearing));
-					if (!used.Contains(i) && gap < bestGap)
+					walk = Mathf.Max(walk, request.Slots[p.Slot].Walk);
+				}
+			}
+			if (!(walk > 0f))
+			{
+				return null;
+			}
+			var seat = new CurtainSeat { Walk = walk };
+			var stations = new List<int>();
+			for (int i = 0; i < pieces.Count; i++)
+			{
+				PointOfInterestLayoutPiece p = pieces[i];
+				if ((p.Role == PointOfInterestSlotRole.Gate || p.Role == PointOfInterestSlotRole.WallTower) && p.Slot >= 0 && p.Slot < request.Slots.Count)
+				{
+					seat.Stations[i] = SeatHeight(context, p.Offset, p.Yaw, request.Slots[p.Slot].Footprint, StructurePieces.FoundationDepth);
+					stations.Add(i);
+				}
+			}
+			// Each joint's height: on a gate's or tower's side, its base (fixed); else the ground's.
+			var height = new Dictionary<Vector2, float>();
+			var fixedJoint = new HashSet<Vector2>();
+			float Height(Vector2 joint)
+			{
+				if (height.TryGetValue(joint, out float h))
+				{
+					return h;
+				}
+				foreach (int s in stations)
+				{
+					PointOfInterestLayoutPiece p = pieces[s];
+					Vector2 rel = joint - p.Offset, x = PointOfInterestLayouts.Rotate(Vector2.right, p.Yaw);
+					float along = Vector2.Dot(rel, x), across = Mathf.Abs(rel.x * x.y - rel.y * x.x);
+					if (across < 0.15f && Mathf.Abs(along) <= request.Slots[p.Slot].Footprint.x * 0.5f + 0.15f)
 					{
-						bestGap = gap;
-						best = i;
+						fixedJoint.Add(joint);
+						return height[joint] = seat.Stations[s];
 					}
 				}
-				if (best < 0)
+				return height[joint] = context.OnGround(joint).y - PointOfInterestLinearFeatures.SinkMetres;
+			}
+			var modules = new List<int>();
+			for (int i = 0; i < pieces.Count; i++)
+			{
+				PointOfInterestLayoutPiece p = pieces[i];
+				if (p.Role == PointOfInterestSlotRole.Perimeter && p.From != p.To && request.Slots[p.Slot].Walk > 0f)
+				{
+					Height(p.From);
+					Height(p.To);
+					modules.Add(i);
+				}
+			}
+			// Sunk where a module would bridge a dip its plinth does not reach down into.
+			var sink = new Dictionary<Vector2, float>();
+			void Sink(Vector2 joint, float by)
+			{
+				if (by > 0f && !fixedJoint.Contains(joint))
+				{
+					sink[joint] = Mathf.Max(sink.TryGetValue(joint, out float was) ? was : 0f, by);
+				}
+			}
+			foreach (int i in modules)
+			{
+				PointOfInterestLayoutPiece p = pieces[i];
+				float a = height[p.From], b = height[p.To], dip = 0f;
+				for (int k = 1; k < 4; k++)
+				{
+					float t = k * 0.25f;
+					dip = Mathf.Max(dip, Mathf.Lerp(a, b, t) - context.OnGround(Vector2.Lerp(p.From, p.To, t)).y);
+				}
+				Sink(p.From, dip - CurtainDipAllowance);
+				Sink(p.To, dip - CurtainDipAllowance);
+			}
+			foreach (KeyValuePair<Vector2, float> s in sink)
+			{
+				height[s.Key] -= s.Value;
+			}
+			// Each stair's joint sunk until its landing is no higher over its foot than it climbs; then its base and height.
+			float half = 0.5f * StructurePieces.WallStairLength, toLanding = half - 0.5f * StructurePieces.WallStairLanding;
+			for (int n = 0; n < request.Stairs.Count; n++)
+			{
+				PointOfInterestLayoutStair stair = request.Stairs[n];
+				if (stair.FootModule < 0 || stair.LandingModule < 0 || stair.FootModule >= pieces.Count || stair.LandingModule >= pieces.Count)
 				{
 					continue;
 				}
-				// Its back to the wall's inner face (the wall faces out along its −z).
-				(Vector3 at, Quaternion turn) wall = curtain[best];
-				Vector3 foot = wall.at + wall.turn * new Vector3(0f, 0f, 1.08f);
-				Vector3 middle = foot + wall.turn * new Vector3(0f, 0f, size.y * 0.5f);
-				bool clear = true;
-				foreach ((Vector3 at, Quaternion turn, Vector2 footprint, PointOfInterestSlotRole role, string _) in grounds)
-				{
-					if (role == PointOfInterestSlotRole.Perimeter || role == PointOfInterestSlotRole.Gate || role == PointOfInterestSlotRole.WallTower)
-					{
-						continue;
-					}
-					if (PointOfInterestLayouts.Overlaps(new Vector2(middle.x, middle.z), wall.turn.eulerAngles.y, size, new Vector2(at.x, at.z), turn.eulerAngles.y, footprint))
-					{
-						clear = false;
-						break;
-					}
-				}
-				if (!clear)
+				PointOfInterestLayoutPiece landing = pieces[stair.LandingModule];
+				if (!height.ContainsKey(landing.From) || !height.ContainsKey(landing.To))
 				{
 					continue;
 				}
-				used.Add(best);
-				context.AddProp(stair, new Vector3(foot.x, wall.at.y, foot.z), wall.turn, Vector3.one);
+				Vector2 x = PointOfInterestLayouts.Rotate(Vector2.right, stair.Yaw);
+				float foot = context.OnGround(stair.Offset - x * half).y;
+				Vector2 top = stair.Offset + x * toLanding;
+				Vector2 chord = landing.To - landing.From;
+				float t = Mathf.Clamp01(Vector2.Dot(top - landing.From, chord) / Mathf.Max(1e-4f, chord.sqrMagnitude));
+				// The stair's joint is the landing module's −x end (the stair climbs along +x from the foot's module onto it).
+				Vector2 joint = landing.From;
+				float weight = 1f - t;
+				float WalkAtLanding() => Mathf.Lerp(height[landing.From], height[landing.To], t) + walk;
+				float excess = WalkAtLanding() - (foot + walk);
+				if (excess > 0f && !fixedJoint.Contains(joint) && weight > 0.1f)
+				{
+					float by = Mathf.Min(StairSinkLimit, excess / weight);
+					height[joint] -= by;
+				}
+				float rise = WalkAtLanding() - foot;
+				if (rise > walk + 0.05f || rise < walk * 0.5f)
+				{
+					// The ground falls too far under it (or rises too near the walk): no stair rather than a ledge.
+					continue;
+				}
+				seat.Stairs[n] = rise > walk ? (WalkAtLanding() - walk, 1f) : (foot, rise / walk);
 			}
+			foreach (int i in modules)
+			{
+				PointOfInterestLayoutPiece p = pieces[i];
+				Vector3 from = context.OnGround(p.From), to = context.OnGround(p.To);
+				from.y = height[p.From];
+				to.y = height[p.To];
+				seat.Modules[i] = (from, to);
+			}
+			return seat;
+		}
+
+		/// <summary>
+		/// A walked curtain's module between its joints (world, its −x end first): its position, its rotation (its x along the chord, its
+		/// faces upright, its −z out as the layout turned it) and its stretch along x, so its ends land on the joints and a run on past
+		/// a corner keeps its length. Pure.
+		/// </summary>
+		public static (Vector3 position, Quaternion rotation, float stretch) CurtainFrame(Vector3 from, Vector3 to, in PointOfInterestLayoutPiece piece, float module, float siteYaw)
+		{
+			Vector3 chord = to - from;
+			float length = chord.magnitude;
+			Vector2 plan = piece.To - piece.From;
+			float planLength = plan.magnitude;
+			if (length < 1e-4f || planLength < 1e-4f || !(module > 0f))
+			{
+				return (0.5f * (from + to), Quaternion.Euler(0f, siteYaw + piece.Yaw, 0f), module > 0f ? piece.Footprint.x / module : 1f);
+			}
+			Vector3 x = chord / length;
+			Vector3 z = Quaternion.Euler(0f, siteYaw + piece.Yaw, 0f) * Vector3.forward;
+			z = (z - x * Vector3.Dot(z, x)).normalized;
+			Quaternion rotation = Quaternion.LookRotation(z, Vector3.Cross(z, x));
+			// The run on past a corner: as far along the chord as the layout set it, both ends' share.
+			float shift = Vector2.Dot(piece.Offset - 0.5f * (piece.From + piece.To), plan / planLength);
+			return (0.5f * (from + to) + x * shift, rotation, (length + piece.Footprint.x - planLength) / module);
+		}
+
+		/// <summary>The wall stairs the layout kept room for, each against the walked modules laid either side of its joint, its landing on the walk.</summary>
+		private static void AddWallStairs(PointOfInterestSiteContext context, PointOfInterestLayoutRequest request, List<PointOfInterestLayoutPiece> pieces,
+			CurtainSeat seat, HashSet<int> curtain, List<(Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole role, string tag)> grounds)
+		{
+			if (seat == null || request.Stairs.Count == 0)
+			{
+				return;
+			}
+			PointOfInterestRecord record = context.Record;
+			for (int n = 0; n < request.Stairs.Count; n++)
+			{
+				PointOfInterestLayoutStair stair = request.Stairs[n];
+				// Both its modules standing walls with a walk (not ruined, not missing), and a seat it fits.
+				if (!curtain.Contains(stair.FootModule) || !curtain.Contains(stair.LandingModule) || !seat.Stairs.TryGetValue(n, out (float y, float scaleY) at))
+				{
+					continue;
+				}
+				// A third of them timber treads on a stone spine.
+				int variant = PointOfInterestPlanner.Hash(record.SiteSeed, n, 0x57A1, 0) % 3u == 0u ? 1 : 0;
+				GameObject prefab = StructureKit.Prefab("WallStair", variant);
+				if (prefab == null)
+				{
+					prefab = StructureKit.Prefab("WallStair", 0);
+				}
+				if (prefab == null)
+				{
+					continue;
+				}
+				Vector3 centre = context.OnGround(stair.Offset);
+				centre.y = at.y;
+				Quaternion turn = Quaternion.Euler(0f, record.Yaw + stair.Yaw, 0f);
+				context.AddProp(prefab, centre, turn, new Vector3(1f, at.scaleY, 1f));
+				grounds.Add((centre, turn, new Vector2(StructurePieces.WallStairLength, StructurePieces.WallStairWidth), PointOfInterestSlotRole.Perimeter, "wallstair"));
+			}
+		}
+
+		/// <summary>A site's seed for one gate or tower slot: the ring's one design of it (2026-10-19).</summary>
+		private static int StationSeed(PointOfInterestRecord record, int slot) => (int)(PointOfInterestPlanner.Hash(record.SiteSeed, slot, 0x57A7, 0) & 0x7FFFFFFFu);
+
+		/// <summary>The walk on a perimeter slot's curtain, metres over its base (the ring's modules are its walked variant: <see cref="CurtainVariant"/>); 0 for none.</summary>
+		public static float PerimeterWalk(string tag, string style)
+		{
+			StructurePiece piece = StructureKitPieceSource.PieceFor(tag, style, 0, 0f);
+			return piece != null ? StructurePieces.CurtainWalk(piece.Id, 0) : 0f;
+		}
+
+		/// <summary>Where a walked curtain meets a gate or tower: the farthest of its "curtain" marks along x less <see cref="PointOfInterestLayouts.MarkEmbed"/>, or 0 (the layout's default) when it has none.</summary>
+		public static float StationJoin(string tag, string style, int seed)
+		{
+			StructurePiece piece = StructureKitPieceSource.PieceFor(tag, style, seed, 0f);
+			if (piece == null)
+			{
+				return 0f;
+			}
+			float join = 0f;
+			foreach (StructureMark mark in StructurePieces.MarksOf(piece, StructureKit.PickVariant(piece, seed)))
+			{
+				if (mark.Name == "curtain")
+				{
+					join = Mathf.Max(join, Mathf.Abs(mark.At.x));
+				}
+			}
+			// A hand into it: a round tower's face falls back from its mark on the walk line toward the curtain's corners.
+			return join > 0f ? Mathf.Max(0.5f, join - PointOfInterestLayouts.MarkEmbed) : 0f;
 		}
 
 		/// <summary>How far over the highest water a land prop's ground must stand, metres (PointOfInterestSiteContext.IsWet).</summary>
@@ -891,7 +1195,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static void AddClutter(PointOfInterestSiteContext context,
 			List<(Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole role, string tag)> grounds,
-			PointOfInterestLayoutRequest request, DeterministicRNG random, float stature, BiomeTemplate siteBiome)
+			PointOfInterestLayoutRequest request, DeterministicRNG random, float stature, BiomeTemplate siteBiome, List<(Vector2 a, Vector2 b)> fences = null)
 		{
 			PointOfInterestRecord record = context.Record;
 			PointOfInterestKindInfo info = PointOfInterestKinds.Info(record.Kind);
@@ -911,6 +1215,15 @@ namespace FishMMO.Shared.WorldDesign
 			foreach ((Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole _, string _) in grounds)
 			{
 				taken.Add((new Vector2(at.x, at.z), turn.eulerAngles.y, size + Vector2.one * 0.6f));
+			}
+			// And the yards' fences (laid after, by PointOfInterestYards): a strip along each run.
+			if (fences != null)
+			{
+				foreach ((Vector2 a, Vector2 b) in fences)
+				{
+					Vector2 run = b - a;
+					taken.Add((0.5f * (a + b), PointOfInterestLayouts.DirectionOf(run) - 90f, new Vector2(run.magnitude, 0.6f)));
+				}
 			}
 			var streets = new List<(Vector2 a, Vector2 b, float half)>();
 			Quaternion siteTurn = Quaternion.Euler(0f, record.Yaw, 0f);
@@ -985,7 +1298,7 @@ namespace FishMMO.Shared.WorldDesign
 				float width = size.x, depth = size.y;
 				float yaw = turn.eulerAngles.y;
 				Vector3 front = turn * Vector3.back, right = turn * Vector3.right;
-				if (town && tag == PointOfInterestTemplateSpecs.Church)
+				if (town && PointOfInterestTemplateSpecs.IsChurch(tag))
 				{
 					// The churchyard: headstones in rows behind and beside the church, the odd plain mound among them, all
 					// facing the same way as the church; rows break where the ground is taken or a street runs.
@@ -1011,6 +1324,8 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						Put("=Gravestone", at + right * sideways * (width * 0.5f + 2f) + front * ((g - 1) * 2.4f), yaw + (float)(random.NextDouble() - 0.5) * 8f);
 					}
+					// Its yard walled, a lychgate to the street and a mausoleum or two at its back (2026-10-19), on draws of its own.
+					placed += PointOfInterestChurchyards.Lay(context, at, turn, size, sideways, rows, stature, taken, OnStreet);
 					continue;
 				}
 				if (town && tag == PointOfInterestTemplateSpecs.Temple)
@@ -1162,10 +1477,17 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			int slots = template.Pieces.Count;
 			var styles = new string[slots];
+			var stationSeeds = new int[slots];
 			// The site's race's stature: its buildings (and what stands round them) are built to it, a giant's hall two and a
 			// half times a human's, a halfling's cottage three fifths (RaceStature). A big race's site keeps its ground, so it
 			// holds fewer, bigger buildings.
 			float stature = RaceStature.BuildingScale(record.Race);
+			// The houses may keep fenced yards where the site is lived in (PointOfInterestYards; never a ruin's or the dead's).
+			PointOfInterestGroup siteGroup = PointOfInterestKinds.Info(record.Kind).Group;
+			bool yards = siteGroup != PointOfInterestGroup.Ruins && siteGroup != PointOfInterestGroup.Dead;
+			// One or two of a type of building to a settlement, one of a landmark (2026-10-20, PointOfInterestStructureCaps): a slot's
+			// count is cut to what its type has room for, slots of one type (a chapel and a parish church) sharing it in slot order.
+			PointOfInterestStructureCaps.Tally caps = PointOfInterestStructureCaps.Tally.Of(context);
 			for (int s = 0; s < slots; s++)
 			{
 				PointOfInterestPieceSlot slot = template.Pieces[s];
@@ -1181,7 +1503,18 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					count = Mathf.Max(1, Mathf.RoundToInt(count / (stature * stature)));
 				}
-				PointOfInterestPieceMetrics metrics = PointOfInterestPieceResolver.Measure(new PointOfInterestPieceRequest(slot.Tag, styles[s], 0));
+				if (!PointOfInterestLayouts.Generates(role))
+				{
+					count = caps.Take(PointOfInterestStructureCaps.TypeOfQuery(slot.Tag), count);
+				}
+				// A wall's gates and towers are one design round the ring (their seed the site's own), so the layout knows where the
+				// curtain meets them (2026-10-19).
+				bool station = role == PointOfInterestSlotRole.Gate || role == PointOfInterestSlotRole.WallTower;
+				if (station)
+				{
+					stationSeeds[s] = StationSeed(record, s);
+				}
+				PointOfInterestPieceMetrics metrics = PointOfInterestPieceResolver.Measure(new PointOfInterestPieceRequest(slot.Tag, styles[s], station ? stationSeeds[s] : 0));
 				// Laid out by what it sweeps as well as what it is (a tower mill's sails), seated by what it is.
 				request.Slots.Add(new PointOfInterestLayoutSlot
 				{
@@ -1189,7 +1522,14 @@ namespace FishMMO.Shared.WorldDesign
 					Footprint = Vector2.Max(metrics.Footprint, metrics.Sweep),
 					Module = metrics.Module,
 					Count = count,
-					Landmark = slot.Tag == PointOfInterestTemplateSpecs.Church || slot.Tag == PointOfInterestTemplateSpecs.Temple,
+					Walk = role == PointOfInterestSlotRole.Perimeter ? PerimeterWalk(slot.Tag, styles[s]) : 0f,
+					Join = station ? StationJoin(slot.Tag, styles[s], stationSeeds[s]) : 0f,
+					// The market hall and the library front the square as the church does (2026-10-19); the cathedral too, and a castle's
+					// barracks and stable take the ward's room first (PointOfInterestTemplateSpecs.IsLandmark).
+					Landmark = PointOfInterestTemplateSpecs.IsLandmark(slot.Tag, record.Kind),
+					Well = slot.Tag == PointOfInterestTemplateSpecs.Well,
+					Stall = slot.Tag == PointOfInterestTemplateSpecs.Stall,
+					Yard =yards && role == PointOfInterestSlotRole.Street ? PointOfInterestYards.KindFor(slot.Tag) : PointOfInterestYardKind.None,
 				});
 			}
 			var draws = new List<Draws>();
@@ -1205,7 +1545,13 @@ namespace FishMMO.Shared.WorldDesign
 					Draws d = Take(random, slot, false);
 					d.Scale *= stature;
 					PointOfInterestPieceMetrics metrics = PointOfInterestPieceResolver.Measure(new PointOfInterestPieceRequest(slot.Tag, styles[s], d.Seed, d.Decay));
-					request.Items.Add(new PointOfInterestLayoutItem { Slot = s, Footprint = Vector2.Max(metrics.Footprint, metrics.Sweep) * d.Scale });
+					Vector2 itemFootprint = Vector2.Max(metrics.Footprint, metrics.Sweep) * d.Scale;
+					if (slot.Tag == PointOfInterestTemplateSpecs.Palace)
+					{
+						// A capital's palace keeps its whole compound's ground (2026-10-19): the layout lays it as the citadel, laid below.
+						itemFootprint = PointOfInterestPalace.Reserve(record.Radius, d.Scale);
+					}
+					request.Items.Add(new PointOfInterestLayoutItem { Slot = s, Footprint = itemFootprint });
 					draws.Add(d);
 				}
 			}
@@ -1256,10 +1602,20 @@ namespace FishMMO.Shared.WorldDesign
 			List<PointOfInterestLayoutPiece> pieces = PointOfInterestLayouts.Place(request, random);
 			AddStreets(context, request);
 			var grounds = new List<(Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole role, string tag)>();
-			// The stone curtain's modules (their walk is climbable) and the gates, for the wall stairs.
-			var curtain = new List<(Vector3 at, Quaternion turn)>();
-			var gateways = new List<Vector3>();
-			int laid = 0, missing = 0, ruined = 0, wet = 0;
+			// A walked curtain's joints and its gates' and towers' bases, shared (CurtainSeat); the walked modules laid (by their
+			// index in the layout), for the wall stairs; the gates.
+			CurtainSeat seat = SeatCurtain(context, request, pieces);
+			var landings = new HashSet<int>();
+			if (seat != null)
+			{
+				foreach (int n in seat.Stairs.Keys)
+				{
+					landings.Add(request.Stairs[n].LandingModule);
+				}
+			}
+			var curtain = new HashSet<int>();
+			var gateways = new List<(Vector3 at, Vector3 outward)>();
+			int laid = 0, missing = 0, ruined = 0, wet = 0, dryPier = 0;
 			var ringSeeds = new Dictionary<int, int>();
 			bool dryOnly = KeepOutOfWater && !PointOfInterestKinds.Info(record.Kind).Has(PointOfInterestTraits.Underwater);
 			float sea = dryOnly ? SeaLevelOf(context) : float.NegativeInfinity;
@@ -1270,8 +1626,18 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				laid++;
 			}
+			// The fenced yards by their house's piece; the ones whose house is laid are handed to PointOfInterestYards.
+			var yardOf = new Dictionary<int, PointOfInterestLayoutYard>();
+			foreach (PointOfInterestLayoutYard yard in request.Yards)
+			{
+				yardOf[yard.Piece] = yard;
+			}
+			var plannedYards = new List<PointOfInterestYards.Planned>();
+			var fences = new List<(Vector2 a, Vector2 b)>();
+			int pieceIndex = -1;
 			foreach (PointOfInterestLayoutPiece piece in pieces)
 			{
+				pieceIndex++;
 				if (gorgeLaid && piece.Role == PointOfInterestSlotRole.Span)
 				{
 					continue;
@@ -1292,6 +1658,11 @@ namespace FishMMO.Shared.WorldDesign
 						ringSeeds[piece.Slot] = d.Seed;
 					}
 				}
+				else if (piece.Role == PointOfInterestSlotRole.Gate || piece.Role == PointOfInterestSlotRole.WallTower)
+				{
+					// The ring's one design of gate and of tower, the one the layout measured (its decay still each one's own).
+					d.Seed = stationSeeds[piece.Slot];
+				}
 				if (d.LeaveOut < d.Decay * 0.5f)
 				{
 					ruined++;
@@ -1304,7 +1675,20 @@ namespace FishMMO.Shared.WorldDesign
 					wet++;
 					continue;
 				}
+				if (piece.Role == PointOfInterestSlotRole.Pier && !PierReachesWater(context, at, record.Yaw + piece.Yaw, piece.Footprint.y))
+				{
+					dryPier++;
+					continue;
+				}
 				StructureFinish finish = FinishFor(Finish, FinishChance, record.Kind, weathering, d.Decay, d.FinishRoll);
+				if (slot.Tag == PointOfInterestTemplateSpecs.Palace && piece.Item >= 0)
+				{
+					// The palace compound in the ground the layout kept for it (2026-10-19, PointOfInterestPalace): its pieces, their
+					// grounds for the yards and the clutter, and the court's worn walks.
+					laid += PointOfInterestPalace.Lay(context, piece.Offset, piece.Yaw, d.Scale, record.Radius, finish, palette, allowLocal, grounds, out int palaceMissing);
+					missing += palaceMissing;
+					continue;
+				}
 				var pieceRequest = new PointOfInterestPieceRequest(slot.Tag, styles[piece.Slot], d.Seed, d.Decay, finish, allowLocal) { Palette = palette };
 				GameObject prefab = PointOfInterestPieceResolver.Resolve(pieceRequest);
 				if (prefab == null)
@@ -1314,7 +1698,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				if (piece.Role == PointOfInterestSlotRole.Perimeter)
 				{
-					prefab = CurtainVariant(prefab, pieceRequest);
+					prefab = CurtainVariant(prefab, pieceRequest, landings.Contains(pieceIndex));
 				}
 				PointOfInterestPieceMetrics metrics = PointOfInterestPieceResolver.Measure(pieceRequest);
 				Quaternion pitch = Quaternion.identity;
@@ -1334,6 +1718,11 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					at.y = pierDeck;
 				}
+				else if (seat != null && seat.Stations.TryGetValue(pieceIndex, out float stationBase))
+				{
+					// A walked ring's gate or tower at the height the curtain's ends meet it at: its walk doors on the walk.
+					at.y = stationBase - d.Decay * MaxSinkMetres;
+				}
 				else
 				{
 					at.y = SeatHeight(context, piece.Offset, piece.Yaw, metrics.Footprint * d.Scale, metrics.Depth * d.Scale, metrics.WaterFront) - d.Decay * MaxSinkMetres;
@@ -1341,32 +1730,52 @@ namespace FishMMO.Shared.WorldDesign
 				float tilt = deck ? 0f : d.Decay * MaxTiltDegrees;
 				Quaternion rotation = Quaternion.Euler(d.TiltX * tilt, record.Yaw + piece.Yaw, d.TiltZ * tilt) * pitch;
 				Vector3 scale = Vector3.one * d.Scale;
+				bool walkedModule = false;
+				if (piece.Role == PointOfInterestSlotRole.Perimeter && metrics.Module > 0f && seat != null
+					&& seat.Modules.TryGetValue(pieceIndex, out (Vector3 from, Vector3 to) joints))
+				{
+					/* A walked curtain's module from joint to joint (2026-10-19): pitched to its chord about its own z (its faces stay
+					 * upright planes), stretched along it so its ends land on the joints its neighbours share, so the walk runs on
+					 * without a step and meets the towers' and gates' doors. Its run on past a corner keeps its length. */
+					(Vector3 position, Quaternion turn, float stretch) = CurtainFrame(joints.from, joints.to, piece, metrics.Module, record.Yaw);
+					at = position + Vector3.down * (d.Decay * MaxSinkMetres);
+					rotation = turn * Quaternion.Euler(d.TiltX * tilt, 0f, d.TiltZ * tilt);
+					scale = new Vector3(stretch, 1f, 1f);
+					walkedModule = true;
+				}
 				if (piece.Role == PointOfInterestSlotRole.Span)
 				{
 					// A span is fitted end to end: its own size, stretched along the deck to the module the layout gave it.
 					float module = metrics.Module > 0f ? metrics.Module : Mathf.Max(0.01f, metrics.Footprint.y);
 					scale = new Vector3(1f, 1f, piece.Footprint.y / module);
 				}
-				else if (piece.Role == PointOfInterestSlotRole.Perimeter && metrics.Module > 0f)
+				else if (piece.Role == PointOfInterestSlotRole.Perimeter && metrics.Module > 0f && !walkedModule)
 				{
 					// A wall module is fitted to its chord of the ring (and run on past a corner to meet its neighbour's face).
 					scale = new Vector3(piece.Footprint.x / metrics.Module, 1f, 1f);
 				}
+				int doorsBefore = context.Doors.Count;
 				context.AddProp(prefab, at, rotation, scale);
 				grounds.Add((at, Quaternion.Euler(0f, record.Yaw + piece.Yaw, 0f), metrics.Footprint * d.Scale, piece.Role, slot.Tag));
-				if (piece.Role == PointOfInterestSlotRole.Perimeter && prefab.name.StartsWith("Structure_WallSegment_0", StringComparison.Ordinal))
+				if (yardOf.TryGetValue(pieceIndex, out PointOfInterestLayoutYard houseYard))
 				{
-					curtain.Add((at, Quaternion.Euler(0f, record.Yaw + piece.Yaw, 0f)));
+					PlanYard(context, houseYard, prefab, at, rotation, doorsBefore, d.Decay, plannedYards, fences);
+				}
+				if (walkedModule && StructurePieces.TryParsePrefab(prefab.name, out StructurePiece walled, out int walledVariant)
+					&& StructurePieces.CurtainWalk(walled.Id, walledVariant) > 0f)
+				{
+					curtain.Add(pieceIndex);
 				}
 				else if (piece.Role == PointOfInterestSlotRole.Gate)
 				{
-					gateways.Add(at);
+					gateways.Add((at, Quaternion.Euler(0f, record.Yaw + piece.Yaw, 0f) * Vector3.back));
 				}
 				laid++;
 			}
+			AddWallStairs(context, request, pieces, seat, curtain, grounds);
 			AddYards(context, grounds);
-			AddClutter(context, grounds, request, random, stature, siteBiome);
-			AddWallStairs(context, curtain, gateways, grounds);
+			AddClutter(context, grounds, request, random, stature, siteBiome, fences);
+			PointOfInterestYards.Offer(context, plannedYards);
 			AddDrawbridges(context, gateways, stature);
 			AddMoatBridges(context, gateways, stature);
 			int dropped = request.Items.Count;
@@ -1385,10 +1794,55 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				context.Notes?.Add($"{record.Name}: {dropped} piece(s) of '{template.name}' found no room in its {record.Radius:0} m footprint.");
 			}
+			if (dryPier > 0)
+			{
+				context.Notes?.Add($"{record.Name}: {dryPier} pier module(s) left out where they would stand on dry land.");
+			}
 			if (wet > 0)
 			{
 				context.Notes?.Add($"{record.Name}: {wet} piece(s) of '{template.name}' left out where its footprint is under water.");
 			}
+		}
+
+		/// <summary>
+		/// One laid house's yard for PointOfInterestYards (2026-10-19): its fence's runs and gate in the world, and the house's front door
+		/// (of the doors its laying added, the one facing most out of its front) for the gate to line up with. Nothing for a piece that is
+		/// no yard's house after all (a ruin or a stilt house the query drew).
+		/// </summary>
+		private static void PlanYard(PointOfInterestSiteContext context, PointOfInterestLayoutYard yard, GameObject prefab, Vector3 at, Quaternion rotation,
+			int doorsBefore, float decay, List<PointOfInterestYards.Planned> planned, List<(Vector2 a, Vector2 b)> fences)
+		{
+			if (!StructurePieces.TryParsePrefab(prefab.name, out StructurePiece house, out _) || PointOfInterestYards.KindFor(house) == PointOfInterestYardKind.None)
+			{
+				return;
+			}
+			Vector2 World(Vector2 local)
+			{
+				Vector3 p = context.OnGround(local);
+				return new Vector2(p.x, p.z);
+			}
+			var runs = new PointOfInterestYardFence[yard.Fences.Count];
+			for (int i = 0; i < runs.Length; i++)
+			{
+				PointOfInterestYardFence run = yard.Fences[i];
+				runs[i] = new PointOfInterestYardFence { A = World(run.A), B = World(run.B), Gate = run.Gate };
+				fences.Add((runs[i].A, runs[i].B));
+			}
+			Vector3 front = rotation * Vector3.back;
+			Vector2? door = null;
+			float best = 0.5f;
+			for (int k = doorsBefore; k < context.Doors.Count; k++)
+			{
+				PointOfInterestSiteContext.PlacedDoor d = context.Doors[k];
+				float facing = Vector3.Dot(-d.Inward, front);
+				if (facing > best)
+				{
+					best = facing;
+					Vector3 foot = d.Hinge + d.Across * (d.Width * 0.5f) - d.Inward * 0.8f;
+					door = new Vector2(foot.x, foot.z);
+				}
+			}
+			planned.Add(new PointOfInterestYards.Planned { Fences = runs, GateAt = World(yard.GateAt), Door = door, Decay = decay });
 		}
 
 		/// <summary>The longest gorge thrown over with a stone arch, lip to lip, metres: wider is crossed on ropes.</summary>
@@ -1561,20 +2015,22 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// A curtain's module as the variant with the wall-walk: a ring of a walled site keeps its walk all the way round, the
 		/// towers' upper doors and the wall stairs meeting it, rather than whatever variant the ring's seed drew (the coped
-		/// field wall has none). Any other piece, or art not generated yet, is returned as it is.
+		/// field wall has none); where a wall stair lands (<paramref name="landing"/>), the walk with its rail open for the landing
+		/// (2026-10-19). Any other piece, or art not generated yet, is returned as it is.
 		/// </summary>
-		private static GameObject CurtainVariant(GameObject prefab, in PointOfInterestPieceRequest request)
+		private static GameObject CurtainVariant(GameObject prefab, in PointOfInterestPieceRequest request, bool landing = false)
 		{
-			if (prefab == null || !StructurePieces.TryParsePrefab(prefab.name, out StructurePiece kit, out int variant) || kit.Id != CurtainPiece || variant == 0)
+			int wanted = landing ? StructurePieces.CurtainLandingVariant : 0;
+			if (prefab == null || !StructurePieces.TryParsePrefab(prefab.name, out StructurePiece kit, out int variant) || kit.Id != CurtainPiece || variant == wanted)
 			{
 				return prefab;
 			}
-			GameObject walk = StructureKit.Prefab(kit.Id, 0, request.Finish, request.AllowLocal);
+			GameObject walk = StructureKit.Prefab(kit.Id, wanted, request.Finish, request.AllowLocal);
 			if (walk == null && request.Finish != StructureFinish.None)
 			{
-				walk = StructureKit.Prefab(kit.Id, 0, StructureFinish.None, request.AllowLocal);
+				walk = StructureKit.Prefab(kit.Id, wanted, StructureFinish.None, request.AllowLocal);
 			}
-			return walk != null ? walk : prefab;
+			return walk != null ? walk : landing ? CurtainVariant(prefab, request) : prefab;
 		}
 
 		/// <summary>Pieces built to stand in water: stilts, piers, bridges.</summary>
@@ -2362,6 +2818,29 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			GorgeBridgeFor(groundAlong, crossing, kept, out _, out ArchDeck deck);
 			return deck.Valid ? deck.Reach : 0f;
+		}
+
+		/// <summary>
+		/// Whether a pier module stands over the water or runs out to it: water (at its highest) under it, or within its own length
+		/// ahead along its run (+z, out from the bank). The layout measures one profile down the site's heading, so a second
+		/// pier beside it on a curving shore ran on over dry ground (2026-10-20: "they kind of just float on land").
+		/// </summary>
+		private static bool PierReachesWater(PointOfInterestSiteContext context, Vector3 at, float yaw, float module)
+		{
+			if (context.GroundAt == null)
+			{
+				return true;
+			}
+			Vector3 run = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
+			float reach = Mathf.Max(1f, module);
+			for (float t = 0f; t <= reach + 0.01f; t += reach * 0.5f)
+			{
+				if (context.IsWet(at.x + run.x * t, at.z + run.z * t, 0f))
+				{
+					return true;
+				}
+			}
+			return false;
 		}
 
 		/// <summary>How far a pier's deck stands over the highest water under it, metres.</summary>

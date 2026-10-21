@@ -329,39 +329,12 @@ namespace FishMMO.Shared.WorldDesign
 				lapAt = now;
 			}
 			Lap("plan and seating");
-			if (options.Excluded != null && plan.Rocks.Count > 0)
+			/* A rock whose footprint as seated covers a site, a cave's mouth or a way is refused by the planner as it is
+			 * seated (CliffRockPlacement.CoversExcluded), never dropped from the plan here: the rocks seated after it may
+			 * stand on its top, and they were left in the air where it went (2026-10-21). */
+			if (plan.Stats.KeptOut > 0)
 			{
-				/* A rock is sited by its centre, but a cliff section is tens of metres across: one centred just outside a
-				 * cave's keep-out or a way's clearance stood over the mouth or across the path (2026-10-11). Each
-				 * rock's footprint as placed (its collision mesh's bounds, turned and scaled) is tested on a 5 × 5 grid,
-				 * and one that covers excluded ground anywhere goes. */
-				int before = plan.Rocks.Count;
-				plan.Rocks.RemoveAll(r =>
-				{
-					seating.TryGetValue(CliffRocks.MeshName(in r.Piece, CliffRocks.CollisionLod), out MeshBuilder mesh);
-					if (mesh == null || mesh.VertexCount == 0)
-					{
-						return options.Excluded(r.Position.x, r.Position.z);
-					}
-					Bounds bounds = mesh.Bounds;
-					for (int ix = 0; ix <= 4; ix++)
-					{
-						for (int iz = 0; iz <= 4; iz++)
-						{
-							var local = new Vector3(Mathf.Lerp(bounds.min.x, bounds.max.x, ix / 4f), bounds.center.y, Mathf.Lerp(bounds.min.z, bounds.max.z, iz / 4f));
-							Vector3 at = r.Position + r.Rotation.MultiplyVector(Vector3.Scale(local, r.Scale));
-							if (options.Excluded(at.x, at.z))
-							{
-								return true;
-							}
-						}
-					}
-					return false;
-				});
-				if (plan.Rocks.Count < before)
-				{
-					report.Notes.Add($"Cliffs: {before - plan.Rocks.Count} rock(s) left out where they would have stood over a site, a cave's mouth or a way.");
-				}
+				report.Notes.Add($"Cliffs: {plan.Stats.KeptOut} rock(s) left out where they would have stood over a site, a cave's mouth or a way.");
 			}
 			if (plan.Rocks.Count == 0)
 			{

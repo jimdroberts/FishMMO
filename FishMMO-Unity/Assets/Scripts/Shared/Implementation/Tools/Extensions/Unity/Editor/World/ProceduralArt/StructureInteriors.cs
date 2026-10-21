@@ -326,7 +326,9 @@ namespace FishMMO.Shared.WorldDesign
 					return new[] { W("Sarcophagus", 1, 1, Mode.BackCentre) };
 				case StructureRoomKind.Guard:
 					return new[] { W("WeaponRack", 1, 1, Mode.Wall), W("Table", area > 6f ? 1 : 0, area > 6f ? 1 : 0, Mode.Centre, 1, 2), W("Chest", 1, 1, Mode.Wall),
-						W("Crate", 1, 2, Mode.Wall), W("Barrel", 1, 1, Mode.Wall), W("Bed", area > 9f ? 1 : 0, area > 9f ? 1 : 0, Mode.Wall, 0) };
+						W("Crate", 1, 2, Mode.Wall), W("Barrel", 1, 1, Mode.Wall), W("Bed", area > 9f ? 1 : 0, area > 9f ? 1 : 0, Mode.Wall, 0),
+						// Last (2026-10-19), so every earlier piece of a guard room lies where it did: an armour stand where there is room.
+						W("ArmourStand", 0, area > 12f ? 1 : 0, Mode.Wall) };
 				case StructureRoomKind.Keeper:
 					return new[] { W("Bed", 1, 1, Mode.Wall), W("Table", 1, 1, Mode.Centre, 1, 1), W("Chest", 1, 1, Mode.Wall), W("Shelf", 1, 1, Mode.Wall),
 						W("Barrel", 1, 2, Mode.Wall) };
@@ -344,6 +346,73 @@ namespace FishMMO.Shared.WorldDesign
 					// The meal floor of a tower mill: what is ground and waiting round the wall, the miller's tally in the middle.
 					return new[] { W("Crate", 2, 3, Mode.Wall), W("Barrel", 1, 2, Mode.Wall), W("Chest", 1, 1, Mode.Wall), W("Shelf", 0, 1, Mode.Wall),
 						W("Table", area > 14f ? 1 : 0, area > 14f ? 1 : 0, Mode.Centre, 1, 1) };
+				// The town's other buildings (2026-10-19).
+				case StructureRoomKind.Study:
+					// A wizard's room: where the work is done first, then the books, then where they sleep.
+					return new[] { W("Desk", 1, 1, Mode.Wall), W("Bookcase", 1, area > 20f ? 3 : 2, Mode.Wall), W("ArcaneFocus", area > 12f ? 1 : 0, 1, Mode.Centre),
+						W("AlchemyBench", 0, 1, Mode.Wall), W("Chest", 1, 1, Mode.Wall), W("Bed", area > 16f ? 1 : 0, area > 16f ? 1 : 0, Mode.Wall, 1) };
+				case StructureRoomKind.Library:
+					return new[] { W("Bookcase", 3, area > 60f ? 10 : area > 30f ? 6 : 4, Mode.Wall), W("Table", 1, area > 50f ? 2 : 1, Mode.Centre, 0, 4),
+						W("Lectern", 0, 1, Mode.Centre, 0), W("Desk", 1, 2, Mode.Wall), W("Chest", 0, 1, Mode.Wall) };
+				case StructureRoomKind.Barracks:
+					return new[] { W("BunkBed", 2, area > 60f ? 8 : area > 30f ? 5 : 3, Mode.Wall), W("WeaponRack", 1, 2, Mode.Wall), W("ArmourStand", 0, 2, Mode.Wall),
+						W("Table", 1, 1, Mode.Centre, 0, 4), W("Chest", 1, 2, Mode.Wall), W("Barrel", 0, 1, Mode.Wall) };
+				case StructureRoomKind.Infirmary:
+					// The sick on pallets round the walls, the healer's herbs and table among them.
+					return new[] { W("Bed", 2, area > 40f ? 6 : area > 20f ? 4 : 2, Mode.Wall, 0), W("HerbShelf", 1, 2, Mode.Wall), W("Table", 1, 1, Mode.Centre, 0, 1),
+						W("Hearth", 0, 1, Mode.Wall), W("Chest", 1, 1, Mode.Wall), W("WaterButt", 0, 1, Mode.Wall) };
+				case StructureRoomKind.Barn:
+					return new[] { W("HayBales", 2, area > 120f ? 5 : 3, Mode.Wall), W("Sacks", 1, 3, Mode.Wall), W("Crate", 1, 2, Mode.Wall), W("Barrel", 0, 2, Mode.Wall),
+						W("Cart", area > 100f ? 1 : 0, area > 100f ? 1 : 0, Mode.Centre) };
+				case StructureRoomKind.Bakery:
+					return new[] { W("Hearth", 0, 1, Mode.Wall), W("Table", 1, area > 30f ? 2 : 1, Mode.Centre, 0), W("Sacks", 1, 2, Mode.Wall), W("Shelf", 1, 2, Mode.Wall),
+						W("Barrel", 1, 1, Mode.Wall) };
+				case StructureRoomKind.Workshop:
+					return new[] { W("Workbench", 1, area > 30f ? 2 : 1, Mode.Wall), W("Crate", 1, 2, Mode.Wall), W("Barrel", 1, 2, Mode.Wall), W("Shelf", 0, 1, Mode.Wall) };
+				case StructureRoomKind.Storehouse:
+					return new[] { W("Crate", 3, area > 80f ? 8 : 5, Mode.Wall), W("Barrel", 2, area > 80f ? 5 : 3, Mode.Wall), W("Sacks", 1, 3, Mode.Wall) };
+				case StructureRoomKind.Shop:
+					return new[] { W("BarCounter", 1, 1, Mode.Wall, 0), W("Shelf", 1, 2, Mode.Wall), W("Crate", 1, 2, Mode.Wall), W("Barrel", 0, 1, Mode.Wall) };
+				// A shop-house let to a trade (2026-10-19, PointOfInterestTrades): the trade's bench first, then its stocked shelves
+				// (TradeShelf, the trade's own variant), then what it keeps its stuff in.
+				case StructureRoomKind.Tailor:
+					return new[] { W("CuttingTable", 1, 1, Mode.Wall), W("DressForm", 1, area > 20f ? 2 : 1, Mode.Wall), W("TradeShelf", 1, area > 30f ? 3 : 2, Mode.Wall, (int)StructureTrade.Tailor),
+						W("BarCounter", 0, 1, Mode.Wall, 0), W("Chest", 0, 1, Mode.Wall) };
+				case StructureRoomKind.Leatherworker:
+					return new[] { W("StitchingBench", 1, 1, Mode.Wall), W("HideRack", 1, area > 20f ? 2 : 1, Mode.Wall), W("TradeShelf", 1, area > 30f ? 2 : 1, Mode.Wall, (int)StructureTrade.Leatherworker),
+						W("Chest", 0, 1, Mode.Wall), W("Barrel", 0, 1, Mode.Wall) };
+				case StructureRoomKind.Fletcher:
+					return new[] { W("FletchingBench", 1, 1, Mode.Wall), W("BowRack", 1, 2, Mode.Wall), W("TradeShelf", 1, area > 30f ? 2 : 1, Mode.Wall, (int)StructureTrade.Fletcher),
+						W("Crate", 1, 1, Mode.Wall), W("Chest", 0, 1, Mode.Wall) };
+				case StructureRoomKind.Cobbler:
+					return new[] { W("CobblerBench", 1, 1, Mode.Wall, 0), W("CobblerBench", 1, 1, Mode.Wall, 1), W("TradeShelf", 1, area > 30f ? 2 : 1, Mode.Wall, (int)StructureTrade.Cobbler),
+						W("Chest", 0, 1, Mode.Wall), W("Crate", 0, 1, Mode.Wall) };
+				case StructureRoomKind.Jeweller:
+					return new[] { W("JewellerBench", 1, 1, Mode.Wall, 0), W("JewellerBench", 1, 1, Mode.Wall, 1), W("Chest", 1, 1, Mode.Wall, 0),
+						W("TradeShelf", 1, area > 30f ? 2 : 1, Mode.Wall, (int)StructureTrade.Jeweller), W("BarCounter", 0, 1, Mode.Wall, 0) };
+				case StructureRoomKind.Chandler:
+					return new[] { W("CandleRack", 1, 2, Mode.Wall), W("TradeShelf", 1, area > 30f ? 3 : 2, Mode.Wall, (int)StructureTrade.Chandler), W("Barrel", 1, 2, Mode.Wall),
+						W("Crate", 0, 1, Mode.Wall) };
+				case StructureRoomKind.Cartographer:
+					// The map table in the middle to work round, a stool at it.
+					return new[] { W("MapTable", 1, 1, Mode.Centre, -1, 1), W("ChartPress", 1, 1, Mode.Wall), W("TradeShelf", 1, area > 30f ? 2 : 1, Mode.Wall, (int)StructureTrade.Cartographer),
+						W("Bookcase", 0, 1, Mode.Wall), W("Chest", 0, 1, Mode.Wall) };
+				case StructureRoomKind.Scribe:
+					return new[] { W("Desk", 1, area > 20f ? 2 : 1, Mode.Wall), W("Bookcase", 1, 2, Mode.Wall), W("TradeShelf", 1, area > 30f ? 2 : 1, Mode.Wall, (int)StructureTrade.Scribe),
+						W("Lectern", 0, 1, Mode.Centre, 0), W("Chest", 0, 1, Mode.Wall) };
+				// The professions' own houses (2026-10-19, StructurePieces.Landmarks.cs).
+				case StructureRoomKind.CountingHouse:
+					// The counting table facing the door, the coin in strongboxes round the walls, the ledgers on shelves.
+					return new[] { W("CountingTable", 1, 1, Mode.Wall), W("Strongbox", 1, area > 40f ? 3 : 2, Mode.Wall), W("Shelf", 1, 2, Mode.Wall),
+						W("Chest", 0, 1, Mode.Wall), W("Stool", 0, 1, Mode.Wall, 1) };
+				case StructureRoomKind.Observatory:
+					// The star charts in the middle, the books and the desk round the wall, an orrery when there is room.
+					return new[] { W("StarChartTable", 1, 1, Mode.Centre), W("Bookcase", 1, area > 25f ? 2 : 1, Mode.Wall), W("Desk", 0, 1, Mode.Wall),
+						W("ArcaneFocus", area > 25f ? 1 : 0, 1, Mode.Centre), W("Chest", 1, 1, Mode.Wall) };
+				case StructureRoomKind.Guildhall:
+					// The council's long tables with forms down their sides, the charters in chests, the speaker's lectern, a fire.
+					return new[] { W("Table", 1, area > 60f ? 2 : 1, Mode.Centre, 0, 4), W("Pew", 0, area > 50f ? 2 : 1, Mode.Wall, 1), W("Lectern", 0, 1, Mode.Wall, 0),
+						W("Chest", 1, 2, Mode.Wall), W("Hearth", 0, 1, Mode.Wall), W("Shelf", 0, 1, Mode.Wall) };
 				default:
 					return Array.Empty<Want>();
 			}
@@ -460,6 +529,12 @@ namespace FishMMO.Shared.WorldDesign
 			if (room.Kind == StructureRoomKind.Church && !room.Round)
 			{
 				FurnishChurch(centre, roomMin, roomMax, floor, footprint, placed, taken, keepOut);
+				return placed;
+			}
+			// A throne room's own layout (2026-10-19): the throne on its dais, the court's benches along the walls facing the aisle.
+			if (room.Kind == StructureRoomKind.ThroneRoom && !room.Round)
+			{
+				FurnishThroneRoom(centre, roomMin, roomMax, floor, footprint, placed, taken, keepOut, rng);
 				return placed;
 			}
 			if (room.Kind == StructureRoomKind.Stable && !room.Round)
@@ -764,6 +839,145 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						placed.Add(new InteriorItem { Piece = "Pew", Variant = index++ % 3 == 2 ? 1 : 0, Position = new Vector3(x, floor, z), Yaw = 180f });
 						taken.Add(shape);
+					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// A throne room (2026-10-19, StructurePieces.Palace.cs): the throne at the back wall's middle ON the dais (the room's back
+		/// <see cref="StructurePieces.ThroneDaisDepth"/>, <see cref="StructurePieces.ThroneDaisRise"/> over its floor: an item's
+		/// height is its own, so these stand on the dais' top), a brazier either side of it and the guard's armour by the side walls
+		/// up there; a brazier either side of the runner at the dais' foot; and down both side walls, facing the aisle, the court's
+		/// benches (pews) in runs with an armour stand after each pair and a chest last before the dais. The building keeps the
+		/// dais, its flight and the runner clear (StructureDraft.RoomClear), so only the dais' own pieces are laid there; the
+		/// nave's pieces keep out of every clear area and the doors' swings, and nothing stands in the way from the door to the
+		/// throne. The same room is furnished the same at every cut: only the variants are drawn.
+		/// </summary>
+		private static void FurnishThroneRoom(Vector2 centre, Vector2 roomMin, Vector2 roomMax, float floor, Func<string, Vector2> footprint,
+			List<InteriorItem> placed, List<Shape> taken, List<Shape> keepOut, DeterministicRNG rng)
+		{
+			float dais = floor + StructurePieces.ThroneDaisRise;
+			float daisFront = roomMax.y - StructurePieces.ThroneDaisDepth, stepFoot = daisFront - StructurePieces.ThroneDaisSteps;
+			int Draw() => (int)(rng.NextFloat() * 2f) % 2;
+			bool Free(in Shape s, bool onDais)
+			{
+				if (s.Min.x < roomMin.x - 1e-3f || s.Min.y < roomMin.y - 1e-3f || s.Max.x > roomMax.x + 1e-3f || s.Max.y > roomMax.y + 1e-3f)
+				{
+					return false;
+				}
+				// On the dais: inside it. Below: clear of the clear areas (the dais among them) and the doors.
+				if (onDais ? s.Min.y < daisFront + 0.05f : Blocked(s))
+				{
+					return false;
+				}
+				foreach (Shape t in taken)
+				{
+					if (s.Overlaps(t, Gap))
+					{
+						return false;
+					}
+				}
+				return true;
+			}
+			bool Blocked(in Shape s)
+			{
+				foreach (Shape k in keepOut)
+				{
+					if (s.Overlaps(k, 0f))
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+			// A piece laid at a place and a turn if it fits there, its footprint turned with it.
+			bool Lay(string piece, int variant, Vector2 at, float yaw, bool onDais)
+			{
+				Vector2 size = footprint(piece);
+				if (size == Vector2.zero)
+				{
+					return false;
+				}
+				Vector2 turned = Mathf.Abs(Mathf.Sin(yaw * Mathf.Deg2Rad)) > 0.5f ? new Vector2(size.y, size.x) : size;
+				Shape s = Shape.Box(at, turned);
+				if (!Free(s, onDais))
+				{
+					return false;
+				}
+				placed.Add(new InteriorItem { Piece = piece, Variant = variant, Position = new Vector3(at.x, onDais ? dais : floor, at.y), Yaw = yaw });
+				taken.Add(s);
+				return true;
+			}
+
+			// The throne, its back to the cloth of estate on the back wall, facing down the hall.
+			Vector2 throne = footprint("Throne");
+			if (throne != Vector2.zero)
+			{
+				Lay("Throne", Draw(), new Vector2(centre.x, roomMax.y - 0.3f - throne.y * 0.5f), 0f, true);
+			}
+			// Braziers either side of it, and the guard's armour by the side walls, their backs to the back wall.
+			int brazier = Draw();
+			for (int s = -1; s <= 1; s += 2)
+			{
+				Lay("Brazier", brazier, new Vector2(centre.x + s * 2.8f, roomMax.y - 1.4f), 0f, true);
+				Vector2 armour = footprint("ArmourStand");
+				Lay("ArmourStand", Draw(), new Vector2(centre.x + s * ((roomMax.x - roomMin.x) * 0.5f - 1.2f), roomMax.y - armour.y * 0.5f - 0.08f), 0f, true);
+			}
+			// A brazier either side of the runner at the foot of the dais' flight.
+			Vector2 bowl = footprint("Brazier");
+			int foot = Draw();
+			for (int s = -1; s <= 1; s += 2)
+			{
+				Lay("Brazier", foot, new Vector2(centre.x + s * 2.6f, stepFoot - 0.4f - bowl.y * 0.5f), 0f, false);
+			}
+
+			// Down both side walls, facing the aisle: pews in pairs, an armour stand after each pair, a chest last before the dais.
+			int pew = Draw();
+			for (int s = -1; s <= 1; s += 2)
+			{
+				float yaw = s < 0 ? -90f : 90f, z = roomMin.y + Approach + 0.6f, end = stepFoot - 0.5f;
+				int n = 0;
+				while (z < end)
+				{
+					string piece = n % 3 == 2 ? "ArmourStand" : "Pew";
+					Vector2 size = footprint(piece);
+					if (size == Vector2.zero)
+					{
+						n++;
+						if (n > 64)
+						{
+							break;
+						}
+						continue;
+					}
+					// Turned a quarter: its depth across the wall, its length along it.
+					float across = size.y, along = size.x;
+					if (z + along > end)
+					{
+						break;
+					}
+					float x = s < 0 ? roomMin.x + across * 0.5f + 0.05f : roomMax.x - across * 0.5f - 0.05f;
+					if (Lay(piece, piece == "Pew" ? pew : Draw(), new Vector2(x, z + along * 0.5f), yaw, false))
+					{
+						z += along + 0.35f;
+						n++;
+					}
+					else
+					{
+						z += 0.25f;
+					}
+				}
+				Vector2 chest = footprint("Chest");
+				if (chest != Vector2.zero)
+				{
+					for (float cz = end - chest.x * 0.5f; cz > roomMin.y + Approach; cz -= 0.25f)
+					{
+						float x = s < 0 ? roomMin.x + chest.y * 0.5f + 0.05f : roomMax.x - chest.y * 0.5f - 0.05f;
+						if (Lay("Chest", Draw(), new Vector2(x, cz), yaw, false))
+						{
+							break;
+						}
 					}
 				}
 			}

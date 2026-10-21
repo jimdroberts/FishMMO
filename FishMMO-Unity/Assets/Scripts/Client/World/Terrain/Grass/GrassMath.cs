@@ -478,6 +478,24 @@ namespace FishMMO.Client
 		/// <summary>A sprinkled type's chance per candidate of its own level (<see cref="SprinkleLevel"/>): the same stems per square metre.</summary>
 		public static float SprinkleChance(float chance, int level) => Math.Min(1f, chance / Quarter(level));
 
+		/// <summary>
+		/// Whether a tussock candidate grows where the field's share is <paramref name="share"/> (summed coverage / full
+		/// coverage): its clump stands with <c>p^tufting</c> (<paramref name="clumpUnit"/>, the clump's own number) and the
+		/// blade with the rest, <c>p^(1−tufting)</c> (<paramref name="bladeUnit"/>, the cell's <see cref="SaltSpawn"/> hash),
+		/// so a thin field is tufts on bare ground and the expected blades stay <c>p</c> per candidate.
+		/// FishGrassBlades.compute FishGrassGenerate mirrors it.
+		/// </summary>
+		public static bool Spawns(float share, float tufting, float clumpUnit, float bladeUnit)
+		{
+			float p = Math.Min(1f, share);
+			if (!(p > 0f))
+			{
+				return false;
+			}
+			float clumpChance = (float)Math.Pow(p, Math.Clamp(tufting, 0f, 1f));
+			return clumpUnit < clumpChance && bladeUnit * clumpChance < p;
+		}
+
 		/// <summary>The type a pick lands on among channel densities (cumulative), or −1 when they are all 0.</summary>
 		public static int PickChannel(float pick, float[] weights, int count)
 		{

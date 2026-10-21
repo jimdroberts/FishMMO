@@ -6,7 +6,8 @@
 //   r  the signed distance to the nearest path's edge, -8 m (inside) .. +3 m (outside)
 //   g  that path's half width / 8 m
 //   b  its wear, 0 grown over .. 1 bare
-//   a  its surface: earth 0, cart track 1/3, gravel 2/3, stone 1.
+//   a  its surface: cart track 0, earth 1/3, gravel 2/3, stone 1 (ScenePathStyle.SurfaceCode; the first bake differed,
+//      FishPathSurfaceCode). Where ways meet, r is the nearer edge and g, b, a a blend of the ways near it.
 //
 // Plain HLSL (no SRP library), so the compute shaders can include it as they are.
 
@@ -21,7 +22,7 @@ Texture2D<float4> _FishPathAtlas;
 SamplerState fishpath_linear_clamp_sampler;
 #define FISH_PATH_SAMPLER fishpath_linear_clamp_sampler
 #endif
-// xy: world x/z of page (0, 0), z: 1 / page metres, w: 1 when any path is bound.
+// xy: world x/z of page (0, 0), z: 1 / page metres, w: the field's encoding when any path is bound (ScenePathField.Encoding), else 0.
 float4 _FishPathParams;
 // xy: the page table's size (pages), z: 1 / the atlas's side (texels), w: stored texels a page side.
 float4 _FishPathSize;
@@ -42,6 +43,57 @@ struct FishPathSample
     float surface;
     bool found;
 };
+
+float FishPathHash(float2 p)
+{
+    p = frac(p * float2(0.1031, 0.1030));
+    p += dot(p, p.yx + 33.33);
+    return frac((p.x + p.y) * p.x);
+}
+
+/// Smooth value noise, 0 .. 1, a unit cell.
+float FishPathNoise(float2 p)
+{
+    float2 i = floor(p);
+    float2 f = frac(p);
+    float2 u = f * f * (3.0 - 2.0 * f);
+    float a = FishPathHash(i);
+    float b = FishPathHash(i + float2(1.0, 0.0));
+    float c = FishPathHash(i + float2(0.0, 1.0));
+    float d = FishPathHash(i + float2(1.0, 1.0));
+    return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
+}
+
+/// <summary>
+/// A baked surface code in this encoding (track 0, earth 1/3, gravel 2/3, stone 1). The first bake (_FishPathParams.w 1)
+/// coded earth 0 and the track 1/3, which put the track between earth and gravel: a blend across a junction passed through
+/// it. Read on until the scene is cut again.
+/// </summary>
+float FishPathSurfaceCode(float baked)
+{
+    float code = baked;
+    if (_FishPathParams.w < 1.5)
+    {
+        code = baked < 1.0 / 3.0 ? 1.0 / 3.0 - baked : (baked < 2.0 / 3.0 ? 2.0 * (baked - 1.0 / 3.0) : baked);
+    }
+    return code;
+}
+
+/// <summary>
+/// Breaks up a blend between two surfaces into patches: where two ways meet the field mixes their codes smoothly
+/// (ScenePathField.BlendMetres), and an even fade of gravel into earth read as a smear laid along a line. Here each
+/// surface holds where a noise field stands over its share, so the trail's earth runs on into the road in tongues and
+/// the road's grit scatters out along the trail. A clean code (a way on its own) is left exactly as it is; the blend
+/// stays between the two surfaces it is of.
+/// </summary>
+float FishPathSeam(float surface, float2 xz)
+{
+    float code = surface * 3.0;
+    float lower = floor(min(code, 2.999));
+    float share = code - lower;
+    float n = 0.3 + 0.4 * (FishPathNoise(xz * 0.9 + 71.0) * 0.65 + FishPathNoise(xz * 3.3 + 13.0) * 0.35);
+    return (lower + smoothstep(n - 0.3, n + 0.3, share)) / 3.0;
+}
 
 /// The path field at a world point; found is false where no page is stored (no path within ~3 m).
 FishPathSample FishPathAt(float2 xz)
@@ -67,35 +119,15 @@ FishPathSample FishPathAt(float2 xz)
             s.edge = t.r * (FISH_PATH_INSIDE + FISH_PATH_OUTSIDE) - FISH_PATH_INSIDE;
             s.halfWidth = t.g * FISH_PATH_HALF_RANGE;
             s.wear = t.b;
-            s.surface = t.a;
+            s.surface = FishPathSeam(FishPathSurfaceCode(t.a), xz);
             s.found = true;
         }
     }
     return s;
 }
 
-float FishPathHash(float2 p)
-{
-    p = frac(p * float2(0.1031, 0.1030));
-    p += dot(p, p.yx + 33.33);
-    return frac((p.x + p.y) * p.x);
-}
-
-/// Smooth value noise, 0 .. 1, a unit cell.
-float FishPathNoise(float2 p)
-{
-    float2 i = floor(p);
-    float2 f = frac(p);
-    float2 u = f * f * (3.0 - 2.0 * f);
-    float a = FishPathHash(i);
-    float b = FishPathHash(i + float2(1.0, 0.0));
-    float c = FishPathHash(i + float2(0.0, 1.0));
-    float d = FishPathHash(i + float2(1.0, 1.0));
-    return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
-}
-
-/// How much a cart track (surface 1/3) the path is, 0 .. 1.
-float FishPathTrackness(float surface) { return saturate(1.0 - abs(surface * 3.0 - 1.0)); }
+/// How much a cart track (surface 0) the path is, 0 .. 1.
+float FishPathTrackness(float surface) { return saturate(1.0 - surface * 3.0); }
 
 /// <summary>
 /// The path's edge moved by its fraying: a lost way wanders and breaks; a kept one wanders less, but never runs ruler

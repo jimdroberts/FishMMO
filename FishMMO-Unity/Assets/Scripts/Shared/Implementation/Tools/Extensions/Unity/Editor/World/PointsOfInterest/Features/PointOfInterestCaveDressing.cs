@@ -207,13 +207,25 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			var dresser = new Dresser(context, system, set, biome, new DeterministicRNG(unchecked(system.Seed * 0x2F6B + 0xD1E5)));
 			dresser.Run();
-			// Lights counts every emitter the dressing added: the glow's own and those its lamps, torches and fires give off.
-			int lights = (context.Points != null && context.Points.Emitters != null ? context.Points.Emitters.Count : 0) - emitters;
+			// Lights counts every emitter the dressing added that lights: the glow's own and those its lamps, torches and fires give
+			// off (not the drips' nor the lava's fumes, which only the client's effects read).
+			int lights = 0;
+			if (context.Points != null && context.Points.Emitters != null)
+			{
+				for (int i = emitters; i < context.Points.Emitters.Count; i++)
+				{
+					SceneEmitterKind kind = context.Points.Emitters[i].Kind;
+					lights += kind == SceneEmitterKind.Drip || kind == SceneEmitterKind.Fumes ? 0 : 1;
+				}
+			}
 			// With the time it took, so the dressing's marches can be measured in a cut's notes.
 			PointOfInterestFeatureKit.Note(context, $"cave dressed in {clock.Elapsed.TotalSeconds:0.00} s ({system.Character}): {dresser.Placed} props, {lights} lights"
 				+ $", glow: {dresser.Glowing} ({dresser.Lights} glow lights), lamps: {dresser.Lamps}, climbs: {dresser.Climbed}, crossings: {dresser.Crossed}, camps: {dresser.Camps}"
 				+ (dresser.Grown > 0 ? $", overgrown: {dresser.Grown} plants" : string.Empty)
+				+ (dresser.Vined > 0 ? $", vines and roots: {dresser.Vined}" : string.Empty)
+				+ (dresser.Clutter > 0 ? $", clutter: {dresser.Clutter}" : string.Empty)
 				+ $", cave life: {dresser.LifeSpots} spots"
+				+ (dresser.LavaLights + dresser.LavaPieces + dresser.LavaFumes > 0 ? $", lava: {dresser.LavaPieces} pieces, {dresser.LavaLights} lava lights, {dresser.LavaFumes} fumes" : string.Empty)
 				+ (dresser.StoodIn.Count > 0 ? $"; {set.Rock} has no art for: {string.Join(", ", dresser.StoodIn)}" : string.Empty)
 				+ (dresser.Unfit.Count > 0 ? $"; cave lights that cannot stand where the biome names them: {string.Join(", ", dresser.Unfit)}" : string.Empty)
 				+ (dresser.Missing.Count > 0 ? $"; missing art: {string.Join(", ", dresser.Missing)} (Generate Biome Art, then repaint)" : string.Empty));
@@ -306,14 +318,35 @@ namespace FishMMO.Shared.WorldDesign
 				if (system.Form == CaveForm.Mine)
 				{
 					Workings();
+					// 2026-10-20 (cave realism): the working's clutter (PointOfInterestCaveDressing.Clutter.cs).
+					MineClutter();
 				}
 				else
 				{
 					GlowAll();
 					Encampments();
+					// 2026-10-20 (cave realism): mushroom trees, groves, rings, clumps and rubble (PointOfInterestCaveDressing.Fungi.cs).
+					Fungi();
 				}
+				// Roots, daylight ivy and the deep dark's glowroots (PointOfInterestCaveDressing.Vines.cs).
+				CaveVines();
 				// Where its animals live: measured, not placed, on a stream of its own (PointOfInterestCaveDressing.Life.cs).
 				Life();
+				// 2026-10-20 (cave lava): a lava tube that still runs, dressed round its lava last of all (PointOfInterestCaveDressing.Lava.cs).
+				Lava();
+				// 2026-10-20 (caves livened): each its own pass on its own stream, after every earlier one, so none of theirs moves.
+				// Its streams and pools' banks and spray (PointOfInterestCaveDressing.Streams.cs).
+				Streams();
+				// Daylight through the roof: the rim's plants and the lit floor below (PointOfInterestCaveDressing.Skylights.cs).
+				Skylights();
+				// Drips from the roof and the puddles they fall in (PointOfInterestCaveDressing.Drips.cs).
+				Drips();
+				// What others left: bones, carvings, cave-ins, mine carts, hidden caches (PointOfInterestCaveDressing.Story.cs).
+				Story();
+				// What hangs from the roof: glow-worm threads, roots, guano under the roosts (PointOfInterestCaveDressing.Hanging.cs).
+				Hanging();
+				// An ice cave's frozen falls, icicle curtains and frozen pools (PointOfInterestCaveDressing.Ice.cs).
+				Ice();
 			}
 
 			// ── Overgrowth ────────────────────────────────────────
@@ -1153,6 +1186,30 @@ namespace FishMMO.Shared.WorldDesign
 						return true;
 					}
 				}
+				// A terrace's walk along its top, a little in from its lip (CaveSystem.TerraceWalk), and the pits that drop out of
+				// a floor with a way down them (2026-10-20, the layout's variety): nothing on the walk, nothing in the shaft.
+				foreach (CaveTerrace terrace in system.Terraces)
+				{
+					if (terrace.Solid < 0 || terrace.Solid >= system.Solids.Count)
+					{
+						continue;
+					}
+					CaveSolid slab = system.Solids[terrace.Solid];
+					float inset = Mathf.Min(1.2f, Mathf.Max(0.6f, 0.5f * terrace.Walk - 0.3f));
+					Vector3 edge = terrace.Out * (slab.Width - inset);
+					if (NearLine(p, slab.A + edge, slab.B + edge, 0.9f + margin, 2.5f))
+					{
+						return true;
+					}
+				}
+				foreach (CavePit pit in system.Pits)
+				{
+					bool drop = pit.Kind == CavePitKind.Shaft || pit.Kind == CavePitKind.Winze || pit.Kind == CavePitKind.Ledged;
+					if (drop && new Vector2(p.x - pit.Rim.x, p.z - pit.Rim.z).magnitude < pit.Radius + 1f + margin && p.y > pit.Bottom - 2f && p.y < pit.Rim.y + 4f)
+					{
+						return true;
+					}
+				}
 				foreach (CaveClimb climb in system.Climbs)
 				{
 					if (NearLine(p, climb.Bottom, climb.Bottom + climb.Out * 1.5f, 1.2f + margin, 3f)
@@ -1239,6 +1296,17 @@ namespace FishMMO.Shared.WorldDesign
 			private bool Place(GameObject prefab, Vector3 local, Quaternion rotation, Vector3 scale)
 			{
 				if (prefab == null)
+				{
+					return false;
+				}
+				// Nothing stands in molten lava, and a molten tube's glowing crystals give way to it (2026-10-20): refused after every
+				// draw for it, so no stream moves (never in a cooled cave).
+				if (InLava(local) || LavaOutshines(prefab, local))
+				{
+					return false;
+				}
+				// Nor in a wet cave's water but its rock (2026-10-20, caves livened, PointOfInterestCaveDressing.Streams.cs), likewise.
+				if (InStream(prefab, local))
 				{
 					return false;
 				}

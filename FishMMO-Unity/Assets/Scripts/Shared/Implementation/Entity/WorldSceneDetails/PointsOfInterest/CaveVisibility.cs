@@ -27,8 +27,20 @@ namespace FishMMO.Shared
 	/// far walls were switched off by distance while the camera stood inside.
 	/// </para>
 	/// <para>
+	/// <b>No finer culling inside (measured 2026-10-20, Moron 2's seven caves, chamber middles and passage nodes, 8 bearings).</b>
+	/// The pieces are drawn by the GPU Resident Drawer with its occlusion culling, which already leaves 10k–19k triangles a view
+	/// on average of the 19k–59k in the frustum; culling to exactly the pieces a ray can reach would leave 7k–15k, and the
+	/// triangles past 60 m (a level of detail's share) are 1k–8k a view. Neither per-chamber visibility nor a far level of
+	/// detail would pay for itself against a frame of ~730k triangles.
+	/// </para>
+	/// <para>
 	/// The caves alive and their pieces' boxes are open to the client (<see cref="Live"/>), so a full-screen effect can
 	/// ask whether the camera is sealed in one (UndergroundView).
+	/// </para>
+	/// <para>
+	/// <b>Where the air is.</b> The cut also keeps the cave's columns (<see cref="CaveEnclosure"/>, 2026-10-21): what the lit
+	/// surfaces' underground darkness reads (CaveEnclosureMap, FishGroundMap.hlsl), and the sky's ambient at the eye
+	/// (<see cref="EnclosedAt"/>), so a hall under thin rock is as dark as one under a mountain.
 	/// </para>
 	/// </remarks>
 	[DisallowMultipleComponent]
@@ -40,26 +52,52 @@ namespace FishMMO.Shared
 		[SerializeField] private float reach = 72f;
 		[Tooltip("The cave's voids, world boxes: inside any of them the camera is in the cave.")]
 		[SerializeField] private Bounds[] volumes = System.Array.Empty<Bounds>();
+		[Tooltip("Where the cave's air is, column by column, for the lit surfaces' underground darkness (CaveEnclosure), set by the cut.")]
+		[SerializeField, HideInInspector] private byte[] enclosure = System.Array.Empty<byte>();
 
 		private const int Interval = 6;
 		/// <summary>How near a piece's box the camera counts as in the cave, metres (the boxes are the meshed 32 m cubes).</summary>
 		private const float InsideMargin = 2f;
 		private Bounds[] boxes;
 		private int phase;
+		private CaveEnclosure enclosed;
+		private static int liveVersion;
 
 		/// <summary>Set by the cut: the pieces and which of them are at a mouth.</summary>
-		public void Configure(Renderer[] renderers, bool[] atMouth, float drawReach, Bounds[] voids = null)
+		public void Configure(Renderer[] renderers, bool[] atMouth, float drawReach, Bounds[] voids = null, byte[] columns = null)
 		{
 			pieces = renderers ?? System.Array.Empty<Renderer>();
 			mouth = atMouth ?? System.Array.Empty<bool>();
 			reach = drawReach;
 			volumes = voids ?? System.Array.Empty<Bounds>();
+			enclosure = columns ?? System.Array.Empty<byte>();
 		}
 
 		private static readonly System.Collections.Generic.List<CaveVisibility> live = new System.Collections.Generic.List<CaveVisibility>();
 
 		/// <summary>The caves enabled now.</summary>
 		public static System.Collections.Generic.IReadOnlyList<CaveVisibility> Live => live;
+
+		/// <summary>Counts the caves enabled and disabled: what a window of their columns (CaveEnclosureMap) is kept against.</summary>
+		public static int LiveVersion => liveVersion;
+
+		/// <summary>Where the cave's air is (null for a cave cut before 2026-10-21, until it is cut again).</summary>
+		public CaveEnclosure Enclosure => enclosed;
+
+		/// <summary>How far in any live cave a point is, 0..1 (<see cref="CaveEnclosure.At"/>): 0 outside them and at their mouths.</summary>
+		public static float EnclosedAt(Vector3 point)
+		{
+			float most = 0f;
+			for (int i = 0; i < live.Count; i++)
+			{
+				CaveEnclosure e = live[i] != null ? live[i].enclosed : null;
+				if (e != null)
+				{
+					most = Mathf.Max(most, e.At(point));
+				}
+			}
+			return most;
+		}
 
 		/// <summary>How many pieces the cave is drawn in.</summary>
 		public int PieceCount => boxes != null ? boxes.Length : 0;
@@ -107,13 +145,16 @@ namespace FishMMO.Shared
 				boxes[i] = pieces[i] != null ? pieces[i].bounds : default;
 			}
 			phase = (GetInstanceID() & 0x7FFFFFFF) % Interval;
+			enclosed ??= CaveEnclosure.Decode(enclosure);
 			Apply(true);
 			live.Add(this);
+			liveVersion++;
 		}
 
 		private void OnDisable()
 		{
 			live.Remove(this);
+			liveVersion++;
 		}
 
 		private void LateUpdate()

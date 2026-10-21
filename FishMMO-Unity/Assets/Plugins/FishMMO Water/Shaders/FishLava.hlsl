@@ -122,6 +122,16 @@ float _FishWaterTime;
 /// <summary>Seconds at which WaterSurface wraps _FishWaterTime (its WrapSeconds).</summary>
 #define FISH_LAVA_CLOCK_WRAP 10000.0
 
+// The INLAND lava (FishInlandLava.shader: a lava tube's rivers and pits, drawn by InlandWaterRenderer on its own meshes)
+// runs on the inland water's clock instead: the shared world-motion clock, wrapped at the same 10 000 s
+// (WorldMotion.ShaderWrapSeconds), so every player's lava drifts alike. Its surfaces have no molten mask.
+#if defined(FISH_LAVA_INLAND)
+float _FishInlandTime;
+#define FISH_LAVA_TIME _FishInlandTime
+#else
+#define FISH_LAVA_TIME _FishWaterTime
+#endif
+
 // The MOLTEN MASK (LavaMask.cs, set while the glow-and-fume pass runs): 1 where the ground is below
 // the lava's level (so the lava shows), 0 where it stands above, built from the scene's terrains and
 // MIPMAPPED, so a single tap at the right level is the share of the ground within a given reach that
@@ -137,6 +147,10 @@ float4 _FishLavaMaskInfo;   // x metres per texel, y 1 when the mask is live, z 
 /// </summary>
 float FishLavaMolten(float2 xz, float reach)
 {
+#if defined(FISH_LAVA_INLAND)
+	// A tube's lava is its mesh's own: no mask is built for it (LavaMask reads the terrains, over the caves).
+	return 1.0;
+#else
 	if (_FishLavaMaskInfo.y < 0.5)
 	{
 		return 1.0;
@@ -148,6 +162,7 @@ float FishLavaMolten(float2 xz, float reach)
 	}
 	float lod = log2(max(1.0, reach / max(1e-3, _FishLavaMaskInfo.x)));
 	return SAMPLE_TEXTURE2D_LOD(_FishLavaMask, sampler_FishLavaMask, uv, lod).r;
+#endif
 }
 
 // ── Black-body light ───────────────────────────────────────────────────
@@ -234,14 +249,21 @@ float3 FishLavaBlackbodyXYZ(float kelvin)
 /// ambient — what a lake actually receives, and the same for this surface and for the glow pass.
 /// </para>
 /// </remarks>
-half FishLavaAdaptedResponse()
+/// <param name="sky">How much of the open sky's light reaches the lava, 0..1: 0 deep in a cave, where the eye adapts to the
+/// dark and the lava itself whatever the hour (the inland lava's, from how far underground it lies).</param>
+half FishLavaAdaptedResponse(half sky)
 {
 	Light light = GetMainLight();
 	half3 weights = half3(0.2126h, 0.7152h, 0.0722h);
 	// The light through the cloud over the viewer (FishWaterSun.hlsl): read bare, a storm read as daylight.
 	half illuminance = dot(light.color * FishWaterCloudLight(_WorldSpaceCameraPos, 1.0h), weights) * saturate(light.direction.y) + dot(_GlossyEnvironmentColor.rgb, weights);
-	half day = saturate(illuminance / max(1e-3h, _DaylightIlluminance));
+	half day = saturate(sky * illuminance / max(1e-3h, _DaylightIlluminance));
 	return lerp(_Response, _DayResponse, day);
+}
+
+half FishLavaAdaptedResponse()
+{
+	return FishLavaAdaptedResponse(1.0h);
 }
 
 /// <summary>
@@ -251,13 +273,18 @@ half FishLavaAdaptedResponse()
 /// <param name="meltGlow">The melt's colour, its brightest channel at <c>_Exposure</c>.</param>
 /// <param name="reference">x the melt's luminance (Y), y the scale that puts a glow's peak where the
 /// melt's is, z the response the eye has under the present light (FishLavaAdaptedResponse).</param>
-void FishLavaReference(out float3 meltGlow, out float3 reference)
+void FishLavaReference(out float3 meltGlow, out float3 reference, half sky)
 {
 	float3 xyz = FishLavaBlackbodyXYZ(_MeltKelvin);
 	float3 rgb = max(0.0, mul(FishLavaXYZToRGB, xyz));
 	float peak = max(1e-30, max(rgb.r, max(rgb.g, rgb.b)));
 	meltGlow = rgb / peak * _Exposure;
-	reference = float3(max(xyz.y, 1e-30), _Exposure * xyz.y / peak, FishLavaAdaptedResponse());
+	reference = float3(max(xyz.y, 1e-30), _Exposure * xyz.y / peak, FishLavaAdaptedResponse(sky));
+}
+
+void FishLavaReference(out float3 meltGlow, out float3 reference)
+{
+	FishLavaReference(meltGlow, reference, 1.0h);
 }
 
 /// <summary>
@@ -350,6 +377,7 @@ struct FishLavaFlow
 	float young;        // how freshly the crust here was made: 1 over an upwelling
 	float2 velocity;    // the crust's drift, metres per second
 	float phaseOffset;  // staggers the flow map's resets across the lake
+	float scale;        // the plates' size against the material's: 1 on the sea; a narrow lava channel's are smaller
 };
 
 /// <summary>
@@ -376,7 +404,7 @@ struct FishLavaFlow
 FishLavaFlow FishLavaConvection(float2 xz, float footprint)
 {
 	float cell = max(1.0, _CellSize);
-	float turn = 6.2831853 * frac(_FishWaterTime / max(1.0, _OverturnSeconds));
+	float turn = 6.2831853 * frac(FISH_LAVA_TIME / max(1.0, _OverturnSeconds));
 	float2 orbit = float2(cos(turn), sin(turn));
 	float fineCell = cell * 0.47;
 	float3 broad = FishLavaNoise(xz / cell + orbit * 0.6);
@@ -397,6 +425,7 @@ FishLavaFlow FishLavaConvection(float2 xz, float footprint)
 	// Noise gradients have a long tail; no crust outruns twice the lake's own speed.
 	flow.velocity = speed > 2.0 * _FlowSpeed ? velocity * (2.0 * _FlowSpeed / speed) : velocity;
 	flow.phaseOffset = FishLavaNoise(xz / (cell * 1.5) + 41.0).x;
+	flow.scale = 1.0;
 	return flow;
 }
 
@@ -570,7 +599,12 @@ struct FishLavaCrust
 FishLavaCrust FishLavaPhase(float2 xz, FishLavaFlow flow, float phase, float cycle, float footprint,
 	float2 dxz, float2 dyz, float3 reference, float3 meltGlow)
 {
-	float size = max(0.5, _PlateSize);
+	// The plates, their seams, jags and relief all at the body's scale (FishLavaFlow.scale: 1 on the sea).
+	float scale = max(0.05, flow.scale);
+	float size = max(0.5 * scale, _PlateSize * scale);
+	float crackWidth = _CrackWidth * scale;
+	float jag = _PlateJag * scale;
+	float relief = _CrustRelief * scale;
 	float speed = max(_FlowSpeed, 1e-3);
 	float tau = max(0.1, _CoolingSeconds);
 	float period = max(1.0, _FlowPeriod);
@@ -587,15 +621,15 @@ FishLavaCrust FishLavaPhase(float2 xz, FishLavaFlow flow, float phase, float cyc
 	float2 tear = tearMask.br - 0.5;
 	float3 warpBroad = FishLavaNoise(position / (0.9 * size) + 7.7);
 	float3 warpFine = FishLavaNoise(position / (0.33 * size) + 3.1);
-	float2 warped = position + warpBroad.yz * (0.32 * size) + warpFine.yz * (0.08 * size) + tear * (0.8 * _PlateJag);
+	float2 warped = position + warpBroad.yz * (0.32 * size) + warpFine.yz * (0.08 * size) + tear * (0.8 * jag);
 	FishLavaPlate plate = FishLavaPlates(warped, size);
-	float edge = plate.edge + _PlateJag * 1.4 * tear.x;
+	float edge = plate.edge + jag * 1.4 * tear.x;
 
 	// ── Age ──
 	float young = flow.young;
 	bool welded = plate.weld < FISH_LAVA_WELDED;
 	float plateAge = (0.15 + 0.85 * (1.0 - young)) * max(1.0, _CellSize) / speed * (0.6 + 0.8 * plate.value);
-	float halfWidth = welded ? 0.0 : _CrackWidth * (0.5 + young) * (0.6 + 0.8 * FishLavaHash12(plate.id + 5.7));
+	float halfWidth = welded ? 0.0 : crackWidth * (0.5 + young) * (0.6 + 0.8 * FishLavaHash12(plate.id + 5.7));
 	float rindAge = welded ? plateAge : max(0.0, edge - halfWidth) / (0.25 * speed);
 	float age = min(plateAge, rindAge);
 
@@ -625,8 +659,8 @@ FishLavaCrust FishLavaPhase(float2 xz, FishLavaFlow flow, float phase, float cyc
 	UNITY_BRANCH
 	if (splitDraw.x < 0.25 + 0.5 * young && sinceSplit > 0.0 && !opened && footprint < 0.2 * size)
 	{
-		float subEdge = FishLavaFractures(warped + 13.1, 0.42 * size) + 0.35 * _PlateJag * tear.x;
-		float subWidth = max(halfWidth, 0.5 * _CrackWidth) * 0.55 * saturate(sinceSplit / 4.0);
+		float subEdge = FishLavaFractures(warped + 13.1, 0.42 * size) + 0.35 * jag * tear.x;
+		float subWidth = max(halfWidth, 0.5 * crackWidth) * 0.55 * saturate(sinceSplit / 4.0);
 		float subCrack = FishLavaLine(subEdge, subWidth, footprint);
 		// Open melt while the crack is still widening, then a skin that cools like any other.
 		float subKelvin = FishLavaCrustKelvin(max(0.0, sinceSplit - 6.0));
@@ -656,9 +690,9 @@ FishLavaCrust FishLavaPhase(float2 xz, FishLavaFlow flow, float phase, float cyc
 	 * has no sag, only a narrow groove; a foundering plate tips toward the side going under. */
 	float dome = 0.5 * size;
 	float t = saturate(edge / dome);
-	float rise = welded ? 0.0 : _CrustRelief * 6.0 * t * (1.0 - t) / dome;
+	float rise = welded ? 0.0 : relief * 6.0 * t * (1.0 - t) / dome;
 	float suture = welded ? 1.0 - smoothstep(0.0, max(0.06, footprint), edge) : 0.0;
-	float2 tilt = (FishLavaHash22(plate.id + 9.2) - 0.5) * (2.0 * _CrustRelief / size);
+	float2 tilt = (FishLavaHash22(plate.id + 9.2) - 0.5) * (2.0 * relief / size);
 	float tip = tipping ? saturate((localTime - sinkAt) / 5.0) * 0.35 : 0.0;
 	float2 slope = opened ? float2(0.0, 0.0) : plate.away * rise * (1.0 - crack) + tilt + sinkDirection * tip;
 
@@ -719,14 +753,15 @@ FishLavaCrust FishLavaPhase(float2 xz, FishLavaFlow flow, float phase, float cyc
 /// and their glow is a few per cent of the seams'.
 /// </para>
 /// </remarks>
-float3 FishLavaMeanGlow(float young, float3 reference, float3 meltGlow)
+float3 FishLavaMeanGlow(float young, float3 reference, float3 meltGlow, float scale)
 {
-	float size = max(0.5, _PlateSize);
+	scale = max(0.05, scale);
+	float size = max(0.5 * scale, _PlateSize * scale);
 	float speed = max(_FlowSpeed, 1e-3);
 	float tau = max(0.1, _CoolingSeconds);
 	float period = max(1.0, _FlowPeriod);
 	float open = 1.0 - FISH_LAVA_WELDED;
-	float seams = saturate(4.0 * open * _CrackWidth * (0.5 + young) / size);
+	float seams = saturate(4.0 * open * _CrackWidth * scale * (0.5 + young) / size);
 	float rinds = min(1.0 - seams, saturate(4.0 * open * (0.25 * speed * 2.0 * tau) / size));
 	float plateAge = (0.15 + 0.85 * (1.0 - young)) * max(1.0, _CellSize) / speed;
 	float founder = saturate(_FounderChance * (0.3 + 1.4 * (1.0 - young)));
@@ -738,6 +773,11 @@ float3 FishLavaMeanGlow(float young, float3 reference, float3 meltGlow)
 		+ rinds * FishLavaGlow(FishLavaCrustKelvin(tau), reference)
 		+ rest * (1.0 - founder) * FishLavaGlow(FishLavaCrustKelvin(plateAge), reference)
 		+ rest * skins;
+}
+
+float3 FishLavaMeanGlow(float young, float3 reference, float3 meltGlow)
+{
+	return FishLavaMeanGlow(young, reference, meltGlow, 1.0);
 }
 
 /// <summary>
@@ -795,8 +835,8 @@ float FishLavaBurst(float2 xz, float footprint, float3 reference, out float3 glo
 	const float window = 10.0;
 	const float cellSize = 6.0;
 	float2 cell = floor(xz / cellSize);
-	float draws = floor(_FishWaterTime / window);
-	float timeIn = _FishWaterTime - draws * window;
+	float draws = floor(FISH_LAVA_TIME / window);
+	float timeIn = FISH_LAVA_TIME - draws * window;
 	float draw = FishLavaHash12(cell + frac(draws * 0.618034) * 517.0);
 	UNITY_BRANCH
 	if (draw >= _Spatter)

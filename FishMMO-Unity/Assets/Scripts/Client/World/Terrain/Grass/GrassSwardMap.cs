@@ -39,6 +39,7 @@ namespace FishMMO.Client
 		private static Vector2 corner;
 		private static bool filled;
 		private static int filledFor = int.MinValue;
+		private static float filledFull = -1f;
 
 		/// <summary>
 		/// Fills the map round <paramref name="eye"/> when it has moved or the grass changed, and publishes the shade the
@@ -56,11 +57,14 @@ namespace FishMMO.Client
 			Vector2 wanted = new Vector2(
 				Mathf.Floor((eye.x - SizeMetres * 0.5f) / TexelMetres) * TexelMetres,
 				Mathf.Floor((eye.z - SizeMetres * 0.5f) / TexelMetres) * TexelMetres);
-			if (!filled || fingerprint != filledFor || (wanted - corner).sqrMagnitude >= RecentreMetres * RecentreMetres)
+			// The sward closes as the blades thicken: at the coverage that grows the full field (FishGrassBlades.compute).
+			float full = Mathf.Clamp(settings.FullCoverage, 0.05f, 1f);
+			if (!filled || fingerprint != filledFor || full != filledFull || (wanted - corner).sqrMagnitude >= RecentreMetres * RecentreMetres)
 			{
-				Fill(terrains, wanted);
+				Fill(terrains, wanted, full);
 				corner = wanted;
 				filledFor = fingerprint;
+				filledFull = full;
 				filled = true;
 			}
 			// The blades' own far blend (FishGrassBlades.hlsl): from FarBlendStart to the share of the grass distance.
@@ -123,7 +127,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		private static void Fill(IReadOnlyList<GrassTerrain> terrains, Vector2 at)
+		private static void Fill(IReadOnlyList<GrassTerrain> terrains, Vector2 at, float full)
 		{
 			GrassTerrain last = null;
 			for (int z = 0; z < Resolution; z++)
@@ -145,7 +149,7 @@ namespace FishMMO.Client
 							}
 						}
 					}
-					pixels[z * Resolution + x] = last != null ? (byte)Mathf.RoundToInt(last.SwardAt(wx, wz) * 255f) : (byte)0;
+					pixels[z * Resolution + x] = last != null ? (byte)Mathf.RoundToInt(Mathf.Min(1f, last.SwardAt(wx, wz) / full) * 255f) : (byte)0;
 				}
 			}
 			texture.SetPixelData(pixels, 0);
@@ -160,6 +164,7 @@ namespace FishMMO.Client
 		{
 			filled = false;
 			filledFor = int.MinValue;
+			filledFull = -1f;
 		}
 	}
 }

@@ -19,7 +19,8 @@ namespace FishMMO.Shared.WorldDesign
 	/// <b>The lanes.</b> A grid of <see cref="Cell"/> cells over the scene marks the water deep enough for a cog at low tide;
 	/// each lane is the cheapest way across it (A*, dearer near the shallows, so ships keep off the coast), pulled straight
 	/// where the water allows and its corners rounded. A lane runs from a harbour (a port, a dockyard, a pirates' cove, a
-	/// coastal city) to the scene's edge or to another harbour, or across the open sea from edge to edge.
+	/// coastal city) to the scene's edge or to another harbour, or across the open sea from edge to edge. Only over the open
+	/// sea: deep water the scene's edge reaches through deep water, never a basin shut in from the ocean.
 	/// </para>
 	/// <para>Seeded by the scene's name: a re-cut sails the same ships on the same lanes.</para>
 	/// </remarks>
@@ -365,8 +366,47 @@ namespace FishMMO.Shared.WorldDesign
 							&& ground(c.x + side, c.y) <= edgeLimit && ground(c.x - side, c.y) <= edgeLimit
 							&& ground(c.x, c.y + side) <= edgeLimit && ground(c.x, c.y - side) <= edgeLimit;
 						deep[z * w + x] = ok;
-						DeepCount += ok ? 1 : 0;
 					}
+				}
+				/* Only the open sea's (2026-10-20: "Ships are only on seas and the FFT ocean"): deep water the scene's edge reaches
+				 * through deep water. A deep basin shut in by land or shallows is a lagoon however deep, and no ship sails it. */
+				var reached = new bool[w * d];
+				var open = new Queue<int>();
+				for (int z = 0; z < d; z++)
+				{
+					for (int x = 0; x < w; x++)
+					{
+						int i = z * w + x;
+						if ((x == 0 || z == 0 || x == w - 1 || z == d - 1) && deep[i])
+						{
+							reached[i] = true;
+							open.Enqueue(i);
+						}
+					}
+				}
+				while (open.Count > 0)
+				{
+					int i = open.Dequeue();
+					int cx = i % w, cz = i / w;
+					for (int n = 0; n < 4; n++)
+					{
+						int nx = cx + (n == 0 ? 1 : n == 1 ? -1 : 0), nz = cz + (n == 2 ? 1 : n == 3 ? -1 : 0);
+						if (nx < 0 || nz < 0 || nx >= w || nz >= d)
+						{
+							continue;
+						}
+						int j = nz * w + nx;
+						if (deep[j] && !reached[j])
+						{
+							reached[j] = true;
+							open.Enqueue(j);
+						}
+					}
+				}
+				for (int i = 0; i < deep.Length; i++)
+				{
+					deep[i] = reached[i];
+					DeepCount += reached[i] ? 1 : 0;
 				}
 				// Distance from the shallows (and from the scene's edge, which a lane may end on but not run along), in cells.
 				clearance = new int[w * d];

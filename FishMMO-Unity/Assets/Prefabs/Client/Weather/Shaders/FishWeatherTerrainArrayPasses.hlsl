@@ -12,6 +12,8 @@
 #define FISHMMO_WEATHER_TERRAIN_ARRAY_PASSES_INCLUDED
 
 #include "FishSurface.hlsl"
+// FishMMO edit: the snow lift thins to nothing at a hole's edge, where a cave's or a canyon wall's rock is the ground.
+#include "FishTerrainSnowHoles.hlsl"
 // FishMMO edit: the moss a waterfall's spray grows on this ground (FishMoss.hlsl FishFallMoss), the same textured moss as
 // the rock's. The spray's alone: the ground has no moss material of its own. Its textures are read with the layers'
 // own sampler (repeat, trilinear, anisotropic), bound wherever the albedo array is read: no sampler state of its own.
@@ -182,8 +184,8 @@ void SplatmapFinalColor(inout half4 color, half fogCoord)
 
 /// Snow lifts the ground it lies on — its blanket, the deep snow past it, less where it is trodden
 /// (FishSnowLiftMetres) — the same lift FishWeatherTerrain applies, so the two terrain shaders agree about
-/// where the snow's surface is.
-void FishSnowLift(inout float4 positionOS, float3 normalOS)
+/// where the snow's surface is — and none at a hole's edge (FishSnowHoleFade), so it comes down onto the rock there.
+void FishSnowLift(inout float4 positionOS, float3 normalOS, float2 uv)
 {
     // FishMMO edit: off unless the quality tier asks for it (_FishSnowDepth is 0 below High), and only
     // where the sky can reach.
@@ -192,6 +194,11 @@ void FishSnowLift(inout float4 positionOS, float3 normalOS)
         float3 snowWorld = TransformObjectToWorld(positionOS.xyz);
         float3 snowNormal = TransformObjectToWorldNormal(normalOS);
         float lift = FishSnowLiftMetres(snowWorld, snowNormal, _FishSnowDepth);
+        UNITY_BRANCH
+        if (lift > 0.0)
+        {
+            lift *= FishSnowHoleFade(uv);
+        }
         positionOS.xyz += TransformWorldToObjectDir(float3(0, 1, 0)) * lift;
     }
 }
@@ -207,7 +214,7 @@ Varyings SplatmapVert(Attributes v)
     UNITY_SETUP_INSTANCE_ID(v);
     UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
     TerrainInstancing(v.positionOS, v.normalOS, v.texcoord);
-    FishSnowLift(v.positionOS, v.normalOS);
+    FishSnowLift(v.positionOS, v.normalOS, v.texcoord);
 
     VertexPositionInputs Attributes = GetVertexPositionInputs(v.positionOS.xyz);
 
@@ -370,7 +377,7 @@ VaryingsLean ShadowPassVertex(AttributesLean v)
     UNITY_SETUP_INSTANCE_ID(v);
     TerrainInstancing(v.position, v.normalOS, v.texcoord);
     // Lifted like the lit pass, so the snow's surface casts the shadow it receives.
-    FishSnowLift(v.position, v.normalOS);
+    FishSnowLift(v.position, v.normalOS, v.texcoord);
 
     float3 positionWS = TransformObjectToWorld(v.position.xyz);
     float3 normalWS = TransformObjectToWorldNormal(v.normalOS);
@@ -410,7 +417,7 @@ VaryingsLean DepthOnlyVertex(AttributesLean v)
     TerrainInstancing(v.position, v.normalOS, v.texcoord);
     // The depth prepass must agree with the lit pass to the bit, or the lifted snow fails the depth test
     // against its own prepass and the ground flickers.
-    FishSnowLift(v.position, v.normalOS);
+    FishSnowLift(v.position, v.normalOS, v.texcoord);
     o.clipPos = TransformObjectToHClip(v.position.xyz);
     o.texcoord = v.texcoord;
     return o;
@@ -452,7 +459,7 @@ VaryingsDepthNormal DepthNormalOnlyVertex(Attributes v)
     UNITY_SETUP_INSTANCE_ID(v);
     UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
     TerrainInstancing(v.positionOS, v.normalOS, v.texcoord);
-    FishSnowLift(v.positionOS, v.normalOS);
+    FishSnowLift(v.positionOS, v.normalOS, v.texcoord);
 
     const VertexPositionInputs attributes = GetVertexPositionInputs(v.positionOS.xyz);
 

@@ -40,6 +40,8 @@ namespace FishMMO.Shared.Biomes
 			public int PlanetRiver;
 			[Tooltip("False for a dry wash: a bed and banks, no water.")]
 			public bool Perennial = true;
+			[Tooltip("True for a river of molten lava (a lava tube's): drawn as lava, burns and is swum as the lava sea is; nothing lives in it.")]
+			public bool Lava;
 			public End Start;
 			public End Finish;
 			[Tooltip("The lake it leaves or enters, or the river it joins; -1 for none.")]
@@ -79,6 +81,8 @@ namespace FishMMO.Shared.Biomes
 			public bool Terminal;
 			[Tooltip("True when the climate keeps it frozen.")]
 			public bool Frozen;
+			[Tooltip("True for a lake of molten lava (a pit in a lava tube's chamber): drawn as lava, burns and is swum as the lava sea is; nothing lives in it.")]
+			public bool Lava;
 			[Tooltip("What flows out over its spill point, m³/s.")]
 			public float Outflow;
 			[Tooltip("Points under its water the lake is flooded from, x and z.")]

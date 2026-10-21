@@ -183,10 +183,54 @@ namespace FishMMO.Shared.WorldDesign
 			new StructureRoofFollower("Granary", 1, StructureMaterial.Timber, StructureRoofShape.Gable, 1.9f, 2f),
 			new StructureRoofFollower("Watchtower", 0, StructureMaterial.Thatch, StructureRoofShape.Turned, 1.8f, 2.5f),
 			new StructureRoofFollower("Watchtower", 1, StructureMaterial.Timber, StructureRoofShape.Turned, 1.8f, 2.5f),
-			new StructureRoofFollower("WallTower", 1, StructureMaterial.Timber, StructureRoofShape.Turned, 3.7f, 3.5f),
-			new StructureRoofFollower("Keep", 1, StructureMaterial.Timber, StructureRoofShape.Turned, 4f, 5f),
+			new StructureRoofFollower("WallTower", 1, StructureMaterial.Timber, StructureRoofShape.Turned, 4.85f, 4.6f),
+			new StructureRoofFollower("Keep", 1, StructureMaterial.Timber, StructureRoofShape.Turned, 2.9f, 2.5f),
 			new StructureRoofFollower("StiltHut", 1, StructureMaterial.Thatch, StructureRoofShape.Turned, 3.05f, 3.32f),
 			new StructureRoofFollower("Dovecote", 1, StructureMaterial.Thatch, StructureRoofShape.Turned, 3.4f, 3.2f),
+			// 2026-10-19: the town's other buildings, appended so no earlier roof variant moves in first-use order.
+			new StructureRoofFollower("MarketHall", 0, StructureMaterial.Timber, StructureRoofShape.Gable, 5.4f, 5.4f),
+			new StructureRoofFollower("MarketHall", 1, StructureMaterial.Timber, StructureRoofShape.Gable, 5f, 5f),
+			new StructureRoofFollower("ShopHouse", 0, StructureMaterial.Timber, StructureRoofShape.Gable, 3.5f, 3.5f),
+			new StructureRoofFollower("ShopHouse", 1, StructureMaterial.Thatch, StructureRoofShape.Gable, 4.2f, 3.5f),
+			new StructureRoofFollower("Warehouse", 0, StructureMaterial.Timber, StructureRoofShape.Gable, 5f, 5f),
+			new StructureRoofFollower("Warehouse", 1, StructureMaterial.Timber, StructureRoofShape.Gable, 5f, 5f),
+			new StructureRoofFollower("CountingHouse", 0, StructureMaterial.Timber),
+			new StructureRoofFollower("CountingHouse", 1, StructureMaterial.Timber),
+			new StructureRoofFollower("WizardTower", 1, StructureMaterial.Timber, StructureRoofShape.Gable, 3.6f, 3f),
+			new StructureRoofFollower("Library", 0, StructureMaterial.Timber, StructureRoofShape.Gable, 6f, 5f),
+			new StructureRoofFollower("Library", 1, StructureMaterial.Timber),
+			new StructureRoofFollower("Barracks", 0, StructureMaterial.Timber),
+			new StructureRoofFollower("Barracks", 1, StructureMaterial.Thatch),
+			new StructureRoofFollower("GuardHouse", 0, StructureMaterial.Timber),
+			new StructureRoofFollower("GuardHouse", 1, StructureMaterial.Thatch),
+			new StructureRoofFollower("Healer", 0, StructureMaterial.Thatch),
+			new StructureRoofFollower("Healer", 1, StructureMaterial.Timber),
+			new StructureRoofFollower("Bakery", 0, StructureMaterial.Timber),
+			new StructureRoofFollower("Bakery", 1, StructureMaterial.Thatch),
+			new StructureRoofFollower("Brewhouse", 0, StructureMaterial.Timber),
+			new StructureRoofFollower("Brewhouse", 1, StructureMaterial.Thatch),
+			new StructureRoofFollower("Workshop", 0, StructureMaterial.Timber, StructureRoofShape.Gable, 3.3f, 3.5f),
+			new StructureRoofFollower("Workshop", 1, StructureMaterial.Thatch, StructureRoofShape.Gable, 4f, 3.5f),
+			new StructureRoofFollower("Barn", 0, StructureMaterial.Thatch, StructureRoofShape.Gable, 6.5f, 5.5f),
+			new StructureRoofFollower("HenHouse", 0, StructureMaterial.Timber, StructureRoofShape.Gable, 0.55f, 0.6f),
+			new StructureRoofFollower("HenHouse", 1, StructureMaterial.Thatch, StructureRoofShape.Gable, 1.05f, 0.7f),
+			// 2026-10-19: the cathedral and the outskirts (StructurePieces.Outskirts.cs), appended likewise. The cathedral's transept roof
+			// is laid from its nave's plan at the same pitch; the aisles' lean-tos, the hut's barrel roof and the bothy's lean-to do not follow.
+			new StructureRoofFollower("Cathedral", 0, StructureMaterial.Timber, StructureRoofShape.Gable, 5.4f, 5.1f),
+			new StructureRoofFollower("Cathedral", 1, StructureMaterial.Timber, StructureRoofShape.Gable, 5.4f, 5.1f),
+			new StructureRoofFollower("Lychgate", 0, StructureMaterial.Timber, StructureRoofShape.Gable, 1.75f, 1.72f),
+			new StructureRoofFollower("WaysideCross", 1, StructureMaterial.Timber, StructureRoofShape.Gable, 0.36f, 0.35f),
+			new StructureRoofFollower("ShepherdHut", 1, StructureMaterial.Earth),
+			new StructureRoofFollower("Bothy", 1, StructureMaterial.Thatch, StructureRoofShape.Turned, 3.3f, 2.75f),
+			// 2026-10-19: a capital's palace (StructurePieces.Palace.cs), appended likewise. The throne hall's nave roof (v0) and its
+			// great roof (v1), the wing's hips inside its parapet (v0) and its steep roof between stone gables (v1); the basilica's
+			// aisle lean-tos, the turrets' stone spirelets, the towers' and bartizans' cones and the cupola's lead dome do not follow.
+			new StructureRoofFollower("ThroneHall", 0, StructureMaterial.Timber, StructureRoofShape.Gable, 5f, 5.1f),
+			new StructureRoofFollower("ThroneHall", 1, StructureMaterial.Timber, StructureRoofShape.Gable, 6.5f, 9f),
+			new StructureRoofFollower("PalaceWing", 0, StructureMaterial.Timber, StructureRoofShape.Turned, 3f, 4.3f),
+			new StructureRoofFollower("PalaceWing", 1, StructureMaterial.Timber, StructureRoofShape.Gable, 6f, 6f),
+			// The corner tower (2026-10-19): its square variant's pyramid is the square wall tower's.
+			new StructureRoofFollower("CornerTower", 1, StructureMaterial.Timber, StructureRoofShape.Turned, 4.85f, 4.6f),
 		};
 
 		/// <summary>Every pitch, in order.</summary>

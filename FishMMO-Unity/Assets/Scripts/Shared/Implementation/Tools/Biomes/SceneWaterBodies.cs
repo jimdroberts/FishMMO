@@ -20,8 +20,13 @@ namespace FishMMO.Shared.Biomes
 	/// <para>
 	/// Shared by the client and the server: the queries are arithmetic on the asset, no rendering.
 	/// </para>
+	/// <para>
+	/// <b>Lava too.</b> A lake or river flagged <see cref="SceneHydrology.Lake.Lava"/> (a lava tube's) stands, flows and is
+	/// asked about like any other, and says it is lava (<see cref="TryGetSurface(float, float, out float, out bool)"/>), so
+	/// <see cref="WaterQuery"/> reports it as <see cref="WaterBody.Lava"/>: burned in, swum slowly by the fire-proof.
+	/// </para>
 	/// </remarks>
-	public sealed class SceneWaterBodies : MonoBehaviour, SurfaceWater.IAreaSource
+	public sealed class SceneWaterBodies : MonoBehaviour, SurfaceWater.ILavaAreaSource
 	{
 		[Tooltip("The scene's rivers and lakes, written when it was generated.")]
 		public SceneHydrology Hydrology;
@@ -141,13 +146,44 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>The water's surface over a scene position: a lake's level, or a river's surface where its channel is.</summary>
-		public bool TryGetSurface(float x, float z, out float level) => TryGetSurfaceNear(x, z, 0f, out level);
+		public bool TryGetSurface(float x, float z, out float level) => TryGetSurfaceNear(x, z, 0f, out level, out _);
+
+		/// <summary>The surface over a scene position, as <see cref="TryGetSurface(float, float, out float)"/>, and whether it is molten lava.</summary>
+		public bool TryGetSurface(float x, float z, out float level, out bool lava) => TryGetSurfaceNear(x, z, 0f, out level, out lava);
+
+		/// <summary>True when any of the scene's lakes or rivers is lava.</summary>
+		public bool HasLava
+		{
+			get
+			{
+				if (Hydrology == null)
+				{
+					return false;
+				}
+				foreach (SceneHydrology.Lake lake in Hydrology.Lakes)
+				{
+					if (lake != null && lake.Lava)
+					{
+						return true;
+					}
+				}
+				foreach (SceneHydrology.River river in Hydrology.Rivers)
+				{
+					if (river != null && river.Lava && river.Perennial)
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+		}
 
 		/// <summary>
 		/// Whether any lake or perennial river may stand within <paramref name="area"/> (scene xz, <c>yMin</c>/<c>yMax</c>
 		/// north), its banks and <see cref="MaxReachMetres"/> included: lets a map over a dry terrain skip asking at every point.
+		/// With <paramref name="lava"/> false, lava lakes and rivers are left out (they are opaque, drawn like ground).
 		/// </summary>
-		public bool Reaches(Rect area)
+		public bool Reaches(Rect area, bool lava = true)
 		{
 			if (Hydrology == null)
 			{
@@ -155,6 +191,10 @@ namespace FishMMO.Shared.Biomes
 			}
 			foreach (SceneHydrology.Lake lake in Hydrology.Lakes)
 			{
+				if (!lava && lake.Lava)
+				{
+					continue;
+				}
 				Rect bounds = lake.Bounds;
 				if (bounds.xMax + MaxReachMetres >= area.xMin && bounds.xMin - MaxReachMetres <= area.xMax &&
 					bounds.yMax + MaxReachMetres >= area.yMin && bounds.yMin - MaxReachMetres <= area.yMax)
@@ -164,7 +204,7 @@ namespace FishMMO.Shared.Biomes
 			}
 			foreach (SceneHydrology.River river in Hydrology.Rivers)
 			{
-				if (!river.Perennial || river.Points == null)
+				if (!river.Perennial || river.Points == null || !lava && river.Lava)
 				{
 					continue;
 				}
@@ -192,9 +232,13 @@ namespace FishMMO.Shared.Biomes
 		/// point or a point that far off. For maps sampled on a grid coarser than a creek: a 2 m heightmap can have no
 		/// sample inside a 1.5 m channel, and the water still has to reach the samples either side of it.
 		/// </summary>
-		public bool TryGetSurfaceNear(float x, float z, float reach, out float level)
+		public bool TryGetSurfaceNear(float x, float z, float reach, out float level) => TryGetSurfaceNear(x, z, reach, out level, out _);
+
+		/// <summary><see cref="TryGetSurfaceNear(float, float, float, out float)"/>, and whether the surface found is molten lava.</summary>
+		public bool TryGetSurfaceNear(float x, float z, float reach, out float level, out bool lava)
 		{
 			level = float.NegativeInfinity;
+			lava = false;
 			bool any = false;
 			if (Hydrology == null)
 			{
@@ -206,6 +250,7 @@ namespace FishMMO.Shared.Biomes
 				if (lake.Level > level && LakeCovers(lake, x, z, reach))
 				{
 					level = lake.Level;
+					lava = lake.Lava;
 					any = true;
 				}
 			}
@@ -218,7 +263,9 @@ namespace FishMMO.Shared.Biomes
 			 * falling river the segment upstream reaches a little past its end and stands higher, so the highest stepped
 			 * at every segment, and the grass's waterline and the banks' bed paint came out as a row of teeth pointing
 			 * downstream (2026-10-11). The nearest varies smoothly along the river. */
-			float nearest = float.PositiveInfinity, river = float.NegativeInfinity;
+			// The nearest of each liquid's apart: a lava tube's river under a river on the hill is its own, and the higher answers.
+			float nearestWater = float.PositiveInfinity, water = float.NegativeInfinity;
+			float nearestLava = float.PositiveInfinity, molten = float.NegativeInfinity;
 			foreach (Segment segment in near)
 			{
 				if (segment.Jet)
@@ -233,15 +280,34 @@ namespace FishMMO.Shared.Biomes
 				Vector3 a = path.Points[segment.Point], b = path.Points[segment.Point + 1];
 				float t = Project(a, b, x, z, out float distance);
 				float half = HalfAt(path, segment.Point, t, a, b, x, z);
-				if (distance <= half + reach && distance < nearest)
+				if (distance > half + reach)
 				{
-					nearest = distance;
-					river = Mathf.Lerp(a.y, b.y, t);
+					continue;
+				}
+				if (path.Lava ? distance < nearestLava : distance < nearestWater)
+				{
+					if (path.Lava)
+					{
+						nearestLava = distance;
+						molten = Mathf.Lerp(a.y, b.y, t);
+					}
+					else
+					{
+						nearestWater = distance;
+						water = Mathf.Lerp(a.y, b.y, t);
+					}
 				}
 			}
-			if (river > level)
+			if (water > level)
 			{
-				level = river;
+				level = water;
+				lava = false;
+				any = true;
+			}
+			if (molten > level)
+			{
+				level = molten;
+				lava = true;
 				any = true;
 			}
 			return any;
@@ -251,13 +317,14 @@ namespace FishMMO.Shared.Biomes
 		/// Metres from a scene position out to the nearest perennial river's bank: negative inside a channel, positive
 		/// outside it. Exact for any channel within <see cref="IndexCell"/> metres; <see cref="float.PositiveInfinity"/>
 		/// where none is. Rivers that start or end in the lake <paramref name="exceptLake"/> names are left out (−1
-		/// leaves none out).
+		/// leaves none out), and so are rivers of the other liquid: for <paramref name="lava"/> false only water's channels
+		/// count, for true only lava's (a lava tube's river under a lake on the hill is no channel through that lake).
 		/// </summary>
 		/// <remarks>
 		/// Asks the index cells round the point's as well as its own: a segment is filed only within about one and a
 		/// quarter widths plus two metres of its banks, so a creek's own cells alone would lose it a few metres out.
 		/// </remarks>
-		public float OutsideChannels(float x, float z, int exceptLake = -1)
+		public float OutsideChannels(float x, float z, int exceptLake = -1, bool lava = false)
 		{
 			float outside = float.PositiveInfinity;
 			if (Hydrology == null)
@@ -285,7 +352,7 @@ namespace FishMMO.Shared.Biomes
 							continue;
 						}
 						SceneHydrology.River river = Hydrology.Rivers[segment.River];
-						if (!river.Perennial || exceptLake >= 0 && (river.StartLake == exceptLake || river.EndLake == exceptLake))
+						if (!river.Perennial || river.Lava != lava || exceptLake >= 0 && (river.StartLake == exceptLake || river.EndLake == exceptLake))
 						{
 							continue;
 						}
@@ -337,14 +404,20 @@ namespace FishMMO.Shared.Biomes
 		public bool IsUnder(Vector3 point) => TryGetSurface(point.x, point.z, out float level) && point.y < level;
 
 		/// <summary>The current at a scene position where water stands there; zero elsewhere.</summary>
-		public Vector2 CurrentAt(float x, float z) => TryGetSurface(x, z, out _) ? FlowAt(x, z, out _, out _) : Vector2.zero;
+		public Vector2 CurrentAt(float x, float z) => TryGetSurface(x, z, out _, out bool lava) ? FlowAt(x, z, out _, out _, lava) : Vector2.zero;
 
 		/// <summary>
 		/// The scene's flow at a position, m/s: every nearby river's current blended by nearness, its jets
 		/// spreading into the lakes and the sea they end in. Also how strongly any river reaches the point,
 		/// 0 … 1, and how broken the water is there (0 smooth … 1 a fall).
 		/// </summary>
-		public Vector2 FlowAt(float x, float z, out float reach, out float broken)
+		public Vector2 FlowAt(float x, float z, out float reach, out float broken) => FlowAt(x, z, out reach, out broken, false);
+
+		/// <summary>
+		/// <see cref="FlowAt(float, float, out float, out float)"/> of one liquid: the lava rivers' flow for <paramref name="lava"/>
+		/// true, the water's for false. Each is its own: a lava tube's river under a lake on the hill moves none of its water.
+		/// </summary>
+		public Vector2 FlowAt(float x, float z, out float reach, out float broken, bool lava)
 		{
 			reach = 0f;
 			broken = 0f;
@@ -358,7 +431,7 @@ namespace FishMMO.Shared.Biomes
 			foreach (Segment segment in near)
 			{
 				SceneHydrology.River river = Hydrology.Rivers[segment.River];
-				if (!river.Perennial)
+				if (!river.Perennial || river.Lava != lava)
 				{
 					continue;
 				}

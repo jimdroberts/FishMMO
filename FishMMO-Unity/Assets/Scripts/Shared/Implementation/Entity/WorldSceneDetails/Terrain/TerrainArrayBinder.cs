@@ -125,6 +125,8 @@ namespace FishMMO.Shared
 		private static readonly int MaskId = Shader.PropertyToID("_FishMaskArray");
 		private static readonly int LayerTableId = Shader.PropertyToID("_FishLayerTable");
 		private static readonly int PathLayersId = Shader.PropertyToID("_FishPathLayers");
+		private static readonly int SnowHoleFadeId = Shader.PropertyToID("_FishSnowHoleFade");
+		private static readonly int SnowHoleFadeTexelSizeId = Shader.PropertyToID("_FishSnowHoleFade_TexelSize");
 
 		/// <summary>Tiles whose index map the editor has checked against the CPU bake this session (<see cref="TerrainIndexMapBaker.Check"/>): the first few.</summary>
 		private static int indexChecks;
@@ -145,12 +147,33 @@ namespace FishMMO.Shared
 		private int pushedStored, pushedBaked;
 		// The scene's per-layer numbers and path slices, one texture for every tile and backdrop renderer (TerrainLayerTable).
 		private Texture2D layerTable;
+		// How much of the deep-snow lift each tile's vertices keep near the holes (TerrainSnowHoleFade): the tiles with a hole
+		// near them; the rest take its blank map. Made on every push (a cut may have holed the ground since).
+		private Dictionary<Terrain, Texture2D> snowFades;
 #if !UNITY_EDITOR
 		private AsyncOperationHandle<TerrainArraySet> handle;
 #endif
 
 		/// <summary>The set currently bound, or null.</summary>
 		public TerrainArraySet BoundSet => set;
+
+		/// <summary>The set bound to a terrain tile by whichever binder drew it last, or null: what names its layers.</summary>
+		public static TerrainArraySet SetFor(Terrain terrain)
+		{
+			if (terrain == null)
+			{
+				return null;
+			}
+			for (int i = 0; i < active.Count; i++)
+			{
+				TerrainArrayBinder binder = active[i];
+				if (binder != null && binder.set != null && binder.bound.Contains(terrain))
+				{
+					return binder.set;
+				}
+			}
+			return null;
+		}
 
 		private void OnEnable()
 		{
@@ -172,6 +195,8 @@ namespace FishMMO.Shared
 #endif
 			Unbind();
 			ReleaseIndexMaps(null);
+			TerrainSnowHoleFade.Release(snowFades);
+			snowFades = null;
 			if (layerTable != null)
 			{
 				if (Application.isPlaying)
@@ -221,6 +246,8 @@ namespace FishMMO.Shared
 			FillLayerTable();
 			List<Terrain> terrains = EffectiveTerrains();
 			ReleaseIndexMaps(terrains);
+			TerrainSnowHoleFade.Release(snowFades);
+			snowFades = TerrainSnowHoleFade.Build(terrains);
 			pushedStored = pushedBaked = 0;
 			foreach (Terrain terrain in terrains)
 			{
@@ -390,6 +417,9 @@ namespace FishMMO.Shared
 			block.SetVector(IndexTexelSizeId, new Vector4(1f / res, 1f / res, res, res));
 
 			PushArrays(block, index != null ? 1 : 0);
+			Texture2D fade = snowFades != null && snowFades.TryGetValue(terrain, out Texture2D own) && own != null ? own : TerrainSnowHoleFade.Blank;
+			block.SetTexture(SnowHoleFadeId, fade);
+			block.SetVector(SnowHoleFadeTexelSizeId, new Vector4(1f / fade.width, 1f / fade.height, fade.width, fade.height));
 			terrain.SetSplatMaterialPropertyBlock(block);
 			return true;
 		}

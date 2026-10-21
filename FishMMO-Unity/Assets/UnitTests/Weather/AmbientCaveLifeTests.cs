@@ -16,7 +16,13 @@ namespace FishMMO.UnitTests.Weather
 	{
 		private static readonly AmbientCreatureKind[] Kinds = AmbientLifeCatalogue.Defaults();
 
-		private static readonly string[] CaveKinds = { "Cave bats", "Cave crickets", "Cave spiders", "Cave salamander", "Olm", "Cave moths", "Fungus gnats", "Cave geckos" };
+		private static readonly string[] CaveKinds =
+		{
+			"Cave bats", "Cave crickets", "Cave spiders", "Cave salamander", "Olm", "Cave moths", "Fungus gnats", "Cave geckos",
+			// 2026-10-20: the light-makers (AmbientGlowLifeTests).
+			"Lantern beetles", "Glow millipedes", "Glowing snails", "Spore motes", "Cave lanternfish", "Lantern jellies", "Wisp moths",
+			"Lantern newts", "Ember mites", "Ice worms",
+		};
 
 		private static int IndexOf(string name)
 		{
@@ -217,6 +223,72 @@ namespace FishMMO.UnitTests.Weather
 				AmbientCaveLife.TryPlace(Kinds[k], k, 1f, 0xCAFEu, 1, Spot(SceneCaveLifeKind.Floor, flags: SceneCaveLifeFlags.Damp), 2, none, airless);
 			}
 			Assert.That(airless, Is.Empty, "no air, no cave life");
+		}
+
+		[Test]
+		public void TheDeepDarkIsNotBare()
+		{
+			// 2026-10-19: almost every baked spot is past the twilight (Dark 1), and caves read empty when only the crickets
+			// lived there at under a group a spot. A dry deep floor in a mild cave holds a few animals of more than one kind.
+			var world = new CaveWorld { Temperature = C(12f) };
+			var groups = new List<AmbientGroup>();
+			var kinds = new HashSet<string>();
+			const int spots = 100;
+			for (int spot = 0; spot < spots; spot++)
+			{
+				SceneCaveLifeSpot floor = Spot(SceneCaveLifeKind.Floor, dark: 1f);
+				for (int k = 0; k < Kinds.Length; k++)
+				{
+					AmbientCaveLife.TryPlace(Kinds[k], k, 1f, 0xD0Cu, spot, floor, spot + 1, world, groups);
+				}
+			}
+			int animals = 0;
+			foreach (AmbientGroup g in groups)
+			{
+				animals += g.Count;
+				kinds.Add(Kinds[g.Kind].Name);
+			}
+			Assert.That(animals, Is.GreaterThan(6 * spots), "a deep floor patch holds several animals on average");
+			Assert.That(kinds, Does.Contain("Cave crickets").And.Contain("Cave spiders"), "the crickets and what hunts them");
+		}
+
+		[Test]
+		public void ACaveUnderColdMountainsIsTheGroundsWarmthNotTheAirs()
+		{
+			// 2026-10-20: every cave round a cold scene's spawn read −2..−4 °C (the open air's year mean at the cave), under every
+			// cave kind's band, and stood empty. The rock is the ground's year mean, and snow keeps the winter's frost off it.
+			Assert.That(AmbientCaveLife.GroundYearMean(C(12f), C(20f), 0.35f), Is.EqualTo(C(12f)).Within(1e-6f), "no frost, no change");
+			Assert.That(AmbientCaveLife.GroundYearMean(C(-3f), C(10f), 1f), Is.EqualTo(C(-3f)).Within(1e-6f), "bare ground feels all the frost");
+			float wet = AmbientCaveLife.CaveAir(C(-3f), C(10f), true, 0.5f);
+			float dry = AmbientCaveLife.CaveAir(C(-3f), C(10f), true, -0.8f);
+			Assert.That(wet, Is.InRange(C(-0.5f), C(1.5f)), "deep snow keeps a −3 °C year's ground at about freezing, the edge of permafrost");
+			Assert.That(dry, Is.LessThan(wet).And.GreaterThan(C(-3f)), "thin snow keeps less of the frost off");
+			Assert.That(AmbientCaveLife.CaveAir(C(-3f), C(10f), false, 0.5f), Is.EqualTo(C(-3f)), "no seasons known: the air's own mean");
+			// Always frozen: snow that never melts keeps less cold out, but the ground stays frozen.
+			Assert.That(AmbientCaveLife.GroundYearMean(C(-20f), C(-10f), 0.35f), Is.LessThan(C(-5f)));
+			// The sine's frost is continuous where the year starts to freeze and where it stops thawing.
+			Assert.That(AmbientCaveLife.GroundYearMean(C(5f), C(10.0001f), 0.35f), Is.EqualTo(C(5f)).Within(1e-3f));
+			Assert.That(AmbientCaveLife.GroundYearMean(C(-5f), C(-0.0001f), 0.35f), Is.EqualTo(0.35f * C(-5f)).Within(1e-3f));
+
+			// And such a cave has its crickets, the spiders hunting them and its bats.
+			var world = new CaveWorld { Temperature = wet };
+			var kinds = new HashSet<string>();
+			var groups = new List<AmbientGroup>();
+			for (int spot = 0; spot < 60; spot++)
+			{
+				for (int k = 0; k < Kinds.Length; k++)
+				{
+					AmbientCaveLife.TryPlace(Kinds[k], k, 1f, 0xC01Du, spot, Spot(SceneCaveLifeKind.Floor, SceneCaveForm.Cave, dark: 1f), spot + 1, world, groups);
+					AmbientCaveLife.TryPlace(Kinds[k], k, 1f, 0xC01Du, 100 + spot, Spot(SceneCaveLifeKind.Roost), spot + 1, world, groups);
+				}
+			}
+			foreach (AmbientGroup g in groups)
+			{
+				kinds.Add(Kinds[g.Kind].Name);
+				Assert.That(AmbientCaveLife.Activity(Kinds[g.Kind], At(0.5, true, -8f, summer: -0.2f), g.Steady, 1f), Is.GreaterThan(0.3f), $"{Kinds[g.Kind].Name} about in its cave");
+			}
+			Assert.That(kinds, Does.Contain("Cave crickets").And.Contain("Cave spiders").And.Contain("Cave bats"));
+			Assert.That(groups.Count, Is.GreaterThan(60), "more than a group a spot");
 		}
 
 		// ── When ──────────────────────────────────────────────────────

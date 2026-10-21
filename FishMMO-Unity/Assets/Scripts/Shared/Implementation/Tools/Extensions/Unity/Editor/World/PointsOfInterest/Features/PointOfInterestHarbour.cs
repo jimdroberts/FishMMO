@@ -26,6 +26,14 @@ namespace FishMMO.Shared.WorldDesign
 	/// prop the sites have laid and of the other boats. The deepest-drawing go first. Where it would touch the bottom at low
 	/// water, it settles there heeled over (<see cref="FloatingBoats.Moored.Floor"/>).
 	/// </para>
+	/// <para>
+	/// <b>Ships on the open sea, each at its own pier</b> (2026-10-20: "Docks, shipyards, etc do not properly sit on the water with
+	/// proper docks to each ship … Ships are only on seas and the FFT ocean."): a cog or a longship only on the sea the ocean
+	/// reaches (<see cref="PointOfInterestOpenSea"/>), never a lake, a river or a basin shut in from the ocean. At a harbour, a
+	/// town or a village every ship and smack lies alongside a pier: one the site's layout laid, else a jetty run out for it from
+	/// the bank, plank module by module, until the water beside it floats the hull or its piles stop reaching the bed. A ship
+	/// with no pier to lie at is not moored at all. A cove's ships lie at anchor; rowboats tie up where they can.
+	/// </para>
 	/// <para>Seeded by the site: a re-cut moors the same boats.</para>
 	/// </remarks>
 	[InitializeOnLoad]
@@ -114,6 +122,9 @@ namespace FishMMO.Shared.WorldDesign
 			float reach = record.Radius + (harbour ? 160f : 60f);
 			List<Obstacle> obstacles = ObstaclesNear(context, site, reach + 30f);
 			bool piers = obstacles.Exists(o => o.Pier);
+			PointOfInterestOpenSea.Map openSea = float.IsNegativeInfinity(sea) ? null : PointOfInterestOpenSea.For(context);
+			bool docks = Docks(record.Kind);
+			int jetties = 0;
 
 			var hulls = new List<Hull>();
 			var moored = new List<FloatingBoats.Moored>();
@@ -140,7 +151,30 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					continue;
 				}
-				if (!TryMoor(context, random, site, record.Radius, reach, sea, length, beam, draft, piers, obstacles, hulls, out FloatingBoats.Moored berth))
+				bool ship = IsShip(wanted.Piece);
+				if (ship && float.IsNegativeInfinity(sea))
+				{
+					unplaced++;
+					continue;
+				}
+				var water = new Waters(context, sea, ship ? openSea : null, ship);
+				FloatingBoats.Moored berth;
+				if (docks && wanted.Piece != "Rowboat")
+				{
+					// Alongside a pier: one already standing, else a jetty run out for it. A ship with neither is not moored.
+					bool berthed = TryAlongside(context, random, site, reach, water, length, beam, draft, obstacles, hulls, out berth);
+					if (!berthed && TryJetty(context, random, site, record.Radius, water, length, beam, draft, obstacles, hulls, out berth))
+					{
+						berthed = true;
+						jetties++;
+					}
+					if (!berthed && (ship || !TryMoor(context, random, site, record.Radius, reach, water, length, beam, draft, piers, obstacles, hulls, out berth)))
+					{
+						unplaced++;
+						continue;
+					}
+				}
+				else if (!TryMoor(context, random, site, record.Radius, reach, water, length, beam, draft, piers || obstacles.Exists(o => o.Pier), obstacles, hulls, out berth))
 				{
 					unplaced++;
 					continue;
@@ -161,7 +195,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			if (afloat + beached > 0 || harbour)
 			{
-				context.Notes?.Add($"{record.Name}: {afloat} boat(s) moored, {beached} hauled up{(unplaced > 0 ? $", {unplaced} found no water to lie in" : string.Empty)}.");
+				context.Notes?.Add($"{record.Name}: {afloat} boat(s) moored, {jetties} jetty(ies) run out for them, {beached} hauled up{(unplaced > 0 ? $", {unplaced} found no water or pier to lie at" : string.Empty)}.");
 			}
 		}
 
@@ -329,13 +363,54 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>The water's surface over a point (river, lake, or sea over ground under it); negative infinity on dry land.</summary>
 		private static float WaterAt(PointOfInterestSiteContext context, float x, float z, float sea)
+			=> new Waters(context, sea, null, false).At(x, z);
+
+		/// <summary>The kinds whose boats lie alongside piers: harbours and the towns and villages by the water.</summary>
+		private static bool Docks(POIType kind)
 		{
-			float level = context.Water != null ? context.Water.SurfaceAt(x, z) : float.NegativeInfinity;
-			if (!float.IsNegativeInfinity(sea) && context.GroundAt(x, z) < sea)
+			switch (kind)
 			{
-				level = Mathf.Max(level, sea);
+				case POIType.Port:
+				case POIType.Dockyard:
+				case POIType.Village:
+				case POIType.Town:
+				case POIType.City:
+				case POIType.Capital:
+				case POIType.StiltVillage:
+					return true;
 			}
-			return level;
+			return false;
+		}
+
+		/// <summary>A sea-going ship: only on the open sea.</summary>
+		private static bool IsShip(string piece) => piece == "Cog" || piece == "Longship";
+
+		/// <summary>The water a boat may lie on: any (river, lake, sea), or for a ship the open sea's alone.</summary>
+		private readonly struct Waters
+		{
+			private readonly PointOfInterestSiteContext context;
+			private readonly PointOfInterestOpenSea.Map openSea;
+			private readonly bool seaOnly;
+			public readonly float Sea;
+
+			public Waters(PointOfInterestSiteContext context, float sea, PointOfInterestOpenSea.Map openSea, bool seaOnly)
+			{
+				this.context = context;
+				Sea = sea;
+				this.openSea = openSea;
+				this.seaOnly = seaOnly;
+			}
+
+			/// <summary>The surface over a point; negative infinity where there is none this boat may lie on.</summary>
+			public float At(float x, float z)
+			{
+				float level = !seaOnly && context.Water != null ? context.Water.SurfaceAt(x, z) : float.NegativeInfinity;
+				if (!float.IsNegativeInfinity(Sea) && context.GroundAt(x, z) < Sea && (openSea == null || openSea.IsOpen(x, z)))
+				{
+					level = Mathf.Max(level, Sea);
+				}
+				return level;
+			}
 		}
 
 		/// <summary>A heading, degrees, that lays a hull's length (its +x) along a direction in plan.</summary>
@@ -347,17 +422,18 @@ namespace FishMMO.Shared.WorldDesign
 			return new Vector2(Mathf.Cos(a), -Mathf.Sin(a));
 		}
 
-		private static bool TryMoor(PointOfInterestSiteContext context, DeterministicRNG random, Vector2 site, float radius, float reach, float sea,
+		private static bool TryMoor(PointOfInterestSiteContext context, DeterministicRNG random, Vector2 site, float radius, float reach, in Waters water,
 			float length, float beam, float draft, bool piers, List<Obstacle> obstacles, List<Hull> hulls, out FloatingBoats.Moored berth)
 		{
 			berth = default;
+			float sea = water.Sea;
 			float best = float.PositiveInfinity;
 			for (int attempt = 0; attempt < Tries; attempt++)
 			{
 				float a = random.NextFloat() * Mathf.PI * 2f;
 				float r = Mathf.Lerp(radius * 0.3f, reach, Mathf.Sqrt(random.NextFloat()));
 				Vector2 at = site + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
-				float level = WaterAt(context, at.x, at.y, sea);
+				float level = water.At(at.x, at.y);
 				if (float.IsNegativeInfinity(level))
 				{
 					continue;
@@ -409,7 +485,7 @@ namespace FishMMO.Shared.WorldDesign
 					for (int s = -1; s <= 1 && fits; s++)
 					{
 						Vector2 p = at + axis * (length * 0.45f * k / 2f) + new Vector2(-axis.y, axis.x) * (hull.Radius * 0.8f * s);
-						float here = WaterAt(context, p.x, p.y, sea);
+						float here = water.At(p.x, p.y);
 						float ground = context.GroundAt(p.x, p.y);
 						float keel = draft * (s == 0 ? 1f : 0.55f) * (Mathf.Abs(k) == 2 ? 0.6f : 1f);
 						fits = !float.IsNegativeInfinity(here) && Mathf.Abs(here - level) < OneWater && here - ground >= keel + (tidal ? 0.3f : InlandKeelRoom);
@@ -447,6 +523,233 @@ namespace FishMMO.Shared.WorldDesign
 			var at2 = new Vector2(berth.Position.x, berth.Position.z);
 			hulls.Add(new Hull { A = at2 - berthAxis * (berth.Length * 0.5f), B = at2 + berthAxis * (berth.Length * 0.5f), Radius = beam * 0.5f });
 			return true;
+		}
+
+		/// <summary>Half a pier's width (the Pier piece is 3 m wide), metres.</summary>
+		private const float PierHalfWidth = 1.5f;
+		/// <summary>A Pier piece's length, metres.</summary>
+		private const float PierModule = 6f;
+		/// <summary>The gap between a pier's side and a hull lying alongside it, metres: the fenders.</summary>
+		private const float PierFender = 0.4f;
+		/// <summary>Headings tried for a jetty of a boat's own.</summary>
+		private const int JettyTries = 24;
+
+		/// <summary>
+		/// Whether a hull at <paramref name="at"/> along <paramref name="axis"/> floats on one water this boat may lie on along its
+		/// whole length at the water's mean level, its draft under its keel (a little less toward the ends and under the bilges)
+		/// and <paramref name="room"/> besides; its level, and the floor the bottom stops it at when the tide goes out.
+		/// </summary>
+		private static bool Afloat(PointOfInterestSiteContext context, in Waters water, Vector2 at, Vector2 axis, float length, float radius, float draft,
+			float room, out float level, out bool tidal, out float floor)
+		{
+			level = water.At(at.x, at.y);
+			floor = float.NegativeInfinity;
+			tidal = !float.IsNegativeInfinity(water.Sea) && Mathf.Abs(level - water.Sea) < OneWater;
+			if (float.IsNegativeInfinity(level))
+			{
+				return false;
+			}
+			for (int k = -2; k <= 2; k++)
+			{
+				for (int s = -1; s <= 1; s++)
+				{
+					Vector2 p = at + axis * (length * 0.45f * k / 2f) + new Vector2(-axis.y, axis.x) * (radius * 0.8f * s);
+					float here = water.At(p.x, p.y);
+					float ground = context.GroundAt(p.x, p.y);
+					float keel = draft * (s == 0 ? 1f : 0.55f) * (Mathf.Abs(k) == 2 ? 0.6f : 1f);
+					if (float.IsNegativeInfinity(here) || Mathf.Abs(here - level) >= OneWater || here - ground < keel + room)
+					{
+						return false;
+					}
+					if (s == 0)
+					{
+						floor = Mathf.Max(floor, ground + keel);
+					}
+				}
+			}
+			return true;
+		}
+
+		/// <summary>
+		/// A hull clear of the laid props and the boats already moored, lying alongside piers: a pier is only in its way where
+		/// the hull would cross its planking, not where it lies against its side.
+		/// </summary>
+		private static bool ClearAlongside(Hull hull, List<Obstacle> obstacles, List<Hull> hulls)
+		{
+			foreach (Obstacle o in obstacles)
+			{
+				float gap = DistanceToSegment(o.Centre, hull.A, hull.B);
+				if (o.Pier ? gap < hull.Radius + PierHalfWidth : gap < hull.Radius + o.Radius * 0.7f + Berth * 0.5f)
+				{
+					return false;
+				}
+			}
+			foreach (Hull other in hulls)
+			{
+				if (SegmentDistance(hull.A, hull.B, other.A, other.B) < hull.Radius + other.Radius + Berth)
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
+		/// <summary>The berth of a hull lying afloat at a point along a heading.</summary>
+		private static FloatingBoats.Moored Berthed(DeterministicRNG random, Vector2 at, float yaw, float level, bool tidal, float floor, float length)
+			=> new FloatingBoats.Moored
+			{
+				Position = new Vector3(at.x, level, at.y),
+				Yaw = yaw,
+				Floor = tidal ? floor : float.NegativeInfinity,
+				Heel = (random.NextFloat() < 0.5f ? -1f : 1f) * random.Range(5f, 11f),
+				Length = length,
+			};
+
+		/// <summary>
+		/// A berth alongside a pier already standing (the site's layout's, or a jetty run out for an earlier boat): the hull along
+		/// a module's run, a fender off its side, afloat. The deepest water first, then the nearest the site.
+		/// </summary>
+		private static bool TryAlongside(PointOfInterestSiteContext context, DeterministicRNG random, Vector2 site, float reach, in Waters water,
+			float length, float beam, float draft, List<Obstacle> obstacles, List<Hull> hulls, out FloatingBoats.Moored berth)
+		{
+			berth = default;
+			float best = float.PositiveInfinity;
+			Hull chosen = default;
+			float offset = PierHalfWidth + beam * 0.5f + PierFender;
+			for (int o = 0; o < obstacles.Count; o++)
+			{
+				Obstacle pier = obstacles[o];
+				if (!pier.Pier || pier.Along.sqrMagnitude < 0.5f || (pier.Centre - site).sqrMagnitude > reach * reach)
+				{
+					continue;
+				}
+				var across = new Vector2(-pier.Along.y, pier.Along.x);
+				for (int side = -1; side <= 1; side += 2)
+				{
+					for (int shift = -1; shift <= 1; shift++)
+					{
+						Vector2 at = pier.Centre + across * (side * offset) + pier.Along * (shift * Mathf.Max(0f, length * 0.5f - PierModule * 0.5f));
+						float yaw = YawAlong(pier.Along) + (random.NextFloat() < 0.5f ? 0f : 180f);
+						Vector2 axis = AxisOf(yaw);
+						if (!Afloat(context, water, at, axis, length, beam * 0.5f, draft, 0.1f, out float level, out bool tidal, out float floor))
+						{
+							continue;
+						}
+						var hull = new Hull { A = at - axis * (length * 0.5f), B = at + axis * (length * 0.5f), Radius = beam * 0.5f };
+						if (!ClearAlongside(hull, obstacles, hulls))
+						{
+							continue;
+						}
+						float depth = level - context.GroundAt(at.x, at.y);
+						float score = 0.01f * Vector2.Distance(at, site) - Mathf.Min(depth, draft + 1.5f);
+						if (score < best)
+						{
+							best = score;
+							chosen = hull;
+							berth = Berthed(random, at, yaw, level, tidal, floor, length);
+						}
+					}
+				}
+			}
+			if (float.IsPositiveInfinity(best))
+			{
+				return false;
+			}
+			hulls.Add(chosen);
+			return true;
+		}
+
+		/// <summary>
+		/// A jetty of the boat's own: along a heading out from the site, from the bank where the ground meets its deck (or the
+		/// high-water line) plank module by module out over the water while its piles reach the bed
+		/// (<see cref="PropsFeature.MeasureShore(System.Func{float, float}, System.Func{float, float}, float, float, float, out float, out float, out float)"/>),
+		/// the hull lying alongside its outer modules (the moored ones with posts and a ladder down), afloat at mean water. A cog
+		/// lying at a jetty whose piles stop short of its draft at low water settles on the bottom then, as a cog was built to.
+		/// </summary>
+		private static bool TryJetty(PointOfInterestSiteContext context, DeterministicRNG random, Vector2 site, float radius, in Waters water,
+			float length, float beam, float draft, List<Obstacle> obstacles, List<Hull> hulls, out FloatingBoats.Moored berth)
+		{
+			berth = default;
+			GameObject plain = StructureKit.Prefab("Pier", 0), moored = StructureKit.Prefab("Pier", 1);
+			if (plain == null || moored == null)
+			{
+				return false;
+			}
+			float sea = water.Sea;
+			float tide = float.IsNegativeInfinity(sea) ? 0f : PropsFeature.HighestTideOf(context);
+			// MeasureShore looks 2.5 of these ahead for the water and runs out 0.6 of one past it at most.
+			float span = Mathf.Max((length + 18f) / 0.6f, radius + 40f);
+			float offset = PierHalfWidth + beam * 0.5f + PierFender;
+			for (int attempt = 0; attempt < JettyTries; attempt++)
+			{
+				float a = random.NextFloat() * Mathf.PI * 2f;
+				var dir = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+				Vector2 origin = site + dir * (radius * 0.3f);
+				float shore = PropsFeature.MeasureShore(
+					t => context.GroundAt(origin.x + dir.x * t, origin.y + dir.y * t),
+					t =>
+					{
+						Vector2 q = origin + dir * t;
+						return context.Water != null ? context.Water.SurfaceAt(q.x, q.y) : float.NegativeInfinity;
+					},
+					sea, tide, span, out float deck, out float from, out float to);
+				if (float.IsNaN(shore) || float.IsNaN(from) || float.IsNaN(to))
+				{
+					continue;
+				}
+				Vector2 wet = origin + dir * (shore + 1f);
+				if (float.IsNegativeInfinity(water.At(wet.x, wet.y)))
+				{
+					// The water it runs out over is not this boat's (a lake for a ship, a basin shut in from the ocean).
+					continue;
+				}
+				int modules = Mathf.Max(2, Mathf.RoundToInt((to - from) / PierModule));
+				float end = from + modules * PierModule;
+				var pier = new Hull { A = origin + dir * from, B = origin + dir * end, Radius = PierHalfWidth };
+				if (!Clear(pier, obstacles, hulls))
+				{
+					continue;
+				}
+				var across = new Vector2(-dir.y, dir.x);
+				int firstSide = random.NextFloat() < 0.5f ? -1 : 1;
+				float flip = random.NextFloat() < 0.5f ? 0f : 180f;
+				for (int pass = 0; pass < 2; pass++)
+				{
+					int side = pass == 0 ? firstSide : -firstSide;
+					// Along the outer modules; else run on a little past the pier's head.
+					for (int slide = 0; slide < 3; slide++)
+					{
+						float centre = end - length * 0.5f + slide * 0.25f * length;
+						Vector2 at = origin + dir * centre + across * (side * offset);
+						float yaw = YawAlong(dir) + flip;
+						Vector2 axis = AxisOf(yaw);
+						if (!Afloat(context, water, at, axis, length, beam * 0.5f, draft, 0.1f, out float level, out bool tidal, out float floor))
+						{
+							continue;
+						}
+						var hull = new Hull { A = at - axis * (length * 0.5f), B = at + axis * (length * 0.5f), Radius = beam * 0.5f };
+						if (!ClearAlongside(hull, obstacles, hulls) || SegmentDistance(hull.A, hull.B, pier.A, pier.B) < hull.Radius + PierHalfWidth)
+						{
+							continue;
+						}
+						// Laid: the plank modules out from the bank, the ones it lies against with posts and a ladder.
+						Quaternion turn = Quaternion.Euler(0f, Mathf.Atan2(dir.x, dir.y) * Mathf.Rad2Deg, 0f);
+						for (int i = 0; i < modules; i++)
+						{
+							float t = from + (i + 0.5f) * PierModule;
+							bool beside = Mathf.Abs(t - centre) <= length * 0.5f;
+							GameObject prefab = beside ? moored : plain;
+							Vector2 p = origin + dir * t;
+							context.AddProp(prefab, new Vector3(p.x, deck, p.y), turn, Vector3.one);
+							obstacles.Add(new Obstacle { Centre = p, Radius = PlanRadius(prefab), Pier = true, Along = dir });
+						}
+						hulls.Add(hull);
+						berth = Berthed(random, at, yaw, level, tidal, floor, length);
+						return true;
+					}
+				}
+			}
+			return false;
 		}
 
 		private static float Depth(PointOfInterestSiteContext context, float x, float z, float level) => level - context.GroundAt(x, z);

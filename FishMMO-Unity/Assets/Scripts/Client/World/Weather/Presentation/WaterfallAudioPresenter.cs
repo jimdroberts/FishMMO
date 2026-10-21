@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
 
 namespace FishMMO.Client
@@ -50,7 +51,9 @@ namespace FishMMO.Client
 		public const float LipRangeShare = 0.5f, LipLoudnessShare = 0.35f;
 
 		private const int SampleRate = 44100;
-		private const float ClipSeconds = 6f, CrossfadeSeconds = 0.5f;
+
+		/// <summary>The rate the falls' loops are made at.</summary>
+		public const int LoopSampleRate = SampleRate;
 
 		/// <summary>One sound source, with what it should be at full fade.</summary>
 		private sealed class Emitter
@@ -264,7 +267,8 @@ namespace FishMMO.Client
 			float splashShare = Mathf.Lerp(0.9f, 0.45f, size);
 			// A wide fall is a wide source: up close it surrounds the listener rather than sitting at a point.
 			float spread = Mathf.Clamp(fall.Width * 3f, 0f, 120f);
-			// Each fall starts at its own place in the loop, so two falls of the same size are not in step.
+			// Each fall at its own place in the loop, so two falls of the same size are not in step; and every player's at
+			// the same place, as the shared clock has it (Configure).
 			// Through int: a negative float cast straight to uint is not defined to wrap.
 			uint hash = unchecked((uint)(int)(fall.Landing.x * 73f) * 73856093u ^ (uint)(int)(fall.Landing.z * 73f) * 19349663u);
 
@@ -296,7 +300,9 @@ namespace FishMMO.Client
 			source.SetCustomCurve(AudioSourceCurveType.CustomRolloff, Rolloff(near / source.maxDistance));
 			if (clip != null)
 			{
-				source.timeSamples = (int)(offset % (uint)clip.samples);
+				// Where the shared clock has this fall's loop now: the same moment of its roar for every player.
+				long along = (long)WorldMotion.Repeat(WorldMotion.Seconds * clip.frequency * pitch, clip.samples);
+				source.timeSamples = (int)((offset % (uint)clip.samples + along) % clip.samples);
 				source.Play();
 			}
 		}
@@ -412,105 +418,36 @@ namespace FishMMO.Client
 		// ── The sound itself ──────────────────────────────────────────────
 
 		/// <summary>
-		/// A seamless loop of falling water, made from seeded noise.
+		/// A seamless loop of falling water, made from seeded noise (<see cref="SynthesiseSamples"/>).
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// The roar (<paramref name="bright"/> false) is mostly brown noise — white noise integrated, so its power
-		/// falls 6 dB an octave and the low end dominates, the rumble of tonnes of water hitting a pool — with a
-		/// third pink noise for body, and a slow surge, as the curtain's load comes and goes.
+		/// The roar (<paramref name="bright"/> false) is the larger falls' sound as recorded: centred at 600–800 Hz, little
+		/// below 125, swelling a little as the curtain's load comes and goes. The splash (<paramref name="bright"/> true) is
+		/// a small fall's or the white water's: centred at 2–3 kHz, full of bubbles.
 		/// </para>
 		/// <para>
-		/// The splash (<paramref name="bright"/> true) is pink noise with the hiss of differenced white noise and a
-		/// sparse crackle of droplets: the spray and the water breaking on rock.
-		/// </para>
-		/// <para>
-		/// Seamless by construction: the surge's cycles fit the loop a whole number of times, and the last half
-		/// second generated is cross-faded (equal power, as the two halves are unrelated noise) into the first, so
-		/// the sample after the loop's end continues the one before it. The same seed makes the same clip on every
-		/// machine.
+		/// Seamless by construction (<see cref="AmbientSounds.Make(AmbientSounds.Bed, uint)"/>): made in the frequency
+		/// domain, so it is periodic. The same seed makes the same clip on every machine.
 		/// </para>
 		/// </remarks>
 		public static AudioClip Synthesise(string name, bool bright, uint seed)
 		{
-			int length = (int)(ClipSeconds * SampleRate);
-			int fade = (int)(CrossfadeSeconds * SampleRate);
-			int total = length + fade;
-			var raw = new float[total];
-			uint state = seed == 0u ? 0x9E3779B9u : seed;
-
-			float brown = 0f, b0 = 0f, b1 = 0f, b2 = 0f, previousWhite = 0f, crackle = 0f;
-			float dcIn = 0f, dcOut = 0f;
-			double surgeA = 2.0 * Math.PI * 3.0 / length, surgeB = 2.0 * Math.PI * 7.0 / length;
-			for (int i = 0; i < total; i++)
-			{
-				float white = Next(ref state) * 2f - 1f;
-				// Brown: integrated, leaking slowly so it does not wander off.
-				brown = (brown + 0.02f * white) * 0.998f;
-				// Pink: Paul Kellett's economy filter, three poles.
-				b0 = 0.99765f * b0 + white * 0.0990460f;
-				b1 = 0.96300f * b1 + white * 0.2965164f;
-				b2 = 0.57000f * b2 + white * 1.0526913f;
-				float pink = (b0 + b1 + b2 + white * 0.1848f) * 0.18f;
-				float sample;
-				if (bright)
-				{
-					float hiss = (white - previousWhite) * 0.25f;
-					if (Next(ref state) < 0.0015f)
-					{
-						crackle += (Next(ref state) * 2f - 1f) * 0.8f;
-					}
-					crackle *= 0.975f;
-					sample = 0.6f * pink + hiss + crackle;
-				}
-				else
-				{
-					sample = 2.6f * brown + 0.35f * pink;
-				}
-				previousWhite = white;
-				// The loop's surge: whole cycles of the loop's length, so it repeats seamlessly.
-				float surge = 1f + (float)(0.12 * Math.Sin(surgeA * i) + 0.07 * Math.Sin(surgeB * i + 1.3));
-				sample *= bright ? 1f + 0.5f * (surge - 1f) : surge;
-				// Blocks any DC the integration leaves, which would only waste headroom.
-				dcOut = sample - dcIn + 0.995f * dcOut;
-				dcIn = sample;
-				raw[i] = dcOut;
-			}
-
-			var data = new float[length];
-			for (int i = 0; i < length; i++)
-			{
-				data[i] = raw[i];
-			}
-			for (int i = 0; i < fade; i++)
-			{
-				float a = (float)i / fade * (Mathf.PI * 0.5f);
-				data[i] = raw[i] * Mathf.Sin(a) + raw[length + i] * Mathf.Cos(a);
-			}
-
-			float peak = 1e-6f;
-			for (int i = 0; i < length; i++)
-			{
-				peak = Mathf.Max(peak, Mathf.Abs(data[i]));
-			}
-			float gain = 0.9f / peak;
-			for (int i = 0; i < length; i++)
-			{
-				data[i] *= gain;
-			}
-
-			AudioClip clip = AudioClip.Create(name, length, 1, SampleRate, false);
+			float[] data = SynthesiseSamples(bright, seed);
+			AudioClip clip = AudioClip.Create(name, data.Length, 1, SampleRate, false);
 			clip.SetData(data, 0);
 			return clip;
 		}
 
-		/// <summary>The next number in [0, 1) from a xorshift generator.</summary>
-		private static float Next(ref uint state)
+		/// <summary>
+		/// The samples <see cref="Synthesise"/> makes its clip from: the falls' bed (<see cref="AmbientSounds.Falls"/>,
+		/// fitted to recordings of falls and brooks), a periodic loop of <see cref="AmbientSounds.LoopSamples"/>. Pure arithmetic, at
+		/// <see cref="LoopSampleRate"/>. It was brown noise for the roar and white hiss for the splash: the recorded falls
+		/// have little below 125 Hz, and a small fall's or a brook's splash is bubbles centred at 2–3 kHz, not hiss at 11.
+		/// </summary>
+		public static float[] SynthesiseSamples(bool bright, uint seed)
 		{
-			state ^= state << 13;
-			state ^= state >> 17;
-			state ^= state << 5;
-			return (state & 0xFFFFFFu) / 16777216f;
+			return AmbientSounds.Make(AmbientSounds.Falls(bright), seed);
 		}
 	}
 }

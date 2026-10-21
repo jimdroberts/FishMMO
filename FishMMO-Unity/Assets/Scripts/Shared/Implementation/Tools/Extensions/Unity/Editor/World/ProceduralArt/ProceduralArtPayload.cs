@@ -179,6 +179,15 @@ namespace FishMMO.Shared.WorldDesign
 			"CaveGlowMeshes.cs",
 			"ProceduralArtCatalogue.Cave.cs",
 			"BiomeArtGenerator.CaveGlow.cs",
+			// What hangs from a cave's roof and piles under it, built as the glow art (2026-10-20, caves livened).
+			"CaveGlowMeshes.Hanging.cs",
+			// An ice cave's ice, built as the glow art (2026-10-20, caves livened).
+			"CaveGlowMeshes.Ice.cs",
+			// What others left in the caves and mines: remains, carvings, fallen timbers, a cache's coffer (2026-10-20, caves livened).
+			"StructurePieces.CaveStory.cs",
+			// The run-time cave cover's mesh (2026-10-20).
+			"CaveCoverMeshes.cs",
+			"BiomeArtGenerator.CaveCover.cs",
 			// Airships and their landing stages, for the cloud worlds (2026-10-14).
 			"StructurePieces.Airships.cs",
 			// Mills and rural works (2026-10-14).
@@ -195,6 +204,25 @@ namespace FishMMO.Shared.WorldDesign
 			"StructurePieces.Boardwalk.cs",
 			// Linear features: hedge bases, walls, fences, gates, clearance rows and channel pieces (2026-10-18, I2f).
 			"StructurePieces.Linear.cs",
+			// Dungeon entrances' doors (2026-10-18), never hashed until 2026-10-19: an edit to them did not mark the art stale.
+			"StructurePieces.Dungeon.cs",
+			// The town's other buildings (2026-10-19): the wizard's tower and library, the garrison's, the farm's, the trades', the
+			// town's own, the trades a shop-house is let to, and the professions' own houses.
+			"StructurePieces.Arcane.cs",
+			"StructurePieces.Military.cs",
+			"StructurePieces.Farm.cs",
+			"StructurePieces.Trades.cs",
+			"StructurePieces.Civic.cs",
+			"StructurePieces.Professions.cs",
+			"StructurePieces.Landmarks.cs",
+			// The great keep, walked floor over floor to its battlements (2026-10-19).
+			"StructurePieces.Keep.cs",
+			// The walls' towers, the watchtower and the gatehouse, walked from their doors to their tops (2026-10-19).
+			"StructurePieces.Towers.cs",
+			// The cathedral and what stands round a settlement's edges (2026-10-19).
+			"StructurePieces.Outskirts.cs",
+			// A capital's palace: the throne hall, the wings, the throne and the court's garden (2026-10-19).
+			"StructurePieces.Palace.cs",
 		};
 
 		/// <summary>
@@ -221,6 +249,8 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			"SceneGlow.cs",
 			"BiomeStructurePalette.cs",
+			// The cave cover's type table: its order is the cover mesh's submeshes' (2026-10-20).
+			"CaveCoverTypes.cs",
 		};
 
 		/// <summary>The project path of a <see cref="ForeignSources"/> file, found by its script's name; null when none or several share it.</summary>

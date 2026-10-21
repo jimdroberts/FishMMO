@@ -2,17 +2,20 @@
 #define FISHMMO_AMBIENT_LIFE_INCLUDED
 
 // FishMMO/Ambient Life: the land's background creatures (AmbientLifeSystem, FishMMO.Client/World/AmbientLife) —
-// birds, bats, rodents, rabbits, lizards, crabs, frogs. Drawn only with Graphics.DrawMeshInstanced, one material
+// birds, bats, rodents, rabbits, lizards, crabs, frogs, and the caves' creatures, some with a light of their own. Drawn only with Graphics.DrawMeshInstanced, one material
 // per kind; where each animal is and which way it faces is worked out on the CPU from the shared world clock. What
 // the shader adds is the movement of the body itself — wing beats and folding, strides and bounds, a lizard's
 // wriggle, a bird's head turning — from the phase the CPU hands each instance.
 //
 // The meshes (AmbientCreatureMeshes) are one unit long, nose toward +z, back up +y, standing on the origin; the
 // instance matrix scales and places them. Vertex data:
-//   COLOR       rgb the animal's own colour (countershaded)
-//   TEXCOORD0   x how far along the body (0 nose .. 1 tail), y across a wing's chord (0 leading .. 1 trailing edge)
+//   COLOR       rgb the animal's own colour (countershaded), a how much of it gives off its own light (the emission mask;
+//               0 all over a creature without one)
+//   TEXCOORD0   x how far along the body (0 nose .. 1 tail; a jelly's from its crown), y across a wing's chord (0 leading ..
+//               1 trailing edge), or on a glowing lamp that lamp's own twinkle offset (0..1)
 //   TEXCOORD1   x which part (birds 0 body, 1 left wing, 2 right wing, 3 legs, 4 head, 5 tail; walkers 0 body,
-//               1-4 legs FL FR HL HR, 5 tail, 6 head; crabs 1-8 legs, 9 claws), y how far out along it (0 root .. 1 tip)
+//               1-4 legs FL FR HL HR, 5 tail, 6 head; crabs 1-8 legs, 9 claws; jellies 0 bell, 1-8 tentacles), y how far out
+//               along it (0 root .. 1 tip; a jelly's bell 0 crown .. 1 rim)
 //   TEXCOORD2   the colour's roles: how much of it came from the kind's back (x), belly (y) and accent (z) (AmbientCreatureMeshes)
 //
 // Per instance (instanced properties):
@@ -21,6 +24,9 @@
 //               walkers: 1 for a bounding gait (rabbits, squirrels, frogs), w birds: the head's turn (radians);
 //               walkers: a pose (a rabbit sitting up, a lizard's push-up, sniffing)
 //   _Tint       rgb times the mesh colour, a how much of the animal is drawn (the distance and fright dither)
+//   _Glow       its own light (AmbientGlow, worked out on the CPU in double precision on the world clock): x its pattern's
+//               phase (cycles, 0..1), y its brightness now (0..1); the material's _EmitColour and _EmitPattern say what colour
+//               and how it runs over the body
 //   _Look       the biome look its group wears (AmbientLooks): x coat, y belly, z markings as packed 8-bit sRGB
 //               (r + 256 g + 65536 b), w 1 + the markings' pattern (plain, stripes, spots, bands, mottled) + its phase
 //               (the fraction / 0.95); w 0 for none: the kind's own colours, exactly as the mesh has them
@@ -43,25 +49,35 @@
 #include "FishAmbient.hlsl"
 
 CBUFFER_START(UnityPerMaterial)
-    half _Mode;          // 0 bird or bat, 1 four-legged walker, 2 lizard, 3 crab, 4 swarm
+    half _Mode;          // 0 bird or bat, 1 four-legged walker, 2 lizard (fish, worm), 3 crab (beetle, millipede, snail), 4 swarm, 5 jelly
     half _Amplitude;     // birds: the beat's half-angle (radians); walkers: the stride, as a share of the body's length
     half _Dihedral;      // birds: the wings' angle above level while gliding (radians)
     half _Smoothness;
     float4 _Shoulder;    // birds: the wings' shoulder (x out, y up, z along), w the neck's z (the head turns about it)
-    half _SwarmStyle;    // swarms: 0 column, 1 cloud, 2 buzz, 3 drift (fireflies), 4 hover (bees), 5 plague (AmbientSwarmStyle)
+    half _SwarmStyle;    // swarms: 0 column, 1 cloud, 2 buzz, 3 drift (fireflies), 4 hover (bees), 5 plague, 6 spores (AmbientSwarmStyle)
     float _BugSize;      // swarms: one insect's length, metres
     float4 _GlowColour;  // swarms: rgb its own light at a flash (linear, HDR), a 1 when it has one
     float4 _LookMix;     // how far it takes a look: x coat, y accents, z markings, w its own brightness kept (AmbientLooks.MixOf)
     float4 _OwnBack;     // the kind's own back, belly and accent (linear): what the colour roles swap out
     float4 _OwnBelly;
     float4 _OwnAccent;
+    float4 _EmitColour;  // its own light at its brightest (rgb linear, HDR), a 1 when it has one (AmbientGlow.EmitColour)
+    float4 _EmitPattern; // x 0 even, 1 a wave along the body's 'along', 2 each lamp twinkling; y crests at once; z a crest's
+                         // sharpness; w the share lit between crests (AmbientGlow.Pattern)
 CBUFFER_END
 
 UNITY_INSTANCING_BUFFER_START(AmbientLifeProps)
     UNITY_DEFINE_INSTANCED_PROP(float4, _Anim)
     UNITY_DEFINE_INSTANCED_PROP(float4, _Tint)
     UNITY_DEFINE_INSTANCED_PROP(float4, _Look)
+    UNITY_DEFINE_INSTANCED_PROP(float4, _Glow)
 UNITY_INSTANCING_BUFFER_END(AmbientLifeProps)
+
+// One instance is a whole swarm (mode 4).
+bool AmbientIsSwarm()
+{
+    return abs(_Mode - 4.0) < 0.5;
+}
 
 struct AmbientLifeAttributes
 {
@@ -196,6 +212,36 @@ void AmbientScuttle(inout float3 p, inout float3 n, float2 body, float2 part, fl
     }
 }
 
+// A jelly's bell beat: a quick squeeze (a fifth of the beat), then a slow relaxing (AmbientGlow.Squeeze, the same curve).
+float AmbientSqueeze(float phase)
+{
+    float f = frac(phase);
+    return smoothstep(0.0, 0.2, f) * (1.0 - smoothstep(0.2, 0.9, f));
+}
+
+// A jelly: the bell's rim drawn in and its crown lifted at each squeeze, the tentacles drawn in with it and trailing in slow waves.
+void AmbientPulse(inout float3 p, inout float3 n, float2 body, float2 part, float4 anim)
+{
+    int id = (int)(part.x + 0.5);
+    float squeeze = AmbientSqueeze(anim.x);
+    if (id == 0)
+    {
+        float rim = saturate(part.y);
+        p.xz *= 1.0 - 0.24 * squeeze * rim * rim;
+        p.y += 0.05 * squeeze * (1.0 - rim);
+        n.xz *= 1.0 + 0.3 * squeeze * rim;
+    }
+    else
+    {
+        float s = saturate(part.y);
+        float phase = anim.x * 6.2831853 - s * 2.6 + id * 0.8;
+        p.xz *= 1.0 - 0.22 * squeeze * (1.0 - 0.5 * s);
+        p.x += 0.06 * s * sin(phase);
+        p.z += 0.06 * s * cos(phase * 0.8);
+        p.y += 0.1 * s * squeeze;
+    }
+}
+
 void AmbientMove(inout float3 p, inout float3 n, float2 body, float2 part, float4 anim)
 {
     int mode = (int)(_Mode + 0.5);
@@ -211,6 +257,10 @@ void AmbientMove(inout float3 p, inout float3 n, float2 body, float2 part, float
     {
         AmbientWriggle(p, n, body, part, anim);
     }
+    else if (mode == 5)
+    {
+        AmbientPulse(p, n, body, part, anim);
+    }
     else
     {
         AmbientScuttle(p, n, body, part, anim);
@@ -223,7 +273,7 @@ struct AmbientLifeVertex
     float3 normalWS;
     float3 color;
     float visible;
-    float glow;          // how much of _GlowColour it gives off (swarms)
+    float glow;          // how much of its light it gives off: _GlowColour's (swarms), _EmitColour's (the rest)
     float3 role;         // the colour's roles (TEXCOORD2)
     float3 rest;         // where on the body it is, at rest (object space): the markings' coordinates
 };
@@ -329,6 +379,19 @@ float3 AmbientSwarmPlace(uint i, uint swarm, float t, int style, out float glow,
         p = lerp(from, to, smoothstep(0.0, 0.15, f));
         p += float3(AmbientSwarmWave(t, 9.0 + 5.0 * r2, r3 * 6.2831853), AmbientSwarmWave(t, 7.0 + 4.0 * r3, r4 * 6.2831853), AmbientSwarmWave(t, 8.0 + 6.0 * r4, r5 * 6.2831853)) * 0.015;
     }
+    else if (style == 6)
+    {
+        // Spore motes: a wide slow haze, deeper than a firefly's, each mote sinking and lifting on the faintest draught about its
+        // place in it and kindling and fading on a slow breath of its own (three to eight seconds), never quite out.
+        float a = r0 * 6.2831853;
+        float rad = pow(r1, 0.4);
+        p = float3(cos(a) * rad, (r2 - 0.5) * 0.9, sin(a) * rad);
+        p += float3(0.25 * AmbientSwarmWave(t, 0.05 + 0.08 * r3, r4 * 6.2831853), 0.18 * AmbientSwarmWave(t, 0.04 + 0.06 * r4, r5 * 6.2831853),
+            0.25 * AmbientSwarmWave(t, 0.06 + 0.07 * r5, r3 * 6.2831853));
+        float breath = 0.5 + 0.5 * AmbientSwarmWave(t, 6.2831853 / (3.0 + 5.0 * r3), r4 * 6.2831853);
+        glow = 0.2 + 0.8 * breath * breath;
+        size = 0.8 + 0.5 * glow;
+    }
     else
     {
         // Locusts: a wide low cloud streaming one way (+z, the swarm's heading) and round again, churning as it goes; each
@@ -374,11 +437,36 @@ AmbientLifeVertex AmbientSwarm(AmbientLifeAttributes input, float4 anim, float4 
     return o;
 }
 
+// ── Its own light ─────────────────────────────────────────────────
+
+// How much of its light a point of the body gives at the pattern's phase (_Glow.x), before the mask and the brightness now: even
+// all over; a wave of crests running along the body's 'along' (a millipede's nose to tail, a lateral line's, a jelly's out from its
+// crown); or each lamp twinkling on its own offset (a newt's spots: a quick kindling, a slow fading). Per vertex: the patterns are
+// a few crests across a creature a few centimetres long.
+float AmbientEmitShape(float along, float offset, float phase)
+{
+    int pattern = (int)(_EmitPattern.x + 0.5);
+    float rest = saturate(_EmitPattern.w);
+    if (pattern == 1)
+    {
+        float crest = frac(phase - along * _EmitPattern.y);
+        float s = pow(saturate(0.5 + 0.5 * cos(crest * 6.2831853)), max(1.0, _EmitPattern.z));
+        return lerp(rest, 1.0, s);
+    }
+    if (pattern == 2)
+    {
+        float c = frac(phase + offset);
+        float s = smoothstep(0.0, 0.1, c) * (1.0 - smoothstep(0.15, 0.55, c));
+        return lerp(rest, 1.0, s);
+    }
+    return 1.0;
+}
+
 AmbientLifeVertex AmbientLifeBuild(AmbientLifeAttributes input)
 {
     float4 anim = UNITY_ACCESS_INSTANCED_PROP(AmbientLifeProps, _Anim);
     float4 tint = UNITY_ACCESS_INSTANCED_PROP(AmbientLifeProps, _Tint);
-    if (_Mode > 3.5)
+    if (AmbientIsSwarm())
     {
         return AmbientSwarm(input, anim, tint);
     }
@@ -391,6 +479,11 @@ AmbientLifeVertex AmbientLifeBuild(AmbientLifeAttributes input)
     o.color = input.color.rgb * tint.rgb;
     o.visible = tint.a;
     o.glow = 0.0;
+    if (_EmitColour.a > 0.5)
+    {
+        float4 glow = UNITY_ACCESS_INSTANCED_PROP(AmbientLifeProps, _Glow);
+        o.glow = input.color.a * AmbientEmitShape(input.body.x, input.body.y, glow.x) * glow.y;
+    }
     o.role = input.role;
     o.rest = input.positionOS.xyz;
     return o;
@@ -529,7 +622,7 @@ struct AmbientLifeVaryings
     float3 positionWS : TEXCOORD0;
     float3 normalWS : TEXCOORD1;
     float3 color : TEXCOORD2;
-    float4 extra : TEXCOORD3;   // x visible share, y fog, z how much of _GlowColour it gives off, w how far underground (FishUnderground)
+    float4 extra : TEXCOORD3;   // x visible share, y fog, z how much of its own light it gives off, w how far underground (FishUnderground)
     float3 role : TEXCOORD4;    // the colour's roles, for the biome look
     float3 rest : TEXCOORD5;    // the body at rest (object space), for the look's markings
     UNITY_VERTEX_INPUT_INSTANCE_ID
@@ -630,12 +723,19 @@ half4 AmbientLifeForwardFragment(AmbientLifeVaryings input, FRONT_FACE_TYPE face
     float3 extraLight = AmbientAdditionalLight(input.positionWS, n, GetNormalizedScreenSpaceUV(input.positionCS), extraSpecular, v);
     colour += albedo * extraLight + extraSpecular;
 #endif
-    if (_Mode > 3.5)
+    if (AmbientIsSwarm())
     {
         // A swarm against the low sun: every insect's wings lit through, a cloud of bright specks.
         colour += light * 0.8 * pow(saturate(dot(-v, mainLight.direction)), 6.0);
         // A firefly's flash (and any swarm's own light), unlit by anything else.
         colour += _GlowColour.rgb * input.extra.z;
+    }
+    else
+    {
+        // A creature's own light, unlit by anything else: full in a cave and by night, toned down under an open day's sky (where
+        // the eye has adapted to the daylight and a cold light reads faint); the bloom catches what is past one.
+        float night = saturate(1.0 - 4.0 * AmbientLookLuma(_FishAmbientSky.rgb));
+        colour += _EmitColour.rgb * input.extra.z * lerp(0.5, 1.0, max(under, night));
     }
     // The weather's fog is the open air's: none in a cave.
     colour = lerp(MixFog(colour, input.extra.y), colour, under);

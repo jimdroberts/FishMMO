@@ -94,7 +94,60 @@ namespace FishMMO.Shared.WorldDesign
 			Piece(list, "ChannelBridge", StructureStyle.Timber, StructureSize.Small,
 				"Where a way crosses a water channel running along z: v0 a plank footbridge across x over the channel; v1 the stone headwalls of a culvert either side of a road (scale z to the road).",
 				ChannelBridge, "linear");
+			// The closing post (2026-10-19: "fences aren't fully connecting in some cases"), last, so no linear piece before it moved.
+			Piece(list, LinearPost, StructureStyle.Timber, StructureSize.Small,
+				"A fence's closing post on the joint at the origin, its run along x toward +x (laid where a run ends, a gap opens or a corner turns and no module's own post stands): v0 the field fence's, v1 the picket fence's, v2 the tall picket fence's, v3 the leaning-pole fence's pair of stakes, v4 the slab fence's (just inside its run's end).",
+				ClosingPost, "linear").Variants = PostVariants;
 		}
+
+		/// <summary>The closing post's variants: one per fence whose modules carry their post at their start (<see cref="LinearPostFor"/>).</summary>
+		public const int PostVariants = 5;
+
+		/// <summary>
+		/// The closing post a linear piece's run takes where it ends with no module's own post (pure): the <see cref="LinearPost"/> variant
+		/// for a fence whose modules each carry one post at their start (the next module's start closes the one before), −1 for a piece
+		/// that needs none (a wall, a bank, a hedge, a hurdle or a palisade is whole at its ends; a gateway stands on its own posts).
+		/// </summary>
+		public static int LinearPostFor(string id, int variant)
+		{
+			switch (id)
+			{
+				case "FieldFence": return 0;
+				case "LinearPickets": return variant == 1 ? 2 : 1;
+				case "LinearPoleFence": return 3;
+				case "LinearSlabFence": return 4;
+				default: return -1;
+			}
+		}
+
+		/// <summary>The closing post's id (<see cref="LinearPostFor"/>).</summary>
+		public const string LinearPost = "LinearPost";
+
+		/// <summary>
+		/// How far either side of its line a solid linear piece stands where two of its modules meet at a turn, metres (pure): what each is
+		/// carried on past the joint so the outside of the corner is closed (a wall's half thickness under its coping, a bank's and a
+		/// clearance row's crest). 0 for a fence, a hurdle or a gateway, whose joint is its post.
+		/// </summary>
+		public static float LinearHalfWidth(string id)
+		{
+			switch (id)
+			{
+				case "LinearDrystone": return 0.3f;
+				case "LinearMortared": return 0.3f;
+				case "LinearEarthBank": return 0.6f;
+				case "LinearSlabs": return 0.06f;
+				case "LinearClearance": return 0.4f;
+				case "LinearHedge": return 0.15f;
+				case "PalisadeSegment": return 0.2f;
+				default: return 0f;
+			}
+		}
+
+		/// <summary>
+		/// Whether a linear piece is solid to the ground (pure): a wall, a bank, a hedge's base, slabs, a clearance row or a palisade, sunk
+		/// where the ground dips under it so no daylight shows beneath; a fence, a hurdle or a gateway stands on its posts and spans a dip.
+		/// </summary>
+		public static bool LinearSolid(string id) => LinearHalfWidth(id) > 0f;
 
 		/// <summary>
 		/// The piece (and variant) a form is laid in, module by module (pure): a laid hedge's base v0, a clipped or wild one's v1; a
@@ -198,7 +251,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The palettes the styles naming their own material lay their pieces in, the kit's otherwise (for the art generator: each
-		/// material key one of them lays is made, PalettesInUse). One per style and piece its form may use (its gate included).
+		/// material key one of them lays is made, PalettesInUse). One per style and piece its form may use (its gate and closing post included).
 		/// </summary>
 		public static IEnumerable<BiomeStructurePalette> LinearPalettes(IEnumerable<BiomeLinearStyle> styles)
 		{
@@ -216,6 +269,10 @@ namespace FishMMO.Shared.WorldDesign
 				if (id != null)
 				{
 					yield return LinearPalette(null, style, id);
+					if (LinearPostFor(id, 0) >= 0)
+					{
+						yield return LinearPalette(null, style, LinearPost);
+					}
 				}
 				if (style.Kind != BiomeLinearKind.TreeRow && style.Kind != BiomeLinearKind.Channel)
 				{
@@ -491,16 +548,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				for (int p = 0; p < 2; p++)
 				{
-					float x = -half + p * PoleFenceModule * 0.5f;
-					for (int s = -1; s <= 1; s += 2)
-					{
-						d.Add(StructureShapes.Rod(new Vector3(x, -0.4f, s * 0.09f), new Vector3(x + d.Range(p * 2 + s, 1, -0.03f, 0.03f), h + 0.15f, s * 0.11f), 0.045f, d.Seg(5, 3),
-							StructureMaterial.Timber, 1 + p * 2 + (s > 0 ? 1 : 0)));
-					}
-					if (d.Mid)
-					{
-						d.Add(StructureShapes.Box(new Vector3(x, h - 0.1f, 0f), new Vector3(0.1f, 0.06f, 0.3f), StructureMaterial.Timber, 8 + p, StructureRole.Detail));
-					}
+					PoleStakes(d, -half + p * PoleFenceModule * 0.5f, p, d.Mid);
 				}
 				int poles = d.Fine ? 8 : d.Mid ? 5 : 2;
 				for (int k = 0; k < poles; k++)
@@ -513,6 +561,21 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					d.Add(StructureShapes.Rod(new Vector3(-half, h + 0.05f, 0f), new Vector3(half, h + 0.05f, 0f), 0.05f, d.Seg(6, 3), StructureMaterial.Timber, 40));
 				}
+			}
+		}
+
+		/// <summary>A leaning-pole fence's pair of stakes at <paramref name="x"/> (the <paramref name="p"/>th of its module), and the tie across their fork when <paramref name="tie"/>.</summary>
+		private static void PoleStakes(StructureDraft d, float x, int p, bool tie)
+		{
+			const float h = PoleFenceHeight;
+			for (int s = -1; s <= 1; s += 2)
+			{
+				d.Add(StructureShapes.Rod(new Vector3(x, -0.4f, s * 0.09f), new Vector3(x + d.Range(p * 2 + s, 1, -0.03f, 0.03f), h + 0.15f, s * 0.11f), 0.045f, d.Seg(5, 3),
+					StructureMaterial.Timber, 1 + p * 2 + (s > 0 ? 1 : 0)));
+			}
+			if (tie)
+			{
+				d.Add(StructureShapes.Box(new Vector3(x, h - 0.1f, 0f), new Vector3(0.1f, 0.06f, 0.3f), StructureMaterial.Timber, 8 + p, StructureRole.Detail));
 			}
 		}
 
@@ -557,8 +620,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				for (int p = 0; p < 2; p++)
 				{
-					float x = -half + p * PicketModule * 0.5f;
-					d.Add(StructureShapes.Box(new Vector3(x, (h - 0.4f) * 0.5f, -0.06f), new Vector3(0.11f, h + 0.4f, 0.11f), StructureMaterial.Timber, 1 + p)).Grain = Vector3.up;
+					PicketPost(d, -half + p * PicketModule * 0.5f, h, 1 + p);
 				}
 				foreach (float y in new[] { 0.3f, h - 0.3f })
 				{
@@ -579,6 +641,12 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
+		/// <summary>A picket fence's post at <paramref name="x"/>, standing to <paramref name="h"/>, behind the pickets' line.</summary>
+		private static void PicketPost(StructureDraft d, float x, float h, int key)
+		{
+			d.Add(StructureShapes.Box(new Vector3(x, (h - 0.4f) * 0.5f, -0.06f), new Vector3(0.11f, h + 0.4f, 0.11f), StructureMaterial.Timber, key)).Grain = Vector3.up;
+		}
+
 		/// <summary>A slab fence: split slabs set upright close together on two rails; v1 weathered, uneven, a slab or two gone.</summary>
 		private static void SlabFence(StructureDraft d)
 		{
@@ -590,7 +658,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					d.Add(StructureShapes.Beam(new Vector3(-half, y, -0.07f), new Vector3(half, y, -0.07f), 0.1f, 0.06f, StructureMaterial.Timber, y < 0.5f ? 1 : 2));
 				}
-				d.Add(StructureShapes.Box(new Vector3(-half + 0.06f, (h - 0.4f) * 0.5f, -0.15f), new Vector3(0.12f, h + 0.4f, 0.12f), StructureMaterial.Timber, 3)).Grain = Vector3.up;
+				SlabPost(d, -half + 0.06f);
 				int slabs = d.Lod == 2 ? 1 : d.Fine ? 12 : 6;
 				for (int k = 0; k < slabs; k++)
 				{
@@ -604,6 +672,12 @@ namespace FishMMO.Shared.WorldDesign
 						Quaternion.Euler(0f, 0f, old ? d.Range(k, 3, -3f, 3f) : 0f), StructureMaterial.Timber, 10 + k)).Grain = Vector3.up;
 				}
 			}
+		}
+
+		/// <summary>A slab fence's post at <paramref name="x"/>, behind its rails.</summary>
+		private static void SlabPost(StructureDraft d, float x)
+		{
+			d.Add(StructureShapes.Box(new Vector3(x, (SlabFenceHeight - 0.4f) * 0.5f, -0.15f), new Vector3(0.12f, SlabFenceHeight + 0.4f, 0.12f), StructureMaterial.Timber, 3)).Grain = Vector3.up;
 		}
 
 		/// <summary>
@@ -650,6 +724,37 @@ namespace FishMMO.Shared.WorldDesign
 				if (d.Mid)
 				{
 					d.Add(StructureShapes.Beam(hinge + open * new Vector3(0.05f, 0.25f, 0.02f), hinge + open * new Vector3(length * 0.7f, 1.1f, 0.02f), 0.06f, 0.035f, StructureMaterial.Timber, 32));
+				}
+			}
+		}
+
+		/// <summary>
+		/// A fence's closing post on the joint at the origin, its run along x toward +x: each variant its fence's own post, built as that
+		/// fence builds it, set upright (a run's end post is its straining post): v0 the field fence's, v1 and v2 the picket fence's at its
+		/// two heights, v3 the leaning-pole fence's pair of stakes and their tie, v4 the slab fence's, just inside the run's end as the
+		/// fence's own stands just inside its start.
+		/// </summary>
+		private static void ClosingPost(StructureDraft d)
+		{
+			using (d.Builds(FenceRoles))
+			{
+				switch (d.Variant)
+				{
+					case 0:
+						d.Add(FieldFencePost(0f, 0f));
+						break;
+					case 1:
+						PicketPost(d, 0f, PicketHeight, 1);
+						break;
+					case 2:
+						PicketPost(d, 0f, 1.5f, 1);
+						break;
+					case 3:
+						PoleStakes(d, 0f, 0, true);
+						break;
+					default:
+						SlabPost(d, -0.06f);
+						break;
 				}
 			}
 		}

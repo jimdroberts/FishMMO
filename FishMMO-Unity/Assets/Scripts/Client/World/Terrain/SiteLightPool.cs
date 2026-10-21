@@ -35,6 +35,11 @@ namespace FishMMO.Client
 		private static readonly int GlowLightsId = Shader.PropertyToID("_FishGlowLights");
 		private static readonly List<Light> pool = new List<Light>();
 		private static readonly List<SceneEmitter> near = new List<SceneEmitter>();
+		/// <summary>
+		/// What the pool chooses from (SceneMagma.PickLights): the nearest <see cref="MaxLights"/> lights of every kind and the
+		/// nearest lava lights, merged nearest first.
+		/// </summary>
+		private static readonly List<SceneEmitter> nearest = new List<SceneEmitter>(), lava = new List<SceneEmitter>(), candidates = new List<SceneEmitter>();
 		private static Vector3 foundAt = new Vector3(float.MaxValue, 0f, 0f);
 		private static int foundVersion = -1;
 		private static int updatedFrame = -1;
@@ -123,8 +128,15 @@ namespace FishMMO.Client
 			{
 				foundVersion = SceneSiteEmitters.Version;
 				foundAt = eye;
-				// Not a chimney's smoke, and not an indoor hearth's bed: a room's light is its Indoor emitter, at its middle.
-				SceneSiteEmitters.Near(eye, Reach + Refind, kind => kind != SceneEmitterKind.Smoke && kind != SceneEmitterKind.Hearth, MaxLights, near);
+				// Not a chimney's smoke, and not an indoor hearth's bed: a room's light is its Indoor emitter, at its middle. Nor a lava
+				// tube's fumes: haze lit by the lava under it, no light of its own. Nor a cave's drips (2026-10-20): water, not a lamp.
+				SceneSiteEmitters.Near(eye, Reach + Refind, kind => kind != SceneEmitterKind.Smoke && kind != SceneEmitterKind.Hearth && kind != SceneEmitterKind.Fumes
+					&& kind != SceneEmitterKind.Drip, MaxLights, nearest);
+				// A lava tube's lava lights first (the nearest dozen within 50 m), then the rest nearest first (SceneMagma.PickLights):
+				// a cave's hundred crystal glows round a lava river never crowd out the light that fills it.
+				SceneSiteEmitters.Near(eye, SceneMagma.PriorityReach, kind => kind == SceneEmitterKind.Magma, SceneMagma.PriorityLights, lava);
+				Merge(eye, nearest, lava, candidates);
+				SceneMagma.PickLights(candidates, eye, MaxLights, near);
 			}
 			float night = Mathf.Clamp01(Shader.GetGlobalFloat(NightLightsId));
 			// Faerie, rune and crystal glows show earlier than the lamps (SceneGlow.Visibility, from SkySystem).
@@ -219,6 +231,27 @@ namespace FishMMO.Client
 						intensity = 3.2f * Mathf.Lerp(0.3f, 1f, night) * flicker * Mathf.Lerp(0.06f, 1f, fire.Burn) * (fire.Burn > 0.02f || fire.Doused < 0.5f ? 1f : 0f);
 						color = Color.Lerp(new Color(1f, 0.28f, 0.1f), color, fire.Burn);
 						break;
+					case SceneEmitterKind.Beacon:
+					{
+						// A lighthouse's fire behind its mirrors: from dusk, filling the lantern and gallery with a slow, heavy
+						// flicker. Its beams are LighthouseBeams'.
+						float flick = 0.9f + 0.06f * Mathf.Sin(time * 6.1f + phase) + 0.04f * Mathf.Sin(time * 9.7f + phase * 1.3f);
+						color = new Color(1f, 0.74f, 0.45f);
+						range = e.Reach > 0f ? e.Reach : 16f;
+						intensity = 4f * night * flick;
+						break;
+					}
+					case SceneEmitterKind.Magma:
+						// Molten lava in a cave (2026-10-20): a deep orange churning slowly on the shared clock, day and night alike (SceneMagma).
+						color = SceneMagma.Colour(e.Seed);
+						range = e.Reach > 0f ? e.Reach : SceneMagma.Range;
+						intensity = SceneMagma.Light(time, e.Position, e.Seed);
+						break;
+					case SceneEmitterKind.Skylight:
+						// An opening in a cave's roof (2026-10-20, caves livened): the sunlit floor under it throws a soft daylight round
+						// its chamber, by day only, through the cloud as the ground has it (CaveSkylights.Bounce).
+						intensity = CaveSkylights.Bounce(e, out color, out range);
+						break;
 					case SceneEmitterKind.Forge:
 						color = new Color(1f, 0.45f, 0.16f);
 						range = 7f;
@@ -263,6 +296,28 @@ namespace FishMMO.Client
 				{
 					light.enabled = enabled;
 					lastEnabled[i] = enabled;
+				}
+			}
+		}
+
+		/// <summary>Two nearest-first lists merged nearest first, an emitter in both taken once (the first list's on a tie).</summary>
+		private static void Merge(Vector3 eye, List<SceneEmitter> a, List<SceneEmitter> b, List<SceneEmitter> into)
+		{
+			into.Clear();
+			int i = 0, j = 0;
+			while (i < a.Count || j < b.Count)
+			{
+				bool fromA = j >= b.Count || (i < a.Count && (a[i].Position - eye).sqrMagnitude <= (b[j].Position - eye).sqrMagnitude);
+				SceneEmitter e = fromA ? a[i++] : b[j++];
+				bool seen = false;
+				for (int k = into.Count - 1; k >= 0 && !seen; k--)
+				{
+					SceneEmitter o = into[k];
+					seen = o.Kind == e.Kind && o.Seed == e.Seed && o.Position == e.Position;
+				}
+				if (!seen)
+				{
+					into.Add(e);
 				}
 			}
 		}

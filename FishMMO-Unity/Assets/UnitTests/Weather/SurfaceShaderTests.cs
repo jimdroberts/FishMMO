@@ -118,6 +118,24 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void TheSnowLift_ComesDownAtTheTerrainsHoles()
+		{
+			// A hole is cut where rock is the ground (a cave's mouth, a canyon wall), flush with its edge. Lifted to the
+			// snow's full depth there, the terrain's edge stands over the rock with a gap under it. The fade is a per-vertex
+			// map: a scan from the vertex reached three cells and collapsed into a square plate on a far patch.
+			string holes = Read(Shaders + "FishTerrainSnowHoles.hlsl");
+			StringAssert.Contains("_FishSnowHoleFade.Load(", holes, "the fade must be each vertex's own value, loaded, not filtered between vertices");
+			string passes = Read(Shaders + "FishWeatherTerrainArrayPasses.hlsl");
+			StringAssert.Contains("#include \"FishTerrainSnowHoles.hlsl\"", passes, "the array terrain lifts the snow without thinning it at the holes");
+			StringAssert.Contains("lift *= FishSnowHoleFade(", passes, "the array terrain lifts the snow without thinning it at the holes");
+			StringAssert.Contains("_FishSnowHoleFade_TexelSize", Read(Shaders + "FishWeatherTerrainArrayInput.hlsl"), "the fade map's size is read from the tile's own buffer");
+
+			string binder = Read("Assets/Scripts/Shared/Implementation/Entity/WorldSceneDetails/Terrain/TerrainArrayBinder.cs");
+			StringAssert.Contains("TerrainSnowHoleFade.Build(", binder, "nothing makes the tiles' fade maps");
+			StringAssert.Contains("SnowHoleFadeId", binder, "nothing hands a tile its fade map");
+		}
+
+		[Test]
 		public void TheCoverMap_IsBuiltAndPublishedForTheSurfaces()
 		{
 			string map = Read("Assets/Scripts/Client/World/Weather/Presentation/WeatherCoverMap.cs");

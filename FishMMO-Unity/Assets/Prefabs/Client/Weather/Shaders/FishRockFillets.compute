@@ -1,0 +1,616 @@
+// Rock seam fillets (RockFillets, FishMMO.Client/World/Terrain): where rocks meet, the seam between them is filled with a
+// smooth surface of rock, so stacked boulders, cliff rocks and sections read as one wall. No rock moves and no collider
+// changes: the fillet is its own geometry, built here from the rocks' distance fields and drawn by FishMMO/Rock Fillet.
+// The arithmetic is RockFilletMath's (same file names in comments), line for line; change both together.
+//
+//   The surface   F = smin(d1, d2, k) + inset, d1 and d2 the signed distances (m) to the nearest two rocks, smin the
+//                 polynomial smooth minimum. Away from a seam F = 0 lies `inset` under the nearer rock's face; in a seam it
+//                 comes out of the rocks into the crease, at most k/4 − inset from them, meeting each face tangentially.
+//
+// A build runs over several frames from one gather of the rock grid (RockContactField), which it copies first:
+//   FishFilletClear     the build's counters to zero.
+//   FishFilletSnapshot  the grid's rock list, copied: later frames mesh from it while the grid regathers under them.
+//   FishFilletClassify  one thread per cell of the region round the camera: the cell's rocks are those of its own and its
+//                       26 neighbours' slots (every rock within the grid's reach plus a cell); a cell whose nearest rocks
+//                       could make a kept fillet anywhere in it (RockFilletMath.CellMayHoldFillet) is appended to the seam
+//                       list with its up to FISH_FILLET_ROCKS nearest.
+//   FishFilletMesh      one group per seam cell, a slice of the list a frame: the field sampled on the cell's lattice into
+//                       group memory, every cube cut into its six tetrahedra, the kept triangles counted, given room in the
+//                       build's triangle buffer by one atomic per group, and written with their normals and look.
+//   FishFilletFinalize  per look, its triangles' run start and its draw's indirect args.
+//   FishFilletScatter   the build's triangles copied into the drawn buffer, grouped by look (one draw per rock material).
+//
+// The kept set depends only on the cells and their rocks, never on which thread found what first: atomics decide only
+// where a triangle lands in the buffers, and the drawn image is the same for any order.
+// Read-only and read-write StructuredBuffers only, at most four per kernel, and group memory under 16 KB (WebGPU's floor).
+
+#pragma kernel FishFilletClear
+#pragma kernel FishFilletSnapshot
+#pragma kernel FishFilletClassify
+#pragma kernel FishFilletMesh
+#pragma kernel FishFilletFinalize
+#pragma kernel FishFilletScatter
+#pragma use_dxc vulkan
+
+#define FISH_ROCK_SLOTS 8
+#define FISH_ROCK_BRICK 32
+#define FISH_FILLET_SUB 8                 // RockFilletMath.Sub: cubes along a cell
+#define FISH_FILLET_SAMPLES 11            // RockFilletMath.Samples: lattice samples along a cell, with a one-sample apron
+#define FISH_FILLET_SAMPLE_COUNT 1331     // FISH_FILLET_SAMPLES³
+#define FISH_FILLET_ROCKS 8               // RockFilletMath.MaxCellRocks
+#define FISH_FILLET_CANDIDATES 16         // distinct rocks a cell's neighbourhood is read for
+#define FISH_FILLET_LOOKS 64              // RockFillets.MaxLooks: one draw each
+#define FISH_FILLET_MAX_WIDTH 1.5         // RockFilletMath.MaxWidth
+#define FISH_FILLET_GROUP 128
+
+// Counters (uint): [0] seam cells, [1] triangles, [2] overflow (bit 0 cells, bit 1 triangles), [3] unused,
+// [4 + look] each look's triangles, [4 + FISH_FILLET_LOOKS + look] each look's scatter fill.
+#define FISH_FILLET_COUNTER_LOOKS 4u
+#define FISH_FILLET_COUNTER_FILL (4u + FISH_FILLET_LOOKS)
+#define FISH_FILLET_COUNTERS (4u + 2u * FISH_FILLET_LOOKS)
+
+struct FishRock   // FishRockField.compute
+{
+    float4 row0;
+    float4 row1;
+    float4 row2;
+    float4 origin;      // xyz world position, w world metres per local unit
+    float4 brickMin;    // xyz brick's local min corner, w the field's unit (1)
+    float4 brickSize;   // xyz brick's local size, w its index in the atlas
+    float4 flags;       // x 1 a rock, y its look + 1
+};
+
+// A seam cell: x, y, z its grid cell (in the snapshot's grid), w how many rocks; then its rocks' snapshot indices.
+struct FishFilletCell
+{
+    uint4 cell;
+    uint4 rocks0;
+    uint4 rocks1;
+};
+
+// A triangle as drawn (FishRockFilletPass.hlsl): corners in drawing order (front face out of the rocks), w each
+// corner's distance to the nearest rock (m, negative inside); normals octahedral-packed, w the look.
+struct FishFilletTri
+{
+    float4 a;
+    float4 b;
+    float4 c;
+    uint4 normals;
+};
+
+RWStructuredBuffer<uint> _FilletCounters;
+RWStructuredBuffer<FishRock> _FilletRocks;          // the snapshot (written by FishFilletSnapshot, read by the mesh)
+StructuredBuffer<FishRock> _FilletRocksIn;          // the grid's live list (snapshot, classify)
+StructuredBuffer<uint> _FilletSlots;                // the grid's cells (classify)
+RWStructuredBuffer<FishFilletCell> _FilletCells;    // the seam list (classify writes, mesh reads)
+StructuredBuffer<FishFilletCell> _FilletCellsIn;
+RWStructuredBuffer<FishFilletTri> _FilletTris;      // the build's triangles (mesh writes)
+StructuredBuffer<FishFilletTri> _FilletTrisIn;      // (scatter reads)
+RWStructuredBuffer<FishFilletTri> _FilletDrawn;     // the drawn set, by look (scatter writes)
+RWByteAddressBuffer _FilletArgs;                    // per look, 16 bytes: vertex count, instance count, start vertex, start instance
+RWStructuredBuffer<uint> _FilletStarts;             // per look: its first triangle in the drawn set
+StructuredBuffer<uint> _FilletStartsIn;
+Texture3D<float> _FilletSdf;                        // RockContactField's atlas
+SamplerState sampler_LinearClamp;
+
+float4 _FilletGrid;          // xyz the grid's world min corner, w the cell size (m)
+uint4 _FilletGridDims;       // xyz cells
+int4 _FilletRegionMin;       // xyz the region's first cell (grid cells)
+uint4 _FilletRegionDims;     // xyz its cells, w their count
+float4 _FilletAtlas;         // x bricks along x, y 1 / atlas width, z 1 / atlas depth
+float4 _FilletShape;         // x width k (m), y share of the smaller rock's size, z inset (m), w tuck (m)
+uint4 _FilletLimits;         // x seam cell capacity, y triangle capacity, z rocks in the list, w the first seam cell this dispatch
+
+// ── Shared arithmetic (RockFilletMath) ─────────────────────────────────────
+
+// RockFilletMath.SmoothMin
+float FilletSmoothMin(float a, float b, float k)
+{
+    if (k <= 0.0)
+    {
+        return min(a, b);
+    }
+    float h = max(k - abs(a - b), 0.0) / k;
+    return min(a, b) - h * h * k * 0.25;
+}
+
+// RockFilletMath.PairWidth
+float FilletPairWidth(float sizeA, float sizeB)
+{
+    return max(0.0, min(min(_FilletShape.x, FISH_FILLET_MAX_WIDTH), _FilletShape.y * min(sizeA, sizeB)));
+}
+
+// A rock's size, metres: its brick's largest side without the brick's padding (RockContactField.RegisterShape pads by
+// a tenth of the largest side each way, 1.2× in all).
+float FilletRockSize(FishRock rock)
+{
+    return max(rock.brickSize.x, max(rock.brickSize.y, rock.brickSize.z)) * rock.origin.w / 1.2;
+}
+
+// Signed metres from a point to a rock's surface through its field. Outside its brick, the distance at the brick's
+// nearest point plus the way to it: continuous across the brick's side, and never under the true distance.
+float FilletRockDistance(FishRock rock, float3 positionWS)
+{
+    float3 local = float3(dot(rock.row0.xyz, positionWS) + rock.row0.w,
+                          dot(rock.row1.xyz, positionWS) + rock.row1.w,
+                          dot(rock.row2.xyz, positionWS) + rock.row2.w);
+    float3 uvw = (local - rock.brickMin.xyz) / rock.brickSize.xyz;
+    float3 inside = saturate(uvw);
+    float beyond = length((uvw - inside) * rock.brickSize.xyz);
+    // Voxel centres only, so a brick never filters into its neighbour in the atlas.
+    float3 voxel = clamp(inside * FISH_ROCK_BRICK, 0.5, FISH_ROCK_BRICK - 0.5);
+    uint brick = (uint)rock.brickSize.w;
+    uint bricksX = (uint)_FilletAtlas.x;
+    float3 atlas = float3((float)((brick % bricksX) * FISH_ROCK_BRICK) + voxel.x,
+                          voxel.y,
+                          (float)((brick / bricksX) * FISH_ROCK_BRICK) + voxel.z);
+    float3 uv = float3(atlas.x * _FilletAtlas.y, atlas.y / FISH_ROCK_BRICK, atlas.z * _FilletAtlas.z);
+    float d = _FilletSdf.SampleLevel(sampler_LinearClamp, uv, 0.0);
+    return (d * rock.brickMin.w + beyond) * rock.origin.w;
+}
+
+// Octahedral normal, 16 bits a component.
+uint FilletPackNormal(float3 n)
+{
+    n /= max(abs(n.x) + abs(n.y) + abs(n.z), 1e-6);
+    float2 o = n.z >= 0.0 ? n.xy : (1.0 - abs(n.yx)) * float2(n.x >= 0.0 ? 1.0 : -1.0, n.y >= 0.0 ? 1.0 : -1.0);
+    uint2 q = (uint2)round(saturate(o * 0.5 + 0.5) * 65535.0);
+    return q.x | (q.y << 16);
+}
+
+// ── Clear, snapshot ────────────────────────────────────────────────────────
+
+[numthreads(64, 1, 1)]
+void FishFilletClear(uint3 id : SV_DispatchThreadID)
+{
+    for (uint i = id.x; i < FISH_FILLET_COUNTERS; i += 64u)
+    {
+        _FilletCounters[i] = 0u;
+    }
+}
+
+[numthreads(64, 1, 1)]
+void FishFilletSnapshot(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _FilletLimits.z)
+    {
+        _FilletRocks[id.x] = _FilletRocksIn[id.x];
+    }
+}
+
+// ── Classify ───────────────────────────────────────────────────────────────
+
+[numthreads(64, 1, 1)]
+void FishFilletClassify(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _FilletRegionDims.w)
+    {
+        return;
+    }
+    uint3 r = uint3(id.x % _FilletRegionDims.x, (id.x / _FilletRegionDims.x) % _FilletRegionDims.y, id.x / (_FilletRegionDims.x * _FilletRegionDims.y));
+    int3 c = _FilletRegionMin.xyz + int3(r);
+    int3 dims = int3(_FilletGridDims.xyz);
+    if (any(c < 0) || any(c >= dims))
+    {
+        return;
+    }
+    uint own = (uint)c.x + _FilletGridDims.x * ((uint)c.y + _FilletGridDims.y * (uint)c.z);
+    // A fillet lies within k/4 of a rock's face, well inside that rock's box grown by the grid's reach.
+    if (_FilletSlots[own * FISH_ROCK_SLOTS] == 0xFFFFFFFFu)
+    {
+        return;
+    }
+    // The distinct rocks of the cell and its neighbours.
+    uint candidates[FISH_FILLET_CANDIDATES];
+    uint found = 0u;
+    [loop]
+    for (int n = 0; n < 27; n++)
+    {
+        int3 nc = c + int3(n % 3 - 1, (n / 3) % 3 - 1, n / 9 - 1);
+        if (any(nc < 0) || any(nc >= dims))
+        {
+            continue;
+        }
+        uint cell = (uint)nc.x + _FilletGridDims.x * ((uint)nc.y + _FilletGridDims.y * (uint)nc.z);
+        [loop]
+        for (uint s = 0u; s < FISH_ROCK_SLOTS; s++)
+        {
+            uint index = _FilletSlots[cell * FISH_ROCK_SLOTS + s];
+            if (index == 0xFFFFFFFFu)
+            {
+                break;
+            }
+            bool seen = false;
+            [unroll]
+            for (uint k = 0u; k < FISH_FILLET_CANDIDATES; k++)
+            {
+                if (k < found && candidates[k] == index)
+                {
+                    seen = true;
+                }
+            }
+            if (!seen && found < FISH_FILLET_CANDIDATES)
+            {
+                candidates[found] = index;
+                found++;
+            }
+        }
+    }
+    if (found < 2u)
+    {
+        return;
+    }
+    // RockFilletMath.CellMayHoldFillet, on the distances at the cell's centre.
+    float3 centre = _FilletGrid.xyz + (float3(c) + 0.5) * _FilletGrid.w;
+    float reach = 1.1 * sqrt(3.0) * _FilletGrid.w * 0.5;
+    float k = min(_FilletShape.x, FISH_FILLET_MAX_WIDTH);
+    float distances[FISH_FILLET_CANDIDATES];
+    uint near = 0u;
+    bool nearest = false;
+    [loop]
+    for (uint i = 0u; i < found; i++)
+    {
+        float d = FilletRockDistance(_FilletRocksIn[candidates[i]], centre);
+        distances[i] = d;
+        if (d >= -_FilletShape.z - reach && d <= 1.25 * k + reach)
+        {
+            near++;
+            nearest = nearest || d <= 0.25 * k + reach;
+        }
+    }
+    if (near < 2u || !nearest)
+    {
+        return;
+    }
+    // Its nearest FISH_FILLET_ROCKS, nearest first.
+    uint chosen[FISH_FILLET_ROCKS] = { 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u };
+    uint kept = min(found, (uint)FISH_FILLET_ROCKS);
+    [loop]
+    for (uint o = 0u; o < kept; o++)
+    {
+        uint best = 0u;
+        float bestD = 1e30;
+        [loop]
+        for (uint j = 0u; j < found; j++)
+        {
+            if (distances[j] < bestD)
+            {
+                bestD = distances[j];
+                best = j;
+            }
+        }
+        distances[best] = 1e30;
+        chosen[o] = candidates[best];
+    }
+    uint slot;
+    InterlockedAdd(_FilletCounters[0], 1u, slot);
+    if (slot >= _FilletLimits.x)
+    {
+        InterlockedOr(_FilletCounters[2], 1u);
+        return;
+    }
+    FishFilletCell record;
+    record.cell = uint4((uint)c.x, (uint)c.y, (uint)c.z, kept);
+    record.rocks0 = uint4(chosen[0], chosen[1], chosen[2], chosen[3]);
+    record.rocks1 = uint4(chosen[4], chosen[5], chosen[6], chosen[7]);
+    _FilletCells[slot] = record;
+}
+
+// ── Mesh ───────────────────────────────────────────────────────────────────
+
+groupshared FishRock gsRocks[FISH_FILLET_ROCKS];
+groupshared float gsSize[FISH_FILLET_ROCKS];
+groupshared float gsF[FISH_FILLET_SAMPLE_COUNT];
+// The hard union's distance with the nearest rock's index in its three low mantissa bits (a few ulps of a metre).
+groupshared uint gsHN[FISH_FILLET_SAMPLE_COUNT];
+groupshared uint gsLooks[FISH_FILLET_LOOKS];
+groupshared uint gsCount;
+groupshared uint gsBase;
+
+// The six Kuhn tetrahedra about the cube's main diagonal (RockFilletMath.Tets), corner bits x, y, z.
+static const uint kFilletTets[24] =
+{
+    0u, 1u, 3u, 7u,
+    0u, 1u, 5u, 7u,
+    0u, 2u, 3u, 7u,
+    0u, 2u, 6u, 7u,
+    0u, 4u, 5u, 7u,
+    0u, 4u, 6u, 7u,
+};
+
+uint FilletSampleIndex(uint3 s)
+{
+    return s.x + FISH_FILLET_SAMPLES * (s.y + FISH_FILLET_SAMPLES * s.z);
+}
+
+float FilletH(uint i)
+{
+    return asfloat(gsHN[i] & ~7u);
+}
+
+uint FilletNear(uint i)
+{
+    return gsHN[i] & 7u;
+}
+
+// The field's gradient at a lattice sample (central differences; samples 1..9 have both neighbours).
+float3 FilletGradient(uint3 s)
+{
+    return float3(gsF[FilletSampleIndex(s + uint3(1, 0, 0))] - gsF[FilletSampleIndex(s - uint3(1, 0, 0))],
+                  gsF[FilletSampleIndex(s + uint3(0, 1, 0))] - gsF[FilletSampleIndex(s - uint3(0, 1, 0))],
+                  gsF[FilletSampleIndex(s + uint3(0, 0, 1))] - gsF[FilletSampleIndex(s - uint3(0, 0, 1))]);
+}
+
+struct FilletVertex
+{
+    float3 position;
+    float h;
+    float3 normal;
+    uint rock;
+};
+
+// The crossing on the lattice edge from sample i (inside) to sample o (outside): RockFilletMath.Crossing.
+FilletVertex FilletCrossing(uint3 i, uint3 o, float3 cellMin, float step)
+{
+    uint ii = FilletSampleIndex(i), oi = FilletSampleIndex(o);
+    float fi = gsF[ii], fo = gsF[oi];
+    float t = fi / (fi - fo);
+    FilletVertex v;
+    v.position = cellMin + (lerp(float3(i), float3(o), t) - 1.0) * step;
+    v.h = lerp(FilletH(ii), FilletH(oi), t);
+    float3 g = lerp(FilletGradient(i), FilletGradient(o), t);
+    v.normal = g / max(length(g), 1e-6);
+    v.rock = FilletNear(ii);
+    return v;
+}
+
+// RockFilletMath.KeepTriangle, and the rock it belongs to (RockFilletMath.MajorityRock) has a look.
+bool FilletKeep(FilletVertex a, FilletVertex b, FilletVertex c, out uint look)
+{
+    uint rock = b.rock == c.rock ? b.rock : a.rock;
+    look = (uint)(gsRocks[rock].flags.y + 0.5);
+    if (look == 0u || look > FISH_FILLET_LOOKS)
+    {
+        return false;
+    }
+    look -= 1u;
+    return max(a.h, max(b.h, c.h)) > -_FilletShape.w;
+}
+
+// Counts a kept triangle, or (write) writes it at the group's base + its slot. RockFilletMath.Emit.
+void FilletEmit(FilletVertex a, FilletVertex b, FilletVertex c, float3 outward, bool write, inout uint count, inout uint slot)
+{
+    uint look;
+    if (!FilletKeep(a, b, c, look))
+    {
+        return;
+    }
+    count++;
+    if (!write)
+    {
+        return;
+    }
+    uint index = gsBase + slot;
+    slot++;
+    if (index >= _FilletLimits.y)
+    {
+        InterlockedOr(_FilletCounters[2], 2u);
+        return;
+    }
+    if (dot(cross(b.position - a.position, c.position - a.position), outward) < 0.0)
+    {
+        FilletVertex swap = b;
+        b = c;
+        c = swap;
+    }
+    FishFilletTri tri;
+    tri.a = float4(a.position, a.h);
+    tri.b = float4(b.position, b.h);
+    tri.c = float4(c.position, c.h);
+    tri.normals = uint4(FilletPackNormal(a.normal), FilletPackNormal(b.normal), FilletPackNormal(c.normal), look);
+    _FilletTris[index] = tri;
+    InterlockedAdd(gsLooks[look], 1u);
+}
+
+uint3 FilletCorner(uint3 cube, uint corner)
+{
+    return cube + uint3(corner & 1u, (corner >> 1) & 1u, (corner >> 2) & 1u);
+}
+
+// One tetrahedron of a cube (RockFilletMath.Tetrahedron): its triangles counted, or written.
+void FilletTet(uint3 cube, uint tet, float3 cellMin, float step, bool write, inout uint count, inout uint slot)
+{
+    uint3 s0 = FilletCorner(cube, kFilletTets[tet * 4u]);
+    uint3 s1 = FilletCorner(cube, kFilletTets[tet * 4u + 1u]);
+    uint3 s2 = FilletCorner(cube, kFilletTets[tet * 4u + 2u]);
+    uint3 s3 = FilletCorner(cube, kFilletTets[tet * 4u + 3u]);
+    uint mask = (gsF[FilletSampleIndex(s0)] < 0.0 ? 1u : 0u) | (gsF[FilletSampleIndex(s1)] < 0.0 ? 2u : 0u)
+              | (gsF[FilletSampleIndex(s2)] < 0.0 ? 4u : 0u) | (gsF[FilletSampleIndex(s3)] < 0.0 ? 8u : 0u);
+    if (mask == 0u || mask == 15u)
+    {
+        return;
+    }
+    float3 p0 = float3(s0), p1 = float3(s1), p2 = float3(s2), p3 = float3(s3);
+    uint insideCount = countbits(mask);
+    float3 inC = ((mask & 1u) ? p0 : 0.0) + ((mask & 2u) ? p1 : 0.0) + ((mask & 4u) ? p2 : 0.0) + ((mask & 8u) ? p3 : 0.0);
+    float3 outC = (p0 + p1 + p2 + p3) - inC;
+    float3 outward = outC / (float)(4u - insideCount) - inC / (float)insideCount;
+    // Corners by index: a lone corner and the other three in corner order, or the two inside and the two outside.
+    uint3 corners[4] = { s0, s1, s2, s3 };
+    if (insideCount == 1u || insideCount == 3u)
+    {
+        bool lone = insideCount == 1u;
+        uint apexBit = firstbitlow(lone ? mask : (~mask & 15u));
+        uint3 apex = corners[apexBit];
+        uint3 others[3];
+        uint o = 0u;
+        [unroll]
+        for (uint q = 0u; q < 4u; q++)
+        {
+            if (q != apexBit)
+            {
+                others[min(o, 2u)] = corners[q];
+                o++;
+            }
+        }
+        // Each crossing runs from the inside end to the outside one.
+        FilletVertex a, b, c;
+        if (lone)
+        {
+            a = FilletCrossing(apex, others[0], cellMin, step);
+            b = FilletCrossing(apex, others[1], cellMin, step);
+            c = FilletCrossing(apex, others[2], cellMin, step);
+        }
+        else
+        {
+            a = FilletCrossing(others[0], apex, cellMin, step);
+            b = FilletCrossing(others[1], apex, cellMin, step);
+            c = FilletCrossing(others[2], apex, cellMin, step);
+        }
+        FilletEmit(a, b, c, outward, write, count, slot);
+        return;
+    }
+    // Two and two: the quad ac → ad → bd → bc, split along ac–bd.
+    uint3 ia = corners[firstbitlow(mask)];
+    uint3 ib = corners[firstbithigh(mask)];
+    uint3 oc = corners[firstbitlow(~mask & 15u)];
+    uint3 od = corners[firstbithigh(~mask & 15u)];
+    FilletVertex ac = FilletCrossing(ia, oc, cellMin, step);
+    FilletVertex ad = FilletCrossing(ia, od, cellMin, step);
+    FilletVertex bd = FilletCrossing(ib, od, cellMin, step);
+    FilletVertex bc = FilletCrossing(ib, oc, cellMin, step);
+    FilletEmit(ac, ad, bd, outward, write, count, slot);
+    FilletEmit(ac, bd, bc, outward, write, count, slot);
+}
+
+// Every tetrahedron of this thread's cubes, counted or written.
+uint FilletCubes(uint thread, float3 cellMin, float step, bool write, uint slot)
+{
+    uint count = 0u;
+    [loop]
+    for (uint cube = thread; cube < FISH_FILLET_SUB * FISH_FILLET_SUB * FISH_FILLET_SUB; cube += FISH_FILLET_GROUP)
+    {
+        // Lattice samples 1..9 are the cell's corners (0 and 10 the apron).
+        uint3 base = uint3(cube % FISH_FILLET_SUB, (cube / FISH_FILLET_SUB) % FISH_FILLET_SUB, cube / (FISH_FILLET_SUB * FISH_FILLET_SUB)) + 1u;
+        [loop]
+        for (uint tet = 0u; tet < 6u; tet++)
+        {
+            FilletTet(base, tet, cellMin, step, write, count, slot);
+        }
+    }
+    return count;
+}
+
+[numthreads(FISH_FILLET_GROUP, 1, 1)]
+void FishFilletMesh(uint3 group : SV_GroupID, uint thread : SV_GroupIndex)
+{
+    // Past the list's end the group meshes no rocks (so draws nothing) rather than returning: FXC refuses a barrier after
+    // a branch on a value read from a buffer, however uniform it is.
+    uint cellIndex = _FilletLimits.w + group.x;
+    bool active = cellIndex < min(_FilletCounters[0], _FilletLimits.x);
+    FishFilletCell record = _FilletCellsIn[active ? cellIndex : 0u];
+    uint rockCount = active ? record.cell.w : 0u;
+    if (thread < FISH_FILLET_ROCKS)
+    {
+        uint4 four = thread < 4u ? record.rocks0 : record.rocks1;
+        uint index = four[thread & 3u];
+        FishRock rock = _FilletRocks[thread < rockCount ? index : 0u];
+        gsRocks[thread] = rock;
+        gsSize[thread] = FilletRockSize(rock);
+    }
+    if (thread < FISH_FILLET_LOOKS)
+    {
+        gsLooks[thread] = 0u;
+    }
+    if (thread == 0u)
+    {
+        gsCount = 0u;
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    // The field on the cell's lattice, apron included (RockFilletMath.Field over RockFilletMath.TwoSmallest).
+    float step = _FilletGrid.w / FISH_FILLET_SUB;
+    float3 cellMin = _FilletGrid.xyz + float3(record.cell.xyz) * _FilletGrid.w;
+    [loop]
+    for (uint i = thread; i < FISH_FILLET_SAMPLE_COUNT; i += FISH_FILLET_GROUP)
+    {
+        uint3 s = uint3(i % FISH_FILLET_SAMPLES, (i / FISH_FILLET_SAMPLES) % FISH_FILLET_SAMPLES, i / (FISH_FILLET_SAMPLES * FISH_FILLET_SAMPLES));
+        float3 p = cellMin + (float3(s) - 1.0) * step;
+        float d1 = 1e4, d2 = 1e4;
+        uint n1 = 0u, n2 = 0u;
+        [loop]
+        for (uint r = 0u; r < rockCount; r++)
+        {
+            float d = FilletRockDistance(gsRocks[r], p);
+            if (d < d1)
+            {
+                d2 = d1;
+                n2 = n1;
+                d1 = d;
+                n1 = r;
+            }
+            else if (d < d2)
+            {
+                d2 = d;
+                n2 = r;
+            }
+        }
+        float k = rockCount >= 2u ? FilletPairWidth(gsSize[n1], gsSize[n2]) : 0.0;
+        gsF[i] = FilletSmoothMin(d1, d2, k) + _FilletShape.z;
+        gsHN[i] = (asuint(d1) & ~7u) | n1;
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    // Count, take room for the group's triangles with one atomic, write.
+    uint mine = FilletCubes(thread, cellMin, step, false, 0u);
+    uint slot = 0u;
+    InterlockedAdd(gsCount, mine, slot);
+    GroupMemoryBarrierWithGroupSync();
+    if (thread == 0u)
+    {
+        uint base = 0u;
+        if (gsCount > 0u)
+        {
+            InterlockedAdd(_FilletCounters[1], gsCount, base);
+        }
+        gsBase = base;
+    }
+    GroupMemoryBarrierWithGroupSync();
+    FilletCubes(thread, cellMin, step, true, slot);
+    GroupMemoryBarrierWithGroupSync();
+    if (thread < FISH_FILLET_LOOKS && gsLooks[thread] > 0u)
+    {
+        InterlockedAdd(_FilletCounters[FISH_FILLET_COUNTER_LOOKS + thread], gsLooks[thread]);
+    }
+}
+
+// ── Finalize, scatter ──────────────────────────────────────────────────────
+
+[numthreads(1, 1, 1)]
+void FishFilletFinalize(uint3 id : SV_DispatchThreadID)
+{
+    uint start = 0u;
+    [loop]
+    for (uint look = 0u; look < FISH_FILLET_LOOKS; look++)
+    {
+        uint count = _FilletCounters[FISH_FILLET_COUNTER_LOOKS + look];
+        _FilletStarts[look] = start;
+        _FilletArgs.Store4(look * 16u, uint4(count * 3u, 1u, 0u, 0u));
+        _FilletCounters[FISH_FILLET_COUNTER_FILL + look] = 0u;
+        start += count;
+    }
+}
+
+[numthreads(64, 1, 1)]
+void FishFilletScatter(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= min(_FilletCounters[1], _FilletLimits.y))
+    {
+        return;
+    }
+    FishFilletTri tri = _FilletTrisIn[id.x];
+    uint look = tri.normals.w;
+    uint slot;
+    InterlockedAdd(_FilletCounters[FISH_FILLET_COUNTER_FILL + look], 1u, slot);
+    _FilletDrawn[_FilletStartsIn[look] + slot] = tri;
+}

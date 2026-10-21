@@ -11,7 +11,7 @@ namespace FishMMO.Shared.Weather
 		Sea = 1,
 		Lake = 2,
 		River = 3,
-		/// <summary>A sea of lava: swum by the fire-proof, deadly to anyone else.</summary>
+		/// <summary>Molten lava (a lava sea, or a lava tube's river or pit): swum by the fire-proof, deadly to anyone else.</summary>
 		Lava = 4,
 	}
 
@@ -51,7 +51,8 @@ namespace FishMMO.Shared.Weather
 	/// <para>
 	/// <b>The sea is everywhere.</b> A sea's level is returned at any place in its scene: whether the ground there
 	/// stands above it is the caller's to compare, since a character knows its ground and this does not. A lake or a
-	/// river stands only where it is, and the highest water over a place answers.
+	/// river stands only where it is, and the highest water over a place answers. An inland lake or river of lava
+	/// (<see cref="SurfaceWater.ILavaAreaSource"/>) answers as <see cref="WaterBody.Lava"/>, as a lava sea does.
 	/// </para>
 	/// </remarks>
 	public static class WaterQuery
@@ -166,14 +167,18 @@ namespace FishMMO.Shared.Weather
 					waters.Inland.RemoveAt(i);
 					continue;
 				}
-				if (inland.TryGetSurface(x, z, out float level) && level > sample.Surface)
+				bool lava = false;
+				float level;
+				bool found = inland is SurfaceWater.ILavaAreaSource liquid ? liquid.TryGetSurface(x, z, out level, out lava) : inland.TryGetSurface(x, z, out level);
+				if (found && level > sample.Surface)
 				{
 					/* The scene's lakes and rivers answer CurrentAt by asking TryGetSurface again first, which this has just
 					 * done: their flow straight away is the same answer without the second lookup. */
 					Vector2 current = inland is FishMMO.Shared.Biomes.SceneWaterBodies bodies
-						? bodies.FlowAt(x, z, out _, out _)
+						? bodies.FlowAt(x, z, out _, out _, lava)
 						: inland.CurrentAt(x, z);
-					sample.Body = current.sqrMagnitude > 1e-8f ? WaterBody.River : WaterBody.Lake;
+					// A lava tube's river or pit is the lava liquid, as a lava sea is: it burns, and only the fire-proof swim it.
+					sample.Body = lava ? WaterBody.Lava : current.sqrMagnitude > 1e-8f ? WaterBody.River : WaterBody.Lake;
 					sample.Surface = level;
 					sample.Current = current;
 				}

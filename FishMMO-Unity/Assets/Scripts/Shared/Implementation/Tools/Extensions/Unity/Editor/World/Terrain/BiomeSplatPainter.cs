@@ -76,6 +76,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// passes and no variant's override is painted.
 		/// </summary>
 		public Func<float, float, float, Vector2> ClimateAt;
+
+		/// <summary>
+		/// The ground's heat at a world point (x, z), 0 cold … 1 boiling: the scene's heat mask from its geothermal sites
+		/// (2026-10-18, phase I2q; GeothermalGroundCarve), what a detail layer's heat band (TerrainTextureLayer.useHeatBand) reads.
+		/// Asked only when some layer has one; called from the painter's worker threads (an array read). Null: every heat band passes.
+		/// </summary>
+		public Func<float, float, float> HeatAt;
 	}
 
 	/// <summary>What the splat painter did.</summary>
@@ -248,6 +255,9 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>Per biome: its ground slots and their occupants when any is climatic (<see cref="SceneTerrainPalette.Entry.Climatic"/>), else null.</summary>
 			private readonly GroundSlot[][] climaticSlots;
 			private readonly bool anyClimatic;
+			/// <summary>True when some detail layer has a heat band and the ground's heat is known (2026-10-18, I2q); the point's heat then.</summary>
+			private readonly bool anyHeat;
+			private float heat = float.NaN;
 			/// <summary>Per biome: its beds (decision 35, 2026-10-18), null for a biome with none.</summary>
 			private readonly BedSet[] beds;
 			/// <summary>Scratch for one biome's extra beds: their strengths and shares at the point being weighed.</summary>
@@ -288,6 +298,14 @@ namespace FishMMO.Shared.WorldDesign
 					uint hash = this.options.Seed ^ unchecked((uint)((entry.Biome != null ? entry.Biome.Key : string.Empty) + entry.Slot).GetDeterministicHashCode());
 					noiseOffset[i] = new Vector2(entry.Source.blendNoiseOffsetX + (hash & 0xFFFF) * 0.37f,
 						entry.Source.blendNoiseOffsetY + (hash >> 16) * 0.37f);
+				}
+
+				if (this.options.HeatAt != null)
+				{
+					foreach (SceneTerrainPalette.Entry entry in palette.Entries)
+					{
+						anyHeat |= entry.Role == PaletteRole.Detail && entry.Source != null && entry.Source.HasHeatBand;
+					}
 				}
 
 				/* Each biome's beds: the lakebed, the riverbed (a channel of its own only when its art differs: one shared terrain layer
@@ -422,6 +440,7 @@ namespace FishMMO.Shared.WorldDesign
 					water = BedWater.At(worldY, options.HasLiquidWater, 0f, inland, river);
 				}
 
+				heat = anyHeat ? options.HeatAt(worldX, worldZ) : float.NaN;
 				Vector2 bar = options.BarAt != null ? options.BarAt(worldX, worldZ) : Vector2.zero;
 				float rock = options.RockAt != null ? Mathf.Clamp01(options.RockAt(worldX, worldZ, slopeDegrees)) : 0f;
 				float reached = 0f;
@@ -774,6 +793,10 @@ namespace FishMMO.Shared.WorldDesign
 				if (source.useSlopeConstraint)
 				{
 					strength *= Band(slope, source.slopeRange.min, source.slopeRange.max, source.slopeFalloff);
+				}
+				if (source.useHeatBand && entry.Role == PaletteRole.Detail)
+				{
+					strength *= source.HeatWeight(heat);
 				}
 				return Mathf.Clamp01(strength);
 			}

@@ -101,7 +101,7 @@ MonoBehaviour:
     MaxScale: 1
     Role: 5
     Style: stone
-  - Tag: keep
+  - Tag: =ThroneHall
     MinCount: 1
     MaxCount: 1
     MinDecay: 0
@@ -112,7 +112,7 @@ MonoBehaviour:
     Style: stone
   - Tag: =Statue
     MinCount: 2
-    MaxCount: 4
+    MaxCount: 2
     MinDecay: 0
     MaxDecay: 0
     MinScale: 1
@@ -120,8 +120,8 @@ MonoBehaviour:
     Role: 1
     Style: 
   - Tag: well
-    MinCount: 3
-    MaxCount: 5
+    MinCount: 1
+    MaxCount: 1
     MinDecay: 0
     MaxDecay: 0
     MinScale: 1
@@ -138,8 +138,8 @@ MonoBehaviour:
     Role: 1
     Style: 
   - Tag: house
-    MinCount: 80
-    MaxCount: 140
+    MinCount: 64
+    MaxCount: 112
     MinDecay: 0
     MaxDecay: 0
     MinScale: 1
@@ -164,16 +164,7 @@ MonoBehaviour:
     MaxScale: 1
     Role: 8
     Style: 
-  - Tag: church
-    MinCount: 2
-    MaxCount: 3
-    MinDecay: 0
-    MaxDecay: 0
-    MinScale: 1
-    MaxScale: 1
-    Role: 6
-    Style: stone
-  - Tag: temple
+  - Tag: =Church#0
     MinCount: 1
     MaxCount: 2
     MinDecay: 0
@@ -182,9 +173,18 @@ MonoBehaviour:
     MaxScale: 1
     Role: 6
     Style: stone
+  - Tag: temple
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: stone
   - Tag: tavern
-    MinCount: 3
-    MaxCount: 6
+    MinCount: 2
+    MaxCount: 2
     MinDecay: 0
     MaxDecay: 0
     MinScale: 1
@@ -192,8 +192,8 @@ MonoBehaviour:
     Role: 6
     Style: timber
   - Tag: smithy
-    MinCount: 3
-    MaxCount: 4
+    MinCount: 2
+    MaxCount: 2
     MinDecay: 0
     MaxDecay: 0
     MinScale: 1
@@ -202,7 +202,7 @@ MonoBehaviour:
     Style: timber
   - Tag: stable
     MinCount: 2
-    MaxCount: 4
+    MaxCount: 2
     MinDecay: 0
     MaxDecay: 0
     MinScale: 1
@@ -218,22 +218,211 @@ MonoBehaviour:
     MaxScale: 1
     Role: 1
     Style: timber
+  - Tag: =MarketHall
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: 
+  - Tag: =Library
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: 
+  - Tag: =ShopHouse
+    MinCount: 6
+    MaxCount: 10
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: 
+  - Tag: =Healer
+    MinCount: 2
+    MaxCount: 2
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: 
+  - Tag: =Bakery
+    MinCount: 2
+    MaxCount: 2
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: 
+  - Tag: =Workshop
+    MinCount: 2
+    MaxCount: 2
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: 
+  - Tag: =Brewhouse
+    MinCount: 2
+    MaxCount: 2
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: 
+  - Tag: =CountingHouse
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: 
+  - Tag: =Barracks
+    MinCount: 1
+    MaxCount: 2
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: 
+  - Tag: =GuardHouse
+    MinCount: 2
+    MaxCount: 2
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: 
+  - Tag: =Warehouse
+    MinCount: 1
+    MaxCount: 2
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: 
+  - Tag: =Pillory
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 1
+    Style: 
+  - Tag: =MarketCross#0
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 1
+    Style: 
+  - Tag: =WizardTower
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 12
+    Style: 
+  - Tag: =Observatory
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 12
+    Style: 
+  - Tag: =TrainingYard
+    MinCount: 1
+    MaxCount: 2
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 12
+    Style: 
+  - Tag: =ArcheryRange
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 12
+    Style: 
+  - Tag: =DyeWorks
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 12
+    Style: 
+  - Tag: =PotteryKiln
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 12
+    Style: 
+  - Tag: =Cathedral
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: 
+  - Tag: =MarketCross#1
+    MinCount: 2
+    MaxCount: 2
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 1
+    Style: 
   Features:
-  - rid: 4061506230068183983
-  - rid: 4061506230068183984
-  - rid: 4061506230068183985
-  - rid: 4061506230068183986
-  - rid: 4061506230068183987
-  - rid: 4061506230068183988
-  - rid: 4061506230068183989
-  - rid: 4061506230068183990
-  - rid: 4061506230068183991
-  - rid: 4061506230068183992
-  - rid: 4061506230068183993
+  - rid: 4061506278254182752
+  - rid: 4061506278254182753
+  - rid: 4061506278254182754
+  - rid: 4061506278254182755
+  - rid: 4061506278254182756
+  - rid: 4061506278254182757
+  - rid: 4061506278254182758
+  - rid: 4061506278254182759
+  - rid: 4061506278254182760
+  - rid: 4061506278254182761
+  - rid: 4061506278254182762
   references:
     version: 2
     RefIds:
-    - rid: 4061506230068183983
+    - rid: 4061506278254182752
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -244,26 +433,26 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings:
-        - {x: -3, y: 2, z: 10.07}
-        - {x: 3, y: 1.5, z: 10.07}
-    - rid: 4061506230068183984
+        - {x: -3, y: 2, z: 22.65}
+        - {x: 3, y: 1.5, z: 22.65}
+    - rid: 4061506278254182753
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506230068183985
+    - rid: 4061506278254182754
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506230068183986
+    - rid: 4061506278254182755
       type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
-        Offset: {x: -3, y: 10.07}
-    - rid: 4061506230068183987
+        Offset: {x: -3, y: 22.65}
+    - rid: 4061506278254182756
       type: {class: RespawnFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
-        Offset: {x: 3, y: 10.07}
-    - rid: 4061506230068183988
+        Offset: {x: 3, y: 22.65}
+    - rid: 4061506278254182757
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 1
@@ -271,7 +460,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506230068183989
+    - rid: 4061506278254182758
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 1
@@ -279,7 +468,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506230068183990
+    - rid: 4061506278254182759
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 0
@@ -287,7 +476,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506230068183991
+    - rid: 4061506278254182760
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 2
@@ -295,7 +484,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506230068183992
+    - rid: 4061506278254182761
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 3
@@ -303,7 +492,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506230068183993
+    - rid: 4061506278254182762
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 4

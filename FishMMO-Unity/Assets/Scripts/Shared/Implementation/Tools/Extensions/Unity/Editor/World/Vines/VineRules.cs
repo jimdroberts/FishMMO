@@ -97,13 +97,29 @@ namespace FishMMO.Shared.WorldDesign
 		/// <param name="outward">Out of the cave, horizontal.</param>
 		/// <param name="openingHeight">The opening's height under the middle of the lintel, metres.</param>
 		/// <param name="solidAt">
-		/// Whether a world point is inside rock (the cave's outcrop and shell, or under the ground); null when only the ground is
+		/// Whether a world point is inside rock (the cave's shell, or the hillside it comes up through); null when only the ground is
 		/// known. What the growth over and round the opening is fitted to: without it only the lintel, the jambs and the ground
 		/// are grown.
 		/// </param>
 		/// <param name="groundAt">The ground's height at (east, north).</param>
+		/// <param name="lintelAt">
+		/// The lintel's height over a point of the line from <paramref name="left"/> to <paramref name="right"/>: an arch's
+		/// underside, whose corners stand low at its feet, so a straight line between them would run across the opening under
+		/// its crown. Null: straight from corner to corner.
+		/// </param>
+		/// <summary>The point <paramref name="t"/> of the way along a lintel, at its height there (<paramref name="lintelAt"/>, else straight).</summary>
+		private static Vector3 Lintel(Vector3 left, Vector3 right, float t, Func<Vector3, float> lintelAt)
+		{
+			Vector3 p = Vector3.Lerp(left, right, t);
+			if (lintelAt != null)
+			{
+				p.y = lintelAt(p);
+			}
+			return p;
+		}
+
 		public static List<VineSpot> CaveMouth(Vector3 left, Vector3 right, Vector3 outward, float openingHeight, VineBiomes.Habitat habitat,
-			DeterministicRNG rng, Func<Vector3, bool> solidAt, Func<float, float, float> groundAt, out CaveGrowth growth)
+			DeterministicRNG rng, Func<Vector3, bool> solidAt, Func<float, float, float> groundAt, out CaveGrowth growth, Func<Vector3, float> lintelAt = null)
 		{
 			var spots = new List<VineSpot>();
 			growth = default;
@@ -122,7 +138,7 @@ namespace FishMMO.Shared.WorldDesign
 				width = 0.5f;
 			}
 			Vector3 a = span.normalized;
-			Vector3 mid = (left + right) * 0.5f;
+			Vector3 mid = Lintel(left, right, 0.5f, lintelAt);
 			float floorY = mid.y - Mathf.Max(0.5f, openingHeight);
 			string species = habitat.Pick(rng.NextFloat());
 			float lush = Mathf.Clamp01(habitat.Caves * rng.Range(0.7f, 1.15f));
@@ -138,7 +154,7 @@ namespace FishMMO.Shared.WorldDesign
 			for (int i = 0; i < pieces; i++)
 			{
 				float t = (i + 0.5f) / pieces;
-				Vector3 top = Vector3.Lerp(left, right, t) + o * 0.06f;
+				Vector3 top = Lintel(left, right, t, lintelAt) + o * 0.06f;
 				float s = (t - 0.5f) * width;
 				float edge = Mathf.Abs(s) / Mathf.Max(0.5f, width * 0.5f);
 				float drop = top.y - floorY;

@@ -4,12 +4,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using FishMMO.Shared.Biomes;
 using FishMMO.Shared.NameGeneration;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Profiling;
 using UnityEngine.Rendering;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Shared.WorldDesign
 {
@@ -33,7 +35,11 @@ namespace FishMMO.Shared.WorldDesign
 	/// <para>
 	/// Environment: <c>FISHMMO_CAVE_WALK_OUT</c> (default <c>WorldRenders/cavewalk</c> under <see cref="ProbeOutput.Root"/>);
 	/// <c>FISHMMO_CAVE_WALK_CAVE</c> (<c>Form:size</c>, default <c>Cave:2</c>); <c>FISHMMO_CAVE_WALK_SEED</c> (a seed to
-	/// use as it is); <c>FISHMMO_CAVE_WALK_FRAMES</c> (default 720).
+	/// use as it is); <c>FISHMMO_CAVE_WALK_FRAMES</c> (default 720). For a <c>LavaTube</c> (2026-10-20) the seed is the first whose
+	/// tube runs molten with a river, a lake and a fall (<see cref="CaveLava.Plan"/>); its lava is written into a hydrology in memory
+	/// and drawn by the inland water renderer as a scene draws it, the walk goes to a lava lake's chamber, and every lava body gets a
+	/// still of its own (<c>stills/lava*</c>), lit by the cave alone and by the torch. <c>FISHMMO_CAVE_WALK_FLY=1</c> flies instead:
+	/// a tour of every lava body, nearest first, through the passages between them, a few metres over the floor, turning to each.
 	/// </para>
 	/// </remarks>
 	public static class CaveWalkRender
@@ -70,11 +76,14 @@ namespace FishMMO.Shared.WorldDesign
 			return string.IsNullOrEmpty(v) ? fallback : v;
 		}
 
-		/// <summary>A foot at 60 m, a face rising 140 m over 60 m, a rolling upland behind: rock enough for an enormous hall.</summary>
+		/// <summary>How far the escarpment's face rises (<c>FISHMMO_CAVE_WALK_RISE</c>; 45 m, low hills where skylights open, for a showcase).</summary>
+		private static float rise = 140f;
+
+		/// <summary>A foot at 60 m, a face rising <see cref="rise"/> (140 m) over 60 m, a rolling upland behind: rock enough for an enormous hall.</summary>
 		private static float Escarpment(float x, float z)
 		{
 			float t = Mathf.Clamp01(z / 60f);
-			float face = 60f + 140f * (t * t * (3f - 2f * t));
+			float face = 60f + rise * (t * t * (3f - 2f * t));
 			float roll = 4f * Mathf.Sin(x * 0.03f) + 3f * Mathf.Sin(z * 0.021f) * Mathf.Clamp01(z / 60f);
 			return face + roll * Mathf.Clamp01((z + 10f) / 30f) - 0.04f * Mathf.Max(0f, -z);
 		}
@@ -90,9 +99,12 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			var log = new List<string>();
 			var total = System.Diagnostics.Stopwatch.StartNew();
+			rise = float.TryParse(Env("FISHMMO_CAVE_WALK_RISE", ""), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float r)
+				? r : Env("FISHMMO_CAVE_WALK_SHOW", "") == "life" ? 45f : 140f;
 
 			// ── The art the dressing places ──
-			if (!CaveArt.TryGlow(CaveGlowKind.Crystal, 0, 0, out _) || CaveArt.Piece(CaveArt.Ladder, 0) == null)
+			// Always asked: whatever the kit is missing is made (the art the dressing passes added since, 2026-10-20), and a kit
+			// with nothing missing costs a scan.
 			{
 				var art = System.Diagnostics.Stopwatch.StartNew();
 				BiomeArtGenerator.Report report = BiomeArtGenerator.GenerateStructuresOnly(ProceduralArtMode.MissingOnly, ProceduralArtCatalogue.DefaultSeed);
@@ -138,23 +150,35 @@ namespace FishMMO.Shared.WorldDesign
 			CaveSystem system = null;
 			int seed = 0;
 			var planClock = new System.Diagnostics.Stopwatch();
+			// The caves livened (2026-10-20): a cave with water, a fall and a skylight to show them all.
+			bool life = Env("FISHMMO_CAVE_WALK_SHOW", "") == "life";
 			if (int.TryParse(Env("FISHMMO_CAVE_WALK_SEED", ""), out int forced))
 			{
 				seed = forced;
 				planClock.Start();
-				system = CaveSystem.Plan(form, size, new Vector3(0f, 0f, -1f), 180f, seed, 1, ground, 0f, out _);
+				system = CaveSystem.Plan(form, size, new Vector3(0f, 0f, -1f), 180f, seed, 1, ground, 0f, out _, WaterFor(form, groundAt));
 				planClock.Stop();
 			}
 			else
 			{
-				for (int tryIndex = 0; tryIndex < 80 && system == null; tryIndex++)
+				for (int tryIndex = 0; tryIndex < (life ? 120 : 80) && system == null; tryIndex++)
 				{
 					int candidate = 5000 + tryIndex * 7919;
 					planClock.Restart();
-					CaveSystem planned = CaveSystem.Plan(form, size, new Vector3(0f, 0f, -1f), 180f, candidate, 1, ground, 0f, out _);
+					CaveSystem planned = CaveSystem.Plan(form, size, new Vector3(0f, 0f, -1f), 180f, candidate, 1, ground, 0f, out string refusal, WaterFor(form, groundAt));
+					if (planned == null && tryIndex < 3)
+					{
+						log.Add($"seed {candidate} refused: {refusal}");
+					}
 					planClock.Stop();
-					if (planned != null && planned.Rifts.Count > 0 && planned.Climbs.Count > 0
-						&& planned.Chambers.Exists(c => Mathf.Max(c.Radii.x, c.Radii.z) >= 26f) && planned.Solids.Exists(o => o.Kind == CaveSolidKind.Bridge))
+					if (planned != null && life && Showcase(planned, skylightWanted: tryIndex < 60))
+					{
+						system = planned;
+						seed = candidate;
+					}
+					else if (planned != null && !life && (form == CaveForm.LavaTube ? LavaShowcase(planned)
+						: planned.Rifts.Count > 0 && planned.Climbs.Count > 0
+						&& planned.Chambers.Exists(c => Mathf.Max(c.Radii.x, c.Radii.z) >= 26f) && planned.Solids.Exists(o => o.Kind == CaveSolidKind.Bridge)))
 					{
 						system = planned;
 						seed = candidate;
@@ -163,7 +187,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			if (system == null)
 			{
-				log.Add("no seed gave a cave with a chasm, a bridge, a climb and a hall");
+				log.Add(form == CaveForm.LavaTube ? "no seed gave a molten tube with a lava river, lake and fall" : "no seed gave a cave with a chasm, a bridge, a climb and a hall");
 				File.WriteAllLines(Path.Combine(output, "index.txt"), log);
 				return false;
 			}
@@ -172,18 +196,23 @@ namespace FishMMO.Shared.WorldDesign
 				$"{system.Solids.Count} solid(s) [{string.Join(", ", system.Solids.GroupBy(o => o.Kind).Select(g => $"{g.Count()} {g.Key}"))}], {system.Climbs.Count} climb(s), " +
 				$"{system.Crossings.Count} built crossing(s), plan {planClock.Elapsed.TotalMilliseconds:0} ms");
 
-			List<Vector2Int> cells = system.HoleCells(0, groundAt, holeStep, gridX, gridZ);
-			CaveShaper.CutHoles(terrains, tiles, cells, holeStep, gridX, gridZ);
+			// Every opening's holes: the mouth's, and a skylight's in the hill over its chamber (2026-10-20).
+			for (int m = 0; m < system.Mouths.Count; m++)
+			{
+				List<Vector2Int> cells = system.HoleCells(m, groundAt, holeStep, gridX, gridZ);
+				CaveShaper.CutHoles(terrains, tiles, cells, holeStep, gridX, gridZ);
+			}
 			terrain.Flush();
 			Bounds e = system.Extent;
 			CaveGround meshGround = CaveShaper.SampleGround(groundAt, tiles, system.Origin.x + e.min.x - 4f, system.Origin.z + e.min.z - 4f, system.Origin.x + e.max.x + 4f, system.Origin.z + e.max.z + 4f);
 			var meshClock = System.Diagnostics.Stopwatch.StartNew();
 			List<CaveMesher.Piece> pieces = CaveMesher.Build(system, meshGround, out string meshReport);
-			Mesh[] meshes = CaveShaper.WriteMeshes(null, 1, pieces, null);
+			Mesh[] meshes = CaveShaper.WriteMeshes(null, 1, pieces, null, out Mesh[] colliders);
 			meshClock.Stop();
-			Material rock = PointOfInterestRock.MaterialOf("Limestone") ?? new Material(Shader.Find("Universal Render Pipeline/Lit"));
+			Material rock = (form == CaveForm.LavaTube ? PointOfInterestRock.MaterialOf("Basalt") : null) ?? PointOfInterestRock.MaterialOf("Limestone")
+				?? new Material(Shader.Find("Universal Render Pipeline/Lit"));
 			var caveRoot = new GameObject("Cave").transform;
-			GameObject caveRock = CaveShaper.Build(caveRoot, system, pieces, meshes, rock);
+			GameObject caveRock = CaveShaper.Build(caveRoot, system, pieces, meshes, rock, colliders);
 			long meshBytes = meshes.Sum(m => Profiler.GetRuntimeMemorySizeLong(m));
 			long triangles = meshes.Sum(m => (long)m.triangles.Length / 3);
 			log.Add($"mesh: {pieces.Count} pieces, {triangles:N0} triangles, {meshes.Sum(m => (long)m.vertexCount):N0} vertices, {meshBytes / 1048576.0:0.0} MB of mesh (render and collider share it), {meshClock.Elapsed.TotalSeconds:0.0} s; {meshReport}");
@@ -231,6 +260,37 @@ namespace FishMMO.Shared.WorldDesign
 				log.Add("  note: " + note);
 			}
 
+			// ── Its lava and its streams, as the cut writes them into the scene's water and the inland renderer draws them ──
+			CaveLavaPlan lava = CaveLava.Plan(system);
+			CaveStreamPlan streams = CaveStreams.Plan(system);
+			bool water = streams.Active && !streams.Frozen;
+			bool grottoPool = !float.IsNaN(system.WaterLevel);
+			if (lava.Active || water || grottoPool)
+			{
+				var hydrology = ScriptableObject.CreateInstance<SceneHydrology>();
+				if (grottoPool)
+				{
+					hydrology.Lakes.Add(PoolOf(system));
+				}
+				int lavaBodies = lava.Active ? CaveLavaWater.Write(hydrology, record.Id, system, lava) : 0;
+				int waterBodies = water ? CaveStreamWater.Write(hydrology, record.Id, system, streams) : 0;
+				SceneGenerator.EnsureInlandWater(SceneManager.GetActiveScene(), hydrology);
+				var inland = UnityEngine.Object.FindFirstObjectByType<FishMMO.Water.InlandWaterRenderer>();
+				if (inland != null)
+				{
+					inland.Rebuild();
+				}
+				log.Add($"water: lava {lava.Bodies.Count} bodies ({lavaBodies} written), streams {streams.Bodies.Count} bodies " +
+					$"({string.Join(", ", streams.Bodies.GroupBy(b => b.Kind).Select(g => $"{g.Count()} {g.Key}"))}, {streams.Bodies.Count(b => b.HasFall)} with falls; {waterBodies} written), " +
+					$"{hydrology.Lakes.Count} lakes, {hydrology.Rivers.Count} rivers, {(inland != null ? inland.GetComponentsInChildren<MeshRenderer>().Length : 0)} surfaces drawn");
+			}
+			else
+			{
+				log.Add(streams.Frozen ? "water: frozen (an ice cave's)" : form == CaveForm.LavaTube ? "water: none (a cooled, dry tube)" : "water: none");
+			}
+			List<int> skylights = Enumerable.Range(0, system.Mouths.Count).Where(m => system.Mouths[m].Kind == CaveMouthKind.Skylight).ToList();
+			log.Add($"skylights: {skylights.Count}");
+
 			// ── Lights: the nearest sixteen emitters, as the client's pool lights them ──
 			var pool = new Light[PoolSize];
 			for (int i = 0; i < PoolSize; i++)
@@ -242,8 +302,12 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			void LightNear(Vector3 eye)
 			{
-				List<SceneEmitter> near = points.Emitters.Where(x => x.Kind != SceneEmitterKind.Smoke && x.Kind != SceneEmitterKind.Hearth)
-					.OrderBy(x => (x.Position - eye).sqrMagnitude).Take(PoolSize).ToList();
+				// As the client's pool picks them (SceneMagma.PickLights): the nearest lava lights first, then the rest nearest first.
+				List<SceneEmitter> sorted = points.Emitters.Where(x => x.Kind != SceneEmitterKind.Smoke && x.Kind != SceneEmitterKind.Hearth && x.Kind != SceneEmitterKind.Fumes
+					&& x.Kind != SceneEmitterKind.Drip && x.Kind != SceneEmitterKind.Skylight)
+					.OrderBy(x => (x.Position - eye).sqrMagnitude).ToList();
+				var near = new List<SceneEmitter>(PoolSize);
+				SceneMagma.PickLights(sorted, eye, PoolSize, near);
 				for (int i = 0; i < PoolSize; i++)
 				{
 					if (i >= near.Count || (near[i].Position - eye).sqrMagnitude > 70f * 70f)
@@ -279,21 +343,37 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			// ── The walk ──
-			List<(Vector3 Eye, Vector3 Look)> route = Route(system, groundAt, log);
+			bool fly = Env("FISHMMO_CAVE_WALK_FLY", "") == "1";
+			List<Vector3> sights = Sights(system, lava, streams);
+			if (fly && sights.Count == 0)
+			{
+				sights = ChamberSights(system);
+			}
+			List<(Vector3 Eye, Vector3 Look)> route = fly && sights.Count > 0 ? FlyRoute(system, sights, groundAt, log)
+				: lava.Active ? LavaRoute(system, lava, groundAt, log) : Route(system, groundAt, log);
 			int wantFrames = int.TryParse(Env("FISHMMO_CAVE_WALK_FRAMES", "720"), out int f) ? f : 720;
 			List<(Vector3 Eye, Vector3 Look)> walk = Resample(route, wantFrames);
 			var renderTimes = new List<double>();
 			var frame = new Texture2D(Width, Height, TextureFormat.RGB24, false);
 			int written = 0;
+			bool sunForSkylight = false;
 			void Shot(string file, Vector3 eye, Vector3 look)
 			{
 				// Under the hill (the eye may graze the rock stepping over a terrace's edge; that is not the outside).
 				bool inside = groundAt(eye.x, eye.z) > eye.y + 1.5f;
 				// Underground, the sky's ambient at the tenth or less SkySystem leaves it.
 				RenderSettings.ambientLight = inside ? new Color(0.028f, 0.03f, 0.034f) : new Color(0.35f, 0.38f, 0.42f);
-				sun.enabled = !inside || (eye - system.Origin).magnitude < 25f;
+				sun.enabled = !inside || (eye - system.Origin).magnitude < 25f || sunForSkylight;
 				LightNear(eye);
-				camera.transform.SetPositionAndRotation(eye, Quaternion.LookRotation((look - eye).sqrMagnitude > 1e-4f ? look - eye : Vector3.forward, Vector3.up));
+				// Never straight up or down: a gaze nearly along the vertical has no up to roll by, and the frame turned over.
+				Vector3 gaze = (look - eye).sqrMagnitude > 1e-4f ? (look - eye).normalized : Vector3.forward;
+				if (Mathf.Abs(gaze.y) > 0.92f)
+				{
+					Vector3 flat = new Vector3(gaze.x, 0f, gaze.z);
+					flat = flat.sqrMagnitude > 1e-6f ? flat.normalized : Vector3.forward;
+					gaze = (flat * 0.39f + Vector3.up * Mathf.Sign(gaze.y) * 0.92f).normalized;
+				}
+				camera.transform.SetPositionAndRotation(eye, Quaternion.LookRotation(gaze, Vector3.up));
 				var clock = System.Diagnostics.Stopwatch.StartNew();
 				camera.Render();
 				renderTimes.Add(clock.Elapsed.TotalMilliseconds);
@@ -305,7 +385,8 @@ namespace FishMMO.Shared.WorldDesign
 				File.WriteAllBytes(file, frame.EncodeToJPG(88));
 				written++;
 			}
-			SetMode(carried, 1);
+			// A fly-through carries the lantern: the great halls are tens of metres across, past a torch's reach.
+			SetMode(carried, fly ? 2 : 1);
 			for (int i = 0; i < walk.Count; i++)
 			{
 				Shot(Path.Combine(frames, $"walk_{i:D5}.jpg"), walk[i].Eye, walk[i].Look);
@@ -324,6 +405,28 @@ namespace FishMMO.Shared.WorldDesign
 					Shot(Path.Combine(stills, $"spot{k + 1}_{modes[m]}.jpg"), walk[spots[k]].Eye, walk[spots[k]].Look);
 				}
 			}
+			// ── Each lava body, stream, pool and skylight on its own: by the cave's light alone, and by the torch ──
+			{
+				List<(Vector3 Target, float Width, string Name)> named = Named(system, lava, streams);
+				int shown = 0;
+				for (int b = 0; b < named.Count && shown < 24; b++)
+				{
+					if (!View(system, named[b].Target, named[b].Width, out Vector3 eye, out Vector3 look))
+					{
+						log.Add($"still {named[b].Name}: no clear place to stand and see it");
+						continue;
+					}
+					bool sky = named[b].Name.StartsWith("skylight");
+					SetMode(carried, 0);
+					sunForSkylight = sky;
+					Shot(Path.Combine(stills, $"{named[b].Name}_none.jpg"), eye, look);
+					SetMode(carried, 1);
+					Shot(Path.Combine(stills, $"{named[b].Name}_torch.jpg"), eye, look);
+					sunForSkylight = false;
+					shown++;
+				}
+				log.Add($"stills: {shown} of {named.Count} sights");
+			}
 			SetMode(carried, 1);
 			UnityEngine.Object.DestroyImmediate(frame);
 
@@ -333,6 +436,374 @@ namespace FishMMO.Shared.WorldDesign
 			log.Add($"total {total.Elapsed.TotalSeconds:0} s");
 			File.WriteAllLines(Path.Combine(output, "index.txt"), log);
 			return written > 0;
+		}
+
+		/// <summary>The water a grotto or a sea cave opens on: at its mouth's foot (the foot of the escarpment); none for the dry forms.</summary>
+		private static float WaterFor(CaveForm form, Func<float, float, float> groundAt)
+			=> form == CaveForm.Grotto || form == CaveForm.SeaCave ? groundAt(0f, -1f) + 5.9f : float.NaN;
+
+		/// <summary>
+		/// A grotto's pool as the cut writes it (CaveShaper.WritePool): a lake at the system's water level over every metre cell
+		/// where the void stands open under that level.
+		/// </summary>
+		private static SceneHydrology.Lake PoolOf(CaveSystem system)
+		{
+			const float cell = 1f;
+			float level = system.WaterLevel;
+			Bounds e = system.Extent;
+			var origin = new Vector2(system.Origin.x + e.min.x - cell, system.Origin.z + e.min.z - cell);
+			int width = Mathf.CeilToInt((e.size.x + 2f * cell) / cell), height = Mathf.CeilToInt((e.size.z + 2f * cell) / cell);
+			var bits = new byte[(width * height + 7) / 8];
+			Vector2 seed = default;
+			for (int z = 0; z < height; z++)
+			{
+				for (int x = 0; x < width; x++)
+				{
+					float east = origin.x + (x + 0.5f) * cell, north = origin.y + (z + 0.5f) * cell;
+					if (system.Void(new Vector3(east - system.Origin.x, level - 0.3f - system.Origin.y, north - system.Origin.z)) < 0f)
+					{
+						int bit = z * width + x;
+						bits[bit >> 3] |= (byte)(1 << (bit & 7));
+						seed = new Vector2(east, north);
+					}
+				}
+			}
+			return new SceneHydrology.Lake
+			{
+				Id = CaveShaper.PoolIdBase | 1, PlanetLake = -1, Level = level, SpillLevel = level, Seeds = new[] { seed },
+				Bounds = new Rect(origin.x, origin.y, width * cell, height * cell), Mask = bits, MaskOrigin = origin, MaskCell = cell,
+				MaskWidth = width, MaskHeight = height,
+			};
+		}
+
+		// ── Lava (2026-10-20) ─────────────────────────────────────
+
+		/// <summary>A tube worth walking for its lava: molten, with a river, a lake and a fall.</summary>
+		private static bool LavaShowcase(CaveSystem system)
+		{
+			CaveLavaPlan plan = CaveLava.Plan(system);
+			return plan.Active && plan.Bodies.Exists(b => b.Kind == CaveLavaKind.River) && plan.Bodies.Exists(b => b.Kind == CaveLavaKind.Lake)
+				&& plan.Bodies.Exists(b => b.Kind == CaveLavaKind.Fall);
+		}
+
+		/// <summary>
+		/// The walk into a molten tube: from out in front of the mouth down its passages to the chamber of its first lava lake
+		/// (else its largest chamber), looking along the way, then round to the lake.
+		/// </summary>
+		private static List<(Vector3 Eye, Vector3 Look)> LavaRoute(CaveSystem system, CaveLavaPlan plan, Func<float, float, float> groundAt, List<string> log)
+		{
+			Vector3 o = system.Origin;
+			var path = new List<Vector3>();
+			CaveMouth mouth = system.Mouths[0];
+			Vector3 outward = new Vector3(Mathf.Sin(mouth.Yaw * Mathf.Deg2Rad), 0f, Mathf.Cos(mouth.Yaw * Mathf.Deg2Rad));
+			for (float d = 28f; d > 2f; d -= 2f)
+			{
+				Vector3 p = o + mouth.Floor + outward * d;
+				p.y = groundAt(p.x, p.z);
+				path.Add(p);
+			}
+			// The lake deepest in: the one the most passages lead to from the mouth, so the walk passes the rivers on the way.
+			int goal = -1, most = -1;
+			Vector3 lake = default;
+			foreach (CaveLavaBody b in plan.Bodies)
+			{
+				if (b.Kind != CaveLavaKind.Lake || b.Chamber < 0)
+				{
+					continue;
+				}
+				int passages = Ways(system, b.Chamber).Count(w => w.Item1 != null);
+				if (passages > most)
+				{
+					most = passages;
+					goal = b.Chamber;
+					lake = o + b.Path[0];
+				}
+			}
+			if (goal < 0)
+			{
+				goal = Enumerable.Range(0, system.Chambers.Count).OrderByDescending(i => Mathf.Max(system.Chambers[i].Radii.x, system.Chambers[i].Radii.z)).First();
+				CaveChamber largest = system.Chambers[goal];
+				lake = o + new Vector3(largest.Centre.x, largest.Floor, largest.Centre.z);
+			}
+			List<(CavePassage Passage, bool Forward, int Into)> ways = Ways(system, goal);
+			foreach ((CavePassage passage, bool forward, int into) in ways)
+			{
+				if (passage != null)
+				{
+					IEnumerable<CaveNode> nodes = forward ? passage.Nodes : Enumerable.Reverse(passage.Nodes);
+					foreach (CaveNode n in nodes)
+					{
+						path.Add(o + new Vector3(n.Centre.x, n.Floor, n.Centre.z));
+					}
+				}
+				CaveChamber c = system.Chambers[into];
+				path.Add(o + new Vector3(c.Centre.x, c.Floor, c.Centre.z));
+			}
+			var route = new List<(Vector3, Vector3)>();
+			for (int i = 0; i < path.Count; i++)
+			{
+				Vector3 p = path[i];
+				float floor = system.FloorBelow(p - o + Vector3.up * 1.2f, 4f);
+				Vector3 eye = new Vector3(p.x, (float.IsNaN(floor) ? p.y - o.y : floor) + o.y + Eye, p.z);
+				Vector3 ahead = path[Mathf.Min(path.Count - 1, i + 3)];
+				route.Add((eye, new Vector3(ahead.x, eye.y - 0.4f, ahead.z)));
+			}
+			// At the end, turned to the lake.
+			(Vector3 last, Vector3 _) = route[route.Count - 1];
+			route.Add((last, lake));
+			route.Add((last, lake));
+			log.Add($"lava route: {ways.Count} passage(s) from the mouth to chamber {goal}, {route.Count} waypoints");
+			return route;
+		}
+
+		/// <summary>How far over the floor the fly-through flies, metres (lower where the roof will not have it).</summary>
+		private const float FlyHeight = 3.2f;
+		/// <summary>How near a lava body draws the fly-through's gaze, metres.</summary>
+		private const float FlyFocusReach = 26f;
+
+		/// <summary>
+		/// A fly-through of a molten tube: from out in front of the mouth to every lava body in turn (its lake's chamber, or the
+		/// chamber nearest a river's or a fall's middle), nearest first, through the passages between, <see cref="FlyHeight"/> over
+		/// the floor where the roof allows; the gaze turns toward each body as it is passed.
+		/// </summary>
+		private static List<(Vector3 Eye, Vector3 Look)> FlyRoute(CaveSystem system, List<Vector3> sights, Func<float, float, float> groundAt, List<string> log)
+		{
+			Vector3 o = system.Origin;
+			var path = new List<Vector3>();
+			CaveMouth mouth = system.Mouths[0];
+			Vector3 outward = new Vector3(Mathf.Sin(mouth.Yaw * Mathf.Deg2Rad), 0f, Mathf.Cos(mouth.Yaw * Mathf.Deg2Rad));
+			for (float d = 28f; d > 2f; d -= 2f)
+			{
+				Vector3 p = o + mouth.Floor + outward * d;
+				p.y = groundAt(p.x, p.z);
+				path.Add(p);
+			}
+			// Each sight's chamber and the point it is seen by.
+			var targets = new List<(int Chamber, Vector3 Focus)>();
+			var focus = new List<Vector3>();
+			foreach (Vector3 mid in sights)
+			{
+				focus.Add(o + mid);
+				int chamber = Nearest(system, mid);
+				if (!targets.Exists(t => t.Chamber == chamber))
+				{
+					targets.Add((chamber, o + mid));
+				}
+			}
+			// Nearest first, from the mouth.
+			Vector3 here = o + mouth.Floor;
+			int at = -1, legs = 0;
+			while (targets.Count > 0)
+			{
+				int next = 0;
+				for (int i = 1; i < targets.Count; i++)
+				{
+					if ((targets[i].Focus - here).sqrMagnitude < (targets[next].Focus - here).sqrMagnitude)
+					{
+						next = i;
+					}
+				}
+				(int chamber, Vector3 seen) = targets[next];
+				targets.RemoveAt(next);
+				List<(CavePassage Passage, bool Forward, int Into)> ways = Ways(system, chamber, at);
+				if (ways.Count == 0 && chamber != at)
+				{
+					continue;
+				}
+				foreach ((CavePassage passage, bool forward, int into) in ways)
+				{
+					if (passage != null)
+					{
+						IEnumerable<CaveNode> nodes = forward ? passage.Nodes : Enumerable.Reverse(passage.Nodes);
+						foreach (CaveNode n in nodes)
+						{
+							path.Add(o + new Vector3(n.Centre.x, n.Floor, n.Centre.z));
+						}
+					}
+					CaveChamber c = system.Chambers[into];
+					path.Add(o + new Vector3(c.Centre.x, c.Floor, c.Centre.z));
+				}
+				at = chamber;
+				here = seen;
+				legs++;
+			}
+			if (legs < 2 && system.Passages.Count > 0)
+			{
+				// No way between its rooms found (a mine's small rooms): along the trunk to its end, then on down the branch that
+				// leaves nearest it.
+				CavePassage trunk = system.Passages[0];
+				foreach (CaveNode n in trunk.Nodes)
+				{
+					path.Add(o + new Vector3(n.Centre.x, n.Floor, n.Centre.z));
+				}
+				Vector3 end = trunk.Nodes[trunk.Nodes.Count - 1].Centre;
+				CavePassage next = system.Passages.Skip(1).OrderBy(x => (x.Nodes[0].Centre - end).sqrMagnitude).FirstOrDefault();
+				if (next != null && (next.Nodes[0].Centre - end).magnitude < 12f)
+				{
+					foreach (CaveNode n in next.Nodes)
+					{
+						path.Add(o + new Vector3(n.Centre.x, n.Floor, n.Centre.z));
+					}
+				}
+				legs = 1;
+			}
+			var route = new List<(Vector3, Vector3)>();
+			for (int i = 0; i < path.Count; i++)
+			{
+				Vector3 p = path[i];
+				float floor = system.FloorBelow(p - o + Vector3.up * 1.2f, 4f);
+				float y = (float.IsNaN(floor) ? p.y - o.y : floor);
+				Vector3 eye = new Vector3(p.x, y + o.y + FlyHeight, p.z);
+				if (system.Void(eye - o) > -0.6f)
+				{
+					eye.y = y + o.y + Eye;
+				}
+				Vector3 ahead = path[Mathf.Min(path.Count - 1, i + 4)];
+				Vector3 look = new Vector3(ahead.x, eye.y - 0.8f, ahead.z);
+				// Turned toward the nearest lava body near enough to be seen.
+				float nearest = FlyFocusReach;
+				Vector3 toward = look;
+				foreach (Vector3 f in focus)
+				{
+					float d = Vector3.Distance(f, eye);
+					if (d < nearest && (look - eye).sqrMagnitude > 1e-4f && Vector3.Dot((f - eye).normalized, (look - eye).normalized) > -0.2f)
+					{
+						nearest = d;
+						toward = f;
+					}
+				}
+				float pull = 0.65f * (1f - nearest / FlyFocusReach);
+				route.Add((eye, Vector3.Lerp(look, toward, pull)));
+			}
+			log.Add($"fly route: {legs} leg(s) to {focus.Count} sights, {route.Count} waypoints");
+			return route;
+		}
+
+		/// <summary>The middle of a body's run: a lake's or pool's centre, a fall's halfway, a river's or stream's middle point.</summary>
+		private static Vector3 Middle(Vector3[] path, bool fall) => path.Length == 1 ? path[0] : fall ? Vector3.Lerp(path[0], path[path.Length - 1], 0.5f) : path[path.Length / 2];
+
+		/// <summary>Everything worth flying past (system frame): the lava's bodies, the streams' and pools, the skylights' floors.</summary>
+		private static List<Vector3> Sights(CaveSystem system, CaveLavaPlan lava, CaveStreamPlan streams)
+			=> Named(system, lava, streams).Select(x => x.Target).ToList();
+
+		/// <summary>The sights with a width to stand back by and a name for their stills.</summary>
+		private static List<(Vector3 Target, float Width, string Name)> Named(CaveSystem system, CaveLavaPlan lava, CaveStreamPlan streams)
+		{
+			var named = new List<(Vector3, float, string)>();
+			if (lava.Active)
+			{
+				for (int b = 0; b < lava.Bodies.Count; b++)
+				{
+					CaveLavaBody body = lava.Bodies[b];
+					named.Add((Middle(body.Path, body.Kind == CaveLavaKind.Fall), body.Width, $"lava{b:D2}_{body.Kind}"));
+				}
+			}
+			if (streams.Active)
+			{
+				for (int b = 0; b < streams.Bodies.Count; b++)
+				{
+					CaveStreamBody body = streams.Bodies[b];
+					// A stream's fall is its best sight: its lip's run.
+					Vector3 at = Middle(body.Path, false);
+					if (body.HasFall)
+					{
+						int f = Array.IndexOf(body.Falls, true);
+						at = body.Path[Mathf.Min(body.Path.Length - 1, f + 1)];
+					}
+					named.Add((at, body.Width, $"{(streams.Frozen ? "ice" : "water")}{b:D2}_{body.Kind}{(body.HasFall ? "Fall" : "")}"));
+				}
+			}
+			for (int m = 0; m < system.Mouths.Count; m++)
+			{
+				if (system.Mouths[m].Kind == CaveMouthKind.Skylight)
+				{
+					named.Add((system.Mouths[m].Floor + Vector3.up * 1.5f, system.Mouths[m].Radius, $"skylight{m}"));
+				}
+			}
+			return named;
+		}
+
+		/// <summary>
+		/// A place to stand and see a sight: in open air 6–14 m off it, a man's eye over the floor there, with nothing but air
+		/// between; false where none is found.
+		/// </summary>
+		private static bool View(CaveSystem system, Vector3 target, float width, out Vector3 eye, out Vector3 look)
+		{
+			Vector3 o = system.Origin;
+			eye = look = o + target;
+			float best = float.PositiveInfinity;
+			bool found = false;
+			for (int k = 0; k < 16; k++)
+			{
+				float a = k * Mathf.PI / 8f;
+				var dir = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+				foreach (float distance in new[] { 8f, 6f, 11f, 14f })
+				{
+					Vector3 stand = target + dir * (distance + width * 0.5f);
+					float floor = system.FloorBelow(stand + Vector3.up * 3f, 8f);
+					if (float.IsNaN(floor) || floor < target.y - 0.2f)
+					{
+						continue;
+					}
+					Vector3 at = new Vector3(stand.x, floor + Eye, stand.z);
+					if (system.Void(at) > -0.4f || !Clear(system, at, target + Vector3.up * 0.3f))
+					{
+						continue;
+					}
+					float score = Mathf.Abs(distance - 8f) + Mathf.Abs(floor - target.y - 1.5f) * 0.5f;
+					if (score < best)
+					{
+						best = score;
+						eye = o + at;
+						look = o + target + Vector3.up * 0.3f;
+						found = true;
+					}
+				}
+			}
+			return found;
+		}
+
+		/// <summary>
+		/// A system worth flying for its form's life (2026-10-20, "a fresh webp of each cave type"): a cave's water with a pool and
+		/// a fall, a lava tube's molten lava, a mine's flooded workings, an ice cave's frozen streams; and (when asked, where the form
+		/// has them) a skylight. A grotto or a sea cave: any.
+		/// </summary>
+		private static bool Showcase(CaveSystem system, bool skylightWanted)
+		{
+			CaveStreamPlan plan = CaveStreams.Plan(system);
+			bool sky = !skylightWanted || system.Mouths.Exists(m => m.Kind == CaveMouthKind.Skylight);
+			switch (system.Form)
+			{
+				case CaveForm.Cave:
+					return plan.Active && !plan.Frozen && plan.Bodies.Exists(b => b.Kind == CaveStreamKind.Pool) && plan.Bodies.Exists(b => b.HasFall) && sky;
+				case CaveForm.LavaTube:
+					return LavaShowcase(system) && sky;
+				case CaveForm.Mine:
+					return plan.Active && plan.Bodies.Count > 0;
+				case CaveForm.IceCave:
+					return plan.Active && plan.Frozen && plan.Bodies.Count > 0 && sky;
+				default:
+					return true;
+			}
+		}
+
+		/// <summary>The chambers to fly through where a system has no sights of its own: the largest six, their middles over their floors.</summary>
+		private static List<Vector3> ChamberSights(CaveSystem system)
+			=> system.Chambers.OrderByDescending(c => Mathf.Max(c.Radii.x, c.Radii.z)).Take(6)
+				.Select(c => new Vector3(c.Centre.x, c.Floor + 1.5f, c.Centre.z)).ToList();
+
+		/// <summary>Whether the straight line between two points (system frame) runs through open air.</summary>
+		private static bool Clear(CaveSystem system, Vector3 a, Vector3 b)
+		{
+			int steps = Mathf.Max(2, Mathf.CeilToInt(Vector3.Distance(a, b) / 0.5f));
+			for (int i = 1; i < steps; i++)
+			{
+				if (system.Void(Vector3.Lerp(a, b, i / (float)steps)) > 0f)
+				{
+					return false;
+				}
+			}
+			return true;
 		}
 
 		// ── The route ─────────────────────────────────────────────
@@ -446,8 +917,11 @@ namespace FishMMO.Shared.WorldDesign
 			return best;
 		}
 
-		/// <summary>The passages from the mouth to a chamber: a breadth-first search over chambers joined by passages.</summary>
-		private static List<(CavePassage, bool, int)> Ways(CaveSystem system, int goal)
+		/// <summary>
+		/// The passages from the mouth (or from chamber <paramref name="start"/>) to a chamber: a breadth-first search over chambers
+		/// joined by passages.
+		/// </summary>
+		private static List<(CavePassage, bool, int)> Ways(CaveSystem system, int goal, int start = -1)
 		{
 			int Holder(Vector3 p, float reach)
 			{
@@ -485,8 +959,8 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			var previous = new Dictionary<int, (int, CavePassage, bool)>();
 			var queue = new Queue<int>();
-			queue.Enqueue(-1);
-			previous[-1] = (-1, null, true);
+			queue.Enqueue(start);
+			previous[start] = (start, null, true);
 			while (queue.Count > 0)
 			{
 				int at = queue.Dequeue();
@@ -509,7 +983,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			var ways = new List<(CavePassage, bool, int)>();
-			for (int at = goal; previous.ContainsKey(at) && at != -1; at = previous[at].Item1)
+			for (int at = goal; previous.ContainsKey(at) && at != start; at = previous[at].Item1)
 			{
 				ways.Add((previous[at].Item2, previous[at].Item3, at));
 			}
@@ -575,6 +1049,12 @@ namespace FishMMO.Shared.WorldDesign
 					colour = new Color(1f, 0.56f, 0.24f);
 					range = 11f;
 					intensity = 3.2f;
+					return;
+				case SceneEmitterKind.Magma:
+					// A lava tube's molten lava (2026-10-20), at the middle of its churn.
+					colour = SceneMagma.Colour(e.Seed);
+					range = e.Reach > 0f ? e.Reach : SceneMagma.Range;
+					intensity = SceneMagma.Brightness(e.Seed);
 					return;
 				default:
 					colour = new Color(1f, 0.72f, 0.42f);

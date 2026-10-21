@@ -83,6 +83,9 @@ namespace FishMMO.Client
 		private static readonly int OwnBackId = Shader.PropertyToID("_OwnBack");
 		private static readonly int OwnBellyId = Shader.PropertyToID("_OwnBelly");
 		private static readonly int OwnAccentId = Shader.PropertyToID("_OwnAccent");
+		private static readonly int GlowId = Shader.PropertyToID("_Glow");
+		private static readonly int EmitColourId = Shader.PropertyToID("_EmitColour");
+		private static readonly int EmitPatternId = Shader.PropertyToID("_EmitPattern");
 
 		/// <summary>The project's shader, for the editor when the profile does not reference it yet.</summary>
 		public const string ShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishAmbientLife.shader";
@@ -158,6 +161,7 @@ namespace FishMMO.Client
 		private static readonly Vector4[] anims = new Vector4[Batch];
 		private static readonly Vector4[] tints = new Vector4[Batch];
 		private static readonly Vector4[] looks = new Vector4[Batch];
+		private static readonly Vector4[] glows = new Vector4[Batch];
 		// The biome looks the placed groups wear were chosen from: re-placed when they change (a scene's palette is
 		// built a frame or so after it loads, and again when the looks are switched off or on).
 		private static string placedLooks;
@@ -418,6 +422,16 @@ namespace FishMMO.Client
 				countedSeed = world.SceneSeed;
 				Debug.Log($"[Ambient life] {Census()}; {drawnCount} drawn now ({conditions.Light:0.00} light, {conditions.Temperature * 33.1f:0} °C, rain {conditions.Rain:0.00}).");
 			}
+			// The census above is the spawn's; a cave's is its own, once each time the camera goes in.
+			if (!eyeInCave)
+			{
+				caveCounted = false;
+			}
+			else if (main && settled && !caveCounted)
+			{
+				caveCounted = true;
+				Debug.Log(CaveCensus(eye, conditions));
+			}
 		}
 
 		/// <summary>Logs the system's state when it changes (the game camera's only).</summary>
@@ -462,6 +476,110 @@ namespace FishMMO.Client
 			}
 			string dressing = dressed > 0 ? $"{dressed}/{groups} groups in their biome's looks (by look: {string.Join(" ", variants)})" : "no biome looks (kinds' own colours)";
 			return $"{cells.Count} cells placed: {animals} animals in groups of {string.Join(", ", parts)}; {underground} of the groups in caves; {dressing}";
+		}
+
+		/// <summary>Whether the cave the camera is in has been counted (<see cref="CaveCensus"/>) since it went in.</summary>
+		private static bool caveCounted;
+
+		/// <summary>How far round the camera a cave's census looks, metres.</summary>
+		private const float CaveCensusReach = 80f;
+
+		/// <summary>
+		/// The cave round the camera, for Editor.log: its spots within <see cref="CaveCensusReach"/> by kind and the cave air's
+		/// range there; per cave kind how many of those spots suit it, how many groups were placed, how many of them are about
+		/// now (their activity over their rank, with the kind's activity at the first), and how many animals are drawn.
+		/// </summary>
+		private static string CaveCensus(Vector3 eye, in AmbientConditions conditions)
+		{
+			var spotKinds = new int[Enum.GetValues(typeof(SceneCaveLifeKind)).Length];
+			var suits = new int[Kinds.Length];
+			var placed = new int[Kinds.Length];
+			var about = new int[Kinds.Length];
+			var activityAt = new float[Kinds.Length];
+			for (int k = 0; k < activityAt.Length; k++)
+			{
+				activityAt[k] = -1f;
+			}
+			int spots = 0, barren = 0;
+			float coldest = float.MaxValue, warmest = float.MinValue;
+			foreach (Cell cell in cells.Values)
+			{
+				if (cell.CaveSpots == null)
+				{
+					continue;
+				}
+				foreach (SceneCaveLifeSpot spot in cell.CaveSpots)
+				{
+					if ((spot.Position - eye).sqrMagnitude > CaveCensusReach * CaveCensusReach)
+					{
+						continue;
+					}
+					spots++;
+					spotKinds[(int)spot.Kind]++;
+					world.CaveHabitat(spot.Position, out AmbientHabitat habitat, out float temperature);
+					barren += (habitat & AmbientHabitat.Barren) != 0 ? 1 : 0;
+					coldest = Mathf.Min(coldest, temperature);
+					warmest = Mathf.Max(warmest, temperature);
+					for (int k = 0; k < Kinds.Length; k++)
+					{
+						suits[k] += AmbientCaveLife.Weight(Kinds[k], spot, habitat, temperature) > 0f ? 1 : 0;
+					}
+				}
+				foreach (AmbientGroup g in cell.Groups)
+				{
+					if (g.Cave <= 0 || g.Cave > cell.CaveSpots.Count)
+					{
+						continue;
+					}
+					SceneCaveLifeSpot spot = cell.CaveSpots[g.Cave - 1];
+					if ((spot.Position - eye).sqrMagnitude > CaveCensusReach * CaveCensusReach)
+					{
+						continue;
+					}
+					placed[g.Kind]++;
+					float share = AmbientCaveLife.Activity(Kinds[g.Kind], conditions, g.Steady, spot.Dark);
+					about[g.Kind] += share > g.Rank ? 1 : 0;
+					if (activityAt[g.Kind] < 0f)
+					{
+						activityAt[g.Kind] = share;
+					}
+				}
+			}
+			var sb = new System.Text.StringBuilder();
+			sb.Append("[Ambient life] cave at ").Append(eye.ToString("F0")).Append(": ").Append(spots).Append(" spots within ")
+				.Append(CaveCensusReach.ToString("0")).Append(" m (");
+			for (int i = 0; i < spotKinds.Length; i++)
+			{
+				sb.Append(i > 0 ? " " : "").Append((SceneCaveLifeKind)i).Append(' ').Append(spotKinds[i]);
+			}
+			sb.Append(")");
+			if (spots > 0)
+			{
+				sb.Append(", air ").Append((coldest * 33.1f).ToString("0.0")).Append("..").Append((warmest * 33.1f).ToString("0.0")).Append(" °C");
+			}
+			sb.Append(", ").Append(barren).Append(" under barren ground; bats ").Append(AmbientCaveLife.BatHours(conditions).Out.ToString("0.00")).Append(" out");
+			// The light-makers (2026-10-20): how many of the drawn animals near here give off a light of their own.
+			int lit = 0;
+			for (int k = 0; k < Kinds.Length; k++)
+			{
+				lit += AmbientGlow.Luminous(Kinds[k]) ? byKind[k]?.Count ?? 0 : 0;
+			}
+			sb.Append("; ").Append(lit).Append(" glowing animals drawn.");
+			for (int k = 0; k < Kinds.Length; k++)
+			{
+				if (!AmbientCaveLife.LivesInCaves(Kinds[k]))
+				{
+					continue;
+				}
+				sb.Append(' ').Append(Kinds[k].Name).Append(AmbientGlow.Luminous(Kinds[k]) ? " (lit)" : "").Append(": suits ").Append(suits[k]).Append(", placed ").Append(placed[k])
+					.Append(", about ").Append(about[k]);
+				if (activityAt[k] >= 0f)
+				{
+					sb.Append(" (activity ").Append(activityAt[k].ToString("0.00")).Append(')');
+				}
+				sb.Append(", drawn ").Append(byKind[k]?.Count ?? 0).Append(';');
+			}
+			return sb.ToString();
 		}
 
 		/// <summary>The moment, from the weather at the viewer (a mild clear day where there is no weather).</summary>
@@ -572,6 +690,9 @@ namespace FishMMO.Client
 				m.SetVector(OwnBackId, (Vector4)kind.Back.linear);
 				m.SetVector(OwnBellyId, (Vector4)kind.Belly.linear);
 				m.SetVector(OwnAccentId, (Vector4)kind.Accent.linear);
+				// Its own light (AmbientGlow): the colour at its brightest, and how it runs over the body.
+				m.SetVector(EmitColourId, AmbientGlow.EmitColour(kind));
+				m.SetVector(EmitPatternId, AmbientGlow.Pattern(kind));
 				if (kind.Shape == AmbientShape.Swarm)
 				{
 					// A swarm's insects are drawn at their own size (no SizeScale: that widens the cloud), and a firefly's light.
@@ -614,6 +735,10 @@ namespace FishMMO.Client
 				case AmbientShape.Beetle: return 0.14f;
 				case AmbientShape.Spider: return 0.1f;
 				case AmbientShape.Cricket: return 0.16f;
+				case AmbientShape.Millipede: return 0.08f;
+				case AmbientShape.Snail: return 0.06f;
+				case AmbientShape.Fish: return 0.2f;
+				case AmbientShape.Worm: return 0.1f;
 				default: return 0.12f;
 			}
 		}
@@ -960,6 +1085,7 @@ namespace FishMMO.Client
 					continue;
 				}
 				bool shadows = Kinds[k].CastShadows && settings.ShadowDistance > 0f;
+				bool glowing = AmbientGlow.Glows(Kinds[k]);
 				for (int first = 0; first < list.Count; first += Batch)
 				{
 					int count = Mathf.Min(Batch, list.Count - first);
@@ -972,6 +1098,7 @@ namespace FishMMO.Client
 						anims[i] = a.Anim;
 						tints[i] = settings.DebugHighlight ? new Vector4(1f, 0f, 1f, a.Tint.w) : a.Tint;
 						looks[i] = settings.DebugHighlight ? Vector4.zero : a.Look;
+						glows[i] = a.Glow;
 						if (shadows && !anyNear && ((Vector3)a.Matrix.GetColumn(3) - drawnEye).sqrMagnitude <= shadowSq)
 						{
 							anyNear = true;
@@ -981,6 +1108,10 @@ namespace FishMMO.Client
 					block.SetVectorArray(AnimId, anims);
 					block.SetVectorArray(TintId, tints);
 					block.SetVectorArray(LookId, looks);
+					if (glowing)
+					{
+						block.SetVectorArray(GlowId, glows);
+					}
 					Graphics.DrawMeshInstanced(meshes[k], 0, materials[k], matrices, count, block,
 						anyNear ? ShadowCastingMode.On : ShadowCastingMode.Off, true, 0, camera);
 				}
@@ -1184,9 +1315,10 @@ namespace FishMMO.Client
 
 			public float WaterAt(float x, float z, out bool sea)
 			{
-				float inland = SurfaceWater.TryGetInlandSurfaceAt(x, z, out float lake) ? lake : float.NegativeInfinity;
+				float inland = SurfaceWater.TryGetInlandSurfaceAt(x, z, out float lake, out bool lava) ? lake : float.NegativeInfinity;
 				float level = seaPresent ? seaMean : float.NegativeInfinity;
-				sea = seaPresent && level >= inland;
+				// Inland lava is no fresh water: nothing paddles on it or comes to drink, as by a lava sea.
+				sea = seaPresent && level >= inland || lava && inland > level;
 				return Mathf.Max(level, inland);
 			}
 
@@ -1218,6 +1350,17 @@ namespace FishMMO.Client
 				if ((habitat & (AmbientHabitat.Barren | AmbientHabitat.Ice)) == 0 && SceneSiteEmitters.SiteAt(position, SiteMargin, out PointOfInterestKindInfo site))
 				{
 					habitat |= AmbientGating.HabitatOfSite(site.Group, site.Traits);
+				}
+			}
+
+			public void CaveHabitat(Vector3 position, out AmbientHabitat habitat, out float temperature)
+			{
+				Habitat(position, out habitat, out temperature);
+				ScenePlacementClimate placement = settings != null ? settings.PlacementClimate : null;
+				if (placement != null && placement.Generated)
+				{
+					ClimateSample sample = placement.SampleAt(position, out _);
+					temperature = AmbientCaveLife.CaveAir(sample.Temperature, sample.WarmestSeason, sample.SeasonKnown, sample.Humidity);
 				}
 			}
 

@@ -6,9 +6,14 @@ using FishMMO.Shared.Weather;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// Plays the weather's loops on the Ambient channel, faded with the weather, and its one-shots
-	/// when asked. A cue with no clip is silent.
+	/// Plays the weather's loops on the Ambient channel, faded with the weather, and its one-shots when asked. A cue the
+	/// profile gives no clip plays its synthesised loop (<see cref="AmbientSounds"/>); a cue with neither is silent.
 	/// </summary>
+	/// <remarks>
+	/// Each loop plays at the place in it the shared clock says (<see cref="ClockedLoop"/>), so players in the same
+	/// weather hear the same rain. The synthesised clips are made the first time their cue is wanted, off the main thread
+	/// (<see cref="SoundLibrary"/>); until one is ready its cue waits silent.
+	/// </remarks>
 	public sealed class WeatherAudioPresenter
 	{
 		private readonly Transform parent;
@@ -16,20 +21,28 @@ namespace FishMMO.Client
 		private readonly Dictionary<WeatherAudioCue, float> levels = new Dictionary<WeatherAudioCue, float>();
 		private WeatherAudioProfile boundProfile;
 		private ChannelAudioSource oneShot;
+		private bool bound;
 
 		public WeatherAudioPresenter(Transform parent)
 		{
 			this.parent = parent;
 		}
 
+		/// <summary>The normalised wind (1 = 30 m/s) at which the wind is at its full level: 15 m/s, a near gale.</summary>
+		public const float FullWind = 0.5f;
+
 		/// <summary>How loud a loop should be for a frame, 0..1, before the cue's own volume.</summary>
 		public static float TargetVolume(WeatherAudioCue cue, in WeatherFrame frame, float shelter)
 		{
 			float p = frame[WeatherChannel.Precipitation];
+			// A trace of rain in the field (a few hundredths) is not rain to the ear: silent, then in over a light drizzle.
 			float rain = p * frame[WeatherChannel.RainWeight];
+			rain *= Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.02f, 0.08f, rain));
 			float heavy = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.35f, 0.75f, rain));
 			float wind = frame[WeatherChannel.WindSpeed];
-			float strong = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.4f, 0.8f, wind));
+			// Wind noise grows faster than the wind does: a 3 m/s breeze is a whisper, a 15 m/s gale fills the ear.
+			float blowing = Mathf.Pow(Mathf.Clamp01(wind / FullWind), 1.3f) * (0.85f + 0.3f * frame[WeatherChannel.WindGust]);
+			float strong = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.3f, 0.6f, wind));
 			float outdoors = 1f - 0.7f * Mathf.Clamp01(shelter);
 			switch (cue)
 			{
@@ -38,8 +51,8 @@ namespace FishMMO.Client
 				case WeatherAudioCue.RainOnRoof: return rain * Mathf.Clamp01(shelter);
 				case WeatherAudioCue.Snow: return p * frame[WeatherChannel.SnowWeight] * 0.6f * outdoors;
 				case WeatherAudioCue.Hail: return p * frame[WeatherChannel.HailWeight] * (1f - 0.3f * Mathf.Clamp01(shelter));
-				case WeatherAudioCue.Wind: return wind * (1f - strong) * outdoors;
-				case WeatherAudioCue.WindStrong: return wind * strong * (0.8f + 0.2f * frame[WeatherChannel.WindGust]) * outdoors;
+				case WeatherAudioCue.Wind: return blowing * (1f - strong) * outdoors;
+				case WeatherAudioCue.WindStrong: return blowing * strong * outdoors;
 				case WeatherAudioCue.Sand: return p * frame[WeatherChannel.SandWeight] * outdoors;
 				case WeatherAudioCue.Ash: return p * frame[WeatherChannel.AshWeight] * 0.5f * outdoors;
 				default: return 0f;
@@ -47,37 +60,64 @@ namespace FishMMO.Client
 		}
 
 		/// <param name="snap">The weather snapped to another moment (<see cref="WeatherClient.Snaps"/>): every loop goes straight to its level.</param>
-		public void Update(in WeatherFrame frame, float shelter, WeatherAudioProfile profile, float deltaTime, bool snap = false)
+		/// <param name="audible">0..1: how much of the weather outside reaches the listener at all (0 sealed deep in a cave).</param>
+		public void Update(in WeatherFrame frame, float shelter, WeatherAudioProfile profile, float deltaTime, bool snap = false, float audible = 1f)
 		{
-			if (profile != boundProfile)
+			if (!bound || profile != boundProfile)
 			{
 				Bind(profile);
 			}
-			if (profile == null)
-			{
-				return;
-			}
-			float step = snap ? float.MaxValue : deltaTime / Mathf.Max(0.05f, profile.FadeSeconds);
+			float fade = profile != null ? profile.FadeSeconds : 1.5f;
+			float step = snap ? float.MaxValue : deltaTime / Mathf.Max(0.05f, fade);
 			foreach (KeyValuePair<WeatherAudioCue, (ChannelAudioSource channel, AudioSource source)> pair in loops)
 			{
-				WeatherAudioEntry entry = profile.Find(pair.Key);
-				float target = TargetVolume(pair.Key, frame, shelter) * (entry != null ? entry.Volume : 0f);
-				levels.TryGetValue(pair.Key, out float level);
-				level = Mathf.MoveTowards(level, target, step);
-				levels[pair.Key] = level;
-				pair.Value.channel.AuthoredVolume = level;
-				if (level > 0.001f && !pair.Value.source.isPlaying)
+				WeatherAudioCue cue = pair.Key;
+				AudioSource source = pair.Value.source;
+				WeatherAudioEntry entry = profile != null ? profile.Find(cue) : null;
+				float volume = entry != null ? entry.Volume : 1f;
+				float target = TargetVolume(cue, frame, shelter) * volume * Mathf.Clamp01(audible);
+				levels.TryGetValue(cue, out float level);
+				if (source.clip == null)
 				{
-					pair.Value.source.Play();
+					// Asked for only once it is wanted: a desert never makes the rain.
+					if (target > 0.001f)
+					{
+						source.clip = ClipFor(cue, entry);
+					}
+					if (source.clip == null)
+					{
+						continue;
+					}
 				}
-				else if (level <= 0.001f && pair.Value.source.isPlaying)
+				level = Mathf.MoveTowards(level, target, step);
+				levels[cue] = level;
+				pair.Value.channel.AuthoredVolume = level;
+				if (level > 0.001f && !source.isPlaying)
 				{
-					pair.Value.source.Stop();
+					ClockedLoop.Start(source);
+				}
+				else if (level <= 0.001f && source.isPlaying)
+				{
+					source.Stop();
+				}
+				else
+				{
+					ClockedLoop.Keep(source);
 				}
 			}
 		}
 
-		/// <summary>Plays a one-shot cue (thunder), if it has a clip.</summary>
+		/// <summary>The profile's clip for a cue, or its synthesised loop (null while that is being made).</summary>
+		private static AudioClip ClipFor(WeatherAudioCue cue, WeatherAudioEntry entry)
+		{
+			if (entry != null && entry.Clip != null)
+			{
+				return entry.Clip;
+			}
+			return AmbientSounds.Synthesised(cue) ? SoundLibrary.Get(AmbientSounds.Key(cue), () => AmbientSounds.Make(cue)) : null;
+		}
+
+		/// <summary>Plays a one-shot cue, if the profile gives it a clip. Thunder is made per strike instead (<see cref="ThunderPresenter"/>).</summary>
 		public void Play(WeatherAudioCue cue, float volume = 1f)
 		{
 			WeatherAudioEntry entry = boundProfile != null ? boundProfile.Find(cue) : null;
@@ -102,21 +142,19 @@ namespace FishMMO.Client
 		{
 			Dispose();
 			boundProfile = profile;
-			if (profile == null)
-			{
-				return;
-			}
+			bound = true;
 			foreach (WeatherAudioCue cue in (WeatherAudioCue[])Enum.GetValues(typeof(WeatherAudioCue)))
 			{
-				WeatherAudioEntry entry = profile.Find(cue);
-				if (entry == null || entry.Clip == null || !WeatherAudioProfile.IsLoop(cue))
+				if (!WeatherAudioProfile.IsLoop(cue))
 				{
 					continue;
 				}
 				var go = new GameObject("Weather " + cue);
 				go.transform.SetParent(parent, false);
 				var source = go.AddComponent<AudioSource>();
-				source.clip = entry.Clip;
+				WeatherAudioEntry entry = profile != null ? profile.Find(cue) : null;
+				// The profile's own clip at once; a synthesised one when the cue is first wanted.
+				source.clip = entry != null ? entry.Clip : null;
 				source.loop = true;
 				source.playOnAwake = false;
 				source.spatialBlend = 0f;
@@ -154,6 +192,7 @@ namespace FishMMO.Client
 				oneShot = null;
 			}
 			boundProfile = null;
+			bound = false;
 		}
 	}
 }

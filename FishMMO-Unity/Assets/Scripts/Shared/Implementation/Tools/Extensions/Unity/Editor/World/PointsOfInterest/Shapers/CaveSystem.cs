@@ -41,6 +41,11 @@ namespace FishMMO.Shared.WorldDesign
 		Submerged,
 		/// <summary>Behind a waterfall's curtain, along a shelf over its pool from the dry bank beside it.</summary>
 		Shelf,
+		/// <summary>
+		/// Not a way in (2026-10-20): an opening in a great chamber's roof up to the ground over it, where the daylight falls
+		/// through (CaveSystem.Skylights.cs). Its floor is the floor under the opening, its landing the opening on the ground.
+		/// </summary>
+		Skylight,
 	}
 
 	/// <summary>What a passage is in the system.</summary>
@@ -125,12 +130,14 @@ namespace FishMMO.Shared.WorldDesign
 	public sealed partial class CaveSystem
 	{
 		/// <summary>
-		/// 6 (2026-10-18, later): each mouth's kind, water and landing (mouths under water and behind waterfalls, second mouths
+		/// 7 (2026-10-20): a personality (<see cref="Traits"/>) and what it lays — hollows (basins, domes, keyhole trenches,
+		/// raises), terraces, rubble, arches, pits — stored after the climbs (a cave stored before is cut again). 6 (2026-10-18,
+		/// later): each mouth's kind, water and landing (mouths under water and behind waterfalls, second mouths
 		/// through a hill). 5 (2026-10-18): mouths' floors at the ground's own height with the approach graded to them, no outcrop or notch, and
 		/// greater halls (a cave stored before is cut again: its floor stood a rim over the ground). 4 (2026-10-13): characters,
 		/// solids, rifts, shafts, crossings, climbs, tall nodes, rough chambers.
 		/// </summary>
-		public const int Format = 6;
+		public const int Format = 7;
 		public const float MinCover = 3f;
 		public const float FloorDepth = 0.45f;
 		public const float ApronBand = 2.5f;
@@ -154,8 +161,12 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>The slope a mine's decline is sunk at where there is no face to drive an adit into, degrees.</summary>
 		public const float DeclinePitch = 15f;
-		/// <summary>The steepest a chamber's floor runs, rise over run (about 18°).</summary>
-		public const float MaxSlope = 0.33f;
+		/// <summary>
+		/// The steepest a chamber's floor runs, rise over run (about 22°: <see cref="WalkPitch"/>'s own, 2026-10-20). It was 0.33
+		/// (18°), and a room on a trunk falling at the walk's full 22° had its floor clamped shallower than the passage it opens
+		/// off: the plane fell away under the passage at the room's entrance, a 1.3 m drop in 1.5 m (48°).
+		/// </summary>
+		public const float MaxSlope = 0.41f;
 		/// <summary>The size of the field's buckets, metres.</summary>
 		private const float Bucket = 16f;
 
@@ -254,8 +265,11 @@ namespace FishMMO.Shared.WorldDesign
 		/// <param name="opening">How the mouth is come to when not over the ground before it (2026-10-18): dived to under a lake
 		/// or the sea (a sump rising from it to dry chambers), or behind a waterfall on a shelf over its pool. Either is a
 		/// classic system (one line), its bore no wider than its water hides.</param>
+		/// <param name="depthLeast">The least depth under the mouth the scene asks of its caves, metres (its pre-cut prompt's range,
+		/// 2026-10-21); the rolled depth is drawn within it and the mouth's height over the sea still caps it.</param>
+		/// <param name="depthMost">The most depth the scene allows, metres.</param>
 		public static CaveSystem Plan(CaveForm form, int size, Vector3 mouth, float yaw, int seed, int siteId, CaveGround ground, float seaLevel, out string problem,
-			float waterLevel = float.NaN, CaveOpening opening = default)
+			float waterLevel = float.NaN, CaveOpening opening = default, float depthLeast = LeastDepth, float depthMost = MaxCaveDepth)
 		{
 			problem = null;
 			var rng = new DeterministicRNG(seed);
@@ -275,6 +289,8 @@ namespace FishMMO.Shared.WorldDesign
 				Flat = pf.Flat,
 				NoiseShare = pf.Noise,
 				MeshCell = Mathf.Clamp(r0 / 4.5f, 0.45f, 1f),
+				// Planned without its lava; cut once it stands (CaveSystem.Lava.cs).
+				lavaHeld = true,
 			};
 			float yr = yaw * Mathf.Deg2Rad;
 			var outward = new Vector3(Mathf.Sin(yr), 0f, Mathf.Cos(yr));
@@ -364,24 +380,64 @@ namespace FishMMO.Shared.WorldDesign
 			// The trunk: level through the mouth, then down toward its depth, rooms along it, the cavern at its end.
 			float trunkLength = rng.Range(pf.TrunkMin, pf.TrunkMax);
 			float depth = rng.Range(pf.DepthMin, pf.DepthMax);
+			// Its depth from a heavy-tailed roll of its own (2026-10-21, DepthFor): most caves tens of metres deep, some a pocket a
+			// few metres under the hill, a rare few hundreds. The profile's draw above stays drawn, so the stream's later draws hold.
+			bool rolled = opening.Kind == CaveMouthKind.Ground && RollsDepth(form);
+			if (rolled)
+			{
+				depth = DepthFor(form, size, seed, depthLeast, depthMost);
+			}
+			bool pocket = rolled && depth < (form == CaveForm.LavaTube ? PocketTubeDepth : PocketDepth);
 			// Its character, from the seed hashed (a fresh stream's first draw follows its seed too closely): what kind of
 			// system the rest of the plan lays (CaveSystem.Layout).
 			system.Character = CharacterFor(form, size, Unit(unchecked((uint)seed), 0x2C1Bu));
-			if (opening.Kind != CaveMouthKind.Ground)
+			if (opening.Kind != CaveMouthKind.Ground || pocket)
 			{
 				system.Character = CaveCharacter.Classic;
 			}
+			else if (rolled && system.Character == CaveCharacter.Classic && depth > ClassicDeepest(form))
+			{
+				// One line cannot fall that far at a walk: a deep system is laid as a graph of levels, its character rolled again.
+				system.Character = DeepCharacter(form, size, seed);
+			}
+			// And its personality on top of it (2026-10-20: "We want caves to feel unique"), laid last on streams of its own.
+			system.Traits = TraitsFor(form, size, system.Character, seed);
 			bool graph = form != CaveForm.Mine && system.Character != CaveCharacter.Classic;
-			int levels = graph ? LevelsFor(system.Character, size, rng) : 1;
 			if (system.Character == CaveCharacter.Abyss)
 			{
 				depth *= 1.25f;
 			}
+			bool held = false;
+			if (rolled)
+			{
+				// No deeper than the sea lets it (a cave whose mouth stands low stays shallower) nor than the deepest a system goes.
+				RangeOf(form, depthLeast, depthMost, out _, out float deepest);
+				// A scene that asks for less than the form's deepest (2026-10-21, its range) has its deepest as a floor nothing goes
+				// under, as the sea's is: the levels keep to the roll, but side branches and their alcoves dip a few metres under the
+				// deepest level's floor. The full range leaves the plan as it was.
+				if (deepest < MaxDepthOf(form))
+				{
+					held = floor0 - deepest > system.LowestFloor;
+					system.LowestFloor = Mathf.Max(system.LowestFloor, floor0 - deepest);
+				}
+				depth = Mathf.Min(depth, deepest, Mathf.Max(0f, floor0 - system.LowestFloor - 1f));
+			}
+			int levels = graph ? (rolled ? LevelsForDepth(form, depth, seed) : LevelsFor(system.Character, size, rng)) : 1;
+			float[] floors = LevelFloors(depth, levels, seed, system.LowestFloor - system.Origin.y + 1f);
 			float level = awash ? 0.6f * r0 + 6f : 0.8f * r0 + 1f;
 			var start = new CaveNode { Centre = outward * (0.2f * r0) + Vector3.up * (FloorDepth * r0 * pf.Flat), Radius = r0, Floor = 0f, Along = 0f };
-			float shortest = form == CaveForm.Grotto ? 8f : Mathf.Max(zone + 5f, 0.35f * pf.TrunkMin);
-			// A graph's trunk is only its way down to the first hub; the rest of its length goes to the hubs' branches.
-			float trunkWalk = graph ? Mathf.Max(shortest + 12f, trunkLength * rng.Range(0.3f, 0.45f)) : trunkLength;
+			// Held up by the scene's deepest (its range), a cave keeps what runs under the rock at that depth, however short: a
+			// short cave where the hill falls away, rather than none.
+			float shortest = form == CaveForm.Grotto ? 8f : pocket || held ? zone + 5f : Mathf.Max(zone + 5f, 0.35f * pf.TrunkMin);
+			if (pocket)
+			{
+				// A pocket: one short passage a few metres under the hill into a chamber, nothing more.
+				trunkLength = Mathf.Max(shortest + 4f, Mathf.Lerp(18f, 45f, Unit(unchecked((uint)seed), 0x9C4Eu)) + zone);
+			}
+			// A graph's trunk is only its way down to the first hub; the rest of its length goes to the hubs' branches. It runs
+			// at least far enough to fall to its first level at a walk.
+			float trunkWalk = graph ? Mathf.Max(shortest + 12f, trunkLength * rng.Range(0.3f, 0.45f),
+				Mathf.Min(0.7f * trunkLength, level + -floors[0] / Mathf.Tan(0.8f * pf.Pitch * Mathf.Deg2Rad))) : trunkLength;
 			// Under water, the trunk is first a sump climbing from the mouth to dry floors, then winds on a few metres over them.
 			// Behind a waterfall, the river's bed is over its threshold: it keeps its full cover from there in.
 			if (submerged)
@@ -389,7 +445,7 @@ namespace FishMMO.Shared.WorldDesign
 				walker.RiseTo = system.LowestFloor - system.Origin.y + SumpClear;
 				depth = -(walker.RiseTo + Mathf.Lerp(1f, 6f, Unit(unchecked((uint)seed), 0x5A3Du)));
 			}
-			CavePassage trunk = walker.Walk(CavePassageKind.Trunk, start, Mathf.Repeat(yaw + 180f, 360f), trunkWalk, graph ? depth / levels : depth, level, shelf ? level : zone, awash);
+			CavePassage trunk = walker.Walk(CavePassageKind.Trunk, start, Mathf.Repeat(yaw + 180f, 360f), trunkWalk, graph ? -floors[0] : depth, level, shelf ? level : zone, awash);
 			float along = trunk.Nodes[trunk.Nodes.Count - 1].Along;
 			if (submerged)
 			{
@@ -429,12 +485,13 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			if (graph)
 			{
-				var layout = new Layout(system, walker, pf, rng, siteId, size, depth, levels, trunkLength * BudgetShare(system.Character));
+				var layout = new Layout(system, walker, pf, rng, siteId, size, floors, trunkLength * BudgetShare(system.Character) * LevelBudget(levels));
 				if (!layout.Run(trunk, out problem))
 				{
 					return null;
 				}
-				system.Prepare();
+				system.Vary(ground, pf, siteId, size);
+				system.LavaHeld = false;
 				return system;
 			}
 			system.Passages.Add(trunk);
@@ -442,7 +499,7 @@ namespace FishMMO.Shared.WorldDesign
 			system.PrepareField();
 
 			// Rooms along the trunk, each where the rock over it holds one.
-			float next = form == CaveForm.Grotto ? float.MaxValue : zone + rng.Range(pf.RoomEveryMin, pf.RoomEveryMax) * 0.6f;
+			float next = form == CaveForm.Grotto || pocket ? float.MaxValue : zone + rng.Range(pf.RoomEveryMin, pf.RoomEveryMax) * 0.6f;
 			for (int i = 1; i < trunk.Nodes.Count - 2; i++)
 			{
 				if (trunk.Nodes[i].Along < next)
@@ -466,7 +523,7 @@ namespace FishMMO.Shared.WorldDesign
 			for (int attempt = 0; attempt < 8 && trunk.Nodes.Count >= 3; attempt++)
 			{
 				CaveKind endKind = form == CaveForm.Mine ? CaveKind.Stope : CaveKind.Cavern;
-				if (walker.TryChamber(trunk, trunk.Nodes.Count - 1, rng.Range(pf.CavernMin, pf.CavernMax), endKind, siteId, out CaveChamber cavern,
+				if (walker.TryChamber(trunk, trunk.Nodes.Count - 1, rng.Range(pf.CavernMin, pf.CavernMax) * (pocket ? 0.6f : 1f), endKind, siteId, out CaveChamber cavern,
 					form == CaveForm.Grotto ? GrottoSlope : (float?)null))
 				{
 					system.Chambers.Add(cavern);
@@ -487,7 +544,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			// Side passages off the rooms (and the cavern), each to an alcove or a dead end.
-			int branches = pf.BranchesMax > 0 ? rng.Range(pf.BranchesMin, pf.BranchesMax + 1) : 0;
+			int branches = pf.BranchesMax > 0 && !pocket ? rng.Range(pf.BranchesMin, pf.BranchesMax + 1) : 0;
 			int rooms = system.Chambers.Count;
 			for (int b = 0; b < branches && rooms > 0; b++)
 			{
@@ -534,9 +591,10 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				// Its deeper levels: shafts and inclines down to drifts of their own, and now and then a natural cavern broken into.
 				system.PrepareField();
-				new Layout(system, walker, pf, rng, siteId, size, depth, 1, 0f).Levels(trunk);
+				new Layout(system, walker, pf, rng, siteId, size, LevelFloors(depth, 1, seed, system.LowestFloor - system.Origin.y + 1f), 0f).Levels(trunk);
 			}
-			system.Prepare();
+			system.Vary(ground, pf, siteId, size);
+			system.LavaHeld = false;
 			return system;
 		}
 
@@ -925,10 +983,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Takes another system's mouths, passages and chambers into this one's frame.</summary>
 		private void Absorb(CaveSystem other, Vector3 shift)
 		{
+			int solids = Solids.Count, shafts = Shafts.Count, climbs = Climbs.Count, hollows = Hollows.Count;
 			foreach (CaveMouth m in other.Mouths)
 			{
 				CaveMouth moved = m;
 				moved.Floor += shift;
+				// A skylight's opening and vault are in the frame too (CaveSystem.Skylights.cs).
+				ShiftSkylight(ref moved, shift);
 				Mouths.Add(moved);
 			}
 			foreach (CavePassage p in other.Passages)
@@ -986,6 +1047,7 @@ namespace FishMMO.Shared.WorldDesign
 				moved.Top += shift;
 				Climbs.Add(moved);
 			}
+			AbsorbVariety(other, shift, solids, shafts, climbs, hollows);
 		}
 
 		// ── The way in ────────────────────────────────────────────
@@ -1417,6 +1479,10 @@ namespace FishMMO.Shared.WorldDesign
 				AddToBuckets(Chambers[c].Centre - Vector3.one * r, Chambers[c].Centre + Vector3.one * r, -1 - c);
 			}
 			AddFeaturesToBuckets(pad);
+			AddSkylightsToBuckets(pad);
+			PrepareLava();
+			// Its water's beds (CaveSystem.Streams.cs), once the system stands.
+			PrepareStreams();
 		}
 
 		/// <summary>How much further a mouth's rock reaches than its passage's: the arch's spread and the collar's wander.</summary>
@@ -1491,8 +1557,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The bare void (no noise), negative inside; and the nearest primitive's floor and radius.</summary>
 		private float Tube(Vector3 p, out float radius, out float floor) => Tube(p, out radius, out floor, out _);
 
-		/// <summary>As above, with the nearest primitive's roughness (<see cref="CaveChamber.Rough"/>).</summary>
-		private float Tube(Vector3 p, out float radius, out float floor, out float rough)
+		/// <summary>As above, with the nearest primitive's roughness (<see cref="CaveChamber.Rough"/>); <paramref name="lava"/> false leaves a molten tube's lava bed uncut.</summary>
+		private float Tube(Vector3 p, out float radius, out float floor, out float rough, bool lava = true)
 		{
 			radius = Radius;
 			floor = 0f;
@@ -1501,6 +1567,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				Prepare();
 			}
+			Vector3 at = p;
 			p = ArchAt(p);
 			if (!buckets.TryGetValue(BucketKey(Mathf.FloorToInt(p.x / Bucket), Mathf.FloorToInt(p.y / Bucket), Mathf.FloorToInt(p.z / Bucket)), out List<int> ids))
 			{
@@ -1535,6 +1602,17 @@ namespace FishMMO.Shared.WorldDesign
 					CaveRift rift = Rifts[RiftId - id];
 					prim = RiftField(rift, p, out primFloor);
 					primRadius = 2f * rift.Width;
+				}
+				else if (id <= HollowId)
+				{
+					CaveHollow hollow = Hollows[HollowId - id];
+					prim = HollowField(hollow, p, out primFloor);
+					primRadius = HollowRadius(hollow);
+				}
+				else if (id <= SkylightId)
+				{
+					// An opening in a chamber's roof up to the ground (CaveSystem.Skylights.cs).
+					prim = SkylightField(SkylightId - id, p, out primRadius, out primFloor);
 				}
 				else if (id >= 0)
 				{
@@ -1573,7 +1651,7 @@ namespace FishMMO.Shared.WorldDesign
 				n++;
 				// A shaft or a chasm meets the floor it opens through at a crisp lip: a rounded one let a climb's top down a
 				// metre short of the floor it steps off onto.
-				float k = id <= RiftId ? LipBlend : id >= 0 ? blend : 1.5f * blend;
+				float k = id <= RiftId ? LipBlend : id <= HollowId ? HollowBlend(Hollows[HollowId - id].Kind) : id >= 0 ? blend : 1.5f * blend;
 				d = d == float.MaxValue ? prim : SMin(d, prim, k);
 			}
 			if (d == float.MaxValue)
@@ -1590,7 +1668,9 @@ namespace FishMMO.Shared.WorldDesign
 					floor = floorBuffer[i];
 				}
 			}
-			return d;
+			// A molten tube's lava bed, cut under its floors (CaveSystem.Lava.cs): the floor the noise keeps off stays the walked one.
+			// A wet cave's water's beds likewise (CaveSystem.Streams.cs); <paramref name="lava"/> false leaves both uncut.
+			return lava ? WithStreams(at, WithLava(at, d)) : d;
 		}
 
 		[ThreadStatic] private static float[] primBuffer, floorBuffer;
@@ -1612,22 +1692,37 @@ namespace FishMMO.Shared.WorldDesign
 			for (int m = 0; m < Mouths.Count; m++)
 			{
 				CaveMouth candidate = Mouths[m];
+				// An opening in a roof is no arch in a face.
+				if (candidate.Kind == CaveMouthKind.Skylight)
+				{
+					continue;
+				}
 				float yaw = candidate.Yaw * Mathf.Deg2Rad;
 				var outward = new Vector3(Mathf.Sin(yaw), 0f, Mathf.Cos(yaw));
 				Vector3 d = p - candidate.Floor;
 				float inward = -(d.x * outward.x + d.z * outward.z);
 				float reach = candidate.Zone + 2f * candidate.Radius;
-				if (inward > reach || d.sqrMagnitude > (reach + 4f * candidate.Radius) * (reach + 4f * candidate.Radius))
+				float outer = reach + 4f * candidate.Radius;
+				if (inward > reach || d.sqrMagnitude > outer * outer)
 				{
 					continue;
 				}
 				float w = 1f - Mathf.Clamp01((inward - candidate.Zone * 0.5f) / Mathf.Max(1f, reach - candidate.Zone * 0.5f));
 				w = w * w * (3f - 2f * w);
+				// Faded to nothing before the cut-off round the mouth, and along its face past the bore's own reach (2026-10-21):
+				// held whole to the cut-off, a point 30 m along the face from a narrow mouth was drawn in 6 m toward it and let go
+				// a step further on, so the field jumped there; a passage beside a second mouth was cut off short, its wall left a
+				// metre of skin with nothing behind it, torn into a hole a player saw the world through (Moron 2's lava tube, "We
+				// see issues around these coordinates with cave walls"). Within two radii of the opening the arch is as it was.
+				float alongFace = d.x * outward.z - d.z * outward.x;
+				float radial = Mathf.Clamp01((Mathf.Sqrt(d.sqrMagnitude) - (reach + 2f * candidate.Radius)) / (2f * candidate.Radius));
+				float lateral = Mathf.Clamp01((Mathf.Abs(alongFace) - 2f * candidate.Radius) / (2f * candidate.Radius));
+				w *= (1f - radial * radial * (3f - 2f * radial)) * (1f - lateral * lateral * (3f - 2f * lateral));
 				if (w > best)
 				{
 					best = w;
 					mouth = candidate;
-					across = d.x * outward.z - d.z * outward.x;
+					across = alongFace;
 				}
 			}
 			return best;
@@ -1673,15 +1768,15 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The void with rock noise on walls and roofs and a near-flat floor, negative inside.</summary>
 		public float Void(Vector3 p) => Void(p, out _);
 
-		private float Void(Vector3 p, out float smooth)
+		private float Void(Vector3 p, out float smooth, bool lava = true)
 		{
-			float tube = Tube(p, out float radius, out float floor, out float rough);
+			float tube = Tube(p, out float radius, out float floor, out float rough, lava);
 			smooth = tube;
 			if (tube > 1e3f)
 			{
 				return tube;
 			}
-			float solid = Solid(p, out float top);
+			float solid = Solid(p, out float top, out CaveSolidKind solidKind);
 			if (solid < 1e3f)
 			{
 				smooth = Mathf.Max(tube, -solid);
@@ -1697,7 +1792,8 @@ namespace FishMMO.Shared.WorldDesign
 			// undercut at its foot, wavering, so the mouth has a brow and ledges rather than a smooth dome. Bounded by the
 			// same amplitude as the knobs, so the holes, the collar and the buckets that allow for it still hold.
 			float mouth = MouthWeight(p, out _, out _);
-			float amp = Amp * rough * (1f - Quiet(p));
+			float quiet = Quiet(p);
+			float amp = Amp * rough * (1f - quiet);
 			if (mouth > 0f)
 			{
 				// On the walls only, fading out up toward the roof: the roof over a mouth is thin by design (its zone), and
@@ -1715,7 +1811,9 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				// The rock put back keeps its walking top exact; under it, its sides are as rough as the walls round it.
 				float below = top == float.MaxValue ? 1f : Mathf.Clamp01((top - p.y) / 1.5f);
-				v = Mathf.Max(v, -(solid - 0.4f * Amp * rough * below * noise));
+				// The variety's terraces, mounds and arches (2026-10-20) are stilled by a climb laid against them, as the walls are.
+				float grain = solidKind >= CaveSolidKind.Terrace ? SolidGrain(solidKind) * (1f - quiet) : 1f;
+				v = Mathf.Max(v, -(solid - 0.4f * Amp * rough * below * noise * grain));
 			}
 			return v;
 		}
@@ -1790,7 +1888,8 @@ namespace FishMMO.Shared.WorldDesign
 			distance = float.MaxValue;
 			for (int m = 0; m < Mouths.Count; m++)
 			{
-				float d = (p - Mouths[m].Floor).magnitude;
+				// A skylight's from its throat's axis, up to its opening (CaveSystem.Skylights.cs).
+				float d = MouthDistance(Mouths[m], p);
 				if (d < distance)
 				{
 					distance = d;
@@ -1833,8 +1932,10 @@ namespace FishMMO.Shared.WorldDesign
 				// where the rock's ground contact (CaveVisibility's cave mode) draws it as the ground: a lip of bedrock in the
 				// hillside, not a stone plate on it. Its outline wanders out past what the holes need (never in: every hole
 				// stays covered), so it is not an ellipse.
-				float lip = Mathf.Clamp01(smooth / LipBand);
-				float rim = Mathf.Lerp(Rim, FlushRim, lip * lip * (3f - 2f * lip));
+				// A skylight's lip stands higher and wider (SkylightRim, SkylightLipBand): a pit's broken edge, seen before it is walked into.
+				bool skylight = mouth.Kind == CaveMouthKind.Skylight;
+				float lip = Mathf.Clamp01(smooth / (skylight ? SkylightLipBand : LipBand));
+				float rim = Mathf.Lerp(skylight ? SkylightRim : Rim, FlushRim, lip * lip * (3f - 2f * lip));
 				// Flush wherever the ground stands at the mouth's floor (2026-10-18: "allow a smoother transition into the
 				// cave itself"): that is where the way in crosses from the terrain onto the rock, and a lip there was a step to
 				// climb at the threshold. The lip stands only up the opening's sides and over its brow.
@@ -1907,6 +2008,7 @@ namespace FishMMO.Shared.WorldDesign
 					b.Encapsulate(c.Centre - Vector3.one * r);
 				}
 				EncapsulateFeatures(ref b, grow);
+				EncapsulateSkylights(ref b, grow);
 				return b;
 			}
 		}
@@ -2029,15 +2131,15 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Every mouth's floor point (system frame), zone and radius in stored values of this format or the two before it (4 and
-		/// 5 stored a mouth in 11 values after the same header): what a plan cut in an older format holed, for Regenerate POIs to
+		/// Every mouth's floor point (system frame), zone and radius in stored values of this format or the three before it (6
+		/// stored its mouths as this one does, 4 and 5 in 11 values after the same header): what a plan cut in an older format holed, for Regenerate POIs to
 		/// fill again before it plans afresh. Empty for values that are none of these.
 		/// </summary>
 		public static List<(Vector3 Floor, float Zone, float Radius)> StoredMouths(float[] v)
 		{
 			var mouths = new List<(Vector3, float, float)>();
 			int format = v != null && v.Length >= HeaderValues ? Mathf.RoundToInt(v[0]) : 0;
-			int stride = format == Format ? MouthValues : format == 4 || format == 5 ? 11 : 0;
+			int stride = format == Format || format == 6 ? MouthValues : format == 4 || format == 5 ? 11 : 0;
 			if (stride == 0 || Mathf.RoundToInt(v[1]) == -1)
 			{
 				return mouths;
@@ -2063,6 +2165,10 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				case CaveMouthKind.Submerged:
 					landing = mouth.Floor;
+					return false;
+				case CaveMouthKind.Skylight:
+					// An opening in a roof: nobody comes in by it, so no way ends at it.
+					landing = mouth.Landing;
 					return false;
 				case CaveMouthKind.Shelf:
 					landing = mouth.Landing;
@@ -2124,6 +2230,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				v.AddRange(new[] { (float)c.Kind, c.Bottom.x, c.Bottom.y, c.Bottom.z, c.Top.x, c.Top.y, c.Top.z, c.Out.x, c.Out.y, c.Out.z, c.TopExit.x, c.TopExit.y, c.TopExit.z });
 			}
+			WriteVariety(v);
 			return v.ToArray();
 		}
 
@@ -2204,6 +2311,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					s.Climbs.Add(new CaveClimb { Kind = (CaveClimbKind)Mathf.RoundToInt(v[o]), Bottom = V(o + 1), Top = V(o + 4), Out = V(o + 7), TopExit = V(o + 10) });
 				}
+				o = s.ReadVariety(v, o);
 				if (o != v.Length || s.Mouths.Count == 0 || s.Passages.Count == 0)
 				{
 					return null;

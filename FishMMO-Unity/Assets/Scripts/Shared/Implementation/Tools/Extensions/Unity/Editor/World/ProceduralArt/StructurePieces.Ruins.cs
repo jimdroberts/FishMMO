@@ -14,7 +14,7 @@ namespace FishMMO.Shared.WorldDesign
 			Ruin(list, "RuinedStoneHouse", "StoneHouse", 2, 2, 0.6f, StructureSize.Building, "A roofless stone house, its walls broken.", "ruin", "house", "building", "underwater");
 			Ruin(list, "RuinedTimberHouse", "TimberHouseSmall", 2, 2, 0.5f, StructureSize.Building, "A fallen-in cottage; pairs well with the charred finish.", "ruin", "house", "building");
 			Ruin(list, "CollapsedTower", "WallTower", 1, 2, 0.65f, StructureSize.Building, "A round tower fallen to a ragged stump.", "ruin", "tower", "wall");
-			Ruin(list, "RuinedKeep", "Keep", 1, 2, 0.5f, StructureSize.Building, "A keep standing to half its height.", "ruin", "keep", "tower");
+			Ruin(list, "RuinedKeep", "Keep", 1, 2, 0.5f, StructureSize.Stronghold, "A keep standing to half its height.", "ruin", "keep", "tower");
 			Piece(list, "Column", StructureStyle.Stone, StructureSize.Small, "A standing column; v1 taller and thicker.", ColumnPiece, "column", "sacred", "monument");
 			Ruin(list, "BrokenColumn", "Column", 2, 2, 0.55f, StructureSize.Medium, "A column snapped off, its top beside it.", "ruin", "column", "underwater");
 			Piece(list, "FallenColumn", StructureStyle.Stone, StructureSize.Medium, "A column fallen in drums beside its stump.", FallenColumn, "ruin", "column", "rubble", "underwater");

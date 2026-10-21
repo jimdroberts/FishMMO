@@ -82,19 +82,26 @@ namespace FishMMO.Shared.WorldDesign
 		/// <see cref="BiomeTemplateArt.Vines"/>); null where none grows.</param>
 		/// <param name="rng">The caller's seeded generator: the same draws for the same site on every cut.</param>
 		/// <param name="solidAt">True inside rock (world); null to grow only the lintel, the jambs and the ground.</param>
+		/// <param name="lintelAt">The lintel's height over a point between its ends (an arch's underside); null for a straight one.</param>
 		public static int DrapeCaveMouth(PointOfInterestSiteContext context, Vector3 lintelLeft, Vector3 lintelRight, Vector3 outward, float openingHeight,
-			VineBiomes.Habitat habitat, DeterministicRNG rng, Func<Vector3, bool> solidAt = null)
+			VineBiomes.Habitat habitat, DeterministicRNG rng, Func<Vector3, bool> solidAt = null, Func<Vector3, float> lintelAt = null)
 		{
 			if (context == null || habitat == null)
 			{
 				return 0;
 			}
-			List<VineSpot> spots = VineRules.CaveMouth(lintelLeft, lintelRight, outward, openingHeight, habitat, rng, solidAt, context.GroundAt, out VineRules.CaveGrowth growth);
+			List<VineSpot> spots = VineRules.CaveMouth(lintelLeft, lintelRight, outward, openingHeight, habitat, rng, solidAt, context.GroundAt, out VineRules.CaveGrowth growth, lintelAt);
 			var ways = context.Points != null && context.Points.Paths != null ? new PathExclusion(context.Points.Paths) : null;
+			// The terrain keeps the hillside's heights under a cut hole: a ground piece seated there would hang in the opening.
+			Func<float, float, bool> holed = context.Terrains != null ? PointOfInterestTerrain.HoleQuery(context.Terrains, context.Tiles) : null;
 			Vector3 o = outward;
 			o.y = 0f;
 			o = o.sqrMagnitude > 1e-6f ? o.normalized : Vector3.forward;
 			Vector3 mid = (lintelLeft + lintelRight) * 0.5f;
+			if (lintelAt != null)
+			{
+				mid.y = lintelAt(mid);
+			}
 			Vector3 a = lintelRight - lintelLeft;
 			a.y = 0f;
 			float half = a.magnitude * 0.5f;
@@ -113,6 +120,10 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					if (ways != null && ways.Details(spot.Position.x, spot.Position.z))
+					{
+						continue;
+					}
+					if (holed != null && holed(spot.Position.x, spot.Position.z))
 					{
 						continue;
 					}
@@ -154,13 +165,15 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// <see cref="DrapeCaveMouth(PointOfInterestSiteContext, Vector3, Vector3, Vector3, float, VineBiomes.Habitat, DeterministicRNG, Func{Vector3, bool})"/>
-		/// for one of a cave system's mouths, its lintel found from the cave's own field (<see cref="CaveLintel"/>), and its
-		/// rock — the shell round the opening — from the system's rock field when <paramref name="ground"/> is
-		/// given. Laid nothing (0) when no roof was found over the opening.
+		/// for one of a cave system's mouths, its lintel found where the hillside closes over the opening (<see cref="CaveLintel"/>),
+		/// and its rock — the shell round the opening and the hillside it comes up through — from the system's rock field and the
+		/// ground when <paramref name="ground"/> is given (<see cref="CaveShaper.GroundAsCut"/>: the ground and holes the cave was
+		/// meshed against, or the shell is found where the mesh has none). Laid nothing (0) when no lintel was found.
 		/// </summary>
 		public static int DrapeCaveMouth(PointOfInterestSiteContext context, CaveSystem system, CaveMouth mouth, VineBiomes.Habitat habitat, DeterministicRNG rng, CaveGround ground = null)
 		{
-			if (system == null || !CaveLintel(system, mouth, out Vector3 left, out Vector3 right, out Vector3 outward, out float height))
+			if (system == null || context == null || context.GroundAt == null
+				|| !CaveLintel(system, mouth, context.GroundAt, out Vector3 left, out Vector3 right, out Vector3 outward, out float height, ground))
 			{
 				return 0;
 			}
@@ -168,17 +181,50 @@ namespace FishMMO.Shared.WorldDesign
 			if (ground != null)
 			{
 				Vector3 origin = system.Origin;
-				solidAt = p => system.Field(p - origin, ground) < 0f;
+				Func<float, float, float> groundAt = context.GroundAt;
+				// The terrain's heights stand on under the cut holes, so under the ground is rock only outside the cave's voids.
+				solidAt = p => system.Field(p - origin, ground) < 0f || (p.y < groundAt(p.x, p.z) && system.Void(p - origin) >= 0f);
 			}
-			return DrapeCaveMouth(context, left, right, outward, height, habitat, rng, solidAt);
+			// The tops set into the lip's rock, not touching its underside: the opening's height measured to them too.
+			return DrapeCaveMouth(context, left, right, outward, height + Embed, habitat, rng, solidAt, p => LintelHeight(system, mouth, p) + Embed);
 		}
 
 		/// <summary>
-		/// A cave mouth's lintel (world): the roof found over the floor across the opening by marching the cave's field up
-		/// (PointOfInterestCaveMouths.RoofOver), out to the front of the arch, where its roof meets the face; its two ends
-		/// (the top corners), the way out and the opening's height under its middle. False when no roof stands over the mouth.
+		/// The underside of a cave mouth's arch over a world point of its lintel (<see cref="CaveLintel"/>): the roof the cave's
+		/// field finds over the mouth's floor there, world height; the point's own height where there is none.
 		/// </summary>
-		public static bool CaveLintel(CaveSystem system, CaveMouth mouth, out Vector3 left, out Vector3 right, out Vector3 outward, out float openingHeight)
+		public static float LintelHeight(CaveSystem system, CaveMouth mouth, Vector3 point)
+		{
+			Vector3 local = point - system.Origin;
+			local.y = mouth.Floor.y;
+			return PointOfInterestCaveMouths.RoofOver(system, local, 3.2f * mouth.Radius + 4f, out float roof) ? system.Origin.y + roof : point.y;
+		}
+
+		/// <summary>How far up into the lip's rock a cave curtain's top is set, metres: hung from the rock, not near it.</summary>
+		private const float Embed = 0.15f;
+
+		/// <summary>How far in from the brow a lintel looks for rock over its roof, metres.</summary>
+		private const float SeatReach = 2f;
+
+		/// <summary>
+		/// A cave mouth's lintel (world): across the brow of the opening, where the hillside comes down to the crown of the
+		/// passage's roof — walked in along the way in, from out in front, until the ground (<paramref name="groundAt"/>: the
+		/// terrain keeps the hillside's heights under the holes cut for the mouth) stands as high as the roof the cave's field
+		/// finds over the floor (PointOfInterestCaveMouths.RoofOver). Its two ends (where the arch comes down to a metre and a
+		/// half over the floor; <see cref="LintelHeight"/> is its underside between them), the way out and the opening's height
+		/// under its middle. With <paramref name="ground"/> (<see cref="CaveShaper.GroundAsCut"/>) it is set back from the brow
+		/// to where the meshed rock stands over the roof: the mesh rounds its lip back from the hillside, and a lintel at the
+		/// brow itself hung its curtains just short of it (2026-10-19). False when no roof stands over the mouth or the
+		/// hillside never closes over it.
+		/// </summary>
+		/// <remarks>
+		/// It used to walk OUT from the mouth's floor point for as long as the field still had a roof, which found the front of
+		/// the rock outcrop a mouth was set in. With the outcrop gone and the way in graded (2026-10-18), the roof out there is
+		/// only the rounded end of the first passage standing in the open air, so the curtains hung from nothing, metres in
+		/// front of the hole (2026-10-19).
+		/// </remarks>
+		public static bool CaveLintel(CaveSystem system, CaveMouth mouth, Func<float, float, float> groundAt, out Vector3 left, out Vector3 right, out Vector3 outward, out float openingHeight,
+			CaveGround ground = null)
 		{
 			left = right = outward = Vector3.zero;
 			openingHeight = 0f;
@@ -186,26 +232,29 @@ namespace FishMMO.Shared.WorldDesign
 			var o = new Vector3(Mathf.Sin(r), 0f, Mathf.Cos(r));
 			var across = new Vector3(o.z, 0f, -o.x);
 			float reach = 3.2f * mouth.Radius + 4f;
-			// The front of the arch: out from the mouth's plane while a roof still stands at about the same height.
-			if (!PointOfInterestCaveMouths.RoofOver(system, mouth.Floor + o * 0.3f, reach, out float roof0))
+			if (!Brow(system, mouth.Floor, o, groundAt, reach, 1.5f * mouth.Radius + 2f, -(3f * mouth.Radius + 8f), out float brow, out float middle))
 			{
 				return false;
 			}
-			float front = 0.3f;
-			for (float d = 0.5f; d <= 6f; d += 0.25f)
+			float seat = brow;
+			if (ground != null)
 			{
-				if (!PointOfInterestCaveMouths.RoofOver(system, mouth.Floor + o * d, reach, out float roof) || Mathf.Abs(roof - roof0) > 1.2f)
+				// In from the brow until the meshed rock stands just over the roof: the lip itself.
+				for (float d = brow; d >= brow - SeatReach; d -= 0.1f)
 				{
-					break;
+					Vector3 p = mouth.Floor + o * d;
+					if (PointOfInterestCaveMouths.RoofOver(system, p, reach, out float roof) && system.Field(new Vector3(p.x, roof + Embed, p.z), ground) < 0f)
+					{
+						seat = d;
+						middle = roof;
+						break;
+					}
 				}
-				front = d;
 			}
-			Vector3 at = mouth.Floor + o * front;
-			if (!PointOfInterestCaveMouths.RoofOver(system, at, reach, out float middle))
-			{
-				return false;
-			}
-			// Across: the run of roof that stands at least a metre and a half over the floor, about the middle.
+			// Across, at the crown's lip: the run of roof that stands at least a metre and a half over the floor. Not each side
+			// at its own brow: the hillside meets the arch's low flanks further out than its crown, and a lintel drawn between
+			// those ends ran out in front of the crown, in the air again.
+			Vector3 at = mouth.Floor + o * seat;
 			float uLeft = 0f, uRight = 0f, yLeft = middle, yRight = middle;
 			for (int side = -1; side <= 1; side += 2)
 			{
@@ -236,6 +285,53 @@ namespace FishMMO.Shared.WorldDesign
 			outward = o;
 			openingHeight = middle - mouth.Floor.y;
 			return true;
+		}
+
+		/// <summary>
+		/// Where, along a line through <paramref name="start"/> (system frame) in the way out <paramref name="o"/>, the hillside
+		/// closes over the cave: walked in from <paramref name="from"/> to <paramref name="to"/> (metres along <paramref name="o"/>,
+		/// negative in), the first point where the ground stands as high as the roof over the floor; how far along it is and the
+		/// roof's height there (system frame). Between two steps it is interpolated.
+		/// </summary>
+		private static bool Brow(CaveSystem system, Vector3 start, Vector3 o, Func<float, float, float> groundAt, float reach, float from, float to, out float along, out float roofY)
+		{
+			along = roofY = 0f;
+			const float step = 0.25f;
+			Vector3 origin = system.Origin;
+			bool open = false;
+			float lastD = 0f, lastGap = 0f, lastRoof = 0f;
+			for (float d = from; d >= to; d -= step)
+			{
+				Vector3 p = start + o * d;
+				if (!PointOfInterestCaveMouths.RoofOver(system, p, reach, out float roof))
+				{
+					// No passage under this point (or no roof over it): nothing to close over yet.
+					open = false;
+					continue;
+				}
+				float gap = roof - (groundAt(origin.x + p.x, origin.z + p.z) - origin.y);
+				if (gap <= 0f)
+				{
+					if (open)
+					{
+						float t = lastGap / (lastGap - gap);
+						along = Mathf.Lerp(lastD, d, t);
+						roofY = Mathf.Lerp(lastRoof, roof, t);
+					}
+					else
+					{
+						// Closed from the first roof on: the hillside stands over the passage where it starts.
+						along = d;
+						roofY = roof;
+					}
+					return true;
+				}
+				open = true;
+				lastD = d;
+				lastGap = gap;
+				lastRoof = roof;
+			}
+			return false;
 		}
 
 		// ── Crags ───────────────────────────────────────────────

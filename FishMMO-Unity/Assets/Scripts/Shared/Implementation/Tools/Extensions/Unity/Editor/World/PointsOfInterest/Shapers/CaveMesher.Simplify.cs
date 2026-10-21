@@ -38,6 +38,8 @@ namespace FishMMO.Shared.WorldDesign
 		public const float VaultTolerance = 0.3f;
 		/// <summary>How far under the ground's surface the rock is left exactly as meshed, metres.</summary>
 		private const float SurfaceKeep = 3f;
+		/// <summary>The most two vertices' habitats may differ in any channel for one to be collapsed onto the other.</summary>
+		public const float HabitatStep = 0.25f;
 		/// <summary>How far over the floor under it the rock counts as out of reach (the walls' full tolerance), metres.</summary>
 		private const float ReachHeight = 2.5f, VaultHeight = 5f;
 
@@ -67,6 +69,19 @@ namespace FishMMO.Shared.WorldDesign
 				tolerance[i] = Mathf.Lerp(FloorTolerance, VaultTolerance, t * t * (3f - 2f * t));
 			});
 			return tolerance;
+		}
+
+		/// <summary>Whether two vertices' habitats differ by more than <see cref="HabitatStep"/> in any channel (false without one).</summary>
+		private static bool HabitatDiffers(Color32[] colours, Vector2[] extra, int u, int v)
+		{
+			if (colours == null || extra == null)
+			{
+				return false;
+			}
+			const int step = (int)(HabitatStep * 255f);
+			Color32 a = colours[u], b = colours[v];
+			return Mathf.Abs(a.r - b.r) > step || Mathf.Abs(a.g - b.g) > step || Mathf.Abs(a.b - b.b) > step || Mathf.Abs(a.a - b.a) > step
+				|| Mathf.Abs(extra[u].x - extra[v].x) > HabitatStep || Mathf.Abs(extra[u].y - extra[v].y) > HabitatStep;
 		}
 
 		private struct Collapse
@@ -134,7 +149,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// left replace <paramref name="tris"/>, the positions are unchanged (a collapsed vertex is merely no longer used).
 		/// Returns how many triangles went.
 		/// </summary>
-		private static int Simplify(CaveSystem system, CaveGround ground, Vector3[] positions, Vector3[] normals, List<int> tris, float h)
+		/// <remarks>
+		/// With the habitat (2026-10-20: <paramref name="colours"/> and <paramref name="extra"/>, per vertex) no edge is collapsed
+		/// whose ends differ by more than <see cref="HabitatStep"/> in any channel: a vertex merely takes its neighbour's place, so
+		/// the sample at the survivor stands for both, and across a lane's edge or a glow patch's that would smear it metres wide.
+		/// </remarks>
+		private static int Simplify(CaveSystem system, CaveGround ground, Vector3[] positions, Vector3[] normals, List<int> tris, float h,
+			Color32[] colours = null, Vector2[] extra = null)
 		{
 			int faces = tris.Count / 3, vertices = positions.Length;
 			if (faces == 0)
@@ -247,7 +268,7 @@ namespace FishMMO.Shared.WorldDesign
 			var heap = new CollapseHeap();
 			void Offer(int u, int v)
 			{
-				if (tolerance[u] <= 0f || tolerance[v] <= 0f || gone[u] || gone[v])
+				if (tolerance[u] <= 0f || tolerance[v] <= 0f || gone[u] || gone[v] || HabitatDiffers(colours, extra, u, v))
 				{
 					return;
 				}

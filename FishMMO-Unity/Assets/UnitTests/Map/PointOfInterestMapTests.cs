@@ -95,6 +95,30 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void Harvest_DrawsEachWayIntoASite_AndADungeonAsOne()
+		{
+			// 2026-10-20: a cave's every mouth is its own entry; a site holding a dungeon is drawn as a dungeon entrance.
+			Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+			var cave = new GameObject("Cave").AddComponent<ScenePointOfInterest>();
+			cave.Apply(new PointOfInterestRecord { Id = 3, Kind = POIType.Cave, Name = "Gloomhollow", Position = new Vector3(10f, 5f, 10f), DetailTier = 2, RequiresDiscovery = true });
+			cave.Entrances.Add(new ScenePointOfInterestEntrance { Position = new Vector3(240f, 8f, 60f), Type = MapMarkerType.Cave, Description = "Another way into the cave." });
+			cave.Entrances.Add(new ScenePointOfInterestEntrance { Position = new Vector3(90f, -40f, 30f), Type = MapMarkerType.DungeonEntrance, Name = "Gloomhollow" });
+			var crypt = new GameObject("Crypt").AddComponent<ScenePointOfInterest>();
+			crypt.Apply(new PointOfInterestRecord { Id = 4, Kind = POIType.Crypt, Name = "Ashen Tomb", Position = new Vector3(-50f, 2f, 0f), DetailTier = 1 });
+			crypt.HoldsDungeon = true;
+
+			List<MapPointOfInterestDetails> harvested = WorldSceneDetailsCacheReader.HarvestPointsOfInterest(scene);
+
+			LogAssert.AreEqual(4, harvested.Count, "the cave, its far mouth, its dungeon gate and the crypt");
+			List<MapPointOfInterestDetails> caves = harvested.FindAll(p => p.Type == MapMarkerType.Cave);
+			LogAssert.AreEqual(2, caves.Count, "both mouths of the cave");
+			LogAssert.IsTrue(caves.TrueForAll(p => p.Name == "Gloomhollow" && p.DetailTier == 2 && p.RequiresDiscovery), "an entrance carries its site's name, tier and discovery");
+			List<MapPointOfInterestDetails> dungeons = harvested.FindAll(p => p.Type == MapMarkerType.DungeonEntrance);
+			LogAssert.AreEqual(2, dungeons.Count, "the cave's gate and the crypt");
+			LogAssert.IsTrue(dungeons.Exists(p => p.Name == "Ashen Tomb" && p.Description.StartsWith("Dungeon entrance (crypt)")));
+		}
+
+		[Test]
 		public void Harvest_IsDeterministic()
 		{
 			Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);

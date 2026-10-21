@@ -114,6 +114,15 @@ namespace FishMMO.Shared.WorldDesign
 			("CaveGlowMeshes.cs", new[] { ArtFamily.Structures }),
 			("ProceduralArtCatalogue.Cave.cs", new[] { ArtFamily.Structures }),
 			("BiomeArtGenerator.CaveGlow.cs", new[] { ArtFamily.Structures }),
+			// What hangs from a cave's roof and piles under it, built as the glow art (2026-10-20, caves livened).
+			("CaveGlowMeshes.Hanging.cs", new[] { ArtFamily.Structures }),
+			// An ice cave's ice, built as the glow art (2026-10-20, caves livened).
+			("CaveGlowMeshes.Ice.cs", new[] { ArtFamily.Structures }),
+			// The run-time cave cover's mesh, built in the structures' steps (2026-10-20), and the type table outside the folder
+			// whose order is its submeshes'.
+			("CaveCoverMeshes.cs", new[] { ArtFamily.Structures }),
+			("BiomeArtGenerator.CaveCover.cs", new[] { ArtFamily.Structures }),
+			("CaveCoverTypes.cs", new[] { ArtFamily.Structures }),
 		};
 
 		/// <summary>

@@ -178,7 +178,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void TwoCavesNearEachOtherJoinDeepDown()
 		{
 			CaveSystem a = PlanCave(CaveForm.Cave, 1, 1, out Func<float, float, float> g, 0f);
-			CaveSystem b = CaveSystem.Plan(CaveForm.Cave, 1, new Vector3(140f, 0f, -1f), YawOut(1f * 13f % 40f - 20f), 4242, 2, Patch(g), 0f, out string problem);
+			// (Seed 4243 since 2026-10-21: depths are rolled now, and 4242's cave became a 20 m pocket-shallow one that no link
+			// from the other's 70 m floor reaches beside its trunk; most such pairs still join.)
+			CaveSystem b = CaveSystem.Plan(CaveForm.Cave, 1, new Vector3(140f, 0f, -1f), YawOut(1f * 13f % 40f - 20f), 4243, 2, Patch(g), 0f, out string problem);
 			Assert.That(b, Is.Not.Null, problem);
 			int passages = a.Passages.Count + b.Passages.Count, chambers = a.Chambers.Count + b.Chambers.Count;
 			Assert.That(a.TryJoin(b, Patch(g, 700f), CaveShaper.LinkLength, 99), Is.True, $"a link fits between them ({a.JoinProblem})");
@@ -511,6 +513,37 @@ namespace FishMMO.UnitTests.WorldDesign
 			foreach ((string what, CaveSystem system, Func<float, float, float> g) in cases)
 			{
 				WalkIn(system, Graded(system, g), what);
+			}
+		}
+
+		[Test]
+		public void TheMouthsVinesHangFromTheBrowOfTheOpening()
+		{
+			// The lintel the vines hang from is where the hillside closes over the passage (2026-10-19: "float outside of the
+			// cave in front of it"). It walked out while the field still had a roof, and with the outcrop gone that roof is
+			// the first passage's rounded end standing in the open air, metres before the hole.
+			foreach ((CaveForm form, int size) in new[] { (CaveForm.Cave, 0), (CaveForm.Cave, 1), (CaveForm.Cave, 2), (CaveForm.LavaTube, 1) })
+			{
+				for (int seed = 1; seed <= 3; seed++)
+				{
+					CaveSystem system = PlanCave(form, size, seed, out Func<float, float, float> g, aligned: true);
+					Func<float, float, float> ground = Graded(system, g);
+					string what = $"{form} {size} seed {seed}";
+					CaveMouth mouth = system.Mouths[0];
+					CaveGround rock = MeshGround(system, ground);
+					Assert.That(VinePlacement.CaveLintel(system, mouth, ground, out Vector3 left, out Vector3 right, out Vector3 o, out float height, rock), Is.True, $"{what}: no lintel");
+					// The crown: the arch's underside over the lintel's middle, where the curtains hang highest.
+					Vector3 mid = (left + right) * 0.5f;
+					mid.y = VinePlacement.LintelHeight(system, mouth, mid);
+					Vector3 hill = mid - o * 0.6f, front = mid + o * 1f;
+					Assert.That(ground(hill.x, hill.z), Is.GreaterThan(mid.y - 0.6f), $"{what}: no hillside over the lintel at {mid}: it hangs in the air");
+					Assert.That(ground(front.x, front.z), Is.LessThan(mid.y), $"{what}: the ground before the lintel stands over it: it is inside the hill");
+					Assert.That(mid.y - (system.Origin.y + mouth.Floor.y), Is.EqualTo(height).Within(0.5f), $"{what}: the opening's height is not the crown's");
+					// Hung from the rock (2026-10-19: "still not touching"): the meshed lip stands just over the crown.
+					Assert.That(system.Field(mid - system.Origin + Vector3.up * 0.3f, rock), Is.LessThan(0f), $"{what}: no rock just over the crown at {mid}: the curtains do not touch the lip");
+					Assert.That(height, Is.GreaterThan(1.5f), $"{what}: the opening under the lintel is {height:0.00} m");
+					Assert.That(Vector3.Distance(left, right), Is.GreaterThan(0.5f * mouth.Radius), $"{what}: the lintel is {Vector3.Distance(left, right):0.0} m across a {mouth.Radius:0.0} m bore");
+				}
 			}
 		}
 
@@ -1216,6 +1249,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			// Measured 2026-10-13: 30k–170k triangles a system, ~2–7 MB of render mesh and as much collider, ≤ 21k a piece.
 			// 2026-10-18, halls to 250 m across: a halls cave nets 430k–480k triangles, thinned (CaveMesher.Simplify) to
 			// 140k–165k, 11–14 MB; the others 28k–61k, ≤ 12k a piece. The caps stand as they were.
+			// 2026-10-21, depth rolled (to 500 m, levels following it): these five 53k–224k (the halls cave of seed 6 224k, ~19 MB);
+			// on a high escarpment the deepest systems (300 m+, 5–8 levels) 150k–270k, ≤ 7.3k a piece, ~13–24 MB. Raised to
+			// 300k triangles and 26 MB a system on purpose; a piece's cap stands.
 			foreach ((CaveForm form, int size, int seed) in new[] { (CaveForm.Cave, 2, 3), (CaveForm.Cave, 2, 4), (CaveForm.LavaTube, 2, 4), (CaveForm.Mine, 1, 4), (CaveForm.Cave, 2, 6) })
 			{
 				CaveSystem system = PlanCave(form, size, seed, out Func<float, float, float> g);
@@ -1230,9 +1266,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 				double megabytes = (vertices * 52.0 + triangles * 12.0 + triangles * 40.0) / 1048576.0;
 				string what = $"{form} {size} seed {seed} ({system.Character})";
-				Assert.That(triangles, Is.LessThanOrEqualTo(250000), $"{what}: {triangles:N0} triangles");
+				Assert.That(triangles, Is.LessThanOrEqualTo(300000), $"{what}: {triangles:N0} triangles");
 				Assert.That(biggest, Is.LessThanOrEqualTo(40000), $"{what}: a piece of {biggest:N0} triangles");
-				Assert.That(megabytes, Is.LessThanOrEqualTo(16.0), $"{what}: ~{megabytes:0.0} MB of render mesh and collider");
+				Assert.That(megabytes, Is.LessThanOrEqualTo(26.0), $"{what}: ~{megabytes:0.0} MB of render mesh and collider");
 			}
 		}
 

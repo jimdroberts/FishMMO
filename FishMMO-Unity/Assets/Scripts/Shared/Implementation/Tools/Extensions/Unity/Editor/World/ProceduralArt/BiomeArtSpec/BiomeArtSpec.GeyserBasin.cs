@@ -18,7 +18,14 @@ namespace FishMMO.Shared.WorldDesign
 				.Accepts(VolcanicGeology)
 				.Look(BiomeLookClass.Volcanic)
 				.Wildlife(BiomeHabitat.Grassland | BiomeHabitat.Volcanic)
-				.Moat(BiomeMoatWater.Wet);
+				.Moat(BiomeMoatWater.Wet)
+				/* Its hot ground (2026-10-18, phase I2q, decision 47). The weather content generator's row asked for Steam, which no
+				 * project had made, so the template emitted nothing and no geyser, spring or fumarole stood in any basin; the column
+				 * writes it (Author biome art creates the substance when it is missing). A quarter geysers, two fifths springs, a
+				 * fifth fumaroles and the rest mud pots; its pools and streams hot: never iced, always steaming. */
+				.Emits("Steam", 0.5f)
+				.Geothermal(0.25f, 0.40f, 0.20f, 0.15f)
+				.HotWater();
 		}
 	}
 }

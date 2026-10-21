@@ -324,6 +324,8 @@ namespace FishMMO.Shared.WorldDesign
 			/// scene a climate to read it against; false skips the band entirely, never sampling the climate.
 			/// </summary>
 			public bool Climate;
+			/// <summary>The ground's heat (<see cref="TerrainScatterOptions.HeatAt"/>) when the rule has a heat band and the scene a heat to read; null skips the band (2026-10-18, I2q).</summary>
+			public Func<float, float, float> Heat;
 			public TerrainScatterReport.RuleOutcome Outcome;
 			public bool Runnable => !Outcome.Skipped;
 		}
@@ -462,6 +464,10 @@ namespace FishMMO.Shared.WorldDesign
 							scatterRule.BedInlandFrom = options.InlandAquaticFadeStartMetres;
 							scatterRule.BedInlandTo = options.InlandAquaticFullMetres;
 						}
+					}
+					if (rule.useHeatBand && options?.HeatAt != null)
+					{
+						scatterRule.Heat = options.HeatAt;
 					}
 					if (rule.useClimateBand)
 					{
@@ -2080,6 +2086,17 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					chance *= band;
 				}
+				if (scatterRule.Heat != null)
+				{
+					// The ground's heat (2026-10-18, I2q), counted with the height rejections like the climate's.
+					float band = rule.HeatWeight(scatterRule.Heat(worldX, worldZ));
+					if (band <= 0f)
+					{
+						pick.Outcome = CellOutcome.NoHeight;
+						return;
+					}
+					chance *= band;
+				}
 				if (roll >= chance)
 				{
 					pick.Outcome = CellOutcome.NoChance;
@@ -2132,6 +2149,12 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
+		/// A size draw along a rule's scale range leaned by its <see cref="PrefabSpawnRule.scaleSkew"/>: t^skew, exactly t at 1 (and
+		/// for a skew left at 0 by an asset older than the field).
+		/// </summary>
+		public static float Skewed(float t, float skew) => skew > 0f && skew != 1f ? Mathf.Pow(Mathf.Clamp01(t), skew) : t;
+
+		/// <summary>
 		/// A tree at a sampled place, its size, turn and colour drawn from the cell's own hash so
 		/// they never change while the cell does not.
 		/// </summary>
@@ -2150,12 +2173,12 @@ namespace FishMMO.Shared.WorldDesign
 			float widthScale, heightScale;
 			if (rule.useNonUniformScaling)
 			{
-				widthScale = Mathf.Max(0.05f, Mathf.Lerp(rule.widthScaleRange.x, rule.widthScaleRange.y, Mathf.Clamp01(Unit(Mix(h + 4u)) + widthShift)));
-				heightScale = Mathf.Max(0.05f, Mathf.Lerp(rule.heightScaleRange.x, rule.heightScaleRange.y, Mathf.Clamp01(Unit(Mix(h + 5u)) + heightShift)));
+				widthScale = Mathf.Max(0.05f, Mathf.Lerp(rule.widthScaleRange.x, rule.widthScaleRange.y, Skewed(Mathf.Clamp01(Unit(Mix(h + 4u)) + widthShift), rule.scaleSkew)));
+				heightScale = Mathf.Max(0.05f, Mathf.Lerp(rule.heightScaleRange.x, rule.heightScaleRange.y, Skewed(Mathf.Clamp01(Unit(Mix(h + 5u)) + heightShift), rule.scaleSkew)));
 			}
 			else
 			{
-				widthScale = Mathf.Max(0.05f, Mathf.Lerp(rule.uniformScaleRange.x, rule.uniformScaleRange.y, Mathf.Clamp01(Unit(Mix(h + 4u)) + heightShift)));
+				widthScale = Mathf.Max(0.05f, Mathf.Lerp(rule.uniformScaleRange.x, rule.uniformScaleRange.y, Skewed(Mathf.Clamp01(Unit(Mix(h + 4u)) + heightShift), rule.scaleSkew)));
 				heightScale = widthScale;
 			}
 			float degrees = Mathf.Lerp(rule.yRotationRange.x, rule.yRotationRange.y, Unit(Mix(h + 6u)));
@@ -2562,6 +2585,16 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					float groundY = frame.Origin.y + Bilinear(heights, heightRes, u, v) * frame.Size.y;
 					float band = ClimateAt(scatterRule, frame, work, u, v, groundY);
+					if (band <= 0f)
+					{
+						outcome = CarpetOutcome.NoHeight;
+						return 0f;
+					}
+					coverage *= band;
+				}
+				if (scatterRule.Heat != null)
+				{
+					float band = scatterRule.Rule.HeatWeight(scatterRule.Heat(worldX, worldZ));
 					if (band <= 0f)
 					{
 						outcome = CarpetOutcome.NoHeight;

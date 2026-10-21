@@ -217,6 +217,72 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>True when the layer is painted on a world of this air (<see cref="airBand"/>; an unknown air, None, passes).</summary>
 		public bool AdmitsAir(BiomeAtmosphereRequirement worldAir) => BiomeAir.Admits(airBand, worldAir);
 
+		/// <remarks>
+		/// <b>A ground of the hot ground</b> (2026-10-18, phase I2q, decision 47): with the band on, a DETAIL layer is painted only
+		/// within a band of the scene's heat mask (baked at the cut from its geothermal sites and their runoff, 0 cold … 1 a
+		/// spring's throat): a geyser basin's white sinter apron near the vents, its thermophile mats in the warm ring, its green
+		/// halo. The band multiplies the layer's patches like its height and slope bands. Main layers, cliffs, beds and ways ignore
+		/// it (a cold main ground under hot details is how the hot ground reads). Off (the default) paints as before.
+		/// </remarks>
+		[Header("Heat Band")]
+		[Tooltip("Detail layers: paint this ground only within a band of the ground's heat (the scene's heat mask from its geothermal sites: 0 cold … 1 boiling). Off = everywhere its other bands allow, as before. Written by Author biome art from the spec (a layer's Heat); set by hand to override.")]
+		public bool useHeatBand = false;
+		[Tooltip("Heat band only. The heat this ground is painted between, 0 … 1; an end at or below 0, or at or above 1, is open.")]
+		public Vector2 heatRange = new Vector2(0f, 1f);
+		[Tooltip("Heat band only. Width of the soft edge at each closed end, centred on the end. 0 = a hard line.")]
+		[Range(0f, 1f)] public float heatFalloff = BiomeHeatBand.DefaultFalloff;
+
+		/// <summary>True when the layer's heat band is on and closes an end, so the heat changes its strength.</summary>
+		public bool HasHeatBand => useHeatBand && BiomeHeatBand.Closes(heatRange);
+
+		/// <summary>How fully the layer is painted at a heat, by its band: 1 without one (or for a NaN reading, no heat known).</summary>
+		public float HeatWeight(float heat) => useHeatBand ? BiomeHeatBand.Weight(heatRange, heatFalloff, heat) : 1f;
+
+		/// <remarks>
+		/// <para>
+		/// <b>A ground of one depth</b> (2026-10-19, phase I2m, decisions 38 and 45: "ground layers get DEPTH bands in metres below
+		/// the water surface", "the depth bands become SIGNED and may be measured in tide units"): with the band on, the layer is
+		/// painted only where the ground lies between two depths below mean sea level, negative above it: a reef's live coral from
+		/// 1 to 30 m, its rubble from 12 to 40 m, a kelp reef in the lit water; and, in tides (1 the lowest tide's depth, −1 the
+		/// highest tide's height), a salt marsh's pioneer zone just under mean high water and its high marsh above it. Metres read
+		/// the same on every scene, where a normalised height band would follow the scene's vertical scale.
+		/// </para>
+		/// <para>
+		/// On a DETAIL layer the band multiplies its patches like its height and slope bands. On the MAIN layer it says where the
+		/// base ground stands: outside it the biome's details carry the ground between them, and where none does the main layer
+		/// stays (never a hole), as a main layer's climate band does. Read on any biome's main and detail layers, above the sea or
+		/// below it; under the sea they paint only in a biome whose Sea Floor lets them (<see cref="BiomeSeaFloor"/>). Cliffs,
+		/// beds, bars and ways ignore it (a bed layer has its own depth band, below its own water). On a world with no sea every
+		/// depth band passes. Off (the default) the layer paints exactly as before the band existed.
+		/// </para>
+		/// </remarks>
+		[Header("Sea Depth Band")]
+		[Tooltip("Main and detail layers: paint this ground only between two depths below mean sea level (negative above it): a reef's coral from 1 to 30 m, a salt marsh's zones by the tide. Off = at every depth its other bands allow, as before. Written by Author biome art from the spec (a layer's Depth or Tide); set by hand to override.")]
+		public bool useSeaDepthBand = false;
+		[Tooltip("Sea depth band only. The depth below mean sea level this ground is painted between (negative: above it), x the shallowest (highest), y the deepest; metres, or tides when In Tides is ticked. An end at or past ±11000 is open.")]
+		public Vector2 seaDepthRange = new Vector2(-BiomeSeaFloors.OpenDepth, BiomeSeaFloors.OpenDepth);
+		[Tooltip("Sea depth band only. Width of the soft edge at each closed end, centred on the end (half the ground at the stated depth); in the band's own units. 0 = a hard line.")]
+		[Range(0f, 50f)] public float seaDepthFalloff = BiomeSeaFloors.DefaultDepthFalloff;
+		[Tooltip("Sea depth band only. Read the range in tides rather than metres: 1 is the depth of the lowest tide, −1 the height of the highest, 0 mean sea level (the scene sea's tide reach, after its coast's tide strength).")]
+		public bool seaDepthInTides = false;
+
+		/// <summary>True when the layer's sea depth band is on and closes an end, so the depth changes its strength.</summary>
+		public bool HasSeaDepthBand => useSeaDepthBand && BiomeSeaFloors.Closes(seaDepthRange);
+
+		/// <summary>
+		/// How fully the layer is painted where the ground lies <paramref name="depthMetres"/> below mean sea level (negative above it)
+		/// on a scene whose tide moves the sea <paramref name="tideMetres"/> either way: 1 without a band, or with NaN (no sea).
+		/// </summary>
+		public float SeaDepthWeight(float depthMetres, float tideMetres)
+		{
+			if (!useSeaDepthBand)
+			{
+				return 1f;
+			}
+			float depth = seaDepthInTides ? BiomeSeaFloors.InTides(depthMetres, tideMetres) : depthMetres;
+			return BiomeSeaFloors.DepthBand(seaDepthRange, seaDepthFalloff, depth);
+		}
+
 		[Header("Ways Across This Ground")]
 		[Tooltip("Main and detail layers only: the path, road and cobble grounds a way takes where this ground is the strongest under it. Each empty one is the biome's own slot. Written by Author biome art from the spec; set by hand to override.")]
 		public GroundWays ways;

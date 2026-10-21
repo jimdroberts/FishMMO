@@ -10,7 +10,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <summary>Everything a site asks of a piece source for one piece: the slot's query, the style, the seed, and how worn and weathered it is.</summary>
 	public struct PointOfInterestPieceRequest
 	{
-		/// <summary>The slot's query (<see cref="StructureKitPieceSource"/> reads "tag", "tag+tag!tag" and "=PieceId").</summary>
+		/// <summary>The slot's query (<see cref="StructureKitPieceSource"/> reads "tag", "tag+tag!tag" and "=PieceId", each with an optional "#variants" pin).</summary>
 		public string Tag;
 		public string Style;
 		public int Seed;
@@ -125,6 +125,13 @@ namespace FishMMO.Shared.WorldDesign
 	/// wall tower, a keep and a lighthouse), so templates narrow them rather than the kit growing a tag per use.
 	/// </para>
 	/// <para>
+	/// <b>Variants</b> (2026-10-19: a village's chapel, a town's parish church, a fountain on the market rather than its cross).
+	/// Any query may end in <c>#</c> and one digit per variant it allows (<see cref="Pins"/>): <c>=Church#1</c> is always the
+	/// chapel, <c>=Church#1110</c> the chapel three times in four and the parish church the fourth, drawn by the piece's seed as
+	/// the kit's own pick is. With no pin the kit's seeded pick is taken (StructureKit.PickVariant), as before. The pin is no part
+	/// of the tags: <c>church#1</c> asks for the same pieces as <c>church</c>.
+	/// </para>
+	/// <para>
 	/// <b>Intact first.</b> A query that does not ask for <c>ruin</c> or <c>stilt</c> takes the pieces without those
 	/// tags when it has any: "house" is a whole house on the ground, and ruins come from decay instead. A piece laid
 	/// past <see cref="RuinDecay"/> is swapped for the kit's ruin of it when there is one (a wall for a ruined wall),
@@ -165,7 +172,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return null;
 			}
-			int variant = StructureKit.PickVariant(piece, request.Seed);
+			int variant = VariantFor(piece, request.Tag, request.Seed);
 			GameObject prefab = PrefabFor(piece, variant, request.Finish, request.Palette, request.AllowLocal);
 			if (prefab == null && request.Finish != StructureFinish.None)
 			{
@@ -240,6 +247,55 @@ namespace FishMMO.Shared.WorldDesign
 			return piece;
 		}
 
+		/// <summary>
+		/// The variants a query pins (pure): the digits after its last <c>#</c>, one per variant it allows ("=Church#1110" → "1110"),
+		/// and the query without them in <paramref name="query"/>; null (the query as it is) where it pins none.
+		/// </summary>
+		public static string Pins(string tag, out string query)
+		{
+			query = tag;
+			if (string.IsNullOrEmpty(tag))
+			{
+				return null;
+			}
+			int hash = tag.LastIndexOf('#');
+			if (hash <= 0 || hash == tag.Length - 1)
+			{
+				return null;
+			}
+			for (int i = hash + 1; i < tag.Length; i++)
+			{
+				if (tag[i] < '0' || tag[i] > '9')
+				{
+					return null;
+				}
+			}
+			query = tag.Substring(0, hash).TrimEnd();
+			return tag.Substring(hash + 1);
+		}
+
+		/// <summary>A query without its variant pin (<see cref="Pins"/>): what it asks of the kit's tags and ids.</summary>
+		public static string BaseQuery(string tag)
+		{
+			Pins(tag, out string query);
+			return query;
+		}
+
+		/// <summary>
+		/// The variant of <paramref name="piece"/> a query lays with <paramref name="seed"/> (pure): one of its pinned variants drawn by
+		/// the seed (clamped to the piece's; a ruin swapped in for a decayed piece keeps the draw), else the kit's seeded pick.
+		/// </summary>
+		public static int VariantFor(StructurePiece piece, string tag, int seed)
+		{
+			string pins = Pins(tag, out _);
+			if (piece == null || pins == null)
+			{
+				return StructureKit.PickVariant(piece, seed);
+			}
+			int variant = pins[(int)(ProceduralNoise.Mix((uint)seed ^ 0x27d4eb2fu) % (uint)pins.Length)] - '0';
+			return Mathf.Clamp(variant, 0, Mathf.Max(0, piece.Variants - 1));
+		}
+
 		/// <summary>Whether the kit has any piece for a query (in any style).</summary>
 		public static bool Resolves(string query) => Candidates(query, null).Count > 0;
 
@@ -251,7 +307,12 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return list;
 			}
-			query = query.Trim();
+			// The variant pin is no part of the tags (2026-10-19).
+			query = BaseQuery(query.Trim()).Trim();
+			if (query.Length == 0)
+			{
+				return list;
+			}
 			if (query[0] == '=')
 			{
 				StructurePiece exact = StructureKit.Get(query.Substring(1).Trim());
@@ -317,11 +378,12 @@ namespace FishMMO.Shared.WorldDesign
 			return null;
 		}
 
-		/// <summary>Splits "a+b!c" into the tags it needs and the tags it refuses.</summary>
+		/// <summary>Splits "a+b!c" into the tags it needs and the tags it refuses (a "#variants" pin dropped).</summary>
 		public static void Parse(string query, out List<string> required, out List<string> excluded)
 		{
 			required = new List<string>();
 			excluded = new List<string>();
+			query = BaseQuery(query) ?? string.Empty;
 			int start = 0;
 			bool exclude = false;
 			for (int i = 0; i <= query.Length; i++)

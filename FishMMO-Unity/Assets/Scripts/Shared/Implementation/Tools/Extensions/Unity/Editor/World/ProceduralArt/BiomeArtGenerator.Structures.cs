@@ -36,7 +36,7 @@ namespace FishMMO.Shared.WorldDesign
 		private static readonly float[] StructureLodHeights = { 0.15f, 0.05f, 0.008f };
 
 		/// <summary>The steps <see cref="StructureSurfaceSteps"/> and <see cref="StructureSteps"/> yield.</summary>
-		private static int StructureStepCount() => 1 + 1 + StructurePieces.All.Count + CaveGlowStepCount();
+		private static int StructureStepCount() => 1 + 1 + StructurePieces.All.Count + CaveGlowStepCount() + CaveCoverStepCount();
 
 		/// <summary>The structure surfaces and their finish albedos: one step, before the texture import.</summary>
 		private static IEnumerable<string> StructureSurfaceSteps(Context c)
@@ -71,6 +71,11 @@ namespace FishMMO.Shared.WorldDesign
 			// The cave kit's glowing crystals, fungi, glow-worms and ore veins (BiomeArtGenerator.CaveGlow.cs): after the
 			// pieces' materials, whose fieldstone a crystal's matrix wears.
 			foreach (string step in CaveGlowSteps(c))
+			{
+				yield return step;
+			}
+			// The run-time cave cover's one mesh (BiomeArtGenerator.CaveCover.cs, 2026-10-20).
+			foreach (string step in CaveCoverSteps(c))
 			{
 				yield return step;
 			}

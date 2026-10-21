@@ -57,6 +57,11 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				yield return path;
 			}
+			// The run-time cave cover's mesh, built in the structures' steps too (BiomeArtGenerator.CaveCover.cs, 2026-10-20).
+			foreach (string path in CaveCoverPayloadPaths())
+			{
+				yield return path;
+			}
 		}
 
 		/// <summary>

@@ -32,6 +32,12 @@ namespace FishMMO.Client
 		void Habitat(Vector3 position, out AmbientHabitat habitat, out float temperature);
 
 		/// <summary>
+		/// <see cref="Habitat"/> for a place underground: the country over it, and the cave's air (-1..1) in place of the open
+		/// air's (<see cref="AmbientCaveLife.CaveAir"/>, the ground's year mean). The open air's where the world knows no seasons.
+		/// </summary>
+		void CaveHabitat(Vector3 position, out AmbientHabitat habitat, out float temperature) => Habitat(position, out habitat, out temperature);
+
+		/// <summary>
 		/// The grass standing at (x, z), metres: what would hide an animal on the ground. 0 where there is none or it is not
 		/// known yet, so a world without grass needs nothing here.
 		/// </summary>
@@ -172,6 +178,10 @@ namespace FishMMO.Client
 		public Vector4 Tint;
 		/// <summary>FishAmbientLife.hlsl's <c>_Look</c>: its group's look (<see cref="AmbientGroup.Look"/>), zero for the kind's own.</summary>
 		public Vector4 Look;
+		/// <summary>FishAmbientLife.hlsl's <c>_Glow</c>: its own light's phase and brightness now (<see cref="AmbientGlow.At"/>); zero for none.</summary>
+		public Vector4 Glow;
+		/// <summary>The member's own seed (<see cref="AmbientLifeMotion.MemberSeed"/>): what its light's rhythm is hashed from.</summary>
+		public uint Seed;
 	}
 
 	/// <summary>
@@ -418,6 +428,16 @@ namespace FishMMO.Client
 					into[i] = instance;
 				}
 			}
+			// A light of its own: each member's on its own rhythm, from its seed and the shared clock.
+			if (AmbientGlow.Glows(kind))
+			{
+				for (int i = first; i < into.Count; i++)
+				{
+					AmbientInstance instance = into[i];
+					instance.Glow = AmbientGlow.At(kind, instance.Seed, frame.Seconds);
+					into[i] = instance;
+				}
+			}
 		}
 
 		private static void Members(in AmbientGroup group, AmbientCreatureKind kind, ref Frame frame, List<AmbientInstance> into)
@@ -481,6 +501,7 @@ namespace FishMMO.Client
 				Matrix = Matrix4x4.TRS(position, rotation, Vector3.one * length),
 				Anim = anim,
 				Tint = new Vector4(lin.r, lin.g, lin.b, Mathf.Clamp01(visible)),
+				Seed = own,
 			});
 		}
 

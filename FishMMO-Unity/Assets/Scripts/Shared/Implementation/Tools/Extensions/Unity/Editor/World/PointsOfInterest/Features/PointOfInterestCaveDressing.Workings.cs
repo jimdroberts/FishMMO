@@ -165,7 +165,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>One seam on the wall a ray meets: the mine's ore (its second ore a quarter of the time), or its glowing ore.</summary>
 			private void Ore(DeterministicRNG random, Vector3 from, Vector3 dir, float reach, bool glow)
 			{
-				Palette p = Colours();
+				CaveGlowPalette p = Colours();
 				bool accent = random.NextFloat() < 0.25f;
 				float scale = random.Range(0.8f, 1.15f);
 				if (glow)

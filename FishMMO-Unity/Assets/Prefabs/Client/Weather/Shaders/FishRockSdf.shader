@@ -1,11 +1,16 @@
-// A rock shape's unsigned distance field, drawn into one brick of the shared 3D atlas (RockContactField,
+// A rock shape's SIGNED distance field, drawn into one brick of the shared 3D atlas (RockContactField,
 // FishMMO.Client/World/Terrain): one full-viewport triangle per slice of the brick, each pixel the distance from
-// its voxel's centre to the nearest triangle of the mesh, as 0..1 of the brick's range (R8).
+// its voxel's centre to the nearest triangle of the mesh, in the shape's local units, negative inside (R16 float).
+// Inside is told by the generalised winding number (the solid angle the mesh's triangles subtend, over 4π): over ½
+// inside a closed mesh, under ½ outside, and graceful where a mesh is not quite closed. Every generated rock level is
+// validated as closed. The sign is what the rock seam fillets (FishRockFillets.compute) need to blend two rocks; the
+// crevices read the distance outside only.
 //
-// Drawn rather than computed: an 8-bit 3D texture is a render target on every API, while WebGPU's compute can only
-// store 32-bit floats (four times the memory, per rock shape in a scene). Bricks lie side by side in x and z and each
+// Drawn rather than computed: a 16-bit float 3D texture is a render target on every API, while WebGPU's compute can
+// only store 32-bit floats (twice the memory, per rock shape in a scene). Bricks lie side by side in x and z and each
 // fills the atlas's whole height, so no viewport depends on an API's vertical flip: the voxel is read back from the
-// very pixel position it is written at.
+// very pixel position it is written at. A shape's slices may be drawn over several frames (RockContactField's bake
+// budget), its mesh bound until its last.
 Shader "Hidden/FishMMO/RockSdf"
 {
     SubShader
@@ -32,7 +37,7 @@ Shader "Hidden/FishMMO/RockSdf"
             StructuredBuffer<float4> _SdfPositions;   // the mesh's vertices, local space (w unused)
             StructuredBuffer<uint> _SdfIndices;       // its triangles
             uint _SdfTriangles;
-            float4 _SdfMin;                           // xyz the brick's local min corner, w its range (local units) = 1.0
+            float4 _SdfMin;                           // xyz the brick's local min corner
             float4 _SdfSize;                          // xyz its local size
             float4 _SdfSlice;                         // x the brick's first atlas column (texels), y this slice's voxel z
 
@@ -70,11 +75,21 @@ Shader "Hidden/FishMMO/RockSdf"
                 return length(p - (a + ab * (vb * denom) + ac * (vc * denom)));
             }
 
+            // The solid angle triangle abc subtends at the origin, signed by its winding (Van Oosterom and Strackee).
+            float SolidAngle(float3 a, float3 b, float3 c)
+            {
+                float la = length(a), lb = length(b), lc = length(c);
+                float numerator = dot(a, cross(b, c));
+                float denominator = la * lb * lc + dot(a, b) * lc + dot(b, c) * la + dot(c, a) * lb;
+                return 2.0 * atan2(numerator, denominator);
+            }
+
             float Frag(Varyings input) : SV_Target
             {
                 float3 voxel = float3(floor(input.positionCS.x - _SdfSlice.x), floor(input.positionCS.y), _SdfSlice.y);
                 float3 p = _SdfMin.xyz + (voxel + 0.5) / FISH_ROCK_BRICK * _SdfSize.xyz;
                 float best = 1e30;
+                float winding = 0.0;
                 UNITY_LOOP
                 for (uint t = 0; t < _SdfTriangles; t++)
                 {
@@ -82,8 +97,10 @@ Shader "Hidden/FishMMO/RockSdf"
                     float3 b = _SdfPositions[_SdfIndices[t * 3u + 1u]].xyz;
                     float3 c = _SdfPositions[_SdfIndices[t * 3u + 2u]].xyz;
                     best = min(best, PointTriangleDistance(p, a, b, c));
+                    winding += SolidAngle(a - p, b - p, c - p);
                 }
-                return saturate(best / max(_SdfMin.w, 1e-5));
+                // Unity's meshes wind clockwise seen from outside, so the angles of a point inside sum to −4π.
+                return abs(winding) > 2.0 * PI ? -best : best;
             }
             ENDHLSL
         }

@@ -1585,7 +1585,10 @@ namespace FishMMO.Shared.WorldDesign
 			foreach (SceneHydrology.River river in asset.Rivers)
 			{
 				int n = river.Points != null ? river.Points.Length : 0;
-				if (n < 2)
+				/* Lava (a lava tube's river, CaveLavaWater) is its cave's, written again when the cave is built: never part of the
+				 * water the ground is marked, carved and painted by (it runs underground, under the hillside's own ground). A cave's
+				 * stream likewise (CaveStreamWater, 2026-10-20). */
+				if (n < 2 || river.Lava || CaveStreamWater.IsCaveStream(river.Id))
 				{
 					continue;
 				}
@@ -1629,8 +1632,9 @@ namespace FishMMO.Shared.WorldDesign
 			foreach (SceneHydrology.Lake lake in asset.Lakes)
 			{
 				/* A paddy's water is its field's (2026-10-18, PointOfInterestPaddies): laid again with the field in the place stage, never
-				 * part of the water the cut measures, settles and keeps the sites off (the field would refuse its own ground). */
-				if (lake == null || PointOfInterestPaddies.IsPaddy(lake.Id))
+				 * part of the water the cut measures, settles and keeps the sites off (the field would refuse its own ground). A lava
+				 * lake is its cave's likewise (CaveLavaWater), written again when the cave is built. */
+				if (lake == null || PointOfInterestPaddies.IsPaddy(lake.Id) || lake.Lava || CaveStreamWater.IsCaveStream(lake.Id))
 				{
 					continue;
 				}

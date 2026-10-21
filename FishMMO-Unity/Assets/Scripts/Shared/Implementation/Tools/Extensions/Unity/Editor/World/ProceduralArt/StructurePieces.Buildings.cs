@@ -16,24 +16,31 @@ namespace FishMMO.Shared.WorldDesign
 			Piece(list, "StoneHouse", StructureStyle.Stone, StructureSize.Building, "A stone house, 6×7 m; v0 thatched, v1 shingled.", StoneHouse, "building", "house");
 			Piece(list, "Longhouse", StructureStyle.Timber, StructureSize.Building, "A long hall, 6×16 m, door in the front gable, crossed gable horns; v1 turf-walled.",
 				Longhouse, "building", "house");
-			Piece(list, "Watchtower", StructureStyle.Timber, StructureSize.Building, "A timber tower, platform at 6 m under a pyramid roof; v1 on a stone base.",
-				Watchtower, "building", "tower", "military");
-			Piece(list, "WallSegment", StructureStyle.Stone, StructureSize.Medium, "Six metres of curtain wall; v0 crenellated ashlar 5 m, v1 a coped fieldstone wall 3 m.",
-				WallSegment, "wall", "military").ModuleLength = 6f;
-			Piece(list, "WallTower", StructureStyle.Stone, StructureSize.Building, "A corner tower for the wall; v0 round and crenellated, v1 square with a pyramid roof.",
-				WallTower, "wall", "tower", "military", "building");
-			Piece(list, "Gatehouse", StructureStyle.Stone, StructureSize.Building, "Two towers over a 3.5×4.5 m passage with a working portcullis (raised by day), 12 m wide; v1 round towers.",
-				Gatehouse, "wall", "gate", "military", "building").ModuleLength = 12f;
+			Piece(list, "Watchtower", StructureStyle.Timber, StructureSize.Building,
+				"A timber tower, a railed platform at 6 m under a pyramid roof, up a boarded stair entered from +z through a railed trap; v1 on a stone guard room.",
+				TimberWatchtower, "building", "tower", "military");
+			StructurePiece curtain = Piece(list, "WallSegment", StructureStyle.Stone, StructureSize.Medium,
+				"Six metres of curtain wall; v0 crenellated ashlar 5 m, its walk railed in timber along its open inner edge, v1 a coped fieldstone wall 3 m, v2 v0 with its rail open where a wall stair's landing meets the walk.",
+				WallSegment, "wall", "military");
+			curtain.ModuleLength = 6f;
+			curtain.Variants = 3;
+			Piece(list, "WallTower", StructureStyle.Stone, StructureSize.Building,
+				"A tower on the curtain, door to the bailey (+z), the walk through it at 5 m, stairs to every floor: v0 round, 8 m, crenellated top; v1 square, 8.2 m, a lookout under a pyramid roof.",
+				CurtainTower, "wall", "tower", "military", "building");
+			Piece(list, "Gatehouse", StructureStyle.Stone, StructureSize.Stronghold,
+				"Two towers over a 3.5×4.5 m passage with a working portcullis (raised by day), 12×9 m: guard rooms from the bailey, a stair to the hall the walk crosses at 5 m and on to a crenellated top; v1 half-round tower fronts.",
+				TwinTowerGatehouse, "wall", "gate", "military", "building").ModuleLength = 12f;
 			// A portcullis's grid, 1×1 m (the gate scales it to its passage), spikes along its foot: a server-run gate's visual.
 			StructurePiece portcullis = Piece(list, "Portcullis", StructureStyle.Stone, StructureSize.Small,
 				"A portcullis grid, 1×1 m (its bars 10 cm deep), spiked foot, scaled to its passage: v0 iron, v1 iron-shod oak.",
 				Portcullis, "portcullis");
 			portcullis.Collides = false;
 			Piece(list, "WallStair", StructureStyle.Stone, StructureSize.Medium,
-				"A straight stone flight up the inside of a curtain wall to its walk, 5 m up over 7.5 m, its back to the wall (+z); v1 timber treads on a stone spine.",
+				"A straight stone flight up the inside of a curtain wall (along +x, its back to the wall's inner face on −z) to a railed landing level with the walk, 5 m up over 8.7 m; v1 timber treads on a stone spine.",
 				WallStair, "wallstair", "military");
-			Piece(list, "Keep", StructureStyle.Stone, StructureSize.Building, "A squat square keep, 10×10×12 m, turrets at the corners; v1 buttressed under a pyramid roof.",
-				Keep, "building", "keep", "tower", "military");
+			Piece(list, "Keep", StructureStyle.Stone, StructureSize.Stronghold,
+				"A great stone keep, 11×11 m and three floors high, walked from its door to its battlements: a storeroom undercroft, the great hall with its hearth, the lord's solar, stairs between them all and a roof walk behind the parapet (its lookout); v0 a Norman keep, a forebuilding along its front enclosing the stair up to the hall (its door in the forebuilding's end), a flat roof and corner turrets; v1 a tower house entered at the ground, a hipped roof inside a broad parapet walk and corner bartizans.",
+				GreatKeep, "building", "keep", "tower", "military");
 			Piece(list, "StiltHut", StructureStyle.Timber, StructureSize.Building, "A hut on a stilted platform with a ladder; v1 round with a conical roof.",
 				StiltHut, "building", "house", "stilt", "swamp", "water");
 			Piece(list, "StiltHouse", StructureStyle.Timber, StructureSize.Building, "The small timber house on stilts, with a deck; v1 shingled.",
@@ -159,110 +166,50 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── Towers and walls ──────────────────────────────────────────
 
-		private static void Watchtower(StructureDraft d)
-		{
-			bool stoneBase = d.Variant == 1;
-			const float platform = 6f, half = 1.6f, foot = 2f;
-			float legFrom = stoneBase ? 2.8f : -0.4f;
-			if (stoneBase)
-			{
-				// A little stone room under the platform: floor, walls with a door, a slab roof the legs stand on.
-				float bw = foot * 2.2f;
-				d.Add(StructureShapes.ChamferBox(new Vector3(0f, (0.15f - FoundationDepth) * 0.5f, 0f), new Vector3(bw, 0.15f + FoundationDepth, bw), d.Bevel(0.05f), StructureMaterial.Fieldstone, 1));
-				WallsWithDoor(d, Vector3.zero, bw, bw, 0.5f, 0.15f, 2.6f, 0f, 1f, 0.14f, 2.4f, StructureMaterial.Fieldstone, 3);
-				d.Add(StructureShapes.ChamferBox(new Vector3(0f, 2.7f, 0f), new Vector3(bw, 0.2f, bw), d.Bevel(0.04f), StructureMaterial.Fieldstone, 2));
-				HangDoor(d, new Vector3(0f, 0.15f, -bw * 0.5f + 0.5f - 0.05f), Vector3.right, Vector3.forward, 1f, 2.25f, StructureDoorKind.Planks);
-				d.Room(new Vector3(0f, 0.15f, 0f), new Vector2(bw - 1f, bw - 1f), 2.45f, StructureRoomKind.Guard);
-			}
-			float footSpread = stoneBase ? half + 0.1f : foot;
-			for (int sx = -1; sx <= 1; sx += 2)
-			{
-				for (int sz = -1; sz <= 1; sz += 2)
-				{
-					var a = new Vector3(sx * footSpread, legFrom, sz * footSpread);
-					var b = new Vector3(sx * half, platform + 2.4f, sz * half);
-					d.Add(StructureShapes.Beam(a, b, 0.24f, 0.24f, StructureMaterial.Timber, 10 + sx + 3 * sz));
-				}
-			}
-			if (d.Mid)
-			{
-				// Cross braces on each face, two tiers.
-				int k = 20;
-				float[] tiers = stoneBase ? new[] { 2.4f, 4.2f, 5.9f } : new[] { 0f, 3f, 5.9f };
-				for (int t = 0; t + 1 < tiers.Length; t++)
-				{
-					float y0 = tiers[t], y1 = tiers[t + 1];
-					float w0 = Mathf.Lerp(footSpread, half, Mathf.InverseLerp(legFrom, platform + 2.4f, y0)) + 0.13f;
-					float w1 = Mathf.Lerp(footSpread, half, Mathf.InverseLerp(legFrom, platform + 2.4f, y1)) + 0.13f;
-					for (int face = 0; face < 4; face++)
-					{
-						Quaternion q = Quaternion.Euler(0f, face * 90f, 0f);
-						d.Add(StructureShapes.Beam(q * new Vector3(-w0, y0 + 0.2f, -w0), q * new Vector3(w1, y1 - 0.1f, -w1), 0.12f, 0.1f, StructureMaterial.Timber, k++, StructureRole.Detail));
-						if (d.Fine)
-						{
-							d.Add(StructureShapes.Beam(q * new Vector3(w0, y0 + 0.2f, -w0), q * new Vector3(-w1, y1 - 0.1f, -w1), 0.12f, 0.1f, StructureMaterial.Timber, k++, StructureRole.Detail));
-						}
-					}
-				}
-			}
-			// The platform, its rail and the roof on the four legs.
-			d.Add(StructureShapes.Box(new Vector3(0f, platform, 0f), new Vector3(half * 2f + 0.8f, 0.2f, half * 2f + 0.8f), StructureMaterial.Timber, 40));
-			float edge = half + 0.35f;
-			for (int face = 0; face < 4; face++)
-			{
-				Quaternion q = Quaternion.Euler(0f, face * 90f, 0f);
-				d.Add(StructureShapes.Beam(q * new Vector3(-edge, platform + 1.05f, -edge), q * new Vector3(edge, platform + 1.05f, -edge), 0.1f, 0.12f, StructureMaterial.Timber, 41 + face));
-				if (d.Mid)
-				{
-					d.Add(StructureShapes.Block(q * new Vector3(0f, platform + 0.45f, -edge), new Vector3(edge * 2f, 0.7f, 0.06f), q,
-						StructureMaterial.Timber, 45 + face, StructureRole.Detail));
-				}
-			}
-			// The roof: a pyramid on the legs' heads (its palette's pitch, or flat, where the palette asks: StructureRoofs, I6h).
-			StructureMaterial roofMaterial = stoneBase ? StructureMaterial.Timber : StructureMaterial.Thatch;
-			const float roofRise = 1.8f;
-			OwnRoofPlan roof = OwnRoof(d, roofMaterial, roofRise, half + 0.9f);
-			using (d.Builds(RoofRoles))
-			{
-				if (roof.Flat)
-				{
-					d.Add(StructureShapes.Box(new Vector3(0f, platform + 2.48f, 0f), new Vector3((half + 0.9f) * 2f, 0.16f, (half + 0.9f) * 2f), roofMaterial, 50, StructureRole.Roof)).Grain = Vector3.forward;
-				}
-				else
-				{
-					// The kit's own sum, to the bit, wherever the rise is the kit's.
-					float peak = roof.Rise == roofRise ? platform + 4.2f : platform + 2.4f + roof.Rise;
-					d.Add(StructureShapes.Lathe(new[] { new Vector2((half + 0.9f) * 1.414f, platform + 2.4f), new Vector2(0f, peak) }, 4,
-						roofMaterial, 50, false, Mathf.PI * 0.25f, false, false, StructureRole.Roof));
-				}
-			}
-			// A ladder up the front.
-			float ladderZ = -(stoneBase ? half + 0.25f : foot - 0.1f);
-			float ladderFrom = stoneBase ? 2.2f : -0.1f;
-			for (int s = -1; s <= 1; s += 2)
-			{
-				d.Add(StructureShapes.Beam(new Vector3(s * 0.25f, ladderFrom, ladderZ - 0.4f), new Vector3(s * 0.25f, platform + 0.9f, -half - 0.45f), 0.07f, 0.07f, StructureMaterial.Timber, 60 + s));
-			}
-			if (d.Mid)
-			{
-				int rungs = Mathf.RoundToInt((platform - ladderFrom) / 0.4f);
-				for (int i = 1; i < rungs; i++)
-				{
-					float t = i / (float)rungs;
-					Vector3 p = Vector3.Lerp(new Vector3(0f, ladderFrom, ladderZ - 0.4f), new Vector3(0f, platform + 0.9f, -half - 0.45f), t);
-					d.Add(StructureShapes.Beam(p + Vector3.left * 0.28f, p + Vector3.right * 0.28f, 0.05f, 0.05f, StructureMaterial.Timber, 70 + i, StructureRole.Detail));
-				}
-			}
-		}
+		// The curtain's frame (2026-10-19, the fortification contract): a walled curtain module (WallSegment v0) runs along x, its
+		// centre line at z = 0, its outer face on −z, its walk its top at WallWalkHeight from the parapet's back to its inner face.
+		// A wall tower or a gatehouse stands with its origin on the curtain's centre line and opens its ±x walk doors on the walk's
+		// centre line, so the walk runs straight in; the packer ends the curtain at the piece's "curtain" marks.
+
+		/// <summary>Half a walled curtain's thickness: its faces at z = ±this in a module's frame (the module's centre line z = 0).</summary>
+		public const float CurtainHalfThickness = 1.05f;
+		/// <summary>The curtain's parapet on its outer (−z) face, metres thick.</summary>
+		public const float CurtainParapet = 0.5f;
+		/// <summary>The walk behind the parapet, metres wide (from the parapet's back to the curtain's back face).</summary>
+		public const float CurtainWalkWidth = 2f * CurtainHalfThickness - CurtainParapet;
+		/// <summary>The walk's centre line, z in a module's frame: where a tower's or a gatehouse's walk doors are centred.</summary>
+		public const float CurtainWalkCentre = CurtainHalfThickness - 0.5f * CurtainWalkWidth;
+		/// <summary>The wall stair's landing at its head, level with the walk, metres along the wall.</summary>
+		public const float WallStairLanding = 1.5f;
+		/// <summary>The wall stair's width out from the curtain's inner face, metres (two abreast).</summary>
+		public const float WallStairWidth = 1.5f;
+		/// <summary>How deep the wall stair's footing goes, metres.</summary>
+		public const float WallStairFooting = 1.2f;
+		/// <summary>The wall stair's risers up to the walk, none over <see cref="StepRise"/>.</summary>
+		public static int WallStairRisers => Mathf.CeilToInt(WallWalkHeight / StepRise - 1e-4f);
+		/// <summary>The wall stair's whole length along the wall: its flight and the landing at its head, metres.</summary>
+		public static float WallStairLength => (WallStairRisers - 1) * StepTread + WallStairLanding;
+
+		/// <summary>The height of the walk along a curtain piece's variant (0 where it has none: the coped field wall).</summary>
+		public static float CurtainWalk(string id, int variant) => id == "WallSegment" && variant != 1 ? WallWalkHeight : 0f;
+
+		/// <summary>The walked curtain's variant with its rail open for a wall stair's landing (WallSegment v2).</summary>
+		public const int CurtainLandingVariant = 2;
+
+		/// <summary>
+		/// Where the rail of a walked curtain's landing module (v2) is open, x in its own frame (before it is stretched to its chord):
+		/// a stair's landing is laid centred on it, and a module stretched from 0.75 to 1.33 of its length opens 1.5 to 2.7 m.
+		/// </summary>
+		public const float CurtainLandingGap = 1f, CurtainLandingGapHalf = 1f;
 
 		private static void WallSegment(StructureDraft d)
 		{
 			const float module = 6f;
-			if (d.Variant == 0)
+			if (d.Variant != 1)
 			{
 				// Thick enough to walk along: a 1.6 m wall-walk behind the parapet (WallStair climbs to it; the towers' upper doors
-				// carry it on), open at the back over the bailey as most were.
-				const float height = WallWalkHeight, thick = 2.1f;
+				// carry it on).
+				const float height = WallWalkHeight, thick = 2f * CurtainHalfThickness;
 				d.Add(StructureShapes.ChamferBox(new Vector3(0f, (0.8f - FoundationDepth) * 0.5f, 0.1f), new Vector3(module, 0.8f + FoundationDepth, thick + 0.4f), d.Bevel(0.04f), StructureMaterial.Stone, 1));
 				d.Add(StructureShapes.Box(new Vector3(0f, height * 0.5f, 0f), new Vector3(module, height, thick), StructureMaterial.Stone, 2));
 				// Parapet on the outer (front) face with merlons.
@@ -274,6 +221,7 @@ namespace FishMMO.Shared.WorldDesign
 					// A string course along the front.
 					d.Add(StructureShapes.Box(new Vector3(0f, height - 0.15f, -thick * 0.5f - 0.06f), new Vector3(module, 0.18f, 0.14f), StructureMaterial.Stone, 5, StructureRole.Detail));
 				}
+				CurtainRail(d, module, d.Variant == CurtainLandingVariant);
 				return;
 			}
 			const float h = 3f, t = 0.9f;
@@ -292,167 +240,40 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		private static void WallTower(StructureDraft d)
+		/// <summary>
+		/// A walked curtain's timber rail along its walk's inner edge over the bailey (2026-10-19: "you just fall off"): posts and two
+		/// rails a metre high, 1.5 m clear behind the parapet; posts in from the module's ends so a run of modules spaces them evenly.
+		/// With <paramref name="landing"/>, open over <see cref="CurtainLandingGap"/> ± <see cref="CurtainLandingGapHalf"/> for a wall
+		/// stair's landing, a post at each side of the opening.
+		/// </summary>
+		private static void CurtainRail(StructureDraft d, float module, bool landing)
 		{
-			if (d.Variant == 0)
+			float z = CurtainHalfThickness - 0.05f, y = WallWalkHeight;
+			float half = 0.5f * module, open0 = CurtainLandingGap - CurtainLandingGapHalf, open1 = CurtainLandingGap + CurtainLandingGapHalf;
+			var posts = new List<float>();
+			for (float x = -half + 0.6f; x < half; x += 1.2f)
 			{
-				const float r = 3.2f, wall = 1.1f, height = 9f;
-				int seg = d.Seg(16, 10);
-				// A battered foot, the wall in blocks (a ruin breaks each its own way), a floor at the top, merlons round it.
-				d.Add(StructureShapes.Lathe(new[] { new Vector2(r + 0.5f, -FoundationDepth), new Vector2(r + 0.5f, 0.4f), new Vector2(r, 1.6f), new Vector2(r - wall, 1.6f), new Vector2(r - wall, -FoundationDepth) },
-					seg, StructureMaterial.Stone, 1, true, 0f, true));
-				// The doorway at the top of the battered foot (the floor raised to it), steps up to it outside.
-				// The door at the foot, and the wall-walk carried through at its height (the curtain walls meet the tower
-				// either side, ±x), across an upper floor.
-				RingWallWithOpenings(d, Vector3.zero, r - wall, r, 1.6f, height, seg, 1.5f * Mathf.PI,
-					new List<(float, float, float, float)> { (1.5f * Mathf.PI, 1.1f, 1.6f, 3.9f), (0f, 1.5f, WallWalkHeight, WallWalkHeight + 2.3f), (Mathf.PI, 1.5f, WallWalkHeight, WallWalkHeight + 2.3f) },
-					StructureMaterial.Stone, 10);
-				d.Add(StructureShapes.Cylinder(r - wall + 0.05f, WallWalkHeight - 0.25f, WallWalkHeight, seg, StructureMaterial.Timber, 39));
-				// The walk's floor through the wall at each door.
-				for (int sx = -1; sx <= 1; sx += 2)
+				if (!landing || x < open0 - 0.3f || x > open1 + 0.3f)
 				{
-					d.Add(StructureShapes.Box(new Vector3(sx * (r - wall * 0.5f), WallWalkHeight - 0.15f, 0f), new Vector3(wall + 0.3f, 0.3f, 1.5f), StructureMaterial.Stone, 37 + (sx > 0 ? 1 : 0)));
-				}
-				d.Add(StructureShapes.Cylinder(r - wall + 0.05f, height - 0.35f, height - 0.1f, seg, StructureMaterial.Timber, 40, false, StructureRole.Roof));
-				d.Add(StructureShapes.Cylinder(r - wall + 0.05f, 0f, 1.6f, seg, StructureMaterial.Earth, 41));
-				// The threshold through the wall at the foot's top, and a flight up to it.
-				d.Add(StructureShapes.Box(new Vector3(0f, (1.6f - FoundationDepth) * 0.5f, -(r - wall * 0.5f)), new Vector3(1.4f, 1.6f + FoundationDepth, wall + 0.2f), StructureMaterial.Stone, 81));
-				Steps(d, new Vector3(0f, 0f, -r - 0.1f), Vector3.back, 1.4f, 1.6f, StructureMaterial.Stone, 82);
-				float inner = r - wall;
-				HangDoor(d, new Vector3(0f, 1.6f, -Mathf.Sqrt(inner * inner - 0.3025f) + 0.05f), Vector3.right, Vector3.forward, 1.1f, 2.3f, StructureDoorKind.Iron);
-				d.RoundRoom(new Vector3(0f, 1.6f, 0f), inner, 3.5f, StructureRoomKind.Guard);
-				if (d.Mid)
-				{
-					// A corbel band under the parapet.
-					d.Add(StructureShapes.Lathe(new[] { new Vector2(r - 0.1f, height - 0.6f), new Vector2(r + 0.25f, height - 0.6f), new Vector2(r + 0.25f, height), new Vector2(r - 0.1f, height) },
-						seg, StructureMaterial.Stone, 42, true, 0f, true, false, StructureRole.Detail));
-				}
-				int merlons = d.Seg(12, 8);
-				for (int i = 0; i < merlons; i++)
-				{
-					float a0 = (i + 0.2f) * 2f * Mathf.PI / merlons, a1 = (i + 0.75f) * 2f * Mathf.PI / merlons;
-					d.Add(RingBlock(Vector3.zero, r - 0.55f, r + 0.2f, height, height + 1f, a0, a1, StructureMaterial.Stone, 60 + i, StructureRole.Detail));
-				}
-				if (d.Mid)
-				{
-					for (int i = 0; i < 4; i++)
-					{
-						float a = (i * 90f + 45f) * Mathf.Deg2Rad;
-						Window(d, new Vector3(Mathf.Cos(a) * r, 5.5f, Mathf.Sin(a) * r), new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)), 90 + i * 4);
-					}
-				}
-				return;
-			}
-			// Square, with a pyramid roof.
-			const float w = 6f, hs = 10f, th = 1f;
-			d.Add(StructureShapes.ChamferBox(new Vector3(0f, (0.8f - FoundationDepth) * 0.5f, 0f), new Vector3(w + 0.6f, 0.8f + FoundationDepth, w + 0.6f), d.Bevel(0.04f), StructureMaterial.Stone, 1));
-			// The door at the foot; the wall-walk through each side at its height, across an upper floor.
-			var walk = new List<WallOpening> { new WallOpening { Along = (w - 2f * th) * 0.5f, Width = 1.5f, Bottom = WallWalkHeight, Top = WallWalkHeight + 2.3f } };
-			WallRun(d, new Vector3(-w * 0.5f, 0f, -w * 0.5f + th * 0.5f), new Vector3(w * 0.5f, 0f, -w * 0.5f + th * 0.5f), th, 0.8f, hs,
-				new List<WallOpening> { new WallOpening { Along = w * 0.5f, Width = 1.2f, Bottom = 1f, Top = 3.3f } }, StructureMaterial.Stone, 2);
-			WallRun(d, new Vector3(-w * 0.5f, 0f, w * 0.5f - th * 0.5f), new Vector3(w * 0.5f, 0f, w * 0.5f - th * 0.5f), th, 0.8f, hs, null, StructureMaterial.Stone, 3);
-			WallRun(d, new Vector3(-w * 0.5f + th * 0.5f, 0f, -w * 0.5f + th), new Vector3(-w * 0.5f + th * 0.5f, 0f, w * 0.5f - th), th, 0.8f, hs, walk, StructureMaterial.Stone, 4);
-			WallRun(d, new Vector3(w * 0.5f - th * 0.5f, 0f, -w * 0.5f + th), new Vector3(w * 0.5f - th * 0.5f, 0f, w * 0.5f - th), th, 0.8f, hs,
-				new List<WallOpening>(walk), StructureMaterial.Stone, 5);
-			d.Add(StructureShapes.Box(new Vector3(0f, WallWalkHeight - 0.12f, 0f), new Vector3(w - 2f * th, 0.24f, w - 2f * th), StructureMaterial.Timber, 12));
-			d.Add(StructureShapes.Box(new Vector3(0f, 0.9f, 0f), new Vector3(w - 2f * th, 0.2f, w - 2f * th), StructureMaterial.Earth, 6));
-			// Steps up onto the plinth and the sill.
-			Steps(d, new Vector3(0f, 0f, -w * 0.5f), Vector3.back, 1.6f, 1f, StructureMaterial.Stone, 10);
-			HangDoor(d, new Vector3(0f, 1f, -w * 0.5f + th - 0.05f), Vector3.right, Vector3.forward, 1.2f, 2.3f, StructureDoorKind.Iron);
-			d.Room(new Vector3(0f, 1f, 0f), new Vector2(w - 2f * th, w - 2f * th), 4f, StructureRoomKind.Guard);
-			d.Add(StructureShapes.Box(new Vector3(0f, hs + 0.15f, 0f), new Vector3(w + 0.5f, 0.3f, w + 0.5f), StructureMaterial.Stone, 7, StructureRole.Roof));
-			// The pyramid roof at its palette's pitch (StructureRoofs, I6h); flat, a timber deck behind merlons.
-			const float roofRise = 3.7f;
-			OwnRoofPlan roof = OwnRoof(d, StructureMaterial.Timber, roofRise, w * 0.5f + 0.5f);
-			using (d.Builds(RoofRoles))
-			{
-				if (roof.Flat)
-				{
-					d.Add(StructureShapes.Box(new Vector3(0f, hs + 0.36f, 0f), new Vector3(w + 0.3f, 0.12f, w + 0.3f), StructureMaterial.Timber, 8, StructureRole.Roof)).Grain = Vector3.forward;
-				}
-				else
-				{
-					float peak = roof.Rise == roofRise ? hs + 4f : hs + 0.3f + roof.Rise;
-					d.Add(StructureShapes.Lathe(new[] { new Vector2((w * 0.5f + 0.5f) * 1.414f, hs + 0.3f), new Vector2(0f, peak) }, 4, StructureMaterial.Timber, 8, false, Mathf.PI * 0.25f, false, false, StructureRole.Roof));
+					posts.Add(x);
 				}
 			}
-			if (roof.Flat)
+			if (landing)
 			{
-				for (int f = 0; f < 4; f++)
-				{
-					Quaternion q = Quaternion.Euler(0f, f * 90f, 0f);
-					float e = w * 0.5f;
-					Crenellate(d, q * new Vector3(-e + 0.3f, hs + 0.42f, -e + 0.3f), q * new Vector3(e - 0.3f, hs + 0.42f, -e + 0.3f), 0.5f, 0.85f, 0.8f, 0.6f, StructureMaterial.Stone, 60 + f * 10);
-				}
+				posts.Add(open0);
+				posts.Add(open1);
 			}
-			if (d.Mid)
+			for (int i = 0; i < posts.Count; i++)
 			{
-				Window(d, new Vector3(0f, 6.5f, -w * 0.5f), Vector3.back, 20);
-				Window(d, new Vector3(-w * 0.5f, 6.5f, 0f), Vector3.left, 24);
-				Window(d, new Vector3(w * 0.5f, 6.5f, 0f), Vector3.right, 28);
+				d.Add(StructureShapes.Box(new Vector3(posts[i], y + 0.5f, z), new Vector3(0.1f, 1f, 0.1f), StructureMaterial.Timber, 40 + i));
 			}
-		}
-
-		private static void Gatehouse(StructureDraft d)
-		{
-			bool round = d.Variant == 1;
-			const float towerH = 9f, depth = 4f;
-			for (int s = -1; s <= 1; s += 2)
+			var spans = landing ? new[] { (-half, open0), (open1, half) } : new[] { (-half, half) };
+			int key = 70;
+			foreach ((float from, float to) in spans)
 			{
-				var c = new Vector3(s * 4f, 0f, 0f);
-				int key = 10 + (s > 0 ? 40 : 0);
-				if (round)
+				foreach (float rail in new[] { 0.5f, 0.95f })
 				{
-					int seg = d.Seg(14, 8);
-					d.Add(StructureShapes.Lathe(new[] { new Vector2(2.4f, -FoundationDepth), new Vector2(2.4f, 0.6f), new Vector2(2.1f, 1.4f), new Vector2(2.1f, towerH), new Vector2(0f, towerH) },
-						seg, StructureMaterial.Stone, key, true).Transform(Matrix4x4.Translate(c)));
-					int merlons = d.Seg(10, 6);
-					for (int i = 0; i < merlons; i++)
-					{
-						float a0 = (i + 0.2f) * 2f * Mathf.PI / merlons, a1 = (i + 0.75f) * 2f * Mathf.PI / merlons;
-						d.Add(RingBlock(c, 1.7f, 2.2f, towerH, towerH + 0.9f, a0, a1, StructureMaterial.Stone, key + 10 + i, StructureRole.Detail));
-					}
-				}
-				else
-				{
-					d.Add(StructureShapes.ChamferBox(c + new Vector3(0f, (towerH - FoundationDepth) * 0.5f, 0f), new Vector3(4f, towerH + FoundationDepth, 4.4f), d.Bevel(0.05f), StructureMaterial.Stone, key));
-					for (int f = 0; f < 4; f++)
-					{
-						Quaternion q = Quaternion.Euler(0f, f * 90f, 0f);
-						Vector3 a = c + q * new Vector3(-(f % 2 == 0 ? 2f : 2.2f) + 0.25f, towerH, -(f % 2 == 0 ? 2.2f : 2f) + 0.25f);
-						Vector3 b = c + q * new Vector3((f % 2 == 0 ? 2f : 2.2f) - 0.25f, towerH, -(f % 2 == 0 ? 2.2f : 2f) + 0.25f);
-						Crenellate(d, a, b, 0.5f, 0.9f, 0.8f, 0.55f, StructureMaterial.Stone, key + 10 + f * 8);
-					}
-				}
-				if (d.Mid)
-				{
-					Window(d, c + new Vector3(0f, 6f, -(round ? 2.1f : 2.2f)), Vector3.back, key + 60);
-				}
-			}
-			// The block over the passage, its parapet, and the portcullis hanging half raised.
-			const float passageW = 3.5f, passageH = 4.5f;
-			d.Add(StructureShapes.Box(new Vector3(0f, (passageH + towerH - 1f) * 0.5f, 0f), new Vector3(4.6f, towerH - 1f - passageH, depth), StructureMaterial.Stone, 100));
-			d.Add(StructureShapes.Box(new Vector3(0f, -0.15f, 0f), new Vector3(passageW + 0.4f, 0.3f, depth), StructureMaterial.Fieldstone, 101));
-			Crenellate(d, new Vector3(-2.3f, towerH - 1f, -depth * 0.5f + 0.25f), new Vector3(2.3f, towerH - 1f, -depth * 0.5f + 0.25f), 0.5f, 0.9f, 0.8f, 0.55f, StructureMaterial.Stone, 110);
-			// The portcullis: a server-run gate (PointOfInterestDoors) in its grooves near the outer face, raised by day; it
-			// drops to close the passage and rises into the block over it.
-			d.Door(new Vector3(-passageW * 0.5f, 0f, -depth * 0.5f + 0.4f), Vector3.right, Vector3.forward, passageW, passageH, StructureDoorKind.Iron,
-				StructureDoorMotion.Lift, true);
-			// A torch each side of the gate on the towers' faces, lit day and night (2026-10-12: torches).
-			for (int s = -1; s <= 1; s += 2)
-			{
-				float x = s * 2.6f;
-				float z = round ? -Mathf.Sqrt(2.1f * 2.1f - 1.4f * 1.4f) : -2.2f;
-				Vector3 outward = round ? new Vector3(x - s * 4f, 0f, z).normalized : Vector3.back;
-				Matrix4x4 place = Matrix4x4.TRS(new Vector3(x, 2.6f, z), Quaternion.LookRotation(-outward, Vector3.up), Vector3.one);
-				MountedTorch(d, place, false, 130 + (s > 0 ? 10 : 0));
-			}
-			if (d.Mid)
-			{
-				// Its grooves in the jambs.
-				for (int s = -1; s <= 1; s += 2)
-				{
-					d.Add(StructureShapes.Box(new Vector3(s * (passageW * 0.5f + 0.06f), passageH * 0.5f, -depth * 0.5f + 0.4f), new Vector3(0.14f, passageH, 0.2f), StructureMaterial.Iron, 120 + (s > 0 ? 1 : 0), StructureRole.Detail));
+					d.Add(StructureShapes.Box(new Vector3(0.5f * (from + to), y + rail, z + 0.01f), new Vector3(to - from, 0.08f, 0.08f), StructureMaterial.Timber, key++)).Grain = Vector3.right;
 				}
 			}
 		}
@@ -494,135 +315,79 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static void WallStair(StructureDraft d)
 		{
-			// From the ground at x = -run/2 to the walk (WallWalkHeight) at x = +run/2, 1.5 m wide (two abreast), its back against the wall at z = 0.
-			int risers = Mathf.CeilToInt(WallWalkHeight / StepRise);
-			float rise = WallWalkHeight / risers, run = (risers - 1) * StepTread;
+			/* From the ground at x = −length/2 up along +x to a landing level with the walk (WallWalkHeight) at the +x end, 1.5 m wide
+			 * (two abreast), its back (−z) flat against the curtain's inner face (2026-10-19: "stairs are missing platforms at the top,
+			 * you just fall off"): risers of StepRise, the last one up onto the landing, the landing as deep as the flight is wide and
+			 * railed on its open front and end, so a climber steps from it straight back onto the walk at the same height. Its stone
+			 * reaches WallStairFooting under its foot, so it stands on a wall's slope without a gap under it. */
+			int risers = WallStairRisers;
+			float rise = WallWalkHeight / risers, half = 0.5f * WallStairLength, landing = half - WallStairLanding, bottom = -WallStairFooting;
+			const float back = -0.5f * WallStairWidth, front = 0.5f * WallStairWidth;
 			bool timber = d.Variant == 1;
+			// The timber flight's first steps are stone too: they bury the curtain's plinth (0.8 m high, 0.3 m proud of its face).
+			int stone = timber ? 4 : risers - 1;
 			for (int i = 1; i < risers; i++)
 			{
-				float top = rise * i, x0 = -run * 0.5f + (i - 1) * StepTread;
-				float length = run * 0.5f - x0;
-				if (timber)
+				float top = rise * i, x0 = -half + (i - 1) * StepTread;
+				if (i <= stone)
 				{
-					// A tread on a stone spine: the spine one solid ramp under them all.
-					d.Add(StructureShapes.Box(new Vector3(x0 + StepTread * 0.5f, top - 0.04f, 0.75f), new Vector3(StepTread + 0.04f, 0.08f, 1.5f), StructureMaterial.Timber, 10 + i)).Grain = Vector3.forward;
+					d.Add(StructureShapes.Box(new Vector3(x0 + StepTread * 0.5f, 0.5f * (top + bottom), 0f), new Vector3(StepTread, top - bottom, WallStairWidth), StructureMaterial.Stone, 10 + i));
 					continue;
 				}
-				d.Add(StructureShapes.Box(new Vector3(x0 + length * 0.5f, (top - FoundationDepth) * 0.5f, 0.75f), new Vector3(length, top + FoundationDepth, 1.5f), StructureMaterial.Stone, 10 + i));
+				// A tread on a stone spine.
+				d.Add(StructureShapes.Box(new Vector3(x0 + StepTread * 0.5f, top - 0.04f, 0f), new Vector3(StepTread + 0.04f, 0.08f, WallStairWidth), StructureMaterial.Timber, 10 + i)).Grain = Vector3.forward;
 			}
-			if (timber)
+			// A rail along the flight's open front from where a fall off it would hurt (a metre up) to the landing's own, so nobody
+			// steps off the side on the way up; the flight keeps 1.25 m clear inside it.
+			int railFrom = Mathf.CeilToInt(1f / rise - 1e-3f);
+			float railX = -half + (railFrom - 1) * StepTread;
+			if (!timber)
 			{
-				// The spine under the treads and the landing at the top.
-				var spine = new[] { new Vector2(-run * 0.5f, -FoundationDepth), new Vector2(run * 0.5f, -FoundationDepth), new Vector2(run * 0.5f, WallWalkHeight - rise - 0.08f), new Vector2(-run * 0.5f + StepTread, rise - 0.08f) };
-				d.Add(StructureShapes.Prism(spine, 0.3f, 1.2f, StructureMaterial.Stone, 5).Transform(Matrix4x4.identity));
-			}
-		}
-
-		private static void Keep(StructureDraft d)
-		{
-			bool roofed = d.Variant == 1;
-			float w = roofed ? 12f : 10f, dz = roofed ? 9f : 10f, h = 12f, th = 1.6f;
-			d.Add(StructureShapes.ChamferBox(new Vector3(0f, (1f - FoundationDepth) * 0.5f, 0f), new Vector3(w + 1.2f, 1f + FoundationDepth, dz + 1.2f), d.Bevel(0.05f), StructureMaterial.Stone, 1));
-			// A doorway at the head of the outside steps (2 m up), a landing inside it and steps down to the floor.
-			WallsWithDoor(d, Vector3.zero, w, dz, th, 1f, h, 0f, 1.4f, 2f, 4.4f, StructureMaterial.Stone, 2);
-			d.Add(StructureShapes.Box(new Vector3(0f, 1.1f, 0f), new Vector3(w - 2f * th, 0.2f, dz - 2f * th), StructureMaterial.Earth, 6));
-			float inside = -dz * 0.5f + th;
-			d.Add(StructureShapes.Box(new Vector3(0f, 1.6f, inside + 0.6f), new Vector3(1.8f, 0.8f, 1.2f), StructureMaterial.Stone, 140));
-			Steps(d, new Vector3(0f, 0f, inside + 1.2f), Vector3.forward, 1.8f, 2f, StructureMaterial.Stone, 141, 1.2f);
-			HangDoor(d, new Vector3(0f, 2f, inside - 0.05f), Vector3.right, Vector3.forward, 1.4f, 2.4f, StructureDoorKind.Studded);
-			d.Room(new Vector3(0f, 1.2f, 0f), new Vector2(w - 2f * th, dz - 2f * th), h - 1.6f, StructureRoomKind.Hall);
-			// The landing and the steps down off it, and a stride at their foot: the only way into the hall (2026-10-15).
-			d.RoomClear(new Vector2(-1.2f, inside), new Vector2(1.2f, inside + 1.2f + 4 * StepTread + 1f));
-			d.Add(StructureShapes.Box(new Vector3(0f, h - 0.2f, 0f), new Vector3(w - 2f * th + 0.1f, 0.4f, dz - 2f * th + 0.1f), StructureMaterial.Timber, 7, StructureRole.Roof));
-			if (roofed)
-			{
-				// Pilaster buttresses on the long walls, and a hipped roof.
-				for (int s = -1; s <= 1; s += 2)
-				{
-					for (int i = -1; i <= 1; i++)
-					{
-						if (s < 0 && i == 0)
-						{
-							continue; // the door is there
-						}
-						d.Add(StructureShapes.ChamferBox(new Vector3(i * 3.6f, h * 0.45f, s * (dz * 0.5f + 0.3f)), new Vector3(1.1f, h * 0.9f, 0.6f), d.Bevel(0.04f), StructureMaterial.Stone, 20 + i + 3 * s));
-					}
-				}
-				// Its rise is its palette's pitch over the half depth (StructureRoofs, I6h); flat, a deck behind merlons.
-				OwnRoofPlan plan = OwnRoof(d, StructureMaterial.Timber, 4f, dz * 0.5f + 0.5f);
-				using (d.Builds(RoofRoles))
-				{
-					if (plan.Flat)
-					{
-						d.Add(StructureShapes.Box(new Vector3(0f, h + 0.08f, 0f), new Vector3(w, 0.16f, dz), StructureMaterial.Timber, 30, StructureRole.Roof)).Grain = Vector3.forward;
-					}
-					else
-					{
-						float r = plan.Rise;
-						var ridge = new[] { new Vector2(-(w * 0.5f + 0.5f), h), new Vector2(w * 0.5f + 0.5f, h), new Vector2(w * 0.5f - 2.5f, h + r), new Vector2(-(w * 0.5f - 2.5f), h + r) };
-						StructureSolid roof = StructureShapes.Prism(ridge, -dz * 0.5f - 0.5f, dz * 0.5f + 0.5f, StructureMaterial.Timber, 30, StructureRole.Roof);
-						// Hip the ends: cut each gable end back to a slope.
-						float k = r / (dz * 0.5f + 0.5f);
-						var n0 = new Vector3(0f, 1f, k).normalized;
-						var n1 = new Vector3(0f, 1f, -k).normalized;
-						roof.Clip(n0, Vector3.Dot(n0, new Vector3(0f, h + r, 0f)));
-						roof.Clip(n1, Vector3.Dot(n1, new Vector3(0f, h + r, 0f)));
-						d.Add(roof);
-					}
-				}
-				if (plan.Flat)
-				{
-					for (int f = 0; f < 4; f++)
-					{
-						Quaternion q = Quaternion.Euler(0f, f * 90f, 0f);
-						float hx = (f % 2 == 0 ? w : dz) * 0.5f, hz = (f % 2 == 0 ? dz : w) * 0.5f;
-						Crenellate(d, q * new Vector3(-hx + 0.3f, h + 0.16f, -hz + 0.3f), q * new Vector3(hx - 0.3f, h + 0.16f, -hz + 0.3f), 0.6f, 1f, 0.9f, 0.6f, StructureMaterial.Stone, 40 + f * 10);
-					}
-				}
+				// A low sloping parapet, its coping parallel to the pitch, built down into the flight's own stone.
+				var parapet = new[] { new Vector2(railX, bottom), new Vector2(landing, bottom), new Vector2(landing, rise * (risers - 1) + 0.9f), new Vector2(railX, rise * railFrom + 0.9f) };
+				d.Add(StructureShapes.Prism(parapet, front - 0.25f, front, StructureMaterial.Stone, 9).Transform(Matrix4x4.identity));
 			}
 			else
 			{
-				// Merlons on every edge, and a turret proud at each corner.
-				for (int f = 0; f < 4; f++)
+				// Posts every fourth tread and a handrail and mid-rail on the pitch.
+				int post = 0;
+				for (int i = railFrom; i < risers; i += 4)
 				{
-					Quaternion q = Quaternion.Euler(0f, f * 90f, 0f);
-					float hx = (f % 2 == 0 ? w : dz) * 0.5f, hz = (f % 2 == 0 ? dz : w) * 0.5f;
-					Crenellate(d, q * new Vector3(-hx + 1.4f, h, -hz + 0.3f), q * new Vector3(hx - 1.4f, h, -hz + 0.3f), 0.6f, 1f, 0.9f, 0.6f, StructureMaterial.Stone, 40 + f * 10);
+					float px = -half + (i - 1) * StepTread + 0.06f;
+					d.Add(StructureShapes.Box(new Vector3(px, rise * i + 0.475f, front - 0.06f), new Vector3(0.1f, 0.95f, 0.1f), StructureMaterial.Timber, 70 + post++));
 				}
-				for (int sx = -1; sx <= 1; sx += 2)
+				foreach (float y in new[] { 0.45f, 0.9f })
 				{
-					for (int sz = -1; sz <= 1; sz += 2)
-					{
-						var c = new Vector3(sx * (w * 0.5f - 0.6f), 0f, sz * (dz * 0.5f - 0.6f));
-						d.Add(StructureShapes.ChamferBox(c + new Vector3(0f, (h + 2.2f) * 0.5f, 0f), new Vector3(2.4f, h + 2.2f, 2.4f), d.Bevel(0.04f), StructureMaterial.Stone, 90 + sx + 3 * sz));
-						if (d.Mid)
-						{
-							d.Add(StructureShapes.ChamferBox(c + new Vector3(0f, h + 2.5f, 0f), new Vector3(2.7f, 0.6f, 2.7f), d.Bevel(0.03f), StructureMaterial.Stone, 100 + sx + 3 * sz, StructureRole.Detail));
-						}
-					}
+					d.Add(StructureShapes.Beam(new Vector3(railX, rise * railFrom + y, front - 0.06f), new Vector3(landing + 0.06f, rise * (risers - 1) + y + 0.08f, front - 0.06f),
+						0.07f, 0.07f, StructureMaterial.Timber, y < 0.7f ? 68 : 69));
 				}
 			}
-			// The flight of steps up to the door, and arrow slits.
-			int steps = 10; // every level: the last is the collider, and a riser over 0.25 m is a wall to a character
-			for (int i = 0; i < steps; i++)
+			// The landing's pier, the flight's last riser up onto it.
+			d.Add(StructureShapes.Box(new Vector3(0.5f * (landing + half), 0.5f * ((timber ? WallWalkHeight - 0.08f : WallWalkHeight) + bottom), 0f),
+				new Vector3(WallStairLanding, (timber ? WallWalkHeight - 0.08f : WallWalkHeight) - bottom, WallStairWidth), StructureMaterial.Stone, 4));
+			if (timber)
 			{
-				float t = (i + 1f) / steps;
-				float top = 2f * t;
-				float zFront = -dz * 0.5f - 0.06f - (1f - t) * 3.2f - 0.6f;
-				d.Add(StructureShapes.Box(new Vector3(0f, (top - 0.3f) * 0.5f, (zFront + (-dz * 0.5f)) * 0.5f), new Vector3(1.8f, top + 0.3f, -dz * 0.5f - zFront), StructureMaterial.Stone, 120 + i));
-			}
-			if (d.Mid)
-			{
-				for (int f = 0; f < 4; f++)
+				// The spine under the treads from the stone foot to the pier: its top under each tread's back edge.
+				float xs = -half + stone * StepTread;
+				var spine = new[] { new Vector2(xs, bottom), new Vector2(landing, bottom), new Vector2(landing, rise * (risers - 1) - 0.08f), new Vector2(xs, rise * stone - 0.08f) };
+				d.Add(StructureShapes.Prism(spine, -0.45f, 0.45f, StructureMaterial.Stone, 5).Transform(Matrix4x4.identity));
+				// A plank deck on the pier, posts and rails round its open front and end.
+				d.Add(StructureShapes.Box(new Vector3(0.5f * (landing + half), WallWalkHeight - 0.04f, 0f), new Vector3(WallStairLanding, 0.08f, WallStairWidth), StructureMaterial.Timber, 6)).Grain = Vector3.right;
+				var posts = new[] { new Vector2(landing + 0.06f, front - 0.06f), new Vector2(half - 0.06f, front - 0.06f), new Vector2(half - 0.06f, back + 0.06f) };
+				for (int p = 0; p < posts.Length; p++)
 				{
-					Quaternion q = Quaternion.Euler(0f, f * 90f, 0f);
-					float hz = (f % 2 == 0 ? dz : w) * 0.5f;
-					for (int i = -1; i <= 1; i += 2)
-					{
-						d.Add(StructureShapes.Block(q * new Vector3(i * 2.4f, 7.5f, -hz - 0.02f), new Vector3(0.18f, 1.3f, 0.06f), q, StructureMaterial.Iron, 130 + f * 2 + (i > 0 ? 1 : 0), StructureRole.Detail));
-					}
+					d.Add(StructureShapes.Box(new Vector3(posts[p].x, WallWalkHeight + 0.5f, posts[p].y), new Vector3(0.12f, 1f, 0.12f), StructureMaterial.Timber, 60 + p));
 				}
+				foreach (float y in new[] { 0.5f, 0.95f })
+				{
+					d.Add(StructureShapes.Box(new Vector3(0.5f * (landing + half), WallWalkHeight + y, front - 0.06f), new Vector3(WallStairLanding, 0.08f, 0.06f), StructureMaterial.Timber, y < 0.7f ? 64 : 65)).Grain = Vector3.right;
+					d.Add(StructureShapes.Box(new Vector3(half - 0.06f, WallWalkHeight + y, 0f), new Vector3(0.06f, 0.08f, WallStairWidth), StructureMaterial.Timber, y < 0.7f ? 66 : 67)).Grain = Vector3.forward;
+				}
+				return;
 			}
+			// A stone parapet round the landing's open front and end, a metre high.
+			d.Add(StructureShapes.Box(new Vector3(0.5f * (landing + half), WallWalkHeight + 0.5f, front - 0.15f), new Vector3(WallStairLanding, 1f, 0.3f), StructureMaterial.Stone, 7));
+			d.Add(StructureShapes.Box(new Vector3(half - 0.15f, WallWalkHeight + 0.5f, 0f), new Vector3(0.3f, 1f, WallStairWidth), StructureMaterial.Stone, 8));
 		}
 
 		// ── Stilts ────────────────────────────────────────────────────
@@ -649,6 +414,35 @@ namespace FishMMO.Shared.WorldDesign
 			// A timber stair up to the deck (a ladder is a wall to a character's controller, which climbs 0.25 m at most).
 			float front = -size.y * 0.5f;
 			Steps(d, new Vector3(stairX, 0f, front), Vector3.back, StairWidth, deck, StructureMaterial.Timber, key + 60);
+			// Its handrails, and a railing round the deck's edge open only where the stair comes up (2026-10-19, round 3: the deck
+			// stood 2 m up with nothing at its edge, and the stair's sides were open). At every level: the last is the collider.
+			StepRails(d, new Vector3(stairX, 0f, front), Vector3.back, StairWidth, deck, StructureMaterial.Timber, key + 61);
+			float hx = size.x * 0.5f - 0.05f, hz = size.y * 0.5f - 0.05f, gap = StairWidth * 0.5f - 0.05f, rail = deck + 0.95f;
+			Vector3[] round =
+			{
+				new Vector3(stairX + gap, 0f, -hz), new Vector3(hx, 0f, -hz), new Vector3(hx, 0f, hz), new Vector3(-hx, 0f, hz), new Vector3(-hx, 0f, -hz),
+				new Vector3(stairX - gap, 0f, -hz),
+			};
+			for (int i = 0; i + 1 < round.Length; i++)
+			{
+				Vector3 a = round[i], b = round[i + 1];
+				d.Add(StructureShapes.Beam(a + Vector3.up * rail, b + Vector3.up * rail, 0.08f, 0.08f, StructureMaterial.Timber, key + 70 + i, StructureRole.Detail));
+				if (d.Mid)
+				{
+					d.Add(StructureShapes.Beam(a + Vector3.up * (deck + 0.5f), b + Vector3.up * (deck + 0.5f), 0.05f, 0.05f, StructureMaterial.Timber, key + 76 + i, StructureRole.Detail));
+				}
+				// Posts at its ends and, on the finer levels, every metre and a half between.
+				int posts = d.Mid ? Mathf.Max(1, Mathf.CeilToInt((b - a).magnitude / 1.5f)) : 1;
+				for (int p = i == 0 ? 0 : 1; p <= posts; p++)
+				{
+					if (!d.Mid && p > 0 && p < posts)
+					{
+						continue;
+					}
+					Vector3 at = Vector3.Lerp(a, b, p / (float)posts);
+					d.Add(StructureShapes.Box(at + Vector3.up * (deck + 0.47f), new Vector3(0.1f, 0.94f, 0.1f), StructureMaterial.Timber, key + 82 + i * 12 + p, StructureRole.Detail));
+				}
+			}
 		}
 
 		private static void StiltHut(StructureDraft d)
@@ -772,7 +566,10 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			d.Add(StructureShapes.Lathe(new[] { new Vector2(1.4f, h + 0.3f), new Vector2(1.4f, h + 0.9f) }, 8, StructureMaterial.Iron, 40, false));
-			d.Add(StructureShapes.Lathe(new[] { new Vector2(1.25f, h + 0.9f), new Vector2(1.25f, h + 2.4f) }, 8, StructureMaterial.Plaster, 41, false));
+			// The lantern's panes (Glass: lit at night, StructureSurfaces), and the fire and turning mirrors inside them
+			// (SceneEmitterKind.Beacon: its light and its sweeping beams).
+			d.Add(StructureShapes.Lathe(new[] { new Vector2(1.25f, h + 0.9f), new Vector2(1.25f, h + 2.4f) }, 8, StructureMaterial.Glass, 41, false));
+			d.Emit(new Vector3(0f, h + 1.65f, 0f), SceneEmitterKind.Beacon);
 			d.Add(StructureShapes.Lathe(new[] { new Vector2(1.65f, h + 2.4f), new Vector2(0f, h + 3.5f) }, 8, StructureMaterial.Iron, 42, false, 0f, false, false, StructureRole.Roof));
 			d.Add(StructureShapes.Sphere(new Vector3(0f, h + 3.6f, 0f), new Vector3(0.18f, 0.18f, 0.18f), d.Seg(8, 4), d.Fine ? 5 : 3, StructureMaterial.Iron, 43));
 			if (d.Mid)

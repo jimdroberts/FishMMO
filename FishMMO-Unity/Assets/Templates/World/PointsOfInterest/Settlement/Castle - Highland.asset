@@ -103,7 +103,7 @@ MonoBehaviour:
     MaxDecay: 0
     MinScale: 1
     MaxScale: 1
-    Role: 1
+    Role: 8
     Style: 
   - Tag: =Longhouse
     MinCount: 2
@@ -141,17 +141,80 @@ MonoBehaviour:
     MaxScale: 1
     Role: 8
     Style: 
+  - Tag: =Barracks
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: 
+  - Tag: =TrainingYard
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 12
+    Style: 
+  - Tag: stable
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: timber
+  - Tag: smithy
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: timber
+  - Tag: =Bakery
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: 
+  - Tag: =Church#1
+    MinCount: 0
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: stone
+  - Tag: house
+    MinCount: 0
+    MaxCount: 4
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: 
   Features:
-  - rid: 4061506230068183847
-  - rid: 4061506230068183848
-  - rid: 4061506230068183849
-  - rid: 4061506230068183850
-  - rid: 4061506230068183851
-  - rid: 4061506230068183852
+  - rid: 4061506278254182614
+  - rid: 4061506278254182615
+  - rid: 4061506278254182616
+  - rid: 4061506278254182617
+  - rid: 4061506278254182618
+  - rid: 4061506278254182619
   references:
     version: 2
     RefIds:
-    - rid: 4061506230068183847
+    - rid: 4061506278254182614
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -162,21 +225,21 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings:
-        - {x: -3, y: 2, z: 10.07}
-    - rid: 4061506230068183848
+        - {x: -3, y: 2, z: 10}
+    - rid: 4061506278254182615
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506230068183849
+    - rid: 4061506278254182616
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506230068183850
+    - rid: 4061506278254182617
       type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
-        Offset: {x: -3, y: 10.07}
-    - rid: 4061506230068183851
+        Offset: {x: -3, y: 10}
+    - rid: 4061506278254182618
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 3
@@ -184,7 +247,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506230068183852
+    - rid: 4061506278254182619
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 1

@@ -132,6 +132,29 @@ namespace FishMMO.Shared.WorldDesign
 				(ground.Count > 0 ? $"\n  Biomes: {string.Join(", ", ground)}" : string.Empty));
 		}
 
+		/// <summary>
+		/// The project's substance of a shipped name, created (and registered) from the shipped table when the project lacks it
+		/// (2026-10-18, phase I2q): Author biome art calls this for a biome whose file says what its ground emits, so a substance
+		/// added to the table after this generator was last run (Steam, 2026-10-10: every geyser basin went without sites until it
+		/// existed) is made by the authoring that needs it. Null for a name the table does not ship; nothing else is created.
+		/// </summary>
+		public static WeatherSubstance EnsureShipped(string name)
+		{
+			SubstanceSpec spec = Array.Find(Substances, candidate => candidate.Name == name);
+			if (spec == null)
+			{
+				return null;
+			}
+			var report = new Report();
+			Dictionary<string, WeatherSubstance> substances = EnsureSubstances(SubstancesFolder, report);
+			if (report.Substances > 0)
+			{
+				AssetDatabase.SaveAssets();
+				Debug.Log($"[Weather content] {report.Substances} shipped substance(s) created or registered for {name}.");
+			}
+			return substances.TryGetValue(name, out WeatherSubstance substance) ? substance : null;
+		}
+
 		// ── Substances ──
 
 		/// <summary>One shipped substance: its look and what it leaves, and what it physically is.</summary>

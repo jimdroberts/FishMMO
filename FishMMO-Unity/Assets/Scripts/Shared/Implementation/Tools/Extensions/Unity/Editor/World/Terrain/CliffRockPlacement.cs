@@ -68,9 +68,9 @@ namespace FishMMO.Shared.WorldDesign
 		public float MinFootBand = 2.5f;
 
 		/// <summary>
-		/// Ground no talus may reach (scene x, z): rivers, lakes and their beds. A cone stops short of it, by
-		/// <see cref="ExclusionMarginMetres"/>, and no debris rock lands on it. Rock sites test it separately.
-		/// Asked from several threads at once: it must only read.
+		/// Ground no rock may stand on (scene x, z): rivers, lakes and their beds, sites, cave mouths and ways. A cone
+		/// stops short of it, by <see cref="ExclusionMarginMetres"/>, and every rock whose footprint as seated covers it
+		/// is refused (<see cref="CliffRockPlacement.CoversExcluded"/>). Asked from several threads at once: it must only read.
 		/// </summary>
 		public Func<float, float, bool> Excluded;
 
@@ -123,6 +123,8 @@ namespace FishMMO.Shared.WorldDesign
 	public sealed class CliffRockStats
 	{
 		public int Attempts, Rejected, Dropped, Face, Talus, Cones, Footing, Backdrops;
+		/// <summary>Rocks refused because their footprint as seated covered excluded ground (<see cref="CliffRockPlacementOptions.Excluded"/>).</summary>
+		public int KeptOut;
 		public float CliffLength, Covered;
 		/// <summary>The rock budget the cliff length gave (<see cref="CliffRockPlacementOptions.MinBudget"/> … <see cref="CliffRockPlacementOptions.MaxRocks"/>).</summary>
 		public int Budget;
@@ -856,7 +858,7 @@ namespace FishMMO.Shared.WorldDesign
 					var c = NewCandidate(run, m, at, S, structure, true);
 					c.R = InSitu(run, m, at, c.Slope, true);
 					run.Plan.Stats.Attempts++;
-					if (Fit(run, c, 0.97f, out PlacedCliffRock rock) && Accept(run, rock, run.Rng.Range(0.1f, 0.3f)))
+					if (Fit(run, c, 0.97f, out PlacedCliffRock rock) && Accept(run, rock, run.Rng.Range(0.1f, 0.3f)) && !KeptOut(run, in rock))
 					{
 						rock.BandT = 0f;
 						rock.Base = true;
@@ -1022,6 +1024,10 @@ namespace FishMMO.Shared.WorldDesign
 				run.Plan.Stats.Dropped++;
 				return false;
 			}
+			if (KeptOut(run, in rock))
+			{
+				return false;
+			}
 			Vector3 n = g.NormalSmooth(rock.Position.x, rock.Position.z);
 			top = float.MinValue;
 			for (int i = 0; i < count; i++)
@@ -1161,6 +1167,10 @@ namespace FishMMO.Shared.WorldDesign
 					run.Plan.Stats.Rejected++;
 					continue;
 				}
+				if (KeptOut(run, in rock))
+				{
+					continue;
+				}
 				rock.BandT = role == CliffRole.Crest ? 1f : t;
 				rock.Base = c.Base;
 				Add(run, rock, role);
@@ -1180,6 +1190,52 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				Stamp(run, rock);
 			}
+		}
+
+		/// <summary>
+		/// True when a seated rock's footprint covers excluded ground (<see cref="CliffRockPlacementOptions.Excluded"/>):
+		/// its seating mesh's bounds, turned and scaled as placed, tested on a 5 × 5 grid at their mid height.
+		/// </summary>
+		/// <remarks>
+		/// A rock is sited by its centre, but a cliff section is tens of metres across: one centred just outside a cave's
+		/// keep-out or a way's clearance stood over the mouth or across the path (2026-10-11). The scene side used to drop
+		/// such rocks once the plan was made, but by then the rocks seated after them stood on their tops, and those stayed
+		/// up in the air where the rock under them went (2026-10-21: blocks and ice fill 5–15 m over the slope beside cave
+		/// mouths). So the test is the planner's, made as each rock is seated, before it joins the top raster or the index.
+		/// </remarks>
+		public static bool CoversExcluded(in PlacedCliffRock rock, Bounds seating, Func<float, float, bool> excluded)
+		{
+			if (excluded == null)
+			{
+				return false;
+			}
+			for (int ix = 0; ix <= 4; ix++)
+			{
+				for (int iz = 0; iz <= 4; iz++)
+				{
+					var local = new Vector3(Mathf.Lerp(seating.min.x, seating.max.x, ix / 4f), seating.center.y, Mathf.Lerp(seating.min.z, seating.max.z, iz / 4f));
+					Vector3 at = rock.World(local);
+					if (excluded(at.x, at.z))
+					{
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
+		/// <summary>
+		/// <see cref="CoversExcluded"/> for a rock about to be added, counted in <see cref="CliffRockStats.KeptOut"/>. Asked
+		/// after the overlap test, so a refusal draws nothing the acceptance would not have.
+		/// </summary>
+		private static bool KeptOut(Run run, in PlacedCliffRock rock)
+		{
+			if (run.O.Excluded == null || !CoversExcluded(in rock, run.Metrics.Of(rock.Piece).Bounds, run.O.Excluded))
+			{
+				return false;
+			}
+			run.Plan.Stats.KeptOut++;
+			return true;
 		}
 
 		/// <summary>Volume overlap with every placed face rock (equal-volume spheres) against an allowance; never swallowing one.</summary>
@@ -2351,7 +2407,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					Candidate c = t.C;
 					Metrics m = c.M;
-					if (!Fit(run, c, 0.6f, out PlacedCliffRock rock))
+					if (!Fit(run, c, 0.6f, out PlacedCliffRock rock) || KeptOut(run, in rock))
 					{
 						continue;
 					}

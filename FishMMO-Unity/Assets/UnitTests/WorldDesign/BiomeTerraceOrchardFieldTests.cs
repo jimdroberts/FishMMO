@@ -64,7 +64,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				string name = Path.GetFileName(path);
 				Assert.That(Regex.IsMatch(text, @"^  orchards:\s*\n  - ", RegexOptions.Multiline), Is.False, $"{name} plants an orchard");
 				Assert.That(Regex.IsMatch(text, @"^\s*Surface: [4-9]\s*$", RegexOptions.Multiline), Is.False, $"{name} lays a new surface");
-				Assert.That(Regex.IsMatch(text, @"^\s*Riser: [1-9]\s*$", RegexOptions.Multiline), Is.False, $"{name} terraces a crop");
+				// The abandoned-terrace block carries its own (inert while Flights is 0) Riser; only crop risers count here.
+				string crops = Regex.Replace(text, @"^  abandonedTerraces:\s*\n(?:    .*\n)*", "", RegexOptions.Multiline);
+				Assert.That(Regex.IsMatch(crops, @"^\s*Riser: [1-9]\s*$", RegexOptions.Multiline), Is.False, $"{name} terraces a crop");
 				Assert.That(Regex.IsMatch(text, @"^\s*Rows: (?!0\s*$)", RegexOptions.Multiline), Is.False, $"{name} sows a crop in rows");
 				Assert.That(Regex.IsMatch(text, @"^    Bottomland: (?!0\s*$)", RegexOptions.Multiline), Is.False, $"{name} keeps fields to the bottomland");
 				Assert.That(Regex.IsMatch(text, @"^    Centuriation: (?!0\s*$)", RegexOptions.Multiline), Is.False, $"{name} lays a centuriation grid");

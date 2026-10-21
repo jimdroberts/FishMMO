@@ -41,8 +41,12 @@ namespace FishMMO.Client
 			new Vector2(600f, 2f),
 		};
 
-		[Tooltip("The detail-layer density (as a share of its maximum) at and above which grass grows at the FULL ring density. The scatter paints biome grass at roughly 20–40% of the maximum; read as a straight spawn chance that thinned the near field to a few dozen blades per square metre, which looked like the old clumps. Below this the field thins in proportion, so painted edges still fade.")]
+		[Tooltip("Sprinkled species (flowers, reeds): the share of its layer's typical painted density at and above which a species has its full chance. Their layers are scattered points, so each terrain's are scaled to their own typical density first; below this the chance thins in proportion, so painted edges still fade. Tussock grass is coverage instead (Full Coverage).")]
 		[Range(0.05f, 1f)] public float Fullness = 0.35f;
+		[Tooltip("Tussock grass: the ground coverage (the biome rule's carpet coverage × its texture ramp, biome share, slope and clump) at and above which grass grows at the FULL ring density; below it the field thins in proportion. The coverage is the biome's own, never rescaled per terrain, so a desert's dune grass (0.25) stays a quarter as thick as a meadow's (0.85). Lush biomes paint 0.8–0.95 at their thickest.")]
+		[Range(0.05f, 1f)] public float FullCoverage = 0.8f;
+		[Tooltip("How a thin field thins: 0 every blade alike (a sparse lawn of evenly spaced blades), 1 whole clumps come and go while the ones left stay full (bunchgrass on bare sand). Between, both: a field at share p keeps p^t of its clumps, each at p^(1−t) of its blades. A full field is the same either way.")]
+		[Range(0f, 1f)] public float Tufting = 0.6f;
 		[Tooltip("The coarsest candidate lattice level sprinkled species (flowers, reeds) stand on. Each level holds a quarter of the cells, so their chance per candidate is four times higher and the distance thinning keeps all of them four times further down the share. 0: they thin with the lawn from the first ring, and a flower grew out of the ground a few metres ahead of the camera. 2 (with the default rings): full count to about 75 m, where a flower head is under a pixel. A type never goes so coarse that its chance passes 1 (reeds stop at 1).")]
 		[Range(0, 3)] public int SprinkleLevel = 2;
 

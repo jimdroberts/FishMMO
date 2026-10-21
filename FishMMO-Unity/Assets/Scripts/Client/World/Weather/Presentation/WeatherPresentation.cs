@@ -58,6 +58,12 @@ namespace FishMMO.Client
 		public WeatherFrame Shown => shown;
 		public SkyOcclusionMap Occlusion => occlusion;
 
+		/// <summary>0..1: how sheltered the camera is this frame (a roof, a cave, the sea over it), as the weather's sound uses it.</summary>
+		public float Shelter { get; private set; }
+
+		/// <summary>Whether the camera is sealed in a cave this frame (<see cref="UndergroundView.Sealed"/>): the weather outside is not heard.</summary>
+		public bool Underground { get; private set; }
+
 		/// <summary>Where snow lies and the ground is wet, around the camera.</summary>
 		public WeatherCoverMap CoverMap => coverMap;
 		public PrecipitationField Precipitation => precipitation;
@@ -291,6 +297,8 @@ namespace FishMMO.Client
 			{
 				shelter = Mathf.Max(shelter, 1f);
 			}
+			Shelter = shelter;
+			Underground = camera != null && UndergroundView.Sealed(camera);
 
 			// Where the cover lies, as opposed to how much of it the scene holds: the ground of this moment at each
 			// place round the camera, worked out from the world time as every other player's is (GroundCover).
@@ -317,7 +325,7 @@ namespace FishMMO.Client
 			GlobalsMarker.End();
 			currentTier = tier;
 			AudioMarker.Begin();
-			audioPresenter.Update(shown, shelter, profile.Audio, dt, snapAudio);
+			audioPresenter.Update(shown, shelter, profile.Audio, dt, snapAudio, Underground ? 0f : 1f);
 			snapAudio = false;
 			AudioMarker.End();
 		}

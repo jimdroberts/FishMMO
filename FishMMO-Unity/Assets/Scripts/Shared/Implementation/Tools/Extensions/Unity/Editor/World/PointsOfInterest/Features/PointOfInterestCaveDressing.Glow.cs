@@ -35,98 +35,21 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>The least distance between two of the glow's lights, metres.</summary>
 			private const float LightSpacing = 9f;
 
-			/// <summary>The hues a system's glow is drawn in (indices into the kinds' hues).</summary>
-			private struct Palette
-			{
-				public int Crystal, CrystalAccent, Fungus, FungusAccent, Ore, OreAccent, GlowOre;
-				/// <summary>Whether luminous fungi grow here, and glow-worms hang.</summary>
-				public bool Fungi, Worms;
-				/// <summary>
-				/// Whether the lining's crystals are the biome's own glowing crystals (<see cref="Mineral"/>, <see cref="MineralAccent"/>)
-				/// in place of the glow art's: where its template grows a kind that glows (2026-10-16, I6c).
-				/// </summary>
-				public bool Minerals;
-				public BiomeCaveCrystalKind Mineral, MineralAccent;
-			}
-
-			private Palette palette;
+			private CaveGlowPalette palette;
 			private bool paletteMade;
 
 			/// <summary>The ways across the halls (system frame, at walking height): from each way into a great hall to its middle.</summary>
 			private readonly List<(Vector3 a, Vector3 b)> ways = new List<(Vector3, Vector3)>();
 
-			/// <summary>The system's palette, drawn from its seed by form.</summary>
-			private Palette Colours()
+			/// <summary>The system's palette, drawn from its seed by form (<see cref="CaveGlowPalettes.For"/>, shared with the cave cover).</summary>
+			private CaveGlowPalette Colours()
 			{
-				if (paletteMade)
+				if (!paletteMade)
 				{
-					return palette;
+					palette = CaveGlowPalettes.For(system.Form, system.Seed, biome);
+					paletteMade = true;
 				}
-				paletteMade = true;
-				var random = new DeterministicRNG(unchecked(system.Seed * 0x5D3B + 0x7A21));
-				int crystals = CaveArt.HueCount(CaveGlowKind.Crystal), fungi = CaveArt.HueCount(CaveGlowKind.Fungus);
-				var p = new Palette
-				{
-					Crystal = random.Range(0, crystals),
-					Fungus = random.Range(0, fungi),
-					Fungi = true,
-					Worms = true,
-				};
-				p.CrystalAccent = (p.Crystal + random.Range(1, crystals)) % crystals;
-				p.FungusAccent = (p.Fungus + random.Range(1, fungi)) % fungi;
-				// Iron and copper the common ores, silver less so, gold rare.
-				string[] ores = { "Iron", "Copper", "Silver", "Gold" };
-				float roll = random.NextFloat();
-				int ore = roll < 0.35f ? 0 : roll < 0.7f ? 1 : roll < 0.88f ? 2 : 3;
-				p.Ore = HueOf(CaveGlowKind.OreVein, ores[ore], 0);
-				p.OreAccent = HueOf(CaveGlowKind.OreVein, ores[(ore + 1 + random.Range(0, 3)) % 4], 1);
-				p.GlowOre = HueOf(CaveGlowKind.GlowOreVein, random.NextFloat() < 0.6f ? "Starmetal" : "Emberstone", 0);
-				switch (system.Form)
-				{
-					case CaveForm.IceCave:
-						p.Crystal = p.CrystalAccent = HueOf(CaveGlowKind.Crystal, "IceBlue", 0);
-						p.Fungi = p.Worms = false;
-						break;
-					case CaveForm.LavaTube:
-						p.Crystal = p.CrystalAccent = HueOf(CaveGlowKind.Crystal, "Amber", 3);
-						p.GlowOre = HueOf(CaveGlowKind.GlowOreVein, "Emberstone", 1);
-						p.Fungi = p.Worms = false;
-						break;
-					case CaveForm.Mine:
-						p.Worms = false;
-						break;
-				}
-				// A natural cave whose glow was drawn by chance (not an ice cave's ice, a lava tube's amber or a mine) where the biome
-				// grows crystals that glow: those line its ways, a lead and an accent by weight from a stream of their own (so the
-				// draws above stand as they were), and the giant crystals take the lead's and the accent's hue.
-				if (system.Form == CaveForm.Cave || system.Form == CaveForm.Grotto || system.Form == CaveForm.SeaCave)
-				{
-					IReadOnlyList<BiomeCaveCrystal> grown = BiomeTemplateArt.CaveCrystals(biome);
-					if (BiomeCaveCrystals.Total(grown, glowingOnly: true) > 0f)
-					{
-						var pick = new DeterministicRNG(unchecked(system.Seed * 0x4C1F + 0x2B95));
-						BiomeCaveCrystals.TryPick(grown, pick.NextFloat(), out p.Mineral, glowingOnly: true);
-						BiomeCaveCrystals.TryPick(grown, pick.NextFloat(), out p.MineralAccent, glowingOnly: true);
-						p.Minerals = true;
-						p.Crystal = CrystalHueOf(p.Mineral, p.Crystal);
-						p.CrystalAccent = CrystalHueOf(p.MineralAccent, p.CrystalAccent);
-					}
-				}
-				palette = p;
-				return p;
-			}
-
-			/// <summary>The glow art's crystal hue nearest a glowing crystal's light (violet, ice-blue, green or amber by its light's hue bits).</summary>
-			private static int CrystalHueOf(BiomeCaveCrystalKind kind, int fallback)
-			{
-				switch (ProceduralArtCatalogue.CaveMineralOf(kind).LightHue)
-				{
-					case 0: return HueOf(CaveGlowKind.Crystal, "Violet", fallback);
-					case 1: return HueOf(CaveGlowKind.Crystal, "IceBlue", fallback);
-					case 2: return HueOf(CaveGlowKind.Crystal, "Green", fallback);
-					case 3: return HueOf(CaveGlowKind.Crystal, "Amber", fallback);
-					default: return fallback;
-				}
+				return palette;
 			}
 
 			/// <summary>
@@ -135,19 +58,13 @@ namespace FishMMO.Shared.WorldDesign
 			/// </summary>
 			private bool TryCrystal(CaveGlowKind kind, int hue, int variant, out CaveGlowArt art)
 			{
-				Palette p = Colours();
+				CaveGlowPalette p = Colours();
 				if (kind == CaveGlowKind.Crystal && p.Minerals)
 				{
 					BiomeCaveCrystalKind mineral = hue == p.CrystalAccent && hue != p.Crystal ? p.MineralAccent : p.Mineral;
 					return CaveArt.TryMineral(mineral, variant, out art);
 				}
 				return CaveArt.TryGlow(kind, hue, variant, out art);
-			}
-
-			private static int HueOf(CaveGlowKind kind, string name, int fallback)
-			{
-				int i = CaveArt.HueIndex(kind, name);
-				return i >= 0 ? i : fallback;
 			}
 
 			/// <summary>How thickly the system's character lines its ways (1 a hall cave's).</summary>
@@ -382,7 +299,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>A crystal cluster or a fungus tuft, by the palette and the character's share.</summary>
 			private bool FloorGlowPick(DeterministicRNG random, Vector3 at, bool small, bool light)
 			{
-				Palette p = Colours();
+				CaveGlowPalette p = Colours();
 				bool crystal = random.NextFloat() < CrystalShare;
 				bool accent = random.NextFloat() < 0.25f;
 				float size = random.NextFloat();
@@ -412,6 +329,10 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return false;
 				}
+				if (kind == CaveGlowKind.Crystal || kind == CaveGlowKind.GiantCrystal)
+				{
+					scale *= Giant(art, at, scale, kind == CaveGlowKind.GiantCrystal ? GiantCrystalMost : CrystalMost);
+				}
 				if (!Place(art.Prefab, at - Vector3.up * (0.03f * scale), Quaternion.Euler(tx, yaw, tz), Vector3.one * scale))
 				{
 					return false;
@@ -422,6 +343,35 @@ namespace FishMMO.Shared.WorldDesign
 					Light(at + Vector3.up * (0.6f * art.Height * scale), art, LightSpacing);
 				}
 				return true;
+			}
+
+			/// <summary>The most a floor crystal's size is multiplied by for the odd giant among them.</summary>
+			private const float CrystalMost = 4f;
+			/// <summary>The same for the giant crystals (already the size of a man and more).</summary>
+			private const float GiantCrystalMost = 3.5f;
+			/// <summary>The lean of that multiplier: most crystals keep their size, the odd one grows toward the most.</summary>
+			private const float GiantSkew = 2.5f;
+
+			/// <summary>
+			/// The odd giant among a cave's crystals (2026-10-20: "we want massive crystals"): a multiplier on a floor crystal's
+			/// size, 1 + (most − 1)·u^<see cref="GiantSkew"/> from a hash of where it stands (no draw is taken, so the dressing's
+			/// stream and every other piece stay where they were), cut back by 30% at a time to where it still clears the roof and,
+			/// for a crystal that collides, stays out of the walked lanes. 1 where none fits larger.
+			/// </summary>
+			private float Giant(in CaveGlowArt art, Vector3 at, float scale, float most)
+			{
+				float u = PointOfInterestPlanner.Unit(PointOfInterestPlanner.Hash(system.Seed, Mathf.RoundToInt(at.x * 10f), Mathf.RoundToInt(at.z * 10f), 0x61A7));
+				float giant = 1f + (most - 1f) * Mathf.Pow(u, GiantSkew);
+				while (giant > 1.05f)
+				{
+					float size = scale * giant;
+					if (system.Void(at + Vector3.up * (art.Height * size + 0.2f)) < 0f && (!art.Collides || !InLane(at, art.Radius * size)))
+					{
+						return giant;
+					}
+					giant = Mathf.Max(1f, giant * 0.7f);
+				}
+				return 1f;
 			}
 
 			/// <summary>
@@ -464,7 +414,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>The kind a wall glows with here: shelf fungus, emberstone in a lava tube, crystal in an ice cave or a crystal gallery.</summary>
 			private (CaveGlowKind kind, int hue) WallKind(DeterministicRNG random)
 			{
-				Palette p = Colours();
+				CaveGlowPalette p = Colours();
 				bool accent = random.NextFloat() < 0.25f, crystal = random.NextFloat() < 0.5f;
 				if (system.Form == CaveForm.LavaTube)
 				{
@@ -511,7 +461,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				bool abyss = system.Character == CaveCharacter.Abyss;
 				float density = Density * (abyss ? 1.3f : 1f);
-				Palette colours = Colours();
+				CaveGlowPalette colours = Colours();
 				for (int i = 0; i < system.Solids.Count; i++)
 				{
 					CaveSolid s = system.Solids[i];
@@ -594,7 +544,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// </summary>
 			private void Centrepieces(DeterministicRNG random)
 			{
-				Palette colours = Colours();
+				CaveGlowPalette colours = Colours();
 				var halls = new List<CaveChamber>();
 				var rooms = new List<CaveChamber>();
 				foreach (CaveChamber c in system.Chambers)
@@ -608,7 +558,8 @@ namespace FishMMO.Shared.WorldDesign
 						rooms.Add(c);
 					}
 				}
-				var giants = new List<Vector3>();
+				// The dressing's great pieces (empty until now), so the later passes keep their own clear of these.
+				List<Vector3> giants = bigs;
 				if (system.Character == CaveCharacter.Crystal)
 				{
 					List<CaveChamber> where = halls.Count > 0 ? halls : rooms;
@@ -706,7 +657,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// </summary>
 			private void PassageGlow(DeterministicRNG random)
 			{
-				Palette colours = Colours();
+				CaveGlowPalette colours = Colours();
 				float density = Density;
 				foreach (CavePassage passage in system.Passages)
 				{

@@ -1,0 +1,481 @@
+// The run-time cave cover (CaveCoverRenderer, FishMMO.Client/World/Caves/Cover, 2026-10-20): the cave's counterpart of the
+// surface's blade grass and detail scatter. Every frame around each camera it scatters small, dense cover (moss, glow moss,
+// gravel and grit, mushrooms and glowcaps, bones, guano, pearls, mud, litter, frost, basalt grit, sulphur, embers, lichen,
+// glowing specks, bracket fungi, mineral glints, seeps, soda straws, roots, glow-worm threads; a mine's timber, iron, ore
+// crumbs and candles) on a carved cave's ROCK MESH, read straight from the mesh's own GPU buffers. Nothing is resident: every
+// instance is a deterministic function of its triangle's world centroid, its type's salt and its index (CaveCoverMath in
+// CaveCoverTypes.cs is the CPU mirror of every function here; change both together), so it is the same on every client and
+// stands still as the camera moves.
+//
+// Per camera, in order:
+//   FishCoverClear      zero every slot's counter
+//   FishCoverGenerate   ONCE PER PIECE (a 32 m cube of a cave's surface): one thread a triangle. The triangle's habitat (its
+//                       vertices' COLOR = wet, daylight, sediment, trodden and TEXCOORD3 = organic, glow, averaged), its class
+//                       (floor / wall / roof by its outward normal), then per type the cave grows: n = area x density
+//                       candidates (the whole ones and the last by its coin), each a hashed point on the triangle, thinned by
+//                       its distance through the rings (a hash under the ring's keep: the far rings' instances are a subset
+//                       of the near ones'), frustum culled, its level by distance, appended to its (type, level) slot
+//   FishCoverFinalize   each indirect command's instanceCount = min(count, capacity)
+//   FishCoverArgsFence  OpenGL only (see FishDetailScatter.compute FishScatterArgsFence)
+//
+// Slots: type * 3 + level (CaveCoverRenderer.SlotOf). No shadow view: the cover is tiny and the cave dark. A slot never
+// overflows: an append past its capacity is dropped (the renderer reads the counts back and grows the slot).
+//
+// Portable (WebGPU, Vulkan, D3D11/12, Metal, GLCore): no wave intrinsics; atomics only on a RWByteAddressBuffer; the mesh
+// read as raw bytes with aligned Loads only; 7 storage buffers in the generate kernel (WebGPU's per-stage limit is 8).
+
+#pragma kernel FishCoverClear
+#pragma kernel FishCoverGenerate
+#pragma kernel FishCoverFinalize
+#pragma kernel FishCoverArgsFence
+#pragma use_dxc vulkan
+
+#define COVER_TYPES 27u
+#define COVER_LEVELS 3u
+#define COVER_MAX_PER_TRIANGLE 128u
+#define COVER_THIN_BAND 0.08
+#define COVER_MAX_RINGS 8
+#define COVER_NONE 0xFFFFFFFFu
+
+struct CoverInstance { float4 positionScale; uint4 data; };   // 32 bytes (FishCaveCover.hlsl)
+// The piece being walked (CaveCoverRenderer.PieceData).
+struct CoverPiece
+{
+    float4 row0; float4 row1; float4 row2;   // the piece's local-to-world rows
+    uint4 offsets;                            // byte offsets in a vertex: position, normal, colour, uv3 (COVER_NONE absent)
+    uint4 formats;                            // per attribute: VertexAttributeFormat | dimension << 8
+    uint4 info;                               // x vertex stride, y triangles, z 1 for 32-bit indices, w first index
+    uint4 site;                               // x base vertex, y the cave's palette slot, z the cave's type mask, w unused
+    float4 tune;                              // x the cave's density, y its glow
+};
+// A cover type (CaveCoverRenderer.TypeData, from CaveCoverTypes.All).
+struct CoverType
+{
+    float4 classDensity;                      // xyz floor, wall, roof weights; w density per m2
+    float4 gain;                              // wet, daylight, sediment, trodden
+    float4 rich;                              // x organic, y glow, z bias, w trodden keep
+    float4 shape;                             // x scale min, y scale max, z sink (m), w reach (share of the rings' metres)
+    uint4 mode;                               // x mount (0 surface, 1 upright, 2 downhill), y salt, zw unused
+};
+
+StructuredBuffer<CoverPiece> _CoverPieces;
+StructuredBuffer<CoverType> _CoverTypes;
+StructuredBuffer<uint2> _CoverSlots;          // per slot: x base in the instance buffer, y capacity
+RWByteAddressBuffer _CoverCounts;             // one uint per slot
+RWStructuredBuffer<CoverInstance> _CoverInstancesOut;
+ByteAddressBuffer _CoverVertices;             // the piece's mesh: its one vertex stream
+ByteAddressBuffer _CoverIndices;              // and its index buffer
+
+float4 _CoverCamera;                          // xyz the eye, w the farthest any type reaches (m)
+float4 _CoverPlanes[6];                       // inside when dot(n, p) + w >= 0
+float4 _CoverRings[COVER_MAX_RINGS];          // x metres, y keep; rising
+float4 _CoverLevels;                          // x level 1 from (m), y level 2 from (m), z the settings' density, w ring count
+uint _CoverPiece;
+uint _CoverSlotCount;
+uint _CoverArgCount;
+
+// ── Hashes (CaveCoverMath) ────────────────────────────────────────────
+
+uint CoverMix(uint x)
+{
+    x ^= x >> 16;
+    x *= 0x7feb352du;
+    x ^= x >> 15;
+    x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return x;
+}
+
+uint CoverTriangleKey(float3 c)
+{
+    int3 q = (int3)floor(c * 100.0);
+    uint h = CoverMix(asuint(q.x) * 0x9E3779B1u ^ CoverMix(asuint(q.y) + 0x632BE5ABu));
+    return CoverMix(h ^ CoverMix(asuint(q.z) * 0x85EBCA77u));
+}
+
+uint CoverCandidate(uint triangleKey, uint salt, uint k)
+{
+    return CoverMix(CoverMix(triangleKey ^ salt * 0xC2B2AE3Du) ^ (k + 1u) * 0x27D4EB2Fu);
+}
+
+float CoverUnit(uint hash, uint stream)
+{
+    return (float)(CoverMix(hash ^ (stream + 1u) * 0x165667B1u) >> 8) * (1.0 / 16777216.0);
+}
+
+// ── The mesh, as raw bytes (aligned Loads only) ───────────────────────
+
+uint CoverLoad16(uint address)
+{
+    uint word = _CoverVertices.Load(address & ~3u);
+    return (address & 2u) != 0u ? word >> 16 : word & 0xFFFFu;
+}
+
+uint CoverLoad8(uint address)
+{
+    uint word = _CoverVertices.Load(address & ~3u);
+    return (word >> ((address & 3u) * 8u)) & 0xFFu;
+}
+
+// One component of an attribute (VertexAttributeFormat: 0 Float32, 1 Float16, 2 UNorm8, 3 SNorm8, 4 UNorm16, 5 SNorm16).
+float CoverComponent(uint address, uint format, uint i)
+{
+    if (format == 0u)
+    {
+        return asfloat(_CoverVertices.Load(address + i * 4u));
+    }
+    if (format == 1u)
+    {
+        return f16tof32(CoverLoad16(address + i * 2u));
+    }
+    if (format == 2u)
+    {
+        return (float)CoverLoad8(address + i) / 255.0;
+    }
+    if (format == 3u)
+    {
+        int b = (int)(CoverLoad8(address + i) << 24) >> 24;
+        return max((float)b / 127.0, -1.0);
+    }
+    if (format == 4u)
+    {
+        return (float)CoverLoad16(address + i * 2u) / 65535.0;
+    }
+    if (format == 5u)
+    {
+        int s = (int)(CoverLoad16(address + i * 2u) << 16) >> 16;
+        return max((float)s / 32767.0, -1.0);
+    }
+    return 0.0;
+}
+
+float4 CoverAttribute(uint vertexAddress, uint offset, uint packedFormat, float4 fallback)
+{
+    if (offset == COVER_NONE)
+    {
+        return fallback;
+    }
+    uint format = packedFormat & 0xFFu;
+    uint dims = (packedFormat >> 8) & 0xFu;
+    uint address = vertexAddress + offset;
+    float4 v = fallback;
+    v.x = CoverComponent(address, format, 0u);
+    if (dims > 1u) { v.y = CoverComponent(address, format, 1u); }
+    if (dims > 2u) { v.z = CoverComponent(address, format, 2u); }
+    if (dims > 3u) { v.w = CoverComponent(address, format, 3u); }
+    return v;
+}
+
+uint CoverIndex(CoverPiece piece, uint i)
+{
+    uint at = piece.info.w + i;
+    if (piece.info.z != 0u)
+    {
+        return _CoverIndices.Load(at * 4u);
+    }
+    uint word = _CoverIndices.Load((at * 2u) & ~3u);
+    return (at & 1u) != 0u ? word >> 16 : word & 0xFFFFu;
+}
+
+// ── Habitat and density (CaveCoverMath) ───────────────────────────────
+
+struct CoverHabitat { float wet; float daylight; float sediment; float trodden; float organic; float glow; };
+
+// CaveCoverMath.HabitatOf: an old mesh's white colour is the modest default; no TEXCOORD3, no organic or glow.
+CoverHabitat CoverHabitatOf(float4 colour, float2 uv3, bool hasUv3)
+{
+    CoverHabitat h;
+    if (all(colour > 0.99))
+    {
+        h.wet = 0.35; h.daylight = 0.0; h.sediment = 0.35; h.trodden = 0.0; h.organic = 0.15; h.glow = 0.2;
+        return h;
+    }
+    h.wet = colour.r; h.daylight = colour.g; h.sediment = colour.b; h.trodden = colour.a;
+    h.organic = hasUv3 ? saturate(uv3.x) : 0.0;
+    h.glow = hasUv3 ? saturate(uv3.y) : 0.0;
+    return h;
+}
+
+float3 CoverClassWeights(float ny)
+{
+    float floorShare = smoothstep(0.35, 0.7, ny);
+    float roofShare = smoothstep(-0.35, -0.7, ny);
+    return float3(floorShare, max(0.0, 1.0 - floorShare - roofShare), roofShare);
+}
+
+float CoverHabitatWeight(CoverType t, CoverHabitat h)
+{
+    float w = t.rich.z + t.gain.x * h.wet + t.gain.y * h.daylight + t.gain.z * h.sediment + t.gain.w * h.trodden
+        + t.rich.x * h.organic + t.rich.y * h.glow;
+    return saturate(w) * lerp(1.0, t.rich.w, h.trodden);
+}
+
+// CaveCoverMath.Keep: piecewise linear through the rings, nothing past the last.
+float CoverKeep(float d)
+{
+    uint count = min((uint)(_CoverLevels.w + 0.5), (uint)COVER_MAX_RINGS);
+    if (count == 0u)
+    {
+        return 0.0;
+    }
+    if (d <= _CoverRings[0].x)
+    {
+        return _CoverRings[0].y;
+    }
+    float keep = 0.0;
+    bool found = false;
+    [loop] for (uint i = 1u; i < count; i++)
+    {
+        float4 a = _CoverRings[i - 1u];
+        float4 b = _CoverRings[i];
+        if (!found && d <= b.x)
+        {
+            keep = lerp(a.y, b.y, saturate((d - a.x) / max(1e-4, b.x - a.x)));
+            found = true;
+        }
+    }
+    return keep;
+}
+
+// CaveCoverMath.ThinFade: the share faded out, 1 gone.
+float CoverThinFade(float keep, float hash)
+{
+    return keep >= 1.0 ? 0.0 : saturate(1.0 - (keep - hash) / COVER_THIN_BAND);
+}
+
+bool CoverSphereVisible(float3 c, float r)
+{
+    bool inside = true;
+    [unroll] for (int k = 0; k < 6; k++)
+    {
+        inside = inside && dot(_CoverPlanes[k].xyz, c) + _CoverPlanes[k].w >= -r;
+    }
+    return inside;
+}
+
+// ── Packing (FishCaveCover.hlsl unpacks) ──────────────────────────────
+
+// Octahedral encoding of a unit vector into two 16-bit halves.
+uint CoverPackOct(float3 n)
+{
+    n /= max(1e-6, abs(n.x) + abs(n.y) + abs(n.z));
+    float2 e = n.y >= 0.0 ? n.xz : (1.0 - abs(n.zx)) * float2(n.x >= 0.0 ? 1.0 : -1.0, n.z >= 0.0 ? 1.0 : -1.0);
+    uint2 q = (uint2)round(saturate(e * 0.5 + 0.5) * 65535.0);
+    return q.x | (q.y << 16);
+}
+
+// The canonical frame about an up (FishCaveCover.hlsl CoverFrame): x0 across, z0 = cross(x0, up).
+void CoverFrame(float3 up, out float3 x0, out float3 z0)
+{
+    float3 helper = abs(up.y) < 0.99 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
+    x0 = normalize(cross(helper, up));
+    z0 = cross(x0, up);
+}
+
+void CoverEmit(uint slot, float3 position, float scale, float3 up, float yaw, float fadeOut, float wet, float glow, uint seed, uint type, uint caveSlot)
+{
+    uint at;
+    _CoverCounts.InterlockedAdd(slot * 4u, 1u, at);
+    uint2 s = _CoverSlots[slot];
+    if (at < s.y)
+    {
+        CoverInstance instance;
+        instance.positionScale = float4(position, scale);
+        uint yaw16 = (uint)round(frac(yaw / 6.2831853) * 65535.0);
+        instance.data = uint4(
+            CoverPackOct(up),
+            yaw16 | ((uint)round(saturate(fadeOut) * 255.0) << 16) | ((uint)round(saturate(wet) * 255.0) << 24),
+            (seed & 0xFFFFFFu) | (type << 24),
+            (uint)round(saturate(glow) * 255.0) | ((caveSlot & 0xFFu) << 8));
+        _CoverInstancesOut[s.x + at] = instance;
+    }
+}
+
+// ── Kernels ───────────────────────────────────────────────────────────
+
+[numthreads(64, 1, 1)]
+void FishCoverClear(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _CoverSlotCount)
+    {
+        _CoverCounts.Store(id.x * 4u, 0u);
+    }
+}
+
+[numthreads(64, 1, 1)]
+void FishCoverGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
+{
+    uint tri = (group.x + group.y * 65535u) * 64u + thread.x;
+    CoverPiece piece = _CoverPieces[_CoverPiece];
+    if (tri >= piece.info.y)
+    {
+        return;
+    }
+    uint stride = piece.info.x;
+    uint baseVertex = piece.site.x;
+    uint i0 = CoverIndex(piece, tri * 3u) + baseVertex;
+    uint i1 = CoverIndex(piece, tri * 3u + 1u) + baseVertex;
+    uint i2 = CoverIndex(piece, tri * 3u + 2u) + baseVertex;
+    uint a0 = i0 * stride, a1 = i1 * stride, a2 = i2 * stride;
+
+    float3x4 toWorld = float3x4(piece.row0, piece.row1, piece.row2);
+    float3 p0 = mul(toWorld, float4(CoverAttribute(a0, piece.offsets.x, piece.formats.x, 0.0).xyz, 1.0));
+    float3 p1 = mul(toWorld, float4(CoverAttribute(a1, piece.offsets.x, piece.formats.x, 0.0).xyz, 1.0));
+    float3 p2 = mul(toWorld, float4(CoverAttribute(a2, piece.offsets.x, piece.formats.x, 0.0).xyz, 1.0));
+    float3 cross12 = cross(p1 - p0, p2 - p0);
+    float twiceArea = length(cross12);
+    if (!(twiceArea > 1e-6))
+    {
+        return;
+    }
+    float area = 0.5 * twiceArea;
+    float3 n = cross12 / twiceArea;
+    // Faced the way the mesh's normals face (out of the rock, into the void), whatever the winding.
+    float3 vn = CoverAttribute(a0, piece.offsets.y, piece.formats.y, 0.0).xyz + CoverAttribute(a1, piece.offsets.y, piece.formats.y, 0.0).xyz
+        + CoverAttribute(a2, piece.offsets.y, piece.formats.y, 0.0).xyz;
+    vn = mul((float3x3)toWorld, vn);
+    if (dot(n, vn) < 0.0)
+    {
+        n = -n;
+    }
+    float3 centre = (p0 + p1 + p2) / 3.0;
+    float radius = sqrt(max(max(dot(p0 - centre, p0 - centre), dot(p1 - centre, p1 - centre)), dot(p2 - centre, p2 - centre)));
+    float3 eye = _CoverCamera.xyz;
+    float nearest = max(0.0, distance(eye, centre) - radius);
+    if (nearest > _CoverCamera.w)
+    {
+        return;
+    }
+    // A face the eye is a metre or more behind: what grows on it is behind its own rock.
+    if (dot(eye - centre, n) < -1.0)
+    {
+        return;
+    }
+    if (!CoverSphereVisible(centre, radius + 1.0))
+    {
+        return;
+    }
+
+    // The triangle's habitat: its vertices' channels averaged.
+    bool hasUv3 = piece.offsets.w != COVER_NONE;
+    float4 white = float4(1.0, 1.0, 1.0, 1.0);
+    CoverHabitat h0 = CoverHabitatOf(CoverAttribute(a0, piece.offsets.z, piece.formats.z, white), CoverAttribute(a0, piece.offsets.w, piece.formats.w, 0.0).xy, hasUv3);
+    CoverHabitat h1 = CoverHabitatOf(CoverAttribute(a1, piece.offsets.z, piece.formats.z, white), CoverAttribute(a1, piece.offsets.w, piece.formats.w, 0.0).xy, hasUv3);
+    CoverHabitat h2 = CoverHabitatOf(CoverAttribute(a2, piece.offsets.z, piece.formats.z, white), CoverAttribute(a2, piece.offsets.w, piece.formats.w, 0.0).xy, hasUv3);
+    CoverHabitat h;
+    h.wet = (h0.wet + h1.wet + h2.wet) / 3.0;
+    h.daylight = (h0.daylight + h1.daylight + h2.daylight) / 3.0;
+    h.sediment = (h0.sediment + h1.sediment + h2.sediment) / 3.0;
+    h.trodden = (h0.trodden + h1.trodden + h2.trodden) / 3.0;
+    h.organic = (h0.organic + h1.organic + h2.organic) / 3.0;
+    h.glow = (h0.glow + h1.glow + h2.glow) / 3.0;
+
+    float3 classes = CoverClassWeights(n.y);
+    uint key = CoverTriangleKey(centre);
+    uint mask = piece.site.z;
+    float scaleAll = _CoverLevels.z * piece.tune.x;
+    // A downhill direction across the face (a seep runs down it, a bracket row stands level on it): none on a floor or roof.
+    float3 down = float3(0.0, -1.0, 0.0) + n * n.y;
+    bool hasDown = dot(down, down) > 1e-4;
+    down = hasDown ? normalize(down) : float3(0.0, 0.0, 1.0);
+
+    [loop] for (uint t = 0u; t < COVER_TYPES; t++)
+    {
+        if (((mask >> t) & 1u) == 0u)
+        {
+            continue;
+        }
+        CoverType type = _CoverTypes[t];
+        float cls = dot(classes, type.classDensity.xyz);
+        if (!(cls > 0.0))
+        {
+            continue;
+        }
+        float density = type.classDensity.w * CoverHabitatWeight(type, h) * cls * scaleAll;
+        float expected = area * density;
+        if (!(expected > 0.0))
+        {
+            continue;
+        }
+        float reach = max(0.05, type.shape.w);
+        if (CoverKeep(nearest / reach) <= 0.0)
+        {
+            continue;
+        }
+        uint count = min((uint)ceil(expected), COVER_MAX_PER_TRIANGLE);
+        uint salt = type.mode.y;
+        uint mount = type.mode.x;
+        [loop] for (uint k = 0u; k < count; k++)
+        {
+            uint hk = CoverCandidate(key, salt, k);
+            // CaveCoverMath.Exists: the whole candidates always, the last by its coin (and none after it).
+            if ((float)k + CoverUnit(hk, 7u) >= expected)
+            {
+                break;
+            }
+            float u = CoverUnit(hk, 0u), v = CoverUnit(hk, 1u);
+            if (u + v > 1.0)
+            {
+                u = 1.0 - u;
+                v = 1.0 - v;
+            }
+            float3 p = p0 * (1.0 - u - v) + p1 * u + p2 * v;
+            float d = distance(p, eye);
+            float fadeOut = CoverThinFade(CoverKeep(d / reach), CoverUnit(hk, 2u));
+            if (fadeOut >= 1.0)
+            {
+                continue;
+            }
+            float scale = lerp(type.shape.x, type.shape.y, CoverUnit(hk, 3u));
+            if (!CoverSphereVisible(p, 0.9 * scale))
+            {
+                continue;
+            }
+            float yaw = CoverUnit(hk, 4u) * 6.2831853;
+            float3 up = n;
+            if (mount == 1u)
+            {
+                // Upright: up, leaned a little with a floor's slope; a roof's hangs straight down from it.
+                up = n.y >= 0.0 ? normalize(float3(0.0, 1.0, 0.0) + n * 0.3) : float3(0.0, 1.0, 0.0);
+            }
+            else if (mount == 2u && hasDown)
+            {
+                // Downhill: its +Z down the slope (the yaw of the canonical frame that lays z along it), a little wander.
+                float3 x0, z0;
+                CoverFrame(up, x0, z0);
+                yaw = atan2(-dot(down, x0), dot(down, z0)) + (CoverUnit(hk, 4u) - 0.5) * 0.3;
+            }
+            float3 position = p - n * type.shape.z * scale;
+            uint level = d < _CoverLevels.x * reach ? 0u : (d < _CoverLevels.y * reach ? 1u : 2u);
+            CoverEmit(t * COVER_LEVELS + level, position, scale, up, yaw, fadeOut, h.wet, h.glow * piece.tune.y, CoverMix(hk ^ 0x5bd1e995u), t, piece.site.y);
+        }
+    }
+}
+
+StructuredBuffer<uint> _CoverArgSlots;        // the slot each indirect command draws
+RWByteAddressBuffer _CoverArgs;               // IndirectDrawIndexedArgs, 5 uints per command
+
+[numthreads(64, 1, 1)]
+void FishCoverFinalize(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _CoverArgCount)
+    {
+        uint slot = _CoverArgSlots[id.x];
+        uint count = _CoverCounts.Load(slot * 4u);
+        _CoverArgs.Store((id.x * 5u + 1u) * 4u, min(count, _CoverSlots[slot].y));
+    }
+}
+
+/* OpenGL: makes Unity issue GL_COMMAND_BARRIER_BIT before the indirect draws (FishDetailScatter.compute FishScatterArgsFence):
+ * Unity's GLES device marks the command barrier pending only when the args buffer is BOUND after its write. */
+ByteAddressBuffer _CoverArgsFence;
+
+[numthreads(1, 1, 1)]
+void FishCoverArgsFence(uint3 id : SV_DispatchThreadID)
+{
+    // Never true (instance counts are capped): only the bindings matter.
+    if (_CoverArgsFence.Load(4) == 0xFFFFFFFFu)
+    {
+        _CoverCounts.Store(0, 0u);
+    }
+}

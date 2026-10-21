@@ -174,6 +174,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// walkable"). A flight goes on from their foot down to the ground.</item>
 		/// </list>
 		/// </summary>
+		/// <remarks>
+		/// 2026-10-19 (round 3: "the stairs don't fit properly a lot of the time"): the building's own flight is found where it is
+		/// (<see cref="OwnFlight"/>: its foot and lowest tread read off the building's collider along the door's line) instead of
+		/// reckoned from a 0.45 m wall, which left a gap or an overlap of up to 0.3 m between the two flights on thinner or
+		/// thicker walls and missed a stilt deck's stair altogether; and the ground is measured again at the flight's own foot,
+		/// which on falling ground lies lower than at its head, so its first riser is a step, not a ledge.
+		/// </remarks>
 		private static void PersonSteps(PointOfInterestSiteContext context, PointOfInterestSiteContext.PlacedDoor door)
 		{
 			if (context.GroundAt == null)
@@ -190,6 +197,18 @@ namespace FishMMO.Shared.WorldDesign
 				top = mid.y;
 				from = 0.35f * door.Scale;
 			}
+			else if (OwnFlight(door.Building, door.Width / door.Scale, door.Height / door.Scale, out float footOut, out float tread))
+			{
+				// From the foot of the building's own flight (its lowest tread), or from the wall's or plinth's face with none. A
+				// door whose way down is not straight out from it (a keep's door up a forestair along its wall, a tower's door onto
+				// the wall-walk) gets no flight of a person's: its own way down is the building's.
+				if (tread > 0.5f)
+				{
+					return;
+				}
+				top = door.Base + tread * door.Scale;
+				from = footOut * door.Scale;
+			}
 			else
 			{
 				// From the foot of the building's own flight (StructurePieces.Steps: its lowest tread one riser over the
@@ -202,6 +221,23 @@ namespace FishMMO.Shared.WorldDesign
 			Vector3 face = mid + outward * from;
 			Vector3 foot = face + outward * 0.15f;
 			float ground = context.GroundAt(foot.x, foot.z);
+			// The flight's foot is (n - 1) treads out from the face: on falling ground lower than at its head, so measured again
+			// there until the flight reaches the ground it starts from.
+			for (int pass = 0; pass < 6; pass++)
+			{
+				float rise = top - ground;
+				if (rise <= 0.25f || rise > MaxPersonFlight)
+				{
+					break;
+				}
+				Vector3 end = face + outward * ((Mathf.CeilToInt(rise / PersonRise) - 1) * PersonTread + 0.15f);
+				float there = context.GroundAt(end.x, end.z);
+				if (there >= ground - 0.02f)
+				{
+					break;
+				}
+				ground = there;
+			}
 			float drop = top - ground;
 			if (drop <= 0.25f || drop > MaxPersonFlight)
 			{
@@ -214,16 +250,119 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			int n = Mathf.CeilToInt(drop / PersonRise);
 			Quaternion turn = Quaternion.LookRotation(outward, Vector3.up);
-			float width = Mathf.Min(1.4f, door.Width);
+			// Two abreast where the doorway is that wide, and never narrower than a body with room either side.
+			float width = Mathf.Clamp(door.Width + 0.4f, 1.2f, StructurePieces.StairWidth);
 			// Step i stands i risers up from the ground, set out from the face by (n - i) treads; the top one is where the
 			// flight arrives (the threshold, or the building's own lowest tread).
 			for (int i = 1; i < n; i++)
 			{
-				float height = ground + drop * i / n, run = (n - i) * 0.3f;
+				float height = ground + drop * i / n, run = (n - i) * PersonTread;
 				Vector3 centre = face + outward * (run * 0.5f);
 				float bottom = context.GroundAt(centre.x, centre.z) - 0.3f;
 				context.AddProp(stone, new Vector3(centre.x, bottom, centre.z), turn, new Vector3(width, Mathf.Max(0.05f, height - bottom), run));
 			}
+		}
+
+		/// <summary>A person's step's tread, metres (StructurePieces.StepTread).</summary>
+		private const float PersonTread = 0.3f;
+
+		private static readonly System.Collections.Generic.Dictionary<(string, float, float), (bool ok, float foot, float tread)> ownFlights =
+			new System.Collections.Generic.Dictionary<(string, float, float), (bool, float, float)>();
+
+		/// <summary>
+		/// Where a building's own way down from a door reaches its ground line, in its own frame: how far out from the doorway's
+		/// middle the foot of its flight is (<paramref name="footOut"/>), and its lowest tread's height over the building's origin
+		/// (<paramref name="tread"/>; the threshold's when no step leads down, the foot then the wall's or plinth's face). Read off
+		/// the collider level along the door's centre line from its threshold out, as a character walks it, so a plinth's steps,
+		/// a forestair or a stilt deck's stair are each found where they stand. False when the kit has no such piece and door.
+		/// Cached per building and doorway.
+		/// </summary>
+		private static bool OwnFlight(string building, float width, float height, out float footOut, out float tread)
+		{
+			footOut = 0f;
+			tread = 0f;
+			if (string.IsNullOrEmpty(building))
+			{
+				return false;
+			}
+			var key = (building, Mathf.Round(width * 100f) / 100f, Mathf.Round(height * 100f) / 100f);
+			lock (ownFlights)
+			{
+				if (ownFlights.TryGetValue(key, out var known))
+				{
+					footOut = known.foot;
+					tread = known.tread;
+					return known.ok;
+				}
+			}
+			bool ok = false;
+			StructurePiece piece = StructurePieces.Find(building);
+			for (int v = 0; piece != null && v < piece.Variants && !ok; v++)
+			{
+				foreach (StructureDoor d in StructurePieces.DoorsOf(piece, v))
+				{
+					if (Mathf.Abs(d.Width - width) > 0.02f || Mathf.Abs(d.Height - height) > 0.02f)
+					{
+						continue;
+					}
+					MeshBuilder mesh = StructurePieces.Build(piece, v, StructurePieces.LevelCount - 1, StructurePieces.DefaultSeed).Mesh;
+					Vector3 m = d.Hinge + d.Across * (d.Width * 0.5f);
+					Vector3 o = -d.Inward;
+					float h = m.y;
+					for (float s = 0f; s <= 12f; s += 0.05f)
+					{
+						Vector3 p = m + o * s;
+						// The highest surface under a step up from where the walker is.
+						float surface = HighestBelow(mesh, p.x, p.z, h + StructurePieces.StepRise + 0.1f);
+						if (surface <= 0.02f)
+						{
+							footOut = s;
+							tread = h;
+							ok = true;
+							break;
+						}
+						h = surface;
+					}
+					break;
+				}
+			}
+			lock (ownFlights)
+			{
+				ownFlights[key] = (ok, footOut, tread);
+			}
+			return ok;
+		}
+
+		/// <summary>The highest point of the mesh straight under (x, from, z), or negative infinity when nothing is under it.</summary>
+		private static float HighestBelow(MeshBuilder mesh, float x, float z, float from)
+		{
+			float best = float.NegativeInfinity;
+			for (int sub = 0; sub < mesh.Submeshes.Count; sub++)
+			{
+				var list = mesh.Submeshes[sub];
+				for (int i = 0; i + 2 < list.Count; i += 3)
+				{
+					Vector3 a = mesh.Positions[list[i]], b = mesh.Positions[list[i + 1]], c = mesh.Positions[list[i + 2]];
+					float area = (b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x);
+					if (Mathf.Abs(area) < 1e-9f)
+					{
+						continue;
+					}
+					float w0 = ((b.x - x) * (c.z - z) - (b.z - z) * (c.x - x)) / area;
+					float w1 = ((c.x - x) * (a.z - z) - (c.z - z) * (a.x - x)) / area;
+					float w2 = 1f - w0 - w1;
+					if (w0 < 0f || w1 < 0f || w2 < 0f)
+					{
+						continue;
+					}
+					float y = w0 * a.y + w1 * b.y + w2 * c.y;
+					if (y <= from && y > best)
+					{
+						best = y;
+					}
+				}
+			}
+			return best;
 		}
 
 		/// <summary>From a door's hinge (on the wall's inside face) out to the wall's outside face, metres: a house's 0.45 m wall less the leaf's inset.</summary>

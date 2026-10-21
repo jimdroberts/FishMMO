@@ -54,6 +54,8 @@ Shader "FishMMO/Water/Waterfall"
             #if defined(_WATER_REFRACTION)
                 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareOpaqueTexture.hlsl"
             #endif
+            // Faded under the hill as the fog passes fade themselves (a cave's falls, 2026-10-20: FISH_WATER_OPEN_AIR).
+            #define FISH_WATER_OPEN_AIR 1
             #include "FishWaterFog.hlsl"
             #include "FishWaterSun.hlsl"
             #include "FishWaterfall.hlsl"
@@ -171,7 +173,7 @@ Shader "FishMMO/Water/Waterfall"
                 }
                 color = MixFog(color, input.fogFactor);
                 float2 fogUV = input.screenPos.xy / input.screenPos.w;
-                color = FishWaterBehindClouds(color, fogUV);
+                color = FishWaterBehindClouds(color, fogUV, positionWS);
                 half fogKeep;
                 color = FishWaterAirFogOver(color, positionWS, fogUV, fogKeep);
                 return half4(color, saturate(alpha));

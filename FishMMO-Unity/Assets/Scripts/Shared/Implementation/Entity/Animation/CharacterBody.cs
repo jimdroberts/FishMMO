@@ -123,6 +123,16 @@ namespace FishMMO.Shared
 		private float tiltRoll;
 		private float lift;
 
+		// The footfalls (CharacterFootfalls): what each foot was seen over this frame, and what the frame's motion raised.
+		private readonly FootfallTracker footfalls = new FootfallTracker();
+		private readonly float[] footGap = new float[2];
+		private readonly RaycastHit[] footHit = new RaycastHit[2];
+		private readonly bool[] footHitValid = new bool[2];
+		private bool pendingLand;
+		private bool pendingRung;
+		private FootfallKind? pendingSwim;
+		private float pendingSpeed;
+
 		private bool sitting;
 		private bool onSeat;
 		private float seatHeight;
@@ -439,6 +449,9 @@ namespace FishMMO.Shared
 		{
 			speed = 0f;
 			airborne = 0f;
+			footfalls.Reset();
+			pendingLand = pendingRung = false;
+			pendingSwim = null;
 			lift = 0f;
 			pitch = 0f;
 			armsTime = -1f;
@@ -510,6 +523,26 @@ namespace FishMMO.Shared
 			}
 			pitch = Mathf.Lerp(pitch, swimPitch, 1f - Mathf.Exp(-0.5f * BlendRate * deltaTime));
 			airborne = grounded || swimming || climbing ? 0f : airborne + deltaTime;
+			if (CharacterFootfalls.Heard && !dead)
+			{
+				// The water first: going in from a fall is a plunge, and the fall's speed is what Landed keeps.
+				FootfallKind? wet = footfalls.Swim(swimming, surfaceShare, speed * deltaTime, velocity.y, out float wetSpeed);
+				if (wet.HasValue)
+				{
+					pendingSwim = wet;
+					pendingSpeed = wetSpeed;
+				}
+				if (footfalls.Landed(!grounded && !swimming && !climbing, grounded, velocity.y, out float landSpeed))
+				{
+					pendingLand = true;
+					pendingSpeed = landSpeed;
+				}
+				// Two rungs to a climb's cycle: a hand and a foot each.
+				if (footfalls.Rung(climbing, Mathf.Abs(velocity.y) * deltaTime, 0.5f * set.ClimbCycleMetres * SeatScale))
+				{
+					pendingRung = true;
+				}
+			}
 			if (sitting && (swimming || climbing || airborne > AirDelay))
 			{
 				sitting = false;
@@ -719,6 +752,7 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
+			bool feetSeen = false;
 			float ease = 1f - Mathf.Exp(-GroundRate * deltaTime);
 			Transform parent = shown.parent;
 			float baseY = Feet.y;
@@ -743,11 +777,16 @@ namespace FishMMO.Shared
 					{
 						sole = Mathf.Min(sole, toes[i].position.y - toeRest[i]);
 					}
-					if (physics.Raycast(new Vector3(foot.x, sole + GroundReach, foot.z), Vector3.down, out RaycastHit hit, GroundReach * 2f, groundMask, QueryTriggerInteraction.Ignore))
+					footHitValid[i] = physics.Raycast(new Vector3(foot.x, sole + GroundReach, foot.z), Vector3.down, out RaycastHit hit, GroundReach * 2f, groundMask, QueryTriggerInteraction.Ignore);
+					footHit[i] = hit;
+					// Kept for the footfalls: a foot over nothing the ray reaches is a foot in the air.
+					footGap[i] = footHitValid[i] ? sole - hit.point.y : float.MaxValue;
+					if (footHitValid[i])
 					{
 						gap = Mathf.Min(gap, sole - hit.point.y);
 					}
 				}
+				feetSeen = true;
 				if (gap < float.MaxValue)
 				{
 					lift = Mathf.Lerp(lift, Mathf.Clamp(lift - gap, -MaxLift, MaxLift), ease);
@@ -799,6 +838,102 @@ namespace FishMMO.Shared
 			Quaternion turn = Quaternion.Euler(tiltPitch, 0f, tiltRoll) * Quaternion.Euler(pitch, 0f, 0f);
 			shown.localRotation = turn * shownRestRotation;
 			shown.localPosition = shownRest + seatOffset + Vector3.up * lift + pivot - turn * pivot;
+			TrackFootfalls(deltaTime, feetSeen);
+		}
+
+		/// <summary>
+		/// Raises this frame's footfalls (<see cref="CharacterFootfalls"/>): a seen foot coming down, or a stride gone by
+		/// when the feet cannot be seen, and whatever the frame's motion raised in <see cref="Pose"/>.
+		/// </summary>
+		/// <param name="feetSeen">Whether <see cref="Place"/> measured both feet against the ground this frame.</param>
+		private void TrackFootfalls(float deltaTime, bool feetSeen)
+		{
+			if (!CharacterFootfalls.Heard || dead)
+			{
+				pendingLand = pendingRung = false;
+				pendingSwim = null;
+				return;
+			}
+			Vector3 at = Feet;
+			if (!CharacterFootfalls.InReach(at))
+			{
+				// Too far off to be heard: nothing is raised (nor any ray cast for it), but the stride is kept counting.
+				pendingLand = pendingRung = false;
+				pendingSwim = null;
+				footfalls.Stride(speed * deltaTime, sitting || swimming || climbing || !grounded ? 0f : speed, restHeight);
+				return;
+			}
+			if (pendingSwim.HasValue)
+			{
+				float level = float.IsNaN(stillWater) ? at.y : stillWater;
+				Vector3 surface = new Vector3(at.x, level, at.z);
+				Raise(pendingSwim.Value, surface, Vector3.up, null, pendingSpeed, footfalls.NextFoot);
+				pendingSwim = null;
+			}
+			if (pendingRung)
+			{
+				pendingRung = false;
+				Vector3 hands = head != null ? head.position : at + Vector3.up * restHeight;
+				Raise(FootfallKind.Climb, hands, Vector3.up, null, speed, footfalls.NextFoot);
+			}
+			if (pendingLand)
+			{
+				pendingLand = false;
+				RaiseOnGround(FootfallKind.Land, at, pendingSpeed, 0);
+				return;
+			}
+			if (sitting || swimming || climbing || !grounded)
+			{
+				return;
+			}
+			if (feetSeen)
+			{
+				float now = Time.time;
+				for (int i = 0; i < 2; i++)
+				{
+					if (footfalls.FootDown(i, footGap[i], speed, now) && footHitValid[i])
+					{
+						Raise(FootfallKind.Step, footHit[i].point, footHit[i].normal, footHit[i].collider, speed, i);
+					}
+				}
+				return;
+			}
+			int foot = footfalls.Stride(speed * deltaTime, speed, restHeight);
+			if (foot >= 0)
+			{
+				Transform root = shown.parent != null ? shown.parent : shown;
+				RaiseOnGround(FootfallKind.Step, at + root.right * (foot == 0 ? -0.1f : 0.1f), speed, foot);
+			}
+		}
+
+		/// <summary>Raises a footfall on whatever is under <paramref name="at"/>, or at it when the ray finds nothing.</summary>
+		private void RaiseOnGround(FootfallKind kind, Vector3 at, float footSpeed, int foot)
+		{
+			PhysicsScene physics = shown.gameObject.scene.GetPhysicsScene();
+			if (physics.Raycast(at + Vector3.up * GroundReach, Vector3.down, out RaycastHit hit, GroundReach * 2f, groundMask, QueryTriggerInteraction.Ignore))
+			{
+				Raise(kind, hit.point, hit.normal, hit.collider, footSpeed, foot);
+			}
+			else
+			{
+				Raise(kind, at, Vector3.up, null, footSpeed, foot);
+			}
+		}
+
+		private void Raise(FootfallKind kind, Vector3 point, Vector3 normal, Collider ground, float footSpeed, int foot)
+		{
+			CharacterFootfalls.Raise(new Footfall
+			{
+				Kind = kind,
+				Point = point,
+				Normal = normal,
+				Ground = ground,
+				Speed = footSpeed,
+				Height = restHeight,
+				Foot = foot,
+				Crouching = crouching,
+				Body = shown.parent != null ? shown.parent : shown,
+			});
 		}
 
 		private bool Visible()

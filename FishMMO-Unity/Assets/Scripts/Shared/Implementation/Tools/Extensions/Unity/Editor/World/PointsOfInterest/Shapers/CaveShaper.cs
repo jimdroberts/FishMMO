@@ -45,7 +45,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// meshes, and the asset is saved once after the stage's last cave rather than once per cave.
 	/// </para>
 	/// </remarks>
-	public sealed class CaveShaper : IPointOfInterestShaper
+	public sealed partial class CaveShaper : IPointOfInterestShaper
 	{
 		public static readonly CaveShaper Instance = new CaveShaper();
 
@@ -123,7 +123,11 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			Vector3 at = opening.Kind == CaveMouthKind.Shelf ? fall.Mouth : site.Position;
 			float yaw = opening.Kind == CaveMouthKind.Shelf ? fall.Yaw : site.Yaw;
-			CaveSystem system = CaveSystem.Plan(form, site.SizeClass, at, yaw, SeedOf(site), site.Id, ground, SeaLevel, out string problem, water, opening);
+			// Within the scene's cave depth range (its pre-cut prompt, 2026-10-21); none set, the planner's own.
+			PointOfInterestSettings settings = context.Request != null ? context.Request.PointsOfInterest : null;
+			Vector2 depths = settings != null ? settings.CaveDepthRange : new Vector2(CaveSystem.LeastDepth, CaveSystem.MaxCaveDepth);
+			CaveSystem system = CaveSystem.Plan(form, site.SizeClass, at, yaw, SeedOf(site), site.Id, ground, SeaLevel, out string problem, water, opening,
+				depths.x, depths.y);
 			if (system == null)
 			{
 				context.Reject(site, problem);
@@ -143,6 +147,9 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			// A way through its hill, where the hill has a far face: a second mouth there, its passage walked in to the trunk.
 			TryThrough(context, site, system);
+			// Openings in its great chambers' roofs up to the ground, where the rock over them is thin (CaveShaper.Skylights.cs):
+			// mouths of their own kind, holed and kept clear with the rest below (and taken along if the system is joined).
+			TrySkylights(context, site, system, ground);
 
 			// Joined to a system already carved near it, where a passage fits between them deep down.
 			if (TryJoin(context, site, system, step, gridX, gridZ))
@@ -439,6 +446,43 @@ namespace FishMMO.Shared.WorldDesign
 			return float.NaN;
 		}
 
+		/// <summary>
+		/// A lava tube's molten lava (2026-10-20, <see cref="CaveLava.Plan"/>: rivers in the channels its field cut, lakes, plunge
+		/// pools, falls) written into the scene's hydrology as lava (CaveLavaWater: ids in the grotto pools' range with bit 28), so
+		/// it is drawn, burns and is pathed round as the lava seas are. Written after the scene's water is saved, on every cut,
+		/// repaint and regeneration, as a grotto's pool is; a cooled tube's write clears whatever an earlier build left.
+		/// </summary>
+		private static void WriteLava(PointOfInterestPlaceContext context, PointOfInterestRecord site, CaveSystem system)
+		{
+			if (system.Form != CaveForm.LavaTube)
+			{
+				return;
+			}
+			CaveLavaPlan plan = CaveLava.Plan(system);
+			int written = CaveLavaWater.WriteToScene(context, site, system, plan);
+			if (written > 0)
+			{
+				context.Notes?.Add($"{PointOfInterestKinds.Info(site.Kind).DisplayName} at ({site.Position.x:F0}, {site.Position.z:F0}): {written} body(ies) of molten lava written.");
+			}
+		}
+
+		/// <summary>
+		/// A wet cave's water (2026-10-20, caves livened, <see cref="CaveStreams.Plan"/>: streams in the channels its field cut, their
+		/// springs and falls, pools, flooded basins, gours, winzes and dead ends) written into the scene's hydrology (CaveStreamWater:
+		/// ids in the grotto pools' range, bits 24..27 the body), so it is drawn, waded and swum as any river or lake. Written after
+		/// the scene's water is saved, on every cut, repaint and regeneration, as a grotto's pool is; a dry or frozen plan's write
+		/// clears whatever an earlier build left.
+		/// </summary>
+		private static void WriteStreams(PointOfInterestPlaceContext context, PointOfInterestRecord site, CaveSystem system)
+		{
+			CaveStreamPlan plan = CaveStreams.Plan(system);
+			int written = CaveStreamWater.WriteToScene(context, site, system, plan);
+			if (written > 0)
+			{
+				context.Notes?.Add($"{PointOfInterestKinds.Info(site.Kind).DisplayName} at ({site.Position.x:F0}, {site.Position.z:F0}): {written} body(ies) of cave water written.");
+			}
+		}
+
 		/// <summary>Lake ids grottos' pools take (moats take MoatShaper.LakeIdBase's): this with the site id's low 24 bits.</summary>
 		public const int PoolIdBase = 1 << 29;
 
@@ -564,6 +608,12 @@ namespace FishMMO.Shared.WorldDesign
 		private static void AddMouthKeepOut(PointOfInterestPlanContext context, PointOfInterestRecord site, CaveSystem system, int mouth)
 		{
 			CaveMouth m = system.Mouths[mouth];
+			// An opening in a roof keeps its pit and lip clear, round its opening on the ground (CaveShaper.Skylights.cs).
+			if (m.Kind == CaveMouthKind.Skylight)
+			{
+				AddSkylightKeepOut(context, site, system, m);
+				return;
+			}
 			float yr = m.Yaw * Mathf.Deg2Rad;
 			var outward = new Vector3(Mathf.Sin(yr), 0f, Mathf.Cos(yr));
 			Vector3 front = system.Origin + m.Floor + outward * m.Radius;
@@ -614,6 +664,32 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			float spacing = tiles.Resolution > 1 ? tiles.MetresPerSample : 1f;
 			return CaveGround.Sample(groundAt, minX, minZ, maxX, maxZ, spacing, -0.5f * tiles.WidthMetres, -0.5f * tiles.DepthMetres);
+		}
+
+		/// <summary>
+		/// The ground a cave system is meshed against (<see cref="SampleGround"/> over its extent), with the system made to
+		/// follow the holes the plan actually cut at each mouth, read back from the tiles (<see cref="CaveSystem.UseCutHoles"/>):
+		/// what <see cref="CaveSystem.Field"/> needs to give the rock as it was meshed. Whatever else asks where the cave's rock
+		/// is (the vines at its mouths) asks with these, or it finds rock the mesh does not have.
+		/// </summary>
+		public static CaveGround GroundAsCut(CaveSystem system, System.Func<float, float, float> groundAt, Terrain[,] terrains, TerrainTilePlan tiles)
+		{
+			Bounds extent = system.Extent;
+			CaveGround ground = SampleGround(groundAt, tiles, system.Origin.x + extent.min.x - 4f, system.Origin.z + extent.min.z - 4f,
+				system.Origin.x + extent.max.x + 4f, system.Origin.z + extent.max.z + 4f);
+			// The collar follows the terrain the plan actually cut at each mouth, read back from the tiles' holes.
+			if (terrains != null && HoleGrid(terrains, tiles, out float holeStep, out float gridX, out float gridZ))
+			{
+				for (int m = 0; m < system.Mouths.Count; m++)
+				{
+					CaveMouth mouth = system.Mouths[m];
+					Vector3 at = system.Origin + mouth.Floor;
+					float reach = mouth.Zone + 2f * mouth.Radius + 10f;
+					List<Vector2> holes = PointOfInterestTerrain.HolesIn(terrains, tiles, new Rect(at.x - reach, at.z - reach, 2f * reach, 2f * reach));
+					system.UseCutHoles(m, holes, groundAt, holeStep, gridX, gridZ);
+				}
+			}
+			return ground;
 		}
 
 		/// <summary>The terrain's hole grid: one cell per heightmap quad, lines from the scene's south-west corner.</summary>
@@ -777,21 +853,7 @@ namespace FishMMO.Shared.WorldDesign
 				context.Notes?.Add($"{label}: no cave is stored for it (or one in an older format); re-cut the scene.");
 				return;
 			}
-			Bounds extent = system.Extent;
-			CaveGround ground = SampleGround(context.GroundAt, context.Tiles, system.Origin.x + extent.min.x - 4f, system.Origin.z + extent.min.z - 4f,
-				system.Origin.x + extent.max.x + 4f, system.Origin.z + extent.max.z + 4f);
-			// The collar follows the terrain the plan actually cut at each mouth, read back from the tiles' holes.
-			if (HoleGrid(context.Terrains, context.Tiles, out float holeStep, out float gridX, out float gridZ))
-			{
-				for (int m = 0; m < system.Mouths.Count; m++)
-				{
-					CaveMouth mouth = system.Mouths[m];
-					Vector3 at = system.Origin + mouth.Floor;
-					float reach = mouth.Zone + 2f * mouth.Radius + 10f;
-					List<Vector2> holes = PointOfInterestTerrain.HolesIn(context.Terrains, context.Tiles, new Rect(at.x - reach, at.z - reach, 2f * reach, 2f * reach));
-					system.UseCutHoles(m, holes, context.GroundAt, holeStep, gridX, gridZ);
-				}
-			}
+			CaveGround ground = GroundAsCut(system, context.GroundAt, context.Terrains, context.Tiles);
 			string assetPath = string.IsNullOrEmpty(context.TerrainFolder) || context.Request == null ? null
 				: AssetPath(context.TerrainFolder, context.Request.SceneName);
 			string summary = $"{label}: {system.Form}, {system.PassageLength:0} m of passages, {system.Depth:0} m deep, {system.Chambers.Count} chambers, {system.Mouths.Count} mouth(s)";
@@ -799,7 +861,7 @@ namespace FishMMO.Shared.WorldDesign
 			var clock = System.Diagnostics.Stopwatch.StartNew();
 			// Built from exactly what it was last built from: its meshes are kept, not built and written again.
 			string inputs = assetPath != null ? InputsKey(site.Id, system, ground) : null;
-			if (!TryKeepMeshes(assetPath, site.Id, inputs, live, out Mesh[] meshes, out bool[] mouths, out int kept))
+			if (!TryKeepMeshes(assetPath, site.Id, inputs, live, out Mesh[] meshes, out Mesh[] colliders, out bool[] mouths, out int kept))
 			{
 				List<CaveMesher.Piece> pieces;
 				try
@@ -814,7 +876,7 @@ namespace FishMMO.Shared.WorldDesign
 					context.Notes?.Add($"{label}: its rock would not mesh ({ex.Message}); the terrain stays holed.");
 					return;
 				}
-				meshes = WriteMeshes(assetPath, site.Id, pieces, live, inputs);
+				meshes = WriteMeshes(assetPath, site.Id, pieces, live, out colliders, inputs);
 				mouths = new bool[pieces.Count];
 				for (int i = 0; i < pieces.Count; i++)
 				{
@@ -825,6 +887,12 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				tally.Kept++;
 				context.Notes?.Add($"{summary}; unchanged since its last build: its {meshes.Length} pieces ({kept} triangles) kept, checked in {clock.Elapsed.TotalSeconds:0.00} s.");
+				if (colliders == null)
+				{
+					// Kept from before the pieces had collider meshes of their own: made from the pieces as they stand, once.
+					colliders = WriteColliders(assetPath, site.Id, meshes);
+					context.Notes?.Add($"{label}: its {colliders.Length} collider meshes made from its kept pieces (positions only, the same triangles).");
+				}
 			}
 
 			string rock = ShellOf(context.Request, site, system);
@@ -833,8 +901,22 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				context.Notes?.Add($"Caves: no material for {rock} ('{CliffRocks.MaterialName(rock)}'); run Generate Biome Art, then repaint.");
 			}
-			Build(context.Root, system, mouths, meshes, material);
+			else
+			{
+				// The shell's rock with the habitat's layers on (2026-10-20): silt, gravel, litter and worn ways on its floors, wet,
+				// stains, moss and glow crust on its walls, by the vertex habitat the mesher wrote (CaveHabitat, FishCaveRock.hlsl).
+				CaveRockLook look = CaveRockLayers.For(PointOfInterestRock.BiomeOf(site), system.Form);
+				material = CaveRockMaterials.For(material, in look, assetPath, out bool written);
+				if (written && assetPath != null)
+				{
+					unsaved.Add(assetPath);
+				}
+			}
+			// The run-time cave cover's choice for this cave (its types and glow by biome and form) on its Visual (CaveCoverSpecies).
+			CaveCoverSpecies.Attach(Build(context.Root, system, mouths, meshes, material, colliders), system, PointOfInterestRock.BiomeOf(site));
 			WritePool(context, site, system, ground);
+			WriteLava(context, site, system);
+			WriteStreams(context, site, system);
 		}
 
 		/// <summary>
@@ -914,7 +996,8 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			foreach (CaveMouth m in CaveSystem.MouthsFromValues(shape.Values))
 			{
-				if (m.SiteId != siteId)
+				// Not an opening in a roof: nobody comes in by one (CaveSystem.Skylights.cs).
+				if (m.SiteId != siteId || m.Kind == CaveMouthKind.Skylight)
 				{
 					continue;
 				}
@@ -1014,7 +1097,8 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>Bump on any change to how a cave is meshed that the inputs key would not see (it already sees every code change, below).</summary>
-		public const int MeshVersion = 1;
+		/// <remarks>2: every vertex carries its habitat (COLOR + UV3, <see cref="CaveHabitat"/>), 2026-10-20.</remarks>
+		public const int MeshVersion = 2;
 
 		/// <summary>
 		/// The code the mesh is built by: the assemblies of the mesher, the field and the mesh writer (compiled
@@ -1087,9 +1171,14 @@ namespace FishMMO.Shared.WorldDesign
 		/// The cave's meshes as last built, when they were built from <paramref name="inputs"/> and are all still in the
 		/// asset (and the meshes of caves not in <paramref name="live"/> pruned); false to build them again.
 		/// </summary>
-		private static bool TryKeepMeshes(string assetPath, int siteId, string inputs, ICollection<int> live, out Mesh[] meshes, out bool[] mouths, out int triangles)
+		/// <remarks>
+		/// <paramref name="colliders"/> are the pieces' collider meshes (<see cref="ColliderName"/>) when all are in the asset, else
+		/// null (an asset written before they were): the caller derives them from the kept pieces.
+		/// </remarks>
+		private static bool TryKeepMeshes(string assetPath, int siteId, string inputs, ICollection<int> live, out Mesh[] meshes, out Mesh[] colliders, out bool[] mouths, out int triangles)
 		{
 			meshes = null;
+			colliders = null;
 			mouths = null;
 			triangles = 0;
 			if (assetPath == null || string.IsNullOrEmpty(inputs) || !(AssetDatabase.LoadMainAssetAtPath(assetPath) is SceneCaveMeshes store))
@@ -1111,7 +1200,7 @@ namespace FishMMO.Shared.WorldDesign
 			int ours = 0;
 			foreach (KeyValuePair<string, Mesh> kv in existing)
 			{
-				if (CaveIdOf(kv.Key, out int id) && id == siteId)
+				if (CaveIdOf(kv.Key, out int id) && id == siteId && IsPieceName(kv.Key))
 				{
 					ours++;
 				}
@@ -1130,10 +1219,30 @@ namespace FishMMO.Shared.WorldDesign
 			meshes = found;
 			mouths = (bool[])cave.Mouths.Clone();
 			triangles = cave.Triangles;
+			var solid = new Mesh[cave.Pieces];
+			for (int i = 0; i < solid.Length; i++)
+			{
+				if (!existing.TryGetValue(ColliderName(siteId, i), out solid[i]) || solid[i] == null || solid[i].vertexCount == 0)
+				{
+					solid = null;
+					break;
+				}
+			}
+			colliders = solid;
 			return true;
 		}
 
 		private static string PieceName(int siteId, int piece) => $"Cave {siteId} P{piece}";
+
+		/// <summary>A piece's collider mesh's name: its triangles on positions alone (<see cref="CaveMesher.ColliderOf"/>).</summary>
+		private static string ColliderName(int siteId, int piece) => $"Cave {siteId} C{piece}";
+
+		/// <summary>Whether a cave mesh's name is a render piece's (<c>Cave &lt;id&gt; P&lt;n&gt;</c>), not a collider's.</summary>
+		private static bool IsPieceName(string name)
+		{
+			int space = name.LastIndexOf(' ');
+			return space >= 0 && space + 1 < name.Length && name[space + 1] == 'P';
+		}
 
 		/// <summary>
 		/// A cave's pieces as meshes: sub-assets of <paramref name="assetPath"/> named <c>Cave &lt;id&gt; P&lt;n&gt;</c>, an
@@ -1143,33 +1252,46 @@ namespace FishMMO.Shared.WorldDesign
 		/// asset once, after the stage's last cave (each save rewrote the whole growing file).
 		/// </summary>
 		public static Mesh[] WriteMeshes(string assetPath, int siteId, IReadOnlyList<CaveMesher.Piece> pieces, ICollection<int> live, string inputs = null)
+			=> WriteMeshes(assetPath, siteId, pieces, live, out _, inputs);
+
+		/// <summary>
+		/// As above, with each piece's collider mesh (<see cref="ColliderName"/>, <see cref="CaveMesher.ColliderOf"/>) written
+		/// beside it into <paramref name="colliders"/>. Stored pieces are written unreadable (2026-10-20): nothing at run time
+		/// reads their vertices on the CPU (the colliders have their own meshes; the cave cover binds their GPU buffers, which an
+		/// unreadable mesh keeps), so a client drops its copy of them once they are on the GPU.
+		/// </summary>
+		public static Mesh[] WriteMeshes(string assetPath, int siteId, IReadOnlyList<CaveMesher.Piece> pieces, ICollection<int> live, out Mesh[] colliders, string inputs = null)
 		{
 			var meshes = new Mesh[pieces.Count];
+			colliders = new Mesh[pieces.Count];
 			var names = new HashSet<string>();
+			var welded = new List<Vector3>();
+			var weldedTriangles = new List<int>();
 			for (int i = 0; i < pieces.Count; i++)
 			{
 				meshes[i] = pieces[i].Mesh.ToMesh(PieceName(siteId, i));
+				// The habitat's second half (organic, glow) on its own channel (the colours carry the first).
+				if (pieces[i].Habitat.Count == pieces[i].Mesh.VertexCount)
+				{
+					meshes[i].SetUVs(CaveHabitat.UvChannel, pieces[i].Habitat);
+				}
 				names.Add(meshes[i].name);
+				CaveMesher.ColliderOf(pieces[i].Mesh.Positions, pieces[i].Mesh.Submeshes[0], welded, weldedTriangles);
+				colliders[i] = ColliderMesh(ColliderName(siteId, i), welded, weldedTriangles);
+				names.Add(colliders[i].name);
 			}
 			if (assetPath == null)
 			{
 				return meshes;
 			}
+			foreach (Mesh mesh in meshes)
+			{
+				SetReadable(mesh, false);
+			}
 			Object container = OpenStore(assetPath, out SceneCaveMeshes store);
 			Dictionary<string, Mesh> existing = Existing(assetPath, container, siteId, names, live);
-			for (int i = 0; i < meshes.Length; i++)
-			{
-				if (existing.TryGetValue(meshes[i].name, out Mesh old))
-				{
-					EditorUtility.CopySerialized(meshes[i], old);
-					Object.DestroyImmediate(meshes[i]);
-					meshes[i] = old;
-				}
-				else
-				{
-					AssetDatabase.AddObjectToAsset(meshes[i], assetPath);
-				}
-			}
+			Store(assetPath, existing, meshes);
+			Store(assetPath, existing, colliders);
 			if (store != null)
 			{
 				var cave = new SceneCaveMeshes.Cave { SiteId = siteId, Inputs = inputs ?? string.Empty, Pieces = pieces.Count, Mouths = new bool[pieces.Count] };
@@ -1191,6 +1313,84 @@ namespace FishMMO.Shared.WorldDesign
 			EditorUtility.SetDirty(container);
 			unsaved.Add(assetPath);
 			return meshes;
+		}
+
+		/// <summary>Each mesh written over the asset's mesh of its name (its references survive), else added to the asset.</summary>
+		private static void Store(string assetPath, Dictionary<string, Mesh> existing, Mesh[] meshes)
+		{
+			for (int i = 0; i < meshes.Length; i++)
+			{
+				if (existing.TryGetValue(meshes[i].name, out Mesh old))
+				{
+					EditorUtility.CopySerialized(meshes[i], old);
+					Object.DestroyImmediate(meshes[i]);
+					meshes[i] = old;
+				}
+				else
+				{
+					AssetDatabase.AddObjectToAsset(meshes[i], assetPath);
+				}
+			}
+		}
+
+		/// <summary>A collider mesh: positions and triangles only (no normals, UVs or bounds beyond the positions').</summary>
+		private static Mesh ColliderMesh(string name, List<Vector3> positions, List<int> triangles)
+		{
+			var mesh = new Mesh { name = name, indexFormat = positions.Count > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16 };
+			mesh.SetVertices(positions);
+			mesh.SetTriangles(triangles, 0, true);
+			return mesh;
+		}
+
+		/// <summary>The serialized read/write flag of a mesh (the editor reads either; a player keeps a CPU copy only of a readable one).</summary>
+		private static bool SetReadable(Mesh mesh, bool readable)
+		{
+			if (mesh == null || mesh.isReadable == readable)
+			{
+				return false;
+			}
+			using (var so = new SerializedObject(mesh))
+			{
+				SerializedProperty flag = so.FindProperty("m_IsReadable");
+				if (flag == null)
+				{
+					return false;
+				}
+				flag.boolValue = readable;
+				so.ApplyModifiedPropertiesWithoutUndo();
+			}
+			return true;
+		}
+
+		/// <summary>
+		/// The collider meshes of a cave whose pieces were kept from before they had their own (made from the pieces, which
+		/// are set unreadable on the way, as <see cref="WriteMeshes"/> now writes them), written into its asset.
+		/// </summary>
+		private static Mesh[] WriteColliders(string assetPath, int siteId, Mesh[] meshes)
+		{
+			var colliders = new Mesh[meshes.Length];
+			var welded = new List<Vector3>();
+			var weldedTriangles = new List<int>();
+			for (int i = 0; i < meshes.Length; i++)
+			{
+				CaveMesher.ColliderOf(meshes[i].vertices, meshes[i].triangles, welded, weldedTriangles);
+				colliders[i] = ColliderMesh(ColliderName(siteId, i), welded, weldedTriangles);
+			}
+			if (assetPath == null)
+			{
+				return colliders;
+			}
+			Object container = AssetDatabase.LoadMainAssetAtPath(assetPath);
+			foreach (Mesh mesh in meshes)
+			{
+				SetReadable(mesh, false);
+				EditorUtility.SetDirty(mesh);
+			}
+			Dictionary<string, Mesh> existing = Existing(assetPath, container, siteId, null, null);
+			Store(assetPath, existing, colliders);
+			EditorUtility.SetDirty(container);
+			unsaved.Add(assetPath);
+			return colliders;
 		}
 
 		/// <summary>
@@ -1349,18 +1549,19 @@ namespace FishMMO.Shared.WorldDesign
 		/// them), the renderers under a client-only "Visual" child drawn by <see cref="CaveVisibility"/>, and an empty marker
 		/// on each chamber's floor.
 		/// </summary>
-		public static GameObject Build(Transform parent, CaveSystem system, IReadOnlyList<CaveMesher.Piece> pieces, Mesh[] meshes, Material material)
+		/// <remarks>Each piece's collider takes its own mesh from <paramref name="colliders"/> (CaveShaper.WriteMeshes), else its render mesh.</remarks>
+		public static GameObject Build(Transform parent, CaveSystem system, IReadOnlyList<CaveMesher.Piece> pieces, Mesh[] meshes, Material material, Mesh[] colliders = null)
 		{
 			var mouths = new bool[pieces.Count];
 			for (int i = 0; i < pieces.Count; i++)
 			{
 				mouths[i] = pieces[i].Mouth;
 			}
-			return Build(parent, system, mouths, meshes, material);
+			return Build(parent, system, mouths, meshes, material, colliders);
 		}
 
 		/// <summary>As above, with each piece's mouth flag (<see cref="CaveMesher.Piece.Mouth"/>) in place of the pieces.</summary>
-		public static GameObject Build(Transform parent, CaveSystem system, bool[] pieceMouths, Mesh[] meshes, Material material)
+		public static GameObject Build(Transform parent, CaveSystem system, bool[] pieceMouths, Mesh[] meshes, Material material, Mesh[] colliders = null)
 		{
 			int layer = CliffPlacer.ColliderLayer;
 			var cave = new GameObject("Cave Rock") { layer = layer };
@@ -1381,7 +1582,7 @@ namespace FishMMO.Shared.WorldDesign
 				GameObjectUtility.SetStaticEditorFlags(solid, CliffPlacer.Flags);
 				var collider = solid.AddComponent<MeshCollider>();
 				collider.convex = false;
-				collider.sharedMesh = meshes[i];
+				collider.sharedMesh = colliders != null && i < colliders.Length && colliders[i] != null ? colliders[i] : meshes[i];
 
 				var child = new GameObject("Piece " + i) { layer = layer };
 				child.transform.SetParent(visual.transform, false);
@@ -1395,7 +1596,7 @@ namespace FishMMO.Shared.WorldDesign
 				renderers[i] = renderer;
 				mouths[i] = pieceMouths[i];
 			}
-			visual.AddComponent<CaveVisibility>().Configure(renderers, mouths, 72f, system.VoidBoxes());
+			visual.AddComponent<CaveVisibility>().Configure(renderers, mouths, 72f, system.VoidBoxes(), EnclosureOf(system, colliders, meshes).Encode());
 
 			foreach (CaveChamber chamber in system.Chambers)
 			{
@@ -1404,6 +1605,24 @@ namespace FishMMO.Shared.WorldDesign
 				marker.transform.SetPositionAndRotation(system.Origin + new Vector3(chamber.Centre.x, chamber.Floor, chamber.Centre.z), Quaternion.Euler(0f, chamber.Yaw, 0f));
 			}
 			return cave;
+		}
+
+		/// <summary>
+		/// The cave's columns (<see cref="CaveSystem.EnclosureOf"/>) from the rock as shipped: each piece's collider mesh (its own
+		/// triangles on welded positions), else its render mesh.
+		/// </summary>
+		private static CaveEnclosure EnclosureOf(CaveSystem system, Mesh[] colliders, Mesh[] meshes)
+		{
+			var pieces = new List<(IList<Vector3>, IList<int>)>(meshes.Length);
+			for (int i = 0; i < meshes.Length; i++)
+			{
+				Mesh mesh = colliders != null && i < colliders.Length && colliders[i] != null ? colliders[i] : meshes[i];
+				if (mesh != null)
+				{
+					pieces.Add((mesh.vertices, mesh.triangles));
+				}
+			}
+			return system.EnclosureOf(pieces);
 		}
 	}
 

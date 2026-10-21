@@ -44,7 +44,7 @@ namespace FishMMO.Shared
 		public Texture2D Table;
 		[Tooltip("The baked atlas of pages: edge distance, half width, wear and surface, half a metre a texel.")]
 		public Texture2D Atlas;
-		[Tooltip("xy the world x/z of page (0, 0), z 1 / page metres, w 1 when baked.")]
+		[Tooltip("xy the world x/z of page (0, 0), z 1 / page metres, w the field's encoding when baked (ScenePathField.Encoding; 1 the first), 0 not.")]
 		public Vector4 Parameters;
 		[Tooltip("xy the page table's size in pages, z 1 / the atlas's side in texels, w stored texels a page side.")]
 		public Vector4 Size;

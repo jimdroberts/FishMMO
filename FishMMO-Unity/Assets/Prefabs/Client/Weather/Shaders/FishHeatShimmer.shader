@@ -46,6 +46,12 @@ Shader "Hidden/FishMMO/Weather/HeatShimmer"
             float4 _HeatScreen;  // x uv per radian across, y up; z the most displacement allowed (uv, up); w unused
             float4 _HeatEye;     // xyz the camera; w the ground under it (m)
 
+            // The hot air over a lava tube's molten lava (2026-10-20, CaveLavaHeat): balls of boiling air over the nearest lava
+            // lights, xyz centre and w radius (m); x of the params how many, y the jitter rms across one's whole width (rad).
+            #define HEAT_SPOTS 8
+            float4 _HeatSpots[HEAT_SPOTS];
+            float4 _HeatSpotParams;
+
             // The molten mask (WaterSurface / LavaMask), bound only while a lava surface is live.
             TEXTURE2D(_FishLavaMask);
             SAMPLER(sampler_FishLavaMask);
@@ -203,6 +209,35 @@ Shader "Hidden/FishMMO/Weather/HeatShimmer"
                 return clamp(local / max(0.15, scene), 0.0, 1.5);
             }
 
+            /* The variance a ray from the eye to a point gathers in the boiling air over cave lava: through each ball, its
+             * jitter² × the share of the ball's width the ray runs inside it (to the point, never past it), weighted to the
+             * middle of the ball where the air is hottest. Exact chord length, so it is steady as the camera moves. */
+            float HeatSpotVariance(float3 eye, float3 d, float distanceToP)
+            {
+                float variance = 0.0;
+                int count = (int)min(_HeatSpotParams.x, (float)HEAT_SPOTS);
+                [loop]
+                for (int i = 0; i < count; i++)
+                {
+                    float4 ball = _HeatSpots[i];
+                    float3 oc = eye - ball.xyz;
+                    float b = dot(oc, d);
+                    float c = dot(oc, oc) - ball.w * ball.w;
+                    float h = b * b - c;
+                    if (h <= 0.0)
+                    {
+                        continue;
+                    }
+                    h = sqrt(h);
+                    float enter = max(0.0, -b - h), leave = min(distanceToP, -b + h);
+                    float inside = max(0.0, leave - enter);
+                    // How near the chord passes the middle: a ray grazing the ball's edge crosses cooler air.
+                    float closest = sqrt(max(0.0, c + ball.w * ball.w - b * b)) / max(ball.w, 1e-3);
+                    variance += inside / (2.0 * ball.w) * (1.0 - closest * closest);
+                }
+                return _HeatSpotParams.y * _HeatSpotParams.y * variance;
+            }
+
             float2 HeatScreenOf(float3 direction, out float inFront)
             {
                 float4 clip = mul(_HeatDirectionVP, float4(direction, 0.0));
@@ -269,6 +304,10 @@ Shader "Hidden/FishMMO/Weather/HeatShimmer"
                         float lavaLayer = 0.25 * _HeatLava.w;
                         float lavaPath = HeatPath(p, distanceToP, sinIncidence, groundness, lavaLayer, _HeatLava.y);
                         variance += _HeatLava.z * _HeatLava.z * molten * lavaPath / _HeatParams.z;
+                    }
+                    if (_HeatSpotParams.x > 0.5)
+                    {
+                        variance += HeatSpotVariance(eye, d, distanceToP);
                     }
 
                     // Nothing nearer than this pixel stands round it, or its strength is the nearer thing's:

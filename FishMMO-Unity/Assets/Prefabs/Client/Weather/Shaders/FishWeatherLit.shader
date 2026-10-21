@@ -44,6 +44,20 @@ Shader "FishMMO/Weather Lit"
         [Toggle] _FishStructure("Structure (weathered, no ground unfold)", Float) = 0.0
         // FishMMO edit: moss on this surface (FishMoss.hlsl), times the scene's dampness; 0 none. Set by the art generator.
         _FishMoss("Moss on this surface", Range(0.0, 1.0)) = 0.0
+        // FishMMO edit: cave rock (keyword _FISH_CAVE_ROCK, FishCaveRock.hlsl): the habitat's floor grounds and wall looks.
+        // Set by the cave shaper (CaveRockMaterials) on its clones of the shell rock's material; unused elsewhere.
+        [HideInInspector] _FishCaveSiltMap("Cave silt", 2D) = "grey" {}
+        [HideInInspector][Normal] _FishCaveSiltNormal("Cave silt normal", 2D) = "bump" {}
+        [HideInInspector] _FishCaveGravelMap("Cave gravel", 2D) = "grey" {}
+        [HideInInspector][Normal] _FishCaveGravelNormal("Cave gravel normal", 2D) = "bump" {}
+        [HideInInspector] _FishCaveOrganicMap("Cave litter", 2D) = "grey" {}
+        [HideInInspector] _FishCaveTroddenMap("Cave worn way", 2D) = "grey" {}
+        [HideInInspector] _FishCaveTiles("Cave grounds per metre", Vector) = (0.4, 0.4, 0.4, 0.4)
+        [HideInInspector] _FishCaveStain("Cave stain (a strength)", Color) = (0.62, 0.42, 0.24, 0.7)
+        [HideInInspector] _FishCaveCrust("Cave flowstone crust", Color) = (0.9, 0.86, 0.77, 1)
+        [HideInInspector][HDR] _FishCaveGlow("Cave glow crust", Color) = (0.7, 2.2, 1.6, 1)
+        [HideInInspector] _FishCaveGuano("Cave guano", Color) = (0.52, 0.46, 0.36, 1)
+        [HideInInspector] _FishCaveParams("Cave moss, wet gloss, grounds bound", Vector) = (1, 1, 0, 0)
 
         _BumpScale("Scale", Float) = 1.0
         _BumpMap("Normal Map", 2D) = "bump" {}
@@ -156,6 +170,8 @@ Shader "FishMMO/Weather Lit"
             #pragma shader_feature_local_fragment _SPECULARHIGHLIGHTS_OFF
             #pragma shader_feature_local_fragment _ENVIRONMENTREFLECTIONS_OFF
             #pragma shader_feature_local_fragment _SPECULAR_SETUP
+            // FishMMO edit: a cave's rock dressed by its habitat (FishCaveRock.hlsl; the plain shader's cave rock materials only).
+            #pragma shader_feature_local _FISH_CAVE_ROCK
 
             // -------------------------------------
             // Universal Pipeline keywords

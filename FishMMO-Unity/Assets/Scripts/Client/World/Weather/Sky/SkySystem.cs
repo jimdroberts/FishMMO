@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Unity.Profiling;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using FishMMO.Shared;
 using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
@@ -267,6 +268,9 @@ namespace FishMMO.Client
 		public WeatherRenderProfile Profile;
 		/// <summary>The camera to present for; otherwise <see cref="Camera.main"/>.</summary>
 		public Camera TargetCamera;
+		/// <summary>The camera presented for: <see cref="TargetCamera"/>, else <see cref="Camera.main"/> (in game the camera lives in
+		/// the client's preboot scene and is never assigned here).</summary>
+		private Camera ViewCamera => TargetCamera != null ? TargetCamera : Camera.main;
 
 		private WorldDayNightCycle cycle;
 		private Material skyMaterial;
@@ -335,6 +339,21 @@ namespace FishMMO.Client
 		private Light createdSun;
 		private Light createdMoon;
 
+		/// <summary>
+		/// A light of the sky's own with its URP data beside it. Every one of them wears a cookie (the cloud's shadow or the
+		/// white stand-in), and URP reads a cookied directional light's data without checking it is there whenever that light
+		/// is not the main one (LightCookieManager.GetLightUVScaleOffset): with the moon or a companion star up beside the
+		/// sun, a light made bare threw a NullReferenceException in the render graph every frame (2026-10-20). The editor adds
+		/// this component to a light made from its menu; a light added from code has to be given it.
+		/// </summary>
+		private static void WithLightData(Light light)
+		{
+			if (!light.TryGetComponent(out UniversalAdditionalLightData _))
+			{
+				light.gameObject.AddComponent<UniversalAdditionalLightData>();
+			}
+		}
+
 		/// <summary>One of the sky's own directional lights, made once and kept under the sky system.</summary>
 		private Light OwnLight(ref Light light, string name)
 		{
@@ -343,6 +362,7 @@ namespace FishMMO.Client
 				var holder = new GameObject(name);
 				holder.transform.SetParent(transform, false);
 				light = holder.AddComponent<Light>();
+				WithLightData(light);
 				light.type = LightType.Directional;
 				// Dark until the sky says otherwise: it sets colour, intensity and which of the two
 				// casts the shadows on every frame it runs.
@@ -415,6 +435,7 @@ namespace FishMMO.Client
 				var holder = new GameObject(name);
 				holder.transform.SetParent(transform, false);
 				Light light = holder.AddComponent<Light>();
+				WithLightData(light);
 				light.type = LightType.Directional;
 				light.shadows = LightShadows.None;
 				light.intensity = 0f;
@@ -457,6 +478,8 @@ namespace FishMMO.Client
 		private MistGroundMap mistGround;
 		/// <summary>The fine ground round the camera every full-screen effect reads how far underground it is from (FishGroundMap.hlsl); null until the first frame.</summary>
 		public MistGroundMap MistGround => mistGround;
+		/// <summary>The live caves' columns round the camera, for how far in a cave every lit surface is (FishGroundMap.hlsl FishCaveEnclosed).</summary>
+		private CaveEnclosureMap caveEnclosure;
 		/// <summary>The steam fog off open water warmer than the air (SteamFogSource), drawn by the mist's march.</summary>
 		private readonly SteamFogSource steamFog = new SteamFogSource();
 		/// <summary>How much the water round the camera smokes, and how warm it is (<see cref="SteamFogSource"/>).</summary>
@@ -637,6 +660,8 @@ namespace FishMMO.Client
 			cloudFlow = null;
 			mistGround?.Dispose();
 			mistGround = null;
+			caveEnclosure?.Release();
+			caveEnclosure = null;
 			Shader.SetGlobalVector(MistId, Vector4.zero);
 			weatherMap?.Dispose();
 			DestroyOwned(skyMaterial);
@@ -1520,6 +1545,8 @@ namespace FishMMO.Client
 			mistGround ??= new MistGroundMap();
 			MistGroundMarker.Begin();
 			mistGround.Update(viewerAt, cloudSunDirection, cloudFlow);
+			caveEnclosure ??= new CaveEnclosureMap();
+			caveEnclosure.Update(viewerAt);
 			MistGroundMarker.End();
 			Shader.SetGlobalVector(MistId, on ? new Vector4(deficit, stirred, night, MistRange) : Vector4.zero);
 			return on;
@@ -2352,11 +2379,12 @@ namespace FishMMO.Client
 				float flashPart = shadowed == sun ? flash * 1.5f : 0f;
 				shadowed.intensity = flashPart + (shadowed.intensity - flashPart) / far;
 			}
-			Vector3 viewer = TargetCamera != null ? TargetCamera.transform.position : transform.position;
+			Camera view = ViewCamera;
+			Vector3 viewer = view != null ? view.transform.position : transform.position;
 			cloudShadows.Update(shadowed, profile.CloudMaterial, viewer, profile.Clouds.ShadowAreaMeters,
 				1f, 8 * MaxCloudLayers, cookie, far);
 			// The cloud's density round the camera on a coarse grid, for the light march's long segments.
-			float farPlane = TargetCamera != null ? TargetCamera.farClipPlane : CloudFarDistance;
+			float farPlane = view != null ? view.farClipPlane : CloudFarDistance;
 			// The tower lattice and formation noise as wrapping tiles (once a world), before the light volume reads them.
 			cloudTiles.Update(profile.CloudMaterial, CloudsReady, latticeSeed == WeatherDriver.WorldSeed);
 			cloudLight.Update(profile.CloudMaterial, viewer, farPlane, CloudShellBottom, CloudShellTop, CloudsReady && DrawClouds);
@@ -2409,6 +2437,12 @@ namespace FishMMO.Client
 			float under = Underground();
 			dim *= 1f - UndergroundAmbientCut * under;
 			RenderSettings.reflectionIntensity = 1f - UndergroundAmbientCut * under;
+			// The sky's reflection probe too (2026-10-21): with a probe in use reflectionIntensity dims nothing, and what is drawn
+			// with stock shaders in a cave mirrored the daylight sky.
+			if (probe != null)
+			{
+				probe.intensity = 1f - UndergroundAmbientCut * under;
+			}
 			Color flashColor = new Color(0.3f, 0.32f, 0.38f) * flash;
 			Color skyColor = sample.AmbientSky * dim + flashColor;
 			Color equator = sample.AmbientEquator * dim + flashColor * 0.6f;
@@ -2445,15 +2479,20 @@ namespace FishMMO.Client
 		private float Underground()
 		{
 			float target = 0f;
-			if (TargetCamera != null)
+			Camera view = ViewCamera;
+			if (view != null)
 			{
-				Vector3 eye = TargetCamera.transform.position;
+				Vector3 eye = view.transform.position;
 				// Not over a cloud world: under an island is the open air beneath its rock, not a cave (FishUnderground is
 				// off there too: MistGroundMap).
 				if (!SceneCloudWorld.Any && TerrainSet.Current.TryHeight(eye.x, eye.z, out float ground))
 				{
 					float t = Mathf.Clamp01((ground - eye.y - 6f) / 14f);
 					target = t * t * (3f - 2f * t);
+					// In a cave's air however thin the rock over it (2026-10-21, CaveEnclosure), as the lit surfaces are.
+					target = Mathf.Max(target, FishMMO.Shared.CaveVisibility.EnclosedAt(eye));
+					// Under an opening in a cave's roof the sky it lets in reaches the eye too (2026-10-20, CaveSkylights).
+					target *= 1f - CaveSkylights.OpenAt(eye);
 				}
 				// Indoors (a room of a site's building), the sky comes in at the windows and the door: part of the way.
 				target = Mathf.Max(target, IndoorAmbientShare * IndoorRooms.IndoorAt(eye));

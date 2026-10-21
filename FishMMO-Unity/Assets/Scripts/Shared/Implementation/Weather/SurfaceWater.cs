@@ -52,6 +52,16 @@ namespace FishMMO.Shared.Weather
 			Vector2 CurrentAt(float x, float z);
 		}
 
+		/// <summary>
+		/// Area water some of which may be molten lava (a lava tube's river, a pit in its chamber): which the highest surface over a
+		/// place is, so what lives, wades, splashes or floats in water can leave lava alone.
+		/// </summary>
+		public interface ILavaAreaSource : IAreaSource
+		{
+			/// <summary>The highest surface over a world position, when there is one there, and whether it is lava.</summary>
+			bool TryGetSurface(float x, float z, out float level, out bool lava);
+		}
+
 		/// <summary>Water whose drawn surface moves (the sea's waves): what a floating body is set on to ride them.</summary>
 		public interface IWaveSource : ISource
 		{
@@ -153,6 +163,35 @@ namespace FishMMO.Shared.Weather
 				if (source is IAreaSource area && area.TryGetSurface(x, z, out float here) && here > level)
 				{
 					level = here;
+					any = true;
+				}
+			}
+			return any;
+		}
+
+		/// <summary>
+		/// <see cref="TryGetInlandSurfaceAt(float, float, out float)"/>, and whether the highest inland surface there is molten lava
+		/// (<see cref="ILavaAreaSource"/>) rather than water.
+		/// </summary>
+		public static bool TryGetInlandSurfaceAt(float x, float z, out float level, out bool lava)
+		{
+			Prune();
+			level = float.NegativeInfinity;
+			lava = false;
+			bool any = false;
+			foreach (ISource source in sources)
+			{
+				if (!(source is IAreaSource area))
+				{
+					continue;
+				}
+				bool molten = false;
+				float here;
+				bool found = area is ILavaAreaSource liquid ? liquid.TryGetSurface(x, z, out here, out molten) : area.TryGetSurface(x, z, out here);
+				if (found && here > level)
+				{
+					level = here;
+					lava = molten;
 					any = true;
 				}
 			}

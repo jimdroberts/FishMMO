@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using FishMMO.Shared.Core;
+using FishMMO.Shared.NameGeneration;
 using FishNet.Object;
 using UnityEditor;
 using UnityEngine;
@@ -155,6 +156,13 @@ namespace FishMMO.Shared.WorldDesign
 	/// steps, a pair of guardians and banners, fallen stone and bones at its edges, never on water (context.IsWet).
 	/// </para>
 	/// <para>A site whose props laid no door (its art not generated) keeps the old box at <see cref="Offset"/>.</para>
+	/// <para>
+	/// <b>Marked as a dungeon</b> (2026-10-20: "Every dungeon entrance or marker should be clearly marked as a dungeon
+	/// entrance"): the site's own map entry is drawn as a dungeon entrance (<see cref="ScenePointOfInterest.HoldsDungeon"/>),
+	/// or, in a cave, the gate gets an entry of its own in the cavern (<see cref="ScenePointOfInterest.Entrances"/>), the
+	/// cave's mouths keeping theirs. Both are baked scene data, on both maps once discovered; the entrance's streamed marker
+	/// is not drawn as well. A crypt or a barrow over its stair is one too (PointOfInterestEntrances), its forecourt only the
+	/// lights either side of the door, the site's own props already filling the ground about it.</para>
 	/// </remarks>
 	[Serializable]
 	public class DungeonEntranceFeature : PointOfInterestFeature
@@ -261,7 +269,8 @@ namespace FishMMO.Shared.WorldDesign
 				AddPassageRoom(context, origin, yaw, scale, doorway);
 				if (Dressing)
 				{
-					Dress(context, origin, yaw, scale, doorway, cave, rustic);
+					bool full = cave != null || context.Record.Kind == POIType.DungeonEntrance;
+					Dress(context, origin, yaw, scale, doorway, cave, rustic, full);
 				}
 			}
 			GameObject entrance = context.AddChild(PointOfInterestFeatureKit.UniqueName(context, "Dungeon Entrance"));
@@ -275,18 +284,49 @@ namespace FishMMO.Shared.WorldDesign
 			dungeon.InteractionRange = Mathf.Max(6f, 0.5f * size.x + 4f);
 			PointOfInterestFeatureKit.SetInteractTriggers(dungeon, PointOfInterestFeatureKit.Load<Trigger>(context, PointOfInterestFeatureKit.DungeonEntranceTriggerPath));
 
-			// The site itself is the map entry, behind discovery; the entrance's own marker shows only up close.
+			// The baked entry is the map's mark, behind discovery, on both maps (MarkOnMap); the streamed marker would draw it twice.
 			MapMarker marker = entrance.GetComponent<MapMarker>();
 			if (marker != null)
 			{
 				marker.Type = MapMarkerType.DungeonEntrance;
+				marker.Label = context.Record.Name;
 				marker.ShowOnWorldMap = false;
-				marker.ShowOnMinimap = true;
+				marker.ShowOnMinimap = false;
 				EditorUtility.SetDirty(marker);
 			}
+			MarkOnMap(context, position);
 			PointOfInterestFeatureKit.AssignSceneId(networkObject, context, 0xD06E);
 			EditorUtility.SetDirty(dungeon);
 			PointOfInterestFeatureKit.Note(context, "dungeon entrance placed with an empty DungeonName: link it to its interior by hand.");
+		}
+
+		/// <summary>
+		/// Marks the entrance on the map: a cave's gate as an entry of its own where it stands in the cavern (the cave's mouths keep
+		/// the cave's), any other site's own entry as a dungeon entrance.
+		/// </summary>
+		private static void MarkOnMap(PointOfInterestSiteContext context, Vector3 doorway)
+		{
+			ScenePointOfInterest point = context.Root != null ? context.Root.GetComponentInParent<ScenePointOfInterest>() : null;
+			if (point == null)
+			{
+				return;
+			}
+			if (CaveShaper.TryForm(context.Record.Kind, out _))
+			{
+				point.Entrances ??= new List<ScenePointOfInterestEntrance>();
+				point.Entrances.Add(new ScenePointOfInterestEntrance
+				{
+					Position = doorway,
+					Type = MapMarkerType.DungeonEntrance,
+					Name = point.ResolvedName,
+					Description = $"Dungeon entrance, deep inside {point.ResolvedName}: reached through the cave.",
+				});
+			}
+			else
+			{
+				point.HoldsDungeon = true;
+			}
+			EditorUtility.SetDirty(point);
 		}
 
 		/// <summary>The passage behind the doorway as a dark room (SceneRoom): the client darkens what is drawn in it as indoors.</summary>
@@ -309,9 +349,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// The forecourt's dressing, in pairs about the door's axis (the door's frame: x across, −z out along the approach):
 		/// braziers (torches before a barrow) either side of the steps' foot, a pair of guardian statues (standing stones before a
 		/// barrow) and banners, then fallen stone on one side and a few bones. Every draw first, in a fixed order; nothing on water
-		/// or, in a cavern, where its floor is not.
+		/// or, in a cavern, where its floor is not. Not <paramref name="full"/> (a crypt among its graves): the lights alone.
 		/// </summary>
-		private static void Dress(PointOfInterestSiteContext context, Vector3 origin, float yaw, float scale, in StructureDoorway door, CaveSystem cave, bool rustic)
+		private static void Dress(PointOfInterestSiteContext context, Vector3 origin, float yaw, float scale, in StructureDoorway door, CaveSystem cave, bool rustic, bool full)
 		{
 			DeterministicRNG random = context.Random;
 			bool guardians = random.NextFloat() < 0.75f, banners = random.NextFloat() < 0.6f, rubble = random.NextFloat() < 0.8f;
@@ -356,6 +396,10 @@ namespace FishMMO.Shared.WorldDesign
 			for (int s = -1; s <= 1; s += 2)
 			{
 				Lay(rustic ? "=TorchPost" : "=Brazier", s * (half + 1f), -3.2f, 0f, 1 + s);
+				if (!full)
+				{
+					continue;
+				}
 				if (guardians)
 				{
 					Lay(rustic ? "=StandingStone" : "=Statue", s * (half + 2f), -5.6f, 0f, 5 + s);
@@ -365,11 +409,11 @@ namespace FishMMO.Shared.WorldDesign
 					Lay("=BannerPole", s * 4.7f, -2.4f, 0f, 9 + s);
 				}
 			}
-			if (rubble)
+			if (rubble && full)
 			{
 				Lay(column && !rustic ? "=FallenColumn" : "=RubblePile", rubbleSide * 5.6f, -6.4f, rubbleTurn, 12);
 			}
-			for (int i = 0; i < bones; i++)
+			for (int i = 0; i < (full ? bones : 0); i++)
 			{
 				Lay("=BonePile", boneAt[i].x, boneAt[i].y, boneAt[i].z, 20 + i);
 			}

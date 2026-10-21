@@ -169,6 +169,14 @@ namespace FishMMO.Shared.Biomes
 		public Vector2 widthScaleRange = new Vector2(0.8f, 1.2f);
 		[Tooltip("Random scale range for tree height (only used when non-uniform scaling is enabled).")]
 		public Vector2 heightScaleRange = new Vector2(0.8f, 1.2f);
+		/// <remarks>
+		/// 2026-10-20 ("we want massive crystals"): a tree-channel instance's size draw t (0..1 along its range, after a group's or a
+		/// stand's lean) is taken as t^skew: 1 leaves every rule exactly as it was; above 1 most instances keep near the small end
+		/// and the odd one reaches the top, so a wide range reads as ordinary rock with the occasional giant rather than giants
+		/// everywhere. Detail-layer rules ignore it (the terrain's detail prototypes draw their own sizes, evenly).
+		/// </remarks>
+		[Tooltip("Lean of each instance's size along its scale range (tree-channel rules): 1 = even, as before; above 1 most stay near the small end and the odd one reaches the top (the rare massive crystal or boulder among ordinary ones).")]
+		[Range(0.25f, 4f)] public float scaleSkew = 1f;
 		public Vector2 yRotationRange = new Vector2(0f, 360f);
 		public bool alignToTerrainNormal = true;
 		[Tooltip("Seed offset applied on top of the global prefab seed to keep results deterministic per rule.")]
@@ -241,6 +249,22 @@ namespace FishMMO.Shared.Biomes
 		[Header("World Gate")]
 		[Tooltip("Grow only on worlds whose air, mean temperature and nature the gate admits (the scene's body: a glowing lichen only under a thin sky, a frost flower only in a giant planet's magnetosphere). Everything empty/off = every world, exactly as before the gate existed. A scene with no body counts as the home world.")]
 		public BiomeWorldGate worldGate;
+
+		/// <remarks>
+		/// 2026-10-18, phase I2q (decision 47): grow only within a band of the ground's HEAT, the scene's heat mask baked at the
+		/// cut from its geothermal sites (0 cold ground … 1 a spring's throat; SceneBiomeMap.HeatAt): a geyser basin's bare sinter
+		/// apron, its warm ring of mats and panic grass, its green halo. Off (the default) grows the rule as before.
+		/// </remarks>
+		[Header("Heat Band")]
+		[Tooltip("Grow only within a band of the ground's heat (the scene's heat mask from its geysers, hot springs, fumaroles and mud pots and their runoff: 0 cold … 1 boiling). Off = everywhere, as before. A scene with no heat known grows the rule as if it were off.")]
+		public bool useHeatBand = false;
+		[Tooltip("Heat band only. The heat the rule grows between, 0 … 1; x the coolest, y the hottest. An end at or below 0, or at or above 1, is open.")]
+		public Vector2 heatRange = new Vector2(0f, 1f);
+		[Tooltip("Heat band only. Width of the soft edge at each closed end, centred on the end. 0 = a hard line.")]
+		[Range(0f, 1f)] public float heatFalloff = BiomeHeatBand.DefaultFalloff;
+
+		/// <summary>How fully the rule grows at a heat, by its band: 1 without one (or for a NaN reading, no heat known).</summary>
+		public float HeatWeight(float heat) => useHeatBand ? BiomeHeatBand.Weight(heatRange, heatFalloff, heat) : 1f;
 
 		[SerializeField, HideInInspector]
 		private string specFingerprint = string.Empty;

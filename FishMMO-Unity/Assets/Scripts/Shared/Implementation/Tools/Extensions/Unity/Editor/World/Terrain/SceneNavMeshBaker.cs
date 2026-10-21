@@ -155,6 +155,20 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			int waterBoxes = surfaceAt != null && groundAt != null ? WaterModifiers(bounds, surfaceAt, groundAt, sources, lavaLevel) : 0;
+			// The lava lakes and rivers of the scene's hydrology (a lava tube's: CaveLavaWater), under ground the terrain grid never sees.
+			int lavaBoxes = 0;
+			foreach (GameObject root in scene.GetRootGameObjects())
+			{
+				foreach (FishMMO.Shared.Biomes.SceneWaterBodies bodies in root.GetComponentsInChildren<FishMMO.Shared.Biomes.SceneWaterBodies>(true))
+				{
+					if (bodies.Hydrology != null)
+					{
+						lavaBoxes += LavaModifiers(bodies.Hydrology.Lakes, bodies.Hydrology.Rivers, LavaAreaOrNotWalkable(), sources);
+						// A cave's pools too deep to wade (CaveStreamWater, 2026-10-20), likewise under the hillside.
+						waterBoxes += CaveStreamWater.DeepModifiers(bodies.Hydrology.Lakes, sources);
+					}
+				}
+			}
 
 			NavMeshBuildSettings settings = surface.GetBuildSettings();
 			NavMeshData data = NavMeshBuilder.BuildNavMeshData(settings, sources, bounds, Vector3.zero, Quaternion.identity);
@@ -215,7 +229,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				SceneNavMeshCatalogueEditor.Sync(scene);
 			}
-			notes?.Add($"NavMesh: baked from {fromScene:N0} scene source(s) and {props:N0} prop(s), water deeper than {WadeMetres:0.#} m marked {DeepWaterArea} in {waterBoxes:N0} box(es), height mesh {(settings.buildHeightMesh ? "on" : "off")}, {settings.voxelSize:0.###} m voxels, in {clock.Elapsed.TotalSeconds:0.0} s.");
+			notes?.Add($"NavMesh: baked from {fromScene:N0} scene source(s) and {props:N0} prop(s), water deeper than {WadeMetres:0.#} m marked {DeepWaterArea} in {waterBoxes:N0} box(es), inland lava marked {LavaArea} in {lavaBoxes:N0} box(es), height mesh {(settings.buildHeightMesh ? "on" : "off")}, {settings.voxelSize:0.###} m voxels, in {clock.Elapsed.TotalSeconds:0.0} s.");
 			return true;
 		}
 
@@ -342,6 +356,106 @@ namespace FishMMO.Shared.WorldDesign
 						transform = Matrix4x4.Translate(centre),
 						size = size,
 						area = of == 2 ? lavaArea : deepArea,
+					});
+					boxes++;
+				}
+			}
+			return boxes;
+		}
+
+		/// <summary>The <see cref="LavaArea"/> NavMesh area, or Not Walkable when the project has none.</summary>
+		private static int LavaAreaOrNotWalkable()
+		{
+			int area = NavMesh.GetAreaFromName(LavaArea);
+			return area >= 0 ? area : NavMesh.GetAreaFromName("Not Walkable");
+		}
+
+		/// <summary>
+		/// Marks the ground under a hydrology's lava lakes and rivers (<see cref="FishMMO.Shared.Biomes.SceneHydrology.Lake.Lava"/>)
+		/// as <paramref name="area"/>: boxes from <see cref="CaveLavaWater.MaxBedDepth"/> and a metre under each surface up to
+		/// <see cref="BoxTopUnderSurfaceMetres"/> under it, so the bed is inside and a bench or a bridge over the lava is not. A
+		/// lake's are its mask's rows, run-merged; a river's one per segment, turned along it and tilted down its slope, so a
+		/// falling run's bed stays inside. Returns how many boxes.
+		/// </summary>
+		/// <remarks>
+		/// Not the terrain grid <see cref="WaterModifiers"/> reads: a lava tube's lava runs tens of metres under the hillside, and
+		/// the grid knows only the ground over it. Non-fire-immune NPCs have the area masked out (AIController.Swimming).
+		/// </remarks>
+		public static int LavaModifiers(IReadOnlyList<FishMMO.Shared.Biomes.SceneHydrology.Lake> lakes, IReadOnlyList<FishMMO.Shared.Biomes.SceneHydrology.River> rivers,
+			int area, List<NavMeshBuildSource> into)
+		{
+			if (lakes == null || rivers == null || area < 0)
+			{
+				return 0;
+			}
+			float under = CaveLavaWater.MaxBedDepth + 1f, top = BoxTopUnderSurfaceMetres;
+			float height = under - top;
+			int boxes = 0;
+			foreach (FishMMO.Shared.Biomes.SceneHydrology.Lake lake in lakes)
+			{
+				if (lake == null || !lake.Lava || lake.Mask == null || lake.MaskCell <= 0f)
+				{
+					continue;
+				}
+				float cell = lake.MaskCell;
+				for (int z = 0; z < lake.MaskHeight; z++)
+				{
+					int x = 0;
+					while (x < lake.MaskWidth)
+					{
+						float cx = lake.MaskOrigin.x + (x + 0.5f) * cell, cz = lake.MaskOrigin.y + (z + 0.5f) * cell;
+						if (!lake.Covers(cx, cz))
+						{
+							x++;
+							continue;
+						}
+						int x1 = x;
+						while (x1 + 1 < lake.MaskWidth && lake.Covers(lake.MaskOrigin.x + (x1 + 1.5f) * cell, cz))
+						{
+							x1++;
+						}
+						var centre = new Vector3(lake.MaskOrigin.x + (x + x1 + 1) * 0.5f * cell, lake.Level - top - 0.5f * height, lake.MaskOrigin.y + (z + 0.5f) * cell);
+						into.Add(new NavMeshBuildSource
+						{
+							shape = NavMeshBuildSourceShape.ModifierBox,
+							transform = Matrix4x4.Translate(centre),
+							// Half a cell more round it: the mask's cells are its centres', and the lava's edge lies between.
+							size = new Vector3((x1 - x + 1) * cell + cell, height, cell + cell),
+							area = area,
+						});
+						boxes++;
+						x = x1 + 1;
+					}
+				}
+			}
+			foreach (FishMMO.Shared.Biomes.SceneHydrology.River river in rivers)
+			{
+				if (river == null || !river.Lava || !river.Perennial || river.Points == null)
+				{
+					continue;
+				}
+				for (int i = 0; i + 1 < river.Points.Length; i++)
+				{
+					Vector3 a = river.Points[i], b = river.Points[i + 1];
+					Vector3 along = b - a;
+					float run = new Vector2(along.x, along.z).magnitude;
+					float width = Mathf.Max(river.Width != null && i < river.Width.Length ? river.Width[i] : 4f,
+						river.Width != null && i + 1 < river.Width.Length ? river.Width[i + 1] : 4f);
+					if (run < 0.05f)
+					{
+						continue;
+					}
+					// Along the segment and down its slope: the box's top runs parallel to the falling surface.
+					Quaternion turn = Quaternion.LookRotation(along / along.magnitude, Vector3.up);
+					Vector3 up = turn * Vector3.up;
+					Vector3 centre = (a + b) * 0.5f - up * (top + 0.5f * height);
+					into.Add(new NavMeshBuildSource
+					{
+						shape = NavMeshBuildSourceShape.ModifierBox,
+						transform = Matrix4x4.TRS(centre, turn, Vector3.one),
+						// Past each end by half a width, so the boxes of a bending river overlap at its points.
+						size = new Vector3(width + 1f, height, along.magnitude + width),
+						area = area,
 					});
 					boxes++;
 				}

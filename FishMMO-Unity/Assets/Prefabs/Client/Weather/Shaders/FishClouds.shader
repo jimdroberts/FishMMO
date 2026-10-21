@@ -738,6 +738,8 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
+            // The fine ground map: no shafts over a cave's own air (FishOpenAir), as the clouds' composite.
+            #include "FishGroundMap.hlsl"
 
             TEXTURE2D(_FishGodRayBuffer);
             SAMPLER(sampler_FishGodRayBuffer);
@@ -782,7 +784,10 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                     bool isSky = rawDepth >= 1.0 - 1e-6;
                 #endif
                 float air = isSky ? 1.0 : 1.0 - exp(-LinearEyeDepth(rawDepth, _ZBufferParams) / max(1.0, _FishGodRayAir.y));
-                rays *= air;
+                // Not in a cave's air (2026-10-21): with no sky in view the gather takes every way as lit, and the air's
+                // depth then glowed the far walls toward the sun and let them go dark as they were walked up to.
+                float3 surface = ComputeWorldSpacePosition(input.uv, rawDepth, UNITY_MATRIX_I_VP);
+                rays *= air * FishOpenAir(GetCameraPositionWS(), surface);
                 // Rolled off so that however thick the air, the light arrives below 1: the display
                 // clips (a tonemapper was tried and measured — URP's Neutral maps 1.0 to 0.63 and
                 // took the brightness out of the whole frame), and added raw this reached white

@@ -195,7 +195,11 @@ namespace FishMMO.Shared.WorldDesign
 						{
 							continue;
 						}
-						if (rule.CoastMetres > 0f && (!Input.HasSea || G.SeaDistance[i] > rule.CoastMetres))
+						if (rule.CoastMetres > 0f && (!Input.HasSea || G.OpenSeaDistance[i] > rule.CoastMetres))
+						{
+							continue;
+						}
+						if (rule.OpenWaterShare > 0f && (!Input.HasSea || G.OpenShareAt(i, PointOfInterestOpenSea.HarbourReach) < rule.OpenWaterShare))
 						{
 							continue;
 						}
@@ -235,7 +239,7 @@ namespace FishMMO.Shared.WorldDesign
 							}
 							if (rule.CoastMetres > 0f)
 							{
-								score += 0.3f * (1f - Mathf.Clamp01(G.SeaDistance[i] / rule.CoastMetres));
+								score += 0.3f * (1f - Mathf.Clamp01(G.OpenSeaDistance[i] / rule.CoastMetres));
 							}
 							if (rule.Exposed)
 							{
@@ -271,7 +275,7 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						continue;
 					}
-					site.Yaw = rule.Face ? FaceAt(site.Cell).yaw : YawFor(rule, site);
+					site.Yaw = rule.Face ? FaceAt(site.Cell).yaw : PointOfInterestOutline.Drawn(site.Outline) && Plots(rule.Kind) ? PlotYaw(site) : YawFor(rule, site);
 					Accept(rule, info, site);
 					taken++;
 				}
@@ -450,7 +454,7 @@ namespace FishMMO.Shared.WorldDesign
 				float[] field = null;
 				if (rule.CoastMetres > 0f && Input.HasSea)
 				{
-					field = G.SeaDistance;
+					field = G.OpenSeaDistance;
 				}
 				else if (PointOfInterestKinds.Info(rule.Kind).Has(PointOfInterestTraits.Settlement) && G.WaterDistance[i] < 400f)
 				{

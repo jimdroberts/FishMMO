@@ -36,6 +36,39 @@ namespace FishMMO.Shared
 		/// underground. Its piece's glowing parts pulse with it (FishStructureWeathering.hlsl, a material marked _FishStructure = 3).
 		/// </summary>
 		Glow,
+		/// <summary>
+		/// A lighthouse's lantern (2026-10-20): a great fire behind polished bronze mirrors that a keeper's clockwork turns,
+		/// lit from dusk. Its warm light fills the lantern and gallery (SiteLightPool); its beams sweep the sea and the land
+		/// round it, seen for kilometres, and flash when one passes over the eye (LighthouseBeams). How fast it turns and how
+		/// many beams it throws come from the seed, so each lighthouse is known by its own light.
+		/// </summary>
+		Beacon,
+		/// <summary>
+		/// Molten lava in a cave (2026-10-20, a lava tube that still runs: its river, lake or fall), just over its surface: a deep
+		/// orange light, lit day and night, churning slowly on the shared clock (<see cref="SceneMagma"/>), reaching
+		/// <see cref="SceneEmitter.Reach"/>; the embers that rise off it and the heat haze over it (SiteEmbers, the heat
+		/// shimmer). Its seed carries the body's half-width and kind (<see cref="SceneMagma.Seed"/>).
+		/// </summary>
+		Magma,
+		/// <summary>
+		/// Thin sulphur fumes hanging under a lava tube's roof over its lava (2026-10-20): a slow drift of haze lit orange from
+		/// below, no light of its own, spread over <see cref="SceneEmitter.Reach"/> metres round its place (SiteEmbers).
+		/// </summary>
+		Fumes,
+		/// <summary>
+		/// Water dripping from a cave's roof (2026-10-20, caves livened): its place is where the drops land (a puddle's surface,
+		/// the floor or a stalagmite's tip), <see cref="SceneEmitter.Reach"/> is how far they fall, and its seed how often they
+		/// fall and the puddle round it (<see cref="SceneDrip"/>). No light of its own: the drops, the rings in the puddle and the
+		/// sound are on the shared clock (CaveDripField, CaveDripPresenter).
+		/// </summary>
+		Drip,
+		/// <summary>
+		/// An opening in a cave's roof up to the sky (2026-10-20, caves livened): its place is the lit floor under the opening,
+		/// <see cref="SceneEmitter.Reach"/> the opening's radius, and its seed how far up the opening is (<see cref="SceneSkylight"/>).
+		/// The daylight's shaft and the motes in it, the sky let in round it (CaveSkylights, FishSkylights.hlsl) and a soft
+		/// light off the sunlit floor by day (SiteLightPool); nothing at night but the moon's.
+		/// </summary>
+		Skylight,
 	}
 
 	/// <summary>

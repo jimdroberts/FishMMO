@@ -383,8 +383,10 @@ namespace FishMMO.Client
 			public const float SmoothMetres = 2f;
 
 			/// <summary>
-			/// Each channel is scaled so this quantile of its non-zero smoothed texels reads as full: a layer's
-			/// own typical dense ground is full grass whatever its scatter density, and its sparse ground stays sparse.
+			/// A sprinkled species' channel (scattered points) is scaled so this quantile of its non-zero smoothed texels reads
+			/// as full: its layer says where it grows, its own chance how thick. A tussock channel is never scaled: it is the
+			/// biome rule's carpet coverage, and scaling each terrain's to full grew a desert's dune grass (0.25) and a beach's
+			/// as thick as a meadow's.
 			/// </summary>
 			public const float FullQuantile = 0.95f;
 
@@ -421,6 +423,8 @@ namespace FishMMO.Client
 			private readonly float[][] density;
 			/// <summary>Each channel's blade type height, metres (for <see cref="GrassTerrain.Cover"/>).</summary>
 			private readonly float[] channelHeights;
+			/// <summary>True for a sprinkled species' channel (its layer is scattered points, normalised); false for coverage.</summary>
+			private readonly bool[] channelPoints;
 			/// <summary>The worker's queue: the strips' arithmetic, in order.</summary>
 			private readonly TerrainBuildQueue queue = new TerrainBuildQueue();
 			private int layer, row, heightRow, surfaceRow, surfaceRows = int.MaxValue;
@@ -494,6 +498,11 @@ namespace FishMMO.Client
 				for (int c = 0; c < count; c++)
 				{
 					channelHeights[c] = channelTypes[c] != null ? Mathf.Max(0f, channelTypes[c].Height) : 0f;
+				}
+				channelPoints = new bool[count];
+				for (int c = 0; c < count; c++)
+				{
+					channelPoints[c] = channelTypes[c] != null && channelTypes[c].Look != null && channelTypes[c].Look.Sprinkle > 0f;
 				}
 				res = Mathf.Max(1, data.detailResolution);
 				top = Mathf.Max(1, data.maxDetailScatterPerRes);
@@ -606,6 +615,20 @@ namespace FishMMO.Client
 				}
 			}
 
+			/// <summary>A point channel normalised (<see cref="Normalise"/>); a coverage channel kept as painted, clamped to 1.</summary>
+			public static void Scale(float[] values, bool points)
+			{
+				if (points)
+				{
+					Normalise(values);
+					return;
+				}
+				for (int i = 0; i < values.Length; i++)
+				{
+					values[i] = Mathf.Min(1f, values[i]);
+				}
+			}
+
 			/// <summary>Scales a channel so its <see cref="FullQuantile"/> of non-zero texels reads 1.</summary>
 			public static void Normalise(float[] values)
 			{
@@ -671,18 +694,19 @@ namespace FishMMO.Client
 			}
 
 			/// <summary>
-			/// Every channel smoothed and normalised (a channel per worker where there are threads, each channel's own
-			/// operations in order, so the same floats either way), then the maps packed, and where grass grows, how tall it
-			/// stands and how much of the ground it covers, texel by texel with the channels in order.
+			/// Every channel smoothed, the point channels (<paramref name="points"/>) normalised and the coverage channels
+			/// clamped to 1 (a channel per worker where there are threads, each channel's own operations in order, so the same
+			/// floats either way), then the maps packed, and where grass grows, how tall it stands and how much of the ground it
+			/// covers, texel by texel with the channels in order.
 			/// </summary>
-			public static DensityResult BuildDensity(float[][] density, int count, int dres, int radius, float[] channelHeights, bool parallel)
+			public static DensityResult BuildDensity(float[][] density, int count, int dres, int radius, float[] channelHeights, bool[] points, bool parallel)
 			{
 				if (parallel && count > 1)
 				{
 					Parallel.For(0, count, c =>
 					{
 						Smooth(density[c], dres, radius, new float[dres]);
-						Normalise(density[c]);
+						Scale(density[c], points[c]);
 					});
 				}
 				else
@@ -691,7 +715,7 @@ namespace FishMMO.Client
 					for (int c = 0; c < count; c++)
 					{
 						Smooth(density[c], dres, radius, line);
-						Normalise(density[c]);
+						Scale(density[c], points[c]);
 					}
 				}
 				int texels = dres * dres;
@@ -1061,9 +1085,10 @@ namespace FishMMO.Client
 					float[][] channels = density;
 					int n = count, side = dres;
 					float[] heights = channelHeights;
+					bool[] points = channelPoints;
 					densityWork = TerrainBuildQueue.Inline
-						? Task.FromResult(BuildDensity(channels, n, side, radius, heights, false))
-						: Task.Run(() => BuildDensity(channels, n, side, radius, heights, true));
+						? Task.FromResult(BuildDensity(channels, n, side, radius, heights, points, false))
+						: Task.Run(() => BuildDensity(channels, n, side, radius, heights, points, true));
 					return true;
 				}
 				int hres = data.heightmapResolution;

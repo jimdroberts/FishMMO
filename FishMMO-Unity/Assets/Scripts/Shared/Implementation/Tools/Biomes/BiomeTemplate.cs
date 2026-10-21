@@ -100,6 +100,8 @@ namespace FishMMO.Shared.Biomes
 		public WeatherSubstance Emits;
 		[Tooltip("How hard it does, 0..1: a steady trickle at a tenth, a vent that never stops at one. An eruption multiplies it.")]
 		[Range(0f, 1f)] public float EmissionRate;
+		[Tooltip("When the ground steams (it emits a vapour such as Steam): how its hot ground divides among geysers, hot springs, fumaroles and mud pots (shares, divided by their sum). Read by the server, every client and the cut alike. Default: a quarter geysers, two fifths springs, the rest fumaroles, no mud pots, as every steaming biome was before 2026-10-18. Written by Author biome art; edits are kept.")]
+		[SerializeField] private BiomeGeothermalShares geothermal = BiomeGeothermalShares.Today;
 
 		[Header("How the ground wears")]
 		[Tooltip("How erosion, drainage and plateaus shape this biome's ground in a generated scene. Empty wears like temperate soil.")]
@@ -266,6 +268,21 @@ namespace FishMMO.Shared.Biomes
 		/// </remarks>
 		[Tooltip("The sea seen from under its surface off this biome's coast and over its own waters (peat-brown off a bog, milky off a glacier, clear over a reef): colour, visibility and murk as the underwater pass's. Blended along the coast out to 160 m; a biome with the default look leaves the sea its scene's own. Written by Author biome art (the default); edits are kept.")]
 		[SerializeField] private BiomeSeaLook seaLook = BiomeSeaLooks.Today;
+		/// <remarks>
+		/// What the biome paints and grows under the sea (<see cref="BiomeSeaFloor"/>, 2026-10-19, phase I2m): the shore's rule
+		/// (its lakebed takes the ground from the water line down, as every biome's did before), its own grounds at every depth (a
+		/// sea-floor biome, deep or on the shelf), or its own grounds down to the lowest tide (an estuary). Shore unless the biome's
+		/// file says otherwise, so nothing changes until a round sets it.
+		/// </remarks>
+		[Tooltip("What this biome paints under the sea: Shore (its Lakebed takes the ground from the water line down, as before), Ground (its main and detail layers at every depth, zoned by their depth bands, the Lakebed only under inland water: a sea-floor biome, deep or on the shelf) or To Low Water (its own grounds down to the lowest tide, the Lakebed below: an estuary). Written by Author biome art (Shore); edits are kept.")]
+		[SerializeField] private BiomeSeaFloor seaFloor = BiomeSeaFloor.Shore;
+		/// <remarks>
+		/// How strongly this biome's coast tides (2026-10-19, phase I2m, decision 45): a funnelled estuary's tide is several times the
+		/// open coast's. A scene cut with this biome on its coast multiplies its sea's tide by the coast's mean strength
+		/// (BiomeSeaFloors.CoastStrength), never past BiomeSeaFloors.MaximumTideMetres. 1 (every biome's) leaves the sea as it was.
+		/// </remarks>
+		[Tooltip("How strongly this biome's coast tides: the scene sea's tide is multiplied by the coast's mean strength (1 as before; an estuary 4), the tide never moving the sea more than 4 m. Written by Author biome art (1); edits are kept.")]
+		[Range(0f, BiomeSeaFloors.MaximumTideStrength)] [SerializeField] private float tideStrength = 1f;
 		/// <remarks>
 		/// What the biome's still fresh water carries on its surface (<see cref="BiomeFloatingPlant"/>, 2026-10-18, I2i): duckweed,
 		/// water-lilies, water hyacinth, frogbit, laid by the cut as baked props on the lakes, ponds, moats and slack river pools
@@ -507,6 +524,9 @@ namespace FishMMO.Shared.Biomes
 
 			/// <summary>The mark of what the ground gives the air (<see cref="BiomeTemplate.Emits"/> and its rate), a spec column since 2026-10-18 (I2o).</summary>
 			public const string Emission = nameof(BiomeTemplate.Emits);
+
+			/// <summary>The mark of the hot ground's split among its kinds (<see cref="BiomeTemplate.Geothermal"/>), a spec column since 2026-10-18 (I2q).</summary>
+			public const string Geothermal = nameof(geothermal);
 		}
 
 		[System.NonSerialized]
@@ -680,6 +700,16 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>The colour and clarity of this biome's fresh water (<see cref="BiomeWaterLook"/>); read through <see cref="BiomeWaterLooks.Of"/>.</summary>
+		/// <summary>
+		/// How a steaming biome's hot ground divides among geysers, hot springs, fumaroles and mud pots (2026-10-18, phase I2q,
+		/// decision 47; GeothermalVents.KindOf). <see cref="BiomeGeothermalShares.Today"/> unless the biome's file says otherwise.
+		/// </summary>
+		public BiomeGeothermalShares Geothermal
+		{
+			get => geothermal;
+			set => geothermal = value;
+		}
+
 		public BiomeWaterLook WaterLook
 		{
 			get => waterLook;

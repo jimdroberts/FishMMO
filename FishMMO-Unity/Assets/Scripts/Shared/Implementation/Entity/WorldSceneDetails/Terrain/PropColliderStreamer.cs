@@ -90,6 +90,8 @@ namespace FishMMO.Shared
 			public readonly Dictionary<long, List<(int set, int index)>> Cells = new Dictionary<long, List<(int, int)>>();
 			/// <summary>The distinct collision meshes, read once for the merge jobs.</summary>
 			public readonly List<Mesh> Meshes = new List<Mesh>();
+			/// <summary>Per entry of <see cref="Meshes"/>, how many triangles the merge copies from it.</summary>
+			public int[] MeshTriangles;
 			public Mesh.MeshDataArray MeshData;
 			public bool HasMeshData;
 			/// <summary>Per set and prototype, its mesh's index in <see cref="Meshes"/> (-1 for none) and its layer.</summary>
@@ -121,6 +123,9 @@ namespace FishMMO.Shared
 			public int Layer;
 			public NativeArray<int> PieceMesh;
 			public NativeArray<Matrix4x4> PieceMatrix;
+			/// <summary>Per piece in merge order, its first triangle in the merged mesh and its prop (set × 2^20 + prototype).</summary>
+			public readonly List<int> PieceStarts = new List<int>();
+			public readonly List<int> PieceOrigins = new List<int>();
 			public Mesh.MeshDataArray Output;
 			public JobHandle Merge;
 			public bool Merging;
@@ -158,8 +163,10 @@ namespace FishMMO.Shared
 		// Pools: a chunk's merge inputs, its bookkeeping and its per-layer grouping are reused, not reallocated per chunk.
 		private static readonly Stack<Chunk> chunkPool = new Stack<Chunk>();
 		private static readonly Stack<Build> buildPool = new Stack<Build>();
-		private static readonly Stack<List<(int mesh, Matrix4x4 matrix)>> pieceListPool = new Stack<List<(int, Matrix4x4)>>();
-		private static readonly Dictionary<int, List<(int mesh, Matrix4x4 matrix)>> byLayer = new Dictionary<int, List<(int, Matrix4x4)>>();
+		private static readonly Stack<List<(int mesh, Matrix4x4 matrix, int origin)>> pieceListPool = new Stack<List<(int, Matrix4x4, int)>>();
+		private static readonly Dictionary<int, List<(int mesh, Matrix4x4 matrix, int origin)>> byLayer = new Dictionary<int, List<(int, Matrix4x4, int)>>();
+		// Every live chunk collider's build, so a ray's hit can be traced to the prop it struck (TryPropAt).
+		private static readonly Dictionary<MeshCollider, (Source source, Build build)> liveColliders = new Dictionary<MeshCollider, (Source, Build)>();
 		private static readonly List<int> layerOrder = new List<int>();
 		private static readonly NativeArrayPool<int> meshIndexPool = new NativeArrayPool<int>();
 		private static readonly NativeArrayPool<Matrix4x4> matrixPool = new NativeArrayPool<Matrix4x4>();
@@ -212,6 +219,7 @@ namespace FishMMO.Shared
 			buildPool.Clear();
 			pieceListPool.Clear();
 			byLayer.Clear();
+			liveColliders.Clear();
 			layerOrder.Clear();
 			meshIndexPool.Dispose();
 			matrixPool.Dispose();
@@ -275,6 +283,17 @@ namespace FishMMO.Shared
 					}
 					list.Add((s, i));
 				}
+			}
+			source.MeshTriangles = new int[source.Meshes.Count];
+			for (int m = 0; m < source.Meshes.Count; m++)
+			{
+				// Every sub-mesh, as the merge copies them all into its one.
+				long indices = 0;
+				for (int sub = 0; sub < source.Meshes[m].subMeshCount; sub++)
+				{
+					indices += source.Meshes[m].GetIndexCount(sub);
+				}
+				source.MeshTriangles[m] = (int)(indices / 3);
 			}
 			if (source.Meshes.Count > 0)
 			{
@@ -736,13 +755,13 @@ namespace FishMMO.Shared
 					ScenePropCollisionSet.Instance instance = source.Owner.Sets[s].Instances[i];
 					int mesh = source.MeshOf[s][instance.Prototype];
 					int layer = source.LayerOf[s][instance.Prototype];
-					if (!byLayer.TryGetValue(layer, out List<(int, Matrix4x4)> pieces))
+					if (!byLayer.TryGetValue(layer, out List<(int, Matrix4x4, int)> pieces))
 					{
-						pieces = pieceListPool.Count > 0 ? pieceListPool.Pop() : new List<(int, Matrix4x4)>();
+						pieces = pieceListPool.Count > 0 ? pieceListPool.Pop() : new List<(int, Matrix4x4, int)>();
 						byLayer[layer] = pieces;
 						layerOrder.Add(layer);
 					}
-					pieces.Add((mesh, Matrix4x4.TRS(instance.Position, instance.Rotation, instance.Scale)));
+					pieces.Add((mesh, Matrix4x4.TRS(instance.Position, instance.Rotation, instance.Scale), (s << 20) | instance.Prototype));
 				}
 				Chunk chunk = chunkPool.Count > 0 ? chunkPool.Pop() : new Chunk();
 				chunk.Cell = cell;
@@ -750,16 +769,22 @@ namespace FishMMO.Shared
 				chunk.Live = false;
 				for (int l = 0; l < layerOrder.Count; l++)
 				{
-					List<(int mesh, Matrix4x4 matrix)> pieces = byLayer[layerOrder[l]];
+					List<(int mesh, Matrix4x4 matrix, int origin)> pieces = byLayer[layerOrder[l]];
 					Build build = buildPool.Count > 0 ? buildPool.Pop() : new Build();
 					build.Layer = layerOrder[l];
 					build.PieceMesh = meshIndexPool.Take(pieces.Count);
 					build.PieceMatrix = matrixPool.Take(pieces.Count);
 					build.Output = Mesh.AllocateWritableMeshData(1);
+					build.PieceStarts.Clear();
+					build.PieceOrigins.Clear();
+					int triangles = 0;
 					for (int k = 0; k < pieces.Count; k++)
 					{
 						build.PieceMesh[k] = pieces[k].mesh;
 						build.PieceMatrix[k] = pieces[k].matrix;
+						build.PieceStarts.Add(triangles);
+						build.PieceOrigins.Add(pieces[k].origin);
+						triangles += source.MeshTriangles[pieces[k].mesh];
 					}
 					build.Merge = new MergeJob
 					{
@@ -814,6 +839,7 @@ namespace FishMMO.Shared
 					// Cooked already, with the collider's own options: assigning only links it.
 					build.Collider.sharedMesh = build.Mesh;
 					build.Collider.gameObject.SetActive(true);
+					liveColliders[build.Collider] = (source, build);
 				}
 				all &= build.Collider != null;
 			}
@@ -857,6 +883,7 @@ namespace FishMMO.Shared
 				}
 				if (build.Collider != null)
 				{
+					liveColliders.Remove(build.Collider);
 					build.Collider.sharedMesh = null;
 					build.Collider.gameObject.SetActive(false);
 					source.Idle.Push(build.Collider);
@@ -882,6 +909,45 @@ namespace FishMMO.Shared
 			chunk.Builds.Clear();
 			chunk.Live = false;
 			chunkPool.Push(chunk);
+		}
+
+		/// <summary>
+		/// The prop a ray struck, when what it struck is a streamed chunk's collider: the set it came from (its
+		/// <see cref="ScenePropCollisionSet.Source"/> says what kind of thing: Scatter, Cliffs, Boulders, POI…) and the
+		/// prototype's collision mesh, whose name says which prop. False for any other collider.
+		/// </summary>
+		/// <param name="triangleIndex">The hit's <see cref="RaycastHit.triangleIndex"/>.</param>
+		public static bool TryPropAt(Collider collider, int triangleIndex, out ScenePropCollisionSet set, out Mesh prototype)
+		{
+			set = null;
+			prototype = null;
+			if (!(collider is MeshCollider mesh) || triangleIndex < 0 || !liveColliders.TryGetValue(mesh, out (Source source, Build build) live)
+				|| live.build.Collider != mesh || live.source.Owner == null || live.build.PieceStarts.Count == 0)
+			{
+				return false;
+			}
+			// The last piece starting at or before the triangle.
+			int found = live.build.PieceStarts.BinarySearch(triangleIndex);
+			int piece = found >= 0 ? found : ~found - 1;
+			if (piece < 0)
+			{
+				return false;
+			}
+			// Pieces of no triangles share a start with the next; the search may land on any of them, and the one that
+			// holds the triangle is the last.
+			while (piece + 1 < live.build.PieceStarts.Count && live.build.PieceStarts[piece + 1] <= triangleIndex)
+			{
+				piece++;
+			}
+			int origin = live.build.PieceOrigins[piece];
+			int s = origin >> 20, p = origin & 0xFFFFF;
+			if (s >= live.source.Owner.Sets.Count || live.source.Owner.Sets[s] == null || p >= live.source.Owner.Sets[s].Prototypes.Length)
+			{
+				return false;
+			}
+			set = live.source.Owner.Sets[s];
+			prototype = set.Prototypes[p].Mesh;
+			return true;
 		}
 
 		private static MeshCollider Take(Source source, int layer)

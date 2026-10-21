@@ -40,6 +40,8 @@ namespace FishMMO.Shared.Biomes
 		public Color Silt;
 		[Tooltip("The colour of the water's foam where it breaks (Foam colour).")]
 		public Color Foam;
+		[Tooltip("Hot water (2026-10-18, phase I2q): fed by the hot ground, it never ices over, however cold the air, and always steams (its surface reads as hot spring water, WaterTemperature.HotWaterC). Off for every biome but those whose files say so.")]
+		public bool Hot;
 
 		public BiomeWaterLook(Color shallow, Color deep, Vector3 absorption, float turbidity, Color silt, Color foam)
 		{
@@ -49,6 +51,7 @@ namespace FishMMO.Shared.Biomes
 			Turbidity = turbidity;
 			Silt = silt;
 			Foam = foam;
+			Hot = false;
 		}
 
 		/// <summary>
@@ -63,7 +66,7 @@ namespace FishMMO.Shared.Biomes
 			return Near(Shallow, other.Shallow, tolerance) && Near(Deep, other.Deep, tolerance) && Near(Silt, other.Silt, tolerance)
 				&& Near(Foam, other.Foam, tolerance) && Mathf.Abs(Turbidity - other.Turbidity) <= tolerance
 				&& Mathf.Abs(Absorption.x - other.Absorption.x) <= tolerance && Mathf.Abs(Absorption.y - other.Absorption.y) <= tolerance
-				&& Mathf.Abs(Absorption.z - other.Absorption.z) <= tolerance;
+				&& Mathf.Abs(Absorption.z - other.Absorption.z) <= tolerance && Hot == other.Hot;
 		}
 
 		private static bool Near(Color a, Color b, float tolerance)
@@ -86,8 +89,9 @@ namespace FishMMO.Shared.Biomes
 			{
 				return b;
 			}
+			// Hot is a property of the water, not a colour: the nearer water's.
 			return new BiomeWaterLook(Color.Lerp(a.Shallow, b.Shallow, t), Color.Lerp(a.Deep, b.Deep, t), Vector3.Lerp(a.Absorption, b.Absorption, t),
-				Mathf.Lerp(a.Turbidity, b.Turbidity, t), Color.Lerp(a.Silt, b.Silt, t), Color.Lerp(a.Foam, b.Foam, t));
+				Mathf.Lerp(a.Turbidity, b.Turbidity, t), Color.Lerp(a.Silt, b.Silt, t), Color.Lerp(a.Foam, b.Foam, t)) { Hot = t < 0.5f ? a.Hot : b.Hot };
 		}
 
 		/// <summary>The look as the authoring marks it: every value round-trip exact, in a fixed order.</summary>
@@ -110,6 +114,11 @@ namespace FishMMO.Shared.Biomes
 			Add(Turbidity);
 			AddColor(Silt);
 			AddColor(Foam);
+			// Only when set, so every look marked before the flag existed signs as it did (2026-10-18, I2q).
+			if (Hot)
+			{
+				text.Append("hot|");
+			}
 			return text.ToString();
 		}
 
@@ -118,7 +127,7 @@ namespace FishMMO.Shared.Biomes
 		{
 			string F(float value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 			string C(Color c) => $"({F(c.r)}, {F(c.g)}, {F(c.b)})";
-			return $"shallow {C(Shallow)}, deep {C(Deep)}, absorbs ({F(Absorption.x)}, {F(Absorption.y)}, {F(Absorption.z)})/m, silt {F(Turbidity)} {C(Silt)}, foam {C(Foam)}";
+			return $"shallow {C(Shallow)}, deep {C(Deep)}, absorbs ({F(Absorption.x)}, {F(Absorption.y)}, {F(Absorption.z)})/m, silt {F(Turbidity)} {C(Silt)}, foam {C(Foam)}{(Hot ? ", hot" : string.Empty)}";
 		}
 	}
 

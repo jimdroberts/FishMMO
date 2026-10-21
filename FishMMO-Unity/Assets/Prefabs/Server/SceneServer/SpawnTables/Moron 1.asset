@@ -859,134 +859,6 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Misty Hesoquay Merchant Spawner [18038f2a]'
-    Position: {x: 745.3941, y: 5.0411377, z: -269.97046}
-    Rotation: {x: -0, y: 0.559193, z: -0, w: -0.8290375}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 1
-    MaxSpawnCount: 1
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 0
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 1, y: 8, z: 1}
-    Spawnables:
-    - rid: 20
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Misty Hesoquay Banker Spawner [18038f2a]'
-    Position: {x: 772.2673, y: 5.0411377, z: -286.08505}
-    Rotation: {x: -0, y: 0.559193, z: -0, w: -0.8290375}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 1
-    MaxSpawnCount: 1
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 0
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 1, y: 8, z: 1}
-    Spawnables:
-    - rid: 21
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Misty Hesoquay Crafter Spawner [18038f2a]'
-    Position: {x: 708.572, y: 4.555908, z: -286.27307}
-    Rotation: {x: -0, y: 0.559193, z: -0, w: -0.8290375}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 1
-    MaxSpawnCount: 1
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 0
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 1, y: 8, z: 1}
-    Spawnables:
-    - rid: 22
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Misty Hesoquay Guard Spawner [18038f2a]'
-    Position: {x: 734.82715, y: 5.0411377, z: -266.97598}
-    Rotation: {x: -0, y: 0.559193, z: -0, w: -0.8290375}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 3
-    MaxSpawnCount: 3
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 1
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 87.75, y: 8, z: 87.75}
-    Spawnables: []
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Misty Hesoquay Townsfolk Spawner [18038f2a]'
-    Position: {x: 731.9398, y: 5.0411377, z: -286.5043}
-    Rotation: {x: -0, y: 0.559193, z: -0, w: -0.8290375}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 4
-    MaxSpawnCount: 4
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 1
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 87.75, y: 8, z: 87.75}
-    Spawnables: []
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
   - Name: 'Hakden Keep Guard Spawner [07e19067]'
     Position: {x: 14.1795025, y: 59.1781, z: -723.08026}
     Rotation: {x: -0, y: 0.95371693, z: -0, w: -0.3007058}
@@ -1031,7 +903,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 23
+    - rid: 20
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1082,7 +954,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 24
+    - rid: 21
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1133,7 +1005,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 25
+    - rid: 22
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1159,7 +1031,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 26
+    - rid: 23
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1242,8 +1114,8 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Root Cave of Boars MonsterPack Spawner [1a805e90]'
-    Position: {x: 1570.5353, y: 47.810608, z: 883.3304}
-    Rotation: {x: -0, y: 0.574026, z: -0, w: 0.81883717}
+    Position: {x: 1566.9929, y: 45.97797, z: 896.49963}
+    Rotation: {x: -0, y: 0.62162375, z: -0, w: 0.78331614}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -1267,8 +1139,8 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Root Cave of Boars Elite Spawner [1a805e90]'
-    Position: {x: 1569.8743, y: 47.574368, z: 883.0533}
-    Rotation: {x: -0, y: 0.574026, z: -0, w: 0.81883717}
+    Position: {x: 1566.3036, y: 45.688545, z: 896.30286}
+    Rotation: {x: -0, y: 0.62162375, z: -0, w: 0.78331614}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -1321,7 +1193,7 @@ MonoBehaviour:
     Rotation: {x: -0, y: 0.8141155, z: -0, w: 0.58070296}
     OrConditions: []
     TrueConditions:
-    - rid: 27
+    - rid: 24
     InitialRespawnTime: 0
     InitialSpawnCount: 1
     MaxSpawnCount: 1
@@ -1486,7 +1358,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 28
+    - rid: 25
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1512,7 +1384,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 29
+    - rid: 26
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1538,7 +1410,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 30
+    - rid: 27
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1564,7 +1436,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 31
+    - rid: 28
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1590,7 +1462,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 32
+    - rid: 29
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1616,7 +1488,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 33
+    - rid: 30
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1642,7 +1514,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 34
+    - rid: 31
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1718,7 +1590,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 35
+    - rid: 32
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1744,7 +1616,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 36
+    - rid: 33
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1770,7 +1642,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 37
+    - rid: 34
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1796,7 +1668,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 38
+    - rid: 35
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1822,7 +1694,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 39
+    - rid: 36
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1848,7 +1720,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 40
+    - rid: 37
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1874,7 +1746,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 41
+    - rid: 38
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1900,7 +1772,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 42
+    - rid: 39
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1926,7 +1798,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 43
+    - rid: 40
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1952,7 +1824,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 44
+    - rid: 41
     Pack:
       Enabled: 0
       Tactic: 0
@@ -2228,7 +2100,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 45
+    - rid: 42
     Pack:
       Enabled: 0
       Tactic: 0
@@ -2254,7 +2126,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 46
+    - rid: 43
     Pack:
       Enabled: 0
       Tactic: 0
@@ -2287,8 +2159,8 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Stenuvald''s Burying Ground MonsterPack Spawner [5e76761e]'
-    Position: {x: -1124.203, y: 34.092285, z: -1719.6127}
-    Rotation: {x: -0, y: 0.9723699, z: -0, w: 0.23344542}
+    Position: {x: -1117.3751, y: 34.29358, z: -1721.6572}
+    Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -2303,7 +2175,7 @@ MonoBehaviour:
     RespawnCheckIntervalMaximum: 6
     RandomSpawnPosition: 1
     SphereRadius: 0.5
-    BoundingBoxSize: {x: 18.9, y: 8, z: 18.9}
+    BoundingBoxSize: {x: 13.9, y: 8, z: 13.9}
     Spawnables: []
     Pack:
       Enabled: 0
@@ -2312,8 +2184,8 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Burying Ground of the Fern-choked Owl MonsterPack Spawner [7a469d1a]'
-    Position: {x: -61.178993, y: 85.77344, z: -1097.7872}
-    Rotation: {x: -0, y: 0.05233605, z: -0, w: -0.9986295}
+    Position: {x: -67.30785, y: 85.817505, z: -1097.588}
+    Rotation: {x: -0, y: 0.8480481, z: -0, w: 0.52991927}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -2328,7 +2200,7 @@ MonoBehaviour:
     RespawnCheckIntervalMaximum: 6
     RandomSpawnPosition: 1
     SphereRadius: 0.5
-    BoundingBoxSize: {x: 20.05, y: 8, z: 20.05}
+    BoundingBoxSize: {x: 22.03, y: 8, z: 22.03}
     Spawnables: []
     Pack:
       Enabled: 0
@@ -2555,7 +2427,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 47
+    - rid: 44
     Pack:
       Enabled: 0
       Tactic: 0
@@ -2581,7 +2453,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 48
+    - rid: 45
     Pack:
       Enabled: 0
       Tactic: 0
@@ -2607,7 +2479,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 49
+    - rid: 46
     Pack:
       Enabled: 0
       Tactic: 0
@@ -2633,7 +2505,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 50
+    - rid: 47
     Pack:
       Enabled: 0
       Tactic: 0
@@ -2659,7 +2531,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 51
+    - rid: 48
     Pack:
       Enabled: 0
       Tactic: 0
@@ -2685,7 +2557,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 52
+    - rid: 49
     Pack:
       Enabled: 0
       Tactic: 0
@@ -2711,7 +2583,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 53
+    - rid: 50
     Pack:
       Enabled: 0
       Tactic: 0
@@ -2787,7 +2659,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 54
+    - rid: 51
     Pack:
       Enabled: 0
       Tactic: 0
@@ -2813,7 +2685,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 55
+    - rid: 52
     Pack:
       Enabled: 0
       Tactic: 0
@@ -2839,7 +2711,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 56
+    - rid: 53
     Pack:
       Enabled: 0
       Tactic: 0
@@ -2865,7 +2737,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 57
+    - rid: 54
     Pack:
       Enabled: 0
       Tactic: 0
@@ -2891,7 +2763,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 58
+    - rid: 55
     Pack:
       Enabled: 0
       Tactic: 0
@@ -2967,7 +2839,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 59
+    - rid: 56
     Pack:
       Enabled: 0
       Tactic: 0
@@ -2993,7 +2865,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 60
+    - rid: 57
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3019,7 +2891,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 61
+    - rid: 58
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3045,7 +2917,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 62
+    - rid: 59
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3071,7 +2943,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 63
+    - rid: 60
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3147,7 +3019,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 64
+    - rid: 61
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3173,7 +3045,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 65
+    - rid: 62
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3199,7 +3071,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 66
+    - rid: 63
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3225,7 +3097,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 67
+    - rid: 64
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3251,7 +3123,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 68
+    - rid: 65
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3277,7 +3149,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 69
+    - rid: 66
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3303,7 +3175,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 70
+    - rid: 67
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3329,7 +3201,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 71
+    - rid: 68
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3355,7 +3227,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 72
+    - rid: 69
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3381,7 +3253,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 73
+    - rid: 70
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3407,7 +3279,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 74
+    - rid: 71
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3433,7 +3305,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 75
+    - rid: 72
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3459,7 +3331,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 76
+    - rid: 73
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3485,7 +3357,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 77
+    - rid: 74
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3511,7 +3383,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 78
+    - rid: 75
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3537,7 +3409,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 79
+    - rid: 76
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3563,7 +3435,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 80
+    - rid: 77
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3589,7 +3461,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 81
+    - rid: 78
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3615,7 +3487,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 82
+    - rid: 79
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3641,7 +3513,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 83
+    - rid: 80
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3667,7 +3539,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 84
+    - rid: 81
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3693,7 +3565,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 85
+    - rid: 82
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3719,7 +3591,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 86
+    - rid: 83
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3745,7 +3617,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 87
+    - rid: 84
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3771,7 +3643,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 88
+    - rid: 85
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3797,7 +3669,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 89
+    - rid: 86
     Pack:
       Enabled: 0
       Tactic: 0
@@ -3823,7 +3695,7 @@ MonoBehaviour:
     SphereRadius: 0.5
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
-    - rid: 90
+    - rid: 87
     Pack:
       Enabled: 0
       Tactic: 0
@@ -4267,78 +4139,12 @@ MonoBehaviour:
         ArchetypeOverride: {fileID: 0}
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
-        FactionOverride: {fileID: 11400000, guid: 861b29cf9ab54208b0e40c622f3af2c0,
-          type: 2}
-        PackRole: 3
-        MinimumScale: 1
-        MaximumScale: 1
-    - rid: 21
-      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
-        asm: FishMMO.Server}
-      data:
-        NetworkObject: {fileID: 7250114663715075110, guid: f7377f38d08b9c84ab957eb9d610e043,
-          type: 3}
-        MinimumRespawnTime: 0
-        MaximumRespawnTime: 0
-        SpawnChance: 1
-        YOffset: -0
-        AttributeBonusOverride: {fileID: 0}
-        CorpseDecayDurationOverride: 0
-        EmptyCorpseDecayDurationOverride: 0
-        LootTableOverride: {fileID: 0}
-        ArchetypeOverride: {fileID: 0}
-        AdditionalAbilities: []
-        ReplacePrefabAbilities: 0
-        FactionOverride: {fileID: 11400000, guid: 861b29cf9ab54208b0e40c622f3af2c0,
-          type: 2}
-        PackRole: 3
-        MinimumScale: 1
-        MaximumScale: 1
-    - rid: 22
-      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
-        asm: FishMMO.Server}
-      data:
-        NetworkObject: {fileID: -4468559157413045786, guid: 2ce4d12b80ddd9f4ca8a389e6c91c7e3,
-          type: 3}
-        MinimumRespawnTime: 0
-        MaximumRespawnTime: 0
-        SpawnChance: 1
-        YOffset: -0
-        AttributeBonusOverride: {fileID: 0}
-        CorpseDecayDurationOverride: 0
-        EmptyCorpseDecayDurationOverride: 0
-        LootTableOverride: {fileID: 0}
-        ArchetypeOverride: {fileID: 0}
-        AdditionalAbilities: []
-        ReplacePrefabAbilities: 0
-        FactionOverride: {fileID: 11400000, guid: 861b29cf9ab54208b0e40c622f3af2c0,
-          type: 2}
-        PackRole: 3
-        MinimumScale: 1
-        MaximumScale: 1
-    - rid: 23
-      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
-        asm: FishMMO.Server}
-      data:
-        NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
-          type: 3}
-        MinimumRespawnTime: 0
-        MaximumRespawnTime: 0
-        SpawnChance: 1
-        YOffset: -0
-        AttributeBonusOverride: {fileID: 0}
-        CorpseDecayDurationOverride: 0
-        EmptyCorpseDecayDurationOverride: 0
-        LootTableOverride: {fileID: 0}
-        ArchetypeOverride: {fileID: 0}
-        AdditionalAbilities: []
-        ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 11400000, guid: 16d741bfb13647cfa2b7f5df134e91d9,
           type: 2}
         PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
-    - rid: 24
+    - rid: 21
       type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
@@ -4360,7 +4166,7 @@ MonoBehaviour:
         PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
-    - rid: 25
+    - rid: 22
       type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
@@ -4382,7 +4188,7 @@ MonoBehaviour:
         PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
-    - rid: 26
+    - rid: 23
       type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
@@ -4403,12 +4209,42 @@ MonoBehaviour:
         PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
-    - rid: 27
+    - rid: 24
       type: {class: SpawnersClearedCondition, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
         Spawners: []
-        SpawnerIndices: 32000000
+        SpawnerIndices: 2d000000
+    - rid: 25
+      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: 7260598054390996014, guid: 2dda1d229ce5748f2bd11446d615576c,
+          type: 3}
+        MinimumRespawnTime: 300
+        MaximumRespawnTime: 600
+        SpawnChance: 1
+        YOffset: -0
+    - rid: 26
+      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: 7260598054390996014, guid: 2dda1d229ce5748f2bd11446d615576c,
+          type: 3}
+        MinimumRespawnTime: 300
+        MaximumRespawnTime: 600
+        SpawnChance: 1
+        YOffset: -0
+    - rid: 27
+      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: 7260598054390996014, guid: 2dda1d229ce5748f2bd11446d615576c,
+          type: 3}
+        MinimumRespawnTime: 300
+        MaximumRespawnTime: 600
+        SpawnChance: 1
+        YOffset: -0
     - rid: 28
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
@@ -4443,7 +4279,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 2dda1d229ce5748f2bd11446d615576c,
+        NetworkObject: {fileID: 7260598054390996014, guid: 4727a6e324c362388bd94ac5dd7c3a10,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4453,7 +4289,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 2dda1d229ce5748f2bd11446d615576c,
+        NetworkObject: {fileID: 7260598054390996014, guid: e20156a5af67e8bf2a3bee9393c16e1e,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4463,7 +4299,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 2dda1d229ce5748f2bd11446d615576c,
+        NetworkObject: {fileID: 7260598054390996014, guid: e20156a5af67e8bf2a3bee9393c16e1e,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4473,7 +4309,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 4727a6e324c362388bd94ac5dd7c3a10,
+        NetworkObject: {fileID: 7260598054390996014, guid: e20156a5af67e8bf2a3bee9393c16e1e,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4553,7 +4389,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: e20156a5af67e8bf2a3bee9393c16e1e,
+        NetworkObject: {fileID: 7260598054390996014, guid: 8d9b86f93a8be4dbaa7299135327f436,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4563,84 +4399,84 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: e20156a5af67e8bf2a3bee9393c16e1e,
+        NetworkObject: {fileID: 7260598054390996014, guid: 8d9b86f93a8be4dbaa7299135327f436,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
         SpawnChance: 1
         YOffset: -0
     - rid: 44
-      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: e20156a5af67e8bf2a3bee9393c16e1e,
+        NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
           type: 3}
-        MinimumRespawnTime: 300
-        MaximumRespawnTime: 600
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
         SpawnChance: 1
         YOffset: -0
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        PackRole: 3
+        MinimumScale: 1
+        MaximumScale: 1
     - rid: 45
-      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 8d9b86f93a8be4dbaa7299135327f436,
+        NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
           type: 3}
-        MinimumRespawnTime: 300
-        MaximumRespawnTime: 600
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
         SpawnChance: 1
         YOffset: -0
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        PackRole: 3
+        MinimumScale: 1
+        MaximumScale: 1
     - rid: 46
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 8d9b86f93a8be4dbaa7299135327f436,
+        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
         SpawnChance: 1
         YOffset: -0
     - rid: 47
-      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
+        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
           type: 3}
-        MinimumRespawnTime: 0
-        MaximumRespawnTime: 0
+        MinimumRespawnTime: 300
+        MaximumRespawnTime: 600
         SpawnChance: 1
         YOffset: -0
-        AttributeBonusOverride: {fileID: 0}
-        CorpseDecayDurationOverride: 0
-        EmptyCorpseDecayDurationOverride: 0
-        LootTableOverride: {fileID: 0}
-        ArchetypeOverride: {fileID: 0}
-        AdditionalAbilities: []
-        ReplacePrefabAbilities: 0
-        FactionOverride: {fileID: 0}
-        PackRole: 3
-        MinimumScale: 1
-        MaximumScale: 1
     - rid: 48
-      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
+        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
           type: 3}
-        MinimumRespawnTime: 0
-        MaximumRespawnTime: 0
+        MinimumRespawnTime: 300
+        MaximumRespawnTime: 600
         SpawnChance: 1
         YOffset: -0
-        AttributeBonusOverride: {fileID: 0}
-        CorpseDecayDurationOverride: 0
-        EmptyCorpseDecayDurationOverride: 0
-        LootTableOverride: {fileID: 0}
-        ArchetypeOverride: {fileID: 0}
-        AdditionalAbilities: []
-        ReplacePrefabAbilities: 0
-        FactionOverride: {fileID: 0}
-        PackRole: 3
-        MinimumScale: 1
-        MaximumScale: 1
     - rid: 49
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
@@ -4665,7 +4501,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
+        NetworkObject: {fileID: 7260598054390996014, guid: 7aa0ca70e1f867b189dd2f171dfd2afc,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4675,7 +4511,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
+        NetworkObject: {fileID: 7260598054390996014, guid: 7aa0ca70e1f867b189dd2f171dfd2afc,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4685,7 +4521,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
+        NetworkObject: {fileID: 7260598054390996014, guid: ef46892dbab0cc6caac60b0903fc9a63,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4695,7 +4531,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 7aa0ca70e1f867b189dd2f171dfd2afc,
+        NetworkObject: {fileID: 7260598054390996014, guid: ef46892dbab0cc6caac60b0903fc9a63,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4705,7 +4541,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 7aa0ca70e1f867b189dd2f171dfd2afc,
+        NetworkObject: {fileID: 7260598054390996014, guid: ef46892dbab0cc6caac60b0903fc9a63,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4715,7 +4551,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: ef46892dbab0cc6caac60b0903fc9a63,
+        NetworkObject: {fileID: 7260598054390996014, guid: 3550f7b19c7273f8a99d994b091d7cb7,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4725,7 +4561,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: ef46892dbab0cc6caac60b0903fc9a63,
+        NetworkObject: {fileID: 7260598054390996014, guid: 3550f7b19c7273f8a99d994b091d7cb7,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4735,7 +4571,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: ef46892dbab0cc6caac60b0903fc9a63,
+        NetworkObject: {fileID: 7260598054390996014, guid: 3550f7b19c7273f8a99d994b091d7cb7,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4765,7 +4601,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 3550f7b19c7273f8a99d994b091d7cb7,
+        NetworkObject: {fileID: 7260598054390996014, guid: 7aa0ca70e1f867b189dd2f171dfd2afc,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4775,7 +4611,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 3550f7b19c7273f8a99d994b091d7cb7,
+        NetworkObject: {fileID: 7260598054390996014, guid: 7aa0ca70e1f867b189dd2f171dfd2afc,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4785,7 +4621,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 3550f7b19c7273f8a99d994b091d7cb7,
+        NetworkObject: {fileID: 7260598054390996014, guid: 7aa0ca70e1f867b189dd2f171dfd2afc,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4812,103 +4648,103 @@ MonoBehaviour:
         SpawnChance: 1
         YOffset: -0
     - rid: 66
-      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 7aa0ca70e1f867b189dd2f171dfd2afc,
+        NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
           type: 3}
-        MinimumRespawnTime: 300
-        MaximumRespawnTime: 600
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
         SpawnChance: 1
         YOffset: -0
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        PackRole: 3
+        MinimumScale: 1
+        MaximumScale: 1
     - rid: 67
-      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 7aa0ca70e1f867b189dd2f171dfd2afc,
+        NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
           type: 3}
-        MinimumRespawnTime: 300
-        MaximumRespawnTime: 600
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
         SpawnChance: 1
         YOffset: -0
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        PackRole: 3
+        MinimumScale: 1
+        MaximumScale: 1
     - rid: 68
-      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 7aa0ca70e1f867b189dd2f171dfd2afc,
+        NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
           type: 3}
-        MinimumRespawnTime: 300
-        MaximumRespawnTime: 600
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
         SpawnChance: 1
         YOffset: -0
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        PackRole: 3
+        MinimumScale: 1
+        MaximumScale: 1
     - rid: 69
-      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
-        asm: FishMMO.Server}
-      data:
-        NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
-          type: 3}
-        MinimumRespawnTime: 0
-        MaximumRespawnTime: 0
-        SpawnChance: 1
-        YOffset: -0
-        AttributeBonusOverride: {fileID: 0}
-        CorpseDecayDurationOverride: 0
-        EmptyCorpseDecayDurationOverride: 0
-        LootTableOverride: {fileID: 0}
-        ArchetypeOverride: {fileID: 0}
-        AdditionalAbilities: []
-        ReplacePrefabAbilities: 0
-        FactionOverride: {fileID: 0}
-        PackRole: 3
-        MinimumScale: 1
-        MaximumScale: 1
-    - rid: 70
-      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
-        asm: FishMMO.Server}
-      data:
-        NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
-          type: 3}
-        MinimumRespawnTime: 0
-        MaximumRespawnTime: 0
-        SpawnChance: 1
-        YOffset: -0
-        AttributeBonusOverride: {fileID: 0}
-        CorpseDecayDurationOverride: 0
-        EmptyCorpseDecayDurationOverride: 0
-        LootTableOverride: {fileID: 0}
-        ArchetypeOverride: {fileID: 0}
-        AdditionalAbilities: []
-        ReplacePrefabAbilities: 0
-        FactionOverride: {fileID: 0}
-        PackRole: 3
-        MinimumScale: 1
-        MaximumScale: 1
-    - rid: 71
-      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
-        asm: FishMMO.Server}
-      data:
-        NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
-          type: 3}
-        MinimumRespawnTime: 0
-        MaximumRespawnTime: 0
-        SpawnChance: 1
-        YOffset: -0
-        AttributeBonusOverride: {fileID: 0}
-        CorpseDecayDurationOverride: 0
-        EmptyCorpseDecayDurationOverride: 0
-        LootTableOverride: {fileID: 0}
-        ArchetypeOverride: {fileID: 0}
-        AdditionalAbilities: []
-        ReplacePrefabAbilities: 0
-        FactionOverride: {fileID: 0}
-        PackRole: 3
-        MinimumScale: 1
-        MaximumScale: 1
-    - rid: 72
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
         NetworkObject: {fileID: 7260598054390996014, guid: d3c3416ef571d1f11b410df6d7fd827a,
+          type: 3}
+        MinimumRespawnTime: 300
+        MaximumRespawnTime: 600
+        SpawnChance: 1
+        YOffset: -0
+    - rid: 70
+      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: 7260598054390996014, guid: d3c3416ef571d1f11b410df6d7fd827a,
+          type: 3}
+        MinimumRespawnTime: 300
+        MaximumRespawnTime: 600
+        SpawnChance: 1
+        YOffset: -0
+    - rid: 71
+      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
+          type: 3}
+        MinimumRespawnTime: 300
+        MaximumRespawnTime: 600
+        SpawnChance: 1
+        YOffset: -0
+    - rid: 72
+      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4918,7 +4754,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: d3c3416ef571d1f11b410df6d7fd827a,
+        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4968,7 +4804,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
+        NetworkObject: {fileID: 7260598054390996014, guid: 3fa78709d8f464211843a6f900c16887,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4978,7 +4814,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
+        NetworkObject: {fileID: 7260598054390996014, guid: 3fa78709d8f464211843a6f900c16887,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4988,7 +4824,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
+        NetworkObject: {fileID: 7260598054390996014, guid: e20156a5af67e8bf2a3bee9393c16e1e,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -4998,7 +4834,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 3fa78709d8f464211843a6f900c16887,
+        NetworkObject: {fileID: 7260598054390996014, guid: e20156a5af67e8bf2a3bee9393c16e1e,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -5008,7 +4844,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 3fa78709d8f464211843a6f900c16887,
+        NetworkObject: {fileID: 7260598054390996014, guid: 8d9b86f93a8be4dbaa7299135327f436,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -5018,7 +4854,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: e20156a5af67e8bf2a3bee9393c16e1e,
+        NetworkObject: {fileID: 7260598054390996014, guid: 8d9b86f93a8be4dbaa7299135327f436,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -5028,7 +4864,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: e20156a5af67e8bf2a3bee9393c16e1e,
+        NetworkObject: {fileID: 7260598054390996014, guid: cc74cf39abc0f1dcfaf9be5c4a8995d5,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -5055,36 +4891,6 @@ MonoBehaviour:
         SpawnChance: 1
         YOffset: -0
     - rid: 87
-      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
-        asm: FishMMO.Server}
-      data:
-        NetworkObject: {fileID: 7260598054390996014, guid: cc74cf39abc0f1dcfaf9be5c4a8995d5,
-          type: 3}
-        MinimumRespawnTime: 300
-        MaximumRespawnTime: 600
-        SpawnChance: 1
-        YOffset: -0
-    - rid: 88
-      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
-        asm: FishMMO.Server}
-      data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 8d9b86f93a8be4dbaa7299135327f436,
-          type: 3}
-        MinimumRespawnTime: 300
-        MaximumRespawnTime: 600
-        SpawnChance: 1
-        YOffset: -0
-    - rid: 89
-      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
-        asm: FishMMO.Server}
-      data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 8d9b86f93a8be4dbaa7299135327f436,
-          type: 3}
-        MinimumRespawnTime: 300
-        MaximumRespawnTime: 600
-        SpawnChance: 1
-        YOffset: -0
-    - rid: 90
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:

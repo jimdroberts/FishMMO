@@ -91,6 +91,7 @@ namespace FishMMO.Shared.WorldDesign
 					return false;
 				}
 				Camps++;
+				campSites.Add(at);
 				// The beds on one side of the fire, the stores and the lantern on the other.
 				float spread = 360f / (beds + 3);
 				for (int b = 0; b < beds; b++)

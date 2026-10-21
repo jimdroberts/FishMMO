@@ -357,7 +357,7 @@ namespace FishMMO.Shared
 				root.GetComponentsInChildren(false, authored);
 				foreach (ScenePointOfInterest point in generated)
 				{
-					result.Add(point.ToDetails());
+					point.AppendDetails(result);
 				}
 				foreach (MapPointOfInterest landmark in authored)
 				{

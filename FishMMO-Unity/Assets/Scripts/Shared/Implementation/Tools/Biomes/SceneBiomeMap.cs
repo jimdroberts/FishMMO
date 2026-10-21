@@ -36,6 +36,42 @@ namespace FishMMO.Shared.Biomes
 		public Vector4 CoastLookRect;
 		[Tooltip("The coastal look's texels, RGBA8 row-major from the south-west (BiomeSeaCoast): written with the map by the cut and every repaint.")]
 		[HideInInspector] public byte[] CoastLook = new byte[0];
+		[Tooltip("The ground's heat (BiomeHeatMask, 2026-10-18, I2q): texels along X. 0 when the scene has no hot ground.")]
+		public int HeatWidth;
+		[Tooltip("The ground's heat: texels along Z.")]
+		public int HeatHeight;
+		[Tooltip("The world rectangle the heat covers: xy its south-west corner, zw its size, metres (only what the geothermal sites warm).")]
+		public Vector4 HeatRect;
+		[Tooltip("The heat's texels, 0 cold … 255 boiling, row-major from the south-west: baked by the cut and every repaint from the scene's geothermal sites (GeothermalVents.SceneSites) and their runoff.")]
+		[HideInInspector] public byte[] Heat = new byte[0];
+
+		/// <summary>The stored heat mask (empty for none).</summary>
+		public BiomeHeatMask HeatMask => new BiomeHeatMask { Width = HeatWidth, Height = HeatHeight, Area = HeatRect, Texels = Heat };
+
+		/// <summary>True when the map carries a heat mask (the scene has hot ground).</summary>
+		public bool HasHeat => HeatMask.Any;
+
+		/// <summary>Stores a heat mask (<see cref="BiomeHeatMask.Bake"/>); an empty one clears it.</summary>
+		public void SetHeat(BiomeHeatMask mask)
+		{
+			if (!mask.Any)
+			{
+				HeatWidth = HeatHeight = 0;
+				HeatRect = Vector4.zero;
+				Heat = new byte[0];
+				return;
+			}
+			HeatWidth = mask.Width;
+			HeatHeight = mask.Height;
+			HeatRect = mask.Area;
+			Heat = mask.Texels;
+		}
+
+		/// <summary>The ground's heat at a world point (xz), 0 cold … 1 boiling; 0 off the mask and on a map with none. Allocation-free.</summary>
+		public float HeatAt(float worldX, float worldZ)
+		{
+			return HeatWidth > 0 ? HeatMask.At(worldX, worldZ) : 0f;
+		}
 
 		/// <summary>True when the map carries a coastal look for the sea's surface (<see cref="BiomeSeaCoast"/>); false draws the sea as it always was.</summary>
 		public bool HasCoastLook => CoastLookBake.Any;
@@ -151,6 +187,8 @@ namespace FishMMO.Shared.Biomes
 			WorldSize = worldSize;
 			// A new grid's coast is baked by whoever wrote it (SceneBiomeField.WriteTo bakes it next); never the old grid's.
 			SetCoastLook(BiomeSeaCoast.Bake.None);
+			// Likewise its heat (the cut and the repaint bake it after writing the grid, 2026-10-18, I2q).
+			SetHeat(BiomeHeatMask.None);
 			if (groundAltitudes != null && groundAltitudes.Length == Width * Height && verticalScale > 0f)
 			{
 				GroundAltitudes = new ushort[groundAltitudes.Length];

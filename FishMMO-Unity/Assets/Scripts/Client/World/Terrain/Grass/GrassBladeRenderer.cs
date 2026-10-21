@@ -571,8 +571,11 @@ namespace FishMMO.Client
 			for (int r = 0; r < MaxRings; r++)
 			{
 				ringDistance[r] = new Vector4(r < ringCount ? ringDistanceF[r] : 0f, 0f, 0f, 0f);
-				// Ring 0's y carries the fullness (FishGrassBlades.compute: spawn = summed density / fullness).
-				ringDensity[r] = new Vector4(r < ringCount ? ringDensityF[r] : 0f, r == 0 ? Mathf.Clamp(s.Fullness, 0.05f, 1f) : 0f, 0f, 0f);
+				// Ring 0's y carries the sprinkled species' fullness, z the coverage that grows the full field (FishGrassBlades.compute:
+				// spawn = summed coverage / z), w how much of a thin field gathers into tufts.
+				ringDensity[r] = r == 0
+					? new Vector4(r < ringCount ? ringDensityF[r] : 0f, Mathf.Clamp(s.Fullness, 0.05f, 1f), Mathf.Clamp(s.FullCoverage, 0.05f, 1f), Mathf.Clamp01(s.Tufting))
+					: new Vector4(r < ringCount ? ringDensityF[r] : 0f, 0f, 0f, 0f);
 			}
 			for (int t = 0; t < MaxTypes; t++)
 			{

@@ -11,7 +11,9 @@ namespace FishMMO.Client
 	/// The sites' fires near the camera (SceneSiteEmitters, baked by the cut): campfires, hearths, forges and torches. The
 	/// nearest <see cref="MaxSources"/> within <see cref="Reach"/> each burn with tongues of flame (FishSiteFlames.shader)
 	/// and throw up a stream of embers that rise, drift downwind, cool and go out (FishSiteEmbers.shader). Two draws of two
-	/// pre-built fields of quads for all of them.
+	/// pre-built fields of quads for all of them. A lava tube's molten lava (<see cref="SceneEmitterKind.Magma"/>, 2026-10-20)
+	/// throws its embers up off the whole width of its body in the same field, and its fumes
+	/// (<see cref="SceneEmitterKind.Fumes"/>) drift there as soft puffs under the roof: no draw of their own.
 	/// </summary>
 	/// <remarks>
 	/// Play mode, client only, self-starting like the site lights. The shader comes from the weather render profile
@@ -141,8 +143,10 @@ namespace FishMMO.Client
 			{
 				foundVersion = SceneSiteEmitters.Version;
 				foundAt = eye;
+				// With a lava tube's molten lava and the fumes under its roof (2026-10-20): its embers rise off the lava, its fumes
+				// hang in the same field (kinds 5 and 6 of FishSiteEmbers.shader).
 				SceneSiteEmitters.Near(eye, Reach + Refind, kind => kind == SceneEmitterKind.Fire || kind == SceneEmitterKind.Forge || kind == SceneEmitterKind.Hearth
-					|| kind == SceneEmitterKind.Torch, MaxSources, near);
+					|| kind == SceneEmitterKind.Torch || kind == SceneEmitterKind.Magma || kind == SceneEmitterKind.Fumes, MaxSources, near);
 			}
 			if (near.Count == 0)
 			{
@@ -175,6 +179,22 @@ namespace FishMMO.Client
 				SceneEmitter e = near[i];
 				float distance = Vector3.Distance(eye, e.Position);
 				float fade = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(Reach * 0.7f, Reach, distance));
+				if (e.Kind == SceneEmitterKind.Magma || e.Kind == SceneEmitterKind.Fumes)
+				{
+					// Lava's embers over the width of its body (z, metres), or the fumes over their spread (Reach): no flames, no
+					// melted ring, no weather (underground). Their pace is the shader's, on the shared clock.
+					bool magma = e.Kind == SceneEmitterKind.Magma;
+					sources[i] = new Vector4(e.Position.x, e.Position.y, e.Position.z, magma ? 5f : 6f);
+					strengths[i] = magma
+						? new Vector4(fade, SceneMagma.Sparks(e.Seed), Mathf.Max(0.3f, SceneMagma.HalfWidthOf(e.Seed)), (float)SceneMagma.BodyOf(e.Seed))
+						: new Vector4(fade, FumePuffShare, Mathf.Max(1f, e.Reach), 0f);
+					flameSources[i] = Vector4.zero;
+					flameStrengths[i] = Vector4.zero;
+					heat[i] = Vector4.zero;
+					float spread = magma ? strengths[i].z + 2f : strengths[i].z + 3f;
+					bounds.Encapsulate(new Bounds(e.Position + Vector3.up * (magma ? 4f : 0f), new Vector3(2f * spread, magma ? 10f : 4f, 2f * spread)));
+					continue;
+				}
 				bool forge = e.Kind == SceneEmitterKind.Forge;
 				bool hearth = e.Kind == SceneEmitterKind.Hearth, torch = e.Kind == SceneEmitterKind.Torch;
 				// A fire burns up and dies down over minutes, each on its own beat; a forge sparks in bursts as it is worked.
@@ -287,5 +307,11 @@ namespace FishMMO.Client
 		}
 
 		private static readonly Vector4[] flameStrengths = new Vector4[MaxSources];
+
+		/// <summary>
+		/// The share of a fume source's quads drawn as puffs (of its <see cref="Particles"/> / <see cref="MaxSources"/>): two dozen
+		/// soft puffs each a few metres across, enough for a haze under the roof, few enough that the overdraw stays small.
+		/// </summary>
+		public const float FumePuffShare = 0.5f;
 	}
 }

@@ -258,6 +258,59 @@ namespace FishMMO.Client
 			entries.Add(entry);
 		}
 
+		/// <summary>
+		/// How wooded the ground round a point is, 0..1: the share of the disc of <paramref name="reach"/> metres the crowns
+		/// within it shade, nearer crowns counting more (1 − (d/reach)²), overlapping at random as in <see cref="Cover"/>.
+		/// What the wind in the leaves is heard from; <paramref name="deciduous"/> is the broadleaved share of it.
+		/// </summary>
+		public static float Woodland(Vector3 at, float reach, out float deciduous)
+		{
+			Hook();
+			if (dirty)
+			{
+				dirty = false;
+				Rebuild();
+			}
+			deciduous = 0f;
+			reach = Mathf.Max(1f, reach);
+			float area = 0f, broad = 0f;
+			int c0x = Mathf.FloorToInt((at.x - reach) / CellMetres), c1x = Mathf.FloorToInt((at.x + reach) / CellMetres);
+			int c0z = Mathf.FloorToInt((at.z - reach) / CellMetres), c1z = Mathf.FloorToInt((at.z + reach) / CellMetres);
+			for (int cz = c0z; cz <= c1z; cz++)
+			{
+				for (int cx = c0x; cx <= c1x; cx++)
+				{
+					if (!cells.TryGetValue(CellKey(cx, cz), out List<int> list))
+					{
+						continue;
+					}
+					foreach (int i in list)
+					{
+						Entry tree = entries[i];
+						float dx = tree.X - at.x, dz = tree.Z - at.z;
+						float s = (dx * dx + dz * dz) / (reach * reach);
+						if (s >= 1f)
+						{
+							continue;
+						}
+						float shade = tree.Radius * tree.Radius * (1f - s);
+						area += shade;
+						if (tree.Deciduous)
+						{
+							broad += shade;
+						}
+					}
+				}
+			}
+			if (area <= 0f)
+			{
+				return 0f;
+			}
+			deciduous = broad / area;
+			// The weighted disc's own area is π·reach²/2; the crowns' summed shade over it, overlapping at random.
+			return 1f - Mathf.Exp(-area / (0.5f * reach * reach));
+		}
+
 		private static long CellKey(float x, float z) => CellKey(Mathf.FloorToInt(x / CellMetres), Mathf.FloorToInt(z / CellMetres));
 
 		private static long CellKey(int cx, int cz) => ((long)cx << 32) ^ (uint)cz;

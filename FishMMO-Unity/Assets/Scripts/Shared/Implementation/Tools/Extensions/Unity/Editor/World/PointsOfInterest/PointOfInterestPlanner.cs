@@ -190,6 +190,14 @@ namespace FishMMO.Shared.WorldDesign
 			public readonly int Width, Depth;
 			public readonly float Cell, OriginX, OriginZ;
 			public readonly float[] Height, Slope, WaterDistance, SeaDistance, Hardness, Plateau;
+			/// <summary>
+			/// The distance to the open sea (<see cref="PointOfInterestOpenSea"/>), metres: what a coastal kind is placed by. A basin
+			/// under sea level shut in from the ocean is <see cref="Sea"/> for keeping sites out of it, but no coast.
+			/// </summary>
+			public readonly float[] OpenSeaDistance;
+			/// <summary>Cells of the open sea, and their summed-area table for <see cref="OpenShareAt"/>.</summary>
+			public readonly bool[] OpenSea;
+			private readonly int[] openSummed;
 			public readonly WaterKind[] Water;
 			public readonly int[] Biome;
 			public readonly bool[] Blocked, Sea;
@@ -261,7 +269,15 @@ namespace FishMMO.Shared.WorldDesign
 					Chamfer(WaterDistance, i => Water[i] == WaterKind.River || Water[i] == WaterKind.Lake);
 				}
 				Chamfer(SeaDistance, i => Sea[i]);
+				OpenSea = input.HasSea ? PointOfInterestOpenSea.Flood(Width, Depth, Height, input.SeaLevel) : new bool[n];
+				openSummed = PointOfInterestOpenSea.Summed(Width, Depth, OpenSea);
+				OpenSeaDistance = new float[n];
+				Chamfer(OpenSeaDistance, i => OpenSea[i]);
 			}
+
+			/// <summary>The share of open sea within <paramref name="reach"/> metres (a square) of a cell.</summary>
+			public float OpenShareAt(int i, float reach)
+				=> PointOfInterestOpenSea.OpenShare(Width, Depth, OpenSea, openSummed, i % Width, i / Width, Mathf.Max(0, Mathf.RoundToInt(reach / Cell)));
 
 			public float EastOf(int x) => OriginX + x * Cell;
 			public float NorthOf(int z) => OriginZ + z * Cell;

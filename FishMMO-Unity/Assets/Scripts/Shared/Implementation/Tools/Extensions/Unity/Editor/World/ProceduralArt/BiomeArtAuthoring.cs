@@ -726,6 +726,7 @@ namespace FishMMO.Shared.WorldDesign
 			AuthorDescription(biome, entry, report, apply);
 			AuthorNaming(biome, entry, report, apply);
 			AuthorEmission(biome, entry, report, apply);
+			AuthorGeothermal(biome, entry, report, apply);
 
 			AuthorRock(biome, entry, report, apply);
 			AuthorCaveShells(biome, entry, report, apply);
@@ -1038,7 +1039,7 @@ namespace FishMMO.Shared.WorldDesign
 			// Fields a pre-fingerprint run could not have set: anything but their defaults is somebody's.
 			if (rule.detailPlacement != DetailPlacement.Scattered || rule.sinkRange != Vector2.zero || rule.sinkSlopeFactor != 0f || rule.clusterMetres != 0f || rule.forestMetres != 0f
 				|| rule.depthRange != Vector2.zero || rule.useClimateBand || rule.waters != BiomeBedWaters.Default || rule.currentRange != Vector2.zero
-				|| !rule.worldGate.IsOpen)
+				|| !rule.worldGate.IsOpen || rule.useHeatBand || (rule.scaleSkew > 0f && rule.scaleSkew != 1f))
 			{
 				return false;
 			}
@@ -2146,7 +2147,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				if (slot.terrainLayer == null || slot.terrainLayer != source.Layer(spec.Family))
 				{
-					if (spec.HasClimateBand || spec.AirBand != BiomeAtmosphereRequirement.None)
+					if (spec.HasClimateBand || spec.AirBand != BiomeAtmosphereRequirement.None || spec.HeatBand.HasValue)
 					{
 						report.Lines.Add($"{biome.name} {slotName}: holds authored art, so its spec climate/air band was not written");
 					}
@@ -2210,6 +2211,10 @@ namespace FishMMO.Shared.WorldDesign
 			layer.humidityRange = spec?.Humidity ?? new Vector2(-1f, 1f);
 			layer.temperatureFalloff = spec != null ? spec.TemperatureFalloff : BiomeClimateBand.DefaultFalloff;
 			layer.humidityFalloff = spec != null ? spec.HumidityFalloff : BiomeClimateBand.DefaultFalloff;
+			// And the heat band (2026-10-18, I2q), riding the same mark.
+			layer.useHeatBand = spec != null && spec.HeatBand.HasValue;
+			layer.heatRange = spec?.HeatBand ?? new Vector2(0f, 1f);
+			layer.heatFalloff = spec != null && spec.HeatBand.HasValue ? spec.HeatFalloff : BiomeHeatBand.DefaultFalloff;
 		}
 
 		/// <summary>A layer's climate band's mark: empty for none (off, or open at every end), else its ranges and falloffs to 1/10 000.</summary>
@@ -2220,7 +2225,7 @@ namespace FishMMO.Shared.WorldDesign
 				return string.Empty;
 			}
 			string climate = layer.HasClimateBand ? ClimateMark(layer.temperatureRange, layer.temperatureFalloff, layer.humidityRange, layer.humidityFalloff) : string.Empty;
-			return WithAir(climate, layer.airBand);
+			return WithHeat(WithAir(climate, layer.airBand), layer.HasHeatBand ? layer.heatRange : (Vector2?)null, layer.heatFalloff);
 		}
 
 		/// <summary>
@@ -2246,7 +2251,21 @@ namespace FishMMO.Shared.WorldDesign
 			string climate = spec.HasClimateBand
 				? ClimateMark(spec.Temperature ?? new Vector2(-1f, 1f), spec.TemperatureFalloff, spec.Humidity ?? new Vector2(-1f, 1f), spec.HumidityFalloff)
 				: string.Empty;
-			return WithAir(climate, spec.AirBand);
+			return WithHeat(WithAir(climate, spec.AirBand), spec.HeatBand, spec.HeatFalloff);
+		}
+
+		/// <summary>
+		/// A climate mark with a layer's heat band after it ("|q" low, high, falloff, 2026-10-18, I2q), the climate part "t-|h-" when it
+		/// has none; unchanged without a heat band, so every mark written before heat bands existed reads the same.
+		/// </summary>
+		private static string WithHeat(string mark, Vector2? heat, float falloff)
+		{
+			if (!heat.HasValue || !BiomeHeatBand.Closes(heat.Value))
+			{
+				return mark;
+			}
+			Vector2 h = heat.Value;
+			return (mark.Length > 0 ? mark : "t-|h-") + $"|q{Q(Mathf.Min(h.x, h.y))},{Q(Mathf.Max(h.x, h.y))},{Q(falloff)}";
 		}
 
 		private static string ClimateMark(Vector2 temperature, float temperatureFalloff, Vector2 humidity, float humidityFalloff)
@@ -2290,9 +2309,16 @@ namespace FishMMO.Shared.WorldDesign
 			if (substance != null)
 			{
 				target = SubstanceNamed(substance);
+				if (target == null && apply)
+				{
+					/* A shipped substance the project lacks is made now (2026-10-18, I2q): Steam was added to the weather content
+					 * generator's table after the substances were first created, so no geyser basin had any sites. */
+					target = WeatherContentGenerator.EnsureShipped(substance);
+				}
 				if (target == null)
 				{
-					report.Missing.Add($"{biome.name} {BiomeTemplate.Authored.Emission}: weather substance {substance}");
+					report.Missing.Add($"{biome.name} {BiomeTemplate.Authored.Emission}: weather substance {substance}" +
+						(apply ? string.Empty : " (Author creates it when the weather content generator ships one of that name)"));
 					return;
 				}
 			}
@@ -2303,6 +2329,23 @@ namespace FishMMO.Shared.WorldDesign
 				biome.Emits = target;
 				biome.EmissionRate = target != null ? rate : 0f;
 			}, $"emits {wanted}", report, apply);
+		}
+
+		/// <summary>
+		/// How the biome's hot ground divides among geysers, hot springs, fumaroles and mud pots (<see cref="BiomeTemplate.Geothermal"/>)
+		/// from the spec's column (<see cref="BiomeArtSpec.Entry.Geothermal"/>, 2026-10-18, I2q): one whole value marked by its
+		/// signature, under the emission's rule (the template's original, today's split, is written over once; a hand edit kept
+		/// after). No column, nothing written: every template keeps today's split unmarked.
+		/// </summary>
+		private static void AuthorGeothermal(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			if (!entry.GeothermalShares.HasValue)
+			{
+				return;
+			}
+			BiomeGeothermalShares target = entry.GeothermalShares.Value;
+			AuthorText(biome, BiomeTemplate.Authored.Geothermal, biome.Geothermal.Signature(), target.Signature(), () => biome.Geothermal = target,
+				$"hot ground {target}", report, apply);
 		}
 
 		/// <summary>An emission's mark: "substance@rate" (the rate to 1/10 000), "none" for nothing.</summary>
@@ -2734,6 +2777,17 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				text.Append("|G").Append(rule.worldGate.Signature());
 			}
+			// The heat band (2026-10-18, I2q) likewise: keyed on its switch, so every mark made before still holds.
+			if (rule.useHeatBand)
+			{
+				text.Append("|Q").Append(Q(rule.heatRange.x)).Append(',').Append(Q(rule.heatRange.y)).Append(',').Append(Q(rule.heatFalloff));
+			}
+			// The size skew (2026-10-20) likewise: only a rule leaned off even hashes it, so every mark made before still holds (0, an
+			// asset saved before the field, is even too).
+			if (rule.scaleSkew > 0f && rule.scaleSkew != 1f)
+			{
+				text.Append("|W").Append(Q(rule.scaleSkew));
+			}
 			return Hash64(text);
 		}
 
@@ -2842,6 +2896,7 @@ namespace FishMMO.Shared.WorldDesign
 				uniformScaleRange = s.Scale,
 				widthScaleRange = s.WidthScale,
 				heightScaleRange = s.HeightScale,
+				scaleSkew = Mathf.Clamp(s.ScaleSkew, 0.25f, 4f),
 				// Any heading (0–360) unless the spec aligns the rule (BiomeArtSpec.Aligned): the default hashes as before.
 				yRotationRange = s.Yaw,
 				alignToTerrainNormal = s.AlignToNormal,
@@ -2880,6 +2935,10 @@ namespace FishMMO.Shared.WorldDesign
 				humidityFalloff = s.Temperature.HasValue || s.Humidity.HasValue ? Mathf.Clamp01(s.HumidityFalloff) : 0.1f,
 				// Open (the default) for every rule without one: the rule is exactly what it was (decision 41, 2026-10-18).
 				worldGate = s.World,
+				// No heat band leaves the band's fields at their defaults (2026-10-18, I2q).
+				useHeatBand = s.Heat.HasValue,
+				heatRange = s.Heat ?? new Vector2(0f, 1f),
+				heatFalloff = s.Heat.HasValue ? Mathf.Clamp01(s.HeatFalloff) : BiomeHeatBand.DefaultFalloff,
 			});
 			rule.SpecFingerprint = Fingerprint(rule);
 		}
@@ -2907,6 +2966,7 @@ namespace FishMMO.Shared.WorldDesign
 			to.uniformScaleRange = from.uniformScaleRange;
 			to.widthScaleRange = from.widthScaleRange;
 			to.heightScaleRange = from.heightScaleRange;
+			to.scaleSkew = from.scaleSkew;
 			to.yRotationRange = from.yRotationRange;
 			to.alignToTerrainNormal = from.alignToTerrainNormal;
 			to.seedOffset = from.seedOffset;
@@ -2941,6 +3001,9 @@ namespace FishMMO.Shared.WorldDesign
 			to.humidityRange = from.humidityRange;
 			to.humidityFalloff = from.humidityFalloff;
 			to.worldGate = from.worldGate;
+			to.useHeatBand = from.useHeatBand;
+			to.heatRange = from.heatRange;
+			to.heatFalloff = from.heatFalloff;
 		}
 	}
 }

@@ -1,3 +1,4 @@
+using System;
 using FishMMO.Shared.Biomes;
 using FishMMO.Shared.Celestial;
 using UnityEngine;
@@ -60,6 +61,13 @@ namespace FishMMO.Shared.Weather
 		public const float InlandSeasonalShare = 0.8f;
 		/// <summary>How far behind the sun a lake's season runs, years.</summary>
 		public const float InlandLagYears = 1f / 24f;
+		/// <summary>
+		/// The surface of hot water (a biome whose water look is <see cref="BiomeWaterLook.Hot"/>, 2026-10-18, I2q), °C: a hot
+		/// spring's pool and the warm lakes and streams it feeds, never cooler than this whatever the air.
+		/// </summary>
+		public const float HotWaterC = 60f;
+		/// <summary>How far round a place its shores are read for hot water, m: the inner and outer rings (<see cref="HotShore"/>).</summary>
+		public static readonly float[] HotShoreRings = { 40f, 80f };
 
 		/// <summary>The sea's surface, °C, from the annual mean sea-level air and the air's season as it was <see cref="SeaLagYears"/> ago (°C off the mean).</summary>
 		public static float SeaSurfaceC(float annualMeanAirC, float laggedSeasonC)
@@ -98,6 +106,58 @@ namespace FishMMO.Shared.Weather
 			/// <summary>A lake's or a river's surface, °C, and whether it is frozen.</summary>
 			public float InlandC;
 			public bool InlandFrozen;
+			/// <summary>True when the inland water here is hot (<see cref="HotShore"/>): it never freezes and always steams.</summary>
+			public bool InlandHot;
+		}
+
+		/// <summary>
+		/// Whether the inland water at a place is hot (2026-10-18, phase I2q): its shores' biomes', read as a body of water's look
+		/// is (BiomeWaterLooks: the LAND biomes round it, water-body biomes skipped), on two rings of eight about the place and
+		/// the place itself; hot when at least half the land read is a biome whose water look is <see cref="BiomeWaterLook.Hot"/>.
+		/// Pure in the biomes, so the server and every client agree; false with no biome read.
+		/// </summary>
+		public static bool HotShore(Func<Vector2, BiomeTemplate> biomeAt, Vector2 at)
+		{
+			if (biomeAt == null)
+			{
+				return false;
+			}
+			int land = 0, hot = 0;
+			void Read(Vector2 p)
+			{
+				BiomeTemplate biome = biomeAt(p);
+				if (biome == null || BiomeWaterLooks.IsWaterBody(biome.WaterRole))
+				{
+					return;
+				}
+				land++;
+				if (biome.WaterLook.Hot)
+				{
+					hot++;
+				}
+			}
+			Read(at);
+			foreach (float ring in HotShoreRings)
+			{
+				for (int k = 0; k < 8; k++)
+				{
+					float a = k * Mathf.PI * 0.25f;
+					Read(at + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * ring);
+				}
+			}
+			return land > 0 && 2 * hot >= land;
+		}
+
+		/// <summary>A reading with hot water applied: the inland surface no cooler than <see cref="HotWaterC"/> and never frozen.</summary>
+		public static Reading WithHot(Reading reading, bool hot)
+		{
+			if (hot)
+			{
+				reading.InlandHot = true;
+				reading.InlandFrozen = false;
+				reading.InlandC = Mathf.Max(reading.InlandC, HotWaterC);
+			}
+			return reading;
 		}
 
 		/// <summary>
@@ -141,7 +201,7 @@ namespace FishMMO.Shared.Weather
 			}
 			float seaAnnualC = seaAnnualK + authoredK - Kelvin;
 			float inlandAnnualC = inlandAnnualK + authoredK - Kelvin;
-			return new Reading
+			var reading = new Reading
 			{
 				AnnualAirC = seaAnnualC,
 				SeaC = SeaSurfaceC(seaAnnualC, seaSeasonK),
@@ -149,6 +209,10 @@ namespace FishMMO.Shared.Weather
 				InlandC = InlandSurfaceC(inlandAnnualC, inlandSeasonK),
 				InlandFrozen = InlandFrozen(inlandAnnualC, inlandSeasonK),
 			};
+			// Hot water (2026-10-18, I2q): where the shores round the place are a biome whose water is hot, the lakes, pools and
+			// streams there never ice and always steam. No biome map, or none hot: exactly the reading as before.
+			SceneBiomeMap map = settings != null ? settings.BiomeMap : null;
+			return map != null ? WithHot(reading, HotShore(p => map.Sample(new Vector3(p.x, 0f, p.y)), new Vector2(inland.x, inland.z))) : reading;
 		}
 	}
 }

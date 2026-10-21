@@ -10,14 +10,16 @@ namespace FishMMO.Client
 	/// <summary>
 	/// Rock crevices: where one rock meets another, the seam darkens toward its bottom and fills with the surrounding
 	/// ground's own material (FishRockContact.hlsl). Distance fields, measured in the world: the same from every angle
-	/// and distance, unlike a screen-space blend.
+	/// and distance, unlike a screen-space blend. The same fields and grid feed the seam fillets (<see cref="RockFillets"/>).
 	/// </summary>
 	/// <remarks>
 	/// <para>
 	/// <b>One distance field per rock shape.</b> When a <see cref="TerrainGpuRenderer"/> registers a rock model
-	/// (<see cref="RegisterShape"/>), its mesh (the level nearest <see cref="TargetTriangles"/> triangles) is read once and
-	/// its unsigned distance field drawn into a 32³ brick of an R8 3D atlas by FishRockSdf.shader, one shape per frame.
-	/// 32 KB a shape. Drawn, not computed, because WebGPU's compute stores only 32-bit floats.
+	/// (<see cref="RegisterShape"/>), its mesh (the finest level up to <see cref="TargetTriangles"/> triangles) is read once
+	/// and its SIGNED distance field (local units, negative inside) drawn into a 32³ brick of a 16-bit float 3D atlas by
+	/// FishRockSdf.shader, as many slices a frame as <see cref="BakeBudget"/> allows. 64 KB a shape. Drawn, not computed,
+	/// because WebGPU's compute stores only 32-bit floats. Each rock model also names its LOOK (<see cref="RegisterLook"/>:
+	/// its material), carried in its instances' tags, so a fillet knows which rock's material to wear.
 	/// </para>
 	/// <para>
 	/// <b>A grid around the camera, every frame.</b> FishRockField.compute lists the rocks whose box reaches a
@@ -61,8 +63,21 @@ namespace FishMMO.Client
 		/// <summary>Rocks the list holds; more near the camera are dropped (the grid then misses them).</summary>
 		public const int ListCapacity = 8192;
 
-		/// <summary>The level whose mesh comes nearest this many triangles (not over it) is the shape's field source.</summary>
-		public const int TargetTriangles = 2500;
+		/// <summary>
+		/// The finest level at or under this many triangles is the shape's field source (the coarsest when none is). The
+		/// fillets meet the rock as drawn near the camera, its finest level: a crag's field from its 972-triangle level stood
+		/// up to 0.9 m off its finest surface (p95 0.5 m), from that level itself p95 0.1–0.2 m (2026-10-21, offline).
+		/// </summary>
+		public const int TargetTriangles = 16000;
+
+		/// <summary>
+		/// Voxel–triangle tests drawn per frame while fields are being built: the slices of a shape a frame takes are as many
+		/// as fit (at least one). About what one 2500-triangle unsigned field cost in a frame before the fields were signed.
+		/// </summary>
+		public const long BakeBudget = 48L * 1000 * 1000;
+
+		/// <summary>The most looks (rock materials) a tag can carry: 12 bits over the shape's 20 (<see cref="TagOf"/>).</summary>
+		public const int MaxLooks = 4095;
 
 		private const int RockStride = 7 * 16;
 
@@ -74,6 +89,13 @@ namespace FishMMO.Client
 		}
 
 		private static readonly List<Shape> shapes = new List<Shape>();
+		private static readonly List<Material> looks = new List<Material>();
+		private static readonly Dictionary<Material, int> lookOf = new Dictionary<Material, int>();
+
+		/// <summary>The shape whose field is being drawn (−1 none), its next slice and its mesh's buffers, held until its last slice.</summary>
+		private static int bakeShape = -1, bakeSlice;
+		private static GraphicsBuffer bakePositions, bakeIndices;
+		private static int bakeTriangles;
 		private static readonly Dictionary<Mesh, int> shapeOf = new Dictionary<Mesh, int>();
 		private static readonly List<TerrainGpuRenderer> renderers = new List<TerrainGpuRenderer>();
 
@@ -89,6 +111,7 @@ namespace FishMMO.Client
 		private static readonly CommandBuffer cmd = new CommandBuffer { name = "FishMMO rock crevices" };
 
 		private static bool on = true;
+		private static bool filletsOn;
 		private static Vector4 crevice = new Vector4(0.35f, 0.45f, 0.85f, 1f);
 
 		/// <summary>
@@ -137,7 +160,10 @@ namespace FishMMO.Client
 			hooked = false;
 			shapes.Clear();
 			shapeOf.Clear();
+			looks.Clear();
+			lookOf.Clear();
 			renderers.Clear();
+			bakeShape = -1;
 			Forget();
 		}
 
@@ -182,8 +208,9 @@ namespace FishMMO.Client
 					empty[i] = uint.MaxValue;
 				}
 				dummySlots.SetData(empty);
-				dummyAtlas = new Texture3D(1, 1, 1, TextureFormat.R8, false) { name = "Rock SDF placeholder", hideFlags = HideFlags.DontSave };
-				dummyAtlas.SetPixel(0, 0, 0, Color.white);
+				dummyAtlas = new Texture3D(1, 1, 1, TextureFormat.RHalf, false) { name = "Rock SDF placeholder", hideFlags = HideFlags.DontSave };
+				// Far outside every rock.
+				dummyAtlas.SetPixel(0, 0, 0, new Color(1000f, 0f, 0f, 0f));
 				dummyAtlas.Apply(false, true);
 			}
 			Shader.SetGlobalBuffer(ListId, list ?? dummyList);
@@ -224,11 +251,56 @@ namespace FishMMO.Client
 			// Padded so a point a crevice width off the surface is still inside the brick.
 			float pad = Mathf.Max(0.1f, 0.1f * Mathf.Max(localBounds.size.x, Mathf.Max(localBounds.size.y, localBounds.size.z)));
 			localBounds.Expand(pad * 2f);
+			if (shapes.Count == 0 && levels[0].Length > 0)
+			{
+				// The layer the rocks draw on, which the fillets draw on too (camera culling masks).
+				RockLayer = levels[0][0].Template.layer;
+			}
 			int index = shapes.Count;
 			shapes.Add(new Shape { Mesh = mesh, Bounds = localBounds });
 			shapeOf[mesh] = index;
 			bricksDirty = true;
 			return index;
+		}
+
+		/// <summary>
+		/// A rock model's look: its material (the plain one, before the renderer's indirect clone), shared by every model
+		/// that wears it; −1 when it has none. The fillets copy it (<see cref="RockFillets"/>).
+		/// </summary>
+		public static int RegisterLook(Material material)
+		{
+			if (material == null)
+			{
+				return -1;
+			}
+			if (lookOf.TryGetValue(material, out int existing))
+			{
+				return existing;
+			}
+			if (looks.Count >= MaxLooks)
+			{
+				return -1;
+			}
+			lookOf[material] = looks.Count;
+			looks.Add(material);
+			return looks.Count - 1;
+		}
+
+		/// <summary>The looks registered so far, by index.</summary>
+		public static IReadOnlyList<Material> Looks => looks;
+
+		/// <summary>
+		/// An instance's tag for the gather (FishRockField.compute FishRockGather): its shape + 1 in the low 20 bits (0: not a
+		/// rock), its look + 1 above them (0: none).
+		/// </summary>
+		public static uint TagOf(int shape, int look)
+		{
+			if (shape < 0)
+			{
+				return 0u;
+			}
+			uint l = look >= 0 && look < MaxLooks ? (uint)(look + 1) : 0u;
+			return ((uint)(shape + 1) & 0xFFFFFu) | (l << 20);
 		}
 
 		/// <summary>The readable mesh of the finest level at or under <see cref="TargetTriangles"/> (else the coarsest).</summary>
@@ -270,6 +342,7 @@ namespace FishMMO.Client
 				return;
 			}
 			on = p.RockCrevices;
+			filletsOn = RockFillets.Wanted(p);
 			crevice = new Vector4(Mathf.Max(0.01f, p.RockCreviceWidth), Mathf.Clamp01(p.RockCreviceShadow), Mathf.Clamp01(p.RockCreviceSoil), on ? 1f : 0f);
 		}
 
@@ -336,7 +409,7 @@ namespace FishMMO.Client
 			}
 			// Room for a few more without growing again.
 			atlasBricksZ = bricksZ + 1;
-			var desc = new RenderTextureDescriptor(BricksX * Brick, Brick, GraphicsFormat.R8_UNorm, 0)
+			var desc = new RenderTextureDescriptor(BricksX * Brick, Brick, GraphicsFormat.R16_SFloat, 0)
 			{
 				dimension = TextureDimension.Tex3D,
 				volumeDepth = atlasBricksZ * Brick,
@@ -355,12 +428,13 @@ namespace FishMMO.Client
 			{
 				s.Built = false;
 			}
+			EndBake();
 			bricksDirty = true;
 			Shader.SetGlobalTexture(SdfId, atlas);
 			Shader.SetGlobalVector(AtlasId, new Vector4(BricksX, 1f / atlas.width, 1f / atlas.volumeDepth, 0f));
 		}
 
-		/// <summary>The per-shape table the gather reads: min + range, size + built, flags (x rock).</summary>
+		/// <summary>The per-shape table the gather reads: min + unit (1: the field is in local units), size + built, flags (x rock).</summary>
 		private static int bricksVersion;
 
 		private static void UploadBricks()
@@ -381,19 +455,60 @@ namespace FishMMO.Client
 			for (int i = 0; i < shapes.Count; i++)
 			{
 				Bounds b = shapes[i].Bounds;
-				float range = RangeOf(b);
-				data[i * 3] = new Vector4(b.min.x, b.min.y, b.min.z, range);
+				data[i * 3] = new Vector4(b.min.x, b.min.y, b.min.z, 1f);
 				data[i * 3 + 1] = new Vector4(b.size.x, b.size.y, b.size.z, shapes[i].Built ? 1f : 0f);
 				data[i * 3 + 2] = new Vector4(1f, 0f, 0f, 0f);
 			}
 			bricks.SetData(data);
 		}
 
-		/// <summary>What 1.0 in a brick means, in local units: six voxels of its largest side.</summary>
-		private static float RangeOf(Bounds b) => Mathf.Max(b.size.x, Mathf.Max(b.size.y, b.size.z)) / Brick * 6f;
-
-		/// <summary>Draws the next unbuilt shape's field into its brick (one a frame).</summary>
+		/// <summary>
+		/// Draws the next slices of the shape being built (starting the next unbuilt shape when none is): as many as
+		/// <see cref="BakeBudget"/> allows this frame, at least one. A shape counts as built (and joins the gather) after
+		/// its last slice.
+		/// </summary>
 		private static void BuildNext()
+		{
+			if (bakeShape < 0 && !StartBake())
+			{
+				return;
+			}
+			Shape s = shapes[bakeShape];
+			Bounds b = s.Bounds;
+			int bx = bakeShape % BricksX, bz = bakeShape / BricksX;
+			long perSlice = (long)Brick * Brick * Mathf.Max(1, bakeTriangles);
+			int count = (int)Mathf.Clamp(BakeBudget / perSlice, 1, Brick - bakeSlice);
+			cmd.Clear();
+			cmd.SetGlobalBuffer(SdfPositionsId, bakePositions);
+			cmd.SetGlobalBuffer(SdfIndicesId, bakeIndices);
+			cmd.SetGlobalInt(SdfTrianglesId, bakeTriangles);
+			cmd.SetGlobalVector(SdfMinId, new Vector4(b.min.x, b.min.y, b.min.z, 1f));
+			cmd.SetGlobalVector(SdfSizeId, new Vector4(b.size.x, b.size.y, b.size.z, 0f));
+			for (int z = bakeSlice; z < bakeSlice + count; z++)
+			{
+				cmd.SetRenderTarget(new RenderTargetIdentifier(atlas, 0, CubemapFace.Unknown, bz * Brick + z));
+				cmd.SetViewport(new Rect(bx * Brick, 0, Brick, Brick));
+				cmd.SetGlobalVector(SdfSliceId, new Vector4(bx * Brick, z, 0f, 0f));
+				cmd.DrawProcedural(Matrix4x4.identity, sdfMaterial, 0, MeshTopology.Triangles, 3);
+			}
+			Graphics.ExecuteCommandBuffer(cmd);
+			cmd.Clear();
+			bakeSlice += count;
+			if (bakeSlice < Brick)
+			{
+				return;
+			}
+			s.Built = true;
+			bricksDirty = true;
+			EndBake();
+			if (CountBuilt() == shapes.Count)
+			{
+				Debug.Log(Describe());
+			}
+		}
+
+		/// <summary>Reads the next unbuilt shape's mesh into the bake's buffers; false when every shape is built.</summary>
+		private static bool StartBake()
 		{
 			for (int i = 0; i < shapes.Count; i++)
 			{
@@ -402,10 +517,10 @@ namespace FishMMO.Client
 					continue;
 				}
 				Shape s = shapes[i];
-				s.Built = true;
-				bricksDirty = true;
 				if (s.Mesh == null || !s.Mesh.isReadable)
 				{
+					s.Built = true;
+					bricksDirty = true;
 					continue;
 				}
 				Vector3[] v = s.Mesh.vertices;
@@ -424,48 +539,42 @@ namespace FishMMO.Client
 				}
 				if (indices.Count < 3 || positions.Length == 0)
 				{
+					s.Built = true;
+					bricksDirty = true;
 					continue;
 				}
-				var positionBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, positions.Length, 16);
-				positionBuffer.SetData(positions);
-				var indexBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, indices.Count, sizeof(uint));
-				indexBuffer.SetData(indices);
-				Bounds b = s.Bounds;
-				int bx = i % BricksX, bz = i / BricksX;
-				cmd.Clear();
-				cmd.SetGlobalBuffer(SdfPositionsId, positionBuffer);
-				cmd.SetGlobalBuffer(SdfIndicesId, indexBuffer);
-				cmd.SetGlobalInt(SdfTrianglesId, indices.Count / 3);
-				cmd.SetGlobalVector(SdfMinId, new Vector4(b.min.x, b.min.y, b.min.z, RangeOf(b)));
-				cmd.SetGlobalVector(SdfSizeId, new Vector4(b.size.x, b.size.y, b.size.z, 0f));
-				for (int z = 0; z < Brick; z++)
-				{
-					cmd.SetRenderTarget(new RenderTargetIdentifier(atlas, 0, CubemapFace.Unknown, bz * Brick + z));
-					cmd.SetViewport(new Rect(bx * Brick, 0, Brick, Brick));
-					cmd.SetGlobalVector(SdfSliceId, new Vector4(bx * Brick, z, 0f, 0f));
-					cmd.DrawProcedural(Matrix4x4.identity, sdfMaterial, 0, MeshTopology.Triangles, 3);
-				}
-				Graphics.ExecuteCommandBuffer(cmd);
-				cmd.Clear();
-				// The draws are recorded with the buffers; releasing them now is safe (Unity defers the free).
-				positionBuffer.Release();
-				indexBuffer.Release();
-				if (CountBuilt() == shapes.Count)
-				{
-					Debug.Log(Describe());
-				}
-				return;
+				bakePositions = new GraphicsBuffer(GraphicsBuffer.Target.Structured, positions.Length, 16);
+				bakePositions.SetData(positions);
+				bakeIndices = new GraphicsBuffer(GraphicsBuffer.Target.Structured, indices.Count, sizeof(uint));
+				bakeIndices.SetData(indices);
+				bakeTriangles = indices.Count / 3;
+				bakeShape = i;
+				bakeSlice = 0;
+				return true;
 			}
+			return false;
+		}
+
+		/// <summary>Lets the bake's mesh go (Unity defers the free until the draws recorded with it are done).</summary>
+		private static void EndBake()
+		{
+			bakePositions?.Release();
+			bakeIndices?.Release();
+			bakePositions = bakeIndices = null;
+			bakeShape = -1;
+			bakeSlice = 0;
 		}
 
 		private static void OnBeginContextRendering(ScriptableRenderContext context, List<Camera> cameras)
 		{
 			ReadProfile();
 			Shader.SetGlobalVector(CreviceId, crevice);
-			if (!on || shapes.Count == 0 || renderers.Count == 0 || !EnsureResources())
+			// The grid serves the crevices and the fillets: kept while either is on (the crevices' own w turns their shading off).
+			if ((!on && !filletsOn) || shapes.Count == 0 || renderers.Count == 0 || !EnsureResources())
 			{
 				Shader.SetGlobalVector(GridDimsGlobalId, Vector4.zero);
 				Forget();
+				RockFillets.Hide();
 				return;
 			}
 			EnsureAtlas();
@@ -477,6 +586,7 @@ namespace FishMMO.Client
 			{
 				Shader.SetGlobalVector(GridDimsGlobalId, Vector4.zero);
 				Forget();
+				RockFillets.Hide();
 				return;
 			}
 			Vector3 eye = camera.transform.position;
@@ -499,12 +609,26 @@ namespace FishMMO.Client
 				gatheredKey = key;
 				regathers = 2;
 			}
-			if (regathers <= 0)
+			// The fillets start a build only from a grid no gather is pending on: the one in the buffers is then this min's.
+			bool settled = regathers <= 0;
+			if (!settled)
 			{
-				return;
+				regathers--;
+				Gather(min, cells);
 			}
-			regathers--;
+			if (filletsOn)
+			{
+				RockFillets.Frame(camera, min, key, settled && list != null);
+			}
+			else
+			{
+				RockFillets.Hide();
+			}
+		}
 
+		/// <summary>Lists the rocks round the grid at <paramref name="min"/> into its cells (FishRockClear, FishRockGather).</summary>
+		private static void Gather(Vector3 min, int cells)
+		{
 			cmd.Clear();
 			cmd.BeginSample(GatherSample);
 			cmd.SetComputeVectorParam(compute, RockGridId, new Vector4(min.x, min.y, min.z, CellSize));
@@ -540,6 +664,14 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(GridDimsGlobalId, new Vector4(GridCells.x, GridCells.y, GridCells.z, 1f));
 		}
 
+		// What the fillets read of the grid (RockFillets): the listed rocks, their cells, and the atlas of their fields.
+		internal static GraphicsBuffer ListBuffer => list;
+		internal static GraphicsBuffer SlotsBuffer => slots;
+		internal static Texture Atlas => atlas;
+		internal static Vector4 AtlasInfo => atlas != null ? new Vector4(BricksX, 1f / atlas.width, 1f / atlas.volumeDepth, 0f) : Vector4.zero;
+		internal static float Reach => crevice.x;
+		internal static int RockLayer { get; private set; }
+
 		/// <summary>One line for the diagnostics.</summary>
 		public static string Describe() =>
 			$"[Rock crevices] {(on ? "on" : "off")}, {shapes.Count} shape(s) ({CountBuilt()} built), {renderers.Count} renderer(s), atlas {(atlas != null ? $"{atlas.width}×{atlas.height}×{atlas.volumeDepth}" : "none")}";
@@ -562,6 +694,8 @@ namespace FishMMO.Client
 			UnityEditor.AssemblyReloadEvents.beforeAssemblyReload -= Release;
 #endif
 			hooked = false;
+			RockFillets.Release();
+			EndBake();
 			list?.Release();
 			listCount?.Release();
 			slots?.Release();

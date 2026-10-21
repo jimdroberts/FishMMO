@@ -156,8 +156,13 @@ namespace FishMMO.Shared.WorldDesign
 		public float NearSettlementMetres;
 		/// <summary>At least this far from every settlement, metres; 0 for no such rule.</summary>
 		public float AwayFromSettlementsMetres;
-		/// <summary>Within this of the sea's edge, metres; 0 for no such rule.</summary>
+		/// <summary>Within this of the open sea's edge, metres (never a basin shut in from the ocean); 0 for no such rule.</summary>
 		public float CoastMetres;
+		/// <summary>
+		/// The share of open sea a harbour's square about it needs (<see cref="PointOfInterestOpenSea.HarbourShare"/>): on the
+		/// open coast, not up an inlet's narrows; 0 for no such rule.
+		/// </summary>
+		public float OpenWaterShare;
 		/// <summary>Within this of a river, a lake or the sea, metres; 0 for no such rule.</summary>
 		public float NearWaterMetres;
 
@@ -287,6 +292,13 @@ namespace FishMMO.Shared.WorldDesign
 		public PointOfInterestKindRule Coast(float metres)
 		{
 			CoastMetres = metres;
+			return this;
+		}
+
+		/// <summary>On the open coast (<see cref="OpenWaterShare"/>): a harbour's, where ships come in from the sea.</summary>
+		public PointOfInterestKindRule OpenWater(float share = PointOfInterestOpenSea.HarbourShare)
+		{
+			OpenWaterShare = share;
 			return this;
 		}
 

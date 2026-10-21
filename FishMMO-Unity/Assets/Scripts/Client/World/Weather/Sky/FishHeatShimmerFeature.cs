@@ -34,7 +34,12 @@ namespace FishMMO.Client
 	/// the boiling air.
 	/// </para>
 	/// <para>
-	/// <b>Cost.</b> When the air is still (night, cloud, wind, wet or green ground) the feature enqueues nothing.
+	/// <b>Cave lava</b> (2026-10-20): over a lava tube's molten lava the air boils day and night; the nearest few lava lights'
+	/// balls of hot air (CaveLavaHeat) add the jitter of the path a ray runs through each, so the far wall of a lava river's
+	/// tube wavers while the floor at your feet hardly moves.
+	/// </para>
+	/// <para>
+	/// <b>Cost.</b> When the air is still (night, cloud, wind, wet or green ground) and no cave lava is near, the feature enqueues nothing.
 	/// When it runs: one full-screen copy and one full-screen pass of ~12 depth taps, two colour taps and four
 	/// octaves of value noise — a few tenths of a millisecond at 1440p. Off on the Performant renderer (the
 	/// feature's own active toggle, which the renderer setup leaves off there).
@@ -89,6 +94,11 @@ namespace FishMMO.Client
 		[Tooltip("Metres above the lava surface its hot air reaches.")]
 		[Range(2f, 60f)] public float LavaReach = 25f;
 
+		[Header("Cave lava")]
+		[Tooltip("The boiling air over a lava tube's molten lava (2026-10-20; CaveLavaHeat's balls of hot air over its lava lights): " +
+			"the jitter a ray gets crossing one ball's whole width, milliradians rms. A screen pixel at 1080p is about one.")]
+		[Range(0f, 8f)] public float CaveLavaJitter = 2.5f;
+
 		/// <summary>The path length the amplitude is quoted at, m.</summary>
 		public const float ReferencePath = 1000f;
 
@@ -102,6 +112,9 @@ namespace FishMMO.Client
 		public const float MinimumAngle = 2e-5f;
 
 		private ShimmerPass pass;
+
+		/// <summary>The hot-air balls over cave lava this frame (CaveLavaHeat), xyz centre and w radius; always full length (a shader array's size is fixed by its first set).</summary>
+		private readonly Vector4[] heatSpots = new Vector4[CaveLavaHeat.MaxSpots];
 
 		public override void Create()
 		{
@@ -137,11 +150,13 @@ namespace FishMMO.Client
 			float angle = Amplitude * 1e-3f * Mathf.Sqrt(air.Turbulence);
 			float lavaLevel = 0f;
 			bool lava = Lava && LavaScan.Find(out lavaLevel);
-			if (angle < MinimumAngle && !lava)
+			// The hot air over a lava tube's lava near the camera (none outside one: one distance check a frame).
+			int spots = Lava && CaveLavaJitter > 0f ? CaveLavaHeat.Spots(camera.transform.position, heatSpots) : 0;
+			if (angle < MinimumAngle && !lava && spots == 0)
 			{
 				return;
 			}
-			pass.Setup(material, this, air, angle, lava, lavaLevel);
+			pass.Setup(material, this, air, angle, lava, lavaLevel, heatSpots, spots);
 			renderer.EnqueuePass(pass);
 		}
 
@@ -234,6 +249,8 @@ namespace FishMMO.Client
 			private static readonly int LavaId = Shader.PropertyToID("_HeatLava");
 			private static readonly int ScreenId = Shader.PropertyToID("_HeatScreen");
 			private static readonly int EyeId = Shader.PropertyToID("_HeatEye");
+			private static readonly int SpotsId = Shader.PropertyToID("_HeatSpots");
+			private static readonly int SpotParamsId = Shader.PropertyToID("_HeatSpotParams");
 
 			private Material material;
 			private FishHeatShimmerFeature settings;
@@ -241,8 +258,10 @@ namespace FishMMO.Client
 			private float angle;
 			private bool lava;
 			private float lavaLevel;
+			private Vector4[] spots;
+			private int spotCount;
 
-			public void Setup(Material shimmer, FishHeatShimmerFeature feature, HeatShimmer.State state, float jitter, bool hasLava, float level)
+			public void Setup(Material shimmer, FishHeatShimmerFeature feature, HeatShimmer.State state, float jitter, bool hasLava, float level, Vector4[] heatSpots, int heatSpotCount)
 			{
 				material = shimmer;
 				settings = feature;
@@ -250,6 +269,8 @@ namespace FishMMO.Client
 				angle = jitter;
 				lava = hasLava;
 				lavaLevel = level;
+				spots = heatSpots;
+				spotCount = heatSpotCount;
 			}
 
 			private class ShimmerData
@@ -306,6 +327,9 @@ namespace FishMMO.Client
 				material.SetVector(NoiseId, new Vector4(1f / cell, settings.CellFlattening / cell, 0.6f, boil));
 
 				material.SetVector(LavaId, new Vector4(lava ? 1f : 0f, lavaLevel, lava ? settings.LavaAmplitude * 1e-3f : 0f, settings.LavaReach));
+				// Cave lava's hot air: the balls and how many, and the jitter across one's width (rad rms).
+				material.SetVectorArray(SpotsId, spots);
+				material.SetVector(SpotParamsId, new Vector4(spotCount, settings.CaveLavaJitter * 1e-3f, 0f, 0f));
 
 				TextureDesc desc = renderGraph.GetTextureDesc(resourceData.activeColorTexture);
 				desc.name = "_FishHeatShimmerSource";

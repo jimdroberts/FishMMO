@@ -32,7 +32,8 @@ namespace FishMMO.Shared
 		/// The layout and the build's arithmetic: bumped whenever either builder changes what it computes, so every bake made
 		/// before reads as unusable (the runtime builds those terrains as before) until the scene is cut or rebaked.
 		/// </summary>
-		public const int Version = 1;
+		/// <remarks>2: tussock grass channels keep the biome's carpet coverage instead of each terrain's scaled to full.</remarks>
+		public const int Version = 2;
 
 		/// <summary>The <see cref="Version"/> this was baked at.</summary>
 		public int BakedVersion;

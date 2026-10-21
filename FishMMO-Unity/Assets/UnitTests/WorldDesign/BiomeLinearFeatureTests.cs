@@ -531,16 +531,30 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			"LinearHedge", "LinearDrystone", "LinearMortared", "LinearEarthBank", "LinearSlabs", "LinearPoleFence", "LinearWattle", "LinearPickets",
 			"LinearSlabFence", "LinearGate", "LinearClearance", "ChannelSluice", "ChannelFlume", "ChannelBridge",
+			// The fences' closing post (2026-10-19), appended last.
+			"LinearPost",
 		};
 
 		[Test]
 		public void Pieces_AreLast_TaggedLinear_Hashed_AndNoTemplateQueriesThem()
 		{
 			IReadOnlyList<StructurePiece> all = StructurePieces.All;
+			// Registered after every family before them, in order; only the town's other buildings (2026-10-19) were appended
+			// after them, and none of those is a linear piece.
+			int first = -1;
+			for (int i = 0; i < all.Count; i++)
+			{
+				first = first < 0 && all[i].Id == LinearPieces[0] ? i : first;
+			}
+			Assert.That(first, Is.GreaterThanOrEqualTo(0));
+			for (int i = first + LinearPieces.Length; i < all.Count; i++)
+			{
+				Assert.That(all[i].HasTag("linear") || all[i].HasTag("boardwalk") || all[i].HasTag("dungeon"), Is.False, $"{all[i].Id} was appended by a later family");
+			}
 			for (int i = 0; i < LinearPieces.Length; i++)
 			{
-				StructurePiece p = all[all.Count - LinearPieces.Length + i];
-				Assert.That(p.Id, Is.EqualTo(LinearPieces[i]), "registered last, in order");
+				StructurePiece p = all[first + i];
+				Assert.That(p.Id, Is.EqualTo(LinearPieces[i]), "registered after the families before them, in order");
 				Assert.That(p.Tags, Is.EqualTo(new[] { "linear" }));
 				Assert.That(p.Collides, Is.True, $"{p.Id} collides");
 			}
@@ -549,6 +563,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(ProceduralArtFamilies.FamiliesOfFile("StructurePieces.Linear.cs"), Is.EqualTo(new[] { ArtFamily.Structures }));
 			string pieces = Read(PiecesSource);
 			Assert.That(pieces.IndexOf("AddLinear(list);", StringComparison.Ordinal), Is.GreaterThan(pieces.IndexOf("AddBoardwalk(list);", StringComparison.Ordinal)));
+			Assert.That(pieces.IndexOf("AddArcane(list);", StringComparison.Ordinal), Is.GreaterThan(pieces.IndexOf("AddLinear(list);", StringComparison.Ordinal)));
 			foreach (string path in Directory.GetFiles("Assets/Templates/World/PointsOfInterest", "*.asset", SearchOption.AllDirectories))
 			{
 				string text = File.ReadAllText(path);

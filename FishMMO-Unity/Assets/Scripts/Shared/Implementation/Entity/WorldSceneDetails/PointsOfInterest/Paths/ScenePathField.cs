@@ -25,11 +25,15 @@ namespace FishMMO.Shared
 	/// <para>
 	/// <b>A texel</b> (RGBA8, linear): r the signed distance to the nearest path's edge (−8 m inside … +3 m outside),
 	/// g that path's half width (÷ 8 m), b its wear, a its surface code (<see cref="ScenePathStyle.SurfaceCode"/>).
-	/// Where two paths meet, the texel takes the one whose edge is nearer — a road's verge, not the trail running into it —
-	/// except inside a building's floor (<see cref="ScenePathPointFlags.Floor"/>), whose wear and surface nothing else
-	/// drawn over it replaces (a door path's round end or a well's apron reaching through the wall would bring its lower
-	/// wear, and so its grass, indoors); its edge is still the deepest of them, so the floor is as bare as the apron
-	/// round it.
+	/// </para>
+	/// <para>
+	/// <b>Where two paths meet</b> the edge is the nearer of theirs, and the rest is a blend of every way whose edge lies
+	/// within <see cref="BlendMetres"/> of it, the nearer weighing more: a trail's earth runs on into the road it joins and
+	/// thins into the gravel, rather than stopping at the line where the two edges are equally far (2026-10-19: "hard texture
+	/// cuts" — the nearest way alone took the texel, so surface, wear and width all switched across one texel). Except
+	/// inside a building's floor (<see cref="ScenePathPointFlags.Floor"/>), whose wear and surface nothing else drawn over
+	/// it blends into (a door path's round end or a well's apron reaching through the wall would bring its lower wear, and
+	/// so its grass, indoors); its edge is still the deepest of them, so the floor is as bare as the apron round it.
 	/// </para>
 	/// <para>Pure data, built by the cut and baked to two textures beside the terrain (ScenePathBake), which
 	/// <see cref="ScenePathSurfaceBinder"/> binds.</para>
@@ -47,6 +51,16 @@ namespace FishMMO.Shared
 		public const float HalfWidthRange = 8f;
 		/// <summary>The most pages one side of the atlas holds: its coordinates are 8-bit in the page table.</summary>
 		public const int MaxAtlasPagesPerSide = 240;
+		/// <summary>
+		/// How much further than the nearest edge another way's edge may be and still blend into a texel, metres: across a
+		/// junction's seam its ways mix over about this width, past it the nearer's alone.
+		/// </summary>
+		public const float BlendMetres = 2f;
+		/// <summary>
+		/// The field's encoding, baked as the binder's Parameters.w (the shader reads it): 1 the first (nearest way only, earth
+		/// coded 0 and track ⅓), 2 blended junctions with the track coded 0 (<see cref="ScenePathStyle.SurfaceCode"/>).
+		/// </summary>
+		public const float Encoding = 2f;
 
 		/// <summary>World x/z of page (0, 0)'s corner.</summary>
 		public Vector2 Origin;
@@ -72,10 +86,14 @@ namespace FishMMO.Shared
 		private sealed class Page
 		{
 			public readonly float[] Edge = new float[StoredTexels * StoredTexels];
+			/// <summary>The deepest floor edge over the texel, which a floor texel's blend is measured from.</summary>
+			public readonly float[] FloorEdge = new float[StoredTexels * StoredTexels];
+			// Weighted sums while blending (Blend), then the blended values (Resolve).
+			public readonly float[] Weight = new float[StoredTexels * StoredTexels];
 			public readonly float[] Half = new float[StoredTexels * StoredTexels];
 			public readonly float[] Wear = new float[StoredTexels * StoredTexels];
 			public readonly float[] Surface = new float[StoredTexels * StoredTexels];
-			/// <summary>Inside a building's floor: no other way replaces the texel.</summary>
+			/// <summary>Inside a building's floor: no other way blends into the texel.</summary>
 			public readonly bool[] Floor = new bool[StoredTexels * StoredTexels];
 
 			public Page()
@@ -83,8 +101,34 @@ namespace FishMMO.Shared
 				for (int i = 0; i < Edge.Length; i++)
 				{
 					Edge[i] = OutsideMetres;
+					FloorEdge[i] = OutsideMetres;
 				}
 			}
+
+			/// <summary>The blended half width, wear and surface: the sums divided by their weight.</summary>
+			public void Resolve()
+			{
+				for (int i = 0; i < Weight.Length; i++)
+				{
+					if (Weight[i] > 0f)
+					{
+						float inverse = 1f / Weight[i];
+						Half[i] *= inverse;
+						Wear[i] *= inverse;
+						Surface[i] *= inverse;
+					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// How much a way whose edge lies <paramref name="beyond"/> metres past a texel's nearest edge weighs in its blend:
+		/// 1 for the nearest, falling smoothly to nothing at <see cref="BlendMetres"/>, so two ways equally near mix evenly.
+		/// </summary>
+		public static float BlendWeight(float beyond)
+		{
+			float t = 1f - Mathf.Clamp01(beyond / BlendMetres);
+			return t * t;
 		}
 
 		/// <summary>
@@ -124,22 +168,35 @@ namespace FishMMO.Shared
 			field.TableDepth = Mathf.Max(1, Mathf.CeilToInt((maxZ + pad - field.Origin.y) / PageMetres));
 
 			var pages = new Dictionary<int, Page>();
+			var faded = new List<(ScenePath Path, float[] Half, float[] Wear)>(list.Count);
 			foreach (ScenePath path in list)
 			{
 				EndFade(path, out float[] half, out float[] wear);
-				for (int i = 1; i < path.Count; i++)
+				faded.Add((path, half, wear));
+			}
+			// Two passes: every texel's nearest edge first, then the blend of the ways near it, measured from that edge.
+			foreach (bool blend in new[] { false, true })
+			{
+				foreach ((ScenePath path, float[] half, float[] wear) in faded)
 				{
-					if ((path.FlagsAt(i - 1) & ScenePathPointFlags.Bridge) != 0 && (path.FlagsAt(i) & ScenePathPointFlags.Bridge) != 0)
+					for (int i = 1; i < path.Count; i++)
 					{
-						continue;
+						if ((path.FlagsAt(i - 1) & ScenePathPointFlags.Bridge) != 0 && (path.FlagsAt(i) & ScenePathPointFlags.Bridge) != 0)
+						{
+							continue;
+						}
+						// Nor under a boardwalk's deck (2026-10-18): the way is walked on its planks, the ground beneath left as it grew.
+						if ((path.FlagsAt(i - 1) & path.FlagsAt(i) & (ScenePathPointFlags.Boardwalk | ScenePathPointFlags.Ferry)) != 0)
+						{
+							continue;
+						}
+						field.Segment(pages, path, i - 1, i, half, wear, blend);
 					}
-					// Nor under a boardwalk's deck (2026-10-18): the way is walked on its planks, the ground beneath left as it grew.
-					if ((path.FlagsAt(i - 1) & path.FlagsAt(i) & (ScenePathPointFlags.Boardwalk | ScenePathPointFlags.Ferry)) != 0)
-					{
-						continue;
-					}
-					field.Segment(pages, path, i - 1, i, half, wear);
 				}
+			}
+			foreach (Page page in pages.Values)
+			{
+				page.Resolve();
 			}
 			field.Pack(pages);
 			return field;
@@ -194,14 +251,18 @@ namespace FishMMO.Shared
 			}
 		}
 
-		/// <summary>Writes one segment's distance into every texel within its reach, keeping the nearest edge.</summary>
-		private void Segment(Dictionary<int, Page> pages, ScenePath path, int ia, int ib, float[] halves, float[] wears)
+		/// <summary>
+		/// One segment over every texel within its reach: its distance, keeping the nearest edge (and the deepest floor), or
+		/// with <paramref name="blend"/>, once every edge is in, its half width, wear and surface added to the texel's blend
+		/// by how near its edge is to the texel's nearest (<see cref="BlendWeight"/>).
+		/// </summary>
+		private void Segment(Dictionary<int, Page> pages, ScenePath path, int ia, int ib, float[] halves, float[] wears, bool blend)
 		{
 			Vector2 a = new Vector2(path.Points[ia].x, path.Points[ia].z), b = new Vector2(path.Points[ib].x, path.Points[ib].z);
 			float ha = halves[ia], hb = halves[ib];
 			float wa = wears[ia], wb = wears[ib];
-			float sa = path.Surface != null && path.Surface.Length > ia ? ScenePathStyle.SurfaceCode((ScenePathSurface)path.Surface[ia]) : 0f;
-			float sb = path.Surface != null && path.Surface.Length > ib ? ScenePathStyle.SurfaceCode((ScenePathSurface)path.Surface[ib]) : 0f;
+			float sa = path.Surface != null && path.Surface.Length > ia ? ScenePathStyle.SurfaceCode((ScenePathSurface)path.Surface[ia]) : ScenePathStyle.SurfaceCode(ScenePathSurface.Earth);
+			float sb = path.Surface != null && path.Surface.Length > ib ? ScenePathStyle.SurfaceCode((ScenePathSurface)path.Surface[ib]) : ScenePathStyle.SurfaceCode(ScenePathSurface.Earth);
 			float reach = Mathf.Max(ha, hb) + OutsideMetres;
 			Vector2 ab = b - a;
 			float length2 = Mathf.Max(1e-6f, ab.sqrMagnitude);
@@ -258,32 +319,42 @@ namespace FishMMO.Shared
 								continue;
 							}
 							bool indoors = floor && edge < 0f;
-							if (page == null)
-							{
-								page = new Page();
-								pages[key] = page;
-							}
 							int k = j * StoredTexels + i;
-							if (indoors && !page.Floor[k])
+							if (!blend)
 							{
-								page.Floor[k] = true;
-								page.Edge[k] = Mathf.Min(edge, page.Edge[k]);
-							}
-							else if (edge < page.Edge[k])
-							{
-								page.Edge[k] = edge;
-								if (page.Floor[k] && !indoors)
+								if (page == null)
 								{
-									continue;
+									page = new Page();
+									pages[key] = page;
 								}
+								page.Edge[k] = Mathf.Min(edge, page.Edge[k]);
+								if (indoors)
+								{
+									page.Floor[k] = true;
+									page.FloorEdge[k] = Mathf.Min(edge, page.FloorEdge[k]);
+								}
+								continue;
 							}
-							else
+							// A floor blends only the floors over it, from the deepest of them.
+							if (page == null || (page.Floor[k] && !indoors))
 							{
 								continue;
 							}
-							page.Half[k] = half;
-							page.Wear[k] = Mathf.Lerp(wa, wb, t);
-							page.Surface[k] = Mathf.Lerp(sa, sb, t);
+							float weight = BlendWeight(edge - (page.Floor[k] ? page.FloorEdge[k] : page.Edge[k]));
+							// And outside its walls a floor fills in only where no other way reaches: its full wear blended out
+							// over the apron round it would wear the ground by the wall as bare as the floor.
+							if (floor && !indoors)
+							{
+								weight *= 1e-3f;
+							}
+							if (weight <= 0f)
+							{
+								continue;
+							}
+							page.Weight[k] += weight;
+							page.Half[k] += half * weight;
+							page.Wear[k] += Mathf.Lerp(wa, wb, t) * weight;
+							page.Surface[k] += Mathf.Lerp(sa, sb, t) * weight;
 						}
 					}
 				}

@@ -51,8 +51,14 @@ namespace FishMMO.Shared.WorldDesign
 	/// </remarks>
 	public static class CaveLifeBake
 	{
-		/// <summary>The most spots one system is given: a great cave's worth, a few hundred animals' homes.</summary>
-		public const int MaxSpots = 480;
+		/// <summary>
+		/// The most spots one system is given: a great cave's worth, a thousand and more animals' homes. The first
+		/// <see cref="MaxSpots"/> − <see cref="MaxLightSpots"/> are the cave's own (its floors, walls, roofs, air, water and mouths);
+		/// the rest are kept for the homes of its light-makers, so a great cave that fills the first share still gets them.
+		/// </summary>
+		public const int MaxSpots = 1120;
+		/// <summary>The spots kept for the light-makers' homes (<c>Lights</c>, 2026-10-20): the low glow air and the patches by it.</summary>
+		public const int MaxLightSpots = 160;
 		/// <summary>The most a floor, wall or roof patch may stray from its plane, metres, anywhere within its radius.</summary>
 		public const float Flatness = 0.07f;
 		/// <summary>The air kept round every corner and middle of a box of flight, as the field reads it, metres.</summary>
@@ -85,6 +91,13 @@ namespace FishMMO.Shared.WorldDesign
 			private readonly bool salt;
 			/// <summary>Limestone forms drip: their deep floors are damp.</summary>
 			private readonly bool dripping;
+			/// <summary>Where the cave's glow gathers (<see cref="CaveHabitat"/>: the rock, the cover and the dressing agree on it).</summary>
+			private readonly CaveHabitat habitat;
+			/// <summary>The light-makers' own stream (<see cref="Lights"/>).</summary>
+			private readonly DeterministicRNG lights;
+			private readonly uint noiseSalt;
+			/// <summary>How many spots the current pass may fill the list to.</summary>
+			private int cap = MaxSpots - MaxLightSpots;
 
 			public Baker(CaveSystem system, int siteId, List<SceneCaveLifeSpot> spots)
 			{
@@ -109,6 +122,10 @@ namespace FishMMO.Shared.WorldDesign
 				// its pool's.
 				salt = system.Form == CaveForm.SeaCave || (system.Form == CaveForm.Grotto && !float.IsNaN(system.WaterLevel) && Mathf.Abs(system.WaterLevel) < 0.05f);
 				dripping = system.Form == CaveForm.Cave || system.Form == CaveForm.Grotto || system.Form == CaveForm.SeaCave;
+				habitat = CaveHabitat.For(system);
+				// The light-makers' homes draw from a stream of their own, so the spots above them bake as they always did.
+				lights = new DeterministicRNG(unchecked(system.Seed * 0x2F1D + 0x6A3B));
+				noiseSalt = unchecked((uint)system.Seed * 0x9E3779B1u ^ 0x61C8u);
 			}
 
 			public void Run()
@@ -125,6 +142,138 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					Mouth(system.Mouths[i]);
 				}
+				// Last, so every spot above keeps its index: the light-makers' homes.
+				cap = MaxSpots;
+				Lights();
+			}
+
+			// ── The light-makers' homes (2026-10-20) ──────────────
+
+			/// <summary>
+			/// Homes for the cave's light-makers (glowing millipedes, snails, beetles, newts and worms on the rock; spore motes and wisp
+			/// moths in the air), kept low where a person walks (2026-10-19: a colony 19 m up a hall is never seen): boxes of glow air a
+			/// metre or two over the floor, each with a patch of floor and of wall by it, in the chambers and every so often along the
+			/// ways, and over the pools. Thickest where the cave's glow gathers (<see cref="GlowAt"/>), as the glowing fungus is.
+			/// Lava tubes and ice caves get only the patches: their light-makers crawl (ember mites, ice worms).
+			/// </summary>
+			private void Lights()
+			{
+				bool air = system.Form != CaveForm.LavaTube && system.Form != CaveForm.IceCave;
+				foreach (CaveChamber c in system.Chambers)
+				{
+					float yaw = c.Yaw * Mathf.Deg2Rad;
+					var along = new Vector3(Mathf.Sin(yaw), 0f, Mathf.Cos(yaw));
+					var across = new Vector3(along.z, 0f, -along.x);
+					float area = Mathf.PI * c.Radii.x * c.Radii.z;
+					bool great = c.Kind == CaveChamberKind.Cavern || c.Kind == CaveChamberKind.Hall;
+					int tries = Mathf.Clamp(Mathf.RoundToInt(area / 90f), 1, great ? 12 : 3);
+					for (int i = 0; i < tries; i++)
+					{
+						float a = lights.Range(0f, 2f * Mathf.PI), t = Mathf.Sqrt(lights.Range(0.05f, 0.8f));
+						float keep = lights.NextFloat();
+						Vector3 p = InChamber(c, along, across, a, t);
+						LightHome(p, c.Yaw, Mathf.Clamp(0.2f * Mathf.Min(c.Radii.x, c.Radii.z), 1.2f, 2.4f), keep, air);
+					}
+				}
+				foreach (CavePassage passage in system.Passages)
+				{
+					List<CaveNode> nodes = passage.Nodes;
+					if (nodes.Count < 2)
+					{
+						continue;
+					}
+					float start = nodes[0].Along, end = nodes[nodes.Count - 1].Along;
+					for (float at = start + lights.Range(4f, 12f); at < end - 2f; at += lights.Range(14f, 26f))
+					{
+						float keep = lights.NextFloat();
+						CentreAt(nodes, at, out Vector3 centre, out float floor, out float radius);
+						CentreAt(nodes, Mathf.Min(end, at + 0.5f), out Vector3 ahead, out _, out _);
+						Vector3 dir = ahead - centre;
+						float yaw = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
+						LightHome(new Vector3(centre.x, floor, centre.z), yaw, Mathf.Clamp(0.5f * radius, 0.6f, 1.6f), keep, air);
+					}
+				}
+				// Over the water: the glow air a person sees hanging over a still pool, doubled in it.
+				if (air)
+				{
+					int count = spots.Count;
+					for (int i = 0; i < count; i++)
+					{
+						if (spots[i].Kind != SceneCaveLifeKind.Pool)
+						{
+							continue;
+						}
+						Vector3 surface = spots[i].Position - system.Origin;
+						float half = Mathf.Clamp(spots[i].Extent.x, 0.8f, 2.2f);
+						TryBox(SceneCaveLifeKind.Glow, surface + Vector3.up * 1.4f, lights.Range(0f, 360f), new Vector3(half, 0.7f, half), new Vector3(0.6f, 0.4f, 0.6f));
+					}
+				}
+			}
+
+			/// <summary>
+			/// One light-makers' home round a point of floor (system frame), kept by the glow there (about one in two where there is
+			/// none, all of them where it gathers): a box of glow air one to three metres over the floor, a patch of floor and one of wall.
+			/// </summary>
+			private void LightHome(Vector3 near, float yaw, float patch, float keep, bool air)
+			{
+				if (!Ground(near + Vector3.up * 1.2f, 4f, out float floor))
+				{
+					return;
+				}
+				var at = new Vector3(near.x, floor, near.z);
+				if (keep > Mathf.Lerp(0.45f, 1f, GlowAt(at, Vector3.up)))
+				{
+					return;
+				}
+				float rise = lights.Range(1.4f, 2.8f);
+				float half = lights.Range(1.1f, 2f);
+				Vector3 toWall = Dir(lights.Range(0f, 360f));
+				float height = lights.Range(0.3f, 1.4f);
+				if (air && Roof(at + Vector3.up * 0.5f, 40f, out float roof) && roof - floor >= 2.6f)
+				{
+					float top = Mathf.Min(rise, roof - floor - 1.1f);
+					TryBox(SceneCaveLifeKind.Glow, at + Vector3.up * Mathf.Max(1.3f, top), yaw, new Vector3(half, 0.7f, half), new Vector3(0.6f, 0.4f, 0.6f));
+				}
+				TryFloor(at + toWall * (0.5f * patch), patch);
+				TryWall(at + Vector3.up * Mathf.Max(0.3f, height), toWall, 12f);
+			}
+
+			/// <summary>
+			/// How much the cave's glow gathers at a point of its rock, 0..1: the habitat's (<see cref="CaveHabitatSample.Glow"/>, what
+			/// the rock's and the cover's glow follow), and a field of the system's own seed where the habitat says nothing (patches
+			/// some twenty metres across), so a cave keeps its glowing reaches either way.
+			/// </summary>
+			private float GlowAt(Vector3 local, Vector3 normal)
+			{
+				float rock = Mathf.Clamp01(habitat.Sample(local, normal).Glow);
+				float own = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.45f, 0.75f, ValueNoise(local / 20f, noiseSalt)));
+				return Mathf.Max(rock, (rock > 0f ? 0.5f : 1f) * own);
+			}
+
+			/// <summary>Smooth value noise, 0..1, from an integer lattice hash (pure: the same on every machine).</summary>
+			private static float ValueNoise(Vector3 p, uint salt)
+			{
+				int x = Mathf.FloorToInt(p.x), y = Mathf.FloorToInt(p.y), z = Mathf.FloorToInt(p.z);
+				float fx = p.x - x, fy = p.y - y, fz = p.z - z;
+				fx = fx * fx * (3f - 2f * fx);
+				fy = fy * fy * (3f - 2f * fy);
+				fz = fz * fz * (3f - 2f * fz);
+				float Corner(int i, int j, int k)
+				{
+					unchecked
+					{
+						uint h = (uint)(x + i) * 73856093u ^ (uint)(y + j) * 19349663u ^ (uint)(z + k) * 83492791u ^ salt;
+						h ^= h >> 16;
+						h *= 0x7FEB352Du;
+						h ^= h >> 15;
+						h *= 0x846CA68Bu;
+						h ^= h >> 16;
+						return (h >> 8) * (1f / 16777216f);
+					}
+				}
+				float a = Mathf.Lerp(Corner(0, 0, 0), Corner(1, 0, 0), fx), b = Mathf.Lerp(Corner(0, 1, 0), Corner(1, 1, 0), fx);
+				float c = Mathf.Lerp(Corner(0, 0, 1), Corner(1, 0, 1), fx), d = Mathf.Lerp(Corner(0, 1, 1), Corner(1, 1, 1), fx);
+				return Mathf.Lerp(Mathf.Lerp(a, b, fy), Mathf.Lerp(c, d, fy), fz);
 			}
 
 			// ── Chambers ──────────────────────────────────────────
@@ -141,16 +290,17 @@ namespace FishMMO.Shared.WorldDesign
 				Ground(middle + Vector3.up * 1.2f, 6f, out float middleFloor);
 				float clear = Roof(new Vector3(middle.x, middleFloor + 1f, middle.z), 100f, out float middleRoof) ? middleRoof - middleFloor : 0f;
 
-				// The floor: patches spread over it, fewer than its formations, never more than a handful a room.
-				int floors = Mathf.Clamp(Mathf.RoundToInt(area / 90f), 1, great ? 8 : 5);
+				// The floor: patches spread over it, one to every 35 m² or so (a great hall's few dozen), so no room is bare.
+				int floors = Mathf.Clamp(Mathf.RoundToInt(area / 35f), 2, great ? 40 : 10);
 				for (int i = 0; i < floors; i++)
 				{
 					float a = random.Range(0f, 2f * Mathf.PI), t = Mathf.Sqrt(random.Range(0.02f, 0.75f));
 					Vector3 p = InChamber(c, along, across, a, t);
 					TryFloor(p, Mathf.Clamp(0.25f * small, 0.8f, 2.4f));
 				}
-				// The walls: at a reach's height or so, round the room.
-				int walls = Mathf.Clamp(Mathf.RoundToInt(area / 160f), 1, great ? 6 : 3);
+				// The walls: at a reach's height or so, round the room, one to every 10 m of its round.
+				float round = 2f * Mathf.PI * Mathf.Sqrt(0.5f * (c.Radii.x * c.Radii.x + c.Radii.z * c.Radii.z));
+				int walls = Mathf.Clamp(Mathf.RoundToInt(round / 10f), 2, great ? 24 : 8);
 				for (int i = 0; i < walls; i++)
 				{
 					float a = random.Range(0f, 2f * Mathf.PI), h = random.Range(0.4f, 2.6f);
@@ -160,7 +310,7 @@ namespace FishMMO.Shared.WorldDesign
 				// The roof: where a colony hangs, only over air a person walks under without touching them.
 				if (clear >= 4f)
 				{
-					int roosts = great ? random.Range(2, 5) : random.NextFloat() < 0.6f ? 1 : 0;
+					int roosts = great ? random.Range(3, 8) : random.Range(1, 3);
 					for (int i = 0; i < roosts; i++)
 					{
 						float a = random.Range(0f, 2f * Mathf.PI), t = Mathf.Sqrt(random.Range(0f, 0.35f));
@@ -239,7 +389,7 @@ namespace FishMMO.Shared.WorldDesign
 				float start = nodes[0].Along, end = nodes[nodes.Count - 1].Along;
 				bool trunk = passage.Kind == CavePassageKind.Trunk;
 				// A trunk's first few metres are the mouth's (its own spot); a branch's or a link's open off a chamber.
-				for (float along = start + (trunk ? 3f : 2f); along < end - 1f; along += random.Range(9f, 15f))
+				for (float along = start + (trunk ? 3f : 2f); along < end - 1f; along += random.Range(5f, 9f))
 				{
 					CentreAt(nodes, along, out Vector3 centre, out float floor, out float radius);
 					CentreAt(nodes, Mathf.Min(end, along + 0.5f), out Vector3 ahead, out _, out _);
@@ -250,7 +400,7 @@ namespace FishMMO.Shared.WorldDesign
 					float offset = random.Range(-0.45f, 0.45f) * radius;
 					float side = random.NextFloat() < 0.5f ? -1f : 1f;
 					float height = random.Range(0.4f, 1.6f);
-					bool wall = random.NextFloat() < 0.6f;
+					bool wall = random.NextFloat() < 0.85f;
 					TryFloor(new Vector3(centre.x, floor, centre.z) + across * offset, Mathf.Clamp(0.6f * radius, 0.6f, 1.8f));
 					if (wall)
 					{
@@ -302,6 +452,10 @@ namespace FishMMO.Shared.WorldDesign
 				if (mouth.Kind == CaveMouthKind.Submerged)
 				{
 					return; // dived into: nothing flies out of it
+				}
+				if (mouth.Kind == CaveMouthKind.Skylight)
+				{
+					return; // an opening in a roof: the colony's way out is a passage's, not a climb up a shaft
 				}
 				Vector3 outward = Dir(mouth.Yaw);
 				Vector3 at = mouth.Floor + Vector3.up * Mathf.Max(1.2f, 0.75f * mouth.Radius);
@@ -625,7 +779,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			private void Add(SceneCaveLifeSpot spot)
 			{
-				if (spots.Count >= MaxSpots)
+				if (spots.Count >= cap)
 				{
 					return;
 				}

@@ -71,6 +71,9 @@ CBUFFER_START(_FishTerrainArray)
     // per tile by TerrainArrayBinder from the scene's path surface (each scene's palette puts them elsewhere). Each layer's
     // own biome's are in the layer table (FISH_LAYER_ROW_PATHS); these are what a layer without them paves with.
     float4 _FishPathLayers;
+    // FishMMO edit: the tile's snow hole fade (_FishSnowHoleFade, TerrainSnowHoleFade): 1 / size, size, as Unity's _TexelSize;
+    // 0 when nothing was pushed.
+    float4 _FishSnowHoleFade_TexelSize;
 CBUFFER_END
 
 // FishMMO edit: the ground on its world (FishFlora.hlsl, published by FloraPaletteMap): the living ground takes its biome's
@@ -391,69 +394,135 @@ void FishPathLayer(int id, float2 world, float2 worldDx, float2 worldDy, float b
     }
 }
 
-/// <summary>
-/// Lays the scene's paths over the ground: a crisp, frayed edge from the half-metre distance field; trodden earth taking
-/// some of the ground's own colour, so a desert trail is sandy and a forest one dark; a cart track's two ruts with grass
-/// between; packed gravel; cobbles. A lost trail is broken by patches of the ground it crosses. Far off, a way narrower
-/// than a pixel fades by the share of the pixel it covers rather than shimmering.
-/// </summary>
-void FishApplyPaths(inout FishArraySurface s, float3 positionWS, float2 worldDx, float2 worldDy, int groundId, float3 groundShift)
+/// <summary>A layer's path grounds (x earth, y road, z cobbles), the scene's standing in where its biome has none.</summary>
+float4 FishPathSlicesOf(int id)
 {
-    FishPathSample p = FishPathAt(positionWS.xz);
-    // Past the furthest the frayed, broken edge reaches (FishPathFrayedEdge, FishPathEdgeBand).
-    UNITY_BRANCH
-    if (!p.found || p.edge > 2.0)
-    {
-        return;
-    }
-    // The path, road and cobble grounds of the biome this pixel's ground belongs to (its layer's column of the table,
-    // SceneTerrainPalette.PathLayerMap), else the scene's. A scene cut before the cobbles had a map holds -1 there and
-    // paves with _FishPathLayers.z, as it always did.
-    float4 pathSlices = FishLayerRow(groundId, FISH_LAYER_ROW_PATHS);
-    float earthSlice = pathSlices.x;
-    float roadSlice = pathSlices.y;
-    float stoneSlice = pathSlices.z;
-    earthSlice = earthSlice > -0.5 ? earthSlice : _FishPathLayers.x;
-    roadSlice = roadSlice > -0.5 ? roadSlice : (_FishPathLayers.y > -0.5 ? _FishPathLayers.y : earthSlice);
-    stoneSlice = stoneSlice > -0.5 ? stoneSlice : (_FishPathLayers.z > -0.5 ? _FishPathLayers.z : roadSlice);
-    // No path slices bound, or slices past what the scene's arrays hold (arrays older than the palette): leave the ground.
-    bool surfaced = earthSlice > -0.5 && max(earthSlice, max(roadSlice, stoneSlice)) < _FishArrayInfo.x;
-    if (_FishPathDebug > 0.5)
-    {
-        s.albedo = lerp(s.albedo, surfaced ? half3(1.0h, 0.0h, 1.0h) : half3(0.0h, 1.0h, 1.0h), (half)(1.0 - smoothstep(-0.05, 0.05, p.edge)));
-        return;
-    }
-    if (!surfaced)
-    {
-        return;
-    }
-    float2 xz = positionWS.xz;
-    float pixel = max(1e-3, max(length(worldDx), length(worldDy)));
-    float wear = saturate(p.wear);
-    float fromCentre = max(0.0, p.edge + p.halfWidth);
+    float4 slices = FishLayerRow(id, FISH_LAYER_ROW_PATHS);
+    slices.x = slices.x > -0.5 ? slices.x : _FishPathLayers.x;
+    slices.y = slices.y > -0.5 ? slices.y : (_FishPathLayers.y > -0.5 ? _FishPathLayers.y : slices.x);
+    slices.z = slices.z > -0.5 ? slices.z : (_FishPathLayers.z > -0.5 ? _FishPathLayers.z : slices.y);
+    return slices;
+}
 
-    // The bare share, as the grass and the details are cleared by (FishPathBare), so neither grows on what is drawn here.
-    float cover = FishPathBare(p, xz, max(pixel * 1.5, lerp(0.3, 0.06, wear)));
-    // A way under a pixel wide covers that share of it.
-    cover *= saturate(2.0 * max(p.halfWidth, 0.25) / pixel);
-    if (cover <= 0.004)
+/// <summary>Whether a set of path grounds can be drawn: bound, and inside what the scene's arrays hold.</summary>
+bool FishPathSlicesDrawn(float4 slices)
+{
+    return slices.x > -0.5 && max(slices.x, max(slices.y, slices.z)) < _FishArrayInfo.x;
+}
+
+/// <summary>
+/// One vote for a set of path grounds: added to the first set or the second where it is either, else the second's place
+/// where that is still empty. A third set at one point (three biomes' path grounds within a few metres) goes uncounted.
+/// </summary>
+void FishPathVote(float4 slices, float weight, inout float4 first, inout float firstWeight, inout float4 second, inout float secondWeight)
+{
+    if (!FishPathSlicesDrawn(slices))
     {
         return;
     }
+    if (firstWeight <= 0.0 || all(slices.xyz == first.xyz))
+    {
+        first = slices;
+        firstWeight += weight;
+    }
+    else if (secondWeight <= 0.0 || all(slices.xyz == second.xyz))
+    {
+        second = slices;
+        secondWeight += weight;
+    }
+}
 
-    float code = p.surface * 3.0;
-    float track = FishPathTrackness(p.surface);
-    float earthShare = saturate(1.0 - code) + track;
+// How far round a point the path grounds are read, metres (FishPathGroundsAt).
+#define FishPathGroundReach 2.5
+
+/// <summary>
+/// The path grounds the ground round a point paves with: lo and hi the two sets met within a few metres (in a fixed
+/// order, so a crossing from one to the other is the same either side), and mix how far the point has gone over to hi.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Why not the pixel's own layer.</b> Each biome paves with its own grounds (SceneTerrainPalette.PathLayerMap): a
+/// meadow's way is loam, a wood's is leaf litter. Chosen by the strongest layer at the pixel, a way crossing from meadow
+/// into wood changed from one to the other on the line where the wood's layer overtook the meadow's, a two-metre alphamap
+/// texel wide: the loam stopped dead on a straight edge and the litter beyond it read as no path at all (2026-10-20:
+/// "Road blending still isn't working").
+/// </para>
+/// <para>
+/// <b>How.</b> The strongest layer under four points <see cref="FishPathGroundReach"/> metres round it, each read
+/// between its four index texels (bilinear, so a point moving across a boundary moves the vote evenly), on a cross turned
+/// by a slow noise so the vote's steps do not line up into rings. The share the second set takes is broken up by noise
+/// (as FishPathSeam breaks up a junction's), so the loam runs on into the wood in tongues and the litter reaches out
+/// into the meadow's way, over a few metres rather than a texel.
+/// </para>
+/// <para>
+/// Sixteen index loads and as many layer-table loads a path pixel (none off the paths), and a second set of path grounds
+/// sampled only where the two are mixed.
+/// </para>
+/// </remarks>
+void FishPathGroundsAt(float2 uv, float2 uvPerMetre, float2 xz, out float4 lo, out float4 hi, out float mix)
+{
+    float4 first = -1.0, second = -1.0;
+    float firstWeight = 0.0, secondWeight = 0.0;
+    float turn = FishPathNoise(xz * 0.13 + 91.0) * 6.2831853;
+    float2 along = float2(cos(turn), sin(turn)) * FishPathGroundReach;
+    float2 across = float2(-along.y, along.x);
+    // The last layer looked up, kept: the four texels round a point mostly name the same one.
+    int lastId = -1;
+    float4 lastSlices = -1.0;
+    UNITY_UNROLL
+    for (int k = 0; k < 4; k++)
+    {
+        float2 offset = k == 0 ? along : (k == 1 ? across : (k == 2 ? -along : -across));
+        int2 i0, i1;
+        float2 f;
+        FishIndexFootprint(uv + offset * uvPerMetre, _FishIndexMap_TexelSize.zw, i0, i1, f);
+        uint4 strongest = uint4(_FishIndexMap.Load(int3(i0.x, i0.y, 0)).x, _FishIndexMap.Load(int3(i1.x, i0.y, 0)).x,
+                                _FishIndexMap.Load(int3(i0.x, i1.y, 0)).x, _FishIndexMap.Load(int3(i1.x, i1.y, 0)).x) & 255u;
+        float4 share = float4((1.0 - f.x) * (1.0 - f.y), f.x * (1.0 - f.y), (1.0 - f.x) * f.y, f.x * f.y);
+        UNITY_UNROLL
+        for (int c = 0; c < 4; c++)
+        {
+            int id = (int)strongest[c];
+            if (id != lastId)
+            {
+                lastId = id;
+                lastSlices = FishPathSlicesOf(id);
+            }
+            FishPathVote(lastSlices, share[c], first, firstWeight, second, secondWeight);
+        }
+    }
+    // A fixed order, by slice: which of the two is "hi" does not depend on which was met first.
+    bool swap = secondWeight > 0.0 && dot(second.xyz, float3(4096.0, 64.0, 1.0)) < dot(first.xyz, float3(4096.0, 64.0, 1.0));
+    lo = swap ? second : first;
+    hi = swap ? first : second;
+    float loWeight = swap ? secondWeight : firstWeight;
+    float hiWeight = swap ? firstWeight : secondWeight;
+    float u = hiWeight / max(loWeight + hiWeight, 1e-4);
+    float n = 0.32 + 0.36 * (FishPathNoise(xz * 0.7 + 31.0) * 0.7 + FishPathNoise(xz * 2.1 + 7.0) * 0.3);
+    mix = hiWeight > 0.0 ? smoothstep(n - 0.18, n + 0.18, u) : 0.0;
+}
+
+/// <summary>
+/// A path's surface drawn in one set of path grounds (FishPathSlicesOf): its earth, gravel and cobbles by their shares of
+/// the surface code, a touch of the ground's colour in its trodden earth, and grit worked up through it where the earth
+/// is the very ground it crosses.
+/// </summary>
+void FishPathGroundSurface(float4 slices, float code, float track, int groundId, half3 groundAlbedo, float2 xz, float2 worldDx, float2 worldDy,
+    float3 groundShift, out half3 albedo, out half3 normal, out half smoothness, out half occlusion)
+{
+    // Track 0, earth 1, gravel 2, stone 3 (ScenePathStyle.SurfaceCode): a track is drawn with the earth, its ruts and
+    // median added by the caller, so the earth's share is the track's and the earth's together.
+    float earthShare = saturate(1.0 - abs(code - 1.0)) + track;
     float gravelShare = saturate(1.0 - abs(code - 2.0));
     float stoneShare = saturate(code - 2.0);
-    int earthId = (int)(earthSlice + 0.5);
-    int gravelId = (int)(roadSlice + 0.5);
-    int stoneId = (int)(stoneSlice + 0.5);
+    int earthId = (int)(slices.x + 0.5);
+    int gravelId = (int)(slices.y + 0.5);
+    int stoneId = (int)(slices.z + 0.5);
 
-    half3 albedo = 0;
-    half3 normal = 0;
-    half smoothness = 0;
-    half occlusion = 0;
+    albedo = 0;
+    normal = 0;
+    smoothness = 0;
+    occlusion = 0;
     half3 a; half3 n; half sm; half oc;
     /* The path grounds are made for this (SurfaceCatalogue: PathLoam, PathSand, PathSnow …): drawn as authored, with a
      * touch of the ground's own colour so the edge sits in it. Only where a biome's override makes its path the very
@@ -465,7 +534,7 @@ void FishApplyPaths(inout FishArraySurface s, float3 positionWS, float2 worldDx,
     if (earthShare > 0.0)
     {
         FishPathLayer(earthId, xz, worldDx, worldDy, 1.0, groundShift, a, n, sm, oc);
-        a = lerp(a, s.albedo, 0.12h);
+        a = lerp(a, groundAlbedo, 0.12h);
         albedo += a * earthShare; normal += n * earthShare; smoothness += sm * earthShare; occlusion += oc * earthShare;
     }
     UNITY_BRANCH
@@ -482,6 +551,78 @@ void FishApplyPaths(inout FishArraySurface s, float3 positionWS, float2 worldDx,
     }
     half total = max(1e-3h, (half)(earthShare + gravelShare + stoneShare));
     albedo /= total; normal /= total; smoothness /= total; occlusion /= total;
+}
+
+/// <summary>
+/// Lays the scene's paths over the ground: a crisp, frayed edge from the half-metre distance field; trodden earth taking
+/// some of the ground's own colour, so a desert trail is sandy and a forest one dark; a cart track's two ruts with grass
+/// between; packed gravel; cobbles. A lost trail is broken by patches of the ground it crosses. Far off, a way narrower
+/// than a pixel fades by the share of the pixel it covers rather than shimmering. Where it crosses from one biome into
+/// another it goes over from the one's path grounds to the other's in patches (FishPathGroundsAt).
+/// </summary>
+/// <param name="uvPerMetre">The tile's 0..1 coordinate per world metre along x and z, found before any branch.</param>
+void FishApplyPaths(inout FishArraySurface s, float2 uv, float2 uvPerMetre, float3 positionWS, float2 worldDx, float2 worldDy, int groundId, float3 groundShift)
+{
+    FishPathSample p = FishPathAt(positionWS.xz);
+    // Past the furthest the frayed, broken edge reaches (FishPathFrayedEdge, FishPathEdgeBand).
+    UNITY_BRANCH
+    if (!p.found || p.edge > 2.0)
+    {
+        return;
+    }
+    float2 xz = positionWS.xz;
+    // The path, road and cobble grounds of the biomes round this point (their layers' columns of the table,
+    // SceneTerrainPalette.PathLayerMap), else the scene's. A scene cut before the cobbles had a map holds -1 there and
+    // paves with _FishPathLayers.z, as it always did.
+    float4 lo, hi;
+    float mix;
+    FishPathGroundsAt(uv, uvPerMetre, xz, lo, hi, mix);
+    // None of them bound, or slices past what the scene's arrays hold (arrays older than the palette): leave the ground.
+    bool surfaced = FishPathSlicesDrawn(lo);
+    if (_FishPathDebug > 0.5)
+    {
+        s.albedo = lerp(s.albedo, surfaced ? half3(1.0h, 0.0h, 1.0h) : half3(0.0h, 1.0h, 1.0h), (half)(1.0 - smoothstep(-0.05, 0.05, p.edge)));
+        return;
+    }
+    if (!surfaced)
+    {
+        return;
+    }
+    float pixel = max(1e-3, max(length(worldDx), length(worldDy)));
+    float wear = saturate(p.wear);
+    float fromCentre = max(0.0, p.edge + p.halfWidth);
+
+    // The bare share, as the grass and the details are cleared by (FishPathBare), so neither grows on what is drawn here.
+    float cover = FishPathBare(p, xz, max(pixel * 1.5, lerp(0.3, 0.06, wear)));
+    // A way under a pixel wide covers that share of it.
+    cover *= saturate(2.0 * max(p.halfWidth, 0.25) / pixel);
+    if (cover <= 0.004)
+    {
+        return;
+    }
+
+    float code = p.surface * 3.0;
+    float track = FishPathTrackness(p.surface);
+    half3 albedo = 0;
+    half3 normal = half3(0.0h, 0.0h, 1.0h);
+    half smoothness = 0;
+    half occlusion = 1;
+    UNITY_BRANCH
+    if (mix < 0.996)
+    {
+        FishPathGroundSurface(lo, code, track, groundId, s.albedo, xz, worldDx, worldDy, groundShift, albedo, normal, smoothness, occlusion);
+    }
+    UNITY_BRANCH
+    if (mix > 0.004)
+    {
+        half3 a; half3 n; half sm; half oc;
+        FishPathGroundSurface(hi, code, track, groundId, s.albedo, xz, worldDx, worldDy, groundShift, a, n, sm, oc);
+        half m = (half)(mix < 0.996 ? mix : 1.0);
+        albedo = lerp(albedo, a, m);
+        normal = lerp(normal, n, m);
+        smoothness = lerp(smoothness, sm, m);
+        occlusion = lerp(occlusion, oc, m);
+    }
 
     // A cart track's ruts: two lanes a gauge apart, darker, packed glossy, shadowed in their bottoms.
     // Fainter where the track is less used, so they melt away with it where it peters out (ScenePathField.EndFade).
@@ -772,7 +913,12 @@ FishArraySurface FishSampleArraySurfaceSloped(float2 uv, float3 positionWS, floa
     s.occlusion = saturate(occlusion);
     s.covered = saturate(covered);
 #if !defined(FISH_TERRAIN_BACKDROP)
-    FishApplyPaths(s, positionWS, worldDx, worldDy, ids.x, groundShift);
+    // The tile's coordinate per metre, from the derivatives here, before any branch: affine in x and z across a tile, so
+    // the ratio is its scale (_TerrainHeightmapRecipSize, which would give it, is set only when the terrain is instanced).
+    float2 uvDx = ddx(uv), uvDy = ddy(uv);
+    float2 uvPerMetre = float2(abs(uvDx.x) + abs(uvDy.x), abs(uvDx.y) + abs(uvDy.y))
+        / max(float2(abs(worldDx.x) + abs(worldDy.x), abs(worldDx.y) + abs(worldDy.y)), 1e-6);
+    FishApplyPaths(s, uv, uvPerMetre, positionWS, worldDx, worldDy, ids.x, groundShift);
 #endif
     return s;
 }
