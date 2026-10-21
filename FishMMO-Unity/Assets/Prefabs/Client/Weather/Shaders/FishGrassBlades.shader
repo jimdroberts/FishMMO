@@ -30,6 +30,8 @@ Shader "FishMMO/Grass Blades"
             Tags { "LightMode" = "UniversalForward" }
             Cull Off
             ZWrite On
+            // The fade and a thin blade's share of its pixel as MSAA coverage (GrassForwardFragment); full coverage at alpha 1.
+            AlphaToMask On
 
             HLSLPROGRAM
             #pragma use_dxc vulkan

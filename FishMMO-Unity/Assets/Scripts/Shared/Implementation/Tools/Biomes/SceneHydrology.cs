@@ -85,6 +85,8 @@ namespace FishMMO.Shared.Biomes
 			public bool Lava;
 			[Tooltip("What flows out over its spill point, m³/s.")]
 			public float Outflow;
+			[Tooltip("The lowest its bed lies, scene metres: the water a height stands in is one whose floor lies under it (water stacked in a cave's levels, under a lake on the hill). Negative infinity when unknown: a lake written before it was kept reaches down without end.")]
+			public float Floor = float.NegativeInfinity;
 			[Tooltip("Points under its water the lake is flooded from, x and z.")]
 			public Vector2[] Seeds = Array.Empty<Vector2>();
 			[Tooltip("The rectangle its water may cover, x/z min and size.")]
@@ -112,6 +114,13 @@ namespace FishMMO.Shared.Biomes
 				return (bit >> 3) < Mask.Length && (Mask[bit >> 3] & (1 << (bit & 7))) != 0;
 			}
 		}
+
+		/// <summary>
+		/// How far under its surface a carved surface pool's floor is taken to lie, metres (2026-10-21): a paddy, a terrace's
+		/// tread, a canal's pound or a hot spring is never so deep (the deepest, a spring's pool, about three metres), and no
+		/// cave's water lies so near the ground (its roof keeps three metres of rock, its passage stands over its water).
+		/// </summary>
+		public const float SurfacePoolFloorDepth = 6f;
 
 		public List<River> Rivers = new List<River>();
 		public List<Lake> Lakes = new List<Lake>();

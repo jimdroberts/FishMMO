@@ -32,10 +32,25 @@ float _FishCasterCullAll;
 // receivers (URP takes the first sphere that contains a point) never read this cascade there. Which cascade is being
 // drawn is told from the projection: a cascade's orthographic half size is its sphere's radius. Where that does not
 // match one of this camera's spheres (a camera that published none, or some other shadow) nothing is culled.
+bool FishCasterCulledAt(float3 centreWS, float radius);
+
 bool FishCasterCulled()
 {
+    if (_FishCasterSphere.w <= 0.0)
+    {
+        return false;
+    }
+    float3 centreWS = TransformObjectToWorld(_FishCasterSphere.xyz);
+    float scale = max(length(UNITY_MATRIX_M._m00_m10_m20), max(length(UNITY_MATRIX_M._m01_m11_m21), length(UNITY_MATRIX_M._m02_m12_m22)));
+    return FishCasterCulledAt(centreWS, _FishCasterSphere.w * scale);
+}
+
+/// FishCasterCulled for a caster known by a world-space sphere (2026-10-21: the grass blades, drawn from a buffer of roots
+/// with no instance matrix): the same rule.
+bool FishCasterCulledAt(float3 centreWS, float radius)
+{
     int count = (int)_FishCasterCascades;
-    if (count < 2 || _FishCasterSphere.w <= 0.0)
+    if (count < 2)
     {
         return false;
     }
@@ -60,9 +75,6 @@ bool FishCasterCulled()
     {
         return true;
     }
-    float3 centreWS = TransformObjectToWorld(_FishCasterSphere.xyz);
-    float scale = max(length(UNITY_MATRIX_M._m00_m10_m20), max(length(UNITY_MATRIX_M._m01_m11_m21), length(UNITY_MATRIX_M._m02_m12_m22)));
-    float radius = _FishCasterSphere.w * scale;
     // Off this cascade's map: the projection looks down the light, so the shadow it throws lies on the same spot of it.
     float2 onMap = mul(UNITY_MATRIX_VP, float4(centreWS, 1.0)).xy;
     if (any(abs(onMap) > 1.0 + radius * perMetre))

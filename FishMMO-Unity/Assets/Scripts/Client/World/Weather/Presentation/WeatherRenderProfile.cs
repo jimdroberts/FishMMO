@@ -150,7 +150,7 @@ namespace FishMMO.Client
 		// skips the read and keeps the average (smooth-edged clouds of the same size).
 		public static WeatherTierSettings Performant() => new WeatherTierSettings { Particles = 3000, BoxSize = 18f, OcclusionResolution = 48, OcclusionTexelMeters = 2f, OcclusionRaysPerFrame = 256, StarCubemapSize = 256, MeteorBudget = 16, Asteroids = false, ReflectionResolution = 64, Curtains = 3, Vortices = 2, VortexParticles = 600, CloudShadows = false, CloudResolution = 0.05f, CloudSteps = 16, CloudDetail = 0f, CloudTemporal = true, CloudHistoryScale = 0f, GodRays = false, TerrainSnowDisplacement = false };
 		public static WeatherTierSettings Balanced() => new WeatherTierSettings { Particles = 8000, BoxSize = 24f, OcclusionResolution = 64, OcclusionTexelMeters = 1.5f, OcclusionRaysPerFrame = 512, StarCubemapSize = 512, MeteorBudget = 64, Asteroids = true, ReflectionResolution = 128, Curtains = 6, Vortices = 3, VortexParticles = 1500, CloudShadows = true, CloudResolution = 0.06f, CloudSteps = 21, CloudDetail = 1f, CloudTemporal = true, CloudHistoryScale = 0f, GodRays = true, TerrainSnowDisplacement = false };
-		public static WeatherTierSettings High() => new WeatherTierSettings { Particles = 16000, BoxSize = 30f, OcclusionResolution = 96, OcclusionTexelMeters = 1f, OcclusionRaysPerFrame = 1024, StarCubemapSize = 1024, MeteorBudget = 256, Asteroids = true, ReflectionResolution = 256, Curtains = 8, Vortices = 4, VortexParticles = 3000, CloudShadows = true, CloudResolution = 0.25f, CloudSteps = 24, CloudDetail = 1f, CloudTemporal = true, CloudHistoryScale = 0f, GodRays = true, TerrainSnowDisplacement = true };
+		public static WeatherTierSettings High() => new WeatherTierSettings { Particles = 16000, BoxSize = 30f, OcclusionResolution = 96, OcclusionTexelMeters = 1f, OcclusionRaysPerFrame = 1024, StarCubemapSize = 1024, MeteorBudget = 256, Asteroids = true, ReflectionResolution = 256, Curtains = 8, Vortices = 4, VortexParticles = 3000, CloudShadows = true, CloudResolution = 0.18f, CloudSteps = 24, CloudDetail = 1f, CloudTemporal = true, CloudHistoryScale = 0f, GodRays = true, TerrainSnowDisplacement = true };
 	}
 
 	/// <summary>
@@ -355,6 +355,8 @@ namespace FishMMO.Client
 		[Range(0f, 1f)] public float BaseDetail = 0.35f;
 		[Tooltip("How far up a cloud its base's smoothing reaches, as a share of the cloud's height (0.3): the pattern comes back in full over this much of it.")]
 		[Range(0.05f, 1f)] public float BaseSmoothHeight = 0.3f;
+		[Tooltip("The most metres over its floor a cloud takes to fill in (80; 0: a share of its height, as it was). Where the fill-in was a tenth of a deep cloud, each cloud's base sat wherever its noise first crossed the cut inside that rise, so bases were bumpy by a hundred metres and more; a real base is the condensation level, one height under the whole cloud, as a storm's already is (60 m).")]
+		[Range(0f, 400f)] public float BaseRiseMetres = 80f;
 
 		[Header("Lighting")]
 		[Tooltip("How strong the sun's light diffused through the cloud is (1 is the physics: the white of a cumulus's lit side, and the 10–20 % that gets through to a thick cloud's base). 0 leaves single scattering, the sky and the ground. See Far Side Follows Light (Fixes under trial) for where it flows; turn this down if the clouds still look lit from within.")]
@@ -438,7 +440,7 @@ namespace FishMMO.Client
 		public Vector4 FixVectorB => new Vector4(FarSideFollowsLight ? 0f : 1f, DenseCloudEconomy ? 0f : 1f, 0f, 0f);
 
 		/// <summary>A cloud's smooth base (<c>_FishCloudBase</c>): x 1 − Base Detail, y Base Smooth Height.</summary>
-		public Vector4 BaseVector => new Vector4(1f - Mathf.Clamp01(BaseDetail), Mathf.Clamp(BaseSmoothHeight, 0.05f, 1f), 0f, 0f);
+		public Vector4 BaseVector => new Vector4(1f - Mathf.Clamp01(BaseDetail), Mathf.Clamp(BaseSmoothHeight, 0.05f, 1f), Mathf.Max(0f, BaseRiseMetres), 0f);
 
 		/// <summary>Whether the clouds are steadied, given what the tier says.</summary>
 		public bool TemporalFor(bool tier) => Temporal == CloudTemporalOverride.Default ? tier : Temporal == CloudTemporalOverride.On;

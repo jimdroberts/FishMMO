@@ -106,11 +106,11 @@ MonoBehaviour:
       HistoryClip: 1
       Kernel: 0
       BlurPixels: 0.55
-      MaxMarchDistance: 0
+      MaxMarchDistance: 30000
       RayJitter: 1
-      StepScale: 0.5
-      NearStepScale: 0.35
-      NearStepDistance: 4000
+      StepScale: 0.75
+      NearStepScale: 0.5
+      NearStepDistance: 2000
       DistanceStepGrowth: 1
       MaxStepOpticalDepth: 1
       MaxInCloudGrowth: 2
@@ -192,7 +192,7 @@ MonoBehaviour:
     Vortices: 4
     VortexParticles: 3000
     CloudShadows: 1
-    CloudResolution: 0.25
+    CloudResolution: 0.18
     CloudSteps: 24
     CloudDetail: 1
     CloudTemporal: 1
@@ -303,8 +303,8 @@ MonoBehaviour:
     GustSharpness: 3
     GustSpeed: 1
     GustSheen: 0.45
-    WindCalmStart: 15
-    WindCalmEnd: 80
+    WindCalmStart: 8
+    WindCalmEnd: 40
     FarWind: 0.2
     FarBlendStart: 30
     FarBlendEnd: 0.75

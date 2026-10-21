@@ -111,6 +111,11 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					for (int i = 0; i + 1 < body.Path.Length; i++)
 					{
+						// Nothing cut where it runs on under the rock (a natural bridge, a rise of the floor it sank under).
+						if (float.IsNaN(body.Tops[i]) || float.IsNaN(body.Tops[i + 1]))
+						{
+							continue;
+						}
 						Vector3 a = body.Path[i], b = body.Path[i + 1];
 						bed.Add(new Piece
 						{
@@ -313,6 +318,7 @@ namespace FishMMO.Shared.WorldDesign
 							LavaRiver(plan, p);
 						}
 					}
+					LavaSinksRunOn(plan);
 				}
 				finally
 				{
@@ -456,9 +462,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// Whether lava may lie at a point on a floor with <paramref name="margin"/> round it: clear of every way (by a walker's
 		/// half width more), kept place, chasm (but <paramref name="exceptRift"/>), shaft, climb, crossing, rock left standing,
-		/// basin or trench, and of the lava laid before it (but <paramref name="exceptBody"/>'s).
+		/// basin or trench, and of the lava laid before it (but <paramref name="exceptBody"/>'s and <paramref name="alsoExcept"/>'s).
 		/// </summary>
-		private bool LavaClear(Vector3 q, float margin, int exceptRift = -1, int exceptBody = -1)
+		private bool LavaClear(Vector3 q, float margin, int exceptRift = -1, int exceptBody = -1, int alsoExcept = -1)
 		{
 			const float WalkerHalf = 1f;
 			foreach ((Vector3 a, Vector3 b) in lavaWays)
@@ -522,7 +528,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			foreach ((Vector3 at, float half, int body) in lavaLaid)
 			{
-				if (body != exceptBody && Plan2(q, at) < half + margin + 1.2f && Mathf.Abs(q.y - at.y) < 3.5f)
+				if (body != exceptBody && body != alsoExcept && Plan2(q, at) < half + margin + 1.2f && Mathf.Abs(q.y - at.y) < 3.5f)
 				{
 					return false;
 				}
@@ -638,7 +644,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			const int MinRun = 9, Gap = 3;
 			float carried = float.NaN;
-			int lastEnd = -1000;
+			int lastEnd = -1000, lastBody = -1;
 			int i = 0;
 			while (i < samples.Count && Room(plan))
 			{
@@ -647,8 +653,15 @@ namespace FishMMO.Shared.WorldDesign
 					i++;
 					continue;
 				}
-				// Under a natural bridge (a short gap since the last run) the lava runs on at its own level; anywhere else it wells up afresh.
+				// Under a natural bridge (a short gap since the last run, or a rise of the floor it sank under) the lava runs on at its
+				// own level, hidden in the rock the whole way (2026-10-21: it had sunk in its bed a pace or two from this run's head);
+				// anywhere else it wells up afresh.
 				bool welling = float.IsNaN(carried) || i - lastEnd > 15 || samples[i].Bank - carried > CaveLava.MaxSink;
+				if (!welling && (lastBody < 0 || !UnderRock(plan.Bodies[lastBody].Path[plan.Bodies[lastBody].Path.Length - 1],
+					new Vector3(samples[i].At.x, Mathf.Min(carried, samples[i].Bank - CaveLava.Drop), samples[i].At.z), 0.3f, 0.5f * width)))
+				{
+					welling = true;
+				}
 				float surface = welling ? samples[i].Bank - CaveLava.Drop : Mathf.Min(carried, samples[i].Bank - CaveLava.Drop);
 				var path = new List<Vector3>();
 				var banks = new List<float>();
@@ -690,15 +703,208 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						LavaVent(plan, pi, samples[i], path, width);
 					}
+					else
+					{
+						// The run before carried on under the rock to this one's head (CaveLavaWater joins the two), nothing cut there.
+						CaveLavaBody before = plan.Bodies[lastBody];
+						Vector3 head = path[0];
+						before.Path = new List<Vector3>(before.Path) { new Vector3(head.x, Mathf.Min(head.y, before.Path[before.Path.Length - 1].y), head.z) }.ToArray();
+						before.Banks = new List<float>(before.Banks) { float.NaN }.ToArray();
+						before.Tops = new List<float>(before.Tops) { float.NaN }.ToArray();
+						plan.Bodies[lastBody] = before;
+					}
 					carried = surface;
 					lastEnd = j - 1;
+					lastBody = index;
 				}
 				i = sank ? j + Gap : j;
-				if (sank)
+			}
+		}
+
+		/// <summary>How far from its end a lava river that would sink into its bed runs on under the rock into other lava, metres.</summary>
+		private const float LavaRunOnReach = 4f;
+
+		/// <summary>
+		/// Every lava river that still sinks into its bed where other lava lies near its end, no higher than it (another river's
+		/// channel, a lake): run on into it, nearest first, under the rock where it would lie hidden the whole way (UnderRock), else
+		/// over the floor in a channel of its own where the way there is clear and the floor lets it fall gently to that lava
+		/// (2026-10-21: two passages' rivers came to a junction at one level and one sank there a few paces from the other).
+		/// </summary>
+		private void LavaSinksRunOn(CaveLavaPlan plan)
+		{
+			for (int ri = 0; ri < plan.Bodies.Count; ri++)
+			{
+				CaveLavaBody river = plan.Bodies[ri];
+				int n = river.Path.Length;
+				if (river.Kind != CaveLavaKind.River || river.Tops == null || float.IsNaN(river.Tops[n - 1]))
 				{
-					carried = float.NaN;
+					continue;
+				}
+				Vector3 end = river.Path[n - 1];
+				bool ends = false;
+				var targets = new List<(float distance, int body, Vector3 at)>();
+				for (int b = 0; b < plan.Bodies.Count && !ends; b++)
+				{
+					CaveLavaBody other = plan.Bodies[b];
+					if (b == ri)
+					{
+						continue;
+					}
+					switch (other.Kind)
+					{
+						case CaveLavaKind.Fall:
+							// Over a chasm's lip into its fall (CaveLavaWater joins the two).
+							ends = Plan2(other.Path[0], end) < 0.05f;
+							continue;
+						case CaveLavaKind.Lake:
+						{
+							Vector3 centre = other.Path[0];
+							float d = Plan2(centre, end) - (other.Width - 0.5f);
+							// Already in it (CaveLavaWater runs it into the lake its end lies in).
+							ends = d < 0f && Mathf.Abs(centre.y - end.y) <= 2f;
+							Vector3 at = centre + FlatDir(end - centre) * Mathf.Max(0f, other.Width - 0.5f);
+							at.y = centre.y;
+							if (d < LavaRunOnReach && centre.y <= end.y && centre.y >= end.y - LavaRunOnReach)
+							{
+								targets.Add((Mathf.Max(0f, d), b, at));
+							}
+							continue;
+						}
+					}
+					if (other.Tops == null || LavaOnLine(river, other.Path[other.Path.Length - 1]))
+					{
+						continue;
+					}
+					// A little way up one that sinks where it ends, else (where only its end is near) into that end, where
+					// CaveLavaWater runs the higher of two rivers ending side by side into the other.
+					float[] otherTops = other.Tops;
+					float keep = float.IsNaN(otherTops[otherTops.Length - 1]) ? 0f : 0.5f * other.Width + 0.6f;
+					foreach (float back in keep > 0f ? new[] { keep, 0f } : new[] { 0f })
+					{
+						if (NearestOnLine(other.Path, k => !float.IsNaN(otherTops[k]), end, back, out Vector3 best, out float nearest)
+							&& nearest - 0.5f * other.Width < LavaRunOnReach && best.y <= end.y && best.y >= end.y - LavaRunOnReach)
+						{
+							targets.Add((nearest, b, best));
+							break;
+						}
+					}
+				}
+				if (ends)
+				{
+					continue;
+				}
+				targets.Sort((x, y) => x.distance != y.distance ? x.distance.CompareTo(y.distance) : x.body.CompareTo(y.body));
+				foreach ((float _, int body, Vector3 at) in targets)
+				{
+					if (LavaRunOnTo(plan, ri, body, at))
+					{
+						break;
+					}
 				}
 			}
+		}
+
+		/// <summary>
+		/// The nearest point to <paramref name="p"/> (in plan) on a river's line, over its stretches <paramref name="cut"/> says are
+		/// its own bed, never nearer its end than <paramref name="keep"/> metres along it (water running into a river that sinks
+		/// there joins it a little way up it, not where it sinks); its distance, or false where no stretch is left.
+		/// </summary>
+		private static bool NearestOnLine(Vector3[] path, System.Func<int, bool> cut, Vector3 p, float keep, out Vector3 at, out float distance)
+		{
+			at = default;
+			distance = float.MaxValue;
+			float tail = 0f;
+			for (int i = path.Length - 2; i >= 0; i--)
+			{
+				float length = Plan2(path[i], path[i + 1]);
+				// Of this stretch, the share at least keep from the end (its far point lies tail along from it).
+				float most = length > 1e-4f ? Mathf.Clamp01(1f - (keep - tail) / length) : (tail >= keep ? 1f : 0f);
+				tail += length;
+				if (!cut(i) || !cut(i + 1) || keep > tail)
+				{
+					continue;
+				}
+				PlanToSegment(p, path[i], path[i + 1], out float t);
+				t = Mathf.Min(t, most);
+				Vector3 q = Vector3.Lerp(path[i], path[i + 1], t);
+				float d = Plan2(p, q);
+				if (d < distance)
+				{
+					distance = d;
+					at = q;
+				}
+			}
+			return distance < float.MaxValue;
+		}
+
+		/// <summary>Whether a point lies on a lava river's line (within its half-width, in plan).</summary>
+		private static bool LavaOnLine(in CaveLavaBody river, Vector3 p)
+		{
+			for (int i = 0; i + 1 < river.Path.Length; i++)
+			{
+				if (PlanToSegment(p, river.Path[i], river.Path[i + 1], out _) <= 0.5f * river.Width)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>A lava river run on from its end into other lava at <paramref name="at"/> (<see cref="LavaSinksRunOn"/>); false where it cannot.</summary>
+		private bool LavaRunOnTo(CaveLavaPlan plan, int ri, int body, Vector3 at)
+		{
+			CaveLavaBody river = plan.Bodies[ri];
+			CaveLavaBody other = plan.Bodies[body];
+			Vector3 end = river.Path[river.Path.Length - 1];
+			var path = new List<Vector3>(river.Path);
+			var banks = new List<float>(river.Banks);
+			var tops = new List<float>(river.Tops);
+			if (!UnderRock(end, at, 0.3f, 0.5f * river.Width))
+			{
+				float reach = other.Kind == CaveLavaKind.Lake ? 0.5f : 0.5f * other.Width;
+				int steps = Mathf.CeilToInt(Plan2(end, at) / 0.8f);
+				float surface = end.y;
+				for (int k = 1; k < steps; k++)
+				{
+					Vector3 q = Vector3.Lerp(end, at, k / (float)steps);
+					if (Plan2(q, at) < reach)
+					{
+						break;
+					}
+					float bank = HeldFloor(q, surface + CaveLava.Drop + 0.6f);
+					if (float.IsNaN(bank))
+					{
+						return false;
+					}
+					q.y = bank;
+					surface = Mathf.Min(surface, bank - CaveLava.Drop);
+					if (bank - surface > CaveLava.MaxSink || !LavaClear(q, 0.5f * river.Width, -1, ri, body))
+					{
+						return false;
+					}
+					path.Add(new Vector3(q.x, surface, q.z));
+					banks.Add(bank);
+					tops.Add(bank + 0.3f);
+				}
+				// Its surface down to the lava's it runs into, gently: no pour where none is planned.
+				if (at.y > surface || surface - at.y > 0.6f)
+				{
+					return false;
+				}
+				for (int k = river.Path.Length; k < path.Count; k++)
+				{
+					lavaLaid.Add((new Vector3(path[k].x, banks[k], path[k].z), 0.5f * river.Width, ri));
+				}
+			}
+			// Into it, nothing cut there (it lies in the other's bed).
+			path.Add(new Vector3(at.x, Mathf.Min(at.y, path[path.Count - 1].y), at.z));
+			banks.Add(float.NaN);
+			tops.Add(float.NaN);
+			river.Path = path.ToArray();
+			river.Banks = banks.ToArray();
+			river.Tops = tops.ToArray();
+			plan.Bodies[ri] = river;
+			return true;
 		}
 
 		/// <summary>A passage's channel line, sampled every metre downstream on the side asked, with whether lava may lie at each (by the shapes alone).</summary>
@@ -900,7 +1106,8 @@ namespace FishMMO.Shared.WorldDesign
 			for (int b = 0; b < plan.Bodies.Count && fed < 0; b++)
 			{
 				CaveLavaBody body = plan.Bodies[b];
-				if (body.Kind == CaveLavaKind.River && OverFloor(chamber, body.Path[body.Path.Length - 1] + Vector3.up * CaveLava.Drop, 1f))
+				// (Not one running on under the rock into the next run: its end is that run's.)
+				if (body.Kind == CaveLavaKind.River && !float.IsNaN(body.Tops[body.Tops.Length - 1]) && OverFloor(chamber, body.Path[body.Path.Length - 1] + Vector3.up * CaveLava.Drop, 1f))
 				{
 					fed = b;
 				}

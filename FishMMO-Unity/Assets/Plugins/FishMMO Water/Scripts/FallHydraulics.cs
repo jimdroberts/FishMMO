@@ -128,5 +128,59 @@ namespace FishMMO.Water
 
 		/// <summary>The terminal speed of a spray droplet, m/s (about a 5 mm drop).</summary>
 		public const float DropTerminalSpeed = 9f;
+
+		/// <summary>
+		/// What pulls on falling water <paramref name="fallen"/> metres below its lip, m/s²: gravity and, once it has fallen past
+		/// its <paramref name="breakup"/> length, the air's drag on its broken ropes and clumps (linear in the velocity, so
+		/// <see cref="BrokenTerminalSpeed"/> is exactly the speed it settles to). The curtain's strips are traced by it
+		/// (InlandWaterRenderer.FallSheet), and <see cref="Throw"/> by the same steps.
+		/// </summary>
+		public static Vector3 FreeAcceleration(Vector3 velocity, float fallen, float breakup)
+		{
+			var acceleration = new Vector3(0f, -Gravity, 0f);
+			float broken = Mathf.Clamp01((fallen - breakup) / Mathf.Max(1f, 0.5f * breakup));
+			if (broken > 0f)
+			{
+				acceleration -= velocity * (broken * Gravity / BrokenTerminalSpeed);
+			}
+			return acceleration;
+		}
+
+		/// <summary>The time step falling water is traced at, at a speed, seconds: never more than 12 cm of its path a step.</summary>
+		public static float FreeStep(float speed) => Mathf.Min(0.05f, 0.12f / Mathf.Max(0.5f, speed));
+
+		/// <summary>
+		/// How far out from its lip water of <paramref name="q"/> m²/s lands on a surface <paramref name="drop"/> metres below the
+		/// lip, falling free, metres: the middle of a curtain traced as the renderer traces it (leaving the brink at
+		/// <see cref="BrinkSpeed"/>, half its brink depth down, its path stepped by <see cref="FreeStep"/> under
+		/// <see cref="FreeAcceleration"/>) with no rock in its way. A fall planned to land in water (a cave's spring into its
+		/// stream, a shower into a pool) puts its foot this far out from its lip, the way it pours, so the curtain lands where
+		/// the water is.
+		/// </summary>
+		/// <param name="path">When given, filled with the path's points: x how far out, y how far down from the lip, metres.</param>
+		public static float Throw(float q, float drop, float turbulence = DefaultTurbulence, System.Collections.Generic.List<Vector2> path = null)
+		{
+			q = Mathf.Max(1e-3f, q);
+			float breakup = BreakupLength(q, turbulence);
+			var p = new Vector3(0f, -0.5f * BrinkDepth(q), 0f);
+			var v = new Vector3(Mathf.Max(0.3f, BrinkSpeed(q)), 0f, 0f);
+			path?.Add(new Vector2(p.x, -p.y));
+			for (int guard = 0; guard < 40000; guard++)
+			{
+				float dt = FreeStep(v.magnitude);
+				v += FreeAcceleration(v, -p.y, breakup) * dt;
+				Vector3 next = p + v * dt;
+				if (-next.y >= drop)
+				{
+					float t = Mathf.Clamp01((drop + p.y) / Mathf.Max(1e-6f, p.y - next.y));
+					float x = Mathf.Lerp(p.x, next.x, t);
+					path?.Add(new Vector2(x, drop));
+					return x;
+				}
+				p = next;
+				path?.Add(new Vector2(p.x, -p.y));
+			}
+			return p.x;
+		}
 	}
 }

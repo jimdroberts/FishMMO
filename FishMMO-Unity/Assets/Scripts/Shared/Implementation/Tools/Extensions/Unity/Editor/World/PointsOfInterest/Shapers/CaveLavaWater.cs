@@ -124,6 +124,7 @@ namespace FishMMO.Shared.WorldDesign
 					written++;
 				}
 			}
+			var rivers = new List<SceneHydrology.River>();
 			for (int i = 0; i < count; i++)
 			{
 				CaveLavaBody body = plan.Bodies[i];
@@ -140,10 +141,83 @@ namespace FishMMO.Shared.WorldDesign
 				if (river != null)
 				{
 					riversOut.Add(river);
+					rivers.Add(river);
 					written++;
 				}
 			}
+			// A vent's fall into the river it feeds, a river over a chasm's lip into its fall, a run on under the rock into the next.
+			Join(rivers);
 			return written;
+		}
+
+		private static float Plan2D(Vector3 a, Vector3 b) => new Vector2(a.x - b.x, a.z - b.z).magnitude;
+
+		/// <summary>How far off another river's surface a river's end may lie and still run into it, metres.</summary>
+		public const float JoinLevel = 0.15f;
+
+		/// <summary>
+		/// Runs each of <paramref name="rivers"/> that would sink where another of them carries its water (or lava) on into that
+		/// other (2026-10-21: "Cave waterfalls and lava flows don't always flow properly into the little underground river
+		/// areas"): its end on the other's line, within its half-width, at its surface (within <see cref="JoinLevel"/>) — a vent's
+		/// or a shower's fall landing in a channel, a river pouring over a chasm's lip into its fall, a run going on under the rock
+		/// into the run past it. Its finish becomes a confluence with that river (the inland water draws its mouth run on into
+		/// it), its end at that surface. Of the same liquid only; never one joining a river that joins it. Returns how many.
+		/// </summary>
+		public static int Join(IReadOnlyList<SceneHydrology.River> rivers)
+		{
+			int joined = 0;
+			if (rivers == null)
+			{
+				return 0;
+			}
+			foreach (SceneHydrology.River river in rivers)
+			{
+				int n = river != null && river.Points != null ? river.Points.Length : 0;
+				if (n < 2 || river.Finish != SceneHydrology.End.Sink)
+				{
+					continue;
+				}
+				Vector3 end = river.Points[n - 1];
+				SceneHydrology.River into = null;
+				float nearest = float.MaxValue, level = end.y;
+				foreach (SceneHydrology.River other in rivers)
+				{
+					if (other == null || other == river || other.Lava != river.Lava || other.JoinsRiver == river.Id || other.Points == null)
+					{
+						continue;
+					}
+					for (int i = 0; i + 1 < other.Points.Length; i++)
+					{
+						Vector3 a = other.Points[i], b = other.Points[i + 1];
+						var ab = new Vector2(b.x - a.x, b.z - a.z);
+						var ap = new Vector2(end.x - a.x, end.z - a.z);
+						float t = Mathf.Clamp01(Vector2.Dot(ap, ab) / Mathf.Max(1e-6f, ab.sqrMagnitude));
+						float off = (ap - ab * t).magnitude, surface = Mathf.Lerp(a.y, b.y, t);
+						float half = 0.5f * Mathf.Lerp(other.Width[i], other.Width[i + 1], t);
+						// At the other's very end (two rivers ending side by side), only the higher runs on into the lower (the first
+						// of two as high): never each into the other.
+						Vector3 otherEnd = other.Points[other.Points.Length - 1];
+						bool atItsEnd = i + 2 == other.Points.Length && Plan2D(Vector3.Lerp(a, b, t), b) < 0.5f * other.Width[i + 1];
+						bool lower = end.y > otherEnd.y || end.y == otherEnd.y && river.Id < other.Id;
+						if (off <= half && (!atItsEnd || lower) && Mathf.Abs(surface - end.y) <= JoinLevel && off < nearest)
+						{
+							nearest = off;
+							level = surface;
+							into = other;
+						}
+					}
+				}
+				if (into == null)
+				{
+					continue;
+				}
+				river.Finish = SceneHydrology.End.Confluence;
+				river.JoinsRiver = into.Id;
+				river.Points[n - 1].y = Mathf.Min(level, river.Points[n - 2].y);
+				river.Bed[n - 1] = river.Points[n - 1].y - river.Depth[n - 1];
+				joined++;
+			}
+			return joined;
 		}
 
 		/// <summary>
@@ -189,7 +263,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// A lava lake at <paramref name="centre"/>'s height (scene metres) over the disc of <paramref name="radius"/> round it, in
 		/// <paramref name="cell"/> cells, a cell taken where <paramref name="open"/> says the space just under the surface (5 cm
-		/// down to a metre) is open at its centre. Null when no cell is.
+		/// down to a metre) is open at its centre. Null when no cell is. Its <see cref="SceneHydrology.Lake.Floor"/> is the lowest
+		/// open space found down each taken cell from there (<see cref="FloorUnder"/>; unknown without <paramref name="open"/>).
 		/// </summary>
 		public static SceneHydrology.Lake Lake(int id, Vector3 centre, float radius, Func<Vector3, bool> open, float cell = LakeMaskCell)
 		{
@@ -201,7 +276,7 @@ namespace FishMMO.Shared.WorldDesign
 			var bits = new byte[(width * height + 7) / 8];
 			int covered = 0;
 			Vector2 seed = default;
-			float nearest = float.PositiveInfinity;
+			float nearest = float.PositiveInfinity, floor = float.PositiveInfinity;
 			for (int z = 0; z < height; z++)
 			{
 				for (int x = 0; x < width; x++)
@@ -213,9 +288,11 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					bool here = open == null;
+					float found = level;
 					for (float drop = 0.05f; !here && drop <= 1.001f; drop += 0.475f)
 					{
-						here = open(new Vector3(east, level - drop, north));
+						found = level - drop;
+						here = open(new Vector3(east, found, north));
 					}
 					if (!here)
 					{
@@ -224,6 +301,10 @@ namespace FishMMO.Shared.WorldDesign
 					int bit = z * width + x;
 					bits[bit >> 3] |= (byte)(1 << (bit & 7));
 					covered++;
+					if (open != null)
+					{
+						floor = Mathf.Min(floor, FloorUnder(open, new Vector3(east, found, north), level - MaxFloorReach));
+					}
 					// Its seed the cell nearest its centre: inside the lava however the walls cut the disc.
 					if (d2 < nearest)
 					{
@@ -243,6 +324,7 @@ namespace FishMMO.Shared.WorldDesign
 				Level = level,
 				SpillLevel = level,
 				Lava = true,
+				Floor = float.IsInfinity(floor) ? float.NegativeInfinity : floor - FloorMargin,
 				Seeds = new[] { seed },
 				Bounds = new Rect(origin.x, origin.y, width * cell, height * cell),
 				Mask = bits,
@@ -251,6 +333,26 @@ namespace FishMMO.Shared.WorldDesign
 				MaskWidth = width,
 				MaskHeight = height,
 			};
+		}
+
+		/// <summary>How far under its surface a cave lake's floor is looked for, metres: a flooded winze's water is the deepest.</summary>
+		public const float MaxFloorReach = 60f;
+
+		/// <summary>How far under the lowest floor found a cave lake's floor is written, metres (the rock's noise between the steps).</summary>
+		private const float FloorMargin = 0.25f;
+
+		/// <summary>
+		/// The floor under an open point (scene metres): down in quarter metres while <paramref name="open"/> holds, no lower than
+		/// <paramref name="lowest"/>; the first height that is not open.
+		/// </summary>
+		public static float FloorUnder(Func<Vector3, bool> open, Vector3 from, float lowest)
+		{
+			float y = from.y;
+			while (y > lowest && open(new Vector3(from.x, y - 0.25f, from.z)))
+			{
+				y -= 0.25f;
+			}
+			return Mathf.Max(lowest, y - 0.25f);
 		}
 
 		/// <summary>

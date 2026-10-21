@@ -111,6 +111,7 @@ namespace FishMMO.Shared.WorldDesign
 				lakesOut.Add(lake);
 				written++;
 			}
+			var rivers = new List<SceneHydrology.River>();
 			for (int i = 0; i < count; i++)
 			{
 				CaveStreamBody body = plan.Bodies[i];
@@ -133,9 +134,12 @@ namespace FishMMO.Shared.WorldDesign
 				if (river != null)
 				{
 					riversOut.Add(river);
+					rivers.Add(river);
 					written++;
 				}
 			}
+			// A shower's fall into the stream under it, a run on under the rock into the next (the lava's rule: CaveLavaWater.Join).
+			CaveLavaWater.Join(rivers);
 			return written;
 		}
 
@@ -244,14 +248,24 @@ namespace FishMMO.Shared.WorldDesign
 				river.Width[i] = w;
 				river.Depth[i] = depth;
 				river.Bed[i] = river.Points[i].y - depth;
-				river.Speed[i] = fall ? MaxSpeed : Mathf.Clamp(MinSpeed + 4f * Mathf.Min(slope, 0.5f), MinSpeed, MaxSpeed);
-				river.Discharge[i] = w * depth * Mathf.Clamp(MinSpeed + 4f * Mathf.Min(slope, 0.5f), MinSpeed, MaxSpeed);
+				river.Speed[i] = fall ? MaxSpeed : RunSpeed(slope);
+				river.Discharge[i] = w * depth * RunSpeed(slope);
 				// Its lip and its foot run smooth into and out of the curtain: the rapid is the stream's own steep runs.
 				bool edge = Falling(i) || Falling(i + 1);
 				river.Reach[i] = fall ? (byte)4 : slope >= RapidSlope && !edge ? (byte)3 : (byte)0;
 			}
 			return river;
 		}
+
+		/// <summary>How fast a cave stream runs where its surface falls at a slope (rise over run), m/s: the steeper the faster, to a fall's.</summary>
+		public static float RunSpeed(float slope) => Mathf.Clamp(MinSpeed + 4f * Mathf.Min(slope, 0.5f), MinSpeed, MaxSpeed);
+
+		/// <summary>
+		/// The water per metre of lip going over a cave fall of a body <paramref name="depth"/> deep, m²/s, as <see cref="River"/>
+		/// writes it (its lip's discharge over its width: the depth at its steepest run's speed) and the inland water reads it
+		/// (FishMMO.Water.FallHydraulics.UnitDischarge): what throws its curtain out from the lip (FallHydraulics.Throw).
+		/// </summary>
+		public static float LipUnitDischarge(float depth) => Mathf.Max(0.1f, depth) * RunSpeed(float.MaxValue);
 
 		/// <summary>How far under a cave pool's surface its NavMesh marking reaches, metres (a winze's water deeper still is climbed, not walked).</summary>
 		public const float DeepMarkMetres = 6f;

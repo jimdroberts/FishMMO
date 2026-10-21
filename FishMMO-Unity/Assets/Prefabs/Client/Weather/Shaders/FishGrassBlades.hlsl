@@ -375,6 +375,14 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     float share = min(1.0, GrassShareV(d) * exp2(2.0 * round(GrassTypeRow(type, GRASS_ROW_MORE).y)));
     float widen = min(min(_GrassParams0.y, screenCap), pow(max(1e-6, share), -_GrassParams0.x));
     float width = typeTip.a * widen * (0.75 + 0.5 * r0) * lerp(0.5, 1.0, thinFade) * clamp(FishFloraSwell(root.xz, GRASS_FLORA_WIDTH_SWELL, GRASS_FLORA_WIDTH_SALT) * (_FishFloraInfo.x < 0.5 ? 1.0 : _FishFloraWorld.y), GRASS_FLORA_MIN_WIDTH, GRASS_FLORA_MAX_WIDTH);
+    /* Under a pixel wide at its base, where MSAA resolves coverage (_GrassScreen.w, 2026-10-21): drawn a pixel wide, its true
+     * width carried as coverage (the forward pass's alpha to coverage), so a swaying sliver fades by its share of the pixel
+     * instead of flipping whole pixels between blade and background — the crest line's flicker. Every pass widens alike. */
+    if (_GrassScreen.w > 0.5 && pixelMetres > 1e-5 && width < pixelMetres)
+    {
+        o.fade.x *= saturate(width / pixelMetres);
+        width = pixelMetres;
+    }
     float4 headInfo = GrassTypeRow(type, GRASS_ROW_HEAD);
     // A strap (a reed's leaf) keeps its width to a rounded end; a blade tapers to a point.
     float taper = headInfo.w > 0.5 ? 1.0 - 0.45 * pow(saturate(t), 3.0) : 1.0 - pow(saturate(t), 1.6);
@@ -693,7 +701,18 @@ float3 GrassLit(float3 L, float3 colour, float3 albedo, float3 n, float3 faceN, 
 
 half4 GrassForwardFragment(GrassVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SEMANTIC) : SV_Target
 {
-    GrassFadeClip(input.positionCS, input.extra.zw);
+    // With MSAA the fade and a thin blade's share of its pixel are coverage (AlphaToMask in the pass): smooth, not a
+    // dither that crawls as the blade sways. Without, the dither as before.
+    half coverage = 1.0h;
+    if (_GrassScreen.w > 0.5)
+    {
+        coverage = (half)saturate(input.extra.z);
+        clip(coverage - 0.004h);
+    }
+    else
+    {
+        GrassFadeClip(input.positionCS, input.extra.zw);
+    }
     float facing = IS_FRONT_VFACE(face, 1.0, -1.0);
     float3 n = GrassShadingNormal(normalize(input.normalWS), input.sideWS.xyz, input.sideWS.w, facing);
     float3 faceN = normalize(input.normalWS) * facing;
@@ -773,7 +792,7 @@ half4 GrassForwardFragment(GrassVaryings input, FRONT_FACE_TYPE face : FRONT_FAC
     {
         colour = float3(1.0, 0.0, 1.0);
     }
-    return half4(colour, 1.0);
+    return half4(colour, coverage);
 }
 
 #endif
@@ -813,12 +832,30 @@ struct GrassDepthVaryings
 #if defined(FISH_GRASS_PASS_SHADOW)
 float3 _LightDirection;
 float3 _LightPosition;
+
+#if defined(FISH_GRASS_PASS_SHADOW) && !defined(_CASTING_PUNCTUAL_LIGHT_SHADOW)
+// Per-cascade caster culling (2026-10-21), as the trees' and rocks' casters have (FishCasterCulling.hlsl): every blade was
+// drawn into every cascade, its curve built four times over. A blade is known by a sphere round its root standing taller
+// than the tallest blade, so nothing a cascade shows is ever dropped.
+#include "FishCasterCulling.hlsl"
+#define GRASS_CASTER_RADIUS 2.5
+#endif
 #endif
 
 GrassDepthVaryings GrassDepthVertex(GrassDepthAttributes input)
 {
-    GrassVertex v = GrassBuild(input.instanceID, input.positionOS.xy);
     GrassDepthVaryings o = (GrassDepthVaryings)0;
+#if defined(FISH_GRASS_PASS_SHADOW) && !defined(_CASTING_PUNCTUAL_LIGHT_SHADOW)
+    // Not wanted in this cascade: outside the clip volume, so the blade's triangles drop, before its curve is built.
+    float3 casterRoot = _GrassBlades[input.instanceID].root;
+    UNITY_BRANCH
+    if (FishCasterCulledAt(casterRoot + float3(0.0, 0.5 * GRASS_CASTER_RADIUS, 0.0), GRASS_CASTER_RADIUS))
+    {
+        o.positionCS = float4(2.0, 2.0, 2.0, 1.0);
+        return o;
+    }
+#endif
+    GrassVertex v = GrassBuild(input.instanceID, input.positionOS.xy);
 #if defined(FISH_GRASS_PASS_SHADOW)
     #if defined(_CASTING_PUNCTUAL_LIGHT_SHADOW)
         float3 lightDirectionWS = normalize(_LightPosition - v.positionWS);

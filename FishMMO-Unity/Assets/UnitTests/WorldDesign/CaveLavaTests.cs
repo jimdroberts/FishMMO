@@ -364,7 +364,11 @@ namespace FishMMO.UnitTests.WorldDesign
 								{
 									Assert.That(b.Path[k].y, Is.LessThanOrEqualTo(b.Path[k - 1].y + 1e-4f), $"{what}: never rising, at point {k}");
 								}
-								Assert.That(b.Banks[k] - b.Path[k].y, Is.InRange(CaveLava.Drop - 1e-3f, CaveLava.MaxSink + 1e-3f), $"{what}: under its bank, at point {k}");
+								// (Its last point the next run's head, where it ran on under the rock into it: no bank, nothing cut.)
+								if (!float.IsNaN(b.Banks[k]) || k < b.Path.Length - 1)
+								{
+									Assert.That(b.Banks[k] - b.Path[k].y, Is.InRange(CaveLava.Drop - 1e-3f, CaveLava.MaxSink + 1e-3f), $"{what}: under its bank, at point {k}");
+								}
 							}
 							// Along its passage (but where it runs on over a chamber's floor to a chasm's lip), beside the lane.
 							int beside = 0;
@@ -449,6 +453,10 @@ namespace FishMMO.UnitTests.WorldDesign
 						for (int k = 0; k < b.Path.Length; k += 4)
 						{
 							Vector3 p = b.Path[k];
+							if (float.IsNaN(b.Banks[k]))
+							{
+								continue;
+							}
 							Vector3 run = b.Path[Mathf.Min(b.Path.Length - 1, k + 1)] - b.Path[Mathf.Max(0, k - 1)];
 							run.y = 0f;
 							run.Normalize();

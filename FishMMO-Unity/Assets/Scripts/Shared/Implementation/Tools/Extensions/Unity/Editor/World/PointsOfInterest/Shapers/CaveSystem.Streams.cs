@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using FishMMO.Water;
 using UnityEngine;
 
 namespace FishMMO.Shared.WorldDesign
@@ -114,7 +115,9 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						Vector3 c = body.Path[0];
 						float bottom = c.y - body.Depth;
-						bed.Add(new Piece { A = c, B = c, Half = body.Width, BedA = bottom, BedB = bottom, TopA = body.Tops[0], TopB = body.Tops[0], Shelf = c.y - 0.3f, Basin = true });
+						// (A shower's splash basin shelves to its brim, ankle deep at its middle: no step at its rim on the way it lies on.)
+						float shelf = body.Depth <= SplashDepth + 1e-4f && body.Width <= SplashRadius + 1e-4f ? c.y - 0.05f : c.y - 0.3f;
+						bed.Add(new Piece { A = c, B = c, Half = body.Width, BedA = bottom, BedB = bottom, TopA = body.Tops[0], TopB = body.Tops[0], Shelf = shelf, Basin = true });
 						continue;
 					}
 					for (int i = 0; i + 1 < body.Path.Length; i++)
@@ -247,7 +250,8 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					// The bodies are capped: a mine's sumps first, the trunks' streams, the chasms' and avens' falls (a stream ending by
 					// a chasm pours over it before it pools), the pools where the trunks' streams come to rest, the chambers' pools,
-					// the basins and gours, the other passages' streams and their pools, a flooded dead end.
+					// the basins and gours, the other passages' streams and their pools, a flooded dead end; last the avens' showers, so
+					// each comes down in whatever water lies under it.
 					Winzes(plan);
 					for (int p = 0; p < Passages.Count; p++)
 					{
@@ -260,7 +264,7 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						StreamChasmFall(plan, r);
 					}
-					AvenFalls(plan);
+					List<(int, Vector3, float)> showers = AvenFalls(plan);
 					ChamberStreams(plan);
 					GrottoSpring(plan);
 					EndPools(plan);
@@ -275,6 +279,8 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					EndPools(plan);
 					FloodedEnd(plan);
+					SinksRunOn(plan);
+					Showers(plan, showers);
 				}
 				finally
 				{
@@ -388,7 +394,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			const int MinRun = 9, Gap = 3;
 			float carried = float.NaN;
-			int lastEnd = -1000;
+			int lastEnd = -1000, lastBody = -1;
 			int i = 0;
 			while (i < samples.Count && StreamRoom(plan))
 			{
@@ -398,6 +404,13 @@ namespace FishMMO.Shared.WorldDesign
 					continue;
 				}
 				bool welling = float.IsNaN(carried) || i - lastEnd > 15 || samples[i].Bank - carried > CaveStreams.MaxSink;
+				// Run on from the run before only where its water went on under the rock (2026-10-21: it sank in its bed a pace or
+				// two from this one's head); anywhere else this one wells up afresh.
+				Vector3 under = new Vector3(samples[i].At.x, Mathf.Min(carried, samples[i].Bank - CaveStreams.Drop), samples[i].At.z);
+				if (!welling && (lastBody < 0 || !UnderRock(plan.Bodies[lastBody].Path[plan.Bodies[lastBody].Path.Length - 1], under, 0.3f, 0.5f * width)))
+				{
+					welling = true;
+				}
 				float surface = welling ? samples[i].Bank - CaveStreams.Drop : Mathf.Min(carried, samples[i].Bank - CaveStreams.Drop);
 				var path = new List<Vector3>();
 				var banks = new List<float>();
@@ -444,19 +457,210 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						lavaLaid.Add((samples[k].At, 0.5f * width, index));
 					}
+					if (!welling)
+					{
+						RunOnInto(plan, lastBody, path[0]);
+					}
 					if (!sank)
 					{
 						streamResting.Add(index);
 					}
 					carried = surface;
 					lastEnd = j - 1;
+					lastBody = index;
 				}
 				i = sank ? j + Gap : j;
-				if (sank)
+			}
+		}
+
+		/// <summary>
+		/// A stream that runs on under the rock into the next run of its passage (a natural bridge over it, or a rise of the floor
+		/// it sank under): its line carried on to that run's head, nothing cut for it there (CaveStreamWater joins the two), and no
+		/// pool at its end.
+		/// </summary>
+		private void RunOnInto(CaveStreamPlan plan, int body, Vector3 head)
+		{
+			CaveStreamBody stream = plan.Bodies[body];
+			int n = stream.Path.Length;
+			var path = new List<Vector3>(stream.Path) { new Vector3(head.x, Mathf.Min(head.y, stream.Path[n - 1].y), head.z) };
+			var banks = new List<float>(stream.Banks) { float.NaN };
+			var tops = new List<float>(stream.Tops) { float.NaN };
+			stream.Path = path.ToArray();
+			stream.Banks = banks.ToArray();
+			stream.Tops = tops.ToArray();
+			if (stream.Falls != null)
+			{
+				stream.Falls = new List<bool>(stream.Falls) { false }.ToArray();
+			}
+			plan.Bodies[body] = stream;
+			streamResting.Remove(body);
+		}
+
+		/// <summary>How far from its end a stream that would sink into its bed runs on under the rock into other water, metres.</summary>
+		private const float RunOnReach = 4f;
+
+		/// <summary>The most a stream run on over the floor into other water may step down into it at the last, metres (a rapid over the other's bank, no fall).</summary>
+		private const float RunOnStep = 1.2f;
+
+		/// <summary>
+		/// Every stream that still sinks into its bed where other water lies near its end, no higher than it (another stream's
+		/// channel, a pool): run on into it (<see cref="RunOnTo"/>), nearest first (2026-10-21: two passages' streams came to a
+		/// junction at one level and one sank there a few paces from the other; a chamber's stream sank beside the trunk's).
+		/// </summary>
+		private void SinksRunOn(CaveStreamPlan plan)
+		{
+			for (int si = 0; si < plan.Bodies.Count; si++)
+			{
+				CaveStreamBody stream = plan.Bodies[si];
+				int n = stream.Path.Length;
+				if (stream.Kind != CaveStreamKind.Stream || stream.Into >= 0 || stream.Banks == null || float.IsNaN(stream.Banks[n - 1])
+					|| stream.Falls != null && stream.Falls[n - 1])
 				{
-					carried = float.NaN;
+					continue;
+				}
+				Vector3 end = stream.Path[n - 1];
+				var targets = new List<(float distance, int body, Vector3 at)>();
+				for (int b = 0; b < plan.Bodies.Count; b++)
+				{
+					CaveStreamBody other = plan.Bodies[b];
+					if (b == si)
+					{
+						continue;
+					}
+					if (other.Kind == CaveStreamKind.Pool)
+					{
+						Vector3 centre = other.Path[0];
+						float d = Plan2(centre, end) - (other.Width - 0.4f);
+						Vector3 at = centre + FlatDir(end - centre) * Mathf.Max(0f, other.Width - 0.4f);
+						at.y = centre.y;
+						if (d < RunOnReach && centre.y <= end.y && centre.y >= end.y - RunOnReach)
+						{
+							targets.Add((d, b, at));
+						}
+						continue;
+					}
+					// Not into a stream that runs into this one.
+					if (other.Banks == null || OnChannel(stream, other.Path[other.Path.Length - 1], out _, out _))
+					{
+						continue;
+					}
+					// A little way up one that sinks where it ends, else (where only its end is near) into that end, where
+					// CaveStreamWater runs the higher of two streams ending side by side into the other.
+					float[] otherBanks = other.Banks;
+					float keep = float.IsNaN(otherBanks[otherBanks.Length - 1]) || other.Into >= 0 ? 0f : 0.5f * other.Width + 0.6f;
+					foreach (float back in keep > 0f ? new[] { keep, 0f } : new[] { 0f })
+					{
+						if (NearestOnLine(other.Path, k => !float.IsNaN(otherBanks[k]), end, back, out Vector3 best, out float nearest)
+							&& nearest - 0.5f * other.Width < RunOnReach && best.y <= end.y && best.y >= end.y - RunOnReach)
+						{
+							targets.Add((nearest, b, best));
+							break;
+						}
+					}
+				}
+				targets.Sort((x, y) => x.distance != y.distance ? x.distance.CompareTo(y.distance) : x.body.CompareTo(y.body));
+				foreach ((float _, int body, Vector3 at) in targets)
+				{
+					if (RunOnTo(plan, si, body, at))
+					{
+						break;
+					}
 				}
 			}
+		}
+
+		/// <summary>
+		/// A sinking stream run on from its end into other water at <paramref name="at"/> (on <paramref name="body"/>'s line or in
+		/// its pool, at its surface): under the rock where it would lie hidden the whole way (<see cref="UnderRock"/>); else over
+		/// the floor in a channel of its own, cut as the rest of it is, where its way there is clear of everything (but the water
+		/// it runs into) and the floor lets its surface fall gently to that water's. False where neither does.
+		/// </summary>
+		private bool RunOnTo(CaveStreamPlan plan, int si, int body, Vector3 at)
+		{
+			CaveStreamBody stream = plan.Bodies[si];
+			CaveStreamBody other = plan.Bodies[body];
+			Vector3 end = stream.Path[stream.Path.Length - 1];
+			if (!UnderRock(end, at, 0.3f, 0.5f * stream.Width))
+			{
+				float reach = other.Kind == CaveStreamKind.Pool ? 0.4f : 0.5f * other.Width;
+				int steps = Mathf.CeilToInt(Plan2(end, at) / 0.8f);
+				var path = new List<Vector3>(stream.Path);
+				var banks = new List<float>(stream.Banks);
+				var tops = new List<float>(stream.Tops);
+				float surface = end.y;
+				for (int k = 1; k < steps; k++)
+				{
+					Vector3 q = Vector3.Lerp(end, at, k / (float)steps);
+					if (Plan2(q, at) < reach)
+					{
+						break;
+					}
+					float bank = HeldFloor(q, surface + CaveStreams.Drop + 0.6f);
+					if (float.IsNaN(bank))
+					{
+						return false;
+					}
+					q.y = bank;
+					surface = Mathf.Min(surface, bank - CaveStreams.Drop);
+					if (bank - surface > CaveStreams.MaxSink || Awash(surface - CaveStreams.StreamDepth) || !LavaClear(q, 0.5f * stream.Width, -1, si, body))
+					{
+						return false;
+					}
+					path.Add(new Vector3(q.x, surface, q.z));
+					banks.Add(bank);
+					tops.Add(bank + 0.3f);
+				}
+				// Its surface down to the water's it runs into, gently: no fall drawn where none is planned.
+				if (at.y > surface || surface - at.y > RunOnStep)
+				{
+					return false;
+				}
+				for (int k = stream.Path.Length; k < path.Count; k++)
+				{
+					lavaLaid.Add((new Vector3(path[k].x, banks[k], path[k].z), 0.5f * stream.Width, si));
+				}
+				stream.Path = path.ToArray();
+				stream.Banks = banks.ToArray();
+				stream.Tops = tops.ToArray();
+				if (stream.Falls != null)
+				{
+					var falls = new List<bool>(stream.Falls);
+					while (falls.Count < path.Count)
+					{
+						falls.Add(false);
+					}
+					stream.Falls = falls.ToArray();
+				}
+				plan.Bodies[si] = stream;
+			}
+			RunOnInto(plan, si, at);
+			if (other.Kind == CaveStreamKind.Pool)
+			{
+				stream = plan.Bodies[si];
+				stream.Into = body;
+				plan.Bodies[si] = stream;
+			}
+			return true;
+		}
+
+		/// <summary>
+		/// Whether water going on under the rock from one point to another (its surface each end) lies hidden the whole way, the
+		/// field (without any bed) rock <paramref name="over"/> over its surface but within a stride of either end, and nothing of
+		/// another level under it within <paramref name="half"/> (<see cref="LavaOverLower"/>): a stream or a lava river run on
+		/// under a natural bridge, never drawn over a way.
+		/// </summary>
+		private bool UnderRock(Vector3 from, Vector3 to, float over, float half)
+		{
+			float run = Plan2(from, to);
+			for (float d = 0f; d <= run; d += 0.5f)
+			{
+				Vector3 p = Vector3.Lerp(from, to, run > 1e-4f ? d / run : 0f);
+				if (d >= 0.6f && d <= run - 0.6f && HeldVoid(p + Vector3.up * over) < 0f || LavaOverLower(p, half))
+				{
+					return false;
+				}
+			}
+			return true;
 		}
 
 		/// <summary>
@@ -494,14 +698,10 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					Vector3 lip = from + dir * (out_ - 0.3f);
-					var landing = new Vector3(lip.x - dir.x * 0.7f, level, lip.z - dir.z * 0.7f);
+					// Out of the crack back over the pool, where the water thrown from it comes down.
+					Vector3 landing = Thrown(lip, -dir, GrottoSpringDepth, level);
 					// Into the pool (water a good way down under where it lands), the whole fall open.
-					bool open = HeldVoid(landing + Vector3.down * 0.4f) < 0f;
-					for (float f = 0.25f; f < 0.95f && open; f += 0.25f)
-					{
-						open = Void(Vector3.Lerp(lip, landing, f) + Vector3.up * 0.25f, out _, false) < 0f;
-					}
-					if (!open || LavaOverLower(landing, 1f))
+					if (HeldVoid(landing + Vector3.down * 0.4f) >= 0f || !ThrowOpen(lip, -dir, GrottoSpringDepth, level) || LavaOverLower(landing, 1f))
 					{
 						continue;
 					}
@@ -511,7 +711,7 @@ namespace FishMMO.Shared.WorldDesign
 						Path = new[] { lip, Vector3.Lerp(lip, landing, 0.5f), landing },
 						Falls = new[] { false, true, true },
 						Width = 0.7f,
-						Depth = 0.3f,
+						Depth = GrottoSpringDepth,
 						Banks = new[] { float.NaN, float.NaN, float.NaN },
 						Tops = new[] { float.NaN, float.NaN, float.NaN },
 						Passage = -1,
@@ -523,6 +723,9 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 		}
+
+		/// <summary>How deep a grotto's spring runs over its crack's lip (its discharge, for its curtain's throw and thickness), metres.</summary>
+		private const float GrottoSpringDepth = 0.3f;
 
 		/// <summary>
 		/// Streams down sloping chambers' floors (a grotto's above all, its back a dry ledge rising out of its pool), by the seed:
@@ -646,12 +849,14 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// A spring pouring out of a crack in the wall over a stream's head into it: from as high as the wall stands over the
-		/// channel (the fall at least <see cref="CaveStreams.MinFall"/>, drawn as one), landing on the stream a little way down it.
-		/// The run before the landing is dropped, so no dry channel lies upstream of the water. Nothing where the head lies in a
-		/// room, out from its walls.
+		/// channel (the fall at least <see cref="CaveStreams.MinFall"/>, drawn as one), landing on the stream's line a little way
+		/// down it, where the water thrown out of the crack comes down (2026-10-21: <see cref="Thrown"/>; set by geometry alone,
+		/// the curtain the inland water traces came down on the bench beside the stream). The run before the landing is dropped,
+		/// so no dry channel lies upstream of the water. Nothing where the head lies in a room, out from its walls.
 		/// </summary>
 		private void Spring(in LavaSample head, List<Vector3> path, List<float> banks, List<float> tops, List<bool> falls)
 		{
+			const float depth = CaveStreams.StreamDepth;
 			for (float up = 3f; up >= 1.8f; up -= 0.4f)
 			{
 				Vector3 vent = head.At;
@@ -673,37 +878,96 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				// Just out of the face, so the water leaves the rock in the open.
 				vent -= head.Side * 0.3f;
-				for (int k = 0; k < Mathf.Min(path.Count - 6, 6); k++)
+				// Where its curtain comes down on the stream's line: the first point down it as far out from the crack as the water
+				// is thrown falling to it.
+				float Short(Vector3 at) => Plan2(vent, at) - FallHydraulics.Throw(CaveStreamWater.LipUnitDischarge(depth), vent.y - at.y);
+				int most = Mathf.Min(path.Count - 6, 6);
+				for (int k = 0; k < most; k++)
 				{
-					Vector3 landing = path[k];
-					float drop = vent.y - landing.y;
-					if (drop < CaveStreams.MinFall || Plan2(vent, landing) < 0.6f)
+					float a = Short(path[k]), b = Short(path[k + 1]);
+					if (a > 0f)
+					{
+						// Already past the head: the crack stands too far off the line for its water to land on it.
+						break;
+					}
+					if (b < 0f)
 					{
 						continue;
 					}
-					// Its fall open the whole way down (a wall flaring out at its foot would stand in it).
-					bool open = true;
-					for (float f = 0.25f; f < 0.95f && open; f += 0.25f)
+					float t0 = 0f, t1 = 1f;
+					for (int step = 0; step < 16; step++)
 					{
-						open = Void(Vector3.Lerp(vent, landing, f) + Vector3.up * 0.25f, out _, false) < 0f;
+						float t = 0.5f * (t0 + t1);
+						if (Short(Vector3.Lerp(path[k], path[k + 1], t)) < 0f)
+						{
+							t0 = t;
+						}
+						else
+						{
+							t1 = t;
+						}
 					}
-					if (!open)
+					float u = 0.5f * (t0 + t1);
+					Vector3 landing = Vector3.Lerp(path[k], path[k + 1], u);
+					Vector3 dir = FlatDir(landing - vent);
+					// Its fall drawn as one, open the whole way down its path (a wall flaring out at its foot would stand in it).
+					if (vent.y - landing.y < CaveStreams.MinFall || !ThrowOpen(vent, dir, depth, landing.y))
 					{
-						continue;
+						break;
 					}
-					path.RemoveRange(0, k);
-					banks.RemoveRange(0, k);
-					tops.RemoveRange(0, k);
-					falls.RemoveRange(0, k);
-					Vector3 mid = Vector3.Lerp(vent, landing, 0.5f);
-					path.InsertRange(0, new[] { vent, mid });
-					banks.InsertRange(0, new[] { float.NaN, float.NaN });
-					tops.InsertRange(0, new[] { float.NaN, float.NaN });
-					falls.InsertRange(0, new[] { false, true });
-					falls[2] = true;
+					float bank = Mathf.Lerp(banks[k], banks[k + 1], u), top = Mathf.Lerp(tops[k], tops[k + 1], u);
+					path.RemoveRange(0, k + 1);
+					banks.RemoveRange(0, k + 1);
+					tops.RemoveRange(0, k + 1);
+					falls.RemoveRange(0, k + 1);
+					path.InsertRange(0, new[] { vent, Vector3.Lerp(vent, landing, 0.5f), landing });
+					banks.InsertRange(0, new[] { float.NaN, float.NaN, bank });
+					tops.InsertRange(0, new[] { float.NaN, float.NaN, top });
+					falls.InsertRange(0, new[] { false, true, true });
 					return;
 				}
 			}
+		}
+
+		/// <summary>
+		/// Where water of a body <paramref name="depth"/> deep comes down to <paramref name="level"/>, pouring off a lip the way
+		/// <paramref name="dir"/> points (level, unit length): out from it by its free throw (FallHydraulics.Throw), as the inland
+		/// water's renderer traces a fall's curtain from its lip with the water the scene's hydrology gives it
+		/// (<see cref="CaveStreamWater.LipUnitDischarge"/>). A fall's foot is put there, in the water it feeds.
+		/// </summary>
+		private static Vector3 Thrown(Vector3 lip, Vector3 dir, float depth, float level)
+		{
+			Vector3 p = lip + dir * FallHydraulics.Throw(CaveStreamWater.LipUnitDischarge(depth), lip.y - level);
+			p.y = level;
+			return p;
+		}
+
+		/// <summary>How far over the water it lands in a curtain's path is looked at for rock (<see cref="ThrowOpen"/>), metres: under that it is in the bed its water is cut (a channel under its bench, a pool's bowl), not cut while the plan is made.</summary>
+		private const float ThrowOpenOver = 0.8f;
+
+		/// <summary>
+		/// Whether a curtain thrown off a lip the way <paramref name="dir"/> points (<see cref="Thrown"/>) is open on the rough field
+		/// the whole way down its path (as <see cref="FallOpen"/>), from a fifth of its drop to <see cref="ThrowOpenOver"/> over its water.
+		/// </summary>
+		private bool ThrowOpen(Vector3 lip, Vector3 dir, float depth, float level)
+		{
+			float drop = lip.y - level;
+			var path = new List<Vector2>();
+			FallHydraulics.Throw(CaveStreamWater.LipUnitDischarge(depth), drop, FallHydraulics.DefaultTurbulence, path);
+			int stride = Mathf.Max(1, path.Count / 16);
+			for (int k = 0; k < path.Count; k += stride)
+			{
+				if (path[k].y < 0.2f * drop || path[k].y > drop - ThrowOpenOver)
+				{
+					continue;
+				}
+				Vector3 p = lip + dir * path[k].x + Vector3.down * path[k].y;
+				if (Void(p + Vector3.up * 0.2f, out _, false) >= 0f)
+				{
+					return false;
+				}
+			}
+			return true;
 		}
 
 		/// <summary>A pool at the end of each stream laid since the last call that comes to rest and pours over nothing (<see cref="EndPool"/>).</summary>
@@ -777,7 +1041,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// pool a stream or a fall feeds lies where the water comes, its shelving edge at the lane's). Its surface no higher than
 		/// <paramref name="under"/>. Laid into the plan with its bowl; its index, or −1 where none fits.
 		/// </summary>
-		private int StreamPool(CaveStreamPlan plan, int chamber, Vector3 at, float wanted, int exceptBody, out float level, bool close = false, float under = float.MaxValue)
+		private int StreamPool(CaveStreamPlan plan, int chamber, Vector3 at, float wanted, int exceptBody, out float level, bool close = false, float under = float.MaxValue,
+			float least = PoolLeast)
 		{
 			level = float.NaN;
 			if (!StreamRoom(plan))
@@ -791,7 +1056,7 @@ namespace FishMMO.Shared.WorldDesign
 				return -1;
 			}
 			at.y = centre;
-			for (float r = wanted; r >= PoolLeast - 1e-3f; r = r > PoolLeast ? Mathf.Max(PoolLeast, r - 0.4f) : 0f)
+			for (float r = wanted; r >= least - 1e-3f; r = r > least ? Mathf.Max(least, r - 0.4f) : 0f)
 			{
 				if (!LavaClear(at, r + (close ? 0.3f : WayLane - 0.4f), -1, exceptBody))
 				{
@@ -1184,11 +1449,14 @@ namespace FishMMO.Shared.WorldDesign
 			for (int b = 0; b < plan.Bodies.Count && fed < 0; b++)
 			{
 				CaveStreamBody body = plan.Bodies[b];
-				if (body.Kind == CaveStreamKind.Stream && body.Into < 0 && OverFloor(chamber, body.Path[body.Path.Length - 1] + Vector3.up * CaveStreams.Drop, 1f))
+				// (Not one running on under the rock into the next run: its end is that run's.)
+				if (body.Kind == CaveStreamKind.Stream && body.Into < 0 && body.Banks != null && !float.IsNaN(body.Banks[body.Banks.Length - 1])
+					&& OverFloor(chamber, body.Path[body.Path.Length - 1] + Vector3.up * CaveStreams.Drop, 1f))
 				{
 					fed = b;
 				}
 			}
+			var chasm = new ChasmPool { Rift = ri, Middle = m, ToFree = axis * free, Across = e, Bottom = bottom, Clear = clear, Half = half, Radius = pool };
 			for (int pass = fed >= 0 ? 0 : 1; pass < 2; pass++)
 			{
 				if (pass == 1 && StreamUnit(0x57EAFu, (uint)ri, 1) >= 0.6f)
@@ -1202,19 +1470,11 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						break;
 					}
+					// The way the water pours: on down the chasm toward its free end, out from the lip.
 					Vector3 poolAt = m + axis * (free * land);
-					if (!LavaPoolFits(poolAt, pool, bottom, axis, out float poolFloor, out float poolTop))
-					{
-						continue;
-					}
-					poolAt.y = poolFloor - CaveStreams.PoolDrop;
-					if (Awash(poolAt.y - CaveStreams.PoolDepthMax))
-					{
-						continue;
-					}
 					if (pass == 0)
 					{
-						if (FedFall(plan, fed, ri, room, m, axis * free, e, lip, poolAt, pool, poolFloor, poolTop, rift))
+						if (FedFall(plan, fed, room, lip, chasm, rift))
 						{
 							return;
 						}
@@ -1233,30 +1493,72 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					// Out of the face into the chasm, where the water leaves the rock.
 					vent -= e * (side * 0.6f);
-					if (vent.y - poolAt.y < CaveStreams.MinFall)
+					if (!PlungeUnder(chasm, vent, FlatDir(poolAt - vent), CaveStreams.StreamDepth, out Vector3 landing, out Vector3 centre, out float poolFloor, out float poolTop))
 					{
 						continue;
 					}
-					int pooled = PlungePool(plan, poolAt, pool, poolFloor, poolTop, room);
-					AddFall(plan, vent, poolAt, Mathf.Clamp(rift.Narrow, 0.8f, 1.6f), -1, room, pooled);
+					int pooled = PlungePool(plan, centre, pool, poolFloor, poolTop, room);
+					AddFall(plan, vent, landing, Mathf.Clamp(rift.Narrow, 0.8f, 1.6f), -1, room, pooled);
 					return;
 				}
 			}
 		}
 
-		/// <summary>The stream <paramref name="fed"/> run on over its chamber's floor to the chasm's lip and over it into a plunge pool; false where its way there is not clear.</summary>
-		private bool FedFall(CaveStreamPlan plan, int fed, int ri, int room, Vector3 m, Vector3 toFree, Vector3 e, float lip, Vector3 poolAt, float pool,
-			float poolFloor, float poolTop, in CaveRift rift)
+		/// <summary>A chasm a fall pours into: its middle on its lip's floor, the way to its free end, across it, its floor's lowest, how far past its middle a lip may lie clear of its climbs (each 3.5 m short of it), its half length, and the plunge pool's radius.</summary>
+		private struct ChasmPool
+		{
+			public int Rift;
+			public Vector3 Middle, ToFree, Across;
+			public float Bottom, Clear, Half, Radius;
+		}
+
+		/// <summary>
+		/// The plunge pool a fall off <paramref name="lip"/> pouring the way <paramref name="dir"/> points comes down in: round where
+		/// its curtain lands (<see cref="Thrown"/>) on the chasm's floor, that floor measured; within the chasm, on its free end's
+		/// side, clear of its climbs, the curtain open the whole way down. Its landing (at the pool's surface) and its centre (y the
+		/// pool's surface), its floor and the top its bowl is cut to; false where none fits.
+		/// </summary>
+		private bool PlungeUnder(in ChasmPool chasm, Vector3 lip, Vector3 dir, float depth, out Vector3 landing, out Vector3 centre, out float floor, out float top)
+		{
+			Vector3 axis = FlatDir(chasm.ToFree);
+			centre = default;
+			floor = top = float.NaN;
+			// First as if it fell to the chasm's lowest floor, then to the floor measured where that lands.
+			landing = Thrown(lip, dir, depth, chasm.Bottom - CaveStreams.PoolDrop);
+			for (int pass = 0; pass < 2; pass++)
+			{
+				if (!LavaPoolFits(landing, chasm.Radius, chasm.Bottom, axis, out floor, out top))
+				{
+					return false;
+				}
+				centre = new Vector3(landing.x, floor - CaveStreams.PoolDrop, landing.z);
+				landing = Thrown(lip, dir, depth, centre.y);
+			}
+			Vector3 o = centre - chasm.Middle;
+			float along = Vector3.Dot(o, chasm.ToFree), across = Mathf.Abs(Vector3.Dot(o, chasm.Across));
+			CaveRift rift = Rifts[chasm.Rift];
+			return Plan2(landing, centre) <= chasm.Radius - 0.3f && along >= chasm.Clear - 2.5f + chasm.Radius && along <= chasm.Half - chasm.Radius - 0.5f && across <= rift.Width
+				&& lip.y - centre.y >= CaveStreams.MinFall && !Awash(centre.y - CaveStreams.PoolDepthMax) && ThrowOpen(lip, dir, depth, centre.y);
+		}
+
+		/// <summary>
+		/// The stream <paramref name="fed"/> run on over its chamber's floor to the chasm's lip <paramref name="lip"/> metres toward
+		/// its free end and over it, into a plunge pool where its curtain comes down (<see cref="PlungeUnder"/>); false where its
+		/// way there is not clear or no pool fits.
+		/// </summary>
+		private bool FedFall(CaveStreamPlan plan, int fed, int room, float lip, in ChasmPool chasm, in CaveRift rift)
 		{
 			CaveStreamBody stream = plan.Bodies[fed];
 			CaveChamber chamber = Chambers[room];
+			int ri = chasm.Rift;
+			Vector3 m = chasm.Middle, e = chasm.Across;
 			Vector3 from = stream.Path[stream.Path.Length - 1];
 			float side = Mathf.Sign(Vector3.Dot(from - m, e));
 			if (side == 0f)
 			{
 				side = 1f;
 			}
-			Vector3 edge = m + toFree * lip + e * (side * (rift.Width - 0.3f));
+			Vector3 edge = m + chasm.ToFree * lip + e * (side * (rift.Width - 0.3f));
 			int steps = Mathf.CeilToInt(Plan2(from, edge));
 			if (steps < 2)
 			{
@@ -1294,7 +1596,10 @@ namespace FishMMO.Shared.WorldDesign
 				banks.Add(bank);
 				tops.Add(top);
 			}
-			if (surface - poolAt.y < 3f || !StreamRoom(plan))
+			// Over the lip the way it runs to it, into the pool where its water comes down.
+			Vector3 lipPoint = path[path.Count - 1];
+			if (!StreamRoom(plan) || !PlungeUnder(chasm, lipPoint, FlatDir(lipPoint - path[path.Count - 2]), stream.Depth, out Vector3 landing, out Vector3 poolAt,
+				out float poolFloor, out float poolTop) || surface - poolAt.y < 3f)
 			{
 				return false;
 			}
@@ -1302,11 +1607,10 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				lavaLaid.Add((new Vector3(path[k].x, banks[k], path[k].z), 0.5f * stream.Width, fed));
 			}
-			int pooled = PlungePool(plan, poolAt, pool, poolFloor, poolTop, room);
+			int pooled = PlungePool(plan, poolAt, chasm.Radius, poolFloor, poolTop, room);
 			// Over the lip and down: a point falling midway, then where it lands in the pool.
-			Vector3 lipPoint = path[path.Count - 1];
-			path.Add(Vector3.Lerp(lipPoint, poolAt, 0.5f));
-			path.Add(poolAt);
+			path.Add(Vector3.Lerp(lipPoint, landing, 0.5f));
+			path.Add(landing);
 			banks.Add(float.NaN);
 			banks.Add(float.NaN);
 			tops.Add(float.NaN);
@@ -1371,12 +1675,15 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Water falling from the roof's avens (2026-10-20: an aven is where water once fell in down a joint; in a wet cave it
-		/// still does), by the seed: out of a crack in the aven's wall partway up it, down that side into a pool on the floor
-		/// under it — under its middle, or off toward whichever side of it a pool fits off every way (the water runs down the
-		/// wall it comes out of).
+		/// still does), by the seed: out of a crack in the aven's wall partway up it, into a pool on the floor round where the
+		/// water thrown out of the crack comes down (<see cref="Thrown"/>). Where no pool fits under an aven (most stand over a
+		/// way), a thin shower instead, laid once every other body is (<see cref="Showers"/>): the avens that shower, their cracks
+		/// and their turns.
 		/// </summary>
-		private void AvenFalls(CaveStreamPlan plan)
+		private List<(int aven, Vector3 crack, float turn)> AvenFalls(CaveStreamPlan plan)
 		{
+			var showers = new List<(int, Vector3, float)>();
+			const float depth = CaveStreams.StreamDepth;
 			for (int ai = 0; ai < Hollows.Count && StreamRoom(plan, 2); ai++)
 			{
 				CaveHollow aven = Hollows[ai];
@@ -1398,61 +1705,333 @@ namespace FishMMO.Shared.WorldDesign
 					continue;
 				}
 				float turn = 360f * StreamUnit(0x57EA7u, (uint)ai, 2);
+				float below = HeldFloor(under, under.y, 40f);
 				bool laid = false;
-				for (int k = 0; k < 17 && !laid && StreamRoom(plan, 2); k++)
+				for (int k = 0; k < 8 && !laid && StreamRoom(plan, 2); k++)
 				{
-					// Under its middle first, then round it a little out and further out.
-					Vector3 dir = LavaDir(turn + 45f * ((k + 7) % 8));
-					float off = k == 0 ? 0f : k <= 8 ? 0.6f * aven.Radius : 1.1f * aven.Radius;
-					Vector3 at = under + dir * off;
-					if (HeldVoid(at) >= 0f)
+					// The crack on one side of the aven, its water thrown back out over the floor under it.
+					Vector3 dir = LavaDir(turn + 45f * k);
+					Vector3 lip = CrackLip(crack, dir, aven.Radius * 1.5f + 1f);
+					Vector3 landing = Thrown(lip, -dir, depth, below - CaveStreams.PoolDrop);
+					var over = new Vector3(landing.x, under.y, landing.z);
+					if (HeldVoid(over) >= 0f)
 					{
 						continue;
 					}
-					float floor = HeldFloor(at, at.y, 40f);
+					float floor = HeldFloor(over, over.y, 40f);
 					if (float.IsNaN(floor))
 					{
 						continue;
 					}
-					at.y = floor;
-					int pooled = StreamPool(plan, Chambers.FindIndex(c => OverFloor(c, at, 0.5f)), at, wanted, -1, out float level, true);
-					if (pooled < 0)
+					// A pool round where it lands: there, or reaching on past it, or back under the crack.
+					foreach (float shift in new[] { 0f, 0.45f, -0.45f })
 					{
-						continue;
+						Vector3 at = new Vector3(landing.x, floor, landing.z) - dir * (shift * wanted);
+						int pooled = StreamPool(plan, Chambers.FindIndex(c => OverFloor(c, at, 0.5f)), at, wanted, -1, out float level, true);
+						if (pooled < 0)
+						{
+							continue;
+						}
+						CaveStreamBody pool = plan.Bodies[pooled];
+						Vector3 lands = Thrown(lip, -dir, depth, level);
+						if (lip.y - level < CaveStreams.MinFall || Plan2(lands, pool.Path[0]) > pool.Width - 0.3f || !ThrowOpen(lip, -dir, depth, level))
+						{
+							plan.Bodies.RemoveAt(pooled);
+							lavaLaid.RemoveAll(l => l.body == pooled);
+							continue;
+						}
+						AddFall(plan, lip, lands, Mathf.Clamp(0.5f * aven.Radius, 0.5f, 1.2f), -1, pool.Chamber, pooled);
+						laid = true;
+						break;
 					}
-					CaveStreamBody pool = plan.Bodies[pooled];
-					// The crack it pours from: on the aven's wall on the pool's side, just out of the face.
-					Vector3 lip = CrackLip(crack, dir, aven.Radius * 1.5f + 1f);
-					// Down that side: it lands under the crack, a little out from the wall, inside the pool.
-					Vector3 landing = new Vector3(lip.x, level, lip.z) - dir * 0.5f;
-					Vector3 fromMiddle = landing - pool.Path[0];
-					fromMiddle.y = 0f;
-					float most = Mathf.Max(0.2f, pool.Width - 0.4f);
-					if (fromMiddle.magnitude > most)
-					{
-						landing = pool.Path[0] + fromMiddle.normalized * most;
-						landing.y = level;
-					}
-					if (lip.y - level < CaveStreams.MinFall || Plan2(lip, landing) < 0.3f)
-					{
-						plan.Bodies.RemoveAt(pooled);
-						lavaLaid.RemoveAll(l => l.body == pooled);
-						continue;
-					}
-					if (!FallOpen(lip, landing))
-					{
-						plan.Bodies.RemoveAt(pooled);
-						lavaLaid.RemoveAll(l => l.body == pooled);
-						continue;
-					}
-					AddFall(plan, lip, landing, Mathf.Clamp(0.5f * aven.Radius, 0.5f, 1.2f), -1, pool.Chamber, pooled);
-					laid = true;
 				}
-				if (!laid && StreamRoom(plan))
+				if (!laid)
 				{
-					Shower(plan, aven, crack, LavaDir(turn));
+					showers.Add((ai, crack, turn));
 				}
 			}
+			return showers;
+		}
+
+		/// <summary>
+		/// The showers (<see cref="AvenFalls"/>), laid once every other body is so each comes down in water: out of a crack on
+		/// whichever side of its aven throws it into a stream's channel (on the channel's line, at its surface: CaveStreamWater
+		/// joins it to the stream) or a pool under it; else into a small plunge pool of its own beside the way; else into the
+		/// splash basin its water wore in the floor (<see cref="SplashFits"/>); else none (2026-10-21: a shower used to come down on
+		/// the bare floor and sink, beside a stream as often as not).
+		/// </summary>
+		private void Showers(CaveStreamPlan plan, List<(int aven, Vector3 crack, float turn)> showers)
+		{
+			foreach ((int ai, Vector3 crack, float turn) in showers)
+			{
+				if (!StreamRoom(plan))
+				{
+					return;
+				}
+				Shower(plan, Hollows[ai], crack, turn);
+			}
+		}
+
+		/// <summary>How far round an aven's middle a shower's crack may throw its water into a stream or pool, metres past its own radius.</summary>
+		private const float ShowerReach = 4f;
+
+		/// <summary>One aven's shower (<see cref="Showers"/>).</summary>
+		private void Shower(CaveStreamPlan plan, in CaveHollow aven, Vector3 crack, float turn)
+		{
+			const float depth = ShowerDepth;
+			float wall = aven.Radius * 1.5f + 1f, reach = aven.Radius + ShowerReach;
+			float width = Mathf.Clamp(0.4f * aven.Radius, 0.4f, 0.8f);
+			Vector3 middle = aven.A;
+			bool Fits(Vector3 lip, Vector3 landing)
+			{
+				return lip.y - landing.y >= CaveStreams.MinFall + 0.5f && !Awash(landing.y) && ThrowOpen(lip, FlatDir(landing - lip), depth, landing.y);
+			}
+			// The cracks round its wall, each throwing its water back in over the floor under it: the first (from the turn its seed
+			// picks) whose water comes down on a stream's line (within a quarter of its width) or inside a pool.
+			const int Cracks = 64;
+			for (int k = 0; k < Cracks; k++)
+			{
+				Vector3 dir = LavaDir(turn + 360f * k / Cracks);
+				Vector3 lip = CrackLip(crack, dir, wall);
+				for (int b = 0; b < plan.Bodies.Count; b++)
+				{
+					CaveStreamBody body = plan.Bodies[b];
+					if (body.Path[0].y > lip.y - CaveStreams.MinFall && body.Path[body.Path.Length - 1].y > lip.y - CaveStreams.MinFall)
+					{
+						continue;
+					}
+					if (body.Kind == CaveStreamKind.Pool)
+					{
+						Vector3 centre = body.Path[0];
+						if (Plan2(centre, middle) > reach + body.Width)
+						{
+							continue;
+						}
+						Vector3 landing = Thrown(lip, -dir, depth, centre.y);
+						if (Plan2(landing, centre) <= body.Width - 0.3f && Fits(lip, landing))
+						{
+							AddShower(plan, lip, landing, width, body.Chamber, b);
+							return;
+						}
+						continue;
+					}
+					if (body.Banks == null)
+					{
+						continue;
+					}
+					// Its surface where the water comes down, found from where it would land on the stream's nearest stretch.
+					Vector3 guess = Thrown(lip, -dir, depth, body.Path[body.Path.Length - 1].y);
+					for (int pass = 0; pass < 2; pass++)
+					{
+						if (!OnChannel(body, guess, out float surface, out float off) || off > 0.25f * body.Width)
+						{
+							guess.y = float.NaN;
+							break;
+						}
+						guess = Thrown(lip, -dir, depth, surface);
+					}
+					if (!float.IsNaN(guess.y) && OnChannel(body, guess, out float level, out float across) && across <= 0.25f * body.Width
+						&& Mathf.Abs(level - guess.y) < 0.02f && Fits(lip, guess))
+					{
+						AddShower(plan, lip, guess, width, Chambers.FindIndex(c => OverFloor(c, guess + Vector3.up * CaveStreams.Drop, 0.5f)), -1);
+						return;
+					}
+				}
+			}
+			// Into a plunge pool of its own, where one fits off the ways round where its water lands.
+			float below = HeldFloor(middle + Vector3.down * 1f, middle.y - 1f, 40f);
+			for (int k = 0; k < 8 && !float.IsNaN(below) && StreamRoom(plan, 2); k++)
+			{
+				Vector3 dir = LavaDir(turn + 45f * k);
+				Vector3 lip = CrackLip(crack, dir, wall);
+				Vector3 landing = Thrown(lip, -dir, depth, below - CaveStreams.PoolDrop);
+				var over = new Vector3(landing.x, middle.y - 1f, landing.z);
+				float floor = HeldVoid(over) < 0f ? HeldFloor(over, over.y, 40f) : float.NaN;
+				if (float.IsNaN(floor))
+				{
+					continue;
+				}
+				int pooled = StreamPool(plan, Chambers.FindIndex(c => OverFloor(c, over, 0.5f)), new Vector3(landing.x, floor, landing.z), ShowerPool, -1, out float level, true, float.MaxValue, ShowerPool);
+				if (pooled < 0)
+				{
+					continue;
+				}
+				CaveStreamBody pool = plan.Bodies[pooled];
+				Vector3 lands = Thrown(lip, -dir, depth, level);
+				if (Plan2(lands, pool.Path[0]) > pool.Width - 0.3f || !Fits(lip, lands))
+				{
+					plan.Bodies.RemoveAt(pooled);
+					lavaLaid.RemoveAll(l => l.body == pooled);
+					continue;
+				}
+				AddShower(plan, lip, lands, width, pool.Chamber, pooled);
+				return;
+			}
+			// Else into the basin its water wore in the floor where it lands, ankle deep (on a way, waded through): nowhere near a
+			// kept place (a camp, a mouth), a climb, a bridge or a chasm, other water, nor over another level.
+			for (int k = 0; k < 8 && !float.IsNaN(below) && StreamRoom(plan, 2); k++)
+			{
+				Vector3 dir = LavaDir(turn + 45f * k);
+				Vector3 lip = CrackLip(crack, dir, wall);
+				Vector3 landing = Thrown(lip, -dir, depth, below);
+				var over = new Vector3(landing.x, middle.y - 1f, landing.z);
+				float floor = HeldVoid(over) < 0f ? HeldFloor(over, over.y, 40f) : float.NaN;
+				if (float.IsNaN(floor) || !SplashFits(new Vector3(landing.x, floor, landing.z), out float low, out float high))
+				{
+					continue;
+				}
+				float level = low - SplashDrop;
+				Vector3 centre = new Vector3(landing.x, level, landing.z);
+				Vector3 lands = Thrown(lip, -dir, depth, level);
+				if (Plan2(lands, centre) > SplashRadius - 0.3f || !Fits(lip, lands))
+				{
+					continue;
+				}
+				int pooled = plan.Bodies.Count;
+				plan.Bodies.Add(new CaveStreamBody
+				{
+					Kind = CaveStreamKind.Pool,
+					Path = new[] { centre },
+					Width = SplashRadius,
+					Depth = SplashDepth,
+					Banks = new[] { low },
+					Tops = new[] { high + 0.3f },
+					Passage = -1,
+					Chamber = Chambers.FindIndex(c => OverFloor(c, over, 0.5f)),
+					Pit = -1,
+					Into = -1,
+				});
+				lavaLaid.Add((new Vector3(landing.x, floor, landing.z), SplashRadius, pooled));
+				AddShower(plan, lip, lands, width, plan.Bodies[pooled].Chamber, pooled);
+				return;
+			}
+		}
+
+		/// <summary>How far round a shower's splash basin reaches, metres.</summary>
+		public const float SplashRadius = 0.8f;
+		/// <summary>How deep a shower's splash basin stands at its middle, metres: ankle deep, waded through where it lies on a way.</summary>
+		public const float SplashDepth = 0.3f;
+		/// <summary>How far under the lowest of its rim a splash basin's water stands, metres: brimming.</summary>
+		public const float SplashDrop = 0.05f;
+
+		/// <summary>
+		/// Whether a shower's splash basin fits on a floor at a point: floor all round it near level, and nothing near it it must
+		/// keep off (as the showers that came down on the bare floor kept: kept places, climbs, crossings, bridges and ramps,
+		/// chasms, shafts, other water, another level under it); the lowest and highest of its rim.
+		/// </summary>
+		private bool SplashFits(Vector3 at, out float low, out float high)
+		{
+			low = high = at.y;
+			for (int k = 0; k < 12; k++)
+			{
+				float found = HeldFloor(at + LavaDir(30f * k) * (SplashRadius + 0.3f), at.y + 0.8f);
+				if (float.IsNaN(found))
+				{
+					return false;
+				}
+				low = Mathf.Min(low, found);
+				high = Mathf.Max(high, found);
+			}
+			if (high - low > 0.4f || Awash(low - SplashDrop - SplashDepth))
+			{
+				return false;
+			}
+			foreach ((Vector3 keep, float radius, float height) in lavaKeeps)
+			{
+				if (Plan2(at, keep) < radius + SplashRadius + 1f && Mathf.Abs(at.y - keep.y) < height)
+				{
+					return false;
+				}
+			}
+			foreach (CaveClimb c in Climbs)
+			{
+				if (Plan2(c.Bottom, at) < 3f + SplashRadius || Plan2(c.Top, at) < 3f + SplashRadius)
+				{
+					return false;
+				}
+			}
+			foreach (CaveCrossing c in Crossings)
+			{
+				if (PlanToSegment(at, c.A, c.B, out _) < c.HalfWidth + 2f + SplashRadius)
+				{
+					return false;
+				}
+			}
+			foreach (CaveSolid sol in Solids)
+			{
+				if ((sol.Kind == CaveSolidKind.Bridge || sol.Kind == CaveSolidKind.Ramp || sol.Kind == CaveSolidKind.Spiral) && PlanToSegment(at, sol.A, sol.B, out _) < sol.Width + 2f + SplashRadius)
+				{
+					return false;
+				}
+			}
+			foreach (CaveRift r in Rifts)
+			{
+				if (PlanToSegment(at, r.A, r.B, out _) < r.Width + 2f + SplashRadius)
+				{
+					return false;
+				}
+			}
+			foreach (CaveShaft sh in Shafts)
+			{
+				if (Plan2(at, sh.Bottom) < sh.Radius * 1.42f + 2f + SplashRadius)
+				{
+					return false;
+				}
+			}
+			foreach ((Vector3 laid, float half, int _) in lavaLaid)
+			{
+				if (Plan2(laid, at) < half + 1.5f + SplashRadius && Mathf.Abs(laid.y - at.y) < 3f)
+				{
+					return false;
+				}
+			}
+			return !LavaOverLower(at, SplashRadius) && !NearHollow(at + Vector3.up * 0.5f, SplashRadius);
+		}
+
+		/// <summary>
+		/// Where a point lies over a stream's channel (a stretch with its bed cut, never a fall's): its surface there and how far off
+		/// the line, in plan; false where it lies over none (by more than half its width).
+		/// </summary>
+		private static bool OnChannel(in CaveStreamBody stream, Vector3 p, out float surface, out float off)
+		{
+			surface = float.NaN;
+			off = float.MaxValue;
+			for (int i = 0; i + 1 < stream.Path.Length; i++)
+			{
+				if (float.IsNaN(stream.Banks[i]) || float.IsNaN(stream.Banks[i + 1]))
+				{
+					continue;
+				}
+				float d = PlanToSegment(p, stream.Path[i], stream.Path[i + 1], out float t);
+				if (d < off)
+				{
+					off = d;
+					surface = Mathf.Lerp(stream.Path[i].y, stream.Path[i + 1].y, t);
+				}
+			}
+			return off <= 0.5f * stream.Width;
+		}
+
+		/// <summary>The radius of a shower's own plunge pool, metres: a basin its water wore in the floor.</summary>
+		private const float ShowerPool = 0.9f;
+
+		/// <summary>A shower: out of its crack, a point falling midway, and where it lands in water (<paramref name="into"/> the pool it feeds, −1 a stream).</summary>
+		private static void AddShower(CaveStreamPlan plan, Vector3 lip, Vector3 landing, float width, int chamber, int into)
+		{
+			plan.Bodies.Add(new CaveStreamBody
+			{
+				Kind = CaveStreamKind.Stream,
+				Path = new[] { lip, Vector3.Lerp(lip, landing, 0.5f), landing },
+				Falls = new[] { false, true, true },
+				Width = width,
+				Depth = ShowerDepth,
+				Banks = new[] { float.NaN, float.NaN, float.NaN },
+				Tops = new[] { float.NaN, float.NaN, float.NaN },
+				Passage = -1,
+				Chamber = chamber,
+				Pit = -1,
+				Into = into,
+			});
 		}
 
 		/// <summary>
@@ -1489,102 +2068,6 @@ namespace FishMMO.Shared.WorldDesign
 				back = Mathf.Max(0f, back - 0.1f);
 			}
 			return crack + dir * back;
-		}
-
-		/// <summary>
-		/// Where no pool fits under an aven (most stand over a way): a thin shower out of its crack, down the wall onto the floor
-		/// under it, where it runs away into the rock — the way under it walked through the falling water, wetted, never cut.
-		/// Nowhere near a kept place (a camp, a mouth), a climb, a bridge or a chasm, nor over another level.
-		/// </summary>
-		private void Shower(CaveStreamPlan plan, in CaveHollow aven, Vector3 crack, Vector3 dir)
-		{
-			Vector3 lip = CrackLip(crack, dir, aven.Radius * 1.5f + 1f);
-			Vector3 foot = lip - dir * 0.5f;
-			if (HeldVoid(foot) >= 0f)
-			{
-				return;
-			}
-			float floor = HeldFloor(foot, foot.y, 40f);
-			if (float.IsNaN(floor) || lip.y - floor < CaveStreams.MinFall + 0.5f || Awash(floor))
-			{
-				return;
-			}
-			foot.y = floor;
-			foreach ((Vector3 at, float radius, float height) in lavaKeeps)
-			{
-				if (Plan2(foot, at) < radius + 1f && Mathf.Abs(foot.y - at.y) < height)
-				{
-					return;
-				}
-			}
-			foreach (CaveClimb c in Climbs)
-			{
-				if (Plan2(c.Bottom, foot) < 3f || Plan2(c.Top, foot) < 3f)
-				{
-					return;
-				}
-			}
-			foreach (CaveCrossing c in Crossings)
-			{
-				if (PlanToSegment(foot, c.A, c.B, out _) < c.HalfWidth + 2f)
-				{
-					return;
-				}
-			}
-			foreach (CaveSolid sol in Solids)
-			{
-				if ((sol.Kind == CaveSolidKind.Bridge || sol.Kind == CaveSolidKind.Ramp || sol.Kind == CaveSolidKind.Spiral) && PlanToSegment(foot, sol.A, sol.B, out _) < sol.Width + 2f)
-				{
-					return;
-				}
-			}
-			foreach (CaveRift r in Rifts)
-			{
-				if (PlanToSegment(foot, r.A, r.B, out _) < r.Width + 2f)
-				{
-					return;
-				}
-			}
-			foreach (CaveShaft sh in Shafts)
-			{
-				if (Plan2(foot, sh.Bottom) < sh.Radius * 1.42f + 2f)
-				{
-					return;
-				}
-			}
-			foreach ((Vector3 laid, float half, int _) in lavaLaid)
-			{
-				if (Plan2(laid, foot) < half + 1.5f && Mathf.Abs(laid.y - foot.y) < 3f)
-				{
-					return;
-				}
-			}
-			if (LavaOverLower(foot, 1f))
-			{
-				return;
-			}
-			// A film over the floor where it lands, running off into the rock; its fall open the whole way down.
-			Vector3 landing = foot + Vector3.up * 0.03f;
-			if (!FallOpen(lip, landing))
-			{
-				return;
-			}
-			int index = plan.Bodies.Count;
-			plan.Bodies.Add(new CaveStreamBody
-			{
-				Kind = CaveStreamKind.Stream,
-				Path = new[] { lip, Vector3.Lerp(lip, landing, 0.5f), landing },
-				Falls = new[] { false, true, true },
-				Width = Mathf.Clamp(0.4f * aven.Radius, 0.4f, 0.8f),
-				Depth = ShowerDepth,
-				Banks = new[] { float.NaN, float.NaN, float.NaN },
-				Tops = new[] { float.NaN, float.NaN, float.NaN },
-				Passage = -1,
-				Chamber = Chambers.FindIndex(c => OverFloor(c, foot, 0.5f)),
-				Pit = -1,
-				Into = -1,
-			});
-			lavaLaid.Add((foot, 0.5f, index));
 		}
 
 		/// <summary>How deep a shower's water runs where it lands (a film: its discharge, for the curtain's thickness), metres.</summary>

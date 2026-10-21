@@ -146,7 +146,15 @@ namespace FishMMO.Shared.Weather
 		}
 
 		/// <summary>The water over a place in <paramref name="scene"/> at a synced server tick: the highest surface standing there.</summary>
-		public static WaterSample Sample(Scene scene, float x, float z, uint tick)
+		public static WaterSample Sample(Scene scene, float x, float z, uint tick) => Sample(scene, x, float.PositiveInfinity, z, tick);
+
+		/// <summary>
+		/// The water a height stands in or over at a place in <paramref name="scene"/> at a synced server tick (2026-10-21): the
+		/// highest surface of the lakes and rivers whose floor lies under it (<see cref="SurfaceWater.IStackedAreaSource"/>), so a
+		/// swimmer in a cave's stream is not under a lava tube's river on the level over it. Positive infinity for
+		/// <paramref name="y"/> is the highest over the place.
+		/// </summary>
+		public static WaterSample Sample(Scene scene, float x, float y, float z, uint tick)
 		{
 			WaterSample sample = WaterSample.Dry;
 			SceneWaters waters = For(scene, false);
@@ -169,13 +177,15 @@ namespace FishMMO.Shared.Weather
 				}
 				bool lava = false;
 				float level;
-				bool found = inland is SurfaceWater.ILavaAreaSource liquid ? liquid.TryGetSurface(x, z, out level, out lava) : inland.TryGetSurface(x, z, out level);
+				bool stacked = !float.IsPositiveInfinity(y) && inland is SurfaceWater.IStackedAreaSource;
+				bool found = stacked ? ((SurfaceWater.IStackedAreaSource)inland).TryGetSurface(x, y, z, out level, out lava)
+					: inland is SurfaceWater.ILavaAreaSource liquid ? liquid.TryGetSurface(x, z, out level, out lava) : inland.TryGetSurface(x, z, out level);
 				if (found && level > sample.Surface)
 				{
 					/* The scene's lakes and rivers answer CurrentAt by asking TryGetSurface again first, which this has just
 					 * done: their flow straight away is the same answer without the second lookup. */
 					Vector2 current = inland is FishMMO.Shared.Biomes.SceneWaterBodies bodies
-						? bodies.FlowAt(x, z, out _, out _, lava)
+						? bodies.FlowAt(x, z, out _, out _, lava, y)
 						: inland.CurrentAt(x, z);
 					// A lava tube's river or pit is the lava liquid, as a lava sea is: it burns, and only the fire-proof swim it.
 					sample.Body = lava ? WaterBody.Lava : current.sqrMagnitude > 1e-8f ? WaterBody.River : WaterBody.Lake;
@@ -186,7 +196,7 @@ namespace FishMMO.Shared.Weather
 			return sample;
 		}
 
-		/// <summary>The water over a place now (<see cref="WeatherQuery.CurrentTick"/>): for anything not predicted.</summary>
-		public static WaterSample Sample(Scene scene, Vector3 position) => Sample(scene, position.x, position.z, WeatherQuery.CurrentTick);
+		/// <summary>The water a position stands in or over now (<see cref="WeatherQuery.CurrentTick"/>): for anything not predicted.</summary>
+		public static WaterSample Sample(Scene scene, Vector3 position) => Sample(scene, position.x, position.y, position.z, WeatherQuery.CurrentTick);
 	}
 }

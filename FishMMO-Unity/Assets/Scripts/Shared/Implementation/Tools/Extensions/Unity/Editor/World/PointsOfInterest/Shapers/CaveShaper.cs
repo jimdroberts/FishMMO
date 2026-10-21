@@ -523,6 +523,9 @@ namespace FishMMO.Shared.WorldDesign
 			var bits = new byte[(width * height + 7) / 8];
 			int covered = 0;
 			Vector2 seed = default;
+			// The lowest its bed lies (the floor under every column it covers), for the water's height-aware lookup.
+			float floor = float.PositiveInfinity;
+			bool Open(Vector3 scene) => system.Void(scene - system.Origin) < 0f;
 			for (int z = 0; z < height; z++)
 			{
 				for (int x = 0; x < width; x++)
@@ -533,9 +536,11 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					bool open = false;
+					float found = level;
 					for (float y = level - 0.05f; y >= deepest - 0.5f && !open; y -= 1f)
 					{
-						open = system.Void(new Vector3(east - system.Origin.x, y - system.Origin.y, north - system.Origin.z)) < 0f;
+						found = y;
+						open = Open(new Vector3(east, y, north));
 					}
 					if (!open)
 					{
@@ -545,6 +550,7 @@ namespace FishMMO.Shared.WorldDesign
 					bits[bit >> 3] |= (byte)(1 << (bit & 7));
 					seed = new Vector2(east, north);
 					covered++;
+					floor = Mathf.Min(floor, CaveLavaWater.FloorUnder(Open, new Vector3(east, found, north), level - CaveLavaWater.MaxFloorReach));
 				}
 			}
 			if (covered > 0)
@@ -555,6 +561,7 @@ namespace FishMMO.Shared.WorldDesign
 					PlanetLake = -1,
 					Level = level,
 					SpillLevel = level,
+					Floor = floor - 0.25f,
 					Seeds = new[] { seed },
 					Bounds = new Rect(origin.x, origin.y, width * cell, height * cell),
 					Mask = bits,

@@ -26,7 +26,7 @@ namespace FishMMO.Shared.Biomes
 	/// <see cref="WaterQuery"/> reports it as <see cref="WaterBody.Lava"/>: burned in, swum slowly by the fire-proof.
 	/// </para>
 	/// </remarks>
-	public sealed class SceneWaterBodies : MonoBehaviour, SurfaceWater.ILavaAreaSource
+	public sealed class SceneWaterBodies : MonoBehaviour, SurfaceWater.IStackedAreaSource
 	{
 		[Tooltip("The scene's rivers and lakes, written when it was generated.")]
 		public SceneHydrology Hydrology;
@@ -151,6 +151,13 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>The surface over a scene position, as <see cref="TryGetSurface(float, float, out float)"/>, and whether it is molten lava.</summary>
 		public bool TryGetSurface(float x, float z, out float level, out bool lava) => TryGetSurfaceNear(x, z, 0f, out level, out lava);
 
+		/// <summary>
+		/// The surface a height stands in or over at a scene position (2026-10-21): only lakes and rivers whose floor lies no more
+		/// than <see cref="SurfaceWater.FloorReach"/> over <paramref name="y"/> answer, so a cave's stream is not drowned by a lava
+		/// tube's river on the level over it, nor by a lake on the hill. A lake whose floor is unknown reaches down without end.
+		/// </summary>
+		public bool TryGetSurface(float x, float y, float z, out float level, out bool lava) => Surface(x, z, 0f, y, out level, out lava);
+
 		/// <summary>True when any of the scene's lakes or rivers is lava.</summary>
 		public bool HasLava
 		{
@@ -235,7 +242,24 @@ namespace FishMMO.Shared.Biomes
 		public bool TryGetSurfaceNear(float x, float z, float reach, out float level) => TryGetSurfaceNear(x, z, reach, out level, out _);
 
 		/// <summary><see cref="TryGetSurfaceNear(float, float, float, out float)"/>, and whether the surface found is molten lava.</summary>
-		public bool TryGetSurfaceNear(float x, float z, float reach, out float level, out bool lava)
+		public bool TryGetSurfaceNear(float x, float z, float reach, out float level, out bool lava) => Surface(x, z, reach, float.PositiveInfinity, out level, out lava);
+
+		/// <summary>Whether water whose floor lies at <paramref name="floor"/> is a height's (any for positive infinity).</summary>
+		private static bool Holds(float floor, float height) => !(floor > height + SurfaceWater.FloorReach);
+
+		/// <summary>A river's floor where its line comes nearest: its bed, else its surface less its depth there.</summary>
+		private static float FloorOf(SceneHydrology.River river, int i, float t, Vector3 a, Vector3 b)
+		{
+			if (river.Bed != null && i + 1 < river.Bed.Length)
+			{
+				return Mathf.Lerp(river.Bed[i], river.Bed[i + 1], t);
+			}
+			float depth = river.Depth != null && i + 1 < river.Depth.Length ? Mathf.Lerp(river.Depth[i], river.Depth[i + 1], t) : 1f;
+			return Mathf.Lerp(a.y, b.y, t) - depth;
+		}
+
+		/// <summary>The surface over a position, within <paramref name="reach"/>, of the water a height stands in or over.</summary>
+		private bool Surface(float x, float z, float reach, float height, out float level, out bool lava)
 		{
 			level = float.NegativeInfinity;
 			lava = false;
@@ -247,7 +271,7 @@ namespace FishMMO.Shared.Biomes
 			reach = Mathf.Clamp(reach, 0f, MaxReachMetres);
 			foreach (SceneHydrology.Lake lake in Hydrology.Lakes)
 			{
-				if (lake.Level > level && LakeCovers(lake, x, z, reach))
+				if (lake.Level > level && Holds(lake.Floor, height) && LakeCovers(lake, x, z, reach))
 				{
 					level = lake.Level;
 					lava = lake.Lava;
@@ -280,7 +304,7 @@ namespace FishMMO.Shared.Biomes
 				Vector3 a = path.Points[segment.Point], b = path.Points[segment.Point + 1];
 				float t = Project(a, b, x, z, out float distance);
 				float half = HalfAt(path, segment.Point, t, a, b, x, z);
-				if (distance > half + reach)
+				if (distance > half + reach || !Holds(FloorOf(path, segment.Point, t, a, b), height))
 				{
 					continue;
 				}
@@ -400,8 +424,8 @@ namespace FishMMO.Shared.Biomes
 			return false;
 		}
 
-		/// <summary>True when a point is under a lake's or a river's surface.</summary>
-		public bool IsUnder(Vector3 point) => TryGetSurface(point.x, point.z, out float level) && point.y < level;
+		/// <summary>True when a point is under the surface of a lake or a river it stands in (not one on a level above it).</summary>
+		public bool IsUnder(Vector3 point) => TryGetSurface(point.x, point.y, point.z, out float level, out _) && point.y < level;
 
 		/// <summary>The current at a scene position where water stands there; zero elsewhere.</summary>
 		public Vector2 CurrentAt(float x, float z) => TryGetSurface(x, z, out _, out bool lava) ? FlowAt(x, z, out _, out _, lava) : Vector2.zero;
@@ -417,7 +441,13 @@ namespace FishMMO.Shared.Biomes
 		/// <see cref="FlowAt(float, float, out float, out float)"/> of one liquid: the lava rivers' flow for <paramref name="lava"/>
 		/// true, the water's for false. Each is its own: a lava tube's river under a lake on the hill moves none of its water.
 		/// </summary>
-		public Vector2 FlowAt(float x, float z, out float reach, out float broken, bool lava)
+		public Vector2 FlowAt(float x, float z, out float reach, out float broken, bool lava) => FlowAt(x, z, out reach, out broken, lava, float.PositiveInfinity);
+
+		/// <summary>
+		/// <see cref="FlowAt(float, float, out float, out float, bool)"/> of the water a height stands in (2026-10-21): rivers whose
+		/// floor lies over it (a level above) move none of it.
+		/// </summary>
+		public Vector2 FlowAt(float x, float z, out float reach, out float broken, bool lava, float height)
 		{
 			reach = 0f;
 			broken = 0f;
@@ -441,6 +471,11 @@ namespace FishMMO.Shared.Biomes
 				if (segment.Jet)
 				{
 					a = river.Points[i];
+					// Into the water at its own end, a level above or not.
+					if (!Holds(river.Bed != null && i < river.Bed.Length ? river.Bed[i] : a.y - 1f, height))
+					{
+						continue;
+					}
 					Vector3 along = a - river.Points[i - 1];
 					along.y = 0f;
 					along = along.sqrMagnitude > 1e-6f ? along.normalized : Vector3.forward;
@@ -465,6 +500,10 @@ namespace FishMMO.Shared.Biomes
 				a = river.Points[i];
 				b = river.Points[i + 1];
 				float t = Project(a, b, x, z, out float distance);
+				if (!Holds(FloorOf(river, i, t, a, b), height))
+				{
+					continue;
+				}
 				half = 0.5f * Mathf.Lerp(Width(river, i), Width(river, i + 1), t);
 				speed = Mathf.Lerp(Speed(river, i), Speed(river, i + 1), t);
 				rough = Broken(river, t < 0.5f ? i : i + 1);

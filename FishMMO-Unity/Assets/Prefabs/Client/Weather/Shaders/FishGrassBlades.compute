@@ -738,6 +738,10 @@ float4 GrassDensityMapAt(float2 local, uint map)
 
 // ── Culling ───────────────────────────────────────────────────────────
 
+// Last frame's depth pyramid (FishDepthPyramid, 2026-10-21): a blade wholly behind a hill, a rock or a wall is not drawn in
+// the camera's view; its shadow still is (only the main lists ask).
+#include "FishHiZOcclusion.hlsl"
+
 bool GrassSphereVisible(float3 c, float r)
 {
     bool inside = true;
@@ -1085,7 +1089,7 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     uint lod = lodDistance < _GrassShapeParams.y ? 0u : lodDistance < _GrassShapeParams.z ? 1u : 2u;
     // The head's two crossed cards are the same stem, drawn at its tip (FishGrassBlades.hlsl GrassBuild): two more records.
     uint records = headed ? 3u : 1u;
-    if (main && GrassSphereVisible(sphereCentre, radius))
+    if (main && GrassSphereVisible(sphereCentre, radius) && !FishOccluded(sphereCentre, radius))
     {
         // Only a blade the camera draws reads the ground's texture (shadow casters are colourless).
         lit = blade;

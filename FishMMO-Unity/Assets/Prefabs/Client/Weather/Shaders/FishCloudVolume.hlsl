@@ -1248,6 +1248,13 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
         // is what carries it up into its anvil — at the band's own softness a storm drew as a heap
         // half its height, with the anvil floating kilometres over it.
         float riseM = max(0.02, c.y) * ceilingM;
+        // No more than _FishCloudBase.z metres (2026-10-21, WeatherRenderProfile.BaseRiseMetres): a share of a deep cloud's
+        // height let each cloud's base sit wherever its noise first crossed the cut inside the rise, a bumpy underside
+        // a hundred metres deep; a base is the condensation level, one height under the whole cloud.
+        if (_FishCloudBase.z > 0.0)
+        {
+            riseM = min(riseM, _FishCloudBase.z);
+        }
         float topSoftness = c.z;
         if (stormCloud > 0.0)
         {

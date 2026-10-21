@@ -123,13 +123,16 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>Whether a pool is a flooded dead end (it floods the end of a way on purpose: nothing lies beyond it).</summary>
 		private static bool FloodedEnd(CaveStreamBody b) => b.Kind == CaveStreamKind.Pool && b.Passage >= 0 && b.Banks == null;
 
-		/// <summary>The water's surface over a point in plan, where it lies in a body's footprint (falls aside); NaN where none does.</summary>
+		/// <summary>Whether a pool is a shower's splash basin (ankle deep: a way may be waded through it).</summary>
+		private static bool Splash(CaveStreamBody b) => b.Kind == CaveStreamKind.Pool && b.Banks != null && b.Depth <= CaveSystem.SplashDepth + 1e-4f && b.Width <= CaveSystem.SplashRadius + 1e-4f;
+
+		/// <summary>The water's surface over a point in plan, where it lies in a body's footprint (falls and splash basins aside); NaN where none does.</summary>
 		private static float WaterOver(CaveStreamPlan plan, Vector3 p)
 		{
 			float surface = float.NaN;
 			foreach (CaveStreamBody b in plan.Bodies)
 			{
-				if (FloodedEnd(b))
+				if (FloodedEnd(b) || Splash(b))
 				{
 					continue;
 				}
@@ -310,7 +313,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void WetCavesHaveStreamsFallsAndPools()
 		{
-			int systems = 0, streams = 0, springs = 0, chasm = 0, avens = 0, showers = 0, pools = 0, basins = 0, winzes = 0, ends = 0, into = 0, most = 0;
+			int systems = 0, streams = 0, springs = 0, chasm = 0, avens = 0, showers = 0, pools = 0, basins = 0, winzes = 0, ends = 0, into = 0, most = 0, splashes = 0;
 			foreach (CaveSystem s in Wet())
 			{
 				CaveStreamPlan plan = CaveStreams.Plan(s);
@@ -339,6 +342,7 @@ namespace FishMMO.UnitTests.WorldDesign
 						basins += b.Pit >= 0 && s.Pits[b.Pit].Kind != CavePitKind.Winze ? 1 : 0;
 						winzes += b.Pit >= 0 && s.Pits[b.Pit].Kind == CavePitKind.Winze ? 1 : 0;
 						ends += FloodedEnd(b) ? 1 : 0;
+						splashes += Splash(b) ? 1 : 0;
 					}
 				}
 				streams += st;
@@ -347,7 +351,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				Console.WriteLine($"{What(s)}: {st} streams ({f} with falls), {po} pools");
 			}
 			Console.WriteLine($"{systems} wet systems: {streams} streams ({into} into pools), {springs} springs, {chasm} fed chasm falls, {avens} falls on their own ({showers} aven showers); "
-				+ $"{pools} pools ({basins} basins and gours, {winzes} winzes, {ends} flooded ends); most bodies {most}");
+				+ $"{pools} pools ({basins} basins and gours, {winzes} winzes, {ends} flooded ends, {splashes} showers' splash basins); most bodies {most}");
 			Assert.That(systems, Is.GreaterThan(0));
 			Assert.That(streams, Is.GreaterThan(0), "streams down the passages");
 			Assert.That(springs + chasm + avens, Is.GreaterThan(0), "falls");
@@ -411,7 +415,8 @@ namespace FishMMO.UnitTests.WorldDesign
 						Assert.That(b.Depth, Is.GreaterThan(0.1f), what);
 						if (b.Banks != null)
 						{
-							Assert.That(b.Banks[0] - b.Path[0].y, Is.GreaterThanOrEqualTo(CaveStreams.PoolDrop - 1e-3f), $"{what}: under its rim");
+							// (A splash basin brims nearly to its rim.)
+							Assert.That(b.Banks[0] - b.Path[0].y, Is.GreaterThanOrEqualTo((Splash(b) ? CaveSystem.SplashDrop : CaveStreams.PoolDrop) - 1e-3f), $"{what}: under its rim");
 						}
 						continue;
 					}

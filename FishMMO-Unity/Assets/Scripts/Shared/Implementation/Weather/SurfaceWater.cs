@@ -53,6 +53,26 @@ namespace FishMMO.Shared.Weather
 		}
 
 		/// <summary>
+		/// How far over a height a body's floor may lie and the height still be in or over that body, metres (2026-10-21): a
+		/// swimmer's feet, a footstep, a camera stand at most this far under the bed of the water they are in.
+		/// </summary>
+		public const float FloorReach = 1f;
+
+		/// <summary>
+		/// Area water that stands at more than one level over a place (2026-10-21: a cave's stream under a lava tube's river on
+		/// the level over it, a lake on the hill over both): which surface a height is in or over, not only the highest.
+		/// </summary>
+		public interface IStackedAreaSource : ILavaAreaSource
+		{
+			/// <summary>
+			/// The surface of the water at a world position that a height stands in or over: the highest of those whose floor
+			/// lies no more than <see cref="FloorReach"/> over the height. Water on a level above (its floor over the height, the
+			/// rock between) is another place's.
+			/// </summary>
+			bool TryGetSurface(float x, float y, float z, out float level, out bool lava);
+		}
+
+		/// <summary>
 		/// Area water some of which may be molten lava (a lava tube's river, a pit in its chamber): which the highest surface over a
 		/// place is, so what lives, wades, splashes or floats in water can leave lava alone.
 		/// </summary>

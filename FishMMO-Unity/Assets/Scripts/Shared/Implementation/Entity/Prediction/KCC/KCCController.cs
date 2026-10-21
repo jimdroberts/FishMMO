@@ -702,7 +702,9 @@ namespace FishMMO.Shared
 		private void UpdateWater()
 		{
 			Vector3 feet = Motor.TransientPosition;
-			water = WaterQuery.Sample(Motor.gameObject.scene, feet.x, feet.z, WaterTick);
+			// The water the feet stand in or over, not the highest over the place: a lava tube's river on the level over a cave's
+			// stream is another place's (2026-10-21).
+			water = WaterQuery.Sample(Motor.gameObject.scene, feet.x, feet.y, feet.z, WaterTick);
 			float submersion = water.Present ? (water.Surface - feet.y) / Mathf.Max(0.1f, FullCapsuleHeight) : 0f;
 			if (!isSwimming)
 			{

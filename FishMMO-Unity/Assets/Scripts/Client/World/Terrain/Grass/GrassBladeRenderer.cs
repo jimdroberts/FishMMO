@@ -793,7 +793,11 @@ namespace FishMMO.Client
 			float pixelsHigh = Mathf.Max(1f, camera.pixelHeight);
 			float perMetre = camera.orthographic ? 0f : 2f * Mathf.Tan(0.5f * camera.fieldOfView * Mathf.Deg2Rad) / pixelsHigh;
 			float flat = camera.orthographic ? 2f * camera.orthographicSize / pixelsHigh : 0f;
-			Shader.SetGlobalVector(ScreenId, new Vector4(perMetre, flat, Mathf.Max(0.1f, s.MaxBladePixels) / Mathf.Max(1e-4f, s.BladeWidth), 0f));
+			// w 1 where this camera resolves MSAA (2026-10-21): a blade thinner than a pixel is drawn a pixel wide with its true width
+			// as coverage (alpha to coverage), so it fades smoothly instead of flipping whole pixels as it sways.
+			var pipeline = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+			bool msaa = camera.allowMSAA && pipeline != null && pipeline.msaaSampleCount > 1;
+			Shader.SetGlobalVector(ScreenId, new Vector4(perMetre, flat, Mathf.Max(0.1f, s.MaxBladePixels) / Mathf.Max(1e-4f, s.BladeWidth), msaa ? 1f : 0f));
 			// And where it stands, for the lay-over seen from above and the edge-on thickening: the shadow pass's own
 			// camera is the light's, and its casters must take the shape this camera's blades have.
 			Vector3 viewer = camera.transform.position;
@@ -1024,6 +1028,8 @@ namespace FishMMO.Client
 			cmd.SetComputeBufferParam(compute, generateKernel, ItemsId, gpuGather ? gatherItems : itemBuffer);
 			cmd.SetComputeBufferParam(compute, generateKernel, GatherCountsId, gatherCounts);
 			cmd.SetComputeIntParam(compute, GatherFromGpuId, gpuGather ? 1 : 0);
+			// Blades hidden behind what this camera drew last frame are left out of its view (never its shadows): FishOccluded.
+			FishDepthPyramid.Bind(cmd, compute, generateKernel, camera, eye, true);
 			cmd.SetComputeBufferParam(compute, generateKernel, CountsId, countBuffer);
 			for (int slot = 0; slot < Slots; slot++)
 			{

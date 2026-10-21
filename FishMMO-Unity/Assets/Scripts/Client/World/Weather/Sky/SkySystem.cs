@@ -864,7 +864,12 @@ namespace FishMMO.Client
 			LightsMarker.Begin();
 			ApplyLights(state, sample, overcast, eclipse, weather, dt, profile, tier);
 			ApplyAmbient(sample, overcast, eclipse, lightning.Flash);
-			FogComposer.SetSkyColor(Color.Lerp(sample.Fog, sample.Fog * 0.7f + new Color(0.25f, 0.26f, 0.28f) * 0.3f, overcast));
+			// Under a deck the fog greys toward the overcast's grey — no brighter than the sky's own fog colour (2026-10-21): the
+			// grey was a constant, so at night and in a storm it lit the fog several times over the sky, and the far ground, the
+			// sea and the haze over the horizon (which take this colour) glowed as a band round it. Daylight is as it was.
+			float fogLight = sample.Fog.r * 0.2126f + sample.Fog.g * 0.7152f + sample.Fog.b * 0.0722f;
+			Color overcastGrey = new Color(0.25f, 0.26f, 0.28f) * Mathf.Min(1f, fogLight / 0.26f);
+			FogComposer.SetSkyColor(Color.Lerp(sample.Fog, sample.Fog * 0.7f + overcastGrey * 0.3f, overcast));
 			LightsMarker.End();
 			ReflectionMarker.Begin();
 			UpdateReflection(state, dt, tier);

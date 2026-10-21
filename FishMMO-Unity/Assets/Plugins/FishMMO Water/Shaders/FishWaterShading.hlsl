@@ -199,13 +199,19 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 	// ── How much water is in front of what is behind ──────────────────
 	float waterColumn = 1000.0;
 	float edgeFade = 1.0;
+	bool occluded = false;
 	#if defined(_WATER_DEPTH)
 		float rawDepth = SampleSceneDepth(screenUV);
 		float sceneEye = WaterEyeDepth(rawDepth);
+		/* What the depth texture holds IN FRONT of this fragment is no sea bed (2026-10-21). Under MSAA it keeps one resolved
+		 * sample a pixel, so along a ridge or a headland standing before the sea it is the land's, and the sea read it as
+		 * a shore of no depth: faded to nothing by the edge fade, it let the bright horizon through as a pixel-wide line
+		 * along every mountain range. Open water there, as it is behind the ridge. */
+		occluded = sceneEye < surfaceEye - 0.5;
 		// Along the view ray, which is the path the light actually took through it.
-		waterColumn = max(0.0, sceneEye - surfaceEye);
+		waterColumn = occluded ? 1000.0 : max(0.0, sceneEye - surfaceEye);
 		// Soft-particle intersection fade: no hard line where the sea meets the sand.
-		edgeFade = saturate(waterColumn / max(0.01, _EdgeFade));
+		edgeFade = occluded ? 1.0 : saturate(waterColumn / max(0.01, _EdgeFade));
 	#endif
 
 	/* How clear the water is here. A real sea is never one tint: plankton, sediment and the
@@ -250,7 +256,7 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 			bool straight = refractedEye < surfaceEye;
 			refractedUV = straight ? screenUV : refractedUV;
 			float seabedRaw = straight ? rawDepth : refractedRaw;
-			waterColumn = max(0.0, max(refractedEye, sceneEye) - surfaceEye);
+			waterColumn = occluded ? 1000.0 : max(0.0, max(refractedEye, sceneEye) - surfaceEye);
 			transmittance = exp(-waterColumn * density);
 			open = lerp(deepColor, shallowColor, transmittance);
 			bodyColor = lerp(open, shoreColor, sediment * sediment) * waterLight;

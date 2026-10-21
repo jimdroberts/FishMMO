@@ -1506,7 +1506,7 @@ namespace FishMMO.Shared.WorldDesign
 					Seeds = lake.Seeds.ToArray(),
 					Bounds = lake.Bounds,
 				};
-				WriteMask(entry, lake.Id);
+				WriteMask(entry, lake.Id, ground);
 				asset.Lakes.Add(entry);
 			}
 		}
@@ -1516,9 +1516,11 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Where a lake's water stands, from the grid it was flooded on, as one bit per <see cref="LakeMaskCell"/>
-		/// cell: set where any sample in the cell is under it. Empty when there is no grid to read.
+		/// cell: set where any sample in the cell is under it. Empty when there is no grid to read. With the finished
+		/// <paramref name="ground"/>, also its floor: the lowest ground under it (2026-10-21), so a cave's water under the lake
+		/// is not taken for the lake's.
 		/// </summary>
-		private void WriteMask(SceneHydrology.Lake entry, int lakeId)
+		private void WriteMask(SceneHydrology.Lake entry, int lakeId, Func<float, float, float> ground = null)
 		{
 			if (Grid == null)
 			{
@@ -1548,6 +1550,7 @@ namespace FishMMO.Shared.WorldDesign
 			int width = Mathf.CeilToInt((Grid.EastOf(maxX) - origin.x) / cell) + 2;
 			int height = Mathf.CeilToInt((Grid.NorthOf(maxZ) - origin.y) / cell) + 2;
 			var bits = new byte[(width * height + 7) / 8];
+			float floor = float.PositiveInfinity;
 			for (int z = minZ; z <= maxZ; z++)
 			{
 				for (int x = minX; x <= maxX; x++)
@@ -1560,8 +1563,13 @@ namespace FishMMO.Shared.WorldDesign
 					int cx = Mathf.FloorToInt((Grid.EastOf(x) - origin.x) / cell), cz = Mathf.FloorToInt((Grid.NorthOf(z) - origin.y) / cell);
 					int bit = cz * width + cx;
 					bits[bit >> 3] |= (byte)(1 << (bit & 7));
+					if (ground != null)
+					{
+						floor = Mathf.Min(floor, ground(Grid.EastOf(x), Grid.NorthOf(z)));
+					}
 				}
 			}
+			entry.Floor = ground != null && floor < float.PositiveInfinity ? floor : float.NegativeInfinity;
 			entry.Mask = bits;
 			entry.MaskOrigin = origin;
 			entry.MaskCell = cell;

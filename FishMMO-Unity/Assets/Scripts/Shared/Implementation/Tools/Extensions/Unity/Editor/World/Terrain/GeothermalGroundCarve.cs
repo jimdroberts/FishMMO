@@ -491,6 +491,7 @@ namespace FishMMO.Shared.WorldDesign
 				PlanetLake = -1,
 				Level = level,
 				SpillLevel = level,
+				Floor = level - SceneHydrology.SurfacePoolFloorDepth,
 				Frozen = false,
 				Seeds = new[] { seed },
 				Bounds = new Rect(x0, z0, width * cell, height * cell),

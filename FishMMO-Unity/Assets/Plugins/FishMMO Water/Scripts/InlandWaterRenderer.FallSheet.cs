@@ -162,18 +162,12 @@ namespace FishMMO.Water
 			for (int guard = 0; guard < 40000; guard++)
 			{
 				float speed = v.magnitude;
-				float dt = Mathf.Min(0.05f, 0.12f / Mathf.Max(0.5f, speed));
+				float dt = FallHydraulics.FreeStep(speed);
 				float fallen = lip.y - p.y;
-				Vector3 acceleration = gravity;
 				/* Broken water feels the air: below its break-up length its ropes and clumps are slowed toward the speed such
-				 * clusters fall at, not on to the pool at the full speed of a dropped stone. Linear in the velocity, so it is
-				 * exactly the terminal speed it settles to. */
-				float broken = Mathf.Clamp01((fallen - strip.Breakup) / Mathf.Max(1f, 0.5f * strip.Breakup));
-				if (broken > 0f)
-				{
-					acceleration -= v * (broken * FallHydraulics.Gravity / FallHydraulics.BrokenTerminalSpeed);
-				}
-				v += acceleration * dt;
+				 * clusters fall at, not on to the pool at the full speed of a dropped stone (FallHydraulics.FreeAcceleration, by
+				 * which a planned fall's foot is put where its water lands: FallHydraulics.Throw). */
+				v += FallHydraulics.FreeAcceleration(v, fallen, strip.Breakup) * dt;
 				Vector3 next = p + v * dt;
 
 				// Still in its channel (on the river, or just over the brink): its banks are the river's, not rock in the way.
