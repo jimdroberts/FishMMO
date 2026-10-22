@@ -1129,11 +1129,11 @@ namespace FishMMO.Shared.WorldDesign
 				return false;
 			}
 
-			/// <summary>Whether nothing may stand at a point: water, a way, another field, a keep-out, no ground.</summary>
+			/// <summary>Whether nothing may stand at a point: water, a way, another field, a keep-out, no ground, the scene's edge.</summary>
 			private bool Blocked(Vector2 p)
 			{
 				float g = context.GroundAt != null ? context.GroundAt(p.x, p.y) : 0f;
-				if (float.IsNaN(g) || float.IsInfinity(g) || context.SkyAt != null && context.SkyAt(p.x, p.y))
+				if (float.IsNaN(g) || float.IsInfinity(g) || context.SkyAt != null && context.SkyAt(p.x, p.y) || !context.InScene(p.x, p.y, 0f))
 				{
 					return true;
 				}

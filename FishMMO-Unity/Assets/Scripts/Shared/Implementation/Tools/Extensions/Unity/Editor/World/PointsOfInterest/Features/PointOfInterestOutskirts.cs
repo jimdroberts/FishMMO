@@ -639,6 +639,10 @@ namespace FishMMO.Shared.WorldDesign
 					for (int j = 0; j <= nz; j++)
 					{
 						Vector2 p = centre + ax * ((i / (float)nx - 0.5f) * size.x) + az * ((j / (float)nz - 0.5f) * size.y);
+						if (!context.InScene(p.x, p.y))
+						{
+							return false;
+						}
 						float ground = context.GroundAt(p.x, p.y);
 						if (float.IsNaN(ground) || float.IsInfinity(ground) || context.SkyAt != null && context.SkyAt(p.x, p.y))
 						{

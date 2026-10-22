@@ -568,7 +568,7 @@ namespace FishMMO.Shared.WorldDesign
 				return Fits(centre, yaw, size);
 			}
 
-			/// <summary>Whether a farmstead's ground lies clear: dry, gentle, open, off the ways, outside every site, off every field and farmstead.</summary>
+			/// <summary>Whether a farmstead's ground lies clear: in the scene, dry, gentle, open, off the ways, outside every site, off every field and farmstead.</summary>
 			private bool Fits(Vector2 centre, float yaw, Vector2 size)
 			{
 				if (context.FieldClaims != null && !context.FieldClaims.Clear(ClaimSite(record.Id), centre, yaw, size))
@@ -599,6 +599,10 @@ namespace FishMMO.Shared.WorldDesign
 					for (int j = 0; j <= nz; j++)
 					{
 						Vector2 p = centre + ax * ((i / (float)nx - 0.5f) * size.x) + az * ((j / (float)nz - 0.5f) * size.y);
+						if (!context.InScene(p.x, p.y))
+						{
+							return false;
+						}
 						float ground = context.GroundAt(p.x, p.y);
 						if (float.IsNaN(ground) || float.IsInfinity(ground) || context.SkyAt != null && context.SkyAt(p.x, p.y))
 						{

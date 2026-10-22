@@ -349,13 +349,17 @@ namespace FishMMO.Shared.WorldDesign
 			return flights;
 		}
 
-		/// <summary>True when a flight's ground is dry, open, clear of the ways and keep-outs, and its mean slope in its biome's band.</summary>
+		/// <summary>True when a flight's ground is in the scene, dry, open, clear of the ways and keep-outs, and its mean slope in its biome's band.</summary>
 		private static bool FlightFits(PointOfInterestSiteContext context, Vector2 centre, float yaw, Vector2 size, BiomeAbandonedTerraces old, PathExclusion ways)
 		{
 			float slopes = 0f;
 			int count = 0;
 			foreach (Vector2 p in PointOfInterestPaddies.Interior(centre, yaw, size * 0.999f))
 			{
+				if (!context.InScene(p.x, p.y))
+				{
+					return false;
+				}
 				float ground = context.GroundAt(p.x, p.y);
 				if (float.IsNaN(ground) || float.IsInfinity(ground) || context.SkyAt != null && context.SkyAt(p.x, p.y))
 				{

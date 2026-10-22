@@ -552,13 +552,17 @@ namespace FishMMO.Shared.WorldDesign
 			return FitsGround(context, field, ways);
 		}
 
-		/// <summary>True when every sample of a field's ground is dry, gentle, open ground clear of the ways and the keep-outs.</summary>
+		/// <summary>True when every sample of a field's ground is dry, gentle, open ground in the scene, clear of the ways and the keep-outs.</summary>
 		private static bool FitsGround(PointOfInterestSiteContext context, Field field, PathExclusion ways)
 		{
 			float slopes = 0f;
 			int count = 0;
 			foreach (Vector2 p in Samples(field))
 			{
+				if (!context.InScene(p.x, p.y))
+				{
+					return false;
+				}
 				float ground = context.GroundAt(p.x, p.y);
 				if (float.IsNaN(ground) || float.IsInfinity(ground) || (context.SkyAt != null && context.SkyAt(p.x, p.y)))
 				{

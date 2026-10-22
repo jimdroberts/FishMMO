@@ -345,6 +345,23 @@ namespace FishMMO.Shared.WorldDesign
 			return GroundAt(x, z) < WaterLevelAt(x, z) + clearance;
 		}
 
+		/// <summary>
+		/// How far in from the scene's edge whatever a site lays out past its own outline (its fields, farmsteads, yards and their
+		/// bounds) keeps, metres. <see cref="GroundAt"/> answers past the edge too, where only the backdrop is drawn, so nothing
+		/// else stopped a field there (2026-10-22). The site itself keeps further in (PointOfInterestPlanInput.EdgeMarginMetres).
+		/// </summary>
+		public const float SceneEdgeMarginMetres = 12f;
+
+		/// <summary>Whether (x, z) lies on the scene's terrain at least <paramref name="margin"/> metres in from its edge; true without a tile plan (a harness).</summary>
+		public bool InScene(float x, float z, float margin = SceneEdgeMarginMetres)
+		{
+			if (Tiles.TotalTiles == 0)
+			{
+				return true;
+			}
+			return Mathf.Abs(x) <= Tiles.WidthMetres * 0.5f - margin && Mathf.Abs(z) <= Tiles.DepthMetres * 0.5f - margin;
+		}
+
 		/// <summary>The world position of an offset in the site's own frame (x right, z ahead along its heading), on the ground.</summary>
 		public Vector3 OnGround(Vector2 local)
 		{
