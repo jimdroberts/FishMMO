@@ -123,6 +123,7 @@ MonoBehaviour:
       DetailStepFootprint: 1.25
       BaseDetail: 0
       BaseSmoothHeight: 0.127
+      BaseRiseMetres: 80
       MultipleScattering: 0.5
       DropletSpike: 1
       SkyAmbient: 1
