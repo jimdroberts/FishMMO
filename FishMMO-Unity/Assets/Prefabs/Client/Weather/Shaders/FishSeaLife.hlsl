@@ -25,7 +25,7 @@
 #include "FishAmbient.hlsl"
 
 CBUFFER_START(UnityPerMaterial)
-    half _Mode;          // 0 fish (side to side), 1 whale (up and down), 2 ray (wings), 3 turtle (flippers), 4 jelly (pulse), 5 crab (legs)
+    half _Mode;          // 0 fish (side to side), 1 whale (up and down), 2 ray (wings), 3 turtle (flippers), 4 jelly (pulse), 5 crab (legs), 6 eel (the whole body)
     half _Amplitude;     // the stroke's swing, as a share of the body's length
     half _WaveLength;    // the body wave's length, in body lengths
     half _Smoothness;
@@ -58,17 +58,18 @@ void SeaLifeSwim(inout float3 p, inout float3 n, float2 body, float2 part, float
     float turn = anim.z;
     float a = body.x;
     int mode = (int)(_Mode + 0.5);
-    if (mode == 0 || mode == 1)
+    if (mode == 0 || mode == 1 || mode == 6)
     {
         // A wave running nose to tail, growing toward the tail (the head barely moves), the body
-        // bent into the turn. A fish sweeps side to side; a whale's flukes beat up and down.
-        float envelope = 0.03 + a * a;
+        // bent into the turn. A fish sweeps side to side; a whale's flukes beat up and down. An eel
+        // (2026-10-25) ripples along its whole length, the head swinging too: anguilliform.
+        float envelope = mode == 6 ? 0.3 + 0.7 * a : 0.03 + a * a;
         float wave = sin(phase - a * 6.2831853 / max(0.2, _WaveLength));
         float swing = _Amplitude * strength * envelope * wave;
         float bend = turn * 0.25 * a * a;
         // The slope of the swing along the body turns the normal with it.
         float slope = _Amplitude * strength * envelope * cos(phase - a * 6.2831853 / max(0.2, _WaveLength)) * 6.2831853 / max(0.2, _WaveLength);
-        if (mode == 0)
+        if (mode == 0 || mode == 6)
         {
             p.x += swing + bend;
             n = normalize(n + float3(0.0, 0.0, -slope * n.x));
@@ -228,12 +229,14 @@ half4 SeaLifeForwardFragment(SeaLifeVaryings input, FRONT_FACE_TYPE face : FRONT
 #endif
     // With the cloud shadow (the main light's cookie): under cloud the light is boosted for the cookie to dim (FishGrassBlades.hlsl).
     Light mainLight = GetMainLight(shadowCoord, input.positionWS, half4(1.0, 1.0, 1.0, 1.0));
-    float3 light = mainLight.color * (mainLight.shadowAttenuation * mainLight.distanceAttenuation);
+    // Under the sea the daylight dims with depth (2026-10-25, FishSeaDaylight; 1 where the scene sets none): a deep fish is dark.
+    float seaDaylight = FishSeaDaylight(input.positionWS);
+    float3 light = mainLight.color * (mainLight.shadowAttenuation * mainLight.distanceAttenuation) * seaDaylight;
     float nl = dot(n, mainLight.direction);
     // Wrapped a little: a fish's flank is round, and light in water comes from everywhere.
     float diffuse = saturate((nl + 0.3) / 1.3);
     float3 colour = albedo * light * diffuse;
-    colour += albedo * FishTrilight((half3)n);
+    colour += albedo * FishTrilight((half3)n) * seaDaylight;
     // Wet skin: a narrow, bright highlight.
     float3 h = normalize(mainLight.direction + v);
     float spec = pow(saturate(dot(n, h)), exp2(10.0 * _Smoothness + 1.0)) * _Smoothness;

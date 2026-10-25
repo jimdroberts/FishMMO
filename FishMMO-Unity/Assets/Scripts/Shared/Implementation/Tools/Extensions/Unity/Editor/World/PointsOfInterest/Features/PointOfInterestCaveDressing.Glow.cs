@@ -46,7 +46,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				if (!paletteMade)
 				{
-					palette = CaveGlowPalettes.For(system.Form, system.Seed, biome);
+					palette = CaveGlowPalettes.For(system.Form, system.Seed, in caves);
 					paletteMade = true;
 				}
 				return palette;
@@ -95,14 +95,18 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						return 1f;
 					}
+					float share;
 					switch (system.Character)
 					{
-						case CaveCharacter.Crystal: return 0.8f;
-						case CaveCharacter.Halls: return 0.25f;
+						case CaveCharacter.Crystal: share = 0.8f; break;
+						case CaveCharacter.Halls: share = 0.25f; break;
 						case CaveCharacter.Abyss:
-						case CaveCharacter.Rift: return 0.45f;
-						default: return 0.4f;
+						case CaveCharacter.Rift: share = 0.45f; break;
+						default: share = 0.4f; break;
 					}
+					// The cave biome's fungus weighs against the crystal (its Cave Glows, 2026-10-25): 1 leaves the share as it was.
+					float fungus = Colours().FungusWeight;
+					return fungus == 1f ? share : BiomeCaveInteriors.CrystalShare(share, fungus);
 				}
 			}
 
@@ -814,6 +818,8 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					chance = 0.1f;
 				}
+				// The cave biome's glow-worms (its Cave Glows, 2026-10-25): 1 the chance as it was.
+				chance *= Colours().WormChance;
 				foreach (CaveChamber c in system.Chambers)
 				{
 					float reach = Mathf.Max(c.Radii.x, c.Radii.z);

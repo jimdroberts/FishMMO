@@ -198,6 +198,13 @@ namespace FishMMO.Shared.WorldDesign
 		public Func<float, float, float> HeatAt;
 
 		/// <summary>
+		/// The scene's landform zones (2026-10-25, phase I2g-b, decision 55; BiomeLandformZones of the sites the cut stored): what a
+		/// rule's landform band (PrefabSpawnRule.landformBand) reads. Asked only for a rule whose band is on; thread-safe. Null: no
+		/// landform, so an "on the part" band grows nothing and an "off the part" band everywhere.
+		/// </summary>
+		public BiomeLandformZones LandformZones;
+
+		/// <summary>
 		/// True where nothing may be scattered at a world position (x, z): a point of interest's footprint
 		/// (<see cref="PointOfInterestStage.Excludes"/>). Null for nowhere. Called from the scatter's workers, so it must
 		/// be safe to call from several threads.

@@ -529,6 +529,15 @@ namespace FishMMO.Shared.WorldDesign
 		/// never authored with its kinds takes BiomeSiteAir's default for each kind instead. Breathable air changes nothing.
 		/// </summary>
 		public static IReadOnlyDictionary<POIType, float> SiteKinds(BiomeTemplate biome, PointOfInterestRules rules, bool breathable)
+			=> SiteKinds(biome, rules, breathable, true);
+
+		/// <summary>
+		/// <see cref="SiteKinds(BiomeTemplate, PointOfInterestRules, bool)"/> on a world that has (<paramref name="liquidWater"/>) or
+		/// lacks liquid water on its surface (decision 68): where it lacks it, every kind whose entry needs it
+		/// (<see cref="BiomeSiteKind.NeedsLiquidWater"/>) weighs 0 too. No kind needs it by default, so liquid water or none changes
+		/// nothing until a biome's file says so.
+		/// </summary>
+		public static IReadOnlyDictionary<POIType, float> SiteKinds(BiomeTemplate biome, PointOfInterestRules rules, bool breathable, bool liquidWater)
 		{
 			if (biome == null)
 			{
@@ -543,7 +552,7 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						if (!kinds.ContainsKey(entry.Kind))
 						{
-							kinds[entry.Kind] = BiomeSiteAir.WeightOn(entry, breathable);
+							kinds[entry.Kind] = BiomeSiteAir.WeightOn(entry, breathable, liquidWater);
 						}
 					}
 				}
@@ -763,6 +772,82 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>The crystal a biome's crystal way-light posts carry (<see cref="BiomeCaveCrystals.PostCrystal"/> of its cave crystals).</summary>
 		public static BiomeCaveCrystalKind PostCrystal(BiomeTemplate biome) => BiomeCaveCrystals.PostCrystal(CaveCrystals(biome));
+
+		// ── Cave interiors (2026-10-25, phase I2n) ────────────────────
+
+		/// <summary>
+		/// A host's cave-interior links (BiomeTemplate.CaveInteriors, 2026-10-25, I2n; read through CaveInteriorArt). None with no host;
+		/// a template never authored with them takes its spec's (the Cave, Ice Cave and Lava Tube by default) and warns.
+		/// </summary>
+		public static IReadOnlyList<BiomeCaveInterior> CaveInteriors(BiomeTemplate host)
+		{
+			if (host == null)
+			{
+				return Array.Empty<BiomeCaveInterior>();
+			}
+			if (host.IsAuthored(BiomeTemplate.Authored.CaveInteriors) || host.CaveInteriors != null && host.CaveInteriors.Count > 0)
+			{
+				return host.CaveInteriors;
+			}
+			List<BiomeCaveInterior> spec = BiomeArtSpec.For(host.name)?.CaveInteriors() ?? BiomeCaveInteriors.DefaultLinks(host.name);
+			Fallback(host, "Cave Interiors", $"the spec table's ({string.Join(", ", spec)})");
+			return spec;
+		}
+
+		/// <summary>The shell rocks an interior dresses the inside of (BiomeTemplate.CaveInteriorRocks; empty: any).</summary>
+		public static IReadOnlyList<string> CaveInteriorRocks(BiomeTemplate interior)
+		{
+			if (interior == null)
+			{
+				return Array.Empty<string>();
+			}
+			if (interior.IsAuthored(BiomeTemplate.Authored.CaveInteriorRocks) || interior.CaveInteriorRocks != null && interior.CaveInteriorRocks.Count > 0)
+			{
+				return interior.CaveInteriorRocks;
+			}
+			List<string> spec = BiomeArtSpec.For(interior.name)?.CaveInteriorRocks() ?? BiomeCaveInteriors.DefaultInteriorRocks(interior.name);
+			Fallback(interior, "Cave Interior Rocks", $"the spec table's ({(spec.Count > 0 ? string.Join(", ", spec) : "any")})");
+			return spec;
+		}
+
+		/// <summary>The formations a biome's caves take by form and place (BiomeTemplate.CaveFormations); the dressing's own with no biome.</summary>
+		public static IReadOnlyList<BiomeCaveFormation> CaveFormations(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return BiomeCaveInteriors.DefaultFormations();
+			}
+			if (biome.IsAuthored(BiomeTemplate.Authored.CaveFormations) || biome.CaveFormations != null && biome.CaveFormations.Count > 0)
+			{
+				return biome.CaveFormations;
+			}
+			List<BiomeCaveFormation> spec = BiomeArtSpec.For(biome.name)?.CaveFormations() ?? BiomeCaveInteriors.DefaultFormations();
+			Fallback(biome, "Cave Formations", "the spec table's (the dressing's own set by form)");
+			return spec;
+		}
+
+		/// <summary>
+		/// What lights a biome's caves of a form by itself (BiomeTemplate.CaveGlows): its entry for the form; the dressing's own by form
+		/// with no biome, an unauthored template (with a warning) or an authored list without the form.
+		/// </summary>
+		public static BiomeCaveGlow CaveGlow(BiomeTemplate biome, CaveForm form)
+		{
+			var f = (BiomeCaveForm)form;
+			if (biome != null)
+			{
+				IReadOnlyList<BiomeCaveGlow> list = biome.CaveGlows;
+				if (!biome.IsAuthored(BiomeTemplate.Authored.CaveGlows) && (list == null || list.Count == 0))
+				{
+					list = BiomeArtSpec.For(biome.name)?.CaveGlows() ?? BiomeCaveInteriors.DefaultGlows();
+					Fallback(biome, "Cave Glows", "the spec table's (the dressing's own by form)");
+				}
+				if (BiomeCaveInteriors.TryGlow(list, f, out BiomeCaveGlow glow))
+				{
+					return glow;
+				}
+			}
+			return BiomeCaveInteriors.DefaultGlow(f);
+		}
 
 		/// <summary>
 		/// The plants a biome's still water carries (BiomeTemplate.FloatingPlants, 2026-10-18, I2i). With no biome, none; a template

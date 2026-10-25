@@ -16,6 +16,11 @@ namespace AppHealthMonitor
         /// <summary>Disabled entries are retained without validation or launch.</summary>
         public bool Enabled { get; set; } = true;
 
+        public bool LaunchInTerminal { get; set; }
+        public string TerminalExecutable { get; set; } = string.Empty;
+        public string TerminalLogPath { get; set; } = string.Empty;
+        public int TerminalLaunchTimeoutSeconds { get; set; } = 15;
+
         /// <summary>Child-only environment overrides. Do not store secrets here.</summary>
         public Dictionary<string, string> EnvironmentVariables { get; set; } = new();
 
@@ -228,6 +233,11 @@ namespace AppHealthMonitor
                 return false;
             }
             WorkingDirectory = workingDirectory;
+            if (TerminalLaunchTimeoutSeconds < 1 || TerminalLaunchTimeoutSeconds > 120)
+            {
+                error = $"TerminalLaunchTimeoutSeconds must be between 1 and 120 for '{Name}'.";
+                return false;
+            }
             EnvironmentVariables ??= new();
             foreach (var entry in EnvironmentVariables)
             {

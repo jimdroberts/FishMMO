@@ -88,5 +88,7 @@ namespace FishMMO.Shared
 		IceGeyserField, Cryovolcano, MethaneLake, ImpactBasin, TidalRift,
 		// Mills (2026-10-14).
 		Windmill, Watermill, LumberMill,
+		// The sea floor's own sites (2026-10-25).
+		SunkenShrine, SeaMonsterDen, SeaCrystalFormation, SunkenMonument, SunkenStatue,
 	}
 }

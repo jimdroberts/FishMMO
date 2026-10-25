@@ -326,6 +326,13 @@ namespace FishMMO.Shared.WorldDesign
 			public bool Climate;
 			/// <summary>The ground's heat (<see cref="TerrainScatterOptions.HeatAt"/>) when the rule has a heat band and the scene a heat to read; null skips the band (2026-10-18, I2q).</summary>
 			public Func<float, float, float> Heat;
+			/// <summary>
+			/// True when the rule has a landform band (<see cref="PrefabSpawnRule.landformBand"/>, decision 55); <see cref="Zones"/> the
+			/// scene's (null: none stored, the band's "nowhere"). False skips the band, never asking a mask (2026-10-25, I2g-b).
+			/// </summary>
+			public bool Zoned;
+			public BiomeLandformZones Zones;
+			public int ZoneBiome;
 			public TerrainScatterReport.RuleOutcome Outcome;
 			public bool Runnable => !Outcome.Skipped;
 		}
@@ -444,8 +451,11 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					if (options != null && options.HasLiquidWater)
 					{
-						// A rule on a biome's submerged layer is aquatic; anything else, trees included, grows on land.
-						bool aquatic = entry.Role == PaletteRole.Submerged;
+						/* A rule on a biome's submerged layer is aquatic; so is a rule on a sea-floor biome's main or detail layer that names
+						 * the sea in its waters (2026-10-25, phase I2m, decision 36 (a): its own grounds paint under the sea, and its reef
+						 * coral grows on them). Anything else, trees included, grows on land. */
+						bool aquatic = entry.Role == PaletteRole.Submerged
+							|| (entry.Role == PaletteRole.Main || entry.Role == PaletteRole.Detail) && BiomeSeaFloors.GrowsUnderSea(entry.Biome.SeaFloor, rule.waters);
 						scatterRule.WaterGated = true;
 						scatterRule.WaterFrom = aquatic ? options.AquaticFadeStartMetres : options.LandFadeStartMetres;
 						scatterRule.WaterTo = aquatic ? options.AquaticFullMetres : options.LandFullMetres;
@@ -469,13 +479,19 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						scatterRule.Heat = options.HeatAt;
 					}
+					if (rule.landformBand.On)
+					{
+						scatterRule.Zoned = true;
+						scatterRule.Zones = options?.LandformZones;
+						scatterRule.ZoneBiome = entry.Biome != null ? entry.Biome.ID : 0;
+					}
 					if (rule.useClimateBand)
 					{
 						// No climate, no band: the rule grows as it did before bands existed (see Scatter).
 						scatterRule.Climate = climate != null;
 						unbanded += climate != null ? 0 : 1;
 					}
-					if (options != null && options.InlandWaterSurface != null && entry.Role != PaletteRole.Submerged)
+					if (options != null && options.InlandWaterSurface != null && entry.Role != PaletteRole.Submerged && !scatterRule.Aquatic)
 					{
 						// Land plants keep to the banks of rivers and lakes, and out of a dry wash's bed.
 						scatterRule.Inland = options.InlandWaterSurface;
@@ -2097,6 +2113,18 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					chance *= band;
 				}
+				if (scatterRule.Zoned)
+				{
+					// On (or off) a part of the biome's sculpted landforms (2026-10-25, I2g-b, decision 55), counted with the height rejections.
+					float band = BiomeLandformZones.WeightOf(scatterRule.Zones, rule.landformBand, scatterRule.ZoneBiome, worldX, worldZ, worldY,
+						Bilinear(slopes, heightRes, u, v));
+					if (band <= 0f)
+					{
+						pick.Outcome = CellOutcome.NoHeight;
+						return;
+					}
+					chance *= band;
+				}
 				if (roll >= chance)
 				{
 					pick.Outcome = CellOutcome.NoChance;
@@ -2595,6 +2623,17 @@ namespace FishMMO.Shared.WorldDesign
 				if (scatterRule.Heat != null)
 				{
 					float band = scatterRule.Rule.HeatWeight(scatterRule.Heat(worldX, worldZ));
+					if (band <= 0f)
+					{
+						outcome = CarpetOutcome.NoHeight;
+						return 0f;
+					}
+					coverage *= band;
+				}
+				if (scatterRule.Zoned)
+				{
+					float band = BiomeLandformZones.WeightOf(scatterRule.Zones, scatterRule.Rule.landformBand, scatterRule.ZoneBiome, worldX, worldZ,
+						frame.Origin.y + Bilinear(heights, heightRes, u, v) * frame.Size.y, Bilinear(slopes, heightRes, u, v));
 					if (band <= 0f)
 					{
 						outcome = CarpetOutcome.NoHeight;

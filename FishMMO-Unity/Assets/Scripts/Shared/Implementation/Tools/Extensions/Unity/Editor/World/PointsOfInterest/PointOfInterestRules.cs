@@ -342,6 +342,14 @@ namespace FishMMO.Shared.WorldDesign
 				Placed(POIType.SunkenShip, 0.08f, 0, 2, 800f).Footprint(14f, 20f, 30f).Sea(5f, 40f),
 				Placed(POIType.SunkenRuins, 0.05f, 0, 1, 1200f).Footprint(20f, 35f, 25f).Sea(4f, 30f).Races("Aquatic"),
 				Placed(POIType.SunkenCity, 0.02f, 0, 1, 3000f).Footprint(60f, 90f, 20f).Sea(8f, 60f).Races("Aquatic"),
+				/* The sea floor's own sites (2026-10-25, phase I2m, decision 36 (b)): hosted by no biome until its round names them
+				 * (BiomeArtSpec.Entry.Hosts), so no scene gains one on a re-plan; any depth below 6 m (the biome's own band,
+				 * BiomeTemplate.UnderwaterSiteDepth, narrows it: an abyss's at 6 000 m). */
+				Placed(POIType.SunkenShrine, 0.05f, 0, 2, 900f).Footprint(8f, 14f, 30f).Sea(6f, PointOfInterestKindRule.Unbounded).Only(),
+				Placed(POIType.SeaMonsterDen, 0.04f, 0, 1, 1200f).Footprint(12f, 20f, 35f).Sea(10f, PointOfInterestKindRule.Unbounded).Only().Races(Monster),
+				Placed(POIType.SeaCrystalFormation, 0.05f, 0, 2, 800f).Footprint(6f, 10f, 40f).Sea(10f, PointOfInterestKindRule.Unbounded).Only(),
+				Placed(POIType.SunkenMonument, 0.03f, 0, 1, 1500f).Footprint(8f, 14f, 30f).Sea(6f, PointOfInterestKindRule.Unbounded).Only(),
+				Placed(POIType.SunkenStatue, 0.05f, 0, 2, 800f).Footprint(5f, 8f, 30f).Sea(4f, PointOfInterestKindRule.Unbounded).Only(),
 
 				// ── Placed: resources (tier 4) ──
 				Wild(Placed(POIType.OreVein, 0.1f, 0, 3, 500f).Footprint(5f, 8f, 35f)).Hard(0.5f).Weigh(0.6f, Alien),

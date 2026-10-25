@@ -218,6 +218,17 @@ namespace FishMMO.Shared.Biomes
 		public bool AdmitsAir(BiomeAtmosphereRequirement worldAir) => BiomeAir.Admits(airBand, worldAir);
 
 		/// <remarks>
+		/// <b>A ground of the open land or of the caves</b> (2026-10-25, phase I2n, decision 57: "an UNDERGROUND band on ground layers:
+		/// one template carries surface and interior palettes"): a cave biome's mud and gravel for its caves' floors beside the grounds
+		/// it paints where it is the open land. Both (the default) is what every layer was: painted on the terrain and, where its
+		/// kind fits, laid on the floors of the caves the biome dresses inside (CaveRockLayers). Surface: the terrain only. Interior:
+		/// the caves only, chosen there before any other layer of its kind; a detail or cliff layer so banded is not painted on the
+		/// terrain (a main layer always is), and a linked interior's Interior cliff is the inner wall of an ice shell.
+		/// </remarks>
+		[Tooltip("Where this ground is laid: Both (the terrain, and the floors of the caves this biome dresses inside, as before), Surface (the terrain only) or Interior (the caves only: not painted on the terrain unless it is the main layer; a cave's floors take it first; an Interior cliff walls an ice cave's ice). Written by Author biome art from the spec (a layer's Underground); set by hand to override.")]
+		public BiomeUnderground underground;
+
+		/// <remarks>
 		/// <b>A ground of the hot ground</b> (2026-10-18, phase I2q, decision 47): with the band on, a DETAIL layer is painted only
 		/// within a band of the scene's heat mask (baked at the cut from its geothermal sites and their runoff, 0 cold … 1 a
 		/// spring's throat): a geyser basin's white sinter apron near the vents, its thermophile mats in the warm ring, its green
@@ -237,6 +248,16 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>How fully the layer is painted at a heat, by its band: 1 without one (or for a NaN reading, no heat known).</summary>
 		public float HeatWeight(float heat) => useHeatBand ? BiomeHeatBand.Weight(heatRange, heatFalloff, heat) : 1f;
+
+		/// <remarks>
+		/// <b>A ground of one part of a landform</b> (2026-10-25, phase I2g-b, decision 55: "LANDFORM ZONE MASK as a general ground/spawn
+		/// BAND"): with the band on, a DETAIL layer is painted only on (or, turned round, only off) one part of its biome's sculpted
+		/// landforms: a crater's rays, a basin's mare or wrinkle ridges, a cell field's troughs. It multiplies the layer's patches like
+		/// its heat band. Main layers, cliffs, beds and ways ignore it. Off (the default) paints as before.
+		/// </remarks>
+		[Header("Landform Zone Band")]
+		[Tooltip("Detail layers: paint this ground only on (or off) one part of its biome's sculpted landforms (BiomeLandformBand). Off = everywhere its other bands allow, as before. Written by Author biome art from the spec (a layer's Zone); set by hand to override.")]
+		public BiomeLandformBand landformBand;
 
 		/// <remarks>
 		/// <para>

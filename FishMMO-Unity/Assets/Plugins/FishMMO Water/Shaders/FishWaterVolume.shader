@@ -54,6 +54,9 @@ Shader "FishMMO/Water/Underwater"
             float4 _FishWaterRippleWindow;  // xy the wind's heading held for a window of the shared clock, z seconds into it, w its length (WaterSurface)
             float _FishWaterHeldWindSpeed;  // the wind's speed held for that window, m/s
             float _FishWaterGravity;
+            // The weather's water: w how fast the daylight dims with depth on the scene's floor (FishWeather.hlsl's FishSeaDaylight;
+            // 0 on every scene with no sea-floor biome, 2026-10-25).
+            float4 _FishOcclusionWater;
 
             CBUFFER_START(UnityPerMaterial)
                 half4 _UnderwaterTint;
@@ -385,6 +388,10 @@ Shader "FishMMO/Water/Underwater"
                 bool reachedUnderwater = sceneDistance <= exitDistance;
                 float behindDepth = reachedUnderwater ? max(0.0, _FishWaterLevel - positionWS.y) : 0.0;
                 half3 behindLight = exp(-0.5 * (dimming + beamDimming) * behindDepth);
+                /* On a scene whose floor dims its own daylight (2026-10-25, phase I2m: the ground, plants, stone and sea life take
+                 * FishSeaDaylight in their lighting) this would dim them twice, and darken their own glow with them: a lure's light
+                 * at 4 000 m would be black. There what lies behind is fogged only by the water between it and the eye. */
+                behindLight = _FishOcclusionWater.w > 0.0 ? half3(1.0, 1.0, 1.0) : behindLight;
                 transmittance *= dot(behindLight, half3(0.2126, 0.7152, 0.0722));
 
                 return half4(inscatter + motes, transmittance);

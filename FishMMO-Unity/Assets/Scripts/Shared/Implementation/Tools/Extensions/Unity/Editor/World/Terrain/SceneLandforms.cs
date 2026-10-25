@@ -356,6 +356,23 @@ namespace FishMMO.Shared.WorldDesign
 							}
 						}
 						break;
+					case BiomeLandformForm.PitChain:
+						// Every pit of the chain (2026-10-25, I2g-b: a lava tube's skylights).
+						foreach (Vector2 pit in PitCentres(site))
+						{
+							pads.Add(new BiomeLandformPad { Kind = f.Kind, BiomeID = site.BiomeID, Centre = pit, Radius = Mathf.Max(1f, site.HalfWidth), Level = carved(pit.x, pit.y) });
+						}
+						break;
+					case BiomeLandformForm.MultiRing:
+					{
+						// The mare's middle, and each mare pit (where a lava tube's site goes, decision 55).
+						pads.Add(new BiomeLandformPad { Kind = f.Kind, BiomeID = site.BiomeID, Centre = site.Centre, Radius = site.Radius * 0.3f, Level = carved(site.Centre.x, site.Centre.y) });
+						foreach (Vector3 pit in new BiomeLandforms.Shape(site, context).BasinPits)
+						{
+							pads.Add(new BiomeLandformPad { Kind = f.Kind, BiomeID = site.BiomeID, Centre = new Vector2(pit.x, pit.y), Radius = pit.z, Level = carved(pit.x, pit.y) });
+						}
+						break;
+					}
 					case BiomeLandformForm.Straight:
 					case BiomeLandformForm.Contour:
 					case BiomeLandformForm.Arc:
@@ -384,6 +401,33 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			return pads;
+		}
+
+		/// <summary>A pit chain's pits along its line: one every three half widths, from half a pitch in (pure).</summary>
+		public static List<Vector2> PitCentres(in BiomeLandformSite site)
+		{
+			var pits = new List<Vector2>();
+			if (site.Segments == null || site.Segments.Count == 0)
+			{
+				return pits;
+			}
+			float pitch = 3f * Mathf.Max(0.05f, site.Segments[0].Half);
+			int s = 0;
+			for (float at = 0.5f * pitch; pits.Count < 4000; at += pitch)
+			{
+				while (s < site.Segments.Count && site.Segments[s].AlongB < at)
+				{
+					s++;
+				}
+				if (s >= site.Segments.Count)
+				{
+					break;
+				}
+				BiomeLandformSegment seg = site.Segments[s];
+				float span = Mathf.Max(1e-4f, seg.AlongB - seg.AlongA);
+				pits.Add(Vector2.Lerp(seg.A, seg.B, Mathf.Clamp01((at - seg.AlongA) / span)));
+			}
+			return pits;
 		}
 
 		// ── The plan ──────────────────────────────────────────────────
@@ -593,12 +637,27 @@ namespace FishMMO.Shared.WorldDesign
 						duneRun += share;
 						mixHigh = duneRun;
 					}
+					if (form.Anchor == BiomeLandformAnchor.LeeOf)
+					{
+						// In the lee of each site of the entry before it (2026-10-25, decision 64: a blue-ice tail behind each nunatak).
+						if (e > 0)
+						{
+							PlaceInLee(input, form, forms[e - 1].Kind, id, b, e, sites);
+						}
+						continue;
+					}
 					int inScene = 0;
+					int entryStart = sites.Count, entrySpacing = spacing.Count;
 					foreach (Patch patch in own)
 					{
 						if (form.PerScene > 0 && inScene >= form.PerScene)
 						{
 							break;
+						}
+						if (form.Form == BiomeLandformForm.MultiRing && patch.Diameter < Mathf.Min(form.Size.x, form.Size.y))
+						{
+							// A multi-ring basin only in a patch as wide as its smallest (decision 55: the basin detection's own threshold).
+							continue;
 						}
 						uint patchSeed = BiomeLandforms.Hash(input.Seed, (uint)id, (uint)patch.First, (uint)e);
 						if (form.Placement == BiomeLandformPlacement.Field || BiomeLandforms.IsField(form.Form))
@@ -655,15 +714,41 @@ namespace FishMMO.Shared.WorldDesign
 							{
 								continue;
 							}
-							if (!TrySite(input, form, id, b, patch, at, ground, siteSeed, out BiomeLandformSite site))
+							if (form.Placement == BiomeLandformPlacement.Chain)
+							{
+								// A chain's members overlap each other (merged rims) but keep apart from everything else (2026-10-25, decision 71).
+								List<BiomeLandformSite> members = Chain(input, form, id, b, patch, at, siteSeed, out float chainReach);
+								bool chainClear = members.Count >= 2;
+								foreach ((Vector2 other, float radius) in spacing)
+								{
+									if (chainClear && Vector2.Distance(other, at) < 0.85f * (chainReach + radius))
+									{
+										chainClear = false;
+									}
+								}
+								if (!chainClear)
+								{
+									continue;
+								}
+								spacing.Add((at, chainReach));
+								sites.AddRange(members);
+								placed++;
+								inScene++;
+								continue;
+							}
+							// A size law draws each one's size (decision 72: a crater population, many small, few large).
+							float drawn = form.SizePower > 0f ? BiomeLandforms.PowerLawPick(form.Size, form.SizePower, BiomeLandforms.Unit(BiomeLandforms.Hash(siteSeed, 0x9017u))) : float.NaN;
+							if (!TrySite(input, form, id, b, patch, at, ground, siteSeed, out BiomeLandformSite site, drawn))
 							{
 								continue;
 							}
 							float reach = SpacingRadius(site);
+							// A size-law population overlaps itself (a young bowl cuts an old rim) and keeps apart only from others.
 							bool clear = true;
-							foreach ((Vector2 other, float radius) in spacing)
+							int keepFrom = form.SizePower > 0f ? entrySpacing : spacing.Count;
+							for (int q = 0; q < keepFrom; q++)
 							{
-								if (Vector2.Distance(other, site.Centre) < 0.85f * (reach + radius))
+								if (Vector2.Distance(spacing[q].At, site.Centre) < 0.85f * (reach + spacing[q].Radius))
 								{
 									clear = false;
 									break;
@@ -677,6 +762,25 @@ namespace FishMMO.Shared.WorldDesign
 							sites.Add(site);
 							placed++;
 							inScene++;
+						}
+					}
+					if (form.Ages && sites.Count - entryStart > 1)
+					{
+						// Old craters first, so each younger bowl is carved over (cuts the rims of) the older (decision 72); stable.
+						var aged = sites.GetRange(entryStart, sites.Count - entryStart);
+						var order = new List<int>(aged.Count);
+						for (int i = 0; i < aged.Count; i++)
+						{
+							order.Add(i);
+						}
+						order.Sort((p, q) =>
+						{
+							int byAge = BiomeLandforms.CraterAge(aged[q].Seed).CompareTo(BiomeLandforms.CraterAge(aged[p].Seed));
+							return byAge != 0 ? byAge : p.CompareTo(q);
+						});
+						for (int i = 0; i < order.Count; i++)
+						{
+							sites[entryStart + i] = aged[order[i]];
 						}
 					}
 				}
@@ -725,6 +829,93 @@ namespace FishMMO.Shared.WorldDesign
 			return sites;
 		}
 
+		/// <summary>
+		/// A chain's members (<see cref="BiomeLandformPlacement.Chain"/>, pure but for the ground; 2026-10-25, decision 71): up to
+		/// <see cref="BiomeLandform.Count"/> sites of the form along a line through <paramref name="at"/>, straight or bent through
+		/// <see cref="BiomeLandform.Lean"/> of a half turn, their sizes tapering to both ends; a member whose place falls outside the
+		/// scene, the biome or the form's conditions is left out. <paramref name="reach"/> is the chain's half length plus its largest member.
+		/// </summary>
+		private static List<BiomeLandformSite> Chain(LandformPlanInput input, BiomeLandform form, int id, int biomeIndex, Patch patch, Vector2 at, uint seed,
+			out float reach)
+		{
+			float U(uint salt) => BiomeLandforms.Unit(BiomeLandforms.Hash(seed, salt));
+			var members = new List<BiomeLandformSite>();
+			float length = BiomeLandforms.Pick(form.Length, U(21u));
+			int most = Mathf.Max(2, form.Count > 0 ? form.Count : 8);
+			int n = Mathf.Clamp(Mathf.RoundToInt(Mathf.Lerp(0.3f * most, most, U(22u))), 2, most);
+			float yaw = YawOf(input, form, at, seed) * Mathf.Deg2Rad;
+			var axis = new Vector2(Mathf.Cos(yaw), Mathf.Sin(yaw));
+			var normal = new Vector2(-axis.y, axis.x);
+			float bend = Mathf.Clamp(form.Lean, -1f, 1f) * Mathf.PI;
+			float biggest = 0f;
+			for (int i = 0; i < n; i++)
+			{
+				uint memberSeed = BiomeLandforms.Hash(seed, (uint)i, 0xC4A1u);
+				float t = i / (n - 1f) - 0.5f;
+				Vector2 p, side;
+				if (Mathf.Abs(bend) > 1e-3f)
+				{
+					float arcRadius = length / bend, a = t * bend;
+					p = at + axis * (arcRadius * Mathf.Sin(a)) + normal * (arcRadius * (1f - Mathf.Cos(a)));
+					side = normal * Mathf.Cos(a) - axis * Mathf.Sin(a);
+				}
+				else
+				{
+					p = at + axis * (t * length);
+					side = normal;
+				}
+				float size = BiomeLandforms.Pick(form.Size, BiomeLandforms.Unit(BiomeLandforms.Hash(memberSeed, 1u))) * (0.5f + 0.5f * Mathf.Sin(Mathf.PI * (i + 0.5f) / n));
+				p += side * (form.Roughness * size * (2f * BiomeLandforms.Unit(BiomeLandforms.Hash(memberSeed, 2u)) - 1f));
+				biggest = Mathf.Max(biggest, size);
+				if (!Inside(input, p, size) || BiomeAt(input, p) != biomeIndex || !Admits(form, input, p, out float ground))
+				{
+					continue;
+				}
+				if (TrySite(input, form, id, biomeIndex, patch, p, ground, memberSeed, out BiomeLandformSite site, size))
+				{
+					members.Add(site);
+				}
+			}
+			reach = 0.5f * length + biggest;
+			return members;
+		}
+
+		/// <summary>
+		/// Places a lee-anchored entry (<see cref="BiomeLandformAnchor.LeeOf"/>, pure): one for each site the biome's entry named
+		/// <paramref name="host"/> placed, downwind of it by the host's reach and most of its own half length, in the host's order.
+		/// </summary>
+		private static void PlaceInLee(LandformPlanInput input, BiomeLandform form, string host, int id, int biomeIndex, int entry, List<BiomeLandformSite> sites)
+		{
+			int made = 0;
+			int count = sites.Count;
+			for (int s = 0; s < count; s++)
+			{
+				BiomeLandformSite lee = sites[s];
+				if (lee.BiomeID != id || !string.Equals(lee.Form.Kind, host, StringComparison.Ordinal))
+				{
+					continue;
+				}
+				if (form.PerScene > 0 && made >= form.PerScene)
+				{
+					break;
+				}
+				uint seed = BiomeLandforms.Hash(lee.Seed, (uint)entry, 0x1EEu);
+				float yaw = YawOf(input, form, lee.Centre, seed) * Mathf.Deg2Rad;
+				var axis = new Vector2(Mathf.Cos(yaw), Mathf.Sin(yaw));
+				float half = 0.5f * BiomeLandforms.Pick(form.Length, BiomeLandforms.Unit(BiomeLandforms.Hash(seed, 11u)));
+				Vector2 at = lee.Centre + axis * (Mathf.Max(lee.Radius, lee.HalfLength) + 0.9f * half);
+				if (!Inside(input, at, Margin(form)))
+				{
+					continue;
+				}
+				if (TrySite(input, form, id, biomeIndex, null, at, input.Ground(at.x, at.y), seed, out BiomeLandformSite site))
+				{
+					sites.Add(site);
+					made++;
+				}
+			}
+		}
+
 		/// <summary>The least distance from the scene's edge a landform's place needs, metres (its footprint, roughly; the site checks exactly).</summary>
 		private static float Margin(BiomeLandform form)
 		{
@@ -732,6 +923,11 @@ namespace FishMMO.Shared.WorldDesign
 			if (BiomeLandforms.IsLine(form.Form))
 			{
 				return 1.75f * width;
+			}
+			if (form.Placement == BiomeLandformPlacement.Chain)
+			{
+				// Most of a chain inside the scene; members past the edge are left out.
+				return 0.3f * Mathf.Max(form.Length.x, form.Length.y) + size;
 			}
 			return size * (form.Family == BiomeLandformFamily.Crater ? 1f : 0.7f) + form.Moat;
 		}
@@ -832,6 +1028,51 @@ namespace FishMMO.Shared.WorldDesign
 					Shuffle(breaks, seed);
 					return breaks;
 				}
+				case BiomeLandformAnchor.PatchEdge:
+				{
+					// The cells the inset inside the patch's edge (a neighbour inside the scene but outside the patch; decision 70).
+					var inPatch = new HashSet<int>(cells);
+					List<int> edge = AtInset(input, cells, c => true, n => !inPatch.Contains(n), form.NearWater > 0f ? form.NearWater : 40f);
+					Shuffle(edge, seed);
+					return edge;
+				}
+				case BiomeLandformAnchor.ShoreSetback:
+				{
+					// The cells the setback from the shoreline, inland or (an entry asking water depth) out to sea (decision 74).
+					var setback = new List<int>();
+					if (!float.IsNegativeInfinity(input.SeaLevel))
+					{
+						bool seaward = form.Depth.y > 0f || form.Depth.x > 0f;
+						bool Wet(int c)
+						{
+							Vector2 p = CellCentre(input, c);
+							return input.Ground(p.x, p.y) < input.SeaLevel;
+						}
+						setback = AtInset(input, cells, c => Wet(c) == seaward, n => Wet(n) != seaward, form.NearWater > 0f ? form.NearWater : 50f);
+					}
+					Shuffle(setback, seed);
+					return setback;
+				}
+				case BiomeLandformAnchor.BayMouth:
+				{
+					// Shallow water with a shore within reach on two opposite sides and open water off one end (decision 74).
+					var mouths = new List<int>();
+					if (!float.IsNegativeInfinity(input.SeaLevel))
+					{
+						float reach = 0.5f * Mathf.Max(80f, Mathf.Max(form.Length.x, form.Length.y));
+						foreach (int c in cells)
+						{
+							Vector2 p = CellCentre(input, c);
+							float g = input.Ground(p.x, p.y);
+							if (g < input.SeaLevel && g > input.SeaLevel - 15f && BayAxis(input, p, reach, out _, out _, out _))
+							{
+								mouths.Add(c);
+							}
+						}
+					}
+					Shuffle(mouths, seed);
+					return mouths;
+				}
 				case BiomeLandformAnchor.NearWater:
 				{
 					var near = new List<int>();
@@ -854,6 +1095,116 @@ namespace FishMMO.Shared.WorldDesign
 					Shuffle(cells, seed);
 					return cells;
 			}
+		}
+
+		/// <summary>
+		/// The cells of <paramref name="cells"/> (those <paramref name="side"/> admits) whose 4-step distance, breadth-first through admitted
+		/// cells from those touching an <paramref name="other"/> cell inside the scene, is about <paramref name="inset"/> metres (pure but
+		/// for the predicates), in the list's order.
+		/// </summary>
+		private static List<int> AtInset(LandformPlanInput input, List<int> cells, Func<int, bool> side, Func<int, bool> other, float inset)
+		{
+			var steps = new Dictionary<int, int>();
+			var queue = new Queue<int>();
+			var admitted = new HashSet<int>();
+			foreach (int c in cells)
+			{
+				if (side(c))
+				{
+					admitted.Add(c);
+				}
+			}
+			foreach (int c in cells)
+			{
+				if (!admitted.Contains(c))
+				{
+					continue;
+				}
+				int x = c % input.CellsX, z = c / input.CellsX;
+				for (int k = 0; k < 4; k++)
+				{
+					int nx = x + (k == 0 ? 1 : k == 1 ? -1 : 0), nz = z + (k == 2 ? 1 : k == 3 ? -1 : 0);
+					if (nx >= 0 && nz >= 0 && nx < input.CellsX && nz < input.CellsZ && other(nz * input.CellsX + nx))
+					{
+						steps[c] = 0;
+						queue.Enqueue(c);
+						break;
+					}
+				}
+			}
+			while (queue.Count > 0)
+			{
+				int c = queue.Dequeue();
+				int x = c % input.CellsX, z = c / input.CellsX;
+				for (int k = 0; k < 4; k++)
+				{
+					int nx = x + (k == 0 ? 1 : k == 1 ? -1 : 0), nz = z + (k == 2 ? 1 : k == 3 ? -1 : 0);
+					int n = nz * input.CellsX + nx;
+					if (nx >= 0 && nz >= 0 && nx < input.CellsX && nz < input.CellsZ && admitted.Contains(n) && !steps.ContainsKey(n))
+					{
+						steps[n] = steps[c] + 1;
+						queue.Enqueue(n);
+					}
+				}
+			}
+			float tolerance = Mathf.Max(0.5f * input.CellMetres, 0.25f * inset);
+			var found = new List<int>();
+			foreach (int c in cells)
+			{
+				if (steps.TryGetValue(c, out int d) && Mathf.Abs((d + 0.5f) * input.CellMetres - inset) <= tolerance)
+				{
+					found.Add(c);
+				}
+			}
+			return found;
+		}
+
+		/// <summary>
+		/// The shortest shore-to-shore span through a point in the water, within <paramref name="reach"/> each way, of eight headings,
+		/// with open water (no shore within the reach) off at least one side of it (pure but for the ground): a bay's mouth.
+		/// </summary>
+		private static bool BayAxis(LandformPlanInput input, Vector2 p, float reach, out float yaw, out Vector2 middle, out float half)
+		{
+			yaw = 0f;
+			middle = p;
+			half = float.MaxValue;
+			float step = Mathf.Max(2f, 0.5f * input.CellMetres);
+			float Landfall(Vector2 dir)
+			{
+				for (float d = step; d <= reach; d += step)
+				{
+					Vector2 q = p + dir * d;
+					if (!Inside(input, q, 0f))
+					{
+						return float.NaN;
+					}
+					if (input.Ground(q.x, q.y) >= input.SeaLevel)
+					{
+						return d;
+					}
+				}
+				return float.NaN;
+			}
+			for (int k = 0; k < 8; k++)
+			{
+				float a = k * Mathf.PI / 8f;
+				var dir = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+				float ahead = Landfall(dir), behind = Landfall(-dir);
+				if (float.IsNaN(ahead) || float.IsNaN(behind) || 0.5f * (ahead + behind) >= half)
+				{
+					continue;
+				}
+				var across = new Vector2(-dir.y, dir.x);
+				if (!float.IsNaN(Landfall(across)) && !float.IsNaN(Landfall(-across)))
+				{
+					// Shut in on all four sides: a lagoon or a lake, not a mouth.
+					continue;
+				}
+				half = 0.5f * (ahead + behind);
+				middle = p + dir * (0.5f * (ahead - behind));
+				yaw = a * Mathf.Rad2Deg;
+			}
+			return half < float.MaxValue;
 		}
 
 		private static void Shuffle(List<int> list, uint seed)
@@ -880,6 +1231,10 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				case BiomeLandformAlign.SceneAxis:
 					return BiomeLandforms.Unit(BiomeLandforms.Hash(input.Seed, 0xA815u)) * 180f + 6f * (BiomeLandforms.Unit(BiomeLandforms.Hash(seed, 0xA2u)) - 0.5f);
+				case BiomeLandformAlign.Cardinal:
+				case BiomeLandformAlign.Meridian:
+					// Square to the compass (2026-10-25, I2g-b): east, or north, within a degree.
+					return (form.Align == BiomeLandformAlign.Meridian ? 90f : 0f) + (BiomeLandforms.Unit(BiomeLandforms.Hash(seed, 0xA4u)) - 0.5f);
 				default:
 					return BiomeLandforms.Unit(BiomeLandforms.Hash(seed, 0xA3u)) * 360f;
 			}
@@ -951,10 +1306,10 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>One scattered or fitted landform at a place (false when its line could not be traced or it leaves the scene).</summary>
 		private static bool TrySite(LandformPlanInput input, BiomeLandform form, int id, int biomeIndex, Patch patch, Vector2 at, float ground, uint seed,
-			out BiomeLandformSite site)
+			out BiomeLandformSite site, float sizeOverride = float.NaN)
 		{
 			float U(uint salt) => BiomeLandforms.Unit(BiomeLandforms.Hash(seed, salt));
-			float size = BiomeLandforms.Pick(form.Size, U(10u));
+			float size = float.IsNaN(sizeOverride) ? BiomeLandforms.Pick(form.Size, U(10u)) : sizeOverride;
 			if (form.Placement == BiomeLandformPlacement.Fitted && form.FitShare > 0f)
 			{
 				size = Mathf.Clamp(form.FitShare * patch.Diameter, Mathf.Min(form.Size.x, form.Size.y), Mathf.Max(form.Size.x, form.Size.y));
@@ -977,18 +1332,41 @@ namespace FishMMO.Shared.WorldDesign
 				Level = float.NaN,
 				Ground = ground,
 			};
+			if (form.Anchor == BiomeLandformAnchor.BayMouth && !float.IsNegativeInfinity(input.SeaLevel))
+			{
+				// Laid along the mouth's span, shore to shore and a little into each (decision 74: an ayre).
+				float reach = 0.5f * Mathf.Max(80f, Mathf.Max(form.Length.x, form.Length.y));
+				if (!BayAxis(input, at, reach, out float bayYaw, out Vector2 middle, out float bayHalf))
+				{
+					return false;
+				}
+				site.Yaw = bayYaw;
+				site.Centre = middle;
+				site.HalfLength = bayHalf + 2f * site.HalfWidth;
+			}
 			bool seaDatum = form.Datum == BiomeLandformDatum.SeaSurface && !float.IsNegativeInfinity(input.SeaLevel);
 			float datum = seaDatum ? input.SeaLevel - BiomeLandforms.Pick(form.DatumDepth, U(14u)) : float.NaN;
 			Vector2 axis = new Vector2(Mathf.Cos(site.Yaw * Mathf.Deg2Rad), Mathf.Sin(site.Yaw * Mathf.Deg2Rad));
 			switch (form.Family)
 			{
 				case BiomeLandformFamily.Crater:
-					// A crater's depth is a share of its diameter.
-					site.Height = height * size;
+					// A crater's depth is a share of its diameter; a ring basin's graben are metres deep whatever its size.
+					// An ageing crater's share is its class's (decision 72).
+					site.Height = form.Form == BiomeLandformForm.RingGraben ? height : (form.Ages ? BiomeLandforms.CraterAgeDepth(BiomeLandforms.CraterAge(seed)) : height) * size;
 					site.HalfLength = radius;
+					if (form.Form == BiomeLandformForm.RingGraben)
+					{
+						// The palimpsest settles towards the mean of its own ground (decision 71: pale and near flat).
+						site.Level = RingMean(input, at, radius * 0.18f);
+					}
 					if (form.Form == BiomeLandformForm.Ghost)
 					{
 						site.Level = RingMean(input, at, radius * 0.95f);
+					}
+					else if (form.Form == BiomeLandformForm.MultiRing)
+					{
+						// The mare's level (decision 55): the sunk floor filled back to six tenths of its sink.
+						site.Level = RingMean(input, at, radius * 0.3f) - 0.4f * site.Height;
 					}
 					break;
 				case BiomeLandformFamily.Mound:
@@ -1002,13 +1380,51 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					break;
 				case BiomeLandformFamily.Depression:
-					if (form.Form == BiomeLandformForm.Pan)
+					if (form.Form == BiomeLandformForm.Pit && seaDatum)
 					{
-						site.Level = Mathf.Min(ground, RingMean(input, at, radius * 0.9f)) - height;
+						site.Level = datum;
+					}
+					if (form.Form == BiomeLandformForm.Pan || form.Form == BiomeLandformForm.Tank)
+					{
+						// A pan with a sea datum floors at that level (2026-10-25, I2g-b: an ukanda's at the spring tides' reach).
+						site.Level = seaDatum && form.Form == BiomeLandformForm.Pan ? datum : Mathf.Min(ground, RingMean(input, at, radius * 0.9f)) - height;
 					}
 					break;
 				case BiomeLandformFamily.Mesa:
-					if (form.Form == BiomeLandformForm.Table)
+					if (form.Form == BiomeLandformForm.Table && seaDatum)
+					{
+						// A table standing from the sea at its datum, joined to the nearest shore by a neck MoatDepth under the sea's
+						// surface and Width wide (decision 74: a tidal brough and its causeway), when Width is set.
+						site.Level = datum;
+						if (form.Width.x > 0f || form.Width.y > 0f)
+						{
+							Vector2 shore = Vector2.zero;
+							float best = float.MaxValue, step = Mathf.Max(2f, 0.5f * input.CellMetres);
+							for (int k = 0; k < 16; k++)
+							{
+								var dir = new Vector2(Mathf.Cos(k * Mathf.PI / 8f), Mathf.Sin(k * Mathf.PI / 8f));
+								for (float d = radius * 0.8f; d <= radius + 600f && d < best; d += step)
+								{
+									Vector2 q = at + dir * d;
+									if (!Inside(input, q, site.HalfWidth * 1.6f))
+									{
+										break;
+									}
+									if (input.Ground(q.x, q.y) >= input.SeaLevel)
+									{
+										best = d;
+										shore = q + dir * site.HalfWidth;
+										break;
+									}
+								}
+							}
+							if (best < float.MaxValue)
+							{
+								site.Segments = Line(new List<Vector2> { at, shore }, site.HalfWidth, Mathf.Max(0f, form.MoatDepth), false);
+							}
+						}
+					}
+					else if (form.Form == BiomeLandformForm.Table)
 					{
 						site.Level = Mathf.Max(ground, RingMean(input, at, radius * 0.5f)) + height;
 					}
@@ -1034,6 +1450,21 @@ namespace FishMMO.Shared.WorldDesign
 					site.Level = datum;
 					site.Radius = form.Form == BiomeLandformForm.Scarp ? radius : site.HalfWidth;
 					site.Segments = Line(points, site.HalfWidth, height, true);
+					if (form.Form == BiomeLandformForm.Graben && form.Count > 1)
+					{
+						// A set of parallel troughs Moat metres apart, outward from the first (decision 76: an arcuate rille's arcs).
+						for (int k = 1; k < form.Count; k++)
+						{
+							var offset = new List<Vector2>(points.Count);
+							for (int i = 0; i < points.Count; i++)
+							{
+								Vector2 along = points[Mathf.Min(i + 1, points.Count - 1)] - points[Mathf.Max(i - 1, 0)];
+								Vector2 normal = along.sqrMagnitude > 1e-8f ? new Vector2(-along.y, along.x).normalized : Vector2.zero;
+								offset.Add(points[i] + normal * (k * Mathf.Max(site.HalfWidth * 2.5f, form.Moat)));
+							}
+							site.Segments.AddRange(Line(offset, site.HalfWidth, height, true));
+						}
+					}
 					break;
 				}
 				case BiomeLandformFamily.Channels:
@@ -1043,16 +1474,29 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						return false;
 					}
+					// A channel floored under the sea's surface (decision 68) cuts to that level.
+					site.Level = seaDatum ? datum : float.NaN;
 					site.Segments = new List<BiomeLandformSegment>();
 					foreach ((List<Vector2> line, int order) in lines)
 					{
 						// Each line from its mouth (no taper) to its head (tapering); a creek's branches narrower and shallower by their order.
 						float half = Mathf.Max(0.5f * Mathf.Min(form.Width.x, form.Width.y), site.HalfWidth * Mathf.Pow(0.55f, order));
 						float depth = Mathf.Max(Mathf.Min(form.Height.x, form.Height.y), height * Mathf.Pow(0.65f, order));
-						site.Segments.AddRange(Line(line, order == 0 ? site.HalfWidth : half, order == 0 ? height : depth, false));
+						bool taperStart = form.Form == BiomeLandformForm.Spiral || form.Form == BiomeLandformForm.Rille && form.CrownDepth <= 0f;
+						site.Segments.AddRange(Line(line, order == 0 ? site.HalfWidth : half, order == 0 ? height : depth, taperStart));
 						if (site.Segments.Count > MaximumSegments)
 						{
 							break;
+						}
+					}
+					if (form.Form == BiomeLandformForm.Rille)
+					{
+						// A rille narrows to half its width from its head to its toe (decision 76).
+						for (int i = 0; i < site.Segments.Count; i++)
+						{
+							BiomeLandformSegment seg = site.Segments[i];
+							seg.Half *= Mathf.Lerp(1f, 0.5f, 0.5f * (seg.AlongA + seg.AlongB) / Mathf.Max(1f, seg.LineLength));
+							site.Segments[i] = seg;
 						}
 					}
 					break;
@@ -1115,6 +1559,22 @@ namespace FishMMO.Shared.WorldDesign
 					float start = Mathf.Atan2(at.y - centre.y, at.x - centre.x);
 					float span = length / arcRadius;
 					int steps = Mathf.Clamp(Mathf.CeilToInt(length / 15f), 2, 200);
+					for (int i = 0; i <= steps; i++)
+					{
+						float a = start + span * (i / (float)steps - 0.5f);
+						points.Add(centre + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * arcRadius);
+					}
+					return points;
+				}
+				case BiomeLandformForm.Graben when form.Size.x > 0f || form.Size.y > 0f:
+				{
+					// An arcuate graben: an arc of the circle its size spans, through its place (decision 76).
+					float arcRadius = Mathf.Max(site.Radius, 10f);
+					Vector2 normal = new Vector2(-axis.y, axis.x);
+					Vector2 centre = at + normal * arcRadius;
+					float start = Mathf.Atan2(at.y - centre.y, at.x - centre.x);
+					float span = Mathf.Min(length / arcRadius, Mathf.PI);
+					int steps = Mathf.Clamp(Mathf.CeilToInt(span * arcRadius / 15f), 2, 200);
 					for (int i = 0; i <= steps; i++)
 					{
 						float a = start + span * (i / (float)steps - 0.5f);
@@ -1239,8 +1699,72 @@ namespace FishMMO.Shared.WorldDesign
 					lines.Add((line, 0));
 					return lines;
 				}
+				case BiomeLandformForm.Geo:
+				{
+					// From a little out to sea at its shore place straight inland (up the ground) to its head (decision 74).
+					Vector2 g = Gradient(input, site.Centre, Mathf.Max(2f, input.CellMetres * 0.5f));
+					Vector2 inland = g.sqrMagnitude > 1e-8f ? g.normalized : axis;
+					var line = new List<Vector2> { site.Centre - inland * (site.HalfWidth * 2f), site.Centre + inland * length };
+					if (!Inside(input, line[0], site.HalfWidth * 3.25f) || !Inside(input, line[1], site.HalfWidth * 3.25f))
+					{
+						return null;
+					}
+					lines.Add((line, 0));
+					return lines;
+				}
+				case BiomeLandformForm.Spiral:
+				{
+					// Troughs spiralling out from the place, one turn and a little over (2026-10-25, decision 64), each its own line.
+					int arms = Mathf.Max(1, form.Count);
+					float outer = Mathf.Max(site.Radius, site.HalfWidth * 8f);
+					float inner = 0.12f * outer;
+					float sweep = Mathf.PI * 2f * 1.1f;
+					float step = Mathf.Clamp(site.HalfWidth, 10f, 80f);
+					// An arm stops where its trough would cross the scene's edge: a channel's box reaches 3.2 half widths past its line
+					// (BiomeLandforms.BoundsOf), so a margin of one step let a wide trough's last points push the whole site out of the scene.
+					float edge = Mathf.Max(step, site.HalfWidth * 3.25f);
+					for (int a = 0; a < arms; a++)
+					{
+						float phase = (a + 0.3f * BiomeLandforms.Unit(BiomeLandforms.Hash(site.Seed, (uint)a, 0x591u))) * Mathf.PI * 2f / arms;
+						var line = new List<Vector2>();
+						int outside = 0;
+						for (float phi = 0f; phi <= sweep && line.Count < 800;)
+						{
+							float r = inner + (outer - inner) * phi / sweep;
+							Vector2 p = site.Centre + new Vector2(Mathf.Cos(phi + phase), Mathf.Sin(phi + phase)) * r;
+							if (!Inside(input, p, edge))
+							{
+								break;
+							}
+							outside = BiomeAt(input, p) == biomeIndex ? 0 : outside + 1;
+							if (outside > 3)
+							{
+								break;
+							}
+							line.Add(p);
+							phi += step / Mathf.Max(r, step);
+						}
+						if (line.Count >= 2)
+						{
+							lines.Add((line, 0));
+						}
+					}
+					return lines.Count > 0 ? lines : null;
+				}
+				case BiomeLandformForm.Rille:
+				{
+					// From its head down the slope to its toe, the head first (decision 76): the vent hollow stands at its start.
+					List<Vector2> line = Downhill(input, biomeIndex, site, length, false);
+					if (line == null)
+					{
+						return null;
+					}
+					lines.Add((line, 0));
+					return lines;
+				}
 				case BiomeLandformForm.Meander:
 				case BiomeLandformForm.StoneRiver:
+				case BiomeLandformForm.PitChain:
 				{
 					List<Vector2> line = Downhill(input, biomeIndex, site, length, form.Form == BiomeLandformForm.StoneRiver);
 					if (line == null)

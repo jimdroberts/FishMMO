@@ -16,6 +16,11 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public bool Minerals;
 		public BiomeCaveCrystalKind Mineral, MineralAccent;
+		/// <summary>
+		/// How much of the floors' glow is luminous fungus against crystal (1 the dressing's own share) and how often glow-worms hang
+		/// (1 its own chance): the cave biome's glow (BiomeTemplate.CaveGlows, 2026-10-25, I2n).
+		/// </summary>
+		public float FungusWeight, WormChance;
 	}
 
 	/// <summary>
@@ -30,7 +35,14 @@ namespace FishMMO.Shared.WorldDesign
 	public static class CaveGlowPalettes
 	{
 		/// <summary>The palette of a system of a form and seed in a biome (null: none of the biome's own crystals).</summary>
-		public static CaveGlowPalette For(CaveForm form, int seed, BiomeTemplate biome)
+		public static CaveGlowPalette For(CaveForm form, int seed, BiomeTemplate biome) => For(form, seed, new CaveBiome(biome, null));
+
+		/// <summary>
+		/// The palette of a system by its cave biomes (2026-10-25, I2n): the glow of the biome dressing its inside (its Cave Glows: the
+		/// crystals' hue, the fungus's share, the glow-worms' chance; their defaults are the rule below by form, so nothing moves), its
+		/// crystals the interior's with the host's glowing ones as accents (CaveInteriorArt.Crystals).
+		/// </summary>
+		public static CaveGlowPalette For(CaveForm form, int seed, in CaveBiome caves)
 		{
 			var random = new DeterministicRNG(unchecked(seed * 0x5D3B + 0x7A21));
 			int crystals = CaveArt.HueCount(CaveGlowKind.Crystal), fungi = CaveArt.HueCount(CaveGlowKind.Fungus);
@@ -40,6 +52,8 @@ namespace FishMMO.Shared.WorldDesign
 				Fungus = random.Range(0, fungi),
 				Fungi = true,
 				Worms = true,
+				FungusWeight = 1f,
+				WormChance = 1f,
 			};
 			p.CrystalAccent = (p.Crystal + random.Range(1, crystals)) % crystals;
 			p.FungusAccent = (p.Fungus + random.Range(1, fungi)) % fungi;
@@ -65,12 +79,22 @@ namespace FishMMO.Shared.WorldDesign
 					p.Worms = false;
 					break;
 			}
+			// The cave biome's own glow (its defaults are the rule above by form).
+			BiomeCaveGlow glow = CaveInteriorArt.Glow(caves.Content, form);
+			if (!string.IsNullOrEmpty(glow.Crystal))
+			{
+				p.Crystal = p.CrystalAccent = HueOf(CaveGlowKind.Crystal, glow.Crystal, p.Crystal);
+			}
+			p.Fungi = glow.Fungus > 0f;
+			p.Worms = glow.Worms > 0f;
+			p.FungusWeight = glow.Fungus;
+			p.WormChance = glow.Worms;
 			// A natural cave whose glow was drawn by chance (not an ice cave's ice, a lava tube's amber or a mine) where the biome
 			// grows crystals that glow: those line its ways, a lead and an accent by weight from a stream of their own (so the
 			// draws above stand as they were), and the giant crystals take the lead's and the accent's hue.
 			if (form == CaveForm.Cave || form == CaveForm.Grotto || form == CaveForm.SeaCave)
 			{
-				IReadOnlyList<BiomeCaveCrystal> grown = BiomeTemplateArt.CaveCrystals(biome);
+				IReadOnlyList<BiomeCaveCrystal> grown = CaveInteriorArt.Crystals(in caves);
 				if (BiomeCaveCrystals.Total(grown, glowingOnly: true) > 0f)
 				{
 					var pick = new DeterministicRNG(unchecked(seed * 0x4C1F + 0x2B95));

@@ -330,8 +330,18 @@ namespace FishMMO.Shared.WorldDesign
 					ClimateSample sample = climate.SampleAt(record.Position, out _);
 					record.VariantIndex = PointOfInterestNaming.VariantIndexOf(biome, biome.ResolveOwnVariant(sample.Temperature, sample.Humidity));
 				}
-				// The template's weight in the site's biome is the biome template's for its variant (2026-10-16).
-				PointOfInterestTemplate template = library.Pick(record, BiomeTemplateArt.SiteVariantWeights(biome), RaceCategoryOf(record.Race));
+				// The template's weight in the site's biome is the biome template's for its variant (2026-10-16); a cave whose host
+				// links its form to a cave biome weighs the two templates' variants merged (2026-10-25, I2n, decision 51).
+				Func<PointOfInterestTemplate, float> weights = BiomeTemplateArt.SiteVariantWeights(biome);
+				if (CaveShaper.TryForm(record.Kind, out _))
+				{
+					CaveBiome caves = CaveInteriorArt.OfSite(Request, record);
+					if (caves.Linked)
+					{
+						weights = CaveInteriorArt.SiteVariantWeights(in caves);
+					}
+				}
+				PointOfInterestTemplate template = library.Pick(record, weights, RaceCategoryOf(record.Race));
 				if (template != null)
 				{
 					record.Template = template.name;
@@ -719,13 +729,19 @@ namespace FishMMO.Shared.WorldDesign
 			if (field != null && field.Biomes.Count > 0)
 			{
 				// Lived-in kinds only where the world's air is breathable (decision 39, 2026-10-18): a thin or airless world's biomes
-				// place their natural sites and relics alone.
-				bool breathable = BiomeAir.IsBreathable(BiomeWorldConditions.For(system, Request.Body).Atmosphere);
+				// place their natural sites and relics alone; so do a methane, nitrogen, acid or molten-rock world's (decision 62).
+				// Kinds that work open water only where the world has liquid water on its surface (decision 68; no kind by default).
+				BiomeWorldConditions world = BiomeWorldConditions.For(system, Request.Body);
+				bool breathable = BiomeAir.IsBreathable(in world), liquidWater = world.HasLiquidWater;
 				foreach (BiomeTemplate biome in field.Biomes)
 				{
 					// The kinds the biome hosts are its template's (2026-10-16), not the catalogue rows' names.
 					biomes.Add(biome != null
-						? new PointOfInterestBiome(biome.name, BiomeRegistry.IDOf(biome), biome.ResolvedDisplayName, BiomeTemplateArt.SiteKinds(biome, rules, breathable))
+						? new PointOfInterestBiome(biome.name, BiomeRegistry.IDOf(biome), biome.ResolvedDisplayName, BiomeTemplateArt.SiteKinds(biome, rules, breathable, liquidWater))
+						{
+							// How deep its underwater sites stand (2026-10-25, phase I2m): (0, 0), each kind's own, unless its round says.
+							UnderwaterDepth = biome.UnderwaterSiteDepth,
+						}
 						: null);
 				}
 				var scratch = new float[field.Biomes.Count];

@@ -216,6 +216,15 @@ namespace FishMMO.Shared.WorldDesign
 			// What the biome offers: its template's Gathering Resources (2026-10-16; the catalogue's rows named biomes before).
 			Biomes.BiomeTemplate template = context.BiomeAt != null ? context.BiomeAt(context.Record.Position.x, context.Record.Position.z) : null;
 			IReadOnlyList<string> offered = BiomeTemplateArt.Gathering(template);
+			// In a cave whose host links its form to a cave biome, its chamber's nodes are that biome's (2026-10-25, I2n).
+			if (CaveShaper.TryForm(context.Record.Kind, out _))
+			{
+				CaveBiome caves = CaveInteriorArt.OfSite(context.Request, context.Record);
+				if (caves.Linked)
+				{
+					offered = CaveInteriorArt.Gathering(in caves);
+				}
+			}
 
 			int size = Mathf.Clamp(context.Record.SizeClass, 0, 2);
 			int count = Count > 0 ? Count : size == 0 ? 2 : size == 1 ? 3 : 5;

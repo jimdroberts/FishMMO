@@ -105,6 +105,39 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
+		/// <summary>
+		/// The cave biome's own formations (its Cave Formations, 2026-10-25, I2n) over a form's set: where the list names the form, each
+		/// place takes its shape by weight among those whose world gate admits the world (a place it leaves out, or whose every shape
+		/// is gated off, unformed), one shape a place a system, drawn on a stream of its own only when a place has several; a list not
+		/// naming the form leaves the set as it was. The defaults (one shape a place, as the set's) change nothing.
+		/// </summary>
+		private static void ApplyFormations(Set set, IReadOnlyList<BiomeCaveFormation> list, CaveForm form, in BiomeWorldConditions world, int seed)
+		{
+			var f = (BiomeCaveForm)form;
+			if (!BiomeCaveInteriors.NamesForm(list, f))
+			{
+				return;
+			}
+			set.Floor = ShapeOf(list, f, BiomeCaveFormationRole.Floor, in world, seed);
+			set.Hanging = ShapeOf(list, f, BiomeCaveFormationRole.Hanging, in world, seed);
+			set.Wall = ShapeOf(list, f, BiomeCaveFormationRole.Wall, in world, seed);
+			set.Pool = ShapeOf(list, f, BiomeCaveFormationRole.Pool, in world, seed);
+			set.Breakdown = ShapeOf(list, f, BiomeCaveFormationRole.Breakdown, in world, seed);
+			set.Crystal = ShapeOf(list, f, BiomeCaveFormationRole.Crystal, in world, seed);
+		}
+
+		/// <summary>A place's shape for a system: the one there is, or one by weight from the system's seed and the place; null for none.</summary>
+		private static string ShapeOf(IReadOnlyList<BiomeCaveFormation> list, BiomeCaveForm form, BiomeCaveFormationRole role, in BiomeWorldConditions world, int seed)
+		{
+			List<(string Shape, float Weight)> shapes = BiomeCaveInteriors.Shapes(list, form, role, in world);
+			if (shapes.Count <= 1)
+			{
+				return shapes.Count == 1 ? shapes[0].Shape : null;
+			}
+			float roll = new DeterministicRNG(unchecked(seed * 0x6E31 + 0x1D7 * ((int)role + 1))).NextFloat();
+			return BiomeCaveInteriors.Pick(shapes, roll);
+		}
+
 		// ── The formations' rock ──────────────────────────────────────
 
 		/// <summary>
@@ -198,14 +231,19 @@ namespace FishMMO.Shared.WorldDesign
 			Set set = SetFor(system.Form);
 			// The formations are the shell's rock: the very rock the shaper built the cave's walls in (its host site's biome's).
 			set.Rock = FormationRock(CaveShaper.ShellOf(context.Request, context.Record, system));
-			// The cave's biome: its host site's, as for its shell. Its crystals are the chambers' deposits where the form grows
-			// them (a cave's, a grotto's: selenite in every biome before 2026-10-16); an ice cave's crystals stay its own ice.
-			BiomeTemplate biome = PointOfInterestRock.BiomeOf(context.Record);
+			// The cave's biomes (2026-10-25, phase I2n): its host site's, whose are its mouth, its shell and a mine, and the cave biome
+			// the host links its form to where the shell is one that biome forms in, whose template dresses the inside (its
+			// formations, crystals, glow, lights, animals). Its crystals are the chambers' deposits where the form grows them (a
+			// cave's, a grotto's: selenite in every biome before 2026-10-16), the interior's with the host's glowing ones as
+			// accents; an ice cave's crystals stay its own ice.
+			CaveBiome caves = CaveInteriorArt.Of(context.Request, context.Record, system);
+			BiomeWorldConditions world = CaveInteriorArt.World(context.Request);
+			ApplyFormations(set, CaveInteriorArt.Formations(caves.Content), system.Form, in world, system.Seed);
 			if (set.CrystalRock != null)
 			{
-				set.Crystals = BiomeTemplateArt.CaveCrystals(biome);
+				set.Crystals = CaveInteriorArt.Crystals(in caves);
 			}
-			var dresser = new Dresser(context, system, set, biome, new DeterministicRNG(unchecked(system.Seed * 0x2F6B + 0xD1E5)));
+			var dresser = new Dresser(context, system, set, in caves, BiomeAir.IsBreathable(in world), new DeterministicRNG(unchecked(system.Seed * 0x2F6B + 0xD1E5)));
 			dresser.Run();
 			// Lights counts every emitter the dressing added that lights: the glow's own and those its lamps, torches and fires give
 			// off (not the drips' nor the lava's fumes, which only the client's effects read).
@@ -219,7 +257,8 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			// With the time it took, so the dressing's marches can be measured in a cut's notes.
-			PointOfInterestFeatureKit.Note(context, $"cave dressed in {clock.Elapsed.TotalSeconds:0.00} s ({system.Character}): {dresser.Placed} props, {lights} lights"
+			PointOfInterestFeatureKit.Note(context, $"cave dressed in {clock.Elapsed.TotalSeconds:0.00} s ({system.Character}"
+				+ (caves.Linked ? $", inside the {caves.Interior.name}" : string.Empty) + $"): {dresser.Placed} props, {lights} lights"
 				+ $", glow: {dresser.Glowing} ({dresser.Lights} glow lights), lamps: {dresser.Lamps}, climbs: {dresser.Climbed}, crossings: {dresser.Crossed}, camps: {dresser.Camps}"
 				+ (dresser.Grown > 0 ? $", overgrown: {dresser.Grown} plants" : string.Empty)
 				+ (dresser.Vined > 0 ? $", vines and roots: {dresser.Vined}" : string.Empty)
@@ -237,8 +276,17 @@ namespace FishMMO.Shared.WorldDesign
 			private readonly CaveSystem system;
 			private readonly Set set;
 			private readonly DeterministicRNG rng;
-			/// <summary>The cave's biome (its host site's), or null: what lights it (its template's Cave Lights) and its crystals.</summary>
+			/// <summary>
+			/// The biome dressing the cave's inside (2026-10-25: its interior where its host links one, else its host's), or null: what
+			/// lights it (its template's Cave Lights), its crystals and glow.
+			/// </summary>
 			private readonly BiomeTemplate biome;
+			/// <summary>The biome the cave opens in (its host site's): its mouth's growth, the land over it (roots, the trees above).</summary>
+			private readonly BiomeTemplate host;
+			/// <summary>Both (<see cref="CaveBiome"/>).</summary>
+			private readonly CaveBiome caves;
+			/// <summary>Whether the world's air burns a flame: a linked interior's lights are the cold Glow kinds where it does not.</summary>
+			private readonly bool breathable;
 			/// <summary>Draws which of the biome's crystals each chamber cluster is, on its own stream, so the mix never moves the rest.</summary>
 			private readonly DeterministicRNG crystalPick;
 			private readonly List<(Vector3 a, Vector3 b)> lanes = new List<(Vector3, Vector3)>();
@@ -254,12 +302,15 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>Where every crystal-kind light of this system stands (system frame): what keeps the glow's lights sparse.</summary>
 			private readonly List<Vector3> glowLights = new List<Vector3>();
 
-			public Dresser(PointOfInterestSiteContext context, CaveSystem system, Set set, BiomeTemplate biome, DeterministicRNG rng)
+			public Dresser(PointOfInterestSiteContext context, CaveSystem system, Set set, in CaveBiome caves, bool breathable, DeterministicRNG rng)
 			{
 				this.context = context;
 				this.system = system;
 				this.set = set;
-				this.biome = biome;
+				this.caves = caves;
+				biome = caves.Content;
+				host = caves.Host;
+				this.breathable = breathable;
 				this.rng = rng;
 				crystalPick = new DeterministicRNG(unchecked(system.Seed * 0x3A7D + 0x51C3));
 				foreach (CavePassage passage in system.Passages)
@@ -962,7 +1013,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				if (!caveLights.TryGetValue(place, out (bool lit, BiomeCaveLight light) known))
 				{
-					known.lit = BiomeTemplateArt.CaveLight(biome, place, out known.light);
+					known.lit = CaveInteriorArt.CaveLight(in caves, place, breathable, out known.light);
 					caveLights[place] = known;
 				}
 				light = known.light;

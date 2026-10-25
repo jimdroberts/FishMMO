@@ -270,8 +270,10 @@ namespace FishMMO.Client
 			loaded = true;
 			group = default;
 			float water = meanLevel - floor;
-			bool onFloor = kind.Behaviour == SeaCreatureBehaviour.Hover || kind.Behaviour == SeaCreatureBehaviour.Crawl;
-			if (onFloor && (water < kind.Depth.x || water > kind.Depth.y))
+			bool onFloor = OnFloor(kind);
+			// A floor dweller's band, and a near-floor swimmer's (2026-10-25), is where its home's FLOOR lies, at any depth.
+			bool floorBand = onFloor || kind.NearFloor;
+			if (floorBand && (water < kind.Depth.x || water > kind.Depth.y))
 			{
 				return false;
 			}
@@ -282,6 +284,15 @@ namespace FishMMO.Client
 			if (onFloor)
 			{
 				y = floor;
+			}
+			else if (kind.NearFloor)
+			{
+				// Its height over the floor in its clearance band, under the low-tide surface.
+				y = floor + Mathf.Lerp(kind.FloorClearance.x, kind.FloorClearance.y, Unit(Mix(seed ^ 0x4u)));
+				if (y > ceiling)
+				{
+					return false;
+				}
 			}
 			else
 			{
@@ -322,7 +333,7 @@ namespace FishMMO.Client
 						return false;
 					}
 					float deep = meanLevel - there;
-					fits = deep >= kind.MinWater && (!onFloor || deep <= kind.Depth.y * 1.25f);
+					fits = deep >= kind.MinWater && (!floorBand || deep <= kind.Depth.y * 1.25f);
 				}
 				if (fits)
 				{
@@ -331,6 +342,34 @@ namespace FishMMO.Client
 				group.Radius *= 0.5f;
 			}
 			return false;
+		}
+
+		/// <summary>True for the kinds that live ON the sea floor (their home is a patch of it): Hover, Crawl and Lurk.</summary>
+		public static bool OnFloor(SeaCreatureKind kind)
+		{
+			return kind.Behaviour == SeaCreatureBehaviour.Hover || kind.Behaviour == SeaCreatureBehaviour.Crawl || kind.Behaviour == SeaCreatureBehaviour.Lurk;
+		}
+
+		/// <summary>The share of a lurker's cycle it spends out of its den, darting out and back (<see cref="LurkAt"/>).</summary>
+		public const float LurkDartShare = 0.12f;
+
+		/// <summary>
+		/// How far out of its den a lurker is at a world time, 0 (in its den, head out) … 1 (at the end of its dart): a pure function of the shared clock, in double precision, so every player sees the same moray
+		/// dart at the same moment. Each cycle it rests for all but <see cref="LurkDartShare"/> of it, then darts out and back in
+		/// one smooth arc (sin of the dart's share of π).
+		/// </summary>
+		/// <param name="seconds">The shared motion clock (SeaLifeSystem.MotionSeconds).</param>
+		/// <param name="period">Seconds between darts.</param>
+		/// <param name="offset">The den's own phase, 0 … 1.</param>
+		public static float LurkAt(double seconds, double period, float offset)
+		{
+			float c = Cycle(seconds, period, offset);
+			float start = 1f - LurkDartShare;
+			if (c < start)
+			{
+				return 0f;
+			}
+			return Mathf.Sin((c - start) / LurkDartShare * Mathf.PI);
 		}
 
 		/// <summary>Seconds a lap of the group's loop takes at its kind's speed.</summary>
@@ -404,10 +443,13 @@ namespace FishMMO.Client
 			// Rises and dips a little round the lap, kept off the floor and under the surface.
 			float bob = Mathf.Sin(lap * Mathf.PI * 4f + Unit(Mix(group.Seed ^ 0xDu)) * 6.28f) * Mathf.Min(2f, group.Radius * 0.08f);
 			centre.y += bob;
-			if (kind.Behaviour != SeaCreatureBehaviour.Hover && kind.Behaviour != SeaCreatureBehaviour.Crawl && ground.TryGround(centre.x, centre.z, out float floor)
+			if (!OnFloor(kind) && ground.TryGround(centre.x, centre.z, out float floor)
 				&& !float.IsInfinity(floor))
 			{
-				centre.y = Mathf.Max(centre.y, floor + kind.FloorClearance.x + kind.Spread * 0.3f);
+				// A near-floor swimmer follows the floor at its height over it (2026-10-25); any other is only kept off it.
+				centre.y = kind.NearFloor
+					? floor + Mathf.Lerp(kind.FloorClearance.x, kind.FloorClearance.y, Unit(Mix(group.Seed ^ 0x4u))) + bob
+					: Mathf.Max(centre.y, floor + kind.FloorClearance.x + kind.Spread * 0.3f);
 			}
 			centre.y = Mathf.Min(centre.y, ceiling - kind.Spread * 0.3f);
 
@@ -454,6 +496,31 @@ namespace FishMMO.Client
 							continue; // its spot is too shallow for it at low tide: not drawn rather than out of the water
 						}
 						memberTurn = (r1 < 0.5f ? 1f : -1f) * 0.6f;
+						break;
+					}
+					case SeaCreatureBehaviour.Lurk:
+					{
+						/* In its den (a spot in the patch, the body half sunk in the bed as in a crevice, the head out), facing out
+						 * with a slow sway; each den darts out a few lengths and back on its own period of the shared clock. */
+						float angle = r0 * Mathf.PI * 2f;
+						float distance = Mathf.Sqrt(r1) * kind.Spread;
+						// About the group's home, which does not move: a den stays where it is.
+						Vector3 den = group.Home + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * distance;
+						float facing = r2 * Mathf.PI * 2f + 0.35f * Mathf.Sin(Cycle(seconds, 9.0 + 7.0 * r3, r1) * Mathf.PI * 2f);
+						forward = new Vector3(Mathf.Cos(facing), 0f, Mathf.Sin(facing));
+						double period = Mathf.Lerp(18f, 45f, r3) / Math.Max(0.1, kind.Speed);
+						float dart = LurkAt(seconds, period, r0);
+						float reach = Mathf.Lerp(kind.Roam.x, kind.Roam.y, r1) * 0.25f;
+						position = den + forward * (reach * dart + length * 0.25f);
+						float under = ground.TryGround(position.x, position.z, out float bed) && !float.IsInfinity(bed) ? bed : group.Home.y;
+						// Half sunk in its den at rest; clear of the bed by its clearance at the end of the dart.
+						position.y = under + Mathf.Lerp(-length * 0.12f, kind.FloorClearance.x, dart);
+						if (position.y > ceiling - length * 0.3f)
+						{
+							continue;
+						}
+						strength = Mathf.Lerp(0.25f, 1.8f, dart);
+						memberTurn = 0.3f * Mathf.Sin(facing * 3f);
 						break;
 					}
 					case SeaCreatureBehaviour.Drift:

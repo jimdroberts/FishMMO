@@ -889,6 +889,9 @@ half4 VegFragmentPBR(InputData inputData, SurfaceData surfaceData, out Light mai
     AmbientOcclusionFactor aoFactor = CreateAmbientOcclusionFactor(inputData, surfaceData);
     uint meshRenderingLayers = GetMeshRenderingLayer();
     mainLightUnoccluded = GetMainLight(inputData.shadowCoord, inputData.positionWS, shadowMask);
+    // Under the sea the daylight dims with depth (2026-10-25, FishSeaDaylight; 1 elsewhere): the light through the leaves with it.
+    half seaDaylight = FishSeaDaylight(inputData.positionWS);
+    mainLightUnoccluded.color *= seaDaylight;
     Light mainLight = mainLightUnoccluded;
     #if defined(_SCREEN_SPACE_OCCLUSION) && !defined(_SURFACE_TYPE_TRANSPARENT)
     if (IsLightingFeatureEnabled(DEBUGLIGHTINGFEATUREFLAGS_AMBIENT_OCCLUSION))
@@ -901,7 +904,7 @@ half4 VegFragmentPBR(InputData inputData, SurfaceData surfaceData, out Light mai
     LightingData lightingData = CreateLightingData(inputData, surfaceData);
     lightingData.giColor = GlobalIllumination(brdfData, brdfDataClearCoat, surfaceData.clearCoatMask,
         inputData.bakedGI, aoFactor.indirectAmbientOcclusion, inputData.positionWS,
-        inputData.normalWS, inputData.viewDirectionWS, inputData.normalizedScreenSpaceUV);
+        inputData.normalWS, inputData.viewDirectionWS, inputData.normalizedScreenSpaceUV) * seaDaylight;
 #ifdef _LIGHT_LAYERS
     if (IsMatchingLightLayer(mainLight.layerMask, meshRenderingLayers))
 #endif

@@ -335,7 +335,8 @@ namespace FishMMO.Shared.Biomes
 				&& (!Has(required, BiomeWorldRequirement.SurfaceWater) || HasWater)
 				// Either route to molten ground (see BiomeWorldRequirement.MoltenRock): the OR lives in
 				// the predicate, so the flags themselves stay AND-ed.
-				&& (!Has(required, BiomeWorldRequirement.MoltenRock) || HasMoltenRock);
+				&& (!Has(required, BiomeWorldRequirement.MoltenRock) || HasMoltenRock)
+				&& (!Has(required, BiomeWorldRequirement.LiquidWater) || HasLiquidWater);
 		}
 
 		private static bool Has(BiomeWorldRequirement mask, BiomeWorldRequirement flag) => (mask & flag) != 0;

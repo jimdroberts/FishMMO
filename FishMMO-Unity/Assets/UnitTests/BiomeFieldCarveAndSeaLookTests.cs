@@ -410,7 +410,10 @@ namespace FishMMO.UnitTests.WorldDesign
 				BiomeArtSpec.Entry entry = BiomeArtSpec.For(name);
 				Assert.That(entry, Is.Not.Null, name);
 				Assert.That(entry.SeaLook().Signature(), Is.EqualTo(BiomeSeaLooks.Today.Signature()), name);
-				Assert.That(entry.WaterLook().Signature(), Is.EqualTo(BiomeWaterLooks.Today.Signature()), name);
+				// A biome file may mark its water hot (phase I2q, .HotWater()); the colours stay today's.
+				BiomeWaterLook water = entry.WaterLook();
+				water.Hot = false;
+				Assert.That(water.Signature(), Is.EqualTo(BiomeWaterLooks.Today.Signature()), name);
 				count++;
 			}
 			Assert.That(count, Is.EqualTo(83));

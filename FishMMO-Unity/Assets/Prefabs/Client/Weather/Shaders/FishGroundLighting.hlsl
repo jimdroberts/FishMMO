@@ -77,13 +77,16 @@ half4 FishFragmentPBR(InputData inputData, half3 albedo, half metallic, half smo
     AmbientOcclusionFactor aoFactor = CreateAmbientOcclusionFactor(inputData, surfaceData);
     uint meshRenderingLayers = GetMeshRenderingLayer();
     Light mainLight = GetMainLight(inputData, shadowMask, aoFactor);
+    // FishMMO edit (2026-10-25): under the sea the daylight dims with depth (FishWeather.hlsl's FishSeaDaylight; 1 elsewhere).
+    half seaDaylight = FishSeaDaylight(inputData.positionWS);
+    mainLight.color *= seaDaylight;
 
     MixRealtimeAndBakedGI(mainLight, inputData.normalWS, inputData.bakedGI);
 
     LightingData lightingData = CreateLightingData(inputData, surfaceData);
 
     lightingData.giColor = FishGlobalIllumination(brdfData, inputData.bakedGI, aoFactor.indirectAmbientOcclusion, inputData.positionWS,
-                                                  inputData.normalWS, inputData.viewDirectionWS, inputData.normalizedScreenSpaceUV);
+                                                  inputData.normalWS, inputData.viewDirectionWS, inputData.normalizedScreenSpaceUV) * seaDaylight;
 #ifdef _LIGHT_LAYERS
     if (IsMatchingLightLayer(mainLight.layerMask, meshRenderingLayers))
 #endif

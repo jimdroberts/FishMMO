@@ -145,17 +145,65 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
-		/// True when people can breathe it and fires burn in it: real air (<see cref="BiomeAtmosphereRequirement.Living"/>, Earth-like
-		/// or thick), never a thin trace or none. What a point-of-interest kind that needs breathable air asks (decision 39).
+		/// The worlds whose air is the wrong STUFF to breathe or burn, however dense (decision 62, 2026-10-25, merged with 65(h)):
+		/// a methane sky (Titan), any sky cold enough to condense methane or nitrogen, frozen nitrogen on the ground (Triton, Pluto),
+		/// a runaway greenhouse of acid cloud (Venus), and molten rock open at the surface. Each is the
+		/// <see cref="BiomeWorldRequirement"/> flag a template's <see cref="BiomeTemplate.Requires"/> names, tested by
+		/// <see cref="BiomeWorldConditions.Meets"/> from the body's own data (its air, its condensate, its heat): nothing new is
+		/// authored on a world.
 		/// </summary>
-		public static bool IsBreathable(AtmosphereKind kind) => (MaskOf(kind) & BiomeAtmosphereRequirement.Living) != 0;
+		public const BiomeWorldRequirement UnbreathableWorlds = BiomeWorldRequirement.MethaneCycle | BiomeWorldRequirement.CryogenicAir
+			| BiomeWorldRequirement.FrozenNitrogen | BiomeWorldRequirement.RunawayGreenhouse | BiomeWorldRequirement.MoltenRock;
+
+		/// <summary>
+		/// True when the air is dense enough to breathe (<see cref="BiomeAtmosphereRequirement.Living"/>: Earth-like or thick), never
+		/// a thin trace or none. Only the DENSITY half of <see cref="IsBreathable"/>: every question of whether people breathe or a
+		/// flame burns asks <see cref="IsBreathable"/>, which also reads what the air is made of.
+		/// </summary>
+		public static bool IsDenseEnough(AtmosphereKind kind) => (MaskOf(kind) & BiomeAtmosphereRequirement.Living) != 0;
+
+		/// <summary>
+		/// True when people can breathe the world's air and fires burn in it: air dense enough (<see cref="IsDenseEnough"/>: Earth-like
+		/// or thick) AND of the right make-up, on a world that meets none of <see cref="UnbreathableWorlds"/> (decision 62,
+		/// 2026-10-25: Titan's thick nitrogen-methane sky counted as breathable, so its cuts sited bridges and its biomes kept fire).
+		/// The ONE answer every consumer asks: what a point-of-interest kind that needs breathable air asks (decision 39), whether a
+		/// cave's fire lights burn (<see cref="BiomeCaveInteriors.ForAir"/>). The home world (<see cref="BiomeWorldConditions.Earthlike"/>)
+		/// and every Earth-like or thick-aired world of water cloud is breathable exactly as before.
+		/// </summary>
+		public static bool IsBreathable(in BiomeWorldConditions world)
+		{
+			if (!IsDenseEnough(world.Atmosphere))
+			{
+				return false;
+			}
+			// One flag at a time: Meets AND-s the flags it is given, and any one of these makes the air unbreathable.
+			for (int bit = 1; bit <= (int)UnbreathableWorlds; bit <<= 1)
+			{
+				var flag = (BiomeWorldRequirement)bit;
+				if ((UnbreathableWorlds & flag) != 0 && world.Meets(flag))
+				{
+					return false;
+				}
+			}
+			return true;
+		}
 
 		/// <summary>
 		/// True when a template admits only worlds of thin air or none (its <see cref="BiomeTemplate.Atmosphere"/> names Airless
-		/// and/or Thin and nothing else): no fire burns on any world it is ever painted on (decision 41's light rule).
+		/// and/or Thin and nothing else): no fire burns on any world it is ever painted on (decision 41's light rule). The density
+		/// half of <see cref="NeverBreathable"/>.
 		/// </summary>
 		public static bool OnlyThinAir(BiomeAtmosphereRequirement templateAtmosphere)
 			=> templateAtmosphere != BiomeAtmosphereRequirement.None && (templateAtmosphere & ~ThinOrNone) == 0;
+
+		/// <summary>
+		/// True when no world a template is ever painted on has breathable air (<see cref="IsBreathable"/> false on every one): it
+		/// admits only thin air or none (<see cref="OnlyThinAir"/>), or its <see cref="BiomeTemplate.Requires"/> names any of
+		/// <see cref="UnbreathableWorlds"/> (a world must meet every flag a template requires to carry it). The authoring's
+		/// Glow-only light rule (decisions 41 and 62/65(h)): such a biome's streets, caves and mines are lit with no flame.
+		/// </summary>
+		public static bool NeverBreathable(BiomeAtmosphereRequirement templateAtmosphere, BiomeWorldRequirement templateRequires)
+			=> OnlyThinAir(templateAtmosphere) || (templateRequires & UnbreathableWorlds) != 0;
 
 		/// <summary>
 		/// True when a ground layer's air band (<see cref="TerrainTextureLayer.airBand"/>) admits a world's air: no band (None)
@@ -227,6 +275,14 @@ namespace FishMMO.Shared.Biomes
 		/// </summary>
 		public static float WeightOn(in BiomeSiteKind entry, bool breathable)
 			=> breathable || !entry.NeedsBreathableAir ? Mathf.Max(0f, entry.Weight) : 0f;
+
+		/// <summary>
+		/// <see cref="WeightOn(in BiomeSiteKind, bool)"/> on a world that also has (<paramref name="liquidWater"/>) or lacks liquid
+		/// water on its surface: 0 too where it lacks it and the entry needs it (<see cref="BiomeSiteKind.NeedsLiquidWater"/>,
+		/// decision 68). An entry without the flag weighs exactly what the air alone gives it.
+		/// </summary>
+		public static float WeightOn(in BiomeSiteKind entry, bool breathable, bool liquidWater)
+			=> liquidWater || !entry.NeedsLiquidWater ? WeightOn(entry, breathable) : 0f;
 
 		/// <summary>Every kind that needs it by default, in kind order (for reports and tests).</summary>
 		public static IEnumerable<POIType> DefaultKinds()

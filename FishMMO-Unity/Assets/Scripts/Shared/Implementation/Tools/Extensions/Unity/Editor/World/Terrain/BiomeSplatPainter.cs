@@ -83,6 +83,21 @@ namespace FishMMO.Shared.WorldDesign
 		/// Asked only when some layer has one; called from the painter's worker threads (an array read). Null: every heat band passes.
 		/// </summary>
 		public Func<float, float, float> HeatAt;
+
+		/// <summary>
+		/// The scene's landform zones (2026-10-25, phase I2g-b, decision 55; BiomeLandformZones of the sites the cut stored), what a
+		/// detail layer's landform band (TerrainTextureLayer.landformBand) reads. Asked only when some layer has one; thread-safe.
+		/// Null: no landform, so an "on the part" band paints nothing and an "off the part" band everywhere.
+		/// </summary>
+		public BiomeLandformZones LandformZones;
+
+		/// <summary>
+		/// How far the scene sea's tide moves it either way, metres (its WaterEnvironment.MaximumTideMetres, after its coast's tide
+		/// strength: BiomeSeaFloors.TideMetres; 2026-10-25, phase I2m): the lowest tide's depth, down to which an estuary's own grounds
+		/// paint (<see cref="BiomeSeaFloor.ToLowWater"/>), and the unit a ground layer's depth band in tides reads
+		/// (<see cref="TerrainTextureLayer.seaDepthInTides"/>).
+		/// </summary>
+		public float TideMetres = BiomeSeaFloors.DefaultTideMetres;
 	}
 
 	/// <summary>What the splat painter did.</summary>
@@ -258,8 +273,19 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>True when some detail layer has a heat band and the ground's heat is known (2026-10-18, I2q); the point's heat then.</summary>
 			private readonly bool anyHeat;
 			private float heat = float.NaN;
+			/// <summary>True when some detail layer has a landform zone band (2026-10-25, I2g-b); the point's ground and slope then.</summary>
+			private readonly bool anyZone;
+			private float zoneGround, zoneSlope;
 			/// <summary>Per biome: its beds (decision 35, 2026-10-18), null for a biome with none.</summary>
 			private readonly BedSet[] beds;
+			/// <summary>Per biome: what it paints under the sea (<see cref="BiomeTemplate.SeaFloor"/>, 2026-10-25, phase I2m).</summary>
+			private readonly BiomeSeaFloor[] floors;
+			/// <summary>
+			/// True when some main or detail layer has a sea depth band (<see cref="TerrainTextureLayer.useSeaDepthBand"/>); the point's
+			/// depth below mean sea level then (negative above it; NaN on a world with no sea, where every band passes).
+			/// </summary>
+			private readonly bool anyDepthBand;
+			private float seaDepth = float.NaN;
 			/// <summary>Scratch for one biome's extra beds: their strengths and shares at the point being weighed.</summary>
 			private readonly float[] bedStrength = new float[BiomeTemplate.MaximumBedLayers];
 			private readonly float[] bedShare = new float[BiomeTemplate.MaximumBedLayers];
@@ -300,12 +326,27 @@ namespace FishMMO.Shared.WorldDesign
 						entry.Source.blendNoiseOffsetY + (hash >> 16) * 0.37f);
 				}
 
+				floors = new BiomeSeaFloor[Mathf.Max(1, field.Biomes.Count)];
+				for (int b = 0; b < field.Biomes.Count; b++)
+				{
+					// A plain type test, not Unity's null: the field's template is only read for a value.
+					floors[b] = field.Biomes[b] is BiomeTemplate biome ? biome.SeaFloor : BiomeSeaFloor.Shore;
+				}
+				foreach (SceneTerrainPalette.Entry entry in palette.Entries)
+				{
+					anyDepthBand |= (entry.Role == PaletteRole.Main || entry.Role == PaletteRole.Detail) && entry.Source != null && entry.Source.HasSeaDepthBand;
+				}
+
 				if (this.options.HeatAt != null)
 				{
 					foreach (SceneTerrainPalette.Entry entry in palette.Entries)
 					{
 						anyHeat |= entry.Role == PaletteRole.Detail && entry.Source != null && entry.Source.HasHeatBand;
 					}
+				}
+				foreach (SceneTerrainPalette.Entry entry in palette.Entries)
+				{
+					anyZone |= entry.Role == PaletteRole.Detail && entry.Source != null && entry.Source.landformBand.On;
 				}
 
 				/* Each biome's beds: the lakebed, the riverbed (a channel of its own only when its art differs: one shared terrain layer
@@ -418,6 +459,9 @@ namespace FishMMO.Shared.WorldDesign
 				float submerged = options.HasLiquidWater && options.ShoreFadeMetres > 0f
 					? Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(-worldY / options.ShoreFadeMetres))
 					: 0f;
+				// The sea's share alone and the inland water's alone, for a sea-floor biome's own bed share (2026-10-25, phase I2m).
+				float seaShore = submerged;
+				float inlandUnder = 0f;
 				float inland = float.NegativeInfinity;
 				if (options.InlandWaterSurface != null)
 				{
@@ -427,9 +471,11 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						float under = float.IsPositiveInfinity(inland) ? 1f
 							: Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((inland - worldY) / Mathf.Max(0.05f, options.InlandShoreFadeMetres)));
+						inlandUnder = under;
 						submerged = Mathf.Max(submerged, under);
 					}
 				}
+				seaDepth = anyDepthBand && options.HasLiquidWater ? -worldY : float.NaN;
 				/* What lies over the bed (decision 35, 2026-10-18): which water, how deep below its own surface, how quick. Only where
 				 * something is submerged; a river's share asked only under inland water. */
 				BedWater water = BedWater.None;
@@ -441,6 +487,11 @@ namespace FishMMO.Shared.WorldDesign
 				}
 
 				heat = anyHeat ? options.HeatAt(worldX, worldZ) : float.NaN;
+				if (anyZone)
+				{
+					zoneGround = worldY;
+					zoneSlope = slopeDegrees;
+				}
 				Vector2 bar = options.BarAt != null ? options.BarAt(worldX, worldZ) : Vector2.zero;
 				float rock = options.RockAt != null ? Mathf.Clamp01(options.RockAt(worldX, worldZ, slopeDegrees)) : 0f;
 				float reached = 0f;
@@ -452,7 +503,12 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					reached += biomeWeight;
-					Share(b, biomeWeight, worldX, worldZ, height, slopeDegrees, submerged, in water, bar, rock, climate, layerWeights);
+					/* A sea-floor biome's own grounds paint under the sea (decision 36 (a), 38, 45): its bed takes none of the sea floor
+					 * (Ground), or none above the lowest tide (ToLowWater); still the whole bed under inland water. Every other biome
+					 * keeps the shore's rule, the very value it always had. */
+					float biomeSubmerged = floors[b] == BiomeSeaFloor.Shore ? submerged
+						: Mathf.Max(BiomeSeaFloors.BedShare(floors[b], seaShore, -worldY, options.ShoreFadeMetres, options.TideMetres), inlandUnder);
+					Share(b, biomeWeight, worldX, worldZ, height, slopeDegrees, biomeSubmerged, in water, bar, rock, climate, layerWeights);
 				}
 
 				float total = 0f;
@@ -585,6 +641,10 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					float d = DetailStrength(entry, worldX, worldZ, height, slope);
+					if (entry.Source.HasSeaDepthBand)
+					{
+						d *= DepthWeight(entry);
+					}
 					detailStrength[entry.Index] = d;
 					keep *= 1f - d;
 					sum += d;
@@ -603,7 +663,23 @@ namespace FishMMO.Shared.WorldDesign
 				}
 
 				float rest = biomeWeight * ground * (1f - union);
-				if (main != null)
+				if (main != null && main.Source.HasSeaDepthBand && sum > 0f)
+				{
+					/* A main layer banded by depth (2026-10-25, phase I2m) stands only inside its band; outside it the details carry the
+					 * ground between them, and where none does the main layer stays, never a hole (as a main layer's climate band). */
+					float stands = DepthWeight(main);
+					layerWeights[main.LayerIndex] += rest * stands;
+					float over = rest * (1f - stands);
+					for (int i = 0; i < entries.Count; i++)
+					{
+						SceneTerrainPalette.Entry entry = entries[i];
+						if (entry.Role == PaletteRole.Detail)
+						{
+							layerWeights[entry.LayerIndex] += over * detailStrength[entry.Index] / sum;
+						}
+					}
+				}
+				else if (main != null)
 				{
 					layerWeights[main.LayerIndex] += rest;
 				}
@@ -657,11 +733,19 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						float claim = entry.Variant.TextureWeight(t, h);
 						climateShare[entry.Index] = left * claim * entry.Source.ClimateWeight(t, h);
+						if (entry.Source.HasSeaDepthBand)
+						{
+							climateShare[entry.Index] *= DepthWeight(entry);
+						}
 						left *= 1f - claim;
 					}
 					if (slot.Own != null)
 					{
 						climateShare[slot.Own.Index] = left * slot.Own.Source.ClimateWeight(t, h);
+						if (slot.Own.Source.HasSeaDepthBand)
+						{
+							climateShare[slot.Own.Index] *= DepthWeight(slot.Own);
+						}
 					}
 					if (slot.Ground == 0)
 					{
@@ -767,6 +851,15 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
+			/// How fully a main or detail layer's sea depth band (<see cref="TerrainTextureLayer.SeaDepthWeight"/>, decision 38/45) admits
+			/// the point being weighed: its depth below mean sea level, in metres or in the scene's tides. 1 on a world with no sea.
+			/// </summary>
+			private float DepthWeight(SceneTerrainPalette.Entry entry)
+			{
+				return float.IsNaN(seaDepth) ? 1f : entry.Source.SeaDepthWeight(seaDepth, options.TideMetres);
+			}
+
+			/// <summary>
 			/// A detail layer's strength at a point, 0 … 1: its noise, sharpened, inside its bands.
 			/// </summary>
 			/// <remarks>
@@ -797,6 +890,12 @@ namespace FishMMO.Shared.WorldDesign
 				if (source.useHeatBand && entry.Role == PaletteRole.Detail)
 				{
 					strength *= source.HeatWeight(heat);
+				}
+				if (anyZone && source.landformBand.On && entry.Role == PaletteRole.Detail && strength > 0f)
+				{
+					// On (or off) a part of its biome's sculpted landforms (2026-10-25, I2g-b, decision 55).
+					strength *= BiomeLandformZones.WeightOf(options.LandformZones, source.landformBand, entry.Biome != null ? entry.Biome.ID : 0,
+						worldX, worldZ, zoneGround, zoneSlope);
 				}
 				return Mathf.Clamp01(strength);
 			}

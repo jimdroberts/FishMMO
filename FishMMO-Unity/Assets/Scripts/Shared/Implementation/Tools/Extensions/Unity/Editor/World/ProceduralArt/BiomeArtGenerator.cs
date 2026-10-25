@@ -1120,6 +1120,14 @@ namespace FishMMO.Shared.WorldDesign
 				float ownSway = ProceduralArtCatalogue.Traits(spec.Plant.Kind).Sway; // a newer kind's own; 0 for every legacy kind
 				float sway = grassy ? 0.35f : spec.Plant.Kind == DetailKind.Kelp ? 0.25f : ownSway > 0f ? ownSway : 0.2f;
 				bool aquatic = SeaFloorMeshes.IsAquatic(spec.Plant.Kind);
+				if (aquatic && spec.Glow.maxColorComponent > 0f)
+				{
+					/* A glowing sea detail (2026-10-25, phase I2m, decision 36 (d)): the cave glow's material, its own colours lit
+					 * from within, so it is seen where the daylight never reaches. */
+					var glow = new CaveGlowHue { Name = spec.Name, Albedo = spec.Healthy, Emission = spec.Glow, Smoothness = 0.45f, Metallic = 0f };
+					WriteMaterial(c, ProceduralArtCatalogue.DetailPrefab(spec.Name), rock, m => CaveGlowLit(m, atlas, atlas, in glow, false));
+					continue;
+				}
 				WriteMaterial(c, ProceduralArtCatalogue.DetailPrefab(spec.Name), veg, m =>
 				{
 					Vegetation(m, atlas, 0.45f, true, sway, 0.02f, 0.5f, spec.Healthy, spec.Dry, 0.35f, spec.SnowBury, false, distanceFade: FadeDetail, groundSink: sink,

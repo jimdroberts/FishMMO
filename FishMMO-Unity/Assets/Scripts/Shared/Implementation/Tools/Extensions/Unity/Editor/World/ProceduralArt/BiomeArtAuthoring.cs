@@ -731,10 +731,12 @@ namespace FishMMO.Shared.WorldDesign
 			AuthorRock(biome, entry, report, apply);
 			AuthorCaveShells(biome, entry, report, apply);
 			AuthorCaveCrystals(biome, entry, report, apply);
+			AuthorCaveInteriors(biome, entry, report, apply);
 			AuthorFloatingPlants(biome, entry, report, apply);
 			AuthorWaterRole(biome, entry, report, apply);
 			AuthorWaterLook(biome, entry, report, apply);
 			AuthorSeaLook(biome, entry, report, apply);
+			AuthorSeaFloor(biome, entry, report, apply);
 			AuthorGrowth(biome, entry, source, report, apply);
 			AuthorLooks(biome, entry, report, apply);
 			AuthorGrass(biome, entry, source, report, apply);
@@ -1039,7 +1041,7 @@ namespace FishMMO.Shared.WorldDesign
 			// Fields a pre-fingerprint run could not have set: anything but their defaults is somebody's.
 			if (rule.detailPlacement != DetailPlacement.Scattered || rule.sinkRange != Vector2.zero || rule.sinkSlopeFactor != 0f || rule.clusterMetres != 0f || rule.forestMetres != 0f
 				|| rule.depthRange != Vector2.zero || rule.useClimateBand || rule.waters != BiomeBedWaters.Default || rule.currentRange != Vector2.zero
-				|| !rule.worldGate.IsOpen || rule.useHeatBand || (rule.scaleSkew > 0f && rule.scaleSkew != 1f))
+				|| !rule.worldGate.IsOpen || rule.useHeatBand || (rule.scaleSkew > 0f && rule.scaleSkew != 1f) || rule.landformBand.On)
 			{
 				return false;
 			}
@@ -1188,6 +1190,32 @@ namespace FishMMO.Shared.WorldDesign
 			string current = biome.IsAuthored(BiomeTemplate.Authored.SeaLook) ? biome.SeaLook.Signature() : string.Empty;
 			AuthorValue(biome.name, biome, BiomeTemplate.Authored.SeaLook, current, target.Signature(), false,
 				() => biome.SeaLook = target, $"{target}", report, apply);
+		}
+
+		/// <summary>
+		/// What the biome paints and grows under the sea, how strongly its coast tides and how deep its underwater sites stand
+		/// (<see cref="BiomeTemplate.SeaFloor"/>, <see cref="BiomeTemplate.TideStrength"/>, <see cref="BiomeTemplate.UnderwaterSiteDepth"/>;
+		/// 2026-10-25, phase I2m) from the spec (<see cref="BiomeArtSpec.Entry.UnderTheSea"/>, <see cref="BiomeArtSpec.Entry.Tides"/>,
+		/// <see cref="BiomeArtSpec.Entry.SitesBetween"/>: Shore, 1 and (0, 0), every template's own, unless the biome's file says
+		/// otherwise). Three values, each marked by what it wrote; a value edited by hand is kept.
+		/// </summary>
+		private static void AuthorSeaFloor(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			BiomeSeaFloor floor = entry.SeaFloorKind;
+			string floorNow = biome.IsAuthored(BiomeTemplate.Authored.SeaFloor) ? biome.SeaFloor.ToString() : string.Empty;
+			AuthorValue(biome.name, biome, BiomeTemplate.Authored.SeaFloor, floorNow, floor.ToString(), false,
+				() => biome.SeaFloor = floor, $"sea floor {floor}", report, apply);
+
+			float tide = entry.TideStrength;
+			string tideNow = biome.IsAuthored(BiomeTemplate.Authored.TideStrength) ? Q(biome.TideStrength).ToString(CultureInfo.InvariantCulture) : string.Empty;
+			AuthorValue(biome.name, biome, BiomeTemplate.Authored.TideStrength, tideNow, Q(tide).ToString(CultureInfo.InvariantCulture), false,
+				() => biome.TideStrength = tide, $"tide strength ×{tide:0.##}", report, apply);
+
+			Vector2 sites = entry.UnderwaterSiteDepth;
+			string SitesMark(Vector2 v) => $"{Q(v.x).ToString(CultureInfo.InvariantCulture)},{Q(v.y).ToString(CultureInfo.InvariantCulture)}";
+			string sitesNow = biome.IsAuthored(BiomeTemplate.Authored.UnderwaterSiteDepth) ? SitesMark(biome.UnderwaterSiteDepth) : string.Empty;
+			AuthorValue(biome.name, biome, BiomeTemplate.Authored.UnderwaterSiteDepth, sitesNow, SitesMark(sites), false,
+				() => biome.UnderwaterSiteDepth = sites, $"underwater sites {SitesMark(sites)} m", report, apply);
 		}
 
 		/// <summary>A cave shell list's mark: a hash of its "Form=Rock" entries in order.</summary>
@@ -1574,15 +1602,21 @@ namespace FishMMO.Shared.WorldDesign
 				boardwalks.ToString(), false, () => biome.Boardwalks = boardwalks, $"boardwalks {boardwalks}", report, apply);
 
 			/* No flame where no world it stands on has the air to burn one (decision 41, 2026-10-18): a biome whose template admits only
-			 * thin air or none is lit with the cold Glow lights in the same places; every other biome as before. */
-			bool glowOnly = BiomeAir.OnlyThinAir(biome.Atmosphere);
+			 * thin air or none is lit with the cold Glow lights in the same places; so is one whose Requires names a methane, cryogenic,
+			 * frozen-nitrogen, runaway-greenhouse or molten-rock world (decisions 62 and 65(h), 2026-10-25: BiomeAir.NeverBreathable);
+			 * every other biome as before. */
+			bool glowOnly = BiomeAir.NeverBreathable(biome.Atmosphere, biome.Requires);
 
 			// How its settlements light their streets (I5b): one entry per kind.
 			AuthorEntries(who, biome, BiomeTemplate.Authored.WayLights, biome.WayLights, entry.WayLights(glowOnly), l => l.Kind.ToString(), l => l.ToString(),
 				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
 
 			// How its caves and mines are lit (2026-10-16, I6c): one entry per place, the cave dressing's old rule by default.
-			AuthorEntries(who, biome, BiomeTemplate.Authored.CaveLights, biome.CaveLights, entry.CaveLights(glowOnly), CaveLightId, l => l.ToString(),
+			/* Decision 57's exception (2026-10-25, I2n): a template other biomes' caves are the inside of (the Lava Tube, found only under
+			 * thin air or none) keeps its fire cave lights, as the cave dressing lights a linked cave with the Glow kinds on a world whose
+			 * air will not burn them (BiomeCaveInteriors.ForAir). */
+			bool glowCaves = BiomeCaveInteriors.GlowCaveLights(glowOnly, entry.CaveInteriorRocks().Count > 0);
+			AuthorEntries(who, biome, BiomeTemplate.Authored.CaveLights, biome.CaveLights, entry.CaveLights(glowCaves), CaveLightId, l => l.ToString(),
 				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
 		}
 
@@ -1600,6 +1634,25 @@ namespace FishMMO.Shared.WorldDesign
 		private static void AuthorCaveCrystals(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
 		{
 			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.CaveCrystals, biome.CaveCrystals, entry.CaveCrystals(), CaveCrystalId, c => c.ToString(),
+				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
+		}
+
+		/// <summary>
+		/// The biome's caves' insides (2026-10-25, phase I2n, decisions 37, 46, 51, 57) from the spec: its links by form to the cave
+		/// biomes that dress them (<see cref="BiomeTemplate.CaveInteriors"/>, the Cave, Ice Cave and Lava Tube by default), the shells
+		/// it is the inside of itself (<see cref="BiomeTemplate.CaveInteriorRocks"/>), and its caves' formations and glow by form
+		/// (<see cref="BiomeTemplate.CaveFormations"/>, <see cref="BiomeTemplate.CaveGlows"/>: what the cave dressing chose by form
+		/// before, unless its file names its own). One mark per entry: hand edits are kept, hand deletions stay deleted.
+		/// </summary>
+		private static void AuthorCaveInteriors(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.CaveInteriors, biome.CaveInteriors, entry.CaveInteriors(), l => l.Form.ToString(), l => l.ToString(),
+				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
+			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.CaveInteriorRocks, biome.CaveInteriorRocks, entry.CaveInteriorRocks(), r => r, r => r,
+				l => Mark(AsList(l)), report, apply);
+			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.CaveFormations, biome.CaveFormations, entry.CaveFormations(), f => f.Id, f => f.ToString(),
+				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
+			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.CaveGlows, biome.CaveGlows, entry.CaveGlows(), g => g.Form.ToString(), g => g.ToString(),
 				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
 		}
 
@@ -2147,7 +2200,8 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				if (slot.terrainLayer == null || slot.terrainLayer != source.Layer(spec.Family))
 				{
-					if (spec.HasClimateBand || spec.AirBand != BiomeAtmosphereRequirement.None || spec.HeatBand.HasValue)
+					if (spec.HasClimateBand || spec.AirBand != BiomeAtmosphereRequirement.None || spec.HeatBand.HasValue || spec.UndergroundBand != BiomeUnderground.Both || spec.SeaDepth.HasValue
+						|| spec.ZoneBand.On)
 					{
 						report.Lines.Add($"{biome.name} {slotName}: holds authored art, so its spec climate/air band was not written");
 					}
@@ -2165,7 +2219,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				BiomeArtSpec.Cliff cliff = entry.Cliffs[i];
 				Spec(BiomeLocalArt.SlotCliff + i, biome.CliffTextureLayers != null && i < biome.CliffTextureLayers.Count ? biome.CliffTextureLayers[i] : null,
-					cliff != null ? new BiomeArtSpec.Layer { Family = cliff.Family, AirBand = cliff.AirBand } : null);
+					cliff != null ? new BiomeArtSpec.Layer { Family = cliff.Family, AirBand = cliff.AirBand, UndergroundBand = cliff.UndergroundBand } : null);
 			}
 			foreach (BiomeArtSpec.Entry.VariantGrounds grounds in entry.VariantLayers)
 			{
@@ -2215,6 +2269,15 @@ namespace FishMMO.Shared.WorldDesign
 			layer.useHeatBand = spec != null && spec.HeatBand.HasValue;
 			layer.heatRange = spec?.HeatBand ?? new Vector2(0f, 1f);
 			layer.heatFalloff = spec != null && spec.HeatBand.HasValue ? spec.HeatFalloff : BiomeHeatBand.DefaultFalloff;
+			// And the underground band (2026-10-25, I2n): the open land, the caves, or both.
+			layer.underground = spec != null ? spec.UndergroundBand : BiomeUnderground.Both;
+			// And the sea depth band (2026-10-25, I2m, decisions 38/45): metres or tides below mean sea level.
+			layer.useSeaDepthBand = spec != null && spec.SeaDepth.HasValue;
+			layer.seaDepthRange = spec?.SeaDepth ?? new Vector2(-BiomeSeaFloors.OpenDepth, BiomeSeaFloors.OpenDepth);
+			layer.seaDepthFalloff = spec != null && spec.SeaDepth.HasValue ? spec.SeaDepthFalloff : BiomeSeaFloors.DefaultDepthFalloff;
+			layer.seaDepthInTides = spec != null && spec.SeaDepth.HasValue && spec.SeaDepthInTides;
+			// And the landform zone band (2026-10-25, I2g-b, decision 55): off unless the spec names a part.
+			layer.landformBand = spec != null ? spec.ZoneBand : default;
 		}
 
 		/// <summary>A layer's climate band's mark: empty for none (off, or open at every end), else its ranges and falloffs to 1/10 000.</summary>
@@ -2225,7 +2288,35 @@ namespace FishMMO.Shared.WorldDesign
 				return string.Empty;
 			}
 			string climate = layer.HasClimateBand ? ClimateMark(layer.temperatureRange, layer.temperatureFalloff, layer.humidityRange, layer.humidityFalloff) : string.Empty;
-			return WithHeat(WithAir(climate, layer.airBand), layer.HasHeatBand ? layer.heatRange : (Vector2?)null, layer.heatFalloff);
+			return WithZone(WithSeaDepth(WithUnderground(WithHeat(WithAir(climate, layer.airBand), layer.HasHeatBand ? layer.heatRange : (Vector2?)null, layer.heatFalloff), layer.underground),
+				layer.HasSeaDepthBand ? layer.seaDepthRange : (Vector2?)null, layer.seaDepthFalloff, layer.seaDepthInTides), layer.landformBand);
+		}
+
+		/// <summary>
+		/// A climate mark with a layer's sea depth band after it ("|s" shallowest, deepest, falloff and m or t, 2026-10-25, I2m), the
+		/// climate part "t-|h-" when it has none; unchanged without a band, so every mark written before depth bands existed reads the same.
+		/// </summary>
+		private static string WithSeaDepth(string mark, Vector2? depth, float falloff, bool tides)
+		{
+			if (!depth.HasValue || !BiomeSeaFloors.Closes(depth.Value))
+			{
+				return mark;
+			}
+			Vector2 d = depth.Value;
+			return (mark.Length > 0 ? mark : "t-|h-") + $"|s{Q(Mathf.Min(d.x, d.y))},{Q(Mathf.Max(d.x, d.y))},{Q(falloff)},{(tides ? "t" : "m")}";
+		}
+
+		/// <summary>
+		/// A climate mark with a layer's underground band after it ("|u" and the band, 2026-10-25, I2n), the climate part "t-|h-" when it
+		/// has none; unchanged for Both, so every mark written before the band existed reads the same.
+		/// </summary>
+		private static string WithUnderground(string mark, BiomeUnderground band)
+		{
+			if (band == BiomeUnderground.Both)
+			{
+				return mark;
+			}
+			return (mark.Length > 0 ? mark : "t-|h-") + "|u" + ((int)band).ToString(System.Globalization.CultureInfo.InvariantCulture);
 		}
 
 		/// <summary>
@@ -2251,7 +2342,21 @@ namespace FishMMO.Shared.WorldDesign
 			string climate = spec.HasClimateBand
 				? ClimateMark(spec.Temperature ?? new Vector2(-1f, 1f), spec.TemperatureFalloff, spec.Humidity ?? new Vector2(-1f, 1f), spec.HumidityFalloff)
 				: string.Empty;
-			return WithHeat(WithAir(climate, spec.AirBand), spec.HeatBand, spec.HeatFalloff);
+			return WithZone(WithSeaDepth(WithUnderground(WithHeat(WithAir(climate, spec.AirBand), spec.HeatBand, spec.HeatFalloff), spec.UndergroundBand),
+				spec.SeaDepth, spec.SeaDepthFalloff, spec.SeaDepthInTides), spec.ZoneBand);
+		}
+
+		/// <summary>
+		/// A climate mark with a layer's landform zone band after it ("|z" and the band's signature, 2026-10-25, I2g-b, decision 55), the
+		/// climate part "t-|h-" when it has none; unchanged with the band off, so every mark written before the band existed reads the same.
+		/// </summary>
+		private static string WithZone(string mark, BiomeLandformBand band)
+		{
+			if (!band.On)
+			{
+				return mark;
+			}
+			return (mark.Length > 0 ? mark : "t-|h-") + "|z" + band.Signature();
 		}
 
 		/// <summary>
@@ -2782,6 +2887,11 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				text.Append("|Q").Append(Q(rule.heatRange.x)).Append(',').Append(Q(rule.heatRange.y)).Append(',').Append(Q(rule.heatFalloff));
 			}
+			// The landform zone band (2026-10-25, I2g-b, decision 55) likewise: only a rule whose band is on hashes it.
+			if (rule.landformBand.On)
+			{
+				text.Append("|Z").Append(rule.landformBand.Signature());
+			}
 			// The size skew (2026-10-20) likewise: only a rule leaned off even hashes it, so every mark made before still holds (0, an
 			// asset saved before the field, is even too).
 			if (rule.scaleSkew > 0f && rule.scaleSkew != 1f)
@@ -2939,6 +3049,8 @@ namespace FishMMO.Shared.WorldDesign
 				useHeatBand = s.Heat.HasValue,
 				heatRange = s.Heat ?? new Vector2(0f, 1f),
 				heatFalloff = s.Heat.HasValue ? Mathf.Clamp01(s.HeatFalloff) : BiomeHeatBand.DefaultFalloff,
+				// Off unless the spec names a part (2026-10-25, I2g-b, decision 55).
+				landformBand = s.Zone,
 			});
 			rule.SpecFingerprint = Fingerprint(rule);
 		}
@@ -3004,6 +3116,7 @@ namespace FishMMO.Shared.WorldDesign
 			to.useHeatBand = from.useHeatBand;
 			to.heatRange = from.heatRange;
 			to.heatFalloff = from.heatFalloff;
+			to.landformBand = from.landformBand;
 		}
 	}
 }

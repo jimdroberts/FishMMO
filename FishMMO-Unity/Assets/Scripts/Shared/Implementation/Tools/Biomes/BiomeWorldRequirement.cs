@@ -185,5 +185,17 @@ namespace FishMMO.Shared.Biomes
 		/// </para>
 		/// </remarks>
 		MoltenRock = 1 << 12,
+
+		/// <summary>
+		/// Liquid water open on the surface (<see cref="BiomeWorldConditions.HasLiquidWater"/>): seas, lakes and rivers of water,
+		/// not ice and not another world's liquid. The opposite of <see cref="NoLiquidWater"/>.
+		/// </summary>
+		/// <remarks>
+		/// Decision 68 (2026-10-25, the Ice Shelf round): a WORLD band on ground layers and a site kind's
+		/// <see cref="BiomeSiteKind.NeedsLiquidWater"/> read it, so one biome can carry one palette over open water and another over
+		/// the raised frozen sea of an ice world. A template's own <see cref="BiomeTemplate.RequiresLiquidWater"/> asks the same
+		/// question of the whole biome; this flag lets a part of it ask. Appended last, so no stored mask changes meaning.
+		/// </remarks>
+		LiquidWater = 1 << 13,
 	}
 }

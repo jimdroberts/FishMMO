@@ -357,7 +357,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				Vector3 world = system.Origin + local;
 				BiomeTemplate over = context.BiomeAt != null ? context.BiomeAt(world.x, world.z) : null;
-				over = ReferenceEquals(over, null) ? biome : over;
+				over = ReferenceEquals(over, null) ? host : over;
 				if (ReferenceEquals(over, null))
 				{
 					return 0f;

@@ -261,7 +261,13 @@ namespace FishMMO.Shared.WorldDesign
 				case POIType.SunkenShip:
 				case POIType.SunkenRuins:
 				case POIType.SunkenCity:
+				case POIType.SunkenShrine:
+				case POIType.SeaMonsterDen:
+				case POIType.SunkenMonument:
+				case POIType.SunkenStatue:
 					return new[] { GatheringFamily.Marine };
+				case POIType.SeaCrystalFormation:
+					return new[] { GatheringFamily.Crystal, GatheringFamily.Marine };
 				default:
 					return Array.Empty<GatheringFamily>();
 			}

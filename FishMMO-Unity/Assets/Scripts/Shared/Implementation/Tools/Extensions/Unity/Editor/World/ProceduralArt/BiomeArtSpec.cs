@@ -178,6 +178,19 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
+			/// Underground band (TerrainTextureLayer.underground, 2026-10-25, phase I2n, decision 57): whether this ground is laid on
+			/// the open land, inside the caves the biome dresses, or both (the default). Set through <see cref="Underground"/>.
+			/// </summary>
+			public BiomeUnderground UndergroundBand;
+
+			/// <summary>Lays this ground only on the open land (Surface) or only inside the biome's caves (Interior: a detail so banded is not painted on the terrain; a cave's floors take it first).</summary>
+			public Layer Underground(BiomeUnderground band)
+			{
+				UndergroundBand = band;
+				return this;
+			}
+
+			/// <summary>
 			/// Heat band (TerrainTextureLayer.useHeatBand, 2026-10-18, phase I2q): the ground's heat this DETAIL ground is painted
 			/// between, 0 cold … 1 a spring's throat (an end at or past 0 or 1 open); null for none, as every layer was before. Set
 			/// through <see cref="Heat"/>.
@@ -197,6 +210,65 @@ namespace FishMMO.Shared.WorldDesign
 				HeatFalloff = Mathf.Clamp01(falloff);
 				return this;
 			}
+
+			/// <summary>
+			/// Landform zone band (TerrainTextureLayer.landformBand, 2026-10-25, phase I2g-b, decision 55): off (the default) for every
+			/// layer, as before. Set through <see cref="Zone"/>.
+			/// </summary>
+			public BiomeLandformBand ZoneBand;
+
+			/// <summary>
+			/// Paints this detail ground only on (or, <paramref name="outside"/>, only off) one part of its biome's sculpted landforms,
+			/// of one name or any (a crater's rays: <c>D(Ground.Regolith, 64f).Zone(BiomeLandformPart.Rays, "RayCrater")</c>). Main
+			/// layers ignore it.
+			/// </summary>
+			public Layer Zone(BiomeLandformPart part, string kind = null, bool outside = false)
+			{
+				ZoneBand = BiomeLandformBand.Of(part, kind, outside);
+				return this;
+			}
+
+			/// <summary>
+			/// Sea depth band (TerrainTextureLayer.useSeaDepthBand, 2026-10-25, phase I2m, decisions 38 and 45): the signed depth below
+			/// mean sea level this ground is painted between (negative above it), x the shallowest and y the deepest, in metres or
+			/// (<see cref="SeaDepthInTides"/>) in the scene's tides; an end at or past ±BiomeSeaFloors.OpenDepth open. Null for none, as
+			/// every layer was before. Set through <see cref="Depth"/> or <see cref="Tide"/>.
+			/// </summary>
+			public Vector2? SeaDepth;
+			/// <summary>The sea depth band's soft edge at each closed end, centred on the end, in the band's own units.</summary>
+			public float SeaDepthFalloff = BiomeSeaFloors.DefaultDepthFalloff;
+			/// <summary>True when <see cref="SeaDepth"/> is in tides (1 the lowest tide's depth, −1 the highest tide's height).</summary>
+			public bool SeaDepthInTides;
+
+			/// <summary>
+			/// Paints this ground only between <paramref name="shallowest"/> and <paramref name="deepest"/> metres below mean sea level
+			/// (negative: above it; 0 for an open end, as a sea rule's depth): a reef's live coral <c>D(Ground.X, 40f).Depth(1f, 30f)</c>,
+			/// its rubble <c>.Depth(12f, 40f)</c>. Under the sea only a sea-floor biome's grounds paint (its file's <see cref="Entry.UnderTheSea"/>).
+			/// On the main layer it says where the base ground stands (the details carry the ground outside it).
+			/// </summary>
+			public Layer Depth(float shallowest, float deepest, float falloff = BiomeSeaFloors.DefaultDepthFalloff)
+			{
+				float x = shallowest == 0f ? -BiomeSeaFloors.OpenDepth : shallowest;
+				float y = deepest == 0f ? BiomeSeaFloors.OpenDepth : deepest;
+				SeaDepth = BiomeSeaFloors.Closes(new Vector2(x, y)) ? new Vector2(Mathf.Min(x, y), Mathf.Max(x, y)) : (Vector2?)null;
+				SeaDepthFalloff = Mathf.Max(0f, falloff);
+				SeaDepthInTides = false;
+				return this;
+			}
+
+			/// <summary>
+			/// Paints this ground only between two HEIGHTS in tides (decision 45: 0 mean sea level, 1 mean high water, −1 mean low
+			/// water; the scene sea's tide after its coast's strength): a salt marsh's pioneer zone <c>.Tide(-0.6f, 0.3f)</c>, its high
+			/// marsh <c>.Tide(0.6f, 1.5f)</c>. An end at or past ±BiomeSeaFloors.OpenDepth is open.
+			/// </summary>
+			public Layer Tide(float lowest, float highest, float falloff = 0.2f)
+			{
+				Vector2 band = BiomeSeaFloors.TideHeightsAsDepths(Mathf.Min(lowest, highest), Mathf.Max(lowest, highest));
+				SeaDepth = BiomeSeaFloors.Closes(band) ? band : (Vector2?)null;
+				SeaDepthFalloff = Mathf.Max(0f, falloff);
+				SeaDepthInTides = SeaDepth.HasValue;
+				return this;
+			}
 		}
 
 		/// <summary>A cliff layer: a family on faces steeper than an angle.</summary>
@@ -212,6 +284,16 @@ namespace FishMMO.Shared.WorldDesign
 			public Cliff Air(BiomeAtmosphereRequirement air)
 			{
 				AirBand = air;
+				return this;
+			}
+
+			/// <summary>Where this rock face is laid (TerrainTextureLayer.underground, 2026-10-25): Interior for a cave interior's inner wall (an ice shell's scalloped ice), not painted on the terrain.</summary>
+			public BiomeUnderground UndergroundBand;
+
+			/// <summary>Lays this rock face only on the open land (Surface) or only inside the biome's caves (Interior).</summary>
+			public Cliff Underground(BiomeUnderground band)
+			{
+				UndergroundBand = band;
 				return this;
 			}
 		}
@@ -316,6 +398,11 @@ namespace FishMMO.Shared.WorldDesign
 			public Vector2? Heat;
 			/// <summary><see cref="PrefabSpawnRule.heatFalloff"/>.</summary>
 			public float HeatFalloff = BiomeHeatBand.DefaultFalloff;
+			/// <summary>
+			/// Landform zone band (<see cref="PrefabSpawnRule.landformBand"/>, 2026-10-25, phase I2g-b, decision 55): off for none. Set
+			/// through <see cref="OnLandform"/>.
+			/// </summary>
+			public BiomeLandformBand Zone;
 			/// <summary>
 			/// Tree-channel rules: the heading range instances are turned to, degrees about the vertical
 			/// (<see cref="PrefabSpawnRule.yRotationRange"/>). Any heading unless set through <see cref="Aligned"/>.
@@ -717,6 +804,46 @@ namespace FishMMO.Shared.WorldDesign
 
 			private BiomeSeaLook? seaTint;
 
+			/// <summary>
+			/// What the biome paints and grows under the sea (<see cref="BiomeTemplate.SeaFloor"/>, 2026-10-25, phase I2m): Shore
+			/// (the default, every biome's before) unless its file says otherwise through <see cref="UnderTheSea"/>.
+			/// </summary>
+			public BiomeSeaFloor SeaFloorKind = BiomeSeaFloor.Shore;
+
+			/// <summary>
+			/// Paints the biome's own main and detail grounds under the sea (decision 36 (a)): <see cref="BiomeSeaFloor.Ground"/> for a
+			/// sea-floor biome, deep or on the shelf; <see cref="BiomeSeaFloor.ToLowWater"/> for an estuary. Its rules on those layers
+			/// that name the sea (<c>In(BiomeBedWaters.Sea, Sea(...))</c>) grow there.
+			/// </summary>
+			public Entry UnderTheSea(BiomeSeaFloor floor = BiomeSeaFloor.Ground)
+			{
+				SeaFloorKind = floor;
+				return this;
+			}
+
+			/// <summary>How strongly the biome's coast tides (<see cref="BiomeTemplate.TideStrength"/>, decision 45): 1 (as before) unless set through <see cref="Tides"/>.</summary>
+			public float TideStrength = 1f;
+
+			/// <summary>Multiplies the scene sea's tide where the biome holds the coast (an estuary ×4; the tide never past 4 m).</summary>
+			public Entry Tides(float strength)
+			{
+				TideStrength = BiomeSeaFloors.Strength(strength);
+				return this;
+			}
+
+			/// <summary>
+			/// How deep the biome's underwater sites stand (<see cref="BiomeTemplate.UnderwaterSiteDepth"/>, decision 36 (b)): (0, 0),
+			/// each kind's own band, unless set through <see cref="SitesBetween"/>.
+			/// </summary>
+			public Vector2 UnderwaterSiteDepth;
+
+			/// <summary>Sites the biome's underwater kinds (wrecks, drowned shrines, dens) between these depths below mean sea level, metres.</summary>
+			public Entry SitesBetween(float shallowest, float deepest)
+			{
+				UnderwaterSiteDepth = new Vector2(Mathf.Max(0f, Mathf.Min(shallowest, deepest)), Mathf.Max(shallowest, deepest));
+				return this;
+			}
+
 			/// <summary>Gives the sea off the biome's coast its own look under the surface (<see cref="BiomeTemplate.SeaLook"/>) in place of the scene's own.</summary>
 			public Entry SeaTint(BiomeSeaLook look)
 			{
@@ -797,6 +924,103 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				return list;
 			}
+
+			// ── Cave interiors (2026-10-25, phase I2n, decisions 37, 46, 51, 57) ──
+			//
+			// Which cave biome dresses the inside of the biome's caves by form (BiomeTemplate.CaveInteriors; every surface biome
+			// links the Cave, Ice Cave and Lava Tube by default, BiomeCaveInteriors.DefaultLinks), the shells the biome is itself the
+			// inside of (CaveInteriorRocks), and what its caves take in each place (CaveFormations) and glow with (CaveGlows): the
+			// cave dressing's own rules by form by default (BiomeCaveInteriors.DefaultFormations/DefaultGlow), which change nothing.
+
+			private List<(CaveForm Form, string Interior)> caveInteriors;
+			private string[] interiorRocks;
+			private List<BiomeCaveFormation> caveFormations;
+			private HashSet<CaveForm> ownFormationForms;
+			private List<BiomeCaveGlow> caveGlows;
+
+			/// <summary>Links the biome's caves of a form to a cave biome's inside (its asset's name), or to none (null: dressed from this biome).</summary>
+			public Entry CaveInterior(CaveForm form, string interior)
+			{
+				caveInteriors ??= new List<(CaveForm, string)>();
+				caveInteriors.RemoveAll(c => c.Form == form);
+				caveInteriors.Add((form, interior));
+				return this;
+			}
+
+			/// <summary>The biome's cave-interior links (<see cref="BiomeTemplate.CaveInteriors"/>): the defaults with the file's own laid over them, in the forms' order. A fresh list.</summary>
+			public List<BiomeCaveInterior> CaveInteriors()
+			{
+				List<BiomeCaveInterior> list = BiomeCaveInteriors.DefaultLinks(Biome);
+				if (caveInteriors != null)
+				{
+					foreach ((CaveForm form, string interior) in caveInteriors)
+					{
+						list.RemoveAll(l => l.Form == (BiomeCaveForm)form);
+						if (!string.IsNullOrEmpty(interior) && interior != Biome)
+						{
+							list.Add(new BiomeCaveInterior((BiomeCaveForm)form, interior));
+						}
+					}
+					list.Sort((a, b) => a.Form.CompareTo(b.Form));
+				}
+				return list;
+			}
+
+			/// <summary>Names the shell rocks the biome dresses the inside of as a cave interior (rock type names, or Ice); none for any.</summary>
+			public Entry InteriorRocks(params string[] rocks)
+			{
+				interiorRocks = rocks ?? Array.Empty<string>();
+				return this;
+			}
+
+			/// <summary>The shell rocks the biome is the inside of (<see cref="BiomeTemplate.CaveInteriorRocks"/>): the file's own, else the default by its name. A fresh list.</summary>
+			public List<string> CaveInteriorRocks() => interiorRocks != null ? new List<string>(interiorRocks) : BiomeCaveInteriors.DefaultInteriorRocks(Biome);
+
+			/// <summary>
+			/// Adds a formation to the biome's caves of a form (the first for a form replaces that form's default set, so a file names
+			/// the whole of what a form takes): a shape in a place, its weight among the place's others, the worlds it forms on.
+			/// </summary>
+			public Entry CaveFormation(CaveForm form, BiomeCaveFormationRole role, string shape, float weight = 1f, BiomeWorldGate gate = default)
+			{
+				caveFormations ??= BiomeCaveInteriors.DefaultFormations();
+				ownFormationForms ??= new HashSet<CaveForm>();
+				if (ownFormationForms.Add(form))
+				{
+					// The form's own entries from now on: its defaults go.
+					caveFormations.RemoveAll(f => f.Form == (BiomeCaveForm)form);
+				}
+				caveFormations.RemoveAll(f => f.Form == (BiomeCaveForm)form && f.Role == role && f.Shape == shape);
+				caveFormations.Add(new BiomeCaveFormation((BiomeCaveForm)form, role, shape, Mathf.Max(0f, weight), gate));
+				return this;
+			}
+
+			/// <summary>
+			/// The formations the biome's caves take (<see cref="BiomeTemplate.CaveFormations"/>): the cave dressing's own set for every
+			/// form (<see cref="BiomeCaveInteriors.DefaultFormations()"/>) with the file's own forms in place of theirs. A fresh list.
+			/// </summary>
+			public List<BiomeCaveFormation> CaveFormations()
+			{
+				if (caveFormations == null)
+				{
+					return BiomeCaveInteriors.DefaultFormations();
+				}
+				var list = new List<BiomeCaveFormation>(caveFormations);
+				list.Sort((a, b) => a.Form != b.Form ? a.Form.CompareTo(b.Form) : a.Role.CompareTo(b.Role));
+				return list;
+			}
+
+			/// <summary>Gives the biome's caves of a form their own glow: the crystals' hue name (empty: by chance), the fungus's share and the glow-worms' chance (1 the dressing's own).</summary>
+			public Entry CaveGlow(CaveForm form, string crystal, float fungus = 1f, float worms = 1f)
+			{
+				caveGlows ??= BiomeCaveInteriors.DefaultGlows();
+				caveGlows.RemoveAll(g => g.Form == (BiomeCaveForm)form);
+				caveGlows.Add(new BiomeCaveGlow((BiomeCaveForm)form, crystal, Mathf.Max(0f, fungus), Mathf.Max(0f, worms)));
+				caveGlows.Sort((a, b) => a.Form.CompareTo(b.Form));
+				return this;
+			}
+
+			/// <summary>What lights the biome's caves by itself (<see cref="BiomeTemplate.CaveGlows"/>): the dressing's own by form, with the file's own. A fresh list.</summary>
+			public List<BiomeCaveGlow> CaveGlows() => caveGlows != null ? new List<BiomeCaveGlow>(caveGlows) : BiomeCaveInteriors.DefaultGlows();
 
 			// ── Floating plants (2026-10-18, I2i) ──
 			//
@@ -1333,6 +1557,30 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>True when a kind needs breathable air here: the file's own word, else BiomeSiteAir's default.</summary>
 			public bool NeedsAir(POIType kind) => breathes != null && breathes.TryGetValue(kind, out bool needs) ? needs : BiomeSiteAir.NeedsAirByDefault(kind);
 
+			private HashSet<POIType> wets;
+
+			/// <summary>
+			/// Says a kind needs liquid water on the world's surface here (<see cref="BiomeSiteKind.NeedsLiquidWater"/>, decision 68,
+			/// 2026-10-25): <c>.Water(POIType.FishingCamp)</c> for a camp at a lead in shelf ice, never on an ice world's frozen sea.
+			/// No kind needs it unless a file says so.
+			/// </summary>
+			public Entry Water(POIType kind, bool needsLiquidWater = true)
+			{
+				wets ??= new HashSet<POIType>();
+				if (needsLiquidWater)
+				{
+					wets.Add(kind);
+				}
+				else
+				{
+					wets.Remove(kind);
+				}
+				return this;
+			}
+
+			/// <summary>True when a kind needs liquid water here: only where the file says so.</summary>
+			public bool NeedsWater(POIType kind) => wets != null && wets.Contains(kind);
+
 			/// <summary>
 			/// Adds a cliff layer after the first (a cliff of another air: <c>.AddCliff(C(Ground.X, 34f).Air(BiomeAtmosphereRequirement.Thin))</c>
 			/// beside a first cliff banded Airless). Authored into slot <c>cliff/k</c> as the first is.
@@ -1386,8 +1634,9 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					if (pair.Value > 0f)
 					{
-						// Lived-in kinds need breathable air (decision 39): the file's word, else BiomeSiteAir's default.
-						list.Add(new BiomeSiteKind((POIType)pair.Key, pair.Value, NeedsAir((POIType)pair.Key)));
+						// Lived-in kinds need breathable air (decision 39): the file's word, else BiomeSiteAir's default. Liquid water
+						// only where the file says (decision 68).
+						list.Add(new BiomeSiteKind((POIType)pair.Key, pair.Value, NeedsAir((POIType)pair.Key), NeedsWater((POIType)pair.Key)));
 					}
 				}
 				return list;
@@ -1675,8 +1924,9 @@ namespace FishMMO.Shared.WorldDesign
 			public List<BiomeWayLight> WayLights() => WayLights(false);
 
 			/// <summary>
-			/// <see cref="WayLights()"/> for a biome whose template admits only worlds of thin air or none (<paramref name="glowOnly"/>,
-			/// BiomeAir.OnlyThinAir, decision 41, 2026-10-18): the same places and spacing with the cold Glow lights in place of every
+			/// <see cref="WayLights()"/> for a biome no world of breathable air carries (<paramref name="glowOnly"/>, BiomeAir.NeverBreathable:
+			/// only thin air or none, decision 41, 2026-10-18, or Requires a methane, cryogenic, frozen-nitrogen, runaway-greenhouse or
+			/// molten-rock world, decisions 62 and 65(h), 2026-10-25): the same places and spacing with the cold Glow lights in place of every
 			/// flame (BiomeGlowLights.WayLights), the file's own lights laid over them. False: exactly <see cref="WayLights()"/>.
 			/// </summary>
 			public List<BiomeWayLight> WayLights(bool glowOnly)
@@ -2134,9 +2384,18 @@ namespace FishMMO.Shared.WorldDesign
 		/// within a band of depth below mean sea level (0 for an open end). Things that lie on the bed (starfish,
 		/// shells, urchins) lie with its slope; anything that grows stands up.
 		/// </summary>
-		private static Scatter Sea(string detail, float density, float shallowest, float deepest, int coverage = 180, float slopeMax = 40f)
+		/// <remarks>
+		/// <paramref name="slopeMin"/> (2026-10-25, decision 38): above 0, the rule grows only on ground at least that steep, a reef's
+		/// drop-off walls and a kelp reef's faces (with <paramref name="slopeMax"/> raised to 90 for a sheer wall). Not in any rule's
+		/// earlier versions: a rule that leaves it 0 writes exactly what it did.
+		/// </remarks>
+		private static Scatter Sea(string detail, float density, float shallowest, float deepest, int coverage = 180, float slopeMax = 40f, float slopeMin = 0f)
 		{
 			Scatter s = Plants(detail, density, coverage, slopeMax);
+			if (slopeMin > 0f)
+			{
+				s.Slope = new Vector2(Mathf.Min(slopeMin, slopeMax), slopeMax);
+			}
 			bool lying = detail == "Starfish" || detail == "Shells" || detail == "Urchin"
 				// The expansion's bed-dwellers that lie on or crust over the bottom rather than grow up from it.
 				|| detail.StartsWith("MusselBed", StringComparison.Ordinal) || detail == "Barnacles" || detail == "SeaLettuce" || detail == "SandDollar"
@@ -2662,6 +2921,18 @@ namespace FishMMO.Shared.WorldDesign
 				r.Heat = heat;
 				r.HeatFalloff = Mathf.Clamp01(falloff);
 			});
+			return rule;
+		}
+
+		/// <summary>
+		/// Keeps a rule to one part of its biome's sculpted landforms (<see cref="PrefabSpawnRule.landformBand"/>, 2026-10-25, phase
+		/// I2g-b, decision 55), or with <paramref name="outside"/> off it: <c>OnLandform(Rocks(...), BiomeLandformPart.Rim, "DegradedCrater")</c>
+		/// sets soft rims on worn craters' rims only. A rule without this call is written exactly as before.
+		/// </summary>
+		private static Scatter OnLandform(Scatter rule, BiomeLandformPart part, string kind = null, bool outside = false)
+		{
+			BiomeLandformBand band = BiomeLandformBand.Of(part, kind, outside);
+			AndEarlier(rule, r => r.Zone = band);
 			return rule;
 		}
 

@@ -122,6 +122,16 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					paletteRead = true;
 					palette = BiomeAt != null && Record != null ? BiomeTemplateArt.StructurePalette(BiomeAt(Record.Position.x, Record.Position.z)) : null;
+					// A cave site whose template the cave biome inside it named (not its host) builds in that biome's palette (2026-10-25,
+					// I2n, decision 51: "pieces take the palette of the template that named their variant").
+					if (Record != null && Template != null && CaveShaper.TryForm(Record.Kind, out _))
+					{
+						CaveBiome caves = CaveInteriorArt.OfSite(Request, Record);
+						if (CaveInteriorArt.InteriorNamed(in caves, Template))
+						{
+							palette = BiomeTemplateArt.StructurePalette(caves.Interior);
+						}
+					}
 				}
 				return palette;
 			}

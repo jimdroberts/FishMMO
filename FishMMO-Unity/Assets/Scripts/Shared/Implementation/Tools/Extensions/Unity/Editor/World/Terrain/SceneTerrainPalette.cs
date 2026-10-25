@@ -375,8 +375,9 @@ namespace FishMMO.Shared.WorldDesign
 					for (int c = 0; c < biome.CliffTextureLayers.Count; c++)
 					{
 						CliffTextureLayer cliff = biome.CliffTextureLayers[c];
-						// A cliff banded to other airs than the world's is not this world's rock face (decision 44).
-						if (cliff != null && !cliff.AdmitsAir(worldAir))
+						// A cliff banded to other airs than the world's is not this world's rock face (decision 44); one banded to
+						// the biome's caves alone is their inner wall, not the terrain's (2026-10-25, I2n).
+						if (cliff != null && (!cliff.AdmitsAir(worldAir) || !BiomeUndergrounds.OnSurface(cliff.underground)))
 						{
 							continue;
 						}
@@ -393,7 +394,8 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						TerrainTextureLayer detail = biome.DetailTextureLayers[d];
 						// The main ground's stand-in is painted as the main; a detail banded to other airs is not this world's (decision 44).
-						if (d == standIn || detail != null && !detail.AdmitsAir(worldAir))
+						// A detail banded to the biome's caves alone floors them, never the terrain (2026-10-25, I2n).
+						if (d == standIn || detail != null && (!detail.AdmitsAir(worldAir) || !BiomeUndergrounds.OnSurface(detail.underground)))
 						{
 							continue;
 						}
@@ -509,7 +511,7 @@ namespace FishMMO.Shared.WorldDesign
 				return true;
 			}
 			TerrainTextureLayer detail = biome.DetailTextureLayers[ground - 1];
-			return ground - 1 == standIn || detail == null || detail.AdmitsAir(worldAir);
+			return ground - 1 == standIn || detail == null || detail.AdmitsAir(worldAir) && BiomeUndergrounds.OnSurface(detail.underground);
 		}
 
 		/// <summary><see cref="AirStandIn(BiomeTemplate, BiomeAtmosphereRequirement)"/> over a biome's detail layers (pure, for tests and tools).</summary>
@@ -522,7 +524,7 @@ namespace FishMMO.Shared.WorldDesign
 			for (int d = 0; d < details.Count; d++)
 			{
 				TerrainTextureLayer detail = details[d];
-				if (detail != null && detail.airBand != BiomeAtmosphereRequirement.None && detail.AdmitsAir(worldAir))
+				if (detail != null && detail.airBand != BiomeAtmosphereRequirement.None && detail.AdmitsAir(worldAir) && BiomeUndergrounds.OnSurface(detail.underground))
 				{
 					return d;
 				}

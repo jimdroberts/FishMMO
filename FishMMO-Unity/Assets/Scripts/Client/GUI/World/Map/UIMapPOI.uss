@@ -185,7 +185,12 @@
 .map-marker--coralreef .map-marker__icon,
 .map-marker--sunkenship .map-marker__icon,
 .map-marker--sunkenruins .map-marker__icon,
-.map-marker--sunkencity .map-marker__icon {
+.map-marker--sunkencity .map-marker__icon,
+.map-marker--sunkenshrine .map-marker__icon,
+.map-marker--seamonsterden .map-marker__icon,
+.map-marker--seacrystalformation .map-marker__icon,
+.map-marker--sunkenmonument .map-marker__icon,
+.map-marker--sunkenstatue .map-marker__icon {
     background-color: var(--map-poi-coast);
     border-radius: 0;
     border-bottom-left-radius: 50%;

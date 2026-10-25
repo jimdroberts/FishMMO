@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFramework>netstandard2.1</TargetFramework>
@@ -148,4 +148,23 @@
 
 		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)" />
 	</Target>
+
+    <!-- The Unity-only Npgsql build keeps Mono and IL2CPP compatible. The regular
+         NuGet driver remains the dependency of the ordinary .NET applications. -->
+    <ItemGroup>
+        <Compile Remove="ThirdParty/**/*.cs;Tools/**/*.cs" />
+        <ProjectReference Include="ThirdParty/Npgsql.UnityAot/Npgsql.UnityAot.csproj"
+                          ReferenceOutputAssembly="false" Private="false" />
+    </ItemGroup>
+    <Target Name="CopyUnityAotNpgsql" AfterTargets="CopyDependenciesToUnity">
+        <MSBuild Projects="$(MSBuildThisFileDirectory)ThirdParty/Npgsql.UnityAot/Npgsql.UnityAot.csproj"
+                 Targets="GetTargetPath" Properties="Configuration=$(Configuration)">
+            <Output TaskParameter="TargetOutputs" ItemName="_UnityNpgsqlTarget" />
+        </MSBuild>
+        <Error Condition="!Exists('@(_UnityNpgsqlTarget)')" Text="Build the Npgsql.UnityAot project before copying Unity dependencies." />
+        <Copy SourceFiles="@(_UnityNpgsqlTarget)"
+              DestinationFolder="$(MSBuildThisFileDirectory)../FishMMO-Unity/Assets/Dependencies"
+              SkipUnchangedFiles="true" />
+    </Target>
+
 </Project>

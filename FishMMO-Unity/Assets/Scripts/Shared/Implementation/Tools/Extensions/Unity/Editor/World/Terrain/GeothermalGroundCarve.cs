@@ -327,22 +327,71 @@ namespace FishMMO.Shared.WorldDesign
 			return line;
 		}
 
+		/// <summary>How far a hot spring point of interest outside the steaming biomes warms the ground round it, m, and how hot at its middle (decision 54).</summary>
+		public const float HotSpringSiteHeatReach = 15f, HotSpringSiteHeatPeak = 0.9f;
+
+		/// <summary>
+		/// The heat round the scene's hot spring points of interest that stand outside the steaming biomes (2026-10-25, decision 54):
+		/// a spring the planner found where a river rises in a biome listing hot springs (an ice palace's warm well, a volcano's
+		/// spring) has no geothermal site under it, so it warms <see cref="HotSpringSiteHeatReach"/> m of ground round itself, which a
+		/// heat band can then dress. A spring on steaming ground (<paramref name="steaming"/>) is left to that ground's own sites. Pure.
+		/// </summary>
+		public static List<BiomeHeatSource> HotSpringHeat(IEnumerable<Vector2> springs, Func<Vector2, bool> steaming)
+		{
+			var sources = new List<BiomeHeatSource>();
+			if (springs == null)
+			{
+				return sources;
+			}
+			foreach (Vector2 at in springs)
+			{
+				if (steaming != null && steaming(at))
+				{
+					continue;
+				}
+				sources.Add(BiomeHeatSource.Point(at, HotSpringSiteHeatPeak, HotSpringSiteHeatReach));
+			}
+			return sources;
+		}
+
+		/// <summary>Where the planned hot spring points of interest stand (world xz), in the plan's order; empty with no plan.</summary>
+		public static List<Vector2> HotSpringsOf(PointOfInterestPlan plan)
+		{
+			var springs = new List<Vector2>();
+			if (plan == null)
+			{
+				return springs;
+			}
+			foreach (PointOfInterestRecord record in plan.Records)
+			{
+				if (record != null && record.Kind == FishMMO.Shared.NameGeneration.POIType.HotSpring)
+				{
+					springs.Add(new Vector2(record.Position.x, record.Position.z));
+				}
+			}
+			return springs;
+		}
+
 		/// <summary>
 		/// The plan for a scene's hot ground (pure in its arguments): of <paramref name="sites"/> (every site, GeothermalVents.SceneSites),
 		/// those not standing in water (<paramref name="wet"/>, the client's own rule) are heated, and of those the ones outside a site
 		/// footprint (<paramref name="excluded"/>) dug, each at its rim level on <paramref name="groundAt"/>; springs and geysers get
-		/// runoff; the Great Spout is found; the heat is baked over <paramref name="scene"/>.
+		/// runoff; the Great Spout is the largest geyser dug; the heat is baked over <paramref name="scene"/>, with
+		/// <paramref name="moreHeat"/> after the sites' own (any shape, points or lines: a hot spring point of interest's warm ground,
+		/// a fissure's stripe; none when null).
 		/// </summary>
 		public static Plan Make(IReadOnlyList<GeothermalSite> sites, Func<float, float, float> groundAt, Func<float, float, bool> wet,
-			Func<float, float, bool> excluded, Rect scene)
+			Func<float, float, bool> excluded, Rect scene, IReadOnlyList<BiomeHeatSource> moreHeat = null)
 		{
 			var plan = new Plan();
-			if (sites == null)
+			if (sites == null && moreHeat == null)
 			{
 				return plan;
 			}
-			plan.Sites.AddRange(sites);
-			plan.GreatSpout = GeothermalVents.GreatSpoutIndex(plan.Sites);
+			if (sites != null)
+			{
+				plan.Sites.AddRange(sites);
+			}
 			bool Stops(float x, float z) => (wet != null && wet(x, z)) || (excluded != null && excluded(x, z));
 			for (int i = 0; i < plan.Sites.Count; i++)
 			{
@@ -371,6 +420,18 @@ namespace FishMMO.Shared.WorldDesign
 						plan.HeatSources.Add(BiomeHeatSource.Line(runoff[p], runoff[p + 1], a, b, RunoffHeatReach));
 					}
 				}
+			}
+			/* The Great Spout among the geysers dug (2026-10-25): one under water the client never draws, and one in a site's
+			 * footprint the cut leaves without its cone, is never the scene's landmark. */
+			var dug = new HashSet<int>();
+			foreach (Dug d in plan.Dug)
+			{
+				dug.Add(d.Index);
+			}
+			plan.GreatSpout = GeothermalVents.GreatSpoutIndex(plan.Sites, dug.Contains);
+			if (moreHeat != null)
+			{
+				plan.HeatSources.AddRange(moreHeat);
 			}
 			plan.Heat = BiomeHeatMask.Bake(plan.HeatSources, scene);
 			plan.Index();
@@ -508,13 +569,15 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// Plans, carves and records a scene's hot ground (the cut's biome stage and every repaint): the sites of the map
 		/// <paramref name="field"/> is about to be written as, under the name <paramref name="mapName"/> (so the seed is the
-		/// client's), dug into <paramref name="terrains"/> from the ground as it stands. Returns the plan (its heat for the splat,
-		/// the scatter and the map). Call <see cref="Restore"/> first when an earlier run's carve may be in the ground.
+		/// client's), dug into <paramref name="terrains"/> from the ground as it stands, and the heat of the hot spring points of
+		/// interest at <paramref name="hotSprings"/> (world xz; decision 54) outside the steaming ground. Returns the plan (its heat
+		/// for the splat, the scatter and the map). Call <see cref="Restore"/> first when an earlier run's carve may be in the ground.
 		/// </summary>
 		public static Plan Lay(Scene scene, Terrain[,] terrains, TerrainTilePlan tiles, SceneBiomeField field, string mapName,
-			Func<float, float, bool> wet, Func<float, float, bool> excluded, List<string> notes)
+			Func<float, float, bool> wet, Func<float, float, bool> excluded, List<string> notes, IReadOnlyList<Vector2> hotSprings = null)
 		{
 			var sites = new List<GeothermalSite>();
+			List<BiomeHeatSource> springHeat;
 			// The map the client will read, written from the same field under the same name: the client's search, the client's answer.
 			var map = ScriptableObject.CreateInstance<SceneBiomeMap>();
 			try
@@ -522,6 +585,7 @@ namespace FishMMO.Shared.WorldDesign
 				map.name = mapName;
 				field.WriteTo(map);
 				GeothermalVents.SceneSites(map, sites);
+				springHeat = HotSpringHeat(hotSprings, p => GeothermalGround.Of(map.Sample(new Vector3(p.x, 0f, p.y))).AllKinds);
 			}
 			finally
 			{
@@ -529,9 +593,14 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			Func<float, float, float> groundAt = (east, north) => SceneGenerator.GroundAltitude(terrains, tiles, east, north);
 			var sceneRect = new Rect(-tiles.WidthMetres * 0.5f, -tiles.DepthMetres * 0.5f, tiles.WidthMetres, tiles.DepthMetres);
-			Plan plan = Make(sites, groundAt, wet, excluded, sceneRect);
+			Plan plan = Make(sites, groundAt, wet, excluded, sceneRect, springHeat);
 			if (!plan.Any)
 			{
+				// Nothing to dig and nothing to record; only the springs' warm ground, if any (the map stores it).
+				if (springHeat.Count > 0)
+				{
+					notes?.Add($"Hot ground: {springHeat.Count} hot spring point(s) of interest warm {HotSpringSiteHeatReach:0} m of ground round them; heat baked {plan.Heat.Width}×{plan.Heat.Height}.");
+				}
 				return plan;
 			}
 
@@ -558,7 +627,8 @@ namespace FishMMO.Shared.WorldDesign
 				record.GreatSpoutSize = spout.Size;
 			}
 			EditorUtility.SetDirty(record);
-			int[] kinds = new int[4];
+			// Sized by the kinds there are (append-only, decision 53: a fissure's jets come next).
+			int[] kinds = new int[Enum.GetValues(typeof(GeothermalKind)).Length];
 			foreach (GeothermalSite site in plan.Sites)
 			{
 				if ((int)site.Kind < kinds.Length)
@@ -568,7 +638,9 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			notes?.Add($"Hot ground: {plan.Sites.Count} geothermal site(s) ({kinds[(int)GeothermalKind.Geyser]} geysers, {kinds[(int)GeothermalKind.HotSpring]} hot springs, " +
 				$"{kinds[(int)GeothermalKind.Fumarole]} fumaroles, {kinds[(int)GeothermalKind.MudPot]} mud pots), {plan.Dug.Count} dug ({moved:N0} heightmap sample(s)), " +
-				$"{record.Pools.Count} pool(s), {plan.Runoff.Count} runoff channel(s); heat baked {plan.Heat.Width}×{plan.Heat.Height}" +
+				$"{record.Pools.Count} pool(s), {plan.Runoff.Count} runoff channel(s)" +
+				(springHeat.Count > 0 ? $", {springHeat.Count} hot spring point(s) of interest warming {HotSpringSiteHeatReach:0} m round them" : string.Empty) +
+				$"; heat baked {plan.Heat.Width}×{plan.Heat.Height}" +
 				(record.HasGreatSpout ? $"; the Great Spout at ({record.GreatSpoutPosition.x:0}, {record.GreatSpoutPosition.y:0})." : "."));
 			return plan;
 		}

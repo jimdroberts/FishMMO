@@ -89,7 +89,8 @@ namespace FishMMO.UnitTests
 				}
 				bool ordinary = flag == BiomeWorldRequirement.Volcanic
 					|| flag == BiomeWorldRequirement.RockSurface
-					|| flag == BiomeWorldRequirement.SurfaceWater;
+					|| flag == BiomeWorldRequirement.SurfaceWater
+					|| flag == BiomeWorldRequirement.LiquidWater;
 				Assert.AreEqual(ordinary, earth.Meets(flag), $"{flag} on an Earth-like world");
 			}
 		}

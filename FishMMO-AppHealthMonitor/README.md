@@ -413,8 +413,8 @@ server configuration and content lookups independent of the monitor's launch dir
 LoginServer, WorldServer and SceneServer are enabled using
 `Builds/Server/Linux Server/FishMMO GameServer Linux/GameServer.exe`.
 Each role is passed first (`LOGIN`, `WORLD`, `SCENE`), followed by Unity's
-`-batchmode -nographics` flags and a separate `<Role>.Player.log` file in the
-server build directory. DatabasePulse names match the actual server configuration:
+`-batchmode -nographics` flags. Terminal launches use `-logFile -` with a
+separate `<Role>.Player.log` tee in the server build directory. DatabasePulse names match the actual server configuration:
 `LoginServer`, `World Server`, and `Scene Server`. Monitor labels remain
 `LoginServer`, `WorldServer`, and `SceneServer`. The database read service is
 initialized before constructing the pulse checkers.
@@ -443,3 +443,58 @@ On 2026-10-25, the rebuilt bundled configuration passed `--check-config`, and
 54 child-process/configuration checks passed, including successful PgBouncer
 6432 authentication and SELECT 1. No supervised application services were started
 by these checks. The production template was not changed.
+
+
+## Separate application terminals (Linux desktop)
+
+The local development template enables `LaunchInTerminal` for all seven services.
+Restart AppHealthMonitor to load the rebuilt monitor and configuration, then enter
+`start`. Each service opens in its own terminal window. The daemon supervises the
+application PID, including resource checks and stop/restart commands; the terminal
+or helper PID is never substituted for the application PID.
+
+No terminal path is required. Detection searches PATH for Konsole, GNOME Terminal,
+Xfce Terminal, Kitty, Alacritty, Foot, then XTerm. Konsole is installed on the current
+machine. To override detection, set this per-application configuration:
+
+```json
+{
+  "LaunchInTerminal": true,
+  "TerminalExecutable": "/usr/bin/konsole",
+  "TerminalLaunchTimeoutSeconds": 15,
+  "TerminalLogPath": "LoginServer.Player.log"
+}
+```
+
+`TerminalExecutable` is optional and may be a supported executable name on PATH or
+an absolute path. Its basename must match one of the supported terminals. Omit it
+or leave it empty for automatic detection. Set `LaunchInTerminal` to false for an
+individual application to launch directly.
+
+For game servers, `-logFile -` makes Unity print full logs to its terminal. The
+terminal helper also appends stdout/stderr to the existing per-role `.Player.log`
+file via `TerminalLogPath`, resolved relative to the application's working directory.
+A launch banner separates restarts in the appended log. With Headless=true or no
+desktop/terminal available, launches remain direct; Unity's output is redirected
+back to its configured per-role file in that mode. Production templates remain
+unchanged. This terminal implementation targets Linux desktops; other platforms
+continue direct launching.
+
+Terminal startup uses a private launch request and PID handshake with kernel
+process-start identities. Arguments are passed without shell interpolation.
+The helper closes when its application exits and stops its child if the monitor
+owner disappears. Failed/timed-out/canceled launches are cleaned up. Closing an
+application window or its terminal can trigger the monitor's normal restart
+policy; use the monitor's `stop` command for an intentional stop.
+
+Verify without starting the real application services:
+
+```bash
+./run-local.sh --check-config
+dotnet run --project Tools/Terminal.Tests
+```
+
+The terminal integration test requires a graphical Linux session and opens short-lived
+verification windows. It exercises the actual terminal/helper/application path,
+PID ownership, arguments, working directory, environment, both output streams,
+headless file logging, owner death, timeout and cancellation cleanup.

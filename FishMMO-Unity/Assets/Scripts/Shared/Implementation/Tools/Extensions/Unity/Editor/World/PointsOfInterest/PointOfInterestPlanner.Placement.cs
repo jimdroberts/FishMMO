@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 using FishMMO.Shared.NameGeneration;
 using UnityEngine;
 
@@ -55,6 +56,19 @@ namespace FishMMO.Shared.WorldDesign
 					return Input.SeaLevel - ground;
 				}
 				return PointOfInterestWaterSites.SunkenDepth(ground, lake, Input.HasSea && Input.SeaIsWater, Input.SeaLevel);
+			}
+
+			/// <summary>
+			/// The depth band an underwater kind stands in at a cell: its biome's own under the sea (BiomeTemplate.UnderwaterSiteDepth,
+			/// 2026-10-25, phase I2m, decision 36 (b): an abyss's wrecks at 6 000 m), else the kind's, as every sunken kind was sited
+			/// before; always the kind's under a lake.
+			/// </summary>
+			private Vector2 DepthBand(PointOfInterestKindRule rule, int cell)
+			{
+				int b = G.Biome[cell];
+				PointOfInterestBiome biome = b >= 0 && b < Input.Biomes.Count ? Input.Biomes[b] : null;
+				bool lake = rule.InLakes && G.Water[cell] == WaterKind.Lake;
+				return biome == null || lake ? new Vector2(rule.MinDepth, rule.MaxDepth) : BiomeSeaFloors.SiteDepth(biome.UnderwaterDepth, rule.MinDepth, rule.MaxDepth);
 			}
 
 			/// <summary>Sites a placed kind on the best cells it may stand on.</summary>
@@ -163,7 +177,8 @@ namespace FishMMO.Shared.WorldDesign
 						if (rule.Underwater)
 						{
 							float depth = UnderwaterDepth(rule, east, north, h, G.Water[i]);
-							if (!(depth >= rule.MinDepth) || depth > rule.MaxDepth)
+							Vector2 band = DepthBand(rule, i);
+							if (!(depth >= band.x) || depth > band.y)
 							{
 								continue;
 							}

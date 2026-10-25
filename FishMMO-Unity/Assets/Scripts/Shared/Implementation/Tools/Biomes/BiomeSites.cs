@@ -26,25 +26,37 @@ namespace FishMMO.Shared.Biomes
 		[Min(0f)] public float Weight;
 		/// <remarks>
 		/// Decision 39 (2026-10-18, the Crater round): a kind people live in or keep (a village, a shrine, a herb garden) is not
-		/// sited on a world whose air is not breathable (thin or none, BiomeAir.IsBreathable), so a biome painted on an airless
-		/// moon places only natural sites and relics there. Written by the authoring from BiomeSiteAir.NeedsAirByDefault unless the
-		/// biome's file says otherwise; off (every entry before 2026-10-18) the kind is sited on every world.
+		/// sited on a world whose air is not breathable (thin or none, or of the wrong make-up such as a methane or acid sky:
+		/// BiomeAir.IsBreathable, decision 62), so a biome painted on an airless moon places only natural sites and relics there.
+		/// Written by the authoring from BiomeSiteAir.NeedsAirByDefault unless the biome's file says otherwise; off (every entry
+		/// before 2026-10-18) the kind is sited on every world.
 		/// </remarks>
-		[Tooltip("Only sited where the world's air is breathable (Earth-like or thick): settlements, camps, kept shrines, living groves. Off: on every world, natural sites and relics.")]
+		[Tooltip("Only sited where the world's air is breathable (Earth-like or thick, and not a methane, nitrogen, acid or molten-rock world): settlements, camps, kept shrines, living groves. Off: on every world, natural sites and relics.")]
 		public bool NeedsBreathableAir;
+		/// <remarks>
+		/// Decision 68 (2026-10-25, the Ice Shelf round): a kind that works open water (a fishing camp at a lead, a harbour) is not
+		/// sited on a world with no liquid water on its surface (BiomeWorldConditions.HasLiquidWater, the world flag
+		/// BiomeWorldRequirement.LiquidWater), such as the raised frozen sea of an ice world. Off by default for every kind, so
+		/// nothing changes until a biome's file sets it (BiomeArtSpec.Entry.Water).
+		/// </remarks>
+		[Tooltip("Only sited where the world has liquid water on its surface. Off: on every world.")]
+		public bool NeedsLiquidWater;
 
-		public BiomeSiteKind(POIType kind, float weight, bool needsBreathableAir = false)
+		public BiomeSiteKind(POIType kind, float weight, bool needsBreathableAir = false, bool needsLiquidWater = false)
 		{
 			Kind = kind;
 			Weight = weight;
 			NeedsBreathableAir = needsBreathableAir;
+			NeedsLiquidWater = needsLiquidWater;
 		}
 
 		/// <summary>
 		/// The entry as the authoring marks and reports it: "Kind×weight" (the weight round-tripped exactly), "×air" after it when it
-		/// needs breathable air (so every mark written before the flag existed still reads the same).
+		/// needs breathable air and "×water" when it needs liquid water (so every mark written before either flag existed still
+		/// reads the same).
 		/// </summary>
-		public override string ToString() => Kind + "×" + Weight.ToString("R", CultureInfo.InvariantCulture) + (NeedsBreathableAir ? "×air" : string.Empty);
+		public override string ToString() => Kind + "×" + Weight.ToString("R", CultureInfo.InvariantCulture) + (NeedsBreathableAir ? "×air" : string.Empty)
+			+ (NeedsLiquidWater ? "×water" : string.Empty);
 	}
 
 	/// <summary>

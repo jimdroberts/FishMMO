@@ -22,6 +22,11 @@ namespace FishMMO.Client
 		Jelly,
 		/// <summary>A crab, walking the sea floor.</summary>
 		Crab,
+		/// <summary>
+		/// An eel (2026-10-25, phase I2m, decision 40): a long round body with one ribbon fin along its back and belly, the whole of it
+		/// rippling as it swims (FishSeaLife.hlsl mode 6): morays, cusk-eels, the deep's ooze-wyrms.
+		/// </summary>
+		Eel,
 	}
 
 	/// <summary>How a kind moves about its home (SeaLifePlacement.Evaluate).</summary>
@@ -37,6 +42,11 @@ namespace FishMMO.Client
 		Drift,
 		/// <summary>Walking slow small loops on the sea floor.</summary>
 		Crawl,
+		/// <summary>
+		/// Lying in a den on the sea floor with its head out, now and then darting a few lengths out and back (2026-10-25, decision 40):
+		/// a moray in its crevice. When each one darts is a pure function of the shared clock (SeaLifePlacement.LurkAt).
+		/// </summary>
+		Lurk,
 	}
 
 	/// <summary>One kind of background sea creature: what it looks like, where it lives and how it moves.</summary>
@@ -78,6 +88,8 @@ namespace FishMMO.Client
 		[Min(0f)] public float MinWater = 4f;
 		[Tooltip("Metres above the sea floor it keeps (Hover: the height band it hovers in, min..max).")]
 		public Vector2 FloorClearance = new Vector2(1.5f, 3f);
+		[Tooltip("Swimmers (School, Cruise, Drift): read Depth as the band its home's sea floor must lie in, as Hover, Crawl and Lurk do, and swim the Floor Clearance band above that floor, following it (2026-10-25: a grenadier over the abyssal plain at 4 000 m). Off: Depth is the band below the surface it swims in, as before.")]
+		public bool NearFloor;
 		[Tooltip("The water's temperature it lives in, -1 coldest .. 1 hottest (the scene's climate at the place).")]
 		public Vector2 Temperature = new Vector2(-1f, 1f);
 		[Tooltip("Biomes (asset names) where it is most at home, as it was decided before 2026-10-16: since then each biome template lists its own sea life with a weight (Sea Life, written by Author biome art from the same lists), and this is read only for a template never authored.")]

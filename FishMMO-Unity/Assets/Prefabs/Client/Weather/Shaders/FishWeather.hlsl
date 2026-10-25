@@ -378,6 +378,17 @@ float FishWaterOpen(float3 worldPos)
     return _FishOcclusionWater.y > 0.5 ? saturate((worldPos.y - _FishOcclusionWater.x) * 4.0 + 1.0) : 1.0;
 }
 
+// The share of the daylight that reaches a point under the sea (2026-10-25, phase I2m, decision 36 (c); BiomeSeaFloors.Daylight,
+// held equal by a test): exp(-w x the depth below the still surface), w the scene cut's loss per metre (_FishOcclusionWater.w:
+// WaterSurface.FloorDaylightExtinction, from the sea looks of the scene's sea-floor biomes). Exactly 1 above the water and on every
+// scene with no sea-floor biome (w = 0). For the sun's and the sky's light on what lies under the sea, never for its own glow or a
+// lamp's: an abyss is black but for what shines in it.
+half FishSeaDaylight(float3 worldPos)
+{
+    float depth = _FishOcclusionWater.x - worldPos.y;
+    return (_FishOcclusionWater.y > 0.5 && _FishOcclusionWater.w > 0.0 && depth > 0.0) ? (half)exp(-_FishOcclusionWater.w * depth) : 1.0h;
+}
+
 // 1 where the sky is open above a point, 0 under a roof or under the water. Outside the map, or
 // without one, open to the sky — but never under the sea.
 float FishSkyOpen(float3 worldPos)

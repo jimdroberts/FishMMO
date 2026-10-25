@@ -108,6 +108,13 @@ namespace FishMMO.Shared
 
 		/// <summary>The site (<see cref="PointOfInterestRecord.Id"/>) whose cave system it is in.</summary>
 		public int SiteId;
+
+		/// <summary>
+		/// The cave biome dressing the inside of its cave (2026-10-25, phase I2n: its biome template's id, BiomeRegistry.IDOf), where
+		/// the biome it opens in links one (a limestone cave in karst country is the Cave inside); 0 where the cave is its host land's,
+		/// read as the biome map's there, as before.
+		/// </summary>
+		public int Biome;
 	}
 
 	/// <summary>

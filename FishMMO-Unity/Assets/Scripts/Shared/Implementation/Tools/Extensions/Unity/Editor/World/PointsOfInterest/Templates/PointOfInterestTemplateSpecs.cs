@@ -917,6 +917,22 @@ namespace FishMMO.Shared.WorldDesign
 				.S(Wall, 1, 1, Perimeter, 0.4f, 0.9f).S(Gate, 2, 2, Gates, 0.5f, 0.8f).S(Keep, 1, 1, Centre, 0.6f, 0.8f)
 				.S(Statue, 1, 3, Centre, 0.3f, 0.9f).S(House, 15, 35, Street, 0.5f, 1f).S(Column, 4, 10, Scatter, 0.3f, 0.9f)
 				.S(Rubble, 6, 12, Scatter).Weathered(PointOfInterestFinish.Algae).Pad(0f);
+			/* The sea floor's own sites (2026-10-25, phase I2m, decision 36 (b)): the land kinds' pieces under the sea's growth until
+			 * I7 gives them their own (drowned shrine, kraken den, crystal garden, colossus). */
+			T(a, POIType.SunkenShrine, "Drowned", Single, Stone)
+				.S(Shrine, 1, 1, Centre, 0.2f, 0.6f).S(Menhir, 0, 2, Scatter, 0.2f, 0.6f, 0.6f, 0.9f).S(Rubble, 1, 3, Scatter)
+				.Weathered(PointOfInterestFinish.Algae).Pad(0f);
+			T(a, POIType.SeaMonsterDen, "Bones", Scattered, Stone)
+				.S(Bones, 6, 12, Scatter).S(Rubble, 3, 6, Scatter).S(Menhir, 0, 2, Scatter, 0.3f, 0.7f, 0.5f, 0.8f)
+				.Weathered(PointOfInterestFinish.Algae).Pad(0f);
+			T(a, POIType.SeaCrystalFormation, "Spires", Scattered, Stone)
+				.S(Menhir, 2, 5, Scatter, 0f, 0.3f, 0.5f, 1f).S(Rubble, 1, 2, Scatter).Pad(0f);
+			T(a, POIType.SunkenMonument, "Colossus", Single, Stone)
+				.S(Statue, 1, 1, Centre, 0.2f, 0.6f).S(Column, 2, 4, Ring, 0.3f, 0.8f).S(Rubble, 1, 3, Scatter)
+				.Weathered(PointOfInterestFinish.Algae).Pad(0f);
+			T(a, POIType.SunkenStatue, "Toppled", Single, Stone)
+				.S(RuinedStatue, 1, 1, Centre).S(Rubble, 0, 2, Scatter).Weathered(PointOfInterestFinish.Algae).Pad(0f);
+
 			T(a, POIType.SunkenCity, "Reef Halls", Streets, Stone)
 				.S(Statue, 1, 2, Centre, 0.2f, 0.5f).S(StoneHouse, 15, 30, Street, 0.3f, 0.7f).S(Column, 6, 12, Scatter, 0.2f, 0.6f)
 				.S(Rubble, 4, 8, Scatter).Weathered(PointOfInterestFinish.Algae).Races(Aquatic).Pad(0f);

@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 using UnityEngine;
 
 namespace FishMMO.Shared.WorldDesign
@@ -24,6 +25,18 @@ namespace FishMMO.Shared.WorldDesign
 					return;
 				}
 				List<SceneCaveLifeSpot> spots = CaveLifeBake.Bake(system, context.Record.Id);
+				// A linked cave's animals are its interior's (2026-10-25, I2n): each spot carries the interior biome's id, read by the
+				// client's ambient life in place of the biome map over it.
+				int inside = caves.Linked ? BiomeRegistry.IDOf(caves.Interior) : 0;
+				if (inside != 0)
+				{
+					for (int i = 0; i < spots.Count; i++)
+					{
+						SceneCaveLifeSpot spot = spots[i];
+						spot.Biome = inside;
+						spots[i] = spot;
+					}
+				}
 				context.Points.CaveLife ??= new List<SceneCaveLifeSpot>();
 				context.Points.CaveLife.AddRange(spots);
 				LifeSpots = spots.Count;

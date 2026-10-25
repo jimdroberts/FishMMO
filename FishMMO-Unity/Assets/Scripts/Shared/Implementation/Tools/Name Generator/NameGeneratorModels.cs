@@ -172,6 +172,8 @@ namespace FishMMO.Shared.NameGeneration
 		Dockyard,
 		// Appended (2026-10-14): mills, a post mill on a rise, a watermill and a sawmill on a river bank.
 		Windmill, Watermill, LumberMill,
+		// Appended (2026-10-25, phase I2m, decision 36 (b)): the sea floor's own sites, sited only where a biome hosts them.
+		SunkenShrine, SeaMonsterDen, SeaCrystalFormation, SunkenMonument, SunkenStatue,
 	}
 
 	/// <summary>Phonology + vocabulary for a biome.</summary>

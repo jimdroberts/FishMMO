@@ -69,7 +69,13 @@ namespace FishMMO.Shared.WorldDesign
 		public static CaveFungusPlan For(BiomeTemplate biome, CaveForm form) => For(TraitsOf(biome, biome != null ? BiomeTemplateArt.Vines(biome) : null), form);
 
 		/// <summary>What the plan reads of a biome, its vines given (read once by the caller: the lookup warns for an unauthored template).</summary>
-		public static CaveBiomeTraits TraitsOf(BiomeTemplate biome, VineBiomes.Habitat vines)
+		public static CaveBiomeTraits TraitsOf(BiomeTemplate biome, VineBiomes.Habitat vines) => TraitsOf(biome, vines, null);
+
+		/// <summary>
+		/// What the plan reads of a cave's biome, its vines given, with the crystals its inside grows (2026-10-25, I2n: the vines, the
+		/// greenery at the mouth and the trees over it are the HOST's, the glowing crystals the interior's; null: the biome's own).
+		/// </summary>
+		public static CaveBiomeTraits TraitsOf(BiomeTemplate biome, VineBiomes.Habitat vines, IReadOnlyList<BiomeCaveCrystal> crystals)
 		{
 			if (ReferenceEquals(biome, null))
 			{
@@ -84,7 +90,7 @@ namespace FishMMO.Shared.WorldDesign
 				VineCaves = vined ? Mathf.Clamp01(vines.Caves) : 0f,
 				Trees = vined ? Mathf.Clamp01(vines.Trees) : 0f,
 				Greenery = green > 0,
-				GlowingCrystals = BiomeCaveCrystals.Total(BiomeTemplateArt.CaveCrystals(biome), glowingOnly: true) > 0f,
+				GlowingCrystals = BiomeCaveCrystals.Total(crystals ?? BiomeTemplateArt.CaveCrystals(biome), glowingOnly: true) > 0f,
 			};
 		}
 
@@ -215,8 +221,9 @@ namespace FishMMO.Shared.WorldDesign
 					if (!planMade)
 					{
 						planMade = true;
-						vines = biome != null ? BiomeTemplateArt.Vines(biome) : null;
-						plan = CaveFungi.For(CaveFungi.TraitsOf(biome, vines), system.Form);
+						// The mouth's vines and greenery and the trees over the cave are its host land's; the glowing crystals its inside's.
+						vines = host != null ? BiomeTemplateArt.Vines(host) : null;
+						plan = CaveFungi.For(CaveFungi.TraitsOf(host, vines, caves.Linked ? CaveInteriorArt.Crystals(in caves) : null), system.Form);
 					}
 					return plan;
 				}

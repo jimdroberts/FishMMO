@@ -82,6 +82,16 @@ namespace FishMMO.Shared.Weather
 			bool TryGetSurface(float x, float z, out float level, out bool lava);
 		}
 
+		/// <summary>
+		/// A sea that dims the daylight on its way down to its floor (2026-10-25, phase I2m, decision 36 (c)): how much per metre, the
+		/// scene cut's (BiomeSeaFloors.DaylightExtinction); 0 for none.
+		/// </summary>
+		public interface IDaylightSource : ISource
+		{
+			/// <summary>Per metre of depth under the still surface: the daylight on the floor is exp(−this × depth).</summary>
+			float DaylightExtinction { get; }
+		}
+
 		/// <summary>Water whose drawn surface moves (the sea's waves): what a floating body is set on to ride them.</summary>
 		public interface IWaveSource : ISource
 		{
@@ -234,6 +244,16 @@ namespace FishMMO.Shared.Weather
 				}
 			}
 			return Vector2.zero;
+		}
+
+		/// <summary>How fast the sea dims the daylight with depth, per metre (<see cref="IDaylightSource"/>), or 0 with no sea or none set.</summary>
+		public static float DaylightExtinction
+		{
+			get
+			{
+				ISource sea = Sea;
+				return sea is IDaylightSource daylight ? Mathf.Max(0f, daylight.DaylightExtinction) : 0f;
+			}
 		}
 
 		/// <summary>The significant height of the sea's waves, or 0 with no sea.</summary>

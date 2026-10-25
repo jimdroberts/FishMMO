@@ -510,8 +510,11 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			string poi = Path.Combine(WorldFolder, "PointsOfInterest");
 			string Code(string relative) => CodeOnly(File.ReadAllText(Path.Combine(poi, relative)));
-			Assert.That(Code("PointOfInterestStage.cs"), Does.Contain("BiomeTemplateArt.SiteKinds(biome, rules, breathable)"));
-			Assert.That(Regex.Matches(Code("PointOfInterestStage.cs"), Regex.Escape("library.Pick(record, BiomeTemplateArt.SiteVariantWeights(biome),")).Count, Is.EqualTo(2));
+			Assert.That(Code("PointOfInterestStage.cs"), Does.Contain("BiomeTemplateArt.SiteKinds(biome, rules, breathable, liquidWater)"));
+			Assert.That(Regex.Matches(Code("PointOfInterestStage.cs"), Regex.Escape("library.Pick(record, BiomeTemplateArt.SiteVariantWeights(biome),")).Count, Is.EqualTo(1));
+			// 2026-10-25 (I2n): the planned sites' pick weighs a linked cave's two templates merged, every other site its biome's.
+			Assert.That(Code("PointOfInterestStage.cs"), Does.Contain("Func<PointOfInterestTemplate, float> weights = BiomeTemplateArt.SiteVariantWeights(biome);"));
+			Assert.That(Code("PointOfInterestStage.cs"), Does.Contain("library.Pick(record, weights, RaceCategoryOf(record.Race))"));
 			Assert.That(Code("PropsFeature.cs"), Does.Contain("BiomeTemplateArt.Weathering(siteBiome)"));
 			Assert.That(Code("PropsFeature.cs"), Does.Contain("{ Palette = palette }"));
 			Assert.That(Code(Path.Combine("Templates", "StructureKitPieceSource.cs")), Does.Contain("PrefabFor(piece, variant, request.Finish, request.Palette, request.AllowLocal)"));

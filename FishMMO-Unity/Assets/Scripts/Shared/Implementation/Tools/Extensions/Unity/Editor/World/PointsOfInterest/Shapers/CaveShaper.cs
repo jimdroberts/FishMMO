@@ -912,7 +912,10 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				// The shell's rock with the habitat's layers on (2026-10-20): silt, gravel, litter and worn ways on its floors, wet,
 				// stains, moss and glow crust on its walls, by the vertex habitat the mesher wrote (CaveHabitat, FishCaveRock.hlsl).
-				CaveRockLook look = CaveRockLayers.For(PointOfInterestRock.BiomeOf(site), system.Form);
+				// 2026-10-25 (I2n): the floors' grounds are the biome dressing the cave's inside (its interior where the host links
+				// one, CaveInteriorArt); an ice shell's inner wall the interior's own ice, where it carries one.
+				CaveBiome caves = CaveInteriorArt.Of(context.Request, site, system);
+				CaveRockLook look = CaveRockLayers.For(caves, system.Form, rock);
 				material = CaveRockMaterials.For(material, in look, assetPath, out bool written);
 				if (written && assetPath != null)
 				{
@@ -920,7 +923,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			// The run-time cave cover's choice for this cave (its types and glow by biome and form) on its Visual (CaveCoverSpecies).
-			CaveCoverSpecies.Attach(Build(context.Root, system, mouths, meshes, material, colliders), system, PointOfInterestRock.BiomeOf(site));
+			CaveCoverSpecies.Attach(Build(context.Root, system, mouths, meshes, material, colliders), system, CaveInteriorArt.Of(context.Request, site, system));
 			WritePool(context, site, system, ground);
 			WriteLava(context, site, system);
 			WriteStreams(context, site, system);

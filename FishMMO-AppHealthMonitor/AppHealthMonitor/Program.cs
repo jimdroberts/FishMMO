@@ -85,6 +85,12 @@ namespace AppHealthMonitor
 		/// <returns>A task representing the asynchronous operation.</returns>
 		static async Task Main(string[] args)
 		{
+            if (args.Length == 2 && args[0] == "--terminal-child")
+            {
+                Environment.ExitCode = await TerminalProcessLauncher.RunChildAsync(args[1]);
+                return;
+            }
+
 			string applicationBaseDirectory = AppContext.BaseDirectory;
 
 			// Resolve config path: working-directory override first, then bundled default.

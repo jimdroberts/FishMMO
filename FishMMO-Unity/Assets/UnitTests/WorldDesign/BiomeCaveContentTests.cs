@@ -425,7 +425,8 @@ namespace FishMMO.UnitTests.WorldDesign
 			string workings = Code("PointsOfInterest/Features/PointOfInterestCaveDressing.Workings.cs");
 			string glow = Code("PointsOfInterest/Features/PointOfInterestCaveDressing.Glow.cs");
 			string all = main + camps + workings + glow + Code("PointsOfInterest/Features/PointOfInterestCaveDressing.Ways.cs");
-			Assert.That(main, Does.Contain("BiomeTemplateArt.CaveLight(biome, place, out known.light)"));
+			// 2026-10-25 (I2n): through the cave's biomes (its host's lights, a linked interior's under the world's air).
+			Assert.That(main, Does.Contain("CaveInteriorArt.CaveLight(in caves, place, breathable, out known.light)"));
 			Assert.That(main, Does.Contain("CaveLight(BiomeCaveLightPlace.MineDrift, out BiomeCaveLight drift)"));
 			Assert.That(main, Does.Contain("CaveLight(BiomeCaveLightPlace.MineStope, out BiomeCaveLight stopeLight)"));
 			Assert.That(main, Does.Contain("nextLamp = along + rng.Range(gapMin, gapMax);"));
@@ -438,15 +439,16 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(all, Does.Not.Contain(fixedLight), fixedLight);
 			}
 			// The chambers' deposits are the biome's crystals (as the shells are its rock), the ways' glow its glowing ones.
-			Assert.That(main, Does.Contain("set.Crystals = BiomeTemplateArt.CaveCrystals(biome);"));
-			Assert.That(main, Does.Contain("BiomeTemplate biome = PointOfInterestRock.BiomeOf(context.Record);"), "the cave's biome is its shell's");
+			Assert.That(main, Does.Contain("set.Crystals = CaveInteriorArt.Crystals(in caves);"));
+			Assert.That(main, Does.Contain("CaveBiome caves = CaveInteriorArt.Of(context.Request, context.Record, system);"), "the cave's biomes: its host site's and its interior");
 			Assert.That(main, Does.Contain("FloorPiece(depositFoot - dir * 0.5f, () => Mineral(kind), 1f, rng.Range(0.8f, 1.6f), true, -dir, out Vector3 laid)"));
 			Assert.That(main, Does.Contain("int variant = rng.Range(0, RockTypes.VariantCount);"), "a crystal's variant is drawn as a formation's");
-			Assert.That(glow, Does.Contain("BiomeTemplateArt.CaveCrystals(biome)"));
+			Assert.That(glow, Does.Contain("CaveGlowPalettes.For(system.Form, system.Seed, in caves)"));
+			Assert.That(Code("PointsOfInterest/Features/CaveGlowPalette.cs"), Does.Contain("CaveInteriorArt.Crystals(in caves)"));
 			Assert.That(glow, Does.Contain("if (!TryCrystal(kind, hue, variant, out CaveGlowArt art))"));
 			string authoring = Code("ProceduralArt/BiomeArtAuthoring.cs");
 			Assert.That(authoring, Does.Contain("BiomeTemplate.Authored.CaveCrystals, biome.CaveCrystals, entry.CaveCrystals()"));
-			Assert.That(authoring, Does.Contain("BiomeTemplate.Authored.CaveLights, biome.CaveLights, entry.CaveLights(glowOnly)"));
+			Assert.That(authoring, Does.Contain("BiomeTemplate.Authored.CaveLights, biome.CaveLights, entry.CaveLights(glowCaves)"));
 			string props = Code("PointsOfInterest/PropsFeature.cs");
 			Assert.That(props, Does.Contain("BiomeWayLights.MountOf(light.Light) == BiomeWayLightMount.Ground"), "a street light stands on the ground");
 		}

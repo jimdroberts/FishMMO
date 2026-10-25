@@ -49,6 +49,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// Zero = by name or kind as before.
 		/// </summary>
 		public Vector2 Sink;
+		/// <summary>
+		/// A glowing sea detail's own light, HDR (2026-10-25, phase I2m, decision 36 (d)): when brighter than black on an aquatic kind,
+		/// its material is made on the cave glow path (BiomeArtGenerator.CaveGlowLit: Weather Lit, its atlas as the emission map in
+		/// this colour) in place of the vegetation's, so it shines in the lightless deep (FishSeaDaylight dims only the daylight).
+		/// It stands still in the surge (Weather Lit has no sway). Black (the default): an ordinary sea plant.
+		/// </summary>
+		public Color Glow;
 	}
 
 	/// <summary>

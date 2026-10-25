@@ -466,12 +466,16 @@ void LitPassFragment(
     surfaceData.occlusion *= 1.0h - fishUnderground;
     // Indoors the sky comes in only at the windows and the door: most of its ambient and reflection gone.
     surfaceData.occlusion *= 1.0h - FISH_INDOOR_DIM * FishIndoor(inputData.positionWS);
+    // ── FishMMO edit (2026-10-25): under the sea the daylight dims with depth (FishSeaDaylight, 1 elsewhere): the sky's ambient and
+    // reflections here, the sun's taken back off below; the surface's own emission (a glowing crystal, a lure's bulb) untouched. ──
+    half fishSeaDaylight = FishSeaDaylight(inputData.positionWS);
+    surfaceData.occlusion *= fishSeaDaylight;
 
     half4 color = UniversalFragmentPBR(inputData, surfaceData);
     // ── FishMMO edit: and the sun's own light taken back off underground. A cave's deep rock casts no shadow (it is drawn
     // without, for cost) and the terrain's shadow reaches only as far as the shadow distance, so the sun lit stalagmites
     // and walls tens of metres under a hill. Its term evaluated again and subtracted, only where there is any to take. ──
-    if (fishUnderground > 0.001h)
+    if (fishUnderground > 0.001h || fishSeaDaylight < 0.999h)
     {
         SurfaceData fishSunSurface = surfaceData;
         BRDFData fishSunBrdf;
@@ -480,6 +484,8 @@ void LitPassFragment(
         // Not where the sun falls through an opening in the roof (2026-10-20, FishSkylights.hlsl): there its shadowed light is
         // the beam, the terrain's holed shadow and the opening's rock drawing its edge.
         half fishSunTaken = fishUnderground * (half)(1.0 - FishSkylightSun(inputData.positionWS, fishSun.direction));
+        // What the sea leaves of the rest (only under it: the expression is the cave's alone everywhere else).
+        fishSunTaken = fishSeaDaylight < 1.0h ? 1.0h - (1.0h - fishSunTaken) * fishSeaDaylight : fishSunTaken;
         color.rgb = max(0.0h, color.rgb - fishSunTaken * LightingPhysicallyBased(fishSunBrdf, fishSun, inputData.normalWS, inputData.viewDirectionWS));
     }
 #if defined(FISH_INDIRECT_INSTANCED)

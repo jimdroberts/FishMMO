@@ -44,6 +44,9 @@ namespace FishMMO.Client
 				case SeaCreatureShape.Crab:
 					Crab(b, back, belly);
 					break;
+				case SeaCreatureShape.Eel:
+					Eel(b, back, belly);
+					break;
 				default:
 					Fish(b, back, belly, height: 0.22f, width: 0.11f, fork: 0.5f, dorsal: 0.2f, dorsalFrom: 0.3f, dorsalTo: 0.5f, pointed: false, flukes: false, tail: 1f);
 					break;
@@ -55,6 +58,86 @@ namespace FishMMO.Client
 			mesh.bounds = bounds;
 			mesh.UploadMeshData(true);
 			return mesh;
+		}
+
+		// ── Eels ──────────────────────────────────────────────────────
+
+		/// <summary>
+		/// An eel (2026-10-25): a long round body lofted from rings, blunt-headed, tapering to a pointed tail, with one ribbon fin
+		/// running from behind the head over the back, round the tail and forward under the belly; dark eyes on the head. Every
+		/// part rides the body wave (FishSeaLife.hlsl mode 6 ripples the whole length).
+		/// </summary>
+		private static void Eel(Builder b, Color back, Color belly)
+		{
+			const int stations = 22;
+			const int sides = 8;
+			const float girth = 0.075f;
+			float Fullness(float a)
+			{
+				float head = Mathf.Sqrt(Mathf.Clamp01(a / 0.06f));
+				float taper = 1f - 0.9f * Mathf.Pow(Mathf.Clamp01((a - 0.35f) / 0.65f), 1.4f);
+				return Mathf.Max(0.03f, head * taper);
+			}
+			float Z(float a) => 0.5f - a;
+			Color Shade(float up) => Color.Lerp(belly, back, Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(up * 0.9f + 0.6f)));
+
+			int first = b.Count;
+			for (int i = 0; i <= stations; i++)
+			{
+				float a = i / (float)stations;
+				float f = Fullness(a);
+				for (int k = 0; k <= sides; k++)
+				{
+					float t = k * Mathf.PI * 2f / sides;
+					float cos = Mathf.Cos(t), sin = Mathf.Sin(t);
+					var p = new Vector3(cos * girth * 0.45f * f, sin * girth * 0.55f * f, Z(a));
+					Color c = Shade(sin);
+					if (i == 1 && Mathf.Abs(cos) > 0.7f && sin > 0.1f)
+					{
+						c = new Color(0.02f, 0.02f, 0.025f);
+					}
+					b.Add(p, c, new Vector2(a, Mathf.Abs(cos)), Vector2.zero);
+				}
+			}
+			for (int i = 0; i < stations; i++)
+			{
+				for (int k = 0; k < sides; k++)
+				{
+					int a0 = first + i * (sides + 1) + k;
+					int a1 = a0 + sides + 1;
+					b.Quad(a0, a0 + 1, a1 + 1, a1);
+				}
+			}
+			// The snout's cap.
+			int nose = b.Add(new Vector3(0f, 0f, Z(0f) + 0.004f), Shade(0.2f), new Vector2(0f, 0f), Vector2.zero);
+			for (int k = 0; k < sides; k++)
+			{
+				b.Tri(nose, first + k + 1, first + k);
+			}
+
+			// The ribbon fin: a strip over the back from a = 0.18 and under the belly from a = 0.5, meeting at the tail.
+			Color fin = Color.Lerp(back, belly, 0.2f);
+			void Ribbon(float from, float sign, float height)
+			{
+				const int steps = 12;
+				int previousRoot = -1, previousTip = -1;
+				for (int s = 0; s <= steps; s++)
+				{
+					float a = Mathf.Lerp(from, 1f, s / (float)steps);
+					float edge = girth * 0.55f * Fullness(a) * sign;
+					float rise = height * Mathf.Sin(Mathf.Clamp01((a - from) / (1f - from)) * Mathf.PI * 0.5f + 0.35f) * sign;
+					int root = b.Add(new Vector3(0f, edge, Z(a)), fin, new Vector2(a, 0f), Vector2.zero);
+					int tip = b.Add(new Vector3(0f, edge + rise, Z(a)), fin, new Vector2(a, 1f), Vector2.zero);
+					if (previousRoot >= 0)
+					{
+						b.Quad(previousRoot, previousTip, tip, root);
+					}
+					previousRoot = root;
+					previousTip = tip;
+				}
+			}
+			Ribbon(0.18f, 1f, girth * 0.45f);
+			Ribbon(0.5f, -1f, girth * 0.35f);
 		}
 
 		// ── Fish, sharks, whales ──────────────────────────────────────

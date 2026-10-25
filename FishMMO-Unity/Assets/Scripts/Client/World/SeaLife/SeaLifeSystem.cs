@@ -449,6 +449,7 @@ namespace FishMMO.Client
 				case SeaCreatureShape.Turtle: return 3f;
 				case SeaCreatureShape.Jelly: return 4f;
 				case SeaCreatureShape.Crab: return 5f;
+				case SeaCreatureShape.Eel: return 6f;
 				default: return 0f;
 			}
 		}
@@ -487,6 +488,7 @@ namespace FishMMO.Client
 					h = h * 31 + kind.Depth.GetHashCode();
 					h = h * 31 + kind.MinWater.GetHashCode();
 					h = h * 31 + kind.FloorClearance.GetHashCode();
+					h = h * 31 + (kind.NearFloor ? 1 : 0);
 					h = h * 31 + kind.Temperature.GetHashCode();
 					h = h * 31 + kind.PreferWeight.GetHashCode();
 					h = h * 31 + kind.ElsewhereWeight.GetHashCode();

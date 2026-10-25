@@ -124,6 +124,292 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeLandformPresets.Named("Not A Landform").Carves, Is.False, "an unknown name carves nothing");
 		}
 
+		/// <summary>
+		/// Every landform name an APPROVED section of a biome draft (written before 2026-10-25; the drafts live outside the
+		/// repository) asks a phase to build as a preset, by biome. Left out: Ice Geyser Field's TigerStripe (decision 53: the sulci are
+		/// IceStripes.Of, stored with the terrain), Geyser Basin's HotPoolBasin and RunoffChannels (the geothermal carve, I2q), Hills'
+		/// abandoned terraces and Glacier's flow field (the terrace field surface, I2j-b; the glacier flow is no carve).
+		/// </summary>
+		private static readonly (string Biome, string[] Names)[] ApprovedNames =
+		{
+			("Tundra", new[] { "Pingo", "Palsa", "ThawSlump" }),
+			("Alpine", new[] { "RockGlacier", "Cornice" }),
+			("Mountain Slope", new[] { "Amba" }),
+			("Crater", new[] { "ImpactCrater" }),
+			("Abyssal Plain", new[] { "AbyssalHills", "StarfallCrater" }),
+			("Abyss", new[] { "MudVolcano", "BrineLake" }),
+			("Badlands", new[] { "Rills", "CaprockMesa", "Wash", "CitadelCrag" }),
+			("Bamboo Forest", new[] { "Kofun" }),
+			("Beach", new[] { "Foredune", "ParabolicDune", "Blowout" }),
+			("Castle", new[] { "PillowMound", "SiegeDitch", "Motte" }),
+			("Coastal Water", new[] { "Sarn" }),
+			("Coral Reef", new[] { "Faru", "Blue hole", "Kandu" }),
+			("Cryovolcanic Plain", new[] { "Cryodome", "Moated massif", "flow-lobe steps" }),
+			("Desert", new[] { "StarDune", "Seif", "Nebkha", "Guelta", "Paleolake" }),
+			("Dust Sea", new[] { "Dust-fill", "Ghost craters", "Kipukas", "Boulder tracks", "Stone River" }),
+			("Estuary", new[] { "TidalCreeks", "Terp", "Warft", "SeaDike", "Pannes" }),
+			("Farmland", new[] { "TerraceScarp", "Dosso", "FontanileHead" }),
+			("Forest Ruins", new[] { "TravertineTerraces", "RuinMound" }),
+			("Fortress", new[] { "MudflowFan" }),
+			("Geyser Basin", new[] { "SinterShield", "ExplosionCrater", "PaintedHills" }),
+			("Glacier", new[] { "CrevasseField", "Moulin", "SupraglacialChannels", "LateralMoraine", "MedialMoraine", "TerminalMoraine", "KettlePonds", "Ogives", "SnoutPortal" }),
+			("High Desert", new[] { "Tinaja", "Fin field", "Volcanic Neck", "Arroyo" }),
+			("Ice Palace", new[] { "SummitCaldera" }),
+			("Ice Ruin", new[] { "WinterWall", "DriftMound" }),
+			("Ice Sheet", new[] { "Nunatak", "BlueIceTail", "Megadunes", "SpiralTroughs", "SwissCheese" }),
+			("Ice Shelf", new[] { "ShelfRolls", "Rift", "Leads", "Polynya", "PressureBelt", "IceRumple", "TideCracks", "EpishelfLake", "IceIsland", "Hafgerdingar" }),
+			("Impact Basin", new[] { "MultiRingBasin" }),
+			("Jungle", new[] { "Inselberg", "Laterite breakaway", "Iya" }),
+			("Jungle Ruins", new[] { "TempleMound", "Cenote", "Bajo" }),
+			("Jungle Temple", new[] { "TempleMountain", "MoatedEnclosure", "Baray" }),
+			("Karst", new[] { "Fenglin", "Fengcong", "Doline", "Uvala", "Polje", "Tiankeng", "Ponor" }),
+			("Lava Tube", new[] { "SkylightChain", "CollapseTrench", "LavaRise", "Hornito" }),
+			("Mangrove", new[] { "TidalCreeks", "MudIslands", "Ukanda", "RagTerrace", "Dolines" }),
+			("Methane Lake", new[] { "RampartPit", "Labyrinth", "Ria", "Magnetberg" }),
+			("Molten Surface", new[] { "Patera", "OverflowBench", "CrustIsland", "SpatterRampart", "LavaChannel", "PlumeRing", "PressureRidges" }),
+			("Nitrogen Ice Field", new[] { "ConvectionCells", "BladedRidges", "NitrogenGlacier", "BlockMontes", "PitField" }),
+			("Oasis", new[] { "SpringMound", "Birket" }),
+			("Ocean", new[] { "CoralMounds", "Pockmarks", "PloughMarks" }),
+			("Permanent Ice", new[] { "SummitDome", "IceTablet", "StepMargin" }),
+			("Plains", new[] { "Wallow", "Playa", "PlatformMound", "ConicalMound" }),
+			("Radiation Plain", new[] { "RingGraben", "Valhalla", "IceRingBasin", "Catena", "CraterChain", "KnobField", "DegradedCrater", "WornCraters", "ScorchFurrow", "BoltScar" }),
+			("Regolith Plain", new[] { "CraterField", "RayCrater", "CayleyFill", "RampartCrater" }),
+			("Salt Flat", new[] { "SaltPan", "SaltRidges", "BrineEye", "SaltDome" }),
+			("Savanna", new[] { "Kopje", "Dwala", "Pan", "TermiteIslands", "TableHill" }),
+			("Rille", new[] { "SinuousRille", "BeadedRille", "StraightGraben", "Rima", "ArcuateRille" }),
+			("Rocky Coast", new[] { "SeaStacks", "StoorwormTeeth", "OldMan", "Geos", "Gloup", "WaveCutPlatform", "Ayre", "TidalBrough" }),
+			("Valley", new[] { "LateralMoraine", "AlluvialFan" }),
+			("Wetlands", new[] { "Tell", "Dibin" }),
+		};
+
+		[Test]
+		public void Presets_CoverEveryApprovedDraftLandform()
+		{
+			var missing = new List<string>();
+			foreach ((string biome, string[] names) in ApprovedNames)
+			{
+				foreach (string name in names)
+				{
+					if (!BiomeLandformPresets.TryGet(name, out BiomeLandform form) || !form.Carves && form.PaintGround < 0)
+					{
+						missing.Add($"{biome}: {name}");
+					}
+				}
+			}
+			Assert.That(missing, Is.Empty, "approved draft landforms with no preset");
+			// The chain and the ring basin carry their own placement and form (decision 71); the steps their own anchor (decision 70).
+			Assert.That(BiomeLandformPresets.Named("Catena").Placement, Is.EqualTo(BiomeLandformPlacement.Chain));
+			Assert.That(BiomeLandformPresets.Named("Valhalla").Form, Is.EqualTo(BiomeLandformForm.RingGraben));
+			Assert.That(BiomeLandformPresets.Named("StepMargin").Anchor, Is.EqualTo(BiomeLandformAnchor.PatchEdge));
+			Assert.That(BiomeLandformPresets.Named("RingBasin").Kind, Is.EqualTo("MultiRingBasin"), "the plain ring basin stays decision 55's");
+		}
+
+		[Test]
+		public void Chain_StandsItsMembersAlongOneLine_TaperingToBothEnds()
+		{
+			BiomeLandform catena = Opened(BiomeLandformPresets.Named("Catena"));
+			catena.Lean = 0f;
+			catena.Roughness = 0f;
+			List<BiomeLandformSite> sites = SceneLandforms.Plan(Input(new[] { catena }));
+			Assert.That(sites.Count, Is.GreaterThanOrEqualTo(2));
+			// The first chain's members: collinear (straight, no offset) and largest towards the middle.
+			Vector2 a = sites[0].Centre, b = sites[1].Centre;
+			Vector2 dir = (b - a).normalized;
+			int members = 1;
+			for (int i = 1; i < sites.Count; i++)
+			{
+				Vector2 d = sites[i].Centre - a;
+				if (Mathf.Abs(d.x * dir.y - d.y * dir.x) > 0.01f * Mathf.Max(1f, d.magnitude))
+				{
+					break;
+				}
+				members++;
+			}
+			Assert.That(members, Is.GreaterThanOrEqualTo(3), "a chain of at least three on one line");
+			Assert.That(SceneLandforms.Plan(Input(new[] { catena })).ConvertAll(s => s.Centre), Is.EqualTo(sites.ConvertAll(s => s.Centre)), "deterministic");
+		}
+
+		[Test]
+		public void RingGraben_CutsConcentricTroughsRoundAFlatPalimpsest()
+		{
+			var site = new BiomeLandformSite
+			{
+				Form = BiomeLandformPresets.Named("RingGraben"),
+				BiomeID = 1001,
+				Centre = Vector2.zero,
+				Radius = 600f,
+				HalfLength = 600f,
+				HalfWidth = 10f,
+				Height = 6f,
+				Seed = 99u,
+				Level = 0f,
+			};
+			site.Bounds = BiomeLandforms.BoundsOf(site);
+			var shape = new BiomeLandforms.Shape(site, new BiomeLandforms.Context());
+			var flat = new BiomeLandforms.GroundInfo();
+			// Walk out along many headings: troughs (cuts of at least 3 m) at several radii, none in the palimpsest, nothing past 1.95 R.
+			int troughs = 0;
+			for (int a = 0; a < 36; a++)
+			{
+				float th = a * Mathf.PI / 18f;
+				bool inTrough = false;
+				for (float d = 0f; d < 1300f; d += 1f)
+				{
+					float x = Mathf.Cos(th) * d, z = Mathf.Sin(th) * d;
+					float h = shape.Apply(x, z, 5f, 5f, flat);
+					if (d < 0.12f * 600f)
+					{
+						Assert.That(h, Is.EqualTo(2f).Within(0.01f), "the palimpsest drawn six tenths of the way to its level");
+					}
+					if (d > 1.95f * 600f)
+					{
+						Assert.That(h, Is.EqualTo(5f), "untouched outside");
+					}
+					bool cut = d > 0.25f * 600f && h < 5f - 2.9f;
+					if (cut && !inTrough)
+					{
+						troughs++;
+						Assert.That(shape.Mask(BiomeLandformPart.Channel, x, z, h, 0f), Is.GreaterThan(0.25f), "the trough mask");
+					}
+					inTrough = cut;
+				}
+			}
+			Assert.That(troughs / 36f, Is.GreaterThan(3f), "several graben crossed on an average heading (arcs broken, 5–10 rings)");
+			Assert.That(shape.Mask(BiomeLandformPart.Floor, 0f, 0f, 0f, 0f), Is.EqualTo(1f));
+		}
+
+		[Test]
+		public void CraterField_DrawsAPowerLawPopulation_CarvedOldFirst()
+		{
+			// The draw: N(> D) ∝ D^−2 over 8 … 400 m, so about a quarter of a thousand rolls lie over 16 m and few over 100 m.
+			int over16 = 0, over100 = 0;
+			for (int i = 0; i < 4000; i++)
+			{
+				float d = BiomeLandforms.PowerLawPick(new Vector2(8f, 400f), 2f, (i + 0.5f) / 4000f);
+				Assert.That(d, Is.InRange(8f, 400f));
+				over16 += d > 16f ? 1 : 0;
+				over100 += d > 100f ? 1 : 0;
+			}
+			Assert.That(over16 / 4000f, Is.EqualTo(0.25f).Within(0.01f));
+			Assert.That(over100 / 4000f, Is.EqualTo(0.0064f).Within(0.003f));
+			Assert.That(BiomeLandforms.PowerLawPick(new Vector2(8f, 400f), 0f, 0.5f), Is.EqualTo(204f).Within(0.01f), "power 0 is the even draw");
+			// The classes' shares (6/14/45/35 %) and the carve order: never a younger crater before an older one.
+			var counts = new int[4];
+			for (uint seed = 0; seed < 20000u; seed++)
+			{
+				counts[BiomeLandforms.CraterAge(seed)]++;
+			}
+			Assert.That(counts[0] / 20000f, Is.EqualTo(0.06f).Within(0.01f));
+			Assert.That(counts[3] / 20000f, Is.EqualTo(0.35f).Within(0.015f));
+			List<BiomeLandformSite> sites = PlanPreset(Array.Find(BiomeLandformPresets.All, p => p.Name == "CraterField"));
+			Assert.That(sites.Count, Is.GreaterThan(10));
+			for (int i = 1; i < sites.Count; i++)
+			{
+				Assert.That(BiomeLandforms.CraterAge(sites[i].Seed), Is.LessThanOrEqualTo(BiomeLandforms.CraterAge(sites[i - 1].Seed)), "old craters carved first");
+				Assert.That(sites[i].Height / (2f * sites[i].Radius), Is.EqualTo(BiomeLandforms.CraterAgeDepth(BiomeLandforms.CraterAge(sites[i].Seed))).Within(1e-4f));
+			}
+			// An entry without the tuners prints as before (marks unchanged).
+			StringAssert.DoesNotContain("|pow", BiomeLandformPresets.Named("ImpactCrater").ToString());
+			StringAssert.DoesNotContain("|aged", BiomeLandformPresets.Named("ImpactCrater").ToString());
+			StringAssert.Contains("|pow|2|aged", BiomeLandformPresets.Named("CraterField").ToString());
+		}
+
+		[Test]
+		public void ShoreSetback_StacksStandOffTheCliff_GloupsBehindIt()
+		{
+			float ShoreDistance(Vector2 p)
+			{
+				bool wet = GroundAt(p.x, p.y) < Sea;
+				float best = float.MaxValue;
+				for (int k = 0; k < 32; k++)
+				{
+					var dir = new Vector2(Mathf.Cos(k * Mathf.PI / 16f), Mathf.Sin(k * Mathf.PI / 16f));
+					for (float d = 1f; d < 400f; d += 1f)
+					{
+						Vector2 q = p + dir * d;
+						if (GroundAt(q.x, q.y) < Sea != wet)
+						{
+							best = Mathf.Min(best, d);
+							break;
+						}
+					}
+				}
+				return best;
+			}
+			foreach ((string name, bool seaward) in new[] { ("SeaStacks", true), ("Gloup", false) })
+			{
+				BiomeLandform form = BiomeLandformPresets.Named(name);
+				form.Slope = Vector2.zero;
+				form.Density = 20f;
+				form.PerScene = 0;
+				List<BiomeLandformSite> sites = SceneLandforms.Plan(Input(new[] { form }));
+				Assert.That(sites.Count, Is.GreaterThan(0), name);
+				foreach (BiomeLandformSite site in sites)
+				{
+					Assert.That(GroundAt(site.Centre.x, site.Centre.y) < Sea, Is.EqualTo(seaward), $"{name} at {site.Centre} on the wrong side of the shore");
+					Assert.That(ShoreDistance(site.Centre), Is.InRange(0.3f * form.NearWater, 2f * form.NearWater), $"{name} at {site.Centre}");
+				}
+			}
+		}
+
+		[Test]
+		public void GrabenAndRille_CutTheirTroughs_TheRillesHeadDeepest()
+		{
+			BiomeLandformSite Line(string name, float half, float depth)
+			{
+				var site = new BiomeLandformSite
+				{
+					Form = BiomeLandformPresets.Named(name),
+					BiomeID = 1001,
+					Centre = Vector2.zero,
+					Radius = half,
+					HalfLength = 200f,
+					HalfWidth = half,
+					Height = depth,
+					Seed = 3u,
+					Level = float.NaN,
+					Segments = SceneLandforms.Line(new List<Vector2> { new Vector2(-200f, 0f), new Vector2(200f, 0f) }, half, depth, true),
+				};
+				site.Bounds = BiomeLandforms.BoundsOf(site);
+				return site;
+			}
+			var flat = new BiomeLandforms.GroundInfo();
+			var graben = new BiomeLandforms.Shape(Line("StraightGraben", 40f, 30f), new BiomeLandforms.Context());
+			Assert.That(graben.Apply(0f, 0f, 0f, 0f, flat), Is.EqualTo(-30f).Within(0.01f), "the floor at its depth");
+			Assert.That(graben.Apply(0f, 20f, 0f, 0f, flat), Is.EqualTo(-30f).Within(0.01f), "flat across six tenths");
+			Assert.That(graben.Apply(0f, 41f, 0f, 0f, flat), Is.EqualTo(0f), "untouched past its scarps");
+			Assert.That(graben.Mask(BiomeLandformPart.Scarp, 0f, 32f, -10f, 40f), Is.GreaterThan(0.5f), "the scarp mask on its wall");
+			BiomeLandformSite rilleSite = Line("SinuousRille", 40f, 30f);
+			rilleSite.Segments = SceneLandforms.Line(new List<Vector2> { new Vector2(-200f, 0f), new Vector2(200f, 0f) }, 40f, 30f, false);
+			var rille = new BiomeLandforms.Shape(rilleSite, new BiomeLandforms.Context());
+			float head = rille.Apply(-200f, 0f, 0f, 0f, flat), trench = rille.Apply(0f, 0f, 0f, 0f, flat);
+			Assert.That(trench, Is.EqualTo(-30f).Within(0.5f));
+			Assert.That(head, Is.LessThan(trench - 4f), "the vent hollow deeper than the trench");
+			Assert.That(rille.Mask(BiomeLandformPart.Head, -200f, 0f, head, 0f), Is.EqualTo(1f).Within(1e-4f));
+			Assert.That(rille.Mask(BiomeLandformPart.Head, 0f, 0f, trench, 0f), Is.EqualTo(0f));
+		}
+
+		[Test]
+		public void PatchEdge_StandsItsInsetInsideThePatch_NotAtTheScenesEdge()
+		{
+			BiomeLandform steps = BiomeLandformPresets.Named("StepMargin");
+			steps.Slope = Vector2.zero;
+			steps.Humidity = Vector2.zero;
+			steps.Density = 20f;
+			const float discCells = 30f;
+			LandformPlanInput input = Input(new[] { steps });
+			input.CellBiome = (x, z) => (x - 47.5f) * (x - 47.5f) + (z - 47.5f) * (z - 47.5f) <= discCells * discCells ? 0 : -1;
+			List<BiomeLandformSite> sites = SceneLandforms.Plan(input);
+			Assert.That(sites.Count, Is.GreaterThan(0), "steps round the disc's margin");
+			foreach (BiomeLandformSite site in sites)
+			{
+				float inside = discCells * CellMetres - site.Centre.magnitude;
+				Assert.That(inside, Is.InRange(15f, 85f), $"{site.Centre} stands {inside} m inside the patch's edge (inset {steps.NearWater} m)");
+			}
+			// The whole scene one patch: no patch edge, so nothing (the scene's edge is not one).
+			Assert.That(SceneLandforms.Plan(Input(new[] { steps })), Is.Empty);
+		}
+
 		[Test]
 		public void SpecHook_ByNameAndTuned()
 		{
@@ -202,11 +488,12 @@ namespace FishMMO.UnitTests.WorldDesign
 			form.Depth = Vector2.zero;
 			form.Temperature = Vector2.zero;
 			form.Humidity = Vector2.zero;
-			if (form.Anchor == BiomeLandformAnchor.NearWater || form.Anchor == BiomeLandformAnchor.SlopeBreak)
+			if (form.Anchor == BiomeLandformAnchor.NearWater || form.Anchor == BiomeLandformAnchor.SlopeBreak || form.Anchor == BiomeLandformAnchor.PatchEdge
+				|| form.Anchor == BiomeLandformAnchor.ShoreSetback && form.Depth == Vector2.zero)
 			{
 				form.Anchor = BiomeLandformAnchor.Anywhere;
 			}
-			if (form.Placement == BiomeLandformPlacement.Scatter)
+			if (form.Placement == BiomeLandformPlacement.Scatter || form.Placement == BiomeLandformPlacement.Chain)
 			{
 				form.Density = Mathf.Max(form.Density, 4f);
 			}
@@ -214,6 +501,8 @@ namespace FishMMO.UnitTests.WorldDesign
 			form.Size = new Vector2(Mathf.Min(form.Size.x, 300f), Mathf.Min(form.Size.y, 300f));
 			form.Length = new Vector2(Mathf.Min(form.Length.x, 500f), Mathf.Min(form.Length.y, 500f));
 			form.Width = new Vector2(Mathf.Min(form.Width.x, 200f), Mathf.Min(form.Width.y, 200f));
+			// An arcuate set's spacing too (its 550 m would carry the outer arcs out of the test scene).
+			form.Moat = Mathf.Min(form.Moat, 60f);
 			return form;
 		}
 
@@ -223,6 +512,12 @@ namespace FishMMO.UnitTests.WorldDesign
 			if (preset.Form.Form == BiomeLandformForm.Pass)
 			{
 				forms.Add(Opened(BiomeLandformPresets.Named("Faru")));
+			}
+			if (preset.Form.Anchor == BiomeLandformAnchor.LeeOf)
+			{
+				// A lee entry stands behind each site of the entry before it: its host is the preset listed just before it.
+				int at = Array.FindIndex(BiomeLandformPresets.All, p => p.Name == preset.Name);
+				forms.Add(Opened(BiomeLandformPresets.All[at - 1].Form));
 			}
 			forms.Add(Opened(preset.Form));
 			List<BiomeLandformSite> sites = SceneLandforms.Plan(Input(forms));
@@ -282,7 +577,7 @@ namespace FishMMO.UnitTests.WorldDesign
 						float h1 = shape.Apply(x, z, g, g, flat), h2 = again.Apply(x, z, g, g, flat);
 						Assert.That(float.IsNaN(h1) || float.IsInfinity(h1), Is.False, preset.Name);
 						Assert.That(h1, Is.EqualTo(h2), $"{preset.Name} is not deterministic");
-						for (BiomeLandformPart part = BiomeLandformPart.Whole; part <= BiomeLandformPart.Crest; part++)
+						for (BiomeLandformPart part = BiomeLandformPart.Whole; part <= BiomeLandformPart.Scarp; part++)
 						{
 							float m = shape.Mask(part, x, z, g, 10f);
 							Assert.That(m >= 0f && m <= 1.0001f, Is.True, $"{preset.Name} {part} mask {m}");

@@ -25,6 +25,8 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		private static string Code(string path) => File.ReadAllText(path);
 
+		private static float F(string text) => float.Parse(text, System.Globalization.CultureInfo.InvariantCulture);
+
 		private static readonly BiomeGeothermalShares Basin = new BiomeGeothermalShares(0.25f, 0.40f, 0.20f, 0.15f);
 
 		/// <summary>The old comparison, verbatim, before the split was on the template.</summary>
@@ -399,6 +401,127 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(all.GreatSpout, Is.EqualTo(GeothermalVents.GreatSpoutIndex(sites)));
 		}
 
+		// ── The Great Spout, as the cut chooses and the map stores it (2026-10-25) ──
+
+		[Test]
+		public void TheGreatSpout_IsTheLargestGeyserDug_NeverOneUnderWaterOrInAFootprint()
+		{
+			var scene = new Rect(Field.Origin, Field.Origin, (Field.N - 1) * Field.Step, (Field.N - 1) * Field.Step);
+			Field field = Field.Hills();
+			List<GeothermalSite> sites = SitesFor(scene);
+			int largest = GeothermalVents.GreatSpoutIndex(sites);
+			Assert.That(largest, Is.GreaterThanOrEqualTo(0));
+			Vector2 at = sites[largest].Position;
+			// Drown the largest geyser, then keep it in a footprint: either way the next largest dug one takes its place.
+			Func<float, float, bool> round = (x, z) => (new Vector2(x, z) - at).sqrMagnitude < 1f;
+			foreach (GeothermalGroundCarve.Plan plan in new[] { GeothermalGroundCarve.Make(sites, field.At, round, null, scene), GeothermalGroundCarve.Make(sites, field.At, null, round, scene) })
+			{
+				Assert.That(plan.GreatSpout, Is.Not.EqualTo(largest));
+				Assert.That(plan.GreatSpout, Is.GreaterThanOrEqualTo(0));
+				Assert.That(plan.Sites[plan.GreatSpout].Kind, Is.EqualTo(GeothermalKind.Geyser));
+				Assert.That(plan.Dug.Any(d => d.Index == plan.GreatSpout), Is.True, "a geyser the cut built a cone for");
+				foreach (GeothermalGroundCarve.Dug dug in plan.Dug.Where(d => d.Site.Kind == GeothermalKind.Geyser))
+				{
+					Assert.That(dug.Site.Size, Is.LessThanOrEqualTo(plan.Sites[plan.GreatSpout].Size));
+				}
+			}
+			// No geyser dug, no Great Spout (at most one a scene, sometimes none).
+			Assert.That(GeothermalGroundCarve.Make(sites, field.At, (x, z) => true, null, scene).GreatSpout, Is.EqualTo(-1));
+			Assert.That(GeothermalVents.GreatSpoutIndex(sites, i => false), Is.EqualTo(-1));
+		}
+
+		[Test]
+		public void TheStoredSpout_EruptsExactlyAsItsSite()
+		{
+			var scene = new Rect(Field.Origin, Field.Origin, (Field.N - 1) * Field.Step, (Field.N - 1) * Field.Step);
+			List<GeothermalSite> sites = SitesFor(scene);
+			GeothermalSite site = sites[GeothermalVents.GreatSpoutIndex(sites)];
+			GeothermalSite stored = GeothermalVents.StoredSpout(site.Position, site.Seed, site.Size);
+			Assert.That(stored.Kind, Is.EqualTo(GeothermalKind.Geyser));
+			for (double t = 1.7e9; t < 1.7e9 + 3.0 * GeothermalVents.IntervalSeconds(site); t += 41.3)
+			{
+				GeyserMoment a = GeothermalVents.Moment(site, t), b = GeothermalVents.Moment(stored, t);
+				Assert.That(b.Eruption, Is.EqualTo(a.Eruption));
+				Assert.That(b.Since, Is.EqualTo(a.Since));
+				Assert.That(b.Column, Is.EqualTo(a.Column));
+				Assert.That(GeothermalVents.SecondsToNextEruption(stored, t), Is.EqualTo(GeothermalVents.SecondsToNextEruption(site, t)));
+			}
+			// The map stores it after the heat (writing a grid clears both); a map cut before searches, as it always did.
+			string generator = Code(WorldFolder + "/SceneGenerator.cs");
+			Assert.That(generator.IndexOf("map.SetGreatSpout(hotGround.GreatSpout >= 0, spout.Position, spout.Seed, spout.Size);", StringComparison.Ordinal),
+				Is.GreaterThan(generator.IndexOf("map.SetHeat(heat);", StringComparison.Ordinal)));
+			string map = Code("Assets/Scripts/Shared/Implementation/Tools/Biomes/SceneBiomeMap.cs");
+			StringAssert.Contains("GreatSpoutBaked = HasGreatSpout = false;", map);
+			string vents = Code("Assets/Scripts/Shared/Implementation/Weather/GeothermalVents.cs");
+			StringAssert.Contains("if (map.GreatSpoutBaked)", vents);
+		}
+
+		// ── Hooks for the fissure fields (decision 53) and the hot springs' warm ground (decision 54) ──
+
+		[Test]
+		public void TheKinds_AreAppendOnly()
+		{
+			Assert.That((int)GeothermalKind.Fumarole, Is.EqualTo(0));
+			Assert.That((int)GeothermalKind.HotSpring, Is.EqualTo(1));
+			Assert.That((int)GeothermalKind.Geyser, Is.EqualTo(2));
+			Assert.That((int)GeothermalKind.MudPot, Is.EqualTo(3));
+			Assert.That(Enum.GetValues(typeof(GeothermalKind)).Cast<GeothermalKind>().Select(k => (int)k), Is.EqualTo(Enumerable.Range(0, Enum.GetValues(typeof(GeothermalKind)).Length)), "contiguous from 0");
+			Assert.That((int)BiomeHeatSourceShape.Point, Is.EqualTo(0));
+			Assert.That((int)BiomeHeatSourceShape.Line, Is.EqualTo(1));
+			string carve = Code(WorldFolder + "/Terrain/GeothermalGroundCarve.cs");
+			StringAssert.Contains("new int[Enum.GetValues(typeof(GeothermalKind)).Length]", carve);
+			StringAssert.DoesNotContain("new int[4]", carve);
+		}
+
+		[Test]
+		public void MoreHeat_LinesAndPoints_BakeAfterTheSites_WithOrWithoutSites()
+		{
+			var scene = new Rect(-200f, -200f, 400f, 400f);
+			var stripe = BiomeHeatSource.Line(new Vector2(-150f, 0f), new Vector2(150f, 20f), 0.9f, 0.9f, 25f);
+			// A fissure field with no site of its own still bakes its stripe's heat.
+			GeothermalGroundCarve.Plan only = GeothermalGroundCarve.Make(null, (x, z) => 0f, null, null, scene, new[] { stripe });
+			Assert.That(only.Any, Is.False);
+			Assert.That(only.Heat.Any, Is.True);
+			Assert.That(only.Heat.At(0f, 10f), Is.GreaterThan(0.8f));
+			Assert.That(only.Heat.At(0f, 60f), Is.EqualTo(0f));
+			Assert.That(only.GreatSpout, Is.EqualTo(-1));
+			Assert.That(GeothermalGroundCarve.Make(null, (x, z) => 0f, null, null, scene).Heat.Any, Is.False);
+			// With sites: the sites' sources first, then the extra ones, and the same digging.
+			var field = new Rect(Field.Origin, Field.Origin, (Field.N - 1) * Field.Step, (Field.N - 1) * Field.Step);
+			Field ground = Field.Hills();
+			List<GeothermalSite> sites = SitesFor(field);
+			GeothermalGroundCarve.Plan plain = GeothermalGroundCarve.Make(sites, ground.At, null, null, field);
+			GeothermalGroundCarve.Plan more = GeothermalGroundCarve.Make(sites, ground.At, null, null, field, new[] { stripe });
+			Assert.That(more.HeatSources.Count, Is.EqualTo(plain.HeatSources.Count + 1));
+			Assert.That(more.HeatSources[more.HeatSources.Count - 1].Shape, Is.EqualTo(BiomeHeatSourceShape.Line));
+			Assert.That(more.Dug.Select(d => d.Base), Is.EqualTo(plain.Dug.Select(d => d.Base)));
+			Assert.That(more.GreatSpout, Is.EqualTo(plain.GreatSpout));
+		}
+
+		[Test]
+		public void HotSpringSites_OutsideTheSteamingGround_Warm15Metres()
+		{
+			var plan = new PointOfInterestPlan();
+			plan.Records.Add(new PointOfInterestRecord { Id = 1, Kind = FishMMO.Shared.NameGeneration.POIType.HotSpring, Position = new Vector3(100f, 5f, -40f) });
+			plan.Records.Add(new PointOfInterestRecord { Id = 2, Kind = FishMMO.Shared.NameGeneration.POIType.HotSpring, Position = new Vector3(-100f, 5f, 40f) });
+			plan.Records.Add(new PointOfInterestRecord { Id = 3, Kind = FishMMO.Shared.NameGeneration.POIType.Camp, Position = new Vector3(0f, 5f, 0f) });
+			List<Vector2> springs = GeothermalGroundCarve.HotSpringsOf(plan);
+			Assert.That(springs, Is.EqualTo(new[] { new Vector2(100f, -40f), new Vector2(-100f, 40f) }));
+			Assert.That(GeothermalGroundCarve.HotSpringsOf(null), Is.Empty);
+			// The west one stands on steaming ground (its own sites warm it): only the east one is a source.
+			List<BiomeHeatSource> heat = GeothermalGroundCarve.HotSpringHeat(springs, p => p.x < 0f);
+			Assert.That(heat.Count, Is.EqualTo(1));
+			Assert.That(heat[0].A, Is.EqualTo(new Vector2(100f, -40f)));
+			Assert.That(heat[0].Reach, Is.EqualTo(15f));
+			Assert.That(heat[0].At(new Vector2(100f, -40f)), Is.EqualTo(GeothermalGroundCarve.HotSpringSiteHeatPeak));
+			Assert.That(heat[0].At(new Vector2(115.1f, -40f)), Is.EqualTo(0f), "nothing past 15 m");
+			BiomeHeatMask mask = GeothermalGroundCarve.Make(null, (x, z) => 0f, null, null, new Rect(-200f, -200f, 400f, 400f), heat).Heat;
+			Assert.That(mask.At(100f, -40f), Is.GreaterThan(0.7f), "hot at the spring (read between 2 m texels)");
+			Assert.That(mask.At(-100f, 40f), Is.EqualTo(0f));
+			Assert.That(GeothermalGroundCarve.HotSpringHeat(null, null), Is.Empty);
+			StringAssert.Contains("keptOut, result.Notes, GeothermalGroundCarve.HotSpringsOf(poi?.Plan));", Code(WorldFolder + "/SceneGenerator.cs"));
+		}
+
 		// ── Heat ──
 
 		[Test]
@@ -513,10 +636,32 @@ namespace FishMMO.UnitTests.WorldDesign
 				{
 					continue;
 				}
-				// Nothing authored yet: no split, no hot water, no heat band anywhere (Author biome art writes the basin's).
-				Assert.That(text.Contains("\n  geothermal:"), Is.False, path);
-				Assert.That(Regex.IsMatch(text, @"\n    Hot: 1"), Is.False, path);
+				/* Authored since (Author biome art, 2026-10-21): the basin alone carries its own split and hot water; every other
+				 * template that serialises the split carries today's, and no heat band is authored anywhere yet (the round's). */
+				bool basin = Path.GetFileNameWithoutExtension(path) == "Geyser Basin";
+				Match split = Regex.Match(text, @"\n  geothermal:\n    Geyser: ([\d.]+)\n    HotSpring: ([\d.]+)\n    Fumarole: ([\d.]+)\n    MudPot: ([\d.]+)");
+				if (split.Success)
+				{
+					BiomeGeothermalShares stored = new BiomeGeothermalShares(F(split.Groups[1].Value), F(split.Groups[2].Value), F(split.Groups[3].Value), F(split.Groups[4].Value));
+					Assert.That(stored.Signature(), Is.EqualTo((basin ? Basin : BiomeGeothermalShares.Today).Signature()), path);
+				}
+				else
+				{
+					Assert.That(text.Contains("\n  geothermal:"), Is.False, path + ": a split in an unexpected shape");
+					Assert.That(basin, Is.False, "the basin's split is authored");
+				}
+				Assert.That(Regex.IsMatch(text, @"\n    Hot: 1"), Is.EqualTo(basin), path);
 				Assert.That(Regex.IsMatch(text, @"useHeatBand: 1"), Is.False, path);
+				if (basin)
+				{
+					StringAssert.Contains("Fingerprint: Steam@5000", text, "the basin emits Steam at 0.5, authored");
+					StringAssert.Contains("Fingerprint: " + Basin.Signature(), text);
+					// The substance the weather content generator made (EnsureShipped), a vapour, is what it emits.
+					string steam = File.ReadAllText("Assets/Templates/Weather/Substances/Steam.asset");
+					StringAssert.Contains("\n  Vapour: 1", steam);
+					string guid = Regex.Match(File.ReadAllText("Assets/Templates/Weather/Substances/Steam.asset.meta"), @"guid: (\w+)").Groups[1].Value;
+					StringAssert.Contains($"\n  Emits: {{fileID: 11400000, guid: {guid}, type: 2}}\n  EmissionRate: 0.5\n", text);
+				}
 			}
 		}
 

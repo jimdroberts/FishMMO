@@ -246,6 +246,22 @@ namespace FishMMO.Shared.Biomes
 		[SerializeField] private List<BiomeCaveCrystal> caveCrystals = new List<BiomeCaveCrystal>();
 
 		/// <remarks>
+		/// The cave biome dressing the inside of this biome's caves of each form (<see cref="BiomeCaveInterior"/>, 2026-10-25, phase
+		/// I2n, decisions 37, 46, 51, 57): its formations, crystals, glow, lights, floor grounds, cover and animals; the mouth, the
+		/// shell's rock and every mine stay this biome's. A link holds where the cave's shell is one of the interior's
+		/// <see cref="CaveInteriorRocks"/>. Until then every cave was dressed from the biome it opened in.
+		/// </remarks>
+		[Header("Cave Interiors")]
+		[Tooltip("The cave biome whose template dresses the inside of this biome's caves of each form (Cave, Ice Cave, Lava Tube…): formations, crystals, glow, lights, floor grounds, cover and animals. The mouth, the shell rock and mines stay this biome's. A link holds only where the shell is one of the interior's Cave Interior Rocks. A form not listed is dressed from this biome. Written by Author biome art (Cave for natural caves, grottos and sea caves, Ice Cave for ice caves, Lava Tube for lava tubes); edits are kept.")]
+		[SerializeField] private List<BiomeCaveInterior> caveInteriors = new List<BiomeCaveInterior>();
+		[Tooltip("As a cave interior: the shell rocks (rock type names, or Ice) another biome's cave must be cut in for this biome to dress its inside (Cave: the soluble rocks; Ice Cave: ice and the rock ice caves' rocks; Lava Tube: basalt). Empty: any rock. Written by Author biome art; edits are kept.")]
+		[SerializeField] private List<string> caveInteriorRocks = new List<string>();
+		[Tooltip("The formations this biome's caves of each form take in each place (floor, roof, wall, pools, fallen rock, own crystal): a shape drawn in the cave's own rock, a weight among the place's others and the worlds it forms on. A form not listed takes the dressing's own set. Written by Author biome art (one shape a place, as the dressing chose by form); edits are kept.")]
+		[SerializeField] private List<BiomeCaveFormation> caveFormations = new List<BiomeCaveFormation>();
+		[Tooltip("What lights this biome's caves of each form by itself: the glow crystals' hue (empty: drawn by chance), how much of the floor's glow is luminous fungus and how often glow-worms hang (1 the dressing's own). Written by Author biome art (ice caves ice-blue, lava tubes amber, neither with fungus or glow-worms; mines fungus only; the rest by chance with both); edits are kept.")]
+		[SerializeField] private List<BiomeCaveGlow> caveGlows = new List<BiomeCaveGlow>();
+
+		/// <remarks>
 		/// The part this biome plays for a scene's water and ice: the biome painted where a lake, a river, an estuary or a dry
 		/// lake bed lies, and the ground of the ice sheet (<see cref="BiomeWaterRole"/>). Until 2026-10-15 the cut found those
 		/// biomes by their names; the biome art authoring writes each its role, and any biome given a role is used for it.
@@ -283,6 +299,14 @@ namespace FishMMO.Shared.Biomes
 		/// </remarks>
 		[Tooltip("How strongly this biome's coast tides: the scene sea's tide is multiplied by the coast's mean strength (1 as before; an estuary 4), the tide never moving the sea more than 4 m. Written by Author biome art (1); edits are kept.")]
 		[Range(0f, BiomeSeaFloors.MaximumTideStrength)] [SerializeField] private float tideStrength = 1f;
+		/// <remarks>
+		/// How deep this biome's underwater sites stand (2026-10-25, phase I2m, decision 36 (b)): metres below mean sea level, x the
+		/// shallowest and y the deepest, for every underwater kind sited on its floor (a wreck, a drowned shrine, a monster's den) in
+		/// place of the kind's own band, which stops at 30–60 m: an abyss's wrecks lie at 6 000 m. (0, 0), every biome's, keeps
+		/// each kind's own band, as before.
+		/// </remarks>
+		[Tooltip("Metres below mean sea level this biome's underwater sites (wrecks, drowned ruins and shrines, dens, crystal formations) stand between, in place of each kind's own band (which stops at 30-60 m). (0, 0): each kind's own, as before. Written by Author biome art ((0, 0)); edits are kept.")]
+		[SerializeField] private Vector2 underwaterSiteDepth = Vector2.zero;
 		/// <remarks>
 		/// What the biome's still fresh water carries on its surface (<see cref="BiomeFloatingPlant"/>, 2026-10-18, I2i): duckweed,
 		/// water-lilies, water hyacinth, frogbit, laid by the cut as baked props on the lakes, ponds, moats and slack river pools
@@ -478,9 +502,16 @@ namespace FishMMO.Shared.Biomes
 			public const string MoatWater = nameof(moatWater);
 			public const string WaterLook = nameof(waterLook);
 			public const string SeaLook = nameof(seaLook);
+			public const string SeaFloor = nameof(seaFloor);
+			public const string TideStrength = nameof(tideStrength);
+			public const string UnderwaterSiteDepth = nameof(underwaterSiteDepth);
 			public const string WayLights = nameof(wayLights);
 			public const string CaveCrystals = nameof(caveCrystals);
 			public const string CaveLights = nameof(caveLights);
+			public const string CaveInteriors = nameof(caveInteriors);
+			public const string CaveInteriorRocks = nameof(caveInteriorRocks);
+			public const string CaveFormations = nameof(caveFormations);
+			public const string CaveGlows = nameof(caveGlows);
 			public const string FloatingPlants = nameof(floatingPlants);
 			public const string Boardwalks = nameof(boardwalks);
 			public const string LinearFeatures = nameof(linearFeatures);
@@ -561,6 +592,18 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>The crystals this biome's caves grow, with their weights (<see cref="BiomeCaveCrystal"/>); read through BiomeTemplateArt.CaveCrystals.</summary>
 		public List<BiomeCaveCrystal> CaveCrystals => caveCrystals;
+
+		/// <summary>The cave biome dressing the inside of this biome's caves of each form (<see cref="BiomeCaveInterior"/>); read through CaveInteriorArt.</summary>
+		public List<BiomeCaveInterior> CaveInteriors => caveInteriors;
+
+		/// <summary>As a cave interior, the shell rocks it dresses the inside of (empty: any).</summary>
+		public List<string> CaveInteriorRocks => caveInteriorRocks;
+
+		/// <summary>The formations this biome's caves take by form and place (<see cref="BiomeCaveFormation"/>).</summary>
+		public List<BiomeCaveFormation> CaveFormations => caveFormations;
+
+		/// <summary>What lights this biome's caves by form by itself (<see cref="BiomeCaveGlow"/>).</summary>
+		public List<BiomeCaveGlow> CaveGlows => caveGlows;
 
 		/// <summary>
 		/// The rock a cave of this form is cut in here (a rock type name, Ice, or <see cref="BiomeCaveShell.Ground"/>): the first
@@ -721,6 +764,27 @@ namespace FishMMO.Shared.Biomes
 		{
 			get => seaLook;
 			set => seaLook = value;
+		}
+
+		/// <summary>What the biome paints and grows under the sea (<see cref="BiomeSeaFloor"/>, 2026-10-19, phase I2m): Shore unless its file says otherwise.</summary>
+		public BiomeSeaFloor SeaFloor
+		{
+			get => seaFloor;
+			set => seaFloor = value;
+		}
+
+		/// <summary>How strongly this biome's coast tides (decision 45), 0 … <see cref="BiomeSeaFloors.MaximumTideStrength"/>; read through <see cref="BiomeSeaFloors.Strength"/>.</summary>
+		public float TideStrength
+		{
+			get => tideStrength;
+			set => tideStrength = BiomeSeaFloors.Strength(value);
+		}
+
+		/// <summary>How deep this biome's underwater sites stand, metres below mean sea level ((0, 0): each kind's own band); read through <see cref="BiomeSeaFloors.SiteDepth"/>.</summary>
+		public Vector2 UnderwaterSiteDepth
+		{
+			get => underwaterSiteDepth;
+			set => underwaterSiteDepth = value;
 		}
 
 		/// <summary>How each kind of settlement lights its streets here (<see cref="BiomeWayLight"/>); a kind not listed is not lit.</summary>
@@ -1113,7 +1177,11 @@ namespace FishMMO.Shared.Biomes
 			acceptedRocks ??= new List<string>();
 			caveShells ??= new List<BiomeCaveShell>();
 			caveCrystals ??= new List<BiomeCaveCrystal>();
-			seaLife ??= new List<BiomeSeaLife>();
+			caveInteriors ??= new List<BiomeCaveInterior>();
+			caveInteriorRocks ??= new List<string>();
+			caveFormations ??= new List<BiomeCaveFormation>();
+			caveGlows ??= new List<BiomeCaveGlow>();
+			seaLife ??=new List<BiomeSeaLife>();
 			habitat &= BiomeHabitats.Stored;
 			vines ??= new BiomeVines();
 			vines.Species ??= new List<BiomeVineSpecies>();

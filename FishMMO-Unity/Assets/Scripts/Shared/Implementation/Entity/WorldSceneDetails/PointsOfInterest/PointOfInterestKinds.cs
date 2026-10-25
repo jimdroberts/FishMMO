@@ -313,6 +313,13 @@ namespace FishMMO.Shared
 			Add(POIType.SunkenShip, Co, K | U, 2);
 			Add(POIType.SunkenRuins, Co, K | U | H, 2);
 			Add(POIType.SunkenCity, Co, K | U | H | R, 1);
+			// The sea floor's own sites (2026-10-25, phase I2m, decision 36 (b)): a drowned shrine, a sea monster's den, a crystal
+			// garden, a monument and a statue the sea took. Their pieces are the land kinds' until I7 gives them their own.
+			Add(POIType.SunkenShrine, Co, K | U, 2, "Drowned Shrine");
+			Add(POIType.SeaMonsterDen, Co, K | U | R | H, 2, "Sea Monster's Den");
+			Add(POIType.SeaCrystalFormation, Co, K | U, 3, "Sea Crystal Formation");
+			Add(POIType.SunkenMonument, Co, K | U, 2);
+			Add(POIType.SunkenStatue, Co, K | U, 3);
 
 			Add(POIType.DungeonEntrance, En, K, 1);
 			Add(POIType.BossLair, En, K | P | H, 1, "World Boss Lair");

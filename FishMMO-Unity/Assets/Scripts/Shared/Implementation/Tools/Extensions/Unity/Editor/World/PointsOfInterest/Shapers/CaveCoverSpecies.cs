@@ -24,8 +24,16 @@ namespace FishMMO.Shared.WorldDesign
 	public static class CaveCoverSpecies
 	{
 		/// <summary>The cover of a cave of a form in a biome (null: no biome, the code defaults), its colours from the system's seed.</summary>
-		public static CaveCoverSite.Choice For(BiomeTemplate biome, CaveForm form, int seed)
+		public static CaveCoverSite.Choice For(BiomeTemplate biome, CaveForm form, int seed) => For(new CaveBiome(biome, null), form, seed);
+
+		/// <summary>
+		/// The cover of a cave by its cave biomes (2026-10-25, I2n): its climate envelope the HOST's (the land over a cave is its air
+		/// and water), its glow colours the dressing's for the same system, which reads the biome dressing the inside
+		/// (<see cref="CaveGlowPalettes.For(CaveForm, int, in CaveBiome)"/>).
+		/// </summary>
+		public static CaveCoverSite.Choice For(in CaveBiome caves, CaveForm form, int seed)
 		{
+			BiomeTemplate biome = caves.Host;
 			CaveCoverSite.Choice choice = CaveCoverSite.Default;
 			choice.Form = (byte)form;
 			switch (form)
@@ -51,7 +59,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				Climate(biome, form, ref choice);
 			}
-			Palette(biome, form, seed, ref choice);
+			Palette(in caves, form, seed, ref choice);
 			return choice;
 		}
 
@@ -76,9 +84,9 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>The glow colours: the dressing's lead and accent fungus hues and its crystal hue for the system (see the remarks).</summary>
-		private static void Palette(BiomeTemplate biome, CaveForm form, int seed, ref CaveCoverSite.Choice choice)
+		private static void Palette(in CaveBiome caves, CaveForm form, int seed, ref CaveCoverSite.Choice choice)
 		{
-			CaveGlowPalette p = CaveGlowPalettes.For(form, seed, biome);
+			CaveGlowPalette p = CaveGlowPalettes.For(form, seed, in caves);
 			CaveGlowHue[] crystals = ProceduralArtCatalogue.CrystalHues, fungi = ProceduralArtCatalogue.FungusHues;
 			choice.Crystal = crystals[p.Crystal % crystals.Length].Emission;
 			if (p.Minerals)
@@ -123,7 +131,10 @@ namespace FishMMO.Shared.WorldDesign
 		/// Writes a cave's choice onto its Visual (the <see cref="CaveVisibility"/> under the cave's rock that
 		/// CaveShaper.Build made): the one call the cut makes. Returns the rock it was given.
 		/// </summary>
-		public static GameObject Attach(GameObject caveRock, CaveSystem system, BiomeTemplate biome)
+		public static GameObject Attach(GameObject caveRock, CaveSystem system, BiomeTemplate biome) => Attach(caveRock, system, new CaveBiome(biome, null));
+
+		/// <summary><see cref="Attach(GameObject, CaveSystem, BiomeTemplate)"/> by the cave's biomes (2026-10-25, I2n: host climate, interior palette).</summary>
+		public static GameObject Attach(GameObject caveRock, CaveSystem system, in CaveBiome caves)
 		{
 			if (caveRock == null || system == null)
 			{
@@ -139,7 +150,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				site = visual.gameObject.AddComponent<CaveCoverSite>();
 			}
-			site.Configure(For(biome, system.Form, system.Seed));
+			site.Configure(For(in caves, system.Form, system.Seed));
 			return caveRock;
 		}
 	}

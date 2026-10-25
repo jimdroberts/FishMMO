@@ -5,7 +5,11 @@ using FishMMO.Shared.Biomes;
 
 namespace FishMMO.Shared.Weather
 {
-	/// <summary>What kind of hot ground a geothermal site is.</summary>
+	/// <summary>
+	/// What kind of hot ground a geothermal site is. APPEND-ONLY (2026-10-19, decision 53): a kind's number is in every peer's
+	/// arithmetic and the cut's records, so new kinds (a fissure's Jet next, after <see cref="MudPot"/>) take the next number and
+	/// nothing is renumbered; code that counts kinds sizes by the enum, not by four.
+	/// </summary>
 	public enum GeothermalKind : byte
 	{
 		/// <summary>A steam vent: a steady jet of steam out of a crack.</summary>
@@ -515,13 +519,20 @@ namespace FishMMO.Shared.Weather
 		/// tie; −1 when the scene has no geyser. At most one a scene, the same for every peer: a Spout clock (I7) reads its
 		/// eruptions from <see cref="Moment"/> and <see cref="SecondsToNextEruption"/>, as the client's steam does.
 		/// </summary>
-		public static int GreatSpoutIndex(IReadOnlyList<GeothermalSite> sites)
+		public static int GreatSpoutIndex(IReadOnlyList<GeothermalSite> sites) => GreatSpoutIndex(sites, null);
+
+		/// <summary>
+		/// <see cref="GreatSpoutIndex(IReadOnlyList{GeothermalSite})"/> among the sites <paramref name="eligible"/> keeps (by index; null
+		/// keeps every one): the cut asks it of the geysers it dug a cone for, so the Great Spout is never one under a lake or the
+		/// sea, which the client never draws (GeothermalGroundCarve.Make), and stores the answer with the map (<see cref="TryGreatSpout"/>).
+		/// </summary>
+		public static int GreatSpoutIndex(IReadOnlyList<GeothermalSite> sites, Func<int, bool> eligible)
 		{
 			int best = -1;
 			for (int i = 0; sites != null && i < sites.Count; i++)
 			{
 				GeothermalSite s = sites[i];
-				if (s.Kind != GeothermalKind.Geyser)
+				if (s.Kind != GeothermalKind.Geyser || (eligible != null && !eligible(i)))
 				{
 					continue;
 				}
@@ -533,14 +544,43 @@ namespace FishMMO.Shared.Weather
 			return best;
 		}
 
-		/// <summary>The Great Spout of a scene's map, when it has a geyser (<see cref="GreatSpoutIndex"/> of <see cref="SceneSites"/>).</summary>
+		/// <summary>
+		/// The Great Spout of a scene's map, when it has one: the geyser the cut chose and stored with the map
+		/// (<see cref="SceneBiomeMap.GreatSpoutBaked"/>, read with no search: what a Spout clock asks); for a map cut before the
+		/// cut stored it, the largest geyser of all its sites (<see cref="GreatSpoutIndex(IReadOnlyList{GeothermalSite})"/> of
+		/// <see cref="SceneSites"/>), which may be one under water.
+		/// </summary>
 		public static bool TryGreatSpout(SceneBiomeMap map, out GeothermalSite spout)
 		{
+			spout = default;
+			if (map == null)
+			{
+				return false;
+			}
+			if (map.GreatSpoutBaked)
+			{
+				if (!map.HasGreatSpout)
+				{
+					return false;
+				}
+				spout = StoredSpout(map.GreatSpoutPosition, map.GreatSpoutSeed, map.GreatSpoutSize,
+					GeothermalGround.Of(map.Sample(new Vector3(map.GreatSpoutPosition.x, 0f, map.GreatSpoutPosition.y))).Substance);
+				return true;
+			}
 			var sites = new List<GeothermalSite>();
 			SceneSites(map, sites);
 			int index = GreatSpoutIndex(sites);
 			spout = index >= 0 ? sites[index] : default;
 			return index >= 0;
+		}
+
+		/// <summary>
+		/// A geyser as the map stores its Great Spout: where, its seed and its size are all its schedule reads (<see cref="Moment"/>,
+		/// <see cref="EruptionStart"/>), so the stored spout erupts exactly as the site the search finds there does.
+		/// </summary>
+		public static GeothermalSite StoredSpout(Vector2 position, uint seed, float size, WeatherSubstance substance = null)
+		{
+			return new GeothermalSite { Position = position, Kind = GeothermalKind.Geyser, Size = size, Seed = seed, Substance = substance };
 		}
 
 		/// <summary>

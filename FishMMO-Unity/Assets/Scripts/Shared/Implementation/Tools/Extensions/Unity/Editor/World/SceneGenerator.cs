@@ -1077,18 +1077,23 @@ namespace FishMMO.Shared.WorldDesign
 			ScenePlacementClimate placementClimate = ScenePlacementClimate.For(system, request.Body, request.Footprint, request.ResolvedRadiusKm, true);
 			/* The hot ground (2026-10-18, I2q, decision 47): the geothermal sites the client steams, found on the map this field is
 			 * written as below (same name, same seed), dug into the ground (pools, cones, rims, runoff) before the splat and the
-			 * scatter read it, and its heat baked for their heat bands and the map. No steaming biome: no site, heat 0 everywhere. */
+			 * scatter read it, and its heat baked for their heat bands and the map. No steaming biome: no site, heat 0 everywhere.
+			 * The planned hot spring points of interest outside the steaming ground warm 15 m round them too (decision 54). */
 			bool sea = climate.Conditions.HasLiquidWater;
 			GeothermalGroundCarve.Plan hotGround = GeothermalGroundCarve.Lay(scene, terrains, plan, field, $"{WorldEditorAssets.Sanitize(request.SceneName)} Biome Map",
 				(east, north) =>
 				{
 					float at = GroundAltitude(terrains, plan, east, north);
 					return (sea && at < 0f) || (inland != null && inland(east, north) > at + 0.3f);
-				}, keptOut, result.Notes);
+				}, keptOut, result.Notes, GeothermalGroundCarve.HotSpringsOf(poi?.Plan));
 			BiomeHeatMask heat = hotGround.Heat;
 			stages.Lap("hot ground");
+			/* The sea's tide from its coast's biomes (decision 45) and its floor's daylight from its sea-floor biomes (decision 36 (c)),
+			 * 2026-10-25, phase I2m: written to the scene's sea before the splat, whose estuary low water and tide bands read the tide. */
+			float seaTide = SceneSeaFloor.Apply(scene, field, terrains, plan, result.Notes);
 			var options = new BiomeSplatOptions
 			{
+				TideMetres = seaTide,
 				// Planet-relative, so a layer's height band means the same height in every scene.
 				NormalizedHeight = (x, y, z) => climate.HeightOfAltitude(y / verticalScale),
 				HasLiquidWater = climate.Conditions.HasLiquidWater,
@@ -1100,6 +1105,8 @@ namespace FishMMO.Shared.WorldDesign
 				// Which of the bed is a river's, and its current: the riverbed under rivers, the lakebed under lakes (decision 35 (h)).
 				RiverAt = RiverBed(water),
 				HeatAt = (east, north) => heat.At(east, north),
+				// The landform zones a detail layer's zone band reads (2026-10-25, I2g-b, decision 55): the sites this scene stores.
+				LandformZones = new BiomeLandformZones(SceneLandforms.Sites(scene), SceneLandforms.ContextOf(field, SceneLandforms.SeaLevel(scene))),
 			};
 			BiomeSplatReport splat = BiomeSplatPainter.Paint(tiles, palette, field, options);
 			// The wet margins along the channels the scene's last placing stored (2026-10-18, I2j-b, decision 38): nothing where it stores none.
@@ -1127,7 +1134,8 @@ namespace FishMMO.Shared.WorldDesign
 			 * on a cold slope only); without it every band passes. */
 			TerrainScatterReport scatter = TerrainScatter.Scatter(tiles, palette, field, options.Seed,
 				new TerrainScatterOptions { NormalizedHeight = options.NormalizedHeight, Prefabs = scope.ScatterPrefabs, HasLiquidWater = options.HasLiquidWater,
-					InlandWaterSurface = inland, RiverAt = options.RiverAt, Excluded = keptOut, DetailExcluded = detailKeptOut, HeatAt = options.HeatAt }, placementClimate);
+					InlandWaterSurface = inland, RiverAt = options.RiverAt, Excluded = keptOut, DetailExcluded = detailKeptOut,
+					LandformZones = options.LandformZones, HeatAt = options.HeatAt }, placementClimate);
 			result.Notes.AddRange(scatter.InvalidPrefabs);
 			result.Notes.AddRange(scatter.BudgetCaps);
 			result.Notes.AddRange(scatter.Warnings);
@@ -1263,6 +1271,10 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			// The ground's heat with it (2026-10-18, I2q), after the grid (writing the grid clears it).
 			map.SetHeat(heat);
+			// And the Great Spout the cut chose (2026-10-25, I2q (d)): the largest geyser it dug, read by a Spout clock with no search.
+			FishMMO.Shared.Weather.GeothermalSite spout = hotGround.GreatSpout >= 0 ? hotGround.Sites[hotGround.GreatSpout] : default;
+			map.SetGreatSpout(hotGround.GreatSpout >= 0, spout.Position, spout.Seed, spout.Size);
+			EditorUtility.SetDirty(map);
 			result.Wrote.Add(mapPath);
 			result.BiomeMap = map;
 

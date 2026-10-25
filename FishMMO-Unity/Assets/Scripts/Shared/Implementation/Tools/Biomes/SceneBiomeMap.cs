@@ -44,6 +44,27 @@ namespace FishMMO.Shared.Biomes
 		public Vector4 HeatRect;
 		[Tooltip("The heat's texels, 0 cold … 255 boiling, row-major from the south-west: baked by the cut and every repaint from the scene's geothermal sites (GeothermalVents.SceneSites) and their runoff.")]
 		[HideInInspector] public byte[] Heat = new byte[0];
+		[Tooltip("True once the cut (or a repaint) has chosen the scene's Great Spout and stored it here (2026-10-25, I2q): the largest geyser it dug, none when it dug no geyser. False on a map cut before, which finds it by search (GeothermalVents.TryGreatSpout).")]
+		public bool GreatSpoutBaked;
+		[Tooltip("True when the scene has a Great Spout (read only when GreatSpoutBaked).")]
+		public bool HasGreatSpout;
+		[Tooltip("The Great Spout's place (world xz), seed and size: everything its eruptions' schedule reads (GeothermalVents.Moment), so a Spout clock needs no search.")]
+		public Vector2 GreatSpoutPosition;
+		public uint GreatSpoutSeed;
+		public float GreatSpoutSize;
+
+		/// <summary>
+		/// Stores the scene's Great Spout as the cut chose it (<paramref name="has"/> false: the scene has none); a new grid
+		/// (<see cref="Set"/>) clears it until the writer stores it again.
+		/// </summary>
+		public void SetGreatSpout(bool has, Vector2 position, uint seed, float size)
+		{
+			GreatSpoutBaked = true;
+			HasGreatSpout = has;
+			GreatSpoutPosition = has ? position : Vector2.zero;
+			GreatSpoutSeed = has ? seed : 0u;
+			GreatSpoutSize = has ? size : 0f;
+		}
 
 		/// <summary>The stored heat mask (empty for none).</summary>
 		public BiomeHeatMask HeatMask => new BiomeHeatMask { Width = HeatWidth, Height = HeatHeight, Area = HeatRect, Texels = Heat };
@@ -189,6 +210,11 @@ namespace FishMMO.Shared.Biomes
 			SetCoastLook(BiomeSeaCoast.Bake.None);
 			// Likewise its heat (the cut and the repaint bake it after writing the grid, 2026-10-18, I2q).
 			SetHeat(BiomeHeatMask.None);
+			// And its Great Spout (stored after the heat, 2026-10-25): until then the map searches, as one cut before did.
+			GreatSpoutBaked = HasGreatSpout = false;
+			GreatSpoutPosition = Vector2.zero;
+			GreatSpoutSeed = 0u;
+			GreatSpoutSize = 0f;
 			if (groundAltitudes != null && groundAltitudes.Length == Width * Height && verticalScale > 0f)
 			{
 				GroundAltitudes = new ushort[groundAltitudes.Length];

@@ -224,9 +224,18 @@ namespace FishMMO.Shared.Biomes
 		// ── Daylight under the sea (decision 36 (c)) ──────────────────
 
 		/// <summary>
-		/// How fast the sea takes the daylight out on its way down to the floor, per metre (FishSea.hlsl's _FishSeaSurge.w): the
-		/// coverage-weighted mean of the sea looks' extinction (<see cref="BiomeSeaLook.Extinction"/>, the underwater pass's own) over
-		/// the scene's sea-floor biomes; 0 (no dimming, as before 2026-10-19) when the scene holds none.
+		/// The share of a sea look's extinction (<see cref="BiomeSeaLook.Extinction"/>) the daylight loses per metre on its way down:
+		/// the underwater pass dims what lies behind by 0.5 × (0.45 e + 0.45 e / cos θ) a metre, its sky and its refracted sun's beam,
+		/// which for a sun 50° up (the beam ~35° off the vertical in the water) is 0.5 × 0.45 × (1 + 1.22) e ≈ 0.5 e; 0.5 so the lit
+		/// floor seen from above and seen from beside a diver darkens alike.
+		/// </summary>
+		public const float DaylightShare = 0.5f;
+
+		/// <summary>
+		/// How fast the sea takes the daylight out on its way down to the floor, per metre (FishWeather.hlsl's _FishOcclusionWater.w,
+		/// FishSeaDaylight): <see cref="DaylightShare"/> of the coverage-weighted mean of the sea looks' extinction
+		/// (<see cref="BiomeSeaLook.Extinction"/>, the underwater pass's own) over the scene's sea-floor biomes; 0 (no dimming, as
+		/// before 2026-10-25) when the scene holds none.
 		/// </summary>
 		/// <param name="looks">Each sea-floor biome's sea look and its share of the scene (texels, cells, any weight).</param>
 		public static float DaylightExtinction(IEnumerable<(BiomeSeaLook look, float weight)> looks)
@@ -246,12 +255,13 @@ namespace FishMMO.Shared.Biomes
 				sum += (double)w * used.Extinction;
 				weight += w;
 			}
-			return weight > 0.0 ? (float)(sum / weight) : 0f;
+			return weight > 0.0 ? (float)(DaylightShare * sum / weight) : 0f;
 		}
 
 		/// <summary>
-		/// The share of the daylight that reaches ground <paramref name="depth"/> metres under the sea's surface (FishSea.hlsl's
-		/// FishSeaDaylight, held equal by a test): exp(−extinction × depth), 1 at and above the surface or with no extinction.
+		/// The share of the daylight that reaches ground <paramref name="depth"/> metres under the sea's surface
+		/// (FishWeather.hlsl's FishSeaDaylight, held equal by a test): exp(−extinction × depth), 1 at and above the surface or with no
+		/// extinction.
 		/// </summary>
 		public static float Daylight(float extinction, float depth)
 		{
@@ -260,6 +270,32 @@ namespace FishMMO.Shared.Biomes
 				return 1f;
 			}
 			return Mathf.Exp(-extinction * depth);
+		}
+
+		// ── What grows and stands under the sea (decision 36 (a), (b)) ─
+
+		/// <summary>
+		/// True when a spawn rule on a biome's MAIN or DETAIL layer grows under the sea (2026-10-25): only in a sea-floor biome
+		/// (<see cref="BiomeSeaFloor.Ground"/> or <see cref="BiomeSeaFloor.ToLowWater"/>, whose own grounds paint there) and only for a
+		/// rule that names the sea in its waters (PrefabSpawnRule.waters); every other rule on those layers grows on land as before.
+		/// </summary>
+		public static bool GrowsUnderSea(BiomeSeaFloor floor, BiomeBedWaters ruleWaters)
+		{
+			return floor != BiomeSeaFloor.Shore && (ruleWaters & BiomeBedWaters.Sea) != 0;
+		}
+
+		/// <summary>
+		/// The depth band an underwater site kind stands in on a biome's floor, metres below mean sea level: the biome's own
+		/// (<see cref="BiomeTemplate.UnderwaterSiteDepth"/>) when it gives one (y &gt; 0), else the kind's (<paramref name="kindMin"/> …
+		/// <paramref name="kindMax"/>), as every sunken site was sited before 2026-10-25.
+		/// </summary>
+		public static Vector2 SiteDepth(Vector2 biome, float kindMin, float kindMax)
+		{
+			if (biome.y > 0f && biome.y >= biome.x)
+			{
+				return new Vector2(Mathf.Max(0f, biome.x), biome.y);
+			}
+			return new Vector2(kindMin, kindMax);
 		}
 	}
 }

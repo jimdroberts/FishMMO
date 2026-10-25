@@ -47,6 +47,11 @@ namespace FishMMO.Shared.WorldDesign
 		public float Moss;
 		/// <summary>How glossy the wet makes the rock, 0..1.</summary>
 		public float WetGloss;
+		/// <summary>
+		/// The inner wall in place of the shell rock's own texture, or none (2026-10-25, I2n, decision 51: "an Ice shell wears the
+		/// interior's scalloped-ice wall texture inside"): a linked interior's Interior-banded cliff layer, for an ice shell only.
+		/// </summary>
+		public CaveRockLayer Wall;
 
 		/// <summary>A key of the whole look, for the material's name: equal looks share one material.</summary>
 		public string Key
@@ -79,6 +84,12 @@ namespace FishMMO.Shared.WorldDesign
 					MixF(GlowStrength);
 					MixF(Moss);
 					MixF(WetGloss);
+					if (Wall.Biome != null)
+					{
+						// The wall's own art by name (its family alone would let two biomes' walls share a material).
+						Mix("wall");
+						Mix(Wall.Biome.terrainLayer != null ? Wall.Biome.terrainLayer.name : Wall.Biome.albedoTexture != null ? Wall.Biome.albedoTexture.name : Wall.Name);
+					}
 					return h.ToString("x8");
 				}
 			}
@@ -107,6 +118,42 @@ namespace FishMMO.Shared.WorldDesign
 		private static readonly string[] SiltFamilies = { Ground.Silt, Ground.Mud, Ground.Clay };
 		private static readonly string[] GravelFamilies = { Ground.Gravel, Ground.Pebbles };
 		private static readonly string[] OrganicFamilies = { Ground.ForestFloor, Ground.NeedleLitter, Ground.JungleFloor, Ground.Peat, Ground.Sphagnum, Ground.Heath };
+
+		/// <summary>
+		/// The look of a cave by its cave biomes (2026-10-25, I2n): the floors' grounds the biome dressing its inside takes
+		/// (<see cref="CaveBiome.Content"/>: its interior where linked), and for a linked cave cut in glacier ice
+		/// (<paramref name="shell"/> Ice) the interior's own inner wall where it carries one (its first cliff layer banded Interior).
+		/// </summary>
+		public static CaveRockLook For(in CaveBiome caves, CaveForm form, string shell)
+		{
+			CaveRockLook look = For(caves.Content, form);
+			if (caves.Linked && shell == CliffRocks.Ice)
+			{
+				TerrainTextureLayer wall = InteriorWall(caves.Interior);
+				if (wall != null)
+				{
+					look.Wall = new CaveRockLayer { Biome = wall };
+				}
+			}
+			return look;
+		}
+
+		/// <summary>An interior's inner wall: its first cliff layer banded Interior with art of its own, or null.</summary>
+		public static TerrainTextureLayer InteriorWall(BiomeTemplate interior)
+		{
+			if (interior == null || interior.CliffTextureLayers == null)
+			{
+				return null;
+			}
+			foreach (CliffTextureLayer cliff in interior.CliffTextureLayers)
+			{
+				if (cliff != null && cliff.underground == BiomeUnderground.Interior && cliff.HasAlbedo)
+				{
+					return cliff;
+				}
+			}
+			return null;
+		}
 
 		/// <summary>The look of a cave of <paramref name="form"/> in <paramref name="biome"/> (null: the form's defaults).</summary>
 		public static CaveRockLook For(BiomeTemplate biome, CaveForm form)
@@ -206,22 +253,43 @@ namespace FishMMO.Shared.WorldDesign
 			return cut > 0 ? rest.Substring(0, cut) : rest;
 		}
 
-		/// <summary>The biome's first ground layer (main, details, beds, bars) made of one of <paramref name="families"/>, in their order.</summary>
+		/// <summary>
+		/// The biome's first ground layer (main, details, beds, bars) made of one of <paramref name="families"/>, in their order, that
+		/// may floor a cave (2026-10-25, its underground band, <see cref="BiomeUndergrounds.CaveRank"/>): a layer banded Interior before
+		/// any other of the family, never one banded Surface. With no band set anywhere, the first of the family as before.
+		/// </summary>
 		private static TerrainTextureLayer Find(BiomeTemplate biome, string[] families)
 		{
 			if (biome == null)
 			{
 				return null;
 			}
-			List<TerrainTextureLayer> layers = biome.GetAllTextureLayersInOrder();
+			return Find(biome.GetAllTextureLayersInOrder(), families);
+		}
+
+		/// <summary><see cref="Find(BiomeTemplate, string[])"/> over a list of layers (pure, for tests).</summary>
+		public static TerrainTextureLayer Find(IReadOnlyList<TerrainTextureLayer> layers, string[] families)
+		{
+			if (layers == null)
+			{
+				return null;
+			}
 			foreach (string family in families)
 			{
+				TerrainTextureLayer best = null;
+				int bestRank = int.MaxValue;
 				foreach (TerrainTextureLayer layer in layers)
 				{
-					if (layer != null && layer.HasAlbedo && FamilyOf(layer) == family)
+					int rank = layer != null ? BiomeUndergrounds.CaveRank(layer.underground) : -1;
+					if (rank >= 0 && rank < bestRank && layer.HasAlbedo && FamilyOf(layer) == family)
 					{
-						return layer;
+						best = layer;
+						bestRank = rank;
 					}
+				}
+				if (best != null)
+				{
+					return best;
 				}
 			}
 			return null;
@@ -297,6 +365,21 @@ namespace FishMMO.Shared.WorldDesign
 			// x moss in the twilight, y wet gloss, z 1 when the ground textures are bound (else flat colours), w unused.
 			bool bound = siltAlbedo != null && gravelAlbedo != null && organicAlbedo != null && troddenAlbedo != null;
 			material.SetVector("_FishCaveParams", new Vector4(look.Moss, look.WetGloss, bound ? 1f : 0f, 0f));
+			if (look.Wall.Biome != null)
+			{
+				// The interior's inner wall over the shell's own texture (an ice cave's scalloped ice), at its own tile: the cave mesh's
+				// UVs run one per RockMeshes.TextureMetres.
+				Resolve(look.Wall, out Texture2D wallAlbedo, out Texture2D wallNormal, out float wallTile);
+				if (wallAlbedo != null && material.HasProperty("_BaseMap"))
+				{
+					material.SetTexture("_BaseMap", wallAlbedo);
+					material.SetTextureScale("_BaseMap", Vector2.one * (RockMeshes.TextureMetres / wallTile));
+					if (wallNormal != null && material.HasProperty("_BumpMap"))
+					{
+						material.SetTexture("_BumpMap", wallNormal);
+					}
+				}
+			}
 			material.EnableKeyword(Keyword);
 			// Cave rock is never drawn by the GPU-instanced twin: the keyword's code is the plain shader's only.
 		}

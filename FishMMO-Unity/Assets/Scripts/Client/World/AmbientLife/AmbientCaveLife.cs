@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using FishMMO.Shared;
+using FishMMO.Shared.Biomes;
 using UnityEngine;
 
 namespace FishMMO.Client
@@ -106,6 +107,22 @@ namespace FishMMO.Client
 				frost = (yearMean * (Mathf.PI - alpha) - amplitude * Mathf.Sin(alpha)) / Mathf.PI;
 			}
 			return yearMean - (1f - Mathf.Clamp01(snowFrost)) * frost;
+		}
+
+		/// <summary>
+		/// The habitat at a cave-life spot (2026-10-25, phase I2n): a linked cave's spot carries its interior biome
+		/// (<see cref="SceneCaveLifeSpot.Biome"/>), whose habitat replaces the land's over it but for its Barren bit, which stays the
+		/// land's (the land over a cave is its air and water; BiomeCaveInteriors.LinkedHabitat). A spot of none, or of a biome this
+		/// client does not hold, keeps the land's.
+		/// </summary>
+		public static AmbientHabitat SpotHabitat(in SceneCaveLifeSpot spot, AmbientHabitat land)
+		{
+			if (spot.Biome == 0 || !BiomeRegistry.TryGetByID(spot.Biome, out BiomeTemplate inside) || inside == null)
+			{
+				return land;
+			}
+			AmbientHabitat own = AmbientGating.HabitatOfTemplate(inside);
+			return own == AmbientHabitat.None ? land : (AmbientHabitat)BiomeCaveInteriors.LinkedHabitat((int)land, (int)own, (int)AmbientHabitat.Barren);
 		}
 
 		/// <summary>Whether a kind lives underground at all.</summary>
@@ -224,6 +241,7 @@ namespace FishMMO.Client
 				return 0;
 			}
 			world.CaveHabitat(spot.Position, out AmbientHabitat habitat, out float temperature);
+			habitat = SpotHabitat(in spot, habitat);
 			float expected = kind.CavePerSpot * density * Weight(kind, spot, habitat, temperature);
 			int added = 0;
 			int candidates = Mathf.Min(3, Mathf.CeilToInt(expected));

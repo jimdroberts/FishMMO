@@ -8,6 +8,7 @@ using FishMMO.Shared.Biomes;
 using FishMMO.Shared.Celestial;
 using FishMMO.Shared.NameGeneration;
 using FishMMO.Shared.WorldDesign;
+using FishMMO.Shared.Weather;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -75,6 +76,12 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			Match m = Regex.Match(yaml, @"\n  Atmosphere: (\d+)");
 			return m.Success ? (BiomeAtmosphereRequirement)int.Parse(m.Groups[1].Value) : BiomeAtmosphereRequirement.Any;
+		}
+
+		private static BiomeWorldRequirement RequiresOf(string yaml)
+		{
+			Match m = Regex.Match(yaml, @"\n  Requires: (\d+)");
+			return m.Success ? (BiomeWorldRequirement)int.Parse(m.Groups[1].Value) : BiomeWorldRequirement.None;
 		}
 
 		// ── The world gate (decision 41) ─────────────────────────────
@@ -188,7 +195,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeArtAuthoring.Fingerprint(reopened), Is.EqualTo(open.SpecFingerprint));
 			string authoring = Code(WorldFolder + "/ProceduralArt/BiomeArtAuthoring.cs");
 			Assert.That(authoring, Does.Contain("to.worldGate = from.worldGate;"));
-			Assert.That(authoring, Does.Contain("|| !rule.worldGate.IsOpen)"), "a gated rule is never taken for a pre-fingerprint one");
+			Assert.That(authoring, Does.Contain("|| !rule.worldGate.IsOpen ||"), "a gated rule is never taken for a pre-fingerprint one");
 		}
 
 		/// <summary>Defaults identical for all 83 biomes: no spec rule has a gate, no spec layer or cliff an air band, no asset either.</summary>
@@ -208,8 +215,8 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(entry.Details.All(d => d == null || d.AirBand == BiomeAtmosphereRequirement.None), Is.True, entry.Biome);
 				Assert.That(entry.Cliffs.Length, Is.LessThanOrEqualTo(1), entry.Biome);
 				Assert.That(entry.Cliffs.All(c => c.AirBand == BiomeAtmosphereRequirement.None), Is.True, entry.Biome);
-				// Crater's file clears its old volcanic ash (decision 39); no other file names an emission.
-				Assert.That(entry.Emission.HasValue, Is.EqualTo(entry.Biome == "Crater"), entry.Biome);
+				// Crater's file clears its old volcanic ash (decision 39); the geyser basin's writes its Steam (I2q, decision 47); no other names one.
+				Assert.That(entry.Emission.HasValue, Is.EqualTo(entry.Biome == "Crater" || entry.Biome == "Geyser Basin"), entry.Biome);
 			}
 			Assert.That(rules, Is.GreaterThan(83 * 4));
 			Assert.That(BiomeArtSpec.For("Crater").Emission, Is.EqualTo(((string)null, 0f)));
@@ -221,7 +228,12 @@ namespace FishMMO.UnitTests.WorldDesign
 				// Nothing serialised yet: Unity writes the new fields on the next save, at their defaults.
 				Assert.That(Regex.IsMatch(pair.Value, @"worldGate:\s*\n\s*air: [1-9]"), Is.False, pair.Key);
 				Assert.That(Regex.IsMatch(pair.Value, @"airBand: [1-9]"), Is.False, pair.Key);
-				Assert.That(Regex.IsMatch(pair.Value, @"NeedsBreathableAir: 1"), Is.False, pair.Key);
+				// Author biome art has run since I2o (2026-10-25): the flag is on the lived-in kinds the spec flags and on no other.
+				foreach (Match flagged in Regex.Matches(pair.Value, @"- Kind: (\d+)\s*\n\s*Weight: [^\n]*\n\s*NeedsBreathableAir: 1"))
+				{
+					var kind = (POIType)int.Parse(flagged.Groups[1].Value);
+					Assert.That(BiomeSiteAir.NeedsAirByDefault(kind) || BiomeArtSpec.For(pair.Key).SiteKinds().Any(k => k.Kind == kind && k.NeedsBreathableAir), Is.True, $"{pair.Key}: {kind}");
+				}
 			}
 		}
 
@@ -255,8 +267,8 @@ namespace FishMMO.UnitTests.WorldDesign
 			// The palette's wiring: main stand-in, banded details and cliffs left out, both scene palettes told the world's air.
 			string palette = Code(WorldFolder + "/Terrain/SceneTerrainPalette.cs");
 			Assert.That(palette, Does.Contain("int standIn = mainSource != null && !mainSource.AdmitsAir(worldAir) ? AirStandIn(biome, worldAir) : -1;"));
-			Assert.That(palette, Does.Contain("if (d == standIn || detail != null && !detail.AdmitsAir(worldAir))"));
-			Assert.That(palette, Does.Contain("if (cliff != null && !cliff.AdmitsAir(worldAir))"));
+			Assert.That(palette, Does.Contain("if (d == standIn || detail != null && (!detail.AdmitsAir(worldAir) || !BiomeUndergrounds.OnSurface(detail.underground)))"));
+			Assert.That(palette, Does.Contain("if (cliff != null && (!cliff.AdmitsAir(worldAir) || !BiomeUndergrounds.OnSurface(cliff.underground)))"));
 			Assert.That(palette, Does.Contain("Source = mainSource, Role = PaletteRole.Main, Slot = mainSlot"));
 			Assert.That(palette, Does.Contain("!PaintsGround(biome, wayGround, standIn, worldAir)"), "a left-out ground's own ways spend no channel");
 			string generator = Code(WorldFolder + "/SceneGenerator.cs");
@@ -298,10 +310,42 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void BreathableAir_IsEarthlikeOrThick_AndTheGateZeroesOnlyFlaggedKindsThere()
 		{
-			Assert.That(BiomeAir.IsBreathable(AtmosphereKind.None), Is.False);
-			Assert.That(BiomeAir.IsBreathable(AtmosphereKind.Thin), Is.False);
-			Assert.That(BiomeAir.IsBreathable(AtmosphereKind.Standard), Is.True);
-			Assert.That(BiomeAir.IsBreathable(AtmosphereKind.Thick), Is.True);
+			Assert.That(BiomeAir.IsDenseEnough(AtmosphereKind.None), Is.False);
+			Assert.That(BiomeAir.IsDenseEnough(AtmosphereKind.Thin), Is.False);
+			Assert.That(BiomeAir.IsDenseEnough(AtmosphereKind.Standard), Is.True);
+			Assert.That(BiomeAir.IsDenseEnough(AtmosphereKind.Thick), Is.True);
+			// Decision 62 (2026-10-25, I2o-b): the air's MAKE-UP as well as its density.
+			Assert.That(BiomeAir.IsBreathable(BiomeWorldConditions.Earthlike), Is.True);
+			Assert.That(BiomeAir.IsBreathable(World(AtmosphereKind.Thick)), Is.True, "thick water-cloud air");
+			Assert.That(BiomeAir.IsBreathable(World(AtmosphereKind.Thin)), Is.False);
+			BiomeWorldConditions titan = World(AtmosphereKind.Thick, -5.8f);
+			titan.Condensate = Condensate.Methane;
+			titan.Water = 0.3f;
+			Assert.That(titan.Meets(BiomeWorldRequirement.MethaneCycle), Is.True);
+			Assert.That(BiomeAir.IsBreathable(titan), Is.False, "Titan");
+			BiomeWorldConditions nitrogen = World(AtmosphereKind.Standard, -6.5f);
+			nitrogen.Condensate = Condensate.Nitrogen;
+			Assert.That(BiomeAir.IsBreathable(nitrogen), Is.False, "nitrogen sky");
+			BiomeWorldConditions venus = World(AtmosphereKind.Thick, 4.8f);
+			venus.Condensate = Condensate.SulphuricAcid;
+			venus.Water = 0f;
+			Assert.That(BiomeAir.IsBreathable(venus), Is.False, "Venus");
+			BiomeWorldConditions molten = World(AtmosphereKind.Thick, (float)ClimateModel.ToScaleUnclamped(SurfaceLiquids.SolidusKelvin + 200.0));
+			molten.Water = 0f;
+			Assert.That(molten.Meets(BiomeWorldRequirement.MoltenRock), Is.True);
+			Assert.That(BiomeAir.IsBreathable(molten), Is.False, "magma ocean");
+			Assert.That(BiomeAir.UnbreathableWorlds, Is.EqualTo(BiomeWorldRequirement.MethaneCycle | BiomeWorldRequirement.CryogenicAir
+				| BiomeWorldRequirement.FrozenNitrogen | BiomeWorldRequirement.RunawayGreenhouse | BiomeWorldRequirement.MoltenRock));
+			Assert.That(BiomeAir.NeverBreathable(BiomeAtmosphereRequirement.Any, BiomeWorldRequirement.MoltenRock), Is.True);
+			Assert.That(BiomeAir.NeverBreathable(BiomeAtmosphereRequirement.Thick, BiomeWorldRequirement.RunawayGreenhouse), Is.True);
+			Assert.That(BiomeAir.NeverBreathable(BiomeAtmosphereRequirement.Any, BiomeWorldRequirement.SurfaceWater), Is.False);
+			Assert.That(BiomeAir.NeverBreathable(BiomeAtmosphereRequirement.Airless | BiomeAtmosphereRequirement.Thin, BiomeWorldRequirement.None), Is.True);
+			// Decision 68: liquid water on site kinds, off by default, marks unchanged without it.
+			var lead = new BiomeSiteKind(POIType.FishingCamp, 1f, true, true);
+			Assert.That(lead.ToString(), Is.EqualTo("FishingCamp×1×air×water"));
+			Assert.That(BiomeSiteAir.WeightOn(lead, true, false), Is.EqualTo(0f));
+			Assert.That(BiomeSiteAir.WeightOn(lead, true, true), Is.EqualTo(1f));
+			Assert.That(BiomeSiteAir.WeightOn(new BiomeSiteKind(POIType.Peak, 1f), false, false), Is.EqualTo(1f));
 			Assert.That(BiomeAir.MaskOf(AtmosphereKind.Standard), Is.EqualTo(BiomeAtmosphereRequirement.Standard));
 			Assert.That(BiomeAir.MaskOf(AtmosphereKind.None), Is.EqualTo(BiomeAtmosphereRequirement.Airless));
 
@@ -318,8 +362,10 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(new BiomeSiteKind(POIType.Village, 1.2f).ToString(), Is.EqualTo("Village×1.2"));
 
 			string stage = Code(WorldFolder + "/PointsOfInterest/PointOfInterestStage.cs");
-			Assert.That(stage, Does.Contain("bool breathable = BiomeAir.IsBreathable(BiomeWorldConditions.For(system, Request.Body).Atmosphere);"));
-			Assert.That(Code(WorldFolder + "/Terrain/BiomeTemplateArt.cs"), Does.Contain("kinds[entry.Kind] = BiomeSiteAir.WeightOn(entry, breathable);"));
+			Assert.That(stage, Does.Contain("BiomeWorldConditions world = BiomeWorldConditions.For(system, Request.Body);"));
+			Assert.That(stage, Does.Contain("bool breathable = BiomeAir.IsBreathable(in world), liquidWater = world.HasLiquidWater;"));
+			Assert.That(Code(WorldFolder + "/Terrain/BiomeTemplateArt.cs"), Does.Contain("kinds[entry.Kind] = BiomeSiteAir.WeightOn(entry, breathable, liquidWater);"));
+			Assert.That(Code(WorldFolder + "/Terrain/CaveInteriorArt.cs"), Does.Contain("public static bool Breathable(SceneGenerationRequest request) => BiomeAir.IsBreathable(World(request));"));
 		}
 
 		/// <summary>
@@ -399,7 +445,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				foreach (Match m in Regex.Matches(File.ReadAllText(pois), @"\n    Kind: (\d+)"))
 				{
 					var kind = (POIType)Enum.Parse(typeof(POIType), kinds[int.Parse(m.Groups[1].Value)]);
-					if (!BiomeAir.IsBreathable(air) && BiomeSiteAir.NeedsAirByDefault(kind))
+					// Every scene's body today is a water-cloud world (Moron Earth-like; Belron thin; Galris, Ithaewyn airless), so the
+					// air's make-up (decision 62) changes no scene: the density alone decides here.
+					if (!BiomeAir.IsDenseEnough(air) && BiomeSiteAir.NeedsAirByDefault(kind))
 					{
 						gone.Add(kind.ToString());
 					}
@@ -447,6 +495,14 @@ namespace FishMMO.UnitTests.WorldDesign
 			var thinOnly = yaml.Where(p => BiomeAir.OnlyThinAir(AtmosphereOf(p.Value))).Select(p => p.Key).OrderBy(n => n, StringComparer.Ordinal).ToList();
 			Assert.That(thinOnly, Is.EqualTo(new[] { "Cryovolcanic Plain", "Dust Sea", "Ice Geyser Field", "Impact Basin", "Lava Tube", "Nitrogen Ice Field",
 				"Radiation Plain", "Regolith Plain", "Rille" }));
+			/* Decisions 62 and 65(h) (2026-10-25, I2o-b): the Glow-only rule also takes every template whose Requires names an
+			 * unbreathable world (BiomeAir.NeverBreathable): five more than the nine (Nitrogen Ice Field was already thin-only). */
+			var neverBreathable = yaml.Where(p => BiomeAir.NeverBreathable(AtmosphereOf(p.Value), RequiresOf(p.Value))).Select(p => p.Key)
+				.OrderBy(n => n, StringComparer.Ordinal).ToList();
+			Assert.That(neverBreathable, Is.EqualTo(new[] { "Cryovolcanic Plain", "Dust Sea", "Ice Geyser Field", "Impact Basin", "Lava Tube",
+				"Methane Lake", "Molten Surface", "Nitrogen Ice Field", "Radiation Plain", "Regolith Plain", "Rille", "Runaway Greenhouse Plain",
+				"Sulphuric Cloud Deck", "Tholin Plain" }));
+			thinOnly = neverBreathable;
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
 				Assert.That(entry.WayLights(false).Select(l => l.ToString()), Is.EqualTo(entry.WayLights().Select(l => l.ToString())), entry.Biome);
@@ -457,10 +513,20 @@ namespace FishMMO.UnitTests.WorldDesign
 					Assert.That(entry.CaveLights(true).All(l => BiomeGlowLights.Glows(l.Light)), Is.True, entry.Biome);
 				}
 			}
+			/* Decision 57 (2026-10-25, I2n): of the nine, the one other biomes' caves are the inside of (the Lava Tube) keeps its FIRE
+			 * cave lights (the dressing lights a linked cave with Glow where the world's air will not burn them); its way lights stay
+			 * Glow. The other eight are Glow for both, as I2o authored them. */
+			var glowCaves = thinOnly.Where(n => BiomeCaveInteriors.GlowCaveLights(true, BiomeArtSpec.For(n).CaveInteriorRocks().Count > 0)).ToList();
+			Assert.That(glowCaves, Is.EqualTo(new[] { "Cryovolcanic Plain", "Dust Sea", "Ice Geyser Field", "Impact Basin", "Methane Lake",
+				"Molten Surface", "Nitrogen Ice Field", "Radiation Plain", "Regolith Plain", "Rille", "Runaway Greenhouse Plain", "Sulphuric Cloud Deck",
+				"Tholin Plain" }));
+			Assert.That(BiomeCaveInteriors.GlowCaveLights(false, true), Is.False);
+			Assert.That(BiomeCaveInteriors.GlowCaveLights(false, false), Is.False);
 			string authoring = Code(WorldFolder + "/ProceduralArt/BiomeArtAuthoring.cs");
-			Assert.That(authoring, Does.Contain("bool glowOnly = BiomeAir.OnlyThinAir(biome.Atmosphere);"));
+			Assert.That(authoring, Does.Contain("bool glowOnly = BiomeAir.NeverBreathable(biome.Atmosphere, biome.Requires);"));
 			Assert.That(authoring, Does.Contain("biome.WayLights, entry.WayLights(glowOnly)"));
-			Assert.That(authoring, Does.Contain("biome.CaveLights, entry.CaveLights(glowOnly)"));
+			Assert.That(authoring, Does.Contain("bool glowCaves = BiomeCaveInteriors.GlowCaveLights(glowOnly, entry.CaveInteriorRocks().Count > 0);"));
+			Assert.That(authoring, Does.Contain("biome.CaveLights, entry.CaveLights(glowCaves)"));
 		}
 
 		// ── Blades: sway by the world's air, rigid blades (decision 41) ─

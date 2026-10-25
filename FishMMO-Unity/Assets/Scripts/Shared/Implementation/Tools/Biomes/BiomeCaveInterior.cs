@@ -119,9 +119,43 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
+	/// Where a ground layer is laid (<see cref="TerrainTextureLayer.underground"/>, 2026-10-25, phase I2n, decision 57: "an
+	/// UNDERGROUND band on ground layers, one template carries surface and interior palettes"): on the open ground the terrain
+	/// is painted with, on the floors and walls of the caves the biome dresses inside, or both.
+	/// </summary>
+	/// <remarks>Append only; the ordinal is stored in template assets. Both (0) is every layer's as it was before the band.</remarks>
+	public enum BiomeUnderground : byte
+	{
+		/// <summary>On the open ground and inside the caves alike (every layer before 2026-10-25).</summary>
+		Both = 0,
+		/// <summary>Only on the open ground: never a cave's floor or wall.</summary>
+		Surface = 1,
+		/// <summary>
+		/// Only inside the biome's caves: never painted on the terrain (a detail or cliff layer; a main layer always paints, a biome
+		/// is never left without its ground). Inside, a cave's floors take such a layer before any other of its kind, and a linked
+		/// interior's Interior cliff is an ice shell's inner wall.
+		/// </summary>
+		Interior = 2,
+	}
+
+	/// <summary>The underground band's rules (pure).</summary>
+	public static class BiomeUndergrounds
+	{
+		/// <summary>True when a layer of the band is painted on the open ground.</summary>
+		public static bool OnSurface(BiomeUnderground band) => band != BiomeUnderground.Interior;
+
+		/// <summary>True when a layer of the band may floor (or wall) a cave.</summary>
+		public static bool InCaves(BiomeUnderground band) => band != BiomeUnderground.Surface;
+
+		/// <summary>How a cave's floor ranks a layer of the band among others of its kind: lower first (an Interior layer, then Both), −1 never.</summary>
+		public static int CaveRank(BiomeUnderground band) => band == BiomeUnderground.Interior ? 0 : band == BiomeUnderground.Both ? 1 : -1;
+	}
+
+	/// <summary>
 	/// The zones of an ice cave's cold trap (decision 51, 2026-10-18): the COLD zone near a mouth and in the cold sink below its
-	/// sill holds the ice, a THAW ring beyond it the ice's leavings, and past that the cave is bare dripping ROCK. As a ground
-	/// layer's band (<see cref="TerrainTextureLayer.caveZones"/>): the zones the layer floors.
+	/// sill holds the ice, a THAW ring beyond it the ice's leavings, and past that the cave is bare dripping ROCK. Built into the
+	/// cave habitat and the ice dressing (CaveHabitat, CaveIce, 2026-10-21); as a ground layer band (the zones a layer floors) it is
+	/// a hook for the Ice Cave round: no layer carries one yet, as the cave rock's four floor grounds are one set a cave.
 	/// </summary>
 	[Flags]
 	public enum BiomeCaveZone : byte
@@ -187,6 +221,103 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>The forms a mine never links (a mine is its host's: dug, timbered and lit by the people of the land over it).</summary>
 		public static bool Links(BiomeCaveForm form) => form != BiomeCaveForm.Mine;
+
+		/// <summary>The cave biomes' asset names: the interiors the authoring links (Cave, Ice Cave, Lava Tube) and the two whose rounds will (Volcanic Cave, Swamp Cave).</summary>
+		public const string Cave = "Cave", IceCave = "Ice Cave", LavaTube = "Lava Tube", VolcanicCave = "Volcanic Cave", SwampCave = "Swamp Cave";
+
+		/// <summary>
+		/// The interior every surface biome's caves of a form are linked to by default (decisions 37, 51 and 57, 2026-10-18/19): a
+		/// natural cave, a grotto and a sea cave the Cave (where the shell is soluble), an ice cave the Ice Cave (in ice or the rock
+		/// ice caves form in), a lava tube the Lava Tube (in basalt); a mine none. Null for none.
+		/// </summary>
+		/// <remarks>
+		/// Hooks for the rounds still to come: the Volcanic Cave round may re-link an active volcanic host's lava tubes (its file's
+		/// CaveInterior(LavaTube, VolcanicCave)), the Swamp Cave round a wetland host's caves; neither is linked by default.
+		/// </remarks>
+		public static string DefaultInterior(BiomeCaveForm form)
+		{
+			switch (form)
+			{
+				case BiomeCaveForm.Cave:
+				case BiomeCaveForm.Grotto:
+				case BiomeCaveForm.SeaCave:
+					return Cave;
+				case BiomeCaveForm.IceCave:
+					return IceCave;
+				case BiomeCaveForm.LavaTube:
+					return LavaTube;
+				default:
+					return null;
+			}
+		}
+
+		/// <summary>
+		/// The links a template named <paramref name="biomeName"/> is authored with (<see cref="DefaultInterior"/> for every form it
+		/// has one for, in the forms' order), leaving out a form whose interior is the template itself (the Cave's own caves are
+		/// already the Cave's; the Lava Tube's tubes its own). A fresh list each call.
+		/// </summary>
+		public static List<BiomeCaveInterior> DefaultLinks(string biomeName)
+		{
+			var list = new List<BiomeCaveInterior>();
+			foreach (BiomeCaveForm form in (BiomeCaveForm[])Enum.GetValues(typeof(BiomeCaveForm)))
+			{
+				string interior = DefaultInterior(form);
+				if (interior != null && !string.Equals(interior, biomeName, StringComparison.Ordinal))
+				{
+					list.Add(new BiomeCaveInterior(form, interior));
+				}
+			}
+			return list;
+		}
+
+		/// <summary>
+		/// The shell rocks a cave biome is the inside of (<see cref="BiomeTemplate.CaveInteriorRocks"/>) by default: the Cave the
+		/// soluble rocks, the Ice Cave ice and the rock ice caves' rocks, the Lava Tube basalt (decision 57, whatever the interior's
+		/// own Atmosphere); every other biome none (it is nobody's interior until its round says so). A fresh list each call.
+		/// </summary>
+		public static List<string> DefaultInteriorRocks(string biomeName)
+		{
+			switch (biomeName)
+			{
+				case Cave: return new List<string>(SolubleRocks);
+				case IceCave: return new List<string>(IceCaveRocks);
+				case LavaTube: return new List<string> { "Basalt" };
+				default: return new List<string>();
+			}
+		}
+
+		/// <summary>
+		/// Whether a link to an interior holds for a cave whose shell is <paramref name="shell"/> (the rock it is cut in, resolved):
+		/// the interior forms in that rock (<see cref="Forms"/>), or names no rocks at all (a link set by hand to a template whose
+		/// rocks were never given holds in every rock). A mine's never does (<see cref="Links"/>).
+		/// </summary>
+		public static bool Holds(BiomeCaveForm form, IReadOnlyList<string> interiorRocks, string shell)
+		{
+			if (!Links(form))
+			{
+				return false;
+			}
+			return interiorRocks == null || interiorRocks.Count == 0 || Forms(interiorRocks, shell);
+		}
+
+		/// <summary>
+		/// The interior's habitat bits a cave-life spot reads in a linked cave (2026-10-25): the interior's own, but the BARREN bit the
+		/// host land's (the land over a cave is its air and water; the Lava Tube's Barren speaks of its open lava fields, decision 57:
+		/// the link ignores the interior's Atmosphere). <paramref name="host"/> and <paramref name="interior"/> are habitat masks;
+		/// <paramref name="barren"/> the barren bit.
+		/// </summary>
+		public static int LinkedHabitat(int host, int interior, int barren) => interior & ~barren | host & barren;
+
+		/// <summary>
+		/// Whether a template's cave lights are authored as the cold Glow kinds (decision 41: a biome found only under thin air or
+		/// none; decision 62: or only on a methane, cryogenic, frozen-nitrogen, runaway-greenhouse or molten-rock world, together
+		/// BiomeAir.NeverBreathable), with decision 57's exception: a template other biomes link their caves to keeps its fire lights,
+		/// as the cave dressing turns them to Glow on a world whose air will not burn them (<see cref="ForAir"/>).
+		/// </summary>
+		public static bool GlowCaveLights(bool neverBreathable, bool isInterior) => neverBreathable && !isInterior;
+
+		/// <summary>True when a template of this name is a cave interior by default (<see cref="DefaultInteriorRocks"/> names rocks).</summary>
+		public static bool IsDefaultInterior(string biomeName) => biomeName == Cave || biomeName == IceCave || biomeName == LavaTube;
 
 		// ── Formations ────────────────────────────────────────────────
 

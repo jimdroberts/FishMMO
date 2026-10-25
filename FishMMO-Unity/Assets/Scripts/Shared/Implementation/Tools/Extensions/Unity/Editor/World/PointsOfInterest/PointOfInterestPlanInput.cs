@@ -20,6 +20,11 @@ namespace FishMMO.Shared.WorldDesign
 		/// (<see cref="PointOfInterestKindRule.DefaultBiomeWeight"/>), as on ground with no biome.
 		/// </summary>
 		public IReadOnlyDictionary<POIType, float> Kinds;
+		/// <summary>
+		/// How deep this biome's underwater sites stand under the sea, metres (its template's UnderwaterSiteDepth, 2026-10-25, phase
+		/// I2m): (0, 0), the default, each kind's own band (<see cref="PointOfInterestKindRule.MinDepth"/> … MaxDepth).
+		/// </summary>
+		public Vector2 UnderwaterDepth;
 
 		public PointOfInterestBiome(string name, int id, string displayName = null, IReadOnlyDictionary<POIType, float> kinds = null)
 		{

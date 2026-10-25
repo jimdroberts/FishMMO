@@ -172,6 +172,11 @@ namespace FishMMO.Shared.NameGeneration
 			[POIType.SunkenShip] = new[] { "Sunken Ship", "Wreck", "Hulk", "Drowned Galleon", "Sunken Hull", "Lost Ship" },
 			[POIType.SunkenRuins] = new[] { "Sunken Ruins", "Drowned Ruins", "Sea Ruins", "Drowned Halls", "Drowned Walls", "Tide Ruins" },
 			[POIType.SunkenCity] = new[] { "Sunken City", "Drowned City", "Lost City", "Deep City", "Sea-city", "Drowned Halls" },
+			[POIType.SunkenShrine] = new[] { "Drowned Shrine", "Sea Altar", "Tide Shrine", "Deep Fane", "Drowned Chapel", "Sunken Altar" },
+			[POIType.SeaMonsterDen] = new[] { "Deep Lair", "Sea Den", "Kraken Hole", "Drowned Lair", "Abyss Lurk", "Wyrm Hollow" },
+			[POIType.SeaCrystalFormation] = new[] { "Sea Crystals", "Drowned Geode", "Brine Spires", "Deep Prisms", "Tide Crystals", "Sea Shardfield" },
+			[POIType.SunkenMonument] = new[] { "Sunken Monument", "Drowned Memorial", "Sea Pillar", "Deep Cenotaph", "Drowned Colossus", "Tide Cairn" },
+			[POIType.SunkenStatue] = new[] { "Sunken Statue", "Drowned Idol", "Sea Effigy", "Deep Likeness", "Drowned Figure", "Tide Colossus" },
 
 			[POIType.DungeonEntrance] = new[] { "Entrance", "Gate", "Mouth", "Descent", "Door", "Stair", "Delve" },
 			[POIType.BossLair] = new[] { "Lair", "Throne", "Domain", "Sanctum", "Den", "Seat", "Roost" },
@@ -339,6 +344,7 @@ namespace FishMMO.Shared.NameGeneration
 		private static readonly POIType[] RaceWorks = { POIType.Tower, POIType.Mine, POIType.Quarry };
 		private static readonly POIType[] Coves = { POIType.SmugglersCove, POIType.PirateCove };
 		private static readonly POIType[] Wrecks = { POIType.Wreck, POIType.SunkenShip };
+		private static readonly POIType[] SeaFloorSites = { POIType.SunkenShrine, POIType.SeaMonsterDen, POIType.SeaCrystalFormation, POIType.SunkenMonument, POIType.SunkenStatue };
 		private static readonly POIType[] Resources = { POIType.OreVein, POIType.CrystalFormation, POIType.HerbGrove };
 
 		private static PlaceNameTemplate P(string pattern, int weight, params POIType[] kinds)
@@ -517,6 +523,10 @@ namespace FishMMO.Shared.NameGeneration
 			P("Drowned {City}", 20, POIType.SunkenCity),
 			P("Sunken {City}", 15, POIType.SunkenCity),
 			P("{Type} of {RacePlural}", 5, POIType.SunkenCity),
+			// The sea floor's own sites (2026-10-25).
+			P("{Type} of {Root}", 15, SeaFloorSites),
+			P("{Root} {Type}", 15, SeaFloorSites),
+			P("The {Adjective} {Type}", 10, SeaFloorSites),
 
 			// Encounters and resources.
 			P("{Dungeon}", 40, POIType.DungeonEntrance),

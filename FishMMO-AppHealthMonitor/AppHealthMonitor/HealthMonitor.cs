@@ -53,6 +53,7 @@ namespace AppHealthMonitor
 		/// Reused for every launch to avoid repeated allocations.
 		/// </summary>
 		private readonly ProcessStartInfo cachedStartInfo;
+        private readonly AppConfig launchConfig;
 
 		/// <summary>
 		/// Whether this monitor is configured for process-only monitoring without port checks.
@@ -275,7 +276,8 @@ namespace AppHealthMonitor
 			portCheckTasks = new Task<bool>[this.healthCheckers.Count];
 			isProcessOnlyMonitoring = this.healthCheckers.Count == 0;
 
-			cachedStartInfo = config.CreateStartInfo(headless);
+			launchConfig = config;
+            cachedStartInfo = config.CreateStartInfo(headless);
 		}
 
 		/// <summary>
@@ -1058,7 +1060,7 @@ namespace AppHealthMonitor
 			Log.Info(logSource, $"Launching application '{resolvedExePath}' with arguments: '{cachedStartInfo.Arguments}' (Headless: {cachedStartInfo.CreateNoWindow})...");
 			try
 			{
-				var launched = Process.Start(cachedStartInfo);
+				var launched = await TerminalProcessLauncher.StartAsync(launchConfig, cachedStartInfo, cancellationToken);
 
 				if (launched != null)
 				{
@@ -1072,6 +1074,11 @@ namespace AppHealthMonitor
 					Log.Warning(logSource, $"Warning: Process.Start returned null for '{resolvedExePath}'. This might indicate a problem.");
 				}
 			}
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                Log.Info(logSource, "Application launch canceled during shutdown.");
+                ClearMonitoredProcess();
+            }
 			catch (Win32Exception ex)
 			{
 				Log.Critical(logSource, $"Error launching application '{resolvedExePath}'. Check if the path is correct and the executable exists. Error: {ex.Message}", ex);

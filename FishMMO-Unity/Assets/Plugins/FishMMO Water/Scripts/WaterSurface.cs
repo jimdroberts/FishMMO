@@ -28,7 +28,7 @@ namespace FishMMO.Water
 	[ExecuteAlways]
 	[AddComponentMenu("FishMMO/Water/Water Surface")]
 	[RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
-	public sealed class WaterSurface : MonoBehaviour, SurfaceWater.IWaveSource
+	public sealed class WaterSurface : MonoBehaviour, SurfaceWater.IWaveSource, SurfaceWater.IDaylightSource
 	{
 		// ── Shader globals ────────────────────────────────────────────
 		private static readonly int WaveId = Shader.PropertyToID("_FishWaterWave");
@@ -174,6 +174,10 @@ namespace FishMMO.Water
 		public Color UnderwaterTint = new Color(0.05f, 0.28f, 0.36f);
 		[Tooltip("Roughly how far a diver can see, in metres.")]
 		[Range(1f, 200f)] public float UnderwaterVisibility = 22f;
+		[Tooltip("How fast the daylight dims on its way down to the sea floor, per metre (2026-10-25: exp(-this x depth) of the sun and " +
+			"the sky on the ground, plants and stone under the sea, their own glow untouched). Written by the scene cut from the sea " +
+			"looks of the scene's sea-floor biomes (an abyss is lightless at 200 m); 0, every other scene's, leaves the light as it was.")]
+		[Min(0f)] public float FloorDaylightExtinction;
 		[Tooltip("Shafts of sunlight through the water, focused by the waves overhead and cut by the " +
 			"shadows of whatever stands in the sun. The dearest part of the underwater pass — sixteen " +
 			"steps a pixel — and 0 skips it.")]
@@ -742,6 +746,8 @@ namespace FishMMO.Water
 		float SurfaceWater.ISource.WaveHeight => SignificantWaveHeight;
 
 		bool SurfaceWater.ISource.IsUnder(Vector3 point) => isActiveAndEnabled && IsUnderSurface(point);
+
+		float SurfaceWater.IDaylightSource.DaylightExtinction => isActiveAndEnabled && Liquid == WaterLiquid.Water ? FloorDaylightExtinction : 0f;
 
 		float SurfaceWater.IWaveSource.SurfaceAt(float x, float z) => isActiveAndEnabled ? HeightAt(new Vector3(x, SeaLevel, z)) : SeaLevel;
 

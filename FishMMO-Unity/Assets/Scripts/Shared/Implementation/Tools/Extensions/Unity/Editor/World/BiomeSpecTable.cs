@@ -320,6 +320,10 @@ namespace FishMMO.Shared.WorldDesign
 			// Ocean floor. The temperature is the water's at the surface: the abyss under cold seas is the sediment-blanketed plain, canyons cut the cold wet slopes, seamount chains stand in the warm subtropical gyres.
 			new Entry("Deep Ocean", 0, 0f, 0.2f, -0.3f, 1f, -1f, 1f, 1f, A.Living, true, R.None),
 			new Entry("Abyssal Plain", 0, 0f, 0.2f, -1f, 0.1f, -1f, 1f, 1f, A.Living, true, R.None),
+			// The hadal trenches (2026-10-25, phase I2m, decision 36 (f)): the deepest sea floor, below about 6 000 m (the tier-0 band's
+			// 0.14), at any surface temperature, weighted over the plain and the deep ocean that share its readings there. A scene whose
+			// floor stays above that depth (every coast and shelf scene) chooses exactly as before.
+			new Entry("Abyss", 0, 0f, 0.14f, -1f, 1f, -1f, 1f, 1.2f, A.Living, true, R.None),
 			new Entry("Ocean", 1, 0.2f, 0.35f, -1f, 1f, -1f, 1f, 1f, A.Living, true, R.None),
 			new Entry("Underwater Canyon", 1, 0.2f, 0.35f, -1f, 0.3f, 0.5f, 1f, 0.8f, A.Living, true, R.None),
 			new Entry("Seamount", 1, 0.2f, 0.35f, 0.3f, 1f, -1f, 0.6f, 0.8f, A.Living, true, R.None),

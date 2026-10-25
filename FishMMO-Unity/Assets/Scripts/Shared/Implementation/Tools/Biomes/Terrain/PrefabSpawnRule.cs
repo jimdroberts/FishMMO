@@ -266,6 +266,15 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>How fully the rule grows at a heat, by its band: 1 without one (or for a NaN reading, no heat known).</summary>
 		public float HeatWeight(float heat) => useHeatBand ? BiomeHeatBand.Weight(heatRange, heatFalloff, heat) : 1f;
 
+		/// <remarks>
+		/// 2026-10-25, phase I2g-b (decision 55): grow only on (or, turned round, only off) one part of the biome's sculpted landforms
+		/// (BiomeLandformBand: a crater's rim, a basin's mare, a cell field's junctions), read from the sites the cut stored. Off (the
+		/// default) grows the rule as before.
+		/// </remarks>
+		[Header("Landform Zone Band")]
+		[Tooltip("Grow only on (or off) one part of the biome's sculpted landforms (a crater's rays, a basin's mare, a dune's lee). Off = everywhere, as before.")]
+		public BiomeLandformBand landformBand;
+
 		[SerializeField, HideInInspector]
 		private string specFingerprint = string.Empty;
 
