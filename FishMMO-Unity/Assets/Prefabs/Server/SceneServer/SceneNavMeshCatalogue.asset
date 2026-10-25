@@ -38,22 +38,6 @@ MonoBehaviour:
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Moron 3
-    Data: {fileID: -4405443638298100871, guid: 517e0f903b1298e60bc29ac228329c07, type: 2}
-    Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 1}
-  - SceneName: StartScene A
-    Data: {fileID: 23800000, guid: e9b8b2a3c19045247a7b70f2b23b0ca1, type: 2}
-    Position: {x: -500, y: 0.21, z: -500}
-    Rotation: {x: 0, y: 0, z: 0, w: 1}
-  - SceneName: StartScene B
-    Data: {fileID: 23800000, guid: f8dd271abfab0f44287f337e86b02aa5, type: 2}
-    Position: {x: -500, y: 0, z: -500}
-    Rotation: {x: 0, y: 0, z: 0, w: 1}
-  - SceneName: Test Dungeon
-    Data: {fileID: 23800000, guid: bccc2ce460150eb43bb0d7f0db28b05b, type: 2}
-    Position: {x: -500, y: 0, z: -500}
-    Rotation: {x: 0, y: 0, z: 0, w: 1}
-  - SceneName: Tutorial Spawners
-    Data: {fileID: 23800000, guid: 9bb793da43a030e459af61d22643af10, type: 2}
+    Data: {fileID: 478686031373700286, guid: 517e0f903b1298e60bc29ac228329c07, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}

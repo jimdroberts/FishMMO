@@ -21,7 +21,7 @@
       <BuildConfiguration>Release</BuildConfiguration>
     </PropertyGroup>
     <ItemGroup>
-      <SharedUtilityDll Include="bin\$(BuildConfiguration)\**\FishMMO-SharedUtility.dll" />
+      <SharedUtilityDll Include="$(TargetPath)" />
     </ItemGroup>
     <Copy SourceFiles="@(SharedUtilityDll)" DestinationFolder="$(TargetDir)" />
   </Target>

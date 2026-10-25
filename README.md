@@ -185,8 +185,8 @@ dotnet run --project FishMMO-Installer
 ```
 
 Or run the compiled binary directly:
-- **Windows:** `FishMMO-Installer\bin\Debug\net8.0\FishMMO-Installer.exe`
-- **Linux:** `./FishMMO-Installer/bin/Debug/net8.0/FishMMO-Installer`
+- **Windows:** `Builds\FishMMO-Installer\Debug\net8.0\FishMMO-Installer.exe`
+- **Linux:** `./Builds/FishMMO-Installer/Debug/net8.0/FishMMO-Installer`
 
 > **Windows:** Run from an elevated PowerShell (Administrator) for system-level installs.
 > **Linux:** You will be prompted for `sudo` when needed.
@@ -828,7 +828,7 @@ Write these values from the Unity Editor via **FishMMO Dashboard → Game Settin
 
 Each server type reads a `.cfg` file from its working directory. Templates are in `FishMMO-Setup/Development/` and `FishMMO-Setup/Production/`.
 
-> Only the templates under `FishMMO-Setup/` are tracked. The `.cfg` files a server actually reads are per-deployment copies and are gitignored, so edits to them never reach source control — change the template, not the copy. In the Editor, `Constants.GetWorkingDirectory()` resolves to the repository root, so running a server from Play Mode drops `LoginServer.cfg`, `WorldServer.cfg`, and `SceneServer.cfg` there; the root `.gitignore` excludes those three paths by name. Runtime `appsettings.json` for the web servers is copied to `$(OutDir)` / `$(PublishDir)`, both under `bin/`, which the general `[Bb]in/` rule already covers.
+> Only the templates under `FishMMO-Setup/` are tracked. The `.cfg` files a server actually reads are per-deployment copies and are gitignored, so edits to them never reach source control — change the template, not the copy. In the Editor, `Constants.GetWorkingDirectory()` resolves to the repository root, so running a server from Play Mode drops `LoginServer.cfg`, `WorldServer.cfg`, and `SceneServer.cfg` there; the root `.gitignore` excludes those three paths by name. Runtime `appsettings.json` for the web servers is copied to `$(OutDir)` / `$(PublishDir)`, both under `Builds/<project>/`, which the root `/Builds/` ignore rule covers.
 
 #### LoginServer.cfg
 
@@ -1506,7 +1506,7 @@ All web servers load `appsettings.json` and `logging.json` from `FishMMO-Setup/`
 FishMMO-Installer --component systemd-services
 ```
 
-This configures automatic startup, crash recovery, environment variables (`FISHMMO_ENVIRONMENT=Production`, `FISHMMO_DB_PASSWORD`, etc.), and log file capture. It requires each web server to have been published first — the installer looks for `FishMMO-WebServers/<project>/bin/Release/net8.0/publish` and skips any server it cannot find there.
+This configures automatic startup, crash recovery, environment variables (`FISHMMO_ENVIRONMENT=Production`, `FISHMMO_DB_PASSWORD`, etc.), and log file capture. It requires each web server to have been published first — the installer looks for `Builds/<project>/Release/net8.0/publish` and skips any server it cannot find there.
 
 > **Linux only.** `systemd-services` is a no-op on Windows. The installer contains an NSSM-based Windows service registration path (`FishMMO-IpFetch`, `FishMMO-Patcher`, `FishMMO-WebGL`), but it is not currently reachable from any CLI component name — configure Windows services via NSSM manually. See the [Installer README](FishMMO-Installer/README.MD) for details.
 
@@ -1966,7 +1966,7 @@ dotnet build FishMMO-ControlPanel.slnx -c Release
 dotnet run --project ControlPanel
 ```
 
-Configuration is layered: the build copies `FishMMO-Setup/Development/appsettings.ControlPanel.json` (and the Production variant) into the output directory, then `./appsettings.json` and `./appsettings.{Environment}.json` in the working directory override it. Edit the templates under `FishMMO-Setup/`, not the copies in `bin/`. Swagger UI is served at `/swagger` in the Development environment only.
+Configuration is layered: the build copies `FishMMO-Setup/Development/appsettings.ControlPanel.json` (and the Production variant) into the output directory, then `./appsettings.json` and `./appsettings.{Environment}.json` in the working directory override it. Edit the templates under `FishMMO-Setup/`, not the copies in `Builds/ControlPanel/`. Swagger UI is served at `/swagger` in the Development environment only.
 
 See [FishMMO-WebServers/FishMMO-ControlPanel/README.md](FishMMO-WebServers/FishMMO-ControlPanel/README.md) for running it, the endpoint tables, the design decisions it enforces, and implementation status.
 
@@ -2406,7 +2406,7 @@ Generated services:
 - **`fishmmo-patcher.service`** — Patcher Web Server on port 8090
 - **`fishmmo-webgl.service`** — WebGL Web Server on port 8000
 
-The generated service units set `Environment=ASPNETCORE_ENVIRONMENT=Production` and `Environment=FISHMMO_ENVIRONMENT=Production`, plus `Restart=always` / `RestartSec=5` and `After=network.target postgresql.service`. **`User=` is set to the account that ran the installer**, not a dedicated service user — edit the unit if you want the servers to run as `fishmmo`. Each server must have been published to `bin/Release/net8.0/publish` first; the installer skips any it cannot find. Application secrets (gate secret, KEK, connection token HMAC key) are **not** set via environment variables or env files -- they are loaded from the database at startup by each server. Database credentials can be provided via `EnvironmentFile=-/etc/fishmmo/db-secrets.env` or the `FISHMMO_DB_*` environment variables.
+The generated service units set `Environment=ASPNETCORE_ENVIRONMENT=Production` and `Environment=FISHMMO_ENVIRONMENT=Production`, plus `Restart=always` / `RestartSec=5` and `After=network.target postgresql.service`. **`User=` is set to the account that ran the installer**, not a dedicated service user — edit the unit if you want the servers to run as `fishmmo`. Each server must have been published to `Builds/<project>/Release/net8.0/publish` first; the installer skips any it cannot find. Application secrets (gate secret, KEK, connection token HMAC key) are **not** set via environment variables or env files -- they are loaded from the database at startup by each server. Database credentials can be provided via `EnvironmentFile=-/etc/fishmmo/db-secrets.env` or the `FISHMMO_DB_*` environment variables.
 
 ```bash
 # Verify after installer-generated registration:

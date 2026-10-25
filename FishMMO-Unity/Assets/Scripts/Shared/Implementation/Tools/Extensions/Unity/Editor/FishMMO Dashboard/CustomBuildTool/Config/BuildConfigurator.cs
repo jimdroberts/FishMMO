@@ -142,6 +142,9 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 			var currentNamedBuildTargetGroup = NamedBuildTarget.FromBuildTargetGroup(targetGroup);
 			if (buildTarget == BuildTarget.WebGL)
 			{
+				// Browser builds target WebGPU only. Apply before Addressables and player compilation.
+				PlayerSettings.SetUseDefaultGraphicsAPIs(buildTarget, false);
+				PlayerSettings.SetGraphicsAPIs(buildTarget, new[] { UnityEngine.Rendering.GraphicsDeviceType.WebGPU });
 				PlayerSettings.SetScriptingBackend(currentNamedBuildTargetGroup, ScriptingImplementation.IL2CPP);
 				PlayerSettings.SetIl2CppCompilerConfiguration(currentNamedBuildTargetGroup, Il2CppCompilerConfiguration.Release);
 				PlayerSettings.SetIl2CppCodeGeneration(currentNamedBuildTargetGroup, Il2CppCodeGeneration.OptimizeSize);

@@ -15,14 +15,14 @@
 // The main light always wears a cookie (white while the cloud throws no shadow, so its variant never
 // changes: CloudShadowPresenter.Clear); _FishCloudCookie says whether it is the cloud's.
 //
-// Needs Lighting.hlsl included first, and `#pragma multi_compile _ _LIGHT_COOKIES` in the pass.
+// Needs Lighting.hlsl and the shared FishLightCookieVariants.hlsl header in the pass.
 
 float _FishCloudCookie;
 
 half3 FishWaterCloudLight(float3 positionWS, half fallback)
 {
 	#if defined(_LIGHT_COOKIES)
-		if (IsMainLightCookieEnabled() && _FishCloudCookie > 0.5)
+		if (_LIGHT_COOKIES && IsMainLightCookieEnabled() && _FishCloudCookie > 0.5)
 		{
 			float2 uv = ComputeLightCookieUVDirectional(_MainLightWorldToLight, positionWS, float4(1.0, 1.0, 0.0, 0.0), URP_TEXTURE_WRAP_MODE_NONE);
 			half4 c = SAMPLE_TEXTURE2D_LOD(_MainLightCookieTexture, sampler_MainLightCookieTexture, uv, 0);

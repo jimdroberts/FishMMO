@@ -1,0 +1,14 @@
+<Project>
+  <!-- Scope this policy to maintained .NET projects, excluding Unity-generated
+       projects, native dependencies, and source trees copied into Builds/. -->
+  <PropertyGroup>
+    <_FishMMORelativeProjectDirectory>$([MSBuild]::MakeRelative('$(MSBuildThisFileDirectory)', '$(MSBuildProjectDirectory)'))</_FishMMORelativeProjectDirectory>
+    <FishMMOCentralizedOutput Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(_FishMMORelativeProjectDirectory)', '^FishMMO-(AppHealthMonitor|Auth|Database|Dependencies|DiscordBot|Installer|Logger|Patcher|SharedUtility|WebServers)([/\\]|$)'))">true</FishMMOCentralizedOutput>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(FishMMOCentralizedOutput)' == 'true'">
+    <FishMMOProjectOutputRoot>$(MSBuildThisFileDirectory)Builds/$(MSBuildProjectName)/</FishMMOProjectOutputRoot>
+    <BaseOutputPath>$(FishMMOProjectOutputRoot)</BaseOutputPath>
+    <!-- Keep obj/ excluded even though bin/ is no longer BaseOutputPath. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;obj/**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>

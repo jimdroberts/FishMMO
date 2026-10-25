@@ -19,14 +19,25 @@ namespace FishMMO.WebShared
         /// headers (X-Server-Version, Server-Timing).
         ///
         /// Use <paramref name="extraHeaders"/> to add server-specific headers such as
-        /// Content-Security-Policy, Cross-Origin-Opener-Policy, or
+        /// Cross-Origin-Opener-Policy or
         /// Cross-Origin-Embedder-Policy that are only needed by certain hosts.
         /// </summary>
         public static IApplicationBuilder UseFishMMOSecurityHeaders(
             this IApplicationBuilder app,
             IHostEnvironment environment,
             Action<IHeaderDictionary>? extraHeaders = null)
+            => app.UseFishMMOSecurityHeaders(environment, ContentSecurityPolicyProfile.Api,
+                extraHeaders: extraHeaders);
+
+        public static IApplicationBuilder UseFishMMOSecurityHeaders(
+            this IApplicationBuilder app,
+            IHostEnvironment environment,
+            ContentSecurityPolicyProfile profile,
+            IConfiguration? configuration = null,
+            Action<IHeaderDictionary>? extraHeaders = null,
+            Microsoft.Extensions.FileProviders.IFileProvider? webRoot = null)
         {
+            var policy = new ContentSecurityPolicy(profile, configuration, environment);
             string serverVersion = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "0.0.0.0";
             bool exposeDiagnostics = !environment.IsProduction();
 
@@ -36,6 +47,7 @@ namespace FishMMO.WebShared
                 ctx.Response.OnStarting(() =>
                 {
                     var h = ctx.Response.Headers;
+                    h["Content-Security-Policy"] = policy.GetHeader(ctx, webRoot);
                     if (!h.ContainsKey("Strict-Transport-Security"))
                         h["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
                     if (!h.ContainsKey("X-Content-Type-Options"))

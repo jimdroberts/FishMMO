@@ -68,7 +68,13 @@ namespace FishMMO.Installer
 				$"fishmmo-{Path.GetFileName(destinationPath)}-{Guid.NewGuid():N}");
 			try
 			{
-				await File.WriteAllTextAsync(tempPath, content);
+				// Create private from the outset: content may contain database credentials.
+				var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write };
+				if (!OperatingSystem.IsWindows())
+					options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+				await using (var stream = new FileStream(tempPath, options))
+				await using (var writer = new StreamWriter(stream))
+					await writer.WriteAsync(content);
 
 				(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
 				string command = $"sudo install -o {owner} -g {group} -m {mode} '{tempPath}' '{destinationPath}'";

@@ -53,7 +53,7 @@ namespace FishMMO.Installer
 			}
 			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
 			{
-				string nginxConfPath = PromptWithDefault("Enter nginx.conf path", InstallationConstants.LinuxNginxConfigurationPath);
+				string nginxConfPath = PromptWithDefault("Enter active nginx.conf path (not the repository template)", "/etc/nginx/nginx.conf");
 				string webRootPath = PromptWithDefault("Enter ACME challenge web root path", InstallationConstants.LinuxCertbotWebRoot);
 				string webServersPath = PromptWithDefault("Enter FishMMO web servers path", InstallationConstants.LinuxFishMMOWebServersPath);
 
@@ -87,10 +87,10 @@ namespace FishMMO.Installer
 
 			var packageNames = new Dictionary<string, string>
 			{
-				["pacman"] = "certbot certbot-nginx",
-				["apt-get"] = "certbot python3-certbot-nginx",
-				["dnf"] = "certbot python3-certbot-nginx",
-				["yum"] = "certbot python3-certbot-nginx"
+				["pacman"] = "certbot certbot-nginx openssl",
+				["apt-get"] = "certbot python3-certbot-nginx openssl",
+				["dnf"] = "certbot python3-certbot-nginx openssl",
+				["yum"] = "certbot python3-certbot-nginx openssl"
 			};
 
 			var detected = await LinuxPackageManagerHelper.DetectAsync(packageNames);
@@ -122,16 +122,22 @@ namespace FishMMO.Installer
 				return;
 			}
 
+			ValidateLinuxNginxAcmeConfiguration(nginxConfPath, webRootPath);
+
 			string domainArguments = string.Join(" ", domains.Select(domain => $"-d \"{domain}\""));
 			string stagingFlag = useStaging ? " --staging" : string.Empty;
-			string certbotCommand = $"sudo certbot certonly --webroot -w \"{webRootPath}\" {domainArguments} --agree-tos -m \"{email}\" --non-interactive --keep-until-expiring{stagingFlag}";
+			string certbotCommand = $"sudo certbot certonly --cert-name \"{domains[0]}\" --webroot -w \"{webRootPath}\" {domainArguments} --agree-tos -m \"{email}\" --non-interactive --keep-until-expiring{stagingFlag}";
 
-			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, certbotCommand, "Failed to request/renew Let's Encrypt certificate."))
+			if (!await InstallerProcessHelper.RunShellCommandWithLiveOutputAsync(shell, argPrefix, certbotCommand, "Failed to request/renew Let's Encrypt certificate."))
 			{
 				return;
 			}
 
-			ValidateLinuxNginxAcmeConfiguration(nginxConfPath, webRootPath);
+			if (!await GameServerCertificateInstaller.InstallAsync($"/etc/letsencrypt/live/{domains[0]}"))
+			{
+				return;
+			}
+
 			ApplyCertificatePathsToNginxConfig(nginxConfPath, domains[0], isLinux: true);
 
 			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, "sudo nginx -t", "NGINX config test failed after certificate updates."))
@@ -407,7 +413,7 @@ namespace FishMMO.Installer
 
 			if (!hasAcmeLocation || !hasExpectedRoot)
 			{
-				_ = Log.Warning("FishMMOInstaller", "Warning: nginx.conf ACME challenge location/root does not match provided web root. Cert issuance/renewal may fail.");
+				_ = Log.Warning("FishMMOInstaller", "The selected nginx.conf does not directly declare the ACME challenge location and web root. If an included file does not supply it, configure HTTP port 80 to serve /.well-known/acme-challenge/ from the specified web root before requesting a certificate. The repository template alone does not configure the running nginx service.");
 			}
 		}
 

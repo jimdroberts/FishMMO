@@ -23,7 +23,11 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 			string tmpPath = rootPath;
 			if (string.IsNullOrWhiteSpace(rootPath))
 			{
-				rootPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
+				string defaultDirectory = Path.GetFullPath(Path.Combine(
+					UnityEngine.Application.dataPath, "..", "..", "Builds",
+					customBuildType == CustomBuildType.Server ? "Server" : "Client"));
+				Directory.CreateDirectory(defaultDirectory);
+				rootPath = EditorUtility.SaveFolderPanel("Pick a save directory", defaultDirectory, "");
 				if (string.IsNullOrWhiteSpace(rootPath))
 				{
 					Log.Warning("BuildExecutor", "No build directory selected. Build cancelled.");
@@ -91,7 +95,7 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 					Log.Debug("BuildExecutor", $"Development build (security gate skip): {isDevelopmentBuild}");
 					LogBuildSteps(report);
 
-					string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
+					string root = Path.GetFullPath(Path.Combine(UnityEngine.Application.dataPath, "..", ".."));
 					string configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(Constants.Configuration.SetupDirectory);
 					string setupRoot = Path.Combine(root, Constants.Configuration.SetupDirectory);
 					CopyConfigurationFiles(buildTarget, customBuildType, Path.Combine(root, configurationPath), buildPath, setupRoot);
@@ -296,7 +300,7 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 
 			/* Only ever accept a per-RID publish directory.
 			 *
-			 * The RID-less output (bin/<config>/net8.0[/publish]) carries a native apphost
+			 * The RID-less output (Builds/Updater/<config>/net8.0[/publish]) carries a native apphost
 			 * built for whatever machine produced it. Accepting it as a fallback is how a
 			 * Linux editor host ends up shipping its own apphost inside a macOS client, or
 			 * an Arch host ships an 'arch-x64' apphost that only resolves against a locally
@@ -372,7 +376,7 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 		/// </remarks>
 		private static string FindUpdaterPublishDirectory(string updaterProject, string[] runtimeIdentifiers, string executableName)
 		{
-			string binRoot = Path.Combine(updaterProject, "bin");
+			string binRoot = Path.GetFullPath(Path.Combine(updaterProject, "..", "..", "Builds", "Updater"));
 
 			foreach (string configuration in new[] { "Release", "Debug" })
 			{

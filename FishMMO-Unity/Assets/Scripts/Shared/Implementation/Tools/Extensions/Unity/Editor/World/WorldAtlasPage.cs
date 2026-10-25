@@ -129,7 +129,7 @@ namespace FishMMO.Shared.WorldDesign
 			tools.Add(new ToolbarButton(RemoveOrphans)
 			{
 				text = "Clear orphans",
-				tooltip = "Deletes atlas entries whose scene file no longer exists. They still draw on the globe and still block a rectangle from being cut there.",
+				tooltip = "Deletes everything left of scenes whose file no longer exists: atlas entries that still draw on the globe and block a cut there, and their teleporters and destinations in the teleporter cache. Teleporters in other scenes that led into them are disconnected.",
 			});
 			tools.Add(new ToolbarButton(BakeSurface)
 			{
@@ -742,25 +742,73 @@ namespace FishMMO.Shared.WorldDesign
 				return;
 			}
 
-			string question = $"Delete \"{sceneName}\" and everything that belongs to it?\n\n";
+			if (!ConfirmAndExecute("Delete scene", $"Delete \"{sceneName}\" and everything that belongs to it?", $"\"{sceneName}\" is deleted", plan))
+			{
+				return;
+			}
+			selected = null;
+			model.Reload();
+			Rebuild();
+		}
+
+		/// <summary>
+		/// Deletes, after asking, everything left of scenes whose file is gone: their atlas entries, and their teleporters,
+		/// destinations and other entries in the shared caches, with teleporters in live scenes that led into them
+		/// disconnected.
+		/// </summary>
+		private void RemoveOrphans()
+		{
+			SceneDeletion.Plan plan;
+			try
+			{
+				EditorUtility.DisplayProgressBar("Clear orphans", "Finding scenes that are gone...", 0.5f);
+				plan = SceneDeletion.ForOrphans();
+			}
+			finally
+			{
+				EditorUtility.ClearProgressBar();
+			}
+			if (plan.IsEmpty)
+			{
+				EditorUtility.DisplayDialog("Clear orphans", "Nothing is left of any deleted scene.", "OK");
+				return;
+			}
+			string names = plan.Names.Count > 0 ? $"\n\nScenes: {string.Join(", ", plan.Names)}" : string.Empty;
+			if (!ConfirmAndExecute("Clear orphans", "Delete everything left of scenes that no longer exist?" + names, "The orphans are deleted", plan))
+			{
+				return;
+			}
+			selected = null;
+			model.Reload();
+			Rebuild();
+		}
+
+		/// <summary>
+		/// Shows the plan, asks, and carries it out, offering to keep re-cut backups when there are any. Returns false
+		/// when cancelled.
+		/// </summary>
+		/// <param name="done">How the result dialog starts when something could not be removed, such as <c>"Coast" is deleted</c>.</param>
+		private static bool ConfirmAndExecute(string title, string question, string done, SceneDeletion.Plan plan)
+		{
+			question += "\n\n";
 			bool keepBackups;
 			if (plan.Backups.Count > 0)
 			{
 				// The re-cut backups are the only way back, so keeping them is offered.
-				int choice = EditorUtility.DisplayDialogComplex("Delete scene",
+				int choice = EditorUtility.DisplayDialogComplex(title,
 					question + plan.Describe(false) + "\n\nThis cannot be undone, except from a re-cut backup if you keep them.",
 					"Delete everything", "Cancel", "Delete, keep backups");
 				if (choice == 1)
 				{
-					return;
+					return false;
 				}
 				keepBackups = choice == 2;
 			}
 			else
 			{
-				if (!EditorUtility.DisplayDialog("Delete scene", question + plan.Describe(false) + "\n\nThis cannot be undone.", "Delete", "Cancel"))
+				if (!EditorUtility.DisplayDialog(title, question + plan.Describe(false) + "\n\nThis cannot be undone.", "Delete", "Cancel"))
 				{
-					return;
+					return false;
 				}
 				keepBackups = false;
 			}
@@ -768,7 +816,7 @@ namespace FishMMO.Shared.WorldDesign
 			List<string> failures;
 			try
 			{
-				EditorUtility.DisplayProgressBar("Delete scene", $"Deleting {sceneName}...", 0.5f);
+				EditorUtility.DisplayProgressBar(title, "Deleting...", 0.5f);
 				failures = SceneDeletion.Execute(plan, keepBackups);
 			}
 			finally
@@ -776,40 +824,13 @@ namespace FishMMO.Shared.WorldDesign
 				EditorUtility.ClearProgressBar();
 			}
 
-			Debug.Log($"[World atlas] Deleted '{sceneName}':\n{plan.Describe(keepBackups)}");
+			Debug.Log($"[World atlas] {title}: deleted\n{plan.Describe(keepBackups)}");
 			if (failures.Count > 0)
 			{
-				Debug.LogWarning($"[World atlas] Deleting '{sceneName}' left {failures.Count} thing(s) behind:\n  " + string.Join("\n  ", failures));
-				EditorUtility.DisplayDialog("Delete scene", $"\"{sceneName}\" is deleted, but not all of it:\n\n" + string.Join("\n", failures), "OK");
+				Debug.LogWarning($"[World atlas] {title} left {failures.Count} thing(s) behind:\n  " + string.Join("\n  ", failures));
+				EditorUtility.DisplayDialog(title, $"{done}, but not all of it:\n\n" + string.Join("\n", failures), "OK");
 			}
-
-			selected = null;
-			model.Reload();
-			Rebuild();
-		}
-
-		/// <summary>Deletes atlas entries whose scene is gone, after asking.</summary>
-		private void RemoveOrphans()
-		{
-			List<string> orphans = WorldEditorAssets.OrphanedAtlasScenes();
-			if (orphans.Count == 0)
-			{
-				EditorUtility.DisplayDialog("Clear orphans", "Every atlas entry has a scene.", "OK");
-				return;
-			}
-			if (!EditorUtility.DisplayDialog("Clear orphans",
-				$"Delete {orphans.Count} atlas entr{(orphans.Count == 1 ? "y" : "ies")} whose scene no longer exists?\n\n" +
-				string.Join("\n", orphans) + "\n\nThis cannot be undone.",
-				"Delete", "Cancel"))
-			{
-				return;
-			}
-
-			List<string> removed = WorldEditorAssets.RemoveOrphanedAtlasScenes();
-			Debug.Log($"[World atlas] Removed {removed.Count} orphaned atlas entr{(removed.Count == 1 ? "y" : "ies")}: {string.Join(", ", removed)}.");
-			selected = null;
-			model.Reload();
-			Rebuild();
+			return true;
 		}
 
 		/// <summary>

@@ -17,12 +17,12 @@ MonoBehaviour:
   Scenes:
     m_keys:
     - Dungeon
-    - StartScene A
-    - StartScene B
-    - Test Dungeon
-    - Tutorial Regions
-    - Tutorial SpawnPoints
-    - Tutorial Spawners
+    - Moron 1
+    - Moron 2
+    - Moron 3
+    - Ithaewyn 1
+    - Galris 1
+    - Belron 1
     m_values:
     - MaxClients: 6
       SceneTransitionImage: {fileID: 21300000, guid: 41f73c28208285445b37a7980665ead3,
@@ -41,9 +41,9 @@ MonoBehaviour:
         m_keys:
         - Dungeon A 1 Entrance
         m_values:
-        - ToScene: StartScene B
-          ToPosition: {x: -2.5910993, y: 4.9199996, z: 27.954844}
-          ToRotation: {x: -0, y: 1, z: -0, w: 0}
+        - ToScene: Dungeon
+          ToPosition: {x: -130.84203, y: 17.6, z: 22.710613}
+          ToRotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
       Boundaries:
         m_keys:
         - SceneBoundary
@@ -55,167 +55,2190 @@ MonoBehaviour:
         m_values: []
       PointsOfInterest: []
     - MaxClients: 200
-      SceneTransitionImage: {fileID: 21300000, guid: 5c2d23be0cbdd4048a53de5b3b050809,
-        type: 3}
+      SceneTransitionImage: {fileID: 0}
       MapDefinition: {fileID: 0}
       InitialSpawnPositions:
-        m_keys:
-        - East A
-        - West A
-        m_values:
-        - SpawnerName: East A
-          SceneName: StartScene A
-          Position: {x: 46.831566, y: 30.904213, z: -65.22532}
-          Rotation: {x: -0, y: -0.37420192, z: -0, w: 0.92734724}
-          AllowedRaces:
-          - {fileID: 11400000, guid: 6f8938bbed1286347b54bf3f4889f32a, type: 2}
-        - SpawnerName: West A
-          SceneName: StartScene A
-          Position: {x: 4.0226974, y: 30.904213, z: -44.803207}
-          Rotation: {x: -0, y: 0.8571673, z: -0, w: 0.51503813}
-          AllowedRaces:
-          - {fileID: 11400000, guid: 6f8938bbed1286347b54bf3f4889f32a, type: 2}
+        m_keys: []
+        m_values: []
       RespawnPositions:
         m_keys:
-        - Respawn Point
+        - 'Grimolair Respawn [07e5ab8d]'
+        - 'Wil Rest Respawn [298e4a94]'
+        - 'Ungate Respawn [7c14b111]'
+        - 'Skifall Respawn [0dd1c39a]'
+        - 'Caelunorclearing Respawn [70b9fe63]'
+        - 'Micrevice Post Respawn [5bce399c]'
+        - 'Thackvault Respawn [75e45802]'
+        - 'Primordial Siluwing Respawn [43de820f]'
+        - 'Reguan''s Waystation Respawn [51d1fc80]'
+        - 'Unafall Respawn [72bb001f]'
+        - 'Shadowy Nokcellar Respawn [3c8cf005]'
+        - 'Greaorn Retreat Respawn [50b74e75]'
+        - 'Garhold Respawn [39682c9c]'
         m_values:
-        - Position: {x: 44.492958, y: 30.904213, z: -53.446384}
-          Rotation: {x: -0, y: 0.47907484, z: -0, w: 0.87777406}
+        - Position: {x: -543.1868, y: 13.575953, z: -1757.0558}
+          Rotation: {x: -0, y: 0.3826835, z: -0, w: -0.92387956}
+        - Position: {x: 293.2832, y: 108.99648, z: 866.4259}
+          Rotation: {x: -0, y: 0.4617487, z: -0, w: -0.8870109}
+        - Position: {x: 1034.2042, y: 17.452784, z: -830.8534}
+          Rotation: {x: -0, y: -0.5372996, z: -0, w: -0.8433915}
+        - Position: {x: 61.664295, y: 11.361353, z: -1491.4429}
+          Rotation: {x: -0, y: -0.85264003, z: -0, w: -0.5224987}
+        - Position: {x: 1445.1132, y: 88.877464, z: -487.71976}
+          Rotation: {x: -0, y: 0.90258527, z: -0, w: -0.43051112}
+        - Position: {x: 1370.4896, y: 14.063868, z: 1563.3479}
+          Rotation: {x: -0, y: -0.104528435, z: -0, w: -0.9945219}
+        - Position: {x: 891.3269, y: 41.647118, z: 1445.906}
+          Rotation: {x: -0, y: -0.25881907, z: -0, w: -0.9659259}
+        - Position: {x: -283.90298, y: 36.585228, z: 884.92804}
+          Rotation: {x: -0, y: 0.7009093, z: -0, w: -0.7132504}
+        - Position: {x: -328.33517, y: 42.633812, z: -983.51746}
+          Rotation: {x: -0, y: 0.83388585, z: -0, w: -0.551937}
+        - Position: {x: 698.9308, y: 18.182032, z: 439.27518}
+          Rotation: {x: -0, y: -0.3907311, z: -0, w: -0.92050487}
+        - Position: {x: 507.7069, y: 29.507105, z: 1381.7334}
+          Rotation: {x: -0, y: -0.2079118, z: -0, w: -0.97814757}
+        - Position: {x: 186.56041, y: 11.678247, z: -1366.8746}
+          Rotation: {x: -0, y: -0.5664063, z: -0, w: -0.82412624}
+        - Position: {x: -1168.8132, y: 18.096216, z: -1474.9442}
+          Rotation: {x: -0, y: -0.92387944, z: -0, w: -0.38268358}
       Teleporters:
-        m_keys:
-        - Tutorial Spawners
-        - Tutorial Regions
-        - Tutorial SpawnPoints
-        - Start Scene B 1
-        m_values:
-        - ToScene: Tutorial Spawners
-          ToPosition: {x: -4.2100005, y: 0.1, z: 0}
-          ToRotation: {x: -0, y: -0, z: -0, w: 1}
-        - ToScene: Tutorial Regions
-          ToPosition: {x: -4.2100005, y: 0.1, z: 0}
-          ToRotation: {x: -0, y: -0, z: -0, w: 1}
-        - ToScene: Tutorial SpawnPoints
-          ToPosition: {x: -4.2100005, y: 0.1, z: 0}
-          ToRotation: {x: -0, y: -0, z: -0, w: 1}
-        - ToScene: StartScene B
-          ToPosition: {x: -150.54633, y: 9.4210825, z: 44.43602}
-          ToRotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
+        m_keys: []
+        m_values: []
       Boundaries:
         m_keys:
-        - Terrain
+        - Scene Boundary
         m_values:
-        - BoundaryOrigin: {x: 12, y: 74.80027, z: 12}
-          BoundarySize: {x: 1024, y: 149.18054, z: 1024}
+        - BoundaryOrigin: {x: 0, y: -434.0171, z: 0}
+          BoundarySize: {x: 3800, y: 3811.1738, z: 4750}
       Waypoints:
-        m_keys: 0000000001000000
+        m_keys: 09000000080000000600000001000000480000000200000007000000000000000e0000000400000003000000050000000c0000000b0000000d00000049000000
         m_values:
-        - Index: 0
-          Name: Camp Waypoint
+        - Index: 9
+          Name: Grimolair
           Description: 
-          Position: {x: 47.49298, y: 30.804213, z: -50.44638}
+          Position: {x: -538.9442, y: 12.000732, z: -1752.8132}
+          Icon: {fileID: 0}
+        - Index: 8
+          Name: Thackvault
+          Description: 
+          Position: {x: 896.5231, y: 41.54712, z: 1442.906}
+          Icon: {fileID: 0}
+        - Index: 6
+          Name: Unafall
+          Description: 
+          Position: {x: 703.0987, y: 18.082031, z: 434.95914}
           Icon: {fileID: 0}
         - Index: 1
-          Name: Tutorial Gate Waypoint
+          Name: Greaorn Retreat
           Description: 
-          Position: {x: 18.66156, y: 30.804213, z: -44.27533}
+          Position: {x: 188.71062, y: 11.776123, z: -1372.4761}
           Icon: {fileID: 0}
-      PointsOfInterest: []
+        - Index: 72
+          Name: Wil Rest
+          Description: 
+          Position: {x: 294.5862, y: 108.896484, z: 869.141}
+          Icon: {fileID: 0}
+        - Index: 2
+          Name: Primordial Siluwing
+          Description: 
+          Position: {x: -283.79828, y: 36.48523, z: 890.9271}
+          Icon: {fileID: 0}
+        - Index: 7
+          Name: Caelunorclearing
+          Description: 
+          Position: {x: 1441.3372, y: 88.777466, z: -483.0569}
+          Icon: {fileID: 0}
+        - Index: 0
+          Name: Ungate
+          Description: 
+          Position: {x: 1036.74, y: 17.352783, z: -836.2912}
+          Icon: {fileID: 0}
+        - Index: 14
+          Name: Micrevice Post
+          Description: 
+          Position: {x: 1375.892, y: 13.963867, z: 1562.7004}
+          Icon: {fileID: 0}
+        - Index: 4
+          Name: Skifall
+          Description: 
+          Position: {x: 58.940353, y: 11.261353, z: -1496.789}
+          Icon: {fileID: 0}
+        - Index: 3
+          Name: Garhold
+          Description: 
+          Position: {x: -1173.0558, y: 17.996216, z: -1479.1868}
+          Icon: {fileID: 0}
+        - Index: 5
+          Name: Shadowy Nokcellar
+          Description: 
+          Position: {x: 513.1882, y: 29.407104, z: 1379.293}
+          Icon: {fileID: 0}
+        - Index: 12
+          Name: Wingowall Keep
+          Description: 
+          Position: {x: 1474.1622, y: 143.72949, z: -14.1709795}
+          Icon: {fileID: 0}
+        - Index: 11
+          Name: Hakden Keep
+          Description: 
+          Position: {x: 15.124977, y: 59.1781, z: -734.48}
+          Icon: {fileID: 0}
+        - Index: 13
+          Name: Castle Tho
+          Description: 
+          Position: {x: 1196.0382, y: 96.327515, z: -337.65942}
+          Icon: {fileID: 0}
+        - Index: 73
+          Name: Reguan's Waystation
+          Description: 
+          Position: {x: -330.6977, y: 42.533813, z: -979.1587}
+          Icon: {fileID: 0}
+      PointsOfInterest:
+      - Name: Drau Stair
+        Description: A dungeon entrance in the Wetlands.
+        Position: {x: 1246.7096, y: 55.345898, z: 1395.6367}
+        Type: 18
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Oak Badger Hole
+        Description: 'Dungeon entrance, deep inside Oak Badger Hole: reached through
+          the cave.'
+        Position: {x: 1168.4094, y: 47.55106, z: 990.5788}
+        Type: 18
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Dappled Long Barrow
+        Description: 'Dungeon entrance (barrow)
+
+          A barrow in the Forest.'
+        Position: {x: 32, y: 101.71, z: -408}
+        Type: 18
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Deep Crypt
+        Description: 'Dungeon entrance (crypt)
+
+          A crypt in the Forest.'
+        Position: {x: 464, y: 76.1, z: 760}
+        Type: 18
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Deep Tumulus
+        Description: 'Dungeon entrance (barrow)
+
+          A barrow in the Forest.'
+        Position: {x: 1568, y: 18.79, z: -1320}
+        Type: 18
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Elven Camp
+        Description: An elven encampment in the Forest.
+        Position: {x: 1536, y: 146.87, z: 872}
+        Type: 19
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Holourn's Bivouac
+        Description: A werewolf encampment in the Forest.
+        Position: {x: -352, y: 14.02, z: -696}
+        Type: 19
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Larar Tents
+        Description: A wolffolk encampment in the Forest.
+        Position: {x: -352, y: 32.88, z: 216}
+        Type: 19
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Dark Idol
+        Description: A shrine in the Forest.
+        Position: {x: -752, y: 61.99, z: -872}
+        Type: 20
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Wayshrine of the Grey Maiden
+        Description: A shrine in the Forest.
+        Position: {x: 976, y: 58.11, z: 936}
+        Type: 20
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Wayshrine of the Towering Sun
+        Description: A shrine in the Forest.
+        Position: {x: 16, y: 88.05, z: 216}
+        Type: 20
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ivy Turret
+        Description: A watchtower in the Forest.
+        Position: {x: -80, y: 45.28, z: 520}
+        Type: 21
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Dark Lookout
+        Description: A watchtower in the Forest.
+        Position: {x: -160, y: 76.75, z: -1256}
+        Type: 21
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Wil Watchtower
+        Description: A watchtower in the Forest.
+        Position: {x: 1072, y: 38.69, z: 648}
+        Type: 21
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Oak Badger Hole
+        Description: A cave of the forest giants in the Forest.
+        Position: {x: 992, y: 73.33, z: 1224}
+        Type: 25
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Root Cave of Boars
+        Description: A cave of the boars in the Forest.
+        Position: {x: 1696, y: 96.67, z: 952}
+        Type: 25
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Obelisk of Nasaaniq
+        Description: A monument in the Forest.
+        Position: {x: 640, y: 41.16, z: 1256}
+        Type: 26
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ashar Crag
+        Description: A peak in the Forest.
+        Position: {x: 48, y: 110.05, z: -984}
+        Type: 35
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Bri Spire
+        Description: A peak in the Forest.
+        Position: {x: 1200, y: 84.43, z: 2056}
+        Type: 35
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Mount Lar
+        Description: A peak in the Forest.
+        Position: {x: -640, y: 78.93, z: -552}
+        Type: 35
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Owl-haunted Spire
+        Description: A peak in the Forest.
+        Position: {x: -320, y: 54.87, z: 1096}
+        Type: 35
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Cop Gap
+        Description: A pass in the Forest.
+        Position: {x: -122.67, y: 75.09, z: -1170.18}
+        Type: 36
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Haldebjorn's Ham
+        Description: An island in the Estuary.
+        Position: {x: 912, y: 6.47, z: -1112}
+        Type: 41
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Kelia Bight
+        Description: A bay in the Estuary.
+        Position: {x: 0, y: 0, z: 1096}
+        Type: 42
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Pelei Bight
+        Description: A bay in the Coastal Water.
+        Position: {x: 656, y: 0, z: 264}
+        Type: 42
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Pelei Cape
+        Description: A headland in the Coastal Water.
+        Position: {x: 288, y: 1.34, z: -1752}
+        Type: 43
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Ancient Head
+        Description: A headland in the Coastal Water.
+        Position: {x: -1296, y: 0.48, z: -1960}
+        Type: 43
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Reef-protected Cape
+        Description: A headland in the Coastal Water.
+        Position: {x: 848, y: 2.67, z: -1160}
+        Type: 43
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Mother Seioto's Hut
+        Description: A witch's hut in the Wetlands.
+        Position: {x: 1360, y: 104.54, z: 1032}
+        Type: 56
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Mur Croft
+        Description: A witch's hut in the Wetlands.
+        Position: {x: 1744, y: 148.82, z: 40}
+        Type: 56
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Kel Mire Shrine
+        Description: A bog shrine in the Wetlands.
+        Position: {x: 144, y: 42.84, z: 1528}
+        Type: 58
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Reed Altar of the Teeming Blade
+        Description: A bog shrine in the Wetlands.
+        Position: {x: 1184, y: 91.91, z: 1160}
+        Type: 58
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Copoern Lip
+        Description: An overhang in the Forest.
+        Position: {x: 1277.4666, y: 12.205078, z: 2045.4501}
+        Type: 65
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Mysterious Hood
+        Description: An overhang in the Forest.
+        Position: {x: 968.8194, y: 18.939941, z: 1711.1805}
+        Type: 65
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Driua Holdfast
+        Description: A bandit camp of the tidewalkers in the Estuary.
+        Position: {x: -304, y: 5.58, z: -504}
+        Type: 66
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Gre Hunt Hall
+        Description: A hunting lodge in the Forest.
+        Position: {x: -608, y: 47.22, z: -792}
+        Type: 67
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Tibaulax's Hunting Lodge
+        Description: A hunting lodge in the Forest.
+        Position: {x: 480, y: 18.69, z: 1176}
+        Type: 67
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Maluuar's Sawpit
+        Description: A lumber camp in the Forest.
+        Position: {x: -96, y: 84.26, z: -584}
+        Type: 68
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Yuuairira's Woodyard
+        Description: A lumber camp in the Forest.
+        Position: {x: 976, y: 60.18, z: 472}
+        Type: 68
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Fahairash's Fishing Camp
+        Description: A fishing camp in the Estuary.
+        Position: {x: 576, y: 4.09, z: -312}
+        Type: 69
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Shiounoshi's Landing
+        Description: A fishing camp in the Estuary.
+        Position: {x: -800, y: 4.59, z: -1832}
+        Type: 69
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Briar Lair
+        Description: A monster den of the rootwalkers in the Forest.
+        Position: {x: 16, y: 76.92, z: 40}
+        Type: 70
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Den of Boars
+        Description: A monster den of the boars in the Forest.
+        Position: {x: 1552, y: 153.09, z: 712}
+        Type: 70
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Lurk of Giant Spiders
+        Description: A monster den of the giant spiders in the Forest.
+        Position: {x: -448, y: 22.64, z: -840}
+        Type: 70
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Great Elk Brood
+        Description: A nest of the great elk in the Forest.
+        Position: {x: 1296, y: 122.55, z: 872}
+        Type: 71
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Nest of Boars
+        Description: A nest of the boars in the Forest.
+        Position: {x: -256, y: 15.59, z: -168}
+        Type: 71
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Gre Blood Ring
+        Description: A ritual site of the rootwalkers in the Forest.
+        Position: {x: -128, y: 64.63, z: -792}
+        Type: 72
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Elma Stone Circle
+        Description: A stone circle in the Forest.
+        Position: {x: 1440, y: 52.27, z: -840}
+        Type: 73
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Henge of the Shadowy Oak
+        Description: A stone circle in the Forest.
+        Position: {x: 272, y: 60.56, z: 1240}
+        Type: 73
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ber House
+        Description: A temple in the Forest.
+        Position: {x: -720, y: 78.14, z: -1304}
+        Type: 74
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Greaorn Retreat
+        Description: A monastery in the Forest.
+        Position: {x: 192, y: 11.79, z: -1368}
+        Type: 75
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Fairy Ring of the Twin Lichen-rock
+        Description: A fey ring in the Forest.
+        Position: {x: 912, y: 34.85, z: 616}
+        Type: 76
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Wellspring of Cop
+        Description: A ley nexus in the Forest.
+        Position: {x: -640, y: 78.93, z: -552}
+        Type: 77
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Blightwood of Asheine
+        Description: A corrupted grove in the Forest.
+        Position: {x: -384, y: 38.64, z: 8}
+        Type: 79
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Waygate of Ivyow
+        Description: A portal in the Forest.
+        Position: {x: 80, y: 47, z: 760}
+        Type: 80
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Burying Ground of the Fern-choked Owl
+        Description: A graveyard in the Forest.
+        Position: {x: -64, y: 85.82, z: -1096}
+        Type: 81
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Stenuvald's Burying Ground
+        Description: A graveyard in the Forest.
+        Position: {x: -1120, y: 34.21, z: -1720}
+        Type: 81
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Mushroom-lit Battlefield
+        Description: A battlefield in the Forest.
+        Position: {x: 1584, y: 34.43, z: -1048}
+        Type: 84
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Tho Ossuary
+        Description: An ossuary in the Forest.
+        Position: {x: -256, y: 38.41, z: 424}
+        Type: 85
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ruins of Briua
+        Description: Ruins in the Estuary.
+        Position: {x: -1328, y: 5.74, z: -1592}
+        Type: 86
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ruins of Ferea
+        Description: Ruins in the Forest.
+        Position: {x: 848, y: 50.48, z: 1304}
+        Type: 86
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ruins of Grear
+        Description: Ruins in the Forest.
+        Position: {x: 1312, y: 152.09, z: 136}
+        Type: 86
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Hirooto's Ruined Tower
+        Description: A ruined tower in the Forest.
+        Position: {x: 1264, y: 121.02, z: -168}
+        Type: 87
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ver Shell
+        Description: A ruined tower in the Forest.
+        Position: {x: 224, y: 102.46, z: 584}
+        Type: 87
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Pubauelus's Figure
+        Description: A statue in the Forest.
+        Position: {x: -128, y: 46.59, z: -1688}
+        Type: 88
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Hrior Stele
+        Description: An obelisk in the Tundra.
+        Position: {x: -800, y: 81.54, z: -1448}
+        Type: 89
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Malaan's Obelisk
+        Description: An obelisk in the Forest.
+        Position: {x: -592, y: 62.22, z: -376}
+        Type: 89
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Iron Road
+        Description: An ancient road in the Forest.
+        Position: {x: 1600, y: 150.78, z: -104}
+        Type: 90
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Oak Farm
+        Description: An abandoned farm in the Forest.
+        Position: {x: 1072, y: 87.51, z: -488}
+        Type: 91
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Forgotten Farm
+        Description: An abandoned farm in the Estuary.
+        Position: {x: -672, y: 4.48, z: -1912}
+        Type: 91
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ashea Hermitage
+        Description: A hermitage in the Forest.
+        Position: {x: -512, y: 33.07, z: -136}
+        Type: 92
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Garhold
+        Description: A werewolf village in the Forest.
+        Position: {x: -1168, y: 17.98, z: -1480}
+        Type: 94
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Primordial Siluwing
+        Description: An owlfolk village in the Forest.
+        Position: {x: -288, y: 36.5, z: 888}
+        Type: 94
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Shadowy Nokcellar
+        Description: An owlfolk village in the Forest.
+        Position: {x: 512, y: 29.39, z: 1384}
+        Type: 94
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Skifall
+        Description: A spiderkin village in the Forest.
+        Position: {x: 64, y: 11.26, z: -1496}
+        Type: 94
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Unafall
+        Description: A beastman village in the Forest.
+        Position: {x: 704, y: 18.1, z: 440}
+        Type: 94
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Caelunorclearing
+        Description: A wood elven town in the Forest.
+        Position: {x: 1440, y: 88.76, z: -488}
+        Type: 95
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Thackvault
+        Description: A boarfolk town in the Forest.
+        Position: {x: 896, y: 41.54, z: 1448}
+        Type: 95
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ungate
+        Description: A beastman capital in the Forest.
+        Position: {x: 1056, y: 17.34, z: -824}
+        Type: 97
+        Icon: {fileID: 0}
+        DetailTier: 0
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Grimolair
+        Description: A werewolf port in the Forest.
+        Position: {x: -544, y: 14.03, z: -1752}
+        Type: 98
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Hakden Keep
+        Description: A keep of the spiderkin in the Forest.
+        Position: {x: 16, y: 59.17, z: -728}
+        Type: 99
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Wingowall Keep
+        Description: A keep of the batfolk in the Forest.
+        Position: {x: 1472, y: 143.71, z: -8}
+        Type: 99
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Castle Tho
+        Description: A castle of the stagfolk in the Forest.
+        Position: {x: 1200, y: 96.31, z: -328}
+        Type: 100
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Micrevice Post
+        Description: A trading post in the Forest.
+        Position: {x: 1376, y: 13.97, z: 1576}
+        Type: 102
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Reguan's Waystation
+        Description: A waystation in the Forest.
+        Position: {x: -336, y: 42.53, z: -984}
+        Type: 103
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Wil Rest
+        Description: A waystation in the Forest.
+        Position: {x: 288, y: 108.9, z: 872}
+        Type: 103
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Oakie Shaft
+        Description: A mine in the Forest.
+        Position: {x: 1616, y: 204.66, z: 248}
+        Type: 104
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Gaiias's Stone-pit
+        Description: A quarry in the Forest.
+        Position: {x: 880, y: 82.57, z: 1080}
+        Type: 105
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Tid Lighthouse
+        Description: A lighthouse in the Estuary.
+        Position: {x: -176, y: 3.17, z: 1352}
+        Type: 106
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ber Run
+        Description: A smugglers' cove in the Forest.
+        Position: {x: -560, y: 12.92, z: 168}
+        Type: 107
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Driei Drowned Ship
+        Description: A sunken ship beneath the Coastal Water.
+        Position: {x: 528, y: -7.97, z: -760}
+        Type: 110
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Sunken Hull of the High Hand
+        Description: A sunken ship beneath the Coastal Water.
+        Position: {x: -704, y: -7.44, z: 40}
+        Type: 110
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Deep Walls of Mar
+        Description: A sunken ruins beneath the Coastal Water.
+        Position: {x: 624, y: -9.92, z: -904}
+        Type: 111
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Drowned City of Shoar
+        Description: A sunken city of the giant crabs beneath the Coastal Water.
+        Position: {x: -1488, y: -12.36, z: -1832}
+        Type: 112
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Nerar Throne
+        Description: A world boss lair in the Estuary.
+        Position: {x: -272, y: 4.85, z: -328}
+        Type: 113
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Seiushi's Ore Vein
+        Description: A rare ore vein in the Forest.
+        Position: {x: -416, y: 94.87, z: -1384}
+        Type: 114
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Howling Strike
+        Description: A rare ore vein in the Estuary.
+        Position: {x: 208, y: 3.57, z: -1208}
+        Type: 114
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Wilar Outcrop
+        Description: A rare ore vein in the Forest.
+        Position: {x: 544, y: 30.05, z: 536}
+        Type: 114
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Bri Geode
+        Description: A crystal formation in the Forest.
+        Position: {x: 864, y: 35.4, z: 312}
+        Type: 115
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Whispering Old Ash
+        Description: An ancient tree in the Forest.
+        Position: {x: 976, y: 50.5, z: -632}
+        Type: 116
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Lar Simples Grove
+        Description: A herb grove in the Forest.
+        Position: {x: -112, y: 20.48, z: 1048}
+        Type: 117
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Oake Herb Grove
+        Description: A herb grove in the Forest.
+        Position: {x: -1200, y: 38, z: -1864}
+        Type: 117
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ber Post Mill
+        Description: A windmill in the Forest.
+        Position: {x: -80, y: 62.59, z: 728}
+        Type: 123
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Berar Mill
+        Description: A windmill in the Forest.
+        Position: {x: 848, y: 36.19, z: -504}
+        Type: 123
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Berow Mill
+        Description: A windmill in the Forest.
+        Position: {x: 1088, y: 82.57, z: 1672}
+        Type: 123
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
     - MaxClients: 200
-      SceneTransitionImage: {fileID: 21300000, guid: af9d2e8814f76f4498e2ed07cc8191ef,
-        type: 3}
+      SceneTransitionImage: {fileID: 0}
       MapDefinition: {fileID: 0}
       InitialSpawnPositions:
         m_keys:
-        - Spire
+        - Kraakkhold Initial Spawn
         m_values:
-        - SpawnerName: Spire
-          SceneName: StartScene B
-          Position: {x: -94.72, y: 20.89, z: 44.3}
-          Rotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
+        - SpawnerName: Kraakkhold Initial Spawn
+          SceneName: Moron 2
+          Position: {x: 1796.6494, y: 122.47264, z: -1549.707}
+          Rotation: {x: -0, y: -0.9588197, z: -0, w: -0.2840156}
           AllowedRaces:
-          - {fileID: 11400000, guid: 570b8e070c073834abac548a07706b47, type: 2}
+          - {fileID: 11400000, guid: 6f8938bbed1286347b54bf3f4889f32a, type: 2}
           - {fileID: 11400000, guid: f1bedd6f4354a7e41be26aee87734d66, type: 2}
+          - {fileID: 11400000, guid: 570b8e070c073834abac548a07706b47, type: 2}
       RespawnPositions:
         m_keys:
-        - Respawn 1
-        - Respawn 2
+        - 'Root-woven Ulfoostone Respawn [1333b211]'
+        - 'Brichamber Respawn [7ff07ff7]'
+        - 'Likiriburrow Respawn [7b1530e3]'
+        - 'Kraakkhold Respawn [3025d570]'
+        - 'Unarabfall Respawn [5214ad33]'
+        - 'The Pale Serpent Respawn [032aac61]'
+        - 'Bruarden Respawn [169e9969]'
+        - 'Alstead Respawn [7c2651ee]'
+        - 'Win Inn Respawn [59f024a0]'
+        - 'Golden Vixeinfield Respawn [5c621b8a]'
+        - 'Lara Market Respawn [12455ead]'
         m_values:
-        - Position: {x: 0, y: 2, z: 0}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
-        - Position: {x: 224.6, y: 2, z: 0}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
+        - Position: {x: 85.091446, y: 134.91556, z: -1759.4525}
+          Rotation: {x: -0, y: 0.9135455, z: -0, w: -0.40673655}
+        - Position: {x: -1675.2911, y: 121.39426, z: -1917.9879}
+          Rotation: {x: -0, y: 0.96363044, z: -0, w: -0.2672383}
+        - Position: {x: 1187.7534, y: 177.42882, z: -1651.4834}
+          Rotation: {x: -0, y: 0.6626201, z: -0, w: -0.74895567}
+        - Position: {x: 1798.1799, y: 122.47264, z: -1547.3702}
+          Rotation: {x: -0, y: -0.9588197, z: -0, w: -0.2840156}
+        - Position: {x: 178.6322, y: 163.61719, z: -1460.0792}
+          Rotation: {x: -0, y: 0.58070296, z: -0, w: -0.8141155}
+        - Position: {x: 1795.7859, y: 175.97714, z: -521.31793}
+          Rotation: {x: -0, y: 0.98768836, z: -0, w: -0.15643445}
+        - Position: {x: 649.9078, y: 120.4403, z: -1896.4785}
+          Rotation: {x: -0, y: -0.16504747, z: -0, w: -0.9862856}
+        - Position: {x: 749.2213, y: 432.25952, z: -20.301321}
+          Rotation: {x: -0, y: 0.026176952, z: -0, w: -0.99965733}
+        - Position: {x: 249.30893, y: 215.67001, z: 2035.7699}
+          Rotation: {x: -0, y: -0.76604456, z: -0, w: -0.6427875}
+        - Position: {x: -478.34442, y: 309.11624, z: 1428.8458}
+          Rotation: {x: -0, y: -0.9890159, z: -0, w: -0.1478095}
+        - Position: {x: -1427.548, y: 121.186874, z: -1941.9486}
+          Rotation: {x: -0, y: 0.61566144, z: -0, w: -0.7880108}
       Teleporters:
-        m_keys:
-        - Dungeon A 1
-        - Start Scene A 1
-        - Start Scene A 1 Teleporter
-        m_values:
-        - ToScene: Dungeon
-          ToPosition: {x: -130.84203, y: 17.6, z: 22.710613}
-          ToRotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
-        - ToScene: StartScene A
-          ToPosition: {x: 10.631569, y: 30.904213, z: -75.19532}
-          ToRotation: {x: -0, y: -0, z: -0, w: 1}
-        - ToScene: StartScene A
-          ToPosition: {x: 8.641569, y: 30.904213, z: -75.23532}
-          ToRotation: {x: -0, y: -0, z: -0, w: 1}
+        m_keys: []
+        m_values: []
       Boundaries:
         m_keys:
-        - Terrain
+        - Scene Boundary
         m_values:
-        - BoundaryOrigin: {x: 0, y: 73.09101, z: 0}
-          BoundarySize: {x: 1000, y: 146.18202, z: 1000}
+        - BoundaryOrigin: {x: 0, y: 763.6801, z: 0}
+          BoundarySize: {x: 4250, y: 3718.0283, z: 4250}
       Waypoints:
-        m_keys: 0100000000000000
+        m_keys: 03000000040000003600000005000000070000000600000008000000390000000200000001000000090000004000000000000000
         m_values:
-        - Index: 1
-          Name: Far Field Waypoint
+        - Index: 3
+          Name: Golden Vixeinfield
           Description: 
-          Position: {x: 227.60004, y: 0.33828163, z: 3.0000305}
+          Position: {x: -484.08224, y: 309.01624, z: 1427.0916}
+          Icon: {fileID: 0}
+        - Index: 4
+          Name: Unarabfall
+          Description: 
+          Position: {x: 180.5856, y: 163.51718, z: -1454.4061}
+          Icon: {fileID: 0}
+        - Index: 54
+          Name: Root-woven Ulfoostone
+          Description: 
+          Position: {x: 81.07666, y: 134.81555, z: -1754.9937}
+          Icon: {fileID: 0}
+        - Index: 5
+          Name: Kraakkhold
+          Description: 
+          Position: {x: 1793.148, y: 122.37264, z: -1550.6381}
+          Icon: {fileID: 0}
+        - Index: 7
+          Name: The Undulating Tower
+          Description: 
+          Position: {x: 26.732458, y: 419.053, z: -553.01404}
+          Icon: {fileID: 0}
+        - Index: 6
+          Name: Bruarden
+          Description: 
+          Position: {x: 655.5809, y: 120.3403, z: -1898.4319}
+          Icon: {fileID: 0}
+        - Index: 8
+          Name: Burring Castle
+          Description: 
+          Position: {x: -191.39888, y: 259.41052, z: 1866.423}
+          Icon: {fileID: 0}
+        - Index: 57
+          Name: Win Inn
+          Description: 
+          Position: {x: 248.91637, y: 215.57, z: 2030.8276}
+          Icon: {fileID: 0}
+        - Index: 2
+          Name: Likiriburrow
+          Description: 
+          Position: {x: 1188.4846, y: 177.32881, z: -1645.5281}
+          Icon: {fileID: 0}
+        - Index: 1
+          Name: Brichamber
+          Description: 
+          Position: {x: -1680.4341, y: 121.29426, z: -1914.8976}
+          Icon: {fileID: 0}
+        - Index: 9
+          Name: Lara Market
+          Description: 
+          Position: {x: -1426.7123, y: 121.086876, z: -1936.5721}
+          Icon: {fileID: 0}
+        - Index: 64
+          Name: The Pale Serpent
+          Description: 
+          Position: {x: 1792.8085, y: 175.87714, z: -520.86566}
           Icon: {fileID: 0}
         - Index: 0
-          Name: Village Waypoint
+          Name: Alstead
           Description: 
-          Position: {x: 3.0000305, y: 0.009815216, z: 3.0000305}
+          Position: {x: 755.2131, y: 432.15952, z: -19.987305}
           Icon: {fileID: 0}
-      PointsOfInterest: []
-    - MaxClients: 6
+      PointsOfInterest:
+      - Name: Air Elemental Cave
+        Description: 'Dungeon entrance, deep inside Air Elemental Cave: reached through
+          the cave.'
+        Position: {x: -1223.8582, y: 764.7429, z: 1207.0636}
+        Type: 18
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Haldea Conduit
+        Description: 'Dungeon entrance, deep inside Haldea Conduit: reached through
+          the cave.'
+        Position: {x: 1018.39996, y: 626.2766, z: 644.91376}
+        Type: 18
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Long Barrow of the Dark Moon
+        Description: 'Dungeon entrance (barrow)
+
+          A barrow in the Forest.'
+        Position: {x: 608, y: 202.47, z: -1376}
+        Type: 18
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Nuna Frost Grotto
+        Description: 'Dungeon entrance, deep inside Nuna Frost Grotto: reached through
+          the cave.'
+        Position: {x: -1789.8108, y: 829.6665, z: 294.76184}
+        Type: 18
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Perorshaft
+        Description: 'Dungeon entrance (crypt)
+
+          A crypt in the Tundra.'
+        Position: {x: 144, y: 393.5, z: -800}
+        Type: 18
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Rift of Celestials
+        Description: 'Dungeon entrance, deep inside Rift of Celestials: reached through
+          the cave.'
+        Position: {x: 719.86444, y: 494.10986, z: 716.5151}
+        Type: 18
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Pristine Golarchamber
+        Description: A dungeon entrance in the Alpine Meadow.
+        Position: {x: 1903.5957, y: 488.79138, z: 1422.7644}
+        Type: 18
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Brie Camp
+        Description: A skyfolk encampment in the Alpine Meadow.
+        Position: {x: -16, y: 403.06, z: 864}
+        Type: 19
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Frostkin Encampment
+        Description: A frostkin encampment in the Tundra.
+        Position: {x: -640, y: 161.19, z: -1568}
+        Type: 19
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Skyfolk Tents
+        Description: A skyfolk encampment in the Alpine Meadow.
+        Position: {x: -576, y: 470.07, z: -624}
+        Type: 19
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Effigy of the Long Spear
+        Description: A shrine in the Tundra.
+        Position: {x: -768, y: 409.14, z: 304}
+        Type: 20
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Per Effigy
+        Description: A shrine in the Tundra.
+        Position: {x: 944, y: 428.49, z: -304}
+        Type: 20
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Flower-ringed Wayshrine
+        Description: A shrine in the Alpine Meadow.
+        Position: {x: -48, y: 491.46, z: 304}
+        Type: 20
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Hayar Lookout
+        Description: A watchtower in the Grassland.
+        Position: {x: -1536, y: 219.77, z: -1536}
+        Type: 21
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Meieita's Watchtower
+        Description: A watchtower in the Grassland.
+        Position: {x: -224, y: 276.33, z: 1696}
+        Type: 21
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Meiouki's Tower
+        Description: A watchtower in the Grassland.
+        Position: {x: 208, y: 436.56, z: -352}
+        Type: 21
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Greea Bridge
+        Description: A bridge in the Alpine Meadow.
+        Position: {x: 1815, y: 476.44, z: 1429}
+        Type: 22
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Air Elemental Cave
+        Description: 'A cave of the air elementals in the Mountain Slope.
+
+          Its
+          passages join Cave of Drakes.'
+        Position: {x: -1248, y: 790.73, z: 944}
+        Type: 25
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Cave of Drakes
+        Description: 'A cave of the drakes in the Scree.
+
+          Its passages
+          join Air Elemental Cave.'
+        Position: {x: -1616, y: 927.03, z: 576}
+        Type: 25
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Rift of Celestials
+        Description: 'A cave of the celestials in the Alpine Meadow.
+
+          One
+          of 2 ways in and out.'
+        Position: {x: 480, y: 546.96, z: 640}
+        Type: 25
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Rift of Celestials
+        Description: Another way into the cave. One of 2 ways in and out.
+        Position: {x: 998.24896, y: 595.28253, z: 847.70044}
+        Type: 25
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Treeless Pillar
+        Description: A monument in the Tundra.
+        Position: {x: -304, y: 164.06, z: -1600}
+        Type: 26
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Gol Pike
+        Description: A peak in the Alpine Meadow.
+        Position: {x: 1840, y: 653.25, z: 880}
+        Type: 35
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Mount Grior
+        Description: A peak in the Mountain Slope.
+        Position: {x: -1248, y: 1026.52, z: -352}
+        Type: 35
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Nunpike
+        Description: A peak in the Ice Sheet.
+        Position: {x: 752, y: 794.49, z: 656}
+        Type: 35
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Grey Horn
+        Description: A peak in the Scree.
+        Position: {x: -1264, y: 1095.79, z: 1904}
+        Type: 35
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Pinea Col
+        Description: A pass in the Alpine Meadow.
+        Position: {x: 1435.89, y: 561.06, z: 796.8}
+        Type: 36
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Hoarei Ice River
+        Description: A glacier in the Ice Sheet.
+        Position: {x: -1552, y: 845.58, z: 1536}
+        Type: 49
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Nuna Frost Grotto
+        Description: An ice cave in the Ice Sheet.
+        Position: {x: -1920, y: 915.44, z: -176}
+        Type: 63
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Saso Ice Cave
+        Description: 'An ice cave in the Ice Sheet.
+
+          One of 2 ways in and
+          out.'
+        Position: {x: -1680, y: 885.35, z: 1088}
+        Type: 63
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Saso Ice Cave
+        Description: Another way into the ice cave. One of 2 ways in and out.
+        Position: {x: -1548.1154, y: 891.7256, z: 997.1311}
+        Type: 63
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ful Ember Tunnel
+        Description: 'A lava tube in the Geyser Basin.
+
+          One of 2 ways in
+          and out. Its passages join Haldea Conduit.'
+        Position: {x: 1168, y: 621.1, z: 1232}
+        Type: 64
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ful Ember Tunnel
+        Description: Another way into the lava tube. One of 2 ways in and out. Its
+          passages join Haldea Conduit.
+        Position: {x: 1231.6157, y: 623.89404, z: 1064.2172}
+        Type: 64
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Haldea Conduit
+        Description: 'A lava tube in the Geyser Basin.
+
+          Its passages join
+          Ful Ember Tunnel.'
+        Position: {x: 624, y: 678.72, z: 768}
+        Type: 64
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Brow of Lar
+        Description: An overhang in the Alpine Meadow.
+        Position: {x: -1089.1798, y: 592.67303, z: 670.8202}
+        Type: 65
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Gol Camp
+        Description: A bandit camp of the skyfolk in the Alpine Meadow.
+        Position: {x: -208, y: 444.6, z: -624}
+        Type: 66
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Wolffolk Camp
+        Description: A bandit camp of the wolffolk in the Tundra.
+        Position: {x: -240, y: 404.96, z: 608}
+        Type: 66
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Oakaorn Hunt Hall
+        Description: A hunting lodge in the Forest.
+        Position: {x: 256, y: 160.37, z: -1584}
+        Type: 67
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Wil Hunting Lodge
+        Description: A hunting lodge in the Forest.
+        Position: {x: 1360, y: 190.04, z: -1536}
+        Type: 67
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Tho Woodyard
+        Description: A lumber camp in the Forest.
+        Position: {x: 752, y: 195.37, z: -1440}
+        Type: 68
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Breie Lair
+        Description: A monster den of the celestials in the Alpine Meadow.
+        Position: {x: -448, y: 471.36, z: -544}
+        Type: 70
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Dire Wolf Lair
+        Description: A monster den of the dire wolves in the Tundra.
+        Position: {x: -608, y: 423.27, z: 48}
+        Type: 70
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Great Elk Nest
+        Description: A nest of the great elk in the Alpine Meadow.
+        Position: {x: -224, y: 432.95, z: -448}
+        Type: 71
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Sto Nest
+        Description: A nest of the griffins in the Mountain Slope.
+        Position: {x: 1712, y: 638.32, z: 896}
+        Type: 71
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Nima Altar
+        Description: A ritual site of the frost wolves in the Tundra.
+        Position: {x: -608, y: 427.16, z: 544}
+        Type: 72
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Gentle Stones
+        Description: A stone circle in the Alpine Meadow.
+        Position: {x: -32, y: 491.66, z: 32}
+        Type: 73
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Sanctuary of Vrea
+        Description: A temple in the Tundra.
+        Position: {x: -224, y: 323.06, z: 1232}
+        Type: 74
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Fairy Ring of Greie
+        Description: A fey ring in the Alpine Meadow.
+        Position: {x: 368, y: 485.54, z: -128}
+        Type: 76
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Lodestone of the Verdant Spear
+        Description: A ley nexus in the Forest.
+        Position: {x: 1072, y: 182.44, z: -1488}
+        Type: 77
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Sickwood of the Towering King
+        Description: A corrupted grove in the Forest.
+        Position: {x: 1952, y: 138.82, z: -304}
+        Type: 79
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ulfimund's Portal
+        Description: A portal in the Ice Sheet.
+        Position: {x: 768, y: 748.29, z: 1056}
+        Type: 80
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ragumund's Cemetery
+        Description: A graveyard in the Forest.
+        Position: {x: 1840, y: 131.51, z: -1840}
+        Type: 81
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ryeow Graveyard
+        Description: A graveyard in the Grassland.
+        Position: {x: 640, y: 429.75, z: -16}
+        Type: 81
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ruins of Mos
+        Description: Ruins in the Tundra.
+        Position: {x: -512, y: 151.55, z: -1760}
+        Type: 86
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Featureless Ruins
+        Description: Ruins in the Tundra.
+        Position: {x: -416, y: 373.3, z: 784}
+        Type: 86
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Sno Shell
+        Description: A ruined tower in the Tundra.
+        Position: {x: -144, y: 165.83, z: -1600}
+        Type: 87
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Tibielus's Broken Tower
+        Description: A ruined tower in the Tundra.
+        Position: {x: 96, y: 400.95, z: 1392}
+        Type: 87
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Rahaarar's Figure
+        Description: A statue in the Alpine Meadow.
+        Position: {x: 144, y: 523.08, z: 416}
+        Type: 88
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Dew-kissed Monolith
+        Description: An obelisk in the Alpine Meadow.
+        Position: {x: -560, y: 486.13, z: -176}
+        Type: 89
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Oak Farm
+        Description: An abandoned farm in the Forest.
+        Position: {x: 1424, y: 145.49, z: -1792}
+        Type: 91
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Kelarik's Hermitage
+        Description: A hermitage in the Alpine Meadow.
+        Position: {x: -48, y: 490.84, z: -240}
+        Type: 92
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Alstead
+        Description: A human village in the Grassland.
+        Position: {x: 752, y: 432.15, z: -16}
+        Type: 94
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Brichamber
+        Description: A foxfolk village in the Woodland.
+        Position: {x: -1680, y: 121.29, z: -1920}
+        Type: 94
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Golden Vixeinfield
+        Description: A foxfolk village in the Grassland.
+        Position: {x: -480, y: 309, z: 1424}
+        Type: 94
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Likiriburrow
+        Description: A goblin village in the Forest.
+        Position: {x: 1184, y: 177.32, z: -1648}
+        Type: 94
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Unarabfall
+        Description: A beastman village in the Forest.
+        Position: {x: 176, y: 163.51, z: -1456}
+        Type: 94
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Root-woven Ulfoostone
+        Description: A wolffolk town in the Forest.
+        Position: {x: 80, y: 134.81, z: -1760}
+        Type: 95
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Bruarden
+        Description: A bearfolk city in the Forest.
+        Position: {x: 656, y: 120.34, z: -1888}
+        Type: 96
+        Icon: {fileID: 0}
+        DetailTier: 0
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Kraakkhold
+        Description: A ravenfolk capital in the Forest.
+        Position: {x: 1808, y: 122.37, z: -1568}
+        Type: 97
+        Icon: {fileID: 0}
+        DetailTier: 0
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Undulating Tower
+        Description: A keep of the elephantfolk in the Grassland.
+        Position: {x: 32, y: 419.04, z: -544}
+        Type: 99
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Burring Castle
+        Description: A castle of the molefolk in the Grassland.
+        Position: {x: -192, y: 260.8, z: 1856}
+        Type: 100
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Lara Market
+        Description: A trading post in the Woodland.
+        Position: {x: -1440, y: 121.07, z: -1936}
+        Type: 102
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Pale Serpent
+        Description: A waystation in the Forest.
+        Position: {x: 1792, y: 175.87, z: -528}
+        Type: 103
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Win Inn
+        Description: A waystation in the Grassland.
+        Position: {x: 256, y: 215.55, z: 2032}
+        Type: 103
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Stenogard's Diggings
+        Description: A mine in the Alpine Meadow.
+        Position: {x: 640, y: 685.08, z: 608}
+        Type: 104
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Grea Quarry
+        Description: A quarry in the Alpine Meadow.
+        Position: {x: 1488, y: 510.01, z: 1280}
+        Type: 105
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Dew Strike
+        Description: A rare ore vein in the Alpine Meadow.
+        Position: {x: -512, y: 518.68, z: -400}
+        Type: 114
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Root-woven Great Oak
+        Description: An ancient tree in the Forest.
+        Position: {x: 1616, y: 135.82, z: -1776}
+        Type: 116
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Greo Simples Grove
+        Description: A herb grove in the Forest.
+        Position: {x: 288, y: 140.9, z: -1744}
+        Type: 117
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ver Herb Dell
+        Description: A herb grove in the Forest.
+        Position: {x: 1120, y: 139.52, z: -1872}
+        Type: 117
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ferow Mill
+        Description: A windmill in the Forest.
+        Position: {x: 96, y: 162.37, z: -1552}
+        Type: 123
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Win Post Mill
+        Description: A windmill in the Grassland.
+        Position: {x: -384, y: 315.7, z: 1456}
+        Type: 123
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+    - MaxClients: 200
       SceneTransitionImage: {fileID: 0}
       MapDefinition: {fileID: 0}
       InitialSpawnPositions:
-        m_keys: []
-        m_values: []
+        m_keys:
+        - Gritty Prakugbastion Initial Spawn
+        m_values:
+        - SpawnerName: Gritty Prakugbastion Initial Spawn
+          SceneName: Moron 3
+          Position: {x: 241.08337, y: 65.51388, z: -396.7018}
+          Rotation: {x: -0, y: -0.9816273, z: -0, w: -0.19080885}
+          AllowedRaces:
+          - {fileID: 11400000, guid: 6f8938bbed1286347b54bf3f4889f32a, type: 2}
+          - {fileID: 11400000, guid: f1bedd6f4354a7e41be26aee87734d66, type: 2}
+          - {fileID: 11400000, guid: 570b8e070c073834abac548a07706b47, type: 2}
       RespawnPositions:
         m_keys:
-        - Team2_B
-        - Team1_B
-        - Team2_A
-        - Team1_A
-        - SpawnPosition
+        - 'Vrakakcamp Respawn [5103735b]'
+        - 'Vakshelter Respawn [6f47f56b]'
+        - 'Edstead Respawn [4793887e]'
+        - Gritty Prakugbastion Respawn [0b437475] (1)
+        - 'Grinoridge Respawn [6275f6ca]'
         m_values:
-        - Position: {x: 17, y: 4.4215527, z: -2.5}
-          Rotation: {x: 0, y: 0, z: 0, w: 1}
-        - Position: {x: 13, y: 4.4215527, z: -8.5}
-          Rotation: {x: 0, y: 0, z: 0, w: 1}
-        - Position: {x: 15.5, y: 4.4215527, z: -2.5}
-          Rotation: {x: 0, y: 0, z: 0, w: 1}
-        - Position: {x: 11.5, y: 4.4215527, z: -8.5}
-          Rotation: {x: 0, y: 0, z: 0, w: 1}
-        - Position: {x: 14.458, y: 4.4215527, z: -5.458}
-          Rotation: {x: 0, y: 0.45196772, z: 0, w: 0.89203435}
+        - Position: {x: -1143.7197, y: 80.94869, z: -653.1131}
+          Rotation: {x: -0, y: 0.333807, z: -0, w: -0.94264144}
+        - Position: {x: -208.14803, y: 74.06661, z: -673.4724}
+          Rotation: {x: -0, y: -0.8290376, z: -0, w: -0.5591929}
+        - Position: {x: -1317.2008, y: 90.954185, z: -732.28796}
+          Rotation: {x: -0, y: 0.5664063, z: -0, w: -0.8241261}
+        - Position: {x: 242.2967, y: 66.53695, z: -401.87546}
+          Rotation: {x: -0, y: -0.9816273, z: -0, w: -0.19080885}
+        - Position: {x: -476.08224, y: 52.147667, z: -363.09155}
+          Rotation: {x: -0, y: -0.14780937, z: -0, w: -0.9890159}
       Teleporters:
         m_keys: []
         m_values: []
       Boundaries:
         m_keys:
-        - Terrain
+        - Scene Boundary
         m_values:
-        - BoundaryOrigin: {x: 0, y: 41.20125, z: 0}
-          BoundarySize: {x: 1000, y: 82.4025, z: 1000}
+        - BoundaryOrigin: {x: 0, y: -339.19287, z: 0}
+          BoundarySize: {x: 3375, y: 3606.8906, z: 2250}
       Waypoints:
-        m_keys: 
-        m_values: []
-      PointsOfInterest: []
+        m_keys: 060000000b000000010000000300000000000000040000000500000002000000
+        m_values:
+        - Index: 6
+          Name: Fort Zano
+          Description: 
+          Position: {x: -1084.7628, y: 95.80609, z: -456.94022}
+          Icon: {fileID: 0}
+        - Index: 11
+          Name: Castle Nyal
+          Description: 
+          Position: {x: -914.51404, y: 122.28302, z: -656.8828}
+          Icon: {fileID: 0}
+        - Index: 1
+          Name: Edstead
+          Description: 
+          Position: {x: -1315.0505, y: 90.63519, z: -726.68646}
+          Icon: {fileID: 0}
+        - Index: 3
+          Name: Vakshelter
+          Description: 
+          Position: {x: -210.39566, y: 73.96661, z: -679.03546}
+          Icon: {fileID: 0}
+        - Index: 0
+          Name: Grinoridge
+          Description: 
+          Position: {x: -470.34442, y: 52.04767, z: -364.8458}
+          Icon: {fileID: 0}
+        - Index: 4
+          Name: Ivyeow Tower
+          Description: 
+          Position: {x: 1587.2114, y: 160.05145, z: 990.72266}
+          Icon: {fileID: 0}
+        - Index: 5
+          Name: Vrakakcamp
+          Description: 
+          Position: {x: -1139.0569, y: 80.848694, z: -649.3372}
+          Icon: {fileID: 0}
+        - Index: 2
+          Name: Gritty Prakugbastion
+          Description: 
+          Position: {x: 236.73361, y: 65.41388, z: -404.1231}
+          Icon: {fileID: 0}
+      PointsOfInterest:
+      - Name: Fahar Camp
+        Description: A sandstrider encampment in the Desert.
+        Position: {x: 1016, y: 92.99, z: 168}
+        Type: 19
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Ancient Idol
+        Description: A shrine in the Desert.
+        Position: {x: 888, y: 78.78, z: -472}
+        Type: 20
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Grotto of Sabre Cats
+        Description: A cave of the sabre cats in the Savanna.
+        Position: {x: 1224, y: 143.49, z: 648}
+        Type: 25
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Sun-bleached Dune Hollow
+        Description: Another way into the cave. One of 2 ways in and out.
+        Position: {x: 488.9145, y: 133.61957, z: 667.98364}
+        Type: 25
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Sun-bleached Dune Hollow
+        Description: 'A cave of the sabre cats in the Scrubland.
+
+          One of
+          2 ways in and out.'
+        Position: {x: 664, y: 126, z: 440}
+        Type: 25
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Haluum's Effigy
+        Description: A monument in the Savanna.
+        Position: {x: -376, y: 205.29, z: 280}
+        Type: 26
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Wandering Lake
+        Description: A lake in the Savanna.
+        Position: {x: 125.14, y: 48.07, z: -161.6}
+        Type: 31
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Fenurcrag
+        Description: A peak in the Scrubland.
+        Position: {x: 792, y: 249.18, z: 680}
+        Type: 35
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Gripike
+        Description: A peak in the Badlands.
+        Position: {x: 1416, y: 189.16, z: -184}
+        Type: 35
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Shaai Spire
+        Description: A peak in the Savanna.
+        Position: {x: -536, y: 216.67, z: 104}
+        Type: 35
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Ancient Pass
+        Description: A pass in the Desert.
+        Position: {x: 1459.29, y: 159.57, z: 176.78}
+        Type: 36
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Resilient Col
+        Description: A pass in the Scrubland.
+        Position: {x: 135.3, y: 116.84, z: 395.16}
+        Type: 36
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Mioi Woodyard
+        Description: A lumber camp in the Bamboo Forest.
+        Position: {x: 1192, y: 178.22, z: 1016}
+        Type: 68
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Regauas's Fishing Camp
+        Description: A fishing camp in the Scrubland.
+        Position: {x: -40, y: 52.68, z: -168}
+        Type: 69
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Lair of Thistlekin
+        Description: A monster den of the thistlekin in the Scrubland.
+        Position: {x: 136, y: 123.99, z: 440}
+        Type: 70
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Barren Brood
+        Description: A nest of the boars in the Scrubland.
+        Position: {x: 1048, y: 86.95, z: 440}
+        Type: 71
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Wasp Swarm Ritual Site
+        Description: A ritual site of the wasp swarms in the Savanna.
+        Position: {x: 280, y: 60.89, z: 792}
+        Type: 72
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ulfarorrik's Henge
+        Description: A stone circle in the Savanna.
+        Position: {x: -136, y: 98.82, z: 536}
+        Type: 73
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Dusty Barrow-field
+        Description: A graveyard in the Scrubland.
+        Position: {x: -248, y: 49.55, z: -312}
+        Type: 81
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Gri Mound
+        Description: A barrow in the Scrubland.
+        Position: {x: -456, y: 80.79, z: -680}
+        Type: 82
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Striated Ruined Temple
+        Description: Ruins in the Badlands.
+        Position: {x: 488, y: 56.84, z: -8}
+        Type: 86
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Freyorard's Ruined Keep
+        Description: A ruined tower in the Desert.
+        Position: {x: 584, y: 54.28, z: -184}
+        Type: 87
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Figure of Nasaair
+        Description: A statue in the Badlands.
+        Position: {x: 696, y: 60.47, z: 40}
+        Type: 88
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Edstead
+        Description: A human village in the Grassland.
+        Position: {x: -1320, y: 92.04, z: -728}
+        Type: 94
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Grinoridge
+        Description: A hyenafolk village in the Savanna.
+        Position: {x: -472, y: 52.04, z: -360}
+        Type: 94
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Vrakakcamp
+        Description: An orc town in the Savanna.
+        Position: {x: -1144, y: 80.83, z: -648}
+        Type: 95
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Vakshelter
+        Description: A hill goblin city in the Scrubland.
+        Position: {x: -200, y: 73.95, z: -680}
+        Type: 96
+        Icon: {fileID: 0}
+        DetailTier: 0
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Gritty Prakugbastion
+        Description: An orc capital in the Scrubland.
+        Position: {x: 248, y: 66.74, z: -424}
+        Type: 97
+        Icon: {fileID: 0}
+        DetailTier: 0
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ivyeow Tower
+        Description: A keep of the werewolves in the Woodland.
+        Position: {x: 1592, y: 160.06, z: 1000}
+        Type: 99
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Castle Nyal
+        Description: A castle of the lionfolk in the Savanna.
+        Position: {x: -920, y: 122.4, z: -648}
+        Type: 100
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Fort Zano
+        Description: A fortress of the gnolls in the Savanna.
+        Position: {x: -1080, y: 95.82, z: -456}
+        Type: 101
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Bri Delf
+        Description: A quarry in the Badlands.
+        Position: {x: 456, y: 76.98, z: -584}
+        Type: 105
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ghauuirash's Light
+        Description: A lighthouse in the Beach.
+        Position: {x: -24, y: 6.2, z: 1000}
+        Type: 106
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Black Reef
+        Description: A coral reef.
+        Position: {x: -616, y: -6.96, z: 728}
+        Type: 109
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Sho Sunken Hull
+        Description: A sunken ship beneath the Coastal Water.
+        Position: {x: -1000, y: -16.25, z: 248}
+        Type: 110
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Whispering Great Oak
+        Description: An ancient tree in the Bamboo Forest.
+        Position: {x: 872, y: 154.26, z: 1032}
+        Type: 116
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Bao Windmill
+        Description: A windmill in the Savanna.
+        Position: {x: -888, y: 128.71, z: -360}
+        Type: 123
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
     - MaxClients: 200
       SceneTransitionImage: {fileID: 0}
       MapDefinition: {fileID: 0}
@@ -223,90 +2246,53 @@ MonoBehaviour:
         m_keys: []
         m_values: []
       RespawnPositions:
-        m_keys:
-        - Respawn Position B
-        - Respawn Position A
-        m_values:
-        - Position: {x: -15, y: 1.5, z: 0}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
-        - Position: {x: 15, y: 1.5, z: 0}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
+        m_keys: []
+        m_values: []
       Teleporters:
-        m_keys:
-        - Tutorial Regions Entrance
-        m_values:
-        - ToScene: StartScene A
-          ToPosition: {x: 22.411568, y: 30.904213, z: -40.85532}
-          ToRotation: {x: -0, y: 1, z: -0, w: 0}
+        m_keys: []
+        m_values: []
       Boundaries:
         m_keys:
-        - WorldSceneSettings
+        - Scene Boundary
         m_values:
-        - BoundaryOrigin: {x: 0, y: 0, z: 0}
-          BoundarySize: {x: 180, y: 50, z: 180}
+        - BoundaryOrigin: {x: 0, y: 405.08008, z: 0}
+          BoundarySize: {x: 750, y: 2072.7207, z: 750}
       Waypoints:
         m_keys: 
         m_values: []
-      PointsOfInterest: []
-    - MaxClients: 200
-      SceneTransitionImage: {fileID: 0}
-      MapDefinition: {fileID: 0}
-      InitialSpawnPositions:
-        m_keys:
-        - Spawn Point C
-        - Spawn Point B
-        - Spawn Point A
-        - Spawn Point D
-        m_values:
-        - SpawnerName: Spawn Point C
-          SceneName: Tutorial SpawnPoints
-          Position: {x: 0, y: 1.5, z: 15}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
-          AllowedRaces: []
-        - SpawnerName: Spawn Point B
-          SceneName: Tutorial SpawnPoints
-          Position: {x: -15, y: 1.5, z: 0}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
-          AllowedRaces: []
-        - SpawnerName: Spawn Point A
-          SceneName: Tutorial SpawnPoints
-          Position: {x: 15, y: 1.5, z: 0}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
-          AllowedRaces: []
-        - SpawnerName: Spawn Point D
-          SceneName: Tutorial SpawnPoints
-          Position: {x: 0, y: 1.5, z: -15}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
-          AllowedRaces: []
-      RespawnPositions:
-        m_keys:
-        - Character Respawn Position B
-        - Character Respawn Position A
-        - Character Respawn Position C
-        m_values:
-        - Position: {x: -8, y: 1.5, z: -8}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
-        - Position: {x: 8, y: 1.5, z: -8}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
-        - Position: {x: -8, y: 1.5, z: 8}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
-      Teleporters:
-        m_keys:
-        - Tutorial SpawnPoints Entrance
-        m_values:
-        - ToScene: StartScene A
-          ToPosition: {x: 15.661569, y: 30.904213, z: -41.275322}
-          ToRotation: {x: -0, y: 1, z: -0, w: 0}
-      Boundaries:
-        m_keys:
-        - WorldSceneSettings
-        m_values:
-        - BoundaryOrigin: {x: 0, y: 0, z: 0}
-          BoundarySize: {x: 180, y: 50, z: 180}
-      Waypoints:
-        m_keys: 
-        m_values: []
-      PointsOfInterest: []
+      PointsOfInterest:
+      - Name: The Scalded Saddle
+        Description: A pass in the Sulphur Flats.
+        Position: {x: -186.21, y: 295.98, z: -76.97}
+        Type: 36
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Mofou Steam Field
+        Description: Fumarole field in the Sulphur Flats.
+        Position: {x: -216, y: 228.13, z: 152}
+        Type: 52
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Bahaian's Stone-pit
+        Description: A quarry in the Sulphur Flats.
+        Position: {x: -200, y: 227.51, z: 184}
+        Type: 105
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Stra Rift
+        Description: A tidal rift in the Tidal Fracture.
+        Position: {x: 8, y: 270.55, z: -104}
+        Type: 122
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
     - MaxClients: 200
       SceneTransitionImage: {fileID: 0}
       MapDefinition: {fileID: 0}
@@ -314,28 +2300,152 @@ MonoBehaviour:
         m_keys: []
         m_values: []
       RespawnPositions:
-        m_keys:
-        - Respawn Position A
-        - Respawn Position B
-        m_values:
-        - Position: {x: 15, y: 1.5, z: 0}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
-        - Position: {x: -15, y: 1.5, z: 0}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
+        m_keys: []
+        m_values: []
       Teleporters:
-        m_keys:
-        - Tutorial Spawners Entrance
-        m_values:
-        - ToScene: StartScene A
-          ToPosition: {x: 29.111568, y: 30.904213, z: -41.27882}
-          ToRotation: {x: -0, y: 1, z: -0, w: 0}
+        m_keys: []
+        m_values: []
       Boundaries:
         m_keys:
-        - WorldSceneSettings
+        - Scene Boundary
         m_values:
-        - BoundaryOrigin: {x: 0, y: 0, z: 0}
-          BoundarySize: {x: 180, y: 50, z: 180}
+        - BoundaryOrigin: {x: 0, y: 61.297607, z: 0}
+          BoundarySize: {x: 2250, y: 2239.9202, z: 2250}
       Waypoints:
         m_keys: 
         m_values: []
-      PointsOfInterest: []
+      PointsOfInterest:
+      - Name: Taraiular's Camp
+        Description: An encampment in the Lava Tube.
+        Position: {x: -440, y: -26.66, z: 280}
+        Type: 19
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Idol of the Cooled Run
+        Description: A shrine in the Lava Tube.
+        Position: {x: -696, y: -15.83, z: -104}
+        Type: 20
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Reg Central Peak
+        Description: A peak in the Regolith Plain.
+        Position: {x: 200, y: 116.4, z: -280}
+        Type: 35
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Weeping Den
+        Description: A monster den in the Lava Tube.
+        Position: {x: -648, y: -12.99, z: -264}
+        Type: 70
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Ingivald's Mound
+        Description: A barrow in the Lava Tube.
+        Position: {x: -72, y: -20.1, z: 360}
+        Type: 82
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Base Field
+        Description: A battlefield in the Lava Tube.
+        Position: {x: -472, y: -18.86, z: 56}
+        Type: 84
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Bas Ruins
+        Description: Ruins in the Lava Tube.
+        Position: {x: -184, y: -7.39, z: -696}
+        Type: 86
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Sker Broken Tower
+        Description: A ruined tower in the Lava Tube.
+        Position: {x: -712, y: -28.66, z: 152}
+        Type: 87
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Statue of the Sealed Run
+        Description: A statue in the Lava Tube.
+        Position: {x: -392, y: -32.25, z: 488}
+        Type: 88
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Fum Prism Hall
+        Description: A crystal formation in the Lava Tube.
+        Position: {x: -280, y: -21.81, z: 232}
+        Type: 115
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+    - MaxClients: 200
+      SceneTransitionImage: {fileID: 0}
+      MapDefinition: {fileID: 0}
+      InitialSpawnPositions:
+        m_keys: []
+        m_values: []
+      RespawnPositions:
+        m_keys: []
+        m_values: []
+      Teleporters:
+        m_keys: []
+        m_values: []
+      Boundaries:
+        m_keys:
+        - Scene Boundary
+        m_values:
+        - BoundaryOrigin: {x: 0, y: 578.79517, z: 0}
+          BoundarySize: {x: 1000, y: 1785.6973, z: 1000}
+      Waypoints:
+        m_keys: 
+        m_values: []
+      PointsOfInterest:
+      - Name: The Stark Gate
+        Description: A dungeon entrance in the Rocky Terrain.
+        Position: {x: -136, y: 527.5, z: -8}
+        Type: 18
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Volor Black Glass
+        Description: An obsidian field in the Volcanic.
+        Position: {x: -72, y: 391.65, z: 264}
+        Type: 53
+        Icon: {fileID: 0}
+        DetailTier: 3
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: The Barren Hideout
+        Description: A bandit camp of the cyclopes in the Volcanic.
+        Position: {x: -88, y: 397.83, z: 216}
+        Type: 66
+        Icon: {fileID: 0}
+        DetailTier: 2
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1
+      - Name: Quinius's Mausoleum
+        Description: A crypt in the Rocky Terrain.
+        Position: {x: 264, y: 592.24, z: -184}
+        Type: 83
+        Icon: {fileID: 0}
+        DetailTier: 1
+        RequiresDiscovery: 1
+        ShowOnMinimap: 1

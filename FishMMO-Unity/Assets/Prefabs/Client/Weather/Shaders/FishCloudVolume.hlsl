@@ -289,6 +289,8 @@ float FishCloudMesoscale(float2 driftedMetres)
 /// tower per lattice cell at a hashed place, size and strength, round, with a flat core — not the
 /// peaks of a value-noise lattice, which put every tower on a nine-kilometre square grid. The
 /// server reads the C# one to put the rain under them.
+// Keep the nine-cell search rolled: cloud density inlines this through nested view/light marches.
+// Positive loop counters also avoid legacy HLSL translators mishandling negative induction variables.
 float FishCloudTowerAnalytic(float2 driftedMetres)
 {
     float2 p = driftedMetres / max(1.0, _FishCloudColumn.y);
@@ -296,10 +298,12 @@ float FishCloudTowerAnalytic(float2 driftedMetres)
     uint seed = (uint)_FishCloudTowerSeed;
     int2 i = (int2)floor(p);
     float best = 0.0;
-    [unroll] for (int dy = -1; dy <= 1; dy++)
+    [loop] for (int oy = 0; oy < 3; oy++)
     {
-        [unroll] for (int dx = -1; dx <= 1; dx++)
+        int dy = oy - 1;
+        [loop] for (int ox = 0; ox < 3; ox++)
         {
+            int dx = ox - 1;
             int cx = i.x + dx, cy = i.y + dy;
             int wx = FishCloudWrapCell(cx, period), wy = FishCloudWrapCell(cy, period);
             float strength = smoothstep(0.0, 1.0, saturate((FishCloudWxValue(wx, wy, seed) - 0.55) / 0.30));
@@ -679,7 +683,11 @@ void FishCloudAirAt(float2 xz, out float4 airA, out float4 airB)
 // eddies' detail read; 256/512/1024/2048 a second tower / meso / air / terrain look-up alone; 4096 a second density
 // (FishCloudDensityAt) per sample; 8192 a second light march; 16384 a second light-from-below (FishCloudFarDepth);
 // 32768 a second density at every edge-finding probe; 65536 the edge searches' five halvings always. 0 as shipped.
+#if defined(FISHMMO_SHADER_DIAGNOSTICS)
 float _FishCloudFieldSkip;
+#else
+#define _FishCloudFieldSkip 0.0
+#endif
 
 FishCloudField FishCloudFieldAt(float2 xz)
 {
@@ -691,16 +699,21 @@ FishCloudField FishCloudFieldAt(float2 xz)
     field.ground = 0.0;
     field.surface = 0.0;
     field.over = 1.0;
+#if defined(FISHMMO_SHADER_DIAGNOSTICS)
     UNITY_BRANCH
     if (skip == 256u && _FishCloudColumn.x > 0.001)
     {
         field.tower += 1e-7 * FishCloudTower(xz + 0.37 - _FishCloudTowerDrift.xy);
     }
+#endif
+#if defined(FISHMMO_SHADER_DIAGNOSTICS)
     UNITY_BRANCH
     if (skip == 512u)
     {
         field.meso += 1e-7 * FishCloudMesoAt(xz + 0.37);
     }
+#endif
+#if defined(FISHMMO_SHADER_DIAGNOSTICS)
     UNITY_BRANCH
     if (skip == 1024u)
     {
@@ -708,12 +721,15 @@ FishCloudField FishCloudFieldAt(float2 xz)
         FishCloudAirAt(xz + 0.37, againA, againB);
         field.meso += 1e-7 * (againA.x + againA.y + againB.x + againB.w);
     }
+#endif
+#if defined(FISHMMO_SHADER_DIAGNOSTICS)
     UNITY_BRANCH
     if (skip == 2048u && _FishCloudTerrainRect.w > 0.5)
     {
         float2 againUV = saturate((xz + 0.37 - _FishCloudTerrainRect.xy) / max(1.0, _FishCloudTerrainRect.z));
         field.meso += 1e-7 * SAMPLE_TEXTURE2D_LOD(_FishCloudTerrain, sampler_FishCloudTerrain, againUV, 0).r;
     }
+#endif
     float4 airA = float4(0.0, 1000.0, 1500.0, 1500.0), airB = float4(0.0, 0.0, 0.0, 2000.0);
     if ((skip & 8u) == 0u)
     {
@@ -1460,11 +1476,13 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
             eddyAt.x = (eddyAt.x - leanM) / max(1.0, b.w);
             float3 detailUV = float3(eddyAt.x, altitude - floorHere, eddyAt.y) / max(20.0, b.y) + i;
             float3 detail = SAMPLE_TEXTURE3D_LOD(_FishCloudDetail, sampler_FishCloudDetail, detailUV, 0).rgb;
+#if defined(FISHMMO_SHADER_DIAGNOSTICS)
             UNITY_BRANCH
             if (_FishCloudFieldSkip == 128.0)
             {
                 detail += 1e-7 * SAMPLE_TEXTURE3D_LOD(_FishCloudDetail, sampler_FishCloudDetail, detailUV + 0.37, 0).rgb;
             }
+#endif
             // An octave the screen cannot resolve is its mean; what is left is measured against the
             // spread that is left, and spread evenly over −1..1 by the logistic stand-in for the
             // normal curve (scale 1.702, Haley 1952). Normalised, the eddies carry the edge over their
@@ -2710,22 +2728,26 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
             else
             {
                 field = FishCloudFieldAt(fieldXZ);
+#if defined(FISHMMO_SHADER_DIAGNOSTICS)
                 UNITY_BRANCH
                 if (_FishCloudFieldSkip == 64.0)
                 {
                     FishCloudField again = FishCloudFieldAt(fieldXZ + 0.37);
                     field.meso += 1e-7 * (again.meso + again.tower + again.lowCover + again.cloudBase + again.storm.cover + again.orographic);
                 }
+#endif
                 rayField = field;
                 rayFieldAt = fieldXZ;
             }
             density = FishCloudDensityAt(position, inside ? detailHere : 0.0, footprint, field, true, spot);
+#if defined(FISHMMO_SHADER_DIAGNOSTICS)
             UNITY_BRANCH
             if (_FishCloudFieldSkip == 4096.0)
             {
                 FishCloudPoint againSpot;
                 density += 1e-7 * FishCloudDensityAt(position + 0.37, inside ? detailHere : 0.0, footprint, field, true, againSpot);
             }
+#endif
             edgeAhead = FishCloudEdgeAhead;
             if (debugging && _FishCloudDiag.w > 5.5)
             {
@@ -2822,11 +2844,13 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
                             }
                             FishCloudPoint probeSpot;
                             probeDensity = FishCloudDensityAt(probe, 0.0, footprint, probeField, true, probeSpot);
+#if defined(FISHMMO_SHADER_DIAGNOSTICS)
                             UNITY_BRANCH
                             if (_FishCloudFieldSkip == 32768.0)
                             {
                                 probeDensity += 1e-7 * FishCloudDensityAt(probe + 0.37, 0.0, footprint, probeField, true, probeSpot);
                             }
+#endif
                         }
                         if (probeDensity > 0.0)
                         {
@@ -2917,11 +2941,13 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
                         }
                         FishCloudPoint probeSpot;
                         float probeDensity = FishCloudDensityAt(probe, 0.0, footprint, probeField, true, probeSpot);
+#if defined(FISHMMO_SHADER_DIAGNOSTICS)
                         UNITY_BRANCH
                         if (_FishCloudFieldSkip == 32768.0)
                         {
                             probeDensity += 1e-7 * FishCloudDensityAt(probe + 0.37, 0.0, footprint, probeField, true, probeSpot);
                         }
+#endif
                         probeCloud = probeDensity > 0.0 && probeSpot.high01 >= 0.0;
                     }
                     if (probeCloud)
@@ -3049,22 +3075,26 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
                         float2 lightPhase = frac(lightBase + i * float2(0.7548777, 0.5698403));
                         FishCloudReadsTerrain = false;
                         depthToSun = FishCloudLightDepth(position, toSun, footprint, field, at, transmittance, lightPhase);
+#if defined(FISHMMO_SHADER_DIAGNOSTICS)
                         UNITY_BRANCH
                         if (_FishCloudFieldSkip == 8192.0)
                         {
                             depthToSun += 1e-7 * FishCloudLightDepth(position + 0.37, toSun, footprint, field, at, transmittance, lightPhase);
                         }
+#endif
                         // Only where FishCloudLight uses it: a deck's far side is its base (spot.tauBelow), which the light
                         // takes outright wherever `deck` is 1 (every band but a column's, and a column's at 95 % cover and
                         // more). Two density looks a lit sample skipped there, for the same light.
                         bool columnBand = _FishCloudLayerF[clamp(spot.layer, 0, FISH_CLOUD_MAX_LAYERS - 1)].z > 0.5;
                         bool baseOnly = _FishCloudFixB.x > 0.5 || (_FishCloudLegacy < 0.5 && (!columnBand || spot.cover >= 0.95));
                         depthAway = baseOnly ? spot.tauBelow : FishCloudFarDepth(position, toSun, footprint, field, lightPhase, spot.tauBelow);
+#if defined(FISHMMO_SHADER_DIAGNOSTICS)
                         UNITY_BRANCH
                         if (_FishCloudFieldSkip == 16384.0)
                         {
                             depthAway += 1e-7 * FishCloudFarDepth(position + 0.37, toSun, footprint, field, lightPhase, spot.tauBelow);
                         }
+#endif
                         FishCloudReadsTerrain = true;
                     }
                     // Only a depth found in this cloud may be used again: once, or in runs deep in (`economy`).

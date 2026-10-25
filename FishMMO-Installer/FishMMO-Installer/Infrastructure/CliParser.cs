@@ -117,6 +117,7 @@ namespace FishMMO.Installer
             Console.WriteLine("  fishmmo-db        FishMMO database, user, and initial migration");
             Console.WriteLine("  nginx             NGINX reverse proxy");
             Console.WriteLine("  letsencrypt       Let's Encrypt TLS certificate");
+            Console.WriteLine("  dev-certificates  Local development TLS certificates (Linux)");
             Console.WriteLine("  unity-hub         Unity Hub");
             Console.WriteLine("  unity-editor      Unity Editor + modules");
             Console.WriteLine("  build-projects    Build all C# projects");
@@ -154,6 +155,7 @@ namespace FishMMO.Installer
             Console.WriteLine("  fishmmo-db        FishMMO database, user, and initial migration");
             Console.WriteLine("  nginx             NGINX reverse proxy");
             Console.WriteLine("  letsencrypt       Let's Encrypt TLS certificate");
+            Console.WriteLine("  dev-certificates  Local development TLS certificates (Linux)");
             Console.WriteLine("  unity-hub         Unity Hub");
             Console.WriteLine("  unity-editor      Unity Editor + modules");
             Console.WriteLine("  build-projects    Build all C# projects");

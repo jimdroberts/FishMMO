@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Settings;
+using UnityEditor.AddressableAssets.Settings.GroupSchemas;
+using FishMMO.Shared.CustomBuildTool.Core;
 
 namespace FishMMO.Shared.WorldDesign
 {
@@ -22,7 +24,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </para>
 	/// <para>
 	/// <b>Only what the build reaches.</b> <see cref="RegisterReachable"/> walks the dependencies of every scene
-	/// in the build and every asset in every other addressable group, and registers the generated assets among
+	/// in the build and every asset in each included addressable group, and registers the generated assets among
 	/// them in <see cref="GroupName"/> — a group whose file is gitignored, like the terrain arrays'. A placeholder
 	/// nothing references never ships. Registering them at all, rather than leaving them as implicit
 	/// dependencies, is what stops a prefab that both a biome (shared bundle) and a scene's terrain (scene bundle)
@@ -60,7 +62,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// Registers every generated asset the build reaches in <see cref="GroupName"/>, and nothing else.
 		/// Returns how many were registered.
 		/// </summary>
-		public static int RegisterReachable(List<string> log)
+		public static int RegisterReachable(List<string> log, string[] excludedGroups = null, bool serverBuild = false)
 		{
 			AddressableAssetSettings settings = AddressableAssetSettingsDefaultObject.Settings;
 			if (settings == null)
@@ -81,7 +83,9 @@ namespace FishMMO.Shared.WorldDesign
 			var gathered = new List<AddressableAssetEntry>();
 			foreach (AddressableAssetGroup group in settings.groups)
 			{
-				if (group == null || group.Name == GroupName)
+				if (group == null || group.Name == GroupName ||
+					!ContentBuildFilter.IncludesGroup(group.Name, excludedGroups) ||
+					group.GetSchema<BundledAssetGroupSchema>() == null)
 				{
 					continue;
 				}
@@ -102,7 +106,8 @@ namespace FishMMO.Shared.WorldDesign
 			var reached = new List<string>();
 			foreach (string dependency in AssetDatabase.GetDependencies(new List<string>(roots).ToArray(), true))
 			{
-				if (IsGenerated(dependency) && !dependency.EndsWith(".cs", StringComparison.Ordinal))
+				if (IsGenerated(dependency) && !dependency.EndsWith(".cs", StringComparison.Ordinal) &&
+					(!serverBuild || !ContentBuildFilter.IsRenderingOnly(AssetDatabase.GetMainAssetTypeAtPath(dependency))))
 				{
 					reached.Add(dependency);
 				}
@@ -112,6 +117,12 @@ namespace FishMMO.Shared.WorldDesign
 			AddressableAssetGroup target = settings.FindGroup(GroupName)
 				?? settings.CreateGroup(GroupName, false, false, false, null,
 					settings.DefaultGroup.Schemas.ConvertAll(schema => schema.GetType()).ToArray());
+			// An interrupted client build may leave this temporary group behind. Replace
+			// its entries so a following server build cannot retain the old rendering roots.
+			foreach (AddressableAssetEntry entry in new List<AddressableAssetEntry>(target.entries))
+			{
+				settings.RemoveAssetEntry(entry.guid, false);
+			}
 			int registered = 0;
 			foreach (string path in reached)
 			{

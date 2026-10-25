@@ -283,27 +283,12 @@ namespace FishMMO.Installer
 		}
 
 		/// <summary>
-		/// Resolves a practical default hierarchy directory by finding the installer repository
-		/// and returning its parent directory.
+		/// Resolves the default project hierarchy using the shared monorepo root detector.
 		/// </summary>
 		/// <returns>Default root directory for dynamic project scanning.</returns>
 		private static string ResolveDefaultRootDirectory()
 		{
-			string workingDirectory = InstallerProcessHelper.GetWorkingDirectory();
-			DirectoryInfo? currentDirectory = new DirectoryInfo(workingDirectory);
-
-			while (currentDirectory != null)
-			{
-				string solutionPath = Path.Combine(currentDirectory.FullName, "FishMMO-Installer.slnx");
-				if (File.Exists(solutionPath))
-				{
-					return currentDirectory.Parent?.FullName ?? currentDirectory.FullName;
-				}
-
-				currentDirectory = currentDirectory.Parent;
-			}
-
-			return Directory.GetParent(workingDirectory)?.FullName ?? workingDirectory;
+			return InstallationConstants.FishMMOMonorepoRoot;
 		}
 
 		/// <summary>
@@ -416,7 +401,8 @@ namespace FishMMO.Installer
 		private static bool ShouldSkipDirectory(string directoryPath)
 		{
 			string directoryName = Path.GetFileName(directoryPath);
-			return directoryName.Equals("bin", StringComparison.OrdinalIgnoreCase)
+			return directoryName.Equals("Builds", StringComparison.OrdinalIgnoreCase)
+				|| directoryName.Equals("bin", StringComparison.OrdinalIgnoreCase)
 				|| directoryName.Equals("obj", StringComparison.OrdinalIgnoreCase)
 				|| directoryName.Equals(".git", StringComparison.OrdinalIgnoreCase)
 				|| directoryName.Equals(".vs", StringComparison.OrdinalIgnoreCase)

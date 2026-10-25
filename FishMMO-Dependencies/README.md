@@ -54,11 +54,14 @@ server, the database, and Unity all link against the same binaries.
 ## Architecture
 
 ```
-FishMMO-Dependencies/
-├── FishMMO-Dependencies.csproj   # The PackageReference list (the real artifact)
-├── Placeholder.cs                     # Empty placeholder (required for a .csproj to compile)
-└── bin/Release/netstandard2.1/   # Output: all package DLLs + dependencies
-                                  # → mirrored to FishMMO-Unity/Assets/Dependencies/
+<monorepo>/
+├── FishMMO-Dependencies/
+│   ├── FishMMO-Dependencies.csproj   # PackageReference list
+│   └── Placeholder.cs               # Empty source placeholder
+├── Builds/
+│   └── FishMMO-Dependencies/Release/netstandard2.1/  # Package DLLs + dependencies
+└── FishMMO-Unity/
+    └── Assets/Dependencies/         # DLL closure mirrored here after build
 ```
 
 A custom MSBuild target copies the full transitive DLL closure (not just the
@@ -167,7 +170,7 @@ versioning — they should NOT reference `FishMMO-Dependencies.dll` directly.
 flowchart LR
     NuGet[(nuget.org)]
     Deps[FishMMO-Dependencies.csproj<br/>PackageReference list]
-    Bin[bin/Release/netstandard2.1/<br/>DLL closure]
+    Bin[../Builds/FishMMO-Dependencies/Release/netstandard2.1/<br/>DLL closure]
     Unity[FishMMO-Unity<br/>Assets/Dependencies/]
 
     NuGet --> Deps

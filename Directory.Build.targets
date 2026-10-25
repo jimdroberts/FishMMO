@@ -1,0 +1,40 @@
+<Project>
+  <UsingTask TaskName="FishMMOCleanOutputTask" TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+    <Task>
+      <Code Type="Class" Language="cs" Source="$(MSBuildThisFileDirectory)BuildTools/CleanOutput.cs" />
+    </Task>
+  </UsingTask>
+
+  <Target Name="FishMMOResolveCleanPaths"
+          Condition="'$(FishMMOCentralizedOutput)' == 'true' and '$(OutputPath)' != '' and '$(OutDir)' == '$(OutputPath)'">
+    <PropertyGroup>
+      <_FishMMOCleanPath>$([MSBuild]::EnsureTrailingSlash($([System.IO.Path]::GetFullPath('$(OutputPath)'))))</_FishMMOCleanPath>
+      <_FishMMOCleanRoot>$([MSBuild]::EnsureTrailingSlash($([System.IO.Path]::GetFullPath('$(FishMMOProjectOutputRoot)'))))</_FishMMOCleanRoot>
+      <_FishMMOCleanEligible Condition="$([System.String]::Copy('$(_FishMMOCleanPath)').StartsWith('$(_FishMMOCleanRoot)')) and '$(_FishMMOCleanPath)' != '$(_FishMMOCleanRoot)'">true</_FishMMOCleanEligible>
+    </PropertyGroup>
+  </Target>
+
+  <!-- Capture runtime overrides before SDK Clean deletes appsettings content. -->
+  <Target Name="FishMMOCapturePatchDirectories" BeforeTargets="CoreClean"
+          DependsOnTargets="FishMMOResolveCleanPaths"
+          Condition="'$(MSBuildProjectName)' == 'Patcher'">
+    <FishMMOCleanOutputTask Mode="Discover" Condition="'$(_FishMMOCleanEligible)' == 'true'"
+                           OutputDirectory="$(_FishMMOCleanPath)"
+                           StateFile="$(_FishMMOCleanPath).fishmmo-patch-directories.xml"
+                           TemplateFiles="$(MSBuildThisFileDirectory)FishMMO-Setup/Development/appsettings.Patcher.json;$(MSBuildThisFileDirectory)FishMMO-Setup/Production/appsettings.Patcher.json"
+                           AdditionalDirectories="$(FishMMOPatchDirectories)">
+      <Output TaskParameter="PreservedDirectories" ItemName="_FishMMOPatchDirectories" />
+    </FishMMOCleanOutputTask>
+  </Target>
+
+  <!-- Remove build/publish output while leaving Patcher runtime data in place.
+       Explicit output overrides remain under the SDK's normal file tracking. -->
+  <Target Name="FishMMOCleanOutput" AfterTargets="Clean" DependsOnTargets="FishMMOResolveCleanPaths">
+    <RemoveDir Directories="$(_FishMMOCleanPath)"
+               Condition="'$(_FishMMOCleanEligible)' == 'true' and '$(MSBuildProjectName)' != 'Patcher'" />
+    <FishMMOCleanOutputTask Mode="Clean" OutputDirectory="$(_FishMMOCleanPath)"
+                           PreservedDirectories="@(_FishMMOPatchDirectories)"
+                           Condition="'$(_FishMMOCleanEligible)' == 'true' and '$(MSBuildProjectName)' == 'Patcher'" />
+  </Target>
+</Project>

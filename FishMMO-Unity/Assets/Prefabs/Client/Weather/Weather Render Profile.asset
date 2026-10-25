@@ -237,7 +237,7 @@ MonoBehaviour:
   RockFilletWidth: 1
   RockFilletSizeShare: 0.5
   RockFilletInset: 0.06
-  RockFilletDistance: 36
+  RockFilletDistance: 20
   RockFilletMinQuality: 1
   RockFilletCellsPerFrame: 192
   RockFilletTriangles: 65536

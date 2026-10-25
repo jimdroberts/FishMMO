@@ -101,15 +101,27 @@ CBUFFER_END
 float4 _FishVegetationFade;
 // Probe diagnostic (ScenePerfProbe `vegold`): 1 lights the leaves as before VegFragmentPBR — URP's UniversalFragmentPBR
 // and the main light sampled again for the light through the leaves. 0 as shipped.
+#if defined(FISHMMO_SHADER_DIAGNOSTICS)
 float _FishVegetationDiag;
+#else
+#define _FishVegetationDiag 0.0
+#endif
 // Probe diagnostic (ScenePerfProbe `vegtrace`): 1 traces the terrain under every vertex for the contact band, as before
 // VegVertex skipped it high in a crown. 0 as shipped.
+#if defined(FISHMMO_SHADER_DIAGNOSTICS)
 float _FishVegContactAlways;
+#else
+#define _FishVegContactAlways 0.0
+#endif
 // Probe diagnostic (ScenePerfProbe `vegplantconst`): 1 takes every per-plant value (VegVary's figures, the season tint,
 // the ground colour, the gust, the colour variation, the sink and the distance fade) as a constant instead of working it
 // out from the plant's hash at every vertex: what precomputing them once per instance could save at most. It draws every
 // plant alike. 0 as shipped.
+#if defined(FISHMMO_SHADER_DIAGNOSTICS)
 float _FishVegPlantConst;
+#else
+#define _FishVegPlantConst 0.0
+#endif
 // 1 while the camera's target is multisampled (VegetationDistanceFade, from the pipeline's MSAA): leaf and
 // needle edges are then drawn by alpha-to-coverage — a soft, antialiased fringe — instead of cut at the
 // cutoff, which drew every card as a hard paper cut-out up close. 0: the plain cut.
@@ -1016,16 +1028,18 @@ half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SE
     groundWeight = 0.0h;
     groundSite = (FishGroundSite)0;
     bool hasGround = false;
+    FishGroundPixel groundPixel = (FishGroundPixel)0;
+#if defined(FISH_INDIRECT_INSTANCED)
     UNITY_BRANCH
     if (_Clinging < 0.5)
     {
         hasGround = FishGroundContact(input.positionWS, input.contact, input.normalWS, groundWeight, groundSite);
     }
-    FishGroundPixel groundPixel = (FishGroundPixel)0;
     if (hasGround)
     {
         groundPixel = FishGroundSurfaceAtSite(groundSite, input.positionWS, groundDx, groundDy);
     }
+#endif
 
     // Moss (FishMoss.hlsl), ahead of the weather so rain darkens it and snow covers it like the rest. A uniform branch on
     // the material: every living plant is at 0 and pays this one test. Deadwood is held still (no sway, no reshaping), so
@@ -1096,6 +1110,7 @@ half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SE
 
     Light mainLight;
     half4 color;
+#if defined(FISHMMO_SHADER_DIAGNOSTICS)
     UNITY_BRANCH
     if (_FishVegetationDiag > 0.5)
     {
@@ -1103,6 +1118,7 @@ half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SE
         mainLight = GetMainLight(inputData.shadowCoord, inputData.positionWS, inputData.shadowMask);
     }
     else
+#endif
     {
         color = VegFragmentPBR(inputData, surface, mainLight);
     }
@@ -1117,10 +1133,12 @@ half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SE
     // the same way).
     back *= saturate(-dot(normalWS * IS_FRONT_VFACE(face, 1.0, -1.0), mainLight.direction) * 2.0 + 0.3);
     color.rgb += albedo * mainLight.color * (mainLight.shadowAttenuation * mainLight.distanceAttenuation * back * _Translucency * (half)(1.0 - distanceFar));
+#if defined(FISH_INDIRECT_INSTANCED)
     if (hasGround && groundWeight > 0.0h)
     {
         color.rgb = lerp(color.rgb, FishGroundLit(inputData, groundPixel, 1.0h, groundDx, groundDy), groundWeight);
     }
+#endif
 
     color.rgb = MixFog(color.rgb, inputData.fogCoord);
     color.a = coverage;

@@ -177,6 +177,12 @@ namespace FishMMO.Shared
 
 		private void OnEnable()
 		{
+			// Scene imports also enable this component in headless build workers.
+			// Its index maps are visual output and require a real graphics device.
+			if (SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null)
+			{
+				return;
+			}
 			if (!active.Contains(this))
 			{
 				active.Add(this);

@@ -8,7 +8,7 @@
 # produce the whole set.
 #
 # Output, one directory per RID:
-#   Updater/bin/Release/net8.0/<rid>/publish/Updater[.exe]
+#   ../Builds/Updater/Release/net8.0/<rid>/publish/Updater[.exe]
 #
 # That layout is exactly what the FishMMO Dashboard's BuildExecutor.CopyUpdaterToBuild
 # looks for when it copies the updater into a client build, so publishing here is what
@@ -52,7 +52,7 @@ for rid in "${rids[@]}"; do
 	# second place to keep in sync.
 	dotnet publish "${project}" -c Release -r "${rid}" --nologo
 
-	publish_dir="${script_dir}/Updater/bin/Release/net8.0/${rid}/publish"
+	publish_dir="${script_dir}/../Builds/Updater/Release/net8.0/${rid}/publish"
 	case "${rid}" in
 		win-*) exe="Updater.exe" ;;
 		*)     exe="Updater" ;;

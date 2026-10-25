@@ -72,7 +72,11 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 
 				try
 				{
-					// SBP cannot build asset bundles under the Server subtarget.
+					using var webGLPipelines = new WebGLRenderPipelineScope(customBuildType != CustomBuildType.Server && buildTarget == BuildTarget.WebGL);
+					using var serverContent = new ServerContentBuildScope(customBuildType == CustomBuildType.Server);
+					if (customBuildType == CustomBuildType.Server)
+						Log.Info("BuildLogger", "Server content: omit GPU programs and materials before serialization; preserve physics and CPU data; bypass the shared SBP content cache.");
+					// The installed SBP does not propagate the Server subtarget to content settings.
 					// Temporarily switch to Player for the addressable build, then restore
 					// the requested subtarget for the player build.
 					if (subTarget == StandaloneBuildSubtarget.Server)
@@ -87,7 +91,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 					BakeWorldMaps(customBuildType);
 
 					// Last before the bundles: only the generated art everything above reaches.
-					RegisterGeneratedArt();
+					RegisterGeneratedArt(excludedAddressableGroups, customBuildType);
 
 					Log.Debug("BuildLogger", "Configuring addressables...");
 					bool isWebGL = buildTarget == BuildTarget.WebGL;
@@ -112,6 +116,11 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 					RemoveGeneratedArtGroup();
 					CleanWorldMaps(customBuildType);
 				}
+			}
+			catch (OperationCanceledException)
+			{
+				Log.Info("BuildTool", "Build cancelled.");
+				throw;
 			}
 			catch (System.Exception ex)
 			{
@@ -283,6 +292,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				Log.Debug("BuildLogger", "Rebuilding the world scene details cache with the baked maps...");
 				WorldSceneDetailsCacheBuilder.Rebuild();
 			}
+			catch (OperationCanceledException) { throw; }
 			catch (Exception ex)
 			{
 				Log.Warning("BuildLogger", $"World map or planet surface bake failed; the build continues without those images: {ex.Message}");
@@ -335,12 +345,12 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		/// (<see cref="FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup"/>). Removed again by
 		/// <see cref="RemoveGeneratedArtGroup"/> whether or not the build succeeds.
 		/// </summary>
-		private static void RegisterGeneratedArt()
+		private static void RegisterGeneratedArt(string[] excludedGroups, CustomBuildType customBuildType)
 		{
 			Log.Debug("BuildLogger", "Registering the generated biome art the build reaches...");
 			var log = new List<string>();
 			FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup.RemoveCommittedEntries(log);
-			FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup.RegisterReachable(log);
+			FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup.RegisterReachable(log, excludedGroups, customBuildType == CustomBuildType.Server);
 			foreach (string line in log)
 			{
 				Log.Debug("BuildLogger", line);
@@ -448,8 +458,8 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 
 		/// <summary>
 		/// Helper method to build addressables with proper error handling and cleanup.
-		/// Asset bundles are always built for the Player subtarget — bundles are platform-specific
-		/// but not subtarget-specific, so Server vs Player distinction is irrelevant for content.
+		/// SBP uses the Player subtarget; an explicit server scope strips rendering content
+		/// and bypasses the shared content cache for server builds.
 		/// </summary>
 		/// <param name="excludeGroups">Array of group name substrings to exclude from the build.</param>
 		/// <param name="buildTarget">The build target platform (e.g. StandaloneLinux64, WebGL).</param>
@@ -465,28 +475,35 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 
 			try
 			{
-				// Always use Player subtarget for addressable builds. Asset bundles contain
-				// assets, not code — the Server/Player distinction doesn't affect bundle content.
-				// Building with Server subtarget causes SBP failures.
+				// Keep the SBP workaround, but carry the actual content target into callbacks.
 				configurator.Configure(StandaloneBuildSubtarget.Player, buildTarget);
+				using var webGLPipelines = new WebGLRenderPipelineScope(customBuildType != CustomBuildType.Server && buildTarget == BuildTarget.WebGL);
+				using var serverContent = new ServerContentBuildScope(customBuildType == CustomBuildType.Server);
+				if (customBuildType == CustomBuildType.Server)
+					Log.Info("BuildLogger", "Server content: omit GPU programs and materials before serialization; preserve physics and CPU data; bypass the shared SBP content cache.");
 				GenerateBiomeArt();
 				BakeSpawnTables();
 				BakeWorldMaps(customBuildType);
-				RegisterGeneratedArt();
+				RegisterGeneratedArt(excludeGroups, customBuildType);
 				addressableManager.BuildAddressablesWithExclusions(excludeGroups, enableCrcForRemoteLoading, useUnityWebRequestForLocal);
+			}
+			catch (OperationCanceledException)
+			{
+				Log.Info("BuildTool", "Addressables build cancelled.");
+				throw;
 			}
 			catch (System.Exception ex)
 			{
 				Log.Error("BuildTool", $"Addressables build failed: {ex.Message}");
+				throw;
 			}
 			finally
 			{
 				configurator.Restore();
 				RemoveGeneratedArtGroup();
 				CleanWorldMaps(customBuildType);
+				Log.Shutdown();
 			}
-
-			Log.Shutdown();
 		}
 
 		// --- Helper methods and fields (stubs, to be implemented or replaced as needed) ---
@@ -563,6 +580,11 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 					buildOptions: buildOptions,
 					subTarget: subTarget,
 					buildTarget: buildTarget);
+			}
+			catch (OperationCanceledException)
+			{
+				Log.Info("BuildTool", "Build cancelled before player compilation.");
+				if (Application.isBatchMode) throw;
 			}
 			catch (System.Exception ex)
 			{
@@ -700,7 +722,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 					 * The result is a build that reports success and produces nothing. */
 					if (!TryGetArg("-fishmmoOutputPath", out string outputPath) || string.IsNullOrWhiteSpace(outputPath))
 					{
-						string projectRoot = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
+						string projectRoot = Path.GetFullPath(Path.Combine(UnityEngine.Application.dataPath, "..", ".."));
 						string subFolder = buildType == BuildTypeEnvironment.Server ? "Server" : "Client";
 						outputPath = Path.Combine(projectRoot, "Builds", subFolder);
 					}
@@ -711,6 +733,11 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				{
 					EditorApplication.Exit(0);
 				}
+			}
+			catch (OperationCanceledException)
+			{
+				UnityEngine.Debug.Log("[CustomBuildTool] CLI build cancelled.");
+				if (Application.isBatchMode) EditorApplication.Exit(1);
 			}
 			catch (Exception ex)
 			{
@@ -742,6 +769,8 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		/// <returns>BuildOptions flags for the build.</returns>
 		private static BuildOptions GetBuildOptions(BuildTarget? buildTarget = null)
 		{
+			// Always clean the player build. Addressables content and shader caches
+			// have their own lifecycle and are preserved by AddressableManager.
 			BuildOptions buildOptions = BuildOptions.CleanBuildCache | BuildOptions.ShowBuiltPlayer;
 
 			WorkingEnvironmentState workingEnvironmentState = WorkingEnvironmentOptions.GetWorkingEnvironmentState();

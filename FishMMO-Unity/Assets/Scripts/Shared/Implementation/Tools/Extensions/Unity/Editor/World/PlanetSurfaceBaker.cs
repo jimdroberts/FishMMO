@@ -1,5 +1,7 @@
 #if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
+using Object = UnityEngine.Object;
 using System.IO;
 using UnityEditor;
 using UnityEditor.AddressableAssets;
@@ -64,42 +66,63 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Baking ────────────────────────────────────────────────────
 
 		[DashboardTool(DashboardToolAttribute.Maintenance, "Bake planet surfaces", Section = "Content", Order = 5,
-			Tooltip = "Generates a surface image for every planet and moon from its terrain seed. Build output: the folder is gitignored and a client build removes it again.")]
+			Tooltip = "Reuses cached planet images when their inputs are unchanged; otherwise bakes with cancellable progress. Build cleanup preserves the Library cache.")]
 		public static void BakeFromDashboard()
 		{
-			int baked = BakeAll(out int skipped);
-			Debug.Log($"[PlanetSurfaceBaker] Baked {baked} surface(s), skipped {skipped}. They are build output: '{BakedDirectory}' is gitignored.");
+			try
+			{
+				int baked = BakeAll(out int skipped);
+				Debug.Log($"[PlanetSurfaceBaker] Generated {baked} surface(s), reused/skipped {skipped}.");
+			}
+			catch (OperationCanceledException) { Debug.Log("[PlanetSurfaceBaker] Bake cancelled; completed cache entries are retained."); }
 		}
 
 		[DashboardTool(DashboardToolAttribute.Maintenance, "Remove baked planet surfaces", Section = "Content", Order = 6,
-			Tooltip = "Deletes the baked surface images and their addressable group, leaving the project as it was found.")]
+			Tooltip = "Removes generated images and their Addressables group. Keeps the Library cache for the next build.")]
 		public static void CleanFromDashboard()
 		{
 			CleanBakedSurfaces();
 		}
 
-		/// <summary>Bakes every world body that has ground. Returns how many were written.</summary>
-		public static int BakeAll(out int skipped)
+		[DashboardTool(DashboardToolAttribute.Maintenance, "Clear planet surface cache", Section = "Content", Order = 7,
+			Tooltip = "Deletes completed planet PNGs in Library/FishMMO/PlanetSurfaces. The next bake regenerates them.")]
+		public static void ClearCachedSurfaces()
 		{
+			if (Directory.Exists(PlanetSurfaceBakeCache.DirectoryPath)) Directory.Delete(PlanetSurfaceBakeCache.DirectoryPath, true);
+			Debug.Log("[PlanetSurfaceBaker] Cleared the planet surface cache.");
+		}
+
+		/// <summary>Bakes missing/stale surfaces; skipped counts null bodies and valid cache hits.</summary>
+		public static int BakeAll(out int skipped) => BakeAll(WorldEditorAssets.FindAll<WorldBody>(), out skipped);
+
+		/// <summary>Bakes a selected set with shared input hashing and progress across its bodies.</summary>
+		public static int BakeAll(IReadOnlyList<WorldBody> bodies, out int skipped, int width = Width, Func<string, float, bool> displayProgress = null)
+		{
+			if (bodies == null) throw new ArgumentNullException(nameof(bodies));
+			if (width < 4 || width % 2 != 0) throw new ArgumentOutOfRangeException(nameof(width));
 			skipped = 0;
 			int baked = 0;
-			foreach (WorldBody body in WorldEditorAssets.FindAll<WorldBody>())
+			using var progress = new PlanetSurfaceBakeProgress(displayProgress);
+			progress.SetBody("Planet inputs", 0, 1);
+			// All tables must settle before keys traverse the system's bodies. Otherwise an
+			// early body's key would depend on later bodies' still-stale tables.
+			foreach (var body in bodies)
 			{
-				if (body == null)
-				{
-					skipped++;
-					continue;
-				}
-				if (Bake(body) != null)
-				{
-					baked++;
-				}
+				if (body == null) continue;
+				progress.Report("Checking climate: " + body.name, 0f);
+				ClimateTableBaker.EnsureBaked(body);
 			}
-			if (baked > 0)
+			string shared = PlanetSurfaceBakeCache.SharedInputs(() => progress.Report("Checking biome and generator inputs", 0f));
+			for (int i = 0; i < bodies.Count; i++)
 			{
-				AssetDatabase.SaveAssets();
-				AssetDatabase.Refresh();
+				WorldBody body = bodies[i];
+				if (body == null) { skipped++; continue; }
+				progress.SetBody(body.name, i, bodies.Count);
+				Bake(body, width, shared, progress, out bool cached);
+				if (cached) skipped++; else baked++;
 			}
+			AssetDatabase.SaveAssets();
+			Debug.Log($"[PlanetSurfaceBaker] Generated {baked}; reused {skipped} cached/skipped surface(s).");
 			return baked;
 		}
 
@@ -121,25 +144,50 @@ namespace FishMMO.Shared.WorldDesign
 			return body == null ? null : AssetDatabase.LoadAssetAtPath<Texture2D>(BakedImagePath(body.name));
 		}
 
-		/// <summary>Generates one body's surface image and registers it. Returns the imported texture.</summary>
-		public static Texture2D Bake(WorldBody body)
+		/// <summary>Restores a valid cache entry or generates a surface with visible, cancellable progress.</summary>
+		public static Texture2D Bake(WorldBody body) => Bake(body, Width);
+
+		/// <summary>Explicit resolution and optional cancellable progress callback, also used by small bake validations.</summary>
+		public static Texture2D Bake(WorldBody body, int width, Func<string, float, bool> displayProgress = null)
 		{
-			if (body == null)
-			{
-				return null;
-			}
-			// The globe is drawn from the body's climate table: have the one the game will read.
+			if (body == null) return null;
+			if (width < 4 || width % 2 != 0) throw new ArgumentOutOfRangeException(nameof(width), "Use an even image width of at least four pixels.");
+			using var progress = new PlanetSurfaceBakeProgress(displayProgress);
+			progress.SetBody(body.name, 0, 1);
+			string shared = PlanetSurfaceBakeCache.SharedInputs(() => progress.Report("Checking biome and generator inputs", 0f));
+			return Bake(body, width, shared, progress, out _);
+		}
+
+		private static Texture2D Bake(WorldBody body, int width, string shared, PlanetSurfaceBakeProgress progress, out bool cached)
+		{
+			progress.Report("Checking climate", 0.01f, true);
 			ClimateTableBaker.EnsureBaked(body);
-			if (!HasGround(body))
+			string input = PlanetSurfaceBakeCache.InputHash(body, width, shared);
+			var cache = new PlanetSurfaceBakeCache();
+			cached = cache.TryRead(body, width, input, out byte[] png);
+			if (cached)
 			{
-				/* A gas giant has no ground, but it is the most striking thing in any sky it is in.
-				 * Skipping it left the atlas drawing a flat tinted ball — read, reasonably, as a
-				 * planet that had come out plain blue. It has a surface to show; it is just made of
-				 * cloud rather than rock. */
-				return BakeGasGiant(body);
+				progress.Report("Restoring cached image", 0.99f, true);
+				var restored = Publish(png, body);
+				progress.Report("Cached image ready", 1f, true);
+				return restored;
 			}
 
-			WorldEditorAssets.EnsureFolder(BakedDirectory);
+			Color32[] pixels = Generate(body, width, progress);
+			progress.Report("Encoding image", 0.99f, true);
+			var texture = new Texture2D(width, width / 2, TextureFormat.RGBA32, false);
+			try { texture.SetPixels32(pixels); texture.Apply(false, false); png = texture.EncodeToPNG(); }
+			finally { Object.DestroyImmediate(texture); }
+			progress.Report("Publishing completed image", 0.995f, true);
+			var imported = Publish(png, body);
+			cache.Store(body, width, input, png);
+			progress.Report("Image ready", 1f, true);
+			return imported;
+		}
+
+		private static Color32[] Generate(WorldBody body, int width, PlanetSurfaceBakeProgress progress)
+		{
+			if (!HasGround(body)) return BakeGasGiant(body, width, progress);
 
 			/* The world's own climate, so the picture is of THIS planet rather than a colour ramp.
 			 * Every body used to come out the same brown-to-white gradient whatever its orbit,
@@ -183,9 +231,8 @@ namespace FishMMO.Shared.WorldDesign
 			bool waterSeas = hasOcean && !hasLava && SurfaceLiquids.For(system, body) == SurfaceLiquid.Water;
 			bool frozenThrough = waterSeas && climate.Conditions.IsFrozenThrough;
 
-			int height = Width / 2;
-			var texture = new Texture2D(Width, height, TextureFormat.RGBA32, false);
-			var pixels = new Color32[Width * height];
+			int height = width / 2;
+			var pixels = new Color32[width * height];
 
 			/* One row of heights kept so the slope costs nothing.
 			 *
@@ -193,8 +240,8 @@ namespace FishMMO.Shared.WorldDesign
 			 * needs the height of the neighbours — but those are the samples just taken. Keeping
 			 * the previous row and the previous pixel gives the gradient for free, where sampling
 			 * the function again would have tripled the cost of the slowest bodies. */
-			var previousRow = new float[Width];
-			var previousRowAltitudes = new float[Width];
+			var previousRow = new float[width];
+			var previousRowAltitudes = new float[width];
 			bool hasPreviousRow = false;
 
 			/* The row, taken in two passes. The first samples the ground and shades the slope; it
@@ -202,13 +249,13 @@ namespace FishMMO.Shared.WorldDesign
 			 * the moisture walk upwind asks of every other pixel on the same circle of latitude.
 			 * The second resolves the biomes with that walk reading the row instead of the noise:
 			 * eight lookups a pixel rather than eight surface samples. */
-			var rowHeights = new float[Width];
-			var rowAltitudes = new float[Width];
-			var rowTemperatures = new float[Width];
-			var rowSlopes = new float[Width];
-			var rowSteepness = new float[Width];
-			var moistureAltitudes = new float[Width];
-			var moistureOceans = new bool[Width];
+			var rowHeights = new float[width];
+			var rowAltitudes = new float[width];
+			var rowTemperatures = new float[width];
+			var rowSlopes = new float[width];
+			var rowSteepness = new float[width];
+			var moistureAltitudes = new float[width];
+			var moistureOceans = new bool[width];
 			var rowTerrain = new MoistureRowTerrain(moistureAltitudes, moistureOceans);
 			// The same sea test PlanetMoistureTerrain makes: a dry world's low ground is lowland, not sea.
 			bool hasSea = profile.OceanFloor != null;
@@ -218,30 +265,31 @@ namespace FishMMO.Shared.WorldDesign
 			 * biome each land pixel is (0 for a pixel already finished — sea, frozen sea, lava), its
 			 * own colour before relief, and the inputs to its variation. About 55 MB at this
 			 * resolution, for the length of one body's bake. */
-			int pixelCount = Width * height;
+			int pixelCount = width * height;
 			var land = new LandPixels(pixelCount);
 
 			// Metres per pixel, for the slope rock shows on: the body's real size, which its relief is scaled from.
 			double radiusMetres = (body.SkyRadiusKm > 0.01f ? body.SkyRadiusKm : PlanetSurface.EarthRadiusKm) * 1000.0;
 			float northMetres = (float)(System.Math.PI * radiusMetres / height);
-			float equatorMetres = (float)(2.0 * System.Math.PI * radiusMetres / Width);
+			float equatorMetres = (float)(2.0 * System.Math.PI * radiusMetres / width);
 			float earthScale = Mathf.Max(1e-3f, relief / PlanetSurface.EarthReliefMetres);
 			// Greener where wet, browner where dry, only where something grows.
 			bool living = climate.Conditions.HasLiquidWater;
 
 			for (int y = 0; y < height; y++)
 			{
+				progress.Report($"Sampling terrain and climate: row {y + 1}/{height}", 0.05f + 0.60f * y / height);
 				/* Pixel centres. Sampling the exact pole would make the whole top row one point,
 				 * and every longitude there would return the same colour — a visible bar of flat
 				 * colour across the top of every planet. */
 				double latitude = 90.0 - (y + 0.5) * 180.0 / height;
-				int row = y * Width;
+				int row = y * width;
 				float previousHeight = 0f;
 				float previousAltitude = 0f;
 				bool hasPreviousHeight = false;
-				for (int x = 0; x < Width; x++)
+				for (int x = 0; x < width; x++)
 				{
-					double longitude = (x + 0.5) * 360.0 / Width - 180.0;
+					double longitude = (x + 0.5) * 360.0 / width - 180.0;
 					float h = PlanetSurface.HeightAt(seed, latitude, longitude, cratering);
 					/* Temperature here: the ground under the star at noon, cooled toward the pole by
 					 * the sun's noon altitude, and cooled again by how far above sea level the ground
@@ -279,12 +327,12 @@ namespace FishMMO.Shared.WorldDesign
 					moistureAltitudes[x] = moistureOceans[x] ? 0f : altitude;
 				}
 
-				for (int x = 0; x < Width; x++)
+				for (int x = 0; x < width; x++)
 				{
 					// The surface field's own height and altitude: never a biome selection's moved one.
 					float h = rowHeights[x];
 					float altitude = rowAltitudes[x];
-					double longitude = (x + 0.5) * 360.0 / Width - 180.0;
+					double longitude = (x + 0.5) * 360.0 / width - 180.0;
 					Vector3 direction = PlanetSurface.Direction(latitude, longitude);
 					/* Temperature here: the year's mean from the body's climate table for this latitude and how far
 					 * inland the place is, cooled by its altitude — the same reading the scene generator and the running
@@ -344,32 +392,31 @@ namespace FishMMO.Shared.WorldDesign
 			 * read or written here. */
 			for (int y = 0; y < height; y++)
 			{
+				progress.Report($"Blending biomes: row {y + 1}/{height}", 0.65f + 0.20f * y / height);
 				double latitude = 90.0 - (y + 0.5) * 180.0 / height;
 				// A pixel's width in equator pixels, so the blend reaches as far east-west as north-south.
 				float stretch = Mathf.Clamp(1f / Mathf.Cos((float)latitude * Mathf.Deg2Rad), 1f, MaxBlendStretch);
-				int row = y * Width;
-				for (int x = 0; x < Width; x++)
+				int row = y * width;
+				for (int x = 0; x < width; x++)
 				{
 					int i = row + x;
 					if (land.Ids[i] == 0)
 					{
 						continue;
 					}
-					double longitude = (x + 0.5) * 360.0 / Width - 180.0;
+					double longitude = (x + 0.5) * 360.0 / width - 180.0;
 					Vector3 direction = PlanetSurface.Direction(latitude, longitude);
 					BorderWarp(seed, direction, out float warpX, out float warpY);
-					LandBlend blend = BlendAcrossBiomes(land.Ids, land.Bases, land.Cliffs, land.Art, Width, height, x, y,
+					LandBlend blend = BlendAcrossBiomes(land.Ids, land.Bases, land.Cliffs, land.Art, width, height, x, y,
 						x + warpX * stretch, y + warpY, stretch);
 					Color colour = Vary(blend, land.EarthAltitudes[i], land.Humidities[i], living, land.Steepness[i], Mottle(seed, direction));
 					pixels[i] = Relief(colour, land.Slopes[i], body);
 				}
 			}
-			Veil(pixels, height, body, system, seed);
-			Recolour(pixels, body, system);
+			Veil(pixels, width, height, body, system, seed, progress);
+			Recolour(pixels, width, body, system, progress);
 
-			texture.SetPixels32(pixels);
-			texture.Apply(false, false);
-			return Write(texture, body);
+			return pixels;
 		}
 
 		/// <summary>
@@ -377,7 +424,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// tholin-orange or white, in soft banks with the ground faint through the thinnest of them. A world with any other
 		/// air keeps its ground, as it shows it.
 		/// </summary>
-		private static void Veil(Color32[] pixels, int height, WorldBody body, SolarSystemProfile system, uint seed)
+		private static void Veil(Color32[] pixels, int width, int height, WorldBody body, SolarSystemProfile system, uint seed, PlanetSurfaceBakeProgress progress)
 		{
 			if (body.Atmosphere != AtmosphereKind.Thick)
 			{
@@ -387,11 +434,12 @@ namespace FishMMO.Shared.WorldDesign
 			Color cloud = look.Globe;
 			for (int y = 0; y < height; y++)
 			{
+				progress.Report($"Atmosphere: row {y + 1}/{height}", 0.85f + 0.08f * y / height);
 				double latitude = 90.0 - (y + 0.5) * 180.0 / height;
-				int row = y * Width;
-				for (int x = 0; x < Width; x++)
+				int row = y * width;
+				for (int x = 0; x < width; x++)
 				{
-					double longitude = (x + 0.5) * 360.0 / Width - 180.0;
+					double longitude = (x + 0.5) * 360.0 / width - 180.0;
 					Vector3 direction = PlanetSurface.Direction(latitude, longitude);
 					// Banks drawn out along the latitudes by the winds, as a thick air's are.
 					float bank = PlanetSurface.FieldNoiseAt(seed ^ 0x7E1A11u, new Vector3(direction.x * 1.2f, direction.y * 6f, direction.z * 1.2f), 4);
@@ -413,7 +461,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// so the globe is drawn toward that colour, its craters and relief kept as light and shade. Worlds with an ordinary
 		/// air keep their biomes' colours, and a thick one its cloud (<see cref="Veil"/>).
 		/// </summary>
-		private static void Recolour(Color32[] pixels, WorldBody body, SolarSystemProfile system)
+		private static void Recolour(Color32[] pixels, int width, WorldBody body, SolarSystemProfile system, PlanetSurfaceBakeProgress progress)
 		{
 			if (body.Atmosphere != AtmosphereKind.None && body.Atmosphere != AtmosphereKind.Thin)
 			{
@@ -423,11 +471,13 @@ namespace FishMMO.Shared.WorldDesign
 			double sum = 0.0;
 			for (int i = 0; i < pixels.Length; i++)
 			{
+				if (i % width == 0) progress.Report("Recolouring surface", 0.93f + 0.02f * i / pixels.Length);
 				sum += Luma(pixels[i]);
 			}
 			float mean = (float)Mathf.Max(1e-3f, (float)(sum / Mathf.Max(1, pixels.Length)));
 			for (int i = 0; i < pixels.Length; i++)
 			{
+				if (i % width == 0) progress.Report("Recolouring surface", 0.95f + 0.03f * i / pixels.Length);
 				Color32 p = pixels[i];
 				float shade = Luma(p) / mean;
 				var target = new Color(ground.r * shade, ground.g * shade, ground.b * shade);
@@ -438,19 +488,21 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static float Luma(Color32 c) => (0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b) / 255f;
 
-		/// <summary>Writes a finished image to disk, imports it and registers it. Destroys the texture.</summary>
-		private static Texture2D Write(Texture2D texture, WorldBody body)
+		/// <summary>Publish only completed PNGs; avoid touching/importing an unchanged output.</summary>
+		private static Texture2D Publish(byte[] png, WorldBody body)
 		{
+			WorldEditorAssets.EnsureFolder(BakedDirectory);
 			string path = BakedImagePath(body.name);
-			File.WriteAllBytes(path, texture.EncodeToPNG());
-			Object.DestroyImmediate(texture);
-			AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
-
-			var imported = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
-			if (imported != null)
+			bool unchanged = File.Exists(path) && PlanetSurfaceBakeCache.Digest(File.ReadAllBytes(path)) == PlanetSurfaceBakeCache.Digest(png);
+			if (!unchanged) PlanetSurfaceBakeCache.WriteAtomically(path, png);
+			var imported = unchanged ? AssetDatabase.LoadAssetAtPath<Texture2D>(path) : null;
+			if (imported == null)
 			{
-				MakeAddressable(path, body.name);
+				AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+				imported = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
 			}
+			if (imported == null) throw new IOException("Planet surface could not be imported: " + path);
+			MakeAddressable(path, body.name);
 			return imported;
 		}
 
@@ -480,6 +532,8 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			string guid = AssetDatabase.AssetPathToGUID(imagePath);
+			var existing = settings.FindAssetEntry(guid);
+			if (existing != null && existing.parentGroup == group && existing.address == AddressOf(bodyName)) return;
 			AddressableAssetEntry entry = settings.CreateOrMoveEntry(guid, group);
 			if (entry != null)
 			{
@@ -532,14 +586,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// stripes never cross. The noise shears along those bands rather than across them, so the
 		/// texture reads as flow rather than as marble.
 		/// </remarks>
-		private static Texture2D BakeGasGiant(WorldBody body)
+		private static Color32[] BakeGasGiant(WorldBody body, int width, PlanetSurfaceBakeProgress progress)
 		{
-			WorldEditorAssets.EnsureFolder(BakedDirectory);
 			uint seed = body.ResolvedTerrainSeed;
 
-			int height = Width / 2;
-			var texture = new Texture2D(Width, height, TextureFormat.RGBA32, false);
-			var pixels = new Color32[Width * height];
+			int height = width / 2;
+			var pixels = new Color32[width * height];
 
 			/* The body's own colour, but only as a wash over strongly separated bands.
 			 *
@@ -560,13 +612,14 @@ namespace FishMMO.Shared.WorldDesign
 
 			for (int y = 0; y < height; y++)
 			{
+				progress.Report($"Gas cloud bands: row {y + 1}/{height}", 0.05f + 0.93f * y / height);
 				double latitude = 90.0 - (y + 0.5) * 180.0 / height;
 				float lat01 = (float)(latitude / 90.0);
-				int row = y * Width;
+				int row = y * width;
 
-				for (int x = 0; x < Width; x++)
+				for (int x = 0; x < width; x++)
 				{
-					double longitude = (x + 0.5) * 360.0 / Width - 180.0;
+					double longitude = (x + 0.5) * 360.0 / width - 180.0;
 					Vector3 direction = PlanetSurface.Direction(latitude, longitude);
 
 					/* The latitude coordinate is dragged about before the bands are read from it.
@@ -618,9 +671,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 
-			texture.SetPixels32(pixels);
-			texture.Apply(false, false);
-			return Write(texture, body);
+			return pixels;
 		}
 		/// <summary>
 		/// A smoothstep between two edges, 0..1.

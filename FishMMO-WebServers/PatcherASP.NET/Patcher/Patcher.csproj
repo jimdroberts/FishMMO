@@ -30,9 +30,9 @@
   </ItemGroup>
   <!--
     NOTE: PRODUCTION CONFIGURATION
-    Only the Development config (appsettings.Patcher.json) is copied to the
-    output directory by this target.  In production, configuration must be
-    provided through one of these mechanisms (in order of precedence):
+    Development and optional Production templates are copied to build and publish
+    output by the content items below. Deployment-specific configuration can be
+    provided through these mechanisms:
 
       1. Environment variables (e.g., ConnectionStrings__DefaultConnection,
          FISHMMO_CLIENT_GATE_SECRET, etc.) overridden via systemd unit
@@ -43,17 +43,19 @@
          or secret store.
 
     Bundling production secrets into the build output is NOT recommended.
-    To add production-specific appsettings.*.json files, update this target
-    or deploy a separate configuration file as described above.
+    Keep production secrets outside the templates and provide them through the
+    deployment configuration mechanisms described above.
   -->
-  <!-- Copy-and-rename config from FishMMO-Setup/ to output. -->
-  <Target Name="CopyFishMMOConfig" AfterTargets="Build">
-    <Copy SourceFiles="..\..\..\FishMMO-Setup\Development\appsettings.Patcher.json"
-          DestinationFiles="$(OutDir)appsettings.json"
-          SkipUnchangedFiles="true" />
-    <Copy SourceFiles="..\..\..\FishMMO-Setup\Production\appsettings.Patcher.json"
-          DestinationFiles="$(OutDir)appsettings.Production.json"
-          SkipUnchangedFiles="true"
-          Condition="Exists('..\..\..\FishMMO-Setup\Production\appsettings.Patcher.json')" />
-  </Target>
+  <!-- Copy-and-rename shared configuration for both build and publish output. -->
+  <ItemGroup>
+    <Content Include="..\..\..\FishMMO-Setup\Development\appsettings.Patcher.json"
+             Link="appsettings.json"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\..\FishMMO-Setup\Production\appsettings.Patcher.json"
+             Link="appsettings.Production.json"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest"
+             Condition="Exists('..\..\..\FishMMO-Setup\Production\appsettings.Patcher.json')" />
+  </ItemGroup>
 </Project>

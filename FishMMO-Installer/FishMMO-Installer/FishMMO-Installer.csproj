@@ -25,6 +25,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Resources/InstallDevelopmentCertificates.sh" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.4" />
   </ItemGroup>
 
@@ -40,7 +44,7 @@
   </ItemGroup>
 
   <!-- Clean previously copied trees (from previous builds) -->
-  <Target Name="CleanCopiedSourceTrees" BeforeTargets="Build">
+  <Target Name="CleanCopiedSourceTrees" BeforeTargets="PrepareForBuild">
     <!-- Dest is defined here so $(OutDir) is fully resolved at execution time. -->
     <PropertyGroup>
       <FishMMODatabaseDest>$(OutDir)FishMMO-Database</FishMMODatabaseDest>
@@ -54,68 +58,38 @@
     <RemoveDir Directories="$(FishMMOSharedUtilityStale)" Condition="Exists('$(FishMMOSharedUtilityStale)')" />
   </Target>
 
-  <!-- Copy FishMMO-Database -->
-  <!-- Run after the project build completes so $(OutDir) points to the real build output. -->
-  <Target Name="CopyFishMMODatabase" AfterTargets="Build">
-    <PropertyGroup>
-      <FishMMODatabaseDest>$(OutDir)FishMMO-Database</FishMMODatabaseDest>
-    </PropertyGroup>
-    <ItemGroup>
-      <FishMMODatabaseFiles Include="$(FishMMODatabaseSource)\**\*.*"
-        Exclude="
-          $(FishMMODatabaseSource)\**\bin\**;
-          $(FishMMODatabaseSource)\**\obj\**;
-          $(FishMMODatabaseSource)\**\Migrations\**;
-          $(FishMMODatabaseSource)\.vs\**" />
-    </ItemGroup>
+  <!-- Runtime source snapshots retain the relative layout used by EF commands. -->
+  <ItemGroup>
+    <Content Include="$(FishMMODatabaseSource)\**\*.*"
+             Link="FishMMO-Database/%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest"
+             Exclude="$(FishMMODatabaseSource)\**\bin\**;$(FishMMODatabaseSource)\**\obj\**;$(FishMMODatabaseSource)\**\Migrations\**;$(FishMMODatabaseSource)\.vs\**" />
+    <Content Include="$(FishMMOSharedUtilitySource)\**\*.*"
+             Link="FishMMO-SharedUtility/%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest"
+             Exclude="$(FishMMOSharedUtilitySource)\**\bin\**;$(FishMMOSharedUtilitySource)\**\obj\**;$(FishMMOSharedUtilitySource)\.vs\**" />
+  </ItemGroup>
 
-    <Copy
-      SourceFiles="@(FishMMODatabaseFiles)"
-      DestinationFiles="@(FishMMODatabaseFiles->'$(FishMMODatabaseDest)\%(RecursiveDir)%(Filename)%(Extension)')"
-      SkipUnchangedFiles="true" />
-
-    <Message Text="Copied FishMMO-Database to $(FishMMODatabaseDest)" Importance="high" />
-  </Target>
-
-  <!-- Copy-and-rename config files from FishMMO-Setup/Development/ to output. -->
-  <Target Name="CopyFishMMOConfig" AfterTargets="Build">
-    <!-- Installer's own appsettings.json (Npgsql database config). -->
-    <Copy SourceFiles="..\..\FishMMO-Setup\Development\appsettings.Database.json"
-          DestinationFiles="$(OutDir)appsettings.json"
-          SkipUnchangedFiles="true" />
-    <!-- Installer templates. -->
-    <MakeDir Directories="$(OutDir)templates" />
-    <Copy SourceFiles="..\..\FishMMO-Setup\Development\install-config.quickstart.json"
-          DestinationFiles="$(OutDir)templates\install-config.quickstart.json"
-          SkipUnchangedFiles="true" />
-    <Copy SourceFiles="..\..\FishMMO-Setup\Development\install-config.full.json"
-          DestinationFiles="$(OutDir)templates\install-config.full.json"
-          SkipUnchangedFiles="true" />
-    <Copy SourceFiles="..\..\FishMMO-Setup\Development\install-config.web.json"
-          DestinationFiles="$(OutDir)templates\install-config.web.json"
-          SkipUnchangedFiles="true" />
-  </Target>
-
-  <!-- Copy FishMMO-SharedUtility -->
-  <!-- Run after the database copy finishes (which runs after Build). -->
-  <Target Name="CopyFishMMOSharedUtility" AfterTargets="CopyFishMMODatabase">
-    <PropertyGroup>
-      <FishMMOSharedUtilityDest>$(OutDir)FishMMO-SharedUtility</FishMMOSharedUtilityDest>
-    </PropertyGroup>
-    <ItemGroup>
-      <FishMMOSharedUtilityFiles Include="$(FishMMOSharedUtilitySource)\**\*.*"
-        Exclude="
-          $(FishMMOSharedUtilitySource)\**\bin\**;
-          $(FishMMOSharedUtilitySource)\**\obj\**;
-          $(FishMMOSharedUtilitySource)\.vs\**" />
-    </ItemGroup>
-
-    <Copy
-      SourceFiles="@(FishMMOSharedUtilityFiles)"
-      DestinationFiles="@(FishMMOSharedUtilityFiles->'$(FishMMOSharedUtilityDest)\%(RecursiveDir)%(Filename)%(Extension)')"
-      SkipUnchangedFiles="true" />
-
-    <Message Text="Copied FishMMO-SharedUtility to $(FishMMOSharedUtilityDest)" Importance="high" />
-  </Target>
+  <!-- Installer settings and templates are included in build and publish output. -->
+  <ItemGroup>
+    <Content Include="..\..\FishMMO-Setup\Development\appsettings.Database.json"
+             Link="appsettings.json"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\FishMMO-Setup\Development\install-config.quickstart.json"
+             Link="templates/install-config.quickstart.json"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\FishMMO-Setup\Development\install-config.full.json"
+             Link="templates/install-config.full.json"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\FishMMO-Setup\Development\install-config.web.json"
+             Link="templates/install-config.web.json"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 
 </Project>

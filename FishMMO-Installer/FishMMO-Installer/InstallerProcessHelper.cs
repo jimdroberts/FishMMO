@@ -76,6 +76,18 @@ namespace FishMMO.Installer
 			});
 		}
 
+        /// <summary>Runs an interactive diagnostic command without hiding stdout (including ACME challenge failures).</summary>
+        public static async Task<bool> RunShellCommandWithLiveOutputAsync(string shell, string argPrefix, string command, string errorMessage)
+        {
+            string escapedCommand = EscapeShellCommand(command);
+            return await RunProcessWithLiveOutputAsync(shell, $"{argPrefix} \"{escapedCommand}\"", (exitCode, output, error) =>
+            {
+                if (exitCode != 0)
+                    _ = FishMMO.Logging.Log.Warning("FishMMOInstaller", errorMessage);
+                return exitCode == 0;
+            });
+        }
+
 		/// <summary>
 		/// Escapes shell command content inserted into a quoted -c/-lc argument.
 		/// </summary>

@@ -39,7 +39,7 @@ Shader "FishMMO/World/Cave Drips"
             #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
-            #pragma multi_compile_fog
+            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHTS
             #pragma multi_compile _ _CLUSTER_LIGHT_LOOP
             #pragma target 3.5

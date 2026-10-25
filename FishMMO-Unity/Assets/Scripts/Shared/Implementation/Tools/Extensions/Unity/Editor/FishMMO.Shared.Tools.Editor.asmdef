@@ -11,7 +11,10 @@
         "FishMMO.Shared.Map.Editor",
         "FishMMO.Shared.NameGenerator.Editor",
         "FishMMO.Water",
-        "Unity.AI.Navigation"
+        "Unity.AI.Navigation",
+        "Unity.ScriptableBuildPipeline.Editor",
+        "Unity.ScriptableBuildPipeline",
+        "Unity.RenderPipelines.Universal.Runtime"
     ],
     "includePlatforms": [
         "Editor"

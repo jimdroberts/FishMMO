@@ -325,6 +325,12 @@ MonoBehaviour:
   - rid: 4707557207935025161
   - rid: 4707557207935025162
   - rid: 4707557207935025163
+  Pack:
+    Enabled: 0
+    Tactic: 0
+    FocusTargeting: 1
+    TacticOrbitRadius: 5
+    KiteRotationSpeed: 30
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
   references:
     version: 2
@@ -347,6 +353,7 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 4707557207935025162
@@ -367,6 +374,7 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 4707557207935025163
@@ -387,6 +395,7 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
 --- !u!4 &352688523
@@ -777,9 +786,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _localLevelOfDetailCalculationType: 0
+  _useLevelOfDetail: 0
+  _useRootLevelOfDetail: 1
   NetworkObserver: {fileID: 0}
   _enablePrediction: 0
   _predictionType: 0
+  _localReconcileCorrectionType: 2
   _graphicalObject: {fileID: 0}
   _detachGraphicalObject: 0
   _enableStateForwarding: 0
@@ -817,6 +830,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
+  _initializedTimestamp: 0
 --- !u!1 &560362197
 GameObject:
   m_ObjectHideFlags: 0
@@ -1048,7 +1062,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4a8272e41da552f4dbf9e4f8fd0dc769, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  DestinationID: 26b009fe-1369-4c28-baf0-8085c8b66300
+  DestinationID: 89dadc7d-ffdf-414a-b3f0-c701f9f4f23d
   GizmoColor: {r: 1, g: 0, b: 1, a: 1}
 --- !u!1 &658343617
 GameObject:
@@ -1997,6 +2011,12 @@ MonoBehaviour:
   - rid: 4707557207935025158
   - rid: 4707557207935025159
   - rid: 4707557207935025160
+  Pack:
+    Enabled: 0
+    Tactic: 0
+    FocusTargeting: 1
+    TacticOrbitRadius: 5
+    KiteRotationSpeed: 30
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
   references:
     version: 2
@@ -2019,6 +2039,7 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 4707557207935025159
@@ -2039,6 +2060,7 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 4707557207935025160
@@ -2059,6 +2081,7 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
 --- !u!4 &1149952039
@@ -3012,6 +3035,12 @@ MonoBehaviour:
   BoundingBoxSize: {x: 1, y: 1, z: 1}
   Spawnables:
   - rid: 4707557207935025164
+  Pack:
+    Enabled: 0
+    Tactic: 0
+    FocusTargeting: 1
+    TacticOrbitRadius: 5
+    KiteRotationSpeed: 30
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
   references:
     version: 2
@@ -3499,9 +3528,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _localLevelOfDetailCalculationType: 0
+  _useLevelOfDetail: 0
+  _useRootLevelOfDetail: 1
   NetworkObserver: {fileID: 0}
   _enablePrediction: 0
   _predictionType: 0
+  _localReconcileCorrectionType: 2
   _graphicalObject: {fileID: 0}
   _detachGraphicalObject: 0
   _enableStateForwarding: 0
@@ -3539,6 +3572,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
+  _initializedTimestamp: 0
 --- !u!114 &1959955020
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3559,6 +3593,7 @@ MonoBehaviour:
   Layers:
     serializedVersion: 2
     m_Bits: 65
+  InvokeStayOnEnter: 0
 --- !u!1 &2037169165
 GameObject:
   m_ObjectHideFlags: 0

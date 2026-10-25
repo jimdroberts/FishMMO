@@ -35,6 +35,12 @@ MonoBehaviour:
     BoundingBoxSize: {x: 1, y: 1, z: 1}
     Spawnables:
     - rid: 1
+    Pack:
+      Enabled: 0
+      Tactic: 0
+      FocusTargeting: 1
+      TacticOrbitRadius: 5
+      KiteRotationSpeed: 30
   - Name: Orc 2
     Position: {x: -101.91, y: 17.7, z: 26.68}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
@@ -57,6 +63,12 @@ MonoBehaviour:
     - rid: 2
     - rid: 3
     - rid: 4
+    Pack:
+      Enabled: 0
+      Tactic: 0
+      FocusTargeting: 1
+      TacticOrbitRadius: 5
+      KiteRotationSpeed: 30
   - Name: Orc 3
     Position: {x: -93.273, y: 17.7, z: 22.58}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
@@ -79,6 +91,12 @@ MonoBehaviour:
     - rid: 5
     - rid: 6
     - rid: 7
+    Pack:
+      Enabled: 0
+      Tactic: 0
+      FocusTargeting: 1
+      TacticOrbitRadius: 5
+      KiteRotationSpeed: 30
   references:
     version: 2
     RefIds:
@@ -91,7 +109,7 @@ MonoBehaviour:
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
         SpawnChance: 1
-        YOffset: 0.6
+        YOffset: -0
     - rid: 2
       type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
@@ -101,7 +119,7 @@ MonoBehaviour:
         MinimumRespawnTime: 0
         MaximumRespawnTime: 0
         SpawnChance: 0.5
-        YOffset: 1.2
+        YOffset: -0
         AttributeBonusOverride: {fileID: 0}
         CorpseDecayDurationOverride: 0
         EmptyCorpseDecayDurationOverride: 0
@@ -110,6 +128,7 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 3
@@ -121,7 +140,7 @@ MonoBehaviour:
         MinimumRespawnTime: 0
         MaximumRespawnTime: 0
         SpawnChance: 0.3
-        YOffset: 1.35
+        YOffset: -0
         AttributeBonusOverride: {fileID: 0}
         CorpseDecayDurationOverride: 0
         EmptyCorpseDecayDurationOverride: 0
@@ -130,6 +149,7 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 4
@@ -141,7 +161,7 @@ MonoBehaviour:
         MinimumRespawnTime: 0
         MaximumRespawnTime: 0
         SpawnChance: 0.2
-        YOffset: 1.35
+        YOffset: -0
         AttributeBonusOverride: {fileID: 0}
         CorpseDecayDurationOverride: 0
         EmptyCorpseDecayDurationOverride: 0
@@ -150,6 +170,7 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 5
@@ -161,7 +182,7 @@ MonoBehaviour:
         MinimumRespawnTime: 0
         MaximumRespawnTime: 0
         SpawnChance: 0.5
-        YOffset: 1.2
+        YOffset: -0
         AttributeBonusOverride: {fileID: 0}
         CorpseDecayDurationOverride: 0
         EmptyCorpseDecayDurationOverride: 0
@@ -170,6 +191,7 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 6
@@ -181,7 +203,7 @@ MonoBehaviour:
         MinimumRespawnTime: 0
         MaximumRespawnTime: 0
         SpawnChance: 0.3
-        YOffset: 1.35
+        YOffset: -0
         AttributeBonusOverride: {fileID: 0}
         CorpseDecayDurationOverride: 0
         EmptyCorpseDecayDurationOverride: 0
@@ -190,6 +212,7 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 7
@@ -201,7 +224,7 @@ MonoBehaviour:
         MinimumRespawnTime: 0
         MaximumRespawnTime: 0
         SpawnChance: 0.2
-        YOffset: 1.35
+        YOffset: -0
         AttributeBonusOverride: {fileID: 0}
         CorpseDecayDurationOverride: 0
         EmptyCorpseDecayDurationOverride: 0
@@ -210,5 +233,6 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1

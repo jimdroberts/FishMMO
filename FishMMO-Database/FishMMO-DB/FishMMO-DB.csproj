@@ -75,9 +75,7 @@
       <BuildConfiguration>Release</BuildConfiguration>
     </PropertyGroup>
     <ItemGroup>
-      <SourceDirWithExclusion Include="bin\$(BuildConfiguration)\**\FishMMO-DB.dll">
-        <Exclude>bin\$(BuildConfiguration)\**\appsettings.json</Exclude>
-      </SourceDirWithExclusion>
+      <SourceDirWithExclusion Include="$(TargetPath)" />
     </ItemGroup>
     <Copy SourceFiles="@(SourceDirWithExclusion)" DestinationFolder="$(TargetDir)" />
   </Target>

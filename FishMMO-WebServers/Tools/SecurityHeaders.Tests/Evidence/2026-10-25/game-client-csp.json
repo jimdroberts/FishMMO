@@ -1,0 +1,36 @@
+{
+  "unity": "ready",
+  "violations": [],
+  "errors": [],
+  "features": {
+    "secureContext": true,
+    "crossOriginIsolated": true,
+    "sharedArrayBuffer": "function",
+    "webTransport": "function",
+    "webGPU": true,
+    "adapter": true
+  },
+  "progress": "width: 100%;",
+  "connectionProbe": {
+    "webTransportConstructed": true
+  },
+  "negativeControl": {
+    "blocked": true,
+    "violations": [
+      {
+        "directive": "script-src-elem",
+        "blocked": "inline",
+        "source": "",
+        "line": 5
+      }
+    ]
+  },
+  "resourceResponses": 70,
+  "addressablesResponses": 60,
+  "httpErrors": [],
+  "notes": [
+    "Installed local WebGLServer tested against the actual FishMMO WebGL build in headless Chromium.",
+    "API probe on localhost:8088 returned ERR_CONNECTION_REFUSED; no live login/gameplay was tested.",
+    "Service worker started, but offline cache registration was not established."
+  ]
+}

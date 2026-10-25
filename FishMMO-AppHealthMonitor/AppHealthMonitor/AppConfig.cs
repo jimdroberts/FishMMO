@@ -13,9 +13,18 @@ namespace AppHealthMonitor
 		/// </summary>
 		public string Name { get; set; } = string.Empty;
 
+        /// <summary>Disabled entries are retained without validation or launch.</summary>
+        public bool Enabled { get; set; } = true;
+
+        /// <summary>Child-only environment overrides. Do not store secrets here.</summary>
+        public Dictionary<string, string> EnvironmentVariables { get; set; } = new();
+
+        /// <summary>Defaults to the executable directory; Builds/ paths are portable.</summary>
+        public string WorkingDirectory { get; set; } = string.Empty;
+
 		/// <summary>
-		/// Gets or sets the full path to the executable.
-		/// Supports both Windows and Unix-style paths.
+		/// Gets or sets the executable path. Builds/ paths resolve from the enclosing
+		/// centralized build directory; other relative paths use the working directory.
 		/// </summary>
 		public string ApplicationExePath { get; set; } = string.Empty;
 
@@ -187,7 +196,7 @@ namespace AppHealthMonitor
 			string resolvedPath;
 			try
 			{
-				resolvedPath = Path.GetFullPath(ApplicationExePath);
+				resolvedPath = ResolveExecutablePath(ApplicationExePath);
 			}
 			catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException or SecurityException)
 			{
@@ -200,6 +209,34 @@ namespace AppHealthMonitor
 				error = $"Executable not found at '{resolvedPath}' for '{Name}'. Verify the file exists and the path is correct.";
 				return false;
 			}
+
+            string workingDirectory;
+            try
+            {
+                workingDirectory = string.IsNullOrWhiteSpace(WorkingDirectory)
+                    ? Path.GetDirectoryName(resolvedPath)!
+                    : ResolveExecutablePath(WorkingDirectory);
+            }
+            catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException or SecurityException)
+            {
+                error = $"Invalid WorkingDirectory for '{Name}'.";
+                return false;
+            }
+            if (!Directory.Exists(workingDirectory))
+            {
+                error = $"WorkingDirectory does not exist for '{Name}': {workingDirectory}";
+                return false;
+            }
+            WorkingDirectory = workingDirectory;
+            EnvironmentVariables ??= new();
+            foreach (var entry in EnvironmentVariables)
+            {
+                if (string.IsNullOrWhiteSpace(entry.Key) || entry.Key.Contains('=') || entry.Key.Contains('\0') || entry.Value == null || entry.Value.Contains('\0'))
+                {
+                    error = $"Invalid environment variable for '{Name}'.";
+                    return false;
+                }
+            }
 
 			// Store the resolved path to avoid redundant re-resolution in HealthMonitor.
 			ApplicationExePath = resolvedPath;
@@ -369,6 +406,47 @@ namespace AppHealthMonitor
 
 			error = string.Empty;
 			return true;
+		}
+
+		/// <summary>
+		/// Resolves portable Builds/ paths from the monitor's centralized output tree.
+		/// Preserves normal resolution for absolute paths and other relative paths.
+		/// </summary>
+        public System.Diagnostics.ProcessStartInfo CreateStartInfo(bool headless)
+        {
+            var info = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = ApplicationExePath,
+                Arguments = LaunchArguments ?? string.Empty,
+                WorkingDirectory = WorkingDirectory,
+                UseShellExecute = false,
+                CreateNoWindow = headless
+            };
+            foreach (var entry in EnvironmentVariables)
+                info.Environment[entry.Key] = entry.Value;
+            return info;
+        }
+
+		private static string ResolveExecutablePath(string executablePath)
+		{
+			if (!Path.IsPathRooted(executablePath))
+			{
+				string normalizedPath = executablePath.Replace('\\', '/');
+				if (normalizedPath.StartsWith("Builds/", StringComparison.Ordinal))
+				{
+					DirectoryInfo? directory = new DirectoryInfo(AppContext.BaseDirectory);
+					while (directory != null)
+					{
+						if (directory.Name.Equals("Builds", StringComparison.Ordinal))
+						{
+							return Path.GetFullPath(Path.Combine(directory.FullName, normalizedPath.Substring("Builds/".Length)));
+						}
+						directory = directory.Parent;
+					}
+				}
+			}
+
+			return Path.GetFullPath(executablePath);
 		}
 
 		/// <summary>

@@ -275,15 +275,7 @@ namespace AppHealthMonitor
 			portCheckTasks = new Task<bool>[this.healthCheckers.Count];
 			isProcessOnlyMonitoring = this.healthCheckers.Count == 0;
 
-			cachedStartInfo = new ProcessStartInfo
-			{
-				FileName = resolvedExePath,
-				Arguments = config.LaunchArguments ?? string.Empty,
-				UseShellExecute = !headless,
-				RedirectStandardOutput = false,
-				RedirectStandardError = false,
-				CreateNoWindow = headless,
-			};
+			cachedStartInfo = config.CreateStartInfo(headless);
 		}
 
 		/// <summary>

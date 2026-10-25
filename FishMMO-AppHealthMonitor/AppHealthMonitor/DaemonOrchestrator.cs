@@ -189,8 +189,14 @@ namespace AppHealthMonitor
 			var apps = new List<(AppConfig, IReadOnlyList<IHealthChecker>)>(appConfigs.Count);
 			var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+            boardService = DaemonControlPlane.TryCreateBoardService(configuration);
 			foreach (var appConfig in appConfigs)
 			{
+                if (!appConfig.Enabled)
+                {
+                    Log.Info("Orchestration", $"Disabled application: {appConfig.Name}");
+                    continue;
+                }
 				if (!appConfig.TryApplyDefaultsAndValidate(out string error))
 				{
 					throw new InvalidOperationException($"Invalid configuration for application '{appConfig.Name}': {error}");
@@ -207,11 +213,12 @@ namespace AppHealthMonitor
 				LogAppConfiguration(appConfig);
 			}
 
+            if (apps.Count == 0)
+                throw new InvalidOperationException("No enabled application configurations were provided.");
 			validatedApps = apps;
 
 			this.headless = headless;
 			this.configuration = configuration;
-			boardService = DaemonControlPlane.TryCreateBoardService(configuration);
 
 			Log.Info("Orchestration", $"Loaded {apps.Count} valid application configuration(s). Headless: {headless}");
 		}

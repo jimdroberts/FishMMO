@@ -8,7 +8,7 @@
     cross-publish from any host, so a single machine can produce the whole set.
 
     Output, one directory per RID:
-        Updater\bin\Release\net8.0\<rid>\publish\Updater[.exe]
+        ..\Builds\Updater\Release\net8.0\<rid>\publish\Updater[.exe]
 
     That layout is exactly what the FishMMO Dashboard's BuildExecutor.CopyUpdaterToBuild
     looks for when it copies the updater into a client build, so publishing here is what
@@ -65,7 +65,7 @@ foreach ($target in $targets) {
         throw "dotnet publish failed for $target (exit code $LASTEXITCODE)."
     }
 
-    $publishDir = Join-Path $scriptDir "Updater/bin/Release/net8.0/$target/publish"
+    $publishDir = Join-Path $scriptDir "../Builds/Updater/Release/net8.0/$target/publish"
     $exe = if ($target -like 'win-*') { 'Updater.exe' } else { 'Updater' }
     $exePath = Join-Path $publishDir $exe
 

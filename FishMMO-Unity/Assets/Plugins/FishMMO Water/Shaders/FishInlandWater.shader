@@ -75,10 +75,10 @@ Shader "FishMMO/Water/Inland Water"
             #pragma fragment InlandFragment
             #pragma target 3.5
 
-            #pragma multi_compile_fog
+            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
-            #pragma multi_compile_fragment _ _SHADOWS_SOFT
-            #pragma multi_compile_fragment _ _LIGHT_COOKIES
+            #include_with_pragmas "Assets/Prefabs/Client/Weather/Shaders/FishShadowVariants.hlsl"
+            #include_with_pragmas "Assets/Prefabs/Client/Weather/Shaders/FishLightCookieVariants.hlsl"
             // The sea's global quality keywords, set against what the running URP asset provides.
             #pragma multi_compile_fragment _ _WATER_DEPTH
             #pragma multi_compile_fragment _ _WATER_REFRACTION

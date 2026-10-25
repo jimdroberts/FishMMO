@@ -283,7 +283,7 @@ globalization) automatically whenever a RuntimeIdentifier is set. A plain
 `dotnet build Updater.sln -c Release` still produces a framework-dependent build for
 local development.
 
-Output lands in `Updater/bin/Release/net8.0/<rid>/publish/Updater[.exe]`.
+Output lands in `Builds/Updater/Release/net8.0/<rid>/publish/Updater[.exe]`.
 
 **Self-contained is a requirement, not an optimisation.** The updater runs on player
 machines with no .NET runtime installed, at the one moment the client cannot report an

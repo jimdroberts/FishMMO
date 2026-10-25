@@ -45,7 +45,7 @@ Shader "FishMMO/Weather/Curtain"
             #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
-            #pragma multi_compile_fog
+            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
             // The cloud shadow cookie on the sun (CloudShadowPresenter): the sun a shaft is lit by is
             // the sun through the cloud in view, which that cookie carries and the light does not.
             #pragma multi_compile_fragment _ _LIGHT_COOKIES

@@ -82,12 +82,16 @@ namespace FishMMO.Installer
 
 			string executeMethod = ResolveExecuteMethod(buildType, kind);
 			string projectPath = InstallationConstants.FishMMOUnityProjectPath;
+			string outputPath = Path.GetFullPath(Path.Combine(
+				InstallationConstants.FishMMOMonorepoRoot, "Builds",
+				buildType == UnityBuildType.Server ? "Server" : "Client"));
 			string logPath = Path.Combine(
 				InstallerProcessHelper.GetWorkingDirectory(),
 				$"unity-build-{buildType}-{osTarget}-{kind}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.log");
 
 			await Log.Info("FishMMOInstaller", $"Unity executable : {unityExe}");
 			await Log.Info("FishMMOInstaller", $"Project path     : {projectPath}");
+			await Log.Info("FishMMOInstaller", $"Output path      : {outputPath}");
 			await Log.Info("FishMMOInstaller", $"Execute method   : {executeMethod}");
 			await Log.Info("FishMMOInstaller", $"Build type       : {buildType}");
 			await Log.Info("FishMMOInstaller", $"OS target        : {osTarget}");
@@ -103,6 +107,7 @@ namespace FishMMO.Installer
 				$"-executeMethod {executeMethod}",
 				$"-fishmmoBuildType {buildType}",
 				$"-fishmmoOSTarget {osTarget}",
+				$"-fishmmoOutputPath \"{outputPath}\"",
 				$"-logFile \"{logPath}\"");
 
 			// Add -standaloneBuildSubtarget "Server" for server builds

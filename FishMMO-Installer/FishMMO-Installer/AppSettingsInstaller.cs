@@ -105,7 +105,9 @@ namespace FishMMO.Installer
 			string displayName, string folderGroup, string folderName,
 			int defaultPort, bool hasNpgsqlDsn, bool hasPatches)
 		{
-			string defaultDir = Path.Combine(FishMMODevRoot, "FishMMO-WebServers", folderGroup, folderName);
+			string defaultDir = folderName is "IpFetchServer" or "Patcher" or "WebGLServer" or "ControlPanel"
+				? Path.Combine(FishMMODevRoot, "Builds", folderName, "Release", "net8.0", "publish")
+				: Path.Combine(FishMMODevRoot, "FishMMO-WebServers", folderGroup, folderName);
 			string? targetDir = PromptComponentDirectory(defaultDir);
 			if (targetDir == null) return;
 
@@ -260,7 +262,7 @@ namespace FishMMO.Installer
 
 		public static async Task ConfigureDiscordBotComponent()
 		{
-			string defaultDir = Path.Combine(FishMMODevRoot, "FishMMO-DiscordBot", "FishMMO-DiscordBot");
+			string defaultDir = Path.Combine(FishMMODevRoot, "Builds", "FishMMO-DiscordBot", "Release", "net8.0", "publish");
 			string? targetDir = PromptComponentDirectory(defaultDir);
 			if (targetDir == null) return;
 

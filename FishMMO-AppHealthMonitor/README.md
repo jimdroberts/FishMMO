@@ -172,7 +172,7 @@ The file has two top-level fields:
 | Field | Default / Min | Description |
 |---|---|---|
 | `Name` | required | Friendly name used in logs and `status`. |
-| `ApplicationExePath` | required | Absolute or relative path to the executable; resolved via `Path.GetFullPath` and verified to exist. |
+| `ApplicationExePath` | required | Absolute or relative executable path, verified to exist. `Builds/...` paths resolve from the enclosing centralized `Builds` directory when the monitor runs there; other relative paths (and `Builds/...` outside that layout) resolve from the working directory. |
 | `LaunchArguments` | `""` | Optional command-line arguments. |
 | `MonitoredPort` | `0` | `0` means **process-only** monitoring (no port probe). |
 | `PortTypes` | `[]` | Subset of `TCP`, `UDP`, `DatabasePulse`. Empty = process-only. Every configured check must pass. The game servers use `DatabasePulse`: WebTransport is QUIC over UDP, so a TCP probe fails against a healthy server and a UDP send succeeds against a dead one. |
@@ -249,7 +249,7 @@ The [FishMMO-Installer](../FishMMO-Installer/README.MD) can install the daemon a
 
 ```bash
 # Publish the project first:
-dotnet publish AppHealthMonitor/AppHealthMonitor.csproj -c Release -o publish
+dotnet publish AppHealthMonitor/AppHealthMonitor.csproj -c Release
 # Install the service:
 FishMMO-Installer --component apphealthmonitor-service
 ```
@@ -268,7 +268,7 @@ Description=FishMMO Application Health Monitor Daemon
 After=network.target postgresql.service
 
 [Service]
-WorkingDirectory=/opt/fishmmo/FishMMO-AppHealthMonitor/AppHealthMonitor/bin/Release/net8.0/publish
+WorkingDirectory=/opt/fishmmo/Builds/AppHealthMonitor/Release/net8.0/publish
 ExecStart=/usr/bin/dotnet "AppHealthMonitor.dll"
 Restart=always
 RestartSec=10
@@ -387,3 +387,59 @@ flowchart TD
     CancelCycle --> Wait
     Shutdown --> Stop([Daemon exits])
 ```
+
+
+## Current local development configuration
+
+Run `./run-local.sh --check-config` from this directory to validate the bundled
+settings without launching services. Run `./run-local.sh`, then enter `start`
+to supervise the three game-server roles and four local web services:
+
+| Service | Executable under `Builds/` | TCP health port |
+|---|---|---|
+| IPFetch | `IpFetchServer/Debug/net8.0/IpFetchServer` | 8080 |
+| Patcher | `Patcher/Debug/net8.0/Patcher` | 8090 |
+| WebGL | `WebGLServer/Debug/net8.0/WebGLServer` | 8000 |
+| Control panel | `ControlPanel/Debug/net8.0/FishMMO-ControlPanel` | 8100 |
+
+The canonical development template and bundled monitor settings now select
+PgBouncer at `127.0.0.1:6432`. Credentials still come from the existing secure
+sources; no passwords were added to JSON. Each child receives Development
+settings and port 6432. WebGL receives the built directory containing `index.html`
+via `ASPNETCORE_WEBROOT`; the control panel receives its own frontend directory.
+The working directory defaults to the executable directory. This keeps relative
+server configuration and content lookups independent of the monitor's launch directory.
+
+LoginServer, WorldServer and SceneServer are enabled using
+`Builds/Server/Linux Server/FishMMO GameServer Linux/GameServer.exe`.
+Each role is passed first (`LOGIN`, `WORLD`, `SCENE`), followed by Unity's
+`-batchmode -nographics` flags and a separate `<Role>.Player.log` file in the
+server build directory. DatabasePulse names match the actual server configuration:
+`LoginServer`, `World Server`, and `Scene Server`. Monitor labels remain
+`LoginServer`, `WorldServer`, and `SceneServer`. The database read service is
+initialized before constructing the pulse checkers.
+
+New per-application settings:
+
+- `Enabled` defaults to true. Disabled entries are not validated, launched, or exposed as supervised control-plane applications.
+- `WorkingDirectory` defaults to the executable directory and supports portable `Builds/` paths.
+- `EnvironmentVariables` supplies child-only overrides; keep credentials out of this dictionary.
+
+The launcher anchors configuration lookup to the bundled output directory.
+`Headless` remains false, so `start` begins supervision interactively. Setting
+`Headless=true` in the launch environment enables automatic startup as before.
+This monitor configuration does not create the separate API gateway at port 8088;
+the individual IPFetch and Patcher services remain on 8080 and 8090.
+
+Regression verification:
+
+```bash
+dotnet run --project Tools/Configuration.Tests
+# Also verify real credentials against PgBouncer with a read-only SELECT 1:
+dotnet run --project Tools/Configuration.Tests -- --database
+```
+
+On 2026-10-25, the rebuilt bundled configuration passed `--check-config`, and
+54 child-process/configuration checks passed, including successful PgBouncer
+6432 authentication and SELECT 1. No supervised application services were started
+by these checks. The production template was not changed.

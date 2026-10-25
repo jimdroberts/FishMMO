@@ -83,7 +83,7 @@ namespace AppHealthMonitor
 		/// Initializes configuration, logging, and starts the orchestration loop.
 		/// </summary>
 		/// <returns>A task representing the asynchronous operation.</returns>
-		static async Task Main()
+		static async Task Main(string[] args)
 		{
 			string applicationBaseDirectory = AppContext.BaseDirectory;
 
@@ -147,6 +147,28 @@ namespace AppHealthMonitor
 				await Log.Shutdown();
 				return;
 			}
+
+            if (args.Contains("--check-config", StringComparer.Ordinal))
+            {
+                int enabled = 0;
+                foreach (var entry in appConfigs)
+                {
+                    if (!entry.Enabled) { Console.WriteLine($"DISABLED: {entry.Name}"); continue; }
+                    if (!entry.TryApplyDefaultsAndValidate(out string error))
+                    {
+                        Console.Error.WriteLine(error);
+                        Environment.ExitCode = 1;
+                        await Log.Shutdown();
+                        return;
+                    }
+                    enabled++;
+                    Console.WriteLine($"OK: {entry.Name} -> {entry.ApplicationExePath}");
+                }
+                if (enabled == 0) Environment.ExitCode = 1;
+                Console.WriteLine($"Validated {enabled} enabled applications; no processes were started.");
+                await Log.Shutdown();
+                return;
+            }
 
 			DaemonOrchestrator orchestrator;
 			try

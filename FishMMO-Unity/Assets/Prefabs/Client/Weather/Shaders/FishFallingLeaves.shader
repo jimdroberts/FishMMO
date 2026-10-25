@@ -36,7 +36,7 @@ Shader "FishMMO/Weather/Falling Leaves"
             #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
-            #pragma multi_compile_fog
+            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
             // The cloud shadow cookie on the sun, as the precipitation reads it.
             #pragma multi_compile _ _LIGHT_COOKIES
             #pragma target 3.5

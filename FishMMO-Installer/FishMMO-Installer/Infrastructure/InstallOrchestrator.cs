@@ -27,6 +27,7 @@ namespace FishMMO.Installer
                 ["fishmmo-db"] = 4,
                 ["nginx"] = 5,
                 ["letsencrypt"] = 6,
+                ["dev-certificates"] = 6,
                 ["firewall"] = 7,
                 ["systemd-services"] = 8,
                 ["unity-hub"] = 9,
@@ -99,6 +100,7 @@ namespace FishMMO.Installer
                         await LetsEncryptInstaller.InstallLetsEncryptCertificate();
                         return true;
                     }),
+                    "dev-certificates" => await FromBoolAsync("dev-certificates", () => DevelopmentCertificateInstaller.InstallAsync()),
                     "unity-hub" => await FromVoidAsync("unity-hub", async () =>
                     {
                         await UnityInstaller.InstallUnityHub();
@@ -301,7 +303,9 @@ namespace FishMMO.Installer
         /// </summary>
         private static async Task<InstallResult> RunAllComponentsAsync(AppSettings appSettings, InstallManifest? manifest)
         {
+            // Development CA trust must be explicitly selected, never installed by "all".
             var allComponents = DependencyOrder
+                .Where(kv => !kv.Key.Equals("dev-certificates", StringComparison.OrdinalIgnoreCase))
                 .OrderBy(kv => kv.Value)
                 .Select(kv => kv.Key)
                 .ToList();

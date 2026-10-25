@@ -440,8 +440,8 @@ dotnet run --project FishMMO-Installer/FishMMO-Installer.csproj
 
 Run the compiled binary directly:
 
-- Windows: `FishMMO-Installer/FishMMO-Installer/bin/Debug/net8.0/FishMMO-Installer.exe`
-- Linux: `./FishMMO-Installer/FishMMO-Installer/bin/Debug/net8.0/FishMMO-Installer`
+- Windows: `Builds/FishMMO-Installer/Debug/net8.0/FishMMO-Installer.exe`
+- Linux: `./Builds/FishMMO-Installer/Debug/net8.0/FishMMO-Installer`
 
 > **Important:** `logging.json` and `appsettings.json` are copied from [`FishMMO-Setup/`](../FishMMO-Setup/) to the output directory automatically by the build. Edit the templates in `FishMMO-Setup/Development/` with your credentials before building, or use the Configuration wizard (menu 5) to apply overrides. Place a modified copy in the working directory to override the bundled defaults at runtime.
 
@@ -644,7 +644,7 @@ This hashes every file listed in `checksums.json` that is present in the working
 
 ```bash
 # Linux
-cd FishMMO-Installer/bin/Debug/net8.0/
+cd ../Builds/FishMMO-Installer/Debug/net8.0/
 for f in *.exe *.zip; do
   if [ -f "$f" ]; then
     hash=$(sha256sum "$f" | cut -d' ' -f1)
@@ -855,3 +855,146 @@ flowchart TD
 ## License
 
 See the main FishMMO repository for license information.
+
+
+## Repair or configure local PgBouncer
+
+For the local Linux installation, a single command configures the installed service
+using the existing application credentials (no database password changes):
+
+```bash
+sudo python3 /path/to/FishMMO-Dev/FishMMO-Installer/scripts/configure-local-pgbouncer.py --apply
+```
+
+Replace `/path/to/FishMMO-Dev` with the checkout location. Run without `--apply`
+to list the planned runtime configuration changes. This requires the existing
+`/etc/fishmmo/db-secrets.env` and the packaged `pgbouncer` account/service. It verifies application
+access to PostgreSQL on 5432, installs loopback PgBouncer on 6432, and tests
+application authentication and `SELECT 1` before changing runtime settings. On a
+failed service/connection test it restores the previous PgBouncer files.
+
+After success it updates development templates, Unity's working-directory
+`appsettings.Development.json`, and existing .NET runtime output configurations.
+When local peer authentication allows it, the tool copies the existing SCRAM
+verifier. Otherwise it uses the existing application password from the secrets file
+in the pgbouncer-owned 0600 auth file. Both modes authenticate with SCRAM; no
+PostgreSQL administrator password or database role changes are required.
+Production templates, installer settings and migration settings stay unchanged.
+Runtime configuration backups are private under `/var/backups/fishmmo-pgbouncer`.
+Restart any running applications afterward. Explicit environment port overrides
+still take precedence: runtime processes should use `FISHMMO_DB_PORT=6432`, while
+migration/admin processes should use 5432. Binaries published outside these known
+output directories need their runtime settings updated separately.
+
+To configure manually or use `auth_query` instead:
+
+Build the installer, then authenticate sudo in your terminal before opening it:
+
+```bash
+sudo -v
+dotnet run --project FishMMO-Installer/FishMMO-Installer.csproj
+```
+
+From the FishMMO-Installer directory, choose **Database (2) → Configure PgBouncer (8)**.
+Enter the PostgreSQL superuser credentials and select backend port **5432** (or the
+actual PostgreSQL port). This port is independent of the runtime application port;
+never point the backend at PgBouncer's own listener, **6432**. Choose **Y** for
+`auth_query`, or **N** to copy the application's current SCRAM verifier.
+
+The systemd service logs to the journal, so no manually created log or PID directory
+is needed. Auth-query mode stores only the lookup role's password in
+`/etc/pgbouncer/userlist.txt`, owned by pgbouncer with mode 0600. Reconfiguration
+rotates that password and updates the file, repairing roles created by older
+installers that discarded the password. It does not change application passwords.
+The installer retains one-time configuration backups and checks the service restart.
+If application database credentials are available through DatabaseSecrets, it also
+connects through PgBouncer and runs `SELECT 1`; otherwise it reports that this test
+still needs to be performed.
+
+Before switching runtime connections, verify with your actual database and role:
+
+```bash
+psql -h 127.0.0.1 -p 6432 -U fishmmo -d fishmmo -c 'SELECT 1'
+```
+
+After that succeeds, set **FISHMMO_DB_PORT=6432** in the environment of runtime
+servers, or update their Npgsql port settings. An existing environment variable or
+`/etc/fishmmo/db-secrets.env` port override can take precedence over JSON. Keep
+migrations and administrative connections on PostgreSQL's direct port. Restart
+runtime processes to pick up their new connection settings. PostgreSQL remains
+on 5432; configuring PgBouncer does not automatically switch running applications.
+
+If the service or connection test fails, inspect:
+
+```bash
+sudo systemctl status pgbouncer --no-pager
+sudo journalctl -u pgbouncer -n 50 --no-pager
+```
+
+### Linux game-server TLS deployment
+
+The Install / Renew Let's Encrypt action also deploys the selected certificate to
+`/etc/fishmmo/certs/fullchain.pem` and `/etc/fishmmo/certs/privkey.pem`, matching the
+LoginServer, WorldServer and SceneServer configuration defaults. It prompts for
+an existing OS account that runs the game servers and adds it to `fishmmo-certs`.
+Start a new login session (or restart the service) to acquire that membership.
+Other game-server accounts must also belong to this group. Directories are
+root-owned and group-accessible (`0750`); certificate and key files are `0640`.
+The private key is never made readable to all users.
+
+A root-owned Certbot deploy hook at
+`/etc/letsencrypt/renewal-hooks/deploy/fishmmo-certificates` validates that the
+certificate is unexpired and matches the key, then publishes both through an
+atomic `current` symlink switch. Unrelated certificate renewals are ignored.
+Previous release directories remain available for recovery. The installer enables
+`certbot.timer` or `certbot-renew.timer` when supplied by the distribution;
+otherwise it installs a twice-daily `fishmmo-certbot-renew.timer`. Successful renewal
+also tests and reloads nginx when it is active. **Restart running game servers
+after renewal**, since WebTransport loads its certificates at startup; the hook
+does not interrupt running game sessions automatically.
+
+This action requires a domain and a working ACME challenge endpoint. It does not
+issue localhost development certificates. Selecting Let's Encrypt staging still
+produces an untrusted test certificate. Running the updated installer is required
+to deploy these changes on an existing machine; rebuilding a Unity server alone
+does not install host certificates.
+
+### Local development certificates (Linux)
+
+Choose **Web Server → 6: Install/Renew Local Development Certificates**, or run
+`FishMMO-Installer --component dev-certificates`. This requires OpenSSL and sudo;
+it does not require nginx, public DNS, port forwarding, or Let's Encrypt.
+Choose the OS account that runs the game servers (for example `jim`). Choose **Y**
+when asked to trust the development CA if you want native clients on this machine
+to connect. The trust decision is local to this machine; other client machines
+need the public CA certificate imported separately. This component is deliberately
+excluded from `--component all`.
+
+The action creates a persistent, root-only local CA in `/etc/fishmmo/dev-ca/` and
+issues an ECDSA P-256 leaf certificate valid for 13 days with SANs for `localhost`,
+`127.0.0.1`, and `::1`. It installs the certificate and key at the existing server
+configuration paths `/etc/fishmmo/certs/fullchain.pem` and
+`/etc/fishmmo/certs/privkey.pem`, with group access for the selected server account.
+It refuses to overwrite unmanaged/production certificates or a production renewal
+hook. No certificate validation is disabled. No Unity server rebuild is needed.
+
+**Start a new login session**, then restart Unity and running game servers so they
+receive the new group membership and certificates. Keep the API/WebGL local HTTP
+settings; this certificate action does not reconfigure nginx or web servers.
+
+For WebGL, supply the printed SHA-256 fingerprint via the client's
+`WebTransport.SetServerCertificateHashes(...)` before connecting. It is the leaf
+certificate's DER hash, **not** the API SPKI pin from the Dashboard's Certificate
+Pins section. The fingerprint is also saved to
+`/etc/fishmmo/certs/server-certificate.sha256`. Browser certificate hashes must be
+provided even if you trusted the local CA on the host. The installer does not yet
+automatically inject this fingerprint into WebGL builds.
+
+Rerun the same action before the 13-day certificate expires, restart servers, and
+update WebGL hashes after rotation. The CA is retained so native clients do not
+need to trust a new CA each time. Previous leaf releases are retained for recovery.
+The public CA is `/etc/fishmmo/certs/development-ca.crt`; never copy the CA private
+key or the server private key to clients.
+
+For testing generation without sudo or system changes, the source script supports
+`bash FishMMO-Installer/Resources/InstallDevelopmentCertificates.sh --generate-only /tmp/fishmmo-dev-certs-test`.

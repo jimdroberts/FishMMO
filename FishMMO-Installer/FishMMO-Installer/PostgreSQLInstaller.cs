@@ -579,7 +579,7 @@ namespace FishMMO.Installer
 
 			// Prompt for superuser credentials so 'database update' can pass them
 			// via --connection, which avoids the design-time factory's potentially
-			// stale appsettings.json (e.g. wrong database name in bin/ output).
+			// stale appsettings.json (e.g. wrong database name in build output).
 			string superUsername = InstallationConstants.PostgreSQLDefaultSuperuser;
 			string superPassword = InstallerProcessHelper.PromptForRequiredPassword(
 				$"Enter PostgreSQL Superuser Password (username is '{superUsername}'): ");

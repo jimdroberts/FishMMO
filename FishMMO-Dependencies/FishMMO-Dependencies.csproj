@@ -132,13 +132,13 @@
 				and exclude test/satellite assemblies that should not ship with the game.
 			-->
 			<SourceDir
-			    Include="bin/$(Configuration)/**/*.dll"
+			    Include="$(OutDir)**/*.dll"
 			    Exclude="
-			        bin/$(Configuration)/**/Microsoft.CSharp.dll;
-			        bin/$(Configuration)/**/System.Collections.Concurrent.dll;
-			        bin/$(Configuration)/**/System.Linq.dll;
-			        bin/$(Configuration)/**/System.Text.RegularExpressions.dll;
-			        bin/$(Configuration)/**/System.Security.Cryptography.Primitives.dll;
+			        $(OutDir)**/Microsoft.CSharp.dll;
+			        $(OutDir)**/System.Collections.Concurrent.dll;
+			        $(OutDir)**/System.Linq.dll;
+			        $(OutDir)**/System.Text.RegularExpressions.dll;
+			        $(OutDir)**/System.Security.Cryptography.Primitives.dll;
 			        **/*.Test.dll;
 			        **/*.Tests.dll;
 			        **/xunit.*.dll;

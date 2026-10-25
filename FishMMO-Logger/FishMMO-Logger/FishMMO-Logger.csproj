@@ -23,7 +23,7 @@
 		</PropertyGroup>
 		
 		<ItemGroup>
-			<SourceDir Include="bin\$(BuildConfiguration)\**\*.dll" />
+			<SourceDir Include="$(OutDir)*.dll" />
 		</ItemGroup>
 		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)" />
 	</Target>

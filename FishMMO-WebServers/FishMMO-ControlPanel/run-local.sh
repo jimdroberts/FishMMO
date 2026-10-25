@@ -7,8 +7,8 @@
 # first, then /etc/fishmmo/db-secrets.env. This script only checks that one of those will
 # work before starting, so a missing secret is a clear message rather than a stack trace.
 #
-# THE PANEL IS SERVED FROM A PUBLISH, NOT FROM bin/. The web assets are mapped back to the
-# source tree only in Development; a Production host started from bin/ answers 404 for
+# The panel runs from publish output. The web assets are mapped back to the
+# source tree only in Development; a Production host using ordinary build output answers 404 for
 # every page with one easily-missed warning. Publishing makes both environments behave the
 # same, which is the point of testing locally at all.
 #
@@ -29,7 +29,7 @@ readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 readonly PROJECT="$SCRIPT_DIR/ControlPanel/ControlPanel.csproj"
 readonly MIGRATOR="$REPO_ROOT/FishMMO-Database/FishMMO-DB-Migrator"
-readonly PUBLISH_DIR="$SCRIPT_DIR/ControlPanel/bin/Release/net8.0/publish"
+readonly PUBLISH_DIR="$REPO_ROOT/Builds/ControlPanel/Release/net8.0/publish"
 readonly SECRETS_FILE="${FISHMMO_SECRETS_FILE:-/etc/fishmmo/db-secrets.env}"
 
 PORT=8100

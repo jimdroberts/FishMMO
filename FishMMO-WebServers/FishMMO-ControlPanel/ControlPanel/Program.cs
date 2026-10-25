@@ -373,7 +373,8 @@ app.UseExceptionHandler(errApp => errApp.Run(async ctx =>
 }));
 
 app.UseForwardedHeaders();
-app.UseFishMMOSecurityHeaders(app.Environment);
+app.UseFishMMOSecurityHeaders(app.Environment, configuration: app.Configuration,
+    profile: ContentSecurityPolicyProfile.ControlPanel, webRoot: app.Environment.WebRootFileProvider);
 
 // No UseHttpsRedirection: Kestrel is loopback-only behind NGINX, and redirecting
 // would break `dotnet run` for anyone opening the panel locally.

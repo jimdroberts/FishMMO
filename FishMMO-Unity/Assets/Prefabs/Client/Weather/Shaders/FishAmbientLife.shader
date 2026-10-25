@@ -53,8 +53,8 @@ Shader "FishMMO/Ambient Life"
             #pragma fragment AmbientLifeForwardFragment
             #pragma multi_compile_instancing
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
-            #pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
-            #pragma multi_compile_fragment _ _LIGHT_COOKIES
+            #include_with_pragmas "FishShadowVariants.hlsl"
+            #include_with_pragmas "FishLightCookieVariants.hlsl"
             // The cave's torches and crystals and a carried light (additional lights; Forward+ clusters them).
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHTS
             #pragma multi_compile _ _CLUSTER_LIGHT_LOOP

@@ -30,7 +30,7 @@ Shader "FishMMO/Weather/Vortex Debris"
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 3.5
-            #pragma multi_compile_fog
+            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"

@@ -20,15 +20,24 @@
     <ProjectReference Include="..\..\FishMMO-WebShared\FishMMO-WebShared.csproj" />
   </ItemGroup>
 
-  <!-- Copy-and-rename config from FishMMO-Setup/ to output. -->
-  <Target Name="CopyFishMMOConfig" AfterTargets="Build">
-    <Copy SourceFiles="..\..\..\FishMMO-Setup\Development\appsettings.ControlPanel.json"
-          DestinationFiles="$(OutDir)appsettings.json"
-          SkipUnchangedFiles="true" />
-    <Copy SourceFiles="..\..\..\FishMMO-Setup\Production\appsettings.ControlPanel.json"
-          DestinationFiles="$(OutDir)appsettings.Production.json"
-          SkipUnchangedFiles="true"
-          Condition="Exists('..\..\..\FishMMO-Setup\Production\appsettings.ControlPanel.json')" />
-  </Target>
+  <!-- Serve static files from the build output as well as published deployments. -->
+  <ItemGroup>
+    <Content Update="wwwroot\**\*"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Copy-and-rename shared configuration for both build and publish output. -->
+  <ItemGroup>
+    <Content Include="..\..\..\FishMMO-Setup\Development\appsettings.ControlPanel.json"
+             Link="appsettings.json"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\..\FishMMO-Setup\Production\appsettings.ControlPanel.json"
+             Link="appsettings.Production.json"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest"
+             Condition="Exists('..\..\..\FishMMO-Setup\Production\appsettings.ControlPanel.json')" />
+  </ItemGroup>
 
 </Project>

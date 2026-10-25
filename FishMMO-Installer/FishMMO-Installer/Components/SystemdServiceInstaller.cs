@@ -51,7 +51,7 @@ namespace FishMMO.Installer
                 {
                     await Log.Warning("FishMMOInstaller",
                         $"Skipping {serviceName}: publish directory not found at " +
-                        $"FishMMO-WebServers/{projectDir}/bin/Release/net8.0/publish. Build the project first.");
+                        $"Builds/{Path.GetFileName(projectDir)}/Release/net8.0/publish. Build the project first.");
                     continue;
                 }
 
@@ -138,8 +138,8 @@ namespace FishMMO.Installer
         /// <summary>Finds the publish output directory for a given project.</summary>
         private static string? FindPublishDirectory(string root, string projectDir)
         {
-            string candidate = Path.Combine(root, "FishMMO-WebServers", projectDir,
-                "bin", "Release", "net8.0", "publish");
+            string candidate = Path.Combine(root, "Builds", Path.GetFileName(projectDir),
+                "Release", "net8.0", "publish");
             return Directory.Exists(candidate) ? candidate : null;
         }
 
@@ -320,11 +320,11 @@ namespace FishMMO.Installer
 				return InstallResult.Ok("apphealthmonitor-service");
 			}
 
-			string candidate = Path.Combine(fishmmoRoot, "FishMMO-AppHealthMonitor", "AppHealthMonitor",
-				"bin", "Release", "net8.0", "publish");
+			string candidate = Path.Combine(fishmmoRoot, "Builds", "AppHealthMonitor",
+				"Release", "net8.0", "publish");
 			if (!Directory.Exists(candidate))
-				candidate = Path.Combine(fishmmoRoot, "FishMMO-AppHealthMonitor", "AppHealthMonitor",
-					"bin", "Debug", "net8.0");
+				candidate = Path.Combine(fishmmoRoot, "Builds", "AppHealthMonitor",
+					"Debug", "net8.0");
 
 			if (!Directory.Exists(candidate))
 			{

@@ -210,7 +210,7 @@ namespace FishMMO.Installer
 		/// <list type="number">
 		///   <item><b>auth_query</b> (recommended): PgBouncer delegates authentication to
 		///   PostgreSQL via a dedicated <c>fishmmo_pgb_auth</c> role and an auth_query
-		///   function. No SCRAM hashes are stored on disk.</item>
+		///   function. Only the lookup role credential is stored on disk.</item>
 		///   <item><b>auth_file</b>: SCRAM-SHA-256 hashes from <c>pg_shadow</c> are
 		///   written to <c>/etc/pgbouncer/userlist.txt</c>.</item>
 		/// </list>
@@ -233,15 +233,30 @@ namespace FishMMO.Installer
 				$"Enter password for PostgreSQL superuser '{superUser}': ");
 
 			string dbHost = appSettings.Npgsql?.Host ?? "127.0.0.1";
-			string dbPort = appSettings.Npgsql?.Port ?? "5432";
+			string configuredPort = appSettings.Npgsql?.Port ?? "5432";
+			string defaultBackendPort = configuredPort == InstallationConstants.PgBouncerDefaultPort
+				? "5432" : configuredPort;
+			string dbPort = InstallerProcessHelper.PromptForInput(
+				$"PostgreSQL backend port (not PgBouncer's listening port) [{defaultBackendPort}]: ") ?? string.Empty;
+			if (string.IsNullOrWhiteSpace(dbPort)) dbPort = defaultBackendPort;
+			if (!int.TryParse(dbPort, out int backendPort) || backendPort < 1 || backendPort > 65535 ||
+				backendPort.ToString() == InstallationConstants.PgBouncerDefaultPort)
+			{
+				await Log.Warning("FishMMOInstaller", "Choose a valid PostgreSQL backend port distinct from PgBouncer's listening port.");
+				return;
+			}
 			string dbName = appSettings.Npgsql?.Database ?? "fishmmo";
 			string dbUser = DatabaseSecrets.TryResolveUsername() ?? "fishmmo";
 
-			string connectionString =
-				$"Host={dbHost};Port={dbPort};Username={superUser};Password={superPassword};Database={InstallationConstants.PostgreSQLDefaultAdminDb};Pooling=false";
+			// The builder preserves passwords containing connection-string punctuation.
+			string connectionString = new NpgsqlConnectionStringBuilder
+			{
+				Host = dbHost, Port = backendPort, Username = superUser, Password = superPassword,
+				Database = InstallationConstants.PostgreSQLDefaultAdminDb, Pooling = false
+			}.ConnectionString;
 
 			bool useAuthQuery = InstallerProcessHelper.PromptForYesNo(
-				"Use auth_query mode (recommended)? PgBouncer will authenticate via PostgreSQL directly instead of storing SCRAM hashes in a file. Say N to use traditional auth_file mode.");
+				"Use auth_query mode (recommended)? PgBouncer will authenticate via PostgreSQL directly and store only its lookup-role credential in a protected file. Say N to use traditional auth_file mode.");
 
 			if (useAuthQuery)
 			{
@@ -279,32 +294,28 @@ namespace FishMMO.Installer
 				await createRole.ExecuteNonQueryAsync();
 				await Log.Info("FishMMOInstaller", $"Created/verified PgBouncer auth role '{authUser}'.");
 
-				// Grant the auth role permission to read pg_shadow (needed for auth_query)
-				await using var grantExec = new NpgsqlCommand(
-					$"GRANT EXECUTE ON FUNCTION pg_catalog.pg_stat_get_activity(int) TO {authUser}", connection);
-				try { await grantExec.ExecuteNonQueryAsync(); } catch { /* may already be granted */ }
+				// Always rotate the credential, including when this role already exists.
+				await using var setPassword = new NpgsqlCommand(
+					$"ALTER ROLE {authUser} WITH LOGIN PASSWORD '{PostgreSQLInstaller.EscapeSqlLiteral(authPassword)}'", connection);
+				await setPassword.ExecuteNonQueryAsync();
 
-				// Create the auth_query function in the target database
-				await using var switchDb = new NpgsqlCommand(
-					$"SELECT format('GRANT CONNECT ON DATABASE %I TO %I', '{dbName}', '{authUser}')", connection);
-				string grantConnectSql = (string)(await switchDb.ExecuteScalarAsync())!;
-				await using var grantConnect = new NpgsqlCommand(grantConnectSql, connection);
+				await using var grantConnect = new NpgsqlCommand(
+					$"GRANT CONNECT ON DATABASE {new NpgsqlCommandBuilder().QuoteIdentifier(dbName)} TO {authUser}", connection);
 				await grantConnect.ExecuteNonQueryAsync();
 
-				// Create auth_query function via superuser connection to the target database
-				string userDbConnString = connectionString.Replace(
-					$"Database={InstallationConstants.PostgreSQLDefaultAdminDb}",
-					$"Database={dbName}");
-				await using var userDbConn = new NpgsqlConnection(userDbConnString);
+				var userDbSettings = new NpgsqlConnectionStringBuilder(connectionString) { Database = dbName };
+				await using var userDbConn = new NpgsqlConnection(userDbSettings.ConnectionString);
 				await userDbConn.OpenAsync();
 
 				await using var createFunc = new NpgsqlCommand(
-					$"CREATE OR REPLACE FUNCTION pgbouncer_auth_query(p_username TEXT) " +
+					$"CREATE OR REPLACE FUNCTION public.pgbouncer_auth_query(p_username TEXT) " +
 					$"RETURNS TABLE(username TEXT, password TEXT) AS $$ " +
-					$"SELECT usename::TEXT, passwd::TEXT FROM pg_catalog.pg_shadow WHERE usename = p_username " +
-					$"$$ LANGUAGE sql SECURITY DEFINER; " +
-					$"REVOKE ALL ON FUNCTION pgbouncer_auth_query(TEXT) FROM PUBLIC; " +
-					$"GRANT EXECUTE ON FUNCTION pgbouncer_auth_query(TEXT) TO {authUser};", userDbConn);
+					$"SELECT rolname::TEXT, rolpassword::TEXT FROM pg_catalog.pg_authid " +
+					$"WHERE rolname = p_username AND rolcanlogin " +
+					$"AND (rolvaliduntil IS NULL OR rolvaliduntil > CURRENT_TIMESTAMP) " +
+					$"$$ LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog; " +
+					$"REVOKE ALL ON FUNCTION public.pgbouncer_auth_query(TEXT) FROM PUBLIC; " +
+					$"GRANT EXECUTE ON FUNCTION public.pgbouncer_auth_query(TEXT) TO {authUser};", userDbConn);
 				await createFunc.ExecuteNonQueryAsync();
 				await Log.Info("FishMMOInstaller", "Created pgbouncer_auth_query function.");
 
@@ -318,7 +329,8 @@ namespace FishMMO.Installer
 				ini.AppendLine("listen_addr = 127.0.0.1");
 				ini.AppendLine($"listen_port = {InstallationConstants.PgBouncerDefaultPort}");
 				ini.AppendLine("auth_type = scram-sha-256");
-				ini.AppendLine($"auth_query = SELECT username, password FROM pgbouncer_auth_query($1)");
+				ini.AppendLine("auth_file = /etc/pgbouncer/userlist.txt");
+				ini.AppendLine("auth_query = SELECT username, password FROM public.pgbouncer_auth_query($1)");
 				ini.AppendLine($"auth_user = {authUser}");
 				ini.AppendLine("pool_mode = transaction");
 				ini.AppendLine("max_client_conn = 1000");
@@ -327,27 +339,24 @@ namespace FishMMO.Installer
 				ini.AppendLine("reserve_pool_timeout = 3");
 				ini.AppendLine("server_reset_query = DISCARD ALL");
 				ini.AppendLine("ignore_startup_parameters = extra_float_digits");
-				ini.AppendLine("logfile = /var/log/pgbouncer/pgbouncer.log");
-				ini.AppendLine("pidfile = /var/run/pgbouncer/pgbouncer.pid");
+				ini.AppendLine("; Foreground systemd service logs to stderr/journald; no log directory required.");
+				ini.AppendLine("; systemd tracks the foreground process; no pidfile required.");
 				ini.AppendLine("admin_users = " + superUser);
 				ini.AppendLine("stats_users = " + superUser);
 
-				// Write pgbouncer.ini only (no userlist.txt needed)
+				// The lookup role needs its plaintext password for backend SCRAM authentication.
+				// A SCRAM verifier alone cannot authenticate this independent connection.
 				const string iniPath = "/etc/pgbouncer/pgbouncer.ini";
-				await LinuxConfigHardeningHelper.EnsureBackupAsync(iniPath);
+				if (!await LinuxConfigHardeningHelper.EnsureBackupAsync(iniPath)) return;
 
+				const string userlistPath = "/etc/pgbouncer/userlist.txt";
+				if (!await BackupUserlistIfPresentAsync()) return;
+				string userlist = $"\"{authUser}\" \"{authPassword}\"\n";
+				if (!await LinuxConfigHardeningHelper.SudoInstallAsync(userlist, userlistPath, "pgbouncer", "pgbouncer", "0600"))
+					return;
 				if (!await LinuxConfigHardeningHelper.SudoInstallAsync(ini.ToString(), iniPath, "pgbouncer", "pgbouncer", "0640"))
 					return;
-
-				// Remove stale userlist.txt if it exists from a previous auth_file config
-				const string userlistPath = "/etc/pgbouncer/userlist.txt";
-				(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
-				await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix,
-					$"sudo rm -f {userlistPath}", "Could not remove old userlist.txt (ignored).");
-
-				await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix,
-					$"sudo systemctl restart {InstallationConstants.PgBouncerLinuxServiceName}",
-					"PgBouncer service restart failed. Run 'sudo journalctl -u pgbouncer -n 50' to investigate.");
+				if (!await RestartAndVerifyAsync(connectionString, dbName, dbUser)) return;
 
 				await Log.Info("FishMMOInstaller",
 					$"PgBouncer configured (auth_query mode): 127.0.0.1:{InstallationConstants.PgBouncerDefaultPort}, " +
@@ -410,34 +419,88 @@ namespace FishMMO.Installer
 			ini.AppendLine("reserve_pool_timeout = 3");
 			ini.AppendLine("server_reset_query = DISCARD ALL");
 			ini.AppendLine("ignore_startup_parameters = extra_float_digits");
-			ini.AppendLine("logfile = /var/log/pgbouncer/pgbouncer.log");
-			ini.AppendLine("pidfile = /var/run/pgbouncer/pgbouncer.pid");
+			ini.AppendLine("; Foreground systemd service logs to stderr/journald; no log directory required.");
+			ini.AppendLine("; systemd tracks the foreground process; no pidfile required.");
 			ini.AppendLine("admin_users = " + superUser);
 			ini.AppendLine("stats_users = " + superUser);
 
 			var userlist = new StringBuilder();
-			userlist.AppendLine(LinuxConfigHardeningHelper.ManagedMarker + " /etc/pgbouncer/userlist.txt generated by FishMMO-Installer.");
+			// Unlike pgbouncer.ini, the auth file does not accept our # marker comment.
 			userlist.AppendLine($"\"{dbUser}\" \"{scramHash}\"");
 
 			const string iniPath = "/etc/pgbouncer/pgbouncer.ini";
 			const string userlistPath = "/etc/pgbouncer/userlist.txt";
 
-			await LinuxConfigHardeningHelper.EnsureBackupAsync(iniPath);
-			await LinuxConfigHardeningHelper.EnsureBackupAsync(userlistPath);
+			if (!await LinuxConfigHardeningHelper.EnsureBackupAsync(iniPath)) return;
+			if (!await BackupUserlistIfPresentAsync()) return;
 
 			if (!await LinuxConfigHardeningHelper.SudoInstallAsync(ini.ToString(), iniPath, "pgbouncer", "pgbouncer", "0640"))
 				return;
 			if (!await LinuxConfigHardeningHelper.SudoInstallAsync(userlist.ToString(), userlistPath, "pgbouncer", "pgbouncer", "0600"))
 				return;
 
-			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
-			await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix,
-				$"sudo systemctl restart {InstallationConstants.PgBouncerLinuxServiceName}",
-				"PgBouncer service restart failed. Run 'sudo journalctl -u pgbouncer -n 50' to investigate.");
+			if (!await RestartAndVerifyAsync(connectionString, dbName, dbUser)) return;
 
 			await Log.Info("FishMMOInstaller",
 				$"PgBouncer configured (auth_file mode): 127.0.0.1:{InstallationConstants.PgBouncerDefaultPort}, " +
 				$"pool_mode=transaction, auth=scram-sha-256, database='{dbName}', user='{dbUser}'.");
+		}
+
+		private static async Task<bool> BackupUserlistIfPresentAsync()
+		{
+			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
+			return await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix,
+				"if sudo test -e /etc/pgbouncer/userlist.txt; then " +
+				"sudo test -e /etc/pgbouncer/userlist.txt.pre-fishmmo.bak || " +
+				"sudo cp -a /etc/pgbouncer/userlist.txt /etc/pgbouncer/userlist.txt.pre-fishmmo.bak; fi",
+				"Could not back up the existing PgBouncer credentials.");
+		}
+
+		private static async Task<bool> RestartAndVerifyAsync(string connectionString, string dbName, string dbUser)
+		{
+			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
+			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix,
+				$"sudo systemctl restart {InstallationConstants.PgBouncerLinuxServiceName} && " +
+				$"sudo systemctl is-active --quiet {InstallationConstants.PgBouncerLinuxServiceName}",
+				"PgBouncer restart failed. Run 'sudo journalctl -u pgbouncer -n 50' to investigate.")) return false;
+
+			string? password = DatabaseSecrets.TryResolvePassword();
+			if (string.IsNullOrEmpty(password))
+			{
+				await Log.Warning("FishMMOInstaller", "PgBouncer service started, but no application DB password is available to test authentication. Test with psql before switching runtime connections to port 6432.");
+				return true;
+			}
+			try
+			{
+				var settings = new NpgsqlConnectionStringBuilder(connectionString)
+				{
+					Host = "127.0.0.1", Port = int.Parse(InstallationConstants.PgBouncerDefaultPort),
+					Database = dbName, Username = dbUser, Password = password, Pooling = false, Timeout = 5
+				};
+				await using var connection = new NpgsqlConnection(settings.ConnectionString);
+				// Type=simple services may be active before their listener is ready.
+				for (int attempt = 0; ; attempt++)
+				{
+					try
+					{
+						await connection.OpenAsync();
+						break;
+					}
+					catch (NpgsqlException ex) when (attempt < 19 && ex.InnerException is System.Net.Sockets.SocketException)
+					{
+						await Task.Delay(250);
+					}
+				}
+				await using var command = new NpgsqlCommand("SELECT 1", connection);
+				await command.ExecuteScalarAsync();
+				await Log.Info("FishMMOInstaller", "Application authentication and SELECT 1 through PgBouncer succeeded.");
+				return true;
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("FishMMOInstaller", "PgBouncer started but the application connection test failed. Keep runtime connections on PostgreSQL until this is resolved.", ex);
+				return false;
+			}
 		}
 	}
 }

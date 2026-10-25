@@ -603,6 +603,7 @@ namespace FishMMO.Installer
                 Console.WriteLine("3 : Deploy FishMMO nginx.conf (from FishMMO-Setup/)");
                 Console.WriteLine("4 : Configure Firewall Rules (open ports 80, 443)");
                 Console.WriteLine("5 : Register FishMMO Web Servers as Services");
+                Console.WriteLine("6 : Install/Renew Local Development Certificates (Linux)");
                 Console.WriteLine("0 : Back");
 
                 ConsoleKeyInfo key = Console.ReadKey(true);
@@ -625,6 +626,10 @@ namespace FishMMO.Installer
                     case ConsoleKey.D5:
                         _ = await SystemdServiceInstaller.InstallAllAsync(
                             InstallationConstants.FishMMOMonorepoRoot);
+                        break;
+                    case ConsoleKey.D6:
+                    case ConsoleKey.NumPad6:
+                        _ = await DevelopmentCertificateInstaller.InstallAsync();
                         break;
                     case ConsoleKey.D0:
                     case ConsoleKey.NumPad0:

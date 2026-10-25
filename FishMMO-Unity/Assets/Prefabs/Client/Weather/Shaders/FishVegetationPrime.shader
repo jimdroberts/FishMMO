@@ -92,6 +92,7 @@ Shader "FishMMO/Vegetation Prime"
             AlphaToMask On
 
             HLSLPROGRAM
+            #include_with_pragmas "FishShaderDiagnostics.hlsl"
             // FXC on purpose, not DXC: the procedural setup (FishIndirectSetup) writes unity_ObjectToWorld and the other UnityPerDraw matrices, which DXC treats as const cbuffer members.
             #pragma target 3.0
             #pragma vertex VegDepthVertex

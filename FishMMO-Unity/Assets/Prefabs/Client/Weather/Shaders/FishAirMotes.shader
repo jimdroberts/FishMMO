@@ -36,7 +36,7 @@ Shader "FishMMO/Weather/Air Motes"
             #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
-            #pragma multi_compile_fog
+            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
             // The cloud shadow on the sun (CloudShadowPresenter), read in the vertex stage as the rain does.
             #pragma multi_compile _ _LIGHT_COOKIES
             // The sun's shadow, so the motes in a forest are seen in its sun patches and not in its shade.

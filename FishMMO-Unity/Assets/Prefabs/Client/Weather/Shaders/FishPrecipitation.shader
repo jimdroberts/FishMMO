@@ -32,7 +32,7 @@ Shader "FishMMO/Weather/Precipitation"
             #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
-            #pragma multi_compile_fog
+            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
             // The cloud shadow cookie on the sun (CloudShadowPresenter), read in the vertex stage: the
             // sun a drop is lit by is the sun through the cloud over it.
             #pragma multi_compile _ _LIGHT_COOKIES

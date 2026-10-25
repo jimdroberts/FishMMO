@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
 
@@ -141,7 +142,8 @@ namespace FishMMO.UnitTests
 				foreach (Match other in Regex.Matches(program, "#include(?:_with_pragmas)? \"([^\"]+)\""))
 				{
 					string file = other.Groups[1].Value;
-					bool passCode = (file.StartsWith("Fish", StringComparison.Ordinal) && file != "FishWeatherLitInput.hlsl" && file != "FishIndirectInstancing.hlsl")
+					bool passCode = (file.StartsWith("Fish", StringComparison.Ordinal) && file != "FishWeatherLitInput.hlsl" && file != "FishIndirectInstancing.hlsl"
+						&& file != "FishShaderDiagnostics.hlsl" && file != "FishShadowVariants.hlsl" && file != "FishLightCookieVariants.hlsl")
 						|| file.Contains("/Shaders/") || file.EndsWith("ObjectMotionVectors.hlsl", StringComparison.Ordinal);
 					if (passCode && other.Index < include)
 					{
@@ -172,8 +174,12 @@ namespace FishMMO.UnitTests
 			{
 				return "the Properties blocks differ: a cloned material with the shader swapped would lose or reset values";
 			}
-			string stripped = WithoutIndirectAdditions(indirect, pair);
-			string expected = FromShaderLine(original);
+			// Vulkan uses DXC for regular vegetation, while procedural matrix writes require FXC.
+			// Ignore only that compiler selection; compare every remaining executable line.
+			string NormalizeCompiler(string text) => string.Join("\n", SourceScanPins.CodeOnly(text).Split('\n')
+				.Where(line => line.Trim() != "#pragma use_dxc vulkan"));
+			string stripped = NormalizeCompiler(WithoutIndirectAdditions(indirect, pair));
+			string expected = NormalizeCompiler(FromShaderLine(original));
 			if (stripped != expected)
 			{
 				return "beyond the procedural pragma and the include, the indirect shader differs from the original (a pragma, render state or include drifted)";

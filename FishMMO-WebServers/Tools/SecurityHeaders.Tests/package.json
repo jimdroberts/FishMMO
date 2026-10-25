@@ -1,0 +1,10 @@
+{
+  "name": "fishmmo-csp-browser-check",
+  "private": true,
+  "scripts": {
+    "test:browser": "node browser-check.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

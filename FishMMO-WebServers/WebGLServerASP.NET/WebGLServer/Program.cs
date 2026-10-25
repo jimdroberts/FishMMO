@@ -201,15 +201,10 @@ namespace FishMMO.WebServer
 								h["Cross-Origin-Opener-Policy"] = "same-origin";
 							if (!h.ContainsKey("Cross-Origin-Embedder-Policy"))
 								h["Cross-Origin-Embedder-Policy"] = "require-corp";
-							if (!h.ContainsKey("Content-Security-Policy"))
-							{
-								string gameHost = context.Configuration["GameHost"] ?? "game.fishmmo.com";
-								h["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; " +
-									"connect-src 'self' wss://" + gameHost + ":* https://" + gameHost + ":*; " +
-									"img-src 'self' data:; style-src 'self' 'unsafe-inline'; " +
-									"worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
-							}
-						});
+
+						}, configuration: context.Configuration,
+                            profile: ContentSecurityPolicyProfile.WebGl,
+                            webRoot: app.ApplicationServices.GetRequiredService<IWebHostEnvironment>().WebRootFileProvider);
 						// NOTE: ClientGate (UseFishMMOClientGate) is intentionally NOT used
 						// here. Browsers cannot add custom headers (X-FishMMO-Client) to static
 						// file requests served via <script> / <link> / <img> tags, so the gate

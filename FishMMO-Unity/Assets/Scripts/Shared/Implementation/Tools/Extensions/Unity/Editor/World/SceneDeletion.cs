@@ -381,18 +381,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static Plan ForDeletedScenes(IEnumerable<string> names, List<string> problems)
 		{
 			var plan = new Plan();
-			var scenes = new HashSet<string>(StringComparer.Ordinal);
-			foreach (string root in new[] { Constants.Configuration.WorldScenePath, Constants.Configuration.LocalScenePath })
-			{
-				string folder = root.Replace('\\', '/').TrimEnd('/');
-				if (Directory.Exists(folder))
-				{
-					foreach (string file in Directory.GetFiles(folder, "*.unity", SearchOption.AllDirectories))
-					{
-						scenes.Add(Path.GetFileNameWithoutExtension(file));
-					}
-				}
-			}
+			HashSet<string> scenes = SceneFileNames();
 			foreach (string name in names)
 			{
 				if (string.IsNullOrWhiteSpace(name))
@@ -406,9 +395,110 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				plan.Names.Add(name);
 			}
+			AddLeftovers(plan);
+			return plan;
+		}
+
+		/// <summary>
+		/// Every orphan at once, for the atlas's Clear orphans: atlas entries whose scene file is gone, and every scene the
+		/// teleporter cache, the scene details cache or the NavMesh catalogue still holds with no scene file anywhere, with
+		/// all they left behind. Touches nothing.
+		/// </summary>
+		/// <remarks>
+		/// Removing only the atlas entries left a dead scene's teleporters and destinations in the teleporter cache, and
+		/// teleporters in live scenes still leading into them. They showed as broken teleporters with no scene to open, and
+		/// once the entry was gone nothing named the scene any more, so no later sweep found them either.
+		/// </remarks>
+		public static Plan ForOrphans()
+		{
+			var plan = new Plan();
+			HashSet<string> files = SceneFileNames();
+			var dead = new SortedSet<string>(StringComparer.Ordinal);
+			void Consider(string name)
+			{
+				if (!string.IsNullOrEmpty(name) && !files.Contains(name))
+				{
+					dead.Add(name);
+				}
+			}
+
+			// The same test the globe marks red with. A scene that exists only under LOCAL while that folder is switched
+			// off loses its entry, as before, but not its LOCAL copy: its leftovers are swept only when no file is left.
+			var listed = new HashSet<string>(StringComparer.Ordinal);
+			foreach (string path in WorldEditorAssets.WorldScenePaths())
+			{
+				listed.Add(Path.GetFileNameWithoutExtension(path));
+			}
+			var entries = new List<(string Path, string What)>();
+			foreach (WorldAtlasScene entry in WorldEditorAssets.FindAll<WorldAtlasScene>())
+			{
+				if (entry == null || string.IsNullOrEmpty(entry.SceneName) || listed.Contains(entry.SceneName))
+				{
+					continue;
+				}
+				entries.Add((AssetDatabase.GetAssetPath(entry), $"atlas entry of {entry.SceneName}"));
+				Consider(entry.SceneName);
+			}
+
+			TeleporterCache teleporters = AtlasTeleporters.Cache();
+			if (teleporters != null)
+			{
+				foreach (TeleporterCacheEntry destination in teleporters.Destinations.Values)
+				{
+					Consider(destination?.SceneName);
+				}
+				foreach (SceneTeleporterCacheEntry teleporter in teleporters.Teleporters.Values)
+				{
+					Consider(teleporter?.SceneName);
+				}
+			}
+			WorldSceneDetailsCache details = WorldEditorAssets.SceneDetails();
+			if (details != null)
+			{
+				foreach (string name in details.Scenes.Keys)
+				{
+					Consider(name);
+				}
+			}
+			var navMesh = AssetDatabase.LoadAssetAtPath<FishMMO.Server.Implementation.World.SceneServer.Navigation.SceneNavMeshCatalogue>(NavMeshCataloguePath);
+			if (navMesh != null)
+			{
+				foreach (var navEntry in navMesh.Entries)
+				{
+					Consider(navEntry?.SceneName);
+				}
+			}
+
+			plan.Names.UnionWith(dead);
+			AddLeftovers(plan);
+			plan.Assets.InsertRange(0, entries);
+			return plan;
+		}
+
+		/// <summary>Names of every scene file under the world and LOCAL scene folders, whether or not LOCAL is switched on.</summary>
+		private static HashSet<string> SceneFileNames()
+		{
+			var scenes = new HashSet<string>(StringComparer.Ordinal);
+			foreach (string root in new[] { Constants.Configuration.WorldScenePath, Constants.Configuration.LocalScenePath })
+			{
+				string folder = root.Replace('\\', '/').TrimEnd('/');
+				if (Directory.Exists(folder))
+				{
+					foreach (string file in Directory.GetFiles(folder, "*.unity", SearchOption.AllDirectories))
+					{
+						scenes.Add(Path.GetFileNameWithoutExtension(file));
+					}
+				}
+			}
+			return scenes;
+		}
+
+		/// <summary>Adds what the scenes in <see cref="Plan.Names"/> left behind, all of which have no scene file.</summary>
+		private static void AddLeftovers(Plan plan)
+		{
 			if (plan.Names.Count == 0)
 			{
-				return plan;
+				return;
 			}
 
 			WorldSceneDetailsCache details = WorldEditorAssets.SceneDetails();
@@ -492,7 +582,6 @@ namespace FishMMO.Shared.WorldDesign
 					plan.Entries.Add($"{destinations.Count} destination(s) and {own} teleporter(s) in the teleporter cache");
 				}
 			}
-			return plan;
 		}
 
 		/// <summary>

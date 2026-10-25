@@ -603,10 +603,12 @@ void FishApplyPaths(inout FishArraySurface s, float2 uv, float2 uvPerMetre, floa
 
     float code = p.surface * 3.0;
     float track = FishPathTrackness(p.surface);
-    half3 albedo = 0;
-    half3 normal = half3(0.0h, 0.0h, 1.0h);
-    half smoothness = 0;
-    half occlusion = 1;
+    // Preserve the path blend's arithmetic: FXC's WebGPU optimizer otherwise recurses
+    // until its native stack overflows on this pair of biome surface evaluations.
+    precise half3 albedo = 0;
+    precise half3 normal = half3(0.0h, 0.0h, 1.0h);
+    precise half smoothness = 0;
+    precise half occlusion = 1;
     UNITY_BRANCH
     if (mix < 0.996)
     {

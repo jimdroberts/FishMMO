@@ -45,8 +45,8 @@ Shader "FishMMO/Sea Life"
             #pragma fragment SeaLifeForwardFragment
             #pragma multi_compile_instancing
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
-            #pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
-            #pragma multi_compile_fragment _ _LIGHT_COOKIES
+            #include_with_pragmas "FishShadowVariants.hlsl"
+            #include_with_pragmas "FishLightCookieVariants.hlsl"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
 
             #define FISH_SEA_LIFE_PASS_FORWARD

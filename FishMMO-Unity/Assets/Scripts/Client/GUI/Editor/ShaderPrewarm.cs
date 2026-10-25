@@ -12,6 +12,8 @@ using UnityEngine.Rendering;
 using Debug = UnityEngine.Debug;
 using Object = UnityEngine.Object;
 
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("FishMMO.UnitTests")]
+
 namespace FishMMO.Client
 {
 	/// <summary>
@@ -217,7 +219,10 @@ namespace FishMMO.Client
 					for (int v = 0; variants != null && v < variants.arraySize; v++)
 					{
 						SerializedProperty variant = variants.GetArrayElementAtIndex(v);
-						string keywords = variant.FindPropertyRelative("keywords").stringValue ?? string.Empty;
+						string[] recorded = (variant.FindPropertyRelative("keywords").stringValue ?? string.Empty)
+							.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+						if (IsProbeVariant(recorded)) continue;
+						string keywords = string.Join(" ", StaticKeywords(shader, recorded));
 						int passType = variant.FindPropertyRelative("passType").intValue;
 						if (!list.LastSeen.ContainsKey(Line(shader.name, passType, keywords)))
 						{
@@ -321,6 +326,7 @@ namespace FishMMO.Client
 					{
 						continue;
 					}
+					if (IsProbeVariant(parts[2].Split(' '))) continue;
 					// The old list had no stamp: last seen before any counted Play, so it ages out like the rest.
 					int seen = parts.Length > 3 && int.TryParse(parts[3], out int stamp) ? stamp : 0;
 					list.LastSeen[parts[0] + "\t" + parts[1] + "\t" + parts[2]] = seen;
@@ -419,22 +425,37 @@ namespace FishMMO.Client
 		/// </summary>
 		private static readonly string[][] ShadowStates =
 		{
-			new[] { null, "_MAIN_LIGHT_SHADOWS", "_MAIN_LIGHT_SHADOWS_CASCADE" },
-			new[] { null, "_SHADOWS_SOFT" },
+			new[] { null, "_MAIN_LIGHT_SHADOWS", "_MAIN_LIGHT_SHADOWS_CASCADE", "_MAIN_LIGHT_SHADOWS_SCREEN" },
+			new[] { null, "_SHADOWS_SOFT", "_SHADOWS_SOFT_LOW", "_SHADOWS_SOFT_MEDIUM", "_SHADOWS_SOFT_HIGH" },
 		};
+
+		/// <summary>Dynamic keywords are uniforms, not separate compiled programs (for example URP fog).</summary>
+		internal static string[] StaticKeywords(Shader shader, IEnumerable<string> keywords) => keywords.Where(name =>
+		{
+			LocalKeyword keyword = shader.keywordSpace.FindKeyword(name);
+			return !keyword.isValid || !keyword.isDynamic;
+		}).ToArray();
+
+		internal static bool IsProbeVariant(IEnumerable<string> keywords) =>
+			keywords.Contains(FishMMO.Shared.CustomBuildTool.ClientShaderBuildProcessor.DiagnosticsKeyword);
+
 
 		/// <summary>
 		/// A learned variant in every main-light shadow state its shader declares (<see cref="ShadowStates"/>): its other
 		/// keywords as drawn, the shadow ones in each combination. A shader that declares none is the variant alone.
 		/// </summary>
+
 		internal static IEnumerable<string[]> WithEveryShadowState(Shader shader, string[] keywords)
 		{
+			if (IsProbeVariant(keywords)) yield break;
+			keywords = StaticKeywords(shader, keywords);
 			var groups = new List<string[]>();
 			foreach (string[] group in ShadowStates)
 			{
-				if (group.Any(k => k != null && shader.keywordSpace.FindKeyword(k).isValid))
+				string[] declared = group.Where(k => k == null || shader.keywordSpace.FindKeyword(k).isValid).ToArray();
+				if (declared.Length > 1)
 				{
-					groups.Add(group);
+					groups.Add(declared);
 				}
 			}
 			if (groups.Count == 0)
@@ -442,7 +463,7 @@ namespace FishMMO.Client
 				yield return keywords;
 				yield break;
 			}
-			var shadowKeywords = new HashSet<string>(groups.SelectMany(g => g).Where(k => k != null), StringComparer.Ordinal);
+			var shadowKeywords = new HashSet<string>(ShadowStates.SelectMany(g => g).Where(k => k != null), StringComparer.Ordinal);
 			string[] rest = keywords.Where(k => !shadowKeywords.Contains(k)).ToArray();
 			var picked = new int[groups.Count];
 			while (true)
@@ -510,13 +531,16 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
-				if (ShaderUtil.IsPassCompiled(r.Material, r.Pass))
+				using (new KeywordScope(r.Material.shader))
 				{
-					alreadyCompiled++;
-					continue;
+					if (ShaderUtil.IsPassCompiled(r.Material, r.Pass))
+					{
+						alreadyCompiled++;
+						continue;
+					}
+					ShaderUtil.CompilePass(r.Material, r.Pass, false);
+					requested++;
 				}
-				ShaderUtil.CompilePass(r.Material, r.Pass, false);
-				requested++;
 			}
 			// The materials are kept until the background compiler has finished with them.
 			if (queue.Count == 0 && !ShaderUtil.anythingCompiling)
@@ -525,11 +549,43 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Compile/query the recorded material state, without the currently open scene's
+		/// enabled globals forcing different multi_compile states over it. Unity captures
+		/// the request's keywords before CompilePass returns. Never leave editor globals changed.
+		/// </summary>
+		internal sealed class KeywordScope : IDisposable
+		{
+			private readonly List<GlobalKeyword> disabled = new List<GlobalKeyword>();
+			private bool disposed;
+
+			public KeywordScope(Shader shader)
+			{
+				foreach (GlobalKeyword global in Shader.enabledGlobalKeywords)
+				{
+					LocalKeyword local = shader.keywordSpace.FindKeyword(global.name);
+					if (local.isValid && local.isOverridable && !local.isDynamic) disabled.Add(global);
+				}
+				try
+				{
+					foreach (GlobalKeyword global in disabled) Shader.DisableKeyword(global);
+				}
+				catch { Dispose(); throw; }
+			}
+
+			public void Dispose()
+			{
+				if (disposed) return;
+				disposed = true;
+				foreach (GlobalKeyword global in disabled) Shader.EnableKeyword(global);
+			}
+		}
+
 		private static void Stop(bool finished)
 		{
 			if (finished && (requested > 0 || reason == "dashboard"))
 			{
-				Debug.Log($"[Shader prewarm] {reason}: {known} learned variant(s); {requested} pass(es) compiled in the background, {alreadyCompiled} already compiled; {clock.Elapsed.TotalSeconds:0.0} s.");
+				Debug.Log($"[Shader prewarm] {reason}: {known} learned variant(s); {requested} pass request(s), {alreadyCompiled} already ready; compiler idle after {clock.Elapsed.TotalSeconds:0.0} s. Requests are not a disk-cache miss count.");
 			}
 			running = false;
 			EditorApplication.update -= Tick;

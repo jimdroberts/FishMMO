@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEditor.AddressableAssets;
@@ -9,6 +10,7 @@ using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.AddressableAssets.Settings.GroupSchemas;
 using FishMMO.Logging;
 using FishMMO.Shared.CustomBuildTool.Core;
+using RuntimeAddressables = UnityEngine.AddressableAssets.Addressables;
 
 namespace FishMMO.Shared.CustomBuildTool.Addressables
 {
@@ -25,14 +27,41 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 		/// <param name="useUnityWebRequestForLocal">If true, uses UnityWebRequest for local bundles (WebGL requirement). If false, uses LoadFromFileAsync (better performance for Windows/Linux).</param>
 		public void BuildAddressablesWithExclusions(string[] excludeGroups, bool enableCrcForRemoteLoading = false, bool useUnityWebRequestForLocal = false)
 		{
-			// Get the default AddressableAssetSettings
-			var originalSettings = AddressableAssetSettingsDefaultObject.GetSettings(true);
+			var originalSettings = GetSettings();
 			if (originalSettings == null || originalSettings.groups == null)
-			{
-				Log.Error("Addressables", "Addressable settings or groups are null.");
-				return;
-			}
+				throw new BuildFailedException("Addressable settings or groups are missing; player build cancelled.");
 
+			var saved = new Dictionary<BundledAssetGroupSchema, (bool include, bool crc, bool cachedCrc, bool webRequest)>();
+			foreach (var group in originalSettings.groups)
+			{
+				var schema = group != null ? group.GetSchema<BundledAssetGroupSchema>() : null;
+				if (schema != null)
+					saved[schema] = (schema.IncludeInBuild, schema.UseAssetBundleCrc,
+						schema.UseAssetBundleCrcForCachedBundles, schema.UseUnityWebRequestForLocalBundles);
+			}
+			try
+			{
+				BuildContent(originalSettings, excludeGroups, enableCrcForRemoteLoading, useUnityWebRequestForLocal);
+			}
+			finally
+			{
+				foreach (var pair in saved)
+				{
+					if (pair.Key == null) continue;
+					pair.Key.IncludeInBuild = pair.Value.include;
+					pair.Key.UseAssetBundleCrc = pair.Value.crc;
+					pair.Key.UseAssetBundleCrcForCachedBundles = pair.Value.cachedCrc;
+					pair.Key.UseUnityWebRequestForLocalBundles = pair.Value.webRequest;
+				}
+				AssetDatabase.SaveAssets();
+			}
+		}
+
+		protected virtual AddressableAssetSettings GetSettings() => AddressableAssetSettingsDefaultObject.GetSettings(true);
+
+		protected virtual void BuildContent(AddressableAssetSettings originalSettings, string[] excludeGroups,
+			bool enableCrcForRemoteLoading, bool useUnityWebRequestForLocal)
+		{
 			Log.Info("Addressables", $"Configuring bundles for {(useUnityWebRequestForLocal ? "WebGL (UnityWebRequest)" : "Windows/Linux (LoadFromFileAsync)")}");
 
 			// All targets load content locally from StreamingAssets — content delivery
@@ -57,15 +86,7 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 					continue;
 				}
 
-				bool exclude = false;
-				for (int i = 0; i < excludeGroups.Length; i++)
-				{
-					if (group.name.IndexOf(excludeGroups[i], StringComparison.OrdinalIgnoreCase) >= 0)
-					{
-						exclude = true;
-						break;
-					}
-				}
+				bool exclude = !ContentBuildFilter.IncludesGroup(group.name, excludeGroups);
 				schema.IncludeInBuild = !exclude;
 
 				// Configure CRC based on build type
@@ -102,22 +123,9 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 			// visible if the Addressables pipeline internally reloads settings.
 			AssetDatabase.SaveAssets();
 
-			// Clean previous Addressables build safely
-			try
-			{
-				Log.Info("Addressables", "Before CleanPlayerContent");
-				AddressableAssetSettings.CleanPlayerContent();
-				Log.Info("Addressables", "After CleanPlayerContent - cleaned previous Addressables player content.");
-			}
-			catch (Exception ex)
-			{
-				Log.Warning("Addressables", $"Error during CleanPlayerContent (non-fatal): {ex.Message}");
-			}
-
-			// Clean stale remote bundles from ServerData so switched-to-local groups don't linger
-			Log.Info("Addressables", "Before CleanServerDataDirectory");
-			CleanServerDataDirectory(originalSettings);
-			Log.Info("Addressables", "After CleanServerDataDirectory");
+			// A clean player build does not require clearing Addressables output.
+			// Keep existing content and caches available while the builder calculates changes.
+			Log.Info("Addressables", "Preserving previous Addressables output and shader caches; obsolete bundles are pruned only after a successful content build.");
 
 			// Start the Addressables build process
 			try
@@ -179,33 +187,38 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 				}
 				Log.Info("Addressables", "After BuildPlayerContent");
 
+				RequireSuccessfulContentBuild(result);
+				var outputPaths = new HashSet<string> { RuntimeAddressables.BuildPath };
+				foreach (var group in originalSettings.groups)
+				{
+					var schema = group != null ? group.GetSchema<BundledAssetGroupSchema>() : null;
+					if (schema != null) outputPaths.Add(schema.BuildPath.GetValue(originalSettings));
+				}
+				// Include Remote.BuildPath even when every group has switched to Local.
+				string remoteBuildPath = originalSettings.profileSettings.GetValueByName(originalSettings.activeProfileId, "Remote.BuildPath");
+				if (!string.IsNullOrEmpty(remoteBuildPath))
+					outputPaths.Add(originalSettings.profileSettings.EvaluateString(originalSettings.activeProfileId, remoteBuildPath));
+				int removed = PruneStaleBundleOutputs(result, outputPaths);
+				Log.Info("Addressables", $"Removed {removed} obsolete output bundle(s); retained current bundles and build caches.");
 				Log.Info("Addressables", $"Result Error: {result.Error}");
 
-				if (!string.IsNullOrEmpty(result.Error))
+				Log.Info("Addressables", $"Addressable content build succeeded (duration: {TimeSpan.FromSeconds(result.Duration):g})");
+
+				if (result.AssetBundleBuildResults != null && result.AssetBundleBuildResults.Count > 0)
 				{
-					Log.Error("Addressables", result.Error);
-					Log.Error("Addressables", $"Addressable content build failed (duration: {TimeSpan.FromSeconds(result.Duration):g})");
+					foreach (var bundleResult in result.AssetBundleBuildResults)
+					{
+						Log.Info("Addressables", $"Bundle: {bundleResult.SourceAssetGroup.Name} | File: {bundleResult.FilePath}");
+
+						foreach (var assetEntry in bundleResult.SourceAssetGroup.entries)
+						{
+							Log.Info("Addressables", $" └─ Asset: {assetEntry.address} | Path: {assetEntry.AssetPath}");
+						}
+					}
 				}
 				else
 				{
-					Log.Info("Addressables", $"Addressable content build succeeded (duration: {TimeSpan.FromSeconds(result.Duration):g})");
-
-					if (result.AssetBundleBuildResults != null && result.AssetBundleBuildResults.Count > 0)
-					{
-						foreach (var bundleResult in result.AssetBundleBuildResults)
-						{
-							Log.Info("Addressables", $"Bundle: {bundleResult.SourceAssetGroup.Name} | File: {bundleResult.FilePath}");
-
-							foreach (var assetEntry in bundleResult.SourceAssetGroup.entries)
-							{
-								Log.Info("Addressables", $" └─ Asset: {assetEntry.address} | Path: {assetEntry.AssetPath}");
-							}
-						}
-					}
-					else
-					{
-						Log.Info("Addressables", "No asset bundles were built.");
-					}
+					Log.Info("Addressables", "No asset bundles were built.");
 				}
 
 			}
@@ -217,63 +230,48 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 				{
 					Log.Error("Addressables", $"Inner exception: {ex.InnerException.Message}", ex.InnerException);
 				}
+				throw;
 			}
 
-			// Restore WebGL-safe schema defaults on disk for standalone builds.
-			// The schema .asset files in version control should always store
-			// CRC + UnityWebRequest enabled (the WebGL requirement). Standalone
-			// builds temporarily disable them above; restore them here so the
-			// working copy stays clean after the build.
-			if (!enableCrcForRemoteLoading)
-			{
-				foreach (var group in originalSettings.groups)
-				{
-					if (group == null) continue;
-					var schema = group.GetSchema<BundledAssetGroupSchema>();
-					if (schema == null) continue;
-					schema.UseAssetBundleCrc = true;
-					schema.UseAssetBundleCrcForCachedBundles = true;
-					schema.UseUnityWebRequestForLocalBundles = true;
-				}
-				AssetDatabase.SaveAssets();
-				Log.Info("Addressables", "Restored WebGL-safe schema defaults (CRC + UWR) after standalone build.");
-			}
+		}
+
+		/// <summary>Addressables reports many failures through Error instead of throwing.</summary>
+		public static void RequireSuccessfulContentBuild(AddressablesPlayerBuildResult result)
+		{
+			if (result == null)
+				throw new BuildFailedException("Addressables returned no build result; player build cancelled.");
+			if (!string.IsNullOrEmpty(result.Error))
+				throw new BuildFailedException($"Addressable content build failed; player build cancelled: {result.Error}");
 		}
 
 		/// <summary>
-		/// Deletes the ServerData/[BuildTarget] directory so stale remote bundles from
-		/// groups that have been switched to Local paths are not left behind.
-		/// The Addressables build will recreate the directory for any active Remote groups.
+		/// Preserve reusable content until a build succeeds, then remove output bundles
+		/// absent from its file registry. In particular, excluded server/client bundles
+		/// must not be copied into the next player's StreamingAssets. Never clear caches.
 		/// </summary>
-		/// <param name="settings">The addressable settings used to resolve the Remote.BuildPath.</param>
-		private static void CleanServerDataDirectory(AddressableAssetSettings settings)
+		public static int PruneStaleBundleOutputs(AddressablesPlayerBuildResult result, IEnumerable<string> outputPaths)
 		{
-			try
+			RequireSuccessfulContentBuild(result);
+			if (result.FileRegistry == null)
+				throw new BuildFailedException("Addressables did not provide its output file registry; cannot safely prepare player content.");
+			var comparer = Path.DirectorySeparatorChar == '\\' ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+			var current = new HashSet<string>(comparer);
+			foreach (string path in result.FileRegistry.GetFilePaths()) current.Add(Path.GetFullPath(path));
+			var visited = new HashSet<string>(comparer);
+			int removed = 0;
+			foreach (string path in outputPaths)
 			{
-				string remoteBuildPath = settings.profileSettings.GetValueByName(
-					settings.activeProfileId, "Remote.BuildPath");
-
-				if (string.IsNullOrEmpty(remoteBuildPath))
+				if (string.IsNullOrEmpty(path)) continue;
+				string root = Path.GetFullPath(path);
+				if (!visited.Add(root) || !Directory.Exists(root)) continue;
+				foreach (string bundle in Directory.GetFiles(root, "*.bundle", SearchOption.AllDirectories))
 				{
-					return;
+					if (current.Contains(Path.GetFullPath(bundle))) continue;
+					File.Delete(bundle);
+					removed++;
 				}
-
-				// Resolve profile variables like [BuildTarget]
-				remoteBuildPath = settings.profileSettings.EvaluateString(
-					settings.activeProfileId, remoteBuildPath);
-
-				if (string.IsNullOrEmpty(remoteBuildPath) || !Directory.Exists(remoteBuildPath))
-				{
-					return;
-				}
-
-				Directory.Delete(remoteBuildPath, true);
-				Log.Info("Addressables", $"Cleaned remote build directory: {remoteBuildPath}");
 			}
-			catch (Exception ex)
-			{
-				Log.Warning("Addressables", $"Failed to clean ServerData directory (non-fatal): {ex.Message}");
-			}
+			return removed;
 		}
 	}
 }

@@ -37,11 +37,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 22ae2a7682fef184fab5e0868f2666d3
-    m_Address: Assets/Scenes/WorldScene/Moron/Moron 3 Terrain/Moron 3 Biome Map.asset
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 399b6f57bd881202faf76df2fb774ed9
     m_Address: StoneLayer
     m_ReadOnly: 0

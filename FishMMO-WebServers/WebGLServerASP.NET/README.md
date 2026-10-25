@@ -17,7 +17,7 @@
 
 ## Overview
 
-ASP.NET Core static file server purpose-built for serving Unity WebGL builds to browsers. Serves all content from the configured content root (set via `WebClient:ContentRootPath` in appsettings), supports HTTP range requests for efficient streaming of large `.wasm`/`.data` files, and applies security headers (COOP/COEP/CSP) required for Unity 6 WebGL multi-threading (SharedArrayBuffer).
+ASP.NET Core static file server purpose-built for serving Unity WebGL builds to browsers. Serves static content from `wwwroot` beside the executable, or the directory selected by `ASPNETCORE_WEBROOT`, supports HTTP range requests for efficient streaming of large `.wasm`/`.data` files, and applies security headers (COOP/COEP/CSP) required for Unity 6 WebGL multi-threading (SharedArrayBuffer).
 
 Designed to run behind NGINX as a reverse proxy (via `play.fishmmo.com`). NGINX terminates SSL and forwards requests over plain HTTP to Kestrel on localhost.
 
@@ -76,7 +76,7 @@ WebGLServer/
 └── (WebGL build output)            # Unity WebGL build placed in configured content root
 ```
 
-The content root path is configured via `WebClient:ContentRootPath` in appsettings. For production, the Unity WebGL build output is placed in this directory. The `wwwroot/` convention is not used — the path is explicitly configured.
+Place the Unity WebGL output (the directory containing `index.html`) in `wwwroot/` beside the server executable, or set `ASPNETCORE_WEBROOT` to its absolute path. `WebClient:ContentRootPath` is not read by the server.
 
 ## Middleware Pipeline
 
@@ -122,7 +122,7 @@ The server applies COOP (`same-origin`), COEP (`require-corp`), and a comprehens
 ## Security
 
 - **SecurityHeaders** — applies `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy: require-corp`, and a comprehensive `Content-Security-Policy` to enable Unity 6 WebGL multi-threading via `SharedArrayBuffer`.
-- **CORS** (`Public`) allows cross-origin access from `play.fishmmo.com` for `.wasm` and `.data` files.
+- **CORS** (`Public`) permits only `Cors:AllowedOrigins`. Same-origin client assets need no CORS grant. Configure browser origins on IPFetch and Patcher for cross-origin API calls.
 - **ForwardedHeaders** ensures correct client IP logging when behind NGINX.
 - **Rate limiting** (token bucket: 60 req/s replenish, 120 burst, partitioned by real client IP) prevents abuse.
 - Kestrel binds to **localhost only** — not directly accessible from the internet.
@@ -168,4 +168,50 @@ flowchart LR
     end
     OK --> Browser
     NF --> Browser
+```
+
+
+## Content Security Policy and local WebGL hosting
+
+The shared middleware owns CSP for all four web applications. NGINX must pass the
+upstream CSP and COOP/COEP headers through; do not add another CSP at the proxy, because browsers
+apply both policies. Deploy the updated applications together with the updated
+`FishMMO-Setup/nginx.conf` template when using NGINX.
+
+The WebGL profile permits WebAssembly compilation, Unity's blob-based decompression
+scripts/workers, and the exact inline startup scripts in the served HTML using
+SHA-256 hashes. Hashes are generated from the current HTML on each HTML response;
+there is no manual pin update after rebuilding the client and no script
+`unsafe-inline` or JavaScript `unsafe-eval` grant. Inline styles remain permitted
+for the Unity template and control panel. API responses use a deny-by-default CSP;
+the control panel uses same-origin scripts and connections without Unity permissions.
+
+`GameHost` is a hostname/IP without a scheme or port. It allows HTTPS WebTransport
+to that host on the dynamically allocated game ports.
+`ContentSecurityPolicy:ConnectOrigins` lists additional explicit API/CDN origins.
+Production accepts HTTPS origins only; Development also accepts HTTP loopback
+origins. Paths, credentials and CSP fragments are rejected at startup. The local
+template includes API ports 8080, 8088 and 8090 on localhost and 127.0.0.1.
+Add each actual cross-origin asset/API host to this list if your deployment differs.
+CSP does not provision transport certificates or replace API CORS configuration.
+
+For the current local build, run:
+
+```bash
+cd /home/jim/Dev/FishMMO-Dev/Builds/WebGLServer/Debug/net8.0
+env FISHMMO_ENVIRONMENT=Development \
+  ASPNETCORE_WEBROOT="/home/jim/Dev/FishMMO-Dev/Builds/Client/WebGL Demo/FishMMO WebGL/FishMMO.exe" \
+  ./WebGLServer
+```
+
+Open `http://localhost:8000`. `FishMMO.exe` here is the build directory containing
+`index.html`. The API services' `Cors:AllowedOrigins` must include
+`http://localhost:8000` (and `http://127.0.0.1:8000` if using that address).
+Restart applications after updating their assemblies or configuration. A Unity
+client rebuild is not needed for these server header changes.
+
+Run regression checks with:
+
+```bash
+dotnet run --project FishMMO-WebServers/Tools/SecurityHeaders.Tests
 ```

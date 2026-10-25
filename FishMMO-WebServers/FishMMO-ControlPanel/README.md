@@ -67,8 +67,8 @@ at build time from `HostConfig.LauncherHtmlUrl` (CI substitutes it from
 `run-local.sh` is the supported way: it checks that the database credentials will resolve,
 publishes, and serves the publish on `http://localhost:8100` (`--port`, `--env Production`,
 `--check`, `--no-build`; `--migrate` applies pending migrations to the database it points at,
-and `--grant-admin NAME` makes an existing account an Admin). It serves a publish rather than
-`bin/` because the web assets are mapped back to the source tree only in Development. By hand:
+and `--grant-admin NAME` makes an existing account an Admin). It serves publish output rather than
+ordinary build output because the web assets are mapped back to the source tree only in Development. By hand:
 
 ```fish
 cd FishMMO-WebServers/FishMMO-ControlPanel
@@ -88,7 +88,7 @@ with **400**. Running the built assembly directly needs the variable set by hand
 
 ```fish
 set -x ASPNETCORE_ENVIRONMENT Development
-dotnet ControlPanel/bin/Release/net8.0/FishMMO-ControlPanel.dll
+dotnet ../../Builds/ControlPanel/Release/net8.0/FishMMO-ControlPanel.dll
 ```
 
 `FISHMMO_ENVIRONMENT` also works and is what the systemd unit sets, matching the other web
@@ -424,7 +424,7 @@ Every colour, radius, spacing step and font size resolves through a token in
 2. **Working-directory overrides** — `./appsettings.json` and
    `./appsettings.{Environment}.json`, both optional, both reloading on change.
 
-Edit the templates under `FishMMO-Setup/`, not the copies in `bin/` — the build overwrites
+Edit the templates under `FishMMO-Setup/`, not the copies in `Builds/ControlPanel/` — the build overwrites
 those.
 
 | Key | Purpose |
