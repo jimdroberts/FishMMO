@@ -595,7 +595,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Packs the terrain's linear albedo under a blade: square root (so dark soils keep their steps) at
 		/// 8 bits a channel, bit 31 set when <paramref name="valid"/> (FishGrassBlades.compute GrassPackColour).
-		/// Bits 29..30 are the record's head part (<see cref="WithHeadPart"/>), 27..28 its <see cref="RecordBits"/>, 24..26 unused.
+		/// Bits 29..30 are the record's head part (<see cref="WithHeadPart"/>), 27..28 its <see cref="RecordBits"/>, 24..26 its burn tone (<see cref="WithBurnTone"/>).
 		/// </summary>
 		public static uint PackColour(float r, float g, float b, bool valid)
 		{
@@ -625,6 +625,24 @@ namespace FishMMO.Client
 		public static uint WithHeadPart(uint colour, int part) => (colour & ~(3u << HeadPartShift)) | ((uint)part & 3u) << HeadPartShift;
 
 		public static int HeadPartOf(uint colour) => (int)(colour >> HeadPartShift & 3u);
+
+		/// <summary>Where a record's burn tone sits in its colour word (three bits).</summary>
+		public const int BurnToneShift = 24;
+
+		/// <summary>
+		/// The colour word with the burn mosaic's tone (2026-10-25, I2t; BurnMosaic.BurnStage.Tone, 0..1: charcoal 1, emerald 3/7, the
+		/// blade's own 0) in bits 24..26, dithered to sevenths by <paramref name="dither"/> (the blade's own hash, 0..1) so a scar's edge
+		/// mottles instead of banding. FishGrassBlades.compute GrassWithBurnTone; read back by FishGrassBlades.hlsl.
+		/// </summary>
+		public static uint WithBurnTone(uint colour, float tone, float dither)
+		{
+			float t = tone < 0f ? 0f : tone > 1f ? 1f : tone;
+			int q = Math.Max(0, Math.Min(7, (int)Math.Floor(t * 7f + dither)));
+			return (colour & ~(7u << BurnToneShift)) | (uint)q << BurnToneShift;
+		}
+
+		/// <summary>The burn tone a colour word carries, 0..1 in sevenths (<see cref="WithBurnTone"/>).</summary>
+		public static float BurnToneOf(uint colour) => (colour >> BurnToneShift & 7u) / 7f;
 
 		/// <summary>
 		/// One texel of a terrain's packed surface layers (GrassTerrain.SurfaceLayers, read by FishGrassBlades.compute

@@ -15,184 +15,9 @@ MonoBehaviour:
   SceneName: Galris 1
   ScenePath: Assets/Scenes/WorldScene/Galris/Galris 1.unity
   Spawners:
-  - Name: 'Taraiular''s Camp MonsterPack Spawner [7c39229e]'
-    Position: {x: -437.89133, y: -26.658401, z: 282.0583}
-    Rotation: {x: -0, y: 0.15643448, z: -0, w: 0.98768836}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 3
-    MaxSpawnCount: 3
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 1
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 15.24, y: 8, z: 15.24}
-    Spawnables: []
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'The Weeping Den MonsterPack Spawner [73ea0c56]'
-    Position: {x: -651.72845, y: -12.989853, z: -261.6433}
-    Rotation: {x: -0, y: 0.28401536, z: -0, w: 0.95881975}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 8
-    MaxSpawnCount: 8
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 1
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 22.7, y: 8, z: 22.7}
-    Spawnables: []
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'The Weeping Den Elite Spawner [73ea0c56]'
-    Position: {x: -651.51495, y: -12.996857, z: -261.4283}
-    Rotation: {x: -0, y: 0.28401536, z: -0, w: 0.95881975}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 1
-    MaxSpawnCount: 1
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 1
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 22.7, y: 8, z: 22.7}
-    Spawnables: []
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Ingivald''s Mound MonsterPack Spawner [27216056]'
-    Position: {x: -73.26852, y: -20.128128, z: 358.70798}
-    Rotation: {x: -0, y: 0.90258527, z: -0, w: -0.43051112}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 8
-    MaxSpawnCount: 8
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 1
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 15.08, y: 8, z: 15.08}
-    Spawnables: []
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Ingivald''s Mound Elite Spawner [27216056]'
-    Position: {x: -71.73084, y: -20.118378, z: 358.88474}
-    Rotation: {x: -0, y: 0.90258527, z: -0, w: -0.43051112}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 1
-    MaxSpawnCount: 1
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 1
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 15.08, y: 8, z: 15.08}
-    Spawnables: []
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Base Field MonsterPack Spawner [0193a7a6]'
-    Position: {x: -474.11996, y: -18.826752, z: 55.526516}
-    Rotation: {x: -0, y: 0.92050487, z: -0, w: -0.39073116}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 5
-    MaxSpawnCount: 5
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 1
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 57.55, y: 8, z: 57.55}
-    Spawnables: []
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Base Field Elite Spawner [0193a7a6]'
-    Position: {x: -473.07727, y: -18.725784, z: 43.92975}
-    Rotation: {x: -0, y: 0.92050487, z: -0, w: -0.39073116}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 1
-    MaxSpawnCount: 1
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 1
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 57.55, y: 8, z: 57.55}
-    Spawnables: []
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Fum Prism Hall Emberglass Cluster Spawner 1 [6d1eeba4]'
-    Position: {x: -280.43335, y: -21.80989, z: 227.71657}
-    Rotation: {x: -0, y: 0.32134706, z: -0, w: -0.9469615}
+  - Name: 'The Hidden Crystal Spires Lumen Quartz Cluster Spawner 1 [019b8bd8]'
+    Position: {x: -333.59213, y: -22.314621, z: 281.3985}
+    Rotation: {x: -0, y: 0.016479135, z: -0, w: 0.9998642}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -216,9 +41,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Fum Prism Hall Emberglass Cluster Spawner 2 [6d1eeba4]'
-    Position: {x: -282.85394, y: -21.680496, z: 236.57172}
-    Rotation: {x: -0, y: 0.73998773, z: -0, w: 0.6726203}
+  - Name: 'The Hidden Crystal Spires Lumen Quartz Cluster Spawner 2 [019b8bd8]'
+    Position: {x: -324.09042, y: -21.765564, z: 276.9211}
+    Rotation: {x: -0, y: 0.6553352, z: -0, w: -0.7553383}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -242,9 +67,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Fum Prism Hall Emberglass Cluster Spawner 3 [6d1eeba4]'
-    Position: {x: -274.14035, y: -21.876175, z: 233.72795}
-    Rotation: {x: -0, y: 0.094171405, z: -0, w: -0.99555606}
+  - Name: 'The Hidden Crystal Spires Lumen Quartz Cluster Spawner 3 [019b8bd8]'
+    Position: {x: -326.7596, y: -21.866379, z: 278.46243}
+    Rotation: {x: -0, y: 0.7548345, z: -0, w: 0.6559154}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -268,9 +93,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Fum Prism Hall Emberglass Cluster Spawner 4 [6d1eeba4]'
-    Position: {x: -280.58688, y: -21.79634, z: 232.77771}
-    Rotation: {x: -0, y: 0.84766555, z: -0, w: 0.53053117}
+  - Name: 'The Hidden Crystal Spires Lumen Quartz Cluster Spawner 4 [019b8bd8]'
+    Position: {x: -324.0285, y: -21.857208, z: 284.18295}
+    Rotation: {x: -0, y: 0.9213075, z: -0, w: 0.3888349}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -294,9 +119,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Fum Prism Hall Emberglass Cluster Spawner 5 [6d1eeba4]'
-    Position: {x: -281.8573, y: -21.785172, z: 230.92755}
-    Rotation: {x: -0, y: 0.7267907, z: -0, w: -0.6868591}
+  - Name: 'The Hidden Crystal Spires Lumen Quartz Cluster Spawner 5 [019b8bd8]'
+    Position: {x: -328.1199, y: -22.087341, z: 274.21576}
+    Rotation: {x: -0, y: 0.22513783, z: -0, w: 0.97432697}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -327,7 +152,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 3fa78709d8f464211843a6f900c16887,
+        NetworkObject: {fileID: 7260598054390996014, guid: 57b22b4b3fa71622784c95487bad2aa6,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -337,7 +162,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 3fa78709d8f464211843a6f900c16887,
+        NetworkObject: {fileID: 7260598054390996014, guid: 57b22b4b3fa71622784c95487bad2aa6,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -347,7 +172,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 3fa78709d8f464211843a6f900c16887,
+        NetworkObject: {fileID: 7260598054390996014, guid: 57b22b4b3fa71622784c95487bad2aa6,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -357,7 +182,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 3fa78709d8f464211843a6f900c16887,
+        NetworkObject: {fileID: 7260598054390996014, guid: 57b22b4b3fa71622784c95487bad2aa6,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -367,7 +192,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 3fa78709d8f464211843a6f900c16887,
+        NetworkObject: {fileID: 7260598054390996014, guid: 57b22b4b3fa71622784c95487bad2aa6,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600

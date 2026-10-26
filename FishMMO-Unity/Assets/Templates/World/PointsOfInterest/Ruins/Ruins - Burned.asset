@@ -45,13 +45,12 @@ MonoBehaviour:
     Weight: 0.3
   - Biome: Scrubland
     Weight: 0.3
-  - Biome: Wasteland
-    Weight: 0.3
   RaceCategories: []
   Races: []
   Small: 1
   Medium: 1
   Large: 1
+  NeedsLiquidWater: 0
   PadFlatness: 0.5
   Style: timber
   Layout: 4
@@ -93,13 +92,13 @@ MonoBehaviour:
     Role: 8
     Style: stone
   Features:
-  - rid: 4061506278254183094
-  - rid: 4061506278254183095
-  - rid: 4061506278254183096
+  - rid: 4061506389932245428
+  - rid: 4061506389932245429
+  - rid: 4061506389932245430
   references:
     version: 2
     RefIds:
-    - rid: 4061506278254183094
+    - rid: 4061506389932245428
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -110,12 +109,12 @@ MonoBehaviour:
         FinishChance: 0.7
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506278254183095
+    - rid: 4061506389932245429
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506278254183096
+    - rid: 4061506389932245430
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 

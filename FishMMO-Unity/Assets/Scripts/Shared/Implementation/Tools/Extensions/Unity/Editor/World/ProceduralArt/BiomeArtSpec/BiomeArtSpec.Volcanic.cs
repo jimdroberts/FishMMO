@@ -22,7 +22,11 @@ namespace FishMMO.Shared.WorldDesign
 				.Accepts(VolcanicGeology)
 				.Look(BiomeLookClass.Volcanic)
 				.Wildlife(BiomeHabitat.Mountain | BiomeHabitat.Volcanic)
-				.Moat(BiomeMoatWater.Dry);
+				.Moat(BiomeMoatWater.Dry)
+				/* Its vents (2026-10-25, I2q-b, decision 93): vog, not ash (Hawaiian eruptions are effusive; the ash stays with the
+				 * Volcanic Temple), the vents on its rift lines (the grid until a rift's lines are stored) playing in fountain episodes. */
+				.Emits("Vog", 0.12f)
+				.Vents(BiomeVentLayout.Fissures, BiomeVentTiming.Episode);
 		}
 	}
 }

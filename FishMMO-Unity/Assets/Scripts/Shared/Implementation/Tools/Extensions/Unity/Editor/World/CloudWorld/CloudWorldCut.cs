@@ -1021,6 +1021,8 @@ namespace FishMMO.Shared.WorldDesign
 			string lightQuery = structures != null && structures.TryLight(CloudWorldWayPlace.BridgeEnd, out CloudWorldWayLight endLight)
 				&& FishMMO.Shared.Biomes.BiomeWayLights.MountOf(endLight.Light) == FishMMO.Shared.Biomes.BiomeWayLightMount.Ground ? endLight.PieceQuery : null;
 			int lights = 0, unlit = 0;
+			// What the lights of the bridge being laid give off (2026-10-25, I6i), kept on its crossing for the client's site lights.
+			var endLights = new List<SceneEmitter>();
 			void LightEnd(CloudIslands.Island island, Vector3 post, Vector3 outward, List<Vector3> taken)
 			{
 				if (lightQuery == null || island == null)
@@ -1033,7 +1035,13 @@ namespace FishMMO.Shared.WorldDesign
 					GameObject prefab = PointOfInterestPieceResolver.Resolve(new PointOfInterestPieceRequest(lightQuery, "timber",
 						unchecked((int)(seed ^ (uint)Mathf.RoundToInt(at.x * 10f) * 0x9E3779B1u ^ (uint)Mathf.RoundToInt(at.z * 10f)))));
 					LayPrefab(prefab, at, facing, Vector3.one);
+					// A crystal post's crystal in its cradle (2026-10-25, I6i-b), where its art exists.
+					if (PostCrystal(prefab, at, facing, Vector3.one, seed, out GameObject crystal, out Vector3 crystalAt, out Vector3 crystalSize))
+					{
+						LayPrefab(crystal, crystalAt, facing, crystalSize);
+					}
 					lights += prefab != null ? 1 : 0;
+					LightEmitters(prefab, at, facing, Vector3.one, seed, endLights);
 				}
 				else
 				{
@@ -1075,6 +1083,7 @@ namespace FishMMO.Shared.WorldDesign
 				// The posts at each end, the landing behind them on the grass, the span leaving toward +z.
 				Lay(CaveArt.RopeBridgeEnd, variant, first, Quaternion.LookRotation(flat, Vector3.up) * Quaternion.Euler(LandingPitch(first, flat, ground), 0f, 0f), Vector3.one);
 				Lay(CaveArt.RopeBridgeEnd, variant, last, Quaternion.LookRotation(-flat, Vector3.up) * Quaternion.Euler(LandingPitch(last, -flat, ground), 0f, 0f), Vector3.one);
+				endLights.Clear();
 				LightEnd(islands.Islands[bridge.A], first, flat, PostsOn(bridge.A));
 				LightEnd(islands.Islands[bridge.B], last, -flat, PostsOn(bridge.B));
 				for (int i = 0; i < joints.Count - 1; i++)
@@ -1089,7 +1098,7 @@ namespace FishMMO.Shared.WorldDesign
 					Lay(CaveArt.RopeBridgeSpan, worn, 0.5f * (p0 + p1), Quaternion.LookRotation(step, Vector3.up), new Vector3(1f, 1f, step.magnitude / CaveArt.SpanModule));
 					metres += step.magnitude;
 				}
-				crossings.Add(new SceneCloudWorld.Crossing { From = first, To = last });
+				crossings.Add(new SceneCloudWorld.Crossing { From = first, To = last, Lights = endLights.ToArray() });
 				laid++;
 			}
 			if (props.Count > 0)
@@ -1108,6 +1117,69 @@ namespace FishMMO.Shared.WorldDesign
 				notes?.Add($"Cloud world: {missing} bridge piece(s) skipped, their art is missing (run Generate biome art, then re-cut).");
 			}
 			return crossings;
+		}
+
+		/// <summary>
+		/// What a way light laid on a cloud world gives off (2026-10-25, I6i), in the scene's frame, into <paramref name="into"/>: its kit
+		/// piece's emitters (StructurePieces.EmittersOf) where the prop stands, each seeded by its place as a site's are; a cold glow
+		/// takes its piece's own hue (rune, faerie), a crystal post's its crystal's hue (<see cref="PostCrystalKind"/>, laid in its cradle by
+		/// <see cref="PostCrystal"/>, 2026-10-25, I6i-b), flickering only where that crystal does, else pulsing. Nothing for a prefab that is not a kit piece. What lets the world's lamps light the islands at night
+		/// (SceneCloudWorld.Lights → SiteLightPool), which they could not while they were props alone.
+		/// </summary>
+		public static void LightEmitters(GameObject prefab, Vector3 position, Quaternion rotation, Vector3 scale, uint salt, List<SceneEmitter> into)
+		{
+			if (prefab == null || into == null || !StructurePieces.TryParsePrefab(prefab.name, out StructurePiece piece, out int variant, out _, out StructureRoofPitch? roof))
+			{
+				return;
+			}
+			foreach ((Vector3 at, SceneEmitterKind kind) in StructurePieces.EmittersOf(piece, variant, roof))
+			{
+				Vector3 world = position + rotation * Vector3.Scale(at, scale);
+				uint seed = PointOfInterestPlanner.Hash(unchecked((int)salt), Mathf.RoundToInt(world.x * 10f), Mathf.RoundToInt(world.z * 10f), (int)kind);
+				if (kind == SceneEmitterKind.Glow)
+				{
+					// As a site's (PointOfInterestSiteContext): a crystal post's light its crystal's hue and flicker.
+					SceneGlowHue? own = StructurePieces.GlowHueOf(piece.Id);
+					bool cradled = !own.HasValue && StructurePieces.TryCrystalSocket(piece, variant, out _, out _);
+					CaveMineral postMineral = cradled ? ProceduralArtCatalogue.CaveMineralOf(PostCrystalKind) : default;
+					seed = own.HasValue ? SceneGlow.WithHue(seed, own.Value) : SceneGlow.WithCrystalHue(seed, cradled ? postMineral.LightHue : -1);
+					seed = SceneGlow.WithFlicker(seed, cradled && postMineral.Flickers);
+				}
+				into.Add(new SceneEmitter { Position = world, Kind = kind, Seed = seed });
+			}
+		}
+
+		/// <summary>
+		/// The crystal a cloud world's crystal posts carry (2026-10-25, I6i-b): a cloud world stands in no biome, so the one a post with
+		/// no biome takes (BiomeTemplateArt.PostCrystal: the default cave crystals' heaviest glowing kind).
+		/// </summary>
+		public static FishMMO.Shared.Biomes.BiomeCaveCrystalKind PostCrystalKind => BiomeTemplateArt.PostCrystal(null);
+
+		/// <summary>
+		/// A way light's crystal (2026-10-25, I6i-b): where <paramref name="prefab"/> is a crystal post (a kit piece with a crystal
+		/// socket) and the art of <see cref="PostCrystalKind"/> exists, the crystal to lay in its cradle, where and how large, its variant
+		/// hashed from <paramref name="salt"/> and the post's place as a site's are. False otherwise (nothing to lay).
+		/// </summary>
+		public static bool PostCrystal(GameObject prefab, Vector3 position, Quaternion rotation, Vector3 scale, uint salt, out GameObject crystal, out Vector3 at,
+			out Vector3 size)
+		{
+			crystal = null;
+			at = position;
+			size = scale;
+			if (prefab == null || !StructurePieces.TryParsePrefab(prefab.name, out StructurePiece piece, out int variant, out _, out _)
+				|| !StructurePieces.TryCrystalSocket(piece, variant, out Vector3 socket, out float crystalScale))
+			{
+				return false;
+			}
+			crystal = CaveArt.MineralPrefab(PostCrystalKind, unchecked((int)PointOfInterestPlanner.Hash(unchecked((int)salt),
+				Mathf.RoundToInt(position.x * 10f), Mathf.RoundToInt(position.z * 10f), 0x5C)) & 0xFF);
+			if (crystal == null)
+			{
+				return false;
+			}
+			at = position + rotation * Vector3.Scale(socket, scale);
+			size = scale * crystalScale;
+			return true;
 		}
 
 		/// <summary>How far to the side of a bridge's line its end's light stands, metres: clear of the posts (0.85 m out) and their cairn or guy.</summary>

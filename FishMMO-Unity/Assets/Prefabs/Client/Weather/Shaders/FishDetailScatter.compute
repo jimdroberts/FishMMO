@@ -15,7 +15,8 @@
 //   FishScatterFinalize   each indirect command's instanceCount = min(count, capacity)
 //
 // Slots: (type * 3 + level) * 2 + view (0 camera, 1 shadow casters; DetailScatterRenderer.SlotOf). Most types draw level 0
-// only. A bush (DetailScatterSettings.BushPrefix) draws up to three levels, stepping at metres per metre of its own height
+// only. A type of one level whose prefab carries variant meshes (Variant1, Variant2 children) draws each instance's variant,
+// picked by its hash (DetailScatterMath.Variant), from the slot that level would take: one slice per variant. A bush (DetailScatterSettings.BushPrefix) draws up to three levels, stepping at metres per metre of its own height
 // and cross-fading over a band (DetailScatterMath.SelectLevel), to a reach set by its height alone, never thinned: it is
 // cover, and must stand the same for every player whatever their settings. A slot never overflows: an append past its capacity is dropped
 // (the CPU sizes it from the exact upper bound of the blocks it listed, so only the per-slot cap can drop anything).
@@ -39,11 +40,15 @@
 #define SCATTER_THIN_BAND 0.08
 #define SCATTER_SLOPE_SINK_SHARE 0.6
 #define SCATTER_MAX_SLOPE_SINK 0.4
+// The hash stream an instance's variant mesh is drawn from (DetailScatterMath.VariantStream), and the most a type cycles
+// (DetailScatterSettings.MaxVariants: a variant takes the slot a bush's level would).
+#define SCATTER_VARIANT_STREAM 5u
+#define SCATTER_MAX_VARIANTS 3u
 
 struct FishInstance { float4 row0; float4 row1; float4 row2; };   // 48 bytes (FishIndirectInstancing.hlsl)
 struct FishVisible { uint index; float lodFade; };                 // 8 bytes
 struct ScatterItem { int blockX; int blockZ; uint packed; uint terrain; };   // packed: main 1, shadow 2, nx 4 bits from 2, nz 4 bits from 6
-struct ScatterModel { float4 sphere; float4 extra; float4 lod; };  // sphere: local centre xyz, radius; extra: x foot radius, y salt (bits), z casts shadows (0/1); lod: x levels, y bush (0/1), z mesh top (m)
+struct ScatterModel { float4 sphere; float4 extra; float4 lod; };  // sphere: local centre xyz, radius; extra: x foot radius, y salt (bits), z casts shadows (0/1); lod: x levels, y bush (0/1), z mesh top (m), w variant meshes (0 or 1: one)
 
 StructuredBuffer<ScatterItem> _ScatterItems;
 StructuredBuffer<uint> _ScatterTable;           // DetailScatterAtlas.WriteTable: SCATTER_TERRAIN_UINTS per terrain
@@ -340,6 +345,8 @@ void FishScatterGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThread
         bool casts = model.extra.z > 0.5;
         bool bush = model.lod.y > 0.5;
         uint levels = clamp((uint)(model.lod.x + 0.5), 1u, 3u);
+        // The variant meshes its instances cycle: only a type of one level (never a bush) has more than one.
+        uint variants = (bush || levels > 1u) ? 1u : clamp((uint)(model.lod.w + 0.5), 1u, SCATTER_MAX_VARIANTS);
 
         // DetailScatterMath.Count: the whole part, plus one when the block's coin lands under the fraction.
         float stored = min(expected, (float)SCATTER_MAX_PER_BLOCK);
@@ -433,6 +440,11 @@ void FishScatterGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThread
             float fade, partnerFade;
             int partner;
             uint level = ScatterSelectLevel(d, tall, levels, fade, partner, partnerFade);
+            if (variants > 1u)
+            {
+                // Its variant's slice (levels is 1 here, so level is 0 and there is no partner), from its own stream.
+                level = min((uint)(ScatterUnit(h, SCATTER_VARIANT_STREAM) * (float)variants), variants - 1u);
+            }
             if (partner < 0)
             {
                 fade = -max(-fade, fadeOut);

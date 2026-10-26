@@ -102,6 +102,10 @@ namespace FishMMO.Shared.Biomes
 		[Range(0f, 1f)] public float EmissionRate;
 		[Tooltip("When the ground steams (it emits a vapour such as Steam): how its hot ground divides among geysers, hot springs, fumaroles and mud pots (shares, divided by their sum). Read by the server, every client and the cut alike. Default: a quarter geysers, two fifths springs, the rest fumaroles, no mud pots, as every steaming biome was before 2026-10-18. Written by Author biome art; edits are kept.")]
 		[SerializeField] private BiomeGeothermalShares geothermal = BiomeGeothermalShares.Today;
+		[Tooltip("Where its vents stand (on the grids, along the scene's stored fissure or ridge lines, in zones on a terrace) and how their strength moves on the shared clock (steady, the moon's plume tide, the sun, Strombolian bursts, fountain episodes, the tidal kneading), with a cap on its plumes a scene. Default: the grid, steady, as every biome before 2026-10-25. Written by Author biome art; edits are kept.")]
+		[SerializeField] private BiomeVents vents = BiomeVents.Today;
+		[Tooltip("How its ground burns on the shared clock (2026-10-25, I2t): None never; Occasional a spring burn in about one year in five (steppe); Annual the late dry season's veld fires (savanna); Brimstone blue sulphur flames at night, breathable worlds only. Drawn by the client only, no damage. Written by Author biome art; edits are kept.")]
+		[SerializeField] private BiomeBurnRegime burnRegime = BiomeBurnRegime.None;
 
 		[Header("How the ground wears")]
 		[Tooltip("How erosion, drainage and plateaus shape this biome's ground in a generated scene. Empty wears like temperate soil.")]
@@ -260,6 +264,12 @@ namespace FishMMO.Shared.Biomes
 		[SerializeField] private List<BiomeCaveFormation> caveFormations = new List<BiomeCaveFormation>();
 		[Tooltip("What lights this biome's caves of each form by itself: the glow crystals' hue (empty: drawn by chance), how much of the floor's glow is luminous fungus and how often glow-worms hang (1 the dressing's own). Written by Author biome art (ice caves ice-blue, lava tubes amber, neither with fungus or glow-worms; mines fungus only; the rest by chance with both); edits are kept.")]
 		[SerializeField] private List<BiomeCaveGlow> caveGlows = new List<BiomeCaveGlow>();
+		[Tooltip("How this biome's caves of each form stand in the water table (2026-10-25, I2n-c, decision 86): a natural cave opening on wet ground drowned in a share of systems, its galleries level at the water with floors up to the depth under it; a grotto's floors as deep under its pool. A form not listed is as before (grottos 1.5 m, every other cave dry). Written by Author biome art (none); edits are kept.")]
+		[SerializeField] private List<BiomeCaveFlood> caveFloods = new List<BiomeCaveFlood>();
+		[Tooltip("What hangs from this biome's caves' roofs by form (2026-10-25, I2n-c): glow-worm silk, roots through a thin roof in the dark and near a mouth, guano under the roosts, the roots' art and the root windows a system opens. A form not listed takes the dressing's own. Written by Author biome art (as the dressing chose by form); edits are kept.")]
+		[SerializeField] private List<BiomeCaveHanging> caveHangings = new List<BiomeCaveHanging>();
+		[Tooltip("The tea ring this biome's cave water leaves on the walls by form (2026-10-25, I2n-c): its colour and strength, how far over the water the highest flood stood and how sharp its top edge is, over the host's rock. A form not listed has none. Written by Author biome art (none); edits are kept.")]
+		[SerializeField] private List<BiomeCaveStain> caveStains = new List<BiomeCaveStain>();
 
 		/// <remarks>
 		/// The part this biome plays for a scene's water and ice: the biome painted where a lake, a river, an estuary or a dry
@@ -316,6 +326,30 @@ namespace FishMMO.Shared.Biomes
 		/// </remarks>
 		[Tooltip("The plants this biome's still fresh water carries on its surface (duckweed carpets, water-lily pads with flowers, water hyacinth mats, frogbit), each with how often: on its lakes, ponds, moats and slack river pools. Empty: none. Written by Author biome art; edits are kept.")]
 		[SerializeField] private List<BiomeFloatingPlant> floatingPlants = new List<BiomeFloatingPlant>();
+		/// <remarks>
+		/// What drifts on the biome's open sea (<see cref="BiomeSeaFloat"/>, 2026-10-25, I2p): sargassum windrows, by-the-wind sailors,
+		/// barnacled drift logs, propagule rafts, a lost corkline, growlers, pumice rafts, pancake and brash ice, drawn by the client on
+		/// the GPU riding the sea's wave sum and carried downwind on the shared clock (SeaFloatSystem). Read at runtime from the
+		/// template under each 128 m cell of the sea. Until then no sea carried anything, which is this field's default (empty).
+		/// </remarks>
+		[Tooltip("What drifts on this biome's open sea (sargassum windrows, by-the-wind sailors, barnacled drift logs, propagule rafts, a lost corkline, growlers, pumice rafts, pancake or brash ice), each with how thickly (1 its natural density). Drawn by the client riding the sea's waves. Empty: none. Written by Author biome art; edits are kept.")]
+		[SerializeField] private List<BiomeSeaFloat> seaFloats = new List<BiomeSeaFloat>();
+		/// <remarks>
+		/// How the biome's cold glows move (<see cref="BiomeGlowMode"/>, 2026-10-25, I6i): its way glows (glowjars, rune stones) and its
+		/// glowing crystals (cave crystals, a crystal post's crystal) each by a mode on the shared clock (caustic, daily step, the sun's
+		/// height, the wet season, the wind, a breath, a crust's overturn, after sunset, the swell, the giant's field, the terminator, the
+		/// parent world's phase, the rain to come, a trail, the night's length, the night, the dark moon, one day in N, the tidal stress, the
+		/// fog, the plume tide, a turbidity tremor, the fountain episodes), warm or cold. Read at runtime by the client (GlowModeTable) under
+		/// each glow. Empty (the default): every glow exactly as before.
+		/// </remarks>
+		[Tooltip("How this biome's cold glows move: its Way glows (glowjars, rune stones) and its glowing Crystals (cave crystals, crystal posts), each by a mode on the shared clock, warm or cold. Empty: as before (way glows pulse, stormglass flickers, crystals shine steady). Written by Author biome art; edits are kept.")]
+		[SerializeField] private List<BiomeGlowMode> glowModes = new List<BiomeGlowMode>();
+		/// <remarks>
+		/// The biome's lava-fountain episodes (<see cref="BiomeFountainEpisodes"/>, 2026-10-25, I6i, decision 93): the slot schedule its
+		/// fissure fountains play on and its Episode glows follow. Empty (the default): no episodes.
+		/// </remarks>
+		[Tooltip("The biome's lava-fountain episodes: slot lengths (each dividing 10 000 s), the share of a slot a fountain plays, its ramps and jet heights. All zero: none. Written by Author biome art; edits are kept.")]
+		[SerializeField] private BiomeFountainEpisodes fountainEpisodes;
 
 		/// <remarks>
 		/// <para>
@@ -430,6 +464,8 @@ namespace FishMMO.Shared.Biomes
 		[SerializeField] private List<BiomeCaveLight> caveLights = new List<BiomeCaveLight>();
 		[Tooltip("Which of this biome's ways are raised boardwalks (plank walks on piles with a pole handrail): its Roads (cart tracks, roads, highways), its Paths (footpaths, trails) across level ground, and the Streets of the settlements built here. None: every way lies on the ground. Written by Author biome art (None); edits are kept.")]
 		[SerializeField] private BiomeBoardwalks boardwalks = BiomeBoardwalks.None;
+		[Tooltip("How this biome's raised roads, paths and trails are built: Planked (plank walk on piles, pole handrail), Passerella (oak planks on stub piles, one rail), LandingWalk (split planks on forked posts), Bohlensteg (paired planks on stakes, 0.6 m wide) or PoleWalk (two poles on forked stakes). A settlement's streets stay planked. Written by Author biome art (Planked); edits are kept.")]
+		[SerializeField] private BiomeBoardwalkStyle boardwalkStyle = BiomeBoardwalkStyle.Planked;
 
 		/// <remarks>
 		/// The long, narrow things this biome's country is divided and watered by (2026-10-18, phase I2f, decisions 23 and 29;
@@ -512,8 +548,15 @@ namespace FishMMO.Shared.Biomes
 			public const string CaveInteriorRocks = nameof(caveInteriorRocks);
 			public const string CaveFormations = nameof(caveFormations);
 			public const string CaveGlows = nameof(caveGlows);
+			public const string CaveFloods = nameof(caveFloods);
+			public const string CaveHangings = nameof(caveHangings);
+			public const string CaveStains = nameof(caveStains);
 			public const string FloatingPlants = nameof(floatingPlants);
+			public const string SeaFloats = nameof(seaFloats);
+			public const string GlowModes = nameof(glowModes);
+			public const string FountainEpisodes = nameof(fountainEpisodes);
 			public const string Boardwalks = nameof(boardwalks);
+			public const string BoardwalkStyle = nameof(boardwalkStyle);
 			public const string LinearFeatures = nameof(linearFeatures);
 			public const string Landforms = nameof(landforms);
 
@@ -534,6 +577,9 @@ namespace FishMMO.Shared.Biomes
 
 			/// <summary>The mark of one way of a ground layer's <see cref="TerrainTextureLayer.ways"/> (key BiomeLocalArt.WaySlot: <c>detail/2/road</c>).</summary>
 			public static string GroundWay(string waySlotKey) => "groundWays/" + waySlotKey;
+
+			/// <summary>The mark of one ground layer's <see cref="TerrainTextureLayer.glow"/> (2026-10-25, phase I2r; slot keys as BiomeLocalArt's).</summary>
+			public static string GroundGlow(string slotKey) => "groundGlow/" + slotKey;
 
 			/// <summary>
 			/// The mark of one ground layer's climate band (<see cref="TerrainTextureLayer.useClimateBand"/> and its ranges, 2026-10-18;
@@ -558,6 +604,12 @@ namespace FishMMO.Shared.Biomes
 
 			/// <summary>The mark of the hot ground's split among its kinds (<see cref="BiomeTemplate.Geothermal"/>), a spec column since 2026-10-18 (I2q).</summary>
 			public const string Geothermal = nameof(geothermal);
+
+			/// <summary>The mark of where the biome's vents stand and how they move (<see cref="BiomeTemplate.Vents"/>), a spec column since 2026-10-25 (I2q-b).</summary>
+			public const string Vents = nameof(vents);
+
+			/// <summary>The mark of how the biome's ground burns (<see cref="BiomeTemplate.BurnRegime"/>), a spec column since 2026-10-25 (I2t).</summary>
+			public const string Burn = nameof(burnRegime);
 		}
 
 		[System.NonSerialized]
@@ -604,6 +656,15 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>What lights this biome's caves by form by itself (<see cref="BiomeCaveGlow"/>).</summary>
 		public List<BiomeCaveGlow> CaveGlows => caveGlows;
+
+		/// <summary>How this biome's caves stand in the water table by form (<see cref="BiomeCaveFlood"/>); read through CaveInteriorArt.</summary>
+		public List<BiomeCaveFlood> CaveFloods => caveFloods;
+
+		/// <summary>What hangs from this biome's caves' roofs by form (<see cref="BiomeCaveHanging"/>); read through CaveInteriorArt.</summary>
+		public List<BiomeCaveHanging> CaveHangings => caveHangings;
+
+		/// <summary>The tea ring this biome's cave water leaves on the walls by form (<see cref="BiomeCaveStain"/>); read through CaveInteriorArt.</summary>
+		public List<BiomeCaveStain> CaveStains => caveStains;
 
 		/// <summary>
 		/// The rock a cave of this form is cut in here (a rock type name, Ice, or <see cref="BiomeCaveShell.Ground"/>): the first
@@ -753,6 +814,26 @@ namespace FishMMO.Shared.Biomes
 			set => geothermal = value;
 		}
 
+		/// <summary>
+		/// Where this biome's vents stand and how their strength moves (2026-10-25, phase I2q-b, decisions 53, 66, 90, 93, 95;
+		/// GeothermalVents, VolcanicVents, VentTiming). <see cref="BiomeVents.Today"/> unless the biome's file says otherwise.
+		/// </summary>
+		public BiomeVents Vents
+		{
+			get => vents;
+			set => vents = value;
+		}
+
+		/// <summary>
+		/// How this biome's ground burns on the shared clock (2026-10-25, phase I2t, decisions 75/82/84; BurnMosaic, FishBurn.hlsl):
+		/// <see cref="BiomeBurnRegime.None"/> unless the biome's file says otherwise. Read live by the client (no re-cut).
+		/// </summary>
+		public BiomeBurnRegime BurnRegime
+		{
+			get => burnRegime;
+			set => burnRegime = value;
+		}
+
 		public BiomeWaterLook WaterLook
 		{
 			get => waterLook;
@@ -796,6 +877,19 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>The plants this biome's still fresh water carries, with their weights (<see cref="BiomeFloatingPlant"/>); read through BiomeTemplateArt.FloatingPlants.</summary>
 		public List<BiomeFloatingPlant> FloatingPlants => floatingPlants;
 
+		/// <summary>What drifts on this biome's open sea, with how thickly (<see cref="BiomeSeaFloat"/>); empty: nothing.</summary>
+		public List<BiomeSeaFloat> SeaFloats => seaFloats ??= new List<BiomeSeaFloat>();
+
+		/// <summary>How this biome's cold glows move, by source (<see cref="BiomeGlowMode"/>); empty: as before.</summary>
+		public List<BiomeGlowMode> GlowModes => glowModes ??= new List<BiomeGlowMode>();
+
+		/// <summary>This biome's lava-fountain episodes (<see cref="BiomeFountainEpisodes"/>); empty: none.</summary>
+		public BiomeFountainEpisodes FountainEpisodes
+		{
+			get => fountainEpisodes;
+			set => fountainEpisodes = value;
+		}
+
 		/// <summary>The landforms sculpted into this biome's ground at the cut (<see cref="BiomeLandform"/>); read through BiomeTemplateArt.Landforms.</summary>
 		public List<BiomeLandform> Landforms => landforms ??= new List<BiomeLandform>();
 
@@ -804,6 +898,13 @@ namespace FishMMO.Shared.Biomes
 		{
 			get => boardwalks;
 			set => boardwalks = value;
+		}
+
+		/// <summary>How this biome's raised routed ways are built (<see cref="BiomeBoardwalkStyle"/>, I2i-b); read through BiomeTemplateArt.BoardwalkStyle.</summary>
+		public BiomeBoardwalkStyle BoardwalkStyle
+		{
+			get => boardwalkStyle;
+			set => boardwalkStyle = value;
 		}
 
 		/// <summary>This biome's hedges, walls, fences, tree rows, channels and clearance rows (<see cref="BiomeLinearStyle"/>); read through BiomeTemplateArt.LinearFeatures.</summary>
@@ -1181,6 +1282,9 @@ namespace FishMMO.Shared.Biomes
 			caveInteriorRocks ??= new List<string>();
 			caveFormations ??= new List<BiomeCaveFormation>();
 			caveGlows ??= new List<BiomeCaveGlow>();
+			caveFloods ??= new List<BiomeCaveFlood>();
+			caveHangings ??= new List<BiomeCaveHanging>();
+			caveStains ??= new List<BiomeCaveStain>();
 			seaLife ??=new List<BiomeSeaLife>();
 			habitat &= BiomeHabitats.Stored;
 			vines ??= new BiomeVines();
@@ -1200,6 +1304,8 @@ namespace FishMMO.Shared.Biomes
 			wayLights ??= new List<BiomeWayLight>();
 			caveLights ??= new List<BiomeCaveLight>();
 			floatingPlants ??= new List<BiomeFloatingPlant>();
+			seaFloats ??= new List<BiomeSeaFloat>();
+			glowModes ??= new List<BiomeGlowMode>();
 			landforms ??= new List<BiomeLandform>();
 			structurePalette ??= new BiomeStructurePalette();
 			structurePalette.Surfaces ??= new List<BiomeStructureSurface>();

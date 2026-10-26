@@ -721,18 +721,23 @@ namespace FishMMO.Shared.WorldDesign
 			Fill(who, BiomeLocalArt.SlotBarSand, biome.BarSandTextureLayer, entry.BarSand, null, source, report, apply);
 			Fill(who, BiomeLocalArt.SlotBarGravel, biome.BarGravelTextureLayer, entry.BarGravel, null, source, report, apply);
 			AuthorLayerWays(biome, entry, source, report, apply);
+			AuthorLayerGlow(biome, entry, source, report, apply);
 			AuthorClimateVariants(biome, entry, source, report, apply);
 			AuthorLayerClimate(biome, entry, source, report, apply);
 			AuthorDescription(biome, entry, report, apply);
 			AuthorNaming(biome, entry, report, apply);
 			AuthorEmission(biome, entry, report, apply);
 			AuthorGeothermal(biome, entry, report, apply);
+			AuthorVents(biome, entry, report, apply);
+			AuthorBurn(biome, entry, report, apply);
 
 			AuthorRock(biome, entry, report, apply);
 			AuthorCaveShells(biome, entry, report, apply);
 			AuthorCaveCrystals(biome, entry, report, apply);
 			AuthorCaveInteriors(biome, entry, report, apply);
 			AuthorFloatingPlants(biome, entry, report, apply);
+			AuthorSeaFloats(biome, entry, report, apply);
+			AuthorGlowModes(biome, entry, report, apply);
 			AuthorWaterRole(biome, entry, report, apply);
 			AuthorWaterLook(biome, entry, report, apply);
 			AuthorSeaLook(biome, entry, report, apply);
@@ -1041,7 +1046,7 @@ namespace FishMMO.Shared.WorldDesign
 			// Fields a pre-fingerprint run could not have set: anything but their defaults is somebody's.
 			if (rule.detailPlacement != DetailPlacement.Scattered || rule.sinkRange != Vector2.zero || rule.sinkSlopeFactor != 0f || rule.clusterMetres != 0f || rule.forestMetres != 0f
 				|| rule.depthRange != Vector2.zero || rule.useClimateBand || rule.waters != BiomeBedWaters.Default || rule.currentRange != Vector2.zero
-				|| !rule.worldGate.IsOpen || rule.useHeatBand || (rule.scaleSkew > 0f && rule.scaleSkew != 1f) || rule.landformBand.On)
+				|| !rule.worldGate.IsOpen || rule.useHeatBand || (rule.scaleSkew > 0f && rule.scaleSkew != 1f) || rule.landformBand.On || rule.talusGrading || !rule.scatterMode.IsOff)
 			{
 				return false;
 			}
@@ -1579,8 +1584,17 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				crops.Add(new BiomeFieldCrop(prefab, weight, entry.FieldSurface(name), entry.FieldRiser(name), entry.FieldRows(name)));
 			}
-			AuthorEntries(who, biome, BiomeTemplate.Authored.FieldCrops, biome.FieldCrops, crops, c => c.Prefab != null ? c.Prefab.name : null, c => c.ToString(),
-				l => Mark(AsList(l)), report, apply);
+			/* An empty list now means "sow nothing" (decision 25, 2026-10-25: no fields laid at all), so a list emptied only because the
+			 * spec's crops' art is missing is not written: the template keeps what it has until the art is generated. */
+			if (crops.Count == 0 && entry.FieldCrops().Count > 0)
+			{
+				report.Missing.Add($"{who} {BiomeTemplate.Authored.FieldCrops}: every crop's prefab is missing; the list is left as it is (an empty list would lay no fields)");
+			}
+			else
+			{
+				AuthorEntries(who, biome, BiomeTemplate.Authored.FieldCrops, biome.FieldCrops, crops, c => c.Prefab != null ? c.Prefab.name : null, c => c.ToString(),
+					l => Mark(AsList(l)), report, apply);
+			}
 
 			BiomeStructurePalette palette = entry.StructurePalette();
 			if (apply && biome.StructurePalette.Surfaces == null)
@@ -1600,6 +1614,10 @@ namespace FishMMO.Shared.WorldDesign
 			BiomeBoardwalks boardwalks = entry.Boardwalks;
 			AuthorValue(who, biome, BiomeTemplate.Authored.Boardwalks, biome.IsAuthored(BiomeTemplate.Authored.Boardwalks) ? biome.Boardwalks.ToString() : string.Empty,
 				boardwalks.ToString(), false, () => biome.Boardwalks = boardwalks, $"boardwalks {boardwalks}", report, apply);
+			// How they are built (2026-10-25, I2i-b): one value, Planked unless the biome's file names a style.
+			BiomeBoardwalkStyle boardwalkStyle = entry.BoardwalkStyle;
+			AuthorValue(who, biome, BiomeTemplate.Authored.BoardwalkStyle, biome.IsAuthored(BiomeTemplate.Authored.BoardwalkStyle) ? biome.BoardwalkStyle.ToString() : string.Empty,
+				boardwalkStyle.ToString(), false, () => biome.BoardwalkStyle = boardwalkStyle, $"boardwalk style {boardwalkStyle}", report, apply);
 
 			/* No flame where no world it stands on has the air to burn one (decision 41, 2026-10-18): a biome whose template admits only
 			 * thin air or none is lit with the cold Glow lights in the same places; so is one whose Requires names a methane, cryogenic,
@@ -1654,6 +1672,14 @@ namespace FishMMO.Shared.WorldDesign
 				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
 			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.CaveGlows, biome.CaveGlows, entry.CaveGlows(), g => g.Form.ToString(), g => g.ToString(),
 				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
+			// 2026-10-25 (I2n-c, decision 86): the water table (none by default), what hangs from the roofs (the dressing's own by
+			// form) and the tea ring on the walls (none by default), one mark per entry as above.
+			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.CaveFloods, biome.CaveFloods, entry.CaveFloods(), f => f.Form.ToString(), f => f.ToString(),
+				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
+			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.CaveHangings, biome.CaveHangings, entry.CaveHangings(), h => h.Form.ToString(), h => h.ToString(),
+				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
+			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.CaveStains, biome.CaveStains, entry.CaveStains(), s => s.Form.ToString(), s => s.ToString(),
+				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
 		}
 
 		/// <summary>A floating-plant entry's identity: its kind.</summary>
@@ -1668,6 +1694,39 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.FloatingPlants, biome.FloatingPlants, entry.FloatingPlants(), FloatingPlantId, p => p.ToString(),
 				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
+		}
+
+		/// <summary>A sea-float entry's identity: its kind.</summary>
+		public static string SeaFloatId(BiomeSeaFloat f) => f.Kind.ToString();
+
+		/// <summary>
+		/// What drifts on the biome's open sea (<see cref="BiomeTemplate.SeaFloats"/>, 2026-10-25, I2p) from the spec
+		/// (<see cref="BiomeArtSpec.Entry.SeaFloats"/>: none, as no sea carried anything before, unless the biome's file names its own).
+		/// One mark per kind, as the floating plants: a weight edited by hand is kept, a kind deleted by hand stays deleted.
+		/// </summary>
+		private static void AuthorSeaFloats(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.SeaFloats, biome.SeaFloats, entry.SeaFloats(), SeaFloatId, f => f.ToString(),
+				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
+		}
+
+		/// <summary>A glow-mode entry's identity: its source.</summary>
+		public static string GlowModeId(BiomeGlowMode g) => g.Source.ToString();
+
+		/// <summary>
+		/// How the biome's cold glows move (<see cref="BiomeTemplate.GlowModes"/>, 2026-10-25, I6i) from the spec
+		/// (<see cref="BiomeArtSpec.Entry.GlowModes"/>: none, every glow as before, unless the biome's file names its own), one mark per
+		/// source; and its lava-fountain episodes (<see cref="BiomeTemplate.FountainEpisodes"/>, decision 93; none unless named), one value
+		/// marked by its signature. Hand edits are kept.
+		/// </summary>
+		private static void AuthorGlowModes(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.GlowModes, biome.GlowModes, entry.GlowModes(), GlowModeId, g => g.ToString(),
+				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
+			BiomeFountainEpisodes target = entry.FountainEpisodes();
+			string current = biome.IsAuthored(BiomeTemplate.Authored.FountainEpisodes) ? biome.FountainEpisodes.ToString() : string.Empty;
+			AuthorValue(biome.name, biome, BiomeTemplate.Authored.FountainEpisodes, current, target.ToString(), false,
+				() => biome.FountainEpisodes = target, $"fountain episodes {target}", report, apply);
 		}
 
 		/// <summary>A linear-feature entry's identity: its kind, form and place (<see cref="BiomeLinearFeatures.Id"/>).</summary>
@@ -1937,6 +1996,58 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
+		/// How each main and detail layer glows (<see cref="TerrainTextureLayer.glow"/>, 2026-10-25, phase I2r, decision 65 (a)) from the
+		/// spec's column (<see cref="BiomeArtSpec.Layer.Glows"/>), one mark per layer by its signature under the ways' rule: a detail slot
+		/// only while it holds the spec's ground; none is a decision (a glow the tool wrote and somebody cleared stays clear); a layer
+		/// with none set, none wanted and none written before is skipped (no mark). The scene's terrain arrays take it in place.
+		/// </summary>
+		private static void AuthorLayerGlow(BiomeTemplate biome, BiomeArtSpec.Entry entry, IBiomeArtSource source, Report report, bool apply)
+		{
+			var layers = new List<(string slot, TerrainTextureLayer ground, BiomeArtSpec.Layer spec)>();
+			if (entry.Main != null)
+			{
+				layers.Add((BiomeLocalArt.SlotMain, biome.MainTextureLayer, entry.Main));
+			}
+			for (int i = 0; i < entry.Details.Length; i++)
+			{
+				BiomeArtSpec.Layer spec = entry.Details[i];
+				TerrainTextureLayer slot = biome.DetailTextureLayers != null && i < biome.DetailTextureLayers.Count ? biome.DetailTextureLayers[i] : null;
+				if (spec == null || slot == null)
+				{
+					continue;
+				}
+				if (slot.terrainLayer == null || slot.terrainLayer != source.Layer(spec.Family))
+				{
+					if (!spec.Glow.IsNone)
+					{
+						report.Lines.Add($"{biome.name} {BiomeLocalArt.DetailSlot(i)}: holds authored art, so its spec glow was not written");
+					}
+					continue;
+				}
+				layers.Add((BiomeLocalArt.DetailSlot(i), slot, spec));
+			}
+			foreach ((string slotName, TerrainTextureLayer ground, BiomeArtSpec.Layer spec) in layers)
+			{
+				if (ground == null)
+				{
+					continue;
+				}
+				string field = BiomeTemplate.Authored.GroundGlow(slotName);
+				string current = ground.glow.Signature();
+				BiomeGroundGlow target = spec.Glow.IsNone ? default : spec.Glow;
+				string wanted = target.Signature();
+				if (current.Length == 0 && wanted.Length == 0 && biome.AuthoredFingerprint(field) == null)
+				{
+					// No glow set, none wanted, none written before: the layer draws as it always did, with no mark to record.
+					continue;
+				}
+				TerrainTextureLayer on = ground;
+				AuthorValue(biome.name, biome, field, current, wanted, true, () => on.glow = target,
+					wanted.Length > 0 ? $"{slotName} glows {wanted}" : $"{slotName} no glow", report, apply, isEmpty: current.Length == 0);
+			}
+		}
+
+		/// <summary>
 		/// The climate variants the spec declares (<see cref="BiomeArtSpec.Entry.ClimateVariant"/>) and the ground overrides it gives
 		/// them (<see cref="BiomeArtSpec.Entry.ClimateGround"/>), decision 29, 2026-10-18. Nothing declared, nothing written: every
 		/// template's variants stay exactly as they are.
@@ -2201,7 +2312,7 @@ namespace FishMMO.Shared.WorldDesign
 				if (slot.terrainLayer == null || slot.terrainLayer != source.Layer(spec.Family))
 				{
 					if (spec.HasClimateBand || spec.AirBand != BiomeAtmosphereRequirement.None || spec.HeatBand.HasValue || spec.UndergroundBand != BiomeUnderground.Both || spec.SeaDepth.HasValue
-						|| spec.ZoneBand.On)
+						|| spec.ZoneBand.On || spec.WorldBand.On)
 					{
 						report.Lines.Add($"{biome.name} {slotName}: holds authored art, so its spec climate/air band was not written");
 					}
@@ -2219,7 +2330,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				BiomeArtSpec.Cliff cliff = entry.Cliffs[i];
 				Spec(BiomeLocalArt.SlotCliff + i, biome.CliffTextureLayers != null && i < biome.CliffTextureLayers.Count ? biome.CliffTextureLayers[i] : null,
-					cliff != null ? new BiomeArtSpec.Layer { Family = cliff.Family, AirBand = cliff.AirBand, UndergroundBand = cliff.UndergroundBand } : null);
+					cliff != null ? new BiomeArtSpec.Layer { Family = cliff.Family, AirBand = cliff.AirBand, UndergroundBand = cliff.UndergroundBand, WorldBand = cliff.WorldBand } : null);
 			}
 			foreach (BiomeArtSpec.Entry.VariantGrounds grounds in entry.VariantLayers)
 			{
@@ -2278,6 +2389,12 @@ namespace FishMMO.Shared.WorldDesign
 			layer.seaDepthInTides = spec != null && spec.SeaDepth.HasValue && spec.SeaDepthInTides;
 			// And the landform zone band (2026-10-25, I2g-b, decision 55): off unless the spec names a part.
 			layer.landformBand = spec != null ? spec.ZoneBand : default;
+			// And the world band (2026-10-25, decision 68): every world unless the spec names flags.
+			layer.worldBand = spec != null ? spec.WorldBand : default;
+			// And the lava band (2026-10-25, I2r, decision 65 (b)): metres above the scene's lava surface.
+			layer.useLavaBand = spec != null && spec.LavaBand.HasValue;
+			layer.lavaRange = spec?.LavaBand ?? new Vector2(-BiomeSeaFloors.OpenDepth, BiomeSeaFloors.OpenDepth);
+			layer.lavaFalloff = spec != null && spec.LavaBand.HasValue ? spec.LavaFalloff : BiomeSeaFloors.DefaultDepthFalloff;
 		}
 
 		/// <summary>A layer's climate band's mark: empty for none (off, or open at every end), else its ranges and falloffs to 1/10 000.</summary>
@@ -2288,8 +2405,9 @@ namespace FishMMO.Shared.WorldDesign
 				return string.Empty;
 			}
 			string climate = layer.HasClimateBand ? ClimateMark(layer.temperatureRange, layer.temperatureFalloff, layer.humidityRange, layer.humidityFalloff) : string.Empty;
-			return WithZone(WithSeaDepth(WithUnderground(WithHeat(WithAir(climate, layer.airBand), layer.HasHeatBand ? layer.heatRange : (Vector2?)null, layer.heatFalloff), layer.underground),
-				layer.HasSeaDepthBand ? layer.seaDepthRange : (Vector2?)null, layer.seaDepthFalloff, layer.seaDepthInTides), layer.landformBand);
+			return WithLava(WithWorld(WithZone(WithSeaDepth(WithUnderground(WithHeat(WithAir(climate, layer.airBand), layer.HasHeatBand ? layer.heatRange : (Vector2?)null, layer.heatFalloff), layer.underground),
+				layer.HasSeaDepthBand ? layer.seaDepthRange : (Vector2?)null, layer.seaDepthFalloff, layer.seaDepthInTides), layer.landformBand), layer.worldBand),
+				layer.HasLavaBand ? layer.lavaRange : (Vector2?)null, layer.lavaFalloff);
 		}
 
 		/// <summary>
@@ -2342,8 +2460,8 @@ namespace FishMMO.Shared.WorldDesign
 			string climate = spec.HasClimateBand
 				? ClimateMark(spec.Temperature ?? new Vector2(-1f, 1f), spec.TemperatureFalloff, spec.Humidity ?? new Vector2(-1f, 1f), spec.HumidityFalloff)
 				: string.Empty;
-			return WithZone(WithSeaDepth(WithUnderground(WithHeat(WithAir(climate, spec.AirBand), spec.HeatBand, spec.HeatFalloff), spec.UndergroundBand),
-				spec.SeaDepth, spec.SeaDepthFalloff, spec.SeaDepthInTides), spec.ZoneBand);
+			return WithLava(WithWorld(WithZone(WithSeaDepth(WithUnderground(WithHeat(WithAir(climate, spec.AirBand), spec.HeatBand, spec.HeatFalloff), spec.UndergroundBand),
+				spec.SeaDepth, spec.SeaDepthFalloff, spec.SeaDepthInTides), spec.ZoneBand), spec.WorldBand), spec.LavaBand, spec.LavaFalloff);
 		}
 
 		/// <summary>
@@ -2357,6 +2475,30 @@ namespace FishMMO.Shared.WorldDesign
 				return mark;
 			}
 			return (mark.Length > 0 ? mark : "t-|h-") + "|z" + band.Signature();
+		}
+
+		/// <summary>
+		/// A climate mark with a layer's lava band after it ("|v" lowest, highest, falloff, 2026-10-25, I2r), "t-|h-" first when it has none;
+		/// unchanged without a band, so every mark written before lava bands existed reads the same.
+		/// </summary>
+		private static string WithLava(string mark, Vector2? band, float falloff)
+		{
+			if (!band.HasValue || !BiomeSeaFloors.Closes(band.Value))
+			{
+				return mark;
+			}
+			Vector2 v = band.Value;
+			return (mark.Length > 0 ? mark : "t-|h-") + $"|v{Q(Mathf.Min(v.x, v.y))},{Q(Mathf.Max(v.x, v.y))},{Q(falloff)}";
+		}
+
+		/// <summary>A climate mark with a layer's world band after it ("|w" requires/forbids, decision 68), "t-|h-" first when it has none; unchanged with the band off.</summary>
+		private static string WithWorld(string mark, BiomeWorldBand band)
+		{
+			if (!band.On)
+			{
+				return mark;
+			}
+			return (mark.Length > 0 ? mark : "t-|h-") + "|w" + band.Signature();
 		}
 
 		/// <summary>
@@ -2451,6 +2593,38 @@ namespace FishMMO.Shared.WorldDesign
 			BiomeGeothermalShares target = entry.GeothermalShares.Value;
 			AuthorText(biome, BiomeTemplate.Authored.Geothermal, biome.Geothermal.Signature(), target.Signature(), () => biome.Geothermal = target,
 				$"hot ground {target}", report, apply);
+		}
+
+		/// <summary>
+		/// Where the biome's vents stand and how they move (<see cref="BiomeTemplate.Vents"/>) from the spec's column
+		/// (<see cref="BiomeArtSpec.Entry.Vents"/>, 2026-10-25, I2q-b): one whole value marked by its signature, under the geothermal
+		/// split's rule (today's, the grid and steady, written over once; a hand edit kept after). No column, nothing written.
+		/// </summary>
+		private static void AuthorVents(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			if (!entry.VentPlan.HasValue)
+			{
+				return;
+			}
+			BiomeVents target = entry.VentPlan.Value;
+			AuthorText(biome, BiomeTemplate.Authored.Vents, biome.Vents.Signature(), target.Signature(), () => biome.Vents = target,
+				$"vents {target}", report, apply);
+		}
+
+		/// <summary>
+		/// How the biome's ground burns (<see cref="BiomeTemplate.BurnRegime"/>) from the spec's column (<see cref="BiomeArtSpec.Entry.Burns"/>,
+		/// 2026-10-25, I2t): one whole value marked by its name, under the vents' rule (the template's original, None, written over once; a
+		/// hand edit kept after). No column, nothing written: every template keeps None unmarked.
+		/// </summary>
+		private static void AuthorBurn(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			if (!entry.BurnRegime.HasValue)
+			{
+				return;
+			}
+			BiomeBurnRegime target = entry.BurnRegime.Value;
+			AuthorText(biome, BiomeTemplate.Authored.Burn, BiomeBurnRegimes.Signature(biome.BurnRegime), BiomeBurnRegimes.Signature(target),
+				() => biome.BurnRegime = target, $"burns {target}", report, apply);
 		}
 
 		/// <summary>An emission's mark: "substance@rate" (the rate to 1/10 000), "none" for nothing.</summary>
@@ -2892,6 +3066,16 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				text.Append("|Z").Append(rule.landformBand.Signature());
 			}
+			// Talus size grading (2026-10-25, I2u) likewise: only a graded rule hashes it.
+			if (rule.talusGrading)
+			{
+				text.Append("|T");
+			}
+			// Scatter modes (2026-10-26, SCATTER-MODES) likewise: only a rule with one hashes it.
+			if (!rule.scatterMode.IsOff)
+			{
+				text.Append("|M").Append(rule.scatterMode.Signature());
+			}
 			// The size skew (2026-10-20) likewise: only a rule leaned off even hashes it, so every mark made before still holds (0, an
 			// asset saved before the field, is even too).
 			if (rule.scaleSkew > 0f && rule.scaleSkew != 1f)
@@ -3051,6 +3235,10 @@ namespace FishMMO.Shared.WorldDesign
 				heatFalloff = s.Heat.HasValue ? Mathf.Clamp01(s.HeatFalloff) : BiomeHeatBand.DefaultFalloff,
 				// Off unless the spec names a part (2026-10-25, I2g-b, decision 55).
 				landformBand = s.Zone,
+				// Off unless the spec grades it (2026-10-25, I2u, decision 79 (d)).
+				talusGrading = s.Graded,
+				// All off unless the spec names a mode (2026-10-26, SCATTER-MODES).
+				scatterMode = s.Mode,
 			});
 			rule.SpecFingerprint = Fingerprint(rule);
 		}
@@ -3117,6 +3305,8 @@ namespace FishMMO.Shared.WorldDesign
 			to.heatRange = from.heatRange;
 			to.heatFalloff = from.heatFalloff;
 			to.landformBand = from.landformBand;
+			to.talusGrading = from.talusGrading;
+			to.scatterMode = from.scatterMode;
 		}
 	}
 }

@@ -91,6 +91,24 @@ void FishCaveRockSurface(float3 positionWS, half3 geomNormalWS, half4 habitat, h
         smoothness = lerp(smoothness, max(smoothness, 0.6h), runs * crust);
     }
 
+    // ── The tea ring (2026-10-25, I2n-c "drowned galleries"): every flood's stain up the walls to the highest one's sharp line ──
+    // _FishCaveFlood: x the cave water's level (world y), y the highest flood over it, z the top edge's fade, w 1 on (CaveRockLayers.
+    // WithStain; BiomeCaveWaters.RingAt is the same curve without the line's wander). Off on every cave rock without one.
+    UNITY_BRANCH
+    if (_FishCaveFlood.w > 0.5 && wall > 0.02h)
+    {
+        float above = positionWS.y - _FishCaveFlood.x;
+        // The highest flood's line wanders a hand's breadth along the wall (eddies, splash), never in steps.
+        float2 along = normalize(float2(-n.z, n.x) + float2(1e-4, 0.0));
+        float wander = (FishSurfaceNoise(float2(dot(positionWS.xz, along) * 0.9, 7.3)) - 0.5) * 0.12;
+        float t = saturate((_FishCaveFlood.y + wander - above) / max(_FishCaveFlood.z, 0.005));
+        half ring = (half)(t * t * (3.0 - 2.0 * t)) * wall * (half)_FishCaveFloodStain.a;
+        // Under the water's line the biofilm darkens it further.
+        half under = (half)saturate(-above * 4.0);
+        half3 tea = albedo * (half3)_FishCaveFloodStain.rgb * 2.2h;
+        albedo = lerp(albedo, tea * (1.0h - 0.45h * under), ring);
+    }
+
     // ── Floors: the cave's grounds over the rock ──
     UNITY_BRANCH
     if (up * (sediment + organic + trodden) > 0.01h)

@@ -3315,7 +3315,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// front square to its street there (the street's own bend), set back a little more or less, turned a hair, a few
 			/// paces between neighbours; on a market town's or village's streets a plot kept behind it.
 			/// </summary>
-			private void Fronts()
+			private void Fronts(bool retry = true)
 			{
 				var frontages = new List<Front>();
 				foreach (Way way in plazaFronts)
@@ -3452,6 +3452,12 @@ namespace FishMMO.Shared.WorldDesign
 						laid.PlotBox = Plot(bestAt, bestNormal, bestYaw, size);
 					}
 					fronted.Add(laid);
+				}
+				// The forward cursors skip gaps that do not fit the current building. Revisit
+				// them once for remaining, smaller pieces without moving anything already laid.
+				if (retry && order.Exists(i => !laidItems.Contains(i)))
+				{
+					Fronts(false);
 				}
 			}
 

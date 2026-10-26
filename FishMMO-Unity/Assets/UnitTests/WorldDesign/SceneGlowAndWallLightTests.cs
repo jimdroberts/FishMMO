@@ -254,9 +254,18 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void Flicker_ReachesOnlyACrystalThatFlickers_AndNoneDoesYet()
 		{
+			// Since 2026-10-26 (NEW-CRYSTALS) the drafts' flickering kinds exist (stormglass and eight more), but no biome grows one
+			// before its round: none of the first ten flickers, and no biome's crystals hold one.
 			foreach (CaveMineral mineral in ProceduralArtCatalogue.CaveMinerals)
 			{
-				Assert.That(mineral.Flickers, Is.False, $"{mineral.Kind}: no kind flickers before its biome's round (stormglass)");
+				Assert.That(mineral.Flickers && (int)mineral.Kind < 10, Is.False, $"{mineral.Kind}: the first ten never flicker");
+			}
+			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
+			{
+				foreach (BiomeCaveCrystal crystal in entry.CaveCrystals())
+				{
+					Assert.That(ProceduralArtCatalogue.CaveMineralOf(crystal.Kind).Flickers, Is.False, $"{entry.Biome} grows {crystal.Kind}, which flickers, before its round");
+				}
 			}
 			string site = Code("PointsOfInterest/PointOfInterestSiteContext.cs");
 			Assert.That(site, Does.Contain("seed = SceneGlow.WithFlicker(seed, cradled && postMineral.Flickers);"), "the bit always written on a glow");

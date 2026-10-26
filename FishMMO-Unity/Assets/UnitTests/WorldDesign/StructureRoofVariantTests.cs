@@ -566,7 +566,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void TheGlowAndThePalette_AreHashedWithTheStructures()
 		{
-			Assert.That(ProceduralArtPayload.ForeignSources, Is.EquivalentTo(new[] { "SceneGlow.cs", "BiomeStructurePalette.cs" }));
+			Assert.That(ProceduralArtPayload.ForeignSources, Is.EquivalentTo(new[] { "SceneGlow.cs", "BiomeStructurePalette.cs", "CaveCoverTypes.cs" }));
 			foreach (string file in ProceduralArtPayload.ForeignSources)
 			{
 				Assert.That(ProceduralArtFamilies.FamiliesOfFile(file), Is.EqualTo(new[] { ArtFamily.Structures }), file);

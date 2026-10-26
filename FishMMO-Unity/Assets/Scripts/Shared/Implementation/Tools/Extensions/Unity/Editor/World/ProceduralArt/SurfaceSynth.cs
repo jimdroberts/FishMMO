@@ -32,6 +32,10 @@ namespace FishMMO.Shared.WorldDesign
 		Clumps,
 		/// <summary>Noise drawn out along one axis: bark furrows, peat fibres, cactus ribs.</summary>
 		Fibres,
+		/// <summary>Periglacial frost-crack polygons: a network of dark cracks, the ground between them bulging a little (decision 25).</summary>
+		Polygons,
+		/// <summary>Sorted stone circles: fine soil in the middle of each cell, a ring of coarse stones heaved out to its border (decision 25).</summary>
+		SortedCircles,
 	}
 
 	/// <summary>
@@ -364,6 +368,39 @@ namespace FishMMO.Shared.WorldDesign
 					height = Mathf.Clamp01(furrow * furrow);
 					colour = Mathf.Clamp01(1f - furrow * 1.3f);
 					tint = n;
+					break;
+				}
+				case SurfaceMotif.Polygons:
+				{
+					// Ice wedges open a network of cracks; the polygon between them stands a little proud, falling to a trough at the crack.
+					float wu = u + ProceduralNoise.PeriodicFbm(u, v, cells * 2, 3, 0.5f, seed + 371) * 0.18f / cells;
+					float wv = v + ProceduralNoise.PeriodicFbm(u, v, cells * 2, 3, 0.5f, seed + 372) * 0.18f / cells;
+					ProceduralNoise.Cell c = ProceduralNoise.PeriodicCellular(wu, wv, cells, 0.75f, seed + 373);
+					float edge = c.F2 - c.F1;
+					float width = Mathf.Max(0.01f, r.MotifSize);
+					float crack = 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(edge / width));
+					float dome = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(edge / Mathf.Max(0.25f, width * 8f)));
+					float grain = ProceduralNoise.PeriodicFbm(u, v, cells * 6, 2, 0.5f, seed + 374) * 0.06f;
+					height = Mathf.Clamp01(0.3f + dome * 0.45f * (0.85f + 0.15f * ProceduralNoise.ToUnit(c.Id)) - crack * 0.3f + grain);
+					colour = crack;
+					tint = ProceduralNoise.ToUnit(c.Id) * 2f - 1f;
+					break;
+				}
+				case SurfaceMotif.SortedCircles:
+				{
+					// The frost sorts the ground: fines domed in the middle, the coarse stones shoved out into a ring at the border.
+					float wu = u + ProceduralNoise.PeriodicFbm(u, v, cells * 2, 3, 0.5f, seed + 381) * 0.2f / cells;
+					float wv = v + ProceduralNoise.PeriodicFbm(u, v, cells * 2, 3, 0.5f, seed + 382) * 0.2f / cells;
+					ProceduralNoise.Cell circle = ProceduralNoise.PeriodicCellular(wu, wv, cells, 0.6f, seed + 383);
+					float ring = 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((circle.F2 - circle.F1) / Mathf.Max(0.05f, r.MotifSize)));
+					// The ring's stones: a finer cellular field of rounded clasts, only where the ring is.
+					ProceduralNoise.Cell stone = ProceduralNoise.PeriodicCellular(u, v, cells * 6, 0.9f, seed + 384);
+					float stones = ring * Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((stone.F2 - stone.F1) / 0.25f));
+					float centre = Mathf.Clamp01(1f - circle.F1 * 0.8f);
+					float grain = ProceduralNoise.PeriodicFbm(u, v, cells * 10, 2, 0.5f, seed + 385) * 0.05f;
+					height = Mathf.Clamp01(0.3f + centre * 0.2f * (1f - ring) + Mathf.Sqrt(stones) * 0.45f + grain);
+					colour = Mathf.Clamp01(stones * 1.2f);
+					tint = ProceduralNoise.ToUnit(stone.Id) * 2f - 1f;
 					break;
 				}
 				default:

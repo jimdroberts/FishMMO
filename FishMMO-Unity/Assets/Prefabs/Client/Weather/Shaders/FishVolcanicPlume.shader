@@ -8,6 +8,10 @@
 //     they entrain air, evaporating as they reach the length the air lets them be seen (SteamPhysics)
 //   5 a geyser's water column: every drop on its own parabola, launched at the speed the eruption had
 //     when it left the vent (GeothermalVents.ColumnEnvelope), so the column grows and sinks without a scrub
+//   6 a frost collar (2026-10-25, I2q-b, decision 84): flakes lying flat on the ground in a ring round an airless
+//     fume jet's lip, where its gas freezes out (GeothermalSteamPresenter)
+//   7 a curtain of fire (2026-10-25, I2r, decision 65 (d)): incandescent lava clots thrown up along a stretch of a fissure,
+//     each on its own parabola, as high as the stretch's fountain episode has it (LavaCurtains, on the shared clock)
 // The motion is VolcanicPlume's (Shared/Weather), the same functions the weather's ash falls by; the
 // steam's and the geyser's are SteamPhysics' and GeothermalVents'.
 // No geometry or compute shaders, so it runs the same on WebGPU, WebGL2 and desktop.
@@ -73,6 +77,11 @@ Shader "FishMMO/Weather/Volcanic Plume"
             // A geyser (population 5): ballistic x the full launch speed (m/s), y gravity, z the jet's half-angle (rad), w the launch
             // period (s, longer than any drop's flight); drift x seconds since the eruption began, y its length (s), z the wind on
             // the spray (m/s, along lean.zw); rise x a drop puff's size (m).
+            // A frost collar (population 6): rise x the ring's inner radius (m), y its outer radius, z a flake's size (m).
+            // A curtain of fire (population 7): vent the stretch's start on the ground, lean xy its run to the end (XZ m), z the
+            // end's rise (m); ballistic x the launch speed (m/s), y gravity, z the widest tilt off the vertical across the line (rad),
+            // w the clots' fixed flight period (s, divides the wrap).
+            // rise x a clot's size (m).
 
             struct Attributes
             {
@@ -117,6 +126,7 @@ Shader "FishMMO/Weather/Volcanic Plume"
                 float shade = 1.0;
                 float glow = 0.0;
                 float2 sideways = float2(0.0, 0.0);
+                bool flat = false;
 
                 // The layer this puff is in, how far into its window, and the period it holds: the weights
                 // sin² and cos² of the same angle add to one, so the two layers together never thin.
@@ -272,6 +282,42 @@ Shader "FishMMO/Weather/Volcanic Plume"
                     alpha = smoothstep(0.0, 0.04, u) * (1.0 - smoothstep(0.96, 1.0, u));
                     glow = pow(saturate(1.0 - u * 8.0), 2.0);
                 }
+                else if (population == 6)
+                {
+                    // A frost collar: still flakes lying on the ground in a ring round the lip, densest at its inner edge.
+                    float inner = _PlumeRise.x;
+                    float outer = max(inner + 0.05, _PlumeRise.y);
+                    float reach = lerp(inner, outer, r.x * r.x);
+                    float phi = r.y * TAU;
+                    centre = vent + float3(cos(phi) * reach, 0.04 + 0.02 * r.z, sin(phi) * reach);
+                    size = _PlumeRise.z * (0.6 + 0.8 * r.z);
+                    alpha = 1.0 - smoothstep(0.6, 1.0, (reach - inner) / (outer - inner));
+                    shade = 0.95;
+                    flat = true;
+                }
+                else if (population == 7)
+                {
+                    // A curtain of fire: each clot launched from its own place along the stretch, tilted across the line, on a
+                    // drag-free parabola (the clots are fist-sized and heavy), glowing as it flies and dulling as it cools.
+                    float3 start = vent + float3(_PlumeLean.x, _PlumeLean.z, _PlumeLean.y) * r.x;
+                    float2 run = _PlumeLean.xy;
+                    float2 side = dot(run, run) > 1e-6 ? normalize(float2(-run.y, run.x)) : float2(1.0, 0.0);
+                    float tilt = (r.z * 2.0 - 1.0) * _PlumeBallistic.z;
+                    float v = _PlumeBallistic.x * (0.55 + 0.45 * sqrt(frac(r.w * 3.71)));
+                    float g = max(0.01, _PlumeBallistic.y);
+                    float flight = max(0.1, 2.0 * v * cos(tilt) / g);
+                    // Each clot's place in its flight runs on a FIXED period (ballistic w, a whole divisor of the clock's wrap), and
+                    // its flight is scaled to the episode's height: as the fountain rises and dies the arcs grow and shrink, they never
+                    // scrub (a flight time read off the changing speed would whirl every clot as the episode ramps).
+                    float u = frac(t / max(0.1, _PlumeBallistic.w) + frac(r.w * 7.31 + r.y));
+                    float since = u * flight;
+                    float outward = v * sin(tilt) * since;
+                    float up = v * cos(tilt) * since - 0.5 * g * since * since;
+                    centre = start + float3(side.x * outward, up, side.y * outward);
+                    size = _PlumeRise.x * (0.6 + 0.8 * frac(r.y * 5.3));
+                    alpha = smoothstep(0.0, 0.03, u) * (1.0 - smoothstep(0.97, 1.0, u));
+                    glow = 1.0 - 0.55 * u;
+                }
                 else
                 {
                     output.positionCS = float4(0.0, 0.0, 0.0, 1.0);
@@ -288,6 +334,15 @@ Shader "FishMMO/Weather/Volcanic Plume"
                 float3 right = UNITY_MATRIX_V[0].xyz;
                 float3 upward = UNITY_MATRIX_V[1].xyz;
                 float3 worldPos = centre + right * (input.corner.x - 0.5) * size + upward * (input.corner.y - 0.5) * size * stretch;
+                if (flat)
+                {
+                    // Lying on the ground, turned by its own draw so the flakes do not line up.
+                    float turn = r.w * TAU;
+                    float2 c = float2(input.corner.x - 0.5, input.corner.y - 0.5) * size;
+                    worldPos = centre + float3(c.x * cos(turn) - c.y * sin(turn), 0.0, c.x * sin(turn) + c.y * cos(turn));
+                    // Seen edge-on it is nothing; the camera-inside fade above is no matter for a flake on the ground.
+                    alpha *= saturate(abs(view.y) * 4.0 + 0.15);
+                }
 
                 /* Lit as a cloud of grains: the sky round it, and the sun — brighter looking toward it,
                  * which is how ash and dust scatter — on the column's sunward side and the umbrella's top,

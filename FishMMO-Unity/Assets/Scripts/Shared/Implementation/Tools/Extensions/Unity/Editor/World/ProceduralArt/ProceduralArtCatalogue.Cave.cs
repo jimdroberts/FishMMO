@@ -94,6 +94,57 @@ namespace FishMMO.Shared.WorldDesign
 		Nodules,
 		/// <summary>Broad tabular blades with chisel tips bursting from a lump of scoria (sunstone).</summary>
 		Blades,
+		// 2026-10-26 (NEW-CRYSTALS, decision 34): the habits the biome drafts name, each its own builder in CaveGlowMeshes.Habits.cs.
+		/// <summary>Grape clusters: bunches of overlapping domes crusting a lump of rock (malachite, smithsonite, hyalite).</summary>
+		Botryoidal,
+		/// <summary>Twins: pairs of flattened prisms joined in a V (Japan-law quartz), and v3 crossed through each other (staurolite).</summary>
+		Twinned,
+		/// <summary>Helictites: curling wire-thin filaments sprouting every way, against gravity.</summary>
+		Helix,
+		/// <summary>Massive: squat irregular many-sided columns with low tops fused in a lump (chalcopyrite).</summary>
+		Massive,
+		/// <summary>Coralloid: knobbly branching sprays (flos-ferri aragonite).</summary>
+		Coralloid,
+		/// <summary>Foliated: books of thin hexagonal plates stacked and fanned (orpiment, specular hematite).</summary>
+		Foliated,
+		/// <summary>Fibrous: sheaves of near-parallel needles fanning from a waist (satin spar, stilbite's bow-ties).</summary>
+		Fibrous,
+		/// <summary>Rosettes: thin rounded petals set about a centre every way, as a desert rose's.</summary>
+		Rosette,
+		/// <summary>Octahedra on a lump of rock, some on a face, some on a point (spinel, alum, pink fluorite).</summary>
+		Octahedral,
+		/// <summary>Bipyramids: double-ended pointed crystals with a short waist (zircon, native sulphur), v3 long four-sided spindles.</summary>
+		Bipyramid,
+		/// <summary>Dendrites: fern-branched six-armed plates fanned off the rock (sublimation hoar), v3 single feathered fronds.</summary>
+		Dendrite,
+		/// <summary>Pearls: polished spheres nested in a shallow rimstone cup (cave pearls).</summary>
+		Pearls,
+		/// <summary>Floss: soft hair-thin tufts and curls over a crust (cave cotton, thenardite).</summary>
+		Floss,
+		/// <summary>Cups: hollow hexagonal cups, open ends up and out (depth hoar), v3 in nested chains.</summary>
+		Cupped,
+		/// <summary>Barrels: hexagonal crystals swelling at the middle and tapering to flat ends (sapphire).</summary>
+		Barrel,
+		/// <summary>Stars: rays radiating every way from a centre (sixling stars, ikaite), v3 flat seven-rayed stars.</summary>
+		Stellate,
+		/// <summary>Droplets: rounded teardrops with pointed tails, standing and lying (tektite splash-forms, tear-glass).</summary>
+		Droplet,
+		/// <summary>Rhombohedra: skewed six-faced crystals (Iceland spar, cinnabar, siderite).</summary>
+		Rhomb,
+		/// <summary>Tabular: thin flat plates stood on edge and intergrown (barite, ilmenite, hydrohalite).</summary>
+		Tabular,
+		/// <summary>Radiating: sprays of fine needles from a point (wollastonite, phillipsite), v2 a flat fan.</summary>
+		Radiating,
+		/// <summary>Leaves: thin curved translucent leaf-shaped plates fanned from a root.</summary>
+		Leaf,
+		/// <summary>Rhombic dodecahedra half sunk in rock (garnet, hauyne).</summary>
+		Dodecahedral,
+		/// <summary>Trapezohedra: twenty-four-faced near-round crystals (leucite, analcime).</summary>
+		Trapezohedral,
+		/// <summary>Trapiche: hexagonal prisms whose sections show six dark spokes round a dark core (trapiche emerald).</summary>
+		Trapiche,
+		/// <summary>Matrix: nodules sunk in a big host lump and veins crossing it (turquoise, lapis), v3 a seam through it.</summary>
+		Matrix,
 	}
 
 	/// <summary>
@@ -131,6 +182,26 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>Whether it glows by its own material (its emission).</summary>
 		public bool Glows => !Formation && Hue.Emission.maxColorComponent > 0f;
+	}
+
+	/// <summary>
+	/// A biome's own look of a cave crystal kind other biomes grow too (2026-10-26, NEW-CRYSTALS; decisions 12, 97): one kind,
+	/// each biome its own habit and colour, chosen by <see cref="BiomeCaveCrystal.Look"/> — not a second kind. Its light, glow
+	/// and flicker are the kind's; it is always built in its own habit (a formation kind's look too), its own material and prefabs.
+	/// </summary>
+	public struct CaveMineralLook
+	{
+		public BiomeCaveCrystalKind Kind;
+		/// <summary>Its number among the kind's looks (<see cref="BiomeCaveCrystal.Look"/>), 1 on; append-only within a kind.</summary>
+		public byte Look;
+		/// <summary>Its name in generated paths: <c>Cave_Mineral_Obsidian_Rossa_1</c>.</summary>
+		public string Name;
+		/// <summary>The biome (its asset name, "Permanent Ice") whose spec takes this look when it names the kind (BiomeArtSpec.Entry.CaveCrystals); null: chosen by hand only.</summary>
+		public string Biome;
+		public CaveMineralHabit Habit;
+		public Color Albedo;
+		public float Smoothness, Metallic;
+		public string Description;
 	}
 
 	/// <summary>One colour (or ore) a kind of glow art is made in.</summary>
@@ -428,12 +499,533 @@ namespace FishMMO.Shared.WorldDesign
 			new CaveMineral { Kind = BiomeCaveCrystalKind.Sunstone, Habit = CaveMineralHabit.Blades, Lit = true, LightHue = 3,
 				Hue = new CaveGlowHue { Name = "Sunstone", Albedo = new Color(0.95f, 0.56f, 0.24f), Emission = new Color(1.6f, 0.62f, 0.16f), Smoothness = 0.78f, Light = new Color(1f, 0.6f, 0.28f), EmitterHue = 3 },
 				Description = "Sunstone (fantasy, volcanic): broad tabular blades of orange-gold crystal alight like embers, bursting from scoria." },
+			// 2026-10-26 (NEW-CRYSTALS, decision 34): every kind the biome drafts name, colours from the drafts, in kind order. The
+			// fantasy kinds glow (a cold glow but where a draft says warm; the warm tint itself is the biome's glow mode, I6i);
+			// Flickers where the draft says flicker, twinkle, sparkle or dart. Sulphur needles are the sulphur Crystals formation.
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Phillipsite, Habit = CaveMineralHabit.Radiating, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Phillipsite", Albedo = new Color(0.941f, 0.925f, 0.894f), Smoothness = 0.86f, EmitterHue = -1 },
+				Description = "Phillipsite (AbyssalPlain): colourless-white zeolite prism sprays and cruciform twins on red clay." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Lodeheart, Habit = CaveMineralHabit.Geode, Lit = true, LightHue = 1,
+				Hue = new CaveGlowHue { Name = "Lodeheart", Albedo = new Color(0.173f, 0.165f, 0.18f), Smoothness = 0.8f, Emission = new Color(0.55f, 1.082f, 1.01f), Light = new Color(0.478f, 0.941f, 0.878f), EmitterHue = 1 },
+				Description = "Lodeheart (fantasy, AbyssalPlain): a split manganese nodule, concentric black rings round a pale aquamarine core that glows." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.FireIce, Habit = CaveMineralHabit.Botryoidal, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "FireIce", Albedo = new Color(0.925f, 0.894f, 0.769f), Smoothness = 0.55f, EmitterHue = -1 },
+				Description = "FireIce (Abyss): methane hydrate: translucent yellow-white waxy cauliflower masses." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Hadalite, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 0,
+				Hue = new CaveGlowHue { Name = "Hadalite", Albedo = new Color(0.102f, 0.078f, 0.188f), Smoothness = 0.9f, Emission = new Color(0.478f, 0.406f, 1.15f), Light = new Color(0.416f, 0.353f, 1f), EmitterHue = 0 },
+				Description = "Hadalite (fantasy, Abyss): violet-black prisms with a slow cold heartbeat glow." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Gwindel, Habit = CaveMineralHabit.Prisms, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Gwindel", Albedo = new Color(0.91f, 0.933f, 0.941f), Smoothness = 0.93f, EmitterHue = -1 },
+				Description = "Gwindel (Alpine): water-clear twisted rock-crystal prism fans with smoky cores." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.PinkFluorite, Habit = CaveMineralHabit.Octahedral, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "PinkFluorite", Albedo = new Color(0.91f, 0.627f, 0.722f), Smoothness = 0.82f, EmitterHue = -1 },
+				Description = "PinkFluorite (Alpine): rose octahedra on milky quartz." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Starfrost, Habit = CaveMineralHabit.Stellate, Lit = true, LightHue = 0, Flickers = true,
+				Hue = new CaveGlowHue { Name = "Starfrost", Albedo = new Color(0.925f, 0.918f, 1f), Smoothness = 0.9f, Emission = new Color(0.902f, 0.884f, 1.15f), Light = new Color(0.784f, 0.769f, 1f), EmitterHue = 0 },
+				Description = "Starfrost (fantasy, Alpine): frost-white six-rayed star clusters that twinkle cold silver-violet." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Stibnite, Habit = CaveMineralHabit.Radiating, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Stibnite", Albedo = new Color(0.416f, 0.431f, 0.455f), Smoothness = 0.85f, Metallic = 0.8f, EmitterHue = -1 },
+				Description = "Stibnite (AlpineMeadow): steel-grey metallic needle sprays with a blue tarnish." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Rhodochrosite, Habit = CaveMineralHabit.Rhomb, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Rhodochrosite", Albedo = new Color(0.753f, 0.188f, 0.353f), Smoothness = 0.8f, EmitterHue = -1 },
+				Description = "Rhodochrosite (AlpineMeadow): raspberry-red rhombs banded with white on quartz." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Stormglass, Habit = CaveMineralHabit.Pearls, Lit = true, LightHue = 1, Flickers = true,
+				Hue = new CaveGlowHue { Name = "Stormglass", Albedo = new Color(0.541f, 0.541f, 0.659f), Smoothness = 0.88f, Emission = new Color(0.902f, 0.992f, 1.15f), Light = new Color(0.784f, 0.863f, 1f), EmitterHue = 1 },
+				Description = "Stormglass (fantasy, AlpineMeadow): smoky violet-grey spheres full of cloud, threads of lightning flickering blue-white in them." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.FireOpal, Habit = CaveMineralHabit.Nodules, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "FireOpal", Albedo = new Color(0.878f, 0.353f, 0.102f), Smoothness = 0.9f, EmitterHue = -1 },
+				Description = "FireOpal (Badlands): orange-red jelly nodules in vesicles, flashing a play of colour." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Perilight, Habit = CaveMineralHabit.Botryoidal, Lit = true, LightHue = 2,
+				Hue = new CaveGlowHue { Name = "Perilight", Albedo = new Color(0.91f, 0.941f, 0.878f), Smoothness = 0.86f, Emission = new Color(0.866f, 1.082f, 0.577f), Light = new Color(0.753f, 0.941f, 0.502f), EmitterHue = 2 },
+				Description = "Perilight (fantasy, Badlands): water-clear botryoidal hyalite crusts glowing cold green-gold." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Twinquartz, Habit = CaveMineralHabit.Twinned, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Twinquartz", Albedo = new Color(0.933f, 0.949f, 0.949f), Smoothness = 0.93f, EmitterHue = -1 },
+				Description = "Twinquartz (BambooForest): Japan-law twins: flat heart-shaped V-paired quartz plates, water-clear." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Jadeite, Habit = CaveMineralHabit.Nodules, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Jadeite", Albedo = new Color(0.541f, 0.753f, 0.541f), Smoothness = 0.7f, EmitterHue = -1 },
+				Description = "Jadeite (BambooForest): white to apple-green waxy jade nodules." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Hotarubi, Habit = CaveMineralHabit.Druse, Lit = true, LightHue = 2,
+				Hue = new CaveGlowHue { Name = "Hotarubi", Albedo = new Color(0.902f, 0.941f, 0.847f), Smoothness = 0.88f, Emission = new Color(0.938f, 1.082f, 0.433f), Light = new Color(0.816f, 0.941f, 0.376f), EmitterHue = 2 },
+				Description = "Hotarubi (fantasy, BambooForest): firefly-glass: a clear druse full of drifting yellow-green pinpoints." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Aragonite, Habit = CaveMineralHabit.Radiating, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Aragonite", Albedo = new Color(0.949f, 0.925f, 0.878f), Smoothness = 0.7f, EmitterHue = -1 },
+				Description = "Aragonite (Beach, Farmland): sea-cave needle sprays, cream-white and satin (Farmland's own look: flos-ferri coralloid sprays)." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Pearlspar, Habit = CaveMineralHabit.Tabular, Lit = true, LightHue = 0,
+				Hue = new CaveGlowHue { Name = "Pearlspar", Albedo = new Color(0.941f, 0.91f, 0.941f), Smoothness = 0.92f, Emission = new Color(1.046f, 0.974f, 1.15f), Light = new Color(0.91f, 0.847f, 1f), EmitterHue = 0 },
+				Description = "Pearlspar (fantasy, Beach): nacreous iridescent plates with a pastel shimmer." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Galena, Habit = CaveMineralHabit.Cubes, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Galena", Albedo = new Color(0.416f, 0.431f, 0.455f), Smoothness = 0.85f, Metallic = 0.9f, EmitterHue = -1 },
+				Description = "Galena (Castle): lead-silver metallic cubes on white calcite." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Chalcopyrite, Habit = CaveMineralHabit.Massive, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Chalcopyrite", Albedo = new Color(0.722f, 0.604f, 0.251f), Smoothness = 0.8f, Metallic = 0.85f, EmitterHue = -1 },
+				Description = "Chalcopyrite (Castle): brassy masses with a peacock tarnish." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Wyrmglass, Habit = CaveMineralHabit.Bipyramid, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Wyrmglass", Albedo = new Color(0.925f, 0.922f, 0.894f), Smoothness = 0.88f, Emission = new Color(1.15f, 1.082f, 0.866f), Light = new Color(1f, 0.941f, 0.753f), EmitterHue = 3 },
+				Description = "Wyrmglass (fantasy, Castle): milk-white translucent spindles each with a coiled serpent-shaped inclusion, glowing white-gold." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.BlueJohn, Habit = CaveMineralHabit.Nodules, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "BlueJohn", Albedo = new Color(0.29f, 0.165f, 0.416f), Smoothness = 0.7f, EmitterHue = -1 },
+				Description = "BlueJohn (Cave): Castleton banded fluorite: nodules banded purple-blue and honey-yellow." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Helictite, Habit = CaveMineralHabit.Helix, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Helictite", Albedo = new Color(0.957f, 0.941f, 0.91f), Smoothness = 0.6f, EmitterHue = -1 },
+				Description = "Helictite (Cave): calcite that grows against gravity: curling wire filaments, white-translucent with clear tips." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Echospar, Habit = CaveMineralHabit.Rhomb, Lit = true, LightHue = 1,
+				Hue = new CaveGlowHue { Name = "Echospar", Albedo = new Color(0.933f, 0.957f, 1f), Smoothness = 0.95f, Emission = new Color(0.974f, 1.046f, 1.15f), Light = new Color(0.847f, 0.91f, 1f), EmitterHue = 1 },
+				Description = "Echospar (fantasy, Cave): optical calcite rhombs, water-clear with a doubled image and a faint cold blue-white glow." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Cassiterite, Habit = CaveMineralHabit.Twinned, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Cassiterite", Albedo = new Color(0.165f, 0.118f, 0.086f), Smoothness = 0.9f, Metallic = 0.3f, EmitterHue = -1 },
+				Description = "Cassiterite (CoastalWater): Cornish tinstone: black-brown adamantine stubby prisms and knee twins." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Bellspar, Habit = CaveMineralHabit.Cupped, Lit = true, LightHue = 0,
+				Hue = new CaveGlowHue { Name = "Bellspar", Albedo = new Color(0.29f, 0.227f, 0.659f), Smoothness = 0.88f, Emission = new Color(0.622f, 0.55f, 1.15f), Light = new Color(0.541f, 0.478f, 1f), EmitterHue = 0 },
+				Description = "Bellspar (fantasy, CoastalWater): violet-blue hollow prisms that ring like drowned bells." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Apatite, Habit = CaveMineralHabit.Prisms, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Apatite", Albedo = new Color(0.227f, 0.604f, 0.541f), Smoothness = 0.86f, EmitterHue = -1 },
+				Description = "Apatite (CoralReef): sea-green glassy hexagonal prisms on a cream phosphorite crust." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Lagoonglass, Habit = CaveMineralHabit.Blades, Lit = true, LightHue = 1,
+				Hue = new CaveGlowHue { Name = "Lagoonglass", Albedo = new Color(0.227f, 0.784f, 0.753f), Smoothness = 0.88f, Emission = new Color(0.289f, 1.01f, 0.938f), Light = new Color(0.251f, 0.878f, 0.816f), EmitterHue = 1 },
+				Description = "Lagoonglass (fantasy, CoralReef): turquoise blades that hold the lagoon's light." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Tektite, Habit = CaveMineralHabit.Droplet, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Tektite", Albedo = new Color(0.118f, 0.165f, 0.086f), Smoothness = 0.9f, EmitterHue = -1 },
+				Description = "Tektite (Crater): bottle-green to black glass splash-forms with sculpted pitted skins." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Starglass, Habit = CaveMineralHabit.Shards, Lit = true, LightHue = 0,
+				Hue = new CaveGlowHue { Name = "Starglass", Albedo = new Color(0.086f, 0.078f, 0.11f), Smoothness = 0.95f, Emission = new Color(0.902f, 0.83f, 1.15f), Light = new Color(0.784f, 0.722f, 1f), EmitterHue = 0 },
+				Description = "Starglass (fantasy, Crater): black glass blades shot with violet-white star-points." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.SalAmmoniac, Habit = CaveMineralHabit.Cubes, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "SalAmmoniac", Albedo = new Color(0.973f, 0.949f, 0.847f), Smoothness = 0.6f, EmitterHue = -1 },
+				Description = "SalAmmoniac (CryovolcanicPlain, SulphurFlats): skeletal hopper cubes and feathers, white to cream (Sulphur Flats' own look: feathery fronds)." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Eitrglass, Habit = CaveMineralHabit.Blades, Lit = true, LightHue = 2,
+				Hue = new CaveGlowHue { Name = "Eitrglass", Albedo = new Color(0.165f, 0.816f, 0.627f), Smoothness = 0.86f, Emission = new Color(0.55f, 1.15f, 0.938f), Light = new Color(0.478f, 1f, 0.816f), EmitterHue = 2 },
+				Description = "Eitrglass (fantasy, CryovolcanicPlain): translucent teal blades with a sloshing liquid-venom core." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Dogtooth, Habit = CaveMineralHabit.Bipyramid, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Dogtooth", Albedo = new Color(0.847f, 0.69f, 0.439f), Smoothness = 0.9f, EmitterHue = -1 },
+				Description = "Dogtooth (DeepOcean, Grassland): calcite scalenohedra in vugs: honey to water-clear spearheads (Grassland's own look: in loess-doll geodes)." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Stellamaris, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 1, Flickers = true,
+				Hue = new CaveGlowHue { Name = "Stellamaris", Albedo = new Color(0.878f, 0.925f, 1f), Smoothness = 0.92f, Emission = new Color(0.758f, 0.902f, 1.15f), Light = new Color(0.659f, 0.784f, 1f), EmitterHue = 1 },
+				Description = "Stellamaris (fantasy, DeepOcean): blue-white clear prisms each holding one twinkling pinpoint of light." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Malachite, Habit = CaveMineralHabit.Botryoidal, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Malachite", Albedo = new Color(0.165f, 0.478f, 0.29f), Smoothness = 0.6f, EmitterHue = -1 },
+				Description = "Malachite (Desert): banded green botryoidal crusts with azurite-blue spots." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Sunglass, Habit = CaveMineralHabit.Nodules, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Sunglass", Albedo = new Color(0.91f, 0.878f, 0.627f), Smoothness = 0.75f, Emission = new Color(1.082f, 1.01f, 0.722f), Light = new Color(0.941f, 0.878f, 0.627f), EmitterHue = 3 },
+				Description = "Sunglass (fantasy, Desert): pale lemon-green translucent desert-glass lumps with frosted skins, glowing warm." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Ilmenite, Habit = CaveMineralHabit.Tabular, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Ilmenite", Albedo = new Color(0.165f, 0.165f, 0.188f), Smoothness = 0.8f, Metallic = 0.6f, EmitterHue = -1 },
+				Description = "Ilmenite (DustSea): black tabular plates with a bronze-steel sheen." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Phaseglass, Habit = CaveMineralHabit.Blades, Lit = true, LightHue = 1,
+				Hue = new CaveGlowHue { Name = "Phaseglass", Albedo = new Color(0.863f, 0.902f, 0.957f), Smoothness = 0.88f, Emission = new Color(0.902f, 0.974f, 1.15f), Light = new Color(0.784f, 0.847f, 1f), EmitterHue = 1 },
+				Description = "Phaseglass (fantasy, DustSea): milky blue-white blades whose glow follows the moon." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Vivianite, Habit = CaveMineralHabit.Radiating, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Vivianite", Albedo = new Color(0.165f, 0.416f, 0.541f), Smoothness = 0.85f, EmitterHue = -1 },
+				Description = "Vivianite (Estuary, PeatBog): marsh-clay phosphate: radiating blue-green blades darkening to indigo (Peat Bog's own look: deep blue-green blades round buried bone)." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Ebbspar, Habit = CaveMineralHabit.Rhomb, Lit = true, LightHue = 2,
+				Hue = new CaveGlowHue { Name = "Ebbspar", Albedo = new Color(0.875f, 0.91f, 0.878f), Smoothness = 0.92f, Emission = new Color(0.622f, 1.01f, 0.902f), Light = new Color(0.541f, 0.878f, 0.784f), EmitterHue = 2 },
+				Description = "Ebbspar (fantasy, Estuary): water-clear rhombs with a grey-green heart whose glow follows the tide." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Celestine, Habit = CaveMineralHabit.Tabular, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Celestine", Albedo = new Color(0.722f, 0.816f, 0.91f), Smoothness = 0.85f, EmitterHue = -1 },
+				Description = "Celestine (Farmland): pale sky-blue tabular blades with a pearly lustre." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Fogpearl, Habit = CaveMineralHabit.Pearls, Lit = true, LightHue = 1,
+				Hue = new CaveGlowHue { Name = "Fogpearl", Albedo = new Color(0.941f, 0.941f, 0.925f), Smoothness = 0.8f, Emission = new Color(1.01f, 1.064f, 1.15f), Light = new Color(0.878f, 0.925f, 1f), EmitterHue = 1 },
+				Description = "Fogpearl (fantasy, Farmland): nests of cave pearls in gour pools with a pearl-white breathing glow." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Cinnabar, Habit = CaveMineralHabit.Rhomb, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Cinnabar", Albedo = new Color(0.69f, 0.125f, 0.102f), Smoothness = 0.88f, EmitterHue = -1 },
+				Description = "Cinnabar (ForestRuins): vermilion rhombohedral crystals on white dolomite, adamantine." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Farrstone, Habit = CaveMineralHabit.Bipyramid, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Farrstone", Albedo = new Color(0.941f, 0.753f, 0.251f), Smoothness = 0.88f, Emission = new Color(1.15f, 1.082f, 0.722f), Light = new Color(1f, 0.941f, 0.627f), EmitterHue = 3 },
+				Description = "Farrstone (fantasy, ForestRuins): the kings' radiance: honey-gold bipyramids glowing with a slow warm pulse." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Realgar, Habit = CaveMineralHabit.Prisms, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Realgar", Albedo = new Color(0.784f, 0.188f, 0.102f), Smoothness = 0.75f, EmitterHue = -1 },
+				Description = "Realgar (Fortress): scarlet-orange resinous prisms on white calcite." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Orpiment, Habit = CaveMineralHabit.Foliated, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Orpiment", Albedo = new Color(0.91f, 0.753f, 0.251f), Smoothness = 0.7f, EmitterHue = -1 },
+				Description = "Orpiment (Fortress): lemon-gold foliated masses, pearly." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Dalistone, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Dalistone", Albedo = new Color(0.941f, 0.91f, 0.816f), Smoothness = 0.85f, Emission = new Color(1.082f, 0.974f, 0.649f), Light = new Color(0.941f, 0.847f, 0.565f), EmitterHue = 3 },
+				Description = "Dalistone (fantasy, Fortress): pale honey-white prisms curved like a tur's horn, breathing a warm glow." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.IcelandSpar, Habit = CaveMineralHabit.Rhomb, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "IcelandSpar", Albedo = new Color(0.957f, 0.925f, 0.847f), Smoothness = 0.95f, EmitterHue = -1 },
+				Description = "IcelandSpar (GeyserBasin): clear colourless rhombohedra with a faint honey tint and a doubled image." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Stilbite, Habit = CaveMineralHabit.Fibrous, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Stilbite", Albedo = new Color(0.91f, 0.69f, 0.596f), Smoothness = 0.7f, EmitterHue = -1 },
+				Description = "Stilbite (GeyserBasin): peach-salmon bow-tie sheaves with white sprays in basalt vugs." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Solarsteinn, Habit = CaveMineralHabit.Rhomb, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Solarsteinn", Albedo = new Color(0.957f, 0.941f, 0.878f), Smoothness = 0.93f, Emission = new Color(1.15f, 1.082f, 0.902f), Light = new Color(1f, 0.941f, 0.784f), EmitterHue = 3 },
+				Description = "Solarsteinn (fantasy, GeyserBasin): sunstone spar rhombs whose white-gold glow brightens on the faces turned toward the sun." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.CupHoar, Habit = CaveMineralHabit.Cupped, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "CupHoar", Albedo = new Color(0.933f, 0.957f, 0.98f), Smoothness = 0.8f, EmitterHue = -1 },
+				Description = "CupHoar (Glacier): hollow hexagonal depth-hoar cups, glittering." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Nagamani, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 2,
+				Hue = new CaveGlowHue { Name = "Nagamani", Albedo = new Color(0.878f, 0.957f, 0.941f), Smoothness = 0.92f, Emission = new Color(0.478f, 1.01f, 0.866f), Light = new Color(0.416f, 0.878f, 0.753f), EmitterHue = 2 },
+				Description = "Nagamani (fantasy, Glacier): water-clear prisms with a sea-green core that glows." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Skyglass, Habit = CaveMineralHabit.Shards, Lit = true, LightHue = 1,
+				Hue = new CaveGlowHue { Name = "Skyglass", Albedo = new Color(0.659f, 0.816f, 0.941f), Smoothness = 0.9f, Emission = new Color(0.649f, 0.902f, 1.15f), Light = new Color(0.565f, 0.784f, 1f), EmitterHue = 1 },
+				Description = "Skyglass (fantasy, Grassland): the sky's tears: pale-blue clear shards with a soft glow." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Turquoise, Habit = CaveMineralHabit.Matrix, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Turquoise", Albedo = new Color(0.29f, 0.69f, 0.659f), Smoothness = 0.5f, EmitterHue = -1 },
+				Description = "Turquoise (HighDesert): sky-blue to green nuggets and spider-web veins in brown limonite." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Gueststar, Habit = CaveMineralHabit.Shards, Lit = true, LightHue = 1, Flickers = true,
+				Hue = new CaveGlowHue { Name = "Gueststar", Albedo = new Color(0.933f, 0.949f, 1f), Smoothness = 0.9f, Emission = new Color(0.902f, 0.992f, 1.15f), Light = new Color(0.784f, 0.863f, 1f), EmitterHue = 1 },
+				Description = "Gueststar (fantasy, HighDesert): frost-white shard sprays each with one burning blue-white point that twinkles." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Garnet, Habit = CaveMineralHabit.Dodecahedral, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Garnet", Albedo = new Color(0.478f, 0.102f, 0.133f), Smoothness = 0.85f, EmitterHue = -1 },
+				Description = "Garnet (Hills): wine-red almandine dodecahedra in schist." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Staurolite, Habit = CaveMineralHabit.Twinned, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Staurolite", Albedo = new Color(0.416f, 0.29f, 0.196f), Smoothness = 0.5f, EmitterHue = -1 },
+				Description = "Staurolite (Hills): fairy crosses: brown cross-twinned prisms." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Heartgarnet, Habit = CaveMineralHabit.Dodecahedral, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Heartgarnet", Albedo = new Color(0.541f, 0.063f, 0.125f), Smoothness = 0.88f, Emission = new Color(1.15f, 0.216f, 0.289f), Light = new Color(1f, 0.188f, 0.251f), EmitterHue = 3 },
+				Description = "Heartgarnet (fantasy, Hills): the moura's heart: a deep-red garnet glowing from within with a slow heartbeat." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Hoarfeather, Habit = CaveMineralHabit.Dendrite, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Hoarfeather", Albedo = new Color(0.957f, 0.973f, 0.988f), Smoothness = 0.8f, EmitterHue = -1 },
+				Description = "Hoarfeather (IceCave): giant sublimation hoar: fern-branched six-armed plates, white-translucent." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Cryocalcite, Habit = CaveMineralHabit.Nodules, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Cryocalcite", Albedo = new Color(0.902f, 0.839f, 0.706f), Smoothness = 0.55f, EmitterHue = -1 },
+				Description = "Cryocalcite (IceCave): pearly cream-to-amber spherule clusters on melted-out ice." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Chudfire, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Chudfire", Albedo = new Color(0.91f, 0.941f, 0.973f), Smoothness = 0.92f, Emission = new Color(1.15f, 0.794f, 0.361f), Light = new Color(1f, 0.69f, 0.314f), EmitterHue = 3 },
+				Description = "Chudfire (fantasy, IceCave): a clear ice prism with a frozen gold-orange flame inside." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Hydrohalite, Habit = CaveMineralHabit.Tabular, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Hydrohalite", Albedo = new Color(0.933f, 0.973f, 1f), Smoothness = 0.9f, EmitterHue = -1 },
+				Description = "Hydrohalite (IceGeyserField): water-clear to pale-blue platy prisms of a salt that forms only below freezing." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Hyalite, Habit = CaveMineralHabit.Botryoidal, Lit = true, LightHue = 2,
+				Hue = new CaveGlowHue { Name = "Hyalite", Albedo = new Color(0.91f, 0.957f, 0.933f), Smoothness = 0.9f, Emission = new Color(0.713f, 1.15f, 0.902f), Light = new Color(0.62f, 1f, 0.784f), EmitterHue = 2 },
+				Description = "Hyalite (fantasy, IceGeyserField): water-clear beaded opal crusts glowing cold green." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Nightpearl, Habit = CaveMineralHabit.Pearls, Lit = true, LightHue = 0,
+				Hue = new CaveGlowHue { Name = "Nightpearl", Albedo = new Color(0.965f, 0.933f, 0.949f), Smoothness = 0.9f, Emission = new Color(1.082f, 0.974f, 1.15f), Light = new Color(0.941f, 0.847f, 1f), EmitterHue = 0 },
+				Description = "Nightpearl (fantasy, IcePalace): luminous pearls nested in nacre-lined ice cups, a pink-lilac sheen." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.ScythianEmerald, Habit = CaveMineralHabit.Prisms, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "ScythianEmerald", Albedo = new Color(0.118f, 0.478f, 0.29f), Smoothness = 0.9f, EmitterHue = -1 },
+				Description = "ScythianEmerald (IceRuin): deep green beryl hexagonal prisms in white quartz." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Hornice, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 1,
+				Hue = new CaveGlowHue { Name = "Hornice", Albedo = new Color(0.659f, 0.784f, 0.91f), Smoothness = 0.9f, Emission = new Color(0.866f, 0.992f, 1.15f), Light = new Color(0.753f, 0.863f, 1f), EmitterHue = 1 },
+				Description = "Hornice (fantasy, IceSheet): blue ice prisms with horn-like growth rings, glowing with the wind." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Jadeice, Habit = CaveMineralHabit.Prisms, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Jadeice", Albedo = new Color(0.165f, 0.416f, 0.29f), Smoothness = 0.85f, EmitterHue = -1 },
+				Description = "Jadeice (IceShelf): bottle-green banded marine-ice prisms." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Swellglass, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 2,
+				Hue = new CaveGlowHue { Name = "Swellglass", Albedo = new Color(0.541f, 0.816f, 0.722f), Smoothness = 0.9f, Emission = new Color(0.695f, 1.082f, 0.938f), Light = new Color(0.604f, 0.941f, 0.816f), EmitterHue = 2 },
+				Description = "Swellglass (fantasy, IceShelf): sea-green glass prisms that brighten and dim with the swell." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Chrysolite, Habit = CaveMineralHabit.Nodules, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Chrysolite", Albedo = new Color(0.29f, 0.416f, 0.141f), Smoothness = 0.85f, EmitterHue = -1 },
+				Description = "Chrysolite (ImpactBasin): olivine, the medieval chrysolite: bottle-green granular nodules." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.MansionPearl, Habit = CaveMineralHabit.Nodules, Lit = true, LightHue = 1,
+				Hue = new CaveGlowHue { Name = "MansionPearl", Albedo = new Color(0.933f, 0.941f, 0.918f), Smoothness = 0.85f, Emission = new Color(1.006f, 1.046f, 1.15f), Light = new Color(0.875f, 0.91f, 1f), EmitterHue = 1 },
+				Description = "MansionPearl (fantasy, ImpactBasin): milky nacre-white nodules each lit on its own mansion night." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.WatermelonTourmaline, Habit = CaveMineralHabit.Prisms, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "WatermelonTourmaline", Albedo = new Color(0.878f, 0.353f, 0.541f), Smoothness = 0.88f, EmitterHue = -1 },
+				Description = "WatermelonTourmaline (Jungle): striated prisms, a pink core in a green rind, in white pegmatite." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Leafglass, Habit = CaveMineralHabit.Leaf, Lit = true, LightHue = 2,
+				Hue = new CaveGlowHue { Name = "Leafglass", Albedo = new Color(0.416f, 0.816f, 0.416f), Smoothness = 0.86f, Emission = new Color(0.622f, 1.082f, 0.55f), Light = new Color(0.541f, 0.941f, 0.478f), EmitterHue = 2 },
+				Description = "Leafglass (fantasy, Jungle): translucent leaf-green glassy plates veined like leaf skeletons." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Specularite, Habit = CaveMineralHabit.Foliated, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Specularite", Albedo = new Color(0.165f, 0.165f, 0.188f), Smoothness = 0.9f, Metallic = 0.8f, EmitterHue = -1 },
+				Description = "Specularite (JungleRuins): specular hematite: mirror-black glittering plates with a steel sheen." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Glyphjade, Habit = CaveMineralHabit.Massive, Lit = true, LightHue = 2,
+				Hue = new CaveGlowHue { Name = "Glyphjade", Albedo = new Color(0.541f, 0.784f, 0.627f), Smoothness = 0.8f, Emission = new Color(0.794f, 1.082f, 0.866f), Light = new Color(0.69f, 0.941f, 0.753f), EmitterHue = 2 },
+				Description = "Glyphjade (fantasy, JungleRuins): translucent green-white crystal with dark glyph-shaped inclusions." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Zircon, Habit = CaveMineralHabit.Bipyramid, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Zircon", Albedo = new Color(0.659f, 0.376f, 0.165f), Smoothness = 0.92f, EmitterHue = -1 },
+				Description = "Zircon (JungleTemple): stubby honey-brown bipyramids, adamantine." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Monsoonglass, Habit = CaveMineralHabit.Blades, Lit = true, LightHue = 1,
+				Hue = new CaveGlowHue { Name = "Monsoonglass", Albedo = new Color(0.604f, 0.69f, 0.753f), Smoothness = 0.86f, Emission = new Color(0.866f, 0.974f, 1.082f), Light = new Color(0.753f, 0.847f, 0.941f), EmitterHue = 1 },
+				Description = "Monsoonglass (fantasy, JungleTemple): rain-grey translucent blades with silver streaks, bright in the wet season." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Smithsonite, Habit = CaveMineralHabit.Botryoidal, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Smithsonite", Albedo = new Color(0.541f, 0.784f, 0.753f), Smoothness = 0.6f, EmitterHue = -1 },
+				Description = "Smithsonite (Karst): zinc grape-crusts in pastel teal, waxy." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Mistjade, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 2,
+				Hue = new CaveGlowHue { Name = "Mistjade", Albedo = new Color(0.604f, 0.784f, 0.69f), Smoothness = 0.82f, Emission = new Color(0.902f, 1.082f, 1.01f), Light = new Color(0.784f, 0.941f, 0.878f), EmitterHue = 2 },
+				Description = "Mistjade (fantasy, Karst): celadon prisms holding a slow white mist." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.CavePearl, Habit = CaveMineralHabit.Pearls, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "CavePearl", Albedo = new Color(0.925f, 0.902f, 0.847f), Smoothness = 0.7f, EmitterHue = -1 },
+				Description = "CavePearl (Lake): polished cream-white calcite spheres nested in rimstone cups." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Nixglass, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 1,
+				Hue = new CaveGlowHue { Name = "Nixglass", Albedo = new Color(0.416f, 0.816f, 0.784f), Smoothness = 0.95f, Emission = new Color(0.478f, 0.938f, 0.902f), Light = new Color(0.416f, 0.816f, 0.784f), EmitterHue = 1 },
+				Description = "Nixglass (fantasy, Lake): water-clear blue-green prisms that look wet, a slow ripple glow." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Thenardite, Habit = CaveMineralHabit.Floss, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Thenardite", Albedo = new Color(0.957f, 0.949f, 0.925f), Smoothness = 0.4f, EmitterHue = -1 },
+				Description = "Thenardite (LavaTube, Volcanic): cave cotton: white sulphate efflorescence crusts and hair tufts (Volcanic's own look: hair-needles on tube walls)." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.OlivineBomb, Habit = CaveMineralHabit.Nodules, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "OlivineBomb", Albedo = new Color(0.353f, 0.478f, 0.102f), Smoothness = 0.88f, EmitterHue = -1 },
+				Description = "OlivineBomb (LavaTube): bottle-green glassy olivine nodules bursting from broken basalt bombs." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Magecstone, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Magecstone", Albedo = new Color(1f, 0.941f, 0.784f), Smoothness = 0.9f, Emission = new Color(1.082f, 0.794f, 0.289f), Light = new Color(0.941f, 0.69f, 0.251f), EmitterHue = 3 },
+				Description = "Magecstone (fantasy, LavaTube): shards of the captive sun: white-gold prisms with a warm glow." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Marcasite, Habit = CaveMineralHabit.Blades, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Marcasite", Albedo = new Color(0.722f, 0.627f, 0.314f), Smoothness = 0.8f, Metallic = 0.8f, EmitterHue = -1 },
+				Description = "Marcasite (Mangrove): brassy cockscomb spear crystals with a blue-violet tarnish." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Nuru, Habit = CaveMineralHabit.Blades, Lit = true, LightHue = 1, Flickers = true,
+				Hue = new CaveGlowHue { Name = "Nuru", Albedo = new Color(0.878f, 0.933f, 0.973f), Smoothness = 0.9f, Emission = new Color(0.406f, 1.01f, 1.082f), Light = new Color(0.353f, 0.878f, 0.941f), EmitterHue = 1 },
+				Description = "Nuru (fantasy, Mangrove): milky blue-white blades that sparkle like disturbed seafire." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Simetite, Habit = CaveMineralHabit.Nodules, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Simetite", Albedo = new Color(0.541f, 0.165f, 0.102f), Smoothness = 0.85f, EmitterHue = -1 },
+				Description = "Simetite (MarblePalace): Sicilian red amber: translucent wine-red to orange nodules." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Fatastone, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 0,
+				Hue = new CaveGlowHue { Name = "Fatastone", Albedo = new Color(0.933f, 0.941f, 0.957f), Smoothness = 0.93f, Emission = new Color(1.01f, 0.974f, 1.15f), Light = new Color(0.878f, 0.847f, 1f), EmitterHue = 0 },
+				Description = "Fatastone (fantasy, MarblePalace): mirage quartz: clear prisms whose cores hold a faint moving image of towers." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Waxspar, Habit = CaveMineralHabit.Rhomb, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Waxspar", Albedo = new Color(0.957f, 0.933f, 0.863f), Smoothness = 0.5f, EmitterHue = -1 },
+				Description = "Waxspar (MethaneLake): soft waxy colourless-cream rhombs." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Adamant, Habit = CaveMineralHabit.Octahedral, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Adamant", Albedo = new Color(0.165f, 0.173f, 0.188f), Smoothness = 0.85f, Metallic = 0.7f, EmitterHue = -1 },
+				Description = "Adamant (MethaneLake): lodestone octahedra, black steel with a violet temper sheen." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Orphanstone, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Orphanstone", Albedo = new Color(0.627f, 0.094f, 0.157f), Smoothness = 0.9f, Emission = new Color(1.15f, 0.478f, 0.262f), Light = new Color(1f, 0.416f, 0.227f), EmitterHue = 3 },
+				Description = "Orphanstone (fantasy, MethaneLake): a lone wine-red carbuncle with a slow warm breath." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Cristobalite, Habit = CaveMineralHabit.Botryoidal, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Cristobalite", Albedo = new Color(0.957f, 0.957f, 0.941f), Smoothness = 0.5f, EmitterHue = -1 },
+				Description = "Cristobalite (MoltenSurface): snow-white spherule clusters in vesicles and glass." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.BrimstoneAmber, Habit = CaveMineralHabit.Nodules, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "BrimstoneAmber", Albedo = new Color(0.659f, 0.125f, 0.055f), Smoothness = 0.8f, EmitterHue = -1 },
+				Description = "BrimstoneAmber (MoltenSurface): glassy blood-red quenched-sulphur beads and crusts." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Dracontite, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Dracontite", Albedo = new Color(0.784f, 0.251f, 0.102f), Smoothness = 0.88f, Emission = new Color(1.15f, 0.505f, 0.216f), Light = new Color(1f, 0.439f, 0.188f), EmitterHue = 3 },
+				Description = "Dracontite (fantasy, MoltenSurface): a dragon's-brain stone: ember-red prisms with a star core." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Hydrophane, Habit = CaveMineralHabit.Nodules, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Hydrophane", Albedo = new Color(0.925f, 0.91f, 0.878f), Smoothness = 0.8f, EmitterHue = -1 },
+				Description = "Hydrophane (MountainSlope): milky-white to honey opal nodules with rainbow fire flecks." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Moonstone, Habit = CaveMineralHabit.Tabular, Lit = true, LightHue = 1,
+				Hue = new CaveGlowHue { Name = "Moonstone", Albedo = new Color(0.91f, 0.933f, 0.973f), Smoothness = 0.9f, Emission = new Color(0.695f, 0.83f, 1.15f), Light = new Color(0.604f, 0.722f, 1f), EmitterHue = 1 },
+				Description = "Moonstone (fantasy, MountainSlope): tabular sanidine with a drifting blue sheen." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.NitrogenSpar, Habit = CaveMineralHabit.Prisms, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "NitrogenSpar", Albedo = new Color(0.949f, 0.91f, 0.863f), Smoothness = 0.6f, EmitterHue = -1 },
+				Description = "NitrogenSpar (NitrogenIceField): hexagonal nitrogen ice, colourless-to-peach and waxy." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Tearglass, Habit = CaveMineralHabit.Droplet, Lit = true, LightHue = 1,
+				Hue = new CaveGlowHue { Name = "Tearglass", Albedo = new Color(0.91f, 0.949f, 1f), Smoothness = 0.92f, Emission = new Color(0.934f, 1.037f, 1.15f), Light = new Color(0.812f, 0.902f, 1f), EmitterHue = 1 },
+				Description = "Tearglass (fantasy, NitrogenIceField): clusters of clear teardrops with a faint breathing glow." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.DesertRose, Habit = CaveMineralHabit.Rosette, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "DesertRose", Albedo = new Color(0.784f, 0.659f, 0.533f), Smoothness = 0.3f, EmitterHue = -1 },
+				Description = "DesertRose (Oasis): sand-included gypsum rosettes, buff-pink." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Alum, Habit = CaveMineralHabit.Octahedral, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Alum", Albedo = new Color(0.949f, 0.949f, 0.933f), Smoothness = 0.8f, EmitterHue = -1 },
+				Description = "Alum (Oasis): water-clear octahedra with a white efflorescent bloom." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Oraclestone, Habit = CaveMineralHabit.Rhomb, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Oraclestone", Albedo = new Color(0.91f, 0.753f, 0.439f), Smoothness = 0.88f, Emission = new Color(1.082f, 0.866f, 0.505f), Light = new Color(0.941f, 0.753f, 0.439f), EmitterHue = 3 },
+				Description = "Oraclestone (fantasy, Oasis): honey-gold translucent calcite holding a ram-horn spiral, glowing warm at dusk." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Siderite, Habit = CaveMineralHabit.Rhomb, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Siderite", Albedo = new Color(0.659f, 0.471f, 0.227f), Smoothness = 0.75f, EmitterHue = -1 },
+				Description = "Siderite (Ocean): iron spar: honey-brown saddle rhombs on cream ankerite." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.GalernaStone, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "GalernaStone", Albedo = new Color(0.353f, 0.29f, 0.416f), Smoothness = 0.88f, Emission = new Color(1.046f, 0.577f, 0.262f), Light = new Color(0.91f, 0.502f, 0.227f), EmitterHue = 3 },
+				Description = "GalernaStone (fantasy, Ocean): smoky storm-violet quartz prisms with an ember core that brightens as the wind rises." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Wispglass, Habit = CaveMineralHabit.Nodules, Lit = true, LightHue = 2, Flickers = true,
+				Hue = new CaveGlowHue { Name = "Wispglass", Albedo = new Color(0.847f, 0.91f, 0.69f), Smoothness = 0.85f, Emission = new Color(0.902f, 1.082f, 0.505f), Light = new Color(0.784f, 0.941f, 0.439f), EmitterHue = 2 },
+				Description = "Wispglass (fantasy, PeatBog): pale green-gold nodules with a slow flickering glow." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Stillglass, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 1,
+				Hue = new CaveGlowHue { Name = "Stillglass", Albedo = new Color(0.933f, 0.957f, 0.973f), Smoothness = 0.94f, Emission = new Color(0.974f, 1.064f, 1.15f), Light = new Color(0.847f, 0.925f, 1f), EmitterHue = 1 },
+				Description = "Stillglass (fantasy, PermanentIce): clear prisms each holding a water drop or snowflake stopped mid-fall, a steady glow." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.BariteRose, Habit = CaveMineralHabit.Rosette, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "BariteRose", Albedo = new Color(0.541f, 0.29f, 0.188f), Smoothness = 0.3f, EmitterHue = -1 },
+				Description = "BariteRose (Plains): rose-rock rosettes, reddish-brown with sand-dusted petals." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.SatinSpar, Habit = CaveMineralHabit.Fibrous, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "SatinSpar", Albedo = new Color(0.957f, 0.941f, 0.91f), Smoothness = 0.75f, EmitterHue = -1 },
+				Description = "SatinSpar (Plains): silky white fibrous gypsum veins with a chatoyant sheen." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Sunspoke, Habit = CaveMineralHabit.Radiating, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Sunspoke", Albedo = new Color(0.957f, 0.925f, 0.847f), Smoothness = 0.9f, Emission = new Color(1.082f, 0.866f, 0.289f), Light = new Color(0.941f, 0.753f, 0.251f), EmitterHue = 3 },
+				Description = "Sunspoke (fantasy, Plains): clear quartz shot through with golden needles radiating like wheel spokes, glowing warm gold." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Antozonite, Habit = CaveMineralHabit.Cubes, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Antozonite", Albedo = new Color(0.165f, 0.102f, 0.227f), Smoothness = 0.8f, EmitterHue = -1 },
+				Description = "Antozonite (RadiationPlain): the fetid spar: fluorite darkened to violet-black with violet edges." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Septentrion, Habit = CaveMineralHabit.Stellate, Lit = true, LightHue = 1,
+				Hue = new CaveGlowHue { Name = "Septentrion", Albedo = new Color(0.933f, 0.949f, 1f), Smoothness = 0.9f, Emission = new Color(0.974f, 1.028f, 1.15f), Light = new Color(0.847f, 0.894f, 1f), EmitterHue = 1 },
+				Description = "Septentrion (fantasy, RadiationPlain): seven-rayed star clusters of clear white crystal." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Balas, Habit = CaveMineralHabit.Octahedral, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Balas", Albedo = new Color(0.769f, 0.416f, 0.478f), Smoothness = 0.9f, EmitterHue = -1 },
+				Description = "Balas (RegolithPlain): the medieval balas ruby: pink spinel octahedra." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Levanite, Habit = CaveMineralHabit.Blades, Lit = true, LightHue = 0,
+				Hue = new CaveGlowHue { Name = "Levanite", Albedo = new Color(0.353f, 0.329f, 0.408f), Smoothness = 0.86f, Emission = new Color(0.902f, 0.866f, 0.992f), Light = new Color(0.784f, 0.753f, 0.863f), EmitterHue = 0 },
+				Description = "Levanite (fantasy, RegolithPlain): smoky violet-grey bladed prisms bright at sunrise and sunset." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Sapphire, Habit = CaveMineralHabit.Barrel, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Sapphire", Albedo = new Color(0.165f, 0.227f, 0.541f), Smoothness = 0.92f, EmitterHue = -1 },
+				Description = "Sapphire (Rille): deep cornflower corundum barrels tapering both ends." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Shamirspar, Habit = CaveMineralHabit.Blades, Lit = true, LightHue = 0,
+				Hue = new CaveGlowHue { Name = "Shamirspar", Albedo = new Color(0.91f, 0.925f, 0.957f), Smoothness = 0.94f, Emission = new Color(0.974f, 0.902f, 1.15f), Light = new Color(0.847f, 0.784f, 1f), EmitterHue = 0 },
+				Description = "Shamirspar (fantasy, Rille): clear blades split clean as glass, a violet-white band sliding along each." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Agate, Habit = CaveMineralHabit.Geode, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Agate", Albedo = new Color(0.541f, 0.596f, 0.659f), Smoothness = 0.7f, EmitterHue = -1 },
+				Description = "Agate (River): banded chalcedony geodes, grey-blue, rust and milk round a rock-crystal core." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.RhinegoldSeam, Habit = CaveMineralHabit.Matrix, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "RhinegoldSeam", Albedo = new Color(0.847f, 0.659f, 0.22f), Smoothness = 0.85f, Emission = new Color(1.082f, 0.866f, 0.361f), Light = new Color(0.941f, 0.753f, 0.314f), EmitterHue = 3 },
+				Description = "RhinegoldSeam (fantasy, River): old-gold threads in milky quartz, a warm shimmer like light through moving water." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Kyanite, Habit = CaveMineralHabit.Blades, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Kyanite", Albedo = new Color(0.353f, 0.541f, 0.784f), Smoothness = 0.8f, EmitterHue = -1 },
+				Description = "Kyanite (RockyCoast): sky-blue bladed sprays in white quartz pods." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Haarglass, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 2,
+				Hue = new CaveGlowHue { Name = "Haarglass", Albedo = new Color(0.541f, 0.784f, 0.69f), Smoothness = 0.75f, Emission = new Color(0.722f, 1.046f, 0.902f), Light = new Color(0.627f, 0.91f, 0.784f), EmitterHue = 2 },
+				Description = "Haarglass (fantasy, RockyCoast): finfolk glass: frosted sea-green prisms holding a drowned light." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Lajvard, Habit = CaveMineralHabit.Matrix, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Lajvard", Albedo = new Color(0.118f, 0.227f, 0.541f), Smoothness = 0.6f, EmitterHue = -1 },
+				Description = "Lajvard (RockyTerrain): lapis lazuli: deep ultramarine veins and nodules flecked with gold pyrite." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Shabchiragh, Habit = CaveMineralHabit.Octahedral, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Shabchiragh", Albedo = new Color(0.784f, 0.188f, 0.29f), Smoothness = 0.9f, Emission = new Color(1.15f, 0.478f, 0.55f), Light = new Color(1f, 0.416f, 0.478f), EmitterHue = 3 },
+				Description = "Shabchiragh (fantasy, RockyTerrain): the night-lamp gem: rose-red spinel octahedra glowing warm after sunset." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Wollastonite, Habit = CaveMineralHabit.Radiating, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Wollastonite", Albedo = new Color(0.941f, 0.933f, 0.91f), Smoothness = 0.6f, EmitterHue = -1 },
+				Description = "Wollastonite (RunawayGreenhousePlain): white silky radiating sprays." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Pyrrhotite, Habit = CaveMineralHabit.Tabular, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Pyrrhotite", Albedo = new Color(0.541f, 0.416f, 0.227f), Smoothness = 0.8f, Metallic = 0.8f, EmitterHue = -1 },
+				Description = "Pyrrhotite (RunawayGreenhousePlain): bronze-brown metallic hexagonal plates." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Sibylleaf, Habit = CaveMineralHabit.Leaf, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Sibylleaf", Albedo = new Color(0.816f, 0.251f, 0.353f), Smoothness = 0.86f, Emission = new Color(1.046f, 0.722f, 0.361f), Light = new Color(0.91f, 0.627f, 0.314f), EmitterHue = 3 },
+				Description = "Sibylleaf (fantasy, RunawayGreenhousePlain): thin curved translucent crimson-amber leaves." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Halite, Habit = CaveMineralHabit.Cubes, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Halite", Albedo = new Color(0.957f, 0.925f, 0.925f), Smoothness = 0.7f, EmitterHue = -1 },
+				Description = "Halite (SaltFlat): water-clear to pale pink hopper cubes." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Sylvite, Habit = CaveMineralHabit.Cubes, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Sylvite", Albedo = new Color(0.784f, 0.376f, 0.227f), Smoothness = 0.6f, EmitterHue = -1 },
+				Description = "Sylvite (SaltFlat): translucent brick-red cubes." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Embersalt, Habit = CaveMineralHabit.Cubes, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Embersalt", Albedo = new Color(0.91f, 0.627f, 0.478f), Smoothness = 0.7f, Emission = new Color(1.15f, 0.794f, 0.577f), Light = new Color(1f, 0.69f, 0.502f), EmitterHue = 3 },
+				Description = "Embersalt (fantasy, SaltFlat): amber-rose cubes with a warm glow from dusk." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Reefgold, Habit = CaveMineralHabit.Prisms, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Reefgold", Albedo = new Color(0.91f, 0.878f, 0.784f), Smoothness = 0.85f, Metallic = 0.2f, EmitterHue = -1 },
+				Description = "Reefgold (Savanna): milky quartz prisms with leafy native gold on their faces." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Emerald, Habit = CaveMineralHabit.Prisms, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Emerald", Albedo = new Color(0.102f, 0.541f, 0.29f), Smoothness = 0.9f, EmitterHue = -1 },
+				Description = "Emerald (Savanna): deep green hexagonal prisms in black schist." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Rainglass, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 2,
+				Hue = new CaveGlowHue { Name = "Rainglass", Albedo = new Color(0.416f, 0.816f, 0.69f), Smoothness = 0.9f, Emission = new Color(0.622f, 1.082f, 0.938f), Light = new Color(0.541f, 0.941f, 0.816f), EmitterHue = 2 },
+				Description = "Rainglass (fantasy, Savanna): blue-green prisms that brighten with the rain." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Goblinfire, Habit = CaveMineralHabit.Druse, Lit = true, LightHue = 2, Flickers = true,
+				Hue = new CaveGlowHue { Name = "Goblinfire", Albedo = new Color(0.541f, 0.816f, 0.753f), Smoothness = 0.88f, Emission = new Color(0.478f, 1.082f, 0.866f), Light = new Color(0.416f, 0.941f, 0.753f), EmitterHue = 2 },
+				Description = "Goblinfire (fantasy, Scree): blue-green cold crystals whose glow hops from point to point." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Peridot, Habit = CaveMineralHabit.Nodules, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Peridot", Albedo = new Color(0.416f, 0.541f, 0.165f), Smoothness = 0.85f, EmitterHue = -1 },
+				Description = "Peridot (Scrubland): olive-green glassy grains in black basalt bombs." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Sunshell, Habit = CaveMineralHabit.Rosette, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Sunshell", Albedo = new Color(0.91f, 0.847f, 0.722f), Smoothness = 0.88f, Emission = new Color(1.082f, 0.866f, 0.577f), Light = new Color(0.941f, 0.753f, 0.502f), EmitterHue = 3 },
+				Description = "Sunshell (fantasy, Scrubland): an iridescent spiral shell-crystal glowing warm after sunset." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Lapastone, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 1, Flickers = true,
+				Hue = new CaveGlowHue { Name = "Lapastone", Albedo = new Color(0.878f, 0.925f, 0.973f), Smoothness = 0.93f, Emission = new Color(0.861f, 1.01f, 1.15f), Light = new Color(0.749f, 0.878f, 1f), EmitterHue = 1 },
+				Description = "Lapastone (fantasy, Seamount): water-clear blue-white prisms through which pale threads of light dart." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Analcime, Habit = CaveMineralHabit.Trapezohedral, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Analcime", Albedo = new Color(0.925f, 0.918f, 0.902f), Smoothness = 0.85f, EmitterHue = -1 },
+				Description = "Analcime (Seamount): water-clear to milky zeolite trapezohedra from pillow vesicles." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Rutilquartz, Habit = CaveMineralHabit.Prisms, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Rutilquartz", Albedo = new Color(0.941f, 0.933f, 0.902f), Smoothness = 0.93f, EmitterHue = -1 },
+				Description = "Rutilquartz (Snow): Venus hair: water-clear prisms pierced by golden needles." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.MidwinterSpar, Habit = CaveMineralHabit.Blades, Lit = true, LightHue = 0,
+				Hue = new CaveGlowHue { Name = "MidwinterSpar", Albedo = new Color(0.541f, 0.478f, 0.659f), Smoothness = 0.88f, Emission = new Color(1.01f, 0.974f, 1.15f), Light = new Color(0.878f, 0.847f, 1f), EmitterHue = 0 },
+				Description = "MidwinterSpar (fantasy, Snow): smoke-violet bladed spar with a white core, brightest in the polar night." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Dioptase, Habit = CaveMineralHabit.Rhomb, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Dioptase", Albedo = new Color(0.039f, 0.541f, 0.416f), Smoothness = 0.9f, EmitterHue = -1 },
+				Description = "Dioptase (Steppe): vivid emerald-green rhombohedral prisms on white quartz." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.WolfsEye, Habit = CaveMineralHabit.Nodules, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "WolfsEye", Albedo = new Color(0.353f, 0.227f, 0.125f), Smoothness = 0.85f, Emission = new Color(0.974f, 0.722f, 0.289f), Light = new Color(0.847f, 0.627f, 0.251f), EmitterHue = 3 },
+				Description = "WolfsEye (fantasy, Steppe): smoky-amber chatoyant chalcedony nodules with a moving bright eye." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Covellite, Habit = CaveMineralHabit.Tabular, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Covellite", Albedo = new Color(0.165f, 0.165f, 0.478f), Smoothness = 0.85f, Metallic = 0.6f, EmitterHue = -1 },
+				Description = "Covellite (SubsurfaceOceanVent): indigo-blue iridescent hexagonal plates." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Anhydrite, Habit = CaveMineralHabit.Blades, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Anhydrite", Albedo = new Color(0.91f, 0.878f, 0.925f), Smoothness = 0.6f, EmitterHue = -1 },
+				Description = "Anhydrite (SubsurfaceOceanVent): white-lilac bladed prisms." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Gledstone, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Gledstone", Albedo = new Color(0.227f, 0.039f, 0.024f), Smoothness = 0.88f, Emission = new Color(1.15f, 0.406f, 0.117f), Light = new Color(1f, 0.353f, 0.102f), EmitterHue = 3 },
+				Description = "Gledstone (fantasy, SubsurfaceOceanVent): ember-red sulphide prisms glowing at night." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.NativeSulphur, Habit = CaveMineralHabit.Bipyramid, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "NativeSulphur", Albedo = new Color(0.91f, 0.753f, 0.188f), Smoothness = 0.7f, EmitterHue = -1 },
+				Description = "NativeSulphur (SulphurFlats): lemon-amber translucent bipyramids, resinous." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Bluebrim, Habit = CaveMineralHabit.Bipyramid, Lit = true, LightHue = 1, Flickers = true,
+				Hue = new CaveGlowHue { Name = "Bluebrim", Albedo = new Color(0.91f, 0.816f, 0.314f), Smoothness = 0.75f, Emission = new Color(0.334f, 0.541f, 1.15f), Light = new Color(0.29f, 0.471f, 1f), EmitterHue = 1 },
+				Description = "Bluebrim (fantasy, SulphurFlats): sulphur bipyramids holding a flickering cold blue flame." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Leadfeather, Habit = CaveMineralHabit.Dendrite, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Leadfeather", Albedo = new Color(0.541f, 0.549f, 0.573f), Smoothness = 0.8f, Metallic = 0.8f, EmitterHue = -1 },
+				Description = "Leadfeather (SulphuricCloudDeck): dendritic metal-frost feathers, lead-silver." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Pyrite, Habit = CaveMineralHabit.Cubes, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Pyrite", Albedo = new Color(0.784f, 0.659f, 0.251f), Smoothness = 0.85f, Metallic = 0.9f, EmitterHue = -1 },
+				Description = "Pyrite (SulphuricCloudDeck, Swamp): brass striated cube druses (Swamp's own look: pyrite suns in black shale)." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Cloudheart, Habit = CaveMineralHabit.Pearls, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Cloudheart", Albedo = new Color(0.91f, 0.847f, 0.627f), Smoothness = 0.8f, Emission = new Color(1.082f, 1.019f, 0.758f), Light = new Color(0.941f, 0.886f, 0.659f), EmitterHue = 3 },
+				Description = "Cloudheart (fantasy, SulphuricCloudDeck): milk-saffron translucent spheroids, brighter as the deck sinks." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Mireopal, Habit = CaveMineralHabit.Nodules, Lit = true, LightHue = 2,
+				Hue = new CaveGlowHue { Name = "Mireopal", Albedo = new Color(0.604f, 0.753f, 0.722f), Smoothness = 0.85f, Emission = new Color(0.55f, 0.866f, 0.794f), Light = new Color(0.478f, 0.753f, 0.69f), EmitterHue = 2 },
+				Description = "Mireopal (fantasy, Swamp): milky green-indigo opal nodules with a slow drifting inner glow." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Aetite, Habit = CaveMineralHabit.Geode, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Aetite", Albedo = new Color(0.416f, 0.227f, 0.102f), Smoothness = 0.3f, EmitterHue = -1 },
+				Description = "Aetite (SwampCave): eagle-stone: hollow limonite geodes, a powdery ochre hollow round a loose core." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.BollasEye, Habit = CaveMineralHabit.Nodules, Lit = true, LightHue = 2,
+				Hue = new CaveGlowHue { Name = "BollasEye", Albedo = new Color(0.541f, 0.604f, 0.227f), Smoothness = 0.85f, Emission = new Color(1.082f, 1.118f, 0.794f), Light = new Color(0.941f, 0.973f, 0.69f), EmitterHue = 2 },
+				Description = "BollasEye (fantasy, SwampCave): chatoyant honey-green ovoids with one slit of light across." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Hauyne, Habit = CaveMineralHabit.Dodecahedral, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Hauyne", Albedo = new Color(0.118f, 0.29f, 0.753f), Smoothness = 0.85f, EmitterHue = -1 },
+				Description = "Hauyne (SwampRuins): sapphire-blue small dodecahedra in pale pumice." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Leucite, Habit = CaveMineralHabit.Trapezohedral, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Leucite", Albedo = new Color(0.925f, 0.91f, 0.878f), Smoothness = 0.7f, EmitterHue = -1 },
+				Description = "Leucite (SwampRuins): white glassy trapezohedra in grey lava." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Saeculite, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Saeculite", Albedo = new Color(0.541f, 0.416f, 0.227f), Smoothness = 0.85f, Emission = new Color(1.046f, 0.902f, 0.577f), Light = new Color(0.91f, 0.784f, 0.502f), EmitterHue = 3 },
+				Description = "Saeculite (fantasy, SwampRuins): the ages: a smoky-honey prism of ten bands, one lit a day." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.TrapicheEmerald, Habit = CaveMineralHabit.Trapiche, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "TrapicheEmerald", Albedo = new Color(0.118f, 0.478f, 0.227f), Smoothness = 0.85f, EmitterHue = -1 },
+				Description = "TrapicheEmerald (SwampTemple): green beryl prisms whose sections show a six-spoked black star." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Mistberyl, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 2,
+				Hue = new CaveGlowHue { Name = "Mistberyl", Albedo = new Color(0.816f, 0.91f, 0.847f), Smoothness = 0.85f, Emission = new Color(0.974f, 1.118f, 1.01f), Light = new Color(0.847f, 0.973f, 0.878f), EmitterHue = 2 },
+				Description = "Mistberyl (fantasy, SwampTemple): pale green-white translucent columns, brighter as the mist thickens." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Quicksilver, Habit = CaveMineralHabit.Rhomb, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Quicksilver", Albedo = new Color(0.784f, 0.8f, 0.824f), Smoothness = 0.95f, Metallic = 1f, EmitterHue = -1 },
+				Description = "Quicksilver (TholinPlain): mercury frozen solid: mirror-bright rhombohedra." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Hazeamber, Habit = CaveMineralHabit.Botryoidal, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Hazeamber", Albedo = new Color(0.722f, 0.353f, 0.094f), Smoothness = 0.85f, Emission = new Color(1.082f, 0.722f, 0.325f), Light = new Color(0.941f, 0.627f, 0.282f), EmitterHue = 3 },
+				Description = "Hazeamber (fantasy, TholinPlain): polymerised haze: translucent orange botryoids glowing warm at night." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Epsomite, Habit = CaveMineralHabit.Radiating, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Epsomite", Albedo = new Color(0.957f, 0.965f, 0.949f), Smoothness = 0.6f, EmitterHue = -1 },
+				Description = "Epsomite (TidalFracture): clear needles with rust-stained roots." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Sakhrastone, Habit = CaveMineralHabit.Tabular, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Sakhrastone", Albedo = new Color(0.416f, 0.055f, 0.11f), Smoothness = 0.88f, Emission = new Color(0.902f, 0.18f, 0.271f), Light = new Color(0.784f, 0.157f, 0.235f), EmitterHue = 3 },
+				Description = "Sakhrastone (fantasy, TidalFracture): dust of the Rock: deep ruby tabular plates glowing cold ruby." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Labradorite, Habit = CaveMineralHabit.Blades, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Labradorite", Albedo = new Color(0.165f, 0.227f, 0.29f), Smoothness = 0.85f, EmitterHue = -1 },
+				Description = "Labradorite (Tundra): dark grey blades with a blue-green-gold schiller flash." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Aurorite, Habit = CaveMineralHabit.Shards, Lit = true, LightHue = 2,
+				Hue = new CaveGlowHue { Name = "Aurorite", Albedo = new Color(0.627f, 0.91f, 0.753f), Smoothness = 0.9f, Emission = new Color(0.361f, 1.082f, 0.722f), Light = new Color(0.314f, 0.941f, 0.627f), EmitterHue = 2 },
+				Description = "Aurorite (fantasy, Tundra): glassy shards glowing a slow green-to-violet shift." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Ikaite, Habit = CaveMineralHabit.Stellate, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Ikaite", Albedo = new Color(0.941f, 0.925f, 0.878f), Smoothness = 0.5f, EmitterHue = -1 },
+				Description = "Ikaite (UnderwaterCanyon): cold-seafloor carbonate: chalky-white spiky stellate clusters (its own look: brown-grey glendonite pseudomorphs)." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Tremorspar, Habit = CaveMineralHabit.Blades, Lit = true, LightHue = 0,
+				Hue = new CaveGlowHue { Name = "Tremorspar", Albedo = new Color(0.541f, 0.478f, 0.604f), Smoothness = 0.8f, Emission = new Color(0.902f, 0.83f, 1.01f), Light = new Color(0.784f, 0.722f, 0.878f), EmitterHue = 0 },
+				Description = "Tremorspar (fantasy, UnderwaterCanyon): smoky-lavender porcelain blades flaring with the canyon's tremors." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Demantoid, Habit = CaveMineralHabit.Dodecahedral, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Demantoid", Albedo = new Color(0.227f, 0.627f, 0.251f), Smoothness = 0.92f, EmitterHue = -1 },
+				Description = "Demantoid (Valley): vivid emerald-green garnet dodecahedra in serpentine, with rainbow fire." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Sphene, Habit = CaveMineralHabit.Twinned, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Sphene", Albedo = new Color(0.659f, 0.627f, 0.251f), Smoothness = 0.9f, EmitterHue = -1 },
+				Description = "Sphene (Valley): titanite: flat wedge envelope twins, honey-green, adamantine." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Laurinite, Habit = CaveMineralHabit.Rosette, Lit = true, LightHue = 0,
+				Hue = new CaveGlowHue { Name = "Laurinite", Albedo = new Color(0.91f, 0.541f, 0.659f), Smoothness = 0.86f, Emission = new Color(1.15f, 0.722f, 0.866f), Light = new Color(1f, 0.627f, 0.753f), EmitterHue = 0 },
+				Description = "Laurinite (fantasy, Valley): the rose garden's roses: rose-pink crystal rosettes of curved petals with a soft rose glow." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.SulphurNeedles, Formation = true, FormationRock = RockTypes.Sulphur.Name, FormationShape = "Crystals", LightHue = -1,
+				Description = "SulphurNeedles (Volcanic Cave): lemon sulphur needles in vugs, the sulphur Crystals formation the rock art already makes (no art of its own, no light)." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Smokestone, Habit = CaveMineralHabit.Shards, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Smokestone", Albedo = new Color(0.078f, 0.071f, 0.086f), Smoothness = 0.97f, EmitterHue = -1 },
+				Description = "Smokestone (VolcanicCave): obsidian mirror-shards under whose gloss a slow smoke curls." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Hearthglass, Habit = CaveMineralHabit.Shards, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Hearthglass", Albedo = new Color(0.227f, 0.063f, 0.031f), Smoothness = 0.92f, Emission = new Color(1.15f, 0.433f, 0.144f), Light = new Color(1f, 0.376f, 0.125f), EmitterHue = 3 },
+				Description = "Hearthglass (fantasy, Volcanic): ember-red glass shards with a molten core." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Hieratite, Habit = CaveMineralHabit.Octahedral, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Hieratite", Albedo = new Color(0.925f, 0.918f, 0.894f), Smoothness = 0.7f, EmitterHue = -1 },
+				Description = "Hieratite (VolcanicTemple): white-to-grey fluosilicate crusts and tiny octahedra with a faint lilac cast." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Forgeheart, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Forgeheart", Albedo = new Color(0.784f, 0.416f, 0.102f), Smoothness = 0.86f, Emission = new Color(1.15f, 0.622f, 0.216f), Light = new Color(1f, 0.541f, 0.188f), EmitterHue = 3 },
+				Description = "Forgeheart (fantasy, VolcanicTemple): ember-orange prisms with an anvil-dark core." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Goethite, Habit = CaveMineralHabit.Botryoidal, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Goethite", Albedo = new Color(0.102f, 0.086f, 0.071f), Smoothness = 0.85f, Metallic = 0.4f, EmitterHue = -1 },
+				Description = "Goethite (Wasteland): black botryoidal iron crust with an iridescent skin." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Weepglass, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 3,
+				Hue = new CaveGlowHue { Name = "Weepglass", Albedo = new Color(0.29f, 0.251f, 0.22f), Smoothness = 0.9f, Emission = new Color(1.15f, 0.289f, 0.216f), Light = new Color(1f, 0.251f, 0.188f), EmitterHue = 3 },
+				Description = "Weepglass (fantasy, Wasteland): smoky quartz points with a red drop of light at the tip after sunset." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Carnelian, Habit = CaveMineralHabit.Nodules, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "Carnelian", Albedo = new Color(0.784f, 0.314f, 0.118f), Smoothness = 0.75f, EmitterHue = -1 },
+				Description = "Carnelian (Wetlands): translucent orange-red chalcedony nodules and banded geode halves." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.Abzulite, Habit = CaveMineralHabit.Prisms, Lit = true, LightHue = 1,
+				Hue = new CaveGlowHue { Name = "Abzulite", Albedo = new Color(0.165f, 0.541f, 0.784f), Smoothness = 0.9f, Emission = new Color(0.478f, 0.938f, 1.01f), Light = new Color(0.416f, 0.816f, 0.878f), EmitterHue = 1 },
+				Description = "Abzulite (fantasy, Wetlands): deep sweet-water-blue prisms with a slow inner tide." },
+			new CaveMineral { Kind = BiomeCaveCrystalKind.FlintGeode, Habit = CaveMineralHabit.Geode, LightHue = -1,
+				Hue = new CaveGlowHue { Name = "FlintGeode", Albedo = new Color(0.784f, 0.816f, 0.878f), Smoothness = 0.8f, EmitterHue = -1 },
+				Description = "FlintGeode (Woodland): hollow flint lined with chalcedony and drusy quartz." },
 		};
 
 		/// <summary>The catalogue's entry for a kind (a kind past the table is selenite's).</summary>
 		public static CaveMineral CaveMineralOf(BiomeCaveCrystalKind kind) => (int)kind < CaveMinerals.Length ? CaveMinerals[(int)kind] : CaveMinerals[0];
 
-		/// <summary>The habits the catalogue's own-built kinds use, each once, in habit order.</summary>
+		/// <summary>The habits the catalogue's own-built kinds and looks use, each once, in habit order.</summary>
 		public static IEnumerable<CaveMineralHabit> CaveMineralHabits()
 		{
 			var used = new HashSet<CaveMineralHabit>();
@@ -443,6 +1035,10 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					used.Add(m.Habit);
 				}
+			}
+			foreach (CaveMineralLook look in CaveMineralLooks)
+			{
+				used.Add(look.Habit);
 			}
 			foreach (CaveMineralHabit habit in (CaveMineralHabit[])System.Enum.GetValues(typeof(CaveMineralHabit)))
 			{
@@ -461,6 +1057,107 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>A cave crystal's material: <c>Cave_Mineral_Amethyst</c>.</summary>
 		public static string CaveMineralMaterial(BiomeCaveCrystalKind kind) => $"{CavePrefix}Mineral_{kind}";
+
+		/// <summary>
+		/// The biomes' own looks of the kinds several drafts share (2026-10-26, NEW-CRYSTALS; decisions 12, 97), numbered within their
+		/// kind in append order. Twenty looks over twelve kinds: kept to the drafts that name one, as each costs a material and
+		/// <see cref="CaveMineralVariants"/> prefabs (meshes are the habit's, shared).
+		/// </summary>
+		public static readonly CaveMineralLook[] CaveMineralLooks =
+		{
+			new CaveMineralLook { Kind = BiomeCaveCrystalKind.Obsidian, Look = 1, Name = "Badlands", Biome = "Badlands", Habit = CaveMineralHabit.Shards, Albedo = new Color(0.165f, 0.078f, 0.063f), Smoothness = 0.95f,
+				Description = "Obsidian Badlands: black with mahogany bands." },
+			new CaveMineralLook { Kind = BiomeCaveCrystalKind.Obsidian, Look = 2, Name = "IrisGlass", Biome = "Permanent Ice", Habit = CaveMineralHabit.Nodules, Albedo = new Color(0.078f, 0.071f, 0.094f), Smoothness = 0.96f,
+				Description = "Obsidian IrisGlass: iris glass: black nodules whose sheen bands flash green, gold and violet." },
+			new CaveMineralLook { Kind = BiomeCaveCrystalKind.Obsidian, Look = 3, Name = "Itzsheen", Biome = "Volcanic Cave", Habit = CaveMineralHabit.Blades, Albedo = new Color(0.118f, 0.165f, 0.102f), Smoothness = 0.96f,
+				Description = "Obsidian Itzsheen: translucent bottle-green blades with a gold sheen at grazing light." },
+			new CaveMineralLook { Kind = BiomeCaveCrystalKind.Obsidian, Look = 4, Name = "Rossa", Biome = "Volcanic Temple", Habit = CaveMineralHabit.Shards, Albedo = new Color(0.353f, 0.102f, 0.063f), Smoothness = 0.95f,
+				Description = "Obsidian Rossa: red-brown obsidian shards." },
+			new CaveMineralLook { Kind = BiomeCaveCrystalKind.Aragonite, Look = 1, Name = "FlosFerri", Biome = "Farmland", Habit = CaveMineralHabit.Coralloid, Albedo = new Color(0.941f, 0.91f, 0.847f), Smoothness = 0.6f,
+				Description = "Aragonite FlosFerri: flos-ferri: white-honey coralloid sprays." },
+			new CaveMineralLook { Kind = BiomeCaveCrystalKind.SalAmmoniac, Look = 1, Name = "SulphurFlats", Biome = "Sulphur Flats", Habit = CaveMineralHabit.Dendrite, Albedo = new Color(0.957f, 0.941f, 0.894f), Smoothness = 0.6f,
+				Description = "SalAmmoniac SulphurFlats: white skeletal feathery fronds." },
+			new CaveMineralLook { Kind = BiomeCaveCrystalKind.Dogtooth, Look = 1, Name = "Grassland", Biome = "Grassland", Habit = CaveMineralHabit.Geode, Albedo = new Color(0.91f, 0.863f, 0.753f), Smoothness = 0.88f,
+				Description = "Dogtooth Grassland: pale honey scalenohedra in loess-doll geodes." },
+			new CaveMineralLook { Kind = BiomeCaveCrystalKind.Vivianite, Look = 1, Name = "PeatBog", Biome = "Peat Bog", Habit = CaveMineralHabit.Blades, Albedo = new Color(0.118f, 0.29f, 0.353f), Smoothness = 0.86f,
+				Description = "Vivianite PeatBog: deep blue-green blade crystals round buried bone and iron." },
+			new CaveMineralLook { Kind = BiomeCaveCrystalKind.ClearQuartz, Look = 1, Name = "Hills", Biome = "Hills", Habit = CaveMineralHabit.Druse, Albedo = new Color(0.878f, 0.863f, 0.816f), Smoothness = 0.86f, Metallic = 0.1f,
+				Description = "ClearQuartz Hills: milky vein quartz with gold flecks." },
+			new CaveMineralLook { Kind = BiomeCaveCrystalKind.ClearQuartz, Look = 2, Name = "Crystallus", Biome = "Ice Ruin", Habit = CaveMineralHabit.Prisms, Albedo = new Color(0.894f, 0.918f, 0.941f), Smoothness = 0.9f,
+				Description = "ClearQuartz Crystallus: crystallus: prisms frosted milky at the base, clear above, bubble trails up their length." },
+			new CaveMineralLook { Kind = BiomeCaveCrystalKind.ClearQuartz, Look = 3, Name = "BlueQuartz", Biome = "Ice Sheet", Habit = CaveMineralHabit.Prisms, Albedo = new Color(0.541f, 0.604f, 0.69f), Smoothness = 0.9f,
+				Description = "ClearQuartz BlueQuartz: opalescent blue-grey prisms in charnockite." },
+			new CaveMineralLook { Kind = BiomeCaveCrystalKind.FrostCrystal, Look = 1, Name = "HoarChandelier", Biome = "Ice Shelf", Habit = CaveMineralHabit.Cupped, Albedo = new Color(0.91f, 0.941f, 0.973f), Smoothness = 0.85f,
+				Description = "FrostCrystal HoarChandelier: depth-hoar cups in clusters." },
+			new CaveMineralLook { Kind = BiomeCaveCrystalKind.Thenardite, Look = 1, Name = "Volcanic", Biome = "Volcanic", Habit = CaveMineralHabit.Fibrous, Albedo = new Color(0.941f, 0.933f, 0.902f), Smoothness = 0.45f,
+				Description = "Thenardite Volcanic: white hair-needles and crusts on tube walls." },
+			new CaveMineralLook { Kind = BiomeCaveCrystalKind.Selenite, Look = 1, Name = "Swallowtail", Biome = "Marble Palace", Habit = CaveMineralHabit.Twinned, Albedo = new Color(0.957f, 0.949f, 0.918f), Smoothness = 0.9f,
+				Description = "Selenite Swallowtail: Messinian twinned selenite: water-clear fishtail blades." },
+			new CaveMineralLook { Kind = BiomeCaveCrystalKind.Selenite, Look = 2, Name = "Swordblade", Biome = "Volcanic Cave", Habit = CaveMineralHabit.Blades, Albedo = new Color(0.933f, 0.941f, 0.925f), Smoothness = 0.9f,
+				Description = "Selenite Swordblade: knife-thin clear blades in fans." },
+			new CaveMineralLook { Kind = BiomeCaveCrystalKind.Selenite, Look = 3, Name = "Wetlands", Biome = "Wetlands", Habit = CaveMineralHabit.Twinned, Albedo = new Color(0.933f, 0.949f, 0.933f), Smoothness = 0.88f,
+				Description = "Selenite Wetlands: water-clear swallowtail twins in gypsum walls." },
+			new CaveMineralLook { Kind = BiomeCaveCrystalKind.Amethyst, Look = 1, Name = "MountainSlope", Biome = "Mountain Slope", Habit = CaveMineralHabit.Geode, Albedo = new Color(0.416f, 0.29f, 0.604f), Smoothness = 0.86f,
+				Description = "Amethyst MountainSlope: deep violet points in basalt geodes." },
+			new CaveMineralLook { Kind = BiomeCaveCrystalKind.Amethyst, Look = 2, Name = "Eonyang", Biome = "Scree", Habit = CaveMineralHabit.Druse, Albedo = new Color(0.784f, 0.69f, 0.878f), Smoothness = 0.86f,
+				Description = "Amethyst Eonyang: pale lilac points in granodiorite pockets." },
+			new CaveMineralLook { Kind = BiomeCaveCrystalKind.Pyrite, Look = 1, Name = "Swamp", Biome = "Swamp", Habit = CaveMineralHabit.Radiating, Albedo = new Color(0.722f, 0.596f, 0.22f), Smoothness = 0.82f, Metallic = 0.85f,
+				Description = "Pyrite Swamp: pyrite suns: brassy radiating discs in black shale." },
+			new CaveMineralLook { Kind = BiomeCaveCrystalKind.Ikaite, Look = 1, Name = "Glendonite", Biome = null, Habit = CaveMineralHabit.Stellate, Albedo = new Color(0.416f, 0.369f, 0.314f), Smoothness = 0.3f,
+				Description = "Ikaite Glendonite: glendonite: brown-grey opaque pseudomorphs after ikaite." },
+		};
+
+		/// <summary>A kind's look by its number; false for 0 (the kind's own) or a number the kind has not.</summary>
+		public static bool TryCaveMineralLook(BiomeCaveCrystalKind kind, byte look, out CaveMineralLook found)
+		{
+			if (look != 0)
+			{
+				foreach (CaveMineralLook l in CaveMineralLooks)
+				{
+					if (l.Kind == kind && l.Look == look)
+					{
+						found = l;
+						return true;
+					}
+				}
+			}
+			found = default;
+			return false;
+		}
+
+		/// <summary>The look a biome's spec grows a kind in: the look named for that biome, else 0 (the kind's own).</summary>
+		public static byte CaveMineralLookFor(BiomeCaveCrystalKind kind, string biome)
+		{
+			foreach (CaveMineralLook l in CaveMineralLooks)
+			{
+				if (l.Kind == kind && l.Biome != null && l.Biome == biome)
+				{
+					return l.Look;
+				}
+			}
+			return 0;
+		}
+
+		/// <summary>A look's colours: its kind's hue (glow, light) in the look's albedo, smoothness and metal, named after the look.</summary>
+		public static CaveGlowHue CaveMineralLookHue(in CaveMineralLook look)
+		{
+			CaveGlowHue hue = CaveMineralOf(look.Kind).Hue;
+			hue.Name = look.Kind + "_" + look.Name;
+			hue.Albedo = look.Albedo;
+			hue.Smoothness = look.Smoothness;
+			hue.Metallic = look.Metallic;
+			if (CaveMineralOf(look.Kind).Formation)
+			{
+				hue.EmitterHue = -1;
+			}
+			return hue;
+		}
+
+		/// <summary>A look's prefab, with its sub-folder: <c>Cave/Cave_Mineral_Obsidian_Rossa_1</c>.</summary>
+		public static string CaveMineralLookPrefab(in CaveMineralLook look, int variant) => $"{CavePrefabFolderName}/{CavePrefix}Mineral_{look.Kind}_{look.Name}_{variant}";
+
+		/// <summary>A look's material: <c>Cave_Mineral_Obsidian_Rossa</c>.</summary>
+		public static string CaveMineralLookMaterial(in CaveMineralLook look) => $"{CavePrefix}Mineral_{look.Kind}_{look.Name}";
 
 		// ── Names ─────────────────────────────────────────────────────
 
@@ -541,6 +1238,10 @@ namespace FishMMO.Shared.WorldDesign
 					yield return MaterialPath(CaveMineralMaterial(m.Kind));
 				}
 			}
+			foreach (CaveMineralLook look in CaveMineralLooks)
+			{
+				yield return MaterialPath(CaveMineralLookMaterial(in look));
+			}
 		}
 
 		/// <summary>Every cave glow prefab name (with its sub-folder): each variant of each kind in each of its hues.</summary>
@@ -564,6 +1265,13 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						yield return CaveMineralPrefab(m.Kind, v);
 					}
+				}
+			}
+			foreach (CaveMineralLook look in CaveMineralLooks)
+			{
+				for (int v = 0; v < CaveMineralVariants; v++)
+				{
+					yield return CaveMineralLookPrefab(in look, v);
 				}
 			}
 		}

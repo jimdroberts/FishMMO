@@ -116,7 +116,8 @@ namespace FishMMO.Shared.WorldDesign
 			values[1] = innerMost;
 			values[2] = width;
 			values[3] = depth;
-			values[4] = wet ? 1f : 0f;
+			// 0 dry, 1 water, 2 lava (2026-10-25, I2r: BiomeLavaChannels.MoatLavaFlag, read by the client's lava ribbons).
+			values[4] = wet ? 1f : LavaMoat(site) ? BiomeLavaChannels.MoatLavaFlag : 0f;
 			Array.Copy(innerReach, 0, values, InnerFrom, innerReach.Length);
 			context.AddShape(new PointOfInterestShape
 			{
@@ -225,7 +226,8 @@ namespace FishMMO.Shared.WorldDesign
 			// What stands in it is the site biome's (its template's Moat Water, 2026-10-16), no longer worked out here from the
 			// template's climate envelope (which is what the authoring wrote onto every template).
 			BiomeMoatWater moat = BiomeTemplateArt.MoatWater(BiomeRegistry.TryGetByID(site.BiomeID, out BiomeTemplate biome) ? biome : null);
-			if (moat == BiomeMoatWater.Dry)
+			// A lava moat (2026-10-25, I2r) is dug as a dry ditch; the client draws its lava (BiomeLavaChannels.MoatLines).
+			if (moat == BiomeMoatWater.Dry || moat == BiomeMoatWater.Lava)
 			{
 				return false;
 			}
@@ -295,6 +297,12 @@ namespace FishMMO.Shared.WorldDesign
 				Covered = covered,
 			});
 			return true;
+		}
+
+		/// <summary>Whether a site's moat holds lava (its biome template's Moat Water, 2026-10-25, I2r).</summary>
+		private static bool LavaMoat(PointOfInterestRecord site)
+		{
+			return BiomeTemplateArt.MoatWater(BiomeRegistry.TryGetByID(site.BiomeID, out BiomeTemplate biome) ? biome : null) == BiomeMoatWater.Lava;
 		}
 
 		/// <summary>

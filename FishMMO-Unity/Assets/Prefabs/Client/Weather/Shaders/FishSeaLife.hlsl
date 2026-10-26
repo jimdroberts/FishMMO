@@ -20,12 +20,17 @@
 //               (1 cruising, more when hurrying), z the turn (-1 .. 1: the body bent into the turn), w spare
 //   _Tint       rgb times the mesh colour (a school's members differ a little; reef fish take their colour
 //               from it), a how much of the animal is drawn (the distance dither; a jelly's opacity)
+//   _Surface    (2026-10-25) x how much of the sea's swell it rides (1 afloat: the sea's own wave sum at its origin,
+//               FishWaterSwell.hlsl), y its own light's brightness now, z that light's phase in cycles (AmbientGlow, on the
+//               CPU from the shared clock), w spare
 
 #include "FishSurface.hlsl"
 #include "FishAmbient.hlsl"
+// The sea's wave sum (globals only), for what floats at the surface (2026-10-25).
+#include "Assets/Plugins/FishMMO Water/Shaders/FishWaterSwell.hlsl"
 
 CBUFFER_START(UnityPerMaterial)
-    half _Mode;          // 0 fish (side to side), 1 whale (up and down), 2 ray (wings), 3 turtle (flippers), 4 jelly (pulse), 5 crab (legs), 6 eel (the whole body)
+    half _Mode;          // 0 fish (side to side), 1 whale (up and down), 2 ray (wings), 3 turtle (flippers), 4 jelly (pulse), 5 crab (legs), 6 eel (the whole body), 7 mola (its tall fins scull), 8 nautilus (jets)
     half _Amplitude;     // the stroke's swing, as a share of the body's length
     half _WaveLength;    // the body wave's length, in body lengths
     half _Smoothness;
@@ -33,11 +38,14 @@ CBUFFER_START(UnityPerMaterial)
     half _SrcBlend;
     half _DstBlend;
     half _ZWrite;
+    half4 _EmitColour;   // its own light at its brightest (linear, HDR); a 1 when it has one (2026-10-25)
+    half4 _EmitPattern;  // x 0 even, 1 a wave along the body; y crests at once; z how sharp; w the share lit between crests
 CBUFFER_END
 
 UNITY_INSTANCING_BUFFER_START(SeaLifeProps)
     UNITY_DEFINE_INSTANCED_PROP(float4, _Anim)
     UNITY_DEFINE_INSTANCED_PROP(float4, _Tint)
+    UNITY_DEFINE_INSTANCED_PROP(float4, _Surface)
 UNITY_INSTANCING_BUFFER_END(SeaLifeProps)
 
 struct SeaLifeAttributes
@@ -137,6 +145,26 @@ void SeaLifeSwim(inout float3 p, inout float3 n, float2 body, float2 part, float
             p.y += 0.08 * down * squeeze;
         }
     }
+    else if (mode == 7)
+    {
+        // A sunfish barely bends: it sculls on its tall dorsal and anal fins, swung side to side against each other.
+        float fin = saturate((abs(p.y) - 0.3) / 0.3);
+        p.x += _Amplitude * strength * sin(phase) * sign(p.y) * fin + turn * 0.05 * a;
+        n = normalize(n + float3(-sign(p.y) * fin * _Amplitude * strength * cos(phase), 0.0, 0.0));
+    }
+    else if (mode == 8)
+    {
+        // A nautilus jets: a quick squeeze drives it back a little, then it drifts; its tentacles trail the stroke.
+        float cycle = frac(anim.x);
+        float squeeze = cycle < 0.25 ? sin(cycle / 0.25 * 1.5707963) : cos((cycle - 0.25) / 0.75 * 1.5707963);
+        p.z -= _Amplitude * strength * squeeze * 0.3;
+        if (part.x > 0.5)
+        {
+            float down = part.y;
+            p.x += 0.05 * down * sin(phase - down * 4.0 + body.y * 6.2831853);
+            p.y += 0.03 * down * cos(phase * 0.5 - down * 3.0 + body.y * 3.0);
+        }
+    }
     else
     {
         // A crab's legs step in alternating sets; its claws lift and open a little.
@@ -162,20 +190,49 @@ struct SeaLifeVertex
     float3 normalWS;
     float4 color;
     float visible;
+    float glow;
 };
+
+/// <summary>How much of its light a point of the body has now (2026-10-25): the brightness, and a wave running along the body.</summary>
+float SeaLifeGlow(float along, float4 surface)
+{
+    if (_EmitColour.a <= 0.0)
+    {
+        return 0.0;
+    }
+    float spatial = 1.0;
+    if (_EmitPattern.x > 0.5)
+    {
+        float crest = frac(along * _EmitPattern.y - surface.z);
+        float lit = pow(saturate(1.0 - abs(crest - 0.5) * 2.0), max(0.5, _EmitPattern.z));
+        spatial = lerp(_EmitPattern.w, 1.0, lit);
+    }
+    return surface.y * spatial;
+}
 
 SeaLifeVertex SeaLifeBuild(SeaLifeAttributes input)
 {
     float4 anim = UNITY_ACCESS_INSTANCED_PROP(SeaLifeProps, _Anim);
     float4 tint = UNITY_ACCESS_INSTANCED_PROP(SeaLifeProps, _Tint);
+    float4 surface = UNITY_ACCESS_INSTANCED_PROP(SeaLifeProps, _Surface);
     float3 p = input.positionOS.xyz;
     float3 n = input.normalOS;
     SeaLifeSwim(p, n, input.body, input.part, anim);
     SeaLifeVertex o;
     o.positionWS = TransformObjectToWorld(p);
     o.normalWS = TransformObjectToWorldNormal(n);
+    if (surface.x > 0.0)
+    {
+        // Afloat: lifted and carried on the sea's own surface at its middle, at the ocean mesh's footprint there.
+        float3 origin = UNITY_MATRIX_M._m03_m13_m23;
+        float distance = length(origin.xz - _WorldSpaceCameraPos.xz);
+        float footprint = _FishWaterMeshSpacing.x > 0.0 ? _FishWaterMeshSpacing.x * max(distance, _FishWaterMeshSpacing.y) : 0.0;
+        float3 up;
+        o.positionWS += FishWaterSwellAt(origin.xz, footprint, up) * surface.x;
+    }
     o.color = float4(input.color.rgb * tint.rgb, input.color.a);
     o.visible = tint.a;
+    o.glow = SeaLifeGlow(input.body.x, surface);
     return o;
 }
 
@@ -188,6 +245,7 @@ struct SeaLifeVaryings
     float3 normalWS : TEXCOORD1;
     float4 color : TEXCOORD2;
     float2 extra : TEXCOORD3;   // x visible share, y fog
+    float glow : TEXCOORD4;     // its own light here now (SeaLifeGlow)
     UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
@@ -202,6 +260,7 @@ SeaLifeVaryings SeaLifeVertexMain(SeaLifeAttributes input)
     o.color = v.color;
     o.positionCS = TransformWorldToHClip(v.positionWS);
     o.extra = float2(v.visible, ComputeFogFactor(o.positionCS.z));
+    o.glow = v.glow;
     return o;
 }
 
@@ -241,6 +300,8 @@ half4 SeaLifeForwardFragment(SeaLifeVaryings input, FRONT_FACE_TYPE face : FRONT
     float3 h = normalize(mainLight.direction + v);
     float spec = pow(saturate(dot(n, h)), exp2(10.0 * _Smoothness + 1.0)) * _Smoothness;
     colour += light * spec * 0.6;
+    // Its own light, after the lighting: the deep's darkness never dims it.
+    colour += _EmitColour.rgb * input.glow;
     half alpha = 1.0;
     if (translucent)
     {

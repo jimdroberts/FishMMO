@@ -135,7 +135,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// snow and wetness are the vegetation shader's, read from globals at run time.
 	/// </para>
 	/// </remarks>
-	public static class TerrainScatter
+	public static partial class TerrainScatter
 	{
 		/// <summary>Unity's largest detail map.</summary>
 		private const int MaximumDetailResolution = 4048;
@@ -231,10 +231,15 @@ namespace FishMMO.Shared.WorldDesign
 			DetailPrototype[] detailArray = detailPrototypes.ToArray();
 			TreePrototype[] treeArray = treePrototypes.ToArray();
 			List<TerrainDetailBiomes.Entry> prototypeBiomes = PrototypeBiomes(rules, detailArray);
+			// The scatter modes the client draws (SCATTER-MODES, 2026-10-26): no record at all unless a rule names one.
+			var modeDetails = new List<TerrainScatterModes.Detail>();
+			var modeTrees = new List<TerrainScatterModes.Tree>();
+			ModeRecord(rules, detailArray, treeArray, options, report, modeDetails, modeTrees);
 			bool firstTile = true;
 			foreach (Terrain terrain in ordered)
 			{
 				RecordBiomes(terrain, prototypeBiomes);
+				RecordModes(terrain, modeDetails, modeTrees);
 				ScatterTile(terrain, rules, detailArray, treeArray, palette, field, layerBiomes, attributionEntries,
 					normalizedHeight, options, workspace, firstTile, report);
 				firstTile = false;
@@ -333,6 +338,10 @@ namespace FishMMO.Shared.WorldDesign
 			public bool Zoned;
 			public BiomeLandformZones Zones;
 			public int ZoneBiome;
+			/// <summary>The scene's landform zones when the rule grades its sizes on talus cones (<see cref="PrefabSpawnRule.talusGrading"/>, 2026-10-25, I2u); null: no grading.</summary>
+			public BiomeLandformZones GradeZones;
+			/// <summary>The rule's scatter modes (<see cref="PrefabSpawnRule.scatterMode"/>, 2026-10-26, SCATTER-MODES); null when all are off: no mode path is taken.</summary>
+			public ScatterModeRun Modes;
 			public TerrainScatterReport.RuleOutcome Outcome;
 			public bool Runnable => !Outcome.Skipped;
 		}
@@ -484,6 +493,17 @@ namespace FishMMO.Shared.WorldDesign
 						scatterRule.Zoned = true;
 						scatterRule.Zones = options?.LandformZones;
 						scatterRule.ZoneBiome = entry.Biome != null ? entry.Biome.ID : 0;
+					}
+					if (rule.talusGrading && options?.LandformZones != null)
+					{
+						// Fine at a talus cone's apex, coarse at its toe (2026-10-25, I2u, decision 79 (d)).
+						scatterRule.GradeZones = options.LandformZones;
+						scatterRule.ZoneBiome = entry.Biome != null ? entry.Biome.ID : 0;
+					}
+					if (!rule.scatterMode.IsOff)
+					{
+						// Turned, tilted, sized, anchored or laid out (2026-10-26, SCATTER-MODES, decision 34); off: no run, nothing changes.
+						scatterRule.Modes = ModesFor(rule, entry, options, seed, scatterRule.Seed, report);
 					}
 					if (rule.useClimateBand)
 					{
@@ -782,12 +802,23 @@ namespace FishMMO.Shared.WorldDesign
 		/// True for a counted detail's reduced level: a bare MeshFilter (no renderer, so nothing draws it by accident) on a
 		/// direct child named <c>LOD1</c>, <c>LOD2</c>…, which only the client's GPU detail scatter reads
 		/// (BiomeArtGenerator.WriteBush). Unity's own detail drawing ignores it and draws the root's mesh, as it should.
+		/// Also any detail's variant mesh (2026-10-26, I6f): a bare MeshFilter on a direct child named <c>Variant1</c>,
+		/// <c>Variant2</c>… (ProceduralArtCatalogue.DetailVariantChild), which the GPU detail scatter cycles per instance.
 		/// </summary>
 		private static bool IsDetailLevel(GameObject prefab, MeshFilter filter)
 		{
 			Transform t = filter.transform;
-			return IsCountedDetail(prefab) && t.parent == prefab.transform && t.name.StartsWith("LOD", StringComparison.Ordinal)
-				&& int.TryParse(t.name.Substring(3), out int level) && level > 0 && !filter.TryGetComponent(out Renderer _);
+			if (t.parent != prefab.transform || filter.TryGetComponent(out Renderer _))
+			{
+				return false;
+			}
+			string variant = ProceduralArtCatalogue.DetailVariantChildPrefix;
+			if (t.name.StartsWith(variant, StringComparison.Ordinal) && int.TryParse(t.name.Substring(variant.Length), out int index) && index > 0)
+			{
+				return true;
+			}
+			return IsCountedDetail(prefab) && t.name.StartsWith("LOD", StringComparison.Ordinal)
+				&& int.TryParse(t.name.Substring(3), out int level) && level > 0;
 		}
 
 		/// <summary>Why a prefab cannot be a mesh detail, or null when it can.</summary>
@@ -1259,12 +1290,20 @@ namespace FishMMO.Shared.WorldDesign
 
 			int maxValue = Mathf.Max(1, data.maxDetailScatterPerRes);
 
-			foreach (ScatterRule rule in rules)
+			// A rule anchored by others (a lee, a nurse, a shelter: SCATTER-MODES) runs after the rest; with none, the order is the list's own.
+			bool anchorsReady = false;
+			foreach (ScatterRule rule in AnchoredLast(rules))
 			{
 				// Carpets run after, all together: they share cells with each other, not with budgets.
 				if (!rule.Runnable || rule.Carpet)
 				{
 					continue;
+				}
+				if (!anchorsReady && rule.Modes != null && rule.Modes.Anchored)
+				{
+					// Everything the anchored rules stand by is placed: gather it once, for all of them.
+					PrepareAnchors(data, rules, frame, work, false);
+					anchorsReady = true;
 				}
 				int layer = rule.Entry.LayerIndex;
 				float[] weights = layer < work.Layers.Length ? work.Layers[layer] : null;
@@ -1316,6 +1355,11 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			report.RuleSeconds += Lap();
+			if (AnyAnchoredCarpet(rules))
+			{
+				// An anchored carpet (grass under the shrubs) stands by every scattered rule's instances, the anchored ones too.
+				PrepareAnchors(data, rules, frame, work, true);
+			}
 			RunCarpets(data, rules, frame, work, detailResolution, maxValue, normalizedHeight, report);
 			report.CarpetSeconds += Lap();
 
@@ -1972,6 +2016,15 @@ namespace FishMMO.Shared.WorldDesign
 					u = (i + 0.5f) / cellsX;
 					v = (j + 0.5f) / cellsZ;
 				}
+				// Scatter modes (2026-10-26, SCATTER-MODES): null for a rule with none, which takes no mode path below.
+				ScatterModeRun modes = scatterRule.Modes;
+				bool even = modes != null && modes.Even;
+				if (even && !EvenCell(modes, rule, frame, i, j, cellsX, cellsZ, tree, ref u, ref v))
+				{
+					// Evenly spaced: only the cell holding its lattice point may place.
+					pick.Outcome = CellOutcome.NoChance;
+					return;
+				}
 
 				float weight = Bilinear(layerWeights, alphaRes, u, v);
 				if (weight < minWeight)
@@ -1985,6 +2038,11 @@ namespace FishMMO.Shared.WorldDesign
 				float standMask = 0f;
 				float roll = Unit(h);
 				float chance = baseChance * weight;
+				if (even)
+				{
+					// A lattice point is a place, not a draw: it holds wherever the rule's ground and bands allow.
+					chance = 1f;
+				}
 				float share = 0f;
 				if (forest)
 				{
@@ -2125,6 +2183,17 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					chance *= band;
 				}
+				if (modes != null && modes.Weighs)
+				{
+					// Anchored (a lee, a nurse, a cliff's foot, a seep line…) or gathered (fields, rain cells, rings), SCATTER-MODES.
+					float band = ModeWeight(modes, frame, heights, slopes, heightRes, u, v, worldX, worldY, worldZ);
+					if (band <= 0f)
+					{
+						pick.Outcome = CellOutcome.NoHeight;
+						return;
+					}
+					chance *= band;
+				}
 				if (roll >= chance)
 				{
 					pick.Outcome = CellOutcome.NoChance;
@@ -2158,6 +2227,17 @@ namespace FishMMO.Shared.WorldDesign
 					float groupShift = clustered ? rule.clusterScaleBias * (closeness - 0.5f) : 0f;
 					float standShift = forest ? forestBias * (standMask - 0.5f) : 0f;
 					TreeInstance instance = TreeInstanceAt(rule, prototypes[variant], u, height01, v, h, groupShift + standShift, groupShift - 0.5f * standShift);
+					if (modes != null && (modes.Faces || modes.Sizes))
+					{
+						// Its facing and power-law size (SCATTER-MODES), before any talus grading scales it.
+						OrientTree(modes, rule, ref instance, h, frame, heights, heightRes, u, v, worldX, worldZ);
+					}
+					if (scatterRule.GradeZones != null)
+					{
+						float grade = scatterRule.GradeZones.TalusGrade(scatterRule.ZoneBiome, worldX, worldZ);
+						instance.widthScale *= grade;
+						instance.heightScale *= grade;
+					}
 					if (Canopy)
 					{
 						pick.PointSpacing = rule.minSpacing * instance.widthScale * (scatterRule.CrownScale != null && variant < scatterRule.CrownScale.Length ? scatterRule.CrownScale[variant] : 1f);
@@ -2634,6 +2714,18 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					float band = BiomeLandformZones.WeightOf(scatterRule.Zones, scatterRule.Rule.landformBand, scatterRule.ZoneBiome, worldX, worldZ,
 						frame.Origin.y + Bilinear(heights, heightRes, u, v) * frame.Size.y, Bilinear(slopes, heightRes, u, v));
+					if (band <= 0f)
+					{
+						outcome = CarpetOutcome.NoHeight;
+						return 0f;
+					}
+					coverage *= band;
+				}
+				if (scatterRule.Modes != null && scatterRule.Modes.Weighs)
+				{
+					// Anchored or gathered (SCATTER-MODES, 2026-10-26): grass under the shrubs, a lee's drift, a fairy ring.
+					float band = ModeWeight(scatterRule.Modes, frame, heights, slopes, heightRes, u, v, worldX,
+						frame.Origin.y + Bilinear(heights, heightRes, u, v) * frame.Size.y, worldZ);
 					if (band <= 0f)
 					{
 						outcome = CarpetOutcome.NoHeight;

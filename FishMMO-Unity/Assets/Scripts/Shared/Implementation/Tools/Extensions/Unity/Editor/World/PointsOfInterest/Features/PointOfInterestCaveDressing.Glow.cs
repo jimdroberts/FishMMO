@@ -61,8 +61,8 @@ namespace FishMMO.Shared.WorldDesign
 				CaveGlowPalette p = Colours();
 				if (kind == CaveGlowKind.Crystal && p.Minerals)
 				{
-					BiomeCaveCrystalKind mineral = hue == p.CrystalAccent && hue != p.Crystal ? p.MineralAccent : p.Mineral;
-					return CaveArt.TryMineral(mineral, variant, out art);
+					bool accent = hue == p.CrystalAccent && hue != p.Crystal;
+					return CaveArt.TryMineral(accent ? p.MineralAccent : p.Mineral, variant, out art, accent ? p.MineralAccentLook : p.MineralLook);
 				}
 				return CaveArt.TryGlow(kind, hue, variant, out art);
 			}

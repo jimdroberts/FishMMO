@@ -42,6 +42,8 @@ namespace FishMMO.Shared.Biomes
 		public Color Foam;
 		[Tooltip("Hot water (2026-10-18, phase I2q): fed by the hot ground, it never ices over, however cold the air, and always steams (its surface reads as hot spring water, WaterTemperature.HotWaterC). Off for every biome but those whose files say so.")]
 		public bool Hot;
+		[Tooltip("A melt (2026-10-25, phase I2q-b, decision 84: a sulphur flat's ponds of molten sulphur): opaque and viscous, its ripples small and slow, its colour drifting between its shallow and deep colours on the shared clock. Never counted as liquid water. Off for every biome but those whose files say so.")]
+		public bool Melt;
 
 		public BiomeWaterLook(Color shallow, Color deep, Vector3 absorption, float turbidity, Color silt, Color foam)
 		{
@@ -52,6 +54,7 @@ namespace FishMMO.Shared.Biomes
 			Silt = silt;
 			Foam = foam;
 			Hot = false;
+			Melt = false;
 		}
 
 		/// <summary>
@@ -66,7 +69,7 @@ namespace FishMMO.Shared.Biomes
 			return Near(Shallow, other.Shallow, tolerance) && Near(Deep, other.Deep, tolerance) && Near(Silt, other.Silt, tolerance)
 				&& Near(Foam, other.Foam, tolerance) && Mathf.Abs(Turbidity - other.Turbidity) <= tolerance
 				&& Mathf.Abs(Absorption.x - other.Absorption.x) <= tolerance && Mathf.Abs(Absorption.y - other.Absorption.y) <= tolerance
-				&& Mathf.Abs(Absorption.z - other.Absorption.z) <= tolerance && Hot == other.Hot;
+				&& Mathf.Abs(Absorption.z - other.Absorption.z) <= tolerance && Hot == other.Hot && Melt == other.Melt;
 		}
 
 		private static bool Near(Color a, Color b, float tolerance)
@@ -89,9 +92,9 @@ namespace FishMMO.Shared.Biomes
 			{
 				return b;
 			}
-			// Hot is a property of the water, not a colour: the nearer water's.
+			// Hot and Melt are properties of the water, not colours: the nearer water's.
 			return new BiomeWaterLook(Color.Lerp(a.Shallow, b.Shallow, t), Color.Lerp(a.Deep, b.Deep, t), Vector3.Lerp(a.Absorption, b.Absorption, t),
-				Mathf.Lerp(a.Turbidity, b.Turbidity, t), Color.Lerp(a.Silt, b.Silt, t), Color.Lerp(a.Foam, b.Foam, t)) { Hot = t < 0.5f ? a.Hot : b.Hot };
+				Mathf.Lerp(a.Turbidity, b.Turbidity, t), Color.Lerp(a.Silt, b.Silt, t), Color.Lerp(a.Foam, b.Foam, t)) { Hot = t < 0.5f ? a.Hot : b.Hot, Melt = t < 0.5f ? a.Melt : b.Melt };
 		}
 
 		/// <summary>The look as the authoring marks it: every value round-trip exact, in a fixed order.</summary>
@@ -119,6 +122,11 @@ namespace FishMMO.Shared.Biomes
 			{
 				text.Append("hot|");
 			}
+			// Likewise the melt (2026-10-25, I2q-b).
+			if (Melt)
+			{
+				text.Append("melt|");
+			}
 			return text.ToString();
 		}
 
@@ -127,7 +135,7 @@ namespace FishMMO.Shared.Biomes
 		{
 			string F(float value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 			string C(Color c) => $"({F(c.r)}, {F(c.g)}, {F(c.b)})";
-			return $"shallow {C(Shallow)}, deep {C(Deep)}, absorbs ({F(Absorption.x)}, {F(Absorption.y)}, {F(Absorption.z)})/m, silt {F(Turbidity)} {C(Silt)}, foam {C(Foam)}{(Hot ? ", hot" : string.Empty)}";
+			return $"shallow {C(Shallow)}, deep {C(Deep)}, absorbs ({F(Absorption.x)}, {F(Absorption.y)}, {F(Absorption.z)})/m, silt {F(Turbidity)} {C(Silt)}, foam {C(Foam)}{(Hot ? ", hot" : string.Empty)}{(Melt ? ", melt" : string.Empty)}";
 		}
 	}
 

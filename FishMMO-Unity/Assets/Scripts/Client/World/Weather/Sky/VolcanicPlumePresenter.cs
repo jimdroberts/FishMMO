@@ -101,7 +101,36 @@ namespace FishMMO.Client
 		/// <summary>The periods each plume's layers hold, by its vent: column, umbrella and fall, two layers each.</summary>
 		private readonly Dictionary<Vector2Int, WorldMotion.HeldValue[]> held = new Dictionary<Vector2Int, WorldMotion.HeldValue[]>();
 		private readonly List<VolcanicPlume.Plume> plumes = new List<VolcanicPlume.Plume>();
-		private readonly List<(Vector3 vent, float emission, Color tint, float distance)> fountains = new List<(Vector3, float, Color, float)>();
+		private readonly List<(Vector3 vent, float emission, Color tint, float distance, float timed)> fountains = new List<(Vector3, float, Color, float, float)>();
+
+		/// <summary>The motion clock and the sky the vents' timing reads this frame (2026-10-25, I2q-b; VentTiming).</summary>
+		private VentSky ventSky;
+
+		/// <summary>
+		/// A scene vent's strength now on its biome's timing (2026-10-25, I2q-b; presentation only: the weather's plume and its fallout
+		/// never read it), by the vent the plume stands on (its seed); 1 for a steady vent and for an eruption cell's plume.
+		/// </summary>
+		private float Timed(uint seed, bool fromCell)
+		{
+			if (fromCell)
+			{
+				return 1f;
+			}
+			foreach (VentSite vent in VolcanicVents.Of(context.Settings))
+			{
+				if (vent.Seed == seed)
+				{
+					return Timed(vent);
+				}
+			}
+			return 1f;
+		}
+
+		private float Timed(in VentSite vent)
+		{
+			return vent.Timing == FishMMO.Shared.Biomes.BiomeVentTiming.Steady ? 1f
+				: VentTiming.Strength(vent.Timing, ventSky, vent.TimingSeed, vent.Bearing, vent.Episodes);
+		}
 
 		// The lava lakes of the scene last asked about: found once, from its terrains.
 		private int lakesScene = int.MinValue;
@@ -220,6 +249,9 @@ namespace FishMMO.Client
 			Vector3 viewer = camera.transform.position;
 			var viewer2 = new Vector2(viewer.x, viewer.z);
 			float reach = camera.farClipPlane * 1.5f + 20000f;
+			ventSky = VentSky.Of(WorldMotion.Seconds, GlowSky.Current);
+			// Curtains of fire along the scene's fissures (2026-10-25, I2r): lava, so drawn with air or without.
+			DrawCurtains(camera, material, profile, viewer2, reach);
 
 			WeatherSample sample = context.Sample;
 			if (VolcanicPlume.CanRise(sample.Planet))
@@ -252,7 +284,10 @@ namespace FishMMO.Client
 			GatherFountains(viewer2, reach);
 			for (int i = 0; i < fountains.Count && i < MaxDrawn; i++)
 			{
-				DrawFountain(fountains[i].vent, fountains[i].emission, fountains[i].tint, gravity, camera, material, profile);
+				if (fountains[i].timed > 0.01f)
+				{
+					DrawFountain(fountains[i].vent, fountains[i].emission, fountains[i].tint, gravity, camera, material, profile, fountains[i].timed);
+				}
 			}
 		}
 
@@ -273,16 +308,24 @@ namespace FishMMO.Client
 			float fallSeconds = plume.Umbrella / Mathf.Max(0.05f, plume.FallSpeed);
 			Color tint = plume.Substance != null ? plume.Substance.Tint : AshTint;
 			float glow = plume.Substance != null ? plume.Substance.Emission : 0f;
-			float strength = 0.4f + 0.6f * plume.Emission;
+			// Its vent's timing (2026-10-25, I2q-b): the plume tide, the sun, bursts, episodes, the kneading; steady as before.
+			float timed = Timed(plume.Seed, plume.FromCell);
+			if (timed <= 0.01f)
+			{
+				return;
+			}
+			float strength = (0.4f + 0.6f * plume.Emission) * timed;
+			// In thin air it rises on its heat and lies over downwind (decision 53: Triton's); elsewhere its own lean, as before.
+			Vector2 topOffset = VolcanicPlume.DrawnTopOffset(plume, context.Sample.Planet.AirRelative);
 
 			var rise = new Vector4(plume.Top, plume.Umbrella, plume.Radius, riseSeconds);
-			var lean = new Vector4(plume.TopOffset.x, plume.TopOffset.y, down.x, down.y);
+			var lean = new Vector4(topOffset.x, topOffset.y, down.x, down.y);
 			var drift = new Vector4(drawn, driftSeconds, VolcanicPlume.SpreadPerMetre, length);
 			var colour = new Color(tint.r, tint.g, tint.b, 0.6f + glow);
 
 			// The box round all of it: the vent, the top, and the umbrella out to where it is drawn.
 			float wide = plume.Radius + VolcanicPlume.SpreadPerMetre * drawn;
-			Vector2 far = plume.Vent + plume.TopOffset + down * drawn;
+			Vector2 far = plume.Vent + topOffset + down * drawn;
 			var min = new Vector3(Mathf.Min(plume.Vent.x, far.x) - wide, ground - 50f, Mathf.Min(plume.Vent.y, far.y) - wide);
 			var max = new Vector3(Mathf.Max(plume.Vent.x, far.x) + wide, ground + plume.Top * 1.3f + 200f, Mathf.Max(plume.Vent.y, far.y) + wide);
 			var bounds = new Bounds((min + max) * 0.5f, max - min);
@@ -307,7 +350,7 @@ namespace FishMMO.Client
 				{
 					float ground = GroundAt(context.Scene, vent.Position);
 					Color tint = vent.Substance != null ? vent.Substance.Tint : FrostTint;
-					fountains.Add((new Vector3(vent.Position.x, ground, vent.Position.y), vent.Emission, tint, d));
+					fountains.Add((new Vector3(vent.Position.x, ground, vent.Position.y), vent.Emission, tint, d, Timed(vent)));
 				}
 			}
 			FindLakes(context.Scene);
@@ -317,13 +360,13 @@ namespace FishMMO.Client
 				if (d <= reach)
 				{
 					// Over the lake's surface; a lake is a vent of no particular strength.
-					fountains.Add((new Vector3(lake.x, lakeLevel, lake.y), 0.08f, FrostTint, d));
+					fountains.Add((new Vector3(lake.x, lakeLevel, lake.y), 0.08f, FrostTint, d, 1f));
 				}
 			}
 			fountains.Sort((a, b) => a.distance.CompareTo(b.distance));
 		}
 
-		private void DrawFountain(Vector3 vent, float emission, Color tint, float gravity, Camera camera, Material material, WeatherRenderProfile profile)
+		private void DrawFountain(Vector3 vent, float emission, Color tint, float gravity, Camera camera, Material material, WeatherRenderProfile profile, float timed = 1f)
 		{
 			float speed = VolcanicPlume.LaunchSpeed(emission);
 			float height = VolcanicPlume.FountainHeight(speed, gravity);
@@ -331,8 +374,79 @@ namespace FishMMO.Client
 			float puff = Mathf.Clamp(height / 30f, 4f, 40f);
 			var bounds = new Bounds(vent + Vector3.up * (0.5f * height), new Vector3(2f * outer + 2f * puff, height + 2f * puff, 2f * outer + 2f * puff));
 			var ballistic = new Vector4(speed, gravity, VolcanicPlume.FountainConeDegrees * Mathf.Deg2Rad, VolcanicPlume.FountainInnerShare);
-			Draw(material, profile, camera, bounds, vent, 3, 1f, 0.14f, new Vector4(puff, 0f, 0f, 0f), Vector4.zero, Vector4.zero, ballistic,
+			// Its vent's timing thins it (2026-10-25, I2q-b): the height stays its emission's, the grains fewer and fainter.
+			Draw(material, profile, camera, bounds, vent, 3, timed >= 1f ? 1f : Mathf.Max(0.1f, timed), 0.14f * timed, new Vector4(puff, 0f, 0f, 0f), Vector4.zero, Vector4.zero, ballistic,
 				new Color(tint.r, tint.g, tint.b, 0.4f), Vector4.zero);
+		}
+
+		// ── Curtains of fire (2026-10-25, phase I2r, decision 65 (d)) ──
+
+		/// <summary>The most curtain stretches drawn at once, the nearest.</summary>
+		public const int MaxCurtains = 6;
+		/// <summary>A curtain's clots, m, and how far either side of the vertical they are thrown across the fissure.</summary>
+		public const float CurtainClotMetres = 1.2f, CurtainTiltDegrees = 8f;
+		/// <summary>What a curtain's clots are made of under the light (cooling basalt spatter) and how strongly they glow.</summary>
+		public static readonly Color CurtainTint = new Color(0.12f, 0.07f, 0.05f, 2.4f);
+
+		private readonly List<LavaCurtains.Curtain> curtains = new List<LavaCurtains.Curtain>();
+		private readonly Dictionary<int, FishMMO.Shared.Biomes.BiomeFountainEpisodes> curtainSchedules = new Dictionary<int, FishMMO.Shared.Biomes.BiomeFountainEpisodes>();
+
+		/// <summary>A biome's fountain episodes by its template id (empty for none), read live from its template.</summary>
+		private FishMMO.Shared.Biomes.BiomeFountainEpisodes CurtainSchedule(int biomeID)
+		{
+			if (!curtainSchedules.TryGetValue(biomeID, out FishMMO.Shared.Biomes.BiomeFountainEpisodes schedule))
+			{
+				schedule = FishMMO.Shared.Biomes.BiomeRegistry.TryGetByID(biomeID, out FishMMO.Shared.Biomes.BiomeTemplate biome) && biome != null
+					? biome.FountainEpisodes : default;
+				if (curtainSchedules.Count > 64)
+				{
+					curtainSchedules.Clear();
+				}
+				curtainSchedules[biomeID] = schedule;
+			}
+			return schedule;
+		}
+
+		/// <summary>
+		/// The curtains of fire standing now along the scene's stored fissure lines (<see cref="LavaCurtains"/>, on the shared clock), the
+		/// nearest <see cref="MaxCurtains"/>. Nothing unless a biome on a fissure line names fountain episodes.
+		/// </summary>
+		private void DrawCurtains(Camera camera, Material material, WeatherRenderProfile profile, Vector2 viewer, float reach)
+		{
+			FishMMO.Shared.Biomes.SceneBiomeMap map = context.Settings != null ? context.Settings.BiomeMap : null;
+			if (map == null || map.VentLines == null || map.VentLines.Count == 0)
+			{
+				return;
+			}
+			LavaCurtains.Of(map.VentLines, CurtainSchedule, clock, curtains);
+			if (curtains.Count == 0)
+			{
+				return;
+			}
+			curtains.Sort((a, b) => (a.Middle - viewer).sqrMagnitude.CompareTo((b.Middle - viewer).sqrMagnitude));
+			WorldBody body = context.Timeline.BodyOverride != null ? context.Timeline.BodyOverride : SceneTime.BodyOf(context.Settings);
+			float gravity = body != null ? SurfacePhysics.Gravity(body) : 9.81f;
+			gravity = gravity > 0.01f ? gravity : 9.81f;
+			for (int i = 0; i < curtains.Count && i < MaxCurtains; i++)
+			{
+				LavaCurtains.Curtain c = curtains[i];
+				if ((c.Middle - viewer).magnitude > reach)
+				{
+					break;
+				}
+				// Its biome's schedule: the clots' period is the schedule's, fixed.
+				FishMMO.Shared.Biomes.BiomeFountainEpisodes schedule = CurtainSchedule(c.BiomeID);
+				float a = GroundAt(context.Scene, c.A), b = GroundAt(context.Scene, c.B);
+				var start = new Vector3(c.A.x, a, c.A.y);
+				Vector2 run = c.B - c.A;
+				float speed = LavaCurtains.LaunchSpeed(c.Height, gravity);
+				float period = LavaCurtains.FlightPeriod(in schedule, gravity);
+				var bounds = new Bounds(new Vector3(0.5f * (c.A.x + c.B.x), 0.5f * (a + b) + 0.5f * c.Height, 0.5f * (c.A.y + c.B.y)),
+					new Vector3(Mathf.Abs(run.x) + c.Height + 20f, c.Height + 20f, Mathf.Abs(run.y) + c.Height + 20f));
+				var ballistic = new Vector4(speed, gravity, CurtainTiltDegrees * Mathf.Deg2Rad, period);
+				Draw(material, profile, camera, bounds, start, 7, Mathf.Clamp(0.15f + 0.85f * c.Strength, 0.1f, 1f), 0.9f,
+					new Vector4(CurtainClotMetres, 0f, 0f, 0f), new Vector4(run.x, run.y, b - a, 0f), Vector4.zero, ballistic, CurtainTint, Vector4.zero);
+			}
 		}
 
 		/// <summary>The lava lakes under the scene's lava surface, found once per scene.</summary>

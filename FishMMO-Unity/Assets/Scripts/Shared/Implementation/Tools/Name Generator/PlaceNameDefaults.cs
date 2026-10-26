@@ -177,6 +177,41 @@ namespace FishMMO.Shared.NameGeneration
 			[POIType.SeaCrystalFormation] = new[] { "Sea Crystals", "Drowned Geode", "Brine Spires", "Deep Prisms", "Tide Crystals", "Sea Shardfield" },
 			[POIType.SunkenMonument] = new[] { "Sunken Monument", "Drowned Memorial", "Sea Pillar", "Deep Cenotaph", "Drowned Colossus", "Tide Cairn" },
 			[POIType.SunkenStatue] = new[] { "Sunken Statue", "Drowned Idol", "Sea Effigy", "Deep Likeness", "Drowned Figure", "Tide Colossus" },
+			[POIType.AdriftDerelict] = new[] { "Derelict", "Ghost Ship", "Drifting Hulk", "Weed Hulk", "Castaway Hull", "Lost Ship" },
+			[POIType.WhaleFall] = new[] { "Whale Fall", "Leviathan Bones", "Drift Carcass", "Whale Grave", "Sea Carcass", "Whalebones" },
+			[POIType.BarnacleLog] = new[] { "Barnacle Log", "Drift Log", "Gooseneck Raft", "Weed Raft", "Drift Timber", "Sea Log" },
+			[POIType.Longline] = new[] { "Longline", "Float Line", "Buoy Line", "Lost Line", "Drift Line", "Hook Line" },
+			[POIType.WhaleTow] = new[] { "Whale Tow", "Whaler's Prize", "Towed Carcass", "Whaler's Haul", "Flensing Tow", "Prize Whale" },
+			// The biome rounds' own kinds (2026-10-25, phase NEW-POI-KINDS).
+			[POIType.TrenchEdge] = new[] { "Brink", "Deep Edge", "Trench Lip", "Drop", "Rim", "Verge" },
+			[POIType.SeaCavern] = new[] { "Sea Cavern", "Drowned Cave", "Deep Grotto", "Wall Cave", "Sea Hollow", "Undercave" },
+			[POIType.CinderCone] = new[] { "Cinder Cone", "Cone", "Ash Hill", "Cinder Mount", "Scoria Hill", "Black Cone" },
+			[POIType.Kipuka] = new[] { "Kipuka", "Old Ground", "Green Isle", "Grove Isle", "Island Wood", "Refuge" },
+			[POIType.HoluaSlide] = new[] { "Holua", "Slide", "Sled Run", "Stone Slide", "Chiefs' Slide", "Sled Course" },
+			[POIType.LavaFall] = new[] { "Lava Fall", "Firefall", "Fire Cascade", "Molten Falls", "Ember Fall", "Burning Falls" },
+			[POIType.AncientForge] = new[] { "Ancient Forge", "Old Forge", "Giants' Forge", "Smiths' Hearth", "Anvil Field", "Forge Ruin" },
+			[POIType.PhoenixNest] = new[] { "Phoenix Nest", "Pyre", "Firebird's Nest", "Ash Nest", "Phoenix Pyre", "Ember Nest" },
+			[POIType.LavaCaveTemple] = new[] { "Forge Grotto", "Cave Temple", "Fire Sanctum", "Tube Shrine", "Ember Fane", "Rock Temple" },
+			[POIType.MireGate] = new[] { "Mire Gate", "Drowned Gate", "Black Gate", "Sunken Arch", "Fen Gate", "Water Gate" },
+			[POIType.SunkenPlaza] = new[] { "Sunken Plaza", "Drowned Forum", "Flooded Square", "Sunken Court", "Drowned Square", "Water Court" },
+			[POIType.MarshWatchtower] = new[] { "Marsh Tower", "Fen Watch", "Reed Tower", "Mire Watch", "Marsh Watch", "Mound Tower" },
+			[POIType.ShatteredBridge] = new[] { "Broken Bridge", "Shattered Span", "Fallen Bridge", "Broken Arch", "Gap Bridge", "Ruined Span" },
+			[POIType.FallenColossus] = new[] { "Fallen Colossus", "Fallen Giant", "Broken Colossus", "Toppled Giant", "Stone Giant", "Fallen King" },
+			[POIType.SealedVault] = new[] { "Sealed Vault", "Rune Vault", "Locked Vault", "Warded Door", "Sealed Door", "Hoard Vault" },
+			[POIType.DrownedForest] = new[] { "Drowned Wood", "Drowned Forest", "Ghost Wood", "Standing Dead", "Sunk Wood", "Carr" },
+			[POIType.FrogShrine] = new[] { "Frog Shrine", "Frog Stone", "Toad Altar", "Frog Mound", "Croaking Stone", "Frog Idol" },
+			[POIType.FloatingIsland] = new[] { "Floating Isle", "Reed Isle", "Drifting Isle", "Mat Island", "Rush Isle", "Wandering Isle" },
+			[POIType.FowlersHide] = new[] { "Fowler's Hide", "Hide", "Decoy", "Fowling Blind", "Reed Blind", "Duck Hide" },
+			[POIType.EelWeir] = new[] { "Eel Weir", "Weir", "Eel Trap", "Fish Garth", "Kiddle", "Eel Stage" },
+			[POIType.BrickKiln] = new[] { "Brick Kiln", "Kiln", "Brickworks", "Clamp", "Brickfield", "Tilery" },
+			[POIType.BlightedCrater] = new[] { "Blighted Crater", "Dolorous Pit", "Stroke", "Cursed Hollow", "Grey Crater", "Waste Pit" },
+			[POIType.Chapel] = new[] { "Chapel", "Oratory", "Bell Chapel", "Wayside Chapel", "Chantry", "Kirk" },
+			[POIType.HolyWell] = new[] { "Holy Well", "Saint's Well", "Blessed Well", "Healing Well", "Wishing Well", "Silent Well" },
+			[POIType.PlagueVillage] = new[] { "Plague Village", "Waste Vill", "Marked Hamlet", "Pest Village", "Sick Steads", "Pyre Village" },
+			[POIType.DeadForest] = new[] { "Dead Forest", "Dead Wood", "Grey Wood", "Bleached Wood", "Snag Wood", "Barren Wood" },
+			[POIType.WarEngineGraveyard] = new[] { "Engine Field", "Siege Graveyard", "Broken Engines", "Trebuchet Field", "Engine Yard", "Siege Wrack" },
+			[POIType.SunkenWhaleFall] = new[] { "Whale Fall", "Whale Bones", "Bone Garden", "Leviathan Ribs", "Rib Field", "Whale Grave" },
+			[POIType.SeaHall] = new[] { "Sea Hall", "Undersea Hall", "Ice Hall", "Brine Hall", "Deep Hall", "Hidden Sea" },
 
 			[POIType.DungeonEntrance] = new[] { "Entrance", "Gate", "Mouth", "Descent", "Door", "Stair", "Delve" },
 			[POIType.BossLair] = new[] { "Lair", "Throne", "Domain", "Sanctum", "Den", "Seat", "Roost" },
@@ -307,9 +342,9 @@ namespace FishMMO.Shared.NameGeneration
 		private static readonly POIType[] RaceCaves = { POIType.Cave, POIType.IceCave, POIType.LavaTube };
 		private static readonly POIType[] RaceCamps = { POIType.Camp, POIType.BanditCamp };
 		private static readonly POIType[] Dens = { POIType.MonsterDen, POIType.Nest };
-		private static readonly POIType[] WorkCamps = { POIType.HuntingLodge, POIType.LumberCamp, POIType.FishingCamp };
+		private static readonly POIType[] WorkCamps = { POIType.HuntingLodge, POIType.LumberCamp, POIType.FishingCamp, POIType.FowlersHide, POIType.EelWeir };
 		private static readonly POIType[] Springs = { POIType.Spring, POIType.HotSpring };
-		private static readonly POIType[] Mounts = { POIType.Volcano, POIType.Cryovolcano };
+		private static readonly POIType[] Mounts = { POIType.Volcano, POIType.Cryovolcano, POIType.CinderCone };
 		/// <summary>Ground shapes and natural features named "{Root} {Type}" or "The {Adjective} {Type}".</summary>
 		private static readonly POIType[] Nature =
 		{
@@ -318,6 +353,8 @@ namespace FishMMO.Shared.NameGeneration
 			POIType.Glacier, POIType.LavaLake, POIType.FumaroleField, POIType.ObsidianField, POIType.MangroveMaze,
 			POIType.Grotto, POIType.SeaCave, POIType.Overhang, POIType.CoralReef, POIType.IceGeyserField,
 			POIType.MethaneLake, POIType.ImpactBasin, POIType.TidalRift, POIType.WispHollow,
+			POIType.TrenchEdge, POIType.SeaCavern, POIType.Kipuka, POIType.LavaFall, POIType.DrownedForest, POIType.FloatingIsland,
+			POIType.DeadForest, POIType.SeaHall,
 		};
 		/// <summary>Natural kinds whose plain type word takes an adjective well ("The Black Gorge").</summary>
 		private static readonly POIType[] PlainNature =
@@ -332,19 +369,26 @@ namespace FishMMO.Shared.NameGeneration
 		{
 			POIType.Shrine, POIType.Temple, POIType.StoneCircle, POIType.RitualSite, POIType.Monastery, POIType.FeyRing,
 			POIType.LeyNexus, POIType.FallenStar, POIType.CorruptedGrove, POIType.Portal, POIType.BogShrine,
-			POIType.SunkenTemple,
+			POIType.SunkenTemple, POIType.LavaCaveTemple, POIType.FrogShrine, POIType.Chapel, POIType.HolyWell,
 		};
-		private static readonly POIType[] PlainSacred = { POIType.Shrine, POIType.Temple, POIType.StoneCircle, POIType.Monastery, POIType.Portal, POIType.LeyNexus };
+		private static readonly POIType[] PlainSacred = { POIType.Shrine, POIType.Temple, POIType.StoneCircle, POIType.Monastery, POIType.Portal, POIType.LeyNexus, POIType.Chapel, POIType.HolyWell };
 		private static readonly POIType[] RaceSacred = { POIType.Shrine, POIType.Temple, POIType.RitualSite, POIType.Monastery, POIType.SunkenTemple, POIType.StoneCircle };
-		private static readonly POIType[] Dead = { POIType.Graveyard, POIType.Barrow, POIType.Crypt, POIType.Battlefield, POIType.Ossuary };
-		private static readonly POIType[] Likenesses = { POIType.Monument, POIType.Statue, POIType.Obelisk };
+		private static readonly POIType[] Dead = { POIType.Graveyard, POIType.Barrow, POIType.Crypt, POIType.Battlefield, POIType.Ossuary, POIType.BlightedCrater, POIType.PlagueVillage };
+		private static readonly POIType[] Likenesses = { POIType.Monument, POIType.Statue, POIType.Obelisk, POIType.FallenColossus };
 		private static readonly POIType[] Homes = { POIType.AbandonedFarm, POIType.Hermitage };
 		private static readonly POIType[] Towns = { POIType.Village, POIType.Town, POIType.City, POIType.Capital, POIType.Port, POIType.StiltVillage };
-		private static readonly POIType[] Works = { POIType.Tower, POIType.Bridge, POIType.Mine, POIType.Quarry, POIType.Lighthouse, POIType.Waystation, POIType.Dockyard, POIType.Windmill, POIType.Watermill, POIType.LumberMill };
+		private static readonly POIType[] Works = { POIType.Tower, POIType.Bridge, POIType.Mine, POIType.Quarry, POIType.Lighthouse, POIType.Waystation, POIType.Dockyard, POIType.Windmill, POIType.Watermill, POIType.LumberMill, POIType.MarshWatchtower, POIType.BrickKiln };
 		private static readonly POIType[] RaceWorks = { POIType.Tower, POIType.Mine, POIType.Quarry };
 		private static readonly POIType[] Coves = { POIType.SmugglersCove, POIType.PirateCove };
 		private static readonly POIType[] Wrecks = { POIType.Wreck, POIType.SunkenShip };
-		private static readonly POIType[] SeaFloorSites = { POIType.SunkenShrine, POIType.SeaMonsterDen, POIType.SeaCrystalFormation, POIType.SunkenMonument, POIType.SunkenStatue };
+		private static readonly POIType[] SeaFloorSites = { POIType.SunkenShrine, POIType.SeaMonsterDen, POIType.SeaCrystalFormation, POIType.SunkenMonument, POIType.SunkenStatue, POIType.SunkenWhaleFall };
+		/// <summary>Relics of the biome rounds (2026-10-25) named as the sea floor's are: "{Type} of {Root}", "{Root} {Type}", "The {Adjective} {Type}".</summary>
+		private static readonly POIType[] Relics =
+		{
+			POIType.HoluaSlide, POIType.AncientForge, POIType.PhoenixNest, POIType.MireGate, POIType.SunkenPlaza, POIType.ShatteredBridge,
+			POIType.SealedVault, POIType.WarEngineGraveyard,
+		};
+		private static readonly POIType[] AdriftSites = { POIType.AdriftDerelict, POIType.WhaleFall, POIType.BarnacleLog, POIType.Longline, POIType.WhaleTow };
 		private static readonly POIType[] Resources = { POIType.OreVein, POIType.CrystalFormation, POIType.HerbGrove };
 
 		private static PlaceNameTemplate P(string pattern, int weight, params POIType[] kinds)
@@ -527,6 +571,14 @@ namespace FishMMO.Shared.NameGeneration
 			P("{Type} of {Root}", 15, SeaFloorSites),
 			P("{Root} {Type}", 15, SeaFloorSites),
 			P("The {Adjective} {Type}", 10, SeaFloorSites),
+			// Adrift on the open sea (2026-10-25).
+			P("{Type} of {Root}", 15, AdriftSites),
+			P("{Root} {Type}", 15, AdriftSites),
+			P("The {Adjective} {Type}", 10, AdriftSites),
+			// The biome rounds' relics (2026-10-25).
+			P("{Type} of {Root}", 15, Relics),
+			P("{Root} {Type}", 15, Relics),
+			P("The {Adjective} {Type}", 10, Relics),
 
 			// Encounters and resources.
 			P("{Dungeon}", 40, POIType.DungeonEntrance),

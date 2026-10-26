@@ -144,6 +144,7 @@ namespace FishMMO.Shared
 			});
 			serverSection.Add(serverIl2cppToggle);
 			inspectorContent.Add(serverSection);
+			AddServerConfigurationInspector();
 
 			// ── Apply Platform Button ──
 			Button applyPlatformButton = new Button(() =>
@@ -225,6 +226,7 @@ namespace FishMMO.Shared
 					return;
 				}
 
+				if (BuildEnvironmentOptions.GetBuildType() == BuildTypeEnvironment.Server && !SaveDashboardServerConfigs()) return;
 				SetStatus("Building Game...");
 				EditorApplication.delayCall += () =>
 				{

@@ -1553,7 +1553,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				{
 					for (uint seed = 1; seed <= 25; seed++)
 					{
-						List<FallLedge> now = FallLedges.Plan(FallWater(drop), FallGround(drop), (x, y, z) => rock, seed);
+						List<FallLedge> now = FallLedges.Plan(FallWater(drop), FallGround(drop), (x, y, z) => rock, seed).FindAll(p => p.Kind != FallRockKind.Wall);
 						List<FallLedge> before = FrozenFallLedges.Plan(FallWater(drop), FallGround(drop), (x, y, z) => rock, seed);
 						Assert.That(now.Count, Is.EqualTo(before.Count), $"drop {drop} {rock} seed {seed}");
 						for (int i = 0; i < now.Count; i++)

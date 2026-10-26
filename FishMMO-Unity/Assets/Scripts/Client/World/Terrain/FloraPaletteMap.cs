@@ -52,6 +52,8 @@ namespace FishMMO.Client
 		private static readonly int StrengthId = Shader.PropertyToID("_FishFloraStrength");
 		private static readonly int GroundId = Shader.PropertyToID("_FishFloraGround");
 		private static readonly int WorldId = Shader.PropertyToID("_FishFloraWorld");
+		private static readonly int CoatTableId = Shader.PropertyToID("_FishCoatTable");
+		private static readonly int CoatInfoId = Shader.PropertyToID("_FishCoatInfo");
 
 		/// <summary>How far each kind of thing takes its look: grass and leaves, flowers, fungi and lichen, stones.</summary>
 		public static Vector4 Strength = new Vector4(0.7f, 1f, 0.75f, 0.6f);
@@ -71,8 +73,8 @@ namespace FishMMO.Client
 		}
 		private static bool enabled = true;
 
-		private static Texture2D biomeTexture, paletteTexture;
-		private static Vector4 rect, info, ground, growth = new Vector4(1f, 1f, 0f, 0f);
+		private static Texture2D biomeTexture, paletteTexture, coatTexture;
+		private static Vector4 rect, info, ground, growth = new Vector4(1f, 1f, 0f, 0f), coatInfo;
 		private static bool hooked, dirty = true, published;
 		private static int builtFrame = -1, retryFrame = -1;
 
@@ -86,6 +88,8 @@ namespace FishMMO.Client
 		/// <summary>The scene's looks: index 0 its own, then one per biome on the map, by <see cref="biomeIndex"/>.</summary>
 		private static readonly List<BiomeLooks.Look> looks = new List<BiomeLooks.Look>();
 		private static readonly Dictionary<int, int> biomeIndex = new Dictionary<int, int>();
+		/// <summary>The template of each palette row (row 0 the commonest biome's, null when none resolved), for the coat table.</summary>
+		private static readonly List<BiomeTemplate> rowBiomes = new List<BiomeTemplate>();
 		private static SceneBiomeMap activeMap;
 		private static string described = "not built";
 
@@ -303,6 +307,7 @@ namespace FishMMO.Client
 			WorldSceneSettings settings = FindSettings();
 			looks.Clear();
 			biomeIndex.Clear();
+			rowBiomes.Clear();
 			activeMap = null;
 			groundLooks = null;
 			if (settings == null)
@@ -333,6 +338,7 @@ namespace FishMMO.Client
 			ordered.Sort((a, b) => b.Value != a.Value ? b.Value.CompareTo(a.Value) : a.Key.CompareTo(b.Key));
 			BiomeTemplate commonest = ordered.Count > 0 && BiomeRegistry.TryGetByID(ordered[0].Key, out BiomeTemplate top) ? top : null;
 			looks.Add(commonest != null ? BiomeLooks.Of(commonest, world) : BiomeLooks.For(BiomeLookClass.Temperate, 0u, world));
+			rowBiomes.Add(commonest);
 			int unresolved = 0;
 			foreach (KeyValuePair<int, int> entry in ordered)
 			{
@@ -347,6 +353,7 @@ namespace FishMMO.Client
 				}
 				biomeIndex[entry.Key] = looks.Count;
 				looks.Add(BiomeLooks.Of(biome, world));
+				rowBiomes.Add(biome);
 			}
 			if (unresolved > 0 && retries < MaxRetries)
 			{
@@ -411,6 +418,14 @@ namespace FishMMO.Client
 			}
 			paletteTexture.SetPixels(pixels);
 			paletteTexture.Apply(false, false);
+			BuildCoats(world.Atmosphere, w, h);
+			// How the cold glows move, biome by biome (2026-10-25, I6i): the same rows and grid.
+			GlowModeTable.Build(rowBiomes, indices, w, h, rect, body != null && body.CloudWorldStructures != null ? body.CloudWorldStructures.GlowModes : null);
+			GlowModeTable.Place(settings);
+			// How the biomes burn on the shared clock (2026-10-25, I2t): the same rows.
+			BurnMosaicTable.Build(rowBiomes, settings);
+			// Which ground layers glow, and the world's heat (2026-10-25, I2r): the same rows.
+			GroundGlowTable.Build(rowBiomes, system, body);
 
 			gridIndices = indices;
 			gridWidth = w;
@@ -427,6 +442,40 @@ namespace FishMMO.Client
 			described = $"{looks.Count - 1} biome(s) on '{(body != null ? body.ResolvedName : "the home world")}' (star {world.StarKelvin:0} K, " +
 				$"{world.Atmosphere} air{(world.GroundStrength > 0f ? $", ground #{ColorUtility.ToHtmlStringRGB(world.Ground)}" : "")}), grid {w}×{h}; scene look {looks[0].Class}";
 			Debug.Log($"[Flora] {described}.");
+		}
+
+		/// <summary>
+		/// The coat table (2026-10-25, FishStructureCoat.hlsl): per palette row the coat its biome's weathering lays over buildings
+		/// (<see cref="BiomeStructureCoats.Texels"/>, the parts that need air dropped on this world), <see cref="BiomeStructureCoats.TexelsPerBiome"/>
+		/// texels a row. <c>_FishCoatInfo</c> = (on, rows, grid w, grid h); on only when some biome here has a coat, so a scene whose biomes
+		/// name none draws every building as before. Follows the build, not <see cref="Enabled"/> (the looks' A/B): a coat is weathering.
+		/// </summary>
+		private static void BuildCoats(AtmosphereKind air, int gridW, int gridH)
+		{
+			var weatherings = new List<BiomeWeathering>(rowBiomes.Count);
+			foreach (BiomeTemplate biome in rowBiomes)
+			{
+				weatherings.Add(biome != null ? biome.Weathering : default);
+			}
+			if (!BiomeStructureCoats.AnyCoat(weatherings))
+			{
+				coatInfo = Vector4.zero;
+				return;
+			}
+			int width = BiomeStructureCoats.TexelsPerBiome;
+			EnsureTexture(ref coatTexture, width, weatherings.Count, TextureFormat.RGBAHalf, "Structure Coats");
+			var pixels = new Color[width * weatherings.Count];
+			for (int row = 0; row < weatherings.Count; row++)
+			{
+				Vector4[] texels = BiomeStructureCoats.Texels(weatherings[row], air);
+				for (int t = 0; t < width; t++)
+				{
+					pixels[row * width + t] = new Color(texels[t].x, texels[t].y, texels[t].z, texels[t].w);
+				}
+			}
+			coatTexture.SetPixels(pixels);
+			coatTexture.Apply(false, false);
+			coatInfo = new Vector4(1f, weatherings.Count, gridW, gridH);
 		}
 
 		/// <summary>
@@ -484,6 +533,14 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(StrengthId, Strength);
 			Shader.SetGlobalVector(GroundId, on ? ground : Vector4.zero);
 			Shader.SetGlobalVector(WorldId, on ? growth : new Vector4(1f, 1f, 0f, 0f));
+			if (coatTexture != null)
+			{
+				Shader.SetGlobalTexture(CoatTableId, coatTexture);
+			}
+			Shader.SetGlobalVector(CoatInfoId, published && coatTexture != null ? coatInfo : Vector4.zero);
+			GlowModeTable.Publish(published);
+			BurnMosaicTable.Publish(on);
+			GroundGlowTable.Publish(on);
 			Version++;
 		}
 
@@ -494,6 +551,11 @@ namespace FishMMO.Client
 			Publish();
 			looks.Clear();
 			biomeIndex.Clear();
+			rowBiomes.Clear();
+			coatInfo = Vector4.zero;
+			GlowModeTable.Release();
+			BurnMosaicTable.Release();
+			GroundGlowTable.Release();
 			activeMap = null;
 			gridIndices = null;
 			groundLooks = null;
@@ -506,6 +568,11 @@ namespace FishMMO.Client
 			{
 				Object.Destroy(paletteTexture);
 				paletteTexture = null;
+			}
+			if (coatTexture != null)
+			{
+				Object.Destroy(coatTexture);
+				coatTexture = null;
 			}
 		}
 

@@ -68,6 +68,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The plan for a cave of a form in a biome (null: the form's defaults).</summary>
 		public static CaveFungusPlan For(BiomeTemplate biome, CaveForm form) => For(TraitsOf(biome, biome != null ? BiomeTemplateArt.Vines(biome) : null), form);
 
+		/// <summary>The roots near a mouth a form's plan takes before the land over it is weighed (what Cave Hangings is authored from).</summary>
+		public static float CodedRootsNearMouth(CaveForm form) => For(default(CaveBiomeTraits), form).RootsNearMouth;
+
 		/// <summary>What the plan reads of a biome, its vines given (read once by the caller: the lookup warns for an unauthored template).</summary>
 		public static CaveBiomeTraits TraitsOf(BiomeTemplate biome, VineBiomes.Habitat vines) => TraitsOf(biome, vines, null);
 
@@ -102,7 +105,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// vines grow (as thickly as at its cave mouths), roots where something green grows above, fewer groves where its own
 		/// glowing crystals light the halls.
 		/// </summary>
-		public static CaveFungusPlan For(in CaveBiomeTraits biome, CaveForm form)
+		/// <param name="rootsNearMouth">The biome's own roots near a mouth before the land over it is weighed (2026-10-25, I2n-c, its
+		/// Cave Hangings entry, authored from <see cref="CodedRootsNearMouth"/>); negative for the form's own.</param>
+		public static CaveFungusPlan For(in CaveBiomeTraits biome, CaveForm form, float rootsNearMouth = -1f)
 		{
 			CaveFungusPlan p;
 			switch (form)
@@ -130,6 +135,10 @@ namespace FishMMO.Shared.WorldDesign
 					break;
 			}
 			p.TowerMax = Mathf.Min(p.TowerMax, TowerMax);
+			if (rootsNearMouth >= 0f)
+			{
+				p.RootsNearMouth = rootsNearMouth;
+			}
 			if (biome.Known)
 			{
 				p.DaylightVines = biome.Vines ? p.DaylightVines * (0.4f + 0.9f * biome.VineCaves) : 0f;
@@ -223,7 +232,9 @@ namespace FishMMO.Shared.WorldDesign
 						planMade = true;
 						// The mouth's vines and greenery and the trees over the cave are its host land's; the glowing crystals its inside's.
 						vines = host != null ? BiomeTemplateArt.Vines(host) : null;
-						plan = CaveFungi.For(CaveFungi.TraitsOf(host, vines, caves.Linked ? CaveInteriorArt.Crystals(in caves) : null), system.Form);
+						// Its roots near a mouth the biome dressing the inside's (I2n-c, Cave Hangings), weighed by the land over it.
+						plan = CaveFungi.For(CaveFungi.TraitsOf(host, vines, caves.Linked ? CaveInteriorArt.Crystals(in caves) : null), system.Form,
+							CaveHanging.Entry(biome, system.Form).RootsNearMouth);
 					}
 					return plan;
 				}

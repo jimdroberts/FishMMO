@@ -45,13 +45,12 @@ MonoBehaviour:
     Weight: 1.3
   - Biome: Scrubland
     Weight: 1.3
-  - Biome: Wasteland
-    Weight: 1.3
   RaceCategories: []
   Races: []
   Small: 1
   Medium: 1
   Large: 1
+  NeedsLiquidWater: 0
   PadFlatness: 1
   Style: stone
   Layout: 0
@@ -66,14 +65,14 @@ MonoBehaviour:
     Role: 1
     Style: 
   Features:
-  - rid: 4061506278254183119
-  - rid: 4061506278254183120
-  - rid: 4061506278254183121
-  - rid: 4061506278254183122
+  - rid: 4061506389932245849
+  - rid: 4061506389932245850
+  - rid: 4061506389932245851
+  - rid: 4061506389932245852
   references:
     version: 2
     RefIds:
-    - rid: 4061506278254183119
+    - rid: 4061506389932245849
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -84,16 +83,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506278254183120
+    - rid: 4061506389932245850
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506278254183121
+    - rid: 4061506389932245851
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506278254183122
+    - rid: 4061506389932245852
       type: {class: DungeonEntranceFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: 0, y: 0}

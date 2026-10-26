@@ -125,6 +125,12 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		[System.NonSerialized] private bool? frozenSeas;
+
+		/// <summary>The open ice shelf this request lays (<see cref="IceShelfReach"/>), built by the first <see cref="SceneAltitude"/> made from it.</summary>
+		[System.NonSerialized] internal IceShelfReach iceShelfReach;
+		[System.NonSerialized] internal bool iceShelfReachBuilt;
+		/// <summary>The body instance <see cref="iceShelfReach"/> was built from: a re-loaded body (a re-cut's Revive) builds it again.</summary>
+		[System.NonSerialized] internal object iceShelfReachBody;
 	}
 
 	/// <summary>How a scene's terrain is cut into Unity terrains.</summary>
@@ -447,11 +453,43 @@ namespace FishMMO.Shared.WorldDesign
 			fineDetail = request.FineDetail;
 			frozenSeas = request.FrozenSeas;
 			iceSheet = new IceSheetSurface(body != null ? SolarSystemProfile.Resolve(body) : null, body, frozenSeas);
+			/* Where the sheet meets a cold sea it runs out over it (decision 68, I2s): measured from the ground before any
+			 * shelf, once per request; null on every world and scene that does not opt in or has no such coast. */
+			iceShelf = null;
+			iceShelf = IceShelfReach.For(request, this);
 		}
+
+		private readonly IceShelfReach iceShelf;
+
+		/// <summary>The open ice shelf this ground lays, or null where it lays none (<see cref="IceShelfReach"/>).</summary>
+		public IceShelfReach IceShelf => iceShelf;
 
 		/// <summary>The altitude in scene metres above the body's sea level: see <see cref="SceneGeneration.AltitudeMetres"/>.</summary>
 		public float At(float eastMetres, float northMetres)
 		{
+			float altitude = BeforeShelf(eastMetres, northMetres, out _, out _);
+			// Where the ice sheet meets a cold sea it runs out over it as a floating shelf, then fast ice to the floe edge.
+			return iceShelf != null ? iceShelf.SurfaceAt(eastMetres, northMetres, altitude) : altitude;
+		}
+
+		/// <summary>What part of the open ice shelf a point is (None everywhere without one): the biome field's water-role read.</summary>
+		public IceShelfPart IceShelfPartAt(float eastMetres, float northMetres)
+		{
+			if (iceShelf == null || !iceShelf.MayReach(eastMetres, northMetres))
+			{
+				return IceShelfPart.None;
+			}
+			return iceShelf.PartAt(eastMetres, northMetres, BeforeShelf(eastMetres, northMetres, out _, out _));
+		}
+
+		/// <summary>
+		/// The altitude before any open ice shelf, scene metres: the planet, its fine detail, a frozen-through sea's ice and
+		/// the ice sheet (<paramref name="iceMetres"/> of it), with the point's unit direction from the body's centre.
+		/// </summary>
+		public float BeforeShelf(float eastMetres, float northMetres, out Vector3 unitDirection, out float iceMetres)
+		{
+			unitDirection = default;
+			iceMetres = 0f;
 			if (!valid)
 			{
 				return 0f;
@@ -474,7 +512,9 @@ namespace FishMMO.Shared.WorldDesign
 				altitude = Mathf.Max(altitude, SceneGeneration.IceShelfMetres(seed, eastMetres, northMetres));
 			}
 			// Land whose summer never thaws is buried under the Ice Sheet's ice; at a cold coast that is the calving front.
-			altitude += iceSheet.ThicknessMetres(direction.normalized, planet, altitude, eastMetres, northMetres);
+			unitDirection = direction.normalized;
+			iceMetres = iceSheet.ThicknessMetres(unitDirection, planet, altitude, eastMetres, northMetres);
+			altitude += iceMetres;
 			return altitude;
 		}
 	}

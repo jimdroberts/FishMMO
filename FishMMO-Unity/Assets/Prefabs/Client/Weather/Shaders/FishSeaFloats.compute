@@ -1,0 +1,246 @@
+// The floats on the open sea (SeaFloatSystem, FishMMO.Client/World/SeaFloats, 2026-10-25, phase I2p): sargassum windrows,
+// by-the-wind sailors, barnacled drift logs, propagule rafts, corklines, growlers, pumice, pancake and brash ice, expanded every
+// frame from the camera's cells into instances on each kind's lattice and drawn by FishMMO/Sea Floats with
+// Graphics.RenderMeshIndirect, one command per kind's slot.
+//
+// A PURE FUNCTION OF THE SHARED CLOCK. A float's identity is its lattice point (k, j) in the frame of the scene's climatological
+// wind; the CPU splits the drift D(t) = rate·t, in double, into whole steps (k = slot − steps, an integer) and a remainder under a
+// pitch, so nothing here holds a large number. Everything about a float is hashed from (k, j) with BiomeSeaFloats' integer
+// arithmetic (BiomeSeaFloat.cs: Mix, Hash, Unit, FloorDiv, Patch, Cover, FromSlot), line for line: the tests run the C# copy.
+// Whether the sea under it is deep enough and far enough from the shore is the vertex stage's (the shore field is a graphics
+// global): a float in the surf is not drawn.
+//
+// Portable (WebGPU, Vulkan, D3D11/12, Metal, GLCore): no wave intrinsics; atomics only on a RWByteAddressBuffer; 5 storage
+// buffers in the expand kernel.
+
+#pragma kernel FishFloatClear
+#pragma kernel FishFloatExpand
+#pragma kernel FishFloatFinalize
+#pragma kernel FishFloatArgsFence
+#pragma use_dxc vulkan
+
+// One cell of the sea and one kind floating on it.
+//   cell     x0, z0 (world), its side (m), the biome's weight for the kind
+//   lattice  the first slot along and across the drift, and how many of each (BiomeSeaFloats.SlotRange)
+//   kind     the kind, its slot in the instance buffer, the steps it has drifted (wrapping), its first thread
+//   drift    x the remainder (m, under one pitch along the drift)
+struct FloatJob
+{
+    float4 cell;
+    int4 lattice;
+    int4 kind;
+    float4 drift;
+};
+
+// Per kind (BiomeSeaFloatTraits):
+//   a  spacing along, across; chance; patch share
+//   b  size min, max; row pitch (0 none); row half width
+//   c  patch cells; draw metres; rigid (1); least depth
+//   d  row band (lattice points to a band, the CPU's rounding); 0; 0; 0
+struct FloatKind
+{
+    float4 a;
+    float4 b;
+    float4 c;
+    float4 d;
+};
+
+// What the draw reads (FishSeaFloats.hlsl):
+//   placed  x, z of its middle (world, flat), its turn (radians), its scale
+//   look    the share drawn (distance fade), its hash's top 23 bits (a whole number, exact as a float), rigid (1), the least depth it is drawn over
+struct FloatInstance
+{
+    float4 placed;
+    float4 look;
+};
+
+StructuredBuffer<FloatJob> _FloatJobs;
+StructuredBuffer<FloatKind> _FloatKinds;
+RWByteAddressBuffer _FloatCounts;                 // one uint per slot
+RWStructuredBuffer<FloatInstance> _FloatInstances;
+RWByteAddressBuffer _FloatArgs;                   // IndirectDrawIndexedArgs, 5 uints per slot
+ByteAddressBuffer _FloatArgsFence;
+
+float4 _FloatDrift;     // xy the drift's way (unit, world xz), z the shared clock folded to 600 s, w unused
+float4 _FloatEye;       // xyz the camera, w unused
+uint _FloatSeed;
+uint _FloatThreads;     // threads in all (the last job's first + its slots)
+uint _FloatJobCount;
+uint _FloatSlots;
+uint _FloatCapacity;    // instances a slot holds
+
+uint FloatMix(uint x)
+{
+    x ^= x >> 16;
+    x *= 0x7feb352du;
+    x ^= x >> 15;
+    x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return x;
+}
+
+uint FloatHash(uint seed, int kind, int k, int j)
+{
+    return FloatMix(seed ^ FloatMix(asuint(kind) * 0x9E3779B1u ^ FloatMix(asuint(k) * 0x85EBCA6Bu ^ FloatMix(asuint(j) * 0xC2B2AE35u + 0x27D4EB2Fu))));
+}
+
+float FloatUnit(uint h)
+{
+    return (float)(h >> 8) * (1.0 / 16777216.0);
+}
+
+int FloatFloorDiv(int a, int b)
+{
+    return a >= 0 ? a / b : -((-a + b - 1) / b);
+}
+
+float FloatPatch(uint seed, int kind, int k, int j, int cells)
+{
+    cells = max(1, cells);
+    int ck = FloatFloorDiv(k, cells);
+    int cj = FloatFloorDiv(j, cells);
+    float fk = (float)(k - ck * cells) / (float)cells;
+    float fj = (float)(j - cj * cells) / (float)cells;
+    fk = fk * fk * (3.0 - 2.0 * fk);
+    fj = fj * fj * (3.0 - 2.0 * fj);
+    uint s = seed ^ 0x5EAF1047u;
+    float a = FloatUnit(FloatHash(s, kind, ck, cj));
+    float b = FloatUnit(FloatHash(s, kind, ck + 1, cj));
+    float c = FloatUnit(FloatHash(s, kind, ck, cj + 1));
+    float d = FloatUnit(FloatHash(s, kind, ck + 1, cj + 1));
+    return lerp(lerp(a, b, fk), lerp(c, d, fk), fj);
+}
+
+float FloatSmooth01(float x)
+{
+    x = saturate(x);
+    return x * x * (3.0 - 2.0 * x);
+}
+
+float FloatCover(FloatKind t, uint seed, int kind, int k, int j, float weight)
+{
+    float patch = t.a.w >= 1.0 ? 1.0 : FloatSmooth01((FloatPatch(seed, kind, k, j, (int)(t.c.x + 0.5)) - (1.0 - t.a.w)) / 0.12 + 0.5);
+    float cover = t.a.z * weight * patch;
+    if (t.b.z > 0.0)
+    {
+        int band = max(1, (int)(t.d.x + 0.5));
+        int r = FloatFloorDiv(j, band);
+        float middle = (0.2 + 0.6 * FloatUnit(FloatHash(seed ^ 0x0A0Bu, kind, 0, r))) * (float)band;
+        float off = abs((float)(j - r * band) - middle) * t.a.y;
+        float width = t.b.w * (0.5 + FloatPatch(seed ^ 0x77u, kind, k, r, 12));
+        cover *= saturate((width - off) / max(0.3, t.a.y) + 0.5);
+    }
+    return saturate(cover);
+}
+
+[numthreads(64, 1, 1)]
+void FishFloatClear(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _FloatSlots)
+    {
+        _FloatCounts.Store(id.x * 4u, 0u);
+    }
+}
+
+[numthreads(64, 1, 1)]
+void FishFloatExpand(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
+{
+    uint t = (group.y * 65535u + group.x) * 64u + thread.x;
+    if (t >= _FloatThreads || _FloatJobCount == 0u)
+    {
+        return;
+    }
+    // The job whose run of threads holds this one: the last whose first thread is at or before it.
+    uint lo = 0u, hi = _FloatJobCount - 1u;
+    [loop]
+    while (lo < hi)
+    {
+        uint mid = (lo + hi + 1u) >> 1;
+        if ((uint)_FloatJobs[mid].kind.w <= t)
+        {
+            lo = mid;
+        }
+        else
+        {
+            hi = mid - 1u;
+        }
+    }
+    FloatJob job = _FloatJobs[lo];
+    int kind = job.kind.x;
+    FloatKind traits = _FloatKinds[kind];
+    int local = (int)(t - (uint)job.kind.w);
+    int countU = max(1, job.lattice.z);
+    if (local >= countU * job.lattice.w)
+    {
+        return;
+    }
+    int slotU = job.lattice.x + local % countU;
+    int slotV = job.lattice.y + local / countU;
+    float2 drift = _FloatDrift.xy;
+    float2 across = float2(-drift.y, drift.x);
+    float2 spacing = traits.a.xy;
+    float remainder = job.drift.x;
+
+    // Each lattice point belongs to the one cell its un-jittered place falls in: no float drawn twice, none missed.
+    float2 slotAt = drift * ((float)slotU * spacing.x + remainder) + across * ((float)slotV * spacing.y);
+    if (any(slotAt < job.cell.xy) || any(slotAt >= job.cell.xy + job.cell.z))
+    {
+        return;
+    }
+    int k = slotU - job.kind.z;   // its identity along the drift: the slot less the steps drifted (wrapping)
+    int j = slotV;
+    uint h = FloatHash(_FloatSeed, kind, k, j);
+    if (FloatUnit(h) >= FloatCover(traits, _FloatSeed, kind, k, j, job.cell.w))
+    {
+        return;
+    }
+    float u = (float)slotU * spacing.x + remainder + (FloatUnit(FloatMix(h ^ 0x1u)) - 0.5) * 0.7 * spacing.x;
+    float v = (float)slotV * spacing.y + (FloatUnit(FloatMix(h ^ 0x2u)) - 0.5) * 0.7 * spacing.y;
+    float2 at = drift * u + across * v;
+
+    float distance = length(at - _FloatEye.xz);
+    float reach = traits.c.y;
+    if (distance >= reach)
+    {
+        return;
+    }
+    float fade = 1.0 - saturate((distance - reach * 0.8) / max(1.0, reach * 0.2));
+    // Turned at random, and slowly turning on: a whole number of turns (−1, 0, 1) to the clock's 600 s fold, so the fold moves nothing.
+    float spin = floor(FloatUnit(FloatMix(h ^ 0x4u)) * 3.0) - 1.0;
+    float yaw = FloatUnit(FloatMix(h ^ 0x3u)) * 6.2831853 + spin * 6.2831853 * (_FloatDrift.z / 600.0);
+    float scale = lerp(traits.b.x, traits.b.y, FloatUnit(FloatMix(h ^ 0x5u)));
+
+    uint slot = (uint)job.kind.y;
+    uint index;
+    _FloatCounts.InterlockedAdd(slot * 4u, 1u, index);
+    if (index >= _FloatCapacity)
+    {
+        return;
+    }
+    FloatInstance o;
+    o.placed = float4(at, yaw, scale);
+    o.look = float4(fade, (float)(h >> 9), traits.c.z, traits.c.w);
+    _FloatInstances[slot * _FloatCapacity + index] = o;
+}
+
+[numthreads(64, 1, 1)]
+void FishFloatFinalize(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _FloatSlots)
+    {
+        uint count = _FloatCounts.Load(id.x * 4u);
+        _FloatArgs.Store((id.x * 5u + 1u) * 4u, min(count, _FloatCapacity));
+    }
+}
+
+/* OpenGL: makes Unity issue GL_COMMAND_BARRIER_BIT before the indirect draws (FishCaveCover.compute FishCoverArgsFence):
+ * Unity's GLES device marks the command barrier pending only when the args buffer is BOUND after its write. */
+[numthreads(1, 1, 1)]
+void FishFloatArgsFence(uint3 id : SV_DispatchThreadID)
+{
+    // Never true (instance counts are capped): only the bindings matter.
+    if (_FloatArgsFence.Load(4) == 0xFFFFFFFFu)
+    {
+        _FloatCounts.Store(0, 0u);
+    }
+}

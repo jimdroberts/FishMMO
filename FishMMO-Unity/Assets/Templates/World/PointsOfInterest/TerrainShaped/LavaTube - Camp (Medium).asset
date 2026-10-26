@@ -22,6 +22,7 @@ MonoBehaviour:
   Small: 0
   Medium: 1
   Large: 0
+  NeedsLiquidWater: 0
   PadFlatness: 0
   Style: timber
   Layout: 0
@@ -72,31 +73,31 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506278254182605
-  - rid: 4061506278254182606
-  - rid: 4061506278254182607
+  - rid: 4061506389932245750
+  - rid: 4061506389932245751
+  - rid: 4061506389932245752
   references:
     version: 2
     RefIds:
-    - rid: 4061506278254182605
+    - rid: 4061506389932245750
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506278254182606
+    - rid: 4061506389932245751
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506278254182607
+    - rid: 4061506389932245752
       type: {class: PointOfInterestChamberFeature, ns: FishMMO.Shared.WorldDesign,
         asm: FishMMO.Shared.Tools.Editor}
       data:
         MinRadius: 3
         Features:
-        - rid: 4061506278254182608
-        - rid: 4061506278254182609
-        - rid: 4061506278254182610
-    - rid: 4061506278254182608
+        - rid: 4061506389932245753
+        - rid: 4061506389932245754
+        - rid: 4061506389932245755
+    - rid: 4061506389932245753
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -107,7 +108,7 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506278254182609
+    - rid: 4061506389932245754
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 5
@@ -115,7 +116,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506278254182610
+    - rid: 4061506389932245755
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 6

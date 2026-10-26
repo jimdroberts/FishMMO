@@ -233,8 +233,10 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>A skylight over a point of a chamber's floor, if one fits there (see <see cref="TryAddSkylights"/>).</summary>
+		/// <param name="maxCover">The most rock over the vault (a root window's 4 m, 2026-10-25); a skylight's own by default.</param>
+		/// <param name="minVault">The least headroom where it opens (a root window's gallery roof); a skylight's own by default.</param>
 		private bool TrySkylightAt(in CaveChamber chamber, Vector3 p, float radius, float yaw, int siteId, CaveGround ground, Func<float, float, bool> refused,
-			out CaveMouth mouth, out string problem)
+			out CaveMouth mouth, out string problem, float maxCover = SkylightMaxCover, float minVault = SkylightMinVault)
 		{
 			mouth = default;
 			float nominal = FloorOf(chamber, p);
@@ -243,7 +245,7 @@ namespace FishMMO.Shared.WorldDesign
 				problem = "no open floor under the place";
 				return false;
 			}
-			if (vault - floor < SkylightMinVault)
+			if (vault - floor < minVault)
 			{
 				problem = $"only {vault - floor:0.#} m of headroom where it would open";
 				return false;
@@ -257,7 +259,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			float top = ground.At(wx, wz) - Origin.y;
 			float cover = top - vault;
-			if (cover < MinCover || cover > SkylightMaxCover)
+			if (cover < MinCover || cover > maxCover)
 			{
 				problem = $"{cover:0.#} m of rock over the vault";
 				return false;

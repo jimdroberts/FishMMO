@@ -36,36 +36,47 @@ namespace FishMMO.Client
 			Glows(kind) || (kind != null && kind.Shape == AmbientShape.Swarm && kind.Glow > 0f);
 
 		/// <summary>One animal's own round of its pattern, seconds: the kind's ± 15 %. A jelly's ripple rides its stroke.</summary>
-		public static double PeriodOf(AmbientCreatureKind kind, uint own)
+		public static double PeriodOf(AmbientCreatureKind kind, uint own) => PeriodOf(kind.GlowPattern, kind.GlowPeriod, kind.StrokeHz, own);
+
+		/// <summary>
+		/// One animal's own round of a pattern, seconds, from the pattern's numbers alone (2026-10-25: the sea creatures' lights
+		/// share these rhythms, SeaLifePlacement): the period ± 15 %, or a ripple's stroke.
+		/// </summary>
+		public static double PeriodOf(AmbientGlowPattern pattern, float glowPeriod, float strokeHz, uint own)
 		{
-			if (kind.GlowPattern == AmbientGlowPattern.Ripple)
+			if (pattern == AmbientGlowPattern.Ripple)
 			{
-				return 1.0 / Math.Max(0.1, kind.StrokeHz);
+				return 1.0 / Math.Max(0.1, strokeHz);
 			}
-			return Math.Max(0.2, kind.GlowPeriod) * (0.85 + 0.3 * Unit(Mix(own ^ 0x61u)));
+			return Math.Max(0.2, glowPeriod) * (0.85 + 0.3 * Unit(Mix(own ^ 0x61u)));
 		}
 
 		/// <summary>
 		/// Where an animal is in its pattern's round at a moment, 0..1. A jelly's is its stroke's (the same seed as its swim's
 		/// phase, AmbientCaveLife), so the light runs out as the bell squeezes.
 		/// </summary>
-		public static float PhaseAt(AmbientCreatureKind kind, uint own, double seconds)
+		public static float PhaseAt(AmbientCreatureKind kind, uint own, double seconds) => PhaseAt(kind.GlowPattern, PeriodOf(kind, own), own, seconds);
+
+		/// <summary>Where an animal is in a pattern's round of <paramref name="period"/> seconds at a moment, 0..1.</summary>
+		public static float PhaseAt(AmbientGlowPattern pattern, double period, uint own, double seconds)
 		{
-			float offset = Unit(Mix(own ^ (kind.GlowPattern == AmbientGlowPattern.Ripple ? 0x95u : 0x62u)));
-			return SeaLifePlacement.Cycle(seconds, PeriodOf(kind, own), offset);
+			float offset = Unit(Mix(own ^ (pattern == AmbientGlowPattern.Ripple ? 0x95u : 0x62u)));
+			return SeaLifePlacement.Cycle(seconds, period, offset);
 		}
 
 		/// <summary>An animal's brightness at a moment, between the kind's <see cref="AmbientCreatureKind.GlowRest"/> and 1.</summary>
-		public static float BrightnessAt(AmbientCreatureKind kind, uint own, double seconds)
+		public static float BrightnessAt(AmbientCreatureKind kind, uint own, double seconds) => BrightnessAt(kind.GlowPattern, kind.GlowRest, PeriodOf(kind, own), own, seconds);
+
+		/// <summary>An animal's brightness at a moment, between <paramref name="glowRest"/> and 1, from a pattern's numbers alone.</summary>
+		public static float BrightnessAt(AmbientGlowPattern pattern, float glowRest, double period, uint own, double seconds)
 		{
-			float rest = Mathf.Clamp01(kind.GlowRest);
-			double period = PeriodOf(kind, own);
-			switch (kind.GlowPattern)
+			float rest = Mathf.Clamp01(glowRest);
+			switch (pattern)
 			{
 				case AmbientGlowPattern.Pulse:
 				{
 					// A slow breath: half a cosine up and down.
-					float u = PhaseAt(kind, own, seconds);
+					float u = PhaseAt(pattern, period, own, seconds);
 					float s = 0.5f - 0.5f * Mathf.Cos(u * 2f * Mathf.PI);
 					return Mathf.Lerp(rest, 1f, s * s * (3f - 2f * s));
 				}
@@ -74,7 +85,7 @@ namespace FishMMO.Client
 				case AmbientGlowPattern.Ripple:
 				{
 					// A little brighter as the bell squeezes (the shader runs the light out over it).
-					float u = PhaseAt(kind, own, seconds);
+					float u = PhaseAt(pattern, period, own, seconds);
 					return Mathf.Lerp(Mathf.Max(rest, 0.6f), 1f, Squeeze(u));
 				}
 				case AmbientGlowPattern.Flicker:

@@ -102,6 +102,39 @@ namespace FishMMO.Client
 		/// <summary>An instance's turn about its up axis, radians.</summary>
 		public static float Yaw(uint hash) => TerrainDetailMath.Unit(hash, 2) * 2f * Mathf.PI;
 
+		/// <summary>The hash stream an instance's variant mesh is drawn from (FishDetailScatter.compute SCATTER_VARIANT_STREAM).</summary>
+		public const int VariantStream = 5;
+
+		/// <summary>
+		/// Which of a type's <paramref name="variants"/> meshes an instance draws (2026-10-26): 0 for a type of one mesh, else
+		/// one of them by its own hash, every one alike likely; its own stream, so its place, turn and size are as they were.
+		/// </summary>
+		public static int Variant(uint hash, int variants)
+		{
+			if (variants <= 1)
+			{
+				return 0;
+			}
+			return Mathf.Min(variants - 1, (int)(TerrainDetailMath.Unit(hash, VariantStream) * variants));
+		}
+
+		/// <summary>
+		/// The instances one of a type's <paramref name="variants"/> slots is sized for when the type's whole bound is
+		/// <paramref name="bound"/>: its even share and five standard deviations of the hash's spread over it (a binomial
+		/// draw), never more than the whole. The CPU cannot know each variant's count without the GPU's hashes, and the whole
+		/// bound for every variant would hold the type's instances <paramref name="variants"/> times over.
+		/// </summary>
+		public static long VariantBound(long bound, int variants)
+		{
+			if (variants <= 1 || bound <= 0)
+			{
+				return bound;
+			}
+			double p = 1.0 / variants;
+			double share = bound * p + 5.0 * System.Math.Sqrt(bound * p * (1.0 - p)) + 16.0;
+			return System.Math.Min(bound, (long)System.Math.Ceiling(share));
+		}
+
 		/// <summary>
 		/// The share of instances kept at distance <paramref name="d"/>: 1 to <paramref name="thinStart"/>, then falling
 		/// linearly to <paramref name="keepAtDistance"/> at <paramref name="drawDistance"/>.

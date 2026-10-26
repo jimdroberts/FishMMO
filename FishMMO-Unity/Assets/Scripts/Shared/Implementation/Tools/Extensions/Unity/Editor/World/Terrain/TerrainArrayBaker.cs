@@ -36,6 +36,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// y lichen, z mineral, w 1 where a slot had one, all 0 where none did (the runtime reads that layer's name).
 		/// </summary>
 		public readonly List<Vector4> Makeup = new List<Vector4>();
+		/// <summary>Each layer's packed glow from the biome slots that paint with it (<see cref="TerrainArraySet.LayerGlow"/>, 2026-10-25, I2r): zero for none.</summary>
+		public readonly List<Vector4> Glow = new List<Vector4>();
 		/// <summary>LOCAL overrides that disagreed, and overrides that had to fall back. For the log.</summary>
 		public readonly List<string> Conflicts = new List<string>();
 		public readonly List<string> Problems = new List<string>();
@@ -155,6 +157,7 @@ namespace FishMMO.Shared.WorldDesign
 				ResolvedTerrainArrayLayer resolved = TerrainArrayResolver.Resolve(i, layers[i], lookup, plan.Conflicts);
 				plan.Layers.Add(resolved);
 				plan.Makeup.Add(MakeupOf(layers[i]));
+				plan.Glow.Add(GlowOf(layers[i]));
 				bool hasAlpha = AlbedoHasAlpha(resolved.Albedo);
 				// A layer with an albedo and no normal or mask gets them worked out from the albedo
 				// (TerrainSurfaceDerivation), so no ground with art draws flat.
@@ -201,6 +204,28 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					Vector3 m = slot.GroundMakeup;
 					return new Vector4(m.x, m.y, m.z, 1f);
+				}
+			}
+			return Vector4.zero;
+		}
+
+		/// <summary>
+		/// How a layer glows (2026-10-25, phase I2r, decision 65 (a)): the packed glow of the first biome slot using it that has one
+		/// (<see cref="TerrainTextureLayer.glow"/>, the uses in the makeup's order); zero when none does. Not part of the content hash,
+		/// as the makeup: a set whose only change is its glow is updated in place.
+		/// </summary>
+		public static Vector4 GlowOf(TerrainArrayLayerSource source)
+		{
+			if (source?.Uses == null)
+			{
+				return Vector4.zero;
+			}
+			foreach (TerrainArrayLayerUse use in source.Uses)
+			{
+				TerrainTextureLayer slot = use != null ? BiomeLocalArt.CommittedLayer(use.Biome, use.Slot) : null;
+				if (slot != null && !slot.glow.IsNone)
+				{
+					return slot.glow.Pack();
 				}
 			}
 			return Vector4.zero;
@@ -430,6 +455,14 @@ namespace FishMMO.Shared.WorldDesign
 					AssetDatabase.SaveAssetIfDirty(existing);
 					report.Written.Add($"{TerrainArraySet.BakedAssetPath(plan.SceneName)} (ground makeup only)");
 				}
+				// And how they glow (2026-10-25, I2r): also in place, no rebake.
+				if (!SameMakeup(existing.LayerGlow, plan.Glow))
+				{
+					existing.LayerGlow = PaddedMakeup(plan.Glow);
+					EditorUtility.SetDirty(existing);
+					AssetDatabase.SaveAssetIfDirty(existing);
+					report.Written.Add($"{TerrainArraySet.BakedAssetPath(plan.SceneName)} (ground glow only)");
+				}
 				// So is the index map's bake shader reference (sets baked before it existed have none): also in place.
 				Shader indexBake = Shader.Find(TerrainIndexMapBaker.ShaderName);
 				if (indexBake != null && existing.IndexBakeShader != indexBake)
@@ -579,6 +612,7 @@ namespace FishMMO.Shared.WorldDesign
 				set.LayerSources[i] = plan.Layers[i].Describe();
 			}
 			set.LayerMakeup = PaddedMakeup(plan.Makeup);
+			set.LayerGlow = PaddedMakeup(plan.Glow);
 			// Carried with the set so a player build has the shader that bakes each tile's index map from its alphamaps.
 			set.IndexBakeShader = Shader.Find(TerrainIndexMapBaker.ShaderName);
 			set.ContentHash = plan.Hash;

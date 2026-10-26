@@ -53,7 +53,7 @@ namespace FishMMO.Client
 			public uint Salt;
 			public float CastsShadows;
 			public float Padding;
-			/// <summary>The compute's <c>lod</c>: x levels (1..3), y bush (0/1), z the mesh's top at scale 1 (m).</summary>
+			/// <summary>The compute's <c>lod</c>: x levels (1..3), y bush (0/1), z the mesh's top at scale 1 (m), w the variant meshes its instances cycle (1..3).</summary>
 			public Vector4 Lod;
 		}
 
@@ -289,6 +289,7 @@ namespace FishMMO.Client
 				LastItems = itemCount;
 				LastBound = bound;
 			}
+			ShareVariantNeeds(types);
 			if (itemCount == 0)
 			{
 				Remember(camera, in view, types.Count, settings, reach, 0);
@@ -656,6 +657,38 @@ namespace FishMMO.Client
 			return swept;
 		}
 
+		/// <summary>The variant meshes a type's instances cycle (2026-10-26): 1 for a bush or any type with levels.</summary>
+		public static int VariantsOf(DetailScatterType type)
+		{
+			int n = type.Variants != null ? type.Variants.Length : 1;
+			return type.Bush || type.Levels.Length > 1 ? 1 : Mathf.Clamp(n, 1, DetailScatterSettings.MaxVariants);
+		}
+
+		/// <summary>
+		/// A type whose instances cycle variant meshes draws each variant from its own slot, the one its level would take
+		/// (FishDetailScatter.compute), so the bound listed into level 0 is shared out (DetailScatterMath.VariantBound): each
+		/// variant's slot is sized for its even share and the hash's spread, not for the whole.
+		/// </summary>
+		private void ShareVariantNeeds(IReadOnlyList<DetailScatterType> types)
+		{
+			for (int t = 0; t < types.Count; t++)
+			{
+				int variants = VariantsOf(types[t]);
+				if (variants <= 1)
+				{
+					continue;
+				}
+				for (int view = 0; view < Views; view++)
+				{
+					long whole = need[SlotOf(t, 0, view)];
+					for (int v = 0; v < variants && v < Levels; v++)
+					{
+						need[SlotOf(t, v, view)] = DetailScatterMath.VariantBound(whole, variants);
+					}
+				}
+			}
+		}
+
 		// ── Layout ────────────────────────────────────────────────────
 
 		/// <summary>Grows the per-slot arrays to the types' count (a new type starts with no capacity).</summary>
@@ -719,16 +752,18 @@ namespace FishMMO.Client
 					FootRadius = type.FootRadius,
 					Salt = type.Salt,
 					CastsShadows = type.CastsShadows ? 1f : 0f,
-					Lod = new Vector4(type.Levels.Length, type.Bush ? 1f : 0f, type.MeshTop, 0f),
+					Lod = new Vector4(type.Levels.Length, type.Bush ? 1f : 0f, type.MeshTop, VariantsOf(type)),
 				};
 				Material clone = CloneOf(type.Material);
 				if (clone == null)
 				{
 					continue;
 				}
-				for (int level = 0; level < type.Levels.Length && level < Levels; level++)
+				// A type's slices: its levels, or the variant meshes its instances cycle (a type of one level: ShareVariantNeeds).
+				Mesh[] slices = VariantsOf(type) > 1 ? type.Variants : type.Levels;
+				for (int level = 0; level < slices.Length && level < Levels; level++)
 				{
-					Mesh mesh = type.Levels[level];
+					Mesh mesh = slices[level];
 					for (int v = 0; v < Views; v++)
 					{
 						if (v == 1 && !type.CastsShadows)

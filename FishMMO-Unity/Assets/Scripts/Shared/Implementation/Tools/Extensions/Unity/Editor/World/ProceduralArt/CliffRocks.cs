@@ -154,13 +154,42 @@ namespace FishMMO.Shared.WorldDesign
 				case "Chalk":
 				case "Conglomerate":
 				case "Tuff":
+				// The biomes' own bedded rocks (2026-10-25, RegionalRocks).
+				case "Flysch":
+				case "Beachrock":
+				case "Marl":
+				case "Duststone":
+				case "Till":
+				case "Travertine":
+				case "Loess":
+				case "Laterite":
+				case "Molasse":
+				case "Cryokarst":
+				case "Mudstone":
+				case "Redbed":
+				case "Flagrock":
+				case "Saltrock":
+				case "Caliche":
+				case "Porcelanite":
+				case "Radiolarite":
+				case "Carstone":
+				case "Greywacke":
+				case "Nenfro":
+				case "Hyaloclastite":
+				case "Platebasalt":
 					return CliffStructure.Bedded;
 				case "Slate":
 				case "Schist":
 				case "Gneiss":
+				case "Serpentinite":
+				case "Tessera":
 					return CliffStructure.Foliated;
 				case "Basalt":
 				case "Andesite":
+				case "Trachyte":
+				case "Dolerite":
+				case "Phonolite":
+				case "Komatiite":
 					return CliffStructure.Columnar;
 				case Ice:
 					return CliffStructure.Ice;

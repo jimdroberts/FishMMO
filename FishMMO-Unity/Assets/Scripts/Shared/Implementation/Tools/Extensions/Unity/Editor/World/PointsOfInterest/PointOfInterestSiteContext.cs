@@ -142,6 +142,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 		private BiomeCaveCrystalKind postCrystal;
+		private byte postCrystalLook;
 		private bool postCrystalRead;
 
 		/// <summary>
@@ -156,13 +157,17 @@ namespace FishMMO.Shared.WorldDesign
 				if (!postCrystalRead)
 				{
 					postCrystalRead = true;
-					postCrystal = BiomeTemplateArt.PostCrystal(BiomeAt != null && Record != null ? BiomeAt(Record.Position.x, Record.Position.z) : null);
+					BiomeTemplate biome = BiomeAt != null && Record != null ? BiomeAt(Record.Position.x, Record.Position.z) : null;
+					postCrystal = BiomeTemplateArt.PostCrystal(biome);
+					// In the look the biome grows it in (2026-10-26, NEW-CRYSTALS; 0 the kind's own).
+					postCrystalLook = BiomeCaveCrystals.LookOf(BiomeTemplateArt.CaveCrystals(biome), postCrystal);
 				}
 				return postCrystal;
 			}
 			set
 			{
 				postCrystal = value;
+				postCrystalLook = 0;
 				postCrystalRead = true;
 			}
 		}
@@ -311,8 +316,9 @@ namespace FishMMO.Shared.WorldDesign
 			// A crystal post's crystal: its biome's own kind, laid in the post's cradle (a kit piece is the same in every biome).
 			if (isPiece && StructurePieces.TryCrystalSocket(piece, variant, out Vector3 socket, out float crystalScale))
 			{
-				GameObject crystal = CaveArt.MineralPrefab(PostCrystal, unchecked((int)PointOfInterestPlanner.Hash(Record != null ? Record.Id : 0,
-					Mathf.RoundToInt(position.x * 10f), Mathf.RoundToInt(position.z * 10f), 0x5C)) & 0xFF);
+				BiomeCaveCrystalKind postKind = PostCrystal;
+				GameObject crystal = CaveArt.MineralPrefab(postKind, unchecked((int)PointOfInterestPlanner.Hash(Record != null ? Record.Id : 0,
+					Mathf.RoundToInt(position.x * 10f), Mathf.RoundToInt(position.z * 10f), 0x5C)) & 0xFF, postCrystalLook);
 				if (crystal != null)
 				{
 					AddProp(crystal, position + rotation * Vector3.Scale(socket, scale), rotation, scale * crystalScale);

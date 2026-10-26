@@ -217,6 +217,15 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>True when the layer is painted on a world of this air (<see cref="airBand"/>; an unknown air, None, passes).</summary>
 		public bool AdmitsAir(BiomeAtmosphereRequirement worldAir) => BiomeAir.Admits(airBand, worldAir);
 
+		/// <remarks><b>A ground for one kind of world</b> (2026-10-25, decision 68): with a band set, a main, detail or cliff layer is in a scene's
+		/// palette only on worlds that meet its Requires and none of its Forbids (liquid water on the surface…). A main layer so refused hands
+		/// its place to the first air- or world-banded detail the world admits. Nothing ticked (the default) = every world, as before.</remarks>
+		[Tooltip("Main, detail and cliff layers: paint this ground only on worlds that meet every Requires flag and no Forbids flag (the scene's body), e.g. Requires Liquid Water. Nothing ticked = every world, as before. Written by Author biome art from the spec (a layer's World); set by hand to override.")]
+		public BiomeWorldBand worldBand;
+
+		/// <summary>True when the layer is painted on this world (<see cref="worldBand"/>; an unknown world, null, passes).</summary>
+		public bool AdmitsWorld(BiomeWorldConditions? world) => !world.HasValue || worldBand.Admits(world.Value);
+
 		/// <remarks>
 		/// <b>A ground of the open land or of the caves</b> (2026-10-25, phase I2n, decision 57: "an UNDERGROUND band on ground layers:
 		/// one template carries surface and interior palettes"): a cave biome's mud and gravel for its caves' floors beside the grounds
@@ -303,6 +312,47 @@ namespace FishMMO.Shared.Biomes
 			float depth = seaDepthInTides ? BiomeSeaFloors.InTides(depthMetres, tideMetres) : depthMetres;
 			return BiomeSeaFloors.DepthBand(seaDepthRange, seaDepthFalloff, depth);
 		}
+
+		/// <remarks>
+		/// <b>A ground measured from the lava</b> (2026-10-25, phase I2r "molten ground", decision 65 (b)): with the band on, a main or
+		/// detail layer is painted only where the ground stands between two heights above the scene's LAVA surface (negative below
+		/// it): a lava lake's glassy shore bench from 0 to 2 m, its spatter up to 8 m. It multiplies the layer's patches as the sea
+		/// depth band does, and on the main layer says where the base ground stands (the details carry the ground outside it). On a
+		/// scene with no lava surface every lava band passes. Off (the default) paints as before.
+		/// </remarks>
+		[Header("Lava Height Band")]
+		[Tooltip("Main and detail layers: paint this ground only between two heights above the scene's lava surface (negative: below it). Off = at every height its other bands allow, as before; a scene with no lava passes every band. Written by Author biome art from the spec (a layer's Lava); set by hand to override.")]
+		public bool useLavaBand = false;
+		[Tooltip("Lava band only. The height above the lava surface this ground is painted between, m (x the lowest, y the highest); an end at or past ±11000 is open.")]
+		public Vector2 lavaRange = new Vector2(-BiomeSeaFloors.OpenDepth, BiomeSeaFloors.OpenDepth);
+		[Tooltip("Lava band only. Width of the soft edge at each closed end, centred on the end, m. 0 = a hard line.")]
+		[Range(0f, 50f)] public float lavaFalloff = BiomeSeaFloors.DefaultDepthFalloff;
+
+		/// <summary>True when the layer's lava band is on and closes an end, so the height above the lava changes its strength.</summary>
+		public bool HasLavaBand => useLavaBand && BiomeSeaFloors.Closes(lavaRange);
+
+		/// <summary>
+		/// How fully the layer is painted where the ground stands <paramref name="aboveLavaMetres"/> over the lava's surface (negative
+		/// below it): 1 without a band, or with NaN (no lava). The sea depth band's rule, measured upward from the lava.
+		/// </summary>
+		public float LavaWeight(float aboveLavaMetres)
+		{
+			if (!useLavaBand || float.IsNaN(aboveLavaMetres))
+			{
+				return 1f;
+			}
+			return BiomeSeaFloors.DepthBand(lavaRange, lavaFalloff, aboveLavaMetres);
+		}
+
+		/// <remarks>
+		/// <b>A ground that glows</b> (2026-10-25, phase I2r, decision 65 (a)): along the seams of a crust that overturns on the shared
+		/// clock, or over the whole layer from the world's heat (<see cref="BiomeGroundGlow"/>). Baked into the scene's terrain arrays
+		/// with the layer (TerrainArraySet.LayerGlow) and drawn by the terrain shader, and written into the lava's molten mask. None
+		/// (the default) draws as before.
+		/// </remarks>
+		[Header("Glow")]
+		[Tooltip("How this ground glows: None (as before), Seams (crust plates overturning on the shared clock, their seams incandescent) or Whole (the whole layer at the world's temperature). Written by Author biome art from the spec (a layer's Glows); set by hand to override. Takes effect when the scene's terrain arrays are baked again (in place).")]
+		public BiomeGroundGlow glow;
 
 		[Header("Ways Across This Ground")]
 		[Tooltip("Main and detail layers only: the path, road and cobble grounds a way takes where this ground is the strongest under it. Each empty one is the biome's own slot. Written by Author biome art from the spec; set by hand to override.")]

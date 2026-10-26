@@ -16,7 +16,9 @@ namespace FishMMO.Shared.WorldDesign
 				.Water(BiomeWaterRole.MethaneLake)
 				// Alien ground alone: the client reads that live from the template's air (BiomeHabitats.Live), never stored.
 				.Wildlife(BiomeHabitat.None)
-				.Moat(BiomeMoatWater.Frozen);
+				.Moat(BiomeMoatWater.Frozen)
+				// Methane mist off the shores (2026-10-25, I2q-b, decision 62), replacing the tholin haze (that stays the Tholin Plain's).
+				.Emits("Methane Mist", 0.1f);
 		}
 	}
 }

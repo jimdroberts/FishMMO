@@ -604,6 +604,17 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
         colour = lerp(colour, dot(colour, lumWeights) * GRASS_CURED, cure);
     }
     colour = lerp(colour, rootGround, rootGroundAmount);
+    /* The burn (2026-10-25, I2t; FishBurn.hlsl, the compute's tone in the colour word's bits 24..26, GrassMath.BurnToneOf):
+     * stubble burnt charcoal, then the green flush's emerald rising from the base, then back to the blade's own colour. 0: the
+     * blade as before. */
+    uint burnBits = (blade.colour >> 24) & 7u;
+    [branch] if (burnBits != 0u && !isHead)
+    {
+        float tone = (float)burnBits / 7.0;
+        float3 charcoal = float3(0.022, 0.019, 0.017) * (0.8 + 0.4 * t);
+        float3 emerald = float3(0.085, 0.33, 0.045) * (0.7 + 0.6 * t);
+        colour = tone > (3.0 / 7.0) ? lerp(emerald, charcoal, (tone - 3.0 / 7.0) / (4.0 / 7.0)) : lerp(colour, emerald, tone / (3.0 / 7.0));
+    }
     if (groundViewOn)
     {
         colour = groundView;

@@ -71,6 +71,9 @@ namespace FishMMO.Shared.Celestial
 		private const float ZenithDuskPower = 3f;
 		private const float HorizonDuskPower = 2.656f;
 		private const float SunsetGlow = 1.103f;
+		// How much of the zenith's light the horizon's air turns again toward the eye, against the
+		// sun's single scattering (see Evaluate). Fitted by hue to the Temperate Sky at 20° and 90°.
+		private const float SecondScattering = 0.8f;
 
 		// What is left when the sun is eighteen degrees down: airglow and starlight.
 		/// <summary>
@@ -206,6 +209,24 @@ namespace FishMMO.Shared.Celestial
 				HorizonGain * (1f - Mathf.Exp(-depth.x * HorizonViewDepth)) * litHorizon.x * scattered.x * horizonDusk + NightHorizon.r,
 				HorizonGain * (1f - Mathf.Exp(-depth.y * HorizonViewDepth)) * litHorizon.y * scattered.y * horizonDusk + NightHorizon.g,
 				HorizonGain * (1f - Mathf.Exp(-depth.z * HorizonViewDepth)) * litHorizon.z * scattered.z * horizonDusk + NightHorizon.b);
+			// The air along the horizon is lit by the sky as well as by the sun: the second scattering, the
+			// zenith's blue light turned again toward the eye by the same long path of air. Scattering once
+			// only, the sun's beam loses its blue on the way down while the view's path is already deep
+			// enough to saturate blue, so green came out on top — a mint horizon from about 15° to noon and a
+			// mint fog with it (2026-10-26), which no real clear sky shows and the painted Temperate Sky this
+			// model was fitted to never had (its horizon is 0.72, 0.80, 0.92 at 20°). Weighed by the dusk
+			// and taken out toward a sunset, where the sun's own light along the horizon is the whole of it,
+			// and at the horizon's own brightness, so only its colour moves.
+			float secondShare = SecondScattering * Mathf.Pow(dusk, HorizonDuskPower) * (1f - low);
+			if (secondShare > 0f)
+			{
+				var second = new Vector3(
+					(1f - Mathf.Exp(-depth.x * HorizonViewDepth)) * scattered.x * Mathf.Max(0f, zenith.x - NightZenith.r),
+					(1f - Mathf.Exp(-depth.y * HorizonViewDepth)) * scattered.y * Mathf.Max(0f, zenith.y - NightZenith.g),
+					(1f - Mathf.Exp(-depth.z * HorizonViewDepth)) * scattered.z * Mathf.Max(0f, zenith.z - NightZenith.b));
+				Vector3 relit = horizon + second * secondShare;
+				horizon = relit * (Luminance(horizon) / Mathf.Max(1e-6f, Luminance(relit)));
+			}
 
 			// Deep air is lit mostly by light that has been scattered many times, and that light is
 			// white: a thick atmosphere's zenith is pale, not a deeper blue. And no sky is brighter

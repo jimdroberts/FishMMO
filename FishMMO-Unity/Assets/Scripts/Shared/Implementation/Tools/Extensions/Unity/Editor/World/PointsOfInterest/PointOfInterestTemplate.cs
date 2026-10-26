@@ -98,6 +98,11 @@ namespace FishMMO.Shared.WorldDesign
 		public bool Small = true;
 		public bool Medium = true;
 		public bool Large = true;
+		/// <summary>
+		/// Built only on a world with liquid water on its surface (decision 96, 2026-10-25): a holy well's spring chapel, where its
+		/// silent well-head stands anywhere. Off for every template written before, so no pick changes (<see cref="WaterFit"/>).
+		/// </summary>
+		public bool NeedsLiquidWater;
 
 		/// <summary>How fully the site's pad is flattened, 0 left as it is … 1 level.</summary>
 		[Header("Ground")]
@@ -190,6 +195,20 @@ namespace FishMMO.Shared.WorldDesign
 				return 0f;
 			}
 			return Fit(Weight, biomeWeight, Small, Medium, Large, Races, RaceCategories, record.SizeClass, race, raceCategory);
+		}
+
+		/// <summary>
+		/// The weights a pick draws a world's templates by (<paramref name="weights"/>: the biome's, null for each template's
+		/// <see cref="DefaultBiomeWeight"/>), with every template that needs liquid water at 0 where the world has none
+		/// (<see cref="NeedsLiquidWater"/>). Where it has water the weights come back as they were given. Pure.
+		/// </summary>
+		public static Func<PointOfInterestTemplate, float> WaterFit(Func<PointOfInterestTemplate, float> weights, bool liquidWater)
+		{
+			if (liquidWater)
+			{
+				return weights;
+			}
+			return template => template == null || template.NeedsLiquidWater ? 0f : weights != null ? weights(template) : template.DefaultBiomeWeight;
 		}
 
 		/// <summary>

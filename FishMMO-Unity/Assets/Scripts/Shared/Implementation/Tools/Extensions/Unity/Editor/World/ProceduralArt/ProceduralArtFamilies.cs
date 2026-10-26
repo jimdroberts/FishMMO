@@ -75,6 +75,10 @@ namespace FishMMO.Shared.WorldDesign
 			("StoneStyles.cs", new[] { ArtFamily.Rocks }),
 			("RockFormations.cs", new[] { ArtFamily.Rocks, ArtFamily.Cliffs }),
 			("RockTypes.cs", new[] { ArtFamily.Rocks, ArtFamily.Cliffs }),
+			("RegionalRocks.cs", new[] { ArtFamily.Rocks, ArtFamily.Cliffs }),
+			("StoneStyles.Regional.cs", new[] { ArtFamily.Rocks }),
+			("RockVariantCounts.cs", new[] { ArtFamily.Rocks }),
+			("StoneStyles.Named.cs", new[] { ArtFamily.Rocks }),
 			("RockArtNames.cs", new[] { ArtFamily.Rocks, ArtFamily.Cliffs }),
 			("CrystalFormations.cs", new[] { ArtFamily.Rocks }),
 			("IceMeshes.cs", new[] { ArtFamily.Rocks }),
@@ -118,6 +122,8 @@ namespace FishMMO.Shared.WorldDesign
 			("CaveGlowMeshes.Hanging.cs", new[] { ArtFamily.Structures }),
 			// An ice cave's ice, built as the glow art (2026-10-20, caves livened).
 			("CaveGlowMeshes.Ice.cs", new[] { ArtFamily.Structures }),
+			// The cave crystals' habits the biome drafts name, built as the glow art (2026-10-26, NEW-CRYSTALS).
+			("CaveGlowMeshes.Habits.cs", new[] { ArtFamily.Structures }),
 			// The run-time cave cover's mesh, built in the structures' steps (2026-10-20), and the type table outside the folder
 			// whose order is its submeshes'.
 			("CaveCoverMeshes.cs", new[] { ArtFamily.Structures }),

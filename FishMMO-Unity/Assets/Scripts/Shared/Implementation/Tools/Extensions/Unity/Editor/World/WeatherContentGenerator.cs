@@ -179,6 +179,8 @@ namespace FishMMO.Shared.WorldDesign
 			public float GrainMetres = 1e-4f;
 			public float GrainDensity = 2500f;
 			public bool Vapour;
+			/// <summary>Thrown up by vents (WeatherSubstance.Vented): set at creation and by the refresh (2026-10-25, I2q-b; Volcanic Ash and Cryo Tephra carried it by hand before).</summary>
+			public bool Vented;
 		}
 
 		private static Color C(float r, float g, float b) => new Color(r, g, b, 1f);
@@ -194,6 +196,19 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>A vapour off hot ground, seen as the drops it condenses into where it meets colder air: cloud drops of ten microns.</summary>
 		private static SubstanceSpec Vapour(string name)
 			=> new SubstanceSpec { Name = name, Vapour = true, GrainMetres = 1e-5f, GrainDensity = 1000f };
+
+		/// <summary>Something vents throw up (2026-10-25, I2q-b): it rises in a plume over the vent and falls out of it downwind (VolcanicPlume).</summary>
+		private static SubstanceSpec Vented(SubstanceSpec spec)
+		{
+			spec.Vented = true;
+			return spec;
+		}
+
+		private static SubstanceSpec Frozen(SubstanceSpec spec)
+		{
+			spec.Frozen = true;
+			return spec;
+		}
 
 		/* The grains are measured ones, not tuned ones. Sand is a fifth of a millimetre of quartz;
 		 * lunar regolith dust is finer and heavier, basalt glass at about 70 microns; volcanic ash a
@@ -225,12 +240,34 @@ namespace FishMMO.Shared.WorldDesign
 				C(0.9f, 0.84f, 0.35f), C(0.72f, 0.66f, 0.28f), 0.8f, 1f, 0.05f, WeatherCoverKind.Ash, C(0.85f, 0.8f, 0.35f), 2f, false, 0.75f),
 			With(Grain("Tholin Haze", 2e-6f, 1400f), "Organic haze settling as a rust-coloured crust.",
 				C(0.72f, 0.48f, 0.32f), C(0.55f, 0.36f, 0.24f), 0.6f, 1f, 0f, WeatherCoverKind.Ash, C(0.6f, 0.4f, 0.28f), 2f, false, 0.5f),
-			With(Grain("Volcanic Ash", 1e-4f, 2400f), "Hot mineral ash. The default ashfall.",
+			With(Vented(Grain("Volcanic Ash", 1e-4f, 2400f)), "Hot mineral ash. The default ashfall.",
 				C(0.55f, 0.53f, 0.5f), C(0.42f, 0.4f, 0.38f), 1f, 1f, 0.05f, WeatherCoverKind.Ash, C(0.35f, 0.34f, 0.33f), 2f, false, 0.6f),
-			With(Grain("Cryo Tephra", 2e-4f, 920f), "Ice thrown out by a cryovolcano and drifting back down. Ash in how it falls, snow in what it leaves.",
+			With(Vented(Grain("Cryo Tephra", 2e-4f, 920f)), "Ice thrown out by a cryovolcano and drifting back down. Ash in how it falls, snow in what it leaves.",
 				C(0.8f, 0.88f, 0.94f), C(0.62f, 0.72f, 0.8f), 0.55f, 1f, 0.02f, WeatherCoverKind.Snow, C(0.86f, 0.92f, 0.96f), -0.5f, false, 0.7f),
 			With(Vapour("Steam"), "Water vapour off hot springs, fumaroles and geysers: white where it mixes into colder air, gone again once the drier air has evaporated it. It never falls and never lies.",
 				C(0.96f, 0.97f, 0.98f), C(0.86f, 0.88f, 0.9f), 1f, 1f, 0f, WeatherCoverKind.None, Color.white, 2f, true, 0.1f),
+
+			/* The vent rounds' substances (2026-10-25, phase I2q-b; each written onto its biome by its spec's Emits column, which makes
+			 * it here when the project lacks it). Plume frost (decision 53): the ice grains an ice moon's jets throw up, five microns of
+			 * water ice, falling back as the brightest snow there is. Plume soot (decision 66): Triton's geysers' dark dust, ten microns
+			 * of tholin carried up in nitrogen gas and laid as streaks downwind. Vog (decision 93): the volcanic smog of an effusive
+			 * field, sulphate aerosol of a micron, blue-grey, which never lies; vented, so it hangs as plumes over the vents and drifts
+			 * downwind rather than everywhere (not a vapour: a vapour's ground is set with geysers). Acid fog (decision 85): sulphuric
+			 * acid droplets of the Venus highlands' cloud base, pooling in the graben. Kiln haze (decision 89): the dense carbon dioxide
+			 * of the Venus lowlands thick with fine dust, ground-hugging. Methane mist (decision 62): a low shore fog of methane
+			 * droplets over a methane lake. */
+			With(Frozen(Vented(Grain("Plume Frost", 5e-6f, 920f))), "Ice grains thrown up by an ice moon's jets and falling back as the brightest snow in the sky.",
+				C(0.95f, 0.97f, 0.98f), C(0.82f, 0.86f, 0.9f), 0.5f, 1f, 0.02f, WeatherCoverKind.Snow, C(0.97f, 0.98f, 0.99f), -0.5f, false, 0.6f),
+			With(Vented(Grain("Plume Soot", 1e-5f, 1400f)), "Dark tholin dust carried up a nitrogen geyser and laid in long streaks downwind.",
+				C(0.23f, 0.14f, 0.09f), C(0.3f, 0.22f, 0.17f), 0.6f, 1f, 0f, WeatherCoverKind.Ash, C(0.2f, 0.13f, 0.09f), 2f, false, 0.5f),
+			With(Vented(Grain("Vog", 1e-6f, 1800f)), "Volcanic smog: sulphate haze off the vents of an effusive field, blue on the horizon. It never lies.",
+				C(0.54f, 0.59f, 0.66f), C(0.5f, 0.54f, 0.6f), 0.5f, 1f, 0f, WeatherCoverKind.None, Color.white, 2f, false, 0.45f),
+			With(Grain("Acid Fog", 2e-6f, 1830f), "Sulphuric acid droplets of the cloud base, pooling in the hollows and dragging over the ridges.",
+				C(0.9f, 0.86f, 0.66f), C(0.82f, 0.78f, 0.58f), 0.4f, 1f, 0f, WeatherCoverKind.None, Color.white, 2f, false, 0.85f),
+			With(Grain("Kiln Haze", 1e-6f, 2000f), "Dense hot carbon dioxide thick with fine dust, hugging the ground and drifting at walking pace.",
+				C(0.69f, 0.54f, 0.35f), C(0.6f, 0.47f, 0.31f), 0.4f, 1f, 0f, WeatherCoverKind.None, Color.white, 2f, false, 0.7f),
+			With(Grain("Methane Mist", 1e-5f, 423f), "A low shore fog of methane droplets over a lake of liquid methane.",
+				C(0.85f, 0.72f, 0.56f), C(0.72f, 0.62f, 0.48f), 0.5f, 1f, 0f, WeatherCoverKind.None, Color.white, -0.6f, false, 0.3f),
 		};
 
 		private static SubstanceSpec With(SubstanceSpec spec, string description, Color tint, Color fog, float fallSpeed, float stretch,
@@ -308,6 +345,7 @@ namespace FishMMO.Shared.WorldDesign
 			substance.GrainMetres = spec.GrainMetres;
 			substance.GrainDensity = spec.GrainDensity;
 			substance.Vapour = spec.Vapour;
+			substance.Vented = spec.Vented;
 		}
 
 		private static T FindOrCreate<T>(string folder, string name, Report report, Action<T> setup) where T : ScriptableObject

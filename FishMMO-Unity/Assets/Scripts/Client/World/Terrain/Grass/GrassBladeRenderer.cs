@@ -615,8 +615,9 @@ namespace FishMMO.Client
 				GrassBladeHead head = look.Head;
 				float headSize = Mathf.Max(0.002f, look.HeadSize);
 				SetType(t, RowShape2, new Vector4(GrassMath.SprinkleChance(sprinkle, sprinkleLevel), (float)head, head != GrassBladeHead.None ? headSize : 0f, Mathf.Clamp01(type.SnowBury)));
-				// The share of stems with a head, the sprinkled type's lattice level, and 1 for a rigid (mineral) type that never sways.
-				SetType(t, RowMore, new Vector4(head != GrassBladeHead.None ? Mathf.Clamp01(look.HeadShare) : 0f, sprinkleLevel, look.Rigid ? 1f : 0f, 0f));
+				// The share of stems with a head, the sprinkled type's lattice level, 1 for a rigid (mineral) type that never sways, and 1 for
+				// an after-burn type that grows only on freshly burnt ground (fire lilies; 2026-10-25, I2t).
+				SetType(t, RowMore, new Vector4(head != GrassBladeHead.None ? Mathf.Clamp01(look.HeadShare) : 0f, sprinkleLevel, look.Rigid ? 1f : 0f, look.AfterBurn ? 1f : 0f));
 				// The head's colours: the mesh's petals (unless the look's win: GrassType.Build left none), else the look's.
 				int colours = Mathf.Clamp(type.HeadColours.Count, 0, GrassType.MaxHeadColours);
 				Color[] palette = colours == 0 ? look.HeadColours : null;
@@ -1368,6 +1369,8 @@ namespace FishMMO.Client
 			cmd.SetComputeVectorParam(compute, FloraGroundId, valid ? Shader.GetGlobalVector(FloraGroundId) : Vector4.zero);
 			// The world's growth (FishFloraGrowth: thin air low, thick air tall), which the blade heights take.
 			cmd.SetComputeVectorParam(compute, FloraWorldId, valid ? Shader.GetGlobalVector(FloraWorldId) : new Vector4(1f, 1f, 0f, 0f));
+			// The burn mosaic (2026-10-25, I2t; FishBurn.hlsl): stubble, the flush and the fire lilies on the flora grid's rows.
+			BurnMosaicTable.BindCompute(cmd, compute);
 		}
 
 		/// <summary>The gather on the GPU: counts cleared, the tile table culled into the work list, the dispatches written.</summary>

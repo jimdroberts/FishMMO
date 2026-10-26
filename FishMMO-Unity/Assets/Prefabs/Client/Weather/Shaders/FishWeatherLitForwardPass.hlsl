@@ -37,6 +37,13 @@ float _FishFloraOn;
 // sixteen, and a texture's own sampler (sampler_FishGroundColour) is refused in a program that does not read that texture. ──
 #define FISH_GROUND_MAP_SAMPLER sampler_LinearClamp
 #include "FishGroundMap.hlsl"
+#if defined(FISH_INDIRECT_INSTANCED)
+// ── FishMMO edit: the coat a biome's weather lays over its buildings (2026-10-25, FishStructureCoat.hlsl, FloraPaletteMap's table; after the ground map,
+// which gives it the slope a piece stands on). ──
+#include "FishStructureCoat.hlsl"
+// ── FishMMO edit: how a biome's cold glows move (2026-10-25, I6i; FishGlowModes.hlsl, GlowModeTable's table): off unless a biome here names a mode. ──
+#include "FishGlowModes.hlsl"
+#endif
 // ── FishMMO edit: moss on the surfaces whose material asks for it (_FishMoss; FishMoss.hlsl). Read with the base map's
 // own sampler, bound in every program of this pass: no sampler state of its own. ──
 #include "FishMoss.hlsl"
@@ -374,12 +381,23 @@ void LitPassFragment(
         half fishFoot = 1.0h - (half)smoothstep(0.0, 0.18, input.fishContact);
         fishGroundWeight = min(fishGroundWeight, fishFoot * 0.9h);
         fishSoil = 0.0h;
+        half3 fishUnweathered = surfaceData.albedo;
+        half fishUnweatheredSmooth = surfaceData.smoothness;
         FishStructureWeather(inputData.positionWS, (half3)input.normalWS, input.fishContact, input.fishRockOrigin,
             surfaceData.albedo, surfaceData.smoothness, surfaceData.occlusion);
+        // The biome's coat over the weathering (walls, roofs, timber: not panes or glowing parts). Off unless a biome here has one.
+        if (_FishStructure < 1.5h)
+        {
+            FishStructureCoat(inputData.positionWS, (half3)input.normalWS, input.fishContact, input.fishRockOrigin, fishUnweathered,
+                fishUnweatheredSmooth, surfaceData.albedo, surfaceData.smoothness, surfaceData.occlusion);
+        }
         if (_FishStructure > 2.5h)
         {
-            // A glowing part (faerie, rune or crystal light): its emission pulses with its piece's light, from before dusk.
+            // A glowing part (faerie, rune or crystal light): its emission pulses with its piece's light, from before dusk; or moves by
+            // the mode its biome names (FishGlowModes.hlsl), as the light does.
+            half3 fishGlowMade = surfaceData.emission;
             surfaceData.emission *= FishStructureGlowLight(input.fishRockOrigin, fishUnderground);
+            FishGlowModeWay(fishGlowMade, input.fishRockOrigin, fishUnderground, surfaceData.emission);
         }
         else if (_FishStructure > 1.5h)
         {
@@ -389,8 +407,15 @@ void LitPassFragment(
     }
     else if (_FishStructure < -0.5h)
     {
-        // A flickering crystal (stormglass, 2026-10-18): its glow crackles with the light beside it (FishGlowFlicker).
-        surfaceData.emission *= FishGlowFlicker(input.fishRockOrigin);
+        // A glowing crystal (2026-10-25: -1 flickering, -2 steady). A flickering one (stormglass, 2026-10-18) crackles with the light
+        // beside it (FishGlowFlicker); a steady one shines as made; either moves by the mode its biome names (FishGlowModes.hlsl).
+        half3 fishGlowMade = surfaceData.emission;
+        bool fishFlickers = _FishStructure > -1.5h;
+        if (fishFlickers)
+        {
+            surfaceData.emission *= FishGlowFlicker(input.fishRockOrigin);
+        }
+        FishGlowModeCrystal(fishGlowMade, input.fishRockOrigin, fishFlickers, surfaceData.emission);
     }
     if (fishSoil > fishGroundWeight)
     {

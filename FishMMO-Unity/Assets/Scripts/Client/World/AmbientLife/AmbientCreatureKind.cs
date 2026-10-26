@@ -345,6 +345,11 @@ namespace FishMMO.Client
 		public bool NeedsFreshWater;
 		/// <summary>Only where there are trees (squirrels).</summary>
 		public bool NeedsTrees;
+		/// <summary>
+		/// Only far out at sea (2026-10-25, I2p: albatrosses, shearwaters, storm petrels): metres from any land its home must lie, the
+		/// sea under it and no dry ground on eight bearings at this distance and at half of it (AmbientLifeMotion.IsOffshore). 0: no such rule.
+		/// </summary>
+		public float Offshore;
 
 		// ── When ──
 		public AmbientActivity Activity = AmbientActivity.Diurnal;

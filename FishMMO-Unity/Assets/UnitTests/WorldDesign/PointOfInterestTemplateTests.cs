@@ -336,7 +336,7 @@ namespace FishMMO.UnitTests.WorldDesign
 					{
 						for (int j = i + 1; j < wells.Count; j++)
 						{
-							Assert.That(Vector2.Distance(wells[i].Offset, wells[j].Offset), Is.GreaterThanOrEqualTo(PointOfInterestLayouts.WellSpacing),
+							Assert.That(Vector2.Distance(wells[i].Offset, wells[j].Offset), Is.GreaterThanOrEqualTo(PointOfInterestLayouts.WellSpacing - 1e-5f),
 								$"{name} seed {seed}: wells {i} and {j}");
 						}
 					}

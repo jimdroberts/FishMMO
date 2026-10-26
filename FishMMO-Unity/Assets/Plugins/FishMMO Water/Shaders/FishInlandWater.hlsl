@@ -83,8 +83,9 @@ float4 _FishWakeVelocities[16];
 float _FishWakeCount;
 /// The body's water look by the biome of its shores (InlandWaterRenderer.Looks, per renderer, 2026-10-16): three looks of
 /// INLAND_LOOK_VECTORS vectors each, its own, the water it runs out of (its start) and the water it runs into (its end),
-/// each x shallow rgb + w the silt moving water carries, deep rgb, absorption per metre rgb, silt rgb, foam rgb (colours
-/// linear, as the material's). _InlandLookOn 0 (no block set): the material's own look, as every body had before.
+/// each x shallow rgb + w the silt moving water carries, deep rgb + w a MELT (2026-10-25, I2q-b: molten sulphur, opaque,
+/// viscous, its colour drifting), absorption per metre rgb, silt rgb, foam rgb (colours linear, as the material's).
+/// _InlandLookOn 0 (no block set): the material's own look, as every body had before.
 #define INLAND_LOOK_VECTORS 5
 float4 _InlandLooks[15];
 float _InlandLookOn;
@@ -98,7 +99,12 @@ struct InlandLook
 	half turbidity;
 	half3 silt;
 	half3 foam;
+	half melt;
 };
+
+/// A melt's colour drift (BiomeWaterLook.Melt, decision 84): once each 1250 s of the shared clock (it divides the wrap), phased over
+/// the surface in patches tens of metres across, toward its deep colour as hotter melt darkens to red.
+#define INLAND_MELT_DRIFT_SECONDS 1250.0
 
 /// The water's look where a river carries <paramref name="towards"/>.x of the look of the water it leaves and .y of the
 /// water it joins (its vertices', BiomeWaterLooks.Blend), the rest its own; the material's without a block.
@@ -113,6 +119,7 @@ InlandLook InlandLookAt(float2 towards)
 		look.turbidity = _Turbidity;
 		look.silt = _SiltColor.rgb;
 		look.foam = _FoamColor.rgb;
+		look.melt = 0.0;
 		return look;
 	}
 	float2 share = saturate(towards);
@@ -126,6 +133,7 @@ InlandLook InlandLookAt(float2 towards)
 	look.shallow = v[0].rgb;
 	look.turbidity = v[0].w;
 	look.deep = v[1].rgb;
+	look.melt = saturate(v[1].w);
 	look.density = v[2].rgb;
 	look.silt = v[3].rgb;
 	look.foam = v[4].rgb;
@@ -851,6 +859,9 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	// Two scales: the current's own, and a finer one the air stirs that hardly moves. Faster water is
 	// rougher, broken water roughest.
 	half detailFade = saturate(1.0 - distanceToCamera / max(1.0, _NormalFadeDistance));
+	// A melt (2026-10-25, I2q-b) is viscous: a fifth of the ripples.
+	half meltRipple = _InlandLookOn < 0.5 ? 1.0 : lerp(1.0, 0.2, saturate(_InlandLooks[1].w));
+	detailFade *= meltRipple;
 	// Choppier along a shear line (the wavelets its turbulence raises), as well as duller (the roughness below).
 	half strength = _NormalStrength * detailFade * (1.0 + 0.6 * saturate(speed / 2.0) + 0.6 * broken + 1.5 * pool.stir + 0.4 * saturate(shear / 2.0));
 	half3 a = UnpackNormalScale(FlowSample(TEXTURE2D_ARGS(_NormalMap, sampler_NormalMap), positionWS.xz, flow, max(0.2, _NormalScale), _FlowCycle, float2(0.0, 0.0)), strength);
@@ -920,6 +931,14 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	/* A river always carries some silt, and more the faster it runs: browner than the lake it runs into, as real ones
 	 * are, and never the clear glass that let a slow river vanish over its bed when seen from above. */
 	InlandLook look = InlandLookAt(input.look);
+	if (look.melt > 0.001)
+	{
+		// The melt's colour drifts on the shared clock (decision 84): the same for every player, seamless at the wrap.
+		float phase = frac(_FishInlandTime / INLAND_MELT_DRIFT_SECONDS + frac(dot(positionWS.xz, float2(0.013, 0.021))));
+		half drift = 0.5 + 0.5 * sin(6.2831853 * phase);
+		look.shallow = lerp(look.shallow, look.deep, look.melt * 0.45 * drift);
+		look.density = max(look.density, look.melt * 4.0);
+	}
 	half silt = look.turbidity * (0.3 + 0.7 * saturate(riverSpeed / 1.5)) * input.state.y * (1.0 - pool.stir);
 	/* Bubbles under a fall scatter the light back out: milky where the curtain lands, clearing fast with distance (the
 	 * churn squared), so the pool reads as a boil round the foot rather than a pale disc; and only as milky as the fall
@@ -954,6 +973,9 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 		behind = refracted * bedTransmittance + bodyColor * (1.0 - transmittance);
 		alpha = 1.0;
 	#endif
+	// A melt is opaque: nothing behind it shows through (2026-10-25, I2q-b).
+	behind = lerp(behind, bodyColor, look.melt);
+	alpha = lerp(alpha, 1.0, look.melt);
 	/* The bubble plume under a plunge pool, seen through the water above it: a cloud of bubbles scatters the light
 	 * that reaches it back up, pale turquoise-white, and hides the bed behind it. It lies deep at its ragged edge and
 	 * welling up to just under the surface over its core (never below the bed), and the water over it tints it as
@@ -1129,6 +1151,8 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	color = MixFog(color, input.fogFactor);
 	if (!below)
 	{
+		// The air in front, behind the clouds, as the sea and the ground take it (FishWaterAirHaze).
+		color = FishWaterAirHaze(color, positionWS);
 		color = FishWaterBehindClouds(color, screenUV, positionWS);
 		half fogKeep;
 		color = FishWaterAirFogOver(color, positionWS, screenUV, fogKeep);

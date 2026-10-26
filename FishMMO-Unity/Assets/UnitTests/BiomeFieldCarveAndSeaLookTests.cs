@@ -293,11 +293,11 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(look.Spray, Is.EqualTo(drops));
 			Assert.That(look.Mist, Is.EqualTo(mist));
 			Assert.That(look.Absorb, Is.EqualTo(Vector3.zero));
-			// And so for every biome's spec water look, which is today's for all 83.
+			// Each look is also its own neutral reference, including the sulphur melt override.
 			foreach (string name in BiomeAssetNames())
 			{
 				BiomeWaterLook own = BiomeArtSpec.For(name).WaterLook();
-				InlandWaterRenderer.FallLook each = InlandWaterRenderer.FallLookOf(own, BiomeWaterLooks.Today, water, foam, drops, mist);
+				InlandWaterRenderer.FallLook each = InlandWaterRenderer.FallLookOf(own, own, water, foam, drops, mist);
 				Assert.That(each.Water, Is.EqualTo(water), name);
 				Assert.That(each.Foam, Is.EqualTo(foam), name);
 				Assert.That(each.Absorb, Is.EqualTo(Vector3.zero), name);
@@ -395,7 +395,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// and water looks, the authoring writes and marks the sea look, and any look an asset already holds is today's.
 		/// </summary>
 		[Test]
-		public void DefaultLooks_AreTodays_ForEveryBiome()
+		public void SeaDefaults_AreTodays_AndWaterMatchesApprovedOverrides()
 		{
 			string template = CodeOnly(Read(TemplateSource));
 			StringAssert.Contains("private BiomeSeaLook seaLook = BiomeSeaLooks.Today;", template);
@@ -412,8 +412,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(entry.SeaLook().Signature(), Is.EqualTo(BiomeSeaLooks.Today.Signature()), name);
 				// A biome file may mark its water hot (phase I2q, .HotWater()); the colours stay today's.
 				BiomeWaterLook water = entry.WaterLook();
-				water.Hot = false;
-				Assert.That(water.Signature(), Is.EqualTo(BiomeWaterLooks.Today.Signature()), name);
+				Assert.That(water.Signature(), Is.EqualTo(BiomeWaterLookAndFieldSurfaceTests.ExpectedAuthoredWater(name).Signature()), name);
 				count++;
 			}
 			Assert.That(count, Is.EqualTo(83));

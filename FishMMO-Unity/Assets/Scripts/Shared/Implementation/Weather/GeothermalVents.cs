@@ -23,6 +23,21 @@ namespace FishMMO.Shared.Weather
 		/// through clay, plopping and spattering on the shared clock (<see cref="GeothermalVents.Plop"/>), a thin steam over it.
 		/// </summary>
 		MudPot = 3,
+		/// <summary>
+		/// A jet (2026-10-25, phase I2q-b, decision 53): a narrow jet of vapour and ice grains out of a fissure, laid along the scene's
+		/// stored lines (an ice moon's tiger stripes); on an airless world a fountain of grains, on a thin one a plume leaning downwind.
+		/// </summary>
+		Jet = 4,
+		/// <summary>
+		/// A pond of molten sulphur (2026-10-25, phase I2q-b, decision 84): dug and pooled as a hot spring is, wearing its biome's
+		/// water look (an opaque Melt look whose colour drifts on the shared clock), fuming thinly; never counted as liquid water.
+		/// </summary>
+		SulphurPool = 5,
+		/// <summary>
+		/// A black smoker (2026-10-25, decisions 83 and 97: the next free value after the jets and sulphur pools): a sulphide chimney
+		/// in a sea hall's hot floor, its plume dark. Placed only by the sea halls (stored per hall, phase I2n-b), never on the surface.
+		/// </summary>
+		Smoker = 6,
 	}
 
 	/// <summary>
@@ -36,6 +51,17 @@ namespace FishMMO.Shared.Weather
 		public bool AllKinds;
 		public BiomeGeothermalShares Shares;
 		public WeatherSubstance Substance;
+		/// <summary>The biome's vents' layout and timing (2026-10-25, I2q-b; <see cref="BiomeTemplate.Vents"/>).</summary>
+		public BiomeVents Vents;
+		/// <summary>The biome's fountain episodes, which an Episode timing follows.</summary>
+		public BiomeFountainEpisodes Episodes;
+		/// <summary>The biome's template id (0 for none).</summary>
+		public int BiomeID;
+		/// <summary>
+		/// True when the scene stores vent lines of this biome (<see cref="IceStripes.HasBiome"/>): a biome laid out on lines then has no
+		/// grid sites, only those on its lines (<see cref="GeothermalVents.FindAlong"/>). Set by the scene's search, never by <see cref="Of"/>.
+		/// </summary>
+		public bool Lined;
 
 		/// <summary>None: plain ground.</summary>
 		public static GeothermalGround None => default;
@@ -49,9 +75,16 @@ namespace FishMMO.Shared.Weather
 				Chance = chance,
 				AllKinds = allKinds,
 				Shares = biome != null ? biome.Geothermal : BiomeGeothermalShares.Today,
-				Substance = allKinds ? biome.Emits : null,
+				// The steam's own look for a steaming biome; a biome with a site rate of its own fumes in its own tint, not its emission's.
+				Substance = allKinds && GeothermalVents.IsSteaming(biome) ? biome.Emits : null,
+				Vents = biome != null ? biome.Vents : BiomeVents.Today,
+				Episodes = biome != null ? biome.FountainEpisodes : default,
+				BiomeID = biome != null ? biome.ID : 0,
 			};
 		}
+
+		/// <summary>True when this ground's sites stand on its lines rather than on the grid.</summary>
+		public bool OnLines => Lined && Vents.Layout != BiomeVentLayout.Grid;
 	}
 
 	/// <summary>
@@ -89,6 +122,16 @@ namespace FishMMO.Shared.Weather
 		public uint Seed;
 		/// <summary>The biome's steam, when it emits one (its look); null for a volcano's fumaroles, which steam plain white.</summary>
 		public WeatherSubstance Substance;
+		/// <summary>The colour it fumes (2026-10-25, I2q-b: its biome's <see cref="BiomeGeothermalShares.FumeTint"/>); alpha 0 for its steam's own.</summary>
+		public Color Fume;
+		/// <summary>How its strength moves on the shared clock (its biome's <see cref="BiomeVents.Timing"/>; presentation only, <see cref="VentTiming"/>).</summary>
+		public BiomeVentTiming Timing;
+		/// <summary>The fountain episodes an Episode timing follows (its biome's; empty: the volcanic default).</summary>
+		public BiomeFountainEpisodes Episodes;
+		/// <summary>Its crack's bearing, radians in [0, π): its line's for a site on a line, the kneading glow's field elsewhere.</summary>
+		public float Bearing;
+		/// <summary>True for a site laid on a stored line (<see cref="GeothermalVents.FindAlong"/>), false for a grid site.</summary>
+		public bool OnLine;
 	}
 
 	/// <summary>A geyser at one moment: which eruption, how far into it, and what it is doing.</summary>
@@ -182,13 +225,23 @@ namespace FishMMO.Shared.Weather
 			return biome != null && biome.Emits != null && biome.Emits.Vapour && biome.EmissionRate > 0f;
 		}
 
-		/// <summary>The chance of a site in a cell of a biome, and whether geysers and springs are among them (else fumaroles only).</summary>
+		/// <summary>
+		/// The chance of a site in a cell of a biome, and whether every kind of its split is among them (else fumaroles only): a
+		/// steaming biome's by its emission, as before; else, a biome with a site rate of its own (2026-10-25, decision 84:
+		/// <see cref="BiomeGeothermalShares.Rate"/>) every kind of its split at that rate, whatever it emits; else a vented biome's
+		/// fumaroles by its emission, as before.
+		/// </summary>
 		public static float SiteChance(BiomeTemplate biome, out bool allKinds)
 		{
 			allKinds = IsSteaming(biome);
 			if (allKinds)
 			{
 				return Mathf.Clamp01(SitesPerEmission * biome.EmissionRate);
+			}
+			if (biome != null && biome.Geothermal.OwnRate)
+			{
+				allKinds = true;
+				return Mathf.Clamp01(SitesPerEmission * biome.Geothermal.Rate);
 			}
 			return VolcanicVents.IsVented(biome) ? Mathf.Clamp01(FumarolesPerVentedEmission * biome.EmissionRate) : 0f;
 		}
@@ -239,7 +292,8 @@ namespace FishMMO.Shared.Weather
 					var at = new Vector2(x, z);
 					GeothermalGround ground = groundAt(at);
 					float chance = ground.Chance;
-					if (chance <= 0f || Unit(h * 2891336453u + 7u) >= chance)
+					// A biome laid out on the scene's stored lines has its sites there instead (2026-10-25, I2q-b; FindAlong).
+					if (chance <= 0f || ground.OnLines || Unit(h * 2891336453u + 7u) >= chance)
 					{
 						continue;
 					}
@@ -255,6 +309,10 @@ namespace FishMMO.Shared.Weather
 						Size = Unit(h * 3266489917u + 3u),
 						Seed = h,
 						Substance = ground.AllKinds ? ground.Substance : null,
+						Fume = ground.Shares.FumeTint,
+						Timing = ground.Vents.Timing,
+						Episodes = ground.Episodes,
+						Bearing = VentTiming.FieldBearing(x, z),
 					});
 				}
 			}
@@ -284,7 +342,192 @@ namespace FishMMO.Shared.Weather
 			{
 				return GeothermalKind.HotSpring;
 			}
-			return shares.MudPot > 0f && k >= vent ? GeothermalKind.MudPot : GeothermalKind.Fumarole;
+			if (shares.Jet <= 0f && shares.SulphurPool <= 0f)
+			{
+				// Every split before 2026-10-25 (no jets, no sulphur pools): the comparison as it was, to the bit.
+				return shares.MudPot > 0f && k >= vent ? GeothermalKind.MudPot : GeothermalKind.Fumarole;
+			}
+			// Then mud pots, jets and sulphur pools, each its share (2026-10-25, I2q-b); a draw rounding past the last goes to the last named.
+			float mud = (shares.Geyser + shares.HotSpring + shares.Fumarole + shares.MudPot) / total;
+			float jet = (shares.Geyser + shares.HotSpring + shares.Fumarole + shares.MudPot + shares.Jet) / total;
+			if (k < vent)
+			{
+				return GeothermalKind.Fumarole;
+			}
+			if (k < mud && shares.MudPot > 0f)
+			{
+				return GeothermalKind.MudPot;
+			}
+			if (k < jet && shares.Jet > 0f)
+			{
+				return GeothermalKind.Jet;
+			}
+			if (shares.SulphurPool > 0f)
+			{
+				return GeothermalKind.SulphurPool;
+			}
+			return shares.Jet > 0f ? GeothermalKind.Jet : shares.MudPot > 0f ? GeothermalKind.MudPot : GeothermalKind.Fumarole;
+		}
+
+		// ── Sites on the scene's stored lines (2026-10-25, phase I2q-b, decisions 53, 90, 95) ──
+
+		/// <summary>The spacing of a jet along a fissure, and of a vent along a ridge, m (decision 53: one every 40–80 m of stripe).</summary>
+		public const float FissureSpacing = 60f, RidgeSpacing = 200f;
+		/// <summary>How far a jet may stray along its slot of a line, as a share of the spacing (either way), and across it, as a share of the half width.</summary>
+		public const float AlongScatter = 0.3f, AcrossScatter = 0.3f;
+		/// <summary>The share of a ridge's slots that hold a vent (a fissure's all do).</summary>
+		public const float RidgeKeep = 0.6f;
+		/// <summary>A terrace's vent zones, at these shares of each line (Stromboli's north-east, central and south-west craters).</summary>
+		public static readonly float[] TerraceZones = { 0.25f, 0.5f, 0.75f };
+		/// <summary>The most vents a terrace zone holds, and how far apart along it they stand, m.</summary>
+		public const int TerraceVents = 3;
+		public const float TerraceSpread = 12f;
+
+		/// <summary>
+		/// The sites on a scene's stored vent lines (pure; appended to <paramref name="into"/> up to <paramref name="maxSites"/>): on a
+		/// Fissures line a jet every <see cref="FissureSpacing"/> m (hash-jittered along and across it), on a Ridges line a jet in
+		/// six of ten <see cref="RidgeSpacing"/> m slots, on a Terrace line 1–3 vents in each of its three zones and on a terrace pad
+		/// 1–3 across its middle; each kept only where <paramref name="groundAt"/> is hot ground laid out on lines, inside
+		/// <paramref name="area"/>. A slot belongs to the one segment of its line it falls on, so a line's sites never double where its
+		/// segments meet. A terrace's vents are of its ground's split (fumaroles for a vented ground).
+		/// </summary>
+		public static void FindAlong(IReadOnlyList<VentLine> lines, Rect area, uint seed, Func<Vector2, GeothermalGround> groundAt, List<GeothermalSite> into, int maxSites)
+		{
+			if (lines == null || groundAt == null || area.width <= 0f || area.height <= 0f)
+			{
+				return;
+			}
+			for (int i = 0; i < lines.Count && into.Count < maxSites; i++)
+			{
+				VentLine line = lines[i];
+				uint lineSeed = seed ^ unchecked(line.Seed * 0x2C1B3C6Du);
+				if (line.Layout == BiomeVentLayout.Fissures || line.Layout == BiomeVentLayout.Ridges)
+				{
+					if (line.IsPad)
+					{
+						continue;
+					}
+					bool ridge = line.Layout == BiomeVentLayout.Ridges;
+					float spacing = ridge ? RidgeSpacing : FissureSpacing;
+					float alongA = line.AlongA, alongB = line.AlongB;
+					long k0 = (long)Math.Floor(alongA / spacing) - 1, k1 = (long)Math.Floor(alongB / spacing);
+					for (long k = k0; k <= k1 && into.Count < maxSites; k++)
+					{
+						uint h = Hash(lineSeed, (int)(k & 0x7FFFFFFF), ridge ? 0x5A17 : 0x7151);
+						float s = (k + 0.5f + 2f * AlongScatter * (Unit(h) - 0.5f)) * spacing;
+						if (s < alongA || s >= alongB || (ridge && Unit(h * 2891336453u + 7u) >= RidgeKeep))
+						{
+							continue;
+						}
+						float t = (s - alongA) / Mathf.Max(1e-4f, alongB - alongA);
+						AddOnLine(line, t, 2f * AcrossScatter * (Unit(h * 747796405u + 1u) - 0.5f) * line.Half, h, area, groundAt, into, true);
+					}
+				}
+				else if (line.Layout == BiomeVentLayout.Terrace)
+				{
+					if (line.IsPad)
+					{
+						uint h = Hash(lineSeed, 0, 0x7E44);
+						int n = 1 + (int)(h % TerraceVents);
+						float heading = Unit(h * 3266489917u + 3u) * Mathf.PI;
+						var way = new Vector2(Mathf.Cos(heading), Mathf.Sin(heading));
+						float step = Mathf.Min(TerraceSpread, line.Half * 0.5f);
+						for (int v = 0; v < n && into.Count < maxSites; v++)
+						{
+							AddAt(line.A + way * ((v - 0.5f * (n - 1)) * step), heading, Hash(lineSeed, v + 1, 0x7E45), area, groundAt, into, false);
+						}
+						continue;
+					}
+					for (int z = 0; z < TerraceZones.Length; z++)
+					{
+						float s = TerraceZones[z] * line.LineLength;
+						if (s < line.AlongA || s >= line.AlongB)
+						{
+							continue;
+						}
+						uint h = Hash(lineSeed, z, 0x7E46);
+						int n = 1 + (int)(h % TerraceVents);
+						for (int v = 0; v < n && into.Count < maxSites; v++)
+						{
+							uint hv = Hash(lineSeed, z * 8 + v + 1, 0x7E47);
+							float t = Mathf.Clamp01((s + (v - 0.5f * (n - 1)) * TerraceSpread - line.AlongA) / Mathf.Max(1e-4f, line.AlongB - line.AlongA));
+							AddOnLine(line, t, 2f * AcrossScatter * (Unit(hv * 747796405u + 1u) - 0.5f) * line.Half, hv, area, groundAt, into, false);
+						}
+					}
+				}
+			}
+		}
+
+		private static void AddOnLine(in VentLine line, float t, float across, uint h, Rect area, Func<Vector2, GeothermalGround> groundAt, List<GeothermalSite> into, bool jet)
+		{
+			Vector2 d = line.B - line.A;
+			Vector2 normal = d.sqrMagnitude > 1e-8f ? new Vector2(-d.y, d.x).normalized : Vector2.zero;
+			AddAt(line.A + d * t + normal * across, line.Bearing, h, area, groundAt, into, jet);
+		}
+
+		private static void AddAt(Vector2 at, float bearing, uint h, Rect area, Func<Vector2, GeothermalGround> groundAt, List<GeothermalSite> into, bool jet)
+		{
+			if (at.x < area.xMin || at.x > area.xMax || at.y < area.yMin || at.y > area.yMax)
+			{
+				return;
+			}
+			GeothermalGround ground = groundAt(at);
+			if (ground.Chance <= 0f || !ground.OnLines)
+			{
+				return;
+			}
+			GeothermalKind kind = jet ? GeothermalKind.Jet : ground.AllKinds ? KindOf(Unit(h * 1103515245u + 12345u), ground.Shares) : GeothermalKind.Fumarole;
+			into.Add(new GeothermalSite
+			{
+				Position = at,
+				Kind = kind,
+				Size = Unit(h * 3266489917u + 3u),
+				Seed = h,
+				Substance = ground.AllKinds ? ground.Substance : null,
+				Fume = ground.Shares.FumeTint,
+				Timing = ground.Vents.Timing,
+				Episodes = ground.Episodes,
+				Bearing = bearing,
+				OnLine = true,
+			});
+		}
+
+		/// <summary>The ground a scene's search reads at a point: the template's (<see cref="GeothermalGround.Of"/>), marked lined when the map stores its lines.</summary>
+		public static GeothermalGround GroundOf(SceneBiomeMap map, IReadOnlyList<VentLine> lines, Vector2 p)
+		{
+			GeothermalGround ground = GeothermalGround.Of(map.Sample(new Vector3(p.x, 0f, p.y)));
+			ground.Lined = ground.BiomeID != 0 && lines != null && lines.Count > 0 && IceStripes.HasBiome(lines, ground.BiomeID);
+			return ground;
+		}
+
+		// ── The Great Plume (2026-10-25, phase I2q-b, decision 53) ──
+
+		/// <summary>
+		/// The scene's Great Plume among its sites: the jet on a line of the largest size, the smaller seed on a tie, among those
+		/// <paramref name="eligible"/> keeps (null: all); −1 for none. At most one a scene; the cut stores its seed with the map.
+		/// </summary>
+		public static int GreatPlumeIndex(IReadOnlyList<GeothermalSite> sites, Func<int, bool> eligible = null)
+		{
+			int best = -1;
+			for (int i = 0; sites != null && i < sites.Count; i++)
+			{
+				GeothermalSite s = sites[i];
+				if (s.Kind != GeothermalKind.Jet || !s.OnLine || (eligible != null && !eligible(i)))
+				{
+					continue;
+				}
+				if (best < 0 || s.Size > sites[best].Size || (s.Size == sites[best].Size && s.Seed < sites[best].Seed))
+				{
+					best = i;
+				}
+			}
+			return best;
+		}
+
+		/// <summary>True when the site is the scene's Great Plume, as the cut stored it with the map.</summary>
+		public static bool IsGreatPlume(SceneBiomeMap map, in GeothermalSite site)
+		{
+			return map != null && map.HasGreatPlume && site.Kind == GeothermalKind.Jet && site.Seed == map.GreatPlumeSeed;
 		}
 
 		/// <summary>The seed a scene's sites are placed with, from its biome map's name (salted apart from the volcanic vents').</summary>
@@ -314,8 +557,11 @@ namespace FishMMO.Shared.Weather
 			{
 				return;
 			}
-			Find(map.WorldOrigin, new Rect(map.WorldOrigin, map.WorldSize), SeedOf(map), p => GeothermalGround.Of(map.Sample(new Vector3(p.x, 0f, p.y))),
-				into, CellMetres, int.MaxValue);
+			IReadOnlyList<VentLine> lines = IceStripes.Of(map);
+			var scene = new Rect(map.WorldOrigin, map.WorldSize);
+			Find(map.WorldOrigin, scene, SeedOf(map), p => GroundOf(map, lines, p), into, CellMetres, int.MaxValue);
+			// The sites on its stored lines after the grid's (2026-10-25, I2q-b): none on a map that stores none.
+			FindAlong(lines, scene, SeedOf(map), p => GroundOf(map, lines, p), into, int.MaxValue);
 		}
 
 		/// <summary>The sites of a scene within <paramref name="radius"/> of a point. Empty with no biome map.</summary>
@@ -334,7 +580,9 @@ namespace FishMMO.Shared.Weather
 			{
 				return;
 			}
-			Find(map.WorldOrigin, near, SeedOf(map), p => map.Sample(new Vector3(p.x, 0f, p.y)), into);
+			IReadOnlyList<VentLine> lines = IceStripes.Of(map);
+			Find(map.WorldOrigin, near, SeedOf(map), p => GroundOf(map, lines, p), into, CellMetres, MaxSites);
+			FindAlong(lines, near, SeedOf(map), p => GroundOf(map, lines, p), into, MaxSites);
 		}
 
 		// ── What each kind is like ─────────────────────────────────────
@@ -351,6 +599,10 @@ namespace FishMMO.Shared.Weather
 				case GeothermalKind.HotSpring: return 2f + 6f * u;
 				case GeothermalKind.Geyser: return 1f + 2f * u;
 				case GeothermalKind.MudPot: return 1f + 3f * u;
+				// A jet's slot in the fissure; a smoker's chimney; a sulphur pond's basin 3–12 m across (decision 84).
+				case GeothermalKind.Jet: return 0.3f + 0.7f * u;
+				case GeothermalKind.Smoker: return 0.5f + 1.5f * u;
+				case GeothermalKind.SulphurPool: return 1.5f + 4.5f * u;
 				default: return 0.4f + 1.2f * u;
 			}
 		}
@@ -368,6 +620,8 @@ namespace FishMMO.Shared.Weather
 				case GeothermalKind.HotSpring: return 0.5f * SourceRadius(site);
 				case GeothermalKind.Geyser: return erupting ? 2f + 4f * u : 0.5f + 0.5f * u;
 				case GeothermalKind.MudPot: return 0.4f * SourceRadius(site);
+				case GeothermalKind.Jet: return 0.5f + 0.5f * u;
+				case GeothermalKind.SulphurPool: return 0.4f * SourceRadius(site);
 				default: return 0.6f + 1.2f * u;
 			}
 		}
@@ -381,6 +635,9 @@ namespace FishMMO.Shared.Weather
 				case GeothermalKind.HotSpring: return 0.6f + 0.6f * u;
 				case GeothermalKind.Geyser: return erupting ? 6f + 8f * u : 1f + u;
 				case GeothermalKind.MudPot: return 0.4f + 0.4f * u;
+				case GeothermalKind.Jet: return 6f + 10f * u;
+				case GeothermalKind.Smoker: return 1f + u;
+				case GeothermalKind.SulphurPool: return 0.3f + 0.3f * u;
 				default: return 2f + 4f * u;
 			}
 		}
@@ -411,8 +668,12 @@ namespace FishMMO.Shared.Weather
 		/// </summary>
 		public static float PoolDepth(in GeothermalSite site)
 		{
-			return 0.8f + 2.2f * Mathf.Clamp01(site.Size);
+			// A sulphur pond is a shallow pan of melt (decision 84), a spring's funnel deeper.
+			return site.Kind == GeothermalKind.SulphurPool ? 0.4f + 1.2f * Mathf.Clamp01(site.Size) : 0.8f + 2.2f * Mathf.Clamp01(site.Size);
 		}
+
+		/// <summary>True for a kind whose site is a pool the cut digs and floods (a hot spring, a sulphur pond, 2026-10-25).</summary>
+		public static bool IsPool(GeothermalKind kind) => kind == GeothermalKind.HotSpring || kind == GeothermalKind.SulphurPool;
 
 		/// <summary>How far under its rim a mud pot's dish is dug, m.</summary>
 		public static float DishDepth(in GeothermalSite site)
@@ -441,6 +702,9 @@ namespace FishMMO.Shared.Weather
 				case GeothermalKind.Geyser: return 10f + 24f * u;
 				case GeothermalKind.HotSpring: return SourceRadius(site) + 6f + 18f * u;
 				case GeothermalKind.MudPot: return SourceRadius(site) + 4f + 6f * u;
+				case GeothermalKind.Jet: return 6f + 10f * u;
+				case GeothermalKind.Smoker: return 8f + 12f * u;
+				case GeothermalKind.SulphurPool: return SourceRadius(site) + 6f + 12f * u;
 				default: return 4f + 8f * u;
 			}
 		}
@@ -453,6 +717,9 @@ namespace FishMMO.Shared.Weather
 				case GeothermalKind.Geyser: return 1f;
 				case GeothermalKind.HotSpring: return 0.95f;
 				case GeothermalKind.MudPot: return 0.85f;
+				case GeothermalKind.Jet: return 0.9f;
+				case GeothermalKind.Smoker:
+				case GeothermalKind.SulphurPool: return 1f;
 				default: return 0.8f;
 			}
 		}

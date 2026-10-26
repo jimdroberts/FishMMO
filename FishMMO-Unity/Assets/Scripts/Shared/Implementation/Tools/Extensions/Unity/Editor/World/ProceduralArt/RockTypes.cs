@@ -390,7 +390,10 @@ namespace FishMMO.Shared.WorldDesign
 	/// </remarks>
 	public static class RockTypes
 	{
-		/// <summary>Seeded variants of every shape, so a field of boulders does not repeat.</summary>
+		/// <summary>
+		/// Seeded variants of every shape, so a field of boulders does not repeat: every rock's before the biome suite's, and
+		/// the most any rock has (each rock's own count: <see cref="RockVariantCounts"/>, 2026-10-26).
+		/// </summary>
 		public const int VariantCount = 4;
 
 		private static Color Hex(string hex) => SurfaceCatalogue.Hex(hex);
@@ -480,6 +483,12 @@ namespace FishMMO.Shared.WorldDesign
 				S("Tor", FormationKind.Tor, 2.6f, 3.0f, 3),
 				S("Perched", FormationKind.Perched, 2.6f, 2.3f),
 				S("Split", FormationKind.Split, 2.2f, 1.5f),
+				// The biome suite's shapes (2026-10-25): an inselberg's sheet-jointed dome, a glacier-smoothed whaleback, a castle kopje, a balanced stack, an exfoliation spall.
+				S("Bornhardt", FormationKind.Boulder, 8.0f, 4.0f, exponent: 2.2f),
+				S("Whaleback", FormationKind.Boulder, 4.0f, 1.6f, elongation: 2.2f, exponent: 2.4f),
+				S("Matopo", FormationKind.Tor, 3.0f, 4.5f, 3),
+				S("BalancingStack", FormationKind.Tor, 2.4f, 4.0f, 3),
+				S("SheetSpall", FormationKind.SlabStack, 2.4f, 0.4f, 2),
 			},
 			// Weathered grey granite (Dartmoor, the Sierra): black biotite, white and pink feldspar, glassy quartz.
 			Surface = R("Granite", 0.02f, "#5a5852", "#8a867e", "#b9b4aa", 6, SurfaceMotif.Granular, 160, 0.1f, 0.35f, "#4a4844", "#c8c4bc", 0.18f,
@@ -515,6 +524,11 @@ namespace FishMMO.Shared.WorldDesign
 				// Lava dribble spires: drips of a cooling tube's roof, piled up from its floor.
 				S("Dribble", FormationKind.Stalagmite, 0.8f, 1.6f, 3),
 				S("Ventifact", FormationKind.Ventifact, 1.0f, 0.55f),
+				// The biome suite's shapes (2026-10-25): thermal-fatigue halves, a kipuka knob, an impact's shatter cone, a lava bank's driblet cairn.
+				S("Split", FormationKind.Split, 2.0f, 1.2f),
+				S("Knob", FormationKind.Knob, 4.0f, 3.0f),
+				S("ShatterCone", FormationKind.Pinnacle, 1.0f, 1.4f),
+				S("DribletCairn", FormationKind.Stalagmite, 1.0f, 1.4f, 3),
 			},
 			// Weathered columnar basalt: charcoal with a faint warm cast, olivine grains, vesicles.
 			Surface = R("Basalt", 0.02f, "#26262a", "#3a3a3c", "#58585a", 4, SurfaceMotif.Fractured, 8, 0.05f, 0.6f, "#18181a", "#4a4a4c", 0.22f,
@@ -539,6 +553,10 @@ namespace FishMMO.Shared.WorldDesign
 				S("Block", FormationKind.Faceted, 1.8f, 1.3f),
 				S("Platy", FormationKind.SlabStack, 2.2f, 1.0f, 4),
 				S("Talus", FormationKind.Scree, 2.6f, 1.0f, 14),
+				// The biome suite's shapes (2026-10-25): a folding-screen column wall, a seat rock, a standing stone.
+				S("Byobu", FormationKind.Standing, 3.0f, 3.0f),
+				S("Iwakura", FormationKind.Faceted, 3.0f, 2.4f),
+				S("Tateishi", FormationKind.Standing, 1.2f, 2.6f),
 			},
 			// Porphyritic grey andesite: white plagioclase laths and black hornblende in a grey groundmass.
 			Surface = R("Andesite", 0.025f, "#4c4945", "#6e6a64", "#948f87", 4, SurfaceMotif.Fractured, 7, 0.06f, 0.5f, "#3c3a36", "#a29d94", 0.2f,
@@ -562,6 +580,8 @@ namespace FishMMO.Shared.WorldDesign
 				S("Chunk", FormationKind.Faceted, 1.4f, 1.0f),
 				S("Shard", FormationKind.Faceted, 1.6f, 0.55f, elongation: 1.5f),
 				S("Scree", FormationKind.Scree, 2.0f, 0.8f, 12),
+				// A blocky glass ridge outcrop (2026-10-25).
+				S("Ridge", FormationKind.Faceted, 12f, 4.0f, elongation: 2.4f),
 			},
 			// Black glass with faint grey flow banding; glossy.
 			Surface = R("Obsidian", 0.004f, "#08080a", "#121216", "#24242a", 3, SurfaceMotif.Strata, 18, 0.1f, 0.15f, "#060608", "#2c2c34", 0.85f, 0.05f, 0.3f),
@@ -607,6 +627,12 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				S("Chimney", FormationKind.Chimney, 2.0f, 4.5f),
 				S("Tafoni", FormationKind.Boulder, 2.0f, 1.5f),
+				// The biome suite's shapes (2026-10-25): a capped hoodoo, a chimney cone, a rib, a citadel spur, a spall.
+				S("Capped", FormationKind.Pedestal, 2.0f, 2.6f, 4),
+				S("Cone", FormationKind.Chimney, 3.0f, 4.0f),
+				S("Rib", FormationKind.Ledges, 4.0f, 1.6f, 4),
+				S("Citadel", FormationKind.Chimney, 3.0f, 6.0f),
+				S("Spall", FormationKind.SlabStack, 1.6f, 0.5f, 3),
 			},
 			// Cappadocian tuff: pale buff with dark lithic fragments and white pumice lapilli.
 			Surface = R("Tuff", 0.025f, "#a8926e", "#d2bf98", "#ebdcbc", 5, SurfaceMotif.Granular, 64, 0.1f, 0.4f, "#9a8462", "#f0e4c8", 0.06f, 0.05f,
@@ -635,6 +661,12 @@ namespace FishMMO.Shared.WorldDesign
 				S("Pedestal", FormationKind.Pedestal, 2.2f, 2.6f, 6),
 				// A cannonball concretion: grains cemented round a nucleus, harder than the sandstone that weathered from it.
 				S("Concretion", FormationKind.Boulder, 1.6f, 1.4f, elongation: 0.72f, exponent: 2f),
+				// The biome suite's shapes (2026-10-25): a dome, a fin, a cross-bedded block, a yardang, a rock-pool gour.
+				S("Dome", FormationKind.Boulder, 6.0f, 3.0f, exponent: 2.2f),
+				S("Fin", FormationKind.Boulder, 4.0f, 2.4f, elongation: 2.6f),
+				S("CrossBedded", FormationKind.Bedded, 2.6f, 1.6f, 6, dip: 20f),
+				S("Yardang", FormationKind.Boulder, 3.2f, 1.6f, elongation: 2.4f),
+				S("Gour", FormationKind.Terrace, 3.0f, 0.5f, 4),
 			},
 			// The ground family's red-orange sandstone, so the legacy material maps on unchanged.
 			Surface = R("Sandstone", 0.03f, "#8a4a2a", "#b86a3e", "#d89a64", 4, SurfaceMotif.Strata, 10, 0.1f, 0.6f, "#7a3c22", "#e0b080", 0.1f, 0.05f, 0.8f),
@@ -664,6 +696,12 @@ namespace FishMMO.Shared.WorldDesign
 				S("Stalagmite", FormationKind.Stalagmite, 1.2f, 2.6f, 3, dress: "Sinter"),
 				S("Flowstone", FormationKind.Flowstone, 3.0f, 1.6f, dress: "Sinter"),
 				S("Gours", FormationKind.Terrace, 3.6f, 0.5f, 5, dress: "Sinter"),
+				// The biome suite's shapes (2026-10-25): a karst blade, a tower, a sea-notched rock, a scholar's stone, cave shelfstone.
+				S("Blade", FormationKind.Standing, 2.0f, 4.0f),
+				S("Tower", FormationKind.Pinnacle, 3.0f, 8.0f),
+				S("Notch", FormationKind.Pedestal, 3.0f, 2.4f, 3),
+				S("Gongshi", FormationKind.Pinnacle, 1.0f, 1.8f),
+				S("Shelfstone", FormationKind.Terrace, 3.0f, 0.6f, 3, dress: "Sinter"),
 			},
 			// The ground family's pale grey limestone, with fossil-shell fragments.
 			Surface = R("Limestone", 0.03f, "#9a968a", "#bcb8aa", "#dcd8ca", 4, SurfaceMotif.Fractured, 5, 0.08f, 0.5f, "#8a8676", "#d0ccbc", 0.2f,
@@ -709,6 +747,10 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				S("Boulder", FormationKind.Boulder, 1.8f, 1.3f),
 				S("Block", FormationKind.Boulder, 2.2f, 1.4f, exponent: 3.6f),
+				// The biome suite's shapes (2026-10-25): a pebble-studded hoodoo, a flock of rounded stones, a ceppo ledge.
+				S("Crone", FormationKind.Pedestal, 2.4f, 4.0f, 4),
+				S("StoneSheep", FormationKind.Boulder, 1.1f, 0.8f, exponent: 2.4f),
+				S("CeppoLedge", FormationKind.Ledges, 3.0f, 1.8f, 4),
 			},
 			// Brown sandy matrix full of grey and cream river cobbles.
 			Surface = R("Conglomerate", 0.04f, "#6a563f", "#8c7356", "#ad9475", 4, SurfaceMotif.Cobbles, 7, 0.4f, 0.45f, "#8a8070", "#b0a690", 0.15f),
@@ -760,6 +802,9 @@ namespace FishMMO.Shared.WorldDesign
 				S("Stack", FormationKind.SlabStack, 2.0f, 0.8f, 5),
 				S("Upright", FormationKind.Standing, 1.3f, 2.0f),
 				S("Scree", FormationKind.Scree, 2.2f, 0.84f, 28),
+				// The biome suite's shapes (2026-10-25): a cleavage fin, a talus cone.
+				S("CleavageFin", FormationKind.Standing, 1.6f, 2.4f),
+				S("TalusCone", FormationKind.Scree, 3.2f, 1.4f, 30),
 			},
 			// Blue-grey slate with fine cleavage lines and the odd brassy pyrite cube.
 			Surface = R("Slate", 0.008f, "#2c2f33", "#43474d", "#5d6268", 4, SurfaceMotif.Strata, 60, 0.1f, 0.5f, "#24272b", "#6a7076", 0.3f,
@@ -807,6 +852,9 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				S("Boulder", FormationKind.Boulder, 1.9f, 1.4f),
 				S("Block", FormationKind.Boulder, 2.2f, 1.5f, exponent: 3.6f),
+				// The biome suite's shapes (2026-10-25): a frost-shattered block field, a slab heaved on end.
+				S("Felsenmeer", FormationKind.Scree, 3.0f, 0.9f, 14),
+				S("FrostJacked", FormationKind.Standing, 0.9f, 1.4f),
 			},
 			// Banded grey gneiss: dark biotite-hornblende layers between pale quartz-feldspar ones.
 			Surface = R("Gneiss", 0.025f, "#3b3936", "#77736b", "#b4aea3", 4, SurfaceMotif.Strata, 8, 0.1f, 0.45f, "#4e4b46", "#a39d92", 0.2f, warp: 0.15f,
@@ -906,6 +954,8 @@ namespace FishMMO.Shared.WorldDesign
 			Shapes = new[]
 			{
 				S("Crystal", FormationKind.CrystalCluster, 1.4f, 1.3f, 9, habit: CrystalHabit.Bladed),
+				// Interlocking selenite beams of a crystal hall (2026-10-25).
+				S("Beam", FormationKind.CrystalCluster, 2.2f, 1.8f, 7, habit: CrystalHabit.Bladed),
 			},
 			// Milky selenite: pearly white with faint fibrous striations along the blades.
 			Surface = R("Gypsum", 0.006f, "#a9a69c", "#d8d6cc", "#f2f1ea", 3, SurfaceMotif.Fibres, 24, 0.1f, 0.25f, "#c4c1b6", "#fbfaf5", 0.6f, 0.08f, 0.4f),
@@ -930,6 +980,11 @@ namespace FishMMO.Shared.WorldDesign
 				S("Crystals", FormationKind.CrystalCluster, 0.9f, 0.6f, 26, habit: CrystalHabit.Acicular),
 				// A fumarole's cone, 1–3 m, crusted in sulphur round its throat.
 				S("Cone", FormationKind.Cone, 2.4f, 1.4f),
+				// The biome suite's shapes (2026-10-25): a molten-sulphur flow lobe, rimstone microterraces, a hollow crust blister, a bipyramid druse.
+				S("Flow", FormationKind.Lobe, 3.0f, 0.6f),
+				S("Terrace", FormationKind.Terrace, 3.0f, 0.6f, 5),
+				S("Blister", FormationKind.Boulder, 1.2f, 0.6f, exponent: 2.2f),
+				S("BipyramidDruse", FormationKind.CrystalCluster, 0.9f, 0.5f, 14, habit: CrystalHabit.Prismatic),
 			},
 			// Fumarole sulphur: lemon yellow, with green and orange where the vent is wet or hot.
 			Surface = R("Sulphur", 0.02f, "#b08c18", "#d8bc30", "#f2e266", 5, SurfaceMotif.Granular, 72, 0.1f, 0.45f, "#a07c12", "#f8ee90", 0.3f, 0.1f, 0.65f,
@@ -953,6 +1008,9 @@ namespace FishMMO.Shared.WorldDesign
 				// Yellowstone's geyser cones, 1–4 m.
 				S("Cone", FormationKind.Cone, 2.2f, 1.6f),
 				S("Terrace", FormationKind.Terrace, 4.0f, 1.1f, 5),
+				// The biome suite's shapes (2026-10-25): a low sinter shield, a beaded pool rim.
+				S("Shield", FormationKind.Lobe, 10f, 1.6f),
+				S("PoolRim", FormationKind.CraterRim, 5.0f, 0.5f),
 			},
 			// Grey-white sinter with orange and brown bands of microbial mat.
 			Surface = R("Sinter", 0.02f, "#8f877a", "#c4bdb0", "#e8e4dc", 4, SurfaceMotif.Strata, 9, 0.1f, 0.35f, "#a0582a", "#d8b08a", 0.2f, 0.1f, 0.65f,
@@ -1002,6 +1060,9 @@ namespace FishMMO.Shared.WorldDesign
 				S("Boulder", FormationKind.Boulder, 1.8f, 1.2f),
 				// A crater 2–40 m: the rim crest about a twenty-fifth of its diameter high, ejecta blocks on it.
 				S("CraterRim", FormationKind.CraterRim, 14f, 1.1f, 7),
+				// The biome suite's shapes (2026-10-25): a house-sized rim block, a polygonally cracked melt plate.
+				S("HouseBlock", FormationKind.Faceted, 10f, 7.0f),
+				S("CoolingPlate", FormationKind.SlabStack, 5.0f, 0.8f, 3),
 			},
 			// Grey shocked rock: angular light and dark clasts in a darker matrix.
 			Surface = R("Breccia", 0.025f, "#4a4844", "#6e6b66", "#94918b", 4, SurfaceMotif.Fractured, 9, 0.06f, 0.55f, "#3a3936", "#b2aea6", 0.12f,
@@ -1045,6 +1106,10 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				// East Pacific Rise smokers: 3–15 m, three flanges.
 				S("Smoker", FormationKind.Cone, 2.6f, 9.0f, 3),
+				// The biome suite's shapes (2026-10-25): a great smoker's pillar, a beehive, a toppled stump.
+				S("Pillar", FormationKind.Cone, 4.0f, 30f, 5),
+				S("Beehive", FormationKind.Cone, 1.0f, 1.2f),
+				S("Toppled", FormationKind.Boulder, 3.0f, 2.0f, elongation: 2f, exponent: 2.6f),
 			},
 			// Black sulphide crust with rust, brass and sulphur-yellow staining.
 			Surface = R("Sulphide", 0.03f, "#141210", "#2a2420", "#4a3a2c", 5, SurfaceMotif.Granular, 64, 0.1f, 0.5f, "#0e0c0a", "#5a4430", 0.2f, 0.1f, 0.8f,
@@ -1087,6 +1152,8 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				// Callisto's knobs, a frost cap on each.
 				S("FrostKnob", FormationKind.Knob, 6.0f, 8.0f, cap: IceSurfaces.BubblyWhite),
+				// A knoblet, frost-capped as its parent (2026-10-25).
+				S("Knoblet", FormationKind.Knob, 1.5f, 1.8f, cap: IceSurfaces.BubblyWhite),
 			},
 			// Dark sputtered lag, brown-black with a few paler grains.
 			Surface = R("DarkLag", 0.025f, "#1e1c1a", "#34302c", "#4e4842", 6, SurfaceMotif.Granular, 64, 0.1f, 0.5f, "#161412", "#5a524a", 0.05f, 0.05f, 0.8f,
@@ -1135,6 +1202,11 @@ namespace FishMMO.Shared.WorldDesign
 				S("Penitentes", FormationKind.Penitentes, 4.5f, 3.0f, 9),
 				// The rim of a sublimation pit in nitrogen ice, as a crater rim without ejecta.
 				S("PitRim", FormationKind.CraterRim, 10f, 0.8f),
+				// The biome suite's shapes (2026-10-25): a cornice's overhanging lip, a snow mushroom, a drift tail, wave dunes.
+				S("Cornice", FormationKind.Sastrugi, 8.0f, 1.5f, 1, elongation: 3f),
+				S("SnowMushroom", FormationKind.Pedestal, 2.4f, 2.4f, 3),
+				S("DriftTail", FormationKind.Sastrugi, 6.0f, 0.8f, 1, colliderless: true),
+				S("WaveDune", FormationKind.Sastrugi, 8.0f, 1.0f, 3, colliderless: true),
 			},
 			// Wind crust: blue-white snow, rippled, with sparkling grains.
 			Surface = R("Firn", 0.015f, "#b6c2cc", "#dfe7ee", "#f8fbfd", 4, SurfaceMotif.Ripples, 10, 0.1f, 0.35f, "#c4d0da", "#ffffff", 0.3f, 0.1f, 0.45f,
@@ -1167,6 +1239,15 @@ namespace FishMMO.Shared.WorldDesign
 				S("DirtCone", FormationKind.Knob, 2.6f, 1.8f, dress: "Conglomerate"),
 				// Sea ice pressed into a ridge on a frozen-through shelf or an ice moon's lineae.
 				S("Ridge", FormationKind.RubbleRidge, 12f, 1.8f, 120, dress: IceSurfaces.SeaIce),
+				// An ice cave's floor formations (2026-10-25): a column, a frozen fall, frozen blocks, ice candles.
+				S("Column", FormationKind.Stalagmite, 1.2f, 4.0f, 1),
+				S("Icefall", FormationKind.Flowstone, 4.0f, 3.0f),
+				S("FrozenBlocks", FormationKind.Scree, 3.0f, 1.0f, 10),
+				S("Candles", FormationKind.Stalagmite, 0.6f, 1.4f, 5),
+				// Permanent ice's dust-banded towers and blocks, and an ice cave's air-scalloped ice (2026-10-25).
+				S("IceTower", FormationKind.Pinnacle, 3.0f, 8.0f, dress: IceSurfaces.Stratified),
+				S("StrataBlock", FormationKind.Bedded, 2.4f, 1.6f, 4, dress: IceSurfaces.Stratified),
+				S("Scalloped", FormationKind.Boulder, 2.0f, 1.4f, dress: IceSurfaces.Scalloped),
 			},
 			// Bubbly water ice: pale blue-white, faint fracture planes, white bubble trains.
 			Surface = R("WaterIce", 0.012f, "#6f9ab4", "#a9c9dc", "#e2eff6", 3, SurfaceMotif.Fractured, 4, 0.03f, 0.25f, "#7fa8c0", "#f2f8fb", 0.8f, 0.08f, 0.35f,
@@ -1174,19 +1255,25 @@ namespace FishMMO.Shared.WorldDesign
 			Ice = IceLook("WaterIce", 0.85f, 0.05f),
 		};
 
-		/// <summary>The sixteen rocks of the crust: igneous, then sedimentary, then metamorphic. Every one can be a cliff.</summary>
-		public static readonly RockType[] Crust =
+		/// <summary>
+		/// The rocks of the crust: the first sixteen (igneous, then sedimentary, then metamorphic), then each biome's own
+		/// (<see cref="RegionalRocks.Crust"/>, appended 2026-10-25). Every one can be a cliff.
+		/// </summary>
+		public static readonly RockType[] Crust = Concat(new[]
 		{
 			Granite, Basalt, Andesite, Obsidian, Pumice, Tuff,
 			Sandstone, Limestone, Shale, Conglomerate, Chalk,
 			Slate, Schist, Gneiss, Marble, Quartzite,
-		};
+		}, RegionalRocks.Crust);
 
-		/// <summary>The rocks made only as formations (<see cref="RockType.FormationsOnly"/>), after the crust in <see cref="All"/>.</summary>
-		public static readonly RockType[] FormationRocks =
+		/// <summary>
+		/// The rocks made only as formations (<see cref="RockType.FormationsOnly"/>), after the crust in <see cref="All"/>; the
+		/// biomes' own (<see cref="RegionalRocks.FormationRocks"/>) appended after the first thirteen.
+		/// </summary>
+		public static readonly RockType[] FormationRocks = Concat(new[]
 		{
 			Halite, Gypsum, Sulphur, Sinter, Scoria, Breccia, Anorthosite, Sulphide, Pyrite, DarkLag, Termitaria, Firn, WaterIce,
-		};
+		}, RegionalRocks.FormationRocks);
 
 		/// <summary>Every rock type: the crust (igneous, sedimentary, metamorphic), then the formation-only rocks.</summary>
 		public static readonly RockType[] All = Concat(Crust, FormationRocks);

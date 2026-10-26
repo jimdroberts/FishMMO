@@ -272,6 +272,20 @@ MonoBehaviour:
   LooseGround: {fileID: 0}
   Emits: {fileID: 0}
   EmissionRate: 0
+  geothermal:
+    Geyser: 0.25
+    HotSpring: 0.4
+    Fumarole: 0.35
+    MudPot: 0
+    Jet: 0
+    SulphurPool: 0
+    Rate: 0
+    FumeTint: {r: 0, g: 0, b: 0, a: 0}
+  vents:
+    Layout: 0
+    Timing: 0
+    MaxPlumes: 0
+  burnRegime: 0
   TerrainProcess: {fileID: 11400000, guid: 4621ef5e37fbafb5c8a551a4af9364bb, type: 2}
   landforms: []
   lookClass: 13
@@ -313,6 +327,31 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    worldBand:
+      requires: 0
+      forbids: 0
+    underground: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    landformBand:
+      On: 0
+      Part: 0
+      Kind: 
+      Outside: 0
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
+    useLavaBand: 0
+    lavaRange: {x: -11000, y: 11000}
+    lavaFalloff: 1
+    glow:
+      Mode: 0
+      Kelvin: 0
+      Strength: 0
+      CellMetres: 0
+      PeriodSeconds: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -353,6 +392,31 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    worldBand:
+      requires: 0
+      forbids: 0
+    underground: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    landformBand:
+      On: 0
+      Part: 0
+      Kind: 
+      Outside: 0
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
+    useLavaBand: 0
+    lavaRange: {x: -11000, y: 11000}
+    lavaFalloff: 1
+    glow:
+      Mode: 0
+      Kelvin: 0
+      Strength: 0
+      CellMetres: 0
+      PeriodSeconds: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -392,6 +456,31 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    worldBand:
+      requires: 0
+      forbids: 0
+    underground: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    landformBand:
+      On: 0
+      Part: 0
+      Kind: 
+      Outside: 0
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
+    useLavaBand: 0
+    lavaRange: {x: -11000, y: 11000}
+    lavaFalloff: 1
+    glow:
+      Mode: 0
+      Kelvin: 0
+      Strength: 0
+      CellMetres: 0
+      PeriodSeconds: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -432,6 +521,31 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    worldBand:
+      requires: 0
+      forbids: 0
+    underground: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    landformBand:
+      On: 0
+      Part: 0
+      Kind: 
+      Outside: 0
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
+    useLavaBand: 0
+    lavaRange: {x: -11000, y: 11000}
+    lavaFalloff: 1
+    glow:
+      Mode: 0
+      Kelvin: 0
+      Strength: 0
+      CellMetres: 0
+      PeriodSeconds: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -472,6 +586,31 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    worldBand:
+      requires: 0
+      forbids: 0
+    underground: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    landformBand:
+      On: 0
+      Part: 0
+      Kind: 
+      Outside: 0
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
+    useLavaBand: 0
+    lavaRange: {x: -11000, y: 11000}
+    lavaFalloff: 1
+    glow:
+      Mode: 0
+      Kelvin: 0
+      Strength: 0
+      CellMetres: 0
+      PeriodSeconds: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -512,6 +651,31 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    worldBand:
+      requires: 0
+      forbids: 0
+    underground: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    landformBand:
+      On: 0
+      Part: 0
+      Kind: 
+      Outside: 0
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
+    useLavaBand: 0
+    lavaRange: {x: -11000, y: 11000}
+    lavaFalloff: 1
+    glow:
+      Mode: 0
+      Kelvin: 0
+      Strength: 0
+      CellMetres: 0
+      PeriodSeconds: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -552,6 +716,31 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    worldBand:
+      requires: 0
+      forbids: 0
+    underground: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    landformBand:
+      On: 0
+      Part: 0
+      Kind: 
+      Outside: 0
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
+    useLavaBand: 0
+    lavaRange: {x: -11000, y: 11000}
+    lavaFalloff: 1
+    glow:
+      Mode: 0
+      Kelvin: 0
+      Strength: 0
+      CellMetres: 0
+      PeriodSeconds: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -601,6 +790,31 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    worldBand:
+      requires: 0
+      forbids: 0
+    underground: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    landformBand:
+      On: 0
+      Part: 0
+      Kind: 
+      Outside: 0
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
+    useLavaBand: 0
+    lavaRange: {x: -11000, y: 11000}
+    lavaFalloff: 1
+    glow:
+      Mode: 0
+      Kelvin: 0
+      Strength: 0
+      CellMetres: 0
+      PeriodSeconds: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -641,6 +855,31 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    worldBand:
+      requires: 0
+      forbids: 0
+    underground: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    landformBand:
+      On: 0
+      Part: 0
+      Kind: 
+      Outside: 0
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
+    useLavaBand: 0
+    lavaRange: {x: -11000, y: 11000}
+    lavaFalloff: 1
+    glow:
+      Mode: 0
+      Kelvin: 0
+      Strength: 0
+      CellMetres: 0
+      PeriodSeconds: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -681,6 +920,31 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    worldBand:
+      requires: 0
+      forbids: 0
+    underground: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    landformBand:
+      On: 0
+      Part: 0
+      Kind: 
+      Outside: 0
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
+    useLavaBand: 0
+    lavaRange: {x: -11000, y: 11000}
+    lavaFalloff: 1
+    glow:
+      Mode: 0
+      Kelvin: 0
+      Strength: 0
+      CellMetres: 0
+      PeriodSeconds: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -721,6 +985,31 @@ MonoBehaviour:
     humidityRange: {x: -1, y: 1}
     humidityFalloff: 0.1
     airBand: 0
+    worldBand:
+      requires: 0
+      forbids: 0
+    underground: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    landformBand:
+      On: 0
+      Part: 0
+      Kind: 
+      Outside: 0
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
+    useLavaBand: 0
+    lavaRange: {x: -11000, y: 11000}
+    lavaFalloff: 1
+    glow:
+      Mode: 0
+      Kelvin: 0
+      Strength: 0
+      CellMetres: 0
+      PeriodSeconds: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -757,6 +1046,7 @@ MonoBehaviour:
       uniformScaleRange: {x: 0.8, y: 1.25}
       widthScaleRange: {x: 0.85, y: 1.15}
       heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 0
       seedOffset: 22706
@@ -786,6 +1076,29 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
       specFingerprint: 357e6fde752267bd
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
@@ -822,6 +1135,7 @@ MonoBehaviour:
       uniformScaleRange: {x: 0.8, y: 1.25}
       widthScaleRange: {x: 0.85, y: 1.15}
       heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 0
       seedOffset: 27339
@@ -851,6 +1165,29 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
       specFingerprint: d2e3c4d3fde8df95
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
@@ -887,6 +1224,7 @@ MonoBehaviour:
       uniformScaleRange: {x: 0.8, y: 1.25}
       widthScaleRange: {x: 0.85, y: 1.15}
       heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 0
       seedOffset: 7210
@@ -916,6 +1254,29 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
       specFingerprint: 6e6d7a8e4f95dfea
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -952,6 +1313,7 @@ MonoBehaviour:
       uniformScaleRange: {x: 0.8, y: 1.25}
       widthScaleRange: {x: 0.85, y: 1.15}
       heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 0
       seedOffset: 54277
@@ -981,6 +1343,29 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
       specFingerprint: 3d7a3c9d2e8c57c1
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -1017,6 +1402,7 @@ MonoBehaviour:
       uniformScaleRange: {x: 0.8, y: 1.25}
       widthScaleRange: {x: 0.85, y: 1.15}
       heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 1
       seedOffset: 30447
@@ -1046,6 +1432,29 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
       specFingerprint: 7bd8eacde3502fae
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -1082,6 +1491,7 @@ MonoBehaviour:
       uniformScaleRange: {x: 0.8, y: 1.25}
       widthScaleRange: {x: 0.85, y: 1.15}
       heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 1
       seedOffset: 64823
@@ -1111,6 +1521,29 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
       specFingerprint: 52b605293339566b
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -1147,6 +1580,7 @@ MonoBehaviour:
       uniformScaleRange: {x: 0.8, y: 1.25}
       widthScaleRange: {x: 0.85, y: 1.15}
       heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 1
       seedOffset: 8370
@@ -1176,6 +1610,29 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
       specFingerprint: 1d2b0fee7036d39b
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -1212,6 +1669,7 @@ MonoBehaviour:
       uniformScaleRange: {x: 0.8, y: 1.25}
       widthScaleRange: {x: 0.85, y: 1.15}
       heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 1
       seedOffset: 17547
@@ -1241,6 +1699,29 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
       specFingerprint: d18dacc5f80b2b12
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
@@ -1277,6 +1758,7 @@ MonoBehaviour:
       uniformScaleRange: {x: 0.8, y: 1.25}
       widthScaleRange: {x: 0.85, y: 1.15}
       heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 0
       seedOffset: 20860
@@ -1306,6 +1788,29 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
       specFingerprint: 8243a5b8842d1f58
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
@@ -1342,6 +1847,7 @@ MonoBehaviour:
       uniformScaleRange: {x: 0.8, y: 1.25}
       widthScaleRange: {x: 0.85, y: 1.15}
       heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 1
       seedOffset: 676
@@ -1371,6 +1877,29 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
       specFingerprint: 0d07a2d417b68503
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
@@ -1407,6 +1936,7 @@ MonoBehaviour:
       uniformScaleRange: {x: 0.8, y: 1.25}
       widthScaleRange: {x: 0.85, y: 1.15}
       heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 1
       seedOffset: 46385
@@ -1436,6 +1966,29 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
       specFingerprint: 531d90b684575080
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
@@ -1472,6 +2025,7 @@ MonoBehaviour:
       uniformScaleRange: {x: 0.8, y: 1.25}
       widthScaleRange: {x: 0.85, y: 1.15}
       heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 1
       seedOffset: 44069
@@ -1501,6 +2055,29 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
       specFingerprint: b903b84df1c03d93
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
@@ -1534,9 +2111,10 @@ MonoBehaviour:
         max: 90
       slopeFalloff: 5
       useNonUniformScaling: 0
-      uniformScaleRange: {x: 0.45, y: 1.75}
-      widthScaleRange: {x: 0.85, y: 1.15}
-      heightScaleRange: {x: 0.85, y: 1.25}
+      uniformScaleRange: {x: 0.2925, y: 2.625}
+      widthScaleRange: {x: 0.5525, y: 1.7249999}
+      heightScaleRange: {x: 0.5525, y: 1.875}
+      scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 1
       seedOffset: 59583
@@ -1566,7 +2144,30 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
-      specFingerprint: fdd8b03b41ab4f00
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      specFingerprint: 7b0c7fa7094b7520
       detailNoiseSpread: 2.5
       detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
       detailDryColor: {r: 1, g: 1, b: 1, a: 1}
@@ -1599,9 +2200,10 @@ MonoBehaviour:
         max: 90
       slopeFalloff: 5
       useNonUniformScaling: 0
-      uniformScaleRange: {x: 0.45, y: 1.75}
-      widthScaleRange: {x: 0.85, y: 1.15}
-      heightScaleRange: {x: 0.85, y: 1.25}
+      uniformScaleRange: {x: 0.2925, y: 2.625}
+      widthScaleRange: {x: 0.5525, y: 1.7249999}
+      heightScaleRange: {x: 0.5525, y: 1.875}
+      scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 1
       seedOffset: 20599
@@ -1631,7 +2233,30 @@ MonoBehaviour:
         requires: 0
         useTemperature: 0
         temperatureRange: {x: 0, y: 0}
-      specFingerprint: 75f7dbba17e57f69
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      specFingerprint: f784bbcb179a9a8d
       detailNoiseSpread: 2.5
       detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
       detailDryColor: {r: 1, g: 1, b: 1, a: 1}
@@ -1655,6 +2280,318 @@ MonoBehaviour:
   caveCrystals:
   - Kind: 0
     Weight: 1
+    Look: 0
+  caveInteriors:
+  - Form: 0
+    Biome: Cave
+  - Form: 1
+    Biome: Cave
+  - Form: 2
+    Biome: Cave
+  - Form: 3
+    Biome: Ice Cave
+  - Form: 4
+    Biome: Lava Tube
+  caveInteriorRocks: []
+  caveFormations:
+  - Form: 0
+    Role: 0
+    Shape: Stalagmite
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 0
+    Role: 1
+    Shape: Stalagmite
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 0
+    Role: 2
+    Shape: Flowstone
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 0
+    Role: 3
+    Shape: Gours
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 0
+    Role: 4
+    Shape: Block
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 0
+    Role: 5
+    Shape: Crystal
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 1
+    Role: 0
+    Shape: Stalagmite
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 1
+    Role: 1
+    Shape: Stalagmite
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 1
+    Role: 2
+    Shape: Flowstone
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 1
+    Role: 3
+    Shape: Gours
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 1
+    Role: 4
+    Shape: Block
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 1
+    Role: 5
+    Shape: Crystal
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 2
+    Role: 0
+    Shape: Stalagmite
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 2
+    Role: 1
+    Shape: Stalagmite
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 2
+    Role: 4
+    Shape: Block
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 3
+    Role: 0
+    Shape: Stalagmite
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 3
+    Role: 1
+    Shape: Stalagmite
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 3
+    Role: 2
+    Shape: FrostFlowers
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 3
+    Role: 4
+    Shape: Lobe
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 3
+    Role: 5
+    Shape: Crystal
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 4
+    Role: 0
+    Shape: Dribble
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 4
+    Role: 1
+    Shape: Dribble
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 4
+    Role: 4
+    Shape: Slabs
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  - Form: 5
+    Role: 4
+    Shape: Scree
+    Weight: 1
+    WorldGate:
+      air: 0
+      requires: 0
+      useTemperature: 0
+      temperatureRange: {x: 0, y: 0}
+  caveGlows:
+  - Form: 0
+    Crystal: 
+    Fungus: 1
+    Worms: 1
+    WormHue: 
+    WormMount: 0
+  - Form: 1
+    Crystal: 
+    Fungus: 1
+    Worms: 1
+    WormHue: 
+    WormMount: 0
+  - Form: 2
+    Crystal: 
+    Fungus: 1
+    Worms: 1
+    WormHue: 
+    WormMount: 0
+  - Form: 3
+    Crystal: IceBlue
+    Fungus: 0
+    Worms: 0
+    WormHue: 
+    WormMount: 0
+  - Form: 4
+    Crystal: Amber
+    Fungus: 0
+    Worms: 0
+    WormHue: 
+    WormMount: 0
+  - Form: 5
+    Crystal: 
+    Fungus: 1
+    Worms: 0
+    WormHue: 
+    WormMount: 0
+  caveFloods: []
+  caveHangings:
+  - Form: 0
+    Silk: 1
+    DeepRoots: 1
+    RootsNearMouth: 1
+    Guano: 1
+    Roots: 0
+    RootWindows: 0
+  - Form: 1
+    Silk: 1.25
+    DeepRoots: 0.8
+    RootsNearMouth: 0.8
+    Guano: 0.5
+    Roots: 0
+    RootWindows: 0
+  - Form: 2
+    Silk: 0.15
+    DeepRoots: 0.3
+    RootsNearMouth: 0.2
+    Guano: 0.3
+    Roots: 0
+    RootWindows: 0
+  - Form: 3
+    Silk: 0
+    DeepRoots: 0
+    RootsNearMouth: 0
+    Guano: 0
+    Roots: 0
+    RootWindows: 0
+  - Form: 4
+    Silk: 0
+    DeepRoots: 1.3
+    RootsNearMouth: 0.6
+    Guano: 0.8
+    Roots: 0
+    RootWindows: 0
+  - Form: 5
+    Silk: 0
+    DeepRoots: 0.6
+    RootsNearMouth: 0.5
+    Guano: 0.25
+    Roots: 0
+    RootWindows: 0
+  caveStains: []
   waterRole: 0
   waterLook:
     Shallow: {r: 0.2, g: 0.42, b: 0.4, a: 1}
@@ -1663,11 +2600,25 @@ MonoBehaviour:
     Turbidity: 0.35
     Silt: {r: 0.36, g: 0.33, b: 0.24, a: 1}
     Foam: {r: 0.92, g: 0.94, b: 0.95, a: 1}
+    Hot: 0
+    Melt: 0
   seaLook:
     Tint: {r: 0.05, g: 0.28, b: 0.36, a: 1}
     Visibility: 22
     Murk: 1
+  seaFloor: 0
+  tideStrength: 1
+  underwaterSiteDepth: {x: 0, y: 0}
   floatingPlants: []
+  seaFloats: []
+  glowModes: []
+  fountainEpisodes:
+    SlotA: 0
+    SlotB: 0
+    SlotC: 0
+    OnShare: 0
+    RampSeconds: 0
+    Heights: {x: 0, y: 0}
   habitat: 512
   seaLife:
   - Kind: Whale
@@ -1698,66 +2649,52 @@ MonoBehaviour:
   caveMouthBoulders: []
   caveMouthLogs: []
   siteKinds:
-  - Kind: 7
-    Weight: 1
-    NeedsBreathableAir: 0
-  - Kind: 11
-    Weight: 1
-    NeedsBreathableAir: 0
-  - Kind: 12
-    Weight: 1
-    NeedsBreathableAir: 0
-  - Kind: 13
-    Weight: 1
-    NeedsBreathableAir: 0
-  - Kind: 14
-    Weight: 1
-    NeedsBreathableAir: 0
   - Kind: 16
     Weight: 1
     NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
   - Kind: 17
     Weight: 1
     NeedsBreathableAir: 0
-  - Kind: 18
-    Weight: 1
-    NeedsBreathableAir: 0
-  - Kind: 19
-    Weight: 1
-    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
   - Kind: 20
     Weight: 1
     NeedsBreathableAir: 0
-  - Kind: 21
-    Weight: 1
-    NeedsBreathableAir: 0
-  - Kind: 22
-    Weight: 1
-    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
   - Kind: 24
     Weight: 1
     NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
   - Kind: 25
     Weight: 1
     NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
   - Kind: 26
     Weight: 1
     NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
   - Kind: 93
     Weight: 1
     NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
   - Kind: 94
     Weight: 1
     NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
   - Kind: 95
     Weight: 1
     NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
   siteVariants: []
   siteStyles: []
   weathering:
     Finish: 1
     Chance: 0
     ChancePerDecay: 0.5
+    Coat: 0
+    CoatCover: 0
+    CoatStrength: 0
+    CoatTint: {r: 0, g: 0, b: 0, a: 0}
   fieldCrops:
   - Prefab: {fileID: 6347404957136446953, guid: aa8a9ac8871e55cd2b06e278fc394940,
       type: 3}
@@ -1812,6 +2749,7 @@ MonoBehaviour:
     Light: 5
     Spacing: 0
   boardwalks: 0
+  boardwalkStyle: 0
   linearFeatures: []
   structurePalette:
     Surfaces:
@@ -2482,42 +3420,6 @@ MonoBehaviour:
     Fingerprint: Pearl Oyster Bed
   - Field: gatheringResources
     Fingerprint: <entries>
-  - Field: siteKinds/Bay
-    Fingerprint: "Bay\xD71"
-  - Field: siteKinds/Butte
-    Fingerprint: "Butte\xD71"
-  - Field: siteKinds/Delta
-    Fingerprint: "Delta\xD71"
-  - Field: siteKinds/Gorge
-    Fingerprint: "Gorge\xD71"
-  - Field: siteKinds/Headland
-    Fingerprint: "Headland\xD71"
-  - Field: siteKinds/Island
-    Fingerprint: "Island\xD71"
-  - Field: siteKinds/Lake
-    Fingerprint: "Lake\xD71"
-  - Field: siteKinds/Mesa
-    Fingerprint: "Mesa\xD71"
-  - Field: siteKinds/Pass
-    Fingerprint: "Pass\xD71"
-  - Field: siteKinds/Peak
-    Fingerprint: "Peak\xD71"
-  - Field: siteKinds/Rapids
-    Fingerprint: "Rapids\xD71"
-  - Field: siteKinds/River
-    Fingerprint: "River\xD71"
-  - Field: siteKinds/RiverMouth
-    Fingerprint: "RiverMouth\xD71"
-  - Field: siteKinds/Spring
-    Fingerprint: "Spring\xD71"
-  - Field: siteKinds/SunkenCity
-    Fingerprint: "SunkenCity\xD71"
-  - Field: siteKinds/SunkenRuins
-    Fingerprint: "SunkenRuins\xD71"
-  - Field: siteKinds/SunkenShip
-    Fingerprint: "SunkenShip\xD71"
-  - Field: siteKinds/Waterfall
-    Fingerprint: "Waterfall\xD71"
   - Field: siteKinds
     Fingerprint: <entries>
   - Field: siteVariants
@@ -2766,3 +3668,131 @@ MonoBehaviour:
     Fingerprint: -1|0
   - Field: landforms
     Fingerprint: <entries>
+  - Field: caveInteriors/Cave
+    Fingerprint: Cave=Cave
+  - Field: caveInteriors/Grotto
+    Fingerprint: Grotto=Cave
+  - Field: caveInteriors/IceCave
+    Fingerprint: IceCave=Ice Cave
+  - Field: caveInteriors/LavaTube
+    Fingerprint: LavaTube=Lava Tube
+  - Field: caveInteriors/SeaCave
+    Fingerprint: SeaCave=Cave
+  - Field: caveInteriors
+    Fingerprint: <entries>
+  - Field: caveInteriorRocks
+    Fingerprint: <entries>
+  - Field: caveFormations/Cave/Breakdown/Block
+    Fingerprint: "Cave/Breakdown/Block\xD71"
+  - Field: caveFormations/Cave/Crystal/Crystal
+    Fingerprint: "Cave/Crystal/Crystal\xD71"
+  - Field: caveFormations/Cave/Floor/Stalagmite
+    Fingerprint: "Cave/Floor/Stalagmite\xD71"
+  - Field: caveFormations/Cave/Hanging/Stalagmite
+    Fingerprint: "Cave/Hanging/Stalagmite\xD71"
+  - Field: caveFormations/Cave/Pool/Gours
+    Fingerprint: "Cave/Pool/Gours\xD71"
+  - Field: caveFormations/Cave/Wall/Flowstone
+    Fingerprint: "Cave/Wall/Flowstone\xD71"
+  - Field: caveFormations/Grotto/Breakdown/Block
+    Fingerprint: "Grotto/Breakdown/Block\xD71"
+  - Field: caveFormations/Grotto/Crystal/Crystal
+    Fingerprint: "Grotto/Crystal/Crystal\xD71"
+  - Field: caveFormations/Grotto/Floor/Stalagmite
+    Fingerprint: "Grotto/Floor/Stalagmite\xD71"
+  - Field: caveFormations/Grotto/Hanging/Stalagmite
+    Fingerprint: "Grotto/Hanging/Stalagmite\xD71"
+  - Field: caveFormations/Grotto/Pool/Gours
+    Fingerprint: "Grotto/Pool/Gours\xD71"
+  - Field: caveFormations/Grotto/Wall/Flowstone
+    Fingerprint: "Grotto/Wall/Flowstone\xD71"
+  - Field: caveFormations/IceCave/Breakdown/Lobe
+    Fingerprint: "IceCave/Breakdown/Lobe\xD71"
+  - Field: caveFormations/IceCave/Crystal/Crystal
+    Fingerprint: "IceCave/Crystal/Crystal\xD71"
+  - Field: caveFormations/IceCave/Floor/Stalagmite
+    Fingerprint: "IceCave/Floor/Stalagmite\xD71"
+  - Field: caveFormations/IceCave/Hanging/Stalagmite
+    Fingerprint: "IceCave/Hanging/Stalagmite\xD71"
+  - Field: caveFormations/IceCave/Wall/FrostFlowers
+    Fingerprint: "IceCave/Wall/FrostFlowers\xD71"
+  - Field: caveFormations/LavaTube/Breakdown/Slabs
+    Fingerprint: "LavaTube/Breakdown/Slabs\xD71"
+  - Field: caveFormations/LavaTube/Floor/Dribble
+    Fingerprint: "LavaTube/Floor/Dribble\xD71"
+  - Field: caveFormations/LavaTube/Hanging/Dribble
+    Fingerprint: "LavaTube/Hanging/Dribble\xD71"
+  - Field: caveFormations/Mine/Breakdown/Scree
+    Fingerprint: "Mine/Breakdown/Scree\xD71"
+  - Field: caveFormations/SeaCave/Breakdown/Block
+    Fingerprint: "SeaCave/Breakdown/Block\xD71"
+  - Field: caveFormations/SeaCave/Floor/Stalagmite
+    Fingerprint: "SeaCave/Floor/Stalagmite\xD71"
+  - Field: caveFormations/SeaCave/Hanging/Stalagmite
+    Fingerprint: "SeaCave/Hanging/Stalagmite\xD71"
+  - Field: caveFormations
+    Fingerprint: <entries>
+  - Field: caveGlows/Cave
+    Fingerprint: Cave=chance|1|1
+  - Field: caveGlows/Grotto
+    Fingerprint: Grotto=chance|1|1
+  - Field: caveGlows/IceCave
+    Fingerprint: IceCave=IceBlue|0|0
+  - Field: caveGlows/LavaTube
+    Fingerprint: LavaTube=Amber|0|0
+  - Field: caveGlows/Mine
+    Fingerprint: Mine=chance|1|0
+  - Field: caveGlows/SeaCave
+    Fingerprint: SeaCave=chance|1|1
+  - Field: caveGlows
+    Fingerprint: <entries>
+  - Field: caveFloods
+    Fingerprint: <entries>
+  - Field: caveHangings/Cave
+    Fingerprint: Cave=1|1|1|1
+  - Field: caveHangings/Grotto
+    Fingerprint: Grotto=1.25|0.8|0.8|0.5
+  - Field: caveHangings/IceCave
+    Fingerprint: IceCave=0|0|0|0
+  - Field: caveHangings/LavaTube
+    Fingerprint: LavaTube=0|1.3|0.6|0.8
+  - Field: caveHangings/Mine
+    Fingerprint: Mine=0|0.6|0.5|0.25
+  - Field: caveHangings/SeaCave
+    Fingerprint: SeaCave=0.15|0.3|0.2|0.3
+  - Field: caveHangings
+    Fingerprint: <entries>
+  - Field: caveStains
+    Fingerprint: <entries>
+  - Field: seaFloats
+    Fingerprint: <entries>
+  - Field: glowModes
+    Fingerprint: <entries>
+  - Field: fountainEpisodes
+    Fingerprint: "0/0/0\xD70~0^0-0"
+  - Field: seaFloor
+    Fingerprint: Shore
+  - Field: tideStrength
+    Fingerprint: 10000
+  - Field: underwaterSiteDepth
+    Fingerprint: 0,0
+  - Field: siteKinds/Bay
+    Fingerprint: "Bay\xD71"
+  - Field: siteKinds/Delta
+    Fingerprint: "Delta\xD71"
+  - Field: siteKinds/Gorge
+    Fingerprint: "Gorge\xD71"
+  - Field: siteKinds/Headland
+    Fingerprint: "Headland\xD71"
+  - Field: siteKinds/Island
+    Fingerprint: "Island\xD71"
+  - Field: siteKinds/RiverMouth
+    Fingerprint: "RiverMouth\xD71"
+  - Field: siteKinds/SunkenCity
+    Fingerprint: "SunkenCity\xD71"
+  - Field: siteKinds/SunkenRuins
+    Fingerprint: "SunkenRuins\xD71"
+  - Field: siteKinds/SunkenShip
+    Fingerprint: "SunkenShip\xD71"
+  - Field: boardwalkStyle
+    Fingerprint: Planked

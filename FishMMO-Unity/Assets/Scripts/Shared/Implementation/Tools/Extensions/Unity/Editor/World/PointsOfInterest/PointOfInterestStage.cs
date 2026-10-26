@@ -317,6 +317,9 @@ namespace FishMMO.Shared.WorldDesign
 				? ScenePlacementClimate.For(system, Request.Body, Request.Footprint, Request.ResolvedRadiusKm, true)
 				: null;
 
+			// A template that needs liquid water (a holy well's spring chapel, decision 96) is built only on a world with some; no
+			// template written before needs it, so this changes no pick.
+			bool liquidWater = BiomeWorldConditions.For(system, Request.Body).HasLiquidWater;
 			foreach (PointOfInterestRecord record in plan.Records)
 			{
 				biomes.TryGetValue(record.BiomeID, out BiomeTemplate biome);
@@ -341,7 +344,7 @@ namespace FishMMO.Shared.WorldDesign
 						weights = CaveInteriorArt.SiteVariantWeights(in caves);
 					}
 				}
-				PointOfInterestTemplate template = library.Pick(record, weights, RaceCategoryOf(record.Race));
+				PointOfInterestTemplate template = library.Pick(record, PointOfInterestTemplate.WaterFit(weights, liquidWater), RaceCategoryOf(record.Race));
 				if (template != null)
 				{
 					record.Template = template.name;

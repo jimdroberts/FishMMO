@@ -29,6 +29,11 @@ namespace FishMMO.Shared.WorldDesign
 		public bool InWater;
 		/// <summary>Built in a carved cave's chamber (<see cref="PointOfInterestChamberFeature"/>), not at its mouth.</summary>
 		public bool InChamber;
+		/// <summary>
+		/// Built only on a world with liquid water on its surface (<see cref="PointOfInterestTemplate.NeedsLiquidWater"/>, decision 96,
+		/// 2026-10-25): a holy well's spring chapel, where its silent well-head stands on any world.
+		/// </summary>
+		public bool NeedsLiquidWater;
 
 		/// <summary>The asset's name.</summary>
 		public string Name => $"{Kind} - {Variant}";
@@ -145,6 +150,13 @@ namespace FishMMO.Shared.WorldDesign
 		public PointOfInterestTemplateSpec Chamber()
 		{
 			InChamber = true;
+			return this;
+		}
+
+		/// <summary>Built only where the world has liquid water (<see cref="NeedsLiquidWater"/>).</summary>
+		public PointOfInterestTemplateSpec NeedsWater()
+		{
+			NeedsLiquidWater = true;
 			return this;
 		}
 	}
@@ -298,7 +310,8 @@ namespace FishMMO.Shared.WorldDesign
 		public static readonly string[] Swamp = { "Swamp", "Mangrove", "Peat Bog", "Wetlands", "Swamp Ruins", "Swamp Temple", "Swamp Cave" };
 		// Dust Sea left the arid list 2026-10-18 (decision 44, the Dust Sea round): a sea of dust on airless and thin-aired worlds,
 		// nobody lives there, so it takes no arid settlement, inn or lodge variants (its template's own weights, from its file, rule).
-		public static readonly string[] Arid = { "Desert", "High Desert", "Badlands", "Salt Flat", "Oasis", "Scrubland", "Wasteland" };
+		// Wasteland left it 2026-10-25 (decision 96): a war-wasted land takes no arid inn, lodge or hermitage variants either.
+		public static readonly string[] Arid = { "Desert", "High Desert", "Badlands", "Salt Flat", "Oasis", "Scrubland" };
 		public static readonly string[] Highland = { "Mountain Slope", "Alpine", "Hills", "Rocky Terrain", "Scree", "Karst", "Rocky Coast", "Alpine Meadow" };
 		public static readonly string[] Cold = { "Tundra", "Taiga", "Snow", "Glacier", "Ice Sheet", "Ice Shelf", "Permanent Ice" };
 		public static readonly string[] Woods = { "Forest", "Woodland", "Taiga", "Jungle", "Bamboo Forest", "Forest Ruins", "Jungle Ruins", "Jungle Temple" };
@@ -343,6 +356,7 @@ namespace FishMMO.Shared.WorldDesign
 			Coast(a);
 			Encounters(a);
 			Caves(a);
+			RoundKinds(a);
 			return a;
 		}
 
@@ -1004,6 +1018,69 @@ namespace FishMMO.Shared.WorldDesign
 			T(a, POIType.ObsidianField, "Shards", Scattered, Stone)
 				.S(Menhir, 4, 10, Scatter, 0.2f, 0.6f, 0.5f, 1.2f).S(Rubble, 2, 5, Scatter)
 				.Weathered(PointOfInterestFinish.Charred, 1f).Pad(0f);
+		}
+
+		// ── The biome rounds' own kinds (2026-10-25, phase NEW-POI-KINDS) ─────
+
+		/// <summary>
+		/// Placeholders on the kit's pieces for the biome rounds' kinds that the kit already reads as (a sunk gate, a flooded forum, a
+		/// marsh tower, a toppled colossus, a rune door, a chapel, a well-head, a quarantined hamlet), until I7 gives each its signature
+		/// pieces. The kinds the kit cannot show yet (the canyon's lip, a cinder cone, a reed isle, a war engine) have none: they are
+		/// named and discovered but lay nothing. No biome hosts any of them yet, so no scene builds one.
+		/// </summary>
+		private static void RoundKinds(List<PointOfInterestTemplateSpec> a)
+		{
+			// Volcanic Temple (decision 95): the smiths' relics in the cinder, the phoenix's stone ring and pyre, a shrine in a tube mouth.
+			T(a, POIType.AncientForge, "Relics", Scattered, Stone)
+				.S(RuinedWall, 1, 2, Scatter).S(Menhir, 1, 1, Centre, 0.2f, 0.5f, 0.8f, 1.2f).S(Brazier, 1, 2, Scatter).S(Rubble, 3, 6, Scatter)
+				.Weathered(PointOfInterestFinish.Charred, 0.5f).Pad(0.4f);
+			T(a, POIType.PhoenixNest, "Pyre", Round, Stone)
+				.S(Menhir, 5, 8, Ring, 0f, 0.3f, 0.5f, 0.7f).S(Fire, 1, 1, Centre).S(Bones, 0, 2, Scatter)
+				.Weathered(PointOfInterestFinish.Charred, 0.6f).Pad(0.5f);
+			T(a, POIType.LavaCaveTemple, "Grotto", Single, Stone)
+				.S(Shrine, 1, 1, Centre).S(Altar, 0, 1, Scatter).S(Brazier, 1, 2, Scatter)
+				.Weathered(PointOfInterestFinish.Charred, 0.3f).Pad(0.6f);
+
+			// Swamp Ruins (decision 87): the drowned city's gate sunk to its arch in black water and its flooded forum.
+			T(a, POIType.MireGate, "Drowned", Single, Stone)
+				.S(Gate, 1, 1, Centre, 0.3f, 0.6f).S(RuinedWall, 2, 4, Scatter).S(Rubble, 1, 3, Scatter)
+				.Weathered(PointOfInterestFinish.Algae, 0.8f).Wet().Pad(0.3f);
+			T(a, POIType.SunkenPlaza, "Forum", Round, Stone)
+				.S(BrokenColumn, 6, 10, Ring).S(Altar, 1, 1, Centre, 0.2f, 0.5f).S(Menhir, 2, 6, Scatter, 0.1f, 0.4f, 0.4f, 0.6f).S(Rubble, 2, 4, Scatter)
+				.Weathered(PointOfInterestFinish.Algae, 0.8f).Wet().Pad(0.2f);
+			T(a, POIType.MarshWatchtower, "Mound", Single, Timber)
+				.S(Watchtower, 1, 1, Centre).S(Fire, 0, 1, Scatter).S(Storage, 1, 3, Scatter)
+				.Weathered(PointOfInterestFinish.Mossy, 0.5f).Pad(0.7f);
+			T(a, POIType.FallenColossus, "Toppled", Single, Stone)
+				.S(RuinedStatue, 1, 1, Centre, 0f, 0f, 2.2f, 3f).S(Plinth, 0, 1, Scatter).S(Rubble, 2, 4, Scatter)
+				.Weathered(PointOfInterestFinish.Mossy, 0.6f).Pad(0.4f);
+			T(a, POIType.SealedVault, "Rune Door", Single, Stone)
+				.S(CryptDoor, 1, 1, Centre).S(RuneStone, 2, 4, Scatter).S(Rubble, 0, 2, Scatter)
+				.Weathered(PointOfInterestFinish.Mossy, 0.5f).Pad(0.6f);
+
+			// Swamp Temple (decision 88): the frogs' mound and its stone, a fowler's reed hide, a potters' brick kiln.
+			T(a, POIType.FrogShrine, "Mound", Single, Earth)
+				.S(Mound, 1, 1, Centre).S(Shrine, 1, 1, Centre, style: Stone).S(Menhir, 2, 4, Ring, 0f, 0.2f, 0.4f, 0.6f, style: Stone)
+				.Weathered(PointOfInterestFinish.Mossy, 0.5f).Pad(0.6f);
+			T(a, POIType.FowlersHide, "Hide", Single, Timber)
+				.S(LeanTo, 1, 1, Centre).S(Storage, 0, 2, Scatter).S(Bedding, 0, 1, Scatter, style: Hide).Pad(0.6f);
+			T(a, POIType.BrickKiln, "Kiln", Scattered, Timber)
+				.S(PotteryKiln, 1, 1, Centre).S(LogPile, 1, 2, Scatter).S(Storage, 2, 4, Scatter).S(LeanTo, 0, 1, Scatter).Pad(0.7f);
+
+			// Wasteland (decision 96): the stroke's cursed stone with its walls thrown outward, the lone chapel, the holy well (its
+			// spring chapel only on a world with water: the silent well-head anywhere), the quarantined vill with its pyres.
+			T(a, POIType.BlightedCrater, "Stroke", Scattered, Stone)
+				.S(Menhir, 1, 1, Centre, 0.2f, 0.5f, 0.9f, 1.2f).S(RuinedWall, 3, 6, Ring, 0.6f, 1f).S(Rubble, 4, 8, Scatter)
+				.Weathered(PointOfInterestFinish.Charred, 0.6f).Pad(0f);
+			T(a, POIType.Chapel, "Chapel", Single, Stone)
+				.S(Chapel, 1, 1, Centre).S(Gravestone, 2, 6, Scatter, 0f, 0.3f).Pad(0.8f);
+			T(a, POIType.HolyWell, "Well-head", Single, Stone)
+				.S(Well, 1, 1, Centre).S(Shrine, 0, 1, Scatter).S(Menhir, 0, 2, Scatter, 0f, 0.2f, 0.4f, 0.6f).Pad(0.8f);
+			T(a, POIType.HolyWell, "Spring Chapel", Single, Stone)
+				.S(Chapel, 1, 1, Centre).S(Well, 1, 1, Scatter).Weighs(0.6f).NeedsWater().Pad(0.8f);
+			T(a, POIType.PlagueVillage, "Quarantine", Streets, Timber)
+				.S(House, 4, 8, Street, 0.2f, 0.6f).S(Fire, 1, 3, Scatter).S(Mound, 2, 5, Scatter).S(Storage, 1, 3, Scatter)
+				.Weathered(PointOfInterestFinish.Charred, 0.3f).Pad(0.6f);
 		}
 	}
 }

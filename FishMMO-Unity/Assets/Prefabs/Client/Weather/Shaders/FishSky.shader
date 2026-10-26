@@ -96,11 +96,18 @@ Shader "FishMMO/Sky"
                 float greying = capture ? 1.0 : 0.7;
                 zenith = lerp(zenith, grey * 0.9, overcast * greying);
                 horizon = lerp(horizon, grey, overcast * greying);
+                // Seen, the horizon (and the ground ring under it) is the air under the low cloud, lit by what the cloud
+                // lets down, as the fog laid over the far ground is (SkySystem.AirLight, _FishSkyCapture.z): undimmed,
+                // it glowed over the dark deck and the fogged ridges in front of it. The zenith is left as it is, for
+                // the gaps the clouds leave. Captured, the whole sky is dimmed below. 0 is "not set": no dimming.
+                float airThrough = _FishSkyCapture.z > 0.0 ? _FishSkyCapture.z : 1.0;
+                float horizonDim = capture ? 1.0 : airThrough;
+                horizon *= horizonDim;
 
                 // Atmosphere.
                 float h = saturate(up);
                 float3 color = lerp(horizon, zenith, pow(h, 0.5));
-                color = lerp(color, _FishSkyGround.rgb, saturate(-up * 5.0));
+                color = lerp(color, _FishSkyGround.rgb * horizonDim, saturate(-up * 5.0));
 
                 // The ring of the world underfoot, asked about once: how much of this direction it covers
                 // and what light comes off it. What is BEHIND the ring — the stars, the galaxy, the

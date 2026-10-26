@@ -65,6 +65,8 @@ namespace FishMMO.Shared.Biomes
 			[Tooltip("How far past its half-width the water reaches on its left and right (looking downstream) at each point, metres, where the cut ground lies under it: a scoured pool wider than its channel. Empty for none.")]
 			public float[] ShoreLeft = Array.Empty<float>();
 			public float[] ShoreRight = Array.Empty<float>();
+			[Tooltip("The biome whose water look this body takes, by its id; 0 by its shores (every body before 2026-10-25). A cave's water takes the look of the cave biome dressing its inside (I2n-c), where that biome has a look of its own.")]
+			public int LookBiome;
 		}
 
 		[Serializable]
@@ -97,6 +99,8 @@ namespace FishMMO.Shared.Biomes
 			public float MaskCell = 4f;
 			public int MaskWidth;
 			public int MaskHeight;
+			[Tooltip("The biome whose water look this body takes, by its id; 0 by its shores (every body before 2026-10-25). A cave's water takes the look of the cave biome dressing its inside (I2n-c), where that biome has a look of its own.")]
+			public int LookBiome;
 
 			/// <summary>True when the lake's water stands over a scene position.</summary>
 			public bool Covers(float x, float z)

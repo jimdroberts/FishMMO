@@ -26,5 +26,11 @@ namespace FishMMO.Shared.Biomes
 		SaltFlat = 5,
 		/// <summary>The ground of the ice that buries land whose summer never thaws (IceSheetSurface); no sheet is laid without one.</summary>
 		IceSheet = 6,
+		/// <summary>
+		/// The floating shelf and its fast ice where the ice sheet meets a sea colder than −5 °C mean (IceShelfReach,
+		/// decision 68): the biome of those cells whatever the climate picks there, as the lake roles are. Opt-in: no name
+		/// stands in for it, so no shelf is laid until a template holds the role.
+		/// </summary>
+		IceShelf = 7,
 	}
 }

@@ -27,6 +27,18 @@ namespace FishMMO.Client
 		/// rippling as it swims (FishSeaLife.hlsl mode 6): morays, cusk-eels, the deep's ooze-wyrms.
 		/// </summary>
 		Eel,
+		/// <summary>An ocean sunfish (2026-10-25, I2p): a tall disc of a body cut off behind, sculling on its tall dorsal and anal fins (mode 7).</summary>
+		Mola,
+		/// <summary>A billfish: a marlin's or sailfish's spear of a bill, a tall dorsal sail and a deep-forked tail (fish mode).</summary>
+		Billfish,
+		/// <summary>A nautilus: a coiled, striped shell, its ring of tentacles out in front, rising and sinking by jets (mode 8).</summary>
+		Nautilus,
+		/// <summary>A dugong: the whale's build, rounder and blunter, finless, its flukes beating up and down (whale mode).</summary>
+		Dugong,
+		/// <summary>A sawfish: a shark's build flattened, with its long toothed saw out in front (fish mode).</summary>
+		Sawfish,
+		/// <summary>A mudskipper: a small goggle-eyed fish with a tall flag of a dorsal fin, hopping on the mud at low tide (fish mode).</summary>
+		Mudskipper,
 	}
 
 	/// <summary>How a kind moves about its home (SeaLifePlacement.Evaluate).</summary>
@@ -47,6 +59,21 @@ namespace FishMMO.Client
 		/// a moray in its crevice. When each one darts is a pure function of the shared clock (SeaLifePlacement.LurkAt).
 		/// </summary>
 		Lurk,
+		/// <summary>
+		/// A school near the surface whose members now and then burst out and glide 20–60 m on their wings a metre over the waves
+		/// (2026-10-25, I2p: flying fish), each on its own schedule of the shared clock (SeaLifePlacement.GlideAt).
+		/// </summary>
+		Glide,
+		/// <summary>Afloat at the surface, riding the swell and drifting with it: a man-o'-war's float (the shader adds the sea's wave sum).</summary>
+		SurfaceFloat,
+		/// <summary>Hopping on the mud between the tides: drawn only where the bed lies out of the water at the tide of the moment, up to 2 m above it (mudskippers).</summary>
+		Skip,
+		/// <summary>Lying on the bed, bell down and arms up, pulsing on the shared clock: an upside-down jelly (Cassiopea) on the shallow sand.</summary>
+		Settle,
+		/// <summary>A school that rises from the deep end of its Depth band by day to the shallow end by night and back (lanternfish), its depth a pure function of the clock's hour.</summary>
+		DielMigrate,
+		/// <summary>A school milling in a slow vertical column round one axis, each member on its own ring: a trevally tornado.</summary>
+		Mill,
 	}
 
 	/// <summary>One kind of background sea creature: what it looks like, where it lives and how it moves.</summary>
@@ -108,6 +135,30 @@ namespace FishMMO.Client
 		[Range(0f, 1f)] public float Smoothness = 0.6f;
 		[Tooltip("Casts shadows on the sea floor (big animals).")]
 		public bool CastShadows;
+
+		[Header("Open sea (2026-10-25)")]
+		[Tooltip("Boil episodes: now and then, on its own schedule of the shared clock, the school rushes up under the surface, tightens and thrashes (tuna on baitfish).")]
+		public bool Boils;
+		[Tooltip("By day the school keeps tight, by night it spreads out four times as wide (scalloped hammerheads hunting alone after dark).")]
+		public bool NightSpread;
+		[Tooltip("A shark's head drawn as a hammerhead's wide flat cephalofoil, its eyes at the tips.")]
+		public bool HammerHead;
+		[Tooltip("Glide: how far one glide carries, metres, min..max.")]
+		public Vector2 GlideMetres = new Vector2(20f, 60f);
+		[Tooltip("Glide: how high over the surface it flies at the top of the glide, metres, min..max.")]
+		public Vector2 GlideHeight = new Vector2(0.5f, 1.5f);
+
+		[Header("Its own light (2026-10-25)")]
+		[Tooltip("How its light comes and goes on the shared clock (the ambient creatures' rhythms: AmbientGlow).")]
+		public AmbientGlowPattern GlowPattern = AmbientGlowPattern.Pulse;
+		[Tooltip("Its light's colour (sRGB).")]
+		public Color GlowColour = new Color(0.4f, 0.8f, 1f);
+		[Tooltip("Its light at its brightest, times the colour (linear, HDR). 0: it has no light of its own.")]
+		[Min(0f)] public float GlowStrength;
+		[Tooltip("Seconds one round of its pattern takes, each animal a little its own about it.")]
+		[Min(0.2f)] public float GlowPeriod = 4f;
+		[Tooltip("The share of its light it keeps between pulses and flashes, 0 dark .. 1 steady.")]
+		[Range(0f, 1f)] public float GlowRest = 0.3f;
 	}
 
 	/// <summary>

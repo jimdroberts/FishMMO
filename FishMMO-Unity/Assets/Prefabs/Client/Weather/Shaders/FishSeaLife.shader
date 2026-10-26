@@ -9,7 +9,7 @@ Shader "FishMMO/Sea Life"
 {
     Properties
     {
-        [Enum(Fish, 0, Whale, 1, Ray, 2, Turtle, 3, Jelly, 4, Crab, 5, Eel, 6)] _Mode("Motion", Float) = 0
+        [Enum(Fish, 0, Whale, 1, Ray, 2, Turtle, 3, Jelly, 4, Crab, 5, Eel, 6, Mola, 7, Nautilus, 8)] _Mode("Motion", Float) = 0
         _Amplitude("Stroke (share of length)", Range(0.0, 0.5)) = 0.08
         _WaveLength("Body wave (body lengths)", Range(0.2, 3.0)) = 0.9
         _Smoothness("Smoothness", Range(0.0, 1.0)) = 0.5
@@ -17,6 +17,8 @@ Shader "FishMMO/Sea Life"
         [Enum(UnityEngine.Rendering.BlendMode)] _SrcBlend("Source blend", Float) = 1
         [Enum(UnityEngine.Rendering.BlendMode)] _DstBlend("Destination blend", Float) = 0
         [Toggle] _ZWrite("Write depth", Float) = 1
+        [HDR] _EmitColour("Own light (linear, a: 1 when it has one)", Vector) = (0, 0, 0, 0)
+        _EmitPattern("Own light pattern (kind, crests, sharpness, share lit)", Vector) = (0, 1, 1, 1)
     }
 
     SubShader

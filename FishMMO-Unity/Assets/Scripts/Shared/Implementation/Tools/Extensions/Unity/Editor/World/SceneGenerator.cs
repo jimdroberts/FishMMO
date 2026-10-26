@@ -232,6 +232,10 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return SceneGenerationResult.Failed("Nothing to generate.");
 			}
+			if (UnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings == null)
+			{
+				return SceneGenerationResult.Failed("Create Addressables settings before cutting a scene so the scene and its assets can be registered.");
+			}
 			/* The biomes, which pick the paint, the scatter and how the ground drains. The editor registers them
 			 * on a deferred call that never runs before a batch method returns, and a scene cut without them
 			 * came out painted in plain bands with a different planet's rivers. */
@@ -635,8 +639,13 @@ namespace FishMMO.Shared.WorldDesign
 			EnsureBodyClimate(request.Body);
 			// Every generated scene has a boundary, so the client needs the glass that shows it.
 			BoundaryGlassAssets.Ensure();
+			// Save and import first so the dependency walk includes every asset written by the cut.
 			AssetDatabase.SaveAssets();
 			AssetDatabase.Refresh();
+			int registered = AddressablesDashboard.RegisterSceneAssets(
+				UnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings, scenePath, result.Wrote);
+			AssetDatabase.SaveAssets();
+			result.Notes.Add($"Registered {registered} scene asset(s) in Addressables.");
 			WorldAtlasScene.EditorLookup.Invalidate();
 
 			clock.Lap("Finishing: atlas entry, climate, asset refresh");
@@ -1051,7 +1060,8 @@ namespace FishMMO.Shared.WorldDesign
 			BiomeTerrainLayers.ClearCache();
 			// The world's air picks between a biome's air-banded grounds (decision 44, 2026-10-18); nothing banded, nothing changes.
 			SceneTerrainPalette palette = SceneTerrainPalette.Build(field, scope.PaletteResolver(BiomeTerrainLayers.Resolve), BiomeTerrainLayers.Placeholder,
-				water != null ? RiverSediment() : null, poi != null && poi.HasPaths ? PathSurfaces() : null, WorldAir(system, request.Body));
+				water != null ? RiverSediment() : null, poi != null && poi.HasPaths ? PathSurfaces() : null, WorldAir(system, request.Body),
+				BiomeWorldConditions.For(system, request.Body));
 			if (poi != null)
 			{
 				// The arrays' slices the path overlay samples its earth, road and cobbles from, and each ground layer's own biome's.
@@ -1094,6 +1104,8 @@ namespace FishMMO.Shared.WorldDesign
 			var options = new BiomeSplatOptions
 			{
 				TideMetres = seaTide,
+				// The lava's surface a lava band measures from (2026-10-25, I2r); NaN with no lava.
+				LavaLevel = SceneGround.LavaLevel(request, system),
 				// Planet-relative, so a layer's height band means the same height in every scene.
 				NormalizedHeight = (x, y, z) => climate.HeightOfAltitude(y / verticalScale),
 				HasLiquidWater = climate.Conditions.HasLiquidWater,
@@ -1135,6 +1147,8 @@ namespace FishMMO.Shared.WorldDesign
 			TerrainScatterReport scatter = TerrainScatter.Scatter(tiles, palette, field, options.Seed,
 				new TerrainScatterOptions { NormalizedHeight = options.NormalizedHeight, Prefabs = scope.ScatterPrefabs, HasLiquidWater = options.HasLiquidWater,
 					InlandWaterSurface = inland, RiverAt = options.RiverAt, Excluded = keptOut, DetailExcluded = detailKeptOut,
+					// The wind, the moon's east, the equator and the planned sites the rules' scatter modes read (SCATTER-MODES, 2026-10-26).
+					Compass = TerrainScatter.CompassFor(request, system), Sites = TerrainScatter.SitesOf(poi?.Plan),
 					LandformZones = options.LandformZones, HeatAt = options.HeatAt }, placementClimate);
 			result.Notes.AddRange(scatter.InvalidPrefabs);
 			result.Notes.AddRange(scatter.BudgetCaps);
@@ -1274,6 +1288,16 @@ namespace FishMMO.Shared.WorldDesign
 			// And the Great Spout the cut chose (2026-10-25, I2q (d)): the largest geyser it dug, read by a Spout clock with no search.
 			FishMMO.Shared.Weather.GeothermalSite spout = hotGround.GreatSpout >= 0 ? hotGround.Sites[hotGround.GreatSpout] : default;
 			map.SetGreatSpout(hotGround.GreatSpout >= 0, spout.Position, spout.Seed, spout.Size);
+			// And the vent lines its sites were found on, with its Great Plume (2026-10-25, I2q-b): the client's search reads both.
+			map.SetVentLines(hotGround.Lines);
+			map.SetGreatPlume(hotGround.GreatPlume >= 0, hotGround.GreatPlume >= 0 ? hotGround.Sites[hotGround.GreatPlume].Seed : 0u);
+			// And every landform line for the glows (2026-10-25, I6i-b): a TRAIL creeps along the nearest, a KNEADING reads its bearing.
+			map.SetGlowLines(SceneGlowPlaces.FromLandforms(SceneLandforms.Sites(scene)));
+			// And its chutes and talus cones on the carved ground (2026-10-25, I2u falling stone): the client's rockfall reads them.
+			StoreRockChutes(map, SceneLandforms.Sites(scene), SceneLandforms.Pads(scene), (east, north) => GroundAltitude(terrains, plan, east, north));
+			// And its molten lines (2026-10-25, I2r, decision 65 (c)): the client draws a lava ribbon along each.
+			map.SetLavaLines(BiomeLavaChannels.FromLandforms(SceneLandforms.Sites(scene)));
+			EnsureLavaRibbons(scene, map, field);
 			EditorUtility.SetDirty(map);
 			result.Wrote.Add(mapPath);
 			result.BiomeMap = map;
@@ -1524,6 +1548,54 @@ namespace FishMMO.Shared.WorldDesign
 			EditorUtility.SetDirty(host);
 		}
 
+		/// <summary>
+		/// The scene's lava ribbons root (2026-10-25, phase I2r, decision 65 (c)/95: FishMMO.Water.LavaRibbonRenderer, client only), made
+		/// when the map stores a lava line or a biome on the scene fills its moats with lava, and taken away when neither: a scene with
+		/// neither keeps none, as before.
+		/// </summary>
+		internal static void EnsureLavaRibbons(Scene scene, SceneBiomeMap map, SceneBiomeField field)
+		{
+			bool lavaMoats = false;
+			if (field?.Biomes != null)
+			{
+				foreach (BiomeTemplate biome in field.Biomes)
+				{
+					lavaMoats |= biome != null && BiomeTemplateArt.MoatWater(biome) == BiomeMoatWater.Lava;
+				}
+			}
+			bool wanted = map != null && (map.LavaLines.Count > 0 || lavaMoats);
+			GameObject host = null;
+			foreach (GameObject root in scene.GetRootGameObjects())
+			{
+				if (root.name == FishMMO.Water.LavaRibbonRenderer.ObjectName)
+				{
+					host = root;
+					break;
+				}
+			}
+			if (!wanted)
+			{
+				if (host != null)
+				{
+					UnityEngine.Object.DestroyImmediate(host);
+				}
+				return;
+			}
+			if (host == null)
+			{
+				host = new GameObject(FishMMO.Water.LavaRibbonRenderer.ObjectName);
+				SceneManager.MoveGameObjectToScene(host, scene);
+				host.AddComponent<ClientOnlyObject>();
+			}
+			if (!host.TryGetComponent(out FishMMO.Water.LavaRibbonRenderer ribbons))
+			{
+				ribbons = host.AddComponent<FishMMO.Water.LavaRibbonRenderer>();
+			}
+			ribbons.Map = map;
+			ribbons.LavaMaterial = AssetDatabase.LoadAssetAtPath<Material>(InlandLavaMaterialPath);
+			EditorUtility.SetDirty(host);
+		}
+
 		/// <summary>A fall's material (the sheet's or the spray's), made from its shader and the inland water's ripple and foam textures when missing.</summary>
 		internal static Material EnsureWaterfallMaterial(string path, string shaderName, string name)
 		{
@@ -1738,11 +1810,13 @@ namespace FishMMO.Shared.WorldDesign
 
 			if (sceneLayers != null && sceneLayers.Count > 0 && resolveSlot != null && horizon.Biomes.Count > 0)
 			{
-				SceneTerrainPalette palette = SceneTerrainPalette.Build(horizon, resolveSlot, BiomeTerrainLayers.Placeholder, worldAir: WorldAir(system, request.Body));
+				SceneTerrainPalette palette = SceneTerrainPalette.Build(horizon, resolveSlot, BiomeTerrainLayers.Placeholder, worldAir: WorldAir(system, request.Body),
+					world: BiomeWorldConditions.For(system, request.Body));
 				var options = new BiomeSplatOptions
 				{
 					NormalizedHeight = (x, y, z) => climate.HeightOfAltitude(y / verticalScale),
 					HasLiquidWater = climate.Conditions.HasLiquidWater,
+					LavaLevel = SceneGround.LavaLevel(request, system),
 					Seed = SceneSeed(request),
 					// The same climate the scene's own ground is weighed with, so a climate-banded layer carries on past the edge.
 					ClimateAt = palette.NeedsClimate ? ClimateOf(ScenePlacementClimate.For(system, request.Body, request.Footprint, request.ResolvedRadiusKm, true)) : null,
@@ -1843,6 +1917,19 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			return 0;
+		}
+
+		/// <summary>
+		/// Stores a scene's chutes and talus cones with its biome map (2026-10-25, phase I2u falling stone; RockChutes.FromLandforms): the
+		/// stored landforms' chute lines head to runout on the carved ground, and their cones. None stored (no chute or cone landform): empty.
+		/// </summary>
+		internal static void StoreRockChutes(SceneBiomeMap map, IReadOnlyList<BiomeLandformSite> sites, IReadOnlyList<BiomeLandformPad> pads, Func<float, float, float> groundAt)
+		{
+			var chutes = new List<RockChute>();
+			var points = new List<Vector4>();
+			var cones = new List<TalusCone>();
+			RockChutes.FromLandforms(sites, pads, groundAt, chutes, points, cones);
+			map.SetRockChutes(chutes, points, cones);
 		}
 
 		/// <summary>Scene metres above sea level of the generated ground at a scene position.</summary>

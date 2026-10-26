@@ -98,6 +98,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// (<see cref="TerrainTextureLayer.seaDepthInTides"/>).
 		/// </summary>
 		public float TideMetres = BiomeSeaFloors.DefaultTideMetres;
+
+		/// <summary>
+		/// The scene's lava surface, world y (2026-10-25, phase I2r, decision 65 (b)): what a ground layer's lava band
+		/// (<see cref="TerrainTextureLayer.useLavaBand"/>) measures heights from. NaN for a scene with no lava: every lava band passes.
+		/// </summary>
+		public float LavaLevel = float.NaN;
 	}
 
 	/// <summary>What the splat painter did.</summary>
@@ -286,6 +292,9 @@ namespace FishMMO.Shared.WorldDesign
 			/// </summary>
 			private readonly bool anyDepthBand;
 			private float seaDepth = float.NaN;
+			/// <summary>True when some main or detail layer has a lava band (2026-10-25, I2r); the point's height above the lava then (NaN: no lava).</summary>
+			private readonly bool anyLavaBand;
+			private float aboveLava = float.NaN;
 			/// <summary>Scratch for one biome's extra beds: their strengths and shares at the point being weighed.</summary>
 			private readonly float[] bedStrength = new float[BiomeTemplate.MaximumBedLayers];
 			private readonly float[] bedShare = new float[BiomeTemplate.MaximumBedLayers];
@@ -335,6 +344,7 @@ namespace FishMMO.Shared.WorldDesign
 				foreach (SceneTerrainPalette.Entry entry in palette.Entries)
 				{
 					anyDepthBand |= (entry.Role == PaletteRole.Main || entry.Role == PaletteRole.Detail) && entry.Source != null && entry.Source.HasSeaDepthBand;
+					anyLavaBand |= (entry.Role == PaletteRole.Main || entry.Role == PaletteRole.Detail) && entry.Source != null && entry.Source.HasLavaBand;
 				}
 
 				if (this.options.HeatAt != null)
@@ -476,6 +486,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				seaDepth = anyDepthBand && options.HasLiquidWater ? -worldY : float.NaN;
+				aboveLava = anyLavaBand && !float.IsNaN(options.LavaLevel) ? worldY - options.LavaLevel : float.NaN;
 				/* What lies over the bed (decision 35, 2026-10-18): which water, how deep below its own surface, how quick. Only where
 				 * something is submerged; a river's share asked only under inland water. */
 				BedWater water = BedWater.None;
@@ -641,7 +652,7 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					float d = DetailStrength(entry, worldX, worldZ, height, slope);
-					if (entry.Source.HasSeaDepthBand)
+					if (Banded(entry.Source))
 					{
 						d *= DepthWeight(entry);
 					}
@@ -663,7 +674,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 
 				float rest = biomeWeight * ground * (1f - union);
-				if (main != null && main.Source.HasSeaDepthBand && sum > 0f)
+				if (main != null && Banded(main.Source) && sum > 0f)
 				{
 					/* A main layer banded by depth (2026-10-25, phase I2m) stands only inside its band; outside it the details carry the
 					 * ground between them, and where none does the main layer stays, never a hole (as a main layer's climate band). */
@@ -733,7 +744,7 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						float claim = entry.Variant.TextureWeight(t, h);
 						climateShare[entry.Index] = left * claim * entry.Source.ClimateWeight(t, h);
-						if (entry.Source.HasSeaDepthBand)
+						if (Banded(entry.Source))
 						{
 							climateShare[entry.Index] *= DepthWeight(entry);
 						}
@@ -742,7 +753,7 @@ namespace FishMMO.Shared.WorldDesign
 					if (slot.Own != null)
 					{
 						climateShare[slot.Own.Index] = left * slot.Own.Source.ClimateWeight(t, h);
-						if (slot.Own.Source.HasSeaDepthBand)
+						if (Banded(slot.Own.Source))
 						{
 							climateShare[slot.Own.Index] *= DepthWeight(slot.Own);
 						}
@@ -856,8 +867,13 @@ namespace FishMMO.Shared.WorldDesign
 			/// </summary>
 			private float DepthWeight(SceneTerrainPalette.Entry entry)
 			{
-				return float.IsNaN(seaDepth) ? 1f : entry.Source.SeaDepthWeight(seaDepth, options.TideMetres);
+				float sea = float.IsNaN(seaDepth) ? 1f : entry.Source.SeaDepthWeight(seaDepth, options.TideMetres);
+				// And its lava band (2026-10-25, I2r): the height above the lava's surface; 1 with no band or no lava.
+				return entry.Source.HasLavaBand ? sea * entry.Source.LavaWeight(aboveLava) : sea;
 			}
+
+			/// <summary>True when a layer's sea depth band or lava band (2026-10-25, I2r) changes where it is painted.</summary>
+			private static bool Banded(TerrainTextureLayer layer) => layer.HasSeaDepthBand || layer.HasLavaBand;
 
 			/// <summary>
 			/// A detail layer's strength at a point, 0 … 1: its noise, sharpened, inside its bands.

@@ -66,6 +66,8 @@ Shader "FishMMO/Weather Lit Indirect"
         [HideInInspector][HDR] _FishCaveGlow("Cave glow crust", Color) = (0.7, 2.2, 1.6, 1)
         [HideInInspector] _FishCaveGuano("Cave guano", Color) = (0.52, 0.46, 0.36, 1)
         [HideInInspector] _FishCaveParams("Cave moss, wet gloss, grounds bound", Vector) = (1, 1, 0, 0)
+        [HideInInspector] _FishCaveFlood("Cave tea ring: water level, rise, edge, on", Vector) = (0, 0, 0.05, 0)
+        [HideInInspector] _FishCaveFloodStain("Cave tea ring colour (a strength)", Color) = (0.35, 0.23, 0.1, 0)
 
         _BumpScale("Scale", Float) = 1.0
         _BumpMap("Normal Map", 2D) = "bump" {}

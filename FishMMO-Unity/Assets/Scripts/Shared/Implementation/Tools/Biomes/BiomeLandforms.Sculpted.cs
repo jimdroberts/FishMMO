@@ -341,6 +341,20 @@ namespace FishMMO.Shared.Biomes
 			/// <summary>The parts of a cockpit field, a labyrinth and a cell field, before their biome's weight.</summary>
 			private float FieldPartMask(BiomeLandformPart part, float x, float z, float lambda)
 			{
+				if (Site.Form.Form == BiomeLandformForm.Weave)
+				{
+					WeaveHeight(x, z, lambda, out float crest, out float trough);
+					switch (part)
+					{
+						case BiomeLandformPart.Crest:
+						case BiomeLandformPart.Top: return crest;
+						case BiomeLandformPart.Channel:
+						case BiomeLandformPart.Floor:
+						case BiomeLandformPart.Moat: return trough;
+						case BiomeLandformPart.Flank: return (1f - trough) * (1f - crest);
+						default: return 1f;
+					}
+				}
 				if (Site.Form.Form == BiomeLandformForm.Cells)
 				{
 					CellDistances(x, z, lambda, out float edge, out float junction);
@@ -390,7 +404,9 @@ namespace FishMMO.Shared.Biomes
 					return 0f;
 				}
 				float top = Mathf.Clamp(f.Top, 0.05f, 0.9f);
-				float delta = r < 1f ? -Site.Height * (1f - S01((r - top) / (1f - top))) : 0f;
+				float wall = 1f - S01((r - top) / (1f - top));
+				// Step-fault benches down its walls (2026-10-25, phase I2g-d: a shield caldera's).
+				float delta = r < 1f ? -Site.Height * (f.Steps > 0 ? Stepped(wall, f.Steps + 1) : wall) : 0f;
 				float rimHeight = Mathf.Max(0f, f.Rim) * 2f * radius;
 				if (rimHeight > 0f)
 				{

@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEditor;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.AddressableAssets.Settings.GroupSchemas;
@@ -10,6 +11,71 @@ namespace FishMMO.Shared
 {
 	public partial class AddressablesDashboard
 	{
+		/// <summary>
+		/// Registers a saved world scene and its runtime dependencies using the dashboard's routing rules.
+		/// Existing entries keep their authored addresses, labels and groups. Generated art and terrain
+		/// arrays retain their build-time registration, and editor records never enter runtime bundles.
+		/// The caller saves the settings along with the generated assets.
+		/// </summary>
+		public static int RegisterSceneAssets(AddressableAssetSettings settings, string scenePath,
+			IEnumerable<string> additionalPaths = null)
+		{
+			if (settings == null)
+			{
+				throw new InvalidOperationException("Addressables settings are required to register a generated scene.");
+			}
+			var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { scenePath };
+			if (additionalPaths != null)
+			{
+				foreach (string path in additionalPaths)
+				{
+					if (!string.IsNullOrEmpty(path)) roots.Add(path);
+				}
+			}
+			var addresses = new HashSet<(string, Type)>();
+			foreach (AddressableAssetGroup group in settings.groups)
+			{
+				if (group == null) continue;
+				foreach (AddressableAssetEntry entry in group.entries)
+				{
+					addresses.Add((entry.address, AssetDatabase.GetMainAssetTypeAtPath(entry.AssetPath)));
+				}
+			}
+			var groups = new Dictionary<string, AddressableAssetGroup>(StringComparer.OrdinalIgnoreCase);
+			int registered = 0;
+			foreach (string path in AssetDatabase.GetDependencies(new List<string>(roots).ToArray(), true))
+			{
+				if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) ||
+					AssetDatabase.IsValidFolder(path) || IsEditorOnlyPath(path) || ShouldSkipLocalAsset(path) ||
+					ContainsSegment(path, "Resources") ||
+					WorldDesign.ProceduralArtBuildGroup.IsGenerated(path) ||
+					path.StartsWith(TerrainArraySet.BakedDirectory + "/", StringComparison.OrdinalIgnoreCase)) continue;
+				Type type = AssetDatabase.GetMainAssetTypeAtPath(path);
+				if (type == null || type == typeof(MonoScript) || type == typeof(DefaultAsset) ||
+					type.Assembly == typeof(AddressablesDashboard).Assembly ||
+					(type != typeof(SceneAsset) && type.Assembly.GetName().Name.StartsWith("UnityEditor", StringComparison.Ordinal))) continue;
+				string guid = AssetDatabase.AssetPathToGUID(path);
+				if (string.IsNullOrEmpty(guid) || settings.FindAssetEntry(guid, true) != null) continue;
+				AssetCategory category = CategorizeAsset(path, null);
+				if (category.IsPluginWarning || string.IsNullOrEmpty(category.GroupName)) continue;
+				AddressableAssetGroup target = GetOrCreateGroup(settings, category.GroupName, groups);
+				if (target == null) throw new InvalidOperationException($"Could not create Addressables group '{category.GroupName}'.");
+				AddressableAssetEntry added = settings.CreateOrMoveEntry(guid, target);
+				if (added == null) throw new InvalidOperationException($"Could not register '{path}' as addressable.");
+				string address = Path.GetFileNameWithoutExtension(path);
+				if (!addresses.Add((address, type)))
+				{
+					address = path;
+					for (int suffix = 2; !addresses.Add((address, type)); suffix++) address = path + " #" + suffix;
+				}
+				added.SetAddress(address);
+				SetExclusiveSmartLabel(settings, added, category.GroupName);
+				registered++;
+			}
+			if (registered > 0) EditorUtility.SetDirty(settings);
+			return registered;
+		}
+
 		private const string SharedDependenciesGroupName = "_SharedDependencies";
 
 		// ──────────────────────────────────────────────
@@ -409,7 +475,10 @@ namespace FishMMO.Shared
 				case ".dae":
 					return true;
 				default:
-					return false;
+					// Generated textures are often saved as .asset rather than an image file.
+					Type type = AssetDatabase.GetMainAssetTypeAtPath(normalizedPath);
+					return type != null && (typeof(UnityEngine.Texture).IsAssignableFrom(type) ||
+						type == typeof(UnityEngine.TerrainLayer));
 			}
 		}
 

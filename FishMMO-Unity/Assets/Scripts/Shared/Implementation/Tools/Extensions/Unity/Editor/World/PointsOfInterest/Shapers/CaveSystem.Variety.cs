@@ -667,21 +667,22 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					Vector3 p = i == 0 ? b : Vector3.Lerp(a, b, s / (float)steps);
 					float from = float.IsNaN(previous) ? p.y + 1.2f : previous + 1.2f;
-					float floor = FloorBelow(new Vector3(p.x, from, p.z), 3.5f);
+					float floor = FloorBelow(new Vector3(p.x, from, p.z), 3.5f, 0.02f);
 					if (float.IsNaN(floor))
 					{
 						why = $"no floor under {p} (rock at {from:0.0}, or a drop)";
 						return false;
 					}
 					// To a centimetre: the march's tenth of a metre is a tenth of a step's slope over half a metre.
-					float lo = floor - 0.1f, hi = floor;
+					float lo = floor - 0.02f, hi = floor;
 					for (int k = 0; k < 4; k++)
 					{
 						float mid = 0.5f * (lo + hi);
 						if (Void(new Vector3(p.x, mid, p.z)) < 0f) hi = mid; else lo = mid;
 					}
 					floor = hi;
-					for (float h = 0.3f; h <= 2.21f; h += 0.38f)
+					// Do not jump over a thin roof into the open pocket above it.
+					for (float h = 0.1f; h <= 2.21f; h += 0.1f)
 					{
 						if (Void(new Vector3(p.x, floor + h, p.z)) >= 0f)
 						{
@@ -959,8 +960,14 @@ namespace FishMMO.Shared.WorldDesign
 				foreach (CaveTerrace terrace in system.Terraces)
 				{
 					List<Vector3> walk = system.TerraceWalk(terrace);
-					if (walk.Count > 0 && Mathf.Abs(walk[0].y - near.y) < 25f && new Vector2(walk[0].x - near.x, walk[0].z - near.z).magnitude < r + 30f
-						&& !system.WalkFits(walk, out _))
+					// A long terrace can start beyond the feature's radius while its far end crosses it.
+					bool nearby = false;
+					for (int i = 0; i < walk.Count && !nearby; i++)
+					{
+						Vector3 a = i == 0 ? walk[0] : walk[i - 1], b = walk[i];
+						nearby = Mathf.Abs(0.5f * (a.y + b.y) - near.y) < 25f && PlanDistance(near, a, b) < r + 30f;
+					}
+					if (nearby && !system.WalkFits(walk, out _))
 					{
 						return false;
 					}

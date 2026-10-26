@@ -15,7 +15,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// How many sites of a kind a scene of <paramref name="areaKm2"/> gets: per km² × area × density × multiplier,
 		/// rounded down plus one more on a seeded draw against the fraction, clamped to [Min, Max]. The capital is one
-		/// when the scene asked for it and none otherwise.
+		/// when the scene asked for it and none otherwise. The planner passes the area the kind's biomes hold, by their
+		/// weights (<see cref="State.HostedAreaKm2"/>), not the scene's.
 		/// </summary>
 		public static int Budget(PointOfInterestKindRule rule, PointOfInterestPlanSettings settings, float areaKm2, int seed)
 		{
@@ -32,6 +33,35 @@ namespace FishMMO.Shared.WorldDesign
 			float fraction = expected - whole;
 			int count = whole + (Unit(Hash(seed, (int)rule.Kind, 0xB0D6E7, 0)) < fraction ? 1 : 0);
 			return Mathf.Clamp(count, Mathf.Max(0, rule.Min), Mathf.Max(0, rule.Max));
+		}
+
+		/// <summary>
+		/// The scene's area as a kind sees it (2026-10-25): each biome's share of the scene's cells times its weight for the kind
+		/// (<see cref="PointOfInterestBiome.WeightOf"/>), a cell with no biome at the kind's default. Weight 0 counts nothing, 0.2 a
+		/// fifth and 2 twice over, so a biome's favoured kinds turn up more and a kind it does not host is not squeezed onto the
+		/// scene's other ground at the whole scene's count, as it was while the weight only ranked the cells.
+		/// </summary>
+		/// <param name="cellsPerBiome">Cells per entry of <paramref name="biomes"/>; one more entry past them for the cells with no biome.</param>
+		public static float HostedAreaKm2(PointOfInterestKindRule rule, float sceneAreaKm2, IReadOnlyList<int> cellsPerBiome, IReadOnlyList<PointOfInterestBiome> biomes)
+		{
+			if (rule == null || cellsPerBiome == null)
+			{
+				return 0f;
+			}
+			long cells = 0;
+			float weighted = 0f;
+			for (int b = 0; b < cellsPerBiome.Count; b++)
+			{
+				int count = cellsPerBiome[b];
+				if (count <= 0)
+				{
+					continue;
+				}
+				cells += count;
+				PointOfInterestBiome biome = biomes != null && b < biomes.Count ? biomes[b] : null;
+				weighted += count * (biome != null ? biome.WeightOf(rule) : Mathf.Max(0f, rule.DefaultBiomeWeight));
+			}
+			return cells == 0 ? 0f : Mathf.Max(0f, sceneAreaKm2) * weighted / cells;
 		}
 
 		internal sealed partial class State
@@ -65,16 +95,38 @@ namespace FishMMO.Shared.WorldDesign
 			/// </summary>
 			private Vector2 DepthBand(PointOfInterestKindRule rule, int cell)
 			{
+				// Afloat (2026-10-25): the kind's own band, never the biome's floor-site depths.
+				if (rule.Afloat)
+				{
+					return new Vector2(rule.MinDepth, rule.MaxDepth);
+				}
 				int b = G.Biome[cell];
 				PointOfInterestBiome biome = b >= 0 && b < Input.Biomes.Count ? Input.Biomes[b] : null;
 				bool lake = rule.InLakes && G.Water[cell] == WaterKind.Lake;
 				return biome == null || lake ? new Vector2(rule.MinDepth, rule.MaxDepth) : BiomeSeaFloors.SiteDepth(biome.UnderwaterDepth, rule.MinDepth, rule.MaxDepth);
 			}
 
+			/// <summary>Cells per biome index (<see cref="Grid.Biome"/>), the last entry the cells with no biome; counted once.</summary>
+			private int[] biomeCells;
+
+			/// <summary>The area this scene's biomes hold for a kind, by their weights (<see cref="PointOfInterestPlanner.HostedAreaKm2"/>).</summary>
+			internal float HostedAreaKm2(PointOfInterestKindRule rule)
+			{
+				if (biomeCells == null)
+				{
+					biomeCells = new int[Input.Biomes.Count + 1];
+					foreach (int b in G.Biome)
+					{
+						biomeCells[b >= 0 && b < Input.Biomes.Count ? b : Input.Biomes.Count]++;
+					}
+				}
+				return PointOfInterestPlanner.HostedAreaKm2(rule, areaKm2, biomeCells, Input.Biomes);
+			}
+
 			/// <summary>Sites a placed kind on the best cells it may stand on.</summary>
 			public void Place(PointOfInterestKindRule rule)
 			{
-				int budget = Budget(rule, Input.Settings, areaKm2, Input.Seed);
+				int budget = Budget(rule, Input.Settings, HostedAreaKm2(rule), Input.Seed);
 				if (budget <= 0)
 				{
 					return;
@@ -215,6 +267,11 @@ namespace FishMMO.Shared.WorldDesign
 							continue;
 						}
 						if (rule.OpenWaterShare > 0f && (!Input.HasSea || G.OpenShareAt(i, PointOfInterestOpenSea.HarbourReach) < rule.OpenWaterShare))
+						{
+							continue;
+						}
+						// Adrift sites (2026-10-25): far out on the open sea only.
+						if (rule.OffshoreMetres > 0f && (!Input.HasSea || G.LandDistance[i] < rule.OffshoreMetres))
 						{
 							continue;
 						}
@@ -419,6 +476,11 @@ namespace FishMMO.Shared.WorldDesign
 				else
 				{
 					site.Y = heights[0];
+				}
+				if (rule.Afloat)
+				{
+					// On the water, not its floor: a hull's builder rides the tide from here (PointOfInterestAdrift, FloatingBoats).
+					site.Y = Input.SeaLevel;
 				}
 				return true;
 			}

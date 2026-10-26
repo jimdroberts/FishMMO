@@ -322,6 +322,10 @@ namespace FishMMO.Shared.Biomes
 				{
 					PrepareGraben();
 				}
+				if (FamilyOf(f.Form) == BiomeLandformFamily.Dunes && f.Wake != Vector2.zero)
+				{
+					PrepareWakes();
+				}
 				if (f.Form == BiomeLandformForm.Hollow && f.Count > 1)
 				{
 					cluster = new Vector3[f.Count];
@@ -558,6 +562,8 @@ namespace FishMMO.Shared.Biomes
 				}
 				float target = !float.IsNaN(Site.Level) && f.Form == BiomeLandformForm.Platform
 					? current + (Site.Level - current) * p
+					// A tower or cone with a level stands to it from the sea's surface, raised only (2026-10-25, I2g-d: a pinnacle).
+					: !float.IsNaN(Site.Level) ? Mathf.Max(current, current + (Site.Level - current) * Mathf.Min(1f, p))
 					: current + Site.Height * p;
 				if (f.Crown > 0f && f.CrownDepth != 0f)
 				{
@@ -566,6 +572,10 @@ namespace FishMMO.Shared.Biomes
 					{
 						target -= f.CrownDepth * Bump(qc);
 					}
+				}
+				if (f.Breach != 0f && q < 1f)
+				{
+					target = MoundBreach(x, z, q, current, target);
 				}
 				if (f.Moat > 0f && f.MoatDepth > 0f && q > 1f)
 				{
@@ -606,7 +616,7 @@ namespace FishMMO.Shared.Biomes
 				}
 				if (f.Form == BiomeLandformForm.Caldera)
 				{
-					return current + CalderaDelta(dx, dz, r);
+					return current + Breached(CalderaDelta(dx, dz, r), dx, dz, r);
 				}
 				if (f.Form == BiomeLandformForm.RingGraben)
 				{
@@ -635,7 +645,7 @@ namespace FishMMO.Shared.Biomes
 				delta += rim * MathF.Exp(-((r - 1f) / rimWidth) * ((r - 1f) / rimWidth)) * (1f - S01((r - 1.6f) / 0.4f));
 				if (f.Form == BiomeLandformForm.Rampart)
 				{
-					return current + delta + RampartLobes(dx, dz, r);
+					return current + Breached(delta + RampartLobes(dx, dz, r), dx, dz, r);
 				}
 				if (r >= 1f && r < 2f)
 				{
@@ -658,7 +668,7 @@ namespace FishMMO.Shared.Biomes
 						}
 					}
 				}
-				return current + delta;
+				return current + Breached(delta, dx, dz, r);
 			}
 
 			// ── Depression ────────────────────────────────────────────
@@ -676,13 +686,19 @@ namespace FishMMO.Shared.Biomes
 						float top = Mathf.Clamp(f.Top, 0f, 0.95f);
 						float w = q >= 1f ? 0f : 1f - S01((q - top) / (1f - top));
 						float floor = !float.IsNaN(Site.Level) ? Site.Level : Site.Ground - Site.Height;
+						if (f.Roughness > 0f)
+						{
+							// A hummocky floor (2026-10-25, I2g-d: a chaos field's matrix), a share of its depth either way.
+							float scale = Mathf.Max(4f, 0.08f * radius);
+							floor += f.Roughness * 0.6f * Site.Height * (Noise(x / scale, z / scale, Site.Seed ^ 0x4Bu) - 0.5f);
+						}
 						target = current - w * Mathf.Max(0f, current - floor);
 						break;
 					}
 					case BiomeLandformForm.Pit:
 					{
 						float w = 1f - S01((q - 0.9f) / 0.1f);
-						if (f.Datum == BiomeLandformDatum.SeaSurface && !float.IsNaN(Site.Level))
+						if (f.Datum != BiomeLandformDatum.Ground && !float.IsNaN(Site.Level))
 						{
 							// Floored at a level under the sea's surface (2026-10-25, decision 68: a rift, a polynya open to the sea).
 							target = current - w * Mathf.Max(0f, current - Site.Level);
@@ -743,10 +759,15 @@ namespace FishMMO.Shared.Biomes
 				{
 					return current;
 				}
-				float top = Mathf.Clamp(f.Top <= 0f ? 0.75f : f.Top, 0.05f, 0.97f);
+				float top = MesaTop();
 				float qq = Mathf.Max(0f, (q - top) / (1f - top));
 				float w = 1f - S01(qq);
 				w = w * w * (3f - 2f * w);
+				if (f.Steps > 0)
+				{
+					// Treads cut into the flank (2026-10-25, I2g-d: a guyot's drowned shorelines).
+					w = Stepped(w, f.Steps + 1);
+				}
 				if (f.Roughness > 0f && f.Count > 0 && q > top)
 				{
 					float theta = MathF.Atan2(v, u);
@@ -755,6 +776,11 @@ namespace FishMMO.Shared.Biomes
 				}
 				float level = !float.IsNaN(Site.Level) ? Site.Level : Site.Ground + Site.Height;
 				float target = current + (level - current) * w;
+				if (f.Datum != BiomeLandformDatum.Ground && !float.IsNaN(Site.Level))
+				{
+					// A table standing from the sea is raised only (decision 80: a guyot's flat top at its depth under the swell).
+					target = Mathf.Max(current, target);
+				}
 				if (f.Crown > 0f && f.CrownDepth > 0f)
 				{
 					// An axial cleft along the table (2026-10-25, I2g-b: a lava rise's), its walls the table's own.
@@ -923,7 +949,17 @@ namespace FishMMO.Shared.Biomes
 						p *= 1f + f.Roughness * 0.35f * (2f * wave - 1f);
 					}
 					best = Mathf.Max(best, Mathf.Clamp01(p));
-					height = Mathf.Max(height, seg.Depth * p);
+					float h = seg.Depth * p;
+					if (f.Crown > 0f && f.CrownDepth > 0f)
+					{
+						// A medial trough down the crest (2026-10-25, I2g-d: a double ridge's), its share of the height.
+						h -= seg.Depth * f.CrownDepth * Bump(hit.Distance / Mathf.Max(0.05f, f.Crown * seg.Half)) * taper;
+					}
+					// The largest either way: a negative height is a trench (2026-10-25: a tide crack, a fissure row; Max kept them flat).
+					if (MathF.Abs(h) > MathF.Abs(height))
+					{
+						height = h;
+					}
 					if (f.Moat > 0f && f.MoatDepth > 0f && hit.Side < 0f)
 					{
 						float w = seg.Half * (1f - Mathf.Clamp(f.Lean, -0.8f, 0.8f));
@@ -939,7 +975,7 @@ namespace FishMMO.Shared.Biomes
 					return current + step;
 				}
 				ditch *= 1f - S01(best / 0.2f);
-				if (f.Datum == BiomeLandformDatum.SeaSurface && !float.IsNaN(Site.Level))
+				if (f.Datum != BiomeLandformDatum.Ground && !float.IsNaN(Site.Level))
 				{
 					return Mathf.Max(current, current + (Site.Level - current) * best) - ditch;
 				}
@@ -968,7 +1004,7 @@ namespace FishMMO.Shared.Biomes
 						ditch = f.MoatDepth * Bump(2f * dd / f.Moat - 1f);
 					}
 				}
-				if (f.Datum == BiomeLandformDatum.SeaSurface && !float.IsNaN(Site.Level))
+				if (f.Datum != BiomeLandformDatum.Ground && !float.IsNaN(Site.Level))
 				{
 					float target = Mathf.Max(current, current + (Site.Level - current) * Mathf.Clamp01(p));
 					if (rr < ring)
@@ -992,6 +1028,10 @@ namespace FishMMO.Shared.Biomes
 				{
 					return current;
 				}
+				if (f.Form == BiomeLandformForm.Treads)
+				{
+					return current + TreadsHeight(hits, out _, out _);
+				}
 				float cut = 0f, share = 0f, levee = 0f;
 				float top = Mathf.Clamp(f.Top, 0f, 0.95f);
 				if (f.Form == BiomeLandformForm.Rille)
@@ -1004,7 +1044,7 @@ namespace FishMMO.Shared.Biomes
 					BiomeLandformSegment seg = Site.Segments[hit.Segment];
 					float half = Mathf.Max(0.05f, seg.Half);
 					float t = ChannelReach(hit, half);
-					float taper = Taper(seg, hit.Along, half, f.Form == BiomeLandformForm.Spiral || f.Form == BiomeLandformForm.Rille && f.CrownDepth <= 0f);
+					float taper = Taper(seg, hit.Along, half, TapersBoth);
 					if (t < 1f)
 					{
 						float bed = t <= top ? 1f : 1f - S01((t - top) / (1f - top));
@@ -1021,7 +1061,7 @@ namespace FishMMO.Shared.Biomes
 					}
 				}
 				levee *= 1f - S01(share / 0.15f);
-				if ((f.Form == BiomeLandformForm.Pass || f.Datum == BiomeLandformDatum.SeaSurface) && !float.IsNaN(Site.Level))
+				if ((f.Form == BiomeLandformForm.Pass || f.Datum != BiomeLandformDatum.Ground) && !float.IsNaN(Site.Level))
 				{
 					// A pass, and a channel floored at a level under the sea's surface (decision 68: a rift opened to the sea).
 					return current - Mathf.Max(0f, current - Site.Level) * share + levee;
@@ -1078,7 +1118,13 @@ namespace FishMMO.Shared.Biomes
 						{
 							along *= 1f + f.Roughness * 0.25f * MathF.Sin(MathF.PI * 2f * u / Mathf.Max(4f, 0.24f * halfLength));
 						}
-						return current + Site.Height * along * Bump(v / radius);
+						float body = Site.Height * along * Bump(v / radius);
+						if (f.Crown > 0f && f.CrownDepth > 0f)
+						{
+							// A central channel between its levees (2026-10-25, I2g-d: an ʻaʻā flow's).
+							body -= f.CrownDepth * along * Bump(v / Mathf.Max(0.5f, f.Crown * radius));
+						}
+						return current + body;
 					}
 					case BiomeLandformForm.Slide:
 					{
@@ -1101,6 +1147,12 @@ namespace FishMMO.Shared.Biomes
 
 			/// <summary>A dune field's height at a point before its biome's weight (pure): the field's form in the wind's frame.</summary>
 			public float DuneHeight(float x, float z)
+			{
+				float h = DuneShape(x, z);
+				return wakes != null && h > 0f ? h * (1f - WakeAt(x, z)) : h;
+			}
+
+			private float DuneShape(float x, float z)
 			{
 				BiomeLandform f = Site.Form;
 				Local(x, z, out float u, out float v);
@@ -1147,7 +1199,7 @@ namespace FishMMO.Shared.Biomes
 						float d = MathF.Abs(Frac(vv / lambda) - 0.5f) * lambda;
 						float width = 0.32f * lambda;
 						float h = Mathf.Min(Site.Height, 0.5f * width * tanRepose);
-						float p = Bump(d / width);
+						float p = f.Forks != Vector2.zero ? ForkedLinear(u, vv, lambda, width) : Bump(d / width);
 						if (f.Roughness > 0f)
 						{
 							p *= 1f + f.Roughness * 0.3f * MathF.Sin(MathF.PI * 2f * u / (0.7f * lambda));
@@ -1263,6 +1315,8 @@ namespace FishMMO.Shared.Biomes
 						return -Site.Height * LabyrinthValley(x, z, lambda);
 					case BiomeLandformForm.Cells:
 						return CellHeight(x, z, lambda);
+					case BiomeLandformForm.Weave:
+						return WeaveHeight(x, z, lambda, out _, out _);
 					default:
 						return 0f;
 				}
@@ -1392,7 +1446,8 @@ namespace FishMMO.Shared.Biomes
 							case BiomeLandformPart.Moat:
 								return f.Moat > 0f && q > 1f ? Bump(2f * ((q - 1f) * radius) / f.Moat - 1f) * MoatShare(x, z) : 0f;
 							case BiomeLandformPart.Rim:
-								return f.Crown > 0f ? Bump((q / f.Crown - 1f) / 0.25f) : 0f;
+								// Its crown's rim; with no crown, the drum band round its foot (2026-10-25, I2g-d: a tumulus's moulded kerb).
+								return f.Crown > 0f ? Bump((q / f.Crown - 1f) / 0.25f) : Bump((q - 0.9f) / 0.1f);
 							case BiomeLandformPart.Streaks:
 							{
 								Local(x, z, out float u, out float v);
@@ -1476,7 +1531,7 @@ namespace FishMMO.Shared.Biomes
 							return MathF.Abs(u) < halfLength && MathF.Abs(v) < radius ? 1f - S01((MathF.Abs(v) / radius - 0.75f) / 0.25f) : 0f;
 						}
 						float q = MathF.Sqrt(u / halfLength * (u / halfLength) + v / radius * (v / radius));
-						float top = Mathf.Clamp(f.Top <= 0f ? 0.75f : f.Top, 0.05f, 0.97f);
+						float top = MesaTop();
 						switch (part)
 						{
 							case BiomeLandformPart.Top: return 1f - S01((q - top + 0.03f) / 0.04f);
@@ -1524,6 +1579,7 @@ namespace FishMMO.Shared.Biomes
 						switch (part)
 						{
 							case BiomeLandformPart.Sand: return w * S01(h / 0.8f) * rock;
+							case BiomeLandformPart.Wake: return w * WakeAt(x, z);
 							case BiomeLandformPart.Lee:
 							{
 								// A slip face: the sand falling away downwind (the field's axis is the wind's).
@@ -1570,6 +1626,7 @@ namespace FishMMO.Shared.Biomes
 							case BiomeLandformForm.Cockpits:
 							case BiomeLandformForm.Labyrinth:
 							case BiomeLandformForm.Cells:
+							case BiomeLandformForm.Weave:
 								return w * FieldPartMask(part, x, z, lambda);
 							default:
 								return w;
@@ -1605,6 +1662,15 @@ namespace FishMMO.Shared.Biomes
 				{
 					RilleHead(x, z, out float head);
 					return head;
+				}
+				if (f.Form == BiomeLandformForm.Treads)
+				{
+					TreadsHeight(hits, out float floorShare, out float crest);
+					return part == BiomeLandformPart.Crest ? crest : part == BiomeLandformPart.Floor || part == BiomeLandformPart.Whole ? floorShare : 0f;
+				}
+				if (f.Form == BiomeLandformForm.Canyon && part == BiomeLandformPart.Head)
+				{
+					return CanyonHead(hits);
 				}
 				if (part == BiomeLandformPart.Wall || part == BiomeLandformPart.Scarp)
 				{
@@ -1653,7 +1719,8 @@ namespace FishMMO.Shared.Biomes
 							m = 1f - S01((t - 0.95f) / 0.1f);
 							break;
 					}
-					best = Mathf.Max(best, m * Taper(seg, hit.Along, half, FamilyOf(f.Form) == BiomeLandformFamily.Ridge || f.Form == BiomeLandformForm.Spiral));
+					best = Mathf.Max(best, m * Taper(seg, hit.Along, half, FamilyOf(f.Form) == BiomeLandformFamily.Ridge || f.Form == BiomeLandformForm.Spiral
+						|| f.Form == BiomeLandformForm.Canyon || f.OnHost));
 				}
 				return best;
 			}

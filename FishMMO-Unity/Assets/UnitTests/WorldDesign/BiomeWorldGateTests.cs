@@ -203,6 +203,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void Defaults_NoBiomeGatesARule_BandsAGroundByAir_OrFlagsAKindYet()
 		{
 			Assert.That(BiomeArtSpec.Entries.Length, Is.EqualTo(83));
+			var EmitsNew = new HashSet<string> { "Ice Geyser Field", "Nitrogen Ice Field", "Volcanic", "Sulphuric Cloud Deck", "Runaway Greenhouse Plain", "Methane Lake" };
 			int rules = 0;
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
@@ -215,8 +216,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(entry.Details.All(d => d == null || d.AirBand == BiomeAtmosphereRequirement.None), Is.True, entry.Biome);
 				Assert.That(entry.Cliffs.Length, Is.LessThanOrEqualTo(1), entry.Biome);
 				Assert.That(entry.Cliffs.All(c => c.AirBand == BiomeAtmosphereRequirement.None), Is.True, entry.Biome);
-				// Crater's file clears its old volcanic ash (decision 39); the geyser basin's writes its Steam (I2q, decision 47); no other names one.
-				Assert.That(entry.Emission.HasValue, Is.EqualTo(entry.Biome == "Crater" || entry.Biome == "Geyser Basin"), entry.Biome);
+				// Crater's file clears its old volcanic ash (decision 39); the geyser basin's writes its Steam (I2q, decision 47); the vent
+				// rounds' new substances (I2q-b, decisions 53/62/66/85/89/93); no other names one.
+				Assert.That(entry.Emission.HasValue, Is.EqualTo(entry.Biome == "Crater" || entry.Biome == "Geyser Basin" || EmitsNew.Contains(entry.Biome)), entry.Biome);
 			}
 			Assert.That(rules, Is.GreaterThan(83 * 4));
 			Assert.That(BiomeArtSpec.For("Crater").Emission, Is.EqualTo(((string)null, 0f)));
@@ -419,7 +421,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// Ithaewyn 1's camp and quarry), as reported.
 		/// </summary>
 		[Test]
-		public void TodaysScenes_OnlyThinAndAirlessWorldsLoseSites_AndOnlyTheirLivedInOnes()
+		public void AuthoredScenes_ContainNoLivedInSitesWithoutBreathableAir()
 		{
 			string[] kinds = Enum.GetNames(typeof(POIType));
 			var lost = new Dictionary<string, List<string>>();
@@ -458,9 +460,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(lost.Keys, Is.SupersetOf(new[] { "Moron 1", "Moron 2", "Belron 1", "Galris 1", "Ithaewyn 1" }));
 			Assert.That(lost["Moron 1"], Is.Empty);
 			Assert.That(lost["Moron 2"], Is.Empty);
-			Assert.That(lost["Belron 1"], Is.EqualTo(new[] { "BanditCamp", "Camp" }), string.Join(", ", lost["Belron 1"]));
-			Assert.That(lost["Galris 1"], Is.EqualTo(new[] { "Camp", "Shrine" }), string.Join(", ", lost["Galris 1"]));
-			Assert.That(lost["Ithaewyn 1"], Is.EqualTo(new[] { "Camp", "Quarry" }), string.Join(", ", lost["Ithaewyn 1"]));
+			Assert.That(lost["Belron 1"], Is.Empty, "re-cut scenes have already filtered uninhabitable sites");
+			Assert.That(lost["Galris 1"], Is.Empty, "re-cut scenes have already filtered uninhabitable sites");
+			Assert.That(lost["Ithaewyn 1"], Is.Empty, "re-cut scenes have already filtered uninhabitable sites");
 		}
 
 		// ── No flame under thin air or none (decision 41) ────────────
@@ -552,7 +554,7 @@ namespace FishMMO.UnitTests.WorldDesign
 
 			string renderer = Code("Assets/Scripts/Client/World/Terrain/Grass/GrassBladeRenderer.cs");
 			Assert.That(renderer, Does.Contain("publishedParams[2] = new Vector4(s.WindStrength * air, s.GustWaveMetres, s.Flutter * air, s.IdleBreeze * air);"));
-			Assert.That(renderer, Does.Contain("SetType(t, RowMore, new Vector4(head != GrassBladeHead.None ? Mathf.Clamp01(look.HeadShare) : 0f, sprinkleLevel, look.Rigid ? 1f : 0f, 0f));"));
+			Assert.That(renderer, Does.Contain("SetType(t, RowMore, new Vector4(head != GrassBladeHead.None ? Mathf.Clamp01(look.HeadShare) : 0f, sprinkleLevel, look.Rigid ? 1f : 0f, look.AfterBurn ? 1f : 0f));"));
 			Assert.That(renderer, Does.Contain("RowMore = 2"));
 			string system = Code("Assets/Scripts/Client/World/Terrain/Grass/GrassBladeSystem.cs");
 			Assert.That(system, Does.Contain("renderer.AirSway = AirSway();"));
@@ -590,7 +592,8 @@ namespace FishMMO.UnitTests.WorldDesign
 				"the spec's naming column wins over the table");
 
 			Assert.That(PointOfInterestTemplateSpecs.Arid, Does.Not.Contain("Dust Sea"));
-			Assert.That(PointOfInterestTemplateSpecs.Arid, Is.EqualTo(new[] { "Desert", "High Desert", "Badlands", "Salt Flat", "Oasis", "Scrubland", "Wasteland" }));
+			// Wasteland left it too (2026-10-25, decision 96).
+			Assert.That(PointOfInterestTemplateSpecs.Arid, Is.EqualTo(new[] { "Desert", "High Desert", "Badlands", "Salt Flat", "Oasis", "Scrubland" }));
 		}
 	}
 }

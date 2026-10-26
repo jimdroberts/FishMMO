@@ -16,6 +16,14 @@ namespace FishMMO.Shared.Weather
 		public float Emission;
 		/// <summary>A stable number for its look.</summary>
 		public uint Seed;
+		/// <summary>How its strength moves on the shared clock (its biome's <see cref="BiomeVents.Timing"/>, 2026-10-25, I2q-b; presentation only).</summary>
+		public BiomeVentTiming Timing;
+		/// <summary>The seed its timing draws from: its own, but the scene's first Strombolian vent takes the scene's (VentBursts.SceneSeed), which <c>_FishVentBurst</c> follows.</summary>
+		public uint TimingSeed;
+		/// <summary>Its crack's bearing, radians in [0, π) (its line's, or the kneading glow's field off any line).</summary>
+		public float Bearing;
+		/// <summary>The fountain episodes an Episode timing follows (its biome's).</summary>
+		public BiomeFountainEpisodes Episodes;
 	}
 
 	/// <summary>
@@ -62,10 +70,42 @@ namespace FishMMO.Shared.Weather
 		/// </summary>
 		public static void Find(Rect area, uint seed, Func<Vector2, BiomeTemplate> biomeAt, List<VentSite> into, float cellMetres = CellMetres)
 		{
+			Find(area, seed, biomeAt, null, into, cellMetres);
+		}
+
+		/// <summary>The spacing of a plume along a stored fissure line, and along a ridge line, m (2026-10-25, I2q-b).</summary>
+		public const float FissureSpacing = 800f, RidgeSpacing = 1200f;
+
+		/// <summary>
+		/// <see cref="Find(Rect, uint, Func{Vector2, BiomeTemplate}, List{VentSite}, float)"/> with the scene's stored vent lines
+		/// (2026-10-25, phase I2q-b, decisions 53, 90, 95): a biome laid out on lines (<see cref="BiomeVents.Layout"/>) whose lines the
+		/// scene stores has no grid vent; its vents stand on its lines instead (a Fissures line one every <see cref="FissureSpacing"/> m,
+		/// a Ridges line every <see cref="RidgeSpacing"/> m, a Terrace line at its middle and on each pad), after the grid's, every vent
+		/// counted against <see cref="MaxVents"/> and its biome's own cap (<see cref="BiomeVents.MaxPlumes"/>). Null lines: the grid
+		/// alone, as before. Pure.
+		/// </summary>
+		public static void Find(Rect area, uint seed, Func<Vector2, BiomeTemplate> biomeAt, IReadOnlyList<VentLine> lines, List<VentSite> into, float cellMetres = CellMetres)
+		{
 			into.Clear();
 			if (biomeAt == null || area.width <= 0f || area.height <= 0f)
 			{
 				return;
+			}
+			Dictionary<int, int> perBiome = null;
+			bool Capped(BiomeTemplate biome)
+			{
+				if (biome.Vents.MaxPlumes <= 0)
+				{
+					return false;
+				}
+				perBiome ??= new Dictionary<int, int>();
+				perBiome.TryGetValue(biome.ID, out int n);
+				if (n >= biome.Vents.MaxPlumes)
+				{
+					return true;
+				}
+				perBiome[biome.ID] = n + 1;
+				return false;
 			}
 			float cell = Mathf.Max(10f, cellMetres);
 			int nx = Mathf.Max(1, Mathf.CeilToInt(area.width / cell));
@@ -88,11 +128,98 @@ namespace FishMMO.Shared.Weather
 					{
 						continue;
 					}
-					if (Unit(h * 2891336453u + 7u) >= Mathf.Clamp01(VentsPerEmission * biome.EmissionRate))
+					// A biome laid out on the scene's stored lines has its vents there (2026-10-25, I2q-b).
+					if (lines != null && biome.Vents.Layout != BiomeVentLayout.Grid && IceStripes.HasBiome(lines, biome.ID))
 					{
 						continue;
 					}
-					into.Add(new VentSite { Position = at, Substance = biome.Emits, Emission = Mathf.Clamp01(biome.EmissionRate), Seed = h });
+					if (Unit(h * 2891336453u + 7u) >= Mathf.Clamp01(VentsPerEmission * biome.EmissionRate) || Capped(biome))
+					{
+						continue;
+					}
+					into.Add(Vent(at, biome, h, VentTiming.FieldBearing(at.x, at.y)));
+				}
+			}
+			for (int i = 0; lines != null && i < lines.Count && into.Count < MaxVents; i++)
+			{
+				VentLine line = lines[i];
+				uint lineSeed = seed ^ unchecked(line.Seed * 0x165667B1u);
+				if (line.IsPad || line.Layout == BiomeVentLayout.Terrace)
+				{
+					// A terrace's plume at its line's middle, or a pad's centre.
+					float mid = 0.5f * line.LineLength;
+					if (!line.IsPad && line.Layout == BiomeVentLayout.Terrace && (mid < line.AlongA || mid >= line.AlongB))
+					{
+						continue;
+					}
+					if (line.Layout != BiomeVentLayout.Terrace)
+					{
+						continue;
+					}
+					float t = line.IsPad ? 0f : (mid - line.AlongA) / Mathf.Max(1e-4f, line.AlongB - line.AlongA);
+					AddOnLine(Vector2.Lerp(line.A, line.B, t), line.Bearing, Hash(lineSeed, 0, 0x7E40), area, biomeAt, lines, into, Capped);
+					continue;
+				}
+				float spacing = line.Layout == BiomeVentLayout.Ridges ? RidgeSpacing : FissureSpacing;
+				long k0 = (long)Math.Floor(line.AlongA / spacing) - 1, k1 = (long)Math.Floor(line.AlongB / spacing);
+				for (long k = k0; k <= k1 && into.Count < MaxVents; k++)
+				{
+					uint h = Hash(lineSeed, (int)(k & 0x7FFFFFFF), 0x1F55);
+					float s = (k + 0.5f + 0.4f * (Unit(h) - 0.5f)) * spacing;
+					if (s < line.AlongA || s >= line.AlongB)
+					{
+						continue;
+					}
+					float t = (s - line.AlongA) / Mathf.Max(1e-4f, line.AlongB - line.AlongA);
+					AddOnLine(Vector2.Lerp(line.A, line.B, t), line.Bearing, h, area, biomeAt, lines, into, Capped);
+				}
+			}
+		}
+
+		private static void AddOnLine(Vector2 at, float bearing, uint h, Rect area, Func<Vector2, BiomeTemplate> biomeAt, IReadOnlyList<VentLine> lines, List<VentSite> into,
+			Func<BiomeTemplate, bool> capped)
+		{
+			if (at.x < area.xMin || at.x > area.xMax || at.y < area.yMin || at.y > area.yMax)
+			{
+				return;
+			}
+			BiomeTemplate biome = biomeAt(at);
+			if (!IsVented(biome) || biome.Vents.Layout == BiomeVentLayout.Grid || !IceStripes.HasBiome(lines, biome.ID) || capped(biome))
+			{
+				return;
+			}
+			into.Add(Vent(at, biome, h, bearing));
+		}
+
+		private static VentSite Vent(Vector2 at, BiomeTemplate biome, uint seed, float bearing)
+		{
+			return new VentSite
+			{
+				Position = at,
+				Substance = biome.Emits,
+				Emission = Mathf.Clamp01(biome.EmissionRate),
+				Seed = seed,
+				Timing = biome.Vents.Timing,
+				TimingSeed = seed,
+				Bearing = bearing,
+				Episodes = biome.FountainEpisodes,
+			};
+		}
+
+		/// <summary>
+		/// Gives the first Strombolian vent of a scene's list the scene's own burst seed (VentBursts.SceneSeed), so the vent and the
+		/// glows that follow <c>_FishVentBurst</c> burst as one (2026-10-25, I2q-b; decision 95). Pure.
+		/// </summary>
+		public static void SeedSceneBurst(List<VentSite> vents, string sceneName)
+		{
+			for (int i = 0; vents != null && i < vents.Count; i++)
+			{
+				if (vents[i].Timing == BiomeVentTiming.Strombolian)
+				{
+					VentSite v = vents[i];
+					v.TimingSeed = VentBursts.SceneSeed(sceneName);
+					vents[i] = v;
+					return;
 				}
 			}
 		}
@@ -117,7 +244,8 @@ namespace FishMMO.Shared.Weather
 				BiomeTemplate biome = map.Sample(new Vector3(p.x, 0f, p.y));
 				resolved |= biome != null;
 				return biome;
-			}, vents);
+			}, IceStripes.Of(map), vents);
+			SeedSceneBurst(vents, settings.gameObject.scene.name);
 			// Kept only once the map's biomes could be read: asked before they had loaded, every
 			// candidate reads as no biome, and keeping that would leave the scene without vents for good.
 			if (resolved)

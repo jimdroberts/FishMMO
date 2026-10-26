@@ -59,8 +59,6 @@ MonoBehaviour:
     Weight: 0.05
   - Biome: Scrubland
     Weight: 0.05
-  - Biome: Wasteland
-    Weight: 0.05
   RaceCategories:
   - Humanoid
   - Beastfolk
@@ -70,6 +68,7 @@ MonoBehaviour:
   Small: 1
   Medium: 1
   Large: 1
+  NeedsLiquidWater: 0
   PadFlatness: 1
   Style: timber
   Layout: 5
@@ -399,20 +398,20 @@ MonoBehaviour:
     Role: 1
     Style: 
   Features:
-  - rid: 4061506278254182828
-  - rid: 4061506278254182829
-  - rid: 4061506278254182830
-  - rid: 4061506278254182831
-  - rid: 4061506278254182832
-  - rid: 4061506278254182833
-  - rid: 4061506278254182834
-  - rid: 4061506278254182835
-  - rid: 4061506278254182836
-  - rid: 4061506278254182837
+  - rid: 4061506389932245201
+  - rid: 4061506389932245202
+  - rid: 4061506389932245203
+  - rid: 4061506389932245204
+  - rid: 4061506389932245205
+  - rid: 4061506389932245206
+  - rid: 4061506389932245207
+  - rid: 4061506389932245208
+  - rid: 4061506389932245209
+  - rid: 4061506389932245210
   references:
     version: 2
     RefIds:
-    - rid: 4061506278254182828
+    - rid: 4061506389932245201
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -425,24 +424,24 @@ MonoBehaviour:
         Clearings:
         - {x: -3, y: 2, z: 10}
         - {x: 3, y: 1.5, z: 10}
-    - rid: 4061506278254182829
+    - rid: 4061506389932245202
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506278254182830
+    - rid: 4061506389932245203
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506278254182831
+    - rid: 4061506389932245204
       type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: -3, y: 10}
-    - rid: 4061506278254182832
+    - rid: 4061506389932245205
       type: {class: RespawnFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: 3, y: 10}
-    - rid: 4061506278254182833
+    - rid: 4061506389932245206
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 1
@@ -450,7 +449,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506278254182834
+    - rid: 4061506389932245207
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 0
@@ -458,7 +457,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506278254182835
+    - rid: 4061506389932245208
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 2
@@ -466,7 +465,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506278254182836
+    - rid: 4061506389932245209
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 3
@@ -474,7 +473,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506278254182837
+    - rid: 4061506389932245210
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 4

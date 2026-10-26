@@ -22,6 +22,7 @@ MonoBehaviour:
   Small: 1
   Medium: 1
   Large: 1
+  NeedsLiquidWater: 0
   PadFlatness: 0
   Style: stone
   Layout: 4
@@ -45,29 +46,29 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506278254182992
-  - rid: 4061506278254182993
-  - rid: 4061506278254182994
+  - rid: 4061506389932245778
+  - rid: 4061506389932245779
+  - rid: 4061506389932245780
   references:
     version: 2
     RefIds:
-    - rid: 4061506278254182992
+    - rid: 4061506389932245778
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506278254182993
+    - rid: 4061506389932245779
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506278254182994
+    - rid: 4061506389932245780
       type: {class: PointOfInterestChamberFeature, ns: FishMMO.Shared.WorldDesign,
         asm: FishMMO.Shared.Tools.Editor}
       data:
         MinRadius: 3
         Features:
-        - rid: 4061506278254182995
-    - rid: 4061506278254182995
+        - rid: 4061506389932245781
+    - rid: 4061506389932245781
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4

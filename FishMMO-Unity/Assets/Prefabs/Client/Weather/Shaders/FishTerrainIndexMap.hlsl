@@ -21,6 +21,7 @@
 #define FISH_LAYER_ROW_FLORA 5        // x living, y lichen, z mineral (TerrainArraySet.LayerFlora)
 #define FISH_LAYER_ROW_PATHS 6        // x its biome's path ground slice, y road ground, z cobbles (-1 none)
 #define FISH_LAYER_ROW_BACKDROP 7     // column c: x the scene layer backdrop channel c holds (SceneBackdrop.ControlLayers; c itself)
+#define FISH_LAYER_ROW_GLOW 8         // the layer's glow (BiomeGroundGlow.Pack; FishGroundGlow.hlsl): x mode + 8 * period, y K, z strength, w plate m
 
 // One index texel's ids and weights (0..1), scaled by the texel's bilinear share.
 void FishIndexDecode(uint2 packed, float share, out int4 ids, out float4 weights)

@@ -59,6 +59,11 @@ namespace FishMMO.Client
 		public Vector4 Anim;
 		/// <summary>FishSeaLife.hlsl's <c>_Tint</c>: colour, and how much is drawn.</summary>
 		public Vector4 Tint;
+		/// <summary>
+		/// FishSeaLife.hlsl's <c>_Surface</c> (2026-10-25): x how much of the sea's swell it rides (1 afloat at the surface, 0 under it),
+		/// y its own light's brightness now (AmbientGlow, 0 none), z its light's phase in cycles, w spare.
+		/// </summary>
+		public Vector4 Surface;
 	}
 
 	/// <summary>
@@ -344,11 +349,74 @@ namespace FishMMO.Client
 			return false;
 		}
 
-		/// <summary>True for the kinds that live ON the sea floor (their home is a patch of it): Hover, Crawl and Lurk.</summary>
+		/// <summary>True for the kinds that live ON the sea floor (their home is a patch of it): Hover, Crawl, Lurk, and since 2026-10-25 Skip and Settle.</summary>
 		public static bool OnFloor(SeaCreatureKind kind)
 		{
-			return kind.Behaviour == SeaCreatureBehaviour.Hover || kind.Behaviour == SeaCreatureBehaviour.Crawl || kind.Behaviour == SeaCreatureBehaviour.Lurk;
+			return kind.Behaviour == SeaCreatureBehaviour.Hover || kind.Behaviour == SeaCreatureBehaviour.Crawl || kind.Behaviour == SeaCreatureBehaviour.Lurk
+				|| kind.Behaviour == SeaCreatureBehaviour.Skip || kind.Behaviour == SeaCreatureBehaviour.Settle;
 		}
+
+		// ── The open sea's rhythms (2026-10-25, I2p): pure functions of the shared clock ──
+
+		/// <summary>
+		/// How dark it is for a diel migrator at a clock hour, 0 (day) .. 1 (night): full night from 20:30 to 04:30, easing over the
+		/// two hours either side (the deep scattering layer rises at dusk and sinks at dawn).
+		/// </summary>
+		public static float NightShare(double hours)
+		{
+			double h = hours - 24.0 * Math.Floor(hours / 24.0);
+			float dusk = Mathf.SmoothStep(0f, 1f, (float)((h - 18.5) / 2.0));
+			float dawn = 1f - Mathf.SmoothStep(0f, 1f, (float)((h - 4.5) / 2.0));
+			return h >= 12.0 ? dusk : dawn;
+		}
+
+		/// <summary>The share of a boil's round it boils for (<see cref="BoilAt"/>).</summary>
+		public const float BoilShare = 0.15f;
+
+		/// <summary>
+		/// How hard a school boils at a moment, 0 .. 1: each group's own round of 120–400 s (hashed from its seed), the first
+		/// <see cref="BoilShare"/> of it a boil that swells and dies away (sin of its share of π).
+		/// </summary>
+		public static float BoilAt(double seconds, uint groupSeed)
+		{
+			double period = 120.0 + 280.0 * Unit(Mix(groupSeed ^ 0xB011u));
+			float c = Cycle(seconds, period, Unit(Mix(groupSeed ^ 0xB012u)));
+			return c < BoilShare ? Mathf.Sin(c / BoilShare * Mathf.PI) : 0f;
+		}
+
+		/// <summary>The stages of a glide (<see cref="GlideAt"/>).</summary>
+		public enum GlideStage { Schooling, Rising, Flying, Returning }
+
+		/// <summary>
+		/// Where a flying fish is in its round at a moment: a round of <paramref name="period"/> seconds; its first share <paramref name="air"/>
+		/// it rises to the surface, the next it is in the air (progress 0 .. 1 along the glide), the next two it swims back to its place
+		/// in the school under the water (progress 0 .. 1), and the rest it schools. Continuous at every seam.
+		/// </summary>
+		public static GlideStage GlideAt(double seconds, double period, float offset, float air, out float progress)
+		{
+			float c = Cycle(seconds, period, offset);
+			air = Mathf.Clamp(air, 0.005f, 0.2f);
+			progress = 0f;
+			if (c < air)
+			{
+				progress = c / air;
+				return GlideStage.Rising;
+			}
+			if (c < 2f * air)
+			{
+				progress = (c - air) / air;
+				return GlideStage.Flying;
+			}
+			if (c < 4f * air)
+			{
+				progress = (c - 2f * air) / (2f * air);
+				return GlideStage.Returning;
+			}
+			return GlideStage.Schooling;
+		}
+
+		/// <summary>Metres a second a flying fish glides at.</summary>
+		public const float GlideSpeed = 12f;
 
 		/// <summary>The share of a lurker's cycle it spends out of its den, darting out and back (<see cref="LurkAt"/>).</summary>
 		public const float LurkDartShare = 0.12f;
@@ -419,10 +487,16 @@ namespace FishMMO.Client
 		/// The sea's surface now, world y, less what its waves' troughs need (SeaLifeSystem): the tide is on the
 		/// shared clock, so this is the same for every player at the same moment.
 		/// </param>
+		/// <param name="level">The sea's surface now (tide included), world y, for what lies at it or out of it (2026-10-25: floats, skippers, migrators); NaN: <paramref name="surface"/>.</param>
+		/// <param name="night">How dark it is now, 0 .. 1 (<see cref="NightShare"/> of the shared clock's hour), for the diel migrators and the night-spreaders.</param>
 		public static void Evaluate(in SeaGroup group, SeaCreatureKind kind, double seconds, float surface, ISeaGround ground, float visible,
-			List<SeaInstance> into)
+			List<SeaInstance> into, float level = float.NaN, float night = 0f)
 		{
 			float ceiling = surface - SurfaceClearance;
+			float waterline = float.IsNaN(level) ? surface + SurfaceClearance : level;
+			float boil = kind.Boils ? BoilAt(seconds, group.Seed) : 0f;
+			// How tight the school keeps: tighter as it boils; spread out by night for a night-spreader.
+			float tight = Mathf.Lerp(1f, 0.5f, boil) * (kind.NightSpread ? Mathf.Lerp(1f, 4f, Mathf.Clamp01(night)) : 1f);
 			float lap = Lap(group, seconds);
 			float step = (float)Math.Min(0.02, 1.0 / Math.Max(1.0, group.Period));
 			Vector3 centre = LoopPoint(group, lap);
@@ -443,6 +517,12 @@ namespace FishMMO.Client
 			// Rises and dips a little round the lap, kept off the floor and under the surface.
 			float bob = Mathf.Sin(lap * Mathf.PI * 4f + Unit(Mix(group.Seed ^ 0xDu)) * 6.28f) * Mathf.Min(2f, group.Radius * 0.08f);
 			centre.y += bob;
+			if (kind.Behaviour == SeaCreatureBehaviour.DielMigrate)
+			{
+				// The deep end of its band by day, the shallow end by night, each group a little its own.
+				float depth = Mathf.Lerp(kind.Depth.y, kind.Depth.x, Mathf.Clamp01(night)) * Mathf.Lerp(0.85f, 1.15f, Unit(Mix(group.Seed ^ 0xE1u)));
+				centre.y = waterline - depth + bob;
+			}
 			if (!OnFloor(kind) && ground.TryGround(centre.x, centre.z, out float floor)
 				&& !float.IsInfinity(floor))
 			{
@@ -452,6 +532,8 @@ namespace FishMMO.Client
 					: Mathf.Max(centre.y, floor + kind.FloorClearance.x + kind.Spread * 0.3f);
 			}
 			centre.y = Mathf.Min(centre.y, ceiling - kind.Spread * 0.3f);
+			// A boil: the school rushes up under the surface.
+			centre.y = Mathf.Lerp(centre.y, ceiling - kind.Spread * 0.15f, boil);
 
 			var side = new Vector3(heading.z, 0f, -heading.x);
 			bool palette = kind.Palette != null && kind.Palette.Length > 0;
@@ -465,6 +547,7 @@ namespace FishMMO.Client
 				Vector3 up = Vector3.up;
 				float strength = 1f;
 				float memberTurn = turn;
+				float surfaceRide = 0f;
 
 				switch (kind.Behaviour)
 				{
@@ -523,6 +606,95 @@ namespace FishMMO.Client
 						memberTurn = 0.3f * Mathf.Sin(facing * 3f);
 						break;
 					}
+					case SeaCreatureBehaviour.Skip:
+					{
+						// Each on its own spot of the mud, crawling a small loop and hopping now and then; out of the water only.
+						float angle = r0 * Mathf.PI * 2f;
+						float distance = Mathf.Sqrt(r1) * kind.Spread;
+						Vector3 spot = group.Home + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * distance;
+						float orbit = 0.3f + r2 * 0.7f;
+						double period = 2.0 * Math.PI * orbit / Math.Max(0.02, kind.Speed * Mathf.Lerp(0.6f, 1.3f, r3));
+						float c = Cycle(seconds, period, r0) * Mathf.PI * 2f * (r1 < 0.5f ? 1f : -1f);
+						position = spot + new Vector3(Mathf.Cos(c), 0f, Mathf.Sin(c)) * orbit;
+						forward = (new Vector3(-Mathf.Sin(c), 0f, Mathf.Cos(c)) * (r1 < 0.5f ? 1f : -1f)).normalized;
+						if (!ground.TryGround(position.x, position.z, out float bed) || float.IsInfinity(bed))
+						{
+							continue;
+						}
+						// Drawn only on the bed the tide has left, up to two metres above the water now.
+						if (bed < waterline - 0.03f || bed > waterline + 2f)
+						{
+							continue;
+						}
+						float hop = Cycle(seconds, 1.8 + 2.5 * r2, r3);
+						float lift = hop < 0.2f ? Mathf.Sin(hop / 0.2f * Mathf.PI) * length * 0.8f : 0f;
+						position.y = bed + lift;
+						strength = hop < 0.2f ? 2f : 0.3f;
+						memberTurn = 0f;
+						break;
+					}
+					case SeaCreatureBehaviour.Settle:
+					{
+						// Lying still on the bed, bell down and arms up, each on its own spot of the patch.
+						float angle = r0 * Mathf.PI * 2f;
+						float distance = Mathf.Sqrt(r1) * kind.Spread;
+						position = group.Home + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * distance;
+						float under = ground.TryGround(position.x, position.z, out float bed) && !float.IsInfinity(bed) ? bed : group.Home.y;
+						position.y = under + length * 0.12f;
+						if (position.y > ceiling - length * 0.3f)
+						{
+							continue;
+						}
+						up = Vector3.down;
+						forward = new Vector3(Mathf.Cos(r2 * Mathf.PI * 2f), 0f, Mathf.Sin(r2 * Mathf.PI * 2f));
+						memberTurn = 0f;
+						break;
+					}
+					case SeaCreatureBehaviour.SurfaceFloat:
+					{
+						// Afloat, spread about the group's slow drift; the shader lifts each on the sea's own swell.
+						float angle = r0 * Mathf.PI * 2f;
+						float distance = Mathf.Sqrt(r1) * kind.Spread;
+						float drift = Cycle(seconds, 60.0 + 60.0 * r2, r0) * Mathf.PI * 2f;
+						position = new Vector3(centre.x + Mathf.Cos(angle) * distance + 0.8f * Mathf.Cos(drift), waterline + length * 0.1f,
+							centre.z + Mathf.Sin(angle) * distance + 0.8f * Mathf.Sin(drift));
+						if (ground.TryGround(position.x, position.z, out float bed) && !float.IsInfinity(bed) && bed + 0.5f + length > waterline)
+						{
+							continue;
+						}
+						up = (Vector3.up + new Vector3(Mathf.Cos(drift), 0f, Mathf.Sin(drift)) * 0.15f).normalized;
+						forward = Vector3.Cross(up, new Vector3(Mathf.Sin(drift), 0f, -Mathf.Cos(drift))).normalized;
+						memberTurn = 0f;
+						surfaceRide = 1f;
+						break;
+					}
+					case SeaCreatureBehaviour.Mill:
+					{
+						// Round one vertical axis, each on its own ring and height of the column, all the same way round.
+						float ring = Mathf.Lerp(0.3f, 1f, Mathf.Sqrt(r0)) * kind.Spread * tight;
+						float height = (r1 - 0.5f) * kind.Spread * 1.6f;
+						double omega = kind.Speed * Mathf.Lerp(0.8f, 1.2f, r2) / Math.Max(0.3, ring);
+						float theta = Cycle(seconds, 2.0 * Math.PI / omega, r3) * Mathf.PI * 2f * group.Sense;
+						position = centre + new Vector3(Mathf.Cos(theta) * ring, height, Mathf.Sin(theta) * ring);
+						forward = (new Vector3(-Mathf.Sin(theta), 0f, Mathf.Cos(theta)) * group.Sense).normalized;
+						memberTurn = -group.Sense * 0.5f;
+						float roof = ceiling - length * 0.3f;
+						if (ground.TryGround(position.x, position.z, out float below) && !float.IsInfinity(below))
+						{
+							float floorTop = below + length * 0.4f + 0.1f;
+							if (floorTop > roof)
+							{
+								continue;
+							}
+							position.y = Mathf.Clamp(position.y, floorTop, roof);
+						}
+						else
+						{
+							position.y = Mathf.Min(position.y, roof);
+						}
+						strength = 1f + boil;
+						break;
+					}
 					case SeaCreatureBehaviour.Drift:
 					{
 						// Hanging in the water about the group's slow drift, each bobbing to its own pulse.
@@ -554,9 +726,10 @@ namespace FishMMO.Client
 						// A school: members at fixed places in the school's frame, longer than it is wide,
 						// flatter than both, each wobbling slowly about its place; a cruiser: one or two
 						// abreast.
-						bool school = kind.Behaviour == SeaCreatureBehaviour.School;
+						bool school = kind.Behaviour == SeaCreatureBehaviour.School || kind.Behaviour == SeaCreatureBehaviour.DielMigrate
+							|| kind.Behaviour == SeaCreatureBehaviour.Glide;
 						float u = r0 * 2f - 1f, v = r1 * 2f - 1f, w = r2 * 2f - 1f;
-						var place = new Vector3(u, v * 0.45f, w * 1.6f) * (school ? kind.Spread : 0f);
+						var place = new Vector3(u, v * 0.45f, w * 1.6f) * (school ? kind.Spread * tight : 0f);
 						if (!school && m > 0)
 						{
 							place = new Vector3((m % 2 == 0 ? -1f : 1f) * kind.Spread * (0.5f + 0.5f * r0), (r1 - 0.5f) * kind.Spread * 0.3f, -kind.Spread * r2);
@@ -572,7 +745,7 @@ namespace FishMMO.Client
 						forward = (heading * Mathf.Cos(yaw) + side * Mathf.Sin(yaw)).normalized;
 						forward.y = 0.12f * Mathf.Cos(a2);
 						forward.Normalize();
-						strength = 1f + 0.25f * Mathf.Sin(a1 * 2f);
+						strength = (1f + 0.25f * Mathf.Sin(a1 * 2f)) * (1f + boil);
 						// Between its own patch of floor and the low-tide surface; where the water is too thin
 						// for it, not drawn rather than in the sand or out of the sea.
 						float roof = ceiling - length * 0.3f;
@@ -589,6 +762,34 @@ namespace FishMMO.Client
 						{
 							position.y = Mathf.Min(position.y, roof);
 						}
+						if (kind.Behaviour == SeaCreatureBehaviour.Glide)
+						{
+							// Now and then out of the water and away over the waves, and back to its place under them.
+							float metres = Mathf.Lerp(kind.GlideMetres.x, kind.GlideMetres.y, r1);
+							double period = 30.0 + 60.0 * r3;
+							float air = (float)(metres / GlideSpeed / period);
+							GlideStage stage = GlideAt(seconds, period, r0, air, out float g);
+							float top = waterline + 0.05f;
+							float smooth = g * g * (3f - 2f * g);
+							switch (stage)
+							{
+								case GlideStage.Rising:
+									position.y = Mathf.Lerp(position.y, top, smooth);
+									strength *= 1f + 1.5f * g;
+									break;
+								case GlideStage.Flying:
+									position += heading * (metres * g);
+									position.y = top + Mathf.Lerp(kind.GlideHeight.x, kind.GlideHeight.y, r2) * Mathf.Sin(g * Mathf.PI);
+									forward = (heading + Vector3.up * (0.35f * Mathf.Cos(g * Mathf.PI))).normalized;
+									strength = 0f;
+									memberTurn = 0f;
+									break;
+								case GlideStage.Returning:
+									position += heading * (metres * (1f - smooth));
+									position.y = Mathf.Lerp(top - 0.3f, position.y, smooth);
+									break;
+							}
+						}
 						break;
 					}
 				}
@@ -596,11 +797,21 @@ namespace FishMMO.Client
 				float stroke = Cycle(seconds, 1.0 / Math.Max(0.01, kind.StrokeHz * Mathf.Lerp(0.85f, 1.15f, r2)), r1);
 				Color colour = palette ? kind.Palette[(int)(r3 * kind.Palette.Length) % kind.Palette.Length] : Color.white * Mathf.Lerp(0.9f, 1.1f, r0);
 				var rotation = Quaternion.LookRotation(forward, up);
+				var light = Vector4.zero;
+				if (kind.GlowStrength > 0f)
+				{
+					// Its own light on the shared clock, in the ambient creatures' rhythms (AmbientGlow).
+					double glowPeriod = AmbientGlow.PeriodOf(kind.GlowPattern, kind.GlowPeriod, kind.StrokeHz, own);
+					light = new Vector4(0f, AmbientGlow.BrightnessAt(kind.GlowPattern, kind.GlowRest, glowPeriod, own, seconds),
+						AmbientGlow.PhaseAt(kind.GlowPattern, glowPeriod, own, seconds), 0f);
+				}
+				light.x = surfaceRide;
 				into.Add(new SeaInstance
 				{
 					Matrix = Matrix4x4.TRS(position, rotation, Vector3.one * length),
 					Anim = new Vector4(stroke, strength, memberTurn, 0f),
 					Tint = new Vector4(colour.linear.r, colour.linear.g, colour.linear.b, visible),
+					Surface = light,
 				});
 			}
 		}

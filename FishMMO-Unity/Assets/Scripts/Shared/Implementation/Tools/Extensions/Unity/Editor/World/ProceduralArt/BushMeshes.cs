@@ -25,6 +25,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// width; the leaves hang on the canes, not on a crown shell.
 		/// </summary>
 		Whip,
+		/// <summary>A low mat hugging the ground, stems lying out near level from the foot (creeping juniper, dwarf willow, bearberry; decision 25).</summary>
+		Prostrate,
 	}
 
 	/// <summary>One shrub species' recipe, at its mature size: one unit is one metre.</summary>
@@ -163,6 +165,35 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>The crown's reach from the plant's axis at scale 1, metres.</summary>
 		public static float CrownRadius(in BushSpecies species) => species.Width * 0.5f;
+
+		/// <summary>The elevations (degrees) a stem of a habit reaches its crown at (pure).</summary>
+		public static Vector2 StemElevationsOf(BushHabit habit)
+		{
+			switch (habit)
+			{
+				case BushHabit.Vase: return new Vector2(15f, 70f);
+				case BushHabit.Upright: return new Vector2(30f, 85f);
+				case BushHabit.Spreading: return new Vector2(-10f, 40f);
+				case BushHabit.Cushion: return new Vector2(-10f, 80f);
+				case BushHabit.Whip: return new Vector2(65f, 80f);
+				// Lying out near level: a mat's stems run along the ground.
+				case BushHabit.Prostrate: return new Vector2(-15f, 15f);
+				default: return new Vector2(-15f, 75f);
+			}
+		}
+
+		/// <summary>How far a stem of a habit rises before it turns out, as a share of its length (pure).</summary>
+		public static float StemRiseOf(BushHabit habit)
+		{
+			switch (habit)
+			{
+				case BushHabit.Vase: return 0.45f;
+				case BushHabit.Upright: return 0.5f;
+				case BushHabit.Spreading: return 0.12f;
+				case BushHabit.Prostrate: return 0.05f;
+				default: return 0.3f;
+			}
+		}
 
 		// ── The crown ─────────────────────────────────────────────────
 
@@ -379,6 +410,12 @@ namespace FishMMO.Shared.WorldDesign
 						e.Top = 0.45f * h; e.Bottom = 0.55f * h; e.PowerTop = 1.6f; e.PowerBottom = 1.1f; e.FootWidth = 0.1f;
 						footRadius = 0.05f * e.A;
 						break;
+					case BushHabit.Prostrate:
+						// A mat: its heart near the ground, a flat top and its foot spread wide.
+						e.Centre = new Vector3(0f, 0.25f * h, 0f);
+						e.Top = 0.75f * h; e.Bottom = 0.3f * h; e.PowerTop = 4f; e.PowerBottom = 2f;
+						footRadius = 0.3f * e.A;
+						break;
 					default:
 						e.Centre = new Vector3(0f, 0.45f * h, 0f);
 						e.Top = 0.55f * h; e.Bottom = 0.6f * h; e.PowerTop = 2.2f; e.PowerBottom = 2.4f;
@@ -434,30 +471,10 @@ namespace FishMMO.Shared.WorldDesign
 				new Vector3(Mathf.Cos(yaw) * Mathf.Cos(elevation), Mathf.Sin(elevation), Mathf.Sin(yaw) * Mathf.Cos(elevation));
 
 			/// <summary>The elevations (degrees) a stem of this habit reaches its crown at.</summary>
-			private Vector2 StemElevations()
-			{
-				switch (sp.Habit)
-				{
-					case BushHabit.Vase: return new Vector2(15f, 70f);
-					case BushHabit.Upright: return new Vector2(30f, 85f);
-					case BushHabit.Spreading: return new Vector2(-10f, 40f);
-					case BushHabit.Cushion: return new Vector2(-10f, 80f);
-					case BushHabit.Whip: return new Vector2(65f, 80f);
-					default: return new Vector2(-15f, 75f);
-				}
-			}
+			private Vector2 StemElevations() => StemElevationsOf(sp.Habit);
 
 			/// <summary>How far a stem rises before it turns out, as a share of its length.</summary>
-			private float StemRise()
-			{
-				switch (sp.Habit)
-				{
-					case BushHabit.Vase: return 0.45f;
-					case BushHabit.Upright: return 0.5f;
-					case BushHabit.Spreading: return 0.12f;
-					default: return 0.3f;
-				}
-			}
+			private float StemRise() => StemRiseOf(sp.Habit);
 
 			// ── Wood ──────────────────────────────────────────────────
 
@@ -772,7 +789,7 @@ namespace FishMMO.Shared.WorldDesign
 					/* Laid along the crown's surface, tipped out of it a little, like shingles: its main card then faces out
 					 * of the crown. A spray pointing straight out showed both its crossed cards edge-on to anyone facing that
 					 * side, and the reduced levels, with few sprays, had a hole wherever the crown faced the camera. */
-					float up = sp.Habit == BushHabit.Upright ? 1.2f : sp.Habit == BushHabit.Arching ? 0.1f : 0.45f;
+					float up = sp.Habit == BushHabit.Upright ? 1.2f : sp.Habit == BushHabit.Arching ? 0.1f : sp.Habit == BushHabit.Prostrate ? 0.2f : 0.45f;
 					Vector3 along = Vector3.ProjectOnPlane(Random3() + Vector3.up * up, n);
 					along = along.sqrMagnitude > 1e-6f ? along.normalized : PlantParts.Perpendicular(n);
 					float tilt = Mathf.Deg2Rad * rng.Range(15f, 40f);

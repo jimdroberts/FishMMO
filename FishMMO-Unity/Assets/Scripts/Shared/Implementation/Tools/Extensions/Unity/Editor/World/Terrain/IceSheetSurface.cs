@@ -24,6 +24,12 @@ namespace FishMMO.Shared.WorldDesign
 	/// and the Ice Sheet biome painted over it share one edge.
 	/// </para>
 	/// <para>
+	/// <b>Or a shelf.</b> Where the coast beside a sea colder than −5 °C mean carries the full sheet and a biome holds the
+	/// Ice Shelf water role, the ice does not stop at the coast: it runs out over the sea as a floating shelf to a calving
+	/// front and fast ice beyond (<see cref="IceShelfReach"/>, laid by <see cref="SceneAltitude"/> on the ground this
+	/// gives), so the sheet ends at its grounding line there instead of in a tidewater cliff.
+	/// </para>
+	/// <para>
 	/// Only on land (a frozen sea is the Ice Shelf's: <see cref="SceneGeneration.IceShelfMetres(uint, float, float)"/>),
 	/// only on a world with water to make ice of, and only once a biome holds the Ice Sheet water role (its
 	/// template's Water Role; found by the name "Ice Sheet" until 2026-10-15) — without one, ice would be painted

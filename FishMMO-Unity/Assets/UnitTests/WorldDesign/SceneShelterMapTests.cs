@@ -51,7 +51,8 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.IsFalse(map.IsCovered(new Vector3(20.5f, 1f, 20.5f)), "open ground");
 				Assert.IsFalse(map.IsCovered(new Vector3(-5.5f, 1f, -5.5f)), "a chunk never baked");
 				Assert.AreEqual(0f, map.Exposure(new Vector3(11.5f, 1f, 11.5f)), 1e-6f, "the middle is wholly sheltered");
-				Assert.AreEqual(0.5f, map.Exposure(new Vector3(10.5f, 1f, 11.5f)), 1e-6f, "at the edge, open to one side");
+				Assert.AreEqual(1f / 6f, map.Exposure(new Vector3(10.5f, 1f, 11.5f)), 1e-6f, "one of the six weighted samples is outside");
+				Assert.AreEqual(5f / 6f, map.Exposure(new Vector3(9.5f, 1f, 11.5f)), 1e-6f, "outside, only the sample toward the roof is covered");
 			}
 			finally
 			{

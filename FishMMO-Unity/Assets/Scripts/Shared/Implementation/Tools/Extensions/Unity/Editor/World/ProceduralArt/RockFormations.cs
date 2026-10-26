@@ -2363,7 +2363,12 @@ namespace FishMMO.Shared.WorldDesign
 			core.LumpScale = core.MeanHalf * 0.6f;
 			core.FloorY = -core.Half.y * 0.2f;
 			core.FloorSoft = 0.05f * core.MeanHalf;
-			mesh.Append(BuildField(core, Mathf.Max(2, (res + 1) / 2)));
+			// Four cells per chart undersample the thin mound's shoulder: averaging the flat
+			// underside with its upper face can turn the shading normals against a triangle
+			// (Porphyry/BlockField, production seed, variants 2 and 3). Keep the two lower
+			// LODs light, but resolve that shoulder with at least five cells at LOD0.
+			int coreResolution = res >= LightResolution[0] ? Mathf.Max(5, (res + 1) / 2) : Mathf.Max(2, (res + 1) / 2);
+			mesh.Append(BuildField(core, coreResolution));
 
 			for (int k = 0; k < count; k++)
 			{

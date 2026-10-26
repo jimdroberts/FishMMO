@@ -268,12 +268,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 53fa60808c930f3baaf43eed7423bc2a
-    m_Address: Weather Audio Profile
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 54623a9b924b400b803a242312f7efb6
     m_Address: UIWorldLabels
     m_ReadOnly: 0
@@ -339,12 +333,6 @@ MonoBehaviour:
     m_Address: UIGathering
     m_ReadOnly: 0
     m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 69baeeda49ea89f268266955933d6961
-    m_Address: Weather Render Profile
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6a35c3b4fb394855aefa0cb7bdf7201f
     m_Address: UIMap

@@ -22,6 +22,7 @@ MonoBehaviour:
   Small: 0
   Medium: 1
   Large: 1
+  NeedsLiquidWater: 0
   PadFlatness: 0
   Style: stone
   Layout: 5
@@ -90,16 +91,16 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506278254183054
-  - rid: 4061506278254183055
-  - rid: 4061506278254183056
-  - rid: 4061506278254183057
-  - rid: 4061506278254183058
-  - rid: 4061506278254183059
+  - rid: 4061506389932245382
+  - rid: 4061506389932245383
+  - rid: 4061506389932245384
+  - rid: 4061506389932245385
+  - rid: 4061506389932245386
+  - rid: 4061506389932245387
   references:
     version: 2
     RefIds:
-    - rid: 4061506278254183054
+    - rid: 4061506389932245382
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -110,16 +111,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506278254183055
+    - rid: 4061506389932245383
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506278254183056
+    - rid: 4061506389932245384
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506278254183057
+    - rid: 4061506389932245385
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 5
@@ -127,7 +128,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506278254183058
+    - rid: 4061506389932245386
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 6
@@ -135,7 +136,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506278254183059
+    - rid: 4061506389932245387
       type: {class: GatheringFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Families: 

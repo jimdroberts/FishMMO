@@ -25,6 +25,32 @@ namespace FishMMO.Shared
 		/// <summary>Bumped whenever a set comes or goes, so a reader can cache what it found.</summary>
 		public static int Version { get; private set; }
 
+		/// <summary>
+		/// Lights from outside any site (2026-10-25, I6i): a cloud world's bridge-end and landing-stage lights (SceneCloudWorld), which
+		/// stand in no point of interest. Offered by <see cref="Near"/> after the sets', each read in full (a few dozen at most).
+		/// </summary>
+		private static readonly List<(Object Owner, IReadOnlyList<SceneEmitter> Emitters)> extra = new List<(Object, IReadOnlyList<SceneEmitter>)>();
+
+		/// <summary>Offers an owner's lights to <see cref="Near"/> (replacing any it offered before).</summary>
+		public static void AddLights(Object owner, IReadOnlyList<SceneEmitter> emitters)
+		{
+			RemoveLights(owner);
+			if (owner != null && emitters != null && emitters.Count > 0)
+			{
+				extra.Add((owner, emitters));
+				Version++;
+			}
+		}
+
+		/// <summary>Withdraws an owner's lights.</summary>
+		public static void RemoveLights(Object owner)
+		{
+			if (extra.RemoveAll(e => e.Owner == owner || e.Owner == null) > 0)
+			{
+				Version++;
+			}
+		}
+
 		/// <summary>This scene's emitters (never null).</summary>
 		public IReadOnlyList<SceneEmitter> Emitters => Points != null && Points.Emitters != null ? Points.Emitters : (IReadOnlyList<SceneEmitter>)System.Array.Empty<SceneEmitter>();
 
@@ -191,10 +217,29 @@ namespace FishMMO.Shared
 						}
 					}
 				}
+				// The lights from outside any site (a cloud world's), as sets after the sites'.
+				for (int s = 0; s < extra.Count; s++)
+				{
+					IReadOnlyList<SceneEmitter> emitters = extra[s].Emitters;
+					for (int i = 0; i < emitters.Count; i++)
+					{
+						SceneEmitter e = emitters[i];
+						if (kinds != null && !kinds(e.Kind))
+						{
+							continue;
+						}
+						float d2 = (e.Position - at).sqrMagnitude;
+						if (d2 <= r2)
+						{
+							found.Add((d2, active.Count + s, i));
+						}
+					}
+				}
 				found.Sort(NearestFirst);
 				for (int i = 0; i < found.Count && i < max; i++)
 				{
-					into.Add(active[found[i].set].Emitters[found[i].index]);
+					int set = found[i].set;
+					into.Add(set < active.Count ? active[set].Emitters[found[i].index] : extra[set - active.Count].Emitters[found[i].index]);
 				}
 			}
 		}

@@ -28,6 +28,8 @@ namespace FishMMO.Client
 		public const string SiteFlamesShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishSiteFlames.shader";
 		public const string LighthouseBeamsShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishLighthouseBeams.shader";
 		public const string CaveDripsShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishCaveDrips.shader";
+		public const string RockfallStonesShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishRockfallStones.shader";
+		public const string RockfallMarksShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishRockfallMarks.shader";
 		public const string CaveSkylightShaftsShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishSkylightShafts.shader";
 		public const string IndirectShaderVariantsPath = "Assets/Prefabs/Shared/Biomes/Generated/Variants/FishIndirectVariants.shadervariants";
 		public const string AudioPath = Folder + "/Weather Audio Profile.asset";
@@ -186,6 +188,9 @@ namespace FishMMO.Client
 			if (profile.GrassBladesShader == null) profile.GrassBladesShader = AssetDatabase.LoadAssetAtPath<Shader>(GrassBladesShaderPath);
 			// The sea's background creatures: same rule.
 			if (profile.SeaLifeShader == null) profile.SeaLifeShader = AssetDatabase.LoadAssetAtPath<Shader>(SeaLifeShaderPath);
+			// What drifts on the open sea (2026-10-25): its compute and shader, same rule.
+			if (profile.SeaFloatsCompute == null) profile.SeaFloatsCompute = AssetDatabase.LoadAssetAtPath<ComputeShader>(SeaFloatSystem.ComputeAssetPath);
+			if (profile.SeaFloatsShader == null) profile.SeaFloatsShader = AssetDatabase.LoadAssetAtPath<Shader>(SeaFloatSystem.ShaderAssetPath);
 			// The land's birds, bats and small animals: same rule.
 			if (profile.AmbientLifeShader == null) profile.AmbientLifeShader = AssetDatabase.LoadAssetAtPath<Shader>(AmbientLifeShaderPath);
 			// What floats in the air round the camera: same rule.
@@ -199,6 +204,8 @@ namespace FishMMO.Client
 			if (profile.LighthouseBeamsShader == null) profile.LighthouseBeamsShader = AssetDatabase.LoadAssetAtPath<Shader>(LighthouseBeamsShaderPath);
 			// The caves' drips (2026-10-20): same rule.
 			if (profile.CaveDripsShader == null) profile.CaveDripsShader = AssetDatabase.LoadAssetAtPath<Shader>(CaveDripsShaderPath);
+			if (profile.RockfallStonesShader == null) profile.RockfallStonesShader = AssetDatabase.LoadAssetAtPath<Shader>(RockfallStonesShaderPath);
+			if (profile.RockfallMarksShader == null) profile.RockfallMarksShader = AssetDatabase.LoadAssetAtPath<Shader>(RockfallMarksShaderPath);
 			// The daylight's shafts under the caves' skylights (2026-10-20): same rule.
 			if (profile.CaveSkylightShaftsShader == null) profile.CaveSkylightShaftsShader = AssetDatabase.LoadAssetAtPath<Shader>(CaveSkylightShaftsShaderPath);
 			// Generated with the biome art (gitignored, path-derived GUID), so it may not exist yet; assigned once it does.

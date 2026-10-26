@@ -1476,7 +1476,9 @@ namespace FishMMO.Water
 			{
 				lavaTerrainCheckFrame = frame;
 				LavaMask.Terrains(gameObject.scene, lavaTerrains);
-				if (lavaMask == null || levelMoved || lavaTerrains.Count != lavaMask.TerrainCount)
+				// Or the glowing ground changed (2026-10-25, I2r: GroundGlowMask).
+				if (lavaMask == null || levelMoved || lavaTerrains.Count != lavaMask.TerrainCount
+					|| lavaMask.GlowVersion != FishMMO.Shared.Weather.GroundGlowMask.Version)
 				{
 					lavaMask ??= new LavaMask();
 					lavaMaskLive = lavaMask.Build(lavaTerrains, level);

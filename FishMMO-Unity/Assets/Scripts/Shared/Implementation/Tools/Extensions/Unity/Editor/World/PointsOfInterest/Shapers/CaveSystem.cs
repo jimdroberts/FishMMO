@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 using UnityEngine;
 
 namespace FishMMO.Shared.WorldDesign
@@ -268,8 +269,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// <param name="depthLeast">The least depth under the mouth the scene asks of its caves, metres (its pre-cut prompt's range,
 		/// 2026-10-21); the rolled depth is drawn within it and the mouth's height over the sea still caps it.</param>
 		/// <param name="depthMost">The most depth the scene allows, metres.</param>
+		/// <param name="flood">How far under the water the floors of a drowned natural cave lie, or how deep a grotto's lie under its
+		/// pool, metres (2026-10-25, phase I2n-c, decision 86 (a): the cave biome's Cave Floods, BiomeCaveWaters.DepthOf); NaN for as
+		/// before (every natural cave dry, a grotto's floors <see cref="AwashDepth"/> under its pool). A drowned cave is laid as a grotto
+		/// is: its water stands <see cref="BiomeCaveWaters.MouthDrop"/> under its mouth's floor, every floor within the depth under it,
+		/// one line of galleries level at the water table (a classic system).</param>
 		public static CaveSystem Plan(CaveForm form, int size, Vector3 mouth, float yaw, int seed, int siteId, CaveGround ground, float seaLevel, out string problem,
-			float waterLevel = float.NaN, CaveOpening opening = default, float depthLeast = LeastDepth, float depthMost = MaxCaveDepth)
+			float waterLevel = float.NaN, CaveOpening opening = default, float depthLeast = LeastDepth, float depthMost = MaxCaveDepth, float flood = float.NaN)
 		{
 			problem = null;
 			var rng = new DeterministicRNG(seed);
@@ -341,8 +347,13 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			// A grotto opens at the water's edge, its floor awash through the mouth and its chamber half flooded
 			// (2026-10-11): the sea's own surface fills it at the coast, a pool of the lake's or river's level inland.
-			bool awash = form == CaveForm.SeaCave || form == CaveForm.Grotto;
-			float water = form == CaveForm.SeaCave ? seaLevel : waterLevel;
+			// A natural cave drowned by its water table (2026-10-25, I2n-c) is awash as a grotto is, its water just under its threshold.
+			// Never where its drowned floors would lie under the sea's level (the ocean fills whatever lies under it): a dry cave there.
+			bool drowned = form == CaveForm.Cave && !float.IsNaN(flood) && flood > 0f && opening.Kind == CaveMouthKind.Ground
+				&& BiomeCaveWaters.LevelUnder(floor0) - Mathf.Min(flood, BiomeCaveWaters.MaxDepth) >= seaLevel + 0.5f * AboveSea;
+			bool awash = form == CaveForm.SeaCave || form == CaveForm.Grotto || drowned;
+			float water = form == CaveForm.SeaCave ? seaLevel : drowned ? BiomeCaveWaters.LevelUnder(floor0) : waterLevel;
+			float awashDepth = (drowned || form == CaveForm.Grotto) && !float.IsNaN(flood) ? Mathf.Clamp(flood, 0.05f, BiomeCaveWaters.MaxDepth) : AwashDepth;
 			if (form == CaveForm.Grotto)
 			{
 				if (float.IsNaN(waterLevel))
@@ -362,7 +373,7 @@ namespace FishMMO.Shared.WorldDesign
 			// level everywhere, so a passage under it would be a flooded one. A submerged mouth's system keeps them over its
 			// own water too, all but its sump (Walker.RiseTo): the ocean fills whatever lies under the sea, and a lake's pool
 			// is written over whatever of the system lies under the lake (CaveShaper.WritePool).
-			system.LowestFloor = awash ? water - AwashDepth : submerged ? Mathf.Max(seaLevel, opening.Water) + AboveSea : seaLevel + AboveSea;
+			system.LowestFloor = awash ? water - awashDepth : submerged ? Mathf.Max(seaLevel, opening.Water) + AboveSea : seaLevel + AboveSea;
 			if (!awash && !submerged && floor0 < system.LowestFloor)
 			{
 				problem = $"its mouth stands {floor0 - seaLevel:0.#} m over the sea; a cave that low is the sea's (a sea cave or a grotto)";
@@ -382,7 +393,7 @@ namespace FishMMO.Shared.WorldDesign
 			float depth = rng.Range(pf.DepthMin, pf.DepthMax);
 			// Its depth from a heavy-tailed roll of its own (2026-10-21, DepthFor): most caves tens of metres deep, some a pocket a
 			// few metres under the hill, a rare few hundreds. The profile's draw above stays drawn, so the stream's later draws hold.
-			bool rolled = opening.Kind == CaveMouthKind.Ground && RollsDepth(form);
+			bool rolled = opening.Kind == CaveMouthKind.Ground && RollsDepth(form) && !drowned;
 			if (rolled)
 			{
 				depth = DepthFor(form, size, seed, depthLeast, depthMost);
@@ -391,7 +402,7 @@ namespace FishMMO.Shared.WorldDesign
 			// Its character, from the seed hashed (a fresh stream's first draw follows its seed too closely): what kind of
 			// system the rest of the plan lays (CaveSystem.Layout).
 			system.Character = CharacterFor(form, size, Unit(unchecked((uint)seed), 0x2C1Bu));
-			if (opening.Kind != CaveMouthKind.Ground || pocket)
+			if (opening.Kind != CaveMouthKind.Ground || pocket || drowned)
 			{
 				system.Character = CaveCharacter.Classic;
 			}
@@ -1064,7 +1075,14 @@ namespace FishMMO.Shared.WorldDesign
 		/// their floors: every dry cave's. An awash cave (a sea cave, a grotto) is entered from its water, its floor under it;
 		/// its shore is left as it is. Ask the system that planned a mouth (a joined host may be of another form).
 		/// </summary>
-		public bool GradesApproach => float.IsNaN(WaterLevel);
+		public bool GradesApproach => float.IsNaN(WaterLevel) || Drowned;
+
+		/// <summary>
+		/// True for a natural cave drowned by its water table (2026-10-25, phase I2n-c, decision 86 (a)): its water stands just under
+		/// its threshold and its galleries wade (a pool is written over them as a grotto's is). Read from what is stored (a natural
+		/// cave's water level is set only so, or under a submerged mouth), so a stored system needs no new value.
+		/// </summary>
+		public bool Drowned => Form == CaveForm.Cave && !float.IsNaN(WaterLevel) && !HasSump;
 
 		/// <summary>
 		/// A mouth's approach in plan (world x/z): its floor's point, the way out, the level run out to (metres from the

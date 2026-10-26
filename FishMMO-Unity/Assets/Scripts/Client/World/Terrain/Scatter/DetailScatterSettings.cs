@@ -28,6 +28,17 @@ namespace FishMMO.Client
 		/// <summary>The most levels of detail a scattered type draws (a bush prefab's root mesh plus its LOD1 and LOD2 children).</summary>
 		public const int MaxLevels = 3;
 
+		/// <summary>
+		/// The most meshes a scattered type cycles per instance (2026-10-26, decision 22 of the biome suite): its root mesh plus
+		/// bare-MeshFilter children <c>Variant1</c>, <c>Variant2</c> (<see cref="VariantChildPrefix"/>; the art generator's
+		/// ProceduralArtCatalogue.DetailVariantChild: the two must match). A type with one level only (never a bush) may have
+		/// them; its variants take the slots a bush's levels would, so the slot layout is unchanged.
+		/// </summary>
+		public const int MaxVariants = MaxLevels;
+
+		/// <summary>The name of a detail prefab's variant child, before its index from 1 (<see cref="MaxVariants"/>).</summary>
+		public const string VariantChildPrefix = "Variant";
+
 		[Tooltip("Off: every mesh detail stays on the instanced chunk renderer (built on the CPU, culled on the GPU). The dashboard's A/B button overrides it per play session.")]
 		public bool Enabled = true;
 

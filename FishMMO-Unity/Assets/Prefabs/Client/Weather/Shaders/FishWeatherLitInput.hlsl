@@ -54,6 +54,10 @@ half4 _FishCaveCrust;
 half4 _FishCaveGlow;
 half4 _FishCaveGuano;
 half4 _FishCaveParams;
+// FishMMO edit (2026-10-25, I2n-c): the tea ring at a cave's water line: x the water's level (world y), y the highest flood over it
+// (m), z the top edge's fade (m), w 1 on; and its colour (a strength). w 0 (the default) on every cave rock without one.
+float4 _FishCaveFlood;
+half4 _FishCaveFloodStain;
 UNITY_TEXTURE_STREAMING_DEBUG_VARS;
 CBUFFER_END
 

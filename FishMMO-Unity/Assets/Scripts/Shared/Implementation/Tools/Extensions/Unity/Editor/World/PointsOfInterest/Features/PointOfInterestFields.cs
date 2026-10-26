@@ -107,10 +107,22 @@ namespace FishMMO.Shared.WorldDesign
 
 			var ways = context.Points != null && context.Points.Paths != null ? new PathExclusion(context.Points.Paths) : null;
 			var site = new Vector2(record.Position.x, record.Position.z);
+			BiomeTemplate siteBiome = context.BiomeAt != null ? context.BiomeAt(site.x, site.y) : null;
+			/* A biome authored to sow nothing (decision 25, 2026-10-25: its Field Crops written empty, or every crop weighed 0, and no
+			 * orchard) lays no fields at all: no plots, pasture, fences or farmsteads. Only its old terraces, a channel of their own on
+			 * draws of their own. A template never authored with crops still grows wheat (BiomeTemplateArt.FieldCrops). */
+			if (BiomeTemplateArt.SowsNothing(siteBiome))
+			{
+				int none = 0, alone = 0;
+				int lone = PointOfInterestFieldKinds.LayAbandonedTerraces(context, ways, ref none, ref alone);
+				context.Notes?.Add($"{record.Name}: its biome sows nothing, so no field is laid round it" +
+					(lone > 0 ? $"; {lone} flight(s) of old terraces round it, carved into {none:N0} heightmap sample(s)." : "."));
+				return;
+			}
 			var fields = new List<Field>();
 			/* How the site's biome lays its fields out (2026-10-18, I2j-b): kept to the bottomland near its rivers and lakes, set
 			 * square to a centuriation grid. Neither (every biome until a round names them): fields are drawn as they always were. */
-			BiomeFieldLayout layout = BiomeTemplateArt.FieldLayout(context.BiomeAt != null ? context.BiomeAt(site.x, site.y) : null);
+			BiomeFieldLayout layout = BiomeTemplateArt.FieldLayout(siteBiome);
 			int sceneSeed = layout.Centuriation > 0f && context.Request != null ? unchecked((int)SceneGenerator.SceneSeed(context.Request)) : 0;
 			for (int attempt = 0; attempt < wanted * 8 && fields.Count < wanted; attempt++)
 			{

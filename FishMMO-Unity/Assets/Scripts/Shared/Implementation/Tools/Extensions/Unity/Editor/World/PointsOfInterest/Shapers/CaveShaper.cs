@@ -126,8 +126,11 @@ namespace FishMMO.Shared.WorldDesign
 			// Within the scene's cave depth range (its pre-cut prompt, 2026-10-21); none set, the planner's own.
 			PointOfInterestSettings settings = context.Request != null ? context.Request.PointsOfInterest : null;
 			Vector2 depths = settings != null ? settings.CaveDepthRange : new Vector2(CaveSystem.LeastDepth, CaveSystem.MaxCaveDepth);
+			// Drowned by its water table where the cave biome says so (2026-10-25, phase I2n-c, decision 86 (a)): NaN for as before.
+			CaveBiome planned = CaveInteriorArt.OfSite(context.Request, site);
+			float flood = FloodOf(context, site, form, opening, in planned);
 			CaveSystem system = CaveSystem.Plan(form, site.SizeClass, at, yaw, SeedOf(site), site.Id, ground, SeaLevel, out string problem, water, opening,
-				depths.x, depths.y);
+				depths.x, depths.y, flood);
 			if (system == null)
 			{
 				context.Reject(site, problem);
@@ -150,6 +153,8 @@ namespace FishMMO.Shared.WorldDesign
 			// Openings in its great chambers' roofs up to the ground, where the rock over them is thin (CaveShaper.Skylights.cs):
 			// mouths of their own kind, holed and kept clear with the rest below (and taken along if the system is joined).
 			TrySkylights(context, site, system, ground);
+			// And small root windows under a wooded, wet host where the cave biome opens them (2026-10-25, I2n-c, decision 86 (f)).
+			TryRootWindows(context, site, system, ground, in planned);
 
 			// Joined to a system already carved near it, where a passage fits between them deep down.
 			if (TryJoin(context, site, system, step, gridX, gridZ))
@@ -494,7 +499,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		private static void WritePool(PointOfInterestPlaceContext context, PointOfInterestRecord site, CaveSystem system, CaveGround ground)
 		{
-			if (system.Form != CaveForm.Grotto && !system.HasSump || float.IsNaN(system.WaterLevel) || system.WaterLevel <= SeaLevel + 0.05f
+			if (system.Form != CaveForm.Grotto && !system.HasSump && !system.Drowned || float.IsNaN(system.WaterLevel) || system.WaterLevel <= SeaLevel + 0.05f
 				|| string.IsNullOrEmpty(context.TerrainFolder) || context.Request == null)
 			{
 				return;
@@ -916,6 +921,8 @@ namespace FishMMO.Shared.WorldDesign
 				// one, CaveInteriorArt); an ice shell's inner wall the interior's own ice, where it carries one.
 				CaveBiome caves = CaveInteriorArt.Of(context.Request, site, system);
 				CaveRockLook look = CaveRockLayers.For(caves, system.Form, rock);
+				// The tea ring at the water's line where the cave biome's water leaves one (2026-10-25, I2n-c, decision 86 (g)).
+				look = CaveRockLayers.WithStain(look, in caves, system.Form, system.WaterLevel);
 				material = CaveRockMaterials.For(material, in look, assetPath, out bool written);
 				if (written && assetPath != null)
 				{
@@ -927,6 +934,8 @@ namespace FishMMO.Shared.WorldDesign
 			WritePool(context, site, system, ground);
 			WriteLava(context, site, system);
 			WriteStreams(context, site, system);
+			// The cave's water takes its interior's look, where that biome has one of its own (2026-10-25, I2n-c, decision 86 (b)).
+			StampWaterLook(context, site, CaveInteriorArt.LookBiome(CaveInteriorArt.Of(context.Request, site, system)));
 		}
 
 		/// <summary>

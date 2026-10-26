@@ -16,7 +16,10 @@ namespace FishMMO.Shared.WorldDesign
 				.Accepts(WatersideGeology)
 				.Look(BiomeLookClass.Cave)
 				.Wildlife(BiomeHabitat.Wetland)
-				.Moat(BiomeMoatWater.Wet);
+				.Moat(BiomeMoatWater.Wet)
+				// 2026-10-25 (decision 86, phase I2n-c): the inside of the swamps' caves cut in the soluble rocks (the Cave's set), so
+				// a link to it never holds in granite or sandstone.
+				.InteriorRocks(BiomeCaveInteriors.SolubleRocks);
 		}
 	}
 }

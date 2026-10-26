@@ -98,7 +98,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// How open to the weather a point is, 0 under cover … 1 under open sky: the point itself and the ground a metre round
-		/// it, the point counting twice, so the lee of a slab's edge is half sheltered and its middle wholly.
+		/// it, the point counting twice, so exposure blends across a slab's edge and its middle is wholly sheltered.
 		/// </summary>
 		public float Exposure(Vector3 point)
 		{

@@ -56,6 +56,7 @@ MonoBehaviour:
   Small: 1
   Medium: 1
   Large: 1
+  NeedsLiquidWater: 0
   PadFlatness: 1
   Style: stone
   Layout: 5
@@ -205,16 +206,16 @@ MonoBehaviour:
     Role: 6
     Style: 
   Features:
-  - rid: 4061506278254182614
-  - rid: 4061506278254182615
-  - rid: 4061506278254182616
-  - rid: 4061506278254182617
-  - rid: 4061506278254182618
-  - rid: 4061506278254182619
+  - rid: 4061506389932245039
+  - rid: 4061506389932245040
+  - rid: 4061506389932245041
+  - rid: 4061506389932245042
+  - rid: 4061506389932245043
+  - rid: 4061506389932245044
   references:
     version: 2
     RefIds:
-    - rid: 4061506278254182614
+    - rid: 4061506389932245039
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -226,20 +227,20 @@ MonoBehaviour:
         KeepOutOfWater: 1
         Clearings:
         - {x: -3, y: 2, z: 10}
-    - rid: 4061506278254182615
+    - rid: 4061506389932245040
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506278254182616
+    - rid: 4061506389932245041
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506278254182617
+    - rid: 4061506389932245042
       type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: -3, y: 10}
-    - rid: 4061506278254182618
+    - rid: 4061506389932245043
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 3
@@ -247,7 +248,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506278254182619
+    - rid: 4061506389932245044
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 1

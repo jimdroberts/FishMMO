@@ -22,6 +22,7 @@ MonoBehaviour:
   Small: 1
   Medium: 1
   Large: 1
+  NeedsLiquidWater: 0
   PadFlatness: 0.7
   Style: timber
   Layout: 4
@@ -72,13 +73,13 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506278254182772
-  - rid: 4061506278254182773
-  - rid: 4061506278254182774
+  - rid: 4061506389932245153
+  - rid: 4061506389932245154
+  - rid: 4061506389932245155
   references:
     version: 2
     RefIds:
-    - rid: 4061506278254182772
+    - rid: 4061506389932245153
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -89,12 +90,12 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506278254182773
+    - rid: 4061506389932245154
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506278254182774
+    - rid: 4061506389932245155
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 

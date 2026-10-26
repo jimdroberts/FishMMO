@@ -560,7 +560,8 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			foreach ((POIType kind, float weight) in (rules ?? PointOfInterestRules.Default()).KindWeightsFor(biome.name))
 			{
-				kinds[kind] = breathable || !BiomeSiteAir.NeedsAirByDefault(kind) ? weight : 0f;
+				// The defaults' water rule too: only the biome rounds' own wet kinds have one (2026-10-25), and no row hosts them.
+				kinds[kind] = (breathable || !BiomeSiteAir.NeedsAirByDefault(kind)) && (liquidWater || !BiomeSiteAir.NeedsWaterByDefault(kind)) ? weight : 0f;
 			}
 			Fallback(biome, "Point of Interest Kinds", "the point-of-interest catalogue's rows that name it");
 			return kinds;
@@ -623,6 +624,15 @@ namespace FishMMO.Shared.WorldDesign
 			Fallback(biome, "Weathering", $"what its name gave ({old})");
 			return old;
 		}
+
+		/// <summary>
+		/// True when a biome is authored to sow nothing (decision 25, 2026-10-25, <see cref="BiomeFieldCrops.SowsNothing"/>): its
+		/// Field Crops marked with no entry weighing anything, and no orchard (<see cref="Orchards"/>). False with no biome and for a
+		/// template never authored with crops (it grows wheat, <see cref="FieldCrops"/>).
+		/// </summary>
+		public static bool SowsNothing(BiomeTemplate biome)
+			=> biome != null && biome.IsAuthored(BiomeTemplate.Authored.FieldCrops)
+				&& BiomeFieldCrops.SowsNothing(true, biome.FieldCrops, Orchards(biome).Count);
 
 		/// <summary>
 		/// The crops a biome's fields grow (BiomeTemplate.FieldCrops): its entries with a prefab and a weight, in order. With no
@@ -850,6 +860,72 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
+		/// How a biome's caves stand in the water table by form (BiomeTemplate.CaveFloods, 2026-10-25, I2n-c; read through
+		/// CaveInteriorArt). None with no biome; a template never authored with them takes its spec's (warning only when it names any).
+		/// </summary>
+		public static IReadOnlyList<BiomeCaveFlood> CaveFloods(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return Array.Empty<BiomeCaveFlood>();
+			}
+			if (biome.IsAuthored(BiomeTemplate.Authored.CaveFloods) || biome.CaveFloods != null && biome.CaveFloods.Count > 0)
+			{
+				return biome.CaveFloods;
+			}
+			List<BiomeCaveFlood> spec = BiomeArtSpec.For(biome.name)?.CaveFloods();
+			if (spec != null && spec.Count > 0)
+			{
+				Fallback(biome, "Cave Floods", "the spec table's");
+				return spec;
+			}
+			return Array.Empty<BiomeCaveFlood>();
+		}
+
+		/// <summary>
+		/// What hangs from a biome's caves' roofs by form (BiomeTemplate.CaveHangings, 2026-10-25, I2n-c; read through
+		/// CaveInteriorArt). Null with no biome (the dressing's own by form); a template never authored with them takes its spec's,
+		/// with a warning.
+		/// </summary>
+		public static IReadOnlyList<BiomeCaveHanging> CaveHangings(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return null;
+			}
+			if (biome.IsAuthored(BiomeTemplate.Authored.CaveHangings) || biome.CaveHangings != null && biome.CaveHangings.Count > 0)
+			{
+				return biome.CaveHangings;
+			}
+			List<BiomeCaveHanging> spec = BiomeArtSpec.For(biome.name)?.CaveHangings() ?? BiomeArtSpec.Entry.DefaultCaveHangings();
+			Fallback(biome, "Cave Hangings", "the spec table's (the dressing's own by form)");
+			return spec;
+		}
+
+		/// <summary>
+		/// The tea ring a biome's cave water leaves by form (BiomeTemplate.CaveStains, 2026-10-25, I2n-c; read through CaveInteriorArt).
+		/// None with no biome; a template never authored with them takes its spec's (warning only when it names any).
+		/// </summary>
+		public static IReadOnlyList<BiomeCaveStain> CaveStains(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return Array.Empty<BiomeCaveStain>();
+			}
+			if (biome.IsAuthored(BiomeTemplate.Authored.CaveStains) || biome.CaveStains != null && biome.CaveStains.Count > 0)
+			{
+				return biome.CaveStains;
+			}
+			List<BiomeCaveStain> spec = BiomeArtSpec.For(biome.name)?.CaveStains();
+			if (spec != null && spec.Count > 0)
+			{
+				Fallback(biome, "Cave Stains", "the spec table's");
+				return spec;
+			}
+			return Array.Empty<BiomeCaveStain>();
+		}
+
+		/// <summary>
 		/// The plants a biome's still water carries (BiomeTemplate.FloatingPlants, 2026-10-18, I2i). With no biome, none; a template
 		/// never authored with them (no mark, empty list) takes its spec's and warns when the spec names any. An authored empty list
 		/// carries none, which is every biome's default.
@@ -913,6 +989,28 @@ namespace FishMMO.Shared.WorldDesign
 			if (spec != BiomeBoardwalks.None)
 			{
 				Fallback(biome, "Boardwalks", $"the spec table's ({spec})");
+			}
+			return spec;
+		}
+
+		/// <summary>
+		/// How a biome's raised routed ways are built (BiomeTemplate.BoardwalkStyle, 2026-10-25, I2i-b). With no biome, planked; a
+		/// template never authored with it takes its spec's and warns when that names another.
+		/// </summary>
+		public static BiomeBoardwalkStyle BoardwalkStyle(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return BiomeBoardwalkStyle.Planked;
+			}
+			if (biome.IsAuthored(BiomeTemplate.Authored.BoardwalkStyle) || biome.BoardwalkStyle != BiomeBoardwalkStyle.Planked)
+			{
+				return biome.BoardwalkStyle;
+			}
+			BiomeBoardwalkStyle spec = BiomeArtSpec.For(biome.name)?.BoardwalkStyle ?? BiomeBoardwalkStyle.Planked;
+			if (spec != BiomeBoardwalkStyle.Planked)
+			{
+				Fallback(biome, "BoardwalkStyle", $"the spec table's ({spec})");
 			}
 			return spec;
 		}

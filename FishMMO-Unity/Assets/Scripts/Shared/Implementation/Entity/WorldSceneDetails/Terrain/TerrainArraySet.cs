@@ -101,6 +101,9 @@ namespace FishMMO.Shared
 		[Tooltip("What each layer's ground is made of, from the biome slot it was painted from (TerrainTextureLayer.GroundMakeup): x living, y lichen, z mineral, w 1 where the slot had one (0: read from the layer's name). Written by the bake; not part of the content hash, refreshed in place when only it changed.")]
 		public Vector4[] LayerMakeup = new Vector4[0];
 
+		[Tooltip("How each layer glows, from the biome slot it was painted from (TerrainTextureLayer.glow, 2026-10-25, phase I2r; Biomes.BiomeGroundGlow.Pack): zero for none. Written by the bake; not part of the content hash, refreshed in place when only it changed. Read into the layer table's glow row.")]
+		public Vector4[] LayerGlow = new Vector4[0];
+
 		[System.NonSerialized] private Vector4[] layerFlora;
 		[System.NonSerialized] private string[] layerFloraNames;
 		[System.NonSerialized] private Vector4[] layerFloraMakeup;

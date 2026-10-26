@@ -69,6 +69,11 @@ namespace FishMMO.Shared
 		public struct Crossing
 		{
 			public Vector3 From, To;
+			/// <summary>
+			/// What the lights beside its ends give off (2026-10-25, I6i: the world body's bridge-end lights, CloudWorldStructures),
+			/// in the scene's frame, as a site's lights are; empty when its ends are unlit. Offered to the client's site lights.
+			/// </summary>
+			public SceneEmitter[] Lights;
 		}
 
 		[Tooltip("The top of the cloud deck, y: below it is cloud, with no floor.")]
@@ -89,6 +94,30 @@ namespace FishMMO.Shared
 		public Island[] Islands = Array.Empty<Island>();
 		public Dock[] Docks = Array.Empty<Dock>();
 		public Crossing[] Bridges = Array.Empty<Crossing>();
+
+		[Tooltip("What the landing stages' lights give off (2026-10-25), in the scene's frame; written with the stages by the cut.")]
+		public SceneEmitter[] StageLights = Array.Empty<SceneEmitter>();
+
+		/// <summary>Every light of the cloud world's own ways: each bridge's end lights, then the landing stages'.</summary>
+		public List<SceneEmitter> Lights()
+		{
+			var all = new List<SceneEmitter>();
+			if (Bridges != null)
+			{
+				foreach (Crossing crossing in Bridges)
+				{
+					if (crossing.Lights != null)
+					{
+						all.AddRange(crossing.Lights);
+					}
+				}
+			}
+			if (StageLights != null)
+			{
+				all.AddRange(StageLights);
+			}
+			return all;
+		}
 
 		private static readonly Dictionary<int, SceneCloudWorld> scenes = new Dictionary<int, SceneCloudWorld>();
 
@@ -153,6 +182,8 @@ namespace FishMMO.Shared
 		{
 			scenes[gameObject.scene.handle] = this;
 			Version++;
+			// Its ways' lights light the islands as a site's lamps do (SiteLightPool reads them through SceneSiteEmitters.Near).
+			SceneSiteEmitters.AddLights(this, Lights());
 		}
 
 		private void OnDisable()
@@ -162,6 +193,7 @@ namespace FishMMO.Shared
 				scenes.Remove(gameObject.scene.handle);
 				Version++;
 			}
+			SceneSiteEmitters.RemoveLights(this);
 		}
 	}
 }

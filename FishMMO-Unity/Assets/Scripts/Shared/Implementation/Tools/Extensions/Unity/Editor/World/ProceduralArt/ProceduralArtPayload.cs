@@ -138,6 +138,12 @@ namespace FishMMO.Shared.WorldDesign
 			// Each stone material's own boulders, rocks and pebbles (2026-10-16).
 			"StoneMeshes.cs",
 			"StoneStyles.cs",
+			// Each biome's own rocks and their stones (2026-10-25, biome suite decision 34).
+			"RegionalRocks.cs",
+			"StoneStyles.Regional.cs",
+			// Each rock's formation variant count and each stone's detail meshes (2026-10-26, I6f), and the drafts' named stone sets.
+			"RockVariantCounts.cs",
+			"StoneStyles.Named.cs",
 			// The vegetation expansion (2026-10-10), listed before their content was written so the hash covers
 			// every one from the first line: land flora and deadwood, the sea floor's catalogue, crystal formations.
 			"FloraMeshes.cs",
@@ -183,6 +189,8 @@ namespace FishMMO.Shared.WorldDesign
 			"CaveGlowMeshes.Hanging.cs",
 			// An ice cave's ice, built as the glow art (2026-10-20, caves livened).
 			"CaveGlowMeshes.Ice.cs",
+			// The cave crystals' habits the biome drafts name (2026-10-26, NEW-CRYSTALS).
+			"CaveGlowMeshes.Habits.cs",
 			// What others left in the caves and mines: remains, carvings, fallen timbers, a cache's coffer (2026-10-20, caves livened).
 			"StructurePieces.CaveStory.cs",
 			// The run-time cave cover's mesh (2026-10-20).

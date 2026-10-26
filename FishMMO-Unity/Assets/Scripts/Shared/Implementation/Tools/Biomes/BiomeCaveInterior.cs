@@ -105,17 +105,34 @@ namespace FishMMO.Shared.Biomes
 		[Min(0f)] public float Fungus;
 		[Tooltip("How often its chambers have glow-worm colonies hung from their roofs (1 the cave dressing's own chance, 0 none).")]
 		[Min(0f)] public float Worms;
+		[Tooltip("The glow-worms' hue by its name in the cave glow art (2026-10-25, I2n-c, decision 86 (e): Rootlight…). Empty: the glow art's first, every cave's until then.")]
+		public string WormHue;
+		[Tooltip("Where its glow-worm colonies hang: from the high roofs (every cave's until 2026-10-25), threaded along the roots through the roof, or on drowned wood.")]
+		public BiomeCaveWormMount WormMount;
 
-		public BiomeCaveGlow(BiomeCaveForm form, string crystal, float fungus, float worms)
+		public BiomeCaveGlow(BiomeCaveForm form, string crystal, float fungus, float worms, string wormHue = null, BiomeCaveWormMount wormMount = BiomeCaveWormMount.Roof)
 		{
 			Form = form;
 			Crystal = crystal ?? string.Empty;
 			Fungus = fungus;
 			Worms = worms;
+			WormHue = wormHue ?? string.Empty;
+			WormMount = wormMount;
 		}
 
-		/// <summary>The entry as the authoring marks and reports it: "Form=crystal|fungus|worms".</summary>
-		public override string ToString() => $"{Form}={(string.IsNullOrEmpty(Crystal) ? "chance" : Crystal)}|{Fungus.ToString("R", CultureInfo.InvariantCulture)}|{Worms.ToString("R", CultureInfo.InvariantCulture)}";
+		/// <summary>
+		/// The entry as the authoring marks and reports it: "Form=crystal|fungus|worms", the worms' hue and mount after a fourth '|'
+		/// only when either is set (every entry authored before 2026-10-25 marks as it did).
+		/// </summary>
+		public override string ToString()
+		{
+			string s = $"{Form}={(string.IsNullOrEmpty(Crystal) ? "chance" : Crystal)}|{Fungus.ToString("R", CultureInfo.InvariantCulture)}|{Worms.ToString("R", CultureInfo.InvariantCulture)}";
+			if (!string.IsNullOrEmpty(WormHue) || WormMount != BiomeCaveWormMount.Roof)
+			{
+				s += $"|{(string.IsNullOrEmpty(WormHue) ? "first" : WormHue)}|{WormMount}";
+			}
+			return s;
+		}
 	}
 
 	/// <summary>
@@ -174,9 +191,10 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>
 		/// The rocks a limestone-type cave forms in (decisions 37 and 46): the soluble rocks water dissolves into caves. What the
-		/// Cave biome's interior rocks are authored from.
+		/// Cave biome's interior rocks are authored from. Coral rag (Mangrove's raised fossil reef) joined 2026-10-25; salt rock,
+		/// alunite, caliche and laterite dissolve or rot but are kept out by their drafts (no limestone cave in them).
 		/// </summary>
-		public static readonly string[] SolubleRocks = { "Limestone", "Chalk", "Marble", "Gypsum", "Travertine", "Dolomite" };
+		public static readonly string[] SolubleRocks = { "Limestone", "Chalk", "Marble", "Gypsum", "Travertine", "Dolomite", "CoralRag" };
 
 		/// <summary>
 		/// The shells an ice cave's cold trap holds ice in (decision 51): glacier ice itself, and the soluble rocks of the rock ice

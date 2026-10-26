@@ -47,6 +47,9 @@ namespace FishMMO.Client
 		private static readonly int WaterWindId = Shader.PropertyToID("_FishWaterWind");
 		private static readonly int AnimId = Shader.PropertyToID("_Anim");
 		private static readonly int TintId = Shader.PropertyToID("_Tint");
+		private static readonly int SurfaceId = Shader.PropertyToID("_Surface");
+		private static readonly int EmitColourId = Shader.PropertyToID("_EmitColour");
+		private static readonly int EmitPatternId = Shader.PropertyToID("_EmitPattern");
 		private static readonly int ModeId = Shader.PropertyToID("_Mode");
 		private static readonly int AmplitudeId = Shader.PropertyToID("_Amplitude");
 		private static readonly int WaveLengthId = Shader.PropertyToID("_WaveLength");
@@ -64,6 +67,8 @@ namespace FishMMO.Client
 		private static float meanLevel;
 		/// <summary>The surface the animals keep under now: the sea's level less what its waves' troughs need.</summary>
 		private static float lifeSurface;
+		/// <summary>The sea's surface now, tide included (what floats ride and what skippers keep out of).</summary>
+		private static float seaLevel;
 
 		/// <summary>
 		/// What the system is doing, for the log and the console: why nothing is drawn, or what is. Logged
@@ -93,6 +98,7 @@ namespace FishMMO.Client
 		private static readonly Matrix4x4[] matrices = new Matrix4x4[Batch];
 		private static readonly Vector4[] anims = new Vector4[Batch];
 		private static readonly Vector4[] tints = new Vector4[Batch];
+		private static readonly Vector4[] surfaces = new Vector4[Batch];
 		private static MaterialPropertyBlock block;
 		private static readonly Plane[] planes = new Plane[6];
 		private static readonly TerrainGround ground = new TerrainGround();
@@ -255,6 +261,7 @@ namespace FishMMO.Client
 			{
 				meanLevel = level;
 			}
+			seaLevel = level;
 			float waves = Mathf.Max(0f, SurfaceWater.WaveHeight);
 			float ceiling = Mathf.Min(level, meanLevel - SeaLifePlacement.LowTideMetres) - 0.2f - 0.5f * waves;
 			lifeSurface = level - 0.5f * Mathf.Min(2f, waves);
@@ -437,6 +444,41 @@ namespace FishMMO.Client
 				m.SetFloat(ZWriteId, jelly ? 0f : 1f);
 				// Jellies after the sea's surface (Transparent-100) and before the underwater pass (-90), which fogs them.
 				m.renderQueue = jelly ? (int)RenderQueue.Transparent - 95 : (int)RenderQueue.Geometry;
+				// Its own light (2026-10-25): the colour at its brightest, and how it runs over the body.
+				m.SetVector(EmitColourId, EmitColour(kind));
+				m.SetVector(EmitPatternId, EmitPattern(kind));
+			}
+		}
+
+		/// <summary>The material's <c>_EmitColour</c>: the kind's light at its brightest (linear, HDR), a 1 when it has one.</summary>
+		public static Vector4 EmitColour(SeaCreatureKind kind)
+		{
+			if (kind == null || kind.GlowStrength <= 0f)
+			{
+				return Vector4.zero;
+			}
+			Color c = kind.GlowColour.linear * kind.GlowStrength;
+			return new Vector4(c.r, c.g, c.b, 1f);
+		}
+
+		/// <summary>
+		/// The material's <c>_EmitPattern</c>, as the ambient creatures' (AmbientGlow.Pattern): x 0 even, 1 a wave along the body; y crests
+		/// at once, z how sharp, w the share lit between crests. A wave and a jelly's ripple run along the body; every other pattern is even.
+		/// </summary>
+		public static Vector4 EmitPattern(SeaCreatureKind kind)
+		{
+			if (kind == null || kind.GlowStrength <= 0f)
+			{
+				return Vector4.zero;
+			}
+			switch (kind.GlowPattern)
+			{
+				case AmbientGlowPattern.Wave:
+					return new Vector4(AmbientGlow.Wave, 1.5f, 3f, 0.35f);
+				case AmbientGlowPattern.Ripple:
+					return new Vector4(AmbientGlow.Wave, 1f, 4f, 0.3f);
+				default:
+					return new Vector4(AmbientGlow.Even, 1f, 1f, 1f);
 			}
 		}
 
@@ -444,6 +486,9 @@ namespace FishMMO.Client
 		{
 			switch (shape)
 			{
+				case SeaCreatureShape.Mola: return 7f;
+				case SeaCreatureShape.Nautilus: return 8f;
+				case SeaCreatureShape.Dugong: return 1f;
 				case SeaCreatureShape.Whale: return 1f;
 				case SeaCreatureShape.Ray: return 2f;
 				case SeaCreatureShape.Turtle: return 3f;
@@ -458,7 +503,7 @@ namespace FishMMO.Client
 		{
 			unchecked
 			{
-				int h = (int)kind.Shape * 397;
+				int h = (int)kind.Shape * 397 + (kind.HammerHead ? 1 : 0);
 				h = h * 31 + kind.Back.GetHashCode();
 				h = h * 31 + kind.Belly.GetHashCode();
 				return h;
@@ -614,6 +659,8 @@ namespace FishMMO.Client
 			}
 			GeometryUtility.CalculateFrustumPlanes(camera, planes);
 			double seconds = MotionSeconds;
+			// The clock's hour for the diel migrators and the night-spreaders: the shared world clock's, so every player's agree.
+			float night = SeaLifePlacement.NightShare(WorldDayNightCycle.SkyClockHours ?? 12.0);
 			float distance = settings.DrawDistance;
 			float fadeStart = distance * (1f - Mathf.Clamp(settings.FadeBand, 0.05f, 0.5f));
 			foreach (Cell cell in cells.Values)
@@ -643,7 +690,7 @@ namespace FishMMO.Client
 					}
 					List<SeaInstance> list = byKind[group.Kind];
 					int start = list.Count;
-					SeaLifePlacement.Evaluate(group, kind, seconds, lifeSurface, ground, 1f, list);
+					SeaLifePlacement.Evaluate(group, kind, seconds, lifeSurface, ground, 1f, list, seaLevel, night);
 					// Each animal dissolves on its own at the draw distance; past it, none is drawn.
 					for (int i = list.Count - 1; i >= start; i--)
 					{
@@ -683,6 +730,7 @@ namespace FishMMO.Client
 						matrices[i] = s.Matrix;
 						anims[i] = s.Anim;
 						tints[i] = s.Tint;
+						surfaces[i] = s.Surface;
 						if (shadows && !anyNearForShadow && Vector3.Distance(eye, s.Matrix.GetColumn(3)) <= settings.ShadowDistance)
 						{
 							anyNearForShadow = true;
@@ -691,6 +739,7 @@ namespace FishMMO.Client
 					block.Clear();
 					block.SetVectorArray(AnimId, anims);
 					block.SetVectorArray(TintId, tints);
+					block.SetVectorArray(SurfaceId, surfaces);
 					Graphics.DrawMeshInstanced(meshes[k], 0, materials[k], matrices, count, block,
 						anyNearForShadow ? ShadowCastingMode.On : ShadowCastingMode.Off, true, 0, camera);
 				}

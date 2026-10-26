@@ -18,7 +18,11 @@ namespace FishMMO.Shared.WorldDesign
 				.Accepts(VolcanicGeology)
 				.Look(BiomeLookClass.Volcanic)
 				.Wildlife(BiomeHabitat.Mountain | BiomeHabitat.Volcanic)
-				.Moat(BiomeMoatWater.Dry);
+				.Moat(BiomeMoatWater.Dry)
+				/* Its vents (2026-10-25, I2q-b, decision 95): Strombolian bursts on the summit terrace's vent zones (the grid until a
+				 * terrace's lines are stored), and a site rate of its own: fumaroles 0.6, mud pots 0.25, hot springs 0.15, no geysers. */
+				.Geothermal(0f, 0.15f, 0.6f, 0.25f, 0f, 0f, 0.3f)
+				.Vents(BiomeVentLayout.Terrace, BiomeVentTiming.Strombolian);
 		}
 	}
 }

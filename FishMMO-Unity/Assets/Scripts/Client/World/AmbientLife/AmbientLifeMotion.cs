@@ -334,6 +334,11 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
+				// An offshore kind (2026-10-25) lives only over the open sea, far from any land.
+				if (kind.Offshore > 0f && !(seaHere && wet && IsOffshore(world, home, kind.Offshore)))
+				{
+					continue;
+				}
 				bool seaNear = kind.NeedsSea && (seaHere && wet || Near(world, home, kind.Behaviour == AmbientBehaviour.Scurry ? 20f : 160f, true));
 				bool freshNear = kind.NeedsFreshWater && (kind.Behaviour == AmbientBehaviour.Paddle || (wet && !seaHere) || Near(world, home, 10f, false));
 				bool treesNear = perches != null && perches.Count > 0;
@@ -367,6 +372,33 @@ namespace FishMMO.Client
 					Look = look,
 					LookVariant = (byte)Mathf.Max(0, variant),
 				});
+			}
+			return true;
+		}
+
+		/// <summary>
+		/// True when no dry ground lies on eight bearings round a place at <paramref name="metres"/> and at half of it (2026-10-25): an
+		/// offshore kind's test. Past the loaded ground (no terrain) counts as open sea.
+		/// </summary>
+		public static bool IsOffshore(IAmbientWorld world, Vector3 at, float metres)
+		{
+			for (int ring = 0; ring < 2; ring++)
+			{
+				float radius = ring == 0 ? metres : metres * 0.5f;
+				for (int k = 0; k < 8; k++)
+				{
+					float a = k * Mathf.PI * 0.25f;
+					float x = at.x + Mathf.Cos(a) * radius, z = at.z + Mathf.Sin(a) * radius;
+					if (!world.TryGround(x, z, out float y) || float.IsInfinity(y))
+					{
+						continue;
+					}
+					float water = world.WaterAt(x, z, out bool isSea);
+					if (!(water > y + 0.05f && isSea))
+					{
+						return false;
+					}
+				}
 			}
 			return true;
 		}

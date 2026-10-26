@@ -332,7 +332,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>A tube along a quadratic curve from a to c bending through b.</summary>
-			private void Limb(Vector3 a, Vector3 b, Vector3 c, float r0, float r1, int sides, int segments, bool point)
+			private void Limb(Vector3 a, Vector3 b, Vector3 c, float r0, float r1, int sides, int segments, bool point, bool trunk = true)
 			{
 				mesh.SetPart(partPivot, partHash, partRank, partKind == PlantPart.Fixed ? PlantPart.Fixed : PlantPart.Limb);
 				path.Clear(); radii.Clear(); colours.Clear(); wind.Clear();
@@ -347,7 +347,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				int firstRing = mesh.VertexCount;
 				PlantParts.Tube(mesh, BarkSubmesh, path, radii, Sides(sides), 1f, colours, wind);
-				if (partKind == PlantPart.Fixed)
+				if (partKind == PlantPart.Fixed && trunk)
 				{
 					// The trunk: each tree thickens or thins it about its own centre line (VegVary).
 					mesh.MarkTrunkRings(firstRing, path);
@@ -983,13 +983,13 @@ namespace FishMMO.Shared.WorldDesign
 					Vector3 c = new Vector3(a.x, 0f, a.z) + outward * ring + Vector3.down * 0.25f;
 					// Out first and over, then down steeply into the mud: the control point stands above the root's foot.
 					Vector3 b = a + outward * ring * 0.6f + Vector3.up * (y0 * 0.3f + 0.3f);
-					Limb(a, b, c, radius, radius * 0.75f, 5, lod == 0 ? 6 : 4, false);
+					Limb(a, b, c, radius, radius * 0.75f, 5, lod == 0 ? 6 : 4, false, trunk: false);
 					if ((i & 1) == 0)
 					{
 						Vector3 at = Curve(a, b, c, 0.5f);
 						Vector3 aside = Vector3.Cross(Vector3.up, outward) * (rng.NextFloat() < 0.5f ? -1f : 1f);
 						Vector3 to = new Vector3(at.x, 0f, at.z) + (outward + aside * 0.7f).normalized * ring * rng.Range(0.4f, 0.6f) + Vector3.down * 0.25f;
-						Limb(at, at + (to - at) * 0.4f + Vector3.up * 0.25f, to, radius * 0.7f, radius * 0.55f, 4, lod == 0 ? 4 : 3, false);
+						Limb(at, at + (to - at) * 0.4f + Vector3.up * 0.25f, to, radius * 0.7f, radius * 0.55f, 4, lod == 0 ? 4 : 3, false, trunk: false);
 					}
 				}
 			}

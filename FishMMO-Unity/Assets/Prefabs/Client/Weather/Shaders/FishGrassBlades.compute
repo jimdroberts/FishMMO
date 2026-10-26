@@ -82,6 +82,11 @@ RWByteAddressBuffer _GrassArgs;              // IndirectDrawIndexedArgs, 5 uints
  * what it was. The blades' vertex shader (FishGrassBlades.hlsl) asks the same patch from the same root for the colour,
  * width and curl, so nothing new rides the record. The patch and salt must match GRASS_FLORA_PATCH / _SALT there. */
 #include "FishFlora.hlsl"
+/* The burn mosaic (2026-10-25, I2t; FishBurn.hlsl, BurnMosaicTable.BindCompute): where a veld fire passed, blades stand as
+ * stubble and regrow through the green flush, and an after-burn type (fire lilies, GRASS_ROW_MORE w) grows only in its weeks.
+ * The blade's colour tone rides three free bits of the colour word (GrassMath.WithBurnTone) for the vertex shader. Off
+ * (_FishBurnInfo.x = 0): every blade exactly as before. */
+#include "FishBurn.hlsl"
 // FishFlora.hlsl's grass patches, which the vertex shader and the terrain's living ground read too.
 #define GRASS_FLORA_PATCH FISH_FLORA_GRASS_PATCH
 #define GRASS_FLORA_SALT FISH_FLORA_GRASS_SALT
@@ -708,6 +713,14 @@ uint GrassWithHeadPart(uint colour, uint part)
     return (colour & ~(3u << 29)) | ((part & 3u) << 29);
 }
 
+// GrassMath.WithBurnTone: the burn's colour tone (FishBurnStage.tone, 0..1) in the colour word's bits 24..26, dithered to
+// eighths by the blade's own hash so a scar's edge mottles instead of banding (2026-10-25, I2t). 0 = the blade's own colour.
+uint GrassWithBurnTone(uint colour, float tone, float dither)
+{
+    uint q = (uint)clamp((int)floor(saturate(tone) * 7.0 + dither), 0, 7);
+    return (colour & ~(7u << 24)) | (q << 24);
+}
+
 // GrassMath.RecordBits: the colour word's shape bits, on every record of the blade (its shadow casters' too): bit 28 the
 // type's fifth bit, bit 27 a tall blade's mark. Zero for a type under 16 no taller than GRASS_MAX_PACKED_HEIGHT.
 uint GrassRecordBits(int type, float height)
@@ -1055,6 +1068,27 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
         return;
     }
     height *= 1.0 - 0.55 * flattened;
+    // The burn (FishBurn.hlsl): an after-burn type only where its flowers stand; any other cut to stubble, regrowing.
+    bool afterBurn = GrassTypeRow(type, GRASS_ROW_MORE).w > 0.5;
+    float burnTone = 0.0;
+    float burnRegrow = 1.0;
+    [branch] if (afterBurn || _FishBurnInfo.y > 0.5)
+    {
+        FishBurnStage burn = FishBurnVeldAt(rootXZ);
+        if (afterBurn)
+        {
+            if (GrassUnit(GrassMix(own ^ 0x6C8E9CF5u)) >= burn.lily)
+            {
+                return;
+            }
+        }
+        else
+        {
+            burnRegrow = burn.regrow;
+            burnTone = burn.tone;
+            height *= burnRegrow;
+        }
+    }
     if (GrassBuried(root, local, type, height))
     {
         return;
@@ -1071,6 +1105,8 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
      * a share of them for a tussock species with a head (feather grass's plumes, a rush's tufts, wheat's ears), which
      * would otherwise put three records on every blade of a dense lawn. */
     bool headed = head != 0u && GrassUnit(GrassMix(own ^ 0x3C6EF372u)) < GrassTypeRow(type, GRASS_ROW_MORE).x;
+    // Stubble and the regrowing flush carry no heads (2026-10-25, I2t).
+    headed = headed && burnRegrow > 0.95;
 
     /* Everything the vertex shader draws: the curve is scaled to the blade's length, so every point lies
      * within `height` of the root, above the ground, in any wind (laid over to 75 degrees, the tip is ~h
@@ -1093,7 +1129,8 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     {
         // Only a blade the camera draws reads the ground's texture (shadow casters are colourless).
         lit = blade;
-        lit.colour = GrassPackColour(GrassTerrainColourAt(local, rootXZ, share, look)) | recordBits;
+        lit.colour = GrassWithBurnTone(GrassPackColour(GrassTerrainColourAt(local, rootXZ, share, look)) | recordBits,
+            burnTone, GrassUnit(GrassMix(own ^ 0x1F83D9ABu)));
         mainSlot = lod;
         mainRecords = records;
     }

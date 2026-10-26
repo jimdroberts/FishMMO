@@ -54,7 +54,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// the side charts). A pebble shows its rock by its habit — flake, disc, chip, nodule, rod — not by its marks.
 	/// </para>
 	/// </remarks>
-	public static class StoneStyles
+	public static partial class StoneStyles
 	{
 		public const string Round = "Round", Slab = "Slab", Spire = "Spire";
 
@@ -512,6 +512,13 @@ namespace FishMMO.Shared.WorldDesign
 					P(S(0.12f, 0.05f, 0.055f).Noise(0.05f, 0f)),
 					P(S(0.08f, 0.07f, 0.075f).Noise(0.05f, 0f)),
 				});
+
+			// ── Each biome's own crust rock (2026-10-25, StoneStyles.Regional.cs) ──
+
+			foreach (StoneSet set in RegionalSets())
+			{
+				yield return set;
+			}
 		}
 	}
 }

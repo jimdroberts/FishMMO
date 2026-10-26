@@ -67,6 +67,12 @@ namespace FishMMO.Shared.WorldDesign
 			landforms = null;
 			SceneHeightField field = SceneHeightField.Sample(request, plan);
 			Observer?.Invoke("sampled from the planet", field, null);
+			// The open ice shelf the sample laid, if any (decision 68): said, since it is ground no biome round it explains.
+			IceShelfReach shelf = new SceneAltitude(request).IceShelf;
+			if (shelf != null)
+			{
+				notes?.Add(shelf.Describe(new Rect(-plan.WidthMetres * 0.5f, -plan.DepthMetres * 0.5f, plan.WidthMetres, plan.DepthMetres)));
+			}
 			if (!request.Erosion)
 			{
 				// The planet's ground exactly: no rain wears it and no river is laid into it (SceneGenerationRequest.Rivers).
@@ -193,6 +199,20 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			SurfaceLiquid liquid = SurfaceLiquids.For(system, request.Body, out float levelMetres);
 			return liquid == SurfaceLiquid.None ? float.NegativeInfinity : levelMetres * request.VerticalScale;
+		}
+
+		/// <summary>
+		/// World Y of the scene's LAVA surface (2026-10-25, phase I2r, decision 65 (b): a magma ocean's or an Io's lava lakes'), NaN
+		/// where the low ground holds water or nothing: what a lava band and a lava-datum landform measure from.
+		/// </summary>
+		public static float LavaLevel(SceneGenerationRequest request, SolarSystemProfile system)
+		{
+			if (request?.Body == null)
+			{
+				return float.NaN;
+			}
+			SurfaceLiquid liquid = SurfaceLiquids.For(system, request.Body, out float levelMetres);
+			return liquid == SurfaceLiquid.Lava ? levelMetres * request.VerticalScale : float.NaN;
 		}
 	}
 }

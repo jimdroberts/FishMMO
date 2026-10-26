@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: FishMMO.Server::FishMMO.Server.Implementation.World.SceneServer.Navigation.SceneNavMeshCatalogue
   Entries:
   - SceneName: Belron 1
-    Data: {fileID: -8638594133073205230, guid: 2d2e99e66683ef7c69d80dd5f004dec6, type: 2}
+    Data: {fileID: -2248489875793218240, guid: 2d2e99e66683ef7c69d80dd5f004dec6, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Dungeon
@@ -22,22 +22,22 @@ MonoBehaviour:
     Position: {x: -256, y: -35, z: -256}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Galris 1
-    Data: {fileID: -4920747176065391094, guid: 37b79cefd7bee57f3b0ad533ca570851, type: 2}
+    Data: {fileID: 1475668372799391533, guid: 37b79cefd7bee57f3b0ad533ca570851, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Ithaewyn 1
-    Data: {fileID: -734056120612313442, guid: f97399325986d3f1bb73fd8884745c66, type: 2}
+    Data: {fileID: -1759312914836055375, guid: f97399325986d3f1bb73fd8884745c66, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Moron 1
-    Data: {fileID: 1248662631807317514, guid: 83b7302d3becafc62b241ba674ce663d, type: 2}
+    Data: {fileID: -6954663816028733664, guid: 83b7302d3becafc62b241ba674ce663d, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Moron 2
-    Data: {fileID: -3699596898005063412, guid: 7d05afec765a37c51a30bb8b8c501b38, type: 2}
+    Data: {fileID: 4228207894476441837, guid: 7d05afec765a37c51a30bb8b8c501b38, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Moron 3
-    Data: {fileID: 478686031373700286, guid: 517e0f903b1298e60bc29ac228329c07, type: 2}
+    Data: {fileID: 1160516266488874160, guid: 517e0f903b1298e60bc29ac228329c07, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}

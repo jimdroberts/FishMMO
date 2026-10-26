@@ -205,6 +205,19 @@ namespace FishMMO.Shared.WorldDesign
 		public BiomeLandformZones LandformZones;
 
 		/// <summary>
+		/// The scene's prevailing wind, the moon's local east and the way to the equator, in scene axes (2026-10-26, phase SCATTER-MODES):
+		/// what a rule's wind, plasma and sunward modes (PrefabSpawnRule.scatterMode) read. Default (all zero): those modes turn and lean
+		/// nothing and a lee has no wind (only an anchored rule's floor grows).
+		/// </summary>
+		public BiomeScatterCompass Compass;
+
+		/// <summary>
+		/// The scene's points of interest (centre, footprint radius, kind): what a NearSite mode reads (SCATTER-MODES). Null: none, so a
+		/// NearSite rule grows only its floor.
+		/// </summary>
+		public System.Collections.Generic.IReadOnlyList<BiomeScatterSite> Sites;
+
+		/// <summary>
 		/// True where nothing may be scattered at a world position (x, z): a point of interest's footprint
 		/// (<see cref="PointOfInterestStage.Excludes"/>). Null for nowhere. Called from the scatter's workers, so it must
 		/// be safe to call from several threads.

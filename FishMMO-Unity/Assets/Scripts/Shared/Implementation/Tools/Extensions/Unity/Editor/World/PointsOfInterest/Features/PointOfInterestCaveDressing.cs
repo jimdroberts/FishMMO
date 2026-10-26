@@ -576,7 +576,7 @@ namespace FishMMO.Shared.WorldDesign
 						BiomeCaveCrystals.TryPick(set.Crystals, BiomeCaveCrystals.NeedsRoll(set.Crystals) ? crystalPick.NextFloat() : 0f, out BiomeCaveCrystalKind kind);
 						CaveMineral mineral = ProceduralArtCatalogue.CaveMineralOf(kind);
 						if (WallFoot(p, dir, Mathf.Max(chamber.Radii.x, chamber.Radii.z) + 2f, out Vector3 depositFoot, chamber)
-							&& FloorPiece(depositFoot - dir * 0.5f, () => Mineral(kind), 1f, rng.Range(0.8f, 1.6f), true, -dir, out Vector3 laid) && mineral.Lit)
+							&& FloorPiece(depositFoot - dir * 0.5f, () => Mineral(kind, BiomeCaveCrystals.LookOf(set.Crystals, kind)), 1f, rng.Range(0.8f, 1.6f), true, -dir, out Vector3 laid) && mineral.Lit)
 						{
 							Glow(laid + Vector3.up * 0.8f, reach, mineral.LightHue >= 0 ? mineral.LightHue : set.Hue, mineral.Flickers);
 						}
@@ -1330,16 +1330,17 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// A cave crystal's prefab (CaveArt.MineralPrefab): its variant drawn first as a formation's is, so selenite (gypsum's
-			/// Crystal formation) is laid from the very same draws as before 2026-10-16.
+			/// Crystal formation) is laid from the very same draws as before 2026-10-16; in the biome's own look of the kind where it
+			/// grows one (2026-10-26).
 			/// </summary>
-			private GameObject Mineral(BiomeCaveCrystalKind kind)
+			private GameObject Mineral(BiomeCaveCrystalKind kind, byte look = 0)
 			{
 				int variant = rng.Range(0, RockTypes.VariantCount);
-				GameObject prefab = CaveArt.MineralPrefab(kind, variant);
+				GameObject prefab = CaveArt.MineralPrefab(kind, variant, look);
 				if (prefab == null)
 				{
 					CaveMineral mineral = ProceduralArtCatalogue.CaveMineralOf(kind);
-					Missing.Add(mineral.Formation ? $"{mineral.FormationRock} {mineral.FormationShape}" : $"cave crystal {kind}");
+					Missing.Add(look == 0 && mineral.Formation ? $"{mineral.FormationRock} {mineral.FormationShape}" : $"cave crystal {kind}" + (look == 0 ? "" : "#" + look));
 				}
 				return prefab;
 			}

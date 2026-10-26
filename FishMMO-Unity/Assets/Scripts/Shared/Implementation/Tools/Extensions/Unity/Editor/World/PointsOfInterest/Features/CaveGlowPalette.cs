@@ -16,6 +16,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public bool Minerals;
 		public BiomeCaveCrystalKind Mineral, MineralAccent;
+		/// <summary>The looks the biome grows them in (<see cref="BiomeCaveCrystal.Look"/>, 2026-10-26; 0 the kind's own).</summary>
+		public byte MineralLook, MineralAccentLook;
 		/// <summary>
 		/// How much of the floors' glow is luminous fungus against crystal (1 the dressing's own share) and how often glow-worms hang
 		/// (1 its own chance): the cave biome's glow (BiomeTemplate.CaveGlows, 2026-10-25, I2n).
@@ -100,6 +102,8 @@ namespace FishMMO.Shared.WorldDesign
 					var pick = new DeterministicRNG(unchecked(seed * 0x4C1F + 0x2B95));
 					BiomeCaveCrystals.TryPick(grown, pick.NextFloat(), out p.Mineral, glowingOnly: true);
 					BiomeCaveCrystals.TryPick(grown, pick.NextFloat(), out p.MineralAccent, glowingOnly: true);
+					p.MineralLook = BiomeCaveCrystals.LookOf(grown, p.Mineral);
+					p.MineralAccentLook = BiomeCaveCrystals.LookOf(grown, p.MineralAccent);
 					p.Minerals = true;
 					p.Crystal = CrystalHueOf(p.Mineral, p.Crystal);
 					p.CrystalAccent = CrystalHueOf(p.MineralAccent, p.CrystalAccent);

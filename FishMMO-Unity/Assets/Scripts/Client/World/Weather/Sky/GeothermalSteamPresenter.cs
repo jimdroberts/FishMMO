@@ -4,6 +4,7 @@ using UnityEngine.Rendering;
 using FishMMO.Shared;
 using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
+using FishMMO.Shared.Biomes;
 
 namespace FishMMO.Client
 {
@@ -68,6 +69,13 @@ namespace FishMMO.Client
 
 		private const int SteamPopulation = 4;
 		private const int WaterPopulation = 5;
+		/// <summary>The plume shader's airless fountain (grains on ballistic arcs) and its frost collar (flakes lying round a lip).</summary>
+		private const int FountainPopulation = 3;
+		private const int CollarPopulation = 6;
+		/// <summary>An airless or thin-aired fume jet's frost collar (decision 84: SO₂ frost; water frost round an ice moon's jets).</summary>
+		public static readonly Color FrostWhite = new Color(0.95f, 0.96f, 0.97f, 1f);
+		/// <summary>A jet's cone, rad: a fissure's narrow jet; a fumarole's wider fume.</summary>
+		private const float JetCone = 0.14f, FumeCone = 0.22f;
 
 		private static readonly int VentId = Shader.PropertyToID("_PlumeVent");
 		private static readonly int FormId = Shader.PropertyToID("_PlumeForm");
@@ -205,16 +213,21 @@ namespace FishMMO.Client
 				return;
 			}
 			PlanetAir planet = context.Sample.Planet;
-			// Steam is buoyant in air and seen by the air it mixes into: with none, nothing hangs.
-			if (!VolcanicPlume.CanRise(planet))
-			{
-				return;
-			}
+			// The vents' timing reads the shared clock and the sky the glows read (2026-10-25, I2q-b; VentTiming): the same for every player.
+			sky = VentSky.Of(motionSeconds, GlowSky.Current);
+			map = context.Settings != null ? context.Settings.BiomeMap : null;
+			/* Steam is buoyant in air and seen by the air it mixes into: with none, nothing hangs. But a fumarole and a jet still throw
+			 * their gas out (2026-10-25, I2q-b, decision 84): in no air a short straight jet of grains that falls back, laying a frost
+			 * collar round its lip. */
+			bool rises = VolcanicPlume.CanRise(planet);
 			Vector3 viewer = camera.transform.position;
 			var viewer2 = new Vector2(viewer.x, viewer.z);
 			FindSites(viewer2);
-			FindHearths(viewer);
-			if (found.Count == 0 && hearths.Count == 0)
+			if (rises)
+			{
+				FindHearths(viewer);
+			}
+			if (found.Count == 0 && (!rises || hearths.Count == 0))
 			{
 				return;
 			}
@@ -236,6 +249,7 @@ namespace FishMMO.Client
 				airByBlock.Clear();
 			}
 			float gravity = planet.Gravity > 0f ? planet.Gravity : SurfacePhysics.EarthGravity;
+			thin = VolcanicPlume.IsThin(planet);
 			for (int i = 0; i < found.Count; i++)
 			{
 				Found f = found[i];
@@ -249,10 +263,18 @@ namespace FishMMO.Client
 				{
 					break;
 				}
+				if (!rises)
+				{
+					drawn += DrawAirless(found[i], gravity, camera, material, profile) ? 1 : 0;
+					continue;
+				}
 				DrawSite(found[i], AirAt(found[i], planet), gravity, camera, material, profile);
 				drawn++;
 			}
-			DrawHearths(planet, camera, material, profile);
+			if (rises)
+			{
+				DrawHearths(planet, camera, material, profile);
+			}
 		}
 
 		// ── Hearth smoke (2026-10-11) ────────────────────────────────
@@ -380,8 +402,8 @@ namespace FishMMO.Client
 				if (SurfaceWater.TryGetInlandSurfaceAt(site.Position.x, site.Position.y, out float lake) && lake > ground + 0.3f)
 				{
 					/* Unless the water is the spring's own pool, which the cut dug and flooded under it (2026-10-18, I2q,
-					 * GeothermalVents.PoolDepth): then its steam rises off the pool's surface. */
-					if (site.Kind != GeothermalKind.HotSpring || lake > ground + GeothermalVents.PoolDepth(site) + OwnPoolSlack)
+					 * GeothermalVents.PoolDepth), or a sulphur pond's melt (2026-10-25, I2q-b): then it fumes off the pool's surface. */
+					if (!GeothermalVents.IsPool(site.Kind) || lake > ground + GeothermalVents.PoolDepth(site) + OwnPoolSlack)
 					{
 						continue;
 					}
@@ -443,14 +465,26 @@ namespace FishMMO.Client
 			GeothermalSite site = here.Site;
 			var vent = new Vector3(site.Position.x, here.Ground, site.Position.y);
 			Lengths visible = LengthsOf(site, air);
-			Color steam = site.Substance != null ? site.Substance.Tint : SteamWhite;
+			Color steam = SteamColour(site);
 			float radius = GeothermalVents.SourceRadius(site);
-			float spread = site.Kind == GeothermalKind.HotSpring ? PoolSpread : PlumeSpread;
+			float spread = GeothermalVents.IsPool(site.Kind) ? PoolSpread : PlumeSpread;
+			// How strong it is now on its biome's timing (2026-10-25, I2q-b; 1 for every steady vent, as before).
+			float timed = Timed(site);
+
+			if (thin && (site.Kind == GeothermalKind.Fumarole || site.Kind == GeothermalKind.Jet))
+			{
+				/* Thin air (2026-10-25, I2q-b, decisions 53/84): a fume is a short straight jet that thins out within a few metres (a
+				 * fissure's jet higher), leaning downwind as the thin wind takes it, and its gas freezes round the lip. */
+				float jet = FumeJetMetres(site);
+				DrawSteam(site, vent, jet, radius, 0.5f * PlumeSpread, GeothermalVents.RiseSpeed(site), air.Wind, 0.85f * timed, 0, steam, camera, material, profile, true);
+				DrawCollar(site, vent, camera, material, profile);
+				return;
+			}
 
 			if (site.Kind == GeothermalKind.MudPot)
 			{
 				// A thin steam off the mud, and its plops on the shared clock (GeothermalVents.Plop): every player sees the same one.
-				DrawSteam(site, vent, visible.Quiet, radius, PoolSpread, GeothermalVents.RiseSpeed(site), air.Wind, 0.45f, 0, steam, camera, material, profile, true);
+				DrawSteam(site, vent, visible.Quiet, radius, PoolSpread, GeothermalVents.RiseSpeed(site), air.Wind, 0.45f * timed, 0, steam, camera, material, profile, true);
 				for (int lane = 0; lane < GeothermalVents.PlopLanes; lane++)
 				{
 					MudPlop plop = GeothermalVents.Plop(site, motionSeconds, lane);
@@ -471,8 +505,9 @@ namespace FishMMO.Client
 
 			if (site.Kind != GeothermalKind.Geyser)
 			{
-				float strength = site.Kind == GeothermalKind.HotSpring ? 0.7f : 0.85f;
-				DrawSteam(site, vent, visible.Quiet, radius, spread, GeothermalVents.RiseSpeed(site), air.Wind, strength, 0, steam, camera, material, profile, true);
+				// A sulphur pond fumes thinly off its melt (decision 84); a spring smokes; a vent, a jet or a smoker jets.
+				float strength = site.Kind == GeothermalKind.HotSpring ? 0.7f : site.Kind == GeothermalKind.SulphurPool ? 0.4f : 0.85f;
+				DrawSteam(site, vent, visible.Quiet, radius, spread, GeothermalVents.RiseSpeed(site), air.Wind, strength * timed, 0, steam, camera, material, profile, true);
 				return;
 			}
 
@@ -480,7 +515,7 @@ namespace FishMMO.Client
 			if (moment.Steam <= 0f)
 			{
 				// Waiting: the vent breathes a little steam off the water standing in it.
-				DrawSteam(site, vent, visible.Quiet, radius, PlumeSpread, GeothermalVents.RiseSpeed(site), air.Wind, 0.4f, 0, steam, camera, material, profile, true);
+				DrawSteam(site, vent, visible.Quiet, radius, PlumeSpread, GeothermalVents.RiseSpeed(site), air.Wind, 0.4f * timed, 0, steam, camera, material, profile, true);
 				return;
 			}
 
@@ -507,6 +542,79 @@ namespace FishMMO.Client
 			float length = full * Mathf.Lerp(0.4f, 1f, moment.Steam);
 			DrawSteam(site, vent, length, radius + 0.1f * column, PlumeSpread, rise, air.Wind, moment.Steam, 1, steam, camera, material, profile, false,
 				full / Mathf.Max(0.5f, rise));
+		}
+
+		// ── Vents' timing, airless fumes and frost collars (2026-10-25, phase I2q-b) ──
+
+		private VentSky sky;
+		private SceneBiomeMap map;
+		private bool thin;
+
+		/// <summary>A site's strength now on its biome's timing (VentTiming; 1 for a steady one): the Great Plume never under its floor.</summary>
+		private float Timed(in GeothermalSite site)
+		{
+			if (site.Timing == BiomeVentTiming.Steady)
+			{
+				return 1f;
+			}
+			return VentTiming.Strength(site.Timing, sky, site.Seed, site.Bearing, site.Episodes, GeothermalVents.IsGreatPlume(map, site));
+		}
+
+		/// <summary>What a site fumes: its biome's fume tint, else its steam's own colour, else a cloud's white.</summary>
+		private static Color SteamColour(in GeothermalSite site)
+		{
+			if (site.Fume.a > 0f)
+			{
+				return new Color(site.Fume.r, site.Fume.g, site.Fume.b, 1f);
+			}
+			return site.Substance != null ? site.Substance.Tint : SteamWhite;
+		}
+
+		/// <summary>How high an airless or thin-aired fume reaches, m (decision 84: a fumarole's 3–8 m; decision 53: a fissure's jet 20–60 m).</summary>
+		public static float FumeJetMetres(in GeothermalSite site)
+		{
+			float u = Mathf.Clamp01(site.Size);
+			return site.Kind == GeothermalKind.Jet ? 20f + 40f * u : 3f + 5f * u;
+		}
+
+		/// <summary>
+		/// A fumarole's or a jet's fume with no air (decision 84 (c)): grains on ballistic arcs to <see cref="FumeJetMetres"/>, as strong as
+		/// its timing has it now, and its frost collar. False for any other kind (a pool or a pot puts nothing up into no air).
+		/// </summary>
+		private bool DrawAirless(in Found here, float gravity, Camera camera, Material material, WeatherRenderProfile profile)
+		{
+			GeothermalSite site = here.Site;
+			if (site.Kind != GeothermalKind.Fumarole && site.Kind != GeothermalKind.Jet)
+			{
+				return false;
+			}
+			var vent = new Vector3(site.Position.x, here.Ground, site.Position.y);
+			float timed = Timed(site);
+			DrawCollar(site, vent, camera, material, profile);
+			if (timed <= 0.01f)
+			{
+				return true;
+			}
+			float height = FumeJetMetres(site);
+			float speed = Mathf.Sqrt(2f * gravity * height);
+			float cone = site.Kind == GeothermalKind.Jet ? JetCone : FumeCone;
+			float reach = speed * speed * Mathf.Sin(2f * cone) / Mathf.Max(0.01f, gravity) + 1f;
+			float puff = 0.25f + 0.02f * height;
+			var bounds = new Bounds(vent + Vector3.up * (0.5f * height), new Vector3(2f * reach + 2f * puff, height + 2f * puff, 2f * reach + 2f * puff));
+			Color tint = SteamColour(site);
+			Draw(material, profile, camera, bounds, vent, FountainPopulation, Mathf.Clamp(0.15f + 0.3f * timed, 0.06f, 0.6f), 0.3f * timed,
+				new Vector4(puff, 0f, 0f, 0f), Vector4.zero, Vector4.zero, new Vector4(speed, gravity, cone, 0.3f), new Color(tint.r, tint.g, tint.b, 0f), Vector4.zero);
+			return true;
+		}
+
+		/// <summary>The frost collar round a fume's lip (decision 84 (c)): flakes lying flat a ring out from its mouth.</summary>
+		private void DrawCollar(in GeothermalSite site, Vector3 vent, Camera camera, Material material, WeatherRenderProfile profile)
+		{
+			float inner = GeothermalVents.SourceRadius(site);
+			float outer = inner + 1.5f + 2f * Mathf.Clamp01(site.Size);
+			var bounds = new Bounds(vent, new Vector3(2f * outer + 1f, 1f, 2f * outer + 1f));
+			Draw(material, profile, camera, bounds, vent, CollarPopulation, 0.25f, 0.65f, new Vector4(inner, outer, 0.35f, 0f), Vector4.zero, Vector4.zero, Vector4.zero,
+				new Color(FrostWhite.r, FrostWhite.g, FrostWhite.b, 0f), Vector4.zero);
 		}
 
 		/// <summary>

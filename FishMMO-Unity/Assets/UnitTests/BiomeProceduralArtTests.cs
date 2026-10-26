@@ -206,22 +206,31 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void Rocks_AreClosedOutwardFacingDeterministic_AndWithinBudget()
 		{
-			foreach (RockShape shape in ProceduralArtCatalogue.BoulderShapes)
+			// Every stone material's own boulders (StoneMeshes, decision 6 of the biome suite), which replaced the shared RockMeshes
+			// shapes; rewritten for decision 22 (2026-10-26, I6f) to prove each closed: every welded edge used once each way.
+			int[] levels = ProceduralArtCatalogue.BoulderResolution;
+			foreach (RockMaterialSpec material in ProceduralArtCatalogue.AllRockMaterials)
 			{
-				for (int lod = 0; lod < ProceduralArtCatalogue.BoulderResolution.Length; lod++)
+				StoneSet set = StoneStyles.For(material.Name);
+				foreach (RockShape slot in ProceduralArtCatalogue.BoulderShapes)
 				{
-					RockShape s = shape;
-					int res = ProceduralArtCatalogue.BoulderResolution[lod];
-					MeshBuilder rock = RockMeshes.Build(in s, res, Seed);
-					List<string> problems = rock.Validate(true);
-					Assert.That(problems, Is.Empty, $"{shape.Name} LOD{lod}: {string.Join("; ", problems)}");
-					Assert.That(rock.TriangleCount, Is.EqualTo(6 * 2 * res * res));
-					Assert.That(rock.TriangleCount, Is.LessThanOrEqualTo(6000));
-					AssertSame(rock, RockMeshes.Build(in s, res, Seed), shape.Name);
-					// Bedded in: some of it below the pivot, most of it above.
-					Bounds b = rock.Bounds;
-					Assert.That(b.min.y, Is.LessThan(0f), $"{shape.Name} floats");
-					Assert.That(b.max.y, Is.GreaterThan(-b.min.y), $"{shape.Name} is mostly buried");
+					StoneShape s = set.Boulder(slot.Name);
+					for (int lod = 0; lod < levels.Length; lod++)
+					{
+						string what = $"{material.Name} {slot.Name} LOD{lod}";
+						int res = levels[lod];
+						MeshBuilder rock = StoneMeshes.Build(in s, res, Seed);
+						List<string> problems = rock.Validate(true);
+						Assert.That(problems, Is.Empty, $"{what}: {string.Join("; ", problems)}");
+						Assert.That(WorldDesign.RockVariantTests.ClosureProblem(rock), Is.Null, what);
+						Assert.That(rock.TriangleCount, Is.EqualTo(StoneMeshes.TrianglesAt(res)), what);
+						Assert.That(rock.TriangleCount, Is.LessThanOrEqualTo(6000), what);
+						AssertSame(rock, StoneMeshes.Build(in s, res, Seed), what);
+						// Bedded in: some of it below the pivot, most of it above.
+						Bounds b = rock.Bounds;
+						Assert.That(b.min.y, Is.LessThan(0f), $"{what} floats");
+						Assert.That(b.max.y, Is.GreaterThan(-b.min.y), $"{what} is mostly buried");
+					}
 				}
 			}
 		}

@@ -237,12 +237,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c4e5a1102aa0390f5ae33ec5318dae23
-    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Ithaewyn 1.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Server_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c9a33a64870ade470a077bafb3cd53fc
     m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Galris 1.asset
     m_ReadOnly: 0

@@ -75,6 +75,7 @@ namespace FishMMO.Shared.WorldDesign
 			WriteCliffRocks(c);
 			yield return "Cliff sections";
 			WriteCliffSections(c);
+			ReportRockOrphans(c);
 		}
 
 		// ── Surfaces ──────────────────────────────────────────────────
@@ -123,7 +124,7 @@ namespace FishMMO.Shared.WorldDesign
 					continue;
 				}
 				// Moss as the stone allows (MossAmounts); the scene's dampness decides how much of it grows.
-				float moss = MossAmounts.ForRockType(type.Name);
+				float moss = RegionalRocks.MossAmount(type.Name) ?? MossAmounts.ForRockType(type.Name);
 				WriteMaterial(c, ProceduralArtCatalogue.RockMaterial(type.Name), rock, m => RockLit(m, albedo, normal, mask, 1f, moss));
 			}
 			foreach (IceMaterialProposal p in IceSurfaces.Materials)
@@ -221,12 +222,51 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				WriteProp(c, ProceduralArtCatalogue.BoulderPrefab(stone.Name, slot.Name), meshes, material);
 			}
-			string rocksName = ProceduralArtCatalogue.SmallRocksMesh(stone.Name);
-			string pebblesName = ProceduralArtCatalogue.PebblesMesh(stone.Name);
-			Mesh rocks = WriteOrLoadMesh(c, ShouldWrite(c, ProceduralArtCatalogue.MeshPath(rocksName)) ? StoneMeshes.BuildGroup(set.Rocks, c.Seed) : null, rocksName, true);
-			Mesh pebbles = WriteOrLoadMesh(c, ShouldWrite(c, ProceduralArtCatalogue.MeshPath(pebblesName)) ? StoneMeshes.BuildGroup(set.Pebbles, c.Seed) : null, pebblesName, true);
-			WritePrefab(c, ProceduralArtCatalogue.SmallRocksPrefab(stone.Name), root => AddRenderer(root, rocks, new[] { material }, ShadowCastingMode.Off));
-			WritePrefab(c, ProceduralArtCatalogue.PebblesPrefab(stone.Name), root => AddRenderer(root, pebbles, new[] { material }, ShadowCastingMode.Off));
+			// The small rocks and pebbles in every variant the stone cycles (RockVariantCounts.StoneDetails, 2026-10-26): variant 0 is
+			// the mesh it always had, the rest bare-mesh children the GPU detail scatter picks one of per instance.
+			int variants = RockVariantCounts.StoneDetailsOf(stone.Name);
+			var rocks = new Mesh[variants];
+			var pebbles = new Mesh[variants];
+			for (int v = 0; v < variants; v++)
+			{
+				string rocksName = ProceduralArtCatalogue.SmallRocksVariantMesh(stone.Name, v);
+				string pebblesName = ProceduralArtCatalogue.PebblesVariantMesh(stone.Name, v);
+				rocks[v] = WriteOrLoadMesh(c, ShouldWrite(c, ProceduralArtCatalogue.MeshPath(rocksName)) ? StoneMeshes.BuildGroup(StoneStyles.DetailVariant(set.Rocks, v), c.Seed) : null, rocksName, true);
+				pebbles[v] = WriteOrLoadMesh(c, ShouldWrite(c, ProceduralArtCatalogue.MeshPath(pebblesName)) ? StoneMeshes.BuildGroup(StoneStyles.DetailVariant(set.Pebbles, v), c.Seed) : null, pebblesName, true);
+			}
+			WritePrefab(c, ProceduralArtCatalogue.SmallRocksPrefab(stone.Name), root => AddStoneDetail(root, rocks, material));
+			WritePrefab(c, ProceduralArtCatalogue.PebblesPrefab(stone.Name), root => AddStoneDetail(root, pebbles, material));
+		}
+
+		/// <summary>
+		/// A stone detail prefab: the root drawing variant 0 casting no shadow, as before, and each further variant on a bare
+		/// MeshFilter child (<see cref="ProceduralArtCatalogue.DetailVariantChild"/>), which only the GPU detail scatter reads.
+		/// </summary>
+		private static void AddStoneDetail(GameObject root, Mesh[] variants, Material material)
+		{
+			AddRenderer(root, variants[0], new[] { material }, ShadowCastingMode.Off);
+			for (int v = 1; v < variants.Length; v++)
+			{
+				GameObject child = Child(root, ProceduralArtCatalogue.DetailVariantChild(v));
+				Ensure<MeshFilter>(child).sharedMesh = variants[v];
+			}
+		}
+
+		// ── Orphans: generated rock and stone files nothing makes any more ─
+
+		/// <summary>
+		/// Lists (never deletes) the generated rock, stone, ice and cliff files on disk that no family makes any more
+		/// (<see cref="ProceduralArtOrphans"/>: the shared boulders, small rocks and pebbles I6b replaced, a variant a lowered
+		/// count drops…), so the owner can remove them by hand. Logged once a run, after the cliff sections.
+		/// </summary>
+		private static void ReportRockOrphans(Context c)
+		{
+			List<string> orphans = ProceduralArtOrphans.RockOrphansOnDisk();
+			if (orphans.Count == 0)
+			{
+				return;
+			}
+			Debug.LogWarning($"[Biome art] {orphans.Count} generated rock/stone file(s) are no longer made by any family (nothing was deleted; delete them by hand if wanted):\n" + string.Join("\n", orphans));
 		}
 
 		// ── Props: formations, ice boulders, seracs ───────────────────
@@ -235,6 +275,7 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			Material material = MaterialOrNull(c, RockArtNames.RockTypeMaterial(in type));
 			int[] res = ProceduralArtCatalogue.FormationResolution;
+			int variants = RockVariantCounts.Of(type.Name);
 			foreach (FormationShape s in type.Shapes)
 			{
 				FormationShape shape = s;
@@ -245,9 +286,9 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					bySubmesh = Array.ConvertAll(RockArtNames.FormationMaterials(in type, in shape), name => MaterialOrNull(c, name));
 				}
-				// The due levels of every variant on all cores; a current one is loaded, not rebuilt.
+				// The due levels of every variant (the rock's own count, RockVariantCounts) on all cores; a current one is loaded, not rebuilt.
 				var due = new List<(int variant, int lod)>();
-				for (int v = 0; v < RockTypes.VariantCount; v++)
+				for (int v = 0; v < variants; v++)
 				{
 					for (int lod = 0; lod < res.Length; lod++)
 					{
@@ -260,7 +301,7 @@ namespace FishMMO.Shared.WorldDesign
 				RockType rockType = type;
 				int seed = c.Seed;
 				MeshBuilder[] built = BuildAll(due, d => RockFormations.Build(in rockType, in shape, res[d.lod], d.variant, seed));
-				for (int v = 0; v < RockTypes.VariantCount; v++)
+				for (int v = 0; v < variants; v++)
 				{
 					var meshes = new Mesh[res.Length];
 					for (int lod = 0; lod < res.Length; lod++)

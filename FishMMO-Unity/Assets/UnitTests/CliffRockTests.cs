@@ -520,7 +520,7 @@ namespace FishMMO.UnitTests
 				Assert.That(CliffRocks.IsCliffRock(t.Name), Is.EqualTo(!t.FormationsOnly), t.Name);
 				Assert.That(types.Contains(t.Name), Is.EqualTo(!t.FormationsOnly), t.Name);
 			}
-			Assert.That(RockTypes.Crust.Length, Is.EqualTo(16));
+			Assert.That(RockTypes.Crust.Length, Is.EqualTo(16 + RegionalRocks.Crust.Length), "the first sixteen, then each biome's own");
 			Assert.That(RockTypes.Crust.All(t => !t.FormationsOnly), Is.True);
 			Assert.That(RockTypes.FormationRocks.All(t => t.FormationsOnly), Is.True);
 			Assert.That(CliffRocks.RockTypeFor(Ground.Sulphur, null), Is.Null, "a sulphur family's cliff stays terrain, not a sulphur cliff");

@@ -90,5 +90,15 @@ namespace FishMMO.Shared
 		Windmill, Watermill, LumberMill,
 		// The sea floor's own sites (2026-10-25).
 		SunkenShrine, SeaMonsterDen, SeaCrystalFormation, SunkenMonument, SunkenStatue,
+		// Adrift on the open sea (2026-10-25).
+		AdriftDerelict, WhaleFall, BarnacleLog, Longline, WhaleTow,
+		// The biome rounds' own kinds (2026-10-25).
+		TrenchEdge, SeaCavern,
+		CinderCone, Kipuka, HoluaSlide, LavaFall,
+		AncientForge, PhoenixNest, LavaCaveTemple,
+		MireGate, SunkenPlaza, MarshWatchtower, ShatteredBridge, FallenColossus, SealedVault, DrownedForest,
+		FrogShrine, FloatingIsland, FowlersHide, EelWeir, BrickKiln,
+		BlightedCrater, Chapel, HolyWell, PlagueVillage, DeadForest, WarEngineGraveyard,
+		SunkenWhaleFall, SeaHall,
 	}
 }

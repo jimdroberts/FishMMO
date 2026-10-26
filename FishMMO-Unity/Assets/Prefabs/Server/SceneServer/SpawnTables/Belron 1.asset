@@ -16,7 +16,7 @@ MonoBehaviour:
   ScenePath: Assets/Scenes/WorldScene/Belron/Belron 1.unity
   Spawners:
   - Name: 'Volor Black Glass Emberglass Cluster Spawner 1 [401713be]'
-    Position: {x: 28.7239, y: 419.29437, z: 245.28426}
+    Position: {x: 28.7239, y: 419.28094, z: 245.28426}
     Rotation: {x: -0, y: 0.62061757, z: -0, w: -0.7841134}
     OrConditions: []
     TrueConditions: []
@@ -42,7 +42,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Volor Black Glass Emberglass Cluster Spawner 2 [401713be]'
-    Position: {x: -159.59544, y: 426.20764, z: 342.08414}
+    Position: {x: -159.59544, y: 426.11365, z: 342.08414}
     Rotation: {x: -0, y: 0.99646944, z: -0, w: -0.083956644}
     OrConditions: []
     TrueConditions: []
@@ -68,7 +68,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Volor Black Glass Emberglass Cluster Spawner 3 [401713be]'
-    Position: {x: 93.256226, y: 432.9972, z: 337.95605}
+    Position: {x: 93.256226, y: 432.2006, z: 337.95605}
     Rotation: {x: -0, y: 0.44953898, z: -0, w: -0.8932608}
     OrConditions: []
     TrueConditions: []
@@ -120,7 +120,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Volor Black Glass Emberglass Cluster Spawner 5 [401713be]'
-    Position: {x: -193.27165, y: 438.2978, z: 408.86658}
+    Position: {x: -193.27165, y: 438.29266, z: 408.86658}
     Rotation: {x: -0, y: 0.81298923, z: -0, w: 0.5822787}
     OrConditions: []
     TrueConditions: []
@@ -145,9 +145,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'The Barren Hideout MonsterPack Spawner [2c009855]'
-    Position: {x: -83.798035, y: 397.74954, z: 216.60228}
-    Rotation: {x: -0, y: 0.87881714, z: -0, w: -0.47715873}
+  - Name: 'The Ash-covered Moloaltahroat MonsterPack Spawner [72d8474e]'
+    Position: {x: 217.08488, y: 504.93976, z: 262.68845}
+    Rotation: {x: -0, y: 0.84804803, z: -0, w: -0.5299193}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -162,57 +162,7 @@ MonoBehaviour:
     RespawnCheckIntervalMaximum: 6
     RandomSpawnPosition: 1
     SphereRadius: 0.5
-    BoundingBoxSize: {x: 19.89, y: 8, z: 19.89}
-    Spawnables: []
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Quinius''s Mausoleum MonsterPack Spawner [1a4e2ecd]'
-    Position: {x: 261.13303, y: 592.2355, z: -183.41606}
-    Rotation: {x: -0, y: 0.47715873, z: -0, w: -0.87881714}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 5
-    MaxSpawnCount: 5
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 1
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 14.24, y: 8, z: 14.24}
-    Spawnables: []
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Quinius''s Mausoleum Elite Spawner [1a4e2ecd]'
-    Position: {x: 263.25537, y: 592.2355, z: -181.62862}
-    Rotation: {x: -0, y: 0.47715873, z: -0, w: -0.87881714}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 1
-    MaxSpawnCount: 1
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 1
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 14.24, y: 8, z: 14.24}
+    BoundingBoxSize: {x: 16.13, y: 8, z: 16.13}
     Spawnables: []
     Pack:
       Enabled: 0

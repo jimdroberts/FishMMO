@@ -40,6 +40,8 @@ namespace FishMMO.Water
 		{
 			public readonly Dictionary<int, float> Along = new Dictionary<int, float>();
 			public readonly Dictionary<int, float> Under = new Dictionary<int, float>();
+			/// <summary>The biome the body takes its look from whatever its shores (SceneHydrology's LookBiome: a cave's water its interior's), 0 none.</summary>
+			public int Own;
 		}
 
 		private readonly List<(MeshRenderer Renderer, int Lake)> lakeRenderers = new List<(MeshRenderer, int)>();
@@ -88,13 +90,13 @@ namespace FishMMO.Water
 				{
 					continue;
 				}
-				var shore = new Shore();
+				var shore = new Shore { Own = lake.LookBiome };
 				BiomeWaterLooks.LakeShore(lake, IdAt, mapCell, shore.Along, shore.Under);
 				lakeShores[lake.Id] = shore;
 			}
 			foreach (SceneHydrology.River river in riversById.Values)
 			{
-				var shore = new Shore();
+				var shore = new Shore { Own = river.LookBiome };
 				BiomeWaterLooks.RiverShore(river, IdAt, mapCell, shore.Along, shore.Under);
 				riverShores[river.Id] = shore;
 			}
@@ -144,6 +146,11 @@ namespace FishMMO.Water
 			if (shore == null)
 			{
 				return fallback;
+			}
+			// A body given its own biome's look (2026-10-25, I2n-c: a cave's water, its interior's) takes it, its shores unread.
+			if (shore.Own != 0 && BiomeRegistry.TryGetByID(shore.Own, out BiomeTemplate own) && own != null)
+			{
+				return BiomeWaterLooks.Of(own) ?? fallback;
 			}
 			int id = BiomeWaterLooks.Choose(shore.Along, shore.Under, RoleOf);
 			return id != 0 && BiomeRegistry.TryGetByID(id, out BiomeTemplate biome) ? BiomeWaterLooks.Of(biome) ?? fallback : fallback;
@@ -409,7 +416,8 @@ namespace FishMMO.Water
 			{
 				int at = slot * LookVectors;
 				lookVectors[at] = C(look.Shallow, look.Turbidity);
-				lookVectors[at + 1] = C(look.Deep, 0f);
+				// Deep's w carries the melt (2026-10-25, I2q-b; FishInlandWater.hlsl InlandLookAt).
+				lookVectors[at + 1] = C(look.Deep, look.Melt ? 1f : 0f);
 				lookVectors[at + 2] = new Vector4(look.Absorption.x, look.Absorption.y, look.Absorption.z, 0f);
 				lookVectors[at + 3] = C(look.Silt, 0f);
 				lookVectors[at + 4] = C(look.Foam, 0f);

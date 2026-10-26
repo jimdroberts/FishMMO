@@ -75,7 +75,8 @@ namespace FishMMO.Shared.WorldDesign
 	/// world frozen through to the shore tier, a few metres above it, and the shelf (tier 3, weight
 	/// 1.05, needs <see cref="BiomeWorldRequirement.IceWorld"/>) outweighs Rocky Coast there — all of
 	/// Galris's raised shelf, and the 1–2% of natural shore on every ice moon; none of any world with
-	/// open water.
+	/// open water by the climate pick. On an open world it reaches only through the Ice Shelf water role:
+	/// the floating shelf and fast ice laid off a cold ice-sheet coast (<see cref="IceShelfReach"/>).
 	/// </para>
 	/// <para>
 	/// <b>A frozen world with air is not an ice moon's surface.</b> Galris (210 K, a standard

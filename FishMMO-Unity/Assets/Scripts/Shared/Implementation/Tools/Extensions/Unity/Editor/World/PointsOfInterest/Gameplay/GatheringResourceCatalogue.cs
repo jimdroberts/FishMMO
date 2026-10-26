@@ -17,6 +17,8 @@ namespace FishMMO.Shared.WorldDesign
 		Wood = 4,
 		/// <summary>What grows or lies on the sea floor (and a lake's): gathered round sunken sites.</summary>
 		Marine = 5,
+		/// <summary>Bones, antler and ivory from old kills and middens (decision 25, 2026-10-25): no site kind gathers them yet (FamiliesFor) and no row stocks them.</summary>
+		Bone = 6,
 	}
 
 	/// <summary>

@@ -16,7 +16,9 @@ namespace FishMMO.Shared.WorldDesign
 				C(Ground.Basalt), Ground.Sulphur, Ground.Sulphur)
 				.Look(BiomeLookClass.Alien)
 				.Wildlife(BiomeHabitat.Barren)
-				.Moat(BiomeMoatWater.Wet);
+				.Moat(BiomeMoatWater.Wet)
+				// Acid fog off the cloud base (2026-10-25, I2q-b, decision 85), replacing the sulphur dust (that is the Sulphur Flats').
+				.Emits("Acid Fog", 0.12f);
 		}
 	}
 }

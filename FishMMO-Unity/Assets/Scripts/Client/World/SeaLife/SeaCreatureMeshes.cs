@@ -28,6 +28,34 @@ namespace FishMMO.Client
 					break;
 				case SeaCreatureShape.Shark:
 					Fish(b, back, belly, height: 0.17f, width: 0.15f, fork: 0.6f, dorsal: 0.55f, dorsalFrom: 0.32f, dorsalTo: 0.5f, pointed: true, flukes: false, tail: 1.4f);
+					if (kind.HammerHead)
+					{
+						HammerHead(b, back);
+					}
+					break;
+				case SeaCreatureShape.Mola:
+					Mola(b, back, belly);
+					break;
+				case SeaCreatureShape.Billfish:
+					Fish(b, back, belly, height: 0.13f, width: 0.09f, fork: 0.9f, dorsal: 0.9f, dorsalFrom: 0.15f, dorsalTo: 0.6f, pointed: true, flukes: false, tail: 1.6f);
+					Limb(b, new[] { new Vector3(0f, 0.004f, 0.47f), new Vector3(0f, 0f, 0.62f), new Vector3(0f, -0.002f, 0.8f) }, 0.014f, back, 0);
+					break;
+				case SeaCreatureShape.Nautilus:
+					Nautilus(b, back, belly);
+					break;
+				case SeaCreatureShape.Dugong:
+					Fish(b, back, belly, height: 0.22f, width: 0.26f, fork: 0.3f, dorsal: 0f, dorsalFrom: 0.5f, dorsalTo: 0.55f, pointed: false, flukes: true, tail: 1.3f);
+					break;
+				case SeaCreatureShape.Sawfish:
+					Fish(b, back, belly, height: 0.11f, width: 0.2f, fork: 0.5f, dorsal: 0.35f, dorsalFrom: 0.35f, dorsalTo: 0.48f, pointed: true, flukes: false, tail: 1.2f);
+					Saw(b, Color.Lerp(back, belly, 0.4f));
+					break;
+				case SeaCreatureShape.Mudskipper:
+					Fish(b, back, belly, height: 0.2f, width: 0.15f, fork: 0.05f, dorsal: 0.6f, dorsalFrom: 0.22f, dorsalTo: 0.45f, pointed: false, flukes: false, tail: 0.9f);
+					for (int s = -1; s <= 1; s += 2)
+					{
+						Ellipsoid(b, new Vector3(s * 0.035f, 0.09f, 0.38f), new Vector3(0.03f, 0.03f, 0.03f), 0.03f, 4, 6, (lat, lon) => new Color(0.03f, 0.03f, 0.035f), Vector2.zero);
+					}
 					break;
 				case SeaCreatureShape.Whale:
 					Fish(b, back, belly, height: 0.19f, width: 0.2f, fork: 0.35f, dorsal: 0.12f, dorsalFrom: 0.62f, dorsalTo: 0.72f, pointed: false, flukes: true, tail: 1.5f);
@@ -58,6 +86,78 @@ namespace FishMMO.Client
 			mesh.bounds = bounds;
 			mesh.UploadMeshData(true);
 			return mesh;
+		}
+
+		// ── The open sea's shapes (2026-10-25, I2p) ───────────────────
+
+		/// <summary>A hammerhead's cephalofoil: a wide flat blade across the nose, its eyes at the tips.</summary>
+		private static void HammerHead(Builder b, Color back)
+		{
+			Ellipsoid(b, new Vector3(0f, 0.005f, 0.44f), new Vector3(0.17f, 0.02f, 0.045f), 0.016f, 4, 12, (lat, lon) => back * (lat > 0f ? 1f : 1.15f), Vector2.zero);
+			for (int s = -1; s <= 1; s += 2)
+			{
+				Ellipsoid(b, new Vector3(s * 0.168f, 0.008f, 0.44f), new Vector3(0.012f, 0.012f, 0.012f), 0.012f, 3, 5, (lat, lon) => new Color(0.02f, 0.02f, 0.025f), Vector2.zero);
+			}
+		}
+
+		/// <summary>
+		/// An ocean sunfish: the fish builder's body made a tall disc cut short behind (its clavus a low frill), with a tall dorsal
+		/// fin and a matching anal fin beneath, both far back, which the shader (mode 7) sculls side to side against each other.
+		/// </summary>
+		private static void Mola(Builder b, Color back, Color belly)
+		{
+			Fish(b, back, belly, height: 0.85f, width: 0.14f, fork: 0f, dorsal: 0.6f, dorsalFrom: 0.55f, dorsalTo: 0.7f, pointed: false, flukes: false, tail: 0.4f);
+			Color fin = Color.Lerp(back, belly, 0.3f);
+			int a0 = b.Add(new Vector3(0f, -0.27f, -0.05f), belly, new Vector2(0.55f, 0f), Vector2.zero);
+			int a1 = b.Add(new Vector3(0f, -0.25f, -0.2f), belly, new Vector2(0.7f, 0f), Vector2.zero);
+			int a2 = b.Add(new Vector3(0f, -0.8f, -0.17f), fin, new Vector2(0.67f, 0f), Vector2.zero);
+			b.Tri(a0, a1, a2);
+		}
+
+		/// <summary>
+		/// A chambered nautilus: a coiled shell, cream barred with flame-brown over its top, its hood and ring of fine tentacles out in
+		/// front (appendage 1, which the shader's mode 8 trails behind each jet), a dark eye on either side.
+		/// </summary>
+		private static void Nautilus(Builder b, Color back, Color belly)
+		{
+			var cream = new Color(0.86f, 0.78f, 0.64f);
+			Ellipsoid(b, new Vector3(0f, 0.05f, -0.05f), new Vector3(0.17f, 0.4f, 0.42f), 0.4f, 10, 14,
+				(lat, lon) => lat > -0.2f && Mathf.Sin(lon * 7f + lat * 3f) > 0.25f ? back : Color.Lerp(cream, belly, 0.3f), Vector2.zero);
+			for (int i = 0; i < 18; i++)
+			{
+				float a = i / 18f * Mathf.PI * 2f;
+				var root = new Vector3(Mathf.Cos(a) * 0.07f, -0.08f + Mathf.Sin(a) * 0.06f, 0.33f);
+				var tip = root + new Vector3(Mathf.Cos(a) * 0.05f, -0.06f + Mathf.Sin(a) * 0.03f, 0.27f);
+				Limb(b, new[] { root, Vector3.Lerp(root, tip, 0.5f) + Vector3.down * 0.02f, tip }, 0.012f, Color.Lerp(belly, cream, 0.5f), 1);
+			}
+			for (int s = -1; s <= 1; s += 2)
+			{
+				Ellipsoid(b, new Vector3(s * 0.15f, -0.02f, 0.3f), new Vector3(0.025f, 0.025f, 0.025f), 0.025f, 3, 6, (lat, lon) => new Color(0.03f, 0.03f, 0.03f), Vector2.zero);
+			}
+		}
+
+		/// <summary>A sawfish's rostrum: a long flat blade from the nose, toothed along both edges.</summary>
+		private static void Saw(Builder b, Color colour)
+		{
+			const float from = 0.47f, to = 0.8f;
+			int r0 = b.Add(new Vector3(-0.028f, 0f, from), colour, new Vector2(0.5f - from, 0.3f), Vector2.zero);
+			int r1 = b.Add(new Vector3(0.028f, 0f, from), colour, new Vector2(0.5f - from, 0.3f), Vector2.zero);
+			int t0 = b.Add(new Vector3(-0.018f, 0f, to), colour, new Vector2(0.5f - to, 0.2f), Vector2.zero);
+			int t1 = b.Add(new Vector3(0.018f, 0f, to), colour, new Vector2(0.5f - to, 0.2f), Vector2.zero);
+			b.Quad(r0, t0, t1, r1);
+			Color tooth = Color.Lerp(colour, Color.white, 0.5f);
+			for (int i = 0; i < 10; i++)
+			{
+				float z = Mathf.Lerp(from + 0.02f, to - 0.01f, i / 9f);
+				float half = Mathf.Lerp(0.028f, 0.018f, (z - from) / (to - from));
+				for (int s = -1; s <= 1; s += 2)
+				{
+					int p0 = b.Add(new Vector3(s * half, 0f, z - 0.008f), tooth, new Vector2(0.5f - z, 0.3f), Vector2.zero);
+					int p1 = b.Add(new Vector3(s * half, 0f, z + 0.008f), tooth, new Vector2(0.5f - z, 0.3f), Vector2.zero);
+					int p2 = b.Add(new Vector3(s * (half + 0.016f), 0f, z), tooth, new Vector2(0.5f - z, 0.3f), Vector2.zero);
+					b.Tri(p0, p1, p2);
+				}
+			}
 		}
 
 		// ── Eels ──────────────────────────────────────────────────────

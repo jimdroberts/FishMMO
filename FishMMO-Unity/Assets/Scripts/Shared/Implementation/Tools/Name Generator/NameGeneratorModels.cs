@@ -174,6 +174,23 @@ namespace FishMMO.Shared.NameGeneration
 		Windmill, Watermill, LumberMill,
 		// Appended (2026-10-25, phase I2m, decision 36 (b)): the sea floor's own sites, sited only where a biome hosts them.
 		SunkenShrine, SeaMonsterDen, SeaCrystalFormation, SunkenMonument, SunkenStatue,
+		// Appended (2026-10-25, phase I2p, decision 42): the open sea's surface sites, adrift a kilometre and more from any shore.
+		AdriftDerelict, WhaleFall, BarnacleLog, Longline, WhaleTow,
+		// Appended (2026-10-25, phase NEW-POI-KINDS): the kinds the biome rounds named, each sited only where a biome hosts it.
+		// Underwater Canyon (decision 92): the lip of the canyon's drop, a cave mouth in its wall.
+		TrenchEdge, SeaCavern,
+		// Volcanic (decision 93): a black cone, an island of old ground in the flows, a stone sled course, lava over a ledge.
+		CinderCone, Kipuka, HoluaSlide, LavaFall,
+		// Volcanic Temple (decision 95): the smiths' relics, the phoenix's pyre, a sanctuary in a tube mouth.
+		AncientForge, PhoenixNest, LavaCaveTemple,
+		// Swamp Ruins (decision 87) and Swamp Temple (decision 88): the drowned city's gate and square, and the marsh's own sites.
+		MireGate, SunkenPlaza, MarshWatchtower, ShatteredBridge, FallenColossus, SealedVault, DrownedForest,
+		FrogShrine, FloatingIsland, FowlersHide, EelWeir, BrickKiln,
+		// Wasteland (decision 96).
+		BlightedCrater, Chapel, HolyWell, PlagueVillage, DeadForest, WarEngineGraveyard,
+		// Abyssal Plain (its Q4): a whale's carcass on the FLOOR, apart from WhaleFall adrift on the surface; Subsurface Ocean
+		// Vent (decision 83): the hall of the sea under an ice shell, whose cave form phase I2n-b builds.
+		SunkenWhaleFall, SeaHall,
 	}
 
 	/// <summary>Phonology + vocabulary for a biome.</summary>

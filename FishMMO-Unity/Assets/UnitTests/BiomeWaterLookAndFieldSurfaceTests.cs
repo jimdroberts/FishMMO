@@ -33,6 +33,18 @@ namespace FishMMO.UnitTests.WorldDesign
 		private const string AuthoringSource = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/ProceduralArt/BiomeArtAuthoring.cs";
 		private const string FieldsSource = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/Features/PointOfInterestFields.cs";
 
+		// Approved per-biome water overrides. Keep this independent of the spec builder so the
+		// checks catch an unintended edit to either the recipe or the authored template.
+		public static BiomeWaterLook ExpectedAuthoredWater(string name)
+		{
+			if (name == "Sulphur Flats")
+				return new BiomeWaterLook(new Color(0.941f, 0.753f, 0.251f, 1f), new Color(0.627f, 0.251f, 0.055f, 1f),
+					new Vector3(0.9f, 0.5f, 0.1f), 1f, new Color(0.784f, 0.541f, 0.188f, 1f), new Color(0.784f, 0.541f, 0.188f, 1f)) { Hot = true, Melt = true };
+			BiomeWaterLook look = BiomeWaterLooks.Today;
+			look.Hot = name == "Geyser Basin";
+			return look;
+		}
+
 		// ── Defaults: today's look, today's fields ───────────────────
 
 		/// <summary>The look every biome is authored with is the inland water material's, value for value (its stored colours to 1e-6).</summary>
@@ -56,15 +68,15 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		/// <summary>Every biome asset's spec look is today's, exactly (the spec's default; no biome's file gives its own yet).</summary>
 		[Test]
-		public void SpecWaterLook_IsTodays_ForEveryBiomeAsset()
+		public void SpecWaterLook_MatchesApprovedOverrides_ForEveryBiomeAsset()
 		{
 			int count = 0;
-			string today = BiomeWaterLooks.Today.Signature();
+			
 			foreach (string name in BiomeAssetNames())
 			{
 				BiomeArtSpec.Entry entry = BiomeArtSpec.For(name);
 				Assert.That(entry, Is.Not.Null, name);
-				Assert.That(entry.WaterLook().Signature(), Is.EqualTo(today), name);
+				Assert.That(entry.WaterLook().Signature(), Is.EqualTo(ExpectedAuthoredWater(name).Signature()), name);
 				count++;
 			}
 			Assert.That(count, Is.EqualTo(83));
@@ -75,7 +87,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// it and marks it, and any look an asset already holds is today's.
 		/// </summary>
 		[Test]
-		public void TemplateLook_DefaultsToTodays_AndEveryAssetHoldsIt()
+		public void TemplateLook_DefaultsToTodays_AndAssetsHoldTheirAuthoredLook()
 		{
 			string template = CodeOnly(Read(TemplateSource));
 			StringAssert.Contains("private BiomeWaterLook waterLook = BiomeWaterLooks.Today;", template);
@@ -97,8 +109,8 @@ namespace FishMMO.UnitTests.WorldDesign
 				holding++;
 				string body = block.Groups[1].Value;
 				var look = new BiomeWaterLook(Colour(body, "Shallow"), Colour(body, "Deep"), Vector(body, "Absorption"), Float(body, "Turbidity"),
-					Colour(body, "Silt"), Colour(body, "Foam"));
-				Assert.That(look.Approximately(today, 1e-5f), Is.True, $"{Path.GetFileName(path)} holds {look}, not today's");
+					Colour(body, "Silt"), Colour(body, "Foam")) { Hot = Regex.IsMatch(body, @"(?m)^    Hot: 1$"), Melt = Regex.IsMatch(body, @"(?m)^    Melt: 1$") };
+				Assert.That(look.Approximately(ExpectedAuthoredWater(Path.GetFileNameWithoutExtension(path)), 1e-5f), Is.True, $"{Path.GetFileName(path)} holds an unexpected authored look: {look}");
 			}
 			TestContextOut($"{holding} biome asset(s) hold a water look; the rest read the field's default.");
 		}

@@ -1653,6 +1653,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 454f480c2bef5375ab739d4830aa21e4
+    m_Address: Plume Frost
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4558469513a2e19ba9894d28d5da44c9
     m_Address: Scroll of Flame Impact
     m_ReadOnly: 0
@@ -1667,6 +1673,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 45f939c10c3acc4928cd087d115c8965
     m_Address: Graveyard - Earthen (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 461ac71ae5aeab195a2341b1f3f79768
+    m_Address: Vog
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1877,6 +1889,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4e60de15106930416bc8fc6224bb5b32
     m_Address: Statue - Standing
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4e6b944629a11ae9ca4b38a7a61d49ae
+    m_Address: Kiln Haze
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2567,6 +2585,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6d7ebb8f0960ebea3a67383f861cd274
     m_Address: Moron 1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6dbd6abc59eacc07bba85f573e29e55c
+    m_Address: Plume Soot
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3650,6 +3674,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 99d48fbf08b0f2af6acf96f3e8f41177
+    m_Address: Methane Mist
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 99d8d311f09942cbb054e7c27bd03fc9
     m_Address: Gorgon
     m_ReadOnly: 0
@@ -4137,6 +4167,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b0b1af143a1e61007bc915616f7ff90e
     m_Address: Living Coral
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b0bcf7bb3230e672cb041804846dc23d
+    m_Address: Acid Fog
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

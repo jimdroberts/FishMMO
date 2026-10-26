@@ -39,6 +39,11 @@ namespace FishMMO.Shared.WorldDesign
 		/// summer never thaws, so the ice sheet meets this sea (<see cref="IceSheetSurface"/>).
 		/// </summary>
 		public bool CalvingFront;
+		/// <summary>
+		/// True when the ice sheet runs out over this sea as an open shelf and fast ice (<see cref="IceShelfReach"/>): both are
+		/// ground, so the sea the ice is placed on starts at the floe edge and nothing is floated on the shelf or its fast ice.
+		/// </summary>
+		public bool FastIce;
 
 		public bool HasSeaIce => NoIceReason == null && SeaIceConcentration > 0f;
 		public bool HasBergs => NoIceReason == null && BergSupply > 0f && LargestBerg.HasValue;
@@ -57,7 +62,8 @@ namespace FishMMO.Shared.WorldDesign
 				  $"berg supply {BergSupply:0.00}, largest {(LargestBerg.HasValue ? LargestBerg.Value.ToString() : "none")}"
 				: "no calving coast within drift range";
 			return $"air {AirMeanC:0.#} °C (coldest {AirColdestC:0.#}, warmest {AirWarmestC:0.#}), sea {SeaSurfaceC:0.#} °C, " +
-				$"sea ice {SeaIceConcentration:0.00}; {bergs}{(CalvingFront ? ", calving front here" : string.Empty)}";
+				$"sea ice {SeaIceConcentration:0.00}; {bergs}{(CalvingFront ? ", calving front here" : string.Empty)}" +
+				(FastIce ? ", an ice shelf and its fast ice laid as ground (ice floats only beyond the floe edge)" : string.Empty);
 		}
 	}
 
@@ -424,6 +430,8 @@ namespace FishMMO.Shared.WorldDesign
 			// Its own coast calving: the source is here and no month thaws, so the ice sheet reaches this sea.
 			climate.CalvingFront = climate.HasCalvingSource && drift < SourceStepDegrees && climate.AirWarmestC <= 0f
 				&& BiomeTemplateArt.WaterBiome(BiomeWaterRole.IceSheet) != null;
+			// The open shelf (decision 68) is terrain above the sea, so the shore field already keeps every piece off it.
+			climate.FastIce = new SceneAltitude(request).IceShelf != null;
 			return climate;
 		}
 	}

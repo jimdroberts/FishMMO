@@ -16,7 +16,11 @@ namespace FishMMO.Shared.WorldDesign
 				.Accepts(WatersideGeology)
 				.Look(BiomeLookClass.Wetland)
 				.Wildlife(BiomeHabitat.Wetland)
-				.Moat(BiomeMoatWater.Wet);
+				.Moat(BiomeMoatWater.Wet)
+				// 2026-10-25 (decisions 86–88, phase I2n-c): its natural caves and grottos are the Swamp Cave's drowned galleries
+				// inside, where they are cut in a rock the Swamp Cave forms in (its soluble set); elsewhere its own, as before.
+				.CaveInterior(CaveForm.Cave, BiomeCaveInteriors.SwampCave)
+				.CaveInterior(CaveForm.Grotto, BiomeCaveInteriors.SwampCave);
 		}
 	}
 }

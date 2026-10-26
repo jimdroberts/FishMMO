@@ -80,6 +80,13 @@ namespace FishMMO.UnitTests.WorldDesign
 						holders.Add(entry.Biome);
 					}
 				}
+				if (role == BiomeWaterRole.IceShelf)
+				{
+					// Opt-in (decision 68, I2s): no name stands in and no spec biome holds it until the owner chooses the scenes it may change.
+					Assert.That(BiomeTemplateArt.LegacyWaterBiomeName(role), Is.Null);
+					Assert.That(holders, Is.Empty, role.ToString());
+					continue;
+				}
 				Assert.That(holders, Is.EqualTo(new[] { BiomeTemplateArt.LegacyWaterBiomeName(role) }), role.ToString());
 				Assert.That(OldNames[BiomeClimateVariant.Normalize(holders[0])], Is.EqualTo(role));
 			}
@@ -325,9 +332,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(binder, Does.Contain("ScenePathSurfaceBinder.StoneMapOf(scene)"));
 			Assert.That(binder, Does.Contain("TerrainLayerTable.Pack("));
 			string shader = File.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishWeatherTerrainArrayInput.hlsl");
-			Assert.That(shader, Does.Contain("FishLayerRow(groundId, FISH_LAYER_ROW_PATHS)"));
-			Assert.That(shader, Does.Contain("float stoneSlice = pathSlices.z;"));
-			Assert.That(shader, Does.Contain("stoneSlice = stoneSlice > -0.5 ? stoneSlice : (_FishPathLayers.z > -0.5 ? _FishPathLayers.z : roadSlice);"));
+			Assert.That(shader, Does.Contain("FishLayerRow(id, FISH_LAYER_ROW_PATHS)"));
+			Assert.That(shader, Does.Contain("float4 FishPathSlicesOf(int id)"));
+			Assert.That(shader, Does.Contain("slices.z = slices.z > -0.5 ? slices.z : (_FishPathLayers.z > -0.5 ? _FishPathLayers.z : slices.y);"));
 			string table = File.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishTerrainIndexMap.hlsl");
 			Assert.That(table, Does.Contain($"#define FISH_LAYER_ROW_PATHS {TerrainLayerTable.RowPaths} "));
 			string generator = File.ReadAllText(Path.Combine(WorldFolder, "SceneGenerator.cs"));

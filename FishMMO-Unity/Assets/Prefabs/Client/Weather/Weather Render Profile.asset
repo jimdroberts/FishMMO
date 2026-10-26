@@ -381,6 +381,7 @@ MonoBehaviour:
       Depth: {x: 1, y: 25}
       MinWater: 3
       FloorClearance: {x: 0.8, y: 3}
+      NearFloor: 0
       Temperature: {x: -1, y: 1}
       Prefers: []
       PreferWeight: 3
@@ -390,6 +391,16 @@ MonoBehaviour:
       Palette: []
       Smoothness: 0.85
       CastShadows: 0
+      Boils: 0
+      NightSpread: 0
+      HammerHead: 0
+      GlideMetres: {x: 20, y: 60}
+      GlideHeight: {x: 0.5, y: 1.5}
+      GlowPattern: 0
+      GlowColour: {r: 0.4, g: 0.8, b: 1, a: 1}
+      GlowStrength: 0
+      GlowPeriod: 4
+      GlowRest: 0.3
     - Name: Reef fish
       Shape: 1
       Behaviour: 2
@@ -406,6 +417,7 @@ MonoBehaviour:
       Depth: {x: 1.5, y: 30}
       MinWater: 1.5
       FloorClearance: {x: 0.4, y: 2.5}
+      NearFloor: 0
       Temperature: {x: 0.2, y: 1}
       Prefers:
       - Coral Reef
@@ -422,6 +434,16 @@ MonoBehaviour:
       - {r: 0.9098039, g: 0.9098039, b: 0.9098039, a: 1}
       Smoothness: 0.6
       CastShadows: 0
+      Boils: 0
+      NightSpread: 0
+      HammerHead: 0
+      GlideMetres: {x: 20, y: 60}
+      GlideHeight: {x: 0.5, y: 1.5}
+      GlowPattern: 0
+      GlowColour: {r: 0.4, g: 0.8, b: 1, a: 1}
+      GlowStrength: 0
+      GlowPeriod: 4
+      GlowRest: 0.3
     - Name: Jacks
       Shape: 0
       Behaviour: 0
@@ -438,6 +460,7 @@ MonoBehaviour:
       Depth: {x: 3, y: 60}
       MinWater: 6
       FloorClearance: {x: 1.5, y: 6}
+      NearFloor: 0
       Temperature: {x: -1, y: 1}
       Prefers: []
       PreferWeight: 3
@@ -447,6 +470,16 @@ MonoBehaviour:
       Palette: []
       Smoothness: 0.8
       CastShadows: 0
+      Boils: 0
+      NightSpread: 0
+      HammerHead: 0
+      GlideMetres: {x: 20, y: 60}
+      GlideHeight: {x: 0.5, y: 1.5}
+      GlowPattern: 0
+      GlowColour: {r: 0.4, g: 0.8, b: 1, a: 1}
+      GlowStrength: 0
+      GlowPeriod: 4
+      GlowRest: 0.3
     - Name: Shark
       Shape: 2
       Behaviour: 1
@@ -463,6 +496,7 @@ MonoBehaviour:
       Depth: {x: 3, y: 80}
       MinWater: 6
       FloorClearance: {x: 1.5, y: 8}
+      NearFloor: 0
       Temperature: {x: -1, y: 1}
       Prefers: []
       PreferWeight: 3
@@ -472,6 +506,16 @@ MonoBehaviour:
       Palette: []
       Smoothness: 0.4
       CastShadows: 1
+      Boils: 0
+      NightSpread: 0
+      HammerHead: 0
+      GlideMetres: {x: 20, y: 60}
+      GlideHeight: {x: 0.5, y: 1.5}
+      GlowPattern: 0
+      GlowColour: {r: 0.4, g: 0.8, b: 1, a: 1}
+      GlowStrength: 0
+      GlowPeriod: 4
+      GlowRest: 0.3
     - Name: Manta
       Shape: 4
       Behaviour: 1
@@ -488,6 +532,7 @@ MonoBehaviour:
       Depth: {x: 3, y: 30}
       MinWater: 6
       FloorClearance: {x: 1.5, y: 6}
+      NearFloor: 0
       Temperature: {x: 0, y: 1}
       Prefers: []
       PreferWeight: 3
@@ -497,6 +542,16 @@ MonoBehaviour:
       Palette: []
       Smoothness: 0.35
       CastShadows: 1
+      Boils: 0
+      NightSpread: 0
+      HammerHead: 0
+      GlideMetres: {x: 20, y: 60}
+      GlideHeight: {x: 0.5, y: 1.5}
+      GlowPattern: 0
+      GlowColour: {r: 0.4, g: 0.8, b: 1, a: 1}
+      GlowStrength: 0
+      GlowPeriod: 4
+      GlowRest: 0.3
     - Name: Sea turtle
       Shape: 5
       Behaviour: 1
@@ -513,6 +568,7 @@ MonoBehaviour:
       Depth: {x: 1.5, y: 20}
       MinWater: 2.5
       FloorClearance: {x: 0.8, y: 4}
+      NearFloor: 0
       Temperature: {x: 0.1, y: 1}
       Prefers:
       - Coral Reef
@@ -524,6 +580,16 @@ MonoBehaviour:
       Palette: []
       Smoothness: 0.5
       CastShadows: 1
+      Boils: 0
+      NightSpread: 0
+      HammerHead: 0
+      GlideMetres: {x: 20, y: 60}
+      GlideHeight: {x: 0.5, y: 1.5}
+      GlowPattern: 0
+      GlowColour: {r: 0.4, g: 0.8, b: 1, a: 1}
+      GlowStrength: 0
+      GlowPeriod: 4
+      GlowRest: 0.3
     - Name: Jellyfish
       Shape: 6
       Behaviour: 3
@@ -540,6 +606,7 @@ MonoBehaviour:
       Depth: {x: 1, y: 30}
       MinWater: 2.5
       FloorClearance: {x: 1, y: 4}
+      NearFloor: 0
       Temperature: {x: -1, y: 1}
       Prefers: []
       PreferWeight: 3
@@ -553,6 +620,16 @@ MonoBehaviour:
       - {r: 0.84705883, g: 0.9098039, b: 0.9411765, a: 1}
       Smoothness: 0.8
       CastShadows: 0
+      Boils: 0
+      NightSpread: 0
+      HammerHead: 0
+      GlideMetres: {x: 20, y: 60}
+      GlideHeight: {x: 0.5, y: 1.5}
+      GlowPattern: 0
+      GlowColour: {r: 0.4, g: 0.8, b: 1, a: 1}
+      GlowStrength: 0
+      GlowPeriod: 4
+      GlowRest: 0.3
     - Name: Crab
       Shape: 7
       Behaviour: 4
@@ -569,6 +646,7 @@ MonoBehaviour:
       Depth: {x: 0.8, y: 30}
       MinWater: 0.8
       FloorClearance: {x: 0, y: 0}
+      NearFloor: 0
       Temperature: {x: -1, y: 1}
       Prefers:
       - Coastal Water
@@ -581,6 +659,16 @@ MonoBehaviour:
       Palette: []
       Smoothness: 0.5
       CastShadows: 0
+      Boils: 0
+      NightSpread: 0
+      HammerHead: 0
+      GlideMetres: {x: 20, y: 60}
+      GlideHeight: {x: 0.5, y: 1.5}
+      GlowPattern: 0
+      GlowColour: {r: 0.4, g: 0.8, b: 1, a: 1}
+      GlowStrength: 0
+      GlowPeriod: 4
+      GlowRest: 0.3
     - Name: Whale
       Shape: 3
       Behaviour: 1
@@ -597,6 +685,7 @@ MonoBehaviour:
       Depth: {x: 10, y: 60}
       MinWater: 30
       FloorClearance: {x: 6, y: 15}
+      NearFloor: 0
       Temperature: {x: -1, y: 1}
       Prefers:
       - Ocean
@@ -608,7 +697,24 @@ MonoBehaviour:
       Palette: []
       Smoothness: 0.4
       CastShadows: 1
+      Boils: 0
+      NightSpread: 0
+      HammerHead: 0
+      GlideMetres: {x: 20, y: 60}
+      GlideHeight: {x: 0.5, y: 1.5}
+      GlowPattern: 0
+      GlowColour: {r: 0.4, g: 0.8, b: 1, a: 1}
+      GlowStrength: 0
+      GlowPeriod: 4
+      GlowRest: 0.3
     Version: 2
+  SeaFloatsCompute: {fileID: 7200000, guid: f5a6b5cf068dc80ceacb179a649c88ba, type: 3}
+  SeaFloatsShader: {fileID: 4800000, guid: a42b1fd535984e900a2de0bc4575c8d9, type: 3}
+  SeaFloats:
+    Enabled: 1
+    DrawDistance: 650
+    Capacity: 16384
+    MaxCameraHeight: 400
   AmbientLifeShader: {fileID: 4800000, guid: 6943ce254cd5feb65911006becc4dd49, type: 3}
   AmbientLife:
     Enabled: 1
@@ -641,6 +747,9 @@ MonoBehaviour:
   CaveDripsShader: {fileID: 4800000, guid: 48ac664988707c9c7a089f115b3fdeba, type: 3}
   CaveSkylightShaftsShader: {fileID: 4800000, guid: e7c209507e8642b8bba568685b6b5cb7,
     type: 3}
+  RockfallStonesShader: {fileID: 4800000, guid: 1eb18bb28518e00fcab80b970b5ed096,
+    type: 3}
+  RockfallMarksShader: {fileID: 4800000, guid: f6933654c321cfb36939fa5f62cfc477, type: 3}
   FallingLeavesShader: {fileID: 4800000, guid: b95ed509b5cff62c4a8a1e51c4c9c9c1, type: 3}
   FallingLeaves:
     Enabled: 1

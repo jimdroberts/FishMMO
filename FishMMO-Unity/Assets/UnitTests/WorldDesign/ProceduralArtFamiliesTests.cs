@@ -22,7 +22,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			"BiomeArtAuthoring.cs", "ProceduralArtAutoGenerate.cs", "ProceduralArtBuildGroup.cs", "ProceduralArtLedger.cs",
 			"ProceduralArtMigration.cs", "ProceduralArtPayload.cs", "ProceduralArtTextureImport.cs", "ProceduralArtVariants.cs",
 			"ProceduralArtWrapperCheck.cs", "ProceduralArtFamilies.cs", "RockComparisonRender.cs", "StructureKitRender.cs",
-			"VegetationVariationRender.cs", "WorldEditorPhotoImport.cs", "VineBiomes.cs", "StructureInteriors.cs", "CaveArt.cs",
+			"VegetationVariationRender.cs", "WorldEditorPhotoImport.cs", "VineBiomes.cs", "StructureInteriors.cs", "CaveArt.cs", "ProceduralArtOrphans.cs",
 		};
 
 		/// <summary>The sources every family is made with: a change to one rebuilds everything.</summary>

@@ -20,7 +20,9 @@ namespace FishMMO.Shared.WorldDesign
 				C(Ground.Ice, 38f), Ground.Ice, Ground.Ice)
 				.Look(BiomeLookClass.Alien)
 				.Wildlife(BiomeHabitat.Barren)
-				.Moat(BiomeMoatWater.Wet);
+				.Moat(BiomeMoatWater.Wet)
+				// Its vents (2026-10-25, I2q-b, decision 90): Cryo Tephra puffing from its ridge lines with the tidal kneading.
+				.Vents(BiomeVentLayout.Ridges, BiomeVentTiming.Kneading);
 		}
 	}
 }

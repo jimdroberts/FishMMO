@@ -188,5 +188,99 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(caves, Is.GreaterThan(10));
 			Assert.That(total, Is.Zero, "no hole in the rock seen from inside the cave");
 		}
+
+		[Test]
+		public void ALinkAlongASteepHillsideKeepsItsDownhillWallUnderTheRock()
+		{
+			// 2026-10-26 (Moron 2, a link joining two caves under a 60° hillside): the link walker tested the rock only over the
+			// bore's middle, so a link run along the hill's contour kept 3–5 m over its middle and had its downhill wall 2 m out of
+			// the ground. The shell stops a skin under the ground, so there the cave lay open to the sky through a hole metres
+			// across. Walked along a face rising 2 m a metre across its way, every point of its air stays under the rock's skin.
+			CaveSystem system = PlanCave(CaveForm.Cave, 1, 1, out _);
+			Assert.That(system, Is.Not.Null);
+			Type endType = typeof(CaveSystem).GetNestedType("LinkEnd", BindingFlags.NonPublic);
+			Assert.That(endType, Is.Not.Null, "CaveSystem.LinkEnd");
+			MethodInfo endOf = endType.GetMethod("Of", BindingFlags.Static | BindingFlags.Public, null, new[] { typeof(CaveNode).MakeByRefType(), typeof(Vector3) }, null);
+			MethodInfo walkTo = typeof(CaveSystem).GetMethod("WalkTo", BindingFlags.Instance | BindingFlags.NonPublic);
+			Assert.That(endOf, Is.Not.Null, "LinkEnd.Of(node, run)");
+			Assert.That(walkTo, Is.Not.Null, "CaveSystem.WalkTo");
+
+			// Far off the planned cave (its own void plays no part), in its frame: a level way north between two ends deep under
+			// the hill, the line between them 4.5 m under a face that rises 2 m a metre to the east.
+			const float slope = 2f, middleCover = 4.5f, length = 150f;
+			float r = Mathf.Max(CaveSystem.MinBore, system.Radius * 0.8f);
+			var x0 = new Vector3(1500f, -30f, 0f);
+			float floor = x0.y;
+			float centreY = floor + CaveSystem.FloorDepth * r * system.Flat;
+			float top = centreY + r * system.Flat + system.Amp;
+			Vector3 o = system.Origin;
+			float GroundLocal(float x, float z)
+			{
+				float fromEnd = Mathf.Min(z - x0.z, x0.z + length - z);
+				return Mathf.Max(top + middleCover + slope * (x - x0.x), top + 40f - 3f * Mathf.Max(0f, fromEnd - 20f));
+			}
+			Func<float, float, float> g = (wx, wz) => GroundLocal(wx - o.x, wz - o.z) + o.y;
+			CaveGround ground = CaveGround.Sample(g, o.x + x0.x - 80f, o.z + x0.z - 80f, o.x + x0.x + 80f, o.z + x0.z + length + 80f, 2f);
+			var start = new CaveNode { Centre = new Vector3(x0.x, centreY, x0.z), Radius = r, Floor = floor, Along = 0f };
+			var finish = new CaveNode { Centre = new Vector3(x0.x, centreY, x0.z + length), Radius = r, Floor = floor, Along = 0f };
+			object end = endOf.Invoke(null, new object[] { finish, Vector3.forward });
+			Func<Vector3, float, bool> blocked = (_, _) => false;
+			var args = new object[] { start, 0f, end, 3f * length, new FishMMO.Shared.DeterministicRNG(7), ground, blocked, -1e4f, float.NaN, 0f, 0f, null };
+			var walk = (List<CaveNode>)walkTo.Invoke(system, args);
+			Assert.That(walk, Is.Not.Null, $"a way along the face still fits, into the hill ({args[11]})");
+
+			// The way's own air (its ends are given, laid by the test on the face): nowhere above the ground less the skin.
+			var link = new CavePassage { Kind = CavePassageKind.Link };
+			link.Nodes.AddRange(walk);
+			system.Passages.Add(link);
+			system.Prepare();
+			float clear = 2f * r + 2f, reach = r + system.Amp + 2f;
+			int open = 0, columns = 0;
+			float worst = float.NegativeInfinity;
+			Vector3 at = default;
+			var seen = new HashSet<Vector2Int>();
+			foreach (CaveNode n in walk)
+			{
+				for (float x = n.Centre.x - reach; x <= n.Centre.x + reach; x += 0.5f)
+				{
+					for (float z = n.Centre.z - reach; z <= n.Centre.z + reach; z += 0.5f)
+					{
+						var cell = new Vector2Int(Mathf.RoundToInt(x * 2f), Mathf.RoundToInt(z * 2f));
+						var p = new Vector3(cell.x * 0.5f, 0f, cell.y * 0.5f);
+						if (!seen.Add(cell) || new Vector2(p.x - start.Centre.x, p.z - start.Centre.z).magnitude < clear
+							|| new Vector2(p.x - finish.Centre.x, p.z - finish.Centre.z).magnitude < clear)
+						{
+							continue;
+						}
+						columns++;
+						float skin = GroundLocal(p.x, p.z) - system.Skin;
+						// The highest air in the column over the skin.
+						for (float y = skin + system.Skin + 4f; y >= skin; y -= 0.1f)
+						{
+							p.y = y;
+							if (system.Void(p) < 0f)
+							{
+								open++;
+								if (y - skin > worst)
+								{
+									worst = y - skin;
+									at = p;
+								}
+								break;
+							}
+						}
+					}
+				}
+			}
+			float east = 0f;
+			foreach (CaveNode n in walk)
+			{
+				east = Mathf.Max(east, n.Centre.x - x0.x);
+			}
+			Console.WriteLine($"{walk.Count} nodes, into the hill up to {east:F1} m; {columns} columns, {open} with air over the rock's skin"
+				+ (open > 0 ? $" (worst {worst:F2} m over it at {at:F1})" : ""));
+			Assert.That(columns, Is.GreaterThan(100));
+			Assert.That(open, Is.Zero, "no air of the link over the rock's skin: the shell is never open to the sky along it");
+		}
 	}
 }

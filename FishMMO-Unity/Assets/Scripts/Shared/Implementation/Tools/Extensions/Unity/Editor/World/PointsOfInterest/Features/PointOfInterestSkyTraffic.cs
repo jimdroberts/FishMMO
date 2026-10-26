@@ -206,7 +206,9 @@ namespace FishMMO.Shared.WorldDesign
 			var prototypeOf = new Dictionary<GameObject, int>();
 			int missing = 0, lights = 0, unlit = 0;
 			int stagesLaid = 0;
-			void Add(GameObject prefab, Vector3 at, Quaternion rotation)
+			// What the stages' lights give off (2026-10-25, I6i), kept on the record for the client's site lights.
+			var stageLights = new List<SceneEmitter>();
+			void Add(GameObject prefab, Vector3 at, Quaternion rotation, Vector3? scale = null)
 			{
 				if (!prototypeOf.TryGetValue(prefab, out int index))
 				{
@@ -214,7 +216,7 @@ namespace FishMMO.Shared.WorldDesign
 					prototypeOf[prefab] = index;
 					prototypes.Add(new ScenePropSet.Prototype { Prefab = prefab, Layer = -1, Materials = StructurePaletteDressing.MaterialsFor(prefab, palette) });
 				}
-				props.Add(new ScenePropSet.Prop { Prototype = index, Position = at, Rotation = rotation, Scale = Vector3.one });
+				props.Add(new ScenePropSet.Prop { Prototype = index, Position = at, Rotation = rotation, Scale = scale ?? Vector3.one });
 			}
 			for (int i = 0; i < docks.Length; i++)
 			{
@@ -242,7 +244,15 @@ namespace FishMMO.Shared.WorldDesign
 						if (light != null)
 						{
 							Add(light, at, Quaternion.LookRotation(outward, Vector3.up));
+							// A crystal post's crystal in its cradle (2026-10-25, I6i-b), where its art exists.
+							if (CloudWorldCut.PostCrystal(light, at, Quaternion.LookRotation(outward, Vector3.up), Vector3.one, (uint)StableHash($"light:{at.x:0}:{at.z:0}"),
+								out GameObject crystal, out Vector3 crystalAt, out Vector3 crystalSize))
+							{
+								Add(crystal, crystalAt, Quaternion.LookRotation(outward, Vector3.up), crystalSize);
+							}
 							lights++;
+							CloudWorldCut.LightEmitters(light, at, Quaternion.LookRotation(outward, Vector3.up), Vector3.one,
+								(uint)StableHash($"light:{at.x:0}:{at.z:0}"), stageLights);
 						}
 						else
 						{
@@ -256,6 +266,11 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			collidable = ScenePropBaker.Write(scene, PropSource, prototypes, props);
+			if (world != null)
+			{
+				world.StageLights = stageLights.ToArray();
+				UnityEditor.EditorUtility.SetDirty(world);
+			}
 			if (missing > 0)
 			{
 				notes?.Add($"Sky traffic: {missing} landing stage piece(s) skipped, their art is missing (run Generate biome art, then re-cut).");

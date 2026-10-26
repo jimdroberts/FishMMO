@@ -221,10 +221,16 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The generated prefab name of a cave crystal's variant (the variant wraps round): the rock art's formation for selenite
-		/// and frost crystal (<c>Rocks/Formations/…Gypsum_Crystal_2</c>), else its own (<c>Cave/Cave_Mineral_Amethyst_2</c>).
+		/// and frost crystal (<c>Rocks/Formations/…Gypsum_Crystal_2</c>), else its own (<c>Cave/Cave_Mineral_Amethyst_2</c>); a
+		/// biome's own look of the kind (<paramref name="look"/> above 0, 2026-10-26) its look's (<c>Cave/Cave_Mineral_Obsidian_Rossa_2</c>),
+		/// a look the kind has not its own.
 		/// </summary>
-		public static string MineralPrefabName(BiomeCaveCrystalKind kind, int variant)
+		public static string MineralPrefabName(BiomeCaveCrystalKind kind, int variant, byte look = 0)
 		{
+			if (ProceduralArtCatalogue.TryCaveMineralLook(kind, look, out CaveMineralLook own))
+			{
+				return ProceduralArtCatalogue.CaveMineralLookPrefab(in own, Wrap(variant, ProceduralArtCatalogue.CaveMineralVariants));
+			}
 			CaveMineral mineral = ProceduralArtCatalogue.CaveMineralOf(kind);
 			if (mineral.Formation)
 			{
@@ -234,38 +240,40 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>A cave crystal's prefab (null until the art is generated: a formation's by the rock art, the rest by the structures').</summary>
-		public static GameObject MineralPrefab(BiomeCaveCrystalKind kind, int variant)
-			=> AssetDatabase.LoadAssetAtPath<GameObject>(ProceduralArtCatalogue.PrefabPath(MineralPrefabName(kind, variant)));
+		public static GameObject MineralPrefab(BiomeCaveCrystalKind kind, int variant, byte look = 0)
+			=> AssetDatabase.LoadAssetAtPath<GameObject>(ProceduralArtCatalogue.PrefabPath(MineralPrefabName(kind, variant, look)));
 
 		/// <summary>
 		/// A cave crystal built in its own habit as a piece of floor glow art (its light, reach and hue its kind's), for what lines
 		/// a cave's ways where the biome grows a glowing kind. False for a formation's crystal (selenite, frost crystal: not glow
 		/// art) and, with everything but the prefab filled in, while the art is not generated.
 		/// </summary>
-		public static bool TryMineral(BiomeCaveCrystalKind kind, int variant, out CaveGlowArt art)
+		public static bool TryMineral(BiomeCaveCrystalKind kind, int variant, out CaveGlowArt art, byte look = 0)
 		{
 			CaveMineral mineral = ProceduralArtCatalogue.CaveMineralOf(kind);
 			art = default;
-			if (mineral.Formation)
+			bool own = ProceduralArtCatalogue.TryCaveMineralLook(kind, look, out CaveMineralLook biomes);
+			if (mineral.Formation && !own)
 			{
 				return false;
 			}
 			int v = Wrap(variant, ProceduralArtCatalogue.CaveMineralVariants);
-			MeasureMineral(mineral.Habit, v, out float height, out float radius, out float root);
-			string name = ProceduralArtCatalogue.CaveMineralPrefab(kind, v);
+			MeasureMineral(own ? biomes.Habit : mineral.Habit, v, out float height, out float radius, out float root);
+			string name = own ? ProceduralArtCatalogue.CaveMineralLookPrefab(in biomes, v) : ProceduralArtCatalogue.CaveMineralPrefab(kind, v);
+			CaveGlowHue hue = own ? ProceduralArtCatalogue.CaveMineralLookHue(in biomes) : mineral.Hue;
 			art = new CaveGlowArt
 			{
 				Prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProceduralArtCatalogue.PrefabPath(name)),
 				Name = name,
 				Kind = CaveGlowKind.Crystal,
-				Hue = mineral.Hue.Name,
+				Hue = hue.Name,
 				Mount = CaveMount.Floor,
 				Height = height,
 				Radius = radius,
 				Root = root,
-				Light = mineral.Hue.Light,
-				SuggestedReach = mineral.Hue.EmitterHue >= 0 ? ProceduralArtCatalogue.CaveMineralReach : 0f,
-				EmitterHue = mineral.Hue.EmitterHue,
+				Light = hue.Light,
+				SuggestedReach = hue.EmitterHue >= 0 ? ProceduralArtCatalogue.CaveMineralReach : 0f,
+				EmitterHue = hue.EmitterHue,
 				Flickers = mineral.Flickers,
 				Collides = true,
 			};

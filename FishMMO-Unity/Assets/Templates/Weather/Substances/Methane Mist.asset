@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc31fd6c26d6fbb81b415e9bc031c46f, type: 3}
+  m_Name: Methane Mist
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Weather.WeatherSubstance
+  DisplayName: Methane Mist
+  Description: A low shore fog of methane droplets over a lake of liquid methane.
+  Tint: {r: 0.85, g: 0.72, b: 0.56, a: 1}
+  FogColor: {r: 0.72, g: 0.62, b: 0.48, a: 1}
+  FallSpeedScale: 0.5
+  StretchScale: 1
+  Emission: 0
+  Cover: 0
+  CoverTint: {r: 1, g: 1, b: 1, a: 1}
+  MeltsAbove: -0.6
+  Breathable: 0
+  Harshness: 0.3
+  Condenses: 0
+  Condensate: 0
+  Frozen: 0
+  GrainMetres: 0.00001
+  GrainDensity: 423
+  Vented: 0
+  Vapour: 0
+  AudioCue: 

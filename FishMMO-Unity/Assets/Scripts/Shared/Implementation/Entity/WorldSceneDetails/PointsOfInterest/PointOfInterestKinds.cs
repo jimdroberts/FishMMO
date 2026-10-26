@@ -320,6 +320,13 @@ namespace FishMMO.Shared
 			Add(POIType.SeaCrystalFormation, Co, K | U, 3, "Sea Crystal Formation");
 			Add(POIType.SunkenMonument, Co, K | U, 2);
 			Add(POIType.SunkenStatue, Co, K | U, 3);
+			// Adrift on the open sea (2026-10-25, I2p): surface sites, not the floor's, so neither U nor K (no template: a derelict's or
+			// a whaler's hull rides the tide from its site builder, PointOfInterestAdrift).
+			Add(POIType.AdriftDerelict, Co, PointOfInterestTraits.None, 2, "Derelict Adrift");
+			Add(POIType.WhaleFall, Co, PointOfInterestTraits.None, 3, "Whale Fall");
+			Add(POIType.BarnacleLog, Co, PointOfInterestTraits.None, 3, "Barnacle Log");
+			Add(POIType.Longline, Co, PointOfInterestTraits.None, 3);
+			Add(POIType.WhaleTow, Co, PointOfInterestTraits.None, 2, "Whale Under Tow");
 
 			Add(POIType.DungeonEntrance, En, K, 1);
 			Add(POIType.BossLair, En, K | P | H, 1, "World Boss Lair");
@@ -333,6 +340,39 @@ namespace FishMMO.Shared
 			Add(POIType.MethaneLake, Al, D, 2);
 			Add(POIType.ImpactBasin, Al, D, 2);
 			Add(POIType.TidalRift, Al, D, 3);
+
+			/* The biome rounds' own kinds (2026-10-25, phase NEW-POI-KINDS), sited only where a biome hosts them. A kind is K only
+			 * where the kit's pieces already read as it (a gate, a chapel, a kiln); the rest are named and discoverable but lay
+			 * nothing until I7 gives them their pieces, as the whale fall adrift does. */
+			Add(POIType.TrenchEdge, Co, U, 3);
+			Add(POIType.SeaCavern, Ts, U, 2);
+			Add(POIType.CinderCone, Vo, PointOfInterestTraits.None, 3);
+			Add(POIType.Kipuka, Vo, PointOfInterestTraits.None, 3);
+			Add(POIType.HoluaSlide, Ru, PointOfInterestTraits.None, 3);
+			Add(POIType.LavaFall, Vo, PointOfInterestTraits.None, 3);
+			Add(POIType.AncientForge, En, K | P, 2);
+			Add(POIType.PhoenixNest, En, K | H, 2);
+			Add(POIType.LavaCaveTemple, Sa, K | P, 2);
+			Add(POIType.MireGate, Ru, K, 2);
+			Add(POIType.SunkenPlaza, Ru, K, 2);
+			Add(POIType.MarshWatchtower, Se, K | P, 2);
+			Add(POIType.ShatteredBridge, Ru, PointOfInterestTraits.None, 3);
+			Add(POIType.FallenColossus, Ru, K, 2);
+			Add(POIType.SealedVault, En, K | P, 2);
+			Add(POIType.DrownedForest, We, PointOfInterestTraits.None, 3);
+			Add(POIType.FrogShrine, Sa, K | P, 2);
+			Add(POIType.FloatingIsland, We, PointOfInterestTraits.None, 3);
+			Add(POIType.FowlersHide, Wi, K | P, 3, "Fowler's Hide");
+			Add(POIType.EelWeir, Wi, PointOfInterestTraits.None, 3);
+			Add(POIType.BrickKiln, Se, K | P, 2);
+			Add(POIType.BlightedCrater, De, K, 2);
+			Add(POIType.Chapel, Sa, K | P, 2);
+			Add(POIType.HolyWell, Sa, K | P, 2);
+			Add(POIType.PlagueVillage, De, K | P | H, 2);
+			Add(POIType.DeadForest, De, PointOfInterestTraits.None, 3);
+			Add(POIType.WarEngineGraveyard, Ru, PointOfInterestTraits.None, 2);
+			Add(POIType.SunkenWhaleFall, Co, U, 3);
+			Add(POIType.SeaHall, Ts, PointOfInterestTraits.None, 2);
 			return t;
 		}
 	}

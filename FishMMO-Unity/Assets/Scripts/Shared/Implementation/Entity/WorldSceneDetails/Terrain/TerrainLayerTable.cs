@@ -25,6 +25,7 @@ namespace FishMMO.Shared
 	/// <item><see cref="RowPaths"/>: the slices of the layer's own biome's path ground, road ground and cobbles (−1 none).</item>
 	/// <item><see cref="RowBackdrop"/>: not a layer's but a backdrop channel's: the scene layer channel c of the backdrop's
 	/// control maps holds (<see cref="SceneBackdrop.ControlLayers"/>), c itself when the backdrop names none.</item>
+	/// <item><see cref="RowGlow"/>: the layer's glow (2026-10-25, phase I2r; <see cref="Biomes.BiomeGroundGlow.Pack"/>), zero for none.</item>
 	/// </list>
 	/// Columns past the scene's layers hold a neutral layer, no flora and no paths, as the arrays' unused slots did.
 	/// </para>
@@ -35,7 +36,7 @@ namespace FishMMO.Shared
 		public const int Width = TerrainArrayLayerParams.MaximumLayers;
 
 		/// <summary>Rows.</summary>
-		public const int Rows = 8;
+		public const int Rows = 9;
 
 		public const int RowST = 0;
 		public const int RowTint = 1;
@@ -45,14 +46,16 @@ namespace FishMMO.Shared
 		public const int RowFlora = 5;
 		public const int RowPaths = 6;
 		public const int RowBackdrop = 7;
+		public const int RowGlow = 8;
 
 		/// <summary>The table's texels, row after row (texel (layer, row) at row × <see cref="Width"/> + layer).</summary>
 		/// <param name="layerCount">The scene's layers; columns past it are neutral.</param>
 		/// <param name="flora">Per layer what it is made of; null leaves the row zero (the looks then leave the ground as it is).</param>
 		/// <param name="earth">Per layer its biome's path ground slice (−1 none); null or short: −1 past it.</param>
 		/// <param name="backdropChannels">The scene layer of each backdrop channel; null or short: the channel's own number.</param>
+		/// <param name="glow">Per layer its packed glow (<see cref="TerrainArraySet.LayerGlow"/>); null or short: none past it.</param>
 		public static Vector4[] Pack(int layerCount, Vector4[] st, Vector4[] tint, Vector4[] maskOffset, Vector4[] maskScale, Vector4[] surface,
-			Vector4[] flora, float[] earth, float[] road, float[] stone, int[] backdropChannels = null)
+			Vector4[] flora, float[] earth, float[] road, float[] stone, int[] backdropChannels = null, Vector4[] glow = null)
 		{
 			var texels = new Vector4[Width * Rows];
 			TerrainArrayLayerParams.Allocate(1, out Vector4[] nst, out Vector4[] ntint, out Vector4[] noffset, out Vector4[] nscale, out Vector4[] nsurface);
@@ -68,6 +71,7 @@ namespace FishMMO.Shared
 				texels[RowFlora * Width + l] = used && flora != null && l < flora.Length ? flora[l] : Vector4.zero;
 				texels[RowPaths * Width + l] = new Vector4(Slice(earth, l), Slice(road, l), Slice(stone, l), -1f);
 				texels[RowBackdrop * Width + l] = new Vector4(backdropChannels != null && l < backdropChannels.Length ? backdropChannels[l] : l, 0f, 0f, 0f);
+				texels[RowGlow * Width + l] = used && glow != null && l < glow.Length ? glow[l] : Vector4.zero;
 			}
 			return texels;
 		}
@@ -82,7 +86,8 @@ namespace FishMMO.Shared
 			{
 				return Pack(0, null, null, null, null, null, null, earth, road, stone, backdropChannels);
 			}
-			return Pack(set.LayerCount, set.LayerST, set.LayerTint, set.LayerMaskOffset, set.LayerMaskScale, set.LayerSurface, set.LayerFlora(), earth, road, stone, backdropChannels);
+			return Pack(set.LayerCount, set.LayerST, set.LayerTint, set.LayerMaskOffset, set.LayerMaskScale, set.LayerSurface, set.LayerFlora(), earth, road, stone, backdropChannels,
+				set.LayerGlow);
 		}
 
 		/// <summary>A table texture, empty: RGBA float, point, clamped, no mips, never saved.</summary>

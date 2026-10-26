@@ -150,6 +150,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// (decision 35 (d)); off: under the sea only, as every sunken kind was.
 		/// </summary>
 		public bool InLakes;
+		/// <summary>
+		/// Afloat on the open sea's SURFACE (2026-10-25, I2p): sited as an <see cref="Underwater"/> kind over at least <see cref="MinDepth"/>
+		/// of water by the kind's OWN band (never the biome's UnderwaterSiteDepth), but stood at sea level, not on the floor.
+		/// </summary>
+		public bool Afloat;
+		/// <summary>At least this far from anything but the open sea (ground, a shut-in basin), metres; 0 for no such rule (2026-10-25).</summary>
+		public float OffshoreMetres;
 
 		/// <summary>Within this of a settlement, metres; 0 for no such rule. The site's parent is that settlement.</summary>
 		[Header("Neighbours")]
@@ -351,6 +358,15 @@ namespace FishMMO.Shared.WorldDesign
 		public PointOfInterestKindRule UnderLakes()
 		{
 			InLakes = true;
+			return this;
+		}
+
+		/// <summary>Afloat on the open sea (<see cref="Afloat"/>): over <paramref name="minDepth"/> m of water or more, <paramref name="offshoreMetres"/> from any shore.</summary>
+		public PointOfInterestKindRule Adrift(float minDepth, float offshoreMetres)
+		{
+			Sea(minDepth, Unbounded);
+			Afloat = true;
+			OffshoreMetres = offshoreMetres;
 			return this;
 		}
 

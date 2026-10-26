@@ -141,6 +141,8 @@ float4 _FishCloudSunColor;   // rgb its colour
 float4 _FishCloudAmbient;    // rgb the sky's own light over a cloud: the upper hemisphere's mean radiance
 float4 _FishCloudCoverage;   // x cut at no cover, y the noise's gradient at the cut (per tile), z cut at full cover, w how hard it bends at the end
 float4 _FishCloudHaze;       // rgb the colour the air between turns a cloud, a unused by the march
+float4 _FishCloudHazeOpen;   // rgb the same air's haze in the open, before the low cloud over the viewer dims it; w how much the low
+                             // cloud lets down to the air under it, 0..1 (SkySystem.AirLightThrough)
 float4 _FishCloudShadowArea;   // x the cookie's texel (m), y how dark the ground goes under cloud, z window size (m), w steps
 float4 _FishCloudShadowOrigin; // xyz the world point at the middle of the window
 float4 _FishCloudShadowRight;  // xyz the light's right, across the window
@@ -3008,9 +3010,18 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
                     // drawn as bright as a noon haze — a pale veil hanging from a black cloud; a real
                     // shaft is grey and darkens up toward the base, where less of the open sky is seen.
                     depthIsFresh = false;
-                    float3 air = _FishCloudHaze.rgb + sunLight * min(1.0, PI * phaseLow) * exp(-1.0) * 0.12;
+                    float3 air = _FishCloudHazeOpen.rgb + sunLight * min(1.0, PI * phaseLow) * exp(-1.0) * 0.12;
                     float through = 1.0 / (1.0 + 0.75 * (1.0 - gLow) * spot.tauOverhead);
-                    float lit = saturate(lerp(1.0, min(1.0, 1.25 * through) + spot.sideSky, spot.under));
+                    // The sky seen sideways under the base is the open sky past the cloud's edge only where there is an
+                    // edge: under a deck that runs to the horizon it is the deck's own grey, the air's light through the
+                    // low cloud (_FishCloudHazeOpen.w, SkySystem.AirLightThrough). Taken as open sky, the rain under a far
+                    // overcast was lit at a third of a clear day's haze and drew a pale band right along the horizon, over
+                    // the far ground too (the far imposter marches by direction, rain and all), 2026-10-26.
+                    float lit = saturate(lerp(1.0, min(1.0, 1.25 * through) + spot.sideSky * saturate(_FishCloudHazeOpen.w), spot.under));
+                    // And never more than the air under the low cloud gets: `under` is this column's own water, so where its
+                    // noise thins the hang was lit as open air although the deck overhead still covered it — a pale mottled
+                    // band in the cloud's own pattern along the horizon under a dark deck (2026-10-26).
+                    lit = min(lit, saturate(_FishCloudHazeOpen.w) * (1.0 - spot.under) + lit * spot.under);
                     cloudColour = air * lit;
                 }
                 else

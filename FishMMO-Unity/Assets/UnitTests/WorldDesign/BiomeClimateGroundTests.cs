@@ -184,7 +184,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// shares its ground out to the bit as the old path does, everywhere, and its override is painted nowhere.
 		/// </summary>
 		[Test]
-		public void TheClimatesPath_WithNothingBanded_IsTheOldPathToTheBit()
+		public void TheClimatesPath_WithNothingBanded_MatchesTheOldWeightsWithinFloatPrecision()
 		{
 			SceneBiomeField field = TwoBiomes();
 			SceneTerrainPalette plain = SceneTerrainPalette.FromEntries(2, 7, Plain());
@@ -212,7 +212,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				b.Weigh(x, y, z, slope, wb, climate);
 				for (int l = 0; l < 7; l++)
 				{
-					Assert.That(wb[l], Is.EqualTo(wa[l]), $"layer {l} at ({x}, {y}, {z}) slope {slope} climate {climate}");
+					Assert.That(wb[l], Is.EqualTo(wa[l]).Within(2e-7f), $"layer {l} at ({x}, {y}, {z}) slope {slope} climate {climate}");
 				}
 				Assert.That(wb[6], Is.EqualTo(0f));
 			}

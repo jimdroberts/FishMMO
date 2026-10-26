@@ -253,11 +253,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// left out, and a main layer so left out hands its place to the first air-banded detail layer that names the world's air
 		/// (<see cref="AirStandIn"/>). None (unknown) passes every band; no layer banded, nothing changes.
 		/// </param>
+		/// <param name="world">The scene's world for the world bands (<see cref="TerrainTextureLayer.worldBand"/>, decision 68); null (unknown) passes every band.</param>
 		public static SceneTerrainPalette Build(SceneBiomeField field,
 			Func<BiomeTemplate, string, TerrainTextureLayer, TerrainLayer> resolveSlot, Func<BiomeTemplate, TerrainLayer> placeholder,
 			Func<BiomeTemplate, IReadOnlyList<(string slot, TerrainTextureLayer source)>> sediment = null,
 			Func<BiomeTemplate, IReadOnlyList<(string slot, TerrainTextureLayer source)>> paths = null,
-			BiomeAtmosphereRequirement worldAir = BiomeAtmosphereRequirement.None)
+			BiomeAtmosphereRequirement worldAir = BiomeAtmosphereRequirement.None, BiomeWorldConditions? world = null)
 		{
 			if (field == null)
 			{
@@ -284,6 +285,12 @@ namespace FishMMO.Shared.WorldDesign
 				TerrainTextureLayer mainSource = biome.MainTextureLayer;
 				string mainSlot = SlotMain;
 				int standIn = mainSource != null && !mainSource.AdmitsAir(worldAir) ? AirStandIn(biome, worldAir) : -1;
+				// A main layer banded to other worlds (decision 68), or an air stand-in that is, hands its place the same way: to the first
+				// air- or world-banded detail this world admits. No world band set, nothing changes.
+				if (mainSource != null && !(standIn >= 0 ? biome.DetailTextureLayers[standIn] : mainSource).AdmitsWorld(world))
+				{
+					standIn = StandIn(biome.DetailTextureLayers, worldAir, world);
+				}
 				TerrainLayer main = null;
 				if (standIn >= 0)
 				{
@@ -356,7 +363,7 @@ namespace FishMMO.Shared.WorldDesign
 					foreach ((string slot, TerrainTextureLayer source) in biomePaths)
 					{
 						// The ways of a ground this world does not paint (decision 44) are not its ways either: no channel spent on them.
-						if (BiomeLocalArt.TryParseWaySlot(slot, out string wayGround, out _) && !PaintsGround(biome, wayGround, standIn, worldAir))
+						if (BiomeLocalArt.TryParseWaySlot(slot, out string wayGround, out _) && (!PaintsGround(biome, wayGround, standIn, worldAir) || !GroundOfWorld(biome, wayGround, standIn, world)))
 						{
 							continue;
 						}
@@ -381,6 +388,11 @@ namespace FishMMO.Shared.WorldDesign
 						{
 							continue;
 						}
+						// A rock face banded to other worlds is not this world's (decision 68).
+						if (cliff != null && !cliff.AdmitsWorld(world))
+						{
+							continue;
+						}
 						TerrainLayer layer = Resolve(resolveSlot, biome, SlotCliff + c, cliff);
 						if (layer != null)
 						{
@@ -396,6 +408,11 @@ namespace FishMMO.Shared.WorldDesign
 						// The main ground's stand-in is painted as the main; a detail banded to other airs is not this world's (decision 44).
 						// A detail banded to the biome's caves alone floors them, never the terrain (2026-10-25, I2n).
 						if (d == standIn || detail != null && (!detail.AdmitsAir(worldAir) || !BiomeUndergrounds.OnSurface(detail.underground)))
+						{
+							continue;
+						}
+						// A ground banded to other worlds is not this world's either (decision 68).
+						if (detail != null && !detail.AdmitsWorld(world))
 						{
 							continue;
 						}
@@ -530,6 +547,37 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			return -1;
+		}
+
+		/// <summary>The detail that stands in for a main ground refused by the world's air or its world band (decisions 44, 68): the first air- or world-banded surface detail admitting both; −1 for none.</summary>
+		public static int StandIn(IReadOnlyList<TerrainTextureLayer> details, BiomeAtmosphereRequirement worldAir, BiomeWorldConditions? world)
+		{
+			if (details == null)
+			{
+				return -1;
+			}
+			for (int d = 0; d < details.Count; d++)
+			{
+				TerrainTextureLayer detail = details[d];
+				if (detail != null && (detail.airBand != BiomeAtmosphereRequirement.None || detail.worldBand.On) && detail.AdmitsWorld(world)
+					&& detail.AdmitsAir(worldAir) && BiomeUndergrounds.OnSurface(detail.underground))
+				{
+					return d;
+				}
+			}
+			return -1;
+		}
+
+		/// <summary>True unless a ground slot names a detail layer (not the main's stand-in) whose world band refuses <paramref name="world"/>.</summary>
+		private static bool GroundOfWorld(BiomeTemplate biome, string groundSlot, int standIn, BiomeWorldConditions? world)
+		{
+			int ground = BiomeLocalArt.GroundIndexOf(groundSlot);
+			if (ground <= 0 || ground - 1 == standIn || biome.DetailTextureLayers == null || ground - 1 >= biome.DetailTextureLayers.Count)
+			{
+				return true;
+			}
+			TerrainTextureLayer detail = biome.DetailTextureLayers[ground - 1];
+			return detail == null || detail.AdmitsWorld(world);
 		}
 
 		/// <summary>

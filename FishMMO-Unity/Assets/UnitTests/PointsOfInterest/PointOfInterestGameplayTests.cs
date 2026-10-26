@@ -92,6 +92,11 @@ namespace FishMMO.UnitTests.PointsOfInterest
 			}
 			foreach (GatheringFamily family in System.Enum.GetValues(typeof(GatheringFamily)))
 			{
+				// Bone (2026-10-25, decision 25) is a family no site gathers yet and no row stocks.
+				if (family == GatheringFamily.Bone)
+				{
+					continue;
+				}
 				Assert.IsTrue(GatheringResourceCatalogue.All.Any(r => r.Family == family), $"no {family} resource");
 			}
 		}

@@ -35,11 +35,19 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeCaveInteriors.DefaultInterior(BiomeCaveForm.Mine), Is.Null);
 			Assert.That(BiomeCaveInteriors.TryLink(forest, BiomeCaveForm.Grotto, out string grotto) && grotto == "Cave", Is.True);
 			Assert.That(BiomeCaveInteriors.TryLink(forest, BiomeCaveForm.Mine, out _), Is.False);
-			// The spec writes exactly the defaults until a round names its own.
+			// The spec writes exactly the defaults until a round names its own: the swamps link their caves and grottos to the Swamp
+			// Cave (2026-10-25, decisions 86–88, I2n-c), every other form as the defaults.
+			var swamps = new[] { "Swamp", "Swamp Ruins", "Swamp Temple" };
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
-				Assert.That(entry.CaveInteriors().Select(l => l.ToString()), Is.EqualTo(BiomeCaveInteriors.DefaultLinks(entry.Biome).Select(l => l.ToString())), entry.Biome);
+				List<string> expected = BiomeCaveInteriors.DefaultLinks(entry.Biome).Select(l => l.ToString()).ToList();
+				if (swamps.Contains(entry.Biome))
+				{
+					expected = expected.Select(l => l.StartsWith("Cave=") ? "Cave=Swamp Cave" : l.StartsWith("Grotto=") ? "Grotto=Swamp Cave" : l).ToList();
+				}
+				Assert.That(entry.CaveInteriors().Select(l => l.ToString()), Is.EqualTo(expected), entry.Biome);
 			}
+			Assert.That(BiomeArtSpec.For("Swamp Cave").CaveInteriorRocks(), Is.EqualTo(BiomeCaveInteriors.SolubleRocks), "a swamp's granite cave stays its own");
 		}
 
 		[Test]

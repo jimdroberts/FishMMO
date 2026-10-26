@@ -55,12 +55,11 @@ namespace FishMMO.UnitTests
 				Assert.That(mesh.Validate(false), Is.Empty, spec.Name);
 				Assert.That(mesh.TriangleCount, Is.InRange(1, 400), spec.Name);
 				Bounds b = mesh.Bounds;
-				Assert.That(b.min.y, Is.GreaterThanOrEqualTo(0f), $"{spec.Name}: nothing under the water line");
+				// I2i-b: a kind's Reach says how far under the water line it may go (none for the first four) and how far over it.
+				Vector2 reach = FloatingPlantMeshes.Reach(in plant);
+				Assert.That(b.min.y, Is.GreaterThanOrEqualTo(-reach.x - 1e-4f), $"{spec.Name}: nothing further under the water line than its kind reaches");
 				Assert.That(b.min.y, Is.LessThan(0.03f), $"{spec.Name}: lying on the water, not over it");
-				if (plant.Kind != DetailKind.WaterHyacinth)
-				{
-					Assert.That(b.max.y, Is.LessThan(0.15f), $"{spec.Name} lies flat on the water: {b.max.y}");
-				}
+				Assert.That(b.max.y, Is.LessThan(reach.y), $"{spec.Name} stands no higher than its kind: {b.max.y}");
 				foreach (Vector2 w in mesh.Wind)
 				{
 					Assert.That(w, Is.EqualTo(Vector2.zero), $"{spec.Name}: held still");

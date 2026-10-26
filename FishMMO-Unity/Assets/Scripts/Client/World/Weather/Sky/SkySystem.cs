@@ -123,6 +123,7 @@ namespace FishMMO.Client
 		private static readonly int CloudSunColorId = Shader.PropertyToID("_FishCloudSunColor");
 		private static readonly int CloudAmbientId = Shader.PropertyToID("_FishCloudAmbient");
 		private static readonly int CloudHazeId = Shader.PropertyToID("_FishCloudHaze");
+		private static readonly int CloudHazeOpenId = Shader.PropertyToID("_FishCloudHazeOpen");
 		private static readonly int CloudLayerAId = Shader.PropertyToID("_FishCloudLayerA");
 		private static readonly int CloudLayerBId = Shader.PropertyToID("_FishCloudLayerB");
 		private static readonly int CloudLayerCId = Shader.PropertyToID("_FishCloudLayerC");
@@ -325,11 +326,15 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>A profile colour recoloured by the air: its own brightness, the air's hue.</summary>
+		/// <remarks>
+		/// Only the brightness is the profile's (2026-10-26). Water's drops and flakes scatter every colour alike, so the
+		/// profile's bluish rain, snow and hail greys were a tint of their own laid over the air's hue — the two
+		/// multiplied, the authored blue times a mint air — where a fog of them is just the colour of what lights it.
+		/// </remarks>
 		public Color InAir(Color authored)
 		{
-			Color chroma = Chroma(AirChroma, 1f);
-			float chromaLum = chroma.r * 0.2126f + chroma.g * 0.7152f + chroma.b * 0.0722f;
-			Color recoloured = new Color(authored.r * chroma.r, authored.g * chroma.g, authored.b * chroma.b, 1f) * (1f / Mathf.Max(1e-4f, chromaLum));
+			float brightness = authored.r * 0.2126f + authored.g * 0.7152f + authored.b * 0.0722f;
+			Color recoloured = Chroma(AirChroma, brightness);
 			recoloured.a = authored.a;
 			return recoloured;
 		}
@@ -802,9 +807,8 @@ namespace FishMMO.Client
 			sample = TintBySuns(state, sample, out primaryTint);
 			current = sample;
 
-			// The air's colours, from the sample as it now stands: the fog is what mist looks like,
-			// and the skylight is what a cloud's underside is lit by.
-			AirChroma = Chroma(sample.Fog, 0.73f);
+			// The air's colours, from the sample as it now stands: the skylight is what a cloud's underside is lit
+			// by. The fog's (AirChroma) is the light under the cloud, set with the fog colour below (AirLight).
 			CloudShadeChroma = Chroma(sample.AmbientSky, 0.68f);
 
 			float overcast = Mathf.Clamp01(weather[WeatherChannel.CloudCover] * (0.4f + 0.6f * weather[WeatherChannel.CloudDensity]));
@@ -864,12 +868,14 @@ namespace FishMMO.Client
 			LightsMarker.Begin();
 			ApplyLights(state, sample, overcast, eclipse, weather, dt, profile, tier);
 			ApplyAmbient(sample, overcast, eclipse, lightning.Flash);
-			// Under a deck the fog greys toward the overcast's grey — no brighter than the sky's own fog colour (2026-10-21): the
-			// grey was a constant, so at night and in a storm it lit the fog several times over the sky, and the far ground, the
-			// sea and the haze over the horizon (which take this colour) glowed as a band round it. Daylight is as it was.
-			float fogLight = sample.Fog.r * 0.2126f + sample.Fog.g * 0.7152f + sample.Fog.b * 0.0722f;
-			Color overcastGrey = new Color(0.25f, 0.26f, 0.28f) * Mathf.Min(1f, fogLight / 0.26f);
-			FogComposer.SetSkyColor(Color.Lerp(sample.Fog, sample.Fog * 0.7f + overcastGrey * 0.3f, overcast));
+			// The fog is the colour of the light the air is lit by under the cloud (AirLight): the overcast's own grey, as dark
+			// as the ground under it, and the weather's fog takes its hue (InAir), so the far ground fogged by it meets the
+			// cloud base without an edge. It was the clear sky's fog greyed toward a grey of its own — a constant until
+			// 2026-10-21, which lit night and storm fog several times over the sky — and never dimmed by the deck at all.
+			Color airLight = AirLight(sample, state.SunAltitude, out float airThrough);
+			AirLightThrough = airThrough;
+			AirChroma = Chroma(airLight, 0.73f);
+			FogComposer.SetSkyColor(airLight);
 			LightsMarker.End();
 			ReflectionMarker.Begin();
 			UpdateReflection(state, dt, tier);
@@ -1134,6 +1140,8 @@ namespace FishMMO.Client
 			Shader.SetGlobalFloat(NightLightsId, 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(-0.04f, 0.12f, sunDirections[0].y)));
 			// Faerie, rune and crystal glows (SceneGlow, 2026-10-18): faintly from before the lamps, full at night.
 			Shader.SetGlobalFloat(GlowLightsId, SceneGlow.Visibility(sunDirections[0].y));
+			// What the glow modes read of the sky and the weather (GlowSky, 2026-10-25, I6i).
+			GlowSky.Publish(state, in context, sunDirections[0].y);
 
 			Shader.SetGlobalVector(CloudLitId, sample.CloudLit);
 			Shader.SetGlobalVector(CloudShadowId, sample.CloudShadow);
@@ -2020,9 +2028,21 @@ namespace FishMMO.Client
 			// What distance does to a cloud: the air in front of it — its molecules and the dust and
 			// salt in it, swollen by the humidity. Two e-foldings of that air is where the haze curve
 			// is at its strongest: about 26 km on an ordinary day under our own air.
+			// Lit as the air under the low cloud is (AirLight, 2026-10-26): the air between the camera and a far cloud
+			// base is under the same deck, so the base fades into the fog's own dimmed colour toward the horizon instead
+			// of into a clear noon's haze. The open-air haze goes beside it for the rain hanging under a cloud, which the
+			// march dims by the cloud over that spot itself.
 			Color haze = Color.Lerp(sample.Horizon, sample.Fog, 0.5f);
+			Color airLight = AirLight(sample, state != null ? state.SunAltitude : 90f, out float hazeThrough);
 			float hazeDistance = AirPhysics.HazeDistance(planet.AirRelative, CloudViewerColumn.RelativeHumidity);
-			Shader.SetGlobalVector(CloudHazeId, new Vector4(haze.r, haze.g, haze.b, Mathf.Max(2000f, hazeDistance)));
+			Shader.SetGlobalVector(CloudHazeOpenId, new Vector4(haze.r, haze.g, haze.b, Mathf.Clamp01(hazeThrough)));
+			// Under the deck's share of the sky, the haze IS the fog's colour (AirLight): the air there is lit only by the light
+			// the deck lets down, which its drops have made colourless, so it is as dark as the deck's base and the same grey —
+			// one colour for the far sea, the far ground, the sky under the deck and the deck's own far fade to meet on. Dimmed
+			// only, it kept the clear horizon's blue, and under a heavy deck that blue band stood out between the warm-grey base
+			// and the sea (2026-10-26). The open sky's share keeps the clear air's colour.
+			Color hazeUnder = Color.Lerp(haze * hazeThrough, airLight, Mathf.Clamp01(CloudOverheadCover));
+			Shader.SetGlobalVector(CloudHazeId, new Vector4(hazeUnder.r, hazeUnder.g, hazeUnder.b, Mathf.Max(2000f, hazeDistance)));
 		}
 
 		/// <summary>
@@ -2124,6 +2144,15 @@ namespace FishMMO.Client
 			// Mathf.SmoothStep is an interpolation from a to b, not the shader's smoothstep(edge, edge, x):
 			// handed (0.85, 1, overcast) it returns about 0.86 whatever the sky is doing.
 			float strength = low * up * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.85f, 1f, overcast)));
+			// And by how much of the sun's BEAM gets down past the low cloud (2026-10-26): a shaft is air lit by the direct
+			// beam, so it can be only where a line to the sun misses the cloud — the gaps, plus what comes straight through
+			// the cloud itself, which for any real cloud is nothing. The gather cannot tell: it measures each pixel's cloud
+			// against the clearest sky in the frame, and under an even deck that clearest sky is the deck, so a 0.92 deck
+			// letting a tenth of the light down drew full shafts. Nor could the weather's `overcast` above, which is cover
+			// times density (0.66 × 0.4–1) and never reached the 0.85 the cut begins at. Clear sky: 1, as before.
+			float beamMu = Mathf.Max(0.05f, Mathf.Sin(Mathf.Max(0f, state.SunAltitude) * Mathf.Deg2Rad));
+			float beamThrough = Mathf.Lerp(1f, Mathf.Exp(-CloudOverheadDepth / beamMu), Mathf.Clamp01(CloudOverheadCover));
+			strength *= beamThrough;
 
 			Vector3 direction = state.SunDirection;
 			Color colour = sample.SunLight;
@@ -2469,6 +2498,56 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// How much of the open air's light the air under the low cloud gets, 0..1: what the fog, the falling snow and rain
+		/// and the haze in front of a far cloud are lit by, against a clear sky's (<see cref="AirLight"/>). 1 under a clear sky.
+		/// </summary>
+		public float AirLightThrough { get; private set; } = 1f;
+
+		/// <summary>
+		/// The light the air is lit by, as the colour a fog takes in it (2026-10-26): the same sun and sky that light the
+		/// ground and the cloud's base, through the same cloud, so a fog under an overcast is the overcast's own grey and
+		/// meets the cloud base without an edge.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A fog's drops, and snowflakes and raindrops, are far bigger than the light's wavelength: they scatter every
+		/// colour alike, so a fog has no colour of its own — it is the colour of what lights it. A drop is a sphere, so it
+		/// takes the sun's whole beam whatever the sun's height, and half of the sky over it and half of the ground's
+		/// light under it. Under the low cloud the beam and the sky are what the cloud lets through
+		/// (<see cref="CloudLightThrough"/>, <see cref="CloudSkyThrough"/>) — exactly what the ground's sun and ambient
+		/// are scaled by.
+		/// </para>
+		/// <para>
+		/// It was the clear sky's fog colour (the sky model's, a mix of its horizon) greyed a little toward a fixed grey
+		/// by the overcast and never dimmed by it, and the weather's fog colour the render profile's daytime tint dimmed
+		/// only by that: under a deck that let a tenth of the light down, the fog and the far ground fogged by it stayed
+		/// at a clear noon's brightness — a glowing pale band under a dark cloud base, the far terrain's edge lit
+		/// like a clear noon (2026-10-26). How bright a clear day's fog is stays the
+		/// sky model's (its fog's luminance): only the hue and the dimming are the light's.
+		/// </para>
+		/// </remarks>
+		public Color AirLight(in SkySample sample, float sunAltitude, out float through)
+		{
+			Color sky = (sample.AmbientSky + sample.AmbientGround) * 0.5f;
+			Color sun = sample.SunLight * (sample.SunIntensity * (sunAltitude > -1f ? 1f : 0f));
+			Color moon = sample.MoonLight * sample.MoonIntensity;
+			Color open = sun + moon + sky;
+			// The moon through the cloud as the sky's light is: diffused, from overhead on average.
+			Color under = sun * CloudLightThrough(sunAltitude) + (moon + sky) * CloudSkyThrough;
+			float openLight = Luminance(open);
+			float underLight = Luminance(under);
+			through = openLight > 1e-6f ? Mathf.Clamp(underLight / openLight, 0f, 1.5f) : 1f;
+			float brightness = Luminance(sample.Fog) * through;
+			if (underLight <= 1e-6f)
+			{
+				return new Color(brightness, brightness, brightness, 1f);
+			}
+			Color light = Chroma(under, brightness);
+			light.a = 1f;
+			return light;
+		}
+
 		/// <summary>How much of the sky's ambient and reflection is taken away deep underground.</summary>
 		public const float UndergroundAmbientCut = 0.92f;
 		/// <summary>How much of the underground dimming a room's inside gets: 0.6 × 0.92, about the lit pass's own (FISH_INDOOR_DIM).</summary>
@@ -2562,7 +2641,9 @@ namespace FishMMO.Client
 			 * sun disc (the sun light gives its own highlight) and the cloud's dimming, as the ambient has it (FishSky.shader).
 			 * Set for every camera, so it is off again for the next. */
 			bool capture = camera != null && camera.cameraType == CameraType.Reflection;
-			Shader.SetGlobalVector(SkyCaptureId, new Vector4(capture ? 1f : 0f, ambientThrough, 0f, 0f));
+			// z: how much of the open air's light the air under the low cloud gets (AirLightThrough), which the dome's horizon is
+			// dimmed by as the fog is, or the sky beyond the far ground glowed over it under an overcast (2026-10-26).
+			Shader.SetGlobalVector(SkyCaptureId, new Vector4(capture ? 1f : 0f, ambientThrough, AirLightThrough, 0f));
 			// Every camera starts with no cloud buffer of its own: the feature raises the flag once it has published
 			// one FOR THIS CAMERA. Cleared once a frame only, a second camera (the Scene view, a probe) inherited the
 			// first's — its height and froxel fog stood down for a fog its own march never drew, and its water laid

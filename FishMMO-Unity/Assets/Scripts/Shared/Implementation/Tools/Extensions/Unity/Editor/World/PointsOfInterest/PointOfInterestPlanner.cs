@@ -197,6 +197,23 @@ namespace FishMMO.Shared.WorldDesign
 			public readonly float[] OpenSeaDistance;
 			/// <summary>Cells of the open sea, and their summed-area table for <see cref="OpenShareAt"/>.</summary>
 			public readonly bool[] OpenSea;
+			/// <summary>
+			/// The distance to anything but the open sea (ground, a shut-in basin), metres: how far offshore a cell lies (2026-10-25, I2p;
+			/// measured the first time a rule asks, so a scene no offshore kind is sited in pays nothing). Land past the scene's edge is not seen.
+			/// </summary>
+			public float[] LandDistance
+			{
+				get
+				{
+					if (landDistance == null)
+					{
+						landDistance = new float[OpenSea.Length];
+						Chamfer(landDistance, i => !OpenSea[i]);
+					}
+					return landDistance;
+				}
+			}
+			private float[] landDistance;
 			private readonly int[] openSummed;
 			public readonly WaterKind[] Water;
 			public readonly int[] Biome;

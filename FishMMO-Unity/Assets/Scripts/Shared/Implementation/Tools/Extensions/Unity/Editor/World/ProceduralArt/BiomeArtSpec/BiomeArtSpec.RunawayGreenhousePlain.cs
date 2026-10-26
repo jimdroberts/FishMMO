@@ -15,7 +15,9 @@ namespace FishMMO.Shared.WorldDesign
 				C(Ground.Basalt), Ground.Basalt, Ground.Basalt)
 				.Look(BiomeLookClass.Alien)
 				.Wildlife(BiomeHabitat.Barren)
-				.Moat(BiomeMoatWater.Dry);
+				.Moat(BiomeMoatWater.Dry)
+				// Kiln haze (2026-10-25, I2q-b, decision 89), replacing the sulphur dust.
+				.Emits("Kiln Haze", 0.06f);
 		}
 	}
 }

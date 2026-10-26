@@ -29,6 +29,26 @@ namespace FishMMO.Shared.Biomes
 		Streets = 1 << 2,
 	}
 
+	/// <summary>
+	/// How a biome's raised ways are built (<see cref="BiomeTemplate.BoardwalkStyle"/>, 2026-10-25, phase I2i-b): the plank walk on
+	/// piles of I2i, or one of the country walks the biome drafts name. Stored by number: append only. The streets of a settlement
+	/// keep the plank walk between its houses whatever the style; the style is the biome's routed ways' (its roads, paths and trails).
+	/// </summary>
+	/// <remarks>Until 2026-10-25 every boardwalk was planked; <see cref="Planked"/> (every biome's default) keeps it so.</remarks>
+	public enum BiomeBoardwalkStyle : byte
+	{
+		/// <summary>The plank walk (I2i): split planks across stringers on bents of two driven piles, 0.9 m up, a pole handrail.</summary>
+		Planked = 0,
+		/// <summary>A passerella (Farmland): oak planks on stub piles 0.3 m over a wet meadow, one pole rail.</summary>
+		Passerella = 1,
+		/// <summary>A landing walk (Plains): split cottonwood planks on forked posts 0.8 m up, rawhide-lashed, no rail.</summary>
+		LandingWalk = 2,
+		/// <summary>A Bohlensteg (Valley): paired split-larch planks laid lengthwise on driven stakes, 0.6 m wide, low over a fen.</summary>
+		Bohlensteg = 3,
+		/// <summary>A pole-walk (Mangrove): two bark-stripped poles side by side along the way, end-lapped on forked stakes over the mud.</summary>
+		PoleWalk = 4,
+	}
+
 	/// <summary>The boardwalk rules that do not depend on a template asset.</summary>
 	public static class BiomeBoardwalkRules
 	{

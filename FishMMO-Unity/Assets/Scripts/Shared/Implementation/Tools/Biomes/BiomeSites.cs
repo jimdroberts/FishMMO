@@ -219,23 +219,56 @@ namespace FishMMO.Shared.Biomes
 		[Range(0f, 1f)] public float Chance;
 		[Tooltip("The share added for each unit of a piece's decay (0 whole … 1 rubble): the more worn, the more finished.")]
 		[Range(0f, 1f)] public float ChancePerDecay;
+		[Tooltip("A coat the GPU draws over the biome's buildings where they stand (2026-10-25: lichen, rime, salt bloom, soot, a tide-mark…; BiomeStructureCoats). None draws them as before.")]
+		public BiomeStructureCoat Coat;
+		[Tooltip("The share of pieces the coat lies on (0..1), each piece by its position.")]
+		[Range(0f, 1f)] public float CoatCover;
+		[Tooltip("How far the coat lies where it lies (0 none … 1 the recipe's full coat).")]
+		[Range(0f, 1f)] public float CoatStrength;
+		[Tooltip("The biome's own tint of the coat's main colour (alpha: how far it is pulled to it; 0 the recipe's colour).")]
+		public Color CoatTint;
 
 		public BiomeWeathering(BiomeStructureFinish finish, float chance, float chancePerDecay)
 		{
 			Finish = finish;
 			Chance = chance;
 			ChancePerDecay = chancePerDecay;
+			Coat = BiomeStructureCoat.None;
+			CoatCover = 0f;
+			CoatStrength = 0f;
+			CoatTint = default;
+		}
+
+		/// <summary>True when the weathering lays a coat that draws (a coat, some cover, some strength).</summary>
+		public bool Coats => Coat != BiomeStructureCoat.None && CoatCover > 0f && CoatStrength > 0f;
+
+		/// <summary>A copy that also lays <paramref name="coat"/> on <paramref name="cover"/> of the pieces at <paramref name="strength"/> (tint alpha 0: the recipe's colour).</summary>
+		public BiomeWeathering WithCoat(BiomeStructureCoat coat, float cover, float strength = 1f, Color tint = default)
+		{
+			BiomeWeathering copy = this;
+			copy.Coat = coat;
+			copy.CoatCover = Mathf.Clamp01(cover);
+			copy.CoatStrength = Mathf.Clamp01(strength);
+			copy.CoatTint = tint;
+			return copy;
 		}
 
 		/// <summary>The share of pieces of this decay finished (before a ruin's floor for moss).</summary>
 		public float ChanceAt(float decay) => Chance + ChancePerDecay * decay;
 
 		/// <summary>Every value, exactly: the authoring's mark.</summary>
-		public string Signature() => Finish + "|" + Chance.ToString("R", CultureInfo.InvariantCulture) + "|" + ChancePerDecay.ToString("R", CultureInfo.InvariantCulture);
+		/// <remarks>The coat is appended only when there is one ("|coat Lichen|cover|strength|tint rgba"), so every mark written before coats reads the same.</remarks>
+		public string Signature() => Finish + "|" + Chance.ToString("R", CultureInfo.InvariantCulture) + "|" + ChancePerDecay.ToString("R", CultureInfo.InvariantCulture)
+			+ (Coat == BiomeStructureCoat.None ? string.Empty : "|coat " + Coat + "|" + CoatCover.ToString("R", CultureInfo.InvariantCulture) + "|"
+				+ CoatStrength.ToString("R", CultureInfo.InvariantCulture) + "|" + CoatTint.r.ToString("R", CultureInfo.InvariantCulture) + ","
+				+ CoatTint.g.ToString("R", CultureInfo.InvariantCulture) + "," + CoatTint.b.ToString("R", CultureInfo.InvariantCulture) + ","
+				+ CoatTint.a.ToString("R", CultureInfo.InvariantCulture));
 
-		public override string ToString() => Finish == BiomeStructureFinish.None
+		public override string ToString() => (Finish == BiomeStructureFinish.None
 			? "none"
-			: $"{Finish} {Chance.ToString("0.##", CultureInfo.InvariantCulture)} + {ChancePerDecay.ToString("0.##", CultureInfo.InvariantCulture)} × decay";
+			: $"{Finish} {Chance.ToString("0.##", CultureInfo.InvariantCulture)} + {ChancePerDecay.ToString("0.##", CultureInfo.InvariantCulture)} × decay")
+			+ (Coat == BiomeStructureCoat.None ? string.Empty
+				: $", coat {Coat} on {CoatCover.ToString("0.##", CultureInfo.InvariantCulture)} at {CoatStrength.ToString("0.##", CultureInfo.InvariantCulture)}");
 	}
 
 	/// <summary>
@@ -278,6 +311,35 @@ namespace FishMMO.Shared.Biomes
 			+ (Rows > 0f ? "|rows " + Rows.ToString("R", CultureInfo.InvariantCulture) : string.Empty);
 	}
 
+	/// <summary>The field-crop rules that do not depend on a template asset (pure).</summary>
+	public static class BiomeFieldCrops
+	{
+		/// <summary>
+		/// Whether a biome's fields sow nothing at all (decision 25, 2026-10-25), so its settlements lay no fields: only a list
+		/// authored so (<paramref name="authored"/>, the template's mark: a list never authored grows wheat) in which no entry
+		/// weighs anything, with no orchard planted instead. An entry with a weight but no prefab (its art missing) still counts
+		/// as sown: the fields are laid and left unsown, as before, rather than vanishing because a prefab was lost.
+		/// </summary>
+		public static bool SowsNothing(bool authored, IReadOnlyList<BiomeFieldCrop> crops, int orchards)
+		{
+			if (!authored || orchards > 0)
+			{
+				return false;
+			}
+			if (crops != null)
+			{
+				for (int i = 0; i < crops.Count; i++)
+				{
+					if (crops[i].Weight > 0f)
+					{
+						return false;
+					}
+				}
+			}
+			return true;
+		}
+	}
+
 	/// <summary>
 	/// What stands in a stronghold's moat in a biome (<see cref="BiomeTemplate.MoatWater"/>): open water, ice, or nothing (a dry
 	/// ditch). Append-only (stored by value).
@@ -286,7 +348,8 @@ namespace FishMMO.Shared.Biomes
 	/// Until 2026-10-16 (phase I5b) the moat shaper read it from the biome's climate envelope: a dry ditch where the envelope's
 	/// mean humidity is under −0.3, else water, frozen where its mean temperature is under −0.5 (<see cref="BiomeMoatWaters.FromClimate"/>).
 	/// The biome art authoring writes each biome what that rule gave it. A moat of molten rock (a volcanic stronghold's lava
-	/// ditch) is not offered: the scene's water has no lava lakes yet (a hydrology/generator task for a later phase).
+	/// ditch, <see cref="Lava"/>, 2026-10-25, phase I2r) is dug as a dry ditch and drawn as a lava ring along its floor by the client
+	/// (BiomeLavaChannels.MoatLines): no water, no hydrology. Append-only (serialised on the templates).
 	/// </remarks>
 	public enum BiomeMoatWater : byte
 	{
@@ -296,6 +359,8 @@ namespace FishMMO.Shared.Biomes
 		Dry = 1,
 		/// <summary>Water frozen over.</summary>
 		Frozen = 2,
+		/// <summary>Molten lava along the ditch's floor (decision 95, Volcanic Temple): dug dry, drawn molten (2026-10-25, phase I2r).</summary>
+		Lava = 3,
 	}
 
 	/// <summary>The moat rules that do not depend on a template asset.</summary>

@@ -111,6 +111,35 @@ namespace FishMMO.Shared.WorldDesign
 		WaterHyacinth,
 		/// <summary>Frogbit: little kidney-shaped floating leaves in rosettes, a few three-petalled white flowers.</summary>
 		Frogbit,
+		// The floating kinds the biome drafts name (FloatingPlantMeshes, 2026-10-25, I2i-b), one per BiomeFloatingPlantKind from
+		// Tasselweed on, in its order; appended so every earlier kind keeps its value.
+		Tasselweed,
+		SacredLotus,
+		WaterChestnut,
+		Watercress,
+		AmericanLotus,
+		WaterClover,
+		WaterLettuce,
+		WaterSnowflake,
+		Ottelia,
+		Azolla,
+		FloatingHeart,
+		WaterSoldier,
+		WaterFern,
+		Bladderwort,
+		Spongeplant,
+		Pennywort,
+		BergyBits,
+		SaltRaft,
+		AmphibiousBistort,
+		Starwort,
+		WaterCrowfoot,
+		Pondweed,
+		BlueLotus,
+		FrothRaft,
+		PropaguleRaft,
+		TanninFoam,
+		Gutweed,
 	}
 
 	/// <summary>One detail plant's recipe.</summary>

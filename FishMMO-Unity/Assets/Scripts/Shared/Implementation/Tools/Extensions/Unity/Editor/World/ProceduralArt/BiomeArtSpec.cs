@@ -177,6 +177,16 @@ namespace FishMMO.Shared.WorldDesign
 				return this;
 			}
 
+			/// <summary>World band (TerrainTextureLayer.worldBand, decision 68): off (the default) for every layer. Set through <see cref="World"/>.</summary>
+			public BiomeWorldBand WorldBand;
+
+			/// <summary>Paints this ground only on worlds that meet <paramref name="requires"/> and none of <paramref name="forbids"/> (a reed bed: <c>D(...).World(BiomeWorldRequirement.LiquidWater)</c>; a salt crust: <c>.World(0, BiomeWorldRequirement.LiquidWater)</c>). A main layer so banded gives its place to the first banded detail the world admits.</summary>
+			public Layer World(BiomeWorldRequirement requires, BiomeWorldRequirement forbids = BiomeWorldRequirement.None)
+			{
+				WorldBand = BiomeWorldBand.Of(requires, forbids);
+				return this;
+			}
+
 			/// <summary>
 			/// Underground band (TerrainTextureLayer.underground, 2026-10-25, phase I2n, decision 57): whether this ground is laid on
 			/// the open land, inside the caves the biome dresses, or both (the default). Set through <see cref="Underground"/>.
@@ -269,6 +279,45 @@ namespace FishMMO.Shared.WorldDesign
 				SeaDepthInTides = SeaDepth.HasValue;
 				return this;
 			}
+
+			/// <summary>
+			/// Lava band (TerrainTextureLayer.useLavaBand, 2026-10-25, phase I2r, decision 65 (b)): the height above the scene's lava surface
+			/// this ground is painted between (negative below it), x the lowest and y the highest, m; an end at or past
+			/// ±BiomeSeaFloors.OpenDepth open. Null for none, as every layer was before. Set through <see cref="Lava"/>.
+			/// </summary>
+			public Vector2? LavaBand;
+			/// <summary>The lava band's soft edge at each closed end, m.</summary>
+			public float LavaFalloff = BiomeSeaFloors.DefaultDepthFalloff;
+
+			/// <summary>
+			/// Paints this ground only between <paramref name="lowest"/> and <paramref name="highest"/> metres above the lava's surface
+			/// (0 for an open end): a lava lake's glassy shore bench <c>D(Ground.X, 40f).Lava(-1f, 2f)</c>. Every band passes on a scene
+			/// with no lava. On the main layer it says where the base ground stands (the details carry the ground outside it).
+			/// </summary>
+			public Layer Lava(float lowest, float highest, float falloff = BiomeSeaFloors.DefaultDepthFalloff)
+			{
+				float x = lowest == 0f ? -BiomeSeaFloors.OpenDepth : lowest;
+				float y = highest == 0f ? BiomeSeaFloors.OpenDepth : highest;
+				LavaBand = BiomeSeaFloors.Closes(new Vector2(x, y)) ? new Vector2(Mathf.Min(x, y), Mathf.Max(x, y)) : (Vector2?)null;
+				LavaFalloff = Mathf.Max(0f, falloff);
+				return this;
+			}
+
+			/// <summary>
+			/// How this ground glows (TerrainTextureLayer.glow, 2026-10-25, phase I2r, decision 65 (a)): none (the default, as every layer was),
+			/// or a <see cref="BiomeGroundGlow"/>. Set through <see cref="Glows"/>.
+			/// </summary>
+			public BiomeGroundGlow Glow;
+
+			/// <summary>
+			/// Makes this ground glow: <c>D(Ground.X, 40f).Glows(BiomeGroundGlow.Seams(1400f, 6f, 400))</c> for a crust whose seams glow as its
+			/// plates overturn on the shared clock, <c>L(Ground.Y).Glows(BiomeGroundGlow.Whole())</c> for ground at the world's own heat.
+			/// </summary>
+			public Layer Glows(BiomeGroundGlow glow)
+			{
+				Glow = glow;
+				return this;
+			}
 		}
 
 		/// <summary>A cliff layer: a family on faces steeper than an angle.</summary>
@@ -294,6 +343,16 @@ namespace FishMMO.Shared.WorldDesign
 			public Cliff Underground(BiomeUnderground band)
 			{
 				UndergroundBand = band;
+				return this;
+			}
+
+			/// <summary>World band (TerrainTextureLayer.worldBand, decision 68): off (the default). Set through <see cref="World"/>.</summary>
+			public BiomeWorldBand WorldBand;
+
+			/// <summary>Paints this rock face only on worlds that meet <paramref name="requires"/> and none of <paramref name="forbids"/>.</summary>
+			public Cliff World(BiomeWorldRequirement requires, BiomeWorldRequirement forbids = BiomeWorldRequirement.None)
+			{
+				WorldBand = BiomeWorldBand.Of(requires, forbids);
 				return this;
 			}
 		}
@@ -403,6 +462,16 @@ namespace FishMMO.Shared.WorldDesign
 			/// through <see cref="OnLandform"/>.
 			/// </summary>
 			public BiomeLandformBand Zone;
+			/// <summary>
+			/// Talus size grading (<see cref="PrefabSpawnRule.talusGrading"/>, 2026-10-25, phase I2u, decision 79 (d)): off for none. Set
+			/// through <see cref="TalusGraded"/>.
+			/// </summary>
+			public bool Graded;
+			/// <summary>
+			/// Scatter modes (<see cref="PrefabSpawnRule.scatterMode"/>, 2026-10-26, phase SCATTER-MODES, decision 34): all off for none. Set
+			/// through <see cref="Moded"/> (or the drafts' named modes, BiomeScatterMode.LeeDrift, .EvenSpacing, …).
+			/// </summary>
+			public BiomeScatterMode Mode;
 			/// <summary>
 			/// Tree-channel rules: the heading range instances are turned to, degrees about the vertical
 			/// (<see cref="PrefabSpawnRule.yRotationRange"/>). Any heading unless set through <see cref="Aligned"/>.
@@ -774,6 +843,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				BiomeWaterLook look = waterTint ?? BiomeWaterLooks.Today;
 				look.Hot |= hotWater;
+				look.Melt |= meltWater;
 				return look;
 			}
 
@@ -799,6 +869,55 @@ namespace FishMMO.Shared.WorldDesign
 			public Entry Geothermal(float geyser, float hotSpring, float fumarole, float mudPot)
 			{
 				GeothermalShares = new BiomeGeothermalShares(Mathf.Max(0f, geyser), Mathf.Max(0f, hotSpring), Mathf.Max(0f, fumarole), Mathf.Max(0f, mudPot));
+				return this;
+			}
+
+			/// <summary>
+			/// Sets the split with jets and sulphur pools (2026-10-25, phase I2q-b, decisions 53/84), and the biome's own site rate (decision
+			/// 84: above 0, its ground has every kind of the split at that rate whatever it emits) and the colour its vents fume (alpha 0: none).
+			/// </summary>
+			public Entry Geothermal(float geyser, float hotSpring, float fumarole, float mudPot, float jet, float sulphurPool, float rate = 0f, Color fumeTint = default)
+			{
+				GeothermalShares = new BiomeGeothermalShares(Mathf.Max(0f, geyser), Mathf.Max(0f, hotSpring), Mathf.Max(0f, fumarole), Mathf.Max(0f, mudPot))
+					.WithMore(jet, sulphurPool).WithRate(rate, fumeTint);
+				return this;
+			}
+
+			private bool meltWater;
+
+			/// <summary>
+			/// Makes the biome's fresh water a MELT (<see cref="BiomeWaterLook.Melt"/>, 2026-10-25, phase I2q-b, decision 84: molten sulphur
+			/// in its pools): opaque and viscous, slow small ripples, its colour drifting on the shared clock. Its colours stay the file's.
+			/// </summary>
+			public Entry MeltWater()
+			{
+				meltWater = true;
+				return this;
+			}
+
+			/// <summary>
+			/// Where the biome's vents stand and how their strength moves, when the file says (<see cref="BiomeTemplate.Vents"/>, 2026-10-25,
+			/// phase I2q-b); null leaves the template's (the grid, steady).
+			/// </summary>
+			public BiomeVents? VentPlan;
+
+			/// <summary>Lays the biome's vents out (Grid, Fissures, Terrace, Ridges) and times them (Steady, PlumeTide, Solar, Strombolian, Episode, Kneading); maxPlumes caps its plumes a scene (0: none of its own).</summary>
+			public Entry Vents(BiomeVentLayout layout, BiomeVentTiming timing, int maxPlumes = 0)
+			{
+				VentPlan = new BiomeVents(layout, timing, maxPlumes);
+				return this;
+			}
+
+			/// <summary>
+			/// How the biome's ground burns on the shared clock, when the file says (<see cref="BiomeTemplate.BurnRegime"/>, 2026-10-25,
+			/// phase I2t, decisions 75/82/84); null leaves the template's (none).
+			/// </summary>
+			public BiomeBurnRegime? BurnRegime;
+
+			/// <summary>Sets how the biome's ground burns: Occasional (a steppe's spring burn), Annual (a savanna's veld fires), Brimstone (blue sulphur fire at night, breathable worlds only).</summary>
+			public Entry Burns(BiomeBurnRegime regime)
+			{
+				BurnRegime = regime;
 				return this;
 			}
 
@@ -910,7 +1029,11 @@ namespace FishMMO.Shared.WorldDesign
 				return this;
 			}
 
-			/// <summary>The crystals the biome's caves grow (<see cref="BiomeTemplate.CaveCrystals"/>): the file's own, else selenite. A fresh list.</summary>
+			/// <summary>
+			/// The crystals the biome's caves grow (<see cref="BiomeTemplate.CaveCrystals"/>): the file's own, else selenite. A fresh
+			/// list. A kind the file names grows in the biome's own look of it where the catalogue has one for the biome
+			/// (ProceduralArtCatalogue.CaveMineralLooks, 2026-10-26); the default selenite always in its own.
+			/// </summary>
 			public List<BiomeCaveCrystal> CaveCrystals()
 			{
 				if (crystals == null)
@@ -920,7 +1043,7 @@ namespace FishMMO.Shared.WorldDesign
 				var list = new List<BiomeCaveCrystal>(crystals.Length);
 				foreach ((BiomeCaveCrystalKind kind, float weight) in crystals)
 				{
-					list.Add(new BiomeCaveCrystal(kind, weight));
+					list.Add(new BiomeCaveCrystal(kind, weight, ProceduralArtCatalogue.CaveMineralLookFor(kind, Biome)));
 				}
 				return list;
 			}
@@ -1009,15 +1132,94 @@ namespace FishMMO.Shared.WorldDesign
 				return list;
 			}
 
-			/// <summary>Gives the biome's caves of a form their own glow: the crystals' hue name (empty: by chance), the fungus's share and the glow-worms' chance (1 the dressing's own).</summary>
-			public Entry CaveGlow(CaveForm form, string crystal, float fungus = 1f, float worms = 1f)
+			/// <summary>
+			/// Gives the biome's caves of a form their own glow: the crystals' hue name (empty: by chance), the fungus's share and the
+			/// glow-worms' chance (1 the dressing's own), and (2026-10-25, I2n-c, decision 86 (e)) the glow-worms' hue name in the cave
+			/// glow art (null: its first) and where they hang.
+			/// </summary>
+			public Entry CaveGlow(CaveForm form, string crystal, float fungus = 1f, float worms = 1f, string wormHue = null,
+				BiomeCaveWormMount wormMount = BiomeCaveWormMount.Roof)
 			{
 				caveGlows ??= BiomeCaveInteriors.DefaultGlows();
 				caveGlows.RemoveAll(g => g.Form == (BiomeCaveForm)form);
-				caveGlows.Add(new BiomeCaveGlow((BiomeCaveForm)form, crystal, Mathf.Max(0f, fungus), Mathf.Max(0f, worms)));
+				caveGlows.Add(new BiomeCaveGlow((BiomeCaveForm)form, crystal, Mathf.Max(0f, fungus), Mathf.Max(0f, worms), wormHue, wormMount));
 				caveGlows.Sort((a, b) => a.Form.CompareTo(b.Form));
 				return this;
 			}
+
+			// ── Drowned galleries (2026-10-25, phase I2n-c, decision 86) ──
+			//
+			// How the biome's caves stand in the water table (CaveFloods: none by default, every cave as before), what hangs from their
+			// roofs (CaveHangings: the cave dressing's own per-form choice by default, so nothing moves) and the tea ring their water
+			// leaves on the walls (CaveStains: none by default).
+
+			private List<BiomeCaveFlood> caveFloods;
+			private List<BiomeCaveHanging> caveHangings;
+			private List<BiomeCaveStain> caveStains;
+
+			/// <summary>
+			/// Drowns the biome's caves of a form (a natural cave on wet ground, in <paramref name="share"/> of systems) or deepens a
+			/// grotto's pool: floors up to <paramref name="depth"/> metres under the water (decision 86 (a): Cave 1.2, Grotto 1.5), with
+			/// marsh-gas beads at <paramref name="bubbles"/> (0 none).
+			/// </summary>
+			public Entry CaveFlood(CaveForm form, float depth, float share, float bubbles = 0f)
+			{
+				caveFloods ??= new List<BiomeCaveFlood>();
+				caveFloods.RemoveAll(f => f.Form == (BiomeCaveForm)form);
+				caveFloods.Add(new BiomeCaveFlood((BiomeCaveForm)form, Mathf.Max(0f, depth), Mathf.Clamp01(share), Mathf.Max(0f, bubbles)));
+				caveFloods.Sort((a, b) => a.Form.CompareTo(b.Form));
+				return this;
+			}
+
+			/// <summary>How the biome's caves stand in the water table (<see cref="BiomeTemplate.CaveFloods"/>): the file's own, none by default. A fresh list.</summary>
+			public List<BiomeCaveFlood> CaveFloods() => caveFloods != null ? new List<BiomeCaveFlood>(caveFloods) : new List<BiomeCaveFlood>();
+
+			/// <summary>
+			/// What hangs from the biome's caves' roofs of a form (decision 86 (d)): silk, roots in the dark and near a mouth, guano (1 a
+			/// limestone cave's), the roots' art and the most root windows a system opens (decision 86 (f), 0 none).
+			/// </summary>
+			public Entry CaveHanging(CaveForm form, float silk, float deepRoots, float rootsNearMouth, float guano,
+				BiomeCaveRootArt roots = BiomeCaveRootArt.Hanging, int rootWindows = 0)
+			{
+				caveHangings ??= DefaultCaveHangings();
+				caveHangings.RemoveAll(h => h.Form == (BiomeCaveForm)form);
+				caveHangings.Add(new BiomeCaveHanging((BiomeCaveForm)form, Mathf.Max(0f, silk), Mathf.Max(0f, deepRoots), Mathf.Max(0f, rootsNearMouth),
+					Mathf.Max(0f, guano), roots, Mathf.Clamp(rootWindows, 0, 3)));
+				caveHangings.Sort((a, b) => a.Form.CompareTo(b.Form));
+				return this;
+			}
+
+			/// <summary>What hangs from the biome's caves' roofs (<see cref="BiomeTemplate.CaveHangings"/>): the dressing's own by form, with the file's own. A fresh list.</summary>
+			public List<BiomeCaveHanging> CaveHangings() => caveHangings != null ? new List<BiomeCaveHanging>(caveHangings) : DefaultCaveHangings();
+
+			/// <summary>
+			/// What hung from every form's roofs until 2026-10-25 (CaveHanging.For: silk, deep roots and the habitat's guano by form;
+			/// CaveFungi's plan by form for the roots near a mouth, before the land over it is weighed): what every template is
+			/// authored with, in the forms' order.
+			/// </summary>
+			public static List<BiomeCaveHanging> DefaultCaveHangings()
+			{
+				var list = new List<BiomeCaveHanging>();
+				foreach (CaveForm form in (CaveForm[])Enum.GetValues(typeof(CaveForm)))
+				{
+					CaveHangingPlan plan = global::FishMMO.Shared.WorldDesign.CaveHanging.Coded(form);
+					list.Add(new BiomeCaveHanging((BiomeCaveForm)form, plan.Silk, plan.DeepRoots, CaveFungi.CodedRootsNearMouth(form), plan.Guano));
+				}
+				return list;
+			}
+
+			/// <summary>Gives the biome's cave water of a form a tea ring on the walls (decision 86 (g)): its colour and strength (alpha), the highest flood over the water, the top edge's fade, metres.</summary>
+			public Entry CaveStain(CaveForm form, Color colour, float rise, float edge = 0.05f)
+			{
+				caveStains ??= new List<BiomeCaveStain>();
+				caveStains.RemoveAll(s => s.Form == (BiomeCaveForm)form);
+				caveStains.Add(new BiomeCaveStain((BiomeCaveForm)form, colour, Mathf.Max(0f, rise), Mathf.Max(0.005f, edge)));
+				caveStains.Sort((a, b) => a.Form.CompareTo(b.Form));
+				return this;
+			}
+
+			/// <summary>The tea ring the biome's cave water leaves (<see cref="BiomeTemplate.CaveStains"/>): the file's own, none by default. A fresh list.</summary>
+			public List<BiomeCaveStain> CaveStains() => caveStains != null ? new List<BiomeCaveStain>(caveStains) : new List<BiomeCaveStain>();
 
 			/// <summary>What lights the biome's caves by itself (<see cref="BiomeTemplate.CaveGlows"/>): the dressing's own by form, with the file's own. A fresh list.</summary>
 			public List<BiomeCaveGlow> CaveGlows() => caveGlows != null ? new List<BiomeCaveGlow>(caveGlows) : BiomeCaveInteriors.DefaultGlows();
@@ -1050,6 +1252,66 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				return list;
 			}
+
+			// ── Sea floats (2026-10-25, I2p) ──
+			//
+			// What drifts on the biome's open sea (BiomeTemplate.SeaFloats): nothing in every biome before, which stays every
+			// biome's default; a biome's own file names its own with FloatsAtSea.
+
+			private (BiomeSeaFloatKind Kind, float Weight)[] seaFloats;
+
+			/// <summary>Gives the biome's open sea what drifts on it (each with how thickly, 1 its natural density): sargassum, by-the-wind sailors, barnacled logs, propagule rafts, corklines, growlers, pumice, pancake or brash ice.</summary>
+			public Entry FloatsAtSea(params (BiomeSeaFloatKind Kind, float Weight)[] kinds)
+			{
+				seaFloats = kinds ?? Array.Empty<(BiomeSeaFloatKind, float)>();
+				return this;
+			}
+
+			/// <summary>What drifts on the biome's open sea (<see cref="BiomeTemplate.SeaFloats"/>): the file's own, else none. A fresh list.</summary>
+			public List<BiomeSeaFloat> SeaFloats()
+			{
+				if (seaFloats == null)
+				{
+					return BiomeSeaFloats.None();
+				}
+				var list = new List<BiomeSeaFloat>(seaFloats.Length);
+				foreach ((BiomeSeaFloatKind kind, float weight) in seaFloats)
+				{
+					list.Add(new BiomeSeaFloat(kind, weight));
+				}
+				return list;
+			}
+
+			// ── Glow modes + fountain episodes (2026-10-25, I6i) ──
+			//
+			// How the biome's cold glows move (BiomeTemplate.GlowModes): no entry in every biome before, which stays every biome's
+			// default (way glows pulse, stormglass flickers, crystals shine steady); a biome's own file names its own with GlowMode.
+			// Its lava-fountain episodes (BiomeTemplate.FountainEpisodes, decision 93): none unless its file names them.
+
+			private List<BiomeGlowMode> glowModes;
+			private BiomeFountainEpisodes? fountainEpisodes;
+
+			/// <summary>Moves one source of the biome's cold glows (Way: glowjars, rune stones; Crystal: its glowing crystals) by a mode, warm or cold; every: Step/DayCount's count of days (0 the mode's own).</summary>
+			public Entry GlowMode(SceneGlowSource source, SceneGlowMode mode, bool warm = false, int every = 0)
+			{
+				glowModes ??= new List<BiomeGlowMode>();
+				glowModes.RemoveAll(g => g.Source == source);
+				glowModes.Add(new BiomeGlowMode(source, mode, warm, every));
+				return this;
+			}
+
+			/// <summary>How the biome's cold glows move (<see cref="BiomeTemplate.GlowModes"/>): the file's own, else none. A fresh list.</summary>
+			public List<BiomeGlowMode> GlowModes() => glowModes != null ? new List<BiomeGlowMode>(glowModes) : BiomeGlowModes.None();
+
+			/// <summary>Gives the biome lava-fountain episodes (decision 93): slot lengths dividing 10 000 s, the share of a slot a fountain plays, its ramps, its jets' heights.</summary>
+			public Entry Fountains(BiomeFountainEpisodes episodes)
+			{
+				fountainEpisodes = episodes;
+				return this;
+			}
+
+			/// <summary>The biome's lava-fountain episodes (<see cref="BiomeTemplate.FountainEpisodes"/>): the file's own, else none.</summary>
+			public BiomeFountainEpisodes FountainEpisodes() => fountainEpisodes ?? default;
 
 			// ── Sculpted landforms (2026-10-18, I2g) ──
 			//
@@ -1534,6 +1796,20 @@ namespace FishMMO.Shared.WorldDesign
 				return this;
 			}
 
+			/// <summary>
+			/// How the biome's raised routed ways are built (<see cref="BiomeTemplate.BoardwalkStyle"/>, 2026-10-25, I2i-b): planked
+			/// unless the biome's file names a style (<see cref="RaisesBoardwalks(BiomeBoardwalks, BiomeBoardwalkStyle)"/>).
+			/// </summary>
+			public BiomeBoardwalkStyle BoardwalkStyle = BiomeBoardwalkStyle.Planked;
+
+			/// <summary>Raises the biome's ways as boardwalks (<see cref="Boardwalks"/>) built in <paramref name="style"/> (<see cref="BoardwalkStyle"/>).</summary>
+			public Entry RaisesBoardwalks(BiomeBoardwalks ways, BiomeBoardwalkStyle style)
+			{
+				Boardwalks = ways;
+				BoardwalkStyle = style;
+				return this;
+			}
+
 			/// <summary>Gives a kind its own weight here in place of the catalogue's (0: never sited here).</summary>
 			public Entry Hosts(POIType kind, float weight)
 			{
@@ -1557,29 +1833,21 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>True when a kind needs breathable air here: the file's own word, else BiomeSiteAir's default.</summary>
 			public bool NeedsAir(POIType kind) => breathes != null && breathes.TryGetValue(kind, out bool needs) ? needs : BiomeSiteAir.NeedsAirByDefault(kind);
 
-			private HashSet<POIType> wets;
+			private Dictionary<POIType, bool> wets;
 
 			/// <summary>
-			/// Says a kind needs liquid water on the world's surface here (<see cref="BiomeSiteKind.NeedsLiquidWater"/>, decision 68,
-			/// 2026-10-25): <c>.Water(POIType.FishingCamp)</c> for a camp at a lead in shelf ice, never on an ice world's frozen sea.
-			/// No kind needs it unless a file says so.
+			/// Says whether a kind needs liquid water on the world's surface here (<see cref="BiomeSiteKind.NeedsLiquidWater"/>, decision 68,
+			/// 2026-10-25) in place of BiomeSiteAir's default: <c>.Water(POIType.FishingCamp)</c> for a camp at a lead in shelf ice, never
+			/// on an ice world's frozen sea. No kind older than the biome rounds' own (phase NEW-POI-KINDS) needs it by default.
 			/// </summary>
 			public Entry Water(POIType kind, bool needsLiquidWater = true)
 			{
-				wets ??= new HashSet<POIType>();
-				if (needsLiquidWater)
-				{
-					wets.Add(kind);
-				}
-				else
-				{
-					wets.Remove(kind);
-				}
+				(wets ??= new Dictionary<POIType, bool>())[kind] = needsLiquidWater;
 				return this;
 			}
 
-			/// <summary>True when a kind needs liquid water here: only where the file says so.</summary>
-			public bool NeedsWater(POIType kind) => wets != null && wets.Contains(kind);
+			/// <summary>True when a kind needs liquid water here: the file's word, else BiomeSiteAir's default.</summary>
+			public bool NeedsWater(POIType kind) => wets != null && wets.TryGetValue(kind, out bool needs) ? needs : BiomeSiteAir.NeedsWaterByDefault(kind);
 
 			/// <summary>
 			/// Adds a cliff layer after the first (a cliff of another air: <c>.AddCliff(C(Ground.X, 34f).Air(BiomeAtmosphereRequirement.Thin))</c>
@@ -1724,7 +1992,20 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>Gives the biome its own weathering of buildings and stones in place of its name's (<see cref="BiomeWeathering"/>).</summary>
 			public Entry Weathers(BiomeStructureFinish finish, float chance, float chancePerDecay)
 			{
-				weathers = new BiomeWeathering(finish, chance, chancePerDecay);
+				BiomeWeathering kept = weathers ?? default;
+				weathers = new BiomeWeathering(finish, chance, chancePerDecay).WithCoat(kept.Coat, kept.CoatCover, kept.CoatStrength, kept.CoatTint);
+				return this;
+			}
+
+			/// <summary>
+			/// Lays a coat over the biome's buildings on the GPU (<see cref="BiomeStructureCoat"/>, 2026-10-25: a draft's new finish), on
+			/// <paramref name="cover"/> of the pieces at <paramref name="strength"/>, its main colour pulled to <paramref name="tint"/> by the
+			/// tint's alpha (0: the recipe's). Keeps the finish (<see cref="Weathers"/>, else the name's); a draft whose finish "falls back"
+			/// to Mossy until built sets Weathers(None, 0, 0) beside it when the coat replaces it. Use either order.
+			/// </summary>
+			public Entry Coated(BiomeStructureCoat coat, float cover, float strength = 1f, Color tint = default)
+			{
+				weathers = (weathers ?? WeatheringByName(Biome)).WithCoat(coat, cover, strength, tint);
 				return this;
 			}
 
@@ -1740,6 +2021,9 @@ namespace FishMMO.Shared.WorldDesign
 				crops = fieldCrops ?? Array.Empty<(string, float)>();
 				return this;
 			}
+
+			/// <summary>Sows nothing (decision 25, 2026-10-25): the biome's Field Crops authored empty, so with no orchard its settlements lay no fields.</summary>
+			public Entry NoCrops() => Crops();
 
 			/// <summary>The crops the biome's fields grow, by detail prefab name (<see cref="BiomeTemplate.FieldCrops"/>): the file's own (<see cref="Crops"/>), else wheat.</summary>
 			public List<(string Prefab, float Weight)> FieldCrops()
@@ -2933,6 +3217,26 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			BiomeLandformBand band = BiomeLandformBand.Of(part, kind, outside);
 			AndEarlier(rule, r => r.Zone = band);
+			return rule;
+		}
+
+		/// <summary>
+		/// Grades a tree-channel rule's sizes on its biome's talus cones (<see cref="PrefabSpawnRule.talusGrading"/>, 2026-10-25, phase I2u,
+		/// decision 79 (d)): ×0.6 at a cone's apex to ×1.8 at its toe. A rule without this call is written exactly as before.
+		/// </summary>
+		private static Scatter TalusGraded(Scatter rule)
+		{
+			AndEarlier(rule, r => r.Graded = true);
+			return rule;
+		}
+
+		/// <summary>
+		/// Gives a rule scatter modes (<see cref="PrefabSpawnRule.scatterMode"/>, 2026-10-26, phase SCATTER-MODES, decision 34):
+		/// <c>Moded(Rocks(...), BiomeScatterMode.LeeDrift(8f))</c>. A rule without this call is written exactly as before.
+		/// </summary>
+		private static Scatter Moded(Scatter rule, BiomeScatterMode mode)
+		{
+			AndEarlier(rule, r => r.Mode = mode);
 			return rule;
 		}
 

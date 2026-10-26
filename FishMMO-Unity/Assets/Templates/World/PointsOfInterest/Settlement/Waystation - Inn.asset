@@ -22,6 +22,7 @@ MonoBehaviour:
   Small: 1
   Medium: 1
   Large: 1
+  NeedsLiquidWater: 0
   PadFlatness: 1
   Style: timber
   Layout: 0
@@ -81,16 +82,16 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506278254183281
-  - rid: 4061506278254183282
-  - rid: 4061506278254183283
-  - rid: 4061506278254183284
-  - rid: 4061506278254183285
-  - rid: 4061506278254183286
+  - rid: 4061506389932245573
+  - rid: 4061506389932245574
+  - rid: 4061506389932245575
+  - rid: 4061506389932245576
+  - rid: 4061506389932245577
+  - rid: 4061506389932245578
   references:
     version: 2
     RefIds:
-    - rid: 4061506278254183281
+    - rid: 4061506389932245573
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -103,24 +104,24 @@ MonoBehaviour:
         Clearings:
         - {x: -1.435713, y: 2, z: 7.0349936}
         - {x: 1.535693, y: 1.5, z: 7.5248957}
-    - rid: 4061506278254183282
+    - rid: 4061506389932245574
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506278254183283
+    - rid: 4061506389932245575
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506278254183284
+    - rid: 4061506389932245576
       type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: -1.435713, y: 7.0349936}
-    - rid: 4061506278254183285
+    - rid: 4061506389932245577
       type: {class: RespawnFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: 1.535693, y: 7.5248957}
-    - rid: 4061506278254183286
+    - rid: 4061506389932245578
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 1

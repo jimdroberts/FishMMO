@@ -47,6 +47,8 @@ namespace FishMMO.Water
 		public float Level;
 		/// <summary>The terrains it was built from, to notice one arriving or leaving.</summary>
 		public int TerrainCount;
+		/// <summary>The glowing ground's version it was built with (<see cref="FishMMO.Shared.Weather.GroundGlowMask.Version"/>).</summary>
+		public int GlowVersion;
 
 		private struct Tile
 		{
@@ -85,6 +87,7 @@ namespace FishMMO.Water
 		{
 			TerrainCount = terrains.Count;
 			Level = level;
+			GlowVersion = FishMMO.Shared.Weather.GroundGlowMask.Version;
 			if (terrains.Count == 0)
 			{
 				return false;
@@ -148,10 +151,17 @@ namespace FishMMO.Water
 			}
 
 			var bytes = new byte[resolution * resolution];
+			// Glowing ground counts as molten by its share (2026-10-25, phase I2r: GroundGlowMask, from the client's terrain layers).
+			System.Func<float, float, float> glowing = FishMMO.Shared.Weather.GroundGlowMask.ShareAt;
 			for (int i = 0; i < bytes.Length; i++)
 			{
 				// No ground under a texel: the disc's lava shows there.
 				float molten = ground[i] == float.MinValue ? 1f : Mathf.Clamp01((level - ground[i]) / (2f * ShoreSoftness) + 0.5f);
+				if (glowing != null && molten < 1f && ground[i] != float.MinValue)
+				{
+					float wx = minX + (i % resolution + 0.5f) * TexelMetres, wz = minZ + (i / resolution + 0.5f) * TexelMetres;
+					molten = Mathf.Max(molten, Mathf.Clamp01(glowing(wx, wz)));
+				}
 				bytes[i] = (byte)Mathf.RoundToInt(molten * 255f);
 			}
 

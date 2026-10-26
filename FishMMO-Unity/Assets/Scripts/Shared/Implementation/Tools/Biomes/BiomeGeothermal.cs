@@ -34,6 +34,14 @@ namespace FishMMO.Shared.Biomes
 		[Min(0f)] public float Fumarole;
 		[Tooltip("Share that are mud pots: grey boiling mud that plops on the shared clock. 0 for none (every biome until 2026-10-18).")]
 		[Min(0f)] public float MudPot;
+		[Tooltip("Share that are jets (2026-10-25, I2q-b, decision 53): a fissure's narrow jets of vapour and ice grains. 0 for none. Sites on stored fissure and ridge lines are jets whatever the split says.")]
+		[Min(0f)] public float Jet;
+		[Tooltip("Share that are sulphur pools (2026-10-25, I2q-b, decision 84): ponds of molten sulphur, dug and pooled as the springs are, wearing the biome's water look (a Melt look). 0 for none.")]
+		[Min(0f)] public float SulphurPool;
+		[Tooltip("The biome's own site rate (2026-10-25, I2q-b, decision 84): when above 0 its hot ground has every kind of this split at this rate (a site in that share of the 80 m cells, × 1.4), whatever it emits, so a biome whose emission is a deposit (sulphur dust) or a vented ash still has its fumaroles, pools and pots. 0 (every biome before): the rate follows the emission as it did.")]
+		[Range(0f, 1f)] public float Rate;
+		[Tooltip("The colour its vents fume (2026-10-25, I2q-b, decision 84: a sulphur flat's yellow-white); alpha 0 for none (the steam's own colour, or a cloud's white).")]
+		public Color FumeTint;
 
 		public BiomeGeothermalShares(float geyser, float hotSpring, float fumarole, float mudPot)
 		{
@@ -41,35 +49,83 @@ namespace FishMMO.Shared.Biomes
 			HotSpring = hotSpring;
 			Fumarole = fumarole;
 			MudPot = mudPot;
+			Jet = 0f;
+			SulphurPool = 0f;
+			Rate = 0f;
+			FumeTint = default;
+		}
+
+		/// <summary>The split with jets and sulphur pools of their own (2026-10-25, I2q-b).</summary>
+		public BiomeGeothermalShares WithMore(float jet, float sulphurPool)
+		{
+			BiomeGeothermalShares shares = this;
+			shares.Jet = Mathf.Max(0f, jet);
+			shares.SulphurPool = Mathf.Max(0f, sulphurPool);
+			return shares;
+		}
+
+		/// <summary>The split with a site rate of its own (decision 84) and the colour its vents fume (alpha 0 for none).</summary>
+		public BiomeGeothermalShares WithRate(float rate, Color fumeTint = default)
+		{
+			BiomeGeothermalShares shares = this;
+			shares.Rate = Mathf.Clamp01(rate);
+			shares.FumeTint = fumeTint;
+			return shares;
 		}
 
 		/// <summary>The split every steaming biome had before the field existed: a quarter geysers, two fifths springs, the rest fumaroles.</summary>
 		public static BiomeGeothermalShares Today => new BiomeGeothermalShares(0.25f, 0.4f, 0.35f, 0f);
 
-		/// <summary>The four shares' sum; 0 or less for a split nobody filled in (read as <see cref="Today"/>).</summary>
-		public float Total => Geyser + HotSpring + Fumarole + MudPot;
+		/// <summary>The shares' sum; 0 or less for a split nobody filled in (read as <see cref="Today"/>).</summary>
+		public float Total => Geyser + HotSpring + Fumarole + MudPot + Jet + SulphurPool;
 
-		/// <summary>True when the split is exactly <see cref="Today"/>'s, value for value.</summary>
+		/// <summary>True when the split among the kinds is exactly <see cref="Today"/>'s, value for value (the rate and tint are not kinds).</summary>
 		public bool IsToday
 		{
 			get
 			{
 				BiomeGeothermalShares today = Today;
-				return Geyser == today.Geyser && HotSpring == today.HotSpring && Fumarole == today.Fumarole && MudPot == today.MudPot;
+				return Geyser == today.Geyser && HotSpring == today.HotSpring && Fumarole == today.Fumarole && MudPot == today.MudPot
+					&& Jet == 0f && SulphurPool == 0f;
 			}
 		}
 
-		/// <summary>The split as the authoring marks it: each share to 1/10 000, in a fixed order.</summary>
+		/// <summary>True when it carries a site rate of its own (<see cref="Rate"/>).</summary>
+		public bool OwnRate => Rate > 0f;
+
+		/// <summary>
+		/// The split as the authoring marks it: each share to 1/10 000, in a fixed order; the jets, pools, rate and tint (2026-10-25)
+		/// only when set, so every mark written before reads the same.
+		/// </summary>
 		public string Signature()
 		{
 			string Q(float v) => Mathf.Round(v * 10000f).ToString(CultureInfo.InvariantCulture);
-			return $"g{Q(Geyser)}|s{Q(HotSpring)}|f{Q(Fumarole)}|m{Q(MudPot)}";
+			string mark = $"g{Q(Geyser)}|s{Q(HotSpring)}|f{Q(Fumarole)}|m{Q(MudPot)}";
+			if (Jet > 0f)
+			{
+				mark += $"|j{Q(Jet)}";
+			}
+			if (SulphurPool > 0f)
+			{
+				mark += $"|p{Q(SulphurPool)}";
+			}
+			if (Rate > 0f)
+			{
+				mark += $"|r{Q(Rate)}";
+			}
+			if (FumeTint.a > 0f)
+			{
+				mark += "|t" + ColorUtility.ToHtmlStringRGBA(FumeTint);
+			}
+			return mark;
 		}
 
 		public override string ToString()
 		{
 			string F(float v) => v.ToString("0.###", CultureInfo.InvariantCulture);
-			return $"geysers {F(Geyser)}, springs {F(HotSpring)}, fumaroles {F(Fumarole)}, mud pots {F(MudPot)}";
+			return $"geysers {F(Geyser)}, springs {F(HotSpring)}, fumaroles {F(Fumarole)}, mud pots {F(MudPot)}"
+				+ (Jet > 0f ? $", jets {F(Jet)}" : string.Empty) + (SulphurPool > 0f ? $", sulphur pools {F(SulphurPool)}" : string.Empty)
+				+ (Rate > 0f ? $", rate {F(Rate)}" : string.Empty) + (FumeTint.a > 0f ? ", fumes #" + ColorUtility.ToHtmlStringRGB(FumeTint) : string.Empty);
 		}
 	}
 

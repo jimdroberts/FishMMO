@@ -264,10 +264,32 @@ namespace FishMMO.Shared.Biomes
 			POIType.Shrine, POIType.Temple, POIType.Monastery, POIType.BogShrine,
 			// Living groves, gardens and nests.
 			POIType.HerbGrove, POIType.AncientTree, POIType.Clearing, POIType.Oasis, POIType.Nest,
+			// The biome rounds' own kinds (2026-10-25, phase NEW-POI-KINDS), by the same rule: worked, kept or living. Their relics
+			// (gate, plaza, colossus, vault, forge, engines, blighted crater) and natural sites stand on any world.
+			POIType.MarshWatchtower, POIType.BrickKiln, POIType.FowlersHide, POIType.EelWeir, POIType.HoluaSlide, POIType.PlagueVillage,
+			POIType.Chapel, POIType.HolyWell, POIType.FrogShrine, POIType.LavaCaveTemple,
+			POIType.Kipuka, POIType.FloatingIsland, POIType.PhoenixNest,
+		};
+
+		/// <summary>
+		/// The kinds that work or stand in open water (decision 68): a reed isle afloat, a wood drowned where it stood, an eel weir, a
+		/// fowler's hide over open water, a flooded square and a gate sunk in black water. Only the biome rounds' kinds (2026-10-25):
+		/// every older kind needs no liquid water unless a biome's file says so, as decision 68 left them.
+		/// </summary>
+		private static readonly HashSet<POIType> Wet = new HashSet<POIType>
+		{
+			POIType.FloatingIsland, POIType.DrownedForest, POIType.EelWeir, POIType.FowlersHide, POIType.SunkenPlaza, POIType.MireGate,
 		};
 
 		/// <summary>True when a kind needs breathable air unless a biome's file says otherwise.</summary>
 		public static bool NeedsAirByDefault(POIType kind) => Lived.Contains(kind);
+
+		/// <summary>
+		/// True when a kind needs liquid water on the world's surface unless a biome's file says otherwise (<see cref="BiomeSiteKind.NeedsLiquidWater"/>).
+		/// A holy well is not one: its spring-fed variants need water, its silent well-head does not (a template's own
+		/// NeedsLiquidWater, decision 96).
+		/// </summary>
+		public static bool NeedsWaterByDefault(POIType kind) => Wet.Contains(kind);
 
 		/// <summary>
 		/// How gladly a biome's entry sites its kind on a world whose air is (<paramref name="breathable"/>) or is not breathable: its
@@ -340,5 +362,48 @@ namespace FishMMO.Shared.Biomes
 			}
 			return list;
 		}
+	}
+
+	/// <summary>
+	/// A ground layer's or landform's WORLD band (decision 68, 2026-10-25): what the scene's world must be (<see cref="requires"/>, every
+	/// flag met) and must not be (<see cref="forbids"/>, no flag met) for it to be painted or carved: a reed bed only where water stands
+	/// liquid, a salt crust only where none does. Both None (the default) is no band: admitted on every world, as before.
+	/// </summary>
+	/// <remarks>One answer per scene, read from the same <see cref="BiomeWorldConditions"/> as <see cref="BiomeWorldGate"/>; the air stays the layer's air band.</remarks>
+	[Serializable]
+	public struct BiomeWorldBand
+	{
+		[Tooltip("What the world must be (every ticked flag must hold): liquid water on its surface, an ice world, volcanic… Nothing ticked = any world.")]
+		public BiomeWorldRequirement requires;
+		[Tooltip("What the world must NOT be (no ticked flag may hold): liquid water on its surface… Nothing ticked = any world.")]
+		public BiomeWorldRequirement forbids;
+
+		/// <summary>True when the band asks anything of the world.</summary>
+		public bool On => requires != BiomeWorldRequirement.None || forbids != BiomeWorldRequirement.None;
+
+		public static BiomeWorldBand Of(BiomeWorldRequirement requires, BiomeWorldRequirement forbids = BiomeWorldRequirement.None)
+			=> new BiomeWorldBand { requires = requires, forbids = forbids };
+
+		/// <summary>True when a world of these conditions meets every required flag and none of the forbidden ones.</summary>
+		public bool Admits(in BiomeWorldConditions world)
+		{
+			if (!world.Meets(requires))
+			{
+				return false;
+			}
+			// One flag at a time: Meets AND-s the flags it is given, and any one forbidden flag refuses.
+			for (int bit = 1; bit <= (int)forbids; bit <<= 1)
+			{
+				var flag = (BiomeWorldRequirement)bit;
+				if ((forbids & flag) != 0 && world.Meets(flag))
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
+		/// <summary>"requires/forbids" as integers, invariant (e.g. "8192/0"); what the marks append after "|w".</summary>
+		public string Signature() => ((int)requires).ToString(CultureInfo.InvariantCulture) + "/" + ((int)forbids).ToString(CultureInfo.InvariantCulture);
 	}
 }

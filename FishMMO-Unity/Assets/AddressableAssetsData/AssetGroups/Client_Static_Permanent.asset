@@ -26,23 +26,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 032b2c1f1ba09e1a686997f4b2bd9f9f
-    m_Address: Belron 1 Backdrop Control 2
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 03593c11c41236a81971b08794501b78
-    m_Address: Ithaewyn 1 Path Atlas
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 03c0414339416b63ebcd02f6265012a2
-    m_Address: Moron 3 Backdrop Control 6
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 057385a6a43986c4395767410661fd2e
     m_Address: LiberationSans SDF UIChat
     m_ReadOnly: 0
@@ -59,12 +42,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 08ac2dafd13f388fba88fd18ef2ba273
-    m_Address: Galris 1 Backdrop Control 0
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 095de51400dc4bcd8f8e45707b97bd50
     m_Address: FishSiteFlames
     m_ReadOnly: 0
@@ -77,18 +54,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0c998ccb184461e8cbe2010605b7a241
     m_Address: Samphire Patch 0
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 0d99a847dcc9a8f37b7e0c7d0a685295
-    m_Address: Moron 3 Backdrop Control 7
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 0e02c5e52b6870e69a98192fa31b762a
-    m_Address: Galris 1 Backdrop
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -160,37 +125,11 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 1d82850fa1edaeac4bb5447a50392ace
-    m_Address: Moron 3 Path Table
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 1ec1b65c82164dc52a1a07468223fc94
-    m_Address: Moron 2 Backdrop Control 2
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 1ef2a7d4def2d057ab549570ea5fd365
-    m_Address: Moron 3 Backdrop Control 2
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 20e36a7680fd18ee7ba63f69f54a32a1
-    m_Address: Moron 2 Backdrop Control 4
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 21d1d818c31df151a8d79b5707f6de1e
     m_Address: FishAirMotes
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 22b97255c9abc98cb815fd2053cb8ffc
-    m_Address: Moron 1 Backdrop Control 1
-    m_ReadOnly: 0
-    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 22c2e676d9b34e14b87e4b97acdc05ed
     m_Address: Glacier
@@ -199,12 +138,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 262d8c8b6862907c3a61c0438002b927
     m_Address: Precipitation Splash
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 269f87e32e25c56a8987a7c34a82cb7a
-    m_Address: Ithaewyn 1 Backdrop Control 1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -237,17 +170,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 2f3791890859d95d2bdbb1b3965efb58
-    m_Address: Moron 2 Backdrop Control 5
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 30547b7f31927a0dfbb83df1dd581de8
-    m_Address: Ithaewyn 1 Backdrop
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 308cee79997a13645aef863746d0aa99
     m_Address: BiomeTexture_HighDesert_CCB280
     m_ReadOnly: 0
@@ -265,11 +187,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 31f3a804c86b84410993552b26ddc2f3
-    m_Address: Ithaewyn 1 Path Table
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 340c2ccd01ed497e691c1f4bc49cd842
     m_Address: Boundary Glass
     m_ReadOnly: 0
@@ -280,12 +197,6 @@ MonoBehaviour:
     m_Address: FishSiteEmbers
     m_ReadOnly: 0
     m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 359a7e2da99448da28995d28038572ad
-    m_Address: Galris 1 Backdrop Control 1
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 35e0ee759d62a84e2b58e5c5c12a08f4
     m_Address: Weather Terrain Array
@@ -418,11 +329,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 47b67bf2b4e6419d7a78917fa40551ed
-    m_Address: Moron 2 Backdrop Control 1
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4859a0b1c2d3e4f5061728394a5b6c04
     m_Address: GroundSand
     m_ReadOnly: 0
@@ -462,22 +368,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 4b4096a60ab783b92a74d4c034cef67d
-    m_Address: Belron 1 Path Table
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 4dd052bd673d5bd38b49633ef75c42ec
-    m_Address: Moron 1 Backdrop Control 5
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 4ec203323ae31d58da33bd673d1be154
-    m_Address: Ithaewyn 1 Backdrop Control 2
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5072c63a60e54d80b9c7042039dacc4b
     m_Address: Silverleaf Patch 0
     m_ReadOnly: 0
@@ -488,6 +378,13 @@ MonoBehaviour:
     m_Address: BiomeTexture_Scree_4C4C4C
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 53fa60808c930f3baaf43eed7423bc2a
+    m_Address: Weather Audio Profile
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 540ef024c26d502ffa769b116036be36
     m_Address: FishBackdropGround
@@ -511,12 +408,6 @@ MonoBehaviour:
     m_Address: Albedo 14x1
     m_ReadOnly: 0
     m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 569706460f397579abe6fd87c89d7ad3
-    m_Address: Moron 3 Backdrop Control 3
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5869a0b1c2d3e4f5061728394a5b6c05
     m_Address: WaterPlaceholder
@@ -552,21 +443,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 61adbb6750c39a5dcb407b5062c40962
-    m_Address: Moron 1 Backdrop
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 623fe745f8934c9188d434afd11249ac
     m_Address: Vortex Debris
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 6319fb86d4f8fa9fb8970d7e058dbaec
-    m_Address: Moron 1 Backdrop Control 0
-    m_ReadOnly: 0
-    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 64333f8b2527405da834564e461d396b
     m_Address: FishVolcanicPlume
@@ -600,6 +481,13 @@ MonoBehaviour:
     m_Address: Precipitation Atlas
     m_ReadOnly: 0
     m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 69baeeda49ea89f268266955933d6961
+    m_Address: Weather Render Profile
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 69d0fa3eef9664791b6448803d42877e
@@ -654,12 +542,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 6fbdf45463df98f53bb79d899e4c7aad
-    m_Address: Moron 3 Backdrop Control 0
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 70eeeadb6186fa22a80675c90ac8cff9
     m_Address: Ground
     m_ReadOnly: 0
@@ -671,22 +553,11 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 71bf2f92118b32577a67a5fdecdbdf60
-    m_Address: Moron 3 Backdrop Control 1
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 71d56f04988618866b412ffbfd951d50
     m_Address: Glass Sponge 0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 71e3f3bd3f87d8b299608ff175748a49
-    m_Address: Belron 1 Path Atlas
-    m_ReadOnly: 0
-    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 72e349d00076ada9d8ff623c6626e2ac
     m_Address: Living Coral 0
@@ -723,12 +594,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7fad9242a28583202a3d95e51d152363
-    m_Address: Moron 3 Backdrop Control 5
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7ff845a3ca822c48d8cc80e1ff889567
     m_Address: Vent Clam Bed 0
     m_ReadOnly: 0
@@ -745,12 +610,6 @@ MonoBehaviour:
     m_Address: Wood
     m_ReadOnly: 0
     m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 83e60c0c220f181b29b639bdfcb5142e
-    m_Address: Ithaewyn 1 Backdrop
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 86849b6d992090818babe1be17080de9
     m_Address: Normal 11x2
@@ -784,19 +643,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 8cf4df2fbaf82876a9122ef96551d8e8
-    m_Address: Moron 3 Path Atlas
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8d5caee492efece2fa2218379b6727fe
     m_Address: FishClouds
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 8fd2901434131da96a688404517209cf
-    m_Address: Moron 2 Backdrop
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -810,12 +658,6 @@ MonoBehaviour:
     m_Address: Mask 14x1
     m_ReadOnly: 0
     m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9442d1e650b3f3db78a00e827c6883e9
-    m_Address: Belron 1 Backdrop Control 0
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 95ea656a99ce0d9a489599457111c679
     m_Address: Albedo 11x2
@@ -836,12 +678,6 @@ MonoBehaviour:
     m_Address: BiomeTexture_Estuary_4C99B2
     m_ReadOnly: 0
     m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9a15e1ff534f1f9a6a1e965a725fdbcf
-    m_Address: Ithaewyn 1 Backdrop Control 0
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9a39582bcfc44cd1baea38a6d1a8d247
     m_Address: FishVegetationPrime
@@ -871,17 +707,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9fe7c322b91a0ef8e8e1bd82eebd58dc
-    m_Address: Moron 3 Backdrop
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a1891ddc6512f2521b9fad800f685a6d
-    m_Address: Galris 1 Path Table
-    m_ReadOnly: 0
-    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a1b2c3d4e5f60718293a4b5c6d7e8f01
     m_Address: Grass.png
@@ -917,12 +742,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: ab351362991ad567181bf8f8490a0187
-    m_Address: Belron 1 Backdrop
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ac571e023977e824b8d127213edebc1f
     m_Address: BiomeTexture_Plains_80CC66
     m_ReadOnly: 0
@@ -944,11 +763,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b08052ee255980a1fa334180c84aa74b
-    m_Address: Moron 1 Backdrop Control 3
-    m_ReadOnly: 0
-    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b0d499e08f7c81d489bd909435b0985b
     m_Address: BiomeTexture_Volcanic_994C33
@@ -988,18 +802,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b69b213454bba1b7cbbe83d18ddb1439
-    m_Address: Moron 2 Backdrop Control 6
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b8390063134b401eadabbd7308815475
     m_Address: UILauncher
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b921abf7021edc8cdbe4f044d087dad1
-    m_Address: Moron 1 Path Table
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -1026,19 +830,8 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: bf4c796a2686c4d5bb124776b0ed10f6
-    m_Address: Moron 1 Backdrop Control 4
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c01d760043289767191f11578eff3f56
     m_Address: Iron Vein 0
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c053be8c16d115d01821f41f2dbec5b7
-    m_Address: Moron 3 Backdrop
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1055,18 +848,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c3f16a08ba1381b308564a5a72585f10
-    m_Address: Galris 1 Path Atlas
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c5a50262d49b51a9199ea4f5e691517e
     m_Address: Generated Sand
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c6182b8f01eb6df009c9348fce20f13b
-    m_Address: Moron 1 Backdrop Control 2
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -1075,11 +858,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c8b04e475d7f13395b0e66b4dc64cb81
-    m_Address: Moron 2 Path Table
-    m_ReadOnly: 0
-    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c9af134792b3622dca87fb40ad222a3a
     m_Address: Mask 11x2
@@ -1098,19 +876,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: cf4599b607507ad5ab5533206a86c919
-    m_Address: Moron 1 Backdrop
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d0ed5d08b5f0911788c42313e2762ae8
     m_Address: Stone
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d0efcccac682afc16b888865d1c227a4
-    m_Address: Moron 2 Backdrop Control 0
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -1121,11 +888,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d74297414c89f90408f6c1700ed4f57e
     m_Address: BiomeTexture_Seamount_336680
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d7675afd7f2d418fc957b0a9431e9ee6
-    m_Address: Moron 1 Path Atlas
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -1168,12 +930,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e380961138ba3635a8307f9a706f6f39
-    m_Address: Moron 3 Backdrop Control 4
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e58b9ead8f522b5e7885b95420063147
     m_Address: FishVortex
     m_ReadOnly: 0
@@ -1182,12 +938,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e5f60718a9b0c1d2293a4b5c6d7e8f05
     m_Address: Water
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e6630ee64d881025fab68f8b758937d3
-    m_Address: Galris 1 Backdrop Control 2
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1203,21 +953,10 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e954021f110ef672d913db09e307a68f
-    m_Address: Moron 2 Backdrop Control 3
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e992be615149b0846884cc772e34ace5
     m_Address: BiomeTexture_Cave_1A1A1A
     m_ReadOnly: 0
     m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: eb6cc8785b83b52a3a00a938021a1240
-    m_Address: Galris 1 Backdrop Control 3
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ebb1a63b1477ea845b9e725d0bed88aa
     m_Address: BiomeTexture_Oasis_4CCC80
@@ -1240,18 +979,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: edef7e48f83bc64919b470a3af815678
-    m_Address: Belron 1 Backdrop Control 1
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: ee055be9a4bf580bc9b81a7a54e664a4
-    m_Address: Belron 1 Backdrop
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: eec51d10537b3ac52a735915b976a06e
     m_Address: Pearl Oyster Bed 0
     m_ReadOnly: 0
@@ -1269,17 +996,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f14e7834fd6b9939bb18bfbffbd22551
-    m_Address: Galris 1 Backdrop
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f6083f5bc8318a8bc81980fab2572bf9
-    m_Address: Moron 2 Path Atlas
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f86c769a177b3e84085abaa1ddeefdc6
     m_Address: BiomeTexture_AbyssalPlain_050D33
     m_ReadOnly: 0
@@ -1290,11 +1006,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: fb80cc9d46805ab5db48f56e76cd3884
-    m_Address: Moron 2 Backdrop
-    m_ReadOnly: 0
-    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: fe87504467212fe5e8c7818943e1c3c6
     m_Address: Leaves

@@ -429,6 +429,37 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(PointOfInterestPlanner.Budget(capital, new PointOfInterestPlanSettings { Capital = true }, 20f, 1), Is.EqualTo(1), "one capital when asked");
 		}
 
+		/// <summary>
+		/// A kind's count comes from the area its biomes hold, by their weights (2026-10-25), not the whole scene's: a kind no
+		/// biome hosts counts nothing, one hosted at 0.2 a fifth, a favoured one more than the scene's area.
+		/// </summary>
+		[Test]
+		public void TheBudgetAreaIsTheAreaTheKindsBiomesHold()
+		{
+			var rule = new PointOfInterestKindRule { Kind = POIType.Shrine, DefaultBiomeWeight = 1f };
+			var biomes = new List<PointOfInterestBiome>
+			{
+				new PointOfInterestBiome("Host", 1, null, new Dictionary<POIType, float> { [POIType.Shrine] = 1f }),
+				new PointOfInterestBiome("Shy", 2, null, new Dictionary<POIType, float> { [POIType.Shrine] = 0.2f }),
+				new PointOfInterestBiome("None", 3, null, new Dictionary<POIType, float>()),
+				new PointOfInterestBiome("Fond", 4, null, new Dictionary<POIType, float> { [POIType.Shrine] = 2f }),
+			};
+			float Area(params int[] cells) => PointOfInterestPlanner.HostedAreaKm2(rule, 10f, cells, biomes);
+
+			Assert.That(Area(100, 0, 0, 0, 0), Is.EqualTo(10f).Within(1e-4f), "all host ground: the scene's area");
+			Assert.That(Area(0, 0, 100, 0, 0), Is.EqualTo(0f), "ground that does not host the kind counts nothing");
+			Assert.That(Area(50, 0, 50, 0, 0), Is.EqualTo(5f).Within(1e-4f), "half the scene hosts it: half the area");
+			Assert.That(Area(0, 100, 0, 0, 0), Is.EqualTo(2f).Within(1e-4f), "weight 0.2: a fifth");
+			Assert.That(Area(0, 0, 0, 100, 0), Is.EqualTo(20f).Within(1e-4f), "weight 2: twice over");
+			Assert.That(Area(0, 0, 0, 0, 100), Is.EqualTo(10f).Within(1e-4f), "cells with no biome take the kind's default");
+			Assert.That(PointOfInterestPlanner.HostedAreaKm2(rule, 10f, new int[5], biomes), Is.EqualTo(0f), "no cells, no area");
+
+			var settings = new PointOfInterestPlanSettings();
+			var dense = new PointOfInterestKindRule { Kind = POIType.Shrine, PerKm2 = 1f, Min = 0, Max = 100 };
+			Assert.That(PointOfInterestPlanner.Budget(dense, settings, PointOfInterestPlanner.HostedAreaKm2(dense, 10f, new[] { 0, 0, 100, 0, 0 }, biomes), 1), Is.EqualTo(0),
+				"a scene of ground that does not host the kind gets none of it");
+		}
+
 		[Test]
 		public void CapitalOnlyWhenAsked()
 		{

@@ -40,7 +40,35 @@ namespace FishMMO.Shared.WorldDesign
 		/// is thin and cracked); a mine no silk (as its palette has no glow-worms), roots at its shallow adits, a little guano.
 		/// Guano is the habitat's own for the form, so the heaps go where the rock is stained and the cover crusted.
 		/// </summary>
-		public static CaveHangingPlan For(CaveForm form)
+		public static CaveHangingPlan For(CaveForm form) => Coded(form);
+
+		/// <summary>
+		/// The plan for a cave of a form dressed by a biome (2026-10-25, phase I2n-c, decision 86 (d)): the biome's Cave Hangings entry
+		/// for the form (BiomeTemplate.CaveHangings, authored from <see cref="Coded"/>, so nothing moves), else the form's own. The
+		/// entry's root art and windows are read by the dressing from <see cref="Entry"/>.
+		/// </summary>
+		public static CaveHangingPlan For(BiomeTemplate biome, CaveForm form)
+		{
+			if (CaveInteriorArt.Hanging(biome, form, out BiomeCaveHanging own))
+			{
+				return new CaveHangingPlan { Silk = own.Silk, DeepRoots = own.DeepRoots, Guano = own.Guano };
+			}
+			return Coded(form);
+		}
+
+		/// <summary>The biome's whole Cave Hangings entry for a form (its root art, its windows), or the form's coded plan with none.</summary>
+		public static BiomeCaveHanging Entry(BiomeTemplate biome, CaveForm form)
+		{
+			if (CaveInteriorArt.Hanging(biome, form, out BiomeCaveHanging own))
+			{
+				return own;
+			}
+			CaveHangingPlan p = Coded(form);
+			return new BiomeCaveHanging((BiomeCaveForm)form, p.Silk, p.DeepRoots, CaveFungi.CodedRootsNearMouth(form), p.Guano);
+		}
+
+		/// <summary>The plan by form alone, as the dressing chose it until 2026-10-25 (what <see cref="BiomeTemplate.CaveHangings"/> is authored from).</summary>
+		public static CaveHangingPlan Coded(CaveForm form)
 		{
 			CaveHangingPlan p;
 			switch (form)
@@ -167,7 +195,10 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>What hangs from the roof: glow-worm threads, roots through a thin roof, guano under the roosts (cave-life programme HANGING).</summary>
 			private void Hanging()
 			{
-				CaveHangingPlan plan = CaveHanging.For(system.Form);
+				// The biome dressing the inside's (2026-10-25, I2n-c: its Cave Hangings, authored as the form's own plan).
+				CaveHangingPlan plan = CaveHanging.For(biome, system.Form);
+				BiomeCaveHanging hung = CaveHanging.Entry(biome, system.Form);
+				waterRoots = hung.Roots == BiomeCaveRootArt.WaterRoots;
 				if (plan.Silk > 0f && Colours().Worms)
 				{
 					SilkThreads(new DeterministicRNG(unchecked(system.Seed * 0x3C91 + 0x5E27)), plan.Silk * CaveFungi.CharacterWeight(system.Character));
@@ -180,6 +211,9 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					GuanoUnderRoosts(new DeterministicRNG(unchecked(system.Seed * 0x1E8D + 0x7C35)), plan.Guano);
 				}
+				// 2026-10-25 (I2n-c, decision 86 (c)/(e)/(f)): glow-worms threaded along the roots, roots round the root windows, what
+				// floats on the water; each on a stream of its own after every other, so nothing above moves (…CaveDressing.Drowned.cs).
+				Drowned();
 				if (silkHung + tapRoots + shortRoots + guanoHeaps > 0)
 				{
 					PointOfInterestFeatureKit.Note(context, $"cave hanging: {silkHung} glow-worm silk, {tapRoots} tap roots, {shortRoots} roots over the ways, {guanoHeaps} guano heaps");
@@ -432,7 +466,13 @@ namespace FishMMO.Shared.WorldDesign
 				float room = roof - floor;
 				int hue = pick < 0.65f ? 0 : 1;
 				float yaw = random.Range(0f, 360f), girth = random.Range(0.8f, 1.2f);
-				if (tapRoots + shortRoots >= MaxRoots)
+				if (tapRoots + shortRoots + waterRooted >= MaxRoots)
+				{
+					return;
+				}
+				// Water roots (2026-10-25, I2n-c, decision 86 (d)): over the cave's water the tap root ends at the water's surface, its
+				// tassels trailing in it, rather than giving way to a short tangle; after every draw, so no stream moves.
+				if (waterRoots && Submerged(ground) && WaterRoot(ground, roof, hue, pick, yaw, girth))
 				{
 					return;
 				}
@@ -445,6 +485,7 @@ namespace FishMMO.Shared.WorldDesign
 					if (Place(tap.Prefab, new Vector3(ground.x, roof + 0.03f, ground.z), Quaternion.Euler(0f, yaw, 0f), new Vector3(girth, sy, girth)))
 					{
 						tapRoots++;
+						rootHangs.Add(new Vector3(ground.x, roof, ground.z));
 					}
 					return;
 				}
@@ -457,6 +498,7 @@ namespace FishMMO.Shared.WorldDesign
 				if (s >= 0.35f && Place(roots.Prefab, new Vector3(ground.x, roof + 0.03f, ground.z), Quaternion.Euler(0f, yaw, 0f), Vector3.one * s))
 				{
 					shortRoots++;
+					rootHangs.Add(new Vector3(ground.x, roof, ground.z));
 				}
 			}
 

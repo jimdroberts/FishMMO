@@ -56,6 +56,30 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>What lights a biome's caves of a form by itself (BiomeTemplateArt.CaveGlow).</summary>
 		public static BiomeCaveGlow Glow(BiomeTemplate biome, CaveForm form) => BiomeTemplateArt.CaveGlow(biome, form);
 
+		// ── Drowned galleries (2026-10-25, phase I2n-c, decision 86) ──
+
+		/// <summary>How a biome's caves of a form stand in the water table (BiomeTemplateArt.CaveFloods), or false for as before.</summary>
+		public static bool Flood(BiomeTemplate biome, CaveForm form, out BiomeCaveFlood flood)
+			=> BiomeCaveWaters.TryFlood(BiomeTemplateArt.CaveFloods(biome), (BiomeCaveForm)form, out flood);
+
+		/// <summary>What hangs from a biome's caves' roofs of a form (BiomeTemplateArt.CaveHangings), or false for the dressing's own.</summary>
+		public static bool Hanging(BiomeTemplate biome, CaveForm form, out BiomeCaveHanging hanging)
+			=> BiomeCaveWaters.TryHanging(BiomeTemplateArt.CaveHangings(biome), (BiomeCaveForm)form, out hanging);
+
+		/// <summary>The tea ring a biome's cave water of a form leaves on the walls (BiomeTemplateArt.CaveStains), or false for none.</summary>
+		public static bool Stain(BiomeTemplate biome, CaveForm form, out BiomeCaveStain stain)
+			=> BiomeCaveWaters.TryStain(BiomeTemplateArt.CaveStains(biome), (BiomeCaveForm)form, out stain);
+
+		/// <summary>
+		/// The biome whose water look a cave's water takes (its hydrology bodies' LookBiome, decision 86 (b)): the linked interior's,
+		/// where its look is its own (<see cref="BiomeCaveWaters.LookBiome"/>); 0 (by the shores, as before) otherwise.
+		/// </summary>
+		public static int LookBiome(in CaveBiome caves)
+		{
+			BiomeTemplate interior = caves.Interior;
+			return interior == null ? 0 : BiomeCaveWaters.LookBiome(true, interior.ID, interior.WaterLook, BiomeWaterLooks.Today);
+		}
+
 		// ── The resolver ──────────────────────────────────────────────
 
 		private static Dictionary<string, BiomeTemplate> projectByName;

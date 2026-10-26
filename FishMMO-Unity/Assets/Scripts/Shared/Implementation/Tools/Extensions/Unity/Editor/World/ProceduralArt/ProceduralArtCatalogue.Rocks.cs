@@ -64,7 +64,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// type's surface (RockArtNames.RockSurfaceTypeForLegacy). Their ground families are only what a caller asking
 		/// for one would want. Constants only, so a field is safe here.
 		/// </summary>
-		public static readonly RockMaterialSpec[] StoneRockMaterials =
+		public static readonly RockMaterialSpec[] StoneRockMaterials = WithRegionalStones(new[]
 		{
 			new RockMaterialSpec { Name = "Andesite", GroundFamily = Ground.Rock, WearsRockType = "Andesite" },
 			new RockMaterialSpec { Name = "Obsidian", GroundFamily = Ground.Basalt, WearsRockType = "Obsidian" },
@@ -82,7 +82,41 @@ namespace FishMMO.Shared.WorldDesign
 			new RockMaterialSpec { Name = "Breccia", GroundFamily = Ground.Regolith, WearsRockType = "Breccia" },
 			new RockMaterialSpec { Name = "Flint", GroundFamily = Ground.Limestone },
 			new RockMaterialSpec { Name = "Cobble", GroundFamily = Ground.Pebbles },
-		};
+		});
+
+		/// <summary>
+		/// The stones above, then one for each biome's own crust rock (<see cref="RegionalRocks.Crust"/>, 2026-10-25), each
+		/// wearing its rock type's material and built from its own shapes (StoneStyles.Regional.cs), so a biome lays its own
+		/// rock's boulders, rocks and pebbles and a river on it its own boulders; then the named sets the drafts ask for
+		/// (2026-10-26, StoneStyles.Named.cs: maerl, coral rubble, furrow stones…), each with a material of its own over its
+		/// rock's surface (RockArtNames.RockSurfaceTypeForLegacy), or its rock's own material when it is named for the rock.
+		/// They come last, so a river's boulders (RiverBoulders.Material) still find each rock's own stone first.
+		/// </summary>
+		private static RockMaterialSpec[] WithRegionalStones(RockMaterialSpec[] stones)
+		{
+			var all = new List<RockMaterialSpec>(stones);
+			foreach (RockType type in RegionalRocks.Crust)
+			{
+				all.Add(new RockMaterialSpec { Name = type.Name, GroundFamily = RegionalRocks.StoneGround(type.Name), WearsRockType = type.Name });
+			}
+			foreach ((string name, string surface, string ground) in StoneStyles.NamedStones)
+			{
+				all.Add(new RockMaterialSpec { Name = name, GroundFamily = ground, WearsRockType = name == surface ? name : null });
+			}
+			return all.ToArray();
+		}
+
+		/// <summary>The name of a detail prefab's variant child, before its index from 1 (the client's DetailScatterSettings.VariantChildPrefix).</summary>
+		public const string DetailVariantChildPrefix = "Variant";
+
+		/// <summary>The child of a stone detail prefab carrying its variant mesh <paramref name="variant"/> (1 on; a MeshFilter only: the GPU scatter alone reads it).</summary>
+		public static string DetailVariantChild(int variant) => DetailVariantChildPrefix + variant;
+
+		/// <summary>A stone's small-rock mesh of a variant: variant 0 is <see cref="SmallRocksMesh"/> itself (2026-10-26, <see cref="RockVariantCounts.StoneDetails"/>).</summary>
+		public static string SmallRocksVariantMesh(string material, int variant) => variant <= 0 ? SmallRocksMesh(material) : $"{SmallRocksMesh(material)}_V{variant}";
+
+		/// <summary>A stone's pebble mesh of a variant: variant 0 is <see cref="PebblesMesh"/> itself.</summary>
+		public static string PebblesVariantMesh(string material, int variant) => variant <= 0 ? PebblesMesh(material) : $"{PebblesMesh(material)}_V{variant}";
 
 		/// <summary>The material a stone's boulders, rocks and pebbles wear: its own, or its rock type's (the same name either way).</summary>
 		public static string StoneMaterial(in RockMaterialSpec stone) => RockMaterial(stone.WearsRockType ?? stone.Name);
@@ -101,8 +135,13 @@ namespace FishMMO.Shared.WorldDesign
 						yield return MeshPath(BoulderMesh(m.Name, shape.Name, lod));
 					}
 				}
-				yield return MeshPath(SmallRocksMesh(m.Name));
-				yield return MeshPath(PebblesMesh(m.Name));
+				// Its small rocks and pebbles, each in every variant it cycles (RockVariantCounts.StoneDetails; one before 2026-10-26).
+				int variants = RockVariantCounts.StoneDetailsOf(m.Name);
+				for (int v = 0; v < variants; v++)
+				{
+					yield return MeshPath(SmallRocksVariantMesh(m.Name, v));
+					yield return MeshPath(PebblesVariantMesh(m.Name, v));
+				}
 			}
 		}
 

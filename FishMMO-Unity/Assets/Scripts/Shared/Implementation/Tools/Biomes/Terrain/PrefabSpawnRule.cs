@@ -275,6 +275,23 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("Grow only on (or off) one part of the biome's sculpted landforms (a crater's rays, a basin's mare, a dune's lee). Off = everywhere, as before.")]
 		public BiomeLandformBand landformBand;
 
+		/// <remarks>
+		/// 2026-10-25, phase I2u (decision 79 (d)): talus SIZE GRADING. Tree-channel rules only (Unity sizes details itself): inside its
+		/// biome's talus cones (the stored ScreeCone landforms) an instance's size is scaled from ×0.6 at the apex to ×1.8 at the toe, the
+		/// fall-sorting of a real cone. Off (the default) sizes it as before.
+		/// </remarks>
+		[Tooltip("Tree-channel rules only. Inside the biome's talus cones (ScreeCone landforms), scale each instance from ×0.6 at the apex to ×1.8 at the toe: fine scree high, coarse blocks at the foot. Off = as before.")]
+		public bool talusGrading;
+
+		/// <remarks>
+		/// 2026-10-26, phase SCATTER-MODES (decision 34; the queued modes of decisions 50, 61, 64, 71, 72, 77, 81, 82, 85, 90): how the rule's
+		/// instances are turned, tilted, sized, anchored and laid out (BiomeScatterMode). Every field at its default is off: the rule scatters
+		/// exactly as before and draws nothing more.
+		/// </remarks>
+		[Header("Scatter Modes")]
+		[Tooltip("How instances are turned (downslope, along a landform line or strike, with the wind or the plasma, sunward), tilted, sized (power law), anchored (in an obstacle's lee, under a nurse tree or shrub, at a cliff's foot, on a wall or its seep lines, near named sites) and laid out (evenly, in fields, rain cells or fairy rings). Everything off = as before.")]
+		public BiomeScatterMode scatterMode;
+
 		[SerializeField, HideInInspector]
 		private string specFingerprint = string.Empty;
 

@@ -38,7 +38,11 @@ namespace FishMMO.Shared.WorldDesign
 	{
 		// ── Rock formations ───────────────────────────────────────────
 
-		public static string FormationPrefab(string type, string shape, int variant) => $"Formation_{type}_{shape}_{variant}";
+		/// <summary>
+		/// A formation's prefab. The variant wraps round the rock's own count (<see cref="RockVariantCounts.Of"/>, 2026-10-26):
+		/// a caller drawing in 0..<see cref="RockTypes.VariantCount"/>−1 (a cave's dressing) always names one the generator makes.
+		/// </summary>
+		public static string FormationPrefab(string type, string shape, int variant) => $"Formation_{type}_{shape}_{RockVariantCounts.Wrap(type, variant)}";
 		public static string FormationMesh(string type, string shape, int variant, int lod) => $"{FormationPrefab(type, shape, variant)}_LOD{lod}";
 		public static string RockSurfaceTexture(string type, string map) => $"{ProceduralArtCatalogue.TexturesFolder}/RockSurface_{type}_{map}.png";
 
@@ -112,6 +116,12 @@ namespace FishMMO.Shared.WorldDesign
 					return type;
 				}
 			}
+			// The biome suite's named stone sets (2026-10-26, StoneStyles.Named.cs), each over its rock's surface.
+			string named = StoneStyles.NamedStoneSurface(legacyMaterial);
+			if (named != null)
+			{
+				return named;
+			}
 			if (System.Array.IndexOf(LegacyOnRockSurface, legacyMaterial) < 0)
 			{
 				return null;
@@ -133,25 +143,27 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public static string[] Formations(in RockType type, params string[] shapes)
 		{
-			var names = new string[shapes.Length * RockTypes.VariantCount];
+			int variants = RockVariantCounts.Of(type.Name);
+			var names = new string[shapes.Length * variants];
 			for (int s = 0; s < shapes.Length; s++)
 			{
-				for (int v = 0; v < RockTypes.VariantCount; v++)
+				for (int v = 0; v < variants; v++)
 				{
-					names[s * RockTypes.VariantCount + v] = FormationPrefab(type.Name, shapes[s], v);
+					names[s * variants + v] = FormationPrefab(type.Name, shapes[s], v);
 				}
 			}
 			return names;
 		}
 
-		/// <summary>Every formation the generator makes: each type, shape and variant.</summary>
+		/// <summary>Every formation the generator makes: each type, shape and variant (the type's own count, <see cref="RockVariantCounts"/>).</summary>
 		public static IEnumerable<(RockType Type, FormationShape Shape, int Variant)> AllFormations()
 		{
 			foreach (RockType type in RockTypes.All)
 			{
+				int variants = RockVariantCounts.Of(type.Name);
 				foreach (FormationShape shape in type.Shapes)
 				{
-					for (int v = 0; v < RockTypes.VariantCount; v++)
+					for (int v = 0; v < variants; v++)
 					{
 						yield return (type, shape, v);
 					}

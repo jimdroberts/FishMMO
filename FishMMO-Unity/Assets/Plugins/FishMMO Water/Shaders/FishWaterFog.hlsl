@@ -227,4 +227,44 @@ half3 FishWaterBehindClouds(half3 color, float2 screenUV, float3 positionWS)
 	return color * lerp(1.0h, (half)clouds.a, open) + clouds.rgb * open;
 }
 
+// The sky's air, published by the weather (SkySystem): rgb the haze's colour under the low cloud, a its distance (m;
+// 0 while no sky publishes it); the molecules' extinction (xyz, 1/m) and scale height (w); the aerosol's (x, y).
+float4 _FishCloudHaze;
+float4 _FishCloudAirExtinction;
+float4 _FishCloudAerosol;
+
+/// <summary>
+/// The air between the eye and the water, by the law the cloud composite hazes the ground with (FishAerialThrough,
+/// FishClouds.shader) and the march every cloud: this world's molecules and haze, each thinning with height. The sea is
+/// drawn after that composite and covered the haze it had laid over the ground beneath, so the far sea stayed its own
+/// dark to a hard horizon under the hazed deck and sky (2026-10-26); hazed the same way, it meets them there.
+/// </summary>
+half3 FishWaterAirHaze(half3 color, float3 positionWS)
+{
+	if (_FishCloudHaze.a <= 0.0)
+	{
+		return color;
+	}
+	float3 camera = _WorldSpaceCameraPos.xyz;
+	float distance = length(positionWS - camera);
+	float low = max(0.0, min(camera.y, positionWS.y));
+	float rise = abs(camera.y - positionWS.y);
+	float airHeight = max(100.0, _FishCloudAirExtinction.w);
+	float hazeHeight = max(10.0, _FishCloudAerosol.y);
+	float ra = rise / airHeight, rh = rise / hazeHeight;
+	float airShare = exp(-low / airHeight) * (ra < 1e-3 ? 1.0 - 0.5 * ra : (1.0 - exp(-ra)) / ra);
+	float hazeShare = exp(-low / hazeHeight) * (rh < 1e-3 ? 1.0 - 0.5 * rh : (1.0 - exp(-rh)) / rh);
+	float3 depth = distance * (_FishCloudAirExtinction.xyz * airShare + _FishCloudAerosol.x * hazeShare);
+	half air = (half)exp(-dot(depth, float3(0.2126, 0.7152, 0.0722)));
+	// And all of it by the camera's far plane. From a few dozen metres up the sea's own horizon lies past the far plane
+	// (55 km from 342 m, against 20.5 km): the sea is cut off there, and its last row, only partly hazed, stood a step
+	// darker than the sky under the deck just above it, which is the haze — "the clouds don't meet the water"
+	// (2026-10-26). What lies past the cut is more sea, hazier still and ending in that same haze, so the sea goes the
+	// rest of the way to it over the last stretch before the cut. From a beach the horizon is nearer than the cut and
+	// nothing changes.
+	float far = _ProjectionParams.z;
+	air *= (half)(1.0 - smoothstep(0.7 * far, 0.98 * far, distance));
+	return color * air + (half3)_FishCloudHaze.rgb * (1.0h - air);
+}
+
 #endif

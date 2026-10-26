@@ -71,6 +71,16 @@ namespace FishMMO.Shared.WorldDesign
 		public const string SeaIce = "IceSea";
 		/// <summary>Basal ice: blue-grey ice banded with silt and studded with stones.</summary>
 		public const string BasalDebris = "IceBasalDebris";
+		/// <summary>Ammonia-water ice of a cryovolcano's flows: cream-grey, bubbly, half translucent (2026-10-25).</summary>
+		public const string AmmoniaHydrate = "IceAmmoniaHydrate";
+		/// <summary>Marine ice accreted under an ice shell: blue-black, veined by brine channels, soot-stained (2026-10-25).</summary>
+		public const string Accreted = "IceAccreted";
+		/// <summary>The coarse blue-green crystalline ice of a geyser moon's stripes (2026-10-25).</summary>
+		public const string StripeBlue = "IceStripeBlue";
+		/// <summary>Permanent ice banded by a thousand summers' dust layers (2026-10-25).</summary>
+		public const string Stratified = "IceStratified";
+		/// <summary>A cave's ice scalloped by moving air into shallow dished hollows (2026-10-25).</summary>
+		public const string Scalloped = "IceScalloped";
 
 		private static Color H(string hex) => SurfaceCatalogue.Hex(hex);
 
@@ -183,6 +193,138 @@ namespace FishMMO.Shared.WorldDesign
 				Occlusion = 0.7f,
 				NormalScale = 1f,
 			},
+			// ── The biome suite's ice dresses (2026-10-25) ──
+			new SurfaceRecipe
+			{
+				Name = AmmoniaHydrate,
+				TileMetres = 6f,
+				ReliefMetres = 0.03f,
+				Dark = H("#8e9088"),
+				Mid = H("#c8ccc4"),
+				Light = H("#eceee8"),
+				BaseCells = 4,
+				Octaves = 5,
+				Persistence = 0.5f,
+				Warp = 0.06f,
+				// Bubbly cream-grey grains, the odd frozen gas bubble.
+				Motif = SurfaceMotif.Granular,
+				MotifCells = 24,
+				MotifSize = 0.1f,
+				MotifWeight = 0.4f,
+				MotifDark = H("#a8aca2"),
+				MotifLight = H("#f6f6f0"),
+				Speckles = new[] { H("#f8f8f2"), H("#9a9c94") },
+				SpeckleCount = 700,
+				SpeckleSize = 0.002f,
+				Smoothness = 0.3f,
+				SmoothnessVariation = 0.1f,
+				Metallic = 0f,
+				Occlusion = 0.5f,
+				NormalScale = 1f,
+			},
+			new SurfaceRecipe
+			{
+				Name = Accreted,
+				TileMetres = 6f,
+				ReliefMetres = 0.03f,
+				Dark = H("#0e1a24"),
+				Mid = H("#2a4456"),
+				Light = H("#6a8ea2"),
+				BaseCells = 3,
+				Octaves = 4,
+				Persistence = 0.45f,
+				Warp = 0.1f,
+				// Brine channels: thin pale veins through dark clear ice.
+				Motif = SurfaceMotif.Cracks,
+				MotifCells = 5,
+				MotifSize = 0.012f,
+				MotifWeight = 0.35f,
+				MotifDark = H("#b8ccd6"),
+				MotifLight = H("#e4eef2"),
+				Speckles = new[] { H("#2a2420"), H("#dfe8ec") },
+				SpeckleCount = 500,
+				SpeckleSize = 0.002f,
+				Smoothness = 0.55f,
+				SmoothnessVariation = 0.15f,
+				Metallic = 0f,
+				Occlusion = 0.4f,
+				NormalScale = 0.9f,
+			},
+			new SurfaceRecipe
+			{
+				Name = StripeBlue,
+				TileMetres = 6f,
+				ReliefMetres = 0.035f,
+				Dark = H("#1e5a62"),
+				Mid = H("#4e9aa2"),
+				Light = H("#b8e2e4"),
+				BaseCells = 3,
+				Octaves = 4,
+				Persistence = 0.45f,
+				Warp = 0.06f,
+				// Coarse crystal faces meeting at bright joints.
+				Motif = SurfaceMotif.Fractured,
+				MotifCells = 6,
+				MotifSize = 0.02f,
+				MotifWeight = 0.35f,
+				MotifDark = H("#2e6e76"),
+				MotifLight = H("#e8fbff"),
+				Smoothness = 0.5f,
+				SmoothnessVariation = 0.1f,
+				Metallic = 0f,
+				Occlusion = 0.4f,
+				NormalScale = 0.9f,
+			},
+			new SurfaceRecipe
+			{
+				Name = Stratified,
+				TileMetres = 6f,
+				ReliefMetres = 0.03f,
+				Dark = H("#6a7a84"),
+				Mid = H("#a8bcc6"),
+				Light = H("#e2ecf0"),
+				BaseCells = 4,
+				Octaves = 5,
+				Persistence = 0.5f,
+				Warp = 0.08f,
+				// Dust bands of old summers, nearly level.
+				Motif = SurfaceMotif.Strata,
+				MotifCells = 14,
+				MotifSize = 0.1f,
+				MotifWeight = 0.5f,
+				MotifDark = H("#5a5248"),
+				MotifLight = H("#eef4f6"),
+				Smoothness = 0.5f,
+				SmoothnessVariation = 0.15f,
+				Metallic = 0f,
+				Occlusion = 0.5f,
+				NormalScale = 1f,
+			},
+			new SurfaceRecipe
+			{
+				Name = Scalloped,
+				TileMetres = 6f,
+				ReliefMetres = 0.05f,
+				Dark = H("#3e7090"),
+				Mid = H("#7ab0cc"),
+				Light = H("#d4ecf6"),
+				BaseCells = 3,
+				Octaves = 4,
+				Persistence = 0.45f,
+				Warp = 0.05f,
+				// Dished scallops cut by moving air, their rims a little paler.
+				Motif = SurfaceMotif.Cobbles,
+				MotifCells = 6,
+				MotifSize = 0.2f,
+				MotifWeight = 0.4f,
+				MotifDark = H("#5a90ae"),
+				MotifLight = H("#e6f4fa"),
+				Smoothness = 0.75f,
+				SmoothnessVariation = 0.1f,
+				Metallic = 0f,
+				Occlusion = 0.4f,
+				NormalScale = 0.9f,
+			},
 		};
 
 		/// <summary>URP Lit settings for each surface (see the class remarks for why).</summary>
@@ -192,6 +334,11 @@ namespace FishMMO.Shared.WorldDesign
 			new IceMaterialProposal { Surface = BubblyWhite, Specular = H("#252525"), Smoothness = 0.35f, EmissionShare = 0.03f, ClearCoat = 0f },
 			new IceMaterialProposal { Surface = SeaIce, Specular = H("#252525"), Smoothness = 0.45f, EmissionShare = 0.02f, ClearCoat = 0.2f },
 			new IceMaterialProposal { Surface = BasalDebris, Specular = H("#252525"), Smoothness = 0.5f, EmissionShare = 0.01f, ClearCoat = 0.3f },
+			new IceMaterialProposal { Surface = AmmoniaHydrate, Specular = H("#252525"), Smoothness = 0.3f, EmissionShare = 0.03f, ClearCoat = 0f },
+			new IceMaterialProposal { Surface = Accreted, Specular = H("#252525"), Smoothness = 0.55f, EmissionShare = 0.04f, ClearCoat = 0.3f },
+			new IceMaterialProposal { Surface = StripeBlue, Specular = H("#252525"), Smoothness = 0.5f, EmissionShare = 0.04f, ClearCoat = 0.2f },
+			new IceMaterialProposal { Surface = Stratified, Specular = H("#252525"), Smoothness = 0.5f, EmissionShare = 0.02f, ClearCoat = 0.2f },
+			new IceMaterialProposal { Surface = Scalloped, Specular = H("#252525"), Smoothness = 0.75f, EmissionShare = 0.04f, ClearCoat = 0.4f },
 		};
 
 		/// <summary>The ice recipe with this name, or false.</summary>

@@ -20,7 +20,10 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Alien)
 				// Alien ground alone: the client reads that live from the template's air (BiomeHabitats.Live), never stored.
 				.Wildlife(BiomeHabitat.None)
-				.Moat(BiomeMoatWater.Frozen);
+				.Moat(BiomeMoatWater.Frozen)
+				// Triton's geysers (2026-10-25, I2q-b, decision 66): dark plume soot, at most four plumes a scene, waking with the sun.
+				.Emits("Plume Soot", 0.04f)
+				.Vents(BiomeVentLayout.Grid, BiomeVentTiming.Solar, 4);
 		}
 	}
 }

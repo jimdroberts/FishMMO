@@ -33,7 +33,28 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void CrystalKinds_AreAppendOnly_AndTheCatalogueIsInKindOrder()
 		{
-			string[] names = { "Selenite", "Amethyst", "ClearQuartz", "SmokyQuartz", "GreenFluorite", "FrostCrystal", "Obsidian", "Amberlight", "Wyrdstone", "Sunstone" };
+			string[] names =
+			{
+				"Selenite", "Amethyst", "ClearQuartz", "SmokyQuartz", "GreenFluorite", "FrostCrystal", "Obsidian", "Amberlight", "Wyrdstone", "Sunstone",
+				// 2026-10-26 (NEW-CRYSTALS): every kind the biome drafts name, appended.
+				"Phillipsite", "Lodeheart", "FireIce", "Hadalite", "Gwindel", "PinkFluorite", "Starfrost", "Stibnite", "Rhodochrosite", "Stormglass", "FireOpal",
+				"Perilight", "Twinquartz", "Jadeite", "Hotarubi", "Aragonite", "Pearlspar", "Galena", "Chalcopyrite", "Wyrmglass", "BlueJohn", "Helictite",
+				"Echospar", "Cassiterite", "Bellspar", "Apatite", "Lagoonglass", "Tektite", "Starglass", "SalAmmoniac", "Eitrglass", "Dogtooth", "Stellamaris",
+				"Malachite", "Sunglass", "Ilmenite", "Phaseglass", "Vivianite", "Ebbspar", "Celestine", "Fogpearl", "Cinnabar", "Farrstone", "Realgar",
+				"Orpiment", "Dalistone", "IcelandSpar", "Stilbite", "Solarsteinn", "CupHoar", "Nagamani", "Skyglass", "Turquoise", "Gueststar", "Garnet",
+				"Staurolite", "Heartgarnet", "Hoarfeather", "Cryocalcite", "Chudfire", "Hydrohalite", "Hyalite", "Nightpearl", "ScythianEmerald", "Hornice",
+				"Jadeice", "Swellglass", "Chrysolite", "MansionPearl", "WatermelonTourmaline", "Leafglass", "Specularite", "Glyphjade", "Zircon", "Monsoonglass",
+				"Smithsonite", "Mistjade", "CavePearl", "Nixglass", "Thenardite", "OlivineBomb", "Magecstone", "Marcasite", "Nuru", "Simetite", "Fatastone",
+				"Waxspar", "Adamant", "Orphanstone", "Cristobalite", "BrimstoneAmber", "Dracontite", "Hydrophane", "Moonstone", "NitrogenSpar", "Tearglass",
+				"DesertRose", "Alum", "Oraclestone", "Siderite", "GalernaStone", "Wispglass", "Stillglass", "BariteRose", "SatinSpar", "Sunspoke", "Antozonite",
+				"Septentrion", "Balas", "Levanite", "Sapphire", "Shamirspar", "Agate", "RhinegoldSeam", "Kyanite", "Haarglass", "Lajvard", "Shabchiragh",
+				"Wollastonite", "Pyrrhotite", "Sibylleaf", "Halite", "Sylvite", "Embersalt", "Reefgold", "Emerald", "Rainglass", "Goblinfire", "Peridot",
+				"Sunshell", "Lapastone", "Analcime", "Rutilquartz", "MidwinterSpar", "Dioptase", "WolfsEye", "Covellite", "Anhydrite", "Gledstone",
+				"NativeSulphur", "Bluebrim", "Leadfeather", "Pyrite", "Cloudheart", "Mireopal", "Aetite", "BollasEye", "Hauyne", "Leucite", "Saeculite",
+				"TrapicheEmerald", "Mistberyl", "Quicksilver", "Hazeamber", "Epsomite", "Sakhrastone", "Labradorite", "Aurorite", "Ikaite", "Tremorspar",
+				"Demantoid", "Sphene", "Laurinite", "SulphurNeedles", "Smokestone", "Hearthglass", "Hieratite", "Forgeheart", "Goethite", "Weepglass",
+				"Carnelian", "Abzulite", "FlintGeode",
+			};
 			Assert.That(Enum.GetNames(typeof(BiomeCaveCrystalKind)), Is.EqualTo(names));
 			for (int i = 0; i < names.Length; i++)
 			{
@@ -66,7 +87,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(RockTypes.TryGet(m.FormationRock, out RockType type), Is.True, m.FormationRock);
 				Assert.That(RockTypes.TryShape(in type, m.FormationShape, out _), Is.True, $"{m.FormationRock} {m.FormationShape}");
 			}
-			Assert.That(all.Where(m => m.Formation).Select(m => m.Kind), Is.EqualTo(new[] { BiomeCaveCrystalKind.Selenite, BiomeCaveCrystalKind.FrostCrystal }));
+			Assert.That(all.Where(m => m.Formation).Select(m => m.Kind), Is.EqualTo(new[] { BiomeCaveCrystalKind.Selenite, BiomeCaveCrystalKind.FrostCrystal, BiomeCaveCrystalKind.SulphurNeedles }));
 			// Each own-built kind is its own habit and colour: no two alike.
 			var looks = new HashSet<string>();
 			foreach (CaveMineral m in all.Where(m => !m.Formation))
@@ -441,7 +462,8 @@ namespace FishMMO.UnitTests.WorldDesign
 			// The chambers' deposits are the biome's crystals (as the shells are its rock), the ways' glow its glowing ones.
 			Assert.That(main, Does.Contain("set.Crystals = CaveInteriorArt.Crystals(in caves);"));
 			Assert.That(main, Does.Contain("CaveBiome caves = CaveInteriorArt.Of(context.Request, context.Record, system);"), "the cave's biomes: its host site's and its interior");
-			Assert.That(main, Does.Contain("FloorPiece(depositFoot - dir * 0.5f, () => Mineral(kind), 1f, rng.Range(0.8f, 1.6f), true, -dir, out Vector3 laid)"));
+			// 2026-10-26 (NEW-CRYSTALS): in the look the biome grows the kind in.
+			Assert.That(main, Does.Contain("FloorPiece(depositFoot - dir * 0.5f, () => Mineral(kind, BiomeCaveCrystals.LookOf(set.Crystals, kind)), 1f, rng.Range(0.8f, 1.6f), true, -dir, out Vector3 laid)"));
 			Assert.That(main, Does.Contain("int variant = rng.Range(0, RockTypes.VariantCount);"), "a crystal's variant is drawn as a formation's");
 			Assert.That(glow, Does.Contain("CaveGlowPalettes.For(system.Form, system.Seed, in caves)"));
 			Assert.That(Code("PointsOfInterest/Features/CaveGlowPalette.cs"), Does.Contain("CaveInteriorArt.Crystals(in caves)"));
@@ -472,7 +494,10 @@ namespace FishMMO.UnitTests.WorldDesign
 						// The deck is the solids at the walking surface (their top within a few centimetres of y = 0).
 						foreach (StructureSolid s in solids.Where(s => s.Part == BiomeStructureRole.Floor))
 						{
-							Assert.That(s.Bounds.max.y, Is.InRange(-0.12f, 0.06f), $"{id}_{v} L{lod}: a floor solid off the deck");
+							float sag = id == StructurePieces.RopeBridgeId(16f) ? 16f / (v == 0 ? 30f : 24f) : 0f;
+							float deck = -sag * (1f - 4f * s.Bounds.center.z * s.Bounds.center.z / (16f * 16f));
+							Assert.That(s.Bounds.max.y, Is.InRange(-sag - 0.12f, 0.06f), $"{id}_{v} L{lod}: a floor solid off the deck");
+							Assert.That(s.Bounds.center.y, Is.EqualTo(deck).Within(0.12f), $"{id}_{v} L{lod}: floor follows the walking surface");
 						}
 					}
 				}

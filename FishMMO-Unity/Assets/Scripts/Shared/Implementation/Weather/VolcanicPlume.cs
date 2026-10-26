@@ -168,6 +168,34 @@ namespace FishMMO.Shared.Weather
 			};
 		}
 
+		/// <summary>
+		/// Air thinner than this share of our own is THIN (2026-10-25, I2q-b, decisions 53/66: Triton, Mars): a plume rises on its own
+		/// heat and then lies over downwind, and a fumarole is a short jet rather than a hanging plume.
+		/// </summary>
+		public const float ThinAirRelative = 0.02f;
+		/// <summary>How far downwind a plume's top stands in the thinnest air, as a share of its height (Triton's lie flat for many times their 8 km).</summary>
+		public const float ThinLean = 1.5f;
+
+		/// <summary>True for air that is there but thin (<see cref="ThinAirRelative"/>).</summary>
+		public static bool IsThin(in PlanetAir planet) => planet.HasAir && planet.AirRelative < ThinAirRelative;
+
+		/// <summary>
+		/// Where a plume's top stands from its vent as DRAWN (2026-10-25, I2q-b, decision 53; presentation only, the fallout keeps
+		/// <see cref="Plume.TopOffset"/>): in thin air it leans downwind by up to <see cref="ThinLean"/> × its height, the more the
+		/// thinner the air, never less than its own lean; in calm or thick air its own lean. Pure.
+		/// </summary>
+		public static Vector2 DrawnTopOffset(in Plume plume, float airRelative)
+		{
+			float u = plume.Wind.magnitude;
+			if (!(airRelative < ThinAirRelative) || u < CalmWind || !(plume.Top > 0f))
+			{
+				return plume.TopOffset;
+			}
+			float thin = 1f - Mathf.Clamp01(airRelative / ThinAirRelative);
+			float lean = Mathf.Max(plume.TopOffset.magnitude, ThinLean * plume.Top * thin);
+			return plume.Wind / u * lean;
+		}
+
 		/// <summary>How far downwind a plume's fall thins by 1/e, m: the drift of a typical grain falling from the umbrella.</summary>
 		public static float FalloutLength(in Plume plume)
 		{

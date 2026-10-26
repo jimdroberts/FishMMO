@@ -61,7 +61,7 @@ namespace FishMMO.Shared.Biomes
 	/// The landform zones of a scene (decision 55): its stored sites made shapes and bucketed by their boxes, so a ground layer's or a
 	/// spawn rule's <see cref="BiomeLandformBand"/> asks a part's mask at a point cheaply (pure; thread-safe once built).
 	/// </summary>
-	public sealed class BiomeLandformZones
+	public sealed partial class BiomeLandformZones
 	{
 		/// <summary>The bucket size, metres.</summary>
 		public const float BucketMetres = 128f;
@@ -139,5 +139,38 @@ namespace FishMMO.Shared.Biomes
 		/// <summary><see cref="Weight"/> on zones that may be missing (null: no landform stored).</summary>
 		public static float WeightOf(BiomeLandformZones zones, in BiomeLandformBand band, int biomeID, float x, float z, float ground, float slope)
 			=> band.On ? (zones ?? None).Weight(band, biomeID, x, z, ground, slope) : 1f;
+
+		/// <summary>
+		/// Talus SIZE GRADING (2026-10-25, phase I2u, decision 79 (d)): the scale a graded rule's instance takes at (x, z) on its biome's talus
+		/// cones (RockChutes.ConeKinds): <see cref="RockChutes.ApexScale"/> at a cone's apex to <see cref="RockChutes.ToeScale"/> at its toe,
+		/// eased to 1 over the cone's edge; 1 off every cone (and with no zones). The cone holding the point most fully decides.
+		/// </summary>
+		public float TalusGrade(int biomeID, float x, float z)
+		{
+			long key = ((long)Mathf.FloorToInt(z / BucketMetres) << 32) ^ (uint)Mathf.FloorToInt(x / BucketMetres);
+			if (!buckets.TryGetValue(key, out List<int> near))
+			{
+				return 1f;
+			}
+			float best = 0f, along = 0f;
+			foreach (int i in near)
+			{
+				BiomeLandformSite site = shapes[i].Site;
+				if (site.BiomeID != biomeID || !RockChutes.IsCone(site.Form.Kind))
+				{
+					continue;
+				}
+				float a = RockChutes.ConeAlong(site, x, z, out float weight);
+				if (weight > best)
+				{
+					best = weight;
+					along = a;
+				}
+			}
+			return RockChutes.GradeAt(along, best);
+		}
+
+		/// <summary><see cref="TalusGrade"/> on zones that may be missing (null: 1).</summary>
+		public static float TalusGradeOf(BiomeLandformZones zones, int biomeID, float x, float z) => zones != null ? zones.TalusGrade(biomeID, x, z) : 1f;
 	}
 }

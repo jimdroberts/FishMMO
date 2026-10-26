@@ -384,7 +384,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.IsFalse(SeaLifePlacement.OnFloor(new SeaCreatureKind { Behaviour = SeaCreatureBehaviour.School, NearFloor = true }), "a near-floor swimmer still swims");
 			Assert.AreEqual((int)SeaCreatureShape.Crab + 1, (int)SeaCreatureShape.Eel, "appended");
 			Assert.AreEqual((int)SeaCreatureBehaviour.Crawl + 1, (int)SeaCreatureBehaviour.Lurk, "appended");
-			StringAssert.Contains("Eel, 6)] _Mode", Read(Shaders + "/FishSeaLife.shader"));
+			StringAssert.Contains("Eel, 6, ", Read(Shaders + "/FishSeaLife.shader")); // 2026-10-25: Mola 7, Nautilus 8 appended after it
 			StringAssert.Contains("case SeaCreatureShape.Eel: return 6f;", Read("Assets/Scripts/Client/World/SeaLife/SeaLifeSystem.cs"));
 			StringAssert.Contains("h = h * 31 + (kind.NearFloor ? 1 : 0);", Read("Assets/Scripts/Client/World/SeaLife/SeaLifeSystem.cs"), "a change re-places the cells");
 		}

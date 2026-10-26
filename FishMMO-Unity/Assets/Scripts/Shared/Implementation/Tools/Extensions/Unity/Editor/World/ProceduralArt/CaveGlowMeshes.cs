@@ -1946,7 +1946,9 @@ namespace FishMMO.Shared.WorldDesign
 				case CaveMineralHabit.Cubes: m = Cubes(variant, lod, s); break;
 				case CaveMineralHabit.Shards: m = Shards(variant, lod, s); break;
 				case CaveMineralHabit.Nodules: m = Nodules(variant, lod, s); break;
-				default: m = Blades(variant, lod, s); break;
+				case CaveMineralHabit.Blades: m = Blades(variant, lod, s); break;
+				// The drafts' habits (2026-10-26, NEW-CRYSTALS): CaveGlowMeshes.Habits.cs.
+				default: m = BuildHabit(habit, variant, lod, s); break;
 			}
 			m.RecalculateTangents();
 			return m;

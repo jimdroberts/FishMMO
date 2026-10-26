@@ -52,6 +52,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// interior's scalloped-ice wall texture inside"): a linked interior's Interior-banded cliff layer, for an ice shell only.
 		/// </summary>
 		public CaveRockLayer Wall;
+		/// <summary>
+		/// The tea ring at the water's line (2026-10-25, phase I2n-c, decision 86 (g)): the cave biome's stain colour and strength (alpha,
+		/// 0 none: every cave's until then), the water's level (world y), the highest flood over it and the top edge's fade, metres.
+		/// </summary>
+		public Color FloodStain;
+		public float FloodLevel, FloodRise, FloodEdge;
 
 		/// <summary>A key of the whole look, for the material's name: equal looks share one material.</summary>
 		public string Key
@@ -84,6 +90,15 @@ namespace FishMMO.Shared.WorldDesign
 					MixF(GlowStrength);
 					MixF(Moss);
 					MixF(WetGloss);
+					if (FloodStain.a > 0f)
+					{
+						// The ring is the cave's own (its water's level): a material of its own (none of the old keys has it).
+						Mix("flood");
+						foreach (float f in new[] { FloodStain.r, FloodStain.g, FloodStain.b, FloodStain.a, FloodLevel, FloodRise, FloodEdge })
+						{
+							MixF(f);
+						}
+					}
 					if (Wall.Biome != null)
 					{
 						// The wall's own art by name (its family alone would let two biomes' walls share a material).
@@ -135,6 +150,24 @@ namespace FishMMO.Shared.WorldDesign
 					look.Wall = new CaveRockLayer { Biome = wall };
 				}
 			}
+			return look;
+		}
+
+		/// <summary>
+		/// The look with the tea ring of the biome dressing the cave's inside (2026-10-25, I2n-c, decision 86 (g), its Cave Stains for the
+		/// form) at the cave's water (<paramref name="waterLevel"/>, world y; NaN for a dry cave: no ring), over the host's rock. The look
+		/// as it was where either is missing.
+		/// </summary>
+		public static CaveRockLook WithStain(CaveRockLook look, in CaveBiome caves, CaveForm form, float waterLevel)
+		{
+			if (float.IsNaN(waterLevel) || !CaveInteriorArt.Stain(caves.Content, form, out BiomeCaveStain stain))
+			{
+				return look;
+			}
+			look.FloodStain = stain.Colour;
+			look.FloodLevel = waterLevel;
+			look.FloodRise = stain.Rise;
+			look.FloodEdge = Mathf.Max(0.005f, stain.Edge);
 			return look;
 		}
 
@@ -365,6 +398,14 @@ namespace FishMMO.Shared.WorldDesign
 			// x moss in the twilight, y wet gloss, z 1 when the ground textures are bound (else flat colours), w unused.
 			bool bound = siltAlbedo != null && gravelAlbedo != null && organicAlbedo != null && troddenAlbedo != null;
 			material.SetVector("_FishCaveParams", new Vector4(look.Moss, look.WetGloss, bound ? 1f : 0f, 0f));
+			// The tea ring (I2n-c): x the water's level (world y), y the highest flood over it, z the top edge's fade, w on; its colour
+			// and strength. Set only on a ringed cave's own material: every other keeps the shader's default (w 0, the branch never
+			// runs) and its bytes as they were.
+			if (look.FloodStain.a > 0f && material.HasProperty("_FishCaveFlood"))
+			{
+				material.SetVector("_FishCaveFlood", new Vector4(look.FloodLevel, look.FloodRise, look.FloodEdge, 1f));
+				material.SetColor("_FishCaveFloodStain", look.FloodStain);
+			}
 			if (look.Wall.Biome != null)
 			{
 				// The interior's inner wall over the shell's own texture (an ice cave's scalloped ice), at its own tile: the cave mesh's

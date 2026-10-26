@@ -346,6 +346,7 @@ namespace FishMMO.Shared.WorldDesign
 			template.Small = planned.Small;
 			template.Medium = planned.Medium;
 			template.Large = planned.Large;
+			template.NeedsLiquidWater = spec.NeedsLiquidWater;
 			template.PadFlatness = spec.PadFlatness;
 			template.Style = spec.Style;
 			template.Layout = spec.Layout;

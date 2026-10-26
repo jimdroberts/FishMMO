@@ -624,6 +624,13 @@ namespace FishMMO.Client
 		public Shader SeaLifeShader;
 		public SeaLifeSettings SeaLife = new SeaLifeSettings();
 
+		[Header("Sea floats")]
+		[Tooltip("FishSeaFloats.compute: expands what drifts on the open sea (sargassum, sailors, drift logs, ice…) round each camera every frame (SeaFloatSystem). Referenced here so a client build includes it; empty, the editor loads it by path.")]
+		public ComputeShader SeaFloatsCompute;
+		[Tooltip("FishMMO/Sea Floats: draws them riding the sea's waves. Referenced here so a client build includes it; empty, the editor loads it by path.")]
+		public Shader SeaFloatsShader;
+		public SeaFloatSettings SeaFloats = new SeaFloatSettings();
+
 		[Header("Ambient life")]
 		[Tooltip("FishMMO/Ambient Life: the land's birds, bats and small animals (AmbientLifeSystem). Referenced here so a client build includes it; empty, the editor loads it by path.")]
 		public Shader AmbientLifeShader;
@@ -644,6 +651,10 @@ namespace FishMMO.Client
 		public Shader CaveDripsShader;
 		[Tooltip("FishMMO/World/Cave Skylight Shafts: the daylight's shafts and the dust motes in them under the openings in caves' roofs near the camera (CaveSkylights). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
 		public Shader CaveSkylightShaftsShader;
+		[Tooltip("FishMMO/World/Rockfall Stones: the stones falling down the scene's stored chutes and the Strombolian bombs (RockfallField, 2026-10-25, I2u). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
+		public Shader RockfallStonesShader;
+		[Tooltip("FishMMO/World/Rockfall Marks: the chutes' fresh scars, the breathing taluses' rime, mist and steam, and the falls' dust (RockfallField, I2u). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
+		public Shader RockfallMarksShader;
 
 		[Header("Falling leaves")]
 		[Tooltip("FishMMO/Weather/Falling Leaves: leaves coming down under and downwind of the trees near the camera, mostly in autumn (FallingLeavesPresenter). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]

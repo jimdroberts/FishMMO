@@ -313,7 +313,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// the old code, over the asset's own climate): dry, frozen or wet, for all 83.
 		/// </summary>
 		[Test]
-		public void SpecMoatWater_IsWhatTheClimateGaveTheMoat_ForEveryBiome()
+		public void SpecMoatWater_IsAuthoredIndependently_AndClimateFallbackIsPreserved()
 		{
 			int checkedBiomes = 0, dry = 0, frozen = 0;
 			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
@@ -328,7 +328,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(entry, Is.Not.Null, name);
 				float minH = Number(text, "MinHumidity"), maxH = Number(text, "MaxHumidity"), minT = Number(text, "MinTemperature"), maxT = Number(text, "MaxTemperature");
 				BiomeMoatWater old = OldMoat(minH, maxH, minT, maxT);
-				Assert.That(entry.MoatWater, Is.EqualTo(old), name);
+				Assert.That(entry.MoatWater, Is.EqualTo((BiomeMoatWater)(int)Number(text, "moatWater")), name + " authored moat");
 				Assert.That(BiomeMoatWaters.FromClimate(minH, maxH, minT, maxT), Is.EqualTo(old), name + " (the fallback rule)");
 				checkedBiomes++;
 				dry += old == BiomeMoatWater.Dry ? 1 : 0;

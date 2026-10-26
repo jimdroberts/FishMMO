@@ -195,6 +195,16 @@ namespace FishMMO.Client
 						color = hue == 0 ? new Color(0.62f, 0.4f, 1f) : hue == 2 ? new Color(0.4f, 1f, 0.7f) : hue == 3 ? new Color(1f, 0.68f, 0.32f) : new Color(0.35f, 0.62f, 1f);
 						range = e.Reach > 0f ? e.Reach : 6f;
 						intensity = 1.4f * (0.85f + 0.15f * Mathf.Sin(time * 0.7f + phase));
+						// A biome that names a mode for its crystals (2026-10-25, I6i): the crystal's own glow moves by it (GlowModeTable).
+						if (GlowModeTable.TryAt(e.Position, SceneGlowSource.Crystal, out FishMMO.Shared.Biomes.BiomeGlowMode crystalMode))
+						{
+							SceneGlowSky sky = GlowSky.Current;
+							if (crystalMode.Mode != SceneGlowMode.Default)
+							{
+								intensity = 1.4f * SceneGlowModes.Value(in crystalMode, time, e.Position, in sky, GlowModeTable.PlaceAt(e.Position));
+							}
+							color = SceneGlowModes.Warmed(color, crystalMode.Warm);
+						}
 						break;
 					}
 					case SceneEmitterKind.Torch:
@@ -219,6 +229,14 @@ namespace FishMMO.Client
 						color = SceneGlow.Colour(SceneGlow.HueOf(e.Seed));
 						range = e.Reach > 0f ? e.Reach : SceneGlow.Range;
 						intensity = SceneGlow.Light(time, e.Position, glow, buried, SceneGlow.Flickers(e.Seed));
+						// A biome that names a mode for this glow's source (2026-10-25, I6i): as its glowing parts move on the GPU.
+						if (GlowModeTable.TryAt(e.Position, SceneGlowModes.SourceOf(SceneGlow.HueOf(e.Seed)), out FishMMO.Shared.Biomes.BiomeGlowMode glowMode))
+						{
+							SceneGlowSky sky = GlowSky.Current;
+							intensity = SceneGlowModes.Light(in glowMode, SceneGlow.Intensity, time, e.Position, in sky, glow, buried, SceneGlow.Flickers(e.Seed),
+								GlowModeTable.PlaceAt(e.Position));
+							color = SceneGlowModes.Warmed(color, glowMode.Warm);
+						}
 						break;
 					}
 					case SceneEmitterKind.Fire:

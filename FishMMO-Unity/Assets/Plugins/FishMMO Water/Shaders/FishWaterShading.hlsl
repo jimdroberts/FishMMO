@@ -516,6 +516,8 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 	 * what lies between the eye and the surface is water. */
 	if (!underwater)
 	{
+		// The air in front of the sea, behind the clouds, as the composite lays it over the ground (FishWaterAirHaze).
+		color = FishWaterAirHaze(color, positionWS);
 		color = FishWaterBehindClouds(color, screenUV);
 		// The air's fog on top, only what the cloud buffer did not already carry (FishWaterAirFogOver).
 		half fogKeep;

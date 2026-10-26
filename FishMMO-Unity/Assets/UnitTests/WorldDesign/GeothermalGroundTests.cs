@@ -117,8 +117,10 @@ namespace FishMMO.UnitTests.WorldDesign
 			string vents = Code("Assets/Scripts/Shared/Implementation/Weather/GeothermalVents.cs");
 			// The template overload (Near, the client) reads the ground through GeothermalGround.Of, as SceneSites (the cut) does.
 			StringAssert.Contains("Find(origin, area, seed, p => GeothermalGround.Of(biomeAt(p)), into, cellMetres, MaxSites);", vents);
-			StringAssert.Contains("Find(map.WorldOrigin, new Rect(map.WorldOrigin, map.WorldSize), SeedOf(map), p => GeothermalGround.Of(map.Sample(new Vector3(p.x, 0f, p.y)))", vents);
-			StringAssert.Contains("Find(map.WorldOrigin, near, SeedOf(map), p => map.Sample(new Vector3(p.x, 0f, p.y)), into);", vents);
+			// Both through GroundOf since 2026-10-25 (I2q-b): the template's ground, marked lined when the map stores its vent lines.
+			StringAssert.Contains("GeothermalGround ground = GeothermalGround.Of(map.Sample(new Vector3(p.x, 0f, p.y)));", vents);
+			StringAssert.Contains("Find(map.WorldOrigin, scene, SeedOf(map), p => GroundOf(map, lines, p), into, CellMetres, int.MaxValue);", vents);
+			StringAssert.Contains("Find(map.WorldOrigin, near, SeedOf(map), p => GroundOf(map, lines, p), into, CellMetres, MaxSites);", vents);
 			StringAssert.Contains("return map != null ? SeedOf(map.name) : 0u;", vents);
 			// The cut names its map as the biome stage writes it.
 			string generator = Code(WorldFolder + "/SceneGenerator.cs");
@@ -595,8 +597,10 @@ namespace FishMMO.UnitTests.WorldDesign
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
 				bool basin = entry.Biome == "Geyser Basin";
-				Assert.That(entry.GeothermalShares.HasValue, Is.EqualTo(basin), entry.Biome);
-				Assert.That(entry.WaterLook().Hot, Is.EqualTo(basin), entry.Biome);
+				// I2q-b (2026-10-25, decisions 84/95): the Sulphur Flats' and Volcanic Temple's own site rates; the flats' pools are hot melt.
+				bool rated = entry.Biome == "Sulphur Flats" || entry.Biome == "Volcanic Temple";
+				Assert.That(entry.GeothermalShares.HasValue, Is.EqualTo(basin || rated), entry.Biome);
+				Assert.That(entry.WaterLook().Hot, Is.EqualTo(basin || entry.Biome == "Sulphur Flats"), entry.Biome);
 				if (!basin)
 				{
 					Assert.That(entry.Emission.HasValue && entry.Emission.Value.Substance == "Steam", Is.False, entry.Biome);
@@ -617,7 +621,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		[Test]
-		public void Defaults_AreTodays_OnEveryTemplate()
+		public void Templates_HoldApprovedGeothermalShares_AndHeatFlags()
 		{
 			Assert.That(BiomeGeothermalShares.Today.IsToday, Is.True);
 			Assert.That(new BiomeGeothermalShares(0.25f, 0.4f, 0.2f, 0.15f).IsToday, Is.False);
@@ -638,19 +642,22 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 				/* Authored since (Author biome art, 2026-10-21): the basin alone carries its own split and hot water; every other
 				 * template that serialises the split carries today's, and no heat band is authored anywhere yet (the round's). */
-				bool basin = Path.GetFileNameWithoutExtension(path) == "Geyser Basin";
+				string name = Path.GetFileNameWithoutExtension(path);
+				bool basin = name == "Geyser Basin", sulphur = name == "Sulphur Flats";
+				BiomeGeothermalShares expected = basin ? Basin : sulphur ? new BiomeGeothermalShares(0f, 0f, 0.7f, 0f)
+					: name == "Volcanic Temple" ? new BiomeGeothermalShares(0f, 0.15f, 0.6f, 0.25f) : BiomeGeothermalShares.Today;
 				Match split = Regex.Match(text, @"\n  geothermal:\n    Geyser: ([\d.]+)\n    HotSpring: ([\d.]+)\n    Fumarole: ([\d.]+)\n    MudPot: ([\d.]+)");
 				if (split.Success)
 				{
 					BiomeGeothermalShares stored = new BiomeGeothermalShares(F(split.Groups[1].Value), F(split.Groups[2].Value), F(split.Groups[3].Value), F(split.Groups[4].Value));
-					Assert.That(stored.Signature(), Is.EqualTo((basin ? Basin : BiomeGeothermalShares.Today).Signature()), path);
+					Assert.That(stored.Signature(), Is.EqualTo(expected.Signature()), path);
 				}
 				else
 				{
 					Assert.That(text.Contains("\n  geothermal:"), Is.False, path + ": a split in an unexpected shape");
 					Assert.That(basin, Is.False, "the basin's split is authored");
 				}
-				Assert.That(Regex.IsMatch(text, @"\n    Hot: 1"), Is.EqualTo(basin), path);
+				Assert.That(Regex.IsMatch(text, @"\n    Hot: 1"), Is.EqualTo(basin || sulphur), path);
 				Assert.That(Regex.IsMatch(text, @"useHeatBand: 1"), Is.False, path);
 				if (basin)
 				{

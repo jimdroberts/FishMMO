@@ -194,6 +194,14 @@ namespace FishMMO.Shared.WorldDesign
 			SceneBiomeOverrides.Substitution overrides = request.BiomeOverrides != null ? request.BiomeOverrides.Resolve() : null;
 			float liquidLevel = 0f;
 			SurfaceLiquid liquid = overrides != null ? SurfaceLiquids.For(system, request.Body, out liquidLevel) : SurfaceLiquid.None;
+			/* The open ice shelf and its fast ice (decision 68, I2s) take the biome holding the Ice Shelf role, whatever the climate
+			 * picks there, as the lake roles do; the climate pick itself never offers it off an ice world. Nothing without a holder. */
+			BiomeTemplate shelfBiome = BiomeTemplateArt.WaterBiome(BiomeWaterRole.IceShelf);
+			SceneAltitude shelf = shelfBiome != null ? new SceneAltitude(request) : default;
+			if (shelf.IceShelf == null)
+			{
+				shelfBiome = null;
+			}
 			for (int z = 0; z < height; z++)
 			{
 				float north = origin.y + (z + 0.5f) * cellMetres;
@@ -206,6 +214,10 @@ namespace FishMMO.Shared.WorldDesign
 					BiomeTemplate biome = water != null && water.Any
 						? WaterBiome(field, water, direction, altitude, east, north, cellMetres, lakeBiome, riverBiome, estuaryBiome, saltFlatBiome)
 						: field.BiomeAt(direction, altitude, out _);
+					if (shelfBiome != null)
+					{
+						biome = IceShelfReach.BiomeOf(shelf.IceShelfPartAt(east, north), biome, shelfBiome);
+					}
 					if (overrides != null)
 					{
 						biome = overrides.Apply(biome, liquid != SurfaceLiquid.None && altitude < liquidLevel);

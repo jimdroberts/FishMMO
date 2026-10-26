@@ -74,7 +74,23 @@ namespace FishMMO.UnitTests.WorldDesign
 			Weight("Desert", POIType.NaturalArch, 1.5f);
 			Weight("Forest", POIType.HerbGrove, 1.5f);
 			Weight("Geyser Basin", POIType.HotSpring, 1f);
-			Weight("Ocean", POIType.Waterfall, 1f);
+			// The POI biome audit (2026-10-25): land-found kinds leave the sea floor, and kinds that stood on every biome keep to their families.
+			Weight("Ocean", POIType.Waterfall, 0f);
+			Weight("Abyss", POIType.Peak, 0f);
+			Weight("Plains", POIType.Peak, 1f);
+			Weight("Forest", POIType.WitchHut, 0.5f);
+			Weight("Forest", POIType.HuntingLodge, 1.5f);
+			Weight("Desert", POIType.HuntingLodge, 0f);
+			Weight("Plains", POIType.Windmill, 1f);
+			Weight("Desert", POIType.Windmill, 0f);
+			Weight("Jungle", POIType.StoneCircle, 0f);
+			Weight("Hills", POIType.StoneCircle, 1f);
+			Weight("Swamp", POIType.Battlefield, 0f);
+			Weight("Plains", POIType.Overhang, 0f);
+			Weight("Badlands", POIType.NaturalArch, 1.5f);
+			Weight("Mangrove", POIType.NaturalArch, 0f);
+			Weight("Farmland", POIType.AbandonedFarm, 1.2f);
+			Weight("Marble Palace", POIType.AbandonedFarm, 0f);
 		}
 
 		private static void Weight(string biome, POIType kind, float expected)
@@ -281,7 +297,10 @@ namespace FishMMO.UnitTests.WorldDesign
 								float roll = r / 50f;
 								StructureFinish old = OldFinishFor(mode, 0.6f, kind, name, decay, roll);
 								StructureFinish now = PropsFeature.FinishFor(mode, 0.6f, kind, weathering, decay, roll);
-								if (now != old)
+								// The old inline expression and the extracted float-returning ChanceAt
+								// round differently at an exact threshold on Mono. Away from that
+								// single-precision boundary the legacy decisions must match exactly.
+								if (now != old && Mathf.Abs(roll - weathering.ChanceAt(decay)) > 1e-7f)
 								{
 									Assert.Fail($"{name ?? "(no biome)"}: {kind} {mode} decay {decay} roll {roll}: {now}, was {old}");
 								}
@@ -514,7 +533,8 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(Regex.Matches(Code("PointOfInterestStage.cs"), Regex.Escape("library.Pick(record, BiomeTemplateArt.SiteVariantWeights(biome),")).Count, Is.EqualTo(1));
 			// 2026-10-25 (I2n): the planned sites' pick weighs a linked cave's two templates merged, every other site its biome's.
 			Assert.That(Code("PointOfInterestStage.cs"), Does.Contain("Func<PointOfInterestTemplate, float> weights = BiomeTemplateArt.SiteVariantWeights(biome);"));
-			Assert.That(Code("PointOfInterestStage.cs"), Does.Contain("library.Pick(record, weights, RaceCategoryOf(record.Race))"));
+			// 2026-10-25 (NEW-POI-KINDS, decision 96): a template needing liquid water drops out on a world with none.
+			Assert.That(Code("PointOfInterestStage.cs"), Does.Contain("library.Pick(record, PointOfInterestTemplate.WaterFit(weights, liquidWater), RaceCategoryOf(record.Race))"));
 			Assert.That(Code("PropsFeature.cs"), Does.Contain("BiomeTemplateArt.Weathering(siteBiome)"));
 			Assert.That(Code("PropsFeature.cs"), Does.Contain("{ Palette = palette }"));
 			Assert.That(Code(Path.Combine("Templates", "StructureKitPieceSource.cs")), Does.Contain("PrefabFor(piece, variant, request.Finish, request.Palette, request.AllowLocal)"));

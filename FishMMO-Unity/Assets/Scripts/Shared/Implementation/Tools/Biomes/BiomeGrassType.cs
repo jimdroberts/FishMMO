@@ -101,6 +101,12 @@ namespace FishMMO.Shared.Biomes
 		/// </remarks>
 		[Tooltip("Never sways: a mineral blade (ice needles, salt quills) stands as it grew whatever the wind. Off: sways with the wind and the world's air, as every blade did.")]
 		public bool Rigid;
+		/// <remarks>
+		/// Decision 75 (2026-10-25, phase I2t, the Savanna round): an after-burn flower (fire lilies) grows ONLY on ground the burn mosaic
+		/// burnt one to four weeks before (BurnMosaic.BurnStage.Lily; GrassBladeRenderer's MORE row w), and nowhere else.
+		/// </remarks>
+		[Tooltip("Grows only where the burn mosaic burnt the ground one to four weeks before (fire lilies after a veld fire). Off: grows wherever it is painted, as every type did.")]
+		public bool AfterBurn;
 
 		[Header("Colours (sRGB)")]
 		[Tooltip("The blade's colour at the root. Used where the prototype mesh gives no colours, or always when Colours Over Mesh is ticked. Alpha 0: none (the built-in greens where the mesh gives none).")]
@@ -199,6 +205,13 @@ namespace FishMMO.Shared.Biomes
 			return this;
 		}
 
+		/// <summary>Grows only after a burn (<see cref="AfterBurn"/>): a fire lily.</summary>
+		public BiomeGrassType AfterBurning()
+		{
+			AfterBurn = true;
+			return this;
+		}
+
 		/// <summary>True when <see cref="RootColour"/> and <see cref="TipColour"/> are colours (alpha above 0), not "none".</summary>
 		public bool HasBladeColours => RootColour.a > 0f && TipColour.a > 0f;
 
@@ -236,6 +249,11 @@ namespace FishMMO.Shared.Biomes
 			if (Rigid)
 			{
 				text.Append("|R");
+			}
+			// Likewise only an after-burn look (2026-10-25, I2t).
+			if (AfterBurn)
+			{
+				text.Append("|F");
 			}
 			return text.ToString();
 		}

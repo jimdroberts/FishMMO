@@ -138,6 +138,11 @@ namespace FishMMO.Client
 					{
 						s.Append($" L{level} {counts[DetailScatterRenderer.SlotOf(t, level, 0)]}");
 					}
+					// The variant meshes it cycles share the slots (2026-10-26): level 0 above is its first variant's.
+					for (int v = 1; v < DetailScatterRenderer.VariantsOf(types[t]) && DetailScatterRenderer.SlotOf(t, v, 0) < counts.Length; v++)
+					{
+						s.Append($" V{v} {counts[DetailScatterRenderer.SlotOf(t, v, 0)]}");
+					}
 				}
 			}
 			return s.Append('.').ToString();

@@ -226,7 +226,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// at each.
 		/// </summary>
 		public static List<Station> Stations(ScenePath path, int from, int to, Func<float, float, float> ground, float module = StructurePieces.BoardwalkModule,
-			bool rampStart = true, bool rampEnd = true)
+			bool rampStart = true, bool rampEnd = true, float rise = DeckRiseMetres, float ramp = RampMetres, float deckWidth = 0f)
 		{
 			var stations = new List<Station>();
 			if (path == null || ground == null || to <= from || from < 0 || to >= path.Count)
@@ -262,7 +262,8 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				Vector2 dir = Direction(stations, k);
 				var side = new Vector2(-dir.y, dir.x);
-				float w = DeckHalfWidth(stations[k].Half);
+				// A country style's deck is its own width (I2i-b); the plank walk's the way's.
+				float w = deckWidth > 0f ? 0.5f * deckWidth : DeckHalfWidth(stations[k].Half);
 				float h = stations[k].Ground;
 				for (int a = -1; a <= 1; a++)
 				{
@@ -274,7 +275,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				highest[k] = h;
 			}
-			float[] deck = DeckLine(Distances(stations), highest, Grounds(stations), rampStart, rampEnd);
+			float[] deck = DeckLine(Distances(stations), highest, Grounds(stations), rampStart, rampEnd, rise, ramp);
 			for (int k = 0; k < stations.Count; k++)
 			{
 				Station st = stations[k];
@@ -323,7 +324,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// end that meets another deck (a street at a junction: <paramref name="rampStart"/>, <paramref name="rampEnd"/> false) keeps
 		/// its height to the end.
 		/// </summary>
-		public static float[] DeckLine(float[] along, float[] highest, float[] ground, bool rampStart = true, bool rampEnd = true)
+		public static float[] DeckLine(float[] along, float[] highest, float[] ground, bool rampStart = true, bool rampEnd = true, float rise = DeckRiseMetres,
+			float rampMetres = RampMetres)
 		{
 			int n = along.Length;
 			var deck = new float[n];
@@ -332,7 +334,7 @@ namespace FishMMO.Shared.WorldDesign
 				float best = float.NegativeInfinity;
 				for (int j = 0; j < n; j++)
 				{
-					best = Mathf.Max(best, highest[j] + DeckRiseMetres - DeckGrade * Mathf.Abs(along[k] - along[j]));
+					best = Mathf.Max(best, highest[j] + rise - DeckGrade * Mathf.Abs(along[k] - along[j]));
 				}
 				deck[k] = best;
 			}
@@ -342,7 +344,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			float start = along[0], end = along[n - 1];
 			float footStart = ground[0] + MinClearMetres, footEnd = ground[n - 1] + MinClearMetres;
-			float ramp = Mathf.Min(RampMetres, 0.5f * (end - start));
+			float ramp = Mathf.Min(rampMetres, 0.5f * (end - start));
 			for (int k = 0; k < n; k++)
 			{
 				float fromStart = along[k] - start, fromEnd = end - along[k];
@@ -366,6 +368,13 @@ namespace FishMMO.Shared.WorldDesign
 			return clear > BentClearMetres ? StructurePieces.BoardwalkBentScale(clear) : 0f;
 		}
 
+		/// <summary>The y scale of a style's bent under a station (pure, I2i-b): 0 under the style's own clearance, else scaled from its own depth.</summary>
+		public static float BentScale(Station station, in StructurePieces.BoardwalkStyleShape shape)
+		{
+			float clear = station.Deck - station.Ground;
+			return clear > shape.BentClear ? StructurePieces.BoardwalkBentScale(clear, shape.BentDepth) : 0f;
+		}
+
 		// ── Laying ────────────────────────────────────────────────────
 
 		/// <summary>
@@ -375,17 +384,19 @@ namespace FishMMO.Shared.WorldDesign
 		/// Returns the props laid; 0, laying nothing, when the pieces are not generated yet.
 		/// </summary>
 		public static int Lay(ScenePath path, int from, int to, Func<float, float, float> ground, Action<GameObject, Vector3, Quaternion, Vector3> add,
-			int seed, List<string> missing = null, bool rampStart = true, bool rampEnd = true)
+			int seed, List<string> missing = null, bool rampStart = true, bool rampEnd = true, BiomeBoardwalkStyle style = BiomeBoardwalkStyle.Planked)
 		{
 			bool footway = path.Class == ScenePathClass.Footpath || path.Class == ScenePathClass.Trail;
-			GameObject span = StructureKit.Prefab("BoardwalkSpan", footway ? 1 : 0);
-			GameObject[] bents = { StructureKit.Prefab("BoardwalkBent", 0), StructureKit.Prefab("BoardwalkBent", 1) };
+			// The style's pieces and deck (I2i-b); the plank walk's shape is I2i's constants, so a planked run lays as before.
+			StructurePieces.BoardwalkStyleShape shape = StructurePieces.BoardwalkShape(style, footway);
+			GameObject span = StructureKit.Prefab("BoardwalkSpan", shape.Span);
+			GameObject[] bents = { StructureKit.Prefab("BoardwalkBent", shape.Bent), shape.Braced ? StructureKit.Prefab("BoardwalkBent", 1) : null };
 			if (span == null || bents[0] == null)
 			{
 				missing?.Add("a boardwalk's pieces (Structure_BoardwalkSpan, Structure_BoardwalkBent) are not generated yet: Biome Tools → Generate biome art, then regenerate.");
 				return 0;
 			}
-			List<Station> stations = Stations(path, from, to, ground, StructurePieces.BoardwalkModule, rampStart, rampEnd);
+			List<Station> stations = Stations(path, from, to, ground, StructurePieces.BoardwalkModule, rampStart, rampEnd, shape.Rise, shape.Ramp, shape.Width);
 			int laid = 0;
 			for (int k = 0; k + 1 < stations.Count; k++)
 			{
@@ -397,16 +408,16 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					continue;
 				}
-				float width = 2f * DeckHalfWidth(0.5f * (a.Half + b.Half));
+				float width = shape.Width > 0f ? shape.Width : 2f * DeckHalfWidth(0.5f * (a.Half + b.Half));
 				add(span, 0.5f * (pa + pb), Quaternion.LookRotation(along.normalized, Vector3.up),
-					new Vector3(width / StructurePieces.BoardwalkWidth, 1f, along.magnitude / StructurePieces.BoardwalkModule));
+					new Vector3(shape.Width > 0f ? 1f : width / StructurePieces.BoardwalkWidth, 1f, along.magnitude / StructurePieces.BoardwalkModule));
 				laid++;
 			}
 			// Under every station between, and under an end that does not ramp down (it meets another deck at its height).
 			for (int k = rampStart ? 1 : 0; k < (rampEnd ? stations.Count - 1 : stations.Count); k++)
 			{
 				Station st = stations[k];
-				float scale = BentScale(st);
+				float scale = style == BiomeBoardwalkStyle.Planked ? BentScale(st) : BentScale(st, in shape);
 				if (!(scale > 0f))
 				{
 					continue;
@@ -416,7 +427,7 @@ namespace FishMMO.Shared.WorldDesign
 				uint h = FloatingPlants.Hash(unchecked((uint)seed), Mathf.RoundToInt(st.At.x * 4f), Mathf.RoundToInt(st.At.y * 4f), 0xB0A2);
 				GameObject bent = bents[(h % 3u) == 0u && bents[1] != null ? 1 : 0];
 				add(bent, new Vector3(st.At.x, st.Deck, st.At.y), Quaternion.LookRotation(new Vector3(dir.x, 0f, dir.y), Vector3.up),
-					new Vector3(width / StructurePieces.BoardwalkWidth, scale, 1f));
+					new Vector3(shape.Width > 0f ? 1f : width / StructurePieces.BoardwalkWidth, scale, 1f));
 				laid++;
 			}
 			return laid;
@@ -444,14 +455,16 @@ namespace FishMMO.Shared.WorldDesign
 				foreach ((int from, int to) in FlaggedRuns(path))
 				{
 					Vector3 middle = path.Points[(from + to) / 2];
+					BiomeTemplate biome = biomeAt != null ? biomeAt(middle.x, middle.z) : null;
 					var context = new PointOfInterestSiteContext
 					{
 						Sink = sink,
 						GroundAt = ground,
-						Palette = BiomeTemplateArt.StructurePalette(biomeAt != null ? biomeAt(middle.x, middle.z) : null),
+						Palette = BiomeTemplateArt.StructurePalette(biome),
 						Notes = notes,
 					};
-					int n = Lay(path, from, to, ground, context.AddProp, seed ^ path.Id, missing);
+					// Built in the style of the biome at its middle (I2i-b; planked unless the biome names another).
+					int n = Lay(path, from, to, ground, context.AddProp, seed ^ path.Id, missing, true, true, BiomeTemplateArt.BoardwalkStyle(biome));
 					laid += n;
 					runs += n > 0 ? 1 : 0;
 					if (missing.Count > 0)

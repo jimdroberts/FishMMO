@@ -202,14 +202,13 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Probing the field ─────────────────────────────────────
 
 		/// <summary>The floor under a point in the void (marched down the noisy field from it), or NaN where the point is rock.</summary>
-		internal float FloorBelow(Vector3 p, float reach = 12f)
+		internal float FloorBelow(Vector3 p, float reach = 12f, float step = 0.1f)
 		{
 			if (Void(p) >= 0f)
 			{
 				return float.NaN;
 			}
 			float y = p.y;
-			const float step = 0.1f;
 			while (Void(new Vector3(p.x, y - step, p.z)) < 0f)
 			{
 				y -= step;
@@ -1780,12 +1779,13 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						continue;
 					}
-					if (groundAt(n) - (n.y + r * Flat + amp) < MinCover)
+					// Over the whole bore, its sides too (BoreCover): a loop along a steep face kept its middle covered and broke out.
+					if (BoreCover(groundAt, n, r, Flat, amp, centre) < MinCover)
 					{
 						// Too near the surface here: go deeper first.
 						nf = floor - step * Mathf.Sin((WalkPitch - 2f) * Mathf.Deg2Rad);
 						n.y = nf + FloorDepth * r * Flat;
-						if (groundAt(n) - (n.y + r * Flat + amp) < MinCover)
+						if (BoreCover(groundAt, n, r, Flat, amp, centre) < MinCover)
 						{
 							continue;
 						}

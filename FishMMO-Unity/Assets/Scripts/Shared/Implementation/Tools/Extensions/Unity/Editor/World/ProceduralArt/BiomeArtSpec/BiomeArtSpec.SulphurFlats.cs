@@ -17,7 +17,15 @@ namespace FishMMO.Shared.WorldDesign
 				C(Ground.Basalt), Ground.Sulphur, Ground.Sulphur)
 				.Look(BiomeLookClass.Volcanic)
 				.Wildlife(BiomeHabitat.Barren)
-				.Moat(BiomeMoatWater.Dry);
+				.Moat(BiomeMoatWater.Dry)
+				/* Its vents (2026-10-25, I2q-b, decision 84): its sulphur dust is a deposit, not a vapour or a vented ash, so no site stood
+				 * here; a site rate of its own gives it fumaroles (seven in ten, fuming yellow-white) and ponds of molten sulphur (three in
+				 * ten), which wear an opaque melt look: amber in the shallows, dark red in the deep, drifting on the shared clock. */
+				.Geothermal(0f, 0f, 0.7f, 0f, 0f, 0.3f, 0.35f, new UnityEngine.Color(0.925f, 0.902f, 0.753f, 1f))
+				.WaterTint(new BiomeWaterLook(new UnityEngine.Color(0.941f, 0.753f, 0.251f, 1f), new UnityEngine.Color(0.627f, 0.251f, 0.055f, 1f),
+					new UnityEngine.Vector3(0.9f, 0.5f, 0.1f), 1f, new UnityEngine.Color(0.784f, 0.541f, 0.188f, 1f), new UnityEngine.Color(0.784f, 0.541f, 0.188f, 1f)))
+				.HotWater()
+				.MeltWater();
 		}
 	}
 }

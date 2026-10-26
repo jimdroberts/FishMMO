@@ -86,6 +86,27 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
+		/// The rock over a link's bore at <paramref name="n"/> (system frame, its centre), metres: the least ground over its middle,
+		/// over both its sides nine tenths of its radius out square to its run from <paramref name="previous"/>, and over the middle
+		/// and both sides half way back to that, less its top (the bore's roof and the noise's amplitude): as a passage's walker
+		/// reckons it (Walker.Cover), with the sides half way back too.
+		/// The middle alone let a link run along a steep hillside's contour with metres over its middle and its downhill wall out
+		/// of the ground (2026-10-26, Moron 2: 3–5 m over the middle, the downhill side 2 m out under a 60° face): the shell
+		/// stops a skin under the ground, so the cave lay open to the sky there.
+		/// </summary>
+		private static float BoreCover(Func<Vector3, float> groundAt, Vector3 n, float radius, float flat, float amp, Vector3 previous)
+		{
+			float top = n.y + radius * flat + amp;
+			var run = new Vector3(n.x - previous.x, 0f, n.z - previous.z);
+			Vector3 side = run.sqrMagnitude > 1e-8f ? new Vector3(run.z, 0f, -run.x).normalized * (0.9f * radius) : Vector3.zero;
+			Vector3 mid = 0.5f * (n + previous);
+			float cover = Mathf.Min(groundAt(n), groundAt(mid)) - top;
+			cover = Mathf.Min(cover, Mathf.Min(groundAt(n + side), groundAt(n - side)) - top);
+			// And either side half way back: a face falling across the way between two nodes.
+			return Mathf.Min(cover, Mathf.Min(groundAt(mid + side), groundAt(mid - side)) - top);
+		}
+
+		/// <summary>
 		/// A link's first node, leaving a chamber toward <paramref name="toward"/>: seven tenths of the way out along that bearing
 		/// (inside its ellipse, however long and narrow the hall).
 		/// </summary>
@@ -133,7 +154,7 @@ namespace FishMMO.Shared.WorldDesign
 				c.y = node.NodeFloor + FloorDepth * radius * Flat;
 				if (i > 0)
 				{
-					float cover = ground.At(c.x + Origin.x, c.z + Origin.z) - Origin.y - (c.y + radius * Flat + Amp);
+					float cover = BoreCover(p => ground.At(p.x + Origin.x, p.z + Origin.z) - Origin.y, c, radius, Flat, Amp, stub[i - 1].Centre);
 					problem = cover < MinCover ? $"the rock over a junction's stub {d:0} m out is {cover:0.#} m thin"
 						: !ground.Contains(c.x + Origin.x, c.z + Origin.z, radius + 12f) ? "a junction's stub runs off the ground"
 						: d > node.NodeRadius + clearance && crosses(c, node.NodeFloor) ? $"a junction's stub {d:0} m out crosses another passage"
@@ -252,8 +273,10 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					float nextAlong = along + step;
 					// Thin over a mouth's threshold, the bore's middle under the ground through the rest of its zone, then the rock's cover.
+					// Past the zone over the whole bore, its sides too (BoreCover); within it over its middle only (the collar's).
 					float need = nextAlong >= zone ? MinCover : nextAlong <= level ? float.NegativeInfinity : -(r * Flat + amp);
-					if (GroundAt(n) - (n.y + r * Flat + amp) < need)
+					float cover = nextAlong >= zone ? BoreCover(GroundAt, n, r, Flat, amp, centre) : GroundAt(n) - (n.y + r * Flat + amp);
+					if (cover < need)
 					{
 						if (nextAlong < zone || entering)
 						{
@@ -262,7 +285,7 @@ namespace FishMMO.Shared.WorldDesign
 						// Too near the surface here: go deeper first.
 						nf = floor - step * Mathf.Sin(steepest * Mathf.Deg2Rad);
 						n.y = nf + FloorDepth * r * Flat;
-						if (GroundAt(n) - (n.y + r * Flat + amp) < MinCover)
+						if (BoreCover(GroundAt, n, r, Flat, amp, centre) < MinCover)
 						{
 							continue;
 						}
@@ -365,7 +388,7 @@ namespace FishMMO.Shared.WorldDesign
 		private float ZoneAt(Vector3 p) => Mouths.Count > 0 ? Mouths[NearestMouth(p, out _)].Zone : 0f;
 
 		/// <summary>The most pairs of ends a join walks before it gives up.</summary>
-		private const int MaxJoinTries = 6;
+		private const int MaxJoinTries = 24;
 
 		/// <summary>
 		/// How near another passage or chamber (its smooth void) a link's bore may pass at another floor, metres: two metres of

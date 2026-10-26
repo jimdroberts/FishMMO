@@ -24,6 +24,13 @@ namespace FishMMO.Client
 		/// </summary>
 		public Mesh[] Levels;
 		/// <summary>
+		/// The meshes its instances cycle, one each by its hash (2026-10-26, <see cref="DetailScatterMath.Variant"/>): <see cref="Mesh"/>
+		/// first, then the prefab's <c>Variant1</c>, <c>Variant2</c> children (bare MeshFilters, one sub-mesh each,
+		/// <see cref="DetailScatterSettings.VariantChildPrefix"/>) when it has them. One for a bush or any type with levels: a
+		/// type's variants take the slots its levels would.
+		/// </summary>
+		public Mesh[] Variants;
+		/// <summary>
 		/// A bush (<see cref="DetailScatterSettings.BushPrefix"/>): cover, the same for every player. Never thinned, never
 		/// scaled by a density setting, drawn to a reach set by its own height rather than by the detail distance.
 		/// </summary>
@@ -82,6 +89,22 @@ namespace FishMMO.Client
 				bounds.Encapsulate(mesh.bounds);
 			}
 			bool bush = DetailScatterSettings.IsBush(prefab.name);
+			// The meshes it cycles per instance, in order, while they are there (a type of one level only: never a bush).
+			var variants = new List<Mesh> { filter.sharedMesh };
+			if (!bush && levels.Count == 1)
+			{
+				for (int v = 1; v < DetailScatterSettings.MaxVariants; v++)
+				{
+					Transform child = prefab.transform.Find(DetailScatterSettings.VariantChildPrefix + v);
+					Mesh mesh = child != null && !child.TryGetComponent(out Renderer _) && child.TryGetComponent(out MeshFilter variantFilter) ? variantFilter.sharedMesh : null;
+					if (mesh == null || mesh.subMeshCount != 1)
+					{
+						break;
+					}
+					variants.Add(mesh);
+					bounds.Encapsulate(mesh.bounds);
+				}
+			}
 			return new DetailScatterType
 			{
 				Prefab = prefab,
@@ -89,6 +112,7 @@ namespace FishMMO.Client
 				Salt = DetailScatterMath.Salt(prefab.name),
 				Mesh = filter.sharedMesh,
 				Levels = levels.ToArray(),
+				Variants = variants.ToArray(),
 				Bush = bush,
 				MeshTop = Mathf.Max(0.05f, bounds.max.y),
 				Material = material,

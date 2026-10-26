@@ -84,6 +84,10 @@ namespace FishMMO.Shared.WorldDesign
 			public readonly List<BiomeHeatSource> HeatSources = new List<BiomeHeatSource>();
 			/// <summary>The Great Spout's index among <see cref="Sites"/>, −1 with no geyser.</summary>
 			public int GreatSpout = -1;
+			/// <summary>The Great Plume's index among <see cref="Sites"/> (the largest heated jet on a line, 2026-10-25, I2q-b), −1 for none.</summary>
+			public int GreatPlume = -1;
+			/// <summary>The scene's stored vent lines the sites were found with (2026-10-25, I2q-b; IceStripes), which the map stores.</summary>
+			public readonly List<VentLine> Lines = new List<VentLine>();
 			public BiomeHeatMask Heat = BiomeHeatMask.None;
 
 			public bool Any => Sites.Count > 0;
@@ -154,6 +158,8 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				case GeothermalKind.Geyser: return GeothermalVents.ConeRadius(site);
 				case GeothermalKind.Fumarole: return GeothermalVents.SourceRadius(site) + 1f;
+				// A jet's lip round its slot (2026-10-25, I2q-b), as a fumarole's.
+				case GeothermalKind.Jet: return GeothermalVents.SourceRadius(site) + 0.6f;
 				default: return GeothermalVents.SourceRadius(site);
 			}
 		}
@@ -186,15 +192,18 @@ namespace FishMMO.Shared.WorldDesign
 			switch (site.Kind)
 			{
 				case GeothermalKind.HotSpring:
+				case GeothermalKind.SulphurPool:
 				case GeothermalKind.MudPot:
 				{
-					float depth = site.Kind == GeothermalKind.HotSpring ? GeothermalVents.PoolDepth(site) + PoolFreeboard : GeothermalVents.DishDepth(site);
+					// A sulphur pond is dug and flooded as a spring's pool is (2026-10-25, I2q-b, decision 84), shallower.
+					float depth = GeothermalVents.IsPool(site.Kind) ? GeothermalVents.PoolDepth(site) + PoolFreeboard : GeothermalVents.DishDepth(site);
 					if (r < radius)
 					{
 						float s = r / radius;
 						return Mathf.Min(ground, dug.Base - depth * (1f - s * s)) - ground;
 					}
-					float lip = site.Kind == GeothermalKind.HotSpring ? GeothermalVents.RimMetres : 0.6f * GeothermalVents.RimMetres;
+					float lip = site.Kind == GeothermalKind.HotSpring ? GeothermalVents.RimMetres : site.Kind == GeothermalKind.SulphurPool ? 0.8f * GeothermalVents.RimMetres
+						: 0.6f * GeothermalVents.RimMetres;
 					float across = (r - radius) / GeothermalVents.RimWidth;
 					if (across < 1f)
 					{
@@ -429,6 +438,9 @@ namespace FishMMO.Shared.WorldDesign
 				dug.Add(d.Index);
 			}
 			plan.GreatSpout = GeothermalVents.GreatSpoutIndex(plan.Sites, dug.Contains);
+			/* The Great Plume (2026-10-25, I2q-b, decision 53): the largest jet on a line the client draws (one under water it never
+			 * does is never the scene's), heated, dug or not. */
+			plan.GreatPlume = GeothermalVents.GreatPlumeIndex(plan.Sites, i => wet == null || !wet(plan.Sites[i].Position.x, plan.Sites[i].Position.y));
 			if (moreHeat != null)
 			{
 				plan.HeatSources.AddRange(moreHeat);
@@ -508,7 +520,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public static SceneHydrology.Lake PoolLake(in Dug dug)
 		{
-			if (dug.Site.Kind != GeothermalKind.HotSpring)
+			if (!GeothermalVents.IsPool(dug.Site.Kind))
 			{
 				return null;
 			}
@@ -578,12 +590,18 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			var sites = new List<GeothermalSite>();
 			List<BiomeHeatSource> springHeat;
+			/* The scene's vent lines (2026-10-25, I2q-b, decision 53): the stored landforms' lines of every biome whose vents follow
+			 * lines (a tiger stripe, a rift, a double ridge; a terrace's pads), stored with the map so the client's search finds the
+			 * same jets the cut digs and heats. None when no biome of the scene lays its vents on lines. */
+			List<VentLine> lines = IceStripes.FromLandforms(SceneLandforms.Sites(scene), SceneLandforms.Pads(scene),
+				id => BiomeRegistry.TryGetByID(id, out BiomeTemplate biome) && biome != null ? biome.Vents.Layout : BiomeVentLayout.Grid);
 			// The map the client will read, written from the same field under the same name: the client's search, the client's answer.
 			var map = ScriptableObject.CreateInstance<SceneBiomeMap>();
 			try
 			{
 				map.name = mapName;
 				field.WriteTo(map);
+				map.SetVentLines(lines);
 				GeothermalVents.SceneSites(map, sites);
 				springHeat = HotSpringHeat(hotSprings, p => GeothermalGround.Of(map.Sample(new Vector3(p.x, 0f, p.y))).AllKinds);
 			}
@@ -591,15 +609,20 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				UnityEngine.Object.DestroyImmediate(map);
 			}
+			// The lines' own heat after the springs' (decision 53: I2q's heat mask takes line sources).
+			int springs = springHeat.Count;
+			springHeat.AddRange(IceStripes.Heat(lines));
 			Func<float, float, float> groundAt = (east, north) => SceneGenerator.GroundAltitude(terrains, tiles, east, north);
 			var sceneRect = new Rect(-tiles.WidthMetres * 0.5f, -tiles.DepthMetres * 0.5f, tiles.WidthMetres, tiles.DepthMetres);
 			Plan plan = Make(sites, groundAt, wet, excluded, sceneRect, springHeat);
+			plan.Lines.AddRange(lines);
 			if (!plan.Any)
 			{
 				// Nothing to dig and nothing to record; only the springs' warm ground, if any (the map stores it).
 				if (springHeat.Count > 0)
 				{
-					notes?.Add($"Hot ground: {springHeat.Count} hot spring point(s) of interest warm {HotSpringSiteHeatReach:0} m of ground round them; heat baked {plan.Heat.Width}×{plan.Heat.Height}.");
+					notes?.Add($"Hot ground: {springs} hot spring point(s) of interest warm {HotSpringSiteHeatReach:0} m of ground round them" +
+						(lines.Count > 0 ? $", {lines.Count} vent line segment(s) warm theirs" : string.Empty) + $"; heat baked {plan.Heat.Width}×{plan.Heat.Height}.");
 				}
 				return plan;
 			}
@@ -637,9 +660,13 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			notes?.Add($"Hot ground: {plan.Sites.Count} geothermal site(s) ({kinds[(int)GeothermalKind.Geyser]} geysers, {kinds[(int)GeothermalKind.HotSpring]} hot springs, " +
-				$"{kinds[(int)GeothermalKind.Fumarole]} fumaroles, {kinds[(int)GeothermalKind.MudPot]} mud pots), {plan.Dug.Count} dug ({moved:N0} heightmap sample(s)), " +
+				$"{kinds[(int)GeothermalKind.Fumarole]} fumaroles, {kinds[(int)GeothermalKind.MudPot]} mud pots" +
+				(kinds[(int)GeothermalKind.Jet] > 0 ? $", {kinds[(int)GeothermalKind.Jet]} jets" : string.Empty) +
+				(kinds[(int)GeothermalKind.SulphurPool] > 0 ? $", {kinds[(int)GeothermalKind.SulphurPool]} sulphur pools" : string.Empty) +
+				(lines.Count > 0 ? $"; {lines.Count} vent line segment(s)" + (plan.GreatPlume >= 0 ? ", a Great Plume" : string.Empty) : string.Empty) +
+				$"), {plan.Dug.Count} dug ({moved:N0} heightmap sample(s)), " +
 				$"{record.Pools.Count} pool(s), {plan.Runoff.Count} runoff channel(s)" +
-				(springHeat.Count > 0 ? $", {springHeat.Count} hot spring point(s) of interest warming {HotSpringSiteHeatReach:0} m round them" : string.Empty) +
+				(springs > 0 ? $", {springs} hot spring point(s) of interest warming {HotSpringSiteHeatReach:0} m round them" : string.Empty) +
 				$"; heat baked {plan.Heat.Width}×{plan.Heat.Height}" +
 				(record.HasGreatSpout ? $"; the Great Spout at ({record.GreatSpoutPosition.x:0}, {record.GreatSpoutPosition.y:0})." : "."));
 			return plan;

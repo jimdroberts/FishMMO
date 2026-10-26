@@ -59,8 +59,6 @@ MonoBehaviour:
     Weight: 0.1
   - Biome: Scrubland
     Weight: 0.1
-  - Biome: Wasteland
-    Weight: 0.1
   RaceCategories:
   - Humanoid
   - Beastfolk
@@ -70,6 +68,7 @@ MonoBehaviour:
   Small: 1
   Medium: 1
   Large: 1
+  NeedsLiquidWater: 0
   PadFlatness: 1
   Style: timber
   Layout: 5
@@ -156,16 +155,16 @@ MonoBehaviour:
     Role: 12
     Style: 
   Features:
-  - rid: 4061506278254182594
-  - rid: 4061506278254182595
-  - rid: 4061506278254182596
-  - rid: 4061506278254182597
-  - rid: 4061506278254182598
-  - rid: 4061506278254182599
+  - rid: 4061506389932245025
+  - rid: 4061506389932245026
+  - rid: 4061506389932245027
+  - rid: 4061506389932245028
+  - rid: 4061506389932245029
+  - rid: 4061506389932245030
   references:
     version: 2
     RefIds:
-    - rid: 4061506278254182594
+    - rid: 4061506389932245025
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -177,20 +176,20 @@ MonoBehaviour:
         KeepOutOfWater: 1
         Clearings:
         - {x: -3, y: 2, z: 5.81}
-    - rid: 4061506278254182595
+    - rid: 4061506389932245026
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506278254182596
+    - rid: 4061506389932245027
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506278254182597
+    - rid: 4061506389932245028
       type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: -3, y: 5.81}
-    - rid: 4061506278254182598
+    - rid: 4061506389932245029
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 3
@@ -198,7 +197,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506278254182599
+    - rid: 4061506389932245030
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 1
