@@ -594,8 +594,22 @@ namespace FishMMO.Client
 			/// </summary>
 			public static GraphicsFormat MotionFormat()
 			{
-				GraphicsFormat[] candidates = { GraphicsFormat.R16G16_SFloat, GraphicsFormat.R32G32_SFloat };
-				foreach (GraphicsFormat format in candidates)
+				// What the machine can draw never changes while it runs: asked once (the candidate arrays and the support
+				// queries were garbage on every frame the pass recorded).
+				if (!motionFormat.HasValue)
+				{
+					motionFormat = ChooseMotionFormat();
+				}
+				return motionFormat.Value;
+			}
+
+			private static GraphicsFormat? motionFormat, weightFormat, weightFormatWritable;
+			private static readonly GraphicsFormat[] MotionCandidates = { GraphicsFormat.R16G16_SFloat, GraphicsFormat.R32G32_SFloat };
+			private static readonly GraphicsFormat[] WeightCandidates = { GraphicsFormat.R16_SFloat, GraphicsFormat.R32_SFloat, GraphicsFormat.R16G16B16A16_SFloat };
+
+			private static GraphicsFormat ChooseMotionFormat()
+			{
+				foreach (GraphicsFormat format in MotionCandidates)
 				{
 					if (SystemInfo.IsFormatSupported(format, GraphicsFormatUsage.Render))
 					{
@@ -617,8 +631,24 @@ namespace FishMMO.Client
 			/// </remarks>
 			public static GraphicsFormat WeightFormat(bool randomWrite)
 			{
-				GraphicsFormat[] candidates = { GraphicsFormat.R16_SFloat, GraphicsFormat.R32_SFloat, GraphicsFormat.R16G16B16A16_SFloat };
-				foreach (GraphicsFormat format in candidates)
+				if (randomWrite)
+				{
+					if (!weightFormatWritable.HasValue)
+					{
+						weightFormatWritable = ChooseWeightFormat(true);
+					}
+					return weightFormatWritable.Value;
+				}
+				if (!weightFormat.HasValue)
+				{
+					weightFormat = ChooseWeightFormat(false);
+				}
+				return weightFormat.Value;
+			}
+
+			private static GraphicsFormat ChooseWeightFormat(bool randomWrite)
+			{
+				foreach (GraphicsFormat format in WeightCandidates)
 				{
 					if (SystemInfo.IsFormatSupported(format, GraphicsFormatUsage.Render)
 						&& (!randomWrite || SystemInfo.IsFormatSupported(format, GraphicsFormatUsage.LoadStore)))
@@ -1693,7 +1723,8 @@ namespace FishMMO.Client
 				{
 					return false;
 				}
-				float aspect = Mathf.Min(cameraData.camera.aspect, (float)screenWidth / Mathf.Max(1, screenHeight),
+				// Two-argument Mins: the three-argument one is the params float[] overload, an array a frame.
+				float aspect = Mathf.Min(Mathf.Min(cameraData.camera.aspect, (float)screenWidth / Mathf.Max(1, screenHeight)),
 					Mathf.Max(8, width / 2) / (float)Mathf.Max(8, height / 2));
 				return GodRaysReachFrame(viewProjection, cameraData.worldSpaceCameraPos, sky.GodRayDirection, GodRayReach(sky), aspect);
 			}

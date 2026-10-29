@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using System.Linq;
 using FishMMO.Logging;
 
 namespace FishMMO.Shared
@@ -195,9 +194,14 @@ namespace FishMMO.Shared
 			if (resourceCache.TryGetValue(targetType, out Dictionary<int, T> cache) &&
 				cache != null && cache.Count > 0) // Check Count > 0 for explicit clarity.
 			{
-				// Use Linq's FirstOrDefault() to safely get the first value.
-				// This ensures that if 'cache.Values' is empty, it returns null without error.
-				return cache.Values.FirstOrDefault() as U;
+				// The first value in enumeration order, exactly what Linq's FirstOrDefault() returned,
+				// walked with the dictionary's own struct enumerator. FirstOrDefault() boxed that
+				// enumerator: 40 bytes of garbage per call, and Active-style getters built on this
+				// (SolarSystemProfile.Active, WorldAtlas.Active) run ~100 times a frame on the client.
+				foreach (T value in cache.Values)
+				{
+					return value as U;
+				}
 			}
 			return null;
 		}

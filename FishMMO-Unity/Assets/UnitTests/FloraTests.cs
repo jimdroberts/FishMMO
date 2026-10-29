@@ -34,12 +34,107 @@ namespace FishMMO.UnitTests
 			"DebrisNeedle", "DebrisPalm", "DebrisWrack", "DebrisBranch", "DebrisBamboo",
 			"MushroomForest", "MushroomCluster", "MushroomSwamp", "MushroomCave",
 			"Horsetail", "EchiumSpire", "PitcherPlant",
+			// The Forest round's (2026-10-26).
+			"GrassWoodrush", "GrassWoodMelick", "GrassSedgePendulous", "FlowersBeechwood", "FlowersRamsons", "FernShuttlecock", "DogsMercury",
+			"CushionMossPincushion", "IvyForest", "SerpentRoots", "DebrisBranchMossy", "MushroomCep", "MushroomPorcelain", "MushroomFoxfire",
+			"Butterbur", "HerbWoodBetony", "GrassOats", "GrassSpelt", "FlowersFieldBean",
+			// The Woodland round's (2026-10-26).
+			"GrassPasture", "GrassYorkshireFog", "GrassFalseBrome", "GrassHairgrass", "GrassRye", "FlowersBluebell", "FlowersPrimrose",
+			"FlowersFoxglove", "FlowersGlade", "FlowersHedgerow", "FlowersBuckwheat", "FlowersWoad", "FlowersFieldPea", "FernBrackenWoodland",
+			"HerbNettle", "DebrisCoppice", "MushroomParasol", "MushroomChanterelle", "WoodSpurge", "LordsAndLadies", "HerbAgrimony", "HerbWildMarjoram",
+			// The Alpine Meadow, Mountain Slope and Scree rounds' (2026-10-26).
+			"GrassBent", "GrassSweetVernal", "GrassRushTrifid", "GrassBlueMoor", "FlowersPolonyna", "FlowersMeltCrocus", "FlowersTallHerb", "FlowersCrag",
+			"GrassMountainOats", "FlowersFlax", "GrassHayMeadow", "Veratrum", "DockAlpine", "GentianYellow", "CarlineThistle", "HerbArnica", "HerbMeum",
+			"LichenIceland", "MossFlush", "FairyRing", "DebrisMarmotSpoil", "DebrisPasture",
+			"GrassKikuyu", "GrassBasket", "GrassAfroTussock", "FlowersMeskel", "FlowersImpatiens", "FlowersEverlasting", "FlowersTorchLily", "GrassTeff",
+			"GrassEmmer", "Enset", "GiantLobelia", "FernMontane", "CushionCloudMoss", "HerbAlchemilla", "HerbKoseret", "MushroomTermitomyces",
+			"DebrisCloudForest", "DebrisFig",
+			"GrassRidgeReed", "GrassRockSedge", "FlowersDiamondBell", "FlowersStonecrop", "CushionNetwort", "LichenCoral", "LichenBlackdot", "FernParsley",
+			"ClubmossFir", "HerbMountainRoot", "CropPerilla", "DebrisRockfallScar", "DebrisFirDrift",
+			// The Scrubland and Savanna rounds' (2026-10-26).
+			"GrassBushMuhly", "GrassThreeAwn", "GrassCottontop", "GrassSixWeeks", "ReedsCarrizo", "FlowersGoldPoppy", "FlowersLupine", "FlowersDesertMarigold",
+			"FlowersSandVerbena", "ChollaTeddybear", "CactusFishhook", "PadCactusEngelmann", "AgaveHohokam", "OrganPipeSonoran", "CactusPincushion",
+			"QueenOfTheNight", "Spikemoss", "HerbChia", "HerbDesertTobacco", "DebrisSaguaroRibs", "DebrisPackratMidden", "DebrisSherdsRedBuff",
+			"GrassMaizeCanal", "FlowersCottonCanal", "GrassLittleBarley",
+			"GrassThatch", "GrassRedOat", "GrassWire", "GrassGuinea", "GrassStar", "ReedsElephant", "FlowersVeld", "FlowersFireLily", "FlowersFlameLily",
+			"GrassPearlMillet", "Bambara", "Myrothamnus", "Xerophyta", "Sansevieria", "HerbWildSage", "MushroomPodaxis", "DebrisVeld",
+			// The Tundra, Ice Sheet and Glacier rounds' (2026-10-26).
+			"GrassPendant", "GrassWoodrushArctic", "FlowersArctic", "FlowersRiverBeauty", "GrassTrisetum", "GrassMeltSedge", "FlowersSnowmeltPrimula",
+			"CushionDryas", "CushionSaxifrage", "CushionHairCap", "LichenSnow", "LichenRockTripe", "Roseroot", "MushroomRoughStalk", "DebrisAntler",
+			"LichenStoneOil", "LichenFrigid", "LichenBlacktuft", "LichenSulphur", "CushionMossSeep", "RhubarbHimalayan", "HerbDhoop", "BergeniaStone",
+			"CushionGlacierMice", "LichenMap", "LichenCryoconite", "DebrisGlacier",
+			// The Grassland round's (2026-10-26).
+			"GrassBrome", "GrassGoldbeard", "GrassRedBeard", "GrassBlueFescue", "GrassAlkali", "ReedsThatch", "FlowersPannonia", "FlowersSpringSteppe",
+			"FlowersPeony", "FlowersSzik", "FlowersTatar", "GrassMillet", "CropHemp", "CropMelon", "ArtemisiaSalt", "ThistleMusk", "Eryngo", "Mullein",
+			"ThymeMat", "MushroomField", "DebrisSteppe", "DebrisSuslikSpoil", "HerbChamomile",
+			// The Plains round's (2026-10-26).
+			"GrassWheatgrass", "GrassLittleBluestem", "GrassGrama", "GrassBuffalo", "GrassBigBluestem", "GrassSwitchgrass", "GrassSandReed",
+			"FlowersConeflower", "FlowersSunflower", "FlowersBlazingStar", "FlowersPrairieSmoke", "FlowersSandhill", "FlowersPlaya", "GrassFlintCorn",
+			"CropSquash", "FlowersFieldSunflower", "YuccaSoapweed", "PricklyPearPlains", "CompassPlant", "Milkweed", "HerbBergamot", "HerbPrairieTurnip",
+			"MushroomPuffball", "DebrisBison", "DebrisCottonwood", "DebrisDogtownMound",
+			// The Steppe round's (2026-10-26).
+			"GrassTyrsa", "GrassTipchak", "GrassChiy", "GrassZhitnyak", "FlowersTulipSteppe", "FlowersPhlomis", "FlowersGoniolimon", "FlowersGagea",
+			"FlowersSafflower", "FlowersTartaryBuckwheat", "WormwoodWhiteEarth", "Biyurgun", "Izen", "Nanophyton", "LichenManna", "LichenSoilCrust",
+			"DebrisHarvesterDisc", "DebrisAwns", "DebrisSaigaSkull",
+			// The Estuary round's (2026-10-26).
+			"GrassCordgrass", "GrassSaltmarsh", "GrassFescueRed", "GrassRushGerard", "GrassSeaCouch", "GrassSeaClubrush", "ReedsBrackish", "FlowersSeaLavender", "FlowersThrift", "FlowersKwelder", "FlowersGoldenSamphire", "Glasswort", "SeaBlite", "SeaPlantain", "ScurvyGrass", "SeaWormwood", "LugwormCasts", "Teek", "ShellsCockle", "CropFlax", "CropCamelina", "CropMadder",
+			// The Desert, Badlands and Salt Flat rounds' (2026-10-26).
+			"GrassDrinn", "GrassTaman", "GrassSilverAwn", "FlowersSchouwia", "FlowersFagonia", "FlowersSandLily", "GrassBulbousPoa", "GrassGoatgrass",
+			"GrassWildBarley", "GrassRavenna", "FlowersGypsophila", "FlowersSpringAsh", "FlowersOnosma", "FlowersEremurus", "FlowersHollyhock",
+			"FlowersSternbergia", "GrassOdyssea", "GrassBrineSedge", "FlowersCressa", "FlowersWardenbloom", "Cistanche", "Had", "Zilla", "Colocynth",
+			"RoseOfJericho", "DebrisCamel", "DebrisBones", "DebrisNeolithic", "Acantholimon", "Noaea", "HerbHarmal", "HerbSalep", "HerbKenger", "LichenTuff",
+			"MossPlaneShade", "DebrisPumice", "DebrisSherdsTerracotta", "DebrisPigeon", "DebrisVinePrunings", "CropBushVine", "CropPumpkin", "CropChickpea",
+			"Halopeplis", "Aerva", "Aizoon", "HerbAloe", "DebrisSaltHopper", "DebrisAmole",
+			// The Hills round's (2026-10-26).
+			"GrassSheepFescue", "GrassSilverbeard", "GrassMatgrass", "GrassMelick", "FlowersAsphodel", "FlowersHillSpring", "FlowersSchist",
+			"FlowersTerraceWeeds", "FlowersFell", "FlowersSaffron", "GrassBarleyHill", "CropVineGoblet", "HerbLavender", "HerbImmortelle", "HerbRue",
+			"HerbSavory", "GiantFennel", "MushroomCaesar", "LichenSchist", "DebrisHill",
+			// The Wetlands round's (2026-10-26).
+			"ReedsQasab", "ReedsBardi", "GrassBulrush", "GrassKnotgrass", "GrassFlatsedge", "GrassSaltgrass", "GrassSweetFlag", "FlowersButomus", "FlowersBatiha", "FlowersDelta", "DebrisReed", "ReedSheaves", "Halocnemum", "Licorice", "WaterPlantain", "MushroomInkcap", "ShellsMelanopsis", "Sherds", "DungCakes", "CropRiceAnbar", "CropBarleySixRow", "CropSugarcane",
+			// The Mangrove round's (2026-10-26).
+			"GrassSaltCouch", "GrassSedgeFimbristylis", "FlowersSesuvium", "FlowersAsmini", "PneumatophoresAvicennia", "PneumatophoresSonneratia", "KneeRoots", "Propagules", "MangroveFern", "MudWhelks", "CrabChimneys", "MangroveLitter", "AlgalMatChips", "Rihani", "CropFingerMillet", "CropSesame", "CropRiceMangrove",
+			// The Jungle and Bamboo Forest rounds' (2026-10-26).
+			"GrassForestBroad", "GrassSpear", "FlowersAlligatorPepper", "FlowersCostus", "FlowersBalsam", "FlowersBloodLily", "Arrowroot", "Palisota",
+			"FernRainforest", "Selaginella", "TermiteCaps", "MushroomTermite", "MushroomLampcap", "DebrisRainforest", "DebrisPods", "HerbScentLeaf",
+			"CropYam", "CropEgusi", "CropRiceAfrican", "GrassSusuki", "GrassHakone", "GrassRyunohige", "FlowersHiganbana", "FlowersAkiNanakusa",
+			"FlowersShaga", "FlowersKatakuri", "Takenoko", "DebrisCulmSheath", "DebrisCutCulm", "FernKurawarabi", "FernZenmai", "HerbDokudami",
+			"HerbSenburi", "HerbGennosho", "MushroomKinugasa", "MushroomMatsutake", "MushroomShiitake", "MossKoke", "CropRice", "CropSoba", "CropAsa",
+			// The Lake and River rounds' (2026-10-26).
+			"GrassShoreweed", "GrassNeedleSpike", "LakeBulrush", "FlowersStrand", "HorsetailWater", "DebrisDriftLine", "PileStumps", "GrassGalingale",
+			"BurReed", "FlowersStromtal", "FlowersFloodbank", "DebrisBrash",
 		};
+
+		/// <summary>The rounds' litter on the legacy flat Debris kind (2026-10-26): in the catalogue, but flat as the legacy litter is.</summary>
+		private static readonly string[] RoundLitter = { "DebrisBeechMast", "DebrisOakLeaf", "DebrisMesquitePods" };
 
 		/// <summary>The design's deadwood props (§2g's tree-channel items).</summary>
 		private static readonly string[] DesignDeadwood =
 		{
 			"FallenLog_Oak", "FallenLog_Conifer", "FallenLog_Birch", "Stump_Broken", "Stump_Cut", "Stump_Bracket", "Driftwood", "PetrifiedLog", "RootPlate",
+			"FallenLog_Beech", "Snag_Beech", "HollowOak", "FallenLimb_Oak", "Stump_Coppice", "Stump_Beefsteak",
+			"Stump_Mugo", "FallenLog_Podocarp",
+			"Snag_Saguaro", "FallenLog_Ironwood", "FallenLog_Leadwood", "Stump_ElephantBroken",
+			"DriftwoodTrunk", "FallenLog_AvalancheBirch",
+			// The Grassland round's (2026-10-26).
+			"Snag_Pear",
+			// The Plains round's (2026-10-26).
+			"FallenLog_Cottonwood", "Snag_Cottonwood",
+			// The Steppe round's (2026-10-26).
+			"Snag_Saxaul", "FallenLimb_Elm",
+			// The Estuary round's (2026-10-26).
+			"DikeStakes",
+			// The Desert, Badlands and Salt Flat rounds' (2026-10-26).
+			"Snag_Balanites", "PetrifiedLog_Tenere", "Snag_Oleaster", "Stump_PlaneHollow", "Snag_SaltedAcacia",
+			// The Hills round's (2026-10-26).
+			"Stump_Olive",
+			// The Wetlands round's (2026-10-26).
+			"Snag_DrownedPalm", "FallenLog_Willow",
+			// The Mangrove round's (2026-10-26).
+			"Snag_Mangrove", "PoleStumps",
+			// The Jungle and Bamboo Forest rounds' (2026-10-26).
+			"FallenLog_Buttressed", "Snag_Iroko", "FallenLog_Sugi", "Snag_Akamatsu", "Culm_Fallen",
+			// The Lake and River rounds' (2026-10-26).
+			"Log_Sunken", "Logboat_Wreck", "DrownedStump", "Snag_Uprooted", "LogJam", "Log_Sunk_River", "Stump_Beaver",
 		};
 
 		/// <summary>Detail names the blade grass takes (their meshes are its WebGL2 fallback and colour source).</summary>
@@ -47,6 +142,45 @@ namespace FishMMO.UnitTests
 		{
 			"GrassSedge", "GrassCotton", "GrassDune", "GrassFeather", "GrassSavanna", "ReedsPlume", "GrassRush", "GrassWheat",
 			"FlowersAlpine", "FlowersWet", "FlowersWoodland", "FlowersTall", "FlowersDesert",
+			"GrassWoodrush", "GrassWoodMelick", "GrassSedgePendulous", "FlowersBeechwood", "FlowersRamsons", "GrassOats", "GrassSpelt", "FlowersFieldBean",
+			"GrassPasture", "GrassYorkshireFog", "GrassFalseBrome", "GrassHairgrass", "GrassRye", "FlowersBluebell", "FlowersPrimrose",
+			"FlowersFoxglove", "FlowersGlade", "FlowersHedgerow", "FlowersBuckwheat", "FlowersWoad", "FlowersFieldPea",
+			"GrassBent", "GrassSweetVernal", "GrassRushTrifid", "GrassBlueMoor", "FlowersPolonyna", "FlowersMeltCrocus", "FlowersTallHerb", "FlowersCrag",
+			"GrassMountainOats", "FlowersFlax", "GrassHayMeadow", "GrassKikuyu", "GrassBasket", "GrassAfroTussock", "FlowersMeskel", "FlowersImpatiens",
+			"FlowersEverlasting", "FlowersTorchLily", "GrassTeff", "GrassEmmer", "GrassRidgeReed", "GrassRockSedge", "FlowersDiamondBell", "FlowersStonecrop",
+			"GrassBushMuhly", "GrassThreeAwn", "GrassCottontop", "GrassSixWeeks", "ReedsCarrizo", "FlowersGoldPoppy", "FlowersLupine", "FlowersDesertMarigold",
+			"FlowersSandVerbena", "GrassMaizeCanal", "FlowersCottonCanal", "GrassLittleBarley",
+			"GrassThatch", "GrassRedOat", "GrassWire", "GrassGuinea", "GrassStar", "ReedsElephant", "FlowersVeld", "FlowersFireLily", "FlowersFlameLily",
+			"GrassPearlMillet",
+			"GrassPendant", "GrassWoodrushArctic", "FlowersArctic", "FlowersRiverBeauty", "GrassTrisetum", "GrassMeltSedge", "FlowersSnowmeltPrimula",
+			// The Grassland round's (2026-10-26).
+			"GrassBrome", "GrassGoldbeard", "GrassRedBeard", "GrassBlueFescue", "GrassAlkali", "ReedsThatch", "FlowersPannonia", "FlowersSpringSteppe",
+			"FlowersPeony", "FlowersSzik", "FlowersTatar", "GrassMillet",
+			// The Plains round's (2026-10-26).
+			"GrassWheatgrass", "GrassLittleBluestem", "GrassGrama", "GrassBuffalo", "GrassBigBluestem", "GrassSwitchgrass", "GrassSandReed",
+			"FlowersConeflower", "FlowersSunflower", "FlowersBlazingStar", "FlowersPrairieSmoke", "FlowersSandhill", "FlowersPlaya", "GrassFlintCorn",
+			"FlowersFieldSunflower",
+			// The Steppe round's (2026-10-26).
+			"GrassTyrsa", "GrassTipchak", "GrassChiy", "GrassZhitnyak", "FlowersTulipSteppe", "FlowersPhlomis", "FlowersGoniolimon", "FlowersGagea",
+			"FlowersSafflower", "FlowersTartaryBuckwheat",
+			// The Estuary round's (2026-10-26).
+			"GrassCordgrass", "GrassSaltmarsh", "GrassFescueRed", "GrassRushGerard", "GrassSeaCouch", "GrassSeaClubrush", "ReedsBrackish", "FlowersSeaLavender", "FlowersThrift", "FlowersKwelder", "FlowersGoldenSamphire",
+			// The Desert, Badlands and Salt Flat rounds' (2026-10-26).
+			"GrassDrinn", "GrassTaman", "GrassSilverAwn", "FlowersSchouwia", "FlowersFagonia", "FlowersSandLily", "GrassBulbousPoa", "GrassGoatgrass",
+			"GrassWildBarley", "GrassRavenna", "FlowersGypsophila", "FlowersSpringAsh", "FlowersOnosma", "FlowersEremurus", "FlowersHollyhock",
+			"FlowersSternbergia", "GrassOdyssea", "GrassBrineSedge", "FlowersCressa", "FlowersWardenbloom",
+			// The Hills round's (2026-10-26).
+			"GrassSheepFescue", "GrassSilverbeard", "GrassMatgrass", "GrassMelick", "FlowersAsphodel", "FlowersHillSpring", "FlowersSchist",
+			"FlowersTerraceWeeds", "FlowersFell", "FlowersSaffron", "GrassBarleyHill",
+			// The Wetlands round's (2026-10-26).
+			"ReedsQasab", "ReedsBardi", "GrassBulrush", "GrassKnotgrass", "GrassFlatsedge", "GrassSaltgrass", "GrassSweetFlag", "FlowersButomus", "FlowersBatiha", "FlowersDelta",
+			// The Mangrove round's (2026-10-26).
+			"GrassSaltCouch", "GrassSedgeFimbristylis", "FlowersSesuvium", "FlowersAsmini",
+			// The Jungle and Bamboo Forest rounds' (2026-10-26).
+			"GrassForestBroad", "GrassSpear", "FlowersAlligatorPepper", "FlowersCostus", "FlowersBalsam", "FlowersBloodLily",
+			"GrassSusuki", "GrassHakone", "GrassRyunohige", "FlowersHiganbana", "FlowersAkiNanakusa", "FlowersShaga", "FlowersKatakuri",
+			// The Lake and River rounds' (2026-10-26).
+			"GrassShoreweed", "GrassNeedleSpike", "FlowersStrand", "GrassGalingale", "FlowersStromtal", "FlowersFloodbank",
 		};
 
 		/// <summary>Of those, the ones whose meshes carry a head colour (seed head, plume, tuft, ear or flower).</summary>
@@ -54,6 +188,44 @@ namespace FishMMO.UnitTests
 		{
 			"GrassCotton", "GrassFeather", "ReedsPlume", "GrassRush", "GrassWheat",
 			"FlowersAlpine", "FlowersWet", "FlowersWoodland", "FlowersTall", "FlowersDesert",
+			"GrassWoodrush", "GrassWoodMelick", "GrassSedgePendulous", "FlowersBeechwood", "FlowersRamsons", "GrassOats", "GrassSpelt", "FlowersFieldBean",
+			"GrassYorkshireFog", "GrassFalseBrome", "GrassHairgrass", "GrassRye", "FlowersBluebell", "FlowersPrimrose",
+			"FlowersFoxglove", "FlowersGlade", "FlowersHedgerow", "FlowersBuckwheat", "FlowersWoad", "FlowersFieldPea",
+			"GrassBent", "GrassSweetVernal", "GrassRushTrifid", "GrassBlueMoor", "FlowersPolonyna", "FlowersMeltCrocus", "FlowersTallHerb", "FlowersCrag",
+			"GrassMountainOats", "FlowersFlax", "GrassHayMeadow", "GrassAfroTussock", "FlowersMeskel", "FlowersImpatiens",
+			"FlowersEverlasting", "FlowersTorchLily", "GrassTeff", "GrassEmmer", "GrassRidgeReed", "FlowersDiamondBell", "FlowersStonecrop",
+			"GrassBushMuhly", "GrassThreeAwn", "GrassCottontop", "GrassSixWeeks", "ReedsCarrizo", "FlowersGoldPoppy", "FlowersLupine", "FlowersDesertMarigold",
+			"FlowersSandVerbena", "GrassMaizeCanal", "FlowersCottonCanal", "GrassLittleBarley",
+			"GrassThatch", "GrassRedOat", "GrassWire", "GrassGuinea", "GrassStar", "ReedsElephant", "FlowersVeld", "FlowersFireLily", "FlowersFlameLily",
+			"GrassPearlMillet",
+			"GrassPendant", "GrassWoodrushArctic", "FlowersArctic", "FlowersRiverBeauty", "GrassTrisetum", "GrassMeltSedge", "FlowersSnowmeltPrimula",
+			// The Grassland round's (2026-10-26).
+			"GrassBrome", "GrassGoldbeard", "GrassRedBeard", "GrassBlueFescue", "GrassAlkali", "ReedsThatch", "FlowersPannonia", "FlowersSpringSteppe",
+			"FlowersPeony", "FlowersSzik", "FlowersTatar", "GrassMillet",
+			// The Plains round's (2026-10-26).
+			"GrassWheatgrass", "GrassLittleBluestem", "GrassGrama", "GrassBigBluestem", "GrassSwitchgrass", "GrassSandReed", "FlowersConeflower",
+			"FlowersSunflower", "FlowersBlazingStar", "FlowersPrairieSmoke", "FlowersSandhill", "FlowersPlaya", "GrassFlintCorn", "FlowersFieldSunflower",
+			// The Steppe round's (2026-10-26).
+			"GrassTyrsa", "GrassTipchak", "GrassChiy", "GrassZhitnyak", "FlowersTulipSteppe", "FlowersPhlomis", "FlowersGoniolimon", "FlowersGagea",
+			"FlowersSafflower", "FlowersTartaryBuckwheat",
+			// The Estuary round's (2026-10-26).
+			"GrassCordgrass", "GrassSaltmarsh", "GrassFescueRed", "GrassRushGerard", "GrassSeaCouch", "GrassSeaClubrush", "ReedsBrackish", "FlowersSeaLavender", "FlowersThrift", "FlowersKwelder", "FlowersGoldenSamphire",
+			// The Desert, Badlands and Salt Flat rounds' (2026-10-26).
+			"GrassDrinn", "GrassTaman", "GrassSilverAwn", "FlowersSchouwia", "FlowersFagonia", "FlowersSandLily", "GrassBulbousPoa", "GrassGoatgrass",
+			"GrassWildBarley", "GrassRavenna", "FlowersGypsophila", "FlowersSpringAsh", "FlowersOnosma", "FlowersEremurus", "FlowersHollyhock",
+			"FlowersSternbergia", "GrassOdyssea", "GrassBrineSedge", "FlowersCressa", "FlowersWardenbloom",
+			// The Hills round's (2026-10-26).
+			"GrassSheepFescue", "GrassSilverbeard", "GrassMatgrass", "GrassMelick", "FlowersAsphodel", "FlowersHillSpring", "FlowersSchist",
+			"FlowersTerraceWeeds", "FlowersFell", "FlowersSaffron", "GrassBarleyHill",
+			// The Wetlands round's (2026-10-26).
+			"ReedsQasab", "ReedsBardi", "GrassBulrush", "GrassKnotgrass", "GrassFlatsedge", "GrassSaltgrass", "GrassSweetFlag", "FlowersButomus", "FlowersBatiha", "FlowersDelta",
+			// The Mangrove round's (2026-10-26).
+			"GrassSaltCouch", "GrassSedgeFimbristylis", "FlowersSesuvium", "FlowersAsmini",
+			// The Jungle and Bamboo Forest rounds' (2026-10-26).
+			"GrassSpear", "FlowersAlligatorPepper", "FlowersCostus", "FlowersBalsam", "FlowersBloodLily",
+			"GrassSusuki", "GrassRyunohige", "FlowersHiganbana", "FlowersAkiNanakusa", "FlowersShaga", "FlowersKatakuri",
+			// The Lake and River rounds' (2026-10-26).
+			"FlowersStrand", "GrassGalingale", "FlowersStromtal", "FlowersFloodbank",
 		};
 
 		[Test]
@@ -66,6 +238,10 @@ namespace FishMMO.UnitTests
 			foreach (string name in DesignDeadwood)
 			{
 				Assert.That(ProceduralArtCatalogue.TryDeadwood(name, out _), $"deadwood '{name}' is missing");
+			}
+			foreach (string name in RoundLitter)
+			{
+				Assert.That(ProceduralArtCatalogue.TryDetail(name, out _), $"detail '{name}' is missing");
 			}
 			var names = new HashSet<string>();
 			foreach (string prefab in ProceduralArtCatalogue.AllPrefabNames())

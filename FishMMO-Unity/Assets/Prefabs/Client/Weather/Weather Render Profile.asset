@@ -272,6 +272,8 @@ MonoBehaviour:
     WidenExponent: 1
     MaxWiden: 64
     MaxBladePixels: 2.5
+    SubPixelCoverage: 1
+    MotionVectorLevels: 2
     Lod0Distance: 6
     Lod1Distance: 25
     ShadowDistance: 0
@@ -315,11 +317,6 @@ MonoBehaviour:
     type: 3}
   DetailScatter:
     Enabled: 1
-    PrototypePrefixes:
-    - Detail_Pebbles
-    - Detail_Rocks
-    - Detail_Shells
-    - Detail_Debris
     ThinStartMetres: 60
     ThinKeepAtDistance: 0.25
     EdgeFadeBand: 0.1
@@ -745,6 +742,8 @@ MonoBehaviour:
   LighthouseBeamsShader: {fileID: 4800000, guid: ecab34d317113a3cca135777ad7b196a,
     type: 3}
   CaveDripsShader: {fileID: 4800000, guid: 48ac664988707c9c7a089f115b3fdeba, type: 3}
+  CaveWaterLifeShader: {fileID: 4800000, guid: cb1af12fa9eeb103d97fa517ce90a148, type: 3}
+  SeaHallVentsShader: {fileID: 4800000, guid: e08cb66e09bc16257b42ad6325c566d9, type: 3}
   CaveSkylightShaftsShader: {fileID: 4800000, guid: e7c209507e8642b8bba568685b6b5cb7,
     type: 3}
   RockfallStonesShader: {fileID: 4800000, guid: 1eb18bb28518e00fcab80b970b5ed096,

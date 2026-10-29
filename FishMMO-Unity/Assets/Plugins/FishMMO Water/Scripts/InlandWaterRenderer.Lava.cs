@@ -429,6 +429,10 @@ namespace FishMMO.Water
 			built.Add(go);
 		}
 
+		/// <summary>Reused for <see cref="Terrain.GetActiveTerrains"/>: <c>Terrain.activeTerrains</c> builds a new array on
+		/// every read, and this runs every frame.</summary>
+		private static readonly System.Collections.Generic.List<Terrain> activeTerrainsScratch = new System.Collections.Generic.List<Terrain>();
+
 		/// <summary>
 		/// How much of the open sky reaches a point, 0..1: 1 within six metres under the terrain over it, none from twenty
 		/// (FishGroundMap.hlsl's FishUnderground, from the terrain here rather than the camera's ground map). 1 off every terrain.
@@ -436,7 +440,8 @@ namespace FishMMO.Water
 		public static float OpenSky(Scene scene, Vector3 p)
 		{
 			float ground = float.NegativeInfinity;
-			foreach (Terrain terrain in Terrain.activeTerrains)
+			Terrain.GetActiveTerrains(activeTerrainsScratch);
+			foreach (Terrain terrain in activeTerrainsScratch)
 			{
 				if (terrain == null || terrain.terrainData == null || (scene.IsValid() && terrain.gameObject.scene != scene))
 				{

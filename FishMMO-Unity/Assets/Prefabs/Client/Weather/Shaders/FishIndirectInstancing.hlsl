@@ -120,6 +120,35 @@ struct FishVisible
     static float FishIndirectLodFade = 0.0;
 #endif
 
+// ── BatchRendererGroup (DOTS_INSTANCING_ON variants; TerrainGpuRenderer.Brg.cs) ─────────────────
+//
+//   The same culled draws submitted as BatchDrawCommandIndirect: Unity's own DOTS setup (UnityDOTSInstancing.hlsl
+//   SetupDOTSVisibleInstancingData, run by UNITY_SETUP_INSTANCE_ID) reads the draw's visible entry — the culling's packed
+//   uint (FishTerrainInstancing.compute FishPackFade: resident index | LOD fade byte << 24) at the command's visibleOffset
+//   + the instance — and UNITY_MATRIX_M / _I_M load the instance's matrices from the batch buffer, which
+//   FishTerrainInstancing.compute FishDotsInstances keeps beside the rows. FishIndirectSetup then does nothing, and:
+//     * the LOD fade is the byte (FishLodFade.hlsl FishLodFadeValue);
+//     * _FishContactOn and _FishFloraOn, which a RenderMeshIndirect draw took from its block, are the batch's own
+//       constants (one batch per renderer, TerrainGpuRenderer.ContactMode / FloraMode) — under the SRP Batcher a loose
+//       uniform is the global's value, never the material's;
+//     * there is no per-draw caster sphere (FishCasterCulling.hlsl culls nothing, as the batched Vulkan calls today).
+//   UserPropertyMetadata is the metadata cbuffer Unity keeps for a shader's own properties (URP uses the builtin and
+//   material ones). The passes stay on FXC (their procedural variants write UnityPerDraw), so these variants are FXC →
+//   HLSLcc on Vulkan, as URP's own Lit is.
+#if defined(UNITY_DOTS_INSTANCING_ENABLED)
+    #define FISH_INDIRECT_DOTS 1
+    UNITY_DOTS_INSTANCING_START(UserPropertyMetadata)
+        uint UNITY_DOTS_INSTANCED_METADATA_NAME(float, _FishBatchContactOn);
+        uint UNITY_DOTS_INSTANCED_METADATA_NAME(float, _FishBatchFloraOn);
+    UNITY_DOTS_INSTANCING_END(UserPropertyMetadata)
+    // Per-batch values (metadata without the per-instance bit: one address for every instance). The includes that declare
+    // these names as loose uniforms skip the declaration (FishGroundColour.hlsl under FISH_INDIRECT_DOTS; the passes'
+    // _FishFloraOn under FISH_FLORA_ON_DECLARED).
+    #define FISH_FLORA_ON_DECLARED
+    #define _FishContactOn LoadDOTSInstancedData_float(UNITY_DOTS_INSTANCED_METADATA_NAME(float, _FishBatchContactOn))
+    #define _FishFloraOn LoadDOTSInstancedData_float(UNITY_DOTS_INSTANCED_METADATA_NAME(float, _FishBatchFloraOn))
+#endif
+
 // The inverse of an affine T·R·S with orthogonal 3×3 columns c0, c1, c2 (no shear). With
 // M3 = R·S, inverse(M3) = S⁻¹·Rᵀ, whose row i is column i of M3 divided by its squared length
 // (|cᵢ|² = sᵢ²): about fifteen flops, against a general 3×3 inverse's cofactors and determinant.

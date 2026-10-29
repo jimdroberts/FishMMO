@@ -14,8 +14,9 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void Authoring_WritesNoOrchardsLayoutOldTerracesOrMargin_OnceAndKeepsHandEdits()
 		{
-			BiomeTemplate hills = MakeBiome("Hills");
-			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Hills");
+			// The Valley (unauthored): no orchards, layout, old terraces or margin (the Hills round, 2026-10-26, gave Hills all but the margin).
+			BiomeTemplate hills = MakeBiome("Valley");
+			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Valley");
 			var source = new FakeSource(created);
 
 			var first = new BiomeArtAuthoring.Report();

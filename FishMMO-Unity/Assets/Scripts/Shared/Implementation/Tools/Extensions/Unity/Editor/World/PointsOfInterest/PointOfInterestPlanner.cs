@@ -70,6 +70,11 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				foreach (PointOfInterestKindRule rule in input.Rules.Ordered(PointOfInterestPlacement.Placed))
 				{
+					// A kind that stands by the ways is sited once they are laid (PlaceBesideWays, 2026-10-27): they are planned from these sites.
+					if (rule.BesideWays)
+					{
+						continue;
+					}
 					PointOfInterestKindRule effective = state.Effective(rule, false);
 					if (effective != null)
 					{
@@ -320,7 +325,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>Chamfer distance, metres, from every cell <paramref name="source"/> holds; far where none does.</summary>
-			private void Chamfer(float[] distance, Func<int, bool> source)
+			internal void Chamfer(float[] distance, Func<int, bool> source)
 			{
 				const float far = 1e6f;
 				for (int i = 0; i < distance.Length; i++)

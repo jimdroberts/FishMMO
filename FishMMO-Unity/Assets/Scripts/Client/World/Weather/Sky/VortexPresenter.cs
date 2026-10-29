@@ -111,8 +111,10 @@ namespace FishMMO.Client
 		private Mesh debris;
 		private int debrisBuilt = -1;
 		private Material ownVolume, ownDebris;
-		private readonly MaterialPropertyBlock volumeBlock = new MaterialPropertyBlock();
-		private readonly MaterialPropertyBlock debrisBlock = new MaterialPropertyBlock();
+		// One copy of each material for each vortex drawn this camera, each with its own numbers: property blocks would take
+		// every vortex's draws out of the SRP Batcher.
+		private readonly DrawMaterials volumeMaterials = new DrawMaterials("Vortex");
+		private readonly DrawMaterials debrisMaterials = new DrawMaterials("Vortex Debris");
 		private readonly List<(StormCell cell, float distance)> nearest = new List<(StormCell, float)>();
 		private readonly Dictionary<ushort, (Vector2 at, GroundTraits ground)> grounds = new Dictionary<ushort, (Vector2, GroundTraits)>();
 		private readonly Dictionary<ushort, Pace> paces = new Dictionary<ushort, Pace>();
@@ -328,22 +330,21 @@ namespace FishMMO.Client
 					StormLight(anatomy, centre, centre + 0.5f * form.TopOffset, 0.5f * top, toSun, out sunSeen, out skySeen, out skyEdge);
 				}
 
-				volumeBlock.SetVector(CentreId, new Vector4(centre.x, ground, centre.y, top));
-				volumeBlock.SetVector(WindId, new Vector4(core, form.PeakWind, gravity, spin));
-				volumeBlock.SetVector(LeanId, new Vector4(form.TopOffset.x, form.TopOffset.y, form.Sway, over));
-				volumeBlock.SetVector(FlowId, new Vector4(form.AxialUpdraft, form.SubVortices, form.Hollow, cloudsLit ? 1f : 0f));
-				volumeBlock.SetVector(TimeId, new Vector4(time, seed, form.Rope, 0f));
-				volumeBlock.SetVector(PaceId, pace.Rates);
-				volumeBlock.SetVector(DustId, new Vector4(liftingWind, form.DebrisHeight, dust, form.DebrisThinning));
-				volumeBlock.SetVector(DustShapeId, new Vector4(form.DebrisReachGround, form.DebrisReachTop, tube, 0f));
-				volumeBlock.SetVector(LookId, new Vector4(lifted.r, lifted.g, lifted.b, form.Condenses ? condensate : 0f));
-				volumeBlock.SetVector(SkyId, new Vector4(sunSeen, skySeen, forwardScatter, flare));
-				volumeBlock.SetVector(MarchId, new Vector4(Strides, NearestMeters, noise != null ? 1f : 0f, flareDepth));
-				volumeBlock.SetVector(StriaeId, new Vector4(form.Condenses ? swing : 0f, rolls, skyEdge, GroundLight / Mathf.Max(GroundLight, skySeen)));
-				if (noise != null)
-				{
-					volumeBlock.SetTexture(NoiseId, noise);
-				}
+				Material volumeCopy = volumeMaterials.For(volumeMaterial, Drawn);
+				volumeCopy.SetVector(CentreId, new Vector4(centre.x, ground, centre.y, top));
+				volumeCopy.SetVector(WindId, new Vector4(core, form.PeakWind, gravity, spin));
+				volumeCopy.SetVector(LeanId, new Vector4(form.TopOffset.x, form.TopOffset.y, form.Sway, over));
+				volumeCopy.SetVector(FlowId, new Vector4(form.AxialUpdraft, form.SubVortices, form.Hollow, cloudsLit ? 1f : 0f));
+				volumeCopy.SetVector(TimeId, new Vector4(time, seed, form.Rope, 0f));
+				volumeCopy.SetVector(PaceId, pace.Rates);
+				volumeCopy.SetVector(DustId, new Vector4(liftingWind, form.DebrisHeight, dust, form.DebrisThinning));
+				volumeCopy.SetVector(DustShapeId, new Vector4(form.DebrisReachGround, form.DebrisReachTop, tube, 0f));
+				volumeCopy.SetVector(LookId, new Vector4(lifted.r, lifted.g, lifted.b, form.Condenses ? condensate : 0f));
+				volumeCopy.SetVector(SkyId, new Vector4(sunSeen, skySeen, forwardScatter, flare));
+				volumeCopy.SetVector(MarchId, new Vector4(Strides, NearestMeters, noise != null ? 1f : 0f, flareDepth));
+				volumeCopy.SetVector(StriaeId, new Vector4(form.Condenses ? swing : 0f, rolls, skyEdge, GroundLight / Mathf.Max(GroundLight, skySeen)));
+				// With no noise volume the shader reads none (_VortexMarch.z 0): the material's own stays bound.
+				volumeCopy.SetTexture(NoiseId, noise != null ? noise : volumeMaterial.GetTexture(NoiseId));
 
 				/* The box: round the foot and round the top, as wide as the widest of the flare, the debris
 				 * and the wandering, from under the ground at the foot to the top of whatever stands
@@ -365,10 +366,9 @@ namespace FishMMO.Client
 				{
 					bounds.Encapsulate(viewer + (position - viewer).normalized * far);
 				}
-				var volumeParams = new RenderParams(volumeMaterial)
+				var volumeParams = new RenderParams(volumeCopy)
 				{
 					camera = camera,
-					matProps = volumeBlock,
 					worldBounds = bounds,
 					shadowCastingMode = ShadowCastingMode.Off,
 					receiveShadows = false,
@@ -380,21 +380,21 @@ namespace FishMMO.Client
 				 * further off: torn soil and plants, not the fine grain. */
 				if (particles > 0 && debris != null && debrisMaterial != null && nearest[i].distance < FlecksMeters && form.Lifted > 0.01f)
 				{
-					debrisBlock.SetVector(CentreId, new Vector4(centre.x, ground, centre.y, top));
-					debrisBlock.SetVector(WindId, new Vector4(core, form.PeakWind, gravity, spin));
-					debrisBlock.SetVector(LeanId, new Vector4(form.TopOffset.x, form.TopOffset.y, form.Sway, over));
-					debrisBlock.SetVector(FlowId, new Vector4(form.AxialUpdraft, form.SubVortices, form.Hollow, cloudsLit ? 1f : 0f));
-					debrisBlock.SetVector(TimeId, new Vector4(time, seed, form.Rope, 0f));
-					debrisBlock.SetVector(PaceId, pace.Rates);
-					debrisBlock.SetVector(SkyId, new Vector4(sunSeen, skySeen, forwardScatter, flare));
-					debrisBlock.SetVector(FleckId, new Vector4(lifted.r * 0.55f, lifted.g * 0.55f, lifted.b * 0.55f, form.Lifted));
-					debrisBlock.SetVector(DebrisId, new Vector4(form.DebrisHeight, form.DebrisReachGround, form.DebrisReachTop, pace.DebrisLife));
-					debrisBlock.SetVector(DebrisLookId, new Vector4(BottomHeavy(devil), Mathf.Clamp(core * 0.04f, 0.3f, 4f), FlecksMeters, pace.DebrisSpread));
+					Material debrisCopy = debrisMaterials.For(debrisMaterial, Drawn);
+					debrisCopy.SetVector(CentreId, new Vector4(centre.x, ground, centre.y, top));
+					debrisCopy.SetVector(WindId, new Vector4(core, form.PeakWind, gravity, spin));
+					debrisCopy.SetVector(LeanId, new Vector4(form.TopOffset.x, form.TopOffset.y, form.Sway, over));
+					debrisCopy.SetVector(FlowId, new Vector4(form.AxialUpdraft, form.SubVortices, form.Hollow, cloudsLit ? 1f : 0f));
+					debrisCopy.SetVector(TimeId, new Vector4(time, seed, form.Rope, 0f));
+					debrisCopy.SetVector(PaceId, pace.Rates);
+					debrisCopy.SetVector(SkyId, new Vector4(sunSeen, skySeen, forwardScatter, flare));
+					debrisCopy.SetVector(FleckId, new Vector4(lifted.r * 0.55f, lifted.g * 0.55f, lifted.b * 0.55f, form.Lifted));
+					debrisCopy.SetVector(DebrisId, new Vector4(form.DebrisHeight, form.DebrisReachGround, form.DebrisReachTop, pace.DebrisLife));
+					debrisCopy.SetVector(DebrisLookId, new Vector4(BottomHeavy(devil), Mathf.Clamp(core * 0.04f, 0.3f, 4f), FlecksMeters, pace.DebrisSpread));
 					float fleckRadius = form.DebrisReachGround * core + inflate + 20f;
-					var debrisParams = new RenderParams(debrisMaterial)
+					var debrisParams = new RenderParams(debrisCopy)
 					{
 						camera = camera,
-						matProps = debrisBlock,
 						worldBounds = new Bounds(new Vector3(centre.x + 0.5f * form.TopOffset.x, ground + 0.5f * form.DebrisHeight, centre.y + 0.5f * form.TopOffset.y),
 							new Vector3(2f * fleckRadius + Mathf.Abs(form.TopOffset.x), form.DebrisHeight + 60f, 2f * fleckRadius + Mathf.Abs(form.TopOffset.y))),
 						shadowCastingMode = ShadowCastingMode.Off,
@@ -576,6 +576,10 @@ namespace FishMMO.Client
 			return traits;
 		}
 
+		/// <summary>Reused for <see cref="Terrain.GetActiveTerrains"/>: <c>Terrain.activeTerrains</c> builds a new array on
+		/// every read, and this runs every frame.</summary>
+		private static readonly System.Collections.Generic.List<Terrain> activeTerrainsScratch = new System.Collections.Generic.List<Terrain>();
+
 		/// <summary>
 		/// The height a vortex stands on: the ground, or the sea over it — a tornado over water is a
 		/// waterspout, and what it lifts is spray.
@@ -589,7 +593,8 @@ namespace FishMMO.Client
 				return island;
 			}
 			float ground = float.MinValue;
-			foreach (Terrain terrain in Terrain.activeTerrains)
+			Terrain.GetActiveTerrains(activeTerrainsScratch);
+			foreach (Terrain terrain in activeTerrainsScratch)
 			{
 				if (terrain == null || terrain.terrainData == null)
 				{
@@ -675,6 +680,8 @@ namespace FishMMO.Client
 			Discard(ref debris);
 			Discard(ref ownVolume);
 			Discard(ref ownDebris);
+			volumeMaterials.Dispose();
+			debrisMaterials.Dispose();
 			debrisBuilt = -1;
 			grounds.Clear();
 			paces.Clear();

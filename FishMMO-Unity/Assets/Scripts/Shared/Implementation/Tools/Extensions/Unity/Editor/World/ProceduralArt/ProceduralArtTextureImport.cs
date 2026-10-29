@@ -53,6 +53,11 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			var importer = (TextureImporter)assetImporter;
 			string file = System.IO.Path.GetFileNameWithoutExtension(assetPath);
+			if (ProceduralArtLookArrays.TryParseArrayName(file, out string set, out ProceduralArtLookArrays.Kind kind))
+			{
+				LookArray(importer, set, kind);
+				return;
+			}
 			// Never inherited from the .meta's legacy upgrade, which makes a cube map (see the remarks).
 			importer.textureShape = TextureImporterShape.Texture2D;
 			importer.mipmapEnabled = true;
@@ -93,6 +98,78 @@ namespace FishMMO.Shared.WorldDesign
 				importer.alphaSource = TextureImporterAlphaSource.FromInput;
 				importer.alphaIsTransparency = false;
 				importer.wrapMode = TextureWrapMode.Repeat;
+			}
+		}
+
+		/// <summary>
+		/// A look array's flipbook (<see cref="ProceduralArtLookArrays"/>, 2026-10-28): a <see cref="Texture2DArray"/> of its cells, each
+		/// imported exactly as the single map it replaces was above — colour as an albedo (sRGB, its alpha the smoothness), normals
+		/// through the normal-map importer, masks linear; mips, trilinear, aniso 8, Repeat, high-quality compression. The grid is
+		/// read from the image's own size and the set's slice size; the image is never scaled (no power-of-two rounding, and a
+		/// max size the largest flipbook fits), so every cell is one slice at the single map's size.
+		/// </summary>
+		private void LookArray(TextureImporter importer, string set, ProceduralArtLookArrays.Kind kind)
+		{
+			int size = ProceduralArtLookArrays.SizeOf(set);
+			if (size <= 0 || !PngSize(assetPath, out int width, out int height) || width % size != 0 || height % size != 0)
+			{
+				Debug.LogError($"[Biome art] {assetPath}: not a look array flipbook of its set's {size}² cells; imported as it is.");
+				return;
+			}
+			importer.mipmapEnabled = true;
+			importer.anisoLevel = 8;
+			importer.filterMode = FilterMode.Trilinear;
+			importer.textureCompression = TextureImporterCompression.CompressedHQ;
+			importer.isReadable = false;
+			importer.wrapMode = TextureWrapMode.Repeat;
+			importer.npotScale = TextureImporterNPOTScale.None;
+			importer.maxTextureSize = ProceduralArtLookArrays.MaxSourceSide;
+			importer.alphaIsTransparency = false;
+			switch (kind)
+			{
+				case ProceduralArtLookArrays.Kind.Normal:
+					importer.textureType = TextureImporterType.NormalMap;
+					break;
+				case ProceduralArtLookArrays.Kind.Mask:
+					importer.textureType = TextureImporterType.Default;
+					importer.sRGBTexture = false;
+					importer.alphaSource = TextureImporterAlphaSource.FromInput;
+					break;
+				default:
+					importer.textureType = TextureImporterType.Default;
+					importer.sRGBTexture = true;
+					importer.alphaSource = TextureImporterAlphaSource.FromInput;
+					break;
+			}
+			var settings = new TextureImporterSettings();
+			importer.ReadTextureSettings(settings);
+			settings.textureShape = TextureImporterShape.Texture2DArray;
+			settings.flipbookColumns = width / size;
+			settings.flipbookRows = height / size;
+			importer.SetTextureSettings(settings);
+		}
+
+		/// <summary>A PNG's size from its header (the IHDR chunk), read before the importer has opened it.</summary>
+		private static bool PngSize(string path, out int width, out int height)
+		{
+			width = height = 0;
+			try
+			{
+				using (var stream = System.IO.File.OpenRead(path))
+				{
+					var header = new byte[24];
+					if (stream.Read(header, 0, 24) < 24 || header[1] != (byte)'P' || header[2] != (byte)'N' || header[3] != (byte)'G')
+					{
+						return false;
+					}
+					width = (header[16] << 24) | (header[17] << 16) | (header[18] << 8) | header[19];
+					height = (header[20] << 24) | (header[21] << 16) | (header[22] << 8) | header[23];
+					return width > 0 && height > 0;
+				}
+			}
+			catch (System.IO.IOException)
+			{
+				return false;
 			}
 		}
 	}

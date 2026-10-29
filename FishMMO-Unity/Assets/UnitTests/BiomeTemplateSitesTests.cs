@@ -25,6 +25,15 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		private static IEnumerable<BiomeArtSpec.Entry> Biomes => BiomeArtSpec.Entries;
 
+		/// <summary>The biomes still as the name tables had them: an authored round's own sites, weathering, crops and palette are pinned in BiomeAuthoredRoundTests.</summary>
+		private static IEnumerable<BiomeArtSpec.Entry> Unauthored => BiomeArtSpec.Entries.Where(e => !BiomeAuthoredRounds.Contains(e.Biome));
+
+		/// <summary>
+		/// The fantasy wave's kinds and the keeps and towers it raised to 1 (2026-10-27): written into every file's .Sites and .Prefers
+		/// on purpose, not as the name tables had them, and pinned by FantasyWaveHostingTests.
+		/// </summary>
+		private static bool FantasyWave(POIType kind) => kind == POIType.Keep || kind == POIType.Tower || FantasyWaveKindsTests.Wave.Contains(kind.ToString());
+
 		// ── Kinds ─────────────────────────────────────────────────────
 
 		/// <summary>
@@ -38,17 +47,18 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			PointOfInterestRules rules = PointOfInterestRules.Default();
 			var kinds = (POIType[])Enum.GetValues(typeof(POIType));
-			int compared = 0, hosted = 0;
-			foreach (BiomeArtSpec.Entry entry in Biomes)
+			int compared = 0, hosted = 0, unauthored = 0;
+			foreach (BiomeArtSpec.Entry entry in Unauthored)
 			{
-				List<BiomeSiteKind> list = entry.SiteKinds(rules);
+				unauthored++;
+				List<BiomeSiteKind> list = entry.SiteKinds();
 				Assert.That(list.Select(k => k.Kind).Distinct().Count(), Is.EqualTo(list.Count), $"{entry.Biome}: one entry a kind");
 				Assert.That(list.All(k => k.Weight > 0f), Is.True, $"{entry.Biome}: only kinds it hosts");
 				var biome = new PointOfInterestBiome(entry.Biome, 1, null, list.ToDictionary(k => k.Kind, k => k.Weight));
 				foreach (POIType kind in kinds)
 				{
 					PointOfInterestKindRule rule = rules.RuleFor(kind);
-					if (rule == null)
+					if (rule == null || FantasyWave(kind))
 					{
 						continue;
 					}
@@ -57,10 +67,11 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 				hosted += list.Count;
 			}
-			Assert.That(compared, Is.GreaterThan(83 * 90));
-			Assert.That(hosted, Is.GreaterThan(83 * 20));
+			// Over 90 kinds compared and 20 hosted a biome, for every biome still unauthored (the rounds' own are pinned by BiomeAuthoredRoundTests).
+			Assert.That(compared, Is.GreaterThan(unauthored * 90));
+			Assert.That(hosted, Is.GreaterThan(unauthored * 20));
 
-			// Spot checks against the old table, literally.
+			// Spot checks against the old table, literally (an authored biome's by its rows, which its file no longer copies).
 			Weight("Swamp", POIType.WitchHut, 1f);
 			Weight("Plains", POIType.WitchHut, 0f);
 			Weight("Farmland", POIType.Village, 1.2f);
@@ -81,10 +92,12 @@ namespace FishMMO.UnitTests.WorldDesign
 			Weight("Forest", POIType.WitchHut, 0.5f);
 			Weight("Forest", POIType.HuntingLodge, 1.5f);
 			Weight("Desert", POIType.HuntingLodge, 0f);
-			Weight("Plains", POIType.Windmill, 1f);
+			// The Plains round (2026-10-26): no mills on the prairie.
+			AuthoredWeight("Plains", POIType.Windmill, 0f);
 			Weight("Desert", POIType.Windmill, 0f);
 			Weight("Jungle", POIType.StoneCircle, 0f);
-			Weight("Hills", POIType.StoneCircle, 1f);
+			// The Hills round (2026-10-26): few circles, the antas and castros instead.
+			AuthoredWeight("Hills", POIType.StoneCircle, 0.2f);
 			Weight("Swamp", POIType.Battlefield, 0f);
 			Weight("Plains", POIType.Overhang, 0f);
 			Weight("Badlands", POIType.NaturalArch, 1.5f);
@@ -93,18 +106,36 @@ namespace FishMMO.UnitTests.WorldDesign
 			Weight("Marble Palace", POIType.AbandonedFarm, 0f);
 		}
 
+		/// <summary>The old table's weight of the kind in the biome: its file's, or an authored biome's rows (its file gives its own).</summary>
 		private static void Weight(string biome, POIType kind, float expected)
+		{
+			if (BiomeAuthoredRounds.Contains(biome))
+			{
+				Assert.That(Mathf.Max(0f, PointOfInterestRules.Default().RuleFor(kind).BiomeWeight(biome)), Is.EqualTo(expected), $"{biome}: {kind} (the rows)");
+				return;
+			}
+			AuthoredWeight(biome, kind, expected);
+		}
+
+		/// <summary>The weight the biome's file gives the kind.</summary>
+		private static void AuthoredWeight(string biome, POIType kind, float expected)
 		{
 			BiomeSiteKind[] found = BiomeArtSpec.For(biome).SiteKinds().Where(k => k.Kind == kind).ToArray();
 			Assert.That(found.Length > 0 ? found[0].Weight : 0f, Is.EqualTo(expected), $"{biome}: {kind}");
 		}
 
-		/// <summary>A biome's file may give a kind its own weight (or none), over the rows'.</summary>
+		/// <summary>
+		/// A biome's file may give a kind its own weight (or none), over its Sites list (the rows' answer, written into every file by
+		/// phase CODE-TABLE CLEARANCE, 2026-10-26); a fresh entry names no kind at all, whatever its name.
+		/// </summary>
 		[Test]
 		public void SpecHosts_OverridesOneKind()
 		{
+			Assert.That(new BiomeArtSpec.Entry { Biome = "Plains" }.SiteKinds(), Is.Empty, "the name gives nothing: the file's Sites do");
 			var entry = new BiomeArtSpec.Entry { Biome = "Plains" };
+			entry.Sites(BiomeArtSpec.For("Plains").SiteKinds().Select(k => (k.Kind, k.Weight)).ToArray());
 			List<BiomeSiteKind> before = entry.SiteKinds();
+			Assert.That(before.Select(k => k.ToString()), Is.EqualTo(BiomeArtSpec.For("Plains").SiteKinds().Select(k => k.ToString())));
 			entry.Hosts(POIType.WitchHut, 0.5f).Hosts(POIType.Village, 0f);
 			List<BiomeSiteKind> after = entry.SiteKinds();
 			Assert.That(after.Single(k => k.Kind == POIType.WitchHut).Weight, Is.EqualTo(0.5f));
@@ -141,15 +172,21 @@ namespace FishMMO.UnitTests.WorldDesign
 			List<PointOfInterestTemplateAuthoring.Planned> planned = PointOfInterestTemplateAuthoring.Plan(PointOfInterestTemplateSpecs.All(), (spec, size) => size.ToString());
 			Dictionary<POIType, List<PointOfInterestTemplateAuthoring.Planned>> byKind = planned.GroupBy(p => p.Spec.Kind).ToDictionary(g => g.Key, g => g.ToList());
 			string[] categories = { string.Empty, "Humanoid", "Beastfolk", "Giant", "Fey", "Beast", "Undead", "Elemental", "Aquatic" };
-			int picks = 0, built = 0, differing = 0;
-			foreach (BiomeArtSpec.Entry entry in Biomes)
+			int picks = 0, built = 0, differing = 0, unauthored = 0;
+			foreach (BiomeArtSpec.Entry entry in Unauthored)
 			{
+				unauthored++;
 				List<BiomeSiteVariant> variants = entry.SiteVariants();
 				List<BiomeSiteStyle> styles = entry.SiteStyles();
 				Assert.That(styles, Is.Empty, $"{entry.Biome}: every style at 1 by default");
 				differing += variants.Count;
 				foreach (KeyValuePair<POIType, List<PointOfInterestTemplateAuthoring.Planned>> kind in byKind)
 				{
+					// The keeps' and towers' holders are the wave's per biome (FantasyWaveHostingTests), not the templates' old lists.
+					if (kind.Key == POIType.Keep || kind.Key == POIType.Tower)
+					{
+						continue;
+					}
 					List<PointOfInterestTemplateAuthoring.Planned> list = kind.Value;
 					for (int size = 0; size < 3; size++)
 					{
@@ -183,13 +220,16 @@ namespace FishMMO.UnitTests.WorldDesign
 					}
 				}
 			}
-			Assert.That(picks, Is.GreaterThan(1000000));
+			// Over a million picks and a variant a biome among all 83 before the rounds: the same share of the biomes still unauthored.
+			Assert.That(picks, Is.GreaterThan(1000000L * unauthored / 83));
 			Assert.That(built, Is.GreaterThan(picks / 4), "most draws build something");
-			Assert.That(differing, Is.GreaterThan(83), "the biomes weigh variants of their own");
+			Assert.That(differing, Is.GreaterThan(unauthored), "the biomes weigh variants of their own");
 			// Spot checks: what the spec writes, from the templates' biome lists.
 			Assert.That(BiomeArtSpec.For("Desert").SiteVariants(), Does.Contain(new BiomeSiteVariant(POIType.Village, "Stone", 2f)));
-			Assert.That(BiomeArtSpec.For("Desert").SiteVariants(), Does.Contain(new BiomeSiteVariant(POIType.Village, "Timber", 0.1f)));
-			Assert.That(BiomeArtSpec.For("Plains").SiteVariants().Any(v => v.Kind == POIType.Village), Is.False, "the plains weigh every village as anywhere");
+			// The Desert round (2026-10-26) builds no timber villages (the lists gave it 0.1).
+			Assert.That(BiomeArtSpec.For("Desert").SiteVariants(), Does.Contain(new BiomeSiteVariant(POIType.Village, "Timber", 0f)));
+			// The Plains round (2026-10-26) weighs its own villages (the longhouse standing in for the earth lodge).
+			Assert.That(BiomeArtSpec.For("Plains").SiteVariants(), Does.Contain(new BiomeSiteVariant(POIType.Village, "Longhouse", 1.2f)));
 		}
 
 		// PointOfInterestTemplate.WeightFor before 2026-10-16, on a planned asset (no race keys: the authoring writes none).
@@ -275,7 +315,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			var kinds = (POIType[])Enum.GetValues(typeof(POIType));
 			var modes = (PointOfInterestFinish[])Enum.GetValues(typeof(PointOfInterestFinish));
-			var names = Biomes.Select(e => e.Biome).Concat(new string[] { null, string.Empty }).ToList();
+			var names = Unauthored.Select(e => e.Biome).Concat(new string[] { null, string.Empty }).ToList();
 			int compared = 0;
 			var finishes = new HashSet<StructureFinish>();
 			foreach (string name in names)
@@ -311,12 +351,17 @@ namespace FishMMO.UnitTests.WorldDesign
 					}
 				}
 			}
-			Assert.That(compared, Is.GreaterThan(5000000));
+			// Over five million among all 83 biomes and none before the rounds (85 names): the same share of the names still compared.
+			Assert.That(compared, Is.GreaterThan(5000000L * names.Count / 85));
 			Assert.That(finishes, Is.EquivalentTo(Enum.GetValues(typeof(StructureFinish))), "every finish comes up");
 			Assert.That(BiomeArtSpec.For("Swamp").Weathering(), Is.EqualTo(new BiomeWeathering(BiomeStructureFinish.Algae, 0.3f, 0.6f)));
 			Assert.That(BiomeArtSpec.For("Desert").Weathering().Finish, Is.EqualTo(BiomeStructureFinish.None));
-			Assert.That(BiomeArtSpec.For("Forest").Weathering(), Is.EqualTo(new BiomeWeathering(BiomeStructureFinish.Mossy, 0f, 1f)));
-			Assert.That(BiomeArtSpec.For("Plains").Weathering(), Is.EqualTo(new BiomeWeathering(BiomeStructureFinish.Mossy, 0f, 0.5f)));
+			// The Forest round (2026-10-26): moss on 35 % of the sound pieces, more as they decay.
+			BiomeWeathering forest = BiomeArtSpec.For("Forest").Weathering();
+			Assert.That((forest.Finish, forest.Chance, forest.ChancePerDecay), Is.EqualTo((BiomeStructureFinish.Mossy, 0.35f, 1f)));
+			// The Plains round (2026-10-26): no moss, the Dusted coat in its place.
+			BiomeWeathering plains = BiomeArtSpec.For("Plains").Weathering();
+			Assert.That((plains.Finish, plains.Chance, plains.ChancePerDecay, plains.Coat), Is.EqualTo((BiomeStructureFinish.None, 0f, 0f, BiomeStructureCoat.Dusted)));
 		}
 
 		private static readonly string[] OldWet = { "Swamp", "Mangrove", "Bog", "Wetland", "Marsh", "Estuary" };
@@ -396,7 +441,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void SpecFieldCrops_AreWheat_AndTheDrawLeavesOneCropAlone()
 		{
 			Assert.That(BiomeArtSpec.WheatCrop, Is.EqualTo(ProceduralArtCatalogue.DetailPrefab("GrassWheat")));
-			foreach (BiomeArtSpec.Entry entry in Biomes)
+			foreach (BiomeArtSpec.Entry entry in Unauthored)
 			{
 				Assert.That(entry.FieldCrops(), Is.EqualTo(new List<(string, float)> { ("Detail_GrassWheat", 1f) }), entry.Biome);
 			}
@@ -459,7 +504,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(kit.BuildsAsKit(style), Is.True, style.ToString());
 				Assert.That(new BiomeStructurePalette().BuildsAsKit(style), Is.True, "an empty palette is the kit's");
 			}
-			foreach (BiomeArtSpec.Entry entry in Biomes)
+			foreach (BiomeArtSpec.Entry entry in Unauthored)
 			{
 				Assert.That(entry.StructurePalette().Signature(), Is.EqualTo(kit.Signature()), entry.Biome);
 			}
@@ -569,6 +614,8 @@ namespace FishMMO.UnitTests.WorldDesign
 			var naming = new HashSet<string> { "PointOfInterestNaming.cs" };
 			// The tables of biome names the authoring reads (the kinds' and variants' default biomes, the gathering catalogue's).
 			var tables = new HashSet<string> { "PointOfInterestRules.cs", "PointOfInterestTemplateSpecs.cs", "GatheringResourceCatalogue.cs" };
+			// The fantasy wave's parts of those two tables (2026-10-27: one file a pack).
+			bool Table(string file) => tables.Contains(file) || file.StartsWith("PointOfInterestRules.Fantasy") || file.StartsWith("PointOfInterestTemplateSpecs.Fantasy");
 			var biomeNames = new HashSet<string>(Biomes.Select(e => e.Biome));
 			// A rock's broken shape and the cave shaper's own name share a word with a biome's.
 			var notBiomes = new HashSet<string> { "Scree", "Cave" };
@@ -589,11 +636,11 @@ namespace FishMMO.UnitTests.WorldDesign
 					{
 						found.Add($"{name}: reads a biome's name: {line.Trim()}");
 					}
-					if (!naming.Contains(name) && !tables.Contains(name) && keywordLists.IsMatch(line))
+					if (!naming.Contains(name) && !Table(name) && keywordLists.IsMatch(line))
 					{
 						found.Add($"{name}: keeps a keyword list of biome names: {line.Trim()}");
 					}
-					if (!naming.Contains(name) && !tables.Contains(name))
+					if (!naming.Contains(name) && !Table(name))
 					{
 						foreach (Match literal in Regex.Matches(line, "\"([^\"\\n]*)\""))
 						{

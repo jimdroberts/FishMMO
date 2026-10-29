@@ -39,7 +39,7 @@ namespace FishMMO.Client
 	/// <b>One float4 an instance.</b> The look rides next to <c>_Tint</c> as <c>_Look</c>: x, y and z the coat, belly and
 	/// markings as 8-bit sRGB packed into a whole number (exact in a float up to 2^24), w = 1 + the pattern + its phase
 	/// (a fraction), or 0 for no look, where the shader draws the kind's own colours exactly as before. Small enough that
-	/// it goes through the same MaterialPropertyBlock arrays as the rest (1023 a batch).
+	/// it rides the same instance record as the rest (<see cref="LifeInstanceRecord"/>).
 	/// </para>
 	/// <para>
 	/// <b>Colour roles, not colours.</b> The meshes keep the kind's own colours in COLOR and carry, in TEXCOORD2, how much

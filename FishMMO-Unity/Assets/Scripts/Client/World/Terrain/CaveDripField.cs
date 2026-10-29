@@ -38,13 +38,13 @@ namespace FishMMO.Client
 		private static readonly int ShapeId = Shader.PropertyToID("_DripShape");
 		private static readonly int TimesId = Shader.PropertyToID("_DripTimes");
 		private static readonly int ExtraId = Shader.PropertyToID("_DripExtra");
+		private static readonly int CountId = Shader.PropertyToID("_DripCount");
 
 		private static readonly List<SceneEmitter> near = new List<SceneEmitter>();
 		private static readonly Vector4[] sources = new Vector4[MaxSources];
 		private static readonly Vector4[] shapes = new Vector4[MaxSources];
 		private static readonly Vector4[] times = new Vector4[MaxSources];
 		private static readonly Vector4[] extras = new Vector4[MaxSources];
-		private static MaterialPropertyBlock block;
 		private static Material material;
 		private static Shader materialShader;
 		private static Mesh mesh;
@@ -153,7 +153,6 @@ namespace FishMMO.Client
 			{
 				mesh = BuildMesh();
 			}
-			block ??= new MaterialPropertyBlock();
 			double seconds = WorldMotion.Seconds;
 			var bounds = new Bounds(near[0].Position, Vector3.one);
 			for (int i = 0; i < MaxSources; i++)
@@ -170,15 +169,17 @@ namespace FishMMO.Client
 				float puddle = Mathf.Max(0.3f, shapes[i].x);
 				bounds.Encapsulate(new Bounds(e.Position + Vector3.up * (0.5f * e.Reach), new Vector3(2f * puddle, e.Reach + 0.6f, 2f * puddle)));
 			}
-			block.Clear();
-			block.SetVectorArray(SourcesId, sources);
-			block.SetVectorArray(ShapeId, shapes);
-			block.SetVectorArray(TimesId, times);
-			block.SetVectorArray(ExtraId, extras);
+			/* No property block, so the draw stays in the SRP Batcher: the arrays are globals (this is the only draw that reads
+			 * them, once per camera, set in that camera's own hook before it renders) and the count is the material's own (it is
+			 * this system's, never shared). */
+			Shader.SetGlobalVectorArray(SourcesId, sources);
+			Shader.SetGlobalVectorArray(ShapeId, shapes);
+			Shader.SetGlobalVectorArray(TimesId, times);
+			Shader.SetGlobalVectorArray(ExtraId, extras);
+			mat.SetFloat(CountId, Mathf.Min(near.Count, MaxSources));
 			var rp = new RenderParams(mat)
 			{
 				camera = camera,
-				matProps = block,
 				shadowCastingMode = ShadowCastingMode.Off,
 				receiveShadows = false,
 				layer = camera.gameObject.layer,

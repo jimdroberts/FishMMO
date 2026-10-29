@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5c6013829f095b192aaf98036399165f, type: 3}
+  m_Name: Qasab Sheaf
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.GatheringNodeTemplate
+  IconReference:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: Cut stems of the giant reed, bundled for house-ribs, mats and boats.
+  Drops:
+  - Item: {fileID: 11400000, guid: 10528377d037af13c9efd61f137be490, type: 2}
+    MinAmount: 2
+    MaxAmount: 4
+    Weight: 1
+  MaxUses: 4
+  GatherTimeSeconds: 2

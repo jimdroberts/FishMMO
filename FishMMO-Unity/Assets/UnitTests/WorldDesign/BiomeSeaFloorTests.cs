@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.Serialization;
 using System.Text.RegularExpressions;
 using FishMMO.Client;
@@ -238,7 +239,8 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void Defaults_EverySpecAndEveryAsset_ChangeNothing()
 		{
 			Assert.AreEqual(83, BiomeArtSpec.Entries.Length);
-			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
+			// An authored round's own floor is pinned in BiomeAuthoredRoundTests.
+			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries.Where(e => !BiomeAuthoredRounds.Contains(e.Biome)))
 			{
 				Assert.AreEqual(BiomeSeaFloor.Shore, entry.SeaFloorKind, entry.Biome);
 				Assert.AreEqual(1f, entry.TideStrength, entry.Biome);
@@ -248,7 +250,7 @@ namespace FishMMO.UnitTests.WorldDesign
 					Assert.IsFalse(layer.SeaDepth.HasValue, entry.Biome + ": no depth band until its round");
 				}
 			}
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset").Where(p => !BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(p))))
 			{
 				string yaml = File.ReadAllText(path);
 				Assert.IsFalse(Regex.IsMatch(yaml, @"^\s*seaFloor: [12]", RegexOptions.Multiline), path);

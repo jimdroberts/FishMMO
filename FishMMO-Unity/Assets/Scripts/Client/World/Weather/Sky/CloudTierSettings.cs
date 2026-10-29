@@ -41,9 +41,8 @@ namespace FishMMO.Client
 		/// frames. It was 2.5 (6.25 frames), which marched two and a half times as many rays for a sky
 		/// that changes over minutes, and the rays are the cost: measured on the thunderstorm stage,
 		/// a quarter of the rays took the march from 224 ms to 67 ms and the steps along each ray
-		/// hardly mattered (half of them saved a fifth). With the tiers' marches lowered to match,
-		/// Balanced and High still rebuild at the screen's own size and Performant at about two
-		/// thirds of it.
+		/// hardly mattered (half of them saved a fifth). At the tiers' marches that is 0.72 of the
+		/// screen on High, 0.24 on Balanced and 0.2 on Performant; the composite scales the rest.
 		/// </para>
 		/// </remarks>
 		public const float AutoPixelsPerTexel = 4f;

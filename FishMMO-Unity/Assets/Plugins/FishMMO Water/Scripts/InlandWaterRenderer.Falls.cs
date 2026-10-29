@@ -57,7 +57,11 @@ namespace FishMMO.Water
 		private static readonly int FallsId = Shader.PropertyToID("_FishFalls");
 		private static readonly int FallsBId = Shader.PropertyToID("_FishFallsB");
 		private static readonly int FallCountId = Shader.PropertyToID("_FishFallCount");
-		private static readonly int RiverFallsId = Shader.PropertyToID("_RiverFalls");
+		/// <summary>A river's falls on its copy of the material: <c>_RiverFall0</c> … <c>_RiverFall3</c>, loose vectors in UnityPerMaterial.</summary>
+		private static readonly int[] RiverFallIds =
+		{
+			Shader.PropertyToID("_RiverFall0"), Shader.PropertyToID("_RiverFall1"), Shader.PropertyToID("_RiverFall2"), Shader.PropertyToID("_RiverFall3"),
+		};
 		private static readonly int RiverFallCountId = Shader.PropertyToID("_RiverFallCount");
 		private static readonly int FoamTextureId = Shader.PropertyToID("_FoamTexture");
 		private static readonly int NormalMapId = Shader.PropertyToID("_NormalMap");
@@ -72,6 +76,9 @@ namespace FishMMO.Water
 		/// <summary>Per river, the falls whose foam it carries downstream: (metres along at the landing, trail metres, strength, metres across).</summary>
 		private readonly Dictionary<int, Vector4[]> riverFalls = new Dictionary<int, Vector4[]>();
 		private readonly Dictionary<int, int> riverFallCounts = new Dictionary<int, int>();
+
+		/// <summary>The curtains and sprays built, each kind's next slot among its copies of the material (Looks: FallPart).</summary>
+		private int curtainParts, sprayParts;
 
 		/// <summary>The textures the falls own (their traced paths), destroyed with them.</summary>
 		private readonly List<Texture> fallTextures = new List<Texture>();
@@ -482,14 +489,9 @@ namespace FishMMO.Water
 					build = SheetMesh(river, fall, gameObject.scene, solved, LipTurbulence);
 					if (build != null && build.Mesh != null)
 					{
-						var block = new MaterialPropertyBlock();
-						// The fall's own streak and ripple maps (FallTextures), not the river's foam: a generic foam texture
-						// stretched down a sheet is the look of every waterfall of twenty years ago.
-						block.SetTexture(FoamTextureId, FallTextures.Streaks);
-						block.SetTexture(NormalMapId, FallTextures.Ripples);
-						MeshRenderer sheet = AddFallPart($"Fall {fall.River}.{fall.Lip}", build.Mesh, FallMaterial, CurtainSortingOrder, block, ShadowCastingMode.On);
-						// The look of the water it pours from, set on this block by ApplyFallLooks (Looks).
-						fallLookParts.Add((sheet, block, fall.River, fall.LipPoint, false));
+						MeshRenderer sheet = AddFallPart($"Fall {fall.River}.{fall.Lip}", build.Mesh, FallMaterial, CurtainSortingOrder, ShadowCastingMode.On);
+						// Its textures and the look of the water it pours from, on its own copy of the material (ApplyFallLooks, Looks).
+						fallLookParts.Add(new FallPart { Renderer = sheet, River = fall.River, Lip = fall.LipPoint, Spray = false, Slot = curtainParts++ });
 						fall.Landing = build.Landing;
 						fall.Strikes = build.Strikes;
 						fall.Parts = build.Parts;
@@ -519,18 +521,16 @@ namespace FishMMO.Water
 					Mesh spray = SprayMesh(river, fall, build);
 					if (spray != null)
 					{
-						var block = new MaterialPropertyBlock();
-						// The mist's noise lattice: without it the shader works the noise out in full, at several times the cost.
-						block.SetTexture(FallMistNoiseId, FallTextures.MistNoise);
-						block.SetFloat(FallMistNoiseCellsId, FallTextures.MistNoiseCells);
+						MeshRenderer sprayRenderer = AddFallPart($"Spray {fall.River}.{fall.Lip}", spray, SprayMaterial, SpraySortingOrder, ShadowCastingMode.Off);
+						var part = new FallPart { Renderer = sprayRenderer, River = fall.River, Lip = fall.LipPoint, Spray = true, Slot = sprayParts++ };
 						if (build != null && build.Paths != null)
 						{
-							block.SetTexture(FallPathTexId, build.Paths);
-							block.SetVector(FallPathId, new Vector4(build.Strips, build.PathSeconds, build.PoolLevel, fall.BreakupLength));
-							block.SetVector(FallOriginId, new Vector4(fall.LipPoint.x, fall.LipPoint.y, fall.LipPoint.z, fall.ImpactSpeed));
+							part.Paths = build.Paths;
+							part.PathInfo = new Vector4(build.Strips, build.PathSeconds, build.PoolLevel, fall.BreakupLength);
+							part.Origin = new Vector4(fall.LipPoint.x, fall.LipPoint.y, fall.LipPoint.z, fall.ImpactSpeed);
 						}
-						MeshRenderer sprayRenderer = AddFallPart($"Spray {fall.River}.{fall.Lip}", spray, SprayMaterial, SpraySortingOrder, block, ShadowCastingMode.Off);
-						fallLookParts.Add((sprayRenderer, block, fall.River, fall.LipPoint, true));
+						// Its mist lattice, its paths and the look of the water it pours from, on its own copy (ApplyFallLooks, Looks).
+						fallLookParts.Add(part);
 					}
 				}
 				Vector3 downstream = fall.FootPoint - fall.LipPoint;
@@ -665,7 +665,7 @@ namespace FishMMO.Water
 		/// </summary>
 		private const int CurtainSortingOrder = 30000, SpraySortingOrder = 30001;
 
-		private MeshRenderer AddFallPart(string name, Mesh mesh, Material material, int sortingOrder, MaterialPropertyBlock block, ShadowCastingMode shadows)
+		private MeshRenderer AddFallPart(string name, Mesh mesh, Material material, int sortingOrder, ShadowCastingMode shadows)
 		{
 			var go = new GameObject(name) { hideFlags = HideFlags.DontSave };
 			go.transform.SetParent(transform, false);
@@ -677,10 +677,6 @@ namespace FishMMO.Water
 			renderer.shadowCastingMode = shadows;
 			renderer.receiveShadows = true;
 			renderer.sortingOrder = sortingOrder;
-			if (block != null && !block.isEmpty)
-			{
-				renderer.SetPropertyBlock(block);
-			}
 			built.Add(go);
 			return renderer;
 		}
@@ -697,20 +693,25 @@ namespace FishMMO.Water
 			}
 			fallTextures.Clear();
 			fallLookParts.Clear();
+			curtainParts = 0;
+			sprayParts = 0;
 			riverFalls.Clear();
 			riverFallCounts.Clear();
 			Waterfalls.Withdraw(this);
 		}
 
-		/// <summary>Sets a river's foam trail data on its property block (empty for a river with no fall above its water).</summary>
-		private bool ApplyRiverFalls(int riverId, MaterialPropertyBlock block)
+		/// <summary>Sets a river's foam trail data on its copy of the material; false (count left 0) for a river with no fall above its water.</summary>
+		private bool ApplyRiverFalls(int riverId, Material own)
 		{
 			if (!riverFalls.TryGetValue(riverId, out Vector4[] list) || !riverFallCounts.TryGetValue(riverId, out int count) || count == 0)
 			{
 				return false;
 			}
-			block.SetVectorArray(RiverFallsId, list);
-			block.SetFloat(RiverFallCountId, count);
+			for (int i = 0; i < RiverFallIds.Length; i++)
+			{
+				own.SetVector(RiverFallIds[i], i < list.Length ? list[i] : Vector4.zero);
+			}
+			own.SetFloat(RiverFallCountId, count);
 			return true;
 		}
 

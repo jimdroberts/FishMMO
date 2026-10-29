@@ -269,28 +269,40 @@ namespace FishMMO.Shared.WorldDesign
 		/// (and dirtied the scene). A layer keeps the biome uses it had; a new one has none, so it
 		/// resolves by name only.
 		/// </summary>
+		/// <remarks>
+		/// Where every tile carries the same list (a scene cut before 2026-10-27, or a hand-made one), that list is the scene's,
+		/// as it always was: a removal or a reorder is followed. Where the tiles carry their own (the cut gave each only the
+		/// layers it paints, <see cref="TerrainTileLayerSync.Compact"/>, or a tool added a layer to some tiles), the provenance is
+		/// the scene's numbering and is never shrunk or reordered from one tile: it keeps every layer it names, in order, and
+		/// gains at its end any layer a tile carries that it does not; then every tile's map is brought in line with it.
+		/// </remarks>
 		public static bool SyncProvenance(TerrainArrayBinder binder)
 		{
 			if (binder == null)
 			{
 				return false;
 			}
-			TerrainLayer[] actual = null;
+			var tileLayers = new List<TerrainLayer[]>();
 			foreach (Terrain terrain in binder.EffectiveTerrains())
 			{
 				if (terrain != null && terrain.terrainData != null)
 				{
-					actual = terrain.terrainData.terrainLayers;
-					break;
+					tileLayers.Add(terrain.terrainData.terrainLayers);
 				}
 			}
-			if (actual == null)
+			if (tileLayers.Count == 0)
 			{
 				return false;
 			}
 			TerrainArrayProvenance provenance = binder.Provenance;
+			bool perTile = TerrainTileLayerSync.IsCompacted(binder) || !AllSame(tileLayers);
+			TerrainLayer[] actual = perTile ? Union(provenance != null ? provenance.Layers : null, tileLayers) : tileLayers[0];
 			if (provenance != null && Matches(provenance.Layers, actual))
 			{
+				if (perTile)
+				{
+					TerrainTileLayerSync.Refresh(binder);
+				}
 				return false;
 			}
 			if (provenance == null)
@@ -316,7 +328,48 @@ namespace FishMMO.Shared.WorldDesign
 			provenance.Layers = layers;
 			EditorUtility.SetDirty(provenance);
 			EditorSceneManager.MarkSceneDirty(binder.gameObject.scene);
+			if (perTile)
+			{
+				TerrainTileLayerSync.Refresh(binder);
+			}
 			return true;
+		}
+
+		/// <summary>True when every tile carries the same layers in the same order.</summary>
+		private static bool AllSame(List<TerrainLayer[]> tileLayers)
+		{
+			TerrainLayer[] first = tileLayers[0];
+			for (int t = 1; t < tileLayers.Count; t++)
+			{
+				TerrainLayer[] other = tileLayers[t];
+				if (other == null || first == null || other.Length != first.Length)
+				{
+					if (other != first)
+					{
+						return false;
+					}
+					continue;
+				}
+				for (int i = 0; i < first.Length; i++)
+				{
+					if (first[i] != other[i])
+					{
+						return false;
+					}
+				}
+			}
+			return true;
+		}
+
+		/// <summary>The scene's layers when its tiles carry their own (<see cref="TerrainTileLayerMap.Union{T}"/>).</summary>
+		public static TerrainLayer[] Union(List<TerrainArrayLayerSource> recorded, IEnumerable<TerrainLayer[]> tileLayers)
+		{
+			var tiles = new List<IList<TerrainLayer>>();
+			foreach (TerrainLayer[] own in tileLayers)
+			{
+				tiles.Add(own);
+			}
+			return TerrainTileLayerMap.Union<TerrainLayer>(recorded != null ? TerrainTileLayerSync.LayersOf(recorded) : null, tiles).ToArray();
 		}
 
 		private static bool Matches(List<TerrainArrayLayerSource> recorded, TerrainLayer[] actual)

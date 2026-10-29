@@ -151,16 +151,41 @@ namespace FishMMO.UnitTests
 		/// too so nothing depends on which branch FishNet picks) use the rider's flat interpolation,
 		/// never adaptive.
 		/// </summary>
+		/// <remarks>
+		/// No scene ships a platform since the start scenes were removed (2026-10-25); the scan still
+		/// runs over every scene so the next one is held to it, and it is proven on
+		/// <see cref="PlatformFixture"/>, the last shipped <c>MovingPlatform</c>, with each broken
+		/// setting caught.
+		/// </remarks>
 		[Test]
 		public void Platforms_SmoothWithTheRidersFlatInterpolation()
 		{
 			string platformGuid = ScriptGuid(PlatformScript);
 			string networkObjectGuid = ScriptGuid(NetworkObjectScript);
 			string smootherGuid = ScriptGuid(TickSmootherScript);
+
+			// The scan recognises a platform and passes a correct one ...
+			StringBuilder fixtureProblems = new StringBuilder();
+			int fixturePlatforms = CheckPlatforms("fixture", SceneDocumentsFromText(PlatformFixture(platformGuid, networkObjectGuid, smootherGuid, 0, 2)),
+				platformGuid, networkObjectGuid, smootherGuid, fixtureProblems);
+			LogAssert.AreEqual(1, fixturePlatforms, "the scan must recognise the shipped MovingPlatform's layout as a platform");
+			LogAssert.IsTrue(fixtureProblems.Length == 0, "and pass it as it shipped:" + fixtureProblems);
+			// ... and fails one that smooths adaptively, at another interpolation, or not at all.
+			foreach ((string name, string text) in new[]
+			{
+				("adaptive", PlatformFixture(platformGuid, networkObjectGuid, smootherGuid, 1, 2)),
+				("three ticks", PlatformFixture(platformGuid, networkObjectGuid, smootherGuid, 0, 3)),
+				("no smoother", PlatformFixture(platformGuid, networkObjectGuid, "00000000000000000000000000000000", 0, 2)),
+			})
+			{
+				StringBuilder broken = new StringBuilder();
+				CheckPlatforms(name, SceneDocumentsFromText(text), platformGuid, networkObjectGuid, smootherGuid, broken);
+				LogAssert.IsTrue(broken.Length > 0, $"a platform deck with {name} must be caught");
+			}
+
 			string[] scenes = UnityEditor.AssetDatabase.FindAssets("t:Scene", new[] { "Assets" });
 			StringBuilder problems = new StringBuilder();
 			int platforms = 0;
-
 			foreach (string guid in scenes)
 			{
 				string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
@@ -169,48 +194,70 @@ namespace FishMMO.UnitTests
 				{
 					continue;
 				}
-
-				Dictionary<string, string> docs = SceneDocuments(full);
-				foreach (KeyValuePair<string, string> entry in docs)
-				{
-					if (!entry.Value.Contains("guid: " + platformGuid))
-					{
-						continue;
-					}
-					platforms++;
-					string goId = FieldRef(entry.Value, "m_GameObject");
-					string nobId = ComponentOfGameObject(docs, goId, networkObjectGuid);
-					if (nobId == null)
-					{
-						problems.Append($"\n  {path}: KCCPlatform &{entry.Key} has no NetworkObject.");
-						continue;
-					}
-
-					int smoothers = 0;
-					foreach (KeyValuePair<string, string> candidate in docs)
-					{
-						if (!candidate.Value.Contains("guid: " + smootherGuid) ||
-							FieldRef(candidate.Value, "_addedNetworkObject") != nobId)
-						{
-							continue;
-						}
-						smoothers++;
-						CheckSettingsBlock(candidate.Value, "_spectatorMovementSettings", path, candidate.Key, problems);
-						CheckSettingsBlock(candidate.Value, "_controllerMovementSettings", path, candidate.Key, problems);
-					}
-					if (smoothers == 0)
-					{
-						problems.Append($"\n  {path}: platform NetworkObject &{nobId} has no NetworkTickSmoother; its deck would step at tick rate.");
-					}
-				}
+				platforms += CheckPlatforms(path, SceneDocuments(full), platformGuid, networkObjectGuid, smootherGuid, problems);
 			}
 
 			TestContext.WriteLine($"MEASURE scene platforms checked for smoothing parity: {platforms}");
-			LogAssert.IsTrue(platforms >= 1, "No KCCPlatform was found in any scene; the parity contract is unproven.");
 			LogAssert.IsTrue(problems.Length == 0,
 				$"Every platform deck must smooth with the rider's flat interpolation " +
 				$"({InterpolationTicks} ticks, adaptive off), or the visible deck trails its collider by a " +
 				"different distance than the rider does and the offset flips at every reversal. Problems:" + problems);
+		}
+
+		/// <summary>Checks every <c>KCCPlatform</c> in one scene's documents; returns how many it found.</summary>
+		private static int CheckPlatforms(string path, Dictionary<string, string> docs, string platformGuid, string networkObjectGuid, string smootherGuid, StringBuilder problems)
+		{
+			int platforms = 0;
+			foreach (KeyValuePair<string, string> entry in docs)
+			{
+				if (!entry.Value.Contains("guid: " + platformGuid))
+				{
+					continue;
+				}
+				platforms++;
+				string goId = FieldRef(entry.Value, "m_GameObject");
+				string nobId = ComponentOfGameObject(docs, goId, networkObjectGuid);
+				if (nobId == null)
+				{
+					problems.Append($"\n  {path}: KCCPlatform &{entry.Key} has no NetworkObject.");
+					continue;
+				}
+
+				int smoothers = 0;
+				foreach (KeyValuePair<string, string> candidate in docs)
+				{
+					if (!candidate.Value.Contains("guid: " + smootherGuid) ||
+						FieldRef(candidate.Value, "_addedNetworkObject") != nobId)
+					{
+						continue;
+					}
+					smoothers++;
+					CheckSettingsBlock(candidate.Value, "_spectatorMovementSettings", path, candidate.Key, problems);
+					CheckSettingsBlock(candidate.Value, "_controllerMovementSettings", path, candidate.Key, problems);
+				}
+				if (smoothers == 0)
+				{
+					problems.Append($"\n  {path}: platform NetworkObject &{nobId} has no NetworkTickSmoother; its deck would step at tick rate.");
+				}
+			}
+			return platforms;
+		}
+
+		/// <summary>
+		/// The last shipped <c>MovingPlatform</c> (StartScene A, removed 2026-10-25), trimmed to what the
+		/// scan reads: the deck GameObject, its <c>KCCPlatform</c> and <c>NetworkObject</c>, and the
+		/// child's <c>NetworkTickSmoother</c> bound to that NetworkObject.
+		/// </summary>
+		private static string PlatformFixture(string platformGuid, string networkObjectGuid, string smootherGuid, int adaptive, int interpolation)
+		{
+			string settings = $"    AdaptiveInterpolationValue: {adaptive}\n    InterpolationValue: {interpolation}\n    SmoothedProperties: 4294967295\n";
+			return
+				"--- !u!1 &100\nGameObject:\n  m_Component:\n  - component: {fileID: 101}\n  - component: {fileID: 102}\n  m_Name: MovingPlatform\n" +
+				$"--- !u!114 &101\nMonoBehaviour:\n  m_GameObject: {{fileID: 100}}\n  m_Script: {{fileID: 11500000, guid: {platformGuid}, type: 3}}\n  _addedNetworkObject: {{fileID: 102}}\n" +
+				$"--- !u!114 &102\nMonoBehaviour:\n  m_GameObject: {{fileID: 100}}\n  m_Script: {{fileID: 11500000, guid: {networkObjectGuid}, type: 3}}\n  _enableStateForwarding: 1\n" +
+				"--- !u!1 &200\nGameObject:\n  m_Component:\n  - component: {fileID: 201}\n  m_Name: Deck\n" +
+				$"--- !u!114 &201\nMonoBehaviour:\n  m_GameObject: {{fileID: 200}}\n  m_Script: {{fileID: 11500000, guid: {smootherGuid}, type: 3}}\n  _addedNetworkObject: {{fileID: 102}}\n" +
+				"  _controllerMovementSettings:\n" + settings + "  _favorPredictionNetworkTransform: 1\n  _spectatorMovementSettings:\n" + settings;
 		}
 
 		private static void CheckSettingsBlock(string doc, string block, string path, string id, StringBuilder problems)
@@ -277,10 +324,12 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>Every YAML document in a scene, keyed by its <c>&amp;fileID</c>.</summary>
-		private static Dictionary<string, string> SceneDocuments(string fullPath)
+		private static Dictionary<string, string> SceneDocuments(string fullPath) => SceneDocumentsFromText(File.ReadAllText(fullPath));
+
+		/// <summary>Every YAML document in a scene's text, keyed by its <c>&amp;fileID</c>.</summary>
+		private static Dictionary<string, string> SceneDocumentsFromText(string text)
 		{
 			Dictionary<string, string> docs = new Dictionary<string, string>();
-			string text = File.ReadAllText(fullPath);
 			int start = text.IndexOf("--- !u!", StringComparison.Ordinal);
 			while (start >= 0)
 			{

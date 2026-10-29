@@ -245,6 +245,16 @@ namespace FishMMO.Shared.WorldDesign
 					look.GlowStrength = 0f;
 					look.Moss = 0.7f;
 					break;
+				case CaveForm.SeaHall:
+					// A sea hall (2026-10-26, I2n-b): the sea's own sediment and grit (the interior's), soot and rust under the smoke, brine
+					// salt; wet everywhere, no glow crust (its light is its vents' and its Glow pieces').
+					look.Stain = new Color(0.16f, 0.12f, 0.1f);
+					look.Crust = new Color(0.86f, 0.9f, 0.92f);
+					look.StainStrength = 0.5f;
+					look.GlowStrength = 0f;
+					look.Moss = 0f;
+					look.WetGloss = 1f;
+					break;
 				case CaveForm.Mine:
 					// Trodden dirt and spoil gravel; ore-stained walls (rust and verdigris); little glow.
 					silt = Ground.Clay;
@@ -415,14 +425,30 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					material.SetTexture("_BaseMap", wallAlbedo);
 					material.SetTextureScale("_BaseMap", Vector2.one * (RockMeshes.TextureMetres / wallTile));
+					// A shell whose maps are look array slices (ProceduralArtLookArrays, 2026-10-28): the overridden slots let go of their
+					// slices, and cave rock reads an empty slot from the material's own 2D map (FishWeatherLitInput.hlsl).
+					EmptyLookSlice(material, 0);
 					if (wallNormal != null && material.HasProperty("_BumpMap"))
 					{
 						material.SetTexture("_BumpMap", wallNormal);
+						EmptyLookSlice(material, 1);
 					}
 				}
 			}
 			material.EnableKeyword(Keyword);
 			// Cave rock is never drawn by the GPU-instanced twin: the keyword's code is the plain shader's only.
+		}
+
+		/// <summary>Empties one component of an array-backed material's look slices (0 albedo, 1 normal); nothing on a 2D-mapped one.</summary>
+		private static void EmptyLookSlice(Material material, int component)
+		{
+			if (!material.HasVector(ProceduralArtLookArrays.SlicesProperty))
+			{
+				return;
+			}
+			Vector4 slices = material.GetVector(ProceduralArtLookArrays.SlicesProperty);
+			slices[component] = -1f;
+			material.SetVector(ProceduralArtLookArrays.SlicesProperty, slices);
 		}
 
 		private static void Set(Material material, string property, Texture texture)

@@ -188,8 +188,17 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>This hook's own time in the profiler (render-pipeline callbacks otherwise show only as
+		/// RenderPipeline.BeginCameraRendering's self time). In a class of its own so the marker, an engine object, is made
+		/// when the hook first runs, not when the type is first touched (tests outside Unity use these types' pure parts).</summary>
+		private static class HookProfiling
+		{
+			public static readonly Unity.Profiling.ProfilerMarker Marker = new Unity.Profiling.ProfilerMarker("RockfallField.BeginCamera");
+		}
+
 		private static void OnBeginCameraRendering(ScriptableRenderContext ctx, Camera camera)
 		{
+			using var hookMarkerScope = HookProfiling.Marker.Auto();
 			if (camera.cameraType != CameraType.Game && camera.cameraType != CameraType.SceneView)
 			{
 				return;
@@ -412,10 +421,13 @@ namespace FishMMO.Client
 			return used;
 		}
 
+		/// <summary><see cref="MultiplierAt"/> as a delegate, made once: a method group converts to a new delegate on every use.</summary>
+		private static Func<double, float> multiplierAt;
+
 		private static int GatherFalls(SceneBiomeMap map, double seconds, float gravity)
 		{
 			int count = 0;
-			Func<double, float> multiplier = MultiplierAt;
+			Func<double, float> multiplier = multiplierAt ??= MultiplierAt;
 			foreach (Near near in nearChutes)
 			{
 				if (!gpuChute.TryGetValue(near.Index, out int slot))
@@ -452,7 +464,7 @@ namespace FishMMO.Client
 			}
 			if (!lastFalls.TryGetValue(index, out double last))
 			{
-				last = Rockfall.LastFall(seconds, chute.Seed, chute.Boost, MultiplierAt);
+				last = Rockfall.LastFall(seconds, chute.Seed, chute.Boost, multiplierAt ??= MultiplierAt);
 				lastFalls[index] = last;
 			}
 			return Rockfall.ScarFreshness(seconds - last);
@@ -460,7 +472,10 @@ namespace FishMMO.Client
 
 		// ── The weather the falls follow ─────────────────────────
 
-		private static float MultiplierAt(double seconds) => Rockfall.Multiplier(seconds, KnotAt);
+		/// <summary><see cref="KnotAt"/> as a delegate, made once (asked for every fall of every near chute, every frame).</summary>
+		private static Func<long, Rockfall.Knot> knotAt;
+
+		private static float MultiplierAt(double seconds) => Rockfall.Multiplier(seconds, knotAt ??= KnotAt);
 
 		/// <summary>The weather at the scene's origin, at its chutes' mean height, on one hour of the world clock (kept once read).</summary>
 		private static Rockfall.Knot KnotAt(long knot)
@@ -615,11 +630,16 @@ namespace FishMMO.Client
 			return chute >= 0;
 		}
 
+		/// <summary>Reused for <see cref="Terrain.GetActiveTerrains"/>: <c>Terrain.activeTerrains</c> builds a new array on
+		/// every read, and this runs every frame.</summary>
+		private static readonly System.Collections.Generic.List<Terrain> activeTerrainsScratch = new System.Collections.Generic.List<Terrain>();
+
 		/// <summary>The ground at a point of the scene's terrains (NaN off them).</summary>
 		private static float GroundAt(float x, float z)
 		{
 			Scene scene = context.Scene;
-			foreach (Terrain t in Terrain.activeTerrains)
+			Terrain.GetActiveTerrains(activeTerrainsScratch);
+			foreach (Terrain t in activeTerrainsScratch)
 			{
 				if (t == null || t.terrainData == null || (scene.IsValid() && t.gameObject.scene != scene))
 				{

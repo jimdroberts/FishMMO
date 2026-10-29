@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Diagnostics;
 using UnityEngine;
 using UnityEngine.Rendering;
 using Debug = UnityEngine.Debug;
@@ -8,124 +7,130 @@ using Unity.Profiling;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// Draws the terrain detail layers (grass, flowers, ferns, shrubs, reeds, pebbles…) on the client in
-	/// place of Unity's per-patch detail drawing: the sibling of <see cref="TerrainTreeInstancing"/>, on the
-	/// same infrastructure (chunk culling, the GPU-driven path with the RenderMeshInstanced fallback, the
-	/// vegetation fade hand-off).
+	/// Which GPU renderer draws a terrain detail prototype (2026-10-27, when the CPU chunk renderer was removed): the blade
+	/// grass (<see cref="GrassBladeSystem"/>) takes the prefixes of <see cref="GrassBladeSettings.PrototypePrefixes"/>, the
+	/// GPU detail scatter (<see cref="DetailScatterSystem"/>) every other mesh prototype; nothing else draws a detail. A
+	/// prototype neither can take (a texture detail, an empty slot) is <see cref="Route.None"/>: an error at the cut and in
+	/// play, never a quiet fallback. Pure but for reading the prototype, so the routing is tested off the engine.
+	/// </summary>
+	public static class TerrainDetailRouting
+	{
+		public enum Route
+		{
+			/// <summary>No GPU renderer can draw it: not drawn (an error).</summary>
+			None,
+			/// <summary>Procedural blade grass.</summary>
+			Blades,
+			/// <summary>The GPU detail scatter (meshes through their procedural-instancing twins).</summary>
+			Scatter,
+		}
+
+		/// <summary>The route of a prefab by its name: <paramref name="mesh"/> false (a texture detail) is never drawn.</summary>
+		public static Route RouteOf(string prefabName, bool mesh, GrassBladeSettings grass)
+		{
+			if (!mesh || string.IsNullOrEmpty(prefabName))
+			{
+				return Route.None;
+			}
+			return grass != null && grass.IsBladePrototype(prefabName) ? Route.Blades : Route.Scatter;
+		}
+
+		/// <summary>The route of a terrain's detail prototype.</summary>
+		public static Route RouteOf(DetailPrototype prototype, GrassBladeSettings grass)
+		{
+			GameObject prefab = prototype?.prototype;
+			return RouteOf(prefab != null ? prefab.name : null, prototype != null && prototype.usePrototypeMesh && prefab != null, grass);
+		}
+
+		/// <summary>Why a prototype has no route (for the error).</summary>
+		public static string WhyNot(DetailPrototype prototype)
+		{
+			if (prototype == null)
+			{
+				return "an empty prototype";
+			}
+			return !prototype.usePrototypeMesh ? "a texture (billboard grass) detail: give it a mesh prefab" : "no prefab";
+		}
+
+		/// <summary>A prototype's name for a message: its prefab's, its texture's, or its index.</summary>
+		public static string NameOf(DetailPrototype prototype, int index)
+		{
+			if (prototype?.prototype != null)
+			{
+				return prototype.prototype.name;
+			}
+			return prototype?.prototypeTexture != null ? prototype.prototypeTexture.name : $"prototype {index}";
+		}
+
+		/// <summary>
+		/// Which of a terrain's detail prototypes are painted anywhere on it (<see cref="TerrainData.GetSupportedLayers(int,int,int,int)"/>:
+		/// a layer any detail patch holds). Cuts before 2026-10-27 listed the whole scene's prototypes on every tile; only these are read.
+		/// </summary>
+		public static bool[] Painted(TerrainData data)
+		{
+			var painted = new bool[data != null ? data.detailPrototypes.Length : 0];
+			if (painted.Length == 0 || data.detailWidth <= 0 || data.detailHeight <= 0)
+			{
+				return painted;
+			}
+			foreach (int p in data.GetSupportedLayers(0, 0, data.detailWidth, data.detailHeight))
+			{
+				if (p >= 0 && p < painted.Length)
+				{
+					painted[p] = true;
+				}
+			}
+			return painted;
+		}
+	}
+
+	/// <summary>
+	/// Takes every terrain's details off Unity's own detail drawing in play mode, for the GPU renderers that draw them: the
+	/// blade grass (<see cref="GrassBladeSystem"/>) and the GPU detail scatter (<see cref="DetailScatterSystem"/>), which
+	/// generate their instances every frame on the GPU (<see cref="TerrainDetailRouting"/> says which takes what).
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Play mode only, client only.</b> Each terrain driven here has its
-	/// <see cref="Terrain.detailObjectDistance"/> set to 0 (its own remembered, put back when it is let
-	/// go, at play-mode exit and at quit; followed if something else sets it). Edit mode is Unity's, so
-	/// painting previews as before. Details have no colliders; the server strips them anyway.
+	/// <b>GPU only (2026-10-27).</b> This was the CPU chunk renderer: it built ~32 m chunks of instances on the main thread
+	/// (TerrainDetailField, TerrainDetailModel) and drew every prototype the GPU renderers did not take. It is gone; what is
+	/// left is the driver both GPU renderers wait on: a terrain they may draw is one taken here.
 	/// </para>
 	/// <para>
-	/// <b>The instances</b> come from the baked detail maps, placed deterministically per world cell
-	/// (<see cref="TerrainDetailMath"/>, <see cref="TerrainDetailField"/>), in ~32 m chunks built lazily
-	/// within the detail distance, nearest first, within <see cref="BuildBudgetMilliseconds"/> a frame
-	/// (more for the first frames after a terrain is taken: <see cref="WarmupBudgetMilliseconds"/>), cached,
-	/// and released after <see cref="KeepFrames"/> frames out of reach.
+	/// <b>Play mode only, client only.</b> Each terrain taken has its <see cref="Terrain.detailObjectDistance"/> set to 0 (its
+	/// own remembered, put back when it is let go, at play-mode exit and at quit; followed if something else sets it). Edit
+	/// mode is Unity's, so painting previews as before. Details have no colliders; the server strips them anyway.
 	/// </para>
 	/// <para>
-	/// <b>Not driven, left to Unity:</b> a terrain whose quality settings override the detail distance, a
-	/// terrain with no details or a zero distance, and a terrain with a prototype this cannot draw (a
-	/// texture/billboard grass prototype, a mesh drawn through Unity's grass shader, a material without
-	/// GPU instancing — logged once).
-	/// </para>
-	/// <para>
-	/// <b>Shadows</b> follow each prototype prefab's MeshRenderer (the generator casts them for ferns, shrubs
-	/// and cacti). <b>Tint</b> needs nothing per instance: FishVegetation hashes the healthy/dry blend from
-	/// the instance's origin, between the material's colours.
+	/// <b>Not taken, left to Unity:</b> a terrain whose quality settings override the detail distance, and a terrain with no
+	/// details or a zero distance. A prototype no GPU renderer can draw is NOT handed back to Unity: it is not drawn, with an
+	/// error (the scatter's and the grass's selection say which and why).
 	/// </para>
 	/// </remarks>
 	public static class TerrainDetailInstancing
 	{
-		/// <summary>Chunk building time per frame, milliseconds.</summary>
-		public const float BuildBudgetMilliseconds = 2f;
-
-		/// <summary>
-		/// Missing chunks this close to a camera are built this frame, whatever the budget (up to
-		/// <see cref="MaxNearBuildsPerFrame"/>): a bare patch at your feet is the gap people see, a late chunk
-		/// at the edge of the detail distance is not. A dense chunk takes ~1–1.6 ms, so the budget alone
-		/// builds about one a frame, and after a teleport or a fast run the chunks around you lagged by seconds.
-		/// </summary>
-		public const float NearBuildMetres = 40f;
-
-		public const int MaxNearBuildsPerFrame = 12;
-
-		/// <summary>Chunk building time per frame for <see cref="WarmupFrames"/> frames after a terrain is taken.</summary>
-		public const float WarmupBudgetMilliseconds = 8f;
-
-		public const int WarmupFrames = 30;
-
-		/// <summary>Frames a built chunk is kept after the last camera wanted it.</summary>
-		public const int KeepFrames = 120;
-
 		private sealed class Driven
 		{
 			public Terrain Terrain;
 			public TerrainData Data;
-			/// <summary>The distance drawn to: the player's grass distance (<see cref="EffectiveDistance"/>).</summary>
+			/// <summary>The distance mesh details are drawn to: the player's grass distance, capped (<see cref="EffectiveDistance"/>).</summary>
 			public float Distance;
 			/// <summary>The terrain's own detail distance, as the scene authored it: put back on release.</summary>
 			public float Authored;
-			public int Layer;
-			public int AdoptedFrame;
-			public TerrainDetailField Field;
-		}
-
-		private readonly struct ModelKey : System.IEquatable<ModelKey>
-		{
-			public readonly GameObject Prefab;
-			public readonly int Layer;
-			public ModelKey(GameObject prefab, int layer) { Prefab = prefab; Layer = layer; }
-			public bool Equals(ModelKey other) => ReferenceEquals(Prefab, other.Prefab) && Layer == other.Layer;
-			public override bool Equals(object obj) => obj is ModelKey k && Equals(k);
-			public override int GetHashCode() => (Prefab != null ? Prefab.GetHashCode() : 0) * 397 ^ Layer;
-		}
-
-		private sealed class NearestFirst : IComparer<TerrainDetailField.Missing>
-		{
-			public int Compare(TerrainDetailField.Missing a, TerrainDetailField.Missing b) => a.Distance.CompareTo(b.Distance);
 		}
 
 		private static readonly Dictionary<Terrain, Driven> driven = new Dictionary<Terrain, Driven>();
 		private static readonly List<Driven> drivenList = new List<Driven>();
-		private static readonly Dictionary<ModelKey, TerrainDetailModel> models = new Dictionary<ModelKey, TerrainDetailModel>();
-		private static readonly Dictionary<TerrainDetailModel, int> users = new Dictionary<TerrainDetailModel, int>();
-		private static readonly List<TerrainDetailModel> modelList = new List<TerrainDetailModel>();
-		private static readonly Dictionary<Terrain, TerrainData> refused = new Dictionary<Terrain, TerrainData>();
 		/// <summary>
-		/// Per terrain, the prototypes other renderers draw, per owner (the procedural grass, the GPU detail
-		/// scatter: <see cref="SetSkipped"/>). One mask per owner, so neither owner's release gives back the
-		/// other's prototypes.
+		/// Per terrain, the prototypes each GPU renderer draws, per owner (<see cref="SetSkipped"/>): the claims the diagnostics
+		/// read. One mask per owner, so neither owner's release gives back the other's.
 		/// </summary>
 		private static readonly Dictionary<Terrain, Dictionary<object, bool[]>> skipped = new Dictionary<Terrain, Dictionary<object, bool[]>>();
-		private static readonly HashSet<string> warned = new HashSet<string>();
 		private static readonly List<Terrain> active = new List<Terrain>();
-		private static readonly List<TerrainDetailField.Missing> missing = new List<TerrainDetailField.Missing>();
-		private static readonly NearestFirst nearestFirst = new NearestFirst();
-		private static readonly Stopwatch stopwatch = new Stopwatch();
 		private static bool hooked;
 		private static bool enabled = true;
 		private static int syncedFrame = -1;
-		private static LightProbeUsage probeUsage = LightProbeUsage.Off;
-		private static TerrainGpuRenderer gpu;
-		/// <summary>The GPU path's renderer, for diagnostics (its per-view and per-family counts).</summary>
-		public static TerrainGpuRenderer Gpu => gpu;
-		private static bool gpuTried;
-		private static bool lastPreferGpu = true;
-		/// <summary>The GPU work list kept across frames (<see cref="TerrainGpuRenderer.WorkReuse"/>), and whether the last GPU gather can be kept.</summary>
-		private static readonly TerrainGpuRenderer.WorkReuse workReuse = new TerrainGpuRenderer.WorkReuse();
-		private static bool gatheredOnGpu;
-		private static readonly Plane[] widenedView = new Plane[6], widenedShadow = new Plane[6];
-		/// <summary>Counts every change to the driven terrains: a GPU work list gathered before one is stale.</summary>
-		private static int drivenVersion;
-		/// <summary>The chunk gather per camera (or the kept list's re-marking), named in the profiler.</summary>
-		private static readonly ProfilerMarker GatherMarker = new ProfilerMarker("TerrainDetailInstancing.Gather");
 
-		/// <summary>On by default; off gives every terrain back to Unity's detail drawing (A/B).</summary>
+		/// <summary>On by default; off gives every terrain back to Unity's own detail drawing (an A/B only: the GPU renderers then draw nothing).</summary>
 		public static bool Enabled
 		{
 			get => enabled;
@@ -144,71 +149,12 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>True while the GPU-driven path draws the details.</summary>
-		public static bool GpuActive => gpu != null;
-
 		public static int DrivenTerrainCount => drivenList.Count;
 
-		/// <summary>Prototype models in use, and how many of them the GPU path draws.</summary>
-		public static int ModelCount => modelList.Count;
-		public static int GpuModelCount
-		{
-			get
-			{
-				int n = 0;
-				foreach (TerrainDetailModel m in modelList)
-				{
-					n += m.GpuId >= 0 ? 1 : 0;
-				}
-				return n;
-			}
-		}
-
-		/// <summary>Reads the next frame of <paramref name="camera"/> back from the GPU path and reports it (false on the fallback).</summary>
-		public static bool RequestGpuDiagnostics(Camera camera, System.Action<string> report)
-		{
-			if (camera == null)
-			{
-				return false;
-			}
-			// Every chunk within reach, and what this camera did with it, logged with the next frame.
-			traceCamera = camera;
-			traceReport = report;
-			if (gpu == null)
-			{
-				return true;
-			}
-			gpu.RequestDiagnostics(camera, report);
-			return true;
-		}
-
-		private static Camera traceCamera;
-		private static System.Action<string> traceReport;
-		public static int LastDrawCount { get; private set; }
-		public static int LastInstanceCount { get; private set; }
-
-		/// <summary>Chunks built last frame, and the milliseconds it took.</summary>
-		public static int LastBuiltChunks { get; private set; }
-		public static float LastBuildMilliseconds { get; private set; }
-
-		/// <summary>Chunks resident over every driven terrain.</summary>
-		public static int ResidentChunks
-		{
-			get
-			{
-				int n = 0;
-				foreach (Driven d in drivenList)
-				{
-					n += d.Field.BuiltCount;
-				}
-				return n;
-			}
-		}
-
 		/// <summary>
-		/// The detail distance a terrain stands for: the one this renderer took over when it drives the terrain
-		/// (whose own <see cref="Terrain.detailObjectDistance"/> it has set to 0), the terrain's own otherwise —
-		/// always in edit mode. The vegetation fade reads this in place of the terrain's field.
+		/// The detail distance a terrain stands for: the mesh details' distance when it is taken (whose own
+		/// <see cref="Terrain.detailObjectDistance"/> is then 0), the terrain's own otherwise — always in edit mode. The
+		/// vegetation fade and the GPU detail scatter read this in place of the terrain's field.
 		/// </summary>
 		public static float DetailDistanceOf(Terrain terrain)
 		{
@@ -222,13 +168,10 @@ namespace FishMMO.Client
 		public static bool IsDriving(Terrain terrain) => terrain != null && driven.ContainsKey(terrain);
 
 		/// <summary>
-		/// Leaves the prototypes set in <paramref name="mask"/> (by index into the terrain's detail prototypes)
-		/// undrawn on <paramref name="terrain"/>, because <paramref name="owner"/> draws them — the procedural
-		/// blade grass (<see cref="GrassBladeSystem"/>) or the GPU detail scatter (<see cref="DetailScatterSystem"/>)
-		/// while it runs there; null gives that owner's prototypes back. A prototype is skipped while any owner
-		/// claims it. A driven terrain is let go and taken straight back with the new set, so it is never handed
-		/// to Unity's own detail drawing in between. Kept across this renderer's own releases (its A/B, a path
-		/// switch) until the owner clears it.
+		/// Records that <paramref name="owner"/> (the blade grass or the GPU detail scatter) draws the prototypes set in
+		/// <paramref name="mask"/> (by index into the terrain's detail prototypes) on <paramref name="terrain"/>; null gives that
+		/// owner's claim back. A prototype is claimed while any owner claims it (<see cref="IsSkipped"/>; the name is the chunk
+		/// renderer's, which skipped them).
 		/// </summary>
 		public static void SetSkipped(object owner, Terrain terrain, bool[] mask)
 		{
@@ -237,41 +180,27 @@ namespace FishMMO.Client
 				return;
 			}
 			skipped.TryGetValue(terrain, out Dictionary<object, bool[]> owners);
-			bool had = owners != null && owners.TryGetValue(owner, out bool[] old) && old != null;
 			if (mask == null)
 			{
-				if (!had)
+				if (owners == null || !owners.Remove(owner))
 				{
 					return;
 				}
-				owners.Remove(owner);
 				if (owners.Count == 0)
 				{
 					skipped.Remove(terrain);
 				}
+				return;
 			}
-			else
+			if (owners == null)
 			{
-				if (had && SameMask(owners[owner], mask))
-				{
-					return;
-				}
-				if (owners == null)
-				{
-					owners = new Dictionary<object, bool[]>();
-					skipped[terrain] = owners;
-				}
-				owners[owner] = (bool[])mask.Clone();
+				owners = new Dictionary<object, bool[]>();
+				skipped[terrain] = owners;
 			}
-			refused.Remove(terrain);
-			if (driven.TryGetValue(terrain, out Driven d))
-			{
-				Release(d);
-				TryDrive(terrain, Time.frameCount);
-			}
+			owners[owner] = (bool[])mask.Clone();
 		}
 
-		/// <summary>Whether a prototype of a terrain is left to another renderer (any owner's).</summary>
+		/// <summary>Whether a prototype of a terrain is claimed by a GPU renderer (any owner's).</summary>
 		public static bool IsSkipped(Terrain terrain, int prototype)
 		{
 			if (terrain == null || prototype < 0 || !skipped.TryGetValue(terrain, out Dictionary<object, bool[]> owners))
@@ -288,36 +217,16 @@ namespace FishMMO.Client
 			return false;
 		}
 
-		private static bool SameMask(bool[] a, bool[] b)
-		{
-			if (a.Length != b.Length)
-			{
-				return false;
-			}
-			for (int i = 0; i < a.Length; i++)
-			{
-				if (a[i] != b[i])
-				{
-					return false;
-				}
-			}
-			return true;
-		}
-
 		/// <summary>The player's grass distance (<see cref="ClientGrassSettings"/>), cached: re-read on its change.</summary>
 		private static float grassDistance = ClientGrassSettings.DefaultDistance;
 
-		/// <summary>
-		/// The distance a driven terrain's details are drawn to: the player's grass distance on the GPU path,
-		/// which culls and thins on the GPU and so can go far past what the scene authored for Unity's own
-		/// drawing; on the CPU fallback never past the scene's own distance, every drawn instance being CPU work there.
-		/// </summary>
-		private static float EffectiveDistance(float authored) => gpu != null ? Mathf.Min(grassDistance, MaxChunkDistance) : Mathf.Min(grassDistance, authored);
+		/// <summary>The distance a taken terrain's mesh details are drawn to: the player's grass distance, never past <see cref="MaxChunkDistance"/>.</summary>
+		private static float EffectiveDistance() => Mathf.Min(grassDistance, MaxChunkDistance);
 
 		/// <summary>
-		/// The farthest the CPU-built chunks reach on the GPU path, metres, whatever the grass distance: every chunk in reach
-		/// is built on the CPU and kept resident, and both grow with the square of the distance. The blade grass and the GPU
-		/// detail scatter, which keep nothing per instance, carry on to the full grass distance.
+		/// The farthest the mesh details (the GPU detail scatter's kinds but bushes, whose reach is their own) are drawn, metres,
+		/// whatever the grass distance: the reach the chunk renderer had, kept when it went so the scatter's GPU work (instances
+		/// generated per frame grow with the square of it) is what it was. The blade grass carries on to the full grass distance.
 		/// </summary>
 		public const float MaxChunkDistance = 250f;
 
@@ -337,7 +246,6 @@ namespace FishMMO.Client
 		{
 			ReleaseAll();
 			Unhook();
-			warned.Clear();
 			skipped.Clear();
 			enabled = true;
 		}
@@ -353,19 +261,13 @@ namespace FishMMO.Client
 			syncedFrame = -1;
 #if UNITY_EDITOR
 			enabled = UnityEditor.SessionState.GetBool(TerrainTreeInstancing.EnabledKey, true);
-			lastPreferGpu = UnityEditor.SessionState.GetBool(TerrainTreeInstancing.PreferGpuKey, true);
 #endif
 			RenderPipelineManager.beginContextRendering += OnBeginContextRendering;
-			RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
 			Application.quitting += Shutdown;
 			grassDistance = ClientGrassSettings.Distance;
 			ClientGrassSettings.OnChanged += OnGrassSettingsChanged;
 #if UNITY_EDITOR
 			UnityEditor.EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
-			// Scripts recompiled while playing reload in place: everything native must be let go first, or the
-			// renderer's and the fields' NativeArrays leak (the "Leak Detected : Persistent" at each reload).
-			UnityEditor.AssemblyReloadEvents.beforeAssemblyReload -= Shutdown;
-			UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += Shutdown;
 #endif
 		}
 
@@ -377,12 +279,10 @@ namespace FishMMO.Client
 			}
 			hooked = false;
 			RenderPipelineManager.beginContextRendering -= OnBeginContextRendering;
-			RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
 			Application.quitting -= Shutdown;
 			ClientGrassSettings.OnChanged -= OnGrassSettingsChanged;
 #if UNITY_EDITOR
 			UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
-			UnityEditor.AssemblyReloadEvents.beforeAssemblyReload -= Shutdown;
 #endif
 		}
 
@@ -419,51 +319,18 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			TerrainInstancingProbe.BeginFrame();
-			double start = TerrainInstancingProbe.Now;
-			SyncFrame();
-			TerrainInstancingProbe.SyncMs += TerrainInstancingProbe.Now - start;
-		}
-
-		private static void SyncFrame()
-		{
-			if (!Application.isPlaying || syncedFrame == Time.frameCount)
-			{
-				return;
-			}
-			int frame = Time.frameCount;
-			syncedFrame = frame;
+			syncedFrame = Time.frameCount;
 			if (!enabled)
 			{
 				return;
 			}
-			if (TerrainTreeInstancing.PreferGpu != lastPreferGpu)
-			{
-				// The path was switched (A/B): let everything go and take it back on the new path.
-				lastPreferGpu = TerrainTreeInstancing.PreferGpu;
-				ReleaseAll();
-			}
-			if (TerrainTreeInstancing.PreferGpu && gpu == null && !gpuTried)
-			{
-				gpuTried = true;
-				gpu = TerrainGpuRenderer.TryCreate();
-				if (gpu != null)
-				{
-					gpu.FloraMode = 1f;   // every detail takes the look of the patch it stands in (FishFlora.hlsl)
-				}
-			}
-
-			LightProbes probes = LightmapSettings.lightProbes;
-			probeUsage = probes != null && probes.count > 0 ? LightProbeUsage.BlendProbes : LightProbeUsage.Off;
-
 			Terrain.GetActiveTerrains(active);
 			bool qualityOverride = (QualitySettings.terrainQualityOverrides & TerrainQualityOverrides.DetailDistance) != 0;
 			for (int i = drivenList.Count - 1; i >= 0; i--)
 			{
 				Driven d = drivenList[i];
 				Terrain t = d.Terrain;
-				bool keep = t != null && active.Contains(t) && t.terrainData == d.Data && d.Data != null
-					&& LayerFor(t) == d.Layer && !(qualityOverride && !t.ignoreQualitySettings);
+				bool keep = t != null && active.Contains(t) && t.terrainData == d.Data && d.Data != null && !(qualityOverride && !t.ignoreQualitySettings);
 				if (!keep)
 				{
 					Release(d);
@@ -474,20 +341,10 @@ namespace FishMMO.Client
 					d.Authored = t.detailObjectDistance;
 					t.detailObjectDistance = 0f;
 				}
-				// The player's grass distance can change at any time: the next gathers reach further (or less),
-				// building the chunks that come into reach; the vegetation fade follows through DetailDistanceOf.
-				d.Distance = EffectiveDistance(d.Authored);
-				float density = DensityScaleOf(t);
-				if (density != d.Field.DensityScale)
-				{
-					// A settings change: the counts change, so every chunk is rebuilt (the same plants, more or fewer).
-					d.Field.ReleaseAll();
-					d.Field.SetDensityScale(density);
-				}
-				d.Field.ReleaseStale(frame - KeepFrames);
+				// The player's grass distance can change at any time: the GPU renderers follow through DetailDistanceOf.
+				d.Distance = EffectiveDistance();
 			}
-
-			bool adopted = false;
+			int taken = 0;
 			for (int i = 0; i < active.Count; i++)
 			{
 				Terrain t = active[i];
@@ -495,157 +352,30 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
-				if (refused.TryGetValue(t, out TerrainData refusedData) && refusedData == t.terrainData)
-				{
-					continue;
-				}
-				adopted |= TryDrive(t, frame);
+				taken += TryDrive(t) ? 1 : 0;
 			}
-			if (adopted)
+			if (taken > 0)
 			{
-				Debug.Log($"[Terrain details] Drawing the detail layers of {drivenList.Count} terrain(s) ({modelList.Count} prototype models, {(gpu != null ? "GPU-driven" : "RenderMeshInstanced fallback")}); Unity's detail drawing is off on those terrains for this play session.");
+				Debug.Log($"[Terrain details] Taking the detail layers of {drivenList.Count} terrain(s) for the GPU renderers (blade grass and detail scatter); Unity's detail drawing is off on those terrains for this play session.");
 			}
-
-			BuildMissing(frame);
 		}
 
-		/// <summary>Builds the chunks cameras wanted last frame, nearest first, within the frame's budget.</summary>
-		private static void BuildMissing(int frame)
-		{
-			LastBuiltChunks = 0;
-			LastBuildMilliseconds = 0f;
-			if (missing.Count == 0)
-			{
-				return;
-			}
-			bool warmup = false;
-			foreach (Driven d in drivenList)
-			{
-				warmup |= frame - d.AdoptedFrame < WarmupFrames;
-			}
-			float budget = warmup ? WarmupBudgetMilliseconds : BuildBudgetMilliseconds;
-			missing.Sort(nearestFirst);
-			stopwatch.Restart();
-			for (int i = 0; i < missing.Count; i++)
-			{
-				TerrainDetailField.Missing m = missing[i];
-				if (m.Field == null || !driven.ContainsKey(m.Field.Terrain))
-				{
-					continue;
-				}
-				bool near = m.Distance < NearBuildMetres && LastBuiltChunks < MaxNearBuildsPerFrame;
-				if (!near && stopwatch.Elapsed.TotalMilliseconds >= budget)
-				{
-					break;
-				}
-				m.Field.Build(m.Index);
-				LastBuiltChunks++;
-			}
-			LastBuildMilliseconds = (float)stopwatch.Elapsed.TotalMilliseconds;
-			stopwatch.Stop();
-			TerrainInstancingProbe.Builds += LastBuiltChunks;
-			TerrainInstancingProbe.BuildMs += LastBuildMilliseconds;
-			missing.Clear();
-		}
-
-		private static int LayerFor(Terrain terrain) => terrain.gameObject.layer;
-
-		private static bool TryDrive(Terrain terrain, int frame)
+		private static bool TryDrive(Terrain terrain)
 		{
 			TerrainData data = terrain.terrainData;
-			if (data == null || terrain.detailObjectDistance <= 0f)
+			if (data == null || terrain.detailObjectDistance <= 0f || data.detailPrototypes.Length == 0)
 			{
 				return false;
-			}
-			DetailPrototype[] prototypes = data.detailPrototypes;
-			if (prototypes.Length == 0)
-			{
-				return false;
-			}
-			int layer = LayerFor(terrain);
-			var resolved = new TerrainDetailModel[prototypes.Length];
-			var created = new Dictionary<ModelKey, TerrainDetailModel>();
-			for (int i = 0; i < prototypes.Length; i++)
-			{
-				if (IsSkipped(terrain, i))
-				{
-					// Drawn by another renderer (the procedural grass): no model, no instances.
-					resolved[i] = null;
-					continue;
-				}
-				GameObject prefab = prototypes[i]?.prototype;
-				var key = new ModelKey(prefab, layer);
-				if (prefab != null && (models.TryGetValue(key, out TerrainDetailModel model) || created.TryGetValue(key, out model)))
-				{
-					resolved[i] = model;
-					continue;
-				}
-				model = TerrainDetailModel.Build(prototypes[i], layer, out string reason);
-				if (model == null)
-				{
-					foreach (TerrainDetailModel made in created.Values)
-					{
-						made.Dispose();
-					}
-					refused[terrain] = data;
-					if (warned.Add(reason))
-					{
-						Debug.LogWarning($"[Terrain details] Leaving '{terrain.name}' (and any terrain with the same prototype) to Unity's own detail drawing: {reason}.");
-					}
-					return false;
-				}
-				created.Add(key, model);
-				resolved[i] = model;
-			}
-			foreach (KeyValuePair<ModelKey, TerrainDetailModel> pair in created)
-			{
-				pair.Value.RegisterGpu(gpu);
-				models.Add(pair.Key, pair.Value);
-				modelList.Add(pair.Value);
-				users[pair.Value] = 0;
-			}
-			foreach (TerrainDetailModel model in resolved)
-			{
-				if (model != null)
-				{
-					users[model]++;
-				}
-			}
-
-			TerrainDetailField field = TerrainDetailField.Create(terrain, resolved, DensityScaleOf(terrain));
-			field.SetPrototypes(prototypes);
-			field.Gpu = gpu;
-			if (gpu != null)
-			{
-				// Each prototype's slot capacity follows its measured resident count (doubling, see
-				// TerrainDetailField.Upload) up to the most the detail disc can contain. Sizing the slots and the
-				// instance buffer to that bound up front reserved ~160 MB on Cov Viaduct, and uploading it was
-				// the stall; real ground is shared between prototypes, so the bound is never approached.
-				float distance = EffectiveDistance(terrain.detailObjectDistance);
-				for (int p = 0; p < resolved.Length; p++)
-				{
-					TerrainDetailModel model = resolved[p];
-					long bound = model != null && model.GpuId >= 0 ? field.CapacityBound(p, distance) : -1;
-					if (bound > 0)
-					{
-						model.CapacityCeiling = (int)Mathf.Max(model.CapacityCeiling, Mathf.Min(bound, 8_000_000));
-					}
-				}
 			}
 			var d = new Driven
 			{
 				Terrain = terrain,
 				Data = data,
-				Distance = EffectiveDistance(terrain.detailObjectDistance),
+				Distance = EffectiveDistance(),
 				Authored = terrain.detailObjectDistance,
-				Layer = layer,
-				AdoptedFrame = frame,
-				Field = field,
 			};
 			driven.Add(terrain, d);
 			drivenList.Add(d);
-			drivenVersion++;
-			refused.Remove(terrain);
 			terrain.detailObjectDistance = 0f;
 			return true;
 		}
@@ -658,35 +388,6 @@ namespace FishMMO.Client
 			}
 			driven.Remove(d.Terrain);
 			drivenList.Remove(d);
-			drivenVersion++;
-			d.Field.Dispose();
-			foreach (TerrainDetailModel model in d.Field.Models)
-			{
-				if (model != null && users.ContainsKey(model))
-				{
-					users[model]--;
-				}
-			}
-			for (int i = modelList.Count - 1; i >= 0; i--)
-			{
-				TerrainDetailModel model = modelList[i];
-				if (users[model] > 0)
-				{
-					continue;
-				}
-				gpu?.SetCapacity(model.GpuId, 0);
-				model.Dispose();
-				users.Remove(model);
-				modelList.RemoveAt(i);
-				models.Remove(new ModelKey(model.Prefab, model.Layer));
-			}
-			for (int i = missing.Count - 1; i >= 0; i--)
-			{
-				if (missing[i].Field == d.Field)
-				{
-					missing.RemoveAt(i);
-				}
-			}
 		}
 
 		private static void ReleaseAll()
@@ -696,134 +397,6 @@ namespace FishMMO.Client
 				Release(drivenList[i]);
 			}
 			driven.Clear();
-			foreach (TerrainDetailModel model in modelList)
-			{
-				model.Dispose();
-			}
-			modelList.Clear();
-			models.Clear();
-			users.Clear();
-			refused.Clear();
-			missing.Clear();
-			TerrainDetailField.DisposePool();
-			gpu?.Dispose();
-			gpu = null;
-			gpuTried = false;
-			workReuse.Forget();
-			gatheredOnGpu = false;
-		}
-
-		// ── Drawing, per camera ───────────────────────────────────────
-
-		private static void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera)
-		{
-			if (!Application.isPlaying || !TerrainInstancingShared.DrawsDetails(camera))
-			{
-				return;
-			}
-			Sync();
-			// No drivers, or a camera that renders no layers at all (the sky's reflection probe): gathering for it was work
-			// thrown away (as CliffRockInstancing skips it).
-			if (drivenList.Count == 0 || camera.cullingMask == 0)
-			{
-				return;
-			}
-			TerrainTreeField.View view = TerrainInstancingShared.ViewOf(camera);
-			for (int i = 0; i < modelList.Count; i++)
-			{
-				modelList[i].Clear();
-			}
-			// Reflection-probe faces take the CPU path: tiny, per face, and never worth a GPU cull of their own.
-			TerrainGpuRenderer cameraGpu = camera.cameraType == CameraType.Reflection ? null : gpu;
-			int frame = Time.frameCount;
-			System.Text.StringBuilder trace = null;
-			System.Action<string> traceTo = null;
-			if (traceCamera == camera && traceReport != null)
-			{
-				trace = new System.Text.StringBuilder("[Terrain detail chunks] within reach of the camera:");
-				traceTo = traceReport;
-				traceCamera = null;
-				traceReport = null;
-			}
-			float reach = 0f;
-			int signature = 17;
-			for (int i = 0; i < drivenList.Count; i++)
-			{
-				Driven d = drivenList[i];
-				bool drawn = d.Terrain != null && d.Terrain.drawTreesAndFoliage;
-				if (drawn)
-				{
-					reach = Mathf.Max(reach, cameraGpu != null ? d.Distance : Mathf.Min(d.Distance, d.Authored));
-				}
-				signature = unchecked(signature * 31 + (drawn ? d.Distance.GetHashCode() : 1));
-			}
-			signature = unchecked((signature * 31 + drivenVersion) * 31 + TerrainDetailField.ChunkVersion);
-			// The GPU work list kept from an earlier frame while the camera stays within what it was widened for, as the
-			// props' is (CliffRockInstancing): only when the gather it came from put everything on the GPU and nothing was
-			// missing. Its chunks are kept wanted as a gather would keep them.
-			bool reuse = cameraGpu != null && trace == null && gatheredOnGpu && workReuse.Still(camera, in view, signature);
-			using (GatherMarker.Auto())
-			{
-				if (reuse)
-				{
-					for (int i = 0; i < drivenList.Count; i++)
-					{
-						drivenList[i].Field.Rewant(frame);
-					}
-				}
-				else
-				{
-					cameraGpu?.BeginCamera();
-					TerrainGpuRenderer.ReuseBounds widen = default;
-					if (cameraGpu != null && trace == null)
-					{
-						float shadowReach = view.Shadows ? view.ShadowDistance : 0f;
-						widen = new TerrainGpuRenderer.ReuseBounds(TerrainGpuRenderer.WorkReuse.Metres,
-							TerrainGpuRenderer.WorkReuse.Widen(view.Planes, TerrainGpuRenderer.WorkReuse.ViewMargin(reach), widenedView),
-							TerrainGpuRenderer.WorkReuse.Widen(view.Planes, TerrainGpuRenderer.WorkReuse.ShadowMargin(reach, shadowReach, 2f * TerrainDetailMath.DefaultChunkMetres), widenedShadow));
-					}
-					bool cpu = false, absent = false;
-					int instances = 0;
-					for (int i = 0; i < drivenList.Count; i++)
-					{
-						Driven d = drivenList[i];
-						if (d.Terrain == null || !d.Terrain.drawTreesAndFoliage)
-						{
-							continue;
-						}
-						// A camera on the CPU path (a reflection probe's) draws every instance it gathers, unthinned:
-						// never past the scene's own distance, however far the GPU path reaches.
-						float distance = cameraGpu != null ? d.Distance : Mathf.Min(d.Distance, d.Authored);
-						instances += d.Field.Gather(in view, distance, frame, missing, cameraGpu != null, trace, in widen, out bool cpuAppended, out bool anyMissing);
-						cpu |= cpuAppended;
-						absent |= anyMissing;
-					}
-					LastInstanceCount = instances;
-					if (cameraGpu != null)
-					{
-						gatheredOnGpu = trace == null && !cpu && !absent;
-						if (gatheredOnGpu)
-						{
-							workReuse.Remember(camera, in view, signature);
-						}
-						else
-						{
-							workReuse.Forget();
-						}
-					}
-				}
-			}
-			int draws = 0;
-			for (int i = 0; i < modelList.Count; i++)
-			{
-				draws += modelList[i].Draw(camera, probeUsage);
-			}
-			if (cameraGpu != null)
-			{
-				draws += cameraGpu.Execute(camera, in view, reach + TerrainDetailMath.DefaultChunkMetres, context);
-			}
-			LastDrawCount = draws;
-			traceTo?.Invoke(trace.ToString());
 		}
 	}
 }

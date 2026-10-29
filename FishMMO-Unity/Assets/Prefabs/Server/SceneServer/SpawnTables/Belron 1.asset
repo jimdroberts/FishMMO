@@ -16,7 +16,7 @@ MonoBehaviour:
   ScenePath: Assets/Scenes/WorldScene/Belron/Belron 1.unity
   Spawners:
   - Name: 'Volor Black Glass Emberglass Cluster Spawner 1 [401713be]'
-    Position: {x: 28.7239, y: 419.28094, z: 245.28426}
+    Position: {x: 28.397125, y: 419.19675, z: 245.34497}
     Rotation: {x: -0, y: 0.62061757, z: -0, w: -0.7841134}
     OrConditions: []
     TrueConditions: []
@@ -42,7 +42,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Volor Black Glass Emberglass Cluster Spawner 2 [401713be]'
-    Position: {x: -159.59544, y: 426.11365, z: 342.08414}
+    Position: {x: -159.31126, y: 425.7918, z: 341.8308}
     Rotation: {x: -0, y: 0.99646944, z: -0, w: -0.083956644}
     OrConditions: []
     TrueConditions: []
@@ -68,7 +68,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Volor Black Glass Emberglass Cluster Spawner 3 [401713be]'
-    Position: {x: 93.256226, y: 432.2006, z: 337.95605}
+    Position: {x: 92.72009, y: 431.58328, z: 337.71613}
     Rotation: {x: -0, y: 0.44953898, z: -0, w: -0.8932608}
     OrConditions: []
     TrueConditions: []
@@ -94,7 +94,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Volor Black Glass Emberglass Cluster Spawner 4 [401713be]'
-    Position: {x: 4.0334473, y: 403.8745, z: 344.6236}
+    Position: {x: 3.7867737, y: 403.71805, z: 344.36203}
     Rotation: {x: -0, y: 0.18711759, z: -0, w: -0.98233753}
     OrConditions: []
     TrueConditions: []
@@ -120,7 +120,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Volor Black Glass Emberglass Cluster Spawner 5 [401713be]'
-    Position: {x: -193.27165, y: 438.29266, z: 408.86658}
+    Position: {x: -192.8782, y: 438.32693, z: 408.39655}
     Rotation: {x: -0, y: 0.81298923, z: -0, w: 0.5822787}
     OrConditions: []
     TrueConditions: []
@@ -145,9 +145,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'The Ash-covered Moloaltahroat MonsterPack Spawner [72d8474e]'
-    Position: {x: 217.08488, y: 504.93976, z: 262.68845}
-    Rotation: {x: -0, y: 0.84804803, z: -0, w: -0.5299193}
+  - Name: 'The Golden Crypt MonsterPack Spawner [2859d984]'
+    Position: {x: -58.836952, y: 383.13824, z: 313.11154}
+    Rotation: {x: -0, y: 0.76040596, z: -0, w: -0.64944804}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -162,7 +162,7 @@ MonoBehaviour:
     RespawnCheckIntervalMaximum: 6
     RandomSpawnPosition: 1
     SphereRadius: 0.5
-    BoundingBoxSize: {x: 16.13, y: 8, z: 16.13}
+    BoundingBoxSize: {x: 15.96, y: 8, z: 15.96}
     Spawnables: []
     Pack:
       Enabled: 0

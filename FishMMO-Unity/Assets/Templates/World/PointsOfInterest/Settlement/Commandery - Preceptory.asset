@@ -1,0 +1,168 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5d5ab720ab15d69083f3901ff8f111f, type: 3}
+  m_Name: Commandery - Preceptory
+  m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
+  Kind: 272
+  Variant: Preceptory
+  Weight: 1
+  DefaultBiomeWeight: 0.6
+  BiomeWeights:
+  - Biome: Forest
+    Weight: 1.3
+  - Biome: Woodland
+    Weight: 1.3
+  - Biome: Taiga
+    Weight: 1.3
+  - Biome: Jungle
+    Weight: 1.3
+  - Biome: Bamboo Forest
+    Weight: 1.3
+  - Biome: Forest Ruins
+    Weight: 1.3
+  - Biome: Jungle Ruins
+    Weight: 1.3
+  - Biome: Jungle Temple
+    Weight: 1.3
+  - Biome: Tundra
+    Weight: 1.2
+  - Biome: Taiga
+    Weight: 1.2
+  - Biome: Snow
+    Weight: 1.2
+  - Biome: Glacier
+    Weight: 1.2
+  - Biome: Ice Sheet
+    Weight: 1.2
+  - Biome: Ice Shelf
+    Weight: 1.2
+  - Biome: Permanent Ice
+    Weight: 1.2
+  RaceCategories:
+  - Humanoid
+  - Beastfolk
+  - Fey
+  - Giant
+  Races: []
+  Small: 1
+  Medium: 1
+  Large: 1
+  NeedsLiquidWater: 0
+  PadFlatness: 0.7
+  Style: timber
+  Layout: 5
+  Pieces:
+  - Tag: palisade!gate
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 3
+    Style: 
+  - Tag: gate
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 4
+    Style: 
+  - Tag: =Church#1
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 1
+    Style: 
+  - Tag: =Longhouse
+    MinCount: 1
+    MaxCount: 2
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  - Tag: stable
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  - Tag: banner
+    MinCount: 3
+    MaxCount: 5
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  - Tag: storage
+    MinCount: 2
+    MaxCount: 4
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  Features:
+  - rid: 4061506423694032911
+  - rid: 4061506423694032912
+  - rid: 4061506423694032913
+  - rid: 4061506423694032914
+  - rid: 4061506423694032915
+  references:
+    version: 2
+    RefIds:
+    - rid: 4061506423694032911
+      type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        MaxSinkMetres: 0.4
+        MaxTiltDegrees: 8
+        Gap: 1
+        CountsFollowSize: 1
+        Finish: 0
+        FinishChance: 1
+        KeepOutOfWater: 1
+        Clearings:
+        - {x: -3, y: 2, z: 12.150001}
+    - rid: 4061506423694032912
+      type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        RadiusShare: 1.25
+        Height: 60
+        ShowName: 1
+    - rid: 4061506423694032913
+      type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data: 
+    - rid: 4061506423694032914
+      type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Offset: {x: -3, y: 12.150001}
+    - rid: 4061506423694032915
+      type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Role: 3
+        Count: 0
+        Offset: {x: 0, y: 0}
+        AreaShare: 0.5
+        ApplySiteRace: 1

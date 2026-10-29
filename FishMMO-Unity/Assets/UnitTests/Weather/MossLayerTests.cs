@@ -265,7 +265,9 @@ namespace FishMMO.UnitTests
 			}
 			foreach (DeadwoodSpecies species in ProceduralArtCatalogue.Deadwood)
 			{
-				if (species.Form != DeadwoodForm.PetrifiedLog && species.Form != DeadwoodForm.Driftwood)
+				// Wood with its bark gone (driftwood, a petrified log, and the authored rounds' silver snags, stakes and bones on
+				// Bark.Dead, salted and bleached) is bare; every barked log or stump greens over.
+				if (species.Form != DeadwoodForm.PetrifiedLog && species.Form != DeadwoodForm.Driftwood && species.BarkFamily != Bark.Dead)
 				{
 					Assert.Greater(MossAmounts.ForDeadwoodBark(species.BarkFamily), 0.5f, $"{species.Name}: a rotting log or stump greens over");
 				}

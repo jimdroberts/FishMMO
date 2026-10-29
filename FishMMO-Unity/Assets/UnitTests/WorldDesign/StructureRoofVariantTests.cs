@@ -304,9 +304,13 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void SpecPalettes_NeedNoRoofVariantToday()
 		{
-			Assert.That(ProceduralArtCatalogue.SpecRoofs(), Is.Empty, "every biome builds as the kit until its round");
-			Assert.That(ProceduralArtCatalogue.StructurePrefabNames().Any(n => n.Contains("_Flat") || n.Contains("_Pitch")), Is.False);
-			Assert.That(ProceduralArtCatalogue.StructurePayloadPaths().Any(n => n.Contains("_Flat_") || n.Contains("_Pitch")), Is.False);
+			// The authored rounds build their own roofs (legacy equality only): every other biome builds as the kit until its round,
+			// and the generator makes a roof variant exactly when some biome's palette wants one.
+			Assert.That(StructureRoofs.Needed(BiomeArtSpec.Entries.Where(e => !BiomeAuthoredRounds.Contains(e.Biome)).Select(e => e.StructurePalette())), Is.Empty,
+				"every unauthored biome builds as the kit until its round");
+			bool wanted = ProceduralArtCatalogue.SpecRoofs().Count > 0;
+			Assert.That(ProceduralArtCatalogue.StructurePrefabNames().Any(n => n.Contains("_Flat") || n.Contains("_Pitch")), Is.EqualTo(wanted));
+			Assert.That(ProceduralArtCatalogue.StructurePayloadPaths().Any(n => n.Contains("_Flat_") || n.Contains("_Pitch")), Is.EqualTo(wanted));
 		}
 
 		[Test]

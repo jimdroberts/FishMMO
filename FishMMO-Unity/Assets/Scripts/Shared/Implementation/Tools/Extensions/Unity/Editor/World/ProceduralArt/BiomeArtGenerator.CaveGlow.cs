@@ -59,18 +59,15 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			int size = ProceduralArtCatalogue.CaveGlowTextureSize;
 			c.Report.TextureBytes += 3 * CompressedBytes(size, size);
-			if (ShouldWrite(c, ProceduralArtCatalogue.CaveGlowAlbedoPath))
+			// Written as the cave glow look array (ProceduralArtLookArrays, 2026-10-28): all three when it is due.
+			if (!LookArraysDue(c, ProceduralArtLookArrays.CaveGlowSetName))
 			{
-				WritePng(c, ProceduralArtCatalogue.CaveGlowAlbedoPath, CaveGlowMeshes.GlowRamp(size, c.Seed, false), size, size);
+				return;
 			}
-			if (ShouldWrite(c, ProceduralArtCatalogue.CaveGlowEmissionPath))
-			{
-				WritePng(c, ProceduralArtCatalogue.CaveGlowEmissionPath, CaveGlowMeshes.GlowRamp(size, c.Seed, true), size, size);
-			}
-			if (ShouldWrite(c, ProceduralArtCatalogue.CaveOreAlbedoPath))
-			{
-				WritePng(c, ProceduralArtCatalogue.CaveOreAlbedoPath, CaveGlowMeshes.OreGrains(size, c.Seed), size, size);
-			}
+			PutSurfaceMap(c, ProceduralArtCatalogue.CaveGlowAlbedoPath, CaveGlowMeshes.GlowRamp(size, c.Seed, false), size);
+			PutSurfaceMap(c, ProceduralArtCatalogue.CaveGlowEmissionPath, CaveGlowMeshes.GlowRamp(size, c.Seed, true), size);
+			PutSurfaceMap(c, ProceduralArtCatalogue.CaveOreAlbedoPath, CaveGlowMeshes.OreGrains(size, c.Seed), size);
+			WriteLookArrays(c, ProceduralArtLookArrays.CaveGlowSetName);
 		}
 
 		/// <summary>Whether a material set is textured as ore (grains in metres) rather than through the glow ramps.</summary>
@@ -85,14 +82,17 @@ namespace FishMMO.Shared.WorldDesign
 				c.Report.Problems.Add("FishMMO/Weather Lit and URP Lit were not found; the cave glow materials were not written.");
 				return;
 			}
-			Texture2D albedo = LoadTexture(ProceduralArtCatalogue.CaveGlowAlbedoPath);
-			Texture2D emission = LoadTexture(ProceduralArtCatalogue.CaveGlowEmissionPath);
-			Texture2D ore = LoadTexture(ProceduralArtCatalogue.CaveOreAlbedoPath);
+			// The maps by their payload paths: slices of the cave glow look array (SetSurfaceMap).
+			string albedo = ProceduralArtCatalogue.CaveGlowAlbedoPath;
+			string emission = ProceduralArtCatalogue.CaveGlowEmissionPath;
+			string ore = ProceduralArtCatalogue.CaveOreAlbedoPath;
 			var seen = new HashSet<string>();
 			foreach (CaveGlowFamily family in ProceduralArtCatalogue.CaveGlowFamilies)
 			{
 				bool isOre = IsOreSet(family.MaterialSet);
-				bool isCrystal = family.MaterialSet == CrystalSet;
+				// The glow-worms too (2026-10-26, I2n-c, decision 86 (h)): marked as a steady crystal, so the crystals' glow mode of the
+				// biome over them (an EYELID, …) reaches them; unmoded, a −2 shines exactly as made.
+				bool isCrystal = family.MaterialSet == CrystalSet || family.MaterialSet == GlowWormSet;
 				foreach (CaveGlowHue h in family.Hues)
 				{
 					CaveGlowHue hue = h;
@@ -101,7 +101,7 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						WriteMaterial(c, name, shader, m =>
 						{
-							CaveGlowLit(m, isOre ? ore : albedo, isOre ? ore : emission, in hue, isOre);
+							CaveGlowLit(c, m, isOre ? ore : albedo, isOre ? ore : emission, in hue, isOre);
 							// A glowing crystal (2026-10-25, I6i): marked so its biome's glow mode reaches it (FishGlowModes.hlsl).
 							if (isCrystal && hue.Emission.maxColorComponent > 0f)
 							{
@@ -112,7 +112,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			CaveGlowHue gangue = ProceduralArtCatalogue.Gangue;
-			WriteMaterial(c, ProceduralArtCatalogue.CaveGangueMaterial, shader, m => CaveGlowLit(m, ore, ore, in gangue, true));
+			WriteMaterial(c, ProceduralArtCatalogue.CaveGangueMaterial, shader, m => CaveGlowLit(c, m, ore, ore, in gangue, true));
 			// The cave crystals' own (2026-10-16, I6c): through the glow ramps as the glow art's crystals, glowing only where the kind does.
 			foreach (CaveMineral mineral in ProceduralArtCatalogue.CaveMinerals)
 			{
@@ -122,7 +122,7 @@ namespace FishMMO.Shared.WorldDesign
 					bool flickers = mineral.Flickers;
 					WriteMaterial(c, ProceduralArtCatalogue.CaveMineralMaterial(mineral.Kind), shader, m =>
 					{
-						CaveGlowLit(m, albedo, emission, in hue, false);
+						CaveGlowLit(c, m, albedo, emission, in hue, false);
 						// A crystal whose glow flickers (stormglass, 2026-10-18, decision 33): _FishStructure −1, not weathered as a
 						// building, its emission crackling with the light beside it (FishWeatherLitForwardPass.hlsl FishGlowFlicker).
 						if (flickers)
@@ -144,7 +144,7 @@ namespace FishMMO.Shared.WorldDesign
 				bool flickers = ProceduralArtCatalogue.CaveMineralOf(look.Kind).Flickers;
 				WriteMaterial(c, ProceduralArtCatalogue.CaveMineralLookMaterial(in look), shader, m =>
 				{
-					CaveGlowLit(m, albedo, emission, in hue, false);
+					CaveGlowLit(c, m, albedo, emission, in hue, false);
 					if (flickers)
 					{
 						m.SetFloat("_FishStructure", FlickeringCrystalFlag);
@@ -232,9 +232,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// alpha) tinted by the hue, and, when the hue glows, the glow ramp (or the grains) as its emission map in the hue's
 		/// HDR colour. No weathering, wetting, snow or moss.
 		/// </summary>
-		private static void CaveGlowLit(Material m, Texture2D albedo, Texture2D glow, in CaveGlowHue hue, bool ore)
+		private static void CaveGlowLit(Context c, Material m, string albedo, string glow, in CaveGlowHue hue, bool ore)
 		{
-			m.SetTexture("_BaseMap", albedo);
+			SetSurfaceMap(c, m, "_BaseMap", albedo);
 			m.SetTextureScale("_BaseMap", ore ? new Vector2(2.5f, 2.5f) : Vector2.one);
 			m.SetColor("_BaseColor", hue.Albedo);
 			m.SetFloat("_Smoothness", hue.Smoothness);
@@ -246,7 +246,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			if (hue.Emission.maxColorComponent > 0f)
 			{
-				m.SetTexture("_EmissionMap", glow);
+				SetSurfaceMap(c, m, "_EmissionMap", glow);
 				m.SetColor("_EmissionColor", hue.Emission);
 				m.EnableKeyword("_EMISSION");
 				m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
@@ -272,6 +272,9 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>The cave glow art's crystal material set (Cave_Crystal_*): the glowing crystals the glow modes reach.</summary>
 		private const string CrystalSet = "Crystal";
+
+		/// <summary>The glow-worms' material set (Cave_GlowWorm_*): marked as steady crystals, so the crystals' glow modes reach them.</summary>
+		public const string GlowWormSet = "GlowWorm";
 
 		/// <summary>A kind's meshes (when they are its own) and its prefabs, a variant in every hue.</summary>
 		private static void WriteCaveGlow(Context c, CaveGlowFamily family)

@@ -45,6 +45,11 @@ namespace FishMMO.UnitTests.WorldDesign
 				{
 					expected = expected.Select(l => l.StartsWith("Cave=") ? "Cave=Swamp Cave" : l.StartsWith("Grotto=") ? "Grotto=Swamp Cave" : l).ToList();
 				}
+				if (SeaHallTests.Hosts.Any(h => h.Biome == entry.Biome))
+				{
+					// The sea halls' hosts (2026-10-26, I2n-b, decision 83), the link last in the forms' order.
+					expected.Add("SeaHall=Subsurface Ocean Vent");
+				}
 				Assert.That(entry.CaveInteriors().Select(l => l.ToString()), Is.EqualTo(expected), entry.Biome);
 			}
 			Assert.That(BiomeArtSpec.For("Swamp Cave").CaveInteriorRocks(), Is.EqualTo(BiomeCaveInteriors.SolubleRocks), "a swamp's granite cave stays its own");
@@ -141,7 +146,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(palette, Does.Contain("FungusWeight = 1f,"));
 			string glow = Code(WorldFolder + "/PointsOfInterest/Features/PointOfInterestCaveDressing.Glow.cs");
 			Assert.That(glow, Does.Contain("return fungus == 1f ? share : BiomeCaveInteriors.CrystalShare(share, fungus);"));
-			Assert.That(glow, Does.Contain("chance *= Colours().WormChance;"));
+			// 2026-10-26 (I2n-c): the worms' mount weighs the roof colonies too, ×1 on the roof (every biome's): as it was.
+			Assert.That(glow, Does.Contain("chance *= Colours().WormChance * BiomeCaveWaters.RoofShare(Colours().WormMount);"));
+			Assert.That(BiomeCaveWaters.RoofShare(BiomeCaveWormMount.Roof), Is.EqualTo(1f));
 		}
 
 		// ── Crystals, lights, habitat, variants ───────────────────────

@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System;
+using FishMMO.Shared.Biomes;
 using UnityEngine;
 
 namespace FishMMO.Shared.WorldDesign
@@ -146,11 +147,80 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>True for the roles of the water's own biomes (a lake's, a river's, an estuary's): a bridge's end is never one of these while land answers. Salt flats and ice sheets are ground.</summary>
-		public static bool IsWaterBiome(FishMMO.Shared.Biomes.BiomeWaterRole role)
+		public static bool IsWaterBiome(BiomeWaterRole role)
 		{
-			return role == FishMMO.Shared.Biomes.BiomeWaterRole.Lake || role == FishMMO.Shared.Biomes.BiomeWaterRole.MethaneLake
-				|| role == FishMMO.Shared.Biomes.BiomeWaterRole.River || role == FishMMO.Shared.Biomes.BiomeWaterRole.Estuary;
+			return role == BiomeWaterRole.Lake || role == BiomeWaterRole.MethaneLake || role == BiomeWaterRole.River || role == BiomeWaterRole.Estuary;
 		}
+
+		// ── Crossing styles (2026-10-26, phase I2l-b) ───────────────
+
+		/// <summary>
+		/// The water widths a crossing style bridges (metres, min, max): the liana bridge a jungle river a vine cable reaches over, the
+		/// corbelled laterite bridge as many narrow openings as a royal road needs, the covered wind-and-rain gallery a broad karst river
+		/// on its piers, the cantilever a gap its log cribs close, the Goblins' Bridge a stream its slabs lie over, a snow bridge only a
+		/// narrow channel. Zero for the kit's bridge (it takes every span).
+		/// </summary>
+		public static Vector2 StyleSpan(BiomeCrossingStyle style)
+		{
+			switch (style)
+			{
+				case BiomeCrossingStyle.Liana: return new Vector2(6f, 40f);
+				case BiomeCrossingStyle.CorbelledLaterite: return new Vector2(4f, 60f);
+				case BiomeCrossingStyle.WindAndRain: return new Vector2(8f, 96f);
+				case BiomeCrossingStyle.Cantilever: return new Vector2(6f, 30f);
+				case BiomeCrossingStyle.GoblinsBridge: return new Vector2(2f, 20f);
+				case BiomeCrossingStyle.SnowBridge: return new Vector2(1f, 10f);
+				default: return Vector2.zero;
+			}
+		}
+
+		/// <summary>
+		/// True when a river crossing of <paramref name="span"/> metres is built in the style: a set style, a span within
+		/// <see cref="StyleSpan"/>, and not a gorge (crossed by one stone arch or rope bridge lip to lip, PropsFeature.LayGorgeBridge).
+		/// Anything else takes the kit's bridge, as before.
+		/// </summary>
+		public static bool StyleFits(BiomeCrossingStyle style, float span, bool gorge)
+		{
+			if (style == BiomeCrossingStyle.Default || gorge || !(span > 0f))
+			{
+				return false;
+			}
+			Vector2 range = StyleSpan(style);
+			return span >= range.x && span <= range.y;
+		}
+
+		/// <summary>The Bridge template variant a style is built from (PointOfInterestTemplateSpecs.Works); null for the kit's (the seeded pick).</summary>
+		public static string StyleVariant(BiomeCrossingStyle style)
+		{
+			switch (style)
+			{
+				case BiomeCrossingStyle.Liana: return "Liana";
+				case BiomeCrossingStyle.CorbelledLaterite: return "Corbelled Laterite";
+				case BiomeCrossingStyle.WindAndRain: return "Wind and Rain";
+				case BiomeCrossingStyle.Cantilever: return "Cantilever";
+				case BiomeCrossingStyle.GoblinsBridge: return "Goblins Bridge";
+				case BiomeCrossingStyle.SnowBridge: return "Snow Bridge";
+				default: return null;
+			}
+		}
+
+		/// <summary>The structure piece a style's span is laid from (StructurePieces.Crossings); null for the kit's.</summary>
+		public static string StylePiece(BiomeCrossingStyle style)
+		{
+			switch (style)
+			{
+				case BiomeCrossingStyle.Liana: return "LianaBridge";
+				case BiomeCrossingStyle.CorbelledLaterite: return "LateriteSpan";
+				case BiomeCrossingStyle.WindAndRain: return "CoveredSpan";
+				case BiomeCrossingStyle.Cantilever: return "CantileverBridge";
+				case BiomeCrossingStyle.GoblinsBridge: return "GoblinSlab";
+				case BiomeCrossingStyle.SnowBridge: return "SnowBridge";
+				default: return null;
+			}
+		}
+
+		/// <summary>The water a Bridge site of <paramref name="radius"/> was sited over, metres (the inverse of PathBridgeSite.RecordRadius, at least 2 m).</summary>
+		public static float SpanOfRecord(float radius) => Mathf.Max(2f, 2f * (radius - 6f));
 
 		private static int Commonest(int[] votes)
 		{

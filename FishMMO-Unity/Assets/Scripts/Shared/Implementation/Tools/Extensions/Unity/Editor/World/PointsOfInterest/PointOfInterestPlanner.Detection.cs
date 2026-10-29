@@ -61,35 +61,11 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return;
 				}
-				var sites = new List<Site>();
-				switch (rule.Detector)
+				if (rule.Detector == PointOfInterestDetector.None)
 				{
-					case PointOfInterestDetector.Falls: Falls(sites); break;
-					case PointOfInterestDetector.Rapids: Rapids(sites); break;
-					case PointOfInterestDetector.Rivers: Rivers(sites); break;
-					case PointOfInterestDetector.Lakes: Lakes(rule, sites); break;
-					case PointOfInterestDetector.Springs: Springs(rule, sites, false); break;
-					case PointOfInterestDetector.HotSprings: Springs(rule, sites, true); break;
-					case PointOfInterestDetector.RiverMouths: Mouths(sites); break;
-					case PointOfInterestDetector.Deltas: Deltas(sites); break;
-					case PointOfInterestDetector.Peaks: Peaks(sites); break;
-					case PointOfInterestDetector.Passes: Passes(sites); break;
-					case PointOfInterestDetector.Gorges: Gorges(sites); break;
-					case PointOfInterestDetector.Mesas: Plateaus(rule, sites, true); break;
-					case PointOfInterestDetector.Buttes: Plateaus(rule, sites, false); break;
-					case PointOfInterestDetector.Islands: Islands(rule, sites); break;
-					case PointOfInterestDetector.Bays: Coast(sites, true); break;
-					case PointOfInterestDetector.Headlands: Coast(sites, false); break;
-					case PointOfInterestDetector.Sinkholes: Sinkholes(rule, sites); break;
-					case PointOfInterestDetector.BiomeCluster:
-					case PointOfInterestDetector.BiomeClusterHighest:
-					case PointOfInterestDetector.BiomeClusterLowest:
-						Clusters(rule, sites);
-						break;
-					default:
-						return;
+					return;
 				}
-				Accept(rule, sites);
+				Accept(rule, Found(rule.Detector, rule));
 			}
 
 			private IReadOnlyList<RiverPath> RiverList => Input.Water?.Rivers ?? Array.Empty<RiverPath>();

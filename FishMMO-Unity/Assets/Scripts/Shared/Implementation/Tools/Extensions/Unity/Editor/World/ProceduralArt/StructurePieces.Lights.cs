@@ -67,7 +67,8 @@ namespace FishMMO.Shared.WorldDesign
 				// The wizard's tower's door runes and finial, the scrying focus, the observatory's rune star (2026-10-19).
 				case "WizardTower": case "ArcaneFocus": case "Observatory": return SceneGlowHue.Rune;
 				case "Glowjar": return SceneGlowHue.Faerie;
-				default: return null;
+				// The suite's cold lights (2026-10-26, StructurePieces.WayLights.cs).
+				default: return SuiteGlowHueOf(pieceId);
 			}
 		}
 

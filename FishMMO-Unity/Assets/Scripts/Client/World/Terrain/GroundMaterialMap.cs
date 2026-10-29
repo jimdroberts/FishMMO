@@ -280,7 +280,7 @@ namespace FishMMO.Client
 			TerrainDetailBake.IndexMap stored = SceneTerrainBake.IndexOf(data);
 			if (stored != null)
 			{
-				Texture2D uploaded = TerrainIndexMapBaker.Upload(stored, $"{t.name} index map (stored, contact)");
+				RenderTexture uploaded = TerrainIndexMapBaker.Upload(stored, $"{t.name} index map (stored, contact)");
 				bool copied = TerrainIndexMapBaker.CopyInto(uploaded, target, slice);
 				if (uploaded != null)
 				{
@@ -291,7 +291,8 @@ namespace FishMMO.Client
 					return true;
 				}
 			}
-			return data.alphamapTextureCount > 0 && TerrainIndexMapBaker.Bake(data, bake, target, slice);
+			// In scene layers, as the binder bakes it, for a tile carrying only the layers it paints (TerrainTileLayers).
+			return data.alphamapTextureCount > 0 && TerrainIndexMapBaker.Bake(data, bake, target, slice, TerrainTileLayers.Of(t));
 		}
 
 		/// <summary>Switches the terrain-material contact off (the shader falls back to the ground colour map) and frees the arrays.</summary>

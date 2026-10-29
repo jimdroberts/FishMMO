@@ -60,8 +60,8 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Creates the missing substances under <paramref name="root"/>, and with
-		/// <paramref name="fillBiomes"/> gives every biome in the ground table its ground if it has
-		/// none yet.
+		/// <paramref name="fillBiomes"/> gives every biome whose file says what its ground gives the air
+		/// (<see cref="GroundFor"/>) that ground if it has none yet.
 		/// </summary>
 		public static Report Generate(string root = Root, bool fillBiomes = true)
 		{
@@ -72,7 +72,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				foreach (BiomeTemplate biome in WorldEditorAssets.FindAll<BiomeTemplate>())
 				{
-					if (!Ground.TryGetValue(biome.name, out GroundSpec spec))
+					if (!GroundFor(biome.name, out GroundSpec spec))
 					{
 						// Rock, soil, vegetation, ice or water: nothing to lift and nothing coming out.
 						continue;
@@ -117,7 +117,7 @@ namespace FishMMO.Shared.WorldDesign
 			var ground = new List<string>();
 			foreach (BiomeTemplate biome in WorldEditorAssets.FindAll<BiomeTemplate>())
 			{
-				if (!Ground.TryGetValue(biome.name, out GroundSpec spec))
+				if (!GroundFor(biome.name, out GroundSpec spec))
 				{
 					continue;
 				}
@@ -383,58 +383,36 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		private static GroundSpec LooseOnly(string substance) => new GroundSpec(substance, null, 0f);
-		private static GroundSpec Emitting(string substance, float rate) => new GroundSpec(null, substance, rate);
+		/* What a biome's ground gives the air is its spec file's word (BiomeArtSpec.Entry.Loose and Emits). Until 2026-10-26 a table
+		 * here, keyed by biome asset name, said it; phase CODE-TABLE CLEARANCE wrote each row into its biome's file (decision 1), and the
+		 * biome art authoring writes the same two columns onto the template (marked). A biome whose file says neither is rock, soil,
+		 * vegetation, ice or water, and gives the air nothing of its own: that is nearly all of them.
+		 *
+		 * Why the rows were what they were (kept with the values in the files). Loose ground: the regolith and radiation plains were
+		 * the dust-devil and regolith-storm biomes, and carried those dusts by name; only the four sand biomes whose weather was sand
+		 * storms for a third or more of the time are sand (savanna, scrubland, wasteland and oasis saw a sandstorm between an eighth
+		 * and a fifth of the time, the steppe a haboob now and then; none is loose ground, and the beach, sand by name, had sand
+		 * forbidden outright). Emissions: the volcanic ground spawned ashfall more than half the time under a standing haze of 0.15
+		 * and emits ash at that; everything else emitting did it only through its storms and gets a trickle of 0.08 that the
+		 * eruptions the physics raises over it then multiply; a geyser basin's steam is a vapour at 0.5 (seven sites in ten of its
+		 * 80 m cells, a quarter of them geysers: Yellowstone's Upper Geyser Basin holds some 150 geysers among several hundred springs). */
 
-		/* Keyed by biome asset name. A biome not listed is rock, soil, vegetation, ice or water, and
-		 * gives the air nothing of its own: that is nearly all of them.
-		 *
-		 * Loose ground. The regolith and radiation plains were the dust-devil and regolith-storm
-		 * biomes, and carried those dusts by name. The sand biomes carried the generic sand layer,
-		 * which had no substance and fell as the default sand; only the four whose weather was
-		 * sand storms for a third or more of the time are sand here. Savanna, scrubland, wasteland
-		 * and oasis saw a sandstorm between an eighth and a fifth of the time, the steppe a haboob
-		 * now and then, and the farmland and grasslands only ever the dirt a tornado picks up; none
-		 * of them is loose ground, and on none of them will the wind lift sand however hard it
-		 * blows. The beach is sand by name, but the old weather forbade sand on it outright.
-		 *
-		 * Emissions. The volcanic three spawned ashfall more than half the time under a standing
-		 * haze of 0.15, and emit ash at that (Crater was a fourth until 2026-10-18: it is an impact
-		 * crater, not a volcano, and its spec file now writes its template's emission through
-		 * BiomeArtSpec.Entry.Emits). Everything else emitting did it only through its storms, and
-		 * gets a trickle of 0.08 that the eruptions the physics raises over it then multiply. The
-		 * methane lake's tholin was the planet's haze settling on it one storm in five; kept, since
-		 * that is what it did. */
-		private static readonly Dictionary<string, GroundSpec> Ground = new Dictionary<string, GroundSpec>(StringComparer.Ordinal)
+		/// <summary>
+		/// What the biome's spec file says its ground gives the air (<see cref="BiomeArtSpec.Entry.LooseGround"/>,
+		/// <see cref="BiomeArtSpec.Entry.Emission"/>); false when it says neither.
+		/// </summary>
+		private static bool GroundFor(string biomeName, out GroundSpec spec)
 		{
-			{ "Badlands", LooseOnly("Silicate Sand") },
-			{ "Desert", LooseOnly("Silicate Sand") },
-			{ "High Desert", LooseOnly("Silicate Sand") },
-			{ "Salt Flat", LooseOnly("Silicate Sand") },
-			{ "Dust Sea", LooseOnly("Regolith Dust") },
-			{ "Impact Basin", LooseOnly("Regolith Dust") },
-			{ "Regolith Plain", LooseOnly("Regolith Dust") },
-			{ "Rille", LooseOnly("Regolith Dust") },
-			{ "Radiation Plain", LooseOnly("Irradiated Dust") },
-
-			{ "Volcanic", Emitting("Volcanic Ash", 0.15f) },
-			{ "Volcanic Temple", Emitting("Volcanic Ash", 0.15f) },
-			{ "Cryovolcanic Plain", Emitting("Cryo Tephra", 0.08f) },
-			{ "Ice Geyser Field", Emitting("Cryo Tephra", 0.08f) },
-			{ "Tidal Fracture", Emitting("Cryo Tephra", 0.08f) },
-			{ "Molten Surface", Emitting("Sulphur Dust", 0.08f) },
-			{ "Runaway Greenhouse Plain", Emitting("Sulphur Dust", 0.08f) },
-			{ "Sulphur Flats", Emitting("Sulphur Dust", 0.08f) },
-			{ "Sulphuric Cloud Deck", Emitting("Sulphur Dust", 0.08f) },
-			{ "Methane Lake", Emitting("Tholin Haze", 0.08f) },
-			{ "Tholin Plain", Emitting("Tholin Haze", 0.08f) },
-
-			/* Steam. A geyser basin is a field of hot springs, fumaroles and geysers (GeothermalVents); its
-			 * steam is a vapour, which the weather never treats as falling or erupting. At 0.5 seven sites in
-			 * ten of the basin's 80 m cells, a quarter of them geysers: Yellowstone's Upper Geyser Basin, a
-			 * few square kilometres, holds some 150 geysers among several hundred springs. */
-			{ "Geyser Basin", Emitting("Steam", 0.5f) },
-		};
+			BiomeArtSpec.Entry entry = BiomeArtSpec.For(biomeName);
+			if (entry == null || entry.LooseGround == null && !entry.Emission.HasValue)
+			{
+				spec = default;
+				return false;
+			}
+			string loose = string.IsNullOrEmpty(entry.LooseGround) ? null : entry.LooseGround;
+			spec = entry.Emission.HasValue ? new GroundSpec(loose, entry.Emission.Value.Substance, entry.Emission.Value.Rate) : new GroundSpec(loose, null, 0f);
+			return true;
+		}
 
 		/// <summary>True when somebody has already said what this biome's ground gives the air.</summary>
 		private static bool HasGround(BiomeTemplate biome)

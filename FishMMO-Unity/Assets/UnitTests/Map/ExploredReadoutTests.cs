@@ -42,7 +42,12 @@ namespace FishMMO.UnitTests
 		private const string MapUxmlPath = "Assets/Scripts/Client/GUI/World/Map/UIMap.uxml";
 
 		/// <summary>A scene the shipped details cache actually carries bounds for.</summary>
-		private const string SceneName = "StartScene A";
+		/// <remarks>
+		/// A thousand-metre overworld scene, the size <c>FogOfWarDefaults.ChunkSize</c> was chosen for
+		/// (one chunk an eighth of a percent). It was StartScene A until the start scenes were removed
+		/// (2026-10-25); Belron 1 is the shipped scene of that size now.
+		/// </remarks>
+		private const string SceneName = "Belron 1";
 
 		private const long TestCharacterID = 987654321L;
 

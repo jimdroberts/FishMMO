@@ -37,7 +37,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <b>Water.</b> The pools are lakes of the scene's hydrology in the paddies' id range (kind 7 of
 	/// <see cref="PointOfInterestFieldTerraces.LakeId"/>'s bits), so the place stage's clearing of the paddies' water takes them
 	/// out and <see cref="WriteWater"/> puts them back from the record each time it runs, and the cut's own water never reads them
-	/// as natural. A scene with no hydrology asset (no river or lake at all) keeps its pools dry.
+	/// as natural. A scene with no hydrology asset (no river or lake on its ground) is given one for them (2026-10-27).
 	/// </para>
 	/// </remarks>
 	public static class GeothermalGroundCarve
@@ -373,7 +373,9 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			foreach (PointOfInterestRecord record in plan.Records)
 			{
-				if (record != null && record.Kind == FishMMO.Shared.NameGeneration.POIType.HotSpring)
+				// Not the hot ground's own springs (GeothermalPointsOfInterest, 2026-10-27), which a repaint reads back: they stand on
+				// steaming ground the sites already warm.
+				if (record != null && record.Kind == FishMMO.Shared.NameGeneration.POIType.HotSpring && !GeothermalPointsOfInterest.IsHotGroundRecord(record))
 				{
 					springs.Add(new Vector2(record.Position.x, record.Position.z));
 				}
@@ -793,9 +795,11 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// Writes the scene's hot spring pools (from its record) into its hydrology asset, replacing any pool lake there: the place
 		/// stage calls it after clearing the paddies' water, so the pools stand again on every cut, repaint and Regenerate POIs.
-		/// Returns how many were written; none without a record or a hydrology asset.
+		/// Returns how many were written; none without a record. A scene with no hydrology asset (no river or lake on its ground) is
+		/// given one for them (2026-10-27, PointOfInterestPaddies.EnsureHydrology, at <paramref name="seaLevel"/>): until then this
+		/// ran before any cave's water made one and every such scene's pools stood dry. Only a LOCAL copy's keep dry here.
 		/// </summary>
-		public static int WriteWater(Scene scene, string terrainFolder, string sceneName, List<string> notes)
+		public static int WriteWater(Scene scene, string terrainFolder, string sceneName, List<string> notes, float seaLevel = float.NegativeInfinity)
 		{
 			if (!scene.IsValid() || string.IsNullOrEmpty(terrainFolder) || string.IsNullOrEmpty(sceneName))
 			{
@@ -810,11 +814,16 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return 0;
 			}
-			var hydrology = AssetDatabase.LoadAssetAtPath<SceneHydrology>(SceneGenerator.HydrologyPath(terrainFolder, sceneName));
+			bool had = AssetDatabase.LoadAssetAtPath<SceneHydrology>(SceneGenerator.HydrologyPath(terrainFolder, sceneName)) != null;
+			SceneHydrology hydrology = PointOfInterestPaddies.EnsureHydrology(scene, terrainFolder, sceneName, seaLevel);
 			if (hydrology == null)
 			{
-				notes?.Add($"Hot ground: {record.Pools.Count} hot spring pool(s) dug but left dry: the scene has no hydrology asset (no river or lake) to hold their water.");
+				notes?.Add($"Hot ground: {record.Pools.Count} hot spring pool(s) dug but left dry: '{terrainFolder}' may not hold a hydrology asset of its own (a LOCAL copy shares the committed scene's).");
 				return 0;
+			}
+			if (!had)
+			{
+				notes?.Add($"Hot ground: the scene had no hydrology asset (no river or lake on its ground); one was made to hold its {record.Pools.Count} pool(s).");
 			}
 			hydrology.Lakes.RemoveAll(l => l != null && IsPool(l.Id));
 			hydrology.Lakes.AddRange(record.Pools);

@@ -240,6 +240,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -329,6 +346,12 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
       specFingerprint: bb06d5a2f78f193b
       detailNoiseSpread: 2.5
       detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
@@ -418,6 +441,12 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
       specFingerprint: 07fda6155de8627b
       detailNoiseSpread: 2.5
       detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
@@ -507,6 +536,12 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
       specFingerprint: 10da1e478dadb941
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -572,6 +607,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -636,6 +688,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -700,6 +769,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -789,6 +875,12 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
       specFingerprint: 2c817464882acd17
       detailNoiseSpread: 2.5
       detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
@@ -854,6 +946,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -919,6 +1028,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -984,6 +1110,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1049,6 +1192,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1123,6 +1283,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1188,6 +1365,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1253,6 +1447,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1318,6 +1529,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1407,6 +1635,12 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
       specFingerprint: fa81f7d90ac5d5db
       detailNoiseSpread: 2.5
       detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
@@ -1913,6 +2147,14 @@ MonoBehaviour:
     Weight: 1
     NeedsBreathableAir: 0
     NeedsLiquidWater: 0
+  - Kind: 179
+    Weight: 0.6
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 180
+    Weight: 0.3
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
   siteVariants: []
   siteStyles: []
   weathering:
@@ -1978,6 +2220,10 @@ MonoBehaviour:
     Spacing: 0
   boardwalks: 0
   boardwalkStyle: 0
+  crossingStyle: 0
+  straightRoads:
+    Form: 0
+    Ruts: 0
   linearFeatures: []
   structurePalette:
     Surfaces:
@@ -2984,6 +3230,30 @@ MonoBehaviour:
     Fingerprint: 10000
   - Field: underwaterSiteDepth
     Fingerprint: 0,0
+  - Field: boardwalkStyle
+    Fingerprint: Planked
+  - Field: wayLights/Capital
+    Fingerprint: Capital=CrystalPost@13
+  - Field: wayLights/City
+    Fingerprint: City=CrystalPost@13
+  - Field: wayLights/Port
+    Fingerprint: Port=CrystalPost@13
+  - Field: wayLights/Town
+    Fingerprint: Town=CrystalPost@13
+  - Field: wayLights/Village
+    Fingerprint: Village=Glowjar@20
+  - Field: caveLights/Camp
+    Fingerprint: Camp=Glowjar@0
+  - Field: caveLights/MineDrift
+    Fingerprint: MineDrift=Glowjar@17
+  - Field: caveLights/MineLamp
+    Fingerprint: MineLamp=Glowjar@0
+  - Field: caveLights/MineStope
+    Fingerprint: MineStope=CrystalPost@0
+  - Field: caveLights/Route
+    Fingerprint: Route=CrystalPost@0
+  - Field: TerrainProcess
+    Fingerprint: Wetland
   - Field: siteKinds/Bay
     Fingerprint: "Bay\xD71"
   - Field: siteKinds/Bridge
@@ -2994,6 +3264,8 @@ MonoBehaviour:
     Fingerprint: "CrystalFormation\xD70.6"
   - Field: siteKinds/Delta
     Fingerprint: "Delta\xD71"
+  - Field: siteKinds/ElderMonolith
+    Fingerprint: "ElderMonolith\xD70.6"
   - Field: siteKinds/FallenStar
     Fingerprint: "FallenStar\xD70.7"
   - Field: siteKinds/Gorge
@@ -3042,25 +3314,5 @@ MonoBehaviour:
     Fingerprint: "SunkenShip\xD71"
   - Field: siteKinds/Waterfall
     Fingerprint: "Waterfall\xD71"
-  - Field: boardwalkStyle
-    Fingerprint: Planked
-  - Field: wayLights/Capital
-    Fingerprint: Capital=CrystalPost@13
-  - Field: wayLights/City
-    Fingerprint: City=CrystalPost@13
-  - Field: wayLights/Port
-    Fingerprint: Port=CrystalPost@13
-  - Field: wayLights/Town
-    Fingerprint: Town=CrystalPost@13
-  - Field: wayLights/Village
-    Fingerprint: Village=Glowjar@20
-  - Field: caveLights/Camp
-    Fingerprint: Camp=Glowjar@0
-  - Field: caveLights/MineDrift
-    Fingerprint: MineDrift=Glowjar@17
-  - Field: caveLights/MineLamp
-    Fingerprint: MineLamp=Glowjar@0
-  - Field: caveLights/MineStope
-    Fingerprint: MineStope=CrystalPost@0
-  - Field: caveLights/Route
-    Fingerprint: Route=CrystalPost@0
+  - Field: siteKinds/WaygateRing
+    Fingerprint: "WaygateRing\xD70.3"

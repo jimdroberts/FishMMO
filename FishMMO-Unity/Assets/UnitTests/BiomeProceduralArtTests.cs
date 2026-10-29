@@ -442,16 +442,17 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void Authoring_FillsEmptySlotsAndRules_ThenChangesNothingTheSecondTime()
 		{
-			BiomeTemplate biome = MakeBiome("Grassland");
+			// The Valley (unauthored): its main ground is still the generic grass (the Grassland round, 2026-10-26, gave Grassland its own).
+			BiomeTemplate biome = MakeBiome("Valley");
 			// A flat colour swatch counts as empty; the tool fills over it without erasing it.
-			biome.MainTextureLayer.albedoTexture = MakeTexture("BiomeTexture_Grassland_80CC66");
-			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Grassland");
+			biome.MainTextureLayer.albedoTexture = MakeTexture("BiomeTexture_Valley_80CC66");
+			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Valley");
 			var source = new FakeSource(created);
 
 			var first = new BiomeArtAuthoring.Report();
 			Assert.IsTrue(BiomeArtAuthoring.Author(biome, entry, source, first, true));
 			Assert.AreSame(source.Layer(Ground.Grass), biome.MainTextureLayer.terrainLayer);
-			Assert.That(biome.MainTextureLayer.albedoTexture.name, Is.EqualTo("BiomeTexture_Grassland_80CC66"), "the swatch was erased");
+			Assert.That(biome.MainTextureLayer.albedoTexture.name, Is.EqualTo("BiomeTexture_Valley_80CC66"), "the swatch was erased");
 			Assert.That(biome.DetailTextureLayers.Count, Is.EqualTo(entry.Details.Length));
 			Assert.AreSame(source.Layer(entry.Details[0].Family), biome.DetailTextureLayers[0].terrainLayer);
 			Assert.That(biome.CliffTextureLayers.Count, Is.EqualTo(1));
@@ -531,8 +532,9 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void Authoring_WritesLooksBladesAndMakeup_OnceAndKeepsHandEdits()
 		{
-			BiomeTemplate biome = MakeBiome("Plains");
-			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Plains");
+			// The Valley (unauthored): no blade tunings of its own (the Plains round, 2026-10-26, tuned every Plains blade).
+			BiomeTemplate biome = MakeBiome("Valley");
+			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Valley");
 			var source = new FakeSource(created);
 
 			var first = new BiomeArtAuthoring.Report();
@@ -540,7 +542,7 @@ namespace FishMMO.UnitTests
 			Assert.That(biome.LookClass, Is.EqualTo(entry.LookClass));
 			Assert.That(BiomeLooks.ClassOf(biome), Is.EqualTo(BiomeLookClass.Temperate));
 			List<(string Prefab, BiomeGrassType Look)> blades = entry.GrassTypes();
-			Assert.That(blades, Is.Not.Empty, "the plains grow blade grass");
+			Assert.That(blades, Is.Not.Empty, "the valley grows blade grass");
 			foreach ((string prefab, BiomeGrassType look) in blades)
 			{
 				BiomeGrassType written = biome.GrassTypeFor(prefab);
@@ -549,7 +551,7 @@ namespace FishMMO.UnitTests
 				Assert.That(written.GroundTint, Is.EqualTo(BiomeGrassType.LegacyGroundTint));
 			}
 			Assert.That(biome.MainTextureLayer.HasGroundMakeup, Is.True);
-			SurfaceCatalogue.TryMakeupOf(Ground.GrassDry, out Vector3 dry);
+			SurfaceCatalogue.TryMakeupOf(Ground.Grass, out Vector3 dry);
 			Assert.That(biome.MainTextureLayer.GroundMakeup, Is.EqualTo(dry));
 
 			var second = new BiomeArtAuthoring.Report();
@@ -1055,7 +1057,8 @@ namespace FishMMO.UnitTests
 			/* Biomes authored before carpets hold Grassland's grass exactly as the old Grass helper
 			 * wrote it, with no fingerprint. One untouched: it must become the spec's carpet in place,
 			 * GUID and all. One whose density somebody changed: it must be left exactly as it is. */
-			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Grassland");
+			// The Valley (unauthored) still grows the generic lush grass the old helper wrote (the Grassland round, 2026-10-26, has its own).
+			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Valley");
 			BiomeArtSpec.Scatter grass = entry.Main.Scatter.Find(s => s.Name == "GrassLush");
 			Assume.That(grass, Is.Not.Null);
 			Assume.That(grass.Placement, Is.EqualTo(DetailPlacement.Carpet));
@@ -1063,8 +1066,8 @@ namespace FishMMO.UnitTests
 			var source = new FakeSource(created);
 			GameObject[] prefabs = { source.Prefab(grass.Earlier[0].Prefabs[0]) };
 
-			BiomeTemplate untouched = MakeBiome("Grassland");
-			PrefabSpawnRule old = BiomeArtAuthoring.ToRule("Grassland", grass.Earlier[0], prefabs);
+			BiomeTemplate untouched = MakeBiome("Valley");
+			PrefabSpawnRule old = BiomeArtAuthoring.ToRule("Valley", grass.Earlier[0], prefabs);
 			old.SpecFingerprint = null; // written before fingerprints existed
 			untouched.MainTextureLayer.prefabSpawnRules.Add(old);
 			string guid = old.StableGuid;
@@ -1079,8 +1082,8 @@ namespace FishMMO.UnitTests
 			Assert.That(report.RulesUpdated, Is.GreaterThanOrEqualTo(1));
 			Assert.That(report.ToString(), Does.Contain("updated"));
 
-			BiomeTemplate tuned = MakeBiome("Grassland");
-			PrefabSpawnRule mine = BiomeArtAuthoring.ToRule("Grassland", grass.Earlier[0], prefabs);
+			BiomeTemplate tuned = MakeBiome("Valley");
+			PrefabSpawnRule mine = BiomeArtAuthoring.ToRule("Valley", grass.Earlier[0], prefabs);
 			mine.SpecFingerprint = null;
 			mine.densityPer100m2 = 12f;
 			tuned.MainTextureLayer.prefabSpawnRules.Add(mine);
@@ -1380,14 +1383,19 @@ namespace FishMMO.UnitTests
 			}
 
 			Assert.That(Cover("Taiga", "Trees: Spruce"), Is.GreaterThanOrEqualTo(0.7f));
-			Assert.That(Cover("Forest", "Trees: Oak, Birch, Beech"), Is.GreaterThanOrEqualTo(0.7f));
+			// The Forest round (2026-10-26): its own beech, veteran oak and lime in a closed vault.
+			Assert.That(Cover("Forest", "Trees: BeechForest, OakForest, Lime"), Is.GreaterThanOrEqualTo(0.7f));
 			Assert.That(Cover("Taiga", "Trees: Pine, Larch"), Is.GreaterThanOrEqualTo(0.7f), "larch joins the pine's woods rather than competing with a stand rule of its own");
 			Assert.That(BiomeArtSpec.For("Forest").Retired, Has.Member(("main", "Trees: Oak, Birch")), "the rule beech joined is retired under its old name");
 			Assert.That(BiomeArtSpec.For("Alpine Meadow").Retired, Has.Member(("main", "Trees: Spruce")));
-			Assert.That(Cover("Jungle", "Trees: Jungle"), Is.GreaterThanOrEqualTo(0.8f));
-			Assert.That(Cover("Woodland", "Trees: Oak, Birch"), Is.InRange(0.35f, 0.7f));
-			Assert.That(Cover("Grassland", "Trees: Oak"), Is.LessThanOrEqualTo(0.2f));
-			Assert.That(Cover("Plains", "Trees: Oak"), Is.LessThanOrEqualTo(0.1f));
+			// The Jungle round (2026-10-26): the mixed rainforest canopy, crowns closing.
+			Assert.That(Cover("Jungle", "Trees: ForestCanopy, AfricanMahogany, Kola"), Is.GreaterThanOrEqualTo(0.8f));
+			// The Woodland round (2026-10-26): wood-pasture veterans on the turf, the coppice standards in their own stands.
+			Assert.That(Cover("Woodland", "Trees: OakWoodland, CrabApple"), Is.InRange(0.35f, 0.7f));
+			Assert.That(Cover("Woodland", "Trees: OakWoodland, SweetChestnut, FieldMaple, BirchWoodland"), Is.InRange(0.35f, 0.7f));
+			// The Grassland and Plains rounds (2026-10-26): the puszta's Turkey-oak islands, the prairie's bur-oak openings.
+			Assert.That(Cover("Grassland", "Trees: TurkeyOak"), Is.LessThanOrEqualTo(0.2f));
+			Assert.That(Cover("Plains", "Trees: BurOak"), Is.LessThanOrEqualTo(0.1f));
 
 			// A biome's species stand in the same woods: one stand size, so one field.
 			var taiga = new List<float>();
@@ -1401,8 +1409,10 @@ namespace FishMMO.UnitTests
 			}
 			Assert.That(taiga.Count, Is.EqualTo(3));
 			Assert.That(taiga.TrueForAll(m => m == taiga[0]), Is.True, "the taiga's spruce, pine and birch should cut one stand field");
-			Assert.That(BiomeArtSpec.For("Grassland").Rules(), Has.Some.Matches<(BiomeArtSpec.Layer, BiomeArtSpec.Scatter)>(r => r.Item2.ForestMetres == taiga[0]),
-				"a grassland's copses should be the hearts of the taiga's woods");
+			Assert.That(BiomeArtSpec.For("Valley").Rules(), Has.Some.Matches<(BiomeArtSpec.Layer, BiomeArtSpec.Scatter)>(r => r.Item2.ForestMetres == taiga[0]),
+				"a valley's copses should be the hearts of the taiga's woods");
+			// The Grassland round (approved 2026-10-16): its Turkey-oak islands on a 600 m low-frequency field of their own.
+			Assert.That(BiomeArtSpec.For("Grassland").Rules(), Has.Some.Matches<(BiomeArtSpec.Layer, BiomeArtSpec.Scatter)>(r => r.Item2.ForestMetres == 600f));
 		}
 
 		[Test]
@@ -1450,7 +1460,8 @@ namespace FishMMO.UnitTests
 					}
 				}
 			}
-			BiomeArtSpec.Scatter grassland = BiomeArtSpec.For("Grassland").Main.Scatter.Find(s => s.Name == "GrassLush");
+			// The Grassland round (2026-10-26): its brome sward is the continuous turf now.
+			BiomeArtSpec.Scatter grassland = BiomeArtSpec.For("Grassland").Main.Scatter.Find(s => s.Name == "GrassBrome");
 			BiomeArtSpec.Scatter highDesert = BiomeArtSpec.For("High Desert").Main.Scatter.Find(s => s.Name == "GrassTuft");
 			Assert.That(grassland.CarpetCoverage, Is.GreaterThan(0.8f), "grassland should read as continuous turf");
 			Assert.That(highDesert.CarpetCoverage * highDesert.ClumpFloor, Is.LessThan(0.15f), "desert tufts should thin to near bare between clumps");

@@ -61,12 +61,20 @@ float FishWrapAngular(float radiansPerSecond)
 // end it has come a whole number of periods, which is where the next window starts it — so a speed that
 // changes with the wind moves the pattern faster or slower and never jumps it, and every player's
 // pattern stands in the same place. speed × clock, which it replaces, jumped by the change in speed
-// times the whole clock every time the wind eased.
-float FishWindTravel(float rate, float period)
+// times the whole clock every time the wind eased. FishWindTravelAt takes the seconds into the window
+// itself: the grass's motion vectors rebuild a blade as it stood a frame earlier on the same clock
+// (_FishWindHold.x less that frame); just after a window starts that is negative, and the pattern then
+// lies a whole number of periods from where the last window left it, so the phase it drives matches.
+float FishWindTravelAt(float rate, float period, float secondsIntoWindow)
 {
     float window = max(1.0, _FishWindHold.y);
     float whole = max(0.0, round(rate * window / period));
-    return whole * period / window * _FishWindHold.x;
+    return whole * period / window * secondsIntoWindow;
+}
+
+float FishWindTravel(float rate, float period)
+{
+    return FishWindTravelAt(rate, period, _FishWindHold.x);
 }
 // x 1 when the quality tier lifts terrain under deep snow, 0 otherwise. y-w unused.
 float4 _FishWeatherTier;

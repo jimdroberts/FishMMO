@@ -50,19 +50,22 @@ Shader "FishMMO/Weather/Falling Leaves"
             TEXTURE2D(_LeafCanopy);
             SAMPLER(sampler_LeafCanopy);
 
-            // Per draw, from a MaterialPropertyBlock (FallingLeavesPresenter).
-            float4 _LeafOrigin;     // xyz camera position, w the shared motion clock (s)
-            float4 _LeafBox;        // xyz the wrapping box (m), w how far above the camera it is centred
-            float4 _LeafFall;       // xyz the typical leaf's velocity (m/s, the air's drift included), w its fall speed
-            float4 _LeafTravel;     // x, z metres the air has carried everything, y metres the typical leaf has fallen; wrapped
-            float4 _LeafSpread;     // x slowest, y fastest flutterer against the typical leaf; z the share that tumble; w how much faster a tumbler falls
-            float4 _LeafRates;      // x share shown under a full deciduous canopy, y under an evergreen one; z the share of falling deciduous leaves turned; w the share of those browned
-            float4 _LeafSize;       // x smallest, y largest leaf (m); z opacity; w seconds a landed leaf lies
-            float4 _LeafColor;      // a fresh leaf's colour, the trees' tint in it (linear)
-            float4 _LeafAutumn;     // the trees' autumn multiplier (linear), as the vegetation shader turns them
-            float4 _LeafDry;        // a dead leaf's colour (linear)
-            float4 _LeafCanopyRect; // xy the map's world x/z minimum, z one over its size, w the height its ground is stored against
-            float4 _LeafWind;       // xy the wind's direction, z the air's speed among the trees (m/s), w the gust now
+            // Per draw, set on the presenter's own material (FallingLeavesPresenter): in UnityPerMaterial, not from a property
+            // block, so the draw stays in the SRP Batcher.
+            CBUFFER_START(UnityPerMaterial)
+                float4 _LeafOrigin;     // xyz camera position, w the shared motion clock (s)
+                float4 _LeafBox;        // xyz the wrapping box (m), w how far above the camera it is centred
+                float4 _LeafFall;       // xyz the typical leaf's velocity (m/s, the air's drift included), w its fall speed
+                float4 _LeafTravel;     // x, z metres the air has carried everything, y metres the typical leaf has fallen; wrapped
+                float4 _LeafSpread;     // x slowest, y fastest flutterer against the typical leaf; z the share that tumble; w how much faster a tumbler falls
+                float4 _LeafRates;      // x share shown under a full deciduous canopy, y under an evergreen one; z the share of falling deciduous leaves turned; w the share of those browned
+                float4 _LeafSize;       // x smallest, y largest leaf (m); z opacity; w seconds a landed leaf lies
+                float4 _LeafColor;      // a fresh leaf's colour, the trees' tint in it (linear)
+                float4 _LeafAutumn;     // the trees' autumn multiplier (linear), as the vegetation shader turns them
+                float4 _LeafDry;        // a dead leaf's colour (linear)
+                float4 _LeafCanopyRect; // xy the map's world x/z minimum, z one over its size, w the height its ground is stored against
+                float4 _LeafWind;       // xy the wind's direction, z the air's speed among the trees (m/s), w the gust now
+            CBUFFER_END
 
             struct Attributes
             {

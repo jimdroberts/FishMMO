@@ -224,7 +224,7 @@ namespace FishMMO.Shared.WorldDesign
 				new PropsFeature { Finish = spec.Finish, FinishChance = spec.FinishChance, KeepOutOfWater = !spec.InWater },
 			};
 			var site = new List<PointOfInterestFeature>();
-			foreach (PointOfInterestFeature feature in PointOfInterestFeatureDefaults.For(spec.Kind, sizeClass))
+			foreach (PointOfInterestFeature feature in KindFeatures(spec, sizeClass))
 			{
 				bool siteWide = feature is RegionFeature || feature is ExplorationFeature;
 				if (spec.InChamber && siteWide)
@@ -248,6 +248,56 @@ namespace FishMMO.Shared.WorldDesign
 			return site;
 		}
 
+		/// <summary>
+		/// The kind's recommended gameplay at a size class as the spec's holder has it (2026-10-27, the fantasy wave's keeps and towers,
+		/// <see cref="PointOfInterestHolder"/>): its garrison keeps the kind's own; a hostile band drops the waypoint, the respawn and every
+		/// service NPC (guard, merchant, banker, crafter, townsfolk) for a monster pack, an elite from medium size and, where the spec
+		/// names its lord (<see cref="PointOfInterestTemplateSpec.HolderBoss"/>), an empty boss spawner after them at the large size; a ruin
+		/// keeps no NPC, waypoint or respawn at all (its region, discovery, gathering and dungeon doors stay). Spawners stay before the
+		/// boss and the region first, as <see cref="PointOfInterestFeatureDefaults"/> orders them.
+		/// </summary>
+		public static List<PointOfInterestFeature> KindFeatures(PointOfInterestTemplateSpec spec, int sizeClass)
+		{
+			List<PointOfInterestFeature> features = PointOfInterestFeatureDefaults.For(spec.Kind, sizeClass);
+			if (spec.Holder == PointOfInterestHolder.Garrison)
+			{
+				return features;
+			}
+			bool hostile = spec.Holder == PointOfInterestHolder.Hostile;
+			features.RemoveAll(f => f is WaypointFeature || f is RespawnFeature
+				|| (f is NpcSpawnerFeature npc && (!hostile || (npc.Role != PointOfInterestNpcRole.MonsterPack && npc.Role != PointOfInterestNpcRole.Elite)))
+				|| (!hostile && f is BossSpawnerFeature));
+			if (!hostile)
+			{
+				return features;
+			}
+			int size = Mathf.Clamp(sizeClass, 0, 2);
+			// The band where the kind's hostile trait would have put it: after the kind's own, before what is gathered there.
+			int at = features.FindIndex(f => f is GatheringFeature || f is PointOfInterestChamberFeature);
+			if (at < 0)
+			{
+				at = features.Count;
+			}
+			var band = new List<PointOfInterestFeature>();
+			bool HasRole(PointOfInterestNpcRole role) => features.Exists(f => f is NpcSpawnerFeature npc && npc.Role == role);
+			if (!HasRole(PointOfInterestNpcRole.MonsterPack))
+			{
+				band.Add(new NpcSpawnerFeature { Role = PointOfInterestNpcRole.MonsterPack });
+			}
+			if (size >= 1 && !HasRole(PointOfInterestNpcRole.Elite))
+			{
+				band.Add(new NpcSpawnerFeature { Role = PointOfInterestNpcRole.Elite });
+			}
+			features.InsertRange(at, band);
+			if (spec.HolderBoss && size >= 2 && !features.Exists(f => f is BossSpawnerFeature))
+			{
+				// After the last spawner, so the boss can wait on them.
+				int last = features.FindLastIndex(f => f is NpcSpawnerFeature);
+				features.Insert(last + 1, new BossSpawnerFeature());
+			}
+			return features;
+		}
+
 		/// <summary>Whether the spec lays a door with a stair down behind it (the dungeon doors, the crypt's): a dungeon's way in.</summary>
 		public static bool LaysDungeonDoor(PointOfInterestTemplateSpec spec)
 		{
@@ -266,7 +316,7 @@ namespace FishMMO.Shared.WorldDesign
 		private static string FeatureSignature(PointOfInterestTemplateSpec spec, int sizeClass)
 		{
 			var sb = new StringBuilder();
-			foreach (PointOfInterestFeature feature in PointOfInterestFeatureDefaults.For(spec.Kind, sizeClass))
+			foreach (PointOfInterestFeature feature in KindFeatures(spec, sizeClass))
 			{
 				if (feature == null)
 				{

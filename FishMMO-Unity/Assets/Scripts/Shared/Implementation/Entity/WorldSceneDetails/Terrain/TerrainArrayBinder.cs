@@ -109,6 +109,12 @@ namespace FishMMO.Shared
 #if !UNITY_SERVER || UNITY_EDITOR
 		private static readonly List<TerrainArrayBinder> active = new List<TerrainArrayBinder>();
 
+		/// <summary>
+		/// Counts every push to a tile and every unbind: what a tile's block holds may have changed when it moves. The client's own
+		/// heightmap draw (TerrainHeightmapSystem) copies the tiles' bindings into arrays and takes them again when it changes.
+		/// </summary>
+		public static int TilePushes { get; private set; }
+
 		private static readonly int[] ControlIds =
 		{
 			Shader.PropertyToID("_FishControl0"), Shader.PropertyToID("_FishControl1"),
@@ -138,6 +144,8 @@ namespace FishMMO.Shared
 		private TerrainArraySet set;
 		private readonly List<Terrain> bound = new List<Terrain>();
 		private readonly List<Renderer> boundBackdrop = new List<Renderer>();
+		// In play, each bound backdrop renderer's own material and the runtime copy it draws with instead (BackdropCopyFor).
+		private readonly Dictionary<Renderer, (Material Source, Material Copy)> backdropCopies = new Dictionary<Renderer, (Material, Material)>();
 		// Each tile's index map and the terrain data it was baked from (a tile given new data is baked again).
 		// Stored: the map is the scene's stored one, uploaded (a Texture2D); otherwise one baked here (a render texture).
 		private readonly Dictionary<Terrain, (Texture Map, TerrainData Data, bool Stored)> indexMaps = new Dictionary<Terrain, (Texture, TerrainData, bool)>();
@@ -422,11 +430,12 @@ namespace FishMMO.Shared
 			int res = index != null ? index.width : 1;
 			block.SetVector(IndexTexelSizeId, new Vector4(1f / res, 1f / res, res, res));
 
-			PushArrays(block, index != null ? 1 : 0);
+			PushArrays(new BlockSink(block), index != null ? 1 : 0);
 			Texture2D fade = snowFades != null && snowFades.TryGetValue(terrain, out Texture2D own) && own != null ? own : TerrainSnowHoleFade.Blank;
 			block.SetTexture(SnowHoleFadeId, fade);
 			block.SetVector(SnowHoleFadeTexelSizeId, new Vector4(1f / fade.width, 1f / fade.height, fade.width, fade.height));
 			terrain.SetSplatMaterialPropertyBlock(block);
+			TilePushes++;
 			return true;
 		}
 
@@ -447,9 +456,9 @@ namespace FishMMO.Shared
 					return entry.Map;
 				}
 				TerrainDetailBake.IndexMap stored = SceneTerrainBake.IndexOf(data);
-				if (stored != null && StoredStillGood(terrain, data, stored))
+				if (stored != null && StoredStillGood(terrain, data, stored, TerrainTileLayers.Of(terrain)))
 				{
-					Texture2D uploaded = TerrainIndexMapBaker.Upload(stored, $"{terrain.name} index map (stored)");
+					RenderTexture uploaded = TerrainIndexMapBaker.Upload(stored, $"{terrain.name} index map (stored)");
 					if (uploaded != null)
 					{
 						FreeMap(entry.Map);
@@ -467,7 +476,7 @@ namespace FishMMO.Shared
 				indexMaps.Remove(terrain);
 				if (!Application.isEditor && warnedIndex.Add("none " + terrain.name))
 				{
-					Debug.LogWarning($"[Terrain index] '{terrain.name}' has no usable stored index map and no alphamaps: it draws its first layer.");
+					throw new System.InvalidOperationException($"[Terrain index] '{terrain.name}' has no usable stored index map and no alphamaps on {SystemInfo.graphicsDeviceType}. Terrain shading cannot be reconstructed; check the stored-map upload shader and device support.");
 				}
 				return null;
 			}
@@ -481,7 +490,8 @@ namespace FishMMO.Shared
 			}
 			if (fresh || rebake || entry.Data != data)
 			{
-				if (!TerrainIndexMapBaker.Bake(data, TerrainIndexMapBaker.ShaderOf(set), baked))
+				// A tile carrying only the layers it paints numbers its channels its own way: the map names scene layers.
+				if (!TerrainIndexMapBaker.Bake(data, TerrainIndexMapBaker.ShaderOf(set), baked, 0, TerrainTileLayers.Of(terrain)))
 				{
 					FreeMap(baked);
 					indexMaps.Remove(terrain);
@@ -506,10 +516,10 @@ namespace FishMMO.Shared
 		/// with no terrain callback would otherwise go unseen until the scene is baked again); a player trusts it, as the
 		/// build checked every texel before it left the alphamaps out.
 		/// </summary>
-		private static bool StoredStillGood(Terrain terrain, TerrainData data, TerrainDetailBake.IndexMap stored)
+		private static bool StoredStillGood(Terrain terrain, TerrainData data, TerrainDetailBake.IndexMap stored, int[] sceneLayers)
 		{
 #if UNITY_EDITOR
-			if (!TerrainIndexMapBaker.MatchesAlphamaps(data, stored, 32, out string bad))
+			if (!TerrainIndexMapBaker.MatchesAlphamaps(data, stored, 32, out string bad, sceneLayers))
 			{
 				if (warnedIndex.Add("stale " + terrain.name))
 				{
@@ -615,10 +625,29 @@ namespace FishMMO.Shared
 		/// A backdrop renderer: its control maps are its material's own (baked over the backdrop by
 		/// SceneBackdropBuilder), so only their count and size go in the block, with the arrays.
 		/// </summary>
+		/// <remarks>
+		/// In play the numbers go on a runtime copy of the renderer's material instead (<see cref="BackdropCopyFor"/>), and the
+		/// renderer draws with the copy and no block: a property block takes a renderer out of the SRP Batcher, and the rings
+		/// are a few dozen draws in every opaque, depth and depth-normals pass. The shader keeps these numbers in its
+		/// UnityPerMaterial (FISH_TERRAIN_ARRAY_NUMBERS), so the copy's values are what the batcher draws with. Edit mode keeps
+		/// the block: a material assigned there would be saved with the scene.
+		/// </remarks>
 		private void PushTo(Renderer renderer)
 		{
+			if (Application.isPlaying)
+			{
+				Material copy = BackdropCopyFor(renderer);
+				PushBackdrop(new MaterialSink(copy), copy);
+				return;
+			}
 			MaterialPropertyBlock block = BlockFor(renderer);
-			Material material = renderer.sharedMaterial;
+			PushBackdrop(new BlockSink(block), renderer.sharedMaterial);
+			renderer.SetPropertyBlock(block);
+		}
+
+		/// <summary>A backdrop renderer's control map count and size, and the scene's arrays, into <paramref name="sink"/>.</summary>
+		private void PushBackdrop<T>(T sink, Material material) where T : struct, IPropertySink
+		{
 			int controls = 0;
 			while (controls < MaximumControlMaps && material.GetTexture(ControlIds[controls]) is Texture2D)
 			{
@@ -627,15 +656,56 @@ namespace FishMMO.Shared
 			if (controls > 0)
 			{
 				Texture first = material.GetTexture(ControlIds[0]);
-				block.SetVector(ControlTexelSizeId, new Vector4(1f / first.width, 1f / first.height, first.width, first.height));
+				sink.SetVector(ControlTexelSizeId, new Vector4(1f / first.width, 1f / first.height, first.width, first.height));
 			}
-			PushArrays(block, controls);
-			renderer.SetPropertyBlock(block);
+			PushArrays(sink, controls);
+		}
+
+		/// <summary>
+		/// The runtime copy a backdrop renderer draws with in play: made from its own material when it is first pushed and put
+		/// on the renderer, freed and the material put back when it is unbound (<see cref="Unbind"/>). A copy is made fresh on
+		/// every push, so nothing of an earlier set stays on it.
+		/// </summary>
+		private Material BackdropCopyFor(Renderer renderer)
+		{
+			Material source = renderer.sharedMaterial;
+			var copy = new Material(source)
+			{
+				name = source.name + " (backdrop copy)",
+				hideFlags = HideFlags.HideAndDontSave,
+			};
+			backdropCopies[renderer] = (source, copy);
+			renderer.SetPropertyBlock(null);
+			renderer.sharedMaterial = copy;
+			return copy;
+		}
+
+		/// <summary>Where <see cref="PushArrays{T}"/> writes: a tile's or edit-mode backdrop's block, or a play-mode backdrop copy.</summary>
+		private interface IPropertySink
+		{
+			void SetTexture(int id, Texture value);
+			void SetVector(int id, Vector4 value);
+		}
+
+		private readonly struct BlockSink : IPropertySink
+		{
+			private readonly MaterialPropertyBlock block;
+			public BlockSink(MaterialPropertyBlock block) => this.block = block;
+			public void SetTexture(int id, Texture value) => block.SetTexture(id, value);
+			public void SetVector(int id, Vector4 value) => block.SetVector(id, value);
+		}
+
+		private readonly struct MaterialSink : IPropertySink
+		{
+			private readonly Material material;
+			public MaterialSink(Material material) => this.material = material;
+			public void SetTexture(int id, Texture value) => material.SetTexture(id, value);
+			public void SetVector(int id, Vector4 value) => material.SetVector(id, value);
 		}
 
 		/// <summary>The scene's arrays and layer table, and the info vector that says what is bound.</summary>
 		/// <param name="weights">For a tile, 1 when its index map is bound; for a backdrop renderer, its control maps.</param>
-		private void PushArrays(MaterialPropertyBlock block, int weights)
+		private void PushArrays<T>(T block, int weights) where T : struct, IPropertySink
 		{
 			bool usable = set != null && set.IsUsable;
 			if (usable)
@@ -682,6 +752,7 @@ namespace FishMMO.Shared
 		/// <summary>Hands every bound tile an empty block, so nothing of a set that is going away stays bound.</summary>
 		private void Unbind()
 		{
+			TilePushes++;
 			foreach (Terrain terrain in bound)
 			{
 				if (terrain != null)
@@ -698,6 +769,25 @@ namespace FishMMO.Shared
 				}
 			}
 			boundBackdrop.Clear();
+			foreach (KeyValuePair<Renderer, (Material Source, Material Copy)> pair in backdropCopies)
+			{
+				if (pair.Key != null && pair.Key.sharedMaterial == pair.Value.Copy)
+				{
+					pair.Key.sharedMaterial = pair.Value.Source;
+				}
+				if (pair.Value.Copy != null)
+				{
+					if (Application.isPlaying)
+					{
+						Destroy(pair.Value.Copy);
+					}
+					else
+					{
+						DestroyImmediate(pair.Value.Copy);
+					}
+				}
+			}
+			backdropCopies.Clear();
 		}
 
 #if UNITY_EDITOR

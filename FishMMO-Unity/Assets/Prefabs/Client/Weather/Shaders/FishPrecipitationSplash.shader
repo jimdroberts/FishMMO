@@ -49,12 +49,16 @@ Shader "FishMMO/Weather/Precipitation Splash"
             #include "FishSurface.hlsl"
             #include "FishAmbient.hlsl"
 
-            float4 _FishSplashOrigin;   // xyz camera, w time
-            float4 _FishSplashParams;   // x radius, y density 0..1, z widest ring across (m), w lifetime seconds
-            float4 _FishSplashColor;    // rgb tint, a alpha
-            float4 _FishSplashHeat;     // x dryness 0..1 (hot ground cuts a glint short), yzw unused
-            float4 _FishSplashGrid;     // x cells along a side of the square round the camera, y metres a cell
-            float4 _FishSplashGlint;    // x seconds a glint lasts, y its height (m), z its opacity, w a ring's opacity
+            // Set on the field's own copy of the material each draw (PrecipitationSplashField), in UnityPerMaterial so the
+            // draw stays in the SRP Batcher.
+            CBUFFER_START(UnityPerMaterial)
+                float4 _FishSplashOrigin;   // xyz camera, w time
+                float4 _FishSplashParams;   // x radius, y density 0..1, z widest ring across (m), w lifetime seconds
+                float4 _FishSplashColor;    // rgb tint, a alpha
+                float4 _FishSplashHeat;     // x dryness 0..1 (hot ground cuts a glint short), yzw unused
+                float4 _FishSplashGrid;     // x cells along a side of the square round the camera, y metres a cell
+                float4 _FishSplashGlint;    // x seconds a glint lasts, y its height (m), z its opacity, w a ring's opacity
+            CBUFFER_END
 
             struct Attributes
             {

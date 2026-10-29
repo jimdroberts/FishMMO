@@ -58,16 +58,19 @@ Shader "FishMMO/Weather/Curtain"
             #include "FishSkyCommon.hlsl"
             #include "FishAmbient.hlsl"
 
-            // Per cell, from CurtainPresenter.
-            float4 _CurtainCentre;  // xyz the cell's centre on the ground (world x, ground height, world z), w how high it stands above the ground (m): the cloud base it falls from, the wall's top, the whirl's
-            float4 _CurtainShape;   // xy the way it faces (unit, world x/z; a front's travel), z RadiusMeters, w ExtentMeters
-            float4 _CurtainForm;    // x shape (0 disc, 1 front, 2 eyewall, 3 funnel), y style (0 falling, 1 dust wall, 2 dust whirl), z flakes (0 streaks … 1 a mottled veil), w seed 0..1
-            float4 _CurtainFall;    // x fall speed (m/s), y time (s), zw how far the shaft's foot is carried from under its top (m, world x/z)
-            float4 _CurtainAmount;  // x what falls at its heart now (precipitation × envelope × peak), y water's share of the extinction (rain + 5 snow + ½ hail), z dust's (0.03 ash + 0.04 sand), w forward scatter g
-            float4 _CurtainColor;   // rgb the colour of what falls, in this air
-            float4 _CurtainBox;     // xy the box's middle (world x/z), zw its half-sizes along the facing and across it (m)
-            float4 _CurtainMarch;   // x strides, y unused, z 1 with a noise volume bound, w the shape's own size (m)
-            float4 _CurtainStorm;   // x 1 when it falls from a storm's own cloud, which the weather map lays out: it falls only under that cloud, and is lit by it; y 1 when the sky has published the open day's light (SkySystem.CloudsReady)
+            // Per curtain, set on the presenter's own copy of the material for each curtain drawn (CurtainPresenter): in
+            // UnityPerMaterial, not from a property block, so every curtain's draw stays in the SRP Batcher.
+            CBUFFER_START(UnityPerMaterial)
+                float4 _CurtainCentre;  // xyz the cell's centre on the ground (world x, ground height, world z), w how high it stands above the ground (m): the cloud base it falls from, the wall's top, the whirl's
+                float4 _CurtainShape;   // xy the way it faces (unit, world x/z; a front's travel), z RadiusMeters, w ExtentMeters
+                float4 _CurtainForm;    // x shape (0 disc, 1 front, 2 eyewall, 3 funnel), y style (0 falling, 1 dust wall, 2 dust whirl), z flakes (0 streaks … 1 a mottled veil), w seed 0..1
+                float4 _CurtainFall;    // x fall speed (m/s), y time (s), zw how far the shaft's foot is carried from under its top (m, world x/z)
+                float4 _CurtainAmount;  // x what falls at its heart now (precipitation × envelope × peak), y water's share of the extinction (rain + 5 snow + ½ hail), z dust's (0.03 ash + 0.04 sand), w forward scatter g
+                float4 _CurtainColor;   // rgb the colour of what falls, in this air
+                float4 _CurtainBox;     // xy the box's middle (world x/z), zw its half-sizes along the facing and across it (m)
+                float4 _CurtainMarch;   // x strides, y unused, z 1 with a noise volume bound, w the shape's own size (m)
+                float4 _CurtainStorm;   // x 1 when it falls from a storm's own cloud, which the weather map lays out: it falls only under that cloud, and is lit by it; y 1 when the sky has published the open day's light (SkySystem.CloudsReady)
+            CBUFFER_END
             TEXTURE3D(_CurtainNoise);
             SAMPLER(sampler_CurtainNoise);
 

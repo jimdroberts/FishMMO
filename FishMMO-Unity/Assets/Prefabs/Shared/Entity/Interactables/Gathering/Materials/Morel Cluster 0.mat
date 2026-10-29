@@ -43,7 +43,9 @@ Material:
     - _Cutoff: 0.45
     - _Deciduous: 0
     - _DistanceFade: 1
+    - _Evergreen: 0
     - _FacingCamera: 0
+    - _FishMoss: 0
     - _FishWeatherAmount: 1
     - _Smoothness: 0.1
     - _SnowBury: 1

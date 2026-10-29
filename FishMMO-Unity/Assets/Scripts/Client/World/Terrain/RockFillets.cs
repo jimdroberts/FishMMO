@@ -447,11 +447,12 @@ namespace FishMMO.Client
 				{
 					m = new Material(shader) { name = $"{source.name} (rock fillet)", hideFlags = HideFlags.DontSave };
 					m.CopyPropertiesFromMaterial(source);
+					// w: the rock's maps are look array slices (ProceduralArtLookArrays; the arrays and slices came with the copy).
 					m.SetVector(MapsId, new Vector4(
 						source.IsKeywordEnabled("_METALLICSPECGLOSSMAP") ? 1f : 0f,
 						source.IsKeywordEnabled("_OCCLUSIONMAP") ? 1f : 0f,
 						source.IsKeywordEnabled("_NORMALMAP") ? 1f : 0f,
-						0f));
+						source.IsKeywordEnabled(TerrainLookMath.Keyword) ? 1f : 0f));
 					// The rocks' base band and crevices (FishGroundColour.hlsl), as the rock renderers set it.
 					m.SetFloat(ContactOnId, 1f);
 				}

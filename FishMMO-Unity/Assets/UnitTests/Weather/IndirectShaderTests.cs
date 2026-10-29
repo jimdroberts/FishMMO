@@ -30,6 +30,8 @@ namespace FishMMO.UnitTests
 		private const string LodFade = Shaders + "FishLodFade.hlsl";
 		private const string ProceduralPragma = "#pragma instancing_options procedural:FishIndirectSetup";
 		private const string IndirectInclude = "#include \"FishIndirectInstancing.hlsl\"";
+		/// <summary>URP's DOTS_INSTANCING_ON pragmas: the BatchRendererGroup path's variants (TerrainGpuRenderer.Brg.cs).</summary>
+		private const string DotsInclude = "#include_with_pragmas \"Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl\"";
 
 		private struct Pair
 		{
@@ -38,6 +40,11 @@ namespace FishMMO.UnitTests
 			public string OriginalName;
 			public string IndirectName;
 			public string[] InstancedPasses;
+			/// <summary>
+			/// The twin adds DOTS_INSTANCING_ON for the BatchRendererGroup path where its original has none (FishMMO/Vegetation:
+			/// the GPU Resident Drawer must not take its MeshRenderers). FishMMO/Weather Lit has it in both already.
+			/// </summary>
+			public bool DotsOnlyInIndirect;
 		}
 
 		private static readonly Pair[] Pairs =
@@ -49,6 +56,7 @@ namespace FishMMO.UnitTests
 				OriginalName = "FishMMO/Vegetation",
 				IndirectName = "FishMMO/Vegetation Indirect",
 				InstancedPasses = new[] { "ForwardLit", "ShadowCaster", "DepthOnly", "DepthNormals" },
+				DotsOnlyInIndirect = true,
 			},
 			new Pair
 			{
@@ -93,7 +101,7 @@ namespace FishMMO.UnitTests
 			foreach (string line in body.Split('\n'))
 			{
 				string t = line.Trim();
-				if (t == ProceduralPragma || t == IndirectInclude)
+				if (t == ProceduralPragma || t == IndirectInclude || (pair.DotsOnlyInIndirect && t == DotsInclude))
 				{
 					continue;
 				}

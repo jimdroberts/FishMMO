@@ -240,6 +240,23 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>The forms a mine never links (a mine is its host's: dug, timbered and lit by the people of the land over it).</summary>
 		public static bool Links(BiomeCaveForm form) => form != BiomeCaveForm.Mine;
 
+		/// <summary>
+		/// Whether the every-form default lists carry a form (shells, formations, glows, hangings, 2026-10-26): every form but a sea hall,
+		/// which is only ever an interior's (decision 83) and is written only where a biome's file names it, so the 83 templates'
+		/// authored lists stay what they were.
+		/// </summary>
+		public static bool InEveryList(BiomeCaveForm form) => form != BiomeCaveForm.SeaHall;
+
+		/// <summary>
+		/// Whether a form's link holds only on a world its interior's Requires admits (2026-10-26, phase I2n-b, decision 83: "the link
+		/// gated by the interior's Requires"): a sea hall's, whose sea exists only on a world frozen through over a warm interior.
+		/// Every other form's link is as it was (the shell alone gates it).
+		/// </summary>
+		public static bool GatedByWorld(BiomeCaveForm form) => form == BiomeCaveForm.SeaHall;
+
+		/// <summary>The interior a Subsurface Ocean Vent host's sea halls link (decision 83): the biome is an interior only.</summary>
+		public const string SubsurfaceOceanVent = "Subsurface Ocean Vent";
+
 		/// <summary>The cave biomes' asset names: the interiors the authoring links (Cave, Ice Cave, Lava Tube) and the two whose rounds will (Volcanic Cave, Swamp Cave).</summary>
 		public const string Cave = "Cave", IceCave = "Ice Cave", LavaTube = "Lava Tube", VolcanicCave = "Volcanic Cave", SwampCave = "Swamp Cave";
 
@@ -327,6 +344,13 @@ namespace FishMMO.Shared.Biomes
 		public static int LinkedHabitat(int host, int interior, int barren) => interior & ~barren | host & barren;
 
 		/// <summary>
+		/// <see cref="LinkedHabitat(int, int, int)"/> for a cave of a form (2026-10-26, phase I2n-b, decision 83 Q7): a sea hall keeps its
+		/// interior's habitat whole, the host's Barren bit not taken (the ice over it is airless; the warm sea under it is the life).
+		/// </summary>
+		public static int LinkedHabitat(BiomeCaveForm form, int host, int interior, int barren)
+			=> form == BiomeCaveForm.SeaHall ? interior : LinkedHabitat(host, interior, barren);
+
+		/// <summary>
 		/// Whether a template's cave lights are authored as the cold Glow kinds (decision 41: a biome found only under thin air or
 		/// none; decision 62: or only on a methane, cryogenic, frozen-nitrogen, runaway-greenhouse or molten-rock world, together
 		/// BiomeAir.NeverBreathable), with decision 57's exception: a template other biomes link their caves to keeps its fire lights,
@@ -369,6 +393,11 @@ namespace FishMMO.Shared.Biomes
 				case BiomeCaveForm.Mine:
 					Add(BiomeCaveFormationRole.Breakdown, "Scree");
 					break;
+				case BiomeCaveForm.SeaHall:
+					// The dressing's own set for a sea hall (2026-10-26, I2n-b): icicles and fallen ice; its chimneys are its smokers'.
+					Add(BiomeCaveFormationRole.Hanging, "Stalagmite");
+					Add(BiomeCaveFormationRole.Breakdown, "Lobe");
+					break;
 				default:
 					Add(BiomeCaveFormationRole.Floor, "Stalagmite");
 					Add(BiomeCaveFormationRole.Hanging, "Stalagmite");
@@ -387,7 +416,10 @@ namespace FishMMO.Shared.Biomes
 			var list = new List<BiomeCaveFormation>();
 			foreach (BiomeCaveForm form in (BiomeCaveForm[])Enum.GetValues(typeof(BiomeCaveForm)))
 			{
-				list.AddRange(DefaultFormations(form));
+				if (InEveryList(form))
+				{
+					list.AddRange(DefaultFormations(form));
+				}
 			}
 			return list;
 		}
@@ -478,7 +510,10 @@ namespace FishMMO.Shared.Biomes
 			var list = new List<BiomeCaveGlow>();
 			foreach (BiomeCaveForm form in (BiomeCaveForm[])Enum.GetValues(typeof(BiomeCaveForm)))
 			{
-				list.Add(DefaultGlow(form));
+				if (InEveryList(form))
+				{
+					list.Add(DefaultGlow(form));
+				}
 			}
 			return list;
 		}

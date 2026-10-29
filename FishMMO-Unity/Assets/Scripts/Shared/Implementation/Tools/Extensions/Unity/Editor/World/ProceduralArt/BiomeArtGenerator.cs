@@ -511,6 +511,8 @@ namespace FishMMO.Shared.WorldDesign
 			public readonly Dictionary<string, Material> Materials = new Dictionary<string, Material>();
 			public readonly Dictionary<string, Color32[]> BarkPixels = new Dictionary<string, Color32[]>();
 			public readonly List<string> PendingTextures = new List<string>();
+			/// <summary>Look array flipbooks being filled by a surface step (BiomeArtGenerator.LookArrays.cs), by path; written at its end.</summary>
+			public readonly Dictionary<string, LookFlipbook> LookFlipbooks = new Dictionary<string, LookFlipbook>(StringComparer.Ordinal);
 			/// <summary>Payload textures that would not load as 2D textures even after a forced reimport.</summary>
 			public readonly HashSet<string> UnloadableTextures = new HashSet<string>(StringComparer.Ordinal);
 			/// <summary>Existing generated assets updated in memory this step, saved together by <see cref="Flush"/>.</summary>
@@ -534,9 +536,10 @@ namespace FishMMO.Shared.WorldDesign
 			// Migration, ground, bark, atlas, import, verify, layers, materials, details, bushes, trees, deadwood,
 			// built layers; the stone, rock-formation, ice and cliff-piece steps (BiomeArtGenerator.Rocks.cs); the structure kit's
 			// (BiomeArtGenerator.Structures.cs).
-			// The vines: a step a species, and one for the climbers (BiomeArtGenerator.Vines.cs).
+			// The vines: a step a species, and one for the climbers (BiomeArtGenerator.Vines.cs). The look arrays' users
+			// (BiomeArtGenerator.LookArrays.cs).
 			return SurfaceCatalogue.GroundRecipes.Length + SurfaceCatalogue.BarkRecipes.Length + 9 + ProceduralArtCatalogue.Bushes.Length + ProceduralArtCatalogue.Trees.Length + RockStepCount()
-				+ StructureStepCount() + ProceduralArtCatalogue.Vines.Length + 1;
+				+ StructureStepCount() + ProceduralArtCatalogue.Vines.Length + 1 + 1;
 		}
 
 		/// <summary>
@@ -622,6 +625,10 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			yield return "Built terrain layers";
 			c.Built = BiomeTerrainLayers.EnsureAll(c.Report.Problems);
+			// Materials outside the generated folder that still name a single map now in a look array (a gathering node's tinted copy,
+			// a cave's rock): pointed at the array's slice (BiomeArtGenerator.LookArrays.cs).
+			yield return "Look array users";
+			RebindLookArrayUsers(c);
 		}
 
 		/// <summary>
@@ -774,7 +781,7 @@ namespace FishMMO.Shared.WorldDesign
 			foreach (string path in ProceduralArtCatalogue.PayloadPaths())
 			{
 				if (path.EndsWith(".png", StringComparison.OrdinalIgnoreCase) && File.Exists(path)
-					&& AssetDatabase.GetMainAssetTypeAtPath(path) != typeof(Texture2D))
+					&& AssetDatabase.GetMainAssetTypeAtPath(path) != ExpectedTextureType(path))
 				{
 					wrong.Add(path);
 				}
@@ -799,14 +806,20 @@ namespace FishMMO.Shared.WorldDesign
 			foreach (string path in wrong)
 			{
 				System.Type type = AssetDatabase.GetMainAssetTypeAtPath(path);
-				if (type == typeof(Texture2D))
+				if (type == ExpectedTextureType(path))
 				{
 					continue;
 				}
 				c.UnloadableTextures.Add(path);
 				string shape = AssetImporter.GetAtPath(path) is TextureImporter importer ? $", texture shape {importer.textureShape}" : string.Empty;
-				c.Report.Problems.Add($"{path}: does not import as a 2D texture even after a forced reimport (imports as {(type != null ? type.Name : "nothing")}{shape}); no wrapper naming it is written");
+				c.Report.Problems.Add($"{path}: does not import as a {ExpectedTextureType(path).Name} even after a forced reimport (imports as {(type != null ? type.Name : "nothing")}{shape}); no wrapper naming it is written");
 			}
+		}
+
+		/// <summary>What a payload PNG must import as: a look array's flipbook a <see cref="Texture2DArray"/>, every other a <see cref="Texture2D"/>.</summary>
+		private static System.Type ExpectedTextureType(string path)
+		{
+			return Path.GetFileName(path).StartsWith(ProceduralArtLookArrays.FilePrefix, StringComparison.Ordinal) ? typeof(Texture2DArray) : typeof(Texture2D);
 		}
 
 		/// <summary>
@@ -1001,9 +1014,12 @@ namespace FishMMO.Shared.WorldDesign
 			m.SetFloat("_FishWeatherAmount", 1f);
 			m.SetTexture("_BumpMap", normal);
 			bool normalMap = normal != null || expectNormal;
+			// On FishMMO/Vegetation a uniform, not a keyword (FishVegetationPasses.hlsl VegNormal): bark and deadwood share one
+			// shader variant. The wrapper check reads it as the normal map's switch (ProceduralArtWrapperCheck.FloatSwitches).
+			// The keyword only for URP Lit, the fallback, which declares it.
 			m.SetFloat("_UseNormalMap", normalMap ? 1f : 0f);
 			m.SetFloat("_BumpScale", 1f);
-			if (normalMap) m.EnableKeyword("_NORMALMAP"); else m.DisableKeyword("_NORMALMAP");
+			if (normalMap && m.shader != null && m.shader.name != "FishMMO/Vegetation") m.EnableKeyword("_NORMALMAP"); else m.DisableKeyword("_NORMALMAP");
 			m.SetFloat("_DistanceFade", distanceFade);
 			m.SetFloat("_FacingCamera", facingCamera ? 1f : 0f);
 			m.SetVector("_GroundSink", new Vector4(groundSink.x, groundSink.y, 0f, 0f));
@@ -1077,21 +1093,22 @@ namespace FishMMO.Shared.WorldDesign
 				// Each wears its rock type's surface (Grey: granite), the one its formations and cliffs wear, so
 				// the three read as one stone (RockArtNames.RockSurfaceTypeForLegacy).
 				string surface = RockArtNames.RockSurfaceTypeForLegacy(spec.Name);
-				Texture2D albedo = LoadTexture(surface != null ? RockArtNames.RockSurfaceTexture(surface, "Albedo") : ProceduralArtCatalogue.GroundTexture(spec.GroundFamily, "Albedo"));
-				Texture2D normal = LoadTexture(surface != null ? RockArtNames.RockSurfaceTexture(surface, "Normal") : ProceduralArtCatalogue.GroundTexture(spec.GroundFamily, "Normal"));
-				Texture2D mask = LoadTexture(surface != null ? RockArtNames.RockSurfaceTexture(surface, "Mask") : ProceduralArtCatalogue.GroundTexture(spec.GroundFamily, "Mask"));
+				string albedo = surface != null ? RockArtNames.RockSurfaceTexture(surface, "Albedo") : ProceduralArtCatalogue.GroundTexture(spec.GroundFamily, "Albedo");
+				string normal = surface != null ? RockArtNames.RockSurfaceTexture(surface, "Normal") : ProceduralArtCatalogue.GroundTexture(spec.GroundFamily, "Normal");
+				string mask = surface != null ? RockArtNames.RockSurfaceTexture(surface, "Mask") : ProceduralArtCatalogue.GroundTexture(spec.GroundFamily, "Mask");
 				WriteMaterial(c, ProceduralArtCatalogue.RockMaterial(spec.Name), rock, m =>
 				{
-					m.SetTexture("_BaseMap", albedo);
+					// A rock type's surface is a slice of the rock look arrays (ProceduralArtLookArrays); a ground's a 2D map.
+					SetSurfaceMap(c, m, "_BaseMap", albedo);
 					m.SetColor("_BaseColor", Color.white);
-					m.SetTexture("_BumpMap", normal);
+					SetSurfaceMap(c, m, "_BumpMap", normal);
 					m.SetFloat("_BumpScale", 1f);
 					m.EnableKeyword("_NORMALMAP");
 					// The ground mask is R metallic, G occlusion, B height, A smoothness — exactly what
 					// URP Lit reads from its metallic-gloss (R, A) and occlusion (G) maps.
-					m.SetTexture("_MetallicGlossMap", mask);
+					SetSurfaceMap(c, m, "_MetallicGlossMap", mask);
 					m.EnableKeyword("_METALLICSPECGLOSSMAP");
-					m.SetTexture("_OcclusionMap", mask);
+					SetSurfaceMap(c, m, "_OcclusionMap", mask);
 					m.SetFloat("_OcclusionStrength", 1f);
 					m.EnableKeyword("_OCCLUSIONMAP");
 					m.SetFloat("_Smoothness", 1f);
@@ -1125,7 +1142,7 @@ namespace FishMMO.Shared.WorldDesign
 					/* A glowing sea detail (2026-10-25, phase I2m, decision 36 (d)): the cave glow's material, its own colours lit
 					 * from within, so it is seen where the daylight never reaches. */
 					var glow = new CaveGlowHue { Name = spec.Name, Albedo = spec.Healthy, Emission = spec.Glow, Smoothness = 0.45f, Metallic = 0f };
-					WriteMaterial(c, ProceduralArtCatalogue.DetailPrefab(spec.Name), rock, m => CaveGlowLit(m, atlas, atlas, in glow, false));
+					WriteMaterial(c, ProceduralArtCatalogue.DetailPrefab(spec.Name), rock, m => CaveGlowLit(c, m, ProceduralArtCatalogue.AtlasPath, ProceduralArtCatalogue.AtlasPath, in glow, false));
 					continue;
 				}
 				WriteMaterial(c, ProceduralArtCatalogue.DetailPrefab(spec.Name), veg, m =>

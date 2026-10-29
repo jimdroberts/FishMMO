@@ -147,7 +147,7 @@ namespace FishMMO.UnitTests
 			Assert.That(body, Does.Not.Contain("isPlaying"), "a stroke in play mode writes the asset too");
 			Assert.That(baker, Does.Contain("StoreIndex(terrain, tile.Index)"), "every cut and repaint stores the maps");
 			Assert.That(baker, Does.Contain("index.Stale = false"));
-			Assert.That(baker, Does.Contain("TerrainIndexMap.Bake(data.GetAlphamaps(0, 0, res, res))"), "stored = the CPU bake of the alphamaps");
+			Assert.That(baker, Does.Contain("TerrainTileLayerMap.Bake(data.GetAlphamaps(0, 0, res, res), TerrainTileLayers.Of(terrain))"), "stored = the CPU bake of the alphamaps, in scene layers");
 
 			string binder = File.ReadAllText(Scripts + "Shared/Implementation/Entity/WorldSceneDetails/Terrain/TerrainArrayBinder.cs");
 			Assert.That(binder, Does.Contain("rebake: Application.isEditor && !Application.isPlaying"), "edit mode bakes every push");
@@ -202,7 +202,7 @@ namespace FishMMO.UnitTests
 		{
 			string stripper = File.ReadAllText(Scripts + "Shared/Implementation/Tools/Extensions/Unity/Editor/ClientTerrainLayerStripper.cs");
 			Assert.That(stripper, Does.Contain("KeepAlphamapsReason(stored, original.alphamapResolution, original.alphamapLayers"));
-			Assert.That(stripper, Does.Contain("TerrainIndexMap.Same(stored.Map, TerrainIndexMap.Bake(original.GetAlphamaps(0, 0, original.alphamapResolution, original.alphamapResolution)))"));
+			Assert.That(stripper, Does.Contain("TerrainIndexMap.Same(stored.Map, TerrainTileLayerMap.Bake(original.GetAlphamaps(0, 0, original.alphamapResolution, original.alphamapResolution), sceneLayers))"));
 			Assert.That(stripper, Does.Contain("ClientCopy(original, layers, keepAlphamaps: keep)"));
 			Assert.That(stripper, Does.Contain("RemapBakes(holders, copies, refused)"));
 			Assert.That(stripper, Does.Contain("tile.Index = new TerrainDetailBake.IndexMap()"), "a refused map is not shipped: a player would trust it");
@@ -332,12 +332,18 @@ namespace FishMMO.UnitTests
 			Assert.That(contact, Does.Contain("TerrainIndexMapBaker.CopyInto(TerrainArrayBinder.IndexMapOf(t), target, slice)"));
 			Assert.That(contact, Does.Contain("TerrainIndexMapBaker.Upload(stored"));
 			Assert.That(contact, Does.Not.Contain("if (data.alphamapTextureCount == 0)\n"), "a tile without alphamaps is no longer left out");
+			// Footstep surfaces (2026-10-21): the alphamaps where the tile kept them, else the stored map through the same filter
+			// the terrain shader runs.
+			string footsteps = File.ReadAllText(Scripts + "Client/Audio/World/GroundSurface.cs");
+			Assert.That(footsteps, Does.Contain("SceneTerrainBake.IndexOf(data)"));
+			Assert.That(footsteps, Does.Contain("TerrainIndexMap.Filter(index.Map, index.Resolution, index.Resolution, u, v, ids, weights)"));
 
 			// No other runtime (non-editor) script reads the alphamaps.
 			foreach (string file in Directory.GetFiles(Scripts, "*.cs", SearchOption.AllDirectories))
 			{
 				string path = file.Replace('\\', '/');
-				if (path.Contains("/Editor/") || path.EndsWith("TerrainIndexMapBaker.cs") || path.EndsWith("GroundColourMap.cs") || path.EndsWith("GrassTerrain.cs"))
+				if (path.Contains("/Editor/") || path.EndsWith("TerrainIndexMapBaker.cs") || path.EndsWith("GroundColourMap.cs") || path.EndsWith("GrassTerrain.cs")
+					|| path.EndsWith("Audio/World/GroundSurface.cs"))
 				{
 					continue;
 				}

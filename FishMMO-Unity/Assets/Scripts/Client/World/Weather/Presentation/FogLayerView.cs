@@ -673,6 +673,10 @@ namespace FishMMO.Client
 			return light;
 		}
 
+		/// <summary>Reused for <see cref="Terrain.GetActiveTerrains"/>: <c>Terrain.activeTerrains</c> builds a new array on
+		/// every read, and the fog and shimmer passes ask every frame.</summary>
+		private static readonly System.Collections.Generic.List<Terrain> activeTerrainsScratch = new System.Collections.Generic.List<Terrain>();
+
 		/// <summary>The ground under a point, m: the highest terrain there, or sea level where there is none (as CloudTerrainMap reads it).</summary>
 		public static float GroundUnder(Vector3 at)
 		{
@@ -682,8 +686,9 @@ namespace FishMMO.Client
 				return island;
 			}
 			float height = 0f;
-			Terrain[] terrains = Terrain.activeTerrains;
-			for (int i = 0; i < terrains.Length; i++)
+			System.Collections.Generic.List<Terrain> terrains = activeTerrainsScratch;
+			Terrain.GetActiveTerrains(terrains);
+			for (int i = 0; i < terrains.Count; i++)
 			{
 				Terrain terrain = terrains[i];
 				if (terrain == null || terrain.terrainData == null)

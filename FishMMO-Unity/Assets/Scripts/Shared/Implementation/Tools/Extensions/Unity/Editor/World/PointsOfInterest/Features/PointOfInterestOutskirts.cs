@@ -795,6 +795,8 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				placed.Add((centre, yaw, size));
 				context.FieldClaims?.Add(PointOfInterestFarmsteads.ClaimSite(record.Id), centre, yaw, size);
+				// Its yard kept as a yard (2026-10-27, PointOfInterestEnclosureClearance): the scatter's trees, bushes and rocks off it, its grass kept.
+				context.FieldClaims?.Enclose(centre, yaw, size, turf: true);
 			}
 
 			/// <summary>The quarter turn of <paramref name="frame"/> whose −z looks most toward <paramref name="to"/> from <paramref name="from"/>.</summary>

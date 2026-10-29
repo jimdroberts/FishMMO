@@ -201,8 +201,17 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>This hook's own time in the profiler (render-pipeline callbacks otherwise show only as
+		/// RenderPipeline.BeginCameraRendering's self time). In a class of its own so the marker, an engine object, is made
+		/// when the hook first runs, not when the type is first touched (tests outside Unity use these types' pure parts).</summary>
+		private static class HookProfiling
+		{
+			public static readonly Unity.Profiling.ProfilerMarker Marker = new Unity.Profiling.ProfilerMarker("CaveCoverSystem.BeginCamera");
+		}
+
 		private static void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera)
 		{
+			using var hookMarkerScope = HookProfiling.Marker.Auto();
 			if (!Application.isPlaying || renderer == null || pieces.Count == 0 || !TerrainInstancingShared.DrawsDetails(camera) || camera.cameraType == CameraType.Reflection)
 			{
 				return;

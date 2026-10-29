@@ -15,7 +15,7 @@ MonoBehaviour:
   IsIdentifiable: 0
   Generate: 0
   MaxStackSize: 50
-  Price: 4
+  Price: 12
   IconPools: 
   icon:
     m_AssetGUID: 
@@ -31,5 +31,5 @@ MonoBehaviour:
     m_EditorAssetChanged: 0
   Attributes: []
   Family: Ore
-  Tier: 1
-  Description: Green-stained copper ore from soft sedimentary rock.
+  Tier: 2
+  Description: Malachite-green copper ore from the old pits in the porphyry.

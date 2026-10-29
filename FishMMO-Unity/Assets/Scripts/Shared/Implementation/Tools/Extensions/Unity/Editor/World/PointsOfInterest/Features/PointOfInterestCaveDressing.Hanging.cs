@@ -479,7 +479,8 @@ namespace FishMMO.Shared.WorldDesign
 				// To the floor where it is off every way and dry; over a way (or too high to reach) a tangle that clears heads.
 				bool clear = room >= CaveHanging.TapRoomMin && room <= CaveHanging.TapRoomMax && !Submerged(ground)
 					&& !InLane(ground, 1.1f) && !OnWay(ground, 1.1f);
-				if (clear && CaveArt.TryGlow(CaveGlowKind.TapRoots, hue, Mathf.FloorToInt(pick * 997f), out CaveGlowArt tap))
+				// In the water roots' hue where the biome's root art is theirs (2026-10-26, I2n-c: the art's own otherwise, as before).
+				if (clear && CaveArt.TryGlow(CaveGlowKind.TapRoots, waterRoots ? CaveGlowPalettes.HueOf(CaveGlowKind.TapRoots, WaterRootsHue, hue) : hue, Mathf.FloorToInt(pick * 997f), out CaveGlowArt tap))
 				{
 					float sy = CaveHanging.TapScaleY(room, tap.Height);
 					if (Place(tap.Prefab, new Vector3(ground.x, roof + 0.03f, ground.z), Quaternion.Euler(0f, yaw, 0f), new Vector3(girth, sy, girth)))
@@ -489,7 +490,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					return;
 				}
-				if (!CaveArt.TryGlow(CaveGlowKind.HangingRoots, hue, Mathf.FloorToInt(pick * 991f), out CaveGlowArt roots))
+				if (!CaveArt.TryGlow(CaveGlowKind.HangingRoots, HangingRootsHue(hue), Mathf.FloorToInt(pick * 991f), out CaveGlowArt roots))
 				{
 					Missing.Add("cave glow art");
 					return;

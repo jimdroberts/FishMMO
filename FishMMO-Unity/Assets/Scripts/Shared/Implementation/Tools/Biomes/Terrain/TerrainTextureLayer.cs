@@ -354,6 +354,46 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("How this ground glows: None (as before), Seams (crust plates overturning on the shared clock, their seams incandescent) or Whole (the whole layer at the world's temperature). Written by Author biome art from the spec (a layer's Glows); set by hand to override. Takes effect when the scene's terrain arrays are baked again (in place).")]
 		public BiomeGroundGlow glow;
 
+		/// <remarks>
+		/// <b>A ground of the faces that look one way</b> (2026-10-26, phase GROUND-BANDS, decision 71: "a FACING band on ground layers
+		/// (frost on shaded/poleward faces)"): with the band on, a DETAIL layer is painted only on slopes whose fall line looks within its
+		/// half width of a compass direction from the scene's place on its globe (<see cref="BiomeFacingBand"/>): a shade frost on the
+		/// poleward faces, a cold trap's ice on the shaded walls. It multiplies the layer's patches like its heat band. Main layers, cliffs,
+		/// beds and ways ignore it. Off (the default) paints as before.
+		/// </remarks>
+		[Header("Ground Bands (2026-10-26)")]
+		[Tooltip("Detail layers: paint this ground only on slopes facing one way (poleward = shade, equatorward = sun, east, west, downwind, upwind). Off = every way, as before. Written by Author biome art from the spec (a layer's Facing); set by hand to override.")]
+		public BiomeFacingBand facingBand;
+
+		/// <remarks>
+		/// <b>Patches drawn out down the fall line</b> (2026-10-26, phase GROUND-BANDS; the Valley draft's avalanche tracks: "noise stretched
+		/// ×4 along fall line"): above 1, a DETAIL layer's blend noise is read in each slope's own frame, its patches this many times longer
+		/// down the slope than across it, so a torn track runs from crest to foot. Flat ground keeps the plain noise. 0 or 1 (the default)
+		/// reads the noise as before.
+		/// </remarks>
+		[Tooltip("Detail layers: above 1, stretch this ground's patches this many times along the fall line (avalanche tracks, scree streaks). 0 or 1 = round patches, as before. Written by Author biome art from the spec (a layer's FallLine); set by hand to override.")]
+		[Range(0f, 16f)] public float fallLineStretch;
+
+		/// <remarks>
+		/// <b>A ground of the sites</b> (2026-10-26, phase GROUND-BANDS: "sites paint their own layer"): with the band on, a DETAIL layer is
+		/// painted only on and round the planned points of interest of its kinds (<see cref="BiomeSiteBand"/>): a whale fall's blackened halo,
+		/// the old burn at a waste vill. On a scene with none of them it paints nowhere. Off (the default) paints as before.
+		/// </remarks>
+		[Tooltip("Detail layers: paint this ground only on and round points of interest of the named kinds (a whale fall's halo). Off = everywhere, as before. Written by Author biome art from the spec (a layer's NearSites); set by hand to override.")]
+		public BiomeSiteBand siteBand;
+
+		/// <remarks>
+		/// <b>A ground that comes and goes with the shared clock</b> (2026-10-26, phase GROUND-BANDS: a seasonal phytodetritus, a dawn SO₂
+		/// frost gone by noon): painted at the cut like any detail, then drawn each frame only through a window of the local year or day,
+		/// giving its share to its biome's main ground outside it (<see cref="BiomeGroundClock"/>; baked into the scene's terrain arrays,
+		/// TerrainArraySet.LayerClock, read by FishGroundClock.hlsl). Main and detail layers. None (the default) draws as before.
+		/// </remarks>
+		[Tooltip("How this ground follows the shared clock: None (always, as before), Year (a window of the local season) or Day (of the local hour); outside the window its biome's main ground shows through. Written by Author biome art from the spec (a layer's Clock); takes effect when the scene's terrain arrays are baked again (in place).")]
+		public BiomeGroundClock clock;
+
+		/// <summary>True when the layer's facing band, fall-line stretch or site band changes where its patches lie (2026-10-26, GROUND-BANDS).</summary>
+		public bool HasGroundBands => facingBand.On || fallLineStretch > 1f || siteBand.On;
+
 		[Header("Ways Across This Ground")]
 		[Tooltip("Main and detail layers only: the path, road and cobble grounds a way takes where this ground is the strongest under it. Each empty one is the biome's own slot. Written by Author biome art from the spec; set by hand to override.")]
 		public GroundWays ways;

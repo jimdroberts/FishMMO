@@ -49,8 +49,11 @@ Shader "FishMMO/World/Lighthouse Beams"
             // z how strong its glare shows (the same, and dimmed by the air between), w unused.
             float4 _BeaconParams[BEACONS];
             // x a beam's drawn length (m), y the metres over which the air takes it to a third, z how much the air shows it
-            // (thin in a clear night, strong in fog, rain and snow), w unused.
+            // (thin in a clear night, strong in fog, rain and snow), w unused. The material's own (LighthouseBeams), so the draw
+            // stays in the SRP Batcher; the arrays above are globals the system sets before each camera renders.
+            CBUFFER_START(UnityPerMaterial)
             float4 _BeaconAir;
+            CBUFFER_END
 
             // A beam's spread: its width at the mirror (m) and how much it widens a metre.
             #define BEAM_MOUTH 0.8

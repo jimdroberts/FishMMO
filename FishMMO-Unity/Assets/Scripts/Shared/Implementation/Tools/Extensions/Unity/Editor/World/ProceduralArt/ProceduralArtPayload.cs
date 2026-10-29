@@ -166,6 +166,7 @@ namespace FishMMO.Shared.WorldDesign
 			"StructurePieces.Clutter.cs",
 			"StructurePieces.Interior.cs",
 			"StructurePieces.Lights.cs",
+			"StructurePieces.WayLights.cs",
 			"StructurePieces.Mine.cs",
 			"StructurePieces.Ships.cs",
 			"StructurePieces.Town.cs",
@@ -196,6 +197,9 @@ namespace FishMMO.Shared.WorldDesign
 			// The run-time cave cover's mesh (2026-10-20).
 			"CaveCoverMeshes.cs",
 			"BiomeArtGenerator.CaveCover.cs",
+			// The look arrays: the props' surfaces written as Texture2DArrays, their materials naming slices (2026-10-28).
+			"ProceduralArtLookArrays.cs",
+			"BiomeArtGenerator.LookArrays.cs",
 			// Airships and their landing stages, for the cloud worlds (2026-10-14).
 			"StructurePieces.Airships.cs",
 			// Mills and rural works (2026-10-14).
@@ -210,8 +214,20 @@ namespace FishMMO.Shared.WorldDesign
 			"ProceduralArtCatalogue.Floating.cs",
 			// Boardwalks: their deck and pile pieces (2026-10-18, I2i).
 			"StructurePieces.Boardwalk.cs",
+			// The country bridges of the crossing styles (2026-10-26, I2l-b): liana, corbelled laterite, wind-and-rain, cantilever, Goblins' Bridge, snow bridge.
+			"StructurePieces.Crossings.cs",
 			// Linear features: hedge bases, walls, fences, gates, clearance rows and channel pieces (2026-10-18, I2f).
 			"StructurePieces.Linear.cs",
+			// The later drafts' linear forms (2026-10-26, I2f-b): a frontier's barrier and forts, windbreaks, a hand rope, palm-rib
+			// screens, marker posts and cairns, a bisse's bracketed flume and hammer, a river weir, a qanat's shafts and gallery mouth.
+			"StructurePieces.LinearForms.cs",
+			// The fantasy wave's pieces (2026-10-27): its packs' shapes, keeps and realm, green, dry and cold kinds.
+			"StructurePieces.Fantasy.Cold.cs",
+			"StructurePieces.Fantasy.Dry.cs",
+			"StructurePieces.Fantasy.Green.cs",
+			"StructurePieces.Fantasy.Keeps.cs",
+			"StructurePieces.Fantasy.Realm.cs",
+			"StructurePieces.Fantasy.Shapes.cs",
 			// Dungeon entrances' doors (2026-10-18), never hashed until 2026-10-19: an edit to them did not mark the art stale.
 			"StructurePieces.Dungeon.cs",
 			// The town's other buildings (2026-10-19): the wizard's tower and library, the garrison's, the farm's, the trades', the

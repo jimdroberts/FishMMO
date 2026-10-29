@@ -10,6 +10,10 @@
 //                     (shadow view); appends {index, lodFade} into the slot (model, level, view)
 //   FishFinalize      writes each indirect command's instanceCount = min(count, capacity)
 //
+// Where the draws go through a BatchRendererGroup (TerrainGpuRenderer.Brg.cs), FishCull also writes each entry as DOTS
+// instancing reads it (_FishVisiblePacked), and FishDotsInstances keeps the resident instances' DOTS matrices beside the
+// rows (unity_ObjectToWorld / unity_WorldToObject, column-major float3x4) after every upload.
+//
 // And, before them when instances changed, FishCopyInstances: copies a freshly created upload buffer into
 // _FishInstances on the GPU. The CPU never writes the instance buffer itself while it is in use: on
 // OpenGL (NVIDIA) a SetBufferData into the multi-MB buffer the previous frames' culling still reads
@@ -30,6 +34,7 @@
 #pragma kernel FishArgsFence
 #pragma kernel FishHiZCopy
 #pragma kernel FishHiZReduce
+#pragma kernel FishDotsInstances
 #pragma use_dxc vulkan
 
 struct FishInstance { float4 row0; float4 row1; float4 row2; };            // 48 bytes
@@ -61,6 +66,12 @@ StructuredBuffer<uint> _FishArgSlots;        // the slot each indirect command d
 RWByteAddressBuffer _FishCounts;             // one uint per slot
 RWStructuredBuffer<FishVisible> _FishVisibleOut;
 RWByteAddressBuffer _FishArgs;               // IndirectDrawIndexedArgs, 5 uints per command
+// The BatchRendererGroup's visible list (TerrainGpuRenderer.Brg.cs): every FishVisible entry again, at the same place, as one
+// uint the way DOTS instancing reads it (UnityDOTSInstancing.hlsl SetupDOTSVisibleInstancingData) — the resident index in
+// the low 24 bits, the LOD fade as a signed byte in the high 8 (FishPackFade). Written only while _FishPackedOn is 1;
+// bound to a one-word buffer otherwise.
+RWByteAddressBuffer _FishVisiblePacked;
+uint _FishPackedOn;
 
 float4 _FishCameraPosition;                  // xyz
 float4 _FishPlanes[6];                       // xyz normal, w distance: inside when dot(n, p) + w >= 0
@@ -185,6 +196,23 @@ float FishThinFade(FishWork w, float3 position, float d)
 groupshared uint gsFishCount[FISH_GROUP_SLOTS];
 groupshared uint gsFishBase[FISH_GROUP_SLOTS];
 
+// The LOD fade as the signed byte DOTS instancing carries in a visible index's top 8 bits (its crossfade, read back as
+// byte / 127). Not the nearest byte: the byte at the middle of the fade's step of FishLodFade.hlsl's 4x4 pattern, so the
+// pattern keeps exactly the pixels the float would (a pixel at threshold k/16 is drawn while k/16 < |fade|, so only
+// ceil(16 |fade|) matters, and a step is 7.9 bytes wide). +f and -f give opposite bytes, which still partition; 0 stays 0
+// (fully drawn). TerrainGpuMath.PackLodFade is the same rule (its tests compare the two predicates over every fade).
+uint FishPackFade(float fade)
+{
+    int q = 0;
+    if (fade != 0.0)
+    {
+        float steps = ceil(16.0 * min(abs(fade), 1.0));
+        q = (int)round((steps - 0.5) * (127.0 / 16.0));
+        q = fade < 0.0 ? -q : q;
+    }
+    return ((uint)q & 0xFFu) << 24;
+}
+
 // Writes a visible entry at its place in a slot (dropped past the slot's capacity).
 void FishStore(uint slot, uint at, uint index, float fade)
 {
@@ -195,6 +223,10 @@ void FishStore(uint slot, uint at, uint index, float fade)
         v.index = index;
         v.lodFade = fade;
         _FishVisibleOut[s.x + at] = v;
+        if (_FishPackedOn != 0)
+        {
+            _FishVisiblePacked.Store((s.x + at) * 4, (index & 0xFFFFFFu) | FishPackFade(fade));
+        }
     }
 }
 
@@ -379,6 +411,44 @@ void FishCopyInstances(uint3 id : SV_DispatchThreadID)
     if (id.x < _FishUploadCount)
     {
         _FishInstancesOut[_FishUploadDestination + id.x] = _FishUpload[_FishUploadSource + id.x];
+    }
+}
+
+/* The BatchRendererGroup's instance data (TerrainGpuRenderer.Brg.cs, TerrainGpuMath.Dots*): each uploaded instance's
+ * object-to-world matrix and its inverse as DOTS instancing loads them (UnityDOTSInstancing.hlsl
+ * LoadDOTSInstancedData_float4x4_from_float3x4: twelve floats, column by column, the translation last), at the instance's
+ * own index in two arrays of _FishDotsOut — unity_ObjectToWorld from _FishDotsObjectToWorld, unity_WorldToObject from
+ * _FishDotsWorldToObject (bytes). Dispatched after FishCopyInstances with the same range, reading the same upload.
+ * The inverse is FishIndirectInstancing.hlsl's (T·R·S, no shear), so both paths light an instance alike. */
+RWByteAddressBuffer _FishDotsOut;
+uint _FishDotsObjectToWorld;
+uint _FishDotsWorldToObject;
+
+void FishStoreDots(uint address, float4 row0, float4 row1, float4 row2)
+{
+    // Column j is (row0[j], row1[j], row2[j]); four columns of three, the translation (w) last.
+    _FishDotsOut.Store4(address +  0, asuint(float4(row0.x, row1.x, row2.x, row0.y)));
+    _FishDotsOut.Store4(address + 16, asuint(float4(row1.y, row2.y, row0.z, row1.z)));
+    _FishDotsOut.Store4(address + 32, asuint(float4(row2.z, row0.w, row1.w, row2.w)));
+}
+
+[numthreads(64, 1, 1)]
+void FishDotsInstances(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _FishUploadCount)
+    {
+        FishInstance i = _FishUpload[_FishUploadSource + id.x];
+        uint at = (_FishUploadDestination + id.x) * 48;
+        FishStoreDots(_FishDotsObjectToWorld + at, i.row0, i.row1, i.row2);
+        // The inverse of T·R·S with orthogonal columns c: row k of inverse(R·S) is c_k / |c_k|², and its translation -that·t.
+        float3 c0 = float3(i.row0.x, i.row1.x, i.row2.x);
+        float3 c1 = float3(i.row0.y, i.row1.y, i.row2.y);
+        float3 c2 = float3(i.row0.z, i.row1.z, i.row2.z);
+        float3 i0 = c0 / dot(c0, c0);
+        float3 i1 = c1 / dot(c1, c1);
+        float3 i2 = c2 / dot(c2, c2);
+        float3 t = float3(i.row0.w, i.row1.w, i.row2.w);
+        FishStoreDots(_FishDotsWorldToObject + at, float4(i0, -dot(i0, t)), float4(i1, -dot(i1, t)), float4(i2, -dot(i2, t)));
     }
 }
 

@@ -97,6 +97,31 @@ namespace FishMMO.Shared
 
 
 		/// <summary>
+		/// Environment-variable names already worked out, by setting name (ordinal: the derived name
+		/// upper-cases, so two spellings of one setting simply share a value).
+		/// </summary>
+		/// <remarks>
+		/// The client reads several settings every frame (clouds on, label occlusion, crosshair, ...),
+		/// and building <c>FISHMMO_CONFIG_{NAME}</c> each time was a concat, an upper-case and three
+		/// replaces of garbage per read. The name depends only on the setting's name, so it is built
+		/// once. The variable itself is still read on every call, so an override set while running
+		/// is seen exactly as before. Bounded by the number of distinct setting names in use.
+		/// </remarks>
+		private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> environmentKeys =
+			new System.Collections.Concurrent.ConcurrentDictionary<string, string>(StringComparer.Ordinal);
+
+		/// <summary>The environment variable that overrides setting <paramref name="name"/>.</summary>
+		internal static string EnvironmentKey(string name)
+		{
+			if (!environmentKeys.TryGetValue(name, out string? key))
+			{
+				key = "FISHMMO_CONFIG_" + name.ToUpperInvariant().Replace('.', '_').Replace(':', '_').Replace('-', '_');
+				environmentKeys.TryAdd(name, key);
+			}
+			return key!;
+		}
+
+		/// <summary>
 		/// Resolves a setting value, preferring the environment variable
 		/// <c>FISHMMO_CONFIG_{NAME}</c> (uppercased, '.'/':' -&gt; '_') over the
 		/// in-memory config dictionary. This allows operators to override
@@ -115,8 +140,7 @@ namespace FishMMO.Shared
 		{
 			if (!string.IsNullOrEmpty(name))
 			{
-				string envKey = "FISHMMO_CONFIG_" + name.ToUpperInvariant().Replace('.', '_').Replace(':', '_').Replace('-', '_');
-				string envVal = Environment.GetEnvironmentVariable(envKey);
+				string envVal = Environment.GetEnvironmentVariable(EnvironmentKey(name));
 				if (envVal != null)
 				{
 					value = envVal;

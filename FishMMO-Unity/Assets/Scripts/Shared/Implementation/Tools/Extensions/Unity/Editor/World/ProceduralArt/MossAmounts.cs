@@ -105,7 +105,8 @@ namespace FishMMO.Shared.WorldDesign
 				case Bark.Palm:
 				case Bark.DatePalm:
 					return 0.5f;
-				case Bark.Bamboo: return 0.35f;
+				// A fallen culm on a damp grove floor (the Bamboo Forest round's) greens over as a log does, a little less.
+				case Bark.Bamboo: return 0.55f;
 				case Bark.Dead: return 0.1f;
 				// A dead cactus is a dry woody skeleton in a desert.
 				case Bark.Cactus: return 0f;

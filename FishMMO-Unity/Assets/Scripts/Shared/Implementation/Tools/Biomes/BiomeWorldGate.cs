@@ -269,6 +269,18 @@ namespace FishMMO.Shared.Biomes
 			POIType.MarshWatchtower, POIType.BrickKiln, POIType.FowlersHide, POIType.EelWeir, POIType.HoluaSlide, POIType.PlagueVillage,
 			POIType.Chapel, POIType.HolyWell, POIType.FrogShrine, POIType.LavaCaveTemple,
 			POIType.Kipuka, POIType.FloatingIsland, POIType.PhoenixNest,
+			// The fantasy wave (2026-10-27).
+			POIType.DragonLair, POIType.GiantsSteading, POIType.GoblinWarren, POIType.Crossroads, POIType.SignalBeacon, POIType.TollGate,
+			POIType.Hamlet, POIType.ManorHouse, POIType.SiegeCamp, POIType.BurnedVillage, POIType.WarbandCamp, POIType.CultistHideout,
+			POIType.KoboldDelving, POIType.DruidGrove, POIType.TreeVillage, POIType.SpiderThicket, POIType.CharcoalClamps,
+			POIType.GreenwoodHideout, POIType.GoblinMarket, POIType.WolfDen, POIType.JaguarTemple, POIType.LizardfolkVillage, POIType.Grange,
+			POIType.Dovecote, POIType.BeeGarden, POIType.VillageGreen, POIType.NomadCamp, POIType.Kraal, POIType.Shieling, POIType.SandwormPit,
+			POIType.CaravanHalt, POIType.MountainKingsHall, POIType.HangingMonastery, POIType.PassFort, POIType.Eyrie, POIType.GriffinRoost,
+			POIType.WyvernNest, POIType.PrayerFlagPass, POIType.SilverMineTown, POIType.FrostGiantSteading, POIType.WinterWolfDen,
+			POIType.Crannog, POIType.HagsCauldron, POIType.HydraLair, POIType.ReedVillage, POIType.CovenCircle, POIType.LizardfolkHatchery,
+			POIType.TidalIslandAbbey, POIType.CliffCastle, POIType.SmugglersTunnel, POIType.WreckersBeacon, POIType.SeaWitchGrotto,
+			POIType.LongshipLanding, POIType.FireTemple, POIType.FireGiantHall, POIType.MerfolkVillage, POIType.LadyOfTheLake,
+			POIType.NymphPool, POIType.LakeMonsterLair, POIType.Commandery,
 		};
 
 		/// <summary>
@@ -279,6 +291,9 @@ namespace FishMMO.Shared.Biomes
 		private static readonly HashSet<POIType> Wet = new HashSet<POIType>
 		{
 			POIType.FloatingIsland, POIType.DrownedForest, POIType.EelWeir, POIType.FowlersHide, POIType.SunkenPlaza, POIType.MireGate,
+			// The fantasy wave (2026-10-27).
+			POIType.Cenote, POIType.Crannog, POIType.ReedVillage, POIType.MerfolkVillage, POIType.KrakenGrounds, POIType.LadyOfTheLake,
+			POIType.NymphPool, POIType.LakeMonsterLair,
 		};
 
 		/// <summary>True when a kind needs breathable air unless a biome's file says otherwise.</summary>
@@ -326,9 +341,12 @@ namespace FishMMO.Shared.Biomes
 	/// </summary>
 	public static class BiomeGlowLights
 	{
-		/// <summary>True for a light that gives off the cold Glow (no flame).</summary>
-		public static bool Glows(BiomeWayLightKind light)
-			=> light == BiomeWayLightKind.Glowjar || light == BiomeWayLightKind.CrystalPost || light == BiomeWayLightKind.RuneStone;
+		/// <summary>
+		/// True for a light that gives off the cold Glow (no flame): the glowjar, the crystal post, the rune stone, and the suite's
+		/// cold lights (2026-10-26: the bell-glow, the sun lens, the crescent standard, the lure-light…), by their emitter
+		/// (<see cref="BiomeWayLights.EmitterOf"/>).
+		/// </summary>
+		public static bool Glows(BiomeWayLightKind light) => BiomeWayLights.EmitterOf(light) == SceneEmitterKind.Glow;
 
 		/// <summary>
 		/// <see cref="BiomeWayLights.Default"/> without flame: a village's torches become glowjars on their stakes, a town's,

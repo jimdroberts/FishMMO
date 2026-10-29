@@ -22,18 +22,24 @@ namespace FishMMO.Shared.Biomes
 		[Range(0f, 1f)] public float Share;
 		[Tooltip("How thickly marsh-gas beads rise from the drowned muck, 0 none (a client presentation on the shared clock).")]
 		[Min(0f)] public float Bubbles;
+		[Tooltip("How many leeches swim in the cave's still water, 0 none (a client presentation: they swim toward whoever wades in, as each viewer sees it; nothing on the wire).")]
+		[Min(0f)] public float Leeches;
 
-		public BiomeCaveFlood(BiomeCaveForm form, float depth, float share, float bubbles = 0f)
+		public BiomeCaveFlood(BiomeCaveForm form, float depth, float share, float bubbles = 0f, float leeches = 0f)
 		{
 			Form = form;
 			Depth = depth;
 			Share = share;
 			Bubbles = bubbles;
+			Leeches = leeches;
 		}
 
-		/// <summary>The entry as the authoring marks and reports it: "Form=depth|share", the bubbles after a third '|' only when set.</summary>
+		/// <summary>
+		/// The entry as the authoring marks and reports it: "Form=depth|share", the bubbles after a third '|' when either they or the
+		/// leeches are set, the leeches after a fourth only when set (an entry authored before either marks as it did).
+		/// </summary>
 		public override string ToString()
-			=> $"{Form}={F(Depth)}|{F(Share)}" + (Bubbles > 0f ? "|" + F(Bubbles) : string.Empty);
+			=> $"{Form}={F(Depth)}|{F(Share)}" + (Bubbles > 0f || Leeches > 0f ? "|" + F(Bubbles) : string.Empty) + (Leeches > 0f ? "|" + F(Leeches) : string.Empty);
 
 		private static string F(float v) => v.ToString("R", CultureInfo.InvariantCulture);
 	}
@@ -143,7 +149,7 @@ namespace FishMMO.Shared.Biomes
 		Roof = 0,
 		/// <summary>Threaded along the roots hanging through the roof, with little roof silk of their own.</summary>
 		Roots = 1,
-		/// <summary>On drowned and fallen wood (a hook: laid on the roof until the dressing has its logs to hang them on).</summary>
+		/// <summary>On drowned and fallen wood: the logs the dressing lays in the cave's water and on its floors, with little roof silk of their own.</summary>
 		Wood = 2,
 	}
 
@@ -289,10 +295,41 @@ namespace FishMMO.Shared.Biomes
 
 		// ── Glow-worms (e) ────────────────────────────────────────────
 
-		/// <summary>The share of its own roof colonies a cave keeps where its glow-worms hang on roots (decision 86: "little roof silk").</summary>
+		/// <summary>The share of its own roof colonies a cave keeps where its glow-worms hang on roots or wood (decision 86: "little roof silk").</summary>
 		public const float RootMountRoofShare = 0.25f;
 
-		/// <summary>How a mount weighs a cave's roof colonies' chance (1 as it was).</summary>
-		public static float RoofShare(BiomeCaveWormMount mount) => mount == BiomeCaveWormMount.Roots ? RootMountRoofShare : 1f;
+		/// <summary>How a mount weighs a cave's roof colonies' chance (1 as it was, the roof's).</summary>
+		public static float RoofShare(BiomeCaveWormMount mount) => mount == BiomeCaveWormMount.Roof ? 1f : RootMountRoofShare;
+
+		/// <summary>The most logs a system's wood-mounted glow-worms are given (drowned in its water first, then fallen on its floors).</summary>
+		public const int MostLogs = 12;
+
+		/// <summary>How many logs a system tries for (decision 86 (e) WormMount Wood): about one a 40 m of its ways, at the biome's glow-worm weight, capped.</summary>
+		public static int LogsWanted(float wayMetres, float worms) => worms <= 0f || !(wayMetres > 0f) ? 0 : Mathf.Clamp(Mathf.RoundToInt(wayMetres / 40f * Mathf.Min(2f, worms)), 1, MostLogs);
+
+		// ── The root windows' peat lip (f) ───────────────────────────
+
+		/// <summary>How far past a root window's throat the peat it rotted through shows on the rock, metres (its lip and the vault round it).</summary>
+		public const float PeatLipReach = 1.4f;
+		/// <summary>How far under the vault the peat lip hangs, metres.</summary>
+		public const float PeatLipDrop = 0.8f;
+		/// <summary>How dark with peat the lip is at most (the habitat's Organic, 0..1).</summary>
+		public const float PeatLipOrganic = 0.9f;
+
+		/// <summary>
+		/// How much of a root window's peat lip a point shows, 0..1 (decision 86 (f): "a peat lip"): full on the throat's rock between the
+		/// vault (<paramref name="vault"/>, less <see cref="PeatLipDrop"/>) and the opening (<paramref name="top"/>) out to its radius,
+		/// fading over <see cref="PeatLipReach"/> beyond (<paramref name="fromAxis"/> the point's distance from the throat's axis).
+		/// </summary>
+		public static float PeatLip(float fromAxis, float y, float radius, float vault, float top)
+		{
+			if (!(y >= vault - PeatLipDrop) || y > top + 0.5f)
+			{
+				return 0f;
+			}
+			float out_ = Mathf.Clamp01((fromAxis - radius) / PeatLipReach);
+			float band = Mathf.Clamp01((y - (vault - PeatLipDrop)) / 0.3f);
+			return (1f - out_ * out_ * (3f - 2f * out_)) * band;
+		}
 	}
 }

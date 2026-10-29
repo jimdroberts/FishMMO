@@ -25,9 +25,9 @@ namespace FishMMO.Client
 	/// </para>
 	/// <para>
 	/// <b>Drawn, not spawned.</b> No GameObjects: one procedural mesh and one material per kind
-	/// (<see cref="SeaCreatureMeshes"/>, FishMMO/Sea Life), drawn with <c>Graphics.DrawMeshInstanced</c> for
-	/// each camera — WebGL2-safe — in batches of 1023, the swimming done in the vertex shader from the phase
-	/// the CPU hands each animal. Only cells within the draw distance are placed, a few a frame.
+	/// (<see cref="SeaCreatureMeshes"/>, FishMMO/Sea Life), drawn from one instance buffer per camera
+	/// (<see cref="LifeInstanceBuffers"/>) by one <c>Graphics.RenderMeshPrimitives</c> per kind, with no property block, the
+	/// swimming done in the vertex shader from the phase the CPU hands each animal. Only cells within the draw distance are placed, a few a frame.
 	/// </para>
 	/// <para>
 	/// <b>Hooked like the blade grass</b>: a static system started after the first scene loads, driven by
@@ -35,9 +35,12 @@ namespace FishMMO.Client
 	/// referenced there so a client build includes it.
 	/// </para>
 	/// </remarks>
-	public static class SeaLifeSystem
+	public static partial class SeaLifeSystem
 	{
-		private const int Batch = 1023;
+		/// <summary>How far past its rest-pose bounds an animal's draw bounds reach: tails, wings, tentacles.</summary>
+		private const float BoundsSlack = 1.5f;
+		/// <summary>Added to a kind's draw bounds for the swell a floater rides (FishWaterSwellAt), metres each way.</summary>
+		private static readonly Vector3 SwellMargin = new Vector3(8f, 8f, 8f);
 		/// <summary>New cells decided a frame at most: placement samples the ground, so it is spread out.</summary>
 		private const int CellsPerFrame = 8;
 
@@ -45,9 +48,8 @@ namespace FishMMO.Client
 		private static readonly int SurgeId = Shader.PropertyToID("_FishSeaSurge");
 		private static readonly int MeanLevelId = Shader.PropertyToID("_FishWaterMeanLevel");
 		private static readonly int WaterWindId = Shader.PropertyToID("_FishWaterWind");
-		private static readonly int AnimId = Shader.PropertyToID("_Anim");
-		private static readonly int TintId = Shader.PropertyToID("_Tint");
-		private static readonly int SurfaceId = Shader.PropertyToID("_Surface");
+		private static readonly int InstancesId = Shader.PropertyToID("_LifeInstances");
+		private static readonly int InstanceBaseId = Shader.PropertyToID("_LifeInstanceBase");
 		private static readonly int EmitColourId = Shader.PropertyToID("_EmitColour");
 		private static readonly int EmitPatternId = Shader.PropertyToID("_EmitPattern");
 		private static readonly int ModeId = Shader.PropertyToID("_Mode");
@@ -95,11 +97,12 @@ namespace FishMMO.Client
 		private static float placedCellMetres;
 
 		private static readonly List<SeaInstance>[] byKind = new List<SeaInstance>[32];
-		private static readonly Matrix4x4[] matrices = new Matrix4x4[Batch];
-		private static readonly Vector4[] anims = new Vector4[Batch];
-		private static readonly Vector4[] tints = new Vector4[Batch];
-		private static readonly Vector4[] surfaces = new Vector4[Batch];
-		private static MaterialPropertyBlock block;
+		// What the shader reads per animal: one buffer for every kind (LifeInstanceRecord), each kind's run start and length,
+		// and whether that kind casts shadows from this camera.
+		private static readonly LifeInstanceBuffers instanceBuffers = new LifeInstanceBuffers("Sea life instances");
+		private static readonly int[] kindBase = new int[32];
+		private static readonly int[] kindDrawn = new int[32];
+		private static readonly bool[] kindShadows = new bool[32];
 		private static readonly Plane[] planes = new Plane[6];
 		private static readonly TerrainGround ground = new TerrainGround();
 
@@ -157,6 +160,9 @@ namespace FishMMO.Client
 			Application.quitting += Shutdown;
 #if UNITY_EDITOR
 			UnityEditor.EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+			// Scripts recompiled while playing reload in place: the instance buffers must be let go first, or they leak.
+			UnityEditor.AssemblyReloadEvents.beforeAssemblyReload -= Shutdown;
+			UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += Shutdown;
 #endif
 		}
 
@@ -172,6 +178,7 @@ namespace FishMMO.Client
 			Application.quitting -= Shutdown;
 #if UNITY_EDITOR
 			UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+			UnityEditor.AssemblyReloadEvents.beforeAssemblyReload -= Shutdown;
 #endif
 		}
 
@@ -194,6 +201,7 @@ namespace FishMMO.Client
 
 		private static void Release()
 		{
+			instanceBuffers.Release();
 			for (int i = 0; i < meshes.Length; i++)
 			{
 				Destroy(meshes[i]);
@@ -205,6 +213,7 @@ namespace FishMMO.Client
 			builtWith = null;
 			cells.Clear();
 			placedHash = 0;
+			ReleasePools();
 		}
 
 		private static void Destroy(UnityEngine.Object o)
@@ -279,8 +288,17 @@ namespace FishMMO.Client
 
 		// ── Drawing ───────────────────────────────────────────────────
 
+		/// <summary>This hook's own time in the profiler (render-pipeline callbacks otherwise show only as
+		/// RenderPipeline.BeginCameraRendering's self time). In a class of its own so the marker, an engine object, is made
+		/// when the hook first runs, not when the type is first touched (tests outside Unity use these types' pure parts).</summary>
+		private static class HookProfiling
+		{
+			public static readonly Unity.Profiling.ProfilerMarker Marker = new Unity.Profiling.ProfilerMarker("SeaLifeSystem.BeginCamera");
+		}
+
 		private static void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera)
 		{
+			using var hookMarkerScope = HookProfiling.Marker.Auto();
 			Publish();
 			if (camera.cameraType != CameraType.Game && camera.cameraType != CameraType.SceneView)
 			{
@@ -308,15 +326,23 @@ namespace FishMMO.Client
 				Report(main, shader == null ? "idle: the profile has no Sea Life shader (Weather Tools → ensure the render assets)" : "idle: FishMMO/Sea Life is not supported on this device");
 				return;
 			}
-			if (!seaPresent)
-			{
-				Report(main, "idle: this scene has no sea");
-				return;
-			}
 			Vector3 eye = camera.transform.position;
-			if (eye.y - meanLevel > settings.MaxCameraHeight)
+			// The seas in the caves first (2026-10-26, I2n-b, decision 83: a sea hall's warm sea under an ice shell, on a world with no sea
+			// of its own): each near pool's own animals, its interior's (SeaLifeSystem.CavePools.cs). Nothing where no cave holds one.
+			bool pools = PlacePools(settings, eye);
+			if (!seaPresent || eye.y - meanLevel > settings.MaxCameraHeight)
 			{
-				Report(main, $"idle: the camera is {eye.y - meanLevel:0} m above the sea (sea life is drawn below {settings.MaxCameraHeight:0} m)");
+				if (pools)
+				{
+					EnsureLooks(settings, shader);
+					DrawWith(settings, camera, eye, false);
+					Report(main, "drawing a cave's sea");
+					return;
+				}
+				if (main)
+				{
+					Report(true, !seaPresent ? "idle: this scene has no sea" : AboveSeaReason(eye.y - meanLevel, settings.MaxCameraHeight));
+				}
 				return;
 			}
 			EnsureLooks(settings, shader);
@@ -355,6 +381,28 @@ namespace FishMMO.Client
 				loggedReason = kind;
 				Debug.Log(reason == "drawing" ? "[Sea life] drawing: placing the sea round the camera (a count follows once it is placed)." : $"[Sea life] {reason}.");
 			}
+		}
+
+		private static double aboveSeaKey = double.NaN;
+		private static double aboveSeaLimitKey = double.NaN;
+		private static string aboveSeaReason;
+
+		/// <summary>"The camera is N m above the sea", formatted only when its whole metres change.</summary>
+		/// <remarks>
+		/// High over the sea this state is reported every frame; formatting it every frame was a string of garbage a frame. The
+		/// key is each figure rounded as the "0" format rounds it (half away from zero), so the text is the one it formatted.
+		/// </remarks>
+		private static string AboveSeaReason(float above, float limit)
+		{
+			double key = Math.Round(above, MidpointRounding.AwayFromZero);
+			double limitKey = Math.Round(limit, MidpointRounding.AwayFromZero);
+			if (aboveSeaReason == null || key != aboveSeaKey || limitKey != aboveSeaLimitKey)
+			{
+				aboveSeaKey = key;
+				aboveSeaLimitKey = limitKey;
+				aboveSeaReason = $"idle: the camera is {above:0} m above the sea (sea life is drawn below {limit:0} m)";
+			}
+			return aboveSeaReason;
 		}
 
 		/// <summary>A state's text with its figures taken out (what tells one state from another).</summary>
@@ -648,8 +696,11 @@ namespace FishMMO.Client
 
 		private static long Key(int x, int z) => ((long)x << 32) | (uint)z;
 
-		/// <summary>Draws the animals in reach; returns how many.</summary>
-		private static int Draw(SeaLifeSettings settings, Camera camera, Vector3 eye)
+		/// <summary>Draws the animals in reach (the open sea's and the near caves' seas'); returns how many.</summary>
+		private static int Draw(SeaLifeSettings settings, Camera camera, Vector3 eye) => DrawWith(settings, camera, eye, true);
+
+		/// <summary>Draws the animals in reach: the open sea's where <paramref name="openSea"/>, and every near cave pool's; returns how many.</summary>
+		private static int DrawWith(SeaLifeSettings settings, Camera camera, Vector3 eye, bool openSea)
 		{
 			SeaCreatureKind[] kinds = settings.Kinds;
 			int kindCount = Mathf.Min(kinds.Length, byKind.Length);
@@ -663,7 +714,14 @@ namespace FishMMO.Client
 			float night = SeaLifePlacement.NightShare(WorldDayNightCycle.SkyClockHours ?? 12.0);
 			float distance = settings.DrawDistance;
 			float fadeStart = distance * (1f - Mathf.Clamp(settings.FadeBand, 0.05f, 0.5f));
-			foreach (Cell cell in cells.Values)
+			if (openSea)
+			{
+				Collect(cells.Values, ground, lifeSurface, seaLevel);
+			}
+			CollectPools(Collect);
+			void Collect(IEnumerable<Cell> from, ISeaGround on, float surfaceAt, float levelAt)
+			{
+			foreach (Cell cell in from)
 			{
 				foreach (SeaGroup group in cell.Groups)
 				{
@@ -690,7 +748,7 @@ namespace FishMMO.Client
 					}
 					List<SeaInstance> list = byKind[group.Kind];
 					int start = list.Count;
-					SeaLifePlacement.Evaluate(group, kind, seconds, lifeSurface, ground, 1f, list, seaLevel, night);
+					SeaLifePlacement.Evaluate(group, kind, seconds, surfaceAt, on, 1f, list, levelAt, night);
 					// Each animal dissolves on its own at the draw distance; past it, none is drawn.
 					for (int i = list.Count - 1; i >= start; i--)
 					{
@@ -707,42 +765,78 @@ namespace FishMMO.Client
 					}
 				}
 			}
+			}
 
-			block ??= new MaterialPropertyBlock();
+			// Every drawn animal of every kind into one buffer, each kind a run of it (LifeInstancePacking).
+			int total = 0;
+			for (int k = 0; k < kindCount; k++)
+			{
+				if (meshes[k] != null && materials[k] != null)
+				{
+					total += byKind[k].Count;
+				}
+			}
+			instanceBuffers.Reserve(total);
+			LifeInstanceRecord[] records = instanceBuffers.Records;
 			int drawn = 0;
 			for (int k = 0; k < kindCount; k++)
 			{
+				kindBase[k] = drawn;
+				kindDrawn[k] = 0;
 				List<SeaInstance> list = byKind[k];
 				if (list.Count == 0 || meshes[k] == null || materials[k] == null)
 				{
 					continue;
 				}
 				SeaCreatureKind kind = kinds[k];
-				drawn += list.Count;
 				bool shadows = kind.CastShadows && kind.Shape != SeaCreatureShape.Jelly;
-				for (int first = 0; first < list.Count; first += Batch)
+				bool anyNearForShadow = false;
+				for (int i = 0; i < list.Count; i++)
 				{
-					int count = Mathf.Min(Batch, list.Count - first);
-					bool anyNearForShadow = false;
-					for (int i = 0; i < count; i++)
+					SeaInstance s = list[i];
+					records[drawn + i] = LifeInstancePacking.Pack(s.Matrix, 1f, s.Anim, s.Tint, s.Surface, Vector4.zero);
+					if (shadows && !anyNearForShadow && Vector3.Distance(eye, s.Matrix.GetColumn(3)) <= settings.ShadowDistance)
 					{
-						SeaInstance s = list[first + i];
-						matrices[i] = s.Matrix;
-						anims[i] = s.Anim;
-						tints[i] = s.Tint;
-						surfaces[i] = s.Surface;
-						if (shadows && !anyNearForShadow && Vector3.Distance(eye, s.Matrix.GetColumn(3)) <= settings.ShadowDistance)
-						{
-							anyNearForShadow = true;
-						}
+						anyNearForShadow = true;
 					}
-					block.Clear();
-					block.SetVectorArray(AnimId, anims);
-					block.SetVectorArray(TintId, tints);
-					block.SetVectorArray(SurfaceId, surfaces);
-					Graphics.DrawMeshInstanced(meshes[k], 0, materials[k], matrices, count, block,
-						anyNearForShadow ? ShadowCastingMode.On : ShadowCastingMode.Off, true, 0, camera);
 				}
+				kindDrawn[k] = list.Count;
+				kindShadows[k] = anyNearForShadow;
+				drawn += list.Count;
+			}
+			GraphicsBuffer buffer = instanceBuffers.Upload(camera, drawn);
+			for (int k = 0; buffer != null && k < kindCount; k++)
+			{
+				int count = kindDrawn[k];
+				if (count == 0)
+				{
+					continue;
+				}
+				// The bounds round every animal of the kind, as DrawMeshInstanced worked them out from its matrices: what the
+				// camera and each shadow cascade cull the kind's one draw by. Floaters ride the swell a little above theirs.
+				Bounds meshBounds = meshes[k].bounds;
+				float reach = LifeInstancePacking.Reach(meshBounds.center, meshBounds.extents, BoundsSlack);
+				Vector3 min = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
+				Vector3 max = new Vector3(float.MinValue, float.MinValue, float.MinValue);
+				int first = kindBase[k];
+				for (int i = 0; i < count; i++)
+				{
+					LifeInstancePacking.Encapsulate(records[first + i], reach, ref min, ref max);
+				}
+				// No property block: the buffer and the kind's run in it are the kind's own material's (EnsureLooks), set for
+				// this camera before it renders; the next camera's hook runs after this one has drawn.
+				Material material = materials[k];
+				material.SetBuffer(InstancesId, buffer);
+				material.SetFloat(InstanceBaseId, first);
+				var rp = new RenderParams(material)
+				{
+					camera = camera,
+					layer = 0,
+					worldBounds = new Bounds((min + max) * 0.5f, max - min + SwellMargin),
+					shadowCastingMode = kindShadows[k] ? ShadowCastingMode.On : ShadowCastingMode.Off,
+					receiveShadows = true,
+				};
+				Graphics.RenderMeshPrimitives(rp, meshes[k], 0, count);
 			}
 			return drawn;
 		}
@@ -774,7 +868,7 @@ namespace FishMMO.Client
 					return false;
 				}
 				UnityEngine.SceneManagement.Scene scene = any.gameObject.scene;
-				SceneSeed = SeaLifePlacement.SceneSeed(scene.name);
+				SceneSeed = SeaLifePlacement.SceneSeed(FishMMO.Shared.SceneNames.Of(scene));
 				if (settings == null || settings.gameObject.scene != scene)
 				{
 					WorldSceneSettings.TryGetForScene(scene, out settings);

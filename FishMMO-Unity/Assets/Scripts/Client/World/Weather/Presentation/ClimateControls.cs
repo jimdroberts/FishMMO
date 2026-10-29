@@ -184,20 +184,39 @@ namespace FishMMO.Client
 			host.AddToClassList("ws-stats");
 			var figures = new List<CloudStats.Figure>();
 			var values = new List<Label>();
-			string shape = null;
+			// The group and label of every row the cards were built for: the set of figures has changed
+			// when these do. Compared in place (a key string built every refresh was garbage 4× a second).
+			var shape = new List<(string Group, string Label)>();
+			bool built = false;
+
+			bool ShapeChanged()
+			{
+				if (!built || shape.Count != figures.Count)
+				{
+					return true;
+				}
+				for (int i = 0; i < figures.Count; i++)
+				{
+					if (!string.Equals(shape[i].Group, figures[i].Group, StringComparison.Ordinal) ||
+						!string.Equals(shape[i].Label, figures[i].Label, StringComparison.Ordinal))
+					{
+						return true;
+					}
+				}
+				return false;
+			}
 
 			void Refresh()
 			{
 				gather(figures);
-				var key = new System.Text.StringBuilder();
-				foreach (CloudStats.Figure figure in figures)
+				if (ShapeChanged())
 				{
-					key.Append(figure.Group).Append('|').Append(figure.Label).Append(';');
-				}
-				string current = key.ToString();
-				if (current != shape)
-				{
-					shape = current;
+					built = true;
+					shape.Clear();
+					foreach (CloudStats.Figure figure in figures)
+					{
+						shape.Add((figure.Group, figure.Label));
+					}
 					Rebuild();
 				}
 				for (int i = 0; i < figures.Count && i < values.Count; i++)
@@ -262,9 +281,32 @@ namespace FishMMO.Client
 				{
 					CloudStats.Poll();
 				}
-				Refresh();
+				// Nothing to show while the cards are out of sight (a regime's foldout is closed, the tab
+				// is another): formatting every figure four times a second for nobody was the panel's
+				// steady garbage. The first refresh after it opens again is at most 250 ms away.
+				if (Shown(host))
+				{
+					Refresh();
+				}
 			}).Every(250);
 			return host;
+		}
+
+		/// <summary>Whether an element is on a panel and nothing above it is hidden or collapsed.</summary>
+		private static bool Shown(VisualElement element)
+		{
+			if (element.panel == null)
+			{
+				return false;
+			}
+			for (VisualElement e = element; e != null; e = e.parent)
+			{
+				if (e.resolvedStyle.display == DisplayStyle.None || e.resolvedStyle.visibility == Visibility.Hidden)
+				{
+					return false;
+				}
+			}
+			return true;
 		}
 
 		private static Label Note(string text)

@@ -73,6 +73,27 @@ namespace FishMMO.Shared
 		/// flat, so, as under a bridge's deck, nothing is drawn or carved on the river's bed beneath.
 		/// </summary>
 		Ferry = 1 << 6,
+		/// <summary>
+		/// On a straight road's stair (2026-10-26, phase I2l-b): a segment between two such points climbs a cliff the road keeps its line
+		/// over, cut as one even flight from the foot to the top (PathCarver) rather than evened to the road's grade.
+		/// </summary>
+		Stairs = 1 << 7,
+	}
+
+	/// <summary>
+	/// How a way runs (<see cref="ScenePath.Form"/>, 2026-10-26, phase I2l-b; decisions 50, 56, 87): routed round the ground as every way
+	/// was, or one of the straight roads, with the profile it is built to. Append only; the ordinal is stored in scene assets.
+	/// </summary>
+	public enum ScenePathForm : byte
+	{
+		/// <summary>Routed round the ground (every way until 2026-10-26).</summary>
+		Routed = 0,
+		/// <summary>Dead-straight, cut and filled to its grade, stairs cut where a cliff stands across it.</summary>
+		Straight = 1,
+		/// <summary>Straight, on an embankment raised over the ground beside it (a sacbe, a royal road).</summary>
+		Raised = 2,
+		/// <summary>Straight, sunk between sheer walls cut into the ground beside it (a via cava).</summary>
+		Cut = 3,
 	}
 
 	/// <summary>
@@ -104,6 +125,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		public float FromEntrance = float.NaN;
 		public float ToEntrance = float.NaN;
+		/// <summary>How the way runs: routed (every way before 2026-10-26) or one of the straight roads (<see cref="ScenePathForm"/>).</summary>
+		public ScenePathForm Form = ScenePathForm.Routed;
 
 		public Vector3[] Points = Array.Empty<Vector3>();
 		/// <summary>Half the trodden width at each point, metres.</summary>
@@ -228,6 +251,40 @@ namespace FishMMO.Shared
 					return For(ScenePathClass.Trail);
 			}
 		}
+
+		/// <summary>How high a raised straight road's embankment stands over the ground beside it, metres (a sacbe's 0.5–2.5 m).</summary>
+		public const float RaisedMetres = 1.2f;
+
+		/// <summary>How deep a cut straight road is sunk below the ground beside it, metres (a via cava's walls).</summary>
+		public const float CutMetres = 5f;
+
+		/// <summary>
+		/// A way's numbers by its class and form (<see cref="ScenePath.Form"/>, 2026-10-26, phase I2l-b): a routed way's are its class's
+		/// exactly (<see cref="For(ScenePathClass)"/>). A straight road evens its line over twice its class's length and cuts and fills
+		/// up to 4 m to hold its grade; a raised one stands <see cref="RaisedMetres"/> over the ground between short steep sides; a cut
+		/// one lies <see cref="CutMetres"/> down between near-sheer walls. The trodden width, surface and grade are the class's.
+		/// </summary>
+		public static ScenePathStyle For(ScenePathClass kind, ScenePathForm form)
+		{
+			ScenePathStyle c = For(kind);
+			switch (form)
+			{
+				case ScenePathForm.Straight:
+					return new ScenePathStyle(kind, c.HalfWidth, c.Surface, c.Wear, c.FarWear, c.MaxGrade, c.Shoulder, c.Dip, Mathf.Max(c.MaxCut, 4f),
+						2f * Mathf.Max(c.SmoothMetres, 12f), c.Clearance, c.FordDepth, c.ClearsDetails);
+				case ScenePathForm.Raised:
+					return new ScenePathStyle(kind, c.HalfWidth, c.Surface, c.Wear, c.FarWear, c.MaxGrade, 2f * RaisedMetres, -RaisedMetres, Mathf.Max(c.MaxCut, 4f),
+						2f * Mathf.Max(c.SmoothMetres, 12f), c.Clearance + 2f * RaisedMetres, c.FordDepth, c.ClearsDetails);
+				case ScenePathForm.Cut:
+					return new ScenePathStyle(kind, c.HalfWidth, c.Surface, c.Wear, c.FarWear, c.MaxGrade, 1.2f, CutMetres, Mathf.Max(c.MaxCut, 4f),
+						2f * Mathf.Max(c.SmoothMetres, 12f), c.Clearance, c.FordDepth, c.ClearsDetails);
+				default:
+					return c;
+			}
+		}
+
+		/// <summary>A way's own numbers: its class's in its form (<see cref="For(ScenePathClass, ScenePathForm)"/>).</summary>
+		public static ScenePathStyle Of(ScenePath path) => path == null ? For(ScenePathClass.Trail) : For(path.Class, path.Form);
 
 		/// <summary>
 		/// The surface as the shader's code: track 0, earth ⅓, gravel ⅔, stone 1. Where two ways meet the field blends their

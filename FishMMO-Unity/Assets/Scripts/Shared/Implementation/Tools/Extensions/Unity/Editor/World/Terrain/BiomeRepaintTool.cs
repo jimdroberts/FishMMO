@@ -148,6 +148,8 @@ namespace FishMMO.Shared.WorldDesign
 					result.BiomeMap != null ? result.BiomeMap : entry.BiomeMap, (east, north) => SceneGenerator.GroundAltitude(terrains, plan, east, north),
 					poi.DetailExcludes, SceneGenerator.SceneSeed(request), result.Notes);
 				poi.Place(scene, plan, terrains, water, result.Notes, result.Wrote);
+				// Every detail layer as the scatter and the sites left it (TerrainDetailLayerCheck): ERROR notes for any misplaced.
+				TerrainDetailLayerCheck.Check(terrains, result.BiomeMap != null ? result.BiomeMap : entry.BiomeMap, result.Notes);
 				SceneGenerator.BakePropsAndNavMesh(scene, plan, terrains, water, result.Notes);
 				/* A backdrop drawn with the arrays reads the scene's layers by index, and the repaint may have
 				 * reordered them: its control maps are baked again. A LOCAL copy shares the committed backdrop. */

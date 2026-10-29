@@ -64,7 +64,10 @@ namespace FishMMO.Shared.WorldDesign
 		public Vector3 A, B;
 		/// <summary>A walkway's half width; a column's radius at its waist; a spiral ledge's width out from the wall.</summary>
 		public float Width;
-		/// <summary>A bridge's thickness at its middle; a column's flare (radius gained at its ends, share); a spiral's pit radius.</summary>
+		/// <summary>
+		/// A bridge's thickness at its middle; a column's flare (radius gained at its ends, share); a spiral's pit radius; a ramp's
+		/// landing (metres of it level at B's height before B, where it runs in onto what it climbs to; 0 for none).
+		/// </summary>
 		public float Depth;
 		/// <summary>A bridge's arch (thickness gained toward its ends); a spiral's drop per radian, metres (signed: its hand).</summary>
 		public float Arch;
@@ -230,8 +233,11 @@ namespace FishMMO.Shared.WorldDesign
 					Vector2 dir = d / length;
 					var ap = new Vector2(p.x - s.A.x, p.z - s.A.z);
 					float along = Vector2.Dot(ap, dir), across = Mathf.Abs(ap.x * dir.y - ap.y * dir.x);
-					float t = Mathf.Clamp01(along / length);
+					// A ramp's landing: level for its last metres, so it runs in under what it climbs onto at that one's height.
+					float slope = s.Kind == CaveSolidKind.Ramp ? Mathf.Max(1e-3f, length - Mathf.Clamp(s.Depth, 0f, length)) : length;
+					float t = Mathf.Clamp01(along / slope);
 					top = Mathf.Lerp(s.A.y, s.B.y, t);
+					t = Mathf.Clamp01(along / length);
 					float under = s.Kind == CaveSolidKind.Bridge
 						? top - (s.Depth + s.Arch * (2f * t - 1f) * (2f * t - 1f))
 						: Mathf.Min(s.A.y, s.B.y) - 3f;

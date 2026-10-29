@@ -59,6 +59,26 @@ namespace FishMMO.Client
 			return Matrix4x4.TRS(WorldPosition(terrainPosition, terrainSize, normalizedPosition), Rotation(rotation), Scale(widthScale, heightScale));
 		}
 
+		/// <summary>
+		/// A tree instance's matrix with its prototype's scatter-mode lean (SCATTER-MODES; the two words of
+		/// <see cref="FishMMO.Shared.Biomes.BiomeScatterModeWord"/>, the lean part only): turned as Unity turns it, then tilted to
+		/// <see cref="FishMMO.Shared.Biomes.BiomeScatterModeWord.LeanUp"/> from the ground's <paramref name="normal"/> and the instance's own
+		/// share (<see cref="FishMMO.Shared.Biomes.BiomeScatterModes.PositionUnit"/> of its world x, z). Visual only: the terrain's tree
+		/// colliders stand upright. Exactly <see cref="InstanceMatrix(Vector3, Vector3, Vector3, float, float, float)"/> with no lean.
+		/// </summary>
+		public static Matrix4x4 InstanceMatrix(Vector3 terrainPosition, Vector3 terrainSize, Vector3 normalizedPosition, float rotation, float widthScale, float heightScale,
+			uint leanWord, uint leanAngles, Vector3 normal)
+		{
+			if (!FishMMO.Shared.Biomes.BiomeScatterModeWord.Leans(leanWord))
+			{
+				return InstanceMatrix(terrainPosition, terrainSize, normalizedPosition, rotation, widthScale, heightScale);
+			}
+			Vector3 world = WorldPosition(terrainPosition, terrainSize, normalizedPosition);
+			float share = FishMMO.Shared.Biomes.BiomeScatterModes.PositionUnit(world.x, world.z);
+			Quaternion lean = FishMMO.Shared.Biomes.BiomeScatterModeWord.LeanRotation(leanWord, leanAngles, normal, share);
+			return Matrix4x4.TRS(world, lean * Rotation(rotation), Scale(widthScale, heightScale));
+		}
+
 		/// <summary>The size a LODGroup measures an instance by: the group's size times the larger of its scales.</summary>
 		public static float WorldSize(float groupSize, float widthScale, float heightScale)
 		{

@@ -1670,8 +1670,17 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				Vector3 at = context.OnGround(piece.Offset);
 				bool deck = piece.Role == PointOfInterestSlotRole.Span || piece.Role == PointOfInterestSlotRole.Pier;
-				if (dryOnly && !deck && !StandsInWater(slot.Tag) && WaterLevelAt(context, at.x, at.z, sea) > at.y + 0.25f)
+				// A piece built at deck level on its own piles (a crannog's round house: 2026-10-27) stands in the shallows as a pier does.
+				bool onPiles = !deck && DeckPinned(slot.Tag);
+				float waterHere = WaterLevelAt(context, at.x, at.z, sea);
+				if (dryOnly && !deck && !onPiles && !StandsInWater(slot.Tag) && waterHere > at.y + 0.25f)
 				{
+					wet++;
+					continue;
+				}
+				if (onPiles && waterHere - at.y > PileReach)
+				{
+					// Deeper than its piles reach down.
 					wet++;
 					continue;
 				}
@@ -1723,11 +1732,17 @@ namespace FishMMO.Shared.WorldDesign
 					// A walked ring's gate or tower at the height the curtain's ends meet it at: its walk doors on the walk.
 					at.y = stationBase - d.Decay * MaxSinkMetres;
 				}
+				else if (onPiles)
+				{
+					// Its deck over the water by a freeboard, as a pier's, or a little over dry ground, its piles driven in under it.
+					float ground = SeatHeight(context, piece.Offset, piece.Yaw, metrics.Footprint * d.Scale, metrics.Depth * d.Scale, metrics.WaterFront);
+					at.y = Mathf.Max(ground + PileLift, float.IsNegativeInfinity(waterHere) ? ground : waterHere + PileFreeboard) - d.Decay * MaxSinkMetres;
+				}
 				else
 				{
 					at.y = SeatHeight(context, piece.Offset, piece.Yaw, metrics.Footprint * d.Scale, metrics.Depth * d.Scale, metrics.WaterFront) - d.Decay * MaxSinkMetres;
 				}
-				float tilt = deck ? 0f : d.Decay * MaxTiltDegrees;
+				float tilt = deck || onPiles ? 0f : d.Decay * MaxTiltDegrees;
 				Quaternion rotation = Quaternion.Euler(d.TiltX * tilt, record.Yaw + piece.Yaw, d.TiltZ * tilt) * pitch;
 				Vector3 scale = Vector3.one * d.Scale;
 				bool walkedModule = false;
@@ -2034,6 +2049,29 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>Pieces built to stand in water: stilts, piers, bridges.</summary>
+		/// <summary>Over the water a piece on its own piles stands its deck, metres (2026-10-27): a pier's dry freeboard.</summary>
+		private const float PileFreeboard = 0.7f;
+		/// <summary>Over dry ground a piece on its own piles stands its deck, metres: its piles show under it.</summary>
+		private const float PileLift = 0.4f;
+		/// <summary>The deepest water a piece on its own piles stands in, metres (the kit's pile reach, 3.2 m, less its driving).</summary>
+		private const float PileReach = 2.8f;
+
+		/// <summary>
+		/// Whether a slot pins a piece built at deck level (<see cref="StructureAnchor.Deck"/>) that is not a span or a pier of the site's
+		/// crossing (2026-10-27, the fantasy wave: a crannog's =PileRoundHouse): laid with its deck over the water, never seated on the
+		/// lake's bed nor turned away as wet.
+		/// </summary>
+		private static bool DeckPinned(string tag)
+		{
+			if (string.IsNullOrEmpty(tag) || tag[0] != '=')
+			{
+				return false;
+			}
+			int hash = tag.IndexOf('#');
+			StructurePiece piece = StructurePieces.Find(hash > 0 ? tag.Substring(1, hash - 1) : tag.Substring(1));
+			return piece != null && piece.Anchor == StructureAnchor.Deck;
+		}
+
 		private static bool StandsInWater(string tag)
 			=> !string.IsNullOrEmpty(tag) && (tag.Contains("stilt") || tag.Contains("dock") || tag.Contains("bridge") || tag.Contains("Stilt") || tag.Contains("Pier") || tag.Contains("Bridge"));
 

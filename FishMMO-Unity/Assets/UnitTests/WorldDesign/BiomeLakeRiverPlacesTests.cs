@@ -467,6 +467,11 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeArtSpec.Entries.Length, Is.EqualTo(83));
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
+				// A "no biome uses the slots yet" pin: the authored rounds (Lake, River, Beach...) use them on purpose.
+				if (BiomeAuthoredRounds.Contains(entry.Biome))
+				{
+					continue;
+				}
 				Assert.That(entry.BedLayers, Is.Empty, $"{entry.Biome} has no bed layer yet");
 				Assert.That(entry.RiverBed, Is.Null, $"{entry.Biome} grows nothing on its riverbed yet");
 				foreach (BiomeArtSpec.Scatter s in entry.Bed != null ? entry.Bed.Scatter : new List<BiomeArtSpec.Scatter>())

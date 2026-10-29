@@ -310,10 +310,10 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		/// <summary>
 		/// Every biome's spec moat water is what the moat shaper decided from its template's climate envelope (a literal copy of
-		/// the old code, over the asset's own climate): dry, frozen or wet, for all 83.
+		/// the old code, over the asset's own climate): dry, frozen or wet, for all 83; and the asset holds what its spec wrote.
 		/// </summary>
 		[Test]
-		public void SpecMoatWater_IsAuthoredIndependently_AndClimateFallbackIsPreserved()
+		public void SpecMoatWater_IsWhatTheClimateGaveTheMoat_ForEveryBiome()
 		{
 			int checkedBiomes = 0, dry = 0, frozen = 0;
 			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
@@ -328,7 +328,12 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(entry, Is.Not.Null, name);
 				float minH = Number(text, "MinHumidity"), maxH = Number(text, "MaxHumidity"), minT = Number(text, "MinTemperature"), maxT = Number(text, "MaxTemperature");
 				BiomeMoatWater old = OldMoat(minH, maxH, minT, maxT);
-				Assert.That(entry.MoatWater, Is.EqualTo((BiomeMoatWater)(int)Number(text, "moatWater")), name + " authored moat");
+				// An authored round names its own moat (BiomeAuthoredRoundTests); its asset takes it at the next Author biome art.
+				if (!BiomeAuthoredRounds.Contains(name))
+				{
+					Assert.That(entry.MoatWater, Is.EqualTo(old), name + " (the spec against its climate)");
+					Assert.That((BiomeMoatWater)(int)Number(text, "moatWater"), Is.EqualTo(entry.MoatWater), name + " (the asset holds its spec's moat)");
+				}
 				Assert.That(BiomeMoatWaters.FromClimate(minH, maxH, minT, maxT), Is.EqualTo(old), name + " (the fallback rule)");
 				checkedBiomes++;
 				dry += old == BiomeMoatWater.Dry ? 1 : 0;
@@ -384,6 +389,12 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				List<BiomeWayLight> lights = entry.WayLights();
 				Assert.That(lights.Select(l => l.Kind).Distinct().Count(), Is.EqualTo(lights.Count), entry.Biome);
+				biomes++;
+				if (BiomeAuthoredRounds.Contains(entry.Biome))
+				{
+					// An authored round lights its own kinds (BiomeAuthoredRoundTests); one entry a kind still holds.
+					continue;
+				}
 				foreach (POIType kind in kinds)
 				{
 					bool lanterns = kind == POIType.Town || kind == POIType.City || kind == POIType.Capital || kind == POIType.Port;
@@ -396,7 +407,6 @@ namespace FishMMO.UnitTests.WorldDesign
 						Assert.That(light.Spacing, Is.EqualTo(lanterns ? 13f : 20f), $"{entry.Biome}: {kind}");
 					}
 				}
-				biomes++;
 			}
 			Assert.That(biomes, Is.EqualTo(83));
 		}

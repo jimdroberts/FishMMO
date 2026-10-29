@@ -466,6 +466,10 @@ namespace FishMMO.Shared.Biomes
 		[SerializeField] private BiomeBoardwalks boardwalks = BiomeBoardwalks.None;
 		[Tooltip("How this biome's raised roads, paths and trails are built: Planked (plank walk on piles, pole handrail), Passerella (oak planks on stub piles, one rail), LandingWalk (split planks on forked posts), Bohlensteg (paired planks on stakes, 0.6 m wide) or PoleWalk (two poles on forked stakes). A settlement's streets stay planked. Written by Author biome art (Planked); edits are kept.")]
 		[SerializeField] private BiomeBoardwalkStyle boardwalkStyle = BiomeBoardwalkStyle.Planked;
+		[Tooltip("How this biome's ways bridge its rivers (2026-10-26): Default (the kit's timber spans), Liana, CorbelledLaterite, WindAndRain (a covered gallery), Cantilever, GoblinsBridge (slabs on boulders) or SnowBridge, each over the spans it can take; a gorge keeps its stone arch or rope bridge. Written by Author biome art only when the biome's file names one; edits are kept.")]
+		[SerializeField] private BiomeCrossingStyle crossingStyle = BiomeCrossingStyle.Default;
+		[Tooltip("This biome's straight roads (2026-10-26): None (every way routed round the ground), Straight (dead-straight, cut and filled to grade, stairs at cliffs), Raised (on an embankment) or Cut (two sunk between sheer walls); Ruts wears them into ox-cart ruts. One network a scene, over the trunk ways between its settlements. Written by Author biome art only when the biome's file names one; edits are kept.")]
+		[SerializeField] private BiomeStraightRoads straightRoads = BiomeStraightRoads.None;
 
 		/// <remarks>
 		/// The long, narrow things this biome's country is divided and watered by (2026-10-18, phase I2f, decisions 23 and 29;
@@ -557,6 +561,8 @@ namespace FishMMO.Shared.Biomes
 			public const string FountainEpisodes = nameof(fountainEpisodes);
 			public const string Boardwalks = nameof(boardwalks);
 			public const string BoardwalkStyle = nameof(boardwalkStyle);
+			public const string CrossingStyle = nameof(crossingStyle);
+			public const string StraightRoads = nameof(straightRoads);
 			public const string LinearFeatures = nameof(linearFeatures);
 			public const string Landforms = nameof(landforms);
 
@@ -601,6 +607,12 @@ namespace FishMMO.Shared.Biomes
 
 			/// <summary>The mark of what the ground gives the air (<see cref="BiomeTemplate.Emits"/> and its rate), a spec column since 2026-10-18 (I2o).</summary>
 			public const string Emission = nameof(BiomeTemplate.Emits);
+
+			/// <summary>The mark of the loose ground the wind lifts (<see cref="BiomeTemplate.LooseGround"/>), a spec column since 2026-10-26 (CODE-TABLE CLEARANCE).</summary>
+			public const string LooseGround = nameof(BiomeTemplate.LooseGround);
+
+			/// <summary>The mark of the terrain process profile the ground wears as (<see cref="BiomeTemplate.TerrainProcess"/>), a spec column since 2026-10-26 (CODE-TABLE CLEARANCE).</summary>
+			public const string TerrainProcess = nameof(BiomeTemplate.TerrainProcess);
 
 			/// <summary>The mark of the hot ground's split among its kinds (<see cref="BiomeTemplate.Geothermal"/>), a spec column since 2026-10-18 (I2q).</summary>
 			public const string Geothermal = nameof(geothermal);
@@ -905,6 +917,20 @@ namespace FishMMO.Shared.Biomes
 		{
 			get => boardwalkStyle;
 			set => boardwalkStyle = value;
+		}
+
+		/// <summary>How this biome's ways bridge its rivers (<see cref="BiomeCrossingStyle"/>, I2l-b); read through BiomeTemplateArt.CrossingStyle.</summary>
+		public BiomeCrossingStyle CrossingStyle
+		{
+			get => crossingStyle;
+			set => crossingStyle = value;
+		}
+
+		/// <summary>This biome's straight roads (<see cref="BiomeStraightRoads"/>, I2l-b); read through BiomeTemplateArt.StraightRoads.</summary>
+		public BiomeStraightRoads StraightRoads
+		{
+			get => straightRoads;
+			set => straightRoads = value;
 		}
 
 		/// <summary>This biome's hedges, walls, fences, tree rows, channels and clearance rows (<see cref="BiomeLinearStyle"/>); read through BiomeTemplateArt.LinearFeatures.</summary>

@@ -17,21 +17,15 @@ namespace FishMMO.Shared.WorldDesign
 				: $"{TexturesFolder}/{StructurePieces.Prefix}{surface}_{finish}_{map}.png";
 		}
 
-		/// <summary>Every structure payload file: three maps and three finish albedos a surface, three meshes a variant; and the cave glow art's.</summary>
+		/// <summary>
+		/// Every structure payload file: the surfaces' look arrays (their maps and finish albedos as slices, ProceduralArtLookArrays;
+		/// no single map is written since 2026-10-28), three meshes a variant; and the cave glow art's.
+		/// </summary>
 		public static IEnumerable<string> StructurePayloadPaths()
 		{
-			foreach (string surface in StructureSurfaces.Names)
+			foreach (ProceduralArtLookArrays.Layout layout in ProceduralArtLookArrays.LayoutsOfSet(ProceduralArtLookArrays.StructureSetName))
 			{
-				yield return StructureTexture(surface, "Albedo");
-				yield return StructureTexture(surface, "Normal");
-				yield return StructureTexture(surface, "Mask");
-				foreach (StructureFinish finish in StructurePieces.Finishes)
-				{
-					if (finish != StructureFinish.None)
-					{
-						yield return StructureTexture(surface, "Albedo", finish);
-					}
-				}
+				yield return layout.Path;
 			}
 			foreach (StructurePiece p in StructurePieces.All)
 			{

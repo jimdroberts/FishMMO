@@ -35,8 +35,23 @@ StructuredBuffer<FishFilletTri> _FishFilletTris;   // the drawn set, grouped by 
 StructuredBuffer<uint> _FishFilletStarts;          // each look's first triangle in it, by command (= look)
 float4 _FishFilletFade;                            // xyz the camera the fillets were drawn round, w the distance they are gone at (m)
 // Per look (its material, set by RockFillets from the rock material's keywords): x its metallic-gloss map, y its
-// occlusion map, z its normal map are in use. Outside UnityPerMaterial, which is FishWeatherLitInput.hlsl's layout.
+// occlusion map, z its normal map are in use, w its maps are look array slices (_FISH_LOOK_ARRAY). Outside UnityPerMaterial,
+// which is FishWeatherLitInput.hlsl's layout.
 float4 _FishFilletMaps;
+
+// ── FishMMO edit (2026-10-28): the rock's maps as look array slices (ProceduralArtLookArrays: the generator writes the rock
+// surfaces as Texture2DArrays and the rock materials name slices, _FishLookSlices in UnityPerMaterial). All three arrays are
+// read with the colour array's sampler — every generated map is imported Repeat, trilinear, aniso 8 — so the pass needs one
+// sampler more, not three. The fillet shader never enables the look keyword, so it declares them itself. ──
+#if !defined(FISH_LOOK_ARRAYS)
+TEXTURE2D_ARRAY(_FishLookColour);   SAMPLER(sampler_FishLookColour);
+TEXTURE2D_ARRAY(_FishLookNormal);
+TEXTURE2D_ARRAY(_FishLookMask);
+#endif
+
+// One map of the look at a projected uv: its array slice when the rock's maps are slices, else its 2D map.
+#define FISH_FILLET_MAP(map, mapSampler, array, slice, uv) (_FishFilletMaps.w > 0.5 \
+    ? (half4)SAMPLE_TEXTURE2D_ARRAY(array, sampler_FishLookColour, uv, max(slice, 0.0)) : (half4)SAMPLE_TEXTURE2D(map, mapSampler, uv))
 
 // Metres over which a fillet's edge dissolves where it reaches the rocks' faces.
 #define FISH_FILLET_EDGE 0.04
@@ -123,9 +138,9 @@ void FishFilletTriplanar(float3 positionWS, float3 n, out SurfaceData surface, o
     uvY = uvY * _BaseMap_ST.xy + _BaseMap_ST.zw;
     uvZ = uvZ * _BaseMap_ST.xy + _BaseMap_ST.zw;
 
-    half4 albedo = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, uvX) * blend.x
-                 + SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, uvY) * blend.y
-                 + SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, uvZ) * blend.z;
+    half4 albedo = FISH_FILLET_MAP(_BaseMap, sampler_BaseMap, _FishLookColour, _FishLookSlices.x, uvX) * blend.x
+                 + FISH_FILLET_MAP(_BaseMap, sampler_BaseMap, _FishLookColour, _FishLookSlices.x, uvY) * blend.y
+                 + FISH_FILLET_MAP(_BaseMap, sampler_BaseMap, _FishLookColour, _FishLookSlices.x, uvZ) * blend.z;
     surface.albedo = albedo.rgb * _BaseColor.rgb;
     surface.alpha = 1.0h;
 
@@ -133,9 +148,9 @@ void FishFilletTriplanar(float3 positionWS, float3 n, out SurfaceData surface, o
     // rock material by RockFillets: a runtime material has none of the plain shader's variants).
     if (_FishFilletMaps.x > 0.5)
     {
-        half4 gloss = SAMPLE_TEXTURE2D(_MetallicGlossMap, sampler_MetallicGlossMap, uvX) * blend.x
-                    + SAMPLE_TEXTURE2D(_MetallicGlossMap, sampler_MetallicGlossMap, uvY) * blend.y
-                    + SAMPLE_TEXTURE2D(_MetallicGlossMap, sampler_MetallicGlossMap, uvZ) * blend.z;
+        half4 gloss = FISH_FILLET_MAP(_MetallicGlossMap, sampler_MetallicGlossMap, _FishLookMask, _FishLookSlices.z, uvX) * blend.x
+                    + FISH_FILLET_MAP(_MetallicGlossMap, sampler_MetallicGlossMap, _FishLookMask, _FishLookSlices.z, uvY) * blend.y
+                    + FISH_FILLET_MAP(_MetallicGlossMap, sampler_MetallicGlossMap, _FishLookMask, _FishLookSlices.z, uvZ) * blend.z;
         surface.metallic = gloss.r;
         surface.smoothness = gloss.a * _Smoothness;
     }
@@ -147,9 +162,9 @@ void FishFilletTriplanar(float3 positionWS, float3 n, out SurfaceData surface, o
     surface.occlusion = 1.0h;
     if (_FishFilletMaps.y > 0.5)
     {
-        half occ = SAMPLE_TEXTURE2D(_OcclusionMap, sampler_OcclusionMap, uvX).g * blend.x
-                 + SAMPLE_TEXTURE2D(_OcclusionMap, sampler_OcclusionMap, uvY).g * blend.y
-                 + SAMPLE_TEXTURE2D(_OcclusionMap, sampler_OcclusionMap, uvZ).g * blend.z;
+        half occ = FISH_FILLET_MAP(_OcclusionMap, sampler_OcclusionMap, _FishLookMask, _FishLookSlices.w, uvX).g * blend.x
+                 + FISH_FILLET_MAP(_OcclusionMap, sampler_OcclusionMap, _FishLookMask, _FishLookSlices.w, uvY).g * blend.y
+                 + FISH_FILLET_MAP(_OcclusionMap, sampler_OcclusionMap, _FishLookMask, _FishLookSlices.w, uvZ).g * blend.z;
         surface.occlusion = LerpWhiteTo(occ, _OcclusionStrength);
     }
     surface.specular = half3(0.0, 0.0, 0.0);
@@ -158,9 +173,9 @@ void FishFilletTriplanar(float3 positionWS, float3 n, out SurfaceData surface, o
     normalWS = (half3)n;
     if (_FishFilletMaps.z > 0.5)
     {
-        half3 tx = UnpackNormalScale(SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, uvX), _BumpScale);
-        half3 ty = UnpackNormalScale(SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, uvY), _BumpScale);
-        half3 tz = UnpackNormalScale(SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, uvZ), _BumpScale);
+        half3 tx = UnpackNormalScale(FISH_FILLET_MAP(_BumpMap, sampler_BumpMap, _FishLookNormal, _FishLookSlices.y, uvX), _BumpScale);
+        half3 ty = UnpackNormalScale(FISH_FILLET_MAP(_BumpMap, sampler_BumpMap, _FishLookNormal, _FishLookSlices.y, uvY), _BumpScale);
+        half3 tz = UnpackNormalScale(FISH_FILLET_MAP(_BumpMap, sampler_BumpMap, _FishLookNormal, _FishLookSlices.y, uvZ), _BumpScale);
         tx.x *= (half)axisSign.x;
         ty.x *= (half)axisSign.y;
         tz.x *= (half)-axisSign.z;

@@ -9,11 +9,11 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// The procedural blade grass (RDR2 / Ghost of Tsushima style): takes the grass detail prototypes
-	/// (<see cref="GrassBladeSettings.PrototypePrefixes"/>, default "Detail_Grass") of every terrain the
-	/// instanced detail renderer drives, and draws them as thin, individually shaped blades regenerated on
-	/// the GPU every frame around each camera (<see cref="GrassBladeRenderer"/>, FishGrassBlades.compute,
-	/// FishMMO/Grass Blades) in place of the clump meshes, which <see cref="TerrainDetailInstancing"/> then
-	/// skips on that terrain (<see cref="TerrainDetailInstancing.SetSkipped"/>).
+	/// (<see cref="GrassBladeSettings.PrototypePrefixes"/>: grasses, reeds, flowers; <see cref="TerrainDetailRouting"/>) of every
+	/// terrain the detail driver (<see cref="TerrainDetailInstancing"/>) takes, and draws them as thin, individually shaped
+	/// blades regenerated on the GPU every frame around each camera (<see cref="GrassBladeRenderer"/>, FishGrassBlades.compute,
+	/// FishMMO/Grass Blades). The only renderer of those kinds (2026-10-27: the CPU chunk renderer and its clump meshes are
+	/// gone): a look past a cap is merged into its prefab's look or, with none, an error.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -23,22 +23,13 @@ namespace FishMMO.Client
 	/// same blades stand in the same places every frame and on every terrain border.
 	/// </para>
 	/// <para>
-	/// <b>When.</b> Play mode, client, compute-capable devices, and only on terrains the detail renderer
-	/// drives — so Unity's own detail drawing never draws the clumps under the blades. Everywhere else
-	/// (WebGL2, the detail renderer off, edit mode) the mesh grass draws exactly as before. The dashboard's
-	/// It is the default wherever compute runs; the dashboard's "Toggle old mesh grass" opts back into the
-	/// instanced clump meshes per editor session (SessionState <see cref="MeshGrassKey"/>, off by default).
-	/// Reflection cameras draw no blades.
+	/// <b>When.</b> Play mode, client, compute-capable devices, and only on terrains the detail driver takes, so
+	/// Unity's own detail drawing never draws the clumps under the blades. Edit mode is Unity's own drawing. Reflection
+	/// cameras draw no blades.
 	/// </para>
 	/// </remarks>
 	public static class GrassBladeSystem
 	{
-		/// <summary>
-		/// SessionState key (editor): true draws the old instanced clump meshes instead of the blades. A new key,
-		/// opt-in and false by default, so a switch-off left over from testing the A/B no longer sticks.
-		/// </summary>
-		public const string MeshGrassKey = "FishMMO.ProceduralGrass.UseMeshGrass";
-
 		private sealed class Taken
 		{
 			public Terrain Terrain;
@@ -138,6 +129,24 @@ namespace FishMMO.Client
 		/// grows, off every taken terrain, or before its maps are built). The ambient life reads it so ground animals forage
 		/// where they can be seen.
 		/// </summary>
+		/// <summary>
+		/// Changes whenever what <see cref="CoverAt"/> can answer changes (a terrain's grass taken or let go, its cover map
+		/// finished or released): what a cache of answers drawn from the cover keys on.
+		/// </summary>
+		public static int CoverStamp
+		{
+			get
+			{
+				int stamp = grassTerrains.Count;
+				for (int i = 0; i < grassTerrains.Count; i++)
+				{
+					GrassTerrain gt = grassTerrains[i];
+					stamp = unchecked(stamp * 31 + (gt != null && gt.CoverSettled ? 2 : 1));
+				}
+				return stamp;
+			}
+		}
+
 		public static float CoverAt(float x, float z)
 		{
 			for (int i = 0; i < grassTerrains.Count; i++)
@@ -157,11 +166,11 @@ namespace FishMMO.Client
 		{
 			if (!enabled)
 			{
-				return "Procedural grass OFF (the grass prototypes draw as meshes).";
+				return "Procedural grass OFF: no grass is drawn (there is no mesh grass).";
 			}
 			if (renderer == null)
 			{
-				return rendererTried ? "Procedural grass unavailable on this device or without its assets (the mesh grass draws); see the log." : "Procedural grass not started (enter play mode on a terrain scene).";
+				return rendererTried ? "Procedural grass unavailable on this device or without its assets: no grass is drawn; see the log." : "Procedural grass not started (enter play mode on a terrain scene).";
 			}
 			var s = new System.Text.StringBuilder();
 			s.Append($"Procedural grass ON: {taken.Count} terrain(s){(building != null ? $" (building '{building.Terrain?.name}': {building.Progress}, {building.Frames} frames, {building.Milliseconds:F0} ms)" : "")}, {types.Count} type(s) [");
@@ -180,8 +189,8 @@ namespace FishMMO.Client
 			{
 				string state = taken.TryGetValue(under, out Taken t) ? $"blades ({t.Grass.Channels} type channel(s) from {t.Grass.Layers} prototype(s))"
 					: building != null && building.Terrain == under ? "building"
-					: none.ContainsKey(under) ? "mesh grass (no blade grass painted on it)"
-					: !TerrainDetailInstancing.IsDriving(under) ? "not driven by the detail renderer"
+					: none.ContainsKey(under) ? "no blade grass painted on it"
+					: !TerrainDetailInstancing.IsDriving(under) ? "not taken by the detail driver"
 					: "waiting to build";
 				s.Append($"; under the camera '{under.name}': {state}");
 			}
@@ -226,9 +235,6 @@ namespace FishMMO.Client
 			}
 			hooked = true;
 			syncedFrame = -1;
-#if UNITY_EDITOR
-			enabled = !UnityEditor.SessionState.GetBool(MeshGrassKey, false);
-#endif
 			RenderPipelineManager.beginContextRendering += OnBeginContextRendering;
 			RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
 			Application.quitting += Shutdown;
@@ -341,7 +347,7 @@ namespace FishMMO.Client
 				renderer = GrassBladeRenderer.TryCreate(out string reason);
 				if (renderer == null)
 				{
-					Debug.Log($"[Grass] Procedural blade grass off: {reason}.");
+					Debug.LogError($"[Grass] Procedural blade grass off: {reason}. No grass is drawn (there is no mesh grass).");
 				}
 			}
 			if (renderer == null)
@@ -391,7 +397,7 @@ namespace FishMMO.Client
 				// Nearest the camera first: the terrain underfoot used to wait behind every other one (30
 				// terrains at 2 ms a frame is hundreds of frames), drawing the old mesh grass meanwhile.
 				bool started = false, spent = false;
-				var bakedWatch = System.Diagnostics.Stopwatch.StartNew();
+				long bakedStart = System.Diagnostics.Stopwatch.GetTimestamp();
 				while (!started && !spent)
 				{
 					Terrain next = null;
@@ -428,7 +434,7 @@ namespace FishMMO.Client
 						Finish(building);
 						building = null;
 						started = false;
-						spent = bakedWatch.Elapsed.TotalMilliseconds >= BakedBudgetMilliseconds;
+						spent = (System.Diagnostics.Stopwatch.GetTimestamp() - bakedStart) * 1000.0 / System.Diagnostics.Stopwatch.Frequency >= BakedBudgetMilliseconds;
 					}
 				}
 				if (!started && !spent && summaryTerrains > 0)
@@ -576,9 +582,12 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// A terrain's blade prototypes and each one's type, new types made and added to <paramref name="types"/> (the scene's
-		/// table, <paramref name="keys"/> parallel to it; up to the renderer's <see cref="GrassBladeRenderer.MaxTypes"/>). The
-		/// play's choice and the editor's bake (TerrainDetailBaker) are this one, so a bake made from the same templates is taken.
+		/// A terrain's PAINTED blade prototypes (<see cref="TerrainDetailRouting.Painted"/>: 2026-10-27, a tile lists the whole
+		/// scene's prototypes) and each one's type, new types made and added to <paramref name="types"/> (the scene's table,
+		/// <paramref name="keys"/> parallel to it; up to the renderer's <see cref="GrassBladeRenderer.MaxTypes"/>). The play's
+		/// choice and the editor's bake (TerrainDetailBaker) are this one, so a bake made from the same templates is taken. A
+		/// prefab refused for the cap is not drawn: an error in the log and, when <paramref name="problems"/> is given (the cut),
+		/// in it. Leaving unpainted prototypes out changes no blade: they weigh nothing anywhere, and the channels keep their order.
 		/// </summary>
 		/// <remarks>
 		/// A prototype's type is its prefab with the look of the biome whose rule made it (<see cref="TerrainDetailBiomes"/>,
@@ -591,7 +600,7 @@ namespace FishMMO.Client
 		/// look silently, and always its material's tints.
 		/// </remarks>
 		public static void SelectBlades(Terrain terrain, GrassBladeSettings settings, List<GrassType> types, List<(GameObject Prefab, string Look)> keys,
-			HashSet<string> warned, List<int> prototypes, List<GrassType> chosen)
+			HashSet<string> warned, List<int> prototypes, List<GrassType> chosen, ICollection<string> problems = null)
 		{
 			prototypes.Clear();
 			chosen.Clear();
@@ -601,11 +610,12 @@ namespace FishMMO.Client
 				return;
 			}
 			DetailPrototype[] all = data.detailPrototypes;
+			bool[] painted = TerrainDetailRouting.Painted(data);
 			for (int p = 0; p < all.Length; p++)
 			{
 				DetailPrototype proto = all[p];
 				GameObject prefab = proto?.prototype;
-				if (prefab == null || !proto.usePrototypeMesh || !settings.IsBladePrototype(prefab.name))
+				if (!painted[p] || TerrainDetailRouting.RouteOf(proto, settings) != TerrainDetailRouting.Route.Blades)
 				{
 					continue;
 				}
@@ -615,17 +625,21 @@ namespace FishMMO.Client
 				int index = GrassTypeTable.Place(keys, prefab, signature, GrassBladeRenderer.MaxTypes, out GrassTypeTable.Placement how);
 				if (how == GrassTypeTable.Placement.Refused)
 				{
-					if (warned.Add("types"))
+					string message = $"[Grass] More than {GrassBladeRenderer.MaxTypes} blade looks in the scene: '{prefab.name}' is not drawn (GPU only: there is no mesh grass; raise GrassMath.MaxTypes or share looks across biomes).";
+					problems?.Add(message);
+					if (warned.Add("types " + prefab.name))
 					{
-						Debug.LogWarning($"[Grass] More than {GrassBladeRenderer.MaxTypes} blade looks in the scene: '{prefab.name}' and later prefabs stay meshes.");
+						Debug.LogError(message);
 					}
 					continue;
 				}
 				if (how == GrassTypeTable.Placement.Merged)
 				{
+					string message = $"[Grass] The scene's {GrassBladeRenderer.MaxTypes} blade looks are taken: '{prefab.name}' in {source} is drawn with the look of {types[index].Source}. Fewer distinct looks of one prefab across the scene's biomes would give each its own.";
+					problems?.Add(message);
 					if (warned.Add("merged " + prefab.name + " " + source))
 					{
-						Debug.LogWarning($"[Grass] The scene's {GrassBladeRenderer.MaxTypes} blade looks are taken: '{prefab.name}' in {source} is drawn with the look of {types[index].Source}. Fewer distinct looks of one prefab across the scene's biomes would give each its own.");
+						Debug.LogWarning(message);
 					}
 				}
 				else if (how == GrassTypeTable.Placement.Added)
@@ -747,7 +761,7 @@ namespace FishMMO.Client
 		public static void ForgetEditorBiomes() => editorBiomes = null;
 #endif
 
-		/// <summary>Hands a finished terrain from the mesh grass to the blades.</summary>
+		/// <summary>Hands a finished terrain to the blades (its prototypes claimed in the driver's books).</summary>
 		private static void Finish(GrassTerrain.Builder done)
 		{
 			Terrain terrain = done.Terrain;
@@ -809,8 +823,17 @@ namespace FishMMO.Client
 
 		// ── Drawing, per camera ───────────────────────────────────────
 
+		/// <summary>This hook's own time in the profiler (render-pipeline callbacks otherwise show only as
+		/// RenderPipeline.BeginCameraRendering's self time). In a class of its own so the marker, an engine object, is made
+		/// when the hook first runs, not when the type is first touched (tests outside Unity use these types' pure parts).</summary>
+		private static class HookProfiling
+		{
+			public static readonly Unity.Profiling.ProfilerMarker Marker = new Unity.Profiling.ProfilerMarker("GrassBladeSystem.BeginCamera");
+		}
+
 		private static void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera)
 		{
+			using var hookMarkerScope = HookProfiling.Marker.Auto();
 			if (!Application.isPlaying || !TerrainInstancingShared.DrawsDetails(camera) || camera.cameraType == CameraType.Reflection)
 			{
 				return;

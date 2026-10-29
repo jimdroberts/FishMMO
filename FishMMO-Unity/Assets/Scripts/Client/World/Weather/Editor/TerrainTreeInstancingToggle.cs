@@ -71,10 +71,11 @@ namespace FishMMO.Client
 				return;
 			}
 			bool trees = TerrainTreeInstancing.RequestGpuDiagnostics(camera, r => Log("Trees", r));
-			bool details = TerrainDetailInstancing.RequestGpuDiagnostics(camera, r => Log("Details", r));
-			if (!trees && !details)
+			// The terrain's details are the blade grass's and the GPU detail scatter's (their own diagnostics): no chunk renderer to read.
+			Debug.Log($"[Terrain instancing] Details: {DetailScatterSystem.Describe()}");
+			if (!trees)
 			{
-				Debug.Log("[Terrain instancing] Neither renderer is on the GPU path; nothing to read back.");
+				Debug.Log("[Terrain instancing] The trees are not on the GPU path; nothing to read back.");
 			}
 		}
 
@@ -114,45 +115,6 @@ namespace FishMMO.Client
 		{
 			ScenePathSurfaceBinder.DebugView = !ScenePathSurfaceBinder.DebugView;
 			Debug.Log($"[Paths] Debug view {(ScenePathSurfaceBinder.DebugView ? "ON" : "OFF")}; {ScenePathSurfaceBinder.Describe()}.");
-		}
-
-		[DashboardTool(DashboardToolAttribute.Biomes, "Toggle old mesh grass (play mode A/B)", Section = "Diagnostics", Order = 107, AllowInPlayMode = true,
-			Tooltip = "Procedural blade grass is the default wherever compute runs. This opts the grass detail prototypes (Detail_Grass*) back into the old instanced clump meshes, and a second press returns to the blades. Remembered for the editor session; in edit mode it sets what the next play session starts with. Each press in play mode also logs the blade system's state and, a second later, the blades it appended (async readback).")]
-		public static void ToggleProceduralGrass()
-		{
-			bool meshGrass = !SessionState.GetBool(GrassBladeSystem.MeshGrassKey, false);
-			if (Application.isPlaying)
-			{
-				meshGrass = GrassBladeSystem.Enabled;
-			}
-			SessionState.SetBool(GrassBladeSystem.MeshGrassKey, meshGrass);
-			bool on = !meshGrass;
-			if (!Application.isPlaying)
-			{
-				Debug.Log($"[Grass] When play starts: {(on ? "procedural blade grass (default)" : "OLD MESH GRASS (clumps); press again for the blades")}.");
-				return;
-			}
-			GrassBladeSystem.Enabled = on;
-			GrassBladeRenderer.StatsEnabled = on;
-			SceneView.RepaintAll();
-			AfterFrames(() => Debug.Log($"[Grass] {GrassBladeSystem.Describe()}"));
-			if (on)
-			{
-				int until = Time.frameCount + 2 * GrassBladeRenderer.StatsInterval + SettleFrames;
-				void Later()
-				{
-					if (Application.isPlaying && Time.frameCount < until)
-					{
-						return;
-					}
-					EditorApplication.update -= Later;
-					if (Application.isPlaying)
-					{
-						Debug.Log($"[Grass] {GrassBladeSystem.Describe()}");
-					}
-				}
-				EditorApplication.update += Later;
-			}
 		}
 
 		[DashboardTool(DashboardToolAttribute.Biomes, "Highlight procedural grass (play mode)", Section = "Diagnostics", Order = 108, AllowInPlayMode = true,
@@ -195,26 +157,6 @@ namespace FishMMO.Client
 		{
 			GrassBladeRenderer.ReverseDispatchOrder = !GrassBladeRenderer.ReverseDispatchOrder;
 			Debug.Log($"[Grass] Dispatch order {(GrassBladeRenderer.ReverseDispatchOrder ? "REVERSED (terrain underfoot last)" : "normal (terrain underfoot first)")}.");
-		}
-
-		[DashboardTool(DashboardToolAttribute.Biomes, "Toggle GPU detail scatter (play mode A/B)", Section = "Diagnostics", Order = 115, AllowInPlayMode = true,
-			Tooltip = "The GPU detail scatter (pebbles, small rocks, shells, litter generated on the GPU every frame) is the default wherever compute runs. This opts those prototypes back into the CPU-built detail chunks, and a second press returns to the scatter. Remembered for the editor session; in edit mode it sets what the next play session starts with. Each press in play mode logs the scatter's state.")]
-		public static void ToggleDetailScatter()
-		{
-			bool chunks = !SessionState.GetBool(DetailScatterSystem.ChunkDetailsKey, false);
-			if (Application.isPlaying)
-			{
-				chunks = DetailScatterSystem.Enabled;
-			}
-			SessionState.SetBool(DetailScatterSystem.ChunkDetailsKey, chunks);
-			if (!Application.isPlaying)
-			{
-				Debug.Log($"[Detail scatter] When play starts: {(chunks ? "CPU DETAIL CHUNKS for every mesh detail; press again for the GPU scatter" : "GPU detail scatter (default)")}.");
-				return;
-			}
-			DetailScatterSystem.Enabled = !chunks;
-			SceneView.RepaintAll();
-			AfterFrames(() => Debug.Log($"[Detail scatter] {DetailScatterSystem.Describe()}"));
 		}
 
 		[DashboardTool(DashboardToolAttribute.Biomes, "Describe GPU detail scatter (play mode)", Section = "Diagnostics", Order = 116, AllowInPlayMode = true,
@@ -274,8 +216,8 @@ namespace FishMMO.Client
 				return "Instanced terrain renderers OFF: Unity draws trees and details.";
 			}
 			string trees = $"trees {TerrainTreeInstancing.GpuModelCount}/{TerrainTreeInstancing.ModelCount} models on GPU on {TerrainTreeInstancing.DrivenTerrainCount} terrains";
-			string details = $"details {TerrainDetailInstancing.GpuModelCount}/{TerrainDetailInstancing.ModelCount}, {TerrainDetailInstancing.ResidentChunks} chunks";
-			if (TerrainTreeInstancing.GpuActive || TerrainDetailInstancing.GpuActive)
+			string details = $"details on {TerrainDetailInstancing.DrivenTerrainCount} terrains (blades {GrassBladeSystem.TerrainCount}, scatter {DetailScatterSystem.TerrainCount} terrains, {DetailScatterSystem.TypeCount} types)";
+			if (TerrainTreeInstancing.GpuActive)
 			{
 				return $"GPU-driven: ON ({trees}, {details}).";
 			}

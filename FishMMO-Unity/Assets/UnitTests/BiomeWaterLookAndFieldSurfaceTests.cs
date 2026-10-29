@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using FishMMO.Shared;
 using FishMMO.Shared.Biomes;
@@ -37,6 +38,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		// checks catch an unintended edit to either the recipe or the authored template.
 		public static BiomeWaterLook ExpectedAuthoredWater(string name)
 		{
+			// An authored round gives its own water (legacy equality only): its file's look is what its asset holds once authored.
+			if (BiomeAuthoredRounds.Contains(name))
+				return BiomeArtSpec.For(name).WaterLook();
 			if (name == "Sulphur Flats")
 				return new BiomeWaterLook(new Color(0.941f, 0.753f, 0.251f, 1f), new Color(0.627f, 0.251f, 0.055f, 1f),
 					new Vector3(0.9f, 0.5f, 0.1f), 1f, new Color(0.784f, 0.541f, 0.188f, 1f), new Color(0.784f, 0.541f, 0.188f, 1f)) { Hot = true, Melt = true };
@@ -77,6 +81,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				BiomeArtSpec.Entry entry = BiomeArtSpec.For(name);
 				Assert.That(entry, Is.Not.Null, name);
 				Assert.That(entry.WaterLook().Signature(), Is.EqualTo(ExpectedAuthoredWater(name).Signature()), name);
+				Assert.That(entry.WaterLook().Defined, Is.True, $"{name}: a look is filled in");
 				count++;
 			}
 			Assert.That(count, Is.EqualTo(83));
@@ -110,7 +115,13 @@ namespace FishMMO.UnitTests.WorldDesign
 				string body = block.Groups[1].Value;
 				var look = new BiomeWaterLook(Colour(body, "Shallow"), Colour(body, "Deep"), Vector(body, "Absorption"), Float(body, "Turbidity"),
 					Colour(body, "Silt"), Colour(body, "Foam")) { Hot = Regex.IsMatch(body, @"(?m)^    Hot: 1$"), Melt = Regex.IsMatch(body, @"(?m)^    Melt: 1$") };
-				Assert.That(look.Approximately(ExpectedAuthoredWater(Path.GetFileNameWithoutExtension(path)), 1e-5f), Is.True, $"{Path.GetFileName(path)} holds an unexpected authored look: {look}");
+				// An authored biome's asset holds today's look until the authoring writes its file's.
+				string biome = Path.GetFileNameWithoutExtension(path);
+				BiomeWaterLook todayFlagged = today;
+				todayFlagged.Hot = look.Hot;
+				todayFlagged.Melt = look.Melt;
+				bool held = look.Approximately(ExpectedAuthoredWater(biome), 1e-5f) || BiomeAuthoredRounds.Contains(biome) && look.Approximately(todayFlagged, 1e-5f);
+				Assert.That(held, Is.True, $"{Path.GetFileName(path)} holds an unexpected authored look: {look}");
 			}
 			TestContextOut($"{holding} biome asset(s) hold a water look; the rest read the field's default.");
 		}
@@ -121,12 +132,17 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
+				// An authored round lays its own field surfaces (legacy equality only; BiomeAuthoredRoundTests pins them).
+				if (BiomeAuthoredRounds.Contains(entry.Biome))
+				{
+					continue;
+				}
 				foreach ((string prefab, float _) in entry.FieldCrops())
 				{
 					Assert.That(entry.FieldSurface(prefab), Is.EqualTo(BiomeFieldSurface.Flat), $"{entry.Biome}: {prefab}");
 				}
 			}
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset").Where(p => !BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(p))))
 			{
 				Match crops = Regex.Match(Read(path), @"^  fieldCrops:\n((?:  [- ] .*\n)+)", RegexOptions.Multiline);
 				if (!crops.Success)
@@ -440,7 +456,8 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			string hlsl = Read(InlandHlsl);
 			StringAssert.Contains("#define INLAND_LOOK_VECTORS 5", hlsl);
-			StringAssert.Contains("float4 _InlandLooks[15];", hlsl);
+			StringAssert.Contains("float4 _InlandLook0;", hlsl);
+			StringAssert.Contains("float4 _InlandLook14;", hlsl);
 			StringAssert.Contains("float _InlandLookOn;", hlsl);
 			StringAssert.Contains("float2 look : TEXCOORD5;", hlsl);
 			Assert.That(InlandWaterRendererLookVectors() * InlandWaterRendererLookSlots(), Is.EqualTo(15));
@@ -469,11 +486,11 @@ namespace FishMMO.UnitTests.WorldDesign
 			StringAssert.Contains("BiomeWaterLooks.Blend(row.Along, length, lookStart, lookEnd, lookFromStart, lookIntoEnd)", renderer);
 			StringAssert.Contains("PrepareLooks(hydrology);", renderer);
 			string looks = CodeOnly(Read(InlandLooks));
-			StringAssert.Contains("Shader.PropertyToID(\"_InlandLooks\")", looks);
+			StringAssert.Contains("Shader.PropertyToID(\"_InlandLook\" + i)", looks);
 			StringAssert.Contains("Shader.PropertyToID(\"_InlandLookOn\")", looks);
 			StringAssert.Contains("BiomeRegistry.Changed += OnBiomesChanged;", looks);
 			string flow = CodeOnly(Read(InlandFlow));
-			StringAssert.Contains("any |= ApplyRiverLook(pair.Key, flowBlock);", flow);
+			StringAssert.Contains("ApplyRiverLook(pair.Key, own);", flow);
 			StringAssert.Contains("ApplyLakeLooks();", flow);
 			// Every pass of the shader still compiles with DXC.
 			Assert.That(Regex.Matches(Read(InlandShader), @"HLSLPROGRAM\s*\n\s*#pragma use_dxc vulkan").Count, Is.EqualTo(2));

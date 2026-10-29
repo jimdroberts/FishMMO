@@ -61,7 +61,11 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(entry.Habitat & BiomeHabitat.Alien, Is.EqualTo(BiomeHabitat.None), asset.Name + ": Alien is never stored");
 				AmbientHabitat old = AmbientGating.HabitatOfBiome(asset.Name, asset.DisplayName, asset.Atmosphere);
 				BiomeHabitat live = BiomeHabitats.Live(entry.Habitat, asset.Atmosphere, asset.Requires);
-				if ((int)live != (int)old)
+				// An authored round names its own country (legacy equality only; the invariants above and below still hold for it). The
+				// sea halls' phase (I2n-b, 2026-10-26) gave the Subsurface Ocean Vent its sea and its caves on purpose.
+				bool changed = BiomeAuthoredRounds.Contains(asset.Name)
+					|| asset.Name == "Subsurface Ocean Vent" && live == (BiomeHabitat.Sea | BiomeHabitat.Cave);
+				if ((int)live != (int)old && !changed)
 				{
 					wrong.Add($"{asset.Name}: spec {entry.Habitat} read live as {live}, its name gave {old}");
 				}
@@ -151,7 +155,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(profile.ContainsKey(kind.Name), Is.True, $"the profile holds {kind.Name}");
 				Assert.That(profile[kind.Name], Is.EqualTo(kind.Prefers), $"the profile's {kind.Name} prefers what the defaults do");
 			}
-			int homes = 0;
+			int homes = 0, oldHomes = 0;
 			foreach (BiomeAsset asset in BiomeAssets())
 			{
 				var old = new List<string>();
@@ -164,6 +168,14 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 				BiomeArtSpec.Entry entry = BiomeArtSpec.For(asset.Name);
 				List<BiomeSeaLife> spec = entry.SeaLife();
+				if (BiomeAuthoredRounds.Contains(asset.Name))
+				{
+					// An authored round names its own sea life at its own weights (BiomeAuthoredRoundTests); every kind it names is one
+					// the client has.
+					Assert.That(entry.SeaLifeKinds().All(n => kinds.Any(k => k.Name == n)), Is.True, asset.Name);
+					oldHomes += old.Count;
+					continue;
+				}
 				Assert.That(entry.SeaLifeKinds(), Is.EqualTo(old), asset.Name);
 				foreach (SeaCreatureKind kind in kinds)
 				{
@@ -181,7 +193,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 				homes += spec.Count;
 			}
-			Assert.That(homes, Is.EqualTo(8), "Coral Reef 3, Coastal Water 2, Beach 1, Ocean 1, Deep Ocean 1");
+			Assert.That(homes + oldHomes, Is.EqualTo(8), "Coral Reef 3, Coastal Water 2, Beach 1, Ocean 1, Deep Ocean 1 (an authored biome by the kinds' names)");
 		}
 
 		/// <summary>
@@ -226,10 +238,16 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void SpecVines_AreTheVineTablesRow_ForEveryBiomeAsset()
 		{
-			int rows = 0;
+			int rows = 0, authored = 0;
 			foreach (BiomeAsset asset in BiomeAssets())
 			{
 				VineBiomes.Habitat old = VineBiomes.For(asset.Name);
+				if (BiomeAuthoredRounds.Contains(asset.Name))
+				{
+					// An authored round gives its own vines (legacy equality only): the table's row is only the unauthored fallback.
+					authored += old != null ? 1 : 0;
+					continue;
+				}
 				BiomeVines spec = BiomeArtSpec.For(asset.Name).VineGrowth();
 				VineBiomes.Habitat read = BiomeTemplateArt.HabitatOf(asset.Name, spec);
 				if (old == null)
@@ -248,7 +266,7 @@ namespace FishMMO.UnitTests.WorldDesign
 					Assert.That(read.Pick(i / 20f), Is.EqualTo(old.Pick(i / 20f)), $"{asset.Name} draw {i}");
 				}
 			}
-			Assert.That(rows, Is.EqualTo(VineBiomes.All.Length), "every row of the table is a biome asset");
+			Assert.That(rows + authored, Is.EqualTo(VineBiomes.All.Length), "every row of the table is a biome asset");
 		}
 
 		/// <summary>A template's vines with no species read as none, whatever its densities; the spec's own vines replace the row.</summary>
@@ -274,7 +292,8 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void SpecGathering_IsTheCataloguesRows_AndDrawsAsTheNameDid()
 		{
-			foreach (BiomeAsset asset in BiomeAssets())
+			// An authored round gives its own gathering (legacy equality only; AuthoredFiles_NameOnlyGroundsAndPrefabsThatExist checks its nodes).
+			foreach (BiomeAsset asset in BiomeAssets().Where(a => !BiomeAuthoredRounds.Contains(a.Name)))
 			{
 				var old = new List<string>();
 				foreach (GatheringResource resource in GatheringResourceCatalogue.All)
@@ -331,7 +350,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void SpecGroveHerbs_AreWhatTheGroveGrewByName_ForEveryBiomeAsset()
 		{
-			foreach (BiomeAsset asset in BiomeAssets())
+			foreach (BiomeAsset asset in BiomeAssets().Where(a => !BiomeAuthoredRounds.Contains(a.Name)))
 			{
 				Assert.That(BiomeArtSpec.For(asset.Name).GroveHerbs(), Is.EqualTo(OldHerbsFor(asset.Name)), asset.Name);
 			}

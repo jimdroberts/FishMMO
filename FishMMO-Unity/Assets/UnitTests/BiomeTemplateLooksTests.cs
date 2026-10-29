@@ -24,7 +24,20 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		// ── Look class ────────────────────────────────────────────────
 
-		/// <summary>Every biome asset's spec look class is what <see cref="BiomeLooks.ClassOf(string, float, float)"/> read from it.</summary>
+		/// <summary>The look classes a biome round changed from what the name gave (the round's approved choice).</summary>
+		private static readonly Dictionary<string, BiomeLookClass> RoundLookClasses = new Dictionary<string, BiomeLookClass>
+		{
+			{ "Woodland", BiomeLookClass.Temperate }, // Woodland round, 2026-10-26: lighter greens, not the closed forest's.
+			{ "Mountain Slope", BiomeLookClass.Forest }, // Mountain Slope round, 2026-10-26: dark saturated cloud forest, not Alpine's sparse pale theme.
+			{ "Grassland", BiomeLookClass.Arid }, // Grassland round, 2026-10-26: straw-gold puszta summer.
+			{ "Plains", BiomeLookClass.Arid }, // Plains round, 2026-10-26: tawny-copper prairie.
+			{ "Hills", BiomeLookClass.Arid }, // Hills round, 2026-10-26: summer-tawny schist hills.
+			{ "Estuary", BiomeLookClass.Coastal }, // Estuary round, 2026-10-26: the salt marsh's grey-green and thrift pinks (Q6).
+			{ "Mangrove", BiomeLookClass.Jungle }, // Mangrove round, 2026-10-26: glossy tropical evergreen, not Wetland's temperate fen (Q6).
+			{ "Geyser Basin", BiomeLookClass.Cold }, // Geyser Basin round, 2026-10-26: grey-green fell-field, campion and cotton blooms (Q9).
+		};
+
+		/// <summary>Every biome asset's spec look class is what <see cref="BiomeLooks.ClassOf(string, float, float)"/> read from it, or its round's own.</summary>
 		[Test]
 		public void SpecLookClass_IsWhatTheNameGave_ForEveryBiomeAsset()
 		{
@@ -43,7 +56,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				string resolved = string.IsNullOrWhiteSpace(display) ? name : display;
 				float temperature = 0.5f * (Number(text, "MinTemperature") + Number(text, "MaxTemperature"));
 				float humidity = 0.5f * (Number(text, "MinHumidity") + Number(text, "MaxHumidity"));
-				BiomeLookClass old = BiomeLooks.ClassOf(resolved, temperature, humidity);
+				BiomeLookClass old = RoundLookClasses.TryGetValue(name, out BiomeLookClass round) ? round : BiomeLooks.ClassOf(resolved, temperature, humidity);
 				if (entry.LookClass != old)
 				{
 					wrong.Add($"{name}: spec {entry.LookClass}, its name gave {old}");
@@ -222,22 +235,31 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeGrassDefaults.For("Detail_Fern"), Is.Null, "a fern is no blade");
 		}
 
-		/// <summary>Until a biome's file tunes them, the authoring writes every blade prefab's old look onto every biome.</summary>
+		/// <summary>Until a biome's file tunes them (a round's Blades), the authoring writes every blade prefab's old look onto every biome.</summary>
 		[Test]
 		public void SpecBladeLooks_AreTheOldLooks_ForEveryBiome()
 		{
-			int looks = 0;
+			int looks = 0, unauthored = 0;
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
+				bool authored = BiomeAuthoredRounds.Contains(entry.Biome);
+				unauthored += authored ? 0 : 1;
 				foreach ((string prefab, BiomeGrassType look) in entry.GrassTypes())
 				{
 					Assert.That(BiomeGrassDefaults.IsBlade(prefab), prefab);
+					if (entry.TunesBlade(prefab))
+					{
+						// A round's own look of the type (Blades): its own ground tint, never the legacy one left by accident.
+						Assert.That(look.Signature(), Is.Not.EqualTo(BiomeGrassDefaults.For(prefab).Signature()), $"{entry.Biome} / {prefab} tuned to nothing");
+						continue;
+					}
 					Assert.That(look.Signature(), Is.EqualTo(BiomeGrassDefaults.For(prefab).Signature()), $"{entry.Biome} / {prefab}");
 					Assert.That(look.GroundTint, Is.EqualTo(BiomeGrassType.LegacyGroundTint));
-					looks++;
+					looks += authored ? 0 : 1;
 				}
 			}
-			Assert.That(looks, Is.GreaterThan(50), "the biomes grow blade grass");
+			// Over 50 among all 83 before the rounds: the same share of the biomes still unauthored (an authored round tunes its own).
+			Assert.That(looks, Is.GreaterThan(50 * unauthored / 83), "the unauthored biomes grow blade grass");
 		}
 
 		/// <summary>
@@ -314,7 +336,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void TheTypeTable_IsCappedAtTheGpus32_MergingLooksOfAPrefabItHas()
 		{
-			Assert.That(GrassBladeRenderer.MaxTypes, Is.EqualTo(32), "five bits of the blade record");
+			Assert.That(GrassBladeRenderer.MaxTypes, Is.EqualTo(128), "seven bits of the blade record (the sixth the colour's old valid flag, the seventh its sixth word, 2026-10-27)");
 			var keys = new List<(string Prefab, string Look)>();
 			for (int i = 0; i < GrassBladeRenderer.MaxTypes; i++)
 			{

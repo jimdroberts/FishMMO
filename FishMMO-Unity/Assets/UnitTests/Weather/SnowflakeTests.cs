@@ -292,7 +292,7 @@ namespace FishMMO.UnitTests.Weather
 
 			string field = SourceScanPins.ReadCode("Assets/Scripts/Client/World/Weather/Presentation/PrecipitationField.cs");
 			LogAssert.IsTrue(field.Contains("crowd = Crowd(flakes / Mathf.Max(1e-6f, particles));"), "snow's particles are told how many flakes each is drawn for");
-			LogAssert.IsTrue(field.Contains("block.SetVector(CrowdId, new Vector4(crowd, 0f, 0f, 0f));"), "and every kind's draw sets it");
+			LogAssert.IsTrue(field.Contains("copy.SetVector(CrowdId, new Vector4(crowd, 0f, 0f, 0f));"), "and every kind's draw sets it");
 		}
 
 		[Test]

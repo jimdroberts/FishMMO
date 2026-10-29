@@ -36,6 +36,10 @@ bool FishCasterCulledAt(float3 centreWS, float radius);
 
 bool FishCasterCulled()
 {
+#if defined(FISH_INDIRECT_DOTS)
+    // A BatchRendererGroup draw has no per-draw block, so no sphere: nothing culled (FishIndirectInstancing.hlsl).
+    return false;
+#else
     if (_FishCasterSphere.w <= 0.0)
     {
         return false;
@@ -43,6 +47,7 @@ bool FishCasterCulled()
     float3 centreWS = TransformObjectToWorld(_FishCasterSphere.xyz);
     float scale = max(length(UNITY_MATRIX_M._m00_m10_m20), max(length(UNITY_MATRIX_M._m01_m11_m21), length(UNITY_MATRIX_M._m02_m12_m22)));
     return FishCasterCulledAt(centreWS, _FishCasterSphere.w * scale);
+#endif
 }
 
 /// FishCasterCulled for a caster known by a world-space sphere (2026-10-21: the grass blades, drawn from a buffer of roots

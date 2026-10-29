@@ -1,0 +1,83 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5d5ab720ab15d69083f3901ff8f111f, type: 3}
+  m_Name: KurganField - Kurgans (Small)
+  m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
+  Kind: 210
+  Variant: Kurgans
+  Weight: 1
+  DefaultBiomeWeight: 1
+  BiomeWeights: []
+  RaceCategories: []
+  Races: []
+  Small: 1
+  Medium: 0
+  Large: 0
+  NeedsLiquidWater: 0
+  PadFlatness: 0.6
+  Style: earth
+  Layout: 6
+  Pieces:
+  - Tag: =GraveMound
+    MinCount: 4
+    MaxCount: 8
+    MinDecay: 0
+    MaxDecay: 0.2
+    MinScale: 2
+    MaxScale: 3
+    Role: 9
+    Style: 
+  - Tag: =Statue
+    MinCount: 2
+    MaxCount: 2
+    MinDecay: 0.3
+    MaxDecay: 0.6
+    MinScale: 0.8
+    MaxScale: 1
+    Role: 8
+    Style: stone
+  Features:
+  - rid: 4061506423694033474
+  - rid: 4061506423694033475
+  - rid: 4061506423694033476
+  - rid: 4061506423694033477
+  references:
+    version: 2
+    RefIds:
+    - rid: 4061506423694033474
+      type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        MaxSinkMetres: 0.4
+        MaxTiltDegrees: 8
+        Gap: 1
+        CountsFollowSize: 1
+        Finish: 2
+        FinishChance: 0.4
+        KeepOutOfWater: 1
+        Clearings: []
+    - rid: 4061506423694033475
+      type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        RadiusShare: 1.25
+        Height: 60
+        ShowName: 1
+    - rid: 4061506423694033476
+      type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data: 
+    - rid: 4061506423694033477
+      type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Role: 5
+        Count: 0
+        Offset: {x: 0, y: 0}
+        AreaShare: 0.5
+        ApplySiteRace: 1

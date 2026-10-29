@@ -75,11 +75,16 @@ namespace FishMMO.Water
 			liveColliders = LiveCollidersIn(bounds);
 		}
 
+		/// <summary>Reused for <see cref="Terrain.GetActiveTerrains"/>: <c>Terrain.activeTerrains</c> builds a new array on
+		/// every read, and this runs every frame.</summary>
+		private static readonly System.Collections.Generic.List<Terrain> activeTerrainsScratch = new System.Collections.Generic.List<Terrain>();
+
 		/// <summary>The highest terrain of <paramref name="scene"/> at (x, z); negative infinity off every terrain.</summary>
 		private static float TerrainHeight(Scene scene, float x, float z)
 		{
 			float best = float.NegativeInfinity;
-			foreach (Terrain terrain in Terrain.activeTerrains)
+			Terrain.GetActiveTerrains(activeTerrainsScratch);
+			foreach (Terrain terrain in activeTerrainsScratch)
 			{
 				if (terrain == null || terrain.terrainData == null || terrain.gameObject.scene != scene)
 				{

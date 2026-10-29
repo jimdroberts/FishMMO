@@ -30,8 +30,11 @@ float4 _FishContactLarge;        // trees' and terrain rocks' bases: x band heig
 // property block (CaveVisibility: a block takes them out of the SRP Batcher, and their FishMMO/Weather Lit forward pass
 // compiles the contact only for the GPU-driven rocks, so it was read by nothing they draw). Nothing else sets it, so it
 // reads 0 and every ordinary material drawn with these shaders (buildings, props, the scattered pebbles and litter, the
-// shared assets) is untouched.
+// shared assets) is untouched. A BatchRendererGroup draw of the indirect twins reads it from its batch instead
+// (FishIndirectInstancing.hlsl, FISH_INDIRECT_DOTS).
+#if !defined(FISH_INDIRECT_DOTS)
 float _FishContactOn;
+#endif
 
 // The ground's colour under a world position (rgb) and the map's coverage there (a; 0 outside it or where no
 // terrain was read).

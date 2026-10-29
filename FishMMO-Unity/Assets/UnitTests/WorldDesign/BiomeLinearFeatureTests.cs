@@ -42,6 +42,11 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeArtSpec.Entries.Length, Is.EqualTo(83));
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
+				if (BiomeAuthoredRounds.Contains(entry.Biome))
+				{
+					// An authored round lays its own lines (BiomeAuthoredRoundTests).
+					continue;
+				}
 				Assert.That(entry.LinearLines(), Is.Empty, $"{entry.Biome} names no linear feature yet");
 				var missing = new List<string>();
 				Assert.That(entry.LinearFeatures(_ => null, missing), Is.Empty, entry.Biome);
@@ -57,6 +62,10 @@ namespace FishMMO.UnitTests.WorldDesign
 					continue;
 				}
 				templates++;
+				if (BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(path)))
+				{
+					continue;
+				}
 				Assert.That(Regex.IsMatch(text, @"^  linearFeatures:\s*\n  - ", RegexOptions.Multiline), Is.False, $"{Path.GetFileName(path)} lays a linear feature");
 			}
 			Assert.That(templates, Is.EqualTo(83));
@@ -91,6 +100,8 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeLinearFeatures.FormsOf(BiomeLinearKind.Fence), Is.EqualTo(new[]
 			{
 				BiomeLinearForm.Rail, BiomeLinearForm.LeaningPole, BiomeLinearForm.Wattle, BiomeLinearForm.Picket, BiomeLinearForm.Slab, BiomeLinearForm.Palisade,
+				// The later drafts' (2026-10-26, I2f-b), appended within the fences' ten.
+				BiomeLinearForm.HandRope, BiomeLinearForm.PalmRib, BiomeLinearForm.BoughBreak,
 			}));
 		}
 
@@ -533,6 +544,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			"LinearSlabFence", "LinearGate", "LinearClearance", "ChannelSluice", "ChannelFlume", "ChannelBridge",
 			// The fences' closing post (2026-10-19), appended last.
 			"LinearPost",
+			// The later drafts' forms (2026-10-26, I2f-b, StructurePieces.LinearForms.cs), appended after it.
+			"LinearBrickBarrier", "LinearSnowWall", "LinearHandRope", "LinearPalmRib", "LinearBoughBreak", "LinearBrickFort",
+			"MarkerWand", "MarkerPost", "MarkerPole", "MarkerCairn", "ChannelBracketFlume", "ChannelHammer", "ChannelWeir", "QanatShaft", "QanatGallery",
 		};
 
 		[Test]
@@ -582,7 +596,7 @@ namespace FishMMO.UnitTests.WorldDesign
 					foreach (float roll in new[] { 0f, 0.4f, 0.9f })
 					{
 						(string id, int variant) = StructurePieces.LinearPieceFor(form, broken, roll);
-						if (kind == BiomeLinearKind.TreeRow || kind == BiomeLinearKind.Channel)
+						if (kind == BiomeLinearKind.TreeRow || kind == BiomeLinearKind.Channel || kind == BiomeLinearKind.Markers)
 						{
 							Assert.That(id, Is.Null, $"{form} is no module");
 							continue;

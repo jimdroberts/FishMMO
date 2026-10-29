@@ -39,10 +39,20 @@ namespace FishMMO.Shared.WorldDesign
 		public static readonly DungeonEntranceShaper Instance = new DungeonEntranceShaper();
 
 		public const string ShaperName = "DungeonEntrance";
-		private const int Format = 1;
-		private const int ValueCount = 7;
+		/// <summary>Format 2 (2026-10-27) adds the door's scale; a format 1 plan reads as scale 1.</summary>
+		private const int Format = 2;
+		private const int ValueCount = 8;
 
-		public bool Handles(POIType kind) => kind == POIType.DungeonEntrance;
+		/// <summary>
+		/// The scale a dwarven gate's door is laid at (2026-10-27, the fantasy wave: "a great carved door"): its template lays the
+		/// kit's square dwarven portal this much larger, and the cut is made to the frame at this scale.
+		/// </summary>
+		public const float DwarvenGateScale = 1.5f;
+
+		public bool Handles(POIType kind) => kind == POIType.DungeonEntrance || kind == POIType.DwarvenGate;
+
+		/// <summary>The scale a kind's door is laid at, and its cut made for.</summary>
+		public static float ScaleOf(POIType kind) => kind == POIType.DwarvenGate ? DwarvenGateScale : 1f;
 
 		// ── The frame ─────────────────────────────────────────────
 
@@ -75,19 +85,29 @@ namespace FishMMO.Shared.WorldDesign
 			public float Floor;
 			/// <summary>How much the face rises over the 8 m behind its foot.</summary>
 			public float Rise;
+			/// <summary>The scale of the door the cut is made for (<see cref="ScaleOf"/>); 0 reads as 1.</summary>
+			public float Scale;
 
 			public Vector3 Outward => new Vector3(Mathf.Sin(Yaw * Mathf.Deg2Rad), 0f, Mathf.Cos(Yaw * Mathf.Deg2Rad));
 
-			public float[] ToValues() => new[] { Format, Threshold.x, Threshold.y, Threshold.z, Yaw, Floor, Rise };
+			/// <summary>The door's scale, 1 for a plan that names none.</summary>
+			public float Scaled => Scale > 0f ? Scale : 1f;
+
+			public float[] ToValues() => new[] { Format, Threshold.x, Threshold.y, Threshold.z, Yaw, Floor, Rise, Scaled };
 
 			public static bool TryFrom(float[] v, out Plan plan)
 			{
 				plan = default;
-				if (v == null || v.Length != ValueCount || Mathf.RoundToInt(v[0]) != Format)
+				if (v == null || v.Length < 7)
 				{
 					return false;
 				}
-				plan = new Plan { Threshold = new Vector3(v[1], v[2], v[3]), Yaw = v[4], Floor = v[5], Rise = v[6] };
+				int format = Mathf.RoundToInt(v[0]);
+				if (!(format == 1 && v.Length == 7) && !(format == Format && v.Length == ValueCount))
+				{
+					return false;
+				}
+				plan = new Plan { Threshold = new Vector3(v[1], v[2], v[3]), Yaw = v[4], Floor = v[5], Rise = v[6], Scale = format == 1 ? 1f : v[7] };
 				return true;
 			}
 		}
@@ -146,6 +166,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// <paramref name="problem"/> where there is no face to set a door in.
 		/// </summary>
 		public static bool FindFace(Func<float, float, float> ground, Vector3 start, float yaw, out Plan plan, out string problem)
+			=> FindFace(ground, start, yaw, 1f, out plan, out problem);
+
+		/// <summary>
+		/// <see cref="FindFace(Func{float, float, float}, Vector3, float, out Plan, out string)"/> for a door laid at
+		/// <paramref name="scale"/>: its forecourt and recess that much larger (a dwarven gate's, 2026-10-27).
+		/// </summary>
+		public static bool FindFace(Func<float, float, float> ground, Vector3 start, float yaw, float scale, out Plan plan, out string problem)
 		{
 			plan = default;
 			problem = null;
@@ -186,7 +213,7 @@ namespace FishMMO.Shared.WorldDesign
 			// The forecourt's own ground along its middle: the floor halves the difference, cutting into the foot as much as it fills.
 			float front = 0f;
 			int n = 0;
-			for (float u = 1f; u <= PadDepth; u += 2f)
+			for (float u = 1f; u <= PadDepth * scale; u += 2f)
 			{
 				Vector2 q = foot + o * u;
 				front += ground(q.x, q.y);
@@ -194,8 +221,8 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			front /= Mathf.Max(1, n);
 			float floor = Mathf.Clamp(0.5f * (footHeight + front), footHeight - 2f, footHeight);
-			Vector2 threshold = foot - o * Recess;
-			plan = new Plan { Threshold = new Vector3(threshold.x, floor, threshold.y), Yaw = heading, Floor = floor, Rise = rise };
+			Vector2 threshold = foot - o * (Recess * scale);
+			plan = new Plan { Threshold = new Vector3(threshold.x, floor, threshold.y), Yaw = heading, Floor = floor, Rise = rise, Scale = scale };
 			return true;
 		}
 
@@ -211,9 +238,10 @@ namespace FishMMO.Shared.WorldDesign
 			Vector2 o = Dir(plan.Yaw), side = new Vector2(o.y, -o.x);
 			var p = new Vector2(x - plan.Threshold.x, z - plan.Threshold.z);
 			float u = Vector2.Dot(p, o), v = Mathf.Abs(Vector2.Dot(p, side));
-			// Out of the forecourt and the notch: the nearer of the two rectangles.
-			float padU = Mathf.Max(0f, Mathf.Max(-u, u - PadDepth)), padV = Mathf.Max(0f, v - PadHalf);
-			float notchU = Mathf.Max(0f, Mathf.Max(-u - NotchDepth, u)), notchV = Mathf.Max(0f, v - NotchHalf);
+			// Out of the forecourt and the notch: the nearer of the two rectangles (the frame at the door's scale).
+			float k = plan.Scaled;
+			float padU = Mathf.Max(0f, Mathf.Max(-u, u - PadDepth * k)), padV = Mathf.Max(0f, v - PadHalf * k);
+			float notchU = Mathf.Max(0f, Mathf.Max(-u - NotchDepth * k, u)), notchV = Mathf.Max(0f, v - NotchHalf * k);
 			float outPad = Mathf.Sqrt(padU * padU + padV * padV), outNotch = Mathf.Sqrt(notchU * notchU + notchV * notchV);
 			float away = Mathf.Min(outPad, outNotch);
 			float s = Mathf.Clamp01((u + 2f) / 4f);
@@ -230,7 +258,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The area a plan's cut can change: the forecourt, the notch and the farthest bank either reaches.</summary>
 		public static Rect CutArea(in Plan plan)
 		{
-			float reach = PadDepth + PadHalf + MaxFill / FillGrade + 2f;
+			float reach = (PadDepth + PadHalf) * plan.Scaled + MaxFill / FillGrade + 2f;
 			return new Rect(plan.Threshold.x - reach, plan.Threshold.z - reach, 2f * reach, 2f * reach);
 		}
 
@@ -238,11 +266,12 @@ namespace FishMMO.Shared.WorldDesign
 		private static IEnumerable<Vector2> PadSamples(Plan plan)
 		{
 			Vector2 o = Dir(plan.Yaw), side = new Vector2(o.y, -o.x), t = new Vector2(plan.Threshold.x, plan.Threshold.z);
+			float k = plan.Scaled;
 			for (int i = 0; i <= 2; i++)
 			{
 				for (int j = -1; j <= 1; j++)
 				{
-					yield return t + o * (PadDepth * i * 0.5f) + side * (PadHalf * j);
+					yield return t + o * (PadDepth * k * i * 0.5f) + side * (PadHalf * k * j);
 				}
 			}
 		}
@@ -251,7 +280,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		void IPointOfInterestShaper.Plan(PointOfInterestPlanContext context, PointOfInterestRecord site)
 		{
-			if (!FindFace(context.GroundAt, site.Position, site.Yaw, out Plan plan, out string problem))
+			if (!FindFace(context.GroundAt, site.Position, site.Yaw, ScaleOf(site.Kind), out Plan plan, out string problem))
 			{
 				context.Reject(site, problem);
 				return;
@@ -282,17 +311,18 @@ namespace FishMMO.Shared.WorldDesign
 			site.Yaw = plan.Yaw;
 			// Nothing grows or tumbles onto the forecourt, the facade or the rock just over it.
 			Vector3 o = plan.Outward;
-			Vector3 court = plan.Threshold + o * (0.5f * PadDepth);
-			context.AddKeepOut(site, court.x, court.z, new Vector2(PadHalf, 0.5f * PadDepth).magnitude + 2f);
-			Vector3 face = plan.Threshold - o * (0.5f * StructurePieces.DungeonRearReach);
-			context.AddKeepOut(site, face.x, face.z, StructurePieces.DungeonHalfWidth + 4f);
+			float k = plan.Scaled;
+			Vector3 court = plan.Threshold + o * (0.5f * PadDepth * k);
+			context.AddKeepOut(site, court.x, court.z, new Vector2(PadHalf, 0.5f * PadDepth).magnitude * k + 2f);
+			Vector3 face = plan.Threshold - o * (0.5f * StructurePieces.DungeonRearReach * k);
+			context.AddKeepOut(site, face.x, face.z, StructurePieces.DungeonHalfWidth * k + 4f);
 			context.AddShape(new PointOfInterestShape
 			{
 				SiteId = site.Id,
 				Shaper = ShaperName,
 				Position = plan.Threshold,
 				Yaw = plan.Yaw,
-				Size = new Vector3(2f * PadHalf, plan.Rise, PadDepth),
+				Size = new Vector3(2f * PadHalf * k, plan.Rise, PadDepth * k),
 				Seed = site.SiteSeed,
 				Values = plan.ToValues(),
 			});

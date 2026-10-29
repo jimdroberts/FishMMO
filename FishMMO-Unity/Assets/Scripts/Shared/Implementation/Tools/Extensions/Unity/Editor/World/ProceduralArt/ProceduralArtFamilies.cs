@@ -129,6 +129,11 @@ namespace FishMMO.Shared.WorldDesign
 			("CaveCoverMeshes.cs", new[] { ArtFamily.Structures }),
 			("BiomeArtGenerator.CaveCover.cs", new[] { ArtFamily.Structures }),
 			("CaveCoverTypes.cs", new[] { ArtFamily.Structures }),
+			// The look arrays (2026-10-28): the rock, ice, structure and cave glow surfaces as Texture2DArrays, and the materials'
+			// slices of them. The legacy stones' materials (the shared "Materials" step) wear the rock arrays too, so that step runs
+			// with any rebuild.
+			("ProceduralArtLookArrays.cs", new[] { ArtFamily.Rocks, ArtFamily.Structures }),
+			("BiomeArtGenerator.LookArrays.cs", new[] { ArtFamily.Rocks, ArtFamily.Structures }),
 		};
 
 		/// <summary>

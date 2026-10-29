@@ -292,6 +292,15 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("How instances are turned (downslope, along a landform line or strike, with the wind or the plasma, sunward), tilted, sized (power law), anchored (in an obstacle's lee, under a nurse tree or shrub, at a cliff's foot, on a wall or its seep lines, near named sites) and laid out (evenly, in fields, rain cells or fairy rings). Everything off = as before.")]
 		public BiomeScatterMode scatterMode;
 
+		/// <remarks>
+		/// 2026-10-26, phase GROUND-BANDS (decision 71): grow only on slopes whose fall line looks one way (BiomeFacingBand: shade-facing
+		/// poleward faces for a cold trap's rime clods, the sunny faces, a lee), the ground layers' facing band for plants and stones. Off
+		/// (the default) grows the rule as before.
+		/// </remarks>
+		[Header("Facing Band")]
+		[Tooltip("Grow only on slopes facing one way (poleward = shade, equatorward = sun, east, west, downwind, upwind). Off = every way, as before.")]
+		public BiomeFacingBand facingBand;
+
 		[SerializeField, HideInInspector]
 		private string specFingerprint = string.Empty;
 

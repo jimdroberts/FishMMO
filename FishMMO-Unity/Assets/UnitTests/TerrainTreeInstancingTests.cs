@@ -23,7 +23,7 @@ namespace FishMMO.UnitTests
 		private static readonly string[] RendererTypes =
 		{
 			"TerrainTreeInstancing", "TerrainTreeModel", "TerrainTreeField", "TerrainTreeMath",
-			"TerrainDetailInstancing", "TerrainDetailModel", "TerrainDetailField", "TerrainDetailMath",
+			"TerrainDetailInstancing", "TerrainDetailMath",
 			"TerrainGpuRenderer", "TerrainGpuMath", "TerrainInstancingShared", "FishInstance", "FishVisible", "RangeAllocator", "TrunkSkirt",
 		};
 		private static readonly float[] TreeLods = { 0.25f, 0.08f, 0.002f };
@@ -775,7 +775,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(system.Contains("ExitingPlayMode"), "every terrain's distance is put back when play mode ends");
 			string details = CodeOnly(Read(RendererFolder + "/TerrainDetailInstancing.cs"));
 			LogAssert.IsTrue(details.Contains("RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)"), "details hooked at runtime only");
-			LogAssert.IsTrue(Regex.Matches(details, @"!Application\.isPlaying").Count >= 3, "details: the hook, the sync and the camera callback check play mode");
+			LogAssert.IsTrue(Regex.Matches(details, @"!Application\.isPlaying").Count >= 2, "details: the hook and the sync check play mode (the driver has no camera callback since the chunk renderer went)");
 			LogAssert.IsTrue(details.Contains("ExitingPlayMode"), "every terrain's detail distance is put back when play mode ends");
 			LogAssert.IsTrue(details.Contains("detailObjectDistance = d.Authored"), "the authored detail distance is restored on release, not the grass distance the renderer draws to");
 		}

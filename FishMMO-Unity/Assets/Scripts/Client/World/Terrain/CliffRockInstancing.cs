@@ -617,8 +617,20 @@ namespace FishMMO.Client
 
 		// ── Drawing, per camera ───────────────────────────────────────
 
+		/// <summary>This hook's own time in the profiler (render-pipeline callbacks otherwise show only as
+		/// RenderPipeline.BeginCameraRendering's self time). In a class of its own so the marker, an engine object, is made
+		/// when the hook first runs, not when the type is first touched (tests outside Unity use these types' pure parts).</summary>
+		private static class HookProfiling
+		{
+			public static readonly Unity.Profiling.ProfilerMarker Marker = new Unity.Profiling.ProfilerMarker("CliffRockInstancing.BeginCamera");
+			/// <summary>Its parts: the chunk walk (only when the kept list no longer covers the camera), the GPU path's culling and draws.</summary>
+			public static readonly Unity.Profiling.ProfilerMarker Gather = new Unity.Profiling.ProfilerMarker("CliffRockInstancing.Gather");
+			public static readonly Unity.Profiling.ProfilerMarker Execute = new Unity.Profiling.ProfilerMarker("CliffRockInstancing.Execute");
+		}
+
 		private static void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera)
 		{
+			using var hookMarkerScope = HookProfiling.Marker.Auto();
 			if (!TerrainInstancingShared.Draws(camera))
 			{
 				return;
@@ -647,6 +659,7 @@ namespace FishMMO.Client
 			bool reuse = onGpu && StillGathered(camera, in view, drawDistance);
 			if (!reuse)
 			{
+				using var gatherScope = HookProfiling.Gather.Auto();
 				Gather(camera, in view, onGpu, reflection, drawDistance);
 			}
 			int draws = 0;
@@ -656,6 +669,7 @@ namespace FishMMO.Client
 			}
 			if (onGpu)
 			{
+				using var executeScope = HookProfiling.Execute.Auto();
 				draws += gpu.Execute(camera, in view, drawDistance, context);
 			}
 			LastDrawCount = draws;

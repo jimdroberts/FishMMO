@@ -91,6 +91,7 @@ namespace FishMMO.Water
 		private void OnDestroy()
 		{
 			Clear();
+			DisposeCopies();
 			ReleaseFlow();
 			UnhookBiomes();
 			ReleaseChannelFlow();
@@ -103,6 +104,11 @@ namespace FishMMO.Water
 			 * at their own phase. The shaders snap every period they cycle on to a whole fraction of
 			 * the wrap (the flow map's, the falls' streaks, each droplet's life), so the wrap is seamless. */
 			Shader.SetGlobalFloat(TimeId, WorldMotion.Wrapped(WorldMotion.ShaderWrapSeconds));
+			// The surfaces' own copies of the materials, made again from an edited or swapped one, numbers and all (Flow).
+			if (built.Count > 0 && SourcesChanged())
+			{
+				ApplyFlow();
+			}
 			ApplyQuality();
 			UpdateWakes();
 			// Where the lakes and rivers stand and run round the camera, for the plants rooted in them (Channel).
@@ -140,6 +146,14 @@ namespace FishMMO.Water
 			}
 		}
 
+		/// <summary>This hook's own time in the profiler (render-pipeline callbacks otherwise show only as
+		/// RenderPipeline.BeginCameraRendering's self time). In a class of its own so the marker, an engine object, is made
+		/// when the hook first runs, not when the type is first touched (tests outside Unity use these types' pure parts).</summary>
+		private static class HookProfiling
+		{
+			public static readonly Unity.Profiling.ProfilerMarker Marker = new Unity.Profiling.ProfilerMarker("InlandWaterRenderer.BeginCamera");
+		}
+
 		/// <summary>
 		/// Whether the camera about to draw is under a lake's or river's surface, for the shader: only then is the
 		/// water's underside drawn. A camera low in a gorge stands below the river's level at the lip above it without
@@ -147,6 +161,7 @@ namespace FishMMO.Water
 		/// </summary>
 		private static void MarkCamera(ScriptableRenderContext context, Camera camera)
 		{
+			using var hookMarkerScope = HookProfiling.Marker.Auto();
 			Vector3 eye = camera.transform.position;
 			bool under = FishMMO.Shared.Weather.SurfaceWater.TryGetInlandSurfaceAt(eye.x, eye.z, out float level) && eye.y < level;
 			Shader.SetGlobalFloat(CameraUnderId, under ? 1f : 0f);
@@ -226,6 +241,12 @@ namespace FishMMO.Water
 		{
 			riverRenderers.Clear();
 			lakeRenderers.Clear();
+			surfaceSlots.Clear();
+			// Out of play nothing destroys them later (no OnDestroy without play), so each build's copies go with it there.
+			if (!Application.isPlaying)
+			{
+				DisposeCopies();
+			}
 			ClearFalls();
 			foreach (GameObject go in built)
 			{
@@ -322,11 +343,13 @@ namespace FishMMO.Water
 			go.transform.position = Vector3.zero;
 			go.AddComponent<MeshFilter>().sharedMesh = mesh;
 			var renderer = go.AddComponent<MeshRenderer>();
+			// Until its numbers are set (ApplyFlow): then a copy of its own, in its slot.
 			renderer.sharedMaterial = Material;
 			renderer.shadowCastingMode = ShadowCastingMode.Off;
 			renderer.receiveShadows = true;
 			// Drawn in this order within the water's queue: the first to claim a pixel keeps it.
 			renderer.sortingOrder = order;
+			surfaceSlots[renderer] = surfaceSlots.Count;
 			built.Add(go);
 			// Its current and the foam it makes, drawn into the simulated foam's windows (its FoamSource pass).
 			WaterFoamField.AddInland(renderer);

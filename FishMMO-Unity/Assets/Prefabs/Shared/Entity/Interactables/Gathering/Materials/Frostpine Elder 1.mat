@@ -13,7 +13,8 @@ Material:
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
   - _ALPHATEST_ON
-  m_InvalidKeywords: []
+  m_InvalidKeywords:
+  - _EVERGREEN_ON
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 1
   m_DoubleSidedGI: 0
@@ -43,7 +44,9 @@ Material:
     - _Cutoff: 0.5
     - _Deciduous: 0
     - _DistanceFade: 2
+    - _Evergreen: 1
     - _FacingCamera: 0
+    - _FishMoss: 0
     - _FishWeatherAmount: 1
     - _Smoothness: 0.1
     - _SnowBury: 0

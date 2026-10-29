@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using FishMMO.Shared;
 using FishMMO.Shared.Biomes;
@@ -37,7 +38,8 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void Defaults_FloatNothingAtSea_ForEveryBiome()
 		{
 			Assert.That(BiomeArtSpec.Entries.Length, Is.EqualTo(83));
-			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
+			// An authored round's own floats are pinned in BiomeAuthoredRoundTests.
+			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries.Where(e => !BiomeAuthoredRounds.Contains(e.Biome)))
 			{
 				Assert.That(entry.SeaFloats(), Is.Empty, $"{entry.Biome} floats nothing at sea yet");
 			}
@@ -50,6 +52,10 @@ namespace FishMMO.UnitTests.WorldDesign
 					continue;
 				}
 				templates++;
+				if (BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(path)))
+				{
+					continue;
+				}
 				Assert.That(Regex.IsMatch(text, @"^  seaFloats:\s*\n  - ", RegexOptions.Multiline), Is.False, $"{Path.GetFileName(path)} floats something at sea");
 			}
 			Assert.That(templates, Is.EqualTo(83));

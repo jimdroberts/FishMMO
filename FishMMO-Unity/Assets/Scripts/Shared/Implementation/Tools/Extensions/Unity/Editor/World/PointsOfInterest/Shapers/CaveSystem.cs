@@ -221,6 +221,8 @@ namespace FishMMO.Shared.WorldDesign
 			size = Mathf.Clamp(size, 0, 2);
 			switch (form)
 			{
+				case CaveForm.SeaHall:
+					return SeaHallProfile(size);
 				case CaveForm.Grotto:
 					return new Profile { RadiusMin = 2f + 0.4f * size, RadiusMax = 2.8f + 0.6f * size, TrunkMin = 14f, TrunkMax = 30f, DepthMin = 2f, DepthMax = 6f, Pitch = 12f, Turn = 14f, Flat = 1f, Noise = 0.3f,
 						RoomEveryMin = 999f, RoomEveryMax = 999f, CavernMin = 1.9f, CavernMax = 2.6f };
@@ -278,6 +280,11 @@ namespace FishMMO.Shared.WorldDesign
 			float waterLevel = float.NaN, CaveOpening opening = default, float depthLeast = LeastDepth, float depthMost = MaxCaveDepth, float flood = float.NaN)
 		{
 			problem = null;
+			if (form == CaveForm.SeaHall)
+			{
+				// A dome under the ice, laid whole rather than walked (CaveSystem.SeaHall.cs): no face, no sea, no trunk to roll.
+				return PlanSeaHall(size, mouth, yaw, seed, siteId, ground, out problem);
+			}
 			var rng = new DeterministicRNG(seed);
 			Profile pf = ProfileFor(form, size);
 			float r0 = rng.Range(pf.RadiusMin, pf.RadiusMax);
@@ -1075,7 +1082,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// their floors: every dry cave's. An awash cave (a sea cave, a grotto) is entered from its water, its floor under it;
 		/// its shore is left as it is. Ask the system that planned a mouth (a joined host may be of another form).
 		/// </summary>
-		public bool GradesApproach => float.IsNaN(WaterLevel) || Drowned;
+		public bool GradesApproach => float.IsNaN(WaterLevel) || Drowned || Form == CaveForm.SeaHall;
 
 		/// <summary>
 		/// True for a natural cave drowned by its water table (2026-10-25, phase I2n-c, decision 86 (a)): its water stands just under
@@ -1755,7 +1762,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		private Vector3 ArchAt(Vector3 p)
 		{
-			if (Mouths.Count == 0)
+			// A sea hall's way in is a stair's head on a shaft's lip, cut, not an arch in a face (CaveSystem.SeaHall.cs).
+			if (Mouths.Count == 0 || Form == CaveForm.SeaHall)
 			{
 				return p;
 			}
@@ -1809,7 +1817,7 @@ namespace FishMMO.Shared.WorldDesign
 			// Round the opening the rock shows its bedding instead of the bore's knobs: layers each jutting at its top and
 			// undercut at its foot, wavering, so the mouth has a brow and ledges rather than a smooth dome. Bounded by the
 			// same amplitude as the knobs, so the holes, the collar and the buckets that allow for it still hold.
-			float mouth = MouthWeight(p, out _, out _);
+			float mouth = Form == CaveForm.SeaHall ? 0f : MouthWeight(p, out _, out _);
 			float quiet = Quiet(p);
 			float amp = Amp * rough * (1f - quiet);
 			if (mouth > 0f)
@@ -2249,6 +2257,8 @@ namespace FishMMO.Shared.WorldDesign
 				v.AddRange(new[] { (float)c.Kind, c.Bottom.x, c.Bottom.y, c.Bottom.z, c.Top.x, c.Top.y, c.Top.z, c.Out.x, c.Out.y, c.Out.z, c.TopExit.x, c.TopExit.y, c.TopExit.z });
 			}
 			WriteVariety(v);
+			// A sea hall's smokers and floor basins (CaveSystem.SeaHall.cs): written by no other cave, so theirs are what they were.
+			WriteSeaHall(v);
 			return v.ToArray();
 		}
 
@@ -2330,6 +2340,7 @@ namespace FishMMO.Shared.WorldDesign
 					s.Climbs.Add(new CaveClimb { Kind = (CaveClimbKind)Mathf.RoundToInt(v[o]), Bottom = V(o + 1), Top = V(o + 4), Out = V(o + 7), TopExit = V(o + 10) });
 				}
 				o = s.ReadVariety(v, o);
+				o = s.ReadSeaHall(v, o);
 				if (o != v.Length || s.Mouths.Count == 0 || s.Passages.Count == 0)
 				{
 					return null;

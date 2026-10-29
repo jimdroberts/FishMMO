@@ -221,8 +221,25 @@ namespace FishMMO.UnitTests
 			{
 				Assert.That(p.Footprint.x, Is.GreaterThan(0.05f), p.Id);
 				Assert.That(p.Footprint.y, Is.GreaterThan(0.05f), p.Id);
-				Assert.That(p.Height, Is.GreaterThan(0.05f), p.Id);
+				// A piece on the ground stands up from its origin. One at a deck or hung from a roof reaches DOWN from it (a
+				// trestle bent under its deck, a climbing rope from its fixing): its size is what it spans, top to bottom, and
+				// its top may sit at the origin itself.
+				if (p.Anchor == StructureAnchor.Ground)
+				{
+					Assert.That(p.Height, Is.GreaterThan(0.05f), p.Id);
+				}
+				else
+				{
+					Assert.That(p.Height + p.Depth, Is.GreaterThan(0.05f), $"{p.Id} spans something top to bottom");
+					Assert.That(p.Height, Is.GreaterThanOrEqualTo(0f), p.Id);
+				}
+				if (p.Anchor == StructureAnchor.Roof)
+				{
+					Assert.That(p.Depth, Is.GreaterThan(0.05f), $"{p.Id} hangs below its fixing");
+				}
 			}
+			StructurePiece rope = StructureKit.Get("ClimbRope");
+			Assert.That(rope.Depth, Is.EqualTo(3f).Within(0.3f), "a climbing rope module hangs 3 m");
 			StructurePiece wall = StructureKit.Get("WallSegment");
 			Assert.That(wall.Footprint.x, Is.EqualTo(wall.ModuleLength).Within(0.05f), "a wall module is exactly its length along x");
 			StructurePiece pier = StructureKit.Get("Pier");
@@ -237,14 +254,24 @@ namespace FishMMO.UnitTests
 			var payload = new HashSet<string>(ProceduralArtCatalogue.PayloadPaths());
 			var wrappers = new HashSet<string>(ProceduralArtCatalogue.WrapperPaths());
 			var prefabs = new HashSet<string>(ProceduralArtCatalogue.AllPrefabNames());
+			// The surfaces' maps are slices of the structure look arrays (2026-10-28): every one has its slice, and the arrays are
+			// the payload, not the single maps.
 			foreach (string surface in StructureSurfaces.Names)
 			{
 				foreach (StructureFinish finish in StructurePieces.Finishes)
 				{
-					Assert.That(payload, Does.Contain(ProceduralArtCatalogue.StructureTexture(surface, "Albedo", finish)));
+					string albedo = ProceduralArtCatalogue.StructureTexture(surface, "Albedo", finish);
+					Assert.That(ProceduralArtLookArrays.TryGetSlice(albedo, out ProceduralArtLookArrays.Slice slice), Is.True, albedo);
+					Assert.That(payload, Does.Contain(slice.Array));
+					Assert.That(payload, Does.Not.Contain(albedo));
 				}
-				Assert.That(payload, Does.Contain(ProceduralArtCatalogue.StructureTexture(surface, "Normal")));
-				Assert.That(payload, Does.Contain(ProceduralArtCatalogue.StructureTexture(surface, "Mask")));
+				foreach (string map in new[] { "Normal", "Mask" })
+				{
+					string path = ProceduralArtCatalogue.StructureTexture(surface, map);
+					Assert.That(ProceduralArtLookArrays.TryGetSlice(path, out ProceduralArtLookArrays.Slice slice), Is.True, path);
+					Assert.That(payload, Does.Contain(slice.Array));
+					Assert.That(payload, Does.Not.Contain(path));
+				}
 			}
 			foreach (StructureMaterial material in Enum.GetValues(typeof(StructureMaterial)))
 			{

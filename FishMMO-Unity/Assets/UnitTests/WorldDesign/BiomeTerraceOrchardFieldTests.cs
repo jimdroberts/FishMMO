@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using FishMMO.Shared;
 using FishMMO.Shared.Biomes;
@@ -39,7 +40,8 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void Defaults_NoBiomeNamesAnyOfIt()
 		{
 			Assert.That(BiomeArtSpec.Entries.Length, Is.EqualTo(83));
-			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
+			// "No biome names it yet" pins: the authored rounds plant orchards, terraces and laid-out fields on purpose.
+			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries.Where(e => !BiomeAuthoredRounds.Contains(e.Biome)))
 			{
 				Assert.That(entry.OrchardEntries(), Is.Empty, $"{entry.Biome} plants no orchard yet");
 				Assert.That(entry.FieldLayout().Any, Is.False, entry.Biome);
@@ -61,6 +63,10 @@ namespace FishMMO.UnitTests.WorldDesign
 					continue;
 				}
 				templates++;
+				if (BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(path)))
+				{
+					continue;
+				}
 				string name = Path.GetFileName(path);
 				Assert.That(Regex.IsMatch(text, @"^  orchards:\s*\n  - ", RegexOptions.Multiline), Is.False, $"{name} plants an orchard");
 				Assert.That(Regex.IsMatch(text, @"^\s*Surface: [4-9]\s*$", RegexOptions.Multiline), Is.False, $"{name} lays a new surface");

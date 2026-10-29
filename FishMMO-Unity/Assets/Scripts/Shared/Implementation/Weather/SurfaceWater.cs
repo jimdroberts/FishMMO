@@ -101,6 +101,9 @@ namespace FishMMO.Shared.Weather
 
 		private static readonly List<ISource> sources = new List<ISource>();
 
+		/// <summary>Moves whenever a body of water joins or leaves: what a cache of answers about the water keys on.</summary>
+		public static int Version { get; private set; }
+
 		/// <summary>True for a source Unity destroyed without it unregistering: Unity's destroyed objects are not null references.</summary>
 		private static bool Dead(ISource source) => source == null || (source is Object unityObject && unityObject == null);
 
@@ -111,6 +114,7 @@ namespace FishMMO.Shared.Weather
 				if (Dead(sources[i]))
 				{
 					sources.RemoveAt(i);
+					Version++;
 				}
 			}
 		}
@@ -312,13 +316,17 @@ namespace FishMMO.Shared.Weather
 			if (water != null && !sources.Contains(water))
 			{
 				sources.Add(water);
+				Version++;
 			}
 		}
 
 		/// <summary>Withdraws a body of water.</summary>
 		public static void Unregister(ISource water)
 		{
-			sources.Remove(water);
+			if (sources.Remove(water))
+			{
+				Version++;
+			}
 		}
 
 		/// <summary>
@@ -329,6 +337,7 @@ namespace FishMMO.Shared.Weather
 		private static void ResetOnLoad()
 		{
 			sources.Clear();
+			Version++;
 		}
 	}
 }

@@ -13,6 +13,14 @@ CBUFFER_START(UnityPerMaterial)
     half _Smoothness;
     half _Opacity;
     half _Breakup;
+    /* The look of the water a fall pours from (InlandWaterRenderer.Looks ApplyFallLooks, on each fall's own copy of the
+     * material, 2026-10-28: on a property block it kept the curtain out of the SRP Batcher): its biome's water look carried
+     * into the curtain's own colours. _FallLookOn 0 (the shared material, or water of the inland water's own look): the
+     * material's colours and nothing more absorbed, as every fall was drawn before. Colours linear, as the material's are. */
+    float _FallLookOn;
+    float4 _FallWater;              // rgb the glassy water over the brink, in place of _WaterColor
+    float4 _FallFoam;               // rgb the aerated water, in place of _FoamColor
+    float4 _FallAbsorb;             // rgb what a metre of this water absorbs beyond the inland water's own (negative: clearer)
 CBUFFER_END
 
 TEXTURE2D(_FoamTexture);
@@ -28,14 +36,6 @@ float _FishInlandTime;
 #define FISH_FALL_CYCLE (FISH_INLAND_CLOCK_WRAP / round(FISH_INLAND_CLOCK_WRAP / 1.1))
 float _FishFallDebug;           // debug: alpha, fallen and the brink as colour
 float _FishInlandCameraInSea;   // 1 under the sea (InlandWaterRenderer.MarkCamera): no falls are seen from there
-
-/// The look of the water a fall pours from (InlandWaterRenderer.Looks ApplyFallLooks, per renderer, 2026-10-18): its biome's
-/// water look carried into the curtain's own colours. _FallLookOn 0 (water of the inland water's own look, or no block): the
-/// material's colours and nothing more absorbed, as every fall was drawn before. Colours linear, as the material's are.
-float _FallLookOn;
-float4 _FallWater;              // rgb the glassy water over the brink, in place of _WaterColor
-float4 _FallFoam;               // rgb the aerated water, in place of _FoamColor
-float4 _FallAbsorb;             // rgb what a metre of this water absorbs beyond the inland water's own (negative: clearer)
 
 /// The glassy water's colour: the look of the water it pours from, else the material's.
 half3 FallWaterColor() { return _FallLookOn > 0.5 ? (half3)_FallWater.rgb : _WaterColor.rgb; }

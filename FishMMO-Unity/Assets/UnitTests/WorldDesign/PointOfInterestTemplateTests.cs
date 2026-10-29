@@ -55,7 +55,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			foreach (PointOfInterestTemplateSpec spec in specs)
 			{
 				bool cave = CaveShaper.TryForm(spec.Kind, out _);
-				Assert.That(cave || PointOfInterestKinds.Info(spec.Kind).Has(PointOfInterestTraits.Structure), Is.True, $"{spec.Name} is for a kind the kit or the cave shaper builds");
+				// Or a carved ground kind that lays props on its cut (a cenote's altar, a sandworm pit's bones: 2026-10-27).
+				Assert.That(cave || PointOfInterestKinds.Info(spec.Kind).Has(PointOfInterestTraits.Structure) || PointOfInterestTemplateSpecs.CarvedGround(spec.Kind), Is.True,
+					$"{spec.Name} is for a kind the kit or a shaper builds");
 				// A mine is dug by the cave shaper too, but its template is the yard before the adit (its ore is in the stope).
 				Assert.That(spec.InChamber, Is.EqualTo(cave && spec.Kind != POIType.Mine), $"{spec.Name}: only caves build in a chamber");
 				Assert.That(spec.Pieces, Is.Not.Empty, $"{spec.Name} lays something");

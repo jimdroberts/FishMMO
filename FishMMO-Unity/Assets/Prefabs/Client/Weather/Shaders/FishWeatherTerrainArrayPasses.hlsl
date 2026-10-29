@@ -6,6 +6,11 @@
 // FishMMO/Backdrop Ground compiles these same passes with FISH_TERRAIN_BACKDROP defined: a plain mesh rather
 // than a terrain, and FishBackdropSurface for its ground (FISH_GROUND_SURFACE).
 //
+// FishMMO/Weather Terrain Array GPU compiles them with FISH_TERRAIN_GPU defined: the client's own heightmap draw
+// (TerrainHeightmapSystem), every tile of a scene in one indirect draw of geomorphed patches. The same pixel shader; the
+// vertices come from FishTerrainGpuInstancing (world space: the draw has no object transform, so none is applied), and the
+// drawn tile travels to the pixel, which makes its numbers and slices the current ones before anything reads them.
+//
 // On a URP upgrade, diff the lighting half of this file against
 // Packages/com.unity.render-pipelines.universal/Shaders/Terrain/TerrainLitPasses.hlsl.
 #ifndef FISHMMO_WEATHER_TERRAIN_ARRAY_PASSES_INCLUDED
@@ -34,11 +39,52 @@
 #endif
 
 // Every layer may carry a normal map, so the tangent frame is always interpolated (TerrainLit only does when
-// the material's _NORMALMAP keyword says some layer has one). Per-pixel normals replace it when instanced.
-#if defined(ENABLE_TERRAIN_PERPIXEL_NORMAL)
+// the material's _NORMALMAP keyword says some layer has one). Per-pixel normals replace it when instanced, and always in
+// the client's heightmap draw (its normal maps are read per pixel as the instanced tiles' are).
+#if defined(ENABLE_TERRAIN_PERPIXEL_NORMAL) || defined(FISH_TERRAIN_GPU)
 #define FISH_TERRAIN_TANGENT_FRAME 0
 #else
 #define FISH_TERRAIN_TANGENT_FRAME 1
+#endif
+
+// Object space to world. The client's heightmap draw places its vertices in the world itself: identity there.
+#if defined(FISH_TERRAIN_GPU)
+#define FISH_TERRAIN_VERTEX_INSTANCE uint fishInstance : SV_InstanceID;
+#define FISH_TERRAIN_TILE_VARYING nointerpolation uint fishTile : TEXCOORD11;
+float3 FishTerrainObjectToWorld(float3 positionOS) { return positionOS; }
+float3 FishTerrainObjectToWorldNormal(float3 normalOS) { return normalize(normalOS); }
+float3 FishTerrainWorldToObjectDir(float3 directionWS) { return directionWS; }
+float4 FishTerrainObjectToHClip(float3 positionOS) { return TransformWorldToHClip(positionOS); }
+VertexPositionInputs FishTerrainPositionInputs(float3 positionOS)
+{
+    // URP's GetVertexPositionInputs with the object transform left out.
+    VertexPositionInputs input;
+    input.positionWS = positionOS;
+    input.positionVS = TransformWorldToView(input.positionWS);
+    input.positionCS = TransformWorldToHClip(input.positionWS);
+    float4 ndc = input.positionCS * 0.5f;
+    input.positionNDC.xy = float2(ndc.x, ndc.y * _ProjectionParams.x) + ndc.w;
+    input.positionNDC.zw = input.positionCS.zw;
+    return input;
+}
+VertexNormalInputs FishTerrainNormalInputs(float3 normalOS, float4 tangentOS)
+{
+    // URP's GetVertexNormalInputs with the object transform left out (no negative scale either).
+    VertexNormalInputs tbn;
+    tbn.normalWS = normalize(normalOS);
+    tbn.tangentWS = normalize(tangentOS.xyz);
+    tbn.bitangentWS = cross(tbn.normalWS, tbn.tangentWS) * tangentOS.w;
+    return tbn;
+}
+#else
+#define FISH_TERRAIN_VERTEX_INSTANCE UNITY_VERTEX_INPUT_INSTANCE_ID
+#define FISH_TERRAIN_TILE_VARYING
+float3 FishTerrainObjectToWorld(float3 positionOS) { return TransformObjectToWorld(positionOS); }
+float3 FishTerrainObjectToWorldNormal(float3 normalOS) { return TransformObjectToWorldNormal(normalOS); }
+float3 FishTerrainWorldToObjectDir(float3 directionWS) { return TransformWorldToObjectDir(directionWS); }
+float4 FishTerrainObjectToHClip(float3 positionOS) { return TransformObjectToHClip(positionOS); }
+VertexPositionInputs FishTerrainPositionInputs(float3 positionOS) { return GetVertexPositionInputs(positionOS); }
+VertexNormalInputs FishTerrainNormalInputs(float3 normalOS, float4 tangentOS) { return GetVertexNormalInputs(normalOS, tangentOS); }
 #endif
 
 struct Attributes
@@ -46,7 +92,7 @@ struct Attributes
     float4 positionOS : POSITION;
     float3 normalOS : NORMAL;
     float2 texcoord : TEXCOORD0;
-    UNITY_VERTEX_INPUT_INSTANCE_ID
+    FISH_TERRAIN_VERTEX_INSTANCE
 };
 
 struct Varyings
@@ -83,6 +129,7 @@ struct Varyings
 #endif
 
     float4 clipPos                  : SV_POSITION;
+    FISH_TERRAIN_TILE_VARYING
     UNITY_VERTEX_OUTPUT_STEREO
 };
 
@@ -91,6 +138,10 @@ half3 FishTerrainNormalWS(Varyings IN, half3 normalTS)
 {
     #if FISH_TERRAIN_TANGENT_FRAME
         return TransformTangentToWorld(normalTS, half3x3(-IN.tangent.xyz, IN.bitangent.xyz, IN.normal.xyz));
+    #elif defined(FISH_TERRAIN_GPU)
+        half3 normalWS = FishTerrainGpuNormalAt(IN.uvMainAndLM.xy);
+        half3 tangentWS = cross(half3(0.0h, 0.0h, 1.0h), normalWS);
+        return TransformTangentToWorld(normalTS, half3x3(-tangentWS, cross(normalWS, tangentWS), normalWS));
     #else
         float2 sampleCoords = (IN.uvMainAndLM.xy / _TerrainHeightmapRecipSize.zw + 0.5f) * _TerrainHeightmapRecipSize.xy;
         half3 normalWS = TransformObjectToWorldNormal(normalize(SAMPLE_TEXTURE2D(_TerrainNormalmapTexture, sampler_TerrainNormalmapTexture, sampleCoords).rgb * 2 - 1));
@@ -197,15 +248,15 @@ void FishSnowLift(inout float4 positionOS, float3 normalOS, float2 uv)
     // where the sky can reach.
     if (_FishSnowDepth > 0.0 && _FishWeatherTier.x > 0.0 && FishSnowAnywhere())
     {
-        float3 snowWorld = TransformObjectToWorld(positionOS.xyz);
-        float3 snowNormal = TransformObjectToWorldNormal(normalOS);
+        float3 snowWorld = FishTerrainObjectToWorld(positionOS.xyz);
+        float3 snowNormal = FishTerrainObjectToWorldNormal(normalOS);
         float lift = FishSnowLiftMetres(snowWorld, snowNormal, _FishSnowDepth);
         UNITY_BRANCH
         if (lift > 0.0)
         {
             lift *= FishSnowHoleFade(uv);
         }
-        positionOS.xyz += TransformWorldToObjectDir(float3(0, 1, 0)) * lift;
+        positionOS.xyz += FishTerrainWorldToObjectDir(float3(0, 1, 0)) * lift;
     }
 }
 
@@ -219,10 +270,14 @@ Varyings SplatmapVert(Attributes v)
 
     UNITY_SETUP_INSTANCE_ID(v);
     UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+#if defined(FISH_TERRAIN_GPU)
+    o.fishTile = FishTerrainGpuInstancing(v.positionOS, v.normalOS, v.texcoord, v.fishInstance);
+#else
     TerrainInstancing(v.positionOS, v.normalOS, v.texcoord);
+#endif
     FishSnowLift(v.positionOS, v.normalOS, v.texcoord);
 
-    VertexPositionInputs Attributes = GetVertexPositionInputs(v.positionOS.xyz);
+    VertexPositionInputs Attributes = FishTerrainPositionInputs(v.positionOS.xyz);
 
     o.uvMainAndLM.xy = v.texcoord;
     o.uvMainAndLM.zw = v.texcoord * unity_LightmapST.xy + unity_LightmapST.zw;
@@ -234,13 +289,13 @@ Varyings SplatmapVert(Attributes v)
     #if FISH_TERRAIN_TANGENT_FRAME
         half3 viewDirWS = GetWorldSpaceNormalizeViewDir(Attributes.positionWS);
         float4 vertexTangent = float4(cross(float3(0, 0, 1), v.normalOS), 1.0);
-        VertexNormalInputs normalInput = GetVertexNormalInputs(v.normalOS, vertexTangent);
+        VertexNormalInputs normalInput = FishTerrainNormalInputs(v.normalOS, vertexTangent);
 
         o.normal = half4(normalInput.normalWS, viewDirWS.x);
         o.tangent = half4(normalInput.tangentWS, viewDirWS.y);
         o.bitangent = half4(normalInput.bitangentWS, viewDirWS.z);
     #else
-        o.normal = TransformObjectToWorldNormal(v.normalOS);
+        o.normal = FishTerrainObjectToWorldNormal(v.normalOS);
         OUTPUT_SH4(Attributes.positionWS, o.normal.xyz, GetWorldSpaceNormalizeViewDir(Attributes.positionWS), o.vertexSH, o.probeOcclusion);
     #endif
 
@@ -279,6 +334,9 @@ void SplatmapFragment(
 #endif
 {
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(IN);
+#if defined(FISH_TERRAIN_GPU)
+    FishTerrainGpuSelectTile(IN.fishTile);
+#endif
 #ifdef _ALPHATEST_ON
     ClipHoles(IN.uvMainAndLM.xy);
 #endif
@@ -384,18 +442,25 @@ void SplatmapFragment(
 float3 _LightDirection;
 float3 _LightPosition;
 
+#if defined(FISH_TERRAIN_GPU)
+// The heightmap draw has one set of bounds round the scene, so URP puts it in every cascade: each patch is culled per
+// cascade here, as the GPU-driven casters are (FishCasterCulling.hlsl).
+#include "FishCasterCulling.hlsl"
+#endif
+
 struct AttributesLean
 {
     float4 position     : POSITION;
     float3 normalOS       : NORMAL;
     float2 texcoord     : TEXCOORD0;
-    UNITY_VERTEX_INPUT_INSTANCE_ID
+    FISH_TERRAIN_VERTEX_INSTANCE
 };
 
 struct VaryingsLean
 {
     float4 clipPos      : SV_POSITION;
     float2 texcoord     : TEXCOORD0;
+    FISH_TERRAIN_TILE_VARYING
     UNITY_VERTEX_OUTPUT_STEREO
 };
 
@@ -403,12 +468,23 @@ VaryingsLean ShadowPassVertex(AttributesLean v)
 {
     VaryingsLean o = (VaryingsLean)0;
     UNITY_SETUP_INSTANCE_ID(v);
+#if defined(FISH_TERRAIN_GPU)
+    o.fishTile = FishTerrainGpuBeginPatch(v.fishInstance);
+    if (FishCasterCulledAt(fishTerrainPatchSphere.xyz, fishTerrainPatchSphere.w))
+    {
+        // Every vertex of the patch says the same, before any of its own work: its triangles fall wholly outside the map.
+        o.clipPos = float4(2.0, 2.0, 2.0, 1.0);
+        return o;
+    }
+    FishTerrainGpuPlace(v.position, v.normalOS, v.texcoord);
+#else
     TerrainInstancing(v.position, v.normalOS, v.texcoord);
+#endif
     // Lifted like the lit pass, so the snow's surface casts the shadow it receives.
     FishSnowLift(v.position, v.normalOS, v.texcoord);
 
-    float3 positionWS = TransformObjectToWorld(v.position.xyz);
-    float3 normalWS = TransformObjectToWorldNormal(v.normalOS);
+    float3 positionWS = FishTerrainObjectToWorld(v.position.xyz);
+    float3 normalWS = FishTerrainObjectToWorldNormal(v.normalOS);
 
 #if _CASTING_PUNCTUAL_LIGHT_SHADOW
     float3 lightDirectionWS = normalize(_LightPosition - positionWS);
@@ -431,6 +507,9 @@ VaryingsLean ShadowPassVertex(AttributesLean v)
 
 half4 ShadowPassFragment(VaryingsLean IN) : SV_TARGET
 {
+#if defined(FISH_TERRAIN_GPU)
+    FishTerrainGpuSelectTile(IN.fishTile);
+#endif
 #ifdef _ALPHATEST_ON
     ClipHoles(IN.texcoord);
 #endif
@@ -442,17 +521,24 @@ VaryingsLean DepthOnlyVertex(AttributesLean v)
     VaryingsLean o = (VaryingsLean)0;
     UNITY_SETUP_INSTANCE_ID(v);
     UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+#if defined(FISH_TERRAIN_GPU)
+    o.fishTile = FishTerrainGpuInstancing(v.position, v.normalOS, v.texcoord, v.fishInstance);
+#else
     TerrainInstancing(v.position, v.normalOS, v.texcoord);
+#endif
     // The depth prepass must agree with the lit pass to the bit, or the lifted snow fails the depth test
     // against its own prepass and the ground flickers.
     FishSnowLift(v.position, v.normalOS, v.texcoord);
-    o.clipPos = TransformObjectToHClip(v.position.xyz);
+    o.clipPos = FishTerrainObjectToHClip(v.position.xyz);
     o.texcoord = v.texcoord;
     return o;
 }
 
 half4 DepthOnlyFragment(VaryingsLean IN) : SV_TARGET
 {
+#if defined(FISH_TERRAIN_GPU)
+    FishTerrainGpuSelectTile(IN.fishTile);
+#endif
 #ifdef _ALPHATEST_ON
     ClipHoles(IN.texcoord);
 #endif
@@ -477,6 +563,7 @@ struct VaryingsDepthNormal
     #endif
     float3 positionWS               : TEXCOORD7;
     float4 clipPos                  : SV_POSITION;
+    FISH_TERRAIN_TILE_VARYING
     UNITY_VERTEX_OUTPUT_STEREO
 };
 
@@ -486,22 +573,26 @@ VaryingsDepthNormal DepthNormalOnlyVertex(Attributes v)
 
     UNITY_SETUP_INSTANCE_ID(v);
     UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+#if defined(FISH_TERRAIN_GPU)
+    o.fishTile = FishTerrainGpuInstancing(v.positionOS, v.normalOS, v.texcoord, v.fishInstance);
+#else
     TerrainInstancing(v.positionOS, v.normalOS, v.texcoord);
+#endif
     FishSnowLift(v.positionOS, v.normalOS, v.texcoord);
 
-    const VertexPositionInputs attributes = GetVertexPositionInputs(v.positionOS.xyz);
+    const VertexPositionInputs attributes = FishTerrainPositionInputs(v.positionOS.xyz);
 
     o.uvMainAndLM.xy = v.texcoord;
     o.uvMainAndLM.zw = 0;
 
     #if FISH_TERRAIN_TANGENT_FRAME
         float4 vertexTangent = float4(cross(float3(0, 0, 1), v.normalOS), 1.0);
-        VertexNormalInputs normalInput = GetVertexNormalInputs(v.normalOS, vertexTangent);
+        VertexNormalInputs normalInput = FishTerrainNormalInputs(v.normalOS, vertexTangent);
         o.normal = half4(normalInput.normalWS, 0);
         o.tangent = half4(normalInput.tangentWS, 0);
         o.bitangent = half4(normalInput.bitangentWS, 0);
     #else
-        o.normal = TransformObjectToWorldNormal(v.normalOS);
+        o.normal = FishTerrainObjectToWorldNormal(v.normalOS);
     #endif
 
     o.positionWS = attributes.positionWS;
@@ -517,12 +608,17 @@ void DepthNormalOnlyFragment(
 #endif
     )
 {
+    #if defined(FISH_TERRAIN_GPU)
+        FishTerrainGpuSelectTile(IN.fishTile);
+    #endif
     #ifdef _ALPHATEST_ON
         ClipHoles(IN.uvMainAndLM.xy);
     #endif
 
     #if FISH_TERRAIN_TANGENT_FRAME
         half3 baseNormalWS = IN.normal.xyz;
+    #elif defined(FISH_TERRAIN_GPU)
+        half3 baseNormalWS = FishTerrainGpuNormalAt(IN.uvMainAndLM.xy);
     #else
         float2 sampleCoords = (IN.uvMainAndLM.xy / _TerrainHeightmapRecipSize.zw + 0.5f) * _TerrainHeightmapRecipSize.xy;
         half3 baseNormalWS = TransformObjectToWorldNormal(normalize(SAMPLE_TEXTURE2D(_TerrainNormalmapTexture, sampler_TerrainNormalmapTexture, sampleCoords).rgb * 2 - 1));
@@ -533,6 +629,9 @@ void DepthNormalOnlyFragment(
 
     #if FISH_TERRAIN_TANGENT_FRAME
         half3 normalWS = TransformTangentToWorld(ground.normalTS, half3x3(-IN.tangent.xyz, IN.bitangent.xyz, IN.normal.xyz));
+    #elif defined(FISH_TERRAIN_GPU)
+        half3 tangentWS = cross(half3(0.0h, 0.0h, 1.0h), baseNormalWS);
+        half3 normalWS = TransformTangentToWorld(ground.normalTS, half3x3(-tangentWS, cross(baseNormalWS, tangentWS), baseNormalWS));
     #else
         half3 tangentWS = cross(GetObjectToWorldMatrix()._13_23_33, baseNormalWS);
         half3 normalWS = TransformTangentToWorld(ground.normalTS, half3x3(-tangentWS, cross(baseNormalWS, tangentWS), baseNormalWS));

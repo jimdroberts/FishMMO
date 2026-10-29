@@ -42,6 +42,11 @@ namespace FishMMO.Shared.WorldDesign
 					choice.Types = CaveCoverTypes.Ice;
 					choice.Glow = 0.8f;
 					break;
+				case CaveForm.SeaHall:
+					// The ledge's rime and frost (2026-10-26, I2n-b); the flooded floor's growth is the sea's (PointOfInterestCaveDressing.SeaHall.cs).
+					choice.Types = CaveCoverTypes.Ice;
+					choice.Glow = 0.4f;
+					break;
 				case CaveForm.LavaTube:
 					choice.Types = CaveCoverTypes.Lava;
 					choice.Glow = 0.9f;

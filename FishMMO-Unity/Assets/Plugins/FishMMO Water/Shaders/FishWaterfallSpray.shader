@@ -20,6 +20,15 @@ Shader "FishMMO/Water/Waterfall Spray"
         _MistSize("Mist size (share of the pool's radius)", Float) = 0.45
         _SoftDistance("Soft against geometry (m)", Float) = 0.8
         _Rainbow("Rainbow strength", Range(0, 2)) = 0.6
+        // Runtime per-surface values must also be ShaderLab properties for SRP Batcher compatibility.
+        [HideInInspector] _FallLookOn("_FallLookOn", Float) = 0
+        [HideInInspector] _FallMistNoiseCells("_FallMistNoiseCells", Float) = 0
+        [HideInInspector] _FallSpray("_FallSpray", Vector) = (0,0,0,0)
+        [HideInInspector] _FallMist("_FallMist", Vector) = (0,0,0,0)
+        [HideInInspector] _FallPath("_FallPath", Vector) = (0,0,0,0)
+        [HideInInspector] _FallOrigin("_FallOrigin", Vector) = (0,0,0,0)
+        [HideInInspector] _FallPathTex("_FallPathTex", 2D) = "black" {}
+        [HideInInspector] _FallMistNoise("_FallMistNoise", 3D) = "black" {}
     }
 
     SubShader
@@ -68,28 +77,32 @@ Shader "FishMMO/Water/Waterfall Spray"
                 float _MistSize;
                 float _SoftDistance;
                 half _Rainbow;
+                /* Each fall's own (InlandWaterRenderer, on its own copy of the material, 2026-10-28: on a property block it kept
+                 * the spray out of the SRP Batcher); all 0 on the shared material. The look of the water the fall pours from
+                 * (ApplyFallLooks): _FallLookOn 0 (or water of the inland water's own look), the material's colours as
+                 * before. Linear. */
+                float _FallLookOn;
+                float4 _FallSpray;          // rgb the drops and strands, in place of _SprayColor
+                float4 _FallMist;           // rgb the mist, in place of _MistColor
+                // The traced paths' layout (BuildFalls; _FallPathTex holds them): x strips (0: no paths), y seconds from the lip
+                // to the last landing, z the pool's level, w break-up length (m).
+                float4 _FallPath;
+                float4 _FallOrigin;         // xyz the lip, w the speed the water lands at (m/s)
+                // The mist's noise lattice's cells along each side (_FallMistNoise); 0 when none is bound, and the noise is
+                // worked out in full instead.
+                float _FallMistNoiseCells;
             CBUFFER_END
 
             float _FishInlandTime;
             float _FishInlandCameraInSea;   // 1 under the sea (InlandWaterRenderer.MarkCamera): no falls are seen from there
             float _FishFallMistVolumetric;  // 1 when the volumetric fog carries the falls' mist this frame (FishVolumetricFogFeature)
             float4 _FishWeatherWind;        // xy the wind's way, z its speed over 30 m/s, w gusts
-            // The look of the water the fall pours from (InlandWaterRenderer.Looks ApplyFallLooks, per fall, 2026-10-18):
-            // _FallLookOn 0 (water of the inland water's own look, or no block), the material's colours as before. Linear.
-            float _FallLookOn;
-            float4 _FallSpray;              // rgb the drops and strands, in place of _SprayColor
-            float4 _FallMist;               // rgb the mist, in place of _MistColor
-
-            // Per fall (InlandWaterRenderer.BuildFalls): the traced paths, and what they need.
+            // Per fall (InlandWaterRenderer.BuildFalls, on its material): the traced paths (the numbers that go with them are
+            // in UnityPerMaterial), and the mist's noise lattice (FallTextures.MistNoise).
             TEXTURE2D(_FallPathTex);
             SAMPLER(sampler_FallPathTex);
-            float4 _FallPath;               // x strips, y seconds from the lip to the last landing, z the pool's level, w break-up length (m)
-            float4 _FallOrigin;             // xyz the lip, w the speed the water lands at (m/s)
-            // The mist's noise lattice (FallTextures.MistNoise) and its cells along each side; 0 when none is bound, and
-            // the noise is worked out in full instead.
             TEXTURE3D(_FallMistNoise);
             SAMPLER(sampler_FallMistNoise);
-            float _FallMistNoiseCells;
 
             #define FISH_INLAND_CLOCK_WRAP 10000.0
             // The least alpha drawn: below it a pixel clips, and a particle whose opacity is below it is never rasterized.

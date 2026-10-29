@@ -232,9 +232,28 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Blade types one terrain can carry, a density channel each (<see cref="MaxDensityMaps"/> maps of four). Was 8: a
 		/// terrain across wetland, forest and meadow (sedge, rush, reeds, Phragmites, wet and woodland flowers, three
-		/// grasses…) ran past it, and every type past the eighth stayed meshes on that terrain.
+		/// grasses…) ran past it, and every type past the eighth stayed meshes on that terrain. 32 on 2026-10-27 (was 16), and
+		/// 64 later that day, once the detail layers stopped wrapping at 256 and the tiles' true demand showed (painted blade
+		/// types, measured over the saved tiles): Moron 1 at most 20 a tile, Moron 2 46 (3_3), Moron 3 48 (2_1). A terrain past
+		/// <see cref="NarrowChannels"/> needs the generate kernel's wide variant (GRASS_WIDE), one past <see cref="WideChannels"/>
+		/// its widest (GRASS_WIDEST), chosen for the dispatch by <see cref="GrassTerrainAtlas.Tier"/> (<see cref="TierOf"/>), so
+		/// a scene whose terrains all fit sixteen (or thirty-two) runs the kernel it always ran. Past the cap a look of a prefab
+		/// already there joins its channel, and a prefab with none is not drawn there (an error).
 		/// </summary>
-		public const int MaxChannels = 16;
+		public const int MaxChannels = 64;
+
+		/// <summary>The channels the narrow generate kernel reads (four density maps), what every terrain had until 2026-10-27.</summary>
+		public const int NarrowChannels = 16;
+
+		/// <summary>The channels the wide generate kernel (GRASS_WIDE) reads in registers: eight density maps.</summary>
+		public const int WideChannels = 32;
+
+		/// <summary>
+		/// The generate kernel a terrain of <paramref name="channels"/> channels needs: 0 the narrow one (to
+		/// <see cref="NarrowChannels"/>), 1 GRASS_WIDE (to <see cref="WideChannels"/>), 2 GRASS_WIDEST (to <see cref="MaxChannels"/>,
+		/// which walks only the maps the terrain has instead of holding every channel in registers).
+		/// </summary>
+		public static int TierOf(int channels) => channels > WideChannels ? 2 : channels > NarrowChannels ? 1 : 0;
 
 		/// <summary>Whether a terrain past <see cref="MaxChannels"/> blade looks has been reported (once a session).</summary>
 		private static bool warnedChannels;
@@ -326,6 +345,9 @@ namespace FishMMO.Client
 		private float[] minHeights, maxHeights;
 		/// <summary>The cover grid being weighed on a worker for a terrain taken from its bake (<see cref="Cover"/> once it lands).</summary>
 		private Task<float[]> coverWork;
+
+		/// <summary>Whether <see cref="CoverAt"/> answers from a finished cover map (false while there is none or it is building).</summary>
+		public bool CoverSettled => Cover != null || (coverWork != null && coverWork.IsCompleted);
 		/// <summary>The water-line map's texels while building, two bytes each (<see cref="Freeboard"/>: R the line, G solid ground).</summary>
 		private byte[] freeboardTexels;
 		private bool anyWater, anyHole;
@@ -437,6 +459,9 @@ namespace FishMMO.Client
 			// A tile without alphamaps (a client build's copy): its stored index map, looked up once (null when it has none).
 			private FishMMO.Shared.TerrainDetailBake.IndexMap surfaceIndex;
 			private bool surfaceIndexLooked;
+			// The scene layer each alphamap channel holds (FishMMO.Shared.TerrainTileLayers), asked once per build.
+			private int[] surfaceSceneLayers;
+			private bool surfaceSceneLayersLooked;
 			/// <summary>Set by the worker when any layer has grass (read on the main thread once the queue is idle).</summary>
 			private bool any;
 			private bool textures;
@@ -450,6 +475,9 @@ namespace FishMMO.Client
 			/// in <see cref="Captured"/> and <see cref="CapturedHeights"/>, once <see cref="Done"/>.
 			/// </summary>
 			public bool Capture;
+
+			/// <summary>Errors of this terrain's channels: a prefab past <see cref="MaxChannels"/>, not drawn there (the bake reports them).</summary>
+			public readonly List<string> Overflow = new List<string>();
 			public FishMMO.Shared.TerrainDetailBake.Grass Captured { get; private set; }
 			/// <summary>The heights as the build stored them (16 bits, 0..1 of the terrain's height), for the bake.</summary>
 			public ushort[] CapturedHeights { get; private set; }
@@ -457,9 +485,9 @@ namespace FishMMO.Client
 			internal Builder(Terrain terrain, TerrainData data, List<int> prototypes, List<GrassType> types)
 			{
 				Terrain = terrain;
-				// One channel per type, in order of first appearance. Past the sixteenth, a type whose prefab already has a
+				// One channel per type, in order of first appearance. Past MaxChannels, a type whose prefab already has a
 				// channel here adds into that one (another biome's look of the same plant, GrassTypeTable's merge per terrain);
-				// one whose prefab has none stays meshes, as every type past the sixteenth did.
+				// one whose prefab has none is not drawn here (an error: there is no mesh grass).
 				var channelTypes = new List<GrassType>();
 				for (int i = 0; i < prototypes.Count; i++)
 				{
@@ -471,6 +499,12 @@ namespace FishMMO.Client
 							c = channelTypes.FindIndex(t => t != null && types[i] != null && t.Prefab == types[i].Prefab);
 							if (c < 0)
 							{
+								string message = $"[Grass] Terrain '{terrain.name}' grows more than {MaxChannels} blade prefabs: '{types[i].Name}' is not drawn there (GPU only: raise GrassTerrain.MaxChannels).";
+								if (Overflow.Count == 0)
+								{
+									Debug.LogError(message);
+								}
+								Overflow.Add(message);
 								continue;
 							}
 							if (!warnedChannels)
@@ -759,7 +793,8 @@ namespace FishMMO.Client
 			}
 
 			/// <summary>Packs a strip of alphamaps (rows <paramref name="rowBase"/>.., <paramref name="ares"/> wide) into the surface-layer texels.</summary>
-			public static void PackSurfaceStrip(float[,,] maps, int rows, int rowBase, int ares, int alayers, Color32[] pixels, float[] weights)
+			/// <param name="sceneLayers">The scene layer each channel holds (FishMMO.Shared.TerrainTileLayers.Of), or null where they are the same.</param>
+			public static void PackSurfaceStrip(float[,,] maps, int rows, int rowBase, int ares, int alayers, Color32[] pixels, float[] weights, int[] sceneLayers = null)
 			{
 				for (int r = 0; r < rows; r++)
 				{
@@ -769,7 +804,7 @@ namespace FishMMO.Client
 						{
 							weights[l] = maps[r, x, l];
 						}
-						uint packed = GrassMath.PackSurfaceLayers(weights, alayers);
+						uint packed = GrassMath.RenameSurfaceLayers(GrassMath.PackSurfaceLayers(weights, alayers), sceneLayers);
 						pixels[(rowBase + r) * ares + x] = new Color32((byte)packed, (byte)(packed >> 8), (byte)(packed >> 16), (byte)(packed >> 24));
 					}
 				}
@@ -1143,7 +1178,12 @@ namespace FishMMO.Client
 					if (holes.Any)
 					{
 						TerrainHoleMask cut = holes;
-						queue.Enqueue(() => gt.CutHoles(cut));
+						// No blade over an opening, nor rooted so near its edge that it leans out over it (2026-10-27).
+						queue.Enqueue(() =>
+						{
+							cut.KeepPlantsClear();
+							gt.CutHoles(cut);
+						});
 					}
 					holes = null;
 					holesCut = true;
@@ -1175,7 +1215,14 @@ namespace FishMMO.Client
 					if (alayers > 0)
 					{
 						float[,,] maps = data.GetAlphamaps(0, surfaceRow, ares, rows);
-						queue.Enqueue(() => PackSurfaceStrip(maps, rows, rowBase, ares, alayers, pixels, new float[alayers]));
+						// The ids the compute reads are the set's slices: a tile carrying only the layers it paints is renamed.
+						if (!surfaceSceneLayersLooked)
+						{
+							surfaceSceneLayersLooked = true;
+							surfaceSceneLayers = FishMMO.Shared.TerrainTileLayers.Of(Terrain);
+						}
+						int[] sceneLayers = surfaceSceneLayers;
+						queue.Enqueue(() => PackSurfaceStrip(maps, rows, rowBase, ares, alayers, pixels, new float[alayers], sceneLayers));
 					}
 					else
 					{

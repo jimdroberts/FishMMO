@@ -6,12 +6,13 @@ using Unity.Profiling;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The GPU detail scatter: the mesh counterpart of the blade grass (<see cref="GrassBladeSystem"/>). It takes the mesh
-	/// detail prototypes named by <see cref="DetailScatterSettings.PrototypePrefixes"/> (ground cover: pebbles, small
-	/// rocks, shells, litter) of every terrain the chunk renderer (<see cref="TerrainDetailInstancing"/>) drives, and
-	/// generates their instances on the GPU every frame around each camera (<see cref="DetailScatterRenderer"/>,
-	/// FishDetailScatter.compute) instead of building them into chunks on the CPU; the chunk renderer then skips those
-	/// prototypes on that terrain (<see cref="TerrainDetailInstancing.SetSkipped"/>).
+	/// The GPU detail scatter: the mesh counterpart of the blade grass (<see cref="GrassBladeSystem"/>). It takes EVERY mesh
+	/// detail prototype the blade grass does not (2026-10-27: bushes, pebbles, rocks, shells, litter, and the ferns, herbs,
+	/// mushrooms, lichens, cushions, shrubs and sea life the CPU chunk renderer used to draw) of every terrain the detail
+	/// driver (<see cref="TerrainDetailInstancing"/>) takes, and generates their instances on the GPU every frame around each
+	/// camera (<see cref="DetailScatterRenderer"/>, FishDetailScatter.compute). There is no CPU path: a kind it cannot draw
+	/// (no procedural-instancing twin, more than one sub-mesh, a texture detail) or one past a cap is an error, at the cut
+	/// (TerrainDetailBaker) and in play.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -21,17 +22,13 @@ namespace FishMMO.Client
 	/// exact expected counts at take-on (<see cref="DetailScatterTerrain"/>, one terrain at a time, a few ms a frame).
 	/// </para>
 	/// <para>
-	/// <b>When.</b> Play mode, client, compute-capable devices, and only on terrains the chunk renderer drives, so Unity's
-	/// own detail drawing never draws them as well. Everywhere else (WebGL2, the chunk renderer off, edit mode) the chunk
-	/// renderer draws every detail exactly as before; the dashboard's "Toggle GPU detail scatter" opts back into it per
-	/// editor session (SessionState <see cref="ChunkDetailsKey"/>). Reflection cameras and the minimap draw none.
+	/// <b>When.</b> Play mode, client, compute-capable devices, and only on terrains the detail driver takes, so Unity's
+	/// own detail drawing never draws them as well. Edit mode is Unity's own drawing. Reflection cameras and the minimap
+	/// draw none.
 	/// </para>
 	/// </remarks>
 	public static class DetailScatterSystem
 	{
-		/// <summary>SessionState key (editor): true draws every mesh detail through the chunk renderer instead (A/B).</summary>
-		public const string ChunkDetailsKey = "FishMMO.DetailScatter.UseChunks";
-
 		/// <summary>
 		/// Milliseconds a frame of the main thread the terrain being taken may spend reading its layers and heights (the sums
 		/// and the packing run on a worker: DetailScatterTerrain.Builder). Was 2 with them on the main thread.
@@ -44,8 +41,11 @@ namespace FishMMO.Client
 		/// </summary>
 		public const double VisibleBuildBudgetMilliseconds = 1.0;
 
-		/// <summary>The most types the scatter keeps (one per prefab); a prefab past it stays on the chunk renderer.</summary>
-		public const int MaxTypes = 64;
+		/// <summary>
+		/// The most types the scatter keeps in a scene (one per prefab; 2026-10-27, was 64). Moron 2 paints 84 mesh kinds and
+		/// Moron 3 115; the audit's spec count for the busiest scene is 127 + 127. Past it a prefab is not drawn: an error.
+		/// </summary>
+		public const int MaxTypes = 1024;
 
 		private sealed class Taken
 		{
@@ -66,7 +66,7 @@ namespace FishMMO.Client
 		private static readonly List<int> prototypeScratch = new List<int>();
 		private static readonly List<DetailScatterType> typeScratch = new List<DetailScatterType>();
 		private static readonly List<Taken> releasing = new List<Taken>();
-		/// <summary>Terrains whose build failed on a worker once (taken again once, then left to the chunk renderer).</summary>
+		/// <summary>Terrains whose build failed on a worker once (taken again once, then given up: their mesh details are not drawn).</summary>
 		private static readonly HashSet<Terrain> failedOnce = new HashSet<Terrain>();
 		private static readonly DetailScatterSettings defaults = new DetailScatterSettings();
 		private static readonly GrassBladeSettings grassDefaults = new GrassBladeSettings();
@@ -86,7 +86,7 @@ namespace FishMMO.Client
 		public const double BakedBudgetMilliseconds = 4.0;
 		private static double summaryMilliseconds;
 
-		/// <summary>The session's switch (A/B); off gives every scattered prototype back to the chunk renderer.</summary>
+		/// <summary>The session's switch (A/B); off draws no mesh detail at all.</summary>
 		public static bool Enabled
 		{
 			get => enabled;
@@ -117,15 +117,16 @@ namespace FishMMO.Client
 		{
 			if (!enabled)
 			{
-				return "GPU detail scatter OFF (every mesh detail draws through the chunk renderer).";
+				return "GPU detail scatter OFF: no mesh detail is drawn (there is no CPU path).";
 			}
 			if (renderer == null)
 			{
-				return rendererTried ? "GPU detail scatter unavailable on this device or without its compute (the chunk renderer draws); see the log." : "GPU detail scatter not started (enter play mode on a terrain scene).";
+				return rendererTried ? "GPU detail scatter unavailable on this device or without its compute: no mesh detail is drawn; see the log." : "GPU detail scatter not started (enter play mode on a terrain scene).";
 			}
 			var s = new System.Text.StringBuilder();
 			s.Append($"GPU detail scatter ON: {taken.Count} terrain(s){(building != null ? $" (building '{building.Terrain?.name}': {building.Progress}, {building.Frames} frames, {building.Milliseconds:F0} ms)" : "")}, {types.Count} type(s)");
 			s.Append($"; last game camera: {renderer.LastItems} work items, upper bound {renderer.LastBound} instances; GPU buffers {renderer.GpuBytes / (1024f * 1024f):F1} MiB");
+			s.Append($"; table {renderer.TableBytes / (1024f * 1024f):F1} MiB");
 			int[] counts = renderer.LastCounts;
 			if (counts.Length > 0)
 			{
@@ -168,9 +169,6 @@ namespace FishMMO.Client
 			}
 			hooked = true;
 			syncedFrame = -1;
-#if UNITY_EDITOR
-			enabled = !UnityEditor.SessionState.GetBool(ChunkDetailsKey, false);
-#endif
 			RenderPipelineManager.beginContextRendering += OnBeginContextRendering;
 			RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
 			Application.quitting += Shutdown;
@@ -250,7 +248,7 @@ namespace FishMMO.Client
 				renderer = DetailScatterRenderer.TryCreate(out string reason);
 				if (renderer == null)
 				{
-					Debug.Log($"[Detail scatter] GPU detail scatter off: {reason}.");
+					Debug.LogError($"[Detail scatter] GPU detail scatter off: {reason}. No mesh detail is drawn (there is no CPU path).");
 				}
 			}
 			if (renderer == null)
@@ -292,7 +290,7 @@ namespace FishMMO.Client
 			{
 				// Nearest the camera first: the ground underfoot must not wait behind every other terrain.
 				bool started = false, spent = false;
-				var bakedWatch = System.Diagnostics.Stopwatch.StartNew();
+				long bakedStart = System.Diagnostics.Stopwatch.GetTimestamp();
 				while (!started && !spent)
 				{
 					Terrain next = null;
@@ -328,12 +326,12 @@ namespace FishMMO.Client
 						Finish(building);
 						building = null;
 						started = false;
-						spent = bakedWatch.Elapsed.TotalMilliseconds >= BakedBudgetMilliseconds;
+						spent = (System.Diagnostics.Stopwatch.GetTimestamp() - bakedStart) * 1000.0 / System.Diagnostics.Stopwatch.Frequency >= BakedBudgetMilliseconds;
 					}
 				}
 				if (!started && !spent && summaryTerrains > 0)
 				{
-					Debug.Log($"[Detail scatter] Scattering {summaryLayers} prototype layer(s) of {types.Count} type(s) on the GPU on {summaryTerrains} terrain(s); {summaryBaked} taken from the scene's bake, the rest built in {summaryMilliseconds:F0} ms of the main thread over {summaryFrames} frames (the sums on workers). The chunk renderer skips those prototypes there.");
+					Debug.Log($"[Detail scatter] Scattering {summaryLayers} prototype layer(s) of {types.Count} type(s) on the GPU on {summaryTerrains} terrain(s); {summaryBaked} taken from the scene's bake, the rest built in {summaryMilliseconds:F0} ms of the main thread over {summaryFrames} frames (the sums on workers).");
 					summaryTerrains = summaryFrames = summaryLayers = summaryBaked = 0;
 					summaryMilliseconds = 0;
 				}
@@ -379,45 +377,44 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// A terrain's scattered prototypes and each one's type, new types made and added to <paramref name="types"/> (up to
-		/// <see cref="MaxTypes"/>): bushes first, never what the blade grass claims. The play's choice and the editor's bake
-		/// (TerrainDetailBaker) are this one.
+		/// <see cref="MaxTypes"/>): every PAINTED mesh prototype the blade grass does not claim (<see cref="TerrainDetailRouting"/>),
+		/// bushes first. The play's choice and the editor's bake (TerrainDetailBaker) are this one. Every painted prototype it
+		/// cannot draw is an error, said once in the log and, when <paramref name="problems"/> is given (the cut), added to it.
 		/// </summary>
+		/// <remarks>
+		/// Painted only (2026-10-27): a cut listed the whole scene's prototypes on every terrain (578 on Moron 2's) but painted a
+		/// tile with a few dozen; channels were spent on the rest. A cut now gives a tile only the prototypes it paints (TerrainScatter). A prototype with nothing painted anywhere on the terrain
+		/// weighs nothing anywhere, so leaving it out changes no plant.
+		/// </remarks>
 		public static void SelectScattered(TerrainData data, int layer, DetailScatterSettings settings, GrassBladeSettings grass, List<DetailScatterType> types,
-			Dictionary<GameObject, DetailScatterType> typesByPrefab, HashSet<string> warned, List<int> prototypeScratch, List<DetailScatterType> typeScratch)
+			Dictionary<GameObject, DetailScatterType> typesByPrefab, HashSet<string> warned, List<int> prototypeScratch, List<DetailScatterType> typeScratch,
+			ICollection<string> problems = null)
 		{
 			DetailPrototype[] prototypes = data.detailPrototypes;
 			prototypeScratch.Clear();
 			typeScratch.Clear();
-			// Bushes first: a terrain has DetailScatterMath.MaxChannels channels, and a type past them stays on the CPU chunk
-			// renderer, which draws it to each player's own detail distance. Cover must not; pebbles may.
+			bool[] painted = TerrainDetailRouting.Painted(data);
+			// Bushes first: the lowest type indices, as before.
 			for (int pass = 0; pass < 2; pass++)
 			for (int p = 0; p < prototypes.Length; p++)
 			{
 				DetailPrototype proto = prototypes[p];
-				GameObject prefab = proto?.prototype;
-				// Whatever the blade grass claims is never taken here, running or not, so nothing is drawn twice.
-				if (prefab == null || !proto.usePrototypeMesh || !settings.IsScatterPrototype(prefab.name) || grass.IsBladePrototype(prefab.name)
-					|| DetailScatterSettings.IsBush(prefab.name) != (pass == 0))
+				if (!painted[p] || TerrainDetailRouting.RouteOf(proto, grass) != TerrainDetailRouting.Route.Scatter || DetailScatterSettings.IsBush(proto.prototype.name) != (pass == 0))
 				{
 					continue;
 				}
+				GameObject prefab = proto.prototype;
 				if (!typesByPrefab.TryGetValue(prefab, out DetailScatterType type))
 				{
 					if (types.Count >= MaxTypes)
 					{
-						if (warned.Add("types"))
-						{
-							Debug.LogWarning($"[Detail scatter] More than {MaxTypes} scattered types: '{prefab.name}' and later ones stay on the chunk renderer.");
-						}
+						Problem(warned, problems, "types " + prefab.name, $"[Detail scatter] More than {MaxTypes} scattered types in the scene: '{prefab.name}' is not drawn (GPU only: raise DetailScatterSystem.MaxTypes).");
 						continue;
 					}
 					type = DetailScatterType.Build(proto, layer, out string reason);
 					if (type == null)
 					{
-						if (warned.Add(reason))
-						{
-							Debug.LogWarning($"[Detail scatter] Leaving {reason} on the chunk renderer.");
-						}
+						Problem(warned, problems, reason, $"[Detail scatter] {reason}: not drawn (GPU only). Give the prefab one sub-mesh and a material with a procedural-instancing twin.");
 						continue;
 					}
 					type.Index = types.Count;
@@ -427,9 +424,28 @@ namespace FishMMO.Client
 				prototypeScratch.Add(p);
 				typeScratch.Add(type);
 			}
+			// What neither GPU renderer can take (a texture detail, an empty prototype) is an error too, once.
+			for (int p = 0; p < prototypes.Length; p++)
+			{
+				if (painted[p] && TerrainDetailRouting.RouteOf(prototypes[p], grass) == TerrainDetailRouting.Route.None)
+				{
+					string name = TerrainDetailRouting.NameOf(prototypes[p], p);
+					Problem(warned, problems, "unrouted " + name, $"[Terrain details] '{name}' is painted but no GPU renderer can draw it ({TerrainDetailRouting.WhyNot(prototypes[p])}): not drawn.");
+				}
+			}
 		}
 
-		/// <summary>Hands a finished terrain from the chunk renderer to the scatter.</summary>
+		/// <summary>Logs a problem once a session as an error, and adds it to the cut's list when there is one.</summary>
+		private static void Problem(HashSet<string> warned, ICollection<string> problems, string key, string message)
+		{
+			problems?.Add(message);
+			if (warned == null || warned.Add(key))
+			{
+				Debug.LogError(message);
+			}
+		}
+
+		/// <summary>Hands a finished terrain to the scatter (its prototypes claimed in the driver's books).</summary>
 		private static void Finish(DetailScatterTerrain.Builder done)
 		{
 			Terrain terrain = done.Terrain;
@@ -449,6 +465,10 @@ namespace FishMMO.Client
 			{
 				string name = types[scatter.ChannelSettings[scatter.ClampedChannel].Type].Name;
 				Debug.LogWarning($"[Detail scatter] '{terrain.name}': {scatter.ClampedBlocks} block(s) painted denser than {DetailScatterMath.MaxPerBlock} instances per {DetailScatterMath.BlockMetres:F0} m block (first: '{name}'); they draw at that cap.");
+			}
+			foreach (string over in done.Overflow)
+			{
+				Problem(warned, null, "channels " + terrain.name + over, $"[Detail scatter] '{terrain.name}' paints more than {DetailScatterMath.MaxChannels} scattered types: '{over}' is not drawn there (GPU only: raise DetailScatterMath.MaxChannels).");
 			}
 			taken[terrain] = new Taken { Terrain = terrain, Data = terrain.terrainData, Scatter = scatter };
 			scatterTerrains.Add(scatter);
@@ -492,8 +512,17 @@ namespace FishMMO.Client
 
 		// ── Drawing, per camera ───────────────────────────────────────
 
+		/// <summary>This hook's own time in the profiler (render-pipeline callbacks otherwise show only as
+		/// RenderPipeline.BeginCameraRendering's self time). In a class of its own so the marker, an engine object, is made
+		/// when the hook first runs, not when the type is first touched (tests outside Unity use these types' pure parts).</summary>
+		private static class HookProfiling
+		{
+			public static readonly Unity.Profiling.ProfilerMarker Marker = new Unity.Profiling.ProfilerMarker("DetailScatterSystem.BeginCamera");
+		}
+
 		private static void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera)
 		{
+			using var hookMarkerScope = HookProfiling.Marker.Auto();
 			if (!Application.isPlaying || !TerrainInstancingShared.DrawsDetails(camera) || camera.cameraType == CameraType.Reflection)
 			{
 				return;

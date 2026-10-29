@@ -70,7 +70,12 @@ namespace FishMMO.Client
 		public static TerrainTreeField Build(Terrain terrain, TerrainTreeModel[] models, float chunkMetres = TerrainTreeMath.DefaultChunkMetres)
 		{
 			TerrainData data = terrain.terrainData;
-			TerrainTreeField field = Build(terrain.GetPosition(), data.size, data.treeInstances, models, chunkMetres);
+			// The prototypes' scatter-mode leans (SCATTER-MODES), when the cut recorded any: visual only, colliders stand upright.
+			FishMMO.Shared.TerrainScatterModes record = terrain.GetComponent<FishMMO.Shared.TerrainScatterModes>();
+			uint[] leanAngles = null;
+			uint[] leanWords = record != null ? record.TreeWords(models.Length, out leanAngles) : null;
+			TerrainTreeField field = Build(terrain.GetPosition(), data.size, data.treeInstances, models, chunkMetres, leanWords, leanAngles,
+				leanWords != null ? (Func<float, float, Vector3>)data.GetInterpolatedNormal : null);
 			field.Terrain = terrain;
 			field.Data = data;
 			return field;
@@ -79,8 +84,12 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Lays out instances for a terrain whose corner is at <paramref name="origin"/> and whose size is
 		/// <paramref name="size"/> (the terrain-free half of <see cref="Build(Terrain, TerrainTreeModel[], float)"/>).
+		/// <paramref name="leanWords"/> and <paramref name="leanAngles"/> (by prototype index, or null) tilt a prototype's instances by its
+		/// scatter-mode lean (<see cref="TerrainTreeMath.InstanceMatrix(Vector3, Vector3, Vector3, float, float, float, uint, uint, Vector3)"/>),
+		/// reading the ground's normal from <paramref name="normalAt"/> (normalised x, z; straight up when null).
 		/// </summary>
-		public static TerrainTreeField Build(Vector3 origin, Vector3 size, TreeInstance[] instances, TerrainTreeModel[] models, float chunkMetres = TerrainTreeMath.DefaultChunkMetres)
+		public static TerrainTreeField Build(Vector3 origin, Vector3 size, TreeInstance[] instances, TerrainTreeModel[] models, float chunkMetres = TerrainTreeMath.DefaultChunkMetres,
+			uint[] leanWords = null, uint[] leanAngles = null, Func<float, float, Vector3> normalAt = null)
 		{
 			int chunksX = TerrainTreeMath.ChunkCount(size.x, chunkMetres);
 			int chunksZ = TerrainTreeMath.ChunkCount(size.z, chunkMetres);
@@ -141,7 +150,11 @@ namespace FishMMO.Client
 					TreeInstance t = instances[source[keep]];
 					int p = prototypeOf[keep];
 					TerrainTreeModel model = models[p];
-					Matrix4x4 m = TerrainTreeMath.InstanceMatrix(origin, size, t.position, t.rotation, t.widthScale, t.heightScale);
+					uint leanWord = leanWords != null && p < leanWords.Length ? leanWords[p] : 0u;
+					Matrix4x4 m = leanWord == 0u
+						? TerrainTreeMath.InstanceMatrix(origin, size, t.position, t.rotation, t.widthScale, t.heightScale)
+						: TerrainTreeMath.InstanceMatrix(origin, size, t.position, t.rotation, t.widthScale, t.heightScale, leanWord,
+							leanAngles != null && p < leanAngles.Length ? leanAngles[p] : 0u, normalAt != null ? normalAt(t.position.x, t.position.z) : Vector3.up);
 					float worldSize = TerrainTreeMath.WorldSize(model.Size, t.widthScale, t.heightScale);
 					field.matrices[k] = m;
 					field.positions[k] = m.GetColumn(3);

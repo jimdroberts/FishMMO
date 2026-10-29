@@ -739,6 +739,54 @@ namespace FishMMO.UnitTests.Weather
 		}
 
 		[Test]
+		public void RememberedSpots_AreTheSpotsWorkedOutAfresh()
+		{
+			// The episode spots kept a frame to the next (AmbientLifeMotion.SpotMemo) give every animal exactly the place working
+			// them out again every frame gives: songbirds on crowns and the ground, ducks on the lake, rabbits, through many episodes.
+			var world = new FakeWorld();
+			var perches = new List<Vector4> { new Vector4(20f, 15f, 20f, 12f), new Vector4(30f, 18f, 25f, 14f) };
+			AmbientCreatureKind songbird = Kind("Songbird");
+			AmbientCreatureKind duck = Kind("Duck");
+			var birds = new AmbientGroup { Kind = System.Array.IndexOf(Kinds, songbird), Seed = 777u, Home = new Vector3(25f, 0f, 22f), Radius = 15f, Episode = 25.0, Count = 2, Length = 0.15f };
+			world.TryGround(25f, 22f, out birds.Home.y);
+			var ducks = new AmbientGroup { Kind = System.Array.IndexOf(Kinds, duck), Seed = 991u, Home = new Vector3(-160f, 0f, 10f), Radius = 20f, Episode = 18.0, Count = 3, Length = 0.4f, StateFirst = 2 };
+			AmbientCreatureKind rabbit = Kind("Rabbit");
+			var rabbits = new AmbientGroup { Kind = System.Array.IndexOf(Kinds, rabbit), Seed = 12345u, Home = new Vector3(50f, 0f, 50f), Radius = 4f, Episode = 12.0, Count = 3, Length = 0.4f, StateFirst = 5 };
+			world.TryGround(50f, 50f, out rabbits.Home.y);
+			var memo = new AmbientLifeMotion.SpotMemo();
+			var remembered = new AmbientMemberState[8];
+			var fresh = new AmbientMemberState[8];
+			var a = new List<AmbientInstance>();
+			var b = new List<AmbientInstance>();
+			var none = new AmbientThreats();
+			int compared = 0;
+			for (double t = 5000.0; t < 5600.0; t += 0.37)
+			{
+				memo.BeginFrame(((IAmbientWorld)world).Stamp);
+				foreach ((AmbientGroup group, AmbientCreatureKind kind) in new[] { (birds, songbird), (ducks, duck), (rabbits, rabbit) })
+				{
+					a.Clear();
+					b.Clear();
+					AmbientLifeMotion.Frame fa = FrameAt(t, world, remembered, none, perches);
+					fa.Spots = memo;
+					AmbientLifeMotion.Frame fb = FrameAt(t, world, fresh, none, perches);
+					AmbientLifeMotion.Evaluate(group, kind, ref fa, a);
+					AmbientLifeMotion.Evaluate(group, kind, ref fb, b);
+					Assert.That(a.Count, Is.EqualTo(b.Count), $"{kind.Name} at {t}");
+					for (int i = 0; i < a.Count; i++)
+					{
+						Assert.That(a[i].Matrix, Is.EqualTo(b[i].Matrix), $"{kind.Name} member {i} at {t}");
+						compared++;
+					}
+				}
+			}
+			Assert.That(compared, Is.GreaterThan(1000));
+			Assert.That(memo.Count, Is.EqualTo(8), "one entry a member");
+			memo.BeginFrame(1);
+			Assert.That(memo.Count, Is.EqualTo(0), "a changed world forgets every spot");
+		}
+
+		[Test]
 		public void Owls_HuntAtNightAndRoostByDay()
 		{
 			AmbientCreatureKind owl = Kind("Owl");

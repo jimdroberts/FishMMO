@@ -36,9 +36,9 @@ namespace FishMMO.Shared
 	/// <item>otherwise (no stored map, stored before the alphamaps were last written, another size or
 	/// layer count, or a texel that differs: one warning naming the reason) <b>the alphamaps</b>,
 	/// exactly — the binder bakes the tile's index map from them where it is drawn — and the terrain
-	/// layers, in the same count and order (the alphamap channel IS the layer index IS the array
-	/// slice) with the same tiling and remaps, as fresh layers whose albedo, normal and mask are
-	/// empty.</item>
+	/// layers, in the same count and order (the tile's own channels: the scene layer each holds is on
+	/// its <see cref="TerrainTileLayers"/>, which the build writes for the player) with the same tiling
+	/// and remaps, as fresh layers whose albedo, normal and mask are empty.</item>
 	/// </list>
 	/// <para>
 	/// <b>The bake follows the copies.</b> The scene's <see cref="TerrainDetailBake"/> names each tile by
@@ -85,6 +85,7 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
+			TerrainIndexMapBuildGuard.Validate(scene, report.summary.platform);
 			var notes = new List<string>();
 			int copied = Strip(scene, notes);
 			if (copied > 0)
@@ -126,6 +127,11 @@ namespace FishMMO.Shared
 					{
 						continue;
 					}
+					/* A tile carrying only the layers it paints (TerrainTileLayers): its stored map names scene layers, so the check
+					 * renames the alphamaps' bake the same way; and the map is written on the build's tile, for a player that keeps
+					 * its alphamaps and bakes from them (it has no provenance to ask). */
+					int[] sceneLayers = TerrainTileLayers.Of(terrain);
+					WorldDesign.TerrainTileLayerSync.Record(terrain, sceneLayers);
 					if (!copies.TryGetValue(original, out TerrainData copy))
 					{
 						bool keep = true;
@@ -133,7 +139,7 @@ namespace FishMMO.Shared
 						{
 							TerrainDetailBake.IndexMap stored = StoredIndexOf(holders, original);
 							string reason = KeepAlphamapsReason(stored, original.alphamapResolution, original.alphamapLayers,
-								() => TerrainIndexMap.Same(stored.Map, TerrainIndexMap.Bake(original.GetAlphamaps(0, 0, original.alphamapResolution, original.alphamapResolution))));
+								() => TerrainIndexMap.Same(stored.Map, TerrainTileLayerMap.Bake(original.GetAlphamaps(0, 0, original.alphamapResolution, original.alphamapResolution), sceneLayers)));
 							keep = reason != null;
 							if (keep)
 							{

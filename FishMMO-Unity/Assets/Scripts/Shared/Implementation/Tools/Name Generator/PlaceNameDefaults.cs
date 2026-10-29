@@ -225,6 +225,134 @@ namespace FishMMO.Shared.NameGeneration
 			[POIType.MethaneLake] = new[] { "Mare", "Black Lake", "Still Mere", "Tar Lake", "Lacus", "Dark Sea" },
 			[POIType.ImpactBasin] = new[] { "Basin", "Crater", "Ring", "Strike", "Scar", "Impact" },
 			[POIType.TidalRift] = new[] { "Rift", "Fracture", "Linea", "Chasm", "Rent", "Fissure" },
+
+			// The hot ground's own sites (2026-10-27).
+			[POIType.Geyser] = new[] { "Geyser", "Spout", "Gusher", "Fountain", "Steam Spout", "Geysir" },
+			[POIType.MudPot] = new[] { "Mud Pot", "Paint Pot", "Mud Cauldron", "Mudspring", "Boiling Mud", "Mud Volcano" },
+			[POIType.Fumarole] = new[] { "Fumarole", "Steam Vent", "Steam Hole", "Reek", "Blower", "Hissing Vent" },
+			[POIType.SulphurPool] = new[] { "Sulphur Pool", "Brimstone Pool", "Yellow Pool", "Sulphur Pot", "Brimstone Pit", "Sulphur Spring" },
+			// The fantasy wave (2026-10-27).
+			[POIType.DragonLair] = new[] { "Lair", "Hoard", "Wyrmhold", "Wyrm's Den", "Roost", "Delve", "Dragonhold" },
+			[POIType.TrollBridge] = new[] { "Bridge", "Span", "Crossing", "Toll Bridge", "Troll Span", "Old Bridge" },
+			[POIType.GiantsSteading] = new[] { "Steading", "Hall", "Hold", "Garth", "Giants' Hall", "Great Hall" },
+			[POIType.GoblinWarren] = new[] { "Warren", "Burrows", "Holes", "Diggings", "Goblin Holes", "Nest" },
+			[POIType.HauntedManor] = new[] { "Manor", "Hall", "House", "Grange", "Old Hall", "Grey Manor" },
+			[POIType.HangingTree] = new[] { "Tree", "Oak", "Gallows Oak", "Hanging Tree", "Dule Tree", "Elm" },
+			[POIType.BuriedHoard] = new[] { "Hoard", "Cache", "Trove", "Cairn", "Hidden Hoard", "Treasure" },
+			[POIType.AmbushSite] = new[] { "Ambush", "Waylay", "Killing Ground", "Bloody Mile", "Red Road", "Trap" },
+			[POIType.WreckedCaravan] = new[] { "Caravan", "Wagons", "Wagon Train", "Wreck", "Lost Wagons", "Last Camp" },
+			[POIType.Crossroads] = new[] { "Crossroads", "Crossways", "Cross", "Four Roads", "Waymeet", "Roadmeet" },
+			[POIType.BoundaryStone] = new[] { "Marker", "Boundary", "March Stone", "Border Stone", "Mearstone", "Meerstone" },
+			[POIType.SignalBeacon] = new[] { "Beacon", "Beacon Hill", "Fire Hill", "Warning Fire", "Watch Fire", "Balefire" },
+			[POIType.TollGate] = new[] { "Toll", "Gate", "Bar", "Toll House", "Turnpike", "Toll Bar" },
+			[POIType.Hamlet] = new[] { "Hamlet", "Thorp", "Steading", "Cotes", "Hithe", "Stead" },
+			[POIType.ManorHouse] = new[] { "Manor", "Hall", "Court", "Grange", "Manor House", "Bury" },
+			[POIType.SiegeCamp] = new[] { "Siege Lines", "Camp", "Leaguer", "Siegeworks", "Siege Camp", "Lines" },
+			[POIType.BurnedVillage] = new[] { "Burnt Village", "Ashes", "Ruin", "Cinders", "Burnt Farm", "Charred Vill" },
+			[POIType.WarbandCamp] = new[] { "Warcamp", "Host", "Muster", "War Camp", "Horde Camp", "Warband" },
+			[POIType.CultistHideout] = new[] { "Hideout", "Sanctum", "Coven", "Cellar", "Undercroft", "Hidden Fane" },
+			[POIType.AncientWall] = new[] { "Wall", "Dyke", "Rampart", "Old Wall", "Great Wall", "Long Wall" },
+			[POIType.SpellScar] = new[] { "Scar", "Blast", "Scorch", "Burn", "Spellburn", "Glassing" },
+			[POIType.PlanarRift] = new[] { "Rift", "Tear", "Breach", "Rent", "Planar Rift", "Wound" },
+			[POIType.PetrifiedBattle] = new[] { "Stone Host", "Frozen Field", "Stoneshield", "Still Host", "Grey Field", "Stone Field" },
+			[POIType.TitansBones] = new[] { "Bones", "Ribs", "Skull", "Remains", "Titan's Ribs", "Old Bones" },
+			[POIType.WishingStone] = new[] { "Stone", "Wishing Stone", "Holed Stone", "Wish Stone", "Hag Stone", "Odin Stone" },
+			[POIType.ElderMonolith] = new[] { "Monolith", "Pillar", "Slab", "Stone", "Black Stone", "Elder Stone" },
+			[POIType.WaygateRing] = new[] { "Waygate", "Ring", "Gate Circle", "Arches", "Starway", "Old Gate" },
+			[POIType.GolemGraveyard] = new[] { "Graveyard", "Field", "Rest", "Scrapfield", "Golemfield", "Still Guard" },
+			[POIType.KoboldDelving] = new[] { "Delving", "Diggings", "Warren", "Holes", "Kobold Holes", "Tunnels" },
+			[POIType.LostLibrary] = new[] { "Library", "Archive", "Scriptorium", "Athenaeum", "Book Hall", "Lore Hall" },
+			[POIType.DruidGrove] = new[] { "Grove", "Nemeton", "Sanctuary", "Ring", "Oak Grove", "Holy Grove" },
+			[POIType.TreeVillage] = new[] { "Talan", "Treetown", "Boughs", "Leafhall", "Tree Hall", "Flets" },
+			[POIType.TrollStones] = new[] { "Trolls", "Troll Stones", "Stone Trolls", "Dawnstones", "Troll Rocks", "Old Trolls" },
+			[POIType.SpiderThicket] = new[] { "Thicket", "Webwood", "Brood", "Nest", "Weave", "Spider Wood" },
+			[POIType.CharcoalClamps] = new[] { "Clamps", "Pitsteads", "Coaling", "Colliers' Camp", "Pitstead", "Burners" },
+			[POIType.GreenwoodHideout] = new[] { "Hideout", "Greenwood", "Outlaws' Oak", "Lair", "Trysting Oak", "Retreat" },
+			[POIType.DryadOak] = new[] { "Oak", "Hollow Oak", "Mother Tree", "Heartwood", "Dryad Oak", "Elder Oak" },
+			[POIType.GoblinMarket] = new[] { "Market", "Night Market", "Fair", "Hollow", "Goblin Fair", "Moon Market" },
+			[POIType.ElfWaystone] = new[] { "Waystone", "Waymark", "Elfstone", "Road Stone", "Mile Stone", "Guide Stone" },
+			[POIType.WolfDen] = new[] { "Den", "Lair", "Lie", "Earth", "Wolf Den", "Wolfholt" },
+			[POIType.MossColossus] = new[] { "Colossus", "Head", "Old King", "Green Face", "Stone Head", "Sleeper" },
+			[POIType.StepPyramid] = new[] { "Pyramid", "Temple", "Steps", "High Place", "Sun Steps", "Stepped Fane" },
+			[POIType.Cenote] = new[] { "Cenote", "Well", "Sacred Well", "Pool", "Dzonot", "Deep Well" },
+			[POIType.JaguarTemple] = new[] { "Temple", "Jaguar House", "Shrine", "Sanctum", "Jaguar Fane", "Spotted House" },
+			[POIType.SerpentIdol] = new[] { "Idol", "Serpent", "Plumed Head", "Stone Snake", "Snake Idol", "Coil" },
+			[POIType.LostCity] = new[] { "City", "Lost City", "Ruins", "Fallen Seat", "Old City", "Jungle City" },
+			[POIType.LizardfolkVillage] = new[] { "Village", "Wallow", "Hatch", "Mudhall", "Scale Town", "Basking" },
+			[POIType.IdolVault] = new[] { "Vault", "Treasury", "Tomb", "Hoard", "Idol Vault", "Gold Room" },
+			[POIType.Grange] = new[] { "Grange", "Home Farm", "Abbey Farm", "Granary", "Tithe Farm", "Barton" },
+			[POIType.Dovecote] = new[] { "Dovecote", "Culver House", "Doocot", "Pigeon House", "Columbarium", "Dove House" },
+			[POIType.BeeGarden] = new[] { "Bee Garden", "Bee Boles", "Apiary", "Skeps", "Bee Bole", "Hive Garden" },
+			[POIType.VillageGreen] = new[] { "Green", "Common", "Lea", "Maypole Green", "Village Green", "Moot Green" },
+			[POIType.ScarecrowField] = new[] { "Field", "Scarecrows", "Crow Field", "Straw Men", "Crowfield", "Tatterfield" },
+			[POIType.LongBarrow] = new[] { "Long Barrow", "Barrow", "Howe", "Long Mound", "Long Low", "Giant's Grave" },
+			[POIType.Henge] = new[] { "Henge", "Ring", "Circle", "Round", "Henge Ring", "Sun Ring" },
+			[POIType.GallowsHill] = new[] { "Gallows Hill", "Gibbet", "Hangman's Hill", "Tyburn", "Gibbet Hill", "Drop" },
+			[POIType.KurganField] = new[] { "Kurgans", "Mounds", "Kurgan Field", "Barrows", "Grave Field", "Khan Mounds" },
+			[POIType.NomadCamp] = new[] { "Camp", "Ordo", "Encampment", "Yurts", "Ail", "Horde" },
+			[POIType.StoneFigures] = new[] { "Stone Men", "Balbals", "Figures", "Watchers", "Stone Guards", "Stone Row" },
+			[POIType.Kraal] = new[] { "Kraal", "Boma", "Enclosure", "Village", "Thorn Ring", "Homestead" },
+			[POIType.Baobab] = new[] { "Baobab", "Bottle Tree", "Great Tree", "Elder Tree", "Monkey Bread", "Old Baobab" },
+			[POIType.Shieling] = new[] { "Shieling", "Summer Huts", "Pasture Huts", "Bothies", "Saeter", "Booley" },
+			[POIType.Necropolis] = new[] { "Necropolis", "City of the Dead", "Tombs", "Silent City", "Dead City", "Tomb Field" },
+			[POIType.Pyramid] = new[] { "Pyramid", "Tomb", "Eternal House", "Peak", "Great Tomb", "King's Tomb" },
+			[POIType.Sphinx] = new[] { "Sphinx", "Guardian", "Watcher", "Riddler", "Lion Guard", "Old Watcher" },
+			[POIType.RockCutFacade] = new[] { "Treasury", "Tomb", "Facade", "Carved Gate", "Rock Tomb", "Hewn Gate" },
+			[POIType.SandBuriedTemple] = new[] { "Buried Temple", "Temple", "Sunk Fane", "Sand Temple", "Dune Temple", "Lost Fane" },
+			[POIType.DjinnPrison] = new[] { "Prison", "Urn", "Brass Seal", "Bound Shrine", "Djinn Seal", "Lamp Shrine" },
+			[POIType.SandwormPit] = new[] { "Pit", "Maw", "Funnel", "Sinking Sands", "Worm Pit", "Swallow" },
+			[POIType.CaravanHalt] = new[] { "Halt", "Camp", "Well Camp", "Stopping Place", "Caravan Rest", "Watering" },
+			[POIType.BeastBoneyard] = new[] { "Boneyard", "Bones", "Bleachings", "Ribs", "Bone Field", "Dry Bones" },
+			[POIType.CliffPalace] = new[] { "Cliff Palace", "Alcove", "Cliff Town", "Cliff Houses", "Overhang", "Eagle Town" },
+			[POIType.DreadRoad] = new[] { "Road", "Dread Road", "Black Way", "Tyrant's Road", "Dark Way", "Iron Road" },
+			[POIType.DwarvenGate] = new[] { "Gate", "Door", "Hall Gate", "Dwarf Door", "Stone Door", "Deep Gate" },
+			[POIType.MountainKingsHall] = new[] { "Hall", "Hold", "Delving", "Under-hall", "King's Hall", "Mountain Hall" },
+			[POIType.HangingMonastery] = new[] { "Monastery", "Hanging Temple", "Cliff Abbey", "Eyrie Cloister", "Cliff Temple", "Rock Abbey" },
+			[POIType.PassFort] = new[] { "Pass Fort", "Gate", "Kleisoura", "Wall", "Pass Gate", "Gate Fort" },
+			[POIType.Eyrie] = new[] { "Eyrie", "Aerie", "Crag Nest", "Roost", "Eagle Crag", "High Nest" },
+			[POIType.GriffinRoost] = new[] { "Roost", "Griffin Rock", "Crag", "Aerie", "Griffin Crag", "Talon Rock" },
+			[POIType.WyvernNest] = new[] { "Nest", "Wyvern Crag", "Scorch", "Roost", "Wyvern Nest", "Wyrm Crag" },
+			[POIType.CliffRelief] = new[] { "Kings", "Stone Kings", "Relief", "Carved Kings", "Old Kings", "Watchers" },
+			[POIType.SummitCairn] = new[] { "Cairn", "Summit Cairn", "Man", "Pile", "Top Cairn", "Stone Man" },
+			[POIType.PrayerFlagPass] = new[] { "Flags", "Prayer Pass", "Col", "Banners", "Flag Pass", "Wind Pass" },
+			[POIType.SilverMineTown] = new[] { "Silver Town", "Mines", "Delving", "Mine Town", "Silverdale", "Ore Town" },
+			[POIType.FrostGiantSteading] = new[] { "Steading", "Rime Hall", "Frost Hall", "Winter Hold", "Ice Hall", "Jotun Hall" },
+			[POIType.RuneStone] = new[] { "Runestone", "Stone", "Bautastein", "Memorial Stone", "Rune Stone", "Rune Slab" },
+			[POIType.FrozenArmy] = new[] { "Frozen Host", "Ice Field", "Rime Host", "Still Army", "Ice Host", "Cold Host" },
+			[POIType.DragonInTheIce] = new[] { "Ice Wyrm", "Frozen Dragon", "Wyrm Ice", "Sleeper", "Ice Sleeper", "Cold Wyrm" },
+			[POIType.MammothGraveyard] = new[] { "Boneyard", "Tusks", "Mammoth Field", "Ivory Field", "Tusk Field", "Old Bones" },
+			[POIType.WinterWolfDen] = new[] { "Den", "Lair", "White Den", "Snow Den", "Wolf Den", "Frost Den" },
+			[POIType.AuroraShrine] = new[] { "Shrine", "Sky Ring", "Light Stone", "Aurora Ring", "Sky Shrine", "Lantern Ring" },
+			[POIType.LichSpire] = new[] { "Spire", "Tower", "Throne", "Black Spire", "Lich Tower", "Bone Spire" },
+			[POIType.IcePalace] = new[] { "Palace", "Rime Palace", "Hall of Ice", "Frost Court", "Ice Court", "Ice Hall" },
+			[POIType.FrozenShipwreck] = new[] { "Wreck", "Ice Ship", "Frozen Hulk", "Locked Ship", "Ice Wreck", "Ghost Hull" },
+			[POIType.Crannog] = new[] { "Crannog", "Isle Hall", "Lake Dwelling", "Islet", "Lake Hall", "Wattle Isle" },
+			[POIType.HagsCauldron] = new[] { "Cauldron", "Hag's Pot", "Brew", "Kettle", "Witch Pot", "Hag Kettle" },
+			[POIType.HydraLair] = new[] { "Lair", "Fen of Heads", "Mire", "Den", "Hydra Fen", "Many Heads" },
+			[POIType.ReedVillage] = new[] { "Reed Village", "Mudhif Isle", "Marsh Town", "Reedhold", "Reed Isle", "Reed Halls" },
+			[POIType.CovenCircle] = new[] { "Coven", "Circle", "Witches' Ring", "Black Ring", "Hag Ring", "Coven Stones" },
+			[POIType.LizardfolkHatchery] = new[] { "Hatchery", "Egg Mounds", "Clutch", "Brood", "Nesting", "Egg Field" },
+			[POIType.SwampCathedral] = new[] { "Cathedral", "Sunk Minster", "Drowned Church", "Black Abbey", "Mire Minster", "Sunk Abbey" },
+			[POIType.TidalIslandAbbey] = new[] { "Holy Isle", "Abbey", "Mount", "Isle", "Tide Abbey", "Saint's Isle" },
+			[POIType.CliffCastle] = new[] { "Cliff Castle", "Promontory", "Head Fort", "Dun", "Cliff Fort", "Sea Fort" },
+			[POIType.SmugglersTunnel] = new[] { "Tunnel", "Hole", "Run", "Cut", "Rum Hole", "Free Trade" },
+			[POIType.WreckersBeacon] = new[] { "False Light", "Beacon", "Wreckers' Fire", "Lure", "Lying Light", "Dark Lamp" },
+			[POIType.SirenRock] = new[] { "Rock", "Siren's Rock", "Singing Stone", "Lorelei", "Siren Stone", "Song Rock" },
+			[POIType.SeaWitchGrotto] = new[] { "Grotto", "Witch's Hole", "Shell Cave", "Sea Den", "Witch Grotto", "Wrack Hole" },
+			[POIType.LongshipLanding] = new[] { "Landing", "Strand Camp", "Beachhead", "Raid Camp", "Ship Strand", "Keel Camp" },
+			[POIType.KrakenWreck] = new[] { "Wreck", "Crushed Ship", "Kraken Wreck", "Broken Keel", "Split Hull", "Sea Grave" },
+			[POIType.FireTemple] = new[] { "Fire Temple", "Ateshgah", "Flame House", "Pyre", "Fire House", "Hearth Fane" },
+			[POIType.FireGiantHall] = new[] { "Hall", "Forgehold", "Ember Hall", "Smithy", "Fire Hall", "Muspel Hall" },
+			[POIType.SalamanderLair] = new[] { "Lair", "Ember Den", "Firepit", "Hollow", "Salamander Den", "Hot Den" },
+			[POIType.AshBuriedCity] = new[] { "Buried City", "Ash Town", "Cinder Town", "Grey City", "Ash City", "Lost Town" },
+			[POIType.MerfolkVillage] = new[] { "Village", "Coral Halls", "Shell Town", "Reefhold", "Mer Town", "Deep Hall" },
+			[POIType.KrakenGrounds] = new[] { "Deep", "Kraken Deep", "Grounds", "Maw", "Kraken Water", "Black Deep" },
+			[POIType.LadyOfTheLake] = new[] { "Shrine", "Mere", "Lady's Mere", "Water Shrine", "Lady's Pool", "Sword Mere" },
+			[POIType.NymphPool] = new[] { "Pool", "Nymph Pool", "Fair Spring", "Naiad's Pool", "Nymph Well", "Fair Pool" },
+			[POIType.LakeMonsterLair] = new[] { "Deep", "Hole", "Lair", "Mere", "Monster Mere", "Black Hole" },
+			[POIType.Commandery] = new[] { "Commandery", "Preceptory", "Knights' House", "Hall", "Order House", "Temple Hall" },
+			[POIType.LostThrone] = new[] { "Throne", "Seat", "High Seat", "Empty Throne", "Old Throne", "King's Seat" },
+			[POIType.RoyalMausoleum] = new[] { "Mausoleum", "Kings' Tomb", "Barrowdowns", "Kings' House", "Royal Tomb", "Kings' Rest" },
 		};
 
 		/// <summary>The built-in type words for a kind; never empty (an unknown kind answers its spaced name).</summary>
@@ -324,6 +452,8 @@ namespace FishMMO.Shared.NameGeneration
 			[POIType.Capital] = 1, [POIType.City] = 2, [POIType.Town] = 3, [POIType.Fortress] = 2, [POIType.Castle] = 2,
 			[POIType.SunkenCity] = 1, [POIType.BossLair] = 2, [POIType.Portal] = 2, [POIType.FallenStar] = 2, [POIType.LeyNexus] = 2,
 			[POIType.IceGeyserField] = 1, [POIType.Cryovolcano] = 1, [POIType.MethaneLake] = 1, [POIType.ImpactBasin] = 1, [POIType.TidalRift] = 1,
+			// The hot ground's sites stand only on steaming ground.
+			[POIType.Geyser] = 1, [POIType.MudPot] = 1, [POIType.Fumarole] = 1, [POIType.SulphurPool] = 1,
 		};
 
 		/// <summary>The built-in draw weight for a kind under <see cref="POIType.Any"/>.</summary>
@@ -340,9 +470,9 @@ namespace FishMMO.Shared.NameGeneration
 
 		// Kind sets the compositions below share.
 		private static readonly POIType[] RaceCaves = { POIType.Cave, POIType.IceCave, POIType.LavaTube };
-		private static readonly POIType[] RaceCamps = { POIType.Camp, POIType.BanditCamp };
-		private static readonly POIType[] Dens = { POIType.MonsterDen, POIType.Nest };
-		private static readonly POIType[] WorkCamps = { POIType.HuntingLodge, POIType.LumberCamp, POIType.FishingCamp, POIType.FowlersHide, POIType.EelWeir };
+		private static readonly POIType[] RaceCamps = { POIType.Camp, POIType.BanditCamp, POIType.SiegeCamp, POIType.WarbandCamp, POIType.GreenwoodHideout, POIType.NomadCamp, POIType.CaravanHalt, POIType.LongshipLanding };
+		private static readonly POIType[] Dens = { POIType.MonsterDen, POIType.Nest, POIType.DragonLair, POIType.GoblinWarren, POIType.KoboldDelving, POIType.SpiderThicket, POIType.WolfDen, POIType.SandwormPit, POIType.Eyrie, POIType.GriffinRoost, POIType.WyvernNest, POIType.WinterWolfDen, POIType.HydraLair, POIType.LizardfolkHatchery, POIType.SalamanderLair, POIType.LakeMonsterLair };
+		private static readonly POIType[] WorkCamps = { POIType.HuntingLodge, POIType.LumberCamp, POIType.FishingCamp, POIType.FowlersHide, POIType.EelWeir, POIType.CharcoalClamps, POIType.Shieling };
 		private static readonly POIType[] Springs = { POIType.Spring, POIType.HotSpring };
 		private static readonly POIType[] Mounts = { POIType.Volcano, POIType.Cryovolcano, POIType.CinderCone };
 		/// <summary>Ground shapes and natural features named "{Root} {Type}" or "The {Adjective} {Type}".</summary>
@@ -354,7 +484,9 @@ namespace FishMMO.Shared.NameGeneration
 			POIType.Grotto, POIType.SeaCave, POIType.Overhang, POIType.CoralReef, POIType.IceGeyserField,
 			POIType.MethaneLake, POIType.ImpactBasin, POIType.TidalRift, POIType.WispHollow,
 			POIType.TrenchEdge, POIType.SeaCavern, POIType.Kipuka, POIType.LavaFall, POIType.DrownedForest, POIType.FloatingIsland,
-			POIType.DeadForest, POIType.SeaHall,
+			POIType.DeadForest, POIType.SeaHall, POIType.Geyser, POIType.MudPot, POIType.Fumarole, POIType.SulphurPool,
+			// The fantasy wave (2026-10-27).
+			POIType.Cenote,
 		};
 		/// <summary>Natural kinds whose plain type word takes an adjective well ("The Black Gorge").</summary>
 		private static readonly POIType[] PlainNature =
@@ -362,7 +494,7 @@ namespace FishMMO.Shared.NameGeneration
 			POIType.Clearing, POIType.Pass, POIType.Gorge, POIType.Mesa, POIType.Butte, POIType.Valley, POIType.Bay,
 			POIType.Headland, POIType.NaturalArch, POIType.Sinkhole, POIType.Crater, POIType.DuneSea, POIType.Glacier,
 			POIType.MangroveMaze, POIType.Grotto, POIType.Overhang, POIType.CoralReef, POIType.MethaneLake,
-			POIType.ImpactBasin, POIType.TidalRift,
+			POIType.ImpactBasin, POIType.TidalRift, POIType.Geyser, POIType.MudPot, POIType.Fumarole, POIType.SulphurPool,
 		};
 		private static readonly POIType[] FusedNature = { POIType.Valley, POIType.Pass, POIType.Bay, POIType.Headland, POIType.Clearing };
 		private static readonly POIType[] Sacred =
@@ -370,26 +502,30 @@ namespace FishMMO.Shared.NameGeneration
 			POIType.Shrine, POIType.Temple, POIType.StoneCircle, POIType.RitualSite, POIType.Monastery, POIType.FeyRing,
 			POIType.LeyNexus, POIType.FallenStar, POIType.CorruptedGrove, POIType.Portal, POIType.BogShrine,
 			POIType.SunkenTemple, POIType.LavaCaveTemple, POIType.FrogShrine, POIType.Chapel, POIType.HolyWell,
+			// The fantasy wave (2026-10-27).
+			POIType.WaygateRing, POIType.DruidGrove, POIType.DryadOak, POIType.JaguarTemple, POIType.Henge, POIType.HangingMonastery, POIType.PrayerFlagPass, POIType.AuroraShrine, POIType.SwampCathedral, POIType.TidalIslandAbbey, POIType.FireTemple, POIType.LadyOfTheLake, POIType.NymphPool,
 		};
 		private static readonly POIType[] PlainSacred = { POIType.Shrine, POIType.Temple, POIType.StoneCircle, POIType.Monastery, POIType.Portal, POIType.LeyNexus, POIType.Chapel, POIType.HolyWell };
-		private static readonly POIType[] RaceSacred = { POIType.Shrine, POIType.Temple, POIType.RitualSite, POIType.Monastery, POIType.SunkenTemple, POIType.StoneCircle };
-		private static readonly POIType[] Dead = { POIType.Graveyard, POIType.Barrow, POIType.Crypt, POIType.Battlefield, POIType.Ossuary, POIType.BlightedCrater, POIType.PlagueVillage };
-		private static readonly POIType[] Likenesses = { POIType.Monument, POIType.Statue, POIType.Obelisk, POIType.FallenColossus };
-		private static readonly POIType[] Homes = { POIType.AbandonedFarm, POIType.Hermitage };
-		private static readonly POIType[] Towns = { POIType.Village, POIType.Town, POIType.City, POIType.Capital, POIType.Port, POIType.StiltVillage };
-		private static readonly POIType[] Works = { POIType.Tower, POIType.Bridge, POIType.Mine, POIType.Quarry, POIType.Lighthouse, POIType.Waystation, POIType.Dockyard, POIType.Windmill, POIType.Watermill, POIType.LumberMill, POIType.MarshWatchtower, POIType.BrickKiln };
+		private static readonly POIType[] RaceSacred = { POIType.Shrine, POIType.Temple, POIType.RitualSite, POIType.Monastery, POIType.SunkenTemple, POIType.StoneCircle, POIType.CultistHideout, POIType.HagsCauldron, POIType.CovenCircle };
+		private static readonly POIType[] Dead = { POIType.Graveyard, POIType.Barrow, POIType.Crypt, POIType.Battlefield, POIType.Ossuary, POIType.BlightedCrater, POIType.PlagueVillage, POIType.HauntedManor, POIType.HangingTree, POIType.PetrifiedBattle, POIType.ScarecrowField, POIType.LongBarrow, POIType.GallowsHill, POIType.KurganField, POIType.Necropolis, POIType.RockCutFacade, POIType.FrozenArmy, POIType.LichSpire, POIType.RoyalMausoleum };
+		private static readonly POIType[] Likenesses = { POIType.Monument, POIType.Statue, POIType.Obelisk, POIType.FallenColossus, POIType.BoundaryStone, POIType.WishingStone, POIType.ElderMonolith, POIType.TrollStones, POIType.ElfWaystone, POIType.MossColossus, POIType.SerpentIdol, POIType.StoneFigures, POIType.Sphinx, POIType.CliffRelief, POIType.SummitCairn, POIType.RuneStone, POIType.SirenRock, POIType.LostThrone };
+		private static readonly POIType[] Homes = { POIType.AbandonedFarm, POIType.Hermitage, POIType.GiantsSteading, POIType.ManorHouse, POIType.BurnedVillage, POIType.GoblinMarket, POIType.VillageGreen, POIType.FrostGiantSteading, POIType.Crannog, POIType.FireGiantHall };
+		private static readonly POIType[] Towns = { POIType.Village, POIType.Town, POIType.City, POIType.Capital, POIType.Port, POIType.StiltVillage, POIType.Hamlet, POIType.TreeVillage, POIType.LizardfolkVillage, POIType.Kraal, POIType.MountainKingsHall, POIType.SilverMineTown, POIType.ReedVillage };
+		private static readonly POIType[] Works = { POIType.Tower, POIType.Bridge, POIType.Mine, POIType.Quarry, POIType.Lighthouse, POIType.Waystation, POIType.Dockyard, POIType.Windmill, POIType.Watermill, POIType.LumberMill, POIType.MarshWatchtower, POIType.BrickKiln, POIType.TrollBridge, POIType.Crossroads, POIType.SignalBeacon, POIType.TollGate, POIType.Grange, POIType.Dovecote, POIType.BeeGarden, POIType.PassFort, POIType.CliffCastle, POIType.Commandery };
 		private static readonly POIType[] RaceWorks = { POIType.Tower, POIType.Mine, POIType.Quarry };
-		private static readonly POIType[] Coves = { POIType.SmugglersCove, POIType.PirateCove };
-		private static readonly POIType[] Wrecks = { POIType.Wreck, POIType.SunkenShip };
-		private static readonly POIType[] SeaFloorSites = { POIType.SunkenShrine, POIType.SeaMonsterDen, POIType.SeaCrystalFormation, POIType.SunkenMonument, POIType.SunkenStatue, POIType.SunkenWhaleFall };
+		private static readonly POIType[] Coves = { POIType.SmugglersCove, POIType.PirateCove, POIType.SmugglersTunnel, POIType.WreckersBeacon, POIType.SeaWitchGrotto };
+		private static readonly POIType[] Wrecks = { POIType.Wreck, POIType.SunkenShip, POIType.FrozenShipwreck, POIType.KrakenWreck };
+		private static readonly POIType[] SeaFloorSites = { POIType.SunkenShrine, POIType.SeaMonsterDen, POIType.SeaCrystalFormation, POIType.SunkenMonument, POIType.SunkenStatue, POIType.SunkenWhaleFall, POIType.MerfolkVillage, POIType.KrakenGrounds };
 		/// <summary>Relics of the biome rounds (2026-10-25) named as the sea floor's are: "{Type} of {Root}", "{Root} {Type}", "The {Adjective} {Type}".</summary>
 		private static readonly POIType[] Relics =
 		{
 			POIType.HoluaSlide, POIType.AncientForge, POIType.PhoenixNest, POIType.MireGate, POIType.SunkenPlaza, POIType.ShatteredBridge,
 			POIType.SealedVault, POIType.WarEngineGraveyard,
+			// The fantasy wave (2026-10-27).
+			POIType.BuriedHoard, POIType.AmbushSite, POIType.WreckedCaravan, POIType.AncientWall, POIType.SpellScar, POIType.PlanarRift, POIType.TitansBones, POIType.GolemGraveyard, POIType.LostLibrary, POIType.StepPyramid, POIType.LostCity, POIType.IdolVault, POIType.Pyramid, POIType.SandBuriedTemple, POIType.DjinnPrison, POIType.BeastBoneyard, POIType.CliffPalace, POIType.DreadRoad, POIType.DwarvenGate, POIType.DragonInTheIce, POIType.MammothGraveyard, POIType.IcePalace, POIType.AshBuriedCity,
 		};
 		private static readonly POIType[] AdriftSites = { POIType.AdriftDerelict, POIType.WhaleFall, POIType.BarnacleLog, POIType.Longline, POIType.WhaleTow };
-		private static readonly POIType[] Resources = { POIType.OreVein, POIType.CrystalFormation, POIType.HerbGrove };
+		private static readonly POIType[] Resources = { POIType.OreVein, POIType.CrystalFormation, POIType.HerbGrove, POIType.Baobab };
 
 		private static PlaceNameTemplate P(string pattern, int weight, params POIType[] kinds)
 			=> new PlaceNameTemplate { Pattern = pattern, Weight = weight, Kinds = new List<POIType>(kinds) };

@@ -96,12 +96,14 @@ namespace FishMMO.Shared.WorldDesign
 				ChannelBridge, "linear");
 			// The closing post (2026-10-19: "fences aren't fully connecting in some cases"), last, so no linear piece before it moved.
 			Piece(list, LinearPost, StructureStyle.Timber, StructureSize.Small,
-				"A fence's closing post on the joint at the origin, its run along x toward +x (laid where a run ends, a gap opens or a corner turns and no module's own post stands): v0 the field fence's, v1 the picket fence's, v2 the tall picket fence's, v3 the leaning-pole fence's pair of stakes, v4 the slab fence's (just inside its run's end).",
+				"A fence's closing post on the joint at the origin, its run along x toward +x (laid where a run ends, a gap opens or a corner turns and no module's own post stands): v0 the field fence's, v1 the picket fence's, v2 the tall picket fence's, v3 the leaning-pole fence's pair of stakes, v4 the slab fence's (just inside its run's end), v5 a hand rope's iron-shod stake.",
 				ClosingPost, "linear").Variants = PostVariants;
+			// The later drafts' forms (2026-10-26, I2f-b, StructurePieces.LinearForms.cs), after the closing post so no piece before them moved.
+			AddLinearForms(list);
 		}
 
-		/// <summary>The closing post's variants: one per fence whose modules carry their post at their start (<see cref="LinearPostFor"/>).</summary>
-		public const int PostVariants = 5;
+		/// <summary>The closing post's variants: one per fence whose modules carry their post at their start (<see cref="LinearPostFor"/>); v5 the hand rope's (2026-10-26).</summary>
+		public const int PostVariants = 6;
 
 		/// <summary>
 		/// The closing post a linear piece's run takes where it ends with no module's own post (pure): the <see cref="LinearPost"/> variant
@@ -116,6 +118,7 @@ namespace FishMMO.Shared.WorldDesign
 				case "LinearPickets": return variant == 1 ? 2 : 1;
 				case "LinearPoleFence": return 3;
 				case "LinearSlabFence": return 4;
+				case "LinearHandRope": return 5;
 				default: return -1;
 			}
 		}
@@ -139,6 +142,8 @@ namespace FishMMO.Shared.WorldDesign
 				case "LinearClearance": return 0.4f;
 				case "LinearHedge": return 0.15f;
 				case "PalisadeSegment": return 0.2f;
+				case "LinearBrickBarrier": return 0.75f;
+				case "LinearSnowWall": return 0.3f;
 				default: return 0f;
 			}
 		}
@@ -176,6 +181,13 @@ namespace FishMMO.Shared.WorldDesign
 				case BiomeLinearForm.Palisade: return ("PalisadeSegment", broken ? 1 : 0);
 				case BiomeLinearForm.Heaped: return ("LinearClearance", 0);
 				case BiomeLinearForm.Turfed: return ("LinearClearance", 1);
+				// The later drafts' forms (2026-10-26, I2f-b): a dead hedge on the stems of a grown-out one, its own walls and fences.
+				case BiomeLinearForm.Dead: return ("LinearHedge", 1);
+				case BiomeLinearForm.BrickBarrier: return ("LinearBrickBarrier", broken || roll < 0.6f ? 1 : 0);
+				case BiomeLinearForm.SnowWall: return ("LinearSnowWall", broken || roll < 0.4f ? 1 : 0);
+				case BiomeLinearForm.HandRope: return ("LinearHandRope", broken ? 1 : 0);
+				case BiomeLinearForm.PalmRib: return ("LinearPalmRib", broken ? 1 : 0);
+				case BiomeLinearForm.BoughBreak: return ("LinearBoughBreak", broken ? 1 : 0);
 				default: return (null, 0);
 			}
 		}
@@ -197,6 +209,11 @@ namespace FishMMO.Shared.WorldDesign
 				case "LinearSlabFence": return SlabFenceHeight;
 				case "PalisadeSegment": return 3f;
 				case "LinearClearance": return ClearanceHeight;
+				case "LinearBrickBarrier": return BrickBarrierHeight;
+				case "LinearSnowWall": return SnowWallHeight;
+				case "LinearHandRope": return HandRopeHeight;
+				case "LinearPalmRib": return PalmRibHeight;
+				case "LinearBoughBreak": return BoughBreakHeight;
 				default: return 1f;
 			}
 		}
@@ -220,6 +237,14 @@ namespace FishMMO.Shared.WorldDesign
 						: kind == BiomeLinearKind.Wall || kind == BiomeLinearKind.ClearanceRow ? new[] { BiomeStructureRole.Dressing } : System.Array.Empty<BiomeStructureRole>();
 				case "ChannelSluice":
 				case "ChannelBridge": return new[] { BiomeStructureRole.Dressing };
+				// The later drafts' (2026-10-26, I2f-b): a snow wall's blocks are its Wall; a bough break's boughs its Roof (its stakes keep
+				// the biome's timber); a cairn's stones its Plinth; a qanat's shaft its spoil (Turf) and its gallery its Wall; a weir's boulders.
+				case "LinearSnowWall": return new[] { BiomeStructureRole.Wall };
+				case "LinearBoughBreak": return new[] { BiomeStructureRole.Roof };
+				case "MarkerCairn": return new[] { BiomeStructureRole.Plinth };
+				case "QanatShaft": return new[] { BiomeStructureRole.Turf, BiomeStructureRole.Plinth };
+				case "QanatGallery": return new[] { BiomeStructureRole.Wall };
+				case "ChannelWeir": return new[] { BiomeStructureRole.Plinth };
 				default: return new[] { BiomeStructureRole.Fence };
 			}
 		}
@@ -274,7 +299,7 @@ namespace FishMMO.Shared.WorldDesign
 						yield return LinearPalette(null, style, LinearPost);
 					}
 				}
-				if (style.Kind != BiomeLinearKind.TreeRow && style.Kind != BiomeLinearKind.Channel)
+				if (BiomeLinearFeatures.DefaultGate(style.Form) > 0f)
 				{
 					yield return LinearPalette(null, style, "LinearGate");
 				}
@@ -282,6 +307,43 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					yield return LinearPalette(null, style, "ChannelSluice");
 				}
+				// The later drafts' pieces of their own (2026-10-26, I2f-b).
+				foreach (string extra in LinearExtras(style.Form))
+				{
+					yield return LinearPalette(null, style, extra);
+				}
+			}
+		}
+
+		/// <summary>
+		/// The pieces a form lays beside its modules (pure, 2026-10-26, I2f-b): a brick barrier's forts, a marker line's marker, a bisse's
+		/// bracketed flume and water-hammer, a great canal's weir, a qanat's shaft mouths and gallery mouth; none for any other.
+		/// </summary>
+		public static IEnumerable<string> LinearExtras(BiomeLinearForm form)
+		{
+			switch (form)
+			{
+				case BiomeLinearForm.BrickBarrier: return new[] { "LinearBrickFort" };
+				case BiomeLinearForm.Bisse: return new[] { "ChannelBracketFlume", "ChannelHammer" };
+				case BiomeLinearForm.GreatCanal: return new[] { "ChannelWeir" };
+				case BiomeLinearForm.Gallery: return new[] { "QanatShaft", "QanatGallery" };
+				default:
+					string marker = MarkerPieceFor(form);
+					return marker != null ? new[] { marker } : System.Array.Empty<string>();
+			}
+		}
+
+		/// <summary>The piece a marker form sets at each station (pure, 2026-10-26, I2f-b); null for a form that is no marker.</summary>
+		public static string MarkerPieceFor(BiomeLinearForm form)
+		{
+			switch (form)
+			{
+				case BiomeLinearForm.WandLine: return "MarkerWand";
+				case BiomeLinearForm.SergePost: return "MarkerPost";
+				case BiomeLinearForm.TamgaPole: return "MarkerPole";
+				case BiomeLinearForm.Cairn:
+				case BiomeLinearForm.Ahu: return "MarkerCairn";
+				default: return null;
 			}
 		}
 
@@ -752,8 +814,11 @@ namespace FishMMO.Shared.WorldDesign
 					case 3:
 						PoleStakes(d, 0f, 0, true);
 						break;
-					default:
+					case 4:
 						SlabPost(d, -0.06f);
+						break;
+					default:
+						HandRopeStake(d, 0f, false);
 						break;
 				}
 			}

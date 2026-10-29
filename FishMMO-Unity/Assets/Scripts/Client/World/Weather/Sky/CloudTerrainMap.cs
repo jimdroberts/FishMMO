@@ -312,9 +312,12 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>Reused for <see cref="Terrain.GetActiveTerrains"/> (<c>Terrain.activeTerrains</c> builds a new array on every read).</summary>
+		private static readonly System.Collections.Generic.List<Terrain> found = new System.Collections.Generic.List<Terrain>();
+
 		private void Read()
 		{
-			Terrain[] found = Terrain.activeTerrains;
+			Terrain.GetActiveTerrains(found);
 			// (The backdrop is read below, when it changes.)
 			int count = 0;
 			foreach (Terrain t in found)

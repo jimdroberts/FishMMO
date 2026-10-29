@@ -17,7 +17,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>Green, wet or cold biomes: never walled in sandstone, whatever the geology under them.</summary>
 		private static readonly string[] Green =
 		{
-			"Grassland", "Plains", "Farmland", "Forest", "Forest Ruins", "Woodland", "Hills", "Taiga", "Tundra", "Peat Bog",
+			// Forest left the list in its round (approved 2026-10-16): its own rock is a mossy grey-buff sandstone. Plains left it in its
+			// round (approved 2026-10-18): it accepts the Dakota sandstone rimrock over its red beds.
+			"Grassland", "Farmland", "Forest Ruins", "Woodland", "Hills", "Taiga", "Tundra", "Peat Bog",
 			"Wetlands", "Swamp", "Lake", "River", "Estuary", "Karst", "Jungle", "Bamboo Forest", "Alpine Meadow", "Valley",
 		};
 
@@ -58,8 +60,18 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				BiomeArtSpec.Entry entry = BiomeArtSpec.For(name);
 				Assert.That(entry, Is.Not.Null, name);
-				Assert.That(CliffRocks.RockFor(entry, "Sandstone"), Is.Not.EqualTo("Sandstone"), $"{name} on a sandstone province");
-				if (CliffRocks.OwnRock(entry) != "Conglomerate")
+				// Estuary accepts the red Heligoland sandstone and Mangrove the Magarini coast sands (their rounds, approved 2026-10-18/25).
+				if (name == "Estuary" || name == "Mangrove")
+				{
+					Assert.That(CliffRocks.RockFor(entry, "Sandstone"), Is.EqualTo("Sandstone"), $"{name} accepts its sandstone");
+				}
+				else
+				{
+					Assert.That(CliffRocks.RockFor(entry, "Sandstone"), Is.Not.EqualTo("Sandstone"), $"{name} on a sandstone province");
+				}
+				// Woodland accepts the Hertfordshire puddingstone (its round, approved 2026-10-16), Alpine Meadow the Bucegi
+				// conglomerate of its crones and stone sheep (its round, approved 2026-10-26).
+				if (CliffRocks.OwnRock(entry) != "Conglomerate" && name != "Woodland" && name != "Alpine Meadow")
 				{
 					Assert.That(CliffRocks.RockFor(entry, "Conglomerate"), Is.Not.EqualTo("Conglomerate"), $"{name} on a conglomerate province");
 				}
@@ -69,12 +81,18 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void AcceptedGeologyStillVariesTheRock()
 		{
-			Assert.That(CliffRocks.RockFor(BiomeArtSpec.For("Grassland"), "Gneiss"), Is.EqualTo("Gneiss"), "a grassland on gneiss stands in gneiss");
-			Assert.That(CliffRocks.RockFor(BiomeArtSpec.For("Grassland"), "Sandstone"), Is.EqualTo("Granite"), "and on sandstone in its own granite");
-			Assert.That(CliffRocks.RockFor(BiomeArtSpec.For("Desert"), "Limestone"), Is.EqualTo("Limestone"), "a desert on limestone stands in limestone");
+			// The Grassland round (2026-10-26): loess country, accepting the Sarmatian limestone.
+			Assert.That(CliffRocks.RockFor(BiomeArtSpec.For("Grassland"), "Limestone"), Is.EqualTo("Limestone"), "a grassland on limestone stands in limestone");
+			Assert.That(CliffRocks.RockFor(BiomeArtSpec.For("Grassland"), "Sandstone"), Is.EqualTo("Loess"), "and on sandstone in its own loess");
+			// The Desert round (2026-10-26): Nubian sandstone country, accepting the basement granite and dropping the limestone.
+			Assert.That(CliffRocks.RockFor(BiomeArtSpec.For("Desert"), "Granite"), Is.EqualTo("Granite"), "a desert on granite stands in granite");
+			Assert.That(CliffRocks.RockFor(BiomeArtSpec.For("Desert"), "Limestone"), Is.EqualTo("Sandstone"), "and on limestone in its own sandstone");
 			Assert.That(CliffRocks.RockFor(BiomeArtSpec.For("Desert"), "Gneiss"), Is.EqualTo("Sandstone"), "and on gneiss in its own sandstone");
 			Assert.That(CliffRocks.RockFor(BiomeArtSpec.For("Karst"), "Granite"), Is.EqualTo("Limestone"), "karst is limestone country");
-			Assert.That(CliffRocks.RockFor(BiomeArtSpec.For("Glacier"), "Granite"), Is.EqualTo(CliffRocks.Ice), "ice stays ice");
+			// The Glacier's round gave it greenstone cliffs (2026-10-26); Permanent Ice is still ice-walled.
+			Assert.That(CliffRocks.RockFor(BiomeArtSpec.For("Permanent Ice"), "Granite"), Is.EqualTo(CliffRocks.Ice), "ice stays ice");
+			Assert.That(CliffRocks.RockFor(BiomeArtSpec.For("Glacier"), "Granite"), Is.EqualTo("Granite"), "a glacier on granite stands in the granite it accepts");
+			Assert.That(CliffRocks.RockFor(BiomeArtSpec.For("Glacier"), "Sandstone"), Is.EqualTo("Greenstone"), "and elsewhere in its own greenstone");
 		}
 
 		[Test]

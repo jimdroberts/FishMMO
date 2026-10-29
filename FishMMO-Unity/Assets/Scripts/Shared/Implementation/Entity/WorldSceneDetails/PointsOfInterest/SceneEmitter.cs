@@ -69,6 +69,13 @@ namespace FishMMO.Shared
 		/// light off the sunlit floor by day (SiteLightPool); nothing at night but the moon's.
 		/// </summary>
 		Skylight,
+		/// <summary>
+		/// A way light's own open fire whose look its seed carries (<see cref="ScenePyre"/>, 2026-10-26): a beacon's pyre on a
+		/// tower top or a hill, dark by day and kindled at dusk, each at its own moment of the dusk on the shared clock, burning
+		/// all night; or a brimstone lamp's low blue sulphur flame. Lit by the site lights (SiteLightPool), its flames and
+		/// sparks by SiteEmbers; no mirrors, so no beams (a lighthouse's lantern is <see cref="Beacon"/>).
+		/// </summary>
+		Pyre,
 	}
 
 	/// <summary>

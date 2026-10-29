@@ -13,7 +13,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 	/// WebGPU cannot use Unity's GPU Resident Drawer. Serialize browser pipelines without that mode,
 	/// which otherwise forces DOTS/probe-atlas shader paths. Restore the Editor/native configuration
 	/// after content AND player writes, including recovery after a native Editor crash.
-	/// FishMMO's RenderMeshIndirect terrain rendering uses its own procedural shaders, not BRG.
+	/// FishMMO's custom prop BRG needs its DOTS variants even with the GPU Resident Drawer disabled.
 	/// </summary>
 	public sealed class WebGLRenderPipelineScope : IDisposable
 	{
@@ -73,7 +73,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			try
 			{
 				foreach (Entry entry in snapshot.pipelines) SetMode(entry.guid, 0);
-				SetBrgMode(BatchRendererGroupStrippingMode.StripAll);
+				SetBrgMode(BatchRendererGroupStrippingMode.KeepAll);
 			}
 			catch
 			{

@@ -818,8 +818,9 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					chance = 0.1f;
 				}
-				// The cave biome's glow-worms (its Cave Glows, 2026-10-25): 1 the chance as it was.
-				chance *= Colours().WormChance;
+				// The cave biome's glow-worms (its Cave Glows, 2026-10-25): 1 the chance as it was. Where they hang on roots or wood
+				// (2026-10-26, I2n-c, decision 86 (e)), little of their own roof silk (the roof's mount ×1: as it was).
+				chance *= Colours().WormChance * BiomeCaveWaters.RoofShare(Colours().WormMount);
 				foreach (CaveChamber c in system.Chambers)
 				{
 					float reach = Mathf.Max(c.Radii.x, c.Radii.z);
@@ -884,7 +885,8 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return;
 				}
-				if (!CaveArt.TryGlow(CaveGlowKind.GlowWorms, 0, variant, out CaveGlowArt art))
+				// In the cave biome's glow-worm hue (2026-10-26, I2n-c: the art's first, hue 0, unless it names one).
+				if (!CaveArt.TryGlow(CaveGlowKind.GlowWorms, Colours().WormHue, variant, out CaveGlowArt art))
 				{
 					Missing.Add("cave glow art");
 					return;

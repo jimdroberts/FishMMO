@@ -10,6 +10,13 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
+	/// <b>Only the cut's fallback since 2026-10-26</b> (phase CODE-TABLE CLEARANCE, decision 1): every row was written into its
+	/// biome's spec file (<see cref="BiomeArtSpec.Entry.GrowsVines"/>), which the authoring writes onto the template, and only
+	/// BiomeTemplateArt.Vines reads this table, for a template never authored (warning once). Change a biome's vines in its file.
+	/// </para>
+	/// </remarks>
+	/// <remarks>
+	/// <para>
 	/// <b>An explicit table.</b> As the art spec: every biome a vine grows in is named with its own decision, read from what
 	/// the biome is (its climate and its water), not guessed from its name. A biome not in the table grows none: every sea
 	/// floor, desert, salt and sulphur flat, ice and snow field, volcanic waste, the airless and alien plains, tundra and the

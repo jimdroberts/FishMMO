@@ -77,6 +77,8 @@ namespace FishMMO.Shared.WorldDesign
 				case POIType.IceCave: form = CaveForm.IceCave; return true;
 				case POIType.LavaTube: form = CaveForm.LavaTube; return true;
 				case POIType.Mine: form = CaveForm.Mine; return true;
+				// A sea hall's melt shaft (2026-10-26, phase I2n-b, decision 83: CaveSystem.SeaHall.cs).
+				case POIType.SeaHall: form = CaveForm.SeaHall; return true;
 				default: form = CaveForm.Cave; return false;
 			}
 		}
@@ -111,7 +113,7 @@ namespace FishMMO.Shared.WorldDesign
 			CaveSystem.Profile profile = CaveSystem.ProfileFor(form, site.SizeClass);
 			// Wide enough for a graph's branches and halls to wander off the trunk's line (CaveSystem.Layout), not only its length:
 			// a large cave's hall runs to 250 m across with its lobes round it (2026-10-18), and every lobe must lie in the sample.
-			float spread = form == CaveForm.Grotto || form == CaveForm.SeaCave ? 0f : site.SizeClass >= 2 ? 320f : 180f;
+			float spread = form == CaveForm.Grotto || form == CaveForm.SeaCave ? 0f : form == CaveForm.SeaHall ? 40f : site.SizeClass >= 2 ? 320f : 180f;
 			CaveGround ground = SampleGround(context.GroundAt, tiles, site.Position.x, site.Position.z, profile.TrunkMax + 60f + spread);
 			float water = form == CaveForm.Grotto ? WaterBefore(context, site) : float.NaN;
 			// Behind a waterfall or under water (2026-10-18), where the planner sited it so (PointOfInterestPlanner.CaveWater).
@@ -128,6 +130,13 @@ namespace FishMMO.Shared.WorldDesign
 			Vector2 depths = settings != null ? settings.CaveDepthRange : new Vector2(CaveSystem.LeastDepth, CaveSystem.MaxCaveDepth);
 			// Drowned by its water table where the cave biome says so (2026-10-25, phase I2n-c, decision 86 (a)): NaN for as before.
 			CaveBiome planned = CaveInteriorArt.OfSite(context.Request, site);
+			if (form == CaveForm.SeaHall && !planned.Linked)
+			{
+				// A sea hall is its sea's (decision 83): with no interior holding here (no host links one, or the world is not frozen
+				// through over a warm interior, its Requires), there is no sea under the ice to open.
+				context.Reject(site, "no sea lies under the ice here (its biome links no sea hall, or the world is not the interior's)");
+				return;
+			}
 			float flood = FloodOf(context, site, form, opening, in planned);
 			CaveSystem system = CaveSystem.Plan(form, site.SizeClass, at, yaw, SeedOf(site), site.Id, ground, SeaLevel, out string problem, water, opening,
 				depths.x, depths.y, flood);
@@ -499,7 +508,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		private static void WritePool(PointOfInterestPlaceContext context, PointOfInterestRecord site, CaveSystem system, CaveGround ground)
 		{
-			if (system.Form != CaveForm.Grotto && !system.HasSump && !system.Drowned || float.IsNaN(system.WaterLevel) || system.WaterLevel <= SeaLevel + 0.05f
+			// A sea hall's water is its own sea under the ice (decision 83), wherever the ice puts it: its world has no sea surface (SceneGenerator.AddWater).
+			bool hall = system.Form == CaveForm.SeaHall;
+			if (system.Form != CaveForm.Grotto && !system.HasSump && !system.Drowned && !hall || float.IsNaN(system.WaterLevel) || !hall && system.WaterLevel <= SeaLevel + 0.05f
 				|| string.IsNullOrEmpty(context.TerrainFolder) || context.Request == null)
 			{
 				return;
@@ -507,6 +518,11 @@ namespace FishMMO.Shared.WorldDesign
 			// A sump under a lake is flooded through its whole height, its roof under the surface too: every column of it down to
 			// its lowest floor is the lake's (else a swimmer in it would stand on its floor, dry).
 			float deepest = system.WaterLevel - 0.05f;
+			if (hall)
+			{
+				// Its dived side passages run wholly under the surface: every column with any void under the level is the sea's.
+				deepest = system.LowestFloor;
+			}
 			if (system.HasSump)
 			{
 				foreach (CaveNode node in system.Passages[0].Nodes)
@@ -542,10 +558,13 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					bool open = false;
 					float found = level;
-					for (float y = level - 0.05f; y >= deepest - 0.5f && !open; y -= 1f)
+					for (float y = level - 0.05f; y >= deepest - 0.5f && !open;)
 					{
 						found = y;
-						open = Open(new Vector3(east, y, north));
+						float v = system.Void(new Vector3(east, y, north) - system.Origin);
+						open = v < 0f;
+						// A sea hall's columns run tens of metres down through solid ice: stepped by the field's own distance there.
+						y -= hall ? Mathf.Max(1f, 0.7f * v) : 1f;
 					}
 					if (!open)
 					{
@@ -865,6 +884,9 @@ namespace FishMMO.Shared.WorldDesign
 				context.Notes?.Add($"{label}: no cave is stored for it (or one in an older format); re-cut the scene.");
 				return;
 			}
+			// The ground over its rock raised where it has come down to its air since the plan (the ways carved, other sites' pads
+			// levelled, 2026-10-27): no hole onto the sky where the cut opened none (CaveShaper.RoofSeal.cs).
+			SealRoof(context, system, label);
 			CaveGround ground = GroundAsCut(system, context.GroundAt, context.Terrains, context.Tiles);
 			string assetPath = string.IsNullOrEmpty(context.TerrainFolder) || context.Request == null ? null
 				: AssetPath(context.TerrainFolder, context.Request.SceneName);

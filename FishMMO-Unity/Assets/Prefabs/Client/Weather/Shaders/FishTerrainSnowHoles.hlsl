@@ -14,18 +14,32 @@
 // two tiles share is lifted alike at whatever level of detail draws it. A tile with no hole near it has a 1×1 map of
 // full lift; nothing pushed (size 0) is full lift too. The backdrop is no terrain and has no holes.
 
+#ifdef FISH_TERRAIN_GPU
+// The client's heightmap draw: every tile's map that has one, a slice each (fishTerrainFadeSlice, -1 none).
+TEXTURE2D(_FishSnowHoleFadeArray);
+#else
 TEXTURE2D(_FishSnowHoleFade);
+#endif
 
 float FishSnowHoleFade(float2 uv)
 {
 #if !defined(FISH_TERRAIN_BACKDROP)
     int2 size = int2(_FishSnowHoleFade_TexelSize.zw);
+#ifdef FISH_TERRAIN_GPU
+    UNITY_BRANCH
+    if (size.x > 1 && fishTerrainFadeSlice >= 0)
+    {
+        int2 vertex = int2(round(uv * (float2)(size - 1)));
+        return _FishSnowHoleFadeArray.Load(int3(clamp(vertex, int2(0, 0), size - 1), 0)).r;
+    }
+#else
     UNITY_BRANCH
     if (size.x > 1)
     {
         int2 vertex = int2(round(uv * (float2)(size - 1)));
         return _FishSnowHoleFade.Load(int3(clamp(vertex, int2(0, 0), size - 1), 0)).r;
     }
+#endif
 #endif
     return 1.0;
 }

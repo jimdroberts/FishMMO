@@ -519,9 +519,6 @@ namespace FishMMO.Client
 		/// <summary>The world clock the sky schedules against, in seconds. Read by the test beds.</summary>
 		public double WorldSeconds => worldSeconds;
 
-		// Made in Awake: Unity refuses these inside a behaviour's constructor.
-		private MaterialPropertyBlock block;
-
 		public SkySample Current => current;
 		public CelestialState State => cycle != null ? cycle.State : null;
 		public LightningPresenter Lightning => lightning;
@@ -621,7 +618,6 @@ namespace FishMMO.Client
 		/// </summary>
 		private void EnsureParts()
 		{
-			block = block ?? new MaterialPropertyBlock();
 			bodies = bodies ?? new SkyBodyMesh();
 			belt = belt ?? new SkyBodyMesh();
 			lightning = lightning ?? new LightningPresenter();
@@ -653,6 +649,9 @@ namespace FishMMO.Client
 			{
 				mesh.Dispose();
 			}
+			bodyCopies.Dispose();
+			texturedCopies.Dispose();
+			ringCopies.Dispose();
 			lightning?.Dispose();
 			curtains?.Dispose();
 			vortices?.Dispose();
@@ -2635,8 +2634,17 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>This hook's own time in the profiler (render-pipeline callbacks otherwise show only as
+		/// RenderPipeline.BeginCameraRendering's self time). In a class of its own so the marker, an engine object, is made
+		/// when the hook first runs, not when the type is first touched (tests outside Unity use these types' pure parts).</summary>
+		private static class HookProfiling
+		{
+			public static readonly Unity.Profiling.ProfilerMarker Marker = new Unity.Profiling.ProfilerMarker("SkySystem.BeginCamera");
+		}
+
 		private void OnBeginCamera(ScriptableRenderContext context, Camera camera)
 		{
+			using var hookMarkerScope = HookProfiling.Marker.Auto();
 			/* The sky reflection probe (UpdateReflection) captures the sky the ground sees, not the one the eye does: no
 			 * sun disc (the sun light gives its own highlight) and the cloud's dimming, as the ambient has it (FishSky.shader).
 			 * Set for every camera, so it is off again for the next. */
@@ -2685,9 +2693,16 @@ namespace FishMMO.Client
 			}
 		}
 
-		// One mesh and property block per textured body: RenderMesh uses them when the frame renders.
+		/* Copies of the body material, each with its own numbers set on it: property blocks would take every body's draw out of
+		 * the SRP Batcher. A material is read when the camera renders, not when the draw is queued, so every draw that differs
+		 * has its own copy: the belt (slot 0) and the quads (slot 1, all alike), one per textured body and one per ring. */
+		private const int BeltCopy = 0, QuadsCopy = 1;
+		private readonly DrawMaterials bodyCopies = new DrawMaterials("Sky Bodies");
+		private readonly DrawMaterials texturedCopies = new DrawMaterials("Sky Body");
+		private readonly DrawMaterials ringCopies = new DrawMaterials("Sky Ring");
+
+		// One mesh per textured body: RenderMesh uses them when the frame renders.
 		private readonly List<SkyBodyMesh> texturedMeshes = new List<SkyBodyMesh>();
-		private readonly List<MaterialPropertyBlock> texturedBlocks = new List<MaterialPropertyBlock>();
 
 		private static readonly int RingMatrixId = Shader.PropertyToID("_FishRingMatrix");
 		private static readonly int OwnRingId = Shader.PropertyToID("_FishOwnRing");
@@ -2731,7 +2746,6 @@ namespace FishMMO.Client
 		}
 
 		private readonly List<SkyBodyMesh> ringMeshes = new List<SkyBodyMesh>();
-		private readonly List<MaterialPropertyBlock> ringBlocks = new List<MaterialPropertyBlock>();
 
 		private static readonly int OccludersId = Shader.PropertyToID("_FishOccluders");
 		private static readonly int OccluderRanksId = Shader.PropertyToID("_FishOccluderRanks");
@@ -2771,8 +2785,8 @@ namespace FishMMO.Client
 		/// Draws the sky's bodies in the sequence the mesh worked out, furthest first.
 		/// </summary>
 		/// <remarks>
-		/// Every draw carries a rising priority. They all share one material and one set of bounds
-		/// round the camera, so the pipeline's own back-to-front sort measures them all the same
+		/// Every draw carries a rising priority. They all draw the body material (each through a copy of
+		/// its own) with one set of bounds round the camera, so the pipeline's own back-to-front sort measures them all the same
 		/// distance away and is free to put them in any order it likes; the priority is sorted on
 		/// before distance, and makes the order the sequence's.
 		/// </remarks>
@@ -2785,12 +2799,11 @@ namespace FishMMO.Client
 			// shader turns every direction it is handed by the object matrix.
 			if (belt.Mesh != null && belt.Mesh.vertexCount > 0)
 			{
-				block.Clear();
-				block.SetFloat(UseTextureId, 0f);
-				var beltParams = new RenderParams(bodyMaterial)
+				Material beltCopy = bodyCopies.For(bodyMaterial, BeltCopy);
+				beltCopy.SetFloat(UseTextureId, 0f);
+				var beltParams = new RenderParams(beltCopy)
 				{
 					camera = camera,
-					matProps = block,
 					worldBounds = bounds,
 					shadowCastingMode = ShadowCastingMode.Off,
 					receiveShadows = false,
@@ -2802,7 +2815,7 @@ namespace FishMMO.Client
 			for (int i = 0; i < bodies.Steps.Count; i++)
 			{
 				SkyBodyMesh.Step step = bodies.Steps[i];
-				MaterialPropertyBlock properties;
+				Material properties;
 				Mesh mesh;
 				int subMesh = 0;
 				switch (step.Kind)
@@ -2813,10 +2826,9 @@ namespace FishMMO.Client
 						{
 							continue;
 						}
-						block.Clear();
-						block.SetFloat(UseTextureId, 0f);
-						block.SetColor(RimColourId, DefaultRim);
-						properties = block;
+						properties = bodyCopies.For(bodyMaterial, QuadsCopy);
+						properties.SetFloat(UseTextureId, 0f);
+						properties.SetColor(RimColourId, DefaultRim);
 						mesh = bodies.Mesh;
 						subMesh = step.SubMesh;
 						break;
@@ -2826,7 +2838,6 @@ namespace FishMMO.Client
 						while (texturedMeshes.Count <= textured)
 						{
 							texturedMeshes.Add(new SkyBodyMesh());
-							texturedBlocks.Add(new MaterialPropertyBlock());
 						}
 						SkyBodyState body = step.Body;
 						SkyBodyMesh quad = texturedMeshes[textured];
@@ -2836,8 +2847,7 @@ namespace FishMMO.Client
 						Color tint = body.Body.SurfaceTexture != null ? body.Body.Tint : Color.white;
 						tint.a = body.Body is WorldBody world && world.HasWeather ? 0.4f : 1f;
 						quad.AddQuad(body.Direction, SkyBodyMesh.Kind.Disc, body.AngularRadius * scale, body.Illumination, body.Shadowed, body.LightDirection, 1.2f, Vector3.up, 0f, tint, step.Rank, (float)body.DistanceKm);
-						properties = texturedBlocks[textured];
-						properties.Clear();
+						properties = texturedCopies.For(bodyMaterial, textured);
 						properties.SetTexture(BodyTexId, PlanetSurfaceLibrary.Get(body.Body));
 						properties.SetFloat(UseTextureId, 1f);
 						properties.SetColor(RimColourId, RimOf(body.Body));
@@ -2854,7 +2864,6 @@ namespace FishMMO.Client
 						while (ringMeshes.Count <= ringed)
 						{
 							ringMeshes.Add(new SkyBodyMesh());
-							ringBlocks.Add(new MaterialPropertyBlock());
 						}
 						SkyBodyState body = step.Body;
 						RingSettings rings = body.Body.Rings;
@@ -2864,22 +2873,19 @@ namespace FishMMO.Client
 						// this sky the way every other direction in it is.
 						Vector3 pole = state.HeliocentricDirection(CelestialMath.PoleOf(body.Body));
 						quad.AddRing(body.Direction, body.AngularRadius * scale, pole, rings, body.LightDirection, step.Rank, (float)body.DistanceKm);
-						properties = ringBlocks[ringed];
-						properties.Clear();
+						properties = ringCopies.For(bodyMaterial, ringed);
 						properties.SetFloat(UseTextureId, rings.Texture != null ? 1f : 0f);
-						if (rings.Texture != null)
-						{
-							properties.SetTexture(BodyTexId, rings.Texture);
-						}
+						// The material's own texture and rim where a ring sets none, as an emptied block left them.
+						properties.SetTexture(BodyTexId, rings.Texture != null ? rings.Texture : bodyMaterial.GetTexture(BodyTexId));
+						properties.SetColor(RimColourId, bodyMaterial.GetColor(RimColourId));
 						mesh = quad.Upload();
 						ringed++;
 						break;
 					}
 				}
-				var rp = new RenderParams(bodyMaterial)
+				var rp = new RenderParams(properties)
 				{
 					camera = camera,
-					matProps = properties,
 					worldBounds = bounds,
 					shadowCastingMode = ShadowCastingMode.Off,
 					receiveShadows = false,

@@ -99,6 +99,10 @@ namespace FishMMO.Shared.WorldDesign
 					return new Set { Floor = "Stalagmite", Hanging = "Stalagmite", Breakdown = "Block", Density = 0.35f, BreakdownShare = 0.6f };
 				case CaveForm.Mine:
 					return new Set { Breakdown = "Scree", Density = 0.3f, BreakdownShare = 1f };
+				case CaveForm.SeaHall:
+					// A sea hall's own ice (2026-10-26, I2n-b): icicles from the roof and fallen ice, nothing stood on a floor that is the
+					// sea's (its chimneys are its smokers', PointOfInterestCaveDressing.SeaHall.cs).
+					return new Set { Hanging = "Stalagmite", Breakdown = "Lobe", FloorHeight = 2.2f, Density = 0.3f, BreakdownShare = 0.3f };
 				default:
 					return new Set { Floor = "Stalagmite", Hanging = "Stalagmite", Wall = "Flowstone", Pool = "Gours", Breakdown = "Block",
 						Crystal = "Crystal", CrystalRock = "Gypsum", CrystalChance = 0.3f };
@@ -155,6 +159,7 @@ namespace FishMMO.Shared.WorldDesign
 			switch (form)
 			{
 				case CaveForm.IceCave:
+				case CaveForm.SeaHall:
 					return RockTypes.WaterIce.Name;
 				case CaveForm.LavaTube:
 					return RockTypes.Basalt.Name;
@@ -172,8 +177,20 @@ namespace FishMMO.Shared.WorldDesign
 		private static readonly string[] SpoilShapes = { "Scree", "Talus", "Chunk", "Platy", "Flags", "Stack", "Slabs", "Block", "Split", "Lump", "Boulder", "Tafoni" };
 
 		/// <summary>
+		/// The broken kinds, nearest first, for a rock whose shapes carry none of the names above (a regional rock named after its
+		/// own landforms: a dolerite's boulder field, a coralstone's storm blocks, a till's erratics): what fallen rock is drawn with.
+		/// </summary>
+		private static readonly FormationKind[] FallenKinds = { FormationKind.Boulder, FormationKind.Faceted, FormationKind.Split, FormationKind.SlabStack,
+			FormationKind.Bedded, FormationKind.Scree };
+
+		/// <summary>The broken kinds, nearest first, for spoil in such a rock.</summary>
+		private static readonly FormationKind[] SpoilKinds = { FormationKind.Scree, FormationKind.Boulder, FormationKind.Faceted, FormationKind.Split,
+			FormationKind.SlabStack, FormationKind.Bedded };
+
+		/// <summary>
 		/// The (rock, shape) a formation of a cave whose formations are <paramref name="rock"/> is drawn with: that rock's own
-		/// shape where its art has it; for fallen rock (Block, Slabs) and spoil (Scree), the rock's nearest broken shape; else
+		/// shape where its art has it; for fallen rock (Block, Slabs) and spoil (Scree), the rock's nearest broken shape (by name,
+		/// then by kind); else
 		/// the shape in the form's old rock (<see cref="StandInRock"/>). Pure: reads the rock types' shapes, not the assets.
 		/// </summary>
 		public static (string Rock, string Shape) FormationArt(string rock, string shape, CaveForm form)
@@ -192,6 +209,21 @@ namespace FishMMO.Shared.WorldDesign
 						if (RockTypes.TryShape(in type, alternative, out _))
 						{
 							return (rock, alternative);
+						}
+					}
+					// None by name: the rock's own broken shape of the nearest kind.
+					foreach (FormationKind kind in shape == "Scree" ? SpoilKinds : FallenKinds)
+					{
+						if (type.Shapes == null)
+						{
+							break;
+						}
+						foreach (FormationShape own in type.Shapes)
+						{
+							if (own.Kind == kind)
+							{
+								return (rock, own.Name);
+							}
 						}
 					}
 				}
@@ -398,6 +430,9 @@ namespace FishMMO.Shared.WorldDesign
 				Hanging();
 				// An ice cave's frozen falls, icicle curtains and frozen pools (PointOfInterestCaveDressing.Ice.cs).
 				Ice();
+				// 2026-10-26 (I2n-b, decision 83): a sea hall's chimneys, the sea's growth on its flooded floor and the spots its plumes,
+				// brinicles, brine mirrors and sea life are drawn from (PointOfInterestCaveDressing.SeaHall.cs); nothing in any other cave.
+				SeaHall();
 			}
 
 			// ── Overgrowth ────────────────────────────────────────

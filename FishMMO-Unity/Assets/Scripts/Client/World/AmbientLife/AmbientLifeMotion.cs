@@ -43,6 +43,13 @@ namespace FishMMO.Client
 		/// </summary>
 		float CoverAt(float x, float z) => 0f;
 
+		/// <summary>
+		/// Changes whenever an answer of <see cref="TryGround"/>, <see cref="WaterAt"/> or <see cref="CoverAt"/> for a fixed place
+		/// could (ground, water or grass loaded or let go): what <see cref="AmbientLifeMotion.SpotMemo"/> keys on. Constant for a
+		/// world that never changes.
+		/// </summary>
+		int Stamp => 0;
+
 		/// <summary>What lives on this world at all (<see cref="AmbientGating.WorldOf"/>): the home world's animals unless told otherwise.</summary>
 		AmbientWorld World => AmbientWorld.Earthly;
 
@@ -443,6 +450,135 @@ namespace FishMMO.Client
 			public float Visible;
 			/// <summary>The cell's cave-life spots, indexed from a cave group's <see cref="AmbientGroup.Cave"/> − 1; null where it has none.</summary>
 			public List<SceneCaveLifeSpot> CaveSpots;
+			/// <summary>Where the lone birds' and ground animals' episodes were worked out already (<see cref="SpotMemo"/>); null works each out afresh.</summary>
+			public SpotMemo Spots;
+		}
+
+		/// <summary>
+		/// The lone birds' and ground animals' episode spots (<see cref="BirdSpot"/>, <see cref="CritterSpot"/>) as worked out, so
+		/// each is worked out once an episode instead of twice a frame (this episode's and the next one's, every frame). A spot is
+		/// a pure function of the member, its episode, whether it shelters (birds) and the world (<see cref="IAmbientWorld.Stamp"/>; everything is forgotten when that changes), so
+		/// the answers are exactly those worked out afresh. Keyed by the member's fright-state slot (its cell's state array and
+		/// index), two episodes a member; members not asked about for a while are forgotten.
+		/// </summary>
+		public sealed class SpotMemo
+		{
+			private struct Entry
+			{
+				public long EpisodeA, EpisodeB;
+				public Vector3 SpotA, SpotB;
+				/// <summary>Bit 0 the slot holds an answer, 1 the answer (BirdSpot's return), 2 on a tree, 3 asked sheltering.</summary>
+				public byte FlagsA, FlagsB;
+				public int Used;
+			}
+
+			/// <summary>Frames a member's entry is kept unasked.</summary>
+			private const int KeepFrames = 240;
+
+			private readonly Dictionary<(AmbientMemberState[] States, int Index), Entry> entries = new Dictionary<(AmbientMemberState[], int), Entry>();
+			private readonly List<(AmbientMemberState[], int)> stale = new List<(AmbientMemberState[], int)>();
+			private int frame;
+			private int stamp;
+			private bool stamped;
+
+			/// <summary>Members remembered now.</summary>
+			public int Count => entries.Count;
+
+			/// <summary>A new frame of a world as of <paramref name="worldStamp"/>: a changed world forgets everything.</summary>
+			public void BeginFrame(int worldStamp)
+			{
+				frame++;
+				if (!stamped || worldStamp != stamp)
+				{
+					entries.Clear();
+					stamp = worldStamp;
+					stamped = true;
+				}
+				if (frame % KeepFrames == 0 && entries.Count > 0)
+				{
+					stale.Clear();
+					foreach (KeyValuePair<(AmbientMemberState[] States, int Index), Entry> pair in entries)
+					{
+						if (frame - pair.Value.Used > KeepFrames)
+						{
+							stale.Add(pair.Key);
+						}
+					}
+					for (int i = 0; i < stale.Count; i++)
+					{
+						entries.Remove(stale[i]);
+					}
+					stale.Clear();
+				}
+			}
+
+			/// <summary>Forgets everything.</summary>
+			public void Clear()
+			{
+				entries.Clear();
+				stamped = false;
+			}
+
+			private static byte Flags(bool result, bool tree, bool sheltered) => (byte)(1 | (result ? 2 : 0) | (tree ? 4 : 0) | (sheltered ? 8 : 0));
+
+			private static bool Matches(byte flags, long episode, long asked, bool sheltered) => (flags & 1) != 0 && episode == asked && ((flags & 8) != 0) == sheltered;
+
+			public bool TryGet(AmbientMemberState[] states, int index, long episode, bool sheltered, out bool result, out Vector3 spot, out bool tree)
+			{
+				if (entries.TryGetValue((states, index), out Entry e))
+				{
+					if (Matches(e.FlagsA, e.EpisodeA, episode, sheltered))
+					{
+						result = (e.FlagsA & 2) != 0;
+						tree = (e.FlagsA & 4) != 0;
+						spot = e.SpotA;
+						Touch(states, index, e);
+						return true;
+					}
+					if (Matches(e.FlagsB, e.EpisodeB, episode, sheltered))
+					{
+						result = (e.FlagsB & 2) != 0;
+						tree = (e.FlagsB & 4) != 0;
+						spot = e.SpotB;
+						Touch(states, index, e);
+						return true;
+					}
+				}
+				result = false;
+				tree = false;
+				spot = default;
+				return false;
+			}
+
+			private void Touch(AmbientMemberState[] states, int index, Entry e)
+			{
+				if (e.Used != frame)
+				{
+					e.Used = frame;
+					entries[(states, index)] = e;
+				}
+			}
+
+			/// <summary>Remembers an answer, in place of the member's older episode's.</summary>
+			public void Put(AmbientMemberState[] states, int index, long episode, bool sheltered, bool result, Vector3 spot, bool tree)
+			{
+				entries.TryGetValue((states, index), out Entry e);
+				bool intoA = (e.FlagsA & 1) == 0 || ((e.FlagsB & 1) != 0 && e.EpisodeA <= e.EpisodeB);
+				if (intoA)
+				{
+					e.EpisodeA = episode;
+					e.SpotA = spot;
+					e.FlagsA = Flags(result, tree, sheltered);
+				}
+				else
+				{
+					e.EpisodeB = episode;
+					e.SpotB = spot;
+					e.FlagsB = Flags(result, tree, sheltered);
+				}
+				e.Used = frame;
+				entries[(states, index)] = e;
+			}
 		}
 
 		/// <summary>Every member of a group at the frame's moment, appended to <paramref name="into"/>.</summary>
@@ -868,9 +1004,30 @@ namespace FishMMO.Client
 
 		// ── Birds alone, and ducks ────────────────────────────────────
 
+		/// <summary><see cref="BirdSpot"/> through the frame's <see cref="SpotMemo"/>, where it has one: the same answer.</summary>
+		private static bool RememberedBirdSpot(in AmbientGroup g, AmbientCreatureKind kind, int m, uint own, long episode, ref Frame f, float shelter, out Vector3 spot, out bool tree)
+		{
+			SpotMemo memo = f.Spots;
+			AmbientMemberState[] states = f.States;
+			bool sheltered = shelter > 0.5f;
+			int index = g.StateFirst + m;
+			if (memo == null || states == null)
+			{
+				return BirdSpot(g, kind, own, episode, ref f, shelter, out spot, out tree);
+			}
+			if (memo.TryGet(states, index, episode, sheltered, out bool result, out spot, out tree))
+			{
+				return result;
+			}
+			result = BirdSpot(g, kind, own, episode, ref f, shelter, out spot, out tree);
+			memo.Put(states, index, episode, sheltered, result, spot, tree);
+			return result;
+		}
+
 		/// <summary>
 		/// Where a lone bird (or a duck) is in an episode: a tree perch near home or a patch of ground (a patch of
 		/// still water for a duck). False when it has nowhere to be (sheltering from the rain with no tree to hand).
+		/// Reads <paramref name="shelter"/> only as more or less than a half (<see cref="RememberedBirdSpot"/> keys on that).
 		/// </summary>
 		private static bool BirdSpot(in AmbientGroup g, AmbientCreatureKind kind, uint own, long episode, ref Frame f, float shelter, out Vector3 spot, out bool tree)
 		{
@@ -985,11 +1142,11 @@ namespace FishMMO.Client
 			float tau = (float)(t - start), len = (float)length;
 			float shelter = AmbientGating.Shelter(kind, f.Conditions);
 			float size = g.Length * Mathf.Lerp(0.88f, 1.12f, Unit(Mix(own ^ 0x32u)));
-			if (!BirdSpot(g, kind, own, episode, ref f, shelter, out Vector3 spot, out bool tree))
+			if (!RememberedBirdSpot(g, kind, m, own, episode, ref f, shelter, out Vector3 spot, out bool tree))
 			{
 				return;
 			}
-			bool haveNext = BirdSpot(g, kind, own, episode + 1, ref f, shelter, out Vector3 next, out bool nextTree);
+			bool haveNext = RememberedBirdSpot(g, kind, m, own, episode + 1, ref f, shelter, out Vector3 next, out bool nextTree);
 			// A pair keeps together: the second bird a little off the first, on the same tree or patch.
 			if (m > 0 && !paddle)
 			{
@@ -1424,6 +1581,25 @@ namespace FishMMO.Client
 		/// <summary>How many places a ground animal weighs for its next spot, keeping the most open (least grass).</summary>
 		private const int SpotChoices = 4;
 
+		/// <summary><see cref="CritterSpot"/> through the frame's <see cref="SpotMemo"/>, where it has one: the same answer.</summary>
+		private static Vector3 RememberedCritterSpot(in AmbientGroup g, AmbientCreatureKind kind, int m, uint own, long episode, Vector3 home, ref Frame f)
+		{
+			SpotMemo memo = f.Spots;
+			AmbientMemberState[] states = f.States;
+			int index = g.StateFirst + m;
+			if (memo == null || states == null)
+			{
+				return CritterSpot(g, kind, own, episode, home, f.World);
+			}
+			if (memo.TryGet(states, index, episode, false, out _, out Vector3 spot, out _))
+			{
+				return spot;
+			}
+			spot = CritterSpot(g, kind, own, episode, home, f.World);
+			memo.Put(states, index, episode, false, true, spot, false);
+			return spot;
+		}
+
 		/// <summary>
 		/// A ground animal's spot in an episode: somewhere dry within its run of its own home spot (a crab's may be wet sand),
 		/// the most open of a few: in 0.5 m grass a mouse or a rat is not seen at all, so they forage on paths, sand, rock
@@ -1475,10 +1651,10 @@ namespace FishMMO.Client
 			bool squirrel = kind.Shape == AmbientShape.Squirrel;
 			Climb climb = default;
 			bool onTrunk = squirrel && TrunkRest(own, episode, home, world, ref f, out climb);
-			Vector3 spot = onTrunk ? Foot(in climb, world) : CritterSpot(g, kind, own, episode, home, world);
+			Vector3 spot = onTrunk ? Foot(in climb, world) : RememberedCritterSpot(g, kind, m, own, episode, home, ref f);
 			Climb nextClimb = default;
 			Vector3 next = squirrel && TrunkRest(own, episode + 1, home, world, ref f, out nextClimb)
-				? Foot(in nextClimb, world) : CritterSpot(g, kind, own, episode + 1, home, world);
+				? Foot(in nextClimb, world) : RememberedCritterSpot(g, kind, m, own, episode + 1, home, ref f);
 			float dash = kind.Shape == AmbientShape.Lizard ? 3f : 1f;
 			float move = Mathf.Clamp(Vector3.Distance(spot, next) / (kind.Speed * dash), 0.3f, len * 0.6f);
 			float gaitHz = kind.StrokeHz * (kind.Shape == AmbientShape.Lizard ? 1.6f : 1f);

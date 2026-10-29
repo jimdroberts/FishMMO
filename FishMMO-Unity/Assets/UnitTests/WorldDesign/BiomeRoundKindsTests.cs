@@ -65,7 +65,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(rule.PerKm2, Is.GreaterThan(0f), name);
 				Assert.That(rule.Max, Is.GreaterThan(0), name);
 			}
-			Assert.That(Enum.GetValues(typeof(POIType)).Cast<int>().Max(), Is.EqualTo(last), "nothing appended after them");
+			// Nothing after them but the hot ground's own kinds (2026-10-27, GeothermalPointsOfInterest: found, not placed, no row).
+			Assert.That((int)POIType.Geyser, Is.EqualTo(last + 1), "the hot ground's kinds follow them");
+			Assert.That((int)POIType.DragonLair, Is.EqualTo((int)POIType.SulphurPool + 1), "the fantasy wave follows the hot ground's (FantasyWaveKindsTests pins the rest)");
 			// The two underwater kinds and the floor's whale fall stand under the sea; the whale fall adrift stays on it.
 			foreach (POIType kind in new[] { POIType.TrenchEdge, POIType.SeaCavern, POIType.SunkenWhaleFall })
 			{
@@ -83,6 +85,8 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			PointOfInterestRules rules = PointOfInterestRules.Default();
 			var named = new HashSet<POIType>(Kinds());
+			// The sea hall's hosts are named by its phase (2026-10-26, I2n-b, decision 83: SeaHallTests pins them); every other new kind waits.
+			named.Remove(POIType.SeaHall);
 			foreach (POIType kind in named)
 			{
 				PointOfInterestKindRule rule = rules.RuleFor(kind);
@@ -96,7 +100,8 @@ namespace FishMMO.UnitTests.WorldDesign
 				{
 					Assert.That(named.Contains(kind) && weight > 0f, Is.False, $"{entry.Biome} hosts {kind} by name");
 				}
-				foreach (BiomeSiteKind site in entry.SiteKinds(rules))
+				// An authored round's file hosts the new kinds its draft asks for (a "before its round" pin; the defaults above still hold).
+				foreach (BiomeSiteKind site in entry.SiteKinds().Where(_ => !BiomeAuthoredRounds.Contains(entry.Biome)))
 				{
 					Assert.That(named.Contains(site.Kind), Is.False, $"{entry.Biome}'s file hosts {site.Kind} before its round");
 				}
@@ -169,7 +174,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			var entry = new BiomeArtSpec.Entry { Biome = "Swamp Ruins" };
 			entry.Hosts(POIType.MireGate, 1f).Hosts(POIType.FloatingIsland, 0.3f).Hosts(POIType.Chapel, 0.5f).Hosts(POIType.DrownedForest, 0.6f)
 				.Water(POIType.DrownedForest, false).Air(POIType.Chapel, false);
-			List<BiomeSiteKind> list = entry.SiteKinds(PointOfInterestRules.Default());
+			List<BiomeSiteKind> list = entry.SiteKinds();
 			BiomeSiteKind gate = list.Single(k => k.Kind == POIType.MireGate);
 			Assert.That((gate.NeedsBreathableAir, gate.NeedsLiquidWater), Is.EqualTo((false, true)));
 			Assert.That(gate.ToString(), Is.EqualTo("MireGate×1×water"));

@@ -207,11 +207,14 @@ namespace FishMMO.Shared
 		/// <param name="v">The tile's 0..1 coordinate along (y).</param>
 		public static void Filter(uint[] map, int width, int height, float u, float v, int[] ids, float[] weights)
 		{
-			// Texel centres as the terrain addresses its control maps: position uv × (size − 1) between them.
-			float px = Mathf.Clamp01(u) * (width - 1), py = Mathf.Clamp01(v) * (height - 1);
+			// Texel centres as the terrain addresses its control maps: position uv × (size − 1) between them. Rounded to
+			// float32 as the GPU computes it (the explicit casts are conv.r4): a runtime that keeps float maths at double
+			// precision would otherwise put a point the shader sees ON a texel centre (0.2 × 5 = 1 in float) a hair past
+			// it, giving the next texel a 1e-8 share that breaks the tie between two equal layers the other way.
+			float px = (float)(Mathf.Clamp01(u) * (width - 1)), py = (float)(Mathf.Clamp01(v) * (height - 1));
 			int x0 = Mathf.Min((int)Mathf.Floor(px), Mathf.Max(width - 2, 0));
 			int y0 = Mathf.Min((int)Mathf.Floor(py), Mathf.Max(height - 2, 0));
-			float fx = Mathf.Clamp01(px - x0), fy = Mathf.Clamp01(py - y0);
+			float fx = Mathf.Clamp01((float)(px - x0)), fy = Mathf.Clamp01((float)(py - y0));
 			int x1 = Mathf.Min(x0 + 1, width - 1), y1 = Mathf.Min(y0 + 1, height - 1);
 			Merge(
 				map[2 * (y0 * width + x0)], map[2 * (y0 * width + x0) + 1],

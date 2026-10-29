@@ -64,6 +64,9 @@ CBUFFER_START(UnityPerMaterial)
     half4 _BaseColor;
     half _Cutoff;
     half _BumpScale;
+    // 1 where the material wears a normal map (bark): a per-draw branch in VegNormal, not a keyword, so bark and deadwood
+    // share one variant.
+    half _UseNormalMap;
     half _Smoothness;
     half _Translucency;
     half _BackfaceFlip;
@@ -834,12 +837,16 @@ VegVaryings VegVertex(VegAttributes input)
 half3 VegNormal(VegVaryings input, half facing)
 {
     half3 n = normalize(input.normalWS);
-#if defined(_NORMALMAP)
-    half3 normalTS = UnpackNormalScale(SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, input.uv), _BumpScale);
-    half3 t = normalize(input.tangentWS.xyz);
-    half3 b = input.tangentWS.w * cross(n, t);
-    n = normalize(normalTS.x * t + normalTS.y * b + normalTS.z * n);
-#endif
+    // A uniform branch (the material's _UseNormalMap, one value per draw): the bark samples its normal map, every other
+    // part keeps the vertex normal, exactly as the old _NORMALMAP variants did.
+    UNITY_BRANCH
+    if (_UseNormalMap > 0.5h)
+    {
+        half3 normalTS = UnpackNormalScale(SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, input.uv), _BumpScale);
+        half3 t = normalize(input.tangentWS.xyz);
+        half3 b = input.tangentWS.w * cross(n, t);
+        n = normalize(normalTS.x * t + normalTS.y * b + normalTS.z * n);
+    }
     return n * lerp(1.0, facing, _BackfaceFlip);
 }
 

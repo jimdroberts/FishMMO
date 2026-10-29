@@ -41,6 +41,11 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeArtSpec.Entries.Length, Is.EqualTo(83));
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
+				// A "no biome names it yet" pin: the authored rounds name their own floats and styles on purpose.
+				if (BiomeAuthoredRounds.Contains(entry.Biome))
+				{
+					continue;
+				}
 				Assert.That(entry.BoardwalkStyle, Is.EqualTo(BiomeBoardwalkStyle.Planked), $"{entry.Biome} names no style yet");
 				Assert.That(entry.FloatingPlants(), Is.Empty, $"{entry.Biome} floats nothing yet");
 				Assert.That(entry.SeaFloats().Exists(f => f.Kind == BiomeSeaFloatKind.KelpRaft), Is.False, $"{entry.Biome} floats no kelp raft yet");
@@ -55,7 +60,8 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 				templates++;
 				Match style = Regex.Match(text, @"^  boardwalkStyle: (\d+)", RegexOptions.Multiline);
-				Assert.That(!style.Success || style.Groups[1].Value == "0", Is.True, $"{Path.GetFileName(path)} names a boardwalk style");
+				Assert.That(!style.Success || style.Groups[1].Value == "0" || BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(path)), Is.True,
+					$"{Path.GetFileName(path)} names a boardwalk style");
 			}
 			Assert.That(templates, Is.EqualTo(83));
 			StringAssert.Contains("private BiomeBoardwalkStyle boardwalkStyle = BiomeBoardwalkStyle.Planked;", File.ReadAllText(TemplateSource));

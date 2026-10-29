@@ -242,11 +242,35 @@ namespace FishMMO.UnitTests
 		/// platform back and replay it with the rider. Run with forwarding off, the client platform
 		/// was dead-reckoned from a one-shot payload and riders sank through it.
 		/// </para>
+		/// <para>
+		/// No scene ships a platform since the start scenes were removed (2026-10-25). The scan still
+		/// runs over every scene — the "off for everything else" half binds every current scene, and
+		/// the next platform is held to the other — and the scan's platform half is proven on
+		/// <see cref="PlatformFixture"/>, the last shipped <c>MovingPlatform</c>, both ways.
+		/// </para>
 		/// </remarks>
 		[Test]
 		public void OnlyPlatforms_ShipWithStateForwardingOn()
 		{
 			string platformGuid = ScriptGuid("Assets/Scripts/Shared/Implementation/Entity/Prediction/KCC/KCCPlatform.cs");
+			string networkObjectGuid = ScriptGuid("Assets/Plugins/FishNet/Runtime/Object/NetworkObject/NetworkObject.cs");
+
+			// The scan recognises a platform, passes one that forwards and catches one that does not, and
+			// catches a forwarding object that is not a platform.
+			foreach ((string name, int platformFlag, int propFlag, bool caught) in new[]
+			{
+				("as shipped", 1, 0, false),
+				("an unforwarded platform", 0, 0, true),
+				("a forwarded prop", 1, 1, true),
+			})
+			{
+				StringBuilder others = new StringBuilder();
+				StringBuilder unforwarded = new StringBuilder();
+				int found = ScanForwarding(name, SceneDocumentsFromText(PlatformFixture(platformGuid, networkObjectGuid, platformFlag, propFlag)), platformGuid, others, unforwarded);
+				LogAssert.AreEqual(1, found, $"{name}: the scan must recognise the shipped MovingPlatform's layout as a platform");
+				LogAssert.AreEqual(caught, others.Length + unforwarded.Length > 0, $"{name}: {(caught ? "must be caught" : "must pass")}{others}{unforwarded}");
+			}
+
 			string[] scenes = UnityEditor.AssetDatabase.FindAssets("t:Scene", new[] { "Assets" });
 			StringBuilder forwardedOthers = new StringBuilder();
 			StringBuilder unforwardedPlatforms = new StringBuilder();
@@ -263,48 +287,69 @@ namespace FishMMO.UnitTests
 				}
 
 				scanned++;
-				Dictionary<string, string> docs = SceneDocuments(full);
-				foreach (KeyValuePair<string, string> entry in docs)
-				{
-					int flag = ForwardingFlag(entry.Value);
-					if (flag < 0)
-					{
-						continue; // Not a NetworkObject.
-					}
-					bool isPlatform = GameObjectHasScript(docs, entry.Value, platformGuid);
-					if (isPlatform)
-					{
-						platforms++;
-						if (flag != 1)
-						{
-							unforwardedPlatforms.Append($"\n  {path}: NetworkObject &{entry.Key}");
-						}
-					}
-					else if (flag == 1)
-					{
-						forwardedOthers.Append($"\n  {path}: NetworkObject &{entry.Key}");
-					}
-				}
+				platforms += ScanForwarding(path, SceneDocuments(full), platformGuid, forwardedOthers, unforwardedPlatforms);
 			}
 
 			TestContext.WriteLine($"MEASURE scenes scanned for state forwarding: {scanned}");
 			TestContext.WriteLine($"MEASURE scene platforms found: {platforms}");
+			LogAssert.IsTrue(scanned > 0, "no scene was scanned");
 			LogAssert.IsTrue(forwardedOthers.Length == 0,
 				"State forwarding is off for everything but platforms; observers are fed by " +
 				"NetworkTransform and per-controller broadcasts. These scene objects have it on:" + forwardedOthers);
 			LogAssert.IsTrue(unforwardedPlatforms.Length == 0,
 				"Every KCCPlatform must forward state, or FishNet never reconciles it to clients and " +
 				"the client copy runs open-loop from its spawn payload (issue #228). These do not:" + unforwardedPlatforms);
-			LogAssert.IsTrue(platforms >= 1,
-				"No KCCPlatform was found in any scene — the shipped MovingPlatform is gone or this " +
-				"scan no longer recognises it, and the forwarding contract is unproven.");
+		}
+
+		/// <summary>Sorts one scene's NetworkObjects by forwarding; returns how many platforms it holds.</summary>
+		private static int ScanForwarding(string path, Dictionary<string, string> docs, string platformGuid, StringBuilder forwardedOthers, StringBuilder unforwardedPlatforms)
+		{
+			int platforms = 0;
+			foreach (KeyValuePair<string, string> entry in docs)
+			{
+				int flag = ForwardingFlag(entry.Value);
+				if (flag < 0)
+				{
+					continue; // Not a NetworkObject.
+				}
+				bool isPlatform = GameObjectHasScript(docs, entry.Value, platformGuid);
+				if (isPlatform)
+				{
+					platforms++;
+					if (flag != 1)
+					{
+						unforwardedPlatforms.Append($"\n  {path}: NetworkObject &{entry.Key}");
+					}
+				}
+				else if (flag == 1)
+				{
+					forwardedOthers.Append($"\n  {path}: NetworkObject &{entry.Key}");
+				}
+			}
+			return platforms;
+		}
+
+		/// <summary>
+		/// The last shipped <c>MovingPlatform</c> (StartScene A, removed 2026-10-25) trimmed to what the scan
+		/// reads, beside a networked prop (a region or spawner) with the given forwarding flags.
+		/// </summary>
+		private static string PlatformFixture(string platformGuid, string networkObjectGuid, int platformFlag, int propFlag)
+		{
+			return
+				"--- !u!1 &100\nGameObject:\n  m_Component:\n  - component: {fileID: 101}\n  - component: {fileID: 102}\n  m_Name: MovingPlatform\n" +
+				$"--- !u!114 &101\nMonoBehaviour:\n  m_GameObject: {{fileID: 100}}\n  m_Script: {{fileID: 11500000, guid: {platformGuid}, type: 3}}\n" +
+				$"--- !u!114 &102\nMonoBehaviour:\n  m_GameObject: {{fileID: 100}}\n  m_Script: {{fileID: 11500000, guid: {networkObjectGuid}, type: 3}}\n  _enableStateForwarding: {platformFlag}\n" +
+				"--- !u!1 &200\nGameObject:\n  m_Component:\n  - component: {fileID: 201}\n  m_Name: Region\n" +
+				$"--- !u!114 &201\nMonoBehaviour:\n  m_GameObject: {{fileID: 200}}\n  m_Script: {{fileID: 11500000, guid: {networkObjectGuid}, type: 3}}\n  _enableStateForwarding: {propFlag}\n";
 		}
 
 		/// <summary>Every YAML document in a scene, keyed by its <c>&amp;fileID</c>.</summary>
-		private static Dictionary<string, string> SceneDocuments(string fullPath)
+		private static Dictionary<string, string> SceneDocuments(string fullPath) => SceneDocumentsFromText(File.ReadAllText(fullPath));
+
+		/// <summary>Every YAML document in a scene's text, keyed by its <c>&amp;fileID</c>.</summary>
+		private static Dictionary<string, string> SceneDocumentsFromText(string text)
 		{
 			Dictionary<string, string> docs = new Dictionary<string, string>();
-			string text = File.ReadAllText(fullPath);
 			int start = text.IndexOf("--- !u!", StringComparison.Ordinal);
 			while (start >= 0)
 			{

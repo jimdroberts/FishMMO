@@ -1,0 +1,10 @@
+#pragma kernel ReadIndex
+Texture2D<uint2> _Index;
+RWStructuredBuffer<uint2> _Words;
+uint _Width;
+[numthreads(8, 8, 1)]
+void ReadIndex(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _Width && id.y < _Width)
+        _Words[id.y * _Width + id.x] = _Index.Load(int3(id.xy, 0));
+}

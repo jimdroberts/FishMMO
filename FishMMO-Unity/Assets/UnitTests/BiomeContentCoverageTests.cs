@@ -26,7 +26,7 @@ namespace FishMMO.UnitTests
 			{
 				var families = new HashSet<GatheringFamily>();
 				// The kinds the biome hosts as the authoring writes them onto its template (2026-10-16: the template decides).
-				var hosted = new HashSet<FishMMO.Shared.NameGeneration.POIType>(BiomeArtSpec.For(biome).SiteKinds(rules).Select(k => k.Kind));
+				var hosted = new HashSet<FishMMO.Shared.NameGeneration.POIType>(BiomeArtSpec.For(biome).SiteKinds().Select(k => k.Kind));
 				foreach (PointOfInterestKindRule rule in rules.Ordered(PointOfInterestPlacement.Placed))
 				{
 					if (rule.Enabled && hosted.Contains(rule.Kind))
@@ -96,11 +96,20 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void SpecWaysAndBars_DefaultToWhatTheCutDecidedInCode()
 		{
-			string desertSand = BiomeArtSpec.For("Desert").Riverbed, forestGravel = BiomeArtSpec.For("Forest").Riverbed;
-			Assert.That(desertSand, Is.EqualTo(Ground.Sand), "every biome's bars were the desert riverbed's sand");
-			Assert.That(forestGravel, Is.EqualTo(Ground.Gravel), "and the forest riverbed's gravel");
+			// Every biome's bars were the desert riverbed's sand and the forest riverbed's gravel: the generated Sand and Gravel (a round
+			// may since have given those biomes riverbeds of their own).
+			string desertSand = Ground.Sand, forestGravel = Ground.Gravel;
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
+				if (BiomeAuthoredRounds.Contains(entry.Biome))
+				{
+					// An authored round names its own ways and bars (BiomeAuthoredRoundTests): only that they are generated grounds.
+					foreach (string own in new[] { entry.PathGround, entry.RoadGround, entry.CobbleGround, entry.BarSand, entry.BarGravel })
+					{
+						Assert.That(SurfaceCatalogue.TryGround(own, out _), Is.True, $"{entry.Biome}: '{own}' is a generated ground");
+					}
+					continue;
+				}
 				// The ground the cut wore paths from: the main layer's, else the first detail's, else grass.
 				string main = entry.Main?.Family ?? entry.Details.Select(d => d.Family).FirstOrDefault(f => f != null) ?? Ground.Grass;
 				Assert.That(entry.PaintedGround, Is.EqualTo(main), entry.Biome);
@@ -220,7 +229,9 @@ namespace FishMMO.UnitTests
 			foreach (string file in files)
 			{
 				string name = file.Replace('\\', '/');
-				if (name.EndsWith("/Terrain/BiomeTemplateArt.cs", StringComparison.Ordinal))
+				// The terrain process button (a Dashboard maintenance tool, never run by the cut) assigns what each biome's file names
+				// since 2026-10-26 (CODE-TABLE CLEARANCE), as the authoring does.
+				if (name.EndsWith("/Terrain/BiomeTemplateArt.cs", StringComparison.Ordinal) || name.EndsWith("/Terrain/TerrainProcessTable.cs", StringComparison.Ordinal))
 				{
 					continue;
 				}

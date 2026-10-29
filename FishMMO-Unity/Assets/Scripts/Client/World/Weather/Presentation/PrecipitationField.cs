@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using FishMMO.Shared;
 using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
 
@@ -300,7 +301,9 @@ namespace FishMMO.Client
 		private int meshParticles;
 		/// <summary>The field's show thresholds in its quads' order (<see cref="BuildMesh(int, int, out float[], bool)"/>).</summary>
 		private float[] thresholds;
-		private readonly MaterialPropertyBlock block = new MaterialPropertyBlock();
+		// One copy of the precipitation material per kind and shell, each drawn with its own numbers: a property block would
+		// take every one of these draws out of the SRP Batcher.
+		private readonly DrawMaterials materials = new DrawMaterials("Precipitation");
 		private readonly Travel[] travel = new Travel[Kinds.Length * SnowShells];
 		private float lastTime = float.NaN;
 		private static readonly float GustPaceA = WholeTurns(0.7);
@@ -761,7 +764,7 @@ namespace FishMMO.Client
 			}
 			if (mesh == null || meshParticles != tier.Particles)
 			{
-				Dispose();
+				DestroyMesh();
 				mesh = BuildMesh(tier.Particles, 1234, out thresholds, true);
 				meshParticles = tier.Particles;
 			}
@@ -772,7 +775,6 @@ namespace FishMMO.Client
 			var rp = new RenderParams(profile.PrecipitationMaterial)
 			{
 				camera = camera,
-				matProps = block,
 				worldBounds = new Bounds(origin, Vector3.one * tier.BoxSize * 2f),
 				shadowCastingMode = ShadowCastingMode.Off,
 				receiveShadows = false,
@@ -875,33 +877,32 @@ namespace FishMMO.Client
 						float particles = tier.Particles * shown / Mathf.Max(1e-6f, volume);
 						crowd = Crowd(flakes / Mathf.Max(1e-6f, particles));
 					}
-					block.Clear();
-					if (profile.PrecipitationAtlas != null)
-					{
-						block.SetTexture(MainTexId, profile.PrecipitationAtlas);
-					}
-					block.SetVector(OriginId, new Vector4(origin.x, origin.y, origin.z, time));
-					block.SetVector(BoxId, new Vector4(shellBox.x, shellBox.y, shellBox.z, 0f));
-					block.SetVector(ShellId, ShellFades(tier.BoxSize, shell, shells));
-					block.SetVector(MotionId, new Vector4(exposure, 0f, 0f, 0f));
-					block.SetVector(FallId, fall);
-					block.SetVector(TravelId, new Vector4((float)moved.X, (float)moved.Fall, (float)moved.Z, 0f));
-					block.SetVector(SpreadId, new Vector4(traits.Spread.x, traits.Spread.y, traits.FromCloud && !traits.FromPlume ? 1f : 0f, traits.Clear ? 1f : 0f));
-					block.SetVector(ShapeId, new Vector4(shown, size, stretch, look.AtlasRow));
-					block.SetVector(GrainId, grain);
-					block.SetVector(TileId, new Vector4(tileMip, SubPixelSigma, MinQuadPixels, ResolvedFromPixels));
-					block.SetVector(CrowdId, new Vector4(crowd, 0f, 0f, 0f));
+					Material copy = materials.For(profile.PrecipitationMaterial, Mathf.Max(0, slot) * SnowShells + shell);
+					// The material's own atlas when the profile has none, as an emptied block left it.
+					copy.SetTexture(MainTexId, profile.PrecipitationAtlas != null ? profile.PrecipitationAtlas : profile.PrecipitationMaterial.GetTexture(MainTexId));
+					copy.SetVector(OriginId, new Vector4(origin.x, origin.y, origin.z, time));
+					copy.SetVector(BoxId, new Vector4(shellBox.x, shellBox.y, shellBox.z, 0f));
+					copy.SetVector(ShellId, ShellFades(tier.BoxSize, shell, shells));
+					copy.SetVector(MotionId, new Vector4(exposure, 0f, 0f, 0f));
+					copy.SetVector(FallId, fall);
+					copy.SetVector(TravelId, new Vector4((float)moved.X, (float)moved.Fall, (float)moved.Z, 0f));
+					copy.SetVector(SpreadId, new Vector4(traits.Spread.x, traits.Spread.y, traits.FromCloud && !traits.FromPlume ? 1f : 0f, traits.Clear ? 1f : 0f));
+					copy.SetVector(ShapeId, new Vector4(shown, size, stretch, look.AtlasRow));
+					copy.SetVector(GrainId, grain);
+					copy.SetVector(TileId, new Vector4(tileMip, SubPixelSigma, MinQuadPixels, ResolvedFromPixels));
+					copy.SetVector(CrowdId, new Vector4(crowd, 0f, 0f, 0f));
 					// A flake's flutter is its own wake shedding as it falls: it comes as often as the fall allows.
-					block.SetVector(FlutterId, new Vector4(look.Sway, look.SwayFrequency * pace, look.Alpha, look.Brightness));
+					copy.SetVector(FlutterId, new Vector4(look.Sway, look.SwayFrequency * pace, look.Alpha, look.Brightness));
 					/* What it does to the light: nothing for water, its own colour for ash and sand. The
 					 * shader lights it with the scene's own sky and sun, which carry this world's hue
 					 * already; rain and snow were passed through the air's hue as well (SkySystem.InAir),
 					 * which coloured them twice — brown under a warm sky, as hail once was. */
-					block.SetColor(ColorId, look.Tint);
+					copy.SetColor(ColorId, look.Tint);
 					// Only the prefix of the field this share can show: the rest would be collapsed by the shader.
 					int prefix = PrefixFor(thresholds, shown);
 					if (prefix >= 0)
 					{
+						rp.material = copy;
 						Graphics.RenderMesh(rp, mesh, prefix, Matrix4x4.identity);
 					}
 				}
@@ -909,6 +910,12 @@ namespace FishMMO.Client
 		}
 
 		public void Dispose()
+		{
+			DestroyMesh();
+			materials.Dispose();
+		}
+
+		private void DestroyMesh()
 		{
 			if (mesh != null)
 			{

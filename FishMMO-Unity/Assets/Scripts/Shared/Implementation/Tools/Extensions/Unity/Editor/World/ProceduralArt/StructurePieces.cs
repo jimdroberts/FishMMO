@@ -426,6 +426,8 @@ namespace FishMMO.Shared.WorldDesign
 			"cathedral", "lychgate", "gallows", "waysidecross", "maypole", "shepherd", "sheepfold", "bothy",
 			// A capital's palace (2026-10-19, StructurePieces.Palace.cs): laid by id, each its own tag, so no older query draws one.
 			"palace", "throne", "garden",
+			// The country bridges of the crossing styles (2026-10-26, StructurePieces.Crossings.cs): laid by id, their own tag, so no "bridge" query draws one.
+			"crossing",
 		};
 
 		private static List<StructurePiece> all;
@@ -477,6 +479,17 @@ namespace FishMMO.Shared.WorldDesign
 					AddTowers(list);
 					// What others left in the caves and mines (2026-10-20, StructurePieces.CaveStory.cs), last again.
 					AddCaveStory(list);
+					// The biome suite's way and cave lights (2026-10-26, StructurePieces.WayLights.cs), last again.
+					AddWayLights(list);
+					// The country bridges of the crossing styles (2026-10-26, I2l-b, StructurePieces.Crossings.cs), last again.
+					AddCrossings(list);
+					// The fantasy wave's new pieces (2026-10-27, StructurePieces.Fantasy*.cs), last again.
+					AddFantasyKeeps(list);
+					AddFantasyRealm(list);
+					AddFantasyGreen(list);
+					AddFantasyDry(list);
+					AddFantasyCold(list);
+					AddFantasyShapes(list);
 					all = list;
 				}
 				return all;

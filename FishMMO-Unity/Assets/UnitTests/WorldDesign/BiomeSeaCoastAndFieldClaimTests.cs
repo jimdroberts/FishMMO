@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using FishMMO.Shared.Biomes;
 using FishMMO.Shared.WorldDesign;
@@ -75,14 +76,20 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			var looks = new Dictionary<int, BiomeSeaLook?>();
 			int id = 1;
+			int count = 0;
 			foreach (string name in BiomeAssetNames())
 			{
 				BiomeArtSpec.Entry entry = BiomeArtSpec.For(name);
 				Assert.That(entry, Is.Not.Null, name);
-				looks[id++] = entry.SeaLook();
+				count++;
+				// An authored round gives its own sea look on purpose (legacy equality only): the bake is empty for the rest.
+				if (!BiomeAuthoredRounds.Contains(name))
+				{
+					looks[id++] = entry.SeaLook();
+				}
 			}
-			Assert.That(looks.Count, Is.EqualTo(83));
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			Assert.That(count, Is.EqualTo(83));
+			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset").Where(p => !BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(p))))
 			{
 				Match block = Regex.Match(Read(path), @"^  seaLook:\n((?:    .*\n)+)", RegexOptions.Multiline);
 				if (block.Success)

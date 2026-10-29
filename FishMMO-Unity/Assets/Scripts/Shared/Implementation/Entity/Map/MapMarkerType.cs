@@ -6,9 +6,10 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// Deliberately not a flags enum. A marker is exactly one thing, and the filter UI wants a
-	/// stable ordinal per row rather than a bit the authoring can accidentally combine.
+	/// stable ordinal per row rather than a bit the authoring can accidentally combine. A ushort since the fantasy wave
+	/// (2026-10-27) took the point-of-interest kinds past 255; nothing writes the type as a byte, and assets store the number.
 	/// </remarks>
-	public enum MapMarkerType : byte
+	public enum MapMarkerType : ushort
 	{
 		/// <summary>The local player. Always drawn, always last, never clamped to the edge.</summary>
 		Self = 0,
@@ -100,5 +101,22 @@ namespace FishMMO.Shared
 		FrogShrine, FloatingIsland, FowlersHide, EelWeir, BrickKiln,
 		BlightedCrater, Chapel, HolyWell, PlagueVillage, DeadForest, WarEngineGraveyard,
 		SunkenWhaleFall, SeaHall,
+		// The hot ground's own sites (2026-10-27).
+		Geyser, MudPot, Fumarole, SulphurPool,
+		// The fantasy wave (2026-10-27): 121 kinds hosted only by the biomes whose .Sites name them.
+		DragonLair, TrollBridge, GiantsSteading, GoblinWarren, HauntedManor, HangingTree, BuriedHoard, AmbushSite, WreckedCaravan,
+		Crossroads, BoundaryStone, SignalBeacon, TollGate, Hamlet, ManorHouse, SiegeCamp, BurnedVillage, WarbandCamp, CultistHideout,
+		AncientWall, SpellScar, PlanarRift, PetrifiedBattle, TitansBones, WishingStone, ElderMonolith, WaygateRing, GolemGraveyard,
+		KoboldDelving, LostLibrary, DruidGrove, TreeVillage, TrollStones, SpiderThicket, CharcoalClamps, GreenwoodHideout, DryadOak,
+		GoblinMarket, ElfWaystone, WolfDen, MossColossus, StepPyramid, Cenote, JaguarTemple, SerpentIdol, LostCity, LizardfolkVillage,
+		IdolVault, Grange, Dovecote, BeeGarden, VillageGreen, ScarecrowField, LongBarrow, Henge, GallowsHill, KurganField, NomadCamp,
+		StoneFigures, Kraal, Baobab, Shieling, Necropolis, Pyramid, Sphinx, RockCutFacade, SandBuriedTemple, DjinnPrison, SandwormPit,
+		CaravanHalt, BeastBoneyard, CliffPalace, DreadRoad, DwarvenGate, MountainKingsHall, HangingMonastery, PassFort, Eyrie,
+		GriffinRoost, WyvernNest, CliffRelief, SummitCairn, PrayerFlagPass, SilverMineTown, FrostGiantSteading, RuneStone, FrozenArmy,
+		DragonInTheIce, MammothGraveyard, WinterWolfDen, AuroraShrine, LichSpire, IcePalace, FrozenShipwreck, Crannog, HagsCauldron,
+		HydraLair, ReedVillage, CovenCircle, LizardfolkHatchery, SwampCathedral, TidalIslandAbbey, CliffCastle, SmugglersTunnel,
+		WreckersBeacon, SirenRock, SeaWitchGrotto, LongshipLanding, KrakenWreck, FireTemple, FireGiantHall, SalamanderLair,
+		AshBuriedCity, MerfolkVillage, KrakenGrounds, LadyOfTheLake, NymphPool, LakeMonsterLair, Commandery, LostThrone,
+		RoyalMausoleum,
 	}
 }

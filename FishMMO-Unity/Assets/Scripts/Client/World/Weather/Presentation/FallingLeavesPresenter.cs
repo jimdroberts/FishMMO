@@ -58,7 +58,6 @@ namespace FishMMO.Client
 		private static int meshParticles;
 		private static Material material;
 		private static Shader materialShader;
-		private static MaterialPropertyBlock block;
 		private static PrecipitationField.Travel travel;
 		private static float lastTime = float.NaN;
 		private static readonly float GustPaceA = WholeTurns(0.7);
@@ -78,7 +77,6 @@ namespace FishMMO.Client
 			mesh = null;
 			material = null;
 			materialShader = null;
-			block = null;
 			travel = default;
 			lastTime = float.NaN;
 		}
@@ -191,7 +189,6 @@ namespace FishMMO.Client
 				mesh.name = $"Falling Leaves ({particles})";
 				meshParticles = particles;
 			}
-			block ??= new MaterialPropertyBlock();
 
 			// The air among the trunks, gusting; leaves go with it (FallingLeaves.UnderCanopyWind).
 			Vector2 direction = WeatherShaderGlobals.WindDirection(frame[WeatherChannel.WindHeading]);
@@ -203,26 +200,26 @@ namespace FishMMO.Client
 			float turned = FallingLeaves.TurnedShare(season.x, season.w, wind01, gust);
 			Color green = settings.LeafAlbedo * LeafCanopyMap.Healthy;
 
-			block.Clear();
-			block.SetTexture(CanopyId, LeafCanopyMap.Texture);
-			block.SetVector(CanopyRectId, LeafCanopyMap.Rect);
-			block.SetVector(OriginId, new Vector4(origin.x, origin.y, origin.z, time));
-			block.SetVector(BoxId, new Vector4(box.x, box.y, box.z, BoxLift));
-			block.SetVector(FallId, new Vector4(velocity.x, velocity.y, velocity.z, TypicalFall));
-			block.SetVector(TravelId, new Vector4((float)travel.X, (float)travel.Fall, (float)travel.Z, 0f));
-			block.SetVector(SpreadId, new Vector4(FallingLeaves.TerminalSpeed.x / TypicalFall, FallingLeaves.TerminalSpeed.y / TypicalFall / TumbleSpeedup,
+			/* The numbers go on the presenter's own material (one draw per camera, and each camera's hook runs after the last
+			 * camera has rendered): a property block would take the draw out of the SRP Batcher. */
+			leafMaterial.SetTexture(CanopyId, LeafCanopyMap.Texture);
+			leafMaterial.SetVector(CanopyRectId, LeafCanopyMap.Rect);
+			leafMaterial.SetVector(OriginId, new Vector4(origin.x, origin.y, origin.z, time));
+			leafMaterial.SetVector(BoxId, new Vector4(box.x, box.y, box.z, BoxLift));
+			leafMaterial.SetVector(FallId, new Vector4(velocity.x, velocity.y, velocity.z, TypicalFall));
+			leafMaterial.SetVector(TravelId, new Vector4((float)travel.X, (float)travel.Fall, (float)travel.Z, 0f));
+			leafMaterial.SetVector(SpreadId, new Vector4(FallingLeaves.TerminalSpeed.x / TypicalFall, FallingLeaves.TerminalSpeed.y / TypicalFall / TumbleSpeedup,
 				FallingLeaves.TumbleShare, TumbleSpeedup));
-			block.SetVector(RatesId, new Vector4(rates.x, rates.y, turned, settings.BrownShare));
-			block.SetVector(SizeId, new Vector4(settings.LeafSize.x, Mathf.Max(settings.LeafSize.x, settings.LeafSize.y), settings.Alpha, settings.LieSeconds));
-			block.SetColor(ColorId, green);
-			block.SetColor(AutumnId, LeafCanopyMap.Autumn);
-			block.SetColor(DryId, settings.DryAlbedo);
-			block.SetVector(WindId, new Vector4(direction.x, direction.y, air, gust));
+			leafMaterial.SetVector(RatesId, new Vector4(rates.x, rates.y, turned, settings.BrownShare));
+			leafMaterial.SetVector(SizeId, new Vector4(settings.LeafSize.x, Mathf.Max(settings.LeafSize.x, settings.LeafSize.y), settings.Alpha, settings.LieSeconds));
+			leafMaterial.SetColor(ColorId, green);
+			leafMaterial.SetColor(AutumnId, LeafCanopyMap.Autumn);
+			leafMaterial.SetColor(DryId, settings.DryAlbedo);
+			leafMaterial.SetVector(WindId, new Vector4(direction.x, direction.y, air, gust));
 
 			var rp = new RenderParams(leafMaterial)
 			{
 				camera = camera,
-				matProps = block,
 				worldBounds = new Bounds(origin + Vector3.up * BoxLift, box * 1.5f),
 				shadowCastingMode = ShadowCastingMode.Off,
 				receiveShadows = false,

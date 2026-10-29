@@ -1,5 +1,5 @@
 // FishMMO/Vegetation Prime: the depth of a GPU-driven alpha-tested vegetation draw, laid ahead of its lit draw
-// (TerrainGpuRenderer). Drawn into the camera's own target in the opaque pass one render queue earlier than the lit
+// (TerrainGpuRenderer). Drawn into the camera's own target in the opaque pass two render queues earlier than the lit
 // material, with the lit pass's exact coverage (FishVegetationPasses.hlsl VegPrimeFragment: the same alpha-to-coverage
 // ramp, the same dissolves, the same deformed positions); the lit material is then drawn with ZWrite off
 // (_VegZWrite 0) and the ordinary LEqual test, so it shades only the leaf in front at each pixel.
@@ -18,7 +18,9 @@ Shader "FishMMO/Vegetation Prime"
         [MainColor] _BaseColor("Colour", Color) = (1, 1, 1, 1)
         _Cutoff("Alpha cutoff", Range(0.0, 1.0)) = 0.5
         [Toggle(_ALPHATEST_ON)] _AlphaClip("Alpha clip", Float) = 1.0
-        [Toggle(_NORMALMAP)] _UseNormalMap("Normal map", Float) = 0.0
+        // A uniform, not a keyword: bark with a normal map and deadwood without one are then one shader variant, so they share
+        // one pipeline and one SRP batch (VegNormal branches on it per draw).
+        [Toggle] _UseNormalMap("Normal map", Float) = 0.0
         [Normal] _BumpMap("Normal map", 2D) = "bump" {}
         _BumpScale("Normal scale", Float) = 1.0
         _Smoothness("Smoothness", Range(0.0, 1.0)) = 0.2
@@ -74,7 +76,7 @@ Shader "FishMMO/Vegetation Prime"
         Tags
         {
             "RenderType" = "TransparentCutout"
-            "Queue" = "AlphaTest-1"
+            "Queue" = "AlphaTest-2"
             "RenderPipeline" = "UniversalPipeline"
             "IgnoreProjector" = "True"
         }
@@ -104,6 +106,8 @@ Shader "FishMMO/Vegetation Prime"
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma multi_compile_instancing
             #pragma instancing_options procedural:FishIndirectSetup
+            // DOTS_INSTANCING_ON: the same draws through a BatchRendererGroup (FishIndirectInstancing.hlsl, TerrainGpuRenderer.Brg.cs).
+            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
 
             #define FISH_VEG_PASS_PRIME
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"

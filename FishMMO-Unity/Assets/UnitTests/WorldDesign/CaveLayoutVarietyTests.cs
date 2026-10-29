@@ -146,6 +146,43 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(why, Is.Null, $"{what}: {why}");
 		}
 
+		/// <summary>
+		/// Whether a way's fault at <paramref name="at"/> is still there, as it was, with the rock the variety laid (its terraces
+		/// and their ramps, mounds, arches) and the hollows it cut taken out of the field: then it is the layout's own, however
+		/// near a feature it lies (2026-10-26: a trunk's own 42° fall, logged as the layout's on HEAD, failed once a terrace was
+		/// laid 5 m off it). Its pits stay (their climbs and ledges are counted by index).
+		/// </summary>
+		private static bool StaysWithoutTheVariety(CaveSystem s, IList<Vector3> points, Vector3 at)
+		{
+			CaveSystem bare = CaveSystem.FromValues(s.ToValues(), s.Origin, s.Seed);
+			var away = new Vector3(0f, -1e5f, 0f);
+			var ramps = new HashSet<int>();
+			foreach (CaveTerrace t in bare.Terraces)
+			{
+				ramps.Add(t.Ramp);
+			}
+			for (int i = 0; i < bare.Solids.Count; i++)
+			{
+				CaveSolid o = bare.Solids[i];
+				if (o.Kind == CaveSolidKind.Terrace || o.Kind == CaveSolidKind.Rubble || o.Kind == CaveSolidKind.Arch || ramps.Contains(i))
+				{
+					o.A += away;
+					o.B += away;
+					bare.Solids[i] = o;
+				}
+			}
+			for (int i = 0; i < bare.Hollows.Count; i++)
+			{
+				CaveHollow h = bare.Hollows[i];
+				h.A += away;
+				h.B += away;
+				h.Top += away.y;
+				bare.Hollows[i] = h;
+			}
+			bare.Prepare();
+			return WalkFailure(bare, points, out Vector3 still) != null && Vector3.Distance(still, at) < 0.6f;
+		}
+
 		/// <summary>Whether a point lies within <paramref name="reach"/> of anything the variety pass laid (its hollows, terraces and their ramps, mounds, arches, pits).</summary>
 		private static bool NearVariety(CaveSystem s, Vector3 p, float reach)
 		{
@@ -322,7 +359,9 @@ namespace FishMMO.UnitTests.WorldDesign
 					{
 						CaveSolid ramp = s.Solids[t.Ramp];
 						Assert.That(ramp.Kind, Is.EqualTo(CaveSolidKind.Ramp), what);
-						float run = new Vector2(ramp.B.x - ramp.A.x, ramp.B.z - ramp.A.z).magnitude;
+						// Its slope only: the last of it (its landing, Depth) runs level in onto the slab.
+						float run = new Vector2(ramp.B.x - ramp.A.x, ramp.B.z - ramp.A.z).magnitude - ramp.Depth;
+						Assert.That(run, Is.GreaterThan(0f), $"{what}: its ramp slopes before its landing");
 						Assert.That(Mathf.Atan2(ramp.B.y - ramp.A.y, run) * Mathf.Rad2Deg, Is.LessThanOrEqualTo(20f), $"{what}: its ramp's grade");
 					}
 					if (t.Climb >= 0)
@@ -413,7 +452,7 @@ namespace FishMMO.UnitTests.WorldDesign
 						continue;
 					}
 					string what = $"{What(s)} passage {p} ({s.Passages[p].Kind}): {why}";
-					Assert.That(NearVariety(s, at, 4f), Is.False, $"{what}, beside a feature the variety laid");
+					Assert.That(NearVariety(s, at, 4f) && !StaysWithoutTheVariety(s, points, at), Is.False, $"{what}, beside a feature the variety laid");
 					Console.WriteLine($"the layout's own: {what}");
 					own++;
 				}
@@ -484,9 +523,10 @@ namespace FishMMO.UnitTests.WorldDesign
 				double megabytes = (vertices * 52.0 + triangles * 12.0 + triangles * 40.0) / 1048576.0;
 				string what = $"{What(system)}: {system.Terraces.Count} terraces, {system.Pits.Count} pits, {system.Hollows.Count} hollows";
 				Console.WriteLine($"{what}: {triangles:N0} triangles, biggest piece {biggest:N0}, ~{megabytes:0.0} MB");
-				Assert.That(triangles, Is.LessThanOrEqualTo(250000), what);
+				// As that fixture's caps stand since 2026-10-21 (raised on purpose for the depth roll; its halls cave of seed 6 ~19 MB).
+				Assert.That(triangles, Is.LessThanOrEqualTo(300000), what);
 				Assert.That(biggest, Is.LessThanOrEqualTo(40000), what);
-				Assert.That(megabytes, Is.LessThanOrEqualTo(16.0), what);
+				Assert.That(megabytes, Is.LessThanOrEqualTo(26.0), what);
 			}
 		}
 

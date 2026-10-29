@@ -46,7 +46,8 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void Defaults_NoSpecAndNoTemplateCarvesAnything()
 		{
 			Assert.That(BiomeArtSpec.Entries.Length, Is.EqualTo(83));
-			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
+			// An authored round's own landforms are pinned in BiomeAuthoredRoundTests.
+			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries.Where(e => !BiomeAuthoredRounds.Contains(e.Biome)))
 			{
 				Assert.That(entry.LandformList(), Is.Empty, $"{entry.Biome} names no landform yet");
 			}
@@ -59,6 +60,10 @@ namespace FishMMO.UnitTests.WorldDesign
 					continue;
 				}
 				templates++;
+				if (BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(path)))
+				{
+					continue;
+				}
 				Assert.That(Regex.IsMatch(text, @"^  landforms:\s*\n  - ", RegexOptions.Multiline), Is.False, $"{Path.GetFileName(path)} carves a landform");
 			}
 			Assert.That(templates, Is.EqualTo(83));
@@ -421,6 +426,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(graben.Apply(0f, 41f, 0f, 0f, flat), Is.EqualTo(0f), "untouched past its scarps");
 			Assert.That(graben.Mask(BiomeLandformPart.Scarp, 0f, 32f, -10f, 40f), Is.GreaterThan(0.5f), "the scarp mask on its wall");
 			BiomeLandformSite rilleSite = Line("SinuousRille", 40f, 30f);
+			// The plain rille: its inner channel and roofed stretches (2026-10-26, I2g-f) are their own test.
+			rilleSite.Form.Inner = 0f;
+			rilleSite.Form.Roofed = 0f;
 			rilleSite.Segments = SceneLandforms.Line(new List<Vector2> { new Vector2(-200f, 0f), new Vector2(200f, 0f) }, 40f, 30f, false);
 			var rille = new BiomeLandforms.Shape(rilleSite, new BiomeLandforms.Context());
 			float head = rille.Apply(-200f, 0f, 0f, 0f, flat), trench = rille.Apply(0f, 0f, 0f, 0f, flat);
@@ -643,7 +651,7 @@ namespace FishMMO.UnitTests.WorldDesign
 						float h1 = shape.Apply(x, z, g, g, flat), h2 = again.Apply(x, z, g, g, flat);
 						Assert.That(float.IsNaN(h1) || float.IsInfinity(h1), Is.False, preset.Name);
 						Assert.That(h1, Is.EqualTo(h2), $"{preset.Name} is not deterministic");
-						for (BiomeLandformPart part = BiomeLandformPart.Whole; part <= BiomeLandformPart.Scarp; part++)
+						for (BiomeLandformPart part = BiomeLandformPart.Whole; part <= BiomeLandformPart.Halo; part++)
 						{
 							float m = shape.Mask(part, x, z, g, 10f);
 							Assert.That(m >= 0f && m <= 1.0001f, Is.True, $"{preset.Name} {part} mask {m}");
@@ -1017,6 +1025,354 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 			List<BiomeLandformPad> pads = SceneLandforms.Pads(sites, new BiomeLandforms.Context(), (x, z) => 0f);
 			Assert.That(pads.Count, Is.EqualTo(sites.ConvertAll(s => SceneLandforms.CycloidCusps(s).Count).Sum()));
+		}
+
+		// ── 2026-10-26, phase I2g-f: the landform follow-ups ─────────
+
+		[Test]
+		public void FollowUps_AreAppendOnly_AndPrintOnlyWhenSet()
+		{
+			Assert.That((byte)BiomeLandformAlign.PatchAxis, Is.EqualTo(8));
+			Assert.That((byte)BiomeLandformAlign.Azimuth, Is.EqualTo(9));
+			Assert.That((byte)BiomeLandformAlign.AcrossWind, Is.EqualTo(10));
+			Assert.That((byte)BiomeLandformPart.Halo, Is.EqualTo(20));
+			BiomeLandform tell = BiomeLandformPresets.Named("Tell");
+			string print = tell.ToString();
+			foreach (string token in new[] { "|upper", "|seaclimate", "|dry", "|peakfrom", "|peakring", "|rays", "|tilt", "|inner", "|roofed", "|radials", "|clear" })
+			{
+				StringAssert.DoesNotContain(token, print, "an entry that sets none of them prints as before");
+			}
+			BiomeLandform high = tell;
+			high.Upper = 0.2f;
+			StringAssert.Contains("|upper|0.2", high.ToString());
+			Assert.That(high.ToString().StartsWith(print, StringComparison.Ordinal), Is.True, "appended after everything older");
+		}
+
+		[Test]
+		public void Upper_KeepsAFieldAndAScatterOnTheirPatchsHighestShare()
+		{
+			var heights = new List<float>();
+			for (int z = 0; z < Cells; z++)
+			{
+				for (int x = 0; x < Cells; x++)
+				{
+					heights.Add(GroundAt(-Half + (x + 0.5f) * CellMetres, -Half + (z + 0.5f) * CellMetres));
+				}
+			}
+			heights.Sort();
+			float fifth = heights[Mathf.FloorToInt(0.8f * heights.Count)], half = heights[Mathf.FloorToInt(0.5f * heights.Count)];
+			List<BiomeLandformSite> ridges = SceneLandforms.Plan(Input(new[] { Opened(BiomeLandformPresets.Named("BladedRidges")) }));
+			Assert.That(ridges.Count, Is.EqualTo(1));
+			Assert.That(ridges[0].Level, Is.EqualTo(fifth), "the field's level is its patch's top-fifth quantile");
+			var shape = new BiomeLandforms.Shape(ridges[0], Context());
+			var flat = new BiomeLandforms.GroundInfo { Slope = 5f };
+			float soft = Mathf.Max(2f, 0.5f * ridges[0].Height);
+			int low = 0, raised = 0;
+			for (int k = 0; k < 4000; k++)
+			{
+				float x = Mathf.Lerp(-Half, Half, BiomeLandforms.Unit(BiomeLandforms.Hash(11u, (uint)k, 1u)));
+				float z = Mathf.Lerp(-Half, Half, BiomeLandforms.Unit(BiomeLandforms.Hash(11u, (uint)k, 2u)));
+				float g = GroundAt(x, z);
+				float h = shape.Apply(x, z, g, g, flat);
+				if (g < fifth - soft)
+				{
+					Assert.That(h, Is.EqualTo(g), "no fin below the top fifth");
+					low++;
+				}
+				else if (h != g)
+				{
+					raised++;
+				}
+			}
+			Assert.That(low, Is.GreaterThan(0));
+			Assert.That(raised, Is.GreaterThan(0), "fins on the high ground");
+			BiomeLandform kopje = Opened(BiomeLandformPresets.Named("Kopje"));
+			kopje.PerScene = 0;
+			List<BiomeLandformSite> kopjes = SceneLandforms.Plan(Input(new[] { kopje }));
+			Assert.That(kopjes.Count, Is.GreaterThan(0));
+			foreach (BiomeLandformSite site in kopjes)
+			{
+				// Placed from a cell at or over the median, jittered within its cell.
+				Assert.That(site.Ground, Is.GreaterThan(half - 4f), "a kopje on the upper half of its patch");
+			}
+			kopje.Upper = 0f;
+			Assert.That(SceneLandforms.Plan(Input(new[] { kopje })).Exists(s => s.Ground < half - 4f), Is.True, "and anywhere without the gate");
+		}
+
+		[Test]
+		public void PloughMarks_ReadTheSeasClimate_AndRunTheirOwnWayNotDownTheSlope()
+		{
+			BiomeLandform plough = Opened(BiomeLandformPresets.Named("PloughMarks"));
+			plough.Temperature = new Vector2(-1f, -0.3f);
+			LandformPlanInput input = Input(new[] { plough });
+			// Cold at and over the sea's surface, warm on the drowned floor.
+			input.Climate = (x, y, z) => new Vector2(y >= Sea - 0.5f ? -0.8f : 0.5f, 0f);
+			List<BiomeLandformSite> marks = SceneLandforms.Plan(input);
+			Assert.That(marks.Exists(s => s.Ground < Sea - 1f), Is.True, "marks on the drowned floor under a cold surface");
+			BiomeLandform floorRead = plough;
+			floorRead.SeaClimate = false;
+			LandformPlanInput floorInput = Input(new[] { floorRead });
+			floorInput.Climate = input.Climate;
+			Assert.That(SceneLandforms.Plan(floorInput).Exists(s => s.Ground < Sea - 1f), Is.False, "none there when the floor's climate is read");
+			int across = 0;
+			foreach (BiomeLandformSite mark in marks)
+			{
+				Vector2 a = mark.Segments[0].A, b = mark.Segments[mark.Segments.Count - 1].B;
+				Vector2 run = (a - b).normalized;
+				var down = new Vector2(-0.1f, 0f).normalized;
+				if (Vector2.Dot(run, down) < 0.85f)
+				{
+					across++;
+				}
+				Assert.That(mark.Segments.Count, Is.EqualTo(8), "a bending line");
+			}
+			Assert.That(across, Is.GreaterThan(0), "a plough mark's heading is its own, not the slope's");
+		}
+
+		[Test]
+		public void ShelfRolls_CrestAlongTheWind_FoldBeltTakesTheHighestPatch()
+		{
+			List<BiomeLandformSite> rolls = SceneLandforms.Plan(Input(new[] { Opened(BiomeLandformPresets.Named("ShelfRolls")) }));
+			Assert.That(rolls.Count, Is.EqualTo(1));
+			Assert.That(Mathf.Abs(Mathf.DeltaAngle(rolls[0].Yaw, 30f + 90f)), Is.LessThanOrEqualTo(5f), "its wave axis square to the wind: crests along it");
+			LandformPlanInput Split(BiomeLandform form)
+			{
+				LandformPlanInput input = Input(new[] { form });
+				// Two patches of one biome: the west (low) third and the east (high) third.
+				input.CellBiome = (x, z) => x < Cells / 3 ? 0 : x < 2 * Cells / 3 ? -1 : 0;
+				return input;
+			}
+			BiomeLandform fold = Opened(BiomeLandformPresets.Named("FoldBelt"));
+			List<BiomeLandformSite> belts = SceneLandforms.Plan(Split(fold));
+			Assert.That(belts.Count, Is.EqualTo(1));
+			Assert.That(belts[0].Centre.x, Is.GreaterThan(0f), "the fold belt on the highest patch");
+			fold.Anchor = BiomeLandformAnchor.Anywhere;
+			Assert.That(SceneLandforms.Plan(Split(fold))[0].Centre.x, Is.LessThan(0f), "the first patch in grid order otherwise");
+			BiomeLandform pingo = Opened(BiomeLandformPresets.Named("Pingo"));
+			pingo.Align = BiomeLandformAlign.PatchAxis;
+			LandformPlanInput band = Input(new[] { pingo });
+			band.CellBiome = (x, z) => Mathf.Abs(z - Cells / 2) < Cells / 8 ? 0 : -1;
+			List<BiomeLandformSite> along = SceneLandforms.Plan(band);
+			Assert.That(along.Count, Is.GreaterThan(0));
+			foreach (BiomeLandformSite site in along)
+			{
+				float off = Mathf.Abs(Mathf.DeltaAngle(site.Yaw, 0f));
+				Assert.That(Mathf.Min(off, 180f - off), Is.LessThanOrEqualTo(4f), "along its patch's long (east–west) axis");
+			}
+		}
+
+		[Test]
+		public void RayCrater_PeakFrom900_TerracedWalls_RaysToEightRadii()
+		{
+			var context = new BiomeLandforms.Context();
+			var flat = new BiomeLandforms.GroundInfo();
+			BiomeLandformSite Crater(Action<BiomeLandformSite[]> tune)
+			{
+				var site = new BiomeLandformSite { Form = BiomeLandformPresets.Named("RayCrater"), Centre = Vector2.zero, Radius = 500f, HalfLength = 500f, Height = 200f, Seed = 9u, Level = float.NaN };
+				site.Form.Roughness = 0f;
+				var box = new[] { site };
+				tune?.Invoke(box);
+				box[0].Bounds = BiomeLandforms.BoundsOf(box[0]);
+				return box[0];
+			}
+			BiomeLandformSite rays = Crater(null);
+			Assert.That(rays.Bounds.z, Is.GreaterThanOrEqualTo(8f * 500f), "its box takes in its rays");
+			var shape = new BiomeLandforms.Shape(rays, context);
+			var plain = new BiomeLandforms.Shape(Crater(b => { b[0].Form.PeakFrom = 0f; b[0].Form.Steps = 0; }), context);
+			Assert.That(shape.Apply(0f, 0f, 0f, 0f, flat), Is.GreaterThan(shape.Apply(85f, 0f, 0f, 0f, flat) + 30f), "a central peak on a 1 km crater");
+			Assert.That(plain.Apply(0f, 0f, 0f, 0f, flat), Is.EqualTo(plain.Apply(60f, 0f, 0f, 0f, flat)).Within(1e-3f), "none under 3 km without PeakFrom");
+			float flatTread = float.MaxValue, smooth = float.MaxValue;
+			for (float r = 150f; r < 450f; r += 5f)
+			{
+				flatTread = Mathf.Min(flatTread, Mathf.Abs(shape.Apply(r + 5f, 0f, 0f, 0f, flat) - shape.Apply(r, 0f, 0f, 0f, flat)));
+				smooth = Mathf.Min(smooth, Mathf.Abs(plain.Apply(r + 5f, 0f, 0f, 0f, flat) - plain.Apply(r, 0f, 0f, 0f, flat)));
+			}
+			Assert.That(flatTread, Is.LessThan(0.2f * smooth), "treads down its wall");
+			float far = 0f;
+			for (int k = 0; k < 720; k++)
+			{
+				float a = k * Mathf.PI / 360f;
+				far = Mathf.Max(far, shape.Mask(BiomeLandformPart.Rays, Mathf.Cos(a) * 2500f, Mathf.Sin(a) * 2500f, 0f, 0f));
+				Assert.That(shape.Apply(Mathf.Cos(a) * 2500f, Mathf.Sin(a) * 2500f, 1f, 1f, flat), Is.EqualTo(1f), "rays paint, they do not carve");
+				Assert.That(shape.Mask(BiomeLandformPart.Rays, Mathf.Cos(a) * 4100f, Mathf.Sin(a) * 4100f, 0f, 0f), Is.EqualTo(0f));
+			}
+			Assert.That(far, Is.GreaterThan(0.2f), "rays at five radii");
+			BiomeLandform opened = Opened(BiomeLandformPresets.Named("RayCrater"));
+			opened.Size = new Vector2(300f, 300f);
+			opened.Air = BiomeAtmosphereRequirement.None;
+			List<BiomeLandformSite> placed = SceneLandforms.Plan(Input(new[] { opened }));
+			Assert.That(placed.Count, Is.GreaterThan(0), "a crater whose rays leave the scene is still placed");
+			foreach (BiomeLandformSite site in placed)
+			{
+				Assert.That(site.Bounds.x >= -Half && site.Bounds.z <= Half && site.Bounds.y >= -Half && site.Bounds.w <= Half, Is.True, "its rays cut at the scene's edge");
+				Assert.That(BiomeLandforms.BoundsOf(site), Is.EqualTo(site.Bounds), "and the box kept");
+			}
+		}
+
+		[Test]
+		public void Cleopatra_RingOfPeaks_CayleyFillsAThirdOfTheWay_HaloTrailsDownwind()
+		{
+			var flat = new BiomeLandforms.GroundInfo();
+			var cleo = new BiomeLandformSite { Form = BiomeLandformPresets.Named("Cleopatra"), Centre = Vector2.zero, Radius = 300f, HalfLength = 300f, HalfWidth = 15f, Height = 108f, Seed = 4u, Yaw = 90f, Level = float.NaN };
+			cleo.Bounds = BiomeLandforms.BoundsOf(cleo);
+			var ring = new BiomeLandforms.Shape(cleo, new BiomeLandforms.Context());
+			Assert.That(ring.Apply(135f, 0f, 0f, 0f, flat), Is.GreaterThan(ring.Apply(0f, 0f, 0f, 0f, flat) + 10f), "a ring of peaks at 0.45 of its radius");
+			Assert.That(ring.Apply(135f, 0f, 0f, 0f, flat), Is.GreaterThan(ring.Apply(60f, 0f, 0f, 0f, flat) + 10f), "with a floor inside it");
+			// A closed bowl 20 m deep, its rim at 0: the Cayley fill raises its floor three tenths of the way.
+			int n = 101;
+			var metres = new float[n * n];
+			for (int z = 0; z < n; z++)
+			{
+				for (int x = 0; x < n; x++)
+				{
+					float rx = (x - 50) * 4f, rz = (z - 50) * 4f, r = Mathf.Sqrt(rx * rx + rz * rz) / 150f;
+					metres[z * n + x] = r < 1f ? 20f * r * r - 20f : 0f;
+				}
+			}
+			float Fill(float top)
+			{
+				var grid = new BiomeLandforms.Grid((float[])metres.Clone(), n, n, 4f, -200f, -200f);
+				BiomeLandform cayley = BiomeLandformPresets.Named("CayleyFill");
+				cayley.Top = top;
+				var site = new BiomeLandformSite { Form = cayley, BiomeID = 1001, Centre = Vector2.zero, Radius = 2f, HalfLength = 2f, HalfWidth = 2f, Height = 0.03f, Seed = 2u, Level = float.NaN, Bounds = new Vector4(-200f, -200f, 200f, 200f) };
+				BiomeLandforms.Carve(grid, new[] { site }, new BiomeLandforms.Context());
+				Assert.That(grid.Metres[50 * n + 90], Is.EqualTo(metres[50 * n + 90]), "the ground outside the bowl untouched");
+				return grid.Metres[50 * n + 50];
+			}
+			Assert.That(Fill(0.3f), Is.EqualTo(-14f).Within(0.3f), "a third of the way up");
+			Assert.That(Fill(0f), Is.EqualTo(0f).Within(0.3f), "to its spill without a share (as before)");
+			var halo = new BiomeLandformSite { Form = BiomeLandformPresets.Named("HaloCrater"), Centre = Vector2.zero, Radius = 100f, HalfLength = 100f, Height = 36f, Seed = 6u, Yaw = 0f, Level = float.NaN };
+			halo.Bounds = BiomeLandforms.BoundsOf(halo);
+			var h = new BiomeLandforms.Shape(halo, new BiomeLandforms.Context());
+			Assert.That(h.Mask(BiomeLandformPart.Halo, 300f, 0f, 0f, 0f), Is.GreaterThan(0.5f), "the parabola downwind");
+			Assert.That(h.Mask(BiomeLandformPart.Halo, -300f, 0f, 0f, 0f), Is.EqualTo(0f), "open on its upwind side past its vertex");
+			Assert.That(h.Mask(BiomeLandformPart.Halo, 0f, 0f, 0f, 0f), Is.EqualTo(0f), "not the crater itself");
+		}
+
+		[Test]
+		public void RaftsTilt_FarrumGrooves_ArachnoidWeb_RilleRoofAndInnerChannel()
+		{
+			var context = new BiomeLandforms.Context();
+			var flat = new BiomeLandforms.GroundInfo();
+			BiomeLandformSite Round(string name, float radius, float height, float level, float halfWidth = 2f)
+			{
+				BiomeLandform form = BiomeLandformPresets.Named(name);
+				form.Roughness = 0f;
+				var s = new BiomeLandformSite { Form = form, Centre = Vector2.zero, Radius = radius, HalfLength = radius, HalfWidth = halfWidth, Height = height, Level = level, Seed = 7u, Ground = 0f };
+				s.Bounds = BiomeLandforms.BoundsOf(s);
+				return s;
+			}
+			float Spread(BiomeLandforms.Shape shape, float r, bool opposite)
+			{
+				float lo = float.MaxValue, hi = float.MinValue;
+				for (int k = 0; k < 720; k++)
+				{
+					float a = k * Mathf.PI / 360f;
+					float h = shape.Apply(Mathf.Cos(a) * r, Mathf.Sin(a) * r, 0f, 0f, flat);
+					float o = opposite ? shape.Apply(-Mathf.Cos(a) * r, -Mathf.Sin(a) * r, 0f, 0f, flat) : h;
+					lo = Mathf.Min(lo, opposite ? -Mathf.Abs(h - o) : h);
+					hi = Mathf.Max(hi, opposite ? Mathf.Abs(h - o) : h);
+				}
+				return hi - lo;
+			}
+			BiomeLandformSite raft = Round("ChaosRafts", 100f, 2f, float.NaN);
+			Assert.That(Spread(new BiomeLandforms.Shape(raft, context), 40f, true), Is.GreaterThan(1f), "a raft's top tilts");
+			raft.Form.Tilt = 0f;
+			Assert.That(Spread(new BiomeLandforms.Shape(raft, context), 40f, true), Is.LessThan(1e-3f), "level without");
+			BiomeLandformSite farrum = Round("Farrum", 200f, 30f, 30f);
+			float mid = 200f * (farrum.Form.Top + 1f) * 0.5f;
+			Assert.That(Spread(new BiomeLandforms.Shape(farrum, context), mid, false), Is.GreaterThan(1f), "grooves round its flank");
+			farrum.Form.Radials = 0;
+			Assert.That(Spread(new BiomeLandforms.Shape(farrum, context), mid, false), Is.LessThan(1e-3f), "a smooth flank without");
+			BiomeLandformSite web = Round("Arachnoid", 300f, 8f, float.NaN, 50f);
+			Assert.That(Spread(new BiomeLandforms.Shape(web, context), 180f, false), Is.GreaterThan(1f), "fractures through the ring's inside");
+			web.Form.Radials = 0;
+			Assert.That(Spread(new BiomeLandforms.Shape(web, context), 180f, false), Is.LessThan(1e-3f));
+			var rille = new BiomeLandformSite
+			{
+				Form = BiomeLandformPresets.Named("SinuousRille"), BiomeID = 1001, Centre = Vector2.zero, Radius = 40f, HalfLength = 1000f, HalfWidth = 40f, Height = 30f, Seed = 3u, Level = float.NaN,
+				Segments = SceneLandforms.Line(new List<Vector2> { new Vector2(-1000f, 0f), new Vector2(1000f, 0f) }, 40f, 30f, false),
+			};
+			rille.Bounds = BiomeLandforms.BoundsOf(rille);
+			var cut = new BiomeLandforms.Shape(rille, context);
+			float deepest = 0f, roof = float.MinValue;
+			for (float x = -600f; x < 900f; x += 5f)
+			{
+				float h = cut.Apply(x, 0f, 0f, 0f, flat);
+				deepest = Mathf.Min(deepest, h);
+				roof = Mathf.Max(roof, h);
+			}
+			Assert.That(deepest, Is.LessThan(-37f), "the inner rille a third deeper down the floor");
+			Assert.That(roof, Is.GreaterThan(-0.5f), "and roofed stretches over it");
+			List<(Vector2 Centre, float Radius)> stretches = cut.RoofedStretches();
+			Assert.That(stretches.Count, Is.GreaterThan(0));
+			foreach ((Vector2 centre, float _) in stretches)
+			{
+				Assert.That(cut.Apply(centre.x, centre.y, 0f, 0f, flat), Is.GreaterThan(-0.5f), "each stretch's middle is roofed");
+			}
+			List<BiomeLandformPad> pads = SceneLandforms.Pads(new[] { rille }, context, (x, z) => 0f);
+			Assert.That(pads.Count, Is.EqualTo(stretches.Count + 1), "a pad on every roof, and its head's");
+		}
+
+		[Test]
+		public void Canyon_TakesTributaries_TarnSlumpsIntoItsBowl_ScarpBenches_SciaraKeptClear_DryTablets()
+		{
+			BiomeLandform canyon = Opened(BiomeLandformPresets.Named("SubmarineCanyon"));
+			canyon.Width = new Vector2(30f, 30f);
+			canyon.Length = new Vector2(900f, 900f);
+			List<BiomeLandformSite> canyons = SceneLandforms.Plan(Input(new[] { canyon }));
+			Assert.That(canyons.Count, Is.EqualTo(1));
+			Assert.That(canyons[0].Segments.FindAll(seg => seg.AlongA == 0f).Count, Is.GreaterThan(1), "its own line and at least one tributary");
+			canyon.Count = 0;
+			Assert.That(SceneLandforms.Plan(Input(new[] { canyon }))[0].Segments.FindAll(seg => seg.AlongA == 0f).Count, Is.EqualTo(1), "one line without");
+			List<BiomeLandformSite> tarn = SceneLandforms.Plan(Input(new[] { Opened(BiomeLandformPresets.Named("TarnBowl")), Opened(BiomeLandformPresets.Named("TarnSlump")) }));
+			BiomeLandformSite bowl = tarn.Find(s => s.Form.Kind == "TarnBowl");
+			List<BiomeLandformSite> slumps = tarn.FindAll(s => s.Form.Kind == "TarnSlump");
+			Assert.That(slumps.Count, Is.EqualTo(1), "one slump lobe");
+			Vector2 heading = new Vector2(Mathf.Cos(slumps[0].Yaw * Mathf.Deg2Rad), Mathf.Sin(slumps[0].Yaw * Mathf.Deg2Rad));
+			Assert.That(Vector2.Distance(slumps[0].Centre, bowl.Centre), Is.LessThan(bowl.Radius * 1.05f), "off the bowl's wall");
+			Assert.That(Vector2.Dot(heading, bowl.Centre - slumps[0].Centre), Is.GreaterThan(0f), "sliding in toward its floor");
+			var scarp = new BiomeLandformSite
+			{
+				Form = BiomeLandformPresets.Named("PlateauScarp"), BiomeID = 1001, Centre = Vector2.zero, Radius = 300f, HalfLength = 500f, HalfWidth = 50f, Height = 40f, Seed = 3u, Level = float.NaN,
+				Segments = SceneLandforms.Line(new List<Vector2> { new Vector2(-500f, 0f), new Vector2(500f, 0f) }, 50f, 40f, true),
+			};
+			scarp.Bounds = BiomeLandforms.BoundsOf(scarp);
+			var benched = new BiomeLandforms.Shape(scarp, new BiomeLandforms.Context());
+			var flat = new BiomeLandforms.GroundInfo();
+			int bench = 0;
+			for (float zz = -50f; zz < 50f; zz += 1f)
+			{
+				float a = benched.Apply(0f, zz, 0f, 0f, flat), b = benched.Apply(0f, zz + 1f, 0f, 0f, flat);
+				if (a > 5f && a < 35f && Mathf.Abs(b - a) < 1e-3f)
+				{
+					bench++;
+				}
+			}
+			Assert.That(bench, Is.GreaterThan(3), "a flat bench part way down the face");
+			List<BiomeLandformSite> sciara = SceneLandforms.Plan(Input(new[] { Opened(BiomeLandformPresets.Named("Sciara")) }));
+			Assert.That(sciara.Count, Is.GreaterThan(0));
+			List<Vector3> discs = SceneLandforms.KeepClearDiscs(sciara);
+			Assert.That(discs.Count, Is.GreaterThan(0), "the sciara keeps the sites and ways off");
+			foreach (Vector3 d in discs)
+			{
+				Assert.That(d.x >= sciara[0].Bounds.x && d.x <= sciara[0].Bounds.z && d.y >= sciara[0].Bounds.y && d.y <= sciara[0].Bounds.w, Is.True, "inside its box");
+			}
+			Assert.That(SceneLandforms.KeepClearDiscs(SceneLandforms.Plan(Input(new[] { Opened(BiomeLandformPresets.Named("Pingo")) }))), Is.Empty, "nothing else does");
+			StringAssert.Contains("SceneLandforms.KeepClearDiscs(landforms.Sites)", Read(World + "/SceneGenerator.cs"));
+			StringAssert.Contains("Func<float, float, bool> before = blocked, avoided = KeepOutQuery(Avoided);", Read(World + "/PointsOfInterest/PointOfInterestStage.cs"));
+			int Tablets(float dry)
+			{
+				BiomeLandform tablet = Opened(BiomeLandformPresets.Named("IceTablet"));
+				tablet.PerPatch = 0;
+				tablet.Size = new Vector2(20f, 20f);
+				tablet.Density = 4f;
+				tablet.DryDensity = dry;
+				LandformPlanInput input = Input(new[] { tablet });
+				input.Climate = (x, y, z) => new Vector2(0f, -0.5f);
+				return SceneLandforms.Plan(input).Count;
+			}
+			Assert.That(Tablets(2f), Is.GreaterThan(Tablets(0f)), "twice as many over dry ground");
 		}
 
 		// ── Wiring ────────────────────────────────────────────────────

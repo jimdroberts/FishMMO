@@ -107,6 +107,8 @@ namespace FishMMO.Client
 		IceCave = 1 << 3,
 		LavaTube = 1 << 4,
 		Mine = 1 << 5,
+		/// <summary>A sea hall under an ice shell (2026-10-26, I2n-b): its own dry ice is near lifeless; its sea's life is the sea life's.</summary>
+		SeaHall = 1 << 6,
 		/// <summary>The caves water made in limestone: a cave, a grotto, a sea cave.</summary>
 		Limestone = Cave | Grotto | SeaCave,
 		/// <summary>Every dry cave but ice: the stone caves and a mine.</summary>
@@ -807,8 +809,9 @@ namespace FishMMO.Client
 					Name = "Chipmunk", Shape = AmbientShape.Squirrel, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
 					Length = new Vector2(0.12f, 0.15f), GroupSize = new Vector2Int(1, 2), GroupsPerKm2 = 260f, Spread = 3f, Roam = new Vector2(2f, 5f),
 					Speed = 1.8f, StrokeHz = 5f, Episode = new Vector2(5f, 12f),
-					Habitats = AmbientHabitat.Forest | AmbientHabitat.Woodland | AmbientHabitat.Scrub | AmbientHabitat.Mountain,
-					Prefers = AmbientHabitat.Woodland, PreferWeight = 2f, Climate = new Vector2(Celsius(-10f), Celsius(28f)),
+					// Not in the Old World's forest or woodland (Forest and Woodland rounds, 2026-10-16): scrub and mountain only.
+					Habitats = AmbientHabitat.Scrub | AmbientHabitat.Mountain,
+					Prefers = AmbientHabitat.Scrub, PreferWeight = 2f, Climate = new Vector2(Celsius(-10f), Celsius(28f)),
 					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(2f), RainLimit = 0.3f, Hibernates = true,
 					FlushMetres = 5f, FleeSpeed = 4f,
 					Back = Hex(0x9a6a3a), Belly = Hex(0xe0c8a0), Accent = Hex(0x3a2414), Smoothness = 0.2f,
@@ -922,7 +925,8 @@ namespace FishMMO.Client
 					Name = "Hummingbirds", Shape = AmbientShape.Songbird, Behaviour = AmbientBehaviour.Hawk, Family = AmbientFamily.Bats,
 					Length = new Vector2(0.08f, 0.1f), GroupSize = new Vector2Int(1, 2), GroupsPerKm2 = 200f, Spread = 4f, Roam = new Vector2(3f, 7f),
 					Speed = 3f, StrokeHz = 50f, Altitude = new Vector2(0.6f, 3f),
-					Habitats = AmbientHabitat.Jungle | AmbientHabitat.Woodland | AmbientHabitat.Scrub | AmbientHabitat.Settlement | AmbientHabitat.Mountain,
+					// Not in a temperate woodland (Woodland round, 2026-10-16).
+					Habitats = AmbientHabitat.Jungle | AmbientHabitat.Scrub | AmbientHabitat.Settlement | AmbientHabitat.Mountain,
 					Prefers = AmbientHabitat.Jungle, PreferWeight = 3f, Climate = new Vector2(Celsius(16f), 1f),
 					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(12f), RainLimit = 0.3f, Migrates = true,
 					FlushMetres = 0f,
@@ -936,7 +940,8 @@ namespace FishMMO.Client
 					Name = "Parrots", Shape = AmbientShape.Songbird, Behaviour = AmbientBehaviour.Flock, Family = AmbientFamily.Flocks,
 					Length = new Vector2(0.3f, 0.42f), GroupSize = new Vector2Int(4, 14), GroupsPerKm2 = 10f, Spread = 6f, Roam = new Vector2(50f, 100f),
 					Speed = 11f, StrokeHz = 8f, Altitude = new Vector2(10f, 35f), Episode = new Vector2(60f, 120f),
-					Habitats = AmbientHabitat.Jungle | AmbientHabitat.Woodland | AmbientHabitat.Scrub | AmbientHabitat.Grassland,
+					// Not in a temperate woodland (Woodland round, 2026-10-16).
+					Habitats = AmbientHabitat.Jungle | AmbientHabitat.Scrub | AmbientHabitat.Grassland,
 					Prefers = AmbientHabitat.Jungle, PreferWeight = 3f, Climate = new Vector2(Celsius(18f), 1f),
 					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(10f), RainLimit = 0.5f,
 					FlushMetres = 15f, FleeSpeed = 11f,

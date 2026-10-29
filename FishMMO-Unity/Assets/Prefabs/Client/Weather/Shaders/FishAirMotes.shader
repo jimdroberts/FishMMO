@@ -53,19 +53,22 @@ Shader "FishMMO/Weather/Air Motes"
             // The fine ground round the camera (MistGroundMap), shared with the mist and the lit surfaces.
             #include "FishGroundMap.hlsl"
 
-            // Per draw, from a MaterialPropertyBlock (AirMotesField.Render).
-            float4 _MoteOrigin;  // xyz camera position, w the ground under the camera (m): a ground band's last resort
-            float4 _MoteBox;     // xyz the box it wraps in round the camera (m), w 1 for a band over the ground, 0 a box round the camera
-            float4 _MoteBand;    // x, y the heights over the ground a band flies at (m), z, w the distances it fades out over (m)
-            float4 _MoteTravel;  // x, z metres the air has carried it (wrapped by the box), y metres the typical particle has settled (wrapped at box.y · 64)
-            float4 _MoteShape;   // x share of particles shown, y typical size (m), z largest (m), w the kind (AirMoteKind)
-            float4 _MoteFall;    // x slowest, y fastest settling against the typical, z smallest size (m), w the ground's say in the count: 1 fireflies, 2 wisps, 0 none
-            float4 _MoteWander;  // x its wander (m), y slowest, z fastest pace (rad/s), w the vertical share
-            float4 _MoteColor;   // rgb its colour (albedo, or the colour of its light), a single-scatter albedo × extinction efficiency
-            float4 _MotePhase;   // x the share in the sharp forward lobe, y its g, z the broad lobe's g, w the share lit as an opaque grain
-            float4 _MoteGlow;    // x the light it gives (linear, at its own disc; 0: it only scatters), y shortest, z longest cycle (s), w lit share of a cycle
-            float4 _MoteHalo;    // x a glow's halo radius against its core, y the halo's share of its light, z the glint cone's cosine, w the glint's peak (0: no glint)
-            float4 _MoteExtra;   // x pollen's seed-fluff share, y its size (m), z how much faster it settles, w the sub-pixel dot's sigma (px)
+            // Per kind, set on the field's own copy of the material for each kind (AirMotesField): in UnityPerMaterial, not
+            // from a property block, so every kind's draw stays in the SRP Batcher.
+            CBUFFER_START(UnityPerMaterial)
+                float4 _MoteOrigin;  // xyz camera position, w the ground under the camera (m): a ground band's last resort
+                float4 _MoteBox;     // xyz the box it wraps in round the camera (m), w 1 for a band over the ground, 0 a box round the camera
+                float4 _MoteBand;    // x, y the heights over the ground a band flies at (m), z, w the distances it fades out over (m)
+                float4 _MoteTravel;  // x, z metres the air has carried it (wrapped by the box), y metres the typical particle has settled (wrapped at box.y · 64)
+                float4 _MoteShape;   // x share of particles shown, y typical size (m), z largest (m), w the kind (AirMoteKind)
+                float4 _MoteFall;    // x slowest, y fastest settling against the typical, z smallest size (m), w the ground's say in the count: 1 fireflies, 2 wisps, 0 none
+                float4 _MoteWander;  // x its wander (m), y slowest, z fastest pace (rad/s), w the vertical share
+                float4 _MoteColor;   // rgb its colour (albedo, or the colour of its light), a single-scatter albedo × extinction efficiency
+                float4 _MotePhase;   // x the share in the sharp forward lobe, y its g, z the broad lobe's g, w the share lit as an opaque grain
+                float4 _MoteGlow;    // x the light it gives (linear, at its own disc; 0: it only scatters), y shortest, z longest cycle (s), w lit share of a cycle
+                float4 _MoteHalo;    // x a glow's halo radius against its core, y the halo's share of its light, z the glint cone's cosine, w the glint's peak (0: no glint)
+                float4 _MoteExtra;   // x pollen's seed-fluff share, y its size (m), z how much faster it settles, w the sub-pixel dot's sigma (px)
+            CBUFFER_END
 
             #define MOTE_DUST 0
             #define MOTE_POLLEN 1

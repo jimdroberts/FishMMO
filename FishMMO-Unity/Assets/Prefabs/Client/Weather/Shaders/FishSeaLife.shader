@@ -1,6 +1,7 @@
 // The background creatures of the sea (SeaLifeSystem, FishMMO.Client/World/SeaLife): schools of fish,
 // reef fish, sharks, rays, turtles, whales, jellyfish and crabs. Pass code and the vertex contract are in
-// FishSeaLife.hlsl. Drawn only with Graphics.DrawMeshInstanced, one runtime material per kind.
+// FishSeaLife.hlsl. Drawn only by SeaLifeSystem: one Graphics.RenderMeshPrimitives and one runtime material per kind, every
+// animal read from its instance buffer by SV_InstanceID (no instancing variants, no property block).
 //
 // Opaque kinds draw in the opaque queue, so the sea refracts them from above and the underwater pass
 // fogs them with everything else; jellies draw blended (premultiplied), after the sea's surface and
@@ -45,7 +46,6 @@ Shader "FishMMO/Sea Life"
             #pragma target 3.5
             #pragma vertex SeaLifeVertexMain
             #pragma fragment SeaLifeForwardFragment
-            #pragma multi_compile_instancing
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #include_with_pragmas "FishShadowVariants.hlsl"
             #include_with_pragmas "FishLightCookieVariants.hlsl"
@@ -72,7 +72,6 @@ Shader "FishMMO/Sea Life"
             #pragma target 3.5
             #pragma vertex SeaLifeDepthVertex
             #pragma fragment SeaLifeDepthFragment
-            #pragma multi_compile_instancing
             #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
 
             #define FISH_SEA_LIFE_PASS_SHADOW
@@ -95,7 +94,6 @@ Shader "FishMMO/Sea Life"
             #pragma target 3.5
             #pragma vertex SeaLifeDepthVertex
             #pragma fragment SeaLifeDepthFragment
-            #pragma multi_compile_instancing
 
             #define FISH_SEA_LIFE_PASS_DEPTH
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -115,7 +113,6 @@ Shader "FishMMO/Sea Life"
             #pragma target 3.5
             #pragma vertex SeaLifeVertexMain
             #pragma fragment SeaLifeDepthNormalsFragment
-            #pragma multi_compile_instancing
             #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
 
             #define FISH_SEA_LIFE_PASS_DEPTHNORMALS

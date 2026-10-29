@@ -44,7 +44,9 @@ Material:
     - _Cutoff: 0.45
     - _Deciduous: 0
     - _DistanceFade: 1
+    - _Evergreen: 0
     - _FacingCamera: 0
+    - _FishMoss: 0
     - _FishWeatherAmount: 0
     - _Smoothness: 0.1
     - _SnowBury: 0
@@ -68,7 +70,7 @@ Material:
     - _AutumnColor: {r: 1.6, g: 0.8, b: 0.3, a: 1}
     - _BaseColor: {r: 0.92, g: 0.9, b: 0.86, a: 1}
     - _DryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
-    - _GroundSink: {r: 0.006, g: 0.015, b: 0, a: 0}
+    - _GroundSink: {r: 0.0075, g: 0.015, b: 0, a: 0}
     - _HealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
     - _VaryColour: {r: 0.12, g: 0.08, b: 0.06, a: 0.1}
     - _VaryFullness: {r: 0, g: 0.2, b: 0, a: 0}

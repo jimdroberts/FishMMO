@@ -14,7 +14,7 @@ namespace FishMMO.Client
 	/// terrain's draw distance that the camera, or the sun's shadow of it, can see, and sizes every type's slots from the
 	/// items' exact upper bounds; FishDetailScatter.compute turns the items into instances in per-(type, view) regions;
 	/// and one <see cref="Graphics.RenderMeshIndirect"/> per type and view draws them through the material's
-	/// procedural-instancing twin (FishIndirectInstancing.hlsl), the same twin the chunk renderer draws with. Everything
+	/// procedural-instancing twin (FishIndirectInstancing.hlsl), the same twin the removed CPU chunk renderer drew with. Everything
 	/// the GPU does for a camera is recorded into one command buffer executed on that camera's context, as
 	/// <see cref="GrassBladeRenderer"/> and <see cref="TerrainGpuRenderer"/> do. No readback in the frame.
 	/// </summary>
@@ -83,7 +83,6 @@ namespace FishMMO.Client
 		private static readonly int InstancesOutId = Shader.PropertyToID("_ScatterInstancesOut");
 		private static readonly int VisibleOutId = Shader.PropertyToID("_ScatterVisibleOut");
 		private static readonly int HeightsId = Shader.PropertyToID("_ScatterHeights");
-		private static readonly int DensityId = Shader.PropertyToID("_ScatterDensity");
 		private static readonly int HolesId = Shader.PropertyToID("_ScatterHoles");
 		private static readonly int CameraId = Shader.PropertyToID("_ScatterCamera");
 		private static readonly int PlanesId = Shader.PropertyToID("_ScatterPlanes");
@@ -162,7 +161,7 @@ namespace FishMMO.Client
 		private int lastStatsFrame = -1000;
 		private bool[] overflowWarned = Array.Empty<bool>();
 
-		/// <summary>Bytes of GPU buffers held (the textures are the atlas's).</summary>
+		/// <summary>Bytes of GPU buffers held, the atlas's table with them (its height and hole arrays are textures).</summary>
 		public long GpuBytes
 		{
 			get
@@ -172,9 +171,13 @@ namespace FishMMO.Client
 				{
 					n += b != null ? (long)b.count * b.stride : 0;
 				}
-				return n;
+				// And the table: the terrains' rows and their sparse density.
+				return n + atlas.TableBytes;
 			}
 		}
+
+		/// <summary>Bytes of the atlas's table alone (the terrains' rows and their sparse density).</summary>
+		public long TableBytes => atlas.TableBytes;
 
 		public int Capacity(int slot) => slot >= 0 && slot < capacities.Length ? capacities[slot] : 0;
 
@@ -201,7 +204,7 @@ namespace FishMMO.Client
 #endif
 			if (!TerrainGpuMath.ChooseGpu(SystemInfo.supportsComputeShaders, SystemInfo.maxComputeBufferInputsVertex, cs != null))
 			{
-				reason = cs == null ? $"the compute ({ComputeAssetPath}) is not loaded: Weather Render Profile → GPU detail scatter" : "no compute shaders or too few vertex-stage buffers on this device (the chunk renderer draws every detail)";
+				reason = cs == null ? $"the compute ({ComputeAssetPath}) is not loaded: Weather Render Profile → GPU detail scatter" : "no compute shaders or too few vertex-stage buffers on this device";
 				return null;
 			}
 			// Its pebbles draw through the rock shader, which declares the crevice inputs: bound before the first draw.
@@ -357,7 +360,6 @@ namespace FishMMO.Client
 			foreach (GroupRange range in ranges)
 			{
 				cmd.SetComputeTextureParam(compute, generateKernel, HeightsId, range.Group.Heights);
-				cmd.SetComputeTextureParam(compute, generateKernel, DensityId, range.Group.Density);
 				cmd.SetComputeTextureParam(compute, generateKernel, HolesId, range.Group.Holes);
 				cmd.SetComputeIntParam(compute, ItemOffsetId, range.Offset);
 				cmd.SetComputeIntParam(compute, ItemCountId, range.Count);
@@ -502,7 +504,7 @@ namespace FishMMO.Client
 			public float Tallest, Shortest, Reach;
 		}
 
-		private readonly ListedChannel[] listed = new ListedChannel[DetailScatterMath.MaxChannels];
+		private ListedChannel[] listed = new ListedChannel[16];
 		private static readonly Unity.Profiling.ProfilerMarker ListMarker = new Unity.Profiling.ProfilerMarker("DetailScatterRenderer.ListItems");
 
 		/// <summary>
@@ -524,6 +526,10 @@ namespace FishMMO.Client
 			int iz0 = Mathf.Max(0, Mathf.FloorToInt((eye.z - listedReach - st.Origin.z) / itemZ)), iz1 = Mathf.Min(side - 1, Mathf.FloorToInt((eye.z + listedReach - st.Origin.z) / itemZ));
 			float pad = st.MaxInstanceReach + 0.5f;
 			int channels = st.Channels;
+			if (listed.Length < channels)
+			{
+				listed = new ListedChannel[Mathf.NextPowerOfTwo(channels)];
+			}
 			for (int c = 0; c < channels; c++)
 			{
 				ref ListedChannel lc = ref listed[c];
@@ -554,13 +560,10 @@ namespace FishMMO.Client
 			{
 				for (int ix = ix0; ix <= ix1; ix++)
 				{
-					int boundsAt = (iz * side + ix) * DetailScatterMath.MaxChannels;
-					bool anything = false;
-					for (int c = 0; c < channels && !anything; c++)
-					{
-						anything = st.ItemBounds[boundsAt + c] > 0;
-					}
-					if (!anything)
+					// The item's painted channels and their bounds (sparse: DetailScatterDensity.ItemBounds).
+					int item = iz * side + ix;
+					int boundsFrom = st.ItemBoundStart[item], boundsTo = st.ItemBoundStart[item + 1];
+					if (boundsFrom >= boundsTo)
 					{
 						continue;
 					}
@@ -584,9 +587,14 @@ namespace FishMMO.Client
 					// The far side only for a bush's levels: worked out once an item has one.
 					float far = -1f;
 					bool any = false;
-					for (int c = 0; c < channels; c++)
+					for (int k = boundsFrom; k < boundsTo; k++)
 					{
-						int bound = st.ItemBounds[boundsAt + c];
+						int c = st.ItemBoundChannel[k];
+						int bound = st.ItemBoundValue[k];
+						if (c >= channels)
+						{
+							continue;
+						}
 						ref ListedChannel lc = ref listed[c];
 						if (bound <= 0 || !lc.Usable)
 						{
@@ -836,6 +844,12 @@ namespace FishMMO.Client
 			// On the clone and on every block (Bind, per command: a bush takes its colours only), as the trees set
 			// _FishContactOn: the source material, a Rock_* the boulders and cliff rocks wear too, is never touched.
 			clone.SetFloat(TerrainGpuRenderer.FloraOnId, 1f);
+			// An alpha-tested bush is never primed (its lit pass writes depth): drawn between the trees' primes and their lit
+			// draws, not sorted in among the latter, which write none (TerrainGpuRenderer.UnprimedAlphaTestQueueOffset).
+			if (shader.name == TerrainGpuRenderer.VegetationIndirectName && clone.IsKeywordEnabled("_ALPHATEST_ON"))
+			{
+				clone.renderQueue = material.renderQueue + TerrainGpuRenderer.UnprimedAlphaTestQueueOffset;
+			}
 			clones.Add(material, clone);
 			return clone;
 		}

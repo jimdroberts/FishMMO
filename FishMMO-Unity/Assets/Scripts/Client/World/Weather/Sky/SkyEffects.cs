@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
+using FishMMO.Shared;
 using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
 
@@ -26,7 +27,8 @@ namespace FishMMO.Client
 		private readonly List<Vector2> uvs = new List<Vector2>();
 		private readonly List<Color> colors = new List<Color>();
 		private readonly List<int> indices = new List<int>();
-		private readonly MaterialPropertyBlock block = new MaterialPropertyBlock();
+		// The bolt material's own copy, its colour set on it: a property block would take the draw out of the SRP Batcher.
+		private readonly DrawMaterials materials = new DrawMaterials("Lightning");
 		private Mesh mesh;
 		private double lastTime = double.NaN;
 		private double lastReal = double.NaN;
@@ -210,8 +212,9 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			block.SetColor(BoltColorId, new Color(0.8f, 0.85f, 1f, 3f));
-			var rp = new RenderParams(material) { camera = camera, matProps = block, worldBounds = mesh.bounds, shadowCastingMode = ShadowCastingMode.Off, receiveShadows = false };
+			Material copy = materials.For(material);
+			copy.SetColor(BoltColorId, new Color(0.8f, 0.85f, 1f, 3f));
+			var rp = new RenderParams(copy) { camera = camera, worldBounds = mesh.bounds, shadowCastingMode = ShadowCastingMode.Off, receiveShadows = false };
 			Graphics.RenderMesh(rp, mesh, 0, Matrix4x4.identity);
 		}
 
@@ -222,6 +225,7 @@ namespace FishMMO.Client
 				if (Application.isPlaying) Object.Destroy(mesh); else Object.DestroyImmediate(mesh);
 				mesh = null;
 			}
+			materials.Dispose();
 		}
 	}
 
@@ -301,7 +305,9 @@ namespace FishMMO.Client
 		private static readonly int NoiseId = Shader.PropertyToID("_CurtainNoise");
 		private Mesh box;
 		private readonly StormFrames storms = new StormFrames();
-		private readonly MaterialPropertyBlock block = new MaterialPropertyBlock();
+		// One copy of the curtain material for each curtain drawn this camera, each with its own numbers: a property block
+		// would take every curtain's draw out of the SRP Batcher.
+		private readonly DrawMaterials materials = new DrawMaterials("Curtain");
 		private static readonly int StormId = Shader.PropertyToID("_CurtainStorm");
 		private readonly List<Curtain> nearest = new List<Curtain>();
 
@@ -802,28 +808,31 @@ namespace FishMMO.Client
 					: 0.55f;
 				bool flakes = kind == PrecipitationKind.Snow || kind == PrecipitationKind.Ash;
 
-				block.SetVector(CentreId, new Vector4(centre.x, ground, centre.y, top));
-				block.SetVector(ShapeId, new Vector4(forward.x, forward.y, radius, extent));
-				block.SetVector(FormId, new Vector4((float)footprint.Shape, (float)style, flakes ? 1f : 0f, (cell.Seed & 0xFFFFu) / 65536f));
-				block.SetVector(FallId, new Vector4(fallSpeed, time, drift.x, drift.y));
-				block.SetVector(AmountId, new Vector4(Mathf.Clamp01(amount), waterShare, dustShare, forwardScatter));
-				block.SetColor(ColorId, color);
-				block.SetVector(MarchId, new Vector4(Strides, 0f, noise != null ? 1f : 0f, size));
-				block.SetVector(BoxId, new Vector4(middle.x, middle.y, 0.5f * sizeF, 0.5f * sizeA));
+				Material copy = materials.For(material, Drawn);
+				copy.SetVector(CentreId, new Vector4(centre.x, ground, centre.y, top));
+				copy.SetVector(ShapeId, new Vector4(forward.x, forward.y, radius, extent));
+				copy.SetVector(FormId, new Vector4((float)footprint.Shape, (float)style, flakes ? 1f : 0f, (cell.Seed & 0xFFFFu) / 65536f));
+				copy.SetVector(FallId, new Vector4(fallSpeed, time, drift.x, drift.y));
+				copy.SetVector(AmountId, new Vector4(Mathf.Clamp01(amount), waterShare, dustShare, forwardScatter));
+				copy.SetColor(ColorId, color);
+				copy.SetVector(MarchId, new Vector4(Strides, 0f, noise != null ? 1f : 0f, size));
+				copy.SetVector(BoxId, new Vector4(middle.x, middle.y, 0.5f * sizeF, 0.5f * sizeA));
 				// x 1 when it falls from a storm's own cloud: the shader then lets it fall only under
 				// that cloud as the weather map lays it out, and lights it by that cloud. y 1 when the
 				// sky has published the day the storm's cloud is lit by (as VortexPresenter asks): the
 				// curtain is lit by the same, and seen through the same air.
-				block.SetVector(StormId, new Vector4(curtain.OwnCloud && map != null ? 1f : 0f, SkySystem.CloudsReady ? 1f : 0f, 0f, 0f));
-				if (noise != null)
-				{
-					block.SetTexture(NoiseId, noise);
-				}
-				var rp = new RenderParams(material) { camera = camera, matProps = block, worldBounds = bounds, shadowCastingMode = ShadowCastingMode.Off, receiveShadows = false };
+				copy.SetVector(StormId, new Vector4(curtain.OwnCloud && map != null ? 1f : 0f, SkySystem.CloudsReady ? 1f : 0f, 0f, 0f));
+				// With no noise volume the shader reads none (_CurtainMarch.z 0): the material's own stays bound.
+				copy.SetTexture(NoiseId, noise != null ? noise : material.GetTexture(NoiseId));
+				var rp = new RenderParams(copy) { camera = camera, worldBounds = bounds, shadowCastingMode = ShadowCastingMode.Off, receiveShadows = false };
 				Graphics.RenderMesh(rp, box, 0, matrix);
 				Drawn++;
 			}
 		}
+
+		/// <summary>Reused for <see cref="Terrain.GetActiveTerrains"/>: <c>Terrain.activeTerrains</c> builds a new array on
+		/// every read, and this runs every frame.</summary>
+		private static readonly System.Collections.Generic.List<Terrain> activeTerrainsScratch = new System.Collections.Generic.List<Terrain>();
 
 		/// <summary>
 		/// The height what a storm drops reaches the ground at under a point: the terrain, or the sea
@@ -838,7 +847,8 @@ namespace FishMMO.Client
 				return island;
 			}
 			float ground = float.MinValue;
-			foreach (Terrain terrain in Terrain.activeTerrains)
+			Terrain.GetActiveTerrains(activeTerrainsScratch);
+			foreach (Terrain terrain in activeTerrainsScratch)
 			{
 				if (terrain == null || terrain.terrainData == null)
 				{
@@ -869,6 +879,7 @@ namespace FishMMO.Client
 				if (Application.isPlaying) Object.Destroy(box); else Object.DestroyImmediate(box);
 				box = null;
 			}
+			materials.Dispose();
 		}
 	}
 

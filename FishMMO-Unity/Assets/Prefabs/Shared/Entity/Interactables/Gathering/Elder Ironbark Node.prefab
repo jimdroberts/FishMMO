@@ -220,8 +220,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 5.8771744, y: 23.954887, z: 7.061835}
-  m_Center: {x: 0.586936, y: 11.977444, z: -0.81755733}
+  m_Size: {x: 5.878345, y: 23.936401, z: 7.0640388}
+  m_Center: {x: 0.58407307, y: 11.968201, z: -0.8147068}
 --- !u!114 &7934473404837635337
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -270,7 +270,7 @@ MonoBehaviour:
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: 7260598054390996014}
   _networkObjectCache: {fileID: 7260598054390996014}
-  InteractionRange: 6.030917
+  InteractionRange: 6.0320196
   onInteractTriggers:
   - {fileID: 11400000, guid: 461d9c4527ea3caff9e27fb5ac4a845c, type: 2}
   GizmoColor: {r: 0, g: 1, b: 0, a: 1}

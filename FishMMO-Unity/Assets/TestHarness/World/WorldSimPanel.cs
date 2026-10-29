@@ -1319,7 +1319,8 @@ namespace FishMMO.TestHarness.World
 			{
 				return;
 			}
-			refresh = 0.15f;
+			// A debug readout: its text is rebuilt (and its strings formatted) at a low rate, not many times a second.
+			refresh = 0.4f;
 			if (!PanelShown)
 			{
 				return;

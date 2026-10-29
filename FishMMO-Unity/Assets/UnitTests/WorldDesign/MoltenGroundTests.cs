@@ -46,7 +46,8 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That((int)BiomeLandformDatum.SeaSurface, Is.EqualTo(1));
 			Assert.That((int)BiomeLandformDatum.LavaSurface, Is.EqualTo(2));
 			Assert.That(TerrainLayerTable.RowGlow, Is.EqualTo(8));
-			Assert.That(TerrainLayerTable.Rows, Is.EqualTo(9));
+			// GROUND-BANDS (2026-10-26) appended the clock rows 9 and 10 after the glow row.
+			Assert.That(TerrainLayerTable.Rows, Is.EqualTo(11));
 		}
 
 		[Test]

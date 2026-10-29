@@ -89,6 +89,8 @@ namespace FishMMO.Shared.WorldDesign
 
 		public int Tiles;
 		public int DetailPrototypes;
+		/// <summary>The most detail prototypes one tile was given (only the rules that reach it: TerrainDetailLayerBudget).</summary>
+		public int TileDetailPrototypesMost;
 		public int TreePrototypes;
 		/// <summary>Tree prototypes whose prefab carries a collider, and so collide through the terrain collider.</summary>
 		public int TreePrototypesWithColliders;
@@ -113,7 +115,7 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			var text = new StringBuilder();
 			text.AppendLine($"[Terrain scatter] {Tiles} tile(s), {Elapsed.TotalSeconds:0.00} s: {TreesPlaced:N0} trees from {TreePrototypes} prototype(s) " +
-				$"({TreePrototypesWithColliders} colliding), {DetailCellsCovered:N0} detail cells from {DetailPrototypes} prototype(s) " +
+				$"({TreePrototypesWithColliders} colliding), {DetailCellsCovered:N0} detail cells from {DetailPrototypes} prototype(s) (at most {TileDetailPrototypesMost} on a tile) " +
 				$"at {DetailResolution}² ({DetailScatterMode}); carpets cover {CarpetCellsCovered:N0} cells at a mean {(CarpetCellsCovered > 0 ? CarpetCoverageSum / CarpetCellsCovered : 0d):P0}. " +
 				$"By phase: setup {SetupSeconds:0.0} s, reading {ReadSeconds:0.0} s, rules {RuleSeconds:0.0} s, carpets {CarpetSeconds:0.0} s (detail layers set {DetailLayerSeconds:0.0} s of those two), writing {WriteSeconds:0.0} s.");
 			foreach (RuleOutcome rule in Rules)

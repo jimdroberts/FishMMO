@@ -86,6 +86,25 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 		}
 
+		/// <summary>
+		/// A cut registers its scene and outputs once it has saved them, and a re-cut that fails registers the old scene's restored
+		/// terrain again: clearing the folder for the re-cut deleted it, and Addressables dropped its entries with the files.
+		/// </summary>
+		[Test]
+		public void TheCutRegistersItsAssets_AndAFailedRecutRegistersTheRestoredOnes()
+		{
+			string code = System.IO.File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/SceneGenerator.cs");
+			Assert.That(code, Does.Contain("AddressablesDashboard.RegisterSceneAssets(\n\t\t\t\tUnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings, scenePath, result.Wrote);").Or.Contain(
+				"AddressablesDashboard.RegisterSceneAssets(\r\n\t\t\t\tUnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings, scenePath, result.Wrote);"));
+			int restore = code.IndexOf("private static void RestoreRecut()", StringComparison.Ordinal);
+			int clear = code.IndexOf("if (AssetDatabase.IsValidFolder(terrainFolder))", restore, StringComparison.Ordinal);
+			int register = code.IndexOf("RegisterRestored(scenePath, terrainFolder);", restore, StringComparison.Ordinal);
+			int next = code.IndexOf("private static void RegisterRestored(string scenePath, string terrainFolder)", StringComparison.Ordinal);
+			Assert.That(restore, Is.GreaterThan(0));
+			Assert.That(register, Is.GreaterThan(clear).And.LessThan(next), "the restore registers what it put back");
+			Assert.That(code.Substring(next), Does.Contain("AddressablesDashboard.RegisterSceneAssets(settings, scenePath, restored);"));
+		}
+
 		private static void AssertEntry(AddressableAssetSettings settings, string path, string group, string address)
 		{
 			var entry = settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(path));

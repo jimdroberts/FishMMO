@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 using FishMMO.Shared.NameGeneration;
 using UnityEngine;
 
@@ -39,6 +40,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// decision 35 (i)); null for none: every crossing a ford or a bridge, as before. Left unset until the ferry's pieces exist.
 		/// </summary>
 		public Func<ScenePathClass, float> FerryOver;
+		/// <summary>
+		/// The straight roads the biome at (east, north) lays (<see cref="PathStraightRoads"/>, 2026-10-26, phase I2l-b); null for none:
+		/// every way routed round the ground, as before.
+		/// </summary>
+		public Func<float, float, BiomeStraightRoads> StraightRoadsAt;
+		/// <summary>The strike-slip traces the ways jog at (<see cref="PathJogs"/>, 2026-10-26, phase I2l-b); null or empty for none.</summary>
+		public IReadOnlyList<PathJogs.Trace> Faults;
 	}
 
 	/// <summary>A bridge a way needs where no bridge stands: the stage turns each into a Bridge site.</summary>
@@ -442,6 +450,11 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				plan.Notes.Add($"{plan.Paths.Count} way(s), {metres / 1000f:0.0} km: {roads} road(s), {tracks} cart track(s), {paths} footpath(s), {trails} trail(s); {plan.Bridges.Count} new bridge(s) ({plan.Gorges} over gorges), {plan.Fords} ford(s).");
+				int straight = plan.Paths.FindAll(p => p.Form != ScenePathForm.Routed).Count;
+				if (straight > 0 || jogs > 0)
+				{
+					plan.Notes.Add($"{straight} straight road(s); {jogs} jog(s) where ways cross strike-slip traces.");
+				}
 				return plan;
 			}
 
@@ -481,11 +494,29 @@ namespace FishMMO.Shared.WorldDesign
 					c = settlements[p.a].Id.CompareTo(settlements[q.a].Id);
 					return c != 0 ? c : settlements[p.b].Id.CompareTo(settlements[q.b].Id);
 				});
-				foreach ((int a, int b, ScenePathClass way, float _) in links)
+				ScenePathForm[] forms = StraightForms(settlements, links);
+				var ruts = straightRuts;
+				for (int li = 0; li < links.Count; li++)
 				{
+					(int a, int b, ScenePathClass way, float _) = links[li];
 					PointOfInterestRecord ra = settlements[a], rb = settlements[b];
 					End ea = EndFor(ra, new Vector2(rb.Position.x, rb.Position.z));
 					End eb = EndFor(rb, new Vector2(ra.Position.x, ra.Position.z));
+					// A straight road (2026-10-26, I2l-b): dead-straight from end to end where the line holds its grade, else routed.
+					if (forms[li] != ScenePathForm.Routed && TryStraight(ea.Outer, eb.Outer, ra.Id, rb.Id, way, forms[li]))
+					{
+						var straightLine = new List<Vector2>();
+						var straightInSite = new List<bool>();
+						AddInner(straightLine, straightInSite, ea.Inner, true);
+						straightLine.Add(ea.Outer);
+						straightInSite.Add(false);
+						straightLine.Add(eb.Outer);
+						straightInSite.Add(false);
+						AddInner(straightLine, straightInSite, eb.Inner, false);
+						gorgeSpans.Clear();
+						Finish(straightLine, straightInSite, way, ra, rb, ea.Entrance, eb.Entrance, 1f, false, forms[li], ruts[li]);
+						continue;
+					}
 					var request = new PathRouter.Request { Class = way, From = ea.Outer, To = eb.Outer, OwnA = ra.Id, OwnB = rb.Id };
 					PathRouter.Route route = router.Find(request);
 					if (route == null)
@@ -509,6 +540,82 @@ namespace FishMMO.Shared.WorldDesign
 					AddInner(line, inSite, eb.Inner, false);
 					Finish(line, inSite, way, ra, rb, ea.Entrance, eb.Entrance, 1f, false);
 				}
+			}
+
+			// ── Straight roads (2026-10-26, phase I2l-b) ───────────
+
+			/// <summary>Whether each sorted trunk link of the straight network wears ruts (<see cref="BiomeStraightRoads.Ruts"/>).</summary>
+			private bool[] straightRuts = Array.Empty<bool>();
+
+			/// <summary>
+			/// The form each sorted trunk link is built to (<see cref="PathStraightRoads"/>): Routed for every link when the input lays no
+			/// straight roads (and then nothing else is read), else the one network's links in their biomes' form, at most two cut.
+			/// </summary>
+			private ScenePathForm[] StraightForms(List<PointOfInterestRecord> settlements, List<(int a, int b, ScenePathClass way, float length)> links)
+			{
+				var forms = new ScenePathForm[links.Count];
+				straightRuts = new bool[links.Count];
+				if (input.StraightRoadsAt == null || links.Count == 0)
+				{
+					return forms;
+				}
+				var candidates = new List<PathStraightRoads.Link>(links.Count);
+				var relief = new List<float>(links.Count);
+				foreach ((int a, int b, ScenePathClass _, float length) in links)
+				{
+					PointOfInterestRecord ra = settlements[a], rb = settlements[b];
+					BiomeStraightRoads roads = PathStraightRoads.Join(input.StraightRoadsAt(ra.Position.x, ra.Position.z), input.StraightRoadsAt(rb.Position.x, rb.Position.z));
+					candidates.Add(new PathStraightRoads.Link { A = ra.Id, B = rb.Id, Length = length, Roads = roads });
+					// How high the ground stands over the straight chord between the two: the ways the cut roads are sunk through.
+					float r = 0f;
+					if (roads.Form == BiomeStraightRoadForm.Cut)
+					{
+						List<Vector2> chord = PathStraightRoads.Line(new Vector2(ra.Position.x, ra.Position.z), new Vector2(rb.Position.x, rb.Position.z), 8f);
+						var natural = new List<float>(chord.Count);
+						foreach (Vector2 p in chord)
+						{
+							natural.Add(input.Ground(p.x, p.y));
+						}
+						r = PathStraightRoads.Relief(natural);
+					}
+					relief.Add(r);
+				}
+				List<int> network = PathStraightRoads.Network(candidates);
+				ScenePathForm[] chosen = PathStraightRoads.Forms(candidates, network, relief);
+				foreach (int i in network)
+				{
+					straightRuts[i] = candidates[i].Roads.Ruts;
+				}
+				if (network.Count > 0)
+				{
+					plan.Notes.Add($"Straight roads: {network.Count} trunk way(s) in the scene's one network.");
+				}
+				return chosen;
+			}
+
+			/// <summary>
+			/// True when a straight line from <paramref name="from"/> to <paramref name="to"/> holds: on no open water, hole or other site's
+			/// ground (the router's cells every 2 m), and its carve's levels within its grade or its stairs (<see cref="PathStraightRoads.Profile"/>).
+			/// </summary>
+			private bool TryStraight(Vector2 from, Vector2 to, int ownA, int ownB, ScenePathClass way, ScenePathForm form)
+			{
+				List<Vector2> line = PathStraightRoads.Line(from, to, PointSpacing);
+				var natural = new List<float>(line.Count);
+				foreach (Vector2 p in line)
+				{
+					if (!router.CellOf(p.x, p.y, out int cx, out int cz))
+					{
+						return false;
+					}
+					int i = router.Index(cx, cz);
+					int owner = router.Owner[i];
+					if (router.Blocked[i] || router.Water[i] == PathCellWater.Open || owner != 0 && owner != ownA && owner != ownB)
+					{
+						return false;
+					}
+					natural.Add(input.Ground(p.x, p.y));
+				}
+				return PathStraightRoads.Profile(natural, PointSpacing, ScenePathStyle.For(way, form), null);
 			}
 
 			// ── Spurs ──────────────────────────────────────────────
@@ -1021,7 +1128,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// way in the router for those after it, and the bridges it needs.
 			/// </summary>
 			private void Finish(List<Vector2> raw, List<bool> rawInSite, ScenePathClass way, PointOfInterestRecord from, PointOfInterestRecord to,
-				float fromEntrance, float toEntrance, float wearScale, bool spur)
+				float fromEntrance, float toEntrance, float wearScale, bool spur, ScenePathForm form = ScenePathForm.Routed, bool ruts = false)
 			{
 				ScenePathStyle style = ScenePathStyle.For(way);
 				// A gorge's span stays straight through the smoothing (its rim cells pinned), and is not inside a site.
@@ -1036,6 +1143,11 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				List<Vector2> smooth = Smooth(raw, pins, out List<bool> smoothPinned);
+				// Where it crosses a strike-slip trace, the way jogs along it for the slip (2026-10-26, I2l-b): never through a pinned point.
+				if (input.Faults != null && input.Faults.Count > 0)
+				{
+					jogs += PathJogs.Apply(smooth, smoothPinned, input.Faults, WalkableLine);
+				}
 				var smoothInSite = new List<bool>(smoothPinned.Count);
 				for (int k = 0; k < smooth.Count; k++)
 				{
@@ -1055,6 +1167,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					Id = id,
 					Class = way,
+					Form = form,
 					FromId = from != null ? from.Id : -1,
 					ToId = to != null ? to.Id : -1,
 					FromEntrance = fromEntrance,
@@ -1101,7 +1214,12 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					path.HalfWidth[i] = half;
 					ScenePathSurface surface = style.Surface;
-					if (way == ScenePathClass.Road && (paveFrom && along[i] < 250f || paveTo && total - along[i] < 250f))
+					if (ruts)
+					{
+						// A royal road's ox-cart ruts (decision 59) its whole length, a city's gates or not.
+						surface = ScenePathSurface.Track;
+					}
+					else if (way == ScenePathClass.Road && (paveFrom && along[i] < 250f || paveTo && total - along[i] < 250f))
 					{
 						surface = ScenePathSurface.Stone;
 					}
@@ -1109,6 +1227,10 @@ namespace FishMMO.Shared.WorldDesign
 					path.Flags[i] = (byte)(inSite[i] ? ScenePathPointFlags.InSite : ScenePathPointFlags.None);
 				}
 				Gorges(path, spans);
+				if (form != ScenePathForm.Routed)
+				{
+					StraightStairs(path);
+				}
 				// A way between two settlements (not a spur, nor an old road's ruin) is theirs to keep: it bridges what it may.
 				bool settlementsRoad = !spur && from != null && to != null && from != to && RankOf(from.Kind) > 0 && RankOf(to.Kind) > 0;
 				Crossings(path, style, settlementsRoad);
@@ -1124,6 +1246,51 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				router.MarkWay(marked, way, style.HalfWidth);
+			}
+
+			/// <summary>How many strike-slip jogs the ways were given (<see cref="PathJogs"/>).</summary>
+			private int jogs;
+
+			/// <summary>
+			/// Flags a straight road's stairs (<see cref="ScenePathPointFlags.Stairs"/>): its carve's levels from the ground past its
+			/// shoulders, as PathCarver reads them, and the flights <see cref="PathStraightRoads.Profile"/> finds; none inside a site.
+			/// </summary>
+			private void StraightStairs(ScenePath path)
+			{
+				int n = path.Count;
+				ScenePathStyle style = ScenePathStyle.Of(path);
+				var natural = new float[n];
+				for (int i = 0; i < n; i++)
+				{
+					Vector3 a = path.Points[Mathf.Max(0, i - 1)], b = path.Points[Mathf.Min(n - 1, i + 1)];
+					var dir = new Vector2(b.x - a.x, b.z - a.z);
+					dir = dir.sqrMagnitude > 1e-6f ? dir.normalized : Vector2.up;
+					var normal = new Vector2(-dir.y, dir.x);
+					float off = path.HalfWidth[i] + style.Shoulder + 1f;
+					Vector3 c = path.Points[i];
+					natural[i] = 0.5f * (input.Ground(c.x + normal.x * off, c.z + normal.y * off) + input.Ground(c.x - normal.x * off, c.z - normal.y * off));
+				}
+				var stairs = new bool[n];
+				if (!PathStraightRoads.Profile(natural, PointSpacing, style, stairs))
+				{
+					plan.Notes.Add($"Way {path.Id} ({path.Form} {path.Class}) holds its grade only roughly once laid: its carve evens what it cannot climb.");
+				}
+				int flights = 0;
+				for (int i = 0; i < n; i++)
+				{
+					if (stairs[i] && (path.FlagsAt(i) & ScenePathPointFlags.InSite) == 0)
+					{
+						if (i == 0 || (path.FlagsAt(i - 1) & ScenePathPointFlags.Stairs) == 0)
+						{
+							flights++;
+						}
+						path.Flags[i] |= (byte)ScenePathPointFlags.Stairs;
+					}
+				}
+				if (flights > 0)
+				{
+					plan.Notes.Add($"Way {path.Id} ({path.Form} {path.Class}) climbs {flights} cliff(s) on cut stairs.");
+				}
 			}
 
 			/// <summary>

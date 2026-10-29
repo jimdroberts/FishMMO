@@ -73,6 +73,23 @@ namespace FishMMO.Shared.WorldDesign
 			return null;
 		}
 
+		/// <summary>A kind's first template (in path order) of a variant (<see cref="PointOfInterestTemplate.VariantKey"/>, case ignored), or null.</summary>
+		public PointOfInterestTemplate Variant(POIType kind, string variant)
+		{
+			if (string.IsNullOrEmpty(variant) || !byKind.TryGetValue(kind, out List<PointOfInterestTemplate> list))
+			{
+				return null;
+			}
+			foreach (PointOfInterestTemplate template in list)
+			{
+				if (string.Equals(template.VariantKey, variant, StringComparison.OrdinalIgnoreCase))
+				{
+					return template;
+				}
+			}
+			return null;
+		}
+
 		/// <summary>
 		/// A template for a site, drawn by its site seed and weighted by <see cref="PointOfInterestTemplate.WeightFor"/>;
 		/// null (a marker-only site) when the kind has none or none fits.

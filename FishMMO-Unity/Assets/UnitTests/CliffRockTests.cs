@@ -540,7 +540,8 @@ namespace FishMMO.UnitTests
 			BiomeArtSpec.Entry hills = BiomeArtSpec.For("Hills");
 			if (hills != null)
 			{
-				Assert.That(CliffRocks.RockTypeFor(Ground.Rock, hills), Is.EqualTo("Granite"), "Hills scatter granite tors: their cliffs are granite");
+				// The Hills round (2026-10-26): schist country, its own rock by its formations.
+				Assert.That(CliffRocks.RockTypeFor(Ground.Rock, hills), Is.EqualTo("Schist"), "the Hills' formations are schist: their cliffs are schist");
 			}
 		}
 

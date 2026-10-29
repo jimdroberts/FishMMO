@@ -342,6 +342,9 @@ namespace FishMMO.Shared.WorldDesign
 			public BiomeLandformZones GradeZones;
 			/// <summary>The rule's scatter modes (<see cref="PrefabSpawnRule.scatterMode"/>, 2026-10-26, SCATTER-MODES); null when all are off: no mode path is taken.</summary>
 			public ScatterModeRun Modes;
+			/// <summary>True when the rule has a facing band (<see cref="PrefabSpawnRule.facingBand"/>, 2026-10-26, GROUND-BANDS); <see cref="FaceCompass"/> the scene's. False skips the band.</summary>
+			public bool Faced;
+			public BiomeScatterCompass FaceCompass;
 			public TerrainScatterReport.RuleOutcome Outcome;
 			public bool Runnable => !Outcome.Skipped;
 		}
@@ -504,6 +507,12 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						// Turned, tilted, sized, anchored or laid out (2026-10-26, SCATTER-MODES, decision 34); off: no run, nothing changes.
 						scatterRule.Modes = ModesFor(rule, entry, options, seed, scatterRule.Seed, report);
+					}
+					if (rule.facingBand.On)
+					{
+						// Only on slopes facing one way (2026-10-26, GROUND-BANDS, decision 71); the scene's compass, plain axes without one.
+						scatterRule.Faced = true;
+						scatterRule.FaceCompass = options != null ? options.Compass : default;
 					}
 					if (rule.useClimateBand)
 					{
@@ -958,8 +967,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// only. The client's GPU scatter holds to that as well (FishMMO.Client DetailScatterSettings).
 		/// </para>
 		/// </remarks>
-		/// <param name="report">Where a prototype that would not calibrate is reported; null to stay quiet (every tile after the first).</param>
-		private static void CalibrateCountedDetails(TerrainData data, DetailPrototype[] prototypes, List<ScatterRule> rules, TerrainScatterReport report)
+		/// <param name="prototypes">The tile's prototypes, by tile layer (<see cref="Workspace.Tile"/>).</param>
+		/// <param name="report">Where a prototype that would not calibrate is reported, the first tile it is calibrated on.</param>
+		private static void CalibrateCountedDetails(TerrainData data, DetailPrototype[] prototypes, List<ScatterRule> rules, Workspace work, TerrainScatterReport report)
 		{
 			if (data.detailScatterMode != DetailScatterMode.CoverageMode || prototypes == null || prototypes.Length == 0)
 			{
@@ -975,12 +985,15 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					continue;
 				}
-				foreach (int p in rule.Prototypes)
+				foreach (int scene in rule.Prototypes)
 				{
+					// The tile's layer of it: the prototype Unity is asked about is the tile's own (TerrainDetailLayerBudget).
+					int p = TileLayer(work, scene);
 					if (p < 0 || p >= prototypes.Length || !IsCountedDetail(prototypes[p].prototype))
 					{
 						continue;
 					}
+					bool first = work.Calibrated.Add(scene);
 					DetailPrototype prototype = prototypes[p];
 					if (prototype.useDensityScaling)
 					{
@@ -1006,7 +1019,7 @@ namespace FishMMO.Shared.WorldDesign
 						prototype.density *= wanted / have;
 						changed = true;
 					}
-					if (report != null && !(Mathf.Abs(have - wanted) <= wanted * 0.05f))
+					if (first && report != null && !(Mathf.Abs(have - wanted) <= wanted * 0.05f))
 					{
 						report.Warnings.Add($"'{prototype.prototype.name}': {have:F3} per m² at full coverage against the {wanted:F3} that makes one plant a placement (density {prototype.density:F2}); its counts will be off.");
 					}
@@ -1063,7 +1076,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Which biome's rule made each detail prototype (every tile carries the same prototypes): the record the client reads
+		/// Which biome's rule made each detail prototype (the whole scene's, keyed by prefab and noise seed, so it holds whichever of them a tile carries): the record the client reads
 		/// to give a prototype's blades its own biome's look and its rule's healthy and dry tints (<see cref="TerrainDetailBiomes"/>).
 		/// </summary>
 		private static List<TerrainDetailBiomes.Entry> PrototypeBiomes(List<ScatterRule> rules, DetailPrototype[] prototypes)
@@ -1179,6 +1192,19 @@ namespace FishMMO.Shared.WorldDesign
 			public int[] CarpetUnits;
 			/// <summary>Each texel's biome weights for a band of alphamap rows (<see cref="ReadBiomes"/>).</summary>
 			public float[] BandWeights = Array.Empty<float>();
+			/// <summary>
+			/// The current tile's detail layers: a scene prototype takes one the first time its rule writes cells here
+			/// (<see cref="WriteDetailLayers"/>). Every detail layer the scatter reads or writes goes through it.
+			/// </summary>
+			public readonly TerrainDetailLayerBudget.TileLayers Tile = new TerrainDetailLayerBudget.TileLayers();
+			/// <summary>The scene's detail prototypes, by scene index.</summary>
+			public DetailPrototype[] ScenePrototypes = Array.Empty<DetailPrototype>();
+			/// <summary>The current tile's name, for its errors.</summary>
+			public string TileName;
+			/// <summary>The current tile's prototypes refused for room (by scene index), each reported once a tile.</summary>
+			public readonly HashSet<int> Refused = new HashSet<int>();
+			/// <summary>The scene's counted prototypes already calibrated, and the prototypes whose vertex budget was checked, by scene index.</summary>
+			public readonly HashSet<int> Calibrated = new HashSet<int>(), BudgetChecked = new HashSet<int>();
 
 			public Workspace(int biomes, int attributions)
 			{
@@ -1193,8 +1219,7 @@ namespace FishMMO.Shared.WorldDesign
 			public static float[] Fit(float[] array, int length)
 			{
 				return array != null && array.Length == length ? array : new float[length];
-			}
-		}
+			}		}
 
 		/// <summary>Where on a tile, and in what frame, its cells are.</summary>
 		private struct TileFrame
@@ -1236,11 +1261,15 @@ namespace FishMMO.Shared.WorldDesign
 			int detailResolution = DetailResolutionFor(frame.Size.x, perPatch, options);
 			data.SetDetailResolution(detailResolution, perPatch);
 			data.SetDetailScatterMode(options.DetailScatterMode);
-			data.detailPrototypes = detailPrototypes;
+			/* No detail prototypes yet: each is given to the tile the first time its rule writes cells here (WriteDetailLayers),
+			 * never the whole scene's list — Unity keeps a detail layer's index in a byte (TerrainDetailLayerBudget). */
 			data.treePrototypes = treePrototypes;
 			data.RefreshPrototypes();
 			detailResolution = data.detailResolution;
-			CalibrateCountedDetails(data, detailPrototypes, rules, firstTile ? report : null);
+			work.Tile.Begin(detailPrototypes.Length, TerrainDetailLayerBudget.MaxLayers - SiteHeadroom);
+			work.ScenePrototypes = detailPrototypes;
+			work.TileName = terrain.name;
+			work.Refused.Clear();
 			report.DetailResolution = detailResolution;
 
 			if (options.ApplyDrawSettings)
@@ -1254,7 +1283,6 @@ namespace FishMMO.Shared.WorldDesign
 
 			if (firstTile)
 			{
-				WarnVertexBudget(data, detailPrototypes, terrain.detailObjectDensity, report);
 				if (data.terrainLayers == null || data.terrainLayers.Length != palette.Layers.Count)
 				{
 					report.Warnings.Add($"'{terrain.name}' has {(data.terrainLayers == null ? 0 : data.terrainLayers.Length)} terrain layers but the palette has {palette.Layers.Count}; channels may not mean what the rules expect. Write the splat before scattering.");
@@ -1365,6 +1393,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			report.DetailCellsCovered += tileDetailUsed;
 			report.TreesPlaced += tileTreesUsed;
+			FinishDetails(terrain, data, rules, work, report);
 			Finish(terrain, data, work);
 			report.WriteSeconds += Lap();
 		}
@@ -1406,12 +1435,18 @@ namespace FishMMO.Shared.WorldDesign
 		/// Unity's own warning, made at bake time: a non-instanced detail patch is one combined mesh,
 		/// and past 65,536 vertices it stops drawing correctly.
 		/// </summary>
-		private static void WarnVertexBudget(TerrainData data, DetailPrototype[] prototypes, float density, TerrainScatterReport report)
+		/// <param name="prototypes">The tile's prototypes, by tile layer; <paramref name="kept"/> gives each one's scene index.</param>
+		private static void WarnVertexBudget(TerrainData data, DetailPrototype[] prototypes, List<int> kept, float density, Workspace work, TerrainScatterReport report)
 		{
 			int patches = Mathf.Max(1, data.detailPatchCount);
 			float patchArea = data.size.x / patches * (data.size.z / patches);
 			for (int i = 0; i < prototypes.Length; i++)
 			{
+				// Once per prototype in the scene, on the first tile that carries it.
+				if (i < kept.Count && !work.BudgetChecked.Add(kept[i]))
+				{
+					continue;
+				}
 				DetailPrototype prototype = prototypes[i];
 				if (prototype.useInstancing || prototype.prototype == null || !prototype.prototype.TryGetComponent(out MeshFilter filter) || filter.sharedMesh == null)
 				{
@@ -1679,6 +1714,82 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
+		/// <summary>The current tile's layer of a scene detail prototype, −1 while the tile has none.</summary>
+		private static int TileLayer(Workspace work, int scenePrototype) => work.Tile.LayerOf(scenePrototype);
+
+		/// <summary>
+		/// The tile's detail prototypes once every rule has written (<see cref="Workspace.Tile"/>): the counted ones calibrated and
+		/// each one's vertex budget checked, the first tile that carries it; and how many the fullest tile held.
+		/// </summary>
+		/// <remarks>
+		/// Until 2026-10-27 every tile was given the whole scene's list (578 on Moron 2) and each rule wrote its scene index.
+		/// Unity keeps a detail layer's index in a byte, so every prototype past the 256th was written into another plant's layer
+		/// (Woodland's pasture grass into the Forest's holly, a carpet of bushes) and its own stayed empty.
+		/// </remarks>
+		private static void FinishDetails(Terrain terrain, TerrainData data, List<ScatterRule> rules, Workspace work, TerrainScatterReport report)
+		{
+			DetailPrototype[] prototypes = data.detailPrototypes;
+			report.TileDetailPrototypesMost = Math.Max(report.TileDetailPrototypesMost, prototypes.Length);
+			if (prototypes.Length == 0)
+			{
+				return;
+			}
+			CalibrateCountedDetails(data, prototypes, rules, work, report);
+			var kept = new List<int>(work.Tile.Kept);
+			// What the calibration settled, back on the scene's own prototypes: the next tile that carries one starts there.
+			prototypes = data.detailPrototypes;
+			for (int i = 0; i < prototypes.Length && i < kept.Count; i++)
+			{
+				DetailPrototype scene = work.ScenePrototypes[kept[i]];
+				scene.density = prototypes[i].density;
+				scene.useDensityScaling = prototypes[i].useDensityScaling;
+			}
+			WarnVertexBudget(data, prototypes, kept, terrain.detailObjectDensity, work, report);
+		}
+
+		/// <summary>
+		/// Gives the tile a layer for every prototype of <paramref name="rule"/> about to be written (cells placed) that has
+		/// none yet, appended after the tile's others (Unity keeps the layers already written when the list grows); a prototype
+		/// past the tile's room is refused there with an error.
+		/// </summary>
+		private static void GiveTileLayers(TerrainData data, ScatterRule rule, Workspace work, TerrainScatterReport report)
+		{
+			bool grew = false;
+			for (int v = 0; v < rule.Prototypes.Count; v++)
+			{
+				if (work.DetailPlaced[v] == 0)
+				{
+					continue;
+				}
+				int scene = rule.Prototypes[v];
+				work.Tile.LayerFor(scene, out bool added);
+				grew |= added;
+				if (work.Tile.LayerOf(scene) < 0 && work.Refused.Add(scene))
+				{
+					TerrainScatterReport.RuleOutcome outcome = rule.Outcome;
+					string name = scene >= 0 && scene < work.ScenePrototypes.Length && work.ScenePrototypes[scene]?.prototype != null ? work.ScenePrototypes[scene].prototype.name : $"prototype {scene}";
+					string message = $"ERROR: '{work.TileName}': {outcome.Biome} / {outcome.Slot} / '{outcome.RuleName}' '{name}' is not scattered on this tile: it already paints {work.Tile.Limit} detail kinds (Unity holds {TerrainDetailLayerBudget.MaxLayers} per terrain, {SiteHeadroom} kept for the sites). Use smaller tiles or fewer detail kinds per biome.";
+					report.Warnings.Add(message);
+					UnityEngine.Debug.LogError($"[Terrain scatter] {message}");
+				}
+			}
+			if (!grew)
+			{
+				return;
+			}
+			IReadOnlyList<int> kept = work.Tile.Kept;
+			var tilePrototypes = new DetailPrototype[kept.Count];
+			for (int i = 0; i < kept.Count; i++)
+			{
+				tilePrototypes[i] = work.ScenePrototypes[kept[i]];
+			}
+			data.detailPrototypes = tilePrototypes;
+			data.RefreshPrototypes();
+		}
+
+		/// <summary>The detail layers the scatter leaves free on every tile for the sites' own prototypes (PointOfInterestHerbGrove.SiteLayers).</summary>
+		public const int SiteHeadroom = 16;
+
 		private static void EnsureDetailBuffers(Workspace work, int resolution, List<ScatterRule> rules)
 		{
 			int variants = 0;
@@ -1708,12 +1819,13 @@ namespace FishMMO.Shared.WorldDesign
 		private static void WriteDetails(TerrainData data, ScatterRule rule, Workspace work, TerrainScatterReport report)
 		{
 			long began = Stopwatch.GetTimestamp();
-			WriteDetailLayers(data, rule, work);
+			WriteDetailLayers(data, rule, work, report);
 			report.DetailLayerSeconds += (Stopwatch.GetTimestamp() - began) / (double)Stopwatch.Frequency;
 		}
 
-		private static void WriteDetailLayers(TerrainData data, ScatterRule rule, Workspace work)
+		private static void WriteDetailLayers(TerrainData data, ScatterRule rule, Workspace work, TerrainScatterReport report)
 		{
+			GiveTileLayers(data, rule, work, report);
 			for (int v = 0; v < rule.Prototypes.Count; v++)
 			{
 				if (work.DetailPlaced[v] == 0)
@@ -1722,7 +1834,12 @@ namespace FishMMO.Shared.WorldDesign
 					continue;
 				}
 				int[,] buffer = work.DetailBuffers[v];
-				data.SetDetailLayer(0, 0, rule.Prototypes[v], buffer);
+				// The tile's own layer of the prototype, never the scene's index (TerrainDetailLayerBudget).
+				int layer = TileLayer(work, rule.Prototypes[v]);
+				if (layer >= 0)
+				{
+					data.SetDetailLayer(0, 0, layer, buffer);
+				}
 				Array.Clear(buffer, 0, buffer.Length);
 				work.DetailPlaced[v] = 0;
 			}
@@ -2179,6 +2296,17 @@ namespace FishMMO.Shared.WorldDesign
 					if (band <= 0f)
 					{
 						pick.Outcome = CellOutcome.NoHeight;
+						return;
+					}
+					chance *= band;
+				}
+				if (scatterRule.Faced)
+				{
+					// On a face looking one way (2026-10-26, GROUND-BANDS, decision 71), counted with the slope rejections.
+					float band = rule.facingBand.Weight(Downhill(frame, heights, heightRes, u, v), Bilinear(slopes, heightRes, u, v), in scatterRule.FaceCompass);
+					if (band <= 0f)
+					{
+						pick.Outcome = CellOutcome.NoSlope;
 						return;
 					}
 					chance *= band;
@@ -2717,6 +2845,16 @@ namespace FishMMO.Shared.WorldDesign
 					if (band <= 0f)
 					{
 						outcome = CarpetOutcome.NoHeight;
+						return 0f;
+					}
+					coverage *= band;
+				}
+				if (scatterRule.Faced)
+				{
+					float band = scatterRule.Rule.facingBand.Weight(Downhill(frame, heights, heightRes, u, v), Bilinear(slopes, heightRes, u, v), in scatterRule.FaceCompass);
+					if (band <= 0f)
+					{
+						outcome = CarpetOutcome.NoSlope;
 						return 0f;
 					}
 					coverage *= band;

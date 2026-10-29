@@ -727,6 +727,8 @@ namespace FishMMO.Shared.WorldDesign
 			AuthorDescription(biome, entry, report, apply);
 			AuthorNaming(biome, entry, report, apply);
 			AuthorEmission(biome, entry, report, apply);
+			AuthorLooseGround(biome, entry, report, apply);
+			AuthorTerrainProcess(biome, entry, report, apply);
 			AuthorGeothermal(biome, entry, report, apply);
 			AuthorVents(biome, entry, report, apply);
 			AuthorBurn(biome, entry, report, apply);
@@ -1046,7 +1048,7 @@ namespace FishMMO.Shared.WorldDesign
 			// Fields a pre-fingerprint run could not have set: anything but their defaults is somebody's.
 			if (rule.detailPlacement != DetailPlacement.Scattered || rule.sinkRange != Vector2.zero || rule.sinkSlopeFactor != 0f || rule.clusterMetres != 0f || rule.forestMetres != 0f
 				|| rule.depthRange != Vector2.zero || rule.useClimateBand || rule.waters != BiomeBedWaters.Default || rule.currentRange != Vector2.zero
-				|| !rule.worldGate.IsOpen || rule.useHeatBand || (rule.scaleSkew > 0f && rule.scaleSkew != 1f) || rule.landformBand.On || rule.talusGrading || !rule.scatterMode.IsOff)
+				|| !rule.worldGate.IsOpen || rule.useHeatBand || (rule.scaleSkew > 0f && rule.scaleSkew != 1f) || rule.landformBand.On || rule.talusGrading || rule.facingBand.On || !rule.scatterMode.IsOff)
 			{
 				return false;
 			}
@@ -1549,7 +1551,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The points of interest the biome hosts and how they are built (2026-10-16, phase I5), from the spec: the kinds sited on
-		/// its ground (<see cref="BiomeArtSpec.Entry.SiteKinds"/>, from the project's catalogue rows by the biome's name), its
+		/// its ground (<see cref="BiomeArtSpec.Entry.SiteKinds"/>, the file's Sites and Hosts), its
 		/// template variants' and styles' weights (<see cref="BiomeArtSpec.Entry.SiteVariants"/>, <see cref="BiomeArtSpec.Entry.SiteStyles"/>),
 		/// its weathering (<see cref="BiomeArtSpec.Entry.Weathering"/>), its fields' crops (<see cref="BiomeArtSpec.Entry.FieldCrops"/>)
 		/// and its structure palette (<see cref="BiomeArtSpec.Entry.StructurePalette"/>). One mark each; empty lists are written
@@ -1559,7 +1561,7 @@ namespace FishMMO.Shared.WorldDesign
 			IReadOnlyList<PointOfInterestTemplateSpec> handMadeTemplates = null)
 		{
 			string who = biome.name;
-			List<BiomeSiteKind> kinds = entry.SiteKinds(SiteRules);
+			List<BiomeSiteKind> kinds = entry.SiteKinds();
 			AuthorEntries(who, biome, BiomeTemplate.Authored.SiteKinds, biome.SiteKinds, kinds, SiteKindId, k => k.ToString(), l => Mark(AsList(l)), report, apply);
 
 			List<BiomeSiteVariant> variants = entry.SiteVariants(handMadeTemplates);
@@ -1618,6 +1620,21 @@ namespace FishMMO.Shared.WorldDesign
 			BiomeBoardwalkStyle boardwalkStyle = entry.BoardwalkStyle;
 			AuthorValue(who, biome, BiomeTemplate.Authored.BoardwalkStyle, biome.IsAuthored(BiomeTemplate.Authored.BoardwalkStyle) ? biome.BoardwalkStyle.ToString() : string.Empty,
 				boardwalkStyle.ToString(), false, () => biome.BoardwalkStyle = boardwalkStyle, $"boardwalk style {boardwalkStyle}", report, apply);
+			/* How its ways bridge its rivers and whether it lays straight roads (2026-10-26, I2l-b): one value each, marked only when the
+			 * biome's file sets one or the tool wrote one before, so a biome that names neither keeps its template untouched. */
+			BiomeCrossingStyle crossing = entry.CrossingStyle;
+			if (crossing != BiomeCrossingStyle.Default || biome.CrossingStyle != BiomeCrossingStyle.Default || biome.IsAuthored(BiomeTemplate.Authored.CrossingStyle))
+			{
+				AuthorValue(who, biome, BiomeTemplate.Authored.CrossingStyle,
+					biome.IsAuthored(BiomeTemplate.Authored.CrossingStyle) || biome.CrossingStyle != BiomeCrossingStyle.Default ? biome.CrossingStyle.ToString() : string.Empty,
+					crossing.ToString(), false, () => biome.CrossingStyle = crossing, $"crossing style {crossing}", report, apply);
+			}
+			BiomeStraightRoads straight = entry.StraightRoads;
+			if (straight.IsSet || biome.StraightRoads.IsSet || biome.IsAuthored(BiomeTemplate.Authored.StraightRoads))
+			{
+				AuthorValue(who, biome, BiomeTemplate.Authored.StraightRoads, biome.StraightRoads.Signature(),
+					straight.Signature(), false, () => biome.StraightRoads = straight, $"straight roads {straight}", report, apply);
+			}
 
 			/* No flame where no world it stands on has the air to burn one (decision 41, 2026-10-18): a biome whose template admits only
 			 * thin air or none is lit with the cold Glow lights in the same places; so is one whose Requires names a methane, cryogenic,
@@ -1882,11 +1899,6 @@ namespace FishMMO.Shared.WorldDesign
 			return handMade;
 		}
 
-		/// <summary>
-		/// The point-of-interest catalogue the cut sites kinds by (the code's rows with the project's catalogue asset laid over
-		/// them): its rows' biome weights are what the authoring writes onto the templates.
-		/// </summary>
-		private static PointOfInterestRules SiteRules => PointOfInterestCatalogue.Resolve();
 
 		/// <summary>A site-kind list's mark: a hash of its "Kind×weight" entries in order.</summary>
 		public static string Mark(List<BiomeSiteKind> kinds) => Mark(kinds?.ConvertAll(k => k.ToString()));
@@ -2266,6 +2278,8 @@ namespace FishMMO.Shared.WorldDesign
 			layer.useCurrentBand = spec.Current.HasValue;
 			layer.currentRange = spec.Current.HasValue ? new Vector2(Mathf.Max(0f, spec.Current.Value.x), Mathf.Max(0f, spec.Current.Value.y)) : Vector2.zero;
 			layer.currentFalloff = Mathf.Max(0f, spec.CurrentFalloff);
+			// And the landform zone band (2026-10-26, GROUND-BANDS, decision 87): off unless the spec names a part.
+			layer.landformBand = spec.Zone;
 		}
 
 		/// <summary>A bed layer's bands' mark: its waters, depth band and current band to 1/10 000.</summary>
@@ -2275,7 +2289,8 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return string.Empty;
 			}
-			return BedMark(layer.waters, layer.depthRange, layer.depthFalloff, layer.useCurrentBand ? layer.currentRange : (Vector2?)null, layer.currentFalloff);
+			return BedMark(layer.waters, layer.depthRange, layer.depthFalloff, layer.useCurrentBand ? layer.currentRange : (Vector2?)null, layer.currentFalloff)
+				+ (layer.landformBand.On ? "|z" + layer.landformBand.Signature() : string.Empty);
 		}
 
 		/// <summary>A spec bed's bands' mark (<see cref="BedMark(BedTextureLayer)"/>'s form).</summary>
@@ -2286,7 +2301,8 @@ namespace FishMMO.Shared.WorldDesign
 				return string.Empty;
 			}
 			return BedMark(spec.Waters, new Vector2(Mathf.Max(0f, spec.Depth.x), Mathf.Max(0f, spec.Depth.y)), Mathf.Max(0f, spec.DepthFalloff),
-				spec.Current.HasValue ? new Vector2(Mathf.Max(0f, spec.Current.Value.x), Mathf.Max(0f, spec.Current.Value.y)) : (Vector2?)null, Mathf.Max(0f, spec.CurrentFalloff));
+				spec.Current.HasValue ? new Vector2(Mathf.Max(0f, spec.Current.Value.x), Mathf.Max(0f, spec.Current.Value.y)) : (Vector2?)null, Mathf.Max(0f, spec.CurrentFalloff))
+				+ (spec.Zone.On ? "|z" + spec.Zone.Signature() : string.Empty);
 		}
 
 		private static string BedMark(BiomeBedWaters waters, Vector2 depth, float depthFalloff, Vector2? current, float currentFalloff)
@@ -2312,7 +2328,7 @@ namespace FishMMO.Shared.WorldDesign
 				if (slot.terrainLayer == null || slot.terrainLayer != source.Layer(spec.Family))
 				{
 					if (spec.HasClimateBand || spec.AirBand != BiomeAtmosphereRequirement.None || spec.HeatBand.HasValue || spec.UndergroundBand != BiomeUnderground.Both || spec.SeaDepth.HasValue
-						|| spec.ZoneBand.On || spec.WorldBand.On)
+						|| spec.ZoneBand.On || spec.WorldBand.On || spec.HasGroundBands)
 					{
 						report.Lines.Add($"{biome.name} {slotName}: holds authored art, so its spec climate/air band was not written");
 					}
@@ -2395,6 +2411,11 @@ namespace FishMMO.Shared.WorldDesign
 			layer.useLavaBand = spec != null && spec.LavaBand.HasValue;
 			layer.lavaRange = spec?.LavaBand ?? new Vector2(-BiomeSeaFloors.OpenDepth, BiomeSeaFloors.OpenDepth);
 			layer.lavaFalloff = spec != null && spec.LavaBand.HasValue ? spec.LavaFalloff : BiomeSeaFloors.DefaultDepthFalloff;
+			// And the ground bands (2026-10-26, GROUND-BANDS): facing, fall-line stretch, sites, shared-clock window; all off without the spec's.
+			layer.facingBand = spec != null ? spec.FacingBand : default;
+			layer.fallLineStretch = spec != null && spec.FallLineStretch > 1f ? spec.FallLineStretch : 0f;
+			layer.siteBand = spec != null ? spec.SiteBand : default;
+			layer.clock = spec != null ? spec.GroundClock : default;
 		}
 
 		/// <summary>A layer's climate band's mark: empty for none (off, or open at every end), else its ranges and falloffs to 1/10 000.</summary>
@@ -2405,9 +2426,9 @@ namespace FishMMO.Shared.WorldDesign
 				return string.Empty;
 			}
 			string climate = layer.HasClimateBand ? ClimateMark(layer.temperatureRange, layer.temperatureFalloff, layer.humidityRange, layer.humidityFalloff) : string.Empty;
-			return WithLava(WithWorld(WithZone(WithSeaDepth(WithUnderground(WithHeat(WithAir(climate, layer.airBand), layer.HasHeatBand ? layer.heatRange : (Vector2?)null, layer.heatFalloff), layer.underground),
+			return WithGroundBands(WithLava(WithWorld(WithZone(WithSeaDepth(WithUnderground(WithHeat(WithAir(climate, layer.airBand), layer.HasHeatBand ? layer.heatRange : (Vector2?)null, layer.heatFalloff), layer.underground),
 				layer.HasSeaDepthBand ? layer.seaDepthRange : (Vector2?)null, layer.seaDepthFalloff, layer.seaDepthInTides), layer.landformBand), layer.worldBand),
-				layer.HasLavaBand ? layer.lavaRange : (Vector2?)null, layer.lavaFalloff);
+				layer.HasLavaBand ? layer.lavaRange : (Vector2?)null, layer.lavaFalloff), layer.facingBand, layer.fallLineStretch, layer.siteBand, layer.clock);
 		}
 
 		/// <summary>
@@ -2460,8 +2481,9 @@ namespace FishMMO.Shared.WorldDesign
 			string climate = spec.HasClimateBand
 				? ClimateMark(spec.Temperature ?? new Vector2(-1f, 1f), spec.TemperatureFalloff, spec.Humidity ?? new Vector2(-1f, 1f), spec.HumidityFalloff)
 				: string.Empty;
-			return WithLava(WithWorld(WithZone(WithSeaDepth(WithUnderground(WithHeat(WithAir(climate, spec.AirBand), spec.HeatBand, spec.HeatFalloff), spec.UndergroundBand),
-				spec.SeaDepth, spec.SeaDepthFalloff, spec.SeaDepthInTides), spec.ZoneBand), spec.WorldBand), spec.LavaBand, spec.LavaFalloff);
+			return WithGroundBands(WithLava(WithWorld(WithZone(WithSeaDepth(WithUnderground(WithHeat(WithAir(climate, spec.AirBand), spec.HeatBand, spec.HeatFalloff), spec.UndergroundBand),
+				spec.SeaDepth, spec.SeaDepthFalloff, spec.SeaDepthInTides), spec.ZoneBand), spec.WorldBand), spec.LavaBand, spec.LavaFalloff),
+				spec.FacingBand, spec.FallLineStretch, spec.SiteBand, spec.GroundClock);
 		}
 
 		/// <summary>
@@ -2489,6 +2511,33 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			Vector2 v = band.Value;
 			return (mark.Length > 0 ? mark : "t-|h-") + $"|v{Q(Mathf.Min(v.x, v.y))},{Q(Mathf.Max(v.x, v.y))},{Q(falloff)}";
+		}
+
+		/// <summary>
+		/// A climate mark with a layer's ground bands after it (2026-10-26, GROUND-BANDS): "|f" its facing band, "|l" its fall-line stretch,
+		/// "|n" its site band, "|k" its shared-clock window, each only when set, "t-|h-" first when the mark has nothing else; unchanged with
+		/// none set, so every mark written before these bands existed reads the same.
+		/// </summary>
+		private static string WithGroundBands(string mark, BiomeFacingBand facing, float fallLine, BiomeSiteBand sites, BiomeGroundClock clock)
+		{
+			string bands = string.Empty;
+			if (facing.On)
+			{
+				bands += "|f" + facing.Signature();
+			}
+			if (fallLine > 1f)
+			{
+				bands += "|l" + Q(fallLine);
+			}
+			if (sites.On)
+			{
+				bands += "|n" + sites.Signature();
+			}
+			if (!clock.IsNone)
+			{
+				bands += "|k" + clock.Signature();
+			}
+			return bands.Length == 0 ? mark : (mark.Length > 0 ? mark : "t-|h-") + bands;
 		}
 
 		/// <summary>A climate mark with a layer's world band after it ("|w" requires/forbids, decision 68), "t-|h-" first when it has none; unchanged with the band off.</summary>
@@ -2576,6 +2625,63 @@ namespace FishMMO.Shared.WorldDesign
 				biome.Emits = target;
 				biome.EmissionRate = target != null ? rate : 0f;
 			}, $"emits {wanted}", report, apply);
+		}
+
+		/// <summary>
+		/// The loose ground the wind lifts (<see cref="BiomeTemplate.LooseGround"/>) from the spec's column
+		/// (<see cref="BiomeArtSpec.Entry.LooseGround"/>, 2026-10-26, phase CODE-TABLE CLEARANCE: the weather content generator's
+		/// table by the biome's name moved into the files), under the emission's rule: the template's original (what that
+		/// generator seeded, so the same value) is written over once, a hand edit kept after. No column, nothing written.
+		/// </summary>
+		private static void AuthorLooseGround(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			if (entry.LooseGround == null)
+			{
+				return;
+			}
+			string substance = entry.LooseGround.Length > 0 ? entry.LooseGround : null;
+			FishMMO.Shared.Weather.WeatherSubstance target = null;
+			if (substance != null)
+			{
+				target = SubstanceNamed(substance);
+				if (target == null && apply)
+				{
+					target = WeatherContentGenerator.EnsureShipped(substance);
+				}
+				if (target == null)
+				{
+					report.Missing.Add($"{biome.name} {BiomeTemplate.Authored.LooseGround}: weather substance {substance}" +
+						(apply ? string.Empty : " (Author creates it when the weather content generator ships one of that name)"));
+					return;
+				}
+			}
+			string current = biome.LooseGround != null ? biome.LooseGround.name : "none";
+			string wanted = substance ?? "none";
+			AuthorText(biome, BiomeTemplate.Authored.LooseGround, current, wanted, () => biome.LooseGround = target, $"loose ground {wanted}", report, apply);
+		}
+
+		/// <summary>
+		/// The terrain process profile the biome's ground wears as (<see cref="BiomeTemplate.TerrainProcess"/>) from the spec's
+		/// column (<see cref="BiomeArtSpec.Entry.TerrainProcessName"/>, 2026-10-26, phase CODE-TABLE CLEARANCE: the terrain process
+		/// table's assignments by the biome's name moved into the files), marked by the profile's name under the emission's rule
+		/// (the template's original, what "Apply terrain process profiles" assigned, so the same profile, is written over once; a
+		/// hand edit kept after). A profile asset the project lacks is reported, not made: that tool creates the profiles.
+		/// </summary>
+		private static void AuthorTerrainProcess(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
+		{
+			if (entry.TerrainProcessName == null)
+			{
+				return;
+			}
+			var profile = AssetDatabase.LoadAssetAtPath<TerrainProcessProfile>($"{TerrainProcessTable.Folder}/{entry.TerrainProcessName}.asset");
+			if (profile == null)
+			{
+				report.Missing.Add($"{biome.name} {BiomeTemplate.Authored.TerrainProcess}: terrain process profile {entry.TerrainProcessName} (run Apply terrain process profiles)");
+				return;
+			}
+			string current = biome.TerrainProcess != null ? biome.TerrainProcess.name : "none";
+			AuthorText(biome, BiomeTemplate.Authored.TerrainProcess, current, profile.name, () => biome.TerrainProcess = profile,
+				$"wears as {profile.name}", report, apply);
 		}
 
 		/// <summary>
@@ -3076,6 +3182,11 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				text.Append("|M").Append(rule.scatterMode.Signature());
 			}
+			// The facing band (2026-10-26, GROUND-BANDS) likewise: only a faced rule hashes it.
+			if (rule.facingBand.On)
+			{
+				text.Append("|F").Append(rule.facingBand.Signature());
+			}
 			// The size skew (2026-10-20) likewise: only a rule leaned off even hashes it, so every mark made before still holds (0, an
 			// asset saved before the field, is even too).
 			if (rule.scaleSkew > 0f && rule.scaleSkew != 1f)
@@ -3239,6 +3350,8 @@ namespace FishMMO.Shared.WorldDesign
 				talusGrading = s.Graded,
 				// All off unless the spec names a mode (2026-10-26, SCATTER-MODES).
 				scatterMode = s.Mode,
+				// Off unless the spec faces it (2026-10-26, GROUND-BANDS, decision 71).
+				facingBand = s.Facing,
 			});
 			rule.SpecFingerprint = Fingerprint(rule);
 		}
@@ -3307,6 +3420,7 @@ namespace FishMMO.Shared.WorldDesign
 			to.landformBand = from.landformBand;
 			to.talusGrading = from.talusGrading;
 			to.scatterMode = from.scatterMode;
+			to.facingBand = from.facingBand;
 		}
 	}
 }

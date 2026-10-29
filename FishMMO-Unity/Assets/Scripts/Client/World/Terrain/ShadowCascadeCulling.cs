@@ -40,7 +40,52 @@ namespace FishMMO.Client
 		private const int MaxCascades = 4;
 
 		/// <summary>What the last game camera published, for probes: each cascade's sphere radius against its projection's half size.</summary>
-		public static string LastReport { get; private set; } = "not run";
+		/// <remarks>
+		/// Formatted only when read. The pass records the raw numbers every frame (no allocation); building this string in the
+		/// pass itself was ~2.7 KB of garbage every frame for a line a probe reads once.
+		/// </remarks>
+		public static string LastReport => FormatReport();
+
+		private enum ReportKind { NotRun, NonePublished, NoShadows, CascadeNotComputed, Published }
+
+		private struct CascadeReport
+		{
+			public float Radius;
+			public float HalfX;
+			public float HalfY;
+			public Vector2 CentreView;
+			public Vector2 Clip;
+		}
+
+		private static ReportKind reportKind = ReportKind.NotRun;
+		private static bool reportShadows;
+		private static int reportLight;
+		private static int reportCount;
+		private static int reportResolution;
+		private static int reportFailedCascade;
+		private static readonly CascadeReport[] reportCascades = new CascadeReport[MaxCascades];
+
+		private static string FormatReport()
+		{
+			switch (reportKind)
+			{
+				case ReportKind.NotRun:
+					return "not run";
+				case ReportKind.NonePublished:
+					return "none published";
+				case ReportKind.NoShadows:
+					return $"none: shadows {reportShadows}, main light {reportLight}, cascades {reportCount}";
+				case ReportKind.CascadeNotComputed:
+					return $"none: cascade {reportFailedCascade} not computed";
+			}
+			var text = new System.Text.StringBuilder($"{reportCount} cascades, tile {reportResolution}:");
+			for (int i = 0; i < reportCount; i++)
+			{
+				CascadeReport c = reportCascades[i];
+				text.Append($" [{i}: r {c.Radius:0.0} half {c.HalfX:0.0}/{c.HalfY:0.0} centre view {c.CentreView.x:0.00},{c.CentreView.y:0.00} clip {c.Clip.x:0.000},{c.Clip.y:0.000}]");
+			}
+			return text.ToString();
+		}
 
 		/// <summary>The pass that publishes them; enqueued by FishCloudsFeature for every camera (every renderer carries it).</summary>
 		public static readonly ScriptableRenderPass Pass = new PublishPass();
@@ -80,7 +125,7 @@ namespace FishMMO.Client
 		{
 			if (report)
 			{
-				LastReport = "none published";
+				reportKind = ReportKind.NonePublished;
 			}
 			UniversalRenderingData rendering = frameData.Get<UniversalRenderingData>();
 			UniversalLightData lights = frameData.Get<UniversalLightData>();
@@ -91,7 +136,10 @@ namespace FishMMO.Client
 			{
 				if (report)
 				{
-					LastReport = $"none: shadows {shadows.supportsMainLightShadows}, main light {light}, cascades {count}";
+					reportKind = ReportKind.NoShadows;
+					reportShadows = shadows.supportsMainLightShadows;
+					reportLight = light;
+					reportCount = count;
 				}
 				return 0;
 			}
@@ -105,7 +153,6 @@ namespace FishMMO.Client
 			int height = count == 2 ? shadows.mainLightShadowmapHeight >> 1 : shadows.mainLightShadowmapHeight;
 			int resolution = ShadowUtils.GetMaxTileResolutionInAtlas(width, height, count);
 			CullingResults cull = rendering.cullResults;
-			var text = report ? new System.Text.StringBuilder($"{count} cascades, tile {resolution}:") : null;
 			for (int i = 0; i < count; i++)
 			{
 				if (!cull.ComputeDirectionalShadowMatricesAndCullingPrimitives(light, i, count, shadows.mainLightShadowCascadesSplit, resolution,
@@ -113,21 +160,31 @@ namespace FishMMO.Client
 				{
 					if (report)
 					{
-						LastReport = $"none: cascade {i} not computed";
+						reportKind = ReportKind.CascadeNotComputed;
+						reportFailedCascade = i;
 					}
 					return 0;
 				}
 				spheres[i] = split.cullingSphere;
-				if (text != null)
+				if (report)
 				{
 					Vector3 centre = view.MultiplyPoint(split.cullingSphere);
 					Vector4 clip = (projection * view) * new Vector4(split.cullingSphere.x, split.cullingSphere.y, split.cullingSphere.z, 1f);
-					text.Append($" [{i}: r {split.cullingSphere.w:0.0} half {1f / Mathf.Abs(projection.m00):0.0}/{1f / Mathf.Abs(projection.m11):0.0} centre view {centre.x:0.00},{centre.y:0.00} clip {clip.x:0.000},{clip.y:0.000}]");
+					reportCascades[i] = new CascadeReport
+					{
+						Radius = split.cullingSphere.w,
+						HalfX = 1f / Mathf.Abs(projection.m00),
+						HalfY = 1f / Mathf.Abs(projection.m11),
+						CentreView = new Vector2(centre.x, centre.y),
+						Clip = new Vector2(clip.x, clip.y),
+					};
 				}
 			}
-			if (text != null)
+			if (report)
 			{
-				LastReport = text.ToString();
+				reportKind = ReportKind.Published;
+				reportCount = count;
+				reportResolution = resolution;
 			}
 			for (int i = count; i < MaxCascades; i++)
 			{

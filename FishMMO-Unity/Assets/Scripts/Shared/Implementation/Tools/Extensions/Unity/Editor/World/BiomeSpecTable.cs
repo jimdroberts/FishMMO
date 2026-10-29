@@ -81,8 +81,9 @@ namespace FishMMO.Shared.WorldDesign
 	/// <para>
 	/// <b>A frozen world with air is not an ice moon's surface.</b> Galris (210 K, a standard
 	/// atmosphere, 13% water) used to read liquid seas; frozen through, it now takes Snow, High
-	/// Desert, Alpine and ice, its frozen sea floor the Subsurface Ocean Vent over a warm interior and
-	/// its shores, natural and raised, the Ice Shelf (Rocky Coast, which needs water to have a coast
+	/// Desert, Alpine and ice, its frozen sea (raised to the shore tier by the cut) and its shores, natural
+	/// and raised, the Ice Shelf; the warm sea UNDER that shell is the Subsurface Ocean Vent, an interior
+	/// biome no surface selects (weight 0, decision 83) that the ice biomes' sea halls open onto (Rocky Coast, which needs water to have a coast
 	/// rather than liquid water, keeps the shores of a cold world with open seas). That is why
 	/// Cryovolcanic Plain is airless or thin-aired only — every confirmed cryovolcanic surface is
 	/// (Europa, Enceladus, Triton, Pluto's Wright Mons, Ceres' Ahuna Mons); under real air the same
@@ -108,8 +109,8 @@ namespace FishMMO.Shared.WorldDesign
 	/// slopes, bare rock and alpine tier 6, scree and permanent ice tier 7, glaciers tier 8. Height
 	/// bands are each tier's, except where a biome must also claim ground below its tier in the
 	/// resolver's fallback pass: on a world with no sea, everything under the datum is a basin, and
-	/// Impact Basin, Methane Lake and Subsurface Ocean Vent take it there (the vent the frozen
-	/// shelf too), Runaway Greenhouse Plain claims every height there, and Scree the summits of a
+	/// Impact Basin and Methane Lake take it there (the Subsurface Ocean Vent's row keeps its envelope
+	/// but weighs 0: it is the sea halls' interior, never a surface's), Runaway Greenhouse Plain claims every height there, and Scree the summits of a
 	/// world with no water for glaciers. A tier-9 biome's band is where in every tier it competes:
 	/// 0–1 for Tidal Fracture, the shore to the plateaus for Rille.
 	/// </para>
@@ -379,11 +380,12 @@ namespace FishMMO.Shared.WorldDesign
 			// Ice Sheet (2026-10-10): land whose summer never thaws, from the shore to the mountains (tier 9, band shore…mountain; Permanent Ice and Glacier keep the summits). Its warmest-season cap (Seasons) is what places it; the envelope only keeps it to cold ground (any humidity: a frozen summer keeps whatever snow falls). Weighted over the Snow plain it shares a reading with.
 			new Entry("Ice Sheet", 9, 0.42f, 0.9f, -1f, 0.1f, -1f, 1f, 1.1f, A.Any, false, R.SurfaceWater),
 
-			// Alien biomes, kept off any world that is not theirs by BiomeTemplate.Requires; each envelope sits where its own world's readings fall (an airless body reads humidity -1, a moon past the frost line temperature -1). Impact Basin, Methane Lake and Subsurface Ocean Vent also claim the ground below their tier in the fallback pass: on a world with no sea, everything under the datum is a basin. Molten Surface is the lowest ground of a world with molten rock open at its surface — a magma ocean, or lava lakes over an interior heated past the lake threshold (R.MoltenRock, the lava code's own test) — where the melt stands; any temperature, since the heat is the rock's, not the sunlight's. Ice Shelf is the frozen sea of a world frozen through, whose below-datum ground the scene raises to the shore tier; it outweighs Rocky Coast there. Runaway Greenhouse Plain claims every height in the fallback pass.
+			// Alien biomes, kept off any world that is not theirs by BiomeTemplate.Requires; each envelope sits where its own world's readings fall (an airless body reads humidity -1, a moon past the frost line temperature -1). Impact Basin and Methane Lake also claim the ground below their tier in the fallback pass: on a world with no sea, everything under the datum is a basin (Subsurface Ocean Vent weighs 0: an interior only, decision 83). Molten Surface is the lowest ground of a world with molten rock open at its surface — a magma ocean, or lava lakes over an interior heated past the lake threshold (R.MoltenRock, the lava code's own test) — where the melt stands; any temperature, since the heat is the rock's, not the sunlight's. Ice Shelf is the frozen sea of a world frozen through, whose below-datum ground the scene raises to the shore tier; it outweighs Rocky Coast there. Runaway Greenhouse Plain claims every height in the fallback pass.
 			new Entry("Dust Sea", 0, 0f, 0.2f, -1f, 1f, -1f, -0.6f, 1f, A.Airless | A.Thin, false, R.RockSurface),
 			new Entry("Molten Surface", 0, 0f, 0.2f, -1f, 1f, -1f, 1f, 1.1f, A.Any, false, R.MoltenRock),
 			new Entry("Impact Basin", 1, 0f, 0.42f, -1f, 1f, -1f, -0.6f, 0.8f, A.Airless | A.Thin, false, R.None),
-			new Entry("Subsurface Ocean Vent", 1, 0f, 0.42f, -1f, -0.3f, -1f, 1f, 1f, A.Any, false, R.Cryovolcanic),
+			// Never on a surface (2026-10-26, phase I2n-b, decision 83): an interior, the sea under an ice moon's shell, linked by its hosts' sea halls.
+			new Entry("Subsurface Ocean Vent", 1, 0f, 0.42f, -1f, -0.3f, -1f, 1f, 0f, A.Any, false, R.Cryovolcanic),
 			new Entry("Lava Tube", 2, 0.35f, 0.42f, -1f, 0.8f, -1f, -0.5f, 1f, A.Airless | A.Thin, false, R.NoLiquidWater | R.RockSurface),
 			new Entry("Methane Lake", 2, 0f, 0.42f, -1f, -0.65f, -1f, 1f, 1f, A.Breathing, false, R.MethaneCycle),
 			new Entry("Ice Shelf", 3, 0.42f, 0.45f, -1f, -0.4f, -1f, 1f, 1.05f, A.Any, false, R.IceWorld),

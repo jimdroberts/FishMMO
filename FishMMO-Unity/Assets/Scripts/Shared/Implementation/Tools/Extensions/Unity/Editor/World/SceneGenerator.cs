@@ -223,7 +223,44 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			AssetDatabase.Refresh();
+			RegisterRestored(scenePath, terrainFolder);
 			Debug.LogWarning($"[Scene generator] The re-cut failed; the old scene and its terrain were put back from '{backup}'.");
+		}
+
+		/// <summary>
+		/// Registers a failed re-cut's restored scene and terrain in Addressables again. Clearing the terrain folder for the re-cut
+		/// deleted it, and Addressables dropped every entry in it with the files; the restored files keep their GUIDs (their metas
+		/// came back with them) but not their entries, so without this the old scene ships with none of its terrain, props,
+		/// collision, backdrop or path art. Never throws: it runs while a failed or throwing cut is being undone.
+		/// </summary>
+		private static void RegisterRestored(string scenePath, string terrainFolder)
+		{
+			var settings = UnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings;
+			if (settings == null)
+			{
+				return;
+			}
+			var restored = new List<string>();
+			if (Directory.Exists(terrainFolder))
+			{
+				foreach (string file in Directory.GetFiles(terrainFolder))
+				{
+					if (!file.EndsWith(".meta", StringComparison.OrdinalIgnoreCase))
+					{
+						restored.Add(file.Replace('\\', '/'));
+					}
+				}
+			}
+			try
+			{
+				int registered = AddressablesDashboard.RegisterSceneAssets(settings, scenePath, restored);
+				AssetDatabase.SaveAssets();
+				Debug.Log($"[Scene generator] Registered {registered} restored scene asset(s) in Addressables again.");
+			}
+			catch (Exception ex)
+			{
+				Debug.LogError($"[Scene generator] The restored scene '{scenePath}' could not be registered in Addressables again: {ex.Message}");
+			}
 		}
 
 		private static SceneGenerationResult GenerateOnce(SceneGenerationRequest request)
@@ -378,6 +415,16 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				poi.Erosion = erosion;
 				poi.Field = ground;
+				if (landforms != null)
+				{
+					// The landforms the sites and the ways keep off (2026-10-26, I2g-f, BiomeLandform.KeepClear: a sciara's chute).
+					foreach (Vector3 disc in SceneLandforms.KeepClearDiscs(landforms.Sites))
+					{
+						poi.Avoided.Add(new PointOfInterestKeepOut { Id = -1, X = disc.x, Z = disc.y, Radius = disc.z });
+					}
+					// The strike-slip traces the ways jog at (2026-10-26, I2l-b, PathJogs): none until a round names a strike-slip preset.
+					poi.Faults.AddRange(SceneLandforms.StrikeSlipTraces(landforms.Sites));
+				}
 				/* No stretch of a river may lie under the ground it was laid in (RiverBurial). Where the shaped ground
 				 * buries one, the water is laid into it again (the carve only lowers, so a river already cut is left as
 				 * it is), and every later stage that writes the ground is checked the same way, so the cut names the
@@ -577,6 +624,9 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				AddBoundary(scene, plan, lowest, relief, result.HasWater || result.HasLava ? result.SeaLevelY : (float?)null);
 				clock.Lap("Sea and boundary");
+				/* Every detail layer as the scatter and the sites left it: each painted plant on its own biome's ground, no tile past
+				 * Unity's 256 detail layers (TerrainDetailLayerCheck; an ERROR note and an error in the log for each). */
+				TerrainDetailLayerCheck.Check(terrains, result.BiomeMap, result.Notes);
 				// Once everything that stands is in place, and whether or not a biome painted the scene.
 				BakePropsAndNavMesh(scene, plan, terrains, water, result.Notes);
 				CheckRivers("the props and the NavMesh", tileGround);
@@ -611,6 +661,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 
+				SceneLookArrayBaker.Bake(scene, terrainFolder, result.Wrote);
 				clock.Lap("World systems and dressing");
 				if (!EditorSceneManager.SaveScene(scene, scenePath))
 				{
@@ -952,6 +1003,10 @@ namespace FishMMO.Shared.WorldDesign
 				surfaceAt: (east, north) => Mathf.Max(sea, water != null ? water.SurfaceAt(east, north) : float.NegativeInfinity),
 				groundAt: (east, north) => GroundAltitude(terrains, plan, east, north),
 				lavaLevel: lava);
+			/* Every tile keeps only the terrain layers it paints (2026-10-27; TerrainTileLayerSync): last, once everything that
+			 * paints the splat has, and before anything is baked from it, so the stored index maps and the detail bake name the
+			 * scene's layers through each tile's own map. Every weight byte stays as painted. */
+			TerrainTileLayerSync.Compact(scene, tiles, notes);
 			// The terrain is as it will ship: whatever is baked from it (the client's grass and detail scatter maps) is baked now.
 			SceneTerrainEvents.RaiseFinished(scene, tiles, notes);
 		}
@@ -1096,6 +1151,8 @@ namespace FishMMO.Shared.WorldDesign
 					float at = GroundAltitude(terrains, plan, east, north);
 					return (sea && at < 0f) || (inland != null && inland(east, north) > at + 0.3f);
 				}, keptOut, result.Notes, GeothermalGroundCarve.HotSpringsOf(poi?.Plan));
+			// The sites it dug, as points of interest (2026-10-27): named, found and on the map with the planner's, the Great Spout a landmark.
+			GeothermalPointsOfInterest.AddTo(poi, hotGround, field, request, terrains, plan, result.Notes);
 			BiomeHeatMask heat = hotGround.Heat;
 			stages.Lap("hot ground");
 			/* The sea's tide from its coast's biomes (decision 45) and its floor's daylight from its sea-floor biomes (decision 36 (c)),
@@ -1119,6 +1176,9 @@ namespace FishMMO.Shared.WorldDesign
 				HeatAt = (east, north) => heat.At(east, north),
 				// The landform zones a detail layer's zone band reads (2026-10-25, I2g-b, decision 55): the sites this scene stores.
 				LandformZones = new BiomeLandformZones(SceneLandforms.Sites(scene), SceneLandforms.ContextOf(field, SceneLandforms.SeaLevel(scene))),
+				// The compass a facing band measures against and the planned sites a site band paints round (2026-10-26, GROUND-BANDS).
+				Compass = TerrainScatter.CompassFor(request, system),
+				Sites = TerrainScatter.SitesOf(poi?.Plan),
 			};
 			BiomeSplatReport splat = BiomeSplatPainter.Paint(tiles, palette, field, options);
 			// The wet margins along the channels the scene's last placing stored (2026-10-18, I2j-b, decision 38): nothing where it stores none.
@@ -1906,17 +1966,19 @@ namespace FishMMO.Shared.WorldDesign
 			};
 		}
 
-		/// <summary>How many terrain layers the scene's tiles carry (one palette, so any tile says).</summary>
+		/// <summary>How many terrain layers the scene has: its arrays' slices (TerrainTileLayerSync.ScenePalette; a tile may carry fewer).</summary>
 		internal static int SceneLayerCount(Terrain[,] terrains)
 		{
+			var tiles = new List<Terrain>();
 			foreach (Terrain terrain in terrains)
 			{
-				if (terrain != null && terrain.terrainData != null)
+				if (terrain != null)
 				{
-					return terrain.terrainData.terrainLayers.Length;
+					tiles.Add(terrain);
 				}
 			}
-			return 0;
+			TerrainLayer[] palette = tiles.Count > 0 ? TerrainTileLayerSync.ScenePalette(tiles[0].gameObject.scene, tiles) : null;
+			return palette != null ? palette.Length : 0;
 		}
 
 		/// <summary>

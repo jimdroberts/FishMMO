@@ -141,6 +141,11 @@ namespace FishMMO.Shared.WorldDesign
 					PlaceRiverBanks(rule, budget);
 					return;
 				}
+				if (rule.TidalIslandMetres > 0f)
+				{
+					PlaceTidalIslands(rule, budget);
+					return;
+				}
 				// A kind under lakes too (decision 35 (d): InLakes) is sited under a lake by its own level even with no sea.
 				if (rule.Underwater && (!Input.HasSea || !Input.SeaIsWater) && !(rule.InLakes && Input.Water != null && Input.Water.SurfaceAt != null))
 				{
@@ -280,6 +285,17 @@ namespace FishMMO.Shared.WorldDesign
 						{
 							continue;
 						}
+						// By a landform a detector finds (2026-10-27: a pass fort at its pass, a cairn on its peak), the nearer the better.
+						float landform = 0f;
+						if (rule.NearDetector != PointOfInterestDetector.None)
+						{
+							float[] near = DetectedDistance(rule);
+							if (near == null || near[i] > rule.NearDetectedMetres)
+							{
+								continue;
+							}
+							landform = 0.4f * (1f - near[i] / rule.NearDetectedMetres);
+						}
 
 						float score;
 						if (rule.Face)
@@ -318,6 +334,7 @@ namespace FishMMO.Shared.WorldDesign
 								score += 0.8f * Exposure(east, north, h);
 							}
 						}
+						score += landform;
 						// A little less near the scene's edge, where a site is half in the next scene's view and far from its players.
 						float edge = Mathf.Min(Input.WidthMetres * 0.5f - Mathf.Abs(east), Input.DepthMetres * 0.5f - Mathf.Abs(north));
 						score *= 0.8f + 0.2f * Mathf.Clamp01(edge / 400f);

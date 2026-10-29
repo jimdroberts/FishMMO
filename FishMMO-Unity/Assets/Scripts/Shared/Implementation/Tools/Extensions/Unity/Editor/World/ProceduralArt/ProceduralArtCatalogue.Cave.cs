@@ -298,10 +298,15 @@ namespace FishMMO.Shared.WorldDesign
 			new CaveGlowHue { Name = "Gold", Albedo = new Color(0.95f, 0.88f, 0.7f), Emission = new Color(1.35f, 1.0f, 0.42f), Smoothness = 0.4f, Light = new Color(1f, 0.85f, 0.5f), EmitterHue = 3 },
 		};
 
-		/// <summary>Glow-worm light: the larvae's blue-green (Arachnocampa, about 487 nm).</summary>
+		/// <summary>
+		/// Glow-worm light: the larvae's blue-green (Arachnocampa, about 487 nm); and (2026-10-26, I2n-c, decision 86 (e)) Rootlight, the
+		/// deeper electric blue of the dismal-swamp fungus-gnat larvae (Orfelia) threading the roots of drowned galleries. Appended
+		/// only: a hue's index is what the dressing draws.
+		/// </summary>
 		public static readonly CaveGlowHue[] GlowWormHues =
 		{
 			new CaveGlowHue { Name = "Blue", Albedo = new Color(0.8f, 0.88f, 0.9f), Emission = new Color(0.25f, 0.95f, 1.5f), Smoothness = 0.85f, Light = new Color(0.35f, 0.85f, 1f), EmitterHue = 1 },
+			new CaveGlowHue { Name = "Rootlight", Albedo = new Color(0.74f, 0.8f, 0.95f), Emission = new Color(0.1f, 0.38f, 1.65f), Smoothness = 0.85f, Light = new Color(0.22f, 0.42f, 1f), EmitterHue = 1 },
 		};
 
 		/// <summary>
@@ -325,12 +330,15 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Tree roots as they hang through a cave's thin roof (2026-10-20): the dark earth-brown of living roots and the pale
-		/// buff of roots that have hung long in still air. They do not glow.
+		/// buff of roots that have hung long in still air; and (2026-10-26, I2n-c, decision 86 (d)) WaterRoots, the wet dark red-brown
+		/// of alder and willow roots that hang into a drowned gallery's water (#3a2a1e, reddened by their root-hair tassels). They do
+		/// not glow. Appended only: a hue's index is what the dressing draws.
 		/// </summary>
 		public static readonly CaveGlowHue[] RootHues =
 		{
 			new CaveGlowHue { Name = "Earth", Albedo = new Color(0.4f, 0.29f, 0.2f), Smoothness = 0.22f, EmitterHue = -1 },
 			new CaveGlowHue { Name = "Pale", Albedo = new Color(0.66f, 0.58f, 0.46f), Smoothness = 0.2f, EmitterHue = -1 },
+			new CaveGlowHue { Name = "WaterRoots", Albedo = new Color(0.3f, 0.17f, 0.12f), Smoothness = 0.45f, EmitterHue = -1 },
 		};
 
 		/// <summary>
@@ -1183,12 +1191,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Whether a kind's meshes are its own (a glowing ore vein wears the ore veins').</summary>
 		public static bool OwnsShape(in CaveGlowFamily family) => family.Shape == family.Kind;
 
-		/// <summary>Every cave glow payload file: the three maps, and three meshes a variant of each shape.</summary>
+		/// <summary>Every cave glow payload file: the look array holding its three maps (ProceduralArtLookArrays), and three meshes a variant of each shape.</summary>
 		public static IEnumerable<string> CaveGlowPayloadPaths()
 		{
-			yield return CaveGlowAlbedoPath;
-			yield return CaveGlowEmissionPath;
-			yield return CaveOreAlbedoPath;
+			foreach (ProceduralArtLookArrays.Layout layout in ProceduralArtLookArrays.LayoutsOfSet(ProceduralArtLookArrays.CaveGlowSetName))
+			{
+				yield return layout.Path;
+			}
 			foreach (CaveGlowFamily f in CaveGlowFamilies)
 			{
 				if (!OwnsShape(in f))

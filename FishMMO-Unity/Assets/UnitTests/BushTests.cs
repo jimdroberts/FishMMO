@@ -228,12 +228,12 @@ namespace FishMMO.UnitTests
 		public void BushNames_AreWhatTheClientScatterTakesAsCover()
 		{
 			Assert.That(DetailScatterSettings.BushPrefix, Is.EqualTo(ProceduralArtCatalogue.BushPrefix), "the generator's and the client's bush prefix must match");
-			var none = new DetailScatterSettings { PrototypePrefixes = new string[0] };
+			var grass = new GrassBladeSettings();
 			foreach (BushSpecies sp in ProceduralArtCatalogue.Bushes)
 			{
 				string prefab = ProceduralArtCatalogue.BushPrefab(sp.Name);
 				Assert.That(DetailScatterSettings.IsBush(prefab), prefab);
-				Assert.That(none.IsScatterPrototype(prefab), $"{prefab}: a bush is always on the GPU scatter, whatever the prefix list says");
+				Assert.That(TerrainDetailRouting.RouteOf(prefab, true, grass), Is.EqualTo(TerrainDetailRouting.Route.Scatter), $"{prefab}: a bush is always on the GPU scatter");
 				Assert.That(ProceduralArtCatalogue.BushMesh(sp.Name, 0), Is.EqualTo(prefab), "level 0 is the prefab's own mesh name");
 			}
 			Assert.IsFalse(DetailScatterSettings.IsBush("Detail_ShrubSmall"), "the small detail shrubs are ground cover, not bushes");

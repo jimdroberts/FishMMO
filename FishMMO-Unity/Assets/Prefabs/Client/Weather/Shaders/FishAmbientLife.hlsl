@@ -2,8 +2,9 @@
 #define FISHMMO_AMBIENT_LIFE_INCLUDED
 
 // FishMMO/Ambient Life: the land's background creatures (AmbientLifeSystem, FishMMO.Client/World/AmbientLife) —
-// birds, bats, rodents, rabbits, lizards, crabs, frogs, and the caves' creatures, some with a light of their own. Drawn only with Graphics.DrawMeshInstanced, one material
-// per kind; where each animal is and which way it faces is worked out on the CPU from the shared world clock. What
+// birds, bats, rodents, rabbits, lizards, crabs, frogs, and the caves' creatures, some with a light of their own. Drawn only by
+// AmbientLifeSystem's Graphics.RenderMeshPrimitives, one draw and one material per kind, every animal read from the instance buffer
+// below; where each animal is and which way it faces is worked out on the CPU from the shared world clock. What
 // the shader adds is the movement of the body itself — wing beats and folding, strides and bounds, a lizard's
 // wriggle, a bird's head turning — from the phase the CPU hands each instance.
 //
@@ -18,7 +19,8 @@
 //               along it (0 root .. 1 tip; a jelly's bell 0 crown .. 1 rim)
 //   TEXCOORD2   the colour's roles: how much of it came from the kind's back (x), belly (y) and accent (z) (AmbientCreatureMeshes)
 //
-// Per instance (instanced properties):
+// Per instance (_LifeInstances[_LifeInstanceBase + SV_InstanceID], LifeInstanceRecord on the C# side): the matrix's rows 0..2,
+// then
 //   _Anim       x the stroke's phase in cycles (wing beat, stride), y its strength (birds: 0 gliding .. 1 beating;
 //               walkers: 0 still .. 1 striding), z birds: 0 wings open, legs tucked .. 1 wings folded, standing;
 //               walkers: 1 for a bounding gait (rabbits, squirrels, frogs), w birds: the head's turn (radians);
@@ -64,14 +66,44 @@ CBUFFER_START(UnityPerMaterial)
     float4 _EmitColour;  // its own light at its brightest (rgb linear, HDR), a 1 when it has one (AmbientGlow.EmitColour)
     float4 _EmitPattern; // x 0 even, 1 a wave along the body's 'along', 2 each lamp twinkling; y crests at once; z a crest's
                          // sharpness; w the share lit between crests (AmbientGlow.Pattern)
+    float _LifeInstanceBase; // where this kind's run starts in _LifeInstances (set per camera by AmbientLifeSystem)
 CBUFFER_END
 
-UNITY_INSTANCING_BUFFER_START(AmbientLifeProps)
-    UNITY_DEFINE_INSTANCED_PROP(float4, _Anim)
-    UNITY_DEFINE_INSTANCED_PROP(float4, _Tint)
-    UNITY_DEFINE_INSTANCED_PROP(float4, _Look)
-    UNITY_DEFINE_INSTANCED_PROP(float4, _Glow)
-UNITY_INSTANCING_BUFFER_END(AmbientLifeProps)
+// Every drawn animal of every kind, each kind a run (AmbientLifeSystem, LifeInstanceRecord: 112 bytes). The draw is a plain
+// procedural one (RenderMeshPrimitives, no indirect args), so SV_InstanceID counts from 0 within it on every API.
+struct AmbientLifeInstance
+{
+    float4 row0;   // objectToWorld row 0: xyz the 3x3 row, w translation x
+    float4 row1;
+    float4 row2;
+    float4 anim;   // _Anim
+    float4 tint;   // _Tint
+    float4 look;   // _Look
+    float4 glow;   // _Glow
+};
+StructuredBuffer<AmbientLifeInstance> _LifeInstances;
+
+AmbientLifeInstance AmbientLifeLoad(uint instanceID)
+{
+    return _LifeInstances[(uint)_LifeInstanceBase + instanceID];
+}
+
+// The instance's object to world, for a point: the matrix's three top rows (its fourth is 0 0 0 1).
+float3 AmbientObjectToWorld(AmbientLifeInstance instance, float3 p)
+{
+    return float3(dot(instance.row0.xyz, p) + instance.row0.w, dot(instance.row1.xyz, p) + instance.row1.w,
+        dot(instance.row2.xyz, p) + instance.row2.w);
+}
+
+// ... and for a normal: as TransformObjectToWorldNormal, the inverse transpose. The matrices are T.R.S with positive scale and no
+// shear (AmbientLifeMotion), so the inverse's row i is column i over its squared length (FishIndirectInverseAffine).
+float3 AmbientObjectToWorldNormal(AmbientLifeInstance instance, float3 n)
+{
+    float3 c0 = float3(instance.row0.x, instance.row1.x, instance.row2.x);
+    float3 c1 = float3(instance.row0.y, instance.row1.y, instance.row2.y);
+    float3 c2 = float3(instance.row0.z, instance.row1.z, instance.row2.z);
+    return SafeNormalize(n.x * c0 / dot(c0, c0) + n.y * c1 / dot(c1, c1) + n.z * c2 / dot(c2, c2));
+}
 
 // One instance is a whole swarm (mode 4).
 bool AmbientIsSwarm()
@@ -87,7 +119,7 @@ struct AmbientLifeAttributes
     float2 body : TEXCOORD0;
     float2 part : TEXCOORD1;
     float3 role : TEXCOORD2;
-    UNITY_VERTEX_INPUT_INSTANCE_ID
+    uint instanceID : SV_InstanceID;
 };
 
 float2 AmbientRotate(float2 v, float angle)
@@ -408,7 +440,7 @@ float3 AmbientSwarmPlace(uint i, uint swarm, float t, int style, out float glow,
 // One insect of a swarm: flown to its place, turned to the camera, never less than about a pixel and a half across. A
 // speck smaller than that is drawn at that size and thinned a little with distance, never below two in three of the
 // swarm: thinned in proportion to its true size, a swarm was gone a few metres off. A firefly's light is never thinned.
-AmbientLifeVertex AmbientSwarm(AmbientLifeAttributes input, float4 anim, float4 tint)
+AmbientLifeVertex AmbientSwarm(AmbientLifeAttributes input, AmbientLifeInstance instance, float4 anim, float4 tint)
 {
     uint i = (uint)(input.part.x + 0.5);
     uint swarm = (uint)(anim.w * 65535.0);
@@ -417,7 +449,7 @@ AmbientLifeVertex AmbientSwarm(AmbientLifeAttributes input, float4 anim, float4 
     float3 offset = AmbientSwarmPlace(i, swarm, anim.x, style, glow, size);
     // Only the first share of the swarm's insects: a smaller swarm, or one coming out or going in.
     bool drawn = input.part.y <= anim.y;
-    float3 centreWS = TransformObjectToWorld(offset);
+    float3 centreWS = AmbientObjectToWorld(instance, offset);
     float3 toCamera = _WorldSpaceCameraPos - centreWS;
     float distance = max(1e-3, length(toCamera));
     float pixel = distance * 2.0 / (abs(UNITY_MATRIX_P._m11) * _ScreenParams.y);
@@ -464,24 +496,25 @@ float AmbientEmitShape(float along, float offset, float phase)
 
 AmbientLifeVertex AmbientLifeBuild(AmbientLifeAttributes input)
 {
-    float4 anim = UNITY_ACCESS_INSTANCED_PROP(AmbientLifeProps, _Anim);
-    float4 tint = UNITY_ACCESS_INSTANCED_PROP(AmbientLifeProps, _Tint);
+    AmbientLifeInstance instance = AmbientLifeLoad(input.instanceID);
+    float4 anim = instance.anim;
+    float4 tint = instance.tint;
     if (AmbientIsSwarm())
     {
-        return AmbientSwarm(input, anim, tint);
+        return AmbientSwarm(input, instance, anim, tint);
     }
     float3 p = input.positionOS.xyz;
     float3 n = input.normalOS;
     AmbientMove(p, n, input.body, input.part, anim);
     AmbientLifeVertex o;
-    o.positionWS = TransformObjectToWorld(p);
-    o.normalWS = TransformObjectToWorldNormal(n);
+    o.positionWS = AmbientObjectToWorld(instance, p);
+    o.normalWS = AmbientObjectToWorldNormal(instance, n);
     o.color = input.color.rgb * tint.rgb;
     o.visible = tint.a;
     o.glow = 0.0;
     if (_EmitColour.a > 0.5)
     {
-        float4 glow = UNITY_ACCESS_INSTANCED_PROP(AmbientLifeProps, _Glow);
+        float4 glow = instance.glow;
         o.glow = input.color.a * AmbientEmitShape(input.body.x, input.body.y, glow.x) * glow.y;
     }
     o.role = input.role;
@@ -575,17 +608,18 @@ float AmbientMarking(float3 rest, float pixel, int pattern, float phase)
 }
 
 // The albedo with the group's look: each colour role's own colour swapped for the look's by the kind's mix, the
-// markings over the coat. 'own' is the mesh colour times the tint, as without a look.
-float3 AmbientLookAlbedo(float3 own, float3 role, float3 rest)
+// markings over the coat. 'own' is the mesh colour times the tint, as without a look; 'instanceID' the animal's place in its draw.
+float3 AmbientLookAlbedo(float3 own, float3 role, float3 rest, uint instanceID)
 {
     float3 spans = fwidth(rest);
     float pixel = max(spans.x, max(spans.y, spans.z));
-    float4 look = UNITY_ACCESS_INSTANCED_PROP(AmbientLifeProps, _Look);
+    AmbientLifeInstance instance = AmbientLifeLoad(instanceID);
+    float4 look = instance.look;
     if (look.w < 0.5)
     {
         return own;
     }
-    float3 tint = UNITY_ACCESS_INSTANCED_PROP(AmbientLifeProps, _Tint).rgb;
+    float3 tint = instance.tint.rgb;
     float3 coat = AmbientUnpackLook(look.x);
     float3 belly = AmbientUnpackLook(look.y);
     float3 mark = AmbientUnpackLook(look.z);
@@ -625,14 +659,13 @@ struct AmbientLifeVaryings
     float4 extra : TEXCOORD3;   // x visible share, y fog, z how much of its own light it gives off, w how far underground (FishUnderground)
     float3 role : TEXCOORD4;    // the colour's roles, for the biome look
     float3 rest : TEXCOORD5;    // the body at rest (object space), for the look's markings
-    UNITY_VERTEX_INPUT_INSTANCE_ID
+    nointerpolation uint instanceID : TEXCOORD6;   // the animal's place in its draw, for the look's per-instance numbers
 };
 
 AmbientLifeVaryings AmbientLifeVertexMain(AmbientLifeAttributes input)
 {
-    UNITY_SETUP_INSTANCE_ID(input);
     AmbientLifeVaryings o = (AmbientLifeVaryings)0;
-    UNITY_TRANSFER_INSTANCE_ID(input, o);
+    o.instanceID = input.instanceID;
     AmbientLifeVertex v = AmbientLifeBuild(input);
     o.positionWS = v.positionWS;
     o.normalWS = v.normalWS;
@@ -689,12 +722,11 @@ float3 AmbientAdditionalLight(float3 positionWS, float3 n, float2 screenUV, out 
 
 half4 AmbientLifeForwardFragment(AmbientLifeVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SEMANTIC) : SV_Target
 {
-    UNITY_SETUP_INSTANCE_ID(input);
     FishDitherClip(input.positionCS.xy, input.extra.x);
     float facing = IS_FRONT_VFACE(face, 1.0, -1.0);
     float3 n = normalize(input.normalWS) * facing;
     float3 v = normalize(GetWorldSpaceViewDir(input.positionWS));
-    float3 albedo = AmbientLookAlbedo(input.color, input.role, input.rest);
+    float3 albedo = AmbientLookAlbedo(input.color, input.role, input.rest, input.instanceID);
 
 #if defined(_MAIN_LIGHT_SHADOWS_SCREEN)
     float4 shadowCoord = ComputeScreenPos(TransformWorldToHClip(input.positionWS));
@@ -711,7 +743,7 @@ half4 AmbientLifeForwardFragment(AmbientLifeVaryings input, FRONT_FACE_TYPE face
     // Wrapped: fur and feathers scatter light round the body's edge.
     float diffuse = saturate((nl + 0.35) / 1.35);
     float3 colour = albedo * light * diffuse;
-    // Ambient from the sky's trilight (not SampleSH, which reads zero for a DrawMeshInstanced draw here).
+    // Ambient from the sky's trilight (not SampleSH, which reads zero for a script-issued draw here).
     colour += albedo * FishTrilight((half3)n) * (1.0 - 0.96 * under);
     // A thin wing or ear lit from behind glows a little through.
     colour += albedo * light * 0.25 * saturate(-nl) * saturate(1.0 - abs(dot(n, v)));
@@ -748,7 +780,6 @@ half4 AmbientLifeForwardFragment(AmbientLifeVaryings input, FRONT_FACE_TYPE face
 
 half4 AmbientLifeDepthNormalsFragment(AmbientLifeVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SEMANTIC) : SV_Target
 {
-    UNITY_SETUP_INSTANCE_ID(input);
     FishDitherClip(input.positionCS.xy, input.extra.x);
     float3 n = normalize(input.normalWS) * IS_FRONT_VFACE(face, 1.0, -1.0);
 #if defined(_GBUFFER_NORMALS_OCT)
@@ -768,7 +799,6 @@ struct AmbientLifeDepthVaryings
 {
     float4 positionCS : SV_POSITION;
     float visible : TEXCOORD0;
-    UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
 #if defined(FISH_AMBIENT_LIFE_PASS_SHADOW)
@@ -778,9 +808,7 @@ float3 _LightPosition;
 
 AmbientLifeDepthVaryings AmbientLifeDepthVertex(AmbientLifeAttributes input)
 {
-    UNITY_SETUP_INSTANCE_ID(input);
     AmbientLifeDepthVaryings o = (AmbientLifeDepthVaryings)0;
-    UNITY_TRANSFER_INSTANCE_ID(input, o);
     AmbientLifeVertex v = AmbientLifeBuild(input);
 #if defined(FISH_AMBIENT_LIFE_PASS_SHADOW)
     #if defined(_CASTING_PUNCTUAL_LIGHT_SHADOW)
@@ -800,7 +828,6 @@ AmbientLifeDepthVaryings AmbientLifeDepthVertex(AmbientLifeAttributes input)
 
 half4 AmbientLifeDepthFragment(AmbientLifeDepthVaryings input) : SV_Target
 {
-    UNITY_SETUP_INSTANCE_ID(input);
     FishDitherClip(input.positionCS.xy, input.visible);
     return half4(input.positionCS.z, 0.0, 0.0, 0.0);
 }

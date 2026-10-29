@@ -174,8 +174,17 @@ namespace FishMMO.Water
 		/// <summary>WebGL has no threads; everywhere else the line is traced on the thread pool.</summary>
 		private static bool CanBuildOffThread => Application.platform != RuntimePlatform.WebGLPlayer;
 
+		/// <summary>This hook's own time in the profiler (render-pipeline callbacks otherwise show only as
+		/// RenderPipeline.BeginCameraRendering's self time). In a class of its own so the marker, an engine object, is made
+		/// when the hook first runs, not when the type is first touched (tests outside Unity use these types' pure parts).</summary>
+		private static class HookProfiling
+		{
+			public static readonly Unity.Profiling.ProfilerMarker Marker = new Unity.Profiling.ProfilerMarker("WaterBreakers.BeginCamera");
+		}
+
 		private void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera)
 		{
+			using var hookMarkerScope = HookProfiling.Marker.Auto();
 			if (camera == null || camera.cameraType == CameraType.Reflection || camera.cameraType == CameraType.Preview)
 			{
 				return;
@@ -219,20 +228,26 @@ namespace FishMMO.Water
 			Shader.SetGlobalFloat(BreakerShiftId, drawn != null ? drawn.Depth - depth : 0f);
 			if (stale && building == null)
 			{
-				float reach = Reach, spacing = Spacing, shortest = ShortestLine, breakDepth = surface.BreakDepth;
-				if (CanBuildOffThread)
-				{
-					building = Task.Run(() => Trace(shore, centre, reach, depth, breakDepth, spacing, shortest));
-				}
-				else
-				{
-					Upload(Trace(shore, centre, reach, depth, breakDepth, spacing, shortest));
-				}
+				StartTrace(shore, centre, depth, surface.BreakDepth);
 			}
 
 			SyncMaterials();
 			EnsureSpray();
 			Show(drawn != null && drawn.Points.Count > 1);
+		}
+
+		/// <summary>Starts (or, without threads, runs) a trace. Its own method: a lambda's closure is made on entry to the scope owning its locals, so inside the per-camera hook every camera paid for it.</summary>
+		private void StartTrace(WaterShoreField.Snapshot shore, Vector2 centre, float depth, float breakDepth)
+		{
+			float reach = Reach, spacing = Spacing, shortest = ShortestLine;
+			if (CanBuildOffThread)
+			{
+				building = Task.Run(() => Trace(shore, centre, reach, depth, breakDepth, spacing, shortest));
+			}
+			else
+			{
+				Upload(Trace(shore, centre, reach, depth, breakDepth, spacing, shortest));
+			}
 		}
 
 		/// <summary>

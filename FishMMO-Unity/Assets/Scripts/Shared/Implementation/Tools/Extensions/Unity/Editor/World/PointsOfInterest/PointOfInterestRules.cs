@@ -21,7 +21,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// tier and never moves the sites of a kind sited before it.
 	/// </para>
 	/// </remarks>
-	public sealed class PointOfInterestRules
+	public sealed partial class PointOfInterestRules
 	{
 		private readonly Dictionary<POIType, PointOfInterestKindRule> rules = new Dictionary<POIType, PointOfInterestKindRule>();
 
@@ -154,9 +154,11 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── The defaults ─────────────────────────────────────────────
 		//
-		// The biome names below are the kinds' DEFAULT biomes (2026-10-16, phase I5): the biome art authoring writes, onto each
+		// The biome names below were the kinds' DEFAULT biomes (2026-10-16, phase I5): the biome art authoring wrote, onto each
 		// biome template, the weight these rows give it for every kind (KindWeightsFor), and the cut sites kinds by the
-		// template's list alone. Changing a name here changes a scene only once the templates are re-authored.
+		// template's list alone. Since 2026-10-26 (phase CODE-TABLE CLEARANCE, decision 1) every biome's spec file carries that
+		// answer itself (BiomeArtSpec.Entry.Sites), so the names here are only the cut's fallback for a template never authored
+		// (BiomeTemplateArt.SiteKinds): changing one changes nothing a template holds. Change a biome's kinds in its file.
 
 		private static readonly string[] Alien =
 		{
@@ -218,6 +220,11 @@ namespace FishMMO.Shared.WorldDesign
 		private static readonly string[] Civil = { "Humanoid", "Beastfolk" };
 		private static readonly string[] Monster = { "Beast", "Undead", "Aberration", "Elemental", "Outsider", "Construct", "Draconic", "Plant", "Giant" };
 		private static readonly string[] Outlaw = { "Humanoid", "Beastfolk", "Giant" };
+		/// <summary>
+		/// Who else holds a keep or a tower besides the settled peoples (2026-10-27, the fantasy wave): giants and the undead, with
+		/// the outlaws' humanoids and beastfolk already in <see cref="Civil"/>.
+		/// </summary>
+		private static readonly string[] KeepHolders = { "Giant", "Undead" };
 
 		private static PointOfInterestKindRule Placed(POIType kind, float perKm2, int min, int max, float spacing)
 			=> new PointOfInterestKindRule { Kind = kind, Placement = PointOfInterestPlacement.Placed, PerKm2 = perKm2, Min = min, Max = max, SpacingMetres = spacing };
@@ -313,7 +320,9 @@ namespace FishMMO.Shared.WorldDesign
 				Settled(Placed(POIType.Town, 0.08f, 0, 2, 1500f).Footprint(70f, 100f, 15f)),
 				Settled(Placed(POIType.Village, 0.25f, 1, 5, 900f).Footprint(40f, 60f, 16f)),
 				Settled(Placed(POIType.Port, 0.1f, 0, 2, 1500f).Footprint(50f, 80f, 14f)).Coast(120f).OpenWater(),
-				Settled(Placed(POIType.Keep, 0.06f, 0, 2, 1200f).Footprint(25f, 35f, 20f)),
+				// The fantasy wave (2026-10-27): keeps everywhere, garrisoned in the settled lands and held by orcs, bandits, the undead or a
+				// dark sorcerer in the wild (their templates' holders and race lists choose: PointOfInterestTemplateSpecs.Fantasy.Keeps.cs).
+				Settled(Placed(POIType.Keep, 0.10f, 0, 3, 1200f).Footprint(25f, 35f, 20f)).Races(KeepHolders),
 				Settled(Placed(POIType.Castle, 0.04f, 0, 1, 2000f).Footprint(45f, 65f, 18f)),
 				Settled(Placed(POIType.Fortress, 0.03f, 0, 1, 2000f).Footprint(55f, 75f, 18f)),
 				Settled(Placed(POIType.StiltVillage, 0.15f, 0, 2, 900f).Footprint(35f, 55f, 14f)).NearWater(80f).Only(Swamp),
@@ -382,7 +391,7 @@ namespace FishMMO.Shared.WorldDesign
 				Placed(POIType.Oasis, 0.2f, 0, 2, 1200f).Footprint(20f, 35f, 12f).Only(Desert).Weigh(0f, "Scrubland").NearWater(150f),
 
 				// ── Placed: works, roads and the coast ──
-				Settled(Placed(POIType.Tower, 0.12f, 0, 3, 800f).Footprint(6f, 9f, 22f)),
+				Settled(Placed(POIType.Tower, 0.20f, 0, 4, 800f).Footprint(8f, 13f, 22f)).Races(KeepHolders),
 				Settled(Placed(POIType.Waystation, 0.08f, 0, 2, 1000f).Footprint(12f, 18f, 16f)).AwayFromSettlements(500f),
 				Placed(POIType.Bridge, 0.1f, 0, 3, 500f).Footprint(6f, 30f, 90f),
 				Wild(Placed(POIType.Mine, 0.08f, 0, 2, 900f).Footprint(12f, 18f, 30f)).Hard(0.55f, true),
@@ -463,8 +472,11 @@ namespace FishMMO.Shared.WorldDesign
 				// Abyssal Plain (its Q4): a whale's carcass on the FLOOR at 200 m and deeper (WhaleFall above is the one adrift); its
 				// three stages by seed, its blackened halo and Abyss's Leviathan variant come with I7's pieces and the site paint.
 				Placed(POIType.SunkenWhaleFall, 0.02f, 0, 1, 2000f).Footprint(10f, 16f, 30f).Sea(200f, PointOfInterestKindRule.Unbounded).Only(),
-				// Subsurface Ocean Vent (decision 83): the sea hall's mouth in an ice shell's face; its cave form is phase I2n-b's.
-				Placed(POIType.SeaHall, 0.03f, 0, 1, 1500f).Footprint(8f, 14f, 30f).Hard(0f, true).Only(),
+				// Subsurface Ocean Vent (decision 83): a sea hall's melt shaft, sunk through the ice shell on its open, near-flat ground
+				// (2026-10-26, phase I2n-b: no face needed, CaveSystem.SeaHall.cs); hosted only where a template names it, and carved only
+				// where its host links the hall to its sea on that sea's world (CaveShaper.Plan).
+				Placed(POIType.SeaHall, 0.03f, 0, 1, 1500f).Footprint(8f, 14f, 15f).Hard(0f).Only()
+					.Weigh(0.4f, "Ice Shelf").Weigh(0.6f, "Tidal Fracture").Weigh(0.5f, "Ice Geyser Field").Weigh(0.3f, "Cryovolcanic Plain"),
 
 				// ── Placed: resources (tier 4) ──
 				Wild(Placed(POIType.OreVein, 0.1f, 0, 3, 500f).Footprint(5f, 8f, 35f)).Hard(0.5f).Weigh(0.6f, Alien),
@@ -472,6 +484,9 @@ namespace FishMMO.Shared.WorldDesign
 				Placed(POIType.AncientTree, 0.05f, 0, 1, 1500f).Footprint(10f, 14f, 18f).Only(Woods),
 				Wild(Placed(POIType.HerbGrove, 0.08f, 0, 2, 700f).Footprint(8f, 12f, 20f)).Weigh(1.5f, Woods).Weigh(1.2f, Swamp),
 			};
+
+			// The fantasy wave (2026-10-27, PointOfInterestRules.Fantasy*.cs): hosted only where a biome's .Sites names it.
+			d.AddRange(FantasyRows());
 
 			// The dead and the sacred are not built on sea-floor biomes nor on the ice of a glacier's heart.
 			foreach (PointOfInterestKindRule rule in d)

@@ -23,6 +23,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// (1 its own chance): the cave biome's glow (BiomeTemplate.CaveGlows, 2026-10-25, I2n).
 		/// </summary>
 		public float FungusWeight, WormChance;
+		/// <summary>
+		/// The glow-worms' hue (an index into the glow art's glow-worm hues: the cave biome's Cave Glows' worm hue by name, 0 the art's
+		/// first, every cave's until 2026-10-25) and where they hang (2026-10-26, I2n-c, decision 86 (e)).
+		/// </summary>
+		public int WormHue;
+		public BiomeCaveWormMount WormMount;
 	}
 
 	/// <summary>
@@ -80,6 +86,10 @@ namespace FishMMO.Shared.WorldDesign
 				case CaveForm.Mine:
 					p.Worms = false;
 					break;
+				case CaveForm.SeaHall:
+					// No fungus or glow-worm lives on marine ice over a warm sea (2026-10-26, I2n-b).
+					p.Fungi = p.Worms = false;
+					break;
 			}
 			// The cave biome's own glow (its defaults are the rule above by form).
 			BiomeCaveGlow glow = CaveInteriorArt.Glow(caves.Content, form);
@@ -91,6 +101,9 @@ namespace FishMMO.Shared.WorldDesign
 			p.Worms = glow.Worms > 0f;
 			p.FungusWeight = glow.Fungus;
 			p.WormChance = glow.Worms;
+			// No draw: the worms' hue by name and their mount (the roof's and the art's first unless the biome names them).
+			p.WormHue = string.IsNullOrEmpty(glow.WormHue) ? 0 : HueOf(CaveGlowKind.GlowWorms, glow.WormHue, 0);
+			p.WormMount = glow.WormMount;
 			// A natural cave whose glow was drawn by chance (not an ice cave's ice, a lava tube's amber or a mine) where the biome
 			// grows crystals that glow: those line its ways, a lead and an accent by weight from a stream of their own (so the
 			// draws above stand as they were), and the giant crystals take the lead's and the accent's hue.

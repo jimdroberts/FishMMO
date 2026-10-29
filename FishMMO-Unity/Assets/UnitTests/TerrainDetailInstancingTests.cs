@@ -15,15 +15,13 @@ using Object = UnityEngine.Object;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The instanced terrain detail renderer and the GPU-driven path shared with the trees: deterministic
-	/// placement, count calibration against Unity's own detail transforms, the chunk lifecycle, the GPU
-	/// buffer layouts, slot layout and overflow guard, the CPU mirror of the cull kernel, the range
-	/// allocator, the path choice, and the detail-distance seam.
+	/// The terrain detail arithmetic and the GPU-driven path the trees and rocks use: deterministic placement and counts,
+	/// the GPU buffer layouts, slot layout and overflow guard, the CPU mirror of the cull kernel, the range allocator, the
+	/// path choice, and the detail-distance seam. (The CPU chunk renderer's own tests, its lifecycle and its count
+	/// calibration, went with it on 2026-10-27.)
 	/// </summary>
 	public class TerrainDetailInstancingTests
 	{
-		private const string CovViaductTile = "Assets/Scenes/WorldScene/Arthis/Cov Viaduct Terrain/Cov Viaduct 1_0.asset";
-
 		private static void Near(float expected, float actual, float tolerance, string message)
 		{
 			LogAssert.IsTrue(Mathf.Abs(expected - actual) <= tolerance, $"{message}: expected {expected}, got {actual}");
@@ -88,193 +86,6 @@ namespace FishMMO.UnitTests
 				total += n;
 			}
 			Near(expected, total / (float)cells, 0.02f, "mean count per cell");
-		}
-
-		// ── Against Unity's own detail data (Cov Viaduct) ─────────────
-
-		private static TerrainData LoadTile()
-		{
-			var data = AssetDatabase.LoadAssetAtPath<TerrainData>(CovViaductTile);
-			if (data == null || data.detailPrototypes.Length == 0)
-			{
-				Assert.Ignore($"{CovViaductTile} is not here or has no details.");
-			}
-			return data;
-		}
-
-		private static TerrainDetailModel[] BuildModels(TerrainData data)
-		{
-			DetailPrototype[] prototypes = data.detailPrototypes;
-			var models = new TerrainDetailModel[prototypes.Length];
-			for (int i = 0; i < prototypes.Length; i++)
-			{
-				models[i] = TerrainDetailModel.Build(prototypes[i], 0, out string reason);
-				if (models[i] == null)
-				{
-					foreach (TerrainDetailModel m in models)
-					{
-						m?.Dispose();
-					}
-					Assert.Ignore($"prototype {i} cannot be drawn here ({reason}); the generated art may not be on this machine.");
-				}
-			}
-			return models;
-		}
-
-		[Test]
-		public void Calibration_CountsAreNearUnitysOwnDetailTransforms()
-		{
-			TerrainData data = LoadTile();
-			GameObject go = Terrain.CreateTerrainGameObject(data);
-			TerrainDetailModel[] models = BuildModels(data);
-			TerrainDetailField field = null;
-			try
-			{
-				Terrain terrain = go.GetComponent<Terrain>();
-				field = TerrainDetailField.Create(terrain, models, 1f);
-				field.SetPrototypes(data.detailPrototypes);
-				int perPatch = data.detailResolutionPerPatch;
-				// A window of whole patches that is also whole chunks (64 × 64 cells), where the most prototypes grow.
-				int cells = Mathf.Min(64, data.detailResolution);
-				int patches = cells / perPatch;
-				int bestX = 0, bestZ = 0, bestLayers = -1;
-				for (int z = 0; z + cells <= data.detailResolution; z += cells)
-				{
-					for (int x = 0; x + cells <= data.detailResolution; x += cells)
-					{
-						int layers = data.GetSupportedLayers(x, z, cells, cells).Length;
-						if (layers > bestLayers)
-						{
-							bestLayers = layers;
-							bestX = x;
-							bestZ = z;
-						}
-					}
-				}
-				int patchX0 = bestX / perPatch, patchZ0 = bestZ / perPatch;
-				long unity = 0;
-				var unityPer = new long[models.Length];
-				for (int p = 0; p < models.Length; p++)
-				{
-					for (int py = patchZ0; py < patchZ0 + patches; py++)
-					{
-						for (int px = patchX0; px < patchX0 + patches; px++)
-						{
-							int n = data.ComputeDetailInstanceTransforms(px, py, p, 1f, out Bounds _).Length;
-							unityPer[p] += n;
-							unity += n;
-						}
-					}
-				}
-				long ours = 0;
-				int chunkSpan = Mathf.Max(1, cells / field.ChunkCells);
-				int chunkX0 = bestX / field.ChunkCells, chunkZ0 = bestZ / field.ChunkCells;
-				for (int cz = chunkZ0; cz < chunkZ0 + chunkSpan; cz++)
-				{
-					for (int cx = chunkX0; cx < chunkX0 + chunkSpan; cx++)
-					{
-						ours += field.Build(cz * field.ChunksX + cx);
-					}
-				}
-				string per = string.Join(", ", Enumerable.Range(0, models.Length).Where(p => unityPer[p] > 0).Select(p => $"{models[p].Prefab.name}: Unity {unityPer[p]}"));
-				Debug.Log($"[Detail calibration] {CovViaductTile} {cells}² cells at ({bestX}, {bestZ}), {bestLayers} prototypes: Unity {unity}, ours {ours} (ratio {(unity > 0 ? ours / (double)unity : 0):F3}); {per}");
-				if (unity == 0)
-				{
-					Assert.Ignore("no details in the calibration window");
-				}
-				double ratio = ours / (double)unity;
-				LogAssert.IsTrue(ratio > 0.67 && ratio < 1.5, $"our count is within ×1.5 of Unity's: {ours} vs {unity} (ratio {ratio:F3})");
-			}
-			finally
-			{
-				field?.Dispose();
-				TerrainDetailField.DisposePool();
-				foreach (TerrainDetailModel m in models)
-				{
-					m.Dispose();
-				}
-				Object.DestroyImmediate(go);
-			}
-		}
-
-		[Test]
-		public void ChunkLifecycle_WantedChunksAreQueuedNearestFirst_BuiltIdentically_AndReleasedWhenStale()
-		{
-			TerrainData data = LoadTile();
-			GameObject go = Terrain.CreateTerrainGameObject(data);
-			TerrainDetailModel[] models = BuildModels(data);
-			TerrainDetailField field = null;
-			try
-			{
-				Terrain terrain = go.GetComponent<Terrain>();
-				field = TerrainDetailField.Create(terrain, models, 1f);
-				field.SetPrototypes(data.detailPrototypes);
-				Vector3 centre = terrain.GetPosition() + new Vector3(data.size.x * 0.5f, 50f, data.size.z * 0.5f);
-				Matrix4x4 worldToCamera = Matrix4x4.Scale(new Vector3(1f, 1f, -1f)) * Matrix4x4.TRS(centre, Quaternion.identity, Vector3.one).inverse;
-				var view = new TerrainTreeField.View
-				{
-					Position = centre,
-					Planes = GeometryUtility.CalculateFrustumPlanes(Matrix4x4.Perspective(60f, 1.5f, 0.3f, 2000f) * worldToCamera),
-					ScreenFactor = TerrainTreeMath.ScreenFactor(60f, false, 0f, 1f),
-				};
-				var missing = new List<TerrainDetailField.Missing>();
-				LogAssert.AreEqual(0, field.Gather(in view, 120f, 1, missing), "nothing built yet: nothing gathered");
-				LogAssert.IsTrue(missing.Count > 0, "the chunks in reach are wanted");
-				float reachChunks = Mathf.Ceil(240f / (field.ChunkCells * data.size.x / data.detailResolution)) + 1;
-				LogAssert.IsTrue(missing.Count <= reachChunks * reachChunks, $"only chunks within the detail distance ({missing.Count})");
-				int again = missing.Count;
-				field.Gather(in view, 120f, 1, missing);
-				LogAssert.AreEqual(again, missing.Count, "queued once per frame, however many cameras ask");
-
-				foreach (TerrainDetailField.Missing m in missing)
-				{
-					field.Build(m.Index);
-				}
-				LogAssert.AreEqual(missing.Count, field.BuiltCount, "every wanted chunk built");
-
-				// Determinism: release and rebuild one chunk; the same instances.
-				int index = missing.OrderByDescending(m => field.ChunkAt(m.Index).Count).First().Index;
-				TerrainDetailField.Chunk chunk = field.ChunkAt(index);
-				FishInstance[] first = chunk.Instances.GetSubArray(0, chunk.Count).ToArray();
-				if (first.Length == 0)
-				{
-					Assert.Ignore("no plants within reach of the tile's centre to compare");
-				}
-				field.ReleaseStale(int.MaxValue);
-				LogAssert.AreEqual(0, field.BuiltCount, "stale chunks go back to the pool");
-				field.Build(index);
-				TerrainDetailField.Chunk rebuilt = field.ChunkAt(index);
-				LogAssert.AreEqual(first.Length, rebuilt.Count, "the same count after a rebuild");
-				for (int i = 0; i < first.Length; i++)
-				{
-					LogAssert.IsTrue(first[i].Row0 == rebuilt.Instances[i].Row0 && first[i].Row1 == rebuilt.Instances[i].Row1 && first[i].Row2 == rebuilt.Instances[i].Row2,
-						$"instance {i} identical after a rebuild");
-				}
-				// Every instance stands on the ground.
-				for (int i = 0; i < rebuilt.Count; i += Mathf.Max(1, rebuilt.Count / 50))
-				{
-					Vector3 p = rebuilt.Instances[i].Position;
-					Near(terrain.SampleHeight(p) + terrain.GetPosition().y, p.y, 0.25f, $"instance {i} on the ground");
-				}
-
-				// Gathered into the CPU buckets once built (the camera looks down +z from the centre).
-				missing.Clear();
-				int gathered = field.Gather(in view, 120f, 2, missing);
-				LogAssert.IsTrue(gathered >= 0, "gathers");
-				LogAssert.AreEqual(gathered, models.Sum(m => m.Count), "every gathered instance is in a bucket");
-				field.ReleaseStale(3);
-				LogAssert.AreEqual(0, field.BuiltCount, "released when no camera wanted them since");
-			}
-			finally
-			{
-				field?.Dispose();
-				TerrainDetailField.DisposePool();
-				foreach (TerrainDetailModel m in models)
-				{
-					m.Dispose();
-				}
-				Object.DestroyImmediate(go);
-			}
 		}
 
 		// ── The GPU path ──────────────────────────────────────────────
@@ -479,7 +290,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(renderer.Contains("context.ExecuteCommandBuffer(cmd)"), "executed on the camera's own render context");
 			LogAssert.IsTrue(renderer.Contains("cmd.SetBufferData(workBuffer"), "the work list is uploaded in the same command stream");
 			LogAssert.IsFalse(renderer.Contains("unity_BaseInstanceID"), "Unity's built-in base instance is left to Unity");
-			foreach (string system in new[] { "TerrainTreeInstancing.cs", "TerrainDetailInstancing.cs" })
+			foreach (string system in new[] { "TerrainTreeInstancing.cs" })
 			{
 				string code = File.ReadAllText(Path.Combine(root, "Assets/Scripts/Client/World/Terrain", system));
 				LogAssert.IsTrue(code.Contains("camera.cameraType == CameraType.Reflection ? null : gpu"), $"{system}: reflection-probe faces take the CPU path");

@@ -19,7 +19,11 @@ Shader "FishMMO/Weather/Bolt"
             #pragma target 3.5
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
-            float4 _BoltColor; // rgb, a brightness
+            // Set on the presenter's own copy of the material (LightningPresenter.Draw): in UnityPerMaterial, not from a property
+            // block, so the draw stays in the SRP Batcher.
+            CBUFFER_START(UnityPerMaterial)
+                float4 _BoltColor; // rgb, a brightness
+            CBUFFER_END
 
             struct Attributes { float3 positionOS : POSITION; float2 uv : TEXCOORD0; float4 color : COLOR; };
             struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float4 color : COLOR; };

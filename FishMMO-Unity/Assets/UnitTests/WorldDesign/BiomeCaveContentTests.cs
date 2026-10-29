@@ -212,6 +212,12 @@ namespace FishMMO.UnitTests.WorldDesign
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
 				List<BiomeCaveCrystal> crystals = entry.CaveCrystals();
+				if (BiomeAuthoredRounds.Contains(entry.Biome))
+				{
+					// An authored round names its own crystals (legacy equality only; BiomeAuthoredRoundTests pins them): its caves still grow one.
+					Assert.That(BiomeCaveCrystals.TryPick(crystals, 0.5f, out _), Is.True, $"{entry.Biome}: its caves grow a crystal");
+					continue;
+				}
 				Assert.That(crystals.Select(c => c.ToString()), Is.EqualTo(new[] { "Selenite×1" }), $"{entry.Biome}: no biome round has named its own crystals yet");
 				Assert.That(BiomeCaveCrystals.NeedsRoll(crystals), Is.False, $"{entry.Biome}: one kind, no draw, so every cave's draws stand as they were");
 				Assert.That(BiomeCaveCrystals.TryPick(crystals, 0f, out BiomeCaveCrystalKind kind) && kind == BiomeCaveCrystalKind.Selenite, Is.True);
@@ -270,10 +276,16 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void WayLightKinds_AreAppendOnly_KitPieces_ThatGiveOffTheirLight()
 		{
 			string[] names = { "LanternPost", "TorchPost", "Brazier", "LanternStand", "WallTorch", "HangingLantern", "WallLantern", "Cresset", "CrookLantern", "Glowjar", "CrystalPost", "RuneStone", "HangingBracket" };
-			Assert.That(Enum.GetNames(typeof(BiomeWayLightKind)), Is.EqualTo(names));
+			// The first thirteen keep their names and numbers; the suite's lights (2026-10-26) follow them (WayLightSuiteTests).
+			Assert.That(Enum.GetNames(typeof(BiomeWayLightKind)).Take(names.Length), Is.EqualTo(names));
 			foreach (BiomeWayLightKind light in (BiomeWayLightKind[])Enum.GetValues(typeof(BiomeWayLightKind)))
 			{
+				if (light >= BiomeWayLights.FirstSuiteLight)
+				{
+					continue;
+				}
 				Assert.That((int)light, Is.EqualTo(Array.IndexOf(names, light.ToString())), $"{light} keeps its number");
+				Assert.That(BiomeWayLights.EmitterOf(light), Is.EqualTo(LightOf[light]), $"{light}'s table row names its emitter");
 				string id = BiomeWayLights.PieceId(light);
 				Assert.That(BiomeWayLights.PieceQuery(light), Is.EqualTo("=" + id));
 				StructurePiece piece = StructureKit.Get(id);
@@ -321,7 +333,8 @@ namespace FishMMO.UnitTests.WorldDesign
 			// The new lights are laid by id only (=Cresset), so no query a template or the template specs make may name one.
 			var newLights = new HashSet<string>(((BiomeWayLightKind[])Enum.GetValues(typeof(BiomeWayLightKind)))
 				.Where(l => l > LastOldLight).Select(BiomeWayLights.PieceId), StringComparer.Ordinal);
-			Assert.That(newLights, Has.Count.EqualTo(6));
+			// I6c's six and the suite's own (2026-10-26): every one laid by id only.
+			Assert.That(newLights, Has.Count.EqualTo(BiomeWayLights.Count - 1 - (int)LastOldLight));
 			var queries = new SortedSet<string>(StringComparer.Ordinal);
 			foreach (System.Reflection.FieldInfo f in typeof(PointOfInterestTemplateSpecs).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
 			{
@@ -406,6 +419,15 @@ namespace FishMMO.UnitTests.WorldDesign
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
 				List<BiomeCaveLight> lights = entry.CaveLights();
+				if (BiomeAuthoredRounds.Contains(entry.Biome))
+				{
+					// An authored round lights its own caves (legacy equality only): every light it names is a kind the kit has.
+					foreach (BiomeCaveLight light in lights)
+					{
+						Assert.That(Enum.IsDefined(typeof(BiomeWayLightKind), light.Light), Is.True, $"{entry.Biome} {light.Place}");
+					}
+					continue;
+				}
 				Assert.That(lights.Select(l => l.ToString()), Is.EqualTo(BiomeCaveLights.Default().Select(l => l.ToString())), entry.Biome);
 				foreach (KeyValuePair<BiomeCaveLightPlace, (string piece, BiomeWayLightMount mount)> place in old)
 				{

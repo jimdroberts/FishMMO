@@ -104,58 +104,33 @@ namespace FishMMO.Shared.WorldDesign
 				1f, 0f, 1f, 32f, 2f, 0.5f, 2f, 1f, 0f, 0f, 0.4f),
 			new Profile("Seabed", "Under the sea: no rain and no runoff, only slow slumping; the hydrology passes leave it alone.",
 				0f, 0.3f, 0f, 30f, 2f, 0.3f, 4f, 1f, 0f, 0f),
+			// The Desert round (2026-10-26, decision 43): the sand sea's own profile, Arid's with the dunes at full sand, fewer flat-lying
+			// benches and rarer storms, slopes at sand's angle of repose.
+			new Profile("Erg", "A sand sea: deep loose sand worked by the wind into dunes at their angle of repose, few benches or mesas, storms rare and violent.",
+				1.4f, 0.05f, 1.6f, 34f, 0.3f, 0.4f, 0.9f, 0f, 0.1f, 0.3f, 1f),
 		};
 
-		/// <summary>Which profile each biome wears, by exact biome asset name.</summary>
-		public static readonly (string Biome, string Profile)[] Assignments =
+		/// <summary>
+		/// Which profile each biome wears: every biome file that names one (<see cref="BiomeArtSpec.Entry.ErodesAs"/>), in the
+		/// spec's order. Until 2026-10-26 this was a table by exact biome asset name; phase CODE-TABLE CLEARANCE moved each row into
+		/// its biome's file (decision 1), and the biome art authoring writes it onto the template too (marked), so this button
+		/// and the authoring assign the same profile.
+		/// </summary>
+		public static (string Biome, string Profile)[] Assignments
 		{
-			// Seabed.
-			("Deep Ocean", "Seabed"), ("Abyssal Plain", "Seabed"), ("Abyss", "Seabed"), ("Ocean", "Seabed"),
-			("Underwater Canyon", "Seabed"), ("Seamount", "Seabed"), ("Coastal Water", "Seabed"), ("Coral Reef", "Seabed"),
-			("Subsurface Ocean Vent", "Seabed"),
-
-			// The shore.
-			("Beach", "Coastal"), ("Rocky Coast", "Coastal"),
-			("Estuary", "Wetland"), ("Mangrove", "Wetland"),
-
-			// Lowland and highland.
-			("Forest", "Temperate"), ("Woodland", "Temperate"), ("Valley", "Temperate"), ("Hills", "Temperate"),
-			("Jungle", "Rainforest"), ("Bamboo Forest", "Rainforest"),
-			("Plains", "Open"), ("Grassland", "Open"), ("Steppe", "Open"), ("Savanna", "Open"), ("Farmland", "Open"),
-			("Desert", "Arid"), ("Scrubland", "Arid"), ("High Desert", "Arid"), ("Salt Flat", "Arid"), ("Wasteland", "Arid"),
-			("Badlands", "Badlands"),
-			("Wetlands", "Wetland"), ("Peat Bog", "Wetland"), ("Swamp", "Wetland"), ("Oasis", "Wetland"),
-			("Tundra", "Periglacial"), ("Taiga", "Periglacial"), ("Snow", "Periglacial"),
-			("Karst", "Karst"),
-
-			// Mountains.
-			("Alpine Meadow", "Mountain"), ("Mountain Slope", "Mountain"), ("Rocky Terrain", "Mountain"), ("Alpine", "Mountain"),
-			("Scree", "Mountain"), ("Crater", "Mountain"),
-			("Permanent Ice", "Periglacial"), ("Glacier", "Periglacial"), ("Ice Sheet", "Periglacial"),
-
-			// Volcanic ground, on any world.
-			("Volcanic", "Volcanic"), ("Geyser Basin", "Volcanic"), ("Sulphur Flats", "Volcanic"), ("Molten Surface", "Volcanic"),
-			("Lava Tube", "Volcanic"), ("Runaway Greenhouse Plain", "Volcanic"), ("Sulphuric Cloud Deck", "Volcanic"),
-
-			// Other worlds. Titan's tholin plains and methane seas have a liquid that rains, so they wear as their Earth counterparts do.
-			("Tholin Plain", "Arid"), ("Methane Lake", "Wetland"),
-			("Regolith Plain", "Barren"), ("Impact Basin", "Barren"), ("Rille", "Barren"), ("Dust Sea", "Barren"),
-			("Radiation Plain", "Barren"), ("Nitrogen Ice Field", "Barren"), ("Cryovolcanic Plain", "Barren"),
-			("Ice Geyser Field", "Barren"), ("Ice Shelf", "Barren"), ("Tidal Fracture", "Barren"),
-
-			// Fresh water: the shores and banks wear as the country round them does.
-			("Lake", "Temperate"), ("River", "Temperate"),
-
-			// Caves, ruins, temples and strongholds take the ground they stand in: a cave is cut in soluble rock, an ice
-			// palace in frozen ground, a jungle temple under the rainforest's rain (2026-10-11: they wore as temperate
-			// country, so an ice cave's floor drained and an obsidian temple grew soil).
-			("Cave", "Karst"), ("Ice Cave", "Periglacial"), ("Volcanic Cave", "Volcanic"), ("Swamp Cave", "Wetland"),
-			("Ice Palace", "Periglacial"), ("Ice Ruin", "Periglacial"),
-			("Jungle Ruins", "Rainforest"), ("Jungle Temple", "Rainforest"),
-			("Swamp Ruins", "Wetland"), ("Swamp Temple", "Wetland"),
-			("Volcanic Temple", "Volcanic"),
-			("Forest Ruins", "Temperate"), ("Castle", "Temperate"), ("Fortress", "Mountain"), ("Marble Palace", "Open"),
-		};
+			get
+			{
+				var list = new List<(string, string)>();
+				foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
+				{
+					if (entry != null && !string.IsNullOrEmpty(entry.TerrainProcessName))
+					{
+						list.Add((entry.Biome, entry.TerrainProcessName));
+					}
+				}
+				return list.ToArray();
+			}
+		}
 
 		/// <summary>The profile named <paramref name="name"/>; false when the table has none.</summary>
 		public static bool TryGetProfile(string name, out Profile profile)

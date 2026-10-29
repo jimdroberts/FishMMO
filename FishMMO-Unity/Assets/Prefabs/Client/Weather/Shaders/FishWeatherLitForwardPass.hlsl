@@ -86,6 +86,9 @@ struct Attributes
     // ── FishMMO edit: the cave habitat the mesher wrote (CaveHabitat): wet, daylight, sediment, trodden; organic, glow. ──
     half4 fishHabitat               : COLOR;
     float2 fishHabitat2             : TEXCOORD3;
+#elif defined(FISH_LOOK_TABLE)
+    // ── FishMMO edit (2026-10-28): the look this vertex wears in its family (x; TerrainLookMath.BakeLook, FishWeatherLitInput.hlsl). ──
+    float2 fishLook                 : TEXCOORD3;
 #endif
     UNITY_VERTEX_INPUT_INSTANCE_ID
 };
@@ -134,6 +137,11 @@ struct Varyings
 
 #ifdef USE_APV_PROBE_OCCLUSION
     float4 probeOcclusion : TEXCOORD10;
+#endif
+
+#if defined(FISH_LOOK_TABLE)
+    // ── FishMMO edit (2026-10-28): the look, for the fragment's table row (one per triangle: every vertex of a part carries it). ──
+    nointerpolation float fishLook  : TEXCOORD12;
 #endif
 
     float4 positionCS               : SV_POSITION;
@@ -246,6 +254,10 @@ Varyings LitPassVertex(Attributes input)
     UNITY_SETUP_INSTANCE_ID(input);
     UNITY_TRANSFER_INSTANCE_ID(input, output);
     UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
+#if defined(FISH_LOOK_TABLE)
+    FishLookSetup(input.fishLook.x);
+    output.fishLook = input.fishLook.x;
+#endif
 
     VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
 
@@ -321,6 +333,9 @@ void LitPassFragment(
 {
     UNITY_SETUP_INSTANCE_ID(input);
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+#if defined(FISH_LOOK_TABLE)
+    FishLookSetup(input.fishLook);
+#endif
 
 #if defined(_PARALLAXMAP)
 #if defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)

@@ -236,6 +236,15 @@ namespace FishMMO.Shared.Weather
 			{
 				return known;
 			}
+			return Find(settings, map);
+		}
+
+		/// <summary>
+		/// The vents of a map not asked of before. Its own method so the lambda's captures are made here only: in <see cref="Of"/>
+		/// they were allocated on every call, cached or not, as the compiler makes a closure where its variables are declared.
+		/// </summary>
+		private static List<VentSite> Find(WorldSceneSettings settings, SceneBiomeMap map)
+		{
 			var vents = new List<VentSite>();
 			uint seed = unchecked((uint)map.name.GetDeterministicHashCode());
 			bool resolved = false;

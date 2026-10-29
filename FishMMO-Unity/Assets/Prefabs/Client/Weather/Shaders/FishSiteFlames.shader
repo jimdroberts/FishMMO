@@ -46,7 +46,11 @@ Shader "FishMMO/World/Site Flames"
             float4 _FlameSources[FLAME_SOURCES];
             // Per source: x how strong it shows (0..1, faded with distance), y how high it burns now (0..1), zw unused.
             float4 _FlameStrength[FLAME_SOURCES];
+            // The material's own (SiteEmbers), so the draw stays in the SRP Batcher; the arrays above are globals the system sets
+            // before each camera renders.
+            CBUFFER_START(UnityPerMaterial)
             float4 _FlameWind;   // xz the wind near the ground (m/s), y the night (0..1), w unused
+            CBUFFER_END
 
             struct Attributes
             {

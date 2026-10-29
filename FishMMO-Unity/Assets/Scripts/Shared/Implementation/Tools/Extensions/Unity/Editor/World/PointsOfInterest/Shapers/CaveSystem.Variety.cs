@@ -653,6 +653,11 @@ namespace FishMMO.Shared.WorldDesign
 		/// the noisy field as the mesher cuts it: every half metre a floor found within reach under the last (none: a drop), 2.2 m
 		/// of headroom over it, and no step steeper than <paramref name="steepest"/> degrees (the walk check allows 42°, the
 		/// NavMesh agent 45°). <paramref name="why"/> says where it fails.
+		/// Each column is walked in strides as long as the field allows (<see cref="WalkFieldSlope"/>), down to 2 cm by a surface:
+		/// a thin roof or floor is found as by the fixed fine marches it replaced (0.02 m down to the floor, 0.1 m up the
+		/// headroom: five times the old marches' field evaluations) wherever the field rises no faster than that, which is all
+		/// but its rare seams. 2026-10-26: the variety fixture's 45 caves planned bit for bit as with the fine marches, in three
+		/// quarters of the time.
 		/// </summary>
 		internal bool WalkFits(IList<Vector3> path, out string why, float steepest = 40f)
 		{
@@ -667,29 +672,13 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					Vector3 p = i == 0 ? b : Vector3.Lerp(a, b, s / (float)steps);
 					float from = float.IsNaN(previous) ? p.y + 1.2f : previous + 1.2f;
-					float floor = FloorBelow(new Vector3(p.x, from, p.z), 3.5f, 0.02f);
+					float floor = WalkFloor(new Vector3(p.x, from, p.z), 3.5f);
 					if (float.IsNaN(floor))
 					{
 						why = $"no floor under {p} (rock at {from:0.0}, or a drop)";
 						return false;
 					}
-					// To a centimetre: the march's tenth of a metre is a tenth of a step's slope over half a metre.
-					float lo = floor - 0.02f, hi = floor;
-					for (int k = 0; k < 4; k++)
-					{
-						float mid = 0.5f * (lo + hi);
-						if (Void(new Vector3(p.x, mid, p.z)) < 0f) hi = mid; else lo = mid;
-					}
-					floor = hi;
-					// Do not jump over a thin roof into the open pocket above it.
-					for (float h = 0.1f; h <= 2.21f; h += 0.1f)
-					{
-						if (Void(new Vector3(p.x, floor + h, p.z)) >= 0f)
-						{
-							why = $"{h:0.0} m of headroom at {p}";
-							return false;
-						}
-					}
+					// The step first (it costs nothing): no need to look up from a floor already too steep to walk onto.
 					if (!float.IsNaN(previous))
 					{
 						float run = new Vector2(p.x - last.x, p.z - last.z).magnitude;
@@ -699,11 +688,85 @@ namespace FishMMO.Shared.WorldDesign
 							return false;
 						}
 					}
+					// Do not jump over a thin roof into the open pocket above it.
+					float h = WalkHeadroom(new Vector3(p.x, floor, p.z), 0.1f, 2.2f);
+					if (h < 2.2f)
+					{
+						why = $"{h:0.0} m of headroom at {p}";
+						return false;
+					}
 					previous = floor;
 					last = p;
 				}
 			}
 			return true;
+		}
+
+		/// <summary>
+		/// How fast the noisy field rises per metre straight up or down, but at its rare seams, with room to spare (2026-10-26,
+		/// ~10M samples a centimetre apart up columns through the variety fixture's 45 caves: 99.97% under 1.5/m): a point the
+		/// field puts v into the void has no rock within −v / this of it up or down its column.
+		/// </summary>
+		private const float WalkFieldSlope = 2f;
+		/// <summary>The finest stride of a walk check up or down a column (the fixed march it replaced), and the longest.</summary>
+		private const float WalkFine = 0.02f, WalkStride = 0.25f;
+
+		/// <summary>
+		/// The floor under a point in the void, to a millimetre or two: walked down in strides as long as the field allows
+		/// (never shorter than <see cref="WalkFine"/>, never longer than <see cref="WalkStride"/>) to the first rock, then
+		/// halved to the surface between it and the last air. NaN where the point is rock, or no floor within reach.
+		/// </summary>
+		private float WalkFloor(Vector3 p, float reach)
+		{
+			float v = Void(p);
+			if (v >= 0f)
+			{
+				return float.NaN;
+			}
+			float y = p.y, bottom = p.y - reach;
+			while (true)
+			{
+				float stride = Mathf.Clamp(-v / WalkFieldSlope, WalkFine, WalkStride);
+				float next = Void(new Vector3(p.x, y - stride, p.z));
+				if (next >= 0f)
+				{
+					float lo = y - stride, hi = y;
+					while (hi - lo > 0.0015f)
+					{
+						float mid = 0.5f * (lo + hi);
+						if (Void(new Vector3(p.x, mid, p.z)) < 0f) hi = mid; else lo = mid;
+					}
+					return hi;
+				}
+				y -= stride;
+				v = next;
+				if (y < bottom)
+				{
+					return float.NaN;
+				}
+			}
+		}
+
+		/// <summary>
+		/// The headroom over a floor (from <paramref name="from"/> over it, metres, up to <paramref name="need"/>): walked up
+		/// in strides as long as the field allows, as <see cref="WalkFloor"/>; <paramref name="need"/> where it is all air.
+		/// </summary>
+		private float WalkHeadroom(Vector3 floor, float from, float need)
+		{
+			float h = from;
+			while (true)
+			{
+				float v = Void(new Vector3(floor.x, floor.y + h, floor.z));
+				if (v >= 0f)
+				{
+					return h;
+				}
+				if (h >= need)
+				{
+					return need;
+				}
+				h = Mathf.Min(need, h + Mathf.Clamp(-v / WalkFieldSlope, WalkFine, WalkStride));
+			}
 		}
 
 		/// <summary>A pit's way out (<see cref="CavePit"/>): from its bottom to its rim, on its sides, its climb or its ledge. Why not, else null.</summary>
@@ -2060,8 +2123,10 @@ namespace FishMMO.Shared.WorldDesign
 				CaveClimb climb = default;
 				if (!climbed)
 				{
-					// Off one end along the wall, its inner side flush with the terrace's inner edge; its top end where its line
-					// leaves the slab's rounded end, less a little, so the two tops meet without a step.
+					// Off one end along the wall, its inner side flush with the terrace's inner edge. Its top end runs in level onto
+					// the slab (its landing) and its slope starts only where the whole of its width is clear of the slab's rounded
+					// end, so the two tops meet without a step: a ramp still sloping where it ran under the slab's edge met it a
+					// step low (its fall over the overlap), under a lip of the slab's rough side — a crack too low to walk.
 					float v = half - rampHalf - 0.15f;
 					float exit = Mathf.Sqrt(Mathf.Max(0f, half * half - v * v));
 					bool placed = false;
@@ -2070,13 +2135,29 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						float sgn = e == 0 ? firstEnd : -firstEnd;
 						Vector3 end = sgn > 0f ? b0 : a0;
-						Vector3 top = end + toRoom * v + along * (sgn * (exit - 0.6f));
 						// Down to the floor away from the terrace at a walk; on a sloping floor it meets the floor sooner going up
 						// the slope (the ramp near level) and later going down it (the ramp at its steepest, or not at all). In a
 						// chamber it bends in with the wall's curve, so its foot is on the floor and not in the wall.
 						float guess = 0.5f * length + exit + 0.5f * h / TerraceRampGrade;
 						float bend = float.IsInfinity(wallRadius) ? 0f : Mathf.Clamp(guess / Mathf.Max(3f, wallRadius), 0f, 0.7f);
 						Vector3 run = (along * (sgn * Mathf.Cos(bend)) + toRoom * Mathf.Sin(bend)).normalized;
+						// Its top end (B) on its line where the slab's end is, back in until its square end is in the slab
+						// all across; its slope's top out along it until all its width stands a little clear of the slab.
+						var width = new Vector3(run.z, 0f, -run.x) * rampHalf;
+						float SlabPlan(Vector3 q) => PlanDistance(q, a0, b0) - half;
+						float Outside(Vector3 q) => Mathf.Max(SlabPlan(q), Mathf.Max(SlabPlan(q + width), SlabPlan(q - width)));
+						float Off(Vector3 q) => Mathf.Min(SlabPlan(q), Mathf.Min(SlabPlan(q + width), SlabPlan(q - width)));
+						Vector3 inner = end + toRoom * v;
+						for (int k = 0; k < 15 && Outside(inner) > -0.1f; k++)
+						{
+							inner -= run * 0.1f;
+						}
+						float landing = 0f;
+						while (Off(inner + run * landing) < 0.2f && landing < 2f * half + 2f)
+						{
+							landing += 0.1f;
+						}
+						Vector3 top = inner + run * landing;
 						float under = floorAt(top);
 						float slope = (floorAt(top + run * 3f) - under) / 3f;
 						float grade = Mathf.Clamp(TerraceRampGrade - slope, 0.04f, TerraceRampGrade);
@@ -2085,6 +2166,11 @@ namespace FishMMO.Shared.WorldDesign
 							continue;
 						}
 						float rampRun = (top.y - under) / (grade + slope);
+						// A floor already up at its top there (or over it) wants no ramp: a negative run laid it back over the slab.
+						if (rampRun < 1f)
+						{
+							continue;
+						}
 						Vector3 foot = top + run * rampRun;
 						foot.y = floorAt(foot);
 						float drop = top.y - foot.y;
@@ -2105,11 +2191,11 @@ namespace FishMMO.Shared.WorldDesign
 							continue;
 						}
 						Vector3 off = top - Vector3.up * (top.y - foot.y);
-						if (!LineClear(off + run * 0.6f, foot + run * 0.8f, rampHalf + 0.3f) || !OnlyOwn(CapsuleSamples(foot, top, rampHalf, top.y - foot.y + 1f), own))
+						if (!LineClear(off + run * 0.6f, foot + run * 0.8f, rampHalf + 0.3f) || !OnlyOwn(CapsuleSamples(foot, inner, rampHalf, top.y - foot.y + 1f), own))
 						{
 							continue;
 						}
-						ramp = new CaveSolid { Kind = CaveSolidKind.Ramp, A = foot, B = top, Width = rampHalf };
+						ramp = new CaveSolid { Kind = CaveSolidKind.Ramp, A = foot, B = inner, Width = rampHalf, Depth = landing };
 						placed = true;
 					}
 					if (!placed)

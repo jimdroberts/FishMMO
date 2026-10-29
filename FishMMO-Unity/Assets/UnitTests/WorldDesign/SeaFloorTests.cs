@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
+using FishMMO.Shared.Biomes;
 using FishMMO.Shared.WorldDesign;
 
 namespace FishMMO.UnitTests.WorldDesign
@@ -38,16 +39,19 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(entry.Bed.Scatter, Is.Not.Empty, name);
 				Assert.That(entry.Bed.Family, Is.EqualTo(entry.Lakebed), $"{name}: the bed's rules ride on the lakebed layer");
 			}
-			// Sea life anywhere but the bed only ever grew on islands (the land gate keeps everything else above the tide).
+			// Sea life anywhere but the bed only ever grew on islands (the land gate keeps everything else above the tide), unless the
+			// biome paints its own grounds under the sea and the rule names the sea (decision 36, 2026-10-25: the sea-floor rounds).
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
 				foreach ((BiomeArtSpec.Layer layer, BiomeArtSpec.Scatter rule) in entry.Rules())
 				{
 					foreach (string prefab in rule.Prefabs)
 					{
-						if (IsSeaDetail(prefab, out _))
+						// Empty shells lie on a strand or a tidal flat above the water too (the shore and low-water rounds' drift lines).
+						if (IsSeaDetail(prefab, out DetailSpec sea) && !(sea.Plant.Kind == DetailKind.Shells && entry.SeaFloorKind != BiomeSeaFloor.Ground))
 						{
-							Assert.That(layer, Is.SameAs(entry.Bed), $"{entry.Biome} '{rule.Name}' is sea life on a layer that is never under the sea");
+							Assert.That(layer == entry.Bed || BiomeSeaFloors.GrowsUnderSea(entry.SeaFloorKind, rule.Waters), Is.True,
+								$"{entry.Biome} '{rule.Name}' is sea life on a layer that is never under the sea");
 						}
 					}
 				}

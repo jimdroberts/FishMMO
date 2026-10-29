@@ -222,6 +222,13 @@ namespace FishMMO.UnitTests.Weather
 			int biomes = 0, compared = 0;
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
+				biomes++;
+				// An authored round weighs its own sea life (legacy equality only; BiomeAuthoredRoundTests and the placement tests
+				// below cover its weights).
+				if (BiomeAuthoredRounds.Contains(entry.Biome))
+				{
+					continue;
+				}
 				foreach (float temperature in new[] { -0.6f, 0.1f, 0.7f })
 				{
 					var byName = new FakeGround { Biome = entry.Biome, Temperature = temperature };
@@ -238,7 +245,6 @@ namespace FishMMO.UnitTests.Weather
 					}
 					compared += before.Count;
 				}
-				biomes++;
 			}
 			Assert.That(biomes, Is.EqualTo(83));
 			Assert.That(compared, Is.GreaterThan(1000), "the area should hold life to compare");

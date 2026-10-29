@@ -30,6 +30,8 @@ namespace FishMMO.Client
 		public static string AddressOf(string bodyName) => $"PlanetSurfaces/{bodyName}";
 
 		private static readonly Dictionary<string, Texture2D> loaded = new Dictionary<string, Texture2D>();
+		/// <summary>Each body's name, read once: <c>Object.name</c> builds a new string on every read.</summary>
+		private static readonly Dictionary<CelestialBody, string> names = new Dictionary<CelestialBody, string>();
 		private static readonly HashSet<string> asked = new HashSet<string>();
 
 		/// <summary>
@@ -50,7 +52,11 @@ namespace FishMMO.Client
 				return body.SurfaceTexture;
 			}
 
-			string name = body.name;
+			if (!names.TryGetValue(body, out string name))
+			{
+				name = body.name;
+				names[body] = name;
+			}
 			if (string.IsNullOrEmpty(name))
 			{
 				return null;
@@ -120,6 +126,7 @@ namespace FishMMO.Client
 		{
 			loaded.Clear();
 			asked.Clear();
+			names.Clear();
 		}
 	}
 }

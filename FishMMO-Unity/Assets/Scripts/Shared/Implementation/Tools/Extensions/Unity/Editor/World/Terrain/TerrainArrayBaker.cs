@@ -38,6 +38,10 @@ namespace FishMMO.Shared.WorldDesign
 		public readonly List<Vector4> Makeup = new List<Vector4>();
 		/// <summary>Each layer's packed glow from the biome slots that paint with it (<see cref="TerrainArraySet.LayerGlow"/>, 2026-10-25, I2r): zero for none.</summary>
 		public readonly List<Vector4> Glow = new List<Vector4>();
+		/// <summary>Each layer's packed shared-clock window (<see cref="TerrainArraySet.LayerClock"/>, 2026-10-26, GROUND-BANDS): zero for none.</summary>
+		public readonly List<Vector4> Clock = new List<Vector4>();
+		/// <summary>Beside <see cref="Clock"/>: x the floor, y the layer its share goes to (<see cref="TerrainArraySet.LayerClockShare"/>).</summary>
+		public readonly List<Vector4> ClockShare = new List<Vector4>();
 		/// <summary>LOCAL overrides that disagreed, and overrides that had to fall back. For the log.</summary>
 		public readonly List<string> Conflicts = new List<string>();
 		public readonly List<string> Problems = new List<string>();
@@ -178,9 +182,85 @@ namespace FishMMO.Shared.WorldDesign
 					plan.Problems.Add($"Layer {i} '{(resolved.Committed != null ? resolved.Committed.name : "missing")}' has no albedo; its slice is grey.");
 				}
 			}
+			ClocksOf(layers, count, plan.Clock, plan.ClockShare);
 			plan.SliceSize = SliceSizeFor(largest, count);
 			plan.Hash = HashOf(plan);
 			return plan;
+		}
+
+		/// <summary>
+		/// How each layer follows the shared clock (2026-10-26, phase GROUND-BANDS): the clock of the first biome slot using it that has one
+		/// (<see cref="TerrainTextureLayer.clock"/>, the uses in the makeup's order), and the layer that takes its share outside its window —
+		/// the layer that biome's main slot paints with (−1 when the clocked slot is the main itself, or the main is not on the scene: the
+		/// other layers there take it). Not part of the content hash, as the glow: written in place.
+		/// </summary>
+		public static void ClocksOf(IReadOnlyList<TerrainArrayLayerSource> layers, int count, List<Vector4> clock, List<Vector4> share)
+		{
+			clock.Clear();
+			share.Clear();
+			for (int i = 0; i < count; i++)
+			{
+				Vector4 packed = Vector4.zero;
+				Vector4 rest = new Vector4(0f, -1f, 0f, 0f);
+				TerrainArrayLayerSource source = layers != null && i < layers.Count ? layers[i] : null;
+				if (source?.Uses != null)
+				{
+					foreach (TerrainArrayLayerUse use in source.Uses)
+					{
+						TerrainTextureLayer slot = use != null ? BiomeLocalArt.CommittedLayer(use.Biome, use.Slot) : null;
+						if (slot == null || slot.clock.IsNone)
+						{
+							continue;
+						}
+						packed = slot.clock.Pack();
+						int main = use.Slot == BiomeLocalArt.SlotMain ? -1 : MainLayerOf(layers, count, use.Biome);
+						rest = new Vector4(Mathf.Clamp01(slot.clock.Floor), main == i ? -1f : main, 0f, 0f);
+						break;
+					}
+				}
+				clock.Add(packed);
+				share.Add(rest);
+			}
+		}
+
+		/// <summary>True when some layer of a list follows a clock (its kind, x, is not 0).</summary>
+		private static bool AnyClock(IEnumerable<Vector4> clocks)
+		{
+			if (clocks != null)
+			{
+				foreach (Vector4 c in clocks)
+				{
+					if (Mathf.RoundToInt(c.x) != 0)
+					{
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
+		/// <summary>The scene layer a biome's main slot paints with, −1 when none does.</summary>
+		private static int MainLayerOf(IReadOnlyList<TerrainArrayLayerSource> layers, int count, BiomeTemplate biome)
+		{
+			if (biome == null || layers == null)
+			{
+				return -1;
+			}
+			for (int j = 0; j < count && j < layers.Count; j++)
+			{
+				if (layers[j]?.Uses == null)
+				{
+					continue;
+				}
+				foreach (TerrainArrayLayerUse use in layers[j].Uses)
+				{
+					if (use != null && use.Biome == biome && use.Slot == BiomeLocalArt.SlotMain)
+					{
+						return j;
+					}
+				}
+			}
+			return -1;
 		}
 
 		/// <summary>
@@ -463,6 +543,17 @@ namespace FishMMO.Shared.WorldDesign
 					AssetDatabase.SaveAssetIfDirty(existing);
 					report.Written.Add($"{TerrainArraySet.BakedAssetPath(plan.SceneName)} (ground glow only)");
 				}
+				// And how they follow the shared clock (2026-10-26, GROUND-BANDS): also in place, no rebake.
+				// A scene with no clocked layer, baked before the clock existed, is left as it is (nothing to draw differently).
+				if ((AnyClock(plan.Clock) || AnyClock(existing.LayerClock))
+					&& (!SameMakeup(existing.LayerClock, plan.Clock) || !SameMakeup(existing.LayerClockShare, plan.ClockShare)))
+				{
+					existing.LayerClock = PaddedMakeup(plan.Clock);
+					existing.LayerClockShare = PaddedMakeup(plan.ClockShare);
+					EditorUtility.SetDirty(existing);
+					AssetDatabase.SaveAssetIfDirty(existing);
+					report.Written.Add($"{TerrainArraySet.BakedAssetPath(plan.SceneName)} (ground clock only)");
+				}
 				// So is the index map's bake shader reference (sets baked before it existed have none): also in place.
 				Shader indexBake = Shader.Find(TerrainIndexMapBaker.ShaderName);
 				if (indexBake != null && existing.IndexBakeShader != indexBake)
@@ -613,6 +704,8 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			set.LayerMakeup = PaddedMakeup(plan.Makeup);
 			set.LayerGlow = PaddedMakeup(plan.Glow);
+			set.LayerClock = PaddedMakeup(plan.Clock);
+			set.LayerClockShare = PaddedMakeup(plan.ClockShare);
 			// Carried with the set so a player build has the shader that bakes each tile's index map from its alphamaps.
 			set.IndexBakeShader = Shader.Find(TerrainIndexMapBaker.ShaderName);
 			set.ContentHash = plan.Hash;

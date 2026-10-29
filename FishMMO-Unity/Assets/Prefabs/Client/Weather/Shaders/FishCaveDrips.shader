@@ -58,6 +58,12 @@ Shader "FishMMO/World/Cave Drips"
             #define DRIP_RING_SPEED 0.24
             #define DRIP_SPATTER_SECONDS 0.32
 
+            // How many of the slots below hold a drip (CaveDripField); the rest are empty. The material's own, so the draw
+            // stays in the SRP Batcher: the arrays are globals the system sets before each camera renders.
+            CBUFFER_START(UnityPerMaterial)
+            float _DripCount;
+            CBUFFER_END
+
             // Per draw (CaveDripField), nearest first. xyz where the drops land (a puddle's surface, the floor, a stalagmite's tip),
             // w how far they fall (m).
             float4 _DripSources[DRIP_SOURCES];
@@ -140,7 +146,7 @@ Shader "FishMMO/World/Cave Drips"
                 float4 shape = _DripShape[index];
                 float4 times = _DripTimes[index];
                 float4 extra = _DripExtra[index];
-                if (shape.z <= 0.001)
+                if (index >= (int)_DripCount || shape.z <= 0.001)
                 {
                     return Hidden();
                 }

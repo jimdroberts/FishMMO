@@ -174,6 +174,39 @@ namespace FishMMO.Shared.WorldDesign
 		public float NearWaterMetres;
 
 		/// <summary>
+		/// Stands beside a way (a road, a cart track, a trail) the path planner laid, its footprint's edge within this of the way's
+		/// verge, metres; 0 for no such rule (2026-10-27, the fantasy wave: a toll gate, an ambush, a wrecked caravan). The ways are
+		/// laid after the sites, so such a kind is sited after them (<see cref="PointOfInterestPlanner.PlaceBesideWays"/>), on the
+		/// ways themselves, never on a guess at them.
+		/// </summary>
+		[Header("Ways")]
+		public float OnWayMetres;
+		/// <summary>
+		/// Stands at a meeting of ways out in the country (a crossroads), its footprint's edge within this of the junction, metres;
+		/// 0 for no such rule. Sited after the ways, as <see cref="OnWayMetres"/>.
+		/// </summary>
+		public float JunctionMetres;
+
+		/// <summary>
+		/// Stands within <see cref="NearDetectedMetres"/> of what a detector finds (a pass, a peak, a headland: 2026-10-27), whether or
+		/// not that detected kind was marked there; <see cref="PointOfInterestDetector.None"/> for no such rule.
+		/// </summary>
+		[Header("Landform")]
+		public PointOfInterestDetector NearDetector;
+		public float NearDetectedMetres;
+
+		/// <summary>
+		/// Stands on a small island joined to the mainland by a causeway the low tide uncovers (a tidal island's abbey: 2026-10-27), the
+		/// island's shore within this of the mainland's across shallow sea, metres; 0 for no such rule
+		/// (<see cref="PointOfInterestPlanner"/>'s tidal islands; the causeway is the site's shaper's).
+		/// </summary>
+		[Header("Tidal island")]
+		public float TidalIslandMetres;
+
+		/// <summary>Whether the kind is sited against the planned ways (<see cref="OnWayMetres"/>, <see cref="JunctionMetres"/>), after them.</summary>
+		public bool BesideWays => OnWayMetres > 0f || JunctionMetres > 0f;
+
+		/// <summary>
 		/// Weight of a biome the list does not name: 1 for a kind found anywhere, 0 for a biome-specific kind. Also the weight on
 		/// ground with no biome.
 		/// </summary>
@@ -312,6 +345,69 @@ namespace FishMMO.Shared.WorldDesign
 		public PointOfInterestKindRule NearWater(float metres)
 		{
 			NearWaterMetres = metres;
+			return this;
+		}
+
+		/// <summary>Beside a planned way, its edge within <paramref name="metres"/> of the verge (<see cref="OnWayMetres"/>).</summary>
+		public PointOfInterestKindRule OnWay(float metres = 6f)
+		{
+			OnWayMetres = Mathf.Max(0.5f, metres);
+			return this;
+		}
+
+		/// <summary>At a meeting of planned ways, its edge within <paramref name="metres"/> of the junction (<see cref="JunctionMetres"/>).</summary>
+		public PointOfInterestKindRule AtJunction(float metres = 12f)
+		{
+			JunctionMetres = Mathf.Max(0.5f, metres);
+			return this;
+		}
+
+		/// <summary>Where a river crosses the way between two settlements, as a bridge is (<see cref="RiverCrossing"/>).</summary>
+		public PointOfInterestKindRule AtCrossing()
+		{
+			RiverCrossing = true;
+			return this;
+		}
+
+		/// <summary>Within <paramref name="metres"/> of what <paramref name="detector"/> finds (<see cref="NearDetector"/>).</summary>
+		public PointOfInterestKindRule AtDetected(PointOfInterestDetector detector, float metres)
+		{
+			NearDetector = detector;
+			NearDetectedMetres = Mathf.Max(1f, metres);
+			return this;
+		}
+
+		/// <summary>
+		/// Within <paramref name="metres"/> of a landform of the detected kind <paramref name="landform"/> (Pass, Peak, Headland, Island,
+		/// Gorge, Mesa, Butte, Bay, Sinkhole): <see cref="AtDetected"/> by the detector that finds it.
+		/// </summary>
+		public PointOfInterestKindRule NearLandform(POIType landform, float metres) => AtDetected(DetectorOf(landform), metres);
+
+		/// <summary>The detector that finds a landform kind; None for a kind no detector finds by its ground.</summary>
+		public static PointOfInterestDetector DetectorOf(POIType landform)
+		{
+			switch (landform)
+			{
+				case POIType.Peak: return PointOfInterestDetector.Peaks;
+				case POIType.Pass: return PointOfInterestDetector.Passes;
+				case POIType.Headland: return PointOfInterestDetector.Headlands;
+				case POIType.Bay: return PointOfInterestDetector.Bays;
+				case POIType.Island: return PointOfInterestDetector.Islands;
+				case POIType.Gorge: return PointOfInterestDetector.Gorges;
+				case POIType.Mesa: return PointOfInterestDetector.Mesas;
+				case POIType.Butte: return PointOfInterestDetector.Buttes;
+				case POIType.Sinkhole: return PointOfInterestDetector.Sinkholes;
+				case POIType.Waterfall: return PointOfInterestDetector.Falls;
+				case POIType.Spring: return PointOfInterestDetector.Springs;
+				case POIType.RiverMouth: return PointOfInterestDetector.RiverMouths;
+				default: return PointOfInterestDetector.None;
+			}
+		}
+
+		/// <summary>On a small island a causeway joins to the mainland at low tide, within <paramref name="shoreMetres"/> of it (<see cref="TidalIslandMetres"/>).</summary>
+		public PointOfInterestKindRule OnTidalIsland(float shoreMetres = 150f)
+		{
+			TidalIslandMetres = Mathf.Max(16f, shoreMetres);
 			return this;
 		}
 

@@ -544,6 +544,12 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+			StartShade(light, scene);
+		}
+
+		/// <summary>Starts the shadow's worker. Its own method: the lambda's closure is made on entry to the scope that owns its locals, so inside <see cref="Shade"/> every frame paid for it.</summary>
+		private void StartShade(Vector3 light, CloudFlowField scene)
+		{
 			shadingStarted = Time.unscaledTime;
 			var fine = TerrainShadowSolver.Grid.Of(current, Resolution, corner.x, corner.y, SizeMeters);
 			TerrainShadowSolver.Grid coarse = scene != null ? scene.Ground : default;

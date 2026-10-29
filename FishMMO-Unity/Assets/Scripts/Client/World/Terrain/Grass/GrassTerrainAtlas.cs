@@ -22,8 +22,24 @@ namespace FishMMO.Client
 	{
 		/// <summary>Uints per terrain in the table (FishGrassBlades.compute GRASS_TERRAIN_UINTS; GrassLoadTerrain reads it).</summary>
 		/// <remarks>25 until the 16-channel terrains (2026-10-10): channels 8..15 and the first density slice were appended
-		/// (25..33) so every older field kept its place.</remarks>
-		public const int TerrainUints = 34;
+		/// (25..33) so every older field kept its place. 50 for the 32-channel terrains (2026-10-27): channels 16..31 at
+		/// 34..49, read only by the wide kernels. 82 for the 64-channel terrains (later that day): channels 32..63 at 50..81,
+		/// read only by the widest kernel (<see cref="ChannelUint"/>).</remarks>
+		public const int TerrainUints = 82;
+
+		/// <summary>
+		/// Where channel <paramref name="channel"/>'s type index sits in a terrain's row: 0..7 at 8..15, 8..15 at 25..32 and
+		/// 16..63 at 34..81 (FishGrassBlades.compute GrassChannelTypeAt).
+		/// </summary>
+		public static int ChannelUint(int channel) => channel < 8 ? 8 + channel : channel < 16 ? 17 + channel : 18 + channel;
+
+		/// <summary>
+		/// The generate kernel the atlas's busiest terrain needs (<see cref="GrassTerrain.TierOf"/>): 0 the narrow one, 1 its
+		/// wide variant (GRASS_WIDE, 32 channels in registers), 2 its widest (GRASS_WIDEST, 64 channels, walking only the
+		/// density maps each terrain has). Every terrain shares the one dispatch, so the variant is the atlas's, and it is
+		/// only as wide as a terrain asks.
+		/// </summary>
+		public int Tier { get; private set; }
 
 		/// <summary>Terrains whose textures share resolutions (and so one set of arrays and one dispatch).</summary>
 		public sealed class Group
@@ -190,6 +206,11 @@ namespace FishMMO.Client
 				}
 			}
 			var data = new uint[Math.Max(1, total)];
+			Tier = 0;
+			foreach (GrassTerrain gt in ordered)
+			{
+				Tier = Math.Max(Tier, GrassTerrain.TierOf(gt.Channels));
+			}
 			foreach (GrassTerrain gt in ordered)
 			{
 				Group g = groupOf[gt];
@@ -199,12 +220,12 @@ namespace FishMMO.Client
 				// 0..3 origin xyz, metres per height unit; 4..7 size x, z, heightmap resolution, density resolution.
 				Put(data, at + 0, gt.Origin.x); Put(data, at + 1, gt.Origin.y); Put(data, at + 2, gt.Origin.z); Put(data, at + 3, gt.HeightScale);
 				Put(data, at + 4, gt.Size.x); Put(data, at + 5, gt.Size.z); Put(data, at + 6, gt.HeightResolution); Put(data, at + 7, gt.DensityResolution);
-				// 8..15 the density channels 0..7's type indices (-1 none); 25..32 channels 8..15's.
+				// 8..15 the density channels 0..7's type indices (-1 none); 25..32 channels 8..15's; 34..81 channels 16..63's.
 				for (int c = 0; c < GrassTerrain.MaxChannels; c++)
 				{
-					Put(data, at + (c < 8 ? 8 + c : 25 + c - 8), gt.ChannelTypes[c]);
+					Put(data, at + ChannelUint(c), gt.ChannelTypes[c]);
 				}
-				// 16 slice, 17 density maps (1..4, raw), 18 surface resolution, 19 colour layers (0: none);
+				// 16 slice, 17 density maps (1..16, raw), 18 surface resolution, 19 colour layers (0: none);
 				// 20 albedo width, 21 albedo mips, 22 texels per layer, 23 the copy's first uint (raw);
 				// 24 its water-line and holes slice (raw; 0xFFFFFFFF none); 33 its first density slice (raw).
 				data[at + 16] = (uint)slice;

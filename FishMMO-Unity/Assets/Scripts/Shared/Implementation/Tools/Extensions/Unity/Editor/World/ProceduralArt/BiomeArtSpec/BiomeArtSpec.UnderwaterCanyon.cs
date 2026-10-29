@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using FishMMO.Shared.Biomes;
+using FishMMO.Shared.NameGeneration;
 
 namespace FishMMO.Shared.WorldDesign
 {
@@ -18,7 +19,16 @@ namespace FishMMO.Shared.WorldDesign
 					SeaStones(SmallRocks("Grey"), 2f, 4f, 0f), SeaStones(Pebbles("Grey"), 3f, 4f, 0f))
 				.Look(BiomeLookClass.Aquatic)
 				.Wildlife(BiomeHabitat.Sea)
-				.Moat(BiomeMoatWater.Wet);
+				.Moat(BiomeMoatWater.Wet)
+				// What the code tables decided by its name until 2026-10-26, written here by phase CODE-TABLE CLEARANCE (decision 1):
+				// the sites it hosts and their variants, its gathering, weathering and terrain process.
+				.Sites((POIType.RiverMouth, 1f), (POIType.Delta, 1f), (POIType.Gorge, 1f), (POIType.Island, 1f), (POIType.Bay, 1f),
+					(POIType.Headland, 1f), (POIType.SunkenShip, 1f), (POIType.SunkenRuins, 1f), (POIType.SunkenCity, 1f),
+					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					(POIType.KrakenWreck, 0.6f))
+				.Gathers("Kelp Holdfast", "Glass Sponge")
+				.Weathers(BiomeStructureFinish.Mossy, 0f, 0.5f)
+				.ErodesAs("Seabed");
 		}
 	}
 }

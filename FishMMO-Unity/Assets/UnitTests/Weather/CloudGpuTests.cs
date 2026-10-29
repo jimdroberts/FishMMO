@@ -77,20 +77,24 @@ namespace FishMMO.UnitTests.Weather
 		}
 
 		[Test]
-		public void EveryTierRebuildsAtFourTimesItsMarchAndHighRebuildsAtTheScreensSize()
+		public void EveryTierRebuildsAtFourTimesItsMarchAndHighIsNotStretchedFar()
 		{
 			// Each tier rebuilds at four times its march, capped at the screen, every pixel re-marched once in sixteen
 			// frames. 2026-10-07: High had come down to a march of 0.07, rebuilt at 0.28 of the screen and stretched 3.5x
-			// by the composite: "very blurry". At 0.25 it is rebuilt at the screen's size, and a still frame matched
+			// by the composite: "very blurry". At 0.25 it was rebuilt at the screen's size, and a still frame matched
 			// a march of 0.48 at 3.7 ms of march against 8.6 (overcast, 2560x1440).
+			// 2026-10-21 (frame-budget pass, chosen by eye against 0.125 and 0.0625): High marches at 0.18, rebuilt at
+			// 0.72 of the screen and stretched 1.4x — the cauliflower edges kept, about 0.8 ms saved. The bar is that
+			// High stays near the screen's size, nowhere near the 3.5x that blurred it.
 			foreach (WeatherTierSettings tier in new[] { WeatherTierSettings.Performant(), WeatherTierSettings.Balanced(), WeatherTierSettings.High() })
 			{
 				float rebuilt = CloudTierSettings.HistoryScaleFor(tier.CloudHistoryScale, tier.CloudResolution);
 				LogAssert.IsTrue(Mathf.Abs(rebuilt - Mathf.Min(1f, 4f * tier.CloudResolution)) < 1e-5f, $"rebuilt at four times a march of {tier.CloudResolution}: {rebuilt:0.000}");
 			}
 			WeatherTierSettings high = WeatherTierSettings.High();
-			LogAssert.IsTrue(CloudTierSettings.HistoryScaleFor(high.CloudHistoryScale, high.CloudResolution) > 0.999f, "High rebuilds at the screen's size, not stretched up from a fraction of it");
-			LogAssert.IsTrue(high.CloudResolution <= 0.25f + 1e-5f, $"and marches no finer than it needs to for that: {high.CloudResolution}");
+			float highRebuilt = CloudTierSettings.HistoryScaleFor(high.CloudHistoryScale, high.CloudResolution);
+			LogAssert.IsTrue(highRebuilt >= 0.7f, $"High is rebuilt near the screen's size, stretched {1f / highRebuilt:0.00}x by the composite, not 3.5x: {highRebuilt:0.000}");
+			LogAssert.IsTrue(high.CloudResolution <= 0.25f + 1e-5f, $"and marches no finer than the screen's size needs: {high.CloudResolution}");
 			foreach (WeatherTierSettings cheap in new[] { WeatherTierSettings.Performant(), WeatherTierSettings.Balanced() })
 			{
 				LogAssert.IsTrue(cheap.CloudResolution < high.CloudResolution, $"the cheaper tiers march coarser: {cheap.CloudResolution}");

@@ -260,7 +260,8 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				Assert.That(mineral.Flickers && (int)mineral.Kind < 10, Is.False, $"{mineral.Kind}: the first ten never flicker");
 			}
-			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
+			// An authored round grows its draft's flickering kinds (a "before its round" pin).
+			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries.Where(e => !BiomeAuthoredRounds.Contains(e.Biome)))
 			{
 				foreach (BiomeCaveCrystal crystal in entry.CaveCrystals())
 				{
@@ -283,7 +284,8 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void WallLights_AreTheWallMounts_AndEachHasAPostToFallBackOn()
 		{
-			var walls = ((BiomeWayLightKind[])Enum.GetValues(typeof(BiomeWayLightKind))).Where(k => BiomeWayLights.MountOf(k) == BiomeWayLightMount.Wall).ToArray();
+			// The I6g wall mounts; the suite's own wall lights and niches (2026-10-26) are WayLightSuiteTests'.
+			var walls = ((BiomeWayLightKind[])Enum.GetValues(typeof(BiomeWayLightKind))).Where(k => k < BiomeWayLights.FirstSuiteLight && BiomeWayLights.MountOf(k) == BiomeWayLightMount.Wall).ToArray();
 			Assert.That(walls, Is.EquivalentTo(new[] { BiomeWayLightKind.WallTorch, BiomeWayLightKind.WallLantern, BiomeWayLightKind.HangingBracket }));
 			Assert.That(BiomeWayLights.PostFor(BiomeWayLightKind.WallTorch), Is.EqualTo(BiomeWayLightKind.TorchPost));
 			Assert.That(BiomeWayLights.PostFor(BiomeWayLightKind.WallLantern), Is.EqualTo(BiomeWayLightKind.LanternPost));
@@ -316,9 +318,10 @@ namespace FishMMO.UnitTests.WorldDesign
 			string pass = props.Substring(hung, end - hung);
 			Assert.That(pass, Does.Not.Contain("random."), "the wall pass never draws on the site's stream");
 			Assert.That(pass, Does.Contain("PointOfInterestWallLights.StreetSeeds(record.Id, streets.Count)"));
-			// The default and every biome's spec and template light their streets with standing lights only (until a round names one).
+			// The default and every biome's spec and template light their streets with standing lights only (until a round names one:
+			// the authored rounds hang their drafts' wall lights and niches).
 			Assert.That(BiomeWayLights.Default().All(l => BiomeWayLights.MountOf(l.Light) == BiomeWayLightMount.Ground));
-			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
+			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries.Where(e => !BiomeAuthoredRounds.Contains(e.Biome)))
 			{
 				foreach (BiomeWayLight l in entry.WayLights())
 				{
@@ -343,7 +346,8 @@ namespace FishMMO.UnitTests.WorldDesign
 					{
 						entries++;
 						var kind = (BiomeWayLightKind)int.Parse(t.Substring(7), CultureInfo.InvariantCulture);
-						Assert.That(BiomeWayLights.MountOf(kind), Is.Not.EqualTo(BiomeWayLightMount.Wall), $"{Path.GetFileName(path)}: {kind}");
+						Assert.That(BiomeWayLights.MountOf(kind) != BiomeWayLightMount.Wall || BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(path)), Is.True,
+							$"{Path.GetFileName(path)}: {kind}");
 					}
 				}
 			}

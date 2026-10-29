@@ -104,6 +104,12 @@ namespace FishMMO.Shared
 		[Tooltip("How each layer glows, from the biome slot it was painted from (TerrainTextureLayer.glow, 2026-10-25, phase I2r; Biomes.BiomeGroundGlow.Pack): zero for none. Written by the bake; not part of the content hash, refreshed in place when only it changed. Read into the layer table's glow row.")]
 		public Vector4[] LayerGlow = new Vector4[0];
 
+		[Tooltip("How each layer follows the shared clock, from the biome slot it was painted from (TerrainTextureLayer.clock, 2026-10-26, phase GROUND-BANDS; Biomes.BiomeGroundClock.Pack): x kind, y from, z to, w falloff; zero for none. Written by the bake; not part of the content hash, refreshed in place when only it changed. Read into the layer table's clock row.")]
+		public Vector4[] LayerClock = new Vector4[0];
+
+		[Tooltip("Beside LayerClock: x the share a clocked layer keeps outside its window, y the scene layer its share goes to then (its biome's main ground; -1 none: the other layers there take it). Written by the bake, in place.")]
+		public Vector4[] LayerClockShare = new Vector4[0];
+
 		[System.NonSerialized] private Vector4[] layerFlora;
 		[System.NonSerialized] private string[] layerFloraNames;
 		[System.NonSerialized] private Vector4[] layerFloraMakeup;

@@ -7,7 +7,7 @@ namespace FishMMO.Water
 {
 	/// <summary>
 	/// The colour and clarity of each lake's and river's water by the biome of its shores (2026-10-16, phase I2e): the
-	/// template's <see cref="BiomeTemplate.WaterLook"/>, read live, handed to each surface on its property block.
+	/// template's <see cref="BiomeTemplate.WaterLook"/>, read live, handed to each surface on its own copy of the material.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -18,20 +18,35 @@ namespace FishMMO.Water
 	/// edited on a template shows on the next rebuild or registration, without a re-cut.
 	/// </para>
 	/// <para>
-	/// A surface whose looks are all the material's own gets no look on its block (<c>_InlandLookOn</c> 0): drawn exactly as
+	/// A surface whose looks are all the material's own gets no look on its copy (<c>_InlandLookOn</c> 0): drawn exactly as
 	/// before. Every biome's look is authored as the material's (<see cref="BiomeWaterLooks.Today"/>), so nothing changes until
 	/// a biome is given its own. A scene with no biome map (tools, probes) is drawn in the material's look.
 	/// </para>
 	/// </remarks>
 	public sealed partial class InlandWaterRenderer
 	{
-		private static readonly int LooksId = Shader.PropertyToID("_InlandLooks");
 		private static readonly int LookOnId = Shader.PropertyToID("_InlandLookOn");
 
-		/// <summary>Vectors per look on the block (FishInlandWater.hlsl INLAND_LOOK_VECTORS).</summary>
+		/// <summary>Vectors per look (FishInlandWater.hlsl INLAND_LOOK_VECTORS).</summary>
 		public const int LookVectors = 5;
-		/// <summary>Looks per surface: its own, the water it leaves, the water it joins (FishInlandWater.hlsl _InlandLooks[15]).</summary>
+		/// <summary>Looks per surface: its own, the water it leaves, the water it joins (FishInlandWater.hlsl _InlandLook0 … 14).</summary>
 		public const int LookSlots = 3;
+
+		/// <summary>
+		/// The looks' vectors by index (slot × <see cref="LookVectors"/> + vector): <c>_InlandLook0</c> … <c>_InlandLook14</c>, loose
+		/// vectors in the shader's UnityPerMaterial (an array there is not known to batch).
+		/// </summary>
+		private static readonly int[] LookIds = LookPropertyIds();
+
+		private static int[] LookPropertyIds()
+		{
+			var ids = new int[LookVectors * LookSlots];
+			for (int i = 0; i < ids.Length; i++)
+			{
+				ids[i] = Shader.PropertyToID("_InlandLook" + i);
+			}
+			return ids;
+		}
 		/// <summary>How near the material's own a look must be to be drawn as the material (its colours are stored to about 1e-7).</summary>
 		private const float LookTolerance = 1e-3f;
 
@@ -49,7 +64,6 @@ namespace FishMMO.Water
 		private readonly Dictionary<int, Shore> riverShores = new Dictionary<int, Shore>();
 		private readonly Dictionary<int, SceneHydrology.River> riversById = new Dictionary<int, SceneHydrology.River>();
 		private readonly Vector4[] lookVectors = new Vector4[LookVectors * LookSlots];
-		private MaterialPropertyBlock lakeBlock;
 		private bool biomesHooked;
 
 		/// <summary>True when a river's first rows lie in the lake it leaves, whose water it then is (its look runs out of the lake's).</summary>
@@ -241,46 +255,50 @@ namespace FishMMO.Water
 			return look;
 		}
 
-		/// <summary>Sets a river's looks on its property block; false (nothing set) where all three are the material's own.</summary>
-		private bool ApplyRiverLook(int riverId, MaterialPropertyBlock block)
+		/// <summary>Sets a river's looks on its copy of the material; false (none set, <c>_InlandLookOn</c> left 0) where all three are the material's own.</summary>
+		private bool ApplyRiverLook(int riverId, Material own)
 		{
 			if (!riversById.TryGetValue(riverId, out SceneHydrology.River river))
 			{
 				return false;
 			}
 			BiomeWaterLook material = MaterialLook();
-			RiverLooks(river, material, true, out BiomeWaterLook own, out BiomeWaterLook start, out BiomeWaterLook end);
-			if (own.Approximately(material, LookTolerance) && start.Approximately(material, LookTolerance) && end.Approximately(material, LookTolerance))
+			RiverLooks(river, material, true, out BiomeWaterLook ownLook, out BiomeWaterLook start, out BiomeWaterLook end);
+			if (ownLook.Approximately(material, LookTolerance) && start.Approximately(material, LookTolerance) && end.Approximately(material, LookTolerance))
 			{
 				return false;
 			}
-			block.SetVectorArray(LooksId, Pack(own, start, end));
-			block.SetFloat(LookOnId, 1f);
+			SetLooks(own, Pack(ownLook, start, end));
 			return true;
 		}
 
-		/// <summary>Gives each lake its look on its own block, or none where its look is the material's.</summary>
+		/// <summary>Gives each lake its look on its own copy of the material, or none (<c>_InlandLookOn</c> 0) where its look is the material's.</summary>
 		private void ApplyLakeLooks()
 		{
 			BiomeWaterLook material = MaterialLook();
-			lakeBlock ??= new MaterialPropertyBlock();
 			foreach ((MeshRenderer renderer, int lake) in lakeRenderers)
 			{
-				if (renderer == null)
+				Material own = SurfaceCopy(renderer);
+				if (own == null)
 				{
 					continue;
 				}
 				BiomeWaterLook look = LakeLook(lake, material);
-				if (look.Approximately(material, LookTolerance))
+				if (!look.Approximately(material, LookTolerance))
 				{
-					renderer.SetPropertyBlock(null);
-					continue;
+					SetLooks(own, Pack(look, look, look));
 				}
-				lakeBlock.Clear();
-				lakeBlock.SetVectorArray(LooksId, Pack(look, look, look));
-				lakeBlock.SetFloat(LookOnId, 1f);
-				renderer.SetPropertyBlock(lakeBlock);
 			}
+		}
+
+		/// <summary>The three looks (<see cref="Pack"/>) on a surface's copy, and <c>_InlandLookOn</c> 1.</summary>
+		private static void SetLooks(Material own, Vector4[] looks)
+		{
+			for (int i = 0; i < LookIds.Length; i++)
+			{
+				own.SetVector(LookIds[i], looks[i]);
+			}
+			own.SetFloat(LookOnId, 1f);
 		}
 
 		// ── The falls (2026-10-18, phase I2h) ─────────────────────────
@@ -292,9 +310,26 @@ namespace FishMMO.Water
 		private static readonly int FallSprayId = Shader.PropertyToID("_FallSpray");
 		private static readonly int FallMistId = Shader.PropertyToID("_FallMist");
 
-		/// <summary>Each fall's sheet and spray, with the river and the lip it pours over, for the look of the water it pours from.</summary>
-		private readonly List<(MeshRenderer Renderer, MaterialPropertyBlock Block, int River, Vector3 Lip, bool Spray)> fallLookParts =
-			new List<(MeshRenderer, MaterialPropertyBlock, int, Vector3, bool)>();
+		/// <summary>
+		/// A fall's sheet or spray: its renderer, the river and the lip it pours over (for the look of the water it pours from),
+		/// its slot among its copies of the material, and the spray's traced paths (BuildFalls); all set on its copy by
+		/// <see cref="ApplyFallLooks"/>.
+		/// </summary>
+		private sealed class FallPart
+		{
+			public MeshRenderer Renderer;
+			public int River;
+			public Vector3 Lip;
+			public bool Spray;
+			public int Slot;
+			/// <summary>The spray's traced paths, or null (the spray then works its drops out without them).</summary>
+			public Texture Paths;
+			public Vector4 PathInfo;
+			public Vector4 Origin;
+		}
+
+		/// <summary>Each fall's sheet and spray, in the order built.</summary>
+		private readonly List<FallPart> fallLookParts = new List<FallPart>();
 
 		/// <summary>
 		/// A fall's colours in the look of the water it pours from (pure): the waterfall materials' own colours, each shifted as
@@ -349,9 +384,10 @@ namespace FishMMO.Water
 		}
 
 		/// <summary>
-		/// Gives each fall's sheet and spray the look of the water it pours from (its river's at the lip, blended with the lake it
-		/// leaves as the river's own surface is there, <see cref="LookWhere"/>), on the block that already carries its textures;
-		/// <c>_FallLookOn</c> 0, the materials' own colours, where that water's look is the inland water's own.
+		/// Gives each fall's sheet and spray its own copy of its material, with its textures (the falls' streaks and ripples; the
+		/// spray's mist lattice and traced paths) and the look of the water it pours from (its river's at the lip, blended with the
+		/// lake it leaves as the river's own surface is there, <see cref="LookWhere"/>); <c>_FallLookOn</c> 0, the materials' own
+		/// colours, where that water's look is the inland water's own.
 		/// </summary>
 		private void ApplyFallLooks()
 		{
@@ -367,16 +403,35 @@ namespace FishMMO.Water
 				return new Vector4(shown.r, shown.g, shown.b, 1f);
 			}
 			Color Of(Material m, string name, Color fallback) => m != null && m.HasProperty(name) ? m.GetColor(name) : fallback;
-			foreach ((MeshRenderer renderer, MaterialPropertyBlock block, int riverId, Vector3 lip, bool spray) in fallLookParts)
+			foreach (FallPart part in fallLookParts)
 			{
-				if (renderer == null || block == null)
+				MeshRenderer renderer = part.Renderer;
+				bool spray = part.Spray;
+				Material own = spray ? sprayCopies.For(SprayMaterial, part.Slot) : curtainCopies.For(FallMaterial, part.Slot);
+				if (renderer == null || own == null)
 				{
 					continue;
 				}
-				BiomeWaterLook look = riversById.TryGetValue(riverId, out SceneHydrology.River river) ? LookWhere(river, lip, material) : material;
+				if (spray)
+				{
+					// The mist's noise lattice: without it the shader works the noise out in full, at several times the cost.
+					own.SetTexture(FallMistNoiseId, FallTextures.MistNoise);
+					own.SetFloat(FallMistNoiseCellsId, FallTextures.MistNoiseCells);
+					own.SetTexture(FallPathTexId, part.Paths);
+					own.SetVector(FallPathId, part.Paths != null ? part.PathInfo : Vector4.zero);
+					own.SetVector(FallOriginId, part.Paths != null ? part.Origin : Vector4.zero);
+				}
+				else
+				{
+					// The fall's own streak and ripple maps (FallTextures), not the river's foam: a generic foam texture
+					// stretched down a sheet is the look of every waterfall of twenty years ago.
+					own.SetTexture(FoamTextureId, FallTextures.Streaks);
+					own.SetTexture(NormalMapId, FallTextures.Ripples);
+				}
+				BiomeWaterLook look = riversById.TryGetValue(part.River, out SceneHydrology.River river) ? LookWhere(river, part.Lip, material) : material;
 				if (look.Approximately(material, LookTolerance))
 				{
-					block.SetFloat(FallLookOnId, 0f);
+					own.SetFloat(FallLookOnId, 0f);
 				}
 				else
 				{
@@ -384,18 +439,18 @@ namespace FishMMO.Water
 						Of(SprayMaterial, "_SprayColor", Color.white), Of(SprayMaterial, "_MistColor", Color.white));
 					if (spray)
 					{
-						block.SetVector(FallSprayId, Shown(fall.Spray));
-						block.SetVector(FallMistId, Shown(fall.Mist));
+						own.SetVector(FallSprayId, Shown(fall.Spray));
+						own.SetVector(FallMistId, Shown(fall.Mist));
 					}
 					else
 					{
-						block.SetVector(FallWaterId, Shown(fall.Water));
-						block.SetVector(FallFoamId, Shown(fall.Foam));
-						block.SetVector(FallAbsorbId, new Vector4(fall.Absorb.x, fall.Absorb.y, fall.Absorb.z, 0f));
+						own.SetVector(FallWaterId, Shown(fall.Water));
+						own.SetVector(FallFoamId, Shown(fall.Foam));
+						own.SetVector(FallAbsorbId, new Vector4(fall.Absorb.x, fall.Absorb.y, fall.Absorb.z, 0f));
 					}
-					block.SetFloat(FallLookOnId, 1f);
+					own.SetFloat(FallLookOnId, 1f);
 				}
-				renderer.SetPropertyBlock(block);
+				renderer.sharedMaterial = own;
 			}
 		}
 

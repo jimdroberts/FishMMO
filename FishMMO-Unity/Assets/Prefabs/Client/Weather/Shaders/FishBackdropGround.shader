@@ -10,8 +10,10 @@
 //
 // The control maps and the colour bake are this material's (SceneBackdropBuilder writes them); the arrays and
 // their per-layer numbers are the scene's, pushed by TerrainArrayBinder exactly as it pushes them to the tiles.
-// No instancing: the renderers carry a property block, which keeps them off the GPU Resident Drawer anyway, and
-// there are a few dozen of them. No shadow caster: the backdrop casts none (SceneBackdropBuilder).
+// No instancing: there are a few dozen renderers, and without DOTS instancing the GPU Resident Drawer leaves them to the
+// SRP Batcher. In play they draw with a runtime copy of their material carrying the binder's numbers (UnityPerMaterial,
+// FISH_TERRAIN_ARRAY_NUMBERS) and no property block, so the batcher keeps them; edit mode still binds a block. No shadow
+// caster: the backdrop casts none (SceneBackdropBuilder).
 Shader "FishMMO/Backdrop Ground"
 {
     Properties

@@ -919,6 +919,22 @@ namespace FishMMO.Shared.Biomes
 			return new Vector3(toward.x * s, Mathf.Cos(t), toward.y * s);
 		}
 
+		/// <summary>True when the word turns instances (a fixed heading or the fall line).</summary>
+		public static bool Faces(uint word) => (word & FacingMask) != 0u;
+
+		/// <summary>True when the word tilts instances off the vertical.</summary>
+		public static bool Leans(uint word) => ((word >> LeanShift) & 0x7u) != 0u;
+
+		/// <summary>True when the word draws sizes from a power law.</summary>
+		public static bool Sizes(uint word) => ((word >> PowerShift) & 0x3Fu) != 0u;
+
+		/// <summary>
+		/// The tilt an instance takes on top of its turn (the client's tree lean, the GPU's ScatterModeLeanUp): the rotation laying +Y on
+		/// <see cref="LeanUp"/>; the identity with no lean.
+		/// </summary>
+		public static Quaternion LeanRotation(uint word, uint angles, Vector3 normal, float leanUnit)
+			=> Leans(word) ? Quaternion.FromToRotation(Vector3.up, LeanUp(word, angles, normal, leanUnit)) : Quaternion.identity;
+
 		/// <summary>The share along the scale range an instance's size takes (ScatterModeSize): <paramref name="t"/> with no power law.</summary>
 		public static float SizeShare(uint word, float t, float lo, float hi)
 		{

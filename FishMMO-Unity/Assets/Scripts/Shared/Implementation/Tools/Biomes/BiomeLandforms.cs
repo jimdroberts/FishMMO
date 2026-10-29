@@ -193,6 +193,12 @@ namespace FishMMO.Shared.Biomes
 			{
 				return s.Bounds;
 			}
+			if (f.Form == BiomeLandformForm.Impact && f.RayReach > 0f && (s.Bounds.z > s.Bounds.x || s.Bounds.w > s.Bounds.y))
+			{
+				// Long rays clipped to the scene by the planner (2026-10-26, I2g-f): the box it kept, never inside the bowl's 2 radii.
+				float c = 2f * s.Radius;
+				return new Vector4(Mathf.Min(s.Bounds.x, s.Centre.x - c), Mathf.Min(s.Bounds.y, s.Centre.y - c), Mathf.Max(s.Bounds.z, s.Centre.x + c), Mathf.Max(s.Bounds.w, s.Centre.y + c));
+			}
 			if (IsLine(f.Form) && s.Segments != null && s.Segments.Count > 0)
 			{
 				float reach = 0f;
@@ -231,6 +237,8 @@ namespace FishMMO.Shared.Biomes
 				case BiomeLandformFamily.Crater:
 					// A rampart crater's lobes reach past twice its radius (decision 72).
 					r = s.Radius * (f.Form == BiomeLandformForm.Rampart ? Mathf.Max(2f, RampartReach(f) * 1.15f + 0.3f) : 2f);
+					// Long rays and a halo's parabola reach their RayReach (2026-10-26, I2g-f); they paint only, the carve ends by 2 radii.
+					r = f.Form == BiomeLandformForm.Impact && f.RayReach > 0f ? Mathf.Max(r, s.Radius * Mathf.Min(f.RayReach, 12f) * 1.02f) : r;
 					break;
 				case BiomeLandformFamily.Depression:
 					r = f.Form == BiomeLandformForm.Hollow && f.Count > 1
@@ -416,6 +424,13 @@ namespace FishMMO.Shared.Biomes
 					float soft = Mathf.Max(1f, 0.1f * (hi - lo));
 					w *= S01((depth - lo + soft) / (2f * soft)) * (1f - S01((depth - hi + soft) / (2f * soft)));
 				}
+				if (f.Upper > 0f && !float.IsNaN(Site.Level))
+				{
+					// Only the highest share of its patch (2026-10-26, I2g-f: the bladed ridges on the top fifth), its level the
+					// planner's quantile of the patch's ground, faded in over half the field's height either side of it.
+					float soft = Mathf.Max(2f, 0.5f * Site.Height);
+					w *= S01((original - Site.Level + soft) / (2f * soft));
+				}
 				if (FamilyOf(f.Form) == BiomeLandformFamily.Dunes && Site.MixHigh > Site.MixLow && !(Site.MixLow <= 0f && Site.MixHigh >= 1f))
 				{
 					w *= MixBand(Noise(x / Mathf.Max(64f, Site.HalfWidth * 6f), z / Mathf.Max(64f, Site.HalfWidth * 6f), Site.MixSeed), Site.MixLow, Site.MixHigh);
@@ -547,6 +562,11 @@ namespace FishMMO.Shared.Biomes
 				BiomeLandform f = Site.Form;
 				float q = MoundQ(x, z);
 				float p = MoundProfile(q);
+				if (f.Radials > 0 && p > 0f && p < 1f)
+				{
+					// Radial grooves down its flank (2026-10-26, I2g-f: a pancake dome's cooling cracks).
+					p *= 1f - MoundRadial(x, z, p);
+				}
 				if (f.Form == BiomeLandformForm.Pyramid && p > 0f)
 				{
 					// The axial stairs run the tiers' height as one ramp (2026-10-25, I2g-b).
@@ -636,7 +656,9 @@ namespace FishMMO.Shared.Biomes
 				float delta = 0f;
 				if (r < 1f)
 				{
-					delta -= Site.Height * (1f - S01((r - top) / (1f - top)));
+					float wall = 1f - S01((r - top) / (1f - top));
+					// Terraced walls (2026-10-26, I2g-f: a young complex crater's slumped benches), the wall drawn as treads.
+					delta -= Site.Height * (f.Steps > 0 && f.Form == BiomeLandformForm.Impact ? Stepped(wall, f.Steps + 1) : wall);
 				}
 				// An ageing crater's rim is lower and rounder by its class (decision 72).
 				int age = f.Ages ? CraterAge(Site.Seed) : 0;
@@ -652,10 +674,11 @@ namespace FishMMO.Shared.Biomes
 					float blanket = (1f / (r * r * r) - 0.125f) / 0.875f;
 					delta += rim * 0.5f * blanket * (1f + 0.35f * RayAt(MathF.Atan2(dz, dx)));
 				}
-				// A central peak once the crater is large (complex: 3 km and over).
-				if (f.Crown > 0f && f.CrownDepth > 0f && radius * 2f >= 3000f)
+				// A central peak once the crater is large (complex: 3 km and over, or its own PeakFrom; 2026-10-26, I2g-f), or a
+				// ring of peaks at its PeakRing share of the radius (a double-ring crater), Crown its half width.
+				if (f.Crown > 0f && f.CrownDepth > 0f && radius * 2f >= (f.PeakFrom > 0f ? f.PeakFrom : 3000f))
 				{
-					delta += f.CrownDepth * 2f * radius * Bump(r / f.Crown);
+					delta += f.CrownDepth * 2f * radius * (f.PeakRing > 0f ? Bump((r - f.PeakRing) / f.Crown) : Bump(r / f.Crown));
 				}
 				if (secondaries != null)
 				{
@@ -775,6 +798,11 @@ namespace FishMMO.Shared.Biomes
 					w *= 1f - f.Roughness * 0.6f * groove * 4f * w * (1f - w);
 				}
 				float level = !float.IsNaN(Site.Level) ? Site.Level : Site.Ground + Site.Height;
+				if (f.Tilt > 0f && f.Form == BiomeLandformForm.Table)
+				{
+					// A tilted top (2026-10-26, I2g-f: a chaos raft rotated as it broke away), about its centre.
+					level += TableTilt(x, z);
+				}
 				float target = current + (level - current) * w;
 				if (f.Datum != BiomeLandformDatum.Ground && !float.IsNaN(Site.Level))
 				{
@@ -938,7 +966,13 @@ namespace FishMMO.Shared.Biomes
 					{
 						float s = hit.Side * hit.Distance;
 						float back = Mathf.Max(1f, Site.Radius);
-						float raise = S01((s + seg.Half) / (2f * seg.Half)) * (1f - S01((s - seg.Half) / back));
+						float face = S01((s + seg.Half) / (2f * seg.Half));
+						if (f.Steps > 0)
+						{
+							// Benches down the face (2026-10-26, I2g-f: a plateau's rim stepping down, an ice cap's flight of margin steps).
+							face = Stepped(face, f.Steps + 1);
+						}
+						float raise = face * (1f - S01((s - seg.Half) / back));
 						step = Mathf.Max(step, seg.Depth * raise * taper);
 						continue;
 					}
@@ -1004,6 +1038,11 @@ namespace FishMMO.Shared.Biomes
 						ditch = f.MoatDepth * Bump(2f * dd / f.Moat - 1f);
 					}
 				}
+				if (f.Radials > 0)
+				{
+					// A web of radial fractures through the ring (2026-10-26, I2g-f: an arachnoid's), cut with its ditch.
+					ditch = Mathf.Max(ditch, RingWeb(dx, dz, rr));
+				}
 				if (f.Datum != BiomeLandformDatum.Ground && !float.IsNaN(Site.Level))
 				{
 					float target = Mathf.Max(current, current + (Site.Level - current) * Mathf.Clamp01(p));
@@ -1039,27 +1078,45 @@ namespace FishMMO.Shared.Biomes
 					// The vent hollow at its head (decision 76), a bowl deeper than the trench it feeds.
 					cut = RilleHead(x, z, out share);
 				}
+				// 2026-10-26, I2g-f: an inner channel down the floor, a canyon's wall terraces, a rille's roofed stretches.
+				bool inner = f.Inner > 0f && (f.Form == BiomeLandformForm.Rille || f.Form == BiomeLandformForm.Canyon);
+				bool benched = f.Steps > 0 && f.Form == BiomeLandformForm.Canyon;
+				float innerCut = 0f;
 				foreach (LineHit hit in hits)
 				{
 					BiomeLandformSegment seg = Site.Segments[hit.Segment];
 					float half = Mathf.Max(0.05f, seg.Half);
 					float t = ChannelReach(hit, half);
 					float taper = Taper(seg, hit.Along, half, TapersBoth);
+					if (f.Roofed > 0f && f.Form == BiomeLandformForm.Rille)
+					{
+						taper *= 1f - RoofAt(hit.Along, Site.Segments[0].Half);
+					}
 					if (t < 1f)
 					{
 						float bed = t <= top ? 1f : 1f - S01((t - top) / (1f - top));
+						if (benched)
+						{
+							bed = Stepped(bed, f.Steps + 1);
+						}
 						if (f.Roughness > 0f)
 						{
 							bed *= 1f - f.Roughness * 0.4f * Noise(x / Mathf.Max(1f, half), z / Mathf.Max(1f, half), Site.Seed);
 						}
 						share = Mathf.Max(share, bed * taper);
 						cut = Mathf.Max(cut, seg.Depth * bed * taper);
+						if (inner)
+						{
+							float ti = t / Mathf.Max(0.05f, f.Inner);
+							innerCut = Mathf.Max(innerCut, 0.33f * seg.Depth * (1f - S01((ti - 0.5f) / 0.5f)) * taper);
+						}
 					}
 					if (f.Rim > 0f && t > 0.9f && t < 3f)
 					{
 						levee = Mathf.Max(levee, f.Rim * Bump((t - 1.85f) / 0.95f) * taper);
 					}
 				}
+				cut += innerCut;
 				levee *= 1f - S01(share / 0.15f);
 				if ((f.Form == BiomeLandformForm.Pass || f.Datum != BiomeLandformDatum.Ground) && !float.IsNaN(Site.Level))
 				{
@@ -1484,7 +1541,15 @@ namespace FishMMO.Shared.Biomes
 							case BiomeLandformPart.Wall: return S01((r - craterTop) / 0.1f) * (1f - S01((r - 0.95f) / 0.08f));
 							case BiomeLandformPart.Ejecta: return S01((r - 0.95f) / 0.1f) * (1f - S01((r - 1.6f) / 0.4f));
 							case BiomeLandformPart.Rays:
+								if (f.Form == BiomeLandformForm.Impact && f.RayReach > 2f)
+								{
+									// Long rays (2026-10-26, I2g-f: a fresh airless crater's, out to 8 radii), thinning outward.
+									float reach = Mathf.Min(f.RayReach, 12f);
+									return RayAt(MathF.Atan2(dz, dx)) * S01((r - 0.95f) / 0.1f) * (1f - S01((r - 0.75f * reach) / (0.25f * reach))) * (1f - 0.5f * Mathf.Clamp01(r / reach));
+								}
 								return RayAt(MathF.Atan2(dz, dx)) * S01((r - 0.95f) / 0.1f) * (1f - S01((r - 1.5f) / 0.5f));
+							case BiomeLandformPart.Halo:
+								return HaloMask(dx, dz, r);
 							default: return 1f - S01((r - 1.05f) / 0.1f);
 						}
 					}
@@ -1915,6 +1980,12 @@ namespace FishMMO.Shared.Biomes
 					filled[nk] = Mathf.Max(level[nk], h);
 					heap.Push(nk, filled[nk]);
 				}
+			}
+			if (shape.Site.Form.Top > 0f)
+			{
+				// Filled only part way (2026-10-26, I2g-f: a Cayley plain's fill to three tenths of its crater's rim): each closed
+				// low's flat level that share of the way from its floor up to its spill.
+				PartFill(level, filled, cw, cd, Mathf.Clamp01(shape.Site.Form.Top));
 			}
 			float[] metres = grid.Metres;
 			Grid g = grid;

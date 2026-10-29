@@ -48,6 +48,8 @@ namespace FishMMO.Client
 				case SceneCaveForm.Mine: return 0.7f;
 				case SceneCaveForm.LavaTube: return 0.45f;
 				case SceneCaveForm.IceCave: return 0.18f;
+				// A sea hall's dry ice holds as little as an ice cave's; its life is its sea's (SeaLifeSystem, its Pool spot).
+				case SceneCaveForm.SeaHall: return 0.18f;
 				default: return 1f;
 			}
 		}
@@ -122,7 +124,9 @@ namespace FishMMO.Client
 				return land;
 			}
 			AmbientHabitat own = AmbientGating.HabitatOfTemplate(inside);
-			return own == AmbientHabitat.None ? land : (AmbientHabitat)BiomeCaveInteriors.LinkedHabitat((int)land, (int)own, (int)AmbientHabitat.Barren);
+			// A sea hall keeps its interior's habitat whole (2026-10-26, I2n-b, decision 83 Q7: not the airless ice's Barren bit).
+			return own == AmbientHabitat.None ? land
+				: (AmbientHabitat)BiomeCaveInteriors.LinkedHabitat((BiomeCaveForm)spot.Form, (int)land, (int)own, (int)AmbientHabitat.Barren);
 		}
 
 		/// <summary>Whether a kind lives underground at all.</summary>

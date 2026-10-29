@@ -70,6 +70,9 @@ namespace FishMMO.UnitTests
 				GraphicsSettings.defaultRenderPipeline = originalDefault;
 				QualitySettings.SetQualityLevel(selected, false);
 				QualitySettings.renderPipeline = originalQuality;
+				// The scope saves the settings, and the fixture's pipeline is not an asset, so the settings files
+				// on disk now name no pipeline: write the project's own back before anything reads them.
+				UnityEditor.AssetDatabase.SaveAssets();
 				renderer.rendererFeatures.Clear();
 				Object.DestroyImmediate(feature);
 				Object.DestroyImmediate(pipeline);

@@ -210,6 +210,12 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+			StartShade(light);
+		}
+
+		/// <summary>Starts the far shade's worker. Its own method: the lambda's closure is made on entry to the scope that owns its locals, so inside <see cref="Shade"/> every frame paid for it.</summary>
+		private void StartShade(Vector3 light)
+		{
 			shadeStarted = Time.unscaledTime;
 			TerrainShadowSolver.Grid scene = completeGround;
 			shadingLight = light;

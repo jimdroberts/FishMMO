@@ -26,7 +26,7 @@
         "WindowsStandalone32Server",
         "WindowsStandalone64Server"
     ],
-    "allowUnsafeCode": false,
+    "allowUnsafeCode": true,
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": false,

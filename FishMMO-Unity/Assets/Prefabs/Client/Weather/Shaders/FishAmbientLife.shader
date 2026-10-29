@@ -4,8 +4,9 @@
 // creatures (AmbientCaveLife), lit underground only by the cave's own lights (FishUnderground, additional lights) and, the
 // light-makers among them (2026-10-20: millipedes, snails, click beetles, lanternfish, jellies, wisp moths, newts, ember mites,
 // ice worms), by their own: a per-kind emission over the mesh's mask on the shared clock (AmbientGlow). Pass code and the vertex
-// contract are in FishAmbientLife.hlsl. Drawn only with Graphics.DrawMeshInstanced, one runtime
-// material per kind; opaque, dithered out at the draw distance and when an animal goes to ground.
+// contract are in FishAmbientLife.hlsl. Drawn only by AmbientLifeSystem: one Graphics.RenderMeshPrimitives and one runtime
+// material per kind, every animal read from its instance buffer by SV_InstanceID (no instancing variants, no property block);
+// opaque, dithered out at the draw distance and when an animal goes to ground.
 Shader "FishMMO/Ambient Life"
 {
     Properties
@@ -51,7 +52,6 @@ Shader "FishMMO/Ambient Life"
             #pragma target 3.5
             #pragma vertex AmbientLifeVertexMain
             #pragma fragment AmbientLifeForwardFragment
-            #pragma multi_compile_instancing
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #include_with_pragmas "FishShadowVariants.hlsl"
             #include_with_pragmas "FishLightCookieVariants.hlsl"
@@ -81,7 +81,6 @@ Shader "FishMMO/Ambient Life"
             #pragma target 3.5
             #pragma vertex AmbientLifeDepthVertex
             #pragma fragment AmbientLifeDepthFragment
-            #pragma multi_compile_instancing
             #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
 
             #define FISH_AMBIENT_LIFE_PASS_SHADOW
@@ -104,7 +103,6 @@ Shader "FishMMO/Ambient Life"
             #pragma target 3.5
             #pragma vertex AmbientLifeDepthVertex
             #pragma fragment AmbientLifeDepthFragment
-            #pragma multi_compile_instancing
 
             #define FISH_AMBIENT_LIFE_PASS_DEPTH
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -124,7 +122,6 @@ Shader "FishMMO/Ambient Life"
             #pragma target 3.5
             #pragma vertex AmbientLifeVertexMain
             #pragma fragment AmbientLifeDepthNormalsFragment
-            #pragma multi_compile_instancing
             #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
 
             #define FISH_AMBIENT_LIFE_PASS_DEPTHNORMALS

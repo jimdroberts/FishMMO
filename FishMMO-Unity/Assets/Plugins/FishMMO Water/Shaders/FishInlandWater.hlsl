@@ -38,6 +38,41 @@ CBUFFER_START(UnityPerMaterial)
 	half _MaxAlpha;
 	float _FoamScale;
 	half4 _FoamColor;
+	/* Each surface's own (InlandWaterRenderer: every lake and river draws with a copy of the material, 2026-10-28), here
+	 * rather than on a property block, which took each river's draw out of the SRP Batcher. All 0 on the shared material:
+	 * no solved flow, no falls, the material's own look. Loose vectors, not arrays: arrays in UnityPerMaterial are not known
+	 * to batch. */
+	/// A river's solved flow: x its length in metres (0: none, the blended flow is used); the field is _RiverFlowField.
+	float4 _RiverFlowInfo;
+	/// The falls on this river (count 0 on lakes and on rivers with none), read through RiverFallAt: x metres along the
+	/// river where the curtain lands, y how far downstream its foam is carried (m), z how strongly (0 … 1), w metres across
+	/// the river at the landing (the riverUV frame).
+	float4 _RiverFall0;
+	float4 _RiverFall1;
+	float4 _RiverFall2;
+	float4 _RiverFall3;
+	float _RiverFallCount;
+	/// The body's water look by the biome of its shores (InlandWaterRenderer.Looks, 2026-10-16), read through
+	/// InlandLookVector: three looks of INLAND_LOOK_VECTORS vectors each, its own, the water it runs out of (its start) and
+	/// the water it runs into (its end), each x shallow rgb + w the silt moving water carries, deep rgb + w a MELT
+	/// (2026-10-25, I2q-b: molten sulphur, opaque, viscous, its colour drifting), absorption per metre rgb, silt rgb, foam rgb
+	/// (colours linear, as the material's). _InlandLookOn 0: the material's own look, as every body had before.
+	float _InlandLookOn;
+	float4 _InlandLook0;
+	float4 _InlandLook1;
+	float4 _InlandLook2;
+	float4 _InlandLook3;
+	float4 _InlandLook4;
+	float4 _InlandLook5;
+	float4 _InlandLook6;
+	float4 _InlandLook7;
+	float4 _InlandLook8;
+	float4 _InlandLook9;
+	float4 _InlandLook10;
+	float4 _InlandLook11;
+	float4 _InlandLook12;
+	float4 _InlandLook13;
+	float4 _InlandLook14;
 CBUFFER_END
 
 TEXTURE2D(_NormalMap);
@@ -66,29 +101,31 @@ float4 _FishFalls[16];
 /// renderer has not published them (FallPool then keeps the older look: churn as white as before, no boil).
 float4 _FishFallsB[16];
 float _FishFallCount;
-/// The falls on this river (InlandWaterRenderer, per renderer; count 0 on lakes and on rivers with none): x metres
-/// along the river where the curtain lands, y how far downstream its foam is carried (m), z how strongly (0 … 1),
-/// w metres across the river at the landing (the riverUV frame).
-float4 _RiverFalls[4];
-float _RiverFallCount;
-/// A river's solved flow (InlandWaterRenderer.Flow, per renderer): along and across its line over its mean speed,
-/// and its length in metres (0: no solved flow, the blended one is used).
+/// The falls on this river by index (0 … 3; the per-surface vectors in UnityPerMaterial).
+float4 RiverFallAt(int i)
+{
+	return i == 0 ? _RiverFall0 : (i == 1 ? _RiverFall1 : (i == 2 ? _RiverFall2 : _RiverFall3));
+}
+/// A river's solved flow (InlandWaterRenderer.Flow, on its material): along and across its line over its mean speed;
+/// its length in metres is _RiverFlowInfo.x (0: no solved flow, the blended one is used).
 TEXTURE2D(_RiverFlowField);
 SAMPLER(sampler_RiverFlowField);
-float4 _RiverFlowInfo;
 /// What moves in the rivers near the camera (InlandWaterRenderer.Wakes): xyz where it meets the surface, w its radius;
 /// and its velocity (xy, world xz).
 float4 _FishWakes[16];
 float4 _FishWakeVelocities[16];
 float _FishWakeCount;
-/// The body's water look by the biome of its shores (InlandWaterRenderer.Looks, per renderer, 2026-10-16): three looks of
-/// INLAND_LOOK_VECTORS vectors each, its own, the water it runs out of (its start) and the water it runs into (its end),
-/// each x shallow rgb + w the silt moving water carries, deep rgb + w a MELT (2026-10-25, I2q-b: molten sulphur, opaque,
-/// viscous, its colour drifting), absorption per metre rgb, silt rgb, foam rgb (colours linear, as the material's).
-/// _InlandLookOn 0 (no block set): the material's own look, as every body had before.
+/// Vectors per look (the looks themselves are the per-surface vectors in UnityPerMaterial).
 #define INLAND_LOOK_VECTORS 5
-float4 _InlandLooks[15];
-float _InlandLookOn;
+
+/// The looks' vectors by index (0 … 14: look slot × INLAND_LOOK_VECTORS + vector). Called with constant indices from
+/// unrolled loops, so each folds to the one vector.
+float4 InlandLookVector(int i)
+{
+	return i == 0 ? _InlandLook0 : i == 1 ? _InlandLook1 : i == 2 ? _InlandLook2 : i == 3 ? _InlandLook3 : i == 4 ? _InlandLook4
+		: i == 5 ? _InlandLook5 : i == 6 ? _InlandLook6 : i == 7 ? _InlandLook7 : i == 8 ? _InlandLook8 : i == 9 ? _InlandLook9
+		: i == 10 ? _InlandLook10 : i == 11 ? _InlandLook11 : i == 12 ? _InlandLook12 : i == 13 ? _InlandLook13 : _InlandLook14;
+}
 
 /// The colour and clarity of the water at a point (BiomeWaterLook).
 struct InlandLook
@@ -107,7 +144,7 @@ struct InlandLook
 #define INLAND_MELT_DRIFT_SECONDS 1250.0
 
 /// The water's look where a river carries <paramref name="towards"/>.x of the look of the water it leaves and .y of the
-/// water it joins (its vertices', BiomeWaterLooks.Blend), the rest its own; the material's without a block.
+/// water it joins (its vertices', BiomeWaterLooks.Blend), the rest its own; the material's own with no look set.
 InlandLook InlandLookAt(float2 towards)
 {
 	InlandLook look;
@@ -128,7 +165,7 @@ InlandLook InlandLookAt(float2 towards)
 	[unroll]
 	for (int i = 0; i < INLAND_LOOK_VECTORS; i++)
 	{
-		v[i] = _InlandLooks[i] * weights.x + _InlandLooks[INLAND_LOOK_VECTORS + i] * weights.y + _InlandLooks[2 * INLAND_LOOK_VECTORS + i] * weights.z;
+		v[i] = InlandLookVector(i) * weights.x + InlandLookVector(INLAND_LOOK_VECTORS + i) * weights.y + InlandLookVector(2 * INLAND_LOOK_VECTORS + i) * weights.z;
 	}
 	look.shallow = v[0].rgb;
 	look.turbidity = v[0].w;
@@ -643,7 +680,7 @@ half FallTrail(float2 riverUV, float halfWidth)
 		{
 			break;
 		}
-		float4 fall = _RiverFalls[i];
+		float4 fall = RiverFallAt(i);
 		float run = riverUV.x - fall.x;
 		float trailLength = max(1.0, fall.y);
 		if (run < -2.0 || run > trailLength)
@@ -860,7 +897,7 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	// rougher, broken water roughest.
 	half detailFade = saturate(1.0 - distanceToCamera / max(1.0, _NormalFadeDistance));
 	// A melt (2026-10-25, I2q-b) is viscous: a fifth of the ripples.
-	half meltRipple = _InlandLookOn < 0.5 ? 1.0 : lerp(1.0, 0.2, saturate(_InlandLooks[1].w));
+	half meltRipple = _InlandLookOn < 0.5 ? 1.0 : lerp(1.0, 0.2, saturate(_InlandLook1.w));
 	detailFade *= meltRipple;
 	// Choppier along a shear line (the wavelets its turbulence raises), as well as duller (the roughness below).
 	half strength = _NormalStrength * detailFade * (1.0 + 0.6 * saturate(speed / 2.0) + 0.6 * broken + 1.5 * pool.stir + 0.4 * saturate(shear / 2.0));

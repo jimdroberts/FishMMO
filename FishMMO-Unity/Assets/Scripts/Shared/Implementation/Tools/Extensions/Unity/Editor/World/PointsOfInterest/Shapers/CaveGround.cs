@@ -20,6 +20,12 @@ namespace FishMMO.Shared.WorldDesign
 		LavaTube = 4,
 		/// <summary>A worked mine: a straight, level adit into the hill, drifts off it at right angles, stopes where the ore was.</summary>
 		Mine = 5,
+		/// <summary>
+		/// A sea hall (2026-10-26, phase I2n-b, decision 83): a great flooded dome under an ice moon's shell, an air pocket under its
+		/// crown with a ledge on one side, smokers on its floor, reached down a melt shaft by a stair wound round its wall
+		/// (CaveSystem.SeaHall.cs). Only ever an interior's: its link is gated by its interior's world.
+		/// </summary>
+		SeaHall = 6,
 	}
 
 	/// <summary>

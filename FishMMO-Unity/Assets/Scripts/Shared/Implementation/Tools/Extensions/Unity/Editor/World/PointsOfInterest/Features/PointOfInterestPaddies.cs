@@ -206,6 +206,37 @@ namespace FishMMO.Shared.WorldDesign
 			return AssetDatabase.LoadAssetAtPath<SceneHydrology>(SceneGenerator.HydrologyPath(terrainFolder, sceneName));
 		}
 
+		/// <summary>
+		/// Whether the place stage may make a scene's hydrology asset for the water its sites lay (pure): a scene's own folder and name,
+		/// never a LOCAL copy's folder (a copy reads the committed scene's water, and an asset of its own there would hide it).
+		/// </summary>
+		public static bool MayMakeHydrology(string terrainFolder, string sceneName)
+			=> !string.IsNullOrEmpty(terrainFolder) && !string.IsNullOrEmpty(sceneName) && !BiomeLocalArtIndex.IsLocalPath(terrainFolder);
+
+		/// <summary>
+		/// The scene's hydrology asset, made empty (at <paramref name="seaLevel"/>) when it has none, with the scene's Inland Water
+		/// object to read and draw it (SceneGenerator.EnsureInlandWater). A scene with no river or lake on its ground has no asset
+		/// after the cut saves its water (SceneGenerator.SaveWater), yet its sites lay water of their own (2026-10-27): hot spring
+		/// and sulphur pools, paddies, terraces, rills and leats, which until then stood dry ("no hydrology to hold their water")
+		/// unless a cave's water, placed later, happened to make one. Null where none may be made (<see cref="MayMakeHydrology"/>).
+		/// </summary>
+		public static SceneHydrology EnsureHydrology(UnityEngine.SceneManagement.Scene scene, string terrainFolder, string sceneName, float seaLevel = float.NegativeInfinity)
+		{
+			SceneHydrology hydrology = Hydrology(terrainFolder, sceneName);
+			if (hydrology != null || !MayMakeHydrology(terrainFolder, sceneName) || !AssetDatabase.IsValidFolder(terrainFolder))
+			{
+				return hydrology;
+			}
+			hydrology = ScriptableObject.CreateInstance<SceneHydrology>();
+			hydrology.SeaLevel = seaLevel;
+			AssetDatabase.CreateAsset(hydrology, SceneGenerator.HydrologyPath(terrainFolder, sceneName));
+			if (scene.IsValid())
+			{
+				SceneGenerator.EnsureInlandWater(scene, hydrology);
+			}
+			return hydrology;
+		}
+
 		/// <summary>Takes every paddy's lake out of the scene's hydrology (before the sites are placed again); returns how many went.</summary>
 		public static int ClearWater(string terrainFolder, string sceneName)
 		{
@@ -223,10 +254,15 @@ namespace FishMMO.Shared.WorldDesign
 			return removed;
 		}
 
-		/// <summary>Writes a paddy's lake into the scene's hydrology, replacing one of the same id; false when there is no hydrology to hold it.</summary>
+		/// <summary>
+		/// Writes a paddy's lake into the scene's hydrology, replacing one of the same id, the hydrology made when the scene has none
+		/// (<see cref="EnsureHydrology"/>); false when there is none to hold it (a harness, a LOCAL copy).
+		/// </summary>
 		public static bool WriteWater(PointOfInterestSiteContext context, SceneHydrology.Lake lake)
 		{
-			SceneHydrology hydrology = lake != null && context?.Request != null ? Hydrology(context.TerrainFolder, context.Request.SceneName) : null;
+			SceneHydrology hydrology = lake != null && context?.Request != null
+				? EnsureHydrology(context.Scene, context.TerrainFolder, context.Request.SceneName, context.Water != null ? context.Water.SeaLevel : float.NegativeInfinity)
+				: null;
 			if (hydrology == null)
 			{
 				return false;

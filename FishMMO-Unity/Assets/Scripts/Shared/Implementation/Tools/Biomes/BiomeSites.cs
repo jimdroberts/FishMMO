@@ -156,6 +156,15 @@ namespace FishMMO.Shared.Biomes
 			return 1f;
 		}
 
+		/// <summary>
+		/// A template's weight in a biome from its variant weight and its style's (pure): the two multiplied, except that a variant the
+		/// biome names by weight (<paramref name="named"/>) keeps its weight under a style weighed 0 (2026-10-27). A style at 0 says the
+		/// country does not build that way; a named variant is the biome's own word for that one template, which the style's blanket
+		/// 0 must not silence (Alpine Meadow names MonsterDen "Bones" at 0.4 and weighs Earth 0, and every bone den is in earth).
+		/// </summary>
+		public static float Apply(float variantWeight, bool named, float styleWeight)
+			=> named && styleWeight <= 0f ? Mathf.Max(0f, variantWeight) : Mathf.Max(0f, variantWeight) * Mathf.Max(0f, styleWeight);
+
 		/// <summary>"timber" → Timber (ignoring case); null for anything that is not a style name (a race key, empty).</summary>
 		public static BiomeStructureStyle? Parse(string style)
 		{
@@ -392,8 +401,10 @@ namespace FishMMO.Shared.Biomes
 	/// <remarks>
 	/// Every member's name is the kit piece that is laid (<see cref="BiomeWayLights.PieceQuery"/>). The first three are the
 	/// street lights the kit built before; the cave kit's lamps (3–6) light caves and mines (<see cref="BiomeCaveLight"/>,
-	/// 2026-10-16, I6c); the rest (7–12) are the lights added with the per-biome content (I6c), each its own kit piece. How a
-	/// light is set (on the ground, on a wall, from a roof) is <see cref="BiomeWayLights.MountOf"/>.
+	/// 2026-10-16, I6c); 7–12 are the lights added with the per-biome content (I6c), each its own kit piece; 13 on are the
+	/// way and cave lights the biome suite's drafts name (2026-10-26). How a light is set (on the ground, on a wall, from a
+	/// roof) is <see cref="BiomeWayLights.MountOf"/>, its placement class <see cref="BiomeWayLights.ClassOf"/>, what it gives
+	/// off <see cref="BiomeWayLights.EmitterOf"/>.
 	/// </remarks>
 	public enum BiomeWayLightKind : byte
 	{
@@ -423,6 +434,183 @@ namespace FishMMO.Shared.Biomes
 		RuneStone = 11,
 		/// <summary>A wrought-iron bracket from a wall with a lantern hung from its scrolled arm (piece HangingBracket).</summary>
 		HangingBracket = 12,
+		// The way and cave lights the biome suite's drafts name (2026-10-26, NEW-LIGHTS): each its own kit piece
+		// (StructurePieces.WayLights.cs), its placement class, emitter and standing twin in BiomeWayLights.
+		/// <summary>A beacon on a tower top: an iron fire basket of logs on a stand, dark by day and kindled at dusk (a Pyre).</summary>
+		Beacon = 13,
+		/// <summary>A signal pyre: a log crib on a slab-stone hearth, kindled at dusk (a Pyre).</summary>
+		SignalPyre = 14,
+		/// <summary>A wart fire: a hill beacon's turf-walled fire pit on a cairn, kindled at dusk (a Pyre).</summary>
+		WartFire = 15,
+		/// <summary>A blubber pyre: an iron pot of rendered fat over a stone ring, kindled at dusk (a Pyre).</summary>
+		BlubberPyre = 16,
+		/// <summary>A beacon of five fire pits in a row on a rammed platform, kindled at dusk (a Pyre).</summary>
+		FivePits = 17,
+		/// <summary>A horn lantern with amber panes on a driftwood post (a Lamp).</summary>
+		AmberLamp = 18,
+		/// <summary>A squat lantern of soft tuff pierced with stars and crosses, on a tuff post (a Lamp).</summary>
+		CarvedLantern = 19,
+		/// <summary>A stone lantern: base, post, a paper-screened firebox and a curled cap (a Lamp).</summary>
+		StoneLantern = 20,
+		/// <summary>A round paper lantern on a bamboo bracket from a wall (a Lamp; PaperLanternPost where no wall is near).</summary>
+		PaperLantern = 21,
+		/// <summary>A round paper lantern hung from a bamboo post's arm (a Lamp).</summary>
+		PaperLanternPost = 22,
+		/// <summary>A clay oil lamp in a niche built out from a wall, a soot tongue above it (a Lamp; NicheLampPost where no wall is near).</summary>
+		NicheLamp = 23,
+		/// <summary>A carved post with a lamp niche in its head (a Lamp).</summary>
+		NicheLampPost = 24,
+		/// <summary>A small bronze bell on a weed-hung post, its mouth glowing (a cold Glow).</summary>
+		Bellglow = 25,
+		/// <summary>A lamp pillar: a stone shaft with tiers of lamp brackets (a Torch at its middle tier).</summary>
+		LampPillar = 26,
+		/// <summary>A ship's stern lantern: a tall hexagonal iron frame of horn panes on an iron stand (a Lamp).</summary>
+		Fanal = 27,
+		/// <summary>A terracotta lamp-jar pierced with triangles, hung from a wall hook (a Lamp; PiercedJarPillar where no wall is near).</summary>
+		PiercedJar = 28,
+		/// <summary>A pierced lamp-jar set on a stacked-slab pillar (a Lamp).</summary>
+		PiercedJarPillar = 29,
+		/// <summary>A waist-high stepped stone altar with a fire bowl on top (a Fire).</summary>
+		FireAltar = 30,
+		/// <summary>An iron double cruse lamp hung from a wall hook (a Lamp; IronCrusePost where no wall is near).</summary>
+		IronCruse = 31,
+		/// <summary>An iron double cruse lamp hung from a hook on a short post (a Lamp).</summary>
+		IronCrusePost = 32,
+		/// <summary>A fire in a stone bowl on a pillar of stacked slabs (a Fire).</summary>
+		SlabHearth = 33,
+		/// <summary>A splinter-light: an iron fork holding a burning splinter on a post over an ember trough (a Torch).</summary>
+		Svetets = 34,
+		/// <summary>A hollow ice cylinder, frosted, on a stone block, a candle inside (a Lamp).</summary>
+		IceLantern = 35,
+		/// <summary>A crystal lens on a stone post that gives back the day after sunset (a cold Glow, amber).</summary>
+		SunLens = 36,
+		/// <summary>An iron fat-lamp cup hung on a hook from a carved post (a Torch).</summary>
+		SergeLamp = 37,
+		/// <summary>A soapstone cup-lamp on an iron spike driven into the ground or the ice (a Torch).</summary>
+		KolaSpike = 38,
+		/// <summary>A tall pole with a crescent finial and hanging tassels (a cold Glow, silver).</summary>
+		CrescentStandard = 39,
+		/// <summary>A many-spouted clay oil lamp in a wall niche (a Lamp; ClayLampPost where no wall is near).</summary>
+		ClayLamp = 40,
+		/// <summary>A many-spouted clay oil lamp on a carved post (a Lamp).</summary>
+		ClayLampPost = 41,
+		/// <summary>A sunken lamp: a green-glowing jar in a weed-grown iron cage on a stake (a cold Glow, green).</summary>
+		DrownedLamp = 42,
+		/// <summary>A resin-heart pine torch wedged in a wall's crack, a soot tongue above it (a Torch; a torch post where it cannot be wedged).</summary>
+		TeaTorch = 43,
+		/// <summary>A ring of stones round a small fire on the ground (a Fire).</summary>
+		HearthRing = 44,
+		/// <summary>A ring of glass oil-cups hung from a post's iron crook (a Lamp).</summary>
+		Polycandelon = 45,
+		/// <summary>A clay saucer lamp under a little hood on a wall bracket (a Lamp; CastorLampPost where no wall is near).</summary>
+		CastorLamp = 46,
+		/// <summary>A clay saucer lamp under a little hood on a palm-trunk post (a Lamp).</summary>
+		CastorLampPost = 47,
+		/// <summary>A flat iron oil dish with a wick spout hung from a twisted hook on a staff (a Torch).</summary>
+		Kriseilu = 48,
+		/// <summary>An iron wheel crown on a stone post, an oil lamp hung inside its spokes (a Lamp).</summary>
+		WheelLamp = 49,
+		/// <summary>A tilted metal mirror disc in a ring frame on a stone post (a cold Glow, white).</summary>
+		VolvaMirror = 50,
+		/// <summary>A square post whose arm hangs a glass plumb-bob dead still on a wire (a cold Glow, white).</summary>
+		Plummet = 51,
+		/// <summary>An open iron oil lamp hung from a hook driven into a wall (a Lamp; a lantern stand where no wall is near).</summary>
+		FrogLamp = 52,
+		/// <summary>A flagstone niche with a horn-paned shutter, built out from a gable or a dyke end (a Lamp; HornBolePillar where no wall is near).</summary>
+		HornBole = 53,
+		/// <summary>A flagstone pillar with a horn-paned lamp niche in its head (a Lamp).</summary>
+		HornBolePillar = 54,
+		/// <summary>A stone lamp-bowl in a wall niche (a Lamp; ChiraghPillar where no wall is near).</summary>
+		Chiragh = 55,
+		/// <summary>A stone lamp-bowl on a waist-high rubble pillar (a Lamp).</summary>
+		ChiraghPillar = 56,
+		/// <summary>An oil wick in a hollowed block of rock salt in a wall niche, the salt glowing (a Lamp; SaltLampCairn where no wall is near).</summary>
+		SaltLamp = 57,
+		/// <summary>An oil wick in a hollowed block of rock salt on a cairn post (a Lamp).</summary>
+		SaltLampCairn = 58,
+		/// <summary>A carved soapstone fire bowl on a waist-high pillar (a Fire).</summary>
+		SoapstoneBowl = 59,
+		/// <summary>A pine-knot fire in a clay-plastered corner niche with a flue hole (a Fire; KokeulPillar where no wall is near).</summary>
+		Kokeul = 60,
+		/// <summary>A squat clay pillar with a pine-knot fire niche and a flue hole (a Fire).</summary>
+		KokeulPillar = 61,
+		/// <summary>A fire in a shallow painted clay tray on a wooden tripod (a Fire).</summary>
+		TrayFire = 62,
+		/// <summary>A candlenut torch: kernels skewered on a leaf midrib lashed to a pole (a Torch).</summary>
+		TuituiTorch = 63,
+		/// <summary>A rolled birch-bark torch in a split stake (a Torch).</summary>
+		BarkTorch = 64,
+		/// <summary>A cauldron-brazier on three hoof-shaped legs (a Fire).</summary>
+		KazanFire = 65,
+		/// <summary>A clay cup of sulphur and oil in a wall niche, burning low and blue (a blue Pyre; BrimLampPost where no wall is near).</summary>
+		BrimLamp = 66,
+		/// <summary>A clay cup of sulphur and oil on a rammed-earth post, burning low and blue (a blue Pyre).</summary>
+		BrimLampPost = 67,
+		/// <summary>An iron fork-basket of resinous pine splinters on a driven stake (a Torch).</summary>
+		PishaStake = 68,
+		/// <summary>A three-wick tinned-copper oil lamp hung from a tripod (a Lamp).</summary>
+		CopperKandil = 69,
+		/// <summary>A tall tripod candelabrum, its oil cup at the top (a Torch).</summary>
+		Candelabrum = 70,
+		/// <summary>A hollow nodule shell on a rib post, a glowing chip inside (a cold Glow, green).</summary>
+		NoduleLamp = 71,
+		/// <summary>A wrought-iron cage on a rib or stone post holding a glowing lure-orb (a cold Glow, blue).</summary>
+		Lurelight = 72,
+		/// <summary>A perforated clay lantern on a pitch-daubed reed-bundle pillar (a Torch).</summary>
+		NaphthaLamp = 73,
+		/// <summary>A seated stone figure bearing a fire bowl on its head (a Fire).</summary>
+		Hearthwarden = 74,
+		/// <summary>Three carved hearthstones under a clay griddle, a fire between them (a Fire).</summary>
+		Tenamaztli = 75,
+		/// <summary>Candlenut kernels strung on a midrib in a leaf sheath, set in a stone socket (a Torch).</summary>
+		KukuiTorch = 76,
+		/// <summary>A stone bowl lamp of nut oil on the ground (a Lamp).</summary>
+		PohoLamp = 77,
+		/// <summary>A bronze many-wick oil lamp in a limewashed wall niche (a Lamp; LucernaPost where no wall is near).</summary>
+		Lucerna = 78,
+		/// <summary>A bronze many-wick oil lamp on a squared post with a little roof (a Lamp).</summary>
+		LucernaPost = 79,
+		/// <summary>One candle in a squat stone hood on a cut post (a Lamp).</summary>
+		VigilLamp = 80,
+		/// <summary>A great shell holding oil and a floating wick, on a short stand (a Lamp).</summary>
+		Shellwick = 81,
+		/// <summary>A wrought-iron pan holding a glowing ember-stone, hung from a stake's arm (a cold Glow, amber).</summary>
+		Gledpan = 82,
+		/// <summary>A pale wisp caged in a bog-iron basket on a crooked post (a cold Glow, faerie).</summary>
+		WispLantern = 83,
+		/// <summary>A stone pillar with a gabled niche, a candle in a tin lantern inside (a Lamp).</summary>
+		Alminha = 84,
+		/// <summary>A candle in a pierced gourd hung from a crooked pole (a Lamp).</summary>
+		GourdLantern = 85,
+		/// <summary>A crescent stone oil lamp on a waist-high cairn, a low wide flame (a Torch).</summary>
+		LampCairn = 86,
+		/// <summary>A candle lantern in a small gabled shrine-box on a post (a Lamp).</summary>
+		WaysideLantern = 87,
+		/// <summary>A tall hollow stone column with an open lantern chamber under a pyramid cap (a Lamp).</summary>
+		LanterneDesMorts = 88,
+		/// <summary>Candles in a niche built out from a wall, a soot fan above (a Lamp; a lantern stand where no wall is near).</summary>
+		CandleNiche = 89,
+	}
+
+	/// <summary>
+	/// What shape of light a kind is, which decides where it can be laid (<see cref="BiomeWayLights.ClassOf"/>, 2026-10-26): a
+	/// post, a wall light, a niche built out from a wall, a bowl or hearth on the ground, a hanging light, a tower's beacon.
+	/// Stored by value nowhere (read from the kind); append-only all the same.
+	/// </summary>
+	public enum BiomeWayLightClass : byte
+	{
+		/// <summary>Stands on its own post, pillar, stake or stand (a ground light).</summary>
+		Post = 0,
+		/// <summary>Hung on a wall by its back plate (at z = 0, standing out along −z): a sconce, a bracket, a hook.</summary>
+		Wall = 1,
+		/// <summary>A niche built out from a wall, the lamp inside it (mounted as a wall light).</summary>
+		Niche = 2,
+		/// <summary>A bowl, a hearth or a brazier on the ground or a low base (a ground light).</summary>
+		Bowl = 3,
+		/// <summary>Hangs from a roof or a beam (a roof light).</summary>
+		Hanging = 4,
+		/// <summary>A beacon: a fire laid on a tower's top (its lookout) or a hill, kindled at dusk (a ground light).</summary>
+		Beacon = 5,
 	}
 
 	/// <summary>How a light is set where it stands: on the ground, against a wall, or from a roof.</summary>
@@ -530,11 +718,21 @@ namespace FishMMO.Shared.Biomes
 					{
 						light.Spacing = light.Spacing > 0f ? Mathf.Max(MinDriftSpacing, light.Spacing) : DriftSpacing;
 					}
+					// Where the dressing stands its lights on the floor (a route's marks, a camp's lamp, a stope's light), a suite
+					// light that is hung on a wall stands as its own twin (2026-10-26: a niche lamp's carved post, a tea torch on a pole).
+					if (StandsOnFloor(place) && BiomeWayLights.StandsInStead(light.Light))
+					{
+						light.Light = BiomeWayLights.PostFor(light.Light);
+					}
 					return true;
 				}
 			}
 			return false;
 		}
+
+		/// <summary>True for the places whose lights the cave dressing stands on the floor (a route, a camp, a stope).</summary>
+		public static bool StandsOnFloor(BiomeCaveLightPlace place)
+			=> place == BiomeCaveLightPlace.Route || place == BiomeCaveLightPlace.Camp || place == BiomeCaveLightPlace.MineStope;
 
 		/// <summary>
 		/// The gap to the next light along a drift, for a mean <paramref name="spacing"/>: between 14/17 and 20/17 of it, so the
@@ -629,16 +827,144 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>The kit piece id of a light (its name: "LanternPost", "Cresset"…).</summary>
 		public static string PieceId(BiomeWayLightKind light) => light.ToString();
 
-		/// <summary>How a light is set: the wall pieces on a wall, the hanging lantern from a roof, everything else on the ground.</summary>
+		/// <summary>One kind's row of <see cref="Rows"/>: its placement class, what it gives off, and its standing twin.</summary>
+		private readonly struct Row
+		{
+			public readonly BiomeWayLightClass Class;
+			public readonly SceneEmitterKind Emitter;
+			public readonly BiomeWayLightKind Post;
+
+			public Row(BiomeWayLightClass @class, SceneEmitterKind emitter, BiomeWayLightKind post)
+			{
+				Class = @class;
+				Emitter = emitter;
+				Post = post;
+			}
+		}
+
+		/// <summary>
+		/// Every kind's placement class, the emitter its piece gives off (the kit's pieces are held to it by the tests), and the
+		/// ground light laid in its stead where it cannot be hung (itself for a ground light), in kind order. The cold Glow
+		/// kinds are what an airless or unbreathable world is lit with (decisions 41/62, <see cref="BiomeGlowLights.Glows"/>).
+		/// </summary>
+		private static readonly Row[] Rows =
+		{
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.LanternPost), // LanternPost
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Torch, BiomeWayLightKind.TorchPost), // TorchPost
+			new Row(BiomeWayLightClass.Bowl, SceneEmitterKind.Fire, BiomeWayLightKind.Brazier), // Brazier
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.LanternStand), // LanternStand
+			new Row(BiomeWayLightClass.Wall, SceneEmitterKind.Torch, BiomeWayLightKind.TorchPost), // WallTorch
+			new Row(BiomeWayLightClass.Hanging, SceneEmitterKind.Lamp, BiomeWayLightKind.LanternPost), // HangingLantern
+			new Row(BiomeWayLightClass.Wall, SceneEmitterKind.Lamp, BiomeWayLightKind.LanternPost), // WallLantern
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Fire, BiomeWayLightKind.Cresset), // Cresset
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.CrookLantern), // CrookLantern
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Glow, BiomeWayLightKind.Glowjar), // Glowjar
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Glow, BiomeWayLightKind.CrystalPost), // CrystalPost
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Glow, BiomeWayLightKind.RuneStone), // RuneStone
+			new Row(BiomeWayLightClass.Wall, SceneEmitterKind.Lamp, BiomeWayLightKind.CrookLantern), // HangingBracket
+			new Row(BiomeWayLightClass.Beacon, SceneEmitterKind.Pyre, BiomeWayLightKind.Beacon), // Beacon
+			new Row(BiomeWayLightClass.Beacon, SceneEmitterKind.Pyre, BiomeWayLightKind.SignalPyre), // SignalPyre
+			new Row(BiomeWayLightClass.Beacon, SceneEmitterKind.Pyre, BiomeWayLightKind.WartFire), // WartFire
+			new Row(BiomeWayLightClass.Beacon, SceneEmitterKind.Pyre, BiomeWayLightKind.BlubberPyre), // BlubberPyre
+			new Row(BiomeWayLightClass.Beacon, SceneEmitterKind.Pyre, BiomeWayLightKind.FivePits), // FivePits
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.AmberLamp), // AmberLamp
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.CarvedLantern), // CarvedLantern
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.StoneLantern), // StoneLantern
+			new Row(BiomeWayLightClass.Wall, SceneEmitterKind.Lamp, BiomeWayLightKind.PaperLanternPost), // PaperLantern
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.PaperLanternPost), // PaperLanternPost
+			new Row(BiomeWayLightClass.Niche, SceneEmitterKind.Lamp, BiomeWayLightKind.NicheLampPost), // NicheLamp
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.NicheLampPost), // NicheLampPost
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Glow, BiomeWayLightKind.Bellglow), // Bellglow
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Torch, BiomeWayLightKind.LampPillar), // LampPillar
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.Fanal), // Fanal
+			new Row(BiomeWayLightClass.Wall, SceneEmitterKind.Lamp, BiomeWayLightKind.PiercedJarPillar), // PiercedJar
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.PiercedJarPillar), // PiercedJarPillar
+			new Row(BiomeWayLightClass.Bowl, SceneEmitterKind.Fire, BiomeWayLightKind.FireAltar), // FireAltar
+			new Row(BiomeWayLightClass.Wall, SceneEmitterKind.Lamp, BiomeWayLightKind.IronCrusePost), // IronCruse
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.IronCrusePost), // IronCrusePost
+			new Row(BiomeWayLightClass.Bowl, SceneEmitterKind.Fire, BiomeWayLightKind.SlabHearth), // SlabHearth
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Torch, BiomeWayLightKind.Svetets), // Svetets
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.IceLantern), // IceLantern
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Glow, BiomeWayLightKind.SunLens), // SunLens
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Torch, BiomeWayLightKind.SergeLamp), // SergeLamp
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Torch, BiomeWayLightKind.KolaSpike), // KolaSpike
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Glow, BiomeWayLightKind.CrescentStandard), // CrescentStandard
+			new Row(BiomeWayLightClass.Niche, SceneEmitterKind.Lamp, BiomeWayLightKind.ClayLampPost), // ClayLamp
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.ClayLampPost), // ClayLampPost
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Glow, BiomeWayLightKind.DrownedLamp), // DrownedLamp
+			new Row(BiomeWayLightClass.Wall, SceneEmitterKind.Torch, BiomeWayLightKind.TorchPost), // TeaTorch
+			new Row(BiomeWayLightClass.Bowl, SceneEmitterKind.Fire, BiomeWayLightKind.HearthRing), // HearthRing
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.Polycandelon), // Polycandelon
+			new Row(BiomeWayLightClass.Wall, SceneEmitterKind.Lamp, BiomeWayLightKind.CastorLampPost), // CastorLamp
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.CastorLampPost), // CastorLampPost
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Torch, BiomeWayLightKind.Kriseilu), // Kriseilu
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.WheelLamp), // WheelLamp
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Glow, BiomeWayLightKind.VolvaMirror), // VolvaMirror
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Glow, BiomeWayLightKind.Plummet), // Plummet
+			new Row(BiomeWayLightClass.Wall, SceneEmitterKind.Lamp, BiomeWayLightKind.LanternStand), // FrogLamp
+			new Row(BiomeWayLightClass.Niche, SceneEmitterKind.Lamp, BiomeWayLightKind.HornBolePillar), // HornBole
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.HornBolePillar), // HornBolePillar
+			new Row(BiomeWayLightClass.Niche, SceneEmitterKind.Lamp, BiomeWayLightKind.ChiraghPillar), // Chiragh
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.ChiraghPillar), // ChiraghPillar
+			new Row(BiomeWayLightClass.Niche, SceneEmitterKind.Lamp, BiomeWayLightKind.SaltLampCairn), // SaltLamp
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.SaltLampCairn), // SaltLampCairn
+			new Row(BiomeWayLightClass.Bowl, SceneEmitterKind.Fire, BiomeWayLightKind.SoapstoneBowl), // SoapstoneBowl
+			new Row(BiomeWayLightClass.Niche, SceneEmitterKind.Fire, BiomeWayLightKind.KokeulPillar), // Kokeul
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Fire, BiomeWayLightKind.KokeulPillar), // KokeulPillar
+			new Row(BiomeWayLightClass.Bowl, SceneEmitterKind.Fire, BiomeWayLightKind.TrayFire), // TrayFire
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Torch, BiomeWayLightKind.TuituiTorch), // TuituiTorch
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Torch, BiomeWayLightKind.BarkTorch), // BarkTorch
+			new Row(BiomeWayLightClass.Bowl, SceneEmitterKind.Fire, BiomeWayLightKind.KazanFire), // KazanFire
+			new Row(BiomeWayLightClass.Niche, SceneEmitterKind.Pyre, BiomeWayLightKind.BrimLampPost), // BrimLamp
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Pyre, BiomeWayLightKind.BrimLampPost), // BrimLampPost
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Torch, BiomeWayLightKind.PishaStake), // PishaStake
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.CopperKandil), // CopperKandil
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Torch, BiomeWayLightKind.Candelabrum), // Candelabrum
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Glow, BiomeWayLightKind.NoduleLamp), // NoduleLamp
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Glow, BiomeWayLightKind.Lurelight), // Lurelight
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Torch, BiomeWayLightKind.NaphthaLamp), // NaphthaLamp
+			new Row(BiomeWayLightClass.Bowl, SceneEmitterKind.Fire, BiomeWayLightKind.Hearthwarden), // Hearthwarden
+			new Row(BiomeWayLightClass.Bowl, SceneEmitterKind.Fire, BiomeWayLightKind.Tenamaztli), // Tenamaztli
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Torch, BiomeWayLightKind.KukuiTorch), // KukuiTorch
+			new Row(BiomeWayLightClass.Bowl, SceneEmitterKind.Lamp, BiomeWayLightKind.PohoLamp), // PohoLamp
+			new Row(BiomeWayLightClass.Niche, SceneEmitterKind.Lamp, BiomeWayLightKind.LucernaPost), // Lucerna
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.LucernaPost), // LucernaPost
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.VigilLamp), // VigilLamp
+			new Row(BiomeWayLightClass.Bowl, SceneEmitterKind.Lamp, BiomeWayLightKind.Shellwick), // Shellwick
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Glow, BiomeWayLightKind.Gledpan), // Gledpan
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Glow, BiomeWayLightKind.WispLantern), // WispLantern
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.Alminha), // Alminha
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.GourdLantern), // GourdLantern
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Torch, BiomeWayLightKind.LampCairn), // LampCairn
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.WaysideLantern), // WaysideLantern
+			new Row(BiomeWayLightClass.Post, SceneEmitterKind.Lamp, BiomeWayLightKind.LanterneDesMorts), // LanterneDesMorts
+			new Row(BiomeWayLightClass.Niche, SceneEmitterKind.Lamp, BiomeWayLightKind.LanternStand), // CandleNiche
+		};
+
+		/// <summary>The first of the biome suite's own lights (2026-10-26): every kind from here on is the drafts'.</summary>
+		public const BiomeWayLightKind FirstSuiteLight = BiomeWayLightKind.Beacon;
+
+		/// <summary>The number of kinds there are (the enum's members, 0 .. Count − 1).</summary>
+		public static int Count => Rows.Length;
+
+		/// <summary>A kind's row; a number no kind has (a bad asset's) reads as a lantern post's.</summary>
+		private static Row RowOf(BiomeWayLightKind light) => (int)light < Rows.Length ? Rows[(int)light] : Rows[0];
+
+		/// <summary>What shape of light a kind is: a post, a wall light, a niche, a bowl, a hanging light, a beacon.</summary>
+		public static BiomeWayLightClass ClassOf(BiomeWayLightKind light) => RowOf(light).Class;
+
+		/// <summary>The emitter a kind's piece gives off: a lamp's, a torch's, a fire's, a cold Glow, a way light's own fire (Pyre).</summary>
+		public static SceneEmitterKind EmitterOf(BiomeWayLightKind light) => RowOf(light).Emitter;
+
+		/// <summary>How a light is set: the wall lights and the niches on a wall, the hanging lights from a roof, everything else on the ground.</summary>
 		public static BiomeWayLightMount MountOf(BiomeWayLightKind light)
 		{
-			switch (light)
+			switch (ClassOf(light))
 			{
-				case BiomeWayLightKind.WallTorch:
-				case BiomeWayLightKind.WallLantern:
-				case BiomeWayLightKind.HangingBracket:
+				case BiomeWayLightClass.Wall:
+				case BiomeWayLightClass.Niche:
 					return BiomeWayLightMount.Wall;
-				case BiomeWayLightKind.HangingLantern:
+				case BiomeWayLightClass.Hanging:
 					return BiomeWayLightMount.Roof;
 				default:
 					return BiomeWayLightMount.Ground;
@@ -646,20 +972,18 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
+		/// True for a suite light (2026-10-26) that cannot stand on a floor and has a standing twin the cave dressing lays in its
+		/// stead where it only stands lights on the floor (a route, a camp, a stope: <see cref="BiomeCaveLights.TryFor"/>). The
+		/// older wall and hanging kinds keep their old handling there (noted as unfit, not laid).
+		/// </summary>
+		public static bool StandsInStead(BiomeWayLightKind light) => light >= FirstSuiteLight && MountOf(light) != BiomeWayLightMount.Ground;
+
+		/// <summary>
 		/// The light that stands on the ground in a light's stead where it cannot be hung (2026-10-18, I6g: a street with no wall
 		/// near a light's place): a wall torch's torch on a pole, a wall lantern's lantern post, a hanging bracket's lantern on a
-		/// crook post, the hanging lantern's lantern post; a light that stands on the ground is its own.
+		/// crook post, the hanging lantern's lantern post; a suite light's own twin (a niche lamp's carved post, a paper lantern's
+		/// bamboo post…); a light that stands on the ground is its own.
 		/// </summary>
-		public static BiomeWayLightKind PostFor(BiomeWayLightKind light)
-		{
-			switch (light)
-			{
-				case BiomeWayLightKind.WallTorch: return BiomeWayLightKind.TorchPost;
-				case BiomeWayLightKind.WallLantern: return BiomeWayLightKind.LanternPost;
-				case BiomeWayLightKind.HangingBracket: return BiomeWayLightKind.CrookLantern;
-				case BiomeWayLightKind.HangingLantern: return BiomeWayLightKind.LanternPost;
-				default: return light;
-			}
-		}
+		public static BiomeWayLightKind PostFor(BiomeWayLightKind light) => (int)light < Rows.Length ? Rows[(int)light].Post : light;
 	}
 }

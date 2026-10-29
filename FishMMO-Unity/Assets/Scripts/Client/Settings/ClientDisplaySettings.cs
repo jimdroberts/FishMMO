@@ -420,8 +420,9 @@ namespace FishMMO.Client
 			// STP runs on URP's temporal anti-aliasing, which needs MSAA off: with samples on, URP quietly drops STP and the
 			// lowered render scale is stretched back up bilinearly — less resolution and no reconstruction. Whenever a pipeline
 			// asset has STP as its upscaler it is the anti-aliasing, and a saved multisampling choice must not switch it off.
-			// No shipped asset uses it (High Fidelity tried 77 % STP on 2026-10-09 and went back to native + MSAA: grass and
-			// vegetation have no motion vectors, so their wind motion pixelated under it).
+			// High Fidelity ships it (67 % since 2026-10-22). Its first try (77 %, 2026-10-09) went back to native + MSAA because
+			// wind-driven geometry had no motion vectors and pixelated under it; the procedural grass writes its own since
+			// 2026-10-27 (FishGrassBlades MotionVectors pass), the GPU trees and detail scatter still report the camera's only.
 			bool stp = pipeline.upscalingFilter == UpscalingFilterSelection.STP && pipeline.renderScale < 1f;
 			pipeline.msaaSampleCount = stp || option == MsaaOption.Off ? 1 : option == MsaaOption.Two ? 2 : 4;
 			MatchOcclusionToMsaa(pipeline);

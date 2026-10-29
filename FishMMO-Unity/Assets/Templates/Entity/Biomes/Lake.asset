@@ -13,7 +13,8 @@ MonoBehaviour:
   m_Name: Lake
   m_EditorClassIdentifier: 
   DisplayName: Lake
-  Description: "Still fresh water \u2014 mirror-calm shallows, reed beds, cold depths"
+  Description: "Clear cold lake \u2014 wave-washed strands, quillwort lawns under
+    green water, and pile-towns on the shallows"
   BiomeColorId: {r: 0.25, g: 0.55, b: 0.8, a: 1}
   GizmoColor: {r: 0.25, g: 0.55, b: 0.8, a: 1}
   ElevationTier: 4
@@ -33,151 +34,109 @@ MonoBehaviour:
   Naming:
     Phonology:
       Onsets:
-      - Mer
-      - Lin
-      - Sil
-      - Cal
-      - Wyn
-      - Tarn
-      - Lor
-      - Ash
-      - Bri
-      - Hol
-      - Vel
-      - Nim
-      - Ser
-      - Del
-      - Elm
+      - Ueber
+      - Lind
+      - Hall
+      - Mond
+      - Atter
+      - Zell
+      - Rein
+      - Moos
       Nuclei:
       - a
       - e
       - i
       - o
-      - ae
-      - oo
-      - ea
+      - u
+      - ei
+      - au
       Codas:
-      - mere
-      - tarn
-      - pool
-      - loch
-      - shore
-      - deep
-      - lin
-      - wash
-      - reed
-      - still
+      - see
+      - au
+      - horn
+      - wil
+      - egg
+      - stad
       Middles:
+      - al
+      - er
       - en
-      - el
-      - an
-      - or
-      - is
+      - ing
       SyllMin: 2
       SyllMax: 3
       DungeonSuffixes:
-      - Depths
-      - Basin
-      - Sanctum
-      - Grotto
-      - Hollow
-      - Vault
-      - Cistern
-      - Wellspring
-      - Drownway
+      - Heidenhoehle
+      - Grotte
+      - Halde
+      - Tiefe
       - Undercroft
-      - Shallows
-      - Bed
-      - Cavern
-      - Reach
-      - Mirror
-      - Sink
+      - Hold
+      - Water-door
       DungeonPrefixes:
-      - The Sunken
-      - The Still
       - The Drowned
-      - The Mirror-black
-      - The Reed-choked
-      - The Glassy
-      - The Silt-bound
-      - The Cold-water
-      - The Forgotten
-      - The Mist-veiled
-      - The Moonlit
-      - The Bottomless
+      - The Nixie-haunted
+      - The Green-glass
+      - The Pile-built
+      - The Lake-kept
+      - The Hand-held
       POISuffixes:
-      - Landing
-      - Reed-bed
-      - Shallows
-      - Fishing-stones
-      - Boathouse
-      - Weir
-      - Jetty
-      - Lily-bank
-      - Mere-stone
-      - Drowned-shrine
-      - Heron-perch
-      - Islet
-      - Spillway
-      - Cold-spring
+      - Halde
+      - Fach
+      - Steg
+      - Woerth
+      - Spitz
+      - Seegfroerni
+      - Pfahl
+      - Nix
       Adjectives:
-      - Still
-      - Glassy
-      - Mirror-calm
-      - Reed-fringed
-      - Mist-veiled
-      - Cold
-      - Bottomless
-      - Moonlit
-      - Silt-dark
-      - Placid
       - Drowned
-      - Clear-water
-      - Sunken
-      - Sheltered
+      - Nixie-haunted
+      - Green-glass
+      - Pile-built
+      - Lake-kept
+      - Wave-washed
       POITypeWords:
-      - Key: bridge
+      - Key: stiltvillage
         Values:
-        - Ford
-        - Bridge
-        - Crossing
-        - Stepping Stones
-        - Ferry
-        - Weir
-      - Key: camp
-        Values:
-        - River Camp
-        - Ford Camp
-        - Ferry Camp
-        - Bank Camp
-        - Reed Camp
-        - Landing Camp
+        - Pfahlbau
+        - Pile-town
+        - Steg
       - Key: fishingcamp
         Values:
-        - Fish Weir
-        - Eel Traps
-        - Net Huts
-        - Smokehouse
-        - Landing
-        - Mill Weir
+        - Fach
+        - Garth
+        - Net-rack
       - Key: island
         Values:
-        - Ait
-        - Eyot
+        - Woerth
+        - Insel
         - Holm
-        - Isle
-        - Bar
-        - Ham
-      - Key: spring
+      - Key: monastery
         Values:
-        - Spring
-        - Source
-        - Rising
-        - Wellspring
-        - Head
-        - Font
-      Description: "Still fresh water \u2014 mirror-calm shallows, reed beds, cold
-        depths"
+        - Island Minster
+        - Woerth
+      - Key: headland
+        Values:
+        - Spitz
+        - Horn
+      - Key: drownedvillage
+        Values:
+        - Pile Field
+        - Drowned Pile-town
+      - Key: sunkenruins
+        Values:
+        - Nixie Stair
+        - Halde
+      - Key: ossuary
+        Values:
+        - Charnel House
+        - Skull House
+      - Key: statue
+        Values:
+        - Mere Hand
+        - Sword Hand
+      Description: 'Alemannic: the Alpine foreland''s clear lakes (Ueber-, Lind-,
+        Hall-, Mond-, Atter-, Zell-; -see, -au, -horn, -wil, -egg)'
   LooseGround: {fileID: 0}
   Emits: {fileID: 0}
   EmissionRate: 0
@@ -201,16 +160,16 @@ MonoBehaviour:
   rareLookA: 0
   rareLookB: 0
   grassTypes:
-  - Prefab: {fileID: 8643539247241336480, guid: 4cea75a0c18e66e3847d7c62470d5b5e,
+  - Prefab: {fileID: 4711490490929279504, guid: db51caf8171e09c2c88cb0b05f4dfe9a,
       type: 3}
-    Density: 1
-    Stiffness: 0.9
-    Width: 1
-    ClumpPull: 0.1
-    Bend: 0.45
+    Density: 1.2
+    Stiffness: 1.2
+    Width: 0.8
+    ClumpPull: 0.6
+    Bend: 0.4
     HeightScale: 1
     Tall: 0
-    Wade: 0
+    Wade: 1
     Sprinkle: 0
     Head: 0
     HeadSize: 0.035
@@ -218,138 +177,66 @@ MonoBehaviour:
     BluntTip: 0
     Rigid: 0
     AfterBurn: 0
-    RootColour: {r: 0, g: 0, b: 0, a: 0}
-    TipColour: {r: 0, g: 0, b: 0, a: 0}
-    ColoursOverMesh: 0
+    RootColour: {r: 0.24313726, g: 0.3529412, b: 0.18039216, a: 1}
+    TipColour: {r: 0.41568628, g: 0.5411765, b: 0.26666668, a: 1}
+    ColoursOverMesh: 1
     HeadColours:
     - {r: 0.36, g: 0.25, b: 0.14, a: 1}
     HeadColoursOverMesh: 0
-    GroundTint: 0.85
-  - Prefab: {fileID: 5380694475537777522, guid: 1616cafa86e9e003a05f5151feb6821e,
+    GroundTint: 0.3
+  - Prefab: {fileID: 6211341293050815206, guid: 8b74b81b95b47e4931205c7690fb9536,
       type: 3}
     Density: 1
-    Stiffness: 2.6
-    Width: 2
-    ClumpPull: 0.35
-    Bend: 0.15
-    HeightScale: 1
-    Tall: 0
-    Wade: 0
-    Sprinkle: 110
-    Head: 1
-    HeadSize: 0.16
-    HeadShare: 1
-    BluntTip: 1
-    Rigid: 0
-    AfterBurn: 0
-    RootColour: {r: 0, g: 0, b: 0, a: 0}
-    TipColour: {r: 0, g: 0, b: 0, a: 0}
-    ColoursOverMesh: 0
-    HeadColours:
-    - {r: 0.36, g: 0.25, b: 0.14, a: 1}
-    HeadColoursOverMesh: 0
-    GroundTint: 0.85
-  - Prefab: {fileID: 6177486225631747932, guid: d30d0d179374decab589f978f8471b9d,
-      type: 3}
-    Density: 1
-    Stiffness: 2.4
-    Width: 2
-    ClumpPull: 0.35
-    Bend: 0.2
-    HeightScale: 1
-    Tall: 1
-    Wade: 0.4
-    Sprinkle: 110
-    Head: 3
-    HeadSize: 0.3
-    HeadShare: 1
-    BluntTip: 1
-    Rigid: 0
-    AfterBurn: 0
-    RootColour: {r: 0.30588236, g: 0.39215687, b: 0.1882353, a: 1}
-    TipColour: {r: 0.5411765, g: 0.5647059, b: 0.3137255, a: 1}
-    ColoursOverMesh: 0
-    HeadColours:
-    - {r: 0.41568628, g: 0.2901961, b: 0.3529412, a: 1}
-    HeadColoursOverMesh: 0
-    GroundTint: 0.85
-  - Prefab: {fileID: 8993051271655985296, guid: 32f8409a49c11e7ddd1ab07fd4726206,
-      type: 3}
-    Density: 0.85
     Stiffness: 1.3
-    Width: 1.1
-    ClumpPull: 0.45
-    Bend: 0.6
-    HeightScale: 1
-    Tall: 0
-    Wade: 0.1
-    Sprinkle: 0
-    Head: 0
-    HeadSize: 0.035
-    HeadShare: 1
-    BluntTip: 0
-    Rigid: 0
-    AfterBurn: 0
-    RootColour: {r: 0.36862746, g: 0.47843137, b: 0.2901961, a: 1}
-    TipColour: {r: 0.5411765, g: 0.6039216, b: 0.38431373, a: 1}
-    ColoursOverMesh: 0
-    HeadColours:
-    - {r: 0.36, g: 0.25, b: 0.14, a: 1}
-    HeadColoursOverMesh: 0
-    GroundTint: 0.85
-  - Prefab: {fileID: 5400443242501833184, guid: 69f1110131cafa0134c70d91cfd1fdcf,
-      type: 3}
-    Density: 0.9
-    Stiffness: 2.2
-    Width: 0.55
-    ClumpPull: 0.5
-    Bend: 0.08
-    HeightScale: 1
-    Tall: 0
-    Wade: 0.25
-    Sprinkle: 0
-    Head: 1
-    HeadSize: 0.04
-    HeadShare: 0.3
-    BluntTip: 0
-    Rigid: 0
-    AfterBurn: 0
-    RootColour: {r: 0.18039216, g: 0.2901961, b: 0.11764706, a: 1}
-    TipColour: {r: 0.24313726, g: 0.3529412, b: 0.16470589, a: 1}
-    ColoursOverMesh: 0
-    HeadColours:
-    - {r: 0.41568628, g: 0.2901961, b: 0.16470589, a: 1}
-    HeadColoursOverMesh: 0
-    GroundTint: 0.85
-  - Prefab: {fileID: 5273093635339167334, guid: 1306396d88cac410918ab54dbbec492c,
-      type: 3}
-    Density: 1
-    Stiffness: 1.1
-    Width: 0.9
+    Width: 0.8
     ClumpPull: 0.1
-    Bend: 0.15
+    Bend: 0.12
     HeightScale: 1
     Tall: 0
-    Wade: 0.1
-    Sprinkle: 10
+    Wade: 0
+    Sprinkle: 12
     Head: 2
     HeadSize: 0.04
     HeadShare: 1
     BluntTip: 0
     Rigid: 0
     AfterBurn: 0
-    RootColour: {r: 0.24313726, g: 0.41568628, b: 0.16470589, a: 1}
-    TipColour: {r: 0.36862746, g: 0.5411765, b: 0.22745098, a: 1}
-    ColoursOverMesh: 0
+    RootColour: {r: 0.24313726, g: 0.41568628, b: 0.15686275, a: 1}
+    TipColour: {r: 0.33333334, g: 0.49803922, b: 0.1882353, a: 1}
+    ColoursOverMesh: 1
     HeadColours:
-    - {r: 0.6901961, g: 0.2509804, b: 0.5411765, a: 1}
-    - {r: 0.9411765, g: 0.8156863, b: 0.1882353, a: 1}
-    - {r: 0.9411765, g: 0.91764706, b: 0.8156863, a: 1}
-    - {r: 0.9490196, g: 0.72156864, b: 0.11764706, a: 1}
+    - {r: 0.41568628, g: 0.65882355, b: 0.9098039, a: 1}
+    - {r: 0.9098039, g: 0.8156863, b: 0.2509804, a: 1}
+    - {r: 0.8784314, g: 0.6039216, b: 0.72156864, a: 1}
+    - {r: 0.84705883, g: 0.78431374, b: 0.9254902, a: 1}
+    HeadColoursOverMesh: 1
+    GroundTint: 0.35
+  - Prefab: {fileID: 7274915435715170782, guid: 519a975117430b44332ea7956b1fe28f,
+      type: 3}
+    Density: 1.4
+    Stiffness: 1
+    Width: 0.4
+    ClumpPull: 0.12
+    Bend: 0.4
+    HeightScale: 1
+    Tall: 0
+    Wade: 1
+    Sprinkle: 0
+    Head: 0
+    HeadSize: 0.035
+    HeadShare: 1
+    BluntTip: 0
+    Rigid: 0
+    AfterBurn: 0
+    RootColour: {r: 0.2901961, g: 0.41568628, b: 0.20392157, a: 1}
+    TipColour: {r: 0.47843137, g: 0.6039216, b: 0.2901961, a: 1}
+    ColoursOverMesh: 1
+    HeadColours:
+    - {r: 0.36, g: 0.25, b: 0.14, a: 1}
     HeadColoursOverMesh: 0
-    GroundTint: 0.85
+    GroundTint: 0.35
   mainTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 41f6eb1d8712e8d73accf8b30ec56aca,
+    terrainLayer: {fileID: 8574412962073106934, guid: 11227f204f52970e0edb6c9c9d724b0e,
       type: 2}
     albedoTexture: {fileID: 2800000, guid: 2ada0aee473c5c64f836dbc1cf387aa6, type: 3}
     normalTexture: {fileID: 0}
@@ -374,9 +261,9 @@ MonoBehaviour:
     slopeFalloff: 5
     groundMakeup:
       Set: 1
-      Living: 1
+      Living: 0
       Lichen: 0
-      Mineral: 0
+      Mineral: 1
     useClimateBand: 0
     temperatureRange: {x: -1, y: 1}
     temperatureFalloff: 0.1
@@ -408,24 +295,41 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
       cobbles: {fileID: 0}
     prefabSpawnRules:
-    - stableGuid: bf21b95aba484d45964784d1daf765cd
+    - stableGuid: 5fcb5c028ef546b08b12716311e1aebd
       enableSpawning: 1
-      ruleName: GrassLush
+      ruleName: GrassShoreweed
       prefabs:
-      - {fileID: 8643539247241336480, guid: 4cea75a0c18e66e3847d7c62470d5b5e, type: 3}
+      - {fileID: 4711490490929279504, guid: db51caf8171e09c2c88cb0b05f4dfe9a, type: 3}
       spawnChannel: 0
       detailRenderMode: 1
       detailPlacement: 1
-      carpetCoverage: 0.8660254
+      carpetCoverage: 0.24301073
       carpetClumpMetres: 18
-      carpetClumpFloor: 0.45310888
+      carpetClumpFloor: 0.28555444
       carpetWeightRamp: 0.3
-      densityPer100m2: 30
+      densityPer100m2: 6
       maxPerChunk: 0
       minSpacing: 0
       minTextureWeight: 0.25
@@ -447,7 +351,7 @@ MonoBehaviour:
       scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 1
-      seedOffset: 52554
+      seedOffset: 28665
       clusterMetres: 0
       clusterSize: 0
       clusterSpacing: 4
@@ -459,7 +363,7 @@ MonoBehaviour:
       forestOpen: 0.05
       forestMix: 0.5
       forestScaleBias: 0.3
-      sinkRange: {x: 0.02, y: 0.05}
+      sinkRange: {x: 0.01, y: 0.02}
       sinkSlopeFactor: 0
       depthRange: {x: 0, y: 0}
       waters: 0
@@ -497,16 +401,22 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
-      specFingerprint: 528461f777da4271
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: 15df6e32a9db09c6
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
-      detailInstancesPerSpawn: 255
-    - stableGuid: b70a8b437e2743f084f8f1d29495ada8
+      detailInstancesPerSpawn: 160
+    - stableGuid: f3ef5d1ed735470bb13fbba4f9f28731
       enableSpawning: 1
-      ruleName: 'Bush: Willow'
+      ruleName: FlowersStrand
       prefabs:
-      - {fileID: 8738681648654770623, guid: c14f9d5ca64f4d6593c6c486529a42e2, type: 3}
+      - {fileID: 6211341293050815206, guid: 8b74b81b95b47e4931205c7690fb9536, type: 3}
       spawnChannel: 0
       detailRenderMode: 1
       detailPlacement: 0
@@ -514,9 +424,484 @@ MonoBehaviour:
       carpetClumpMetres: 16
       carpetClumpFloor: 0.45
       carpetWeightRamp: 0.25
-      densityPer100m2: 0.3
+      densityPer100m2: 3
       maxPerChunk: 0
-      minSpacing: 1.8
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 25
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 697
+      clusterMetres: 3
+      clusterSize: 12
+      clusterSpacing: 4
+      clusterBackground: 0.15
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.01, y: 0.02}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
+      waters: 0
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: 50ecd7b3855608dc
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 160
+    - stableGuid: 12d657c1033948488d9bf5bac38f5fd9
+      enableSpawning: 1
+      ruleName: DebrisDriftLine
+      prefabs:
+      - {fileID: 8697651798636196106, guid: b4e176f5297e145fb3e783aa3c0295f8, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 3
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 15
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 31808
+      clusterMetres: 5
+      clusterSize: 12
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0.01}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
+      waters: 0
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: a0b604c62bd6b460
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 128
+    - stableGuid: 8ebddf6c56cf4f3d81b2c1ba272346e4
+      enableSpawning: 1
+      ruleName: Detail_Pebbles_Strand
+      prefabs:
+      - {fileID: 5467228132995787424, guid: 77b68e0b95ca007d6fd772f8a9a61e3d, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 10
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.4
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 0
+      slopeRange:
+        min: 0
+        max: 90
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.2925, y: 2.625}
+      widthScaleRange: {x: 0.5525, y: 1.7249999}
+      heightScaleRange: {x: 0.5525, y: 1.875}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 45369
+      clusterMetres: 2
+      clusterSize: 8
+      clusterSpacing: 4
+      clusterBackground: 0.2
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
+      waters: 0
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: 87388167b6aea4ca
+      detailNoiseSpread: 2.5
+      detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
+      detailDryColor: {r: 1, g: 1, b: 1, a: 1}
+      detailInstancesPerSpawn: 96
+    - stableGuid: 04a28a8438ac4dc58031ea2fddd7d79e
+      enableSpawning: 1
+      ruleName: Detail_Pebbles_Furrow
+      prefabs:
+      - {fileID: 9078771879776250093, guid: d92acfaa950ab818e973782a34425624, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 6
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.4
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 0
+      slopeRange:
+        min: 0
+        max: 90
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.2925, y: 2.625}
+      widthScaleRange: {x: 0.5525, y: 1.7249999}
+      heightScaleRange: {x: 0.5525, y: 1.875}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 3606
+      clusterMetres: 2
+      clusterSize: 8
+      clusterSpacing: 4
+      clusterBackground: 0.2
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
+      waters: 0
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: afa47a58c856df0f
+      detailNoiseSpread: 2.5
+      detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
+      detailDryColor: {r: 1, g: 1, b: 1, a: 1}
+      detailInstancesPerSpawn: 96
+    - stableGuid: 3d89fa75240e4d13b336305429911ae9
+      enableSpawning: 1
+      ruleName: Detail_Rocks_Molasse
+      prefabs:
+      - {fileID: 5813160540650278353, guid: a6b5c837ebd21aa5eab841857542898d, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 1
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.4
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 0
+      slopeRange:
+        min: 0
+        max: 90
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.2925, y: 2.625}
+      widthScaleRange: {x: 0.5525, y: 1.7249999}
+      heightScaleRange: {x: 0.5525, y: 1.875}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 33771
+      clusterMetres: 3
+      clusterSize: 6
+      clusterSpacing: 4
+      clusterBackground: 0.2
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
+      waters: 0
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: d450d728ce46df43
+      detailNoiseSpread: 2.5
+      detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
+      detailDryColor: {r: 1, g: 1, b: 1, a: 1}
+      detailInstancesPerSpawn: 96
+    - stableGuid: 1b6f1c2b331d4938ae0a91ebaefd86d0
+      enableSpawning: 1
+      ruleName: 'Bush: LakeWillowScrub'
+      prefabs:
+      - {fileID: 5301487591774725513, guid: 2a9f6290c77007ccbf52f5f57fad0221, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.4
+      maxPerChunk: 0
+      minSpacing: 0.8
       minTextureWeight: 0.45
       spawnProbabilityMultiplier: 1
       useHeightConstraint: 0
@@ -536,8 +921,8 @@ MonoBehaviour:
       scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 0
-      seedOffset: 18984
-      clusterMetres: 6.4
+      seedOffset: 1155
+      clusterMetres: 6
       clusterSize: 5
       clusterSpacing: 4
       clusterBackground: 0.25
@@ -586,191 +971,19 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
-      specFingerprint: 56b8b19fc0768a04
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: 97d050d460b6a07a
       detailNoiseSpread: 1.5
       detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
       detailDryColor: {r: 0.8, g: 0.76, b: 0.58, a: 1}
       detailInstancesPerSpawn: 64
-    - stableGuid: 424bc71c66ee4c3cb636834f8555ad2e
-      enableSpawning: 1
-      ruleName: 'Trees: Alder'
-      prefabs:
-      - {fileID: 8906230398972087876, guid: 0a87602ecd72dbf00a122cb8acc07b28, type: 3}
-      spawnChannel: 1
-      detailRenderMode: 1
-      detailPlacement: 0
-      carpetCoverage: 0.85
-      carpetClumpMetres: 16
-      carpetClumpFloor: 0.45
-      carpetWeightRamp: 0.25
-      densityPer100m2: 0.343
-      maxPerChunk: 20000
-      minSpacing: 5.6
-      minTextureWeight: 0.5
-      spawnProbabilityMultiplier: 1
-      useHeightConstraint: 0
-      heightRange:
-        min: 0
-        max: 1
-      heightFalloff: 0.05
-      useSlopeConstraint: 1
-      slopeRange:
-        min: 0
-        max: 15
-      slopeFalloff: 5
-      useNonUniformScaling: 1
-      uniformScaleRange: {x: 0.85, y: 1.2}
-      widthScaleRange: {x: 0.85, y: 1.15}
-      heightScaleRange: {x: 0.8, y: 1.2}
-      scaleSkew: 1
-      yRotationRange: {x: 0, y: 360}
-      alignToTerrainNormal: 0
-      seedOffset: 14950
-      clusterMetres: 0
-      clusterSize: 0
-      clusterSpacing: 4
-      clusterBackground: 0.2
-      clusterScaleBias: 0.5
-      forestMetres: 520
-      forestCover: 0.15
-      forestEdge: 0.3
-      forestOpen: 0.025806451
-      forestMix: 0.5
-      forestScaleBias: 0.3
-      sinkRange: {x: 0.05, y: 0.15}
-      sinkSlopeFactor: 0.3
-      depthRange: {x: 0, y: 0}
-      waters: 0
-      currentRange: {x: 0, y: 0}
-      useClimateBand: 0
-      temperatureRange: {x: -1, y: 1}
-      temperatureFalloff: 0.1
-      humidityRange: {x: -1, y: 1}
-      humidityFalloff: 0.1
-      worldGate:
-        air: 0
-        requires: 0
-        useTemperature: 0
-        temperatureRange: {x: 0, y: 0}
-      useHeatBand: 0
-      heatRange: {x: 0, y: 1}
-      heatFalloff: 0.1
-      landformBand:
-        On: 0
-        Part: 0
-        Kind: 
-        Outside: 0
-      talusGrading: 0
-      scatterMode:
-        Facing: 0
-        FacingOffset: 0
-        FacingSpread: 0
-        Lean: 0
-        LeanDegrees: 0
-        Anchor: 0
-        AnchorMetres: 0
-        AnchorFloor: 0
-        AnchorNames: 
-        Pattern: 0
-        PatternMetres: 0
-        PatternShare: 0
-        SizePower: 0
-      specFingerprint: f084026cde6002c2
-      detailNoiseSpread: 0.4
-      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
-      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
-      detailInstancesPerSpawn: 255
-    - stableGuid: caaf1f2ff7f840c281896e2ab144a920
-      enableSpawning: 1
-      ruleName: 'Trees: WeepingWillow'
-      prefabs:
-      - {fileID: 9115963082080805528, guid: 33f773e3919fa8f2b6218cd6a0c3027a, type: 3}
-      spawnChannel: 1
-      detailRenderMode: 1
-      detailPlacement: 0
-      carpetCoverage: 0.85
-      carpetClumpMetres: 16
-      carpetClumpFloor: 0.45
-      carpetWeightRamp: 0.25
-      densityPer100m2: 0.02
-      maxPerChunk: 20000
-      minSpacing: 6
-      minTextureWeight: 0.5
-      spawnProbabilityMultiplier: 1
-      useHeightConstraint: 0
-      heightRange:
-        min: 0
-        max: 1
-      heightFalloff: 0.05
-      useSlopeConstraint: 1
-      slopeRange:
-        min: 0
-        max: 15
-      slopeFalloff: 5
-      useNonUniformScaling: 1
-      uniformScaleRange: {x: 0.85, y: 1.2}
-      widthScaleRange: {x: 0.85, y: 1.15}
-      heightScaleRange: {x: 0.8, y: 1.2}
-      scaleSkew: 1
-      yRotationRange: {x: 0, y: 360}
-      alignToTerrainNormal: 0
-      seedOffset: 46671
-      clusterMetres: 15
-      clusterSize: 6
-      clusterSpacing: 4
-      clusterBackground: 0.2
-      clusterScaleBias: 0.4
-      forestMetres: 0
-      forestCover: 0.6
-      forestEdge: 0.3
-      forestOpen: 0.05
-      forestMix: 0.5
-      forestScaleBias: 0.3
-      sinkRange: {x: 0.05, y: 0.15}
-      sinkSlopeFactor: 0.3
-      depthRange: {x: 0, y: 0}
-      waters: 0
-      currentRange: {x: 0, y: 0}
-      useClimateBand: 1
-      temperatureRange: {x: 0.3, y: 1}
-      temperatureFalloff: 0.1
-      humidityRange: {x: -1, y: 1}
-      humidityFalloff: 0.1
-      worldGate:
-        air: 0
-        requires: 0
-        useTemperature: 0
-        temperatureRange: {x: 0, y: 0}
-      useHeatBand: 0
-      heatRange: {x: 0, y: 1}
-      heatFalloff: 0.1
-      landformBand:
-        On: 0
-        Part: 0
-        Kind: 
-        Outside: 0
-      talusGrading: 0
-      scatterMode:
-        Facing: 0
-        FacingOffset: 0
-        FacingSpread: 0
-        Lean: 0
-        LeanDegrees: 0
-        Anchor: 0
-        AnchorMetres: 0
-        AnchorFloor: 0
-        AnchorNames: 
-        Pattern: 0
-        PatternMetres: 0
-        PatternShare: 0
-        SizePower: 0
-      specFingerprint: cd980518f317798e
-      detailNoiseSpread: 0.4
-      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
-      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
-      detailInstancesPerSpawn: 255
   detailTextureLayers:
-  - terrainLayer: {fileID: 8574412962073106934, guid: 5806dadc18f33441edaabda730fc11bd,
+  - terrainLayer: {fileID: 8574412962073106934, guid: 2754ac586e2bde62b556c5969711f722,
       type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -779,19 +992,19 @@ MonoBehaviour:
     smoothness: 0
     tileSize: {x: 15, y: 15}
     blendMode: 0
-    blendNoiseScale: 32
+    blendNoiseScale: 72
     blendNoiseOffsetX: 0
     blendNoiseOffsetY: 0
-    blendSharpness: 2
-    useHeightConstraint: 0
+    blendSharpness: 3
+    useHeightConstraint: 1
     heightRange:
       min: 0
-      max: 1
+      max: 0.47
     heightFalloff: 0.05
     useSlopeConstraint: 1
     slopeRange:
       min: 0
-      max: 10
+      max: 6
     slopeFalloff: 5
     groundMakeup:
       Set: 1
@@ -829,202 +1042,41 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
       cobbles: {fileID: 0}
     prefabSpawnRules:
-    - stableGuid: fb723dc959ec44c1ad440cda885bb3e3
+    - stableGuid: d7b95795b4f04b2ba32cdc918c25d84c
       enableSpawning: 1
-      ruleName: Reeds
+      ruleName: GrassShoreweed
       prefabs:
-      - {fileID: 5380694475537777522, guid: 1616cafa86e9e003a05f5151feb6821e, type: 3}
-      spawnChannel: 0
-      detailRenderMode: 1
-      detailPlacement: 0
-      carpetCoverage: 0.85
-      carpetClumpMetres: 16
-      carpetClumpFloor: 0.45
-      carpetWeightRamp: 0.25
-      densityPer100m2: 15
-      maxPerChunk: 0
-      minSpacing: 0
-      minTextureWeight: 0.45
-      spawnProbabilityMultiplier: 1
-      useHeightConstraint: 0
-      heightRange:
-        min: 0
-        max: 1
-      heightFalloff: 0.05
-      useSlopeConstraint: 1
-      slopeRange:
-        min: 0
-        max: 40
-      slopeFalloff: 5
-      useNonUniformScaling: 0
-      uniformScaleRange: {x: 0.8, y: 1.25}
-      widthScaleRange: {x: 0.85, y: 1.15}
-      heightScaleRange: {x: 0.85, y: 1.25}
-      scaleSkew: 1
-      yRotationRange: {x: 0, y: 360}
-      alignToTerrainNormal: 0
-      seedOffset: 60520
-      clusterMetres: 6
-      clusterSize: 20
-      clusterSpacing: 4
-      clusterBackground: 0.25
-      clusterScaleBias: 0.5
-      forestMetres: 0
-      forestCover: 0.6
-      forestEdge: 0.3
-      forestOpen: 0.05
-      forestMix: 0.5
-      forestScaleBias: 0.3
-      sinkRange: {x: 0.04, y: 0.08}
-      sinkSlopeFactor: 0
-      depthRange: {x: 0, y: 0}
-      waters: 0
-      currentRange: {x: 0, y: 0}
-      useClimateBand: 0
-      temperatureRange: {x: -1, y: 1}
-      temperatureFalloff: 0.1
-      humidityRange: {x: -1, y: 1}
-      humidityFalloff: 0.1
-      worldGate:
-        air: 0
-        requires: 0
-        useTemperature: 0
-        temperatureRange: {x: 0, y: 0}
-      useHeatBand: 0
-      heatRange: {x: 0, y: 1}
-      heatFalloff: 0.1
-      landformBand:
-        On: 0
-        Part: 0
-        Kind: 
-        Outside: 0
-      talusGrading: 0
-      scatterMode:
-        Facing: 0
-        FacingOffset: 0
-        FacingSpread: 0
-        Lean: 0
-        LeanDegrees: 0
-        Anchor: 0
-        AnchorMetres: 0
-        AnchorFloor: 0
-        AnchorNames: 
-        Pattern: 0
-        PatternMetres: 0
-        PatternShare: 0
-        SizePower: 0
-      specFingerprint: 3248c374b701f3cb
-      detailNoiseSpread: 1.2
-      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
-      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
-      detailInstancesPerSpawn: 160
-    - stableGuid: 5dfa31b315924e82826a8e9188abdea5
-      enableSpawning: 1
-      ruleName: ReedsPlume
-      prefabs:
-      - {fileID: 6177486225631747932, guid: d30d0d179374decab589f978f8471b9d, type: 3}
-      spawnChannel: 0
-      detailRenderMode: 1
-      detailPlacement: 0
-      carpetCoverage: 0.85
-      carpetClumpMetres: 16
-      carpetClumpFloor: 0.45
-      carpetWeightRamp: 0.25
-      densityPer100m2: 10
-      maxPerChunk: 0
-      minSpacing: 0
-      minTextureWeight: 0.45
-      spawnProbabilityMultiplier: 1
-      useHeightConstraint: 0
-      heightRange:
-        min: 0
-        max: 1
-      heightFalloff: 0.05
-      useSlopeConstraint: 1
-      slopeRange:
-        min: 0
-        max: 40
-      slopeFalloff: 5
-      useNonUniformScaling: 0
-      uniformScaleRange: {x: 0.8, y: 1.25}
-      widthScaleRange: {x: 0.85, y: 1.15}
-      heightScaleRange: {x: 0.85, y: 1.25}
-      scaleSkew: 1
-      yRotationRange: {x: 0, y: 360}
-      alignToTerrainNormal: 0
-      seedOffset: 820
-      clusterMetres: 6
-      clusterSize: 20
-      clusterSpacing: 4
-      clusterBackground: 0.25
-      clusterScaleBias: 0.5
-      forestMetres: 0
-      forestCover: 0.6
-      forestEdge: 0.3
-      forestOpen: 0.05
-      forestMix: 0.5
-      forestScaleBias: 0.3
-      sinkRange: {x: 0.04, y: 0.08}
-      sinkSlopeFactor: 0
-      depthRange: {x: 0, y: 0}
-      waters: 0
-      currentRange: {x: 0, y: 0}
-      useClimateBand: 0
-      temperatureRange: {x: -1, y: 1}
-      temperatureFalloff: 0.1
-      humidityRange: {x: -1, y: 1}
-      humidityFalloff: 0.1
-      worldGate:
-        air: 0
-        requires: 0
-        useTemperature: 0
-        temperatureRange: {x: 0, y: 0}
-      useHeatBand: 0
-      heatRange: {x: 0, y: 1}
-      heatFalloff: 0.1
-      landformBand:
-        On: 0
-        Part: 0
-        Kind: 
-        Outside: 0
-      talusGrading: 0
-      scatterMode:
-        Facing: 0
-        FacingOffset: 0
-        FacingSpread: 0
-        Lean: 0
-        LeanDegrees: 0
-        Anchor: 0
-        AnchorMetres: 0
-        AnchorFloor: 0
-        AnchorNames: 
-        Pattern: 0
-        PatternMetres: 0
-        PatternShare: 0
-        SizePower: 0
-      specFingerprint: da788c05d1dcf120
-      detailNoiseSpread: 1.2
-      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
-      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
-      detailInstancesPerSpawn: 200
-    - stableGuid: 2e29bf3f2bc0446f8477995db237de1d
-      enableSpawning: 1
-      ruleName: GrassSedge
-      prefabs:
-      - {fileID: 8993051271655985296, guid: 32f8409a49c11e7ddd1ab07fd4726206, type: 3}
+      - {fileID: 4711490490929279504, guid: db51caf8171e09c2c88cb0b05f4dfe9a, type: 3}
       spawnChannel: 0
       detailRenderMode: 1
       detailPlacement: 1
-      carpetCoverage: 0.61237246
+      carpetCoverage: 0.58166265
       carpetClumpMetres: 18
-      carpetClumpFloor: 0.36433035
+      carpetClumpFloor: 0.40956697
       carpetWeightRamp: 0.3
-      densityPer100m2: 15
+      densityPer100m2: 22
       maxPerChunk: 0
       minSpacing: 0
       minTextureWeight: 0.25
@@ -1046,7 +1098,7 @@ MonoBehaviour:
       scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 1
-      seedOffset: 30795
+      seedOffset: 28665
       clusterMetres: 0
       clusterSize: 0
       clusterSpacing: 4
@@ -1058,7 +1110,7 @@ MonoBehaviour:
       forestOpen: 0.05
       forestMix: 0.5
       forestScaleBias: 0.3
-      sinkRange: {x: 0.02, y: 0.04}
+      sinkRange: {x: 0.01, y: 0.02}
       sinkSlopeFactor: 0
       depthRange: {x: 0, y: 0}
       waters: 0
@@ -1096,20 +1148,26 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
-      specFingerprint: b1ac0b32635b5608
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: 6905bbbcd5c59861
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
-      detailInstancesPerSpawn: 255
-    - stableGuid: 8bbeeb51153f429fa14c4c1a62d712b7
+      detailInstancesPerSpawn: 200
+    - stableGuid: beea284b56ea48f582af3b69496fe26f
       enableSpawning: 1
-      ruleName: GrassRush
+      ruleName: GrassNeedleSpike
       prefabs:
-      - {fileID: 5400443242501833184, guid: 69f1110131cafa0134c70d91cfd1fdcf, type: 3}
+      - {fileID: 7274915435715170782, guid: 519a975117430b44332ea7956b1fe28f, type: 3}
       spawnChannel: 0
       detailRenderMode: 1
       detailPlacement: 1
-      carpetCoverage: 0.5
+      carpetCoverage: 0.3137255
       carpetClumpMetres: 18
       carpetClumpFloor: 0.325
       carpetWeightRamp: 0.3
@@ -1135,7 +1193,7 @@ MonoBehaviour:
       scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 1
-      seedOffset: 61715
+      seedOffset: 5535
       clusterMetres: 0
       clusterSize: 0
       clusterSpacing: 4
@@ -1147,7 +1205,7 @@ MonoBehaviour:
       forestOpen: 0.05
       forestMix: 0.5
       forestScaleBias: 0.3
-      sinkRange: {x: 0.03, y: 0.06}
+      sinkRange: {x: 0.01, y: 0.02}
       sinkSlopeFactor: 0
       depthRange: {x: 0, y: 0}
       waters: 0
@@ -1185,16 +1243,22 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
-      specFingerprint: edb7b042af4bc64a
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: eb3166ea6127ae1e
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
-      detailInstancesPerSpawn: 255
-    - stableGuid: e19d1050f5e8453cb9ad7e81bc16181c
+      detailInstancesPerSpawn: 160
+    - stableGuid: 036e221dbd4c4dd3b202a57f09311192
       enableSpawning: 1
-      ruleName: FlowersWet
+      ruleName: LakeBulrush
       prefabs:
-      - {fileID: 5273093635339167334, guid: 1306396d88cac410918ab54dbbec492c, type: 3}
+      - {fileID: 5878427629353739915, guid: 74eca263f4bf37d60a376e8035cd4e6a, type: 3}
       spawnChannel: 0
       detailRenderMode: 1
       detailPlacement: 0
@@ -1215,7 +1279,7 @@ MonoBehaviour:
       useSlopeConstraint: 1
       slopeRange:
         min: 0
-        max: 40
+        max: 15
       slopeFalloff: 5
       useNonUniformScaling: 0
       uniformScaleRange: {x: 0.8, y: 1.25}
@@ -1224,11 +1288,11 @@ MonoBehaviour:
       scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 0
-      seedOffset: 63965
-      clusterMetres: 3
-      clusterSize: 10
+      seedOffset: 40367
+      clusterMetres: 6
+      clusterSize: 14
       clusterSpacing: 4
-      clusterBackground: 0.15
+      clusterBackground: 0.25
       clusterScaleBias: 0.5
       forestMetres: 0
       forestCover: 0.6
@@ -1236,7 +1300,7 @@ MonoBehaviour:
       forestOpen: 0.05
       forestMix: 0.5
       forestScaleBias: 0.3
-      sinkRange: {x: 0.01, y: 0.03}
+      sinkRange: {x: 0.04, y: 0.08}
       sinkSlopeFactor: 0
       depthRange: {x: 0, y: 0}
       waters: 0
@@ -1274,12 +1338,208 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
-      specFingerprint: 086dcafa39467abc
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: cddd544c3c0b9997
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
-      detailInstancesPerSpawn: 180
-  - terrainLayer: {fileID: 8574412962073106934, guid: 4d2365d4764e196d50dd0e9f4a48dfd1,
+      detailInstancesPerSpawn: 128
+    - stableGuid: 7b6818837fc748bea6494cb7e7f64255
+      enableSpawning: 1
+      ruleName: FlowersStrand
+      prefabs:
+      - {fileID: 6211341293050815206, guid: 8b74b81b95b47e4931205c7690fb9536, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 8
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 25
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 697
+      clusterMetres: 3
+      clusterSize: 12
+      clusterSpacing: 4
+      clusterBackground: 0.15
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.01, y: 0.02}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
+      waters: 0
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: c319736d455479ed
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 160
+    - stableGuid: 38aede403b234b97a2ba74e370be8930
+      enableSpawning: 1
+      ruleName: HorsetailWater
+      prefabs:
+      - {fileID: 8228761359252188321, guid: 1897dff1b23f05745be6a6ce6ae56d0c, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 5
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 15
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 11686
+      clusterMetres: 4
+      clusterSize: 8
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.02, y: 0.05}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
+      waters: 0
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: bfdc687351449596
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 128
+  - terrainLayer: {fileID: 8574412962073106934, guid: f1590b245da4b874e3e23fc7f7f9be21,
       type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -1288,25 +1548,25 @@ MonoBehaviour:
     smoothness: 0
     tileSize: {x: 15, y: 15}
     blendMode: 0
-    blendNoiseScale: 48
+    blendNoiseScale: 24
     blendNoiseOffsetX: 0
     blendNoiseOffsetY: 0
-    blendSharpness: 2
+    blendSharpness: 4
     useHeightConstraint: 0
     heightRange:
       min: 0
       max: 1
     heightFalloff: 0.05
-    useSlopeConstraint: 0
+    useSlopeConstraint: 1
     slopeRange:
       min: 0
-      max: 90
+      max: 8
     slopeFalloff: 5
     groundMakeup:
       Set: 1
-      Living: 0
+      Living: 0.25
       Lichen: 0
-      Mineral: 1
+      Mineral: 0.75
     useClimateBand: 0
     temperatureRange: {x: -1, y: 1}
     temperatureFalloff: 0.1
@@ -1338,6 +1598,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1427,16 +1704,22 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
       specFingerprint: 27d4a351524bae5a
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
-    - stableGuid: e466bfc166334aad99851eecaf3367c5
+    - stableGuid: bb53666c1c644155b18ce3218b53ff77
       enableSpawning: 1
-      ruleName: Detail_Pebbles_Grey
+      ruleName: DebrisDriftLine
       prefabs:
-      - {fileID: 9091986924529341410, guid: e7e5ae42e23e436a881abe7e07dc62a0, type: 3}
+      - {fileID: 8697651798636196106, guid: b4e176f5297e145fb3e783aa3c0295f8, type: 3}
       spawnChannel: 0
       detailRenderMode: 1
       detailPlacement: 0
@@ -1444,33 +1727,33 @@ MonoBehaviour:
       carpetClumpMetres: 16
       carpetClumpFloor: 0.45
       carpetWeightRamp: 0.25
-      densityPer100m2: 5
+      densityPer100m2: 18
       maxPerChunk: 0
       minSpacing: 0
-      minTextureWeight: 0.4
+      minTextureWeight: 0.45
       spawnProbabilityMultiplier: 1
       useHeightConstraint: 0
       heightRange:
         min: 0
         max: 1
       heightFalloff: 0.05
-      useSlopeConstraint: 0
+      useSlopeConstraint: 1
       slopeRange:
         min: 0
-        max: 90
+        max: 15
       slopeFalloff: 5
       useNonUniformScaling: 0
-      uniformScaleRange: {x: 0.2925, y: 2.625}
-      widthScaleRange: {x: 0.5525, y: 1.7249999}
-      heightScaleRange: {x: 0.5525, y: 1.875}
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
       scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
-      alignToTerrainNormal: 1
-      seedOffset: 41598
-      clusterMetres: 2
-      clusterSize: 8
+      alignToTerrainNormal: 0
+      seedOffset: 31808
+      clusterMetres: 5
+      clusterSize: 12
       clusterSpacing: 4
-      clusterBackground: 0.2
+      clusterBackground: 0.25
       clusterScaleBias: 0.5
       forestMetres: 0
       forestCover: 0.6
@@ -1478,7 +1761,7 @@ MonoBehaviour:
       forestOpen: 0.05
       forestMix: 0.5
       forestScaleBias: 0.3
-      sinkRange: {x: 0, y: 0}
+      sinkRange: {x: 0, y: 0.01}
       sinkSlopeFactor: 0
       depthRange: {x: 0, y: 0}
       waters: 0
@@ -1516,16 +1799,22 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
-      specFingerprint: 1ef7de865daa302e
-      detailNoiseSpread: 2.5
-      detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
-      detailDryColor: {r: 1, g: 1, b: 1, a: 1}
-      detailInstancesPerSpawn: 96
-    - stableGuid: 60186a23cc784ca9abcf319702d93093
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: 4d982972ae91e224
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 160
+    - stableGuid: 762a95e64afe4b7ab4219b8c6ea64784
       enableSpawning: 1
-      ruleName: Detail_Rocks_Grey
+      ruleName: FlowersStrand
       prefabs:
-      - {fileID: 6429919493837588000, guid: 5ab08d91d26e259328288439498bdbd2, type: 3}
+      - {fileID: 6211341293050815206, guid: 8b74b81b95b47e4931205c7690fb9536, type: 3}
       spawnChannel: 0
       detailRenderMode: 1
       detailPlacement: 0
@@ -1533,7 +1822,183 @@ MonoBehaviour:
       carpetClumpMetres: 16
       carpetClumpFloor: 0.45
       carpetWeightRamp: 0.25
-      densityPer100m2: 1.2
+      densityPer100m2: 2
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 25
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 697
+      clusterMetres: 3
+      clusterSize: 12
+      clusterSpacing: 4
+      clusterBackground: 0.15
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.01, y: 0.02}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
+      waters: 0
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: 51c2f30301ffa017
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 128
+  - terrainLayer: {fileID: 8574412962073106934, guid: 374db4ba7ae4f0c744f08d23e7baa52c,
+      type: 2}
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 4
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 1
+    slopeRange:
+      min: 22
+      max: 90
+    slopeFalloff: 5
+    groundMakeup:
+      Set: 1
+      Living: 0
+      Lichen: 0
+      Mineral: 1
+    useClimateBand: 0
+    temperatureRange: {x: -1, y: 1}
+    temperatureFalloff: 0.1
+    humidityRange: {x: -1, y: 1}
+    humidityFalloff: 0.1
+    airBand: 0
+    worldBand:
+      requires: 0
+      forbids: 0
+    underground: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    landformBand:
+      On: 0
+      Part: 0
+      Kind: 
+      Outside: 0
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
+    useLavaBand: 0
+    lavaRange: {x: -11000, y: 11000}
+    lavaFalloff: 1
+    glow:
+      Mode: 0
+      Kelvin: 0
+      Strength: 0
+      CellMetres: 0
+      PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
+    ways:
+      path: {fileID: 0}
+      road: {fileID: 0}
+      cobbles: {fileID: 0}
+    prefabSpawnRules:
+    - stableGuid: 4d8d14a94e67443d81da9c762e3112e4
+      enableSpawning: 1
+      ruleName: Detail_Rocks_Molasse
+      prefabs:
+      - {fileID: 5813160540650278353, guid: a6b5c837ebd21aa5eab841857542898d, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 3
       maxPerChunk: 0
       minSpacing: 0
       minTextureWeight: 0.4
@@ -1555,7 +2020,7 @@ MonoBehaviour:
       scaleSkew: 1
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 1
-      seedOffset: 47495
+      seedOffset: 33771
       clusterMetres: 3
       clusterSize: 6
       clusterSpacing: 4
@@ -1605,13 +2070,486 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
-      specFingerprint: eb89b93664852b69
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: c3b9c58658031125
+      detailNoiseSpread: 2.5
+      detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
+      detailDryColor: {r: 1, g: 1, b: 1, a: 1}
+      detailInstancesPerSpawn: 96
+    - stableGuid: af52a6aa8259457db32c3cea6c6b2c59
+      enableSpawning: 1
+      ruleName: 'Formations: Molasse ledges'
+      prefabs:
+      - {fileID: 5463573697621676023, guid: 3db64aeba0a13d3d7304cd3105f66f03, type: 3}
+      - {fileID: 7006557972898179131, guid: 41da730377f580024b7de113b0d73bec, type: 3}
+      - {fileID: 5904532799434438693, guid: 68220f2383d3bd9d8345c5de262e8c9a, type: 3}
+      - {fileID: 6885605860841677671, guid: 8fa817db145534c945e010554279f61e, type: 3}
+      spawnChannel: 1
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.01
+      maxPerChunk: 2000
+      minSpacing: 6
+      minTextureWeight: 0.5
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 60
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.48000002, y: 3.25}
+      widthScaleRange: {x: 0.51000005, y: 2.9899998}
+      heightScaleRange: {x: 0.51000005, y: 3.25}
+      scaleSkew: 1.8
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 62640
+      clusterMetres: 14
+      clusterSize: 5
+      clusterSpacing: 4
+      clusterBackground: 0.3
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0.05}
+      sinkSlopeFactor: 0.6
+      depthRange: {x: 0, y: 0}
+      waters: 0
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: 7e38bea73600aa05
+      detailNoiseSpread: 0.4
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 255
+    - stableGuid: ac7d05472de24a8e9fd77ae145ea33c2
+      enableSpawning: 1
+      ruleName: 'Formations: Molasse tafoni'
+      prefabs:
+      - {fileID: 6943087375516201557, guid: 01e0403bdcb1d6f09f4aa0d7599e4711, type: 3}
+      - {fileID: 7055936500598569802, guid: 86e3a2860dfcb2d151d6f8c13ad41380, type: 3}
+      - {fileID: 5663897139250682548, guid: 94eff5c2e617d18625ab6aaa1b4408e7, type: 3}
+      - {fileID: 6182726916273563882, guid: 38f3a9b431c87dfff79da50fe25cb02d, type: 3}
+      spawnChannel: 1
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.004
+      maxPerChunk: 2000
+      minSpacing: 6
+      minTextureWeight: 0.5
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 60
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.48000002, y: 3.25}
+      widthScaleRange: {x: 0.51000005, y: 2.9899998}
+      heightScaleRange: {x: 0.51000005, y: 3.25}
+      scaleSkew: 1.8
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 36909
+      clusterMetres: 14
+      clusterSize: 5
+      clusterSpacing: 4
+      clusterBackground: 0.3
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0.05}
+      sinkSlopeFactor: 0.6
+      depthRange: {x: 0, y: 0}
+      waters: 0
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: 26c1b255a6977e08
+      detailNoiseSpread: 0.4
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 255
+  - terrainLayer: {fileID: 8574412962073106934, guid: ff0b1c202d9ef8366ecdb30d6a172ef2,
+      type: 2}
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 40
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 3
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 1
+    slopeRange:
+      min: 2
+      max: 18
+    slopeFalloff: 5
+    groundMakeup:
+      Set: 1
+      Living: 0
+      Lichen: 0
+      Mineral: 1
+    useClimateBand: 1
+    temperatureRange: {x: -1, y: -0.2}
+    temperatureFalloff: 0.1
+    humidityRange: {x: -1, y: 1}
+    humidityFalloff: 0.1
+    airBand: 0
+    worldBand:
+      requires: 0
+      forbids: 0
+    underground: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    landformBand:
+      On: 0
+      Part: 0
+      Kind: 
+      Outside: 0
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
+    useLavaBand: 0
+    lavaRange: {x: -11000, y: 11000}
+    lavaFalloff: 1
+    glow:
+      Mode: 0
+      Kelvin: 0
+      Strength: 0
+      CellMetres: 0
+      PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
+    ways:
+      path: {fileID: 0}
+      road: {fileID: 0}
+      cobbles: {fileID: 0}
+    prefabSpawnRules:
+    - stableGuid: 9a0529d622ad41c9922a1032fa355c2a
+      enableSpawning: 1
+      ruleName: 'Bush: LakeWillowScrub'
+      prefabs:
+      - {fileID: 5301487591774725513, guid: 2a9f6290c77007ccbf52f5f57fad0221, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.4
+      maxPerChunk: 0
+      minSpacing: 0.8
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 35
+      slopeFalloff: 5
+      useNonUniformScaling: 1
+      uniformScaleRange: {x: 0.85, y: 1.2}
+      widthScaleRange: {x: 0.8, y: 1.2}
+      heightScaleRange: {x: 0.8, y: 1.2}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 1155
+      clusterMetres: 6
+      clusterSize: 5
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.4
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.04, y: 0.1}
+      sinkSlopeFactor: 0.3
+      depthRange: {x: 0, y: 0}
+      waters: 0
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: 97d050d460b6a07a
+      detailNoiseSpread: 1.5
+      detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
+      detailDryColor: {r: 0.8, g: 0.76, b: 0.58, a: 1}
+      detailInstancesPerSpawn: 64
+    - stableGuid: c7153b3f30c141dc8639c1aae780f761
+      enableSpawning: 1
+      ruleName: Detail_Pebbles_Strand
+      prefabs:
+      - {fileID: 5467228132995787424, guid: 77b68e0b95ca007d6fd772f8a9a61e3d, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 4
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.4
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 0
+      slopeRange:
+        min: 0
+        max: 90
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.2925, y: 2.625}
+      widthScaleRange: {x: 0.5525, y: 1.7249999}
+      heightScaleRange: {x: 0.5525, y: 1.875}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 45369
+      clusterMetres: 2
+      clusterSize: 8
+      clusterSpacing: 4
+      clusterBackground: 0.2
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
+      waters: 0
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: f0549e321072d06b
       detailNoiseSpread: 2.5
       detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
       detailDryColor: {r: 1, g: 1, b: 1, a: 1}
       detailInstancesPerSpawn: 96
   roadTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 681250d76f3d5f0051f9560a9508f439,
+    terrainLayer: {fileID: 8574412962073106934, guid: 94603cdd8aec5ff0a5900a4783a45a36,
       type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -1670,13 +2608,30 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   smallPathTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 5282d64513e43ea5206cd2a03e762546,
+    terrainLayer: {fileID: 8574412962073106934, guid: 92b007318cac6ee22507423f928451bf,
       type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -1735,13 +2690,30 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   cobbleTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 9374fa5aef4de793cecfa0bd63c0510a,
+    terrainLayer: {fileID: 8574412962073106934, guid: 62c1bc5d394d96c6e2b28a2bd2c19bfd,
       type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -1800,13 +2772,30 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   cliffTextureLayers:
-  - terrainLayer: {fileID: 8574412962073106934, guid: b460e0b7c7d15dda82b56be3ce4cb55f,
+  - terrainLayer: {fileID: 8574412962073106934, guid: 5d0e1c913382ec34a10515ebac8996c5,
       type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -1826,7 +2815,7 @@ MonoBehaviour:
     heightFalloff: 0.05
     useSlopeConstraint: 1
     slopeRange:
-      min: 42
+      min: 40
       max: 90
     slopeFalloff: 10
     groundMakeup:
@@ -1865,22 +2854,39 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
       cobbles: {fileID: 0}
     prefabSpawnRules: []
-    minCliffAngle: 42
+    minCliffAngle: 40
     maxCliffAngle: 90
     cliffSlopeFalloff: 10
     useCliffHeightConstraint: 0
     cliffHeightRange:
       min: 0.2
       max: 1
-    rockType: Granite
-    rockTypeAuthored: Granite
+    rockType: None
+    rockTypeAuthored: None
   riverbedTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 4d2365d4764e196d50dd0e9f4a48dfd1,
+    terrainLayer: {fileID: 8574412962073106934, guid: 4d6b9ebc066f71227b081fc11e45c051,
       type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -1939,13 +2945,30 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   barSandTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 1d10f337581c5f444da1242bbcbcae76,
+    terrainLayer: {fileID: 8574412962073106934, guid: 166ef8722ca850810f84b10bb15a158c,
       type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -2004,13 +3027,30 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   barGravelTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 681250d76f3d5f0051f9560a9508f439,
+    terrainLayer: {fileID: 8574412962073106934, guid: 17a22483c31e419c769652289e6676a7,
       type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -2069,13 +3109,30 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   lakebedTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 5806dadc18f33441edaabda730fc11bd,
+    terrainLayer: {fileID: 8574412962073106934, guid: 19b4d0fdaaa2fdc6fe60bb75eb6f5dec,
       type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -2134,37 +3191,1939 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
+    ways:
+      path: {fileID: 0}
+      road: {fileID: 0}
+      cobbles: {fileID: 0}
+    prefabSpawnRules:
+    - stableGuid: c32c9cfd7f944a0a8f7346eb9ef1e9d9
+      enableSpawning: 1
+      ruleName: LakeBulrush
+      prefabs:
+      - {fileID: 5878427629353739915, guid: 74eca263f4bf37d60a376e8035cd4e6a, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 8
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 20
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 40367
+      clusterMetres: 6
+      clusterSize: 14
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.04, y: 0.08}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0.3, y: 2.5}
+      waters: 2
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: 1444dbc5e0f2721a
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 160
+    - stableGuid: 32f498a0192b410e8f6d0a926aa18375
+      enableSpawning: 1
+      ruleName: WaterLobelia
+      prefabs:
+      - {fileID: 8305653387182526792, guid: a6ef6385acb3acbbe5ab2ee787b67cfb, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 6
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 20
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 10276
+      clusterMetres: 5
+      clusterSize: 6
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.01, y: 0.03}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0.2, y: 1.5}
+      waters: 2
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: 4032947cdd9a869b
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailInstancesPerSpawn: 160
+    - stableGuid: 4d944a8a7fc546b88dfb6108409dff60
+      enableSpawning: 1
+      ruleName: Quillwort
+      prefabs:
+      - {fileID: 9221409554119800549, guid: 9e40c43336a68f5bd96f93ee60c5eba8, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 14
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 25
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 21518
+      clusterMetres: 6
+      clusterSize: 20
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.01, y: 0.025}
+      sinkSlopeFactor: 0
+      depthRange: {x: 1, y: 3}
+      waters: 2
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: a80d6614c647717e
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailInstancesPerSpawn: 200
+    - stableGuid: e7aee574f4d44fc0b065a9aa16b5c72e
+      enableSpawning: 1
+      ruleName: WillowMoss
+      prefabs:
+      - {fileID: 7738200474989493812, guid: 2804fe091f17e02f867def6b009cc382, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 4
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 25
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 35686
+      clusterMetres: 4
+      clusterSize: 8
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.01, y: 0.03}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0.3, y: 3}
+      waters: 2
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: 5d10edc2880c4695
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailInstancesPerSpawn: 160
+    - stableGuid: 7621f085bb0c4eb4a5e2ab0dc9fc029b
+      enableSpawning: 1
+      ruleName: LakeBall
+      prefabs:
+      - {fileID: 5328512822185715576, guid: c0e125e40736737d83aba1b4544f56fd, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 3
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 15
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 56703
+      clusterMetres: 4
+      clusterSize: 6
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.01, y: 0.03}
+      sinkSlopeFactor: 0
+      depthRange: {x: 2, y: 3}
+      waters: 2
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: c535a536e61933bf
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailInstancesPerSpawn: 128
+    - stableGuid: 7fd4f687624d4bb2ab0c061f88ceb0e4
+      enableSpawning: 1
+      ruleName: LakeSponge
+      prefabs:
+      - {fileID: 7630394985304045513, guid: 22f36f1ef4600b6cbb0b7137a8ef3642, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 2
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 25
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 25861
+      clusterMetres: 5
+      clusterSize: 3
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.01, y: 0.03}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0.3, y: 3}
+      waters: 2
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: 1c79a8e2f1e09d8d
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailInstancesPerSpawn: 128
+    - stableGuid: 3f35ebb2d9264b5bb6112f9703a8baa6
+      enableSpawning: 1
+      ruleName: HorsetailWater
+      prefabs:
+      - {fileID: 8228761359252188321, guid: 1897dff1b23f05745be6a6ce6ae56d0c, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 4
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 20
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 11686
+      clusterMetres: 4
+      clusterSize: 8
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.02, y: 0.05}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0.8}
+      waters: 2
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: 695822a736ae6afc
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 128
+    - stableGuid: 740411ee385a496eba0be29c45a5ec70
+      enableSpawning: 1
+      ruleName: Detail_Pebbles_Furrow
+      prefabs:
+      - {fileID: 9078771879776250093, guid: d92acfaa950ab818e973782a34425624, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 8
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.4
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 0
+      slopeRange:
+        min: 0
+        max: 90
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.2925, y: 2.625}
+      widthScaleRange: {x: 0.5525, y: 1.7249999}
+      heightScaleRange: {x: 0.5525, y: 1.875}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 3606
+      clusterMetres: 2
+      clusterSize: 8
+      clusterSpacing: 4
+      clusterBackground: 0.2
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 3}
+      waters: 2
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: 0cf765e3de546197
+      detailNoiseSpread: 2.5
+      detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
+      detailDryColor: {r: 1, g: 1, b: 1, a: 1}
+      detailInstancesPerSpawn: 96
+    - stableGuid: 4772b7092ff1450588aa26203e19b4ed
+      enableSpawning: 1
+      ruleName: PileStumps
+      prefabs:
+      - {fileID: 5713469628022648462, guid: 8b2c92eed29a3371aa62cfd5153b8290, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.3
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 20
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 44947
+      clusterMetres: 12
+      clusterSize: 6
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.03, y: 0.06}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0.3, y: 3}
+      waters: 2
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: a2d7637f19039c6e
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 96
+    - stableGuid: 4d8f5759ea4c462b9c3ebf02e70ad641
+      enableSpawning: 1
+      ruleName: NetSinkers
+      prefabs:
+      - {fileID: 5198206294765104871, guid: b5bdf6cb9a1077aabb35aedddbd3a752, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 1
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 20
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 36834
+      clusterMetres: 6
+      clusterSize: 5
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0.008}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0.3, y: 3}
+      waters: 2
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: c08853145cfe2dfc
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailInstancesPerSpawn: 96
+    - stableGuid: ed36069723f94768bd07611dad1e9dad
+      enableSpawning: 1
+      ruleName: 'Deadwood: Sunken logs'
+      prefabs:
+      - {fileID: 8471486829432960045, guid: 9831500fb5b097753d32a514e5a0d05e, type: 3}
+      spawnChannel: 1
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.02
+      maxPerChunk: 2000
+      minSpacing: 5
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 25
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.75, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 49488
+      clusterMetres: 12
+      clusterSize: 3
+      clusterSpacing: 4
+      clusterBackground: 0.3
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0.05}
+      sinkSlopeFactor: 0.5
+      depthRange: {x: 1, y: 3}
+      waters: 2
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: 349b9f1c228dd0b9
+      detailNoiseSpread: 0.4
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 255
+    - stableGuid: 02deed06e1c34c13b9a9c0c1208bcb19
+      enableSpawning: 1
+      ruleName: 'Deadwood: Logboat wrecks'
+      prefabs:
+      - {fileID: 5800881604608607962, guid: 786afd1b21498ccd6d68728cb0de1832, type: 3}
+      spawnChannel: 1
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.004
+      maxPerChunk: 2000
+      minSpacing: 5
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 25
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.75, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 13173
+      clusterMetres: 12
+      clusterSize: 3
+      clusterSpacing: 4
+      clusterBackground: 0.3
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0.05}
+      sinkSlopeFactor: 0.5
+      depthRange: {x: 0.5, y: 3}
+      waters: 2
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: 9a5489fd71633a25
+      detailNoiseSpread: 0.4
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 255
+    - stableGuid: 11c2142d3f2245fab5098ba2db103b81
+      enableSpawning: 1
+      ruleName: 'Formations: Lake erratics'
+      prefabs:
+      - {fileID: 5980537048820460675, guid: a880e597c00db9bf153cf7726450371a, type: 3}
+      - {fileID: 7799980289429082101, guid: 07c1acc10d6afca1ece05ad08ce93ae2, type: 3}
+      - {fileID: 5895865741283843473, guid: a4726b7aca0626166035561a61279a1a, type: 3}
+      - {fileID: 6482419944120801429, guid: bb03131eb2543f69639cfa38431e44bb, type: 3}
+      spawnChannel: 1
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.003
+      maxPerChunk: 2000
+      minSpacing: 4
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 25
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.45000002, y: 3.3799996}
+      widthScaleRange: {x: 0.51000005, y: 2.9899998}
+      heightScaleRange: {x: 0.51000005, y: 3.25}
+      scaleSkew: 1.8
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 39959
+      clusterMetres: 10
+      clusterSize: 4
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.6
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0.05}
+      sinkSlopeFactor: 0.5
+      depthRange: {x: 0.2, y: 2}
+      waters: 2
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: 8f6479d46c8787ed
+      detailNoiseSpread: 0.4
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 255
+  bedTextureLayers:
+  - terrainLayer: {fileID: 8574412962073106934, guid: e107f92d171542fe9e7670592e4486f7,
+      type: 2}
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    groundMakeup:
+      Set: 1
+      Living: 0
+      Lichen: 0
+      Mineral: 1
+    useClimateBand: 0
+    temperatureRange: {x: -1, y: 1}
+    temperatureFalloff: 0.1
+    humidityRange: {x: -1, y: 1}
+    humidityFalloff: 0.1
+    airBand: 0
+    worldBand:
+      requires: 0
+      forbids: 0
+    underground: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    landformBand:
+      On: 0
+      Part: 0
+      Kind: 
+      Outside: 0
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
+    useLavaBand: 0
+    lavaRange: {x: -11000, y: 11000}
+    lavaFalloff: 1
+    glow:
+      Mode: 0
+      Kelvin: 0
+      Strength: 0
+      CellMetres: 0
+      PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
+    ways:
+      path: {fileID: 0}
+      road: {fileID: 0}
+      cobbles: {fileID: 0}
+    prefabSpawnRules:
+    - stableGuid: e74829ba279145da948147eeb1dfa741
+      enableSpawning: 1
+      ruleName: Pondweed
+      prefabs:
+      - {fileID: 5800196909734780953, guid: 7dd08bcf4fbb840fe1f936d22945f54e, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 8
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 25
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 20814
+      clusterMetres: 6
+      clusterSize: 8
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.03, y: 0.06}
+      sinkSlopeFactor: 0
+      depthRange: {x: 1.5, y: 6}
+      waters: 0
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: c89de023367552be
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailInstancesPerSpawn: 160
+    - stableGuid: bcc46ab6051f4e6c9d030130f400bdd7
+      enableSpawning: 1
+      ruleName: Milfoil
+      prefabs:
+      - {fileID: 4680689175900448039, guid: f0c2b4e0953d8e74eb445da0e9ec065b, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 5
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 25
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 62241
+      clusterMetres: 5
+      clusterSize: 8
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.01, y: 0.03}
+      sinkSlopeFactor: 0
+      depthRange: {x: 1, y: 4}
+      waters: 0
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: fae9331189a85426
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailInstancesPerSpawn: 160
+    - stableGuid: e9acc13bad8f473aaaae9f419c55a2e4
+      enableSpawning: 1
+      ruleName: Quillwort
+      prefabs:
+      - {fileID: 9221409554119800549, guid: 9e40c43336a68f5bd96f93ee60c5eba8, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 10
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 25
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 21518
+      clusterMetres: 6
+      clusterSize: 20
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.01, y: 0.025}
+      sinkSlopeFactor: 0
+      depthRange: {x: 3, y: 6}
+      waters: 0
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: be6225b3b7a01c10
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailInstancesPerSpawn: 200
+    - stableGuid: c7f1befd4fcb42dcbce9bff48453af39
+      enableSpawning: 1
+      ruleName: LakeBall
+      prefabs:
+      - {fileID: 5328512822185715576, guid: c0e125e40736737d83aba1b4544f56fd, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 3
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 15
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 56703
+      clusterMetres: 4
+      clusterSize: 6
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.01, y: 0.03}
+      sinkSlopeFactor: 0
+      depthRange: {x: 2, y: 8}
+      waters: 0
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: 87712d3595fd7c37
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailInstancesPerSpawn: 128
+    - stableGuid: 452ed7397abc4a7dbe0782cb8e86bbde
+      enableSpawning: 1
+      ruleName: 'Deadwood: Drowned stumps'
+      prefabs:
+      - {fileID: 5840577739181515190, guid: 4078fe6ca1432a43ac47e266836a80e8, type: 3}
+      spawnChannel: 1
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.01
+      maxPerChunk: 2000
+      minSpacing: 5
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 25
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.75, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 45785
+      clusterMetres: 12
+      clusterSize: 3
+      clusterSpacing: 4
+      clusterBackground: 0.3
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0.05}
+      sinkSlopeFactor: 0.5
+      depthRange: {x: 3, y: 9}
+      waters: 0
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: ebe2010ce3440844
+      detailNoiseSpread: 0.4
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 255
+    waters: 2
+    depthRange: {x: 3, y: 9}
+    depthFalloff: 0.5
+    useCurrentBand: 0
+    currentRange: {x: 0, y: 0}
+    currentFalloff: 0.2
+  - terrainLayer: {fileID: 8574412962073106934, guid: 62ed47adc3e4c67db6deb9a25a2b1b12,
+      type: 2}
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    groundMakeup:
+      Set: 1
+      Living: 0
+      Lichen: 0
+      Mineral: 1
+    useClimateBand: 0
+    temperatureRange: {x: -1, y: 1}
+    temperatureFalloff: 0.1
+    humidityRange: {x: -1, y: 1}
+    humidityFalloff: 0.1
+    airBand: 0
+    worldBand:
+      requires: 0
+      forbids: 0
+    underground: 0
+    useHeatBand: 0
+    heatRange: {x: 0, y: 1}
+    heatFalloff: 0.1
+    landformBand:
+      On: 0
+      Part: 0
+      Kind: 
+      Outside: 0
+    useSeaDepthBand: 0
+    seaDepthRange: {x: -11000, y: 11000}
+    seaDepthFalloff: 1
+    seaDepthInTides: 0
+    useLavaBand: 0
+    lavaRange: {x: -11000, y: 11000}
+    lavaFalloff: 1
+    glow:
+      Mode: 0
+      Kelvin: 0
+      Strength: 0
+      CellMetres: 0
+      PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
       cobbles: {fileID: 0}
     prefabSpawnRules: []
-  bedTextureLayers: []
-  ownRock: Granite
+    waters: 2
+    depthRange: {x: 9, y: 0}
+    depthFalloff: 0.5
+    useCurrentBand: 0
+    currentRange: {x: 0, y: 0}
+    currentFalloff: 0.2
+  ownRock: Molasse
   acceptedRocks:
-  - Granite
   - Gneiss
-  - Schist
-  - Slate
-  - Shale
   - Limestone
-  - Basalt
   caveShells:
   - Form: 0
-    Rock: Ground
+    Rock: Molasse
   - Form: 1
-    Rock: Ground
+    Rock: Limestone
   - Form: 2
-    Rock: Ground
+    Rock: Molasse
   - Form: 3
     Rock: Ice
   - Form: 4
     Rock: Basalt
   - Form: 5
-    Rock: Ground
+    Rock: Limestone
   caveCrystals:
-  - Kind: 0
-    Weight: 1
+  - Kind: 87
+    Weight: 0.6
+    Look: 0
+  - Kind: 88
+    Weight: 0.4
     Look: 0
   caveInteriors:
   - Form: 0
@@ -2479,12 +5438,12 @@ MonoBehaviour:
   caveStains: []
   waterRole: 1
   waterLook:
-    Shallow: {r: 0.2, g: 0.42, b: 0.4, a: 1}
-    Deep: {r: 0.03, g: 0.12, b: 0.16, a: 1}
-    Absorption: {x: 0.45, y: 0.12, z: 0.08}
-    Turbidity: 0.35
-    Silt: {r: 0.36, g: 0.33, b: 0.24, a: 1}
-    Foam: {r: 0.92, g: 0.94, b: 0.95, a: 1}
+    Shallow: {r: 0.2901961, g: 0.6039216, b: 0.5411765, a: 1}
+    Deep: {r: 0.03137255, g: 0.1882353, b: 0.2901961, a: 1}
+    Absorption: {x: 0.4, y: 0.09, z: 0.05}
+    Turbidity: 0.08
+    Silt: {r: 0.5411765, g: 0.5254902, b: 0.4392157, a: 1}
+    Foam: {r: 0.93333334, g: 0.9490196, b: 0.9490196, a: 1}
     Hot: 0
     Melt: 0
   seaLook:
@@ -2496,7 +5455,18 @@ MonoBehaviour:
   underwaterSiteDepth: {x: 0, y: 0}
   floatingPlants: []
   seaFloats: []
-  glowModes: []
+  glowModes:
+  - Source: 1
+    Mode: 4
+    Warm: 0
+    Every: 0
+    Episodes:
+      SlotA: 0
+      SlotB: 0
+      SlotC: 0
+      OnShare: 0
+      RampSeconds: 0
+      Heights: {x: 0, y: 0}
   fountainEpisodes:
     SlotA: 0
     SlotB: 0
@@ -2507,24 +5477,27 @@ MonoBehaviour:
   habitat: 1024
   seaLife: []
   vines:
-    Caves: 0.7
-    Ruins: 0.65
-    Cliffs: 0.3
-    Trees: 0.1
+    Caves: 0.4
+    Ruins: 0.6
+    Cliffs: 0.25
+    Trees: 0
     Species:
-    - Species: Ivy
-      Weight: 0.75
-    - Species: Creeper
-      Weight: 0.25
+    - Species: Bittersweet
+      Weight: 1
   gatheringResources:
-  - Pearl Oyster Bed
+  - Lake Ore
+  - Lake Ball
+  - Spongilla
+  - Bulrush Bundle
+  - Nixglass
   herbGroveFlowers:
-  - {fileID: 5273093635339167334, guid: 1306396d88cac410918ab54dbbec492c, type: 3}
+  - {fileID: 6211341293050815206, guid: 8b74b81b95b47e4931205c7690fb9536, type: 3}
   herbGroveHerbs:
-  - {fileID: 7861824566822864725, guid: b738faf087e5f72243bcf6f2cccdaf24, type: 3}
-  - {fileID: 7531936262845815141, guid: ec386e9730f9e7eb27376729d8f04357, type: 3}
+  - {fileID: 6211341293050815206, guid: 8b74b81b95b47e4931205c7690fb9536, type: 3}
+  - {fileID: 4711490490929279504, guid: db51caf8171e09c2c88cb0b05f4dfe9a, type: 3}
+  - {fileID: 8228761359252188321, guid: 1897dff1b23f05745be6a6ce6ae56d0c, type: 3}
   caveMouthBushes:
-  - {fileID: 8738681648654770623, guid: c14f9d5ca64f4d6593c6c486529a42e2, type: 3}
+  - {fileID: 5301487591774725513, guid: 2a9f6290c77007ccbf52f5f57fad0221, type: 3}
   caveMouthFerns:
   - {fileID: 5183624929536887463, guid: fb5bc9fd8fb6f8f65c825bf94c490701, type: 3}
   - {fileID: 7040531935600446957, guid: 49db2bc4e07ba3e829ff499ebf213bfe, type: 3}
@@ -2533,8 +5506,13 @@ MonoBehaviour:
     type: 3}
   caveMouthBoulders: []
   caveMouthLogs:
-  - {fileID: 6654722738590819976, guid: d081b1382242b7dd513e2d24fc6ba137, type: 3}
+  - {fileID: 8471486829432960045, guid: 9831500fb5b097753d32a514e5a0d05e, type: 3}
+  - {fileID: 5800881604608607962, guid: 786afd1b21498ccd6d68728cb0de1832, type: 3}
   siteKinds:
+  - Kind: 3
+    Weight: 0.6
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
   - Kind: 7
     Weight: 1
     NeedsBreathableAir: 0
@@ -2595,35 +5573,95 @@ MonoBehaviour:
     Weight: 1
     NeedsBreathableAir: 0
     NeedsLiquidWater: 0
-  - Kind: 93
+  - Kind: 38
     Weight: 1
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 40
+    Weight: 2
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
+  - Kind: 52
+    Weight: 2
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
+  - Kind: 53
+    Weight: 0.3
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 58
+    Weight: 0.8
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
+  - Kind: 68
+    Weight: 0.3
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 71
+    Weight: 0.15
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 75
+    Weight: 0.4
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
+  - Kind: 81
+    Weight: 0.3
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
+  - Kind: 89
+    Weight: 0.15
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
+  - Kind: 93
+    Weight: 0.8
     NeedsBreathableAir: 0
     NeedsLiquidWater: 0
   - Kind: 94
-    Weight: 1
+    Weight: 0.5
     NeedsBreathableAir: 0
     NeedsLiquidWater: 0
   - Kind: 95
-    Weight: 1
+    Weight: 0.05
     NeedsBreathableAir: 0
     NeedsLiquidWater: 0
+  - Kind: 107
+    Weight: 0.5
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
+  - Kind: 248
+    Weight: 1.2
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 1
+  - Kind: 269
+    Weight: 1
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 1
+  - Kind: 270
+    Weight: 0.8
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 1
+  - Kind: 271
+    Weight: 1
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 1
   siteVariants: []
-  siteStyles: []
+  siteStyles:
+  - Style: 0
+    Weight: 2
+  - Style: 1
+    Weight: 0.4
+  - Style: 4
+    Weight: 0.2
   weathering:
-    Finish: 1
-    Chance: 0
-    ChancePerDecay: 1
+    Finish: 3
+    Chance: 0.35
+    ChancePerDecay: 0.8
     Coat: 0
     CoatCover: 0
     CoatStrength: 0
     CoatTint: {r: 0, g: 0, b: 0, a: 0}
-  fieldCrops:
-  - Prefab: {fileID: 6347404957136446953, guid: aa8a9ac8871e55cd2b06e278fc394940,
-      type: 3}
-    Weight: 1
-    Surface: 0
-    Riser: 0
-    Rows: 0
+  fieldCrops: []
   orchards: []
   fieldLayout:
     Bottomland: 0
@@ -2639,70 +5677,80 @@ MonoBehaviour:
     Width: 0
   moatWater: 0
   wayLights:
-  - Kind: 77
-    Light: 1
-    Spacing: 20
-  - Kind: 78
-    Light: 0
-    Spacing: 13
-  - Kind: 79
-    Light: 0
-    Spacing: 13
-  - Kind: 80
-    Light: 0
-    Spacing: 13
   - Kind: 81
+    Light: 5
+    Spacing: 12
+  - Kind: 40
+    Light: 7
+    Spacing: 14
+  - Kind: 52
+    Light: 7
+    Spacing: 14
+  - Kind: 107
+    Light: 5
+    Spacing: 12
+  - Kind: 58
     Light: 0
     Spacing: 13
+  - Kind: 38
+    Light: 42
+    Spacing: 10
+  - Kind: 94
+    Light: 42
+    Spacing: 10
   caveLights:
   - Place: 0
-    Light: 3
-    Spacing: 0
+    Light: 1
+    Spacing: 16
   - Place: 1
     Light: 3
     Spacing: 0
   - Place: 2
-    Light: 4
-    Spacing: 17
+    Light: 6
+    Spacing: 10
   - Place: 3
     Light: 1
     Spacing: 0
   - Place: 4
     Light: 5
     Spacing: 0
-  boardwalks: 0
+  boardwalks: 6
   boardwalkStyle: 0
+  crossingStyle: 0
+  straightRoads:
+    Form: 0
+    Ruts: 0
   linearFeatures: []
   structurePalette:
     Surfaces:
     - Style: 0
       Role: 0
       Material: 1
-      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Tint: {r: 0.8627451, g: 0.84705883, b: 0.78431374, a: 1}
       Surface: 
       Pitch: 0
     - Style: 0
       Role: 1
-      Material: 1
-      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Material: 0
+      Tint: {r: 0.5411765, g: 0.5254902, b: 0.5019608, a: 1}
       Surface: 
       Pitch: 0
     - Style: 0
       Role: 2
-      Material: 2
-      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Material: 15
+      Tint: {r: 0.36862746, g: 0.22745098, b: 0.16470589, a: 1}
       Surface: 
       Pitch: 0
     - Style: 0
       Role: 3
-      Material: 0
-      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Material: 15
+      Tint: {r: 0.5411765, g: 0.5411765, b: 0.5176471, a: 1}
       Surface: 
       Pitch: 0
     - Style: 0
       Role: 4
-      Material: 4
-      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Material: 0
+      Tint: {r: 0.14117648, g: 0.11764706, b: 0.09411765, a: 1}
       Surface: 
       Pitch: 0
     - Style: 0
@@ -2714,7 +5762,7 @@ MonoBehaviour:
     - Style: 0
       Role: 6
       Material: 0
-      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Tint: {r: 0.22745098, g: 0.41568628, b: 0.5411765, a: 1}
       Surface: 
       Pitch: 0
     - Style: 0
@@ -2731,26 +5779,26 @@ MonoBehaviour:
       Pitch: 0
     - Style: 0
       Role: 9
-      Material: 4
-      Tint: {r: 1, g: 1, b: 1, a: 1}
-      Surface: 
-      Pitch: 0
-    - Style: 0
-      Role: 10
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
       Pitch: 0
     - Style: 0
+      Role: 10
+      Material: 14
+      Tint: {r: 0.47843137, g: 0.36862746, b: 0.26666668, a: 1}
+      Surface: 
+      Pitch: 0
+    - Style: 0
       Role: 11
-      Material: 3
+      Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
       Pitch: 0
     - Style: 0
       Role: 12
-      Material: 8
-      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Material: 23
+      Tint: {r: 0.41568628, g: 0.41568628, b: 0.2901961, a: 1}
       Surface: 
       Pitch: 0
     - Style: 0
@@ -2761,7 +5809,7 @@ MonoBehaviour:
       Pitch: 0
     - Style: 0
       Role: 14
-      Material: 11
+      Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
       Pitch: 0
@@ -2780,19 +5828,19 @@ MonoBehaviour:
     - Style: 0
       Role: 17
       Material: 5
-      Tint: {r: 0.86, g: 0.78, b: 0.62, a: 1}
+      Tint: {r: 0.5411765, g: 0.41568628, b: 0.2901961, a: 1}
       Surface: 
       Pitch: 0
     - Style: 0
       Role: 18
       Material: 6
-      Tint: {r: 0.62, g: 0.14, b: 0.11, a: 1}
+      Tint: {r: 0.22745098, g: 0.41568628, b: 0.5411765, a: 1}
       Surface: 
       Pitch: 0
     - Style: 1
       Role: 0
       Material: 3
-      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Tint: {r: 0.45490196, g: 0.4862745, b: 0.42352942, a: 1}
       Surface: 
       Pitch: 0
     - Style: 1
@@ -2803,8 +5851,8 @@ MonoBehaviour:
       Pitch: 0
     - Style: 1
       Role: 2
-      Material: 2
-      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Material: 15
+      Tint: {r: 0.5411765, g: 0.5411765, b: 0.5176471, a: 1}
       Surface: 
       Pitch: 0
     - Style: 1
@@ -2815,14 +5863,14 @@ MonoBehaviour:
       Pitch: 0
     - Style: 1
       Role: 4
-      Material: 4
-      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Material: 3
+      Tint: {r: 0.45490196, g: 0.4862745, b: 0.42352942, a: 1}
       Surface: 
       Pitch: 0
     - Style: 1
       Role: 5
-      Material: 0
-      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Material: 3
+      Tint: {r: 0.8627451, g: 0.84705883, b: 0.78431374, a: 1}
       Surface: 
       Pitch: 0
     - Style: 1
@@ -2833,38 +5881,38 @@ MonoBehaviour:
       Pitch: 0
     - Style: 1
       Role: 7
-      Material: 3
-      Tint: {r: 1, g: 1, b: 1, a: 1}
-      Surface: 
-      Pitch: 0
-    - Style: 1
-      Role: 8
-      Material: 3
-      Tint: {r: 1, g: 1, b: 1, a: 1}
-      Surface: 
-      Pitch: 0
-    - Style: 1
-      Role: 9
-      Material: 3
-      Tint: {r: 1, g: 1, b: 1, a: 1}
-      Surface: 
-      Pitch: 0
-    - Style: 1
-      Role: 10
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
       Pitch: 0
     - Style: 1
+      Role: 8
+      Material: 0
+      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Surface: 
+      Pitch: 0
+    - Style: 1
+      Role: 9
+      Material: 0
+      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Surface: 
+      Pitch: 0
+    - Style: 1
+      Role: 10
+      Material: 14
+      Tint: {r: 0.47843137, g: 0.36862746, b: 0.26666668, a: 1}
+      Surface: 
+      Pitch: 0
+    - Style: 1
       Role: 11
-      Material: 3
+      Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
       Pitch: 0
     - Style: 1
       Role: 12
-      Material: 8
-      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Material: 23
+      Tint: {r: 0.41568628, g: 0.41568628, b: 0.2901961, a: 1}
       Surface: 
       Pitch: 0
     - Style: 1
@@ -2875,7 +5923,7 @@ MonoBehaviour:
       Pitch: 0
     - Style: 1
       Role: 14
-      Material: 11
+      Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
       Pitch: 0
@@ -2894,13 +5942,13 @@ MonoBehaviour:
     - Style: 1
       Role: 17
       Material: 5
-      Tint: {r: 0.86, g: 0.78, b: 0.62, a: 1}
+      Tint: {r: 0.5411765, g: 0.41568628, b: 0.2901961, a: 1}
       Surface: 
       Pitch: 0
     - Style: 1
       Role: 18
       Material: 6
-      Tint: {r: 0.62, g: 0.14, b: 0.11, a: 1}
+      Tint: {r: 0.22745098, g: 0.41568628, b: 0.5411765, a: 1}
       Surface: 
       Pitch: 0
     - Style: 2
@@ -2947,7 +5995,7 @@ MonoBehaviour:
       Pitch: 0
     - Style: 2
       Role: 7
-      Material: 8
+      Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
       Pitch: 0
@@ -2959,26 +6007,26 @@ MonoBehaviour:
       Pitch: 0
     - Style: 2
       Role: 9
-      Material: 8
-      Tint: {r: 1, g: 1, b: 1, a: 1}
-      Surface: 
-      Pitch: 0
-    - Style: 2
-      Role: 10
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
       Pitch: 0
     - Style: 2
+      Role: 10
+      Material: 14
+      Tint: {r: 0.47843137, g: 0.36862746, b: 0.26666668, a: 1}
+      Surface: 
+      Pitch: 0
+    - Style: 2
       Role: 11
-      Material: 3
+      Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
       Pitch: 0
     - Style: 2
       Role: 12
-      Material: 8
-      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Material: 23
+      Tint: {r: 0.41568628, g: 0.41568628, b: 0.2901961, a: 1}
       Surface: 
       Pitch: 0
     - Style: 2
@@ -2989,7 +6037,7 @@ MonoBehaviour:
       Pitch: 0
     - Style: 2
       Role: 14
-      Material: 11
+      Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
       Pitch: 0
@@ -3008,13 +6056,13 @@ MonoBehaviour:
     - Style: 2
       Role: 17
       Material: 5
-      Tint: {r: 0.86, g: 0.78, b: 0.62, a: 1}
+      Tint: {r: 0.5411765, g: 0.41568628, b: 0.2901961, a: 1}
       Surface: 
       Pitch: 0
     - Style: 2
       Role: 18
       Material: 6
-      Tint: {r: 0.62, g: 0.14, b: 0.11, a: 1}
+      Tint: {r: 0.22745098, g: 0.41568628, b: 0.5411765, a: 1}
       Surface: 
       Pitch: 0
     - Style: 3
@@ -3061,38 +6109,38 @@ MonoBehaviour:
       Pitch: 0
     - Style: 3
       Role: 7
-      Material: 3
-      Tint: {r: 1, g: 1, b: 1, a: 1}
-      Surface: 
-      Pitch: 0
-    - Style: 3
-      Role: 8
-      Material: 7
-      Tint: {r: 1, g: 1, b: 1, a: 1}
-      Surface: 
-      Pitch: 0
-    - Style: 3
-      Role: 9
-      Material: 3
-      Tint: {r: 1, g: 1, b: 1, a: 1}
-      Surface: 
-      Pitch: 0
-    - Style: 3
-      Role: 10
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
       Pitch: 0
     - Style: 3
+      Role: 8
+      Material: 0
+      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Surface: 
+      Pitch: 0
+    - Style: 3
+      Role: 9
+      Material: 0
+      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Surface: 
+      Pitch: 0
+    - Style: 3
+      Role: 10
+      Material: 14
+      Tint: {r: 0.47843137, g: 0.36862746, b: 0.26666668, a: 1}
+      Surface: 
+      Pitch: 0
+    - Style: 3
       Role: 11
-      Material: 3
+      Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
       Pitch: 0
     - Style: 3
       Role: 12
-      Material: 8
-      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Material: 23
+      Tint: {r: 0.41568628, g: 0.41568628, b: 0.2901961, a: 1}
       Surface: 
       Pitch: 0
     - Style: 3
@@ -3103,7 +6151,7 @@ MonoBehaviour:
       Pitch: 0
     - Style: 3
       Role: 14
-      Material: 11
+      Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
       Pitch: 0
@@ -3122,13 +6170,13 @@ MonoBehaviour:
     - Style: 3
       Role: 17
       Material: 5
-      Tint: {r: 0.86, g: 0.78, b: 0.62, a: 1}
+      Tint: {r: 0.5411765, g: 0.41568628, b: 0.2901961, a: 1}
       Surface: 
       Pitch: 0
     - Style: 3
       Role: 18
       Material: 6
-      Tint: {r: 0.62, g: 0.14, b: 0.11, a: 1}
+      Tint: {r: 0.22745098, g: 0.41568628, b: 0.5411765, a: 1}
       Surface: 
       Pitch: 0
     - Style: 4
@@ -3175,38 +6223,38 @@ MonoBehaviour:
       Pitch: 0
     - Style: 4
       Role: 7
-      Material: 8
-      Tint: {r: 1, g: 1, b: 1, a: 1}
-      Surface: 
-      Pitch: 0
-    - Style: 4
-      Role: 8
-      Material: 8
-      Tint: {r: 1, g: 1, b: 1, a: 1}
-      Surface: 
-      Pitch: 0
-    - Style: 4
-      Role: 9
-      Material: 8
-      Tint: {r: 1, g: 1, b: 1, a: 1}
-      Surface: 
-      Pitch: 0
-    - Style: 4
-      Role: 10
       Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
       Pitch: 0
     - Style: 4
+      Role: 8
+      Material: 0
+      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Surface: 
+      Pitch: 0
+    - Style: 4
+      Role: 9
+      Material: 0
+      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Surface: 
+      Pitch: 0
+    - Style: 4
+      Role: 10
+      Material: 14
+      Tint: {r: 0.47843137, g: 0.36862746, b: 0.26666668, a: 1}
+      Surface: 
+      Pitch: 0
+    - Style: 4
       Role: 11
-      Material: 3
+      Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
       Pitch: 0
     - Style: 4
       Role: 12
-      Material: 8
-      Tint: {r: 1, g: 1, b: 1, a: 1}
+      Material: 23
+      Tint: {r: 0.41568628, g: 0.41568628, b: 0.2901961, a: 1}
       Surface: 
       Pitch: 0
     - Style: 4
@@ -3217,7 +6265,7 @@ MonoBehaviour:
       Pitch: 0
     - Style: 4
       Role: 14
-      Material: 11
+      Material: 0
       Tint: {r: 1, g: 1, b: 1, a: 1}
       Surface: 
       Pitch: 0
@@ -3236,68 +6284,32 @@ MonoBehaviour:
     - Style: 4
       Role: 17
       Material: 5
-      Tint: {r: 0.86, g: 0.78, b: 0.62, a: 1}
+      Tint: {r: 0.5411765, g: 0.41568628, b: 0.2901961, a: 1}
       Surface: 
       Pitch: 0
     - Style: 4
       Role: 18
       Material: 6
-      Tint: {r: 0.62, g: 0.14, b: 0.11, a: 1}
+      Tint: {r: 0.22745098, g: 0.41568628, b: 0.5411765, a: 1}
       Surface: 
       Pitch: 0
   authoredMarks:
   - Field: ownRock
-    Fingerprint: Granite
-  - Field: acceptedRocks/basalt
-    Fingerprint: Basalt
-  - Field: acceptedRocks/gneiss
-    Fingerprint: Gneiss
-  - Field: acceptedRocks/granite
-    Fingerprint: Granite
-  - Field: acceptedRocks/limestone
-    Fingerprint: Limestone
-  - Field: acceptedRocks/schist
-    Fingerprint: Schist
-  - Field: acceptedRocks/shale
-    Fingerprint: Shale
-  - Field: acceptedRocks/slate
-    Fingerprint: Slate
+    Fingerprint: Molasse
   - Field: acceptedRocks
     Fingerprint: <entries>
-  - Field: caveShells/Cave
-    Fingerprint: Cave=Ground
-  - Field: caveShells/Grotto
-    Fingerprint: Grotto=Ground
-  - Field: caveShells/IceCave
-    Fingerprint: IceCave=Ice
-  - Field: caveShells/LavaTube
-    Fingerprint: LavaTube=Basalt
-  - Field: caveShells/Mine
-    Fingerprint: Mine=Ground
-  - Field: caveShells/SeaCave
-    Fingerprint: SeaCave=Ground
   - Field: caveShells
     Fingerprint: <entries>
-  - Field: caveCrystals/Selenite
-    Fingerprint: "Selenite\xD71"
   - Field: caveCrystals
     Fingerprint: <entries>
   - Field: waterRole
     Fingerprint: Lake
   - Field: waterLook
-    Fingerprint: 0.2|0.42|0.4|1|0.03|0.12|0.16|1|0.45|0.12|0.08|0.35|0.36|0.33|0.24|1|0.92|0.94|0.95|1|
-  - Field: herbGroveFlowers/Detail_FlowersWet
-    Fingerprint: Detail_FlowersWet
+    Fingerprint: 0.2901961|0.6039216|0.5411765|1|0.03137255|0.1882353|0.2901961|1|0.4|0.09|0.05|0.08|0.5411765|0.5254902|0.4392157|1|0.933333337|0.9490196|0.9490196|1|
   - Field: herbGroveFlowers
     Fingerprint: <entries>
-  - Field: herbGroveHerbs/Detail_BroadHerb
-    Fingerprint: Detail_BroadHerb
-  - Field: herbGroveHerbs/Detail_HerbRuderal
-    Fingerprint: Detail_HerbRuderal
   - Field: herbGroveHerbs
     Fingerprint: <entries>
-  - Field: caveMouthBushes/Detail_Bush_Willow
-    Fingerprint: Detail_Bush_Willow
   - Field: caveMouthBushes
     Fingerprint: <entries>
   - Field: caveMouthFerns/Detail_Fern
@@ -3310,32 +6322,18 @@ MonoBehaviour:
     Fingerprint: <entries>
   - Field: caveMouthBoulders
     Fingerprint: <entries>
-  - Field: caveMouthLogs/Deadwood_Driftwood
-    Fingerprint: Deadwood_Driftwood
   - Field: caveMouthLogs
     Fingerprint: <entries>
   - Field: caveMouthCreeper
     Fingerprint: Detail_Ivy
   - Field: lookClass
     Fingerprint: Aquatic
-  - Field: grassTypes/Detail_GrassLush
-    Fingerprint: Detail_GrassLush|10000,9000,10000,1000,4500,10000,t,0|s0,0,350,10000,b|c(0,0,0,0)(0,0,0,0)m|h(3600,2500,1400,10000)m|g8500
-  - Field: grassTypes/Detail_Reeds
-    Fingerprint: Detail_Reeds|10000,26000,20000,3500,1500,10000,t,0|s1100000,1,1600,10000,B|c(0,0,0,0)(0,0,0,0)m|h(3600,2500,1400,10000)m|g8500
-  - Field: grassTypes/Detail_ReedsPlume
-    Fingerprint: Detail_ReedsPlume|10000,24000,20000,3500,2000,10000,T,4000|s1100000,3,3000,10000,B|c(3059,3922,1882,10000)(5412,5647,3137,10000)m|h(4157,2902,3529,10000)m|g8500
-  - Field: grassTypes/Detail_GrassSedge
-    Fingerprint: Detail_GrassSedge|8500,13000,11000,4500,6000,10000,t,1000|s0,0,350,10000,b|c(3686,4784,2902,10000)(5412,6039,3843,10000)m|h(3600,2500,1400,10000)m|g8500
-  - Field: grassTypes/Detail_GrassRush
-    Fingerprint: Detail_GrassRush|9000,22000,5500,5000,800,10000,t,2500|s0,1,400,3000,b|c(1804,2902,1176,10000)(2431,3529,1647,10000)m|h(4157,2902,1647,10000)m|g8500
-  - Field: grassTypes/Detail_FlowersWet
-    Fingerprint: Detail_FlowersWet|10000,11000,9000,1000,1500,10000,t,1000|s100000,2,400,10000,b|c(2431,4157,1647,10000)(3686,5412,2275,10000)m|h(6902,2510,5412,10000)(9412,8157,1882,10000)(9412,9176,8157,10000)(9490,7216,1176,10000)m|g8500
   - Field: groundMakeup/main
-    Fingerprint: 10000,0,0
+    Fingerprint: 0,0,10000
   - Field: groundMakeup/detail/0
     Fingerprint: 0,0,10000
   - Field: groundMakeup/detail/1
-    Fingerprint: 0,0,10000
+    Fingerprint: 2500,0,7500
   - Field: groundMakeup/cliff/0
     Fingerprint: 0,0,10000
   - Field: groundMakeup/riverbed
@@ -3357,53 +6355,11 @@ MonoBehaviour:
   - Field: seaLife
     Fingerprint: <entries>
   - Field: vines.densities
-    Fingerprint: 7000,6500,3000,1000
-  - Field: vines/creeper
-    Fingerprint: Creeper:2500
-  - Field: vines/ivy
-    Fingerprint: Ivy:7500
+    Fingerprint: 4000,6000,2500,0
   - Field: vines
     Fingerprint: <entries>
-  - Field: gatheringResources/pearl oyster bed
-    Fingerprint: Pearl Oyster Bed
   - Field: gatheringResources
     Fingerprint: <entries>
-  - Field: siteKinds/Bay
-    Fingerprint: "Bay\xD71"
-  - Field: siteKinds/Butte
-    Fingerprint: "Butte\xD71"
-  - Field: siteKinds/Delta
-    Fingerprint: "Delta\xD71"
-  - Field: siteKinds/Gorge
-    Fingerprint: "Gorge\xD71"
-  - Field: siteKinds/Headland
-    Fingerprint: "Headland\xD71"
-  - Field: siteKinds/Island
-    Fingerprint: "Island\xD71"
-  - Field: siteKinds/Lake
-    Fingerprint: "Lake\xD71"
-  - Field: siteKinds/Mesa
-    Fingerprint: "Mesa\xD71"
-  - Field: siteKinds/Pass
-    Fingerprint: "Pass\xD71"
-  - Field: siteKinds/Peak
-    Fingerprint: "Peak\xD71"
-  - Field: siteKinds/Rapids
-    Fingerprint: "Rapids\xD71"
-  - Field: siteKinds/River
-    Fingerprint: "River\xD71"
-  - Field: siteKinds/RiverMouth
-    Fingerprint: "RiverMouth\xD71"
-  - Field: siteKinds/Spring
-    Fingerprint: "Spring\xD71"
-  - Field: siteKinds/SunkenCity
-    Fingerprint: "SunkenCity\xD71"
-  - Field: siteKinds/SunkenRuins
-    Fingerprint: "SunkenRuins\xD71"
-  - Field: siteKinds/SunkenShip
-    Fingerprint: "SunkenShip\xD71"
-  - Field: siteKinds/Waterfall
-    Fingerprint: "Waterfall\xD71"
   - Field: siteKinds
     Fingerprint: <entries>
   - Field: siteVariants
@@ -3411,227 +6367,15 @@ MonoBehaviour:
   - Field: siteStyles
     Fingerprint: <entries>
   - Field: weathering
-    Fingerprint: Mossy|0|1
-  - Field: fieldCrops/Detail_GrassWheat
-    Fingerprint: "Detail_GrassWheat\xD71"
+    Fingerprint: Algae|0.35|0.8
   - Field: fieldCrops
     Fingerprint: <entries>
-  - Field: structurePalette/Earth/Banner
-    Fingerprint: Earth/Banner=Dyed(0.62,0.14,0.11,1)@
-  - Field: structurePalette/Earth/Carving
-    Fingerprint: Earth/Carving=Monolith(1,1,1,1)@
-  - Field: structurePalette/Earth/Cloth
-    Fingerprint: Earth/Cloth=Canvas(0.86,0.78,0.62,1)@
-  - Field: structurePalette/Earth/Door
-    Fingerprint: Earth/Door=Timber(1,1,1,1)@
-  - Field: structurePalette/Earth/Dressing
-    Fingerprint: Earth/Dressing=Stone(1,1,1,1)@
-  - Field: structurePalette/Earth/Fence
-    Fingerprint: Earth/Fence=Earth(1,1,1,1)@
-  - Field: structurePalette/Earth/Floor
-    Fingerprint: Earth/Floor=Earth(1,1,1,1)@
-  - Field: structurePalette/Earth/GroundFloor
-    Fingerprint: Earth/GroundFloor=Stone(1,1,1,1)@
-  - Field: structurePalette/Earth/Ironwork
-    Fingerprint: Earth/Ironwork=Iron(1,1,1,1)@
-  - Field: structurePalette/Earth/LogWall
-    Fingerprint: Earth/LogWall=Timber(1,1,1,1)@
-  - Field: structurePalette/Earth/Paving
-    Fingerprint: Earth/Paving=Earth(1,1,1,1)@
-  - Field: structurePalette/Earth/Plinth
-    Fingerprint: Earth/Plinth=Fieldstone(1,1,1,1)@
-  - Field: structurePalette/Earth/Roof
-    Fingerprint: Earth/Roof=Earth(1,1,1,1)@
-  - Field: structurePalette/Earth/ShingleRoof
-    Fingerprint: Earth/ShingleRoof=Earth(1,1,1,1)@
-  - Field: structurePalette/Earth/Trim
-    Fingerprint: Earth/Trim=Timber(1,1,1,1)@
-  - Field: structurePalette/Earth/Turf
-    Fingerprint: Earth/Turf=Earth(1,1,1,1)@
-  - Field: structurePalette/Earth/UpperWall
-    Fingerprint: Earth/UpperWall=Earth(1,1,1,1)@
-  - Field: structurePalette/Earth/Wall
-    Fingerprint: Earth/Wall=Earth(1,1,1,1)@
-  - Field: structurePalette/Earth/Woodwork
-    Fingerprint: Earth/Woodwork=Timber(1,1,1,1)@
-  - Field: structurePalette/Hide/Banner
-    Fingerprint: Hide/Banner=Dyed(0.62,0.14,0.11,1)@
-  - Field: structurePalette/Hide/Carving
-    Fingerprint: Hide/Carving=Monolith(1,1,1,1)@
-  - Field: structurePalette/Hide/Cloth
-    Fingerprint: Hide/Cloth=Canvas(0.86,0.78,0.62,1)@
-  - Field: structurePalette/Hide/Door
-    Fingerprint: Hide/Door=Ash(0.3,0.29,0.28,1)@
-  - Field: structurePalette/Hide/Dressing
-    Fingerprint: Hide/Dressing=Stone(1,1,1,1)@
-  - Field: structurePalette/Hide/Fence
-    Fingerprint: Hide/Fence=Timber(1,1,1,1)@
-  - Field: structurePalette/Hide/Floor
-    Fingerprint: Hide/Floor=Earth(1,1,1,1)@
-  - Field: structurePalette/Hide/GroundFloor
-    Fingerprint: Hide/GroundFloor=Stone(1,1,1,1)@
-  - Field: structurePalette/Hide/Ironwork
-    Fingerprint: Hide/Ironwork=Iron(1,1,1,1)@
-  - Field: structurePalette/Hide/LogWall
-    Fingerprint: Hide/LogWall=Timber(1,1,1,1)@
-  - Field: structurePalette/Hide/Paving
-    Fingerprint: Hide/Paving=Earth(1,1,1,1)@
-  - Field: structurePalette/Hide/Plinth
-    Fingerprint: Hide/Plinth=Earth(1,1,1,1)@
-  - Field: structurePalette/Hide/Roof
-    Fingerprint: Hide/Roof=Canvas(0.86,0.78,0.62,1)@
-  - Field: structurePalette/Hide/ShingleRoof
-    Fingerprint: Hide/ShingleRoof=Canvas(0.86,0.78,0.62,1)@
-  - Field: structurePalette/Hide/Trim
-    Fingerprint: Hide/Trim=Timber(1,1,1,1)@
-  - Field: structurePalette/Hide/Turf
-    Fingerprint: Hide/Turf=Earth(1,1,1,1)@
-  - Field: structurePalette/Hide/UpperWall
-    Fingerprint: Hide/UpperWall=Canvas(0.86,0.78,0.62,1)@
-  - Field: structurePalette/Hide/Wall
-    Fingerprint: Hide/Wall=Canvas(0.86,0.78,0.62,1)@
-  - Field: structurePalette/Hide/Woodwork
-    Fingerprint: Hide/Woodwork=Timber(1,1,1,1)@
-  - Field: structurePalette/Iron/Banner
-    Fingerprint: Iron/Banner=Dyed(0.62,0.14,0.11,1)@
-  - Field: structurePalette/Iron/Carving
-    Fingerprint: Iron/Carving=Monolith(1,1,1,1)@
-  - Field: structurePalette/Iron/Cloth
-    Fingerprint: Iron/Cloth=Canvas(0.86,0.78,0.62,1)@
-  - Field: structurePalette/Iron/Door
-    Fingerprint: Iron/Door=Iron(1,1,1,1)@
-  - Field: structurePalette/Iron/Dressing
-    Fingerprint: Iron/Dressing=Stone(1,1,1,1)@
-  - Field: structurePalette/Iron/Fence
-    Fingerprint: Iron/Fence=Iron(1,1,1,1)@
-  - Field: structurePalette/Iron/Floor
-    Fingerprint: Iron/Floor=Stone(1,1,1,1)@
-  - Field: structurePalette/Iron/GroundFloor
-    Fingerprint: Iron/GroundFloor=Stone(1,1,1,1)@
-  - Field: structurePalette/Iron/Ironwork
-    Fingerprint: Iron/Ironwork=Iron(1,1,1,1)@
-  - Field: structurePalette/Iron/LogWall
-    Fingerprint: Iron/LogWall=Timber(1,1,1,1)@
-  - Field: structurePalette/Iron/Paving
-    Fingerprint: Iron/Paving=Stone(1,1,1,1)@
-  - Field: structurePalette/Iron/Plinth
-    Fingerprint: Iron/Plinth=Stone(1,1,1,1)@
-  - Field: structurePalette/Iron/Roof
-    Fingerprint: Iron/Roof=Iron(1,1,1,1)@
-  - Field: structurePalette/Iron/ShingleRoof
-    Fingerprint: Iron/ShingleRoof=Iron(1,1,1,1)@
-  - Field: structurePalette/Iron/Trim
-    Fingerprint: Iron/Trim=Iron(1,1,1,1)@
-  - Field: structurePalette/Iron/Turf
-    Fingerprint: Iron/Turf=Earth(1,1,1,1)@
-  - Field: structurePalette/Iron/UpperWall
-    Fingerprint: Iron/UpperWall=Iron(1,1,1,1)@
-  - Field: structurePalette/Iron/Wall
-    Fingerprint: Iron/Wall=Iron(1,1,1,1)@
-  - Field: structurePalette/Iron/Woodwork
-    Fingerprint: Iron/Woodwork=Timber(1,1,1,1)@
-  - Field: structurePalette/Stone/Banner
-    Fingerprint: Stone/Banner=Dyed(0.62,0.14,0.11,1)@
-  - Field: structurePalette/Stone/Carving
-    Fingerprint: Stone/Carving=Monolith(1,1,1,1)@
-  - Field: structurePalette/Stone/Cloth
-    Fingerprint: Stone/Cloth=Canvas(0.86,0.78,0.62,1)@
-  - Field: structurePalette/Stone/Door
-    Fingerprint: Stone/Door=Timber(1,1,1,1)@
-  - Field: structurePalette/Stone/Dressing
-    Fingerprint: Stone/Dressing=Stone(1,1,1,1)@
-  - Field: structurePalette/Stone/Fence
-    Fingerprint: Stone/Fence=Stone(1,1,1,1)@
-  - Field: structurePalette/Stone/Floor
-    Fingerprint: Stone/Floor=Stone(1,1,1,1)@
-  - Field: structurePalette/Stone/GroundFloor
-    Fingerprint: Stone/GroundFloor=Stone(1,1,1,1)@
-  - Field: structurePalette/Stone/Ironwork
-    Fingerprint: Stone/Ironwork=Iron(1,1,1,1)@
-  - Field: structurePalette/Stone/LogWall
-    Fingerprint: Stone/LogWall=Timber(1,1,1,1)@
-  - Field: structurePalette/Stone/Paving
-    Fingerprint: Stone/Paving=Stone(1,1,1,1)@
-  - Field: structurePalette/Stone/Plinth
-    Fingerprint: Stone/Plinth=Fieldstone(1,1,1,1)@
-  - Field: structurePalette/Stone/Roof
-    Fingerprint: Stone/Roof=Thatch(1,1,1,1)@
-  - Field: structurePalette/Stone/ShingleRoof
-    Fingerprint: Stone/ShingleRoof=Timber(1,1,1,1)@
-  - Field: structurePalette/Stone/Trim
-    Fingerprint: Stone/Trim=Timber(1,1,1,1)@
-  - Field: structurePalette/Stone/Turf
-    Fingerprint: Stone/Turf=Earth(1,1,1,1)@
-  - Field: structurePalette/Stone/UpperWall
-    Fingerprint: Stone/UpperWall=Plaster(1,1,1,1)@
-  - Field: structurePalette/Stone/Wall
-    Fingerprint: Stone/Wall=Stone(1,1,1,1)@
-  - Field: structurePalette/Stone/Woodwork
-    Fingerprint: Stone/Woodwork=Timber(1,1,1,1)@
-  - Field: structurePalette/Timber/Banner
-    Fingerprint: Timber/Banner=Dyed(0.62,0.14,0.11,1)@
-  - Field: structurePalette/Timber/Carving
-    Fingerprint: Timber/Carving=Monolith(1,1,1,1)@
-  - Field: structurePalette/Timber/Cloth
-    Fingerprint: Timber/Cloth=Canvas(0.86,0.78,0.62,1)@
-  - Field: structurePalette/Timber/Door
-    Fingerprint: Timber/Door=Timber(1,1,1,1)@
-  - Field: structurePalette/Timber/Dressing
-    Fingerprint: Timber/Dressing=Stone(1,1,1,1)@
-  - Field: structurePalette/Timber/Fence
-    Fingerprint: Timber/Fence=Timber(1,1,1,1)@
-  - Field: structurePalette/Timber/Floor
-    Fingerprint: Timber/Floor=Timber(1,1,1,1)@
-  - Field: structurePalette/Timber/GroundFloor
-    Fingerprint: Timber/GroundFloor=Stone(1,1,1,1)@
-  - Field: structurePalette/Timber/Ironwork
-    Fingerprint: Timber/Ironwork=Iron(1,1,1,1)@
-  - Field: structurePalette/Timber/LogWall
-    Fingerprint: Timber/LogWall=Timber(1,1,1,1)@
-  - Field: structurePalette/Timber/Paving
-    Fingerprint: Timber/Paving=Fieldstone(1,1,1,1)@
-  - Field: structurePalette/Timber/Plinth
-    Fingerprint: Timber/Plinth=Fieldstone(1,1,1,1)@
-  - Field: structurePalette/Timber/Roof
-    Fingerprint: Timber/Roof=Thatch(1,1,1,1)@
-  - Field: structurePalette/Timber/ShingleRoof
-    Fingerprint: Timber/ShingleRoof=Timber(1,1,1,1)@
-  - Field: structurePalette/Timber/Trim
-    Fingerprint: Timber/Trim=Timber(1,1,1,1)@
-  - Field: structurePalette/Timber/Turf
-    Fingerprint: Timber/Turf=Earth(1,1,1,1)@
-  - Field: structurePalette/Timber/UpperWall
-    Fingerprint: Timber/UpperWall=Plaster(1,1,1,1)@
-  - Field: structurePalette/Timber/Wall
-    Fingerprint: Timber/Wall=Plaster(1,1,1,1)@
-  - Field: structurePalette/Timber/Woodwork
-    Fingerprint: Timber/Woodwork=Timber(1,1,1,1)@
   - Field: structurePalette
     Fingerprint: <entries>
   - Field: moatWater
     Fingerprint: Wet
-  - Field: wayLights/Capital
-    Fingerprint: Capital=LanternPost@13
-  - Field: wayLights/City
-    Fingerprint: City=LanternPost@13
-  - Field: wayLights/Port
-    Fingerprint: Port=LanternPost@13
-  - Field: wayLights/Town
-    Fingerprint: Town=LanternPost@13
-  - Field: wayLights/Village
-    Fingerprint: Village=TorchPost@20
   - Field: wayLights
     Fingerprint: <entries>
-  - Field: caveLights/Camp
-    Fingerprint: Camp=LanternStand@0
-  - Field: caveLights/MineDrift
-    Fingerprint: MineDrift=WallTorch@17
-  - Field: caveLights/MineLamp
-    Fingerprint: MineLamp=HangingLantern@0
-  - Field: caveLights/MineStope
-    Fingerprint: MineStope=TorchPost@0
-  - Field: caveLights/Route
-    Fingerprint: Route=LanternStand@0
   - Field: caveLights
     Fingerprint: <entries>
   - Field: seaLook
@@ -3639,7 +6383,7 @@ MonoBehaviour:
   - Field: floatingPlants
     Fingerprint: <entries>
   - Field: boardwalks
-    Fingerprint: None
+    Fingerprint: Paths, Streets
   - Field: linearFeatures
     Fingerprint: <entries>
   - Field: orchards
@@ -3762,3 +6506,389 @@ MonoBehaviour:
     Fingerprint: 0,0
   - Field: boardwalkStyle
     Fingerprint: Planked
+  - Field: bedBands/bed/0
+    Fingerprint: w2|d30000,90000,5000|c-
+  - Field: bedBands/bed/1
+    Fingerprint: w2|d90000,0,5000|c-
+  - Field: groundClimate/detail/3
+    Fingerprint: t-10000,-2000,1000|h-
+  - Field: Description
+    Fingerprint: "Clear cold lake \u2014 wave-washed strands, quillwort lawns under
+      green water, and pile-towns on the shallows"
+  - Field: naming/Onsets
+    Fingerprint: e28a3fcc5cbc421d
+  - Field: naming/Nuclei
+    Fingerprint: 529569320a71e924
+  - Field: naming/Codas
+    Fingerprint: a415fb4ce05a47e8
+  - Field: naming/Middles
+    Fingerprint: 3fc93838205fdc52
+  - Field: naming/SyllMin
+    Fingerprint: 2
+  - Field: naming/SyllMax
+    Fingerprint: 3
+  - Field: naming/DungeonSuffixes
+    Fingerprint: 0ebcea167e21fe4e
+  - Field: naming/DungeonPrefixes
+    Fingerprint: a2f392a568cfb577
+  - Field: naming/POISuffixes
+    Fingerprint: a143fa77e6a1a40c
+  - Field: naming/Adjectives
+    Fingerprint: b7faf709f62916ec
+  - Field: naming/POITypeWords
+    Fingerprint: 62e490d4d9d1c774
+  - Field: naming/Description
+    Fingerprint: 'Alemannic: the Alpine foreland''s clear lakes (Ueber-, Lind-, Hall-,
+      Mond-, Atter-, Zell-; -see, -au, -horn, -wil, -egg)'
+  - Field: TerrainProcess
+    Fingerprint: Temperate
+  - Field: acceptedRocks/gneiss
+    Fingerprint: Gneiss
+  - Field: acceptedRocks/limestone
+    Fingerprint: Limestone
+  - Field: caveShells/Cave
+    Fingerprint: Cave=Molasse
+  - Field: caveShells/Grotto
+    Fingerprint: Grotto=Limestone
+  - Field: caveShells/IceCave
+    Fingerprint: IceCave=Ice
+  - Field: caveShells/LavaTube
+    Fingerprint: LavaTube=Basalt
+  - Field: caveShells/Mine
+    Fingerprint: Mine=Limestone
+  - Field: caveShells/SeaCave
+    Fingerprint: SeaCave=Molasse
+  - Field: caveCrystals/CavePearl
+    Fingerprint: "CavePearl\xD70.6"
+  - Field: caveCrystals/Nixglass
+    Fingerprint: "Nixglass\xD70.4"
+  - Field: glowModes/Crystal
+    Fingerprint: Crystal=Caustic
+  - Field: herbGroveFlowers/Detail_FlowersStrand
+    Fingerprint: Detail_FlowersStrand
+  - Field: herbGroveHerbs/Detail_FlowersStrand
+    Fingerprint: Detail_FlowersStrand
+  - Field: herbGroveHerbs/Detail_GrassShoreweed
+    Fingerprint: Detail_GrassShoreweed
+  - Field: herbGroveHerbs/Detail_HorsetailWater
+    Fingerprint: Detail_HorsetailWater
+  - Field: caveMouthBushes/Detail_Bush_LakeWillowScrub
+    Fingerprint: Detail_Bush_LakeWillowScrub
+  - Field: caveMouthLogs/Deadwood_Log_Sunken
+    Fingerprint: Deadwood_Log_Sunken
+  - Field: caveMouthLogs/Deadwood_Logboat_Wreck
+    Fingerprint: Deadwood_Logboat_Wreck
+  - Field: grassTypes/Detail_GrassShoreweed
+    Fingerprint: Detail_GrassShoreweed|12000,12000,8000,6000,4000,10000,t,10000|s0,0,350,10000,b|c(2431,3529,1804,10000)(4157,5412,2667,10000)M|h(3600,2500,1400,10000)m|g3000
+  - Field: grassTypes/Detail_FlowersStrand
+    Fingerprint: Detail_FlowersStrand|10000,13000,8000,1000,1200,10000,t,0|s120000,2,400,10000,b|c(2431,4157,1569,10000)(3333,4980,1882,10000)M|h(4157,6588,9098,10000)(9098,8157,2510,10000)(8784,6039,7216,10000)(8471,7843,9255,10000)M|g3500
+  - Field: grassTypes/Detail_GrassNeedleSpike
+    Fingerprint: Detail_GrassNeedleSpike|14000,10000,4000,1200,4000,10000,t,10000|s0,0,350,10000,b|c(2902,4157,2039,10000)(4784,6039,2902,10000)M|h(3600,2500,1400,10000)m|g3500
+  - Field: groundMakeup/detail/2
+    Fingerprint: 0,0,10000
+  - Field: groundMakeup/detail/3
+    Fingerprint: 0,0,10000
+  - Field: groundMakeup/bed/0
+    Fingerprint: 0,0,10000
+  - Field: groundMakeup/bed/1
+    Fingerprint: 0,0,10000
+  - Field: vines/bittersweet
+    Fingerprint: Bittersweet:10000
+  - Field: gatheringResources/bulrush bundle
+    Fingerprint: Bulrush Bundle
+  - Field: gatheringResources/lake ball
+    Fingerprint: Lake Ball
+  - Field: gatheringResources/lake ore
+    Fingerprint: Lake Ore
+  - Field: gatheringResources/nixglass
+    Fingerprint: Nixglass
+  - Field: gatheringResources/spongilla
+    Fingerprint: Spongilla
+  - Field: siteStyles/Earth
+    Fingerprint: "Earth\xD70.2"
+  - Field: siteStyles/Stone
+    Fingerprint: "Stone\xD70.4"
+  - Field: siteStyles/Timber
+    Fingerprint: "Timber\xD72"
+  - Field: structurePalette/Earth/Banner
+    Fingerprint: Earth/Banner=Dyed(0.227450982,0.41568628,0.5411765,1)@
+  - Field: structurePalette/Earth/Carving
+    Fingerprint: Earth/Carving=Timber(1,1,1,1)@
+  - Field: structurePalette/Earth/Cloth
+    Fingerprint: Earth/Cloth=Canvas(0.5411765,0.41568628,0.2901961,1)@
+  - Field: structurePalette/Earth/Door
+    Fingerprint: Earth/Door=Timber(1,1,1,1)@
+  - Field: structurePalette/Earth/Dressing
+    Fingerprint: Earth/Dressing=Stone(1,1,1,1)@
+  - Field: structurePalette/Earth/Fence
+    Fingerprint: Earth/Fence=Timber(1,1,1,1)@
+  - Field: structurePalette/Earth/Floor
+    Fingerprint: Earth/Floor=Timber(1,1,1,1)@
+  - Field: structurePalette/Earth/GroundFloor
+    Fingerprint: Earth/GroundFloor=Timber(1,1,1,1)@
+  - Field: structurePalette/Earth/Ironwork
+    Fingerprint: Earth/Ironwork=Iron(1,1,1,1)@
+  - Field: structurePalette/Earth/LogWall
+    Fingerprint: Earth/LogWall=Log(0.478431374,0.368627459,0.266666681,1)@
+  - Field: structurePalette/Earth/Paving
+    Fingerprint: Earth/Paving=Timber(1,1,1,1)@
+  - Field: structurePalette/Earth/Plinth
+    Fingerprint: Earth/Plinth=Fieldstone(1,1,1,1)@
+  - Field: structurePalette/Earth/Roof
+    Fingerprint: Earth/Roof=Earth(1,1,1,1)@
+  - Field: structurePalette/Earth/ShingleRoof
+    Fingerprint: Earth/ShingleRoof=Earth(1,1,1,1)@
+  - Field: structurePalette/Earth/Trim
+    Fingerprint: Earth/Trim=Timber(1,1,1,1)@
+  - Field: structurePalette/Earth/Turf
+    Fingerprint: Earth/Turf=Reed(0.41568628,0.41568628,0.2901961,1)@
+  - Field: structurePalette/Earth/UpperWall
+    Fingerprint: Earth/UpperWall=Earth(1,1,1,1)@
+  - Field: structurePalette/Earth/Wall
+    Fingerprint: Earth/Wall=Earth(1,1,1,1)@
+  - Field: structurePalette/Earth/Woodwork
+    Fingerprint: Earth/Woodwork=Timber(1,1,1,1)@
+  - Field: structurePalette/Hide/Banner
+    Fingerprint: Hide/Banner=Dyed(0.227450982,0.41568628,0.5411765,1)@
+  - Field: structurePalette/Hide/Carving
+    Fingerprint: Hide/Carving=Timber(1,1,1,1)@
+  - Field: structurePalette/Hide/Cloth
+    Fingerprint: Hide/Cloth=Canvas(0.5411765,0.41568628,0.2901961,1)@
+  - Field: structurePalette/Hide/Door
+    Fingerprint: Hide/Door=Ash(0.3,0.29,0.28,1)@
+  - Field: structurePalette/Hide/Dressing
+    Fingerprint: Hide/Dressing=Stone(1,1,1,1)@
+  - Field: structurePalette/Hide/Fence
+    Fingerprint: Hide/Fence=Timber(1,1,1,1)@
+  - Field: structurePalette/Hide/Floor
+    Fingerprint: Hide/Floor=Timber(1,1,1,1)@
+  - Field: structurePalette/Hide/GroundFloor
+    Fingerprint: Hide/GroundFloor=Timber(1,1,1,1)@
+  - Field: structurePalette/Hide/Ironwork
+    Fingerprint: Hide/Ironwork=Iron(1,1,1,1)@
+  - Field: structurePalette/Hide/LogWall
+    Fingerprint: Hide/LogWall=Log(0.478431374,0.368627459,0.266666681,1)@
+  - Field: structurePalette/Hide/Paving
+    Fingerprint: Hide/Paving=Timber(1,1,1,1)@
+  - Field: structurePalette/Hide/Plinth
+    Fingerprint: Hide/Plinth=Earth(1,1,1,1)@
+  - Field: structurePalette/Hide/Roof
+    Fingerprint: Hide/Roof=Canvas(0.86,0.78,0.62,1)@
+  - Field: structurePalette/Hide/ShingleRoof
+    Fingerprint: Hide/ShingleRoof=Canvas(0.86,0.78,0.62,1)@
+  - Field: structurePalette/Hide/Trim
+    Fingerprint: Hide/Trim=Timber(1,1,1,1)@
+  - Field: structurePalette/Hide/Turf
+    Fingerprint: Hide/Turf=Reed(0.41568628,0.41568628,0.2901961,1)@
+  - Field: structurePalette/Hide/UpperWall
+    Fingerprint: Hide/UpperWall=Canvas(0.86,0.78,0.62,1)@
+  - Field: structurePalette/Hide/Wall
+    Fingerprint: Hide/Wall=Canvas(0.86,0.78,0.62,1)@
+  - Field: structurePalette/Hide/Woodwork
+    Fingerprint: Hide/Woodwork=Timber(1,1,1,1)@
+  - Field: structurePalette/Iron/Banner
+    Fingerprint: Iron/Banner=Dyed(0.227450982,0.41568628,0.5411765,1)@
+  - Field: structurePalette/Iron/Carving
+    Fingerprint: Iron/Carving=Timber(1,1,1,1)@
+  - Field: structurePalette/Iron/Cloth
+    Fingerprint: Iron/Cloth=Canvas(0.5411765,0.41568628,0.2901961,1)@
+  - Field: structurePalette/Iron/Door
+    Fingerprint: Iron/Door=Iron(1,1,1,1)@
+  - Field: structurePalette/Iron/Dressing
+    Fingerprint: Iron/Dressing=Stone(1,1,1,1)@
+  - Field: structurePalette/Iron/Fence
+    Fingerprint: Iron/Fence=Timber(1,1,1,1)@
+  - Field: structurePalette/Iron/Floor
+    Fingerprint: Iron/Floor=Timber(1,1,1,1)@
+  - Field: structurePalette/Iron/GroundFloor
+    Fingerprint: Iron/GroundFloor=Timber(1,1,1,1)@
+  - Field: structurePalette/Iron/Ironwork
+    Fingerprint: Iron/Ironwork=Iron(1,1,1,1)@
+  - Field: structurePalette/Iron/LogWall
+    Fingerprint: Iron/LogWall=Log(0.478431374,0.368627459,0.266666681,1)@
+  - Field: structurePalette/Iron/Paving
+    Fingerprint: Iron/Paving=Timber(1,1,1,1)@
+  - Field: structurePalette/Iron/Plinth
+    Fingerprint: Iron/Plinth=Stone(1,1,1,1)@
+  - Field: structurePalette/Iron/Roof
+    Fingerprint: Iron/Roof=Iron(1,1,1,1)@
+  - Field: structurePalette/Iron/ShingleRoof
+    Fingerprint: Iron/ShingleRoof=Iron(1,1,1,1)@
+  - Field: structurePalette/Iron/Trim
+    Fingerprint: Iron/Trim=Iron(1,1,1,1)@
+  - Field: structurePalette/Iron/Turf
+    Fingerprint: Iron/Turf=Reed(0.41568628,0.41568628,0.2901961,1)@
+  - Field: structurePalette/Iron/UpperWall
+    Fingerprint: Iron/UpperWall=Iron(1,1,1,1)@
+  - Field: structurePalette/Iron/Wall
+    Fingerprint: Iron/Wall=Iron(1,1,1,1)@
+  - Field: structurePalette/Iron/Woodwork
+    Fingerprint: Iron/Woodwork=Timber(1,1,1,1)@
+  - Field: structurePalette/Stone/Banner
+    Fingerprint: Stone/Banner=Dyed(0.227450982,0.41568628,0.5411765,1)@
+  - Field: structurePalette/Stone/Carving
+    Fingerprint: Stone/Carving=Timber(1,1,1,1)@
+  - Field: structurePalette/Stone/Cloth
+    Fingerprint: Stone/Cloth=Canvas(0.5411765,0.41568628,0.2901961,1)@
+  - Field: structurePalette/Stone/Door
+    Fingerprint: Stone/Door=Timber(1,1,1,1)@
+  - Field: structurePalette/Stone/Dressing
+    Fingerprint: Stone/Dressing=Stone(1,1,1,1)@
+  - Field: structurePalette/Stone/Fence
+    Fingerprint: Stone/Fence=Timber(1,1,1,1)@
+  - Field: structurePalette/Stone/Floor
+    Fingerprint: Stone/Floor=Timber(1,1,1,1)@
+  - Field: structurePalette/Stone/GroundFloor
+    Fingerprint: Stone/GroundFloor=Timber(1,1,1,1)@
+  - Field: structurePalette/Stone/Ironwork
+    Fingerprint: Stone/Ironwork=Iron(1,1,1,1)@
+  - Field: structurePalette/Stone/LogWall
+    Fingerprint: Stone/LogWall=Log(0.478431374,0.368627459,0.266666681,1)@
+  - Field: structurePalette/Stone/Paving
+    Fingerprint: Stone/Paving=Timber(1,1,1,1)@
+  - Field: structurePalette/Stone/Plinth
+    Fingerprint: Stone/Plinth=Stone(0.454901963,0.4862745,0.423529416,1)@
+  - Field: structurePalette/Stone/Roof
+    Fingerprint: Stone/Roof=Shingle(0.5411765,0.5411765,0.5176471,1)@
+  - Field: structurePalette/Stone/ShingleRoof
+    Fingerprint: Stone/ShingleRoof=Timber(1,1,1,1)@
+  - Field: structurePalette/Stone/Trim
+    Fingerprint: Stone/Trim=Stone(0.8627451,0.847058833,0.784313738,1)@
+  - Field: structurePalette/Stone/Turf
+    Fingerprint: Stone/Turf=Reed(0.41568628,0.41568628,0.2901961,1)@
+  - Field: structurePalette/Stone/UpperWall
+    Fingerprint: Stone/UpperWall=Plaster(1,1,1,1)@
+  - Field: structurePalette/Stone/Wall
+    Fingerprint: Stone/Wall=Stone(0.454901963,0.4862745,0.423529416,1)@
+  - Field: structurePalette/Stone/Woodwork
+    Fingerprint: Stone/Woodwork=Timber(1,1,1,1)@
+  - Field: structurePalette/Timber/Banner
+    Fingerprint: Timber/Banner=Dyed(0.227450982,0.41568628,0.5411765,1)@
+  - Field: structurePalette/Timber/Carving
+    Fingerprint: Timber/Carving=Timber(1,1,1,1)@
+  - Field: structurePalette/Timber/Cloth
+    Fingerprint: Timber/Cloth=Canvas(0.5411765,0.41568628,0.2901961,1)@
+  - Field: structurePalette/Timber/Door
+    Fingerprint: Timber/Door=Timber(0.227450982,0.41568628,0.5411765,1)@
+  - Field: structurePalette/Timber/Dressing
+    Fingerprint: Timber/Dressing=Stone(1,1,1,1)@
+  - Field: structurePalette/Timber/Fence
+    Fingerprint: Timber/Fence=Timber(1,1,1,1)@
+  - Field: structurePalette/Timber/Floor
+    Fingerprint: Timber/Floor=Timber(1,1,1,1)@
+  - Field: structurePalette/Timber/GroundFloor
+    Fingerprint: Timber/GroundFloor=Timber(1,1,1,1)@
+  - Field: structurePalette/Timber/Ironwork
+    Fingerprint: Timber/Ironwork=Iron(1,1,1,1)@
+  - Field: structurePalette/Timber/LogWall
+    Fingerprint: Timber/LogWall=Log(0.478431374,0.368627459,0.266666681,1)@
+  - Field: structurePalette/Timber/Paving
+    Fingerprint: Timber/Paving=Timber(1,1,1,1)@
+  - Field: structurePalette/Timber/Plinth
+    Fingerprint: Timber/Plinth=Timber(0.141176477,0.117647059,0.09411765,1)@
+  - Field: structurePalette/Timber/Roof
+    Fingerprint: Timber/Roof=Shingle(0.368627459,0.227450982,0.164705887,1)@
+  - Field: structurePalette/Timber/ShingleRoof
+    Fingerprint: Timber/ShingleRoof=Shingle(0.5411765,0.5411765,0.5176471,1)@
+  - Field: structurePalette/Timber/Trim
+    Fingerprint: Timber/Trim=Timber(1,1,1,1)@
+  - Field: structurePalette/Timber/Turf
+    Fingerprint: Timber/Turf=Reed(0.41568628,0.41568628,0.2901961,1)@
+  - Field: structurePalette/Timber/UpperWall
+    Fingerprint: Timber/UpperWall=Timber(0.5411765,0.5254902,0.5019608,1)@
+  - Field: structurePalette/Timber/Wall
+    Fingerprint: Timber/Wall=Plaster(0.8627451,0.847058833,0.784313738,1)@
+  - Field: structurePalette/Timber/Woodwork
+    Fingerprint: Timber/Woodwork=Timber(1,1,1,1)@
+  - Field: wayLights/Dockyard
+    Fingerprint: Dockyard=HangingLantern@12
+  - Field: wayLights/DrownedVillage
+    Fingerprint: DrownedVillage=DrownedLamp@10
+  - Field: wayLights/FishingCamp
+    Fingerprint: FishingCamp=Cresset@14
+  - Field: wayLights/Monastery
+    Fingerprint: Monastery=LanternPost@13
+  - Field: wayLights/Port
+    Fingerprint: Port=HangingLantern@12
+  - Field: wayLights/StiltVillage
+    Fingerprint: StiltVillage=Cresset@14
+  - Field: wayLights/SunkenRuins
+    Fingerprint: SunkenRuins=DrownedLamp@10
+  - Field: caveLights/Camp
+    Fingerprint: Camp=LanternStand@0
+  - Field: caveLights/MineDrift
+    Fingerprint: MineDrift=WallLantern@10
+  - Field: caveLights/MineLamp
+    Fingerprint: MineLamp=HangingLantern@0
+  - Field: caveLights/MineStope
+    Fingerprint: MineStope=TorchPost@0
+  - Field: caveLights/Route
+    Fingerprint: Route=TorchPost@16
+  - Field: siteKinds/Bay
+    Fingerprint: "Bay\xD71"
+  - Field: siteKinds/Butte
+    Fingerprint: "Butte\xD71"
+  - Field: siteKinds/Crannog
+    Fingerprint: "Crannog\xD71.2\xD7air\xD7water"
+  - Field: siteKinds/Delta
+    Fingerprint: "Delta\xD71"
+  - Field: siteKinds/Dockyard
+    Fingerprint: "Dockyard\xD70.5\xD7air"
+  - Field: siteKinds/DrownedVillage
+    Fingerprint: "DrownedVillage\xD71"
+  - Field: siteKinds/FishingCamp
+    Fingerprint: "FishingCamp\xD72\xD7air"
+  - Field: siteKinds/Gorge
+    Fingerprint: "Gorge\xD71"
+  - Field: siteKinds/Headland
+    Fingerprint: "Headland\xD71"
+  - Field: siteKinds/Hermitage
+    Fingerprint: "Hermitage\xD70.4\xD7air"
+  - Field: siteKinds/Island
+    Fingerprint: "Island\xD71"
+  - Field: siteKinds/LadyOfTheLake
+    Fingerprint: "LadyOfTheLake\xD71\xD7air\xD7water"
+  - Field: siteKinds/Lake
+    Fingerprint: "Lake\xD71"
+  - Field: siteKinds/LakeMonsterLair
+    Fingerprint: "LakeMonsterLair\xD71\xD7air\xD7water"
+  - Field: siteKinds/Lighthouse
+    Fingerprint: "Lighthouse\xD70.15\xD7air"
+  - Field: siteKinds/Mesa
+    Fingerprint: "Mesa\xD71"
+  - Field: siteKinds/Monastery
+    Fingerprint: "Monastery\xD70.8\xD7air"
+  - Field: siteKinds/MonsterDen
+    Fingerprint: "MonsterDen\xD70.3"
+  - Field: siteKinds/NymphPool
+    Fingerprint: "NymphPool\xD70.8\xD7air\xD7water"
+  - Field: siteKinds/Ossuary
+    Fingerprint: "Ossuary\xD70.3"
+  - Field: siteKinds/Pass
+    Fingerprint: "Pass\xD71"
+  - Field: siteKinds/Peak
+    Fingerprint: "Peak\xD71"
+  - Field: siteKinds/Port
+    Fingerprint: "Port\xD70.3\xD7air"
+  - Field: siteKinds/Rapids
+    Fingerprint: "Rapids\xD71"
+  - Field: siteKinds/River
+    Fingerprint: "River\xD71"
+  - Field: siteKinds/RiverMouth
+    Fingerprint: "RiverMouth\xD71"
+  - Field: siteKinds/Shrine
+    Fingerprint: "Shrine\xD70.6\xD7air"
+  - Field: siteKinds/Spring
+    Fingerprint: "Spring\xD71"
+  - Field: siteKinds/Statue
+    Fingerprint: "Statue\xD70.15"
+  - Field: siteKinds/StiltVillage
+    Fingerprint: "StiltVillage\xD72\xD7air"
+  - Field: siteKinds/SunkenCity
+    Fingerprint: "SunkenCity\xD70.05"
+  - Field: siteKinds/SunkenRuins
+    Fingerprint: "SunkenRuins\xD70.5"
+  - Field: siteKinds/SunkenShip
+    Fingerprint: "SunkenShip\xD70.8"
+  - Field: siteKinds/Waterfall
+    Fingerprint: "Waterfall\xD71"

@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.Rendering;
+using FishMMO.Shared;
 using FishMMO.Shared.Biomes;
 using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
@@ -445,7 +446,9 @@ namespace FishMMO.Client
 
 		private readonly Mesh[] meshes = new Mesh[Kinds.Length];
 		private readonly int[] meshParticles = new int[Kinds.Length];
-		private readonly MaterialPropertyBlock block = new MaterialPropertyBlock();
+		// The motes' material copied once per kind, each kind's numbers set on its own copy: a property block would take
+		// every kind's draw out of the SRP Batcher.
+		private readonly DrawMaterials kindMaterials = new DrawMaterials("Air Motes");
 		private Material material;
 		private Shader materialShader;
 		private AirMotesMix drawn;
@@ -537,7 +540,6 @@ namespace FishMMO.Client
 			var rp = new RenderParams(mat)
 			{
 				camera = camera,
-				matProps = block,
 				shadowCastingMode = ShadowCastingMode.Off,
 				receiveShadows = false,
 				layer = camera.gameObject.layer,
@@ -571,22 +573,23 @@ namespace FishMMO.Client
 				float far = band ? 0.5f * box.x : 0.5f * Mathf.Min(box.x, box.y);
 				bool passive = traits.Radiance <= 0f;
 
-				block.Clear();
-				block.SetVector(Ids.OriginId, new Vector4(origin.x, origin.y, origin.z, groundUnderCamera));
-				block.SetVector(Ids.BoxId, new Vector4(box.x, box.y, box.z, band ? 1f : 0f));
+				Material copy = kindMaterials.For(mat, k);
+				copy.SetVector(Ids.OriginId, new Vector4(origin.x, origin.y, origin.z, groundUnderCamera));
+				copy.SetVector(Ids.BoxId, new Vector4(box.x, box.y, box.z, band ? 1f : 0f));
 				// Faded out over the outer two fifths of the box, so nothing is seen to wrap.
-				block.SetVector(Ids.BandId, new Vector4(traits.Band.x, traits.Band.y, 0.6f * far, far));
-				block.SetVector(Ids.TravelId, new Vector4(travelX, settled, travelZ, 0f));
-				block.SetVector(Ids.ShapeId, new Vector4(ShownShare(amount, traits, particles), traits.Size.y, traits.Size.z, (float)kind));
-				block.SetVector(Ids.FallId, new Vector4(traits.SettleSpread.x, traits.SettleSpread.y, traits.Size.x,
+				copy.SetVector(Ids.BandId, new Vector4(traits.Band.x, traits.Band.y, 0.6f * far, far));
+				copy.SetVector(Ids.TravelId, new Vector4(travelX, settled, travelZ, 0f));
+				copy.SetVector(Ids.ShapeId, new Vector4(ShownShare(amount, traits, particles), traits.Size.y, traits.Size.z, (float)kind));
+				copy.SetVector(Ids.FallId, new Vector4(traits.SettleSpread.x, traits.SettleSpread.y, traits.Size.x,
 					kind == AirMoteKind.Firefly ? 1f : kind == AirMoteKind.Wisp ? 2f : 0f));
-				block.SetVector(Ids.WanderId, new Vector4(traits.Wander * (passive ? turbulence : 1f), traits.WanderPace.x, traits.WanderPace.y, traits.WanderVertical));
-				block.SetColor(Ids.ColorId, traits.Color);
-				block.SetVector(Ids.PhaseId, traits.Phase);
-				block.SetVector(Ids.GlowId, new Vector4(traits.Radiance, traits.Cycle.x, traits.Cycle.y, traits.LitShare));
-				block.SetVector(Ids.HaloId, new Vector4(traits.Halo.x, traits.Halo.y, glintCos, kind == AirMoteKind.Ice ? GlintPeak() : 0f));
-				block.SetVector(Ids.ExtraId, new Vector4(kind == AirMoteKind.Pollen ? FluffShare : 0f, FluffMetres, FluffSettle, PrecipitationField.SubPixelSigma));
+				copy.SetVector(Ids.WanderId, new Vector4(traits.Wander * (passive ? turbulence : 1f), traits.WanderPace.x, traits.WanderPace.y, traits.WanderVertical));
+				copy.SetColor(Ids.ColorId, traits.Color);
+				copy.SetVector(Ids.PhaseId, traits.Phase);
+				copy.SetVector(Ids.GlowId, new Vector4(traits.Radiance, traits.Cycle.x, traits.Cycle.y, traits.LitShare));
+				copy.SetVector(Ids.HaloId, new Vector4(traits.Halo.x, traits.Halo.y, glintCos, kind == AirMoteKind.Ice ? GlintPeak() : 0f));
+				copy.SetVector(Ids.ExtraId, new Vector4(kind == AirMoteKind.Pollen ? FluffShare : 0f, FluffMetres, FluffSettle, PrecipitationField.SubPixelSigma));
 				rp.worldBounds = new Bounds(new Vector3(origin.x, band ? groundUnderCamera : origin.y, origin.z), new Vector3(box.x, band ? 200f : box.y, box.z) * 1.5f);
+				rp.material = copy;
 				Graphics.RenderMesh(rp, meshes[k], 0, Matrix4x4.identity);
 			}
 		}
@@ -627,6 +630,7 @@ namespace FishMMO.Client
 			{
 				DestroyMesh(k);
 			}
+			kindMaterials.Dispose();
 			DestroyMaterial();
 		}
 	}

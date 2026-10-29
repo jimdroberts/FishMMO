@@ -537,24 +537,57 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			Assert.That(new PrefabSpawnRule().talusGrading, Is.False);
 			Assert.That(new BiomeArtSpec.Scatter().Graded, Is.False);
+			// No biome's file grades a rule or names a chute or cone before its round (an authored round's file may: Scree, 2026-10-26).
+			bool authoredNamesThem = false;
 			foreach (string path in Directory.GetFiles($"{World}/ProceduralArt", "*.cs", SearchOption.AllDirectories))
 			{
 				string text = Read(path);
+				bool authored = BiomeAuthoredRounds.Contains(AuthoredBiomeOf(path));
+				bool names = Regex.IsMatch(text, "\"(ScreeChutes|Sciara|ScreeCone)\"");
+				authoredNamesThem |= authored && names;
+				if (authored)
+				{
+					continue;
+				}
 				Assert.That(text.Contains("TalusGraded(") && !path.EndsWith("BiomeArtSpec.cs"), Is.False, $"{path} grades a rule");
-				Assert.That(Regex.IsMatch(text, "\"(ScreeChutes|Sciara|ScreeCone)\"") && !path.EndsWith("BiomeLandformPresets.cs"), Is.False, $"{path} names a chute or cone");
+				Assert.That(names && !path.EndsWith("BiomeLandformPresets.cs"), Is.False, $"{path} names a chute or cone");
 			}
-			// No stored map holds a chute or a cone (a map saved before the fields has none at all).
-			foreach (string path in Directory.GetFiles("Assets", "*Biome Map.asset", SearchOption.AllDirectories))
+			// No stored map holds a chute or a cone (a map saved before the fields has none at all), until an authored round names
+			// them and the owner re-cuts its scenes.
+			if (!authoredNamesThem)
 			{
-				string text = Read(path);
-				Assert.That(Regex.IsMatch(text, @"\n  Chutes:\s*\n  - "), Is.False, $"{path} stores chutes");
-				Assert.That(Regex.IsMatch(text, @"\n  TalusCones:\s*\n  - "), Is.False, $"{path} stores talus cones");
+				foreach (string path in Directory.GetFiles("Assets", "*Biome Map.asset", SearchOption.AllDirectories))
+				{
+					string text = Read(path);
+					Assert.That(Regex.IsMatch(text, @"\n  Chutes:\s*\n  - "), Is.False, $"{path} stores chutes");
+					Assert.That(Regex.IsMatch(text, @"\n  TalusCones:\s*\n  - "), Is.False, $"{path} stores talus cones");
+				}
 			}
-			// And no template rule is graded.
-			foreach (string path in Directory.GetFiles("Assets/Templates/Entity/Biomes", "*.asset", SearchOption.AllDirectories))
+			// And no unauthored template rule is graded.
+			foreach (string path in Directory.GetFiles("Assets/Templates/Entity/Biomes", "*.asset", SearchOption.AllDirectories)
+				.Where(p => !BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(p))))
 			{
 				Assert.That(Read(path), Does.Not.Contain("talusGrading: 1"), path);
 			}
+		}
+
+		/// <summary>The biome a spec file under BiomeArtSpec/ writes (BiomeArtSpec.&lt;File&gt;.cs → its asset name), or the empty string.</summary>
+		private static string AuthoredBiomeOf(string path)
+		{
+			string file = Path.GetFileNameWithoutExtension(path);
+			if (!file.StartsWith("BiomeArtSpec.", System.StringComparison.Ordinal))
+			{
+				return string.Empty;
+			}
+			string compact = file.Substring("BiomeArtSpec.".Length);
+			foreach (string biome in BiomeAuthoredRounds.All)
+			{
+				if (Regex.Replace(biome, "[^A-Za-z0-9]+", string.Empty) == compact)
+				{
+					return biome;
+				}
+			}
+			return string.Empty;
 		}
 	}
 }

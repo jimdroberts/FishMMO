@@ -388,10 +388,11 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void SpecPalettes_NeedNoMaterialBeyondTheKitsToday()
 		{
-			var palettes = BiomeArtSpec.Entries.Select(e => e.StructurePalette()).ToList();
-			Assert.That(palettes.Count, Is.GreaterThan(80));
-			Assert.That(StructurePalettes.KeysOf(palettes), Is.Empty, "every biome builds as the kit until its round");
-			// So the catalogue lists the kit's materials alone: every material (the new ten too) in every finish.
+			// The authored rounds build in their own materials (legacy equality only): every other biome builds as the kit until its round.
+			Assert.That(BiomeArtSpec.Entries.Length, Is.GreaterThan(80));
+			var palettes = BiomeArtSpec.Entries.Where(e => !BiomeAuthoredRounds.Contains(e.Biome)).Select(e => e.StructurePalette()).ToList();
+			Assert.That(StructurePalettes.KeysOf(palettes), Is.Empty, "every unauthored biome builds as the kit until its round");
+			// The catalogue lists every kit material (the new ten too) in every finish, beside the authored rounds' own.
 			string[] structureMaterials = ProceduralArtCatalogue.StructureWrapperPaths()
 				.Where(p => p.Contains("/" + StructurePieces.Prefix) && p.EndsWith(".mat", StringComparison.Ordinal)).ToArray();
 			int kit = Enum.GetValues(typeof(StructureMaterial)).Length * StructurePieces.Finishes.Length;

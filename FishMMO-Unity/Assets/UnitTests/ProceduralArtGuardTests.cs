@@ -23,14 +23,14 @@ namespace FishMMO.UnitTests
 
 		private const string MaterialHead = "%YAML 1.1\n%TAG !u! tag:unity3d.com,2011:\n--- !u!21 &2100000\nMaterial:\n  serializedVersion: 8\n  m_Name: Rock_Grey\n";
 
-		private static string MaterialYaml(string keywords, string baseMap, string bumpMap)
+		private static string MaterialYaml(string keywords, string baseMap, string bumpMap, string useNormalMap = "0")
 		{
 			return MaterialHead + keywords +
 				"  m_InvalidKeywords: []\n" +
 				"  m_SavedProperties:\n    serializedVersion: 3\n    m_TexEnvs:\n" +
 				"    - _BaseMap:\n        m_Texture: " + baseMap + "\n        m_Scale: {x: 1, y: 1}\n        m_Offset: {x: 0, y: 0}\n" +
 				"    - _BumpMap:\n        m_Texture: " + bumpMap + "\n        m_Scale: {x: 1, y: 1}\n        m_Offset: {x: 0, y: 0}\n" +
-				"    m_Floats:\n    - _UseNormalMap: 1\n    m_Colors:\n    - _BaseColor: {r: 1, g: 1, b: 1, a: 1}\n";
+				"    m_Floats:\n    - _UseNormalMap: " + useNormalMap + "\n    m_Colors:\n    - _BaseColor: {r: 1, g: 1, b: 1, a: 1}\n";
 		}
 
 		private const string Texture = "{fileID: 2800000, guid: ac99cea88a05f90f6a6644cd707402cf, type: 3}";
@@ -54,6 +54,19 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void MaterialYaml_TheVegetationsNormalMapSwitch_RequiresTheMap_WithoutAKeyword()
+		{
+			// FishMMO/Vegetation reads _UseNormalMap as a uniform (one variant for bark and deadwood): no keyword in the file.
+			Assert.That(ProceduralArtWrapperCheck.MissingInMaterialYaml(MaterialYaml("  m_ValidKeywords: []\n", Texture, "{fileID: 0}", "1")),
+				Is.EqualTo(new[] { "_BumpMap" }), "the switch is on and the map empty");
+			Assert.That(ProceduralArtWrapperCheck.MissingInMaterialYaml(MaterialYaml("  m_ValidKeywords: []\n", Texture, Texture, "1")), Is.Empty);
+			Assert.That(ProceduralArtWrapperCheck.MissingInMaterialYaml(MaterialYaml("  m_ValidKeywords: []\n", Texture, "{fileID: 0}", "0")), Is.Empty,
+				"switched off: an empty _BumpMap is not sampled");
+			Assert.That(ProceduralArtWrapperCheck.MissingInMaterialYaml(MaterialYaml("  m_ValidKeywords:\n  - _NORMALMAP\n", Texture, "{fileID: 0}", "1")),
+				Is.EqualTo(new[] { "_BumpMap" }), "a material on disk from before (keyword and switch both on) asks once");
+		}
+
+		[Test]
 		public void TerrainLayerYaml_NeedsAllThreeMaps()
 		{
 			string empty = "--- !u!1953259897 &8574412962073106934\nTerrainLayer:\n  m_Name: Ground_Lichen\n  m_DiffuseTexture: {fileID: 0}\n  m_NormalMapTexture: {fileID: 0}\n  m_MaskMapTexture: {fileID: 0}\n  m_TileSize: {x: 3, y: 3}\n";
@@ -65,14 +78,15 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void AFreshMaterial_WithANormalMapKeywordAndNoMap_IsRefused()
+		public void AFreshMaterial_WithItsNormalMapOnAndNoMap_IsRefused()
 		{
 			Shader shader = Shader.Find("FishMMO/Vegetation");
 			Assume.That(shader, Is.Not.Null, "the vegetation shader is in the project");
 			var material = new Material(shader);
 			try
 			{
-				material.EnableKeyword("_NORMALMAP");
+				// Its normal map is the _UseNormalMap uniform, not a keyword (one variant for bark and deadwood).
+				material.SetFloat("_UseNormalMap", 1f);
 				Assert.That(ProceduralArtWrapperCheck.MissingInMaterial(material), Is.EqualTo(new[] { "_BaseMap", "_BumpMap" }));
 				material.SetTexture("_BaseMap", Texture2D.whiteTexture);
 				material.SetTexture("_BumpMap", Texture2D.normalTexture);

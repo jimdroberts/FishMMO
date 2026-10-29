@@ -93,15 +93,16 @@ namespace FishMMO.Shared.WorldDesign
 				? SceneGenerator.GroundAltitude(terrains, plan, east, north)
 				: planet.At(east, north);
 
-			TerrainLayer[] layers = null;
+			// The scene's layers as its arrays number them: a tile may carry only the ones it paints (TerrainTileLayers).
+			var tiles = new List<Terrain>();
 			foreach (Terrain terrain in terrains)
 			{
-				if (terrain != null && terrain.terrainData != null)
+				if (terrain != null)
 				{
-					layers = terrain.terrainData.terrainLayers;
-					break;
+					tiles.Add(terrain);
 				}
 			}
+			TerrainLayer[] layers = TerrainTileLayerSync.ScenePalette(scene, tiles);
 			if (layers == null || layers.Length == 0)
 			{
 				return "the scene's terrain has no layers.";

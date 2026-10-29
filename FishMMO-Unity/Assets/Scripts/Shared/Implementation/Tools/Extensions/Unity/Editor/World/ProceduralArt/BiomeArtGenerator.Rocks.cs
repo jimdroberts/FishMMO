@@ -37,16 +37,22 @@ namespace FishMMO.Shared.WorldDesign
 		private static IEnumerable<string> RockSurfaceSteps(Context c)
 		{
 			yield return "Rock and ice surfaces";
+			// Written as the rock and ice look arrays (ProceduralArtLookArrays, 2026-10-28): every surface when its set's arrays are
+			// due, none when they are not.
+			bool rocks = LookArraysDue(c, ProceduralArtLookArrays.RockSetName);
 			foreach (RockType type in RockTypes.All)
 			{
 				string name = type.Name;
-				WriteRockSurface(c, type.Surface, map => RockArtNames.RockSurfaceTexture(name, map));
+				WriteRockSurface(c, type.Surface, map => RockArtNames.RockSurfaceTexture(name, map), rocks);
 			}
+			WriteLookArrays(c, ProceduralArtLookArrays.RockSetName);
+			bool ice = LookArraysDue(c, ProceduralArtLookArrays.IceSetName);
 			foreach (SurfaceRecipe recipe in IceSurfaces.Recipes)
 			{
 				string name = recipe.Name;
-				WriteRockSurface(c, recipe, map => RockArtNames.IceSurfaceTexture(name, map));
+				WriteRockSurface(c, recipe, map => RockArtNames.IceSurfaceTexture(name, map), ice);
 			}
+			WriteLookArrays(c, ProceduralArtLookArrays.IceSetName);
 		}
 
 		/// <summary>
@@ -80,20 +86,29 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── Surfaces ──────────────────────────────────────────────────
 
-		private static void WriteRockSurface(Context c, SurfaceRecipe recipe, Func<string, string> pathOf)
+		/// <param name="arraysDue">Whether the surface's look arrays are written this run: its maps go into them, never a PNG of their own.</param>
+		private static void WriteRockSurface(Context c, SurfaceRecipe recipe, Func<string, string> pathOf, bool arraysDue)
 		{
 			int size = ProceduralArtCatalogue.RockSurfaceSize;
 			string albedo = pathOf("Albedo"), normal = pathOf("Normal"), mask = pathOf("Mask");
-			bool wa = ShouldWrite(c, albedo), wn = ShouldWrite(c, normal), wm = ShouldWrite(c, mask);
 			c.Report.TextureBytes += 3 * CompressedBytes(size, size);
-			if (!wa && !wn && !wm)
+			if (!arraysDue)
 			{
 				return;
 			}
 			SurfaceMaps maps = SurfaceSynth.Generate(in recipe, size, c.Seed);
-			if (wa) WritePng(c, albedo, maps.Albedo, maps.Size, maps.Size);
-			if (wn) WritePng(c, normal, maps.Normal, maps.Size, maps.Size);
-			if (wm) WritePng(c, mask, maps.Mask, maps.Size, maps.Size);
+			PutSurfaceMap(c, albedo, maps.Albedo, maps.Size);
+			PutSurfaceMap(c, normal, maps.Normal, maps.Size);
+			PutSurfaceMap(c, mask, maps.Mask, maps.Size);
+		}
+
+		/// <summary>A surface map into its look array; a map no array takes (none today) as its own PNG, as before.</summary>
+		private static void PutSurfaceMap(Context c, string path, Color32[] pixels, int size)
+		{
+			if (!PutLook(c, path, pixels, size, size) && ShouldWrite(c, path))
+			{
+				WritePng(c, path, pixels, size, size);
+			}
 		}
 
 		// ── Materials ─────────────────────────────────────────────────
@@ -113,45 +128,46 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					continue; // Wears its legacy rock material (Granite: Rock_Grey), written with the legacy rocks.
 				}
-				Texture2D albedo = LoadTexture(RockArtNames.RockSurfaceTexture(type.Name, "Albedo"));
-				Texture2D normal = LoadTexture(RockArtNames.RockSurfaceTexture(type.Name, "Normal"));
-				Texture2D mask = LoadTexture(RockArtNames.RockSurfaceTexture(type.Name, "Mask"));
+				string albedo = RockArtNames.RockSurfaceTexture(type.Name, "Albedo");
+				string normal = RockArtNames.RockSurfaceTexture(type.Name, "Normal");
+				string mask = RockArtNames.RockSurfaceTexture(type.Name, "Mask");
 				if (!string.IsNullOrEmpty(type.Ice.Surface))
 				{
 					// Snow and ice (Firn, WaterIce): ice's own set-up over the type's surface.
 					IceMaterialProposal ice = type.Ice;
-					WriteMaterial(c, ProceduralArtCatalogue.RockMaterial(type.Name), rock, m => IceLit(m, ice, albedo, normal, mask));
+					WriteMaterial(c, ProceduralArtCatalogue.RockMaterial(type.Name), rock, m => IceLit(c, m, ice, albedo, normal, mask));
 					continue;
 				}
 				// Moss as the stone allows (MossAmounts); the scene's dampness decides how much of it grows.
 				float moss = RegionalRocks.MossAmount(type.Name) ?? MossAmounts.ForRockType(type.Name);
-				WriteMaterial(c, ProceduralArtCatalogue.RockMaterial(type.Name), rock, m => RockLit(m, albedo, normal, mask, 1f, moss));
+				WriteMaterial(c, ProceduralArtCatalogue.RockMaterial(type.Name), rock, m => RockLit(c, m, albedo, normal, mask, 1f, moss));
 			}
 			foreach (IceMaterialProposal p in IceSurfaces.Materials)
 			{
 				IceMaterialProposal proposal = p;
-				Texture2D albedo = LoadTexture(RockArtNames.IceSurfaceTexture(proposal.Surface, "Albedo"));
-				Texture2D normal = LoadTexture(RockArtNames.IceSurfaceTexture(proposal.Surface, "Normal"));
-				Texture2D mask = LoadTexture(RockArtNames.IceSurfaceTexture(proposal.Surface, "Mask"));
-				WriteMaterial(c, RockArtNames.IceMaterial(proposal.Surface), rock, m => IceLit(m, proposal, albedo, normal, mask));
+				string albedo = RockArtNames.IceSurfaceTexture(proposal.Surface, "Albedo");
+				string normal = RockArtNames.IceSurfaceTexture(proposal.Surface, "Normal");
+				string mask = RockArtNames.IceSurfaceTexture(proposal.Surface, "Mask");
+				WriteMaterial(c, RockArtNames.IceMaterial(proposal.Surface), rock, m => IceLit(c, m, proposal, albedo, normal, mask));
 			}
 			// Cliff rocks wear their rock type's formation material (or glacier ice): nothing of their own.
 		}
 
 		/// <summary>The legacy rock material's setup, with a texture scale (cliffs draw rock at the terrain's size) and the
-		/// moss it may grow (FishMoss.hlsl's _FishMoss, MossAmounts; 0 none).</summary>
-		private static void RockLit(Material m, Texture2D albedo, Texture2D normal, Texture2D mask, float scale, float moss = 0f)
+		/// moss it may grow (FishMoss.hlsl's _FishMoss, MossAmounts; 0 none). The maps by their payload paths: slices of their look
+		/// arrays (<see cref="SetSurfaceMap"/>).</summary>
+		private static void RockLit(Context c, Material m, string albedo, string normal, string mask, float scale, float moss = 0f)
 		{
-			m.SetTexture("_BaseMap", albedo);
+			SetSurfaceMap(c, m, "_BaseMap", albedo);
 			m.SetTextureScale("_BaseMap", new Vector2(scale, scale));
 			m.SetColor("_BaseColor", Color.white);
-			m.SetTexture("_BumpMap", normal);
+			SetSurfaceMap(c, m, "_BumpMap", normal);
 			m.SetFloat("_BumpScale", 1f);
 			m.EnableKeyword("_NORMALMAP");
 			// The surface mask is R metallic, G occlusion, B height, A smoothness: URP Lit's metallic-gloss (R, A) and occlusion (G).
-			m.SetTexture("_MetallicGlossMap", mask);
+			SetSurfaceMap(c, m, "_MetallicGlossMap", mask);
 			m.EnableKeyword("_METALLICSPECGLOSSMAP");
-			m.SetTexture("_OcclusionMap", mask);
+			SetSurfaceMap(c, m, "_OcclusionMap", mask);
 			m.SetFloat("_OcclusionStrength", 1f);
 			m.EnableKeyword("_OCCLUSIONMAP");
 			m.SetFloat("_Smoothness", 1f);
@@ -166,9 +182,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// faint emission of the albedo for the light ice scatters back. Clear coat needs Complex Lit
 		/// and is left out.
 		/// </summary>
-		private static void IceLit(Material m, IceMaterialProposal p, Texture2D albedo, Texture2D normal, Texture2D mask)
+		private static void IceLit(Context c, Material m, IceMaterialProposal p, string albedo, string normal, string mask)
 		{
-			m.SetTexture("_BaseMap", albedo);
+			SetSurfaceMap(c, m, "_BaseMap", albedo);
 			m.SetColor("_BaseColor", Color.white);
 			m.SetFloat("_WorkflowMode", 0f);
 			m.EnableKeyword("_SPECULAR_SETUP");
@@ -176,15 +192,15 @@ namespace FishMMO.Shared.WorldDesign
 			m.SetFloat("_Smoothness", p.Smoothness);
 			m.SetFloat("_SmoothnessTextureChannel", 1f);
 			m.EnableKeyword("_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A");
-			m.SetTexture("_BumpMap", normal);
+			SetSurfaceMap(c, m, "_BumpMap", normal);
 			m.SetFloat("_BumpScale", 1f);
 			m.EnableKeyword("_NORMALMAP");
-			m.SetTexture("_OcclusionMap", mask);
+			SetSurfaceMap(c, m, "_OcclusionMap", mask);
 			m.SetFloat("_OcclusionStrength", 1f);
 			m.EnableKeyword("_OCCLUSIONMAP");
 			if (p.EmissionShare > 0f)
 			{
-				m.SetTexture("_EmissionMap", albedo);
+				SetSurfaceMap(c, m, "_EmissionMap", albedo);
 				m.SetColor("_EmissionColor", new Color(p.EmissionShare, p.EmissionShare, p.EmissionShare, 1f));
 				m.EnableKeyword("_EMISSION");
 				m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;

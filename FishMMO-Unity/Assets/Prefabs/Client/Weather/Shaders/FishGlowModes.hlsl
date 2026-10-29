@@ -17,8 +17,11 @@
 //   A.xz, B.xz) + _FishGlowLineData[64] (along at A + the line's phase, along span to B, cos 2b, sin 2b), which a TRAIL creeps along
 //   and a KNEADING reads the bearing of; _FishGlowVents[16] (a fountain vent: x, z, its seed's high half + 65536·its schedule, its
 //   seed's low half), whose episodes an EPISODE plays; _FishGlowAnchors[32] (x, z, radius, row: a site or a light by a biome edge,
-//   everything inside reads that row, so a light and its stone agree); _FishGlowPlaceInfo = (lines, vents, anchors, 0). With none
+//   everything inside reads that row, so a light and its stone agree); _FishGlowPlaceInfo = (lines, vents, anchors, caves). With none
 //   stored: a fixed bearing, a smooth field, a 500 m cell and the grid's own row, as before.
+// The linked caves (2026-10-26, I2n-c, decision 86 (h); SceneGlowCaves.cs): _FishGlowCaves[32], two a cave: (min x, min z, max x,
+//   max z) and (min y, max y, row, 0), the box of a cave's air whose inside is an interior biome and that biome's row: a glow whose
+//   origin is in it reads that row before any anchor or the grid, so a cave's crystals and glow-worms move by the interior's mode.
 //
 // Only the indirect twin's pass includes it (FishWeatherLitIndirect.shader, FXC on purpose); needs FishFlora.hlsl (the flora grid),
 // FishWeather.hlsl (the clock) and FishStructureWeathering.hlsl (_FishGlowLights, the pulse and the flicker) first. Loads only, no sampler.
@@ -34,6 +37,7 @@ float4 _FishGlowLines[64];
 float4 _FishGlowLineData[64];
 float4 _FishGlowVents[16];
 float4 _FishGlowAnchors[32];
+float4 _FishGlowCaves[32];
 float4 _FishGlowPlaceInfo;
 float4 _FishGlowSkyA;
 float4 _FishGlowSkyB;
@@ -77,6 +81,23 @@ uint FishGlowAnchoredRow(float2 xz, uint row)
         if (dot(d, d) <= a.z * a.z)
         {
             return (uint)round(a.w);
+        }
+    }
+    return row;
+}
+
+/// <summary>The row a glow inside a linked cave reads (SceneGlowCaves.RowAt): the first cave box holding its origin, else the row given.</summary>
+uint FishGlowCaveRow(float3 originWS, uint row)
+{
+    int count = (int)_FishGlowPlaceInfo.w;
+    [loop]
+    for (int i = 0; i < count; i++)
+    {
+        float4 a = _FishGlowCaves[2 * i];
+        float4 b = _FishGlowCaves[2 * i + 1];
+        if (originWS.x >= a.x && originWS.x <= a.z && originWS.z >= a.y && originWS.z <= a.w && originWS.y >= b.x && originWS.y <= b.y)
+        {
+            return (uint)round(b.z);
         }
     }
     return row;
@@ -458,6 +479,7 @@ bool FishGlowEntryAt(float3 originWS, int source, out float4 entry, out float4 s
         return false;
     }
     uint row = min(FishGlowAnchoredRow(originWS.xz, FishGlowRowAt(originWS.xz)), 63u);
+    row = min(FishGlowCaveRow(originWS, row), 63u);
     float4 rowEntry = _FishGlowRows[row];
     float packed = source == 0 ? rowEntry.x : rowEntry.y;
     if (packed < 0.5)

@@ -14,7 +14,7 @@ namespace FishMMO.UnitTests.Weather
 {
 	/// <summary>
 	/// The weather and clock broadcasts through the serializer FishNet actually uses, and the web
-	/// player's graphics API order.
+	/// player's graphics API.
 	/// </summary>
 	/// <remarks>
 	/// Every field the server fills must arrive: a storm cell missing its death tick lives forever
@@ -212,13 +212,15 @@ namespace FishMMO.UnitTests.Weather
 		}
 
 		[Test]
-		public void TheWebPlayerPrefersWebGPU()
+		public void TheWebPlayerIsWebGPUOnly()
 		{
+			// The web player is WebGPU only (2026-10-26): no WebGL 2 fallback. A browser without
+			// WebGPU is not a supported client, so the build carries no GLES 3 player for it.
 			GraphicsDeviceType[] apis = PlayerSettings.GetGraphicsAPIs(BuildTarget.WebGL);
 			LogAssert.IsFalse(PlayerSettings.GetUseDefaultGraphicsAPIs(BuildTarget.WebGL), "the list is explicit, not automatic");
-			LogAssert.IsTrue(apis.Length >= 2, "WebGL 2 stays as the fallback for browsers without WebGPU");
+			LogAssert.AreEqual(1, apis.Length, $"WebGPU is the web player's only graphics API: {string.Join(", ", apis)}");
 			LogAssert.AreEqual(GraphicsDeviceType.WebGPU, apis[0]);
-			LogAssert.IsTrue(System.Array.IndexOf(apis, GraphicsDeviceType.OpenGLES3) > 0, "WebGL 2 is the fallback");
+			LogAssert.IsTrue(System.Array.IndexOf(apis, GraphicsDeviceType.OpenGLES3) < 0, "no WebGL 2 fallback");
 		}
 	}
 }

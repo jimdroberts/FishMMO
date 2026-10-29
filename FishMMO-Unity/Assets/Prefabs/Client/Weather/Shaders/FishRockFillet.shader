@@ -19,7 +19,12 @@ Shader "FishMMO/Rock Fillet"
         [HideInInspector] _FishWeatherAmount("Weather on this surface", Range(0.0, 1.0)) = 1.0
         [HideInInspector] _FishVisible("Visible", Range(0.0, 1.0)) = 1.0
         _FishMoss("Moss on this surface", Range(0.0, 1.0)) = 0.0
-        [HideInInspector] _FishFilletMaps("Maps in use (metallic-gloss, occlusion, normal)", Vector) = (0, 0, 0, 0)
+        // FishMMO edit (2026-10-28): a rock whose maps are look array slices (ProceduralArtLookArrays; FishRockFilletPass.hlsl).
+        [HideInInspector][NoScaleOffset] _FishLookColour("Look albedo and emission", 2DArray) = "" {}
+        [HideInInspector][NoScaleOffset] _FishLookNormal("Look normals", 2DArray) = "" {}
+        [HideInInspector][NoScaleOffset] _FishLookMask("Look gloss and occlusion", 2DArray) = "" {}
+        [HideInInspector] _FishLookSlices("Look slices (albedo, normal, gloss, occlusion)", Vector) = (-1, -1, -1, -1)
+        [HideInInspector] _FishFilletMaps("Maps in use (metallic-gloss, occlusion, normal; w the look arrays)", Vector) = (0, 0, 0, 0)
         [HideInInspector] _FishContactOn("Contact blend", Float) = 1.0
         [Enum(UnityEngine.Rendering.CullMode)] _Cull("Cull", Float) = 2.0
     }

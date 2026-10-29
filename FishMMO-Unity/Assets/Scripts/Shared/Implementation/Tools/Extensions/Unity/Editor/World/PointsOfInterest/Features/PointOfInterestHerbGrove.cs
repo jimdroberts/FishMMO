@@ -430,8 +430,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// Until 2026-10-16 (I3b) every site took the tile's first prototype of the plant, whichever biome's it was: a grove's
 		/// flowers on a tile a neighbouring meadow's rule also grew were drawn with the meadow's look, and two sites of
 		/// different biomes on one tile shared the first one's. Limits: each added prototype is one more detail layer on the
-		/// tile; a blade plant's own look is one more grass type in the scene (GrassTypeTable, 32: past them a look merges into
-		/// the plant's first) and one more channel on the tile (GrassTerrain.MaxChannels, 16: past them it adds into its plant's
+		/// tile; a blade plant's own look is one more grass type in the scene (GrassTypeTable, 128: past them a look merges into
+		/// the plant's first) and one more channel on the tile (GrassTerrain.MaxChannels, 64: past them it adds into its plant's
 		/// channel), each with a warning; the GPU detail scatter keeps a channel per plant, so its prototypes sum into the
 		/// plant's one. The bake (TerrainDetailBaker) chooses with the same selection as play, so it matches.
 		/// </remarks>
@@ -457,6 +457,13 @@ namespace FishMMO.Shared.WorldDesign
 			if (reuse >= 0)
 			{
 				return new PlantLayers { Own = reuse, Base = first >= 0 ? first : reuse };
+			}
+			if (prototypes.Length >= TerrainDetailLayerBudget.MaxLayers)
+			{
+				/* Unity keeps a detail layer's index in a byte: a layer added past the last would be written into another plant's
+				 * (TerrainDetailLayerBudget). The site paints the tile's own prototype of the plant where it has one, else nothing. */
+				UnityEngine.Debug.LogError($"[Points of interest] ERROR: '{terrain.name}' already holds {prototypes.Length} detail prototypes (Unity's most per terrain): a site's own '{prefab.name}' is not added{(first >= 0 ? "; it paints the tile's first of the plant" : " and is not painted")}.");
+				return first >= 0 ? new PlantLayers { Own = first, Base = first } : PlantLayers.None;
 			}
 			DetailPrototype added = first >= 0 ? new DetailPrototype(prototypes[first]) : fresh(prototypes, prefab);
 			if (added == null)

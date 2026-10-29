@@ -124,6 +124,14 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			SetQualityPipelines(qualityPipelines);
 		}
 
+		private bool IsRestored()
+		{
+			if (!ReferenceEquals(GraphicsSettings.defaultRenderPipeline, defaultPipeline)) return false;
+			for (int index = 0; index < qualityPipelines.Length; index++)
+				if (!ReferenceEquals(QualitySettings.GetRenderPipelineAssetAt(index), qualityPipelines[index])) return false;
+			return true;
+		}
+
 		public void Dispose()
 		{
 			if (disposed) return;
@@ -133,6 +141,9 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				Restore();
 				// SaveAssets may have persisted the temporary null settings during SBP.
 				AssetDatabase.SaveAssets();
+				// Saving writes the settings files and re-imports them. A pipeline that is not an asset on
+				// disk cannot be written, so it reads back as none: put it back in memory too.
+				if (!IsRestored()) Restore();
 				if (ownsRecovery) File.Delete(RecoveryPath);
 			}
 			finally { activeScopes--; }

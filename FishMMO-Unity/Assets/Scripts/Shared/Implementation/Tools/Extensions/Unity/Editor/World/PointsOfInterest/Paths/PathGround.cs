@@ -78,7 +78,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		public PathExclusion(IReadOnlyList<ScenePath> paths)
 		{
-			index = new PathSegmentIndex(paths, p => p.MaxHalfWidth + ScenePathStyle.For(p.Class).Clearance);
+			index = new PathSegmentIndex(paths, p => p.MaxHalfWidth + ScenePathStyle.Of(p).Clearance);
 		}
 
 		/// <summary>True where nothing that stands (trees, rocks, cliffs) may be placed.</summary>
@@ -92,7 +92,7 @@ namespace FishMMO.Shared.WorldDesign
 			foreach ((int path, int point) in near)
 			{
 				float d = index.Distance(path, point, x, z, out float t);
-				if (d < index.HalfWidthAt(path, point, t) + ScenePathStyle.For(index.Paths[path].Class).Clearance)
+				if (d < index.HalfWidthAt(path, point, t) + ScenePathStyle.Of(index.Paths[path]).Clearance)
 				{
 					return true;
 				}
@@ -153,7 +153,8 @@ namespace FishMMO.Shared.WorldDesign
 			for (int p = 0; p < paths.Count; p++)
 			{
 				ScenePath path = paths[p];
-				ScenePathStyle style = ScenePathStyle.For(path.Class);
+				// Its class's numbers in its form (a straight road's, raised or cut, 2026-10-26; a routed way's exactly its class's).
+				ScenePathStyle style = ScenePathStyle.Of(path);
 				int n = path.Count;
 				var natural = new float[n];
 				for (int i = 0; i < n; i++)
@@ -184,9 +185,43 @@ namespace FishMMO.Shared.WorldDesign
 					float even = weight > 0f ? sum / weight : natural[i];
 					target[i] = Mathf.Clamp(even, natural[i] - style.MaxCut, natural[i] + style.MaxCut) - style.Dip;
 				}
+				// A straight road's stairs (2026-10-26, I2l-b) are one even flight from the level at their foot to the level at their top.
+				Stairs(path, target);
 				targets[p] = target;
 			}
 			return targets;
+		}
+
+		/// <summary>
+		/// Lays each run of a way's points flagged <see cref="ScenePathPointFlags.Stairs"/> as one straight flight between the levels the
+		/// carve gave the points either side of it (pure). A way with no stairs is left as it is.
+		/// </summary>
+		public static void Stairs(ScenePath path, float[] target)
+		{
+			int n = path != null ? Mathf.Min(path.Count, target.Length) : 0;
+			int i = 0;
+			while (i < n)
+			{
+				if ((path.FlagsAt(i) & ScenePathPointFlags.Stairs) == 0)
+				{
+					i++;
+					continue;
+				}
+				int first = i;
+				while (i < n && (path.FlagsAt(i) & ScenePathPointFlags.Stairs) != 0)
+				{
+					i++;
+				}
+				int a = Mathf.Max(0, first - 1), b = Mathf.Min(n - 1, i);
+				if (b <= a)
+				{
+					continue;
+				}
+				for (int k = a + 1; k < b; k++)
+				{
+					target[k] = Mathf.Lerp(target[a], target[b], (k - a) / (float)(b - a));
+				}
+			}
 		}
 
 		/// <summary>
@@ -211,7 +246,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					continue;
 				}
-				ScenePathStyle style = ScenePathStyle.For(way.Class);
+				ScenePathStyle style = ScenePathStyle.Of(way);
 				float d = index.Distance(path, point, x, z, out float t);
 				float half = index.HalfWidthAt(path, point, t);
 				if (d >= half + style.Shoulder)
@@ -243,11 +278,11 @@ namespace FishMMO.Shared.WorldDesign
 				return 0;
 			}
 			float[][] targets = Targets(paths, ground, wet);
-			var index = new PathSegmentIndex(paths, p => p.MaxHalfWidth + ScenePathStyle.For(p.Class).Shoulder);
+			var index = new PathSegmentIndex(paths, p => p.MaxHalfWidth + ScenePathStyle.Of(p).Shoulder);
 			float minX = float.PositiveInfinity, minZ = float.PositiveInfinity, maxX = float.NegativeInfinity, maxZ = float.NegativeInfinity;
 			foreach (ScenePath path in paths)
 			{
-				float r = path.MaxHalfWidth + ScenePathStyle.For(path.Class).Shoulder;
+				float r = path.MaxHalfWidth + ScenePathStyle.Of(path).Shoulder;
 				foreach (Vector3 p in path.Points)
 				{
 					minX = Mathf.Min(minX, p.x - r);

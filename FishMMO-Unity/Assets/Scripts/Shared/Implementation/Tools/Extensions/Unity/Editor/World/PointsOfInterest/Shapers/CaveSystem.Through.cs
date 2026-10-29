@@ -93,17 +93,25 @@ namespace FishMMO.Shared.WorldDesign
 		/// The middle alone let a link run along a steep hillside's contour with metres over its middle and its downhill wall out
 		/// of the ground (2026-10-26, Moron 2: 3–5 m over the middle, the downhill side 2 m out under a 60° face): the shell
 		/// stops a skin under the ground, so the cave lay open to the sky there.
+		/// And over the node's rounded end ahead of it, straight on and both ways between that and its sides: the bore is a chain
+		/// of rounded ends, so where the way bends the end's outer shoulder stands past both sides (on the outside of the bend,
+		/// metres from either side's sample); a bend under a steeper face broke out there with every side covered.
 		/// </summary>
 		private static float BoreCover(Func<Vector3, float> groundAt, Vector3 n, float radius, float flat, float amp, Vector3 previous)
 		{
 			float top = n.y + radius * flat + amp;
 			var run = new Vector3(n.x - previous.x, 0f, n.z - previous.z);
-			Vector3 side = run.sqrMagnitude > 1e-8f ? new Vector3(run.z, 0f, -run.x).normalized * (0.9f * radius) : Vector3.zero;
+			Vector3 ahead = run.sqrMagnitude > 1e-8f ? run.normalized * (0.9f * radius) : Vector3.zero;
+			var side = new Vector3(ahead.z, 0f, -ahead.x);
 			Vector3 mid = 0.5f * (n + previous);
 			float cover = Mathf.Min(groundAt(n), groundAt(mid)) - top;
 			cover = Mathf.Min(cover, Mathf.Min(groundAt(n + side), groundAt(n - side)) - top);
 			// And either side half way back: a face falling across the way between two nodes.
-			return Mathf.Min(cover, Mathf.Min(groundAt(mid + side), groundAt(mid - side)) - top);
+			cover = Mathf.Min(cover, Mathf.Min(groundAt(mid + side), groundAt(mid - side)) - top);
+			// Its rounded end: straight on, and its two shoulders half way round from there to the sides.
+			Vector3 shoulder = 0.70710678f * ahead, across = 0.70710678f * side;
+			cover = Mathf.Min(cover, groundAt(n + ahead) - top);
+			return Mathf.Min(cover, Mathf.Min(groundAt(n + shoulder + across), groundAt(n + shoulder - across)) - top);
 		}
 
 		/// <summary>

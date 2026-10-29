@@ -184,7 +184,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// shares its ground out to the bit as the old path does, everywhere, and its override is painted nowhere.
 		/// </summary>
 		[Test]
-		public void TheClimatesPath_WithNothingBanded_MatchesTheOldWeightsWithinFloatPrecision()
+		public void TheClimatesPath_WithNothingBanded_IsTheOldPathToTheBit()
 		{
 			SceneBiomeField field = TwoBiomes();
 			SceneTerrainPalette plain = SceneTerrainPalette.FromEntries(2, 7, Plain());
@@ -212,7 +212,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				b.Weigh(x, y, z, slope, wb, climate);
 				for (int l = 0; l < 7; l++)
 				{
-					Assert.That(wb[l], Is.EqualTo(wa[l]).Within(2e-7f), $"layer {l} at ({x}, {y}, {z}) slope {slope} climate {climate}");
+					Assert.That(wb[l], Is.EqualTo(wa[l]), $"layer {l} at ({x}, {y}, {z}) slope {slope} climate {climate}");
 				}
 				Assert.That(wb[6], Is.EqualTo(0f));
 			}
@@ -447,6 +447,11 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeArtSpec.Entries.Length, Is.EqualTo(83));
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
+				// An authored round sets bands, variants and the text columns on purpose (BiomeAuthoredRoundTests pins what it gave).
+				if (BiomeAuthoredRounds.Contains(entry.Biome))
+				{
+					continue;
+				}
 				Assert.That(entry.Main == null || !entry.Main.HasClimateBand, Is.True, entry.Biome);
 				foreach (BiomeArtSpec.Layer detail in entry.Details)
 				{
@@ -564,7 +569,8 @@ namespace FishMMO.UnitTests.WorldDesign
 			string painter = Code(WorldFolder + "/Terrain/BiomeSplatPainter.cs");
 			Assert.That(painter, Does.Contain("bool climatic = options.ClimateAt != null && palette.NeedsClimate;"));
 			Assert.That(painter, Does.Contain("TerrainClimateGrid climate = climatic"));
-			Assert.That(painter, Does.Contain("ShareInClimate(slots, biomeWeight * ground,"));
+			Assert.That(painter, Does.Contain("float groundShare = (float)(biomeWeight * ground);"), "one rounded ground share for both paths");
+			Assert.That(painter, Does.Contain("ShareInClimate(slots, groundShare,"));
 
 			string authoring = Code(WorldFolder + "/ProceduralArt/BiomeArtAuthoring.cs");
 			foreach (string call in new[]

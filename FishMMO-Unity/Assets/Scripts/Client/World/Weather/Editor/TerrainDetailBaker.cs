@@ -113,6 +113,9 @@ namespace FishMMO.Client
 			var prototypes = new List<int>();
 			var chosenGrass = new List<GrassType>();
 			var chosenScatter = new List<DetailScatterType>();
+			// Every detail kind the GPU renderers cannot draw, or that a cap leaves out (2026-10-27: GPU only, there is no CPU
+			// path): the cut reports them as errors, never a quiet fallback.
+			var problems = new List<string>();
 			int grassTerrains = 0, scatterTerrains = 0, indexTerrains = 0;
 			bool wasInline = TerrainBuildQueue.Inline;
 			TerrainBuildQueue.Inline = true;
@@ -129,11 +132,12 @@ namespace FishMMO.Client
 					ushort[] heights = null;
 					indexTerrains += StoreIndex(terrain, tile.Index) ? 1 : 0;
 
-					GrassBladeSystem.SelectBlades(terrain, grassSettings, grassTypes, grassKeys, warned, prototypes, chosenGrass);
+					GrassBladeSystem.SelectBlades(terrain, grassSettings, grassTypes, grassKeys, warned, prototypes, chosenGrass, problems);
 					GrassTerrain.Builder grass = prototypes.Count > 0 ? GrassTerrain.Begin(terrain, prototypes, chosenGrass) : null;
 					if (grass != null)
 					{
 						grass.Capture = true;
+						problems.AddRange(grass.Overflow);
 						if (Run(grass.Step) && grass.Captured != null)
 						{
 							tile.Grass = grass.Captured;
@@ -144,12 +148,16 @@ namespace FishMMO.Client
 					}
 
 					DetailScatterSystem.SelectScattered(data, terrain.gameObject.layer, scatterSettings, grassSettings, scatterTypes, scatterByPrefab, warned,
-						prototypes, chosenScatter);
+						prototypes, chosenScatter, problems);
 					DetailScatterTerrain.Builder scatter = prototypes.Count > 0
 						? DetailScatterTerrain.Begin(terrain, prototypes, chosenScatter, TerrainDetailInstancing.DensityScaleOf(terrain)) : null;
 					if (scatter != null)
 					{
 						scatter.Capture = true;
+						foreach (string over in scatter.Overflow)
+						{
+							problems.Add($"[Detail scatter] '{terrain.name}' paints more than {DetailScatterMath.MaxChannels} scattered types: '{over}' is not drawn there.");
+						}
 						if (Run(scatter.Step) && scatter.Captured != null)
 						{
 							tile.Scatter = scatter.Captured;
@@ -165,6 +173,7 @@ namespace FishMMO.Client
 						bake.Tiles.Add(tile);
 					}
 				}
+				ReportProblems(scene, problems, notes);
 				int albedos = BakeAlbedos(scene, path, bake);
 				bool ground = BakeGround(scene, path, terrains, bake);
 				bake = ScenePropBaker.Store(bake, path);
@@ -186,6 +195,41 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// The cut's errors for detail kinds no GPU renderer draws (unrouted, refused, or past a cap): one note naming each
+		/// distinct problem (the first <see cref="MaxProblemNotes"/>), and one error in the log. Nothing when every painted kind
+		/// is drawn.
+		/// </summary>
+		public static void ReportProblems(Scene scene, List<string> problems, List<string> notes)
+		{
+			var distinct = new List<string>();
+			foreach (string problem in problems)
+			{
+				if (!distinct.Contains(problem))
+				{
+					distinct.Add(problem);
+				}
+			}
+			if (distinct.Count == 0)
+			{
+				return;
+			}
+			string head = $"ERROR: {distinct.Count} terrain detail problem(s) in '{scene.name}' (GPU only: these kinds are not drawn or not drawn as authored)";
+			notes?.Add(head + ":");
+			for (int i = 0; i < distinct.Count && i < MaxProblemNotes; i++)
+			{
+				notes?.Add("  " + distinct[i]);
+			}
+			if (distinct.Count > MaxProblemNotes)
+			{
+				notes?.Add($"  … and {distinct.Count - MaxProblemNotes} more (the log has each).");
+			}
+			Debug.LogError($"[Terrain details] {head}. First: {distinct[0]}");
+		}
+
+		/// <summary>The most detail problems a cut's notes list one by one.</summary>
+		public const int MaxProblemNotes = 20;
+
+		/// <summary>
 		/// Stores an array-drawn terrain's index map in <paramref name="index"/>: the CPU bake of its alphamaps as they are now
 		/// (read once, whole). False, and <paramref name="index"/> left empty, for a terrain on another material or without
 		/// layers.
@@ -199,7 +243,8 @@ namespace FishMMO.Client
 				return false;
 			}
 			int res = data.alphamapResolution;
-			index.Map = TerrainIndexMap.Bake(data.GetAlphamaps(0, 0, res, res));
+			// In scene layers: a tile carrying only the layers it paints (TerrainTileLayers) is renamed as the GPU bake renames it.
+			index.Map = TerrainTileLayerMap.Bake(data.GetAlphamaps(0, 0, res, res), TerrainTileLayers.Of(terrain));
 			index.Resolution = res;
 			index.Layers = data.alphamapLayers;
 			index.Stale = false;
@@ -380,7 +425,7 @@ namespace FishMMO.Client
 				TerrainDetailBake.Grass g = t.Grass;
 				n += g.Density.Length + g.Occupied.Length + g.Sward.Length + g.Freeboard.Length + g.Surface.Length + 4L * (g.MinHeights.Length + g.MaxHeights.Length);
 				TerrainDetailBake.Scatter s = t.Scatter;
-				n += 2L * (s.Slice0.Length + s.Slice1.Length) + s.Holes.Length + 4L * (s.ItemBounds.Length + s.ItemMin.Length + s.ItemMax.Length);
+				n += 4L * (s.Entries.Length + s.ItemEntryStart.Length + s.ItemMin.Length + s.ItemMax.Length) + 2L * s.BlockStarts.Length + s.Holes.Length;
 				n += t.Index != null && t.Index.Map != null ? 4L * t.Index.Map.Length : 0L;
 			}
 			foreach (TerrainDetailBake.Albedo a in bake.Albedos)

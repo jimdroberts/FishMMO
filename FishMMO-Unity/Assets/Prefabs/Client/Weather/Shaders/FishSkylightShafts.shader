@@ -57,8 +57,11 @@ Shader "FishMMO/World/Cave Skylight Shafts"
             // z how strongly its motes show, w a phase of its own.
             float4 _SkylightFloors[SLOTS];
             // x the shaft's air: how much light a metre of it scatters toward the eye; y the shaft's brightness; z the motes';
-            // w how far the motes are drawn from the eye (m).
+            // w how far the motes are drawn from the eye (m). The material's own (CaveSkylights), so the draw stays in the SRP
+            // Batcher; the arrays above are globals the system sets before each camera renders.
+            CBUFFER_START(UnityPerMaterial)
             float4 _SkylightAir;
+            CBUFFER_END
 
             struct Attributes
             {

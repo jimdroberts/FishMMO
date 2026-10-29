@@ -28,6 +28,8 @@ namespace FishMMO.Client
 		public const string SiteFlamesShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishSiteFlames.shader";
 		public const string LighthouseBeamsShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishLighthouseBeams.shader";
 		public const string CaveDripsShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishCaveDrips.shader";
+		public const string CaveWaterLifeShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishCaveWaterLife.shader";
+		public const string SeaHallVentsShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishSeaHallVents.shader";
 		public const string RockfallStonesShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishRockfallStones.shader";
 		public const string RockfallMarksShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishRockfallMarks.shader";
 		public const string CaveSkylightShaftsShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishSkylightShafts.shader";
@@ -204,6 +206,9 @@ namespace FishMMO.Client
 			if (profile.LighthouseBeamsShader == null) profile.LighthouseBeamsShader = AssetDatabase.LoadAssetAtPath<Shader>(LighthouseBeamsShaderPath);
 			// The caves' drips (2026-10-20): same rule.
 			if (profile.CaveDripsShader == null) profile.CaveDripsShader = AssetDatabase.LoadAssetAtPath<Shader>(CaveDripsShaderPath);
+			// The caves' still water's beads and leeches (2026-10-26): same rule.
+			if (profile.CaveWaterLifeShader == null) profile.CaveWaterLifeShader = AssetDatabase.LoadAssetAtPath<Shader>(CaveWaterLifeShaderPath);
+			if (profile.SeaHallVentsShader == null) profile.SeaHallVentsShader = AssetDatabase.LoadAssetAtPath<Shader>(SeaHallVentsShaderPath);
 			if (profile.RockfallStonesShader == null) profile.RockfallStonesShader = AssetDatabase.LoadAssetAtPath<Shader>(RockfallStonesShaderPath);
 			if (profile.RockfallMarksShader == null) profile.RockfallMarksShader = AssetDatabase.LoadAssetAtPath<Shader>(RockfallMarksShaderPath);
 			// The daylight's shafts under the caves' skylights (2026-10-20): same rule.
@@ -221,6 +226,9 @@ namespace FishMMO.Client
 			// The rock seam fillets (2026-10-21): their compute and shader, same rule.
 			if (profile.RockFilletsCompute == null) profile.RockFilletsCompute = AssetDatabase.LoadAssetAtPath<ComputeShader>(RockFillets.ComputeAssetPath);
 			if (profile.RockFilletShader == null) profile.RockFilletShader = AssetDatabase.LoadAssetAtPath<Shader>(RockFillets.ShaderAssetPath);
+			// The client's own terrain heightmap draw (2026-10-28): its compute and shader, same rule.
+			if (profile.TerrainHeightmapCompute == null) profile.TerrainHeightmapCompute = AssetDatabase.LoadAssetAtPath<ComputeShader>(TerrainHeightmapSystem.ComputeAssetPath);
+			if (profile.TerrainHeightmapShader == null) profile.TerrainHeightmapShader = AssetDatabase.LoadAssetAtPath<Shader>(TerrainHeightmapSystem.ShaderAssetPath);
 			EditorUtility.SetDirty(profile);
 			WorldEditorAssets.RegisterAddressable(profile, WorldEditorAssets.ClientStaticGroup);
 			AssetDatabase.SaveAssets();

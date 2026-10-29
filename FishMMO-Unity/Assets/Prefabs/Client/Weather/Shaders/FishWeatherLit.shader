@@ -112,6 +112,18 @@ Shader "FishMMO/Weather Lit"
         [HideInInspector][NoScaleOffset]unity_Lightmaps("unity_Lightmaps", 2DArray) = "" {}
         [HideInInspector][NoScaleOffset]unity_LightmapsInd("unity_LightmapsInd", 2DArray) = "" {}
         [HideInInspector][NoScaleOffset]unity_ShadowMasks("unity_ShadowMasks", 2DArray) = "" {}
+
+        // FishMMO edit (2026-10-28): look arrays (_FISH_LOOK_ARRAY, FishWeatherLitInput.hlsl). The art generator writes a surface
+        // family's maps as Texture2DArray assets (ProceduralArtLookArrays) and its materials name their slices here instead of 2D
+        // maps (−1: the slot is empty); a GPU-driven look family's material (_FISH_LOOK_TABLE, TerrainGpuRenderer.Looks.cs) reads
+        // its members' slices and scalars from the table instead, at the row its vertex (or, DOTS-instanced, its instance) names.
+        [HideInInspector][NoScaleOffset] _FishLookColour("Look albedo and emission", 2DArray) = "" {}
+        [HideInInspector][NoScaleOffset] _FishLookNormal("Look normals", 2DArray) = "" {}
+        [HideInInspector][NoScaleOffset] _FishLookMask("Look gloss and occlusion", 2DArray) = "" {}
+        [HideInInspector] _FishLookSlices("Look slices (albedo, normal, gloss, occlusion)", Vector) = (-1, -1, -1, -1)
+        [HideInInspector] _FishLookEmissionSlice("Look emission slice", Float) = -1
+        [HideInInspector] _FishLook("Look row (family table)", Float) = -1
+        [HideInInspector][NoScaleOffset] _FishLookTable("Look table", 2D) = "black" {}
     }
 
     SubShader
@@ -174,6 +186,13 @@ Shader "FishMMO/Weather Lit"
             #pragma shader_feature_local_fragment _SPECULAR_SETUP
             // FishMMO edit: a cave's rock dressed by its habitat (FishCaveRock.hlsl; the plain shader's cave rock materials only).
             #pragma shader_feature_local _FISH_CAVE_ROCK
+            // FishMMO edit (2026-10-28): the generated surface families' maps from their look arrays, at the material's own slices
+            // (_FISH_LOOK_ARRAY, ProceduralArtLookArrays); and a GPU-driven look family's draws (_FISH_LOOK_TABLE,
+            // TerrainGpuRenderer.Looks.cs): slices and scalars from the family's table, the look per vertex (uv3.x) or per DOTS
+            // instance (_FishLook). The table is ForwardLit's only: a family is opaque and unclipped, so its depth, shadow and
+            // motion passes sample nothing. Both shaders declare both (IndirectShaderTests); only the twin's family clones enable the table.
+            #pragma shader_feature_local _FISH_LOOK_ARRAY
+            #pragma shader_feature_local _FISH_LOOK_TABLE
 
             // -------------------------------------
             // Universal Pipeline keywords
@@ -320,6 +339,8 @@ Shader "FishMMO/Weather Lit"
             #pragma shader_feature_local_fragment _ENVIRONMENTREFLECTIONS_OFF
             #pragma shader_feature_local_fragment _SPECULAR_SETUP
             #pragma shader_feature_local _RECEIVE_SHADOWS_OFF
+            // FishMMO edit (2026-10-28): the material's maps from its look arrays (FishWeatherLitInput.hlsl).
+            #pragma shader_feature_local_fragment _FISH_LOOK_ARRAY
 
             // -------------------------------------
             // Universal Pipeline keywords
@@ -444,6 +465,8 @@ Shader "FishMMO/Weather Lit"
             #pragma shader_feature_local _PARALLAXMAP
             #pragma shader_feature_local _ _DETAIL_MULX2 _DETAIL_SCALED
             #pragma shader_feature_local _ALPHATEST_ON
+            // FishMMO edit (2026-10-28): the material's normal map from its look array (FishWeatherLitInput.hlsl).
+            #pragma shader_feature_local_fragment _FISH_LOOK_ARRAY
             #pragma shader_feature_local_fragment _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
 
             // -------------------------------------
@@ -500,6 +523,8 @@ Shader "FishMMO/Weather Lit"
             #pragma shader_feature_local_fragment _ _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
             #pragma shader_feature_local _ _DETAIL_MULX2 _DETAIL_SCALED
             #pragma shader_feature_local_fragment _SPECGLOSSMAP
+            // FishMMO edit (2026-10-28): the material's maps from its look arrays (FishWeatherLitInput.hlsl).
+            #pragma shader_feature_local_fragment _FISH_LOOK_ARRAY
             #pragma shader_feature EDITOR_VISUALIZATION
 
             // -------------------------------------

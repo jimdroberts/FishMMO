@@ -25,6 +25,11 @@ namespace FishMMO.Shared.Biomes
 		Channel = 4,
 		/// <summary>A clearance row: the stones picked off a field heaped along its edge (clapas, consumption dykes).</summary>
 		ClearanceRow = 5,
+		/// <summary>
+		/// Markers (2026-10-26, phase I2f-b): single posts, wands or cairns set one by one along a way at a spacing (a wand line over
+		/// the ice, serge posts, tamga poles, a cairn line, ahu on the lava trails), each a piece of its own, never joined.
+		/// </summary>
+		Markers = 6,
 	}
 
 	/// <summary>
@@ -40,6 +45,8 @@ namespace FishMMO.Shared.Biomes
 		Clipped = 1,
 		/// <summary>Grown out: tall, shaggy and gapped, standard trees left to grow up through it.</summary>
 		Wild = 2,
+		/// <summary>A dead hedge (2026-10-26, I2f-b): the old thorn standing dead and silver, gapped, its hollow pollards along it.</summary>
+		Dead = 3,
 
 		// ── Walls ──
 		/// <summary>Drystone: two faces of unmortared field or quarry stone, hearted with rubble, through-stones, a coping of stones on edge.</summary>
@@ -50,6 +57,13 @@ namespace FishMMO.Shared.Biomes
 		EarthBank = 12,
 		/// <summary>Slabs of stone set upright on edge side by side (the Alpine Plattenzaun, the Caithness flagstone fence).</summary>
 		UprightSlabs = 13,
+		/// <summary>
+		/// A long barrier wall of fired brick (2026-10-26, I2f-b): 2–5 m, an outer ditch, square brick forts along it, broken through
+		/// every 40–200 m; one to a scene (<see cref="BiomeLinearPlace.Frontier"/>).
+		/// </summary>
+		BrickBarrier = 14,
+		/// <summary>Blocks of wind-packed snow cut and stacked in a curved wall, 1.5–2 m, on a camp's windward side (2026-10-26, I2f-b).</summary>
+		SnowWall = 15,
 
 		// ── Fences ──
 		/// <summary>Posts and two or three rails (the structure kit's field fence).</summary>
@@ -64,6 +78,15 @@ namespace FishMMO.Shared.Biomes
 		Slab = 24,
 		/// <summary>Sharpened logs on rails (the structure kit's palisade).</summary>
 		Palisade = 25,
+		/// <summary>
+		/// A hand rope (2026-10-26, I2f-b): iron-shod stakes every few metres carrying a sagging hemp rope up a steep way, laid only where
+		/// the ground climbs steeper than <see cref="BiomeLinearFeatures.MinSlopeOf"/>.
+		/// </summary>
+		HandRope = 26,
+		/// <summary>A screen of palm ribs (jarid) set upright close on a palm-trunk rail, holding the sand off a garden (2026-10-26, I2f-b).</summary>
+		PalmRib = 27,
+		/// <summary>A windbreak of cut fir boughs laid against stakes and a rail, 1.2–1.8 m (2026-10-26, I2f-b).</summary>
+		BoughBreak = 28,
 
 		// ── Tree rows ──
 		/// <summary>A filare: one species in a straight row at an even spacing (Lombardy poplars along a road).</summary>
@@ -78,12 +101,44 @@ namespace FishMMO.Shared.Biomes
 		EarthDitch = 40,
 		/// <summary>A lined channel: its head and its falls built in stone or brick, stone partitions where it divides (the roggia).</summary>
 		LinedChannel = 41,
+		/// <summary>
+		/// A bisse (2026-10-26, I2f-b): a long earth leat carried along the contour from far up a valley, hung across the cliffs in a plank
+		/// flume on iron brackets with a walkway beside it, a water-hammer knocking at its head while the water runs.
+		/// </summary>
+		Bisse = 42,
+		/// <summary>
+		/// A roggia (2026-10-26, I2f-b): a straight brick-lined channel laid on the land's grid (the centuriation's, else the scene's),
+		/// turning only at right angles, a stone sluice every 150–300 m and a stone partition where it divides.
+		/// </summary>
+		Roggia = 43,
+		/// <summary>
+		/// A great canal (2026-10-26, I2f-b): one to a scene, 10–20 m wide and 3 m deep, taken off a river at a brush-and-boulder weir,
+		/// lined and banked with its own spoil, its laterals carried off it to the other settlements' fields.
+		/// </summary>
+		GreatCanal = 44,
+		/// <summary>
+		/// A qanat gallery (2026-10-26, I2f-b, decision 67): carried underground from a scarp's foot (no trench), a line of shaft mouths
+		/// every 15–20 m over it, daylighting at an arched gallery mouth into a lined channel the last stretch to the fields.
+		/// </summary>
+		Gallery = 45,
 
 		// ── Clearance rows ──
 		/// <summary>Field stones heaped loose in a long low ridge.</summary>
 		Heaped = 50,
 		/// <summary>A clearance bank grown over with turf, only its stones' tops showing.</summary>
 		Turfed = 51,
+
+		// ── Markers (2026-10-26, I2f-b) ──
+		/// <summary>A wand line: birch wands with a saffron rag every 12–18 m across the ice, a cairn at each end of a run.</summary>
+		WandLine = 60,
+		/// <summary>Serge posts: carved larch hitching posts in ring bands, a white horsehair tassel; every fifth a fat-lamp hook.</summary>
+		SergePost = 61,
+		/// <summary>Tamga poles: spruce poles axe-cut with a clan sign, a strip of madder-red cloth; every sixth a bark-torch bracket.</summary>
+		TamgaPole = 62,
+		/// <summary>A cairn line: waist-high cairns of platy stone, each capped by a bronze token.</summary>
+		Cairn = 63,
+		/// <summary>Ahu: rounded cairns of lava stones 0.8–1.5 m marking a trail across the flows.</summary>
+		Ahu = 64,
 	}
 
 	/// <summary>Where a linear feature is laid (<see cref="BiomeLinearStyle.Where"/>). Append-only (stored by value).</summary>
@@ -101,6 +156,16 @@ namespace FishMMO.Shared.Biomes
 		Folds = 4,
 		/// <summary>Along the lip of a terrace (laid by the terraced fields' own builder, PointOfInterestLinearFeatures.LayAlong).</summary>
 		TerraceEdges = 5,
+		/// <summary>
+		/// On the windward arc of a camp or small settlement (2026-10-26, I2f-b): a curved break against the prevailing wind, the scene's
+		/// own (none on an airless world: a drawn bearing).
+		/// </summary>
+		Windbreaks = 6,
+		/// <summary>
+		/// One long line across the scene through the biome's ground (2026-10-26, I2f-b): a frontier's barrier wall, one to a scene, its
+		/// ways breaking through it.
+		/// </summary>
+		Frontier = 7,
 	}
 
 	/// <summary>Which ways a lane style follows (<see cref="BiomeLinearStyle.Ways"/>); none set: every routed way.</summary>
@@ -268,6 +333,11 @@ namespace FishMMO.Shared.Biomes
 		/// </summary>
 		public static bool Allows(BiomeLinearKind kind, BiomeLinearPlace where)
 		{
+			// Markers stand one by one along the ways and nowhere else (2026-10-26, I2f-b).
+			if (kind == BiomeLinearKind.Markers)
+			{
+				return where == BiomeLinearPlace.Lanes;
+			}
 			switch (where)
 			{
 				case BiomeLinearPlace.FieldEdges:
@@ -275,13 +345,40 @@ namespace FishMMO.Shared.Biomes
 					return true;
 				case BiomeLinearPlace.Folds:
 					return kind != BiomeLinearKind.Channel && kind != BiomeLinearKind.TreeRow;
+				case BiomeLinearPlace.Windbreaks:
+				case BiomeLinearPlace.Frontier:
+					// A break or a barrier is built: a wall, a fence, a hedge (a frontier's clearance bank too), never a row or a channel.
+					return kind == BiomeLinearKind.Wall || kind == BiomeLinearKind.Fence || kind == BiomeLinearKind.Hedge
+						|| where == BiomeLinearPlace.Frontier && kind == BiomeLinearKind.ClearanceRow;
 				default:
 					return kind != BiomeLinearKind.Channel;
 			}
 		}
 
+		/// <summary>
+		/// Whether a form may be laid at a place (pure, 2026-10-26, I2f-b): its kind <see cref="Allows"/> it, and the forms with a place
+		/// of their own keep to it: a bisse, a great canal and a qanat gallery only from a settlement's fields (an earth ditch, a lined
+		/// channel or a roggia also along the lanes), a brick barrier only as the scene's frontier, a hand rope only along the ways.
+		/// </summary>
+		public static bool AllowsForm(BiomeLinearForm form, BiomeLinearPlace where)
+		{
+			if (!Allows(KindOf(form), where))
+			{
+				return false;
+			}
+			switch (form)
+			{
+				case BiomeLinearForm.Bisse:
+				case BiomeLinearForm.GreatCanal:
+				case BiomeLinearForm.Gallery: return where == BiomeLinearPlace.FieldEdges;
+				case BiomeLinearForm.BrickBarrier: return where == BiomeLinearPlace.Frontier;
+				case BiomeLinearForm.HandRope: return where == BiomeLinearPlace.Lanes;
+				default: return true;
+			}
+		}
+
 		/// <summary>True when a style can be laid: its form is its kind's, its kind allowed at its place, and it is not drawn away (density over 0).</summary>
-		public static bool IsLaid(in BiomeLinearStyle style) => KindOf(style.Form) == style.Kind && Allows(style.Kind, style.Where) && style.Density > 0f;
+		public static bool IsLaid(in BiomeLinearStyle style) => KindOf(style.Form) == style.Kind && AllowsForm(style.Form, style.Where) && style.Density > 0f;
 
 		/// <summary>A style's identity in its list (one mark per entry): its kind, form and place.</summary>
 		public static string Id(in BiomeLinearStyle style) => style.Kind + "/" + style.Form + "/" + style.Where;
@@ -334,6 +431,21 @@ namespace FishMMO.Shared.Biomes
 				case BiomeLinearForm.Mortared: return 2.2f;
 				case BiomeLinearForm.EarthBank: return 1.2f;
 				case BiomeLinearForm.UprightSlabs: return 1f;
+				case BiomeLinearForm.Dead: return 2f;
+				case BiomeLinearForm.BrickBarrier: return 3.5f;
+				case BiomeLinearForm.SnowWall: return 1.7f;
+				case BiomeLinearForm.HandRope: return 1.05f;
+				case BiomeLinearForm.PalmRib: return 2f;
+				case BiomeLinearForm.BoughBreak: return 1.5f;
+				case BiomeLinearForm.Bisse: return 0.45f;
+				case BiomeLinearForm.Roggia: return 0.7f;
+				case BiomeLinearForm.GreatCanal: return 3f;
+				case BiomeLinearForm.Gallery: return 0.6f;
+				case BiomeLinearForm.WandLine: return 2.2f;
+				case BiomeLinearForm.SergePost: return 2.4f;
+				case BiomeLinearForm.TamgaPole: return 3f;
+				case BiomeLinearForm.Cairn: return 1f;
+				case BiomeLinearForm.Ahu: return 1.1f;
 				case BiomeLinearForm.Rail: return 1.25f;
 				case BiomeLinearForm.LeaningPole: return 1.3f;
 				case BiomeLinearForm.Wattle: return 1.2f;
@@ -359,6 +471,12 @@ namespace FishMMO.Shared.Biomes
 				case BiomeLinearForm.Laid: return 1.1f;
 				case BiomeLinearForm.Clipped: return 0.9f;
 				case BiomeLinearForm.Wild: return 1.6f;
+				case BiomeLinearForm.Dead: return 1.4f;
+				case BiomeLinearForm.WandLine: return 15f;
+				case BiomeLinearForm.SergePost: return 42f;
+				case BiomeLinearForm.TamgaPole: return 50f;
+				case BiomeLinearForm.Cairn: return 30f;
+				case BiomeLinearForm.Ahu: return 50f;
 				case BiomeLinearForm.Filare: return 6f;
 				case BiomeLinearForm.Pollard: return 5f;
 				case BiomeLinearForm.Piantata: return 7f;
@@ -369,10 +487,15 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>A form's own gate, metres: a field gate's 3 m in a hedge, wall, fence or clearance row; a row of trees and a channel have none.</summary>
 		public static float DefaultGate(BiomeLinearForm form)
 		{
+			if (form == BiomeLinearForm.HandRope)
+			{
+				return 0f;
+			}
 			switch (KindOf(form))
 			{
 				case BiomeLinearKind.TreeRow:
 				case BiomeLinearKind.Channel:
+				case BiomeLinearKind.Markers:
 					return 0f;
 				default:
 					return 3f;
@@ -390,6 +513,7 @@ namespace FishMMO.Shared.Biomes
 				case BiomeLinearKind.TreeRow: return 2.5f;
 				case BiomeLinearKind.Channel: return 1.4f;
 				case BiomeLinearKind.ClearanceRow: return 1f;
+				case BiomeLinearKind.Markers: return 1.2f;
 				default: return 1f;
 			}
 		}
@@ -402,6 +526,78 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>A style's gate width: its own, else its form's.</summary>
 		public static float GateOf(in BiomeLinearStyle style) => style.GateWidth > 0f ? style.GateWidth : DefaultGate(style.Form);
+
+		// ── The new forms' own rules (2026-10-26, I2f-b) ──
+
+		/// <summary>The gentlest ground a form is laid over, degrees (pure): a hand rope only up ways steeper than 15°; 0 for every other.</summary>
+		public static float MinSlopeOf(BiomeLinearForm form) => form == BiomeLinearForm.HandRope ? 15f : 0f;
+
+		/// <summary>
+		/// The steepest a form's module may climb along its line, rise over run (pure): a hand rope up to 1.2 (50°: it is laid for the
+		/// steep), a snow wall or a bough break 0.35, everything else <paramref name="fallback"/> (the placement's own).
+		/// </summary>
+		public static float MaxGradeOf(BiomeLinearForm form, float fallback)
+		{
+			switch (form)
+			{
+				case BiomeLinearForm.HandRope: return 1.2f;
+				case BiomeLinearForm.SnowWall:
+				case BiomeLinearForm.BoughBreak: return 0.35f;
+				default: return fallback;
+			}
+		}
+
+		/// <summary>
+		/// How many of a marker line's stations go by before one carries its form's fitting (pure): every fifth serge post its fat-lamp
+		/// hook, every sixth tamga pole its bark-torch bracket; 0 for a form with none.
+		/// </summary>
+		public static int FittingEvery(BiomeLinearForm form) => form == BiomeLinearForm.SergePost ? 5 : form == BiomeLinearForm.TamgaPole ? 6 : 0;
+
+		/// <summary>
+		/// The variant a marker at station <paramref name="k"/> of <paramref name="count"/> stands in (pure): a wand line's ends its end
+		/// cairns (1), its wands between (0); a serge post or tamga pole its fitting every <see cref="FittingEvery"/>th (1); a cairn line
+		/// its platy cairns (0), ahu their lava ones (1).
+		/// </summary>
+		public static int MarkerVariant(BiomeLinearForm form, int k, int count)
+		{
+			switch (form)
+			{
+				case BiomeLinearForm.WandLine: return k == 0 || k == count - 1 ? 1 : 0;
+				case BiomeLinearForm.SergePost:
+				case BiomeLinearForm.TamgaPole: return (k + 1) % FittingEvery(form) == 0 ? 1 : 0;
+				case BiomeLinearForm.Ahu: return 1;
+				default: return 0;
+			}
+		}
+
+		/// <summary>A channel's half width, metres (pure): an earth leat or a bisse 0.7, a lined channel or a qanat's 1.0, a roggia 1.2, a great canal 6.</summary>
+		public static float ChannelHalfWidth(BiomeLinearForm form)
+		{
+			switch (form)
+			{
+				case BiomeLinearForm.LinedChannel:
+				case BiomeLinearForm.Gallery: return 1f;
+				case BiomeLinearForm.Roggia: return 1.2f;
+				case BiomeLinearForm.GreatCanal: return 6f;
+				default: return 0.7f;
+			}
+		}
+
+		/// <summary>True for a channel form built in stone or brick (its sluices stone): a lined channel, a roggia, a great canal, a qanat's.</summary>
+		public static bool IsLined(BiomeLinearForm form) => form == BiomeLinearForm.LinedChannel || form == BiomeLinearForm.Roggia || form == BiomeLinearForm.GreatCanal
+			|| form == BiomeLinearForm.Gallery;
+
+		/// <summary>The most of a form one scene lays (pure): one great canal, one frontier barrier, four qanat galleries; 0 for no cap of its own.</summary>
+		public static int SceneCapOf(BiomeLinearForm form)
+		{
+			switch (form)
+			{
+				case BiomeLinearForm.GreatCanal:
+				case BiomeLinearForm.BrickBarrier: return 1;
+				case BiomeLinearForm.Gallery: return 4;
+				default: return 0;
+			}
+		}
 
 		/// <summary>Whether a lane style follows a way of this class (pure): its Ways flags, none set every routed way; streets and yards never.</summary>
 		public static bool Follows(BiomeLinearWays ways, ScenePathClass way)

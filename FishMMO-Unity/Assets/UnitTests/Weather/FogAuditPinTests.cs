@@ -93,8 +93,21 @@ namespace FishMMO.UnitTests.Weather
 					: "the near cloud is not walked at its own step, eased back with distance",
 				SourceScanPins.Replace("cloudStepBase *= lerp(nearStep, 1.0, smoothstep(_FishCloudNearStep.y, _FishCloudNearStep.y + _FishCloudNearStep.z, travelled));", ""),
 				"one step scale for the whole sky");
+			// 2026-10-21 (frame-budget pass): the whole march went 0.5 -> 0.75 and the near cloud 0.35 -> 0.5 with
+			// the near band 4 km -> 2 km, about 1.9-2.5 ms with the edges kept. What is pinned is the relation: near
+			// cloud is walked finer than the rest of the sky.
 			string asset = SourceScanPins.ReadSource("Assets/Prefabs/Client/Weather/Weather Render Profile.asset");
-			LogAssert.IsTrue(asset.Contains("NearStepScale: 0.35"), "the shipped profile walks near cloud at 0.35");
+			float near = AssetFloat(asset, "NearStepScale");
+			float far = AssetFloat(asset, "StepScale");
+			LogAssert.IsTrue(near > 0f && near < far, $"the shipped profile walks near cloud finer than the rest: near {near}, step {far}");
+		}
+
+		/// <summary>The first <c>key: value</c> float in a serialized asset (the key matched as a whole word).</summary>
+		private static float AssetFloat(string asset, string key)
+		{
+			System.Text.RegularExpressions.Match match = System.Text.RegularExpressions.Regex.Match(asset, @"(?m)^\s*" + key + @":\s*(-?[0-9.eE+-]+)\s*$");
+			LogAssert.IsTrue(match.Success, $"the shipped profile has a {key}");
+			return float.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
 		}
 
 		[Test]

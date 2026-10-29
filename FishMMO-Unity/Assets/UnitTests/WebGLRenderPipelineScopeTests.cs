@@ -49,7 +49,7 @@ namespace FishMMO.UnitTests
 				{
 					using var outer = new WebGLRenderPipelineScope(true);
 					foreach (var asset in assets) Assert.That(Mode(asset), Is.Zero);
-					Assert.That(EditorGraphicsSettings.batchRendererGroupShaderStrippingMode, Is.EqualTo(BatchRendererGroupStrippingMode.StripAll));
+					Assert.That(EditorGraphicsSettings.batchRendererGroupShaderStrippingMode, Is.EqualTo(BatchRendererGroupStrippingMode.KeepAll));
 					using (new WebGLRenderPipelineScope(true))
 						foreach (var asset in assets) Assert.That(Mode(asset), Is.Zero);
 					foreach (var asset in assets) Assert.That(Mode(asset), Is.Zero, "an inner scope must not restore native settings early");

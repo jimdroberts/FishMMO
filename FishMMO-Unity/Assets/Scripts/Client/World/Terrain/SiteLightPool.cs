@@ -259,6 +259,13 @@ namespace FishMMO.Client
 						intensity = 4f * night * flick;
 						break;
 					}
+					case SceneEmitterKind.Pyre:
+						// A way light's own fire (2026-10-26): a beacon dark by day and kindled at its own moment of the dusk, or a
+						// brimstone lamp's low blue flame (ScenePyre, read by its flames in SiteEmbers too).
+						color = ScenePyre.Colour(e.Seed);
+						range = e.Reach > 0f ? e.Reach : ScenePyre.Range(e.Seed);
+						intensity = ScenePyre.Light(time, night, e.Seed);
+						break;
 					case SceneEmitterKind.Magma:
 						// Molten lava in a cave (2026-10-20): a deep orange churning slowly on the shared clock, day and night alike (SceneMagma).
 						color = SceneMagma.Colour(e.Seed);

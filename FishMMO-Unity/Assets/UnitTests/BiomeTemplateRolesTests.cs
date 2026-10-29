@@ -129,7 +129,8 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void SpecCaveShells_CutWhatTheShaperCut_ForEveryBiomeAndGeology()
 		{
-			var forms = (CaveForm[])Enum.GetValues(typeof(CaveForm));
+			// The every-form lists (a sea hall's, 2026-10-26 I2n-b, only where a file names one: BiomeCaveInteriorsTests' sea-hall fixture).
+			var forms = Array.FindAll((CaveForm[])Enum.GetValues(typeof(CaveForm)), f => BiomeCaveInteriors.InEveryList((BiomeCaveForm)f));
 			Assert.That(forms.Length, Is.EqualTo(6));
 			Assert.That(BiomeArtSpec.Entries.Length, Is.EqualTo(83));
 			List<string> geologies = GeologySamples();
@@ -143,11 +144,24 @@ namespace FishMMO.UnitTests.WorldDesign
 					CaveForm form = forms[i];
 					Assert.That((CaveForm)shells[i].Form, Is.EqualTo(form), entry.Biome);
 					Assert.That(shells[i].Rock, Is.EqualTo(entry.CaveShellFor(form)));
-					Assert.That(shells[i].Rock, Is.EqualTo(BiomeArtSpec.DefaultCaveShell(form)), $"{entry.Biome} {form}: no biome names its own yet");
+					// An authored round names its own shells (legacy equality only): each still resolves to a rock with art.
+					bool authored = BiomeAuthoredRounds.Contains(entry.Biome);
+					if (!authored)
+					{
+						Assert.That(shells[i].Rock, Is.EqualTo(BiomeArtSpec.DefaultCaveShell(form)), $"{entry.Biome} {form}: no biome names its own yet");
+					}
 					foreach (string geology in geologies)
 					{
 						Func<string> ground = () => CliffRocks.RockFor(entry, geology);
-						Assert.That(CaveShaper.ResolveShell(shells[i].Rock, ground), Is.EqualTo(OldShell(form, ground)), $"{entry.Biome} {form} on {geology ?? "unknown"}");
+						string resolved = CaveShaper.ResolveShell(shells[i].Rock, ground);
+						if (authored)
+						{
+							Assert.That(resolved == CliffRocks.Ice || RockTypes.TryGet(resolved, out _), Is.True, $"{entry.Biome} {form} on {geology ?? "unknown"}: '{resolved}' is no rock");
+						}
+						else
+						{
+							Assert.That(resolved, Is.EqualTo(OldShell(form, ground)), $"{entry.Biome} {form} on {geology ?? "unknown"}");
+						}
 						checkedShells++;
 					}
 				}
@@ -226,6 +240,11 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			foreach (CaveForm form in (CaveForm[])Enum.GetValues(typeof(CaveForm)))
 			{
+				if (form == CaveForm.SeaHall)
+				{
+					// New on 2026-10-26 (I2n-b): its ice stands in as an ice cave's does (SeaHallTests).
+					continue;
+				}
 				string old = OldFormationRock(form);
 				Assert.That(PointOfInterestCaveDressing.StandInRock(form), Is.EqualTo(old), form.ToString());
 				List<string> shapes = PointOfInterestCaveDressing.FormationShapes(form);

@@ -26,7 +26,14 @@ namespace FishMMO.Client
 	/// or KNEADING glow reads (<c>_FishGlowLines</c>, <c>_FishGlowLineData</c>), its fountain vents an EPISODE glow plays
 	/// (<c>_FishGlowVents</c>: x, z, seed's high half + 65536·schedule, seed's low half) and the discs that keep a light and its stone
 	/// on one biome's row across a grid edge (<c>_FishGlowAnchors</c>: x, z, radius, row; rebuilt as the scene's lights come and go,
-	/// <see cref="Refresh"/>); <c>_FishGlowPlaceInfo</c> = (lines, vents, anchors, 0), all 0 where nothing is stored.
+	/// <see cref="Refresh"/>); <c>_FishGlowPlaceInfo</c> = (lines, vents, anchors, caves), all 0 where nothing is stored.
+	/// </para>
+	/// <para>
+	/// Its linked caves (2026-10-26, phase I2n-c, decision 86 (h); <see cref="SceneGlowCaves"/>): each loaded cave whose inside is an
+	/// interior biome (its cave-life spots carry it) is a box of its air (<c>_FishGlowCaves</c>, two float4 a cave), and every glow
+	/// inside reads the INTERIOR's row (the interior's flora row where it paints the surface too, else a row of its own after the
+	/// flora's), so a cave's crystals and glow-worms move by its interior's mode. Boxes only where the interior names a mode; none on
+	/// a scene whose caves link none, and every glow there as before.
 	/// </para>
 	/// </remarks>
 	public static class GlowModeTable
@@ -49,6 +56,7 @@ namespace FishMMO.Client
 		private static readonly int VentsId = Shader.PropertyToID("_FishGlowVents");
 		private static readonly int AnchorsId = Shader.PropertyToID("_FishGlowAnchors");
 		private static readonly int PlaceInfoId = Shader.PropertyToID("_FishGlowPlaceInfo");
+		private static readonly int CavesId = Shader.PropertyToID("_FishGlowCaves");
 
 		private static readonly Vector4[] rows = new Vector4[Rows];
 		private static readonly Vector4[] episodes = new Vector4[Schedules];
@@ -57,6 +65,11 @@ namespace FishMMO.Client
 		private static readonly Vector4[] lineData = new Vector4[SceneGlowPlaces.MaxLines];
 		private static readonly Vector4[] ventData = new Vector4[SceneGlowPlaces.MaxVents];
 		private static readonly Vector4[] anchorData = new Vector4[SceneGlowPlaces.MaxAnchors];
+		private static readonly Vector4[] caveData = new Vector4[2 * SceneGlowCaves.MaxCaves];
+		private static readonly List<SceneGlowCave> caves = new List<SceneGlowCave>();
+		private static IReadOnlyList<BiomeGlowMode> worldModes;
+		private static int floraRows, caveVersion = -1, cavedBuild = -1;
+		private static bool floraNamed, published;
 		private static readonly List<string> scheduleKeys = new List<string>();
 		private static readonly List<SceneGlowLine> lines = new List<SceneGlowLine>();
 		private static readonly List<SceneGlowVent> vents = new List<SceneGlowVent>();
@@ -86,8 +99,13 @@ namespace FishMMO.Client
 		public static void Build(IReadOnlyList<BiomeTemplate> rowBiomes, byte[] indices, int width, int height, Vector4 gridRect, IReadOnlyList<BiomeGlowMode> world)
 		{
 			int count = Mathf.Min(rowBiomes != null ? rowBiomes.Count : 0, Rows);
-			entries = new BiomeGlowMode[Mathf.Max(1, count), 2];
-			named = new bool[Mathf.Max(1, count), 2];
+			// Room for the linked caves' interiors after the flora's rows (2026-10-26, I2n-c; AddCaveRows).
+			entries = new BiomeGlowMode[Rows, 2];
+			named = new bool[Rows, 2];
+			floraRows = count;
+			worldModes = world;
+			caves.Clear();
+			caveVersion = cavedBuild = -1;
 			grid = indices;
 			gridW = width;
 			gridH = height;
@@ -100,7 +118,7 @@ namespace FishMMO.Client
 			vents.Clear();
 			anchors = new List<SceneGlowAnchor>();
 			builds++;
-			rowIDs = new int[Mathf.Max(1, count)];
+			rowIDs = new int[Rows];
 			bool any = false;
 			for (int r = 0; r < count; r++)
 			{
@@ -126,7 +144,97 @@ namespace FishMMO.Client
 				rows[r] = row;
 			}
 			info = any && count > 0 ? new Vector4(1f, count, width, height) : Vector4.zero;
+			floraNamed = any && count > 0;
 			PackPlaces();
+		}
+
+		/// <summary>
+		/// The linked caves' boxes and their interiors' rows (2026-10-26, I2n-c), again whenever the loaded caves change
+		/// (SceneCaveLife.Version) or the table is rebuilt: each box reads the row of its interior where the interior names a mode for
+		/// either source (its flora row if it paints the surface too, else one after the flora's; past <see cref="Rows"/> none); boxes
+		/// whose interior names none are dropped. True when it gathered again. The table turns on for a cave's mode alone.
+		/// </summary>
+		private static bool AddCaveRows()
+		{
+			int version = SceneCaveLife.Version;
+			if (version == caveVersion && builds == cavedBuild)
+			{
+				return false;
+			}
+			caveVersion = version;
+			cavedBuild = builds;
+			// The interior rows of an earlier gathering go: rows from the flora's on are the caves' (the first past row 0 at least, so
+			// a scene with no flora row never lends its grid's row 0 to a cave).
+			int firstCaveRow = Mathf.Max(floraRows, 1);
+			for (int r = firstCaveRow; r < Rows; r++)
+			{
+				rows[r] = Vector4.zero;
+				rowIDs[r] = 0;
+				named[r, 0] = named[r, 1] = false;
+				entries[r, 0] = entries[r, 1] = default;
+			}
+			var found = new List<SceneGlowCave>();
+			foreach (SceneCaveLife.Set set in SceneCaveLife.Sets)
+			{
+				SceneGlowCaves.FromSpots(set.Spots, found);
+			}
+			caves.Clear();
+			int next = firstCaveRow;
+			bool cavesNamed = false;
+			foreach (SceneGlowCave each in found)
+			{
+				if (caves.Count >= SceneGlowCaves.MaxCaves)
+				{
+					break;
+				}
+				SceneGlowCave cave = each;
+				int row = -1;
+				for (int r = 0; r < floraRows && row < 0; r++)
+				{
+					if (rowIDs[r] == cave.Biome)
+					{
+						row = r;
+					}
+				}
+				for (int r = firstCaveRow; r < next && row < 0; r++)
+				{
+					if (rowIDs[r] == cave.Biome)
+					{
+						row = r;
+					}
+				}
+				if (row < 0 && next < Rows && BiomeRegistry.TryGetByID(cave.Biome, out BiomeTemplate inside) && inside != null)
+				{
+					row = next++;
+					rowIDs[row] = cave.Biome;
+					var packed = new Vector4(0f, 0f, -1f, -1f);
+					for (int source = 0; source < 2; source++)
+					{
+						if (!BiomeGlowModes.Resolve(inside.GlowModes, worldModes, inside.FountainEpisodes, (SceneGlowSource)source, out BiomeGlowMode entry))
+						{
+							continue;
+						}
+						entries[row, source] = entry;
+						named[row, source] = true;
+						packed[source] = Pack(in entry);
+						if (!entry.Episodes.IsEmpty)
+						{
+							packed[2 + source] = ScheduleOf(in entry.Episodes);
+						}
+					}
+					rows[row] = packed;
+				}
+				if (row < 0 || !(named[row, 0] || named[row, 1]))
+				{
+					continue;
+				}
+				cave.Row = row;
+				caves.Add(cave);
+				cavesNamed = true;
+			}
+			// On for the flora's modes (as Build had it) or a cave's alone; the grid's row count stays the flora's.
+			info = floraNamed || cavesNamed ? new Vector4(1f, floraRows, gridW, gridH) : Vector4.zero;
+			return true;
 		}
 
 		/// <summary>A schedule's index in <c>_FishGlowEpisodes</c>, added on first use; past <see cref="Schedules"/>, the last.</summary>
@@ -200,7 +308,19 @@ namespace FishMMO.Client
 		/// </summary>
 		public static void Refresh()
 		{
-			if (!On || entries == null || grid == null)
+			if (entries == null)
+			{
+				return;
+			}
+			// The linked caves first (2026-10-26, I2n-c): a cave's interior may turn the table on.
+			if (AddCaveRows())
+			{
+				PackPlaces();
+				Shader.SetGlobalVectorArray(RowsId, rows);
+				PublishPlaces();
+				Shader.SetGlobalVector(InfoId, published ? info : Vector4.zero);
+			}
+			if (!On || grid == null)
 			{
 				return;
 			}
@@ -242,7 +362,7 @@ namespace FishMMO.Client
 		private const float EverywhereMetres = 1e7f;
 
 		/// <summary>The grid as the glows read it.</summary>
-		private static SceneGlowGrid Grid => new SceneGlowGrid { Cells = grid, Width = gridW, Height = gridH, Rect = rect, Rows = entries != null ? entries.GetLength(0) : 0 };
+		private static SceneGlowGrid Grid => new SceneGlowGrid { Cells = grid, Width = gridW, Height = gridH, Rect = rect, Rows = entries != null ? Mathf.Max(1, floraRows) : 0 };
 
 		/// <summary>Packs the lines, vents and anchors into the GPU's arrays.</summary>
 		private static void PackPlaces()
@@ -272,12 +392,19 @@ namespace FishMMO.Client
 				SceneGlowAnchor a = anchors[i];
 				anchorData[i] = new Vector4(a.Centre.x, a.Centre.y, a.Radius, a.Row);
 			}
-			placeInfo = new Vector4(lineCount, ventCount, anchorCount, 0f);
+			System.Array.Clear(caveData, 0, caveData.Length);
+			int caveCount = Mathf.Min(caves.Count, SceneGlowCaves.MaxCaves);
+			for (int i = 0; i < caveCount; i++)
+			{
+				SceneGlowCaves.Pack(caves[i], out caveData[2 * i], out caveData[2 * i + 1]);
+			}
+			placeInfo = new Vector4(lineCount, ventCount, anchorCount, caveCount);
 		}
 
 		/// <summary>Hands the table to the shaders (off unless built with a named mode and <paramref name="published"/>).</summary>
 		public static void Publish(bool published)
 		{
+			GlowModeTable.published = published;
 			Shader.SetGlobalVectorArray(RowsId, rows);
 			PublishPlaces();
 			Shader.SetGlobalVector(InfoId, published ? info : Vector4.zero);
@@ -292,6 +419,7 @@ namespace FishMMO.Client
 			Shader.SetGlobalVectorArray(LineDataId, lineData);
 			Shader.SetGlobalVectorArray(VentsId, ventData);
 			Shader.SetGlobalVectorArray(AnchorsId, anchorData);
+			Shader.SetGlobalVectorArray(CavesId, caveData);
 			Shader.SetGlobalVector(PlaceInfoId, placeInfo);
 		}
 
@@ -306,6 +434,11 @@ namespace FishMMO.Client
 			lines.Clear();
 			vents.Clear();
 			anchors = new List<SceneGlowAnchor>();
+			caves.Clear();
+			worldModes = null;
+			floraRows = 0;
+			floraNamed = published = false;
+			caveVersion = cavedBuild = -1;
 			placeInfo = Vector4.zero;
 			anchoredBuild = anchoredVersion = -1;
 			Shader.SetGlobalVector(InfoId, Vector4.zero);
@@ -313,16 +446,18 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// The row (biome) a glow at a world position reads, as FishGlowModes.hlsl reads it: the first disc holding it (a site or a light
-		/// by a biome edge, <see cref="Refresh"/>), else the flora grid's texel, unjittered.
+		/// The row (biome) a glow at a world position reads, as FishGlowModes.hlsl reads it: the first linked cave's box holding it (its
+		/// interior's row, 2026-10-26), else the first disc holding it (a site or a light by a biome edge, <see cref="Refresh"/>), else
+		/// the flora grid's texel, unjittered.
 		/// </summary>
 		public static int RowAt(Vector3 position)
 		{
-			if (grid == null || entries == null || rect.z <= 0f || gridW < 1 || gridH < 1)
+			if (entries == null)
 			{
 				return 0;
 			}
-			return SceneGlowPlaces.RowAt(anchors, position.x, position.z, Grid.RowAt(position.x, position.z));
+			int flat = grid == null || rect.z <= 0f || gridW < 1 || gridH < 1 ? 0 : SceneGlowPlaces.RowAt(anchors, position.x, position.z, Grid.RowAt(position.x, position.z));
+			return SceneGlowCaves.RowAt(caves, position, flat);
 		}
 
 		/// <summary>The entry moving a source's glow at a position; false when none does there (it glows as before).</summary>

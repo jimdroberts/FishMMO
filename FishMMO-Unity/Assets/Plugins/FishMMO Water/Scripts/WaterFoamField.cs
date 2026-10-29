@@ -140,7 +140,8 @@ namespace FishMMO.Water
 
 		private static readonly Window[] windows = { new Window(NearTexelMetres, true), new Window(FarTexelMetres, false) };
 		private static readonly List<Renderer> inland = new List<Renderer>();
-		private static readonly Dictionary<Material, int> sourcePasses = new Dictionary<Material, int>();
+		/// <summary>The FoamSource pass by shader (each lake and river draws with a copy of its material of its own).</summary>
+		private static readonly Dictionary<Shader, int> sourcePasses = new Dictionary<Shader, int>();
 		private static readonly HashSet<object> seas = new HashSet<object>();
 		private static Vector4 seaFoam = new Vector4(0.7f, 0.28f, 0.6f, 0f);
 		private static Shader shader;
@@ -253,8 +254,17 @@ namespace FishMMO.Water
 			Shader.SetGlobalVector(RectFarId, Vector4.zero);
 		}
 
+		/// <summary>This hook's own time in the profiler (render-pipeline callbacks otherwise show only as
+		/// RenderPipeline.BeginCameraRendering's self time). In a class of its own so the marker, an engine object, is made
+		/// when the hook first runs, not when the type is first touched (tests outside Unity use these types' pure parts).</summary>
+		private static class HookProfiling
+		{
+			public static readonly Unity.Profiling.ProfilerMarker Marker = new Unity.Profiling.ProfilerMarker("WaterFoamField.BeginContext");
+		}
+
 		private static void OnBeginContextRendering(ScriptableRenderContext context, List<Camera> cameras)
 		{
+			using var hookMarkerScope = HookProfiling.Marker.Auto();
 			if (frame == Time.frameCount)
 			{
 				return;
@@ -497,17 +507,18 @@ namespace FishMMO.Water
 			published = live > 0f;
 		}
 
-		/// <summary>The FoamSource pass of a surface's material, cached; −1 for a material without one.</summary>
+		/// <summary>The FoamSource pass of a surface's material, cached by its shader; −1 for a material without one.</summary>
 		private static int SourcePass(Material surface)
 		{
-			if (surface == null)
+			Shader drawn = surface != null ? surface.shader : null;
+			if (drawn == null)
 			{
 				return -1;
 			}
-			if (!sourcePasses.TryGetValue(surface, out int pass))
+			if (!sourcePasses.TryGetValue(drawn, out int pass))
 			{
 				pass = surface.FindPass(SourcePassName);
-				sourcePasses[surface] = pass;
+				sourcePasses[drawn] = pass;
 			}
 			return pass;
 		}

@@ -191,6 +191,23 @@ namespace FishMMO.Shared.NameGeneration
 		// Abyssal Plain (its Q4): a whale's carcass on the FLOOR, apart from WhaleFall adrift on the surface; Subsurface Ocean
 		// Vent (decision 83): the hall of the sea under an ice shell, whose cave form phase I2n-b builds.
 		SunkenWhaleFall, SeaHall,
+		// The hot ground's own sites (2026-10-27): the geysers, mud pots, fumaroles and sulphur pools the cut digs (a spring's is HotSpring).
+		Geyser, MudPot, Fumarole, SulphurPool,
+		// The fantasy wave (2026-10-27): 121 kinds hosted only by the biomes whose .Sites name them.
+		DragonLair, TrollBridge, GiantsSteading, GoblinWarren, HauntedManor, HangingTree, BuriedHoard, AmbushSite, WreckedCaravan,
+		Crossroads, BoundaryStone, SignalBeacon, TollGate, Hamlet, ManorHouse, SiegeCamp, BurnedVillage, WarbandCamp, CultistHideout,
+		AncientWall, SpellScar, PlanarRift, PetrifiedBattle, TitansBones, WishingStone, ElderMonolith, WaygateRing, GolemGraveyard,
+		KoboldDelving, LostLibrary, DruidGrove, TreeVillage, TrollStones, SpiderThicket, CharcoalClamps, GreenwoodHideout, DryadOak,
+		GoblinMarket, ElfWaystone, WolfDen, MossColossus, StepPyramid, Cenote, JaguarTemple, SerpentIdol, LostCity, LizardfolkVillage,
+		IdolVault, Grange, Dovecote, BeeGarden, VillageGreen, ScarecrowField, LongBarrow, Henge, GallowsHill, KurganField, NomadCamp,
+		StoneFigures, Kraal, Baobab, Shieling, Necropolis, Pyramid, Sphinx, RockCutFacade, SandBuriedTemple, DjinnPrison, SandwormPit,
+		CaravanHalt, BeastBoneyard, CliffPalace, DreadRoad, DwarvenGate, MountainKingsHall, HangingMonastery, PassFort, Eyrie,
+		GriffinRoost, WyvernNest, CliffRelief, SummitCairn, PrayerFlagPass, SilverMineTown, FrostGiantSteading, RuneStone, FrozenArmy,
+		DragonInTheIce, MammothGraveyard, WinterWolfDen, AuroraShrine, LichSpire, IcePalace, FrozenShipwreck, Crannog, HagsCauldron,
+		HydraLair, ReedVillage, CovenCircle, LizardfolkHatchery, SwampCathedral, TidalIslandAbbey, CliffCastle, SmugglersTunnel,
+		WreckersBeacon, SirenRock, SeaWitchGrotto, LongshipLanding, KrakenWreck, FireTemple, FireGiantHall, SalamanderLair,
+		AshBuriedCity, MerfolkVillage, KrakenGrounds, LadyOfTheLake, NymphPool, LakeMonsterLair, Commandery, LostThrone,
+		RoyalMausoleum,
 	}
 
 	/// <summary>Phonology + vocabulary for a biome.</summary>

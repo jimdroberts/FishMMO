@@ -186,7 +186,7 @@ namespace FishMMO.UnitTests.Weather
 			string spawn = MethodBody(host, "public ushort SpawnCell(Scene scene, StormKind kind");
 			LogAssert.IsTrue(spawn.Contains("StormPhysics.CanForm(sample.Planet)"), "WeatherHost.SpawnCell (the admin command and the ECA action) refuses where no storm can form");
 			string bed = CodeOnly(Read("TestHarness/World/WorldSimController.cs"));
-			LogAssert.IsTrue(MethodBody(bed, "public void SpawnCell(StormKind kind").Contains("StormPhysics.CanForm(here.Planet)"), "and so does the bed");
+			LogAssert.IsTrue(MethodBody(bed, "public string SpawnCell(StormKind kind").Contains("StormPhysics.CanForm(here.Planet)"), "and so does the bed (it returns what it started, or why nothing will show, to the panel)");
 		}
 
 		// ── The bed stands on the scene's own body ─────────────────────

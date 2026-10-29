@@ -14,6 +14,11 @@ Shader "FishMMO/Water/Waterfall"
         _Smoothness("Smoothness", Range(0, 1)) = 0.86
         _Opacity("Opacity", Range(0, 1)) = 0.96
         _Breakup("How much a free curtain frays", Range(0, 1)) = 0.55
+        // Runtime per-surface values must also be ShaderLab properties for SRP Batcher compatibility.
+        [HideInInspector] _FallLookOn("_FallLookOn", Float) = 0
+        [HideInInspector] _FallWater("_FallWater", Vector) = (0,0,0,0)
+        [HideInInspector] _FallFoam("_FallFoam", Vector) = (0,0,0,0)
+        [HideInInspector] _FallAbsorb("_FallAbsorb", Vector) = (0,0,0,0)
     }
 
     SubShader

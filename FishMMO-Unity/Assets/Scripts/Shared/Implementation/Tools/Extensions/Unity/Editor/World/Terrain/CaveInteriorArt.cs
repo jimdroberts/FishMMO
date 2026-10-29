@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using FishMMO.Shared.Biomes;
 using FishMMO.Shared.Celestial;
+using FishMMO.Shared.NameGeneration;
 using UnityEditor;
 
 namespace FishMMO.Shared.WorldDesign
@@ -119,7 +120,14 @@ namespace FishMMO.Shared.WorldDesign
 		/// resolved shell rock, CaveShaper.ShellOf): the host's link for the form, where it names a template other than the host and
 		/// the interior forms in the shell (<see cref="BiomeCaveInteriors.Holds"/>); never for a mine.
 		/// </summary>
-		public static CaveBiome Of(BiomeTemplate host, CaveForm form, string shell)
+		public static CaveBiome Of(BiomeTemplate host, CaveForm form, string shell) => Of(host, form, shell, null);
+
+		/// <summary>
+		/// <see cref="Of(BiomeTemplate, CaveForm, string)"/> on a world (2026-10-26, phase I2n-b, decision 83): a form whose link is gated
+		/// by its interior's world (<see cref="BiomeCaveInteriors.GatedByWorld"/>: a sea hall) holds only where the world meets the
+		/// interior's Requires (with no world given, the home world). Every other form as before.
+		/// </summary>
+		public static CaveBiome Of(BiomeTemplate host, CaveForm form, string shell, BiomeWorldConditions? world)
 		{
 			var f = (BiomeCaveForm)form;
 			if (host == null || !BiomeCaveInteriors.Links(f) || !BiomeCaveInteriors.TryLink(Links(host), f, out string name) || name == host.name)
@@ -128,6 +136,10 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			BiomeTemplate interior = Named(name);
 			if (interior == null || interior == host || !BiomeCaveInteriors.Holds(f, InteriorRocks(interior), shell))
+			{
+				return new CaveBiome(host, null);
+			}
+			if (BiomeCaveInteriors.GatedByWorld(f) && !(world ?? BiomeWorldConditions.Earthlike).Meets(interior.Requires))
 			{
 				return new CaveBiome(host, null);
 			}
@@ -141,7 +153,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return default;
 			}
-			return Of(PointOfInterestRock.BiomeOf(site), system.Form, CaveShaper.ShellOf(request, site, system));
+			return Of(PointOfInterestRock.BiomeOf(site), system.Form, CaveShaper.ShellOf(request, site, system), World(request));
 		}
 
 		/// <summary>
@@ -159,7 +171,33 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return new CaveBiome(host, null);
 			}
-			return Of(host, form, CaveShaper.RockOf(form, request, site, site.Position));
+			return Of(host, form, CaveShaper.RockOf(form, request, site, site.Position), World(request));
+		}
+
+		/// <summary>
+		/// Whether a host's sea halls hold on a world (2026-10-26, phase I2n-b, decision 83): it links the form to an interior whose world
+		/// gate the world meets (a frozen-through, cryovolcanic one for the Subsurface Ocean Vent), in the host's shell for the form.
+		/// </summary>
+		public static bool SeaHallsHold(BiomeTemplate host, in BiomeWorldConditions world)
+			=> host != null && Of(host, CaveForm.SeaHall, BiomeTemplateArt.CaveShell(host, CaveForm.SeaHall), world).Linked;
+
+		/// <summary>
+		/// A host's site kinds with its sea halls weighed 0 where they would not hold on the world (<see cref="SeaHallsHold"/>), so the
+		/// planner never sites a melt shaft over no sea; the very same dictionary where the host gives sea halls no weight (every
+		/// biome's but the four hosts of decision 83) or they hold.
+		/// </summary>
+		public static IReadOnlyDictionary<POIType, float> GateSeaHalls(BiomeTemplate host, IReadOnlyDictionary<POIType, float> kinds, in BiomeWorldConditions world)
+		{
+			if (kinds == null || !kinds.TryGetValue(POIType.SeaHall, out float weight) || weight <= 0f || SeaHallsHold(host, in world))
+			{
+				return kinds;
+			}
+			var gated = new Dictionary<POIType, float>();
+			foreach (KeyValuePair<POIType, float> pair in kinds)
+			{
+				gated[pair.Key] = pair.Key == POIType.SeaHall ? 0f : pair.Value;
+			}
+			return gated;
 		}
 
 		// ── What the inside takes ─────────────────────────────────────
@@ -218,20 +256,28 @@ namespace FishMMO.Shared.WorldDesign
 		/// The template weights a cave site's pick uses: its host's (BiomeTemplateArt.SiteVariantWeights) where not linked or where
 		/// either template's variants are unauthored; where linked, the two lists merged
 		/// (<see cref="BiomeCaveInteriors.MergedVariantWeight"/>: the host's entry, else the interior's, at ×0.4 where the host names
-		/// its own for the kind), times the host's style weight.
+		/// its own for the kind), times the host's style weight (a variant either names keeps its weight under a style weighed 0,
+		/// BiomeSiteStyle.Apply, 2026-10-27). Not <paramref name="styled"/>: every style at 1 (the stage's second pick).
 		/// </summary>
-		public static Func<PointOfInterestTemplate, float> SiteVariantWeights(in CaveBiome caves)
+		public static Func<PointOfInterestTemplate, float> SiteVariantWeights(in CaveBiome caves, bool styled = true)
 		{
 			BiomeTemplate host = caves.Host, interior = caves.Interior;
 			if (!caves.Linked || host == null || !VariantsAuthored(host) || !VariantsAuthored(interior))
 			{
-				return BiomeTemplateArt.SiteVariantWeights(host);
+				return BiomeTemplateArt.SiteVariantWeights(host, styled);
 			}
 			List<BiomeSiteVariant> own = host.SiteVariants, inside = interior.SiteVariants;
-			List<BiomeSiteStyle> styles = host.SiteStyles;
-			return template => template == null ? 0f
-				: BiomeCaveInteriors.MergedVariantWeight(own, inside, template.Kind, template.VariantKey, template.DefaultBiomeWeight, out _)
-					* BiomeSiteStyle.WeightOf(styles, BiomeSiteStyle.Parse(template.Style));
+			List<BiomeSiteStyle> styles = styled ? host.SiteStyles : null;
+			return template =>
+			{
+				if (template == null)
+				{
+					return 0f;
+				}
+				float weight = BiomeCaveInteriors.MergedVariantWeight(own, inside, template.Kind, template.VariantKey, template.DefaultBiomeWeight, out bool interiorNamed);
+				bool named = interiorNamed || BiomeSiteVariant.TryWeight(own, template.Kind, template.VariantKey, out _);
+				return BiomeSiteStyle.Apply(weight, named, BiomeSiteStyle.WeightOf(styles, BiomeSiteStyle.Parse(template.Style)));
+			};
 		}
 
 		/// <summary>

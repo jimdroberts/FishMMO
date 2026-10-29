@@ -27,10 +27,12 @@ namespace FishMMO.UnitTests
 		/// </summary>
 		private static void OldTopLayers(Color32[][] controls, int width, int height, int layers, float u, float v, int[] ids, float[] weights)
 		{
-			float px = Mathf.Clamp01(u) * (width - 1), py = Mathf.Clamp01(v) * (height - 1);
+			// In float32 as the shader ran it (explicit casts: a runtime keeping float maths at double precision must not
+			// move a texel-centre point off its centre).
+			float px = (float)(Mathf.Clamp01(u) * (width - 1)), py = (float)(Mathf.Clamp01(v) * (height - 1));
 			int x0 = Math.Min((int)Math.Floor(px), Math.Max(width - 2, 0));
 			int y0 = Math.Min((int)Math.Floor(py), Math.Max(height - 2, 0));
-			float fx = Mathf.Clamp01(px - x0), fy = Mathf.Clamp01(py - y0);
+			float fx = Mathf.Clamp01((float)(px - x0)), fy = Mathf.Clamp01((float)(py - y0));
 			int x1 = Math.Min(x0 + 1, width - 1), y1 = Math.Min(y0 + 1, height - 1);
 			float t0 = 0f, t1 = 0f, t2 = 0f, t3 = 0f, fifth = 0f;
 			int i0 = 0, i1 = 0, i2 = 0, i3 = 0;

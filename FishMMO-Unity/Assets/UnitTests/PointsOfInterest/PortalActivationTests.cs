@@ -37,8 +37,9 @@ namespace FishMMO.UnitTests.PointsOfInterest
 		/// <summary>
 		/// A NAMED scene for the portals: the store keys activations by scene name and ignores an empty one, and the runner's
 		/// own scene is untitled. A preview scene opened from a path takes that scene's name (NewPreviewScene's is empty).
+		/// The region test bed: small, tracked and carrying no portals of its own (Tutorial Regions until 2026-10-25).
 		/// </summary>
-		private const string NamedScenePath = "Assets/Scenes/WorldScene/Tutorial Regions.unity";
+		private const string NamedScenePath = "Assets/Scenes/Test/RegionSim.unity";
 		private Scene named;
 
 		[SetUp]

@@ -55,8 +55,17 @@ namespace FishMMO.Client
 		/// <summary>What a tall blade's packed height is multiplied by (<see cref="TallShift"/>).</summary>
 		public const float TallHeightScale = 2f;
 
-		/// <summary>The most blade types a record can name: four bits in the packed word, the fifth in the colour word (<see cref="TypeHighShift"/>).</summary>
-		public const int MaxTypes = 32;
+		/// <summary>
+		/// The most blade types a record can name: four bits in the packed word, the fifth and sixth in the colour word
+		/// (<see cref="TypeHighShift"/>, <see cref="TypeTopShift"/>), the seventh in the record's sixth word
+		/// (<see cref="RecordMore"/>). 64 since 2026-10-27 (was 32: the sixth bit is the one the colour's valid flag held, now
+		/// read from the colour itself, <see cref="UnpackColour"/>); 128 later that day, once the detail layers stopped wrapping
+		/// at 256 and the scenes' true demand showed: measured over the saved tiles (painted blade prototypes, one type per
+		/// prefab and biome look), Moron 1 27, Moron 2 80, Moron 3 79. Both words of a record were full, so the seventh bit
+		/// took a word of its own (<see cref="BladeStride"/> 20 to 24 bytes); a record of type 0..63 is bit for bit what it
+		/// was, with that word 0.
+		/// </summary>
+		public const int MaxTypes = 128;
 
 		public const uint SaltPriority = 0x9E3779B9u;
 		public const uint SaltJitterX = 0x85EBCA6Bu;
@@ -527,10 +536,14 @@ namespace FishMMO.Client
 			return last;
 		}
 
-		// ── The blade record (20 bytes: float3 root, uint packed, uint colour) ─────
+		// ── The blade record (24 bytes: float3 root, uint packed, uint colour, uint more) ─────
 
-		/// <summary>Bytes per blade in the slot buffers (FishGrassBlades.compute GrassBlade).</summary>
-		public const int BladeStride = 20;
+		/// <summary>
+		/// Bytes per blade in the slot buffers (FishGrassBlades.compute / .hlsl GrassBlade). 24 since 2026-10-27 (was 20): the
+		/// packed and colour words had no bit left for the 128 types' seventh, so it rides a sixth word (<see cref="RecordMore"/>,
+		/// its other bits zero and free). With the profile's 5 M blade cap the five slots cost ~118 MB instead of ~98 MB.
+		/// </summary>
+		public const int BladeStride = 24;
 
 		/// <summary>
 		/// Packs a blade: type 4 bits (its low four; the fifth rides the colour word, <see cref="RecordBits"/>), facing 7
@@ -561,10 +574,20 @@ namespace FishMMO.Client
 			Unpack(packed, 0u, out type, out facing, out height, out lean, out fade, out clumpColour);
 		}
 
-		/// <summary>A whole record: the packed word and its colour word's <see cref="RecordBits"/> (FishGrassBlades.hlsl GrassUnpack).</summary>
+		/// <summary>A record of type 0..63: the packed word and its colour word's <see cref="RecordBits"/>, its sixth word 0.</summary>
 		public static void Unpack(uint packed, uint colour, out int type, out float facing, out float height, out float lean, out float fade, out float clumpColour)
 		{
-			type = (int)(packed & 15u) | (int)(colour >> TypeHighShift & 1u) << 4;
+			Unpack(packed, colour, 0u, out type, out facing, out height, out lean, out fade, out clumpColour);
+		}
+
+		/// <summary>
+		/// A whole record: the packed word, its colour word's <see cref="RecordBits"/> and its sixth word (<see cref="RecordMore"/>)
+		/// (FishGrassBlades.hlsl GrassUnpack).
+		/// </summary>
+		public static void Unpack(uint packed, uint colour, uint more, out int type, out float facing, out float height, out float lean, out float fade, out float clumpColour)
+		{
+			type = (int)(packed & 15u) | (int)(colour >> TypeHighShift & 1u) << 4 | (int)(colour >> TypeTopShift & 1u) << 5
+				| (int)(more >> TypeSeventhShift & 1u) << 6;
 			facing = ((packed >> 4) & 127u) / 128f * 6.2831853f;
 			float q = ((packed >> 11) & 127u) / 127f;
 			height = q * q * MaxPackedHeight * ((colour >> TallShift & 1u) != 0u ? TallHeightScale : 1f);
@@ -573,44 +596,67 @@ namespace FishMMO.Client
 			clumpColour = ((packed >> 27) & 31u) / 31f;
 		}
 
-		/// <summary>Where a record's type's fifth bit sits in its colour word (types 16..31).</summary>
+		/// <summary>Where a record's type's fifth bit sits in its colour word (types 16..31, 48..63).</summary>
 		public const int TypeHighShift = 28;
+
+		/// <summary>Where a record's type's sixth bit sits in its colour word (types 32..63): the old valid flag's bit.</summary>
+		public const int TypeTopShift = 31;
 
 		/// <summary>Where a record's tall mark sits in its colour word: its packed height is half its own (<see cref="TallHeightScale"/>).</summary>
 		public const int TallShift = 27;
 
+		/// <summary>Where a record's type's seventh bit sits in its sixth word (types 64..127).</summary>
+		public const int TypeSeventhShift = 0;
+
 		/// <summary>
-		/// The bits of a blade's colour word that belong to its shape, not its colour: the type's fifth bit and the tall
-		/// mark. Every record of the blade carries them, its shadow casters' colourless ones too (their colour word is
+		/// A record's sixth word (2026-10-27): the type's seventh bit, on every record of the blade (its shadow casters' and its
+		/// head cards' too). Zero for types 0..63, so their records are what they were; its bits 1..31 are free.
+		/// FishGrassBlades.compute GrassRecordMore.
+		/// </summary>
+		public static uint RecordMore(int type)
+		{
+			uint t = (uint)Math.Max(0, Math.Min(MaxTypes - 1, type));
+			return (t >> 6 & 1u) << TypeSeventhShift;
+		}
+
+		/// <summary>
+		/// The bits of a blade's colour word that belong to its shape, not its colour: the type's fifth and sixth bits and the
+		/// tall mark (the seventh is in its sixth word, <see cref="RecordMore"/>). Every record of the blade carries them, its shadow casters' colourless ones too (their colour word is
 		/// these bits and the head part, never the valid flag). Zero for a type under 16 no taller than
 		/// <see cref="MaxPackedHeight"/>, so such a record is what it always was. FishGrassBlades.compute GrassRecordBits.
 		/// </summary>
 		public static uint RecordBits(int type, float height)
 		{
-			uint high = (uint)Math.Max(0, Math.Min(MaxTypes - 1, type)) >> 4 & 1u;
+			uint t = (uint)Math.Max(0, Math.Min(MaxTypes - 1, type));
 			uint tall = height > MaxPackedHeight ? 1u : 0u;
-			return high << TypeHighShift | tall << TallShift;
+			return (t >> 4 & 1u) << TypeHighShift | (t >> 5 & 1u) << TypeTopShift | tall << TallShift;
 		}
 
 		/// <summary>
 		/// Packs the terrain's linear albedo under a blade: square root (so dark soils keep their steps) at
-		/// 8 bits a channel, bit 31 set when <paramref name="valid"/> (FishGrassBlades.compute GrassPackColour).
+		/// 8 bits a channel; an invalid colour is all zero, a valid one never is (a black ground's blue is raised a step: 2026-10-27,
+		/// the valid flag's bit 31 became the type's sixth, <see cref="TypeTopShift"/>) (FishGrassBlades.compute GrassPackColour).
 		/// Bits 29..30 are the record's head part (<see cref="WithHeadPart"/>), 27..28 its <see cref="RecordBits"/>, 24..26 its burn tone (<see cref="WithBurnTone"/>).
 		/// </summary>
 		public static uint PackColour(float r, float g, float b, bool valid)
 		{
 			static uint Q(float v) => (uint)Math.Max(0, Math.Min(255, (int)Math.Round(Math.Sqrt(Math.Max(0f, Math.Min(1f, v))) * 255f)));
-			return Q(r) | Q(g) << 8 | Q(b) << 16 | (valid ? 1u : 0u) << 31;
+			if (!valid)
+			{
+				return 0u;
+			}
+			uint packed = Q(r) | Q(g) << 8 | Q(b) << 16;
+			return packed == 0u ? 1u << 16 : packed;
 		}
 
-		/// <summary>The inverse of <see cref="PackColour"/> (FishGrassBlades.hlsl GrassUnpackColour).</summary>
+		/// <summary>The inverse of <see cref="PackColour"/> (FishGrassBlades.hlsl GrassUnpackColour): valid where any colour bit is set.</summary>
 		public static void UnpackColour(uint packed, out float r, out float g, out float b, out bool valid)
 		{
 			static float D(uint q) { float v = q / 255f; return v * v; }
 			r = D(packed & 255u);
 			g = D(packed >> 8 & 255u);
 			b = D(packed >> 16 & 255u);
-			valid = (packed >> 31) != 0u;
+			valid = (packed & 0xFFFFFFu) != 0u;
 		}
 
 		/// <summary>Where a record's head part sits in its colour word.</summary>
@@ -682,6 +728,24 @@ namespace FishMMO.Client
 			float share = a + b > 1e-5f ? a / (a + b) : 1f;
 			uint q = (uint)Math.Max(0, Math.Min(255, (int)Math.Round(share * 255f)));
 			return (uint)id0 | (uint)id1 << 8 | q << 16 | 255u << 24;
+		}
+
+		/// <summary>
+		/// A packed surface texel (<see cref="PackSurfaceLayers"/>) with its two layer ids renamed from a tile's channels to the
+		/// scene's layers (<paramref name="sceneLayers"/>[channel], FishMMO.Shared.TerrainTileLayers: a tile carrying only the
+		/// layers it paints). Unchanged for null, an unpainted texel (0), or an id past the map. The tile's channels are in scene
+		/// order, so the strongest of two equal layers is the same one either way.
+		/// </summary>
+		public static uint RenameSurfaceLayers(uint packed, int[] sceneLayers)
+		{
+			if (sceneLayers == null || packed == 0u)
+			{
+				return packed;
+			}
+			int id0 = (int)(packed & 255u), id1 = (int)(packed >> 8 & 255u);
+			uint to0 = (uint)(id0 < sceneLayers.Length ? sceneLayers[id0] : id0) & 255u;
+			uint to1 = (uint)(id1 < sceneLayers.Length ? sceneLayers[id1] : id1) & 255u;
+			return (packed & 0xFFFF0000u) | to0 | to1 << 8;
 		}
 
 		/// <summary>

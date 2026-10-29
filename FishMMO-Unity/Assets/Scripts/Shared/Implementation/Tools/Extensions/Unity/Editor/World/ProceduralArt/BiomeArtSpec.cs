@@ -318,6 +318,76 @@ namespace FishMMO.Shared.WorldDesign
 				Glow = glow;
 				return this;
 			}
+
+			/// <summary>
+			/// Facing band (TerrainTextureLayer.facingBand, 2026-10-26, phase GROUND-BANDS, decision 71): off (the default) for every layer,
+			/// as before. Set through <see cref="Facing"/>.
+			/// </summary>
+			public BiomeFacingBand FacingBand;
+
+			/// <summary>
+			/// Paints this detail ground only on slopes whose fall line looks within ±<paramref name="halfWidth"/>° of one way: a shade
+			/// frost on the poleward faces, <c>D(Ground.Frost, 6f).Facing(BiomeFacing.Poleward)</c>. Main layers ignore it.
+			/// </summary>
+			public Layer Facing(BiomeFacing toward, float halfWidth = BiomeFacingBand.DefaultHalfWidth, float falloff = BiomeFacingBand.DefaultFalloff,
+				float minSlope = BiomeFacingBand.DefaultMinSlope)
+			{
+				FacingBand = BiomeFacingBand.Of(toward, halfWidth, falloff, minSlope);
+				return this;
+			}
+
+			/// <summary>
+			/// Fall-line stretch (TerrainTextureLayer.fallLineStretch, 2026-10-26, phase GROUND-BANDS): 0 (the default) for round patches,
+			/// as before. Set through <see cref="FallLine"/>.
+			/// </summary>
+			public float FallLineStretch;
+
+			/// <summary>
+			/// Draws this detail ground's patches out <paramref name="stretch"/> times down the fall line (an avalanche track:
+			/// <c>D(Ground.Soil, 220f, 4.5f, 24f, 40f).FallLine(4f)</c>). 1 or less is no stretch.
+			/// </summary>
+			public Layer FallLine(float stretch)
+			{
+				FallLineStretch = stretch > 1f ? Mathf.Min(16f, stretch) : 0f;
+				return this;
+			}
+
+			/// <summary>
+			/// Site band (TerrainTextureLayer.siteBand, 2026-10-26, phase GROUND-BANDS): off (the default) for every layer, as before. Set
+			/// through <see cref="NearSites"/>.
+			/// </summary>
+			public BiomeSiteBand SiteBand;
+
+			/// <summary>
+			/// Paints this detail ground only on and round the points of interest of the named kinds, fading out over
+			/// <paramref name="metres"/> past their footprints (a whale fall's blackened halo:
+			/// <c>D(Ground.Mud, 40f).NearSites("SunkenWhaleFall", 10f)</c>); nowhere on a scene with none.
+			/// </summary>
+			public Layer NearSites(string kinds, float metres = BiomeSiteBand.DefaultMetres)
+			{
+				SiteBand = BiomeSiteBand.Of(kinds, metres);
+				return this;
+			}
+
+			/// <summary>
+			/// Shared-clock window (TerrainTextureLayer.clock, 2026-10-26, phase GROUND-BANDS): none (the default) for every layer, as before.
+			/// Set through <see cref="Clock"/>.
+			/// </summary>
+			public BiomeGroundClock GroundClock;
+
+			/// <summary>
+			/// Draws this ground only through a window of the local year or day, its biome's main ground showing through outside it: a
+			/// seasonal phytodetritus <c>.Clock(BiomeGroundClock.Year(0.2f, 0.65f, 0.15f))</c>, a dawn frost gone by noon
+			/// <c>.Clock(BiomeGroundClock.Day(0.8f, 0.42f))</c>.
+			/// </summary>
+			public Layer Clock(BiomeGroundClock clock)
+			{
+				GroundClock = clock;
+				return this;
+			}
+
+			/// <summary>True when the layer names any of the 2026-10-26 ground bands (facing, fall line, sites, clock).</summary>
+			public bool HasGroundBands => FacingBand.On || FallLineStretch > 1f || SiteBand.On || !GroundClock.IsNone;
 		}
 
 		/// <summary>A cliff layer: a family on faces steeper than an angle.</summary>
@@ -473,6 +543,11 @@ namespace FishMMO.Shared.WorldDesign
 			/// </summary>
 			public BiomeScatterMode Mode;
 			/// <summary>
+			/// Facing band (<see cref="PrefabSpawnRule.facingBand"/>, 2026-10-26, phase GROUND-BANDS, decision 71): off for none. Set through
+			/// <see cref="Faced"/>.
+			/// </summary>
+			public BiomeFacingBand Facing;
+			/// <summary>
 			/// Tree-channel rules: the heading range instances are turned to, degrees about the vertical
 			/// (<see cref="PrefabSpawnRule.yRotationRange"/>). Any heading unless set through <see cref="Aligned"/>.
 			/// </summary>
@@ -587,6 +662,8 @@ namespace FishMMO.Shared.WorldDesign
 				/// <summary>The current band, m/s, x slowest, y quickest, 0 open; null for none.</summary>
 				public Vector2? Current;
 				public float CurrentFalloff = BiomeBedBands.DefaultCurrentFalloff;
+				/// <summary>The landform zone band (2026-10-26, phase GROUND-BANDS, decision 87): off for none. Set through <see cref="BedZone"/>.</summary>
+				public BiomeLandformBand Zone;
 			}
 
 			/// <summary>The extra beds the file gives, in slot order (bed/0, bed/1, bed/2). Empty for every biome until a round gives one.</summary>
@@ -612,6 +689,20 @@ namespace FishMMO.Shared.WorldDesign
 					Depth = new Vector2(Mathf.Max(0f, depthMin), Mathf.Max(0f, depthMax)),
 					Current = speedMin > 0f || speedMax > 0f ? new Vector2(Mathf.Max(0f, speedMin), Mathf.Max(0f, speedMax)) : (Vector2?)null,
 				});
+				return this;
+			}
+
+			/// <summary>
+			/// Keeps the extra bed added last to one part of its biome's sculpted landforms (or, <paramref name="outside"/>, off it), as a
+			/// detail layer's zone band (2026-10-26, phase GROUND-BANDS, decision 87): a sinking quarter's drowned paving only on its floor,
+			/// <c>.BedLayer(Ground.Flagstone, BiomeBedWaters.Lake, 0.2f, 1.5f).BedZone(BiomeLandformPart.Floor, "SinkingQuarter")</c>.
+			/// </summary>
+			public Entry BedZone(BiomeLandformPart part, string kind = null, bool outside = false)
+			{
+				if (BedLayers.Count > 0)
+				{
+					BedLayers[BedLayers.Count - 1].Zone = BiomeLandformBand.Of(part, kind, outside);
+				}
 				return this;
 			}
 
@@ -1010,7 +1101,11 @@ namespace FishMMO.Shared.WorldDesign
 				var shells = new List<BiomeCaveShell>();
 				foreach (CaveForm form in (CaveForm[])Enum.GetValues(typeof(CaveForm)))
 				{
-					shells.Add(new BiomeCaveShell((BiomeCaveForm)form, CaveShellFor(form)));
+					// A sea hall's shell only where the file names one (2026-10-26, I2n-b): the 83 templates' lists stay as they were.
+					if (BiomeCaveInteriors.InEveryList((BiomeCaveForm)form) || caveShells.Exists(c => c.Form == form))
+					{
+						shells.Add(new BiomeCaveShell((BiomeCaveForm)form, CaveShellFor(form)));
+					}
 				}
 				return shells;
 			}
@@ -1160,13 +1255,13 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>
 			/// Drowns the biome's caves of a form (a natural cave on wet ground, in <paramref name="share"/> of systems) or deepens a
 			/// grotto's pool: floors up to <paramref name="depth"/> metres under the water (decision 86 (a): Cave 1.2, Grotto 1.5), with
-			/// marsh-gas beads at <paramref name="bubbles"/> (0 none).
+			/// marsh-gas beads at <paramref name="bubbles"/> and leeches swimming toward waders at <paramref name="leeches"/> (0 none).
 			/// </summary>
-			public Entry CaveFlood(CaveForm form, float depth, float share, float bubbles = 0f)
+			public Entry CaveFlood(CaveForm form, float depth, float share, float bubbles = 0f, float leeches = 0f)
 			{
 				caveFloods ??= new List<BiomeCaveFlood>();
 				caveFloods.RemoveAll(f => f.Form == (BiomeCaveForm)form);
-				caveFloods.Add(new BiomeCaveFlood((BiomeCaveForm)form, Mathf.Max(0f, depth), Mathf.Clamp01(share), Mathf.Max(0f, bubbles)));
+				caveFloods.Add(new BiomeCaveFlood((BiomeCaveForm)form, Mathf.Max(0f, depth), Mathf.Clamp01(share), Mathf.Max(0f, bubbles), Mathf.Max(0f, leeches)));
 				caveFloods.Sort((a, b) => a.Form.CompareTo(b.Form));
 				return this;
 			}
@@ -1202,6 +1297,10 @@ namespace FishMMO.Shared.WorldDesign
 				var list = new List<BiomeCaveHanging>();
 				foreach (CaveForm form in (CaveForm[])Enum.GetValues(typeof(CaveForm)))
 				{
+					if (!BiomeCaveInteriors.InEveryList((BiomeCaveForm)form))
+					{
+						continue;
+					}
 					CaveHangingPlan plan = global::FishMMO.Shared.WorldDesign.CaveHanging.Coded(form);
 					list.Add(new BiomeCaveHanging((BiomeCaveForm)form, plan.Silk, plan.DeepRoots, CaveFungi.CodedRootsNearMouth(form), plan.Guano));
 				}
@@ -1365,10 +1464,38 @@ namespace FishMMO.Shared.WorldDesign
 					Species = species ?? Array.Empty<string>();
 				}
 
+				/// <summary>
+				/// A named style (BiomeLinearStyles, 2026-10-26, I2f-b: "Kershef", "SergeLine", "Gallery") at its own place, grown of
+				/// <paramref name="species"/> (none: the style's own). A name the table lacks lays nothing (<see cref="Unknown"/>).
+				/// </summary>
+				public Line(string named, params string[] species) : this(named, null, species)
+				{
+				}
+
+				/// <summary>A named style (BiomeLinearStyles) laid at <paramref name="where"/> (null: its own place), grown of <paramref name="species"/> (none: its own).</summary>
+				public Line(string named, BiomeLinearPlace? where, params string[] species)
+				{
+					if (BiomeLinearStyles.TryGet(named, out BiomeNamedLinearStyle preset))
+					{
+						Style = preset.Make(where);
+						Species = species != null && species.Length > 0 ? species : preset.Species;
+						Standards = preset.Standards;
+					}
+					else
+					{
+						Style = new BiomeLinearStyle(BiomeLinearForm.Laid, where ?? BiomeLinearPlace.FieldEdges, 0f);
+						Unknown = named ?? string.Empty;
+					}
+				}
+
+				/// <summary>The name a line was given that BiomeLinearStyles lacks (its style then lays nothing); empty for a known one.</summary>
+				public string Unknown = string.Empty;
+
 				/// <summary>The prefab name a species is generated under for this line: a hedge's bushes are bush details, everything else trees.</summary>
 				public string PrefabOf(string species, bool standard)
 				{
-					if (string.IsNullOrEmpty(species) || species.StartsWith("Detail_", StringComparison.Ordinal) || species.StartsWith("Tree_", StringComparison.Ordinal))
+					if (string.IsNullOrEmpty(species) || species.StartsWith("Detail_", StringComparison.Ordinal) || species.StartsWith("Tree_", StringComparison.Ordinal)
+						|| species.StartsWith("Deadwood_", StringComparison.Ordinal))
 					{
 						return species;
 					}
@@ -1575,6 +1702,9 @@ namespace FishMMO.Shared.WorldDesign
 				return looks;
 			}
 
+			/// <summary>True when the biome's file tunes one blade prefab's look (by name) with <see cref="Blades"/> (a round's own look).</summary>
+			public bool TunesBlade(string prefab) => bladeTunings.Exists(t => t.Prefab == prefab);
+
 			/// <summary>The biome's look of one blade prefab (by name): the old look, then its tunings; null for a prefab that is no blade.</summary>
 			public BiomeGrassType LookOf(string prefab)
 			{
@@ -1601,11 +1731,12 @@ namespace FishMMO.Shared.WorldDesign
 			// the creatures' country every biome's file names with Wildlife (the client's keyword reading of the name; alien
 			// ground is not named here, since 2026-10-16 the client reads it live from the template's air, BiomeHabitats.Live);
 			// the sea creatures a sea biome's file names with HomeTo, each with its weight (the kinds that named it as a
-			// favourite, at the weight they gave every favourite: SeaKindPreferWeight); the vines from the vine table's row
-			// (VineBiomes, by the biome's name) unless the file sets its
-			// own with GrowsVines or NoVines; the gathering resources from the catalogue's rows that name the biome
-			// (GatheringResourceCatalogue) unless the file sets its own with Gathers; and a herb grove's herbs from those
-			// resources unless the file sets its own with Herbs.
+			// favourite, at the weight they gave every favourite: SeaKindPreferWeight); the vines its file names with GrowsVines
+			// (none without); the gathering resources its file names with Gathers (none without); and a herb grove's herbs from
+			// those resources unless the file sets its own with Herbs. Until 2026-10-26 the vines and the resources defaulted to
+			// the code tables' rows by the biome's name (VineBiomes, GatheringResourceCatalogue's biome lists); phase CODE-TABLE
+			// CLEARANCE wrote each row into its biome's file (decision 1: the template is the single source, and the file is
+			// what authors it), so the tables are only the cut's fallback for a template never authored (BiomeTemplateArt).
 
 			/// <summary>
 			/// The country the biome offers ambient creatures as the template stores it (<see cref="BiomeTemplate.Habitat"/>):
@@ -1664,7 +1795,7 @@ namespace FishMMO.Shared.WorldDesign
 			public List<string> SeaLifeKinds() => SeaLife().ConvertAll(entry => entry.Kind);
 
 			/// <summary>
-			/// Gives the biome its own vines in place of the vine table's row: how thickly they grow at a cave's mouth, on old
+			/// Gives the biome its vines: how thickly they grow at a cave's mouth, on old
 			/// walls, on cliff crags and on trees (0..1), and the species with their weights.
 			/// </summary>
 			public Entry GrowsVines(float caves, float ruins, float cliffs, float trees, params (string Species, float Weight)[] species)
@@ -1677,7 +1808,7 @@ namespace FishMMO.Shared.WorldDesign
 				return this;
 			}
 
-			/// <summary>Grows no vines here, whatever the vine table says.</summary>
+			/// <summary>Grows no vines here (as a file that names none: said outright).</summary>
 			public Entry NoVines()
 			{
 				vines = new BiomeVines();
@@ -1685,32 +1816,13 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// The biome's vines (<see cref="BiomeTemplate.Vines"/>): its file's own (<see cref="GrowsVines"/>), else the vine
-			/// table's row for the biome's name (<see cref="VineBiomes"/>), else none. A fresh copy each call.
+			/// The biome's vines (<see cref="BiomeTemplate.Vines"/>): its file's own (<see cref="GrowsVines"/>), else none. A fresh
+			/// copy each call. The vine table (<see cref="VineBiomes"/>) is not read: its rows were written into the files
+			/// (2026-10-26, phase CODE-TABLE CLEARANCE), and it is only the cut's fallback for a template never authored.
 			/// </summary>
-			public BiomeVines VineGrowth()
-			{
-				if (vines != null)
-				{
-					return vines.Clone();
-				}
-				var growth = new BiomeVines();
-				VineBiomes.Habitat row = VineBiomes.For(Biome);
-				if (row != null)
-				{
-					growth.Caves = row.Caves;
-					growth.Ruins = row.Ruins;
-					growth.Cliffs = row.Cliffs;
-					growth.Trees = row.Trees;
-					foreach ((string species, float weight) in row.Species)
-					{
-						growth.Species.Add(new BiomeVineSpecies(species, weight));
-					}
-				}
-				return growth;
-			}
+			public BiomeVines VineGrowth() => vines != null ? vines.Clone() : new BiomeVines();
 
-			/// <summary>Gives the biome its own gathering resources (the catalogue's node names) in place of the catalogue's.</summary>
+			/// <summary>Gives the biome its gathering resources (the catalogue's node names): the whole list, in the catalogue's order.</summary>
 			public Entry Gathers(params string[] nodes)
 			{
 				gathers = nodes ?? Array.Empty<string>();
@@ -1719,25 +1831,11 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// The gathering resources the biome's sites draw from (<see cref="BiomeTemplate.GatheringResources"/>): its file's
-			/// own (<see cref="Gathers"/>), else every catalogue resource that grows here
-			/// (<see cref="GatheringResourceCatalogue.GrowsIn"/>: one that names the biome, or names none), in the catalogue's order.
+			/// own (<see cref="Gathers"/>), else none. The catalogue's biome lists (<see cref="GatheringResourceCatalogue.GrowsIn"/>)
+			/// are not read: each file names what they gave it (2026-10-26, phase CODE-TABLE CLEARANCE, in the catalogue's order),
+			/// and they are only the cut's fallback for a template never authored.
 			/// </summary>
-			public List<string> GatheringResources()
-			{
-				if (gathers != null)
-				{
-					return new List<string>(gathers);
-				}
-				var nodes = new List<string>();
-				foreach (GatheringResource resource in GatheringResourceCatalogue.All)
-				{
-					if (GatheringResourceCatalogue.GrowsIn(resource, Biome) && !nodes.Contains(resource.Node))
-					{
-						nodes.Add(resource.Node);
-					}
-				}
-				return nodes;
-			}
+			public List<string> GatheringResources() => new List<string>(gathers ?? Array.Empty<string>());
 
 			/// <summary>Gives a herb grove here its own herbs (detail prefab names) in place of the gathered herbs' kin.</summary>
 			public Entry Herbs(params string[] prefabs)
@@ -1756,9 +1854,12 @@ namespace FishMMO.Shared.WorldDesign
 			//
 			// What the biome's points of interest are and how they are built, as the authoring writes them onto its template:
 			// the kinds it hosts, its template variants' and styles' weights, its weathering, its crops and its structure
-			// palette. Each defaults to exactly what the cut decided by the biome's name before (the point-of-interest
-			// catalogue's rows and templates, the props' wet/dry/damp keywords, wheat in every field, the kit's materials); a
-			// biome's own file sets its own with Hosts, Prefers, Favours, Weathers, Crops and Builds.
+			// palette. The kinds, the variants' weights and the weathering are the file's own (Sites and Hosts, Prefers,
+			// Weathers): until 2026-10-26 they defaulted to what the cut decided by the biome's name (the point-of-interest
+			// catalogue's rows, the templates' biome lists, the props' wet/dry/damp keywords), and phase CODE-TABLE CLEARANCE
+			// wrote that answer into every file (decision 1), so the name tables are only the cut's fallback for a template
+			// never authored. The crops default to wheat in every field and the palette to the kit's materials; a biome's own
+			// file sets its own with Favours, Crops and Builds.
 
 			private List<(POIType Kind, float Weight)> hosts;
 			private List<(POIType Kind, string Variant, float Weight)> prefers;
@@ -1810,7 +1911,46 @@ namespace FishMMO.Shared.WorldDesign
 				return this;
 			}
 
-			/// <summary>Gives a kind its own weight here in place of the catalogue's (0: never sited here).</summary>
+			/// <summary>
+			/// How the biome's ways bridge its rivers (<see cref="BiomeTemplate.CrossingStyle"/>, 2026-10-26, I2l-b): the kit's timber spans
+			/// unless the biome's file names a style (<see cref="Crosses"/>).
+			/// </summary>
+			public BiomeCrossingStyle CrossingStyle = BiomeCrossingStyle.Default;
+
+			/// <summary>Bridges the biome's rivers in <paramref name="style"/> wherever it fits the span (<see cref="CrossingStyle"/>).</summary>
+			public Entry Crosses(BiomeCrossingStyle style)
+			{
+				CrossingStyle = style;
+				return this;
+			}
+
+			/// <summary>
+			/// The biome's straight roads (<see cref="BiomeTemplate.StraightRoads"/>, 2026-10-26, I2l-b, decisions 50/56/87/89): none unless
+			/// the biome's file lays them (<see cref="LaysStraightRoads"/>).
+			/// </summary>
+			public BiomeStraightRoads StraightRoads = BiomeStraightRoads.None;
+
+			/// <summary>Lays the trunk ways between the biome's settlements dead-straight in <paramref name="form"/>, worn into ox-cart ruts when <paramref name="ruts"/>.</summary>
+			public Entry LaysStraightRoads(BiomeStraightRoadForm form, bool ruts = false)
+			{
+				StraightRoads = new BiomeStraightRoads(form, ruts);
+				return this;
+			}
+
+			private List<(POIType Kind, float Weight)> sites;
+
+			/// <summary>
+			/// Names every point-of-interest kind sited on the biome's ground, each with its weight: the whole list, in place of any
+			/// before (2026-10-26, phase CODE-TABLE CLEARANCE: each file was given the weights the catalogue's rows gave its biome
+			/// by its name). A kind left out is never sited here; <see cref="Hosts"/> after it changes one kind.
+			/// </summary>
+			public Entry Sites(params (POIType Kind, float Weight)[] kinds)
+			{
+				sites = new List<(POIType, float)>(kinds ?? Array.Empty<(POIType, float)>());
+				return this;
+			}
+
+			/// <summary>Gives a kind its own weight here over the file's <see cref="Sites"/> (0: never sited here).</summary>
 			public Entry Hosts(POIType kind, float weight)
 			{
 				(hosts ??= new List<(POIType, float)>()).Add((kind, weight));
@@ -1878,17 +2018,50 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// The point-of-interest kinds sited on the biome's ground and how gladly (<see cref="BiomeTemplate.SiteKinds"/>): the
-			/// weight every catalogue row gives the biome by its name (<see cref="PointOfInterestRules.KindWeightsFor"/>, the
-			/// code's rows unless <paramref name="rules"/> are given: the authoring passes the project's, catalogue asset and
-			/// all), with the file's own <see cref="Hosts"/> laid over them; only kinds weighing more than 0, in kind order.
+			/// The loose ground the wind lifts here, when the file says (<see cref="BiomeTemplate.LooseGround"/>): a substance's asset
+			/// name, or "" for none. Unset (the default) leaves the template's. Set through <see cref="Loose"/>. Until 2026-10-26 only
+			/// the weather content generator's table by the biome's name said it; phase CODE-TABLE CLEARANCE moved each row into
+			/// its biome's file, and the generator now seeds a template's ground from the file (<see cref="Emission"/> with it).
 			/// </summary>
-			public List<BiomeSiteKind> SiteKinds(PointOfInterestRules rules = null)
+			public string LooseGround;
+
+			/// <summary>Rewrites the loose ground (null: none), once over the template's original, then hand edits kept.</summary>
+			public Entry Loose(string substance)
+			{
+				LooseGround = substance ?? string.Empty;
+				return this;
+			}
+
+			/// <summary>
+			/// The terrain process profile the biome's ground wears as (<see cref="BiomeTemplate.TerrainProcess"/>: how it erodes,
+			/// drains and breaks into benches), by the profile's name (<see cref="TerrainProcessTable.Profiles"/>), or null when the
+			/// file names none (the template's kept). Set through <see cref="ErodesAs"/>. Until 2026-10-26 the terrain process
+			/// table's assignments by the biome's name said it; phase CODE-TABLE CLEARANCE moved each into its biome's file.
+			/// </summary>
+			public string TerrainProcessName;
+
+			/// <summary>Wears the biome's ground as a terrain process profile (<see cref="TerrainProcessName"/>), by its name.</summary>
+			public Entry ErodesAs(string profile)
+			{
+				TerrainProcessName = string.IsNullOrWhiteSpace(profile) ? null : profile;
+				return this;
+			}
+
+			/// <summary>
+			/// The point-of-interest kinds sited on the biome's ground and how gladly (<see cref="BiomeTemplate.SiteKinds"/>): the
+			/// file's <see cref="Sites"/> with its <see cref="Hosts"/> laid over them; only kinds weighing more than 0, in kind
+			/// order. The catalogue's rows are not read by the biome's name (<see cref="PointOfInterestRules.KindWeightsFor"/>, the
+			/// cut's fallback for a template never authored): their answer is in every file since 2026-10-26.
+			/// </summary>
+			public List<BiomeSiteKind> SiteKinds()
 			{
 				var weights = new SortedDictionary<int, float>();
-				foreach ((POIType kind, float weight) in (rules ?? PointOfInterestRules.Default()).KindWeightsFor(Biome))
+				if (sites != null)
 				{
-					weights[(int)kind] = weight;
+					foreach ((POIType kind, float weight) in sites)
+					{
+						weights[(int)kind] = weight;
+					}
 				}
 				if (hosts != null)
 				{
@@ -1910,7 +2083,7 @@ namespace FishMMO.Shared.WorldDesign
 				return list;
 			}
 
-			/// <summary>Gives a kind's template variant its own weight here in place of the templates' (0: never built here).</summary>
+			/// <summary>Gives a kind's template variant its own weight here in place of its weight elsewhere (0: never built here).</summary>
 			public Entry Prefers(POIType kind, string variant, float weight)
 			{
 				(prefers ??= new List<(POIType, string, float)>()).Add((kind, variant, weight));
@@ -1918,13 +2091,18 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// The weight each template variant takes here (<see cref="BiomeTemplate.SiteVariants"/>): for every template the
-			/// authoring writes (<see cref="PointOfInterestTemplateSpecs.All"/>) whose biome list gives this biome, by its name,
-			/// another weight than the template's weight elsewhere, that weight; then the same for the project's other templates
-			/// (<paramref name="handMade"/>: made by hand, or left over from an older catalogue; 2026-10-16, I5b), so a hand-made
-			/// variant that names this biome is not stranded at its weight elsewhere; then the file's own <see cref="Prefers"/>.
-			/// In the templates' order. A variant not listed keeps its weight elsewhere, so the pick is the same as by the name.
+			/// The weight each template variant takes here (<see cref="BiomeTemplate.SiteVariants"/>): the file's own
+			/// <see cref="Prefers"/>, in its order; then, for each of the project's other templates (<paramref name="handMade"/>:
+			/// made by hand, or left over from an older catalogue; 2026-10-16, I5b) whose own biome list gives this biome another
+			/// weight than its weight elsewhere, that weight, so a hand-made variant that names this biome is not stranded (the
+			/// file's word for that variant stands). A variant not listed keeps its weight elsewhere.
 			/// </summary>
+			/// <remarks>
+			/// Until 2026-10-26 the catalogue's templates' biome lists (<see cref="PointOfInterestTemplateSpecs.All"/>,
+			/// <see cref="PointOfInterestTemplateSpec.BiomeWeightByName"/>) came first, by the biome's name; phase CODE-TABLE
+			/// CLEARANCE wrote their answer into every file as Prefers in the templates' order, so the list and its mark are as
+			/// before. The templates' lists stay what the template authoring writes onto their assets: the cut's fallback.
+			/// </remarks>
 			/// <param name="handMade">
 			/// The project's template assets as plain data (kind, variant, weight elsewhere, biome list): a variant the catalogue
 			/// writes is skipped (the catalogue's weights stand), and of two assets of one variant the first counts.
@@ -1944,36 +2122,34 @@ namespace FishMMO.Shared.WorldDesign
 						list.Add(new BiomeSiteVariant(kind, variant, weight));
 					}
 				}
-				var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-				foreach (PointOfInterestTemplateSpec spec in PointOfInterestTemplateSpecs.All())
+				if (prefers != null)
 				{
-					written.Add(spec.Kind + "/" + spec.Variant);
-					float weight = spec.BiomeWeightByName(Biome);
-					if (weight != spec.DefaultBiomeWeight)
+					foreach ((POIType kind, string variant, float weight) in prefers)
 					{
-						Set(spec.Kind, spec.Variant, weight);
+						Set(kind, variant, weight);
 					}
 				}
 				if (handMade != null)
 				{
+					// A variant the catalogue writes is skipped (its weights are the file's Prefers); of two of one variant, the first.
+					var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+					foreach (PointOfInterestTemplateSpec spec in PointOfInterestTemplateSpecs.All())
+					{
+						written.Add(spec.Kind + "/" + spec.Variant);
+					}
 					foreach (PointOfInterestTemplateSpec own in handMade)
 					{
 						if (own == null || string.IsNullOrWhiteSpace(own.Variant) || !written.Add(own.Kind + "/" + own.Variant.Trim()))
 						{
 							continue;
 						}
+						string variant = own.Variant.Trim();
 						float weight = own.BiomeWeightByName(Biome);
-						if (weight != own.DefaultBiomeWeight)
+						if (weight != own.DefaultBiomeWeight
+							&& !list.Exists(v => v.Kind == own.Kind && string.Equals(v.Variant, variant, StringComparison.OrdinalIgnoreCase)))
 						{
-							Set(own.Kind, own.Variant.Trim(), weight);
+							Set(own.Kind, variant, weight);
 						}
-					}
-				}
-				if (prefers != null)
-				{
-					foreach ((POIType kind, string variant, float weight) in prefers)
-					{
-						Set(kind, variant, weight);
 					}
 				}
 				return list;
@@ -2005,15 +2181,17 @@ namespace FishMMO.Shared.WorldDesign
 			/// </summary>
 			public Entry Coated(BiomeStructureCoat coat, float cover, float strength = 1f, Color tint = default)
 			{
-				weathers = (weathers ?? WeatheringByName(Biome)).WithCoat(coat, cover, strength, tint);
+				weathers = (weathers ?? DefaultWeathering).WithCoat(coat, cover, strength, tint);
 				return this;
 			}
 
 			/// <summary>
 			/// How the weather finishes the biome's buildings and stones (<see cref="BiomeTemplate.Weathering"/>): the file's own
-			/// (<see cref="Weathers"/>), else what the biome's name gave (<see cref="WeatheringByName"/>).
+			/// (<see cref="Weathers"/>), else <see cref="DefaultWeathering"/>. Until 2026-10-26 the default was what the biome's
+			/// name gave (<see cref="WeatheringByName"/>); phase CODE-TABLE CLEARANCE wrote that into every file, and the keyword
+			/// reading is only the cut's fallback for a template never authored.
 			/// </summary>
-			public BiomeWeathering Weathering() => weathers ?? WeatheringByName(Biome);
+			public BiomeWeathering Weathering() => weathers ?? DefaultWeathering;
 
 			/// <summary>Gives the biome's fields their own crops (detail prefab names, each with a weight) in place of wheat.</summary>
 			public Entry Crops(params (string Prefab, float Weight)[] fieldCrops)
@@ -2349,12 +2527,20 @@ namespace FishMMO.Shared.WorldDesign
 		public const string WheatCrop = "Detail_GrassWheat";
 
 		/// <summary>
+		/// The weathering of a file that names none (<see cref="Entry.Weathers"/>): moss on half the worn pieces, what a name with no
+		/// keyword gave (<see cref="WeatheringByName"/>), with no name read.
+		/// </summary>
+		public static BiomeWeathering DefaultWeathering => new BiomeWeathering(BiomeStructureFinish.Mossy, 0f, 0.5f);
+
+		/// <summary>
 		/// The weathering a biome's name gave its points of interest until 2026-10-16 (PropsFeature.FinishFor read the name's
 		/// keywords): a dark algal film in wet country, 0.3 + 0.6 × decay of the pieces (swamp, mangrove, bog, wetland, marsh,
 		/// estuary); nothing in dry country (desert, badlands, salt, arid, dust, wasteland, savanna, scrub, volcanic, molten,
 		/// sulphur, oasis); else moss on 1 × decay of the pieces in damp country (forest, woodland, jungle, rainforest, taiga,
 		/// bamboo, valley, karst, temperate, lake, river) and 0.5 × decay elsewhere (and with no biome at all). In that order: a
-		/// name that is both wet and dry is wet. Every biome's default (<see cref="Entry.Weathering"/>).
+		/// name that is both wet and dry is wet. Every biome's default (<see cref="Entry.Weathering"/>) until 2026-10-26; since
+		/// phase CODE-TABLE CLEARANCE only the cut's fallback for a template never authored (BiomeTemplateArt.Weathering), every
+		/// file naming its own.
 		/// </summary>
 		public static BiomeWeathering WeatheringByName(string biomeName)
 		{
@@ -2447,6 +2633,8 @@ namespace FishMMO.Shared.WorldDesign
 				case CaveForm.LavaTube:
 					return "Basalt";
 				case CaveForm.IceCave:
+				case CaveForm.SeaHall:
+					// A sea hall is cut in the ice shell over its sea (decision 83; its round names the marine ice).
 					return CliffRocks.Ice;
 				default:
 					return BiomeCaveShell.Ground;
@@ -3237,6 +3425,19 @@ namespace FishMMO.Shared.WorldDesign
 		private static Scatter Moded(Scatter rule, BiomeScatterMode mode)
 		{
 			AndEarlier(rule, r => r.Mode = mode);
+			return rule;
+		}
+
+		/// <summary>
+		/// Keeps a rule to slopes facing one way (<see cref="PrefabSpawnRule.facingBand"/>, 2026-10-26, phase GROUND-BANDS, decision 71):
+		/// <c>Faced(Detail(...), BiomeFacing.Poleward)</c> for a cold trap's rime clods on the shaded faces. A rule without this call is
+		/// written exactly as before.
+		/// </summary>
+		private static Scatter Faced(Scatter rule, BiomeFacing toward, float halfWidth = BiomeFacingBand.DefaultHalfWidth, float falloff = BiomeFacingBand.DefaultFalloff,
+			float minSlope = BiomeFacingBand.DefaultMinSlope)
+		{
+			BiomeFacingBand band = BiomeFacingBand.Of(toward, halfWidth, falloff, minSlope);
+			AndEarlier(rule, r => r.Facing = band);
 			return rule;
 		}
 

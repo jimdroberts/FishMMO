@@ -403,7 +403,8 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void Defaults_NameNoMode_AndGlowAsBefore()
 		{
 			Assert.That(BiomeArtSpec.Entries.Length, Is.EqualTo(83));
-			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
+			// An authored round's own glow modes are pinned in BiomeAuthoredRoundTests.
+			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries.Where(e => !BiomeAuthoredRounds.Contains(e.Biome)))
 			{
 				Assert.That(entry.GlowModes(), Is.Empty, $"{entry.Biome} names no glow mode yet");
 				Assert.That(entry.FountainEpisodes().IsEmpty, Is.True, $"{entry.Biome} has no fountain episodes yet");
@@ -417,6 +418,10 @@ namespace FishMMO.UnitTests.WorldDesign
 					continue;
 				}
 				templates++;
+				if (BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(path)))
+				{
+					continue;
+				}
 				Assert.That(Regex.IsMatch(text, @"^  glowModes:\s*\n  - ", RegexOptions.Multiline), Is.False, $"{Path.GetFileName(path)} names a glow mode");
 			}
 			Assert.That(templates, Is.EqualTo(83));

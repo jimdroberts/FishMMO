@@ -33,6 +33,30 @@ Shader "FishMMO/Water/Inland Water"
         [NoScaleOffset] _FoamTexture("Foam", 2D) = "black" {}
         _FoamScale("Foam size (m)", Float) = 2.5
         _FoamColor("Foam colour", Color) = (0.92, 0.94, 0.95, 1)
+        // Runtime per-surface values must also be ShaderLab properties for SRP Batcher compatibility.
+        [HideInInspector] _RiverFlowInfo("_RiverFlowInfo", Vector) = (0,0,0,0)
+        [HideInInspector] _RiverFall0("_RiverFall0", Vector) = (0,0,0,0)
+        [HideInInspector] _RiverFall1("_RiverFall1", Vector) = (0,0,0,0)
+        [HideInInspector] _RiverFall2("_RiverFall2", Vector) = (0,0,0,0)
+        [HideInInspector] _RiverFall3("_RiverFall3", Vector) = (0,0,0,0)
+        [HideInInspector] _InlandLook0("_InlandLook0", Vector) = (0,0,0,0)
+        [HideInInspector] _InlandLook1("_InlandLook1", Vector) = (0,0,0,0)
+        [HideInInspector] _InlandLook2("_InlandLook2", Vector) = (0,0,0,0)
+        [HideInInspector] _InlandLook3("_InlandLook3", Vector) = (0,0,0,0)
+        [HideInInspector] _InlandLook4("_InlandLook4", Vector) = (0,0,0,0)
+        [HideInInspector] _InlandLook5("_InlandLook5", Vector) = (0,0,0,0)
+        [HideInInspector] _InlandLook6("_InlandLook6", Vector) = (0,0,0,0)
+        [HideInInspector] _InlandLook7("_InlandLook7", Vector) = (0,0,0,0)
+        [HideInInspector] _InlandLook8("_InlandLook8", Vector) = (0,0,0,0)
+        [HideInInspector] _InlandLook9("_InlandLook9", Vector) = (0,0,0,0)
+        [HideInInspector] _InlandLook10("_InlandLook10", Vector) = (0,0,0,0)
+        [HideInInspector] _InlandLook11("_InlandLook11", Vector) = (0,0,0,0)
+        [HideInInspector] _InlandLook12("_InlandLook12", Vector) = (0,0,0,0)
+        [HideInInspector] _InlandLook13("_InlandLook13", Vector) = (0,0,0,0)
+        [HideInInspector] _InlandLook14("_InlandLook14", Vector) = (0,0,0,0)
+        [HideInInspector] _RiverFallCount("_RiverFallCount", Float) = 0
+        [HideInInspector] _InlandLookOn("_InlandLookOn", Float) = 0
+        [HideInInspector] _RiverFlowField("_RiverFlowField", 2D) = "black" {}
     }
 
     SubShader

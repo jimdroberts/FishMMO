@@ -121,8 +121,6 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The material a stone's boulders, rocks and pebbles wear: its own, or its rock type's (the same name either way).</summary>
 		public static string StoneMaterial(in RockMaterialSpec stone) => RockMaterial(stone.WearsRockType ?? stone.Name);
 
-		private static readonly string[] SurfaceMaps = { "Albedo", "Normal", "Mask" };
-
 		/// <summary>Every stone's own meshes: three boulders at each level, its small rocks and its pebbles (StoneStyles).</summary>
 		public static IEnumerable<string> StonePayloadPaths()
 		{
@@ -152,19 +150,14 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				yield return path;
 			}
-			foreach (RockType t in RockTypes.All)
+			// The rock and ice surfaces as their look arrays (ProceduralArtLookArrays; no single map since 2026-10-28).
+			foreach (ProceduralArtLookArrays.Layout layout in ProceduralArtLookArrays.LayoutsOfSet(ProceduralArtLookArrays.RockSetName))
 			{
-				foreach (string map in SurfaceMaps)
-				{
-					yield return RockArtNames.RockSurfaceTexture(t.Name, map);
-				}
+				yield return layout.Path;
 			}
-			foreach (SurfaceRecipe r in IceSurfaces.Recipes)
+			foreach (ProceduralArtLookArrays.Layout layout in ProceduralArtLookArrays.LayoutsOfSet(ProceduralArtLookArrays.IceSetName))
 			{
-				foreach (string map in SurfaceMaps)
-				{
-					yield return RockArtNames.IceSurfaceTexture(r.Name, map);
-				}
+				yield return layout.Path;
 			}
 			foreach ((RockType type, FormationShape shape, int variant) in RockArtNames.AllFormations())
 			{

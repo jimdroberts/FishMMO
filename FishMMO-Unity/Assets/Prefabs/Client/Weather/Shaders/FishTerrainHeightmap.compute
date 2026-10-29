@@ -1,0 +1,393 @@
+// FishMMO: the client's own draw of the terrain heightmaps (TerrainHeightmapSystem, 2026-10-28); the shared numbers and the
+// geomorph are FishTerrainHeightmap.hlsl.
+//
+// ONCE A SCENE (TerrainHeightmapField.Build, again when a tile's data changes):
+//   FishTerrainRoughClear   the error cells to 0
+//   FishTerrainRough        per heightmap texel and coarser level: how far that level's surface misses it
+//                           (TerrainHeightmapMath.TexelDeviation), the most into its cell of that level's field (an
+//                           InterlockedMax of the bits: positive floats order as their bits do)
+//   FishTerrainRoughLog     per cell and field l: g_l = log2 of it (never below the floor) less l + 1
+//   FishTerrainDilateX/Z    each field's peaks spread so it falls at most _FishTerrainBuild.y a cell (a separable max of
+//                           v - slope * |k|): the fields change slowly, so no patch's vertices slide past one another
+//   FishTerrainFieldRaise   per cell: g_l raised to g_(l-1) - 1 (FishTerrainHeightmap.hlsl: what the proofs need)
+//   FishTerrainNodeLeaf     per level-0 node: its lowest and highest texel, whether a hole texel touches it
+//   FishTerrainNodeParent   per node of level _FishTerrainBuild.x: its four children's union, and the largest g_(level-1)
+//                           any of its points can read (the cells under it and round it)
+//   FishTerrainNormals      per texel: the heightmap's normal (central differences, across the seams into the neighbour tiles)
+// PER CAMERA (TerrainHeightmapField.Select):
+//   FishTerrainClear        the four lists' instance counts to 0
+//   FishTerrainSelect       per node: drawn or not (FishTerrainHeightmap.hlsl SELECTION), into the camera's lists when it is
+//                           in the frustum and the shadow lists when its shadow can fall in it
+//   FishTerrainArgsFence    OpenGL only (unity-gl-indirect-args-barrier: binds the args so the draw's command barrier is issued)
+
+#pragma kernel FishTerrainRoughClear
+#pragma kernel FishTerrainRough
+#pragma kernel FishTerrainRoughLog
+#pragma kernel FishTerrainDilateX
+#pragma kernel FishTerrainDilateZ
+#pragma kernel FishTerrainFieldRaise
+#pragma kernel FishTerrainNodeLeaf
+#pragma kernel FishTerrainNodeParent
+#pragma kernel FishTerrainClear
+#pragma kernel FishTerrainSelect
+#pragma kernel FishTerrainArgsFence
+#pragma use_dxc vulkan
+
+#include "FishTerrainHeightmap.hlsl"
+
+// x the level FishTerrainNodeParent builds, y the field's slope (log2 a cell), z its floor (log2 metres), w the dilation's reach (cells)
+float4 _FishTerrainBuild;
+
+RWStructuredBuffer<uint> _FishTerrainRoughCells;
+StructuredBuffer<uint> _FishTerrainRoughRead;
+StructuredBuffer<float> _FishTerrainFieldIn;
+RWStructuredBuffer<float> _FishTerrainFieldOut;
+RWStructuredBuffer<float4> _FishTerrainNodesOut;
+// Every tile's holes (terrainData.holesTexture, a slice per tile that has holes): 0 a hole, 1 ground.
+Texture2D<float4> _FishTerrainHolesRead;
+
+// ── Roughness ───────────────────────────────────────────────────────────
+
+/// Cells in one field, and fields (one per step between levels: _FishTerrainLodScale.w).
+uint FishTerrainCells() { return (uint)(_FishTerrainLodGrid.w * _FishTerrainLodScale.x); }
+uint FishTerrainFields() { return (uint)_FishTerrainLodScale.w; }
+
+[numthreads(64, 1, 1)]
+void FishTerrainRoughClear(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < FishTerrainCells() * FishTerrainFields())
+    {
+        _FishTerrainRoughCells[id.x] = 0u;
+    }
+}
+
+/// The patch triangulation's height at (u, v) in a quad of corners h00, h10, h01, h11: the diagonal runs (0, 0)–(1, 1)
+/// (TerrainHeightmapMath.PatchIndices).
+float FishTerrainQuadHeight(float h00, float h10, float h01, float h11, float u, float v)
+{
+    return u >= v ? h00 + u * (h10 - h00) + v * (h11 - h10) : h00 + v * (h01 - h00) + u * (h11 - h01);
+}
+
+[numthreads(8, 8, 1)]
+void FishTerrainRough(uint3 id : SV_DispatchThreadID)
+{
+    uint tileIndex = _FishTerrainBuildTile;
+    FishTerrainTile tile = _FishTerrainTiles[tileIndex];
+    uint quads = (uint)tile.grid.z;
+    if (id.x > quads || id.y > quads)
+    {
+        return;
+    }
+    uint levels = (uint)tile.grid.w;
+    float h = FishTerrainHeightTexel(tile, tileIndex, int2(id.xy));
+    float2 world = tile.origin.xz + (float2)id.xy * tile.grid.xy;
+    int2 cell = (int2)floor((world - _FishTerrainLodGrid.xy) / _FishTerrainLodGrid.z);
+    int2 size = int2((int)_FishTerrainLodGrid.w, (int)_FishTerrainLodScale.x);
+    cell = clamp(cell, int2(0, 0), size - 1);
+    UNITY_LOOP
+    for (uint l = 1u; l < levels; l++)
+    {
+        uint stride = 1u << l;
+        uint2 c0 = min((id.xy / stride) * stride, uint2(quads - stride, quads - stride));
+        float2 uv = ((float2)id.xy - (float2)c0) / (float)stride;
+        float h00 = FishTerrainHeightTexel(tile, tileIndex, int2(c0));
+        float h10 = FishTerrainHeightTexel(tile, tileIndex, int2(c0) + int2(stride, 0));
+        float h01 = FishTerrainHeightTexel(tile, tileIndex, int2(c0) + int2(0, stride));
+        float h11 = FishTerrainHeightTexel(tile, tileIndex, int2(c0) + int2(stride, stride));
+        float deviation = abs(h - FishTerrainQuadHeight(h00, h10, h01, h11, uv.x, uv.y));
+        InterlockedMax(_FishTerrainRoughCells[(l - 1u) * FishTerrainCells() + (uint)(cell.y * size.x + cell.x)], asuint(deviation));
+    }
+}
+
+[numthreads(64, 1, 1)]
+void FishTerrainRoughLog(uint3 id : SV_DispatchThreadID)
+{
+    uint cells = FishTerrainCells();
+    if (id.x < cells * FishTerrainFields())
+    {
+        float field = (float)(id.x / cells);
+        _FishTerrainFieldOut[id.x] = max(log2(max(asfloat(_FishTerrainRoughRead[id.x]), 1e-6)), _FishTerrainBuild.z) - (field + 1.0);
+    }
+}
+
+/// One axis of the dilation in one field: the most of v(k) - slope * |k - here| along it, within the reach.
+float FishTerrainDilateAlong(int2 here, int2 axis, int2 size, uint first)
+{
+    float slope = _FishTerrainBuild.y;
+    int reach = (int)_FishTerrainBuild.w;
+    float best = _FishTerrainFieldIn[first + here.y * size.x + here.x];
+    UNITY_LOOP
+    for (int k = 1; k <= reach; k++)
+    {
+        float fall = slope * (float)k;
+        int2 a = here + axis * k;
+        int2 b = here - axis * k;
+        if (all(a >= 0) && all(a < size))
+        {
+            best = max(best, _FishTerrainFieldIn[first + a.y * size.x + a.x] - fall);
+        }
+        if (all(b >= 0) && all(b < size))
+        {
+            best = max(best, _FishTerrainFieldIn[first + b.y * size.x + b.x] - fall);
+        }
+    }
+    return best;
+}
+
+[numthreads(8, 8, 1)]
+void FishTerrainDilateX(uint3 id : SV_DispatchThreadID)
+{
+    int2 size = int2((int)_FishTerrainLodGrid.w, (int)_FishTerrainLodScale.x);
+    if ((int)id.x < size.x && (int)id.y < size.y && id.z < FishTerrainFields())
+    {
+        uint first = id.z * FishTerrainCells();
+        _FishTerrainFieldOut[first + id.y * size.x + id.x] = FishTerrainDilateAlong(int2(id.xy), int2(1, 0), size, first);
+    }
+}
+
+[numthreads(8, 8, 1)]
+void FishTerrainDilateZ(uint3 id : SV_DispatchThreadID)
+{
+    int2 size = int2((int)_FishTerrainLodGrid.w, (int)_FishTerrainLodScale.x);
+    if ((int)id.x < size.x && (int)id.y < size.y && id.z < FishTerrainFields())
+    {
+        uint first = id.z * FishTerrainCells();
+        _FishTerrainFieldOut[first + id.y * size.x + id.x] = FishTerrainDilateAlong(int2(id.xy), int2(0, 1), size, first);
+    }
+}
+
+[numthreads(64, 1, 1)]
+void FishTerrainFieldRaise(uint3 id : SV_DispatchThreadID)
+{
+    uint cells = FishTerrainCells();
+    if (id.x >= cells)
+    {
+        return;
+    }
+    float below = _FishTerrainFieldOut[id.x];
+    UNITY_LOOP
+    for (uint l = 1u; l < FishTerrainFields(); l++)
+    {
+        float g = max(_FishTerrainFieldOut[l * cells + id.x], below - 1.0);
+        _FishTerrainFieldOut[l * cells + id.x] = g;
+        below = g;
+    }
+}
+
+// ── Nodes ───────────────────────────────────────────────────────────────
+
+[numthreads(8, 8, 1)]
+void FishTerrainNodeLeaf(uint3 id : SV_DispatchThreadID)
+{
+    uint tileIndex = _FishTerrainBuildTile;
+    FishTerrainTile tile = _FishTerrainTiles[tileIndex];
+    uint quads = (uint)tile.grid.z;
+    uint across = FishTerrainNodesAcross(quads, 0u);
+    if (id.x >= across || id.y >= across)
+    {
+        return;
+    }
+    int2 first = int2(id.xy) * (int)FISH_TERRAIN_PATCH_QUADS;
+    float lo = 1e30, hi = -1e30;
+    UNITY_LOOP
+    for (int z = 0; z <= (int)FISH_TERRAIN_PATCH_QUADS; z++)
+    {
+        UNITY_LOOP
+        for (int x = 0; x <= (int)FISH_TERRAIN_PATCH_QUADS; x++)
+        {
+            float h = FishTerrainHeightTexel(tile, tileIndex, first + int2(x, z));
+            lo = min(lo, h);
+            hi = max(hi, h);
+        }
+    }
+    // A hole texel anywhere a bilinear read of the holes over this node reaches (a texel each side): a pixel may be cut here.
+    float holes = 0.0;
+    if (tile.slices.x >= 0)
+    {
+        int last = (int)quads - 1;
+        UNITY_LOOP
+        for (int hz = -1; hz <= (int)FISH_TERRAIN_PATCH_QUADS; hz++)
+        {
+            UNITY_LOOP
+            for (int hx = -1; hx <= (int)FISH_TERRAIN_PATCH_QUADS; hx++)
+            {
+                int2 t = clamp(first + int2(hx, hz), int2(0, 0), int2(last, last));
+                if (_FishTerrainHolesRead.Load(int3(t, 0)).r < 0.5)
+                {
+                    holes = 1.0;
+                }
+            }
+        }
+    }
+    // A level-0 node never splits: it reads no field.
+    uint index = FishTerrainNodeIndex(tileIndex, quads, 0u, id.xy);
+    _FishTerrainNodesOut[index] = float4(tile.origin.y + lo, tile.origin.y + hi, 0.0, holes);
+}
+
+[numthreads(8, 8, 1)]
+void FishTerrainNodeParent(uint3 id : SV_DispatchThreadID)
+{
+    uint tileIndex = id.z;
+    FishTerrainTile tile = _FishTerrainTiles[tileIndex];
+    uint quads = (uint)tile.grid.z;
+    uint level = (uint)_FishTerrainBuild.x;
+    uint across = FishTerrainNodesAcross(quads, level);
+    if (level == 0u || level >= (uint)tile.grid.w || id.x >= across || id.y >= across)
+    {
+        return;
+    }
+    float4 a = _FishTerrainNodesOut[FishTerrainNodeIndex(tileIndex, quads, level - 1u, id.xy * 2u)];
+    float4 b = _FishTerrainNodesOut[FishTerrainNodeIndex(tileIndex, quads, level - 1u, id.xy * 2u + uint2(1u, 0u))];
+    float4 c = _FishTerrainNodesOut[FishTerrainNodeIndex(tileIndex, quads, level - 1u, id.xy * 2u + uint2(0u, 1u))];
+    float4 d = _FishTerrainNodesOut[FishTerrainNodeIndex(tileIndex, quads, level - 1u, id.xy * 2u + uint2(1u, 1u))];
+    // The cells a bilinear read of field g_(level-1) from any point of this node takes: those under it and one round it (a
+    // level-0 node's side is one cell). A child's cells are among its parent's: its bound is never above its parent's + 1.
+    uint span = 1u << level;
+    float2 corner = tile.origin.xz + (float2)(id.xy * FISH_TERRAIN_PATCH_QUADS * span) * tile.grid.xy;
+    int2 cell = (int2)floor((corner - _FishTerrainLodGrid.xy) / _FishTerrainLodGrid.z + 0.5);
+    int2 size = int2((int)_FishTerrainLodGrid.w, (int)_FishTerrainLodScale.x);
+    uint first = (level - 1u) * FishTerrainCells();
+    float rough = -1e30;
+    UNITY_LOOP
+    for (int cz = -1; cz <= (int)span; cz++)
+    {
+        UNITY_LOOP
+        for (int cx = -1; cx <= (int)span; cx++)
+        {
+            int2 at = clamp(cell + int2(cx, cz), int2(0, 0), size - 1);
+            rough = max(rough, _FishTerrainLodField[first + at.y * size.x + at.x]);
+        }
+    }
+    _FishTerrainNodesOut[FishTerrainNodeIndex(tileIndex, quads, level, id.xy)] = float4(
+        min(min(a.x, b.x), min(c.x, d.x)), max(max(a.y, b.y), max(c.y, d.y)), rough, max(max(a.w, b.w), max(c.w, d.w)));
+}
+
+// ── Per camera ──────────────────────────────────────────────────────────
+
+RWByteAddressBuffer _FishTerrainArgs;              // four IndirectDrawIndexedArgs (20 bytes): the lists' commands
+RWStructuredBuffer<uint2> _FishTerrainPatchesOut;  // the lists, _FishTerrainLayout.x apart
+StructuredBuffer<uint> _FishTerrainTileShown;      // per tile: 0 when its terrain is off (nothing drawn there)
+float4 _FishTerrainPlanes[6];                      // the camera's frustum, inward (xyz normal, w distance), widened a little
+float4 _FishTerrainShadowPlanes[6];                // the same, its far plane at the shadow distance
+float4 _FishTerrainShadowSweep;                    // xyz how far down the light a shadow can fall (0: no shadows), w 1 when shadows are drawn
+
+[numthreads(4, 1, 1)]
+void FishTerrainClear(uint3 id : SV_DispatchThreadID)
+{
+    _FishTerrainArgs.Store(id.x * 20u + 4u, 0u);
+}
+
+/// The smallest level field over a box whose points read at most <paramref name="logRough"/>.
+float FishTerrainMinLod(float3 lo, float3 hi, float logRough)
+{
+    float3 eye = _FishTerrainLodView.xyz;
+    float3 gap = max(max(lo - eye, eye - hi), 0.0);
+    return FishTerrainLogDistance(length(gap)) - logRough - _FishTerrainLodView.w;
+}
+
+/// Whether the box (swept along <paramref name="sweep"/>) is wholly outside one of the planes.
+bool FishTerrainOutside(float3 lo, float3 hi, float4 planes[6], float3 sweep)
+{
+    UNITY_UNROLL
+    for (int i = 0; i < 6; i++)
+    {
+        float3 n = planes[i].xyz;
+        float3 far = float3(n.x >= 0.0 ? hi.x : lo.x, n.y >= 0.0 ? hi.y : lo.y, n.z >= 0.0 ? hi.z : lo.z);
+        float d = dot(n, far) + planes[i].w;
+        if (max(d, d + dot(n, sweep)) < 0.0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void FishTerrainAppend(uint list, uint2 record)
+{
+    list += (record.x & 0xFFFFu) * 4u;
+    uint slot;
+    _FishTerrainArgs.InterlockedAdd(list * 20u + 4u, 1u, slot);
+    uint capacity = (uint)_FishTerrainLayout.x;
+    if (slot < capacity)
+    {
+        _FishTerrainPatchesOut[list * capacity + slot] = record;
+    }
+}
+
+[numthreads(64, 1, 1)]
+void FishTerrainSelect(uint3 id : SV_DispatchThreadID)
+{
+    uint nodesPerTile = (uint)_FishTerrainLayout.y;
+    uint tiles = (uint)_FishTerrainLayout.z;
+    if (id.x >= nodesPerTile * tiles)
+    {
+        return;
+    }
+    uint tileIndex = id.x / nodesPerTile;
+    if (_FishTerrainTileShown[tileIndex] == 0u)
+    {
+        return;
+    }
+    uint local = id.x - tileIndex * nodesPerTile;
+    FishTerrainTile tile = _FishTerrainTiles[tileIndex];
+    uint quads = (uint)tile.grid.z;
+    uint levels = (uint)tile.grid.w;
+    uint level = 0u;
+    uint offset = 0u;
+    uint across = FishTerrainNodesAcross(quads, 0u);
+    UNITY_LOOP
+    while (level + 1u < levels && local >= offset + across * across)
+    {
+        offset += across * across;
+        across >>= 1;
+        level++;
+    }
+    uint inLevel = local - offset;
+    uint2 node = uint2(inLevel % across, inLevel / across);
+    float side = (float)(FISH_TERRAIN_PATCH_QUADS << level);
+
+    float4 bounds = _FishTerrainNodes[id.x];
+    float3 lo = float3(tile.origin.x + node.x * side * tile.grid.x, bounds.x, tile.origin.z + node.y * side * tile.grid.y);
+    float3 hi = float3(lo.x + side * tile.grid.x, bounds.y + _FishTerrainLodScale.z, lo.z + side * tile.grid.y);
+    if (level > 0u && FishTerrainMinLod(lo, hi, bounds.z) < (float)level)
+    {
+        return;
+    }
+    if (level + 1u < levels)
+    {
+        uint parentAcross = across >> 1;
+        uint2 parent = node >> 1;
+        float4 parentBounds = _FishTerrainNodes[tileIndex * nodesPerTile + offset + across * across + parent.y * parentAcross + parent.x];
+        float3 parentLo = float3(tile.origin.x + parent.x * 2.0 * side * tile.grid.x, parentBounds.x, tile.origin.z + parent.y * 2.0 * side * tile.grid.y);
+        float3 parentHi = float3(parentLo.x + 2.0 * side * tile.grid.x, parentBounds.y + _FishTerrainLodScale.z, parentLo.z + 2.0 * side * tile.grid.y);
+        if (!(FishTerrainMinLod(parentLo, parentHi, parentBounds.z) < (float)(level + 1u)))
+        {
+            return;
+        }
+    }
+
+    uint2 record = uint2(tileIndex | (level << 16), node.x | (node.y << 16));
+    bool holed = bounds.w > 0.5;
+    if (!FishTerrainOutside(lo, hi, _FishTerrainPlanes, float3(0.0, 0.0, 0.0)))
+    {
+        FishTerrainAppend(holed ? FISH_TERRAIN_LIST_HOLED : FISH_TERRAIN_LIST_SOLID, record);
+    }
+    if (_FishTerrainShadowSweep.w > 0.5 && !FishTerrainOutside(lo, hi, _FishTerrainShadowPlanes, _FishTerrainShadowSweep.xyz))
+    {
+        FishTerrainAppend(holed ? FISH_TERRAIN_LIST_SHADOW_HOLED : FISH_TERRAIN_LIST_SHADOW_SOLID, record);
+    }
+}
+
+/* OpenGL: makes Unity issue GL_COMMAND_BARRIER_BIT before the indirect draws (FishTerrainInstancing.compute FishArgsFence). */
+ByteAddressBuffer _FishTerrainArgsFence;
+RWStructuredBuffer<uint> _FishTerrainFenceSink;
+
+[numthreads(1, 1, 1)]
+void FishTerrainArgsFence(uint3 id : SV_DispatchThreadID)
+{
+    // Never true (the counts are capped at the nodes): only the bindings matter.
+    if (_FishTerrainArgsFence.Load(4) == 0xFFFFFFFFu)
+    {
+        _FishTerrainFenceSink[0] = 0u;
+    }
+}

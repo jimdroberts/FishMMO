@@ -370,18 +370,10 @@ namespace FishMMO.Shared.WorldDesign
 		private static void ShiftLines(List<BiomeLandformSite> sites, int trace)
 		{
 			BiomeLandformSite t = sites[trace];
-			if (t.Segments == null || t.Segments.Count == 0)
+			if (!TraceOf(in t, out Vector2 start, out Vector2 d, out float length, out float offset))
 			{
 				return;
 			}
-			Vector2 start = t.Segments[0].A, d = t.Segments[t.Segments.Count - 1].B - start;
-			float length = d.magnitude;
-			if (length < 1f)
-			{
-				return;
-			}
-			d /= length;
-			float offset = BiomeLandforms.Pick(t.Form.Shift, BiomeLandforms.Unit(BiomeLandforms.Hash(t.Seed, 0x5F1u)));
 			float fade = 0.25f * length;
 			Vector2 Move(Vector2 p)
 			{
@@ -415,6 +407,52 @@ namespace FishMMO.Shared.WorldDesign
 				s.Bounds = BiomeLandforms.BoundsOf(s);
 				sites[i] = s;
 			}
+		}
+
+		/// <summary>
+		/// A strike-slip trace's line and slip (pure; what <see cref="ShiftLines"/> moves the lines by): from its first segment's start to
+		/// its last's end, its unit direction and length, and the slip its seed picks from its Shift range. False for a site with no
+		/// Shift, no segments or a trace shorter than a metre.
+		/// </summary>
+		public static bool TraceOf(in BiomeLandformSite t, out Vector2 start, out Vector2 direction, out float length, out float offset)
+		{
+			start = direction = default;
+			length = offset = 0f;
+			if (t.Form.Shift == Vector2.zero || t.Segments == null || t.Segments.Count == 0)
+			{
+				return false;
+			}
+			start = t.Segments[0].A;
+			Vector2 d = t.Segments[t.Segments.Count - 1].B - start;
+			length = d.magnitude;
+			if (length < 1f)
+			{
+				return false;
+			}
+			direction = d / length;
+			offset = BiomeLandforms.Pick(t.Form.Shift, BiomeLandforms.Unit(BiomeLandforms.Hash(t.Seed, 0x5F1u)));
+			return true;
+		}
+
+		/// <summary>
+		/// The strike-slip traces of a scene's landforms as the ways jog at them (2026-10-26, I2l-b, <see cref="PathJogs"/>): each site
+		/// with a Shift, in the order placed. Empty for none (every scene until a round names a strike-slip preset).
+		/// </summary>
+		public static List<PathJogs.Trace> StrikeSlipTraces(IReadOnlyList<BiomeLandformSite> sites)
+		{
+			var traces = new List<PathJogs.Trace>();
+			if (sites == null)
+			{
+				return traces;
+			}
+			foreach (BiomeLandformSite site in sites)
+			{
+				if (TraceOf(in site, out Vector2 start, out Vector2 direction, out float length, out float offset) && offset != 0f)
+				{
+					traces.Add(new PathJogs.Trace(start, direction, length, offset));
+				}
+			}
+			return traces;
 		}
 
 		/// <summary>Measures a site's lines again after their points moved: each run (from a stretch starting at 0) its own along-distances and length.</summary>

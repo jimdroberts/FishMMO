@@ -50,7 +50,11 @@ Shader "FishMMO/World/Site Embers"
             // Per source: x how strong it burns (0..1, faded with distance), y the share of its embers alive; for lava z the
             // half-width of its body (m) and w the body (0 river, 1 lake, 2 fall); for fumes z their spread (m).
             float4 _EmberStrength[EMBER_SOURCES];
+            // The material's own (SiteEmbers), so the draw stays in the SRP Batcher; the arrays above are globals the system sets
+            // before each camera renders.
+            CBUFFER_START(UnityPerMaterial)
             float4 _EmberWind;   // xz the wind near the ground (m/s), y the night (0..1, embers show far better in the dark), w the sub-pixel dot's sigma (px)
+            CBUFFER_END
 
             struct Attributes
             {

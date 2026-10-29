@@ -22,6 +22,8 @@
 #define FISH_LAYER_ROW_PATHS 6        // x its biome's path ground slice, y road ground, z cobbles (-1 none)
 #define FISH_LAYER_ROW_BACKDROP 7     // column c: x the scene layer backdrop channel c holds (SceneBackdrop.ControlLayers; c itself)
 #define FISH_LAYER_ROW_GLOW 8         // the layer's glow (BiomeGroundGlow.Pack; FishGroundGlow.hlsl): x mode + 8 * period, y K, z strength, w plate m
+#define FISH_LAYER_ROW_CLOCK 9        // the layer's shared-clock window (BiomeGroundClock.Pack; FishGroundClock.hlsl): x kind, y from, z to, w falloff
+#define FISH_LAYER_ROW_CLOCK_SHARE 10 // x the share a clocked layer keeps outside its window, y the layer taking the rest (-1 none), w 1 when any layer is clocked
 
 // One index texel's ids and weights (0..1), scaled by the texel's bilinear share.
 void FishIndexDecode(uint2 packed, float share, out int4 ids, out float4 weights)

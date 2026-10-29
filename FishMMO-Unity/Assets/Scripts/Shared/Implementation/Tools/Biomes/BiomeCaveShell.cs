@@ -21,6 +21,8 @@ namespace FishMMO.Shared.Biomes
 		LavaTube = 4,
 		/// <summary>A worked mine.</summary>
 		Mine = 5,
+		/// <summary>A sea hall under an ice shell (2026-10-26, phase I2n-b, decision 83): only ever an interior's, its link gated by its world.</summary>
+		SeaHall = 6,
 	}
 
 	/// <summary>

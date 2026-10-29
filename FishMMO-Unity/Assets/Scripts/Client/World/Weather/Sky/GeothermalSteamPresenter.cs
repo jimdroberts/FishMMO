@@ -115,7 +115,10 @@ namespace FishMMO.Client
 		private bool hasContext;
 		private Mesh mesh;
 		private Material fallbackMaterial;
-		private MaterialPropertyBlock block;
+		// One copy of the plume material for each draw this camera, each with its own numbers: a property block would take
+		// every one of these draws out of the SRP Batcher. drawSlot counts this camera's draws.
+		private readonly DrawMaterials materials = new DrawMaterials("Steam");
+		private int drawSlot;
 		private float intoA, intoB;
 		private long windowA, windowB;
 		private double motionSeconds;
@@ -136,7 +139,6 @@ namespace FishMMO.Client
 		private void Awake()
 		{
 			presentation = GetComponent<WeatherPresentation>();
-			block = new MaterialPropertyBlock();
 			WeatherClient.RegisterPresenter(this);
 			RenderPipelineManager.beginCameraRendering += OnBeginCamera;
 		}
@@ -153,6 +155,7 @@ namespace FishMMO.Client
 			{
 				Destroy(fallbackMaterial);
 			}
+			materials.Dispose();
 		}
 
 		public void Apply(in WeatherFrame frame, in WeatherContext ctx)
@@ -201,8 +204,17 @@ namespace FishMMO.Client
 			return fallbackMaterial;
 		}
 
+		/// <summary>This hook's own time in the profiler (render-pipeline callbacks otherwise show only as
+		/// RenderPipeline.BeginCameraRendering's self time). In a class of its own so the marker, an engine object, is made
+		/// when the hook first runs, not when the type is first touched (tests outside Unity use these types' pure parts).</summary>
+		private static class HookProfiling
+		{
+			public static readonly Unity.Profiling.ProfilerMarker Marker = new Unity.Profiling.ProfilerMarker("GeothermalSteamPresenter.BeginCamera");
+		}
+
 		private void OnBeginCamera(ScriptableRenderContext renderContext, Camera camera)
 		{
+			using var hookMarkerScope = HookProfiling.Marker.Auto();
 			if (!hasContext || camera == null || context.Timeline == null || context.Timeline.SceneMode != WeatherSceneMode.Own)
 			{
 				return;
@@ -241,6 +253,7 @@ namespace FishMMO.Client
 			{
 				mesh = VolcanicPlumePresenter.BuildMesh(Particles);
 			}
+			drawSlot = 0;
 
 			double airTime = System.Math.Floor(context.Timeline.WorldSecondsAt((uint)context.Tick) / AirSeconds) * AirSeconds;
 			if (airTime != airAt)
@@ -301,6 +314,12 @@ namespace FishMMO.Client
 			}
 			hearthsVersion = SceneSiteEmitters.Version;
 			hearthsAt = viewer;
+			RefindHearths(viewer);
+		}
+
+		/// <summary>The hearths about the viewer, found again (its own method, so the lambda's closure is made only when it runs).</summary>
+		private void RefindHearths(Vector3 viewer)
+		{
 			SceneSiteEmitters.Near(viewer, HearthReach + Refind, k => k == SceneEmitterKind.Smoke || k == SceneEmitterKind.Fire, MaxHearths * 2, hearths);
 			// No smoke column off a fire underground (a camp in a cave's cavern): it would rise out through the hill. Nor off a
 			// fire indoors (a hall's fire pit, a temple's braziers): it rose through the roof; a building's smoke leaves by
@@ -666,24 +685,21 @@ namespace FishMMO.Client
 		private void Draw(Material material, WeatherRenderProfile profile, Camera camera, Bounds bounds, Vector3 vent, int population, float share, float opacity,
 			Vector4 rise, Vector4 lean, Vector4 drift, Vector4 ballistic, Color colour, Vector4 heldPeriods)
 		{
-			block.Clear();
-			if (profile != null && profile.PrecipitationAtlas != null)
-			{
-				block.SetTexture(MainTexId, profile.PrecipitationAtlas);
-			}
-			block.SetVector(VentId, new Vector4(vent.x, vent.y, vent.z, (float)WorldMotion.Repeat(motionSeconds, WorldMotion.ShaderWrapSeconds)));
-			block.SetVector(FormId, new Vector4(population, share, opacity, VolcanicPlumePresenter.AshRow));
-			block.SetVector(RiseId, rise);
-			block.SetVector(LeanId, lean);
-			block.SetVector(DriftId, drift);
-			block.SetVector(BallisticId, ballistic);
-			block.SetColor(ColorId, colour);
-			block.SetVector(PaceId, new Vector4(intoA, intoB, (float)VolcanicPlumePresenter.PaceWindowSeconds, 0f));
-			block.SetVector(HeldId, heldPeriods);
-			var rp = new RenderParams(material)
+			Material copy = materials.For(material, drawSlot++);
+			// The material's own texture when the profile has no atlas, as an emptied block left it.
+			copy.SetTexture(MainTexId, profile != null && profile.PrecipitationAtlas != null ? profile.PrecipitationAtlas : material.GetTexture(MainTexId));
+			copy.SetVector(VentId, new Vector4(vent.x, vent.y, vent.z, (float)WorldMotion.Repeat(motionSeconds, WorldMotion.ShaderWrapSeconds)));
+			copy.SetVector(FormId, new Vector4(population, share, opacity, VolcanicPlumePresenter.AshRow));
+			copy.SetVector(RiseId, rise);
+			copy.SetVector(LeanId, lean);
+			copy.SetVector(DriftId, drift);
+			copy.SetVector(BallisticId, ballistic);
+			copy.SetColor(ColorId, colour);
+			copy.SetVector(PaceId, new Vector4(intoA, intoB, (float)VolcanicPlumePresenter.PaceWindowSeconds, 0f));
+			copy.SetVector(HeldId, heldPeriods);
+			var rp = new RenderParams(copy)
 			{
 				camera = camera,
-				matProps = block,
 				worldBounds = bounds,
 				shadowCastingMode = ShadowCastingMode.Off,
 				receiveShadows = false,

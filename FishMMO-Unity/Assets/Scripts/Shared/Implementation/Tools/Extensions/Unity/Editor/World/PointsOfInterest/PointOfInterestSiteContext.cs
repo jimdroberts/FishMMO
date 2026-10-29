@@ -310,6 +310,13 @@ namespace FishMMO.Shared.WorldDesign
 						seed = own.HasValue ? SceneGlow.WithHue(seed, own.Value) : SceneGlow.WithCrystalHue(seed, cradled ? postMineral.LightHue : -1);
 						seed = SceneGlow.WithFlicker(seed, cradled && postMineral.Flickers);
 					}
+					// A way light's own fire (2026-10-26, ScenePyre): a beacon's kindled at dusk, a brimstone lamp's blue (both bits
+					// always written, never the hash's).
+					else if (kind == SceneEmitterKind.Pyre)
+					{
+						StructurePieces.PyreLookOf(piece.Id, out bool atDusk, out bool blue);
+						seed = ScenePyre.WithLook(seed, atDusk, blue);
+					}
 					Points.Emitters.Add(new SceneEmitter { Position = world, Kind = kind, Seed = seed });
 				}
 			}

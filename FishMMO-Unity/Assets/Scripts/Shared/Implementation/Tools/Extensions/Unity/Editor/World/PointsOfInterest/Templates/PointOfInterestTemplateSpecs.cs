@@ -34,6 +34,14 @@ namespace FishMMO.Shared.WorldDesign
 		/// 2026-10-25): a holy well's spring chapel, where its silent well-head stands on any world.
 		/// </summary>
 		public bool NeedsLiquidWater;
+		/// <summary>
+		/// Who holds the place (2026-10-27, the fantasy wave's keeps and towers): its garrison (the kind's own features), a hostile
+		/// band (no waypoint and no service NPCs, a monster pack in their place) or nobody (a ruin: no NPCs at all).
+		/// PointOfInterestTemplateAuthoring.FeaturesFor applies it.
+		/// </summary>
+		public PointOfInterestHolder Holder = PointOfInterestHolder.Garrison;
+		/// <summary>A hostile holder's lord (a dark tower's sorcerer, a dark keep's): an empty boss spawner after the pack at the large size.</summary>
+		public bool HolderBoss;
 
 		/// <summary>The asset's name.</summary>
 		public string Name => $"{Kind} - {Variant}";
@@ -159,6 +167,14 @@ namespace FishMMO.Shared.WorldDesign
 			NeedsLiquidWater = true;
 			return this;
 		}
+
+		/// <summary>Who holds the place (<see cref="Holder"/>); <paramref name="boss"/>: a hostile holder's lord waits at the large size (<see cref="HolderBoss"/>).</summary>
+		public PointOfInterestTemplateSpec Held(PointOfInterestHolder holder, bool boss = false)
+		{
+			Holder = holder;
+			HolderBoss = boss;
+			return this;
+		}
 	}
 
 	/// <summary>
@@ -184,7 +200,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// walls and houses and gets fallen ones.
 	/// </para>
 	/// </remarks>
-	public static class PointOfInterestTemplateSpecs
+	public static partial class PointOfInterestTemplateSpecs
 	{
 		// ── Queries ──────────────────────────────────────────────────
 		public const string House = "house";
@@ -304,9 +320,12 @@ namespace FishMMO.Shared.WorldDesign
 		public const string Timber = "timber", Stone = "stone", Hide = "hide", Iron = "iron", Earth = "earth";
 
 		// ── Biomes (asset names in Assets/Templates/Entity/Biomes, exactly: a name no biome has matches nothing) ───
-		// The variants' DEFAULT biomes (2026-10-16, phase I5): the biome art authoring writes each biome the weight these lists
+		// The variants' DEFAULT biomes (2026-10-16, phase I5): the biome art authoring wrote each biome the weight these lists
 		// give it for every variant (where it differs from the variant's weight elsewhere) onto its template, and the cut picks
-		// by the template's. A change here reaches a scene once the biome templates are re-authored.
+		// by the template's. Since 2026-10-26 (phase CODE-TABLE CLEARANCE, decision 1) every biome's spec file carries those
+		// weights itself (BiomeArtSpec.Entry.Prefers), so these lists only reach the point-of-interest templates' own biome lists
+		// (what this authoring writes onto their assets): the cut's fallback for a biome template never authored. Change a
+		// biome's variant weights in its file.
 		public static readonly string[] Swamp = { "Swamp", "Mangrove", "Peat Bog", "Wetlands", "Swamp Ruins", "Swamp Temple", "Swamp Cave" };
 		// Dust Sea left the arid list 2026-10-18 (decision 44, the Dust Sea round): a sea of dust on airless and thin-aired worlds,
 		// nobody lives there, so it takes no arid settlement, inn or lodge variants (its template's own weights, from its file, rule).
@@ -357,6 +376,13 @@ namespace FishMMO.Shared.WorldDesign
 			Encounters(a);
 			Caves(a);
 			RoundKinds(a);
+			// The fantasy wave (2026-10-27, PointOfInterestTemplateSpecs.Fantasy*.cs), last so no earlier template moved.
+			FantasyKeeps(a);
+			FantasyRealm(a);
+			FantasyGreen(a);
+			FantasyDry(a);
+			FantasyCold(a);
+			FantasyShapes(a);
 			return a;
 		}
 
@@ -614,6 +640,15 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			// Spans laid across the river the planner sited it on, as long as the water is wide (PropsFeature.MeasureCrossing).
 			T(a, POIType.Bridge, "Timber", Linear, Timber).S(Bridge, 1, 1, Span).Pad(0f);
+			/* The country bridges the biome drafts name (2026-10-26, I2l-b; BiomeCrossingStyle): weighed nowhere (Elsewhere 0), so no seeded
+			 * pick ever draws one; the stage builds a crossing from its style's variant (PathCrossings.StyleVariant) where the biome at its
+			 * ends names the style and the span fits it. Each span is laid by its piece's id, so no older "bridge" query draws one. */
+			T(a, POIType.Bridge, "Liana", Linear, Timber).S("=LianaBridge", 1, 1, Span).Pad(0f).Elsewhere(0f);
+			T(a, POIType.Bridge, "Corbelled Laterite", Linear, Stone).S("=LateriteSpan", 1, 1, Span).Pad(0f).Elsewhere(0f);
+			T(a, POIType.Bridge, "Wind and Rain", Linear, Timber).S("=CoveredSpan", 1, 1, Span).Pad(0f).Elsewhere(0f);
+			T(a, POIType.Bridge, "Cantilever", Linear, Timber).S("=CantileverBridge", 1, 1, Span).Pad(0f).Elsewhere(0f);
+			T(a, POIType.Bridge, "Goblins Bridge", Linear, Stone).S("=GoblinSlab", 1, 1, Span).Pad(0f).Elsewhere(0f);
+			T(a, POIType.Bridge, "Snow Bridge", Linear, Stone).S("=SnowBridge", 1, 1, Span).Pad(0f).Elsewhere(0f);
 
 			// The adit itself is dug by the cave shaper into the rock face the planner found (CaveForm.Mine: its portal, sets,
 			// track and stopes are the cave dressing's); the template is the yard before it.
@@ -851,6 +886,12 @@ namespace FishMMO.Shared.WorldDesign
 			// Columns and statues lining both sides of the road (along the heading); decay breaks some of them.
 			T(a, POIType.AncientRoad, "Colonnade", Linear, Stone)
 				.S(Column, 4, 10, Street, 0.1f, 0.8f).S(RuinedStatue, 0, 2, Street).S(Rubble, 1, 3, Scatter).Pad(0f);
+			// The dry country's old road (2026-10-27, Salt Flat's escarpment track): a caravan trace walled with dry stone where it
+			// climbs, rest-cairns along it, fallen courses beside it. Weighs nothing in any pick of its own: a biome names it (Salt Flat,
+			// whose colonnade has no place on a salt pan).
+			T(a, POIType.AncientRoad, "Caravan Track", Linear, Stone)
+				.S("=LinearDrystone", 4, 8, Street, 0.2f, 0.7f).S("=MarkerCairn", 2, 4, Street).S(Rubble, 1, 3, Scatter).Pad(0f)
+				.Elsewhere(0f);
 
 			T(a, POIType.AbandonedFarm, "Farmstead", Scattered, Timber)
 				.S(RuinedHouse, 1, 1, Centre).S(Well, 0, 1, Scatter, style: Stone).S(Palisade, 2, 5, Rows, 0.3f, 0.8f)

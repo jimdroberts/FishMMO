@@ -68,6 +68,25 @@ namespace FishMMO.Client
 					}
 				}
 			}
+			/* And a climate variant's ground override (2026-10-26, GROUND-BANDS; I2r LEFT (a)): the bake already reads an override slot's
+			 * glow (TerrainArrayBaker.GlowOf resolves variant slots), so a glowing override must switch the table on too. */
+			if (biome.ClimateVariants != null)
+			{
+				foreach (BiomeClimateVariant variant in biome.ClimateVariants)
+				{
+					if (variant?.TextureLayerOverrides == null)
+					{
+						continue;
+					}
+					foreach (TerrainTextureLayer layer in variant.TextureLayerOverrides)
+					{
+						if (layer != null && !layer.glow.IsNone)
+						{
+							return true;
+						}
+					}
+				}
+			}
 			return false;
 		}
 

@@ -3,25 +3,40 @@
 
 // A tornado or a dust devil: its axis, the water its low pressure condenses and the dust its wind
 // lifts, and how both are lit. VortexPhysics.cs is the C# twin of every physical function here, and the
-// tests pin it: the two have to stay in step. VortexPresenter fills the property block once per vortex;
+// tests pin it: the two have to stay in step. VortexPresenter sets these once per vortex on its own copy of the material;
 // FishVortex.shader marches a box through what this describes, and FishVortexDebris.shader throws the
 // flecks round it on the same axis.
 
-// ── The vortex ─────────────────────────────────────────────────────────────
-float4 _VortexCentre;     // x, z: its foot, where it stands on the ground; y the ground's height; w how tall it stands: the wall cloud's base above the ground for a tornado, the whirl's height for a dust devil (m)
-float4 _VortexWind;       // x core radius (m), y peak wind (m/s), z gravity (m/s²), w spin (+1 anticlockwise seen from above)
-float4 _VortexLean;       // xy where the top stands from the foot (m, world x/z); z how far the axis wanders (m); w how far above the top the funnel reaches into the cloud (m)
-float4 _VortexFlow;       // x how fast the air climbs the axis (m/s); y sub-vortices (0, or 2..6); z how hollow the core is (a two-celled vortex), 0..1; w 1 while the sky has published the clouds' light
-float4 _VortexTime;       // x seconds, wrapped; y a number of its own, 0..1; z how far it has roped out, 0..1; w unused
-float4 _VortexPace;       // what its motions are TIMED by, the cell's at maturity and constant for its life: x the climb (m/s), y the core radius (m), z the peak wind (m/s); w the clock's wrap (s)
+// In UnityPerMaterial, not from a property block, so every vortex's draws stay in the SRP Batcher. The flecks' own
+// numbers come last, in FishVortexDebris.shader only (FISH_VORTEX_DEBRIS); each shader has one pass, so one layout.
+CBUFFER_START(UnityPerMaterial)
+    // ── The vortex ─────────────────────────────────────────────────────────────
+    float4 _VortexCentre;     // x, z: its foot, where it stands on the ground; y the ground's height; w how tall it stands: the wall cloud's base above the ground for a tornado, the whirl's height for a dust devil (m)
+    float4 _VortexWind;       // x core radius (m), y peak wind (m/s), z gravity (m/s²), w spin (+1 anticlockwise seen from above)
+    float4 _VortexLean;       // xy where the top stands from the foot (m, world x/z); z how far the axis wanders (m); w how far above the top the funnel reaches into the cloud (m)
+    float4 _VortexFlow;       // x how fast the air climbs the axis (m/s); y sub-vortices (0, or 2..6); z how hollow the core is (a two-celled vortex), 0..1; w 1 while the sky has published the clouds' light
+    float4 _VortexTime;       // x seconds, wrapped; y a number of its own, 0..1; z how far it has roped out, 0..1; w unused
+    float4 _VortexPace;       // what its motions are TIMED by, the cell's at maturity and constant for its life: x the climb (m/s), y the core radius (m), z the peak wind (m/s); w the clock's wrap (s)
 
-// ── What it puts in the air (the volume only) ─────────────────────────────
-float4 _VortexDust;       // x the wind that starts the ground moving (m/s); y how high the dust stands (m); z its extinction where the wind carries all it can (1/m); w how fast it thins upward (a power of the height left)
-float4 _VortexDustShape;  // x its reach at the ground, y at its top, in core radii; z the tube the march is kept to (m); w unused
-float4 _VortexLook;       // rgb the colour of what it lifts; a the funnel's extinction per (metre of lift past condensation)^⅔ — 0 for a dust devil, which condenses nothing
-float4 _VortexSky;        // x how much of the sun the storm lets through to it; y how much of the sky it sees under the storm's base; z the drops' forward scatter; w the widest the funnel flares into the cloud (m)
-float4 _VortexMarch;      // x strides; y the nearest the march starts (m); z 1 with a noise volume bound; w how far under the top the flare is wide (m)
-float4 _VortexStriae;     // x how far the inflow's moisture swings its condensation level either way (m, VortexPhysics.CondensationSwing) — 0 draws no bands; y the wavelength of the rolls it comes through (m); z how high the sky it sees reaches, the storm base's edge (radians, π/2 in the open); w the ground's share of the light an upright face gets
+    // ── What it puts in the air (the volume only) ─────────────────────────────
+    float4 _VortexDust;       // x the wind that starts the ground moving (m/s); y how high the dust stands (m); z its extinction where the wind carries all it can (1/m); w how fast it thins upward (a power of the height left)
+    float4 _VortexDustShape;  // x its reach at the ground, y at its top, in core radii; z the tube the march is kept to (m); w unused
+    float4 _VortexLook;       // rgb the colour of what it lifts; a the funnel's extinction per (metre of lift past condensation)^⅔ — 0 for a dust devil, which condenses nothing
+    float4 _VortexSky;        // x how much of the sun the storm lets through to it; y how much of the sky it sees under the storm's base; z the drops' forward scatter; w the widest the funnel flares into the cloud (m)
+    float4 _VortexMarch;      // x strides; y the nearest the march starts (m); z 1 with a noise volume bound; w how far under the top the flare is wide (m)
+    float4 _VortexStriae;     // x how far the inflow's moisture swings its condensation level either way (m, VortexPhysics.CondensationSwing) — 0 draws no bands; y the wavelength of the rolls it comes through (m); z how high the sky it sees reaches, the storm base's edge (radians, π/2 in the open); w the ground's share of the light an upright face gets
+#if defined(FISH_VORTEX_DEBRIS)
+    // ── The flecks (FishVortexDebris.shader only) ────────────────────────────
+    // x height the flecks climb to (m); y radius at the ground, z at the top, in core radii; w a fleck's life (s): the
+    // climb at the cell's pace (VortexPresenter), whole in the clock's wrap
+    float4 _VortexDebris;
+    // x how bottom-heavy (1 even, more keeps them low); y fleck size (m); z where they have faded out (m from the camera);
+    // w how far out a fleck goes round half-way up its life, at the cell's pace (m): what its turning is timed by
+    float4 _VortexDebrisLook;
+    // rgb their colour; a the share of them the wind lifts
+    float4 _VortexFleck;
+#endif
+CBUFFER_END
 TEXTURE3D(_VortexNoise);
 SAMPLER(sampler_VortexNoise);
 

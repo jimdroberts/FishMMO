@@ -52,22 +52,23 @@ Shader "FishMMO/Weather/Precipitation"
             CBUFFER_START(UnityPerMaterial)
                 float4 _MainTex_ST;
                 float4 _Tint;
-            CBUFFER_END
 
-            // Per draw, from a MaterialPropertyBlock.
-            float4 _PrecipOrigin;   // xyz camera position, w time in seconds
-            float4 _PrecipBox;      // xyz size of the wrapping box around the camera (this shell's), w unused
-            float4 _PrecipShell;    // where this shell is drawn (PrecipitationField.ShellFades): x, y the distances it fades in over, z, w those it fades out over, m
-            float4 _PrecipMotion;   // x the eye's moment a grain's streak is gathered over, s (PrecipitationField.StreakSeconds): 0 draws no streak
-            float4 _PrecipFall;     // xyz the kind's velocity now at its typical particle, m/s, wind included
-            float4 _PrecipTravel;   // x, z metres the air has carried everything, y metres the typical particle has fallen; wrapped
-            float4 _PrecipSpread;   // x slowest, y fastest particle against the typical one, z 1 when it falls from cloud, w 1 for a clear drop (seen through), 0 for an opaque grain
-            float4 _PrecipShape;    // x visible share of particles, y size in metres, z stretch, w atlas row
-            float4 _PrecipFlutter;  // x sway in metres, y sway frequency, z alpha, w brightness
-            float4 _PrecipColor;    // tint for this draw
-            float4 _PrecipGrain;    // x 1: sizes spread exponentially about _PrecipShape.y (snow), 0: ±30 %; y smallest, z largest, m; w how much of its quad the sprite fills, across
-            float4 _PrecipTile;     // x atlas mip at which a texel is a whole tile, y sub-pixel dot sigma px, z fewest pixels across a grain's quad, w grain pixels from which its shape shows
-            float4 _PrecipCrowd;    // x how many grains' light one particle carries (PrecipitationField.Crowd): 1 for its own
+                // Per draw, set on the field's own copy of the material for each kind and shell (PrecipitationField):
+                // in here, not from a property block, so every draw stays in the SRP Batcher.
+                float4 _PrecipOrigin;   // xyz camera position, w time in seconds
+                float4 _PrecipBox;      // xyz size of the wrapping box around the camera (this shell's), w unused
+                float4 _PrecipShell;    // where this shell is drawn (PrecipitationField.ShellFades): x, y the distances it fades in over, z, w those it fades out over, m
+                float4 _PrecipMotion;   // x the eye's moment a grain's streak is gathered over, s (PrecipitationField.StreakSeconds): 0 draws no streak
+                float4 _PrecipFall;     // xyz the kind's velocity now at its typical particle, m/s, wind included
+                float4 _PrecipTravel;   // x, z metres the air has carried everything, y metres the typical particle has fallen; wrapped
+                float4 _PrecipSpread;   // x slowest, y fastest particle against the typical one, z 1 when it falls from cloud, w 1 for a clear drop (seen through), 0 for an opaque grain
+                float4 _PrecipShape;    // x visible share of particles, y size in metres, z stretch, w atlas row
+                float4 _PrecipFlutter;  // x sway in metres, y sway frequency, z alpha, w brightness
+                float4 _PrecipColor;    // tint for this draw
+                float4 _PrecipGrain;    // x 1: sizes spread exponentially about _PrecipShape.y (snow), 0: ±30 %; y smallest, z largest, m; w how much of its quad the sprite fills, across
+                float4 _PrecipTile;     // x atlas mip at which a texel is a whole tile, y sub-pixel dot sigma px, z fewest pixels across a grain's quad, w grain pixels from which its shape shows
+                float4 _PrecipCrowd;    // x how many grains' light one particle carries (PrecipitationField.Crowd): 1 for its own
+            CBUFFER_END
 
             struct Attributes
             {

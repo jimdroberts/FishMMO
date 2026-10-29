@@ -128,7 +128,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		internal static PointOfInterestBiome Hosting(string name, int id, PointOfInterestRules rules)
 		{
 			var kinds = new Dictionary<POIType, float>();
-			foreach (FishMMO.Shared.Biomes.BiomeSiteKind kind in BiomeArtSpec.For(name).SiteKinds(rules))
+			foreach (FishMMO.Shared.Biomes.BiomeSiteKind kind in BiomeArtSpec.For(name).SiteKinds())
 			{
 				kinds[kind.Kind] = kind.Weight;
 			}

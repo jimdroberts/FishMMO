@@ -46,7 +46,7 @@ namespace FishMMO.Client
 		/// <summary>How far its foot reaches from its root at scale 1, m (what hangs off a slope: the chunk renderer's rule).</summary>
 		public float FootRadius;
 
-		/// <summary>Reads a detail prototype, or returns null with the reason the scatter cannot draw it (it then stays on the chunk renderer).</summary>
+		/// <summary>Reads a detail prototype, or returns null with the reason the scatter cannot draw it (it is then not drawn: an error, GPU only).</summary>
 		public static DetailScatterType Build(DetailPrototype prototype, int layer, out string reason)
 		{
 			reason = null;
@@ -118,7 +118,7 @@ namespace FishMMO.Client
 				Material = material,
 				CastsShadows = renderer.shadowCastingMode != ShadowCastingMode.Off,
 				MeshBounds = bounds,
-				FootRadius = TerrainDetailField.DetailPrototypeSettings.From(prototype).FootRadius,
+				FootRadius = DetailPrototypeSettings.FootRadiusOf(prototype),
 				Template = new RenderParams(material)
 				{
 					layer = layer >= 0 ? layer : prefab.layer,
@@ -133,14 +133,104 @@ namespace FishMMO.Client
 	}
 
 	/// <summary>
-	/// One terrain as the GPU detail scatter reads it: its scattered prototypes' detail layers summed into 2 m blocks
-	/// of exact expected counts (<see cref="DetailScatterMath"/>), one channel per TYPE (every prototype of a prefab
-	/// adds into it, as the blade grass does), four channels a half-float slice; each channel's placement settings
-	/// (the prototypes' own, averaged by how much each contributes); the terrain's own height texture; and, per work
-	/// item (8 × 8 blocks), an exact upper bound on each channel's instances and the ground's height range, so the CPU
-	/// sizes the slots and culls the items without reading the GPU. Built once when the terrain is taken, released
-	/// with it.
+	/// The per-prototype placement settings, read once from a detail prototype (the CPU chunk renderer's, kept when it was
+	/// removed on 2026-10-27: the scatter averages them per channel and slope-sinks by the foot's reach).
 	/// </summary>
+	public struct DetailPrototypeSettings
+	{
+		/// <summary>How far the plant's foot reaches from its root, m at scale 1: the widest of its lowest sixth (FootRadiusOf).</summary>
+		public float FootRadius;
+		public int Seed;
+		public float Jitter;
+		public float NoiseSpread;
+		public float MinWidth, MaxWidth, MinHeight, MaxHeight;
+		public float AlignToGround;
+		public bool UseDensityScaling;
+
+		public static DetailPrototypeSettings From(DetailPrototype p)
+		{
+			return new DetailPrototypeSettings
+			{
+				Seed = p.noiseSeed,
+				Jitter = p.positionJitter,
+				NoiseSpread = Mathf.Max(1e-4f, p.noiseSpread),
+				MinWidth = p.minWidth,
+				MaxWidth = Mathf.Max(p.minWidth, p.maxWidth),
+				MinHeight = p.minHeight,
+				MaxHeight = Mathf.Max(p.minHeight, p.maxHeight),
+				AlignToGround = Mathf.Clamp01(p.alignToGround),
+				UseDensityScaling = p.useDensityScaling,
+				FootRadius = FootRadiusOf(p),
+			};
+		}
+
+		/// <summary>Each mesh's foot reach, worked out once (a terrain lists the same prefab once per biome rule; the main thread's).</summary>
+		private static readonly Dictionary<Mesh, float> footRadii = new Dictionary<Mesh, float>();
+
+		/// <summary>
+		/// How far a prototype's foot reaches from its root, m: the furthest any vertex in the lowest sixth of
+		/// its height stands from the root across the ground — what hangs off a slope. From the vertices where
+		/// the mesh can be read, half its bounds' width where it cannot; 0 for a texture detail.
+		/// </summary>
+		public static float FootRadiusOf(DetailPrototype p)
+		{
+			if (p == null || !p.usePrototypeMesh || p.prototype == null)
+			{
+				return 0f;
+			}
+			MeshFilter filter = p.prototype.GetComponentInChildren<MeshFilter>();
+			Mesh mesh = filter != null ? filter.sharedMesh : null;
+			if (mesh == null)
+			{
+				return 0f;
+			}
+			if (footRadii.TryGetValue(mesh, out float cached))
+			{
+				return cached;
+			}
+			float reach;
+			if (!mesh.isReadable)
+			{
+				reach = 0.5f * Mathf.Max(mesh.bounds.size.x, mesh.bounds.size.z);
+			}
+			else
+			{
+				Vector3[] vertices = mesh.vertices;
+				float lowest = float.MaxValue, highest = float.MinValue;
+				foreach (Vector3 v in vertices)
+				{
+					lowest = Mathf.Min(lowest, v.y);
+					highest = Mathf.Max(highest, v.y);
+				}
+				float foot = lowest + (highest - lowest) * 0.16f;
+				reach = 0f;
+				foreach (Vector3 v in vertices)
+				{
+					if (v.y <= foot)
+					{
+						reach = Mathf.Max(reach, Mathf.Sqrt(v.x * v.x + v.z * v.z));
+					}
+				}
+			}
+			footRadii[mesh] = reach;
+			return reach;
+		}
+	}
+
+	/// <summary>
+	/// One terrain as the GPU detail scatter reads it: its scattered prototypes' detail layers summed into 2 m blocks of
+	/// exact expected counts (<see cref="DetailScatterMath"/>), one channel per TYPE painted on it (every prototype of a
+	/// prefab adds into it, as the blade grass does), kept SPARSE (2026-10-27): only the painted pairs of block and channel,
+	/// each with the block's painted cells (<see cref="DetailScatterDensity"/>); each channel's placement settings (the
+	/// prototypes' own, averaged by how much each contributes); the terrain's own height texture; and, per work item (8 × 8
+	/// blocks), an exact upper bound on each channel's instances and the ground's height range, so the CPU sizes the slots
+	/// and culls the items without reading the GPU. Built once when the terrain is taken, released with it.
+	/// </summary>
+	/// <remarks>
+	/// Sparse because every mesh kind is scattered now (the CPU chunk renderer is gone): Moron 2's terrains paint up to 63
+	/// mesh kinds but a 2 m block holds 2.4 of them on average (11 at most), so the 6.1 M painted pairs of its 16 terrains
+	/// take 24 MB, where the two dense half-float slices of eight channels a terrain took 72 MB.
+	/// </remarks>
 	public sealed class DetailScatterTerrain : IDisposable
 	{
 		/// <summary>One channel's placement: the prototypes' sizes, noise, seed and ground alignment.</summary>
@@ -151,6 +241,12 @@ namespace FishMMO.Client
 			public float NoiseSpread;
 			public int Seed;
 			public float AlignToGround;
+			/// <summary>
+			/// The channel's scatter modes (2026-10-26, SCATTER-MODES): the two words of <see cref="FishMMO.Shared.Biomes.BiomeScatterModeWord"/>
+			/// (facing, lean, power-law size), from the terrain's <see cref="FishMMO.Shared.TerrainScatterModes"/> record; 0 and 0 (every
+			/// mode off, the scatter exactly as before) when it has none.
+			/// </summary>
+			public uint ModeWord, ModeAngles;
 		}
 
 		public Terrain Terrain;
@@ -158,10 +254,11 @@ namespace FishMMO.Client
 		public Vector3 Origin;
 		public Vector3 Size;
 		public int Channels;
-		public readonly Channel[] ChannelSettings = new Channel[DetailScatterMath.MaxChannels];
+		/// <summary>Per channel (<see cref="Channels"/> of them).</summary>
+		public Channel[] ChannelSettings = Array.Empty<Channel>();
 		/// <summary>The prototypes read into the channels.</summary>
 		public int Layers;
-		/// <summary>The prototypes the scatter draws (by prototype index), what the chunk renderer skips.</summary>
+		/// <summary>The prototypes the scatter draws (by prototype index).</summary>
 		public bool[] Skip;
 		/// <summary>The density scale the counts were built at (a quality change rebuilds the terrain).</summary>
 		public float DensityScale;
@@ -170,9 +267,18 @@ namespace FishMMO.Client
 		public int Blocks;
 		public float BlockX, BlockZ;
 		public int WorldBlockX, WorldBlockZ;
-		/// <summary>Work items per side, each item's exact upper bound per channel (item × MaxChannels + channel), and its ground height range.</summary>
+		/// <summary>Detail cells per block side (DetailScatterMath.BlockFactor): what an entry's painted-cell mask means.</summary>
+		public int Factor;
+		/// <summary>Work items per side.</summary>
 		public int ItemsSide;
-		public int[] ItemBounds;
+		/// <summary>The sparse density (<see cref="DetailScatterDensity"/>): per item its first entry (and the total), its blocks' starts, the entries.</summary>
+		public int[] ItemEntryStart = Array.Empty<int>();
+		public ushort[] BlockStarts = Array.Empty<ushort>();
+		public uint[] Entries = Array.Empty<uint>();
+		/// <summary>Per item, its painted channels' exact upper bounds (<see cref="DetailScatterDensity.ItemBounds"/>): pairs [start[i], start[i + 1]).</summary>
+		public int[] ItemBoundStart = Array.Empty<int>();
+		public ushort[] ItemBoundChannel = Array.Empty<ushort>();
+		public int[] ItemBoundValue = Array.Empty<int>();
 		private float[] itemMin, itemMax;
 		/// <summary>The tallest an instance can stand above its root, and the farthest it can reach sideways, m (item bounds).</summary>
 		public float MaxInstanceHeight, MaxInstanceReach;
@@ -181,8 +287,6 @@ namespace FishMMO.Client
 		/// <summary>Blocks whose expected count was over <see cref="DetailScatterMath.MaxPerBlock"/> and was capped, and the first such channel (−1 none).</summary>
 		public int ClampedBlocks;
 		public int ClampedChannel = -1;
-		/// <summary>The density slices: channels 0..3, then 4..7 (null when there are four or fewer channels).</summary>
-		public Texture2D Density0, Density1;
 
 		/* The scatter's own copy of the terrain's heights, as the blade grass keeps one (GrassTerrain): Unity's
 		 * heightmapTexture is not the same on every graphics API. */
@@ -203,6 +307,9 @@ namespace FishMMO.Client
 		/// <summary>Metres per unit of <see cref="Heightmap"/> (it holds 0..1 of the terrain's height).</summary>
 		public float HeightScale => Size.y;
 
+		/// <summary>True when the terrain scatters anything (it has entries).</summary>
+		public bool Any => Entries.Length > 0;
+
 		/// <summary>The ground's height range under a work item (lo, hi), world y.</summary>
 		public Vector2 ItemHeightRange(int itemX, int itemZ)
 		{
@@ -220,50 +327,55 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// A terrain's scatter under construction: <see cref="Step"/> reads <see cref="StripRows"/> rows of one detail
-		/// layer (or of the heightmap) at a time until the frame's budget is spent, then packs the slices. The chunk
-		/// renderer keeps drawing the prototypes until it is <see cref="Done"/>.
+		/// A terrain's scatter under construction: <see cref="Step"/> reads a strip of whole item rows of every painted layer
+		/// (<see cref="DetailScatterMath.StripRows"/>), one layer at a time until the frame's budget is spent, and a worker sums
+		/// each strip into blocks and writes its items' entries once all its layers are in; then the heights, the holes and the
+		/// channels' settings. Nothing of the terrain's scattered kinds draws until it is <see cref="Done"/>.
 		/// </summary>
 		public sealed class Builder
 		{
-			public const int StripRows = 64;
-
 			public readonly Terrain Terrain;
 			public DetailScatterTerrain Result { get; private set; }
 			public bool Done { get; private set; }
 			public double Milliseconds { get; private set; }
 			public int Frames { get; private set; }
 
-			public string Progress => layer < layerPrototypes.Count ? $"reading layer {layer + 1}/{layerPrototypes.Count}" : heightRow < st.HeightResolution ? "heights" : holes == null || !holes.Complete ? "holes" : "packing";
+			public string Progress => row < res ? $"reading rows {row}/{res}" : heightRow < st.HeightResolution ? "heights" : holes == null || !holes.Complete ? "holes" : "packing";
 
 			/// <summary>True when the build gave up on a worker's exception (logged): the terrain is taken again from the start.</summary>
 			public bool Failed { get; private set; }
 
-			/// <summary>Strips read ahead of the worker at most: past it the main thread waits a frame (bounded memory).</summary>
+			/// <summary>Strips read ahead of the worker at most (a strip of one layer each): past it the main thread waits a frame (bounded memory).</summary>
 			public const int MaxPendingStrips = 8;
 
 			/// <summary>
-			/// The worker's queue (<see cref="TerrainBuildQueue"/>): each strip's sums and the height texels, in the order read,
-			/// as the same managed code ran them here, so the counts and heights are bit for bit what they were.
+			/// The worker's queue (<see cref="TerrainBuildQueue"/>): each strip's sums, its items' entries and the height texels, in
+			/// the order read, so the counts and heights are bit for bit the same wherever they are worked out.
 			/// </summary>
 			private readonly TerrainBuildQueue queue = new TerrainBuildQueue();
-			/// <summary>The channels' settings, the items' bounds and the slices (a worker's), once everything is read.</summary>
+			/// <summary>The channels' settings and the items' bounds (a worker's), once everything is read.</summary>
 			private Task<Slices> packing;
 
 			private readonly DetailScatterTerrain st;
 			private readonly List<int> layerPrototypes = new List<int>(), layerChannels = new List<int>();
-			private readonly TerrainDetailField.DetailPrototypeSettings[] prototypeSettings;
+			/// <summary>Per prototype index, its place in <see cref="layerPrototypes"/> (−1 not read).</summary>
+			private readonly int[] layerOf;
+			private readonly DetailPrototypeSettings[] prototypeSettings;
 			/// <summary>Per channel, whether its type is a bush (no density scale: cover is the same for everyone).</summary>
 			private readonly bool[] channelBush;
 			private readonly float[] coverage;
 			private readonly double[] prototypeTotals;
-			private readonly int res, factor;
+			private readonly int res, factor, stripRows, stripBlocks;
 			private readonly bool coverageMode;
 			private readonly float cellArea;
-			/// <summary>Each channel's expected instances per block while building, full precision.</summary>
-			private readonly float[][] expected;
-			private int layer, row, heightRow;
-			private bool any;
+			/// <summary>The strip being summed (the worker's): per channel each block's expected count and painted cells, null until painted.</summary>
+			private readonly float[][] window;
+			private readonly byte[][] windowCells;
+			private readonly DetailScatterDensity density;
+			/// <summary>The strip's first row, and the layers of it still to read (painted ones only: GetSupportedLayers).</summary>
+			private int row, stripLayer = -1;
+			private readonly List<int> stripLayers = new List<int>();
+			private int heightRow;
 			/// <summary>The terrain's painted holes, read a strip at a time after the heights; null until then.</summary>
 			private TerrainHoleMask holes;
 			/// <summary>Each channel's prefab (its type's): what a bake records, and what one must match to be taken.</summary>
@@ -278,10 +390,19 @@ namespace FishMMO.Client
 			/// <summary>The heights as the build stored them (16 bits, 0..1 of the terrain's height), for the bake.</summary>
 			public ushort[] CapturedHeights { get; private set; }
 
+			/// <summary>Types past <see cref="DetailScatterMath.MaxChannels"/> on this terrain (not drawn: an error, logged by the system).</summary>
+			public readonly List<string> Overflow = new List<string>();
+
 			internal Builder(Terrain terrain, TerrainData data, List<int> prototypes, List<DetailScatterType> types, float densityScale)
 			{
 				Terrain = terrain;
 				var channelTypes = new List<DetailScatterType>();
+				DetailPrototype[] all = data.detailPrototypes;
+				layerOf = new int[all.Length];
+				for (int i = 0; i < layerOf.Length; i++)
+				{
+					layerOf[i] = -1;
+				}
 				for (int i = 0; i < prototypes.Count; i++)
 				{
 					int c = channelTypes.IndexOf(types[i]);
@@ -289,11 +410,16 @@ namespace FishMMO.Client
 					{
 						if (channelTypes.Count >= DetailScatterMath.MaxChannels)
 						{
+							if (!Overflow.Contains(types[i].Name))
+							{
+								Overflow.Add(types[i].Name);
+							}
 							continue;
 						}
 						c = channelTypes.Count;
 						channelTypes.Add(types[i]);
 					}
+					layerOf[prototypes[i]] = layerPrototypes.Count;
 					layerPrototypes.Add(prototypes[i]);
 					layerChannels.Add(c);
 				}
@@ -301,14 +427,15 @@ namespace FishMMO.Client
 				float cellX = data.size.x / res, cellZ = data.size.z / res;
 				cellArea = cellX * cellZ;
 				factor = DetailScatterMath.BlockFactor(cellX);
+				stripRows = DetailScatterMath.StripRows(factor);
+				stripBlocks = stripRows / factor;
 				coverageMode = data.detailScatterMode == DetailScatterMode.CoverageMode;
-				DetailPrototype[] all = data.detailPrototypes;
-				prototypeSettings = new TerrainDetailField.DetailPrototypeSettings[all.Length];
+				prototypeSettings = new DetailPrototypeSettings[all.Length];
 				coverage = new float[all.Length];
 				prototypeTotals = new double[all.Length];
 				foreach (int p in layerPrototypes)
 				{
-					prototypeSettings[p] = TerrainDetailField.DetailPrototypeSettings.From(all[p]);
+					prototypeSettings[p] = DetailPrototypeSettings.From(all[p]);
 					if (coverageMode)
 					{
 						float c = data.ComputeDetailCoverage(p);
@@ -324,6 +451,7 @@ namespace FishMMO.Client
 					Origin = origin,
 					Size = data.size,
 					Channels = channelTypes.Count,
+					ChannelSettings = new Channel[channelTypes.Count],
 					Layers = layerPrototypes.Count,
 					Skip = new bool[all.Length],
 					DensityScale = densityScale,
@@ -333,6 +461,7 @@ namespace FishMMO.Client
 					BlockZ = cellZ * factor,
 					WorldBlockX = DetailScatterMath.WorldBlockBase(origin.x, cellX * factor),
 					WorldBlockZ = DetailScatterMath.WorldBlockBase(origin.z, cellZ * factor),
+					Factor = factor,
 					ItemsSide = DetailScatterMath.Items(blocks),
 				};
 				channelBush = new bool[channelTypes.Count];
@@ -349,20 +478,54 @@ namespace FishMMO.Client
 				{
 					st.Skip[p] = true;
 				}
-				expected = new float[st.Channels][];
-				for (int c = 0; c < st.Channels; c++)
-				{
-					expected[c] = new float[blocks * blocks];
-				}
+				bool leans = ReadModes(terrain, all);
+				window = new float[st.Channels][];
+				windowCells = new byte[st.Channels][];
+				density = new DetailScatterDensity(blocks, st.Channels, factor);
 				// The tallest and widest an instance can be: its mesh at the largest scale any of its prototypes allows.
 				for (int i = 0; i < layerPrototypes.Count; i++)
 				{
-					TerrainDetailField.DetailPrototypeSettings s = prototypeSettings[layerPrototypes[i]];
+					DetailPrototypeSettings s = prototypeSettings[layerPrototypes[i]];
 					Bounds b = channelTypes[layerChannels[i]].MeshBounds;
 					float w = Mathf.Max(s.MaxWidth, 0.01f), h = Mathf.Max(s.MaxHeight, 0.01f);
 					st.MaxInstanceHeight = Mathf.Max(st.MaxInstanceHeight, b.max.y * h);
 					st.MaxInstanceReach = Mathf.Max(st.MaxInstanceReach, Mathf.Max(b.extents.x + Mathf.Abs(b.center.x), b.extents.z + Mathf.Abs(b.center.z)) * w);
 				}
+				if (leans)
+				{
+					// A leaning instance can lay its height sideways: the items' bounds reach that far.
+					st.MaxInstanceReach = Mathf.Max(st.MaxInstanceReach, st.MaxInstanceReach + st.MaxInstanceHeight);
+				}
+			}
+
+			/// <summary>
+			/// Each channel's mode words from the terrain's <see cref="FishMMO.Shared.TerrainScatterModes"/> record (SCATTER-MODES): the first of
+			/// the channel's prototypes the record names (by prefab name and noise seed, as the cut wrote it). Nothing is set with no record.
+			/// True when any channel leans its instances.
+			/// </summary>
+			private bool ReadModes(Terrain terrain, DetailPrototype[] all)
+			{
+				FishMMO.Shared.TerrainScatterModes record = terrain != null ? terrain.GetComponent<FishMMO.Shared.TerrainScatterModes>() : null;
+				if (record == null)
+				{
+					return false;
+				}
+				bool leans = false;
+				for (int i = 0; i < layerPrototypes.Count; i++)
+				{
+					int p = layerPrototypes[i], c = layerChannels[i];
+					if (st.ChannelSettings[c].ModeWord != 0u || p < 0 || p >= all.Length || all[p] == null || all[p].prototype == null)
+					{
+						continue;
+					}
+					if (record.TryDetail(all[p].prototype.name, all[p].noiseSeed, out uint word, out uint angles))
+					{
+						st.ChannelSettings[c].ModeWord = word;
+						st.ChannelSettings[c].ModeAngles = angles;
+						leans |= FishMMO.Shared.Biomes.BiomeScatterModeWord.Leans(word);
+					}
+				}
+				return leans;
 			}
 
 			/// <summary>Drops an unfinished build, freeing anything it created; its queued work is skipped.</summary>
@@ -391,15 +554,16 @@ namespace FishMMO.Client
 				};
 			}
 
-			/// <summary>The finished maps, bounds, channel settings and heights into the bake (before the textures take them).</summary>
+			/// <summary>The finished density, items' ranges, channel settings and heights into the bake (before the textures take them).</summary>
 			private void CaptureMaps(Slices packed)
 			{
 				Captured = Layout(true);
 				Captured.Blocks = st.Blocks;
-				Captured.Slice0 = packed.Slice0;
-				Captured.Slice1 = packed.Slice1 ?? new ushort[0];
+				Captured.Factor = st.Factor;
+				Captured.ItemEntryStart = (int[])st.ItemEntryStart.Clone();
+				Captured.BlockStarts = (ushort[])st.BlockStarts.Clone();
+				Captured.Entries = (uint[])st.Entries.Clone();
 				Captured.Holes = packed.Holes ?? new byte[0];
-				Captured.ItemBounds = (int[])st.ItemBounds.Clone();
 				Captured.ItemMin = (float[])st.itemMin.Clone();
 				Captured.ItemMax = (float[])st.itemMax.Clone();
 				Captured.ClampedBlocks = st.ClampedBlocks;
@@ -475,10 +639,9 @@ namespace FishMMO.Client
 					return true;
 				}
 				int blocks = st.Blocks, hres = st.HeightResolution, items = st.ItemsSide * st.ItemsSide;
-				bool second = st.Channels > DetailScatterMath.ChannelsPerSlice;
-				if (b.Blocks != blocks || b.Slice0 == null || b.Slice0.Length != blocks * blocks * 4
-					|| (second && (b.Slice1 == null || b.Slice1.Length != blocks * blocks * 4))
-					|| b.ItemBounds == null || b.ItemBounds.Length != items * DetailScatterMath.MaxChannels
+				if (b.Blocks != blocks || b.Factor != st.Factor || b.ItemEntryStart == null || b.ItemEntryStart.Length != items + 1
+					|| b.BlockStarts == null || b.BlockStarts.Length != items * (DetailScatterMath.BlocksPerItem + 1)
+					|| b.Entries == null || b.Entries.Length != b.ItemEntryStart[items]
 					|| b.ItemMin == null || b.ItemMin.Length != items || b.ItemMax == null || b.ItemMax.Length != items
 					|| b.Channels == null || b.Channels.Length != st.Channels
 					|| tile.HeightResolution != hres || tile.Heights == null || tile.Heights.Length != hres * hres)
@@ -497,13 +660,14 @@ namespace FishMMO.Client
 					ch.AlignToGround = baked.AlignToGround;
 					ch.Seed = baked.Seed;
 				}
-				st.ItemBounds = b.ItemBounds;
+				st.ItemEntryStart = b.ItemEntryStart;
+				st.BlockStarts = b.BlockStarts;
+				st.Entries = b.Entries;
+				st.FinishBounds();
 				st.itemMin = b.ItemMin;
 				st.itemMax = b.ItemMax;
 				st.ClampedBlocks = b.ClampedBlocks;
 				st.ClampedChannel = b.ClampedChannel;
-				st.Density0 = MakeSlice(b.Slice0, blocks, $"{Terrain.name} detail scatter 0-3");
-				st.Density1 = second ? MakeSlice(b.Slice1, blocks, $"{Terrain.name} detail scatter 4-7") : null;
 				if (SystemInfo.SupportsTextureFormat(TextureFormat.R16))
 				{
 					st.heightTexels16 = tile.Heights;
@@ -519,15 +683,7 @@ namespace FishMMO.Client
 				st.FinishHeightTexture();
 				if (b.Holes != null && b.Holes.Length == hres * hres)
 				{
-					st.Holes = new Texture2D(hres, hres, TextureFormat.R8, false, true)
-					{
-						name = $"{Terrain.name} detail scatter holes",
-						filterMode = FilterMode.Point,
-						wrapMode = TextureWrapMode.Clamp,
-						hideFlags = HideFlags.DontSave,
-					};
-					st.Holes.SetPixelData(b.Holes, 0);
-					st.Holes.Apply(false, true);
+					st.Holes = MakeHoles(b.Holes, hres, Terrain.name);
 				}
 				Result = st;
 				Done = true;
@@ -562,20 +718,23 @@ namespace FishMMO.Client
 			private float Density(int prototype) => prototypeSettings[prototype].UseDensityScaling ? st.DensityScale : 1f;
 
 			/// <summary>
-			/// One strip of a detail layer (rows <paramref name="rowBase"/>..) summed into a channel's blocks: each cell's
-			/// expected count as the chunk renderer works it out (coverage or instance count, density scale), in order.
-			/// Returns the strip's total (summed in doubles, in order); <paramref name="any"/> true when any cell counted.
+			/// One strip of a detail layer (rows <paramref name="rowBase"/>..) summed into a channel's blocks of the strip's window
+			/// (block rows from <paramref name="blockRowBase"/>): each cell's expected count as the chunk renderer worked it out
+			/// (coverage or instance count, density scale), in order, and each painted cell's bit in its block's mask
+			/// (<paramref name="cells"/>, null to keep none). Returns the strip's total (summed in doubles, in order).
 			/// </summary>
-			public static double AddStrip(int[,] cells, int rows, int rowBase, int res, int factor, int blocks, bool coverageMode, float coverage,
-				float cellArea, float density, float[] target, ref bool any)
+			public static double AddStrip(int[,] map, int rows, int rowBase, int res, int factor, int blocks, int blockRowBase, bool coverageMode, float coverage,
+				float cellArea, float density, float[] target, byte[] cells)
 			{
 				double total = 0.0;
 				for (int z = 0; z < rows; z++)
 				{
-					int blockRow = (rowBase + z) / factor * blocks;
+					int gz = rowBase + z;
+					int blockRow = (gz / factor - blockRowBase) * blocks;
+					int cz = gz % factor;
 					for (int x = 0; x < res; x++)
 					{
-						int v = cells[z, x];
+						int v = map[z, x];
 						if (v <= 0)
 						{
 							continue;
@@ -583,9 +742,13 @@ namespace FishMMO.Client
 						float e = TerrainDetailMath.ExpectedInCell(v, coverageMode, coverage, cellArea, density);
 						if (e > 0f)
 						{
-							target[blockRow + x / factor] += e;
+							int at = blockRow + x / factor;
+							target[at] += e;
 							total += e;
-							any = true;
+							if (cells != null)
+							{
+								cells[at] |= (byte)DetailScatterMath.CellBit(x % factor, cz, factor);
+							}
 						}
 					}
 				}
@@ -610,44 +773,77 @@ namespace FishMMO.Client
 					Failed = true;
 					return true;
 				}
-				if (layer < layerPrototypes.Count)
+				if (row < res)
 				{
 					if (queue.Pending >= MaxPendingStrips)
 					{
 						return false;
 					}
-					int p = layerPrototypes[layer];
-					int rows = Mathf.Min(StripRows, res - row);
-					int[,] cells = data.GetDetailLayer(0, row, res, rows, p);
-					float[] target = expected[layerChannels[layer]];
-					int blocks = st.Blocks, rowBase = row;
-					float density = channelBush[layerChannels[layer]] ? 1f : Density(p);
-					float cover = coverage[p];
+					int rows = Mathf.Min(stripRows, res - row);
+					if (stripLayer < 0)
+					{
+						// The strip's painted layers of ours, in the order they were listed (GetSupportedLayers: what any patch holds).
+						stripLayers.Clear();
+						foreach (int p in data.GetSupportedLayers(0, row, res, rows))
+						{
+							if (p >= 0 && p < layerOf.Length && layerOf[p] >= 0)
+							{
+								stripLayers.Add(layerOf[p]);
+							}
+						}
+						stripLayers.Sort();
+						stripLayer = 0;
+					}
+					if (stripLayer < stripLayers.Count)
+					{
+						int layer = stripLayers[stripLayer++];
+						int p = layerPrototypes[layer];
+						int c = layerChannels[layer];
+						int[,] cells = data.GetDetailLayer(0, row, res, rows, p);
+						int blocks = st.Blocks, rowBase = row, blockRowBase = row / factor;
+						float density = channelBush[c] ? 1f : Density(p);
+						float cover = coverage[p];
+						bool masks = DetailScatterMath.MaskCells(factor) > 0;
+						queue.Enqueue(() =>
+						{
+							window[c] ??= new float[stripBlocks * blocks];
+							if (masks)
+							{
+								windowCells[c] ??= new byte[stripBlocks * blocks];
+							}
+							prototypeTotals[p] += AddStrip(cells, rows, rowBase, res, factor, blocks, blockRowBase, coverageMode, cover, cellArea, density, window[c], masks ? windowCells[c] : null);
+						});
+						return true;
+					}
+					// Every layer of the strip is in: its item rows are written, and the window cleared for the next.
+					int emitRow = row / factor, emitRows = (rows + factor - 1) / factor;
 					queue.Enqueue(() =>
 					{
-						bool found = false;
-						prototypeTotals[p] += AddStrip(cells, rows, rowBase, res, factor, blocks, coverageMode, cover, cellArea, density, target, ref found);
-						if (found)
+						density.EmitRows(window, windowCells, emitRow, emitRows);
+						for (int c = 0; c < window.Length; c++)
 						{
-							any = true;
+							if (window[c] != null)
+							{
+								Array.Clear(window[c], 0, window[c].Length);
+							}
+							if (windowCells[c] != null)
+							{
+								Array.Clear(windowCells[c], 0, windowCells[c].Length);
+							}
 						}
 					});
 					row += rows;
-					if (row >= res)
-					{
-						layer++;
-						row = 0;
-					}
+					stripLayer = -1;
 					return true;
 				}
 				if (heightRow == 0 && heightTexelsMissing)
 				{
-					// Whether anything was painted is known once the layers are summed.
+					// Whether anything was painted is known once the strips are summed.
 					if (!queue.Idle)
 					{
 						return false;
 					}
-					if (!any)
+					if (density.Entries.Count == 0)
 					{
 						if (Capture)
 						{
@@ -666,7 +862,7 @@ namespace FishMMO.Client
 					{
 						return false;
 					}
-					int rows = Mathf.Min(StripRows, hres - heightRow);
+					int rows = Mathf.Min(TerrainHoleMask.StripRows, hres - heightRow);
 					float[,] strip = data.GetHeights(0, heightRow, hres, rows);
 					int zBase = heightRow;
 					queue.Enqueue(() => AccumulateHeights(strip, zBase));
@@ -686,7 +882,7 @@ namespace FishMMO.Client
 						return false;
 					}
 					TerrainHoleMask cut = holes;
-					packing = TerrainBuildQueue.Inline ? Task.FromResult(PackSlices(cut)) : Task.Run(() => PackSlices(cut));
+					packing = TerrainBuildQueue.Inline ? Task.FromResult(Pack(cut)) : Task.Run(() => Pack(cut));
 					return true;
 				}
 				if (!packing.IsCompleted)
@@ -761,20 +957,25 @@ namespace FishMMO.Client
 				}
 			}
 
-			/// <summary>What <see cref="PackSlices"/> gives the textures.</summary>
+			/// <summary>What <see cref="Pack"/> gives the textures.</summary>
 			private sealed class Slices
 			{
-				public ushort[] Slice0, Slice1;
 				public byte[] Holes;
 			}
 
-			/// <summary>
-			/// The channels' settings, the items' bounds and the slices' halves (and the holes' texels): a worker's, once every
-			/// strip is summed, the same code in the same order as on the main thread before. Mathf.FloatToHalf is thread-safe.
-			/// </summary>
-			private Slices PackSlices(TerrainHoleMask cut)
+			/// <summary>The mask with its plants' margin (TerrainHoleMask.KeepPlantsClear), returned for the call's convenience.</summary>
+			private static TerrainHoleMask PlantsClear(TerrainHoleMask mask)
 			{
-				int blocks = st.Blocks;
+				mask.KeepPlantsClear();
+				return mask;
+			}
+
+			/// <summary>
+			/// The channels' settings, the density and the items' bounds (and the holes' texels): a worker's, once every strip is
+			/// summed and written.
+			/// </summary>
+			private Slices Pack(TerrainHoleMask cut)
+			{
 				int channels = st.Channels;
 				// Each channel's placement settings: its prototypes' own, weighted by how many instances each contributes.
 				var weight = new double[channels];
@@ -788,7 +989,7 @@ namespace FishMMO.Client
 					{
 						continue;
 					}
-					TerrainDetailField.DetailPrototypeSettings s = prototypeSettings[p];
+					DetailPrototypeSettings s = prototypeSettings[p];
 					weight[c] += w;
 					sums[c, 0] += w * s.MinWidth;
 					sums[c, 1] += w * s.MaxWidth;
@@ -818,67 +1019,30 @@ namespace FishMMO.Client
 						ch.MinWidth = ch.MaxWidth = ch.MinHeight = ch.MaxHeight = 1f;
 					}
 				}
-
-				// The counts as the GPU will read them (half floats), the items' exact upper bounds, and the slices.
-				int side = st.ItemsSide;
-				st.ItemBounds = new int[side * side * DetailScatterMath.MaxChannels];
-				ushort[] slice0 = new ushort[blocks * blocks * 4];
-				ushort[] slice1 = channels > DetailScatterMath.ChannelsPerSlice ? new ushort[blocks * blocks * 4] : null;
-				for (int c = 0; c < channels; c++)
-				{
-					float[] values = expected[c];
-					ushort[] slice = c < DetailScatterMath.ChannelsPerSlice ? slice0 : slice1;
-					int lane = c % DetailScatterMath.ChannelsPerSlice;
-					for (int bz = 0; bz < blocks; bz++)
-					{
-						for (int bx = 0; bx < blocks; bx++)
-						{
-							int i = bz * blocks + bx;
-							float stored = DetailScatterMath.Stored(values[i]);
-							if (values[i] > DetailScatterMath.MaxPerBlock)
-							{
-								st.ClampedBlocks++;
-								st.ClampedChannel = st.ClampedChannel < 0 ? c : st.ClampedChannel;
-							}
-							slice[i * 4 + lane] = Mathf.FloatToHalf(stored);
-							int bound = DetailScatterMath.Bound(stored);
-							if (bound > 0)
-							{
-								st.ItemBounds[((bz / DetailScatterMath.ItemSide) * side + bx / DetailScatterMath.ItemSide) * DetailScatterMath.MaxChannels + c] += bound;
-							}
-						}
-					}
-				}
+				st.ItemEntryStart = density.ItemEntryStart;
+				st.BlockStarts = density.BlockStarts;
+				st.Entries = density.Entries.ToArray();
+				st.ClampedBlocks = density.ClampedBlocks;
+				st.ClampedChannel = density.ClampedChannel;
+				st.FinishBounds();
 				return new Slices
 				{
-					Slice0 = slice0,
-					Slice1 = slice1,
-					Holes = cut != null && cut.Any ? cut.ToTexels(st.HeightResolution) : null,
+					// No stone, litter or plant over an opening, nor so near its edge that it lies out over it (2026-10-27).
+					Holes = cut != null && cut.Any ? PlantsClear(cut).ToTexels(st.HeightResolution) : null,
 				};
 			}
 
-			/// <summary>The slices, the height texture and the holes' texture (the main thread's).</summary>
+			/// <summary>The height texture and the holes' texture (the main thread's).</summary>
 			private void Finish(Slices packed)
 			{
-				int blocks = st.Blocks;
 				if (Capture)
 				{
 					CaptureMaps(packed);
 				}
-				st.Density0 = MakeSlice(packed.Slice0, blocks, $"{Terrain.name} detail scatter 0-3");
-				st.Density1 = packed.Slice1 != null ? MakeSlice(packed.Slice1, blocks, $"{Terrain.name} detail scatter 4-7") : null;
 				st.FinishHeightTexture();
 				if (packed.Holes != null)
 				{
-					st.Holes = new Texture2D(st.HeightResolution, st.HeightResolution, TextureFormat.R8, false, true)
-					{
-						name = $"{Terrain.name} detail scatter holes",
-						filterMode = FilterMode.Point,
-						wrapMode = TextureWrapMode.Clamp,
-						hideFlags = HideFlags.DontSave,
-					};
-					st.Holes.SetPixelData(packed.Holes, 0);
-					st.Holes.Apply(false, true);
+					st.Holes = MakeHoles(packed.Holes, st.HeightResolution, Terrain.name);
 				}
 				holes = null;
 				Result = st;
@@ -886,18 +1050,24 @@ namespace FishMMO.Client
 			}
 		}
 
-		private static Texture2D MakeSlice(ushort[] halves, int res, string name)
+		/// <summary>The items' sparse bounds from the entries (<see cref="DetailScatterDensity.ItemBounds"/>).</summary>
+		private void FinishBounds()
 		{
-			var texture = new Texture2D(res, res, TextureFormat.RGBAHalf, false, true)
+			DetailScatterDensity.ItemBounds(ItemEntryStart, Entries, Channels, out ItemBoundStart, out ItemBoundChannel, out ItemBoundValue);
+		}
+
+		private static Texture2D MakeHoles(byte[] texels, int res, string terrainName)
+		{
+			var holes = new Texture2D(res, res, TextureFormat.R8, false, true)
 			{
-				name = name,
+				name = $"{terrainName} detail scatter holes",
 				filterMode = FilterMode.Point,
 				wrapMode = TextureWrapMode.Clamp,
 				hideFlags = HideFlags.DontSave,
 			};
-			texture.SetPixelData(halves, 0);
-			texture.Apply(false, true);
-			return texture;
+			holes.SetPixelData(texels, 0);
+			holes.Apply(false, true);
+			return holes;
 		}
 
 		private void FinishHeightTexture()
@@ -926,7 +1096,7 @@ namespace FishMMO.Client
 
 		public void Dispose()
 		{
-			foreach (Texture2D t in new[] { Density0, Density1, heightTexture, Holes })
+			foreach (Texture2D t in new[] { heightTexture, Holes })
 			{
 				if (t == null)
 				{
@@ -942,7 +1112,7 @@ namespace FishMMO.Client
 					UnityEngine.Object.DestroyImmediate(t);
 				}
 			}
-			Density0 = Density1 = Holes = null;
+			Holes = null;
 			heightTexture = null;
 		}
 	}

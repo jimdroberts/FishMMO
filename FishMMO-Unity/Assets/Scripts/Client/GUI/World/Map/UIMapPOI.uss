@@ -30,7 +30,8 @@
 .map-marker--lake .map-marker__icon,
 .map-marker--hotspring .map-marker__icon,
 .map-marker--rivermouth .map-marker__icon,
-.map-marker--delta .map-marker__icon {
+.map-marker--delta .map-marker__icon,
+.map-marker--cenote .map-marker__icon {
     background-color: var(--map-poi-water);
     border-radius: 50%;
 }
@@ -64,7 +65,11 @@
 .map-marker--obsidianfield .map-marker__icon,
 .map-marker--cindercone .map-marker__icon,
 .map-marker--kipuka .map-marker__icon,
-.map-marker--lavafall .map-marker__icon {
+.map-marker--lavafall .map-marker__icon,
+.map-marker--geyser .map-marker__icon,
+.map-marker--mudpot .map-marker__icon,
+.map-marker--fumarole .map-marker__icon,
+.map-marker--sulphurpool .map-marker__icon {
     background-color: var(--map-poi-volcanic);
     border-radius: 50%;
     border-bottom-left-radius: 0;
@@ -112,7 +117,27 @@
 .map-marker--monsterden .map-marker__icon,
 .map-marker--nest .map-marker__icon,
 .map-marker--fowlershide .map-marker__icon,
-.map-marker--eelweir .map-marker__icon {
+.map-marker--eelweir .map-marker__icon,
+.map-marker--giantssteading .map-marker__icon,
+.map-marker--goblinwarren .map-marker__icon,
+.map-marker--warbandcamp .map-marker__icon,
+.map-marker--kobolddelving .map-marker__icon,
+.map-marker--spiderthicket .map-marker__icon,
+.map-marker--charcoalclamps .map-marker__icon,
+.map-marker--greenwoodhideout .map-marker__icon,
+.map-marker--wolfden .map-marker__icon,
+.map-marker--shieling .map-marker__icon,
+.map-marker--sandwormpit .map-marker__icon,
+.map-marker--eyrie .map-marker__icon,
+.map-marker--griffinroost .map-marker__icon,
+.map-marker--wyvernnest .map-marker__icon,
+.map-marker--frostgiantsteading .map-marker__icon,
+.map-marker--winterwolfden .map-marker__icon,
+.map-marker--hydralair .map-marker__icon,
+.map-marker--lizardfolkhatchery .map-marker__icon,
+.map-marker--firegianthall .map-marker__icon,
+.map-marker--salamanderlair .map-marker__icon,
+.map-marker--lakemonsterlair .map-marker__icon {
     background-color: var(--map-poi-wild);
     border-radius: 1px;
 }
@@ -131,7 +156,29 @@
 .map-marker--lavacavetemple .map-marker__icon,
 .map-marker--frogshrine .map-marker__icon,
 .map-marker--chapel .map-marker__icon,
-.map-marker--holywell .map-marker__icon {
+.map-marker--holywell .map-marker__icon,
+.map-marker--cultisthideout .map-marker__icon,
+.map-marker--spellscar .map-marker__icon,
+.map-marker--planarrift .map-marker__icon,
+.map-marker--wishingstone .map-marker__icon,
+.map-marker--waygatering .map-marker__icon,
+.map-marker--druidgrove .map-marker__icon,
+.map-marker--trollstones .map-marker__icon,
+.map-marker--dryadoak .map-marker__icon,
+.map-marker--jaguartemple .map-marker__icon,
+.map-marker--serpentidol .map-marker__icon,
+.map-marker--henge .map-marker__icon,
+.map-marker--djinnprison .map-marker__icon,
+.map-marker--hangingmonastery .map-marker__icon,
+.map-marker--summitcairn .map-marker__icon,
+.map-marker--prayerflagpass .map-marker__icon,
+.map-marker--aurorashrine .map-marker__icon,
+.map-marker--hagscauldron .map-marker__icon,
+.map-marker--covencircle .map-marker__icon,
+.map-marker--tidalislandabbey .map-marker__icon,
+.map-marker--firetemple .map-marker__icon,
+.map-marker--ladyofthelake .map-marker__icon,
+.map-marker--nymphpool .map-marker__icon {
     background-color: var(--map-poi-sacred);
     border-radius: 50%;
     border-width: 2px;
@@ -146,7 +193,22 @@
 .map-marker--ossuary .map-marker__icon,
 .map-marker--blightedcrater .map-marker__icon,
 .map-marker--plaguevillage .map-marker__icon,
-.map-marker--deadforest .map-marker__icon {
+.map-marker--deadforest .map-marker__icon,
+.map-marker--hauntedmanor .map-marker__icon,
+.map-marker--hangingtree .map-marker__icon,
+.map-marker--petrifiedbattle .map-marker__icon,
+.map-marker--titansbones .map-marker__icon,
+.map-marker--scarecrowfield .map-marker__icon,
+.map-marker--longbarrow .map-marker__icon,
+.map-marker--gallowshill .map-marker__icon,
+.map-marker--kurganfield .map-marker__icon,
+.map-marker--necropolis .map-marker__icon,
+.map-marker--rockcutfacade .map-marker__icon,
+.map-marker--beastboneyard .map-marker__icon,
+.map-marker--frozenarmy .map-marker__icon,
+.map-marker--mammothgraveyard .map-marker__icon,
+.map-marker--lichspire .map-marker__icon,
+.map-marker--royalmausoleum .map-marker__icon {
     background-color: var(--map-poi-dead);
     border-radius: 1px;
     border-width: 2px;
@@ -169,7 +231,29 @@
 .map-marker--sunkenplaza .map-marker__icon,
 .map-marker--shatteredbridge .map-marker__icon,
 .map-marker--fallencolossus .map-marker__icon,
-.map-marker--warenginegraveyard .map-marker__icon {
+.map-marker--warenginegraveyard .map-marker__icon,
+.map-marker--boundarystone .map-marker__icon,
+.map-marker--burnedvillage .map-marker__icon,
+.map-marker--ancientwall .map-marker__icon,
+.map-marker--eldermonolith .map-marker__icon,
+.map-marker--golemgraveyard .map-marker__icon,
+.map-marker--lostlibrary .map-marker__icon,
+.map-marker--elfwaystone .map-marker__icon,
+.map-marker--mosscolossus .map-marker__icon,
+.map-marker--steppyramid .map-marker__icon,
+.map-marker--lostcity .map-marker__icon,
+.map-marker--stonefigures .map-marker__icon,
+.map-marker--pyramid .map-marker__icon,
+.map-marker--sphinx .map-marker__icon,
+.map-marker--sandburiedtemple .map-marker__icon,
+.map-marker--cliffpalace .map-marker__icon,
+.map-marker--dreadroad .map-marker__icon,
+.map-marker--cliffrelief .map-marker__icon,
+.map-marker--runestone .map-marker__icon,
+.map-marker--icepalace .map-marker__icon,
+.map-marker--swampcathedral .map-marker__icon,
+.map-marker--ashburiedcity .map-marker__icon,
+.map-marker--lostthrone .map-marker__icon {
     background-color: var(--map-poi-ruins);
     border-radius: 0;
     border-top-right-radius: 50%;
@@ -195,7 +279,28 @@
 .map-marker--watermill .map-marker__icon,
 .map-marker--lumbermill .map-marker__icon,
 .map-marker--marshwatchtower .map-marker__icon,
-.map-marker--brickkiln .map-marker__icon {
+.map-marker--brickkiln .map-marker__icon,
+.map-marker--signalbeacon .map-marker__icon,
+.map-marker--tollgate .map-marker__icon,
+.map-marker--hamlet .map-marker__icon,
+.map-marker--manorhouse .map-marker__icon,
+.map-marker--treevillage .map-marker__icon,
+.map-marker--goblinmarket .map-marker__icon,
+.map-marker--lizardfolkvillage .map-marker__icon,
+.map-marker--grange .map-marker__icon,
+.map-marker--dovecote .map-marker__icon,
+.map-marker--beegarden .map-marker__icon,
+.map-marker--villagegreen .map-marker__icon,
+.map-marker--nomadcamp .map-marker__icon,
+.map-marker--kraal .map-marker__icon,
+.map-marker--caravanhalt .map-marker__icon,
+.map-marker--mountainkingshall .map-marker__icon,
+.map-marker--passfort .map-marker__icon,
+.map-marker--silverminetown .map-marker__icon,
+.map-marker--crannog .map-marker__icon,
+.map-marker--reedvillage .map-marker__icon,
+.map-marker--cliffcastle .map-marker__icon,
+.map-marker--commandery .map-marker__icon {
     background-color: var(--map-poi-settlement);
     border-radius: 2px;
     border-width: 2px;
@@ -221,7 +326,16 @@
 .map-marker--longline .map-marker__icon,
 .map-marker--whaletow .map-marker__icon,
 .map-marker--trenchedge .map-marker__icon,
-.map-marker--sunkenwhalefall .map-marker__icon {
+.map-marker--sunkenwhalefall .map-marker__icon,
+.map-marker--frozenshipwreck .map-marker__icon,
+.map-marker--smugglerstunnel .map-marker__icon,
+.map-marker--wreckersbeacon .map-marker__icon,
+.map-marker--sirenrock .map-marker__icon,
+.map-marker--seawitchgrotto .map-marker__icon,
+.map-marker--longshiplanding .map-marker__icon,
+.map-marker--krakenwreck .map-marker__icon,
+.map-marker--merfolkvillage .map-marker__icon,
+.map-marker--krakengrounds .map-marker__icon {
     background-color: var(--map-poi-coast);
     border-radius: 0;
     border-bottom-left-radius: 50%;
@@ -236,7 +350,17 @@
 .map-marker--herbgrove .map-marker__icon,
 .map-marker--ancientforge .map-marker__icon,
 .map-marker--phoenixnest .map-marker__icon,
-.map-marker--sealedvault .map-marker__icon {
+.map-marker--sealedvault .map-marker__icon,
+.map-marker--dragonlair .map-marker__icon,
+.map-marker--trollbridge .map-marker__icon,
+.map-marker--buriedhoard .map-marker__icon,
+.map-marker--ambushsite .map-marker__icon,
+.map-marker--wreckedcaravan .map-marker__icon,
+.map-marker--siegecamp .map-marker__icon,
+.map-marker--idolvault .map-marker__icon,
+.map-marker--baobab .map-marker__icon,
+.map-marker--dwarvengate .map-marker__icon,
+.map-marker--dragonintheice .map-marker__icon {
     background-color: var(--map-poi-encounter);
     border-radius: 2px;
     border-width: 3px;
@@ -254,6 +378,12 @@
     border-width: 2px;
     border-color: var(--map-poi-alien);
     background-color: var(--map-surface);
+}
+
+/* OTHER: Squared like the plain landmark. */
+.map-marker--crossroads .map-marker__icon {
+    background-color: var(--map-poi-other);
+    border-radius: 2px;
 }
 
 /*

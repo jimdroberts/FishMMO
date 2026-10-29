@@ -32,8 +32,16 @@ namespace FishMMO.Shared
 		/// The layout and the build's arithmetic: bumped whenever either builder changes what it computes, so every bake made
 		/// before reads as unusable (the runtime builds those terrains as before) until the scene is cut or rebaked.
 		/// </summary>
-		/// <remarks>2: tussock grass channels keep the biome's carpet coverage instead of each terrain's scaled to full.</remarks>
-		public const int Version = 2;
+		/// <remarks>
+		/// 2: tussock grass channels keep the biome's carpet coverage instead of each terrain's scaled to full. 3 (2026-10-27): the
+		/// grass's and the scatter's hole masks keep their plants a margin clear of every hole's edge (TerrainHoleMask.KeepPlantsClear).
+		/// NOT bumped for the GPU-only change (2026-10-27: only the prototypes painted on a terrain are read, the scatter takes every
+		/// mesh kind the blades do not and keeps its density sparse, <see cref="Scatter.Entries"/>): a grass or scatter entry baked
+		/// before lists every prototype, so it no longer matches what play selects (Builder.SameLayout) and an old scatter entry
+		/// has no sparse density (Builder.TakeBaked's checks), so both are rebuilt at play until the scene is rebaked; bumping
+		/// would also have thrown away the still-valid index maps and ground colour map.
+		/// </remarks>
+		public const int Version = 3;
 
 		/// <summary>The <see cref="Version"/> this was baked at.</summary>
 		public int BakedVersion;
@@ -135,12 +143,17 @@ namespace FishMMO.Shared
 			public GameObject[] ChannelPrefabs = new GameObject[0];
 			/// <summary>Per channel, its placement: the prototypes' sizes, noise and ground alignment, and its seed.</summary>
 			public ScatterChannel[] Channels = new ScatterChannel[0];
-			/// <summary>Blocks per side, and the half-float slices: channels 0..3, then 4..7 (empty with four or fewer).</summary>
+			/// <summary>Blocks per side, and detail cells per block side (what an entry's painted-cell mask means).</summary>
 			public int Blocks;
-			public ushort[] Slice0 = new ushort[0];
-			public ushort[] Slice1 = new ushort[0];
-			/// <summary>Per work item and channel, the exact upper bound on its instances; per item, its ground height range.</summary>
-			public int[] ItemBounds = new int[0];
+			public int Factor;
+			/// <summary>
+			/// The sparse density (DetailScatterDensity, 2026-10-27): per work item its first entry (and the total at the end), its
+			/// 65 block starts relative to it, and every painted (block, channel) pair, one uint each (DetailScatterMath.PackEntry).
+			/// </summary>
+			public int[] ItemEntryStart = new int[0];
+			public ushort[] BlockStarts = new ushort[0];
+			public uint[] Entries = new uint[0];
+			/// <summary>Per item, its ground height range.</summary>
 			public float[] ItemMin = new float[0];
 			public float[] ItemMax = new float[0];
 			public int ClampedBlocks;

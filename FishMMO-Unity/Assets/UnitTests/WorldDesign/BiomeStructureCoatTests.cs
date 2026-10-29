@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.IO;
 using FishMMO.Shared.Biomes;
@@ -235,10 +236,11 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void TheSpecColumn_KeepsTheFinish_AndWeathersKeepsTheCoat()
 		{
-			BiomeArtSpec.Entry tundra = BiomeArtSpec.For("Tundra");
-			Assume.That(tundra, Is.Not.Null);
-			BiomeWeathering before = tundra.Weathering();
-			Assert.That(before.Coat, Is.EqualTo(BiomeStructureCoat.None), "no spec names a coat until its round authors one");
+			// No spec names a coat until its round authors one (an authored round's own coat: BiomeAuthoredRoundTests).
+			foreach (BiomeArtSpec.Entry unauthored in BiomeArtSpec.Entries.Where(e => !BiomeAuthoredRounds.Contains(e.Biome)))
+			{
+				Assert.That(unauthored.Weathering().Coat, Is.EqualTo(BiomeStructureCoat.None), $"{unauthored.Biome}: no spec names a coat until its round authors one");
+			}
 			var entry = new BiomeArtSpec.Entry { Biome = "Probe Biome" };
 			entry.Coated(BiomeStructureCoat.Lichen, 0.3f).Weathers(BiomeStructureFinish.None, 0f, 0f);
 			Assert.That(entry.Weathering().Coat, Is.EqualTo(BiomeStructureCoat.Lichen));

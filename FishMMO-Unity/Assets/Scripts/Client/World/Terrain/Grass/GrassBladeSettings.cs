@@ -62,6 +62,12 @@ namespace FishMMO.Client
 		[Tooltip("The widest a widened blade gets ON SCREEN, pixels (at the base width, Blade Width). Blades are what a pixel shows: widening only in metres left them one or two pixels wide past 8 m and under a pixel past 100 m, which read as the grass getting smaller and sparser with distance. Where the field thins faster than this allows blades to widen, coverage falls off instead of the blades turning into cards.")]
 		[Range(0.5f, 8f)] public float MaxBladePixels = 2.5f;
 
+		[Header("Anti-aliasing (MSAA, STP, TAA)")]
+		[Tooltip("A blade (or the upper part of a tapering one) thinner than a rendered pixel is drawn a pixel wide with its true width as coverage: MSAA's alpha to coverage, or a dither that turns every frame for STP/TAA to average. Off: slivers flip whole pixels as they sway (the tops shimmer). No effect without MSAA or a temporal resolve.")]
+		public bool SubPixelCoverage = true;
+		[Tooltip("Blades out to this level of detail write their own motion (the wind's sway, rebuilt a frame back on the shared clock) for STP/TAA: 0 none (the camera's motion only), 1 the near strips (Lod0 Distance), 2 near and mid (to Lod1 Distance, where the wind has calmed; default), 3 every blade. Without it the upscaler is told every blade stands still, throws away its history where the tips sway, and the grass tops are drawn raw at the rendered resolution. Each level costs another vertex pass over its blades.")]
+		[Range(0, 3)] public int MotionVectorLevels = 2;
+
 		[Header("Levels of detail")]
 		[Tooltip("Blades nearer than this draw the 15-vertex strip; to Lod1 Distance the 7-vertex one; beyond, a triangle.")]
 		[Min(1f)] public float Lod0Distance = 12f;

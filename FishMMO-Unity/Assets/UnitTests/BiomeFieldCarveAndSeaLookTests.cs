@@ -360,8 +360,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(Regex.Matches(sprayShader, @"HLSLPROGRAM\s*\n\s*#pragma use_dxc vulkan").Count, Is.EqualTo(1));
 
 			string falls = CodeOnly(Read(WaterFolder + "/Scripts/InlandWaterRenderer.Falls.cs"));
-			StringAssert.Contains("fallLookParts.Add((sheet, block, fall.River, fall.LipPoint, false));", falls);
-			StringAssert.Contains("fallLookParts.Add((sprayRenderer, block, fall.River, fall.LipPoint, true));", falls);
+			StringAssert.Contains("fallLookParts.Add(new FallPart { Renderer = sheet, River = fall.River, Lip = fall.LipPoint, Spray = false, Slot = curtainParts++ });", falls);
+			StringAssert.Contains("var part = new FallPart { Renderer = sprayRenderer, River = fall.River, Lip = fall.LipPoint, Spray = true, Slot = sprayParts++ };", falls);
+			StringAssert.Contains("fallLookParts.Add(part);", falls);
 			StringAssert.Contains("fallLookParts.Clear();", falls);
 			StringAssert.Contains("ApplyFallLooks();", CodeOnly(Read(WaterFolder + "/Scripts/InlandWaterRenderer.Flow.cs")));
 		}
@@ -390,6 +391,10 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeSeaLooks.OwnLook(today), Is.False, "today's look says nothing of its own");
 		}
 
+		/// <summary>Today's sea look, or an authored round's own (its file's, which its asset holds once authored).</summary>
+		private static BiomeSeaLook ExpectedSeaLook(string name) =>
+			BiomeAuthoredRounds.Contains(name) ? BiomeArtSpec.For(name).SeaLook() : BiomeSeaLooks.Today;
+
 		/// <summary>
 		/// Every biome's defaults are today's, all 83: the template's field starts as today's sea look, the spec gives today's sea
 		/// and water looks, the authoring writes and marks the sea look, and any look an asset already holds is today's.
@@ -409,7 +414,8 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				BiomeArtSpec.Entry entry = BiomeArtSpec.For(name);
 				Assert.That(entry, Is.Not.Null, name);
-				Assert.That(entry.SeaLook().Signature(), Is.EqualTo(BiomeSeaLooks.Today.Signature()), name);
+				// An authored round gives its own sea look (legacy equality only; BiomeAuthoredRoundTests pins it).
+				Assert.That(entry.SeaLook().Signature(), Is.EqualTo(ExpectedSeaLook(name).Signature()), name);
 				// A biome file may mark its water hot (phase I2q, .HotWater()); the colours stay today's.
 				BiomeWaterLook water = entry.WaterLook();
 				Assert.That(water.Signature(), Is.EqualTo(BiomeWaterLookAndFieldSurfaceTests.ExpectedAuthoredWater(name).Signature()), name);
@@ -428,7 +434,10 @@ namespace FishMMO.UnitTests.WorldDesign
 				holding++;
 				string body = block.Groups[1].Value;
 				var look = new BiomeSeaLook(Colour(body, "Tint"), Float(body, "Visibility"), Float(body, "Murk"));
-				Assert.That(look.Approximately(BiomeSeaLooks.Today, 1e-5f), Is.True, $"{Path.GetFileName(path)} holds {look}, not today's");
+				// An authored biome's asset holds today's look until the authoring writes its file's.
+				string biome = Path.GetFileNameWithoutExtension(path);
+				bool held = look.Approximately(ExpectedSeaLook(biome), 1e-5f) || BiomeAuthoredRounds.Contains(biome) && look.Approximately(BiomeSeaLooks.Today, 1e-5f);
+				Assert.That(held, Is.True, $"{Path.GetFileName(path)} holds {look}, not its file's");
 			}
 			Console.WriteLine($"{holding} biome asset(s) hold a sea look; the rest read the field's default.");
 		}

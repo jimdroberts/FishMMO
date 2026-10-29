@@ -572,15 +572,16 @@ namespace FishMMO.Shared.WorldDesign
 		/// the template's variant weight in the biome (BiomeTemplate.SiteVariants; a variant not listed at the template's weight
 		/// elsewhere) times its style's (BiomeTemplate.SiteStyles; a style not listed at 1). Null with no biome (every template
 		/// at its weight elsewhere, as before). A template never authored with its variant weights takes each template's own
-		/// biome list by the biome's name, as the pick did before, and warns.
+		/// biome list by the biome's name, as the pick did before, and warns. Not <paramref name="styled"/>: the variant weights alone,
+		/// every style at 1 (the stage's second pick where the styles weigh every template a site could have at 0, 2026-10-27).
 		/// </summary>
-		public static Func<PointOfInterestTemplate, float> SiteVariantWeights(BiomeTemplate biome)
+		public static Func<PointOfInterestTemplate, float> SiteVariantWeights(BiomeTemplate biome, bool styled = true)
 		{
 			if (biome == null)
 			{
 				return null;
 			}
-			List<BiomeSiteStyle> styles = biome.SiteStyles;
+			List<BiomeSiteStyle> styles = styled ? biome.SiteStyles : null;
 			if (biome.IsAuthored(BiomeTemplate.Authored.SiteVariants) || biome.SiteVariants != null && biome.SiteVariants.Count > 0)
 			{
 				List<BiomeSiteVariant> variants = biome.SiteVariants;
@@ -596,13 +597,14 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// A template's weight in a biome from the biome's lists (pure): its variant's entry (<see cref="BiomeSiteVariant.TryWeight"/>),
 		/// else <paramref name="elsewhere"/> (the template's weight in a biome that does not weigh it), times its style's
-		/// (<see cref="BiomeSiteStyle.WeightOf"/>; a template with no style of its own at 1).
+		/// (<see cref="BiomeSiteStyle.WeightOf"/>; a template with no style of its own at 1); a variant the biome names keeps its own
+		/// weight under a style weighed 0 (<see cref="BiomeSiteStyle.Apply"/>, 2026-10-27).
 		/// </summary>
 		public static float SiteVariantWeight(IReadOnlyList<BiomeSiteVariant> variants, IReadOnlyList<BiomeSiteStyle> styles, POIType kind,
 			string variant, string style, float elsewhere)
 		{
-			float weight = BiomeSiteVariant.TryWeight(variants, kind, variant, out float own) ? own : elsewhere;
-			return weight * BiomeSiteStyle.WeightOf(styles, BiomeSiteStyle.Parse(style));
+			bool named = BiomeSiteVariant.TryWeight(variants, kind, variant, out float own);
+			return BiomeSiteStyle.Apply(named ? own : elsewhere, named, BiomeSiteStyle.WeightOf(styles, BiomeSiteStyle.Parse(style)));
 		}
 
 		/// <summary>
@@ -1011,6 +1013,50 @@ namespace FishMMO.Shared.WorldDesign
 			if (spec != BiomeBoardwalkStyle.Planked)
 			{
 				Fallback(biome, "BoardwalkStyle", $"the spec table's ({spec})");
+			}
+			return spec;
+		}
+
+		/// <summary>
+		/// How a biome's ways bridge its rivers (BiomeTemplate.CrossingStyle, 2026-10-26, I2l-b). With no biome, the kit's bridge; a
+		/// template never authored with it takes its spec's and warns when that names a style.
+		/// </summary>
+		public static BiomeCrossingStyle CrossingStyle(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return BiomeCrossingStyle.Default;
+			}
+			if (biome.IsAuthored(BiomeTemplate.Authored.CrossingStyle) || biome.CrossingStyle != BiomeCrossingStyle.Default)
+			{
+				return biome.CrossingStyle;
+			}
+			BiomeCrossingStyle spec = BiomeArtSpec.For(biome.name)?.CrossingStyle ?? BiomeCrossingStyle.Default;
+			if (spec != BiomeCrossingStyle.Default)
+			{
+				Fallback(biome, "CrossingStyle", $"the spec table's ({spec})");
+			}
+			return spec;
+		}
+
+		/// <summary>
+		/// A biome's straight roads (BiomeTemplate.StraightRoads, 2026-10-26, I2l-b). With no biome, none; a template never authored
+		/// with them takes its spec's and warns when that lays some.
+		/// </summary>
+		public static BiomeStraightRoads StraightRoads(BiomeTemplate biome)
+		{
+			if (biome == null)
+			{
+				return BiomeStraightRoads.None;
+			}
+			if (biome.IsAuthored(BiomeTemplate.Authored.StraightRoads) || biome.StraightRoads.IsSet)
+			{
+				return biome.StraightRoads;
+			}
+			BiomeStraightRoads spec = BiomeArtSpec.For(biome.name)?.StraightRoads ?? BiomeStraightRoads.None;
+			if (spec.IsSet)
+			{
+				Fallback(biome, "StraightRoads", $"the spec table's ({spec})");
 			}
 			return spec;
 		}

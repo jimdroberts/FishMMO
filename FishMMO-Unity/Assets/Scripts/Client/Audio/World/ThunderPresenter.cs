@@ -235,10 +235,15 @@ namespace FishMMO.Client
 			return true;
 		}
 
+		/// <summary>Reused for <see cref="Terrain.GetActiveTerrains"/>: <c>Terrain.activeTerrains</c> builds a new array on
+		/// every read, and this runs every frame.</summary>
+		private static readonly System.Collections.Generic.List<Terrain> activeTerrainsScratch = new System.Collections.Generic.List<Terrain>();
+
 		private static float GroundUnder(Vector3 at)
 		{
 			Terrain terrain = Terrain.activeTerrain;
-			foreach (Terrain t in Terrain.activeTerrains)
+			Terrain.GetActiveTerrains(activeTerrainsScratch);
+			foreach (Terrain t in activeTerrainsScratch)
 			{
 				Vector3 o = t.GetPosition();
 				Vector3 s = t.terrainData != null ? t.terrainData.size : Vector3.zero;

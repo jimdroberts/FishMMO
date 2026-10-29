@@ -343,6 +343,21 @@ namespace FishMMO.Shared.Biomes
 		/// spur off a guyot), toward a cut one's (a slide down a canyon's wall). Elsewhere: by its hash.
 		/// </summary>
 		HostDownhill = 7,
+		/// <summary>
+		/// Along its patch's long axis (2026-10-26, phase I2g-f, decision 76: a graben opening along the plain it splits), within a
+		/// few degrees; a round patch's axis is still its own, by its cells. With no patch (an entry on a host): by its hash.
+		/// </summary>
+		PatchAxis = 8,
+		/// <summary>
+		/// Each its own way by its hash, also for grooves, which otherwise run straight down the slope (I2g-f: an iceberg's plough
+		/// mark, dragged by the current whatever the floor's slope, and curving a little as it goes).
+		/// </summary>
+		Azimuth = 9,
+		/// <summary>
+		/// Square to the scene's wind (I2g-f): a wave field's crests, which stand across its axis, then run along the wind (an ice
+		/// shelf's rolls, laid down the flow).
+		/// </summary>
+		AcrossWind = 10,
 	}
 
 	/// <summary>What a landform's heights are measured from.</summary>
@@ -403,6 +418,11 @@ namespace FishMMO.Shared.Biomes
 		Scarp = 18,
 		/// <summary>A dune field's wake: the dune-free teardrop downwind of an obstacle (2026-10-25, phase I2g-d, decision 91).</summary>
 		Wake = 19,
+		/// <summary>
+		/// An impact's dark halo parabola (2026-10-26, phase I2g-f, decision 89: Venus's), its vertex upwind of the crater and its
+		/// arms trailing down its axis out to <see cref="BiomeLandform.RayReach"/> radii; the crater itself is not in it.
+		/// </summary>
+		Halo = 20,
 	}
 
 	/// <summary>
@@ -482,6 +502,29 @@ namespace FishMMO.Shared.Biomes
 		public Vector2 Wake;
 		[Tooltip("Its line carries molten lava (2026-10-25, phase I2r, decision 65 (c)): a lava channel, an ʻaʻā tongue's channel, a breakout, a temple's ember rill. The cut stores its line on the biome map and the client draws a lava ribbon along it with the lava material; the ground is carved as before.")]
 		public bool Molten;
+		// 2026-10-26, phase I2g-f: the landform follow-ups. Each is inert at its default, so every entry before carves as it did.
+		[Tooltip("Only on the highest share of its patch's ground (0.2: the top fifth; a bladed ridge field, a salt dome, a kopje); 0 anywhere.")]
+		[Range(0f, 1f)] public float Upper;
+		[Tooltip("Its temperature and humidity bands read at the sea's surface over its place, not on the floor (an iceberg's plough mark: cold water at the top).")]
+		public bool SeaClimate;
+		[Tooltip("Scatter: Density × this over the dry share of its patch (local humidity below 0: a dry cap's ice tablets twice as many); 0 or 1 none.")]
+		[Min(0f)] public float DryDensity;
+		[Tooltip("A crater's central peak (Crown, CrownDepth) stands once it is this wide, metres; 0: 3 km (a complex crater's).")]
+		[Min(0f)] public float PeakFrom;
+		[Tooltip("A crater's peak as a ring at this share of its radius (a double-ring crater), Crown its half width; 0 a central peak.")]
+		[Range(0f, 0.9f)] public float PeakRing;
+		[Tooltip("A fresh impact's rays (and a Halo parabola) out to this many radii, paint only; 0 its ejecta's 1.5–2.")]
+		[Min(0f)] public float RayReach;
+		[Tooltip("A table's top tilted up to this many degrees, each its own way and share by its hash (a chaos raft); 0 level.")]
+		[Range(0f, 30f)] public float Tilt;
+		[Tooltip("A rille's or canyon's inner channel down its floor: that share of its width, cut a third of its depth deeper; 0 none.")]
+		[Range(0f, 0.9f)] public float Inner;
+		[Tooltip("That share of a rille's line left roofed (the lava tube's unbroken roof bridging it), in stretches, each a pad; 0 none.")]
+		[Range(0f, 0.9f)] public float Roofed;
+		[Tooltip("Radial grooves down a mound's flank (a pancake dome's), or a ring's web of radial fractures out from it (an arachnoid's); 0 none.")]
+		[Min(0)] public int Radials;
+		[Tooltip("No point of interest and no way on it (a sciara's loose chute): the cut keeps the site planner and the path planner off its ground.")]
+		public bool KeepClear;
 		[Tooltip("Rays, arms, streaks, steps, branch levels, cluster size or passes.")]
 		[Min(0)] public int Count;
 		[Tooltip("How broken its surface is, 0 smooth … 1 rough (a seif's serrated crest, a rock glacier's ridges).")]
@@ -707,6 +750,51 @@ namespace FishMMO.Shared.Biomes
 			if (Molten)
 			{
 				s.Append("|molten");
+			}
+			// 2026-10-26, phase I2g-f: the same rule.
+			if (Upper != 0f)
+			{
+				Append(s.Append("|upper"), Upper);
+			}
+			if (SeaClimate)
+			{
+				s.Append("|seaclimate");
+			}
+			if (DryDensity != 0f)
+			{
+				Append(s.Append("|dry"), DryDensity);
+			}
+			if (PeakFrom != 0f)
+			{
+				Append(s.Append("|peakfrom"), PeakFrom);
+			}
+			if (PeakRing != 0f)
+			{
+				Append(s.Append("|peakring"), PeakRing);
+			}
+			if (RayReach != 0f)
+			{
+				Append(s.Append("|rays"), RayReach);
+			}
+			if (Tilt != 0f)
+			{
+				Append(s.Append("|tilt"), Tilt);
+			}
+			if (Inner != 0f)
+			{
+				Append(s.Append("|inner"), Inner);
+			}
+			if (Roofed != 0f)
+			{
+				Append(s.Append("|roofed"), Roofed);
+			}
+			if (Radials != 0)
+			{
+				s.Append("|radials").Append(Radials);
+			}
+			if (KeepClear)
+			{
+				s.Append("|clear");
 			}
 			return s.ToString();
 		}

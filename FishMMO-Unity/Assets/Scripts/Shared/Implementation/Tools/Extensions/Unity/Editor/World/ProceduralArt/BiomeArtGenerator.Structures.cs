@@ -84,34 +84,31 @@ namespace FishMMO.Shared.WorldDesign
 		private static void WriteStructureSurfaces(Context c)
 		{
 			int size = StructureSurfaces.Size;
+			bool due = LookArraysDue(c, ProceduralArtLookArrays.StructureSetName);
 			foreach (string surface in StructureSurfaces.Names)
 			{
 				string albedo = ProceduralArtCatalogue.StructureTexture(surface, "Albedo");
 				string normal = ProceduralArtCatalogue.StructureTexture(surface, "Normal");
 				string mask = ProceduralArtCatalogue.StructureTexture(surface, "Mask");
 				c.Report.TextureBytes += (3 + StructurePieces.Finishes.Length - 1) * CompressedBytes(size, size);
-				bool due = ShouldWrite(c, albedo) || ShouldWrite(c, normal) || ShouldWrite(c, mask);
-				foreach (StructureFinish finish in StructurePieces.Finishes)
-				{
-					due |= finish != StructureFinish.None && ShouldWrite(c, ProceduralArtCatalogue.StructureTexture(surface, "Albedo", finish));
-				}
+				// Written as the structure look arrays (ProceduralArtLookArrays, 2026-10-28): every surface when they are due.
 				if (!due)
 				{
 					continue;
 				}
 				SurfaceMaps maps = StructureSurfaces.Generate(surface, size, c.Seed);
-				if (ShouldWrite(c, albedo)) WritePng(c, albedo, maps.Albedo, maps.Size, maps.Size);
-				if (ShouldWrite(c, normal)) WritePng(c, normal, maps.Normal, maps.Size, maps.Size);
-				if (ShouldWrite(c, mask)) WritePng(c, mask, maps.Mask, maps.Size, maps.Size);
+				PutSurfaceMap(c, albedo, maps.Albedo, maps.Size);
+				PutSurfaceMap(c, normal, maps.Normal, maps.Size);
+				PutSurfaceMap(c, mask, maps.Mask, maps.Size);
 				foreach (StructureFinish finish in StructurePieces.Finishes)
 				{
-					string path = ProceduralArtCatalogue.StructureTexture(surface, "Albedo", finish);
-					if (finish != StructureFinish.None && ShouldWrite(c, path))
+					if (finish != StructureFinish.None)
 					{
-						WritePng(c, path, StructureSurfaces.Finish(maps, surface, finish, c.Seed), maps.Size, maps.Size);
+						PutSurfaceMap(c, ProceduralArtCatalogue.StructureTexture(surface, "Albedo", finish), StructureSurfaces.Finish(maps, surface, finish, c.Seed), maps.Size);
 					}
 				}
 			}
+			WriteLookArrays(c, ProceduralArtLookArrays.StructureSetName);
 		}
 
 		private static void WriteStructureMaterials(Context c)
@@ -195,20 +192,21 @@ namespace FishMMO.Shared.WorldDesign
 			// The surface variant (I9's per-biome texture variants) names the material; until those textures exist it is drawn
 			// with the surface every biome shares.
 			string surface = StructureSurfaces.SurfaceOf(material);
-			Texture2D normal = LoadTexture(ProceduralArtCatalogue.StructureTexture(surface, "Normal"));
-			Texture2D mask = LoadTexture(ProceduralArtCatalogue.StructureTexture(surface, "Mask"));
+			// The maps by their payload paths: slices of the structure look arrays (SetSurfaceMap).
+			string normal = ProceduralArtCatalogue.StructureTexture(surface, "Normal");
+			string mask = ProceduralArtCatalogue.StructureTexture(surface, "Mask");
 			float scale = 1f / StructureSurfaces.TileMetres(surface);
 			Color tint = key.Colour;
-			Texture2D plainAlbedo = LoadTexture(ProceduralArtCatalogue.StructureTexture(surface, "Albedo"));
+			string plainAlbedo = ProceduralArtCatalogue.StructureTexture(surface, "Albedo");
 			foreach (StructureFinish f in StructurePieces.Finishes)
 			{
 				StructureFinish finish = f;
-				Texture2D albedo = LoadTexture(ProceduralArtCatalogue.StructureTexture(surface, "Albedo", finish));
+				string albedo = ProceduralArtCatalogue.StructureTexture(surface, "Albedo", finish);
 				WriteMaterial(c, key.MaterialName(finish), shader, mat =>
 				{
 					// Moss as the material and its finish allow (MossAmounts): stone, timber and thatch green over in a
 					// damp scene; the Mossy finish keeps its baked moss and takes the most of the layer on top.
-					RockLit(mat, albedo, normal, mask, scale, StructureSurfaces.MossOf(material, finish));
+					RockLit(c, mat, albedo, normal, mask, scale, StructureSurfaces.MossOf(material, finish));
 					mat.SetColor("_BaseColor", tint);
 					// Weathered as a building, not set into the ground as a rock (FishStructureWeathering.hlsl); a pane lit at night.
 					mat.SetFloat("_FishStructure", StructureSurfaces.StructureFlag(material));
@@ -218,11 +216,11 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					else if (material == StructureMaterial.Lamplight)
 					{
-						Lamplight(mat, plainAlbedo);
+						Lamplight(c, mat, plainAlbedo);
 					}
 					else if (StructureSurfaces.TryGlow(material, out SceneGlowHue glow))
 					{
-						Glowlight(mat, plainAlbedo, glow);
+						Glowlight(c, mat, plainAlbedo, glow);
 					}
 				});
 			}
@@ -234,9 +232,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// the lighting (and after the cave darkness's occlusion), so it reads as a light deep underground where the sky's
 		/// ambient is all but gone; in every finish the plain albedo, so a charred or mossy ruin's lamp burns as bright.
 		/// </summary>
-		private static void Lamplight(Material mat, Texture2D plainAlbedo)
+		private static void Lamplight(Context c, Material mat, string plainAlbedo)
 		{
-			mat.SetTexture("_EmissionMap", plainAlbedo);
+			SetSurfaceMap(c, mat, "_EmissionMap", plainAlbedo);
 			mat.SetColor("_EmissionColor", new Color(1.9f, 1.05f, 0.42f, 1f));
 			mat.EnableKeyword("_EMISSION");
 			mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
@@ -250,10 +248,10 @@ namespace FishMMO.Shared.WorldDesign
 		/// fade its piece's light has (_FishStructure = 3, FishStructureWeathering.hlsl FishStructureGlowLight): dark by day,
 		/// faint from before dusk, full at night and underground.
 		/// </summary>
-		private static void Glowlight(Material mat, Texture2D plainAlbedo, SceneGlowHue glow)
+		private static void Glowlight(Context context, Material mat, string plainAlbedo, SceneGlowHue glow)
 		{
 			Color c = SceneGlow.Colour(glow);
-			mat.SetTexture("_EmissionMap", plainAlbedo);
+			SetSurfaceMap(context, mat, "_EmissionMap", plainAlbedo);
 			mat.SetColor("_EmissionColor", new Color(c.r * 1.7f, c.g * 1.7f, c.b * 1.7f, 1f));
 			mat.EnableKeyword("_EMISSION");
 			mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;

@@ -34,16 +34,9 @@ Shader "FishMMO/Weather/Vortex Debris"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+            // The flecks' own numbers (_VortexDebris, _VortexDebrisLook, _VortexFleck) join the vortex's in its UnityPerMaterial.
+            #define FISH_VORTEX_DEBRIS 1
             #include "FishVortex.hlsl"
-
-            // x height the flecks climb to (m); y radius at the ground, z at the top, in core radii; w a fleck's life (s): the
-            // climb at the cell's pace (VortexPresenter), whole in the clock's wrap
-            float4 _VortexDebris;
-            // x how bottom-heavy (1 even, more keeps them low); y fleck size (m); z where they have faded out (m from the camera);
-            // w how far out a fleck goes round half-way up its life, at the cell's pace (m): what its turning is timed by
-            float4 _VortexDebrisLook;
-            // rgb their colour; a the share of them the wind lifts
-            float4 _VortexFleck;
 
             struct Attributes { float3 positionOS : POSITION; float4 corner : TEXCOORD0; float4 random : TEXCOORD1; };
             struct Varyings

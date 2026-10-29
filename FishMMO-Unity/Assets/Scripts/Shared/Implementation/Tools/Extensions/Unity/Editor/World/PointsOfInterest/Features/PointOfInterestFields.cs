@@ -222,6 +222,8 @@ namespace FishMMO.Shared.WorldDesign
 					: field.Kind == FieldKind.Fallow ? PointOfInterestFarmsteads.FieldUse.Fallow
 					: field.Kind == FieldKind.Ploughed ? PointOfInterestFarmsteads.FieldUse.Ploughed : PointOfInterestFarmsteads.FieldUse.Crop;
 				bool reaped = false, inOrchard = false;
+				// Whether its details were laid as its crop's (below); else it is kept as turf (2026-10-27, PointOfInterestEnclosureClearance).
+				bool painted = false;
 				if (field.Kind == FieldKind.Wheat || field.Kind == FieldKind.Ploughed)
 				{
 					// The crop is one of the biome's its field lies in, and takes that biome's look (2026-10-16).
@@ -292,6 +294,7 @@ namespace FishMMO.Shared.WorldDesign
 					if (!orchard.HasValue || crop != null)
 					{
 						PaintDetails(terrains, field, crop, biome, surface);
+						painted = true;
 					}
 					if (BiomeFieldSurfaces.Ridged(surface))
 					{
@@ -330,6 +333,9 @@ namespace FishMMO.Shared.WorldDesign
 					Fence(context, field, site, abandoned, same ? context.Random : new DeterministicRNG(unchecked((int)PointOfInterestPlanner.Hash(record.SiteSeed, 0x46454E, f, 0))), dry: lined);
 				}
 				laidFields.Add(new PointOfInterestFarmsteads.LaidField { Centre = field.Centre, Yaw = field.Yaw, Size = field.Size, Use = use, Reaped = reaped, Index = f, Orchard = inOrchard });
+				/* Its ground cleared of the scatter's trees, bushes and boulders once every site is built (2026-10-27: "Trees, bushes, and
+				 * other details spawn inside it"), a pasture's, a fallow's or an unsown orchard's wild details with them, its grass kept. */
+				context.FieldClaims?.Enclose(field.Centre, field.Yaw, field.Size, turf: !painted);
 			}
 			/* The old terraces round a hamlet (2026-10-18, I2j-b): flights of benches on the slopes about it, carved as a terraced field's,
 			 * nothing sown, their walls tumbled; on draws of their own after every field, so the fields lie as before. */

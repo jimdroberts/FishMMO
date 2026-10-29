@@ -42,6 +42,7 @@ namespace FishMMO.Shared
 #if !UNITY_SERVER || UNITY_EDITOR
 		private static readonly int SourceId = Shader.PropertyToID("_FishIndexSource");
 		private static readonly int ParamsId = Shader.PropertyToID("_FishIndexBakeParams");
+		private static readonly int RemapId = Shader.PropertyToID("_FishIndexRemap");
 
 		private static Material material;
 		private static RenderTexture scratch;
@@ -49,6 +50,15 @@ namespace FishMMO.Shared
 		private static MaterialPropertyBlock properties;
 		private static RenderTexture blank;
 		private static bool warnedUnsupported;
+		// The bake's channel → scene layer tables (TerrainTileLayerMap.BakeTable), one texel per channel: one texture per table
+		// a bake has asked for, so a push baking every tile in one frame never rewrites a table an earlier bake still reads.
+		private static readonly System.Collections.Generic.Dictionary<string, Texture2D> remaps = new System.Collections.Generic.Dictionary<string, Texture2D>();
+
+		/// <summary>The most remap tables kept at once (a scene has one per tile).</summary>
+		private const int MaximumRemaps = 128;
+
+		/// <summary>How many channels the remap table names: every id a byte can hold.</summary>
+		public const int RemapWidth = TerrainIndexMap.MaximumLayers;
 
 		/// <summary>The bake shader a set carries (so a player build has it), else the project's by name.</summary>
 		public static Shader ShaderOf(TerrainArraySet set)
@@ -124,7 +134,11 @@ namespace FishMMO.Shared
 		/// Bakes <paramref name="data"/>'s index map into <paramref name="target"/> (slice <paramref name="slice"/> of an
 		/// array target), now. False, with one warning a session, when the device or shader cannot.
 		/// </summary>
-		public static bool Bake(TerrainData data, Shader shader, RenderTexture target, int slice = 0)
+		/// <param name="sceneLayers">
+		/// The scene layer each of the tile's channels holds (<see cref="TerrainTileLayers.Of"/>): the ids are written as scene
+		/// layers, as <see cref="TerrainTileLayerMap.Bake"/> writes them on the CPU. Null for a tile whose channels are the scene's.
+		/// </param>
+		public static bool Bake(TerrainData data, Shader shader, RenderTexture target, int slice = 0, int[] sceneLayers = null)
 		{
 			if (data == null || target == null)
 			{
@@ -165,6 +179,7 @@ namespace FishMMO.Shared
 			properties ??= new MaterialPropertyBlock();
 			properties.Clear();
 			properties.SetTexture(SourceId, scratch);
+			properties.SetTexture(RemapId, RemapTexture(TerrainTileLayerMap.BakeTable(sceneLayers)));
 			properties.SetVector(ParamsId, new Vector4(layers, maps, res, res));
 			commands.Clear();
 			commands.SetRenderTarget(target, 0, CubemapFace.Unknown, slice);
@@ -174,50 +189,116 @@ namespace FishMMO.Shared
 			return true;
 		}
 
+		/// <summary>
+		/// The remap table as the bake shader loads it: texel c (red) is the scene layer channel c's id becomes; every texel past
+		/// the table (all of them for null) is its own channel. Made once per distinct table and kept until the scratch is freed.
+		/// </summary>
+		private static Texture2D RemapTexture(int[] table)
+		{
+			string key = table == null ? "identity" : string.Join(",", table);
+			if (remaps.TryGetValue(key, out Texture2D made) && made != null)
+			{
+				return made;
+			}
+			if (remaps.Count >= MaximumRemaps)
+			{
+				// An editor session of many repaints: the tables of earlier cuts are not asked for again.
+				foreach (Texture2D old in remaps.Values)
+				{
+					Destroy(old);
+				}
+				remaps.Clear();
+			}
+			var texture = new Texture2D(RemapWidth, 1, TextureFormat.RGBAFloat, false, true)
+			{
+				name = "Terrain Index Remap",
+				filterMode = FilterMode.Point,
+				wrapMode = TextureWrapMode.Clamp,
+				hideFlags = HideFlags.HideAndDontSave,
+			};
+			var texels = new Color[RemapWidth];
+			for (int c = 0; c < RemapWidth; c++)
+			{
+				texels[c] = new Color(table != null && c < table.Length ? table[c] : c, 0f, 0f, 0f);
+			}
+			texture.SetPixels(texels);
+			texture.Apply(false, true);
+			remaps[key] = texture;
+			return texture;
+		}
+
 		/// <summary>Whether <see cref="Upload"/> has said once that this device cannot hold a stored map.</summary>
 		private static bool warnedUpload;
 
-		/// <summary>True when this device can sample (load) an index map held as a texture of <see cref="Format"/>.</summary>
+		/// <summary>The byte staging texture: two RGBA8 texels carry the two packed uint words, without filtering.</summary>
+		public const GraphicsFormat UploadFormat = GraphicsFormat.R8G8B8A8_UNorm;
+
+		/// <summary>Integer Texture2D creation is unsupported on some devices that can render and load integer targets.</summary>
 		public static bool CanUpload()
 		{
-			return SystemInfo.graphicsDeviceType != GraphicsDeviceType.Null && SystemInfo.IsFormatSupported(Format, GraphicsFormatUsage.Sample);
+			return CanBake(Shader.Find(ShaderName)) && SystemInfo.IsFormatSupported(UploadFormat, GraphicsFormatUsage.Sample);
 		}
 
 		/// <summary>
-		/// A stored index map (<see cref="TerrainDetailBake.IndexMap"/>) as a GPU texture of <see cref="Format"/>, point
-		/// filtered and clamped like a baked one, its CPU copy dropped once uploaded (the stored words stay in the bake);
-		/// null, with one warning a session, where the device cannot hold it. The caller owns and destroys it.
+		/// Reconstructs stored words in an integer render target from two RGBA8 staging texels per index texel. This uses the
+		/// same representation as live painting, avoiding integer Texture2D creation and its different capability rules.
+		/// The temporary source has no mipmaps, sRGB conversion or filtering; the upload pass rounds bytes before packing.
+		/// The caller owns the target. Stored CPU words and the final eight bytes per texel are unchanged.
 		/// </summary>
-		public static Texture2D Upload(TerrainDetailBake.IndexMap stored, string name)
+		public static RenderTexture Upload(TerrainDetailBake.IndexMap stored, string name)
 		{
-			if (stored == null || stored.Resolution <= 0 || stored.Map == null || stored.Map.Length != stored.Resolution * stored.Resolution * 2)
+			if (stored == null || stored.Resolution <= 0 || stored.Map == null || stored.Map.Length != (long)stored.Resolution * stored.Resolution * 2)
+				return null;
+			if (!CanUpload() || stored.Resolution > SystemInfo.maxTextureSize / 2)
 			{
+				WarnUpload($"{Format} render target / {UploadFormat} staging unavailable, or map exceeds texture limits");
 				return null;
 			}
-			if (!CanUpload())
-			{
-				WarnUpload($"{Format} cannot be sampled here");
-				return null;
-			}
-			Texture2D texture = null;
+			Texture2D source = null;
+			RenderTexture target = null;
+			Material upload = null;
+			CommandBuffer draw = null;
 			try
 			{
-				texture = new Texture2D(stored.Resolution, stored.Resolution, Format, TextureCreationFlags.DontInitializePixels)
+				int res = stored.Resolution;
+				source = new Texture2D(res * 2, res, UploadFormat, TextureCreationFlags.DontInitializePixels)
 				{
-					name = name,
-					filterMode = FilterMode.Point,
-					wrapMode = TextureWrapMode.Clamp,
+					name = "Terrain index upload bytes", filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp,
 					hideFlags = HideFlags.HideAndDontSave,
 				};
-				texture.SetPixelData(stored.Map, 0);
-				texture.Apply(false, true);
-				return texture;
+				// Explicit byte order also keeps packing independent of the CPU's endianness.
+				var bytes = new Unity.Collections.NativeArray<byte>(stored.Map.Length * sizeof(uint), Unity.Collections.Allocator.Temp, Unity.Collections.NativeArrayOptions.UninitializedMemory);
+				try
+				{
+					for (int i = 0; i < stored.Map.Length; i++)
+						for (int b = 0; b < 4; b++) bytes[4 * i + b] = (byte)(stored.Map[i] >> (b * 8));
+					source.SetPixelData(bytes, 0);
+				}
+				finally { bytes.Dispose(); }
+				source.Apply(false, true);
+				target = Create(res, res, 1, name);
+				if (!target.IsCreated() || target.graphicsFormat != Format) throw new System.InvalidOperationException("Integer target creation failed or changed format.");
+				upload = new Material(Shader.Find(ShaderName)) { hideFlags = HideFlags.HideAndDontSave };
+				int pass = upload.FindPass("UploadStored");
+				if (pass < 0) throw new System.InvalidOperationException("Stored index upload shader pass is missing.");
+				var block = new MaterialPropertyBlock();
+				block.SetTexture(SourceId, source);
+				draw = new CommandBuffer { name = "Terrain stored index upload" };
+				draw.SetRenderTarget(target);
+				draw.SetViewport(new Rect(0, 0, res, res));
+				draw.DrawProcedural(Matrix4x4.identity, upload, pass, MeshTopology.Triangles, 3, 1, block);
+				Graphics.ExecuteCommandBuffer(draw);
+				return target;
 			}
 			catch (System.Exception e)
 			{
-				Destroy(texture);
+				if (target != null) { target.Release(); Destroy(target); }
 				WarnUpload(e.Message);
 				return null;
+			}
+			finally
+			{
+				draw?.Release(); Destroy(source); Destroy(upload);
 			}
 		}
 
@@ -320,6 +401,11 @@ namespace FishMMO.Shared
 				Destroy(material);
 				material = null;
 			}
+			foreach (Texture2D texture in remaps.Values)
+			{
+				Destroy(texture);
+			}
+			remaps.Clear();
 		}
 
 		private static void Destroy(Object o)
@@ -379,8 +465,9 @@ namespace FishMMO.Shared
 		/// the tile, edges included (the CPU bake of each, <see cref="TerrainIndexMap.BakeTexel"/>, against the stored words):
 		/// the editor's guard against a map whose staleness was missed (an alphamap written with no terrain callback). True,
 		/// with nothing compared, for a tile without alphamaps. Reads a texel at a time, so it is cheap.
+		/// <paramref name="sceneLayers"/> is the tile's channel map (<see cref="TerrainTileLayers.Of"/>): a stored map names scene layers.
 		/// </summary>
-		public static bool MatchesAlphamaps(TerrainData data, TerrainDetailBake.IndexMap stored, int samples, out string firstBad)
+		public static bool MatchesAlphamaps(TerrainData data, TerrainDetailBake.IndexMap stored, int samples, out string firstBad, int[] sceneLayers = null)
 		{
 			firstBad = null;
 			if (data == null || stored == null)
@@ -400,6 +487,7 @@ namespace FishMMO.Shared
 				return false;
 			}
 			var weights = new byte[layers];
+			int[] table = TerrainTileLayerMap.BakeTable(sceneLayers);
 			for (int s = 0; s < samples; s++)
 			{
 				int x = (int)((long)(res - 1) * ((s * 7 + 3) % samples) / Mathf.Max(1, samples - 1));
@@ -410,6 +498,7 @@ namespace FishMMO.Shared
 					weights[l] = TerrainIndexMap.ByteOf(alphas[0, 0, l]);
 				}
 				TerrainIndexMap.BakeTexel(weights, 0, layers, out uint ids, out uint packed);
+				ids = TerrainTileLayerMap.RemapIds(ids, table);
 				int at = 2 * (y * res + x);
 				if (stored.Map[at] != ids || stored.Map[at + 1] != packed)
 				{
@@ -436,6 +525,8 @@ namespace FishMMO.Shared
 			int res = data.alphamapResolution;
 			int layers = data.alphamapLayers;
 			string name = terrain.name;
+			// The bake names scene layers: the CPU side renames by the same table.
+			int[] table = TerrainTileLayerMap.BakeTable(TerrainTileLayers.Of(terrain));
 			// Read now: the callback runs frames later, when the index map may have been released and rebuilt.
 			int width = target.width;
 			/* AsyncGPUReadback refuses integer formats ("RG32 UInt is not supported as source for async read back"), so
@@ -474,6 +565,7 @@ namespace FishMMO.Shared
 						weights[l] = (byte)Mathf.Clamp(Mathf.RoundToInt(alphas[0, 0, l] * 255f), 0, 255);
 					}
 					TerrainIndexMap.BakeTexel(weights, 0, layers, out uint ids, out uint packed);
+					ids = TerrainTileLayerMap.RemapIds(ids, table);
 					int at = 2 * (y * width + x);
 					if (at + 1 >= gpu.Length || gpu[at] != ids || gpu[at + 1] != packed)
 					{

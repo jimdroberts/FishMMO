@@ -30,6 +30,7 @@ struct GrassBlade
     float3 root;
     uint packed;
     uint colour;   // the terrain's albedo under the root (FishGrassBlades.compute GrassPackColour), a byte = valid
+    uint more;     // bit 0 the type's seventh bit (types 64..127, GrassMath.RecordMore); 0 for types 0..63, the rest free
 };
 
 StructuredBuffer<GrassBlade> _GrassBlades;
@@ -63,9 +64,16 @@ float4 _GrassParams3;   // x root ground blend, y root ground height (share of t
 float4 _GrassParams4;   // x max wind bend (radians from vertical), y gust crest sharpness, z gust travel speed scale, w gust sheen
 float _GrassHighlight;   // debug: 1 draws every blade magenta (GrassBladeRenderer.Highlight)
 // This camera's pixel size (GrassBladeRenderer.Execute, a global so the shadow pass widens as the camera does): x metres per
-// pixel per metre of distance (perspective), y metres per pixel (orthographic), z the most pixels a widened blade spans
-// divided by the base blade width.
+// RENDERED pixel per metre of distance (perspective; under a render scale a rendered pixel is larger than a screen pixel),
+// y metres per rendered pixel (orthographic), z the most rendered pixels a widened blade spans divided by the base blade
+// width (MaxBladePixels counts screen pixels: the renderer scales it), w how a blade thinner than a rendered pixel is drawn:
+// 0 as it is, 1 a pixel wide with its true width as MSAA coverage (alpha to coverage), 2 a pixel wide with its true width
+// as a dither that changes every frame, for a temporal resolve (STP or TAA) to average.
 float4 _GrassScreen;
+// The temporal resolve (GrassBladeRenderer.Execute): x this frame's index (0..63, the dither's turn), y seconds back on the
+// shared motion clock to the frame before (the motion vectors rebuild every blade as it stood then; 0 after a jump),
+// z 1 when this camera resolves temporally (every dither turns each frame), w unused.
+float4 _GrassTemporal;
 // This camera's position (GrassBladeRenderer.Execute; the shadow pass's own camera is the light's): xyz.
 float4 _GrassViewer;
 float4 _GrassParams5;   // far-field blend: x start (m), y end (share of the grass distance), z ground colour pull, w normal flatten
@@ -107,11 +115,12 @@ float4 _GrassParams7;   // wind calm with distance: x start (m), y end (m), z be
 
 // ── Unpacking (GrassMath.Unpack) ──────────────────────────────────────
 
-// GrassMath.UnpackColour: square-root 8:8:8, bit 31 set when the terrain's texture was read.
+// GrassMath.UnpackColour: square-root 8:8:8, valid (the terrain's texture was read) where any colour bit is set: bit 31
+// is the type's sixth bit since 2026-10-27 (GrassMath.TypeTopShift).
 float4 GrassUnpackColour(uint c)
 {
     float3 q = float3(c & 0xFFu, (c >> 8) & 0xFFu, (c >> 16) & 0xFFu) / 255.0;
-    return float4(q * q, (c >> 31) != 0u ? 1.0 : 0.0);
+    return float4(q * q, (c & 0xFFFFFFu) != 0u ? 1.0 : 0.0);
 }
 
 // GrassMath.HeadPartOf: 0 the stem itself, 1 and 2 the two crossed cards of its head (bits 29..30).
@@ -120,11 +129,12 @@ uint GrassHeadPart(uint c)
     return (c >> 29) & 3u;
 }
 
-// The colour word carries the record's shape bits (GrassMath.RecordBits): bit 28 the type's fifth bit (types 16..31),
-// bit 27 a tall blade, whose packed height is half its own.
-void GrassUnpack(uint packed, uint colour, out int type, out float facing, out float height, out float lean, out float fade, out float clumpColour)
+// The colour word carries the record's shape bits (GrassMath.RecordBits): bit 28 the type's fifth bit, bit 31 its sixth
+// (types 32..63), bit 27 a tall blade, whose packed height is half its own; the sixth word's bit 0 the type's seventh
+// (types 64..127, GrassMath.RecordMore).
+void GrassUnpack(uint packed, uint colour, uint more, out int type, out float facing, out float height, out float lean, out float fade, out float clumpColour)
 {
-    type = (int)(packed & 15u) | (int)(((colour >> 28) & 1u) << 4);
+    type = (int)(packed & 15u) | (int)(((colour >> 28) & 1u) << 4) | (int)(((colour >> 31) & 1u) << 5) | (int)((more & 1u) << 6);
     facing = (float)((packed >> 4) & 127u) / 128.0 * 6.2831853;
     float q = (float)((packed >> 11) & 127u) / 127.0;
     height = q * q * 2.5 * (((colour >> 27) & 1u) != 0u ? 2.0 : 1.0);
@@ -231,13 +241,16 @@ float3 GrassSeasonTint(float3 rootWS, float4 healthy, float4 dryTint, float own,
     return lerp(healthy.rgb, dryTint.rgb, dry);
 }
 
-GrassVertex GrassBuild(uint instanceID, float2 vertex)
+/* The blade as it stands `back` seconds earlier on the shared motion clock (0: now). Only the wind moves with the clock, so
+ * the motion vectors (GrassMotionVertex) rebuild a blade a frame back with the same function and the same clock the
+ * forward pass drew it with: its sway is never told to the upscaler as standing still. */
+GrassVertex GrassBuildAt(uint instanceID, float2 vertex, float back)
 {
     GrassVertex o = (GrassVertex)0;
     GrassBlade blade = _GrassBlades[instanceID];
     int type;
     float facingAngle, height, lean, thinFade, clumpColour;
-    GrassUnpack(blade.packed, blade.colour, type, facingAngle, height, lean, thinFade, clumpColour);
+    GrassUnpack(blade.packed, blade.colour, blade.more, type, facingAngle, height, lean, thinFade, clumpColour);
     // The type's rows, each read once.
     float4 typeParams = GrassTypeRow(type, GRASS_ROW_PARAMS);
     float4 typeTip = GrassTypeRow(type, GRASS_ROW_TIP);
@@ -271,7 +284,7 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
 
     // The wind: a world-space wave field carried downwind (gust bands rolling across the meadow), a
     // steady push by the wind's speed, and each blade's own flutter at its own phase.
-    float time = _FishWeatherMisc.w;
+    float time = _FishWeatherMisc.w - back;
     float2 dir = _FishWeatherWind.xy;
     if (dot(dir, dir) < 1e-6)
     {
@@ -292,7 +305,7 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     float acrossWind = dot(root.xz, float2(-way.y, way.x));
     // At the wind's pace, held for each window of the shared clock (FishWindTravel): the bands lie in
     // the same place for every player, and never scrub as the wind eases.
-    float travel = FishWindTravel((1.5 + _FishWindHold.z * 6.0) * max(0.0, _GrassParams4.z), lambda);
+    float travel = FishWindTravelAt((1.5 + _FishWindHold.z * 6.0) * max(0.0, _GrassParams4.z), lambda, _FishWindHold.x - back);
     float wobble = (FishSurfaceNoise(float2(acrossWind, alongWind) / (lambda * 2.5) + time * 0.05) - 0.5) * lambda * 1.2;
     float stiffness = max(0.1, typeParams.x);
     float phase = (alongWind - travel + wobble) / lambda - r1 * 0.06 * stiffness;
@@ -375,32 +388,42 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     float share = min(1.0, GrassShareV(d) * exp2(2.0 * round(GrassTypeRow(type, GRASS_ROW_MORE).y)));
     float widen = min(min(_GrassParams0.y, screenCap), pow(max(1e-6, share), -_GrassParams0.x));
     float width = typeTip.a * widen * (0.75 + 0.5 * r0) * lerp(0.5, 1.0, thinFade) * clamp(FishFloraSwell(root.xz, GRASS_FLORA_WIDTH_SWELL, GRASS_FLORA_WIDTH_SALT) * (_FishFloraInfo.x < 0.5 ? 1.0 : _FishFloraWorld.y), GRASS_FLORA_MIN_WIDTH, GRASS_FLORA_MAX_WIDTH);
-    /* Under a pixel wide at its base, where MSAA resolves coverage (_GrassScreen.w, 2026-10-21): drawn a pixel wide, its true
-     * width carried as coverage (the forward pass's alpha to coverage), so a swaying sliver fades by its share of the pixel
-     * instead of flipping whole pixels between blade and background — the crest line's flicker. Every pass widens alike. */
-    if (_GrassScreen.w > 0.5 && pixelMetres > 1e-5 && width < pixelMetres)
-    {
-        o.fade.x *= saturate(width / pixelMetres);
-        width = pixelMetres;
-    }
     float4 headInfo = GrassTypeRow(type, GRASS_ROW_HEAD);
+    uint headPart = GrassHeadPart(blade.colour);
+    bool isHead = headPart != 0u && headInfo.x > 0.5;
     // A strap (a reed's leaf) keeps its width to a rounded end; a blade tapers to a point.
     float taper = headInfo.w > 0.5 ? 1.0 - 0.45 * pow(saturate(t), 3.0) : 1.0 - pow(saturate(t), 1.6);
-    o.positionWS = root + curvePoint + sideWS * (u * 0.5 * width * taper);
+    float drawn = width * taper;
     /* Edge-on, a blade is a sliver: its width lies along the line of sight. The share of the width it has lost is put
      * back ACROSS the view (perpendicular to both the view and the blade's own line), so an edge-on blade covers
      * EdgeOnThicken of what it would face-on. Face-on, or seen down its length from above (where the lay-over does the
      * work), nothing is added. */
     float3 toEye = normalize(_GrassViewer.xyz - root);
+    float faceOn = length(cross(sideWS, toEye));
     float3 screenSide = cross(toEye, tangent);
     float screenSideLength = length(screenSide);
+    float thicken = 0.0;
     if (_GrassParams6.w > 0.0 && screenSideLength > 1e-3)
     {
         screenSide /= screenSideLength;
         screenSide *= dot(screenSide, sideWS) < 0.0 ? -1.0 : 1.0;
-        float lost = 1.0 - length(cross(sideWS, toEye));
-        o.positionWS += screenSide * (u * 0.5 * width * taper * _GrassParams6.w * lost);
+        thicken = _GrassParams6.w * (1.0 - faceOn);
     }
+    // How wide this row of the blade shows across the view, in rendered pixels: its face-on share and the thickening.
+    float acrossPixels = drawn * (faceOn + thicken) / max(1e-6, pixelMetres);
+    /* Under a rendered pixel (_GrassScreen.w; 2026-10-21 for MSAA at the base only, 2026-10-27 row by row and for a temporal
+     * resolve too): drawn a pixel wide, its true width carried as coverage (MSAA's alpha to coverage, or the dither a
+     * temporal resolve averages), so a swaying sliver and the last of a tapering tip fade by their share of the pixel
+     * instead of flipping whole pixels between blade and background: the crest line's flicker and the tops' shimmer. At a
+     * render scale of 0.67 a blade tuned to two screen pixels is 1.3 rendered pixels at its base, so the upper half of
+     * nearly every blade is this case. Every pass widens alike. A head's cards are its own shape (below). */
+    float toPixel = 1.0;
+    if (_GrassScreen.w > 0.5 && pixelMetres > 1e-5 && acrossPixels < 1.0 && !isHead)
+    {
+        o.fade.x *= saturate(acrossPixels);
+        toPixel = min(16.0, 1.0 / max(acrossPixels, 1e-3));
+    }
+    o.positionWS = root + curvePoint + sideWS * (u * 0.5 * drawn * toPixel) + screenSide * (u * 0.5 * drawn * toPixel * thicken);
     o.normalWS = normalize(cross(sideWS, tangent));
 
     /* A head record (GrassMath.WithHeadPart): the same stem, rebuilt above with the same wind, and one of its head's
@@ -408,8 +431,6 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
      * side u across its width, shaped to an ellipse (flower), a spindle (seed head) or a nodding panicle (plume). The
      * strip's root row and its tip point close the outline, so the LOD meshes need nothing new. It widens with the
      * field as the blades do, so thinned far flowers keep their share of colour. */
-    uint headPart = GrassHeadPart(blade.colour);
-    bool isHead = headPart != 0u && headInfo.x > 0.5;
     bool isPlume = isHead && headInfo.x > 2.5;
     bool isFlower = isHead && headInfo.x >= 1.5 && headInfo.x <= 2.5;
     // A flower's drift: its own, larger patches (the look's bloom colour and size), read only for a flower's cards.
@@ -484,7 +505,11 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     // Far blades lean their shading toward the ground's: a far meadow is lit like a surface, not sparkle.
     o.normalWS = normalize(lerp(o.normalWS, float3(0.0, 1.0, 0.0), saturate(d / 120.0) * 0.6));
     o.sideWS = sideWS;
-    o.side = isHead ? u * 0.3 : u;
+    /* The rounding (GrassShadingNormal) only where the blade shows it: across a pixel or less, the pixel's centre lands on
+     * one edge or the other as the blade sways and the camera's jitter moves, and the normal turned the rounding angle
+     * (NormalRounding, 38 degrees) one way or the other was a light/dark flip on every thin blade. A pixel that holds the whole width sees its average, the face normal:
+     * none at one rendered pixel, all of it from two. */
+    o.side = isHead ? u * 0.3 : u * saturate(acrossPixels - 1.0);
     // 2 marks a head for the fragment (no root shading, no terrain colour, kept through the far field).
     o.along = isHead ? 2.0 : t;
     o.thin = isPlume ? 1.0 : isHead ? 0.6 : saturate(1.0 - width / 0.04);
@@ -628,6 +653,12 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     return o;
 }
 
+// The blade as it stands now.
+GrassVertex GrassBuild(uint instanceID, float2 vertex)
+{
+    return GrassBuildAt(instanceID, vertex, 0.0);
+}
+
 // The shaded normal: the face normal turned toward each edge by the rounding angle (a cylinder, not a
 // card), flipped with the face seen. The edge term does not flip: seen from behind, the same edge
 // still faces outward the same way.
@@ -637,8 +668,28 @@ float3 GrassShadingNormal(float3 normalWS, float3 sideWS, float side, float faci
     return normalize(normalWS * (facing * cos(a)) + sideWS * (side * sin(a)));
 }
 
+/* The dither's threshold under a temporal resolve: interleaved gradient noise turned a golden-ratio step every frame (and
+ * a blade's own step, so two blades over one pixel never share their holes). A fixed pattern stands still on the screen,
+ * so the resolve keeps its holes (a screen door, stretched by the upscale); one that turns averages to the share. */
+float GrassTemporalThreshold(float2 positionSS, float shift)
+{
+    float n = frac(52.9829189 * frac(dot(positionSS, float2(0.06711056, 0.00583715))));
+    return frac(n + _GrassTemporal.x * 0.61803399 + shift * 0.38196601);
+}
+
 void GrassFadeClip(float4 positionCS, float2 fade)
 {
+#if !defined(FISH_GRASS_PASS_SHADOW)
+    // The shadow map is not resolved over frames: its casters keep the fixed pattern.
+    if (_GrassTemporal.z > 0.5)
+    {
+        if (fade.x < 0.999)
+        {
+            clip(fade.x - GrassTemporalThreshold(positionCS.xy, fade.y) - 0.0001);
+        }
+        return;
+    }
+#endif
     float2 shift = float2(fmod(fade.y, 4.0), floor(fade.y * 0.25));
     FishDitherClip(positionCS.xy + shift, fade.x);
 }
@@ -713,9 +764,9 @@ float3 GrassLit(float3 L, float3 colour, float3 albedo, float3 n, float3 faceN, 
 half4 GrassForwardFragment(GrassVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SEMANTIC) : SV_Target
 {
     // With MSAA the fade and a thin blade's share of its pixel are coverage (AlphaToMask in the pass): smooth, not a
-    // dither that crawls as the blade sways. Without, the dither as before.
+    // dither that crawls as the blade sways. Without, the dither (GrassFadeClip: one that turns each frame under STP/TAA).
     half coverage = 1.0h;
-    if (_GrassScreen.w > 0.5)
+    if (abs(_GrassScreen.w - 1.0) < 0.5)
     {
         coverage = (half)saturate(input.extra.z);
         clip(coverage - 0.004h);
@@ -822,6 +873,64 @@ half4 GrassDepthNormalsFragment(GrassVaryings input, FRONT_FACE_TYPE face : FRON
 #else
     return half4(n, 0.0);
 #endif
+}
+
+#endif
+
+#if defined(FISH_GRASS_PASS_MOTION)
+
+/* Motion vectors (URP's MotionVectors pass, drawn for the slots GrassBladeRenderer gives per-object motion: the near and mid
+ * strips by default, GrassBladeSettings.MotionVectorLevels). STP and TAA follow every pixel back to where it was a frame
+ * ago; told only the camera's motion, a swaying tip was "static", its history was rejected wherever it moved, and the
+ * tops of the grass were redrawn raw each frame at the rendered resolution: pixelated and shimmering. Each blade is
+ * rebuilt a frame back on the shared motion clock (GrassBuildAt, the same wind function the forward pass drew it with) and
+ * seen through the frame before's camera. Everything else that shapes a blade (snow, a trail, the viewer's lay-over) moves
+ * over seconds and is taken as it is now. */
+struct GrassMotionAttributes
+{
+    float4 positionOS : POSITION;
+    uint instanceID : SV_InstanceID;
+};
+
+struct GrassMotionVaryings
+{
+    float4 positionCS : SV_POSITION;
+    float4 positionNow : TEXCOORD0;      // clip position now, without the jitter
+    float4 positionBefore : TEXCOORD1;   // the frame before, through its camera
+    float2 fade : TEXCOORD2;
+};
+
+GrassMotionVaryings GrassMotionVertex(GrassMotionAttributes input)
+{
+    GrassMotionVaryings o = (GrassMotionVaryings)0;
+    GrassVertex v = GrassBuild(input.instanceID, input.positionOS.xy);
+    // Jittered, as the forward pass drew it, so the same pixels pass the depth test.
+    o.positionCS = TransformWorldToHClip(v.positionWS);
+    o.positionNow = mul(_NonJitteredViewProjMatrix, float4(v.positionWS, 1.0));
+    float3 before = v.positionWS;
+    UNITY_BRANCH
+    if (_GrassTemporal.y > 0.0)
+    {
+        before = GrassBuildAt(input.instanceID, input.positionOS.xy, _GrassTemporal.y).positionWS;
+    }
+    o.positionBefore = mul(_PrevViewProjMatrix, float4(before, 1.0));
+    o.fade = v.fade;
+    return o;
+}
+
+// MotionVectorsCommon.hlsl's CalcNdcMotionVectorFromCsPositions, without its per-object "force no motion" switch: these
+// draws carry no renderer of their own to set it.
+float4 GrassMotionFragment(GrassMotionVaryings input) : SV_Target
+{
+    // The same pixels the forward pass kept (its dither clip; the MSAA coverage path never runs with a temporal resolve).
+    GrassFadeClip(input.positionCS, input.fade);
+    float2 now = input.positionNow.xy / input.positionNow.w;
+    float2 before = input.positionBefore.xy / input.positionBefore.w;
+    float2 velocity = now - before;
+#if UNITY_UV_STARTS_AT_TOP
+    velocity.y = -velocity.y;
+#endif
+    return float4(velocity * 0.5, 0.0, 0.0);
 }
 
 #endif

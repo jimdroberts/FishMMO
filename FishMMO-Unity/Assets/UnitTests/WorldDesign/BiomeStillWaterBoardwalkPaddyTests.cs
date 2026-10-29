@@ -40,6 +40,11 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeArtSpec.Entries.Length, Is.EqualTo(83));
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
+				// An authored round names its own floats, boardwalks and paddies (pinned in BiomeAuthoredRoundTests).
+				if (BiomeAuthoredRounds.Contains(entry.Biome))
+				{
+					continue;
+				}
 				Assert.That(entry.FloatingPlants(), Is.Empty, $"{entry.Biome} floats nothing yet");
 				Assert.That(entry.Boardwalks, Is.EqualTo(BiomeBoardwalks.None), $"{entry.Biome} raises no way yet");
 				foreach ((string prefab, float _) in entry.FieldCrops())

@@ -24,7 +24,9 @@ Shader "FishMMO/Vegetation"
         [MainColor] _BaseColor("Colour", Color) = (1, 1, 1, 1)
         _Cutoff("Alpha cutoff", Range(0.0, 1.0)) = 0.5
         [Toggle(_ALPHATEST_ON)] _AlphaClip("Alpha clip", Float) = 1.0
-        [Toggle(_NORMALMAP)] _UseNormalMap("Normal map", Float) = 0.0
+        // A uniform, not a keyword: bark with a normal map and deadwood without one are then one shader variant, so they share
+        // one pipeline and one SRP batch (VegNormal branches on it per draw).
+        [Toggle] _UseNormalMap("Normal map", Float) = 0.0
         [Normal] _BumpMap("Normal map", 2D) = "bump" {}
         _BumpScale("Normal scale", Float) = 1.0
         _Smoothness("Smoothness", Range(0.0, 1.0)) = 0.2
@@ -103,7 +105,6 @@ Shader "FishMMO/Vegetation"
             #pragma fragment VegForwardFragment
 
             #pragma shader_feature_local _ALPHATEST_ON
-            #pragma shader_feature_local _NORMALMAP
 
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
@@ -195,7 +196,6 @@ Shader "FishMMO/Vegetation"
             #pragma fragment VegDepthNormalsFragment
 
             #pragma shader_feature_local _ALPHATEST_ON
-            #pragma shader_feature_local _NORMALMAP
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
             #pragma multi_compile_instancing

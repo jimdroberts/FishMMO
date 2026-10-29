@@ -42,14 +42,12 @@ namespace FishMMO.Client
 		private static readonly int FlameStrengthId = Shader.PropertyToID("_FlameStrength");
 		private static readonly int FlameWindId = Shader.PropertyToID("_FlameWind");
 		private static readonly Vector4[] flameSources = new Vector4[MaxSources];
-		private static MaterialPropertyBlock flameBlock;
 		private static Material flameMaterial;
 		private static Mesh flameMesh;
 
 		private static readonly List<SceneEmitter> near = new List<SceneEmitter>();
 		private static readonly Vector4[] sources = new Vector4[MaxSources];
 		private static readonly Vector4[] strengths = new Vector4[MaxSources];
-		private static MaterialPropertyBlock block;
 		private static Material material;
 		private static Shader materialShader;
 		private static Mesh mesh;
@@ -132,8 +130,17 @@ namespace FishMMO.Client
 			return material;
 		}
 
+		/// <summary>This hook's own time in the profiler (render-pipeline callbacks otherwise show only as
+		/// RenderPipeline.BeginCameraRendering's self time). In a class of its own so the marker, an engine object, is made
+		/// when the hook first runs, not when the type is first touched (tests outside Unity use these types' pure parts).</summary>
+		private static class HookProfiling
+		{
+			public static readonly Unity.Profiling.ProfilerMarker Marker = new Unity.Profiling.ProfilerMarker("SiteEmbers.BeginCamera");
+		}
+
 		private static void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera)
 		{
+			using var hookMarkerScope = HookProfiling.Marker.Auto();
 			if (camera.cameraType != CameraType.Game && camera.cameraType != CameraType.SceneView)
 			{
 				return;
@@ -145,8 +152,9 @@ namespace FishMMO.Client
 				foundAt = eye;
 				// With a lava tube's molten lava and the fumes under its roof (2026-10-20): its embers rise off the lava, its fumes
 				// hang in the same field (kinds 5 and 6 of FishSiteEmbers.shader).
+				// And a way light's own fire (2026-10-26, ScenePyre): a beacon's, flaming only once it is kindled at dusk.
 				SceneSiteEmitters.Near(eye, Reach + Refind, kind => kind == SceneEmitterKind.Fire || kind == SceneEmitterKind.Forge || kind == SceneEmitterKind.Hearth
-					|| kind == SceneEmitterKind.Torch || kind == SceneEmitterKind.Magma || kind == SceneEmitterKind.Fumes, MaxSources, near);
+					|| kind == SceneEmitterKind.Torch || kind == SceneEmitterKind.Magma || kind == SceneEmitterKind.Fumes || kind == SceneEmitterKind.Pyre, MaxSources, near);
 			}
 			if (near.Count == 0)
 			{
@@ -162,8 +170,6 @@ namespace FishMMO.Client
 				mesh = PrecipitationField.BuildMesh(Particles, 104723);
 				mesh.name = "Site Embers";
 			}
-			block ??= new MaterialPropertyBlock();
-
 			float night = Mathf.Clamp01(Shader.GetGlobalFloat(NightLightsId));
 			var bounds = new Bounds(near[0].Position, Vector3.one * 8f);
 			for (int i = 0; i < MaxSources; i++)
@@ -195,6 +201,21 @@ namespace FishMMO.Client
 					bounds.Encapsulate(new Bounds(e.Position + Vector3.up * (magma ? 4f : 0f), new Vector3(2f * spread, magma ? 10f : 4f, 2f * spread)));
 					continue;
 				}
+				if (e.Kind == SceneEmitterKind.Pyre)
+				{
+					// A way light's own fire (2026-10-26, ScenePyre): a beacon's flames and sparks as a campfire's, once it is kindled
+					// (dark by day, caught at its own moment of the dusk); a brimstone lamp's blue flame is its piece's own, no
+					// orange tongues or sparks. No weather on either (a keeper tends a beacon), no melted ring.
+					float kindled = ScenePyre.Blue(e.Seed) ? 0f : ScenePyre.Kindled(night, e.Seed);
+					float beat = 0.65f + 0.35f * Mathf.Sin((float)(WorldMotion.Seconds * 0.05 % 6283.0) + (e.Seed & 0xFFFF) * 0.0137f);
+					sources[i] = new Vector4(e.Position.x, e.Position.y, e.Position.z, 1f);
+					strengths[i] = new Vector4(fade * kindled, 0.35f + 0.4f * beat, 0f, 0f);
+					flameSources[i] = new Vector4(e.Position.x, e.Position.y, e.Position.z, 1f);
+					flameStrengths[i] = new Vector4(fade * kindled, Mathf.InverseLerp(0.3f, 1f, beat), 0f, 0f);
+					heat[i] = Vector4.zero;
+					bounds.Encapsulate(new Bounds(e.Position + Vector3.up * 3f, new Vector3(10f, 8f, 10f)));
+					continue;
+				}
 				bool forge = e.Kind == SceneEmitterKind.Forge;
 				bool hearth = e.Kind == SceneEmitterKind.Hearth, torch = e.Kind == SceneEmitterKind.Torch;
 				// A fire burns up and dies down over minutes, each on its own beat; a forge sparks in bursts as it is worked.
@@ -221,14 +242,14 @@ namespace FishMMO.Client
 			// The wind near the ground: the weather's direction and speed (0..1 of 30 m/s), the plume's share of it.
 			Vector4 wind = Shader.GetGlobalVector(WeatherWindId);
 			float speed = wind.z * 30f * 0.35f;
-			block.Clear();
-			block.SetVectorArray(SourcesId, sources);
-			block.SetVectorArray(StrengthId, strengths);
-			block.SetVector(WindId, new Vector4(wind.x * speed, night, wind.y * speed, PrecipitationField.SubPixelSigma));
+			/* No property block, so the draw stays in the SRP Batcher: the arrays are globals (only this draw reads them, set in the
+			 * camera's own hook before it renders) and the wind is the material's own (this system's, never shared). */
+			Shader.SetGlobalVectorArray(SourcesId, sources);
+			Shader.SetGlobalVectorArray(StrengthId, strengths);
+			mat.SetVector(WindId, new Vector4(wind.x * speed, night, wind.y * speed, PrecipitationField.SubPixelSigma));
 			var rp = new RenderParams(mat)
 			{
 				camera = camera,
-				matProps = block,
 				shadowCastingMode = ShadowCastingMode.Off,
 				receiveShadows = false,
 				layer = camera.gameObject.layer,
@@ -289,15 +310,13 @@ namespace FishMMO.Client
 				flameMesh = PrecipitationField.BuildMesh(Flames, 61211);
 				flameMesh.name = "Site Flames";
 			}
-			flameBlock ??= new MaterialPropertyBlock();
-			flameBlock.Clear();
-			flameBlock.SetVectorArray(FlameSourcesId, flameSources);
-			flameBlock.SetVectorArray(FlameStrengthId, flameStrengths);
-			flameBlock.SetVector(FlameWindId, new Vector4(windX, night, windZ, 0f));
+			// As the embers: the flames' own arrays as globals, their wind the material's own.
+			Shader.SetGlobalVectorArray(FlameSourcesId, flameSources);
+			Shader.SetGlobalVectorArray(FlameStrengthId, flameStrengths);
+			flameMaterial.SetVector(FlameWindId, new Vector4(windX, night, windZ, 0f));
 			var rp = new RenderParams(flameMaterial)
 			{
 				camera = camera,
-				matProps = flameBlock,
 				shadowCastingMode = ShadowCastingMode.Off,
 				receiveShadows = false,
 				layer = camera.gameObject.layer,

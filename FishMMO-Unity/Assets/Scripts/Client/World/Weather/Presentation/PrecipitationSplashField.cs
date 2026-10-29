@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.Rendering;
+using FishMMO.Shared;
 using FishMMO.Shared.Weather;
 
 namespace FishMMO.Client
@@ -44,7 +45,8 @@ namespace FishMMO.Client
 		private static readonly int GridId = Shader.PropertyToID("_FishSplashGrid");
 		private static readonly int GlintId = Shader.PropertyToID("_FishSplashGlint");
 
-		private readonly MaterialPropertyBlock block = new MaterialPropertyBlock();
+		// The splash material's own copy: its numbers set on it, not on a property block, keep the draw in the SRP Batcher.
+		private readonly DrawMaterials materials = new DrawMaterials("Splash");
 		private Mesh mesh;
 		private int meshCount;
 
@@ -77,6 +79,7 @@ namespace FishMMO.Client
 				mesh = null;
 			}
 			meshCount = 0;
+			materials.Dispose();
 		}
 
 		/// <summary>
@@ -125,30 +128,29 @@ namespace FishMMO.Client
 			}
 
 			Vector3 origin = camera.transform.position;
-			block.Clear();
-			block.SetVector(OriginId, new Vector4(origin.x, origin.y, origin.z, time));
+			Material material = materials.For(profile.SplashMaterial);
+			material.SetVector(OriginId, new Vector4(origin.x, origin.y, origin.z, time));
 			// Bigger drops make bigger rings and throw their droplets higher.
 			float dropScale = Mathf.Lerp(0.7f, 1.4f, frame[WeatherChannel.DropSize]);
-			block.SetVector(ParamsId, new Vector4(Radius, Mathf.Clamp01(rain * 1.4f), Size * dropScale, Lifetime));
-			block.SetVector(GlintId, new Vector4(GlintLifetime, GlintHeight * dropScale, GlintOpacity, RingOpacity));
+			material.SetVector(ParamsId, new Vector4(Radius, Mathf.Clamp01(rain * 1.4f), Size * dropScale, Lifetime));
+			material.SetVector(GlintId, new Vector4(GlintLifetime, GlintHeight * dropScale, GlintOpacity, RingOpacity));
 
 			/* Water is clear: the shader lights a splash with the scene's own sky and sun, which carry
 			 * this world's hue already. It was a pale blue passed through the air's hue as well
 			 * (SkySystem.InAir), which coloured it twice. A substance of its own colour keeps it. */
 			Color tint = substance != null ? substance.Tint : Color.white;
-			block.SetColor(ColorId, new Color(tint.r, tint.g, tint.b, 0.5f));
+			material.SetColor(ColorId, new Color(tint.r, tint.g, tint.b, 0.5f));
 
 			/* Dryness from the temperature. Nothing happens below the midpoint — a splash on cool
 			 * ground should behave as it always has — and it ramps from there to scorching, where a
 			 * drop is gone almost as soon as it lands. */
 			float dry = Mathf.Clamp01(Mathf.InverseLerp(0.15f, 0.9f, temperature));
-			block.SetVector(HeatId, new Vector4(dry, 0f, 0f, 0f));
-			block.SetVector(GridId, new Vector4(side, 2f * Radius / side, 0f, 0f));
+			material.SetVector(HeatId, new Vector4(dry, 0f, 0f, 0f));
+			material.SetVector(GridId, new Vector4(side, 2f * Radius / side, 0f, 0f));
 
-			var rp = new RenderParams(profile.SplashMaterial)
+			var rp = new RenderParams(material)
 			{
 				camera = camera,
-				matProps = block,
 				worldBounds = new Bounds(origin, Vector3.one * Radius * 2.5f),
 				shadowCastingMode = ShadowCastingMode.Off,
 				receiveShadows = false,

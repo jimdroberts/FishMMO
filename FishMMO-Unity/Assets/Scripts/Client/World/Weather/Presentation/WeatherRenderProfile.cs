@@ -137,7 +137,7 @@ namespace FishMMO.Client
 		/// composite scales it the rest of the way. 0 is also what a profile saved before this field
 		/// existed reads, which gives every tier of it exactly the numbers below.
 		/// </remarks>
-		[Tooltip("Share of the screen the steadied clouds are rebuilt at. 0: no more than 4 pixels a marched texel across (a sixteen-frame refresh) — the screen's size on Balanced and High, about two thirds on Performant. Never coarser than the march.")]
+		[Tooltip("Share of the screen the steadied clouds are rebuilt at. 0: no more than 4 pixels a marched texel across (a sixteen-frame refresh) — about three quarters of the screen on High (0.72), a quarter on Balanced and a fifth on Performant. Never coarser than the march.")]
 		[Range(0f, 1f)] public float CloudHistoryScale = 0f;
 		[Tooltip("Light shafts through the clouds, and around a body during an eclipse.")]
 		public bool GodRays = true;
@@ -576,6 +576,13 @@ namespace FishMMO.Client
 		[Tooltip("FishMMO/Rock Fillet: draws them. Referenced here so it ships to clients only.")]
 		public Shader RockFilletShader;
 
+		[Header("Terrain heightmap draw")]
+		[Tooltip("FishTerrainHeightmap.compute: chooses the ground's geomorphed patches on the GPU for every camera (TerrainHeightmapSystem). Referenced here so a client build includes it; empty, the editor loads it by path.")]
+		public ComputeShader TerrainHeightmapCompute;
+		[Tooltip("Hidden/FishMMO/Weather Terrain Array GPU: draws them with the ground's own shading. Referenced here so a client build includes it; empty, the editor loads it by path.")]
+		public Shader TerrainHeightmapShader;
+		public TerrainHeightmapSettings TerrainHeightmap = new TerrainHeightmapSettings();
+
 		[Header("Moss (rock, cliffs, caves, stone, timber and deadwood)")]
 		[Tooltip("How much moss the world grows, times each scene's dampness (MossClimate: the biome under the camera — swamp and forest a lot, desert, volcanic and ice next to none) and each material's own Moss amount (_FishMoss, set by the art generator). A waterfall's spray grows it at this strength whatever the climate, on that rock and on the ground round the fall. 0 turns it off everywhere. Live (2026-10-12).")]
 		[Range(0f, 2f)] public float MossStrength = 1f;
@@ -649,6 +656,10 @@ namespace FishMMO.Client
 		public Shader LighthouseBeamsShader;
 		[Tooltip("FishMMO/World/Cave Drips: the drops falling from the caves' roofs, their spatter and the rings on their puddles near the camera (CaveDripField). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
 		public Shader CaveDripsShader;
+		[Tooltip("FishMMO/World/Cave Water Life: the marsh-gas beads rising in the caves' still water and the leeches swimming in it near the camera (CaveWaterLife, 2026-10-26). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
+		public Shader CaveWaterLifeShader;
+		[Tooltip("FishMMO/World/Sea Hall Vents: a sea hall's smoker plumes, smoke ceiling, flange mirrors, carbon-dioxide beads, brinicles and brine mirrors near the camera (SeaHallVents, 2026-10-26). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
+		public Shader SeaHallVentsShader;
 		[Tooltip("FishMMO/World/Cave Skylight Shafts: the daylight's shafts and the dust motes in them under the openings in caves' roofs near the camera (CaveSkylights). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
 		public Shader CaveSkylightShaftsShader;
 		[Tooltip("FishMMO/World/Rockfall Stones: the stones falling down the scene's stored chutes and the Strombolian bombs (RockfallField, 2026-10-25, I2u). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]

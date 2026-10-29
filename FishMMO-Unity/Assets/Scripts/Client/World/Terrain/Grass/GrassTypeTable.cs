@@ -17,12 +17,12 @@ namespace FishMMO.Client
 	/// straw in the next across one terrain.
 	/// </para>
 	/// <para>
-	/// <b>The cap</b> is the GPU's (<see cref="GrassBladeRenderer.MaxTypes"/>, GrassMath.MaxTypes = 32: four bits of a blade
-	/// record's packed word and one of its colour word, FishGrassBlades.compute GRASS_TYPES). Past it a look is MERGED into
-	/// the first entry of the same prefab (drawn with that biome's look, said once in the log): the blades still grow where
-	/// their biome paints them, only their look is another biome's. A prefab with no entry at all past the cap is refused
-	/// (its prototypes stay meshes, as a type past the cap always did). Each terrain's own cap
-	/// (<see cref="GrassTerrain.MaxChannels"/>, 16 density channels) is the builder's, as before: an entry is a channel.
+	/// <b>The cap</b> is the GPU's (<see cref="GrassBladeRenderer.MaxTypes"/>, GrassMath.MaxTypes = 128 since 2026-10-27: four
+	/// bits of a blade record's packed word, two of its colour word and one of its sixth word, FishGrassBlades.compute GRASS_TYPES). Past it a look is
+	/// MERGED into the first entry of the same prefab (drawn with that biome's look, said once in the log and in the cut's
+	/// notes): the blades still grow where their biome paints them, only their look is another biome's. A prefab with no
+	/// entry at all past the cap is refused: not drawn, an error (there is no mesh grass since the CPU chunk renderer went).
+	/// Each terrain's own cap (<see cref="GrassTerrain.MaxChannels"/>, 64 density channels) is the builder's: an entry is a channel.
 	/// </para>
 	/// </remarks>
 	public static class GrassTypeTable

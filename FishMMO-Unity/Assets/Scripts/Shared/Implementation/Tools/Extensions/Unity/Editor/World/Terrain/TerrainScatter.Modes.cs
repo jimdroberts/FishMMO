@@ -367,8 +367,10 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						continue;
 					}
-					foreach (int p in rule.Prototypes)
+					foreach (int scene in rule.Prototypes)
 					{
+						// The tile's layer of it (TerrainDetailLayerBudget): the tile carries only the prototypes of the rules that reach it.
+						int p = TileLayer(work, scene);
 						string name = p >= 0 && p < details.Length && details[p].prototype != null ? details[p].prototype.name : null;
 						if (name == null || !read.Add(p) || !words.Exists(w => BiomeScatterModes.Names(w, name)))
 						{

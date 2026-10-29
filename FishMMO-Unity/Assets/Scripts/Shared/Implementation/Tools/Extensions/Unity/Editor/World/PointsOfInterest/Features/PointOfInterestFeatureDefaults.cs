@@ -27,7 +27,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// camps, obsidian fields, fallen stars, witches' huts): <see cref="GatheringFeature"/>.</description></item>
 	/// </list>
 	/// </remarks>
-	public static class PointOfInterestFeatureDefaults
+	public static partial class PointOfInterestFeatureDefaults
 	{
 		/// <summary>The recommended features for a kind at a size class (0 small, 1 medium, 2 large).</summary>
 		public static List<PointOfInterestFeature> For(POIType kind, int sizeClass)
@@ -64,6 +64,10 @@ namespace FishMMO.Shared.WorldDesign
 					features.Add(new WaypointFeature());
 					features.Add(new NpcSpawnerFeature { Role = PointOfInterestNpcRole.Guard });
 					features.Add(new NpcSpawnerFeature { Role = PointOfInterestNpcRole.Merchant });
+					break;
+				case POIType.Tower:
+					// A watchtower's watch (2026-10-27); a hostile or ruined tower's holder takes it away again.
+					features.Add(new NpcSpawnerFeature { Role = PointOfInterestNpcRole.Guard });
 					break;
 				case POIType.Windmill:
 				case POIType.Watermill:
@@ -102,6 +106,8 @@ namespace FishMMO.Shared.WorldDesign
 					break;
 			}
 
+			Fantasy(kind, size, features);
+
 			if (info.Has(PointOfInterestTraits.Hostile) && kind != POIType.BossLair)
 			{
 				features.Add(new NpcSpawnerFeature { Role = PointOfInterestNpcRole.MonsterPack });
@@ -110,6 +116,8 @@ namespace FishMMO.Shared.WorldDesign
 					features.Add(new NpcSpawnerFeature { Role = PointOfInterestNpcRole.Elite });
 				}
 			}
+
+			FantasyBoss(kind, size, features);
 
 			if (kind == POIType.Mine)
 			{

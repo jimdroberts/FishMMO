@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using FishMMO.Shared.Biomes;
 using UnityEngine;
 
 namespace FishMMO.Shared.WorldDesign
@@ -106,6 +107,9 @@ namespace FishMMO.Shared.WorldDesign
 					return new FormTraits { Wet = 0.15f, Sediment = 0.6f, Litter = 0.7f, Guano = 0.8f, Glow = 0f, Dry = true };
 				case CaveForm.Mine:
 					return new FormTraits { Wet = 0.6f, Sediment = 1f, Litter = 0.5f, Guano = 0.25f, Glow = 0.3f, Spoil = true };
+				case CaveForm.SeaHall:
+					// Wet through, the sea's sediment on its floor, no litter, no roost, no glow crust (2026-10-26, I2n-b).
+					return new FormTraits { Wet = 1.2f, Sediment = 1f, Litter = 0f, Guano = 0f, Glow = 0f };
 				default:
 					return new FormTraits { Wet = 1f, Sediment = 1f, Litter = 1f, Guano = 1f, Glow = 1f };
 			}
@@ -153,6 +157,8 @@ namespace FishMMO.Shared.WorldDesign
 		private readonly float[] mouthReach, mouthStrength, mouthRadius;
 		private readonly bool[] mouthWet;
 		private readonly bool[] mouthSky;
+		/// <summary>The root windows' throats (2026-10-26, I2n-c, decision 86 (f)): their mouths' indices, none in a system that opens none.</summary>
+		private readonly int[] rootWindows;
 
 		/// <summary>The roof-opening kind when the layout has one (an enum member it may add): compiled whether or not it exists.</summary>
 		private static readonly CaveMouthKind? skylightKind = Enum.TryParse("Skylight", out CaveMouthKind sky) ? sky : (CaveMouthKind?)null;
@@ -372,6 +378,15 @@ namespace FishMMO.Shared.WorldDesign
 				mouthStrength[m] = mouthWet[m] ? 0.35f : 1f;
 				distance[m] = Dijkstra(edges, mouth.Floor, mouthRadius[m]);
 			}
+			var windows = new List<int>();
+			for (int m = 0; m < mouths; m++)
+			{
+				if (CaveSystem.IsRootWindow(system.Mouths[m]))
+				{
+					windows.Add(m);
+				}
+			}
+			rootWindows = windows.Count > 0 ? windows.ToArray() : null;
 
 			// ── The void's primitives, bucketed ──
 			var list2 = new List<Prim>();
@@ -624,6 +639,13 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				sediment *= 0.5f;
 			}
+			if (system.Form == CaveForm.SeaHall && floorness > 0f)
+			{
+				// The floor's heat zones (2026-10-26, I2n-b, decision 83: the stored smokers' heat, CaveSystem.HeatAt): the sea's fine
+				// metalliferous sediment (the silt ground) away from the vents, coarse chimney rubble (the gravel ground) round them.
+				float heat = system.HeatAt(p);
+				sediment = floorness * Mathf.Lerp(Mathf.Max(0.62f, sediment / Mathf.Max(0.01f, floorness)), 0.25f, Smooth(0.4f, 0.65f, heat));
+			}
 
 			// ── Trodden ──
 			float trodden = 0f;
@@ -655,6 +677,11 @@ namespace FishMMO.Shared.WorldDesign
 				float foot = Mathf.Max(floorness * Smooth(0.45f, 0.85f, across), wallness * (1f - Smooth(0.3f, 1.6f, height)));
 				float rot = 0.6f + 0.4f * ProceduralNoise.Gradient3(new Vector3(p.x / 2f, p.y / 2f, p.z / 2f), seed + 141);
 				organic = Mathf.Max(organic, 0.6f * foot * rot);
+			}
+			if (rootWindows != null)
+			{
+				// The peat a root window rotted down through, on its throat's rock and the vault round it (2026-10-26, I2n-c: its lip).
+				organic = Mathf.Max(organic, BiomeCaveWaters.PeatLipOrganic * PeatLipAt(p));
 			}
 			if (hasWater && system.Form == CaveForm.SeaCave)
 			{
@@ -692,6 +719,26 @@ namespace FishMMO.Shared.WorldDesign
 				Organic = organic,
 				Glow = glow,
 			};
+		}
+
+		/// <summary>
+		/// How much of a root window's peat lip a point (system frame) shows, 0..1 (<see cref="BiomeCaveWaters.PeatLip"/>): the most of its
+		/// root windows', measured from each throat's axis (from over its vault's floor point up to its opening, as it leans).
+		/// </summary>
+		private float PeatLipAt(Vector3 p)
+		{
+			float most = 0f;
+			foreach (int m in rootWindows)
+			{
+				CaveMouth mouth = system.Mouths[m];
+				float vault = CaveSystem.SkylightVault(in mouth);
+				Vector3 top = CaveSystem.SkylightOpening(in mouth);
+				float t = top.y > vault ? Mathf.Clamp01((p.y - vault) / (top.y - vault)) : 0f;
+				float ax = Mathf.Lerp(mouth.Floor.x, top.x, t), az = Mathf.Lerp(mouth.Floor.z, top.z, t);
+				float fromAxis = new Vector2(p.x - ax, p.z - az).magnitude;
+				most = Mathf.Max(most, BiomeCaveWaters.PeatLip(fromAxis, p.y, mouth.Radius, vault, top.y));
+			}
+			return most;
 		}
 
 		/// <summary>How far a point is walked in from the nearest mouth, metres (+inf where the system has none).</summary>

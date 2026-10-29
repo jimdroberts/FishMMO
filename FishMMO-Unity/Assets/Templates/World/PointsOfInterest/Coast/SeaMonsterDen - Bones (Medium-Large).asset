@@ -55,16 +55,16 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506389932245626
-  - rid: 4061506389932245627
-  - rid: 4061506389932245628
-  - rid: 4061506389932245629
-  - rid: 4061506389932245630
-  - rid: 4061506389932245631
+  - rid: 4061506423697965368
+  - rid: 4061506423697965369
+  - rid: 4061506423697965370
+  - rid: 4061506423697965371
+  - rid: 4061506423697965372
+  - rid: 4061506423697965373
   references:
     version: 2
     RefIds:
-    - rid: 4061506389932245626
+    - rid: 4061506423697965368
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -75,16 +75,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506389932245627
+    - rid: 4061506423697965369
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506389932245628
+    - rid: 4061506423697965370
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506389932245629
+    - rid: 4061506423697965371
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 5
@@ -92,7 +92,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506389932245630
+    - rid: 4061506423697965372
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 6
@@ -100,7 +100,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506389932245631
+    - rid: 4061506423697965373
       type: {class: GatheringFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Families: 

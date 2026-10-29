@@ -61,14 +61,17 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The most channels one scene carries.</summary>
 		public const int MaxChannels = 16;
 
+		/// <summary>How much of a channel's half width its pound's water mask covers (pure): 0.55, a great canal's 0.85 (2026-10-26, I2f-b).</summary>
+		public static float PoundCover(BiomeLinearForm form) => form == BiomeLinearForm.GreatCanal ? 0.85f : 0.55f;
+
 		/// <summary>A pound's lake id.</summary>
 		public static int ChannelLakeId(int channel, int pound) => ChannelIdBase | ((channel & 0x7FFF) << 12) | (pound & 0xFFF);
 
 		/// <summary>True for a channel pound's lake id.</summary>
 		public static bool IsChannel(int id) => (id >> 27) == (ChannelIdBase >> 27);
 
-		/// <summary>A channel's half width, metres: an earth leat 0.7, a lined channel 1.0.</summary>
-		public static float ChannelHalfWidth(BiomeLinearForm form) => form == BiomeLinearForm.LinedChannel ? 1f : 0.7f;
+		/// <summary>A channel's half width, metres: an earth leat 0.7, a lined channel 1.0 (the later forms' BiomeLinearFeatures.ChannelHalfWidth).</summary>
+		public static float ChannelHalfWidth(BiomeLinearForm form) => BiomeLinearFeatures.ChannelHalfWidth(form);
 
 		/// <summary>What a channel's station is: carved and flooded, carried in a flume, under a road in a culvert.</summary>
 		public enum ChannelPart : byte
@@ -241,7 +244,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// built up is carried in a flume. Each run of flume or culvert stations ends its pound.
 		/// </summary>
 		public static List<ChannelStation> Pounds(IReadOnlyList<Vector2> line, Func<float, float, float> ground, bool falling, float startLevel, float endLevel,
-			Func<Vector2, bool> culvert = null, Func<Vector2, Vector2, float> lowSide = null)
+			Func<Vector2, bool> culvert = null, Func<Vector2, Vector2, float> lowSide = null, float poundMetres = PoundMetres)
 		{
 			var stations = new List<ChannelStation>();
 			List<Station> at = Stations(line, ChannelStationMetres);
@@ -263,7 +266,7 @@ namespace FishMMO.Shared.WorldDesign
 				bool fresh = pound < 0 || part == ChannelPart.Cut && last != ChannelPart.Cut;
 				if (!fresh)
 				{
-					fresh = falling ? level - plan > MaxStep || at[i].Along - poundStart > PoundMetres
+					fresh = falling ? level - plan > MaxStep || at[i].Along - poundStart > poundMetres
 						: Mathf.Abs(rest - level) > 0.25f || at[i].Along - poundStart > DitchPoundMetres;
 				}
 				if (fresh && part == ChannelPart.Cut)
@@ -322,9 +325,10 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// One pound's water as a lake of the scene's hydrology (pure): every one-metre cell, on a lattice fixed to the scene's metres,
-		/// whose middle lies within 0.55 of the half width of the pound's carved stretch; null when none does.
+		/// whose middle lies within <paramref name="cover"/> (0.55) of the half width of the pound's carved stretch; null when none does.
+		/// A great canal's wide, deep trench takes 0.85 (<see cref="PoundCover"/>), still inside where its sides rise past its water.
 		/// </summary>
-		public static SceneHydrology.Lake PoundLake(int id, IReadOnlyList<ChannelStation> stations, int pound, float half)
+		public static SceneHydrology.Lake PoundLake(int id, IReadOnlyList<ChannelStation> stations, int pound, float half, float cover = 0.55f)
 		{
 			const float cell = 1f;
 			var segments = new List<(Vector2 A, Vector2 B)>();
@@ -363,7 +367,7 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						best = Mathf.Min(best, HedgeDistance(p, a, b, out _));
 					}
-					if (best > 0.55f * half)
+					if (best > cover * half)
 					{
 						continue;
 					}
@@ -458,29 +462,41 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── The scene ─────────────────────────────────────────────────
 
-		/// <summary>The scene's leats: from the water to the fields of each settlement whose biome waters its fields, in its channel style.</summary>
+		/// <summary>
+		/// The scene's leats: from the water to the fields of each settlement whose biome waters its fields, in its channel style (the
+		/// first its draw admits): an earth or lined leat, a bisse, a roggia on the land's grid, a qanat gallery from a scarp's foot
+		/// (2026-10-26, I2f-b); the scene's one great canal first, its laterals watering the settlements it reaches.
+		/// </summary>
 		private static int LayChannels(SceneScope scope)
 		{
 			if (scope.Claims == null || scope.Water == null)
 			{
 				return 0;
 			}
-			int laid = 0, channels = 0, dry = 0;
+			int laid = 0, dry = 0;
+			int before = scope.ChannelCount;
+			laid += LayGreatCanal(scope);
 			foreach (PointOfInterestRecord record in scope.Points.Points)
 			{
-				if (channels >= MaxChannels || !BiomeRegistry.TryGetByID(record.BiomeID, out BiomeTemplate biome))
+				if (scope.ChannelCount >= MaxChannels || scope.Watered.Contains(record.Id) || !BiomeRegistry.TryGetByID(record.BiomeID, out BiomeTemplate biome))
 				{
 					continue;
 				}
 				foreach ((BiomeLinearStyle style, int index) in StylesAt(biome, BiomeLinearPlace.FieldEdges))
 				{
-					if (style.Kind != BiomeLinearKind.Channel)
+					if (style.Kind != BiomeLinearKind.Channel || style.Form == BiomeLinearForm.GreatCanal)
 					{
+						// A great canal is the scene's one (LayGreatCanal): a settlement it did not reach takes its next channel style.
 						continue;
 					}
 					int seed = unchecked((int)BiomeLinearFeatures.Hash(record.SiteSeed, 0x434841, index, 0));
 					if (!BiomeLinearFeatures.Admits(style.Density, BiomeLinearFeatures.Hash(seed, 1, 0, 0)) || !HeadOf(scope, record, out List<Vector2> head))
 					{
+						break;
+					}
+					if (style.Form == BiomeLinearForm.Gallery)
+					{
+						laid += LayGallery(scope, record, biome, style, head, seed);
 						break;
 					}
 					if (!TakeOff(scope, head[0], style.Reach > 0f ? style.Reach : SearchMetres, out Vector2 source, out float surface))
@@ -491,20 +507,32 @@ namespace FishMMO.Shared.WorldDesign
 					float startLevel = Mathf.Min(surface - 0.05f, scope.Ground(source.x, source.y) - ChannelFreeboard - 0.12f);
 					Vector2 last = head[head.Count - 1];
 					float endLevel = Mathf.Min(startLevel, scope.Ground(last.x, last.y) - ChannelFreeboard - 0.12f);
-					var exclusion = new PathExclusion(scope.Ways);
 					bool Blocked(Vector2 p) => scope.Water.KindAt(p.x, p.y) != WaterKind.None || scope.Points.IsKeptOut(p.x, p.y) && (p - source).magnitude > 12f
 						|| scope.Slope != null && scope.Slope(p.x, p.y) > 25f || InClaims(scope.Claims, p, 1f, null) && (p - head[0]).magnitude > 6f;
-					if (!Route(source, head[0], startLevel + ChannelFreeboard + 0.12f, scope.Ground(head[0].x, head[0].y), scope.Ground, Blocked, RouteCellMetres, RouteMarginMetres,
-						out List<Vector2> route))
+					bool routed = style.Form == BiomeLinearForm.Roggia
+						? GridRoute(source, head[0], RoggiaYaw(scope), startLevel + ChannelFreeboard + 0.12f, scope.Ground(head[0].x, head[0].y), scope.Ground, Blocked,
+							RouteCell(style.Form, source, head[0]), RouteMarginMetres, RoggiaTurnMetres, out List<Vector2> route)
+						: Route(source, head[0], startLevel + ChannelFreeboard + 0.12f, scope.Ground(head[0].x, head[0].y), scope.Ground, Blocked,
+							RouteCell(style.Form, source, head[0]), RouteMarginMetres, out route);
+					if (!routed)
 					{
 						scope.Notes?.Add($"Linear features: {record.Name}'s leat found no way from its water to its fields.");
 						break;
 					}
+					int join = route.Count - 1;
 					route.AddRange(head.GetRange(1, head.Count - 1));
-					laid += BuildChannel(scope, biome, style, route, true, startLevel, endLevel, channels++, seed, record);
+					var stations = new List<ChannelStation>();
+					float pound = style.Form == BiomeLinearForm.Roggia ? RoggiaPoundMetres(seed) : PoundMetres;
+					laid += BuildChannel(scope, biome, style, route, true, startLevel, endLevel, scope.ChannelCount++, seed, record, stations, true, pound);
+					if (style.Form == BiomeLinearForm.Roggia)
+					{
+						// Its partition where it meets the fields' head and divides along it.
+						laid += Partition(scope, biome, style, stations, route[join]);
+					}
 					break;
 				}
 			}
+			int channels = scope.ChannelCount - before;
 			if (channels + dry > 0)
 			{
 				scope.Notes?.Add($"Linear features: {channels} leat(s) carried to the fields" + (dry > 0 ? $"; {dry} settlement(s) had no water high enough within reach." : "."));
@@ -551,13 +579,22 @@ namespace FishMMO.Shared.WorldDesign
 		/// (on an 8 m lattice) whose surface stands high enough over the head's ground to fall to it at the channel's grade, then walked
 		/// toward the head to the first dry ground. False when there is none.
 		/// </summary>
-		private static bool TakeOff(SceneScope scope, Vector2 head, float reach, out Vector2 source, out float surface)
+		private static bool TakeOff(SceneScope scope, Vector2 head, float reach, out Vector2 source, out float surface) =>
+			TakeOff(scope, head, reach, false, out source, out surface, out _);
+
+		/// <summary>
+		/// <see cref="TakeOff(SceneScope, Vector2, float, out Vector2, out float)"/>, a river's only where <paramref name="riverOnly"/> (a
+		/// great canal's weir), and the water point it was taken from (<paramref name="water"/>); its lattice 16 m past 1.2 km of reach
+		/// (2026-10-26, I2f-b: a bisse's or a canal's).
+		/// </summary>
+		private static bool TakeOff(SceneScope scope, Vector2 head, float reach, bool riverOnly, out Vector2 source, out float surface, out Vector2 water)
 		{
 			source = default;
 			surface = float.NaN;
+			water = default;
 			float headLevel = scope.Ground(head.x, head.y) - ChannelFreeboard - 0.12f;
 			float best = float.MaxValue;
-			const float step = 8f;
+			float step = reach > 1200f ? 16f : 8f;
 			int n = Mathf.CeilToInt(reach / step);
 			for (int j = -n; j <= n; j++)
 			{
@@ -570,7 +607,7 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					WaterKind kind = scope.Water.KindAt(p.x, p.y);
-					if (kind != WaterKind.River && kind != WaterKind.Lake)
+					if (kind != WaterKind.River && (riverOnly || kind != WaterKind.Lake))
 					{
 						continue;
 					}
@@ -588,6 +625,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return false;
 			}
+			water = source;
 			Vector2 dir = (head - source).normalized;
 			for (int k = 0; k < 40; k++)
 			{
@@ -606,7 +644,8 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			BiomeTemplate biome = layer.Biome;
 			int index = scope.DitchCount++;
-			return BuildChannel(scope, biome, layer.Style, run, false, 0f, 0f, MaxChannels + index, seed, null);
+			return BuildChannel(scope, biome, layer.Style, run, false, 0f, 0f, MaxChannels + index, seed, null, null, true,
+				layer.Style.Form == BiomeLinearForm.Roggia ? RoggiaPoundMetres(seed) : PoundMetres);
 		}
 
 		/// <summary>
@@ -615,7 +654,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// Returns the props laid.
 		/// </summary>
 		private static int BuildChannel(SceneScope scope, BiomeTemplate biome, BiomeLinearStyle style, List<Vector2> line, bool falling, float startLevel, float endLevel,
-			int channel, int seed, PointOfInterestRecord record)
+			int channel, int seed, PointOfInterestRecord record, List<ChannelStation> keep = null, bool headSluice = true, float poundMetres = PoundMetres)
 		{
 			float half = ChannelHalfWidth(style.Form);
 			float depth = BiomeLinearFeatures.HeightOf(style);
@@ -653,11 +692,12 @@ namespace FishMMO.Shared.WorldDesign
 				Vector2 side = Left(dir) * (half + BankMetres);
 				return Mathf.Min(scope.Ground(p.x + side.x, p.y + side.y), scope.Ground(p.x - side.x, p.y - side.y));
 			}
-			List<ChannelStation> stations = Pounds(line, scope.Ground, falling, startLevel, endLevel, Culvert, LowSide);
+			List<ChannelStation> stations = Pounds(line, scope.Ground, falling, startLevel, endLevel, Culvert, LowSide, poundMetres);
 			if (stations.Count < 2)
 			{
 				return 0;
 			}
+			keep?.AddRange(stations);
 			PointOfInterestSiteContext context = scope.Context(record);
 
 			// The trench and its banks, carved from the ground as it lies (restored before the next run reads it).
@@ -687,7 +727,7 @@ namespace FishMMO.Shared.WorldDesign
 			int pounds = stations[stations.Count - 1].Pound + 1, wet = 0;
 			for (int p = 0; p < pounds; p++)
 			{
-				SceneHydrology.Lake lake = PoundLake(ChannelLakeId(channel, p), stations, p, half);
+				SceneHydrology.Lake lake = PoundLake(ChannelLakeId(channel, p), stations, p, half, PoundCover(style.Form));
 				if (lake != null && PointOfInterestPaddies.WriteWater(context, lake))
 				{
 					wet++;
@@ -699,13 +739,13 @@ namespace FishMMO.Shared.WorldDesign
 
 			// The pieces: the head, a sluice at every step, the flumes, the crossings.
 			int laid = 0;
-			bool lined = style.Form == BiomeLinearForm.LinedChannel;
+			bool lined = BiomeLinearFeatures.IsLined(style.Form);
 			BiomeStructurePalette palette = BiomeTemplateArt.StructurePalette(biome);
 			for (int i = 0; i < stations.Count; i++)
 			{
 				ChannelStation st = stations[i];
 				Vector2 dir = stations[Mathf.Min(stations.Count - 1, i + 1)].At - stations[Mathf.Max(0, i - 1)].At;
-				bool head = i == 0 && falling;
+				bool head = i == 0 && falling && headSluice;
 				bool step = i > 0 && st.Part == ChannelPart.Cut && stations[i - 1].Part == ChannelPart.Cut && st.Pound != stations[i - 1].Pound;
 				if (head || step)
 				{
@@ -721,7 +761,12 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			laid += LayRuns(context, palette, style, stations, ChannelPart.Culvert, half);
-			laid += LayRuns(context, palette, style, stations, ChannelPart.Flume, half);
+			laid += LayRuns(context, palette, style, stations, ChannelPart.Flume, half, seed);
+			if (style.Form == BiomeLinearForm.Bisse && falling)
+			{
+				// Its water-hammer a few metres below the head, knocking while the water runs (2026-10-26, I2f-b).
+				laid += Hammer(context, palette, style, stations, seed);
+			}
 			if (falling)
 			{
 				scope.Notes?.Add($"Linear features: {(record != null ? record.Name + "'s " : string.Empty)}leat of {stations[stations.Count - 1].Along:0} m, {wet} pound(s) of water, {carved:N0} heightmap sample(s) carved, {laid} piece(s).");
@@ -730,7 +775,8 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>The culverts (one at each run's middle, its headwalls either side of the road) or the flumes (end to end on trestles) of a channel.</summary>
-		private static int LayRuns(PointOfInterestSiteContext context, BiomeStructurePalette palette, BiomeLinearStyle style, List<ChannelStation> stations, ChannelPart part, float half)
+		private static int LayRuns(PointOfInterestSiteContext context, BiomeStructurePalette palette, BiomeLinearStyle style, List<ChannelStation> stations, ChannelPart part, float half,
+			int channelSeed = 0)
 		{
 			int laid = 0;
 			for (int i = 0; i < stations.Count; i++)
@@ -759,13 +805,26 @@ namespace FishMMO.Shared.WorldDesign
 					var run = new List<Vector2> { a, b };
 					List<Station> modules = Stations(run, StructurePieces.FlumeModule);
 					float rim = level + StructurePieces.FlumeWater;
-					GameObject trough = StructureKit.Prefab("ChannelFlume", style.Form == BiomeLinearForm.LinedChannel ? 1 : 0);
+					GameObject trough = StructureKit.Prefab("ChannelFlume", BiomeLinearFeatures.IsLined(style.Form) ? 1 : 0);
 					GameObject bent = StructureKit.Prefab("BoardwalkBent", 0);
 					for (int k = 0; trough != null && k + 1 < modules.Count; k++)
 					{
 						Vector2 p0 = modules[k].At, p1 = modules[k + 1].At;
 						var mid = new Vector3(0.5f * (p0.x + p1.x), rim, 0.5f * (p0.y + p1.y));
 						var along = new Vector3(p1.x - p0.x, 0f, p1.y - p0.y);
+						// A bisse's flume hangs on brackets where a cliff stands over it (2026-10-26, I2f-b), its cliff side (−x) toward it.
+						if (style.Form == BiomeLinearForm.Bisse && BracketSide(context, new Vector2(mid.x, mid.z), new Vector2(along.x, along.z), rim, out float turn))
+						{
+							GameObject hung = StructureKit.Prefab("ChannelBracketFlume", (int)(BiomeLinearFeatures.Hash(channelSeed, k, 0x4246, 0) & 1u));
+							if (hung != null)
+							{
+								context.Palette = StructurePieces.LinearPalette(palette, style, "ChannelBracketFlume");
+								context.AddProp(hung, mid, Quaternion.LookRotation(along.normalized * turn, Vector3.up), new Vector3(1f, 1f, along.magnitude / StructurePieces.FlumeModule));
+								context.Palette = palette;
+								laid++;
+								continue;
+							}
+						}
 						context.AddProp(trough, mid, Quaternion.LookRotation(along.normalized, Vector3.up), new Vector3(1f, 1f, along.magnitude / StructurePieces.FlumeModule));
 						laid++;
 						if (bent != null)

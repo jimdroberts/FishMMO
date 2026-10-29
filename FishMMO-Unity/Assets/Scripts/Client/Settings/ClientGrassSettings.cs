@@ -10,10 +10,10 @@ namespace FishMMO.Client
 	/// <remarks>
 	/// <para><b>It replaces the scene's own detail distance on the GPU-driven path.</b> Unity's terrain
 	/// caps a detail distance at 250 m and draws every instance to it at full density, so scenes were
-	/// authored short (Cov Viaduct: 120 m). The GPU-driven renderer (<c>TerrainDetailInstancing</c>)
-	/// culls on the GPU and thins grass with distance (full density near, a dithered fraction toward the
-	/// edge), so it can draw much further for little cost. On the CPU fallback (WebGL2) the scene's
-	/// distance stays the ceiling: there every drawn instance is CPU work.</para>
+	/// authored short (Cov Viaduct: 120 m). The GPU renderers (the blade grass and the detail scatter, on
+	/// the terrains <c>TerrainDetailInstancing</c> takes) generate and cull on the GPU and thin with
+	/// distance (full density near, a dithered fraction toward the edge), so they draw much further for
+	/// little cost. There is no CPU path (2026-10-27).</para>
 	///
 	/// <para><b>A performance control.</b> Resident instances, chunk builds and memory grow with the
 	/// square of the distance; the thinning bounds what is drawn, not what is kept.</para>
@@ -33,8 +33,8 @@ namespace FishMMO.Client
 		/// <summary>Longest grass distance offered, in metres.</summary>
 		/// <remarks>
 		/// The blade grass and the GPU detail scatter hold nothing per blade, so their cost past a few hundred metres is the
-		/// far field's thin share. The CPU-built mesh detail chunks (ferns, shrubs) stop at
-		/// <c>TerrainDetailInstancing.MaxChunkDistance</c> whatever this is: their resident instances grow with its square.
+		/// far field's thin share. The scatter's mesh details (ferns, pebbles; not bushes, whose reach is their own) stop at
+		/// <c>TerrainDetailInstancing.MaxChunkDistance</c> whatever this is: the instances it generates grow with its square.
 		/// </remarks>
 		public const float MaximumDistance = 1000f;
 

@@ -40,11 +40,14 @@ namespace FishMMO.Shared.WorldDesign
 	/// <remarks>
 	/// <para>
 	/// <b>One order for the whole scene.</b> <see cref="Layers"/> is assigned to every tile's
-	/// <c>terrainLayers</c> as it stands, so channel <i>i</i> of every tile's alphamap means the
-	/// same ground, the texture-array slice <i>i</i> is that ground's art, and a seam between two
-	/// tiles never changes what a weight means. A per-tile subset would save a little memory on
-	/// tiles that miss a biome and cost a remapping in the shader, the scatter and every tool a
-	/// designer touches the terrain with afterwards.
+	/// <c>terrainLayers</c> as it stands while the cut paints, so channel <i>i</i> of every tile's
+	/// alphamap means the same ground to the painter, the scatter and the cliffs, and the
+	/// texture-array slice <i>i</i> is that ground's art. At the very end of the cut each tile keeps
+	/// only the layers it paints (TerrainTileLayerSync.Compact, 2026-10-27: Moron 2's tiles carried
+	/// 210 layers, 53 control maps, to paint at most 62), every weight unchanged; the scene's order
+	/// stays the numbering everything counts by, each tile records which scene layer its channels
+	/// hold (TerrainTileLayers), and the few readers that turn a channel into a slice rename it
+	/// (TerrainTileLayerMap). A repaint gives every tile the whole palette again first.
 	/// </para>
 	/// <para>
 	/// <b>Shared art is one layer.</b> Two biomes using the same terrain layer asset get one

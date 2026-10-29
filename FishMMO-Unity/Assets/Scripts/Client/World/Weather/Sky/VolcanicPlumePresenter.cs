@@ -92,7 +92,10 @@ namespace FishMMO.Client
 		private bool hasContext;
 		private Mesh mesh;
 		private Material fallbackMaterial;
-		private MaterialPropertyBlock block;
+		// One copy of the plume material for each population drawn this camera, each with its own numbers: a property block
+		// would take every one of these draws out of the SRP Batcher. drawSlot counts this camera's draws.
+		private readonly DrawMaterials materials = new DrawMaterials("Plume");
+		private int drawSlot;
 		/// <summary>The shared clock, wrapped, for the fountains, whose pace is their vent's and constant.</summary>
 		private float clock;
 		/// <summary>Seconds into each layer's window this frame, and which window it is (see <see cref="PaceWindowSeconds"/>).</summary>
@@ -140,7 +143,6 @@ namespace FishMMO.Client
 		private void Awake()
 		{
 			presentation = GetComponent<WeatherPresentation>();
-			block = new MaterialPropertyBlock();
 			WeatherClient.RegisterPresenter(this);
 			RenderPipelineManager.beginCameraRendering += OnBeginCamera;
 		}
@@ -157,6 +159,7 @@ namespace FishMMO.Client
 			{
 				Destroy(fallbackMaterial);
 			}
+			materials.Dispose();
 		}
 
 		public void Apply(in WeatherFrame frame, in WeatherContext ctx)
@@ -225,8 +228,36 @@ namespace FishMMO.Client
 			return fallbackMaterial;
 		}
 
+		// Nearest first, from the viewer. Sorted with these rather than lambdas capturing the viewer: a capturing lambda is a
+		// closure and a delegate of garbage for every camera, every frame (the closure is made on entry, before any early return).
+		private sealed class PlumesNearest : IComparer<VolcanicPlume.Plume>
+		{
+			public Vector2 From;
+			public int Compare(VolcanicPlume.Plume a, VolcanicPlume.Plume b) => (a.Vent - From).sqrMagnitude.CompareTo((b.Vent - From).sqrMagnitude);
+		}
+
+		private sealed class CurtainsNearest : IComparer<LavaCurtains.Curtain>
+		{
+			public Vector2 From;
+			public int Compare(LavaCurtains.Curtain a, LavaCurtains.Curtain b) => (a.Middle - From).sqrMagnitude.CompareTo((b.Middle - From).sqrMagnitude);
+		}
+
+		private readonly PlumesNearest plumesByDistance = new PlumesNearest();
+		private readonly CurtainsNearest curtainsByDistance = new CurtainsNearest();
+		/// <summary><see cref="CurtainSchedule"/> as a delegate, made once (a method group converts to a new delegate on every call).</summary>
+		private System.Func<int, FishMMO.Shared.Biomes.BiomeFountainEpisodes> curtainScheduleOf;
+
+		/// <summary>This hook's own time in the profiler (render-pipeline callbacks otherwise show only as
+		/// RenderPipeline.BeginCameraRendering's self time). In a class of its own so the marker, an engine object, is made
+		/// when the hook first runs, not when the type is first touched (tests outside Unity use these types' pure parts).</summary>
+		private static class HookProfiling
+		{
+			public static readonly Unity.Profiling.ProfilerMarker Marker = new Unity.Profiling.ProfilerMarker("VolcanicPlumePresenter.BeginCamera");
+		}
+
 		private void OnBeginCamera(ScriptableRenderContext renderContext, Camera camera)
 		{
+			using var hookMarkerScope = HookProfiling.Marker.Auto();
 			if (!hasContext || camera == null || context.Timeline == null || context.Timeline.SceneMode != WeatherSceneMode.Own)
 			{
 				return;
@@ -250,6 +281,7 @@ namespace FishMMO.Client
 			var viewer2 = new Vector2(viewer.x, viewer.z);
 			float reach = camera.farClipPlane * 1.5f + 20000f;
 			ventSky = VentSky.Of(WorldMotion.Seconds, GlowSky.Current);
+			drawSlot = 0;
 			// Curtains of fire along the scene's fissures (2026-10-25, I2r): lava, so drawn with air or without.
 			DrawCurtains(camera, material, profile, viewer2, reach);
 
@@ -260,7 +292,8 @@ namespace FishMMO.Client
 				// player. Leaning on the viewer's wind, as the weather at the viewer does, it leaned
 				// differently for each.
 				VolcanicVents.PlumesInTheirOwnWind(context.Timeline, context.Settings, (uint)context.Tick, sample.Planet, viewer2, plumes);
-				plumes.Sort((a, b) => (a.Vent - viewer2).sqrMagnitude.CompareTo((b.Vent - viewer2).sqrMagnitude));
+				plumesByDistance.From = viewer2;
+				plumes.Sort(plumesByDistance);
 				int drawn = 0;
 				for (int i = 0; i < plumes.Count && drawn < MaxDrawn; i++)
 				{
@@ -418,12 +451,14 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			LavaCurtains.Of(map.VentLines, CurtainSchedule, clock, curtains);
+			curtainScheduleOf ??= CurtainSchedule;
+			LavaCurtains.Of(map.VentLines, curtainScheduleOf, clock, curtains);
 			if (curtains.Count == 0)
 			{
 				return;
 			}
-			curtains.Sort((a, b) => (a.Middle - viewer).sqrMagnitude.CompareTo((b.Middle - viewer).sqrMagnitude));
+			curtainsByDistance.From = viewer;
+			curtains.Sort(curtainsByDistance);
 			WorldBody body = context.Timeline.BodyOverride != null ? context.Timeline.BodyOverride : SceneTime.BodyOf(context.Settings);
 			float gravity = body != null ? SurfacePhysics.Gravity(body) : 9.81f;
 			gravity = gravity > 0.01f ? gravity : 9.81f;
@@ -522,9 +557,14 @@ namespace FishMMO.Client
 			return float.NaN;
 		}
 
+		/// <summary>Reused for <see cref="Terrain.GetActiveTerrains"/>: <c>Terrain.activeTerrains</c> builds a new array on
+		/// every read, and this runs every frame.</summary>
+		private static readonly System.Collections.Generic.List<Terrain> activeTerrainsScratch = new System.Collections.Generic.List<Terrain>();
+
 		private static float GroundAt(Scene scene, Vector2 p)
 		{
-			foreach (Terrain t in Terrain.activeTerrains)
+			Terrain.GetActiveTerrains(activeTerrainsScratch);
+			foreach (Terrain t in activeTerrainsScratch)
 			{
 				if (t == null || t.terrainData == null || (scene.IsValid() && t.gameObject.scene != scene))
 				{
@@ -545,24 +585,21 @@ namespace FishMMO.Client
 		private void Draw(Material material, WeatherRenderProfile profile, Camera camera, Bounds bounds, Vector3 vent, int population, float share, float opacity,
 			Vector4 rise, Vector4 lean, Vector4 drift, Vector4 ballistic, Color colour, Vector4 heldPeriods)
 		{
-			block.Clear();
-			if (profile != null && profile.PrecipitationAtlas != null)
-			{
-				block.SetTexture(MainTexId, profile.PrecipitationAtlas);
-			}
-			block.SetVector(VentId, new Vector4(vent.x, vent.y, vent.z, clock));
-			block.SetVector(FormId, new Vector4(population, share, opacity, AshRow));
-			block.SetVector(RiseId, rise);
-			block.SetVector(LeanId, lean);
-			block.SetVector(DriftId, drift);
-			block.SetVector(BallisticId, ballistic);
-			block.SetColor(ColorId, colour);
-			block.SetVector(PaceId, new Vector4(intoA, intoB, (float)PaceWindowSeconds, 0f));
-			block.SetVector(HeldId, heldPeriods);
-			var rp = new RenderParams(material)
+			Material copy = materials.For(material, drawSlot++);
+			// The material's own texture when the profile has no atlas, as an emptied block left it.
+			copy.SetTexture(MainTexId, profile != null && profile.PrecipitationAtlas != null ? profile.PrecipitationAtlas : material.GetTexture(MainTexId));
+			copy.SetVector(VentId, new Vector4(vent.x, vent.y, vent.z, clock));
+			copy.SetVector(FormId, new Vector4(population, share, opacity, AshRow));
+			copy.SetVector(RiseId, rise);
+			copy.SetVector(LeanId, lean);
+			copy.SetVector(DriftId, drift);
+			copy.SetVector(BallisticId, ballistic);
+			copy.SetColor(ColorId, colour);
+			copy.SetVector(PaceId, new Vector4(intoA, intoB, (float)PaceWindowSeconds, 0f));
+			copy.SetVector(HeldId, heldPeriods);
+			var rp = new RenderParams(copy)
 			{
 				camera = camera,
-				matProps = block,
 				worldBounds = bounds,
 				shadowCastingMode = ShadowCastingMode.Off,
 				receiveShadows = false,

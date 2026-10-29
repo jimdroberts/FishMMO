@@ -599,20 +599,27 @@ namespace FishMMO.UnitTests.WorldDesign
 				bool basin = entry.Biome == "Geyser Basin";
 				// I2q-b (2026-10-25, decisions 84/95): the Sulphur Flats' and Volcanic Temple's own site rates; the flats' pools are hot melt.
 				bool rated = entry.Biome == "Sulphur Flats" || entry.Biome == "Volcanic Temple";
-				Assert.That(entry.GeothermalShares.HasValue, Is.EqualTo(basin || rated), entry.Biome);
-				Assert.That(entry.WaterLook().Hot, Is.EqualTo(basin || entry.Biome == "Sulphur Flats"), entry.Biome);
+				// Rocky Terrain (round G12, 2026-10-26): warm springs and fumaroles, no geysers. Salt Flat (round G7, 2026-10-26): the warm
+				// brine springs and Abbe's steaming chimneys, no geysers.
+				Assert.That(entry.GeothermalShares.HasValue, Is.EqualTo(basin || rated || entry.Biome == "Rocky Terrain" || entry.Biome == "Salt Flat"), entry.Biome);
+				// An authored round may give its own water the hot flag (Salt Flat's brine, round G7): only the unauthored keep today's.
+				if (!BiomeAuthoredRounds.Contains(entry.Biome) || basin)
+				{
+					Assert.That(entry.WaterLook().Hot, Is.EqualTo(basin || entry.Biome == "Sulphur Flats"), entry.Biome);
+				}
 				if (!basin)
 				{
 					Assert.That(entry.Emission.HasValue && entry.Emission.Value.Substance == "Steam", Is.False, entry.Biome);
 				}
 			}
+			Assert.That(BiomeArtSpec.For("Salt Flat").GeothermalShares.Value.Signature(), Is.EqualTo(new BiomeGeothermalShares(0f, 0.6f, 0.4f, 0f).Signature()));
 			BiomeArtSpec.Entry geyser = BiomeArtSpec.For("Geyser Basin");
 			Assert.That(geyser.Emission, Is.EqualTo(("Steam", 0.5f)));
 			Assert.That(geyser.GeothermalShares.Value.Signature(), Is.EqualTo(Basin.Signature()));
 			// Its colours stay today's: only the flag is new until its round tints it.
+			// (Round G12, 2026-10-26: the basin's round has since given it the sapphire hot-pool colours.)
 			BiomeWaterLook look = geyser.WaterLook();
-			look.Hot = false;
-			Assert.That(look.Signature(), Is.EqualTo(BiomeWaterLooks.Today.Signature()));
+			Assert.That(look.Hot, Is.True);
 			// The weather content generator ships Steam (a vapour) and the authoring makes it when missing.
 			string content = Code(WorldFolder + "/WeatherContentGenerator.cs");
 			StringAssert.Contains("With(Vapour(\"Steam\")", content);

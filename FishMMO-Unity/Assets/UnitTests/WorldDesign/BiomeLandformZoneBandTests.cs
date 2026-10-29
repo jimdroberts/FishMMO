@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using FishMMO.Shared.Biomes;
 using FishMMO.Shared.WorldDesign;
 using NUnit.Framework;
@@ -49,7 +50,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(zones.Weight(off, 1, 0f, 0f, 0f, 0f), Is.EqualTo(1f));
 			// A default rule's and layer's band is off; the spec writes none unless a round names one.
 			Assert.That(new PrefabSpawnRule().landformBand.On, Is.False);
-			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
+			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries.Where(e => !BiomeAuthoredRounds.Contains(e.Biome)))
 			{
 				foreach (BiomeArtSpec.Layer layer in entry.Details)
 				{

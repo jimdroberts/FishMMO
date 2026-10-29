@@ -46,7 +46,6 @@ namespace FishMMO.Client
 			"DetailScatterTerrain.Builder.Step",
 			"CliffRockInstancing.BeginContext",
 			"TerrainDetailInstancing.BeginContext",
-			"TerrainDetailField.Build",
 			"TerrainTreeInstancing.BeginContext",
 			"AmbientLifeSystem.BeginContext",
 			"GroundColourMap.BeginContext",

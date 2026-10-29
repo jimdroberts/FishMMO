@@ -632,10 +632,13 @@ namespace FishMMO.Shared.WorldDesign
 			laid += LayWoodEdges(scope, biomes);
 			laid += LaySiteBounds(scope);
 			laid += LayFolds(scope);
+			// The later drafts' places (2026-10-26, I2f-b): camps' windbreaks and a frontier across the scene.
+			laid += LayWindbreaks(scope);
+			laid += LayFrontiers(scope, biomes);
 			laid += LayChannels(scope);
 			if (laid > 0)
 			{
-				notes?.Add($"Linear features: {laid:N0} piece(s), tree(s) and garland(s) laid along the lanes, woods' edges, small sites' bounds, folds and leats.");
+				notes?.Add($"Linear features: {laid:N0} piece(s), tree(s) and garland(s) laid along the lanes, woods' edges, small sites' bounds, folds, windbreaks, frontiers and leats.");
 			}
 			return laid;
 		}
@@ -661,6 +664,38 @@ namespace FishMMO.Shared.WorldDesign
 			public List<ScenePath> Ways;
 			/// <summary>The lane ditches laid so far (their pounds' lake ids follow the leats').</summary>
 			public int DitchCount;
+			/// <summary>The way the scene's prevailing wind blows, on the plan (zero on an airless world; 2026-10-26, I2f-b windbreaks).</summary>
+			public Vector2 WindTo;
+			/// <summary>How many of each capped form the scene has laid (BiomeLinearFeatures.SceneCapOf; 2026-10-26, I2f-b).</summary>
+			public readonly Dictionary<BiomeLinearForm, int> Capped = new Dictionary<BiomeLinearForm, int>();
+			/// <summary>The settlements a great canal's laterals already water (their own channel styles are not laid again).</summary>
+			public readonly HashSet<int> Watered = new HashSet<int>();
+			/// <summary>The channels laid so far (each one's lake ids its own).</summary>
+			public int ChannelCount;
+
+			/// <summary>True when a capped form has room left here (nothing counted); always true for a form with no cap.</summary>
+			public bool CapLeft(BiomeLinearForm form)
+			{
+				int cap = BiomeLinearFeatures.SceneCapOf(form);
+				return cap <= 0 || !Capped.TryGetValue(form, out int n) || n < cap;
+			}
+
+			/// <summary>True when a capped form may still be laid here (and counts it); always true for a form with no cap.</summary>
+			public bool TakeCap(BiomeLinearForm form)
+			{
+				int cap = BiomeLinearFeatures.SceneCapOf(form);
+				if (cap <= 0)
+				{
+					return true;
+				}
+				Capped.TryGetValue(form, out int n);
+				if (n >= cap)
+				{
+					return false;
+				}
+				Capped[form] = n + 1;
+				return true;
+			}
 
 			/// <summary>A context for laying at a point (the POI root as its site: the field carve's record goes under it, as the fields' do).</summary>
 			public PointOfInterestSiteContext Context(PointOfInterestRecord record = null) => new PointOfInterestSiteContext
@@ -769,7 +804,10 @@ namespace FishMMO.Shared.WorldDesign
 					verge.Add(centre[i] + (unit[i] - centre[i]) * sign * (half[i] + BiomeLinearFeatures.LaneMargin(style.Kind)));
 				}
 				var layer = new Layer(scope.Context(), biome, style, seed) { OwnWay = way };
-				foreach (List<Vector2> run in Runs(verge, p => style.Reach <= 0f || scope.FromSettlement(p) <= style.Reach, MinRunMetres))
+				float minSlope = BiomeLinearFeatures.MinSlopeOf(style.Form);
+				bool Laneable(Vector2 p) => (style.Reach <= 0f || scope.FromSettlement(p) <= style.Reach)
+					&& (minSlope <= 0f || scope.Slope != null && scope.Slope(p.x, p.y) >= minSlope);
+				foreach (List<Vector2> run in Runs(verge, Laneable, MinRunMetres))
 				{
 					if (style.Kind == BiomeLinearKind.Channel)
 					{
@@ -996,6 +1034,11 @@ namespace FishMMO.Shared.WorldDesign
 						}
 						layer.Report();
 						laid += layer.Laid;
+						// Its pen kept as turf (2026-10-27, PointOfInterestEnclosureClearance): the scatter's trees, bushes and rocks off it.
+						if (layer.Laid > 0)
+						{
+							scope.Claims?.Enclose(centre, bearing, FoldSize, turf: true);
+						}
 						break;
 					}
 					break;
@@ -1032,7 +1075,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// Lays one style along lines for one place (a field, a lane's stretch, a wood's edge, a site's bounds, a fold): modules, the
 		/// gate, a hedge's leaves and standards, a row's trees and garlands, counting what it laid for the notes.
 		/// </summary>
-		private sealed class Layer
+		private sealed partial class Layer
 		{
 			private readonly PointOfInterestSiteContext context;
 			private readonly BiomeTemplate biome;
@@ -1169,6 +1212,10 @@ namespace FishMMO.Shared.WorldDesign
 					case BiomeLinearKind.Channel:
 						// Channels are carried by their own machinery (LayChannels, LayDitch).
 						break;
+					case BiomeLinearKind.Markers:
+						// Set one by one at their spacing (2026-10-26, I2f-b, PointOfInterestLinearFeatures.Forms.cs).
+						Markers(line);
+						break;
 					default:
 						Modules(line, gate);
 						break;
@@ -1193,6 +1240,15 @@ namespace FishMMO.Shared.WorldDesign
 				float gateWidth = BiomeLinearFeatures.GateOf(style);
 				int gateModule = (gate || GateAtStart) && gateWidth > 0f ? (GateAtStart ? 0 : GateModule(modules)) : -1;
 				bool[] kept = Kept(modules, k => ModuleBlocked(stations[k].At, stations[k + 1].At), gateModule, seed ^ lines * 0x3141, style.Breaks + (Broken ? 0.35f : 0f));
+				if (style.Form == BiomeLinearForm.BrickBarrier)
+				{
+					// A frontier's barrier is broken through every 40–200 m besides (2026-10-26, I2f-b).
+					bool[] breached = Breaches(modules, piece.ModuleLength, seed ^ lines * 0x2718);
+					for (int k = 0; k < modules; k++)
+					{
+						kept[k] &= !breached[k];
+					}
+				}
 				float yScale = BiomeLinearFeatures.HeightOf(style) / StructurePieces.LinearBuiltHeight(id);
 				context.Palette = StructurePieces.LinearPalette(BiomeTemplateArt.StructurePalette(biome), style, id);
 				for (int k = 0; k < modules; k++)
@@ -1207,7 +1263,10 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						continue;
 					}
-					int v = style.Form == BiomeLinearForm.Rail ? (BiomeLinearFeatures.Unit(BiomeLinearFeatures.Hash(seed, k, lines, 7)) < 0.5f ? 0 : 1) : variant;
+					int v = style.Form == BiomeLinearForm.Rail ? (BiomeLinearFeatures.Unit(BiomeLinearFeatures.Hash(seed, k, lines, 7)) < 0.5f ? 0 : 1)
+						// A frontier's barrier stands or has slumped module by module (2026-10-26, I2f-b).
+						: style.Form == BiomeLinearForm.BrickBarrier ? (BiomeLinearFeatures.Unit(BiomeLinearFeatures.Hash(seed, k, lines, 7)) < 0.6f ? 1 : 0)
+						: variant;
 					GameObject prefab = StructureKit.Prefab(id, v);
 					if (prefab == null)
 					{
@@ -1234,7 +1293,7 @@ namespace FishMMO.Shared.WorldDesign
 					return true;
 				}
 				float run = (b - a).magnitude;
-				return run > 1e-3f && Mathf.Abs(Ground(b) - Ground(a)) / run > MaxGrade;
+				return run > 1e-3f && Mathf.Abs(Ground(b) - Ground(a)) / run > BiomeLinearFeatures.MaxGradeOf(style.Form, MaxGrade);
 			}
 
 			/// <summary>
@@ -1289,8 +1348,8 @@ namespace FishMMO.Shared.WorldDesign
 					context.Notes?.Add($"Linear features: {Label(biome)} {BiomeLinearFeatures.Id(style)} names no bushes: its hedges are bare stems.");
 					return;
 				}
-				float half = style.Form == BiomeLinearForm.Wild ? 1.3f : style.Form == BiomeLinearForm.Clipped ? 0.7f : 0.85f;
-				float core = style.Form == BiomeLinearForm.Wild ? 150f : style.Form == BiomeLinearForm.Clipped ? 235f : 200f;
+				float half = style.Form == BiomeLinearForm.Wild ? 1.3f : style.Form == BiomeLinearForm.Clipped ? 0.7f : style.Form == BiomeLinearForm.Dead ? 1f : 0.85f;
+				float core = style.Form == BiomeLinearForm.Wild ? 150f : style.Form == BiomeLinearForm.Clipped ? 235f : style.Form == BiomeLinearForm.Dead ? 120f : 200f;
 				if (context.Terrains == null)
 				{
 					return;
@@ -1372,6 +1431,11 @@ namespace FishMMO.Shared.WorldDesign
 						if (style.Form == BiomeLinearForm.Wild)
 						{
 							want *= 0.6f + 0.8f * BiomeLinearFeatures.Unit(BiomeLinearFeatures.Hash(seed, Mathf.FloorToInt(p.x), Mathf.FloorToInt(p.y), 0x57));
+						}
+						else if (style.Form == BiomeLinearForm.Dead)
+						{
+							// The dead thorn stands in ragged clumps, bare between.
+							want *= Mathf.Clamp01(1.4f * BiomeLinearFeatures.Unit(BiomeLinearFeatures.Hash(seed, Mathf.FloorToInt(p.x * 0.7f), Mathf.FloorToInt(p.y * 0.7f), 0x44)) - 0.2f);
 						}
 						int value = Mathf.Clamp(Mathf.RoundToInt(want * unit), 0, maxValue);
 						int grown = TerrainDetailBiomes.SiteCover(bases[s] != null ? bases[s][j, i] : 0, maps[s][j, i], bases[s] == null, value);

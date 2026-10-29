@@ -924,6 +924,8 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				placed.Add((centre, yaw, size));
 				context.FieldClaims?.Add(ClaimSite(record.Id), centre, yaw, size);
+				// Its yard kept as a yard (2026-10-27, PointOfInterestEnclosureClearance): the scatter's trees, bushes and rocks off it, its grass kept.
+				context.FieldClaims?.Enclose(centre, yaw, size, turf: true);
 			}
 		}
 

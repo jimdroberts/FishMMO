@@ -2,7 +2,8 @@
 #define FISHMMO_SEA_LIFE_INCLUDED
 
 // FishMMO/Sea Life: the background creatures of the sea (SeaLifeSystem, FishMMO.Client/World/SeaLife).
-// Drawn only with Graphics.DrawMeshInstanced, one material per kind; where each animal is and which way
+// Drawn only by SeaLifeSystem's Graphics.RenderMeshPrimitives, one draw and one material per kind, every animal read from the
+// instance buffer below; where each animal is and which way
 // it heads is worked out on the CPU from the shared world clock, so every player sees the same school in
 // the same place. What the shader adds is the swimming itself — a body wave, a wing beat, a bell's pulse —
 // from the phase the CPU hands each instance.
@@ -15,7 +16,8 @@
 //   TEXCOORD1   x which appendage (0 body; turtle flippers 1-4; jelly tentacles 1; crab legs 1-8, claws 9),
 //               y how far out along it (0 where it joins .. 1 its tip)
 //
-// Per instance (instanced properties):
+// Per instance (_LifeInstances[_LifeInstanceBase + SV_InstanceID], LifeInstanceRecord on the C# side): the matrix's rows 0..2,
+// then
 //   _Anim       x the stroke's phase in cycles (0..1, from the clock on the CPU), y the stroke's strength
 //               (1 cruising, more when hurrying), z the turn (-1 .. 1: the body bent into the turn), w spare
 //   _Tint       rgb times the mesh colour (a school's members differ a little; reef fish take their colour
@@ -40,13 +42,39 @@ CBUFFER_START(UnityPerMaterial)
     half _ZWrite;
     half4 _EmitColour;   // its own light at its brightest (linear, HDR); a 1 when it has one (2026-10-25)
     half4 _EmitPattern;  // x 0 even, 1 a wave along the body; y crests at once; z how sharp; w the share lit between crests
+    float _LifeInstanceBase; // where this kind's run starts in _LifeInstances (set per camera by SeaLifeSystem)
 CBUFFER_END
 
-UNITY_INSTANCING_BUFFER_START(SeaLifeProps)
-    UNITY_DEFINE_INSTANCED_PROP(float4, _Anim)
-    UNITY_DEFINE_INSTANCED_PROP(float4, _Tint)
-    UNITY_DEFINE_INSTANCED_PROP(float4, _Surface)
-UNITY_INSTANCING_BUFFER_END(SeaLifeProps)
+// Every drawn animal of every kind, each kind a run (SeaLifeSystem, LifeInstanceRecord: 112 bytes). The draw is a plain procedural
+// one (RenderMeshPrimitives, no indirect args), so SV_InstanceID counts from 0 within it on every API.
+struct SeaLifeInstance
+{
+    float4 row0;     // objectToWorld row 0: xyz the 3x3 row, w translation x
+    float4 row1;
+    float4 row2;
+    float4 anim;     // _Anim
+    float4 tint;     // _Tint
+    float4 surface;  // _Surface
+    float4 spare;    // unused (zero)
+};
+StructuredBuffer<SeaLifeInstance> _LifeInstances;
+
+// The instance's object to world, for a point: the matrix's three top rows (its fourth is 0 0 0 1).
+float3 SeaLifeObjectToWorld(SeaLifeInstance instance, float3 p)
+{
+    return float3(dot(instance.row0.xyz, p) + instance.row0.w, dot(instance.row1.xyz, p) + instance.row1.w,
+        dot(instance.row2.xyz, p) + instance.row2.w);
+}
+
+// ... and for a normal: as TransformObjectToWorldNormal, the inverse transpose. The matrices are T.R.S with positive scale and no
+// shear (SeaLifePlacement), so the inverse's row i is column i over its squared length (FishIndirectInverseAffine).
+float3 SeaLifeObjectToWorldNormal(SeaLifeInstance instance, float3 n)
+{
+    float3 c0 = float3(instance.row0.x, instance.row1.x, instance.row2.x);
+    float3 c1 = float3(instance.row0.y, instance.row1.y, instance.row2.y);
+    float3 c2 = float3(instance.row0.z, instance.row1.z, instance.row2.z);
+    return SafeNormalize(n.x * c0 / dot(c0, c0) + n.y * c1 / dot(c1, c1) + n.z * c2 / dot(c2, c2));
+}
 
 struct SeaLifeAttributes
 {
@@ -55,7 +83,7 @@ struct SeaLifeAttributes
     float4 color : COLOR;
     float2 body : TEXCOORD0;
     float2 part : TEXCOORD1;
-    UNITY_VERTEX_INPUT_INSTANCE_ID
+    uint instanceID : SV_InstanceID;
 };
 
 // The animal's stroke, in its own (unit-length) space: where the vertex is now, and its normal.
@@ -212,19 +240,20 @@ float SeaLifeGlow(float along, float4 surface)
 
 SeaLifeVertex SeaLifeBuild(SeaLifeAttributes input)
 {
-    float4 anim = UNITY_ACCESS_INSTANCED_PROP(SeaLifeProps, _Anim);
-    float4 tint = UNITY_ACCESS_INSTANCED_PROP(SeaLifeProps, _Tint);
-    float4 surface = UNITY_ACCESS_INSTANCED_PROP(SeaLifeProps, _Surface);
+    SeaLifeInstance instance = _LifeInstances[(uint)_LifeInstanceBase + input.instanceID];
+    float4 anim = instance.anim;
+    float4 tint = instance.tint;
+    float4 surface = instance.surface;
     float3 p = input.positionOS.xyz;
     float3 n = input.normalOS;
     SeaLifeSwim(p, n, input.body, input.part, anim);
     SeaLifeVertex o;
-    o.positionWS = TransformObjectToWorld(p);
-    o.normalWS = TransformObjectToWorldNormal(n);
+    o.positionWS = SeaLifeObjectToWorld(instance, p);
+    o.normalWS = SeaLifeObjectToWorldNormal(instance, n);
     if (surface.x > 0.0)
     {
         // Afloat: lifted and carried on the sea's own surface at its middle, at the ocean mesh's footprint there.
-        float3 origin = UNITY_MATRIX_M._m03_m13_m23;
+        float3 origin = float3(instance.row0.w, instance.row1.w, instance.row2.w);
         float distance = length(origin.xz - _WorldSpaceCameraPos.xz);
         float footprint = _FishWaterMeshSpacing.x > 0.0 ? _FishWaterMeshSpacing.x * max(distance, _FishWaterMeshSpacing.y) : 0.0;
         float3 up;
@@ -246,14 +275,11 @@ struct SeaLifeVaryings
     float4 color : TEXCOORD2;
     float2 extra : TEXCOORD3;   // x visible share, y fog
     float glow : TEXCOORD4;     // its own light here now (SeaLifeGlow)
-    UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
 SeaLifeVaryings SeaLifeVertexMain(SeaLifeAttributes input)
 {
-    UNITY_SETUP_INSTANCE_ID(input);
     SeaLifeVaryings o = (SeaLifeVaryings)0;
-    UNITY_TRANSFER_INSTANCE_ID(input, o);
     SeaLifeVertex v = SeaLifeBuild(input);
     o.positionWS = v.positionWS;
     o.normalWS = v.normalWS;
@@ -270,7 +296,6 @@ SeaLifeVaryings SeaLifeVertexMain(SeaLifeAttributes input)
 
 half4 SeaLifeForwardFragment(SeaLifeVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SEMANTIC) : SV_Target
 {
-    UNITY_SETUP_INSTANCE_ID(input);
     bool translucent = _Translucent > 0.5;
     if (!translucent)
     {
@@ -322,7 +347,6 @@ half4 SeaLifeForwardFragment(SeaLifeVaryings input, FRONT_FACE_TYPE face : FRONT
 
 half4 SeaLifeDepthNormalsFragment(SeaLifeVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SEMANTIC) : SV_Target
 {
-    UNITY_SETUP_INSTANCE_ID(input);
     FishDitherClip(input.positionCS.xy, input.extra.x);
     float3 n = normalize(input.normalWS) * IS_FRONT_VFACE(face, 1.0, -1.0);
 #if defined(_GBUFFER_NORMALS_OCT)
@@ -342,7 +366,6 @@ struct SeaLifeDepthVaryings
 {
     float4 positionCS : SV_POSITION;
     float visible : TEXCOORD0;
-    UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
 #if defined(FISH_SEA_LIFE_PASS_SHADOW)
@@ -352,9 +375,7 @@ float3 _LightPosition;
 
 SeaLifeDepthVaryings SeaLifeDepthVertex(SeaLifeAttributes input)
 {
-    UNITY_SETUP_INSTANCE_ID(input);
     SeaLifeDepthVaryings o = (SeaLifeDepthVaryings)0;
-    UNITY_TRANSFER_INSTANCE_ID(input, o);
     SeaLifeVertex v = SeaLifeBuild(input);
 #if defined(FISH_SEA_LIFE_PASS_SHADOW)
     #if defined(_CASTING_PUNCTUAL_LIGHT_SHADOW)
@@ -374,7 +395,6 @@ SeaLifeDepthVaryings SeaLifeDepthVertex(SeaLifeAttributes input)
 
 half4 SeaLifeDepthFragment(SeaLifeDepthVaryings input) : SV_Target
 {
-    UNITY_SETUP_INSTANCE_ID(input);
     FishDitherClip(input.positionCS.xy, input.visible);
     return half4(input.positionCS.z, 0.0, 0.0, 0.0);
 }

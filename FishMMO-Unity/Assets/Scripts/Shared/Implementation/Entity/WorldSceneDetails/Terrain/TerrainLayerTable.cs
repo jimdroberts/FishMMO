@@ -26,6 +26,10 @@ namespace FishMMO.Shared
 	/// <item><see cref="RowBackdrop"/>: not a layer's but a backdrop channel's: the scene layer channel c of the backdrop's
 	/// control maps holds (<see cref="SceneBackdrop.ControlLayers"/>), c itself when the backdrop names none.</item>
 	/// <item><see cref="RowGlow"/>: the layer's glow (2026-10-25, phase I2r; <see cref="Biomes.BiomeGroundGlow.Pack"/>), zero for none.</item>
+	/// <item><see cref="RowClock"/>: how the layer follows the shared clock (2026-10-26, phase GROUND-BANDS; <see cref="Biomes.BiomeGroundClock.Pack"/>):
+	/// x kind, y from, z to, w falloff; zero for none.</item>
+	/// <item><see cref="RowClockShare"/>: x the share a clocked layer keeps outside its window, y the layer that takes the rest (−1 none), w 1 in
+	/// every column when any layer of the scene follows a clock (the shader's one test before it reads more).</item>
 	/// </list>
 	/// Columns past the scene's layers hold a neutral layer, no flora and no paths, as the arrays' unused slots did.
 	/// </para>
@@ -36,7 +40,7 @@ namespace FishMMO.Shared
 		public const int Width = TerrainArrayLayerParams.MaximumLayers;
 
 		/// <summary>Rows.</summary>
-		public const int Rows = 9;
+		public const int Rows = 11;
 
 		public const int RowST = 0;
 		public const int RowTint = 1;
@@ -47,6 +51,8 @@ namespace FishMMO.Shared
 		public const int RowPaths = 6;
 		public const int RowBackdrop = 7;
 		public const int RowGlow = 8;
+		public const int RowClock = 9;
+		public const int RowClockShare = 10;
 
 		/// <summary>The table's texels, row after row (texel (layer, row) at row × <see cref="Width"/> + layer).</summary>
 		/// <param name="layerCount">The scene's layers; columns past it are neutral.</param>
@@ -54,10 +60,20 @@ namespace FishMMO.Shared
 		/// <param name="earth">Per layer its biome's path ground slice (−1 none); null or short: −1 past it.</param>
 		/// <param name="backdropChannels">The scene layer of each backdrop channel; null or short: the channel's own number.</param>
 		/// <param name="glow">Per layer its packed glow (<see cref="TerrainArraySet.LayerGlow"/>); null or short: none past it.</param>
+		/// <param name="clock">Per layer its packed clock (<see cref="TerrainArraySet.LayerClock"/>); null or short: none past it.</param>
+		/// <param name="clockShare">Per layer its clock's floor and yield layer (<see cref="TerrainArraySet.LayerClockShare"/>); null or short: none.</param>
 		public static Vector4[] Pack(int layerCount, Vector4[] st, Vector4[] tint, Vector4[] maskOffset, Vector4[] maskScale, Vector4[] surface,
-			Vector4[] flora, float[] earth, float[] road, float[] stone, int[] backdropChannels = null, Vector4[] glow = null)
+			Vector4[] flora, float[] earth, float[] road, float[] stone, int[] backdropChannels = null, Vector4[] glow = null, Vector4[] clock = null,
+			Vector4[] clockShare = null)
 		{
 			var texels = new Vector4[Width * Rows];
+			int counted = Mathf.Clamp(layerCount, 0, Width);
+			// Any clocked layer on the scene: every column says so, so the shader asks one texel before it reads the rest.
+			bool anyClock = false;
+			for (int l = 0; clock != null && l < counted && l < clock.Length; l++)
+			{
+				anyClock |= Mathf.RoundToInt(clock[l].x) != 0;
+			}
 			TerrainArrayLayerParams.Allocate(1, out Vector4[] nst, out Vector4[] ntint, out Vector4[] noffset, out Vector4[] nscale, out Vector4[] nsurface);
 			int count = Mathf.Clamp(layerCount, 0, Width);
 			for (int l = 0; l < Width; l++)
@@ -72,6 +88,10 @@ namespace FishMMO.Shared
 				texels[RowPaths * Width + l] = new Vector4(Slice(earth, l), Slice(road, l), Slice(stone, l), -1f);
 				texels[RowBackdrop * Width + l] = new Vector4(backdropChannels != null && l < backdropChannels.Length ? backdropChannels[l] : l, 0f, 0f, 0f);
 				texels[RowGlow * Width + l] = used && glow != null && l < glow.Length ? glow[l] : Vector4.zero;
+				Vector4 c = used && anyClock && l < clock.Length ? clock[l] : Vector4.zero;
+				texels[RowClock * Width + l] = c;
+				Vector4 share = Mathf.RoundToInt(c.x) != 0 && clockShare != null && l < clockShare.Length ? clockShare[l] : new Vector4(0f, -1f, 0f, 0f);
+				texels[RowClockShare * Width + l] = new Vector4(share.x, share.y, 0f, anyClock ? 1f : 0f);
 			}
 			return texels;
 		}
@@ -87,7 +107,7 @@ namespace FishMMO.Shared
 				return Pack(0, null, null, null, null, null, null, earth, road, stone, backdropChannels);
 			}
 			return Pack(set.LayerCount, set.LayerST, set.LayerTint, set.LayerMaskOffset, set.LayerMaskScale, set.LayerSurface, set.LayerFlora(), earth, road, stone, backdropChannels,
-				set.LayerGlow);
+				set.LayerGlow, set.LayerClock, set.LayerClockShare);
 		}
 
 		/// <summary>A table texture, empty: RGBA float, point, clamped, no mips, never saved.</summary>

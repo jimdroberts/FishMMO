@@ -378,6 +378,7 @@ namespace FishMMO.UnitTests
 				}
 
 				var fresh = new float[blocks * blocks];
+				var masks = new byte[blocks * blocks];
 				double freshTotal = 0.0;
 				bool any = false;
 				var queue = new TerrainBuildQueue();
@@ -387,12 +388,24 @@ namespace FishMMO.UnitTests
 					int[,] cells = Strip(layer, row, rows, res);
 					queue.Enqueue(() =>
 					{
-						bool found = false;
-						freshTotal += DetailScatterTerrain.Builder.AddStrip(cells, rows, rowBase, res, factor, blocks, coverageMode, 3.5f, cellArea, density, fresh, ref found);
-						any |= found;
+						// The whole terrain as one window (block row 0): the same sums the dense build made.
+						double total = DetailScatterTerrain.Builder.AddStrip(cells, rows, rowBase, res, factor, blocks, 0, coverageMode, 3.5f, cellArea, density, fresh, masks);
+						freshTotal += total;
+						any |= total > 0.0;
 					});
 				}
 				queue.Drain();
+				// Every painted cell's bit is set in its block's mask, and only those (DetailScatterMath.CellBit, 1 m cells).
+				for (int z = 0; z < res; z++)
+				{
+					for (int x = 0; x < res; x++)
+					{
+						uint bit = DetailScatterMath.CellBit(x % factor, z % factor, factor);
+						bool set = (masks[z / factor * blocks + x / factor] & bit) != 0u;
+						bool painted = layer[z, x] > 0 && TerrainDetailMath.ExpectedInCell(layer[z, x], coverageMode, 3.5f, cellArea, density) > 0f;
+						LogAssert.AreEqual(painted, set, $"coverage {coverageMode}: cell ({x}, {z})'s mask bit");
+					}
+				}
 				LogAssert.AreEqual(oldAny, any, $"coverage {coverageMode}: whether anything counted");
 				LogAssert.AreEqual(BitConverter.DoubleToInt64Bits(oldTotal), BitConverter.DoubleToInt64Bits(freshTotal), $"coverage {coverageMode}: the prototype's total {oldTotal:R} then, {freshTotal:R} now");
 				SameBits(old, fresh, $"coverage {coverageMode}: blocks");

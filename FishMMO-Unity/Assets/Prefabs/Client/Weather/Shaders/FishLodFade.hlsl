@@ -30,14 +30,16 @@
 // URP's path untouched. No keyword: the value only exists in the INSTANCING_ON variants
 // (multi_compile_instancing, already declared by every pass). In non-instanced variants — the ones
 // the SRP Batcher uses — nothing is declared at all, so UnityPerMaterial and the cbuffer layout are
-// byte-for-byte what they were, and the clip compiles away. DOTS instancing reads 0.
+// byte-for-byte what they were, and the clip compiles away. DOTS instancing reads 0 (but the indirect shaders' DOTS
+// variants, below).
 //
 // GPU-driven draws (the indirect shaders' PROCEDURAL_INSTANCING_ON variants, RenderMeshIndirect):
 // the same value with the same sign convention, but read from the culling output instead —
 // FishVisible.lodFade, which FishIndirectSetup (FishIndirectInstancing.hlsl) copies into
 // FishIndirectLodFade. Only the SOURCE differs; the predicate and the pattern below are shared, so
 // an indirect level and an instanced level would still partition each other exactly. Procedural
-// variants of a shader that does not include FishIndirectInstancing.hlsl (first) read 0.
+// variants of a shader that does not include FishIndirectInstancing.hlsl (first) read 0. Their DOTS variants (the same draws
+// through a BatchRendererGroup) read it from the visible index's top byte, quantised to the pattern's 16 steps exactly.
 //
 // Include after Core.hlsl (and after FishIndirectInstancing.hlsl when a shader has both); call
 // FishLodFadeClip in a fragment, after UNITY_SETUP_INSTANCE_ID.
@@ -46,6 +48,11 @@
 
 #if defined(FISH_INDIRECT_INSTANCED)
     // A procedural (indirect) variant: FishIndirectSetup has the fade from the culling output.
+    #define FISH_LOD_FADE_INSTANCED 1
+#elif defined(FISH_INDIRECT_DOTS)
+    // An indirect shader's DOTS variant (a BatchRendererGroup draw): the same fade, packed as a signed byte in the visible
+    // index (FishIndirectInstancing.hlsl). Only the indirect shaders: a DOTS draw of an ordinary shader (the GPU Resident
+    // Drawer's LODGroups) cross-fades through URP's LOD_FADE_CROSSFADE and must not be dithered twice.
     #define FISH_LOD_FADE_INSTANCED 1
 #elif defined(UNITY_INSTANCING_ENABLED)
     #define FISH_LOD_FADE_INSTANCED 1
@@ -60,6 +67,10 @@ float FishLodFadeValue()
 {
 #if defined(FISH_INDIRECT_INSTANCED)
     return FishIndirectLodFade;
+#elif defined(FISH_INDIRECT_DOTS)
+    // The culling wrote the byte at the middle of the fade's pattern step (FishTerrainInstancing.compute FishPackFade),
+    // so FishLodFadeKeeps keeps exactly the pixels the float would.
+    return (float)GetDOTSInstanceCrossfadeSnorm8() * (1.0 / 127.0);
 #elif defined(FISH_LOD_FADE_INSTANCED)
     return UNITY_ACCESS_INSTANCED_PROP(FishLodFadeProps, _FishLodFade);
 #else

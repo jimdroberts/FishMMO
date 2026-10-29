@@ -57,21 +57,22 @@ Shader "FishMMO/Weather/Volcanic Plume"
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _MainTex_ST;
-            CBUFFER_END
 
-            // Per draw, from a MaterialPropertyBlock.
-            float4 _PlumeVent;      // xyz the vent on the ground, w the shared clock, wrapped (s): the fountain's, whose pace is constant
-            float4 _PlumeForm;      // x population (0 column, 1 umbrella, 2 fall, 3 fountain), y share of the quads drawn, z opacity, w atlas row
-            float4 _PlumeRise;      // x column top m (fountain: puff size m), y umbrella height m, z umbrella half-width at the column m, w seconds to climb
-            float4 _PlumeLean;      // xy the column top's offset from the vent XZ, zw the downwind unit XZ (zero in calm)
-            float4 _PlumeDrift;     // x distance drawn downwind m, y seconds to drift it, z spread per metre downwind, w fallout length m
-            float4 _PlumeBallistic; // fountain: x launch speed m/s, y gravity m/s2, z widest launch angle rad, w narrowest share; fall: x seconds to fall
-            float4 _PlumeColor;     // rgb what it is made of, a its own glow near the vent
-            // The column, umbrella and fall's pace (VolcanicPlumePresenter.PaceWindowSeconds): two layers of puffs, on windows of the
-            // shared clock half a window apart, each running on the time into its own window at the period it held from that window's
-            // start, and fading in and out over it. The rise.w, drift.y and ballistic.x periods are the live ones, and time nothing.
-            float4 _PlumePace;      // x seconds into layer A's window, y into layer B's, z the window (s)
-            float4 _PlumeHeld;      // x the period layer A holds, y layer B (s): the drawn population's climb, drift or fall
+                // Per draw, set on the presenter's own copy of the material for each draw (VolcanicPlumePresenter,
+                // GeothermalSteamPresenter): in here, not from a property block, so every draw stays in the SRP Batcher.
+                float4 _PlumeVent;      // xyz the vent on the ground, w the shared clock, wrapped (s): the fountain's, whose pace is constant
+                float4 _PlumeForm;      // x population (0 column, 1 umbrella, 2 fall, 3 fountain), y share of the quads drawn, z opacity, w atlas row
+                float4 _PlumeRise;      // x column top m (fountain: puff size m), y umbrella height m, z umbrella half-width at the column m, w seconds to climb
+                float4 _PlumeLean;      // xy the column top's offset from the vent XZ, zw the downwind unit XZ (zero in calm)
+                float4 _PlumeDrift;     // x distance drawn downwind m, y seconds to drift it, z spread per metre downwind, w fallout length m
+                float4 _PlumeBallistic; // fountain: x launch speed m/s, y gravity m/s2, z widest launch angle rad, w narrowest share; fall: x seconds to fall
+                float4 _PlumeColor;     // rgb what it is made of, a its own glow near the vent
+                // The column, umbrella and fall's pace (VolcanicPlumePresenter.PaceWindowSeconds): two layers of puffs, on windows of the
+                // shared clock half a window apart, each running on the time into its own window at the period it held from that window's
+                // start, and fading in and out over it. The rise.w, drift.y and ballistic.x periods are the live ones, and time nothing.
+                float4 _PlumePace;      // x seconds into layer A's window, y into layer B's, z the window (s)
+                float4 _PlumeHeld;      // x the period layer A holds, y layer B (s): the drawn population's climb, drift or fall
+            CBUFFER_END
             // Steam (population 4): rise x the visible length along the plume (m), y the source's radius (m), z how fast it widens
             // per metre along; lean xy where the visible end stands from the vent, XZ m, z how high (m), w how strong the steam is (0..1).
             // A geyser (population 5): ballistic x the full launch speed (m/s), y gravity, z the jet's half-angle (rad), w the launch

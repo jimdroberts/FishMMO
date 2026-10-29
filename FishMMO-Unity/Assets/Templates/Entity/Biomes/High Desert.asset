@@ -470,6 +470,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -559,6 +576,12 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
       specFingerprint: a4ed9dbf3b0b1cf0
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -648,6 +671,12 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
       specFingerprint: f2caa2dd0b8d5fd0
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -737,6 +766,12 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
       specFingerprint: cc5b675cc9ba52fc
       detailNoiseSpread: 1.5
       detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
@@ -826,6 +861,12 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
       specFingerprint: 5e82d3d145bd9ca6
       detailNoiseSpread: 1.5
       detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
@@ -915,6 +956,12 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
       specFingerprint: 1071a57165d39d4d
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -1004,6 +1051,12 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
       specFingerprint: 9773ecbba89e2824
       detailNoiseSpread: 1.5
       detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
@@ -1093,6 +1146,12 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
       specFingerprint: 4a65bfe6a649cf1c
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 1, g: 0.97, b: 0.9, a: 1}
@@ -1182,6 +1241,12 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
       specFingerprint: fb7e90438f4e0279
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -1247,6 +1312,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1336,6 +1418,12 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
       specFingerprint: f7256b55d4b0b057
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -1400,6 +1488,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1491,6 +1596,12 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
       specFingerprint: 8bb112d348c37d00
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -1587,6 +1698,12 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
       specFingerprint: 7adc83a03e1c3bb4
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -1683,6 +1800,12 @@ MonoBehaviour:
         PatternMetres: 0
         PatternShare: 0
         SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
       specFingerprint: 3ad065751dddc9a4
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -1748,6 +1871,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1813,6 +1953,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1878,6 +2035,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -1943,6 +2117,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -2017,6 +2208,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -2082,6 +2290,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -2147,6 +2372,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -2212,6 +2454,23 @@ MonoBehaviour:
       Strength: 0
       CellMetres: 0
       PeriodSeconds: 0
+    facingBand:
+      On: 0
+      Toward: 0
+      HalfWidth: 0
+      Falloff: 0
+      MinSlope: 0
+    fallLineStretch: 0
+    siteBand:
+      On: 0
+      Kinds: 
+      Metres: 0
+    clock:
+      Kind: 0
+      From: 0
+      To: 0
+      Falloff: 0
+      Floor: 0
     ways:
       path: {fileID: 0}
       road: {fileID: 0}
@@ -2622,7 +2881,7 @@ MonoBehaviour:
     NeedsBreathableAir: 1
     NeedsLiquidWater: 0
   - Kind: 4
-    Weight: 0.3
+    Weight: 1
     NeedsBreathableAir: 1
     NeedsLiquidWater: 0
   - Kind: 5
@@ -2830,7 +3089,7 @@ MonoBehaviour:
     NeedsBreathableAir: 1
     NeedsLiquidWater: 0
   - Kind: 82
-    Weight: 0.3
+    Weight: 1
     NeedsBreathableAir: 1
     NeedsLiquidWater: 0
   - Kind: 83
@@ -2909,6 +3168,150 @@ MonoBehaviour:
     Weight: 0.3
     NeedsBreathableAir: 1
     NeedsLiquidWater: 0
+  - Kind: 154
+    Weight: 0.5
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
+  - Kind: 155
+    Weight: 0.6
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 157
+    Weight: 0.7
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
+  - Kind: 159
+    Weight: 0.6
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 160
+    Weight: 0.8
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 161
+    Weight: 0.8
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 162
+    Weight: 1.4
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 163
+    Weight: 1
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
+  - Kind: 164
+    Weight: 0.6
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 166
+    Weight: 0.8
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
+  - Kind: 167
+    Weight: 1
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
+  - Kind: 170
+    Weight: 0.6
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
+  - Kind: 171
+    Weight: 0.5
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
+  - Kind: 172
+    Weight: 0.5
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
+  - Kind: 174
+    Weight: 0.4
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 175
+    Weight: 0.3
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 176
+    Weight: 0.6
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 177
+    Weight: 1.2
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 179
+    Weight: 0.8
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 180
+    Weight: 0.3
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 181
+    Weight: 1
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 182
+    Weight: 0.5
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
+  - Kind: 183
+    Weight: 0.5
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 201
+    Weight: 0.4
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 211
+    Weight: 0.6
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
+  - Kind: 216
+    Weight: 1.2
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 217
+    Weight: 0.8
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 218
+    Weight: 0.6
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 219
+    Weight: 0.6
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 220
+    Weight: 0.8
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 221
+    Weight: 1
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 222
+    Weight: 0.5
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
+  - Kind: 223
+    Weight: 1.2
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
+  - Kind: 224
+    Weight: 1.2
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 225
+    Weight: 1
+    NeedsBreathableAir: 0
+    NeedsLiquidWater: 0
+  - Kind: 263
+    Weight: 0.4
+    NeedsBreathableAir: 1
+    NeedsLiquidWater: 0
   siteVariants:
   - Kind: 77
     Variant: Timber
@@ -2979,6 +3382,48 @@ MonoBehaviour:
   - Kind: 96
     Variant: Door
     Weight: 1.3
+  - Kind: 4
+    Variant: Wizard
+    Weight: 0.5
+  - Kind: 154
+    Variant: Hoard
+    Weight: 1.2
+  - Kind: 162
+    Variant: Last Camp
+    Weight: 1.4
+  - Kind: 166
+    Variant: Toll House
+    Weight: 1.2
+  - Kind: 167
+    Variant: Stone Stead
+    Weight: 1.4
+  - Kind: 170
+    Variant: Cinders
+    Weight: 1.3
+  - Kind: 171
+    Variant: Horde
+    Weight: 1.2
+  - Kind: 177
+    Variant: Sunken Skull
+    Weight: 1.4
+  - Kind: 183
+    Variant: Dry Athenaeum
+    Weight: 1.4
+  - Kind: 211
+    Variant: Black Tents
+    Weight: 1.4
+  - Kind: 216
+    Variant: City of the Dead
+    Weight: 1.3
+  - Kind: 217
+    Variant: Smooth-sided
+    Weight: 1.3
+  - Kind: 217
+    Variant: Stepped
+    Weight: 1.2
+  - Kind: 223
+    Variant: Well Camp
+    Weight: 1.3
   siteStyles: []
   weathering:
     Finish: 0
@@ -3043,6 +3488,10 @@ MonoBehaviour:
     Spacing: 0
   boardwalks: 0
   boardwalkStyle: 0
+  crossingStyle: 0
+  straightRoads:
+    Form: 0
+    Ruts: 0
   linearFeatures: []
   structurePalette:
     Surfaces:
@@ -3983,52 +4432,6 @@ MonoBehaviour:
     Fingerprint: -1|0
   - Field: landforms
     Fingerprint: <entries>
-  - Field: siteVariants/Capital/stone
-    Fingerprint: "Capital/Stone\xD71.5"
-  - Field: siteVariants/Capital/timber
-    Fingerprint: "Capital/Timber\xD70.05"
-  - Field: siteVariants/City/stone
-    Fingerprint: "City/Stone\xD71.5"
-  - Field: siteVariants/City/timber
-    Fingerprint: "City/Timber\xD70.05"
-  - Field: siteVariants/DungeonEntrance/door
-    Fingerprint: "DungeonEntrance/Door\xD71.3"
-  - Field: siteVariants/Hermitage/stone
-    Fingerprint: "Hermitage/Stone\xD72"
-  - Field: siteVariants/HuntingLodge/lodge
-    Fingerprint: "HuntingLodge/Lodge\xD70.3"
-  - Field: siteVariants/Keep/palisade
-    Fingerprint: "Keep/Palisade\xD70.1"
-  - Field: siteVariants/Port/stone
-    Fingerprint: "Port/Stone\xD72"
-  - Field: siteVariants/Port/timber
-    Fingerprint: "Port/Timber\xD70.2"
-  - Field: siteVariants/Ruins/burned
-    Fingerprint: "Ruins/Burned\xD70.3"
-  - Field: siteVariants/Ruins/excavation
-    Fingerprint: "Ruins/Excavation\xD71.3"
-  - Field: siteVariants/Ruins/temple
-    Fingerprint: "Ruins/Temple\xD71.5"
-  - Field: siteVariants/Tower/observatory
-    Fingerprint: "Tower/Observatory\xD71.6"
-  - Field: siteVariants/Tower/stone
-    Fingerprint: "Tower/Stone\xD72"
-  - Field: siteVariants/Town/palisaded
-    Fingerprint: "Town/Palisaded\xD70.2"
-  - Field: siteVariants/Town/stone
-    Fingerprint: "Town/Stone\xD72"
-  - Field: siteVariants/Town/timber
-    Fingerprint: "Town/Timber\xD70.1"
-  - Field: siteVariants/TradingPost/caravanserai
-    Fingerprint: "TradingPost/Caravanserai\xD72"
-  - Field: siteVariants/Village/stone
-    Fingerprint: "Village/Stone\xD72"
-  - Field: siteVariants/Village/timber
-    Fingerprint: "Village/Timber\xD70.1"
-  - Field: siteVariants/Village/yurts
-    Fingerprint: "Village/Yurts\xD70.6"
-  - Field: siteVariants/Waystation/stone inn
-    Fingerprint: "Waystation/Stone Inn\xD72"
   - Field: caveInteriors/Cave
     Fingerprint: Cave=Cave
   - Field: caveInteriors/Grotto
@@ -4137,8 +4540,16 @@ MonoBehaviour:
     Fingerprint: 10000
   - Field: underwaterSiteDepth
     Fingerprint: 0,0
+  - Field: boardwalkStyle
+    Fingerprint: Planked
+  - Field: LooseGround
+    Fingerprint: Silicate Sand
+  - Field: TerrainProcess
+    Fingerprint: Arid
   - Field: siteKinds/AbandonedFarm
     Fingerprint: "AbandonedFarm\xD70.3"
+  - Field: siteKinds/AmbushSite
+    Fingerprint: "AmbushSite\xD70.8"
   - Field: siteKinds/AncientRoad
     Fingerprint: "AncientRoad\xD71"
   - Field: siteKinds/BanditCamp
@@ -4149,60 +4560,98 @@ MonoBehaviour:
     Fingerprint: "Battlefield\xD71"
   - Field: siteKinds/Bay
     Fingerprint: "Bay\xD71"
+  - Field: siteKinds/BeastBoneyard
+    Fingerprint: "BeastBoneyard\xD71.2"
   - Field: siteKinds/BossLair
     Fingerprint: "BossLair\xD71"
+  - Field: siteKinds/BoundaryStone
+    Fingerprint: "BoundaryStone\xD70.6"
   - Field: siteKinds/Bridge
     Fingerprint: "Bridge\xD71\xD7air"
+  - Field: siteKinds/BuriedHoard
+    Fingerprint: "BuriedHoard\xD70.8"
+  - Field: siteKinds/BurnedVillage
+    Fingerprint: "BurnedVillage\xD70.6\xD7air"
   - Field: siteKinds/Butte
     Fingerprint: "Butte\xD71"
   - Field: siteKinds/Camp
     Fingerprint: "Camp\xD71\xD7air"
   - Field: siteKinds/Capital
     Fingerprint: "Capital\xD70.3\xD7air"
+  - Field: siteKinds/CaravanHalt
+    Fingerprint: "CaravanHalt\xD71.2\xD7air"
   - Field: siteKinds/Castle
     Fingerprint: "Castle\xD70.3\xD7air"
   - Field: siteKinds/Cave
     Fingerprint: "Cave\xD71"
   - Field: siteKinds/City
     Fingerprint: "City\xD70.3\xD7air"
+  - Field: siteKinds/CliffPalace
+    Fingerprint: "CliffPalace\xD71"
+  - Field: siteKinds/Crossroads
+    Fingerprint: "Crossroads\xD71\xD7air"
   - Field: siteKinds/Crypt
     Fingerprint: "Crypt\xD71"
   - Field: siteKinds/CrystalFormation
     Fingerprint: "CrystalFormation\xD71"
+  - Field: siteKinds/CultistHideout
+    Fingerprint: "CultistHideout\xD70.5\xD7air"
   - Field: siteKinds/Delta
     Fingerprint: "Delta\xD71"
+  - Field: siteKinds/DjinnPrison
+    Fingerprint: "DjinnPrison\xD71"
   - Field: siteKinds/Dockyard
     Fingerprint: "Dockyard\xD70.3\xD7air"
+  - Field: siteKinds/DragonLair
+    Fingerprint: "DragonLair\xD70.5\xD7air"
   - Field: siteKinds/DungeonEntrance
     Fingerprint: "DungeonEntrance\xD71"
+  - Field: siteKinds/ElderMonolith
+    Fingerprint: "ElderMonolith\xD70.8"
   - Field: siteKinds/FallenStar
     Fingerprint: "FallenStar\xD71"
+  - Field: siteKinds/FireTemple
+    Fingerprint: "FireTemple\xD70.4\xD7air"
   - Field: siteKinds/FishingCamp
     Fingerprint: "FishingCamp\xD71\xD7air"
   - Field: siteKinds/Fortress
     Fingerprint: "Fortress\xD70.3\xD7air"
+  - Field: siteKinds/GoblinWarren
+    Fingerprint: "GoblinWarren\xD70.7\xD7air"
+  - Field: siteKinds/GolemGraveyard
+    Fingerprint: "GolemGraveyard\xD71"
   - Field: siteKinds/Gorge
     Fingerprint: "Gorge\xD71"
   - Field: siteKinds/Graveyard
     Fingerprint: "Graveyard\xD71"
   - Field: siteKinds/Grotto
     Fingerprint: "Grotto\xD71"
+  - Field: siteKinds/Hamlet
+    Fingerprint: "Hamlet\xD71\xD7air"
+  - Field: siteKinds/HangingTree
+    Fingerprint: "HangingTree\xD70.6"
   - Field: siteKinds/Headland
     Fingerprint: "Headland\xD71"
   - Field: siteKinds/HerbGrove
     Fingerprint: "HerbGrove\xD71\xD7air"
   - Field: siteKinds/Hermitage
     Fingerprint: "Hermitage\xD71\xD7air"
+  - Field: siteKinds/IdolVault
+    Fingerprint: "IdolVault\xD70.4"
   - Field: siteKinds/Island
     Fingerprint: "Island\xD71"
   - Field: siteKinds/Keep
-    Fingerprint: "Keep\xD70.3\xD7air"
+    Fingerprint: "Keep\xD71\xD7air"
+  - Field: siteKinds/KoboldDelving
+    Fingerprint: "KoboldDelving\xD70.5\xD7air"
   - Field: siteKinds/Lake
     Fingerprint: "Lake\xD71"
   - Field: siteKinds/LeyNexus
     Fingerprint: "LeyNexus\xD71"
   - Field: siteKinds/Lighthouse
     Fingerprint: "Lighthouse\xD71\xD7air"
+  - Field: siteKinds/LostLibrary
+    Fingerprint: "LostLibrary\xD70.5"
   - Field: siteKinds/Mesa
     Fingerprint: "Mesa\xD71"
   - Field: siteKinds/Mine
@@ -4215,8 +4664,12 @@ MonoBehaviour:
     Fingerprint: "Monument\xD71"
   - Field: siteKinds/NaturalArch
     Fingerprint: "NaturalArch\xD71.5"
+  - Field: siteKinds/Necropolis
+    Fingerprint: "Necropolis\xD71.2"
   - Field: siteKinds/Nest
     Fingerprint: "Nest\xD71\xD7air"
+  - Field: siteKinds/NomadCamp
+    Fingerprint: "NomadCamp\xD70.6\xD7air"
   - Field: siteKinds/Oasis
     Fingerprint: "Oasis\xD71\xD7air"
   - Field: siteKinds/Obelisk
@@ -4231,12 +4684,18 @@ MonoBehaviour:
     Fingerprint: "Pass\xD71"
   - Field: siteKinds/Peak
     Fingerprint: "Peak\xD71"
+  - Field: siteKinds/PetrifiedBattle
+    Fingerprint: "PetrifiedBattle\xD70.6"
   - Field: siteKinds/PirateCove
     Fingerprint: "PirateCove\xD71\xD7air"
+  - Field: siteKinds/PlanarRift
+    Fingerprint: "PlanarRift\xD70.3"
   - Field: siteKinds/Port
     Fingerprint: "Port\xD70.3\xD7air"
   - Field: siteKinds/Portal
     Fingerprint: "Portal\xD71"
+  - Field: siteKinds/Pyramid
+    Fingerprint: "Pyramid\xD70.8"
   - Field: siteKinds/Quarry
     Fingerprint: "Quarry\xD71\xD7air"
   - Field: siteKinds/Rapids
@@ -4247,16 +4706,26 @@ MonoBehaviour:
     Fingerprint: "River\xD71"
   - Field: siteKinds/RiverMouth
     Fingerprint: "RiverMouth\xD71"
+  - Field: siteKinds/RockCutFacade
+    Fingerprint: "RockCutFacade\xD70.6"
   - Field: siteKinds/RuinedTower
     Fingerprint: "RuinedTower\xD71"
   - Field: siteKinds/Ruins
     Fingerprint: "Ruins\xD71"
+  - Field: siteKinds/SandBuriedTemple
+    Fingerprint: "SandBuriedTemple\xD70.8"
+  - Field: siteKinds/SandwormPit
+    Fingerprint: "SandwormPit\xD70.5\xD7air"
   - Field: siteKinds/SeaCave
     Fingerprint: "SeaCave\xD71"
   - Field: siteKinds/Shrine
     Fingerprint: "Shrine\xD71\xD7air"
   - Field: siteKinds/SmugglersCove
     Fingerprint: "SmugglersCove\xD71\xD7air"
+  - Field: siteKinds/SpellScar
+    Fingerprint: "SpellScar\xD70.4"
+  - Field: siteKinds/Sphinx
+    Fingerprint: "Sphinx\xD70.6"
   - Field: siteKinds/Spring
     Fingerprint: "Spring\xD71"
   - Field: siteKinds/Statue
@@ -4269,21 +4738,105 @@ MonoBehaviour:
     Fingerprint: "SunkenShip\xD71"
   - Field: siteKinds/Temple
     Fingerprint: "Temple\xD71\xD7air"
+  - Field: siteKinds/TitansBones
+    Fingerprint: "TitansBones\xD71.2"
+  - Field: siteKinds/TollGate
+    Fingerprint: "TollGate\xD70.8\xD7air"
   - Field: siteKinds/Tower
-    Fingerprint: "Tower\xD70.3\xD7air"
+    Fingerprint: "Tower\xD71\xD7air"
   - Field: siteKinds/Town
     Fingerprint: "Town\xD70.3\xD7air"
   - Field: siteKinds/TradingPost
     Fingerprint: "TradingPost\xD70.3\xD7air"
+  - Field: siteKinds/TrollBridge
+    Fingerprint: "TrollBridge\xD70.6"
   - Field: siteKinds/Village
     Fingerprint: "Village\xD70.3\xD7air"
+  - Field: siteKinds/WarbandCamp
+    Fingerprint: "WarbandCamp\xD70.5\xD7air"
   - Field: siteKinds/Waterfall
     Fingerprint: "Waterfall\xD71"
+  - Field: siteKinds/WaygateRing
+    Fingerprint: "WaygateRing\xD70.3"
   - Field: siteKinds/Waystation
     Fingerprint: "Waystation\xD70.3\xD7air"
   - Field: siteKinds/Windmill
     Fingerprint: "Windmill\xD70.3\xD7air"
   - Field: siteKinds/Wreck
     Fingerprint: "Wreck\xD71"
-  - Field: boardwalkStyle
-    Fingerprint: Planked
+  - Field: siteKinds/WreckedCaravan
+    Fingerprint: "WreckedCaravan\xD71.4"
+  - Field: siteVariants/BurnedVillage/cinders
+    Fingerprint: "BurnedVillage/Cinders\xD71.3"
+  - Field: siteVariants/Capital/stone
+    Fingerprint: "Capital/Stone\xD71.5"
+  - Field: siteVariants/Capital/timber
+    Fingerprint: "Capital/Timber\xD70.05"
+  - Field: siteVariants/CaravanHalt/well camp
+    Fingerprint: "CaravanHalt/Well Camp\xD71.3"
+  - Field: siteVariants/City/stone
+    Fingerprint: "City/Stone\xD71.5"
+  - Field: siteVariants/City/timber
+    Fingerprint: "City/Timber\xD70.05"
+  - Field: siteVariants/DragonLair/hoard
+    Fingerprint: "DragonLair/Hoard\xD71.2"
+  - Field: siteVariants/DungeonEntrance/door
+    Fingerprint: "DungeonEntrance/Door\xD71.3"
+  - Field: siteVariants/Hamlet/stone stead
+    Fingerprint: "Hamlet/Stone Stead\xD71.4"
+  - Field: siteVariants/Hermitage/stone
+    Fingerprint: "Hermitage/Stone\xD72"
+  - Field: siteVariants/HuntingLodge/lodge
+    Fingerprint: "HuntingLodge/Lodge\xD70.3"
+  - Field: siteVariants/Keep/palisade
+    Fingerprint: "Keep/Palisade\xD70.1"
+  - Field: siteVariants/LostLibrary/dry athenaeum
+    Fingerprint: "LostLibrary/Dry Athenaeum\xD71.4"
+  - Field: siteVariants/Necropolis/city of the dead
+    Fingerprint: "Necropolis/City of the Dead\xD71.3"
+  - Field: siteVariants/NomadCamp/black tents
+    Fingerprint: "NomadCamp/Black Tents\xD71.4"
+  - Field: siteVariants/Port/stone
+    Fingerprint: "Port/Stone\xD72"
+  - Field: siteVariants/Port/timber
+    Fingerprint: "Port/Timber\xD70.2"
+  - Field: siteVariants/Pyramid/smooth-sided
+    Fingerprint: "Pyramid/Smooth-sided\xD71.3"
+  - Field: siteVariants/Pyramid/stepped
+    Fingerprint: "Pyramid/Stepped\xD71.2"
+  - Field: siteVariants/Ruins/burned
+    Fingerprint: "Ruins/Burned\xD70.3"
+  - Field: siteVariants/Ruins/excavation
+    Fingerprint: "Ruins/Excavation\xD71.3"
+  - Field: siteVariants/Ruins/temple
+    Fingerprint: "Ruins/Temple\xD71.5"
+  - Field: siteVariants/TitansBones/sunken skull
+    Fingerprint: "TitansBones/Sunken Skull\xD71.4"
+  - Field: siteVariants/TollGate/toll house
+    Fingerprint: "TollGate/Toll House\xD71.2"
+  - Field: siteVariants/Tower/observatory
+    Fingerprint: "Tower/Observatory\xD71.6"
+  - Field: siteVariants/Tower/stone
+    Fingerprint: "Tower/Stone\xD72"
+  - Field: siteVariants/Tower/wizard
+    Fingerprint: "Tower/Wizard\xD70.5"
+  - Field: siteVariants/Town/palisaded
+    Fingerprint: "Town/Palisaded\xD70.2"
+  - Field: siteVariants/Town/stone
+    Fingerprint: "Town/Stone\xD72"
+  - Field: siteVariants/Town/timber
+    Fingerprint: "Town/Timber\xD70.1"
+  - Field: siteVariants/TradingPost/caravanserai
+    Fingerprint: "TradingPost/Caravanserai\xD72"
+  - Field: siteVariants/Village/stone
+    Fingerprint: "Village/Stone\xD72"
+  - Field: siteVariants/Village/timber
+    Fingerprint: "Village/Timber\xD70.1"
+  - Field: siteVariants/Village/yurts
+    Fingerprint: "Village/Yurts\xD70.6"
+  - Field: siteVariants/WarbandCamp/horde
+    Fingerprint: "WarbandCamp/Horde\xD71.2"
+  - Field: siteVariants/Waystation/stone inn
+    Fingerprint: "Waystation/Stone Inn\xD72"
+  - Field: siteVariants/WreckedCaravan/last camp
+    Fingerprint: "WreckedCaravan/Last Camp\xD71.4"

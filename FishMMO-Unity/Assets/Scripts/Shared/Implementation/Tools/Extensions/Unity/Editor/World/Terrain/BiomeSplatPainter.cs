@@ -104,6 +104,19 @@ namespace FishMMO.Shared.WorldDesign
 		/// (<see cref="TerrainTextureLayer.useLavaBand"/>) measures heights from. NaN for a scene with no lava: every lava band passes.
 		/// </summary>
 		public float LavaLevel = float.NaN;
+
+		/// <summary>
+		/// The scene's compass (2026-10-26, phase GROUND-BANDS; TerrainScatter.CompassFor, the scatter modes' own): which way the equator,
+		/// the east and the prevailing wind lie, what a detail layer's facing band (<see cref="TerrainTextureLayer.facingBand"/>) measures
+		/// against. Default (all zero): the plain axes, east +x and the equator −z, and no wind (a wind facing band passes).
+		/// </summary>
+		public BiomeScatterCompass Compass;
+
+		/// <summary>
+		/// The scene's planned points of interest (2026-10-26, phase GROUND-BANDS; TerrainScatter.SitesOf), what a detail layer's site band
+		/// (<see cref="TerrainTextureLayer.siteBand"/>) paints round. Null: none, so a site-banded layer paints nowhere.
+		/// </summary>
+		public IReadOnlyList<BiomeScatterSite> Sites;
 	}
 
 	/// <summary>What the splat painter did.</summary>
@@ -168,6 +181,8 @@ namespace FishMMO.Shared.WorldDesign
 			object gate = new object();
 			// No climate-banded layer, no climate read: the paint is what it was before the bands existed.
 			bool climatic = options.ClimateAt != null && palette.NeedsClimate;
+			// No facing band or fall-line stretch, no normals read (2026-10-26, GROUND-BANDS): the paint is what it was before.
+			bool downhills = Weigher.NeedsDownhill(palette);
 
 			foreach (Terrain terrain in tiles)
 			{
@@ -192,6 +207,8 @@ namespace FishMMO.Shared.WorldDesign
 				// The terrain answers on the main thread only: every texel's ground height and steepness first.
 				var groundY = new float[resolution * resolution];
 				var steepness = new float[resolution * resolution];
+				// And, only for a palette that asks (a facing band, a fall-line stretch), the way each texel's ground falls.
+				Vector2[] fall = downhills ? new Vector2[resolution * resolution] : null;
 				for (int z = 0; z < resolution; z++)
 				{
 					float v = (z + 0.5f) / resolution;
@@ -201,6 +218,12 @@ namespace FishMMO.Shared.WorldDesign
 						// GetInterpolatedHeight and GetSteepness take (x, z) normalised; height in metres.
 						groundY[z * resolution + x] = origin.y + data.GetInterpolatedHeight(u, v);
 						steepness[z * resolution + x] = data.GetSteepness(u, v);
+						if (fall != null)
+						{
+							// The normal leans the way the ground falls: its level part is the fall line, its length the slope's sine.
+							Vector3 n = data.GetInterpolatedNormal(u, v);
+							fall[z * resolution + x] = new Vector2(n.x, n.z);
+						}
 					}
 				}
 
@@ -219,7 +242,8 @@ namespace FishMMO.Shared.WorldDesign
 						float worldX = origin.x + u * size.x;
 						float y = groundY[z * resolution + x];
 						Vector2 at = climate != null ? climate.Read(u, v, y) : Weigher.NoClimate;
-						if (!weigher.Weigh(worldX, y, worldZ, steepness[z * resolution + x], texelWeights, at))
+						Vector2 down = fall != null ? fall[z * resolution + x] : Vector2.zero;
+						if (!weigher.Weigh(worldX, y, worldZ, steepness[z * resolution + x], texelWeights, at, down))
 						{
 							missed++;
 						}
@@ -295,6 +319,16 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>True when some main or detail layer has a lava band (2026-10-25, I2r); the point's height above the lava then (NaN: no lava).</summary>
 			private readonly bool anyLavaBand;
 			private float aboveLava = float.NaN;
+			/// <summary>
+			/// True when some detail layer has a facing band or a fall-line stretch (2026-10-26, GROUND-BANDS); the point's fall line then
+			/// (world xz, its length the slope's sine; zero unknown or flat).
+			/// </summary>
+			private readonly bool anyDownhill;
+			private Vector2 downhill;
+			/// <summary>Per entry with a site band (2026-10-26, GROUND-BANDS): the scene's sites of its kinds (empty: none), else null.</summary>
+			private readonly List<BiomeScatterSite>[] siteLists;
+			/// <summary>True when some detail or bed layer has a landform zone band (bed layers 2026-10-26, GROUND-BANDS, decision 87).</summary>
+			private readonly bool anyBedZone;
 			/// <summary>Scratch for one biome's extra beds: their strengths and shares at the point being weighed.</summary>
 			private readonly float[] bedStrength = new float[BiomeTemplate.MaximumBedLayers];
 			private readonly float[] bedShare = new float[BiomeTemplate.MaximumBedLayers];
@@ -357,6 +391,32 @@ namespace FishMMO.Shared.WorldDesign
 				foreach (SceneTerrainPalette.Entry entry in palette.Entries)
 				{
 					anyZone |= entry.Role == PaletteRole.Detail && entry.Source != null && entry.Source.landformBand.On;
+					// A bed layer's zone band (2026-10-26, GROUND-BANDS, decision 87: drowned paving only on a sinking quarter's floor).
+					anyBedZone |= entry.Role == PaletteRole.Submerged && entry.Source is BedTextureLayer && entry.Source.landformBand.On;
+				}
+				anyZone |= anyBedZone;
+				anyDownhill = NeedsDownhill(palette);
+				/* The sites each site-banded detail paints round, filtered by its kinds once (2026-10-26, GROUND-BANDS): a texel then
+				 * walks only the whale falls, not every planned site. */
+				foreach (SceneTerrainPalette.Entry entry in palette.Entries)
+				{
+					if (entry.Role != PaletteRole.Detail || entry.Source == null || !entry.Source.siteBand.On)
+					{
+						continue;
+					}
+					siteLists ??= new List<BiomeScatterSite>[palette.Entries.Count];
+					var list = new List<BiomeScatterSite>();
+					if (this.options.Sites != null)
+					{
+						foreach (BiomeScatterSite site in this.options.Sites)
+						{
+							if (BiomeScatterModes.Names(entry.Source.siteBand.Kinds, site.Kind))
+							{
+								list.Add(site);
+							}
+						}
+					}
+					siteLists[entry.Index] = list;
 				}
 
 				/* Each biome's beds: the lakebed, the riverbed (a channel of its own only when its art differs: one shared terrain layer
@@ -445,6 +505,26 @@ namespace FishMMO.Shared.WorldDesign
 			public bool Climatic => anyClimatic;
 
 			/// <summary>
+			/// True when some detail layer of the palette reads the ground's fall line (a facing band or a fall-line stretch, 2026-10-26,
+			/// GROUND-BANDS), so the painter reads the terrain's normals; false paints exactly as before.
+			/// </summary>
+			public static bool NeedsDownhill(SceneTerrainPalette palette)
+			{
+				if (palette == null)
+				{
+					return false;
+				}
+				foreach (SceneTerrainPalette.Entry entry in palette.Entries)
+				{
+					if (entry.Role == PaletteRole.Detail && entry.Source != null && (entry.Source.facingBand.On || entry.Source.fallLineStretch > 1f))
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+
+			/// <summary>
 			/// <see cref="Weigh(float, float, float, float, float[], Vector2)"/> with the point's climate asked of
 			/// <see cref="BiomeSplatOptions.ClimateAt"/> (only when some biome's ground changes with it), for a caller weighing a
 			/// point at a time (the backdrop).
@@ -463,7 +543,19 @@ namespace FishMMO.Shared.WorldDesign
 			/// <param name="climate">The point's climate (x temperature, y humidity; <see cref="BiomeSplatOptions.ClimateAt"/>), or <see cref="NoClimate"/>.</param>
 			public bool Weigh(float worldX, float worldY, float worldZ, float slopeDegrees, float[] layerWeights, Vector2 climate)
 			{
+				return Weigh(worldX, worldY, worldZ, slopeDegrees, layerWeights, climate, Vector2.zero);
+			}
+
+			/// <summary>
+			/// <see cref="Weigh(float, float, float, float, float[], Vector2)"/> with the ground's fall line at the point (2026-10-26,
+			/// GROUND-BANDS): world xz, its length the slope's sine (the terrain normal's level part); zero where it is not known (the
+			/// backdrop), which a facing band reads as flat ground and a fall-line stretch as round patches. Read only when a detail layer
+			/// asks (<see cref="NeedsDownhill"/>).
+			/// </summary>
+			public bool Weigh(float worldX, float worldY, float worldZ, float slopeDegrees, float[] layerWeights, Vector2 climate, Vector2 fallLine)
+			{
 				Array.Clear(layerWeights, 0, layerWeights.Length);
+				downhill = anyDownhill ? fallLine : Vector2.zero;
 				field.WeightsAt(worldX, worldZ, biomeWeights);
 				float height = options.NormalizedHeight != null ? options.NormalizedHeight(worldX, worldY, worldZ) : 0.5f;
 				float submerged = options.HasLiquidWater && options.ShoreFadeMetres > 0f
@@ -618,6 +710,12 @@ namespace FishMMO.Shared.WorldDesign
 					for (int k = 0; k < extras; k++)
 					{
 						bedStrength[k] = bedSet.ExtraSources[k].Strength(in water);
+						if (anyBedZone && bedStrength[k] > 0f && bedSet.ExtraSources[k].landformBand.On)
+						{
+							// On (or off) one part of its biome's landforms (2026-10-26, GROUND-BANDS, decision 87): a sunk quarter's paving.
+							bedStrength[k] *= BiomeLandformZones.WeightOf(options.LandformZones, bedSet.ExtraSources[k].landformBand,
+								bedSet.Extras[k].Biome != null ? bedSet.Extras[k].Biome.ID : 0, worldX, worldZ, zoneGround, zoneSlope);
+						}
 					}
 					float taken = BiomeBedBands.Split(in water, bedSet.Lakebed != null, bedSet.Riverbed != null, bedStrength, extras, bedShare,
 						out float lakebedShare, out float riverbedShare);
@@ -634,10 +732,14 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return;
 				}
+				/* The biome's ground share, rounded to a float once (the explicit cast forces it: a runtime may hold a float local or
+				 * argument at higher precision) and used by both paths below, so the climate's path with nothing banded is the plain
+				 * path to the bit on every runtime, not only on one that computes in single precision throughout. */
+				float groundShare = (float)(biomeWeight * ground);
 				GroundSlot[] slots = climaticSlots[biomeIndex];
 				if (slots != null)
 				{
-					ShareInClimate(slots, biomeWeight * ground, worldX, worldZ, height, slope, climate, layerWeights);
+					ShareInClimate(slots, groundShare, worldX, worldZ, height, slope, climate, layerWeights);
 					return;
 				}
 
@@ -668,12 +770,12 @@ namespace FishMMO.Shared.WorldDesign
 						SceneTerrainPalette.Entry entry = entries[i];
 						if (entry.Role == PaletteRole.Detail)
 						{
-							layerWeights[entry.LayerIndex] += biomeWeight * ground * union * detailStrength[entry.Index] / sum;
+							layerWeights[entry.LayerIndex] += groundShare * union * detailStrength[entry.Index] / sum;
 						}
 					}
 				}
 
-				float rest = biomeWeight * ground * (1f - union);
+				float rest = groundShare * (1f - union);
 				if (main != null && Banded(main.Source) && sum > 0f)
 				{
 					/* A main layer banded by depth (2026-10-25, phase I2m) stands only inside its band; outside it the details carry the
@@ -892,6 +994,11 @@ namespace FishMMO.Shared.WorldDesign
 				float z = worldZ / scale + offset.y;
 				// Two octaves; fBm pulls toward the middle, so it is stretched back out to fill 0 … 1.
 				float n = Mathf.PerlinNoise(x, z) * 0.67f + Mathf.PerlinNoise(x * 2.03f + 17.1f, z * 2.03f - 9.7f) * 0.33f;
+				if (anyDownhill && source.fallLineStretch > 1f && entry.Role == PaletteRole.Detail)
+				{
+					// Drawn out down the fall line (2026-10-26, GROUND-BANDS: avalanche tracks), eased in from flat ground.
+					n = FallLineNoise(n, offset, scale, source.fallLineStretch, worldX, worldZ, slope);
+				}
 				n = Mathf.Clamp01((n - 0.5f) * 1.6f + 0.5f);
 				float strength = Mathf.Pow(n, Mathf.Max(0.1f, source.blendSharpness));
 
@@ -913,7 +1020,84 @@ namespace FishMMO.Shared.WorldDesign
 					strength *= BiomeLandformZones.WeightOf(options.LandformZones, source.landformBand, entry.Biome != null ? entry.Biome.ID : 0,
 						worldX, worldZ, zoneGround, zoneSlope);
 				}
+				if (source.facingBand.On && entry.Role == PaletteRole.Detail && strength > 0f)
+				{
+					// On the faces that look one way (2026-10-26, GROUND-BANDS, decision 71): a shade frost on the poleward slopes.
+					strength *= source.facingBand.Weight(downhill, slope, in options.Compass);
+				}
+				if (siteLists != null && source.siteBand.On && entry.Role == PaletteRole.Detail && strength > 0f)
+				{
+					// On and round the sites of its kinds (2026-10-26, GROUND-BANDS): a whale fall's halo; nowhere on a scene with none.
+					strength *= BiomeScatterModes.NearSite(siteLists[entry.Index], string.Empty, worldX, worldZ, source.siteBand.Metres);
+				}
 				return Mathf.Clamp01(strength);
+			}
+
+			/// <summary>
+			/// A detail's two-octave noise read in the slope's own frame, its patches <paramref name="stretch"/> times longer down the fall
+			/// line than across it (2026-10-26, GROUND-BANDS), blended toward the round <paramref name="plain"/> noise on gentle ground.
+			/// </summary>
+			/// <remarks>
+			/// Turning the world's coordinates by the local fall line alone would make a degree's wobble in the line slide the pattern by
+			/// tens of metres a few kilometres from the origin, and the patches would shred into speckle. So the turned coordinates are taken
+			/// from the four corners of a grid one stretched patch wide, each corner with its own hashed offset, and blended by smoothstep
+			/// weights with the spread kept (Σwᵢ(nᵢ − ½) / √Σwᵢ²): a wobble moves each corner's pattern by a patch-width's sine at most.
+			/// </remarks>
+			private float FallLineNoise(float plain, Vector2 offset, float scale, float stretch, float worldX, float worldZ, float slope)
+			{
+				float length = downhill.magnitude;
+				float lean = Mathf.Clamp01(slope / FallLineFullSlope);
+				lean = lean * lean * (3f - 2f * lean);
+				if (!(length > 1e-6f) || lean <= 0f)
+				{
+					return plain;
+				}
+				Vector2 d = downhill / length;
+				float cell = scale * stretch;
+				float gx = worldX / cell, gz = worldZ / cell;
+				int ix = Mathf.FloorToInt(gx), iz = Mathf.FloorToInt(gz);
+				float fx = gx - ix, fz = gz - iz;
+				fx = fx * fx * (3f - 2f * fx);
+				fz = fz * fz * (3f - 2f * fz);
+				float sum = 0f, squares = 0f;
+				for (int k = 0; k < 4; k++)
+				{
+					int cx = ix + (k & 1), cz = iz + (k >> 1);
+					float w = ((k & 1) != 0 ? fx : 1f - fx) * ((k >> 1) != 0 ? fz : 1f - fz);
+					if (w <= 0f)
+					{
+						continue;
+					}
+					float qx = worldX - cx * cell, qz = worldZ - cz * cell;
+					float along = (qx * d.x + qz * d.y) / cell;
+					float across = (qz * d.x - qx * d.y) / scale;
+					uint h = CornerHash(cx, cz);
+					float ox = offset.x + (h & 0x3FFu) * 0.731f, oz = offset.y + ((h >> 10) & 0x3FFu) * 0.731f;
+					float n = Mathf.PerlinNoise(along + ox, across + oz) * 0.67f + Mathf.PerlinNoise((along + ox) * 2.03f + 17.1f, (across + oz) * 2.03f - 9.7f) * 0.33f;
+					sum += w * (n - 0.5f);
+					squares += w * w;
+				}
+				float streak = 0.5f + sum / Mathf.Sqrt(Mathf.Max(squares, 1e-6f));
+				float mixed = (1f - lean) * (plain - 0.5f) + lean * (streak - 0.5f);
+				return 0.5f + mixed / Mathf.Sqrt((1f - lean) * (1f - lean) + lean * lean);
+			}
+
+			/// <summary>The slope (degrees) from which a fall-line stretch is wholly turned down the slope; eased in from flat below it.</summary>
+			public const float FallLineFullSlope = 12f;
+
+			/// <summary>A grid corner's hash, for its noise offset (pure; the same corner in every tile).</summary>
+			private static uint CornerHash(int x, int z)
+			{
+				unchecked
+				{
+					uint h = (uint)x * 0x9E3779B1u ^ (uint)z * 0x85EBCA77u;
+					h ^= h >> 15;
+					h *= 0x2C1B3C6Du;
+					h ^= h >> 12;
+					h *= 0x297A2D39u;
+					h ^= h >> 15;
+					return h;
+				}
 			}
 		}
 

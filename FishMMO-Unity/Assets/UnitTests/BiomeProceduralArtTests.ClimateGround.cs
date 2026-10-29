@@ -16,7 +16,8 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void Authoring_WritesClimateBandsAndVariantGrounds_OnceAndKeepsHandEdits()
 		{
-			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Plains");
+			// The Valley (unauthored): no bands or climate grounds of its own (the Plains round, 2026-10-26, authored both).
+			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Valley");
 			BiomeArtSpec.Layer main = entry.Main, grass = entry.Details[0];
 			try
 			{
@@ -24,7 +25,7 @@ namespace FishMMO.UnitTests
 				grass.Temp(0.2f, 1f);
 				var snow = new BiomeArtSpec.Layer { Family = Ground.Snow };
 				entry.ClimateVariant("Cold", -1f, -0.3f).ClimateGround("Cold", snow);
-				BiomeTemplate biome = MakeBiome("Plains");
+				BiomeTemplate biome = MakeBiome("Valley");
 				var source = new FakeSource(created);
 
 				var first = new BiomeArtAuthoring.Report();
@@ -70,10 +71,11 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void Authoring_WritesDescriptionAndNaming_OverTheOriginalOnce_ThenKeepsHandEdits()
 		{
-			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Hills");
+			// The Valley (unauthored): no description or naming column (the Hills round, 2026-10-26, rewrote both).
+			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Valley");
 			try
 			{
-				BiomeTemplate biome = MakeBiome("Hills");
+				BiomeTemplate biome = MakeBiome("Valley");
 				biome.Description = "Rolling hills — moss-covered barrows";
 				biome.Naming.Phonology.Onsets = new[] { "Hil", "Bre" };
 				biome.Naming.Phonology.Codas = new[] { "hill" };

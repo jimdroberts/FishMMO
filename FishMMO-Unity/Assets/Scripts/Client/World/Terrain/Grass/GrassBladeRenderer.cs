@@ -24,7 +24,8 @@ namespace FishMMO.Client
 		public const string ComputeAssetPath = "Assets/Prefabs/Client/Weather/Shaders/FishGrassBlades.compute";
 		public const string ShaderName = "FishMMO/Grass Blades";
 		/// <summary>
-		/// Blade types in one scene (GrassMath.MaxTypes: four bits of the record's packed word and one of its colour word).
+		/// Blade types in one scene (GrassMath.MaxTypes: four bits of the record's packed word, two of its colour word and one of
+		/// its sixth word).
 		/// Was 16; the vegetation expansion's sedges, rushes, dune, feather, savanna and plume grasses and five flower sets
 		/// make 20, and a scene past the cap drew its later types as meshes.
 		/// </summary>
@@ -49,6 +50,9 @@ namespace FishMMO.Client
 		/// </remarks>
 		private static readonly float[] SlotShare = { 0.06f, 0.2f, 0.6f, 0.06f, 0.06f };
 		private static readonly int ScreenId = Shader.PropertyToID("_GrassScreen");
+		private static readonly int TemporalId = Shader.PropertyToID("_GrassTemporal");
+		/// <summary>The longest step of the shared motion clock between two frames still taken as motion (s); a longer one is a jump.</summary>
+		private const float MaxMotionStep = 0.25f;
 		private static readonly int ViewerId = Shader.PropertyToID("_GrassViewer");
 
 		[StructLayout(LayoutKind.Sequential)]
@@ -383,6 +387,10 @@ namespace FishMMO.Client
 		/// <summary>Debug A/B: dispatch the terrains last to first (the terrain underfoot, built first, is normally the first dispatch).</summary>
 		public static bool ReverseDispatchOrder;
 		private readonly LocalKeyword noTerrainColour;
+		/// <summary>The generate kernel's 32-channel variant (FishGrassBlades.compute GRASS_WIDE): on only while a terrain needs it.</summary>
+		private readonly LocalKeyword wideChannels;
+		/// <summary>Its 64-channel variant (GRASS_WIDEST, 2026-10-27): on only while a terrain has more than 32 channels.</summary>
+		private readonly LocalKeyword widestChannels;
 		private bool generated;
 		private static readonly int HighlightId = Shader.PropertyToID("_GrassHighlight");
 
@@ -438,6 +446,8 @@ namespace FishMMO.Client
 			// Bound to the generate kernel on either path (it reads the count from it when the gather is on the GPU).
 			gatherCounts = new GraphicsBuffer(GraphicsBuffer.Target.Raw, 16, 4);
 			noTerrainColour = new LocalKeyword(compute, "GRASS_NO_TERRAIN_COLOUR");
+			wideChannels = new LocalKeyword(compute, "GRASS_WIDE");
+			widestChannels = new LocalKeyword(compute, "GRASS_WIDEST");
 			material = new Material(shader) { name = "Grass Blades (runtime)", hideFlags = HideFlags.DontSave };
 			for (int s = 0; s < Slots; s++)
 			{
@@ -789,16 +799,27 @@ namespace FishMMO.Client
 			TimedCalls++;
 			ReleaseRetired(false);
 			Shader.SetGlobalFloat(HighlightId, Highlight ? 1f : 0f);
-			// This camera's pixel at a distance, for the blades' on-screen width cap (FishGrassBlades.hlsl). A global, set
-			// before every draw of this camera, so its shadow casters widen exactly as its blades do.
-			float pixelsHigh = Mathf.Max(1f, camera.pixelHeight);
+			// This camera's RENDERED pixel at a distance, for the blades' on-screen width cap and the sub-pixel coverage
+			// (FishGrassBlades.hlsl). A global, set before every draw of this camera, so its shadow casters widen exactly as its
+			// blades do. Under a render scale (High Fidelity: 0.67 with STP) a rendered pixel is 1/scale screen pixels: the
+			// sub-pixel test counted screen pixels until 2026-10-27, so a "pixel-wide" blade was two thirds of what it drew to.
+			var pipeline = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+			float renderScale = RenderScaleOf(camera, pipeline);
+			float pixelsHigh = Mathf.Max(1f, camera.pixelHeight * renderScale);
 			float perMetre = camera.orthographic ? 0f : 2f * Mathf.Tan(0.5f * camera.fieldOfView * Mathf.Deg2Rad) / pixelsHigh;
 			float flat = camera.orthographic ? 2f * camera.orthographicSize / pixelsHigh : 0f;
-			// w 1 where this camera resolves MSAA (2026-10-21): a blade thinner than a pixel is drawn a pixel wide with its true width
-			// as coverage (alpha to coverage), so it fades smoothly instead of flipping whole pixels as it sways.
-			var pipeline = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+			// w: how a blade thinner than a rendered pixel is drawn (2026-10-21 MSAA; 2026-10-27 temporal): a pixel wide with its true
+			// width as coverage, MSAA's alpha to coverage (1) or a dither that turns every frame for STP/TAA to average (2), so it
+			// fades smoothly instead of flipping whole pixels as it sways; 0 as it is (no resolve could smooth it).
 			bool msaa = camera.allowMSAA && pipeline != null && pipeline.msaaSampleCount > 1;
-			Shader.SetGlobalVector(ScreenId, new Vector4(perMetre, flat, Mathf.Max(0.1f, s.MaxBladePixels) / Mathf.Max(1e-4f, s.BladeWidth), msaa ? 1f : 0f));
+			bool temporal = !msaa && ResolvesTemporally(camera, pipeline);
+			float subPixel = !s.SubPixelCoverage ? 0f : msaa ? 1f : temporal ? 2f : 0f;
+			// MaxBladePixels counts screen pixels (it was tuned at full resolution: about two a blade): in rendered pixels, × scale.
+			float bladePixels = Mathf.Max(0.1f, s.MaxBladePixels) * renderScale;
+			Shader.SetGlobalVector(ScreenId, new Vector4(perMetre, flat, bladePixels / Mathf.Max(1e-4f, s.BladeWidth), subPixel));
+			TrackMotionClock();
+			Shader.SetGlobalVector(TemporalId, new Vector4(motionFrame & 63, temporal ? motionBack : 0f, temporal ? 1f : 0f, 0f));
+			motionLevels = temporal ? Mathf.Clamp(s.MotionVectorLevels, 0, 3) : 0;
 			// And where it stands, for the lay-over seen from above and the edge-on thickening: the shadow pass's own
 			// camera is the light's, and its casters must take the shape this camera's blades have.
 			Vector3 viewer = camera.transform.position;
@@ -810,7 +831,7 @@ namespace FishMMO.Client
 			{
 				return IssueDraws(camera, terrains, view.Position, grassDistance, shadowDistance);
 			}
-			bool synced = atlas.Sync(terrains, AlbedoFor);
+			bool synced = atlas.Sync(terrains, albedoForDelegate ??= AlbedoFor);
 			double t1 = TerrainInstancingProbe.Now;
 			TimeAtlas += t1 - t0;
 			if (!synced)
@@ -1026,6 +1047,9 @@ namespace FishMMO.Client
 			cmd.DispatchCompute(compute, clearKernel, 1, 1, 1);
 
 			compute.SetKeyword(noTerrainColour, SkipTerrainColour);
+			// One of the two at most (one multi_compile set): the narrow kernel unless a terrain asks for more channels.
+			compute.SetKeyword(wideChannels, atlas.Tier == 1);
+			compute.SetKeyword(widestChannels, atlas.Tier >= 2);
 			cmd.SetComputeBufferParam(compute, generateKernel, ItemsId, gpuGather ? gatherItems : itemBuffer);
 			cmd.SetComputeBufferParam(compute, generateKernel, GatherCountsId, gatherCounts);
 			cmd.SetComputeIntParam(compute, GatherFromGpuId, gpuGather ? 1 : 0);
@@ -1109,46 +1133,15 @@ namespace FishMMO.Client
 				lastStatsFrame = Time.frameCount;
 				if (gpuGather)
 				{
-					int[] capacitiesNow = (int[])groupCapacity.Clone();
-					cmd.RequestAsyncReadback(gatherCounts, request =>
+					// The capacities this read is checked against, as they are now (a regather can resize them before it lands).
+					if (statsCapacities.Length != groupCapacity.Length)
 					{
-						if (request.hasError)
-						{
-							return;
-						}
-						NativeArray<uint> written = request.GetData<uint>();
-						int sum = 0;
-						for (int g = 0; g < capacitiesNow.Length && g < written.Length; g++)
-						{
-							sum += (int)Mathf.Min(written[g], capacitiesNow[g]);
-							if (written[g] > capacitiesNow[g] && !gatherOverflowWarned)
-							{
-								gatherOverflowWarned = true;
-								Debug.LogWarning($"[Grass] The GPU gather's work list overflowed group {g}: {written[g]} items for a capacity of {capacitiesNow[g]}. Tiles past it go ungenerated.");
-							}
-						}
-						GpuItems = sum;
-					});
+						statsCapacities = new int[groupCapacity.Length];
+					}
+					System.Array.Copy(groupCapacity, statsCapacities, groupCapacity.Length);
+					cmd.RequestAsyncReadback(gatherCounts, onGatherCounts ??= OnGatherCounts);
 				}
-				cmd.RequestAsyncReadback(countBuffer, request =>
-				{
-					if (request.hasError)
-					{
-						return;
-					}
-					NativeArray<uint> counts = request.GetData<uint>();
-					for (int i = 0; i < Slots && i < counts.Length; i++)
-					{
-						LastBlades[i] = (int)counts[i];
-						if (counts[i] > capacities[i] && !overflowWarned[i])
-						{
-							overflowWarned[i] = true;
-							Debug.LogWarning($"[Grass] Slot {SlotNames[i]} overflowed: {counts[i]} blades appended, capacity {capacities[i]}. "
-								+ "The blades past the capacity are dropped by whole work groups in a different order every frame, so squares of grass flicker. "
-								+ "Raise Grass > BladeCap on the Weather Render Profile, or thin the rings.");
-						}
-					}
-				});
+				cmd.RequestAsyncReadback(countBuffer, onBladeCounts ??= OnBladeCounts);
 			}
 			cmd.EndSample(GpuSample);
 			context.ExecuteCommandBuffer(cmd);
@@ -1162,7 +1155,55 @@ namespace FishMMO.Client
 			return issued;
 		}
 
+		/// <summary>AlbedoFor as a delegate, made once: a method group allocates a new delegate on every conversion.</summary>
+		private System.Func<FishMMO.Shared.TerrainArraySet, GrassAlbedoTexels> albedoForDelegate;
+
 		private bool gatherOverflowWarned;
+
+		// The stats reads' callbacks, made once: as lambdas they were a closure and two delegates of garbage every read.
+		private System.Action<AsyncGPUReadbackRequest> onGatherCounts, onBladeCounts;
+		private int[] statsCapacities = new int[0];
+
+		private void OnGatherCounts(AsyncGPUReadbackRequest request)
+		{
+			if (request.hasError)
+			{
+				return;
+			}
+			NativeArray<uint> written = request.GetData<uint>();
+			int[] capacitiesNow = statsCapacities;
+			int sum = 0;
+			for (int g = 0; g < capacitiesNow.Length && g < written.Length; g++)
+			{
+				sum += (int)Mathf.Min(written[g], capacitiesNow[g]);
+				if (written[g] > capacitiesNow[g] && !gatherOverflowWarned)
+				{
+					gatherOverflowWarned = true;
+					Debug.LogWarning($"[Grass] The GPU gather's work list overflowed group {g}: {written[g]} items for a capacity of {capacitiesNow[g]}. Tiles past it go ungenerated.");
+				}
+			}
+			GpuItems = sum;
+		}
+
+		private void OnBladeCounts(AsyncGPUReadbackRequest request)
+		{
+			if (request.hasError)
+			{
+				return;
+			}
+			NativeArray<uint> counts = request.GetData<uint>();
+			for (int i = 0; i < Slots && i < counts.Length; i++)
+			{
+				LastBlades[i] = (int)counts[i];
+				if (counts[i] > capacities[i] && !overflowWarned[i])
+				{
+					overflowWarned[i] = true;
+					Debug.LogWarning($"[Grass] Slot {SlotNames[i]} overflowed: {counts[i]} blades appended, capacity {capacities[i]}. "
+						+ "The blades past the capacity are dropped by whole work groups in a different order every frame, so squares of grass flicker. "
+						+ "Raise Grass > BladeCap on the Weather Render Profile, or thin the rings.");
+				}
+			}
+		}
 
 		/// <summary>
 		/// The tile table for the GPU gather: every tile of every drawn terrain with grass on it, its bounds padded as the
@@ -1393,6 +1434,66 @@ namespace FishMMO.Client
 			cmd.DispatchCompute(compute, gatherArgsKernel, groupThreads, 1, 1);
 		}
 
+		/// <summary>The frame <see cref="TrackMotionClock"/> last read the shared motion clock in, and what it read.</summary>
+		private int motionFrame = -1;
+		private float motionNow;
+		/// <summary>Seconds of the shared motion clock since the frame before (0 after a pause, a jump or a skipped frame).</summary>
+		private float motionBack;
+		/// <summary>The camera slots' levels of detail that draw their own motion vectors this camera (GrassBladeSettings.MotionVectorLevels; 0 without a temporal resolve).</summary>
+		private int motionLevels;
+
+		/// <summary>
+		/// Reads the shared motion clock (WeatherShaderGlobals' _FishWeatherMisc.w, the clock every blade's wind runs on) once a
+		/// frame, keeping how far it moved since the frame before: the motion vectors rebuild each blade that far back.
+		/// </summary>
+		private void TrackMotionClock()
+		{
+			int frame = Time.frameCount;
+			if (frame == motionFrame)
+			{
+				return;
+			}
+			float now = Shader.GetGlobalVector(WeatherShaderGlobals.Misc).w;
+			float step = now - motionNow;
+			if (step < 0f)
+			{
+				// The shader clock wraps (WorldMotion.ShaderWrapSeconds): a step across the wrap is still a step.
+				step += (float)FishMMO.Shared.Celestial.WorldMotion.ShaderWrapSeconds;
+			}
+			motionBack = frame == motionFrame + 1 && step <= MaxMotionStep ? step : 0f;
+			motionNow = now;
+			motionFrame = frame;
+		}
+
+		/// <summary>URP's render scale for this camera (UniversalRenderPipeline.InitializeStackedCameraData): the asset's, for a game camera only, ignored within 0.05 of 1.</summary>
+		private static float RenderScaleOf(Camera camera, UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset pipeline)
+		{
+			if (pipeline == null || camera.cameraType != CameraType.Game)
+			{
+				return 1f;
+			}
+			float scale = pipeline.renderScale;
+			return Mathf.Abs(1f - scale) < 0.05f ? 1f : Mathf.Clamp(scale, 0.1f, 2f);
+		}
+
+		/// <summary>
+		/// True when URP resolves this camera over frames (STP, or TAA): the conditions of UniversalCameraData.IsTemporalAAEnabled,
+		/// with STP forcing TAA on for a game camera as UniversalRenderPipeline does. The dither then turns every frame and the
+		/// near blades write their own motion.
+		/// </summary>
+		private static bool ResolvesTemporally(Camera camera, UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset pipeline)
+		{
+			if (pipeline == null || camera.cameraType != CameraType.Game || camera.allowDynamicResolution
+				|| !camera.TryGetComponent(out UnityEngine.Rendering.Universal.UniversalAdditionalCameraData data)
+				|| !data.renderPostProcessing || data.renderType != UnityEngine.Rendering.Universal.CameraRenderType.Base
+				|| (data.cameraStack != null && data.cameraStack.Count > 0))
+			{
+				return false;
+			}
+			return pipeline.upscalingFilter == UnityEngine.Rendering.Universal.UpscalingFilterSelection.STP
+				|| data.antialiasing == UnityEngine.Rendering.Universal.AntialiasingMode.TemporalAntiAliasing;
+		}
+
 		/// <summary>The five indirect draws of whatever the slots last received.</summary>
 		private int IssueDraws(Camera camera, IReadOnlyList<GrassTerrain> terrains, Vector3 eye, float grassDistance, float shadowDistance)
 		{
@@ -1416,7 +1517,8 @@ namespace FishMMO.Client
 					receiveShadows = true,
 					lightProbeUsage = LightProbeUsage.Off,
 					reflectionProbeUsage = ReflectionProbeUsage.Off,
-					motionVectorMode = MotionVectorGenerationMode.Camera,
+					// Per-object motion makes URP draw the shader's MotionVectors pass (the blades' own sway) for this slot every frame.
+					motionVectorMode = !shadowSlot && SlotLod[slot] < motionLevels ? MotionVectorGenerationMode.Object : MotionVectorGenerationMode.Camera,
 				};
 				Graphics.RenderMeshIndirect(rp, lodMeshes[SlotLod[slot]], argsBuffer, 1, slot);
 				draws++;

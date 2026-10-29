@@ -58,6 +58,18 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Claims a laid field's ground for <paramref name="site"/>.</summary>
 		public void Add(int site, Vector2 centre, float yaw, Vector2 size) => claims.Add(new Claim(site, centre, yaw, size));
 
+		private readonly List<PointOfInterestEnclosureClearance.Enclosure> enclosures = new List<PointOfInterestEnclosureClearance.Enclosure>();
+
+		/// <summary>
+		/// The ground the sites enclosed so far (2026-10-27): every field, fold, farmstead and holding, cleared of its wild growth once
+		/// every site is built (PointOfInterestEnclosureClearance). In the order laid.
+		/// </summary>
+		public IReadOnlyList<PointOfInterestEnclosureClearance.Enclosure> Enclosures => enclosures;
+
+		/// <summary>Records enclosed ground to be cleared: turf (pasture, a fold, a yard) loses its wild details too, sown ground its trees only.</summary>
+		public void Enclose(Vector2 centre, float yaw, Vector2 size, bool turf)
+			=> enclosures.Add(new PointOfInterestEnclosureClearance.Enclosure(centre, yaw, size, turf));
+
 		/// <summary>True when a field of <paramref name="site"/> there lies over no other site's claim (each kept <see cref="Gap"/> apart).</summary>
 		public bool Clear(int site, Vector2 centre, float yaw, Vector2 size)
 		{

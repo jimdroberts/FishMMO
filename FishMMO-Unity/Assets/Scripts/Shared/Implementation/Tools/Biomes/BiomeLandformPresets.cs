@@ -103,6 +103,28 @@ namespace FishMMO.Shared.Biomes
 			return form;
 		}
 
+		/// <summary>A copy with the landform follow-ups' fields set (2026-10-26, phase I2g-f); each left at its default does nothing.</summary>
+		private static BiomeLandform Follow(BiomeLandform form, float upper = 0f, bool seaClimate = false, float dryDensity = 0f, float peakFrom = 0f,
+			float peakRing = 0f, float rayReach = 0f, float tilt = 0f, float inner = 0f, float roofed = 0f, int radials = 0, bool keepClear = false, int steps = 0)
+		{
+			form.Upper = upper;
+			form.SeaClimate = seaClimate;
+			form.DryDensity = dryDensity;
+			form.PeakFrom = peakFrom;
+			form.PeakRing = peakRing;
+			form.RayReach = rayReach;
+			form.Tilt = tilt;
+			form.Inner = inner;
+			form.Roofed = roofed;
+			form.Radials = radials;
+			form.KeepClear = keepClear;
+			if (steps > 0)
+			{
+				form.Steps = steps;
+			}
+			return form;
+		}
+
 		/// <summary>Every preset, in the order the drafts asked for them.</summary>
 		public static readonly Preset[] All =
 		{
@@ -440,11 +462,11 @@ namespace FishMMO.Shared.Biomes
 				height: V(0.5f, 2f))),
 
 			// Nitrogen Ice Field (decision 66): Sputnik's convection cells (their troughs, interiors and junctions for the zone bands),
-			// bladed ridges striking north, nitrogen glaciers, the block montes, the pit fields.
+			// bladed ridges striking north on the top fifth of their patch's ground, nitrogen glaciers, the block montes, the pit fields.
 			new Preset("ConvectionCells", "Nitrogen Ice Field", Make("ConvectionCells", BiomeLandformForm.Cells, Field, density: 1f, width: V(250f, 700f),
 				height: V(5f, 15f), moat: 28f, moatDepth: 8f)),
-			new Preset("BladedRidges", "Nitrogen Ice Field", Make("BladedRidges", BiomeLandformForm.Fins, Field, density: 1f, width: V(40f, 90f), height: V(15f, 40f),
-				roughness: 0.5f, align: BiomeLandformAlign.Meridian)),
+			new Preset("BladedRidges", "Nitrogen Ice Field", Follow(Make("BladedRidges", BiomeLandformForm.Fins, Field, density: 1f, width: V(40f, 90f), height: V(15f, 40f),
+				roughness: 0.5f, align: BiomeLandformAlign.Meridian), upper: 0.2f)),
 			new Preset("NitrogenGlacier", "Nitrogen Ice Field", Make("NitrogenGlacier", BiomeLandformForm.Tongue, density: 0.3f, perPatch: 3, size: V(60f, 200f),
 				length: V(600f, 3000f), height: V(5f, 20f), roughness: 0.3f, anchor: BiomeLandformAnchor.Highest, align: BiomeLandformAlign.Downslope)),
 			new Preset("BlockMontes", "Nitrogen Ice Field", Make("BlockMontes", BiomeLandformForm.Tower, density: 0.3f, perPatch: 1, size: V(300f, 1500f),
@@ -458,10 +480,10 @@ namespace FishMMO.Shared.Biomes
 			new Preset("Birket", "Oasis", Make("Birket", BiomeLandformForm.Pan, density: 0.3f, perScene: 2, size: V(300f, 1500f), height: V(0.5f, 2f), top: 0.85f,
 				anchor: BiomeLandformAnchor.Lowest, slope: V(0f, 3f), paint: 2, part: BiomeLandformPart.Rim, pad: true)),
 
-			// Ice Shelf (decision 68; the floating reach itself is phase I2s): rolls, rifts and leads opened to the sea below its surface
+			// Ice Shelf (decision 68; the floating reach itself is phase I2s): rolls (crests along the wind), rifts and leads opened to the sea below its surface
 			// (the floor datum), polynyas, pressure belts, ice rumples, tide cracks, an epishelf lake, a stranded ice island, Hafgerðingar.
 			new Preset("ShelfRolls", "Ice Shelf", Make("ShelfRolls", BiomeLandformForm.SedimentWaves, Field, density: 1f, width: V(150f, 300f), height: V(0.8f, 2f),
-				align: BiomeLandformAlign.Wind, paint: 1, part: BiomeLandformPart.Whole)),
+				align: BiomeLandformAlign.AcrossWind, paint: 1, part: BiomeLandformPart.Whole)),
 			new Preset("Rift", "Ice Shelf", Make("Rift", BiomeLandformForm.Grooves, density: 1f, perPatch: 3, length: V(500f, 3000f), width: V(20f, 150f),
 				height: V(6f, 20f), top: 0.9f, datum: BiomeLandformDatum.SeaSurface, datumDepth: V(6f, 6f), pad: true)),
 			new Preset("Leads", "Ice Shelf", Make("Leads", BiomeLandformForm.Crevasses, Field, density: 1f, width: V(200f, 800f), height: V(1f, 3f), top: 0.05f,
@@ -482,28 +504,29 @@ namespace FishMMO.Shared.Biomes
 			new Preset("Hafgerdingar", "Ice Shelf", Make("Hafgerdingar", BiomeLandformForm.Arc, density: 0.1f, perScene: 1, size: V(1200f, 3000f),
 				length: V(800f, 2500f), width: V(30f, 60f), height: V(12f, 25f), count: 3, moat: 250f, lean: -0.6f, paint: 4, part: BiomeLandformPart.Whole)),
 
-			// Ocean: Lophelia coral mounds along the contour of the deep slope, pockmark fields, and in the cold band iceberg plough marks.
+			// Ocean: Lophelia coral mounds along the contour of the deep slope, pockmark fields, and iceberg plough marks where the sea's
+			// surface is cold (its climate read at the surface, not on the floor), each on its own heading and curving a little.
 			new Preset("CoralMounds", "Ocean", Make("CoralMounds", BiomeLandformForm.Oblong, density: 1f, perScene: 12, size: V(80f, 300f), length: V(120f, 450f),
 				height: V(5f, 25f), top: 0.2f, roughness: 0.4f, align: BiomeLandformAlign.Contour, depth: V(200f, 1200f), paint: 2, part: BiomeLandformPart.Flank)),
 			new Preset("Pockmarks", "Ocean", Make("Pockmarks", BiomeLandformForm.Hollow, density: 1f, size: V(300f, 900f), width: V(20f, 80f), height: V(2f, 6f),
 				count: 24, paint: 3, part: BiomeLandformPart.Floor)),
-			new Preset("PloughMarks", "Ocean", Make("PloughMarks", BiomeLandformForm.Grooves, density: 0.5f, length: V(500f, 3000f), width: V(10f, 40f),
-				height: V(1f, 4f), paint: 5, part: BiomeLandformPart.Whole)
-				.Banded(new Vector2(-1f, -0.3f), default)),
+			new Preset("PloughMarks", "Ocean", Follow(Make("PloughMarks", BiomeLandformForm.Grooves, density: 0.5f, length: V(500f, 3000f), width: V(10f, 40f),
+				height: V(1f, 4f), align: BiomeLandformAlign.Azimuth, paint: 5, part: BiomeLandformPart.Whole)
+				.Banded(new Vector2(-1f, -0.3f), default), seaClimate: true)),
 
 			// Geyser Basin: the low sinter shield the geyser clusters build (its pool basins and runoff are the geothermal carve's, I2q).
 			new Preset("SinterShield", "Geyser Basin", Make("SinterShield", BiomeLandformForm.Dome, density: 2f, perScene: 6, size: V(10f, 30f), height: V(0.5f, 1.5f),
 				top: 0.4f, slope: V(0f, 8f))),
 
-			// Permanent Ice (decision 70): the summit dome smoothing the cap, the dry caps' ice tablets with their sheer lips, the wet
-			// caps' steps round the margin (author IceTablet a second time banded dry for the draft's "×2 dry").
+			// Permanent Ice (decision 70): the summit dome smoothing the cap, the ice tablets with their sheer lips (twice as many over a
+			// patch's dry share: the draft's "×2 dry"), the wet caps' flights of steps round the margin (three treads a scarp).
 			new Preset("SummitDome", "Permanent Ice", Make("SummitDome", BiomeLandformForm.Dome, Fitted, fit: 0.7f, size: V(150f, 6000f), height: V(20f, 60f),
 				anchor: BiomeLandformAnchor.Highest, paint: 0, part: BiomeLandformPart.Whole)),
-			new Preset("IceTablet", "Permanent Ice", Make("IceTablet", BiomeLandformForm.Table, density: 0.6f, perPatch: 5, size: V(25f, 150f), height: V(8f, 30f),
-				top: 0.9f, rim: 0.5f, slope: V(0f, 15f), paint: 7, part: BiomeLandformPart.Flank, pad: true)),
-			new Preset("StepMargin", "Permanent Ice", Make("StepMargin", BiomeLandformForm.Scarp, density: 1f, perPatch: 3, size: V(40f, 120f), length: V(300f, 1200f),
+			new Preset("IceTablet", "Permanent Ice", Follow(Make("IceTablet", BiomeLandformForm.Table, density: 0.6f, perPatch: 5, size: V(25f, 150f), height: V(8f, 30f),
+				top: 0.9f, rim: 0.5f, slope: V(0f, 15f), paint: 7, part: BiomeLandformPart.Flank, pad: true), dryDensity: 2f)),
+			new Preset("StepMargin", "Permanent Ice", Follow(Make("StepMargin", BiomeLandformForm.Scarp, density: 1f, perPatch: 3, size: V(40f, 120f), length: V(300f, 1200f),
 				width: V(6f, 25f), height: V(6f, 25f), anchor: BiomeLandformAnchor.PatchEdge, nearWater: 45f, paint: 7, part: BiomeLandformPart.Flank)
-				.Banded(default, new Vector2(-0.3f, 1f))),
+				.Banded(default, new Vector2(-0.3f, 1f)), steps: 2)),
 
 			// Radiation Plain (decision 71): Valhalla's ring graben round a pale palimpsest, a catena of merged craters on a line, knobs
 			// left on a vanished rim's arc, worn lag-floored bowls, the scorched furrow and the bolt's radial scar (both with their pad).
@@ -521,28 +544,31 @@ namespace FishMMO.Shared.Biomes
 				count: 9, paint: 6, part: BiomeLandformPart.Whole, pad: true)),
 
 			// Regolith Plain (decision 72): the crater population (power-law sizes, four ageing classes carved old first, floor pads),
-			// the bright-rayed young crater (airless), old floors filled flat (Cayley plains), the rampart crater of thin air.
+			// the bright-rayed young crater (airless: its central peak from 900 m, terraced walls, rays out to eight radii), old floors
+			// filled to three tenths of their rims (Cayley plains), the rampart crater of thin air.
 			new Preset("CraterField", "Regolith Plain", Make("CraterField", BiomeLandformForm.Impact, density: 60f, size: V(8f, 400f), height: V(0.1f, 0.1f),
 				rim: 0.035f, top: 0.1f, pad: true).PowerLaw(2f, true)),
-			new Preset("RayCrater", "Regolith Plain", Make("RayCrater", BiomeLandformForm.Impact, density: 0.2f, perScene: 2, size: V(300f, 1200f),
+			new Preset("RayCrater", "Regolith Plain", Follow(Make("RayCrater", BiomeLandformForm.Impact, density: 0.2f, perScene: 2, size: V(300f, 1200f),
 				height: V(0.2f, 0.2f), rim: 0.04f, top: 0.15f, crown: 0.18f, crownDepth: 0.04f, count: 9, roughness: 0.3f, air: BiomeAtmosphereRequirement.Airless,
-				pad: true)),
-			new Preset("CayleyFill", "Regolith Plain", Make("CayleyFill", BiomeLandformForm.SpillFill, Field, density: 1f, height: V(0.02f, 0.05f), slope: V(0f, 5f),
-				paint: 3, part: BiomeLandformPart.Floor)),
+				pad: true), peakFrom: 900f, rayReach: 8f, steps: 2)),
+			new Preset("CayleyFill", "Regolith Plain", Make("CayleyFill", BiomeLandformForm.SpillFill, Field, density: 1f, height: V(0.02f, 0.05f), top: 0.3f,
+				slope: V(0f, 5f), paint: 3, part: BiomeLandformPart.Floor)),
 			new Preset("RampartCrater", "Regolith Plain", Make("RampartCrater", BiomeLandformForm.Rampart, density: 0.3f, perScene: 3, size: V(200f, 900f),
 				height: V(0.15f, 0.15f), rim: 0.03f, top: 0.2f, crown: 1.9f, crownDepth: 4f, air: BiomeAtmosphereRequirement.Thin, paint: 5,
 				part: BiomeLandformPart.Ejecta)),
 
-			// Salt Flat: the pan filled dead flat, the megapolygon net of pressure ridges, the brine eyes, the salt dome (its top dolines
-			// and the height ≥ 0.52 gate are not built; the dome stands on the patch's highest ground instead).
+			// Salt Flat: the pan filled dead flat, the megapolygon net of pressure ridges, the brine eyes, the salt dome on the highest
+			// 48 % of its patch (the draft's height ≥ 0.52 gate) with the dolines dissolved in its top (author SaltDomeDolines right after it).
 			new Preset("SaltPan", "Salt Flat", Make("SaltPan", BiomeLandformForm.SpillFill, Field, density: 1f, height: V(0.02f, 0.05f), paint: 0,
 				part: BiomeLandformPart.Floor)),
 			new Preset("SaltRidges", "Salt Flat", Make("SaltRidges", BiomeLandformForm.Polygons, Field, density: 1f, width: V(40f, 120f), height: V(0.5f, 1.5f),
 				paint: 1, part: BiomeLandformPart.Rim)),
 			new Preset("BrineEye", "Salt Flat", Make("BrineEye", BiomeLandformForm.Pit, density: 0.5f, perScene: 3, size: V(8f, 20f), height: V(2f, 6f), top: 0.6f,
 				anchor: BiomeLandformAnchor.Lowest, slope: V(0f, 6f), pad: true)),
-			new Preset("SaltDome", "Salt Flat", Make("SaltDome", BiomeLandformForm.Table, density: 0.1f, perScene: 1, size: V(200f, 600f), height: V(20f, 80f),
-				top: 0.7f, rim: 1f, roughness: 0.4f, anchor: BiomeLandformAnchor.Highest, pad: true)),
+			new Preset("SaltDome", "Salt Flat", Follow(Make("SaltDome", BiomeLandformForm.Table, density: 0.1f, perScene: 1, size: V(200f, 600f), height: V(20f, 80f),
+				top: 0.7f, rim: 1f, roughness: 0.4f, anchor: BiomeLandformAnchor.Highest, pad: true), upper: 0.48f)),
+			new Preset("SaltDomeDolines", "Salt Flat", Make("SaltDomeDolines", BiomeLandformForm.Hollow, density: 60f, size: V(8f, 25f), height: V(1f, 4f),
+				top: 0.3f, anchor: BiomeLandformAnchor.OnTopOf)),
 
 			// Rocky Coast (decision 74): flagstone stacks off the cliff (their tops pads), the Stoorworm's line of teeth, the Old Man,
 			// geos cut inland from the shore, the gloup behind the cliff, the wave-cut platform, the ayre across a bay's mouth (the oyce
@@ -568,10 +594,10 @@ namespace FishMMO.Shared.Biomes
 				height: V(15f, 40f), top: 0.8f, rim: 1f, moatDepth: 0.8f, datum: BiomeLandformDatum.SeaSurface, datumDepth: V(-40f, -15f),
 				anchor: BiomeLandformAnchor.ShoreSetback, nearWater: 250f, depth: V(0.3f, 60f), pad: true)),
 
-			// Savanna: granite kopjes (a castle of corestones: a rough fluted tower), low dwala pavements (not the jungle's sheer
+			// Savanna: granite kopjes on the upper half of their patch (a castle of corestones: a rough fluted tower), low dwala pavements (not the jungle's sheer
 			// inselberg), seasonal pans, the termite islands (their mounds a zone the rules band on), the cleft table hill (its pad).
-			new Preset("Kopje", "Savanna", Make("Kopje", BiomeLandformForm.Tower, density: 0.5f, perScene: 6, size: V(60f, 200f), height: V(20f, 60f),
-				top: 0.55f, flank: 55f, count: 9, roughness: 0.9f, paint: 4, part: BiomeLandformPart.Whole, pad: true)),
+			new Preset("Kopje", "Savanna", Follow(Make("Kopje", BiomeLandformForm.Tower, density: 0.5f, perScene: 6, size: V(60f, 200f), height: V(20f, 60f),
+				top: 0.55f, flank: 55f, count: 9, roughness: 0.9f, paint: 4, part: BiomeLandformPart.Whole, pad: true), upper: 0.5f)),
 			new Preset("Dwala", "Savanna", Make("Dwala", BiomeLandformForm.Oblong, density: 0.3f, perScene: 4, size: V(60f, 200f), length: V(100f, 400f),
 				height: V(5f, 25f), top: 0.2f, roughness: 0.2f, paint: 4, part: BiomeLandformPart.Whole)),
 			new Preset("Pan", "Savanna", Make("Pan", BiomeLandformForm.Pan, density: 1f, perScene: 8, size: V(30f, 150f), height: V(0.5f, 2f), top: 0.8f,
@@ -583,14 +609,16 @@ namespace FishMMO.Shared.Biomes
 
 			// Rille (decision 76): the sinuous rille from its vent hollow, the beaded rille of a fallen-in tube, the straight graben, the
 			// arcuate set round a plain's edge. Author the rilles before the graben, so the graben cut them. Their stored lines are the
-			// sites' own segments. Not built yet: the inner rille, roofed stretches, en échelon relay ramps, the drainage pits on a
-			// graben's floor, a heading from the patch's long axis.
-			new Preset("SinuousRille", "Rille", Make("SinuousRille", BiomeLandformForm.Rille, density: 0.2f, perPatch: 1, perScene: 2, length: V(1500f, 6000f),
-				width: V(120f, 500f), height: V(25f, 120f), top: 0.4f, rim: 4f, crownDepth: 1.2f, anchor: BiomeLandformAnchor.Highest, pad: true)),
+			// sites' own segments. The sinuous rille has its inner rille and roofed stretches (each a pad), the straight graben runs along
+			// its patch's long axis with drainage pits down its floor (GrabenPits, right after it). Not built: en échelon relay ramps.
+			new Preset("SinuousRille", "Rille", Follow(Make("SinuousRille", BiomeLandformForm.Rille, density: 0.2f, perPatch: 1, perScene: 2, length: V(1500f, 6000f),
+				width: V(120f, 500f), height: V(25f, 120f), top: 0.4f, rim: 4f, crownDepth: 1.2f, anchor: BiomeLandformAnchor.Highest, pad: true), inner: 0.25f, roofed: 0.2f)),
 			new Preset("BeadedRille", "Rille", Make("BeadedRille", BiomeLandformForm.Rille, density: 0.2f, perScene: 2, length: V(800f, 3000f), width: V(60f, 200f),
 				height: V(15f, 50f), top: 0.3f, rim: 2f, crown: 0.5f, anchor: BiomeLandformAnchor.Highest)),
 			new Preset("StraightGraben", "Rille", Make("StraightGraben", BiomeLandformForm.Graben, density: 0.3f, perScene: 3, length: V(1000f, 5000f),
-				width: V(150f, 600f), height: V(20f, 80f), top: 0.6f)),
+				width: V(150f, 600f), height: V(20f, 80f), top: 0.6f, align: BiomeLandformAlign.PatchAxis)),
+			new Preset("GrabenPits", "Rille", Make("GrabenPits", BiomeLandformForm.PitChain, perScene: 3, width: V(30f, 120f), height: V(10f, 40f), top: 0.6f,
+				moat: 400f, anchor: BiomeLandformAnchor.OnTopOf, pad: true)),
 			new Preset("ArcuateRille", "Rille", Make("ArcuateRille", BiomeLandformForm.Graben, density: 0.2f, perScene: 1, size: V(4000f, 16000f),
 				length: V(1500f, 6000f), width: V(120f, 300f), height: V(15f, 50f), top: 0.6f, count: 3, moat: 550f, anchor: BiomeLandformAnchor.Lowest)),
 
@@ -632,6 +660,20 @@ namespace FishMMO.Shared.Biomes
 				size: V(8f, 25f), length: V(200f, 800f), height: V(15f, 40f), top: 0.1f, flank: 75f, count: 12, roughness: 0.4f)),
 			new Preset("WalkingRock", "Scree", Make("WalkingRock", BiomeLandformForm.Grooves, density: 30f, length: V(20f, 200f), width: V(0.2f, 0.5f),
 				height: V(0.05f, 0.15f), slope: V(0f, 3f), pad: true)),
+			// Scree's re-tuned reuses (2026-10-26, I2g-f; decision 79, conflict C13): new names, so the biomes that already author
+			// RockGlacier, StoneRiver, MudflowFan and BoulderTracks carve exactly as before. The rock glacier only where it is cold,
+			// real block streams, the mudflow fan only where it is wet, the boulder tracks on airless worlds.
+			new Preset("ScreeRockGlacier", "Scree", Make("ScreeRockGlacier", BiomeLandformForm.Tongue, density: 0.2f, perScene: 3, size: V(60f, 150f),
+				length: V(150f, 500f), height: V(8f, 25f), roughness: 0.5f, align: BiomeLandformAlign.Downslope, slope: V(5f, 20f), paint: 3,
+				part: BiomeLandformPart.Whole).Banded(new Vector2(-1f, -0.3f), default)),
+			new Preset("ScreeStoneRiver", "Scree", Make("ScreeStoneRiver", BiomeLandformForm.StoneRiver, density: 0.5f, perScene: 3, length: V(300f, 1500f),
+				width: V(20f, 80f), height: V(1f, 3f), top: 0.5f, roughness: 0.6f, anchor: BiomeLandformAnchor.Highest, slope: V(5f, 20f), paint: 2,
+				part: BiomeLandformPart.Whole, pad: true)),
+			new Preset("ScreeMudflowFan", "Scree", Make("ScreeMudflowFan", BiomeLandformForm.Fan, density: 0.5f, perScene: 3, size: V(60f, 200f), height: V(2f, 8f),
+				rim: 0.8f, roughness: 0.5f, anchor: BiomeLandformAnchor.SlopeBreak, align: BiomeLandformAlign.Downslope, slope: V(8f, 35f))
+				.Banded(default, new Vector2(0.3f, 1f))),
+			new Preset("ScreeBoulderTracks", "Scree", Make("ScreeBoulderTracks", BiomeLandformForm.Grooves, density: 50f, length: V(20f, 150f), width: V(0.3f, 1f),
+				height: V(0.15f, 0.4f), slope: V(12f, 45f), air: BiomeAtmosphereRequirement.Airless, pad: true)),
 
 			// ── 2026-10-25, phase I2g-d (decisions 77–96): the last drafts' landforms ──
 			// Entries on a host (OnTopOf / OnFlankOf) stand on the sites of the nearest entry before them that is not itself on one:
@@ -691,16 +733,17 @@ namespace FishMMO.Shared.Biomes
 				width: V(2f, 5f), height: V(-3f, -1f), roughness: 0.3f)),
 
 			// Sulphuric Cloud Deck (decision 85): the tessera weave (fins at the patch's strike crossed at 70° by flat troughs), the
-			// plateau's rim scarp, the fold belt's great fins, Cleopatra breached by its one channel. Not built: the bench below the
-			// scarp (a wave-cut form, no sea here), the inner peak ring, the fold belt held to the highest patch, scatter along the strike.
+			// plateau's rim scarp with a bench down its face, the fold belt's great fins on the biome's highest patch, Cleopatra (its
+			// inner peak ring) breached by its one channel. Not built: scatter along the strike.
 			new Preset("TesseraWeave", "Sulphuric Cloud Deck", Make("TesseraWeave", BiomeLandformForm.Weave, Field, density: 1f, width: V(20f, 60f), height: V(3f, 12f),
 				top: 0.25f, moat: 105f, moatDepth: 15f, paint: 3, part: BiomeLandformPart.Floor)),
-			new Preset("PlateauScarp", "Sulphuric Cloud Deck", Make("PlateauScarp", BiomeLandformForm.Scarp, density: 0.3f, perPatch: 1, size: V(200f, 600f),
-				length: V(1000f, 4000f), width: V(30f, 70f), height: V(30f, 60f), anchor: BiomeLandformAnchor.SlopeBreak, slope: V(3f, 40f))),
+			new Preset("PlateauScarp", "Sulphuric Cloud Deck", Follow(Make("PlateauScarp", BiomeLandformForm.Scarp, density: 0.3f, perPatch: 1, size: V(200f, 600f),
+				length: V(1000f, 4000f), width: V(30f, 70f), height: V(30f, 60f), anchor: BiomeLandformAnchor.SlopeBreak, slope: V(3f, 40f)), steps: 1)),
 			new Preset("FoldBelt", "Sulphuric Cloud Deck", Make("FoldBelt", BiomeLandformForm.Fins, Field, density: 1f, perScene: 1, width: V(120f, 300f),
-				height: V(20f, 60f), roughness: 0.3f)),
-			new Preset("Cleopatra", "Sulphuric Cloud Deck", Make("Cleopatra", BiomeLandformForm.Impact, density: 0.1f, perScene: 1, size: V(300f, 900f),
-				width: V(20f, 40f), height: V(0.18f, 0.18f), rim: 0.04f, top: 0.3f, align: BiomeLandformAlign.Downslope, pad: true).Breached(1.1f)),
+				height: V(20f, 60f), roughness: 0.3f, anchor: BiomeLandformAnchor.Highest)),
+			new Preset("Cleopatra", "Sulphuric Cloud Deck", Follow(Make("Cleopatra", BiomeLandformForm.Impact, density: 0.1f, perScene: 1, size: V(300f, 900f),
+				width: V(20f, 40f), height: V(0.18f, 0.18f), rim: 0.04f, top: 0.3f, crown: 0.1f, crownDepth: 0.03f, align: BiomeLandformAlign.Downslope, pad: true)
+				.Breached(1.1f), peakFrom: 200f, peakRing: 0.45f)),
 
 			// Swamp Ruins (decision 87): barrows with a moulded drum and wet ditch (their pads), the sinking quarter the water floods,
 			// the cuniculi's pits along their tunnel, the tufa spur the acropolis stands on, a harbour mole by the water.
@@ -716,9 +759,12 @@ namespace FishMMO.Shared.Biomes
 				height: V(1f, 2f), top: 0.5f, anchor: BiomeLandformAnchor.NearWater, nearWater: 40f, paint: 2, part: BiomeLandformPart.Crest, pad: true)),
 
 			// Swamp Temple (decision 88): the tarn in its maar bowl with the drainers' notch, cercado mounds in the humedal, the painted
-			// megaboulders, the humedal itself (the palaeolake's shape, its own paint). Not built: the slump lobe below the notch.
+			// megaboulders, the humedal itself (the palaeolake's shape, its own paint), the slump lobe off the bowl's wall onto its floor
+			// (TarnSlump, right after the bowl).
 			new Preset("TarnBowl", "Swamp Temple", Make("TarnBowl", BiomeLandformForm.Caldera, density: 0.1f, perScene: 1, size: V(200f, 450f), height: V(0.08f, 0.12f),
 				top: 0.6f, rim: 0.06f, count: 5, pad: true).Breached(0.15f)),
+			new Preset("TarnSlump", "Swamp Temple", Make("TarnSlump", BiomeLandformForm.Slide, perPatch: 1, size: V(40f, 120f), length: V(60f, 160f), height: V(2f, 6f),
+				anchor: BiomeLandformAnchor.OnFlankOf, align: BiomeLandformAlign.HostDownhill)),
 			new Preset("CercadoMound", "Swamp Temple", Make("CercadoMound", BiomeLandformForm.Platform, density: 0.3f, perScene: 3, size: V(40f, 70f), height: V(1f, 2f),
 				top: 0.7f, slope: V(0f, 4f), pad: true)),
 			new Preset("PaintedStones", "Swamp Temple", Make("PaintedStones", BiomeLandformForm.Dome, BiomeLandformPlacement.Chain, density: 0.2f, perScene: 1,
@@ -728,34 +774,36 @@ namespace FishMMO.Shared.Biomes
 
 			// Runaway Greenhouse Plain (decision 89): a touching cluster of pancake domes with their summit pits, the arachnoid's ring and
 			// outer trough, the canale's constant-width channel edge to edge (its stored line), the airburst splotch, the shield field
-			// (power-law sizes), the halo crater. Not built: the farrum's radial grooves and ring crack, the arachnoid's web of radial
-			// fractures and second trough, the splotch's shattered core, the halo's dark parabola opening west (paint its ejecta meanwhile).
-			new Preset("Farrum", "Runaway Greenhouse Plain", Make("Farrum", BiomeLandformForm.Platform, BiomeLandformPlacement.Chain, density: 0.2f, perScene: 1,
+			// (power-law sizes), the halo crater. The farrum's radial grooves, the arachnoid's web of radial fractures, the halo's dark
+			// parabola trailing down the wind (its Halo part) are built. Not built: the farrum's ring crack, the arachnoid's second
+			// trough, the splotch's shattered core.
+			new Preset("Farrum", "Runaway Greenhouse Plain", Follow(Make("Farrum", BiomeLandformForm.Platform, BiomeLandformPlacement.Chain, density: 0.2f, perScene: 1,
 				size: V(150f, 500f), length: V(300f, 900f), height: V(15f, 45f), top: 0.7f, crown: 0.06f, crownDepth: 8f, count: 4, lean: 0.3f, roughness: 0.3f,
-				paint: 1, part: BiomeLandformPart.Top, pad: true)),
-			new Preset("Arachnoid", "Runaway Greenhouse Plain", Make("Arachnoid", BiomeLandformForm.Ring, density: 0.1f, perScene: 1, size: V(300f, 900f),
-				width: V(60f, 160f), height: V(4f, 10f), moat: 15f, moatDepth: 3f, roughness: 0.3f, pad: true)),
+				paint: 1, part: BiomeLandformPart.Top, pad: true), radials: 14)),
+			new Preset("Arachnoid", "Runaway Greenhouse Plain", Follow(Make("Arachnoid", BiomeLandformForm.Ring, density: 0.1f, perScene: 1, size: V(300f, 900f),
+				width: V(60f, 160f), height: V(4f, 10f), moat: 15f, moatDepth: 3f, roughness: 0.3f, pad: true), radials: 18)),
 			new Preset("Canale", "Runaway Greenhouse Plain", Make("Canale", BiomeLandformForm.Meander, density: 0.1f, perScene: 1, length: V(5000f, 20000f),
 				width: V(15f, 40f), height: V(2f, 5f), top: 0.8f, rim: 1.5f, anchor: BiomeLandformAnchor.Highest, paint: 6, part: BiomeLandformPart.Floor)),
 			new Preset("Splotch", "Runaway Greenhouse Plain", Make("Splotch", BiomeLandformForm.Hollow, density: 0.1f, perScene: 2, size: V(200f, 700f),
 				height: V(0.2f, 0.5f), paint: 4, part: BiomeLandformPart.Whole, pad: true)),
 			new Preset("ShieldField", "Runaway Greenhouse Plain", Make("ShieldField", BiomeLandformForm.Cone, density: 10f, perPatch: 25, size: V(40f, 160f),
 				height: V(3f, 12f), crown: 0.06f, crownDepth: 3f, paint: 5, part: BiomeLandformPart.Flank).PowerLaw(2f, false)),
-			new Preset("HaloCrater", "Runaway Greenhouse Plain", Make("HaloCrater", BiomeLandformForm.Impact, density: 0.1f, perScene: 1, size: V(300f, 700f),
-				height: V(0.18f, 0.18f), rim: 0.04f, top: 0.25f, paint: 4, part: BiomeLandformPart.Ejecta, pad: true)),
+			new Preset("HaloCrater", "Runaway Greenhouse Plain", Follow(Make("HaloCrater", BiomeLandformForm.Impact, density: 0.1f, perScene: 1, size: V(300f, 700f),
+				height: V(0.18f, 0.18f), rim: 0.04f, top: 0.25f, align: BiomeLandformAlign.Wind, paint: 4, part: BiomeLandformPart.Halo, pad: true), rayReach: 5f)),
 
 			// Tidal Fracture (decision 90): crossing sets of double ridges with their medial trough (a younger set carved over an older),
 			// cycloids (cusp pads), the chaos field's hummocky matrix with its rafts on it (author ChaosRafts right after it), lenticulae
 			// (domes, with their pits as LenticulaPits), the pull-apart band, the strike-slip trace that shifts every line before it.
-			// Not built: the rafts' tilt, the band's striations, scatter aligned along a line, ways shifted by the trace (only landforms are).
+			// The rafts tilt, each its own way. Not built: the band's striations, scatter aligned along a line, ways shifted by the trace
+			// (the ways are laid after the carve, over the shifted ground; only the landform lines before it shift).
 			new Preset("DoubleRidge", "Tidal Fracture", Make("DoubleRidge", BiomeLandformForm.Straight, density: 2f, perPatch: 8, length: V(600f, 3000f),
 				width: V(60f, 160f), height: V(6f, 20f), top: 0.35f, crown: 0.35f, crownDepth: 0.5f, roughness: 0.2f, paint: 4, part: BiomeLandformPart.Crest)),
 			new Preset("Cycloid", "Tidal Fracture", Make("Cycloid", BiomeLandformForm.Cycloid, density: 0.3f, perScene: 2, size: V(200f, 700f), width: V(40f, 80f),
 				height: V(3f, 8f), top: 0.35f, crown: 0.35f, crownDepth: 0.5f, count: 9, pad: true)),
 			new Preset("ChaosField", "Tidal Fracture", Make("ChaosField", BiomeLandformForm.Pan, density: 0.3f, perScene: 2, size: V(400f, 1500f), height: V(3f, 12f),
 				top: 0.8f, roughness: 0.8f, paint: 2, part: BiomeLandformPart.Floor)),
-			new Preset("ChaosRafts", "Tidal Fracture", Make("ChaosRafts", BiomeLandformForm.Table, density: 20f, perPatch: 20, size: V(20f, 200f), height: V(0.5f, 3f),
-				top: 0.8f, roughness: 0.3f, anchor: BiomeLandformAnchor.OnTopOf, paint: 3, part: BiomeLandformPart.Top)),
+			new Preset("ChaosRafts", "Tidal Fracture", Follow(Make("ChaosRafts", BiomeLandformForm.Table, density: 20f, perPatch: 20, size: V(20f, 200f), height: V(0.5f, 3f),
+				top: 0.8f, roughness: 0.3f, anchor: BiomeLandformAnchor.OnTopOf, paint: 3, part: BiomeLandformPart.Top), tilt: 12f)),
 			new Preset("Lenticulae", "Tidal Fracture", Make("Lenticulae", BiomeLandformForm.Dome, density: 6f, perPatch: 12, size: V(15f, 80f), height: V(2f, 8f),
 				roughness: 0.3f, paint: 6, part: BiomeLandformPart.Whole)),
 			new Preset("LenticulaPits", "Tidal Fracture", Make("LenticulaPits", BiomeLandformForm.Pit, density: 6f, perPatch: 12, size: V(15f, 80f), height: V(2f, 8f),
@@ -784,9 +832,11 @@ namespace FishMMO.Shared.Biomes
 
 			// Underwater Canyon (decision 92): the canyon from its head down to the deep (its stored line), then on it the cyclic steps
 			// down its floor, gullies down both walls, slides off its walls, and the fan valley at its mouth (author them after it).
-			// Not built: inner terraces on the bends, its dendritic tributaries, a hanging one.
-			new Preset("SubmarineCanyon", "Underwater Canyon", Make("SubmarineCanyon", BiomeLandformForm.Canyon, density: 1f, perScene: 1, length: V(4000f, 15000f),
-				width: V(600f, 3000f), height: V(150f, 700f), top: 0.12f, anchor: BiomeLandformAnchor.Highest, paint: 1, part: BiomeLandformPart.Floor, pad: true)),
+			// The canyon has inner terraces down its walls, an inner thalweg channel and three tributaries into it. Not built: a
+			// hanging tributary.
+			new Preset("SubmarineCanyon", "Underwater Canyon", Follow(Make("SubmarineCanyon", BiomeLandformForm.Canyon, density: 1f, perScene: 1, length: V(4000f, 15000f),
+				width: V(600f, 3000f), height: V(150f, 700f), top: 0.12f, count: 3, anchor: BiomeLandformAnchor.Highest, paint: 1, part: BiomeLandformPart.Floor, pad: true),
+				inner: 0.15f, steps: 2)),
 			new Preset("CyclicSteps", "Underwater Canyon", Make("CyclicSteps", BiomeLandformForm.Treads, width: V(30f, 120f), height: V(1f, 4f),
 				anchor: BiomeLandformAnchor.OnTopOf, paint: 1, part: BiomeLandformPart.Crest)),
 			new Preset("WallGullies", "Underwater Canyon", Make("WallGullies", BiomeLandformForm.Grooves, length: V(20f, 60f), width: V(6f, 20f), height: V(2f, 8f),
@@ -821,13 +871,13 @@ namespace FishMMO.Shared.Biomes
 
 			// Volcanic Temple (decision 95): the summit terrace and its row of vent mouths (stored as their sites, right after it), the
 			// sciara down one flank (its stored chute line), the fossa crater, the obsidian flow, the precinct's dry stepped terraces.
-			// Not built: the sciara kept away from the precinct and out of the road planner, the fossa on the second-highest patch.
+			// The sciara keeps the sites (the precinct with them) and the ways off its chute. Not built: the fossa on the second-highest patch.
 			new Preset("SummitTerrace", "Volcanic Temple", Make("SummitTerrace", BiomeLandformForm.Pan, density: 0.1f, perScene: 1, size: V(150f, 300f),
 				length: V(250f, 500f), height: V(20f, 60f), top: 0.75f, anchor: BiomeLandformAnchor.Highest, pad: true)),
 			new Preset("VentMouths", "Volcanic Temple", Make("VentMouths", BiomeLandformForm.Pit, perPatch: 4, size: V(20f, 60f), height: V(8f, 20f), top: 0.3f,
 				rim: 1.5f, anchor: BiomeLandformAnchor.OnTopOf, pad: true)),
-			new Preset("Sciara", "Volcanic Temple", Make("Sciara", BiomeLandformForm.Graben, density: 0.1f, perScene: 1, length: V(800f, 2500f), width: V(300f, 900f),
-				height: V(20f, 80f), top: 0.7f, anchor: BiomeLandformAnchor.Highest, align: BiomeLandformAlign.Downslope, paint: 4, part: BiomeLandformPart.Floor)),
+			new Preset("Sciara", "Volcanic Temple", Follow(Make("Sciara", BiomeLandformForm.Graben, density: 0.1f, perScene: 1, length: V(800f, 2500f), width: V(300f, 900f),
+				height: V(20f, 80f), top: 0.7f, anchor: BiomeLandformAnchor.Highest, align: BiomeLandformAlign.Downslope, paint: 4, part: BiomeLandformPart.Floor), keepClear: true)),
 			new Preset("FossaCrater", "Volcanic Temple", Make("FossaCrater", BiomeLandformForm.Caldera, density: 0.1f, perScene: 1, size: V(300f, 500f),
 				height: V(0.18f, 0.25f), top: 0.45f, rim: 0.04f, count: 4, anchor: BiomeLandformAnchor.Highest, paint: 5, part: BiomeLandformPart.Floor, pad: true)),
 			new Preset("GlassFlow", "Volcanic Temple", Make("GlassFlow", BiomeLandformForm.Tongue, density: 0.2f, perScene: 2, size: V(100f, 300f), length: V(300f, 800f),

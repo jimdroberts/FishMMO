@@ -626,12 +626,13 @@ namespace FishMMO.Client
 					continue;
 				}
 				sets.TryGetValue(t, out TerrainArraySet set);
+				int[] sceneLayers = TerrainTileLayers.Of(t);
 				for (int i = 0; i < ls.Length; i++)
 				{
 					TerrainLayer l = ls[i];
 					if (l != null && seen.Add(l))
 					{
-						Color c = LayerColour(set, ls, i, out bool fromArray);
+						Color c = LayerColour(set, ls, i, TerrainTileLayerMap.SceneLayerOf(sceneLayers, i), out bool fromArray);
 						layers.Append(layers.Length > 0 ? ", " : "").Append(l.name).Append(" #").Append(ColorUtility.ToHtmlStringRGB(c))
 							.Append(fromArray ? "" : " (layer texture: no array set)");
 					}
@@ -719,6 +720,14 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+			/* A tile carrying only the layers it paints (TerrainTileLayers) numbers its channels its own way: channel l is the
+			 * set's slice sceneLayers[l]. The stored map's ids are the set's own already. */
+			int[] sceneLayers = hasControls ? TerrainTileLayers.Of(terrain) : null;
+			if (!hasControls && set != null)
+			{
+				// The stored map names the set's layers, which a compacted tile's own count does not bound.
+				count = set.LayerCount;
+			}
 			var colours = new Color[count];
 			// What each layer is made of for the looks: the set's own (by its baked names, as the terrain shader is given
 			// them), or the layer's name where no set draws the terrain.
@@ -726,11 +735,12 @@ namespace FishMMO.Client
 			var flora = new Vector4[count];
 			for (int l = 0; l < count; l++)
 			{
-				bool drawable = l < layers.Length || (set != null && set.Albedo != null && l < set.LayerCount && l < set.Albedo.depth);
-				colours[l] = drawable ? LayerColour(set, layers, l, out _) : new Color(0.5f, 0.5f, 0.5f, 1f);
-				if (setFlora != null && l < set.LayerCount && l < setFlora.Length)
+				int slice = TerrainTileLayerMap.SceneLayerOf(sceneLayers, l);
+				bool drawable = l < layers.Length || (set != null && set.Albedo != null && slice < set.LayerCount && slice < set.Albedo.depth);
+				colours[l] = drawable ? LayerColour(set, layers, l, slice, out _) : new Color(0.5f, 0.5f, 0.5f, 1f);
+				if (setFlora != null && slice < set.LayerCount && slice < setFlora.Length)
 				{
-					flora[l] = setFlora[l];
+					flora[l] = setFlora[slice];
 				}
 				else
 				{
@@ -898,13 +908,16 @@ namespace FishMMO.Client
 		/// Layer <paramref name="index"/>'s colour as the terrain draws it: its slice of the bound albedo array
 		/// times its tint (the terrain shader's own arithmetic), or — no set — the layer's own diffuse texture.
 		/// </summary>
-		private static Color LayerColour(TerrainArraySet set, TerrainLayer[] layers, int index, out bool fromArray)
+		/// <param name="index">The tile's channel (its layer in <paramref name="layers"/>).</param>
+		/// <param name="slice">The scene layer that channel holds: the set's slice (TerrainTileLayers; the channel itself on a tile carrying the whole palette).</param>
+		private static Color LayerColour(TerrainArraySet set, TerrainLayer[] layers, int index, int slice, out bool fromArray)
 		{
-			fromArray = set != null && set.Albedo != null && index < set.LayerCount && index < set.Albedo.depth;
+			fromArray = set != null && set.Albedo != null && slice < set.LayerCount && slice < set.Albedo.depth;
 			if (!fromArray)
 			{
-				return MeanOf(layers[index]);
+				return MeanOf(index < layers.Length ? layers[index] : null);
 			}
+			index = slice;
 			var key = ((Texture)set.Albedo, index);
 			if (!sliceMeans.TryGetValue(key, out Color mean))
 			{

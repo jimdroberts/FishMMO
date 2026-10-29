@@ -429,6 +429,11 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeArtSpec.Entries.Length, Is.EqualTo(83));
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
+				if (BiomeAuthoredRounds.Contains(entry.Biome))
+				{
+					// An authored round names its own burning (BiomeAuthoredRoundTests: Savanna's annual veld fires).
+					continue;
+				}
 				Assert.That(entry.BurnRegime.HasValue, Is.False, $"{entry.Biome} names no burn regime yet (its round authors it)");
 			}
 			int templates = 0;
@@ -440,6 +445,10 @@ namespace FishMMO.UnitTests.WorldDesign
 					continue;
 				}
 				templates++;
+				if (BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(path)))
+				{
+					continue;
+				}
 				Match m = Regex.Match(text, @"^  burnRegime: (\d+)", RegexOptions.Multiline);
 				Assert.That(!m.Success || m.Groups[1].Value == "0", Is.True, $"{Path.GetFileName(path)} burns");
 				Assert.That(Regex.IsMatch(text, @"^\s+AfterBurn: 1", RegexOptions.Multiline), Is.False, $"{Path.GetFileName(path)} has an after-burn grass");

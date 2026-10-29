@@ -60,7 +60,6 @@ namespace FishMMO.Client
 		private static readonly List<(float d2, int index)> order = new List<(float, int)>();
 		private static readonly Vector4[] sources = new Vector4[MaxBeacons];
 		private static readonly Vector4[] parameters = new Vector4[MaxBeacons];
-		private static MaterialPropertyBlock block;
 		private static Material material;
 		private static Shader materialShader;
 		private static Mesh mesh;
@@ -195,8 +194,17 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>This hook's own time in the profiler (render-pipeline callbacks otherwise show only as
+		/// RenderPipeline.BeginCameraRendering's self time). In a class of its own so the marker, an engine object, is made
+		/// when the hook first runs, not when the type is first touched (tests outside Unity use these types' pure parts).</summary>
+		private static class HookProfiling
+		{
+			public static readonly Unity.Profiling.ProfilerMarker Marker = new Unity.Profiling.ProfilerMarker("LighthouseBeams.BeginCamera");
+		}
+
 		private static void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera)
 		{
+			using var hookMarkerScope = HookProfiling.Marker.Auto();
 			if (camera.cameraType != CameraType.Game && camera.cameraType != CameraType.SceneView)
 			{
 				return;
@@ -234,8 +242,6 @@ namespace FishMMO.Client
 			{
 				mesh = BuildMesh();
 			}
-			block ??= new MaterialPropertyBlock();
-
 			// The air: fog, rain and snow scatter a beam (it shows more) and take it sooner (it reaches less far).
 			float fog = Mathf.Clamp01(Shader.GetGlobalVector(WeatherFogId).x);
 			float precip = Mathf.Clamp01(Shader.GetGlobalVector(WeatherPrecipId).x);
@@ -262,14 +268,14 @@ namespace FishMMO.Client
 				parameters[i] = new Vector4(night * fade, BeamsOf(e.Seed), night * fade * carried, 0f);
 				bounds.Encapsulate(new Bounds(e.Position, Vector3.one * (BeamLength * 2f)));
 			}
-			block.Clear();
-			block.SetVectorArray(SourcesId, sources);
-			block.SetVectorArray(ParamsId, parameters);
-			block.SetVector(AirId, new Vector4(BeamLength, reach, haze, 0f));
+			/* No property block, so the draw stays in the SRP Batcher: the arrays are globals (only this draw reads them, set in the
+			 * camera's own hook before it renders) and the air is the material's own (this system's, never shared). */
+			Shader.SetGlobalVectorArray(SourcesId, sources);
+			Shader.SetGlobalVectorArray(ParamsId, parameters);
+			mat.SetVector(AirId, new Vector4(BeamLength, reach, haze, 0f));
 			var rp = new RenderParams(mat)
 			{
 				camera = camera,
-				matProps = block,
 				shadowCastingMode = ShadowCastingMode.Off,
 				receiveShadows = false,
 				layer = camera.gameObject.layer,

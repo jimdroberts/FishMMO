@@ -20,6 +20,44 @@
 // TerrainArrayLayerParams.MaximumLayers and TerrainLayerTable.Width on the C# side (32, eight control maps, until 2026-10-16).
 #define FISH_TERRAIN_ARRAY_MAX_LAYERS 256
 
+// What TerrainArrayBinder pushes per tile through Terrain.SetSplatMaterialPropertyBlock.
+//
+// The per-layer numbers are not here: they live in the layer table (_FishLayerTable below, TerrainLayerTable.cs), one
+// texture loaded by layer. As uniform arrays they were 27 KB at 256 layers, pushed per tile — past the 16 KB uniform block
+// OpenGL ES guarantees, and large constant arrays varied per draw are what broke the grass on OpenGL. Their values live
+// in the baked TerrainArraySet asset, because they depend on which art (committed or LOCAL) a layer resolved to.
+//
+//   _FishArrayInfo              x: layers in the arrays (0 = nothing baked yet), y: 1 when the tile's index map is bound (the
+//                               backdrop: its control maps bound), z: 1 when the normal array holds anything, w: 1 when the
+//                               mask array does.
+//   _FishControl0_TexelSize     the backdrop's control maps (FishBackdropSurface): 1 / size, size.
+//   _FishControlEmpty           x: bit k set when control map k is zero over the whole tile: it can neither add a layer nor
+//                               move one, so it is not sampled. 0 (nothing pushed) reads every map. The backdrop's only, now;
+//                               it never pushes it.
+//   _FishIndexMap_TexelSize     the tile's index map (_FishIndexMap): 1 / size, size, as Unity's _TexelSize.
+//   _FishPathLayers             FishMMO edit: the slices the scene's paths are surfaced from (x trodden earth, y gravel, z
+//                               stone; -1 none), set per tile by TerrainArrayBinder from the scene's path surface (each scene's
+//                               palette puts them elsewhere). Each layer's own biome's are in the layer table
+//                               (FISH_LAYER_ROW_PATHS); these are what a layer without them paves with.
+//   _FishSnowHoleFade_TexelSize FishMMO edit: the tile's snow hole fade (_FishSnowHoleFade, TerrainSnowHoleFade): 1 / size,
+//                               size, as Unity's _TexelSize; 0 when nothing was pushed.
+//
+// The backdrop (FISH_TERRAIN_BACKDROP) keeps the same numbers in its UnityPerMaterial instead: in play its renderers draw
+// with a runtime copy of their material that carries them (TerrainArrayBinder.PushTo(Renderer)) and no property block, so
+// they stay in the SRP Batcher, and under the batcher a draw reads its material's numbers only from UnityPerMaterial.
+//
+// The client's own heightmap draw (FISH_TERRAIN_GPU, FishMMO/Weather Terrain Array GPU, TerrainHeightmapSystem) draws every
+// tile of a scene in one draw, so the same numbers are statics there, set per vertex and per pixel from the drawn tile's
+// record (FishTerrainGpuSelectTile below), with the per-tile textures read from arrays of them by the tile's slice.
+#define FISH_TERRAIN_ARRAY_NUMBERS_AS(storage) \
+    storage float4 _FishArrayInfo; \
+    storage float4 _FishControl0_TexelSize; \
+    storage float4 _FishControlEmpty; \
+    storage float4 _FishIndexMap_TexelSize; \
+    storage float4 _FishPathLayers; \
+    storage float4 _FishSnowHoleFade_TexelSize;
+#define FISH_TERRAIN_ARRAY_NUMBERS FISH_TERRAIN_ARRAY_NUMBERS_AS()
+
 CBUFFER_START(UnityPerMaterial)
     float4 _MainTex_ST;
     half4 _BaseColor;
@@ -33,6 +71,16 @@ CBUFFER_START(UnityPerMaterial)
     float4 _FishBackdropColour_ST;
     // x: the camera distance (m) the arrays start fading into the colour bake at, y: where they are gone.
     float4 _FishBackdropDetail;
+    // What the tiles take in _FishTerrainArray below (the backdrop's renderers carry them on their material).
+    FISH_TERRAIN_ARRAY_NUMBERS
+#endif
+#ifdef FISH_TERRAIN_GPU
+    // The client's heightmap draw (TerrainHeightmapField): what every tile of the scene shares, from the binder's push.
+    // _FishGpuArrayInfo: _FishArrayInfo less its y (per tile); _FishGpuPathLayers: _FishPathLayers; _FishGpuHeightBlend: 1 when
+    // the tiles' material blends by height (its _TERRAIN_BLEND_HEIGHT, a branch here rather than a keyword the build strips).
+    float4 _FishGpuArrayInfo;
+    float4 _FishGpuPathLayers;
+    float _FishGpuHeightBlend;
 #endif
 CBUFFER_END
 
@@ -50,31 +98,45 @@ CBUFFER_START(_Terrain)
     #endif
 CBUFFER_END
 
-// What TerrainArrayBinder pushes per tile through Terrain.SetSplatMaterialPropertyBlock.
-//
-// The per-layer numbers are not here: they live in the layer table (_FishLayerTable below, TerrainLayerTable.cs), one
-// texture loaded by layer. As uniform arrays they were 27 KB at 256 layers, pushed per tile — past the 16 KB uniform block
-// OpenGL ES guarantees, and large constant arrays varied per draw are what broke the grass on OpenGL. Their values live
-// in the baked TerrainArraySet asset, because they depend on which art (committed or LOCAL) a layer resolved to.
+#ifndef FISH_TERRAIN_BACKDROP
+#ifndef FISH_TERRAIN_GPU
+// The tiles' (see FISH_TERRAIN_ARRAY_NUMBERS above).
 CBUFFER_START(_FishTerrainArray)
-    // x: layers in the arrays (0 = nothing baked yet), y: 1 when the tile's index map is bound (the backdrop: its control
-    // maps bound), z: 1 when the normal array holds anything, w: 1 when the mask array does.
-    float4 _FishArrayInfo;
-    // The backdrop's control maps (FishBackdropSurface): 1 / size, size.
-    float4 _FishControl0_TexelSize;
-    // x: bit k set when control map k is zero over the whole tile: it can neither add a layer nor move one, so it is not
-    // sampled. 0 (nothing pushed) reads every map. The backdrop's only, now; it never pushes it.
-    float4 _FishControlEmpty;
-    // The tile's index map (_FishIndexMap): 1 / size, size, as Unity's _TexelSize.
-    float4 _FishIndexMap_TexelSize;
-    // FishMMO edit: the slices the scene's paths are surfaced from (x trodden earth, y gravel, z stone; -1 none), set
-    // per tile by TerrainArrayBinder from the scene's path surface (each scene's palette puts them elsewhere). Each layer's
-    // own biome's are in the layer table (FISH_LAYER_ROW_PATHS); these are what a layer without them paves with.
-    float4 _FishPathLayers;
-    // FishMMO edit: the tile's snow hole fade (_FishSnowHoleFade, TerrainSnowHoleFade): 1 / size, size, as Unity's _TexelSize;
-    // 0 when nothing was pushed.
-    float4 _FishSnowHoleFade_TexelSize;
+    FISH_TERRAIN_ARRAY_NUMBERS
 CBUFFER_END
+#else
+// The drawn tile's, set by FishTerrainGpuSelectTile at the top of every vertex and pixel.
+FISH_TERRAIN_ARRAY_NUMBERS_AS(static)
+#endif
+#endif
+
+#ifdef FISH_TERRAIN_GPU
+// The scene's tiles, heightmaps, level field and patches (FishTerrainHeightmap.hlsl); which command (list) a draw is.
+#include "FishTerrainHeightmap.hlsl"
+#include "UnityIndirect.cginc"
+
+// The drawn tile and its slices in the per-tile arrays (holes: -1 none; normals and the index map: the tile itself).
+static uint fishTerrainTile;
+static int fishTerrainHoleSlice;
+static int fishTerrainFadeSlice;
+static float fishTerrainQuads;
+
+/// Makes the per-tile numbers the drawn tile's (FishTerrainHeightmap.hlsl FishTerrainTile): what a tile's own draw had bound.
+void FishTerrainGpuSelectTile(uint tileIndex)
+{
+    FishTerrainTile tile = _FishTerrainTiles[tileIndex];
+    fishTerrainTile = tileIndex;
+    fishTerrainHoleSlice = tile.slices.x;
+    fishTerrainFadeSlice = tile.slices.y;
+    fishTerrainQuads = tile.grid.z;
+    _FishArrayInfo = float4(_FishGpuArrayInfo.x, tile.slices.w != 0 ? 1.0 : 0.0, _FishGpuArrayInfo.z, _FishGpuArrayInfo.w);
+    _FishControl0_TexelSize = float4(0.0, 0.0, 0.0, 0.0);
+    _FishControlEmpty = float4(0.0, 0.0, 0.0, 0.0);
+    _FishIndexMap_TexelSize = tile.indexTexel;
+    _FishPathLayers = _FishGpuPathLayers;
+    _FishSnowHoleFade_TexelSize = tile.fadeTexel;
+}
+#endif
 
 // FishMMO edit: the ground on its world (FishFlora.hlsl, published by FloraPaletteMap): the living ground takes its biome's
 // ground shift (what the planet's light and air change; white on an Earth-like world), bare ground on an airless or
@@ -101,7 +163,14 @@ TEXTURE2D(_FishControl7);
 // The tile's index map: per alphamap texel its four strongest layers (TerrainIndexMap.cs), baked on the GPU from Unity's
 // own alphamaps by TerrainArrayBinder (TerrainIndexMapBaker) whenever they change — a brush stroke included, so the paint
 // tools keep working with no other glue, and the alphamaps stay the weights everything edits.
+#ifdef FISH_TERRAIN_GPU
+// Every tile's, a slice each (copies of what the binder bound per tile).
+Texture2D<uint2> _FishIndexMapArray;
+#define FISH_INDEX_LOAD(x, y) _FishIndexMapArray.Load(int3((x), (y), 0))
+#else
 Texture2D<uint2> _FishIndexMap;
+#define FISH_INDEX_LOAD(x, y) _FishIndexMap.Load(int3((x), (y), 0))
+#endif
 #endif
 
 // The scene's per-layer numbers, a column per layer (TerrainLayerTable.cs; rows FISH_LAYER_ROW_*).
@@ -111,6 +180,10 @@ float4 FishLayerRow(int id, int row)
 {
     return _FishLayerTable.Load(int3(clamp(id, 0, FISH_TERRAIN_ARRAY_MAX_LAYERS - 1), row, 0));
 }
+
+// FishMMO edit (2026-10-26, GROUND-BANDS): ground layers that come and go on the shared clock (FishGroundClock.hlsl), applied
+// to the four strongest layers FishTopLayers returns.
+#include "FishGroundClock.hlsl"
 
 // Slice i of every array is terrainData.terrainLayers[i]. One sampler (repeat, trilinear, anisotropic, from
 // the albedo array's import settings) serves all three: they share a layout, and samplers are scarcer than
@@ -147,6 +220,18 @@ UNITY_DEFINE_INSTANCED_PROP(float4, _TerrainPatchInstanceData)  // float4(xBase,
 UNITY_INSTANCING_BUFFER_END(Terrain)
 
 #ifdef _ALPHATEST_ON
+#ifdef FISH_TERRAIN_GPU
+// The tiles' holes (copies of terrainData.holesTexture with its own sampling), a slice per tile that has any. Read
+// unconditionally (a tile with none reads slice 0 and takes ground): an implicit-gradient sample needs uniform flow.
+TEXTURE2D(_FishHolesArray);
+SAMPLER(sampler_FishHolesArray);
+
+float SampleTerrainHolesTexture(float2 uv)
+{
+    float hole = SAMPLE_TEXTURE2D(_FishHolesArray, sampler_FishHolesArray, uv).r;
+    return fishTerrainHoleSlice >= 0 ? hole : 1.0;
+}
+#else
 TEXTURE2D(_TerrainHolesTexture);
 SAMPLER(sampler_TerrainHolesTexture);
 
@@ -154,6 +239,7 @@ float SampleTerrainHolesTexture(float2 uv)
 {
     return SAMPLE_TEXTURE2D(_TerrainHolesTexture, sampler_TerrainHolesTexture, uv).r;
 }
+#endif
 
 void ClipHoles(float2 uv)
 {
@@ -198,6 +284,70 @@ void TerrainInstancing(inout float4 positionOS)
     float3 normal = { 0, 0, 0 };
     TerrainInstancing(positionOS, normal);
 }
+
+#ifdef FISH_TERRAIN_GPU
+// Every tile's normal map (FishTerrainHeightmap.compute FishTerrainNormals: the heightmap's, across the seams), as the
+// engine's _TerrainNormalmapTexture is read per pixel.
+TEXTURE2D(_FishTerrainNormals);
+
+// The drawn patch (FishTerrainGpuBeginPatch): its level, its node in its tile, and its bounding sphere (world), for the shadow
+// caster's per-cascade test, which is made before any of the patch's vertex work.
+static uint fishTerrainLevel;
+static uint2 fishTerrainNode;
+static float4 fishTerrainPatchSphere;
+
+/// <summary>
+/// The patch <paramref name="instance"/> of this draw's list: makes its tile's numbers the current ones (FishTerrainGpuSelectTile)
+/// and finds its bounding sphere. Returns the tile.
+/// </summary>
+uint FishTerrainGpuBeginPatch(uint instance)
+{
+    uint list = GetCommandID(0);
+    uint2 patch = _FishTerrainPatches[list * (uint)_FishTerrainLayout.x + instance];
+    uint tileIndex;
+    FishTerrainPatchOf(patch, tileIndex, fishTerrainLevel, fishTerrainNode);
+    FishTerrainGpuSelectTile(tileIndex);
+    FishTerrainTile tile = _FishTerrainTiles[tileIndex];
+    float4 bounds = _FishTerrainNodes[FishTerrainNodeIndex(tileIndex, (uint)tile.grid.z, fishTerrainLevel, fishTerrainNode)];
+    float side = (float)(FISH_TERRAIN_PATCH_QUADS << fishTerrainLevel);
+    float3 lo = float3(tile.origin.x + fishTerrainNode.x * side * tile.grid.x, bounds.x, tile.origin.z + fishTerrainNode.y * side * tile.grid.y);
+    float3 hi = float3(lo.x + side * tile.grid.x, bounds.y + _FishTerrainLodScale.z, lo.z + side * tile.grid.y);
+    fishTerrainPatchSphere = float4(0.5 * (lo + hi), 0.5 * length(hi - lo));
+    return tileIndex;
+}
+
+/// <summary>
+/// The begun patch's vertex in place of TerrainInstancing: <paramref name="positionOS"/>.xy is the patch mesh's grid vertex
+/// (0..16). Out: the vertex's WORLD position (the draw's object space is the world: nothing transforms it), its normal (up: the
+/// normal is read per pixel) and the tile's 0..1 coordinate.
+/// </summary>
+void FishTerrainGpuPlace(inout float4 positionOS, inout float3 normal, inout float2 uv)
+{
+    FishTerrainTile tile = _FishTerrainTiles[fishTerrainTile];
+    float stride = (float)(1u << fishTerrainLevel);
+    float2 g = ((float2)fishTerrainNode * (float)FISH_TERRAIN_PATCH_QUADS + round(positionOS.xy)) * stride;
+    float height;
+    float2 p = FishTerrainMorph(tile, fishTerrainTile, g, fishTerrainLevel, height);
+    positionOS = float4(FishTerrainWorldAt(tile, p, height), 1.0);
+    normal = float3(0.0, 1.0, 0.0);
+    uv = p / tile.grid.z;
+}
+
+/// The client's heightmap draw in place of TerrainInstancing (FishTerrainGpuBeginPatch, then FishTerrainGpuPlace). Returns the tile.
+uint FishTerrainGpuInstancing(inout float4 positionOS, inout float3 normal, inout float2 uv, uint instance)
+{
+    uint tileIndex = FishTerrainGpuBeginPatch(instance);
+    FishTerrainGpuPlace(positionOS, normal, uv);
+    return tileIndex;
+}
+
+/// The heightmap's normal at a pixel of the drawn tile (as the engine reads _TerrainNormalmapTexture: texel centres at the vertices).
+half3 FishTerrainGpuNormalAt(float2 uv)
+{
+    float2 sampleCoords = (uv * fishTerrainQuads + 0.5) / (fishTerrainQuads + 1.0);
+    return (half3)normalize(SAMPLE_TEXTURE2D_LOD(_FishTerrainNormals, sampler_LinearClamp, sampleCoords, 0).rgb * 2.0 - 1.0);
+}
+#endif
 
 // ── The array splat ─────────────────────────────────────────────────────
 
@@ -302,7 +452,10 @@ half4 FishTopLayers(float2 uv, out int4 ids, out half covered)
         ids = 0;
         return half4(1, 0, 0, 0);
     }
-    return weights / total;
+    weights /= total;
+    // A clocked ground's share to its main ground (2026-10-26, GROUND-BANDS); untouched on a scene with none.
+    FishGroundClockShift(weights, ids);
+    return weights;
 }
 #else
 /// <summary>
@@ -326,15 +479,18 @@ half4 FishTopLayers(float2 uv, out int4 ids, out half covered)
     int2 i0, i1;
     float2 f;
     FishIndexFootprint(uv, _FishIndexMap_TexelSize.zw, i0, i1, f);
-    uint2 t00 = _FishIndexMap.Load(int3(i0.x, i0.y, 0));
-    uint2 t10 = _FishIndexMap.Load(int3(i1.x, i0.y, 0));
-    uint2 t01 = _FishIndexMap.Load(int3(i0.x, i1.y, 0));
-    uint2 t11 = _FishIndexMap.Load(int3(i1.x, i1.y, 0));
-    return (half4)FishIndexFilter(t00, t10, t01, t11, f, ids);
+    uint2 t00 = FISH_INDEX_LOAD(i0.x, i0.y);
+    uint2 t10 = FISH_INDEX_LOAD(i1.x, i0.y);
+    uint2 t01 = FISH_INDEX_LOAD(i0.x, i1.y);
+    uint2 t11 = FISH_INDEX_LOAD(i1.x, i1.y);
+    half4 weights = (half4)FishIndexFilter(t00, t10, t01, t11, f, ids);
+    // A clocked ground's share to its main ground (2026-10-26, GROUND-BANDS); untouched on a scene with none.
+    FishGroundClockShift(weights, ids);
+    return weights;
 }
 #endif
 
-#ifdef _TERRAIN_BLEND_HEIGHT
+#if defined(_TERRAIN_BLEND_HEIGHT) || defined(FISH_TERRAIN_GPU)
 // URP's HeightBasedSplatModify, on the four chosen layers: heights from the mask's blue channel, the highest
 // layer wins within _HeightTransition of the rest.
 void FishHeightBlend(inout half4 weights, half4 heights)
@@ -476,8 +632,8 @@ void FishPathGroundsAt(float2 uv, float2 uvPerMetre, float2 xz, out float4 lo, o
         int2 i0, i1;
         float2 f;
         FishIndexFootprint(uv + offset * uvPerMetre, _FishIndexMap_TexelSize.zw, i0, i1, f);
-        uint4 strongest = uint4(_FishIndexMap.Load(int3(i0.x, i0.y, 0)).x, _FishIndexMap.Load(int3(i1.x, i0.y, 0)).x,
-                                _FishIndexMap.Load(int3(i0.x, i1.y, 0)).x, _FishIndexMap.Load(int3(i1.x, i1.y, 0)).x) & 255u;
+        uint4 strongest = uint4(FISH_INDEX_LOAD(i0.x, i0.y).x, FISH_INDEX_LOAD(i1.x, i0.y).x,
+                                FISH_INDEX_LOAD(i0.x, i1.y).x, FISH_INDEX_LOAD(i1.x, i1.y).x) & 255u;
         float4 share = float4((1.0 - f.x) * (1.0 - f.y), f.x * (1.0 - f.y), (1.0 - f.x) * f.y, f.x * f.y);
         UNITY_UNROLL
         for (int c = 0; c < 4; c++)
@@ -870,7 +1026,13 @@ FishArraySurface FishSampleArraySurfaceSloped(float2 uv, float3 positionWS, floa
         masks[k] = masks[k] * (half4)layerMaskScale[k] + (half4)layerMaskOffset[k];
     }
 
-#ifdef _TERRAIN_BLEND_HEIGHT
+#if defined(FISH_TERRAIN_GPU)
+    UNITY_BRANCH
+    if (_FishGpuHeightBlend > 0.5)
+    {
+        FishHeightBlend(weights, half4(masks[0].b, masks[1].b, masks[2].b, masks[3].b));
+    }
+#elif defined(_TERRAIN_BLEND_HEIGHT)
     FishHeightBlend(weights, half4(masks[0].b, masks[1].b, masks[2].b, masks[3].b));
 #endif
 

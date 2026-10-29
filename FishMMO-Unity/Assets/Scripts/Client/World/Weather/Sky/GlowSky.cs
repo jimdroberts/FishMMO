@@ -27,6 +27,7 @@ namespace FishMMO.Client
 		private static readonly int PlumeTideId = Shader.PropertyToID("_FishPlumeTide");
 		private static readonly int TidalStressId = Shader.PropertyToID("_FishTidalStress");
 		private static readonly int VentBurstId = Shader.PropertyToID("_FishVentBurst");
+		private static readonly int GroundClockId = Shader.PropertyToID("_FishGroundClock");
 
 		/// <summary>The knots the weather is read on, seconds: wind and fog, and the rain to come and the sea.</summary>
 		public const double FineKnotSeconds = 60.0, CoarseKnotSeconds = 3600.0;
@@ -72,10 +73,27 @@ namespace FishMMO.Client
 			Shader.SetGlobalFloat(PlumeTideId, sky.PlumeTide);
 			Shader.SetGlobalVector(TidalStressId, sky.TidalStress);
 			Shader.SetGlobalFloat(VentBurstId, sky.VentBurst);
+			// The clocks a clocked ground layer follows (2026-10-26, GROUND-BANDS; FishGroundClock.hlsl): the local year and hour.
+			Shader.SetGlobalVector(GroundClockId, GroundClockOf(state));
 			// The glow table's anchors as the scene's lights come and go (2026-10-25, I6i-b): a light and its stone on one biome's row.
 			GlowModeTable.Refresh();
 			// The burn mosaic's clock, wind and night (2026-10-25, I2t), at the same moment and the same prevailing way.
 			BurnMosaicTable.Frame(in sky, state != null ? state.Hours * 3600.0 : weather.WorldHours * 3600.0);
+		}
+
+		/// <summary>
+		/// The ground's clocks at the sky's moment (<see cref="FishMMO.Shared.Biomes.BiomeGroundClock.ShaderClock"/>): the local year from the
+		/// body's season, turned in the south, and the local solar time; zero (no clock known) with no celestial state.
+		/// </summary>
+		public static Vector4 GroundClockOf(CelestialState state)
+		{
+			if (state == null)
+			{
+				return Vector4.zero;
+			}
+			bool year = state.System != null && state.Observer != null;
+			float phase = year ? FishMMO.Shared.Biomes.BiomeGroundClock.LocalYear(CelestialMath.Season01(state.System, state.Observer, state.Hours), (float)state.Latitude) : 0f;
+			return FishMMO.Shared.Biomes.BiomeGroundClock.ShaderClock(phase, year, (float)state.LocalTime01, true);
 		}
 
 		private static void Sky(CelestialState state, ref SceneGlowSky sky)
@@ -121,9 +139,9 @@ namespace FishMMO.Client
 			sky.WayX = way.x;
 			sky.WayZ = way.y;
 			int scene = weather.Scene.IsValid() ? weather.Scene.handle : 0;
-			sky.Turbidity = weather.Scene.IsValid() ? TurbidityEpisodes.Strength(TurbidityEpisodes.SeedOf(weather.Scene.name), worldSeconds) : 0f;
+			sky.Turbidity = weather.Scene.IsValid() ? TurbidityEpisodes.Strength(TurbidityEpisodes.SeedOf(FishMMO.Shared.SceneNames.Of(weather.Scene)), worldSeconds) : 0f;
 			// The scene's own vent (decision 95): on the motion clock, as the glows and the later vent effect read it.
-			sky.VentBurst = weather.Scene.IsValid() ? VentBursts.At(WorldMotion.Wrapped(WorldMotion.ShaderWrapSeconds), VentBursts.SceneSeed(weather.Scene.name)) : 0f;
+			sky.VentBurst = weather.Scene.IsValid() ? VentBursts.At(WorldMotion.Wrapped(WorldMotion.ShaderWrapSeconds), VentBursts.SceneSeed(FishMMO.Shared.SceneNames.Of(weather.Scene))) : 0f;
 			if (weather.Timeline == null || weather.Settings == null)
 			{
 				return;

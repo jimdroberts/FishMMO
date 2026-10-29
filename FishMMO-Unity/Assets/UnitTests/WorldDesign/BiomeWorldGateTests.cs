@@ -204,21 +204,28 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			Assert.That(BiomeArtSpec.Entries.Length, Is.EqualTo(83));
 			var EmitsNew = new HashSet<string> { "Ice Geyser Field", "Nitrogen Ice Field", "Volcanic", "Sulphuric Cloud Deck", "Runaway Greenhouse Plain", "Methane Lake" };
+			var EmitsMoved = new HashSet<string> { "Cryovolcanic Plain", "Tidal Fracture", "Molten Surface", "Sulphur Flats", "Tholin Plain", "Volcanic Temple" };
 			int rules = 0;
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
 				foreach (BiomeArtSpec.Scatter s in RulesOf(entry))
 				{
-					Assert.That(s.World.IsOpen, Is.True, $"{entry.Biome} {s.Name}");
+					// An authored round gates its own rules and bands its own grounds by air (BiomeAuthoredRoundTests).
+					Assert.That(s.World.IsOpen || BiomeAuthoredRounds.Contains(entry.Biome), Is.True, $"{entry.Biome} {s.Name}");
 					rules++;
 				}
-				Assert.That(entry.Main == null || entry.Main.AirBand == BiomeAtmosphereRequirement.None, Is.True, entry.Biome);
-				Assert.That(entry.Details.All(d => d == null || d.AirBand == BiomeAtmosphereRequirement.None), Is.True, entry.Biome);
-				Assert.That(entry.Cliffs.Length, Is.LessThanOrEqualTo(1), entry.Biome);
-				Assert.That(entry.Cliffs.All(c => c.AirBand == BiomeAtmosphereRequirement.None), Is.True, entry.Biome);
+				if (!BiomeAuthoredRounds.Contains(entry.Biome))
+				{
+					Assert.That(entry.Main == null || entry.Main.AirBand == BiomeAtmosphereRequirement.None, Is.True, entry.Biome);
+					Assert.That(entry.Details.All(d => d == null || d.AirBand == BiomeAtmosphereRequirement.None), Is.True, entry.Biome);
+					Assert.That(entry.Cliffs.Length, Is.LessThanOrEqualTo(1), entry.Biome);
+					Assert.That(entry.Cliffs.All(c => c.AirBand == BiomeAtmosphereRequirement.None), Is.True, entry.Biome);
+				}
 				// Crater's file clears its old volcanic ash (decision 39); the geyser basin's writes its Steam (I2q, decision 47); the vent
-				// rounds' new substances (I2q-b, decisions 53/62/66/85/89/93); no other names one.
-				Assert.That(entry.Emission.HasValue, Is.EqualTo(entry.Biome == "Crater" || entry.Biome == "Geyser Basin" || EmitsNew.Contains(entry.Biome)), entry.Biome);
+				// rounds' new substances (I2q-b, decisions 53/62/66/85/89/93); the weather content generator's other emitting rows moved
+				// into their files (2026-10-26, CODE-TABLE CLEARANCE); no other names one.
+				Assert.That(entry.Emission.HasValue, Is.EqualTo(entry.Biome == "Crater" || entry.Biome == "Geyser Basin" || EmitsNew.Contains(entry.Biome)
+					|| EmitsMoved.Contains(entry.Biome)), entry.Biome);
 			}
 			Assert.That(rules, Is.GreaterThan(83 * 4));
 			Assert.That(BiomeArtSpec.For("Crater").Emission, Is.EqualTo(((string)null, 0f)));
@@ -227,9 +234,12 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(yaml.Count, Is.EqualTo(83));
 			foreach (KeyValuePair<string, string> pair in yaml)
 			{
-				// Nothing serialised yet: Unity writes the new fields on the next save, at their defaults.
-				Assert.That(Regex.IsMatch(pair.Value, @"worldGate:\s*\n\s*air: [1-9]"), Is.False, pair.Key);
-				Assert.That(Regex.IsMatch(pair.Value, @"airBand: [1-9]"), Is.False, pair.Key);
+				// Nothing serialised yet: Unity writes the new fields on the next save, at their defaults (an authored round's own once authored).
+				if (!BiomeAuthoredRounds.Contains(pair.Key))
+				{
+					Assert.That(Regex.IsMatch(pair.Value, @"worldGate:\s*\n\s*air: [1-9]"), Is.False, pair.Key);
+					Assert.That(Regex.IsMatch(pair.Value, @"airBand: [1-9]"), Is.False, pair.Key);
+				}
 				// Author biome art has run since I2o (2026-10-25): the flag is on the lived-in kinds the spec flags and on no other.
 				foreach (Match flagged in Regex.Matches(pair.Value, @"- Kind: (\d+)\s*\n\s*Weight: [^\n]*\n\s*NeedsBreathableAir: 1"))
 				{
@@ -400,9 +410,17 @@ namespace FishMMO.UnitTests.WorldDesign
 			int flagged = 0;
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
-				foreach (BiomeSiteKind k in entry.SiteKinds(rules))
+				foreach (BiomeSiteKind k in entry.SiteKinds())
 				{
-					Assert.That(k.NeedsBreathableAir, Is.EqualTo(BiomeSiteAir.NeedsAirByDefault(k.Kind)), $"{entry.Biome} {k.Kind}");
+					// An authored round may say otherwise per kind (its file's Air, BiomeAuthoredRoundTests).
+					Assert.That(k.NeedsBreathableAir, Is.EqualTo(BiomeAuthoredRounds.Contains(entry.Biome) ? entry.NeedsAir(k.Kind) : BiomeSiteAir.NeedsAirByDefault(k.Kind)),
+						$"{entry.Biome} {k.Kind}");
+					// Invariant for every biome, authored or not: a detected (natural) kind never needs breathable air.
+					PointOfInterestKindRule kindRule = rules.RuleFor(k.Kind);
+					if (kindRule != null && kindRule.Placement == PointOfInterestPlacement.Detected)
+					{
+						Assert.That(k.NeedsBreathableAir, Is.False, $"{entry.Biome} {k.Kind} is detected (natural)");
+					}
 					flagged += k.NeedsBreathableAir ? 1 : 0;
 				}
 			}
@@ -410,21 +428,89 @@ namespace FishMMO.UnitTests.WorldDesign
 
 			var dust = new BiomeArtSpec.Entry { Biome = "Dust Sea" };
 			dust.Hosts(POIType.Hermitage, 0.3f).Air(POIType.Hermitage, false).Hosts(POIType.Ruins, 0.3f).Air(POIType.Ruins, true);
-			List<BiomeSiteKind> list = dust.SiteKinds(rules);
+			List<BiomeSiteKind> list = dust.SiteKinds();
 			Assert.That(list.Single(k => k.Kind == POIType.Hermitage).NeedsBreathableAir, Is.False, "the file's word over the default");
 			Assert.That(list.Single(k => k.Kind == POIType.Ruins).NeedsBreathableAir, Is.True);
 		}
 
+		/// <summary>The air of a body in the home system, read from its asset (bodies are tracked templates; scenes are cut output).</summary>
+		private static AtmosphereKind BodyAir(string body)
+		{
+			string path = Directory.GetFiles("Assets/Templates/World/Systems", "* - " + body + ".asset", SearchOption.AllDirectories).Single();
+			return (AtmosphereKind)int.Parse(Regex.Match(File.ReadAllText(path), @"\n  Atmosphere: (\d+)").Groups[1].Value);
+		}
+
 		/// <summary>
-		/// Today's cut scenes (2026-10-18): the two on Moron (Earth-like air) lose no site; the three on thin or airless worlds lose
-		/// only their lived-in kinds once re-authored and regenerated (Belron 1's bandit camp and camp; Galris 1's camp and shrine;
-		/// Ithaewyn 1's camp and quarry), as reported.
+		/// The gate's choice for today's scenes (2026-10-18, re-pinned 2026-10-26 on a fixture once the re-cut scenes no longer held the
+		/// sites to lose): each scene's sites as cut before the gate, weighed as the cut weighs them (the spec's default air flag per
+		/// kind, <see cref="BiomeSiteAir.WeightOn(in BiomeSiteKind, bool, bool)"/> under <see cref="BiomeAir.IsBreathable"/> of the
+		/// scene's body). The two on Moron (Earth-like air) lose no site; the three on thin or airless worlds lose only their lived-in
+		/// kinds (Belron 1's bandit camp and camp; Galris 1's camp and shrine; Ithaewyn 1's camp and quarry), as reported.
 		/// </summary>
 		[Test]
-		public void AuthoredScenes_ContainNoLivedInSitesWithoutBreathableAir()
+		public void TodaysScenes_OnlyThinAndAirlessWorldsLoseSites_AndOnlyTheirLivedInOnes()
+		{
+			PointOfInterestRules rules = PointOfInterestRules.Default();
+			// Each scene: its body, and the kinds it held before the gate (the lived-in ones reported then, its natural sites and relics
+			// as the re-cut kept them; Moron's a sample of its towns, works, camps and shrines among its wild sites).
+			var scenes = new (string Scene, string Body, POIType[] Sites)[]
+			{
+				("Moron 1", "Moron", new[] { POIType.Capital, POIType.Town, POIType.Village, POIType.Keep, POIType.Mine, POIType.Camp, POIType.Shrine,
+					POIType.HerbGrove, POIType.Spring, POIType.Cave, POIType.Ruins, POIType.Barrow }),
+				("Moron 2", "Moron", new[] { POIType.Village, POIType.Quarry, POIType.Temple, POIType.Hermitage, POIType.Nest, POIType.BanditCamp,
+					POIType.Glacier, POIType.Portal, POIType.Obelisk, POIType.Crypt }),
+				("Belron 1", "Belron", new[] { POIType.BanditCamp, POIType.Camp, POIType.Crypt, POIType.ObsidianField, POIType.Spring }),
+				("Galris 1", "Galris", new[] { POIType.Camp, POIType.Shrine, POIType.CrystalFormation, POIType.Peak, POIType.RuinedTower, POIType.Ruins }),
+				("Ithaewyn 1", "Ithaewyn", new[] { POIType.Camp, POIType.Quarry, POIType.FumaroleField, POIType.Pass, POIType.TidalRift }),
+			};
+			var lost = new Dictionary<string, List<string>>();
+			foreach ((string scene, string body, POIType[] sites) in scenes)
+			{
+				AtmosphereKind air = BodyAir(body);
+				// Every scene's body today is a water-cloud world (Moron Earth-like; Belron thin; Galris, Ithaewyn airless), so the air's
+				// make-up (decision 62) changes no scene: the density decides, through the one breathability answer the cut asks.
+				bool breathable = BiomeAir.IsBreathable(World(air));
+				Assert.That(breathable, Is.EqualTo(BiomeAir.IsDenseEnough(air)), scene);
+				var entry = new BiomeArtSpec.Entry { Biome = scene };
+				foreach (POIType kind in sites)
+				{
+					entry.Hosts(kind, 0.3f);
+				}
+				// The scene's own sites only (the catalogue's rows for every biome come along with them, weighed the same way).
+				List<BiomeSiteKind> weighed = entry.SiteKinds().Where(k => sites.Contains(k.Kind)).ToList();
+				Assert.That(weighed.Select(k => k.Kind), Is.EquivalentTo(sites), scene);
+				var gone = new List<string>();
+				foreach (BiomeSiteKind k in weighed)
+				{
+					float weight = BiomeSiteAir.WeightOn(k, breathable, true);
+					Assert.That(weight, Is.EqualTo(0f).Or.EqualTo(k.Weight), $"{scene} {k.Kind}: the gate keeps a kind whole or drops it");
+					if (weight == 0f)
+					{
+						gone.Add(k.Kind.ToString());
+					}
+				}
+				gone.Sort(StringComparer.Ordinal);
+				lost[scene] = gone;
+			}
+			Assert.That(BodyAir("Moron"), Is.EqualTo(AtmosphereKind.Standard));
+			Assert.That(BodyAir("Belron"), Is.EqualTo(AtmosphereKind.Thin));
+			Assert.That(BodyAir("Galris"), Is.EqualTo(AtmosphereKind.None));
+			Assert.That(BodyAir("Ithaewyn"), Is.EqualTo(AtmosphereKind.None));
+			Assert.That(lost["Moron 1"], Is.Empty, string.Join(", ", lost["Moron 1"]));
+			Assert.That(lost["Moron 2"], Is.Empty, string.Join(", ", lost["Moron 2"]));
+			Assert.That(lost["Belron 1"], Is.EqualTo(new[] { "BanditCamp", "Camp" }), string.Join(", ", lost["Belron 1"]));
+			Assert.That(lost["Galris 1"], Is.EqualTo(new[] { "Camp", "Shrine" }), string.Join(", ", lost["Galris 1"]));
+			Assert.That(lost["Ithaewyn 1"], Is.EqualTo(new[] { "Camp", "Quarry" }), string.Join(", ", lost["Ithaewyn 1"]));
+		}
+
+		/// <summary>
+		/// The cut obeys the gate (2026-10-26): every world scene cut on this machine (scenes are cut output, not in the repository; a
+		/// scene not cut here is skipped) holds no site whose kind needs breathable air when its body's air is too thin to breathe.
+		/// </summary>
+		[Test]
+		public void CutScenes_HoldNoLivedInSiteWithoutBreathableAir()
 		{
 			string[] kinds = Enum.GetNames(typeof(POIType));
-			var lost = new Dictionary<string, List<string>>();
 			foreach (string atlas in Directory.GetFiles("Assets/Templates/World/Atlas/Scenes", "*.asset"))
 			{
 				string text = File.ReadAllText(atlas);
@@ -438,31 +524,24 @@ namespace FishMMO.UnitTests.WorldDesign
 					.First(m => File.ReadAllText(m).Contains("guid: " + body.Groups[1].Value));
 				var air = (AtmosphereKind)int.Parse(Regex.Match(File.ReadAllText(meta.Substring(0, meta.Length - 5)), @"\n  Atmosphere: (\d+)").Groups[1].Value);
 				string name = scene.Groups[1].Value.Trim();
-				string pois = Directory.GetFiles("Assets/Scenes/WorldScene", name + " Points of Interest.asset", SearchOption.AllDirectories).FirstOrDefault();
-				if (pois == null)
+				string pois = Directory.Exists("Assets/Scenes/WorldScene")
+					? Directory.GetFiles("Assets/Scenes/WorldScene", name + " Points of Interest.asset", SearchOption.AllDirectories).FirstOrDefault()
+					: null;
+				if (pois == null || BiomeAir.IsDenseEnough(air))
 				{
 					continue;
 				}
-				var gone = new List<string>();
+				var lived = new List<string>();
 				foreach (Match m in Regex.Matches(File.ReadAllText(pois), @"\n    Kind: (\d+)"))
 				{
 					var kind = (POIType)Enum.Parse(typeof(POIType), kinds[int.Parse(m.Groups[1].Value)]);
-					// Every scene's body today is a water-cloud world (Moron Earth-like; Belron thin; Galris, Ithaewyn airless), so the
-					// air's make-up (decision 62) changes no scene: the density alone decides here.
-					if (!BiomeAir.IsDenseEnough(air) && BiomeSiteAir.NeedsAirByDefault(kind))
+					if (BiomeSiteAir.NeedsAirByDefault(kind))
 					{
-						gone.Add(kind.ToString());
+						lived.Add(kind.ToString());
 					}
 				}
-				gone.Sort(StringComparer.Ordinal);
-				lost[name] = gone;
+				Assert.That(lived, Is.Empty, $"{name} ({air} air) holds lived-in sites: re-cut it");
 			}
-			Assert.That(lost.Keys, Is.SupersetOf(new[] { "Moron 1", "Moron 2", "Belron 1", "Galris 1", "Ithaewyn 1" }));
-			Assert.That(lost["Moron 1"], Is.Empty);
-			Assert.That(lost["Moron 2"], Is.Empty);
-			Assert.That(lost["Belron 1"], Is.Empty, "re-cut scenes have already filtered uninhabitable sites");
-			Assert.That(lost["Galris 1"], Is.Empty, "re-cut scenes have already filtered uninhabitable sites");
-			Assert.That(lost["Ithaewyn 1"], Is.Empty, "re-cut scenes have already filtered uninhabitable sites");
 		}
 
 		// ── No flame under thin air or none (decision 41) ────────────
@@ -487,7 +566,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(cave.Single(l => l.Place == BiomeCaveLightPlace.Route).Light, Is.EqualTo(BiomeWayLightKind.CrystalPost), "as both drafts mark routes");
 			foreach (BiomeWayLightKind kind in (BiomeWayLightKind[])Enum.GetValues(typeof(BiomeWayLightKind)))
 			{
-				Assert.That(BiomeGlowLights.Glows(kind), Is.EqualTo(kind == BiomeWayLightKind.Glowjar || kind == BiomeWayLightKind.CrystalPost || kind == BiomeWayLightKind.RuneStone));
+				// The I6c/I6g glows; the suite's cold lights (2026-10-26) glow by their emitter (WayLightSuiteTests).
+				Assert.That(BiomeGlowLights.Glows(kind), Is.EqualTo(kind == BiomeWayLightKind.Glowjar || kind == BiomeWayLightKind.CrystalPost || kind == BiomeWayLightKind.RuneStone
+					|| kind >= BiomeWayLights.FirstSuiteLight && BiomeWayLights.EmitterOf(kind) == FishMMO.Shared.SceneEmitterKind.Glow));
 			}
 			// Every glow light stands on the ground, which every cave place takes (a drift's at the wall's foot).
 			Assert.That(cave.All(l => BiomeWayLights.MountOf(l.Light) == BiomeWayLightMount.Ground), Is.True);
@@ -508,7 +589,11 @@ namespace FishMMO.UnitTests.WorldDesign
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
 				Assert.That(entry.WayLights(false).Select(l => l.ToString()), Is.EqualTo(entry.WayLights().Select(l => l.ToString())), entry.Biome);
-				Assert.That(entry.CaveLights(false).Select(l => l.ToString()), Is.EqualTo(BiomeCaveLights.Default().Select(l => l.ToString())), entry.Biome);
+				if (!BiomeAuthoredRounds.Contains(entry.Biome))
+				{
+					// An authored round lights its own caves (BiomeAuthoredRoundTests).
+					Assert.That(entry.CaveLights(false).Select(l => l.ToString()), Is.EqualTo(BiomeCaveLights.Default().Select(l => l.ToString())), entry.Biome);
+				}
 				if (thinOnly.Contains(entry.Biome))
 				{
 					Assert.That(entry.WayLights(true).All(l => BiomeGlowLights.Glows(l.Light)), Is.True, entry.Biome);
@@ -578,7 +663,10 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			string weather = Code(WorldFolder + "/WeatherContentGenerator.cs");
 			Assert.That(weather, Does.Not.Contain("{ \"Crater\","), "the weather content generator's volcanic Crater row is gone");
-			Assert.That(weather, Does.Contain("{ \"Volcanic\", Emitting(\"Volcanic Ash\", 0.15f) },"));
+			// The generator's ground table itself left for the files (2026-10-26, CODE-TABLE CLEARANCE): it seeds from the spec.
+			Assert.That(weather, Does.Not.Contain("Emitting(\"Volcanic Ash\", 0.15f)"));
+			Assert.That(weather, Does.Contain("BiomeArtSpec.Entry entry = BiomeArtSpec.For(biomeName);"));
+			Assert.That(BiomeArtSpec.For("Volcanic Temple").Emission, Is.EqualTo(("Volcanic Ash", 0.15f)));
 			Assert.That(BiomeArtAuthoring.EmissionMark(null, 0f), Is.EqualTo("none"));
 			Assert.That(BiomeArtAuthoring.EmissionMark("Volcanic Ash", 0.15f), Is.EqualTo("Volcanic Ash@1500"));
 

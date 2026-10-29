@@ -198,6 +198,15 @@ namespace FishMMO.TestHarness.World.Editor
 					Debug.Log($"[ScenePerfProbe] Bake: {note}");
 				}
 			}
+			// Client-style copies, in memory only: exercise stored maps with the alphamap fallback removed.
+			if (Environment.GetEnvironmentVariable("FISHMMO_PERF_STRIP_TERRAIN") == "1")
+			{
+				var open = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+				TerrainIndexMapBuildGuard.Validate(open, EditorUserBuildSettings.activeBuildTarget);
+				var notes = new List<string>();
+				int copied = ClientTerrainLayerStripper.Strip(open, notes);
+				Debug.Log($"[ScenePerfProbe] Client terrain copies: {copied}. {string.Join(" ", notes)}");
+			}
 			EditorApplication.playModeStateChanged -= OnPlayMode;
 			EditorApplication.playModeStateChanged += OnPlayMode;
 			EditorApplication.EnterPlaymode();
@@ -229,7 +238,12 @@ namespace FishMMO.TestHarness.World.Editor
 
 		private static void Begin()
 		{
-			TerrainGpuRenderer.CountFamilies = true;
+			// FISHMMO_PERF_FAMILIES=0: the props' per-family tally off (it formats a string per command drawn, ~0.25 ms of
+			// TerrainGpuRenderer.Draws at a 600-command view), for CPU timings of the draws themselves.
+			TerrainGpuRenderer.CountFamilies = Environment.GetEnvironmentVariable("FISHMMO_PERF_FAMILIES") != "0";
+			// FISHMMO_PERF_UNITY_TERRAIN=1: the whole run with Unity's terrain drawing the ground (TerrainHeightmapSystem off), the
+			// before of the client's own heightmap draw at the same views; the `unityterrain` variant is the same A/B within a run.
+			TerrainHeightmapSystem.Override = Environment.GetEnvironmentVariable("FISHMMO_PERF_UNITY_TERRAIN") == "1" ? false : (bool?)null;
 			// Before anything is measured or its markers listed: the clouds and fog as shipped, whatever the editor's own switches say
 			// (FISHMMO_PERF_CLOUDS=0 holds the clouds off instead, to price everything else).
 			SkySystem.EditorCloudsOff = CloudsHeldOff;
@@ -271,6 +285,11 @@ namespace FishMMO.TestHarness.World.Editor
 					stepIndex = 0;
 					frame = 0;
 					Enter(steps[0]);
+					return;
+				}
+				if (FlyPath != null)
+				{
+					Fly();
 					return;
 				}
 				Step step = steps[stepIndex];
@@ -563,13 +582,56 @@ namespace FishMMO.TestHarness.World.Editor
 						break;
 					}
 					goto default;
+				case "river":
+				{
+					var surfaces = UnityEngine.Object.FindObjectsByType<InlandWaterRenderer>(FindObjectsInactive.Exclude)
+						.SelectMany(w => w.GetComponentsInChildren<MeshRenderer>())
+						.Where(r => r.enabled && r.sharedMaterial != null && r.sharedMaterial.shader.name == "FishMMO/Water/Inland Water")
+						.OrderByDescending(r => r.bounds.size.sqrMagnitude).ToArray();
+					if (surfaces.Length == 0) { report.Add("river: no inland surfaces; default fallback"); Place("meadow"); return; }
+					look = surfaces[0].bounds.center;
+					eye = look + new Vector3(0, 80, -100);
+					report.Add($"river: {surfaces[0].name}, centre {look}, {surfaces.Length} surfaces");
+					break;
+				}
+				case "denseprops":
+				{
+					var cells = new Dictionary<Vector2Int, (Vector3 Sum, int Count)>();
+					foreach (SceneProps owner in UnityEngine.Object.FindObjectsByType<SceneProps>(FindObjectsInactive.Exclude))
+					foreach (ScenePropSet set in owner.Sets)
+					{
+						if (set == null) continue;
+						foreach (var prop in set.Props)
+						{
+							if (prop.Prototype < 0 || prop.Prototype >= set.Prototypes.Length) continue;
+							var prototype = set.Prototypes[prop.Prototype];
+							if (prototype.Prefab == null || !prototype.Prefab.name.StartsWith("Structure", StringComparison.Ordinal)) continue;
+							var key = new Vector2Int(Mathf.FloorToInt(prop.Position.x / 16), Mathf.FloorToInt(prop.Position.z / 16));
+							cells.TryGetValue(key, out var value); cells[key] = (value.Sum + prop.Position, value.Count + 1);
+						}
+					}
+					if (cells.Count == 0) { report.Add("denseprops: no structure prototypes; meadow fallback"); Place("meadow"); return; }
+					var best = cells.OrderByDescending(p => p.Value.Count).ThenBy(p => p.Key.x).ThenBy(p => p.Key.y).First().Value;
+					Vector3 centre = best.Sum / best.Count;
+					eye = new Vector3(centre.x, GroundAt(centre.x, centre.z) + 2f, centre.z);
+					look = eye + Vector3.forward * 10;
+					report.Add($"denseprops: {best.Count} structure placements in 16m cell, eye {eye}");
+					break;
+				}
+
 				case "at":
 				{
 					// FISHMMO_PERF_AT="x,y,z,yaw": a fixed eye (y absolute) looking level along the yaw, e.g. inside a cave chamber,
 					// where the ground under the camera is the cave's floor rather than the terrain.
 					string[] parts = (Environment.GetEnvironmentVariable("FISHMMO_PERF_AT") ?? "0,0,0,0").Split(',');
 					float F(int i) => parts.Length > i && float.TryParse(parts[i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) ? v : 0f;
-					eye = new Vector3(F(0), F(1), F(2));
+					// y as "g<metres>" ("g2"): that height above the terrain under the eye instead of an absolute height.
+					bool aboveGround = parts.Length > 1 && parts[1].Trim().StartsWith("g");
+					if (aboveGround)
+					{
+						parts[1] = parts[1].Trim().Substring(1);
+					}
+					eye = new Vector3(F(0), F(1) + (aboveGround ? GroundAt(F(0), F(2)) : 0f), F(2));
 					look = eye + Quaternion.Euler(0f, F(3), 0f) * Vector3.forward * 10f;
 					break;
 				}
@@ -1104,6 +1166,107 @@ namespace FishMMO.TestHarness.World.Editor
 			return false;
 		}
 
+		/// <summary>
+		/// FISHMMO_PERF_FLY="x,z;x,z;…": instead of the timed views, the camera flies the polyline at FISHMMO_PERF_FLY_HEIGHT
+		/// metres over the ground (8), looking along its way and FISHMMO_PERF_FLY_PITCH degrees down (12), over
+		/// FISHMMO_PERF_FLY_FRAMES natural frames (360), and writes each as fly/frame_NNNN.png for a fly-through video. It first
+		/// holds the opening pose for FlyWarmFrames, so the streamed terrains, grass and scatter are taken on before frame one.
+		/// </summary>
+		private static List<Vector2> FlyPath
+		{
+			get
+			{
+				if (flyParsed)
+				{
+					return flyPath;
+				}
+				flyParsed = true;
+				string spec = Environment.GetEnvironmentVariable("FISHMMO_PERF_FLY");
+				if (string.IsNullOrEmpty(spec))
+				{
+					return null;
+				}
+				var points = new List<Vector2>();
+				foreach (string pair in spec.Split(';'))
+				{
+					string[] xz = pair.Split(',');
+					if (xz.Length == 2 && float.TryParse(xz[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float x)
+						&& float.TryParse(xz[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float z))
+					{
+						points.Add(new Vector2(x, z));
+					}
+				}
+				flyPath = points.Count >= 2 ? points : null;
+				return flyPath;
+			}
+		}
+
+		private const int FlyWarmFrames = 240;
+		private static bool flyParsed;
+		private static List<Vector2> flyPath;
+		private static float flyHeight;
+
+		private static float FlyFloat(string name, float fallback)
+			=> float.TryParse(Environment.GetEnvironmentVariable(name), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) ? v : fallback;
+
+		/// <summary>The point <paramref name="distance"/> metres along the fly path, and the way it heads there.</summary>
+		private static Vector2 FlyAlong(float distance, out Vector2 heading)
+		{
+			List<Vector2> path = FlyPath;
+			for (int i = 0; i + 1 < path.Count; i++)
+			{
+				float length = Vector2.Distance(path[i], path[i + 1]);
+				if (distance <= length || i + 2 == path.Count)
+				{
+					heading = (path[i + 1] - path[i]).normalized;
+					return Vector2.Lerp(path[i], path[i + 1], length > 0f ? Mathf.Clamp01(distance / length) : 0f);
+				}
+				distance -= length;
+			}
+			heading = Vector2.up;
+			return path[0];
+		}
+
+		private static void Fly()
+		{
+			List<Vector2> path = FlyPath;
+			int frames = Mathf.Max(2, (int)FlyFloat("FISHMMO_PERF_FLY_FRAMES", 360f));
+			float height = FlyFloat("FISHMMO_PERF_FLY_HEIGHT", 8f), pitch = FlyFloat("FISHMMO_PERF_FLY_PITCH", 12f);
+			float total = 0f;
+			for (int i = 0; i + 1 < path.Count; i++)
+			{
+				total += Vector2.Distance(path[i], path[i + 1]);
+			}
+			int shot = frame - FlyWarmFrames;
+			Vector2 at = FlyAlong(total * Mathf.Clamp01(shot / (float)(frames - 1)), out Vector2 heading);
+			// Over the ground ahead as well as below, eased, so the camera neither dips into a rise nor jumps at each step.
+			Vector2 ahead = at + heading * 6f;
+			float ground = Mathf.Max(GroundAt(at.x, at.y), GroundAt(ahead.x, ahead.y)) + height;
+			flyHeight = frame == 0 ? ground : Mathf.Lerp(flyHeight, ground, 0.12f);
+			camera.transform.position = new Vector3(at.x, flyHeight, at.y);
+			camera.transform.rotation = Quaternion.LookRotation(new Vector3(heading.x, 0f, heading.y)) * Quaternion.Euler(pitch, 0f, 0f);
+			if (shot >= 0)
+			{
+				string folder = Path.Combine(output, "fly");
+				Directory.CreateDirectory(folder);
+				var still = new Texture2D(target.width, target.height, TextureFormat.RGBA32, false);
+				RenderTexture.active = target;
+				still.ReadPixels(new Rect(0, 0, target.width, target.height), 0, 0);
+				File.WriteAllBytes(Path.Combine(folder, $"frame_{shot:D4}.png"), still.EncodeToPNG());
+				UnityEngine.Object.DestroyImmediate(still);
+			}
+			if (shot == 0)
+			{
+				report.Add($"fly: {path.Count} points, {total:F0} m over {frames} frames at {height:F1} m, pitch {pitch:F0}°");
+				report.Add($"fly: {DetailScatterSystem.Describe()}");
+			}
+			frame++;
+			if (shot >= frames - 1)
+			{
+				Finish(0);
+			}
+		}
+
 		private static float GroundAt(float x, float z)
 		{
 			foreach (Terrain terrain in Terrain.activeTerrains)
@@ -1225,6 +1388,13 @@ namespace FishMMO.TestHarness.World.Editor
 					asset.renderScale = scaleWas;
 					asset.upscalingFilter = filterWas;
 				};
+			}
+			if (variant.StartsWith("batchgap="))
+			{
+				// TerrainGpuRenderer.BatchGap held at a number: one call bridging that many unwanted commands of its batch.
+				int was = TerrainGpuRenderer.BatchGap;
+				TerrainGpuRenderer.BatchGap = int.Parse(variant.Substring("batchgap=".Length));
+				return () => TerrainGpuRenderer.BatchGap = was;
 			}
 			if (variant.StartsWith("quality:"))
 			{
@@ -1455,6 +1625,20 @@ namespace FishMMO.TestHarness.World.Editor
 					// One indirect call a command again, not one a material over a merged mesh (TerrainGpuRenderer.BatchDraws).
 					TerrainGpuRenderer.BatchDraws = false;
 					return () => TerrainGpuRenderer.BatchDraws = true;
+				case "nolooks":
+					// Every prop drawn through its own material again, not through its look family's (TerrainGpuRenderer.LookArrays); same textures.
+					TerrainGpuRenderer.LookArrays = false;
+					return () => TerrainGpuRenderer.LookArrays = true;
+				case "nolightcull":
+				{
+					bool was = TerrainGpuRenderer.CullLightCommands;
+					TerrainGpuRenderer.CullLightCommands = false;
+					return () => TerrainGpuRenderer.CullLightCommands = was;
+				}
+				case "nobrg":
+					// The GPU-driven props and trees through RenderMeshIndirect again, not the BatchRendererGroup (TerrainGpuRenderer.UseBrg).
+					TerrainGpuRenderer.UseBrg = false;
+					return () => TerrainGpuRenderer.UseBrg = true;
 				case "batchgap2":
 				{
 					// Batched calls bridging up to two unwanted commands (TerrainGpuRenderer.BatchGap): fewer calls, more empty draws.
@@ -1553,6 +1737,13 @@ namespace FishMMO.TestHarness.World.Editor
 					pipeline.renderScale = 0.5f;
 					return () => pipeline.renderScale = was;
 				}
+				case "unityterrain":
+				{
+					// The ground drawn by Unity's terrain instead of the client's own heightmap draw (TerrainHeightmapSystem): the A/B.
+					bool? was = TerrainHeightmapSystem.Override;
+					TerrainHeightmapSystem.Override = false;
+					return () => TerrainHeightmapSystem.Override = was;
+				}
 				case "terrain":
 				{
 					var on = Terrain.activeTerrains.Where(t => t.enabled).ToList();
@@ -1577,6 +1768,144 @@ namespace FishMMO.TestHarness.World.Editor
 					on = on.Where(b => b.enabled).ToList();
 					on.ForEach(b => b.enabled = false);
 					return () => on.ForEach(b => b.enabled = true);
+				}
+				case "waterblocks":
+				{
+					// The inland water as it was drawn before its surfaces had copies of their own (2026-10-28): each lake, river,
+					// curtain and spray back on its shared material with its numbers on a property block (outside the SRP Batcher).
+					var put = new List<(MeshRenderer Renderer, Material Copy)>();
+					foreach (InlandWaterRenderer inland in UnityEngine.Object.FindObjectsByType<InlandWaterRenderer>(FindObjectsInactive.Exclude))
+					{
+						foreach (MeshRenderer part in inland.GetComponentsInChildren<MeshRenderer>())
+						{
+							Material copy = part.sharedMaterial;
+							Material source = copy == null ? null
+								: copy.shader == inland.Material?.shader ? inland.Material
+								: copy.shader == inland.FallMaterial?.shader ? inland.FallMaterial
+								: copy.shader == inland.SprayMaterial?.shader ? inland.SprayMaterial : null;
+							if (source == null || copy == source)
+							{
+								continue;
+							}
+							var block = new MaterialPropertyBlock();
+							bool surface = source == inland.Material, curtain = source == inland.FallMaterial;
+							var vectors = new List<string>();
+							if (surface)
+							{
+								vectors.AddRange(new[] { "_RiverFlowInfo", "_RiverFall0", "_RiverFall1", "_RiverFall2", "_RiverFall3" });
+								vectors.AddRange(Enumerable.Range(0, 15).Select(i => "_InlandLook" + i));
+							}
+							else
+							{
+								vectors.AddRange(curtain ? new[] { "_FallWater", "_FallFoam", "_FallAbsorb" } : new[] { "_FallSpray", "_FallMist", "_FallPath", "_FallOrigin" });
+							}
+							foreach (string name in vectors)
+							{
+								block.SetVector(name, copy.GetVector(name));
+							}
+							string[] floats = surface ? new[] { "_RiverFallCount", "_InlandLookOn" } : curtain ? new[] { "_FallLookOn" } : new[] { "_FallLookOn", "_FallMistNoiseCells" };
+							foreach (string name in floats)
+							{
+								block.SetFloat(name, copy.GetFloat(name));
+							}
+							string[] textures = surface ? new[] { "_RiverFlowField" } : curtain ? new[] { "_FoamTexture", "_NormalMap" } : new[] { "_FallPathTex", "_FallMistNoise" };
+							foreach (string name in textures)
+							{
+								if (copy.GetTexture(name) is Texture texture && texture != null) block.SetTexture(name, texture);
+							}
+							part.sharedMaterial = source;
+							part.SetPropertyBlock(block);
+							put.Add((part, copy));
+						}
+					}
+					report.Add($"waterblocks: {put.Count} inland surfaces back on blocks");
+					return () => put.ForEach(p => { p.Renderer.SetPropertyBlock(null); p.Renderer.sharedMaterial = p.Copy; });
+				}
+				case "walker":
+				case "walkghost":
+				case "walkerstill":
+				{
+					// The bed's walker (V): "walker" walks it with the camera following behind; "walkghost" puts the camera where
+					// that follow puts it and takes the walker away again (the same view without it); "walkerstill" stands the
+					// walker 6 m ahead of the camera, which stays where the view put it (the walker alone, same view as the base).
+					WorldSimCamera controls = camera.GetComponent<WorldSimCamera>();
+					if (controls == null)
+					{
+						report.Add($"{variant}: the camera has no WorldSimCamera");
+						return null;
+					}
+					Vector3 eyeWas = camera.transform.position;
+					Quaternion lookWas = camera.transform.rotation;
+					if (variant == "walkerstill")
+					{
+						WorldSimWalker still = WorldSimWalker.Create(controls);
+						still.PlaceAt(eyeWas + Vector3.ProjectOnPlane(camera.transform.forward, Vector3.up).normalized * 6f + Vector3.down * 2f);
+						return () => UnityEngine.Object.Destroy(still.gameObject);
+					}
+					controls.Face(camera.transform.forward);
+					controls.SetWalking(true);
+					if (variant == "walkghost")
+					{
+						controls.SetWalking(false);
+					}
+					return () =>
+					{
+						controls.SetWalking(false);
+						camera.transform.SetPositionAndRotation(eyeWas, lookWas);
+					};
+				}
+				case "torchnoshadows":
+				{
+					Light torch = Resources.FindObjectsOfTypeAll<Light>().FirstOrDefault(l => l.gameObject.scene.IsValid() && l.name == "World Sim Torch");
+					if (torch == null) return null;
+					LightShadows was = torch.shadows;
+					torch.shadows = LightShadows.None;
+					return () => { if (torch != null) torch.shadows = was; };
+				}
+				case "torch":
+				{
+					// After a walker variant ("walker+torch"): the walker's torch (F) lit, the same call the key makes.
+					WorldSimCamera holder = camera.GetComponent<WorldSimCamera>();
+					System.Reflection.MethodInfo toggle = typeof(WorldSimCamera).GetMethod("ToggleTorch", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+					if (holder == null || toggle == null)
+					{
+						report.Add("torch: no WorldSimCamera or ToggleTorch");
+						return null;
+					}
+					toggle.Invoke(holder, null);
+					return () => toggle.Invoke(holder, null);
+				}
+				case "nobody":
+				case "nofocus":
+				case "noglass":
+				{
+					// After a walker variant ("walker+nobody"): its figure hidden, its prop-collider focus dropped, or the
+					// boundary glass off, to find which part of it costs what.
+					WorldSimWalker walking = UnityEngine.Object.FindAnyObjectByType<WorldSimWalker>();
+					if (variant == "noglass")
+					{
+						ClientBoundaryWarning.Enabled = false;
+						return () => ClientBoundaryWarning.Enabled = true;
+					}
+					if (walking == null)
+					{
+						report.Add($"{variant}: no walker");
+						return null;
+					}
+					if (variant == "nofocus")
+					{
+						PropColliderStreamer.RemoveFocus(walking.transform);
+						return null;
+					}
+					Transform figure = walking.transform.Find("Body");
+					figure?.gameObject.SetActive(false);
+					return () =>
+					{
+						if (figure != null)
+						{
+							figure.gameObject.SetActive(true);
+						}
+					};
 				}
 				default:
 					return null;
@@ -1772,6 +2101,68 @@ namespace FishMMO.TestHarness.World.Editor
 		/// Where the GPU-driven draws come from, as Unity counts them: each command is a draw in its pass, a shadow caster's in
 		/// every cascade. Props and terrain details by view (lit, depth prime, shadow) and the props by art family.
 		/// </summary>
+		/// <summary>
+		/// The generated surface families' textures loaded now: the look arrays (LookArray_*, ProceduralArtLookArrays) and any single
+		/// maps of those families still loaded (Structure_*, RockSurface_*, IceSurface_*), each with its runtime memory. Read once per
+		/// report.
+		/// </summary>
+		private static string SurfaceTexturesLoaded()
+		{
+			int arrays = 0, singles = 0;
+			long arrayBytes = 0, singleBytes = 0;
+			foreach (Texture t in Resources.FindObjectsOfTypeAll<Texture>())
+			{
+				if (t == null || string.IsNullOrEmpty(t.name))
+				{
+					continue;
+				}
+				if (t is Texture2DArray && t.name.StartsWith("LookArray_", StringComparison.Ordinal))
+				{
+					arrays++;
+					arrayBytes += UnityEngine.Profiling.Profiler.GetRuntimeMemorySizeLong(t);
+				}
+				else if (t is Texture2D && (t.name.StartsWith("Structure_", StringComparison.Ordinal) || t.name.StartsWith("RockSurface_", StringComparison.Ordinal)
+					|| t.name.StartsWith("IceSurface_", StringComparison.Ordinal)))
+				{
+					singles++;
+					singleBytes += UnityEngine.Profiling.Profiler.GetRuntimeMemorySizeLong(t);
+				}
+			}
+			return $"surface textures loaded: {arrays} look arrays {arrayBytes / (1024.0 * 1024.0):0.0} MB, {singles} single maps {singleBytes / (1024.0 * 1024.0):0.0} MB";
+		}
+
+		private static string PointShadowCandidates()
+		{
+			Light point = Resources.FindObjectsOfTypeAll<Light>()
+				.Where(l => l.gameObject.scene.IsValid() && l.isActiveAndEnabled && l.type == LightType.Point && l.shadows != LightShadows.None)
+				.OrderBy(l => Vector3.SqrMagnitude(l.transform.position - camera.transform.position)).FirstOrDefault();
+			if (point == null) return "point shadow candidates: no shadowed point light";
+			var families = new Dictionary<string, int>();
+			int renderers = 0, slots = 0, faceDraws = 0;
+			Vector3[] directions = { Vector3.right, Vector3.left, Vector3.up, Vector3.down, Vector3.forward, Vector3.back };
+			var planes = new Plane[6][];
+			for (int i = 0; i < 6; i++)
+			{
+				Quaternion rotation = Quaternion.LookRotation(directions[i], Mathf.Abs(directions[i].y) > .9f ? Vector3.forward : Vector3.up);
+				var view = Matrix4x4.Scale(new Vector3(1, 1, -1)) * Matrix4x4.TRS(point.transform.position, rotation, Vector3.one).inverse;
+				planes[i] = GeometryUtility.CalculateFrustumPlanes(Matrix4x4.Perspective(92, 1, .05f, point.range) * view);
+			}
+			foreach (Renderer renderer in UnityEngine.Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+			{
+				if (!renderer.enabled || !renderer.gameObject.activeInHierarchy || renderer.shadowCastingMode == ShadowCastingMode.Off ||
+					(point.cullingMask & (1 << renderer.gameObject.layer)) == 0 || renderer.bounds.SqrDistance(point.transform.position) > point.range * point.range) continue;
+				int n = renderer.sharedMaterials.Count(m => m != null && m.FindPass("ShadowCaster") >= 0);
+				if (n == 0) continue;
+				renderers++; slots += n;
+				int faces = planes.Count(p => GeometryUtility.TestPlanesAABB(p, renderer.bounds));
+				faceDraws += faces * n;
+				string key = renderer.name + " / " + renderer.sharedMaterial?.shader?.name;
+				families.TryGetValue(key, out int count); families[key] = count + faces * n;
+			}
+			return $"point shadow candidates '{point.name}' range {point.range}: {renderers} ordinary renderers, {slots} slots, ~{faceDraws} face draws (conservative bounds): " +
+				string.Join("; ", families.OrderByDescending(p => p.Value).Take(12).Select(p => p.Key + "=" + p.Value));
+		}
+
 		private static string DrawSources()
 		{
 			int cascades = (GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset)?.shadowCascadeCount ?? 1;
@@ -1786,7 +2177,6 @@ namespace FishMMO.TestHarness.World.Editor
 				sb.Append($"{name} {total} (lit {g.LastMainCommands}, prime {g.LastPrimeCommands}, shadow {g.LastShadowCommands} × {cascades}); ");
 			}
 			Renderer("props", CliffRockInstancing.Gpu);
-			Renderer("details", TerrainDetailInstancing.Gpu);
 			DetailScatterRenderer scatter = DetailScatterSystem.Renderer;
 			if (scatter != null)
 			{
@@ -1955,11 +2345,35 @@ namespace FishMMO.TestHarness.World.Editor
 			}
 			report.Add(DescribeFog());
 			report.Add($"  props drawn: {CliffRockInstancing.DescribeDraws()}");
+			report.Add($"  ambient life: {AmbientLifeSystem.DescribeWork()}");
 			report.Add($"  shadow cascades: {ShadowCascadeCulling.LastReport}");
+			report.Add($"  {TerrainHeightmapSystem.Report}");
 			report.Add($"  frame stats (mean of {sampled} natural frames): draw calls {drawCallsSum / (double)Math.Max(1, sampled):0}, instanced batches {batchesSum / (double)Math.Max(1, sampled):0}, set-pass calls {setPassSum / (double)Math.Max(1, sampled):0}, shadow casters {shadowCastersSum / (double)Math.Max(1, sampled):0}");
 			report.Add($"  props commands drawn: {CliffRockInstancing.LastCommandCount}");
+			if (CliffRockInstancing.Gpu != null)
+			{
+				TerrainGpuRenderer props = CliffRockInstancing.Gpu;
+				report.Add($"  props look families: {(TerrainGpuRenderer.LookArrays ? "on" : "off")}, {props.LookCount} looks in {props.LookFamilyCount} families, {props.LookTableBytes / 1024.0:0.0} KB of tables");
+				report.Add($"  props BatchRendererGroup: {(props.BrgActive ? "on" : TerrainGpuRenderer.BrgSupported ? "off" : "off (unsupported here)")}, {props.BrgMeshCount} meshes, {props.BrgMaterialCount} materials registered, {props.BrgBytes / (1024.0 * 1024.0):0.0} MB of batch buffers; last camera {props.LastBrgCameraCommands} commands, last light {props.LastBrgLightCommands}/{props.LastBrgLightCommandsBeforeCull} commands, split draws {props.LastBrgLightFacesAfterCull}/{props.LastBrgLightFacesBeforeCull}; all {props.CameraLightCallbacks} light callbacks {props.CameraLightFacesAfterCull}/{props.CameraLightFacesBeforeCull} split draws");
+			}
+			report.Add("  " + SurfaceTexturesLoaded());
 			report.Add("  draw sources: " + DrawSources());
-			report.Add($"  indirect draws a camera: props {CliffRockInstancing.LastDrawCount}, trees {TerrainTreeInstancing.LastDrawCount}, details {TerrainDetailInstancing.LastDrawCount}, scatter {DetailScatterSystem.LastDrawCount}, grass {GrassBladeSystem.LastDrawCount}");
+			report.Add("  " + PointShadowCandidates());
+			var tiles = Terrain.activeTerrains.Where(t => t.gameObject.scene == camera.gameObject.scene).ToArray();
+			report.Add($"  terrain stored-map check: {tiles.Length} tiles, {tiles.Count(t => t.terrainData.alphamapTextureCount == 0)} without alphamaps, {tiles.Count(t => TerrainArrayBinder.IndexMapOf(t) != null)} with bound index textures");
+
+			foreach (string name in new[] { "FishMMO/Water/Inland Water", "FishMMO/Water/Waterfall", "FishMMO/Water/Waterfall Spray" })
+			{
+				Shader shader = Shader.Find(name);
+				if (shader == null) continue;
+				var flags = BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public;
+				var codeMethod = typeof(ShaderUtil).GetMethod("GetSRPBatcherCompatibilityCode", flags);
+				var reasonMethod = typeof(ShaderUtil).GetMethod("GetSRPBatcherCompatibilityIssueReason", flags);
+				int code = (int)codeMethod.Invoke(null, new object[] { shader, 0 });
+				report.Add($"  water shader {name}: SRP code {code}, {reasonMethod.Invoke(null, new object[] { shader, 0, code })}");
+			}
+
+			report.Add($"  indirect draws a camera: props {CliffRockInstancing.LastDrawCount}, trees {TerrainTreeInstancing.LastDrawCount}, scatter {DetailScatterSystem.LastDrawCount}, grass {GrassBladeSystem.LastDrawCount}");
 			if (GrassBladeRenderer.TimedCalls > 0)
 			{
 				float calls = GrassBladeRenderer.TimedCalls;

@@ -1,10 +1,12 @@
 // The procedural blade grass (GrassBladeRenderer, FishMMO.Client/World/Terrain/Grass): every blade is a
-// strip shaped in the vertex shader from a 20-byte record FishGrassBlades.compute wrote this frame.
+// strip shaped in the vertex shader from a 24-byte record FishGrassBlades.compute wrote this frame.
 // The pass code and the buffer contract are in FishGrassBlades.hlsl. Drawn only with
 // Graphics.RenderMeshIndirect by the renderer, which binds _GrassBlades per draw and the per-type
 // table (_GrassTypeTable) on its own material instances; nothing else should use this shader.
 //
-// Alpha-free geometry: no cutout; the only clip is the dithered fade at the grass distance.
+// Alpha-free geometry: no cutout; the only clips are the dithered fade at the grass distance and, under MSAA or a temporal
+// resolve (STP/TAA), a sliver under a rendered pixel drawn a pixel wide with its true width as coverage.
+// MotionVectors: the blades' own sway for STP/TAA (GrassMotionVertex), drawn for the slots the renderer gives per-object motion.
 // Read-only StructuredBuffer in the vertex stage only (WebGPU's floor); no geometry stage.
 Shader "FishMMO/Grass Blades"
 {
@@ -93,6 +95,28 @@ Shader "FishMMO/Grass Blades"
             #pragma fragment GrassDepthFragment
 
             #define FISH_GRASS_PASS_DEPTH
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "FishGrassBlades.hlsl"
+            ENDHLSL
+        }
+
+        Pass
+        {
+            Name "MotionVectors"
+            Tags { "LightMode" = "MotionVectors" }
+            ColorMask RG
+            Cull Off
+            // Pulled a hair toward the camera: the depth it tests against is the forward pass's, from another program, and a
+            // last-bit difference in a long vertex shader must not drop a blade's motion.
+            Offset -1, -1
+
+            HLSLPROGRAM
+            #pragma use_dxc vulkan
+            #pragma target 4.5
+            #pragma vertex GrassMotionVertex
+            #pragma fragment GrassMotionFragment
+
+            #define FISH_GRASS_PASS_MOTION
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "FishGrassBlades.hlsl"
             ENDHLSL

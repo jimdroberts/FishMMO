@@ -85,6 +85,56 @@ namespace FishMMO.Shared.WorldDesign
 			new KeyValuePair<string, string>("FishMMO/Weather Lit", "FishMMO/Weather Lit Indirect"),
 		};
 
+		/// <summary>
+		/// The keyword of an array-backed material (FishMMO.Client TerrainLookMath.Keyword; ProceduralArtLookArrays): its maps are
+		/// slices of the generated look arrays. A material's own keyword, so its sets carry it like any other.
+		/// </summary>
+		public const string LookKeyword = "_FISH_LOOK_ARRAY";
+
+		/// <summary>
+		/// A look family's keyword (FishMMO.Client TerrainLookMath.TableKeyword): the GPU-driven renderer draws a family of opaque,
+		/// array-backed Weather Lit materials through one runtime material with it on (TerrainGpuRenderer.Looks.cs), so every
+		/// keyword set such a family can have is listed with it too, for the pass types that declare it (ForwardLit).
+		/// </summary>
+		public const string LookTableKeyword = "_FISH_LOOK_TABLE";
+
+		/// <summary>Keywords that keep a material out of every look family (FishMMO.Client TerrainLookMath.BlockingKeywords; a test pins them equal).</summary>
+		public static readonly string[] LookBlockingKeywords =
+		{
+			"_ALPHATEST_ON", "_SURFACE_TYPE_TRANSPARENT", "_ALPHAPREMULTIPLY_ON", "_ALPHAMODULATE_ON", "_PARALLAXMAP", "_DETAIL_MULX2", "_DETAIL_SCALED",
+			"_FISH_CAVE_ROCK",
+		};
+
+		/// <summary>True when a material with these keywords may join a look family (none of <see cref="LookBlockingKeywords"/>).</summary>
+		public static bool AllowsLooks(IEnumerable<string> keywords)
+		{
+			if (keywords != null)
+			{
+				foreach (string raw in keywords)
+				{
+					if (Array.IndexOf(LookBlockingKeywords, raw?.Trim()) >= 0)
+					{
+						return false;
+					}
+				}
+			}
+			return true;
+		}
+
+		/// <summary>True when a material with these keywords joins a look family: array-backed (<see cref="LookKeyword"/>) and <see cref="AllowsLooks"/>.</summary>
+		public static bool JoinsLookFamily(IEnumerable<string> keywords)
+		{
+			bool arrays = false;
+			if (keywords != null)
+			{
+				foreach (string raw in keywords)
+				{
+					arrays |= raw?.Trim() == LookKeyword;
+				}
+			}
+			return arrays && AllowsLooks(keywords);
+		}
+
 		/// <summary>The pass types listed when a twin's passes cannot be read: the two every lit, shadowed draw uses, and motion vectors.</summary>
 		public static readonly PassType[] DefaultPassTypes = { PassType.ScriptableRenderPipeline, PassType.ShadowCaster, PassType.MotionVectors };
 
@@ -183,8 +233,10 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// The collection's entries for these materials: each material of a source shader, outside
 		/// <see cref="LocalPrefix"/>, contributes its keywords mapped onto the twin, once per pass type the
-		/// twin has, cut down to the keywords that type's passes declare. Deduplicated and sorted
-		/// (<see cref="Variant.CompareTo"/>), so the same materials always give the same list.
+		/// twin has, cut down to the keywords that type's passes declare; a material a look family can take
+		/// (<see cref="JoinsLookFamily"/>) also contributes its set with <see cref="LookTableKeyword"/>, for the pass
+		/// types that declare it. Deduplicated and sorted (<see cref="Variant.CompareTo"/>), so the same
+		/// materials always give the same list.
 		/// </summary>
 		/// <param name="passesOf">
 		/// For a twin's name, its pass types and the keywords each declares. Null, or a null answer, means
@@ -216,15 +268,30 @@ namespace FishMMO.Shared.WorldDesign
 						}
 						continue;
 					}
+					bool looks = JoinsLookFamily(material.Keywords);
 					foreach (KeyValuePair<PassType, HashSet<string>> pass in passes)
 					{
 						set.Add(new Variant(twin, pass.Key, JoinKeywords(material.Keywords, pass.Value)));
+						// The same set as a look family's material draws it, where this pass type declares the table (ForwardLit).
+						if (looks && pass.Value != null && pass.Value.Contains(LookTableKeyword))
+						{
+							set.Add(new Variant(twin, pass.Key, JoinKeywords(WithLook(material.Keywords), pass.Value)));
+						}
 					}
 				}
 			}
 			var list = new List<Variant>(set);
 			list.Sort();
 			return list;
+		}
+
+		private static IEnumerable<string> WithLook(IReadOnlyList<string> keywords)
+		{
+			foreach (string k in keywords)
+			{
+				yield return k;
+			}
+			yield return LookTableKeyword;
 		}
 
 		/// <summary>The keywords trimmed, kept only where <paramref name="declared"/> has them (all when null), deduplicated, ordinal-sorted and space-joined.</summary>
@@ -379,7 +446,9 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── The editor part ───────────────────────────────────────────
 
-		private static readonly ShaderTagId LightModeTag = new ShaderTagId("LightMode");
+		// Made when asked, not in the type initializer: ShaderTagId's constructor is native, and the pure part above must stay
+		// usable without Unity (the EditMode fixtures run under a plain .NET host too).
+		private static ShaderTagId LightModeTag => new ShaderTagId("LightMode");
 
 		/// <summary>
 		/// A shader's pass types and the keywords each declares (vertex and fragment stages), Meta left

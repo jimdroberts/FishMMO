@@ -64,16 +64,16 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506389932245165
-  - rid: 4061506389932245166
-  - rid: 4061506389932245167
-  - rid: 4061506389932245168
-  - rid: 4061506389932245169
-  - rid: 4061506389932245170
+  - rid: 4061506423688528009
+  - rid: 4061506423688528010
+  - rid: 4061506423688528011
+  - rid: 4061506423688528012
+  - rid: 4061506423688528013
+  - rid: 4061506423688528014
   references:
     version: 2
     RefIds:
-    - rid: 4061506389932245165
+    - rid: 4061506423688528009
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -84,16 +84,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506389932245166
+    - rid: 4061506423688528010
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506389932245167
+    - rid: 4061506423688528011
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506389932245168
+    - rid: 4061506423688528012
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 5
@@ -101,7 +101,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506389932245169
+    - rid: 4061506423688528013
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 6
@@ -109,7 +109,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506389932245170
+    - rid: 4061506423688528014
       type: {class: DungeonEntranceFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: 0, y: 0}

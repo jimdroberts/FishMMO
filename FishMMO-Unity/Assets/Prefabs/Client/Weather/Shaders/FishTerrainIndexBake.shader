@@ -6,6 +6,10 @@
 // Integer arithmetic throughout (weights are bytes), so this is TerrainIndexMap.BakeTexel exactly; the binder checks a
 // sample of texels against it in the editor ("[Terrain index] check").
 //
+// A tile that carries only the layers it paints (TerrainTileLayers, 2026-10-27) numbers its channels its own way: the ids are
+// written as the scene's layers through _FishIndexRemap (TerrainTileLayerMap.BakeTable; identity for a tile carrying the whole
+// palette), after the four are chosen. Its channels are in scene order, so the choice between equal weights is the same.
+//
 // On the GPU because the alphamaps are: a brush stroke writes them there before the CPU copy is synchronised, so a bake
 // from the GPU copy keeps painting live, as reading the alphamaps per pixel did.
 Shader "Hidden/FishMMO/Terrain Index Bake"
@@ -30,6 +34,13 @@ Shader "Hidden/FishMMO/Terrain Index Bake"
             Texture2DArray<float4> _FishIndexSource;
             // x layers (terrainData.alphamapLayers), y maps (slices), z texels across, w texels along.
             float4 _FishIndexBakeParams;
+            // Texel c (red): the scene layer channel c is written as (TerrainIndexMapBaker.RemapTexture, 256 wide).
+            Texture2D<float4> _FishIndexRemap;
+
+            uint SceneLayer(uint channel)
+            {
+                return (uint)round(_FishIndexRemap.Load(int3((int)channel, 0, 0)).x);
+            }
 
             struct Varyings
             {
@@ -89,8 +100,41 @@ Shader "Hidden/FishMMO/Terrain Index Bake"
                     Consider(0.0, extra, top, ids, fifth);
                 }
                 uint4 w = (uint4)(top - max(fifth, 0.0));
-                uint4 n = (uint4)ids;
+                uint4 n = uint4(SceneLayer((uint)ids.x), SceneLayer((uint)ids.y), SceneLayer((uint)ids.z), SceneLayer((uint)ids.w));
                 return uint2(n.x | (n.y << 8) | (n.z << 16) | (n.w << 24), w.x | (w.y << 8) | (w.z << 16) | (w.w << 24));
+            }
+            ENDHLSL
+        }
+        // Stored words have the same target representation as the live bake. RGBA8 staging avoids unsupported
+        // integer Texture2D constructors. Float loads recover each byte exactly before integer reconstruction.
+        Pass
+        {
+            Name "UploadStored"
+            ZTest Always
+            ZWrite Off
+            Cull Off
+            Blend Off
+            HLSLPROGRAM
+            #pragma use_dxc vulkan
+            #pragma target 3.5
+            #pragma vertex VertUpload
+            #pragma fragment FragUpload
+            Texture2D<float4> _FishIndexSource;
+            float4 VertUpload(uint vertexID : SV_VertexID) : SV_POSITION
+            {
+                float2 corner = float2((vertexID << 1) & 2, vertexID & 2);
+                return float4(corner * 2.0 - 1.0, 0.0, 1.0);
+            }
+            uint PackBytes(float4 value)
+            {
+                uint4 b = (uint4)round(value * 255.0);
+                return b.x | (b.y << 8) | (b.z << 16) | (b.w << 24);
+            }
+            uint2 FragUpload(float4 positionCS : SV_POSITION) : SV_Target
+            {
+                int2 p = int2(positionCS.xy);
+                return uint2(PackBytes(_FishIndexSource.Load(int3(p.x * 2, p.y, 0))),
+                             PackBytes(_FishIndexSource.Load(int3(p.x * 2 + 1, p.y, 0))));
             }
             ENDHLSL
         }

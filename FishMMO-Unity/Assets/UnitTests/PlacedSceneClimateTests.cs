@@ -105,7 +105,7 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void AGeneratedScene_BetweenTheGridNodes_OnlyTheMoistureIsInterpolated()
+		public void AGeneratedScene_BetweenTheGridNodes_OnlyTheDirectionWalksAreInterpolated()
 		{
 			SolarSystemProfile system = MakeSystem(out WorldBody home);
 			var footprint = new AtlasFootprint(-12.0, 100.0, 75f, new Vector2(8f, 8f));
@@ -115,7 +115,7 @@ namespace FishMMO.UnitTests
 
 			var rng = new System.Random(238);
 			const int Points = 400;
-			double humidityError = 0.0;
+			double humidityError = 0.0, temperatureError = 0.0;
 			for (int k = 0; k < Points; k++)
 			{
 				float x = (float)((rng.NextDouble() - 0.5) * 8000.0);
@@ -125,11 +125,25 @@ namespace FishMMO.UnitTests
 				PlanetSurfacePoint expected = field.At(direction, y / placement.VerticalScale);
 				ClimateSample actual = placement.SampleAt(new Vector3(x, y, z), out float normalized);
 
-				Assert.AreEqual(expected.Climate.Temperature, actual.Temperature, $"point {k}: temperature is never interpolated");
+				/* The two upwind walks are the costly, direction-only terms, so both come off the grid: the moisture (since
+				 * the start) and the continentality the seasons are read with (2026-10-15; the splat painter samples this per
+				 * alphamap texel). Everything else in the temperature is the field's own at the point: given the gridded
+				 * continentality, the temperature is the field's to the bit. */
+				Vector3 unit = direction.normalized;
+				float gridded = placement.ContinentalityAt(x, z);
+				ClimateSample exact = field.ClimateAt(direction, placement.AltitudeOf(y),
+					field.Moisture.Anomaly(PlanetClimateField.LatitudeOf(unit), unit), gridded, out float exactHeight);
+				Assert.AreEqual(exact.Temperature, actual.Temperature, $"point {k}: nothing but the continentality is interpolated in the temperature");
+				Assert.AreEqual(gridded, actual.Continentality, $"point {k}: the sample carries the continentality it was read with");
 				Assert.AreEqual(expected.Climate.ElevationTier, actual.ElevationTier, $"point {k}: tier");
 				Assert.AreEqual(expected.NormalizedHeight, normalized, $"point {k}: height");
+				Assert.AreEqual(exactHeight, normalized, $"point {k}: height");
 				humidityError += Mathf.Abs(expected.Climate.Humidity - actual.Humidity);
+				temperatureError += Mathf.Abs(expected.Climate.Temperature - actual.Temperature);
 			}
+			// The continentality moves over hundreds of km (MoistureModel.MaritimeDecayKm 900), so a cell of a thirty-second of
+			// the scene carries it all but linearly: the temperature stays within a hair of the field's everywhere.
+			Assert.Less(temperatureError / Points, 1e-3, "mean temperature error from the interpolated continentality");
 			/* Only the wind's share of the humidity comes off the 32-cell grid. Measured offline on an
 			 * Earth-like body and on the home world: a mean error of 0.0002–0.009, with single points up
 			 * to about 0.3 where a coastline or a rain shadow's edge in the moisture field crosses a
