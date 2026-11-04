@@ -140,6 +140,15 @@ namespace FishMMO.Client
 			}
 			LookFamily family = FamilyFor(key, clone);
 
+			var values = ReadLook(clone);
+			family.Looks.Add(values);
+			family.Dirty = true;
+			return new LookRef(family, family.Looks.Count - 1);
+		}
+
+		/// <summary>Reads the same look values used by indirect families and baked HLOD.</summary>
+		public static TerrainLookMath.LookValues ReadLook(Material clone)
+		{
 			TerrainLookMath.LookValues values = TerrainLookMath.LookValues.Untextured();
 			Vector2 scale = clone.HasProperty("_BaseMap") ? clone.GetTextureScale("_BaseMap") : Vector2.one;
 			Vector2 offset = clone.HasProperty("_BaseMap") ? clone.GetTextureOffset("_BaseMap") : Vector2.zero;
@@ -156,9 +165,7 @@ namespace FishMMO.Client
 			values.Structure = FloatOf(clone, "_FishStructure", 0f);
 			values.WeatherAmount = FloatOf(clone, "_FishWeatherAmount", 1f);
 			values.SetSlices(clone.GetVector(LookSlicesId), clone.HasProperty(LookEmissionSliceId) ? clone.GetFloat(LookEmissionSliceId) : -1f);
-			family.Looks.Add(values);
-			family.Dirty = true;
-			return new LookRef(family, family.Looks.Count - 1);
+			return values;
 		}
 
 		private LookFamily FamilyFor(string key, Material clone)
@@ -184,9 +191,10 @@ namespace FishMMO.Client
 		/// Everything a family's members must share, as one string: the shader, keywords, queue, passes, and every property not the
 		/// look's (values exactly, textures — the look arrays among them — by identity and tiling). Null when a property cannot be read.
 		/// </summary>
-		private string FamilyKey(Material clone)
+		private string FamilyKey(Material clone) => FamilyKey(clone, lookKey);
+		public static string LookFamilyKey(Material material) => FamilyKey(material, new StringBuilder(1024));
+		private static string FamilyKey(Material clone, StringBuilder sb)
 		{
-			StringBuilder sb = lookKey;
 			sb.Clear();
 			Shader shader = clone.shader;
 			sb.Append(shader.GetInstanceID()).Append('|').Append(clone.renderQueue).Append('|');

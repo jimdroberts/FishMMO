@@ -895,7 +895,8 @@ namespace FishMMO.Shared.WorldDesign
 			var clock = System.Diagnostics.Stopwatch.StartNew();
 			// Built from exactly what it was last built from: its meshes are kept, not built and written again.
 			string inputs = assetPath != null ? InputsKey(site.Id, system, ground) : null;
-			if (!TryKeepMeshes(assetPath, site.Id, inputs, live, out Mesh[] meshes, out Mesh[] colliders, out bool[] mouths, out int kept))
+			bool rebuilt = !TryKeepMeshes(assetPath, site.Id, inputs, live, out Mesh[] meshes, out Mesh[] colliders, out bool[] mouths, out int kept);
+			if (rebuilt)
 			{
 				List<CaveMesher.Piece> pieces;
 				try
@@ -951,8 +952,10 @@ namespace FishMMO.Shared.WorldDesign
 					unsaved.Add(assetPath);
 				}
 			}
-			// The run-time cave cover's choice for this cave (its types and glow by biome and form) on its Visual (CaveCoverSpecies).
-			CaveCoverSpecies.Attach(Build(context.Root, system, mouths, meshes, material, colliders), system, CaveInteriorArt.Of(context.Request, site, system));
+			// The run-time cave cover's choice for this cave (its types and glow by biome and form) on its Visual (CaveCoverSpecies),
+			// with what the cover reads of its rock (2026-11-03): a kept cave gets its bake once, as its colliders above.
+			CaveCoverBake cover = CoverBakeFor(assetPath, site.Id, meshes, rebuilt, live);
+			CaveCoverSpecies.Attach(Build(context.Root, system, mouths, meshes, material, colliders), system, CaveInteriorArt.Of(context.Request, site, system), cover);
 			WritePool(context, site, system, ground);
 			WriteLava(context, site, system);
 			WriteStreams(context, site, system);

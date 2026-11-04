@@ -1,0 +1,15 @@
+#pragma kernel CheckColour
+#include "../../../Prefabs/Client/Weather/Shaders/FishGrassBlades.compute"
+StructuredBuffer<float2> _ColourPoints;
+RWStructuredBuffer<float4> _ColourResults;
+uint _ColourPointCount;
+[numthreads(64,1,1)]
+void CheckColour(uint3 id:SV_DispatchThreadID)
+{
+    if(id.x>=_ColourPointCount)return;
+    GrassLoadTerrain(0u);
+    float2 uv=_ColourPoints[id.x];
+    int mip=(int)(id.x%8u);
+    float3 c=id.x<256u ? GrassAlbedoTexel(_GrassAlbedoBase+GRASS_ALBEDO_HEADER+id.x) : GrassAlbedoBilinear(0,uv,mip,128.0);
+    _ColourResults[id.x]=float4(c,(float)GrassPackColour(float4(c,1)));
+}

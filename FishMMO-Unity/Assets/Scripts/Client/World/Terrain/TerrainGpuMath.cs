@@ -111,7 +111,7 @@ namespace FishMMO.Client
 		/// maximum LOD level.
 		/// </summary>
 		public static void Cull(in Matrix4x4 m, in FishModelData model, float drawDistance, float lodBias, Vector3 eye, Plane[] planes,
-			Vector4 light, Vector3 lod, List<Emit> emits)
+			Vector4 light, Vector3 lod, List<Emit> emits, bool mainCandidate = true)
 		{
 			emits.Clear();
 			Vector3 position = m.GetColumn(3);
@@ -139,7 +139,7 @@ namespace FishMMO.Client
 			}
 			Vector3 centre = m.MultiplyPoint3x4(model.SphereCentre);
 			float radius = model.SphereRadius * Mathf.Max(sx, Mathf.Max(sy, sz));
-			if (SphereVisible(planes, centre, radius))
+			if (mainCandidate && SphereVisible(planes, centre, radius))
 			{
 				emits.Add(new Emit { Level = level, View = 0, Fade = fade });
 				if (partner >= 0)

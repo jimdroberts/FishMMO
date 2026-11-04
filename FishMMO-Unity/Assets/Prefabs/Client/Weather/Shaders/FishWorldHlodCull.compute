@@ -1,0 +1,19 @@
+#pragma kernel CullHlod
+#pragma use_dxc vulkan
+#include "FishHiZOcclusion.hlsl"
+struct HlodPart { float4 sphere; uint cluster; uint3 padding; };
+StructuredBuffer<HlodPart> _HlodParts;
+StructuredBuffer<uint> _HlodSelected;
+RWByteAddressBuffer _HlodArgs;
+uint _HlodPartCount;
+float4 _HlodPlanes[6];
+[numthreads(64,1,1)]
+void CullHlod(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _HlodPartCount) return;
+    HlodPart part = _HlodParts[id.x];
+    bool visible = _HlodSelected[part.cluster] != 0u;
+    for (uint p = 0u; p < 6u; p++) visible = visible && dot(_HlodPlanes[p].xyz, part.sphere.xyz) + _HlodPlanes[p].w >= -part.sphere.w;
+    if (visible) visible = !FishOccluded(part.sphere.xyz, part.sphere.w);
+    _HlodArgs.Store((id.x * 5u + 1u) * 4u, visible ? 1u : 0u);
+}

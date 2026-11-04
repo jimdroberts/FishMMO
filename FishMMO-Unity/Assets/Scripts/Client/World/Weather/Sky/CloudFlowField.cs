@@ -1,3 +1,4 @@
+using FishMMO.Shared;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -225,7 +226,7 @@ namespace FishMMO.Client
 			// Into the halves the last upload is done with (an orphaned worker keeps its own: they are let go of then).
 			ushort[] into = shadeSpare ?? new ushort[Resolution * Resolution];
 			shadeSpare = null;
-			shading = Task.Run(() => mine == generation ? Shaded.Of(TerrainShadowSolver.ShadowTops(scene, default, light.x, light.y, light.z, ShadeReach), packBase, into) : null);
+			shading = PlatformWork.Run(() => mine == generation ? Shaded.Of(TerrainShadowSolver.ShadowTops(scene, default, light.x, light.y, light.z, ShadeReach), packBase, into) : null);
 		}
 
 		/// <summary>The far shade's heights, and the same packed into halves above <see cref="Base"/> on the worker.</summary>
@@ -333,7 +334,7 @@ namespace FishMMO.Client
 			float cell = size / n;
 			float[] heights = ground;
 			int mine = generation;
-			preparing = Task.Run(() => mine == generation ? PrepareOn(heights, n, cell, mine) : null);
+			preparing = PlatformWork.Run(() => mine == generation ? PrepareOn(heights, n, cell, mine) : null);
 		}
 
 		/// <summary>What the worker makes of the heights: the maps packed for upload, and what the flow is solved from.</summary>
@@ -417,7 +418,7 @@ namespace FishMMO.Client
 			float[] levels = prepared.Levels;
 			solvingLevels = levels;
 			int mine = generation;
-			solving = Task.Run(() => mine == generation ? PackField(TerrainFlowSolver.Solve(smoothed, n, cell, levels)) : null);
+			solving = PlatformWork.Run(() => mine == generation ? PackField(TerrainFlowSolver.Solve(smoothed, n, cell, levels)) : null);
 		}
 
 		private void UploadRock(ushort[] halves)

@@ -42,8 +42,8 @@ namespace FishMMO.Client
 	/// </para>
 	/// <para>
 	/// <b>Where</b>: compute and a raw-buffer BatchRendererGroup (<see cref="BatchRendererGroup.BufferTarget"/>, the GPU
-	/// Resident Drawer's own test): Vulkan, D3D11/12, Metal, and WebGPU where Unity gives it raw buffers. Elsewhere, and
-	/// with the switch off, the RenderMeshIndirect path draws.
+	/// Resident Drawer's own test): Vulkan, D3D11/12, Metal and WebGPU (whose DOTS variants are trimmed to its 12 uniform
+	/// buffers a stage). Elsewhere, and with the switch off, the RenderMeshIndirect path draws.
 	/// </para>
 	/// </remarks>
 	public sealed partial class TerrainGpuRenderer
@@ -52,7 +52,16 @@ namespace FishMMO.Client
 		public static bool UseBrg = true;
 
 		/// <summary>Whether this platform can: compute, and a raw-buffer BatchRendererGroup (the GPU Resident Drawer's test).</summary>
-		public static bool BrgSupported => SystemInfo.supportsComputeShaders && BatchRendererGroup.BufferTarget == BatchBufferTarget.RawBuffer;
+		/// <remarks>
+		/// WebGPU included since 2026-11-01: its DOTS variants drop the material and user metadata cbuffers there
+		/// (FishWeatherLitInput.hlsl, FishIndirectInstancing.hlsl), which brought the lit fragment from 13 uniform buffers to
+		/// within WebGPU's guaranteed 12 (WebGpuUniformBudgetTests). On WebGPU every RenderMeshIndirect submission re-applies
+		/// its whole pass, re-uploading every constant buffer through a linear scratch-page scan; the batch group's draws go
+		/// through the SRP Batcher instead (Docs/Rendering/2026-11-01/webgpu-constants).
+		/// </remarks>
+		public static bool SupportsBrg(GraphicsDeviceType api, bool compute, BatchBufferTarget target)
+			=> compute && target == BatchBufferTarget.RawBuffer;
+        public static bool BrgSupported => SupportsBrg(SystemInfo.graphicsDeviceType, SystemInfo.supportsComputeShaders, BatchRendererGroup.BufferTarget);
 
 		/// <summary>Whether this renderer's next layout submits through the batch group (not where it was refused: <see cref="SyncDots"/>).</summary>
 		private bool BrgWanted => UseBrg && !brgRefused && BrgSupported;
@@ -102,6 +111,8 @@ namespace FishMMO.Client
 			public int View;
 			/// <summary>Its render parameters' filter (<see cref="brgFilters"/>).</summary>
 			public int Filter;
+			/// <summary>A static shadow caster: drawn from the cached main-light shadows when they serve the camera (TerrainGpuRenderer.ShadowCache.cs).</summary>
+			public bool StaticShadow;
 		}
 
 		/// <summary>What a draw range fixes besides the shadow casting mode (which the view decides).</summary>
@@ -159,6 +170,7 @@ namespace FishMMO.Client
 				DisposeBrg();
 				return;
 			}
+			LayoutLightParts();
 			EnsureBrg();
 			SyncDots();
 			int visibleCount = visibleBuffer != null ? visibleBuffer.count : 1;
@@ -194,6 +206,7 @@ namespace FishMMO.Client
 					VisibleOffset = (uint)bases[command.Slot],
 					View = command.View,
 					Filter = f,
+					StaticShadow = IsStaticShadowCaster(command.View, command.Params.material),
 				};
 			}
 			if (brgFilterCounts.Length < brgFilters.Count)
@@ -310,6 +323,14 @@ namespace FishMMO.Client
 			into.SetComputeIntParam(compute, PackedOnId, on ? 1 : 0);
 		}
 
+		/// <summary>The cull kernel with no packed list: the shadow cache's own culling must not write the batch group's.</summary>
+		private void BindPackedOff(CommandBuffer into)
+		{
+			packedDummy ??= new GraphicsBuffer(GraphicsBuffer.Target.Raw, 1, sizeof(uint));
+			into.SetComputeBufferParam(compute, cullKernel, VisiblePackedId, packedDummy);
+			into.SetComputeIntParam(compute, PackedOnId, 0);
+		}
+
 		/// <summary>After a copy dispatch: the same range's DOTS matrices into the batch buffer (parameters already set for the copy).</summary>
 		private void DispatchDots(CommandBuffer into, GraphicsBuffer upload, int count)
 		{
@@ -334,6 +355,7 @@ namespace FishMMO.Client
 			CameraLightCallbacks = CameraLightFacesBeforeCull = CameraLightFacesAfterCull = 0;
 			lightWorkPrepared = false;
 			brgCamera = camera.GetEntityId();
+			brgCameraObject = camera;
 			brgArmed = true;
 			brgEye = camera.transform.position;
 			int main = 0, primes = 0, shadows = 0;
@@ -402,7 +424,15 @@ namespace FishMMO.Client
 			}
 
 			ushort splits = view == 0 ? (ushort)1 : TerrainBrgMath.SplitMask(context.cullingSplits.Length);
-			// The sun retains the existing cascade path and CPU cost. Point and spot shadows provide perspective splits.
+			// The main light's cascades (orthographic): its static casters come from the cached shadows when they serve this
+			// camera (CachedMainLightShadows), drawn by the cache pass into the tiles it refreshes, not into every cascade here.
+			bool omitStatic = view == 1 && context.projectionType == BatchCullingProjectionType.Orthographic
+				&& shadowCacheArgs != null && CachedMainLightShadows.AppliesTo(brgCameraObject);
+			if (view == 1)
+			{
+				LastStaticShadowCommandsOmitted = 0;
+			}
+			// Directional cascade culling was measured separately; retain its former CPU cost in production.
 			bool cullLight = view == 1 && CullLightCommands && context.projectionType == BatchCullingProjectionType.Perspective;
 			if (view == 1)
 			{
@@ -417,6 +447,11 @@ namespace FishMMO.Client
 				int c = wantedCommands[w];
 				if (c >= brgDraws.Length || brgDraws[c].View != view)
 				{
+					continue;
+				}
+				if (omitStatic && brgDraws[c].StaticShadow)
+				{
+					LastStaticShadowCommandsOmitted++;
 					continue;
 				}
 				if (view == 1)
@@ -485,6 +520,7 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
+				if (omitStatic && brgDraws[c].StaticShadow) continue;
 				ushort mask = view == 0 ? splits : CommandLightMask(c, splits, cullLight);
 				if (mask == 0) continue;
 				BrgDraw d = brgDraws[c];
@@ -579,6 +615,12 @@ namespace FishMMO.Client
 				lightWorkModelMasks = Array.Empty<int>();
 				lightWorkCount = lightWorkModels = -1;
 				lightModelMasks = Array.Empty<ushort>();
+				lightCommandMasks = Array.Empty<ushort>();
+				lightPartBounds = Array.Empty<Bounds>();
+				lightMeshBounds.Clear();
+				shadowHierarchies.Clear();
+				lightPartHierarchy = Array.Empty<TerrainShadowHierarchy>();
+				lightWorkByModel = Array.Empty<List<int>>();
 				packedDummy?.Release();
 				packedDummy = null;
 			}

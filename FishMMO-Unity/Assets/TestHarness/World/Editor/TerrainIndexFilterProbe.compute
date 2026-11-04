@@ -1,0 +1,17 @@
+#pragma kernel Probe
+#pragma use_dxc vulkan
+#include "../../../Prefabs/Client/Weather/Shaders/FishTerrainIndexFast.hlsl"
+struct Point { uint2 t00,t10,t01,t11; float2 f; float2 pad; };
+StructuredBuffer<Point> _Points;
+RWStructuredBuffer<float4> _Results;
+uint _PointCount;
+[numthreads(64,1,1)]
+void Probe(uint3 id:SV_DispatchThreadID)
+{
+    if (id.x>=_PointCount) return;
+    Point p = _Points[id.x]; int4 fastIds,fullIds;
+    float4 fast = FishIndexFilter(p.t00,p.t10,p.t01,p.t11,p.f,fastIds);
+    float4 full = FishIndexFilterFull(p.t00,p.t10,p.t01,p.t11,p.f,fullIds);
+    _Results[id.x*4]=fast; _Results[id.x*4+1]=full;
+    _Results[id.x*4+2]=(float4)fastIds; _Results[id.x*4+3]=(float4)fullIds;
+}

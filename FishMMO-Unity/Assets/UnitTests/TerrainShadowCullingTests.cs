@@ -98,5 +98,67 @@ namespace FishMMO.UnitTests
 			using var splits = new NativeArray<CullingSplit>(new[] { new CullingSplit { cullingPlaneOffset = 10, cullingPlaneCount = 6 } }, Allocator.Temp);
 			Assert.That(TerrainShadowCullingMath.SplitMask(new Vector4(100, 200, 300, 1), planes, splits), Is.EqualTo(1));
 		}
+		[TestCase(IndexFormat.UInt16)]
+		[TestCase(IndexFormat.UInt32)]
+		public void PartBoundsUseIndexedVerticesAndBaseVertexInsteadOfBroadMeshBounds(IndexFormat format)
+		{
+			var mesh = new Mesh { indexFormat = format };
+			try
+			{
+				mesh.vertices = new[] { new Vector3(-21,0,0), new Vector3(-19,0,0), new Vector3(-20,2,0), new Vector3(19,0,0), new Vector3(21,0,0), new Vector3(20,3,0) };
+				mesh.subMeshCount = 2;
+				mesh.SetIndices(new[] { 0,1,2 }, MeshTopology.Triangles, 0, false);
+				mesh.SetIndices(new[] { 0,1,2 }, MeshTopology.Triangles, 1, false, 3);
+				mesh.bounds = new Bounds(Vector3.zero, Vector3.one * 100);
+				Bounds[] bounds = TerrainShadowCullingMath.MeshPartBounds(mesh);
+				Assert.That(bounds[0].min.x, Is.EqualTo(-21)); Assert.That(bounds[0].max.x, Is.EqualTo(-19));
+				Assert.That(bounds[1].min.x, Is.EqualTo(19)); Assert.That(bounds[1].max.x, Is.EqualTo(21));
+				Assert.That(bounds[0].max.y, Is.EqualTo(2)); Assert.That(bounds[1].max.y, Is.EqualTo(3));
+			}
+			finally { Object.DestroyImmediate(mesh); }
+		}
+
+		[Test]
+		public void UnreadableMeshesKeepTheirConservativeOriginalBounds()
+		{
+			var mesh = new Mesh();
+			try
+			{
+				mesh.vertices = new[] { Vector3.zero, Vector3.right, Vector3.up }; mesh.triangles = new[] { 0,1,2 };
+				Bounds original = mesh.bounds; mesh.UploadMeshData(true);
+				Assert.That(mesh.isReadable, Is.False);
+				Assert.That(TerrainShadowCullingMath.MeshPartBounds(mesh)[0], Is.EqualTo(original));
+			}
+			finally { Object.DestroyImmediate(mesh); }
+		}
+
+		[TestCase(false)]
+		[TestCase(true)]
+		public void PartBoundsContainTransformedCornersWithRootFloraScalingAndDeformation(bool flora)
+		{
+			var source = new Bounds(new Vector3(12,-3,5), new Vector3(1,8,.4f));
+			var matrix = Matrix4x4.TRS(new Vector3(4,9,-2), Quaternion.Euler(20,40,30), new Vector3(-2,3,.5f));
+			Bounds world = TerrainShadowCullingMath.WorldBounds(FishInstance.From(matrix), TerrainShadowCullingMath.PartBounds(source, flora));
+			foreach (float scale in flora ? new[] { .7f, 1.4f } : new[] { 1f })
+			for (int i = 0; i < 8; i++)
+			{
+				Vector3 corner = source.center + Vector3.Scale(source.extents, new Vector3((i&1)==0?-1:1,(i&2)==0?-1:1,(i&4)==0?-1:1));
+				foreach (Vector3 bend in new[] { Vector3.up, Vector3.down, Vector3.right, Vector3.left, Vector3.forward, Vector3.back })
+					Assert.That(world.SqrDistance(matrix.MultiplyPoint3x4(corner * scale + bend)), Is.LessThan(.00001f));
+			}
+		}
+
+		[Test]
+		public void OppositeStructurePartsHaveIndependentMasksAndMultipleInstancesUnionTheirFaces()
+		{
+			using var planes = new NativeArray<Plane>(new[] { new Plane(Vector3.right,0), new Plane(Vector3.left,0) }, Allocator.Temp);
+			using var splits = new NativeArray<CullingSplit>(new[] { new CullingSplit { cullingPlaneOffset=0,cullingPlaneCount=1 },new CullingSplit { cullingPlaneOffset=1,cullingPlaneCount=1 } }, Allocator.Temp);
+			Bounds part = TerrainShadowCullingMath.PartBounds(new Bounds(Vector3.right * 20, Vector3.one), false);
+			Bounds first = TerrainShadowCullingMath.WorldBounds(FishInstance.From(Matrix4x4.identity), part);
+			Bounds second = TerrainShadowCullingMath.WorldBounds(FishInstance.From(Matrix4x4.Translate(Vector3.left * 40)), part);
+			ushort a = TerrainShadowCullingMath.BoundsMask(first,planes,splits), b = TerrainShadowCullingMath.BoundsMask(second,planes,splits);
+			Assert.That(a, Is.EqualTo(1)); Assert.That(b, Is.EqualTo(2)); Assert.That(a|b, Is.EqualTo(3));
+		}
+
 	}
 }

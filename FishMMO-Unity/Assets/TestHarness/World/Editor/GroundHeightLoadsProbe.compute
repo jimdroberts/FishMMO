@@ -1,0 +1,17 @@
+#pragma kernel Probe
+#pragma use_dxc vulkan
+#include "../../../Prefabs/Client/Weather/Shaders/FishGroundHeightLoads.hlsl"
+Texture2DArray<float4> _Heights;
+SamplerState sampler_LinearClamp;
+StructuredBuffer<float2> _Points;
+RWStructuredBuffer<float2> _Results;
+uint _Count,_Size;
+[numthreads(64,1,1)]
+void Probe(uint3 id:SV_DispatchThreadID)
+{
+    if(id.x>=_Count)return;
+    uint slice=id.x%2;
+    float2 t=_Points[id.x];
+    float2 uv=(saturate(t)*(float)(_Size-1)+0.5)/(float)_Size;
+    _Results[id.x]=float2(FishGroundHeightLoads(_Heights,(int)_Size,(int)slice,t),_Heights.SampleLevel(sampler_LinearClamp,float3(uv,slice),0).r);
+}

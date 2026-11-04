@@ -1393,6 +1393,12 @@ namespace FishMMO.TestHarness.World
 		/// </summary>
 		private void Cache()
 		{
+			// Standalone test beds use the same global render-profile lookup as the client boot.
+			if (Profile != null && WeatherRenderProfile.GetFirst<WeatherRenderProfile>() == null)
+			{
+				Profile.AddToCache(Profile.name); registered.Add(Profile);
+			}
+
 			if (SolarSystem != null && SolarSystemProfile.GetFirst<SolarSystemProfile>() == null)
 			{
 				SolarSystem.AddToCache(SolarSystem.name);

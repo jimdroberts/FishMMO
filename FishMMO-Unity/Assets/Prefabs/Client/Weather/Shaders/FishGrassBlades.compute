@@ -23,6 +23,8 @@
 // layers, the per-type table) and the weather's snow maps. Nothing the terrain draws with is bound here: on OpenGL the
 // terrain's control maps and then its albedo array, read here, made whole terrains' blades flicker.
 
+#pragma kernel FishGrassPrepareColour
+#pragma kernel FishGrassBuildActiveChannels
 #pragma kernel FishGrassClear
 #pragma kernel FishGrassGenerate
 #pragma kernel FishGrassFinalize
@@ -43,6 +45,7 @@
 // terrain has, twice (the sums, then the tussock's pick, stopping at the channel it picks), in the same channel order with
 // the same sums, so it picks what the register kernels would.
 #pragma multi_compile_local __ GRASS_WIDE GRASS_WIDEST
+#pragma multi_compile_local __ GRASS_ACTIVE_CHANNELS
 
 #define GRASS_MAX_LEVEL 5
 #define GRASS_ITEM_SIDE 8
@@ -97,6 +100,7 @@ RWByteAddressBuffer _GrassArgs;              // IndirectDrawIndexedArgs, 5 uints
  * what it was. The blades' vertex shader (FishGrassBlades.hlsl) asks the same patch from the same root for the colour,
  * width and curl, so nothing new rides the record. The patch and salt must match GRASS_FLORA_PATCH / _SALT there. */
 #include "FishFlora.hlsl"
+#include "FishGrassLookCache.hlsl"
 /* The burn mosaic (2026-10-25, I2t; FishBurn.hlsl, BurnMosaicTable.BindCompute): where a veld fire passed, blades stand as
  * stubble and regrow through the green flush, and an after-burn type (fire lilies, GRASS_ROW_MORE w) grows only in its weeks.
  * The blade's colour tone rides three free bits of the colour word (GrassMath.WithBurnTone) for the vertex shader. Off
@@ -136,6 +140,17 @@ Texture2DArray<float2> _GrassWater;
  * dispatch per terrain, rebinding and re-uploading constants between them, disturbed the trees' and cliff rocks'
  * culling on OpenGL, and per-dispatch constant arrays broke the grass's own. */
 StructuredBuffer<uint> _GrassShared;
+RWStructuredBuffer<uint> _GrassColourTableOut;
+// One 1 KB table per atlas, prepared with this backend's original decoder. No extra generate buffer binding.
+uint _GrassLinearTableBase, _GrassUsePreparedColour;
+[numthreads(256,1,1)]
+void FishGrassPrepareColour(uint3 id : SV_DispatchThreadID)
+{
+    float c = id.x / 255.0;
+    float decoded = c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);
+    _GrassColourTableOut[_GrassLinearTableBase + id.x] = asuint(decoded);
+}
+
 #define GRASS_TERRAIN_UINTS 82u             // GrassTerrainAtlas.TerrainUints
 
 float4 _GrassCamera;                         // xyz position, w grass distance
@@ -271,6 +286,11 @@ float4 GrassChannelTypes(uint m)
 #endif
 }
 
+uint _GrassActiveTableBase;
+uint _GrassActiveTerrain;
+uint _GrassUseActiveChannels;
+uint _GrassCacheFloraLooks;
+#define GRASS_ACTIVE_SIDE 8u // GrassTerrainAtlas.ActiveRegionSide
 uint _GrassItemOffset;
 uint _GrassItemCount;
 
@@ -615,6 +635,10 @@ float GrassFreeboardAt(float2 local)
 float3 GrassAlbedoTexel(uint index)
 {
     uint packed = _GrassShared[index];
+    [branch] if (_GrassUsePreparedColour != 0u)
+        return float3(asfloat(_GrassShared[_GrassLinearTableBase + (packed & 255u)]),
+            asfloat(_GrassShared[_GrassLinearTableBase + ((packed >> 8) & 255u)]),
+            asfloat(_GrassShared[_GrassLinearTableBase + ((packed >> 16) & 255u)]));
     float3 c = float3(packed & 0xFFu, (packed >> 8) & 0xFFu, (packed >> 16) & 0xFFu) / 255.0;
     return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);
 }
@@ -631,10 +655,19 @@ float3 GrassAlbedoBilinear(int id, float2 uv, int mip, float width)
     i1 = i1 >= size ? i1 - size : i1;
     // The mip's first texel in the layer: every larger mip before it (GrassAlbedoTexels' layout).
     uint offset = _GrassAlbedoBase + GRASS_ALBEDO_HEADER + (uint)id * (uint)_GrassArrayInfo2.w;
-    [loop] for (int k = 0; k < mip; k++)
+    [branch] if (_GrassUsePreparedColour != 0u)
     {
-        uint side = max(1u, (uint)width >> (uint)k);
-        offset += side * side;
+        // Exact geometric sum for the power-of-two pyramids GrassAlbedoTexels builds.
+        uint w = (uint)width, side = max(1u,w >> (uint)mip);
+        offset += (4u*w*w - 4u*side*side)/3u;
+    }
+    else
+    {
+        [loop] for (int k = 0; k < mip; k++)
+        {
+            uint side = max(1u, (uint)width >> (uint)k);
+            offset += side * side;
+        }
     }
     uint row = (uint)size;
     float3 a = GrassAlbedoTexel(offset + (uint)i0.y * row + (uint)i0.x);
@@ -810,6 +843,22 @@ float4 GrassDensityMapAt(float2 local, uint map)
     return d;
 }
 
+// Conservatively contains all channels contributing to GrassDensityMapAt at this point.
+uint2 GrassActiveChannelsAt(uint terrain, float2 local)
+{
+    uint2 channels = uint2(0xFFFFFFFFu, 0xFFFFFFFFu);
+    [branch] if (_GrassUseActiveChannels != 0u)
+    {
+        uint header = _GrassActiveTableBase + terrain * 2u;
+        uint width = _GrassShared[header + 1u];
+        uint2 texel = (uint2)floor(clamp(local / _GrassTerrainSize.xy * _GrassTerrainSize.w - 0.5, 0.0, _GrassTerrainSize.w - 1.0));
+        uint2 region = texel / GRASS_ACTIVE_SIDE;
+        uint at = _GrassShared[header] + (region.y * width + region.x) * 2u;
+        channels = uint2(_GrassShared[at], _GrassShared[at + 1u]);
+    }
+    return channels;
+}
+
 // ── Culling ───────────────────────────────────────────────────────────
 
 // Last frame's depth pyramid (FishDepthPyramid, 2026-10-21): a blade wholly behind a hill, a rock or a wall is not drawn in
@@ -940,6 +989,9 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     float typePick = GrassUnit(GrassMix(clump ^ 0xE6546B64u));
 
     float2 local0 = cellRoot - _GrassTerrainOrigin.xz;
+#if defined(GRASS_WIDEST) && defined(GRASS_ACTIVE_CHANNELS)
+    uint2 activeChannels = GrassActiveChannelsAt(item.terrain, local0);
+#endif
 #if !defined(GRASS_WIDEST)
     float weights[GRASS_CHANNELS];
     float channelTypes[GRASS_CHANNELS];
@@ -978,9 +1030,21 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     // The loop below, line for line, a density map at a time: channel c = 4m + j in the same order, so the same sums.
     [loop] for (uint m = 0u; m < maps; m++)
     {
+#if defined(GRASS_ACTIVE_CHANNELS)
+        uint active = ((m < 8u ? activeChannels.x : activeChannels.y) >> ((m & 7u) * 4u)) & 15u;
+        [branch] if (active == 0u) continue;
+#endif
         float4 dm = GrassDensityMapAt(local0, m);
+#if defined(GRASS_ACTIVE_CHANNELS)
+        uint remaining = active;
+        [loop] while (remaining != 0u)
+        {
+            uint j = firstbitlow(remaining);
+            remaining &= remaining - 1u;
+#else
         [unroll] for (uint j = 0u; j < 4u; j++)
         {
+#endif
             int c = (int)(4u * m + j);
             float ct = GrassChannelTypeAt((uint)c);
             int t = ct >= 0.0 ? (int)ct : 0;
@@ -1088,9 +1152,21 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
          * order until the pick lands: what the loop below picks, without holding the weights. */
         [loop] for (uint m = 0u; m < maps && !found; m++)
         {
+#if defined(GRASS_ACTIVE_CHANNELS)
+            uint active = ((m < 8u ? activeChannels.x : activeChannels.y) >> ((m & 7u) * 4u)) & 15u;
+            [branch] if (active == 0u) continue;
+#endif
             float4 dm = GrassDensityMapAt(local0, m);
+#if defined(GRASS_ACTIVE_CHANNELS)
+            uint remaining = active;
+            [loop] while (remaining != 0u)
+            {
+                uint j = firstbitlow(remaining);
+                remaining &= remaining - 1u;
+#else
             [unroll] for (uint j = 0u; j < 4u; j++)
             {
+#endif
                 int k = (int)(4u * m + j);
                 float ct = GrassChannelTypeAt((uint)k);
                 float w = ct >= 0.0 ? max(0.0, GrassComponent(dm, j)) : 0.0;
@@ -1243,12 +1319,14 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     uint recordBits = GrassRecordBits(type, height);
     blade.colour = recordBits;
     blade.more = GrassRecordMore(type);
+    if (_GrassCacheFloraLooks != 0u) blade.more = FishGrassPackLook(blade.more,look);
     /* Whether this stem carries its type's head: every stem of a type tuned before GrassTypeTuning.HeadShare (share 1),
      * a share of them for a tussock species with a head (feather grass's plumes, a rush's tufts, wheat's ears), which
      * would otherwise put three records on every blade of a dense lawn. */
     bool headed = head != 0u && GrassUnit(GrassMix(own ^ 0x3C6EF372u)) < GrassTypeRow(type, GRASS_ROW_MORE).x;
     // Stubble and the regrowing flush carry no heads (2026-10-25, I2t).
     headed = headed && burnRegrow > 0.95;
+    if (_GrassCacheFloraLooks != 0u && headed && head == 2u) blade.more = FishGrassPackBloom(blade.more,rootXZ,look);
 
     /* Everything the vertex shader draws: the curve is scaled to the blade's length, so every point lies
      * within `height` of the root, above the ground, in any wind (laid over to 75 degrees, the tip is ~h
@@ -1451,6 +1529,9 @@ void FishGrassGather(uint3 id : SV_DispatchThreadID)
     float3 centre = (boundsMin + boundsMax) * 0.5;
     float3 extent = (boundsMax - boundsMin) * 0.5;
     bool main = GrassBoxInView(centre, extent);
+    // Bound includes terrain height, snow, blade/head reach and wind padding. Cull only the main
+    // view here; the swept shadow bound below remains independent.
+    if (main && FishBoxOccluded(centre, extent)) main = false;
     bool shadow = false;
     float shadowDistance = _GrassLight.w;
     if (shadowDistance > 0.0 && near <= shadowDistance)
@@ -1507,5 +1588,44 @@ void FishGrassGatherArgs(uint3 id : SV_DispatchThreadID)
         _GrassGatherArgs.Store(id.x * 12u, min(count, 65535u));
         _GrassGatherArgs.Store(id.x * 12u + 4u, count > 0u ? (count + 65534u) / 65535u : 0u);
         _GrassGatherArgs.Store(id.x * 12u + 8u, 1u);
+    }
+}
+
+// Built once per atlas version from its actual RGBA8 density textures, including cached/client terrain data.
+// Each region includes its upper row/column: every texel contributing to manual bilinear sampling is covered.
+// Shares the existing table/albedo buffer; no additional generate-stage storage binding.
+RWStructuredBuffer<uint> _GrassActiveOut;
+groupshared uint gsActiveChannels[2];
+[numthreads(64, 1, 1)]
+void FishGrassBuildActiveChannels(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
+{
+    if (thread.x < 2u) gsActiveChannels[thread.x] = 0u;
+    GroupMemoryBarrierWithGroupSync();
+    uint terrainAt = _GrassActiveTerrain * GRASS_TERRAIN_UINTS;
+    uint resolution = (uint)asfloat(_GrassActiveOut[terrainAt + 7u]);
+    uint maps = min(_GrassActiveOut[terrainAt + 17u], 16u);
+    uint first = _GrassActiveOut[terrainAt + 33u];
+    uint2 mask = 0u;
+    for (uint i = thread.x; i < 81u; i += 64u)
+    {
+        uint2 pixel = min(group.xy * GRASS_ACTIVE_SIDE + uint2(i % 9u, i / 9u), resolution - 1u);
+        for (uint m = 0u; m < maps; m++)
+        {
+            float4 d = _GrassDensity.Load(int4(pixel, first + m, 0));
+            uint bits = (d.x > 0.0 ? 1u : 0u) | (d.y > 0.0 ? 2u : 0u) | (d.z > 0.0 ? 4u : 0u) | (d.w > 0.0 ? 8u : 0u);
+            if (m < 8u) mask.x |= bits << (m * 4u);
+            else mask.y |= bits << ((m - 8u) * 4u);
+        }
+    }
+    InterlockedOr(gsActiveChannels[0], mask.x);
+    InterlockedOr(gsActiveChannels[1], mask.y);
+    GroupMemoryBarrierWithGroupSync();
+    if (thread.x == 0u)
+    {
+        uint header = _GrassActiveTableBase + _GrassActiveTerrain * 2u;
+        uint width = _GrassActiveOut[header + 1u];
+        uint at = _GrassActiveOut[header] + (group.y * width + group.x) * 2u;
+        _GrassActiveOut[at] = gsActiveChannels[0];
+        _GrassActiveOut[at + 1u] = gsActiveChannels[1];
     }
 }

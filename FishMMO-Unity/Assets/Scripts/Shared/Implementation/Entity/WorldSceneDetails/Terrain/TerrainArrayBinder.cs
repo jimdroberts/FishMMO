@@ -253,6 +253,14 @@ namespace FishMMO.Shared
 #endif
 		}
 
+		/// <summary>Supplies an already loaded scene bake (for local rendering tools that do not run client boot).</summary>
+		public void Bind(TerrainArraySet loadedSet)
+		{
+			if (loadedSet == null || !loadedSet.IsUsable || loadedSet.SceneName != SceneKey)
+				throw new System.ArgumentException("Terrain bake must be usable and belong to this scene.", nameof(loadedSet));
+			set = loadedSet; Push();
+		}
+
 		/// <summary>Pushes the current set (or none) to every tile without looking for it again.</summary>
 		public void Push()
 		{
@@ -809,7 +817,7 @@ namespace FishMMO.Shared
 		private void BeginLoad()
 		{
 			string key = SceneKey;
-			if (string.IsNullOrEmpty(key) || handle.IsValid())
+			if (set != null || string.IsNullOrEmpty(key) || handle.IsValid())
 			{
 				return;
 			}
@@ -822,7 +830,7 @@ namespace FishMMO.Shared
 			{
 				bool exists = found.Status == AsyncOperationStatus.Succeeded && found.Result != null && found.Result.Count > 0;
 				Addressables.Release(found);
-				if (this == null || !isActiveAndEnabled)
+				if (this == null || !isActiveAndEnabled || set != null)
 				{
 					return;
 				}
@@ -834,7 +842,7 @@ namespace FishMMO.Shared
 				handle = Addressables.LoadAssetAsync<TerrainArraySet>(address);
 				handle.Completed += loaded =>
 				{
-					if (this == null || !isActiveAndEnabled)
+					if (this == null || !isActiveAndEnabled || set != null)
 					{
 						return;
 					}

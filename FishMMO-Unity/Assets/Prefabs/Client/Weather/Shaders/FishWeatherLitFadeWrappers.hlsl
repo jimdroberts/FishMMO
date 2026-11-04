@@ -63,11 +63,12 @@ GBufferFragOutput FishLitGBufferPassFragment(Varyings input)
 #endif
 
 #if defined(FISH_LIT_WRAP_DEPTH)
-half FishDepthOnlyFragment(Varyings input) : SV_TARGET
+half4 FishDepthOnlyFragment(Varyings input) : SV_TARGET
 {
     UNITY_SETUP_INSTANCE_ID(input);
     FishLodFadeClip(input.positionCS);
-    return DepthOnlyFragment(input);
+    half depth = DepthOnlyFragment(input);
+    return half4(depth,0.0h,0.0h,0.0h); // ColorMask R; valid for scalar or RGBA color attachments.
 }
 #endif
 

@@ -18,6 +18,51 @@ namespace FishMMO.Client
 			return new Vector4(Vector4.Dot(instance.Row0, p), Vector4.Dot(instance.Row1, p), Vector4.Dot(instance.Row2, p), radius * Mathf.Max(sx, Mathf.Max(sy, sz)));
 		}
 
+		/// <summary>Root-space part bounds with the existing caster deformation allowance and flora root scaling.</summary>
+		public static Bounds PartBounds(Bounds bounds, bool flora)
+		{
+			float scale = flora ? TerrainGpuRenderer.FloraMaxScale : 1f;
+			float radius = flora ? TerrainGpuRenderer.FloraSphereRadius(bounds) : bounds.extents.magnitude;
+			Vector3 c = bounds.center;
+			bounds.extents = bounds.extents * scale + new Vector3(Mathf.Abs(c.x), Mathf.Abs(c.y), Mathf.Abs(c.z)) * (scale - 1f)
+				+ Vector3.one * (radius * (TerrainGpuRenderer.CasterSphereGrowth - 1f) + TerrainGpuRenderer.CasterSphereMetres);
+			return bounds;
+		}
+
+		public static Bounds WorldBounds(in FishInstance instance, Bounds local)
+		{
+			Vector3 e = local.extents;
+			float Reach(Vector4 r) => Mathf.Abs(r.x) * e.x + Mathf.Abs(r.y) * e.y + Mathf.Abs(r.z) * e.z;
+			Vector4 p = new Vector4(local.center.x, local.center.y, local.center.z, 1);
+			return new Bounds(new Vector3(Vector4.Dot(instance.Row0, p), Vector4.Dot(instance.Row1, p), Vector4.Dot(instance.Row2, p)),
+				2f * new Vector3(Reach(instance.Row0), Reach(instance.Row1), Reach(instance.Row2)));
+		}
+
+		/// <summary>Generated meshes often store whole-mesh submesh bounds. Read indexed vertices once to tighten them.</summary>
+		public static Bounds[] MeshPartBounds(Mesh mesh)
+		{
+			var bounds = new Bounds[mesh.subMeshCount];
+			for (int s = 0; s < bounds.Length; s++) bounds[s] = mesh.bounds;
+			if (!mesh.isReadable) return bounds;
+			using var data = Mesh.AcquireReadOnlyMeshData(mesh);
+			using var vertices = new NativeArray<Vector3>(mesh.vertexCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+			data[0].GetVertices(vertices);
+			var wide = mesh.indexFormat == IndexFormat.UInt32 ? data[0].GetIndexData<uint>() : default;
+			var narrow = mesh.indexFormat == IndexFormat.UInt16 ? data[0].GetIndexData<ushort>() : default;
+			for (int s = 0; s < bounds.Length; s++)
+			{
+				var part = data[0].GetSubMesh(s);
+				if (part.indexCount == 0) continue;
+				for (int i = 0; i < part.indexCount; i++)
+				{
+					int at = part.indexStart + i;
+					int vertex = (mesh.indexFormat == IndexFormat.UInt32 ? (int)wide[at] : narrow[at]) + part.baseVertex;
+					if (i == 0) bounds[s] = new Bounds(vertices[vertex], Vector3.zero); else bounds[s].Encapsulate(vertices[vertex]);
+				}
+			}
+			return bounds;
+		}
+
 		public static ushort SplitMask(Vector4 sphere, NativeArray<Plane> planes, NativeArray<CullingSplit> splits, ushort wanted = ushort.MaxValue)
 		{
 			return BoundsMask(new Bounds(new Vector3(sphere.x, sphere.y, sphere.z), Vector3.one * (2f * sphere.w)), planes, splits, wanted, sphere.w);
@@ -59,9 +104,9 @@ namespace FishMMO.Client
 		private ushort[] masks = Array.Empty<ushort>();
 		public int LastFrame;
 
-		public bool Matches(int version, long revision, NativeArray<Plane> currentPlanes, NativeArray<CullingSplit> currentSplits, int modelCount)
+		public bool Matches(int version, long revision, NativeArray<Plane> currentPlanes, NativeArray<CullingSplit> currentSplits, int maskCount)
 		{
-			if (instanceVersion != version || workRevision != revision || count != modelCount || planes.Length != currentPlanes.Length || splits.Length != currentSplits.Length) return false;
+			if (instanceVersion != version || workRevision != revision || count != maskCount || planes.Length != currentPlanes.Length || splits.Length != currentSplits.Length) return false;
 			for (int i = 0; i < planes.Length; i++)
 				if (!planes[i].normal.Equals(currentPlanes[i].normal) || !planes[i].distance.Equals(currentPlanes[i].distance)) return false;
 			for (int i = 0; i < splits.Length; i++)
@@ -69,12 +114,12 @@ namespace FishMMO.Client
 			return true;
 		}
 
-		public void Capture(int version, long revision, NativeArray<Plane> currentPlanes, NativeArray<CullingSplit> currentSplits, ushort[] currentMasks, int modelCount)
+		public void Capture(int version, long revision, NativeArray<Plane> currentPlanes, NativeArray<CullingSplit> currentSplits, ushort[] currentMasks, int maskCount)
 		{
-			instanceVersion = version; workRevision = revision; count = modelCount;
+			instanceVersion = version; workRevision = revision; count = maskCount;
 			if (planes.Length != currentPlanes.Length) planes = new Plane[currentPlanes.Length];
 			if (splits.Length != currentSplits.Length) splits = new CullingSplit[currentSplits.Length];
-			if (masks.Length < modelCount) masks = new ushort[modelCount];
+			if (masks.Length < maskCount) masks = new ushort[maskCount];
 			currentPlanes.CopyTo(planes); currentSplits.CopyTo(splits); Array.Copy(currentMasks, masks, count);
 		}
 
@@ -85,6 +130,18 @@ namespace FishMMO.Client
 	{
 		/// <summary>A/B diagnostic: off restores the original all-commands/all-splits light submissions.</summary>
 		public static bool CullLightCommands = true;
+		/// <summary>A/B diagnostic: false keeps the previous whole-prototype light masks.</summary>
+		public static bool CullLightParts = true;
+		/// <summary>Reject empty regions inside static opaque/cutout mesh bounds for punctual shadow views.</summary>
+		public static bool CullLightGeometry = true;
+		private readonly Dictionary<(Mesh, int), TerrainShadowHierarchy> shadowHierarchies = new Dictionary<(Mesh, int), TerrainShadowHierarchy>();
+		private TerrainShadowHierarchy[] lightPartHierarchy = Array.Empty<TerrainShadowHierarchy>();
+		private bool lightGeometrySnapshot;
+		/// <summary>Retained node payload, excluding managed headers; no GPU allocation.</summary>
+		public long ShadowHierarchyBytes
+		{
+			get { long bytes = 0; foreach (var entry in shadowHierarchies) if (entry.Value != null) bytes += (long)entry.Value.NodeCount * 32; return bytes; }
+		}
 		private sealed class ShadowRange
 		{
 			public int Version = -1;
@@ -93,6 +150,43 @@ namespace FishMMO.Client
 		}
 		private readonly Dictionary<(uint Start, uint Count, uint Model), ShadowRange> shadowRanges = new Dictionary<(uint, uint, uint), ShadowRange>();
 		private ushort[] lightModelMasks = Array.Empty<ushort>();
+		private ushort[] lightCommandMasks = Array.Empty<ushort>();
+		private Bounds[] lightPartBounds = Array.Empty<Bounds>();
+		private readonly Dictionary<Mesh, Bounds[]> lightMeshBounds = new Dictionary<Mesh, Bounds[]>();
+		private List<int>[] lightWorkByModel = Array.Empty<List<int>>();
+		private bool lightPartsSnapshot;
+
+		private void LayoutLightParts()
+		{
+			lightSplitCaches.Clear();
+			lightWorkCount = -1;
+			lightPartBounds = new Bounds[commands.Count];
+			lightPartHierarchy = new TerrainShadowHierarchy[commands.Count];
+			lightCommandMasks = new ushort[commands.Count];
+			for (int c = 0; c < commands.Count; c++)
+			{
+				Command command = commands[c];
+				if (command.SourceMesh == null) continue;
+				if (!lightMeshBounds.TryGetValue(command.SourceMesh, out Bounds[] parts))
+				{
+					parts = TerrainShadowCullingMath.MeshPartBounds(command.SourceMesh);
+					lightMeshBounds.Add(command.SourceMesh, parts);
+				}
+				lightPartBounds[c] = TerrainShadowCullingMath.PartBounds(parts[command.SourceSubmesh], FloraMode > .5f);
+				// This exact shader's shadow vertex is URP's static position/normal transform. Vegetation and unknown
+				// shaders keep the deformed part bounds; their wind/root scaling must not be culled as static triangles.
+				if (command.View == 1 && command.Params.material.shader.name == "FishMMO/Weather Lit Indirect")
+				{
+					var key = (command.SourceMesh, command.SourceSubmesh);
+					if (!shadowHierarchies.TryGetValue(key, out var hierarchy))
+					{
+						hierarchy = TerrainShadowHierarchy.FromMesh(key.SourceMesh, key.SourceSubmesh);
+						shadowHierarchies.Add(key, hierarchy);
+					}
+					lightPartHierarchy[c] = hierarchy;
+				}
+			}
+		}
 		private readonly Dictionary<EntityId, TerrainShadowSplitCache> lightSplitCaches = new Dictionary<EntityId, TerrainShadowSplitCache>();
 		private FishWork[] lightWorkSnapshot = Array.Empty<FishWork>();
 		private int[] lightWorkModelMasks = Array.Empty<int>();
@@ -103,7 +197,7 @@ namespace FishMMO.Client
 		private void PrepareLightWork()
 		{
 			lightWorkPrepared = true;
-			bool changed = lightWorkCount != workCount || lightWorkModels != models.Count;
+			bool changed = lightWorkCount != workCount || lightWorkModels != models.Count || lightPartsSnapshot != CullLightParts || lightGeometrySnapshot != CullLightGeometry;
 			if (!changed)
 			{
 				for (int i = 0; i < models.Count && !changed; i++) changed = lightWorkModelMasks[i] != models[i].ShadowMask;
@@ -115,10 +209,17 @@ namespace FishMMO.Client
 			}
 			if (!changed) return;
 			lightWorkRevision++;
+			lightPartsSnapshot = CullLightParts;
+			lightGeometrySnapshot = CullLightGeometry;
 			lightWorkCount = workCount; lightWorkModels = models.Count;
 			if (lightWorkSnapshot.Length < workCount) lightWorkSnapshot = new FishWork[workCount];
 			if (lightWorkModelMasks.Length < models.Count) lightWorkModelMasks = new int[models.Count];
-			for (int i = 0; i < workCount; i++) lightWorkSnapshot[i] = work[i];
+			if (lightWorkByModel.Length != models.Count) lightWorkByModel = new List<int>[models.Count];
+			for (int m = 0; m < models.Count; m++) { lightWorkByModel[m] ??= new List<int>(); lightWorkByModel[m].Clear(); }
+			for (int i = 0; i < workCount; i++)
+			{
+				lightWorkSnapshot[i] = work[i]; lightWorkByModel[(int)work[i].Model].Add(i);
+			}
 			for (int i = 0; i < models.Count; i++) lightWorkModelMasks[i] = models[i].ShadowMask;
 		}
 		public int CameraLightCallbacks { get; private set; }
@@ -147,9 +248,9 @@ namespace FishMMO.Client
 				// A recycled cache belongs to another light; its planes are checked below as well.
 			}
 			cached.LastFrame = Time.frameCount;
-			if (cached.Matches(RockVersion, lightWorkRevision, context.cullingPlanes, context.cullingSplits, models.Count))
+			if (cached.Matches(RockVersion, lightWorkRevision, context.cullingPlanes, context.cullingSplits, commands.Count))
 			{
-				cached.CopyMasksTo(lightModelMasks);
+				cached.CopyMasksTo(lightCommandMasks);
 				return;
 			}
 			Array.Clear(lightModelMasks, 0, models.Count);
@@ -188,10 +289,35 @@ namespace FishMMO.Client
 					needed &= (ushort)~visible;
 				}
 			}
-			cached.Capture(RockVersion, lightWorkRevision, context.cullingPlanes, context.cullingSplits, lightModelMasks, models.Count);
+			Array.Clear(lightCommandMasks, 0, lightCommandMasks.Length);
+			foreach (int c in wantedCommands)
+			{
+				Command command = commands[c];
+				if (command.View != 1) continue;
+				ushort candidate = lightModelMasks[command.Model];
+				if (!CullLightParts) { lightCommandMasks[c] = candidate; continue; }
+				if (candidate == 0) continue;
+				Bounds local = lightPartBounds[c];
+				if (local.extents == Vector3.zero) { lightCommandMasks[c] = candidate; continue; }
+				foreach (int w in lightWorkByModel[command.Model])
+				{
+					FishWork item = work[w];
+					for (int i = 0; i < item.Count && candidate != 0; i++)
+					{
+						Bounds bounds = TerrainShadowCullingMath.WorldBounds(mirror[(int)item.Start + i], local);
+						ushort visible = TerrainShadowCullingMath.BoundsMask(bounds, context.cullingPlanes, context.cullingSplits, candidate);
+						if (visible != 0 && CullLightGeometry && context.projectionType == BatchCullingProjectionType.Perspective && lightPartHierarchy[c] != null)
+							visible = lightPartHierarchy[c].SplitMask(mirror[(int)item.Start + i], context.cullingPlanes, context.cullingSplits, visible, CasterSphereMetres);
+						lightCommandMasks[c] |= visible;
+						candidate &= (ushort)~visible;
+					}
+					if (candidate == 0) break;
+				}
+			}
+			cached.Capture(RockVersion, lightWorkRevision, context.cullingPlanes, context.cullingSplits, lightCommandMasks, commands.Count);
 		}
 
-		private ushort CommandLightMask(int command, ushort all, bool cull) => cull ? lightModelMasks[commands[command].Model] : all;
+		private ushort CommandLightMask(int command, ushort all, bool cull) => cull ? lightCommandMasks[command] : all;
 		private static int FaceCount(ushort mask)
 		{
 			int n = 0;

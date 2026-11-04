@@ -88,6 +88,7 @@ Shader "Hidden/FishMMO/Weather Terrain Array GPU"
             #define SKIP_SHADOWS_LIGHT_INDEX_CHECK 1
             #endif
 
+            #include "FishTerrainIndexFast.hlsl"
             #include "FishWeatherTerrainArrayInput.hlsl"
             #include "FishWeatherTerrainArrayPasses.hlsl"
             ENDHLSL

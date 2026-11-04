@@ -145,7 +145,8 @@ namespace FishMMO.TestHarness.World.Editor
 				$"layer drawn by clouds {FogLayerView.DrawnByClouds}, marched {FogLayerView.MarchedThisFrame}; " +
 				string.Join(" ", new[] { "_FishFogLayer", "_FishFogShell", "_FishMist", "_FishCloudSub", "_FishFogLightColor", "_FishFogAmbient", "_FishSkyFogColor" }.Select(V));
 		}
-		private static Action revert;
+		private static Action revert, baseAaRevert;
+		private static bool CpuProfile => Environment.GetEnvironmentVariable("FISHMMO_PERF_CPU_PROFILE") != "0";
 		// Which steps' variants have been captured (FISHMMO_PERF_RENDERDOC_STEPS, a semicolon list; default the first rebase).
 		private static readonly HashSet<string> renderDocTaken = new HashSet<string>();
 
@@ -308,7 +309,7 @@ namespace FishMMO.TestHarness.World.Editor
 					float sway = Mathf.Sign(Mathf.Sin((float)EditorApplication.timeSinceStartup * Mathf.PI * 0.5f));
 					camera.transform.position += camera.transform.right * (walk * sway * Time.deltaTime);
 				}
-				if (step.Breakdown && frame == WaitFrames - SampledFrames / 2)
+				if (step.Breakdown && CpuProfile && frame == WaitFrames - SampledFrames / 2)
 				{
 					// Unity's profiler over the same natural frames: the CPU's time by marker, scripts included.
 					ProfilerDriver.ClearAllFrames();
@@ -422,6 +423,8 @@ namespace FishMMO.TestHarness.World.Editor
 			string[] wh = res.Split('x');
 			target = new RenderTexture(int.Parse(wh[0]), int.Parse(wh[1]), 24, RenderTextureFormat.ARGB32);
 			camera.targetTexture = target;
+			string baseAa = Environment.GetEnvironmentVariable("FISHMMO_PERF_BASE_AA");
+			if (!string.IsNullOrEmpty(baseAa)) baseAaRevert = Apply("aa:" + baseAa);
 
 			var pipeline = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
 			report.Add($"scene {UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}, {target.width}x{target.height}, quality {QualitySettings.names[QualitySettings.GetQualityLevel()]}, " +
@@ -429,6 +432,8 @@ namespace FishMMO.TestHarness.World.Editor
 				$"GPU {SystemInfo.graphicsDeviceName} ({SystemInfo.graphicsDeviceType}), GPU recorder {(SystemInfo.supportsGpuRecorder ? "yes" : "NO")}");
 			report.Add($"camera far {camera.farClipPlane:0}, fov {camera.fieldOfView:0}, lodBias {QualitySettings.lodBias:0.00}; weather {weatherName}");
 			report.Add($"render-pipeline hooks: {Hooks()}");
+			foreach (Camera c in Resources.FindObjectsOfTypeAll<Camera>())
+				report.Add($"camera inventory: {c.name}, type {c.cameraType}, enabled {c.enabled}, active {c.gameObject.activeInHierarchy}, scene {c.gameObject.scene.name}, target {(c.targetTexture != null ? c.targetTexture.width + "x" + c.targetTexture.height : "display")}");
 			report.Add(DescribeBackdrop());
 
 			EnableRecorders();
@@ -444,7 +449,7 @@ namespace FishMMO.TestHarness.World.Editor
 					// Looks, not timings: every view in every variant (the grass angles before and after a change).
 					foreach (string variant in Variants(variants))
 					{
-						steps.Add(new Step { View = viewList[v], Variant = variant });
+						steps.Add(new Step { View = viewList[v], Variant = variant, Breakdown = Environment.GetEnvironmentVariable("FISHMMO_PERF_BREAKDOWN_ALL") == "1" });
 					}
 				}
 				if (v == 0)
@@ -582,6 +587,22 @@ namespace FishMMO.TestHarness.World.Editor
 						break;
 					}
 					goto default;
+				case "keep-outside":
+				case "keep-door":
+				case "keep-inside":
+				{
+					Vector3 anchor = new Vector3(-290.050018f, 163.804184f, -1563.31958f);
+					var rooms = new List<SceneRoom>(); SceneSiteEmitters.NearRooms(anchor, 80, 64, rooms);
+					var floor = rooms.Where(r => r.Centre.y > anchor.y && r.Centre.y < anchor.y + 7).OrderBy(r => (r.Centre - anchor).sqrMagnitude).ToArray();
+					if (floor.Length == 0) { report.Add("keep: no nearby ground-floor rooms"); Place("at"); return; }
+					SceneRoom room = floor[0];
+					Vector3 outward = anchor - room.Centre; outward.y = 0; outward.Normalize();
+					eye = view == "keep-inside" ? new Vector3(room.Centre.x, Mathf.Clamp(anchor.y + 1.7f, room.Centre.y - room.HalfSize.y * .7f, room.Centre.y + room.HalfSize.y * .7f), room.Centre.z)
+						: anchor + Vector3.up * 1.7f + (view == "keep-outside" ? outward * 16f : Vector3.zero);
+					look = eye - outward * 10;
+					report.Add($"keep selected room: centre {room.Centre}, half-size {room.HalfSize}, yaw {room.Yaw}; {view} eye {eye}");
+					break;
+				}
 				case "river":
 				{
 					var surfaces = UnityEngine.Object.FindObjectsByType<InlandWaterRenderer>(FindObjectsInactive.Exclude)
@@ -1389,6 +1410,43 @@ namespace FishMMO.TestHarness.World.Editor
 					asset.upscalingFilter = filterWas;
 				};
 			}
+			if (variant.StartsWith("aa:"))
+			{
+				// aa:<samples>:<scale>: a spatial MSAA comparison. URP takes samples from a camera's
+				// target texture when present, so changing the pipeline asset alone would silently test 1x.
+				string[] values = variant.Split(':');
+				int samples = int.Parse(values[1]);
+				float scale = float.Parse(values[2], System.Globalization.CultureInfo.InvariantCulture);
+				var asset = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+				var data = camera.GetUniversalAdditionalCameraData();
+				float scaleWas = asset.renderScale;
+				int samplesWas = asset.msaaSampleCount, targetWas = target.antiAliasing;
+				var filterWas = asset.upscalingFilter;
+				var aaWas = data.antialiasing;
+				bool allowWas = camera.allowMSAA;
+				asset.renderScale = scale;
+				asset.msaaSampleCount = samples;
+				asset.upscalingFilter = UpscalingFilterSelection.Linear;
+				data.antialiasing = AntialiasingMode.None;
+				camera.allowMSAA = true;
+				if (RenderTexture.active == target) RenderTexture.active = null;
+				target.Release();
+				target.antiAliasing = samples;
+				target.Create();
+				report.Add($"  AA comparison: MSAA {samples}, scale {scale:0.00}, target samples {target.antiAliasing}, camera AA {data.antialiasing}");
+				return () =>
+				{
+					asset.renderScale = scaleWas;
+					asset.msaaSampleCount = samplesWas;
+					asset.upscalingFilter = filterWas;
+					data.antialiasing = aaWas;
+					camera.allowMSAA = allowWas;
+					if (RenderTexture.active == target) RenderTexture.active = null;
+					target.Release();
+					target.antiAliasing = targetWas;
+					target.Create();
+				};
+			}
 			if (variant.StartsWith("batchgap="))
 			{
 				// TerrainGpuRenderer.BatchGap held at a number: one call bridging that many unwanted commands of its batch.
@@ -1472,6 +1530,18 @@ namespace FishMMO.TestHarness.World.Editor
 						g.Rings = rings;
 						g.BladeCap = cap;
 					};
+				}
+				case "scattercullingoff":
+				{
+					bool was = DetailScatterRenderer.CullInstances;
+					DetailScatterRenderer.CullInstances = false;
+					return () => DetailScatterRenderer.CullInstances = was;
+				}
+				case "allgrasschannels":
+				{
+					bool was = GrassBladeRenderer.UseActiveChannels;
+					GrassBladeRenderer.UseActiveChannels = false;
+					return () => GrassBladeRenderer.UseActiveChannels = was;
 				}
 				case "cpugather":
 					GrassBladeRenderer.GpuGather = false;
@@ -1629,6 +1699,21 @@ namespace FishMMO.TestHarness.World.Editor
 					// Every prop drawn through its own material again, not through its look family's (TerrainGpuRenderer.LookArrays); same textures.
 					TerrainGpuRenderer.LookArrays = false;
 					return () => TerrainGpuRenderer.LookArrays = true;
+				case "nogeometrycull":
+				{
+					bool was = TerrainGpuRenderer.CullLightGeometry; TerrainGpuRenderer.CullLightGeometry = false;
+					return () => TerrainGpuRenderer.CullLightGeometry = was;
+				}
+				case "nosunroute":
+				{
+					bool was = DirectionalShadowDraws.Enabled; DirectionalShadowDraws.Enabled = false;
+					return () => DirectionalShadowDraws.Enabled = was;
+				}
+				case "nolightparts":
+				{
+					bool was = TerrainGpuRenderer.CullLightParts; TerrainGpuRenderer.CullLightParts = false;
+					return () => TerrainGpuRenderer.CullLightParts = was;
+				}
 				case "nolightcull":
 				{
 					bool was = TerrainGpuRenderer.CullLightCommands;
@@ -1853,6 +1938,13 @@ namespace FishMMO.TestHarness.World.Editor
 						controls.SetWalking(false);
 						camera.transform.SetPositionAndRotation(eyeWas, lookWas);
 					};
+				}
+				case "sitenoshadows":
+				{
+					var lights = Resources.FindObjectsOfTypeAll<Light>().Where(l => l.gameObject.scene.IsValid() && l.name.StartsWith("Site Light ", StringComparison.Ordinal)).ToArray();
+					var shadows = lights.Select(l => l.shadows).ToArray();
+					Action stop = BeforeEachCamera(() => { foreach (Light light in lights) if (light != null) light.shadows = LightShadows.None; });
+					return () => { stop(); for (int i = 0; i < lights.Length; i++) if (lights[i] != null) lights[i].shadows = shadows[i]; };
 				}
 				case "torchnoshadows":
 				{
@@ -2235,7 +2327,7 @@ namespace FishMMO.TestHarness.World.Editor
 		private static void Measure(Step step)
 		{
 			List<string> cpu = null;
-			if (step.Breakdown)
+			if (step.Breakdown && CpuProfile)
 			{
 				UnwrapHooks();
 				cpu = CpuTable();
@@ -2358,7 +2450,12 @@ namespace FishMMO.TestHarness.World.Editor
 			}
 			report.Add("  " + SurfaceTexturesLoaded());
 			report.Add("  draw sources: " + DrawSources());
+			if (CliffRockInstancing.Gpu != null) report.Add($"  static shadow hierarchy: {CliffRockInstancing.Gpu.ShadowHierarchyBytes / 1048576.0:0.00} MiB retained node payload");
 			report.Add("  " + PointShadowCandidates());
+			report.Add($"  indoor factor {IndoorRooms.IndoorAt(camera.transform.position):0.000}; eye {camera.transform.position}");
+			foreach (Light light in Resources.FindObjectsOfTypeAll<Light>().Where(l => l.gameObject.scene.IsValid() && l.isActiveAndEnabled && l.type != LightType.Directional).OrderBy(l => Vector3.SqrMagnitude(l.transform.position - camera.transform.position)))
+				report.Add($"  local light {light.name}: {light.type}, shadows {light.shadows}, range {light.range:0.0}, intensity {light.intensity:0.00}, position {light.transform.position}, distance {Vector3.Distance(light.transform.position, camera.transform.position):0.0}");
+
 			var tiles = Terrain.activeTerrains.Where(t => t.gameObject.scene == camera.gameObject.scene).ToArray();
 			report.Add($"  terrain stored-map check: {tiles.Length} tiles, {tiles.Count(t => t.terrainData.alphamapTextureCount == 0)} without alphamaps, {tiles.Count(t => TerrainArrayBinder.IndexMapOf(t) != null)} with bound index textures");
 
@@ -2410,7 +2507,7 @@ namespace FishMMO.TestHarness.World.Editor
 				{
 					report.Add($"    {pair.Value / frames / 1e6:0.000} ms  {pair.Key}");
 				}
-				report.AddRange(cpu);
+				if (cpu != null) report.AddRange(cpu);
 			}
 			foreach (KeyValuePair<string, List<double>> pair in gpuSeries)
 			{
@@ -2543,6 +2640,10 @@ namespace FishMMO.TestHarness.World.Editor
 		{
 			EditorApplication.update -= Pump;
 			SessionState.EraseString(StateKey);
+			revert?.Invoke();
+			revert = null;
+			baseAaRevert?.Invoke();
+			baseAaRevert = null;
 			if (camera != null)
 			{
 				camera.targetTexture = null;

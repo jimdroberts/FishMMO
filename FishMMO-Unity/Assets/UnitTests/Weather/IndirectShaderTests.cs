@@ -29,7 +29,9 @@ namespace FishMMO.UnitTests
 		private const string Include = Shaders + "FishIndirectInstancing.hlsl";
 		private const string LodFade = Shaders + "FishLodFade.hlsl";
 		private const string ProceduralPragma = "#pragma instancing_options procedural:FishIndirectSetup";
+		private const string FirstInstancePragma = "#pragma multi_compile _ FISH_INDIRECT_FIRST_INSTANCE";
 		private const string IndirectInclude = "#include \"FishIndirectInstancing.hlsl\"";
+		private const string PerDrawInclude = "#include \"FishIndirectPerDraw.hlsl\"";
 		/// <summary>URP's DOTS_INSTANCING_ON pragmas: the BatchRendererGroup path's variants (TerrainGpuRenderer.Brg.cs).</summary>
 		private const string DotsInclude = "#include_with_pragmas \"Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl\"";
 
@@ -89,7 +91,7 @@ namespace FishMMO.UnitTests
 			return at < 0 ? null : shader.Substring(at);
 		}
 
-		/// <summary>The indirect shader with its two per-pass additions removed and its name put back.</summary>
+		/// <summary>The indirect shader with its per-pass additions removed and its name put back.</summary>
 		private static string WithoutIndirectAdditions(string indirect, Pair pair)
 		{
 			string body = FromShaderLine(indirect);
@@ -101,7 +103,7 @@ namespace FishMMO.UnitTests
 			foreach (string line in body.Split('\n'))
 			{
 				string t = line.Trim();
-				if (t == ProceduralPragma || t == IndirectInclude || (pair.DotsOnlyInIndirect && t == DotsInclude))
+				if (t == FirstInstancePragma || t == ProceduralPragma || t == IndirectInclude || t == PerDrawInclude || (pair.DotsOnlyInIndirect && t == DotsInclude))
 				{
 					continue;
 				}
@@ -129,6 +131,7 @@ namespace FishMMO.UnitTests
 			{
 				bool instanced = program.Contains("#pragma multi_compile_instancing");
 				bool procedural = program.Contains(ProceduralPragma);
+                if (instanced && !program.Contains(FirstInstancePragma)) return $"{name} has no feature-gated first-instance variant";
 				int include = program.IndexOf(IndirectInclude, StringComparison.Ordinal);
 				if (!instanced)
 				{
@@ -151,7 +154,8 @@ namespace FishMMO.UnitTests
 				{
 					string file = other.Groups[1].Value;
 					bool passCode = (file.StartsWith("Fish", StringComparison.Ordinal) && file != "FishWeatherLitInput.hlsl" && file != "FishIndirectInstancing.hlsl"
-						&& file != "FishShaderDiagnostics.hlsl" && file != "FishShadowVariants.hlsl" && file != "FishLightCookieVariants.hlsl")
+						&& file != "FishShaderDiagnostics.hlsl" && file != "FishShadowVariants.hlsl" && file != "FishLightCookieVariants.hlsl"
+						&& file != "FishIndirectPerDraw.hlsl")
 						|| file.Contains("/Shaders/") || file.EndsWith("ObjectMotionVectors.hlsl", StringComparison.Ordinal);
 					if (passCode && other.Index < include)
 					{
@@ -182,7 +186,7 @@ namespace FishMMO.UnitTests
 			{
 				return "the Properties blocks differ: a cloned material with the shader swapped would lose or reset values";
 			}
-			// Vulkan uses DXC for regular vegetation, while procedural matrix writes require FXC.
+			// Both compile with DXC on Vulkan, the twin through FishIndirectPerDraw.hlsl (an indirect addition, removed above).
 			// Ignore only that compiler selection; compare every remaining executable line.
 			string NormalizeCompiler(string text) => string.Join("\n", SourceScanPins.CodeOnly(text).Split('\n')
 				.Where(line => line.Trim() != "#pragma use_dxc vulkan"));

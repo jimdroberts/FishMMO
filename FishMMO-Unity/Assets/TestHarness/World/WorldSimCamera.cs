@@ -270,6 +270,7 @@ namespace FishMMO.TestHarness.World
 				held.transform.localPosition = new Vector3(0.3f, 1.4f, 0.4f);
 				torch = held.AddComponent<Light>();
 				torch.type = LightType.Point;
+				DirectionalShadowDraws.ConfigurePunctualLight(torch);
 				torch.color = new Color(1f, 0.64f, 0.34f);
 				torch.range = 11f;
 				torch.shadows = LightShadows.Soft;

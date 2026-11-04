@@ -88,6 +88,21 @@ namespace FishMMO.Client
 		/// </summary>
 		public static bool GpuGather = true;
 
+		/// <summary>Skip empty density maps in wide grass generation using conservative, bilinear-safe channel masks.</summary>
+		public static bool UseActiveChannels = true;
+		/// <summary>Reuses the exact biome/variant selected by generation, rather than finding it again for every vertex.</summary>
+		public static bool CacheFloraLooks = true;
+		public static bool CoarseOcclusion = true, PrepareTerrainColour = true;
+		private static readonly int LinearTableBaseId = Shader.PropertyToID("_GrassLinearTableBase"), PreparedColourId = Shader.PropertyToID("_GrassUsePreparedColour"), ColourTableOutId = Shader.PropertyToID("_GrassColourTableOut");
+		private int colourVersion = -1;
+		private readonly int prepareColourKernel;
+		private static readonly int CacheFloraLooksId = Shader.PropertyToID("_GrassCacheFloraLooks");
+		private static readonly int ActiveTableBaseId = Shader.PropertyToID("_GrassActiveTableBase");
+		private static readonly int ActiveTerrainId = Shader.PropertyToID("_GrassActiveTerrain");
+		private static readonly int ActiveOutId = Shader.PropertyToID("_GrassActiveOut");
+		private static readonly int UseActiveChannelsId = Shader.PropertyToID("_GrassUseActiveChannels");
+		private int activeVersion = -1;
+
 		private struct GroupRange
 		{
 			public GrassTerrainAtlas.Group Group;
@@ -185,7 +200,7 @@ namespace FishMMO.Client
 		private static readonly int Params7Id = Shader.PropertyToID("_GrassParams7");
 
 		private readonly ComputeShader compute;
-		private readonly int clearKernel, generateKernel, finalizeKernel, probeKernel, argsFenceKernel;
+		private readonly int clearKernel, generateKernel, finalizeKernel, probeKernel, argsFenceKernel, activeKernel;
 		private readonly int gatherClearKernel = -1, gatherKernel = -1, gatherArgsKernel = -1;
 		private GraphicsBuffer tileBuffer, gatherItems, gatherCounts, gatherArgs, gatherLayout;
 		private readonly List<Tile> tileList = new List<Tile>();
@@ -238,6 +253,8 @@ namespace FishMMO.Client
 		private readonly CommandBuffer cmd = new CommandBuffer { name = "FishMMO procedural grass" };
 		/// <summary>The generation's GPU time, as a marker the profiler's GPU module and ScenePerfProbe see (a string sample has no GPU timing).</summary>
 		private static readonly CustomSampler GpuSample = CustomSampler.Create("FishMMO grass (compute)", true);
+		private static readonly CustomSampler GatherGpuSample = CustomSampler.Create("FishMMO grass gather", true);
+		private static readonly CustomSampler GenerateGpuSample = CustomSampler.Create("FishMMO grass generate", true);
 		private readonly Vector4[] planeVectors = new Vector4[6];
 		private readonly Vector4[] ringDistance = new Vector4[MaxRings];
 		private readonly Vector4[] ringDensity = new Vector4[MaxRings];
@@ -391,6 +408,7 @@ namespace FishMMO.Client
 		private readonly LocalKeyword wideChannels;
 		/// <summary>Its 64-channel variant (GRASS_WIDEST, 2026-10-27): on only while a terrain has more than 32 channels.</summary>
 		private readonly LocalKeyword widestChannels;
+		private readonly LocalKeyword activeChannelsKeyword;
 		private bool generated;
 		private static readonly int HighlightId = Shader.PropertyToID("_GrassHighlight");
 
@@ -437,6 +455,8 @@ namespace FishMMO.Client
 			finalizeKernel = compute.FindKernel("FishGrassFinalize");
 			probeKernel = compute.FindKernel("FishGrassProbeHeights");
 			argsFenceKernel = compute.FindKernel("FishGrassArgsFence");
+			activeKernel = compute.FindKernel("FishGrassBuildActiveChannels");
+			prepareColourKernel = compute.FindKernel("FishGrassPrepareColour");
 			if (compute.HasKernel("FishGrassGather") && compute.HasKernel("FishGrassGatherClear") && compute.HasKernel("FishGrassGatherArgs"))
 			{
 				gatherClearKernel = compute.FindKernel("FishGrassGatherClear");
@@ -448,6 +468,7 @@ namespace FishMMO.Client
 			noTerrainColour = new LocalKeyword(compute, "GRASS_NO_TERRAIN_COLOUR");
 			wideChannels = new LocalKeyword(compute, "GRASS_WIDE");
 			widestChannels = new LocalKeyword(compute, "GRASS_WIDEST");
+			activeChannelsKeyword = new LocalKeyword(compute, "GRASS_ACTIVE_CHANNELS");
 			material = new Material(shader) { name = "Grass Blades (runtime)", hideFlags = HideFlags.DontSave };
 			for (int s = 0; s < Slots; s++)
 			{
@@ -1018,6 +1039,32 @@ namespace FishMMO.Client
 			cmd.Clear();
 			// Named on the GPU, so the profiler (and ScenePerfProbe's GPU table) can price the grass's compute.
 			cmd.BeginSample(GpuSample);
+			cmd.SetComputeIntParam(compute, ActiveTableBaseId, atlas.ActiveTableBase);
+			cmd.SetComputeIntParam(compute, UseActiveChannelsId, UseActiveChannels ? 1 : 0);
+			cmd.SetComputeIntParam(compute, CacheFloraLooksId, CacheFloraLooks ? 1 : 0);
+			cmd.SetComputeIntParam(compute, LinearTableBaseId, atlas.LinearTableBase);
+			cmd.SetComputeIntParam(compute, PreparedColourId, PrepareTerrainColour ? 1 : 0);
+			if (colourVersion != atlas.Version)
+			{
+				cmd.SetComputeBufferParam(compute, prepareColourKernel, ColourTableOutId, atlas.Shared);
+				cmd.DispatchCompute(compute, prepareColourKernel, 1, 1, 1);
+				colourVersion = atlas.Version;
+			}
+			if (atlas.Tier >= 2 && activeVersion != atlas.Version)
+			{
+				cmd.SetComputeBufferParam(compute, activeKernel, ActiveOutId, atlas.Shared);
+				foreach (GrassTerrainAtlas.Group group in atlas.Groups)
+				{
+					cmd.SetComputeTextureParam(compute, activeKernel, DensityId, group.Density);
+					foreach (GrassTerrain gt in group.Terrains)
+					{
+						cmd.SetComputeIntParam(compute, ActiveTerrainId, atlas.IndexOf(gt));
+						int side = (gt.DensityResolution + GrassTerrainAtlas.ActiveRegionSide - 1) / GrassTerrainAtlas.ActiveRegionSide;
+						cmd.DispatchCompute(compute, activeKernel, side, side, 1);
+					}
+				}
+				activeVersion = atlas.Version;
+			}
 			// A reused work list is already in the buffer (only a new gather can grow it, which reallocates).
 			if (!gpuGather && !reuse)
 			{
@@ -1040,9 +1087,13 @@ namespace FishMMO.Client
 
 			if (gpuGather)
 			{
+				cmd.BeginSample(GatherGpuSample);
+				FishDepthPyramid.Bind(cmd, compute, gatherKernel, camera, eye, CoarseOcclusion);
 				RecordGather();
+				cmd.EndSample(GatherGpuSample);
 			}
 
+			cmd.BeginSample(GenerateGpuSample);
 			cmd.SetComputeBufferParam(compute, clearKernel, CountsId, countBuffer);
 			cmd.DispatchCompute(compute, clearKernel, 1, 1, 1);
 
@@ -1050,6 +1101,7 @@ namespace FishMMO.Client
 			// One of the two at most (one multi_compile set): the narrow kernel unless a terrain asks for more channels.
 			compute.SetKeyword(wideChannels, atlas.Tier == 1);
 			compute.SetKeyword(widestChannels, atlas.Tier >= 2);
+			compute.SetKeyword(activeChannelsKeyword, UseActiveChannels && atlas.Tier >= 2);
 			cmd.SetComputeBufferParam(compute, generateKernel, ItemsId, gpuGather ? gatherItems : itemBuffer);
 			cmd.SetComputeBufferParam(compute, generateKernel, GatherCountsId, gatherCounts);
 			cmd.SetComputeIntParam(compute, GatherFromGpuId, gpuGather ? 1 : 0);
@@ -1103,6 +1155,7 @@ namespace FishMMO.Client
 				int gx = Mathf.Min(range.Count, 65535), gy = (range.Count + 65534) / 65535;
 				cmd.DispatchCompute(compute, generateKernel, gx, gy, 1);
 			}
+			cmd.EndSample(GenerateGpuSample);
 			if (camera.cameraType == CameraType.Game)
 			{
 				foreach (GrassTerrainAtlas.Group group in atlas.Groups)

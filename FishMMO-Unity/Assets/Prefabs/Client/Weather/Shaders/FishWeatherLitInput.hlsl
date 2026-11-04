@@ -76,9 +76,24 @@ CBUFFER_END
 // metadata cbuffer. FXC drops it; DXC keeps it as a cbuffer member, which Unity's reflection then reports ("DOTS instancing
 // metadata constant "_Smoothness_DOTSInstancingOverrideMode" does not match expected format, ignoring"). So the cbuffer
 // holds only the metadata uints, and the modes (the same value URP's macro gives: overrides supported) sit after it.
+#if defined(SHADER_API_WEBGPU)
+// FishMMO edit (2026-11-01): WebGPU — no per-instance material overrides, so no metadata cbuffer. A browser stage binds at most
+// 12 uniform buffers and this one made the DOTS fragment 13 (Docs/Rendering/2026-11-01/webgpu-constants). The only DOTS draws a
+// WebGPU build keeps are the indirect twins' BatchRendererGroup batches (ClientShaderBuildProcessor strips every other DOTS
+// variant there; the GPU Resident Drawer is off in browser builds), and their batches name no material property
+// (TerrainGpuRenderer.Brg.cs SyncDots): every metadata word Unity wrote here was 0, and a 0 word reads the material's value.
+// Override-disabled (URP's own UNITY_DOTS_INSTANCED_PROP_OVERRIDE_DISABLED form) reads that same value at compile time.
+#define FISH_DOTS_METADATA(type, name) static const uint UNITY_DOTS_INSTANCED_METADATA_NAME(type, name) = 0;
+#define FISH_DOTS_OVERRIDE_MODE(name) static const int UNITY_DOTS_INSTANCED_PROP_OVERRIDE_MODE_NAME(name) = kDotsInstancedPropOverrideDisabled;
+#define FISH_DOTS_METADATA_START
+#define FISH_DOTS_METADATA_END
+#else
 #define FISH_DOTS_METADATA(type, name) uint UNITY_DOTS_INSTANCED_METADATA_NAME(type, name);
 #define FISH_DOTS_OVERRIDE_MODE(name) static const int UNITY_DOTS_INSTANCED_PROP_OVERRIDE_MODE_NAME(name) = kDotsInstancedPropOverrideSupported;
-UNITY_DOTS_INSTANCING_START(MaterialPropertyMetadata)
+#define FISH_DOTS_METADATA_START UNITY_DOTS_INSTANCING_START(MaterialPropertyMetadata)
+#define FISH_DOTS_METADATA_END UNITY_DOTS_INSTANCING_END(MaterialPropertyMetadata)
+#endif
+FISH_DOTS_METADATA_START
     FISH_DOTS_METADATA(float4, _BaseColor)
     FISH_DOTS_METADATA(float4, _SpecColor)
     FISH_DOTS_METADATA(float4, _EmissionColor)
@@ -95,7 +110,7 @@ UNITY_DOTS_INSTANCING_START(MaterialPropertyMetadata)
     FISH_DOTS_METADATA(float , _Surface)
     // FishMMO edit (2026-10-28): a look family's row per instance (_FISH_LOOK_TABLE; FishLookSetup below).
     FISH_DOTS_METADATA(float , _FishLook)
-UNITY_DOTS_INSTANCING_END(MaterialPropertyMetadata)
+FISH_DOTS_METADATA_END
 FISH_DOTS_OVERRIDE_MODE(_BaseColor)
 FISH_DOTS_OVERRIDE_MODE(_SpecColor)
 FISH_DOTS_OVERRIDE_MODE(_EmissionColor)
@@ -189,6 +204,22 @@ void SetupDOTSLitMaterialPropertyCaches()
 // (a cave's inner wall laid over its shell, CaveRockLayers). ──
 #if defined(_FISH_LOOK_ARRAY) || defined(_FISH_LOOK_TABLE)
 #define FISH_LOOK_ARRAYS 1
+// FishMMO edit (2026-11-02): an array-backed material's maps are its slices, not its keywords. URP's material validation (the
+// LitShader editor both Weather Lit shaders use) sets _NORMALMAP, _METALLICSPECGLOSSMAP and _OCCLUSIONMAP only where a 2D texture
+// fills the slot, and ProceduralArtLookArrays.Bind empties those slots: any re-validation dropped the three keywords from 2043 of
+// the generated materials, which then ignored their normals and occlusion and drew at _Smoothness (1: the gloss map's scale) —
+// every structure and rock a mirror-smooth surface the sky's reflection washed over. So here every map path is on and each slot
+// reads its slice, or, where the slot is empty (slice −1), exactly what the material gives without that map (FISH_LOOK_SAMPLE's
+// fallbacks below: flat, the material's metallic and smoothness, no occlusion).
+#ifndef _NORMALMAP
+    #define _NORMALMAP 1
+#endif
+#ifndef _METALLICSPECGLOSSMAP
+    #define _METALLICSPECGLOSSMAP 1
+#endif
+#ifndef _OCCLUSIONMAP
+    #define _OCCLUSIONMAP 1
+#endif
 TEXTURE2D_ARRAY(_FishLookColour);   SAMPLER(sampler_FishLookColour);
 TEXTURE2D_ARRAY(_FishLookNormal);   SAMPLER(sampler_FishLookNormal);
 TEXTURE2D_ARRAY(_FishLookMask);     SAMPLER(sampler_FishLookMask);
@@ -292,7 +323,13 @@ TEXTURE2D(_SpecGlossMap);       SAMPLER(sampler_SpecGlossMap);
 TEXTURE2D(_ClearCoatMap);       SAMPLER(sampler_ClearCoatMap);
 
 #if defined(FISH_LOOK_ARRAYS)
-    #define SAMPLE_METALLICSPECULAR(uv) FISH_LOOK_SAMPLE(_FishLookMask, uv, FISH_LOOK_SLICES.z, half4(1.0, 1.0, 1.0, 1.0))
+    // An empty gloss slot: the material's own metallic (or specular colour) and full alpha, so the smoothness is _Smoothness,
+    // as without the map.
+    #if defined(_SPECULAR_SETUP)
+        #define SAMPLE_METALLICSPECULAR(uv) FISH_LOOK_SAMPLE(_FishLookMask, uv, FISH_LOOK_SLICES.z, half4(_SpecColor.rgb, 1.0))
+    #else
+        #define SAMPLE_METALLICSPECULAR(uv) FISH_LOOK_SAMPLE(_FishLookMask, uv, FISH_LOOK_SLICES.z, half4((half)_Metallic, (half)_Metallic, (half)_Metallic, 1.0))
+    #endif
 #elif defined(_SPECULAR_SETUP)
     #define SAMPLE_METALLICSPECULAR(uv) SAMPLE_TEXTURE2D(_SpecGlossMap, sampler_SpecGlossMap, uv)
 #else

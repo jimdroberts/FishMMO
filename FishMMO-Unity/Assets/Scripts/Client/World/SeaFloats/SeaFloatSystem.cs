@@ -479,7 +479,7 @@ namespace FishMMO.Client
 						instanceCount = 0u,
 						startIndex = (uint)sub.indexStart,
 						baseVertexIndex = (uint)sub.baseVertex,
-						startInstance = TerrainGpuRenderer.InstanceIdCarriesBase ? bases[s] : 0u,
+						startInstance = SystemInfo.graphicsDeviceType == GraphicsDeviceType.Vulkan ? bases[s] : 0u,
 					};
 				}
 				argsBuffer.SetData(args);

@@ -2267,7 +2267,9 @@ namespace FishMMO.Client
 			// does the same thing patch by patch. It was × (1 − 0.6·overcast) on top of the cookie:
 			// the ground under a cloud was dimmed twice, and never lit by what diffuses through.
 			float sunIntensity = sample.SunIntensity * (1f - eclipse * 0.9f) * CloudLightThrough(sunAltitude);
-			sun.transform.rotation = LightRotation(sunDirection);
+			// While the main light's static casters are cached, the sky lights turn in small fixed steps (a pure function of the
+			// direction, itself of the shared clock), so the cascades hold still between steps (CachedMainLightShadows).
+			sun.transform.rotation = LightRotation(CachedMainLightShadows.StableDirection(sunDirection));
 			sun.color = Color.Lerp(sample.SunLight, new Color(0.8f, 0.85f, 1f), flash * 0.6f);
 			sun.intensity = sunIntensity + flash * 1.5f;
 
@@ -2310,7 +2312,7 @@ namespace FishMMO.Client
 					continue;
 				}
 				lamp.enabled = true;
-				lamp.transform.rotation = LightRotation(body.Direction);
+				lamp.transform.rotation = LightRotation(CachedMainLightShadows.StableDirection(body.Direction));
 				lamp.intensity = moonOrder[n].light;
 				// Mostly the sky's moonlight, a little the moon's own colour.
 				Color tint = body.Body != null ? Color.Lerp(Color.white, body.Body.Tint, 0.35f) : Color.white;
@@ -2351,7 +2353,7 @@ namespace FishMMO.Client
 				Light companion = Pooled(companions, needed++, "Sky Companion Sun");
 				float relative = primaryFlux > 1e-12f ? Mathf.Clamp(Flux(star) / primaryFlux, 0f, 2f) : 1f;
 				float own = blendTo != null ? Mathf.Max(0f, blendTo.SunIntensity.Evaluate(star.AltitudeDegrees)) : sample.SunIntensity;
-				companion.transform.rotation = LightRotation(star.Direction);
+				companion.transform.rotation = LightRotation(CachedMainLightShadows.StableDirection(star.Direction));
 				companion.intensity = own * relative * CloudLightThrough(star.AltitudeDegrees);
 				companion.color = Mul(baseSunLight, ((StarBody)star.Body).SkyTint);
 				companion.shadows = LightShadows.None;

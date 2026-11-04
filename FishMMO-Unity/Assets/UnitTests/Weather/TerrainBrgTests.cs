@@ -26,6 +26,7 @@ namespace FishMMO.UnitTests
 		private const string Stripper = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/FishMMO Dashboard/CustomBuildTool/Addressables/ClientShaderBuildProcessor.cs";
 		private const string DotsInclude = "#include_with_pragmas \"Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl\"";
 		private const string IndirectInclude = "#include \"FishIndirectInstancing.hlsl\"";
+		private const string PerDrawInclude = "#include \"FishIndirectPerDraw.hlsl\"";
 
 		// ── The fade byte ────────────────────────────────────────────────
 
@@ -239,9 +240,13 @@ namespace FishMMO.UnitTests
 		private static string CheckIncludes(string include, string lodFade, string ground, string caster)
 		{
 			string dots = include.Substring(Math.Max(0, include.IndexOf("#if defined(UNITY_DOTS_INSTANCING_ENABLED)", StringComparison.Ordinal)));
-			string why = SourceScanPins.InOrder(dots, "#define FISH_INDIRECT_DOTS 1", "UNITY_DOTS_INSTANCING_START(UserPropertyMetadata)",
+			// WebGPU loads the header words at their fixed addresses (no UserPropertyMetadata cbuffer: the 12-uniform-buffer
+			// stage limit, WebGpuRenderingCompatibilityTests); every other API names them through the metadata as before.
+			string why = SourceScanPins.InOrder(dots, "#define FISH_INDIRECT_DOTS 1", "#define FISH_FLORA_ON_DECLARED", "#if defined(SHADER_API_WEBGPU)",
+				"#define _FishContactOn LoadDOTSInstancedData_float(FISH_BRG_CONTACT_ON_ADDRESS)", "#define _FishFloraOn LoadDOTSInstancedData_float(FISH_BRG_FLORA_ON_ADDRESS)",
+				"#else", "UNITY_DOTS_INSTANCING_START(UserPropertyMetadata)",
 				"UNITY_DOTS_INSTANCED_METADATA_NAME(float, _FishBatchContactOn)", "UNITY_DOTS_INSTANCED_METADATA_NAME(float, _FishBatchFloraOn)",
-				"#define FISH_FLORA_ON_DECLARED", "#define _FishContactOn LoadDOTSInstancedData_float(", "#define _FishFloraOn LoadDOTSInstancedData_float(");
+				"#define _FishContactOn LoadDOTSInstancedData_float(UNITY_DOTS_INSTANCED_METADATA_NAME", "#define _FishFloraOn LoadDOTSInstancedData_float(UNITY_DOTS_INSTANCED_METADATA_NAME");
 			if (why != null)
 			{
 				return "FishIndirectInstancing.hlsl DOTS block: " + why;
@@ -301,9 +306,16 @@ namespace FishMMO.UnitTests
 				{
 					return "a pass that includes FishIndirectInstancing.hlsl has no DOTS_INSTANCING_ON variant: the batch group would draw it with the error shader";
 				}
-				if (program.Contains("#pragma use_dxc"))
+				// DXC rejects writes to UnityPerDraw's matrices; FishIndirectPerDraw.hlsl redirects them to statics, so it must come
+				// before any include that reaches URP's Core.hlsl (FishLightCookieVariants.hlsl does in the forward passes).
+				if (!program.Contains("#pragma use_dxc vulkan"))
 				{
-					return "a pass with the procedural setup compiles with DXC, which rejects its writes to UnityPerDraw";
+					return "a pass with the procedural setup is left on FXC → HLSLcc, about ten times DXC's compile time a variant";
+				}
+				Match first = Regex.Match(program, "#include(?:_with_pragmas)? \"([^\"]+)\"");
+				if (!first.Success || first.Groups[1].Value != "FishIndirectPerDraw.hlsl")
+				{
+					return "a DXC pass with the procedural setup does not include FishIndirectPerDraw.hlsl first, so its UnityPerDraw writes are const";
 				}
 			}
 			return passes == 0 ? "no pass includes FishIndirectInstancing.hlsl" : null;
@@ -322,6 +334,13 @@ namespace FishMMO.UnitTests
 						return at < 0 ? s : s.Remove(at, DotsInclude.Length);
 					},
 					"a pass without DOTS.hlsl");
+				SourceScanPins.HoldsAndFires(name, code, EveryIndirectPassHasDots,
+					s =>
+					{
+						int at = s.IndexOf(PerDrawInclude, StringComparison.Ordinal);
+						return at < 0 ? s : s.Remove(at, PerDrawInclude.Length);
+					},
+					"a DXC pass without the static per-draw matrices");
 			}
 		}
 
@@ -375,9 +394,39 @@ namespace FishMMO.UnitTests
 		{
 			string code = SourceScanPins.ReadCode(Stripper);
 			SourceScanPins.HoldsAndFires("stripper", code,
-				s => SourceScanPins.InOrder(s, "new ShaderKeyword(shader, \"DOTS_INSTANCING_ON\")", "IsEnabled(procedural) || variants[i].shaderKeywordSet.IsEnabled(dots)", "(!usedIndirect ||"),
-				SourceScanPins.Replace(" || variants[i].shaderKeywordSet.IsEnabled(dots)", string.Empty),
+				s => SourceScanPins.InOrder(s, "public const string DotsKeyword = \"DOTS_INSTANCING_ON\";", "bool usedIndirect = procedural || dots;", "(!usedIndirect ||",
+					"bool foreignDots = !IsBrgTwin(shader.name) &&", "new ShaderKeyword(shader, DotsKeyword)", "variants[i].shaderKeywordSet.IsEnabled(dots)",
+					"bool unusedDots = foreignDots && webGpu &&"),
+				SourceScanPins.Replace("bool usedIndirect = procedural || dots;", "bool usedIndirect = procedural;"),
 				"WebGPU builds stripping the batch group's variants");
+			SourceScanPins.HoldsAndFires("foreign DOTS", code,
+				s => SourceScanPins.InOrder(s, "bool foreignDots = !IsBrgTwin(shader.name) &&", "bool unusedDots = foreignDots && webGpu &&"),
+				SourceScanPins.Replace("bool foreignDots = !IsBrgTwin(shader.name) &&", "bool foreignDots ="),
+				"the twins' own DOTS variants stripped from WebGPU builds with everyone else's");
+			// The three shaders the batch group draws with are exactly the twins the stripper keeps.
+			foreach (string name in new[] { "FishMMO/Vegetation Indirect", "FishMMO/Weather Lit Indirect", "FishMMO/Vegetation Prime" })
+			{
+				Assert.That(FishMMO.Shared.CustomBuildTool.ClientShaderBuildProcessor.IsBrgTwin(name), Is.True, name);
+			}
+			Assert.That(FishMMO.Shared.CustomBuildTool.ClientShaderBuildProcessor.IsBrgTwin("FishMMO/Weather Lit"), Is.False);
+			Assert.That(FishMMO.Shared.CustomBuildTool.ClientShaderBuildProcessor.IsBrgTwin("Universal Render Pipeline/Lit"), Is.False);
 		}
+
+		/// <summary>
+		/// The twins keep exactly the variants TerrainGpuRenderer draws: procedural or DOTS, never the LODGroup keyword, and off
+		/// WebGPU never the first-instance keyword (no other player enables it). WebGPU keeps its own rule for the two indirect shaders.
+		/// </summary>
+		[TestCase(false, true, true, true, false, false, false, ExpectedResult = false, TestName = "Native procedural kept")]
+		[TestCase(false, true, true, false, true, false, false, ExpectedResult = false, TestName = "Native DOTS kept")]
+		[TestCase(false, true, true, false, false, false, false, ExpectedResult = true, TestName = "Native plain stripped")]
+		[TestCase(false, true, true, true, false, true, false, ExpectedResult = true, TestName = "Native LODGroup fade stripped")]
+		[TestCase(false, true, true, true, false, false, true, ExpectedResult = true, TestName = "Native first instance stripped")]
+		[TestCase(false, false, true, false, false, false, false, ExpectedResult = true, TestName = "Native prime plain stripped")]
+		[TestCase(false, false, false, false, false, false, false, ExpectedResult = false, TestName = "Native other shader kept")]
+		[TestCase(true, true, true, true, false, false, true, ExpectedResult = false, TestName = "WebGPU first instance kept")]
+		[TestCase(true, true, true, false, false, false, false, ExpectedResult = true, TestName = "WebGPU plain stripped")]
+		[TestCase(true, false, true, false, false, false, false, ExpectedResult = false, TestName = "WebGPU prime unchanged")]
+		public bool TheTwins_KeepOnlyTheDrawnPaths(bool webGpu, bool indirect, bool twin, bool procedural, bool dots, bool lodGroupFade, bool firstInstance)
+			=> FishMMO.Shared.CustomBuildTool.ClientShaderBuildProcessor.IsUnusedTwinVariant(webGpu, indirect, twin, procedural, dots, lodGroupFade, firstInstance);
 	}
 }

@@ -532,7 +532,7 @@ namespace FishMMO.Client
 					baseVertexIndex = (uint)sub.baseVertex,
 					instanceCount = 0,
 					// The slot's start where the instance index carries it (FishCaveCover.hlsl's Vulkan branch).
-					startInstance = TerrainGpuRenderer.InstanceIdCarriesBase ? (uint)bases[slot] : 0u,
+					startInstance = SystemInfo.graphicsDeviceType == GraphicsDeviceType.Vulkan ? (uint)bases[slot] : 0u,
 				};
 				argSlots[slot] = (uint)slot;
 				commandBases[slot] = (uint)bases[slot];

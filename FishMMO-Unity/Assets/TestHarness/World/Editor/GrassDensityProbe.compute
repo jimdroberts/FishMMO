@@ -1,0 +1,21 @@
+#pragma kernel ProbeDensity
+#include "../../../Prefabs/Client/Weather/Shaders/FishGrassBlades.compute"
+StructuredBuffer<float2> _ProbePoints;
+RWStructuredBuffer<float4> _ProbeDensity;
+uint _ProbeCount;
+[numthreads(64, 1, 1)]
+void ProbeDensity(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _ProbeCount * 16u) return;
+    uint pointIndex = id.x / 16u, map = id.x % 16u;
+    GrassLoadTerrain(0u);
+    float2 local = _ProbePoints[pointIndex];
+    uint2 channels = GrassActiveChannelsAt(0u, local);
+    uint bits = ((map < 8u ? channels.x : channels.y) >> ((map & 7u) * 4u)) & 15u;
+    float4 raw = GrassDensityMapAt(local, map);
+    float4 filtered = float4((bits & 1u) != 0u ? raw.x : 0.0,
+        (bits & 2u) != 0u ? raw.y : 0.0, (bits & 4u) != 0u ? raw.z : 0.0,
+        (bits & 8u) != 0u ? raw.w : 0.0);
+    _ProbeDensity[id.x * 2u] = raw;
+    _ProbeDensity[id.x * 2u + 1u] = filtered;
+}

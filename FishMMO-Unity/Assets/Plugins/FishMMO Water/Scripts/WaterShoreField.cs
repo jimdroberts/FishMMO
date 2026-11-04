@@ -1,3 +1,4 @@
+using FishMMO.Shared;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -478,7 +479,7 @@ namespace FishMMO.Water
 			if (allowBackground && CanBuildOffThread)
 			{
 				buildingGeneration = request;
-				building = Task.Run(() => Compute(plan));
+				building = PlatformWork.Run(() => Compute(plan));
 #if UNITY_EDITOR
 				StartPolling();
 #endif

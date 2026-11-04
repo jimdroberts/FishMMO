@@ -45,6 +45,7 @@ namespace FishMMO.Client
 			public int Start;
 			public int Count;
 			public float MinSize, MaxSize;
+			public WorldHlod.Range[] HlodRanges;
 		}
 
 		private sealed class Chunk
@@ -111,12 +112,12 @@ namespace FishMMO.Client
 		private static Camera gatheredFor;
 		private static Vector3 gatheredEye, gatheredForward, gatheredLight;
 		private static float gatheredFov, gatheredAspect, gatheredReach, gatheredShadow, gatheredLodBias;
-		private static int gatheredVersion = -1;
+		private static int gatheredVersion = -1, gatheredHlodRevision = -1;
 		private static readonly Plane[] widened = new Plane[6];
 
 		private static bool StillGathered(Camera camera, in TerrainTreeField.View view, float drawDistance)
 		{
-			if (gatheredFor != camera || gatheredVersion != drivenVersion || gatheredReach != drawDistance || gatheredShadow != view.ShadowDistance
+			if (gatheredFor != camera || gatheredVersion != drivenVersion || gatheredHlodRevision != WorldHlod.Revision || gatheredReach != drawDistance || gatheredShadow != view.ShadowDistance
 				|| gatheredFov != camera.fieldOfView || gatheredAspect != camera.aspect || gatheredLodBias != QualitySettings.lodBias)
 			{
 				return false;
@@ -353,15 +354,17 @@ namespace FishMMO.Client
 			{
 				modelOf[p] = ModelFor(set.Prototypes[p].Prefab, set.Prototypes[p].Layer, null, set.Prototypes[p].Materials);
 			}
-			foreach (ScenePropSet.Prop prop in set.Props)
+			var indices = new List<int>(set.Props.Length);
+			for (int pi = 0; pi < set.Props.Length; pi++)
 			{
+				var prop = set.Props[pi];
 				if (prop.Prototype < 0 || prop.Prototype >= modelOf.Length || modelOf[prop.Prototype] == null)
 				{
 					continue;
 				}
-				placed.Add((modelOf[prop.Prototype], prop.Matrix));
+				placed.Add((modelOf[prop.Prototype], prop.Matrix)); indices.Add(pi);
 			}
-			Drive(new Driven { Source = set }, placed, $"{set.name}");
+			Drive(new Driven { Source = set }, placed, $"{set.name}", indices);
 		}
 
 		/// <summary>Reads a cliff root's rock objects into models, chunks and one GPU range, and switches their renderers off.</summary>
@@ -393,7 +396,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>Lays a source's props out chunk by chunk, model by model, so every (chunk, model) is one contiguous run.</summary>
-		private static void Drive(Driven d, List<(TerrainTreeModel model, Matrix4x4 matrix)> placed, string owner)
+		private static void Drive(Driven d, List<(TerrainTreeModel model, Matrix4x4 matrix)> placed, string owner, List<int> sourceIndices = null)
 		{
 			drivenSources.Add(d.Source);
 			if (placed.Count == 0)
@@ -429,11 +432,17 @@ namespace FishMMO.Client
 				{
 					TerrainTreeModel model = runPair.Key;
 					var run = new Run { Model = model, Start = at, MinSize = float.MaxValue, MaxSize = 0f };
+					var ranges = new List<WorldHlod.Range>();
 					foreach (int i in runPair.Value)
 					{
 						Matrix4x4 m = placed[i].matrix;
 						d.Matrices[at] = m;
 						d.Instances[at] = FishInstance.From(m);
+						var group = sourceIndices == null ? null : WorldHlod.Membership(d.Source as ScenePropSet, sourceIndices[i]);
+						WorldHlod.RegisterMember(group, model.GpuId >= 0);
+						if (ranges.Count > 0 && ranges[ranges.Count - 1].Group == group)
+						{ var previous = ranges[ranges.Count - 1]; ranges[ranges.Count - 1] = new WorldHlod.Range(previous.Start, previous.Count + 1, group); }
+						else ranges.Add(new WorldHlod.Range(at, 1, group));
 						at++;
 						float scale = Mathf.Max(m.GetColumn(0).magnitude, m.GetColumn(1).magnitude);
 						run.MinSize = Mathf.Min(run.MinSize, model.Size * scale);
@@ -449,7 +458,7 @@ namespace FishMMO.Client
 							any = true;
 						}
 					}
-					run.Count = at - run.Start;
+					run.Count = at - run.Start; run.HlodRanges = ranges.ToArray();
 					chunk.Runs.Add(run);
 					chunk.MaxSize = Mathf.Max(chunk.MaxSize, run.MaxSize);
 					instancesOf.TryGetValue(model, out int total);
@@ -561,6 +570,8 @@ namespace FishMMO.Client
 
 		private static void Release(Driven d)
 		{
+			foreach (var chunk in d.Chunks) foreach (var run in chunk.Runs) foreach (var range in run.HlodRanges)
+				for (int i = 0; i < range.Count; i++) WorldHlod.UnregisterMember(range.Group, run.Model.GpuId >= 0);
 			foreach (Renderer r in d.Hidden)
 			{
 				if (r != null)
@@ -671,9 +682,19 @@ namespace FishMMO.Client
 			{
 				using var executeScope = HookProfiling.Execute.Auto();
 				draws += gpu.Execute(camera, in view, drawDistance, context);
+				draws += WorldHlod.Draw(camera, context, in view);
 			}
 			LastDrawCount = draws;
 		}
+
+		private struct PendingWork
+		{
+			public int Start, Count, Model, Mask;
+			public float Reach;
+			public bool Shadow;
+			public WorldHlod.Group Group;
+		}
+		private static readonly List<PendingWork> pending = new List<PendingWork>();
 
 		/// <summary>Walks every chunk for a camera: the GPU work list (against a widened view) and the CPU path's buckets.</summary>
 		private static void Gather(Camera camera, in TerrainTreeField.View view, bool onGpu, bool reflection, float drawDistance)
@@ -689,6 +710,8 @@ namespace FishMMO.Client
 				planes = widened;
 				gpu.BeginCamera();
 			}
+			pending.Clear();
+			if (onGpu) WorldHlod.BeginGather(camera, in view, planes, true);
 			bool allResident = true;
 			float slack = onGpu ? RegatherMetres : 0f;
 			Vector3 eye = view.Position;
@@ -742,8 +765,14 @@ namespace FishMMO.Client
 							float farHeight = TerrainTreeMath.RelativeHeight(run.MinSize, far, view.ScreenFactor, view.Orthographic);
 							int mask = TerrainGpuMath.LevelMask(nearHeight, farHeight, model.Transitions, model.FadeWidths, view.MaximumLodLevel);
 							// Thinned out (dithered, by position) over the last share of its reach: a stand thins away rather than ending at a line.
-							gpu.AddWork(d.GpuOffset + run.Start, run.Count, model.GpuId, reach, 1f, mask, view.Shadows && near <= view.ShadowDistance,
-								reach * (1f - ThinShare), 0f);
+							if (!WorldHlod.HasCandidates)
+							{ gpu.AddWork(d.GpuOffset + run.Start, run.Count, model.GpuId, reach, 1f, mask, view.Shadows && near <= view.ShadowDistance, reach * (1f - ThinShare), 0f); continue; }
+							int commands = 0; foreach (var part in model.Levels[model.Levels.Length - 1].Parts) commands += part.Params.Length;
+							foreach (var range in run.HlodRanges)
+							{
+								WorldHlod.Account(model.GpuId, range.Count, commands, range.Group);
+								pending.Add(new PendingWork { Start = d.GpuOffset + range.Start, Count = range.Count, Model = model.GpuId, Mask = mask, Reach = reach, Shadow = view.Shadows && near <= view.ShadowDistance, Group = range.Group });
+							}
 							continue;
 						}
 						allResident = false;
@@ -751,10 +780,26 @@ namespace FishMMO.Client
 					}
 				}
 			}
+			if (onGpu)
+			{
+				WorldHlod.Select();
+				// The HLOD membership ranges can be much smaller than a GPU work group. Merge the
+				// ranges again once selection is known, so only a real main/proxy boundary splits work.
+				PendingWork previous = default; bool any = false, previousMain = true;
+				foreach (var work in pending)
+				{
+					bool main = work.Group == null || !work.Group.Selected;
+					if (any && previous.Start + previous.Count == work.Start && previous.Model == work.Model && previous.Reach == work.Reach && previous.Mask == work.Mask && previous.Shadow == work.Shadow && previousMain == main) { previous.Count += work.Count; continue; }
+					if (any) gpu.AddWork(previous.Start, previous.Count, previous.Model, previous.Reach, 1f, previous.Mask, previous.Shadow, previous.Reach * (1f - ThinShare), 0f, previousMain);
+					previous = work; previousMain = main; any = true;
+				}
+				if (any) gpu.AddWork(previous.Start, previous.Count, previous.Model, previous.Reach, 1f, previous.Mask, previous.Shadow, previous.Reach * (1f - ThinShare), 0f, previousMain);
+			}
+
 			if (onGpu && allResident)
 			{
 				gatheredFor = camera;
-				gatheredVersion = drivenVersion;
+				gatheredVersion = drivenVersion; gatheredHlodRevision = WorldHlod.Revision;
 				gatheredEye = eye;
 				gatheredForward = camera.transform.forward;
 				gatheredLight = view.LightDirection;

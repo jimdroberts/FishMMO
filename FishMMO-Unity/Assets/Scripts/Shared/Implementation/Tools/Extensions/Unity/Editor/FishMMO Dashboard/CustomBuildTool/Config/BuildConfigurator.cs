@@ -23,6 +23,8 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 		private WebGLCompressionFormat originalCompressionFormat;
 		private bool originalDecompressionFallback;
 		private bool originalDataCaching;
+		private string originalWebCodeOptimization;
+		private bool originalWasm2023;
 
 		private bool isConfigured = false;
 
@@ -97,6 +99,8 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 			originalCompressionFormat = PlayerSettings.WebGL.compressionFormat;
 			originalDecompressionFallback = PlayerSettings.WebGL.decompressionFallback;
 			originalDataCaching = PlayerSettings.WebGL.dataCaching;
+			originalWebCodeOptimization = WebAssemblyCodeOptimization.Current;
+			originalWasm2023 = PlayerSettings.WebGL.wasm2023;
 
 			// Switch active build target
 			BuildTargetGroup targetGroup = BuildPipeline.GetBuildTargetGroup(buildTarget);
@@ -143,11 +147,18 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 			if (buildTarget == BuildTarget.WebGL)
 			{
 				// Browser builds target WebGPU only. Apply before Addressables and player compilation.
+				// BuildOptions.Development and IL2CPP Release do not select WASM optimization.
+				// Never inherit Build Times (unoptimized engine code) for a client build.
+				WebAssemblyCodeOptimization.Current = "RuntimeSpeed";
 				PlayerSettings.SetUseDefaultGraphicsAPIs(buildTarget, false);
 				PlayerSettings.SetGraphicsAPIs(buildTarget, new[] { UnityEngine.Rendering.GraphicsDeviceType.WebGPU });
 				PlayerSettings.SetScriptingBackend(currentNamedBuildTargetGroup, ScriptingImplementation.IL2CPP);
 				PlayerSettings.SetIl2CppCompilerConfiguration(currentNamedBuildTargetGroup, Il2CppCompilerConfiguration.Release);
-				PlayerSettings.SetIl2CppCodeGeneration(currentNamedBuildTargetGroup, Il2CppCodeGeneration.OptimizeSize);
+				// Frame time over download size: OptimizeSize shares generic code, which is markedly slower in the browser.
+				PlayerSettings.SetIl2CppCodeGeneration(currentNamedBuildTargetGroup, Il2CppCodeGeneration.OptimizeSpeed);
+				// WebAssembly 2023 (bulk memory, SIMD, native exceptions): every WebGPU browser supports it, and the per-draw
+				// constant copies become memory.copy instead of a JavaScript memcpy.
+				PlayerSettings.WebGL.wasm2023 = true;
 				PlayerSettings.bakeCollisionMeshes = false;
 				PlayerSettings.stripUnusedMeshComponents = false;
 				PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
@@ -201,6 +212,8 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 			PlayerSettings.WebGL.compressionFormat = originalCompressionFormat;
 			PlayerSettings.WebGL.decompressionFallback = originalDecompressionFallback;
 			PlayerSettings.WebGL.dataCaching = originalDataCaching;
+			WebAssemblyCodeOptimization.Current = originalWebCodeOptimization;
+			PlayerSettings.WebGL.wasm2023 = originalWasm2023;
 
 			Log.Debug("BuildConfigurator", "Build target restored successfully.");
 		}

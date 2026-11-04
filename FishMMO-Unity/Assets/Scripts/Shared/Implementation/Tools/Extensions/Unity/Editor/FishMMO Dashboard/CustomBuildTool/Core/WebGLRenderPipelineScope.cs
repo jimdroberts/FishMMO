@@ -6,6 +6,7 @@ using UnityEditor;
 using UnityEditor.Rendering;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 namespace FishMMO.Shared.CustomBuildTool.Core
 {
@@ -13,18 +14,22 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 	/// WebGPU cannot use Unity's GPU Resident Drawer. Serialize browser pipelines without that mode,
 	/// which otherwise forces DOTS/probe-atlas shader paths. Restore the Editor/native configuration
 	/// after content AND player writes, including recovery after a native Editor crash.
-	/// FishMMO's custom prop BRG needs its DOTS variants even with the GPU Resident Drawer disabled.
+	/// BatchRendererGroup variants are KEPT (2026-11-01): the GPU-driven props/trees draw through a batch group in the browser
+	/// too, and ClientShaderBuildProcessor removes every other shader's DOTS variants from WebGPU builds, as StripAll did.
+	/// Serialize native resolution / MSAA before the first camera can request an unavailable STP kernel.
 	/// </summary>
 	public sealed class WebGLRenderPipelineScope : IDisposable
 	{
 		private const string RecoveryPath = "Library/FishMMO/WebGLRenderPipelineRecovery.json";
 		private const string DrawerField = "m_GPUResidentDrawerMode";
+		/// <summary>What a browser build strips of the BatchRendererGroup variants: nothing here, the twins' are needed.</summary>
+		public const BatchRendererGroupStrippingMode BrowserBrgStripping = BatchRendererGroupStrippingMode.KeepAll;
 		private static int activeScopes;
 		private readonly bool enabled, ownsRecovery;
 		private readonly Recovery snapshot;
 		private bool disposed;
 
-		[Serializable] private sealed class Entry { public string guid; public int mode; }
+		[Serializable] private sealed class Entry { public string guid; public int mode; public bool hasAA; public float scale; public int msaa, filter; }
 		[Serializable] private sealed class Recovery { public int brg; public List<Entry> pipelines = new List<Entry>(); }
 
 		[InitializeOnLoadMethod]
@@ -60,7 +65,12 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				if (mode == null) continue;
 				string guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(asset));
 				if (string.IsNullOrEmpty(guid)) throw new InvalidOperationException("Save render pipeline assets before building WebGPU.");
-				snapshot.pipelines.Add(new Entry { guid = guid, mode = mode.intValue });
+				var entry = new Entry { guid = guid, mode = mode.intValue };
+                if (asset is UniversalRenderPipelineAsset urp)
+                {
+                    entry.hasAA = true; entry.scale = urp.renderScale; entry.msaa = urp.msaaSampleCount; entry.filter = (int)urp.upscalingFilter;
+                }
+                snapshot.pipelines.Add(entry);
 			}
 			ownsRecovery = activeScopes == 0;
 			if (ownsRecovery)
@@ -72,8 +82,12 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			activeScopes++;
 			try
 			{
-				foreach (Entry entry in snapshot.pipelines) SetMode(entry.guid, 0);
-				SetBrgMode(BatchRendererGroupStrippingMode.KeepAll);
+				foreach (Entry entry in snapshot.pipelines)
+                {
+                    SetMode(entry.guid, 0);
+                    if (entry.hasAA) SetAA(entry.guid,1f,4,(int)UpscalingFilterSelection.Linear);
+                }
+                SetBrgMode(BrowserBrgStripping);
 			}
 			catch
 			{
@@ -95,6 +109,14 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			serialized.ApplyModifiedPropertiesWithoutUndo();
 		}
 
+        private static void SetAA(string guid, float scale, int msaa, int filter)
+        {
+            var asset = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(AssetDatabase.GUIDToAssetPath(guid));
+            if (asset == null) throw new InvalidOperationException("Cannot restore browser anti-aliasing " + guid);
+            asset.renderScale = scale; asset.msaaSampleCount = msaa; asset.upscalingFilter = (UpscalingFilterSelection)filter;
+            EditorUtility.SetDirty(asset);
+        }
+
 		private static void SetBrgMode(BatchRendererGroupStrippingMode value)
 		{
 			var settings = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/GraphicsSettings.asset");
@@ -110,7 +132,12 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		private static void Restore(Recovery recovery)
 		{
 			if (recovery?.pipelines == null) throw new InvalidOperationException("Invalid WebGPU pipeline recovery snapshot.");
-			foreach (Entry entry in recovery.pipelines) SetMode(entry.guid, entry.mode);
+			foreach (Entry entry in recovery.pipelines)
+            {
+                SetMode(entry.guid, entry.mode);
+                // Older crash-recovery files contain only the drawer mode.
+                if (entry.hasAA) SetAA(entry.guid,entry.scale,entry.msaa,entry.filter);
+            }
 			SetBrgMode((BatchRendererGroupStrippingMode)recovery.brg);
 		}
 

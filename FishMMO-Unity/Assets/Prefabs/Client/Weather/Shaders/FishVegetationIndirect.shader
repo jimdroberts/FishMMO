@@ -102,8 +102,10 @@ Shader "FishMMO/Vegetation Indirect"
             AlphaToMask On
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
+            // First: the per-draw matrices the procedural setup writes, as statics DXC lets it write (FishIndirectPerDraw.hlsl).
+            #include "FishIndirectPerDraw.hlsl"
             #include_with_pragmas "FishShaderDiagnostics.hlsl"
-            // FXC on purpose, not DXC: the procedural setup (FishIndirectSetup) writes unity_ObjectToWorld and the other UnityPerDraw matrices, which DXC treats as const cbuffer members.
             #pragma target 3.0
             #pragma vertex VegVertex
             #pragma fragment VegForwardFragment
@@ -123,6 +125,7 @@ Shader "FishMMO/Vegetation Indirect"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/RenderingLayers.hlsl"
 
             #pragma multi_compile_instancing
+            #pragma multi_compile _ FISH_INDIRECT_FIRST_INSTANCE
             #pragma instancing_options procedural:FishIndirectSetup
             #pragma instancing_options renderinglayer
             // DOTS_INSTANCING_ON: the same draws through a BatchRendererGroup (FishIndirectInstancing.hlsl, TerrainGpuRenderer.Brg.cs).
@@ -146,8 +149,10 @@ Shader "FishMMO/Vegetation Indirect"
             Cull [_Cull]
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
+            // First: the per-draw matrices the procedural setup writes, as statics DXC lets it write (FishIndirectPerDraw.hlsl).
+            #include "FishIndirectPerDraw.hlsl"
             #include_with_pragmas "FishShaderDiagnostics.hlsl"
-            // FXC on purpose, not DXC: the procedural setup (FishIndirectSetup) writes unity_ObjectToWorld and the other UnityPerDraw matrices, which DXC treats as const cbuffer members.
             #pragma target 3.0
             #pragma vertex VegDepthVertex
             #pragma fragment VegDepthFragment
@@ -156,6 +161,7 @@ Shader "FishMMO/Vegetation Indirect"
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
             #pragma multi_compile_instancing
+            #pragma multi_compile _ FISH_INDIRECT_FIRST_INSTANCE
             #pragma instancing_options procedural:FishIndirectSetup
             // DOTS_INSTANCING_ON: the same draws through a BatchRendererGroup (FishIndirectInstancing.hlsl, TerrainGpuRenderer.Brg.cs).
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
@@ -177,8 +183,10 @@ Shader "FishMMO/Vegetation Indirect"
             Cull [_Cull]
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
+            // First: the per-draw matrices the procedural setup writes, as statics DXC lets it write (FishIndirectPerDraw.hlsl).
+            #include "FishIndirectPerDraw.hlsl"
             #include_with_pragmas "FishShaderDiagnostics.hlsl"
-            // FXC on purpose, not DXC: the procedural setup (FishIndirectSetup) writes unity_ObjectToWorld and the other UnityPerDraw matrices, which DXC treats as const cbuffer members.
             #pragma target 3.0
             #pragma vertex VegDepthVertex
             #pragma fragment VegDepthFragment
@@ -186,6 +194,7 @@ Shader "FishMMO/Vegetation Indirect"
             #pragma shader_feature_local _ALPHATEST_ON
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma multi_compile_instancing
+            #pragma multi_compile _ FISH_INDIRECT_FIRST_INSTANCE
             #pragma instancing_options procedural:FishIndirectSetup
             // DOTS_INSTANCING_ON: the same draws through a BatchRendererGroup (FishIndirectInstancing.hlsl, TerrainGpuRenderer.Brg.cs).
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
@@ -205,8 +214,10 @@ Shader "FishMMO/Vegetation Indirect"
             Cull [_Cull]
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
+            // First: the per-draw matrices the procedural setup writes, as statics DXC lets it write (FishIndirectPerDraw.hlsl).
+            #include "FishIndirectPerDraw.hlsl"
             #include_with_pragmas "FishShaderDiagnostics.hlsl"
-            // FXC on purpose, not DXC: the procedural setup (FishIndirectSetup) writes unity_ObjectToWorld and the other UnityPerDraw matrices, which DXC treats as const cbuffer members.
             #pragma target 3.0
             #pragma vertex VegVertex
             #pragma fragment VegDepthNormalsFragment
@@ -215,6 +226,7 @@ Shader "FishMMO/Vegetation Indirect"
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
             #pragma multi_compile_instancing
+            #pragma multi_compile _ FISH_INDIRECT_FIRST_INSTANCE
             #pragma instancing_options procedural:FishIndirectSetup
             // DOTS_INSTANCING_ON: the same draws through a BatchRendererGroup (FishIndirectInstancing.hlsl, TerrainGpuRenderer.Brg.cs).
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"

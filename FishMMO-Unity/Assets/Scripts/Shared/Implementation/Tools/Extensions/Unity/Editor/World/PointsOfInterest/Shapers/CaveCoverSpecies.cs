@@ -139,7 +139,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static GameObject Attach(GameObject caveRock, CaveSystem system, BiomeTemplate biome) => Attach(caveRock, system, new CaveBiome(biome, null));
 
 		/// <summary><see cref="Attach(GameObject, CaveSystem, BiomeTemplate)"/> by the cave's biomes (2026-10-25, I2n: host climate, interior palette).</summary>
-		public static GameObject Attach(GameObject caveRock, CaveSystem system, in CaveBiome caves)
+		public static GameObject Attach(GameObject caveRock, CaveSystem system, in CaveBiome caves, CaveCoverBake bake = null)
 		{
 			if (caveRock == null || system == null)
 			{
@@ -156,6 +156,7 @@ namespace FishMMO.Shared.WorldDesign
 				site = visual.gameObject.AddComponent<CaveCoverSite>();
 			}
 			site.Configure(For(in caves, system.Form, system.Seed));
+			site.SetBake(bake);
 			return caveRock;
 		}
 	}

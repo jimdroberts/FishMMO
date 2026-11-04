@@ -24,6 +24,9 @@
 // prototype's resident instances: an instance appears at most once per level per view, even inside a
 // fade band (where it is in two different levels).
 //
+// Not culling, but here so the profile's compute carries it (as the depth pyramid's kernels are): FishLightTableGather, the
+// WebGPU light table (AdditionalLightTable, FishLightTableGather.hlsl).
+//
 // Portable to Vulkan, D3D11/12, Metal and WebGPU: no wave intrinsics; atomics only on a
 // RWByteAddressBuffer and on groupshared counters (appends are counted per thread group); no readbacks.
 
@@ -35,6 +38,7 @@
 #pragma kernel FishHiZCopy
 #pragma kernel FishHiZReduce
 #pragma kernel FishDotsInstances
+#pragma kernel FishLightTableGather
 #pragma use_dxc vulkan
 
 struct FishInstance { float4 row0; float4 row1; float4 row2; };            // 48 bytes
@@ -76,7 +80,9 @@ uint _FishPackedOn;
 float4 _FishCameraPosition;                  // xyz
 float4 _FishPlanes[6];                       // xyz normal, w distance: inside when dot(n, p) + w >= 0
 float4 _FishLight;                           // xyz the sun's direction of travel, w the shadow distance (0: no shadows)
-float4 _FishLod;                             // x screen factor, y orthographic (0/1), z maximum LOD level
+float4 _FishLod;                             // x screen factor, y orthographic (0/1), z maximum LOD level,
+                                             // w 1: the shadow cache's own culling (CachedMainLightShadows): shadow slots only, from
+                                             // its anchor (the camera position), against its window's planes, one level, no fade
 uint _FishSlotCount;
 uint _FishWorkCount;
 uint _FishArgCount;
@@ -295,10 +301,19 @@ void FishCullInstance(uint3 group, uint3 thread, out uint index, out uint4 slots
     {
         fade = -max(-fade, thin);   // a single fading-out level (grass): the stronger of the two fades
     }
+    // The shadow cache keeps what it draws until its window moves on: a dither frozen mid-fade would stay in the shadow, so it
+    // draws the chosen level whole.
+    bool cacheCull = _FishLod.w > 0.5;
+    if (cacheCull)
+    {
+        fade = 0.0;
+        partner = -1;
+        partnerFade = 0.0;
+    }
 
     float3 centre = FishTransformPoint(inst, m.sphereCentre);
     float radius = m.sphereRadius * max(sx, max(sy, sz));
-    if (FishSphereVisible(centre, radius) && !FishOccluded(centre, radius))
+    if (!cacheCull && (work.padding & 1u) == 0 && FishSphereVisible(centre, radius) && !FishOccluded(centre, radius))
     {
         slots.x = (uint)lod * 2;
         fades.x = fade;
@@ -517,3 +532,6 @@ void FishHiZReduce(uint3 id : SV_DispatchThreadID)
     }
     _FishHiZAtlas[FishHiZOrigin(level) + int2(id.xy)] = farthest;
 }
+
+// ── The light table (AdditionalLightTable, WebGPU): URP's per-light arrays into one storage buffer, once per camera ──
+#include "FishLightTableGather.hlsl"

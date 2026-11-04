@@ -366,6 +366,7 @@ namespace FishMMO.Client
 				go.transform.SetParent(host.transform, false);
 				Light light = go.AddComponent<Light>();
 				light.type = LightType.Point;
+				DirectionalShadowDraws.ConfigurePunctualLight(light);
 				light.shadows = LightShadows.None;
 				light.renderMode = LightRenderMode.Auto;
 				light.enabled = false;

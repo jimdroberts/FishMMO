@@ -1,3 +1,4 @@
+using FishMMO.Shared;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using FishMMO.Shared.Weather;
@@ -270,7 +271,7 @@ namespace FishMMO.Client
 			byte[] bytes = spareBytes ?? new byte[n * n * 2];
 			spareHalves = null;
 			spareBytes = null;
-			building = Task.Run(() => BuildOn(heights, wetCells, seaCells, crowns, n, cell, at, mine, halves, bytes));
+			building = PlatformWork.Run(() => BuildOn(heights, wetCells, seaCells, crowns, n, cell, at, mine, halves, bytes));
 		}
 
 		/// <summary>The window's textures worked out from what was read, on a worker.</summary>
@@ -561,7 +562,7 @@ namespace FishMMO.Client
 			// Into the halves the last upload is done with (an orphaned worker keeps its own: they are let go of then).
 			ushort[] into = shadeSpare ?? new ushort[Resolution * Resolution];
 			shadeSpare = null;
-			shading = Task.Run(() => mine == generation ? Shadowed.Of(TerrainShadowSolver.ShadowTops(fine, coarse, light.x, light.y, light.z, ShadowReach), packBase, into) : null);
+			shading = PlatformWork.Run(() => mine == generation ? Shadowed.Of(TerrainShadowSolver.ShadowTops(fine, coarse, light.x, light.y, light.z, ShadowReach), packBase, into) : null);
 		}
 
 		/// <summary>The shade's heights, and the same packed into halves above <see cref="Base"/> on the worker.</summary>

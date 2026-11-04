@@ -46,9 +46,10 @@
 //       Vulkan: startInstance = the command's run start in _FishVisibleInstances, and the instance
 //         index alone finds the entry; a call may then draw many commands (TerrainGpuRenderer's
 //         batched calls), since nothing needs to know which command it is.
-//       Everything else: startInstance = 0, one command per call (commandCount 1), and the run start
+//       WebGPU with indirect-first-instance enabled: startInstance carries the run start, as on Vulkan.
+//       Without that feature, and on the other APIs: startInstance = 0, one command per call (commandCount 1), and the run start
 //         comes from _FishCommandBases[GetCommandID(0)]. (WebGPU needs a feature for a non-zero
-//         startInstance in indirect draws, so it stays here.)
+//         startInstance in indirect draws; the runtime flag is set from the enabled device features.)
 //     unity_InstanceID is SV_InstanceID plus unity_BaseInstanceID, which Unity leaves 0 for indirect draws.
 //   * Transforms are T·R·S with a rotation and a positive per-axis scale, and NO SHEAR — which
 //     every terrain tree, detail, boulder and ice piece is (rotation about Y or ground-aligned,
@@ -78,6 +79,8 @@
 //   TransformObjectToWorld, TransformObjectToWorldNormal (the inverse, for non-uniform scale),
 //   VegFaceCamera's billboard scale, the distance fade's origin, the ground sink and tint hashes,
 //   URP's shadow bias and motion vectors — sees the instance and needs no change.
+//   Under DXC (Vulkan) UnityPerDraw's members are const, so the passes include FishIndirectPerDraw.hlsl
+//   first: in the procedural variants those names are statics there, which this setup writes.
 //
 // Include after Core.hlsl (unity_InstanceID, UnityPerDraw) and BEFORE the pass code — in
 // particular before FishLodFade.hlsl, which only reads the indirect fade when it finds this file
@@ -108,16 +111,29 @@ struct FishVisible
     // GetCommandID. The engine sets it for every indirect call itself, so nothing per draw rides on a
     // MaterialPropertyBlock uniform — which is what failed: a per-call _FishVisibleBase never reached
     // the shader reliably (every draw read slot 0's run, so grass came out in bands).
-    #include "UnityIndirect.cginc"
+    // Compile out the command-ID binding on devices whose first instance already
+    // carries the visible-list offset. A runtime branch keeps that binding alive.
+    #if !defined(SHADER_API_WEBGPU) || !defined(FISH_INDIRECT_FIRST_INSTANCE)
+        #include "UnityIndirect.cginc"
+    #endif
     StructuredBuffer<FishInstance> _FishInstances;
     StructuredBuffer<FishVisible> _FishVisibleInstances;
     // Where each command's run starts in _FishVisibleInstances, one uint per command index (the
     // renderer issues one command per call with startCommand = its slot's command index).
-    StructuredBuffer<uint> _FishCommandBases;
+    #if !defined(SHADER_API_WEBGPU) || !defined(FISH_INDIRECT_FIRST_INSTANCE)
+        StructuredBuffer<uint> _FishCommandBases;
+    #endif
+    #if defined(UNITY_COMPILER_DXC) && !defined(FISH_INDIRECT_STATIC_PER_DRAW)
+        #error A DXC pass with the procedural setup must include FishIndirectPerDraw.hlsl first: UnityPerDraw's members are const there
+    #endif
     // Superseded by _FishCommandBases; still declared so an older property block binding it is harmless.
     float _FishVisibleBase;
     // This instance's LOD fade, for FishLodFadeValue (FishLodFade.hlsl). Set by FishIndirectSetup.
     static float FishIndirectLodFade = 0.0;
+#endif
+
+#if defined(FISH_INDIRECT_STATIC_PER_DRAW) && !defined(FISH_INDIRECT_INSTANCED)
+    #error FishIndirectPerDraw.hlsl redirected the per-draw matrices in a variant whose setup never writes them
 #endif
 
 // ── BatchRendererGroup (DOTS_INSTANCING_ON variants; TerrainGpuRenderer.Brg.cs) ─────────────────
@@ -133,20 +149,31 @@ struct FishVisible
 //       uniform is the global's value, never the material's;
 //     * there is no per-draw caster sphere (FishCasterCulling.hlsl culls nothing, as the batched Vulkan calls today).
 //   UserPropertyMetadata is the metadata cbuffer Unity keeps for a shader's own properties (URP uses the builtin and
-//   material ones). The passes stay on FXC (their procedural variants write UnityPerDraw), so these variants are FXC →
-//   HLSLcc on Vulkan, as URP's own Lit is.
+//   material ones). The passes compile with DXC on Vulkan (FishIndirectPerDraw.hlsl makes the procedural variants' per-draw
+//   writes legal there), and FishWeatherLitInput.hlsl's FISH_DOTS_METADATA keeps the metadata cbuffer in the format Unity
+//   expects from DXC.
 #if defined(UNITY_DOTS_INSTANCING_ENABLED)
     #define FISH_INDIRECT_DOTS 1
-    UNITY_DOTS_INSTANCING_START(UserPropertyMetadata)
-        uint UNITY_DOTS_INSTANCED_METADATA_NAME(float, _FishBatchContactOn);
-        uint UNITY_DOTS_INSTANCED_METADATA_NAME(float, _FishBatchFloraOn);
-    UNITY_DOTS_INSTANCING_END(UserPropertyMetadata)
     // Per-batch values (metadata without the per-instance bit: one address for every instance). The includes that declare
     // these names as loose uniforms skip the declaration (FishGroundColour.hlsl under FISH_INDIRECT_DOTS; the passes'
     // _FishFloraOn under FISH_FLORA_ON_DECLARED).
     #define FISH_FLORA_ON_DECLARED
-    #define _FishContactOn LoadDOTSInstancedData_float(UNITY_DOTS_INSTANCED_METADATA_NAME(float, _FishBatchContactOn))
-    #define _FishFloraOn LoadDOTSInstancedData_float(UNITY_DOTS_INSTANCED_METADATA_NAME(float, _FishBatchFloraOn))
+    #if defined(SHADER_API_WEBGPU)
+        // FishMMO edit (2026-11-01): WebGPU loads the batch header's words at their fixed addresses (TerrainBrgMath
+        // ContactOnAddress / FloraOnAddress — the very values SyncDots gives these names' metadata) instead of through a
+        // UserPropertyMetadata cbuffer: a browser stage binds at most 12 uniform buffers (Docs/Rendering/2026-11-01/webgpu-constants).
+        #define FISH_BRG_CONTACT_ON_ADDRESS 64u
+        #define FISH_BRG_FLORA_ON_ADDRESS 68u
+        #define _FishContactOn LoadDOTSInstancedData_float(FISH_BRG_CONTACT_ON_ADDRESS)
+        #define _FishFloraOn LoadDOTSInstancedData_float(FISH_BRG_FLORA_ON_ADDRESS)
+    #else
+        UNITY_DOTS_INSTANCING_START(UserPropertyMetadata)
+            uint UNITY_DOTS_INSTANCED_METADATA_NAME(float, _FishBatchContactOn);
+            uint UNITY_DOTS_INSTANCED_METADATA_NAME(float, _FishBatchFloraOn);
+        UNITY_DOTS_INSTANCING_END(UserPropertyMetadata)
+        #define _FishContactOn LoadDOTSInstancedData_float(UNITY_DOTS_INSTANCED_METADATA_NAME(float, _FishBatchContactOn))
+        #define _FishFloraOn LoadDOTSInstancedData_float(UNITY_DOTS_INSTANCED_METADATA_NAME(float, _FishBatchFloraOn))
+    #endif
 #endif
 
 // The inverse of an affine T·R·S with orthogonal 3×3 columns c0, c1, c2 (no shear). With
@@ -179,8 +206,8 @@ void FishIndirectSetup()
     // and with startInstance 0 in every args entry SV_InstanceID is the raw 0-based index on every
     // API (Vulkan and WebGPU add startInstance, D3D does not — zero makes them agree).
     uint local = (uint)(unity_InstanceID - unity_BaseInstanceID);
-#if defined(SHADER_API_VULKAN)
-    // Vulkan's instance index includes the args' startInstance, which the renderers set there to the command's run
+#if defined(SHADER_API_VULKAN) || (defined(SHADER_API_WEBGPU) && defined(FISH_INDIRECT_FIRST_INSTANCE))
+    // The instance index includes the args' startInstance, which the renderers set there to the command's run
     // start (TerrainGpuRenderer.InstanceIdCarriesBase): the index alone finds the entry, whichever command of a
     // many-command call this is.
     FishVisible visible = _FishVisibleInstances[local];
@@ -201,6 +228,9 @@ void FishIndirectSetup()
     unity_MatrixPreviousMI = worldToObject;
     // Positive scale only (the precondition above), so never mirrored: GetOddNegativeScale() reads
     // w for the tangent frame's sign and must not depend on what the indirect call left there.
+#if defined(FISH_INDIRECT_STATIC_PER_DRAW)
+    unity_WorldTransformParams = FishPerDrawWorldTransformParams();
+#endif
     unity_WorldTransformParams.w = 1.0;
 
     FishIndirectLodFade = visible.lodFade;

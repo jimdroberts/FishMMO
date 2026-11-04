@@ -18,9 +18,10 @@ namespace FishMMO.Client
 	/// <remarks>
 	/// <para>
 	/// <b>What it follows.</b> Every cave alive (<see cref="CaveVisibility.Live"/>, on the cave's client-only Visual): its pieces'
-	/// meshes, taken on as a camera nears them (their GPU buffers marked raw and bound to the compute as bytes, a few pieces a
-	/// frame, main thread), and its <see cref="CaveCoverSite"/> (the types and glow colours the cut chose; a cave cut before has
-	/// none and grows <see cref="CaveCoverTypes.Natural"/>). A cave gone from the list is let go.
+	/// meshes, taken on as a camera nears them (the cut's <see cref="CaveCoverBake"/> of them uploaded, or in the editor their
+	/// own GPU buffers marked raw, bound to the compute as bytes, a few pieces a frame, main thread), and its
+	/// <see cref="CaveCoverSite"/> (the types and glow colours the cut chose; a cave cut before has none and grows
+	/// <see cref="CaveCoverTypes.Natural"/>). A cave gone from the list is let go.
 	/// </para>
 	/// <para>
 	/// <b>When.</b> Play mode, client, compute-capable devices (not WebGL2), the profile's Cave cover enabled; the dashboard's
@@ -47,6 +48,8 @@ namespace FishMMO.Client
 			public CaveCoverRenderer.Piece[] Pieces;
 			public bool[] Tried;
 			public CaveCoverSite.Choice Choice;
+			/// <summary>What the cover reads of the rock (the cut's bake), or null: the meshes themselves, where readable.</summary>
+			public CaveCoverBake Bake;
 			public int Slot = -1;
 			public int Layer;
 		}
@@ -353,6 +356,7 @@ namespace FishMMO.Client
 				Pieces = new CaveCoverRenderer.Piece[filters.Length],
 				Tried = new bool[filters.Length],
 				Choice = site != null ? site.Current : CaveCoverSite.Default,
+				Bake = site != null ? site.Bake : null,
 				Slot = slot,
 				Layer = visibility.gameObject.layer,
 			};
@@ -361,15 +365,30 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// A piece's mesh bound for the compute: its vertex and index buffers marked raw (a one-off re-creation of them on the GPU),
-		/// its layout read from the mesh (one stream holding position, normal, colour and, when written, TEXCOORD3; formats
-		/// read as they are). Null for a mesh the compute cannot read.
+		/// A piece bound for the compute: from the cave's bake (<see cref="CaveCoverBake"/>, the cut's copy of what the compute
+		/// reads, in raw buffers of its own) where it has one, else from the mesh's own vertex and index buffers marked raw (a
+		/// one-off re-creation of them on the GPU), its layout read from the mesh (one stream holding position, normal, colour
+		/// and, when written, TEXCOORD3; formats read as they are). Null for a mesh the compute cannot read.
 		/// </summary>
+		/// <remarks>
+		/// A player cannot re-target an unreadable mesh's index buffer (it holds no CPU copy to make it again: "index buffer is
+		/// null", 2026-11-03), and the stored pieces are unreadable, so a player reads only bakes; the editor reads either.
+		/// </remarks>
 		private static CaveCoverRenderer.Piece TakeOn(Cave cave, MeshFilter filter, Bounds bounds)
 		{
 			Mesh mesh = filter.sharedMesh;
 			if (mesh == null || mesh.subMeshCount < 1 || mesh.vertexCount == 0)
 			{
+				return null;
+			}
+			CaveCoverBake.Piece baked = cave.Bake != null ? cave.Bake.For(mesh) : null;
+			if (baked != null)
+			{
+				return FromBake(cave, baked, filter, bounds);
+			}
+			if (!mesh.isReadable && !Application.isEditor)
+			{
+				WarnOnce("unbaked:" + cave.Visibility.name, $"[Cave cover] '{cave.Visibility.name}' has no cover bake for its unreadable rock: no cover in it until its scene is cut again.");
 				return null;
 			}
 			if (!mesh.HasVertexAttribute(VertexAttribute.Position) || !mesh.HasVertexAttribute(VertexAttribute.Normal))
@@ -394,8 +413,16 @@ namespace FishMMO.Client
 				WarnOnce("raw:" + mesh.name, $"[Cave cover] '{mesh.name}' would not take raw GPU buffers: no cover on it.");
 				return null;
 			}
-			GraphicsBuffer vertices = mesh.GetVertexBuffer(stream);
-			GraphicsBuffer indices = mesh.GetIndexBuffer();
+			GraphicsBuffer vertices = null, indices = null;
+			try
+			{
+				vertices = mesh.GetVertexBuffer(stream);
+				indices = mesh.GetIndexBuffer();
+			}
+			catch (System.ArgumentException e)
+			{
+				WarnOnce("buffers:" + mesh.name, $"[Cave cover] '{mesh.name}' gave no GPU buffers ({e.Message}): no cover on it.");
+			}
 			if (vertices == null || indices == null)
 			{
 				vertices?.Dispose();
@@ -437,6 +464,52 @@ namespace FishMMO.Client
 				},
 			};
 		}
+
+		/// <summary>A baked piece bound for the compute: its bytes in raw buffers of its own (released with the piece).</summary>
+		private static CaveCoverRenderer.Piece FromBake(Cave cave, CaveCoverBake.Piece baked, MeshFilter filter, Bounds bounds)
+		{
+			var vertices = new GraphicsBuffer(GraphicsBuffer.Target.Raw, baked.Vertices.Length / 4, 4);
+			vertices.SetData(baked.Vertices);
+			var indices = new GraphicsBuffer(GraphicsBuffer.Target.Raw, baked.Indices.Length / 4, 4);
+			indices.SetData(baked.Indices);
+			return new CaveCoverRenderer.Piece
+			{
+				Id = nextId++,
+				Bounds = bounds,
+				Vertices = vertices,
+				Indices = indices,
+				Layer = cave.Layer,
+				Data = RowOf(cave, baked, filter.transform.localToWorldMatrix),
+			};
+		}
+
+		/// <summary>A baked piece's table row (FishCaveCover.compute CoverPiece): its indices start at 0 in its own buffer.</summary>
+		public static CaveCoverRenderer.PieceData RowOf(int caveSlot, in CaveCoverSite.Choice choice, CaveCoverBake.Piece baked, Matrix4x4 toWorld)
+			=> new CaveCoverRenderer.PieceData
+			{
+				Row0 = toWorld.GetRow(0),
+				Row1 = toWorld.GetRow(1),
+				Row2 = toWorld.GetRow(2),
+				PositionOffset = (uint)baked.PositionOffset,
+				NormalOffset = (uint)baked.NormalOffset,
+				ColourOffset = baked.ColourOffset >= 0 ? (uint)baked.ColourOffset : 0xFFFFFFFFu,
+				Uv3Offset = baked.Uv3Offset >= 0 ? (uint)baked.Uv3Offset : 0xFFFFFFFFu,
+				PositionFormat = baked.PositionFormat,
+				NormalFormat = baked.NormalFormat,
+				ColourFormat = baked.ColourOffset >= 0 ? baked.ColourFormat : 0u,
+				Uv3Format = baked.Uv3Offset >= 0 ? baked.Uv3Format : 0u,
+				VertexStride = (uint)baked.Stride,
+				Triangles = (uint)(baked.IndexCount / 3),
+				Wide = baked.Wide ? 1u : 0u,
+				FirstIndex = 0u,
+				BaseVertex = (uint)baked.BaseVertex,
+				CaveSlot = (uint)caveSlot,
+				TypeMask = choice.Types,
+				Density = choice.Density,
+				Glow = choice.Glow,
+			};
+
+		private static CaveCoverRenderer.PieceData RowOf(Cave cave, CaveCoverBake.Piece baked, Matrix4x4 toWorld) => RowOf(cave.Slot, cave.Choice, baked, toWorld);
 
 		/// <summary>An attribute's format for the compute: VertexAttributeFormat | dimension &lt;&lt; 8.</summary>
 		private static uint Format(Mesh mesh, VertexAttribute attribute)

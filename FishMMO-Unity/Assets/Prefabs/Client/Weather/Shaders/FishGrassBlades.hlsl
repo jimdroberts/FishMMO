@@ -30,7 +30,7 @@ struct GrassBlade
     float3 root;
     uint packed;
     uint colour;   // the terrain's albedo under the root (FishGrassBlades.compute GrassPackColour), a byte = valid
-    uint more;     // bit 0 the type's seventh bit (types 64..127, GrassMath.RecordMore); 0 for types 0..63, the rest free
+    uint more;     // bit 0: type 64..127; higher bits: exact biome/variant selectors (FishGrassLookCache.hlsl)
 };
 
 StructuredBuffer<GrassBlade> _GrassBlades;
@@ -90,6 +90,7 @@ float4 _GrassParams7;   // wind calm with distance: x start (m), y end (m), z be
  * salt, so a drift of bloom does not end where a patch of grass does. _FishFloraInfo.x = 0 (nothing published, the A/B
  * off): every look is invalid and every blade is drawn as it was. */
 #include "FishFlora.hlsl"
+#include "FishGrassLookCache.hlsl"
 // The grass's patches are FishFlora.hlsl's own: the terrain's living ground reads the same, so the sward under a patch is
 // the patch's colour too.
 #define GRASS_FLORA_PATCH FISH_FLORA_GRASS_PATCH
@@ -131,7 +132,7 @@ uint GrassHeadPart(uint c)
 
 // The colour word carries the record's shape bits (GrassMath.RecordBits): bit 28 the type's fifth bit, bit 31 its sixth
 // (types 32..63), bit 27 a tall blade, whose packed height is half its own; the sixth word's bit 0 the type's seventh
-// (types 64..127, GrassMath.RecordMore).
+// (types 64..127, GrassMath.RecordMore). Its spare bits cache exact palette selectors (FishGrassLookCache.hlsl).
 void GrassUnpack(uint packed, uint colour, uint more, out int type, out float facing, out float height, out float lean, out float fade, out float clumpColour)
 {
     type = (int)(packed & 15u) | (int)(((colour >> 28) & 1u) << 4) | (int)(((colour >> 31) & 1u) << 5) | (int)((more & 1u) << 6);
@@ -266,7 +267,7 @@ GrassVertex GrassBuildAt(uint instanceID, float2 vertex, float back)
     float r2 = GrassUnitV(GrassMixV(h0 ^ 0x2C1B3C6Du));
     // The look of the blade's patch, the one the compute grew it by (its height and lean are already in the record). Every
     // pass asks it, so the shadow casters' blades are as wide and curled as the camera's.
-    FishFloraLook look = FishFloraAt(root.xz, GRASS_FLORA_PATCH, GRASS_FLORA_SALT);
+    FishFloraLook look = FishGrassReadLook(blade.more,root.xz);
 
     float d = distance(root, _WorldSpaceCameraPos);
     o.distance = d;
@@ -437,7 +438,7 @@ GrassVertex GrassBuildAt(uint instanceID, float2 vertex, float back)
     FishFloraLook bloomLook = look;
     [branch] if (isFlower)
     {
-        bloomLook = FishFloraAt(root.xz, GRASS_FLORA_BLOOM_PATCH, GRASS_FLORA_BLOOM_SALT);
+        bloomLook = FishGrassReadBloom(blade.more,root.xz);
     }
     if (isHead)
     {

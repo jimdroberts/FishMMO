@@ -6,7 +6,10 @@
         "FishMMO.Shared",
         "Unity.InputSystem",
         "KinematicCharacterController",
-        "FishNet.Runtime"
+        "FishNet.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.Core.Runtime",
+        "FishMMO.Water"
     ],
     "includePlatforms": [],
     "excludePlatforms": [

@@ -183,12 +183,16 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Vulkan's SV_InstanceID includes the args' startInstance (D3D's, GL's and WebGPU's here do not, or may not use it):
+		/// Vulkan's SV_InstanceID includes startInstance; WebGPU can do the same when its device enables indirect-first-instance:
 		/// there every command's startInstance is its run's start, and FishIndirectSetup (FishIndirectInstancing.hlsl) reads
 		/// the visible entry by the instance index alone, so no command needs to know which command it is. That is what lets
-		/// one call draw many commands. Must match the shader's SHADER_API_VULKAN branch; the detail scatter follows it too.
+		/// one call draw many commands. Must match FishIndirectSetup's backend/feature branches; scatter follows it too.
 		/// </summary>
-		public static bool InstanceIdCarriesBase => SystemInfo.graphicsDeviceType == GraphicsDeviceType.Vulkan;
+		public static bool SupportsInstanceIdBase(UnityEngine.Rendering.GraphicsDeviceType api, bool indirectFirstInstance)
+			=> api == GraphicsDeviceType.Vulkan || (api == GraphicsDeviceType.WebGPU && indirectFirstInstance);
+
+		public static bool InstanceIdCarriesBase => SupportsInstanceIdBase(SystemInfo.graphicsDeviceType,
+			SystemInfo.graphicsDeviceType == GraphicsDeviceType.WebGPU && WebGpuDrawCapabilities.IndirectFirstInstance);
 
 		/// <summary>
 		/// Where the instance index carries the run's start (<see cref="InstanceIdCarriesBase"/>): the commands that share a
@@ -385,6 +389,7 @@ namespace FishMMO.Client
 		private TerrainGpuRenderer(ComputeShader compute)
 		{
 			this.compute = compute;
+			Live.Add(this);
 			// The rock shader's crevice inputs, bound before this renderer's first draw.
 			RockContactField.EnsureBindings();
 			clearKernel = compute.FindKernel("FishClearCounts");
@@ -417,7 +422,11 @@ namespace FishMMO.Client
 			// every variant of each listed keyword set (crossed with every global multi_compile) synchronously, which
 			// held the first frame 5.7 s (StartupTimeline, 2026-10-08). The editor compiles them in the background as
 			// they are first drawn instead.
-			if (!Application.isEditor && profile != null && profile.IndirectShaderVariants != null && !profile.IndirectShaderVariants.isWarmedUp)
+			// Unity's WebGPU collection warmup draws synthetic triangles with tiny dummy storage buffers
+            // and a default color attachment, which are incompatible with these structured/depth variants.
+            // Let the browser create each pipeline with its real draw bindings and attachment instead.
+            if (!Application.isEditor && SystemInfo.graphicsDeviceType != GraphicsDeviceType.WebGPU
+                && profile != null && profile.IndirectShaderVariants != null && !profile.IndirectShaderVariants.isWarmedUp)
 			{
 				profile.IndirectShaderVariants.WarmUp();
 			}
@@ -854,6 +863,7 @@ namespace FishMMO.Client
 				dirty.Clear();
 				return;
 			}
+			flushSerial++;
 			// A buffer created now is in no frame's use, so writing it never waits for the GPU; the copy
 			// into the instance buffer then runs on the GPU, in order, ahead of this camera's culling.
 			var upload = new GraphicsBuffer(GraphicsBuffer.Target.Structured, total, FishInstance.Stride);
@@ -928,7 +938,7 @@ namespace FishMMO.Client
 		/// thinning: full density to <paramref name="thinStart"/> metres, then a share falling linearly to
 		/// <paramref name="thinKeep"/> at <paramref name="drawDistance"/> (1: no thinning).
 		/// </summary>
-		public void AddWork(int offset, int count, int model, float drawDistance, float lodBias, int levelMask, bool shadowCandidate, float thinStart = 0f, float thinKeep = 1f)
+		public void AddWork(int offset, int count, int model, float drawDistance, float lodBias, int levelMask, bool shadowCandidate, float thinStart = 0f, float thinKeep = 1f, bool mainCandidate = true)
 		{
 			if (count <= 0 || model < 0 || levelMask == 0)
 			{
@@ -936,7 +946,7 @@ namespace FishMMO.Client
 			}
 			Model m = models[model];
 			workVersion++;
-			m.MainMask |= levelMask;
+			if (mainCandidate) m.MainMask |= levelMask;
 			m.WorkInstances += count;
 			if (shadowCandidate)
 			{
@@ -952,6 +962,7 @@ namespace FishMMO.Client
 					Start = (uint)(offset + start),
 					Count = (uint)Mathf.Min(FishWork.MaxInstances, count - start),
 					Model = (uint)model,
+					Padding = mainCandidate ? 0u : 1u,
 					DrawDistance = drawDistance,
 					LodBiasMultiplier = lodBias,
 					ThinStart = thinStart,
@@ -1057,6 +1068,7 @@ namespace FishMMO.Client
 				Plane p = view.Planes[i];
 				planeVectors[i] = new Vector4(p.normal.x, p.normal.y, p.normal.z, p.distance);
 			}
+			RememberShadowCacheView(in view);
 			if (!(Freeze && culled))
 			{
 				using var recordScope = ExecuteProfiling.Record.Auto();
@@ -1392,6 +1404,7 @@ namespace FishMMO.Client
 			{
 				argsBuffer.SetData(args);
 			}
+			LayoutShadowCacheArgs(args, bases);
 			Recreate(ref argSlotBuffer, GraphicsBuffer.Target.Structured, Mathf.Max(1, argSlots.Count), 4);
 			if (argSlots.Count > 0)
 			{
@@ -1879,6 +1892,8 @@ namespace FishMMO.Client
 
 		public void Dispose()
 		{
+			Live.Remove(this);
+			ReleaseShadowCache();
 			cmd.Release();
 			ReleaseRetired(true);
 			if (compute != null)

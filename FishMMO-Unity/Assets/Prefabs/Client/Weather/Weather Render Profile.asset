@@ -243,6 +243,12 @@ MonoBehaviour:
   RockFilletTriangles: 65536
   RockFilletsCompute: {fileID: 7200000, guid: 876ad3646a162ea53bdd0bcfd4608ad7, type: 3}
   RockFilletShader: {fileID: 4800000, guid: 662214b2300ae9058bb17bf5496c8a68, type: 3}
+  TerrainHeightmapCompute: {fileID: 7200000, guid: a3447a68192d273c5adad401d51b52c5,
+    type: 3}
+  TerrainHeightmapShader: {fileID: 4800000, guid: 23d0c64a0f00051799fdd3428739077f,
+    type: 3}
+  TerrainHeightmap:
+    Enabled: 1
   MossStrength: 1
   MossTileMetres: 2
   MossEditorDampness: 0.6

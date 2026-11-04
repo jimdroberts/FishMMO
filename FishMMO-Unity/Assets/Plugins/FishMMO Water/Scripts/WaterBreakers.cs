@@ -1,3 +1,4 @@
+using FishMMO.Shared;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -242,7 +243,7 @@ namespace FishMMO.Water
 			float reach = Reach, spacing = Spacing, shortest = ShortestLine;
 			if (CanBuildOffThread)
 			{
-				building = Task.Run(() => Trace(shore, centre, reach, depth, breakDepth, spacing, shortest));
+				building = PlatformWork.Run(() => Trace(shore, centre, reach, depth, breakDepth, spacing, shortest));
 			}
 			else
 			{

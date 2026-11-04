@@ -15,6 +15,7 @@
 // pass running the skirt) has _FishGroundColour stripped, and its sampler then matches no texture: Vulkan and D3D
 // reject the shader ("Unrecognized sampler 'sampler_fishgroundcolour'", 2026-10-08).
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/GlobalSamplers.hlsl"
+#include "FishGroundHeightLoads.hlsl"
 
 TEXTURE2D(_FishGroundColour);
 SAMPLER(sampler_FishGroundColour);
@@ -186,7 +187,11 @@ float2 FishGroundTexelUV(float2 t, float res)
 // The terrain's surface height (world y) at a position on a tile.
 float FishGroundHeightAt(int tile, float2 t)
 {
+#if defined(SHADER_API_WEBGPU)
+    float h = FishGroundHeightLoads(_FishGroundHeights,(int)_FishGroundArrayRes.x,tile,t);
+#else
     float h = SAMPLE_TEXTURE2D_ARRAY_LOD(_FishGroundHeights, sampler_LinearClamp, FishGroundTexelUV(t, _FishGroundArrayRes.x), tile, 0.0).r;
+#endif
     return _FishGroundTileData[tile].x + h * _FishGroundTileData[tile].y;
 }
 

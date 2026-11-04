@@ -70,6 +70,10 @@ namespace FishMMO.Client
 		[Tooltip("The storms' weather map laid down on the GPU (FishWeatherMap.compute). Left empty, the feature finds it by name in the editor; a build needs it assigned. Without it the map is rasterised on the CPU.")]
 		public ComputeShader WeatherMapCompute;
 
+		[Tooltip("The cached main-light shadows' merge shader (Hidden/FishMMO/Shadow Cache Merge). Referenced here so a build " +
+			"carries it: CachedMainLightShadows merges its cached static casters into URP's shadow map with it.")]
+		public Shader ShadowCacheMergeShader;
+
 		private CloudPass pass;
 
 		/// <summary>
@@ -313,6 +317,23 @@ namespace FishMMO.Client
 			// Every camera's shadow cascades, for the GPU-driven vegetation's casters to skip the cascades that do not need
 			// them (ShadowCascadeCulling): every camera, since each draws its own shadows and must not read another's.
 			renderer.EnqueuePass(ShadowCascadeCulling.Pass);
+			// WebGPU: every camera's light table (AdditionalLightTable), after URP's shadow passes and before anything is lit;
+			// the lit passes read their additional lights and reflection probes from it there.
+			if (AdditionalLightTable.Needed)
+			{
+				renderer.EnqueuePass(AdditionalLightTable.Pass);
+			}
+			// The cached main-light shadows (switched off by default): their cache pass before URP's shadows and their merge
+			// after; both return at once for a camera they do not serve (CachedMainLightShadows.AppliesTo).
+			if (renderingData.cameraData.cameraType == CameraType.Game)
+			{
+				if (CachedMainLightShadows.MergeShader == null)
+				{
+					CachedMainLightShadows.MergeShader = ShadowCacheMergeShader;
+				}
+				renderer.EnqueuePass(CachedMainLightShadows.CachePass);
+				renderer.EnqueuePass(CachedMainLightShadows.MergePass);
+			}
 			Material material = Resolve();
 			if (material == null || !SkySystem.CloudsReady || !SkySystem.DrawClouds)
 			{
@@ -1321,11 +1342,12 @@ namespace FishMMO.Client
 							d.Material.SetTexture(NearMotionId, d.Motion);
 							for (int i = 0; i < FarSlices; i++)
 							{
-								if (i != d.Marching)
-								{
-									d.Material.SetTexture(FarSliceIds[i], d.FarSlices[i]);
-									d.Material.SetTexture(FarSliceInfoIds[i], d.FarSliceInfos[i]);
-								}
+								// The shader never fetches the marching slice, but WebGPU validates all
+								// bound resources, including branches not taken. Replace its stale
+								// previous-frame binding with declared read-only inputs so the MRT
+								// outputs are never simultaneously bound as sampled textures.
+								d.Material.SetTexture(FarSliceIds[i], i == d.Marching ? d.Source : d.FarSlices[i]);
+								d.Material.SetTexture(FarSliceInfoIds[i], i == d.Marching ? d.Motion : d.FarSliceInfos[i]);
 							}
 							Blitter.BlitTexture(context.cmd, Vector2.one, d.Material, d.Pass);
 						});

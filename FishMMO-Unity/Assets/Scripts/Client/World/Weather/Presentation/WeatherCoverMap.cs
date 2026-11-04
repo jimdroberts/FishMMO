@@ -790,7 +790,7 @@ namespace FishMMO.Client
 			}
 			else
 			{
-				working = Task.Run(batchBody);
+				working = PlatformWork.Run(batchBody);
 			}
 		}
 
@@ -801,7 +801,7 @@ namespace FishMMO.Client
 			batchDeadline = budget == long.MaxValue ? long.MaxValue : Stopwatch.GetTimestamp() + budget;
 			int workers = Mathf.Clamp(System.Environment.ProcessorCount - 1, 1, MaxWorkers);
 			claimBody ??= ClaimTexels;
-			Parallel.For(0, workers, claimBody);
+			PlatformWork.For(0, workers, claimBody);
 		}
 
 		private void ClaimTexels(int worker)
@@ -995,7 +995,7 @@ namespace FishMMO.Client
 				}
 				return;
 			}
-			Parallel.For(0, count, s =>
+			PlatformWork.For(0, count, s =>
 			{
 				int i = indices[s];
 				IntegrateTexel(work, i, firstTouch[i], out oldAt[i], out oldNext[i], out youngAt[i], out youngNext[i]);
@@ -1048,7 +1048,7 @@ namespace FishMMO.Client
 			stepAhead = ahead;
 			stepRoll = roll;
 			stepRowBody ??= StepRow;
-			Parallel.For(0, resolution, stepRowBody);
+			PlatformWork.For(0, resolution, stepRowBody);
 			stepAhead = null;
 			if (roll)
 			{
@@ -1146,7 +1146,7 @@ namespace FishMMO.Client
 			else
 			{
 				touchBody ??= TouchTexel;
-				Parallel.For(0, touchedScratch.Count, touchBody);
+				PlatformWork.For(0, touchedScratch.Count, touchBody);
 			}
 			touchAhead = null;
 		}

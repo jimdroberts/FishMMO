@@ -260,7 +260,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			string shaper = Code(WorldFolder + "/PointsOfInterest/Shapers/CaveShaper.cs");
 			Assert.That(shaper, Does.Contain("CaveBiome caves = CaveInteriorArt.Of(context.Request, site, system);"));
 			Assert.That(shaper, Does.Contain("CaveRockLook look = CaveRockLayers.For(caves, system.Form, rock);"));
-			Assert.That(shaper, Does.Contain("CaveCoverSpecies.Attach(Build(context.Root, system, mouths, meshes, material, colliders), system, CaveInteriorArt.Of(context.Request, site, system));"));
+			Assert.That(shaper, Does.Contain("CaveCoverSpecies.Attach(Build(context.Root, system, mouths, meshes, material, colliders), system, CaveInteriorArt.Of(context.Request, site, system), cover);"));
 			string cover = Code(WorldFolder + "/PointsOfInterest/Shapers/CaveCoverSpecies.cs");
 			Assert.That(cover, Does.Contain("BiomeTemplate biome = caves.Host;"), "the cover's climate is the land's");
 			Assert.That(cover, Does.Contain("CaveGlowPalettes.For(form, seed, in caves)"));

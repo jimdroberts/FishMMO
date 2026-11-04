@@ -1,3 +1,4 @@
+using FishMMO.Shared;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -68,7 +69,7 @@ namespace FishMMO.Client
 			var result = new float[levels.Length][];
 			if (parallel)
 			{
-				Parallel.For(0, levels.Length, k => result[k] = SolveLevel(ground, n, cell, levels[k]));
+				PlatformWork.For(0, levels.Length, k => result[k] = SolveLevel(ground, n, cell, levels[k]));
 			}
 			else
 			{

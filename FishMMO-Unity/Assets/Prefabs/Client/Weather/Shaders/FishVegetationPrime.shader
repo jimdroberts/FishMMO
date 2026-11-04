@@ -94,8 +94,10 @@ Shader "FishMMO/Vegetation Prime"
             AlphaToMask On
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
+            // First: the per-draw matrices the procedural setup writes, as statics DXC lets it write (FishIndirectPerDraw.hlsl).
+            #include "FishIndirectPerDraw.hlsl"
             #include_with_pragmas "FishShaderDiagnostics.hlsl"
-            // FXC on purpose, not DXC: the procedural setup (FishIndirectSetup) writes unity_ObjectToWorld and the other UnityPerDraw matrices, which DXC treats as const cbuffer members.
             #pragma target 3.0
             #pragma vertex VegDepthVertex
             #pragma fragment VegPrimeFragment
@@ -105,6 +107,7 @@ Shader "FishMMO/Vegetation Prime"
             #pragma multi_compile_local _ _ALPHATEST_ON
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma multi_compile_instancing
+            #pragma multi_compile _ FISH_INDIRECT_FIRST_INSTANCE
             #pragma instancing_options procedural:FishIndirectSetup
             // DOTS_INSTANCING_ON: the same draws through a BatchRendererGroup (FishIndirectInstancing.hlsl, TerrainGpuRenderer.Brg.cs).
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"

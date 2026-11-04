@@ -7,6 +7,7 @@ using UnityEditor;
 using UnityEditor.Rendering;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 namespace FishMMO.UnitTests
 {
@@ -48,8 +49,16 @@ namespace FishMMO.UnitTests
 				Assert.Throws<InvalidOperationException>(() =>
 				{
 					using var outer = new WebGLRenderPipelineScope(true);
-					foreach (var asset in assets) Assert.That(Mode(asset), Is.Zero);
-					Assert.That(EditorGraphicsSettings.batchRendererGroupShaderStrippingMode, Is.EqualTo(BatchRendererGroupStrippingMode.KeepAll));
+					foreach (var asset in assets)
+                    {
+                        Assert.That(Mode(asset), Is.Zero);
+                        if (asset is UniversalRenderPipelineAsset urp)
+                        {
+                            Assert.That(urp.renderScale,Is.EqualTo(1)); Assert.That(urp.msaaSampleCount,Is.EqualTo(4));
+                            Assert.That(urp.upscalingFilter,Is.EqualTo(UpscalingFilterSelection.Linear));
+                        }
+                    }
+					Assert.That(EditorGraphicsSettings.batchRendererGroupShaderStrippingMode, Is.EqualTo(BatchRendererGroupStrippingMode.KeepAll), "the twins' BatchRendererGroup variants draw the browser's props and trees");
 					using (new WebGLRenderPipelineScope(true))
 						foreach (var asset in assets) Assert.That(Mode(asset), Is.Zero);
 					foreach (var asset in assets) Assert.That(Mode(asset), Is.Zero, "an inner scope must not restore native settings early");

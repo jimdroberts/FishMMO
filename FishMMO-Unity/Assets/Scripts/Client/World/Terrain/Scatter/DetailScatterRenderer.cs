@@ -106,7 +106,7 @@ namespace FishMMO.Client
 		private static bool NeedsArgsFence => SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLCore || SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES3;
 
 		private readonly ComputeShader compute;
-		private readonly int clearKernel, generateKernel, finalizeKernel, argsFenceKernel;
+		private readonly int clearKernel, generateKernel, finalizeKernel, argsFenceKernel, cullKernel;
 		private readonly DetailScatterAtlas atlas = new DetailScatterAtlas();
 		private readonly CommandBuffer cmd = new CommandBuffer { name = "FishMMO detail scatter" };
 		/// <summary>The scatter's GPU time, as a marker the profiler's GPU module and ScenePerfProbe see (a string sample has no GPU timing).</summary>
@@ -117,6 +117,7 @@ namespace FishMMO.Client
 		private readonly Dictionary<Material, Material> clones = new Dictionary<Material, Material>();
 		private readonly List<(GraphicsBuffer Buffer, int Frame)> retired = new List<(GraphicsBuffer, int)>();
 		private MaterialPropertyBlock[] blocks = Array.Empty<MaterialPropertyBlock>();
+		private GraphicsBuffer culledVisibleBuffer, culledCountBuffer;
 		private GraphicsBuffer itemBuffer, modelBuffer, slotBuffer, countBuffer, instanceBuffer, visibleBuffer, argsBuffer, argSlotBuffer, commandBaseBuffer;
 		private NativeArray<Item> items;
 		private int itemCount;
@@ -144,6 +145,12 @@ namespace FishMMO.Client
 		/// <summary>Debug and profiling: generate on every render, as before the reuse.</summary>
 		public static bool AlwaysRegenerate;
 
+		/// <summary>Refresh cached instances' camera visibility each frame; shadow lists remain unchanged.</summary>
+		public static bool CullInstances = true;
+		private static readonly int CulledVisibleId = Shader.PropertyToID("_ScatterCulledVisible");
+		private static readonly int CulledCountsId = Shader.PropertyToID("_ScatterCulledCounts");
+		private static readonly CustomSampler CullGpuSample = CustomSampler.Create("FishMMO scatter visibility", true);
+
 		private Camera generatedFor;
 		private Vector3 generatedEye, generatedForward, generatedLight;
 		private float generatedFov, generatedAspect, generatedShadow, generatedReach;
@@ -167,7 +174,7 @@ namespace FishMMO.Client
 			get
 			{
 				long n = 0;
-				foreach (GraphicsBuffer b in new[] { itemBuffer, modelBuffer, slotBuffer, countBuffer, instanceBuffer, visibleBuffer, argsBuffer, argSlotBuffer, commandBaseBuffer })
+				foreach (GraphicsBuffer b in new[] { itemBuffer, modelBuffer, slotBuffer, countBuffer, instanceBuffer, visibleBuffer, argsBuffer, argSlotBuffer, commandBaseBuffer, culledVisibleBuffer, culledCountBuffer })
 				{
 					n += b != null ? (long)b.count * b.stride : 0;
 				}
@@ -188,6 +195,7 @@ namespace FishMMO.Client
 			generateKernel = compute.FindKernel("FishScatterGenerate");
 			finalizeKernel = compute.FindKernel("FishScatterFinalize");
 			argsFenceKernel = compute.FindKernel("FishScatterArgsFence");
+			cullKernel = compute.FindKernel("FishScatterCull");
 		}
 
 		/// <summary>The renderer, or null where it cannot run (no compute, too few vertex-stage buffers, the compute missing).</summary>
@@ -230,8 +238,10 @@ namespace FishMMO.Client
 			int settings = SettingsSignature(s);
 			if (StillGenerated(camera, in view, types.Count, settings))
 			{
-				// The buffers still hold this camera's instances (no other camera has generated since): only the draws.
-				return generatedDraws > 0 ? Draw(camera, generatedEye, generatedReach) : 0;
+				// Reuse placement, refreshing camera visibility before submitting the draws.
+				if (generatedDraws <= 0) return 0;
+				RefreshVisibility(camera, context, in view);
+				return Draw(camera, generatedEye, generatedReach);
 			}
 			generatedFor = null;
 			EnsureSlots(types.Count);
@@ -365,18 +375,6 @@ namespace FishMMO.Client
 				cmd.SetComputeIntParam(compute, ItemCountId, range.Count);
 				cmd.DispatchCompute(compute, generateKernel, Mathf.Min(range.Count, 65535), (range.Count + 65534) / 65535, 1);
 			}
-
-			cmd.SetComputeBufferParam(compute, finalizeKernel, ArgSlotsId, argSlotBuffer);
-			cmd.SetComputeBufferParam(compute, finalizeKernel, CountsId, countBuffer);
-			cmd.SetComputeBufferParam(compute, finalizeKernel, SlotsId, slotBuffer);
-			cmd.SetComputeBufferParam(compute, finalizeKernel, ArgsId, argsBuffer);
-			cmd.DispatchCompute(compute, finalizeKernel, (commands.Count + 63) / 64, 1, 1);
-			if (NeedsArgsFence)
-			{
-				cmd.SetComputeBufferParam(compute, argsFenceKernel, ArgsFenceId, argsBuffer);
-				cmd.SetComputeBufferParam(compute, argsFenceKernel, CountsId, countBuffer);
-				cmd.DispatchCompute(compute, argsFenceKernel, 1, 1, 1);
-			}
 			// Always read in the editor: an overflowing slot is otherwise invisible but for its symptom.
 			if (Application.isEditor && camera.cameraType == CameraType.Game && Time.frameCount - lastStatsFrame >= StatsInterval)
 			{
@@ -388,9 +386,57 @@ namespace FishMMO.Client
 			cmd.Clear();
 			TerrainInstancingProbe.RecordMs += TerrainInstancingProbe.Now - recordStart;
 
+			RefreshVisibility(camera, context, in view);
 			int draws = Draw(camera, eye, reach);
 			Remember(camera, in view, types.Count, settings, reach, draws);
 			return draws;
+		}
+
+		/// <summary>Compact only camera lists against current frustum and fresh depth, including reused generations.
+		/// The source lists remain intact so camera movement or a disabled depth pyramid restores every candidate.</summary>
+		private void RefreshVisibility(Camera camera, ScriptableRenderContext context, in TerrainTreeField.View view)
+		{
+			cmd.Clear();
+			cmd.BeginSample(CullGpuSample);
+			if (CullInstances)
+			{
+				Recreate(ref culledVisibleBuffer, GraphicsBuffer.Target.Structured, visibleBuffer.count, FishVisible.Stride);
+				Recreate(ref culledCountBuffer, GraphicsBuffer.Target.Raw, Mathf.Max(1, slotCount), 4);
+				for (int i = 0; i < 6; i++)
+				{
+					Plane p = view.Planes[i];
+					planeVectors[i] = new Vector4(p.normal.x, p.normal.y, p.normal.z, p.distance);
+				}
+				cmd.SetComputeVectorArrayParam(compute, PlanesId, planeVectors);
+				cmd.SetComputeIntParam(compute, SlotCountId, slotCount);
+				cmd.SetComputeBufferParam(compute, clearKernel, CountsId, culledCountBuffer);
+				cmd.DispatchCompute(compute, clearKernel, (slotCount + 63) / 64, 1, 1);
+				FishDepthPyramid.Bind(cmd, compute, cullKernel, camera, view.Position, true);
+				cmd.SetComputeBufferParam(compute, cullKernel, ModelsId, modelBuffer);
+				cmd.SetComputeBufferParam(compute, cullKernel, SlotsId, slotBuffer);
+				cmd.SetComputeBufferParam(compute, cullKernel, CountsId, countBuffer);
+				cmd.SetComputeBufferParam(compute, cullKernel, InstancesOutId, instanceBuffer);
+				cmd.SetComputeBufferParam(compute, cullKernel, VisibleOutId, visibleBuffer);
+				cmd.SetComputeBufferParam(compute, cullKernel, CulledVisibleId, culledVisibleBuffer);
+				cmd.SetComputeBufferParam(compute, cullKernel, CulledCountsId, culledCountBuffer);
+				cmd.DispatchCompute(compute, cullKernel, slotCount, 1, 1);
+			}
+			// Also restore the original counts after switching the diagnostic off.
+			cmd.SetComputeIntParam(compute, ArgCountId, commands.Count);
+			cmd.SetComputeBufferParam(compute, finalizeKernel, ArgSlotsId, argSlotBuffer);
+			cmd.SetComputeBufferParam(compute, finalizeKernel, CountsId, CullInstances ? culledCountBuffer : countBuffer);
+			cmd.SetComputeBufferParam(compute, finalizeKernel, SlotsId, slotBuffer);
+			cmd.SetComputeBufferParam(compute, finalizeKernel, ArgsId, argsBuffer);
+			cmd.DispatchCompute(compute, finalizeKernel, (commands.Count + 63) / 64, 1, 1);
+			if (NeedsArgsFence)
+			{
+				cmd.SetComputeBufferParam(compute, argsFenceKernel, ArgsFenceId, argsBuffer);
+				cmd.SetComputeBufferParam(compute, argsFenceKernel, CountsId, countBuffer);
+				cmd.DispatchCompute(compute, argsFenceKernel, 1, 1, 1);
+			}
+			cmd.EndSample(CullGpuSample);
+			context.ExecuteCommandBuffer(cmd);
+			cmd.Clear();
 		}
 
 		/// <summary>Issues the indirect draws of every slot this camera's generation filled. Returns the draws.</summary>
@@ -413,6 +459,11 @@ namespace FishMMO.Client
 				rp.camera = camera;
 				rp.worldBounds = worldBounds;
 				rp.matProps = blocks[c];
+				blocks[c].SetBuffer(VisibleId, CullInstances && (command.Slot & 1) == 0 ? culledVisibleBuffer : visibleBuffer);
+				// Procedural vegetation already clips every punctual shadow in FishVegetationPasses. Avoid those native
+				// submissions for configured local lights while keeping the original lit draw and directional shadows.
+				if (rp.shadowCastingMode == ShadowCastingMode.ShadowsOnly && rp.material.shader.name == TerrainGpuRenderer.VegetationIndirectName)
+					rp.layer = DirectionalShadowDraws.LayerFor(camera, RenderSettings.sun, rp.layer);
 				Graphics.RenderMeshIndirect(rp, command.Mesh, argsBuffer, 1, c);
 				draws++;
 				shadowDraws += rp.shadowCastingMode == UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly ? 1 : 0;
@@ -954,11 +1005,11 @@ namespace FishMMO.Client
 		{
 			cmd.Release();
 			ReleaseRetired(true);
-			foreach (GraphicsBuffer b in new[] { itemBuffer, modelBuffer, slotBuffer, countBuffer, instanceBuffer, visibleBuffer, argsBuffer, argSlotBuffer, commandBaseBuffer })
+			foreach (GraphicsBuffer b in new[] { itemBuffer, modelBuffer, slotBuffer, countBuffer, instanceBuffer, visibleBuffer, argsBuffer, argSlotBuffer, commandBaseBuffer, culledVisibleBuffer, culledCountBuffer })
 			{
 				b?.Release();
 			}
-			itemBuffer = modelBuffer = slotBuffer = countBuffer = instanceBuffer = visibleBuffer = argsBuffer = argSlotBuffer = commandBaseBuffer = null;
+			itemBuffer = modelBuffer = slotBuffer = countBuffer = instanceBuffer = visibleBuffer = argsBuffer = argSlotBuffer = commandBaseBuffer = culledVisibleBuffer = culledCountBuffer = null;
 			if (items.IsCreated)
 			{
 				items.Dispose();

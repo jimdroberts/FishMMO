@@ -150,6 +150,89 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
+		/// Whether an unreadable piece's index buffer survives being re-targeted raw (<c>-executeMethod …CaveCostProbe.IndexRetarget</c>,
+		/// graphics needed). Players logged "index buffer is null" from CaveCoverSystem.TakeOn on every stored piece, where
+		/// <see cref="Readability"/> had read back only the vertex buffer. Each order of the two re-targets on a fresh unreadable
+		/// copy, its index buffer read back against the source's triangles. Environment as <see cref="Readability"/>.
+		/// </summary>
+		public static void IndexRetarget()
+		{
+			var log = new List<string>();
+			string output = ProbeOutput.FromEnvironment("FISHMMO_CAVE_COST_OUT", "WorldRenders", "cavecost");
+			try
+			{
+				string asset = Environment.GetEnvironmentVariable("FISHMMO_CAVE_COST_ASSET");
+				if (string.IsNullOrEmpty(asset))
+				{
+					asset = "Assets/Scenes/WorldScene/Moron/Moron 3 Terrain/Moron 3 Caves.asset";
+				}
+				Mesh source = AssetDatabase.LoadAllAssetsAtPath(asset).OfType<Mesh>().Where(m => m.name.Contains(" P")).OrderByDescending(m => m.vertexCount).FirstOrDefault();
+				int[] triangles = source.triangles;
+				log.Add($"source {source?.name}: {source?.vertexCount} verts, {triangles.Length} indices, {source.indexFormat}, graphics {SystemInfo.graphicsDeviceType}");
+				foreach (string order in new[] { "vertex,index", "index,vertex", "index", "index-before-upload" })
+				{
+					Mesh copy = UnityEngine.Object.Instantiate(source);
+					try
+					{
+						if (order == "index-before-upload")
+						{
+							copy.indexBufferTarget |= GraphicsBuffer.Target.Raw;
+							copy.vertexBufferTarget |= GraphicsBuffer.Target.Raw;
+							copy.UploadMeshData(true);
+						}
+						else
+						{
+							copy.UploadMeshData(true);
+							foreach (string step in order.Split(','))
+							{
+								if (step == "vertex") copy.vertexBufferTarget |= GraphicsBuffer.Target.Raw;
+								else copy.indexBufferTarget |= GraphicsBuffer.Target.Raw;
+							}
+						}
+						using (GraphicsBuffer buffer = copy.GetIndexBuffer())
+						{
+							bool wide = copy.indexFormat == UnityEngine.Rendering.IndexFormat.UInt32;
+							var bytes = new byte[buffer.count * buffer.stride];
+							buffer.GetData(bytes);
+							int same = 0, n = Math.Min(triangles.Length, bytes.Length / (wide ? 4 : 2));
+							for (int i = 0; i < n; i++)
+							{
+								int v = wide ? BitConverter.ToInt32(bytes, i * 4) : BitConverter.ToUInt16(bytes, i * 2);
+								if (v == triangles[i])
+								{
+									same++;
+								}
+							}
+							log.Add($"{order}: readable {copy.isReadable}, index buffer {buffer.count}×{buffer.stride}, {same}/{triangles.Length} indices intact");
+						}
+					}
+					catch (Exception e)
+					{
+						log.Add($"{order}: readable {copy.isReadable}, threw {e.GetType().Name}: {e.Message}");
+					}
+					finally
+					{
+						UnityEngine.Object.DestroyImmediate(copy);
+					}
+				}
+			}
+			catch (Exception e)
+			{
+				log.Add("failed: " + e);
+			}
+			Directory.CreateDirectory(output);
+			File.WriteAllLines(Path.Combine(output, "index-retarget.txt"), log);
+			foreach (string line in log)
+			{
+				Debug.Log("[cavecost] " + line);
+			}
+			if (Application.isBatchMode)
+			{
+				EditorApplication.Exit(0);
+			}
+		}
+
+		/// <summary>
 		/// The cut's collider meshes through a real asset (<c>-executeMethod …CaveCostProbe.Colliders</c>): one small cave meshed
 		/// and written to a scratch caves asset under Assets (deleted at the end) as the cut writes it, read back after a save;
 		/// kept as the next cut keeps it; an asset from before collider meshes (pieces readable, no <c>C</c> meshes) upgraded on

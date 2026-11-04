@@ -660,6 +660,11 @@ namespace FishMMO.Shared.WorldDesign
 				Debug.Log($"[Terrain arrays] '{plan.SceneName}': relief worked out from the albedo for {string.Join(", ", names)}.");
 			}
 
+			// These pixel pairs are only needed while writing. Do not retain them during texture compression.
+			derived.Clear();
+			GC.Collect();
+			GC.WaitForPendingFinalizers();
+
 			string setPath = TerrainArraySet.BakedAssetPath(plan.SceneName);
 			keep.Add(setPath);
 			// Images from an earlier bake with another grid (the file name carries it) would otherwise linger.
@@ -793,15 +798,16 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 
-			var image = new Texture2D(width, height, TextureFormat.RGBA32, false, kind != TerrainArrayKind.Albedo);
-			image.SetPixels32(pixels);
-			image.Apply(false, false);
+			// Encoding CPU pixels needs no Texture2D or GPU upload. Apply used to keep whole atlas
+			// uploads alive until the next frame, while the following imports allocated compression scratch.
 			string path = $"{folder}/{FlipbookFileName(kind, columns, rows)}";
-			File.WriteAllBytes(path, image.EncodeToPNG());
-			Object.DestroyImmediate(image);
+			File.WriteAllBytes(path, EncodeFlipbook(pixels, width, height));
 			report.Written.Add(path);
 			return path;
 		}
+
+		public static byte[] EncodeFlipbook(Color32[] pixels, int width, int height)
+			=> ImageConversion.EncodeArrayToPNG(pixels, GraphicsFormat.R8G8B8A8_UNorm, (uint)width, (uint)height);
 
 		/// <summary>What an empty slice holds: grey albedo, a flat normal, the "no mask" grey TerrainLit assumes.</summary>
 		public static Color32 Neutral(TerrainArrayKind kind)

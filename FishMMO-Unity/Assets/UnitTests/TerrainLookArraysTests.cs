@@ -161,7 +161,8 @@ namespace FishMMO.UnitTests
 				SourceScanPins.Replace(" && !defined(_FISH_CAVE_ROCK)\n#define FISH_LOOK_TABLE 1", "\n#define FISH_LOOK_TABLE 1"),
 				"the cave rock guard dropped");
 			StringAssert.Contains("#if defined(_FISH_LOOK_ARRAY) || defined(_FISH_LOOK_TABLE)\n#define FISH_LOOK_ARRAYS 1", code);
-			Ordered(code, "#define FISH_LOOK_SLICES        FishLookSlices", "#else", "#define FISH_LOOK_SLICES        _FishLookSlices");
+			// The table's slices, else the material's: one contiguous #if/#else (an earlier #else elsewhere in the file is not it).
+			StringAssert.Contains("#define FISH_LOOK_SLICES        FishLookSlices\n#define FISH_LOOK_EMISSION_SLICE FishLookEmissionSlice\n#else\n#define FISH_LOOK_SLICES        _FishLookSlices", code);
 			// The slices live in UnityPerMaterial (the SRP batcher's layout never changes), and the row has a DOTS override.
 			Ordered(code, "CBUFFER_START(UnityPerMaterial)", "float4 _FishLookSlices;", "float _FishLookEmissionSlice;", "float _FishLook;", "CBUFFER_END");
 			StringAssert.Contains("FISH_DOTS_METADATA(float , _FishLook)", code);
@@ -177,6 +178,23 @@ namespace FishMMO.UnitTests
 			Ordered(normal, "#if defined(_FISH_CAVE_ROCK)", "FISH_LOOK_SLICES.y < 0.0 ? (half4)SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, uv) : n");
 			// URP's stock depth-normals pass reads the normal map through SampleNormal: redirected to the look in look variants.
 			StringAssert.Contains("#define SampleNormal(uv, bumpMap, scale) FishLookNormal(uv, scale)", code);
+		}
+
+		[Test]
+		public void LookBlock_TheSlicesNotTheKeywordsSayWhichMapsAreRead()
+		{
+			// URP's material validation drops _NORMALMAP/_METALLICSPECGLOSSMAP/_OCCLUSIONMAP from an array-backed material (its 2D
+			// slots are empty), and without them a generated surface drew at _Smoothness 1, flat and unoccluded: the structures'
+			// sky sheen (2026-11-02). Every look variant reads all three maps; an empty slot gives what no map gives.
+			string code = SourceScanPins.ReadCode(Shaders + "FishWeatherLitInput.hlsl");
+			Ordered(code, "#define FISH_LOOK_ARRAYS 1",
+				"#ifndef _NORMALMAP\n    #define _NORMALMAP 1\n#endif",
+				"#ifndef _METALLICSPECGLOSSMAP\n    #define _METALLICSPECGLOSSMAP 1\n#endif",
+				"#ifndef _OCCLUSIONMAP\n    #define _OCCLUSIONMAP 1\n#endif",
+				"#define FISH_MOSS_SAMPLER sampler_FishLookColour");
+			// An empty gloss slot: the material's metallic and full alpha (smoothness = _Smoothness), never white (metallic 1).
+			StringAssert.Contains("FISH_LOOK_SAMPLE(_FishLookMask, uv, FISH_LOOK_SLICES.z, half4((half)_Metallic, (half)_Metallic, (half)_Metallic, 1.0))", code);
+			StringAssert.DoesNotContain("FISH_LOOK_SAMPLE(_FishLookMask, uv, FISH_LOOK_SLICES.z, half4(1.0, 1.0, 1.0, 1.0))", code);
 		}
 
 		[Test]
@@ -344,7 +362,8 @@ namespace FishMMO.UnitTests
 			string code = SourceScanPins.ReadCode(Terrain + "TerrainGpuRenderer.Looks.cs");
 			string make = SourceScanPins.Body(code, "private LookRef MakeLook(Material clone)");
 			Ordered(make, "!clone.IsKeywordEnabled(TerrainLookMath.Keyword)", "FindKeyword(TerrainLookMath.TableKeyword).isValid", "TerrainLookMath.KeywordsAllowLooks(clone.shaderKeywords)",
-				"FamilyKey(clone)", "values.SetSlices(clone.GetVector(LookSlicesId)");
+				"FamilyKey(clone)", "ReadLook(clone)");
+			StringAssert.Contains("values.SetSlices(clone.GetVector(LookSlicesId)", SourceScanPins.Body(code, "public static TerrainLookMath.LookValues ReadLook(Material clone)"));
 			Ordered(SourceScanPins.Body(code, "private LookFamily FamilyFor(string key, Material clone)"), "new Material(clone)", "material.EnableKeyword(TerrainLookMath.TableKeyword);");
 			// The memory-free rule: no array is made or filled at run time; only the tables are.
 			foreach (string banned in new[] { "Texture2DArray", "CopyTexture", "GraphicsFormat" })

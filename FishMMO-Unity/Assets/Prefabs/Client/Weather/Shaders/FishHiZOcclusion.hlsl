@@ -48,10 +48,9 @@ int2 FishHiZSize(int level)
     return max(size, int2(1, 1));
 }
 
-bool FishOccluded(float3 centre, float radius)
+// Common projection/read rule. The caller supplies a conservative nearest depth and padded extents.
+bool FishBoundsOccluded(float3 centre, float3 extent, float nearest)
 {
-    radius += _FishHiZEye.w;
-    float nearest = dot(centre - _FishHiZEye.xyz, _FishHiZForward.xyz) - radius;
     bool occluded = false;
     if (_FishHiZParams.w >= 0.5 && nearest > 1.0)
     {
@@ -60,7 +59,7 @@ bool FishOccluded(float3 centre, float radius)
         float2 hi = float2(-1e9, -1e9);
         [unroll] for (int k = 0; k < 8; k++)
         {
-            float3 corner = centre + radius * float3((k & 1) ? 1.0 : -1.0, (k & 2) ? 1.0 : -1.0, (k & 4) ? 1.0 : -1.0);
+            float3 corner = centre + extent * float3((k & 1) ? 1.0 : -1.0, (k & 2) ? 1.0 : -1.0, (k & 4) ? 1.0 : -1.0);
             float4 clip = mul(_FishHiZViewProj, float4(corner, 1.0));
             inFront = inFront && clip.w > 1e-4;
             float2 uv = clip.xy / max(clip.w, 1e-4) * 0.5 + 0.5;
@@ -88,4 +87,18 @@ bool FishOccluded(float3 centre, float radius)
     return occluded;
 }
 
+// Preserve the original sphere test, including its nearest-depth rule, for existing per-instance callers.
+bool FishOccluded(float3 centre, float radius)
+{
+    radius += _FishHiZEye.w;
+    return FishBoundsOccluded(centre, radius.xxx, dot(centre - _FishHiZEye.xyz, _FishHiZForward.xyz) - radius);
+}
+
+// A tile can span a slope without needing the sphere's vertical radius along every axis.
+bool FishBoxOccluded(float3 centre, float3 extent)
+{
+    extent += _FishHiZEye.w;
+    float nearest = dot(centre - _FishHiZEye.xyz, _FishHiZForward.xyz) - dot(abs(_FishHiZForward.xyz), extent);
+    return FishBoundsOccluded(centre, extent, nearest);
+}
 #endif

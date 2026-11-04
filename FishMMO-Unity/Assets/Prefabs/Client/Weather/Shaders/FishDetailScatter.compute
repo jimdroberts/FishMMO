@@ -26,6 +26,7 @@
 // textures read with Load (no samplers); 7 storage buffers in the generate kernel (WebGPU's per-stage limit is 8: the
 // sparse density rides the table, not a buffer of its own); 2 textures of the scatter's own (and the path overlay's).
 
+#pragma kernel FishScatterCull
 #pragma kernel FishScatterClear
 #pragma kernel FishScatterGenerate
 #pragma kernel FishScatterFinalize
@@ -679,5 +680,42 @@ void FishScatterArgsFence(uint3 id : SV_DispatchThreadID)
     if (_ScatterArgsFence.Load(4) == 0xFFFFFFFFu)
     {
         _ScatterCounts.Store(0, 0u);
+    }
+}
+
+// Visibility is refreshed independently of generation: cached candidates may become visible again next frame.
+// Seven storage buffers; shadow lists and their counts are copied without camera occlusion.
+#include "FishHiZOcclusion.hlsl"
+RWStructuredBuffer<FishVisible> _ScatterCulledVisible;
+RWByteAddressBuffer _ScatterCulledCounts;
+[numthreads(64, 1, 1)]
+void FishScatterCull(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
+{
+    uint slot = group.x;
+    if (slot >= _ScatterSlotCount) return;
+    uint2 region = _ScatterSlots[slot];
+    uint count = min(_ScatterCounts.Load(slot * 4u), region.y);
+    if ((slot & 1u) != 0u)
+    {
+        if (thread.x == 0u) _ScatterCulledCounts.Store(slot * 4u, count);
+        return;
+    }
+    ScatterModel model = _ScatterModels[slot / 6u];
+    for (uint i = thread.x; i < count; i += 64u)
+    {
+        FishVisible visible = _ScatterVisibleOut[region.x + i];
+        FishInstance instance = _ScatterInstancesOut[visible.index];
+        float4 local = float4(model.sphere.xyz, 1.0);
+        float3 centre = float3(dot(instance.row0, local), dot(instance.row1, local), dot(instance.row2, local));
+        float scale = max(length(float3(instance.row0.x, instance.row1.x, instance.row2.x)),
+            max(length(float3(instance.row0.y, instance.row1.y, instance.row2.y)), length(float3(instance.row0.z, instance.row1.z, instance.row2.z))));
+        // Conservative wind/flora allowance, also used for prop shadow culling. No LOD or density change.
+        float radius = model.sphere.w * scale * 1.6 + 1.0;
+        if (ScatterSphereVisible(centre, radius) && !FishOccluded(centre, radius))
+        {
+            uint at;
+            _ScatterCulledCounts.InterlockedAdd(slot * 4u, 1u, at);
+            _ScatterCulledVisible[region.x + at] = visible;
+        }
     }
 }

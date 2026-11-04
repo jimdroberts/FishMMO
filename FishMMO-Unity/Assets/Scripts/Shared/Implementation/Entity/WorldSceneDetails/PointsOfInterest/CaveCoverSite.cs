@@ -29,6 +29,8 @@ namespace FishMMO.Shared
 		[SerializeField] private Color accent = new Color(0.3f, 0.7f, 1.45f);
 		[Tooltip("The glow of its crystal hue (HDR): mineral glints and frost.")]
 		[SerializeField] private Color crystal = new Color(0.95f, 0.45f, 1.6f);
+		[Tooltip("What the cover reads of the cave's rock (CaveCoverBake, in the scene's caves asset): a player cannot read the unreadable pieces themselves. None: cut before 2026-11-03; the editor reads the meshes, a player grows nothing until the scene is cut again.")]
+		[SerializeField] private CaveCoverBake bake;
 
 		/// <summary>The choice a cave with none carries.</summary>
 		public static readonly Choice Default = new Choice
@@ -53,6 +55,12 @@ namespace FishMMO.Shared
 
 		/// <summary>The cave's choice as stored.</summary>
 		public Choice Current => new Choice { Form = form, Types = types, Density = density, Glow = glow, Fungus = fungus, Accent = accent, Crystal = crystal };
+
+		/// <summary>The cave's rock as the cover reads it, or null (cut before the bake).</summary>
+		public CaveCoverBake Bake => bake;
+
+		/// <summary>Set by the cut.</summary>
+		public void SetBake(CaveCoverBake value) => bake = value;
 
 		/// <summary>Set by the cut.</summary>
 		public void Configure(in Choice choice)

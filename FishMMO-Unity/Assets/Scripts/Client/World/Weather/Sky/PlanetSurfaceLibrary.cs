@@ -111,12 +111,18 @@ namespace FishMMO.Client
 			loaded[bodyName] = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(EditorPathOf(bodyName));
 			return;
 #else
-			AsyncOperationHandle<Texture2D> handle = Addressables.LoadAssetAsync<Texture2D>(AddressOf(bodyName));
-			handle.Completed += operation =>
+			// An unbaked body is normal. Query first: LoadAssetAsync logs an error for a missing key
+			// before its completion callback can handle the intended untextured fallback.
+			var locations = Addressables.LoadResourceLocationsAsync(AddressOf(bodyName), typeof(Texture2D));
+			locations.Completed += lookup =>
 			{
-				// A body with no bake is the normal case in a fresh project, so a failure here is
-				// remembered as "nothing" rather than reported.
-				loaded[bodyName] = operation.Status == AsyncOperationStatus.Succeeded ? operation.Result : null;
+				if (lookup.Status == AsyncOperationStatus.Succeeded && lookup.Result.Count > 0)
+				{
+					AsyncOperationHandle<Texture2D> handle = Addressables.LoadAssetAsync<Texture2D>(lookup.Result[0]);
+					handle.Completed += operation => loaded[bodyName] = operation.Status == AsyncOperationStatus.Succeeded ? operation.Result : null;
+				}
+				else loaded[bodyName] = null;
+				Addressables.Release(lookup);
 			};
 #endif
 		}

@@ -1,0 +1,25 @@
+#pragma kernel Probe
+#pragma use_dxc vulkan
+#include "../../../Prefabs/Client/Weather/Shaders/FishGrassLookCache.hlsl"
+StructuredBuffer<float2> _Points;
+RWStructuredBuffer<float4> _Results;
+uint _PointCount;
+[numthreads(64,1,1)]
+void Probe(uint3 id:SV_DispatchThreadID)
+{
+    if(id.x>=_PointCount)return;
+    float2 p=_Points[id.x];
+    FishFloraLook full=FishFloraAt(p,6.0,0x6A09E667u);
+    uint more=FishGrassPackLook(1u,full); more=FishGrassPackBloom(more,p,full);
+    FishFloraLook cached=FishGrassReadLook(more,p);
+    FishFloraLook bloom=FishGrassReadBloom(more,p);
+    FishFloraLook fullBloom=FishFloraAt(p,11.0,0xBB67AE85u);
+    uint b=id.x*12;
+    _Results[b]=float4(cached.biome,cached.variant,cached.valid?1:0,more&1u);
+    _Results[b+1]=float4(full.biome,full.variant,full.valid?1:0,1);
+    _Results[b+2]=float4(cached.foliage,cached.height); _Results[b+3]=float4(full.foliage,full.height);
+    _Results[b+4]=float4(cached.shift,cached.width); _Results[b+5]=float4(full.shift,full.width);
+    _Results[b+6]=float4(cached.biomeShift,cached.bend); _Results[b+7]=float4(full.biomeShift,full.bend);
+    _Results[b+8]=float4(bloom.bloom,bloom.bloomSize); _Results[b+9]=float4(fullBloom.bloom,fullBloom.bloomSize);
+    _Results[b+10]=float4(bloom.biome,bloom.variant,bloom.valid?1:0,0); _Results[b+11]=float4(fullBloom.biome,fullBloom.variant,fullBloom.valid?1:0,0);
+}

@@ -27,6 +27,10 @@ namespace FishMMO.Client
 		/// read only by the widest kernel (<see cref="ChannelUint"/>).</remarks>
 		public const int TerrainUints = 82;
 
+		/// <summary>Density texels per active-channel region; the GPU build includes the upper bilinear neighbour.</summary>
+		public const int ActiveRegionSide = 8;
+		public int ActiveTableBase { get; private set; }
+
 		/// <summary>
 		/// Where channel <paramref name="channel"/>'s type index sits in a terrain's row: 0..7 at 8..15, 8..15 at 25..32 and
 		/// 16..63 at 34..81 (FishGrassBlades.compute GrassChannelTypeAt).
@@ -60,6 +64,9 @@ namespace FishMMO.Client
 
 		public readonly List<Group> Groups = new List<Group>();
 		public GraphicsBuffer Shared { get; private set; }
+		/// <summary>One backend-prepared float per sRGB byte, appended after the unchanged terrain/albedo layout.</summary>
+		public const int LinearTableEntries = 256;
+		public int LinearTableBase { get; private set; }
 
 		private readonly Dictionary<GrassTerrain, int> index = new Dictionary<GrassTerrain, int>();
 		private readonly Dictionary<GrassTerrain, Group> groupOf = new Dictionary<GrassTerrain, Group>();
@@ -193,9 +200,19 @@ namespace FishMMO.Client
 				densitySlices[g] = next;
 			}
 
-			// The albedo copies after the table, each once.
+			Tier = 0;
+			foreach (GrassTerrain gt in ordered) Tier = Math.Max(Tier, GrassTerrain.TierOf(gt.Channels));
+			// The active-channel headers/regions precede the albedo copies. Narrow scenes need no regions.
 			var albedoBase = new Dictionary<GrassAlbedoTexels, int>();
-			int total = ordered.Count * TerrainUints;
+			ActiveTableBase = ordered.Count * TerrainUints;
+			int total = ActiveTableBase + ordered.Count * 2;
+			var activeBase = new Dictionary<GrassTerrain, int>();
+			foreach (GrassTerrain gt in ordered)
+			{
+				activeBase[gt] = total;
+				int side = (gt.DensityResolution + ActiveRegionSide - 1) / ActiveRegionSide;
+				if (Tier >= 2) total += side * side * 2;
+			}
 			foreach (GrassTerrain gt in ordered)
 			{
 				GrassAlbedoTexels texels = gt.Arrays != null && gt.Arrays.IsUsable && gt.SurfaceLayers != null ? albedoFor(gt.Arrays) : null;
@@ -205,12 +222,8 @@ namespace FishMMO.Client
 					total += texels.Data.Length;
 				}
 			}
+			LinearTableBase = total; total += LinearTableEntries;
 			var data = new uint[Math.Max(1, total)];
-			Tier = 0;
-			foreach (GrassTerrain gt in ordered)
-			{
-				Tier = Math.Max(Tier, GrassTerrain.TierOf(gt.Channels));
-			}
 			foreach (GrassTerrain gt in ordered)
 			{
 				Group g = groupOf[gt];
@@ -238,6 +251,9 @@ namespace FishMMO.Client
 				data[at + 23] = texels != null ? (uint)albedoBase[texels] : 0u;
 				data[at + 24] = gt.Freeboard != null ? (uint)WaterSliceOf(g, gt) : 0xFFFFFFFFu;
 				data[at + 33] = (uint)densityBase[gt];
+				int maskAt = ActiveTableBase + index[gt] * 2;
+				data[maskAt] = (uint)activeBase[gt];
+				data[maskAt + 1] = (uint)((gt.DensityResolution + ActiveRegionSide - 1) / ActiveRegionSide);
 			}
 			foreach (KeyValuePair<GrassAlbedoTexels, int> a in albedoBase)
 			{
@@ -341,6 +357,12 @@ namespace FishMMO.Client
 			}
 		}
 
+		private static void DestroyTexture(Object texture)
+		{
+			if (Application.isPlaying) Object.Destroy(texture);
+			else Object.DestroyImmediate(texture);
+		}
+
 		private void ReleaseRetired(bool all)
 		{
 			int frame = Time.frameCount;
@@ -348,7 +370,7 @@ namespace FishMMO.Client
 			{
 				if (all || frame - retiredTextures[i].Frame >= 4)
 				{
-					Object.Destroy(retiredTextures[i].Texture);
+					DestroyTexture(retiredTextures[i].Texture);
 					retiredTextures.RemoveAt(i);
 				}
 			}
@@ -370,7 +392,7 @@ namespace FishMMO.Client
 			{
 				if (black != null)
 				{
-					Object.Destroy(black);
+					DestroyTexture(black);
 				}
 			}
 			blacks.Clear();

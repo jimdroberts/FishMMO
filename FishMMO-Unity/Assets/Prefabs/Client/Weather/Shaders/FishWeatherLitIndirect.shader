@@ -168,7 +168,9 @@ Shader "FishMMO/Weather Lit Indirect"
             AlphaToMask[_AlphaToMask]
 
             HLSLPROGRAM
-            // FXC on purpose, not DXC: the procedural setup (FishIndirectSetup) writes unity_ObjectToWorld and the other UnityPerDraw matrices, which DXC treats as const cbuffer members.
+            #pragma use_dxc vulkan
+            // First: the per-draw matrices the procedural setup writes, as statics DXC lets it write (FishIndirectPerDraw.hlsl).
+            #include "FishIndirectPerDraw.hlsl"
             #pragma target 2.0
 
             // -------------------------------------
@@ -240,6 +242,7 @@ Shader "FishMMO/Weather Lit Indirect"
             //--------------------------------------
             // GPU Instancing
             #pragma multi_compile_instancing
+            #pragma multi_compile _ FISH_INDIRECT_FIRST_INSTANCE
             #pragma instancing_options procedural:FishIndirectSetup
             #pragma instancing_options renderinglayer
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
@@ -266,7 +269,9 @@ Shader "FishMMO/Weather Lit Indirect"
             Cull[_Cull]
 
             HLSLPROGRAM
-            // FXC on purpose, not DXC: the procedural setup (FishIndirectSetup) writes unity_ObjectToWorld and the other UnityPerDraw matrices, which DXC treats as const cbuffer members.
+            #pragma use_dxc vulkan
+            // First: the per-draw matrices the procedural setup writes, as statics DXC lets it write (FishIndirectPerDraw.hlsl).
+            #include "FishIndirectPerDraw.hlsl"
             #pragma target 2.0
 
             // -------------------------------------
@@ -282,6 +287,7 @@ Shader "FishMMO/Weather Lit Indirect"
             //--------------------------------------
             // GPU Instancing
             #pragma multi_compile_instancing
+            #pragma multi_compile _ FISH_INDIRECT_FIRST_INSTANCE
             #pragma instancing_options procedural:FishIndirectSetup
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
 
@@ -323,7 +329,9 @@ Shader "FishMMO/Weather Lit Indirect"
             Cull[_Cull]
 
             HLSLPROGRAM
-            // FXC on purpose, not DXC: the procedural setup (FishIndirectSetup) writes unity_ObjectToWorld and the other UnityPerDraw matrices, which DXC treats as const cbuffer members.
+            #pragma use_dxc vulkan
+            // First: the per-draw matrices the procedural setup writes, as statics DXC lets it write (FishIndirectPerDraw.hlsl).
+            #include "FishIndirectPerDraw.hlsl"
             #pragma target 4.5
 
             // Deferred Rendering Path does not support the OpenGL-based graphics API:
@@ -387,6 +395,7 @@ Shader "FishMMO/Weather Lit Indirect"
             //--------------------------------------
             // GPU Instancing
             #pragma multi_compile_instancing
+            #pragma multi_compile _ FISH_INDIRECT_FIRST_INSTANCE
             #pragma instancing_options procedural:FishIndirectSetup
             #pragma instancing_options renderinglayer
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
@@ -418,7 +427,9 @@ Shader "FishMMO/Weather Lit Indirect"
             Cull[_Cull]
 
             HLSLPROGRAM
-            // FXC on purpose, not DXC: the procedural setup (FishIndirectSetup) writes unity_ObjectToWorld and the other UnityPerDraw matrices, which DXC treats as const cbuffer members.
+            #pragma use_dxc vulkan
+            // First: the per-draw matrices the procedural setup writes, as statics DXC lets it write (FishIndirectPerDraw.hlsl).
+            #include "FishIndirectPerDraw.hlsl"
             #pragma target 2.0
 
             // -------------------------------------
@@ -438,6 +449,7 @@ Shader "FishMMO/Weather Lit Indirect"
             //--------------------------------------
             // GPU Instancing
             #pragma multi_compile_instancing
+            #pragma multi_compile _ FISH_INDIRECT_FIRST_INSTANCE
             #pragma instancing_options procedural:FishIndirectSetup
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
 
@@ -467,7 +479,9 @@ Shader "FishMMO/Weather Lit Indirect"
             Cull[_Cull]
 
             HLSLPROGRAM
-            // FXC on purpose, not DXC: the procedural setup (FishIndirectSetup) writes unity_ObjectToWorld and the other UnityPerDraw matrices, which DXC treats as const cbuffer members.
+            #pragma use_dxc vulkan
+            // First: the per-draw matrices the procedural setup writes, as statics DXC lets it write (FishIndirectPerDraw.hlsl).
+            #include "FishIndirectPerDraw.hlsl"
             #pragma target 2.0
 
             // -------------------------------------
@@ -496,6 +510,7 @@ Shader "FishMMO/Weather Lit Indirect"
             //--------------------------------------
             // GPU Instancing
             #pragma multi_compile_instancing
+            #pragma multi_compile _ FISH_INDIRECT_FIRST_INSTANCE
             #pragma instancing_options procedural:FishIndirectSetup
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
 
@@ -597,7 +612,9 @@ Shader "FishMMO/Weather Lit Indirect"
             ColorMask RG
 
             HLSLPROGRAM
-            // FXC on purpose, not DXC: the procedural setup (FishIndirectSetup) writes unity_ObjectToWorld and the other UnityPerDraw matrices, which DXC treats as const cbuffer members.
+            #pragma use_dxc vulkan
+            // First: the per-draw matrices the procedural setup writes, as statics DXC lets it write (FishIndirectPerDraw.hlsl).
+            #include "FishIndirectPerDraw.hlsl"
             #pragma shader_feature_local _ALPHATEST_ON
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma shader_feature_local_vertex _ADD_PRECOMPUTED_VELOCITY
@@ -609,6 +626,7 @@ Shader "FishMMO/Weather Lit Indirect"
             #pragma vertex vert
             #pragma fragment FishMotionVectorsFragment
             #pragma multi_compile_instancing
+            #pragma multi_compile _ FISH_INDIRECT_FIRST_INSTANCE
             #pragma instancing_options procedural:FishIndirectSetup
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
             #include_with_pragmas "Packages/com.unity.render-pipelines.core/ShaderLibrary/FoveatedRenderingKeywords.hlsl"
@@ -638,7 +656,9 @@ Shader "FishMMO/Weather Lit Indirect"
             }
 
             HLSLPROGRAM
-            // FXC on purpose, not DXC: the procedural setup (FishIndirectSetup) writes unity_ObjectToWorld and the other UnityPerDraw matrices, which DXC treats as const cbuffer members.
+            #pragma use_dxc vulkan
+            // First: the per-draw matrices the procedural setup writes, as statics DXC lets it write (FishIndirectPerDraw.hlsl).
+            #include "FishIndirectPerDraw.hlsl"
             #pragma shader_feature_local _ALPHATEST_ON
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma shader_feature_local_vertex _ADD_PRECOMPUTED_VELOCITY
@@ -651,6 +671,7 @@ Shader "FishMMO/Weather Lit Indirect"
             #pragma vertex vert
             #pragma fragment FishMotionVectorsFragment
             #pragma multi_compile_instancing
+            #pragma multi_compile _ FISH_INDIRECT_FIRST_INSTANCE
             #pragma instancing_options procedural:FishIndirectSetup
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
             #include_with_pragmas "Packages/com.unity.render-pipelines.core/ShaderLibrary/FoveatedRenderingKeywords.hlsl"

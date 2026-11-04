@@ -1,3 +1,4 @@
+using FishMMO.Shared;
 using Unity.Profiling;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -644,7 +645,7 @@ namespace FishMMO.Water
 				}
 				else
 				{
-					queryBuild = System.Threading.Tasks.Task.Run(() =>
+					queryBuild = FishMMO.Shared.PlatformWork.Run(() =>
 						WaterSpectrum.Build(wind, heading, gravity, amplitude, choppiness, loop, 1u, patches));
 				}
 			}

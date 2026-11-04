@@ -23,7 +23,8 @@
         "Unity.Addressables.Editor",
         "Unity.AI.Navigation",
         "Unity.ScriptableBuildPipeline.Editor",
-        "Unity.ScriptableBuildPipeline"
+        "Unity.ScriptableBuildPipeline",
+        "FishMMO.TestHarness.World.Editor"
     ],
     "includePlatforms": [
         "Editor"

@@ -177,6 +177,8 @@ InlandLook InlandLookAt(float2 towards)
 	return look;
 }
 
+float _FishFoamFullFallback; // Diagnostic only; zero uses the carried-lace shortcut.
+
 struct Attributes
 {
 	float4 positionOS : POSITION;
@@ -1075,8 +1077,6 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	if (!below)
 	{
 		float foamSpeed = onRiver ? max(0.0, dot(flow, normalize(input.bank.zw + float2(1e-5, 0.0)))) : 0.0;
-		float streakLod;
-		half lace = StreakFoam(foamFrame, foamFrameDx, foamFrameDy, foamSpeed, max(0.3, _FoamScale), _FlowCycle, streakLod);
 		/* The foam a fall's boil sends downstream: an allowance laid along the river below each landing, with the
 		 * streaked foam running through it, gathered into rafts (the smooth field at three times the size) so the trail
 		 * is drifting patches of more and less foam, not a white band. */
@@ -1089,19 +1089,21 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 			 * every raft as a puffy cloud lying on the water (screenshot, 2026-10-08). The lace makes the holes. */
 			trail *= 0.35 + 0.65 * smoothstep(0.2, 0.75, rafts);
 		}
-		// Round a fall's foot the pool boils rather than streaks.
-		float boilLod;
-		half boilLace = BoilFoam(positionWS.xz, positionDdx.xz, positionDdy.xz, riverFlow, max(0.3, _FoamScale), _FlowCycle, boilLod);
-		half boilShare = saturate(1.6 * churn);
-		lace = FishFoamBlend(lace, boilLace, boilShare);
-		// How far the cut is resolved: each lace's own, as much of each as it is of the foam.
-		half laceResolved = lerp(FlowLaceResolved(streakLod), FlowLaceResolved(boilLod), boilShare);
-		/* Where the simulated foam keeps it, the lace carried with the water itself (FishFoamFieldLace): no flow-map
-		 * cycle, so the foam no longer changes under the eye every two seconds; it drifts as the water drifts. */
+		// Read carried coverage before paying for the legacy lace which it replaces in the window interior.
 		half carriedLaceShare;
 		float carriedLod;
 		half carriedLace = FishFoamFieldLace(TEXTURE2D_ARGS(_FoamTexture, sampler_FoamTexture), positionWS.xz, positionDdx.xz, positionDdy.xz,
 			max(0.3, _FoamScale), FISH_RIVER_LACE_MIP, carriedLaceShare, carriedLod);
+		half lace = 0.0h, laceResolved = 0.0h;
+		[branch] if (carriedLaceShare < 1.0h || _FishFoamFullFallback > 0.5)
+		{
+			float streakLod, boilLod;
+			lace = StreakFoam(foamFrame, foamFrameDx, foamFrameDy, foamSpeed, max(0.3, _FoamScale), _FlowCycle, streakLod);
+			half boilLace = BoilFoam(positionWS.xz, positionDdx.xz, positionDdy.xz, riverFlow, max(0.3, _FoamScale), _FlowCycle, boilLod);
+			half boilShare = saturate(1.6 * churn);
+			lace = FishFoamBlend(lace, boilLace, boilShare);
+			laceResolved = lerp(FlowLaceResolved(streakLod), FlowLaceResolved(boilLod), boilShare);
+		}
 		if (carriedLaceShare > 0.0)
 		{
 			carriedLace = FishFoamLaceRestore(carriedLace, carriedLod);

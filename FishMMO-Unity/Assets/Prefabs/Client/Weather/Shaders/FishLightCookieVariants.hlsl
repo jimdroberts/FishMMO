@@ -23,4 +23,19 @@ real3 FishSampleAdditionalLightCookie(int lightIndex, float3 positionWS)
 }
 #define SampleMainLightCookie FishSampleMainLightCookie
 #define SampleAdditionalLightCookie FishSampleAdditionalLightCookie
+// WebGPU: URP's per-light arrays from the light table (FishLightTable.hlsl): the additional lights' cookies here, and URP's
+// light, shadow and reflection-probe functions for every lit pass after this point (FishLightTableLighting.hlsl). Kept below
+// everything native compiles, so a native program's preprocessed source (and with it the shader cache) is unchanged.
+#if defined(SHADER_API_WEBGPU)
+#include "FishLightTable.hlsl"
+real3 FishTableSampleAdditionalLightCookieVariant(int lightIndex, float3 positionWS)
+{
+    UNITY_BRANCH
+    if (_LIGHT_COOKIES) return FishTableSampleAdditionalLightCookie(lightIndex, positionWS);
+    return real3(1, 1, 1);
+}
+#undef SampleAdditionalLightCookie
+#define SampleAdditionalLightCookie FishTableSampleAdditionalLightCookieVariant
+#include "FishLightTableLighting.hlsl"
+#endif
 #endif
