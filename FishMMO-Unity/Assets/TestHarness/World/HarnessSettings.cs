@@ -46,6 +46,65 @@ namespace FishMMO.TestHarness.World
 				case "ambientLife": if (WeatherRenderProfile.Active != null) WeatherRenderProfile.Active.AmbientLife.Enabled = value == "1"; break;
 				case "ambientLifeMax": if (WeatherRenderProfile.Active != null) WeatherRenderProfile.Active.AmbientLife.MaxVisible = int.Parse(value, inv); break;
 				case "scatter": DetailScatterSystem.Enabled = value == "1"; break;
+				case "scatterBatching": DetailScatterRenderer.BatchDraws = value == "1"; break;
+				// The scatter's takes effect at its next layout; the props' only for models registered after (a scene load).
+				case "scatterBrg": DetailScatterRenderer.UseBrg = value == "1"; break;
+				case "vegTable": DetailScatterRenderer.VegFamilies = value == "1"; break;
+				case "runGather": TerrainGpuRenderer.RunGather = value == "1"; break;
+				case "rockDemand": RockContactField.DemandOnly = value == "1"; break;
+				// What each feature costs a frame: drawn or not, everything else as ever. hideFamilies takes the props' model
+				// families (Structure,Rock,Tree…: the props tally's names), hideLayers layer names off the main camera.
+				case "hideGrass": GrassBladeRenderer.HideDraws = value == "1"; break;
+				// The grass A/B: its distance (metres over the player's setting, 0 the player's), every ring's density × k, and the
+				// distances its blades drop to the 7-vertex strip and the triangle ("-" restores what the profile shipped with).
+				case "grassDistance": GrassBladeSystem.DistanceOverride = float.Parse(value, inv); break;
+				case "grassDensity":
+				case "grassLod0":
+				case "grassLod1":
+				{
+					GrassBladeSettings g = WeatherRenderProfile.Active != null ? WeatherRenderProfile.Active.Grass : null;
+					if (g == null) break;
+					shippedRings ??= g.Rings;
+					if (shippedLod0 < 0f) { shippedLod0 = g.Lod0Distance; shippedLod1 = g.Lod1Distance; }
+					if (name == "grassDensity")
+					{
+						float k = value == "-" ? 1f : float.Parse(value, inv);
+						var rings = new Vector2[shippedRings.Length];
+						for (int i = 0; i < rings.Length; i++) rings[i] = new Vector2(shippedRings[i].x, shippedRings[i].y * k);
+						g.Rings = rings;
+					}
+					else if (name == "grassLod0") g.Lod0Distance = value == "-" ? shippedLod0 : float.Parse(value, inv);
+					else g.Lod1Distance = value == "-" ? shippedLod1 : float.Parse(value, inv);
+				}
+				break;
+				case "hideTerrain": TerrainHeightmapSystem.HideDraws = value == "1"; break;
+				// The ground's A/B: its render queue (−1 the shader's, 2450 after the other opaques: the default), the strongest layers
+				// a pixel blends (4 every layer, the old look; 2 or 3; 0 the shader's default, 3), and the distance its layers' normal
+				// and mask maps fade out over ("from,to" metres; "0" never, the old look; "default" the shader's 40–80 m).
+				case "terrainQueue": TerrainHeightmapSystem.QueueOverride = int.Parse(value, inv); break;
+				case "terrainLayers": Shader.SetGlobalFloat("_FishTerrainMaxLayers", float.Parse(value, inv)); break;
+				case "terrainFarDetail":
+				{
+					string[] range = value.Split(',');
+					Shader.SetGlobalVector("_FishTerrainDetailFar", range.Length == 2
+						? new Vector4(float.Parse(range[0], inv), float.Parse(range[1], inv), 0f, 0f)
+						: value == "default" ? Vector4.zero : new Vector4(0f, -1f, 0f, 0f));
+				}
+				break;
+				case "hideFamilies": TerrainGpuRenderer.HideFamilies = value == "-" ? "" : value; break;
+				case "hideLayers":
+				{
+					Camera main = Camera.main;
+					if (main != null)
+					{
+						if (layersShown < 0) layersShown = main.cullingMask;
+						int mask = 0;
+						foreach (string layer in value.Split(',')) if (layer.Length > 0 && layer != "-") mask |= LayerMask.GetMask(layer);
+						main.cullingMask = layersShown & ~mask;
+					}
+				}
+				break;
+				case "mergeMaterials": DetailScatterRenderer.MergeIdenticalMaterials = TerrainGpuRenderer.MergeIdenticalMaterials = value == "1"; break;
 				case "ssao": SetFeature("ScreenSpaceAmbientOcclusion", value == "1"); break;
 				case "paused": { var world = Object.FindAnyObjectByType<WorldSimController>(); if (world != null) world.Paused = value == "1"; } break;
 				case "runRate": { var world = Object.FindAnyObjectByType<WorldSimController>(); if (world != null) world.RunRate = double.Parse(value, inv); } break;
@@ -77,6 +136,10 @@ namespace FishMMO.TestHarness.World
 				default: throw new ArgumentException("Unknown setting " + name);
 			}
 		}
+
+		private static int layersShown = -1;
+		private static Vector2[] shippedRings;
+		private static float shippedLod0 = -1f, shippedLod1;
 
 		private static GameObject testLights;
 		private static Texture2D testCookie;

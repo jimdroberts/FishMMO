@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Same view, same held world clock: a screenshot before and after a harness setting change (an owner A/B pair).
 // Usage: node ab_webgpu_images.mjs <out-dir> <name> <view> "<before settings>" "<after settings>"
-//   settings are "name=value;name=value" for WebGpuSmokeProbe.SetSetting; view is forest|settlement|settlement-close.
+//   settings are "name=value;name=value" for WebGpuSmokeProbe.SetSetting; view is forest|forest-down|settlement|settlement-close.
 // Writes <out-dir>/<name>-<view>-a.png and -b.png, restores the "before" settings and releases the clock.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -13,6 +13,8 @@ const settle = Number(process.env.FISHMMO_WEBGPU_AB_SETTLE || 4) * 1000;
 const views = {
   forest:[-1082.901245,513.39331,429.819427,-1082.901245,513.39331,445.819427],
   settlement:[1970.555176,191.37265,-1600.95056,1850.555176,126.37264,-1480.95056],
+  // The forest view pitched down to the ground before it (the near grass and the ground's layers).
+  'forest-down':[-1082.901245,513.39331,429.819427,-1082.901245,503.39331,445.819427],
   // The same town from close by (a street-level look at the structures' surfaces).
   'settlement-close':[1885.555176,144.37264,-1515.95056,1850.555176,126.37264,-1480.95056],
 };

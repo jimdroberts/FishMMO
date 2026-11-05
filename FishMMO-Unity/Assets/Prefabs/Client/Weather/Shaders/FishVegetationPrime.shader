@@ -69,6 +69,11 @@ Shader "FishMMO/Vegetation Prime"
         _VaryPartLength("Each limb's length (share either way)", Range(0.0, 0.5)) = 0
         _VaryFullness("Fullness: x the fewest of the spare limbs kept, y the fewest leaves kept (0..1)", Vector) = (0, 0, 0, 0)
         _VaryColour("Colour: x brightness, y hue and saturation, z each leaf card, w bark (shares either way)", Vector) = (0, 0, 0, 0)
+        // A bush's draw takes its look's colours, never its size (cover is the same for everyone): what _FishFloraOn 2 says on a
+        // RenderMeshIndirect draw, which a BatchRendererGroup draw's per-batch constant cannot (DetailScatterRenderer.Brg.cs).
+        [HideInInspector] _FishFloraColoursOnly("Flora look: colours only (a bush)", Float) = 0
+        // A vegetation family's table (FishVegetationPasses.hlsl FISH_VEG_TABLE; set on the runtime family material only).
+        [HideInInspector][NoScaleOffset] _FishVegTable("Vegetation family table", 2D) = "black" {}
     }
 
     SubShader

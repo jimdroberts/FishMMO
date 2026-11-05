@@ -191,13 +191,36 @@ namespace FishMMO.Client
 		/// Everything a family's members must share, as one string: the shader, keywords, queue, passes, and every property not the
 		/// look's (values exactly, textures — the look arrays among them — by identity and tiling). Null when a property cannot be read.
 		/// </summary>
-		private string FamilyKey(Material clone) => FamilyKey(clone, lookKey);
-		public static string LookFamilyKey(Material material) => FamilyKey(material, new StringBuilder(1024));
-		private static string FamilyKey(Material clone, StringBuilder sb)
+		private static readonly Func<string, bool> SkipLook = TerrainLookMath.IsLookOrIgnored;
+		private static readonly Func<string, bool> SkipVegTable = TerrainVegTableMath.IsTableProperty;
+		private string FamilyKey(Material clone) => FamilyKey(clone, lookKey, SkipLook);
+		public static string LookFamilyKey(Material material) => FamilyKey(material, new StringBuilder(1024), SkipLook);
+
+		/// <summary>
+		/// A vegetation family's key (TerrainVegTableMath): everything as <see cref="ContentKey"/> but the table's own properties,
+		/// which its members may differ in. Null when a property cannot be read.
+		/// </summary>
+		public static string VegFamilyKey(Material material, StringBuilder sb) => material == null || material.shader == null ? null : FamilyKey(material, sb, SkipVegTable);
+
+		/// <summary>
+		/// Everything a material draws with, as one string: the shader, keywords, queue, passes, its RenderType tag and every
+		/// property (values exactly; textures by identity and tiling). Two materials with the same key draw identically, so one
+		/// clone can stand for both (<see cref="MergeIdenticalMaterials"/>). Null when a property cannot be read.
+		/// </summary>
+		public static string ContentKey(Material material, StringBuilder sb) => material == null || material.shader == null ? null : FamilyKey(material, sb, null);
+
+		/// <summary>The key of <paramref name="clone"/>: every property but those <paramref name="skip"/> names (none when null: the whole material).</summary>
+		private static string FamilyKey(Material clone, StringBuilder sb, Func<string, bool> skip)
 		{
+			// The RenderType tag a material may override (the look families predate it and keep their key as it was).
+			bool tagged = skip != SkipLook;
 			sb.Clear();
 			Shader shader = clone.shader;
 			sb.Append(shader.GetInstanceID()).Append('|').Append(clone.renderQueue).Append('|');
+			if (tagged)
+			{
+				sb.Append(clone.GetTag("RenderType", false)).Append('|');
+			}
 			// The shader's own keywords only: a stale one it no longer declares (the structure kit's _FISHSTRUCTURE_ON, 154 of the
 			// Structure_* materials) changes nothing it draws, so it must not split a family.
 			LocalKeyword[] enabled = clone.enabledKeywords;
@@ -221,7 +244,7 @@ namespace FishMMO.Client
 			for (int i = 0; i < count; i++)
 			{
 				string name = shader.GetPropertyName(i);
-				if (TerrainLookMath.IsLookOrIgnored(name))
+				if (skip != null && skip(name))
 				{
 					continue;
 				}

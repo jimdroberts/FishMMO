@@ -20,6 +20,8 @@ namespace FishMMO.TestHarness.World
             public int width, height, errors, grass, scatter, terrainCommands, terrainSubmissions, frames, targetFrameRate, vSyncCount;
             public bool development, clouds, batching, firstInstance, brg, brgActive;
             public int brgCameraCommands, brgLightCommands;
+            public bool scatterBrgActive;
+            public int scatterBrgCameraCommands, scatterBrgLightCommands, scatterVegFamilies;
             public string settings;
             public bool cachedShadows;
             public int shadowRefreshFrames, shadowRefreshCascades, shadowMergedFrames, staticShadowDraws, staticShadowCommandsOmitted;
@@ -77,6 +79,10 @@ namespace FishMMO.TestHarness.World
                 readbackBadStarts = CachedMainLightShadows.ReadbackBadStarts, readbacksLanded = CachedMainLightShadows.ReadbacksLanded,
                 staticShadowCommandsOmitted = CliffRockInstancing.Gpu != null ? CliffRockInstancing.Gpu.LastStaticShadowCommandsOmitted : 0,
                 brgLightCommands = CliffRockInstancing.Gpu != null ? CliffRockInstancing.Gpu.LastBrgLightCommands : 0,
+                scatterBrgActive = DetailScatterSystem.Renderer != null && DetailScatterSystem.Renderer.BrgActive,
+                scatterBrgCameraCommands = DetailScatterSystem.Renderer != null ? DetailScatterSystem.Renderer.LastBrgCameraCommands : 0,
+                scatterBrgLightCommands = DetailScatterSystem.Renderer != null ? DetailScatterSystem.Renderer.LastBrgLightCommands : 0,
+                scatterVegFamilies = DetailScatterSystem.Renderer != null ? DetailScatterSystem.Renderer.VegFamilyCount : 0,
                 clouds = SkySystem.CloudsReady, worldSeconds = world != null ? world.WorldSeconds : 0,
                 frames = sampleFrames.Count, frameMs = sampleFrames, targetFrameRate = Application.targetFrameRate, vSyncCount = QualitySettings.vSyncCount, worldSecondsStart = sampleClockStart };
             sampleName = null;
@@ -179,9 +185,21 @@ namespace FishMMO.TestHarness.World
             if (fpsTime >= 1) { fps = fpsFrames / fpsTime; fpsTime = 0; fpsFrames = 0; }
             if (Time.realtimeSinceStartup < reportAt) return;
             reportAt = Time.realtimeSinceStartup + 15;
+            ReportUnsupportedShaders();
             var world = FindAnyObjectByType<WorldSimController>();
             status = $"{SystemInfo.graphicsDeviceType} | {Screen.width}×{Screen.height} | {fps:F0} FPS | errors {errors}";
             Debug.Log($"[WebGPU Smoke] {status}; grass={GrassBladeSystem.LastDrawCount}; scatter={DetailScatterSystem.LastDrawCount}; terrainCommands={CliffRockInstancing.LastCommandCount}; brgActive={CliffRockInstancing.Gpu?.BrgActive}; clouds={SkySystem.CloudsReady}; clock={world?.WorldSeconds}");
+        }
+        // Every FishMMO shader loaded so far that this device cannot run (Shader.isSupported false: Unity draws nothing with it),
+        // once a name: a shader past a device limit (texture parameters, uniform buffers) is otherwise only a warning at load.
+        readonly System.Collections.Generic.HashSet<string> shadersChecked = new System.Collections.Generic.HashSet<string>();
+        void ReportUnsupportedShaders()
+        {
+            foreach (Shader shader in Resources.FindObjectsOfTypeAll<Shader>())
+            {
+                if (shader == null || !shader.name.Contains("FishMMO") || !shadersChecked.Add(shader.name)) continue;
+                if (!shader.isSupported) Debug.LogWarning($"[WebGPU Smoke] shader unsupported on this device: {shader.name}");
+            }
         }
         void OnGUI()
         {

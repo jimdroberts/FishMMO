@@ -14,17 +14,49 @@ import time
 
 
 def group_rss(pid):
-    total = 0
+    """Resident memory of the command's process group AND every process descended from it: a Unity editor started
+    through xvfb-run leaves the group, and counted by group alone it never showed (a 22 GB editor read as 66 MB)."""
+    parents, groups = {}, {}
     for entry in Path('/proc').iterdir():
         if not entry.name.isdigit():
             continue
         try:
-            if int((entry / 'stat').read_text().rsplit(')', 1)[1].split()[2]) != pid:
-                continue
-            total += next((int(line.split()[1]) * 1024 for line in (entry / 'status').read_text().splitlines() if line.startswith('VmRSS:')), 0)
+            fields = (entry / 'stat').read_text().rsplit(')', 1)[1].split()
+            parents[int(entry.name)] = int(fields[1])
+            groups[int(entry.name)] = int(fields[2])
+        except (OSError, ValueError, ProcessLookupError, IndexError):
+            pass
+    members = {p for p, g in groups.items() if g == pid}
+    members.add(pid)
+    grew = True
+    while grew:
+        grew = False
+        for p, parent in parents.items():
+            if parent in members and p not in members:
+                members.add(p)
+                grew = True
+    total = 0
+    for p in members:
+        try:
+            total += next((int(line.split()[1]) * 1024 for line in Path(f'/proc/{p}/status').read_text().splitlines() if line.startswith('VmRSS:')), 0)
         except (OSError, ValueError, ProcessLookupError):
             pass
     return total
+
+
+def descendants(pid):
+    parents = {}
+    for entry in Path('/proc').iterdir():
+        if entry.name.isdigit():
+            try:
+                parents[int(entry.name)] = int((entry / 'stat').read_text().rsplit(')', 1)[1].split()[1])
+            except (OSError, ValueError, ProcessLookupError, IndexError):
+                pass
+    found, frontier = set(), {pid}
+    while frontier:
+        frontier = {p for p, parent in parents.items() if parent in frontier and p not in found}
+        found |= frontier
+    return sorted(found)
 
 
 def main():
@@ -56,7 +88,15 @@ def main():
                 elif time.monotonic() - start > args.timeout:
                     stop = 'timeout'
                 if stop:
+                    # Descendants that left the group (an editor under xvfb-run) are signalled by pid, listed BEFORE the
+                    # group goes: a parent killed first orphans them and they are no longer found under it.
+                    escaped = descendants(process.pid)
                     os.killpg(process.pid, signal.SIGTERM)
+                    for child in escaped:
+                        try:
+                            os.kill(child, signal.SIGTERM)
+                        except OSError:
+                            pass
                     break
                 if args.gpu:
                     try:

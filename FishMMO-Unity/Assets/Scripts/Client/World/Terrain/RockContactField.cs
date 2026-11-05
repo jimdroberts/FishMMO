@@ -71,10 +71,43 @@ namespace FishMMO.Client
 		public const int TargetTriangles = 16000;
 
 		/// <summary>
-		/// Voxel–triangle tests drawn per frame while fields are being built: the slices of a shape a frame takes are as many
-		/// as fit (at least one). About what one 2500-triangle unsigned field cost in a frame before the fields were signed.
+		/// Voxel–triangle tests drawn per frame while a field the grid can already read is built (its nearest rock within
+		/// <see cref="NearDistance"/>): the slices of a shape a frame takes are as many as fit (at least one). 48 M cost 5.7 ms
+		/// of GPU a frame in the browser (2026-11-04), so this is about 1.4 ms, and a shape (some 300 M tests) takes a third of
+		/// a second.
 		/// </summary>
-		public const long BakeBudget = 48L * 1000 * 1000;
+		public const long BakeBudget = 12L * 1000 * 1000;
+
+		/// <summary>
+		/// The same while every field wanted near the grid is drawn and those left are only in the margin
+		/// (<see cref="DemandMarginXZ"/>): about 0.5 ms. Of 127 shapes wanted round the settlement test camera
+		/// (2026-11-05) the grid itself held none.
+		/// </summary>
+		public const long MarginBakeBudget = 4L * 1000 * 1000;
+
+		/// <summary>Metres from the camera to a shape's nearest rock box within which its field takes <see cref="BakeBudget"/>: half the grid's height, so inside the grid.</summary>
+		public static float NearDistance => GridCells.y * CellSize * 0.5f;
+
+		/// <summary>
+		/// Metres past the grid (each side, across; <see cref="DemandMarginY"/> up and down) within which a rock's shape is
+		/// wanted: only those fields are drawn, nearest the camera first. The gather never reads a field of a rock whose box
+		/// misses the grid, and a scene registers hundreds of shapes (500 in the settlement test scene, 2026-11-04) of which
+		/// the grid meets a few, so drawing every field cost 5.7 ms of GPU a frame for some 40 s after a scene loaded in the
+		/// browser. The wanted set is measured again once the camera has moved half a margin along any axis (the grid then
+		/// still lies inside the region it was measured for, so every field the gather can read is wanted), or the rocks
+		/// change (<see cref="DemandInterval"/>). A measurement reads a few columns of <see cref="RockBoxes"/> (0.03–0.5 ms
+		/// in the editor), so the margin is the lead a field gets to be drawn before the grid reaches it: 16 m of walking.
+		/// </summary>
+		public const float DemandMarginXZ = 32f;
+
+		/// <summary>The same up and down: the grid is half as tall, and the camera seldom climbs fast.</summary>
+		public const float DemandMarginY = 16f;
+
+		/// <summary>The margins as a vector (x, y, z).</summary>
+		public static Vector3 DemandMargin => new Vector3(DemandMarginXZ, DemandMarginY, DemandMarginXZ);
+
+		/// <summary>The fewest frames between two measurements of the wanted set taken because the rocks changed (streaming uploads).</summary>
+		public const int DemandInterval = 30;
 
 		/// <summary>The most looks (rock materials) a tag can carry: 12 bits over the shape's 20 (<see cref="TagOf"/>).</summary>
 		public const int MaxLooks = 4095;
@@ -98,6 +131,26 @@ namespace FishMMO.Client
 		private static int bakeTriangles;
 		private static readonly Dictionary<Mesh, int> shapeOf = new Dictionary<Mesh, int>();
 		private static readonly List<TerrainGpuRenderer> renderers = new List<TerrainGpuRenderer>();
+
+		/// <summary>
+		/// Per shape, the distance from <see cref="demandEye"/> to its nearest rock whose box meets the demand region
+		/// (+∞: none, its field is not wanted); what it was measured at, and the measurement's own cost for the diagnostics.
+		/// </summary>
+		private static float[] demand = new float[0];
+		private static Vector3 demandEye = new Vector3(float.NaN, float.NaN, float.NaN);
+		private static float demandReach = float.NaN, demandMs, boxesMs;
+		private static int demandWanted, boxesKey, boxesFrame = NeverGathered;
+
+		/// <summary>Far enough back that the first frame counts as an interval later (int.MinValue would overflow the subtraction).</summary>
+		private const int NeverGathered = -1000000;
+		private static readonly RockBoxes boxes = new RockBoxes();
+		private static bool loadLogged;
+
+		/// <summary>
+		/// Only the wanted fields are drawn (the default). Off, every shape's field is drawn as before, the wanted ones
+		/// first: the harness switch "rockDemand", for A/B runs and <see cref="CheckDemand"/>.
+		/// </summary>
+		public static bool DemandOnly = true;
 
 		private static ComputeShader compute;
 		private static int clearKernel = -1, gatherKernel = -1;
@@ -164,6 +217,13 @@ namespace FishMMO.Client
 			lookOf.Clear();
 			renderers.Clear();
 			bakeShape = -1;
+			demand = new float[0];
+			demandEye = new Vector3(float.NaN, float.NaN, float.NaN);
+			demandReach = float.NaN;
+			boxesKey = 0;
+			boxesFrame = NeverGathered;
+			boxes.Clear();
+			loadLogged = false;
 			Forget();
 		}
 
@@ -456,7 +516,7 @@ namespace FishMMO.Client
 			{
 				Bounds b = shapes[i].Bounds;
 				data[i * 3] = new Vector4(b.min.x, b.min.y, b.min.z, 1f);
-				data[i * 3 + 1] = new Vector4(b.size.x, b.size.y, b.size.z, shapes[i].Built ? 1f : 0f);
+				data[i * 3 + 1] = new Vector4(b.size.x, b.size.y, b.size.z, shapes[i].Built || listEveryShape ? 1f : 0f);
 				data[i * 3 + 2] = new Vector4(1f, 0f, 0f, 0f);
 			}
 			bricks.SetData(data);
@@ -477,7 +537,9 @@ namespace FishMMO.Client
 			Bounds b = s.Bounds;
 			int bx = bakeShape % BricksX, bz = bakeShape / BricksX;
 			long perSlice = (long)Brick * Brick * Mathf.Max(1, bakeTriangles);
-			int count = (int)Mathf.Clamp(BakeBudget / perSlice, 1, Brick - bakeSlice);
+			// Full budget for a field the grid can read now, a smaller one for those only in the margin.
+			bool near = bakeShape < demand.Length && demand[bakeShape] <= NearDistance;
+			int count = (int)Mathf.Clamp((near ? BakeBudget : MarginBakeBudget) / perSlice, 1, Brick - bakeSlice);
 			cmd.Clear();
 			cmd.SetGlobalBuffer(SdfPositionsId, bakePositions);
 			cmd.SetGlobalBuffer(SdfIndicesId, bakeIndices);
@@ -501,20 +563,119 @@ namespace FishMMO.Client
 			s.Built = true;
 			bricksDirty = true;
 			EndBake();
-			if (CountBuilt() == shapes.Count)
-			{
-				Debug.Log(Describe());
-			}
 		}
 
-		/// <summary>Reads the next unbuilt shape's mesh into the bake's buffers; false when every shape is built.</summary>
-		private static bool StartBake()
+		/// <summary>
+		/// Measures again which shapes' fields are wanted (<see cref="demand"/>) when the camera has moved half the
+		/// <see cref="DemandMargin"/> since, or the crevice width changed, from the rocks' boxes (<see cref="boxes"/>).
+		/// Those are gathered again when the rocks or shapes change, at most every <see cref="DemandInterval"/> frames
+		/// (uploads come in bursts as a scene's sets register).
+		/// </summary>
+		private static void RefreshDemand(Vector3 eye)
 		{
+			int rocksKey;
+			unchecked
+			{
+				rocksKey = 17 * 31 + shapes.Count;
+				foreach (TerrainGpuRenderer r in renderers)
+				{
+					rocksKey = rocksKey * 31 + (r != null ? r.RockVersion : 0);
+				}
+				rocksKey = rocksKey == 0 ? 1 : rocksKey;
+			}
+			bool regathered = false;
+			if (rocksKey != boxesKey && Time.frameCount - boxesFrame >= DemandInterval)
+			{
+				long gatherStart = System.Diagnostics.Stopwatch.GetTimestamp();
+				boxes.Clear();
+				foreach (TerrainGpuRenderer r in renderers)
+				{
+					r?.CollectRockBoxes(boxes);
+				}
+				boxesKey = rocksKey;
+				boxesFrame = Time.frameCount;
+				boxesMs = Milliseconds(gatherStart);
+				regathered = true;
+			}
+			Vector3 half = DemandMargin * 0.5f;
+			// A NaN eye (never measured) fails every comparison, so counts as moved.
+			bool kept = Mathf.Abs(eye.x - demandEye.x) <= half.x && Mathf.Abs(eye.y - demandEye.y) <= half.y && Mathf.Abs(eye.z - demandEye.z) <= half.z;
+			if (!regathered && kept && demand.Length >= shapes.Count && crevice.x == demandReach)
+			{
+				return;
+			}
+			long start = System.Diagnostics.Stopwatch.GetTimestamp();
+			if (demand.Length < shapes.Count)
+			{
+				demand = new float[Mathf.Max(shapes.Count, demand.Length * 2)];
+			}
+			for (int i = 0; i < demand.Length; i++)
+			{
+				demand[i] = float.PositiveInfinity;
+			}
+			boxes.Fold(RockFieldDemand.Region(eye, new Vector3(GridCells.x, GridCells.y, GridCells.z) * CellSize, CellSize, DemandMargin), eye, crevice.x, demand);
+			demandWanted = 0;
 			for (int i = 0; i < shapes.Count; i++)
 			{
-				if (shapes[i].Built)
+				demandWanted += float.IsPositiveInfinity(demand[i]) ? 0 : 1;
+			}
+			demandEye = eye;
+			demandReach = crevice.x;
+			demandMs = Milliseconds(start);
+		}
+
+		private static float Milliseconds(long since) =>
+			(float)((System.Diagnostics.Stopwatch.GetTimestamp() - since) * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
+
+		/// <summary>A registered shape's local box (its field's brick), false for none.</summary>
+		public static bool ShapeBox(int shape, out Vector3 centre, out Vector3 half)
+		{
+			if (shape < 0 || shape >= shapes.Count)
+			{
+				centre = half = Vector3.zero;
+				return false;
+			}
+			Bounds b = shapes[shape].Bounds;
+			centre = b.center;
+			half = b.extents;
+			return true;
+		}
+
+		/// <summary>
+		/// Reads the mesh of the nearest wanted shape not yet built (<see cref="demand"/>) into the bake's buffers; false
+		/// when every wanted shape is built.
+		/// </summary>
+		private static bool StartBake()
+		{
+			while (true)
+			{
+				int i = -1;
+				float nearest = float.PositiveInfinity;
+				for (int k = 0, n = Mathf.Min(shapes.Count, demand.Length); k < n; k++)
 				{
-					continue;
+					if (!shapes[k].Built && demand[k] < nearest)
+					{
+						nearest = demand[k];
+						i = k;
+					}
+				}
+				if (i < 0 && !DemandOnly)
+				{
+					// Every field, as before demand: the rest in registration order.
+					for (int k = 0; k < shapes.Count && i < 0; k++)
+					{
+						i = shapes[k].Built ? -1 : k;
+					}
+				}
+				if (i < 0)
+				{
+					if (!loadLogged && demandWanted > 0)
+					{
+						// The first time everything wanted is drawn: how long a joining player waits for the crevices.
+						loadLogged = true;
+						Debug.Log($"{Describe()}; every wanted field drawn by frame {Time.frameCount}, {Time.realtimeSinceStartup:F1} s");
+					}
+					return false;
 				}
 				Shape s = shapes[i];
 				if (s.Mesh == null || !s.Mesh.isReadable)
@@ -552,7 +713,6 @@ namespace FishMMO.Client
 				bakeSlice = 0;
 				return true;
 			}
-			return false;
 		}
 
 		/// <summary>Lets the bake's mesh go (Unity defers the free until the draws recorded with it are done).</summary>
@@ -587,10 +747,15 @@ namespace FishMMO.Client
 				return;
 			}
 			EnsureAtlas();
-			BuildNext();
+			Camera camera = Camera.main;
+			if (camera != null)
+			{
+				// Only the fields the grid round this camera can read, nearest first.
+				RefreshDemand(camera.transform.position);
+				BuildNext();
+			}
 			UploadBricks();
 
-			Camera camera = Camera.main;
 			if (camera == null)
 			{
 				Shader.SetGlobalVector(GridDimsGlobalId, Vector4.zero);
@@ -681,9 +846,86 @@ namespace FishMMO.Client
 		internal static float Reach => crevice.x;
 		internal static int RockLayer { get; private set; }
 
+		/// <summary>
+		/// For the harness's demand check: every shape counts as built in the gather's table, drawn or not, so the grid lists
+		/// every rock that reaches it (the gather reads a field's built flag, never its texels, to list a rock). The crevices
+		/// and fillets read unbuilt fields meanwhile: a probe's frame or two only.
+		/// </summary>
+		public static bool ListEveryShape
+		{
+			get => listEveryShape;
+			set
+			{
+				if (listEveryShape != value)
+				{
+					listEveryShape = value;
+					bricksDirty = true;
+				}
+			}
+		}
+
+		private static bool listEveryShape;
+
+		/// <summary>A listed rock as FishRockField.compute writes it (FishRock: 7 float4); brickSize.w is its shape.</summary>
+		private struct ListedRock
+		{
+			public Vector4 Row0, Row1, Row2, Origin, BrickMin, BrickSize, Flags;
+		}
+
+		/// <summary>
+		/// For the harness (ScenePerfProbe FISHMMO_PERF_ROCK_DEMAND_CHECK): the shapes of the rocks the gather last listed
+		/// into the grid, read back (a stall), against the wanted set. Meaningful with <see cref="ListEveryShape"/> on: the
+		/// gather lists a rock only once its field is built.
+		/// </summary>
+		public static string CheckDemand()
+		{
+			if (list == null || listCount == null)
+			{
+				return "no grid";
+			}
+			var count = new uint[1];
+			listCount.GetData(count);
+			int n = (int)Mathf.Min(count[0], ListCapacity);
+			var rocks = new ListedRock[Mathf.Max(1, n)];
+			list.GetData(rocks, 0, 0, n);
+			var listed = new HashSet<int>();
+			for (int i = 0; i < n; i++)
+			{
+				listed.Add(Mathf.RoundToInt(rocks[i].BrickSize.w));
+			}
+			var missing = new List<int>();
+			foreach (int shape in listed)
+			{
+				if (shape < 0 || shape >= demand.Length || float.IsPositiveInfinity(demand[shape]))
+				{
+					missing.Add(shape);
+				}
+			}
+			missing.Sort();
+			// How many more shapes the 64 m columns want than the rocks themselves (1 m columns: as good as rock by rock).
+			var fine = new RockBoxes(1f);
+			foreach (TerrainGpuRenderer r in renderers)
+			{
+				r?.CollectRockBoxes(fine);
+			}
+			var fineNear = new float[Mathf.Max(1, shapes.Count)];
+			for (int i = 0; i < fineNear.Length; i++)
+			{
+				fineNear[i] = float.PositiveInfinity;
+			}
+			fine.Fold(RockFieldDemand.Region(demandEye, new Vector3(GridCells.x, GridCells.y, GridCells.z) * CellSize, CellSize, DemandMargin), demandEye, crevice.x, fineNear);
+			int fineWanted = 0;
+			for (int i = 0; i < shapes.Count; i++)
+			{
+				fineWanted += float.IsPositiveInfinity(fineNear[i]) ? 0 : 1;
+			}
+			return $"rock by rock {fineWanted} wanted; listed {count[0]} rocks{(count[0] > ListCapacity ? " (over capacity)" : "")} of {listed.Count} shapes; {demandWanted} wanted at {demandEye}; " +
+				$"listed but NOT wanted: {missing.Count}{(missing.Count > 0 ? " (" + string.Join(", ", missing) + ")" : "")}; fields built {CountBuilt()}/{shapes.Count}";
+		}
+
 		/// <summary>One line for the diagnostics.</summary>
 		public static string Describe() =>
-			$"[Rock crevices] {(on ? "on" : "off")}, {shapes.Count} shape(s) ({CountBuilt()} built), {renderers.Count} renderer(s), atlas {(atlas != null ? $"{atlas.width}×{atlas.height}×{atlas.volumeDepth}" : "none")}";
+			$"[Rock crevices] {(on ? "on" : "off")}, {shapes.Count} shape(s) ({CountBuilt()} built, {demandWanted} wanted round the camera{(DemandOnly ? "" : ", every field drawn")}; {boxes.Rocks} rocks in {boxes.Count} boxes gathered in {boxesMs:F2} ms, wanted measured in {demandMs:F3} ms), {renderers.Count} renderer(s), atlas {(atlas != null ? $"{atlas.width}×{atlas.height}×{atlas.volumeDepth}" : "none")}";
 
 		private static int CountBuilt()
 		{
@@ -718,6 +960,181 @@ namespace FishMMO.Client
 				atlas.Release();
 				Object.Destroy(atlas);
 				atlas = null;
+			}
+		}
+	}
+
+	/// <summary>
+	/// The pure parts of <see cref="RockContactField"/>'s demand (which fields its grid can read), apart from its engine
+	/// objects so tests outside Unity reach them.
+	/// </summary>
+	public static class RockFieldDemand
+	{
+		/// <summary>
+		/// The box a rock must meet for its field to be wanted, measured at <paramref name="eye"/>: every grid of
+		/// <paramref name="gridExtent"/> metres the gather can place round a camera within half the
+		/// <paramref name="margin"/> of it along each axis (its corner snapped down to a <paramref name="cellSize"/> cell),
+		/// grown by that half again.
+		/// </summary>
+		public static Bounds Region(Vector3 eye, Vector3 gridExtent, float cellSize, Vector3 margin)
+		{
+			var region = new Bounds();
+			region.SetMinMax(eye - gridExtent * 0.5f - Vector3.one * cellSize - margin, eye + gridExtent * 0.5f + margin);
+			return region;
+		}
+
+		/// <summary>
+		/// A rock's world box as the gather builds it (FishRockField.compute FishRockGather), before the crevice reach: its
+		/// shape's local box through the instance, the centre moved and the half-extents through |M| (exactly the box of
+		/// the moved corners).
+		/// </summary>
+		public static void WorldBox(in FishInstance instance, Vector3 localCentre, Vector3 localHalf, out Vector3 lo, out Vector3 hi)
+		{
+			Vector4 r0 = instance.Row0, r1 = instance.Row1, r2 = instance.Row2;
+			var centre = new Vector3(
+				r0.x * localCentre.x + r0.y * localCentre.y + r0.z * localCentre.z + r0.w,
+				r1.x * localCentre.x + r1.y * localCentre.y + r1.z * localCentre.z + r1.w,
+				r2.x * localCentre.x + r2.y * localCentre.y + r2.z * localCentre.z + r2.w);
+			var extent = new Vector3(
+				Mathf.Abs(r0.x) * localHalf.x + Mathf.Abs(r0.y) * localHalf.y + Mathf.Abs(r0.z) * localHalf.z,
+				Mathf.Abs(r1.x) * localHalf.x + Mathf.Abs(r1.y) * localHalf.y + Mathf.Abs(r1.z) * localHalf.z,
+				Mathf.Abs(r2.x) * localHalf.x + Mathf.Abs(r2.y) * localHalf.y + Mathf.Abs(r2.z) * localHalf.z);
+			lo = centre - extent;
+			hi = centre + extent;
+		}
+
+		/// <summary>
+		/// The distance from <paramref name="eye"/> to the box [<paramref name="lo"/>, <paramref name="hi"/>] grown by
+		/// <paramref name="reach"/>, or +∞ when that box misses <paramref name="region"/>.
+		/// </summary>
+		public static float BoxDistance(Vector3 lo, Vector3 hi, float reach, Bounds region, Vector3 eye)
+		{
+			Vector3 grow = new Vector3(reach, reach, reach), min = region.min, max = region.max;
+			lo -= grow;
+			hi += grow;
+			if (hi.x < min.x || hi.y < min.y || hi.z < min.z || lo.x > max.x || lo.y > max.y || lo.z > max.z)
+			{
+				return float.PositiveInfinity;
+			}
+			float dx = Mathf.Max(0f, Mathf.Max(lo.x - eye.x, eye.x - hi.x));
+			float dy = Mathf.Max(0f, Mathf.Max(lo.y - eye.y, eye.y - hi.y));
+			float dz = Mathf.Max(0f, Mathf.Max(lo.z - eye.z, eye.z - hi.z));
+			return Mathf.Sqrt(dx * dx + dy * dy + dz * dz);
+		}
+	}
+
+	/// <summary>
+	/// The rocks' world boxes, gathered once when the rocks change and kept by shape in <see cref="Cell"/> m columns (by
+	/// each box's centre): one box per shape and column, the union of its rocks' boxes. Measuring which shapes a region
+	/// wants then reads the few columns round it, not every rock. A union box meets the region whenever one of its rocks
+	/// does, and lies no farther from the eye, so the shapes wanted are every one the rocks themselves want (and a few
+	/// more), nearest first.
+	/// </summary>
+	public sealed class RockBoxes
+	{
+		/// <summary>The columns' side, metres, unless a <see cref="RockBoxes(float)"/> says otherwise.</summary>
+		public const float DefaultCell = 64f;
+
+		/// <summary>This set's column side, metres.</summary>
+		public readonly float Cell;
+
+		public RockBoxes(float cell = DefaultCell)
+		{
+			Cell = Mathf.Max(0.01f, cell);
+		}
+
+		private struct Entry
+		{
+			public int Shape;
+			public Vector3 Lo, Hi;
+		}
+
+		private readonly List<Entry> entries = new List<Entry>();
+		private readonly Dictionary<(long Column, int Shape), int> entryOf = new Dictionary<(long Column, int Shape), int>();
+		private readonly Dictionary<long, List<int>> columns = new Dictionary<long, List<int>>();
+		private readonly Stack<List<int>> spare = new Stack<List<int>>();
+
+		/// <summary>The largest half-width (x or z) of any box added: a union keyed to a column lies within it grown by this.</summary>
+		private float maxHalf;
+
+		/// <summary>Rocks added since the last <see cref="Clear"/>.</summary>
+		public int Rocks { get; private set; }
+
+		/// <summary>Union boxes held (shape × column).</summary>
+		public int Count => entries.Count;
+
+		public void Clear()
+		{
+			entries.Clear();
+			entryOf.Clear();
+			foreach (List<int> list in columns.Values)
+			{
+				list.Clear();
+				spare.Push(list);
+			}
+			columns.Clear();
+			maxHalf = 0f;
+			Rocks = 0;
+		}
+
+		private static long ColumnKey(int x, int z) => ((long)x << 32) | (uint)z;
+
+		public void Add(int shape, Vector3 lo, Vector3 hi)
+		{
+			Rocks++;
+			Vector3 centre = (lo + hi) * 0.5f;
+			maxHalf = Mathf.Max(maxHalf, Mathf.Max(hi.x - centre.x, hi.z - centre.z));
+			long column = ColumnKey(Mathf.FloorToInt(centre.x / Cell), Mathf.FloorToInt(centre.z / Cell));
+			if (entryOf.TryGetValue((column, shape), out int at))
+			{
+				Entry e = entries[at];
+				e.Lo = Vector3.Min(e.Lo, lo);
+				e.Hi = Vector3.Max(e.Hi, hi);
+				entries[at] = e;
+				return;
+			}
+			if (!columns.TryGetValue(column, out List<int> list))
+			{
+				list = spare.Count > 0 ? spare.Pop() : new List<int>();
+				columns[column] = list;
+			}
+			entryOf[(column, shape)] = entries.Count;
+			list.Add(entries.Count);
+			entries.Add(new Entry { Shape = shape, Lo = lo, Hi = hi });
+		}
+
+		/// <summary>
+		/// Folds into <paramref name="near"/>, per shape, the least <see cref="RockFieldDemand.BoxDistance"/> of its union
+		/// boxes from <paramref name="eye"/> among those (grown by <paramref name="reach"/>) that meet <paramref name="region"/>.
+		/// </summary>
+		public void Fold(Bounds region, Vector3 eye, float reach, float[] near)
+		{
+			float grow = maxHalf + reach;
+			Vector3 min = region.min, max = region.max;
+			int x0 = Mathf.FloorToInt((min.x - grow) / Cell), x1 = Mathf.FloorToInt((max.x + grow) / Cell);
+			int z0 = Mathf.FloorToInt((min.z - grow) / Cell), z1 = Mathf.FloorToInt((max.z + grow) / Cell);
+			for (int x = x0; x <= x1; x++)
+			{
+				for (int z = z0; z <= z1; z++)
+				{
+					if (!columns.TryGetValue(ColumnKey(x, z), out List<int> list))
+					{
+						continue;
+					}
+					foreach (int at in list)
+					{
+						Entry e = entries[at];
+						if (e.Shape < 0 || e.Shape >= near.Length)
+						{
+							continue;
+						}
+						float d = RockFieldDemand.BoxDistance(e.Lo, e.Hi, reach, region, eye);
+						if (d < near[e.Shape])
+						{
+							near[e.Shape] = d;
+						}
+					}
+				}
 			}
 		}
 	}

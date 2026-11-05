@@ -812,6 +812,30 @@ void FishApplyPaths(inout FishArraySurface s, float2 uv, float2 uvPerMetre, floa
 /// baker writes it on every platform, rather than through UnpackNormalScale, whose layout follows the platform's
 /// normal-map encoding).
 /// </summary>
+/* Cheaper ground, chosen from a browser A/B (2026-11-05; the owner picked these over the old look):
+ * - the strongest FISH_TERRAIN_DEFAULT_LAYERS (3) layers a pixel are blended, the next one's weight taken off the kept ones
+ *   (as the fifth is off the four, so a layer's edge stays continuous): only a three-way junction's faintest layer goes;
+ * - the layers' normal and mask maps fade out between FISH_TERRAIN_DETAIL_FAR (40 to 80 m) and are not fetched past it
+ *   (far ground takes flat detail and its layers' slider smoothness and AO).
+ * Globals override both (unset, 0, means these defaults): _FishTerrainMaxLayers 2, 3 or 4 (4: every layer, the old look);
+ * _FishTerrainDetailFar xy from and to, metres (y < 0: never faded, the old look). The harness's terrainLayers and
+ * terrainFarDetail set them for A/B. */
+#define FISH_TERRAIN_DEFAULT_LAYERS 3.0
+#define FISH_TERRAIN_DETAIL_FAR float2(40.0, 80.0)
+float _FishTerrainMaxLayers;
+float4 _FishTerrainDetailFar;
+
+/// <summary>The n-th largest of four weights (1-based), 0 for n outside 1..4.</summary>
+half FishNthLargestWeight(half4 w, int n)
+{
+    // A sorting network, largest first.
+    half a = max(w.x, w.y), b = min(w.x, w.y), c = max(w.z, w.w), d = min(w.z, w.w);
+    half s0 = max(a, c), s3 = min(b, d);
+    half m0 = min(a, c), m1 = max(b, d);
+    half s1 = max(m0, m1), s2 = min(m0, m1);
+    return n == 1 ? s1 : n == 2 ? s2 : n == 3 ? s3 : 0.0h;
+}
+
 void FishSampleLayerPlane(int id, float2 layerUV, float2 dx, float2 dy, bool hasMasks, bool hasNormals, half hasMask, half normalScale,
     out half4 albedo, out half4 mask, out half3 normal)
 {
@@ -916,10 +940,24 @@ FishArraySurface FishSampleArraySurfaceSloped(float2 uv, float3 positionWS, floa
     int4 ids;
     half covered;
     half4 weights = FishTopLayers(uv, ids, covered);
+    // Only the strongest few layers (3 unless _FishTerrainMaxLayers says otherwise), the next one's weight taken off the rest.
+    float maxLayers = _FishTerrainMaxLayers > 0.5 ? _FishTerrainMaxLayers : FISH_TERRAIN_DEFAULT_LAYERS;
+    UNITY_BRANCH
+    if (maxLayers > 0.5 && maxLayers < 3.5)
+    {
+        half4 kept = max(weights - FishNthLargestWeight(weights, (int)maxLayers), 0.0h);
+        half keptTotal = dot(kept, 1.0h);
+        weights = keptTotal > 1e-4h ? kept / keptTotal : weights;
+    }
 
     float2 world = positionWS.xz;
-    bool hasNormals = _FishArrayInfo.z > 0.5;
-    bool hasMasks = _FishArrayInfo.w > 0.5;
+    // The layers' normal and mask maps faded out with distance and not fetched past its end (40 to 80 m unless the global says).
+    float2 detailFar = _FishTerrainDetailFar.y != 0.0 ? _FishTerrainDetailFar.xy : FISH_TERRAIN_DETAIL_FAR;
+    half detailNear = detailFar.y > 0.0
+        ? (half)(1.0 - smoothstep(detailFar.x, detailFar.y, distance(positionWS, _WorldSpaceCameraPos.xyz)))
+        : 1.0h;
+    bool hasNormals = _FishArrayInfo.z > 0.5 && detailNear > 0.0h;
+    bool hasMasks = _FishArrayInfo.w > 0.5 && detailNear > 0.0h;
 
     /* How much the ground is taken from the side, and from which: the planes facing x and z, by the share of each in the
      * triangle's own facing. A cliff across the heightmap's grid is a staircase of triangles facing x and z by turns;
@@ -983,7 +1021,7 @@ FishArraySurface FishSampleArraySurfaceSloped(float2 uv, float3 positionWS, floa
             layerMaskOffset[k] = FishLayerRow(id, FISH_LAYER_ROW_MASK_OFFSET);
             layerMaskScale[k] = FishLayerRow(id, FISH_LAYER_ROW_MASK_SCALE);
             layerFlora[k] = FishLayerRow(id, FISH_LAYER_ROW_FLORA);
-            hasMask[k] = (half)layerSurface[k].z;
+            hasMask[k] = (half)layerSurface[k].z * detailNear;
             half normalScale = (half)layerTint[k].a;
             float2 layerUV = world * st.xy + st.zw;
             float2 dx = worldDx * st.xy;
@@ -1022,6 +1060,7 @@ FishArraySurface FishSampleArraySurfaceSloped(float2 uv, float3 positionWS, floa
             albedo[k] = a;
             masks[k] = m;
             normals[k] = normalize(detail + half3(0.0h, 0.0h, 1e-4h));
+            normals[k] = detailNear < 1.0h ? normalize(lerp(half3(0.0h, 0.0h, 1.0h), normals[k], detailNear) + half3(0.0h, 0.0h, 1e-4h)) : normals[k];
         }
         masks[k] = masks[k] * (half4)layerMaskScale[k] + (half4)layerMaskOffset[k];
     }
@@ -1030,7 +1069,10 @@ FishArraySurface FishSampleArraySurfaceSloped(float2 uv, float3 positionWS, floa
     UNITY_BRANCH
     if (_FishGpuHeightBlend > 0.5)
     {
-        FishHeightBlend(weights, half4(masks[0].b, masks[1].b, masks[2].b, masks[3].b));
+        // Faded with the masks it reads (_FishTerrainDetailFar; detailNear is 1 when that is off, as it was).
+        half4 heightBlended = weights;
+        FishHeightBlend(heightBlended, half4(masks[0].b, masks[1].b, masks[2].b, masks[3].b));
+        weights = detailNear < 1.0h ? lerp(weights, heightBlended, detailNear) : heightBlended;
     }
 #elif defined(_TERRAIN_BLEND_HEIGHT)
     FishHeightBlend(weights, half4(masks[0].b, masks[1].b, masks[2].b, masks[3].b));

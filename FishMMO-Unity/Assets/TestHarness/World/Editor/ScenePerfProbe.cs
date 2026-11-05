@@ -29,7 +29,7 @@ namespace FishMMO.TestHarness.World.Editor
 	/// <remarks>
 	/// Launched by <c>memory/tools/perfrun.sh</c> as a GUI editor under xvfb (play mode needs presented frames).
 	/// Environment: FISHMMO_PERF_OUT (report folder), FISHMMO_SCENE (scene path; Flo Monolith), FISHMMO_PERF_VIEWS
-	/// (meadow,fall,overview; also edge, skyline, grass-*, and "at" with FISHMMO_PERF_AT="x,y,z,yaw"), FISHMMO_PERF_VARIANTS ("all", "none" or a comma list), FISHMMO_PERF_RES (2560x1440),
+	/// (meadow,fall,overview; also edge, skyline, grass-*, and "at" with FISHMMO_PERF_AT="x,y,z,yaw[,pitch]"), FISHMMO_PERF_VARIANTS ("all", "none" or a comma list), FISHMMO_PERF_RES (2560x1440),
 	/// FISHMMO_PERF_SETTLE (seconds before the first measurement; 45). Writes ScenePerf-report.txt and a PNG per view.
 	/// </remarks>
 	public static class ScenePerfProbe
@@ -242,6 +242,10 @@ namespace FishMMO.TestHarness.World.Editor
 			// FISHMMO_PERF_FAMILIES=0: the props' per-family tally off (it formats a string per command drawn, ~0.25 ms of
 			// TerrainGpuRenderer.Draws at a 600-command view), for CPU timings of the draws themselves.
 			TerrainGpuRenderer.CountFamilies = Environment.GetEnvironmentVariable("FISHMMO_PERF_FAMILIES") != "0";
+			// FISHMMO_PERF_RUN_GATHER=0: the props' work gathered by chunk, as before TerrainGpuRenderer.RunGather.
+			TerrainGpuRenderer.RunGather = Environment.GetEnvironmentVariable("FISHMMO_PERF_RUN_GATHER") != "0";
+			// FISHMMO_PERF_ROCK_DEMAND=0: every rock field drawn, as before RockContactField.DemandOnly; the demand check needs them all.
+			RockContactField.DemandOnly = Environment.GetEnvironmentVariable("FISHMMO_PERF_ROCK_DEMAND") != "0";
 			// FISHMMO_PERF_UNITY_TERRAIN=1: the whole run with Unity's terrain drawing the ground (TerrainHeightmapSystem off), the
 			// before of the client's own heightmap draw at the same views; the `unityterrain` variant is the same A/B within a run.
 			TerrainHeightmapSystem.Override = Environment.GetEnvironmentVariable("FISHMMO_PERF_UNITY_TERRAIN") == "1" ? false : (bool?)null;
@@ -653,7 +657,8 @@ namespace FishMMO.TestHarness.World.Editor
 						parts[1] = parts[1].Trim().Substring(1);
 					}
 					eye = new Vector3(F(0), F(1) + (aboveGround ? GroundAt(F(0), F(2)) : 0f), F(2));
-					look = eye + Quaternion.Euler(0f, F(3), 0f) * Vector3.forward * 10f;
+					// An optional fifth value pitches the view down (degrees): "x,y,z,yaw,pitch".
+					look = eye + Quaternion.Euler(F(4), F(3), 0f) * Vector3.forward * 10f;
 					break;
 				}
 				case "cloud-overview":
@@ -1348,6 +1353,19 @@ namespace FishMMO.TestHarness.World.Editor
 					}
 				}
 				return () => changed.ForEach(c => c.Material.SetVector("_FishBackdropDetail", c.Was));
+			}
+			if (variant.StartsWith("grassdist="))
+			{
+				// The grass distance, metres, over the player's setting (ClientGrassSettings, default 200).
+				float was = GrassBladeSystem.DistanceOverride;
+				GrassBladeSystem.DistanceOverride = float.Parse(variant.Substring("grassdist=".Length), System.Globalization.CultureInfo.InvariantCulture);
+				return () => GrassBladeSystem.DistanceOverride = was;
+			}
+			if (variant == "grasshide")
+			{
+				// The blades generated as ever but not drawn: the generation's cost apart from the drawing's.
+				GrassBladeRenderer.HideDraws = true;
+				return () => GrassBladeRenderer.HideDraws = false;
 			}
 			if (variant.StartsWith("grass:") || variant.StartsWith("grassrings="))
 			{
@@ -2255,6 +2273,91 @@ namespace FishMMO.TestHarness.World.Editor
 				string.Join("; ", families.OrderByDescending(p => p.Value).Take(12).Select(p => p.Key + "=" + p.Value));
 		}
 
+		/// <summary>
+		/// TerrainGpuRenderer.RunGather against the chunk gather, at this view in this frame: renders with it off, then on, and
+		/// compares every command's instance count. Exact means every command that drew anything off is still submitted on,
+		/// with the same count. A main-view instance whose sphere met the view while its grown box did not would show as a
+		/// count change in the main view (drawing no pixel either way); any loss is listed.
+		/// </summary>
+		/// <summary>
+		/// Every shape counted as built for two frames (RockContactField.ListEveryShape: the gather then lists every rock
+		/// reaching the grid, whether its field is drawn or not), the grid gathered at this camera and read back: every
+		/// shape it lists must be one the demand wants, or drawing only the wanted fields changes the image.
+		/// </summary>
+		private static string RockDemandCheck()
+		{
+			if (camera == null)
+			{
+				return "no camera";
+			}
+			RockContactField.ListEveryShape = true;
+			try
+			{
+				camera.Render();
+				camera.Render();
+				return $"{RockContactField.CheckDemand()} (camera {camera.transform.position}, main {(Camera.main == camera ? "yes" : "NO")})";
+			}
+			finally
+			{
+				RockContactField.ListEveryShape = false;
+			}
+		}
+
+		private static string RunGatherCheck()
+		{
+			TerrainGpuRenderer props = CliffRockInstancing.Gpu;
+			if (props == null || camera == null)
+			{
+				return "no props renderer";
+			}
+			bool was = TerrainGpuRenderer.RunGather;
+			(bool[] Wanted, int[] View, uint[] Instances)? Capture(bool on)
+			{
+				TerrainGpuRenderer.RunGather = on;
+				camera.Render();
+				camera.Render();
+				return props.CaptureCommands();
+			}
+			var off = Capture(false);
+			var on = Capture(true);
+			var offAgain = Capture(false);
+			TerrainGpuRenderer.RunGather = was;
+			if (off == null || on == null || offAgain == null || off.Value.Instances.Length != on.Value.Instances.Length || off.Value.Instances.Length != offAgain.Value.Instances.Length)
+			{
+				return "capture failed or the layout changed";
+			}
+			var a = off.Value;
+			var b = on.Value;
+			int[] wantedOff = new int[2], wantedOn = new int[2], lostCommands = new int[2], changed = new int[2], drift = new int[2];
+			long[] lostInstances = new long[2], instancesOff = new long[2], instancesOn = new long[2];
+			var lost = new List<string>();
+			for (int c = 0; c < a.Instances.Length; c++)
+			{
+				int v = a.View[c];
+				// Frame-to-frame noise in the reference: off twice should agree.
+				drift[v] += a.Instances[c] != offAgain.Value.Instances[c] ? 1 : 0;
+				wantedOff[v] += a.Wanted[c] ? 1 : 0;
+				wantedOn[v] += b.Wanted[c] ? 1 : 0;
+				uint drawnOff = a.Wanted[c] ? a.Instances[c] : 0u;
+				uint drawnOn = b.Wanted[c] ? b.Instances[c] : 0u;
+				instancesOff[v] += drawnOff;
+				instancesOn[v] += drawnOn;
+				if (drawnOff > 0 && !b.Wanted[c])
+				{
+					lostCommands[v]++;
+					lostInstances[v] += drawnOff;
+					if (lost.Count < 8) lost.Add($"{(v == 0 ? "main" : "shadow")} #{c} {drawnOff}");
+				}
+				else if (drawnOff != drawnOn)
+				{
+					changed[v]++;
+				}
+			}
+			return $"main wanted {wantedOff[0]} -> {wantedOn[0]}, instances {instancesOff[0]} -> {instancesOn[0]}, lost {lostCommands[0]} ({lostInstances[0]} inst), changed {changed[0]}, off-vs-off drift {drift[0]}; " +
+				$"shadow wanted {wantedOff[1]} -> {wantedOn[1]}, instances {instancesOff[1]} -> {instancesOn[1]}, lost {lostCommands[1]} ({lostInstances[1]} inst), changed {changed[1]}, off-vs-off drift {drift[1]}" +
+				(lost.Count > 0 ? "; lost: " + string.Join(", ", lost) : "");
+		}
+
 		private static string DrawSources()
 		{
 			int cascades = (GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset)?.shadowCascadeCount ?? 1;
@@ -2437,6 +2540,17 @@ namespace FishMMO.TestHarness.World.Editor
 			}
 			report.Add(DescribeFog());
 			report.Add($"  props drawn: {CliffRockInstancing.DescribeDraws()}");
+			report.Add($"  props wanted: {CliffRockInstancing.DescribeWanted()}");
+			if (Environment.GetEnvironmentVariable("FISHMMO_PERF_RUN_GATHER_CHECK") == "1")
+			{
+				report.Add($"  run gather check: {RunGatherCheck()}");
+			}
+			report.Add($"  {RockContactField.Describe()}");
+			report.Add($"  grass: {GrassBladeSystem.Describe()}");
+			if (Environment.GetEnvironmentVariable("FISHMMO_PERF_ROCK_DEMAND_CHECK") == "1")
+			{
+				report.Add($"  rock demand check: {RockDemandCheck()}");
+			}
 			report.Add($"  ambient life: {AmbientLifeSystem.DescribeWork()}");
 			report.Add($"  shadow cascades: {ShadowCascadeCulling.LastReport}");
 			report.Add($"  {TerrainHeightmapSystem.Report}");

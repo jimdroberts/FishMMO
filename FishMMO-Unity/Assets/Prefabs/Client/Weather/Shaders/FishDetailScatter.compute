@@ -31,6 +31,7 @@
 #pragma kernel FishScatterGenerate
 #pragma kernel FishScatterFinalize
 #pragma kernel FishScatterArgsFence
+#pragma kernel FishScatterPack
 #pragma use_dxc vulkan
 
 #define SCATTER_ITEM_SIDE 8
@@ -388,6 +389,52 @@ uint ScatterSelectLevel(float d, float height, uint levels, out float fade, out 
     return level;
 }
 
+// ── The BatchRendererGroup path (DetailScatterRenderer.Brg.cs; the layout is TerrainBrgMath's) ──
+// The batch buffer: every generated instance's DOTS matrices (unity_ObjectToWorld, unity_WorldToObject, column-major float3x4) at
+// its instance index, written as it is emitted. The eighth storage buffer of the generate kernel (WebGPU's limit a stage); a
+// one-word buffer and _ScatterDotsOn 0 while the scatter draws with RenderMeshIndirect.
+RWByteAddressBuffer _ScatterDotsOut;
+uint _ScatterDotsOn;
+uint _ScatterDotsObjectToWorld;
+uint _ScatterDotsWorldToObject;
+
+void ScatterStoreDots(uint address, float4 row0, float4 row1, float4 row2)
+{
+    // Column j is (row0[j], row1[j], row2[j]); four columns of three, the translation (w) last (FishTerrainInstancing.compute FishStoreDots).
+    _ScatterDotsOut.Store4(address +  0, asuint(float4(row0.x, row1.x, row2.x, row0.y)));
+    _ScatterDotsOut.Store4(address + 16, asuint(float4(row1.y, row2.y, row0.z, row1.z)));
+    _ScatterDotsOut.Store4(address + 32, asuint(float4(row2.z, row0.w, row1.w, row2.w)));
+}
+
+void ScatterEmitDots(uint index, FishInstance i)
+{
+    uint at = index * 48u;
+    ScatterStoreDots(_ScatterDotsObjectToWorld + at, i.row0, i.row1, i.row2);
+    // The inverse of T·R·S with orthogonal columns c: row k of inverse(R·S) is c_k / |c_k|², and its translation -that·t.
+    float3 c0 = float3(i.row0.x, i.row1.x, i.row2.x);
+    float3 c1 = float3(i.row0.y, i.row1.y, i.row2.y);
+    float3 c2 = float3(i.row0.z, i.row1.z, i.row2.z);
+    float3 i0 = c0 / dot(c0, c0);
+    float3 i1 = c1 / dot(c1, c1);
+    float3 i2 = c2 / dot(c2, c2);
+    float3 t = float3(i.row0.w, i.row1.w, i.row2.w);
+    ScatterStoreDots(_ScatterDotsWorldToObject + at, float4(i0, -dot(i0, t)), float4(i1, -dot(i1, t)), float4(i2, -dot(i2, t)));
+}
+
+// A visible entry as DOTS instancing reads it: the instance index in the low 24 bits, the LOD fade as a signed byte in the high 8
+// (FishTerrainInstancing.compute FishPackFade, TerrainBrgMath.PackVisible: the middle of the fade's 4x4 pattern step).
+uint ScatterPackVisible(FishVisible v)
+{
+    int q = 0;
+    if (v.lodFade != 0.0)
+    {
+        float steps = ceil(16.0 * min(abs(v.lodFade), 1.0));
+        q = (int)round((steps - 0.5) * (127.0 / 16.0));
+        q = v.lodFade < 0.0 ? -q : q;
+    }
+    return (v.index & 0xFFFFFFu) | (((uint)q & 0xFFu) << 24);
+}
+
 void ScatterEmit(uint slot, FishInstance instance, float fade)
 {
     uint at;
@@ -400,6 +447,10 @@ void ScatterEmit(uint slot, FishInstance instance, float fade)
         v.index = s.x + at;
         v.lodFade = fade;
         _ScatterVisibleOut[s.x + at] = v;
+        if (_ScatterDotsOn != 0u)
+        {
+            ScatterEmitDots(s.x + at, instance);
+        }
     }
 }
 
@@ -683,11 +734,30 @@ void FishScatterArgsFence(uint3 id : SV_DispatchThreadID)
     }
 }
 
+// The generated visible lists packed for the batch group (ScatterPackVisible), every slot's run at its base: after each
+// generation, one group a slot.
+RWByteAddressBuffer _ScatterPackedOut;
+
+[numthreads(64, 1, 1)]
+void FishScatterPack(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
+{
+    uint slot = group.x;
+    if (slot >= _ScatterSlotCount) return;
+    uint2 region = _ScatterSlots[slot];
+    uint count = min(_ScatterCounts.Load(slot * 4u), region.y);
+    for (uint i = thread.x; i < count; i += 64u)
+    {
+        _ScatterPackedOut.Store((region.x + i) * 4u, ScatterPackVisible(_ScatterVisibleOut[region.x + i]));
+    }
+}
+
 // Visibility is refreshed independently of generation: cached candidates may become visible again next frame.
-// Seven storage buffers; shadow lists and their counts are copied without camera occlusion.
+// Seven storage buffers, and the eighth the culled list packed for the batch group (a one-word buffer while it is off);
+// shadow lists and their counts are copied without camera occlusion.
 #include "FishHiZOcclusion.hlsl"
 RWStructuredBuffer<FishVisible> _ScatterCulledVisible;
 RWByteAddressBuffer _ScatterCulledCounts;
+RWByteAddressBuffer _ScatterCulledPacked;
 [numthreads(64, 1, 1)]
 void FishScatterCull(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
 {
@@ -716,6 +786,10 @@ void FishScatterCull(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
             uint at;
             _ScatterCulledCounts.InterlockedAdd(slot * 4u, 1u, at);
             _ScatterCulledVisible[region.x + at] = visible;
+            if (_ScatterDotsOn != 0u)
+            {
+                _ScatterCulledPacked.Store((region.x + at) * 4u, ScatterPackVisible(visible));
+            }
         }
     }
 }

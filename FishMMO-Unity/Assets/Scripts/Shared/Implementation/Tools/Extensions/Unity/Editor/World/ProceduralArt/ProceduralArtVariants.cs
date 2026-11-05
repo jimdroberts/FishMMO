@@ -98,6 +98,30 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public const string LookTableKeyword = "_FISH_LOOK_TABLE";
 
+		/// <summary>
+		/// A vegetation family's keyword (FishMMO.Client TerrainVegTableMath.Keyword): the detail scatter draws the alpha-tested
+		/// FishMMO/Vegetation kinds of one structure through one runtime material with it on (DetailScatterRenderer.VegFamilies),
+		/// so every alpha-tested vegetation set is listed with it too, for the pass types that declare it (all four).
+		/// </summary>
+		public const string VegTableKeyword = "_FISH_VEG_TABLE";
+
+		/// <summary>True when a material of this shader and these keywords may join a vegetation family (FishMMO/Vegetation, alpha-tested).</summary>
+		public static bool JoinsVegFamily(string shader, IEnumerable<string> keywords)
+		{
+			if (!string.Equals(shader, "FishMMO/Vegetation", StringComparison.Ordinal) || keywords == null)
+			{
+				return false;
+			}
+			foreach (string raw in keywords)
+			{
+				if (raw?.Trim() == "_ALPHATEST_ON")
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
 		/// <summary>Keywords that keep a material out of every look family (FishMMO.Client TerrainLookMath.BlockingKeywords; a test pins them equal).</summary>
 		public static readonly string[] LookBlockingKeywords =
 		{
@@ -269,13 +293,19 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					bool looks = JoinsLookFamily(material.Keywords);
+					bool veg = JoinsVegFamily(material.Shader, material.Keywords);
 					foreach (KeyValuePair<PassType, HashSet<string>> pass in passes)
 					{
 						set.Add(new Variant(twin, pass.Key, JoinKeywords(material.Keywords, pass.Value)));
 						// The same set as a look family's material draws it, where this pass type declares the table (ForwardLit).
 						if (looks && pass.Value != null && pass.Value.Contains(LookTableKeyword))
 						{
-							set.Add(new Variant(twin, pass.Key, JoinKeywords(WithLook(material.Keywords), pass.Value)));
+							set.Add(new Variant(twin, pass.Key, JoinKeywords(WithKeyword(material.Keywords, LookTableKeyword), pass.Value)));
+						}
+						// And as a vegetation family's material draws it (every pass type of FishMMO/Vegetation Indirect declares it).
+						if (veg && pass.Value != null && pass.Value.Contains(VegTableKeyword))
+						{
+							set.Add(new Variant(twin, pass.Key, JoinKeywords(WithKeyword(material.Keywords, VegTableKeyword), pass.Value)));
 						}
 					}
 				}
@@ -285,13 +315,13 @@ namespace FishMMO.Shared.WorldDesign
 			return list;
 		}
 
-		private static IEnumerable<string> WithLook(IReadOnlyList<string> keywords)
+		private static IEnumerable<string> WithKeyword(IReadOnlyList<string> keywords, string added)
 		{
 			foreach (string k in keywords)
 			{
 				yield return k;
 			}
-			yield return LookTableKeyword;
+			yield return added;
 		}
 
 		/// <summary>The keywords trimmed, kept only where <paramref name="declared"/> has them (all when null), deduplicated, ordinal-sorted and space-joined.</summary>

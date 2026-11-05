@@ -14,6 +14,9 @@ const port = Number(process.env.FISHMMO_WEBGPU_DEBUG_PORT || 9229);
 const views = {
   forest:[-1082.901245,513.39331,429.819427,-1082.901245,513.39331,445.819427],
   settlement:[1970.555176,191.37265,-1600.95056,1850.555176,126.37264,-1480.95056],
+  // The forest view pitched down to the ground before it (the near grass and the ground's layers).
+  'forest-down':[-1082.901245,513.39331,429.819427,-1082.901245,503.39331,445.819427],
+  'settlement-close':[1885.555176,144.37264,-1515.95056,1850.555176,126.37264,-1480.95056],
 };
 fs.mkdirSync(path.dirname(file), {recursive:true});
 const tabs = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
@@ -48,7 +51,7 @@ try {
     function ensure(dev){if(!device){device=dev;qs=device.createQuerySet({type:'timestamp',count:CAP})}}
     D.createCommandEncoder=function(...a){ensure(this);return orig.cce.apply(this,a)};
     function wrap(kind,o){return function(desc={}){if(!qs||desc.timestampWrites||index+2>CAP){skipped++;return o.call(this,desc)}
-      const rec={kind,label:desc.label||'',i:index,pipes:new Map()};index+=2;open.push(rec);
+      const depthOnly=kind==='render'&&!(desc.colorAttachments||[]).some(Boolean);const rec={kind:depthOnly?'render (depth only)':kind,label:desc.label||'',i:index,pipes:new Map()};index+=2;open.push(rec);
       const p=o.call(this,{...desc,timestampWrites:{querySet:qs,beginningOfPassWriteIndex:rec.i,endOfPassWriteIndex:rec.i+1}});passOf.set(p,rec);return p}}
     E.beginRenderPass=wrap('render',orig.brp);E.beginComputePass=wrap('compute',orig.bcp);
     function tally(o){return function(p){const r=passOf.get(this);if(r){const l=p.label||'?';r.pipes.set(l,(r.pipes.get(l)||0)+1)}return o.call(this,p)}}

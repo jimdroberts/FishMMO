@@ -592,6 +592,9 @@ namespace FishMMO.Client
 		/// Chooses this camera's patches (FishTerrainClear + FishTerrainSelect) and draws them: the solid list, the holed one where
 		/// a tile with holes is in view, and both again as shadow casters when the main light casts. Returns the draws issued.
 		/// </summary>
+		private int appliedQueue = int.MinValue;
+		private Material appliedTo;
+
 		public int Draw(ScriptableRenderContext context, Camera camera, ComputeShader compute, CommandBuffer cmd, int selectKernel, int clearKernel, int fenceKernel)
 		{
 			if (!Built || camera == null)
@@ -608,6 +611,13 @@ namespace FishMMO.Client
 				return 0;
 			}
 
+			// The queue the harness asks for (−1: the shader's); the getter reports the shader's queue for −1, so the last one set is kept.
+			if (solid != null && (appliedQueue != TerrainHeightmapSystem.QueueOverride || appliedTo != solid))
+			{
+				solid.renderQueue = holed.renderQueue = TerrainHeightmapSystem.QueueOverride;
+				appliedQueue = TerrainHeightmapSystem.QueueOverride;
+				appliedTo = solid;
+			}
 			Vector3 eye = camera.transform.position;
 			bool orthographic = camera.orthographic;
 			float bias = TerrainHeightmapMath.LodBias(ClientTerrainLod.HeightmapPixelError, camera.pixelHeight, camera.fieldOfView, orthographic,

@@ -258,6 +258,9 @@ namespace FishMMO.Client
 				}
 				float far = TerrainTreeMath.MaxDistance(chunk.Bounds, eye);
 				bool allInRange = far <= drawDistance;
+				// Kept for its shadows alone: no instance of it can reach the main view while the list is kept
+				// (TerrainGpuRenderer.RunGather).
+				bool keptInView = !TerrainGpuRenderer.RunGather || TerrainGpuMath.MainReachable(widened ? reuse.ViewPlanes : view.Planes, chunk.Bounds, MaxSize(in chunk));
 				for (int r = chunk.FirstRun, end = chunk.FirstRun + chunk.RunCount; r < end; r++)
 				{
 					Run run = Runs[r];
@@ -274,7 +277,7 @@ namespace FishMMO.Client
 						float nearLevelHeight = TerrainTreeMath.RelativeHeight(run.MaxSize, wideNear, factor, view.Orthographic);
 						float farLevelHeight = TerrainTreeMath.RelativeHeight(run.MinSize, far + slack, factor, view.Orthographic);
 						int mask = TerrainGpuMath.LevelMask(nearLevelHeight, farLevelHeight, model.Transitions, model.FadeWidths, view.MaximumLodLevel);
-						gpu.AddWork(GpuOffset + run.Start, run.Count, model.GpuId, drawDistance, lodBiasMultiplier, mask, view.Shadows && near - slack <= view.ShadowDistance);
+						gpu.AddWork(GpuOffset + run.Start, run.Count, model.GpuId, drawDistance, lodBiasMultiplier, mask, view.Shadows && near - slack <= view.ShadowDistance, mainCandidate: keptInView);
 						gathered += run.Count;
 						continue;
 					}
@@ -333,6 +336,17 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>Whether a chunk at <paramref name="near"/> metres is in view, or casts a shadow that can reach it.</summary>
+		/// <summary>The largest instance of a chunk's runs (world metres).</summary>
+		private float MaxSize(in Chunk chunk)
+		{
+			float size = 0f;
+			for (int r = chunk.FirstRun, end = chunk.FirstRun + chunk.RunCount; r < end; r++)
+			{
+				size = Mathf.Max(size, Runs[r].MaxSize);
+			}
+			return size;
+		}
+
 		private static bool Sees(Plane[] viewPlanes, Plane[] shadowPlanes, in View view, Bounds bounds, float near)
 		{
 			if (TerrainTreeMath.IntersectsFrustum(viewPlanes, bounds))

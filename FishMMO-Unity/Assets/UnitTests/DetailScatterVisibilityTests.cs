@@ -49,6 +49,8 @@ namespace FishMMO.UnitTests
 				visible.SetData(sourceVisible);
 				using var output = new GraphicsBuffer(GraphicsBuffer.Target.Structured, 8, 8);
 				using var outputCounts = new GraphicsBuffer(GraphicsBuffer.Target.Raw, 6, 4);
+				// The culled list packed as the batch group reads it (DetailScatterRenderer.Brg.cs): resident index | fade byte.
+				using var packed = new GraphicsBuffer(GraphicsBuffer.Target.Raw, 8, 4);
 				int clear = shader.FindKernel("FishScatterClear"), cull = shader.FindKernel("FishScatterCull");
 				shader.SetInt("_ScatterSlotCount", 6);
 				var view = Matrix4x4.Scale(new Vector3(1, 1, -1));
@@ -65,6 +67,7 @@ namespace FishMMO.UnitTests
 				shader.SetBuffer(cull, "_ScatterCounts", counts); shader.SetBuffer(cull, "_ScatterInstancesOut", instances);
 				shader.SetBuffer(cull, "_ScatterVisibleOut", visible); shader.SetBuffer(cull, "_ScatterCulledVisible", output);
 				shader.SetBuffer(cull, "_ScatterCulledCounts", outputCounts); shader.SetBuffer(clear, "_ScatterCounts", outputCounts);
+				shader.SetBuffer(cull, "_ScatterCulledPacked", packed); shader.SetInt("_ScatterDotsOn", 1);
 				void Refresh(bool useDepth)
 				{
 					shader.SetVector("_FishHiZParams", new Vector4(8, 8, 1, useDepth ? 1 : 0));
@@ -76,6 +79,9 @@ namespace FishMMO.UnitTests
 				Assert.That(actualCounts[1], Is.EqualTo(2), "camera occlusion never clips the source shadow list");
 				Assert.That(actual[0].Index, Is.InRange(0u, 1u));
 				Assert.That(actual[0].Fade, Is.EqualTo(sourceVisible[actual[0].Index].Fade), "LOD crossfade preserved");
+				var actualPacked = new uint[8]; packed.GetData(actualPacked);
+				for (int i = 0; i < actualCounts[0]; i++)
+					Assert.That(actualPacked[i], Is.EqualTo(TerrainBrgMath.PackVisible(actual[i].Index, actual[i].Fade)), $"packed entry {i} is the culled entry as DOTS reads it");
 				// A cached source can reappear without any regeneration of positions or density.
 				Refresh(false); outputCounts.GetData(actualCounts); Assert.That(actualCounts[0], Is.EqualTo(2));
 				sourceInstances[1] = FishInstance.From(Matrix4x4.Translate(new Vector3(0, 0, 4)));
@@ -85,6 +91,40 @@ namespace FishMMO.UnitTests
 				var unchangedVisible = new Visible[8]; visible.GetData(unchangedVisible); CollectionAssert.AreEqual(sourceVisible, unchangedVisible);
 			}
 			finally { Object.DestroyImmediate(shader); Object.DestroyImmediate(texture); }
+		}
+
+		[Test]
+		public void ThePack_WritesEachSlotsGeneratedList_AsTheBatchGroupReadsIt()
+		{
+			if (!SystemInfo.supportsComputeShaders || SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
+				Assert.Ignore("Requires a real GPU");
+			var shader = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ShaderPath));
+			try
+			{
+				using var slots = new GraphicsBuffer(GraphicsBuffer.Target.Structured, 2, 8);
+				slots.SetData(new[] { new Region { Start = 0, Capacity = 3 }, new Region { Start = 5, Capacity = 2 } });
+				using var counts = new GraphicsBuffer(GraphicsBuffer.Target.Raw, 2, 4);
+				// Slot 1 overflowed: only its capacity is packed.
+				counts.SetData(new uint[] { 3u, 9u });
+				using var visible = new GraphicsBuffer(GraphicsBuffer.Target.Structured, 8, 8);
+				var source = new Visible[8];
+				for (uint i = 0; i < 8; i++) source[i] = new Visible { Index = 100 + i, Fade = i % 3 == 0 ? 0f : (i % 2 == 0 ? -0.4f : 0.7f) };
+				visible.SetData(source);
+				using var packed = new GraphicsBuffer(GraphicsBuffer.Target.Raw, 8, 4);
+				var untouched = new uint[8]; for (int i = 0; i < 8; i++) untouched[i] = 0xDEADBEEFu;
+				packed.SetData(untouched);
+				int pack = shader.FindKernel("FishScatterPack");
+				shader.SetInt("_ScatterSlotCount", 2);
+				shader.SetBuffer(pack, "_ScatterSlots", slots); shader.SetBuffer(pack, "_ScatterCounts", counts);
+				shader.SetBuffer(pack, "_ScatterVisibleOut", visible); shader.SetBuffer(pack, "_ScatterPackedOut", packed);
+				shader.Dispatch(pack, 2, 1, 1);
+				var actual = new uint[8]; packed.GetData(actual);
+				foreach (int i in new[] { 0, 1, 2, 5, 6 })
+					Assert.That(actual[i], Is.EqualTo(TerrainBrgMath.PackVisible(source[i].Index, source[i].Fade)), $"entry {i}");
+				foreach (int i in new[] { 3, 4, 7 })
+					Assert.That(actual[i], Is.EqualTo(0xDEADBEEFu), $"entry {i} lies outside every slot's filled run");
+			}
+			finally { Object.DestroyImmediate(shader); }
 		}
 
 		[Test, Timeout(600000)]

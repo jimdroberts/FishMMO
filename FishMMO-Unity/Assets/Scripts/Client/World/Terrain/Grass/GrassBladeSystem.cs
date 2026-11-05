@@ -88,6 +88,18 @@ namespace FishMMO.Client
 		private static bool enabled = true;
 		private static int syncedFrame = -1;
 		private static float grassDistance = ClientGrassSettings.DefaultDistance;
+		private static float distanceOverride;
+
+		/// <summary>Diagnosis and A/B (the harness's grassDistance): the grass distance, metres, over the player's setting; 0 gives it back.</summary>
+		public static float DistanceOverride
+		{
+			get => distanceOverride;
+			set
+			{
+				distanceOverride = Mathf.Max(0f, value);
+				OnGrassSettingsChanged();
+			}
+		}
 		private static readonly HashSet<string> warned = new HashSet<string>();
 		/// <summary>The next frame to look for terrains' array sets while any taken terrain has none (a binder loads its set by address).</summary>
 		private static int arraysCheckAt;
@@ -238,7 +250,7 @@ namespace FishMMO.Client
 			RenderPipelineManager.beginContextRendering += OnBeginContextRendering;
 			RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
 			Application.quitting += Shutdown;
-			grassDistance = ClientGrassSettings.Distance;
+			OnGrassSettingsChanged();
 			ClientGrassSettings.OnChanged += OnGrassSettingsChanged;
 			BiomeRegistry.Changed += OnBiomesChanged;
 #if UNITY_EDITOR
@@ -279,7 +291,7 @@ namespace FishMMO.Client
 			Unhook();
 		}
 
-		private static void OnGrassSettingsChanged() => grassDistance = ClientGrassSettings.Distance;
+		private static void OnGrassSettingsChanged() => grassDistance = distanceOverride > 0f ? distanceOverride : ClientGrassSettings.Distance;
 
 		/// <summary>A biome registered (or left): terrains taken while a prototype's biome was missing are taken again.</summary>
 		private static void OnBiomesChanged()

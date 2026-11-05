@@ -385,6 +385,9 @@ namespace FishMMO.Client
 		/// <summary>Debug: every blade drawn bright magenta, so procedural blades can be told from mesh grass at a glance.</summary>
 		public static bool Highlight;
 
+		/// <summary>Diagnosis: the blades are generated as ever but not drawn (the harness's "hide" A/B of what each feature costs a frame).</summary>
+		public static bool HideDraws;
+
 		/// <summary>
 		/// Debug: stop regenerating and keep drawing the last blades generated (whichever camera made them).
 		/// A flicker that goes on while frozen is in the drawing or lighting; one that stops is in the generation or culling.
@@ -1557,6 +1560,10 @@ namespace FishMMO.Client
 			{
 				bool shadowSlot = slot >= 3;
 				if (shadowSlot && shadowDistance <= 0f)
+				{
+					continue;
+				}
+				if (HideDraws)
 				{
 					continue;
 				}

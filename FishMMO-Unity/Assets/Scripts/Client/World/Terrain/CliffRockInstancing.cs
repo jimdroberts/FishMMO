@@ -45,6 +45,13 @@ namespace FishMMO.Client
 			public int Start;
 			public int Count;
 			public float MinSize, MaxSize;
+			/// <summary>
+			/// Every instance's mesh box, pivot and LOD reference point: the kernel's distances (draw distance from the pivot, level
+			/// from the reference point, shadow reach from the sphere's centre, the box's) all lie within it (TerrainGpuRenderer.RunGather).
+			/// </summary>
+			public Bounds Bounds;
+			/// <summary>The largest of its instances' culling spheres (the kernel's: the mesh box's half-diagonal times the largest scale).</summary>
+			public float Radius;
 			public WorldHlod.Range[] HlodRanges;
 		}
 
@@ -113,11 +120,13 @@ namespace FishMMO.Client
 		private static Vector3 gatheredEye, gatheredForward, gatheredLight;
 		private static float gatheredFov, gatheredAspect, gatheredReach, gatheredShadow, gatheredLodBias;
 		private static int gatheredVersion = -1, gatheredHlodRevision = -1;
+		private static bool gatheredRunGather;
 		private static readonly Plane[] widened = new Plane[6];
 
 		private static bool StillGathered(Camera camera, in TerrainTreeField.View view, float drawDistance)
 		{
 			if (gatheredFor != camera || gatheredVersion != drivenVersion || gatheredHlodRevision != WorldHlod.Revision || gatheredReach != drawDistance || gatheredShadow != view.ShadowDistance
+				|| gatheredRunGather != TerrainGpuRenderer.RunGather
 				|| gatheredFov != camera.fieldOfView || gatheredAspect != camera.aspect || gatheredLodBias != QualitySettings.lodBias)
 			{
 				return false;
@@ -151,6 +160,9 @@ namespace FishMMO.Client
 
 		/// <summary>What the props' last culling drew (TerrainGpuRenderer.DescribeDraws), for probes.</summary>
 		public static string DescribeDraws() => gpu != null ? gpu.DescribeDraws() : "not on the GPU path";
+
+		/// <summary>The last camera's wanted commands and how many drew nothing (TerrainGpuRenderer.DescribeWanted; a stall).</summary>
+		public static string DescribeWanted() => gpu != null ? gpu.DescribeWanted() : "not on the GPU path";
 
 		// ── Hook ──────────────────────────────────────────────────────
 
@@ -448,6 +460,19 @@ namespace FishMMO.Client
 						run.MinSize = Mathf.Min(run.MinSize, model.Size * scale);
 						run.MaxSize = Mathf.Max(run.MaxSize, model.Size * scale);
 						Bounds b = TerrainTreeMath.TransformBounds(m, model.LocalBounds);
+						float sphere = gpu != null && gpu.FloraMode > 0.5f ? TerrainGpuRenderer.FloraSphereRadius(model.LocalBounds) : model.LocalBounds.extents.magnitude;
+						run.Radius = Mathf.Max(run.Radius, sphere * Mathf.Max(scale, m.GetColumn(2).magnitude));
+						Bounds own = b;
+						own.Encapsulate(m.GetColumn(3));
+						own.Encapsulate(m.MultiplyPoint3x4(model.LocalReference));
+						if (at - 1 == run.Start)
+						{
+							run.Bounds = own;
+						}
+						else
+						{
+							run.Bounds.Encapsulate(own);
+						}
 						if (any)
 						{
 							chunk.Bounds.Encapsulate(b);
@@ -692,9 +717,17 @@ namespace FishMMO.Client
 			public int Start, Count, Model, Mask;
 			public float Reach;
 			public bool Shadow;
+			/// <summary>Whether its chunk meets the widened view (else it is gathered for its shadows alone).</summary>
+			public bool InView;
 			public WorldHlod.Group Group;
 		}
 		private static readonly List<PendingWork> pending = new List<PendingWork>();
+
+		/// <summary>A run's own part of the GPU work list (TerrainGpuRenderer.RunGather, TerrainGpuMath.RunCandidates): false when it has nothing to draw.</summary>
+		private static bool RunWork(Plane[] planes, in TerrainTreeField.View view, Run run, float slack, float reach,
+			out float near, out float far, out bool main, out bool shadow)
+			=> TerrainGpuMath.RunCandidates(planes, run.Bounds, run.MaxSize, run.Radius, view.Position, slack, reach,
+				view.Shadows, view.LightDirection, view.ShadowDistance, RegatherDegrees, out near, out far, out main, out shadow);
 
 		/// <summary>Walks every chunk for a camera: the GPU work list (against a widened view) and the CPU path's buckets.</summary>
 		private static void Gather(Camera camera, in TerrainTreeField.View view, bool onGpu, bool reflection, float drawDistance)
@@ -761,17 +794,23 @@ namespace FishMMO.Client
 						}
 						if (onGpu && d.GpuOffset >= 0)
 						{
-							float nearHeight = TerrainTreeMath.RelativeHeight(run.MaxSize, near, view.ScreenFactor, view.Orthographic);
-							float farHeight = TerrainTreeMath.RelativeHeight(run.MinSize, far, view.ScreenFactor, view.Orthographic);
+							float runNear = near, runFar = far;
+							bool mainCandidate = true, shadowCandidate = view.Shadows && near <= view.ShadowDistance;
+							if (TerrainGpuRenderer.RunGather && !RunWork(planes, in view, run, slack, reach, out runNear, out runFar, out mainCandidate, out shadowCandidate))
+							{
+								continue;
+							}
+							float nearHeight = TerrainTreeMath.RelativeHeight(run.MaxSize, runNear, view.ScreenFactor, view.Orthographic);
+							float farHeight = TerrainTreeMath.RelativeHeight(run.MinSize, runFar, view.ScreenFactor, view.Orthographic);
 							int mask = TerrainGpuMath.LevelMask(nearHeight, farHeight, model.Transitions, model.FadeWidths, view.MaximumLodLevel);
 							// Thinned out (dithered, by position) over the last share of its reach: a stand thins away rather than ending at a line.
 							if (!WorldHlod.HasCandidates)
-							{ gpu.AddWork(d.GpuOffset + run.Start, run.Count, model.GpuId, reach, 1f, mask, view.Shadows && near <= view.ShadowDistance, reach * (1f - ThinShare), 0f); continue; }
+							{ gpu.AddWork(d.GpuOffset + run.Start, run.Count, model.GpuId, reach, 1f, mask, shadowCandidate, reach * (1f - ThinShare), 0f, mainCandidate); continue; }
 							int commands = 0; foreach (var part in model.Levels[model.Levels.Length - 1].Parts) commands += part.Params.Length;
 							foreach (var range in run.HlodRanges)
 							{
 								WorldHlod.Account(model.GpuId, range.Count, commands, range.Group);
-								pending.Add(new PendingWork { Start = d.GpuOffset + range.Start, Count = range.Count, Model = model.GpuId, Mask = mask, Reach = reach, Shadow = view.Shadows && near <= view.ShadowDistance, Group = range.Group });
+								pending.Add(new PendingWork { Start = d.GpuOffset + range.Start, Count = range.Count, Model = model.GpuId, Mask = mask, Reach = reach, Shadow = shadowCandidate, Group = range.Group, InView = mainCandidate });
 							}
 							continue;
 						}
@@ -788,7 +827,7 @@ namespace FishMMO.Client
 				PendingWork previous = default; bool any = false, previousMain = true;
 				foreach (var work in pending)
 				{
-					bool main = work.Group == null || !work.Group.Selected;
+					bool main = (work.Group == null || !work.Group.Selected) && work.InView;
 					if (any && previous.Start + previous.Count == work.Start && previous.Model == work.Model && previous.Reach == work.Reach && previous.Mask == work.Mask && previous.Shadow == work.Shadow && previousMain == main) { previous.Count += work.Count; continue; }
 					if (any) gpu.AddWork(previous.Start, previous.Count, previous.Model, previous.Reach, 1f, previous.Mask, previous.Shadow, previous.Reach * (1f - ThinShare), 0f, previousMain);
 					previous = work; previousMain = main; any = true;
@@ -808,6 +847,7 @@ namespace FishMMO.Client
 				gatheredReach = drawDistance;
 				gatheredShadow = view.ShadowDistance;
 				gatheredLodBias = QualitySettings.lodBias;
+				gatheredRunGather = TerrainGpuRenderer.RunGather;
 			}
 			else
 			{

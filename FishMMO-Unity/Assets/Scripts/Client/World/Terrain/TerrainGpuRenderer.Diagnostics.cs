@@ -79,6 +79,92 @@ namespace FishMMO.Client
 			return sb.ToString();
 		}
 
+		/// <summary>
+		/// The last camera's wanted commands against what its culling filled, read back now (a stall: for probes, not the game):
+		/// per view, how many were wanted and how many of those drew no instance at all (each still a draw the CPU pays for),
+		/// and the model families with the most empty ones.
+		/// </summary>
+		public string DescribeWanted()
+		{
+			if (argsBuffer == null || commands.Count == 0)
+			{
+				return "no draws";
+			}
+			AsyncGPUReadbackRequest request = AsyncGPUReadback.Request(argsBuffer);
+			request.WaitForCompletion();
+			if (request.hasError)
+			{
+				return "readback failed";
+			}
+			NativeArray<GraphicsBuffer.IndirectDrawIndexedArgs> args = request.GetData<GraphicsBuffer.IndirectDrawIndexedArgs>();
+			var wanted = new int[2];
+			var empty = new int[2];
+			var single = new int[2];
+			var emptyBy = new Dictionary<string, int>();
+			foreach (int c in wantedCommands)
+			{
+				if (c >= args.Length)
+				{
+					continue;
+				}
+				int view = commands[c].View == 0 ? 0 : 1;
+				wanted[view]++;
+				uint n = args[c].instanceCount;
+				single[view] += n == 1 ? 1 : 0;
+				if (n == 0)
+				{
+					empty[view]++;
+					string name = models[commands[c].Model].Name ?? "?";
+					int cut = name.IndexOf('_');
+					string key = (view == 0 ? "main " : "shadow ") + (cut > 0 ? name.Substring(0, cut) : name) + " L" + commands[c].Level;
+					emptyBy[key] = (emptyBy.TryGetValue(key, out int e) ? e : 0) + 1;
+				}
+			}
+			var sb = new StringBuilder();
+			sb.Append($"main wanted {wanted[0]} empty {empty[0]} single {single[0]}; shadow wanted {wanted[1]} empty {empty[1]} single {single[1]}; empty by family:");
+			foreach (KeyValuePair<string, int> pair in emptyBy.OrderByDescending(p => p.Value).Take(12))
+			{
+				sb.Append($" {pair.Key} {pair.Value}");
+			}
+			return sb.ToString();
+		}
+
+		/// <summary>
+		/// The last camera's commands as its culling filled them, read back now (a stall: for probes): per command, whether it
+		/// was wanted (submitted), its view (0 main) and its instance count. Null when there is nothing to read.
+		/// </summary>
+		public (bool[] Wanted, int[] View, uint[] Instances)? CaptureCommands()
+		{
+			if (argsBuffer == null || commands.Count == 0)
+			{
+				return null;
+			}
+			AsyncGPUReadbackRequest request = AsyncGPUReadback.Request(argsBuffer);
+			request.WaitForCompletion();
+			if (request.hasError)
+			{
+				return null;
+			}
+			NativeArray<GraphicsBuffer.IndirectDrawIndexedArgs> args = request.GetData<GraphicsBuffer.IndirectDrawIndexedArgs>();
+			int n = Mathf.Min(commands.Count, args.Length);
+			var wanted = new bool[n];
+			var view = new int[n];
+			var instances = new uint[n];
+			foreach (int c in wantedCommands)
+			{
+				if (c < n)
+				{
+					wanted[c] = true;
+				}
+			}
+			for (int c = 0; c < n; c++)
+			{
+				view[c] = commands[c].View == 0 ? 0 : 1;
+				instances[c] = args[c].instanceCount;
+			}
+			return (wanted, view, instances);
+		}
+
 		private sealed class Snapshot
 		{
 			public Vector3 Eye;
@@ -242,7 +328,7 @@ namespace FishMMO.Client
 						continue;
 					}
 					modelOfIndex[item.Start + (uint)i] = (int)item.Model;
-					TerrainGpuMath.Cull(inst.ToMatrix(), in m.Data, item.DrawDistance, item.LodBiasMultiplier, snap.Eye, snap.Planes, snap.Light, snap.Lod, emits);
+					TerrainGpuMath.Cull(inst.ToMatrix(), in m.Data, item.DrawDistance, item.LodBiasMultiplier, snap.Eye, snap.Planes, snap.Light, snap.Lod, emits, (item.Padding & 1u) == 0u);
 					foreach (TerrainGpuMath.Emit e in emits)
 					{
 						expected[TerrainGpuMath.Slot((int)m.Data.SlotBase, e.Level, e.View)]++;

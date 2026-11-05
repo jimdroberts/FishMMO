@@ -117,6 +117,10 @@ namespace FishMMO.Client
 			public int WorkInstances;
 			/// <summary>Its shape in the rock crevice field (<see cref="RockContactField"/>), −1 when it is not a rock taking part.</summary>
 			public int RockShape = -1;
+
+			/// <summary>Whether <see cref="HideFamilies"/> hides it, as of <see cref="HideVersion"/>.</summary>
+			public bool Hidden;
+			public int HideVersion = -1;
 			/// <summary>Its look there (<see cref="RockContactField.RegisterLook"/>: its material, which its seam fillets wear), −1 none.</summary>
 			public int RockLook = -1;
 		}
@@ -217,6 +221,35 @@ namespace FishMMO.Client
 		public int LastPrimeCommands { get; private set; }
 		public int LastShadowCommands { get; private set; }
 
+		/// <summary>
+		/// Whether the gatherers decide a run's main-view candidacy, levels and shadow candidacy from the run's own bounds
+		/// (CliffRockInstancing: one model's instances in a chunk; TerrainTreeField: main-view candidacy only), not its 64 m
+		/// chunk's. Every wanted command is a draw whether the kernel fills it or not, and on WebGPU each costs the CPU a
+		/// pipeline key and bind group (~5 µs): with the chunk's distances a lone building took every level the whole chunk
+		/// could reach, and its shadow commands every chunk within the shadow distance. Settlement view 2026-11-04 (editor
+		/// readback, ScenePerfProbe "props wanted"): 561 of 1310 camera commands and 366 of 466 shadow commands drew nothing.
+		/// Each decision stays a superset of the kernel's per instance (see the gatherers), so the same instances draw.
+		/// Off: the chunk's, as before (harness `runGather`).
+		/// </summary>
+		public static bool RunGather = true;
+
+		/// <summary>
+		/// Diagnosis: models whose name's family (before its first '_', as <see cref="CountFamilies"/> tallies them) is in this
+		/// comma list are not drawn (the harness's "hide" A/B of what each feature costs a frame). Empty: all drawn.
+		/// </summary>
+		public static string HideFamilies
+		{
+			get => hideFamilies;
+			set
+			{
+				hideFamilies = value ?? "";
+				hideVersion++;
+			}
+		}
+
+		private static string hideFamilies = "";
+		private static int hideVersion;
+
 		/// <summary>Diagnostics (ScenePerfProbe): count the last camera's commands by art family too (<see cref="LastFamilies"/>).</summary>
 		public static bool CountFamilies;
 		/// <summary>Per family (the prefab name's first word: Tree, Vine, Rock…), the last camera's main, prime and shadow commands.</summary>
@@ -270,6 +303,18 @@ namespace FishMMO.Client
 		private int indexedModels;
 		private readonly Dictionary<int, Resident> residents = new Dictionary<int, Resident>();
 		private readonly Dictionary<Material, Material> clones = new Dictionary<Material, Material>();
+		/// <summary>Each clone by its source's <see cref="ContentKey"/> (<see cref="MergeIdenticalMaterials"/>).</summary>
+		private readonly Dictionary<string, Material> clonesByContent = new Dictionary<string, Material>(StringComparer.Ordinal);
+		private readonly System.Text.StringBuilder contentKey = new System.Text.StringBuilder(1024);
+
+		/// <summary>
+		/// Whether materials that draw identically (<see cref="ContentKey"/>: the same shader, keywords, queue, passes and every
+		/// property value) share one clone, so their commands batch into one call (2026-11-04). The art generator writes a
+		/// material per species: 134 Leaves_* materials hold two value sets, 121 Detail_Bush_* two, 678 Detail_* 195. Exact,
+		/// so the image is unchanged. Read when a model registers (off: a clone per source material, as before).
+		/// </summary>
+		public static bool MergeIdenticalMaterials = true;
+
 		/// <summary>Lit clone → its depth-prime twin (<see cref="PrimeOf"/>).</summary>
 		private readonly Dictionary<Material, Material> primes = new Dictionary<Material, Material>();
 
@@ -454,10 +499,20 @@ namespace FishMMO.Client
 			{
 				return null;
 			}
+			string key = MergeIdenticalMaterials ? ContentKey(material, contentKey) : null;
+			if (key != null && clonesByContent.TryGetValue(key, out clone) && clone != null)
+			{
+				clones.Add(material, clone);
+				return clone;
+			}
 			clone = new Material(material) { shader = shader, name = material.name + " (indirect)", hideFlags = HideFlags.DontSave };
 			clone.SetFloat(ContactOnId, ContactMode);
 			clone.SetFloat(FloraOnId, FloraMode);
 			clones.Add(material, clone);
+			if (key != null)
+			{
+				clonesByContent[key] = clone;
+			}
 			return clone;
 		}
 
@@ -688,6 +743,33 @@ namespace FishMMO.Client
 			tags = tagBuffer;
 			count = Mathf.Min(instances.count, tagMirror.Length);
 			return true;
+		}
+
+		/// <summary>
+		/// For which rock fields are drawn, nearest first (RockContactField's demand): adds every resident rock of this
+		/// renderer to <paramref name="into"/> by its shape, with the world box the field's gather tests against its grid
+		/// (<see cref="RockFieldDemand.WorldBox"/>).
+		/// </summary>
+		public void CollectRockBoxes(RockBoxes into)
+		{
+			if (!anyRock || !mirror.IsCreated || !tagMirror.IsCreated)
+			{
+				return;
+			}
+			int length = Mathf.Min(mirror.Length, tagMirror.Length);
+			foreach (KeyValuePair<int, Resident> r in residents)
+			{
+				for (int i = r.Key, end = Mathf.Min(r.Key + r.Value.Count, length); i < end; i++)
+				{
+					int shape = (int)(tagMirror[i] & 0xFFFFFu) - 1;
+					if (shape < 0 || !RockContactField.ShapeBox(shape, out Vector3 centre, out Vector3 half))
+					{
+						continue;
+					}
+					RockFieldDemand.WorldBox(mirror[i], centre, half, out Vector3 lo, out Vector3 hi);
+					into.Add(shape, lo, hi);
+				}
+			}
 		}
 
 		/// <summary>Sets how many instances a model's slots hold (its resident count); grows the visible buffer on the next camera.</summary>
@@ -1501,6 +1583,19 @@ namespace FishMMO.Client
 		/// This camera's wanted commands, ascending, into <see cref="wantedCommands"/>: those whose level the camera's work can
 		/// reach in their view (the model's main or shadow mask). Only the commands of models its work reached are looked at.
 		/// </summary>
+		private static bool IsHidden(Model model)
+		{
+			if (model.HideVersion != hideVersion)
+			{
+				model.HideVersion = hideVersion;
+				string name = model.Name ?? "?";
+				int cut = name.IndexOf('_');
+				string family = cut > 0 ? name.Substring(0, cut) : name;
+				model.Hidden = System.Array.Exists(hideFamilies.Split(','), f => string.Equals(f.Trim(), family, StringComparison.OrdinalIgnoreCase));
+			}
+			return model.Hidden;
+		}
+
 		private void CollectWanted()
 		{
 			wantedCommands.Clear();
@@ -1508,7 +1603,7 @@ namespace FishMMO.Client
 			{
 				Model model = models[m];
 				int main = model.MainMask, shadow = model.ShadowMask;
-				if ((main | shadow) == 0)
+				if ((main | shadow) == 0 || (hideFamilies.Length > 0 && IsHidden(model)))
 				{
 					continue;
 				}
@@ -1927,7 +2022,8 @@ namespace FishMMO.Client
 			RockContactField.RemoveRenderer(this);
 			DisposeBrg(true);
 			DisposeLooks();
-			foreach (Material clone in clones.Values)
+			// A merged clone stands for several sources: destroyed once.
+			foreach (Material clone in new HashSet<Material>(clones.Values))
 			{
 				if (clone != null)
 				{
@@ -1935,6 +2031,7 @@ namespace FishMMO.Client
 				}
 			}
 			clones.Clear();
+			clonesByContent.Clear();
 			foreach (Material prime in primes.Values)
 			{
 				if (prime != null)

@@ -48,6 +48,23 @@ namespace FishMMO.Client
 		/// <summary>When set, wins over the profile's switch (the probe's A/B): false draws with Unity's terrain.</summary>
 		public static bool? Override;
 
+		/// <summary>Diagnosis: the ground kept here but not drawn (the harness's "hide" A/B of what each feature costs a frame).</summary>
+		public static bool HideDraws;
+
+		/// <summary>
+		/// The ground's render queue: after every other opaque (2450, the default) or −1 for the shader's own (Geometry−100,
+		/// first; the harness's terrainQueue A/B). Drawn last, the ground is depth-tested against the houses, trunks, rocks
+		/// and grass already drawn and shades only where it shows; drawn first, it only spared what stands behind a hill. The
+		/// picture is the same either way (opaque, depth-tested, nothing in the opaque queues overlays the ground: pixel-
+		/// identical in the browser A/B). Its per-pixel layers are the frame's dearest opaque shading, so last is cheaper:
+		/// browser, 2560×1440, 4× MSAA (2026-11-05), GPU 10.1 → 9.1 ms in the forest, 9.7 → 8.2 ms in the settlement, 6.4 → 5.8
+		/// ms looking down at the forest floor (ABBA, no overlap).
+		/// </summary>
+		public const int DrawnLastQueue = 2450;
+
+		/// <inheritdoc cref="DrawnLastQueue"/>
+		public static int QueueOverride = DrawnLastQueue;
+
 		/// <summary>True while any scene's ground is drawn here.</summary>
 		public static bool Active => fields.Count > 0;
 
@@ -451,6 +468,10 @@ namespace FishMMO.Client
 			int draws = 0;
 			foreach (TerrainHeightmapField f in fields)
 			{
+				if (HideDraws)
+				{
+					break;
+				}
 				draws += f.Draw(context, camera, compute, cmd, selectKernel, clearKernel, fenceKernel);
 			}
 			if (camera.cameraType == CameraType.Game)

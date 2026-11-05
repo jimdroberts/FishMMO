@@ -75,6 +75,11 @@ Shader "FishMMO/Vegetation"
         _VaryPartLength("Each limb's length (share either way)", Range(0.0, 0.5)) = 0
         _VaryFullness("Fullness: x the fewest of the spare limbs kept, y the fewest leaves kept (0..1)", Vector) = (0, 0, 0, 0)
         _VaryColour("Colour: x brightness, y hue and saturation, z each leaf card, w bark (shares either way)", Vector) = (0, 0, 0, 0)
+        // A bush's draw takes its look's colours, never its size (cover is the same for everyone): what _FishFloraOn 2 says on a
+        // RenderMeshIndirect draw, which a BatchRendererGroup draw's per-batch constant cannot (DetailScatterRenderer.Brg.cs).
+        [HideInInspector] _FishFloraColoursOnly("Flora look: colours only (a bush)", Float) = 0
+        // A vegetation family's table (FishVegetationPasses.hlsl FISH_VEG_TABLE; set on the runtime family material only).
+        [HideInInspector][NoScaleOffset] _FishVegTable("Vegetation family table", 2D) = "black" {}
     }
 
     SubShader
@@ -105,6 +110,8 @@ Shader "FishMMO/Vegetation"
             #pragma fragment VegForwardFragment
 
             #pragma shader_feature_local _ALPHATEST_ON
+            // A vegetation family's material (DetailScatterRenderer families; FishVegetationPasses.hlsl FISH_VEG_TABLE): the kinds' scalars from its table.
+            #pragma shader_feature_local _FISH_VEG_TABLE
 
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
@@ -145,6 +152,8 @@ Shader "FishMMO/Vegetation"
             #pragma fragment VegDepthFragment
 
             #pragma shader_feature_local _ALPHATEST_ON
+            // A vegetation family's material (DetailScatterRenderer families; FishVegetationPasses.hlsl FISH_VEG_TABLE): the kinds' scalars from its table.
+            #pragma shader_feature_local _FISH_VEG_TABLE
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
             #pragma multi_compile_instancing
@@ -172,6 +181,8 @@ Shader "FishMMO/Vegetation"
             #pragma fragment VegDepthFragment
 
             #pragma shader_feature_local _ALPHATEST_ON
+            // A vegetation family's material (DetailScatterRenderer families; FishVegetationPasses.hlsl FISH_VEG_TABLE): the kinds' scalars from its table.
+            #pragma shader_feature_local _FISH_VEG_TABLE
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma multi_compile_instancing
 
@@ -196,6 +207,8 @@ Shader "FishMMO/Vegetation"
             #pragma fragment VegDepthNormalsFragment
 
             #pragma shader_feature_local _ALPHATEST_ON
+            // A vegetation family's material (DetailScatterRenderer families; FishVegetationPasses.hlsl FISH_VEG_TABLE): the kinds' scalars from its table.
+            #pragma shader_feature_local _FISH_VEG_TABLE
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
             #pragma multi_compile_instancing

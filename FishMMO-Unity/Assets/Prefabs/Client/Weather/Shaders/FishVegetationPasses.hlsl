@@ -98,7 +98,92 @@ CBUFFER_START(UnityPerMaterial)
     half _Aquatic;
     half _Clinging;
     half _FishMoss;
+    // 1 on a bush's material (DetailScatterRenderer): its look's colours only, as _FishFloraOn 2 (VegFloraScale).
+    half _FishFloraColoursOnly;
 CBUFFER_END
+
+// ── A vegetation family's table (_FISH_VEG_TABLE; DetailScatterRenderer's families, TerrainVegTableMath.cs) ──
+// The art generator writes a material per kind, and the kinds of one structure (the same atlas, keywords, queue, cull, …) differ
+// only in the scalars below. A GPU-driven family of them draws through ONE material with this keyword on: each kind is a row of
+// the family's table (RGBAHalf, TerrainVegTableMath.Columns float4s), named per vertex by the pooled mesh's uv4.x, and the
+// material's own names below read the row instead. The vertex stage reads it (FishVegTableSetup, at the head of VegDeform); the
+// forward fragment takes the three it reads from the vertex (VegVaryings.vegTable). Every other property stays the material's.
+#if defined(_FISH_VEG_TABLE)
+#define FISH_VEG_TABLE 1
+TEXTURE2D(_FishVegTable);
+
+static half4 FishVegHealthyColor;
+static half4 FishVegDryColor;
+static half4 FishVegGroundSink;
+static half FishVegSnowBury;
+static float FishVegTintPatchMetres;
+static half FishVegWindSway;
+static half FishVegWindFlutter;
+static half FishVegAquatic;
+static half FishVegEvergreen;
+static half FishVegDeciduous;
+static half FishVegTintSpread;
+static half FishVegVaryLean;
+static half FishVegVaryPartDroop;
+static half FishVegDistanceFade;
+static half FishVegClinging;
+static half FishVegWeatherAmount;
+static half FishVegTranslucency;
+
+// The row's columns, in TerrainVegTableMath.WriteRow's order.
+void FishVegTableSetup(float vertexRow)
+{
+    int row = (int)(vertexRow + 0.5);
+    half4 c3 = (half4)LOAD_TEXTURE2D(_FishVegTable, int2(3, row));
+    half4 c4 = (half4)LOAD_TEXTURE2D(_FishVegTable, int2(4, row));
+    half4 c5 = (half4)LOAD_TEXTURE2D(_FishVegTable, int2(5, row));
+    half4 c6 = (half4)LOAD_TEXTURE2D(_FishVegTable, int2(6, row));
+    FishVegHealthyColor = (half4)LOAD_TEXTURE2D(_FishVegTable, int2(0, row));
+    FishVegDryColor = (half4)LOAD_TEXTURE2D(_FishVegTable, int2(1, row));
+    FishVegGroundSink = (half4)LOAD_TEXTURE2D(_FishVegTable, int2(2, row));
+    FishVegSnowBury = c3.x;
+    FishVegTintPatchMetres = c3.y;
+    FishVegWindSway = c3.z;
+    FishVegWindFlutter = c3.w;
+    FishVegAquatic = c4.x;
+    FishVegEvergreen = c4.y;
+    FishVegDeciduous = c4.z;
+    FishVegTintSpread = c4.w;
+    FishVegVaryLean = c5.x;
+    FishVegVaryPartDroop = c5.y;
+    FishVegDistanceFade = c5.z;
+    FishVegClinging = c5.w;
+    FishVegWeatherAmount = c6.x;
+    FishVegTranslucency = c6.y;
+}
+
+// The fragment's three (weather amount, clinging, translucency), as the vertex read them.
+half4 FishVegFragmentValues() { return half4(FishVegWeatherAmount, FishVegClinging, FishVegTranslucency, 0.0h); }
+void FishVegFragmentSetup(half4 values)
+{
+    FishVegWeatherAmount = values.x;
+    FishVegClinging = values.y;
+    FishVegTranslucency = values.z;
+}
+
+#define _HealthyColor       FishVegHealthyColor
+#define _DryColor           FishVegDryColor
+#define _GroundSink         FishVegGroundSink
+#define _SnowBury           FishVegSnowBury
+#define _TintPatchMetres    FishVegTintPatchMetres
+#define _WindSway           FishVegWindSway
+#define _WindFlutter        FishVegWindFlutter
+#define _Aquatic            FishVegAquatic
+#define _Evergreen          FishVegEvergreen
+#define _Deciduous          FishVegDeciduous
+#define _TintSpread         FishVegTintSpread
+#define _VaryLean           FishVegVaryLean
+#define _VaryPartDroop      FishVegVaryPartDroop
+#define _DistanceFade       FishVegDistanceFade
+#define _Clinging           FishVegClinging
+#define _FishWeatherAmount  FishVegWeatherAmount
+#define _Translucency       FishVegTranslucency
+#endif
 
 // Not per material: one value for every plant, from the terrains' draw distances.
 float4 _FishVegetationFade;
@@ -189,6 +274,9 @@ struct VegAttributes
     float2 wind : TEXCOORD1;
     float4 partPivot : TEXCOORD2;
     float4 partData : TEXCOORD3;
+#if defined(FISH_VEG_TABLE)
+    float2 vegRow : TEXCOORD4;   // x the kind's row of the family's table (the pooled mesh's uv4)
+#endif
     UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
@@ -395,7 +483,7 @@ float VegFloraScale(FishFloraLook look, float3 originWS)
 {
     // The world's growth and a smooth swell (FishFloraGrowth), never the patch's look: neighbouring plants should not
     // jump in size where one patch meets the next.
-    return look.valid && _FishFloraOn < 1.5 ? clamp(sqrt(FishFloraGrowth(originWS.xz, 0.15, 0x1F83D9ABu)), FISH_VEG_FLORA_SCALE_MIN, FISH_VEG_FLORA_SCALE_MAX) : 1.0;
+    return look.valid && _FishFloraOn < 1.5 && _FishFloraColoursOnly < 0.5 ? clamp(sqrt(FishFloraGrowth(originWS.xz, 0.15, 0x1F83D9ABu)), FISH_VEG_FLORA_SCALE_MIN, FISH_VEG_FLORA_SCALE_MAX) : 1.0;
 }
 
 /// What this vertex is recoloured to (rgb, linear) and how far (a; 0 = left as it is), by what it is: its vertex alpha
@@ -588,6 +676,9 @@ float2 VegSkirtUV(float2 uv, float2 wind, float drop)
 // takes from its patch's look and how far (VegFloraColour; a 0 on every draw but the terrain's details).
 void VegDeform(VegAttributes input, out float3 positionWS, out half3 normalWS, out half4 tint, out half2 fade, out half4 ground, out float skirtDrop, out half4 flora)
 {
+#if defined(FISH_VEG_TABLE)
+    FishVegTableSetup(input.vegRow.x);
+#endif
     skirtDrop = 0.0;
     // Every path below sets these; set here too, or Unity's Vulkan compile warns "potentially uninitialized" at the
     // early returns.
@@ -774,6 +865,9 @@ struct VegVaryings
     float contact : TEXCOORD9; // metres above the terrain straight below, for the contact blend at a trunk's base (FishGroundColour.hlsl)
 #if defined(FISH_VEG_PASS_FORWARD)
     half4 flora : TEXCOORD10; // rgb the colour of the patch's look this vertex takes, a how far (VegFloraColour; 0 off)
+#if defined(FISH_VEG_TABLE)
+    nointerpolation half4 vegTable : TEXCOORD11; // the family row's fragment values (FishVegFragmentValues)
+#endif
 #endif
     UNITY_VERTEX_INPUT_INSTANCE_ID
     UNITY_VERTEX_OUTPUT_STEREO
@@ -803,6 +897,9 @@ VegVaryings VegVertex(VegAttributes input)
     output.ground = ground;
 #if defined(FISH_VEG_PASS_FORWARD)
     output.flora = flora;
+#if defined(FISH_VEG_TABLE)
+    output.vegTable = FishVegFragmentValues();
+#endif
 #endif
     // The terrain is traced (FishContactHeight: a walk over the copied terrains, a height and a normal read) only where
     // the contact band could reach: a vertex this far above its root takes its height above the root instead. The band
@@ -963,6 +1060,9 @@ half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SE
 {
     UNITY_SETUP_INSTANCE_ID(input);
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+#if defined(FISH_VEG_TABLE)
+    FishVegFragmentSetup(input.vegTable);
+#endif
 
     half4 tex = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv);
     half coverage = 1.0;

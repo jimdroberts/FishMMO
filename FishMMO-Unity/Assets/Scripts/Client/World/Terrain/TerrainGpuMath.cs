@@ -68,6 +68,61 @@ namespace FishMMO.Client
 		/// <summary>The instance count a command is finalised with: never more than the slot holds.</summary>
 		public static uint Finalize(uint counter, uint capacity) => counter < capacity ? counter : capacity;
 
+		/// <summary>
+		/// Whether any instance in a box (a run's or a chunk's) can put a pixel in the main view (TerrainGpuRenderer.RunGather): its bounds,
+		/// grown by half its largest instance on every side, meet the view. The bounds hold every instance's mesh box,
+		/// and geometry outside the frustum draws nothing whether the kernel keeps it or not; only the vegetation shaders carry
+		/// a vertex past its mesh box (height variation, lean, droop and sway: a few tenths of the plant's size at most), and
+		/// the margin covers them, so a box this refuses has nothing to show.
+		/// </summary>
+		public static bool MainReachable(Plane[] planes, Bounds bounds, float largestInstance)
+		{
+			bounds.Expand(Mathf.Max(0f, largestInstance));
+			return TerrainTreeMath.IntersectsFrustum(planes, bounds);
+		}
+
+		/// <summary>
+		/// A gathered run's part of the GPU work list from its own bounds (TerrainGpuRenderer.RunGather): its distances for the
+		/// levels, whether it is a main-view candidate and whether a shadow candidate; false when neither (nothing to draw).
+		/// <paramref name="bounds"/> holds every instance's mesh box, pivot and LOD reference point; <paramref name="largestSize"/>
+		/// and <paramref name="largestRadius"/> are its largest instance's LOD size and culling sphere. The list is kept while the
+		/// camera moves <paramref name="slack"/> metres and it and the sun turn <paramref name="turnDegrees"/>, against
+		/// <paramref name="planes"/> widened for that. Every answer holds every instance the kernel (FishCull) can keep from
+		/// anywhere in that range, as long as the instance can show:
+		/// <list type="bullet">
+		/// <item>the distances, <paramref name="slack"/> nearer and farther, bracket every pivot (draw distance) and reference
+		/// point (level), so the levels between them hold every level and fade partner the kernel picks;</item>
+		/// <item>the main view: the box grown by half the largest size meets the view (<see cref="MainReachable"/>);</item>
+		/// <item>the shadows: the kernel casts an instance whose sphere's centre (inside the box) is within the shadow distance
+		/// plus its radius, and whose sphere swept min(shadow distance, 2r / max(−d.y, 0.1)) along the sun's travel d meets the
+		/// view; the box within the shadow distance plus the largest radius, grown by that radius (holding every sphere), swept
+		/// by the same formula at that radius and grown by what the sun's turn moves the sweep's end, covers it.</item>
+		/// </list>
+		/// </summary>
+		public static bool RunCandidates(Plane[] planes, Bounds bounds, float largestSize, float largestRadius, Vector3 eye, float slack, float reach,
+			bool shadows, Vector3 lightTravel, float shadowDistance, float turnDegrees, out float near, out float far, out bool main, out bool shadow)
+		{
+			near = Mathf.Max(0f, TerrainTreeMath.MinDistance(bounds, eye) - slack);
+			far = TerrainTreeMath.MaxDistance(bounds, eye) + slack;
+			main = shadow = false;
+			if (near > reach)
+			{
+				return false;
+			}
+			main = MainReachable(planes, bounds, largestSize);
+			if (shadows && near <= shadowDistance + largestRadius)
+			{
+				float length = Mathf.Min(shadowDistance, 2f * largestRadius / Mathf.Max(-lightTravel.y, 0.1f));
+				Bounds swept = bounds;
+				swept.Expand(2f * largestRadius);
+				swept.Encapsulate(swept.min + lightTravel * length);
+				swept.Encapsulate(swept.max + lightTravel * length);
+				swept.Expand(2f * length * lightTravel.magnitude * Mathf.Sin(turnDegrees * Mathf.Deg2Rad));
+				shadow = main || TerrainTreeMath.IntersectsFrustum(planes, swept);
+			}
+			return main || shadow;
+		}
+
 		/// <summary>The sphere is at least partly inside every plane.</summary>
 		public static bool SphereVisible(Plane[] planes, Vector3 centre, float radius)
 		{
