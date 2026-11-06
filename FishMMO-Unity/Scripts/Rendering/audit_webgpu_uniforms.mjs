@@ -80,4 +80,7 @@ try {
     console.log(view.name, 'pipelines', data.pipelines.length, 'uniform buffers created', data.uniformBuffersCreated, 'writes', data.writeBuffers);
   }
   await call('Page.removeScriptToEvaluateOnNewDocument',{identifier});
-} finally {ws.close()}
+} finally {
+  // The canvas back to the page's own size (it fills the window), so the tab is usable at its real size afterwards.
+  await evaluate(`(()=>{const c=document.querySelector('canvas');if(c){c.style.width='';c.style.height='';}})()`).catch(()=>{}); await call('Emulation.clearDeviceMetricsOverride').catch(()=>{}); ws.close();
+}

@@ -291,6 +291,14 @@ float FishSnowDepthAt(float3 worldPos)
 // the camera only clears the strip it moves into, never copies the map along.
 float4 _FishTrailRect;      // xy the window's corner (world x/z), z its size (m), w 1 when the map is valid
 float4 _FishTrailParams;    // x metres per texel, y texels a side
+// A pass at the device's texture-parameter limit (the rock fillets' forward pass: 33 of WebGPU's 32 with every feature on)
+// defines FISH_NO_TRAILS before its includes: no trail map bound, and nothing trodden (a seam between rocks is steep).
+#if defined(FISH_NO_TRAILS)
+float2 FishTrailAt(float2 worldXZ)
+{
+    return 0.0;
+}
+#else
 TEXTURE2D(_FishTrailTex);
 
 // One texel of the trail map by world texel: wrapped to where it is kept.
@@ -326,6 +334,7 @@ float2 FishTrailAt(float2 worldXZ)
     float2 d = FishTrailTexel(i + float2(1.0, 1.0));
     return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
 }
+#endif
 
 // Sky occlusion: a top-down height map of the highest surface around the camera.
 // Rect: xy = world x/z of the map's corner, zw = size in metres.

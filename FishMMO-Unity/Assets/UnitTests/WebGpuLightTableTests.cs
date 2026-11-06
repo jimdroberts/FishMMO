@@ -271,7 +271,8 @@ namespace FishMMO.UnitTests
 					Assert.That(native,Does.Not.Contain("_FishLightTable"),name+" "+api+" reads the table");
 					Assert.That(native,Does.Not.Contain("FishTableGetAdditionalLight"),name+" "+api+" takes the table's light functions");
 					Assert.That(native,Does.Match(@"cbuffer\s+AdditionalLights\b"),name+" "+api+" lost URP's AdditionalLights");
-					Assert.That(native,Does.Contain("_AdditionalLightsPosition["),name+" "+api+" no longer reads URP's light array");
+					// DXC's preprocessor (`#pragma use_dxc vulkan`) spaces an array's brackets: "_AdditionalLightsPosition [(256)]".
+					Assert.That(native,Does.Match(@"_AdditionalLightsPosition\s*\["),name+" "+api+" no longer reads URP's light array");
 				}
 			// And the C# gather never runs there.
 			Assert.That(AdditionalLightTable.Needed,Is.EqualTo(SystemInfo.graphicsDeviceType==GraphicsDeviceType.WebGPU));

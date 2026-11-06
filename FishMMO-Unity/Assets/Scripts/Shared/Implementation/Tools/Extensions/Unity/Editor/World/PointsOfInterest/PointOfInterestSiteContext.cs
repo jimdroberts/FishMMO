@@ -241,6 +241,12 @@ namespace FishMMO.Shared.WorldDesign
 			if (prefab != null)
 			{
 				prefab = StructurePaletteDressing.RoofVariant(prefab, Palette);
+				// A developer's hand edit of this piece (ScenePropEdits): placed where they put it, or not at all; its doors,
+				// rooms, dug floor and emitters below then follow.
+				if (ScenePropEdits.Active != null && !ScenePropEdits.Active.Apply(PointOfInterestGenerator.PropSource, prefab, ref position, ref rotation, ref scale))
+				{
+					return;
+				}
 			}
 			Sink?.Add(prefab, position, rotation, scale, Sink != null ? StructurePaletteDressing.MaterialsFor(prefab, Palette) : null);
 			if (prefab != null)

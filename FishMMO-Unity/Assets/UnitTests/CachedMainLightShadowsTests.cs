@@ -157,6 +157,68 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void ARefusedFrame_DrawsWindowsThatAreTheSlices_AndMergesThemTexelForTexel()
+		{
+			// What a frame the margin windows cannot serve draws (the batch group has already left the static casters out of URP's
+			// culling): every cascade over a window that is URP's slice, read one texel to one texel at depth unchanged.
+			Vector2Int atlas = CachedMainLightShadows.AtlasSize(4, Size);
+			Vector2Int tile = CachedMainLightShadows.TileOf(1, 4, Size);
+			foreach (CachedMainLightShadows.CascadeKey slice in new[] { Slice(), Slice(3f, -5f), Slice(0.5f, 0.25f, 7f) })
+			{
+				Assert.That(CachedMainLightShadows.TryExactWindowFor(in slice, tile.x, tile.y, out CachedMainLightShadows.Window w), Is.True);
+				Assert.That(w.Size, Is.EqualTo(Resolution));
+				Assert.That(w.Projection, Is.EqualTo(slice.Projection));
+				Assert.That(CachedMainLightShadows.TryMap(in w, in slice, atlas.x, atlas.y, out CachedMainLightShadows.Mapping map), Is.True);
+				Assert.That(map.DepthScale, Is.EqualTo(1f).Within(1e-4f));
+				Assert.That(map.DepthOffset, Is.EqualTo(0f).Within(1e-4f));
+				Vector2 first = FirstTexel(in map, in w);
+				Assert.That(first.x, Is.EqualTo(0.5f).Within(1e-3f), "URP's first texel centre on the window's");
+				Assert.That(first.y, Is.EqualTo(0.5f).Within(1e-3f));
+			}
+			string code = System.IO.File.ReadAllText("Assets/Scripts/Client/World/Terrain/CachedMainLightShadows.cs");
+			StringAssert.Contains("TryExactWindowFor(in currentKeys[i], tile.x, tile.y, out windows[i])", code);
+			StringAssert.DoesNotContain("// Not a slice this cache understands: URP's own map stands alone this frame.", code);
+		}
+
+		[Test]
+		public void AFreshWindow_ReadsItsOwnSlice_FarFromTheOriginAndMetresAcross()
+		{
+			// The browser's settlement close view (2026-11-05): the near cascade a few metres across, the light's view translated
+			// by kilometres. In float, TryMap put a fresh window's texel centres hundredths of a texel off and refused the very
+			// slice it was built from (~1 frame in 6, each then without structure shadows); in double it reads it, and any slice
+			// moved by whole texels within the margin.
+			Vector2Int atlas = CachedMainLightShadows.AtlasSize(4, Size);
+			int refused = 0, tried = 0;
+			var random = new System.Random(2026);
+			for (int trial = 0; trial < 200; trial++)
+			{
+				var at = new Vector3(1500f + (float)random.NextDouble() * 1000f, 100f + (float)random.NextDouble() * 200f, -1200f - (float)random.NextDouble() * 1000f);
+				Vector3 travel = Quaternion.Euler(30f + (float)random.NextDouble() * 50f, (float)random.NextDouble() * 360f, 0f) * Vector3.forward;
+				Matrix4x4 view = Matrix4x4.TRS(at, Quaternion.LookRotation(travel, Vector3.up), new Vector3(1f, 1f, -1f)).inverse;
+				float half = 2f + (float)random.NextDouble() * 6f;
+				float texel = 2f * half / Resolution;
+				// URP's stable fit: the slice's grid on whole texels of the light's view.
+				view.m03 = Mathf.Round(view.m03 / texel) * texel;
+				view.m13 = Mathf.Round(view.m13 / texel) * texel;
+				var slice = new CachedMainLightShadows.CascadeKey
+				{
+					View = view, Projection = Matrix4x4.Ortho(-half, half, -half, half, 0.1f, 300f), OffsetX = 0, OffsetY = 0, Resolution = Resolution,
+					Bias = new Vector4(-0.1f, -0.2f, 0f, 0f), LightDirection = -travel,
+				};
+				Vector2Int tile = CachedMainLightShadows.TileOf(0, 4, Size);
+				Assert.That(CachedMainLightShadows.TryWindowFor(in slice, Margin, tile.x, tile.y, out CachedMainLightShadows.Window w), Is.True);
+				tried++;
+				refused += CachedMainLightShadows.TryMap(in w, in slice, atlas.x, atlas.y, out _) ? 0 : 1;
+				CachedMainLightShadows.CascadeKey moved = slice;
+				moved.View.m03 -= random.Next(-Margin + 1, Margin) * texel;
+				moved.View.m13 -= random.Next(-Margin + 1, Margin) * texel;
+				tried++;
+				refused += CachedMainLightShadows.TryMap(in w, in moved, atlas.x, atlas.y, out _) ? 0 : 1;
+			}
+			Assert.That(refused, Is.EqualTo(0), $"{refused} of {tried} slices refused by their own window");
+		}
+
+		[Test]
 		public void TheDepthMap_GivesURPsOwnDepthForEveryCachedPoint()
 		{
 			CachedMainLightShadows.Window w = WindowOf(Slice());
@@ -199,7 +261,8 @@ namespace FishMMO.UnitTests
 		public void TheCachesContent_NoLongerFollowsTheCamera()
 		{
 			string cache = SourceScanPins.ReadCode("Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.ShadowCache.cs");
-			StringAssert.Contains("public int ShadowContentVersion => HashCode.Combine(layoutSerial, flushSerial);", cache);
+			// Its static casters (a layout, an upload) and the coverage of the shadow work it culled (ShadowCasterCoverage); not the camera.
+			StringAssert.Contains("public int ShadowContentVersion => HashCode.Combine(layoutSerial, flushSerial, CoverageSerial());", cache);
 			string kernel = System.IO.File.ReadAllText(Shaders + "FishTerrainInstancing.compute");
 			StringAssert.Contains("if (!cacheCull && (work.padding & 1u) == 0 && FishSphereVisible(centre, radius) && !FishOccluded(centre, radius))", kernel);
 			StringAssert.Contains("partner = -1;", kernel);
@@ -253,14 +316,15 @@ namespace FishMMO.UnitTests
 			string brg = SourceScanPins.ReadCode("Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.Brg.cs");
 			SourceScanPins.HoldsAndFires("omission", brg,
 				s => SourceScanPins.InOrder(s, "bool omitStatic = view == 1 && context.projectionType == BatchCullingProjectionType.Orthographic",
-					"CachedMainLightShadows.AppliesTo(brgCameraObject);", "if (omitStatic && brgDraws[c].StaticShadow)", "if (omitStatic && brgDraws[c].StaticShadow) continue;"),
+					"CachedMainLightShadows.OmitsStaticCasters(brgCameraObject);", "if (omitStatic && brgDraws[c].StaticShadow)", "if (omitStatic && brgDraws[c].StaticShadow) continue;"),
 				SourceScanPins.Replace("context.projectionType == BatchCullingProjectionType.Orthographic", "true"),
 				"spot and point light shadows losing their static casters");
 			StringAssert.Contains("StaticShadow = IsStaticShadowCaster(command.View, command.Params.material),", brg);
 			string cached = SourceScanPins.ReadCode("Assets/Scripts/Client/World/Terrain/CachedMainLightShadows.cs");
 			SourceScanPins.HoldsAndFires("cache cull", cached,
-				s => SourceScanPins.InOrder(s, "renderer.RecordShadowCacheCull(native, d.Camera, d.Anchor, d.Planes, d.Light);", "renderGraph.AddRasterRenderPass<CachePassData>"),
-				SourceScanPins.Replace("renderer.RecordShadowCacheCull(native, d.Camera, d.Anchor, d.Planes, d.Light);", string.Empty),
+				s => SourceScanPins.InOrder(s, "AddCasterCull(renderGraph, camera, in windows[widest]);", "renderGraph.AddRasterRenderPass<CachePassData>",
+					"private static void AddCasterCull(", "renderer.RecordShadowCacheCull(native, d.Camera, d.Anchor, d.Planes, d.Light);"),
+				SourceScanPins.Replace("AddCasterCull(renderGraph, camera, in windows[widest]);", string.Empty),
 				"the cache drawing instance counts it never culled");
 			string cacheCode = SourceScanPins.ReadCode("Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.ShadowCache.cs");
 			SourceScanPins.HoldsAndFires("cache visible list", cacheCode,

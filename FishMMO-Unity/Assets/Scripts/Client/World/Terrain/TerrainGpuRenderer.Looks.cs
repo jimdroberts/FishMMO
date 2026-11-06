@@ -153,9 +153,12 @@ namespace FishMMO.Client
 			Vector2 scale = clone.HasProperty("_BaseMap") ? clone.GetTextureScale("_BaseMap") : Vector2.one;
 			Vector2 offset = clone.HasProperty("_BaseMap") ? clone.GetTextureOffset("_BaseMap") : Vector2.zero;
 			values.BaseMapST = new Vector4(scale.x, scale.y, offset.x, offset.y);
-			values.BaseColor = ColorOf(clone, "_BaseColor", Color.white);
-			values.SpecColor = ColorOf(clone, "_SpecColor", new Color(0.2f, 0.2f, 0.2f, 1f));
-			values.EmissionColor = ColorOf(clone, "_EmissionColor", Color.black);
+			// As the material would have them: Unity hands a shader its Color properties in linear space when the project is
+			// (it is), but GetColor returns them as authored. Stored raw, a look family's tinted members drew brighter than their
+			// own materials did (2026-11-05). The table is a linear texture, read as it is (FishWeatherLitInput.hlsl FishLookSetup).
+			values.BaseColor = AsShaderSees(ColorOf(clone, "_BaseColor", Color.white));
+			values.SpecColor = AsShaderSees(ColorOf(clone, "_SpecColor", new Color(0.2f, 0.2f, 0.2f, 1f)));
+			values.EmissionColor = AsShaderSees(ColorOf(clone, "_EmissionColor", Color.black));
 			values.Cutoff = FloatOf(clone, "_Cutoff", 0.5f);
 			values.Smoothness = FloatOf(clone, "_Smoothness", 0.5f);
 			values.Metallic = FloatOf(clone, "_Metallic", 0f);
@@ -185,6 +188,9 @@ namespace FishMMO.Client
 		}
 
 		private static Color ColorOf(Material m, string property, Color fallback) => m.HasProperty(property) ? m.GetColor(property) : fallback;
+
+		/// <summary>A material Color as its shader receives it: linear (alpha as it is) in a linear project.</summary>
+		private static Color AsShaderSees(Color c) => QualitySettings.activeColorSpace == ColorSpace.Linear ? c.linear : c;
 		private static float FloatOf(Material m, string property, float fallback) => m.HasProperty(property) ? m.GetFloat(property) : fallback;
 
 		/// <summary>
@@ -344,6 +350,73 @@ namespace FishMMO.Client
 				command.Submesh = pool.Index[(command.SourceMesh, command.SourceSubmesh, command.Look)];
 				commands[c] = command;
 			}
+		}
+
+		/// <summary>
+		/// Joins, under the batch group, each camera-view look command into the one before it of the same slot when they draw
+		/// the same pool mesh with the same material, depth prime and render parameters and the pool's index ranges run on
+		/// (this one starts where that one ends, at the same base vertex): one draw then takes both (<see cref="JoinSlotParts"/>).
+		/// A slot's commands are consecutive (Relayout adds them part by part), and a pool takes a model's parts in that order,
+		/// so a level's parts in one family lie end to end in its pool unless another model put a shared part there first,
+		/// which then simply stays its own draw.
+		/// </summary>
+		private void JoinSlotLookCommands()
+		{
+			int write = 0;
+			int slotStart = 0, lastSlot = -1;
+			for (int read = 0; read < commands.Count; read++)
+			{
+				Command command = commands[read];
+				if (command.Slot != lastSlot)
+				{
+					slotStart = write;
+					lastSlot = command.Slot;
+				}
+				if (command.View == 0 && command.Look >= 0)
+				{
+					int into = -1;
+					// The latest joinable command of this slot on the same pool mesh (parts of other pools may lie between).
+					for (int k = write - 1; k >= slotStart; k--)
+					{
+						if (commands[k].Mesh == command.Mesh)
+						{
+							into = k;
+							break;
+						}
+					}
+					if (into >= 0 && Joinable(commands[into], command))
+					{
+						Command joined = commands[into];
+						joined.JoinedIndexCount = IndexCountOf(joined) + command.Mesh.GetIndexCount(command.Submesh);
+						joined.JoinedParts = Mathf.Max(1, joined.JoinedParts) + 1;
+						commands[into] = joined;
+						continue;
+					}
+				}
+				commands[write++] = command;
+			}
+			commands.RemoveRange(write, commands.Count - write);
+		}
+
+		/// <summary>Whether <paramref name="next"/> can be drawn by <paramref name="head"/>'s draw: see <see cref="JoinSlotLookCommands"/>.</summary>
+		private static bool Joinable(in Command head, in Command next)
+		{
+			if (head.View != 0 || next.View != 0 || head.Look < 0 || next.Look < 0 || head.Slot != next.Slot || head.Mesh != next.Mesh
+				|| head.Prime != next.Prime)
+			{
+				return false;
+			}
+			RenderParams a = head.Params, b = next.Params;
+			if (a.material != b.material || a.layer != b.layer || a.renderingLayerMask != b.renderingLayerMask || a.receiveShadows != b.receiveShadows
+				|| a.motionVectorMode != b.motionVectorMode || a.shadowCastingMode != b.shadowCastingMode || a.lightProbeUsage != b.lightProbeUsage
+				|| a.reflectionProbeUsage != b.reflectionProbeUsage)
+			{
+				return false;
+			}
+			Mesh mesh = head.Mesh;
+			return mesh.GetTopology(head.Submesh) == MeshTopology.Triangles && mesh.GetTopology(next.Submesh) == MeshTopology.Triangles
+				&& mesh.GetBaseVertex(head.Submesh) == mesh.GetBaseVertex(next.Submesh)
+				&& mesh.GetIndexStart(head.Submesh) + IndexCountOf(head) == mesh.GetIndexStart(next.Submesh);
 		}
 
 		/// <summary>Bakes each look part's look into a freshly merged pool mesh (uv3.x, and uv0 tiled), when the pool is a family's.</summary>

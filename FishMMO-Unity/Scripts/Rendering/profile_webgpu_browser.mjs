@@ -127,4 +127,7 @@ try {
     console.log(JSON.stringify(summary.at(-1)));
   }
   if (summary.some(row=>!row.valid)) process.exitCode=2;
-} finally {socket.close()}
+} finally {
+  // The canvas back to the page's own size (it fills the window), so the tab is usable at its real size afterwards.
+  await evaluate(`(()=>{const c=document.querySelector('canvas');if(c){c.style.width='';c.style.height='';}})()`).catch(()=>{}); await call('Emulation.clearDeviceMetricsOverride').catch(()=>{}); socket.close();
+}

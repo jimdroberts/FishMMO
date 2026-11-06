@@ -42,12 +42,42 @@ namespace FishMMO.Client
 		/// <summary>The camera the batch group is armed for (<see cref="ArmBrg"/>), to ask the cache whether it serves it.</summary>
 		private Camera brgCameraObject;
 
+		/// <summary>This camera's shadow work as instance ranges (x the first, y one past the last), listed by AddWork.</summary>
+		private readonly List<Vector2Int> shadowWorkRanges = new List<Vector2Int>();
+		/// <summary>The shadow work the cache's last redraw culled, merged (<see cref="ShadowCasterCoverage"/>).</summary>
+		private readonly List<Vector2Int> heldShadowRanges = new List<Vector2Int>();
+		private int coverageSerial, coverageCheckedWork = -1;
+
 		/// <summary>
-		/// Changes whenever the static casters themselves may have changed: a layout or an instance upload. Not the camera
-		/// (2026-11-03): the cache culls them itself, from its own anchor and window (<see cref="RecordShadowCacheCull"/>), so a
-		/// moving camera no longer redraws every cascade every frame.
+		/// Changes whenever the static casters themselves may have changed (a layout or an instance upload) or this camera's
+		/// shadow work reaches an instance the cache's last redraw did not cull (<see cref="CoverageSerial"/>). Not the camera's
+		/// every move (2026-11-03): the cache culls them itself, from its own anchor and window (<see cref="RecordShadowCacheCull"/>),
+		/// so a moving camera no longer redraws every cascade every frame.
 		/// </summary>
-		public int ShadowContentVersion => HashCode.Combine(layoutSerial, flushSerial);
+		public int ShadowContentVersion => HashCode.Combine(layoutSerial, flushSerial, CoverageSerial());
+
+		/// <summary>
+		/// Moves on when this camera's shadow work is not wholly inside what the last redraw culled: the gather keeps only the
+		/// chunks the camera's frustum or its shadow sweep reaches, and stable cascades hold their windows while the camera turns,
+		/// so without this a prop turned towards was in neither the cache nor URP's map (ShadowCasterCoverage). Checked once per
+		/// work list. Levels need no check: within a held range the cache's levels are those chosen at its redraw, as designed.
+		/// </summary>
+		private int CoverageSerial()
+		{
+			if (coverageCheckedWork != workVersion)
+			{
+				coverageCheckedWork = workVersion;
+				if (!ShadowCasterCoverage.Covers(heldShadowRanges, shadowWorkRanges))
+				{
+					coverageSerial++;
+					CoverageRedraws++;
+				}
+			}
+			return coverageSerial;
+		}
+
+		/// <summary>Redraws asked for because the shadow work outgrew the cache (for probes).</summary>
+		public static int CoverageRedraws { get; private set; }
 
 		/// <summary>The level choice this camera's culling reads, for the cache's own culling.</summary>
 		private void RememberShadowCacheView(in TerrainTreeField.View view)
@@ -108,6 +138,8 @@ namespace FishMMO.Client
 				shadowCacheVisible?.Release();
 				shadowCacheVisible = new GraphicsBuffer(GraphicsBuffer.Target.Structured, visibleBuffer.count, FishVisible.Stride);
 			}
+			// What this redraw holds: the shadow work culled now (CoverageSerial asks for the next redraw when it outgrows it).
+			ShadowCasterCoverage.Merge(shadowWorkRanges, heldShadowRanges);
 			cmd.SetComputeVectorParam(compute, CameraPositionId, anchor);
 			cmd.SetComputeVectorArrayParam(compute, PlanesId, planes);
 			cmd.SetComputeVectorParam(compute, LightId, light);

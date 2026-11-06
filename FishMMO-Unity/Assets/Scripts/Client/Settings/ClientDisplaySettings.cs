@@ -309,8 +309,21 @@ namespace FishMMO.Client
 		private const int MsaaUnchosen = -1;
 
 		/// <summary>
+		/// The multisampling choices this device can draw, in dropdown order. WebGPU allows a sample count of 1 or 4 only (its
+		/// spec), so 2× is not offered there: asked for, it measured exactly as 4× did in the browser (2026-11-04).
+		/// </summary>
+		public static MsaaOption[] AvailableMsaa() =>
+			SystemInfo.graphicsDeviceType == GraphicsDeviceType.WebGPU
+				? new[] { MsaaOption.Off, MsaaOption.Four }
+				: new[] { MsaaOption.Off, MsaaOption.Two, MsaaOption.Four };
+
+		/// <summary>The nearest choice this device can draw (a 2× saved elsewhere is 4× on WebGPU).</summary>
+		public static MsaaOption SupportedMsaa(MsaaOption option) =>
+			option == MsaaOption.Two && SystemInfo.graphicsDeviceType == GraphicsDeviceType.WebGPU ? MsaaOption.Four : option;
+
+		/// <summary>
 		/// Applies the stored multisampling choice to the active pipeline asset; with none, leaves the quality level's own
-		/// (2026-10-09: 4× on High Fidelity, off on Balanced and Performant). The leaves' and the grass's soft edges are
+		/// (2026-11-05: 4× on High Fidelity at native scale, off on Balanced and Performant). The leaves' and the grass's soft edges are
 		/// alpha-to-coverage, which only MSAA can draw; 4× cost about 0.3 ms at 2560×1440 in Flo Monolith (`msaa1`).
 		/// </summary>
 		public static void ApplySavedMsaa()
@@ -391,10 +404,10 @@ namespace FishMMO.Client
 			int stored = ClientSettings.GetInt(ClientSettings.MsaaKey, MsaaUnchosen);
 			if (stored != MsaaUnchosen)
 			{
-				return (MsaaOption)Mathf.Clamp(stored, (int)MsaaOption.Off, (int)MsaaOption.Four);
+				return SupportedMsaa((MsaaOption)Mathf.Clamp(stored, (int)MsaaOption.Off, (int)MsaaOption.Four));
 			}
 			int samples = GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset pipeline ? pipeline.msaaSampleCount : 1;
-			return samples >= 4 ? MsaaOption.Four : samples >= 2 ? MsaaOption.Two : MsaaOption.Off;
+			return SupportedMsaa(samples >= 4 ? MsaaOption.Four : samples >= 2 ? MsaaOption.Two : MsaaOption.Off);
 		}
 
 		/// <summary>
@@ -420,10 +433,11 @@ namespace FishMMO.Client
 			// STP runs on URP's temporal anti-aliasing, which needs MSAA off: with samples on, URP quietly drops STP and the
 			// lowered render scale is stretched back up bilinearly — less resolution and no reconstruction. Whenever a pipeline
 			// asset has STP as its upscaler it is the anti-aliasing, and a saved multisampling choice must not switch it off.
-			// High Fidelity ships it (67 % since 2026-10-22). Its first try (77 %, 2026-10-09) went back to native + MSAA because
-			// wind-driven geometry had no motion vectors and pixelated under it; the procedural grass writes its own since
-			// 2026-10-27 (FishGrassBlades MotionVectors pass), the GPU trees and detail scatter still report the camera's only.
+			// High Fidelity shipped it at 67 % from 2026-10-22 to 2026-11-05; since then it ships native scale with 4× MSAA (the
+			// owner's default for High), which the browser frame budget was measured at. Wind-driven geometry other than the
+			// grass still reports the camera's motion only, which STP smears.
 			bool stp = pipeline.upscalingFilter == UpscalingFilterSelection.STP && pipeline.renderScale < 1f;
+			option = SupportedMsaa(option);
 			pipeline.msaaSampleCount = stp || option == MsaaOption.Off ? 1 : option == MsaaOption.Two ? 2 : 4;
 			MatchOcclusionToMsaa(pipeline);
 		}

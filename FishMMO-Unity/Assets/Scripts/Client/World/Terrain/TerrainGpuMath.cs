@@ -75,6 +75,29 @@ namespace FishMMO.Client
 		/// a vertex past its mesh box (height variation, lean, droop and sway: a few tenths of the plant's size at most), and
 		/// the margin covers them, so a box this refuses has nothing to show.
 		/// </summary>
+		/// <summary>
+		/// Whether a box meets the view of a camera moved up to <paramref name="slack"/> metres and turned up to
+		/// <paramref name="turnRadians"/> from the one <paramref name="planes"/> (unit normals) belong to: each plane's signed
+		/// distance to a point x changes by at most slack + turn·|x − eye| (a turn rotates the normal by at most the angle, the
+		/// move shifts the plane by at most the slack), so the box is tested against every plane widened by the slack plus the
+		/// turn times its farthest distance from the eye.
+		/// </summary>
+		public static bool IntersectsTurned(Plane[] planes, Bounds bounds, Vector3 eye, float slack, float turnRadians)
+		{
+			float margin = slack + TerrainTreeMath.MaxDistance(bounds, eye) * turnRadians;
+			Vector3 c = bounds.center, e = bounds.extents;
+			for (int i = 0; i < planes.Length; i++)
+			{
+				Vector3 n = planes[i].normal;
+				float reach = Mathf.Abs(n.x) * e.x + Mathf.Abs(n.y) * e.y + Mathf.Abs(n.z) * e.z;
+				if (Vector3.Dot(n, c) + planes[i].distance + reach + margin * n.magnitude < 0f)
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
 		public static bool MainReachable(Plane[] planes, Bounds bounds, float largestInstance)
 		{
 			bounds.Expand(Mathf.Max(0f, largestInstance));
@@ -99,9 +122,17 @@ namespace FishMMO.Client
 		/// by the same formula at that radius and grown by what the sun's turn moves the sweep's end, covers it.</item>
 		/// </list>
 		/// </summary>
+		/// <remarks>
+		/// <paramref name="rawPlanes"/>: <paramref name="planes"/> are the camera's own, and each box is tested against them widened
+		/// by what the kept range can bring it (<see cref="IntersectsTurned"/>: the slack, and the turn times the box's farthest
+		/// distance), not by one margin for the whole far plane — which at a 3 km far plane was 158 m on every side, so everything
+		/// within 158 m of the view was a candidate and drew empty (TerrainGpuRenderer.AngularMargins).
+		/// </remarks>
 		public static bool RunCandidates(Plane[] planes, Bounds bounds, float largestSize, float largestRadius, Vector3 eye, float slack, float reach,
-			bool shadows, Vector3 lightTravel, float shadowDistance, float turnDegrees, out float near, out float far, out bool main, out bool shadow)
+			bool shadows, Vector3 lightTravel, float shadowDistance, float turnDegrees, out float near, out float far, out bool main, out bool shadow,
+			bool rawPlanes = false)
 		{
+			float turn = turnDegrees * Mathf.Deg2Rad;
 			near = Mathf.Max(0f, TerrainTreeMath.MinDistance(bounds, eye) - slack);
 			far = TerrainTreeMath.MaxDistance(bounds, eye) + slack;
 			main = shadow = false;
@@ -109,7 +140,16 @@ namespace FishMMO.Client
 			{
 				return false;
 			}
-			main = MainReachable(planes, bounds, largestSize);
+			if (rawPlanes)
+			{
+				Bounds grown = bounds;
+				grown.Expand(Mathf.Max(0f, largestSize));
+				main = IntersectsTurned(planes, grown, eye, slack, turn);
+			}
+			else
+			{
+				main = MainReachable(planes, bounds, largestSize);
+			}
 			if (shadows && near <= shadowDistance + largestRadius)
 			{
 				float length = Mathf.Min(shadowDistance, 2f * largestRadius / Mathf.Max(-lightTravel.y, 0.1f));
@@ -118,7 +158,7 @@ namespace FishMMO.Client
 				swept.Encapsulate(swept.min + lightTravel * length);
 				swept.Encapsulate(swept.max + lightTravel * length);
 				swept.Expand(2f * length * lightTravel.magnitude * Mathf.Sin(turnDegrees * Mathf.Deg2Rad));
-				shadow = main || TerrainTreeMath.IntersectsFrustum(planes, swept);
+				shadow = main || (rawPlanes ? IntersectsTurned(planes, swept, eye, slack, turn) : TerrainTreeMath.IntersectsFrustum(planes, swept));
 			}
 			return main || shadow;
 		}
@@ -221,6 +261,24 @@ namespace FishMMO.Client
 					}
 				}
 			}
+		}
+
+		/// <summary>
+		/// The levels one instance can be drawn at while the camera stays within <paramref name="slack"/> metres of
+		/// <paramref name="eye"/> (bit per level, fade partners included): the kernel's own choice (<see cref="Cull"/>: its
+		/// reference point's distance, the model's size by its largest x/y scale) over that distance ± slack. 0 when it is culled
+		/// by size from everywhere there.
+		/// </summary>
+		public static int InstanceLevelMask(in Matrix4x4 m, float modelSize, Vector3 localReference, Vector3 eye, float slack, float screenFactor,
+			bool orthographic, float[] transitions, float[] widths, int maximumLodLevel)
+		{
+			float sx = ((Vector3)m.GetColumn(0)).magnitude, sy = ((Vector3)m.GetColumn(1)).magnitude;
+			float size = modelSize * Mathf.Max(sx, sy);
+			float distance = Vector3.Distance(m.MultiplyPoint3x4(localReference), eye);
+			// A hair more than the slack: the kernel's float distance may round either way of the CPU's.
+			float reach = slack + 1e-3f * (1f + distance);
+			return LevelMask(TerrainTreeMath.RelativeHeight(size, Mathf.Max(0f, distance - reach), screenFactor, orthographic),
+				TerrainTreeMath.RelativeHeight(size, distance + reach, screenFactor, orthographic), transitions, widths, maximumLodLevel);
 		}
 
 		/// <summary>

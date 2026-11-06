@@ -78,6 +78,25 @@ namespace FishMMO.Client
 	/// </remarks>
 	public static class TerrainTreeInstancing
 	{
+		/// <summary>
+		/// Owner A/B switches for distant trees (harness `treeDistance`, `treeLodBias`): a cap on the trees' draw distance in metres
+		/// (0: as authored), and a scale on their LOD bias (below 1: each tree takes its coarser levels nearer). They apply to the
+		/// terrains' own trees here and to the baked Tree-family props (CliffRockInstancing), which is what the worlds' trees are.
+		/// Defaults draw as authored.
+		/// </summary>
+		public static float DistanceCap;
+		public static float LodBiasScale = 1f;
+
+		/// <summary>
+		/// The owner's A/B of where a tree's last level (its billboard) takes over from the mesh before it (harness
+		/// `billboardSwitch`): that one transition times this, the others as authored (TerrainTreeModel.ApplyBillboardSwitch).
+		/// Above 1 the billboard takes over nearer. 1: as authored.
+		/// </summary>
+		public static float BillboardSwitchScale = 1f;
+
+		private static float DistanceOf(Driven d) => DistanceCap > 0f ? Mathf.Min(d.Distance, DistanceCap) : d.Distance;
+		private static float LodBiasOf(Driven d) => d.Terrain.treeLODBiasMultiplier * LodBiasScale;
+
 		/// <summary>A terrain this renderer draws, and the tree distance it took over.</summary>
 		private sealed class Driven
 		{
@@ -592,9 +611,9 @@ namespace FishMMO.Client
 				bool drawn = d.Terrain != null && d.Terrain.drawTreesAndFoliage;
 				if (drawn)
 				{
-					reach = Mathf.Max(reach, d.Distance);
+					reach = Mathf.Max(reach, DistanceOf(d));
 				}
-				signature = unchecked(signature * 31 + (drawn ? d.Distance.GetHashCode() * 7 + d.Terrain.treeLODBiasMultiplier.GetHashCode() * 3 + d.Field.GpuOffset : 1));
+				signature = unchecked(signature * 31 + (drawn ? DistanceOf(d).GetHashCode() * 7 + LodBiasOf(d).GetHashCode() * 3 + d.Field.GpuOffset : 1));
 			}
 			signature = unchecked(signature * 31 + drivenVersion);
 			// The GPU work list kept from an earlier frame while the camera stays within what it was widened for, as the
@@ -622,7 +641,7 @@ namespace FishMMO.Client
 						{
 							continue;
 						}
-						instances += d.Field.Gather(in view, d.Distance, d.Terrain.treeLODBiasMultiplier, cameraGpu, in widen, out bool cpuAppended);
+						instances += d.Field.Gather(in view, DistanceOf(d), LodBiasOf(d), cameraGpu, in widen, out bool cpuAppended);
 						cpu |= cpuAppended;
 					}
 					LastInstanceCount = instances;

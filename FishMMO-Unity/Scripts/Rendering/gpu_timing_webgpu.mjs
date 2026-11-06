@@ -79,4 +79,7 @@ try {
   result.canvas = JSON.parse(await evaluate(`JSON.stringify({w:document.querySelector('canvas').width,h:document.querySelector('canvas').height})`));
   fs.writeFileSync(file, JSON.stringify(result,null,2)+'\n');
   console.log(JSON.stringify({view, frames:result.frames, frameMsWall:result.frameMsWall, gpuBusyMsPerFrame:result.gpuBusyMsPerFrame, passesPerFrame:result.passesPerFrame, errors:result.errors, skipped:result.skipped}));
-} finally {ws.close()}
+} finally {
+  // The canvas back to the page's own size (it fills the window), so the tab is usable at its real size afterwards.
+  await evaluate(`(()=>{const c=document.querySelector('canvas');if(c){c.style.width='';c.style.height='';}})()`).catch(()=>{}); await call('Emulation.clearDeviceMetricsOverride').catch(()=>{}); ws.close();
+}

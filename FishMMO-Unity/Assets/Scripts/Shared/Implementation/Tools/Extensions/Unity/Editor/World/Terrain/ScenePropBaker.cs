@@ -61,6 +61,20 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public static int Write(Scene scene, string source, List<ScenePropSet.Prototype> prototypes, List<ScenePropSet.Prop> props, int collisionLayer = -1)
 		{
+			// The developers' hand edits laid over it (ScenePropEdits); a POI piece's were laid as it was made (AddProp), with its doors.
+			if (source != PointOfInterestGenerator.PropSource)
+			{
+				ScenePropEdits edits = ScenePropEdits.For(scene, false);
+				if (edits != null)
+				{
+					int applied = edits.ApplyTo(source, prototypes, props);
+					int unmatched = edits.Unmatched(source);
+					if (applied > 0 || unmatched > 0)
+					{
+						Debug.Log($"[Props] {scene.name} {source}: {applied} hand edit(s) laid over the bake{(unmatched > 0 ? $", {unmatched} unmatched (see {ScenePropEdits.PathFor(scene)})" : "")}.");
+					}
+				}
+			}
 			WriteSet(scene, source, prototypes, props);
 			return WriteCollision(scene, source, prototypes, props, collisionLayer);
 		}

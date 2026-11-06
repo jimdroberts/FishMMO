@@ -93,7 +93,7 @@ namespace FishMMO.UnitTests
 				SourceScanPins.Replace("clone.renderQueue + PrimeQueueOffset", "clone.renderQueue - 1"), "the prime one queue ahead: among the bushes");
 			SourceScanPins.HoldsAndFires("DetailScatterRenderer.CloneOf", SourceScanPins.ReadCode(Scatter),
 				code => SourceScanPins.InOrder(SourceScanPins.Body(code, "private Material CloneOf("),
-					"clone.IsKeywordEnabled(\"_ALPHATEST_ON\")", "clone.renderQueue = material.renderQueue + TerrainGpuRenderer.UnprimedAlphaTestQueueOffset;", "clones.Add(material, clone);"),
+					"clone.IsKeywordEnabled(\"_ALPHATEST_ON\")", "clone.renderQueue = material.renderQueue + TerrainGpuRenderer.UnprimedAlphaTestQueueOffset;", "clonesByContent[key] = clone;"),
 				SourceScanPins.Replace("clone.renderQueue = material.renderQueue + TerrainGpuRenderer.UnprimedAlphaTestQueueOffset;", string.Empty),
 				"the bushes back in the trees' queue");
 		}

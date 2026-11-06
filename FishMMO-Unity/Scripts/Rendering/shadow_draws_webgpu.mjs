@@ -65,4 +65,7 @@ try {
   fs.writeFileSync(file, JSON.stringify(data,null,2)+'\n');
   console.log(JSON.stringify(data));
   await call('Page.removeScriptToEvaluateOnNewDocument',{identifier});
-} finally { ws.close(); }
+} finally {
+  // The canvas back to the page's own size (it fills the window), so the tab is usable at its real size afterwards.
+  await evaluate(`(()=>{const c=document.querySelector('canvas');if(c){c.style.width='';c.style.height='';}})()`).catch(()=>{}); await call('Emulation.clearDeviceMetricsOverride').catch(()=>{}); ws.close();
+}

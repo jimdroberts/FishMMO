@@ -21,6 +21,15 @@ namespace FishMMO.Shared
 		[Tooltip("The scene's baked prop sets, one per source.")]
 		public List<ScenePropSet> Sets = new List<ScenePropSet>();
 
+		/// <summary>
+		/// Raised when a set's props were changed in place (a developer's hand edit, ScenePropEditTool): whatever draws or
+		/// collides the sets reads them again. A rebake replaces the asset and needs no call.
+		/// </summary>
+		public static event System.Action SetsEdited;
+
+		/// <summary>Tells the props' renderers a set changed in place (<see cref="SetsEdited"/>).</summary>
+		public static void NotifySetsEdited() => SetsEdited?.Invoke();
+
 		/// <summary>Replaces the set from <paramref name="set"/>'s source (or adds it), dropping missing entries.</summary>
 		public void Put(ScenePropSet set)
 		{

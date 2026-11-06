@@ -40,4 +40,7 @@ try {
     await pause(Number(interval));
   }
   console.log(JSON.stringify({name, view, frames:files.length, monitor:JSON.parse(await evaluate('JSON.stringify(window.fishWebGpuTestStatus)'))}));
-} finally { ws.close(); }
+} finally {
+  // The canvas back to the page's own size (it fills the window), so the tab is usable at its real size afterwards.
+  await evaluate(`(()=>{const c=document.querySelector('canvas');if(c){c.style.width='';c.style.height='';}})()`).catch(()=>{}); await call('Emulation.clearDeviceMetricsOverride').catch(()=>{}); ws.close();
+}

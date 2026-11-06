@@ -120,13 +120,16 @@ namespace FishMMO.Client
 		private static Vector3 gatheredEye, gatheredForward, gatheredLight;
 		private static float gatheredFov, gatheredAspect, gatheredReach, gatheredShadow, gatheredLodBias;
 		private static int gatheredVersion = -1, gatheredHlodRevision = -1;
-		private static bool gatheredRunGather;
+		private static bool gatheredRunGather, gatheredExactLevels, gatheredAngular;
+		private static float gatheredTreeCap, gatheredTreeBias = 1f, gatheredBillboardSwitch = 1f;
 		private static readonly Plane[] widened = new Plane[6];
 
 		private static bool StillGathered(Camera camera, in TerrainTreeField.View view, float drawDistance)
 		{
 			if (gatheredFor != camera || gatheredVersion != drivenVersion || gatheredHlodRevision != WorldHlod.Revision || gatheredReach != drawDistance || gatheredShadow != view.ShadowDistance
-				|| gatheredRunGather != TerrainGpuRenderer.RunGather
+				|| gatheredRunGather != TerrainGpuRenderer.RunGather || gatheredExactLevels != TerrainGpuRenderer.ExactRunLevels || gatheredAngular != TerrainGpuRenderer.AngularMargins
+				|| gatheredTreeCap != TerrainTreeInstancing.DistanceCap || gatheredTreeBias != TerrainTreeInstancing.LodBiasScale
+				|| gatheredBillboardSwitch != TerrainTreeInstancing.BillboardSwitchScale
 				|| gatheredFov != camera.fieldOfView || gatheredAspect != camera.aspect || gatheredLodBias != QualitySettings.lodBias)
 			{
 				return false;
@@ -143,6 +146,8 @@ namespace FishMMO.Client
 		/// <summary>Props per model across every driven source: the CPU buckets' capacity.</summary>
 		private static readonly Dictionary<TerrainTreeModel, int> instancesOf = new Dictionary<TerrainTreeModel, int>();
 		private static TerrainGpuRenderer gpu;
+		/// <summary>The billboard switch the models were last moved to (<see cref="TerrainTreeInstancing.BillboardSwitchScale"/>).</summary>
+		private static float appliedBillboardSwitch = 1f;
 		private static bool gpuTried, hooked, scenesChanged = true;
 		private static bool enabled = true, preferGpu = true;
 		private static int syncedFrame = -1;
@@ -231,6 +236,9 @@ namespace FishMMO.Client
 			UnityEditor.EditorApplication.hierarchyChanged += MarkChanged;
 			UnityEditor.EditorApplication.projectChanged -= MarkChanged;
 			UnityEditor.EditorApplication.projectChanged += MarkChanged;
+			// A developer's hand edit changes a set in place (ScenePropEditTool): no asset is reimported, so nothing else tells.
+			SceneProps.SetsEdited -= MarkChanged;
+			SceneProps.SetsEdited += MarkChanged;
 			if (!UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode)
 			{
 				Hook();
@@ -538,6 +546,10 @@ namespace FishMMO.Client
 					model.Dispose();
 					model = null;
 				}
+				else
+				{
+					model.ApplyBillboardSwitch(appliedBillboardSwitch, gpu);
+				}
 			}
 			if (model == null)
 			{
@@ -692,6 +704,14 @@ namespace FishMMO.Client
 			}
 			// The GPU work list kept from the last gather while the camera stays inside what it was widened for. Only
 			// when every source is resident: a CPU-path source's props are bucketed afresh each camera.
+			if (TerrainTreeInstancing.BillboardSwitchScale != appliedBillboardSwitch)
+			{
+				appliedBillboardSwitch = TerrainTreeInstancing.BillboardSwitchScale;
+				foreach (TerrainTreeModel each in models.Values)
+				{
+					each.ApplyBillboardSwitch(appliedBillboardSwitch, gpu);
+				}
+			}
 			bool reuse = onGpu && StillGathered(camera, in view, drawDistance);
 			if (!reuse)
 			{
@@ -715,7 +735,9 @@ namespace FishMMO.Client
 		private struct PendingWork
 		{
 			public int Start, Count, Model, Mask;
-			public float Reach;
+			/// <summary>The levels its instances can show at, and cast at (−1: the mask, as decided for the whole run).</summary>
+			public int MainLevels, ShadowLevels;
+			public float Reach, LodBias;
 			public bool Shadow;
 			/// <summary>Whether its chunk meets the widened view (else it is gathered for its shadows alone).</summary>
 			public bool InView;
@@ -726,8 +748,11 @@ namespace FishMMO.Client
 		/// <summary>A run's own part of the GPU work list (TerrainGpuRenderer.RunGather, TerrainGpuMath.RunCandidates): false when it has nothing to draw.</summary>
 		private static bool RunWork(Plane[] planes, in TerrainTreeField.View view, Run run, float slack, float reach,
 			out float near, out float far, out bool main, out bool shadow)
-			=> TerrainGpuMath.RunCandidates(planes, run.Bounds, run.MaxSize, run.Radius, view.Position, slack, reach,
-				view.Shadows, view.LightDirection, view.ShadowDistance, RegatherDegrees, out near, out far, out main, out shadow);
+			=> TerrainGpuRenderer.AngularMargins
+				? TerrainGpuMath.RunCandidates(view.Planes, run.Bounds, run.MaxSize, run.Radius, view.Position, slack, reach,
+					view.Shadows, view.LightDirection, view.ShadowDistance, RegatherDegrees, out near, out far, out main, out shadow, rawPlanes: true)
+				: TerrainGpuMath.RunCandidates(planes, run.Bounds, run.MaxSize, run.Radius, view.Position, slack, reach,
+					view.Shadows, view.LightDirection, view.ShadowDistance, RegatherDegrees, out near, out far, out main, out shadow);
 
 		/// <summary>Walks every chunk for a camera: the GPU work list (against a widened view) and the CPU path's buckets.</summary>
 		private static void Gather(Camera camera, in TerrainTreeField.View view, bool onGpu, bool reflection, float drawDistance)
@@ -775,6 +800,13 @@ namespace FishMMO.Client
 						TerrainTreeModel model = run.Model;
 						// Each run as far as its largest prop is drawn: the chunk's reach is its biggest.
 						float reach = Mathf.Min(drawDistance, DrawDistanceFor(run.MaxSize));
+						// The owner's A/B switches for distant trees (harness `treeDistance`, `treeLodBias`; default: as authored).
+						bool tree = model.TreeFamily;
+						float lodBias = tree ? TerrainTreeInstancing.LodBiasScale : 1f;
+						if (tree && TerrainTreeInstancing.DistanceCap > 0f)
+						{
+							reach = Mathf.Min(reach, TerrainTreeInstancing.DistanceCap);
+						}
 						if (near > reach)
 						{
 							continue;
@@ -800,17 +832,55 @@ namespace FishMMO.Client
 							{
 								continue;
 							}
-							float nearHeight = TerrainTreeMath.RelativeHeight(run.MaxSize, runNear, view.ScreenFactor, view.Orthographic);
-							float farHeight = TerrainTreeMath.RelativeHeight(run.MinSize, runFar, view.ScreenFactor, view.Orthographic);
+							float screenFactor = view.ScreenFactor * lodBias;
+							float nearHeight = TerrainTreeMath.RelativeHeight(run.MaxSize, runNear, screenFactor, view.Orthographic);
+							float farHeight = TerrainTreeMath.RelativeHeight(run.MinSize, runFar, screenFactor, view.Orthographic);
 							int mask = TerrainGpuMath.LevelMask(nearHeight, farHeight, model.Transitions, model.FadeWidths, view.MaximumLodLevel);
+							// A small run (a lone building, a few rocks): decided instance by instance (TerrainGpuRenderer.ExactRunLevels),
+							// each by the run's own test on its own box (a run of one, RunGatherTests) and its own levels from its own
+							// reference point: the levels the camera draws are those of instances that can show, the shadow's those of
+							// instances that can cast into the view, never every level the run's box could reach in either.
+							int mainLevels = -1, shadowLevels = -1;
+							if (TerrainGpuRenderer.ExactRunLevels && TerrainGpuRenderer.RunGather && run.Count <= TerrainGpuRenderer.ExactRunLevelsMax && mask != 0)
+							{
+								mainLevels = shadowLevels = 0;
+								for (int i = run.Start; i < run.Start + run.Count; i++)
+								{
+									Matrix4x4 m = d.Matrices[i];
+									float scale = Mathf.Max(m.GetColumn(0).magnitude, m.GetColumn(1).magnitude);
+									Bounds own = TerrainTreeMath.TransformBounds(m, model.LocalBounds);
+									own.Encapsulate(m.GetColumn(3));
+									own.Encapsulate(m.MultiplyPoint3x4(model.LocalReference));
+									float sphere = gpu.FloraMode > 0.5f ? TerrainGpuRenderer.FloraSphereRadius(model.LocalBounds) : model.LocalBounds.extents.magnitude;
+									bool angular = TerrainGpuRenderer.AngularMargins;
+									if (!TerrainGpuMath.RunCandidates(angular ? view.Planes : planes, own, model.Size * scale, sphere * Mathf.Max(scale, m.GetColumn(2).magnitude), view.Position, slack, reach,
+										view.Shadows, view.LightDirection, view.ShadowDistance, RegatherDegrees, out _, out _, out bool instanceMain, out bool instanceShadow, angular))
+									{
+										continue;
+									}
+									int levels = TerrainGpuMath.InstanceLevelMask(m, model.Size, model.LocalReference, eye, slack,
+										screenFactor, view.Orthographic, model.Transitions, model.FadeWidths, view.MaximumLodLevel);
+									mainLevels |= instanceMain ? levels : 0;
+									shadowLevels |= instanceShadow ? levels : 0;
+								}
+								mainLevels &= mask;
+								shadowLevels &= mask;
+								mask = mainLevels | shadowLevels;
+								if (mask == 0)
+								{
+									continue;
+								}
+								mainCandidate = mainLevels != 0;
+								shadowCandidate = shadowLevels != 0;
+							}
 							// Thinned out (dithered, by position) over the last share of its reach: a stand thins away rather than ending at a line.
 							if (!WorldHlod.HasCandidates)
-							{ gpu.AddWork(d.GpuOffset + run.Start, run.Count, model.GpuId, reach, 1f, mask, shadowCandidate, reach * (1f - ThinShare), 0f, mainCandidate); continue; }
+							{ gpu.AddWork(d.GpuOffset + run.Start, run.Count, model.GpuId, reach, lodBias, mask, shadowCandidate, reach * (1f - ThinShare), 0f, mainCandidate, mainLevels, shadowLevels); continue; }
 							int commands = 0; foreach (var part in model.Levels[model.Levels.Length - 1].Parts) commands += part.Params.Length;
 							foreach (var range in run.HlodRanges)
 							{
 								WorldHlod.Account(model.GpuId, range.Count, commands, range.Group);
-								pending.Add(new PendingWork { Start = d.GpuOffset + range.Start, Count = range.Count, Model = model.GpuId, Mask = mask, Reach = reach, Shadow = shadowCandidate, Group = range.Group, InView = mainCandidate });
+								pending.Add(new PendingWork { Start = d.GpuOffset + range.Start, Count = range.Count, Model = model.GpuId, Mask = mask, MainLevels = mainLevels, ShadowLevels = shadowLevels, Reach = reach, LodBias = lodBias, Shadow = shadowCandidate, Group = range.Group, InView = mainCandidate });
 							}
 							continue;
 						}
@@ -828,11 +898,11 @@ namespace FishMMO.Client
 				foreach (var work in pending)
 				{
 					bool main = (work.Group == null || !work.Group.Selected) && work.InView;
-					if (any && previous.Start + previous.Count == work.Start && previous.Model == work.Model && previous.Reach == work.Reach && previous.Mask == work.Mask && previous.Shadow == work.Shadow && previousMain == main) { previous.Count += work.Count; continue; }
-					if (any) gpu.AddWork(previous.Start, previous.Count, previous.Model, previous.Reach, 1f, previous.Mask, previous.Shadow, previous.Reach * (1f - ThinShare), 0f, previousMain);
+					if (any && previous.Start + previous.Count == work.Start && previous.Model == work.Model && previous.Reach == work.Reach && previous.LodBias == work.LodBias && previous.Mask == work.Mask && previous.MainLevels == work.MainLevels && previous.ShadowLevels == work.ShadowLevels && previous.Shadow == work.Shadow && previousMain == main) { previous.Count += work.Count; continue; }
+					if (any) gpu.AddWork(previous.Start, previous.Count, previous.Model, previous.Reach, previous.LodBias, previous.Mask, previous.Shadow, previous.Reach * (1f - ThinShare), 0f, previousMain, previous.MainLevels, previous.ShadowLevels);
 					previous = work; previousMain = main; any = true;
 				}
-				if (any) gpu.AddWork(previous.Start, previous.Count, previous.Model, previous.Reach, 1f, previous.Mask, previous.Shadow, previous.Reach * (1f - ThinShare), 0f, previousMain);
+				if (any) gpu.AddWork(previous.Start, previous.Count, previous.Model, previous.Reach, previous.LodBias, previous.Mask, previous.Shadow, previous.Reach * (1f - ThinShare), 0f, previousMain, previous.MainLevels, previous.ShadowLevels);
 			}
 
 			if (onGpu && allResident)
@@ -848,6 +918,11 @@ namespace FishMMO.Client
 				gatheredShadow = view.ShadowDistance;
 				gatheredLodBias = QualitySettings.lodBias;
 				gatheredRunGather = TerrainGpuRenderer.RunGather;
+				gatheredExactLevels = TerrainGpuRenderer.ExactRunLevels;
+				gatheredAngular = TerrainGpuRenderer.AngularMargins;
+				gatheredTreeCap = TerrainTreeInstancing.DistanceCap;
+				gatheredTreeBias = TerrainTreeInstancing.LodBiasScale;
+				gatheredBillboardSwitch = TerrainTreeInstancing.BillboardSwitchScale;
 			}
 			else
 			{

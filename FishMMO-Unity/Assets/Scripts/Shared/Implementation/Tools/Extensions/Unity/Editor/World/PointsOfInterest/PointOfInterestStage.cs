@@ -999,6 +999,30 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public ScenePointsOfInterest Place(Scene scene, TerrainTilePlan tiles, Terrain[,] terrains, SceneWater water, List<string> notes, List<string> wrote)
 		{
+			// The developers' hand edits to this scene's pieces, laid as each piece is made (PointOfInterestSiteContext.AddProp), so
+			// a moved building's doors, rooms, dug floor and smoke follow it.
+			ScenePropEdits.Active = ScenePropEdits.For(scene, false);
+			ScenePropEdits.Active?.BeginBake(PointOfInterestGenerator.PropSource);
+			try
+			{
+				ScenePointsOfInterest placed = PlaceSites(scene, tiles, terrains, water, notes, wrote);
+				ScenePropEdits edits = ScenePropEdits.Active;
+				if (edits != null)
+				{
+					EditorUtility.SetDirty(edits);
+					int unmatched = edits.Unmatched(PointOfInterestGenerator.PropSource);
+					notes?.Add($"Points of interest: {edits.Edits.Count - unmatched} hand edit(s) laid{(unmatched > 0 ? $", {unmatched} unmatched (their pieces are no longer generated where they were: see {ScenePropEdits.PathFor(scene)})" : "")}.");
+				}
+				return placed;
+			}
+			finally
+			{
+				ScenePropEdits.Active = null;
+			}
+		}
+
+		private ScenePointsOfInterest PlaceSites(Scene scene, TerrainTilePlan tiles, Terrain[,] terrains, SceneWater water, List<string> notes, List<string> wrote)
+		{
 			// The sea's level before a dry scene's water is let go: a hydrology asset the sites' water needs is made at it.
 			float seaLevel = water != null ? water.SeaLevel : float.NegativeInfinity;
 			if (water != null && !water.Any)

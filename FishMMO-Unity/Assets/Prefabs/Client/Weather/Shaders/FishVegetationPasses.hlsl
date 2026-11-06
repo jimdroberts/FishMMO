@@ -214,6 +214,10 @@ float _FishVegPlantConst;
 // needle edges are then drawn by alpha-to-coverage — a soft, antialiased fringe — instead of cut at the
 // cutoff, which drew every card as a hard paper cut-out up close. 0: the plain cut.
 float _FishVegetationAlphaToCoverage;
+// 1: a tree's billboard takes its plant's height and crown width (VegVary), as the meshes before it do, so a tree keeps its
+// size where it changes to its billboard. 0 (as shipped until the owner's A/B): every billboard is the species' picture at
+// its authored size. Set by the harness (`billboardVary`).
+float _FishBillboardVary;
 
 // The ground colour map (GroundColourMap): xy the map's world xz origin, zw one over its xz size.
 #include "FishGroundColour.hlsl"
@@ -575,7 +579,16 @@ bool VegVary(inout float3 positionOS, inout float3 normalOS, float4 partPivot, f
     }
     if (_FacingCamera > 0.5)
     {
-        // A billboard is a picture of the tree already: only its colour is the plant's own.
+        // A billboard is a picture of the tree already: its colour is the plant's own, and (with _FishBillboardVary) its
+        // height and its crown's width, which the meshes take below. The crown's widening fades in over the first 3 m
+        // there; on the quad it is uniform across (the trunk is a pixel or two wide at a billboard's range). No twist or
+        // lean: one picture turned to the camera has neither.
+        UNITY_BRANCH
+        if (_FishBillboardVary > 0.5)
+        {
+            positionOS.y *= 1.0 + rTall * _VaryHeight;
+            positionOS.x *= 1.0 + rCrown * _VaryCrown;
+        }
         return true;
     }
     // Its trunk thickened or thinned about its own centre line (partPivot), the taller of a species the thicker;

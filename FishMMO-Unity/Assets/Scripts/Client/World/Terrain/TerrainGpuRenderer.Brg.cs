@@ -427,7 +427,7 @@ namespace FishMMO.Client
 			// The main light's cascades (orthographic): its static casters come from the cached shadows when they serve this
 			// camera (CachedMainLightShadows), drawn by the cache pass into the tiles it refreshes, not into every cascade here.
 			bool omitStatic = view == 1 && context.projectionType == BatchCullingProjectionType.Orthographic
-				&& shadowCacheArgs != null && CachedMainLightShadows.AppliesTo(brgCameraObject);
+				&& shadowCacheArgs != null && CachedMainLightShadows.OmitsStaticCasters(brgCameraObject);
 			if (view == 1)
 			{
 				LastStaticShadowCommandsOmitted = 0;
@@ -528,7 +528,7 @@ namespace FishMMO.Client
 				{
 					flags = BatchDrawCommandFlags.LODCrossFadeValuePacked | BatchDrawCommandFlags.HasSortingPosition,
 					batchID = brgBatch,
-					materialID = d.Material,
+					materialID = BillboardDiagnostic == 2 && view == 0 && d.HasPrime && commandBillboard[c] ? d.Prime : d.Material,
 					splitVisibilityMask = mask,
 					lightmapIndex = ushort.MaxValue,
 					sortingPosition = 0,

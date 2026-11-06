@@ -38,6 +38,16 @@ namespace FishMMO.Shared.WorldDesign
 	/// </remarks>
 	public static class BillboardImpostor
 	{
+		/// <summary>
+		/// A tree's fullness range: x the fewest of its spare limbs a plant keeps, y the fewest of its spare leaf cards; each plant
+		/// keeps a share between that and all of them, from its own hash. The trees' vegetation materials' <c>_VaryFullness</c>
+		/// (BiomeArtGenerator's Vegetation): keep the two the same.
+		/// </summary>
+		public static readonly Vector2 TreeFullness = new Vector2(0.15f, 0.55f);
+
+		/// <summary>What the median tree keeps of its spares (<see cref="TreeFullness"/> halfway to all): the parts a billboard is pictured with.</summary>
+		public static Vector2 MedianTreeKeep => new Vector2(Mathf.Lerp(TreeFullness.x, 1f, 0.5f), Mathf.Lerp(TreeFullness.y, 1f, 0.5f));
+
 		public sealed class Result
 		{
 			public Color32[] Pixels;
@@ -49,8 +59,15 @@ namespace FishMMO.Shared.WorldDesign
 		public delegate Color Shade(int submesh, Vector2 uv, Color vertexColour);
 
 		/// <param name="height">Texture height in pixels; the width follows the tree's proportions, a power of two.</param>
-		public static Result Render(MeshBuilder tree, Shade shade, int height, float swayHeight, float tintable)
+		/// <param name="keep">
+		/// The spares pictured (x limbs, y leaf cards: a part ranked above is left out, as the vegetation shader's VegVary drops it
+		/// from a plant that keeps no more); <see cref="Vector2.zero"/> pictures every part. Unset: the median tree's
+		/// (<see cref="MedianTreeKeep"/>). The billboard replaces trees that drop theirs, and a picture of every spare drew each
+		/// one denser than the tree it stood for (2026-11-06).
+		/// </param>
+		public static Result Render(MeshBuilder tree, Shade shade, int height, float swayHeight, float tintable, Vector2? keep = null)
 		{
+			Vector2 kept = keep ?? MedianTreeKeep;
 			Bounds bounds = tree.Bounds;
 			float reach = 0.01f;
 			foreach (Vector3 p in tree.Positions)
@@ -78,6 +95,10 @@ namespace FishMMO.Shared.WorldDesign
 				for (int t = 0; t + 2 < list.Count; t += 3)
 				{
 					int ia = list[t], ib = list[t + 1], ic = list[t + 2];
+					if (kept != Vector2.zero && tree.HasParts && Dropped(tree.PartData[ia], kept))
+					{
+						continue;
+					}
 					Vector3 pa = tree.Positions[ia], pb = tree.Positions[ib], pc = tree.Positions[ic];
 					// View from -Z looking down +Z: x right, y up, z away.
 					Vector2 sa = new Vector2((pa.x + reach) / (2f * reach) * sw, (pa.y - bottom) / tall * sh);
@@ -148,6 +169,22 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			return new Result { Pixels = pixels, Width = width, Height = height, Mesh = FacingQuad(reach, bottom, top, swayHeight, tintable) };
+		}
+
+		/// <summary>
+		/// Whether a plant that keeps <paramref name="keep"/> of its spares (x limbs, y leaf cards) leaves this part out: exactly
+		/// VegVary's test (FishVegetationPasses.hlsl), on a part's data (<see cref="MeshBuilder.PartData"/>: y its keep rank,
+		/// z what it is, w a card's keep rank).
+		/// </summary>
+		public static bool Dropped(Vector4 part, Vector2 keep)
+		{
+			float kind = part.z;
+			if (kind <= 0.5f)
+			{
+				return false;
+			}
+			bool leafCard = kind > 2.5f && kind < 3.5f;
+			return part.y > keep.x + 1e-4f || (leafCard && part.w > keep.y + 1e-4f);
 		}
 
 		private static float Edge(Vector2 a, Vector2 b, Vector2 c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);

@@ -110,6 +110,7 @@ namespace FishMMO.TestHarness.World.Editor
                     string page = File.ReadAllText(pagePath);
                     page = page.Replace(".then((unityInstance) => {", ".then((unityInstance) => { window.fishWebGpuInstance = unityInstance;");
                     page = page.Replace("alert(message);", "console.error(message); unityShowBanner(message + ' Use the isolated Brave test launcher if GPU startup fails.', 'error');");
+                    page = FillWindow(page);
                     page = page.Replace("</head>", "<script src=\"webgpu_monitor.js\"></script></head>");
                     File.Copy(Path.Combine(Application.dataPath,"../Scripts/Rendering/webgpu_monitor.js"),Path.Combine(output,"webgpu_monitor.js"),true);
                     File.WriteAllText(pagePath,page);
@@ -129,6 +130,22 @@ namespace FishMMO.TestHarness.World.Editor
                 File.Delete(RecoveryPath); building = false;
             }
             EditorApplication.Exit(0);
+        }
+
+        /// <summary>
+        /// The test page's canvas fills the browser window. The Default template draws a fixed 1024×768 canvas centred in the
+        /// page, so any window shorter than the canvas cuts off its top and bottom (the World Sim panel's header among them).
+        /// Unity keeps its render target matched to the canvas's on-page size, so the player always renders at the window's size.
+        /// </summary>
+        public static string FillWindow(string page)
+        {
+            const string fixedSize = "canvas.style.width = \"1024px\";\n        canvas.style.height = \"768px\";";
+            if (!page.Contains(fixedSize)) throw new BuildFailedException("WebGPU test page: the Default template's canvas size was not found");
+            page = page.Replace(fixedSize, "canvas.style.width = \"100%\";\n        canvas.style.height = \"100%\";");
+            const string fill = "<style>html,body{width:100%;height:100%;overflow:hidden;background:#231F20}"
+                + "#unity-container.unity-desktop{position:fixed;left:0;top:0;width:100%;height:100%;transform:none}"
+                + "#unity-canvas{display:block}#unity-footer{display:none}</style>";
+            return page.Replace("</head>", fill + "</head>");
         }
     }
 }

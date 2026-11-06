@@ -1580,18 +1580,25 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			msaaDropdown.choices = new List<string>(MsaaLabels);
+			// Only what this device can draw (WebGPU: off or 4×), each by its own label.
+			ClientDisplaySettings.MsaaOption[] options = ClientDisplaySettings.AvailableMsaa();
+			var choices = new List<string>(options.Length);
+			foreach (ClientDisplaySettings.MsaaOption option in options)
+			{
+				choices.Add(MsaaLabels[(int)option]);
+			}
+			msaaDropdown.choices = choices;
 			// The player's choice, or with none the quality level's own. Without notify: see InitializeAntialiasing.
 			msaaDropdown.SetValueWithoutNotify(MsaaLabels[(int)ClientDisplaySettings.CurrentMsaa()]);
 			msaaDropdown.RegisterValueChangedCallback((evt) =>
 			{
 				int index = msaaDropdown.index;
-				if (index < 0 || index >= MsaaLabels.Length)
+				if (index < 0 || index >= options.Length)
 				{
 					return;
 				}
-				ClientSettings.Set(ClientSettings.MsaaKey, index);
-				ClientDisplaySettings.ApplyMsaa((ClientDisplaySettings.MsaaOption)index);
+				ClientSettings.Set(ClientSettings.MsaaKey, (int)options[index]);
+				ClientDisplaySettings.ApplyMsaa(options[index]);
 			});
 		}
 

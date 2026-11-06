@@ -18,6 +18,69 @@ namespace FishMMO.Client
 		private Camera diagnosticCamera;
 		private Action<string> diagnosticReport;
 
+		/// <summary>
+		/// Diagnosis (probes): the kernel's own decision (its CPU mirror, TerrainGpuMath.Cull) for every instance of a family
+		/// within <paramref name="radius"/> metres of the camera in this camera's work list, with the shadow test's parts: the
+		/// level, the model's casting levels, the sphere's distance against the shadow distance, the sweep, and what it emits.
+		/// </summary>
+		public string DescribeShadowTrace(Camera camera, string family, float radius, int max = 24)
+		{
+			TerrainTreeField.View view = TerrainInstancingShared.ViewOf(camera);
+			Vector4 light = view.Shadows ? new Vector4(view.LightDirection.x, view.LightDirection.y, view.LightDirection.z, view.ShadowDistance) : Vector4.zero;
+			var lod = new Vector3(view.ScreenFactor, view.Orthographic ? 1f : 0f, view.MaximumLodLevel);
+			var emits = new List<TerrainGpuMath.Emit>();
+			var sb = new StringBuilder();
+			sb.Append($"light {light}, eye {view.Position}; ");
+			int shown = 0, seen = 0, seenDrawn = 0, casting = 0;
+			var drawnAt = new int[4];
+			var castAt = new int[4];
+			for (int w = 0; w < workCount; w++)
+			{
+				FishWork item = work[w];
+				Model m = models[(int)item.Model];
+				if (m.Name == null || !m.Name.StartsWith(family, StringComparison.Ordinal))
+				{
+					continue;
+				}
+				for (int i = 0; i < item.Count; i++)
+				{
+					Matrix4x4 matrix = mirror[(int)item.Start + i].ToMatrix();
+					Vector3 centre = matrix.MultiplyPoint3x4(m.Data.SphereCentre);
+					float distance = Vector3.Distance(centre, view.Position);
+					if (distance > radius)
+					{
+						continue;
+					}
+					seen++;
+					TerrainGpuMath.Cull(matrix, in m.Data, item.DrawDistance, item.LodBiasMultiplier, view.Position, view.Planes, light, lod, emits, (item.Padding & 1u) == 0u);
+					bool casts = emits.Exists(e => e.View == 1);
+					bool drawn = emits.Exists(e => e.View == 0);
+					if (!drawn)
+					{
+						continue;
+					}
+					seenDrawn++;
+					casting += casts ? 1 : 0;
+					foreach (TerrainGpuMath.Emit e in emits)
+					{
+						if (e.View == 0)
+						{
+							drawnAt[Mathf.Min(e.Level, 3)]++;
+							castAt[Mathf.Min(e.Level, 3)] += casts ? 1 : 0;
+						}
+					}
+					if (shown < max && !casts)
+					{
+						shown++;
+						float scale = Mathf.Max(((Vector3)matrix.GetColumn(0)).magnitude, Mathf.Max(((Vector3)matrix.GetColumn(1)).magnitude, ((Vector3)matrix.GetColumn(2)).magnitude));
+						sb.Append($"\n    {m.Name} at {distance:F0} m (r {m.Data.SphereRadius * scale:F1}): castMask {m.Data.ShadowMask}, wantMain {m.MainMask} wantShadow {m.ShadowMask}, item main {((item.Padding & 1u) == 0u)}, emits [{string.Join(",", emits.ConvertAll(e => $"{(e.View == 0 ? "main" : "shadow")} L{e.Level}"))}]");
+					}
+				}
+			}
+			sb.Insert(0, $"{family} within {radius:F0} m: {seen} instances, {seenDrawn} drawn, {casting} of them cast; drawn by level L0..L3 [{string.Join(",", drawnAt)}], casting [{string.Join(",", castAt)}]; drawn but casting nothing: ");
+			return sb.ToString();
+		}
+
 		/// <summary>The next time <paramref name="camera"/> renders, read its results back and report them.</summary>
 		public void RequestDiagnostics(Camera camera, Action<string> report)
 		{
@@ -247,7 +310,7 @@ namespace FishMMO.Client
 				Command command = snap.Commands[c];
 				snap.ExpectedArgs[c] = new GraphicsBuffer.IndirectDrawIndexedArgs
 				{
-					indexCountPerInstance = command.Mesh.GetIndexCount(command.Submesh),
+					indexCountPerInstance = IndexCountOf(command),
 					startIndex = command.Mesh.GetIndexStart(command.Submesh),
 					baseVertexIndex = (uint)command.Mesh.GetBaseVertex(command.Submesh),
 				};

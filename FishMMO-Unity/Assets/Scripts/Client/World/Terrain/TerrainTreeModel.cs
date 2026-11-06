@@ -67,6 +67,21 @@ namespace FishMMO.Client
 		public static readonly int LodFadeId = Shader.PropertyToID("_FishLodFade");
 
 		public GameObject Prefab { get; private set; }
+
+		/// <summary>Whether its prefab is of the Tree family ("Tree_…", as the harness's hideFamilies names it), read once.</summary>
+		public bool TreeFamily
+		{
+			get
+			{
+				if (treeFamily < 0)
+				{
+					treeFamily = Prefab != null && Prefab.name.StartsWith("Tree_", System.StringComparison.Ordinal) ? 1 : 0;
+				}
+				return treeFamily == 1;
+			}
+		}
+
+		private int treeFamily = -1;
 		public int Layer { get; private set; }
 		public bool HasLodGroup { get; private set; }
 
@@ -88,6 +103,38 @@ namespace FishMMO.Client
 		/// <see cref="TerrainTreeMath.DefaultFadeBandShare"/> of the transition. Zero without a LODGroup.
 		/// </summary>
 		public float[] FadeWidths { get; private set; }
+
+		/// <summary>The LODGroup's own transitions and fade widths (<see cref="ApplyBillboardSwitch"/> moves <see cref="Transitions"/> from them).</summary>
+		private float[] authoredTransitions;
+		private float[] authoredFadeSettings;
+		private float appliedBillboardSwitch = 1f;
+
+		/// <summary>
+		/// Moves a tree's switch to its billboard (its last level's upper transition) to the authored height times
+		/// <paramref name="scale"/>, kept between its neighbours, and its fade widths with it; the GPU path's copy too. In place:
+		/// the gatherers read <see cref="Transitions"/> each gather. Returns whether anything changed. Only a Tree-family model
+		/// with a LODGroup of three or more levels has a billboard to move.
+		/// </summary>
+		public bool ApplyBillboardSwitch(float scale, TerrainGpuRenderer gpu)
+		{
+			if (!TreeFamily || !HasLodGroup || authoredTransitions == null || authoredTransitions.Length < 3 || scale == appliedBillboardSwitch)
+			{
+				return false;
+			}
+			appliedBillboardSwitch = scale;
+			int n = authoredTransitions.Length, at = n - 2;
+			float upper = at > 0 ? authoredTransitions[at - 1] : 1f;
+			Transitions[at] = Mathf.Clamp(authoredTransitions[at] * scale, authoredTransitions[n - 1], upper);
+			for (int i = 0; i < n; i++)
+			{
+				FadeWidths[i] = TerrainTreeMath.FadeWidth(Transitions, i, authoredFadeSettings[i]);
+			}
+			if (gpu != null && GpuId >= 0)
+			{
+				gpu.SetModelTransitions(GpuId, Transitions, FadeWidths);
+			}
+			return true;
+		}
 
 		public Level[] Levels { get; private set; }
 
@@ -200,6 +247,12 @@ namespace FishMMO.Client
 				model.Transitions = transitions;
 				model.FadeWidths = widths;
 				model.HasLodGroup = true;
+				model.authoredTransitions = (float[])transitions.Clone();
+				model.authoredFadeSettings = new float[lods.Length];
+				for (int i = 0; i < lods.Length; i++)
+				{
+					model.authoredFadeSettings[i] = lods[i].fadeTransitionWidth;
+				}
 			}
 			else
 			{

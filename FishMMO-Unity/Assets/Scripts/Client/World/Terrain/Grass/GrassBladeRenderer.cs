@@ -101,6 +101,8 @@ namespace FishMMO.Client
 		private static readonly int ActiveTerrainId = Shader.PropertyToID("_GrassActiveTerrain");
 		private static readonly int ActiveOutId = Shader.PropertyToID("_GrassActiveOut");
 		private static readonly int UseActiveChannelsId = Shader.PropertyToID("_GrassUseActiveChannels");
+		private static readonly int RejectStatsId = Shader.PropertyToID("_GrassRejectStats");
+		private static readonly int EarlyExitsId = Shader.PropertyToID("_GrassEarlyExits");
 		private int activeVersion = -1;
 
 		private struct GroupRange
@@ -389,6 +391,35 @@ namespace FishMMO.Client
 		public static bool HideDraws;
 
 		/// <summary>
+		/// Diagnosis: the generate kernel counts how many candidate cells each of its exits takes (FishGrassBlades.compute
+		/// GRASS_STAT), read back with the blade counts into <see cref="LastStages"/> (the editor, or <see cref="StatsEnabled"/>).
+		/// Off, the kernel pays one branch not taken an exit.
+		/// </summary>
+		public static bool RejectStats;
+
+		/// <summary>
+		/// The generate kernel turns away, right after a candidate's root, one its blade could never survive: buried in snow
+		/// even at the tallest it can be (FishGrassBlades.compute). The same blades, less work: at the forest test camera a
+		/// third of all candidates were found buried only after every other test (2026-11-05). Off only for the A/B that proves
+		/// the blades the same (harness grassEarly, probe noearly).
+		/// </summary>
+		public static bool EarlyExits = true;
+
+		/// <summary>The kernel's stage counters' first word in the counts buffer (GRASS_STATS_BASE).</summary>
+		private const int StatsBase = 16;
+
+		/// <summary>What each stage counter counts, in the kernel's order (GRASS_STAT k).</summary>
+		public static readonly string[] StageNames =
+		{
+			"past the work list", "past the item's edge", "ring priority or distance", "no spawn (coverage, clump)", "no type",
+			"neighbour terrain's", "under the sea", "bank freeboard", "leaning over water", "past the grass distance",
+			"thinned by distance", "trodden", "burnt", "buried", "BUILT", "DRAWN by the camera", "(unused)",
+		};
+
+		/// <summary>The last read stage counts (RejectStats on), −1 before any.</summary>
+		public readonly long[] LastStages = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+
+		/// <summary>
 		/// Debug: stop regenerating and keep drawing the last blades generated (whichever camera made them).
 		/// A flicker that goes on while frozen is in the drawing or lighting; one that stops is in the generation or culling.
 		/// </summary>
@@ -484,7 +515,7 @@ namespace FishMMO.Client
 			{
 				blocks[s] = new MaterialPropertyBlock();
 			}
-			countBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Raw, 8, 4);
+			countBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Raw, StatsBase + StageNames.Length, 4);
 			argsBuffer = new GraphicsBuffer(GraphicsBuffer.Target.IndirectArguments | GraphicsBuffer.Target.Raw, Slots, GraphicsBuffer.IndirectDrawIndexedArgs.size);
 			var args = new GraphicsBuffer.IndirectDrawIndexedArgs[Slots];
 			for (int s = 0; s < Slots; s++)
@@ -825,7 +856,7 @@ namespace FishMMO.Client
 			Shader.SetGlobalFloat(HighlightId, Highlight ? 1f : 0f);
 			// This camera's RENDERED pixel at a distance, for the blades' on-screen width cap and the sub-pixel coverage
 			// (FishGrassBlades.hlsl). A global, set before every draw of this camera, so its shadow casters widen exactly as its
-			// blades do. Under a render scale (High Fidelity: 0.67 with STP) a rendered pixel is 1/scale screen pixels: the
+			// blades do. Under a render scale (a quality level drawn below native with STP) a rendered pixel is 1/scale screen pixels: the
 			// sub-pixel test counted screen pixels until 2026-10-27, so a "pixel-wide" blade was two thirds of what it drew to.
 			var pipeline = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
 			float renderScale = RenderScaleOf(camera, pipeline);
@@ -1044,6 +1075,8 @@ namespace FishMMO.Client
 			cmd.BeginSample(GpuSample);
 			cmd.SetComputeIntParam(compute, ActiveTableBaseId, atlas.ActiveTableBase);
 			cmd.SetComputeIntParam(compute, UseActiveChannelsId, UseActiveChannels ? 1 : 0);
+			cmd.SetComputeIntParam(compute, RejectStatsId, RejectStats ? 1 : 0);
+			cmd.SetComputeIntParam(compute, EarlyExitsId, EarlyExits ? 1 : 0);
 			cmd.SetComputeIntParam(compute, CacheFloraLooksId, CacheFloraLooks ? 1 : 0);
 			cmd.SetComputeIntParam(compute, LinearTableBaseId, atlas.LinearTableBase);
 			cmd.SetComputeIntParam(compute, PreparedColourId, PrepareTerrainColour ? 1 : 0);
@@ -1241,6 +1274,44 @@ namespace FishMMO.Client
 			GpuItems = sum;
 		}
 
+		/// <summary>
+		/// Diagnosis (ScenePerfProbe's grass early-exit check): every slot's blade count and an order-independent fingerprint
+		/// of its records (the sum and the xor of each 24-byte record's hash), read back now (a stall). The kernel appends in a
+		/// different order every frame, so only a set's own fingerprint can compare two frames' blades.
+		/// </summary>
+		public string Fingerprint()
+		{
+			if (countBuffer == null)
+			{
+				return "no grass";
+			}
+			var counts = new uint[countBuffer.count];
+			countBuffer.GetData(counts);
+			var s = new System.Text.StringBuilder();
+			for (int slot = 0; slot < Slots; slot++)
+			{
+				int n = (int)Mathf.Min(counts[slot], outBuffers[slot] != null ? outBuffers[slot].count : 0);
+				ulong sum = 0, xor = 0;
+				if (n > 0)
+				{
+					var words = new uint[n * (GrassMath.BladeStride / 4)];
+					outBuffers[slot].GetData(words, 0, 0, words.Length);
+					for (int i = 0; i < n; i++)
+					{
+						ulong h = 1469598103934665603UL;
+						for (int w = 0; w < GrassMath.BladeStride / 4; w++)
+						{
+							h = (h ^ words[i * (GrassMath.BladeStride / 4) + w]) * 1099511628211UL;
+						}
+						sum += h;
+						xor ^= h;
+					}
+				}
+				s.Append($"{SlotNames[slot]} {counts[slot]} {sum:x16}{xor:x16}; ");
+			}
+			return s.ToString();
+		}
+
 		private void OnBladeCounts(AsyncGPUReadbackRequest request)
 		{
 			if (request.hasError)
@@ -1248,6 +1319,13 @@ namespace FishMMO.Client
 				return;
 			}
 			NativeArray<uint> counts = request.GetData<uint>();
+			if (RejectStats)
+			{
+				for (int k = 0; k < StageNames.Length && StatsBase + k < counts.Length; k++)
+				{
+					LastStages[k] = counts[StatsBase + k];
+				}
+			}
 			for (int i = 0; i < Slots && i < counts.Length; i++)
 			{
 				LastBlades[i] = (int)counts[i];

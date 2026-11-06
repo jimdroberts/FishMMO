@@ -1361,6 +1361,50 @@ namespace FishMMO.TestHarness.World.Editor
 				GrassBladeSystem.DistanceOverride = float.Parse(variant.Substring("grassdist=".Length), System.Globalization.CultureInfo.InvariantCulture);
 				return () => GrassBladeSystem.DistanceOverride = was;
 			}
+			if (variant == "noangular")
+			{
+				// Candidacy against the far plane's one margin again (TerrainGpuRenderer.AngularMargins off): the empty draws it removes.
+				TerrainGpuRenderer.AngularMargins = false;
+				return () => TerrainGpuRenderer.AngularMargins = true;
+			}
+			if (variant == "noexact")
+			{
+				// Small runs' levels from the run's box again (TerrainGpuRenderer.ExactRunLevels off): the empty draws it removes.
+				TerrainGpuRenderer.ExactRunLevels = false;
+				return () => TerrainGpuRenderer.ExactRunLevels = true;
+			}
+			if (variant == "nohiz")
+			{
+				// The depth pyramid's occlusion off (FishDepthPyramid.Enabled): the empty draws Hi-Z alone makes.
+				bool was = FishDepthPyramid.Enabled;
+				FishDepthPyramid.Enabled = false;
+				return () => FishDepthPyramid.Enabled = was;
+			}
+			if (variant == "cache")
+			{
+				// The cached main-light shadows on (CachedMainLightShadows): the static casters leave URP's culling.
+				bool was = CachedMainLightShadows.Enabled;
+				CachedMainLightShadows.Enabled = true;
+				return () => CachedMainLightShadows.Enabled = was;
+			}
+			if (variant == "nojoin")
+			{
+				// The props' camera parts drawn one a command again (TerrainGpuRenderer.JoinSlotParts off; relaid out next camera).
+				TerrainGpuRenderer.JoinSlotParts = false;
+				return () => TerrainGpuRenderer.JoinSlotParts = true;
+			}
+			if (variant == "noearly")
+			{
+				// The grass kernel's exact early exits off (GrassBladeRenderer.EarlyExits): its blade counts must not change.
+				GrassBladeRenderer.EarlyExits = false;
+				return () => GrassBladeRenderer.EarlyExits = true;
+			}
+			if (variant == "grassstats")
+			{
+				// The generate kernel's exit counters on (GrassBladeRenderer.RejectStats): the grass line says where candidates end.
+				GrassBladeRenderer.RejectStats = true;
+				return () => GrassBladeRenderer.RejectStats = false;
+			}
 			if (variant == "grasshide")
 			{
 				// The blades generated as ever but not drawn: the generation's cost apart from the drawing's.
@@ -2284,6 +2328,43 @@ namespace FishMMO.TestHarness.World.Editor
 		/// reaching the grid, whether its field is drawn or not), the grid gathered at this camera and read back: every
 		/// shape it lists must be one the demand wants, or drawing only the wanted fields changes the image.
 		/// </summary>
+		/// <summary>
+		/// The grass kernel's early exits off, on, off (GrassBladeRenderer.EarlyExits), the world held still, each a few
+		/// frames rendered and then every slot's blades fingerprinted: on must equal off, and off must equal itself (the
+		/// occlusion reads the last frame's depth, so the frames are rendered until it settles).
+		/// </summary>
+		private static string GrassEarlyCheck()
+		{
+			if (camera == null)
+			{
+				return "no camera";
+			}
+			WorldSimController world = UnityEngine.Object.FindAnyObjectByType<WorldSimController>();
+			bool paused = world != null && world.Paused;
+			if (world != null)
+			{
+				world.Paused = true;
+			}
+			bool was = GrassBladeRenderer.EarlyExits;
+			string Take(bool on)
+			{
+				GrassBladeRenderer.EarlyExits = on;
+				for (int i = 0; i < 4; i++)
+				{
+					camera.Render();
+				}
+				return GrassBladeSystem.Fingerprint();
+			}
+			string off = Take(false), on = Take(true), offAgain = Take(false);
+			GrassBladeRenderer.EarlyExits = was;
+			if (world != null)
+			{
+				world.Paused = paused;
+			}
+			string verdict = off != offAgain ? "UNSTABLE (off differs from off)" : on == off ? "IDENTICAL" : "DIFFERENT";
+			return $"{verdict}; off: {off} on: {on} off again: {offAgain}";
+		}
+
 		private static string RockDemandCheck()
 		{
 			if (camera == null)
@@ -2303,17 +2384,23 @@ namespace FishMMO.TestHarness.World.Editor
 			}
 		}
 
-		private static string RunGatherCheck()
+		private static string RunGatherCheck() => SwitchCheck(() => TerrainGpuRenderer.RunGather, on => TerrainGpuRenderer.RunGather = on);
+
+		/// <summary>
+		/// A props switch that must draw the same instances (off, on, off; per command): RunGather, ExactRunLevels. Six renders,
+		/// never a loop (editor-probe-oom).
+		/// </summary>
+		private static string SwitchCheck(Func<bool> get, Action<bool> set)
 		{
 			TerrainGpuRenderer props = CliffRockInstancing.Gpu;
 			if (props == null || camera == null)
 			{
 				return "no props renderer";
 			}
-			bool was = TerrainGpuRenderer.RunGather;
+			bool was = get();
 			(bool[] Wanted, int[] View, uint[] Instances)? Capture(bool on)
 			{
-				TerrainGpuRenderer.RunGather = on;
+				set(on);
 				camera.Render();
 				camera.Render();
 				return props.CaptureCommands();
@@ -2321,7 +2408,7 @@ namespace FishMMO.TestHarness.World.Editor
 			var off = Capture(false);
 			var on = Capture(true);
 			var offAgain = Capture(false);
-			TerrainGpuRenderer.RunGather = was;
+			set(was);
 			if (off == null || on == null || offAgain == null || off.Value.Instances.Length != on.Value.Instances.Length || off.Value.Instances.Length != offAgain.Value.Instances.Length)
 			{
 				return "capture failed or the layout changed";
@@ -2541,12 +2628,29 @@ namespace FishMMO.TestHarness.World.Editor
 			report.Add(DescribeFog());
 			report.Add($"  props drawn: {CliffRockInstancing.DescribeDraws()}");
 			report.Add($"  props wanted: {CliffRockInstancing.DescribeWanted()}");
+			report.Add($"  shadow cache: {CachedMainLightShadows.Describe()}");
 			if (Environment.GetEnvironmentVariable("FISHMMO_PERF_RUN_GATHER_CHECK") == "1")
 			{
 				report.Add($"  run gather check: {RunGatherCheck()}");
 			}
+			if (Environment.GetEnvironmentVariable("FISHMMO_PERF_SHADOW_TRACE") == "1" && CliffRockInstancing.Gpu != null && camera != null)
+			{
+				report.Add($"  shadow trace: {CliffRockInstancing.Gpu.DescribeShadowTrace(camera, "Structure", 80f)}");
+			}
+			if (Environment.GetEnvironmentVariable("FISHMMO_PERF_ANGULAR_CHECK") == "1")
+			{
+				report.Add($"  angular margins check: {SwitchCheck(() => TerrainGpuRenderer.AngularMargins, on => TerrainGpuRenderer.AngularMargins = on)}");
+			}
+			if (Environment.GetEnvironmentVariable("FISHMMO_PERF_EXACT_LEVELS_CHECK") == "1")
+			{
+				report.Add($"  exact levels check: {SwitchCheck(() => TerrainGpuRenderer.ExactRunLevels, on => TerrainGpuRenderer.ExactRunLevels = on)}");
+			}
 			report.Add($"  {RockContactField.Describe()}");
 			report.Add($"  grass: {GrassBladeSystem.Describe()}");
+			if (Environment.GetEnvironmentVariable("FISHMMO_PERF_GRASS_EARLY_CHECK") == "1")
+			{
+				report.Add($"  grass early-exit check: {GrassEarlyCheck()}");
+			}
 			if (Environment.GetEnvironmentVariable("FISHMMO_PERF_ROCK_DEMAND_CHECK") == "1")
 			{
 				report.Add($"  rock demand check: {RockDemandCheck()}");

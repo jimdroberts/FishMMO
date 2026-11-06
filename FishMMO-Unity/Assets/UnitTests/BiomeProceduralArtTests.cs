@@ -284,13 +284,37 @@ namespace FishMMO.UnitTests
 
 				var bark = new Color32[16];
 				for (int i = 0; i < bark.Length; i++) bark[i] = new Color32(120, 90, 60, 255);
-				BillboardImpostor.Result billboard = BillboardImpostor.Render(lod1, (sub, uv, vc) => sub == 0 ? new Color(0.4f, 0.3f, 0.2f, 1f) : new Color(0.2f, 0.5f, 0.2f, 1f), 64, species.Height, 1f);
+				BillboardImpostor.Result billboard = BillboardImpostor.Render(lod1, (sub, uv, vc) => sub == 0 ? new Color(0.4f, 0.3f, 0.2f, 1f) : new Color(0.2f, 0.5f, 0.2f, 1f), 64, species.Height, 1f, Vector2.zero);
 				Assert.That(billboard.Mesh.TriangleCount, Is.EqualTo(2), "one quad, turned to the camera by the shader");
 				Assert.That(billboard.Mesh.Validate(false), Is.Empty);
 				int opaque = 0;
 				foreach (Color32 p in billboard.Pixels) if (p.a > 127) opaque++;
 				Assert.That(opaque, Is.GreaterThan(billboard.Pixels.Length / 50), $"{species.Name}'s billboard is nearly empty");
+
+				// Pictured as the median tree keeps its spares: never denser than every spare, and still a crown.
+				BillboardImpostor.Result median = BillboardImpostor.Render(lod1, (sub, uv, vc) => sub == 0 ? new Color(0.4f, 0.3f, 0.2f, 1f) : new Color(0.2f, 0.5f, 0.2f, 1f), 64, species.Height, 1f);
+				int medianOpaque = 0;
+				foreach (Color32 p in median.Pixels) if (p.a > 127) medianOpaque++;
+				Assert.That(medianOpaque, Is.LessThanOrEqualTo(opaque), $"{species.Name}'s median billboard is denser than its full one");
+				Assert.That(medianOpaque, Is.GreaterThan(median.Pixels.Length / 50), $"{species.Name}'s median billboard is nearly empty");
 			}
+		}
+
+		[Test]
+		public void BillboardImpostor_DropsTheSparesTheShaderDrops()
+		{
+			var keep = new Vector2(0.575f, 0.775f);
+			// The trunk (kind 0) is never dropped, whatever its ranks.
+			Assert.That(BillboardImpostor.Dropped(new Vector4(0f, 1f, 0f, 1f), keep), Is.False);
+			// A limb (1) by its own rank; a leaf card (3) by its card rank too; a twig (2) by its limb's rank only.
+			Assert.That(BillboardImpostor.Dropped(new Vector4(0f, 0.5f, 1f, 0f), keep), Is.False);
+			Assert.That(BillboardImpostor.Dropped(new Vector4(0f, 0.6f, 1f, 0f), keep), Is.True);
+			Assert.That(BillboardImpostor.Dropped(new Vector4(0f, 0.5f, 3f, 0.7f), keep), Is.False);
+			Assert.That(BillboardImpostor.Dropped(new Vector4(0f, 0.5f, 3f, 0.8f), keep), Is.True);
+			Assert.That(BillboardImpostor.Dropped(new Vector4(0f, 0.5f, 2f, 0.9f), keep), Is.False);
+			// The median keep is halfway from the trees' fewest to all.
+			Assert.That(BillboardImpostor.MedianTreeKeep.x, Is.EqualTo(0.575f).Within(1e-5f));
+			Assert.That(BillboardImpostor.MedianTreeKeep.y, Is.EqualTo(0.775f).Within(1e-5f));
 		}
 
 		[Test]

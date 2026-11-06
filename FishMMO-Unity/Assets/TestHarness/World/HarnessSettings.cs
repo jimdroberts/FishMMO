@@ -51,6 +51,8 @@ namespace FishMMO.TestHarness.World
 				case "scatterBrg": DetailScatterRenderer.UseBrg = value == "1"; break;
 				case "vegTable": DetailScatterRenderer.VegFamilies = value == "1"; break;
 				case "runGather": TerrainGpuRenderer.RunGather = value == "1"; break;
+				// The props' camera draws joined per model level (TerrainGpuRenderer.JoinSlotParts); takes effect at the next layout.
+				case "joinParts": TerrainGpuRenderer.JoinSlotParts = value == "1"; break;
 				case "rockDemand": RockContactField.DemandOnly = value == "1"; break;
 				// What each feature costs a frame: drawn or not, everything else as ever. hideFamilies takes the props' model
 				// families (Structure,Rock,Tree…: the props tally's names), hideLayers layer names off the main camera.
@@ -58,6 +60,7 @@ namespace FishMMO.TestHarness.World
 				// The grass A/B: its distance (metres over the player's setting, 0 the player's), every ring's density × k, and the
 				// distances its blades drop to the 7-vertex strip and the triangle ("-" restores what the profile shipped with).
 				case "grassDistance": GrassBladeSystem.DistanceOverride = float.Parse(value, inv); break;
+				case "grassEarly": GrassBladeRenderer.EarlyExits = value == "1"; break;
 				case "grassDensity":
 				case "grassLod0":
 				case "grassLod1":
@@ -113,6 +116,16 @@ namespace FishMMO.TestHarness.World
 				case "shadowCacheDebug": CachedMainLightShadows.DebugOverwrite = value == "1"; break;
 				case "shadowCacheClear": CachedMainLightShadows.DebugClearDepth = float.Parse(value, inv); break;
 				case "shadowCacheReadback": CachedMainLightShadows.ReadbackRequested = value == "1"; break;
+				case "propsBrg": TerrainGpuRenderer.UseBrg = value != "0"; break;
+				case "angularMargins": TerrainGpuRenderer.AngularMargins = value != "0"; break;
+				case "exactLevels": TerrainGpuRenderer.ExactRunLevels = value != "0"; break;
+				case "treeDistance": TerrainTreeInstancing.DistanceCap = float.Parse(value, inv); break;
+				case "treeLodBias": TerrainTreeInstancing.LodBiasScale = float.Parse(value, inv); break;
+				case "billboardVary": Shader.SetGlobalFloat("_FishBillboardVary", value == "1" ? 1f : 0f); break;
+				case "billboardSwitch": TerrainTreeInstancing.BillboardSwitchScale = float.Parse(value, inv); break;
+				case "billboards": TerrainGpuRenderer.BillboardDiagnostic = value == "hide" ? 1 : value == "primeonly" ? 2 : 0; break;
+				case "shadowCacheExact": CachedMainLightShadows.DebugForceExact = value == "1"; break;
+				case "shadowCacheLog": Debug.Log($"[Shadow cache] {CachedMainLightShadows.Describe()}"); break;
 				// Reflection diagnosis: the sky probe's intensity (held over SkySystem's own each frame; "auto" releases), the props'
 				// look arrays, the ground cover (dry, wet, or the clock's own: auto) and the fog features.
 				case "skyProbe": skyProbeIntensity = value == "auto" ? -1f : float.Parse(value, inv); Hook(); break;

@@ -23,6 +23,8 @@ namespace FishMMO.UnitTests.WorldDesign
 			"ProceduralArtMigration.cs", "ProceduralArtPayload.cs", "ProceduralArtTextureImport.cs", "ProceduralArtVariants.cs",
 			"ProceduralArtWrapperCheck.cs", "ProceduralArtFamilies.cs", "RockComparisonRender.cs", "StructureKitRender.cs",
 			"VegetationVariationRender.cs", "WorldEditorPhotoImport.cs", "VineBiomes.cs", "StructureInteriors.cs", "CaveArt.cs", "ProceduralArtOrphans.cs",
+			// A cut's own compacted look arrays: written into the scene's folder at the cut, never into the shared art.
+			"SceneLookArrayBaker.cs",
 		};
 
 		/// <summary>The sources every family is made with: a change to one rebuilds everything.</summary>

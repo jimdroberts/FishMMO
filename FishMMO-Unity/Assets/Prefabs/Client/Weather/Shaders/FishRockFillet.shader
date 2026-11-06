@@ -71,6 +71,8 @@ Shader "FishMMO/Rock Fillet"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/RenderingLayers.hlsl"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
 
+            // At WebGPU's 32 texture parameters with every feature on (33 before): the trail map left out (FishWeather.hlsl).
+            #define FISH_NO_TRAILS
             #include "FishWeatherLitInput.hlsl"
             #include "FishSurface.hlsl"
             #include "FishGroundColour.hlsl"

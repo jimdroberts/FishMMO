@@ -82,7 +82,16 @@ struct GrassItem { int cellX; int cellZ; uint packed; uint terrain; };   // pack
 struct GrassBlade { float3 root; uint packed; uint colour; uint more; };   // 24 bytes (GrassMath.Pack, PackColour, RecordMore)
 
 StructuredBuffer<GrassItem> _GrassItems;
-RWByteAddressBuffer _GrassCounts;            // GRASS_SLOTS uints
+RWByteAddressBuffer _GrassCounts;            // GRASS_SLOTS uints; from GRASS_STATS_BASE the diagnosis's stage counters
+
+/* Diagnosis (GrassBladeRenderer.RejectStats): how many candidates each exit of GrassCandidate takes, counted in _GrassCounts
+ * from word GRASS_STATS_BASE. A uniform branch, off unless asked: the shipped kernel pays a branch not taken per exit. */
+#define GRASS_STATS_BASE 16u
+#define GRASS_STATS_COUNT 24u
+uint _GrassRejectStats;
+// The exact early exits in GrassCandidate (GrassBladeRenderer.EarlyExits; 0 only for the A/B that proves them exact).
+uint _GrassEarlyExits;
+#define GRASS_STAT(k) [branch] if (_GrassRejectStats != 0u) { _GrassCounts.InterlockedAdd((GRASS_STATS_BASE + (k)) * 4u, 1u); }
 RWStructuredBuffer<GrassBlade> _GrassOut0;
 RWStructuredBuffer<GrassBlade> _GrassOut1;
 RWStructuredBuffer<GrassBlade> _GrassOut2;
@@ -921,6 +930,14 @@ void FishGrassClear(uint3 id : SV_DispatchThreadID)
     {
         _GrassCounts.Store(id.x * 4u, 0u);
     }
+    [branch] if (_GrassRejectStats != 0u)
+    {
+        // Eight threads, three counters each.
+        [unroll] for (uint k = 0u; k < 3u; k++)
+        {
+            _GrassCounts.Store((GRASS_STATS_BASE + id.x * 3u + k) * 4u, 0u);
+        }
+    }
 }
 
 /* One candidate cell of a work item: the blade it grows (if any) and where it goes. `lit` is the camera's record (its
@@ -943,7 +960,7 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     uint itemCount = _GrassGatherFromGpu != 0u ? min(_GrassGatherCounts.Load(_GrassGatherGroup * 4u), _GrassGatherCapacity) : _GrassItemCount;
     if (itemIndex >= itemCount)
     {
-        return;
+        GRASS_STAT(0u); return;
     }
     GrassItem item = _GrassItems[_GrassItemOffset + itemIndex];
     GrassLoadTerrain(item.terrain);
@@ -956,7 +973,7 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     uint lz = thread.x >> 3;
     if (lx >= nx || lz >= nz)
     {
-        return;
+        GRASS_STAT(1u); return;
     }
     int step = 1 << level;
     int ci = item.cellX + (int)lx * step;
@@ -974,7 +991,7 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     float groundDistance = distance(cellRoot, eyeXZ);
     if (groundDistance > _GrassCamera.w + clumpMetres || priority >= GrassShare(max(0.0, groundDistance - clumpMetres)))
     {
-        return;
+        GRASS_STAT(2u); return;
     }
 
     // The clump: where the blade really stands, which way it faces, how tall it is.
@@ -1141,7 +1158,7 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
         if (total <= 0.0 || GrassUnit(GrassMix(clump ^ SALT_SPAWN)) >= clumpChance
             || GrassUnit(GrassHash(ci, cj, SALT_SPAWN)) * clumpChance >= p)
         {
-            return;
+            GRASS_STAT(3u); return;
         }
         // The clump's own pick, so a tussock is one species (GrassMath.PickChannel); the last channel with any
         // weight if rounding runs past the end.
@@ -1201,7 +1218,7 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
 #endif
     if (type < 0)
     {
-        return;
+        GRASS_STAT(4u); return;
     }
     float4 typeShape = GrassTypeRow(type, GRASS_ROW_SHAPE);
     float4 typeShape2 = GrassTypeRow(type, GRASS_ROW_SHAPE2);
@@ -1211,13 +1228,13 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     float2 local = rootXZ - _GrassTerrainOrigin.xz;
     if (any(local < 0.0) || any(local >= _GrassTerrainSize.xy))
     {
-        return;   // the neighbouring terrain's dispatch draws it
+        GRASS_STAT(5u); return;   // the neighbouring terrain's dispatch draws it
     }
     float3 root = float3(rootXZ.x, GrassHeightAt(local), rootXZ.y);
     // Land grass does not grow under the sea, whatever a scene's scatter wrote there: below the lowest tide is sea floor.
     if (_GrassSea.y > 0.5 && root.y < _GrassSea.x)
     {
-        return;
+        GRASS_STAT(6u); return;
     }
     /* How tall the grass stands against its type and how far it leans (GrassMath.FloraHeight, FloraLean): the world's
      * growth and a smooth swell (FishFloraGrowth/Swell), never the patch's look, whose edges stepped the meadow's height.
@@ -1226,13 +1243,29 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     FishFloraLook look = FishFloraAt(rootXZ, GRASS_FLORA_PATCH, GRASS_FLORA_SALT);
     float floraHeight = clamp(FishFloraGrowth(rootXZ, GRASS_FLORA_HEIGHT_SWELL, GRASS_FLORA_HEIGHT_SALT), GRASS_FLORA_MIN_HEIGHT, GRASS_FLORA_MAX_HEIGHT);
     float floraBend = clamp(FishFloraSwell(rootXZ, GRASS_FLORA_BEND_SWELL, GRASS_FLORA_BEND_SALT), GRASS_FLORA_MIN_BEND, GRASS_FLORA_MAX_BEND);
+
+    /* An early exit that keeps the field exactly as it was (2026-11-05): a third of the forest's candidates were found
+     * buried only after every other test (the banks, the flora, the paths, the burn). The blade's height is at most `tallest`
+     * (a path's flattening and a burn's regrowth only shorten it, below), and snow buries a shorter blade sooner
+     * (GrassBuried's drawn height grows with it), so a candidate buried at its tallest is buried as it is, by the same test
+     * at the end. The same done for the view (the tallest blade's culling sphere holds any shorter one's) cost more than it
+     * saved in the browser: one more occlusion read for every candidate, against a few thousand blades not built. */
+    float clumpHeight = 1.0 + (GrassUnit(GrassMix(clump ^ 0x2545F491u)) - 0.5) * 2.0 * _GrassLattice.w;
+    float middle = 1.0 - 0.35 * min(1.0, r);
+    float ownHeight = 0.72 + 0.38 * GrassUnit(GrassMix(own ^ 0x68E31DA4u));
+    float tallest = min(typeShape.x * max(0.1, clumpHeight * middle * ownHeight) * floraHeight, GRASS_MAX_PACKED_HEIGHT * GRASS_TALL_SCALE);
+    [branch] if (_GrassEarlyExits != 0u && GrassBuried(root, local, type, tallest))
+    {
+        GRASS_STAT(13u); return;
+    }
+
     /* Nor in a river or a lake: none below the water line (less a wading type's depth), thinning in over the bank above
      * it. The density maps (2 m texels smoothed over 2 m) filled a creek from both banks; the cut is per blade. Nor over
      * a painted hole (GRASS_HOLE_FREEBOARD): the detail layers under a cave mouth keep what was painted before it. */
     float freeboard = GrassFreeboardAt(local) + typeShape.w - _GrassSea.z;
     if (freeboard < 0.0 || GrassUnit(GrassMix(own ^ 0x7F4A7C15u)) >= saturate(freeboard / _GrassSea.w))
     {
-        return;
+        GRASS_STAT(7u); return;
     }
     /* Nor leaning out over the water: a blade rooted on the bank within its own lean of the water's edge hangs over it.
      * Rooted only by its height above the water, the banks of a narrow stream or a fall's lip grew meadow up to the
@@ -1246,7 +1279,7 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
             min(GrassFreeboardAt(clamp(local + float2(0.0, leanReach), 0.0, _GrassTerrainSize.xy - 0.01)), GrassFreeboardAt(clamp(local - float2(0.0, leanReach), 0.0, _GrassTerrainSize.xy - 0.01))));
         if (lowest + typeShape.w < 0.0)
         {
-            return;
+            GRASS_STAT(8u); return;
         }
     }
 
@@ -1254,13 +1287,13 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     float d = distance(root, eye);
     if (d > _GrassCamera.w)
     {
-        return;
+        GRASS_STAT(9u); return;
     }
     float share = GrassShare(d);
     float fade = GrassThinFade(priority, share);
     if (fade <= 0.0)
     {
-        return;
+        GRASS_STAT(10u); return;
     }
 
     float facingStrength = _GrassLattice.z;
@@ -1268,13 +1301,10 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     float clumpFacing = GrassUnit(GrassMix(clump ^ 0x51ED270Bu)) * 6.2831853;
     float jitter = (GrassUnit(own) - 0.5) * 2.4;
     float facing = GrassWrap(GrassAngleLerp(outward, clumpFacing, facingStrength) + jitter * (1.0 - 0.5 * facingStrength));
-    float clumpHeight = 1.0 + (GrassUnit(GrassMix(clump ^ 0x2545F491u)) - 0.5) * 2.0 * _GrassLattice.w;
-    float middle = 1.0 - 0.35 * min(1.0, r);
-    float ownHeight = 0.72 + 0.38 * GrassUnit(GrassMix(own ^ 0x68E31DA4u));
     float lean = saturate(_GrassShapeParams.x * (0.25 + 0.75 * min(1.0, r * 1.2)) * (0.5 + 0.5 * GrassUnit(GrassMix(own ^ 0xB5297A4Du))));
     lean = saturate(lean * floraBend);
     // The look's height, never past what a record holds (a tall record packs half its height): GrassMath.FloraHeight.
-    float height = min(typeShape.x * max(0.1, clumpHeight * middle * ownHeight) * floraHeight, GRASS_MAX_PACKED_HEIGHT * GRASS_TALL_SCALE);
+    float height = tallest;   // the same expression, found above for the early exits
     /* The scene's paths and yards (FishGroundPaths.hlsl): no blade where the terrain draws the ground bare, thinning in
      * over its edge; what stands on a way lies trampled short, which is how a lost trail's overgrown stretches still
      * read; a cart track keeps the strip between its ruts. */
@@ -1282,7 +1312,7 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     FishPathWearAt(rootXZ, trodden, flattened);
     if (trodden > 0.0 && GrassUnit(GrassMix(own ^ 0x2F6B1C3Du)) < trodden)
     {
-        return;
+        GRASS_STAT(11u); return;
     }
     height *= 1.0 - 0.55 * flattened;
     // The burn (FishBurn.hlsl): an after-burn type only where its flowers stand; any other cut to stubble, regrowing.
@@ -1296,7 +1326,7 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
         {
             if (GrassUnit(GrassMix(own ^ 0x6C8E9CF5u)) >= burn.lily)
             {
-                return;
+                GRASS_STAT(12u); return;
             }
         }
         else
@@ -1308,7 +1338,7 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     }
     if (GrassBuried(root, local, type, height))
     {
-        return;
+        GRASS_STAT(13u); return;
     }
     float clumpColour = GrassUnit(GrassMix(clump ^ 0x1B873593u));
 
@@ -1345,8 +1375,10 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     uint lod = lodDistance < _GrassShapeParams.y ? 0u : lodDistance < _GrassShapeParams.z ? 1u : 2u;
     // The head's two crossed cards are the same stem, drawn at its tip (FishGrassBlades.hlsl GrassBuild): two more records.
     uint records = headed ? 3u : 1u;
+    GRASS_STAT(14u);   // built: a blade stands here
     if (main && GrassSphereVisible(sphereCentre, radius) && !FishOccluded(sphereCentre, radius))
     {
+        GRASS_STAT(15u);   // drawn by the camera
         // Only a blade the camera draws reads the ground's texture (shadow casters are colourless).
         lit = blade;
         lit.colour = GrassWithBurnTone(GrassPackColour(GrassTerrainColourAt(local, rootXZ, share, look)) | recordBits,

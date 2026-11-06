@@ -57,9 +57,15 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Whether the cache starts on. The owner chose on in browser players and off natively (2026-11-03), but the browser
 		/// measurement (2026-11-04) showed wrong shadows on settlement structures and a merge on only ~1 frame in 12, so it is
-		/// off everywhere until that is fixed (Docs/Rendering/2026-11-02/webgpu-cached-shadows, Browser results).
+		/// off everywhere until that is fixed (Docs/Rendering/2026-11-02/webgpu-cached-shadows, Browser results). Merges are now
+		/// ~95% of frames; what remains (2026-11-05, Docs/Rendering/2026-11-05/round-2): the batch group omits the static casters
+		/// from URP's culling whenever this is enabled, decided before the cache pass knows it can map URP's slice, so a frame it
+		/// refuses has no structure shadows at all.
 		/// </summary>
 		public const bool DefaultOn = false;
+
+		/// <summary>Diagnostic: every frame drawn over exact windows (the refused frame's path), to test that path alone.</summary>
+		public static bool DebugForceExact;
 
 		/// <summary>Diagnostic: the merge overwrites URP's map with the cache (depth test off), showing only the cached casters.</summary>
 		public static bool DebugOverwrite;
@@ -88,12 +94,54 @@ namespace FishMMO.Client
 		public static int LastStaticDraws { get; private set; }
 		/// <summary>Frames the cache was merged into URP's map.</summary>
 		public static int MergedFrames { get; private set; }
+		/// <summary>
+		/// Diagnosis: frames the cache pass or the merge did not merge, by reason (<see cref="SkipNames"/>; the browser probe logs
+		/// them). While the cache is enabled the batch group leaves the static casters out of URP's culling, so every skip but the
+		/// first four (no main-light shadows at all) is a frame whose structures cast nothing.
+		/// </summary>
+		public static readonly string[] SkipNames = { "no main light shadows", "not a shadowed directional light", "slice extraction", "no cascade", "refused: exact windows drawn", "exact windows impossible", "merge: cache not ready", "merge: no shadow map" };
+		public static readonly int[] Skips = new int[8];
+		private const int SkipNoShadows = 0, SkipNotDirectional = 1, SkipSlice = 2, SkipNoCascade = 3, SkipRefused = 4, SkipExactFailed = 5, SkipNotReady = 6, SkipNoShadowMap = 7;
+
+		private static void Skip(int reason) => Skips[reason]++;
+
+		/// <summary>The cache's counters as one line (the browser probe and the harness's `shadowCacheLog`).</summary>
+		public static string Describe()
+		{
+			var line = new System.Text.StringBuilder();
+			line.Append($"enabled {Enabled}, supported {Supported}, merged {MergedFrames}, redraw frames {RefreshFrames} ({TerrainGpuRenderer.CoverageRedraws} for new shadow work), maps {MapSuccesses}");
+			for (int i = 0; i < Skips.Length; i++)
+			{
+				if (Skips[i] > 0)
+				{
+					line.Append($", [{SkipNames[i]} {Skips[i]}]");
+				}
+			}
+			for (int i = 0; i < MapFailures.Length; i++)
+			{
+				if (MapFailures[i] > 0)
+				{
+					line.Append($", map refused [{MapFailureNames[i]} {MapFailures[i]}]");
+				}
+			}
+			return line.ToString();
+		}
 
 		/// <summary>The shader the merge and the tile clears draw with (FishCloudsFeature carries it into builds).</summary>
 		public static Shader MergeShader;
 
 		/// <summary>Whether this device can draw the cached casters: their procedural variants need the run's start in the instance index.</summary>
 		public static bool Supported => SystemInfo.supportsComputeShaders && TerrainGpuRenderer.InstanceIdCarriesBase;
+
+		/// <summary>
+		/// Whether the batch group leaves the static casters out of URP's culling for this camera: the cache serves it, and the
+		/// last frame merged. Culling comes before the cache pass knows whether it can merge, so a frame after one that could not
+		/// keeps them in URP's map (drawn twice if this one merges too: the depth test keeps one depth), and only the first frame
+		/// of a failure lacks them. Before 2026-11-05 every refused frame did.
+		/// </summary>
+		public static bool OmitsStaticCasters(Camera camera) => AppliesTo(camera) && !lastFrameUnmerged;
+
+		private static bool lastFrameUnmerged;
 
 		/// <summary>Whether the cache serves this camera's main-light shadows this frame.</summary>
 		public static bool AppliesTo(Camera camera) => Enabled && Supported && camera != null && camera.cameraType == CameraType.Game && MergeMaterial() != null;
@@ -214,6 +262,42 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// A window that is URP's slice itself (no margin, its own view and projection) in the tile at
+		/// (<paramref name="tileX"/>, <paramref name="tileY"/>): what a frame the margin windows cannot serve draws, merged by
+		/// <see cref="TryMap"/> as any window. False when the slice's projection is not a plain orthographic one.
+		/// </summary>
+		public static bool TryExactWindowFor(in CascadeKey slice, int tileX, int tileY, out Window window)
+		{
+			window = default;
+			if (slice.Resolution <= 0 || !TryOrthoBox(slice.Projection, out float l, out float r, out float b, out float t, out float n, out float f))
+			{
+				return false;
+			}
+			window = new Window
+			{
+				View = slice.View,
+				Projection = slice.Projection,
+				TileX = tileX,
+				TileY = tileY,
+				Size = slice.Resolution,
+				Resolution = slice.Resolution,
+				Bias = slice.Bias,
+				LightDirection = slice.LightDirection,
+				Width = r - l,
+				Height = t - b,
+				Depth = f - n,
+				Left = l,
+				Right = r,
+				Bottom = b,
+				Top = t,
+				Near = n,
+				Far = f,
+			};
+			return true;
+		}
+
+
+		/// <summary>
 		/// How URP's <paramref name="slice"/> reads <paramref name="window"/> in a cache atlas of the given size, or false when the
 		/// window must be redrawn: a different slice shape (resolution, bias, light, rotation, texel size, depth range), a shift
 		/// that is not whole texels, or the slice outside the window's tile or depth range. A pure function (tests).
@@ -223,19 +307,159 @@ namespace FishMMO.Client
 		/// depth range and y flip are its own: three points of the slice's NDC give the xy map, the slice's near and far points
 		/// the depth map.
 		/// </remarks>
+		/// <summary>A point in double precision.</summary>
+		public struct double3
+		{
+			public double x, y, z;
+			public double3(double x, double y, double z) { this.x = x; this.y = y; this.z = z; }
+			public static double3 operator -(double3 a, double3 b) => new double3(a.x - b.x, a.y - b.y, a.z - b.z);
+		}
+
+		/// <summary>A 4×4 matrix in double precision (TryMap's maths: world translations of kilometres, cascades of metres).</summary>
+		public struct D4
+		{
+			private double[] m;
+
+			public static D4 From(Matrix4x4 f)
+			{
+				var d = new D4 { m = new double[16] };
+				for (int r = 0; r < 4; r++)
+				{
+					for (int c = 0; c < 4; c++)
+					{
+						d.m[r * 4 + c] = f[r, c];
+					}
+				}
+				return d;
+			}
+
+			public static D4 operator *(D4 a, D4 b)
+			{
+				var d = new D4 { m = new double[16] };
+				for (int r = 0; r < 4; r++)
+				{
+					for (int c = 0; c < 4; c++)
+					{
+						double sum = 0.0;
+						for (int k = 0; k < 4; k++)
+						{
+							sum += a.m[r * 4 + k] * b.m[k * 4 + c];
+						}
+						d.m[r * 4 + c] = sum;
+					}
+				}
+				return d;
+			}
+
+			/// <summary>The point transformed and divided by w.</summary>
+			public double3 Point(double x, double y, double z)
+			{
+				double px = m[0] * x + m[1] * y + m[2] * z + m[3];
+				double py = m[4] * x + m[5] * y + m[6] * z + m[7];
+				double pz = m[8] * x + m[9] * y + m[10] * z + m[11];
+				double pw = m[12] * x + m[13] * y + m[14] * z + m[15];
+				return new double3(px / pw, py / pw, pz / pw);
+			}
+
+			public double3 Point(double3 p) => Point(p.x, p.y, p.z);
+
+			/// <summary>The inverse (Gauss–Jordan with partial pivoting; the identity's zero for a singular matrix).</summary>
+			public D4 Inverse()
+			{
+				var a = (double[])m.Clone();
+				var inv = new double[16];
+				for (int i = 0; i < 4; i++)
+				{
+					inv[i * 4 + i] = 1.0;
+				}
+				for (int col = 0; col < 4; col++)
+				{
+					int pivot = col;
+					for (int r = col + 1; r < 4; r++)
+					{
+						if (Math.Abs(a[r * 4 + col]) > Math.Abs(a[pivot * 4 + col]))
+						{
+							pivot = r;
+						}
+					}
+					if (Math.Abs(a[pivot * 4 + col]) < 1e-300)
+					{
+						return new D4 { m = new double[16] };
+					}
+					if (pivot != col)
+					{
+						for (int k = 0; k < 4; k++)
+						{
+							(a[col * 4 + k], a[pivot * 4 + k]) = (a[pivot * 4 + k], a[col * 4 + k]);
+							(inv[col * 4 + k], inv[pivot * 4 + k]) = (inv[pivot * 4 + k], inv[col * 4 + k]);
+						}
+					}
+					double scale = 1.0 / a[col * 4 + col];
+					for (int k = 0; k < 4; k++)
+					{
+						a[col * 4 + k] *= scale;
+						inv[col * 4 + k] *= scale;
+					}
+					for (int r = 0; r < 4; r++)
+					{
+						if (r == col)
+						{
+							continue;
+						}
+						double factor = a[r * 4 + col];
+						if (factor == 0.0)
+						{
+							continue;
+						}
+						for (int k = 0; k < 4; k++)
+						{
+							a[r * 4 + k] -= factor * a[col * 4 + k];
+							inv[r * 4 + k] -= factor * inv[col * 4 + k];
+						}
+					}
+				}
+				return new D4 { m = inv };
+			}
+		}
+
+		/// <summary>Diagnosis: why TryMap last refused, and how often each reason has (<see cref="MapFailureNames"/>; the browser probe logs them).</summary>
+		public static readonly string[] MapFailureNames = { "window size or resolution", "slice size", "view rotation", "axes not aligned", "texel scale", "tile outside window", "texel centres off", "depth range outside", "flat depth", "bias", "light direction", "not a plain ortho projection" };
+		public static readonly int[] MapFailures = new int[12];
+		public static int MapSuccesses;
+
+		private static bool Fail(int reason)
+		{
+			MapFailures[reason]++;
+			return false;
+		}
+
+		/// <summary>How far URP's texel centres may lie from the window's, in texels, for its texels to be copied one for one.</summary>
+		public const double TexelCentreTolerance = 0.1;
+
 		public static bool TryMap(in Window window, in CascadeKey slice, int atlasWidth, int atlasHeight, out Mapping map)
 		{
 			map = default;
-			if (window.Size <= 0 || slice.Resolution != window.Resolution || !slice.Bias.Equals(window.Bias) || !slice.LightDirection.Equals(window.LightDirection)
-				|| !TryOrthoBox(slice.Projection, out float l, out float r, out float b, out float t, out float n, out float f))
+			if (window.Size <= 0 || slice.Resolution != window.Resolution)
 			{
-				return false;
+				return Fail(0);
+			}
+			if (!slice.Bias.Equals(window.Bias))
+			{
+				return Fail(9);
+			}
+			if (!slice.LightDirection.Equals(window.LightDirection))
+			{
+				return Fail(10);
+			}
+			if (!TryOrthoBox(slice.Projection, out float l, out float r, out float b, out float t, out float n, out float f))
+			{
+				return Fail(11);
 			}
 			const float shape = 1e-4f;
 			if (Mathf.Abs((r - l) - window.Width) > shape * window.Width || Mathf.Abs((t - b) - window.Height) > shape * window.Height
 				|| Mathf.Abs((f - n) - window.Depth) > shape * window.Depth)
 			{
-				return false;
+				return Fail(1);
 			}
 			for (int row = 0; row < 3; row++)
 			{
@@ -243,61 +467,71 @@ namespace FishMMO.Client
 				{
 					if (Mathf.Abs(slice.View[row, col] - window.View[row, col]) > 1e-5f)
 					{
-						return false;
+						return Fail(2);
 					}
 				}
 			}
-			Matrix4x4 worldToSlice = GL.GetGPUProjectionMatrix(slice.Projection, true) * slice.View;
-			Matrix4x4 sliceToWorld = worldToSlice.inverse;
-			Matrix4x4 worldToCache = GL.GetGPUProjectionMatrix(window.Projection, true) * window.View;
-			Vector3 a0 = worldToCache.MultiplyPoint(sliceToWorld.MultiplyPoint(new Vector3(0f, 0f, 0.5f)));
-			Vector3 ax = worldToCache.MultiplyPoint(sliceToWorld.MultiplyPoint(new Vector3(1f, 0f, 0.5f))) - a0;
-			Vector3 ay = worldToCache.MultiplyPoint(sliceToWorld.MultiplyPoint(new Vector3(0f, 1f, 0.5f))) - a0;
-			if (Mathf.Abs(ax.y) > shape || Mathf.Abs(ay.x) > shape)
+			/* In double precision (2026-11-05): the views carry world translations of thousands of metres and the near cascade is
+			 * metres across, so float products and an inverse put a fresh window's texel centres a few hundredths of a texel off
+			 * and TryMap refused the very slice it was built from (browser, settlement close: ~1 frame in 6). */
+			D4 worldToSlice = D4.From(GL.GetGPUProjectionMatrix(slice.Projection, true)) * D4.From(slice.View);
+			D4 sliceToWorld = worldToSlice.Inverse();
+			D4 worldToCache = D4.From(GL.GetGPUProjectionMatrix(window.Projection, true)) * D4.From(window.View);
+			D4 sliceToCache = worldToCache * sliceToWorld;
+			double3 a0 = sliceToCache.Point(0.0, 0.0, 0.5);
+			double3 ax = sliceToCache.Point(1.0, 0.0, 0.5) - a0;
+			double3 ay = sliceToCache.Point(0.0, 1.0, 0.5) - a0;
+			if (Math.Abs(ax.y) > shape || Math.Abs(ay.x) > shape)
 			{
-				return false;
+				return Fail(3);
 			}
 			// One slice texel (2 / resolution in NDC) is one cache texel (2 / size), each way.
-			float size = window.Size;
-			if (Mathf.Abs(Mathf.Abs(ax.x) * size / window.Resolution - 1f) > 1e-3f || Mathf.Abs(Mathf.Abs(ay.y) * size / window.Resolution - 1f) > 1e-3f)
+			double size = window.Size;
+			if (Math.Abs(Math.Abs(ax.x) * size / window.Resolution - 1.0) > 1e-3 || Math.Abs(Math.Abs(ay.y) * size / window.Resolution - 1.0) > 1e-3)
 			{
-				return false;
+				return Fail(4);
 			}
 			// The slice's tile within the window's (its corners), and its texel centres on the window's texel centres.
 			for (int corner = 0; corner < 4; corner++)
 			{
-				float sx = (corner & 1) == 0 ? -1f : 1f, sy = (corner & 2) == 0 ? -1f : 1f;
-				float u = ((a0.x + ax.x * sx) * 0.5f + 0.5f) * size, v = ((a0.y + ay.y * sy) * 0.5f + 0.5f) * size;
-				if (u < -1e-2f || u > size + 1e-2f || v < -1e-2f || v > size + 1e-2f)
+				double sx = (corner & 1) == 0 ? -1.0 : 1.0, sy = (corner & 2) == 0 ? -1.0 : 1.0;
+				double u = ((a0.x + ax.x * sx) * 0.5 + 0.5) * size, v = ((a0.y + ay.y * sy) * 0.5 + 0.5) * size;
+				if (u < -1e-2 || u > size + 1e-2 || v < -1e-2 || v > size + 1e-2)
 				{
-					return false;
+					return Fail(5);
 				}
 			}
-			float firstX = ((a0.x + ax.x * (1f / window.Resolution - 1f)) * 0.5f + 0.5f) * size;
-			float firstY = ((a0.y + ay.y * (1f / window.Resolution - 1f)) * 0.5f + 0.5f) * size;
-			if (Mathf.Abs(firstX - Mathf.Floor(firstX) - 0.5f) > 0.02f || Mathf.Abs(firstY - Mathf.Floor(firstY) - 0.5f) > 0.02f)
+			double firstX = ((a0.x + ax.x * (1.0 / window.Resolution - 1.0)) * 0.5 + 0.5) * size;
+			double firstY = ((a0.y + ay.y * (1.0 / window.Resolution - 1.0)) * 0.5 + 0.5) * size;
+			// A tenth of a texel: URP's slices are float matrices, and kilometres from the origin a cascade metres across moved
+			// by whole texels lands up to ~0.03 of one off its grid (a float's step at 2 km is 0.12 mm); the copy reads the
+			// nearest texel, so a shadow edge moves by at most this much.
+			if (Math.Abs(firstX - Math.Floor(firstX) - 0.5) > TexelCentreTolerance || Math.Abs(firstY - Math.Floor(firstY) - 0.5) > TexelCentreTolerance)
 			{
-				return false;
+				return Fail(6);
 			}
 			// Depth: the slice's near and far points, in both maps; the slice's range inside the window's.
-			Matrix4x4 viewToWorld = slice.View.inverse;
-			Vector3 nearPoint = viewToWorld.MultiplyPoint(new Vector3(0f, 0f, -n)), farPoint = viewToWorld.MultiplyPoint(new Vector3(0f, 0f, -f));
-			float nearInWindow = -window.View.MultiplyPoint(nearPoint).z, farInWindow = -window.View.MultiplyPoint(farPoint).z;
-			float slack = 1e-4f * window.Depth;
+			D4 viewToWorld = D4.From(slice.View).Inverse();
+			D4 windowView = D4.From(window.View);
+			double3 nearPoint = viewToWorld.Point(0.0, 0.0, -n), farPoint = viewToWorld.Point(0.0, 0.0, -f);
+			double nearInWindow = -windowView.Point(nearPoint).z, farInWindow = -windowView.Point(farPoint).z;
+			double slack = 1e-4 * window.Depth;
 			if (nearInWindow < window.Near - slack || farInWindow > window.Far + slack)
 			{
-				return false;
+				return Fail(7);
 			}
-			float sliceNear = worldToSlice.MultiplyPoint(nearPoint).z, sliceFar = worldToSlice.MultiplyPoint(farPoint).z;
-			float cacheNear = worldToCache.MultiplyPoint(nearPoint).z, cacheFar = worldToCache.MultiplyPoint(farPoint).z;
-			if (Mathf.Abs(cacheNear - cacheFar) < 1e-8f)
+			double sliceNear = worldToSlice.Point(nearPoint).z, sliceFar = worldToSlice.Point(farPoint).z;
+			double cacheNear = worldToCache.Point(nearPoint).z, cacheFar = worldToCache.Point(farPoint).z;
+			if (Math.Abs(cacheNear - cacheFar) < 1e-8)
 			{
-				return false;
+				return Fail(8);
 			}
-			map.DepthScale = (sliceNear - sliceFar) / (cacheNear - cacheFar);
-			map.DepthOffset = sliceNear - map.DepthScale * cacheNear;
-			map.Scale = new Vector2(ax.x * 0.5f * size / atlasWidth, ay.y * 0.5f * size / atlasHeight);
-			map.Offset = new Vector2(((a0.x * 0.5f + 0.5f) * size + window.TileX) / atlasWidth, ((a0.y * 0.5f + 0.5f) * size + window.TileY) / atlasHeight);
+			double depthScale = (sliceNear - sliceFar) / (cacheNear - cacheFar);
+			map.DepthScale = (float)depthScale;
+			map.DepthOffset = (float)(sliceNear - depthScale * cacheNear);
+			map.Scale = new Vector2((float)(ax.x * 0.5 * size / atlasWidth), (float)(ay.y * 0.5 * size / atlasHeight));
+			map.Offset = new Vector2((float)(((a0.x * 0.5 + 0.5) * size + window.TileX) / atlasWidth), (float)(((a0.y * 0.5 + 0.5) * size + window.TileY) / atlasHeight));
+			MapSuccesses++;
 			return true;
 		}
 
@@ -333,6 +567,10 @@ namespace FishMMO.Client
 		private static readonly Vector4[] cullPlanes = new Vector4[6];
 		/// <summary>Whether this frame's cache is complete for the camera recording now (the merge pass reads it).</summary>
 		private static bool mergeReady;
+		private static bool matricesLogged;
+
+		/// <summary>URP's main light shadow map's depth format as the merge pass last saw it, and the format the cache was made in.</summary>
+		private static GraphicsFormat shadowFormat = GraphicsFormat.None, cachedFormat = GraphicsFormat.None;
 		private static int mergeCascades;
 
 		private static readonly int CacheId = Shader.PropertyToID("_FishShadowCache");
@@ -428,13 +666,20 @@ namespace FishMMO.Client
 				UniversalShadowData shadows = frameData.Get<UniversalShadowData>();
 				int light = lights.mainLightIndex;
 				int count = shadows.mainLightShadowCascadesCount;
-				if (!shadows.supportsMainLightShadows || camera.maxShadowDistance <= 0f || light < 0 || count < 1 || count > MaxCascades || light >= lights.visibleLights.Length)
+				if (!shadows.supportsMainLightShadows || camera.maxShadowDistance <= 0f || light < 0 || light >= lights.visibleLights.Length)
 				{
+					Skip(SkipNoShadows);
+					return;
+				}
+				if (count < 1 || count > MaxCascades)
+				{
+					Skip(SkipNoCascade);
 					return;
 				}
 				VisibleLight visible = lights.visibleLights[light];
 				if (visible.lightType != LightType.Directional || visible.light == null || visible.light.shadows == LightShadows.None)
 				{
+					Skip(SkipNotDirectional);
 					return;
 				}
 				// UniversalRenderPipeline.InitializeMainLightShadowResolution's sizes, and ShadowCulling's slices.
@@ -447,6 +692,7 @@ namespace FishMMO.Client
 				{
 					if (!ShadowUtils.ExtractDirectionalLightMatrix(ref cull, shadows, light, i, width, height, resolution, visible.light.shadowNearPlane, out _, out ShadowSliceData slice))
 					{
+						Skip(SkipSlice);
 						return;
 					}
 					currentKeys[i] = new CascadeKey
@@ -460,16 +706,31 @@ namespace FishMMO.Client
 						LightDirection = lightDirection,
 					};
 				}
+				if (!matricesLogged)
+				{
+					// Diagnosis: what this platform's slice and its GPU projection look like (the browser's mapping fails).
+					matricesLogged = true;
+					Debug.Log($"[Shadow cache] {SystemInfo.graphicsDeviceType}: slice 0 projection {currentKeys[0].Projection.ToString("F6")}; GPU {GL.GetGPUProjectionMatrix(currentKeys[0].Projection, true).ToString("F6")}; view {currentKeys[0].View.ToString("F4")}; resolution {resolution}, reversed z {SystemInfo.usesReversedZBuffer}");
+				}
 				int margin = resolution / MarginDivisor;
 				int size = resolution + 2 * margin;
 				Vector2Int atlas = AtlasSize(count, size);
 				int content = Content();
-				bool atlasChanged = cache == null || cacheWidth != atlas.x || cacheHeight != atlas.y || cachedCount != count || cachedSize != size;
+				/* The cache in the depth format URP's own map is in on this device (seen by the merge pass, a frame late; 16-bit until
+				 * then): a caster's depth bias is in units of its target's depth format, and the cache's casters are drawn with URP's
+				 * bias, so a cache in another format kept another bias. In the browser that left the cached structures' grazing edges
+				 * (roof eaves, wall corners) shaded unlike URP's own map (2026-11-05). */
+				GraphicsFormat wantedFormat = GraphicsFormatUtility.IsDepthFormat(shadowFormat) ? shadowFormat : GraphicsFormat.None;
+				bool atlasChanged = cache == null || cacheWidth != atlas.x || cacheHeight != atlas.y || cachedCount != count || cachedSize != size
+					|| cachedFormat != wantedFormat;
 				if (atlasChanged)
 				{
 					cache?.Release();
-					cache = RTHandles.Alloc(atlas.x, atlas.y, depthBufferBits: DepthBits.Depth16, dimension: TextureDimension.Tex2D,
-						filterMode: FilterMode.Point, name: "Fish Main Light Shadow Cache");
+					cache = wantedFormat != GraphicsFormat.None
+						? RTHandles.Alloc(atlas.x, atlas.y, wantedFormat, dimension: TextureDimension.Tex2D, filterMode: FilterMode.Point, name: "Fish Main Light Shadow Cache")
+						: RTHandles.Alloc(atlas.x, atlas.y, depthBufferBits: DepthBits.Depth16, dimension: TextureDimension.Tex2D,
+							filterMode: FilterMode.Point, name: "Fish Main Light Shadow Cache");
+					cachedFormat = wantedFormat;
 					cacheWidth = atlas.x;
 					cacheHeight = atlas.y;
 					cachedCount = count;
@@ -479,8 +740,14 @@ namespace FishMMO.Client
 				bool contentChanged = content != cachedContent;
 				// Each cascade read from its window where URP's slice still lies inside it, else redrawn over a new one.
 				int mask = 0, widest = -1;
+				bool refused = false;
 				for (int i = 0; i < count; i++)
 				{
+					if (DebugForceExact)
+					{
+						refused = true;
+						break;
+					}
 					if (!atlasChanged && !contentChanged && windowValid[i] && TryMap(in windows[i], in currentKeys[i], cacheWidth, cacheHeight, out mappings[i]))
 					{
 						continue;
@@ -488,13 +755,40 @@ namespace FishMMO.Client
 					Vector2Int tile = TileOf(i, count, size);
 					if (!TryWindowFor(in currentKeys[i], margin, tile.x, tile.y, out windows[i]) || !TryMap(in windows[i], in currentKeys[i], cacheWidth, cacheHeight, out mappings[i]))
 					{
-						// Not a slice this cache understands: URP's own map stands alone this frame.
-						windowValid[i] = false;
-						return;
+						refused = true;
+						break;
 					}
 					windowValid[i] = true;
 					mask |= 1 << i;
 					widest = i;
+				}
+				if (refused)
+				{
+					/* A slice this cache cannot read through a margin window this frame. The batch group has already left the static
+					 * casters out of URP's culling (decided before this pass knows), so every cascade is drawn over a window that IS
+					 * URP's slice (no margin, its own projection) and merged one texel to one texel at depth unchanged: until
+					 * 2026-11-05 a refused frame had no structure shadows at all. */
+					Skip(SkipRefused);
+					mask = 0;
+					for (int i = 0; i < count; i++)
+					{
+						Vector2Int tile = TileOf(i, count, size);
+						if (!TryExactWindowFor(in currentKeys[i], tile.x, tile.y, out windows[i]))
+						{
+							Skip(SkipExactFailed);
+							Array.Clear(windowValid, 0, windowValid.Length);
+							return;
+						}
+						if (!TryMap(in windows[i], in currentKeys[i], cacheWidth, cacheHeight, out mappings[i]))
+						{
+							Skip(SkipExactFailed);
+							Array.Clear(windowValid, 0, windowValid.Length);
+							return;
+						}
+						windowValid[i] = true;
+						mask |= 1 << i;
+					}
+					widest = count - 1;
 				}
 				mergeCascades = count;
 				mergeReady = true;
@@ -503,25 +797,7 @@ namespace FishMMO.Client
 					return;
 				}
 				// The casters for the widest window redrawn (the farther cascades hold the nearer ones), culled for it from here.
-				using (var builder = renderGraph.AddUnsafePass<CullPassData>("Fish Main Light Shadow Cache Cull", out CullPassData cullData))
-				{
-					cullData.Camera = camera.camera;
-					cullData.Anchor = camera.worldSpaceCameraPos;
-					WindowPlanes(in windows[widest], cullData.Planes);
-					Window w = windows[widest];
-					float reach = camera.maxShadowDistance + Mathf.Max(w.Right - w.Left, w.Top - w.Bottom);
-					Vector3 travel = -new Vector3(w.View.m20, w.View.m21, w.View.m22).normalized;
-					cullData.Light = new Vector4(travel.x, travel.y, travel.z, reach);
-					builder.AllowPassCulling(false);
-					builder.SetRenderFunc(static (CullPassData d, UnsafeGraphContext context) =>
-					{
-						CommandBuffer native = CommandBufferHelpers.GetNativeCommandBuffer(context.cmd);
-						foreach (TerrainGpuRenderer renderer in TerrainGpuRenderer.Live)
-						{
-							renderer.RecordShadowCacheCull(native, d.Camera, d.Anchor, d.Planes, d.Light);
-						}
-					});
-				}
+				AddCasterCull(renderGraph, camera, in windows[widest]);
 				TextureHandle target = renderGraph.ImportTexture(cache);
 				using (var builder = renderGraph.AddRasterRenderPass<CachePassData>("Fish Main Light Shadow Cache", out CachePassData data))
 				{
@@ -546,6 +822,32 @@ namespace FishMMO.Client
 				}
 				cachedContent = content;
 				RefreshFrames++;
+			}
+		}
+
+		/// <summary>
+		/// The static casters culled for <paramref name="window"/> from the camera (TerrainGpuRenderer.RecordShadowCacheCull), into
+		/// the cache's own visible list and args, which the cache's redraw or the direct draw then reads.
+		/// </summary>
+		private static void AddCasterCull(RenderGraph renderGraph, UniversalCameraData camera, in Window window)
+		{
+			using (var builder = renderGraph.AddUnsafePass<CullPassData>("Fish Main Light Shadow Cache Cull", out CullPassData cullData))
+			{
+				cullData.Camera = camera.camera;
+				cullData.Anchor = camera.worldSpaceCameraPos;
+				WindowPlanes(in window, cullData.Planes);
+				float reach = camera.maxShadowDistance + Mathf.Max(window.Right - window.Left, window.Top - window.Bottom);
+				Vector3 travel = -new Vector3(window.View.m20, window.View.m21, window.View.m22).normalized;
+				cullData.Light = new Vector4(travel.x, travel.y, travel.z, reach);
+				builder.AllowPassCulling(false);
+				builder.SetRenderFunc(static (CullPassData d, UnsafeGraphContext context) =>
+				{
+					CommandBuffer native = CommandBufferHelpers.GetNativeCommandBuffer(context.cmd);
+					foreach (TerrainGpuRenderer renderer in TerrainGpuRenderer.Live)
+					{
+						renderer.RecordShadowCacheCull(native, d.Camera, d.Anchor, d.Planes, d.Light);
+					}
+				});
 			}
 		}
 
@@ -614,8 +916,14 @@ namespace FishMMO.Client
 
 			public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
 			{
-				if (!mergeReady || cache == null || !AppliesTo(frameData.Get<UniversalCameraData>().camera))
+				if (!AppliesTo(frameData.Get<UniversalCameraData>().camera))
 				{
+					return;
+				}
+				if (!mergeReady || cache == null)
+				{
+					Skip(SkipNotReady);
+					lastFrameUnmerged = true;
 					return;
 				}
 				mergeReady = false;
@@ -624,7 +932,15 @@ namespace FishMMO.Client
 				// URP's own map, not the 1×1 empty one it binds when it draws no shadows.
 				if (!shadowMap.IsValid() || renderGraph.GetTextureDesc(shadowMap).width <= 1)
 				{
+					Skip(SkipNoShadowMap);
 					return;
+				}
+				// Its depth format, which the cache takes from the next frame (see the cache pass).
+				GraphicsFormat urpFormat = renderGraph.GetTextureDesc(shadowMap).format;
+				if (urpFormat != shadowFormat)
+				{
+					Debug.Log($"[Shadow cache] {SystemInfo.graphicsDeviceType}: URP's main light shadow map is {urpFormat}; the cache was {(cache != null && cache.rt != null ? cache.rt.depthStencilFormat.ToString() : "none")}, now matches it.");
+					shadowFormat = urpFormat;
 				}
 				using (var builder = renderGraph.AddRasterRenderPass<MergePassData>("Fish Main Light Shadow Cache Merge", out MergePassData data))
 				{
@@ -658,6 +974,7 @@ namespace FishMMO.Client
 					});
 				}
 				MergedFrames++;
+				lastFrameUnmerged = false;
 			}
 		}
 	}

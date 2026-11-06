@@ -188,6 +188,11 @@ namespace FishMMO.TestHarness.World
             ReportUnsupportedShaders();
             var world = FindAnyObjectByType<WorldSimController>();
             status = $"{SystemInfo.graphicsDeviceType} | {Screen.width}×{Screen.height} | {fps:F0} FPS | errors {errors}";
+            if (CachedMainLightShadows.Enabled)
+            {
+                // Why the window shadow cache merges, refuses or skips (CachedMainLightShadows.Describe).
+                Debug.Log($"[Shadow cache] {CachedMainLightShadows.Describe()}");
+            }
             Debug.Log($"[WebGPU Smoke] {status}; grass={GrassBladeSystem.LastDrawCount}; scatter={DetailScatterSystem.LastDrawCount}; terrainCommands={CliffRockInstancing.LastCommandCount}; brgActive={CliffRockInstancing.Gpu?.BrgActive}; clouds={SkySystem.CloudsReady}; clock={world?.WorldSeconds}");
         }
         // Every FishMMO shader loaded so far that this device cannot run (Shader.isSupported false: Unity draws nothing with it),

@@ -154,7 +154,18 @@ namespace FishMMO.Client
 			public Material Prime;
 			/// <summary>The look this command's part wears in its family (TerrainGpuRenderer.Looks.cs; <see cref="Params"/> then draws the family material from the pool), or −1: its own clone.</summary>
 			public int Look;
+			/// <summary>
+			/// Indices drawn from <see cref="Submesh"/>'s start when this command draws several of its slot's parts at once
+			/// (<see cref="JoinSlotParts"/>: their pool ranges follow one another), else 0: the submesh's own count.
+			/// </summary>
+			public uint JoinedIndexCount;
+			/// <summary>Parts this command draws (1 unless joined).</summary>
+			public int JoinedParts;
 		}
+
+		/// <summary>The indices a command's draw takes: its joined run's, or its submesh's.</summary>
+		private static uint IndexCountOf(in Command command) =>
+			command.JoinedIndexCount > 0 ? command.JoinedIndexCount : command.Mesh.GetIndexCount(command.Submesh);
 
 		/// <summary>
 		/// A run of consecutive commands drawn by one <see cref="Graphics.RenderMeshIndirect"/> call (<see cref="BatchDraws"/>):
@@ -234,6 +245,38 @@ namespace FishMMO.Client
 		public static bool RunGather = true;
 
 		/// <summary>
+		/// A small run decided instance by instance: each instance's candidacy by the run's own test on its own box (a run of one,
+		/// TerrainGpuMath.RunCandidates) and its levels from its own reference point (TerrainGpuMath.InstanceLevelMask, its
+		/// distance ± the regather slack); the camera's levels only from instances that can show, the shadow's only from those
+		/// that can cast into the view. A run's box spans every instance, so a run of houses took every level and both views any
+		/// one of them could need and drew the rest empty. Settlement view 2026-11-05 (editor, Hi-Z off): 99 of 447 camera
+		/// commands and 155 of 255 shadow commands drew nothing. Each decision a superset of the kernel's per instance
+		/// (RunGatherTests), so the same instances draw. Off: the run's box alone (harness `exactLevels`).
+		/// </summary>
+		public static bool ExactRunLevels = true;
+
+		/// <summary>
+		/// A run's (and a small run's instances') view and shadow candidacy against the camera's own planes widened per box by
+		/// what the kept work list allows (TerrainGpuMath.IntersectsTurned: the regather slack plus the regather turn times the
+		/// box's farthest distance), not against planes widened by one margin taken at the far plane (1.5 m + 3 km × sin 3° =
+		/// 158 m on every side, so everything within 158 m of the view was gathered and drew empty). A superset of the kernel's
+		/// choice from anywhere the list is kept (RunGatherTests). Off: the far plane's margin (harness `angularMargins`).
+		/// </summary>
+		public static bool AngularMargins = true;
+
+		/// <summary>The largest run whose instances' levels are found one by one (a gather walks each of them).</summary>
+		public const int ExactRunLevelsMax = 32;
+
+		/// <summary>
+		/// The batch group's camera view draws a model level's look parts that share a pool, material and render parameters
+		/// as one command where their pool ranges follow one another (<see cref="JoinSlotLookCommands"/>). They are the same
+		/// instances (one slot), the same triangles and the same material, so the picture is the same; what goes is the
+		/// per-draw cost of Unity's WebGPU backend (~5 us a command, whatever its instance count). A structure is 7–9 parts a
+		/// level. Shadow commands stay one a part (their light culling is per part). The harness switch is joinParts.
+		/// </summary>
+		public static bool JoinSlotParts = true;
+
+		/// <summary>
 		/// Diagnosis: models whose name's family (before its first '_', as <see cref="CountFamilies"/> tallies them) is in this
 		/// comma list are not drawn (the harness's "hide" A/B of what each feature costs a frame). Empty: all drawn.
 		/// </summary>
@@ -249,6 +292,23 @@ namespace FishMMO.Client
 
 		private static string hideFamilies = "";
 		private static int hideVersion;
+
+		/// <summary>
+		/// Diagnosis of what the trees' billboards (the camera-facing last level, a material with <c>_FacingCamera</c>) cost a
+		/// frame, by part (harness `billboards`): 0 drawn as normal; 1 not drawn at all; 2 drawn by their depth prime alone, the
+		/// lit draw replaced by a second prime (so the lit shading is gone and the rasterising and coverage work stays). The
+		/// picture is wrong in 1 and 2; never set in play.
+		/// </summary>
+		public static int BillboardDiagnostic;
+
+		private static readonly int FacingCameraId = Shader.PropertyToID("_FacingCamera");
+
+		/// <summary>Whether a lit material turns its quad to the camera (a tree's billboard).</summary>
+		private static bool IsBillboard(Material material) => material != null && material.HasFloat(FacingCameraId) && material.GetFloat(FacingCameraId) > 0.5f;
+
+		/// <summary>The material a command's lit draw uses under <see cref="BillboardDiagnostic"/> 2 (its prime for a billboard), else its own.</summary>
+		private Material LitMaterialOf(int c, Material lit, Material prime) =>
+			BillboardDiagnostic == 2 && prime != null && c < commandBillboard.Length && commandBillboard[c] ? prime : lit;
 
 		/// <summary>Diagnostics (ScenePerfProbe): count the last camera's commands by art family too (<see cref="LastFamilies"/>).</summary>
 		public static bool CountFamilies;
@@ -297,6 +357,8 @@ namespace FishMMO.Client
 		private int[] commandBatch = Array.Empty<int>();
 		private int[] commandView = Array.Empty<int>();
 		private int[] commandBit = Array.Empty<int>();
+		/// <summary>Per command, whether it draws a billboard (<see cref="BillboardDiagnostic"/>).</summary>
+		private bool[] commandBillboard = Array.Empty<bool>();
 		/// <summary>This camera's wanted command indices, ascending (<see cref="CollectWanted"/>).</summary>
 		private readonly List<int> wantedCommands = new List<int>();
 		/// <summary>The models <see cref="IndexCommands"/> filed (a model added since waits for the relayout it forces).</summary>
@@ -602,6 +664,26 @@ namespace FishMMO.Client
 		/// on the fallback). Transition heights and fade bands as <see cref="TerrainTreeMath.SelectLodFaded"/>
 		/// reads them; the sphere bounds every level in the root's space.
 		/// </summary>
+		/// <summary>
+		/// A registered model's transitions and fade widths changed (an A/B switch, TerrainTreeModel.ApplyBillboardSwitch): its
+		/// GPU copy follows, by a relayout (which uploads the models again) before the next camera.
+		/// </summary>
+		public void SetModelTransitions(int id, float[] transitions, float[] fadeWidths)
+		{
+			if (id < 0 || id >= models.Count)
+			{
+				return;
+			}
+			FishModelData data = models[id].Data;
+			for (int l = 0; l < transitions.Length && l < FishModelData.MaxLevels; l++)
+			{
+				data.Transitions[l] = transitions[l];
+				data.FadeWidths[l] = fadeWidths != null && l < fadeWidths.Length ? fadeWidths[l] : 0f;
+			}
+			models[id].Data = data;
+			layoutDirty = true;
+		}
+
 		public int AddModel(float[] transitions, float[] fadeWidths, float size, Vector3 localReference, Bounds localBounds, PartSource[][] levels, string name = null)
 		{
 			if (levels == null || levels.Length == 0 || levels.Length > FishModelData.MaxLevels || transitions.Length != levels.Length)
@@ -1012,6 +1094,7 @@ namespace FishMMO.Client
 				m.ShadowMask = 0;
 				m.WorkInstances = 0;
 			}
+			shadowWorkRanges.Clear();
 		}
 
 		/// <summary>
@@ -1020,7 +1103,10 @@ namespace FishMMO.Client
 		/// thinning: full density to <paramref name="thinStart"/> metres, then a share falling linearly to
 		/// <paramref name="thinKeep"/> at <paramref name="drawDistance"/> (1: no thinning).
 		/// </summary>
-		public void AddWork(int offset, int count, int model, float drawDistance, float lodBias, int levelMask, bool shadowCandidate, float thinStart = 0f, float thinKeep = 1f, bool mainCandidate = true)
+		/// <param name="mainLevels">The levels its instances can be seen at, where known apart from the shadows' (−1: <paramref name="levelMask"/>).</param>
+		/// <param name="shadowLevels">The levels its instances can cast at (−1: <paramref name="levelMask"/>).</param>
+		public void AddWork(int offset, int count, int model, float drawDistance, float lodBias, int levelMask, bool shadowCandidate, float thinStart = 0f, float thinKeep = 1f, bool mainCandidate = true,
+			int mainLevels = -1, int shadowLevels = -1)
 		{
 			if (count <= 0 || model < 0 || levelMask == 0)
 			{
@@ -1028,11 +1114,17 @@ namespace FishMMO.Client
 			}
 			Model m = models[model];
 			workVersion++;
-			if (mainCandidate) m.MainMask |= levelMask;
+			if (mainCandidate) m.MainMask |= mainLevels >= 0 ? mainLevels : levelMask;
 			m.WorkInstances += count;
 			if (shadowCandidate)
 			{
-				m.ShadowMask |= levelMask & (int)m.Data.ShadowMask;
+				int casts = (shadowLevels >= 0 ? shadowLevels : levelMask) & (int)m.Data.ShadowMask;
+				m.ShadowMask |= casts;
+				// What the shadow cache must hold for this camera (ShadowCasterCoverage, ShadowContentVersion).
+				if (casts != 0)
+				{
+					shadowWorkRanges.Add(new Vector2Int(offset, offset + count));
+				}
 			}
 			int items = TerrainGpuMath.WorkItems(count);
 			EnsureWork(workCount + items);
@@ -1123,7 +1215,7 @@ namespace FishMMO.Client
 				}
 			}
 			// (Through the batch group nothing is batched: BatchDraws is moot there.)
-			if (batchedState != (Batching && !BrgWanted) || LooksChanged || brgState != BrgWanted)
+			if (batchedState != (Batching && !BrgWanted) || LooksChanged || brgState != BrgWanted || joinedState != JoinSlotParts)
 			{
 				layoutDirty = true;
 			}
@@ -1243,6 +1335,7 @@ namespace FishMMO.Client
 				rp.camera = camera;
 				rp.worldBounds = bounds;
 				rp.matProps = slotBlocks[command.Slot];
+				rp.material = LitMaterialOf(c, rp.material, primedState ? command.Prime : null);
 				Graphics.RenderMeshIndirect(rp, command.Mesh, argsBuffer, 1, c);
 				draws++;
 				if (primedState && command.Prime != null)
@@ -1296,7 +1389,7 @@ namespace FishMMO.Client
 				rp.worldBounds = bounds;
 				rp.matProps = batchBlock;
 				int count = last - first + 1;
-				rp.material = batch.Params.material;
+				rp.material = LitMaterialOf(first, batch.Params.material, primedState ? batch.Prime : null);
 				Graphics.RenderMeshIndirect(rp, batch.Mesh, argsBuffer, count, first);
 				draws++;
 				covered += count;
@@ -1353,9 +1446,13 @@ namespace FishMMO.Client
 
 		// ── Layout ────────────────────────────────────────────────────
 
+		/// <summary>The <see cref="JoinSlotParts"/> the last layout was made with.</summary>
+		private bool joinedState;
+
 		private void Relayout()
 		{
 			layoutDirty = false;
+			joinedState = JoinSlotParts;
 			TerrainInstancingProbe.Relayouts++;
 			slotCount = 0;
 			var capacities = new List<int>();
@@ -1441,6 +1538,10 @@ namespace FishMMO.Client
 			else if (looksState)
 			{
 				PoolLookCommands();
+				if (brgState && JoinSlotParts)
+				{
+					JoinSlotLookCommands();
+				}
 			}
 			// Where the instance index carries it, each command's startInstance is its run's start (InstanceIdCarriesBase). Never
 			// for the batch group: DOTS instancing adds the command's visibleOffset to an instance index that starts at 0.
@@ -1451,7 +1552,7 @@ namespace FishMMO.Client
 			{
 				args.Add(new GraphicsBuffer.IndirectDrawIndexedArgs
 				{
-					indexCountPerInstance = command.Mesh.GetIndexCount(command.Submesh),
+					indexCountPerInstance = IndexCountOf(command),
 					startIndex = command.Mesh.GetIndexStart(command.Submesh),
 					baseVertexIndex = (uint)command.Mesh.GetBaseVertex(command.Submesh),
 					instanceCount = 0,
@@ -1540,6 +1641,7 @@ namespace FishMMO.Client
 				commandBatch = new int[count];
 				commandView = new int[count];
 				commandBit = new int[count];
+				commandBillboard = new bool[count];
 				commandsByModel = new int[count];
 			}
 			if (modelCommandStart.Length < models.Count + 1)
@@ -1553,6 +1655,7 @@ namespace FishMMO.Client
 				commandBatch[c] = -1;
 				commandView[c] = command.View;
 				commandBit[c] = 1 << command.Level;
+				commandBillboard[c] = command.View == 0 && IsBillboard(command.Params.material);
 				modelCommandStart[command.Model + 1]++;
 			}
 			for (int m = 0; m < models.Count; m++)
@@ -1610,7 +1713,7 @@ namespace FishMMO.Client
 				for (int k = modelCommandStart[m]; k < modelCommandStart[m + 1]; k++)
 				{
 					int c = commandsByModel[k];
-					if (((commandView[c] == 0 ? main : shadow) & commandBit[c]) != 0)
+					if (((commandView[c] == 0 ? main : shadow) & commandBit[c]) != 0 && !(BillboardDiagnostic == 1 && commandBillboard[c]))
 					{
 						wantedCommands.Add(c);
 					}

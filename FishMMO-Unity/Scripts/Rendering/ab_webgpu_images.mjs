@@ -26,7 +26,9 @@ if (!tab) throw Error('No isolated localhost WebGPU test tab');
 const ws = new WebSocket(tab.webSocketDebuggerUrl);
 await new Promise((resolve,reject) => {ws.onopen=resolve; ws.onerror=reject});
 let next = 0; const pending = new Map();
-ws.onmessage = e => {const m=JSON.parse(e.data),p=pending.get(m.id);if(p){clearTimeout(p.timer);pending.delete(m.id);m.error?p.reject(Error(JSON.stringify(m.error))):p.resolve(m.result)}};
+// The page's console while the pair is taken, beside the images (<name>-<view>-console.txt): what the player logged about them.
+const consoleLines = [];
+ws.onmessage = e => {const m=JSON.parse(e.data);if(m.method==='Runtime.consoleAPICalled'){consoleLines.push((m.params.args||[]).map(a=>a.value??'').join(' '));return}const p=pending.get(m.id);if(p){clearTimeout(p.timer);pending.delete(m.id);m.error?p.reject(Error(JSON.stringify(m.error))):p.resolve(m.result)}};
 const call = (method,params={}) => new Promise((resolve,reject) => {const id=++next,timer=setTimeout(()=>{pending.delete(id);reject(Error('DevTools timeout: '+method))},120000);pending.set(id,{resolve,reject,timer});ws.send(JSON.stringify({id,method,params}))});
 const evaluate = async expression => {const r=await call('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(JSON.stringify(r.exceptionDetails));return r.result.value};
 const send = (method, arg) => evaluate(`fishWebGpuInstance.SendMessage('WebGPU Rendering Test',${JSON.stringify(method)},${JSON.stringify(arg)})`);
@@ -34,6 +36,7 @@ const apply = async list => { for (const s of list.split(';').filter(Boolean)) a
 const pause = ms => new Promise(r => setTimeout(r, ms));
 const shot = async file => { const r = await call('Page.captureScreenshot',{format:'png'}); fs.writeFileSync(file, Buffer.from(r.data,'base64')); };
 try {
+  await call('Runtime.enable');
   await call('Emulation.setFocusEmulationEnabled',{enabled:true});
   await call('Emulation.setDeviceMetricsOverride',{width:2560,height:1440,deviceScaleFactor:1,mobile:false});
   await evaluate(`(()=>{const c=document.querySelector('canvas');c.style.width='2560px';c.style.height='1440px';c.width=2560;c.height=1440;dispatchEvent(new Event('resize'));})()`);
@@ -45,10 +48,17 @@ try {
   await apply(before); await pause(settle);
   const a = path.join(outDir, `${name}-${view}-a.png`), b = path.join(outDir, `${name}-${view}-b.png`);
   await shot(a);
+  await send('SetSetting', 'shadowCacheLog=1');
   await apply(after); await pause(settle);
   await shot(b);
+  await send('SetSetting', 'shadowCacheLog=1');
+  await pause(500);
   await apply(before);
   await send('SetSetting', 'paused=0');
   const state = JSON.parse(await evaluate('JSON.stringify(window.fishWebGpuTestStatus)'));
   console.log(JSON.stringify({name, view, before, after, a, b, monitor:state}));
-} finally { ws.close(); }
+} finally {
+  fs.writeFileSync(path.join(outDir, `${name}-${view}-console.txt`), consoleLines.join('\n'));
+  // The canvas back to the page's own size (it fills the window), so the tab is usable at its real size afterwards.
+  await evaluate(`(()=>{const c=document.querySelector('canvas');if(c){c.style.width='';c.style.height='';}})()`).catch(()=>{}); await call('Emulation.clearDeviceMetricsOverride').catch(()=>{}); ws.close();
+}

@@ -110,6 +110,9 @@ namespace FishMMO.Client
 		/// </summary>
 		private static bool biomesPending;
 
+		/// <summary>The renderer's blade fingerprint (GrassBladeRenderer.Fingerprint), or why there is none.</summary>
+		public static string Fingerprint() => renderer != null ? renderer.Fingerprint() : "no grass renderer";
+
 		/// <summary>The session's switch (A/B); off gives every grass prototype back to the mesh renderer.</summary>
 		public static bool Enabled
 		{
@@ -194,6 +197,14 @@ namespace FishMMO.Client
 			if (renderer.LastBlades[0] >= 0)
 			{
 				s.Append($"; blades appended LOD0/1/2 {renderer.LastBlades[0]}/{renderer.LastBlades[1]}/{renderer.LastBlades[2]} (caps {renderer.Capacity(0)}/{renderer.Capacity(1)}/{renderer.Capacity(2)}), shadow {renderer.LastBlades[3]}/{renderer.LastBlades[4]}");
+				if (GrassBladeRenderer.RejectStats && renderer.LastStages[0] >= 0)
+				{
+					s.Append("; candidate exits:");
+					for (int k = 0; k < GrassBladeRenderer.StageNames.Length; k++)
+					{
+						s.Append($" [{GrassBladeRenderer.StageNames[k]} {renderer.LastStages[k]}]");
+					}
+				}
 			}
 			// "0 tiles" with terrains taken usually means the ground under the camera is not one of them.
 			Terrain under = TerrainUnderCamera();
