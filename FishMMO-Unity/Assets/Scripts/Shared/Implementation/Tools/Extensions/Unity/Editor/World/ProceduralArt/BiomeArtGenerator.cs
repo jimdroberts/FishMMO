@@ -1877,19 +1877,30 @@ namespace FishMMO.Shared.WorldDesign
 			BillboardImpostor.Result billboard = tree.Billboard;
 
 			string billboardPath = ProceduralArtCatalogue.BillboardTexture(species.Name);
-			c.Report.TextureBytes += CompressedBytes(billboard.Width, billboard.Height);
-			if (ShouldWrite(c, billboardPath))
+			string billboardNormalPath = ProceduralArtCatalogue.BillboardNormalTexture(species.Name);
+			c.Report.TextureBytes += CompressedBytes(billboard.Width, billboard.Height) + CompressedBytes(billboard.NormalWidth, billboard.NormalHeight);
+			bool writeColour = ShouldWrite(c, billboardPath), writeNormals = ShouldWrite(c, billboardNormalPath);
+			if (writeColour)
 			{
-				// Imported at once: the billboard material below loads it.
 				WritePng(c, billboardPath, billboard.Pixels, billboard.Width, billboard.Height);
+			}
+			if (writeNormals)
+			{
+				WritePng(c, billboardNormalPath, billboard.Normals, billboard.NormalWidth, billboard.NormalHeight);
+			}
+			if (writeColour || writeNormals)
+			{
+				// Imported at once: the billboard material below loads them.
 				ImportPendingTextures(c);
 			}
 			Texture2D billboardTexture = LoadTexture(billboardPath);
+			Texture2D billboardNormals = LoadTexture(billboardNormalPath);
 			// Turned to face the camera by the shader (_FacingCamera). Still two-sided: a shadow or reflection
-			// camera may see it from behind, and a culled back face would drop the tree there.
+			// camera may see it from behind, and a culled back face would drop the tree there. Lit by its own normals
+			// (the picture is unlit; BillboardImpostor), as the meshes are by theirs.
 			Material billboardMaterial = WriteMaterial(c, ProceduralArtCatalogue.BillboardMaterial(species.Name), VegetationShader, m =>
 				Vegetation(m, billboardTexture, 0.5f, true, 0.35f, 0f, 0.3f, new Color(0.95f, 1f, 0.95f), new Color(0.8f, 0.75f, 0.55f), 0.25f, 0f, species.Deciduous,
-					distanceFade: FadeTree, facingCamera: true, evergreen: !species.Deciduous));
+					normal: billboardNormals, expectNormal: true, distanceFade: FadeTree, facingCamera: true, evergreen: !species.Deciduous));
 
 			string prefix = ProceduralArtCatalogue.TreePrefab(species.Name);
 			Mesh m0 = WriteMesh(c, lod0, prefix + "_LOD0", false);

@@ -297,7 +297,51 @@ namespace FishMMO.UnitTests
 				foreach (Color32 p in median.Pixels) if (p.a > 127) medianOpaque++;
 				Assert.That(medianOpaque, Is.LessThanOrEqualTo(opaque), $"{species.Name}'s median billboard is denser than its full one");
 				Assert.That(medianOpaque, Is.GreaterThan(median.Pixels.Length / 50), $"{species.Name}'s median billboard is nearly empty");
+
+				// Unlit: a wholly opaque texel is the surface's own colour (the shader lights it), never darkened here.
+				foreach (Color32 p in billboard.Pixels)
+				{
+					if (p.a == 255)
+					{
+						// Bark, leaf, or a texel's blend of the two where both fall in it: never darker than that blend.
+						float share = Mathf.Clamp01((p.g - 77f) / (128f - 77f));
+						Assert.That(Near(p, Mathf.RoundToInt(Mathf.Lerp(102f, 51f, share)), p.g, 51), $"{species.Name}'s billboard texel {p} is not a surface's own colour (lit in the picture?)");
+					}
+				}
+				// Its normals: half the picture's size, every one a unit normal facing the viewer (z ≥ 0 in the quad's frame).
+				Assert.That(billboard.NormalWidth, Is.EqualTo(Mathf.Max(1, billboard.Width / 2)));
+				Assert.That(billboard.NormalHeight, Is.EqualTo(Mathf.Max(1, billboard.Height / 2)));
+				Assert.That(billboard.Normals.Length, Is.EqualTo(billboard.NormalWidth * billboard.NormalHeight));
+				foreach (Color32 p in billboard.Normals)
+				{
+					var n = new Vector3(p.r / 255f * 2f - 1f, p.g / 255f * 2f - 1f, p.b / 255f * 2f - 1f);
+					Assert.That(n.magnitude, Is.EqualTo(1f).Within(0.02f), $"{species.Name}'s billboard normal {p} is not a unit normal");
+					Assert.That(n.z, Is.GreaterThanOrEqualTo(-0.01f), $"{species.Name}'s billboard normal {p} faces away from the viewer");
+				}
 			}
+		}
+
+		/// <summary>A texel within a step of rounding of a colour (0.3 × 255 is 76.5).</summary>
+		private static bool Near(Color32 p, int r, int g, int b) => Mathf.Abs(p.r - r) <= 1 && Mathf.Abs(p.g - g) <= 1 && Mathf.Abs(p.b - b) <= 1;
+
+		[Test]
+		public void BillboardImpostor_NormalsAreInTheTurnedQuadsFrame()
+		{
+			// The picture is taken from object −z: a surface facing it is straight out (z toward the viewer); x and y stay.
+			Vector3 facing = BillboardImpostor.TangentNormal(new Vector3(0f, 0f, -1f));
+			Assert.That(facing, Is.EqualTo(Vector3.forward));
+			Vector3 right = BillboardImpostor.TangentNormal(new Vector3(0.6f, 0f, -0.8f));
+			Assert.That(right.x, Is.EqualTo(0.6f).Within(1e-5f));
+			Assert.That(right.z, Is.EqualTo(0.8f).Within(1e-5f));
+			Vector3 up = BillboardImpostor.TangentNormal(new Vector3(0f, 0.8f, -0.6f));
+			Assert.That(up.y, Is.EqualTo(0.8f).Within(1e-5f));
+			// One facing away is mirrored into the viewer's hemisphere (a normal map rebuilds z ≥ 0).
+			Vector3 away = BillboardImpostor.TangentNormal(new Vector3(0.6f, 0f, 0.8f));
+			Assert.That(away.z, Is.EqualTo(0.8f).Within(1e-5f));
+			Color32 packed = BillboardImpostor.PackNormal(Vector3.forward);
+			Assert.That(packed.r, Is.EqualTo(128));
+			Assert.That(packed.g, Is.EqualTo(128));
+			Assert.That(packed.b, Is.EqualTo(255));
 		}
 
 		[Test]

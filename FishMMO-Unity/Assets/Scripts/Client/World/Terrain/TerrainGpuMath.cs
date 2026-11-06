@@ -244,7 +244,12 @@ namespace FishMMO.Client
 			}
 			float shadowDistance = light.w;
 			uint mask = model.ShadowMask;
-			bool levelCasts = (mask & (1u << level)) != 0, partnerCasts = partner >= 0 && (mask & (1u << partner)) != 0;
+			// A static caster's shadow: one whole level, past the band's middle (FishModelData.FlagWholeShadow; the kernel's rule).
+			if ((model.Flags & FishModelData.FlagWholeShadow) != 0u)
+			{
+				WholeShadowLevel(ref level, ref fade, ref partner, ref partnerFade);
+			}
+			bool levelCasts = level >= 0 && (mask & (1u << level)) != 0, partnerCasts = partner >= 0 && (mask & (1u << partner)) != 0;
 			if (shadowDistance > 0f && (levelCasts || partnerCasts) && Vector3.Distance(centre, eye) <= shadowDistance + radius)
 			{
 				Vector3 d = light;
@@ -261,6 +266,26 @@ namespace FishMMO.Client
 					}
 				}
 			}
+		}
+
+		/// <summary>
+		/// A static caster's shadow level (FishModelData.FlagWholeShadow, FishCullInstance's same rule): of a cross-fading pair,
+		/// the level more than half drawn, whole; a single level fading out (to the cull, or thinned) whole until it is more than
+		/// half gone, then none (−1). Outside a band the level as it is.
+		/// </summary>
+		public static void WholeShadowLevel(ref int level, ref float fade, ref int partner, ref float partnerFade)
+		{
+			if (partner >= 0)
+			{
+				level = partnerFade > 0.5f ? partner : level;
+			}
+			else if (-fade > 0.5f)
+			{
+				level = -1;
+			}
+			fade = 0f;
+			partner = -1;
+			partnerFade = 0f;
 		}
 
 		/// <summary>

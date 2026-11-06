@@ -121,7 +121,6 @@ namespace FishMMO.TestHarness.World
 				case "exactLevels": TerrainGpuRenderer.ExactRunLevels = value != "0"; break;
 				case "treeDistance": TerrainTreeInstancing.DistanceCap = float.Parse(value, inv); break;
 				case "treeLodBias": TerrainTreeInstancing.LodBiasScale = float.Parse(value, inv); break;
-				case "billboardVary": Shader.SetGlobalFloat("_FishBillboardVary", value == "1" ? 1f : 0f); break;
 				case "billboardSwitch": TerrainTreeInstancing.BillboardSwitchScale = float.Parse(value, inv); break;
 				case "billboards": TerrainGpuRenderer.BillboardDiagnostic = value == "hide" ? 1 : value == "primeonly" ? 2 : 0; break;
 				case "shadowCacheExact": CachedMainLightShadows.DebugForceExact = value == "1"; break;

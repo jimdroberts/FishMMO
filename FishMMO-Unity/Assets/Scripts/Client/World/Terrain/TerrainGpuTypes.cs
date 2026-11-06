@@ -69,7 +69,16 @@ namespace FishMMO.Client
 		public uint LevelCount;
 		public uint SlotBase;
 		public uint ShadowMask;
-		public uint Padding;
+		/// <summary>Bits: <see cref="FlagWholeShadow"/>.</summary>
+		public uint Flags;
+
+		/// <summary>
+		/// A static caster (structures, rocks, props: not the swaying vegetation, TerrainGpuRenderer.IsStaticShadowCaster): its
+		/// shadow is one whole level, the one its cross-fade band is past the middle of, never the dithered pair the camera
+		/// draws. The cached main-light shadows hold what they draw over many frames and cannot dither, so the live shadows of
+		/// what they cache follow the same rule and the two maps agree (2026-11-06). The camera's own draw still cross-fades.
+		/// </summary>
+		public const uint FlagWholeShadow = 1u;
 	}
 
 	/// <summary>

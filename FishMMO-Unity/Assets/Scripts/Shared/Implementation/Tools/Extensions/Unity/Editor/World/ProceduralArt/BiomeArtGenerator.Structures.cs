@@ -299,9 +299,25 @@ namespace FishMMO.Shared.WorldDesign
 		/// A piece's meshes (every variant, every level) and its prefabs (every variant in every finish), then the roof variants
 		/// of its houses that <paramref name="roofs"/> names (StructureRoofs), each the same in every way but its roof.
 		/// </summary>
+		/// <summary>
+		/// Every level of a structure casts, its last too (2026-11-06). The rocks' rule (<see cref="LodShadows"/>: all but the
+		/// last) suits a boulder, whose last level starts past the shadow distance; a house is many small pieces, and a small
+		/// piece reaches its last level well inside it (a 3 m wall at ≈ 50 m at a LOD bias of 1), so near houses drew no shadow
+		/// while the cached main-light shadows (CachedMainLightShadows) drew theirs. Each level casts with the mesh it draws.
+		/// </summary>
+		private static ShadowCastingMode[] StructureShadows(int count)
+		{
+			var shadows = new ShadowCastingMode[count];
+			for (int i = 0; i < count; i++)
+			{
+				shadows[i] = ShadowCastingMode.On;
+			}
+			return shadows;
+		}
+
 		private static void WriteStructurePiece(Context c, StructurePiece piece, List<StructureRoofVariant> roofs)
 		{
-			ShadowCastingMode[] shadows = LodShadows(StructurePieces.LevelCount);
+			ShadowCastingMode[] shadows = StructureShadows(StructurePieces.LevelCount);
 			for (int v = 0; v < piece.Variants; v++)
 			{
 				WriteStructureVariant(c, piece, v, null, shadows);

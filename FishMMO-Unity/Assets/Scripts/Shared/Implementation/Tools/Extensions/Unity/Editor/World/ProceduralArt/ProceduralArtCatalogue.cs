@@ -139,6 +139,9 @@ namespace FishMMO.Shared.WorldDesign
 		public static string BarkTexture(string family, string map) => $"{TexturesFolder}/Bark_{family}_{map}.png";
 		public static string AtlasPath => $"{TexturesFolder}/{AtlasName}.png";
 		public static string BillboardTexture(string tree) => $"{TexturesFolder}/Billboard_{tree}_Albedo.png";
+
+		/// <summary>A tree billboard's normals (BillboardImpostor.Result.Normals): a normal map, by its "_Normal" name.</summary>
+		public static string BillboardNormalTexture(string tree) => $"{TexturesFolder}/Billboard_{tree}_Normal.png";
 		public static string MeshPath(string name) => $"{MeshesFolder}/{name}.asset";
 		public static string MaterialPath(string name) => $"{MaterialsFolder}/{name}.mat";
 		public static string PrefabPath(string name) => $"{PrefabsFolder}/{name}.prefab";
@@ -998,13 +1001,15 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Screen-relative heights at which a tree steps to its next level; the last one culls.</summary>
 		/// <remarks>
 		/// <para>
-		/// For a 15 m tree under a 60° vertical field of view (screen share = h / (2·d·tan 30°)):
-		/// LOD0 → LOD1 at 0.25 ≈ 52 m, LOD1 → the billboard at 0.08 ≈ 160 m, culled at 0.002 ≈ 4.3 km.
-		/// Screen shares scale with the tree, so a 28 m spruce steps at ≈ 97 m and ≈ 300 m: the trees
-		/// grew to their real sizes (2026-10-04) and change level proportionally further off, at the same
-		/// size on screen, which is what the shares are for.
-		/// The billboard used to start at 0.1 (≈130 m), close enough that its flatness showed; at 160 m a
-		/// 15 m tree is ~90 px tall at 1080p, a little below the 512 px picture's own resolution.
+		/// For a 15 m tree under a 60° vertical field of view (screen share = h / (2·d·tan 30°)), at a LOD
+		/// bias of 1: LOD0 → LOD1 at 0.25 ≈ 52 m, LOD1 → the billboard at 0.16 ≈ 81 m, culled at 0.002 ≈
+		/// 4.3 km. The quality levels' LOD bias multiplies those distances (High's 2: ≈ 104 m and ≈ 162 m).
+		/// Screen shares scale with the tree, so a 28 m spruce steps proportionally further off, at the same
+		/// size on screen, which is what the shares are for: the trees grew to their real sizes (2026-10-04).
+		/// The billboard used to start at 0.1, close enough that its flatness showed, then at 0.08. Since the
+		/// billboard is lit by its own normals like the meshes and takes its plant's size (2026-11-06) it
+		/// starts at 0.16: the owner's A/B at High, settlement view, GPU 9.24 → 8.26 ms for 4.8% of the
+		/// frame's pixels changed, the residue being a single picture's shape (Docs/Rendering/2026-11-05/round-2).
 		/// </para>
 		/// <para>
 		/// The cull height is set far past the terrain's tree distance on purpose: a terrain tree is
@@ -1015,7 +1020,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// CrossFade, animated), and every pass of the shader dithers on <c>LOD_FADE_CROSSFADE</c>.
 		/// </para>
 		/// </remarks>
-		public static readonly float[] TreeLodHeights = { 0.25f, 0.08f, 0.002f };
+		public static readonly float[] TreeLodHeights = { 0.25f, 0.16f, 0.002f };
 
 		// ── What the generator writes ────────────────────────────────
 
@@ -1065,6 +1070,7 @@ namespace FishMMO.Shared.WorldDesign
 			foreach (TreeSpecies t in Trees)
 			{
 				yield return BillboardTexture(t.Name);
+				yield return BillboardNormalTexture(t.Name);
 				yield return MeshPath(TreePrefab(t.Name) + "_LOD0");
 				yield return MeshPath(TreePrefab(t.Name) + "_LOD1");
 				yield return MeshPath(TreePrefab(t.Name) + "_Billboard");

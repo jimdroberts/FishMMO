@@ -214,10 +214,6 @@ float _FishVegPlantConst;
 // needle edges are then drawn by alpha-to-coverage — a soft, antialiased fringe — instead of cut at the
 // cutoff, which drew every card as a hard paper cut-out up close. 0: the plain cut.
 float _FishVegetationAlphaToCoverage;
-// 1: a tree's billboard takes its plant's height and crown width (VegVary), as the meshes before it do, so a tree keeps its
-// size where it changes to its billboard. 0 (as shipped until the owner's A/B): every billboard is the species' picture at
-// its authored size. Set by the harness (`billboardVary`).
-float _FishBillboardVary;
 
 // The ground colour map (GroundColourMap): xy the map's world xz origin, zw one over its xz size.
 #include "FishGroundColour.hlsl"
@@ -373,14 +369,20 @@ void VegFadeClip(float4 positionCS, half2 fade)
 // A tree billboard turned to face the camera about the tree's up axis (cylindrical billboarding):
 // object x goes to the camera's right, object -z toward the camera, y stays up. The quad is
 // BillboardImpostor.FacingQuad; the scale is the instance's own (terrain trees vary width and height).
+/// A billboard's quad as the shader turns it: across it (object x), world up (object y), toward the camera (object −z).
+float3 VegFacingToward(float3 originWS)
+{
+    float2 toCamera = _WorldSpaceCameraPos.xz - originWS.xz;
+    float len = length(toCamera);
+    float2 f2 = len > 1e-4 ? toCamera / len : float2(0.0, -1.0);
+    return float3(f2.x, 0.0, f2.y);
+}
+
 float3 VegFaceCamera(float3 positionOS, float3 normalOS, float3 originWS, out half3 normalWS)
 {
     float scaleX = length(float3(UNITY_MATRIX_M._m00, UNITY_MATRIX_M._m10, UNITY_MATRIX_M._m20));
     float scaleY = length(float3(UNITY_MATRIX_M._m01, UNITY_MATRIX_M._m11, UNITY_MATRIX_M._m21));
-    float2 toCamera = _WorldSpaceCameraPos.xz - originWS.xz;
-    float len = length(toCamera);
-    float2 f2 = len > 1e-4 ? toCamera / len : float2(0.0, -1.0);
-    float3 toward = float3(f2.x, 0.0, f2.y);
+    float3 toward = VegFacingToward(originWS);
     float3 up = float3(0.0, 1.0, 0.0);
     float3 right = cross(toward, up);
     normalWS = (half3)normalize(right * normalOS.x + up * normalOS.y - toward * normalOS.z);
@@ -579,16 +581,12 @@ bool VegVary(inout float3 positionOS, inout float3 normalOS, float4 partPivot, f
     }
     if (_FacingCamera > 0.5)
     {
-        // A billboard is a picture of the tree already: its colour is the plant's own, and (with _FishBillboardVary) its
-        // height and its crown's width, which the meshes take below. The crown's widening fades in over the first 3 m
-        // there; on the quad it is uniform across (the trunk is a pixel or two wide at a billboard's range). No twist or
-        // lean: one picture turned to the camera has neither.
-        UNITY_BRANCH
-        if (_FishBillboardVary > 0.5)
-        {
-            positionOS.y *= 1.0 + rTall * _VaryHeight;
-            positionOS.x *= 1.0 + rCrown * _VaryCrown;
-        }
+        // A billboard is a picture of the tree already: its colour is the plant's own, and so are its height and its crown's
+        // width, which the meshes take below, or a tree changed size where it changed to its billboard (2026-11-06). The
+        // crown's widening fades in over the first 3 m there; on the quad it is uniform across (the trunk is a pixel or two
+        // wide at a billboard's range). No twist or lean: one picture turned to the camera has neither.
+        positionOS.y *= 1.0 + rTall * _VaryHeight;
+        positionOS.x *= 1.0 + rCrown * _VaryCrown;
         return true;
     }
     // Its trunk thickened or thinned about its own centre line (partPivot), the taller of a species the thicker;
@@ -930,8 +928,12 @@ VegVaryings VegVertex(VegAttributes input)
     }
     output.positionWS = positionWS;
     output.normalWS = normalWS;
-    // A billboard's tangent is not turned with it; billboards carry no normal map, so nothing reads it.
     output.tangentWS = half4(TransformObjectToWorldDir(input.tangentOS.xyz), input.tangentOS.w * GetOddNegativeScale());
+    // A billboard's tangent is the quad's across, turned with it (VegFaceCamera): its normal map is in that frame (VegNormal).
+    if (_FacingCamera > 0.5)
+    {
+        output.tangentWS = half4((half3)cross(VegFacingToward(rootWS), float3(0.0, 1.0, 0.0)), 1.0h);
+    }
     output.uv = TRANSFORM_TEX(VegSkirtUV(input.uv, input.wind, skirtDrop), _BaseMap);
     output.color = half4(input.color.rgb * VegVaryColour(TransformObjectToWorld(float3(0.0, 0.0, 0.0)), input.color.a, input.partData), input.color.a);
     output.tint = tint;
@@ -954,8 +956,19 @@ half3 VegNormal(VegVaryings input, half facing)
     {
         half3 normalTS = UnpackNormalScale(SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, input.uv), _BumpScale);
         half3 t = normalize(input.tangentWS.xyz);
-        half3 b = input.tangentWS.w * cross(n, t);
-        n = normalize(normalTS.x * t + normalTS.y * b + normalTS.z * n);
+        UNITY_BRANCH
+        if (_FacingCamera > 0.5h)
+        {
+            // A billboard's picture holds the tree's own normals in the turned quad's frame (BillboardImpostor: x across,
+            // y up, z toward the viewer), not a bump about the quad's rounded vertex normal.
+            half3 up = half3(0.0h, 1.0h, 0.0h);
+            n = normalize(normalTS.x * t + normalTS.y * up + normalTS.z * cross(up, t));
+        }
+        else
+        {
+            half3 b = input.tangentWS.w * cross(n, t);
+            n = normalize(normalTS.x * t + normalTS.y * b + normalTS.z * n);
+        }
     }
     return n * lerp(1.0, facing, _BackfaceFlip);
 }

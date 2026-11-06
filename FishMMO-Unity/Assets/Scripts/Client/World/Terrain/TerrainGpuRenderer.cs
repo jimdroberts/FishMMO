@@ -684,6 +684,22 @@ namespace FishMMO.Client
 			layoutDirty = true;
 		}
 
+		/// <summary>Whether every part of the model that casts is a static caster (<see cref="IsStaticShadowCaster"/>).</summary>
+		private static bool CastsOnlyStatic(PartSource[][] levels)
+		{
+			foreach (PartSource[] level in levels)
+			{
+				foreach (PartSource part in level)
+				{
+					if (part.CastsShadows && !IsStaticShadowCaster(1, part.Material))
+					{
+						return false;
+					}
+				}
+			}
+			return true;
+		}
+
 		public int AddModel(float[] transitions, float[] fadeWidths, float size, Vector3 localReference, Bounds localBounds, PartSource[][] levels, string name = null)
 		{
 			if (levels == null || levels.Length == 0 || levels.Length > FishModelData.MaxLevels || transitions.Length != levels.Length)
@@ -719,6 +735,7 @@ namespace FishMMO.Client
 				SphereRadius = FloraMode > 0.5f ? FloraSphereRadius(localBounds) : localBounds.extents.magnitude,
 				LevelCount = (uint)levels.Length,
 				ShadowMask = shadowMask,
+				Flags = shadowMask != 0 && CastsOnlyStatic(resolved) ? FishModelData.FlagWholeShadow : 0u,
 			};
 			for (int l = 0; l < levels.Length; l++)
 			{

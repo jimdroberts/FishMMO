@@ -59,6 +59,28 @@ def descendants(pid):
     return sorted(found)
 
 
+def alive(pid):
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def reap(pids, grace=20):
+    """Waits for signalled processes that left the group to go; SIGKILLs any still there after the grace. An editor busy in
+    an executeMethod ignored SIGTERM and ran on for 12 minutes after its xvfb-run parent went (2026-11-06)."""
+    deadline = time.monotonic() + grace
+    while any(alive(p) for p in pids) and time.monotonic() < deadline:
+        time.sleep(0.5)
+    for p in pids:
+        if alive(p):
+            try:
+                os.kill(p, signal.SIGKILL)
+            except OSError:
+                pass
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, required=True)
@@ -75,6 +97,7 @@ def main():
     start = time.monotonic()
     peak = 0
     stop = None
+    escaped = []
     with (args.out / 'stdout.log').open('w') as log, (args.out / 'gpu.csv').open('w') as telemetry:
         telemetry.write('seconds,name,pstate,graphics_mhz,memory_mhz,gpu_percent,power_w,temp_c,vram_mib\n')
         process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
@@ -111,6 +134,8 @@ def main():
             except subprocess.TimeoutExpired:
                 os.killpg(process.pid, signal.SIGKILL)
                 code = process.wait()
+            if escaped:
+                reap(escaped)
         except BaseException:
             os.killpg(process.pid, signal.SIGTERM)
             try:

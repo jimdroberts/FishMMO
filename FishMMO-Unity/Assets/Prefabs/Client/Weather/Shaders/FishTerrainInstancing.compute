@@ -54,7 +54,7 @@ struct FishModel                                                            // 8
     uint levelCount;
     uint slotBase;
     uint shadowMask;
-    uint padding;
+    uint flags;                                                              // 1: whole-level shadow (FishModelData.FlagWholeShadow)
 };
 struct FishWork { uint start; uint count; uint model; uint padding; float drawDistance; float lodBias; float thinStart; float thinKeep; }; // 32 bytes
 
@@ -301,14 +301,26 @@ void FishCullInstance(uint3 group, uint3 thread, out uint index, out uint4 slots
     {
         fade = -max(-fade, thin);   // a single fading-out level (grass): the stronger of the two fades
     }
-    // The shadow cache keeps what it draws until its window moves on: a dither frozen mid-fade would stay in the shadow, so it
-    // draws the chosen level whole.
+    // The shadow cache keeps what it draws until its window moves on: a dither frozen mid-fade would stay in the shadow, so a
+    // static caster's shadow is one whole level, the one past its band's middle (a single level fading out: whole until more
+    // than half gone, then none), in the cache and in the live shadows alike so the two agree (FishModelData.FlagWholeShadow,
+    // TerrainGpuMath.WholeShadowLevel). The camera's own draw keeps its cross-fade.
     bool cacheCull = _FishLod.w > 0.5;
-    if (cacheCull)
+    int shadowLod = lod, shadowPartner = partner;
+    float shadowFade = fade, shadowPartnerFade = partnerFade;
+    if ((m.flags & 1u) != 0 || cacheCull)
     {
-        fade = 0.0;
-        partner = -1;
-        partnerFade = 0.0;
+        if (partner >= 0)
+        {
+            shadowLod = partnerFade > 0.5 ? partner : lod;
+        }
+        else if (-fade > 0.5)
+        {
+            shadowLod = -1;
+        }
+        shadowPartner = -1;
+        shadowFade = 0.0;
+        shadowPartnerFade = 0.0;
     }
 
     float3 centre = FishTransformPoint(inst, m.sphereCentre);
@@ -327,7 +339,7 @@ void FishCullInstance(uint3 group, uint3 thread, out uint index, out uint4 slots
     }
 
     float shadowDistance = _FishLight.w;
-    uint casts = m.shadowMask & ((1u << (uint)lod) | (partner >= 0 ? (1u << (uint)partner) : 0u));
+    uint casts = m.shadowMask & ((shadowLod >= 0 ? (1u << (uint)shadowLod) : 0u) | (shadowPartner >= 0 ? (1u << (uint)shadowPartner) : 0u));
     if (shadowDistance > 0.0 && casts != 0 && distance(centre, eye) <= shadowDistance + radius)
     {
         float3 d = _FishLight.xyz;
@@ -335,16 +347,16 @@ void FishCullInstance(uint3 group, uint3 thread, out uint index, out uint4 slots
         float l = min(shadowDistance, 2.0 * radius / down);
         if (FishSweptSphereVisible(centre, radius, d, l))
         {
-            if ((m.shadowMask & (1u << (uint)lod)) != 0)
+            if (shadowLod >= 0 && (m.shadowMask & (1u << (uint)shadowLod)) != 0)
             {
-                slots.z = (uint)lod * 2 + 1;
-                fades.z = fade;
+                slots.z = (uint)shadowLod * 2 + 1;
+                fades.z = shadowFade;
                 valid |= 4u;
             }
-            if (partner >= 0 && (m.shadowMask & (1u << (uint)partner)) != 0)
+            if (shadowPartner >= 0 && (m.shadowMask & (1u << (uint)shadowPartner)) != 0)
             {
-                slots.w = (uint)partner * 2 + 1;
-                fades.w = partnerFade;
+                slots.w = (uint)shadowPartner * 2 + 1;
+                fades.w = shadowPartnerFade;
                 valid |= 8u;
             }
         }

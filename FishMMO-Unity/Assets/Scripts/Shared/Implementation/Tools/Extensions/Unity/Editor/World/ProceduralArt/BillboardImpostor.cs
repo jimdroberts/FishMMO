@@ -16,7 +16,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// textures missing they drew as grey slabs. A quad turned about the trunk toward the camera
 	/// (cylindrical billboarding, <c>_FacingCamera</c> in FishVegetationPasses.hlsl — what Unity's own
 	/// terrain billboards do) always shows the whole silhouette at full width, costs two triangles, and
-	/// at the billboard's distance (past ~160 m, <see cref="ProceduralArtCatalogue.TreeLodHeights"/>) the
+	/// at the billboard's distance (past ~160 m at High, <see cref="ProceduralArtCatalogue.TreeLodHeights"/>) the
 	/// one side it shows is indistinguishable from the others for a tree. More crossed planes would
 	/// only add slivers; octahedral impostors would be truer from above, which a ground-level game
 	/// at that range does not need. The mesh's bounds are widened to the cylinder it sweeps.
@@ -31,9 +31,14 @@ namespace FishMMO.Shared.WorldDesign
 	/// <b>Why in software.</b> A camera render in the editor depends on the open scene, the
 	/// pipeline asset, the lighting and the colour space, and none of that is the tree. An
 	/// orthographic rasteriser over a few thousand triangles takes milliseconds, needs no GPU, gives
-	/// the same bytes every time, and runs in a test. The picture is lit only softly — the billboard
-	/// is lit again by the scene at runtime — and darkened toward the back of the crown so it keeps
-	/// some depth.
+	/// the same bytes every time, and runs in a test.
+	/// </para>
+	/// <para>
+	/// <b>Unlit, with its normals (2026-11-06).</b> The picture is the surface's own colour, and a normal map
+	/// beside it holds the front-most surface's normal; the vegetation shader lights the turned quad by it
+	/// (VegNormal) as it lights the meshes. It used to be lit here (a fixed sun, the back of the crown
+	/// darkened) and lit again in the scene: about 0.7 of the meshes' colour, so trees went duller and
+	/// browner where they changed to their billboards, and nearer that change could not come.
 	/// </para>
 	/// </remarks>
 	public static class BillboardImpostor
@@ -52,6 +57,12 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			public Color32[] Pixels;
 			public int Width, Height;
+			/// <summary>
+			/// The picture's normals at half its size (<see cref="NormalWidth"/> × <see cref="NormalHeight"/>), tangent space of the
+			/// quad as the shader turns it (x across, y up, z toward the viewer), packed 0..1 as a normal map's colour.
+			/// </summary>
+			public Color32[] Normals;
+			public int NormalWidth, NormalHeight;
 			public MeshBuilder Mesh;
 		}
 
@@ -81,13 +92,12 @@ namespace FishMMO.Shared.WorldDesign
 			// Rendered at twice the size and filtered down: the cutout edge is antialiased in alpha.
 			int sw = width * 2, sh = height * 2;
 			var colour = new Color[sw * sh];
+			var normal = new Vector3[sw * sh];
 			var depth = new float[sw * sh];
 			for (int i = 0; i < depth.Length; i++)
 			{
 				depth[i] = float.MaxValue;
 			}
-			float zMin = bounds.min.z, zRange = Mathf.Max(0.01f, bounds.size.z);
-			var light = new Vector3(0.35f, 0.75f, -0.55f).normalized;
 
 			for (int s = 0; s < tree.Submeshes.Count; s++)
 			{
@@ -136,11 +146,14 @@ namespace FishMMO.Shared.WorldDesign
 							{
 								continue;
 							}
+							// The surface's own colour and normal, unlit: the shader lights the picture by its normals as it lights
+							// the meshes (2026-11-06). A picture lit once here (a fixed sun, the back of the crown darkened) and
+							// again in the scene came out at about 0.7 of the meshes' colour: duller and browner than the tree it
+							// took over from.
 							Vector3 n = (tree.Normals[ia] * wa + tree.Normals[ib] * wb + tree.Normals[ic] * wc).normalized;
-							float lit = 0.6f + 0.4f * Mathf.Max(0f, Vector3.Dot(n, light));
-							float back = Mathf.Lerp(1f, 0.72f, (z - zMin) / zRange);
 							depth[i] = z;
-							colour[i] = new Color(c.r * lit * back, c.g * lit * back, c.b * lit * back, 1f);
+							normal[i] = n;
+							colour[i] = new Color(c.r, c.g, c.b, 1f);
 						}
 					}
 				}
@@ -168,8 +181,52 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 
-			return new Result { Pixels = pixels, Width = width, Height = height, Mesh = FacingQuad(reach, bottom, top, swayHeight, tintable) };
+			// Normals at half the picture's size: each texel the coverage-weighted mean of its 4×4 supersamples, in the quad's
+			// tangent space (object x across, object y up, object −z toward the viewer). Where nothing is drawn, straight out.
+			int nw = Mathf.Max(1, width / 2), nh = Mathf.Max(1, height / 2);
+			var normals = new Color32[nw * nh];
+			for (int y = 0; y < nh; y++)
+			{
+				for (int x = 0; x < nw; x++)
+				{
+					Vector3 sum = Vector3.zero;
+					for (int k = 0; k < 16; k++)
+					{
+						int i = (y * 4 + (k >> 2)) * sw + x * 4 + (k & 3);
+						if (colour[i].a > 0f)
+						{
+							sum += normal[i];
+						}
+					}
+					Vector3 t = sum.sqrMagnitude > 1e-8f ? TangentNormal(sum.normalized) : Vector3.forward;
+					normals[y * nw + x] = PackNormal(t);
+				}
+			}
+
+			return new Result
+			{
+				Pixels = pixels, Width = width, Height = height, Normals = normals, NormalWidth = nw, NormalHeight = nh,
+				Mesh = FacingQuad(reach, bottom, top, swayHeight, tintable),
+			};
 		}
+
+		/// <summary>
+		/// An object-space normal as the billboard's tangent space holds it: x across (object x), y up (object y), z toward the
+		/// viewer (object −z, the side the picture is taken from). A normal map keeps only the viewer's hemisphere (its z is
+		/// rebuilt from x and y), so one facing away is mirrored into it: the front-most surface faces the viewer nearly always.
+		/// </summary>
+		public static Vector3 TangentNormal(Vector3 objectNormal)
+		{
+			var t = new Vector3(objectNormal.x, objectNormal.y, Mathf.Abs(objectNormal.z));
+			return t.sqrMagnitude > 1e-8f ? t.normalized : Vector3.forward;
+		}
+
+		/// <summary>A tangent-space normal as a normal map's texel (−1..1 to 0..255, z kept for the importer to drop).</summary>
+		public static Color32 PackNormal(Vector3 t) => new Color32(
+			(byte)Mathf.Clamp(Mathf.RoundToInt((t.x * 0.5f + 0.5f) * 255f), 0, 255),
+			(byte)Mathf.Clamp(Mathf.RoundToInt((t.y * 0.5f + 0.5f) * 255f), 0, 255),
+			(byte)Mathf.Clamp(Mathf.RoundToInt((t.z * 0.5f + 0.5f) * 255f), 0, 255),
+			255);
 
 		/// <summary>
 		/// Whether a plant that keeps <paramref name="keep"/> of its spares (x limbs, y leaf cards) leaves this part out: exactly

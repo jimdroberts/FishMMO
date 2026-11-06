@@ -219,6 +219,56 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void CullMirror_AStaticCastersShadowIsOneWholeLevel_PastItsBandsMiddle()
+		{
+			FishModelData model = TreeModel();
+			model.ShadowMask = 0b111;
+			model.Flags = FishModelData.FlagWholeShadow;
+			Plane[] planes = ForwardPlanes();
+			var emits = new List<TerrainGpuMath.Emit>();
+			var lod = new Vector3(TerrainTreeMath.ScreenFactor(60f, false, 0f, 1f), 0f, 0f);
+			var eye = new Vector3(0f, 2f, 0f);
+			var light = new Vector4(0f, -0.5f, 0.866f, 500f);
+			float band = TerrainTreeMath.FadeWidth(new[] { 0.25f, 0.08f, 0.002f }, 0, 0f);
+			// Across the LOD0→1 band: the camera view keeps both levels cross-fading; the shadow is the one more than half drawn.
+			foreach (float into in new[] { 0.1f, 0.4f, 0.6f, 0.9f })
+			{
+				float rh = 0.25f + band * (1f - into);
+				float d = 4f * lod.x / rh;
+				TerrainGpuMath.Cull(Matrix4x4.Translate(new Vector3(0f, 0f, d)), in model, 1000f, 1f, eye, planes, light, lod, emits);
+				var camera = emits.Where(e => e.View == 0).ToList();
+				var shadow = emits.Where(e => e.View == 1).ToList();
+				LogAssert.AreEqual(2, camera.Count, $"camera view cross-fades at {into:P0} into the band");
+				LogAssert.AreEqual(1, shadow.Count, $"one shadow level at {into:P0} into the band");
+				LogAssert.AreEqual(0f, shadow[0].Fade, "whole");
+				LogAssert.AreEqual(camera[1].Fade > 0.5f ? 1 : 0, shadow[0].Level, $"the level more than half drawn at {into:P0}");
+			}
+			// A vegetation model (no flag) keeps its dithered shadow pair.
+			model.Flags = 0u;
+			float mid = 0.25f + band * 0.5f;
+			TerrainGpuMath.Cull(Matrix4x4.Translate(new Vector3(0f, 0f, 4f * lod.x / mid)), in model, 1000f, 1f, eye, planes, light, lod, emits);
+			LogAssert.AreEqual(2, emits.Count(e => e.View == 1), "vegetation: both levels in the shadow, dithered");
+		}
+
+		[Test]
+		public void WholeShadowLevel_KeepsTheLevelMoreThanHalfDrawn()
+		{
+			int level = 0, partner = 1;
+			float fade = -0.3f, partnerFade = 0.3f;
+			TerrainGpuMath.WholeShadowLevel(ref level, ref fade, ref partner, ref partnerFade);
+			LogAssert.IsTrue(level == 0 && partner == -1 && fade == 0f && partnerFade == 0f, "30% into the next: still the first, whole");
+			level = 0; partner = 1; fade = -0.7f; partnerFade = 0.7f;
+			TerrainGpuMath.WholeShadowLevel(ref level, ref fade, ref partner, ref partnerFade);
+			LogAssert.AreEqual(1, level, "70% into the next: the next, whole");
+			level = 2; partner = -1; fade = -0.4f; partnerFade = 0f;
+			TerrainGpuMath.WholeShadowLevel(ref level, ref fade, ref partner, ref partnerFade);
+			LogAssert.AreEqual(2, level, "the last level 40% faded out: still cast");
+			level = 2; partner = -1; fade = -0.6f; partnerFade = 0f;
+			TerrainGpuMath.WholeShadowLevel(ref level, ref fade, ref partner, ref partnerFade);
+			LogAssert.AreEqual(-1, level, "60% faded out: no shadow");
+		}
+
+		[Test]
 		public void LevelMask_CoversEveryLevelARunCanReach()
 		{
 			float[] t = { 0.25f, 0.08f, 0.002f };

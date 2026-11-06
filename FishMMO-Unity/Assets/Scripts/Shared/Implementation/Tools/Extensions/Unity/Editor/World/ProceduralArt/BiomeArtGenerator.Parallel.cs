@@ -195,6 +195,7 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			string prefix = ProceduralArtCatalogue.TreePrefab(species.Name);
 			yield return ProceduralArtCatalogue.BillboardTexture(species.Name);
+			yield return ProceduralArtCatalogue.BillboardNormalTexture(species.Name);
 			yield return ProceduralArtCatalogue.MaterialPath(ProceduralArtCatalogue.BillboardMaterial(species.Name));
 			yield return ProceduralArtCatalogue.MeshPath(prefix + "_LOD0");
 			yield return ProceduralArtCatalogue.MeshPath(prefix + "_LOD1");
