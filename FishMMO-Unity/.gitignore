@@ -5,6 +5,7 @@
 
 # --- Unity Folders (Root Only) ---
 /[Ll]ibrary/
+/[Dd]ocs/
 /[Tt]emp/
 /[Ll]ogs/
 /[Uu]ser[Ss]ettings/
