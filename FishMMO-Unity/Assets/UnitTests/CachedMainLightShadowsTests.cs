@@ -356,9 +356,10 @@ namespace FishMMO.UnitTests
 			StringAssert.Contains("_FishShadowCacheZTest(\"Merge depth test\", Float) = 4", System.IO.File.ReadAllText(Shaders + "FishShadowCacheMerge.shader"));
 		}
 
-		// Off everywhere (2026-11-04) until the browser's wrong structure shadows are fixed; the owner wants it on in browsers then.
+		// Off everywhere until the merge is right (2026-11-06: the browser merge writes depth no caster put there); the owner wants
+		// it on in browsers then.
 		[Test]
-		public void OffByDefaultUntilTheBrowserLookIsFixed()
+		public void OffByDefaultUntilTheMergeIsRight()
 		{
 			string code = System.IO.File.ReadAllText("Assets/Scripts/Client/World/Terrain/CachedMainLightShadows.cs");
 			StringAssert.Contains("public static bool Enabled = DefaultOn;", code);

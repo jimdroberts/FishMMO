@@ -399,6 +399,9 @@ namespace FishMMO.Client
 		/// shadow-view ones in every split. One draw range per render-parameter filter; the memory is Unity's to free
 		/// (Allocator.TempJob). Nothing for any other view, or while not armed.
 		/// </summary>
+		/// <summary>Diagnosis: how many shadow splits the last main-light (orthographic) culling callback was given.</summary>
+		public static int LastSunShadowSplits { get; private set; } = -1;
+
 		private unsafe JobHandle OnPerformCulling(BatchRendererGroup group, BatchCullingContext context, BatchCullingOutput output, IntPtr userContext)
 		{
 			if (!brgArmed || !brgState || !brgHasBatch || argsBuffer == null || packedVisibleBuffer == null || brgFilters.Count == 0)
@@ -424,6 +427,10 @@ namespace FishMMO.Client
 			}
 
 			ushort splits = view == 0 ? (ushort)1 : TerrainBrgMath.SplitMask(context.cullingSplits.Length);
+			if (view == 1 && context.projectionType == BatchCullingProjectionType.Orthographic)
+			{
+				LastSunShadowSplits = context.cullingSplits.Length;
+			}
 			// The main light's cascades (orthographic): its static casters come from the cached shadows when they serve this
 			// camera (CachedMainLightShadows), drawn by the cache pass into the tiles it refreshes, not into every cascade here.
 			bool omitStatic = view == 1 && context.projectionType == BatchCullingProjectionType.Orthographic

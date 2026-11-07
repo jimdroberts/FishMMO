@@ -55,12 +55,12 @@ namespace FishMMO.Client
 		public static bool Enabled = DefaultOn;
 
 		/// <summary>
-		/// Whether the cache starts on. The owner chose on in browser players and off natively (2026-11-03), but the browser
-		/// measurement (2026-11-04) showed wrong shadows on settlement structures and a merge on only ~1 frame in 12, so it is
-		/// off everywhere until that is fixed (Docs/Rendering/2026-11-02/webgpu-cached-shadows, Browser results). Merges are now
-		/// ~95% of frames; what remains (2026-11-05, Docs/Rendering/2026-11-05/round-2): the batch group omits the static casters
-		/// from URP's culling whenever this is enabled, decided before the cache pass knows it can map URP's slice, so a frame it
-		/// refuses has no structure shadows at all.
+		/// Whether the cache starts on. The owner chose on in browser players and off natively (2026-11-03); it stays off
+		/// everywhere until its merge is right. 2026-11-06: with URP's three cascades in the browser, the cache's image has dark
+		/// areas the live map has nowhere (the live map with one cascade has none either), and the merge alone, with nothing
+		/// cached (harness `shadowCacheDrawNothing`), still changed ~8% of the close view's pixels: on WebGPU the merge writes
+		/// depth that no caster put there. The editor (Vulkan) merge wrote nothing in the same state (RenderDoc). See
+		/// Docs/Rendering/2026-11-05/round-2.
 		/// </summary>
 		public const bool DefaultOn = false;
 
@@ -78,6 +78,9 @@ namespace FishMMO.Client
 
 		/// <summary>Diagnostic: set to read back the static commands' instance counts once (both args buffers, probes).</summary>
 		public static bool ReadbackRequested;
+
+		/// <summary>Diagnosis (harness `shadowCacheLiveCull`): the cache draws the camera's own culling of the static casters, not its own.</summary>
+		public static bool DebugLiveCull;
 		/// <summary>The last readback: instances in the cache's args and in the batch group's, over the static commands, and how many readbacks landed.</summary>
 		public static long ReadbackCacheInstances, ReadbackLiveInstances, ReadbackBadStarts;
 		public static int ReadbacksLanded;
@@ -139,7 +142,19 @@ namespace FishMMO.Client
 		/// keeps them in URP's map (drawn twice if this one merges too: the depth test keeps one depth), and only the first frame
 		/// of a failure lacks them. Before 2026-11-05 every refused frame did.
 		/// </summary>
-		public static bool OmitsStaticCasters(Camera camera) => AppliesTo(camera) && !lastFrameUnmerged;
+		public static bool OmitsStaticCasters(Camera camera) => AppliesTo(camera) && !lastFrameUnmerged && !DebugDrawNothing;
+
+		/// <summary>
+		/// Diagnosis (harness `shadowCacheDrawNothing`): the cache's passes run and set their state, but draw no casters, and the
+		/// batch group keeps the static casters in URP's map: what the cache's passes do to a frame besides its casters.
+		/// </summary>
+		public static bool DebugDrawNothing;
+
+		/// <summary>Diagnosis (harness `shadowCacheSkipPass`, `shadowCacheSkipCull`, `shadowCacheSkipMerge`): one of the cache's passes left out.</summary>
+		public static bool DebugSkipPass, DebugSkipCull, DebugSkipMerge;
+
+		/// <summary>Diagnosis (harness `shadowCacheMergeNoDraw`, `shadowCacheMergeNoState`): the merge pass without its draws, or without its depth bias and viewport.</summary>
+		public static bool DebugMergeNoDraw, DebugMergeNoState;
 
 		private static bool lastFrameUnmerged;
 
@@ -652,6 +667,10 @@ namespace FishMMO.Client
 			public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
 			{
 				mergeReady = false;
+				if (DebugSkipPass)
+				{
+					return;
+				}
 				UniversalCameraData camera = frameData.Get<UniversalCameraData>();
 				if (!AppliesTo(camera.camera))
 				{
@@ -797,7 +816,10 @@ namespace FishMMO.Client
 					return;
 				}
 				// The casters for the widest window redrawn (the farther cascades hold the nearer ones), culled for it from here.
-				AddCasterCull(renderGraph, camera, in windows[widest]);
+				if (!DebugSkipCull)
+				{
+					AddCasterCull(renderGraph, camera, in windows[widest]);
+				}
 				TextureHandle target = renderGraph.ImportTexture(cache);
 				using (var builder = renderGraph.AddRasterRenderPass<CachePassData>("Fish Main Light Shadow Cache", out CachePassData data))
 				{
@@ -899,6 +921,7 @@ namespace FishMMO.Client
 
 		private sealed class MergePassData
 		{
+			public bool NoDraw, NoState;
 			public readonly CascadeKey[] Keys = new CascadeKey[MaxCascades];
 			public readonly Mapping[] Maps = new Mapping[MaxCascades];
 			public int Count;
@@ -916,7 +939,7 @@ namespace FishMMO.Client
 
 			public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
 			{
-				if (!AppliesTo(frameData.Get<UniversalCameraData>().camera))
+				if (!AppliesTo(frameData.Get<UniversalCameraData>().camera) || DebugSkipMerge)
 				{
 					return;
 				}
@@ -955,10 +978,15 @@ namespace FishMMO.Client
 					builder.SetRenderAttachmentDepth(shadowMap, AccessFlags.ReadWrite);
 					builder.AllowPassCulling(false);
 					builder.AllowGlobalStateModification(true);
+					data.NoDraw = DebugMergeNoDraw;
+					data.NoState = DebugMergeNoState;
 					builder.SetRenderFunc(static (MergePassData d, RasterGraphContext context) =>
 					{
 						RasterCommandBuffer cmd = context.cmd;
-						cmd.SetGlobalDepthBias(0f, 0f);
+						if (!d.NoState)
+						{
+							cmd.SetGlobalDepthBias(0f, 0f);
+						}
 						cmd.SetGlobalTexture(CacheId, d.Cache);
 						cmd.SetGlobalFloat(ClearDepthId, d.ClearDepth);
 						for (int i = 0; i < d.Count; i++)
@@ -966,10 +994,16 @@ namespace FishMMO.Client
 							CascadeKey key = d.Keys[i];
 							Mapping map = d.Maps[i];
 							// URP's tile; each texel reads its window's texel and its depth remapped to URP's range.
-							cmd.SetViewport(new Rect(key.OffsetX, key.OffsetY, key.Resolution, key.Resolution));
+							if (!d.NoState)
+							{
+								cmd.SetViewport(new Rect(key.OffsetX, key.OffsetY, key.Resolution, key.Resolution));
+							}
 							cmd.SetGlobalVector(CacheMapId, new Vector4(map.Scale.x, map.Scale.y, map.Offset.x, map.Offset.y));
 							cmd.SetGlobalVector(CacheDepthMapId, new Vector4(map.DepthScale, map.DepthOffset, 0f, 0f));
-							cmd.DrawProcedural(Matrix4x4.identity, d.Merge, 0, MeshTopology.Triangles, 3);
+							if (!d.NoDraw)
+							{
+								cmd.DrawProcedural(Matrix4x4.identity, d.Merge, 0, MeshTopology.Triangles, 3);
+							}
 						}
 					});
 				}

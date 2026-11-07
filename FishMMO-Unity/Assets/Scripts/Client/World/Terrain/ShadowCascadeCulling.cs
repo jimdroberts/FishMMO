@@ -55,6 +55,19 @@ namespace FishMMO.Client
 			public float HalfY;
 			public Vector2 CentreView;
 			public Vector2 Clip;
+			/// <summary>The projection's near and far planes and the sphere's centre, as distances down the light from the shadow view.</summary>
+			public float Near, Far, CentreDepth;
+			public Vector4 Sphere;
+			public Matrix4x4 View;
+		}
+
+		/// <summary>Diagnosis: the last game camera's cascade <paramref name="i"/>: its sphere, shadow view, and near/far depths.</summary>
+		public static bool TryLastCascade(int i, out Vector4 sphere, out Matrix4x4 view, out float near, out float far)
+		{
+			bool ok = reportKind == ReportKind.Published && i >= 0 && i < reportCount;
+			CascadeReport c = ok ? reportCascades[i] : default;
+			sphere = c.Sphere; view = c.View; near = c.Near; far = c.Far;
+			return ok;
 		}
 
 		private static ReportKind reportKind = ReportKind.NotRun;
@@ -82,7 +95,8 @@ namespace FishMMO.Client
 			for (int i = 0; i < reportCount; i++)
 			{
 				CascadeReport c = reportCascades[i];
-				text.Append($" [{i}: r {c.Radius:0.0} half {c.HalfX:0.0}/{c.HalfY:0.0} centre view {c.CentreView.x:0.00},{c.CentreView.y:0.00} clip {c.Clip.x:0.000},{c.Clip.y:0.000}]");
+				text.Append($" [{i}: r {c.Radius:0.0} half {c.HalfX:0.0}/{c.HalfY:0.0} centre view {c.CentreView.x:0.00},{c.CentreView.y:0.00} clip {c.Clip.x:0.000},{c.Clip.y:0.000}"
+					+ $" depth near {c.Near:0.0} far {c.Far:0.0} centre {c.CentreDepth:0.0} (sphere {c.CentreDepth - c.Radius:0.0}..{c.CentreDepth + c.Radius:0.0})]");
 			}
 			return text.ToString();
 		}
@@ -170,8 +184,15 @@ namespace FishMMO.Client
 				{
 					Vector3 centre = view.MultiplyPoint(split.cullingSphere);
 					Vector4 clip = (projection * view) * new Vector4(split.cullingSphere.x, split.cullingSphere.y, split.cullingSphere.z, 1f);
+					// An orthographic projection (OpenGL form): m22 = -2/(f-n), m23 = -(f+n)/(f-n); the view looks down -z.
+					float range = -2f / projection.m22, sum = -projection.m23 * range;
 					reportCascades[i] = new CascadeReport
 					{
+						Sphere = split.cullingSphere,
+						View = view,
+						Near = 0.5f * (sum - range),
+						Far = 0.5f * (sum + range),
+						CentreDepth = -centre.z,
 						Radius = split.cullingSphere.w,
 						HalfX = 1f / Mathf.Abs(projection.m00),
 						HalfY = 1f / Mathf.Abs(projection.m11),

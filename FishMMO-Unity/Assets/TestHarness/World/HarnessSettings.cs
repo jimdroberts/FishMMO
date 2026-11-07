@@ -124,7 +124,15 @@ namespace FishMMO.TestHarness.World
 				case "billboardSwitch": TerrainTreeInstancing.BillboardSwitchScale = float.Parse(value, inv); break;
 				case "billboards": TerrainGpuRenderer.BillboardDiagnostic = value == "hide" ? 1 : value == "primeonly" ? 2 : 0; break;
 				case "shadowCacheExact": CachedMainLightShadows.DebugForceExact = value == "1"; break;
-				case "shadowCacheLog": Debug.Log($"[Shadow cache] {CachedMainLightShadows.Describe()}"); break;
+				case "shadowCacheLiveCull": CachedMainLightShadows.DebugLiveCull = value == "1"; break;
+				case "shadowCacheDrawNothing": CachedMainLightShadows.DebugDrawNothing = value == "1"; break;
+				case "shadowCacheSkipPass": CachedMainLightShadows.DebugSkipPass = value == "1"; break;
+				case "shadowCacheSkipCull": CachedMainLightShadows.DebugSkipCull = value == "1"; break;
+				case "shadowCacheSkipMerge": CachedMainLightShadows.DebugSkipMerge = value == "1"; break;
+				case "shadowCacheMergeNoDraw": CachedMainLightShadows.DebugMergeNoDraw = value == "1"; break;
+				case "shadowCacheMergeNoState": CachedMainLightShadows.DebugMergeNoState = value == "1"; break;
+				case "cascadeCull": ShadowCascadeCulling.Enabled = value != "0"; break;
+				case "shadowCacheLog": Debug.Log($"[Shadow cache] {CachedMainLightShadows.Describe()}; sun splits seen by the batch group {TerrainGpuRenderer.LastSunShadowSplits}, URP cascades {urp.shadowCascadeCount}, QualitySettings.shadowCascades {QualitySettings.shadowCascades}"); break;
 				// Reflection diagnosis: the sky probe's intensity (held over SkySystem's own each frame; "auto" releases), the props'
 				// look arrays, the ground cover (dry, wet, or the clock's own: auto) and the fog features.
 				case "skyProbe": skyProbeIntensity = value == "auto" ? -1f : float.Parse(value, inv); Hook(); break;

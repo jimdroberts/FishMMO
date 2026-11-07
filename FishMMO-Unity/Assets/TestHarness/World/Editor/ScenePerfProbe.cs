@@ -1387,6 +1387,14 @@ namespace FishMMO.TestHarness.World.Editor
 				CachedMainLightShadows.Enabled = true;
 				return () => CachedMainLightShadows.Enabled = was;
 			}
+			if (variant == "cachenothing")
+			{
+				// The cache's passes on but drawing no casters, URP keeping the static casters (CachedMainLightShadows.DebugDrawNothing).
+				bool was = CachedMainLightShadows.Enabled;
+				CachedMainLightShadows.Enabled = true;
+				CachedMainLightShadows.DebugDrawNothing = true;
+				return () => { CachedMainLightShadows.Enabled = was; CachedMainLightShadows.DebugDrawNothing = false; };
+			}
 			if (variant == "nojoin")
 			{
 				// The props' camera parts drawn one a command again (TerrainGpuRenderer.JoinSlotParts off; relaid out next camera).
@@ -2629,6 +2637,10 @@ namespace FishMMO.TestHarness.World.Editor
 			report.Add($"  props drawn: {CliffRockInstancing.DescribeDraws()}");
 			report.Add($"  props wanted: {CliffRockInstancing.DescribeWanted()}");
 			report.Add($"  shadow cache: {CachedMainLightShadows.Describe()}");
+			{
+				var urpAsset = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+				report.Add($"  sun shadow splits: the batch group's culling saw {TerrainGpuRenderer.LastSunShadowSplits}; URP cascades {(urpAsset != null ? urpAsset.shadowCascadeCount : -1)}; QualitySettings.shadowCascades {QualitySettings.shadowCascades}");
+			}
 			if (Environment.GetEnvironmentVariable("FISHMMO_PERF_RUN_GATHER_CHECK") == "1")
 			{
 				report.Add($"  run gather check: {RunGatherCheck()}");

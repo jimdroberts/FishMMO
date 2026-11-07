@@ -140,6 +140,21 @@ namespace FishMMO.Client
 			}
 			// What this redraw holds: the shadow work culled now (CoverageSerial asks for the next redraw when it outgrows it).
 			ShadowCasterCoverage.Merge(shadowWorkRanges, heldShadowRanges);
+			if (CachedMainLightShadows.DebugLiveCull)
+			{
+				// Diagnosis: the camera's own culling (its counts and visible list, this frame's) drawn by the cache instead of
+				// the cache's culling, to split "the live culling lacks a caster" from "URP's drawing of it loses it".
+				cmd.SetComputeIntParam(compute, ArgCountId, commands.Count);
+				cmd.SetComputeBufferParam(compute, finalizeKernel, ArgSlotsId, argSlotBuffer);
+				cmd.SetComputeBufferParam(compute, finalizeKernel, CountsId, countBuffer);
+				cmd.SetComputeBufferParam(compute, finalizeKernel, SlotsId, slotBuffer);
+				cmd.SetComputeBufferParam(compute, finalizeKernel, ArgsId, shadowCacheArgs);
+				cmd.DispatchCompute(compute, finalizeKernel, (commands.Count + 63) / 64, 1, 1);
+				Bind(shadowCacheBlock);
+				shadowCacheBlock.SetBuffer(VisibleId, visibleBuffer);
+				shadowCacheBlock.SetVector(CasterSphereId, Vector4.zero);
+				return;
+			}
 			cmd.SetComputeVectorParam(compute, CameraPositionId, anchor);
 			cmd.SetComputeVectorArrayParam(compute, PlanesId, planes);
 			cmd.SetComputeVectorParam(compute, LightId, light);
@@ -229,7 +244,7 @@ namespace FishMMO.Client
 		/// </summary>
 		internal int RecordStaticShadowCasters(RasterCommandBuffer cmd)
 		{
-			if (!ServesShadowCache)
+			if (!ServesShadowCache || CachedMainLightShadows.DebugDrawNothing)
 			{
 				return 0;
 			}

@@ -31,7 +31,13 @@ namespace FishMMO.Client
 			var emits = new List<TerrainGpuMath.Emit>();
 			var sb = new StringBuilder();
 			sb.Append($"light {light}, eye {view.Position}; ");
-			int shown = 0, seen = 0, seenDrawn = 0, casting = 0;
+			int shown = 0, seen = 0, seenDrawn = 0, casting = 0, unwanted = 0, unwantedShown = 0;
+			// Per cascade: casting instances whose centre is in its sphere, and of those beyond its far plane or before its near.
+			var inSphere = new int[4];
+			var pastFar = new int[4];
+			var beforeNear = new int[4];
+			var depthSb = new StringBuilder();
+			var unwantedSb = new StringBuilder();
 			var drawnAt = new int[4];
 			var castAt = new int[4];
 			for (int w = 0; w < workCount; w++)
@@ -61,6 +67,47 @@ namespace FishMMO.Client
 					}
 					seenDrawn++;
 					casting += casts ? 1 : 0;
+					for (int k = 0; casts && k < 4; k++)
+					{
+						if (!ShadowCascadeCulling.TryLastCascade(k, out Vector4 sphere, out Matrix4x4 cascadeView, out float near, out float far))
+						{
+							break;
+						}
+						if (Vector3.Distance(centre, sphere) > sphere.w)
+						{
+							continue;
+						}
+						inSphere[k]++;
+						float radiusWorld = m.Data.SphereRadius * Mathf.Max(((Vector3)matrix.GetColumn(0)).magnitude, ((Vector3)matrix.GetColumn(1)).magnitude);
+						float depth = -cascadeView.MultiplyPoint(centre).z;
+						if (depth + radiusWorld > far)
+						{
+							pastFar[k]++;
+							if (depthSb.Length < 1200)
+							{
+								depthSb.Append($"\n    PAST FAR cascade {k}: {m.Name} at {distance:F0} m, depth {depth - radiusWorld:F1}..{depth + radiusWorld:F1}, near {near:F1} far {far:F1}");
+							}
+						}
+						if (depth - radiusWorld < near)
+						{
+							beforeNear[k]++;
+						}
+					}
+					// The kernel fills a shadow slot whose command no work asked for (the model's wanted shadow levels): drawn by
+					// nobody, though the cache, which draws every static command it culls, would show it.
+					foreach (TerrainGpuMath.Emit e in emits)
+					{
+						if (e.View == 1 && (m.ShadowMask & (1 << e.Level)) == 0)
+						{
+							unwanted++;
+							if (unwantedShown < 12)
+							{
+								unwantedShown++;
+								unwantedSb.Append($"\n    UNWANTED {m.Name} at {distance:F0} m: shadow L{e.Level}, wantShadow {m.ShadowMask}, wantMain {m.MainMask}, castMask {m.Data.ShadowMask}");
+							}
+							break;
+						}
+					}
 					foreach (TerrainGpuMath.Emit e in emits)
 					{
 						if (e.View == 0)
@@ -77,7 +124,10 @@ namespace FishMMO.Client
 					}
 				}
 			}
-			sb.Insert(0, $"{family} within {radius:F0} m: {seen} instances, {seenDrawn} drawn, {casting} of them cast; drawn by level L0..L3 [{string.Join(",", drawnAt)}], casting [{string.Join(",", castAt)}]; drawn but casting nothing: ");
+			sb.Insert(0, $"{family} within {radius:F0} m: {seen} instances, {seenDrawn} drawn, {casting} of them cast, {unwanted} casting with no shadow command wanted; drawn by level L0..L3 [{string.Join(",", drawnAt)}], casting [{string.Join(",", castAt)}]; drawn but casting nothing: ");
+			sb.Append(unwantedSb);
+			sb.Append($"\n    casting, by cascade sphere they are in: in sphere [{string.Join(",", inSphere)}], reaching past its far plane [{string.Join(",", pastFar)}], before its near plane [{string.Join(",", beforeNear)}]");
+			sb.Append(depthSb);
 			return sb.ToString();
 		}
 
