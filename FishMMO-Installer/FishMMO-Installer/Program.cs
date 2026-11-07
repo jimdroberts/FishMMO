@@ -601,9 +601,10 @@ namespace FishMMO.Installer
                 Console.WriteLine("1 : Install NGINX (Web Server/Reverse Proxy)");
                 Console.WriteLine("2 : Install/Renew Let's Encrypt Certificate (NGINX)");
                 Console.WriteLine("3 : Deploy FishMMO nginx.conf (from FishMMO-Setup/)");
-                Console.WriteLine("4 : Configure Firewall Rules (open ports 80, 443)");
+                Console.WriteLine("4 : Configure Firewall Rules (open 443/tcp, 7770-7999/udp)");
                 Console.WriteLine("5 : Register FishMMO Web Servers as Services");
                 Console.WriteLine("6 : Install/Renew Local Development Certificates (Linux)");
+                Console.WriteLine("7 : Point DNS Records at This Host (Porkbun)");
                 Console.WriteLine("0 : Back");
 
                 ConsoleKeyInfo key = Console.ReadKey(true);
@@ -630,6 +631,10 @@ namespace FishMMO.Installer
                     case ConsoleKey.D6:
                     case ConsoleKey.NumPad6:
                         _ = await DevelopmentCertificateInstaller.InstallAsync();
+                        break;
+                    case ConsoleKey.D7:
+                    case ConsoleKey.NumPad7:
+                        await LetsEncryptInstaller.PointDnsRecordsAsync();
                         break;
                     case ConsoleKey.D0:
                     case ConsoleKey.NumPad0:

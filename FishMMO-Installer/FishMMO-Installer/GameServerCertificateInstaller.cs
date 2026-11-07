@@ -30,6 +30,12 @@ public static class GameServerCertificateInstaller
         if (!await Run($"sudo usermod -a -G {ReaderGroup} {Quote(user)}")) return false;
         if (!await Run("sudo install -d -o root -g root -m 0755 /etc/fishmmo /etc/letsencrypt/renewal-hooks/deploy")) return false;
         if (!await Run($"sudo install -d -o root -g {ReaderGroup} -m 0750 {CertificateDirectory}")) return false;
+        // A publicly trusted certificate replaces a local development one. Remove the development
+        // marker, or the development-certificate action would treat this directory as its own and
+        // overwrite the real certificate the next time it ran; the other two links point into the
+        // development release and would dangle once 'current' moves.
+        if (!await Run($"sudo rm -f {CertificateDirectory}/.fishmmo-development " +
+            $"{CertificateDirectory}/development-ca.crt {CertificateDirectory}/server-certificate.sha256")) return false;
         if (!await LinuxConfigHardeningHelper.SudoInstallAsync(
             GenerateHook(lineage, CertificateDirectory, ReaderGroup), HookPath, "root", "root", "0750")) return false;
         if (!await Run($"sudo /bin/bash {HookPath}")) return false;

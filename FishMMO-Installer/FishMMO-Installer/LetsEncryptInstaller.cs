@@ -19,24 +19,45 @@ namespace FishMMO.Installer
 			Console.Clear();
 			await Log.Info("FishMMOInstaller", "--- Install / Renew Let's Encrypt Certificate ---");
 
-			if (!await NGINXInstaller.IsNGINXInstalledAsync())
+			// The DNS challenge needs neither nginx nor an open port 80, which is what lets the
+			// certificate exist BEFORE the FishMMO nginx.conf (which references it) is deployed.
+			bool useDns = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) && PromptForDnsChallenge();
+
+			if (!useDns && !await NGINXInstaller.IsNGINXInstalledAsync())
 			{
 				await Log.Info("FishMMOInstaller", "NGINX was not detected. Install and configure NGINX before requesting certificates.");
 				return;
 			}
 
-			string domainInput = (InstallerProcessHelper.PromptForInput("Enter domains (comma-separated, e.g. fishmmo.com,play.fishmmo.com): ") ?? string.Empty).Trim();
-			string[] domains = ParseDomains(domainInput);
-			if (domains.Length == 0)
+			string[] domains;
+			if (useDns)
 			{
-				await Log.Info("FishMMOInstaller", "No valid domains were provided. Certificate operation cancelled.");
-				return;
+				string rootInput = (InstallerProcessHelper.PromptForInput(
+					"Enter your root domain (e.g. example.com). The certificate covers it and *.example.com: ") ?? string.Empty)
+					.Trim().TrimEnd('.').ToLowerInvariant();
+				string[] parsed = ParseDomains(rootInput);
+				if (parsed.Length != 1)
+				{
+					await Log.Info("FishMMOInstaller", "A single valid root domain is required. Certificate operation cancelled.");
+					return;
+				}
+				domains = new[] { parsed[0], "*." + parsed[0] };
+			}
+			else
+			{
+				string domainInput = (InstallerProcessHelper.PromptForInput("Enter domains (comma-separated, e.g. fishmmo.com,api.fishmmo.com,play.fishmmo.com,game.fishmmo.com,panel.fishmmo.com): ") ?? string.Empty).Trim();
+				domains = ParseDomains(domainInput);
+				if (domains.Length == 0)
+				{
+					await Log.Info("FishMMOInstaller", "No valid domains were provided. Certificate operation cancelled.");
+					return;
+				}
 			}
 
 			string email = (InstallerProcessHelper.PromptForInput("Enter email for Let's Encrypt registration: ") ?? string.Empty).Trim();
-			if (string.IsNullOrWhiteSpace(email))
+			if (!EmailPattern.IsMatch(email))
 			{
-				await Log.Info("FishMMOInstaller", "Email is required. Certificate operation cancelled.");
+				await Log.Info("FishMMOInstaller", "A valid email is required. Certificate operation cancelled.");
 				return;
 			}
 
@@ -50,6 +71,10 @@ namespace FishMMO.Installer
 				string webRootPath = PromptWithDefault("Enter ACME challenge web root path", defaultWebRoot);
 
 				await InstallLetsEncryptWindows(domains, email, nginxConfPath, webRootPath, useStaging);
+			}
+			else if (useDns)
+			{
+				await InstallLetsEncryptLinuxDns(domains[0], email, useStaging);
 			}
 			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
 			{
@@ -85,29 +110,7 @@ namespace FishMMO.Installer
 			await Log.Info("FishMMOInstaller", "Configuring Let's Encrypt on Linux...");
 			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
 
-			var packageNames = new Dictionary<string, string>
-			{
-				["pacman"] = "certbot certbot-nginx openssl",
-				["apt-get"] = "certbot python3-certbot-nginx openssl",
-				["dnf"] = "certbot python3-certbot-nginx openssl",
-				["yum"] = "certbot python3-certbot-nginx openssl"
-			};
-
-			var detected = await LinuxPackageManagerHelper.DetectAsync(packageNames);
-			if (detected == null)
-			{
-				await Log.Warning("FishMMOInstaller", "No supported package manager found for certbot installation.");
-				return;
-			}
-
-			await Log.Info("FishMMOInstaller", $"Using {detected.ManagerName} to install certbot dependencies.");
-
-			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, detected.UpdateCommand, "Failed to update package metadata for certbot."))
-			{
-				return;
-			}
-
-			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, detected.InstallCommand, "Failed to install certbot packages."))
+			if (!await InstallCertbotPackagesAsync(shell, argPrefix, includeDnsTools: false))
 			{
 				return;
 			}
@@ -126,7 +129,7 @@ namespace FishMMO.Installer
 
 			string domainArguments = string.Join(" ", domains.Select(domain => $"-d \"{domain}\""));
 			string stagingFlag = useStaging ? " --staging" : string.Empty;
-			string certbotCommand = $"sudo certbot certonly --cert-name \"{domains[0]}\" --webroot -w \"{webRootPath}\" {domainArguments} --agree-tos -m \"{email}\" --non-interactive --keep-until-expiring{stagingFlag}";
+			string certbotCommand = $"sudo certbot certonly --cert-name \"{domains[0]}\" --webroot -w \"{webRootPath}\" {domainArguments} --agree-tos -m \"{email}\" --non-interactive --keep-until-expiring --reuse-key{stagingFlag}";
 
 			if (!await InstallerProcessHelper.RunShellCommandWithLiveOutputAsync(shell, argPrefix, certbotCommand, "Failed to request/renew Let's Encrypt certificate."))
 			{
@@ -432,6 +435,248 @@ namespace FishMMO.Installer
 			}
 
 			return inputValue.Trim();
+		}
+
+		/// <summary>Where the Porkbun DNS-01 hook is installed. Certbot's renewal configuration records this path.</summary>
+		public const string PorkbunHookPath = "/etc/letsencrypt/fishmmo-porkbun-hook.py";
+
+		/// <summary>Root-only Porkbun API credentials read by <see cref="PorkbunHookPath"/>.</summary>
+		public const string PorkbunCredentialsPath = "/etc/letsencrypt/fishmmo-porkbun.ini";
+
+		// The address is placed inside a double-quoted shell argument, so quotes, '$', '`' and
+		// backslashes are refused rather than escaped.
+		private static readonly Regex EmailPattern = new Regex(@"^[^@\s""'`$\\]+@[^@\s""'`$\\]+\.[^@\s""'`$\\]+$", RegexOptions.Compiled);
+
+		// Porkbun keys are 'pk1_' / 'sk1_' followed by hex; anything else is a paste error.
+		private static readonly Regex PorkbunKeyPattern = new Regex(@"^[A-Za-z0-9_]{8,128}$", RegexOptions.Compiled);
+
+		/// <summary>Asks which ACME challenge to use. Returns true for DNS via the Porkbun API.</summary>
+		private static bool PromptForDnsChallenge()
+		{
+			Console.WriteLine("How should Let's Encrypt check that you control the domain?");
+			Console.WriteLine("1 : DNS, through the Porkbun API (recommended). Needs no open port 80 and no nginx yet,");
+			Console.WriteLine("    and issues one wildcard certificate (example.com + *.example.com) for every host.");
+			Console.WriteLine("2 : HTTP on port 80. nginx must already serve /.well-known/acme-challenge/ from the web root,");
+			Console.WriteLine("    and every host name must be listed.");
+			return PromptWithDefault("Choice", "1") != "2";
+		}
+
+		/// <summary>Installs certbot (and, for the DNS challenge, dig) with the distribution's package manager.</summary>
+		private static async Task<bool> InstallCertbotPackagesAsync(string shell, string argPrefix, bool includeDnsTools)
+		{
+			var packageNames = new Dictionary<string, string>
+			{
+				["pacman"] = "certbot certbot-nginx openssl" + (includeDnsTools ? " bind" : ""),
+				["apt-get"] = "certbot python3-certbot-nginx openssl" + (includeDnsTools ? " dnsutils" : ""),
+				["dnf"] = "certbot python3-certbot-nginx openssl" + (includeDnsTools ? " bind-utils" : ""),
+				["yum"] = "certbot python3-certbot-nginx openssl" + (includeDnsTools ? " bind-utils" : "")
+			};
+
+			var detected = await LinuxPackageManagerHelper.DetectAsync(packageNames);
+			if (detected == null)
+			{
+				await Log.Warning("FishMMOInstaller", "No supported package manager found for certbot installation.");
+				return false;
+			}
+
+			await Log.Info("FishMMOInstaller", $"Using {detected.ManagerName} to install certbot dependencies.");
+
+			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, detected.UpdateCommand, "Failed to update package metadata for certbot."))
+			{
+				return false;
+			}
+
+			return await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, detected.InstallCommand, "Failed to install certbot packages.");
+		}
+
+		/// <summary>
+		/// Requests (or renews) a wildcard certificate for <paramref name="rootDomain"/> with the
+		/// DNS-01 challenge answered through the Porkbun API, then deploys it for the game servers.
+		/// </summary>
+		/// <remarks>
+		/// The certificate is issued with <c>--reuse-key</c>, as is the HTTP route: the release
+		/// client pins the SPKI of this key, and certbot's default of a fresh key on every renewal
+		/// would break every shipped client about every 60 days.
+		/// </remarks>
+		private static async Task InstallLetsEncryptLinuxDns(string rootDomain, string email, bool useStaging)
+		{
+			await Log.Info("FishMMOInstaller", "Configuring Let's Encrypt (DNS challenge through Porkbun) on Linux...");
+			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
+
+			if (!await InstallCertbotPackagesAsync(shell, argPrefix, includeDnsTools: true))
+			{
+				return;
+			}
+
+			if (!await EnsurePorkbunCredentialsAsync(rootDomain))
+			{
+				return;
+			}
+
+			string hook = ReadEmbeddedText("FishMMO.Installer.Resources.porkbun-dns-hook.py");
+			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, "sudo install -d -o root -g root -m 0755 /etc/letsencrypt", "Failed to create /etc/letsencrypt.") ||
+				!await LinuxConfigHardeningHelper.SudoInstallAsync(hook, PorkbunHookPath, "root", "root", "0755"))
+			{
+				return;
+			}
+
+			string stagingFlag = useStaging ? " --staging" : string.Empty;
+			string certbotCommand =
+				$"sudo certbot certonly --cert-name \"{rootDomain}\" --manual --preferred-challenges dns " +
+				$"--manual-auth-hook \"{PorkbunHookPath} auth\" --manual-cleanup-hook \"{PorkbunHookPath} cleanup\" " +
+				$"-d \"{rootDomain}\" -d \"*.{rootDomain}\" --agree-tos -m \"{email}\" --non-interactive " +
+				$"--keep-until-expiring --reuse-key{stagingFlag}";
+
+			await Log.Info("FishMMOInstaller", "Requesting the certificate. Waiting for the TXT records to reach every Porkbun nameserver can take a few minutes.");
+			if (!await InstallerProcessHelper.RunShellCommandWithLiveOutputAsync(shell, argPrefix, certbotCommand,
+				"Failed to request/renew the Let's Encrypt certificate. If the hook reported API_ACCESS_DISABLED, turn on API Access for the domain in Porkbun."))
+			{
+				return;
+			}
+
+			if (!await GameServerCertificateInstaller.InstallAsync($"/etc/letsencrypt/live/{rootDomain}"))
+			{
+				return;
+			}
+
+			await Log.Info("FishMMOInstaller",
+				$"Certificate for {rootDomain} and *.{rootDomain} is in /etc/letsencrypt/live/{rootDomain}/ and deployed to " +
+				$"{GameServerCertificateInstaller.CertificateDirectory}. Renewals repeat the DNS challenge automatically. " +
+				"Next: Web Server > Deploy FishMMO nginx.conf, entering the same root domain.");
+		}
+
+		// One DNS label or several (e.g. 'eu.play'), relative to the zone; no apex, no wildcard.
+		private static readonly Regex RecordNamePattern = new Regex(
+			@"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$", RegexOptions.Compiled);
+
+		/// <summary>
+		/// Points the game's host names (api, play, game, panel by default) at this server's public
+		/// IPv4 address with A records at Porkbun, using the same root-only API credentials as the
+		/// DNS challenge. Shows the changes first and applies them only after confirmation.
+		/// </summary>
+		public static async Task PointDnsRecordsAsync()
+		{
+			Console.Clear();
+			await Log.Info("FishMMOInstaller", "--- Point DNS records at this host (Porkbun) ---");
+			if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+			{
+				await Log.Warning("FishMMOInstaller", "This option is Linux only. Create the A records in Porkbun's DNS page instead.");
+				return;
+			}
+
+			string rootDomain = (InstallerProcessHelper.PromptForInput("Root domain registered at Porkbun (e.g. example.com): ") ?? "")
+				.Trim().TrimEnd('.').ToLowerInvariant();
+			if (!NGINXInstaller.RootDomainPattern.IsMatch(rootDomain))
+			{
+				await Log.Warning("FishMMOInstaller", "A valid root domain such as example.com is required. Nothing was changed.");
+				return;
+			}
+
+			Console.WriteLine();
+			Console.WriteLine("Each name below gets one A record pointing at this server's public IPv4 address:");
+			Console.WriteLine($"  api.{rootDomain} (IPFetch/Patcher), play.{rootDomain} (browser client), " +
+				$"game.{rootDomain} (QUIC game servers), panel.{rootDomain} (Control Panel).");
+			Console.WriteLine($"The bare {rootDomain}, www and every other record are left alone.");
+			string[] names = PromptWithDefault("Host names, space separated", "api play game panel")
+				.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+			if (names.Length == 0 || names.Any(name => !RecordNamePattern.IsMatch(name)))
+			{
+				await Log.Warning("FishMMOInstaller", "Host names must be plain labels such as 'play' (no apex, no '*'). Nothing was changed.");
+				return;
+			}
+
+			Console.WriteLine("Public IPv4 address: leave blank to use the address Porkbun sees this server connect from");
+			Console.WriteLine("(right for a home connection; enter one only if the server's traffic leaves through another address).");
+			string address = (InstallerProcessHelper.PromptForInput("Public IPv4 address [detect]: ") ?? "").Trim();
+			if (address.Length > 0 && !System.Net.IPAddress.TryParse(address, out _))
+			{
+				await Log.Warning("FishMMOInstaller", $"'{address}' is not an IP address. Nothing was changed.");
+				return;
+			}
+
+			if (!await EnsurePorkbunCredentialsAsync(rootDomain))
+			{
+				return;
+			}
+			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
+			string hook = ReadEmbeddedText("FishMMO.Installer.Resources.porkbun-dns-hook.py");
+			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, "sudo install -d -o root -g root -m 0755 /etc/letsencrypt", "Failed to create /etc/letsencrypt.") ||
+				!await LinuxConfigHardeningHelper.SudoInstallAsync(hook, PorkbunHookPath, "root", "root", "0755"))
+			{
+				return;
+			}
+
+			string arguments = (address.Length > 0 ? $"--ip {address} " : "") + string.Join(' ', names);
+			await Log.Info("FishMMOInstaller", "Checking the current records (nothing is changed yet)...");
+			if (!await InstallerProcessHelper.RunShellCommandWithLiveOutputAsync(shell, argPrefix,
+					$"sudo {PorkbunHookPath} records --dry-run {arguments}",
+					"Reading the Porkbun records failed. If it reported API_ACCESS_DISABLED, turn on API Access for the domain in Porkbun.") ||
+				!InstallerProcessHelper.PromptForYesNo("Apply these DNS changes?"))
+			{
+				return;
+			}
+			if (await InstallerProcessHelper.RunShellCommandWithLiveOutputAsync(shell, argPrefix,
+					$"sudo {PorkbunHookPath} records {arguments}", "Updating the Porkbun records failed. Review the output above."))
+			{
+				await Log.Info("FishMMOInstaller",
+					"DNS records updated. New names usually resolve within minutes (TTL 600 s). " +
+					$"If the ISP changes the address, run this again or schedule 'sudo {PorkbunHookPath} records {string.Join(' ', names)}'.");
+			}
+		}
+
+		/// <summary>
+		/// Writes <see cref="PorkbunCredentialsPath"/> (root:root 0600), reusing saved keys when the
+		/// operator agrees. The zone is always rewritten to <paramref name="rootDomain"/>.
+		/// </summary>
+		private static async Task<bool> EnsurePorkbunCredentialsAsync(string rootDomain)
+		{
+			string? apiKey = null;
+			string? secretKey = null;
+
+			string? existing = await LinuxConfigHardeningHelper.SudoReadAsync(PorkbunCredentialsPath);
+			if (!string.IsNullOrWhiteSpace(existing) &&
+				InstallerProcessHelper.PromptForYesNo($"Reuse the Porkbun API keys saved in {PorkbunCredentialsPath}?"))
+			{
+				foreach (string line in existing.Split('\n'))
+				{
+					string trimmed = line.Trim();
+					if (trimmed.StartsWith("PORKBUN_API_KEY=", StringComparison.Ordinal)) apiKey = trimmed["PORKBUN_API_KEY=".Length..];
+					if (trimmed.StartsWith("PORKBUN_SECRET_API_KEY=", StringComparison.Ordinal)) secretKey = trimmed["PORKBUN_SECRET_API_KEY=".Length..];
+				}
+			}
+
+			if (apiKey == null || secretKey == null)
+			{
+				Console.WriteLine();
+				Console.WriteLine("Porkbun setup (once):");
+				Console.WriteLine("  1. https://porkbun.com/account/api : create an API key with DNS permission.");
+				Console.WriteLine($"  2. Domain Management > {rootDomain} > Details : turn on API Access.");
+				Console.WriteLine("The keys are stored root-only and used only for _acme-challenge TXT records and the game's A records.");
+				apiKey = InstallerProcessHelper.PromptForRequiredInput("Porkbun API key (pk1_...): ");
+				secretKey = InstallerProcessHelper.PromptForRequiredPassword("Porkbun secret API key (sk1_...): ").Trim();
+			}
+
+			if (!PorkbunKeyPattern.IsMatch(apiKey) || !PorkbunKeyPattern.IsMatch(secretKey))
+			{
+				await Log.Error("FishMMOInstaller", "The Porkbun keys must be the pk1_/sk1_ values from the API page, without spaces.");
+				return false;
+			}
+
+			string content =
+				"# Porkbun API credentials for the FishMMO certbot DNS-01 hook. root:root 0600.\n" +
+				$"PORKBUN_API_KEY={apiKey}\n" +
+				$"PORKBUN_SECRET_API_KEY={secretKey}\n" +
+				$"PORKBUN_DOMAIN={rootDomain}\n";
+			return await LinuxConfigHardeningHelper.SudoInstallAsync(content, PorkbunCredentialsPath, "root", "root", "0600");
+		}
+
+		/// <summary>Reads a text file embedded in the installer assembly.</summary>
+		private static string ReadEmbeddedText(string resourceName)
+		{
+			using Stream resource = typeof(LetsEncryptInstaller).Assembly.GetManifestResourceStream(resourceName)
+				?? throw new InvalidOperationException($"'{resourceName}' is missing from the installer resources.");
+			using var reader = new StreamReader(resource);
+			return reader.ReadToEnd();
 		}
 
 		/// <summary>

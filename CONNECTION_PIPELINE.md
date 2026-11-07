@@ -1366,7 +1366,7 @@ Suspicion: a user reports unauthorized access, or an anomaly detection alert fir
 
 Suspicion: the TLS private key for `game.fishmmo.com` (or `api.fishmmo.com`) has been exposed.
 
-1. **Renew certificates immediately** — run `certbot renew --force-renewal` on the server hosting the affected domain. The certbot deploy hook (`certbot-fishmmo.sh`) copies new certs to `/etc/fishmmo/certs/`.
+1. **Replace the key, not just the certificate.** The certificates are issued with `--reuse-key` so that client pins survive renewal, which also means a plain `certbot renew --force-renewal` re-issues the *compromised* key. Issue for the offline backup key instead (its SPKI is the second pin every release client already carries — see the README's *Client TLS Certificate Pinning*), or, without one, `certbot renew --cert-name <domain> --force-renewal --new-key` (it reuses the saved DNS hooks) and ship a client with new pins. The deploy hook (`/etc/letsencrypt/renewal-hooks/deploy/fishmmo-certificates`) copies the new files to `/etc/fishmmo/certs/`; revoke the old certificate with `certbot revoke`.
 2. **Restart all game servers** that terminate QUIC/TLS (LoginServer, WorldServer, SceneServer) — each reads certificate paths from `.cfg` files (`CertificatePath` / `PrivateKeyPath`) at startup.
 3. **Reload NGINX** with `nginx -t && nginx -s reload` to pick up updated web server certificates.
 4. **Verify the new certificate** — check `openssl x509 -in /etc/fishmmo/certs/fullchain.pem -noout -dates` and confirm the private key matches with `openssl pkey -in /etc/fishmmo/certs/privkey.pem -pubout`.
@@ -1762,8 +1762,7 @@ Common operational procedures for FishMMO game servers. These procedures assume 
 
 ### Rotate Certificates
 
-- **Run certbot renewal** with `certbot renew` on the host that manages TLS certificates. The deploy hook at `FishMMO-Setup/deploy-hooks/certbot-fishmmo.sh` copies renewed certs to `/etc/fishmmo/certs/`.
-- **Reload NGINX** with `nginx -t && nginx -s reload` to pick up new web server certificates.
+- **Run certbot renewal** with `certbot renew` on the host that manages TLS certificates (the timer does this twice a day). The Installer-generated deploy hook, `/etc/letsencrypt/renewal-hooks/deploy/fishmmo-certificates`, copies renewed certs to `/etc/fishmmo/certs/` and reloads NGINX. The key is reused (`reuse_key = True`), so client pins stay valid.
 - **Restart game servers** (LoginServer, WorldServer, SceneServer) one at a time to minimize downtime. Each reads `CertificatePath` and `PrivateKeyPath` from its `.cfg` file at startup.
 - **Verify** certs with `openssl x509 -in /etc/fishmmo/certs/fullchain.pem -noout -dates` and check the private key matches via modulus comparison.
 

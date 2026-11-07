@@ -40,6 +40,7 @@ FishMMO-Installer is a cross-platform .NET 8 console tool that automates FishMMO
 3 : Web Server
 4 : Unity & Build
 5 : Configuration
+6 : Uninstall
 0 : Quit
 ```
 
@@ -57,7 +58,7 @@ VS Build Tools installs the **`.NET desktop development`** and **`Desktop develo
 
 | Option | Description |
 |---|---|
-| 1 | Configure Database Secrets (env vars / secrets file for DB credentials) |
+| 1 | Configure Secrets & Environment (database, mail, service — one file; also Configuration → 3) |
 | 2 | Install PostgreSQL |
 | 3 | Install PgBouncer (connection pooler) |
 | 4 | Install FishMMO Database (user / schema / initial EF migration) |
@@ -71,11 +72,13 @@ VS Build Tools installs the **`.NET desktop development`** and **`Desktop develo
 
 | Option | Description |
 |---|---|
-| 1 | Install NGINX `1.29.5` and configure service startup |
-| 2 | Install / Renew Let's Encrypt certificate for NGINX |
-| 3 | Deploy FishMMO `nginx.conf` (from `FishMMO-Setup/`) |
-| 4 | Configure Firewall Rules (opens `FirewallInstaller.DefaultPorts` — `80/tcp` and `443/tcp`) |
-| 5 | Register FishMMO Web Servers as systemd Services (Linux) or Windows Services via NSSM |
+| 1 | Install NGINX (`1.29.5` on Windows; the distribution package plus its stream module on Linux) and configure service startup |
+| 2 | Install / Renew Let's Encrypt certificate — Linux offers the DNS challenge through the Porkbun API (default, wildcard) or the HTTP challenge |
+| 3 | Deploy FishMMO `nginx.conf` (from `FishMMO-Setup/`) for your domain, plus the UDP stream blocks |
+| 4 | Configure Firewall Rules (opens `FirewallInstaller.DefaultPorts` — `443/tcp` and `7770-7999/udp`; port 80 stays closed) |
+| 5 | Register FishMMO Web Servers as systemd Services (Linux: IPFetch, Patcher, WebGL, Control Panel) |
+| 6 | Install / Renew Local Development Certificates (Linux) |
+| 7 | Point DNS Records at This Host (Porkbun): `A` records for `api`, `play`, `game`, `panel` via `porkbun-dns-hook.py records`, with a dry run and confirmation first |
 
 The menu entry always opens the two default TCP ports. Port ranges and UDP rules — the
 game servers' `7770-7999/udp` in particular — are expressed in `install-config.json`'s
@@ -85,7 +88,7 @@ game servers' `7770-7999/udp` in particular — are expressed in `install-config
 On **Windows** NGINX runs as a Windows service managed by NSSM `2.24` and TLS is automated via win-acme `2.2.9.1701`.  
 On **Linux** NGINX is managed by systemd and TLS is automated via certbot.
 
-The web server service registration (menu 3-5) is **cross-platform** — systemd on Linux, NSSM on Windows — with environment variables set automatically to `Production` (configurable via `FISHMMO_SERVICE_ENVIRONMENT`).
+The web server service registration (menu 3-5) registers systemd units on Linux, with environment variables set to `Production` (configurable via `FISHMMO_SERVICE_ENVIRONMENT`). On Windows it only logs a reminder: an NSSM registration path exists in `SystemdServiceInstaller.InstallWindowsServicesAsync` but nothing calls it yet.
 
 ### 4 — Unity & Build
 
@@ -280,7 +283,7 @@ The installer runs pre-flight checks at startup in all modes. In non-interactive
 
 | File | Responsibility |
 |---|---|
-| `Components/FirewallInstaller.cs` | Host firewall rule creation from `FirewallPortSpec` values (ufw preferred then firewalld on Linux, netsh on Windows). Exposes `DefaultPorts` (`80/tcp`, `443/tcp`) — the list used by the menu and by any manifest that names no ports |
+| `Components/FirewallInstaller.cs` | Host firewall rule creation from `FirewallPortSpec` values (ufw preferred then firewalld on Linux, netsh on Windows). Exposes `DefaultPorts` (`443/tcp`, `7770-7999/udp`; never `80/tcp`) — the list used by the menu and by any manifest that names no ports |
 | `Components/HealthChecker.cs` | Post-install validation — .NET SDK, ASP.NET Runtime, PostgreSQL, NGINX, PgBouncer, systemd services, database connectivity, disk space |
 | `Components/SystemdServiceInstaller.cs` | Cross-platform service installation — systemd unit files on Linux, NSSM Windows services on Windows. Covers web servers (IPFetch, Patcher, WebGL) and the AppHealthMonitor daemon |
 
@@ -506,7 +509,7 @@ For non-interactive mode, create an `install-config.json`:
 {
   "components": ["postgresql", "fishmmo-db", "nginx", "letsencrypt"],
   "configureFirewall": true,
-  "firewallPorts": [80, 443, "7770-7999/udp"],
+  "firewallPorts": [443, "7770-7999/udp"],
   "registerSystemdServices": true,
   "webServers": ["ipfetch", "patcher", "webgl"],
   "validateAfterInstall": true,
@@ -518,7 +521,7 @@ For non-interactive mode, create an `install-config.json`:
 |---|---|---|
 | `components` | `string[]` | Component names to install, in desired order (sorted by dependency before execution) |
 | `configureFirewall` | `bool` | Open `firewallPorts` after the components finish. Redundant when `firewall` (or `all`) is in `components`: that step already applies `firewallPorts`, and the post-install pass is skipped so rules are not added twice. |
-| `firewallPorts` | `(int \| string)[]` | Ports to open. A bare number is a single TCP port; a string may carry a range and protocol: `"443/tcp"`, `"7770-7999/udp"` (ranges inclusive, protocol defaults to `tcp`). Defaults to `[80, 443]` if empty. |
+| `firewallPorts` | `(int \| string)[]` | Ports to open. A bare number is a single TCP port; a string may carry a range and protocol: `"443/tcp"`, `"7770-7999/udp"` (ranges inclusive, protocol defaults to `tcp`). Defaults to `[443, "7770-7999/udp"]` if empty. Add `80` only for the Let's Encrypt HTTP challenge. |
 | `registerSystemdServices` | `bool` | Register `webServers` as systemd services after the components finish (Linux only). Redundant when `systemd-services` (or `all`) is in `components`, which already uses `webServers`; the post-install pass is then skipped. |
 | `webServers` | `string[]` | Web server names to register (`ipfetch`, `patcher`, `webgl` or `fishmmo-ipfetch` etc). When empty or omitted, all three are registered. |
 | `validateAfterInstall` | `bool` | Run health checks after installation completes |
@@ -671,71 +674,79 @@ This section shows exactly where to place `nginx.conf`, which ports must be open
 
 ### Required networking model
 
-- Public internet ports to expose:
-  - `80/tcp` (Let's Encrypt HTTP-01 challenge + HTTP→HTTPS redirect)
-  - `443/tcp` (all game/web/API traffic through NGINX)
-- Keep backend app ports local-only (do **not** forward publicly):
-  - `8000` (WebGL server)
-  - `8080` (IPFetch)
-  - `8090` (Patcher)
-- If using current websocket routing (`wss://game.<domain>/ws/{port}`), keep game ports `7770-7899` private behind NGINX.
+- Public internet ports to expose (host firewall **and** router forwarding):
+  - `443/tcp` — HTTPS for `api.`, `play.` and `panel.`
+  - `80/tcp` — **not needed** with the DNS challenge; leave it closed so nothing unencrypted is reachable. Open it only to use the Let's Encrypt HTTP challenge (nginx then also redirects HTTP to HTTPS).
+  - `7770-7999/udp` — QUIC/WebTransport game traffic. NGINX's stream module listens on these and forwards the datagrams, untouched, to the loopback-bound game servers. At minimum forward the ports actually in use: 7770 (Login), 7780 (World), 7790 upwards (one per Scene server).
+  - `443/udp` — optional, HTTP/3 for `play.`
+- Keep backend app ports local-only (do **not** forward publicly): `8000` (WebGL), `8080` (IPFetch), `8090` (Patcher), `8100` (Control Panel), `5432` (PostgreSQL), `6432` (PgBouncer).
 
-> Router/NAT forwarding itself is usually configured on your router UI (not on the host terminal). Terminal commands below open host firewall rules only.
+> Router/NAT forwarding itself is configured on your router UI (not on the host terminal). Terminal commands below open host firewall rules only.
 
 ### Linux (Ubuntu/Debian + Arch/CachyOS)
 
-#### 1) Place your nginx.conf
+Order matters: **certificate first, then nginx.conf.** Every HTTPS server block in the FishMMO `nginx.conf` names the certificate, so `nginx -t` cannot pass before it exists.
 
-Recommended production location (the installer's "Deploy nginx.conf" option automates this):
+#### 1) Install NGINX and the stream module
 
-```bash
-sudo cp "/home/$USER/Dev/FishMMO-Dev/FishMMO-Setup/nginx.conf" /etc/nginx/nginx.conf
-sudo chown root:root /etc/nginx/nginx.conf
-sudo chmod 644 /etc/nginx/nginx.conf
-```
+Web Server → 1. It installs `nginx` plus `nginx-mod-stream` (Arch, Fedora) or `libnginx-mod-stream` (Debian, Ubuntu); the stream module is what forwards the game's UDP ports.
 
-#### 2) Ensure certbot challenge webroot exists
+#### 2) Get the certificate
+
+Web Server → 2, choose **DNS through the Porkbun API** (default), enter the root domain (e.g. `example.com`). It issues one certificate for `example.com` and `*.example.com`, with `--reuse-key`, and deploys it for the game servers — see [Linux game-server TLS deployment](#linux-game-server-tls-deployment). It needs no nginx and no open port 80.
+
+Using the HTTP challenge instead, nginx must already serve the challenge directory on port 80, from a minimal config (not yet the FishMMO one):
 
 ```bash
 sudo mkdir -p /var/www/certbot/.well-known/acme-challenge
 sudo chown -R root:root /var/www/certbot
 sudo chmod -R 755 /var/www/certbot
+# port-80 server block: location /.well-known/acme-challenge/ { root /var/www/certbot; }
 ```
 
-#### 3) Open host firewall ports 80/443
+#### 3) Deploy the FishMMO nginx.conf
+
+Web Server → 3. It asks for the root domain and substitutes it for the template's `fishmmo.com`, checks the certificate exists, loads the stream module (writing `/etc/nginx/modules.d/fishmmo-stream.conf` on Arch), installs the config (backing up the old one as `nginx.conf.pre-fishmmo.bak`), runs `nginx -t`, then installs and runs `/usr/local/bin/gen-fishmmo-stream-config.sh` to write one UDP block per game port into `/etc/nginx/stream.d/`, listening on this host's LAN address (not `0.0.0.0`, which would include the game servers' own `127.0.0.1` ports). Last it raises NGINX's open-file limit with `/etc/systemd/system/nginx.service.d/fishmmo-limits.conf` (`LimitNOFILE=65535`; reuseport opens one socket per worker per UDP port), restarts NGINX, and checks that UDP 7770 is really listening.
+
+#### 4) Open host firewall ports
 
 If using `ufw`:
 
 ```bash
-sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
+sudo ufw allow 7770:7999/udp
+sudo ufw allow 443/udp        # optional, HTTP/3
 sudo ufw status
+# 80/tcp only if you use the HTTP challenge instead of DNS
 ```
 
 If using `firewalld`:
 
 ```bash
-sudo firewall-cmd --permanent --add-service=http
 sudo firewall-cmd --permanent --add-service=https
+sudo firewall-cmd --permanent --add-port=7770-7999/udp
 sudo firewall-cmd --reload
-sudo firewall-cmd --list-services
 ```
 
-#### 4) Test and reload NGINX
+The menu entry (Web Server → 4) and the `firewall` component both open `443/tcp` and `7770-7999/udp`, and never `80/tcp`.
+
+#### 5) Check NGINX
 
 ```bash
 sudo nginx -t
-sudo systemctl enable --now nginx
-sudo systemctl reload nginx
 sudo systemctl status nginx
+sudo ss -ulpn | grep ':7770'   # nginx listening on the first game port
 ```
 
-#### 5) Router/NAT forwarding
+#### 6) Router/NAT forwarding
 
-Forward these from router WAN to your Linux host LAN IP:
+Forward these from router WAN to your Linux host's LAN IP (give it a fixed address or DHCP reservation):
 
-- `TCP 80` → `<server_lan_ip>:80`
-- `TCP 443` → `<server_lan_ip>:443`
+- `TCP 443` → `<server_lan_ip>` (`TCP 80` only with the HTTP challenge)
+- `UDP 7770-7999` → `<server_lan_ip>`
+- `UDP 443` → `<server_lan_ip>` (optional)
+
+If the router's WAN address differs from what `curl -4 https://ifconfig.me` reports, the ISP uses CGNAT and inbound connections cannot reach you; ask the ISP for a public IPv4.
 
 ### Windows 10/11
 
@@ -753,7 +764,7 @@ Copy-Item "C:\path\to\FishMMO-Setup\nginx.conf" "C:\nginx\nginx-1.29.5\conf\ngin
 
 #### 2) Open Windows Firewall ports 80/443
 
-Run PowerShell as Administrator:
+On Windows the certificate comes from the HTTP challenge, so port 80 must be open for issuance and renewal (nginx answers it with the challenge files and an HTTPS redirect, nothing else). Run PowerShell as Administrator:
 
 ```powershell
 netsh advfirewall firewall add rule name="FishMMO NGINX HTTP" dir=in action=allow protocol=TCP localport=80
@@ -790,28 +801,29 @@ sc.exe query "FishMMO-NGINX"
 
 Forward these from router WAN to your Windows host LAN IP:
 
-- `TCP 80` → `<server_lan_ip>:80`
+- `TCP 80` → `<server_lan_ip>:80` (the HTTP challenge)
 - `TCP 443` → `<server_lan_ip>:443`
+- `UDP 7770-7999` → `<server_lan_ip>` (game traffic)
 
 ### Verify externally after forwarding
 
 From any external machine/network:
 
 ```bash
-curl -I http://your-domain
-curl -I https://your-domain
+curl -I https://play.your-domain
+curl -I --max-time 5 http://play.your-domain
 ```
 
 Expected outcome:
 
-- HTTP responds with redirect to HTTPS (or ACME challenge path on renewal)
-- HTTPS responds successfully with your configured certificate
+- HTTPS responds with your configured certificate
+- HTTP times out when port 80 is closed (the DNS challenge). With the HTTP challenge it answers with a redirect to HTTPS
 
 ### Important FishMMO port notes
 
-- Do **NOT** public-forward `8000`, `8080`, `8090`.
-- Do **NOT** public-forward `7770-7899` unless intentionally bypassing NGINX websocket path routing.
-- Primary public surface should be only `80` and `443`.
+- Do **NOT** public-forward `8000`, `8080`, `8090`, `8100`.
+- **Do** forward `7770-7999/udp`: game traffic is QUIC over UDP and reaches the game servers through NGINX's stream module, never through 80/443. There is no WebSocket path.
+- The public surface is `443/tcp`, `7770-7999/udp` and optionally `443/udp` (plus `80/tcp` only with the HTTP challenge).
 - PostgreSQL hardening (`scram-sha-256`, `listen_addresses` — default `localhost`, overridable via `FISHMMO_PG_LISTEN_ADDRESSES` env var) is applied automatically during database setup on Linux.
 
 ---
@@ -843,7 +855,7 @@ flowchart TD
     Helper -->|apt / pacman / dnf / winget / choco| OS[(Host OS)]
     Cfg -->|writes| Settings[(appsettings.json)]
     Cfg -->|writes| Secrets[(fishmmo-secrets.env<br/>DB creds + web server settings only)]
-    Unity -->|FishMMO > Security > Fetch Client Secrets| ClientFiles[(ClientApiSecret.generated.cs<br/>CertificatePins.generated.cs<br/>HostConfig.generated.cs)]
+    Unity -->|FishMMO Dashboard > Game Settings| ClientFiles[(ClientApiSecret.generated.cs<br/>CertificatePins.generated.cs<br/>HostConfig.generated.cs)]
     Manifest --> PreFlight[Pre-flight checks]
     PreFlight --> Orchestrator[InstallOrchestrator]
     Orchestrator -->|ordered| Components[Components installed<br/>in dependency order]
@@ -874,7 +886,9 @@ application authentication and `SELECT 1` before changing runtime settings. On a
 failed service/connection test it restores the previous PgBouncer files.
 
 After success it updates development templates, Unity's working-directory
-`appsettings.Development.json`, and existing .NET runtime output configurations.
+`appsettings.Development.json`, and existing .NET runtime output configurations —
+except the Discord bot's: its verification listener holds a `LISTEN`, which
+transaction pooling drops, so the bot always connects to PostgreSQL on 5432.
 When local peer authentication allows it, the tool copies the existing SCRAM
 verifier. Otherwise it uses the existing application password from the secrets file
 in the pgbouncer-owned 0600 auth file. Both modes authenticate with SCRAM; no
@@ -933,14 +947,23 @@ sudo journalctl -u pgbouncer -n 50 --no-pager
 
 ### Linux game-server TLS deployment
 
-The Install / Renew Let's Encrypt action also deploys the selected certificate to
+**Web Server → 2** first asks which ACME challenge to use:
+
+- **DNS through the Porkbun API** (default). Enter the root domain; the certificate covers `example.com` and `*.example.com`. The first run asks for a Porkbun API key and secret (create them at https://porkbun.com/account/api with DNS permission, and turn on **API Access** for the domain under Domain Management → Details). They are stored root-only in `/etc/letsencrypt/fishmmo-porkbun.ini`; later runs offer to reuse them. The hook, `/etc/letsencrypt/fishmmo-porkbun-hook.py` (source: `FishMMO-Installer/Resources/porkbun-dns-hook.py`, Python standard library only), creates the `_acme-challenge` TXT record, waits with `dig` until every Porkbun nameserver serves it, and deletes it afterwards. Certbot stores the hook commands in the renewal configuration, so renewals are unattended. It needs no nginx and no open port 80.
+- **HTTP on port 80.** List every host name; nginx must already serve `/.well-known/acme-challenge/` from the web root.
+
+Both issue with **`--reuse-key`**: release clients pin the certificate's public key, and a new key at each renewal would lock them out.
+
+The action then deploys the certificate to
 `/etc/fishmmo/certs/fullchain.pem` and `/etc/fishmmo/certs/privkey.pem`, matching the
 LoginServer, WorldServer and SceneServer configuration defaults. It prompts for
 an existing OS account that runs the game servers and adds it to `fishmmo-certs`.
 Start a new login session (or restart the service) to acquire that membership.
 Other game-server accounts must also belong to this group. Directories are
 root-owned and group-accessible (`0750`); certificate and key files are `0640`.
-The private key is never made readable to all users.
+The private key is never made readable to all users. If the directory held a
+local development certificate, its marker is removed so the development action
+can never overwrite the real certificate.
 
 A root-owned Certbot deploy hook at
 `/etc/letsencrypt/renewal-hooks/deploy/fishmmo-certificates` validates that the
@@ -953,8 +976,7 @@ also tests and reloads nginx when it is active. **Restart running game servers
 after renewal**, since WebTransport loads its certificates at startup; the hook
 does not interrupt running game sessions automatically.
 
-This action requires a domain and a working ACME challenge endpoint. It does not
-issue localhost development certificates. Selecting Let's Encrypt staging still
+It does not issue localhost development certificates. Selecting Let's Encrypt staging still
 produces an untrusted test certificate. Running the updated installer is required
 to deploy these changes on an existing machine; rebuilding a Unity server alone
 does not install host certificates.

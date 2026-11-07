@@ -195,34 +195,42 @@ namespace FishMMO.Shared
 			LoadPinFetchInputs(forceFromFile);
 
 			gs_discoveredPins.Clear();
+			gs_backupPins.Clear();
+
+			var fileLive = new List<string>();
+			var fileBackup = new List<string>();
+			string pinPath = GetCertificatePinsFilePath();
+			if (File.Exists(pinPath))
+			{
+				try
+				{
+					ParsePinsFromFile(File.ReadAllText(pinPath), fileLive, fileBackup);
+				}
+				catch { /* leave empty on error */ }
+			}
 
 			if (!forceFromFile && SessionState.GetBool(DraftPinsDirtyKey, false))
-			{
-				string pinsBlob = SessionState.GetString(DraftPinsKey, "");
-				if (!string.IsNullOrEmpty(pinsBlob))
-				{
-					foreach (string line in pinsBlob.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
-					{
-						string pin = line.Trim();
-						if (!string.IsNullOrEmpty(pin) && !pin.Contains(sentinelMarker))
-							gs_discoveredPins.Add(pin);
-					}
-				}
-				return;
-			}
+				gs_discoveredPins.AddRange(ReadPinBlob(SessionState.GetString(DraftPinsKey, "")));
+			else
+				gs_discoveredPins.AddRange(fileLive);
 
-			string pinPath = GetCertificatePinsFilePath();
-			if (!File.Exists(pinPath))
-				return;
+			if (!forceFromFile && SessionState.GetBool(DraftBackupPinsDirtyKey, false))
+				gs_backupPins.AddRange(ReadPinBlob(SessionState.GetString(DraftBackupPinsKey, "")));
+			else
+				gs_backupPins.AddRange(fileBackup);
+		}
 
-			try
+		/// <summary>Splits a newline-separated pin draft, dropping blanks and sentinels.</summary>
+		private static List<string> ReadPinBlob(string blob)
+		{
+			var pins = new List<string>();
+			foreach (string line in (blob ?? "").Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
 			{
-				string content = File.ReadAllText(pinPath);
-				var parsed = ParsePinsFromFile(content);
-				if (parsed != null)
-					gs_discoveredPins.AddRange(parsed);
+				string pin = line.Trim();
+				if (!string.IsNullOrEmpty(pin) && !pin.Contains(sentinelMarker))
+					pins.Add(pin);
 			}
-			catch { /* leave empty on error */ }
+			return pins;
 		}
 
 		/// <summary>
@@ -350,6 +358,7 @@ namespace FishMMO.Shared
 			ClearHostDraft();
 			ClearPinDraft();
 			ClearPinFetchInputs();
+			ClearBackupPinDraft();
 			ClearSecretDraft();
 		}
 
@@ -586,10 +595,12 @@ namespace FishMMO.Shared
 
 			// Info
 			Label info = new Label(
-				"Fetch TLS certificate SPKI SHA-256 pins from hosts that speak HTTPS on port 443.\n" +
-				"Game/QUIC-only hostnames (loginserver/world/scene) usually fail — use API/IPFetch/play.\n" +
-				"After Fetch succeeds, click Write Pins to File (saves CertificatePins.generated.cs).\n" +
-				"Prefer at least two pins (active + backup) for release builds.");
+				"A pin is the SHA-256 of a TLS public key (SPKI). Native release clients only trust servers whose\n" +
+				"key matches a pin, and refuse to build with fewer than two: the live key, plus a backup key.\n" +
+				"Live pin: Fetch Pins reads it from a host serving HTTPS on :443 (API host; game/QUIC-only names\n" +
+				"fail), or Pin from Certificate File reads it from the deployed certificate (no network needed —\n" +
+				"use this when the server is this machine and the router has no hairpin NAT).\n" +
+				"Backup pin: below. Then Write Pins to File (saves CertificatePins.generated.cs).");
 			info.style.fontSize = 10;
 			info.style.color = new Color(0.5f, 0.5f, 0.5f, 1f);
 			info.style.whiteSpace = WhiteSpace.Normal;
@@ -653,6 +664,8 @@ namespace FishMMO.Shared
 			section.Add(gs_pinErrorContainer);
 			RefreshPinErrorDisplay();
 
+			BuildBackupPinsSubsection(section);
+
 			if (SessionState.GetBool(DraftPinsDirtyKey, false))
 			{
 				AddDraftHint(section,
@@ -679,6 +692,14 @@ namespace FishMMO.Shared
 			gs_fetchPinsButton.SetEnabled(!gs_pinFetchInProgress);
 			buttonRow.Add(gs_fetchPinsButton);
 
+			Button certificateFileButton = new Button(AddLivePinFromCertificateFile);
+			certificateFileButton.text = "Pin from Certificate File…";
+			certificateFileButton.tooltip = "Reads the live pin from the server's certificate, e.g. " +
+				"/etc/fishmmo/certs/fullchain.pem or /etc/letsencrypt/live/<domain>/fullchain.pem.";
+			certificateFileButton.style.height = 28;
+			certificateFileButton.style.marginRight = 4;
+			buttonRow.Add(certificateFileButton);
+
 			gs_writePinsButton = new Button(() => WriteCertificatePins());
 			gs_writePinsButton.text = "Write Pins to File";
 			gs_writePinsButton.style.height = 28;
@@ -689,11 +710,8 @@ namespace FishMMO.Shared
 			gs_writePinsButton.style.borderTopRightRadius = 4;
 			gs_writePinsButton.style.borderBottomLeftRadius = 4;
 			gs_writePinsButton.style.borderBottomRightRadius = 4;
-			gs_writePinsButton.SetEnabled(gs_discoveredPins.Count > 0);
-			gs_writePinsButton.tooltip = gs_discoveredPins.Count > 0
-				? "Writes CertificatePins.generated.cs and refreshes assets."
-				: "Fetch at least one pin first (or load existing non-sentinel pins).";
 			buttonRow.Add(gs_writePinsButton);
+			UpdateWritePinsButtonState();
 
 			section.Add(buttonRow);
 			inspectorContent.Add(section);
@@ -707,8 +725,8 @@ namespace FishMMO.Shared
 			if (gs_discoveredPins.Count == 0)
 			{
 				Label emptyLabel = new Label(
-					"No pins loaded. Enable API Host and/or Custom Host (HTTPS :443), " +
-					"click Fetch Pins, then Write Pins to File.");
+					"No live pin loaded. Fetch Pins (API Host / Custom Host on HTTPS :443) or " +
+					"Pin from Certificate File, then Write Pins to File.");
 				emptyLabel.style.fontSize = 10;
 				emptyLabel.style.color = new Color(0.5f, 0.5f, 0.5f, 1f);
 				emptyLabel.style.whiteSpace = WhiteSpace.Normal;
@@ -717,7 +735,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			Label header = new Label($"Current Pins ({gs_discoveredPins.Count})");
+			Label header = new Label($"Live Pins ({gs_discoveredPins.Count})");
 			header.style.unityFontStyleAndWeight = FontStyle.Bold;
 			header.style.fontSize = 11;
 			header.style.marginBottom = 2;
@@ -764,11 +782,11 @@ namespace FishMMO.Shared
 		private void UpdateWritePinsButtonState()
 		{
 			if (gs_writePinsButton == null) return;
-			bool canWrite = gs_discoveredPins.Count > 0;
+			bool canWrite = gs_discoveredPins.Count + gs_backupPins.Count > 0;
 			gs_writePinsButton.SetEnabled(canWrite);
 			gs_writePinsButton.tooltip = canWrite
-				? "Writes CertificatePins.generated.cs and refreshes assets."
-				: "Fetch at least one pin first (or load existing non-sentinel pins).";
+				? "Writes the live and backup pins to CertificatePins.generated.cs and refreshes assets."
+				: "Fetch or read a live pin first (or load existing non-sentinel pins).";
 		}
 
 		/// <summary>
@@ -1053,8 +1071,15 @@ namespace FishMMO.Shared
 				sb.AppendLine("\t\t\tvalues.Pins = new[]");
 				sb.AppendLine("\t\t\t{");
 
-				for (int i = 0; i < gs_discoveredPins.Count; i++)
-					sb.AppendLine("\t\t\t\t" + Quote(gs_discoveredPins[i]) + ",");
+				var written = new HashSet<string>(StringComparer.Ordinal);
+				foreach (string pin in gs_discoveredPins)
+					if (written.Add(pin))
+						sb.AppendLine("\t\t\t\t" + Quote(pin) + ",");
+				// The marker is how the dashboard tells a backup pin from a live one when it
+				// reads this file back; the client treats every entry the same.
+				foreach (string pin in gs_backupPins)
+					if (written.Add(pin))
+						sb.AppendLine("\t\t\t\t" + Quote(pin) + ", " + BackupPinMarker + " (offline key, not served)");
 
 				sb.AppendLine("\t\t\t};");
 				sb.AppendLine();
@@ -1073,10 +1098,15 @@ namespace FishMMO.Shared
 				// Pins are on disk now; the fetch inputs stay so the panel comes back the
 				// way the operator left it. Other sections keep their own drafts.
 				ClearPinDraft();
+				ClearBackupPinDraft();
 				AssetDatabase.Refresh();
 
-				SetPinStatus($"Wrote {gs_discoveredPins.Count} pin(s) to CertificatePins.generated.cs",
-					new Color(0.4f, 0.85f, 0.4f, 1f));
+				if (written.Count < 2)
+					SetPinStatus($"Wrote {written.Count} pin(s). Release builds need at least 2 — add a backup pin.",
+						new Color(0.95f, 0.75f, 0.3f, 1f));
+				else
+					SetPinStatus($"Wrote {written.Count} pin(s) ({gs_backupPins.Count} backup) to CertificatePins.generated.cs",
+						new Color(0.4f, 0.85f, 0.4f, 1f));
 				SetStatus("Certificate pins written.");
 			}
 			catch (Exception ex)
@@ -1372,17 +1402,17 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Extracts pin strings from a generated C# file's Pins array initializer.
+		/// Extracts pin strings from a generated C# file's Pins array initializer. Entries
+		/// carrying <see cref="BackupPinMarker"/> go to <paramref name="backup"/>.
 		/// </summary>
-		private static List<string> ParsePinsFromFile(string content)
+		private static void ParsePinsFromFile(string content, List<string> live, List<string> backup)
 		{
-			var result = new List<string>();
 			int start = content.IndexOf("Pins =", StringComparison.Ordinal);
-			if (start < 0) return result;
+			if (start < 0) return;
 			start = content.IndexOf('{', start);
-			if (start < 0) return result;
+			if (start < 0) return;
 			int end = content.IndexOf("};", start, StringComparison.Ordinal);
-			if (end < 0) return result;
+			if (end < 0) return;
 
 			string arrayContent = content.Substring(start + 1, end - start - 1);
 			foreach (string line in arrayContent.Split('\n'))
@@ -1390,17 +1420,16 @@ namespace FishMMO.Shared
 				string trimmed = line.Trim();
 				if (trimmed.StartsWith("\"", StringComparison.Ordinal))
 				{
-					int firstQuote = trimmed.IndexOf('"');
-					int lastQuote = trimmed.LastIndexOf('"');
-					if (firstQuote >= 0 && lastQuote > firstQuote)
+					// The closing quote of the pin itself: a trailing comment may hold more quotes.
+					int closingQuote = trimmed.IndexOf('"', 1);
+					if (closingQuote > 1)
 					{
-						string pin = trimmed.Substring(firstQuote + 1, lastQuote - firstQuote - 1);
+						string pin = trimmed.Substring(1, closingQuote - 1);
 						if (!string.IsNullOrWhiteSpace(pin) && !pin.Contains(sentinelMarker))
-							result.Add(pin);
+							(trimmed.IndexOf(BackupPinMarker, closingQuote, StringComparison.Ordinal) >= 0 ? backup : live).Add(pin);
 					}
 				}
 			}
-			return result;
 		}
 
 		/// <summary>

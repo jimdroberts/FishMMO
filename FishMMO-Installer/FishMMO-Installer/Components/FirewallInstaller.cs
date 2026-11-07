@@ -9,11 +9,17 @@ namespace FishMMO.Installer
     /// </summary>
     public static class FirewallInstaller
     {
-        /// <summary>Ports opened when a manifest or menu does not name any: HTTP and HTTPS.</summary>
+        /// <summary>
+        /// Ports opened by the menu, and by a manifest that names none: HTTPS for the web servers,
+        /// plus the UDP range NGINX's stream module listens on for QUIC game traffic (the same
+        /// range as the install templates and the stream config generator). Port 80 is
+        /// deliberately absent: the DNS challenge needs no HTTP, so nothing unencrypted is
+        /// exposed. A host using the HTTP challenge must open 80/tcp itself.
+        /// </summary>
         public static readonly IReadOnlyList<FirewallPortSpec> DefaultPorts = new[]
         {
-            FirewallPortSpec.TcpPort(80),
             FirewallPortSpec.TcpPort(443),
+            new FirewallPortSpec(7770, 7999, FirewallPortSpec.Udp),
         };
 
         /// <summary>

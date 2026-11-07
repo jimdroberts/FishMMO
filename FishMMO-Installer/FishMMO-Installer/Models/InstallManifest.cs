@@ -17,7 +17,7 @@ namespace FishMMO.Installer
 
         /// <summary>
         /// Firewall rules to open. Entries are a bare port number (TCP) or a string
-        /// with an optional range and protocol, e.g. <c>[80, 443, "7770-7999/udp"]</c>.
+        /// with an optional range and protocol, e.g. <c>[443, "7770-7999/udp"]</c>.
         /// </summary>
         [JsonPropertyName("firewallPorts")]
         public List<FirewallPortSpec> FirewallPorts { get; init; } = new();

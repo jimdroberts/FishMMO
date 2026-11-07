@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Resources/InstallDevelopmentCertificates.sh" />
+    <EmbeddedResource Include="Resources/porkbun-dns-hook.py" LogicalName="FishMMO.Installer.Resources.porkbun-dns-hook.py" />
   </ItemGroup>
 
   <ItemGroup>

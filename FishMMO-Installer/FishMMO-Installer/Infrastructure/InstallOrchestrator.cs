@@ -148,7 +148,7 @@ namespace FishMMO.Installer
             return result with { Duration = sw.Elapsed };
         }
 
-        /// <summary>The manifest's firewall rules, or HTTP/HTTPS when it names none.</summary>
+        /// <summary>The manifest's firewall rules, or HTTPS plus the UDP game range when it names none.</summary>
         private static IReadOnlyList<FirewallPortSpec> FirewallPortsFor(InstallManifest? manifest) =>
             manifest is { FirewallPorts.Count: > 0 } ? manifest.FirewallPorts : FirewallInstaller.DefaultPorts;
 

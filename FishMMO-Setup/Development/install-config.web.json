@@ -9,7 +9,6 @@
   ],
   "configureFirewall": true,
   "firewallPorts": [
-    80,
     443,
     "7770-7999/udp"
   ],

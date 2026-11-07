@@ -1,6 +1,7 @@
 using FishMMO.Logging;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 
 namespace FishMMO.Installer
 {
@@ -38,6 +39,10 @@ namespace FishMMO.Installer
 				}
 				else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
 				{
+					// An NGINX installed earlier, by hand or by the distribution, usually lacks the
+					// separately packaged stream module the game's UDP ports need.
+					(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
+					await EnsureStreamModuleInstalledAsync(shell, argPrefix, prompt: false);
 					await EnsureLinuxServiceConfiguredAsync();
 				}
 
@@ -162,13 +167,8 @@ namespace FishMMO.Installer
 			await Log.Info("FishMMOInstaller", "Installing NGINX on Linux...");
 			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
 
-			var packageNames = new Dictionary<string, string>
-			{
-				["pacman"] = "nginx",
-				["apt-get"] = "nginx",
-				["dnf"] = "nginx",
-				["yum"] = "nginx"
-			};
+			var packageNames = StreamModulePackages.ToDictionary(
+				entry => entry.Key, entry => "nginx " + entry.Value);
 
 			var detected = await LinuxPackageManagerHelper.DetectAsync(packageNames);
 			if (detected == null)
@@ -368,12 +368,217 @@ namespace FishMMO.Installer
 			return string.Empty;
 		}
 
+		/// <summary>The placeholder domain the repository's nginx.conf is written for.</summary>
+		public const string TemplateDomain = "fishmmo.com";
+
+		/// <summary>The UDP stream generator in <see cref="InstallationConstants.FishMMOSetupPath"/>.</summary>
+		public const string StreamGeneratorName = "gen-fishmmo-stream-config.sh";
+
+		/// <summary>Where the stream generator is installed, matching nginx.conf's comments and the README.</summary>
+		public const string StreamGeneratorInstallPath = "/usr/local/bin/gen-fishmmo-stream-config.sh";
+
+		internal static readonly Regex RootDomainPattern = new Regex(
+			@"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$", RegexOptions.Compiled);
+
+		// Directories the distributions' module packages drop load_module snippets into; nginx.conf
+		// includes all three.
+		private static readonly string[] ModuleSnippetDirectories =
+		{
+			"/etc/nginx/modules-enabled", // Debian, Ubuntu
+			"/etc/nginx/modules.d",       // Arch, CachyOS
+			"/usr/share/nginx/modules",   // Fedora, RHEL
+		};
+
+		/// <summary>
+		/// Rewrites the template's placeholder domain (host names and the certificate lineage path)
+		/// to <paramref name="domain"/>.
+		/// </summary>
+		public static string ForDomain(string template, string domain) =>
+			Regex.Replace(template, @"(?<![a-z0-9-])fishmmo\.com\b", domain);
+
+		/// <summary>
+		/// Makes sure the stream module is installed and loaded. A distribution that builds it as a
+		/// dynamic module needs a load_module line; Debian and Fedora packages ship one, Arch's ships
+		/// only the .so. Returns false, with the reason logged, when the module is missing and was
+		/// not installed.
+		/// </summary>
+		private static async Task<bool> EnsureStreamModuleLoadedAsync(string shell, string argPrefix)
+		{
+			string? module = await EnsureStreamModuleInstalledAsync(shell, argPrefix, prompt: true);
+			if (module == null)
+			{
+				return false;
+			}
+			if (module.Length == 0)
+			{
+				// Built in (or absent, which nginx -t reports as 'unknown directive "stream"').
+				return true;
+			}
+
+			foreach (string directory in ModuleSnippetDirectories.Where(Directory.Exists))
+			{
+				foreach (string snippet in Directory.EnumerateFiles(directory, "*.conf"))
+				{
+					try
+					{
+						if (File.ReadAllText(snippet).Contains("ngx_stream_module", StringComparison.Ordinal))
+							return true;
+					}
+					catch (IOException) { }
+					catch (UnauthorizedAccessException) { }
+				}
+			}
+
+			await Log.Info("FishMMOInstaller", "Loading the NGINX stream module through /etc/nginx/modules.d/fishmmo-stream.conf.");
+			return await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix,
+					"sudo install -d -o root -g root -m 0755 /etc/nginx/modules.d", "Failed to create /etc/nginx/modules.d.") &&
+				await LinuxConfigHardeningHelper.SudoInstallAsync($"load_module {module};\n",
+					"/etc/nginx/modules.d/fishmmo-stream.conf", "root", "root", "0644");
+		}
+
+		/// <summary>
+		/// The stream module forwards the game's UDP (QUIC) ports. Arch, Debian and Fedora all ship
+		/// it as a separate dynamic-module package, keyed here by package manager.
+		/// </summary>
+		/// <summary>
+		/// Asks for the LAN address NGINX listens on for the UDP game ports, defaulting to this
+		/// host's source address on the default route. Returns null (reason logged) when the answer
+		/// cannot work.
+		/// </summary>
+		/// <remarks>
+		/// NGINX must not listen on 0.0.0.0: the game servers bind the same port numbers on
+		/// 127.0.0.1, which 0.0.0.0 includes, so they could not bind and NGINX would forward every
+		/// datagram back to itself. A specific LAN address and 127.0.0.1 coexist on one port.
+		/// </remarks>
+		private static async Task<string?> PromptForGameListenAddressAsync(string shell, string argPrefix)
+		{
+			string detected = string.Empty;
+			await InstallerProcessHelper.RunProcessAsync(shell, $"{argPrefix} \"ip -4 route get 1.1.1.1\"", (code, output, _) =>
+			{
+				Match source = Regex.Match(output, @"\bsrc\s+(\d+\.\d+\.\d+\.\d+)");
+				if (source.Success) detected = source.Groups[1].Value;
+				return code == 0;
+			});
+
+			Console.WriteLine();
+			Console.WriteLine("LAN address for the UDP game ports (7770-7999).");
+			Console.WriteLine("  NGINX listens for game traffic on this address and forwards it to the game servers on 127.0.0.1.");
+			Console.WriteLine("  It must be this machine's own address on the local network: the one your router forwards");
+			Console.WriteLine("  UDP 7770-7999 to (usually 192.168.x.x or 10.x.x.x). Not 0.0.0.0: the game servers use the");
+			Console.WriteLine("  same port numbers on 127.0.0.1, which 0.0.0.0 includes, so they could not start. Not 127.0.0.1:");
+			Console.WriteLine("  the router cannot reach it.");
+			Console.WriteLine("  Keep it fixed (a static address or a DHCP reservation in the router): if it changes, NGINX");
+			Console.WriteLine("  cannot start until this step is run again with the new address.");
+			string answer = (InstallerProcessHelper.PromptForInput(
+				detected.Length > 0 ? $"LAN address [{detected}]: " : "LAN address (e.g. 192.168.1.10): ") ?? "").Trim();
+			if (answer.Length == 0) answer = detected;
+
+			if (!System.Net.IPAddress.TryParse(answer, out System.Net.IPAddress? parsed) ||
+				parsed.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork || answer.Split('.').Length != 4)
+			{
+				await Log.Warning("FishMMOInstaller", $"'{answer}' is not an IPv4 address. Nothing was changed.");
+				return null;
+			}
+			if (answer == "0.0.0.0" || answer.StartsWith("127.", StringComparison.Ordinal))
+			{
+				await Log.Warning("FishMMOInstaller", $"{answer} cannot be used (see above). Enter this machine's LAN address. Nothing was changed.");
+				return null;
+			}
+
+			// NGINX cannot bind an address this machine does not have.
+			bool assigned = await InstallerProcessHelper.RunProcessAsync(shell, $"{argPrefix} \"ip -o -4 addr show\"",
+				(code, output, _) => code == 0 && Regex.IsMatch(output, $@"\binet\s+{Regex.Escape(answer)}/"));
+			if (!assigned)
+			{
+				await Log.Warning("FishMMOInstaller",
+					$"{answer} is not an address of this machine ('ip -4 addr' does not list it), so NGINX could not listen on it. Nothing was changed.");
+				return null;
+			}
+			return answer;
+		}
+
+		/// <summary>systemd drop-in that raises NGINX's open-file limit for the UDP stream sockets.</summary>
+		public const string LimitsDropInPath = "/etc/systemd/system/nginx.service.d/fishmmo-limits.conf";
+
+		private static readonly Dictionary<string, string> StreamModulePackages = new()
+		{
+			["pacman"] = "nginx-mod-stream",
+			["apt-get"] = "libnginx-mod-stream",
+			["dnf"] = "nginx-mod-stream",
+			["yum"] = "nginx-mod-stream"
+		};
+
+		/// <summary>
+		/// Returns the path of the stream module shared object when NGINX builds it as a dynamic
+		/// module, installing its package first if the file is missing; returns the empty string
+		/// when NGINX has the module built in, and null (with the reason logged) when it is missing
+		/// and could not be installed.
+		/// </summary>
+		private static async Task<string?> EnsureStreamModuleInstalledAsync(string shell, string argPrefix, bool prompt)
+		{
+			string configure = string.Empty;
+			await InstallerProcessHelper.RunProcessAsync("nginx", "-V", (code, output, error) =>
+			{
+				configure = output + error; // nginx -V prints to stderr
+				return code == 0;
+			});
+			if (!configure.Contains("--with-stream=dynamic", StringComparison.Ordinal))
+			{
+				return string.Empty;
+			}
+
+			Match modulesPath = Regex.Match(configure, @"--modules-path=(\S+)");
+			string module = Path.Combine(modulesPath.Success ? modulesPath.Groups[1].Value : "/usr/lib/nginx/modules",
+				"ngx_stream_module.so");
+			if (File.Exists(module))
+			{
+				return module;
+			}
+
+			const string manualHint = "Install 'nginx-mod-stream' (Arch, Fedora) or 'libnginx-mod-stream' (Debian, Ubuntu), then try again.";
+			var detected = await LinuxPackageManagerHelper.DetectAsync(StreamModulePackages);
+			if (detected == null)
+			{
+				await Log.Error("FishMMOInstaller", $"The NGINX stream module is not installed ({module} is missing). {manualHint}");
+				return null;
+			}
+			if (prompt && !InstallerProcessHelper.PromptForYesNo(
+					$"The NGINX stream module (needed for the game's UDP ports) is not installed. Install it with {detected.ManagerName}?"))
+			{
+				await Log.Warning("FishMMOInstaller", $"The NGINX stream module is required. {manualHint}");
+				return null;
+			}
+
+			await Log.Info("FishMMOInstaller", "Installing the NGINX stream module...");
+			// pacman installs from the existing package database: refreshing it alone (-Sy) and then
+			// installing one package is a partial upgrade, which Arch does not support. The module is
+			// built alongside the installed NGINX, so the database that installed NGINX has it.
+			if (!detected.ManagerName.StartsWith("pacman", StringComparison.Ordinal))
+			{
+				await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, detected.UpdateCommand,
+					"Failed to update package lists.");
+			}
+			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, detected.InstallCommand,
+					"Failed to install the NGINX stream module.") || !File.Exists(module))
+			{
+				await Log.Error("FishMMOInstaller", $"The NGINX stream module is still missing ({module}). {manualHint}");
+				return null;
+			}
+			await Log.Info("FishMMOInstaller", $"NGINX stream module installed ({module}).");
+			return module;
+		}
+
 		/// <summary>
 		/// Deploys the canonical FishMMO <c>nginx.conf</c> from
 		/// <see cref="InstallationConstants.FishMMOSetupPath"/> to the system NGINX config
 		/// location and reloads the service. Existing files are backed up once with
 		/// <c>.pre-fishmmo.bak</c>. Runs <c>nginx -t</c> before reload to validate syntax.
 		/// </summary>
+		/// <remarks>
+		/// On Linux it also substitutes the operator's root domain for <see cref="TemplateDomain"/>,
+		/// refuses to run before that domain's certificate exists (every server block names it),
+		/// loads the stream module, and installs and runs the UDP stream generator.
+		/// </remarks>
 		public static async Task DeployNginxConfigAsync()
 		{
 			Console.Clear();
@@ -406,13 +611,44 @@ namespace FishMMO.Installer
 			if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
 			{
 				const string destPath = "/etc/nginx/nginx.conf";
-				await LinuxConfigHardeningHelper.EnsureBackupAsync(destPath);
-				if (!await LinuxConfigHardeningHelper.SudoInstallAsync(sourceContent, destPath, "root", "root", "0644"))
+				(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
+
+				string domain = (InstallerProcessHelper.PromptForInput(
+					$"Enter your root domain (the template's '{TemplateDomain}' is replaced with it): ") ?? string.Empty)
+					.Trim().TrimEnd('.').ToLowerInvariant();
+				if (!RootDomainPattern.IsMatch(domain))
+				{
+					await Log.Warning("FishMMOInstaller", "A valid root domain such as example.com is required. Nothing was changed.");
+					return;
+				}
+
+				string? listenAddress = await PromptForGameListenAddressAsync(shell, argPrefix);
+				if (listenAddress == null)
 				{
 					return;
 				}
 
-				(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
+				// Every server block names this certificate, so nginx -t cannot pass without it.
+				string certificate = $"/etc/letsencrypt/live/{domain}/fullchain.pem";
+				if (!await InstallerProcessHelper.RunProcessAsync(shell, $"{argPrefix} \"sudo test -s '{certificate}'\""))
+				{
+					await Log.Warning("FishMMOInstaller",
+						$"No certificate at {certificate}. Run Web Server > Install/Renew Let's Encrypt Certificate first " +
+						"(its DNS challenge needs no nginx), then deploy again. Nothing was changed.");
+					return;
+				}
+
+				if (!await EnsureStreamModuleLoadedAsync(shell, argPrefix))
+				{
+					return;
+				}
+
+				await LinuxConfigHardeningHelper.EnsureBackupAsync(destPath);
+				if (!await LinuxConfigHardeningHelper.SudoInstallAsync(ForDomain(sourceContent, domain), destPath, "root", "root", "0644"))
+				{
+					return;
+				}
+
 				bool valid = await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix,
 					"sudo nginx -t",
 					"nginx -t reported configuration errors. The previous config is preserved as '/etc/nginx/nginx.conf.pre-fishmmo.bak'.");
@@ -424,14 +660,66 @@ namespace FishMMO.Installer
 					return;
 				}
 
-				if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix,
-					"sudo systemctl reload nginx",
-					"NGINX reload failed. Check 'sudo journalctl -u nginx -n 50'."))
+				// One UDP server block per game port; without them nothing reaches the game servers.
+				string generator = Path.Combine(InstallationConstants.FishMMOSetupPath, StreamGeneratorName);
+				if (!File.Exists(generator))
+				{
+					await Log.Error("FishMMOInstaller", $"Stream generator not found at '{generator}'.");
+					return;
+				}
+				if (!await LinuxConfigHardeningHelper.SudoInstallAsync(await File.ReadAllTextAsync(generator),
+						StreamGeneratorInstallPath, "root", "root", "0755") ||
+					!await InstallerProcessHelper.RunShellCommandWithLiveOutputAsync(shell, argPrefix,
+						$"sudo env NO_RELOAD=1 LISTEN_IP={listenAddress} {StreamGeneratorInstallPath}",
+						"Generating the UDP stream configuration failed. Review the output above."))
 				{
 					return;
 				}
 
-				await Log.Info("FishMMOInstaller", "FishMMO nginx.conf deployed to /etc/nginx/nginx.conf and NGINX reloaded.");
+				// reuseport gives every worker its own socket per UDP port, so the master opens
+				// workers x ports sockets; the systemd default of 1024-2048 open files is too few.
+				// The limit is read when the master starts, hence a restart rather than a reload.
+				if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix,
+						$"sudo install -d -o root -g root -m 0755 {Path.GetDirectoryName(LimitsDropInPath)}",
+						"Failed to create the NGINX systemd drop-in directory.") ||
+					!await LinuxConfigHardeningHelper.SudoInstallAsync(
+						"# Installed by FishMMO-Installer: NGINX opens one socket per worker for every UDP game port.\n" +
+						"[Service]\nLimitNOFILE=65535\n",
+						LimitsDropInPath, "root", "root", "0644") ||
+					!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix,
+						"sudo systemctl daemon-reload", "Failed to reload systemd."))
+				{
+					return;
+				}
+
+				if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix,
+					"sudo systemctl enable nginx && sudo systemctl restart nginx",
+					"NGINX restart failed. Check 'sudo journalctl -u nginx -n 50' and /var/log/nginx/error.log."))
+				{
+					return;
+				}
+
+				// systemctl can succeed while the master fails to open a listening socket, so
+				// confirm NGINX really holds the first game port.
+				bool listening = false;
+				for (int attempt = 0; attempt < 10 && !listening; attempt++)
+				{
+					listening = await InstallerProcessHelper.RunProcessAsync(shell,
+						$"{argPrefix} \"sudo ss -Hulnp 'sport = :7770'\"",
+						(code, output, _) => code == 0 && output.Contains("nginx", StringComparison.Ordinal));
+					if (!listening) await Task.Delay(500);
+				}
+				if (!listening)
+				{
+					await Log.Error("FishMMOInstaller",
+						"NGINX is running but not listening on UDP 7770. Check /var/log/nginx/error.log.");
+					return;
+				}
+
+				await Log.Info("FishMMOInstaller",
+					$"FishMMO nginx.conf deployed for {domain} with UDP game ports 7770-7999 on {listenAddress}, and NGINX restarted. " +
+					$"After changing game port ranges or the LAN address, run 'sudo env LISTEN_IP={listenAddress} {StreamGeneratorInstallPath}' " +
+					"(with the new address if it changed).");
 			}
 			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 			{

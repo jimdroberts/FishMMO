@@ -132,7 +132,7 @@ namespace FishMMO.Installer
             Console.WriteLine(@"  {
             ""components"": [""postgresql"", ""nginx""],
             ""configureFirewall"": true,
-            ""firewallPorts"": [80, 443, ""7770-7999/udp""],
+            ""firewallPorts"": [443, ""7770-7999/udp""],
             ""registerSystemdServices"": true,
             ""validateAfterInstall"": true
           }");

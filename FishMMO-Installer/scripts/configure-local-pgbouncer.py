@@ -124,7 +124,9 @@ def update_runtime(path, backup_root):
 
 def runtime_paths(repo):
     dev = repo / 'FishMMO-Setup/Development'
-    names = ('appsettings.json', 'appsettings.DiscordBot.json', 'appsettings.IpFetchServer.json',
+    # The Discord bot is deliberately absent: its verification listener holds a LISTEN, which is
+    # session state that transaction pooling drops, so it must stay on PostgreSQL's own port.
+    names = ('appsettings.json', 'appsettings.IpFetchServer.json',
              'appsettings.IpFetchServer.Development.json', 'appsettings.Patcher.json',
              'appsettings.ControlPanel.json')
     paths = [dev / name for name in names]
@@ -132,16 +134,13 @@ def runtime_paths(repo):
     # Existing binaries receive the same settings; future builds copy the templates.
     for folder in ('FishMMO-WebServers/IPFetchASP.NET/IpFetchServer',
                    'FishMMO-WebServers/PatcherASP.NET/Patcher',
-                   'FishMMO-WebServers/FishMMO-ControlPanel/ControlPanel',
-                   'FishMMO-DiscordBot/FishMMO-DiscordBot'):
+                   'FishMMO-WebServers/FishMMO-ControlPanel/ControlPanel'):
         if folder == 'FishMMO-WebServers/IPFetchASP.NET/IpFetchServer':
             paths.extend((repo / 'Builds/IpFetchServer').rglob('appsettings.json'))
         elif folder == 'FishMMO-WebServers/PatcherASP.NET/Patcher':
             paths.extend((repo / 'Builds/Patcher').rglob('appsettings.json'))
         elif folder == 'FishMMO-WebServers/FishMMO-ControlPanel/ControlPanel':
             paths.extend((repo / 'Builds/ControlPanel').rglob('appsettings.json'))
-        elif folder == 'FishMMO-DiscordBot/FishMMO-DiscordBot':
-            paths.extend((repo / 'Builds/FishMMO-DiscordBot').rglob('appsettings.json'))
         if 'IpFetchServer' in folder:
             paths.extend((repo / 'Builds/IpFetchServer').rglob('appsettings.Development.json'))
     for player in ('Server', 'Client'):
