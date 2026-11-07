@@ -1,0 +1,115 @@
+diff --git a/src/core/library.c b/src/core/library.c
+index cec893cc0..50ba308d0 100644
+--- a/src/core/library.c
++++ b/src/core/library.c
+@@ -2105,6 +2105,55 @@ MsQuicClose(
+     }
+ }
+ 
++//
++// The IPv4 address of Addr, also when it is held as a v4-mapped IPv6 address
++// (the form a dual-mode socket reports). FALSE when it has none.
++//
++static
++BOOLEAN
++QuicLibraryGetIpv4(
++    _In_ const QUIC_ADDR* Addr,
++    _Out_ IN_ADDR* Ipv4
++    )
++{
++    static const uint8_t V4MappedPrefix[12] = { 0,0,0,0,0,0,0,0,0,0,0xff,0xff };
++    if (QuicAddrGetFamily(Addr) == QUIC_ADDRESS_FAMILY_INET) {
++        *Ipv4 = Addr->Ipv4.sin_addr;
++        return TRUE;
++    }
++    if (QuicAddrGetFamily(Addr) == QUIC_ADDRESS_FAMILY_INET6 &&
++        memcmp(&Addr->Ipv6.sin6_addr, V4MappedPrefix, sizeof(V4MappedPrefix)) == 0) {
++        CxPlatCopyMemory(Ipv4, ((const uint8_t*)&Addr->Ipv6.sin6_addr) + 12, sizeof(IN_ADDR));
++        return TRUE;
++    }
++    return FALSE;
++}
++
++//
++// TRUE when a listening binding on Bound would also receive what a listener
++// asking for Requested (same port) expects: either is a wildcard, or both are
++// the same address.
++//
++static
++BOOLEAN
++QuicLibraryListenerAddressesOverlap(
++    _In_ const QUIC_ADDR* Requested,
++    _In_ const QUIC_ADDR* Bound
++    )
++{
++    if (QuicAddrIsWildCard(Requested) || QuicAddrIsWildCard(Bound)) {
++        return TRUE;
++    }
++    IN_ADDR RequestedV4, BoundV4;
++    const BOOLEAN RequestedIsV4 = QuicLibraryGetIpv4(Requested, &RequestedV4);
++    const BOOLEAN BoundIsV4 = QuicLibraryGetIpv4(Bound, &BoundV4);
++    if (RequestedIsV4 || BoundIsV4) {
++        return RequestedIsV4 && BoundIsV4 &&
++            memcmp(&RequestedV4, &BoundV4, sizeof(IN_ADDR)) == 0;
++    }
++    return memcmp(&Requested->Ipv6.sin6_addr, &Bound->Ipv6.sin6_addr, sizeof(IN6_ADDR)) == 0;
++}
++
+ _IRQL_requires_max_(DISPATCH_LEVEL)
+ QUIC_BINDING*
+ QuicLibraryLookupBinding(
+@@ -2149,12 +2198,13 @@ QuicLibraryLookupBinding(
+ 
+         } else {
+             //
+-            // For server (unconnected/listening) bindings we always use wildcard
+-            // addresses, so we simply need to match on the local port. We need not consider the
+-            // binding QTIP settings because we always disallow listeners with different QTIP settings to
+-            // share a binding. This is enforced by the caller.
++            // For server (unconnected/listening) bindings we match on the local port, and on the
++            // address when both are specific (a listener on a specific address binds only that
++            // address). We need not consider the binding QTIP settings because we always disallow
++            // listeners with different QTIP settings to share a binding. This is enforced by the caller.
+             //
+-            if (QuicAddrGetPort(&BindingLocalAddr) == QuicAddrGetPort(LocalAddress)) {
++            if (QuicAddrGetPort(&BindingLocalAddr) == QuicAddrGetPort(LocalAddress) &&
++                QuicLibraryListenerAddressesOverlap(LocalAddress, &BindingLocalAddr)) {
+                 //
+                 // Note: We don't check the remote address, because we want to
+                 // return a match even if the caller is looking for a connected
+diff --git a/src/core/listener.c b/src/core/listener.c
+index dba384d60..522c0ce02 100644
+--- a/src/core/listener.c
++++ b/src/core/listener.c
+@@ -292,14 +292,23 @@ MsQuicListenerStart(
+         PortUnspecified = TRUE;
+     }
+ 
+-    //
+-    // Listeners always grab the dual-mode wildcard binding for the specified
+-    // (if available) UDP port and then manually filter on the specific address
+-    // (if available) at the QUIC layer.
+-    //
+-    QuicAddrSetFamily(&BindingLocalAddress, QUIC_ADDRESS_FAMILY_INET6);
+-    QuicAddrSetPort(&BindingLocalAddress,
+-        PortUnspecified ? 0 : QuicAddrGetPort(LocalAddress));
++    if (LocalAddress != NULL && !Listener->WildCard) {
++        //
++        // A listener on a specific address binds exactly that address, so
++        // another socket on another address of this host (for example a
++        // proxy on the LAN address in front of a server on loopback) can use
++        // the same UDP port.
++        //
++        CxPlatCopyMemory(&BindingLocalAddress, LocalAddress, sizeof(QUIC_ADDR));
++    } else {
++        //
++        // Wildcard listeners grab the dual-mode wildcard binding for the
++        // specified (if available) UDP port.
++        //
++        QuicAddrSetFamily(&BindingLocalAddress, QUIC_ADDRESS_FAMILY_INET6);
++        QuicAddrSetPort(&BindingLocalAddress,
++            PortUnspecified ? 0 : QuicAddrGetPort(LocalAddress));
++    }
+ 
+     if (!QuicLibraryOnListenerRegistered(Listener)) {
+         Status = QUIC_STATUS_OUT_OF_MEMORY;

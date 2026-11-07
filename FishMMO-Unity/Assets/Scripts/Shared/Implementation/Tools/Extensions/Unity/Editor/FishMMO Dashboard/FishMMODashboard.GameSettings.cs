@@ -1126,9 +1126,9 @@ namespace FishMMO.Shared
 
 			// Info
 			Label info = new Label(
-				"Paste the client gate secret (base64) obtained from the FishMMO Installer\n" +
-				"output or directly from the deployment_secrets database.\n" +
-				"The secret must be valid base64 and decode to at least 32 bytes.");
+				"The secret the client signs its web API requests with. It must be the one the servers verify\n" +
+				"(deployment_secrets.client_gate_secret, written by Installer ▸ Database ▸ 9), or every request\n" +
+				"is refused with 401. Fetch from Database reads it; or paste it (base64, at least 32 bytes).");
 			info.style.fontSize = 10;
 			info.style.color = new Color(0.5f, 0.5f, 0.5f, 1f);
 			info.style.whiteSpace = WhiteSpace.Normal;
@@ -1189,6 +1189,19 @@ namespace FishMMO.Shared
 			writeButton.style.borderBottomLeftRadius = 4;
 			writeButton.style.borderBottomRightRadius = 4;
 			buttonRow.Add(writeButton);
+
+			Button fetchButton = new Button(() => FetchClientSecretFromDatabase(secretField));
+			fetchButton.text = "Fetch from Database";
+			fetchButton.tooltip = "Reads deployment_secrets.client_gate_secret, the secret IPFetch and the Patcher verify, " +
+				"through the same database configuration the servers use. It fills the field as an unsaved draft: " +
+				"Write Secret to File persists it.";
+			fetchButton.style.height = 28;
+			fetchButton.style.marginRight = 4;
+			fetchButton.style.borderTopLeftRadius = 4;
+			fetchButton.style.borderTopRightRadius = 4;
+			fetchButton.style.borderBottomLeftRadius = 4;
+			fetchButton.style.borderBottomRightRadius = 4;
+			buttonRow.Add(fetchButton);
 
 			Button loadButton = new Button(() => ShowGameSettingsInspector(reloadFromDisk: true));
 			loadButton.text = "Reload from File";

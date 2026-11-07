@@ -13,6 +13,13 @@ namespace FishMMO.Shared
 		public const string SharedStaticLabel = "Shared_Static_Permanent";
 
 		/// <summary>
+		/// Group and label of the biome templates. Each biome template references its whole art set, so they are not
+		/// in the boot preload: the server loads the label at boot (its builds strip the art), and the client loads only
+		/// the biomes on a world scene's biome map, while that scene is loaded (SceneBiomeLoader).
+		/// </summary>
+		public const string SharedBiomesLabel = "Shared_Biomes";
+
+		/// <summary>
 		/// Returns the working directory for the application.
 		/// In the Unity Editor, this is the project root.
 		/// In standalone builds, this is the base directory of the executable.

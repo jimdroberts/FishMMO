@@ -20,15 +20,27 @@ if(WT_STATIC_MSQUIC)
     set(QUIC_BUILD_PERF OFF CACHE BOOL "" FORCE)
     set(QUIC_TLS_LIB "quictls" CACHE STRING "" FORCE)
 
+    # The patch makes a listener given a specific address (the server .cfg Address, 127.0.0.1)
+    # bind exactly that address. Unpatched msquic always binds the dual-stack wildcard [::]:PORT
+    # and filters by address afterwards, so a game server on 127.0.0.1:7770 also held
+    # 192.168.1.2:7770 and NGINX's stream listener there failed it with "ListenerStart: 0x62"
+    # (address in use), and the server was reachable on every interface.
     FetchContent_Declare(
         msquic
         GIT_REPOSITORY https://github.com/microsoft/msquic.git
         GIT_TAG v2.5.9
         GIT_SHALLOW TRUE
+        PATCH_COMMAND ${CMAKE_COMMAND}
+            -DPATCH_FILE=${CMAKE_CURRENT_SOURCE_DIR}/patches/msquic-listener-bind-specific-address.patch
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/ApplyPatchOnce.cmake
     )
 
     # Try to fetch, but allow system-installed msquic as fallback
     find_package(msquic QUIET)
+    if(msquic_FOUND)
+        message(WARNING "Using a system msquic: it lacks patches/msquic-listener-bind-specific-address.patch, "
+            "so servers bind every address on their port and cannot share it with NGINX on the same host.")
+    endif()
     if(NOT msquic_FOUND)
         FetchContent_MakeAvailable(msquic)
         set(MSQUIC_TARGET msquic)

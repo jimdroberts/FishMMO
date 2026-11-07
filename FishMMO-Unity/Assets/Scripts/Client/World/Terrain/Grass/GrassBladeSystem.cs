@@ -366,6 +366,13 @@ namespace FishMMO.Client
 			}
 			if (renderer == null && !rendererTried)
 			{
+				// The profile, and the compute shaders it carries, arrives with the boot preload. Render callbacks run from
+				// the first frame of the boot scene, before that, and this attempt is made once: tried now, it gave up for
+				// the whole session (in builds only: the editor finds the profile by path).
+				if (WeatherRenderProfile.Active == null)
+				{
+					return;
+				}
 				rendererTried = true;
 				renderer = GrassBladeRenderer.TryCreate(out string reason);
 				if (renderer == null)

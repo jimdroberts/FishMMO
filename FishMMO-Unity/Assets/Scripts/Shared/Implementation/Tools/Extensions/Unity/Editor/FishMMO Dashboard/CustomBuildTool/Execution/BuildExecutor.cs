@@ -43,8 +43,9 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 
 			BuildTargetGroup targetGroup = BuildPipeline.GetBuildTargetGroup(buildTarget);
 
-			// Append world scene paths to bootstrap scene array
-			string[] scenes = AppendWorldScenePaths(bootstrapScenes);
+			// The player gets the bootstrap scenes only. World scenes ship as Addressables (Scene_Shared) and are loaded
+			// through AddressableSceneProcessor on the client and the scene server alike.
+			string[] scenes = AppendLocalScenePaths(bootstrapScenes);
 
 			string folderName = executableName;
 			if (customBuildType != CustomBuildType.Client)
@@ -161,13 +162,18 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 		}
 
 		/// <summary>
-		/// Appends all world scene paths (and optionally local scenes) to the required bootstrap scenes.
+		/// Appends the local scenes, when the local directory is enabled, to the required bootstrap scenes.
 		/// </summary>
-		private string[] AppendWorldScenePaths(string[] requiredPaths)
+		/// <remarks>
+		/// World scenes are deliberately not in the player. Every world scene is an Addressables entry (Scene_Shared) and
+		/// is loaded by AddressableSceneProcessor, so a copy in the player's scene list was never loaded: it only doubled
+		/// the build. It also put every world, with its terrain arrays, biome atlases and backdrops, into data.unity3d
+		/// (1.08 GB), which a WebGL player unpacks into its memory heap at startup, so the web client ran out of memory
+		/// before the first frame.
+		/// </remarks>
+		private string[] AppendLocalScenePaths(string[] requiredPaths)
 		{
 			HashSet<string> allPaths = new HashSet<string>(requiredPaths);
-			HashSet<string> worldScenes = DirectoryExtensions.GetAllFiles(Constants.Configuration.WorldScenePath, ".unity");
-			allPaths.UnionWith(worldScenes);
 			if (UnityEditor.EditorPrefs.GetBool("FishMMOEnableLocalDirectory"))
 			{
 				HashSet<string> localScenes = DirectoryExtensions.GetAllFiles(Constants.Configuration.LocalScenePath, ".unity");

@@ -50,3 +50,53 @@ retention of the constructor responsible for the observed failure.
 
 Unity API reference:
 https://docs.unity.com/en-us/engine/6000.3/script-reference/unityeditor/build/iunitylinkerprocessor/generateadditionallinkxmlfile
+
+
+## Npgsql runtime compatibility (both Mono and IL2CPP)
+
+After constructor preservation, the game servers hit a second failure while
+registering: `NotImplementedException("byref delegate")`. An isolated read-only
+probe reproduced it with the actual Unity AOT framework libraries and identified
+Npgsql 5.0.18's `NpgsqlTypeHandler<TDefault>.GenerateNonGenericValidationMethod`.
+The simple-handler variant has the same problem. Both compile a validator delegate
+with a `ref NpgsqlLengthCache` parameter; Unity's expression interpreter cannot
+create that delegate. The EF model itself successfully loaded 77 entity types.
+
+A pinned, source-controlled Npgsql compatibility build now replaces those two
+expression factories with normal AOT-compiled C# delegates and cached interface
+reflection dispatch. Ref-cache updates and original exception types are preserved.
+Native validation then found an additional synchronous connection issue: IL2CPP
+returns SocketError.InProgress (10036) for non-blocking connect, while the original
+driver accepted only WouldBlock. The existing socket readiness/error/timeout path
+now accepts both pending statuses. These are the only three upstream runtime source
+methods changed. The PostgreSQL license and signing identity are retained.
+
+Source and build notes:
+`FishMMO-Dependencies/ThirdParty/Npgsql.UnityAot/README.md` (relative to repository root).
+The dependency project builds the compatibility DLL and copies it into Unity
+**after** copying the standard package dependencies, so a subsequent dependency
+refresh retains the fix. Ordinary .NET applications keep their original NuGet
+Npgsql driver. No backend is switched or disabled.
+
+Verification on 2026-10-25:
+
+- Original Npgsql: Mono passed; AOT-profile probe reproduced the byref-delegate failure.
+- Patched Npgsql: both framework-profile probes passed.
+- Actual Unity 6000.4.10f1 standalone dedicated players: Mono and size-optimized
+  IL2CPP both exited 0. Both loaded the full EF model, queried the login/world/scene
+  registries, executed an async query, materialized and tracked a synthetic server
+  row, and round-tripped ten PostgreSQL parameter types. Overflow exceptions from
+  validators were correctly propagated without TargetInvocationException wrappers.
+- All database SQL was read-only; the synthetic row came from a SELECT expression,
+  with no insertion or persisted records. The asynchronous probe runs on a worker
+  task so the diagnostic's blocking waits cannot deadlock Unity's main thread.
+- Results: `2026-10-25/npgsql-runtime-results.json` and the two database-probe text
+  files. The regression harness is in `FishMMO-Dependencies/Tools/DatabaseRuntimeProbe`.
+
+The imported Unity DLL is updated. Rebuild the actual GameServer using the selected
+Mono or IL2CPP backend and restart its monitored roles. This work built isolated
+validation players; the installed full GameServer binary was not rebuilt/replaced.
+No AppHealthMonitor or WebGL client rebuild is required for this server fix.
+AppHealthMonitor now supports per-application `LaunchInTerminal` on Linux desktops,
+with automatic terminal detection. Game output is visible in the terminal and
+retained in each role's `.Player.log` file. See the AppHealthMonitor README.

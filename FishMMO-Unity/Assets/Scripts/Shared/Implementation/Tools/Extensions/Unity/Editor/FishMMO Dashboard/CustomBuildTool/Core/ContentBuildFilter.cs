@@ -22,7 +22,8 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		/// <summary>
 		/// Rendering-only generated assets need not be explicit server bundle roots.
 		/// Meshes, prefabs, terrain and gameplay ScriptableObjects must remain reachable.
-		/// This does not delete implicit dependencies of retained gameplay assets.
+		/// Left out, such an asset becomes an implicit dependency of whatever references it;
+		/// ServerContentPacking then removes the materials, and the textures only they used.
 		/// </summary>
 		public static bool IsRenderingOnly(Type type) => type != null &&
 			(typeof(Material).IsAssignableFrom(type) || typeof(Texture).IsAssignableFrom(type) ||

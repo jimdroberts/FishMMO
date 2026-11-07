@@ -27,7 +27,7 @@ MonoBehaviour:
     - MaxClients: 6
       SceneTransitionImage: {fileID: 21300000, guid: 41f73c28208285445b37a7980665ead3,
         type: 3}
-      MapDefinition: {fileID: 0}
+      MapDefinition: {fileID: 11400000, guid: 16e42418e196eaaabb55fee7866f555a, type: 2}
       InitialSpawnPositions:
         m_keys: []
         m_values: []
@@ -56,20 +56,20 @@ MonoBehaviour:
       PointsOfInterest: []
     - MaxClients: 200
       SceneTransitionImage: {fileID: 0}
-      MapDefinition: {fileID: 0}
+      MapDefinition: {fileID: 11400000, guid: dccedb87d7525639c847b5e079bfac71, type: 2}
       InitialSpawnPositions:
         m_keys: []
         m_values: []
       RespawnPositions:
         m_keys:
-        - 'Marhut Respawn [332c70a7]'
         - 'High Liniarpunt Respawn [2bde4b35]'
+        - 'Marhut Respawn [332c70a7]'
         - 'Ungate Respawn [7c14b111]'
         m_values:
-        - Position: {x: -659.9686, y: 4.8836913, z: -1893.2039}
-          Rotation: {x: -0, y: -0.6883546, z: -0, w: -0.7253744}
         - Position: {x: 212.79272, y: 4.5090575, z: -1176.7734}
           Rotation: {x: -0, y: 0.8616291, z: -0, w: -0.5075384}
+        - Position: {x: -659.9686, y: 4.8836913, z: -1893.2039}
+          Rotation: {x: -0, y: -0.6883546, z: -0, w: -0.7253744}
         - Position: {x: 1034.2042, y: 17.452784, z: -830.8534}
           Rotation: {x: -0, y: -0.5372996, z: -0, w: -0.8433915}
       Teleporters:
@@ -82,32 +82,32 @@ MonoBehaviour:
         - BoundaryOrigin: {x: 0, y: -434.0171, z: 0}
           BoundarySize: {x: 3800, y: 3811.1738, z: 4750}
       Waypoints:
-        m_keys: 0b000000010000002c0000000400000000000000
+        m_keys: 2c0000000b000000000000000400000001000000
         m_values:
+        - Index: 44
+          Name: Ivy Bar
+          Description: 
+          Position: {x: 62.37065, y: 14.706787, z: -1615.7178}
+          Icon: {fileID: 0}
         - Index: 11
           Name: Rulupalisade Keep
           Description: 
           Position: {x: 15.124977, y: 59.1781, z: -734.48}
           Icon: {fileID: 0}
-        - Index: 1
-          Name: Marhut
+        - Index: 0
+          Name: Ungate
           Description: 
-          Position: {x: -659.6546, y: 4.7836914, z: -1899.1957}
-          Icon: {fileID: 0}
-        - Index: 44
-          Name: Ivy Bar
-          Description: 
-          Position: {x: 62.37065, y: 14.706787, z: -1615.7178}
+          Position: {x: 1036.74, y: 17.352783, z: -836.2912}
           Icon: {fileID: 0}
         - Index: 4
           Name: High Liniarpunt
           Description: 
           Position: {x: 209.88387, y: 6.5584717, z: -1171.5256}
           Icon: {fileID: 0}
-        - Index: 0
-          Name: Ungate
+        - Index: 1
+          Name: Marhut
           Description: 
-          Position: {x: 1036.74, y: 17.352783, z: -836.2912}
+          Position: {x: -659.6546, y: 4.7836914, z: -1899.1957}
           Icon: {fileID: 0}
       PointsOfInterest:
       - Name: Hole Sepulchre
@@ -580,28 +580,37 @@ MonoBehaviour:
         ShowOnMinimap: 1
     - MaxClients: 200
       SceneTransitionImage: {fileID: 0}
-      MapDefinition: {fileID: 0}
+      MapDefinition: {fileID: 11400000, guid: 6423be6d94547fd4ab42456d12cf6811, type: 2}
       InitialSpawnPositions:
-        m_keys: []
-        m_values: []
-      RespawnPositions:
         m_keys:
-        - 'Alstead Respawn [7c2651ee]'
-        - 'Soda-white Vixeinfield Respawn [5c621b8a]'
-        - 'Brichamber Respawn [7ff07ff7]'
-        - 'Keai Inn Respawn [1091a6e6]'
         - 'Kraakkhold Respawn [3025d570]'
         m_values:
+        - SpawnerName: 'Kraakkhold Respawn [3025d570]'
+          SceneName: Moron 2
+          Position: {x: 1798.1799, y: 122.47264, z: -1547.3702}
+          Rotation: {x: -0, y: -0.9588197, z: -0, w: -0.2840156}
+          AllowedRaces:
+          - {fileID: 11400000, guid: 6f8938bbed1286347b54bf3f4889f32a, type: 2}
+          - {fileID: 11400000, guid: 570b8e070c073834abac548a07706b47, type: 2}
+          - {fileID: 11400000, guid: f1bedd6f4354a7e41be26aee87734d66, type: 2}
+      RespawnPositions:
+        m_keys:
+        - 'Kraakkhold Respawn [3025d570]'
+        - 'Keai Inn Respawn [1091a6e6]'
+        - 'Brichamber Respawn [7ff07ff7]'
+        - 'Alstead Respawn [7c2651ee]'
+        - 'Soda-white Vixeinfield Respawn [5c621b8a]'
+        m_values:
+        - Position: {x: 1798.1799, y: 122.47264, z: -1547.3702}
+          Rotation: {x: -0, y: -0.9588197, z: -0, w: -0.2840156}
+        - Position: {x: 263.04117, y: 440.18152, z: -323.06665}
+          Rotation: {x: -0, y: 0.6293205, z: -0, w: -0.77714586}
+        - Position: {x: -1675.2911, y: 121.39426, z: -1917.9879}
+          Rotation: {x: -0, y: 0.96363044, z: -0, w: -0.2672383}
         - Position: {x: 749.2213, y: 432.25952, z: -20.301321}
           Rotation: {x: -0, y: 0.026176952, z: -0, w: -0.99965733}
         - Position: {x: -478.34442, y: 309.11624, z: 1428.8458}
           Rotation: {x: -0, y: -0.9890159, z: -0, w: -0.1478095}
-        - Position: {x: -1675.2911, y: 121.39426, z: -1917.9879}
-          Rotation: {x: -0, y: 0.96363044, z: -0, w: -0.2672383}
-        - Position: {x: 263.04117, y: 440.18152, z: -323.06665}
-          Rotation: {x: -0, y: 0.6293205, z: -0, w: -0.77714586}
-        - Position: {x: 1798.1799, y: 122.47264, z: -1547.3702}
-          Rotation: {x: -0, y: -0.9588197, z: -0, w: -0.2840156}
       Teleporters:
         m_keys: []
         m_values: []
@@ -612,32 +621,17 @@ MonoBehaviour:
         - BoundaryOrigin: {x: 0, y: 763.6801, z: 0}
           BoundarySize: {x: 4250, y: 3718.0283, z: 4250}
       Waypoints:
-        m_keys: 080000003300000000000000030000001e0000000d0000000600000005000000
+        m_keys: 1e000000330000000d0000000600000000000000080000000500000003000000
         m_values:
-        - Index: 8
-          Name: Castle Ivyow
+        - Index: 30
+          Name: Keai Inn
           Description: 
-          Position: {x: -1481.4076, y: 121.99936, z: -1940.5275}
+          Position: {x: 263.17975, y: 440.0815, z: -320.05832}
           Icon: {fileID: 0}
         - Index: 51
           Name: Rod Toll
           Description: 
           Position: {x: 254.03792, y: 516.4214, z: 52.538834}
-          Icon: {fileID: 0}
-        - Index: 0
-          Name: Alstead
-          Description: 
-          Position: {x: 755.2131, y: 432.15952, z: -19.987305}
-          Icon: {fileID: 0}
-        - Index: 3
-          Name: Soda-white Vixeinfield
-          Description: 
-          Position: {x: -484.08224, y: 309.01624, z: 1427.0916}
-          Icon: {fileID: 0}
-        - Index: 30
-          Name: Keai Inn
-          Description: 
-          Position: {x: 263.17975, y: 440.0815, z: -320.05832}
           Icon: {fileID: 0}
         - Index: 13
           Name: Iskaakir's Hold
@@ -649,10 +643,25 @@ MonoBehaviour:
           Description: 
           Position: {x: -1680.4341, y: 121.29426, z: -1914.8976}
           Icon: {fileID: 0}
+        - Index: 0
+          Name: Alstead
+          Description: 
+          Position: {x: 755.2131, y: 432.15952, z: -19.987305}
+          Icon: {fileID: 0}
+        - Index: 8
+          Name: Castle Ivyow
+          Description: 
+          Position: {x: -1481.4076, y: 121.99936, z: -1940.5275}
+          Icon: {fileID: 0}
         - Index: 5
           Name: Kraakkhold
           Description: 
           Position: {x: 1793.148, y: 122.37264, z: -1550.6381}
+          Icon: {fileID: 0}
+        - Index: 3
+          Name: Soda-white Vixeinfield
+          Description: 
+          Position: {x: -484.08224, y: 309.01624, z: 1427.0916}
           Icon: {fileID: 0}
       PointsOfInterest:
       - Name: Air Elemental Alcove
@@ -1278,25 +1287,25 @@ MonoBehaviour:
         ShowOnMinimap: 1
     - MaxClients: 200
       SceneTransitionImage: {fileID: 0}
-      MapDefinition: {fileID: 0}
+      MapDefinition: {fileID: 11400000, guid: d4fa047794c33a6159e91e17f09b563e, type: 2}
       InitialSpawnPositions:
         m_keys: []
         m_values: []
       RespawnPositions:
         m_keys:
-        - 'Grakden Respawn [0a65d8b9]'
         - 'Golurashadow Respawn [01eef504]'
         - 'South Paaenclosure Respawn [6b608415]'
         - 'Skabiwarren Respawn [4bb809e4]'
+        - 'Grakden Respawn [0a65d8b9]'
         m_values:
-        - Position: {x: -300.97162, y: 51.033775, z: -342.77307}
-          Rotation: {x: -0, y: -0.55919296, z: -0, w: -0.82903755}
         - Position: {x: -51.90299, y: 54.05709, z: -187.07198}
           Rotation: {x: -0, y: 0.7009093, z: -0, w: -0.7132504}
         - Position: {x: -1168.7452, y: 78.95968, z: -712.1796}
           Rotation: {x: -0, y: 0.83388585, z: -0, w: -0.551937}
         - Position: {x: 142.12308, y: 65.51388, z: -465.98795}
           Rotation: {x: -0, y: 0.9975641, z: -0, w: -0.06975648}
+        - Position: {x: -300.97162, y: 51.033775, z: -342.77307}
+          Rotation: {x: -0, y: -0.55919296, z: -0, w: -0.82903755}
       Teleporters:
         m_keys: []
         m_values: []
@@ -1307,27 +1316,27 @@ MonoBehaviour:
         - BoundaryOrigin: {x: 0, y: -339.19287, z: 0}
           BoundarySize: {x: 3375, y: 3606.8906, z: 2250}
       Waypoints:
-        m_keys: 0100000003000000080000000000000002000000
+        m_keys: 0800000001000000000000000300000002000000
         m_values:
-        - Index: 1
-          Name: South Paaenclosure
-          Description: 
-          Position: {x: -1171.0897, y: 78.80426, z: -706.6566}
-          Icon: {fileID: 0}
-        - Index: 3
-          Name: Grakden
-          Description: 
-          Position: {x: -298.724, y: 50.933777, z: -348.33618}
-          Icon: {fileID: 0}
         - Index: 8
           Name: Hesestead Keep
           Description: 
           Position: {x: 735.67285, y: 57.974915, z: -192.9199}
           Icon: {fileID: 0}
+        - Index: 1
+          Name: South Paaenclosure
+          Description: 
+          Position: {x: -1171.0897, y: 78.80426, z: -706.6566}
+          Icon: {fileID: 0}
         - Index: 0
           Name: Golurashadow
           Description: 
           Position: {x: -51.798275, y: 53.957092, z: -181.07289}
+          Icon: {fileID: 0}
+        - Index: 3
+          Name: Grakden
+          Description: 
+          Position: {x: -298.724, y: 50.933777, z: -348.33618}
           Icon: {fileID: 0}
         - Index: 2
           Name: Skabiwarren
@@ -1547,7 +1556,7 @@ MonoBehaviour:
         ShowOnMinimap: 1
     - MaxClients: 200
       SceneTransitionImage: {fileID: 0}
-      MapDefinition: {fileID: 0}
+      MapDefinition: {fileID: 11400000, guid: 35ef1da6784d38d758e7a0cf87877077, type: 2}
       InitialSpawnPositions:
         m_keys: []
         m_values: []
@@ -1729,7 +1738,7 @@ MonoBehaviour:
         ShowOnMinimap: 1
     - MaxClients: 200
       SceneTransitionImage: {fileID: 0}
-      MapDefinition: {fileID: 0}
+      MapDefinition: {fileID: 11400000, guid: d96ecb234daf3a7d2b7cc291b4fbdbec, type: 2}
       InitialSpawnPositions:
         m_keys: []
         m_values: []
@@ -1815,7 +1824,7 @@ MonoBehaviour:
         ShowOnMinimap: 1
     - MaxClients: 200
       SceneTransitionImage: {fileID: 0}
-      MapDefinition: {fileID: 0}
+      MapDefinition: {fileID: 11400000, guid: 62d340df8070ea046bf21d37125f5ca6, type: 2}
       InitialSpawnPositions:
         m_keys: []
         m_values: []

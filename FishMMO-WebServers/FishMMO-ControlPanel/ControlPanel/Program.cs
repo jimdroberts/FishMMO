@@ -154,7 +154,7 @@ builder.Services.AddSingleton(verificationOptions);
 builder.Services.AddSingleton(new BetaOptions
 {
 	Enabled = builder.Configuration.GetValue("Beta:Enabled", false),
-	Programs = (builder.Configuration.GetSection("Beta:Programs").Get<string[]>() ?? Array.Empty<string>())
+	Programs = (ConfigurationLists.Get(builder.Configuration, "Beta:Programs") ?? Array.Empty<string>())
 		.Select(FishMMO.Database.Data.BetaCodeFormat.NormalizeProgram)
 		.Where(FishMMO.Database.Data.BetaCodeFormat.IsValidProgram)
 		.Distinct()

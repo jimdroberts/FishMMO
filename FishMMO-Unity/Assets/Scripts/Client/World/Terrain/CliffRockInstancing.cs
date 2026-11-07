@@ -310,7 +310,9 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			if (Application.isPlaying && preferGpu && gpu == null && !gpuTried)
+			// Not before the profile (and its compute) arrives with the boot preload: render callbacks start on the boot
+			// scene's first frame, and a try then gave up on the GPU path for the whole session (in builds only).
+			if (Application.isPlaying && preferGpu && gpu == null && !gpuTried && WeatherRenderProfile.Active != null)
 			{
 				gpuTried = true;
 				gpu = TerrainGpuRenderer.TryCreate();

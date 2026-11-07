@@ -34,11 +34,11 @@
             </ui:VisualElement>
             <ui:VisualElement class="stat-box">
                 <ui:Label name="stat-duplicates" text="—" class="stat-value" />
-                <ui:Label text="Duplicate Deps" class="stat-label" />
+                <ui:Label text="Shared Deps" class="stat-label" tooltip="Assets two or more bundles of a build (client + server) use. The build isolates each once; nothing to fix." />
             </ui:VisualElement>
             <ui:VisualElement class="stat-box">
                 <ui:Label name="stat-non-addressable-refs" text="—" class="stat-value" />
-                <ui:Label text="Non-Addr Refs" class="stat-label" />
+                <ui:Label text="Missing Refs" class="stat-label" tooltip="AssetReference targets that are not addressable: they fail at run time. Fix All registers them." />
             </ui:VisualElement>
             <ui:VisualElement class="stat-box">
                 <ui:Label name="stat-total-deps" text="—" class="stat-value" />

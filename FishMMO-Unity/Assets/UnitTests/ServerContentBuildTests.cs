@@ -106,6 +106,7 @@ namespace FishMMO.UnitTests
 		[TestCase("Server_Static_Permanent", true)]
 		[TestCase("Scene_Shared", true)]
 		[TestCase("Generated_Biome_Art", true)]
+		[TestCase("Build_Shared_Dependencies", true)]
 		public void GeneratedDependencyRootsFollowTheSameGroupExclusions(string name, bool included)
 		{
 			Assert.That(ContentBuildFilter.IncludesGroup(name, new[] { "Client" }), Is.EqualTo(included));
@@ -124,6 +125,27 @@ namespace FishMMO.UnitTests
 		public void RenderingRootFilterPreservesGeometryTerrainPrefabsAndData(Type type, bool renderingOnly)
 		{
 			Assert.That(ContentBuildFilter.IsRenderingOnly(type), Is.EqualTo(renderingOnly));
+		}
+
+		// The server draws nothing: every visual object goes, wherever it is referenced from. A texture
+		// stored inside TerrainData (its control maps) is terrain data, not an image, and stays.
+		[TestCase(typeof(Material), typeof(Material), true)]
+		[TestCase(typeof(Shader), typeof(Shader), true)]
+		[TestCase(typeof(Texture2D), typeof(Texture2D), true)]
+		[TestCase(typeof(Texture2DArray), typeof(Texture2DArray), true)]
+		[TestCase(typeof(Texture3D), typeof(Texture3D), true)]
+		[TestCase(typeof(Sprite), typeof(Texture2D), true)]
+		[TestCase(typeof(Font), typeof(Font), true)]
+		[TestCase(typeof(Texture2D), typeof(ScriptableObject), true)]
+		[TestCase(typeof(Texture2D), typeof(TerrainData), false)]
+		[TestCase(typeof(TerrainData), typeof(TerrainData), false)]
+		[TestCase(typeof(TerrainLayer), typeof(TerrainLayer), false)]
+		[TestCase(typeof(Mesh), typeof(Mesh), false)]
+		[TestCase(typeof(AnimationClip), typeof(AnimationClip), false)]
+		[TestCase(typeof(GameObject), typeof(GameObject), false)]
+		public void ServerStripsEveryVisualObjectButKeepsTerrainDataAndGeometry(Type objectType, Type assetType, bool stripped)
+		{
+			Assert.That(ServerContentPacking.IsStrippedOnServer(objectType, assetType), Is.EqualTo(stripped));
 		}
 
 		[Test]

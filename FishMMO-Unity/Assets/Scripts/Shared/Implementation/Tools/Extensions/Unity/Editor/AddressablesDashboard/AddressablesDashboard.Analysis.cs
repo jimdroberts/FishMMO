@@ -110,9 +110,12 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Runs the full project analysis: duplicate dependencies, non-addressable references,
-		/// unused labels, address collisions, stale entries, total dependency count, and builds a detailed report.
-		/// Uses EditorUtility.DisplayProgressBar for feedback on large projects.
+		/// Runs the full project analysis. Both builds are simulated bundle by bundle
+		/// (<see cref="CustomBuildTool.Addressables.AddressablesBuildPlan"/>): which groups each includes, how
+		/// each group splits into bundles, and, for the server, that everything visual is stripped. Reports the
+		/// shared dependencies each build will isolate, AssetReference targets that are not addressable,
+		/// entries that are only weight, label mismatches, address collisions, stale entries, unused labels and
+		/// empty groups.
 		/// </summary>
 		private void RunAnalysis()
 		{
@@ -123,447 +126,247 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			SetStatus("Analyzing dependencies…");
+			SetStatus("Analyzing…");
 
 			try
 			{
-				// Build a set of all addressable asset paths
-				var addressablePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 				var allEntries = new List<AddressableAssetEntry>();
+				var usedLabels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+				// (address, assetType) → entries: different types at one address are told apart by LoadAssetAsync<T>.
+				var addressMap = new Dictionary<(string address, System.Type type), List<(string group, string path)>>();
+				var staleEntries = new List<(string address, string group, string path)>();
 
 				foreach (var group in settings.groups)
 				{
 					if (group == null) continue;
 					foreach (var entry in group.entries)
 					{
-						if (entry == null) continue;
-						if (ShouldSkipLocalAsset(entry.AssetPath)) continue;
-						addressablePaths.Add(entry.AssetPath);
+						if (entry == null || ShouldSkipLocalAsset(entry.AssetPath)) continue;
 						allEntries.Add(entry);
+						foreach (string entryLabel in entry.labels) usedLabels.Add(entryLabel);
+
+						var addressKey = (entry.address, AssetDatabase.GetMainAssetTypeAtPath(entry.AssetPath));
+						if (!addressMap.TryGetValue(addressKey, out var addressEntries))
+						{
+							addressEntries = new List<(string group, string path)>();
+							addressMap[addressKey] = addressEntries;
+						}
+						addressEntries.Add((group.Name, entry.AssetPath));
+
+						string guid = AssetDatabase.AssetPathToGUID(entry.AssetPath);
+						if (string.IsNullOrEmpty(guid) || string.IsNullOrEmpty(AssetDatabase.GUIDToAssetPath(guid)))
+						{
+							staleEntries.Add((entry.address, group.Name, entry.AssetPath));
+						}
 					}
 				}
 
-				// Map: dependency path → set of group names that reference it
-				var depToGroups = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-				var nonAddressableRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-				var pluginRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-				var allUniqueDeps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+				EditorUtility.DisplayProgressBar("Addressables Analysis", "Planning the client build…", 0.15f);
+				var client = CustomBuildTool.Addressables.AddressablesBuildPlan.ForProject(settings, false);
+				EditorUtility.DisplayProgressBar("Addressables Analysis", "Planning the server build…", 0.4f);
+				var server = CustomBuildTool.Addressables.AddressablesBuildPlan.ForProject(settings, true);
+				EditorUtility.DisplayProgressBar("Addressables Analysis", "Scanning AssetReferences…", 0.65f);
+				Dictionary<string, string> runtimeKeys = ScanRuntimeKeys(settings);
+				List<(string path, string referrer)> missing = FindMissingRuntimeKeys(settings, runtimeKeys);
+				EditorUtility.DisplayProgressBar("Addressables Analysis", "Checking entries…", 0.85f);
+				List<AddressableAssetEntry> redundant = FindRedundantEntries(settings, runtimeKeys);
+				List<AddressableAssetEntry> mislabeled = FindLabelMismatches(settings);
+				var misplaced = FindPlacementErrors(settings);
 
-				// Track per-group non-addressable refs for the report
-				var groupNonAddrRefs = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-
-				// Track which labels are actually used by entries
-				var usedLabels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-				// Detect address collisions: (address, assetType) → list of (group, path) tuples.
-				// Different asset types at the same address are safely disambiguated by LoadAssetAsync<T>,
-				// so only same-type entries sharing an address are true collisions.
-				var addressMap = new Dictionary<(string address, System.Type type), List<(string group, string path)>>();
-
-				// Detect stale entries: entries whose source asset no longer exists
-				var staleEntries = new List<(string address, string group, string path)>();
-
-				int total = allEntries.Count;
-
-				for (int i = 0; i < total; i++)
+				// Plugin assets either build would ship.
+				var allImplicit = new HashSet<string>(client.ImplicitUsers.Keys, StringComparer.Ordinal);
+				allImplicit.UnionWith(server.ImplicitUsers.Keys);
+				var pluginRefs = new List<string>();
+				foreach (string dep in allImplicit)
 				{
-					var entry = allEntries[i];
-
-					if (i % ProgressReportInterval == 0)
-					{
-						EditorUtility.DisplayProgressBar(
-							"Addressables Analysis",
-							$"Scanning {entry.address} ({i + 1}/{total})",
-							(float)i / total);
-					}
-
-					// Collect used labels
-					foreach (string entryLabel in entry.labels)
-					{
-						usedLabels.Add(entryLabel);
-					}
-
-					// Address collision detection (type-aware)
-					string address = entry.address;
-					string groupName = entry.parentGroup != null ? entry.parentGroup.Name : "Unknown";
-					System.Type assetType = AssetDatabase.GetMainAssetTypeAtPath(entry.AssetPath);
-					var addressKey = (address, assetType);
-
-					if (!addressMap.TryGetValue(addressKey, out var addressEntries))
-					{
-						addressEntries = new List<(string group, string path)>();
-						addressMap[addressKey] = addressEntries;
-					}
-					addressEntries.Add((groupName, entry.AssetPath));
-
-					// Stale entry detection
-					string guid = AssetDatabase.AssetPathToGUID(entry.AssetPath);
-					if (string.IsNullOrEmpty(guid) || string.IsNullOrEmpty(AssetDatabase.GUIDToAssetPath(guid)))
-					{
-						staleEntries.Add((entry.address, groupName, entry.AssetPath));
-					}
-
-					string[] deps = AssetDatabase.GetDependencies(entry.AssetPath, true);
-
-					for (int d = 0; d < deps.Length; d++)
-					{
-						string dep = deps[d];
-						if (string.Equals(dep, entry.AssetPath, StringComparison.OrdinalIgnoreCase)) continue;
-
-						// Skip scripts, packages, and editor-only assets — they are not bundled
-						if (dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
-							dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) ||
-							IsEditorOnlyPath(dep) ||
-							ShouldSkipLocalAsset(dep))
-						{
-							continue;
-						}
-
-						allUniqueDeps.Add(dep);
-
-						// Track plugin references that the categorizer considers unfixable
-						if (dep.Replace('\\', '/').StartsWith("Assets/Plugins/", StringComparison.OrdinalIgnoreCase))
-						{
-							AssetCategory pluginCat = CategorizeAsset(dep, null);
-							if (pluginCat.IsPluginWarning)
-							{
-								pluginRefs.Add(dep);
-							}
-						}
-
-						// Track cross-group duplicate deps
-						if (!depToGroups.TryGetValue(dep, out HashSet<string> groups))
-						{
-							groups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-							depToGroups[dep] = groups;
-						}
-						groups.Add(groupName);
-
-						// Track non-addressable references
-						if (!addressablePaths.Contains(dep))
-						{
-							nonAddressableRefs.Add(dep);
-
-							if (!groupNonAddrRefs.TryGetValue(groupName, out HashSet<string> grpRefs))
-							{
-								grpRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-								groupNonAddrRefs[groupName] = grpRefs;
-							}
-							grpRefs.Add(dep);
-						}
-					}
+					if (dep.StartsWith("Assets/Plugins/", StringComparison.OrdinalIgnoreCase) &&
+						CategorizeAsset(dep, null).IsPluginWarning) pluginRefs.Add(dep);
 				}
+				pluginRefs.Sort(StringComparer.Ordinal);
 
-				// Count non-addressable dependencies referenced by more than one group.
-				// Only non-addressable deps are actually duplicated in bundles —
-				// addressable deps are loaded by reference and bundled once.
-				int duplicateDepCount = 0;
-				var duplicateDepList = new List<KeyValuePair<string, HashSet<string>>>();
-				foreach (var kvp in depToGroups)
-				{
-					if (kvp.Value.Count > 1 &&
-						!kvp.Key.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) &&
-						!addressablePaths.Contains(kvp.Key))
-					{
-						duplicateDepCount++;
-						duplicateDepList.Add(kvp);
-					}
-				}
-
-				// Count address collisions (same address + same type used by more than one entry)
-				int addressCollisionCount = 0;
 				var addressCollisions = new List<KeyValuePair<(string address, System.Type type), List<(string group, string path)>>>();
 				foreach (var kvp in addressMap)
 				{
-					if (kvp.Value.Count > 1)
-					{
-						addressCollisionCount++;
-						addressCollisions.Add(kvp);
-					}
+					if (kvp.Value.Count > 1) addressCollisions.Add(kvp);
 				}
-
-				// Find unused labels
-				var allLabels = settings.GetLabels();
 				var unusedLabels = new List<string>();
+				var allLabels = settings.GetLabels();
 				if (allLabels != null)
 				{
-					for (int i = 0; i < allLabels.Count; i++)
+					foreach (string label in allLabels)
 					{
-						if (!usedLabels.Contains(allLabels[i]))
-						{
-							unusedLabels.Add(allLabels[i]);
-						}
+						if (!usedLabels.Contains(label)) unusedLabels.Add(label);
 					}
 				}
-
-				// Find empty groups
 				var emptyGroups = new List<string>();
 				foreach (var group in settings.groups)
 				{
-					if (group != null && group.entries.Count == 0)
-					{
-						emptyGroups.Add(group.Name);
-					}
+					if (group != null && group.entries.Count == 0) emptyGroups.Add(group.Name);
 				}
 
-				// Build per-entry and per-group violation sets for tree highlighting.
-				// An entry is violated if it has cross-group duplicate deps (non-addressable dep
-				// referenced by multiple groups → duplicated in each bundle), address collisions,
-				// or is a stale entry.
+				// Tree highlighting: entries that need attention.
 				violationEntryPaths.Clear();
 				violationGroupNames.Clear();
-
-				// Mark stale entries as violations
-				for (int i = 0; i < staleEntries.Count; i++)
+				void Flag(string path, string group)
 				{
-					violationEntryPaths.Add(staleEntries[i].path);
-					violationGroupNames.Add(staleEntries[i].group);
+					violationEntryPaths.Add(path);
+					if (!string.IsNullOrEmpty(group)) violationGroupNames.Add(group);
 				}
+				foreach (var e in staleEntries) Flag(e.path, e.group);
+				foreach (var kvp in addressCollisions) foreach (var e in kvp.Value) Flag(e.path, e.group);
+				foreach (var e in redundant) Flag(e.AssetPath, e.parentGroup?.Name);
+				foreach (var e in mislabeled) Flag(e.AssetPath, e.parentGroup?.Name);
+				foreach (var e in misplaced) Flag(e.Entry.AssetPath, e.Entry.parentGroup?.Name);
 
-				// Mark entries involved in address collisions
-				for (int i = 0; i < addressCollisions.Count; i++)
-				{
-					var kvp = addressCollisions[i];
-					for (int j = 0; j < kvp.Value.Count; j++)
-					{
-						violationEntryPaths.Add(kvp.Value[j].path);
-						violationGroupNames.Add(kvp.Value[j].group);
-					}
-				}
-
-				// Mark entries with cross-group duplicate dependencies
-				for (int i = 0; i < total; i++)
-				{
-					var entry = allEntries[i];
-					if (violationEntryPaths.Contains(entry.AssetPath)) continue; // already flagged
-
-					string entGrpName = entry.parentGroup != null ? entry.parentGroup.Name : "Unknown";
-					bool hasViolation = false;
-
-					string[] entDeps = AssetDatabase.GetDependencies(entry.AssetPath, true);
-					for (int d = 0; d < entDeps.Length; d++)
-					{
-						string dep = entDeps[d];
-						if (string.Equals(dep, entry.AssetPath, StringComparison.OrdinalIgnoreCase)) continue;
-						if (dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
-							dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) ||
-							IsEditorOnlyPath(dep) ||
-							ShouldSkipLocalAsset(dep))
-						{
-							continue;
-						}
-
-						// Cross-group duplicate: non-addressable dep used by entries in 2+ groups
-						if (!addressablePaths.Contains(dep) &&
-							depToGroups.TryGetValue(dep, out HashSet<string> dGroups) && dGroups.Count > 1)
-						{
-							hasViolation = true;
-							break;
-						}
-					}
-
-					if (hasViolation)
-					{
-						violationEntryPaths.Add(entry.AssetPath);
-						violationGroupNames.Add(entGrpName);
-					}
-				}
-
-				// Cache results
-				cachedDuplicateCount = duplicateDepCount;
-				cachedNonAddressableRefCount = nonAddressableRefs.Count;
-				cachedTotalDepCount = allUniqueDeps.Count;
+				cachedDuplicateCount = client.Shared.Count + server.Shared.Count;
+				cachedNonAddressableRefCount = missing.Count;
+				cachedTotalDepCount = allImplicit.Count;
 				cachedUnusedLabelCount = unusedLabels.Count;
-				cachedAddressCollisionCount = addressCollisionCount;
+				cachedAddressCollisionCount = addressCollisions.Count;
 				cachedStaleEntryCount = staleEntries.Count;
+				cachedRedundantEntryCount = redundant.Count;
+				cachedLabelMismatchCount = mislabeled.Count;
+				cachedPlacementErrorCount = misplaced.Count;
+				analysisCurrent = true;
 
-				// Build detailed report
 				var report = new StringBuilder();
-
-				// Summary
 				report.AppendLine("═══ ANALYSIS SUMMARY ═══");
-				report.AppendLine($"Scanned {total} addressable entries across {settings.groups.Count} groups.");
-				report.AppendLine($"Total unique dependencies: {allUniqueDeps.Count}");
-				report.AppendLine($"Cross-group duplicate dependencies: {duplicateDepCount}");
-				report.AppendLine($"Non-addressable referenced assets: {nonAddressableRefs.Count}");
-				report.AppendLine($"Plugin asset references: {pluginRefs.Count}");
-				report.AppendLine($"Address collisions: {addressCollisionCount}");
+				report.AppendLine($"{allEntries.Count} entries in {settings.groups.Count} groups.");
+				AppendPlanSummary(report, "Client", client);
+				AppendPlanSummary(report, "Server", server);
+				report.AppendLine($"Missing AssetReference targets (fail at run time): {missing.Count}");
+				report.AppendLine($"Redundant entries (scene content nothing loads by key): {redundant.Count}");
+				report.AppendLine($"Misplaced by class (fail at run time): {misplaced.Count}");
+				report.AppendLine($"Label mismatches: {mislabeled.Count}");
+				report.AppendLine($"Address collisions: {addressCollisions.Count}");
 				report.AppendLine($"Stale entries (missing source): {staleEntries.Count}");
+				report.AppendLine($"Plugin asset references: {pluginRefs.Count}");
 				report.AppendLine($"Unused labels: {unusedLabels.Count}");
 				report.AppendLine($"Empty groups: {emptyGroups.Count}");
 				report.AppendLine();
 
-				// Address collisions — critical: causes silent runtime load bugs
-				if (addressCollisionCount > 0)
+				if (missing.Count > 0)
+				{
+					report.AppendLine("═══ ✖ MISSING ASSETREFERENCE TARGETS ═══");
+					report.AppendLine("An AssetReference points at these, but they are not addressable: loading them throws");
+					report.AppendLine("InvalidKeyException at run time. Fix All registers them.\n");
+					AppendList(report, missing, 40, m => $"  • {m.path}\n      ← {m.referrer}");
+				}
+				if (misplaced.Count > 0)
+				{
+					report.AppendLine("═══ ✖ MISPLACED BY CLASS ═══");
+					report.AppendLine("The asset's class decides where it may go: a server-only class in a group the client loads");
+					report.AppendLine("(\"Could not load the file 'FishMMO.Server'\"), or a cached class outside the preloaded labels");
+					report.AppendLine("(the runtime never finds it). Fix All moves each to the group shown.\n");
+					AppendList(report, misplaced, 40, e => $"  [{e.Entry.parentGroup?.Name}] {e.Entry.AssetPath}\n      {e.Reason} → {e.Group ?? "(no rule: move it by hand)"}");
+				}
+				if (addressCollisions.Count > 0)
 				{
 					report.AppendLine("═══ ✖ ADDRESS COLLISIONS ═══");
-					report.AppendLine("Multiple entries of the same type share the same address.");
-					report.AppendLine("LoadAssetAsync<T> will pick one arbitrarily, causing silent runtime bugs.\n");
-
-					int shown = 0;
-					for (int i = 0; i < addressCollisions.Count; i++)
+					report.AppendLine("Multiple entries of the same type share an address; LoadAssetAsync<T> picks one arbitrarily.\n");
+					AppendList(report, addressCollisions, 30, kvp =>
 					{
-						if (shown >= 30)
-						{
-							report.AppendLine($"  … and {addressCollisions.Count - shown} more");
-							break;
-						}
-						var kvp = addressCollisions[i];
-						string typeName = kvp.Key.type != null ? kvp.Key.type.Name : "Unknown";
-						report.AppendLine($"  Address: \"{kvp.Key.address}\"  Type: {typeName}");
-						for (int j = 0; j < kvp.Value.Count; j++)
-						{
-							report.AppendLine($"    → [{kvp.Value[j].group}] {kvp.Value[j].path}");
-						}
-						shown++;
-					}
-					report.AppendLine();
+						var sb = new StringBuilder($"  Address: \"{kvp.Key.address}\"  Type: {(kvp.Key.type != null ? kvp.Key.type.Name : "Unknown")}");
+						foreach (var e in kvp.Value) sb.Append($"\n    → [{e.group}] {e.path}");
+						return sb.ToString();
+					});
 				}
-
-				// Stale entries — critical: break builds
 				if (staleEntries.Count > 0)
 				{
 					report.AppendLine("═══ ✖ STALE ENTRIES ═══");
-					report.AppendLine("These entries reference assets that no longer exist or have been moved.");
-					report.AppendLine("They will cause build errors.\n");
-
-					int shown = 0;
-					for (int i = 0; i < staleEntries.Count; i++)
-					{
-						if (shown >= 30)
-						{
-							report.AppendLine($"  … and {staleEntries.Count - shown} more");
-							break;
-						}
-						var e = staleEntries[i];
-						report.AppendLine($"  [{e.group}] \"{e.address}\" → {e.path}");
-						shown++;
-					}
-					report.AppendLine();
+					report.AppendLine("These entries reference assets that no longer exist and will break the build.\n");
+					AppendList(report, staleEntries, 30, e => $"  [{e.group}] \"{e.address}\" → {e.path}");
 				}
-
-				// Plugin warnings — shown first since they need developer attention
+				if (redundant.Count > 0)
+				{
+					report.AppendLine("═══ ⚠ REDUNDANT ENTRIES ═══");
+					report.AppendLine("Scene content only its scene uses. As entries they each add a catalogue entry (and, in a");
+					report.AppendLine("PackSeparately group, a bundle) and land render assets in the client's boot-loaded group.");
+					report.AppendLine("Left implicit they travel in their scene's bundle. Smart Group removes them.\n");
+					AppendList(report, redundant, 30, e => $"  [{e.parentGroup?.Name}] {e.AssetPath}");
+				}
+				if (mislabeled.Count > 0)
+				{
+					report.AppendLine("═══ ⚠ LABEL MISMATCHES ═══");
+					report.AppendLine("Labels decide what is preloaded; these carry another group's label. Fix All corrects them.\n");
+					AppendList(report, mislabeled, 30, e => $"  [{e.parentGroup?.Name}] {e.AssetPath}  labels: {string.Join(", ", e.labels)}");
+				}
+				AppendShared(report, "CLIENT", client);
+				AppendShared(report, "SERVER", server);
 				if (pluginRefs.Count > 0)
 				{
 					report.AppendLine("═══ ⚠ PLUGIN ASSET REFERENCES ═══");
-					report.AppendLine("These plugin assets have no categorization rule and cannot be auto-fixed.");
-					report.AppendLine("Replace with production assets or add a categorization rule.\n");
-
-					int shown = 0;
-					foreach (string path in pluginRefs)
-					{
-						if (shown >= 20)
-						{
-							report.AppendLine($"  … and {pluginRefs.Count - shown} more");
-							break;
-						}
-						report.AppendLine($"  • {path}");
-						shown++;
-					}
-					report.AppendLine();
+					report.AppendLine("A build ships these plugin assets. Replace them with production assets or add a categorization rule.\n");
+					AppendList(report, pluginRefs, 20, p => $"  • {p}");
 				}
-
-				// Non-addressable references by group
-				if (nonAddressableRefs.Count > 0)
-				{
-					report.AppendLine("═══ NON-ADDRESSABLE REFERENCES ═══");
-					report.AppendLine("These assets are referenced by addressable entries but are not addressable themselves.");
-					report.AppendLine("They will be duplicated into every bundle that references them.\n");
-
-					foreach (var kvp in groupNonAddrRefs)
-					{
-						report.AppendLine($"  [{kvp.Key}] — {kvp.Value.Count} non-addressable ref(s):");
-						int shown = 0;
-						foreach (string path in kvp.Value)
-						{
-							if (shown >= 15)
-							{
-								report.AppendLine($"    … and {kvp.Value.Count - shown} more");
-								break;
-							}
-							report.AppendLine($"    • {path}");
-							shown++;
-						}
-						report.AppendLine();
-					}
-				}
-
-				// Duplicate dependencies
-				if (duplicateDepCount > 0)
-				{
-					report.AppendLine("═══ DUPLICATE DEPENDENCIES ═══");
-					report.AppendLine("These non-addressable dependencies are shared across multiple groups");
-					report.AppendLine("and WILL be duplicated into every bundle that references them.\n");
-
-					int shown = 0;
-					for (int i = 0; i < duplicateDepList.Count; i++)
-					{
-						if (shown >= 30)
-						{
-							report.AppendLine($"  … and {duplicateDepList.Count - shown} more");
-							break;
-						}
-						var kvp = duplicateDepList[i];
-						report.AppendLine($"  • {kvp.Key}");
-						report.AppendLine($"    → groups: {string.Join(", ", kvp.Value)}");
-						shown++;
-					}
-					report.AppendLine();
-				}
-
-				// Unused labels
 				if (unusedLabels.Count > 0)
 				{
 					report.AppendLine("═══ UNUSED LABELS ═══");
-					report.AppendLine("These labels are defined but not assigned to any entry.\n");
-					for (int i = 0; i < unusedLabels.Count; i++)
-					{
-						report.AppendLine($"  • {unusedLabels[i]}");
-					}
-					report.AppendLine();
+					AppendList(report, unusedLabels, 50, l => $"  • {l}");
 				}
-
-				// Empty groups
 				if (emptyGroups.Count > 0)
 				{
 					report.AppendLine("═══ EMPTY GROUPS ═══");
-					for (int i = 0; i < emptyGroups.Count; i++)
-					{
-						report.AppendLine($"  • {emptyGroups[i]}");
-					}
-					report.AppendLine();
+					AppendList(report, emptyGroups, 50, g => $"  • {g}");
 				}
 
 				cachedDetailReport = report.ToString();
 				UpdateAnalysisStats();
 
-				// Also log summary to console
-				UnityEngine.Debug.Log($"[AddressablesDashboard] Analysis complete — {duplicateDepCount} duplicate dep(s), " +
-					$"{nonAddressableRefs.Count} non-addressable ref(s), {pluginRefs.Count} plugin ref(s), " +
-					$"{addressCollisionCount} address collision(s), {staleEntries.Count} stale entry(ies), " +
-					$"{unusedLabels.Count} unused label(s), {allUniqueDeps.Count} total unique dep(s).");
+				string summary = $"Analysis complete — client {client.BundleEntries.Count} bundles / {client.Shared.Count} shared, " +
+					$"server {server.BundleEntries.Count} bundles / {server.Shared.Count} shared, {missing.Count} missing ref(s), " +
+					$"{redundant.Count} redundant, {mislabeled.Count} mislabeled, {addressCollisions.Count} collision(s), {staleEntries.Count} stale.";
+				UnityEngine.Debug.Log($"[AddressablesDashboard] {summary}");
+				SetStatus(summary);
 
-				SetStatus($"Analysis complete — {duplicateDepCount} dup dep(s), {nonAddressableRefs.Count} non-addr ref(s), " +
-					$"{pluginRefs.Count} plugin ref(s), {addressCollisionCount} collision(s), {staleEntries.Count} stale, " +
-					$"{unusedLabels.Count} unused label(s), {allUniqueDeps.Count} total dep(s).");
-
-				// Auto-open detail foldout if there are issues
-				if (detailFoldout != null && (duplicateDepCount > 0 || nonAddressableRefs.Count > 0 ||
-					unusedLabels.Count > 0 || pluginRefs.Count > 0 || addressCollisionCount > 0 || staleEntries.Count > 0))
-				{
-					detailFoldout.value = true;
-				}
-
-				// Refresh tree rows so violation highlighting is applied
-				if (treeView != null)
-				{
-					treeView.RefreshItems();
-				}
+				if (detailFoldout != null) detailFoldout.value = true;
+				if (treeView != null) treeView.RefreshItems();
 			}
 			finally
 			{
 				EditorUtility.ClearProgressBar();
 			}
+		}
+
+		private static void AppendPlanSummary(StringBuilder report, string name,
+			CustomBuildTool.Addressables.AddressablesBuildPlan plan)
+		{
+			long bytes = 0;
+			foreach (string path in plan.Shared) bytes += FileSize(path);
+			report.AppendLine($"{name} build: {plan.EntryCount} entries in {plan.BundleEntries.Count} bundles; " +
+				$"{plan.ImplicitUsers.Count} implicit dependencies, {plan.Shared.Count} shared by 2+ bundles " +
+				$"({FormatBytes(bytes)} of source) — isolated once at build time.");
+		}
+
+		private static void AppendShared(StringBuilder report, string name,
+			CustomBuildTool.Addressables.AddressablesBuildPlan plan)
+		{
+			if (plan.Shared.Count == 0) return;
+			report.AppendLine($"═══ SHARED DEPENDENCIES — {name} BUILD ═══");
+			report.AppendLine("Two or more bundles reach these. The build stores each once in a temporary group");
+			report.AppendLine("(Build_Shared_Dependencies); without that they would be copied into every one of them.\n");
+			var ranked = new List<(long weight, string path, int users)>();
+			foreach (string path in plan.Shared)
+			{
+				int users = plan.ImplicitUsers[path].Count;
+				ranked.Add((FileSize(path) * (users - 1), path, users));
+			}
+			ranked.Sort((a, b) => b.weight.CompareTo(a.weight));
+			AppendList(report, ranked, 25, r => $"  • {r.path}  ×{r.users} bundles");
+		}
+
+		private static void AppendList<T>(StringBuilder report, IList<T> items, int max, Func<T, string> format)
+		{
+			for (int i = 0; i < items.Count && i < max; i++) report.AppendLine(format(items[i]));
+			if (items.Count > max) report.AppendLine($"  … and {items.Count - max} more");
+			report.AppendLine();
+		}
+
+		private static long FileSize(string path)
+		{
+			try { return new FileInfo(path).Length; }
+			catch (IOException) { return 0; }
+			catch (UnauthorizedAccessException) { return 0; }
 		}
 
 		/// <summary>

@@ -87,17 +87,15 @@ namespace FishMMO.WebServer
 					{
 						_ = Log.Info("Services", "Registering services...");
 
-						// Compress static assets (.wasm, .data, .unityweb) to reduce
-						// bandwidth for large WebGL builds (20-50 MB uncompressed).
+						// Compress text responses on the fly (HTML, CSS, JavaScript, JSON, an uncompressed .wasm).
+						// NOT application/octet-stream: Unity's build files are compressed when the build is made
+						// and are served as stored (UnityBuildFiles), and Addressables bundles are compressed
+						// already. Compressing either again cost CPU on every download and dropped the
+						// Content-Length, so the loader showed no progress bar.
 						services.AddResponseCompression(options =>
 						{
 							options.EnableForHttps = true;
-							options.MimeTypes = new[]
-							{
-								"application/wasm",
-								"application/octet-stream",
-								"application/x-gzip",
-							};
+							options.MimeTypes = Microsoft.AspNetCore.ResponseCompression.ResponseCompressionDefaults.MimeTypes;
 						});
 
 						services.AddControllers();
@@ -110,7 +108,7 @@ namespace FishMMO.WebServer
 						{
 							options.AddPolicy("Public", builder =>
 							{
-								var allowedOrigins = context.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+								var allowedOrigins = ConfigurationLists.Get(context.Configuration, "Cors:AllowedOrigins");
 								if (allowedOrigins != null && allowedOrigins.Length > 0)
 								{
 									builder.WithOrigins(allowedOrigins).AllowAnyMethod().AllowAnyHeader();
@@ -137,6 +135,23 @@ namespace FishMMO.WebServer
 							options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
 							{
 								string key = httpContext.GetClientIpKey();
+								// The game's own files are fetched in hundreds when a world loads (one per Addressables
+								// bundle, 700+ in a build); under the page's bucket they were refused with 429 and the load
+								// failed. They get their own, larger bucket per client; everything else keeps the small one.
+								PathString path = httpContext.Request.Path;
+								if (path.StartsWithSegments("/Build") || path.StartsWithSegments("/StreamingAssets") ||
+									path.StartsWithSegments("/TemplateData"))
+								{
+									return RateLimitPartition.GetTokenBucketLimiter(key + "|content", _ => new TokenBucketRateLimiterOptions
+									{
+										TokenLimit = 2000,
+										TokensPerPeriod = 300,
+										ReplenishmentPeriod = TimeSpan.FromSeconds(1),
+										QueueLimit = 0,
+										AutoReplenishment = true,
+										QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+									});
+								}
 								return RateLimitPartition.GetTokenBucketLimiter(key, _ => new TokenBucketRateLimiterOptions
 								{
 									TokenLimit = 120,
@@ -222,6 +237,8 @@ namespace FishMMO.WebServer
 						contentTypeProvider.Mappings[".hash"] = "text/plain";
 						contentTypeProvider.Mappings[".webmanifest"] = "application/manifest+json";
 						contentTypeProvider.Mappings[".data"] = "application/octet-stream";
+						// Brotli build files without decompression fallback (.wasm.br, .data.br, ...).
+						contentTypeProvider.Mappings[".br"] = "application/octet-stream";
 
 						app.UseResponseCompression();
 						app.UseDefaultFiles();
@@ -234,6 +251,8 @@ namespace FishMMO.WebServer
 							OnPrepareResponse = ctx =>
 							{
 								ctx.Context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+								// Pre-compressed Unity build files go out as stored, labelled with their encoding.
+								UnityBuildFiles.PrepareResponse(ctx.Context, ctx.File);
 							},
 						});
 

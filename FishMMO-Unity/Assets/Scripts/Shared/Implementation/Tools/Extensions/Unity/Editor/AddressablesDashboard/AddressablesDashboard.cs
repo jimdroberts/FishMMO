@@ -116,6 +116,11 @@ namespace FishMMO.Shared
 		private int cachedUnusedLabelCount;
 		private int cachedAddressCollisionCount;
 		private int cachedStaleEntryCount;
+		/// <summary>Set once Analyze has run against the current settings; the Build button requires it.</summary>
+		private bool analysisCurrent;
+		private int cachedRedundantEntryCount;
+		private int cachedLabelMismatchCount;
+		private int cachedPlacementErrorCount;
 
 		/// <summary>
 		/// Cached detailed analysis report text for the detail panel.

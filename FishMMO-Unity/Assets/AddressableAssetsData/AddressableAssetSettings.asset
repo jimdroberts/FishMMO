@@ -15,7 +15,7 @@ MonoBehaviour:
   m_DefaultGroup: 9f41fb9c2f019e548ad7e95d00d2093e
   m_currentHash:
     serializedVersion: 2
-    Hash: 6c0e02a4e75ccf0c92e241c68108320a
+    Hash: 00000000000000000000000000000000
   m_DisableWriteTypeTree: 0
   m_OptimizeCatalogSize: 0
   m_BuildRemoteCatalog: 0
@@ -63,12 +63,15 @@ MonoBehaviour:
   m_BuildAddressablesWithPlayerBuild: 2
   m_overridePlayerVersion: '[UnityEditor.PlayerSettings.bundleVersion]'
   m_GroupAssets:
+  - {fileID: 11400000, guid: 74546d68a1836c5e299dfc23f94dc4de, type: 2}
   - {fileID: 11400000, guid: d50109977965d790d94ff0f45a520bbc, type: 2}
+  - {fileID: 11400000, guid: a6f7a0f874528ba46a2f6d64aaaed80b, type: 2}
   - {fileID: 11400000, guid: c0dde3bd25c7dee33817f39da7f3be00, type: 2}
   - {fileID: 11400000, guid: 3d1bf120fab6411718b9837256a88abd, type: 2}
-  - {fileID: 11400000, guid: a0b736bae1bcd120bba8cad46c3fbedb, type: 2}
   - {fileID: 11400000, guid: 1f533a41c54f946d18968c769e1c5533, type: 2}
+  - {fileID: 11400000, guid: c516baa593343faacb8b9ebe49976e0b, type: 2}
   - {fileID: 11400000, guid: a7eb9b7d918cb6e769a49a88d622048e, type: 2}
+  - {fileID: 11400000, guid: 086af99fc32ed80b689898ca875b6d44, type: 2}
   - {fileID: 11400000, guid: 0923770f0a4268749b38890e1058e8f4, type: 2}
   - {fileID: 11400000, guid: 6c426359434945466a7204d09b26fa5b, type: 2}
   - {fileID: 11400000, guid: 8cfdf08704e8f47099c9588fadc5aa60, type: 2}
@@ -141,6 +144,7 @@ MonoBehaviour:
     - Scene_Shared
     - Scene_Server
     - Shared_Dynamic
+    - Shared_Biomes
   m_SchemaTemplates: []
   m_GroupTemplateObjects:
   - {fileID: 11400000, guid: 2f9575764d1020448a25d0512380c601, type: 2}

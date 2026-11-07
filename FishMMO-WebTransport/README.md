@@ -130,6 +130,14 @@ brew install cmake openssl@3
 
 Output: `libfishmmo_webtransport.dylib` in the Unity `mac_x86_64` plugin directory.
 
+## msquic patch: listeners bind their own address
+
+[`patches/msquic-listener-bind-specific-address.patch`](patches/msquic-listener-bind-specific-address.patch) is applied to the fetched msquic v2.5.9 by `FetchContent`'s `PATCH_COMMAND` ([`cmake/ApplyPatchOnce.cmake`](cmake/ApplyPatchOnce.cmake), which skips it when already applied and fails the configure if it no longer applies).
+
+Upstream msquic ignores a listener's address for its socket: every listener binds the dual-stack wildcard `[::]:PORT` and filters connections by address afterwards. A game server whose `.cfg` says `Address=127.0.0.1` therefore held port 7770 on **every** interface, so NGINX's stream listener on the LAN address (`192.168.1.2:7770`) failed it with `ListenerStart: 0x62` (errno 98, address in use), and the server was reachable directly wherever the firewall allowed it. With the patch a listener given a specific address binds exactly that address (`[::ffff:127.0.0.1]:7770` in `ss`), and the server-binding lookup compares addresses as well as ports, so listeners on different addresses of one port get separate sockets. Wildcard listeners (`0.0.0.0`, `::`) behave as before.
+
+The CMake builds (`build_linux.sh`, `build_macos.sh`, `build_windows.ps1 -Static`) apply it. The NuGet Windows builds (`build_windows_nuget.ps1`, the `build_windows.ps1` default, `build_windows_cross.sh`) link Microsoft's prebuilt msquic and do **not**: a Windows game server behind NGINX on the same host needs a `-Static` build. Clients never open a listener and are unaffected.
+
 ## TLS provider
 
 msquic ships in two TLS flavours and only one of them can host a server for this
@@ -330,6 +338,8 @@ FishMMO-WebTransport/
 ├── rebuild_only.ps1            Incremental rebuild — prefers the NuGet tree, else the CMake cache
 ├── rebuild_only.bat            cmd.exe wrapper for rebuild_only.ps1
 ├── README.md
+├── cmake/ApplyPatchOnce.cmake  Idempotent patch step for the fetched msquic
+├── patches/                    msquic patches (see "msquic patch" above)
 ├── src/                        C++ source (7 .cpp + 8 .h)
 └── tests/                      wt_*_e2e tests, build_asan.sh, check_abi_version.sh (-DWT_BUILD_TESTS=ON)
 ```

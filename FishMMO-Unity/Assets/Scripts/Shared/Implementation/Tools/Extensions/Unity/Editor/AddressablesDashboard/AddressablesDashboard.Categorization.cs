@@ -12,10 +12,15 @@ namespace FishMMO.Shared
 	public partial class AddressablesDashboard
 	{
 		/// <summary>
-		/// Registers a saved world scene and its runtime dependencies using the dashboard's routing rules.
-		/// Existing entries keep their authored addresses, labels and groups. Generated art and terrain
-		/// arrays retain their build-time registration, and editor records never enter runtime bundles.
-		/// The caller saves the settings along with the generated assets.
+		/// Registers a saved world scene, and of its dependencies only what the game loads by key:
+		/// NavMeshes (the scene server's catalogue) and AssetReference targets. Everything else the
+		/// scene uses is packed into the scene's own bundle, so it loads and unloads with the scene;
+		/// whatever another bundle also uses is isolated once, at build time
+		/// (<see cref="CustomBuildTool.Addressables.SharedDependencyBuildGroup"/>). Registering every
+		/// dependency instead made each prop prefab its own bundle and put every scene's look
+		/// materials and textures in the client's boot-loaded permanent group.
+		/// Existing entries keep their authored addresses, labels and groups. The caller saves the
+		/// settings along with the generated assets.
 		/// </summary>
 		public static int RegisterSceneAssets(AddressableAssetSettings settings, string scenePath,
 			IEnumerable<string> additionalPaths = null)
@@ -32,6 +37,9 @@ namespace FishMMO.Shared
 					if (!string.IsNullOrEmpty(path)) roots.Add(path);
 				}
 			}
+			string[] reached = AssetDatabase.GetDependencies(new List<string>(roots).ToArray(), true);
+			Dictionary<string, string> referenced = CustomBuildTool.Addressables.AssetReferenceScanner.Scan(reached);
+
 			var addresses = new HashSet<(string, Type)>();
 			foreach (AddressableAssetGroup group in settings.groups)
 			{
@@ -41,9 +49,27 @@ namespace FishMMO.Shared
 					addresses.Add((entry.address, AssetDatabase.GetMainAssetTypeAtPath(entry.AssetPath)));
 				}
 			}
+			var candidates = new List<(string path, bool runtimeKey)>();
+			var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			foreach (string path in reached)
+			{
+				string normalized = path.Replace('\\', '/');
+				bool runtimeKey = referenced.ContainsKey(AssetDatabase.AssetPathToGUID(normalized));
+				if (string.Equals(normalized, scenePath, StringComparison.OrdinalIgnoreCase) ||
+					runtimeKey || IsNavMeshAsset(normalized))
+				{
+					if (seen.Add(normalized)) candidates.Add((normalized, runtimeKey));
+				}
+			}
+			foreach (string guid in referenced.Keys)
+			{
+				string path = AssetDatabase.GUIDToAssetPath(guid);
+				if (!string.IsNullOrEmpty(path) && seen.Add(path)) candidates.Add((path, true));
+			}
+
 			var groups = new Dictionary<string, AddressableAssetGroup>(StringComparer.OrdinalIgnoreCase);
 			int registered = 0;
-			foreach (string path in AssetDatabase.GetDependencies(new List<string>(roots).ToArray(), true))
+			foreach ((string path, bool runtimeKey) in candidates)
 			{
 				if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) ||
 					AssetDatabase.IsValidFolder(path) || IsEditorOnlyPath(path) || ShouldSkipLocalAsset(path) ||
@@ -56,7 +82,7 @@ namespace FishMMO.Shared
 					(type != typeof(SceneAsset) && type.Assembly.GetName().Name.StartsWith("UnityEditor", StringComparison.Ordinal))) continue;
 				string guid = AssetDatabase.AssetPathToGUID(path);
 				if (string.IsNullOrEmpty(guid) || settings.FindAssetEntry(guid, true) != null) continue;
-				AssetCategory category = CategorizeAsset(path, null);
+				AssetCategory category = CategorizeAsset(path, null, runtimeKey);
 				if (category.IsPluginWarning || string.IsNullOrEmpty(category.GroupName)) continue;
 				AddressableAssetGroup target = GetOrCreateGroup(settings, category.GroupName, groups);
 				if (target == null) throw new InvalidOperationException($"Could not create Addressables group '{category.GroupName}'.");
@@ -75,8 +101,6 @@ namespace FishMMO.Shared
 			if (registered > 0) EditorUtility.SetDirty(settings);
 			return registered;
 		}
-
-		private const string SharedDependenciesGroupName = "_SharedDependencies";
 
 		// ──────────────────────────────────────────────
 		// Smart Group Categorization
@@ -105,6 +129,8 @@ namespace FishMMO.Shared
 			public const string SceneClient = "Scene_Client";
 			/// <summary>The SceneServer value.</summary>
 			public const string SceneServer = "Scene_Server";
+			/// <summary>Biome templates: one bundle each, loaded per scene by the client, at boot by the server.</summary>
+			public const string SharedBiomes = Constants.SharedBiomesLabel;
 
 			/// <summary>
 			/// All smart group names. Used to strip stale labels from entries.
@@ -120,6 +146,7 @@ namespace FishMMO.Shared
 				SceneShared,
 				SceneClient,
 				SceneServer,
+				SharedBiomes,
 			};
 		}
 
@@ -142,8 +169,10 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="assetPath">The asset path to categorize.</param>
 		/// <param name="referencingGroupNames">Names of groups that reference this asset (null if unknown).</param>
+		/// <param name="runtimeKey">True when the game loads this asset by key (an AssetReference target), so it must
+		/// be addressable even where its folder's content otherwise is not.</param>
 		/// <returns>The categorization result with target group name and reason.</returns>
-		private static AssetCategory CategorizeAsset(string assetPath, HashSet<string> referencingGroupNames)
+		private static AssetCategory CategorizeAsset(string assetPath, HashSet<string> referencingGroupNames, bool runtimeKey = false)
 		{
 			// Normalize separators for reliable matching
 			string normalized = assetPath.Replace('\\', '/');
@@ -210,7 +239,68 @@ namespace FishMMO.Shared
 				};
 			}
 
+			// ── The asset's class, before its folder ──
+			// A server-only class must never reach a group the client loads (the catalogue names its assembly, and
+			// "Could not load the file 'FishMMO.Server'" follows), wherever the asset lives: the NPC AI templates sit
+			// under Assets/Templates. A cached class (CachedScriptableObject) is found only in the cache the boot fills
+			// from the preloaded labels, so it must be in the permanent group of its side, wherever it lives: the
+			// weather profiles sit under Assets/Prefabs/Client, whose folder rule made them dynamic and invisible.
+			Type mainType = AssetDatabase.GetMainAssetTypeAtPath(normalized);
+			ScriptSide side = SideOf(mainType);
+			// Biome templates reference their whole art set, so they are cached but not preloaded: the client loads a
+			// scene's own biomes with the scene (SceneBiomeLoader), the server loads the label at boot.
+			if (mainType != null && typeof(FishMMO.Shared.Biomes.BiomeTemplate).IsAssignableFrom(mainType))
+			{
+				return new AssetCategory
+				{
+					GroupName = SmartGroups.SharedBiomes,
+					Reason = "Biome template — one bundle each, loaded per scene on the client and at boot on the server",
+				};
+			}
+			if (side == ScriptSide.Server)
+			{
+				return new AssetCategory
+				{
+					GroupName = SmartGroups.ServerStaticPermanent,
+					Reason = $"{mainType.Name} exists only in server code — a client build cannot load it",
+				};
+			}
+			if (IsCachedType(mainType))
+			{
+				string preloaded = side == ScriptSide.Client || ContainsSegment(normalized, "Client") ? SmartGroups.ClientStaticPermanent
+					: ContainsSegment(normalized, "Server") ? SmartGroups.ServerStaticPermanent
+					: SmartGroups.SharedStaticPermanent;
+				return new AssetCategory
+				{
+					GroupName = preloaded,
+					Reason = $"{mainType.Name} is found only in the cache the boot preload fills — permanent",
+				};
+			}
+
+			// ── Scene content: packed with its scene, not an entry of its own ──
+			// The scene references it, so it travels in the scene's bundle and unloads with the scene. Content a
+			// second bundle also uses is isolated once at build time (SharedDependencyBuildGroup).
+			if (normalized.StartsWith("Assets/Scenes/", StringComparison.OrdinalIgnoreCase) &&
+				!normalized.EndsWith(".unity", StringComparison.OrdinalIgnoreCase))
+			{
+				if (!runtimeKey)
+				{
+					return new AssetCategory
+					{
+						GroupName = null,
+						Reason = "Scene content — packed into its scene's bundle; shared parts are isolated at build time",
+					};
+				}
+				bool visual = CustomBuildTool.Core.ServerContentPacking.IsVisualAsset(AssetDatabase.GetMainAssetTypeAtPath(normalized));
+				return new AssetCategory
+				{
+					GroupName = visual ? SmartGroups.ClientDynamic : SmartGroups.SceneShared,
+					Reason = visual ? "Scene asset loaded by key — visual, client only" : "Scene asset loaded by key",
+				};
+			}
+
 			// ── Templates: always shared + permanent ──
+			// Constant data both the client and the server need at launch.
 			if (normalized.StartsWith("Assets/Templates/", StringComparison.OrdinalIgnoreCase))
 			{
 				return new AssetCategory
@@ -230,18 +320,20 @@ namespace FishMMO.Shared
 				};
 			}
 
-			// ── Render assets: client-only (server is headless) ──
-			// Textures, fonts, materials, shaders, and render textures are never
-			// needed by the headless server.
+			// ── Render assets: client-only (the server draws nothing) ──
+			// Shaders, fonts and UI are needed from launch and stay resident. Textures, materials and models
+			// load with whatever uses them: the permanent group is loaded at boot and never released.
 			if (IsRenderAsset(normalized))
 			{
 				// Still respect explicit Server paths — don't override those
 				if (!ContainsSegment(normalized, "Server"))
 				{
+					bool resident = IsResidentRenderAsset(normalized);
 					return new AssetCategory
 					{
-						GroupName = SmartGroups.ClientStaticPermanent,
-						Reason = "Render asset — client-only (server is headless)",
+						GroupName = resident ? SmartGroups.ClientStaticPermanent : SmartGroups.ClientDynamic,
+						Reason = resident ? "Shader, font or UI asset — client-only, resident from launch"
+							: "Render asset — client-only, loaded with whatever uses it",
 					};
 				}
 			}
@@ -482,6 +574,26 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>True for render assets the client keeps resident from launch: shaders, fonts and UI.</summary>
+		private static bool IsResidentRenderAsset(string normalizedPath)
+		{
+			string ext = Path.GetExtension(normalizedPath).ToLowerInvariant();
+			switch (ext)
+			{
+				case ".shader":
+				case ".shadergraph":
+				case ".shadersubgraph":
+				case ".compute":
+				case ".ttf":
+				case ".otf":
+				case ".fnt":
+				case ".fontsettings":
+					return true;
+			}
+			return ContainsSegment(normalizedPath, "UI") || ContainsSegment(normalizedPath, "GUI") ||
+				ContainsSegment(normalizedPath, "Launcher") || ContainsSegment(normalizedPath, "Icons");
+		}
+
 		/// <summary>
 		/// Finds an existing group by name or creates a new one with BundledAssetGroupSchema.
 		/// Newly created groups have their packing mode set based on the group name:
@@ -526,7 +638,7 @@ namespace FishMMO.Shared
 			if (schema == null) return;
 
 			string lower = groupName.ToLowerInvariant();
-			if (lower.Contains("scene") || lower.Contains("dynamic"))
+			if (lower.Contains("scene") || lower.Contains("dynamic") || lower.Contains("biomes"))
 			{
 				schema.BundleMode = BundledAssetGroupSchema.BundlePackingMode.PackSeparately;
 			}

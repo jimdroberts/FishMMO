@@ -67,6 +67,7 @@ VS Build Tools installs the **`.NET desktop development`** and **`Desktop develo
 | 7 | **Delete FishMMO Database** *(destructive — prompts for confirmation)* |
 | 8 | Configure PgBouncer (generate `pgbouncer.ini`, auth_query or userlist.txt, Linux only) |
 | 9 | Configure Server Keys (DB-backed deployment secrets — gate secret, HMAC key, KEK) |
+| A | Create Admin Account (`AdminAccountInstaller`: Admin, verified, two-factor enrolled, audited; needs 9 first for the TOTP master key) |
 
 ### 3 — Web Server
 
@@ -271,6 +272,7 @@ The installer runs pre-flight checks at startup in all modes. In non-interactive
 | `PostgreSQLHardening.cs` | PostgreSQL security hardening — rewrites `pg_hba.conf` to `scram-sha-256`, updates `postgresql.conf` (partial class of `PostgreSQLInstaller`) |
 | `PgBouncerInstaller.cs` | PgBouncer install, systemd service setup, `pgbouncer.ini` generation with auth_query (recommended) or auth_file/userlist.txt SCRAM-SHA-256 modes |
 | `SecurityKeyInstaller.cs` | Cryptographic key generation and storage in the database (gate secret, connection token HMAC key, signing key KEK). Client .generated.cs files are generated separately from the Unity Editor. |
+| `AdminAccountInstaller.cs` | Database → A. Creates an Administrator through the FishMMO-DB services with the servers' own credentials, mirroring a registration: SRP salt/verifier from the fixed identity, email profile, verified, access level Admin, TOTP secret under the master KEK, recovery codes. All writes are one transaction; the result is audited (`source = installer`). Shows the authenticator key (QR via `qrencode` when installed) and recovery codes once. |
 | `NGINXInstaller.cs` | NGINX install, Windows service registration (NSSM), Linux systemd configuration, nginx.conf deployment |
 | `LetsEncryptInstaller.cs` | certbot (Linux) and win-acme (Windows) TLS certificate automation for NGINX |
 | `UnityInstaller.cs` | Unity Hub and Unity Editor install via Unity Hub CLI with module selection |

@@ -20,6 +20,9 @@
 
 var LibraryFishWebTransport = {
 
+    // _dynCall resolves C# callbacks through Emscripten's table accessor; make the linker keep it.
+    $FishWebTransport__deps: ['$getWasmTableEntry'],
+
     // ------------------------------------------------------------------
     //  Internal helper (Emscripten library symbol — emitted as
     //  `var FishWebTransport` in the framework JS)
@@ -29,20 +32,32 @@ var LibraryFishWebTransport = {
         _lastErrors: {},  // error messages keyed by index, persists after _remove
         _nextIndex: 1,
 
-        /** Compatible dynCall wrapper — uses wasmTable when available
-         *  (Emscripten 3.x+) and falls back to Module.dynCall / dynCall
-         *  (Emscripten 2.x).  This prevents breakage when Unity upgrades
-         *  its Emscripten toolchain. */
-        _dynCall: (typeof wasmTable !== 'undefined' && wasmTable.get)
-            ? function(sig, fn, args) {
-                var func = wasmTable.get(fn);
-                if (!func) { console.error('[FishWT] Bad function pointer: ' + fn); return; }
-                func.apply(null, args);
-              }
-            : function(sig, fn, args) {
-                var dc = Module['dynCall'] || dynCall;
+        /** Calls a C# callback (a wasm function-table index).
+         *  Resolved on every call, never when this object is created: the
+         *  object is built before the wasm module is instantiated, when
+         *  wasmTable does not exist yet, so a choice made then always fell
+         *  back to the Emscripten 2 global dynCall, which Unity 6
+         *  (Emscripten 3) does not define: "dynCall is not defined" on the
+         *  first callback, and no connection could open.
+         *  Emscripten 3: getWasmTableEntry (declared in __deps below), else
+         *  wasmTable.get. Emscripten 2: Module.dynCall / dynCall. */
+        _dynCall: function(sig, fn, args) {
+            var func = null;
+            if (typeof getWasmTableEntry === 'function') {
+                func = getWasmTableEntry(fn);
+            } else if (typeof wasmTable !== 'undefined' && wasmTable && wasmTable.get) {
+                func = wasmTable.get(fn);
+            }
+            if (func) {
+                return func.apply(null, args);
+            }
+            var dc = (typeof Module !== 'undefined' && Module['dynCall']) ||
+                     (typeof dynCall === 'function' ? dynCall : null);
+            if (dc) {
                 return dc(sig, fn, args);
-              },
+            }
+            console.error('[FishWT] Cannot call function pointer ' + fn + ' (' + sig + '): no getWasmTableEntry, wasmTable or dynCall in this build.');
+        },
 
         /** True when the session can send/receive.
          *  Deliberately does NOT require wt.readyState === 'connected':

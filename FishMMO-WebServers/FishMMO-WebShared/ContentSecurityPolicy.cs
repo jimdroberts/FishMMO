@@ -36,8 +36,8 @@ public sealed class ContentSecurityPolicy
             string authority = gameHost.Contains(':') ? "[" + gameHost.Trim('[', ']') + "]" : gameHost;
             // WebTransport uses HTTPS, with dynamically allocated game-server ports.
             sources.Add("https://" + authority + ":*");
-            var configured = configuration?.GetSection("ContentSecurityPolicy:ConnectOrigins")
-                .Get<string[]>();
+            // Whole list from the source that sets it: an index merge would keep Development's loopback tail.
+            var configured = ConfigurationLists.Get(configuration, "ContentSecurityPolicy:ConnectOrigins");
             foreach (string raw in configured ?? new[] { "https://api.fishmmo.com" })
             {
                 if (!Uri.TryCreate(raw, UriKind.Absolute, out var uri) ||

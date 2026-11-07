@@ -92,6 +92,8 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 
 					// Last before the bundles: only the generated art everything above reaches.
 					RegisterGeneratedArt(excludedAddressableGroups, customBuildType);
+					// After every other registration: what two bundles of this build would both copy.
+					RegisterSharedDependencies(customBuildType);
 
 					Log.Debug("BuildLogger", "Configuring addressables...");
 					bool isWebGL = buildTarget == BuildTarget.WebGL;
@@ -114,6 +116,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 					Log.Debug("BuildLogger", "Restoring build configuration...");
 					configurator.Restore();
 					RemoveGeneratedArtGroup();
+					RemoveSharedDependencyGroup();
 					CleanWorldMaps(customBuildType);
 				}
 			}
@@ -340,20 +343,50 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		}
 
 		/// <summary>
-		/// Registers the generated biome art the build reaches in its build-time group, and nothing else:
-		/// generated art never sits in a committed group, and a placeholder nothing uses never ships
-		/// (<see cref="FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup"/>). Removed again by
-		/// <see cref="RemoveGeneratedArtGroup"/> whether or not the build succeeds.
+		/// Takes generated biome art out of the committed groups (<see cref="FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup.RemoveCommittedEntries"/>).
+		/// It is not registered as entries of its own any more: it travels as implicit dependencies, inside the one bundle
+		/// that uses it or, when several do, isolated by the set of bundles that use it
+		/// (<see cref="FishMMO.Shared.CustomBuildTool.Addressables.SharedDependencyBuildGroup"/>). Registered, all of it
+		/// went into one PackTogether bundle (about 2 GB), so a single reference loaded every biome's art.
 		/// </summary>
 		private static void RegisterGeneratedArt(string[] excludedGroups, CustomBuildType customBuildType)
 		{
-			Log.Debug("BuildLogger", "Registering the generated biome art the build reaches...");
+			Log.Debug("BuildLogger", "Removing generated biome art from the committed groups...");
 			var log = new List<string>();
 			FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup.RemoveCommittedEntries(log);
-			FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup.RegisterReachable(log, excludedGroups, customBuildType == CustomBuildType.Server);
+			// A group an interrupted earlier build left behind would still pack everything together.
+			FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup.RemoveGroup();
 			foreach (string line in log)
 			{
 				Log.Debug("BuildLogger", line);
+			}
+		}
+
+		/// <summary>
+		/// Stores once, in a build-time group, every asset two or more bundles of this build would each
+		/// copy (<see cref="FishMMO.Shared.CustomBuildTool.Addressables.SharedDependencyBuildGroup"/>).
+		/// Removed again by <see cref="RemoveSharedDependencyGroup"/> whether or not the build succeeds.
+		/// </summary>
+		private static void RegisterSharedDependencies(CustomBuildType customBuildType)
+		{
+			var log = new List<string>();
+			FishMMO.Shared.CustomBuildTool.Addressables.SharedDependencyBuildGroup.Register(customBuildType == CustomBuildType.Server, log);
+			foreach (string line in log)
+			{
+				Log.Info("BuildLogger", line);
+			}
+		}
+
+		/// <summary>Removes the shared dependencies' build-time group, leaving the project as it was found.</summary>
+		private static void RemoveSharedDependencyGroup()
+		{
+			try
+			{
+				FishMMO.Shared.CustomBuildTool.Addressables.SharedDependencyBuildGroup.RemoveGroup();
+			}
+			catch (Exception ex)
+			{
+				Log.Warning("BuildLogger", $"Removing the '{FishMMO.Shared.CustomBuildTool.Addressables.SharedDependencyBuildGroup.GroupName}' addressable group failed; remove it by hand in the Addressables Groups window: {ex.Message}");
 			}
 		}
 
@@ -485,6 +518,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				BakeSpawnTables();
 				BakeWorldMaps(customBuildType);
 				RegisterGeneratedArt(excludeGroups, customBuildType);
+				RegisterSharedDependencies(customBuildType);
 				addressableManager.BuildAddressablesWithExclusions(excludeGroups, enableCrcForRemoteLoading, useUnityWebRequestForLocal);
 			}
 			catch (OperationCanceledException)
@@ -501,6 +535,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			{
 				configurator.Restore();
 				RemoveGeneratedArtGroup();
+				RemoveSharedDependencyGroup();
 				CleanWorldMaps(customBuildType);
 				Log.Shutdown();
 			}

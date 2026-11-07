@@ -525,6 +525,7 @@ namespace FishMMO.Installer
                 Console.WriteLine("7 : Delete FishMMO Database (DANGEROUS!)");
                 Console.WriteLine("8 : Configure PgBouncer (Linux)");
 			Console.WriteLine("9 : Configure Server Keys (DB-backed deployment secrets)");
+                Console.WriteLine("A : Create Admin Account (Control Panel sign-in, two-factor; needs 9 first)");
                 Console.WriteLine("0 : Back");
 
                 ConsoleKeyInfo key = Console.ReadKey(true);
@@ -576,6 +577,9 @@ namespace FishMMO.Installer
 							"Npgsql database",
 							(u, p, s) => SecurityKeyInstaller.ConfigureDatabaseKeysAsync(u, p, s));
 						break;
+                    case ConsoleKey.A:
+                        await AdminAccountInstaller.CreateAdminAccountAsync();
+                        break;
                     case ConsoleKey.D0:
                     case ConsoleKey.NumPad0:
                         return;

@@ -33,6 +33,10 @@ namespace FishMMO.Shared
 			cachedUnusedLabelCount = 0;
 			cachedAddressCollisionCount = 0;
 			cachedStaleEntryCount = 0;
+			cachedRedundantEntryCount = 0;
+			cachedLabelMismatchCount = 0;
+			cachedPlacementErrorCount = 0;
+			analysisCurrent = false;
 			cachedDetailReport = "";
 			if (detailFoldout != null)
 			{

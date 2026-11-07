@@ -14,7 +14,12 @@ namespace FishMMO.UnitTests.WorldDesign
 	public class SceneAddressablesTests
 	{
 		[Test]
-		public void SavedSceneRegistersRecursiveDependenciesAndKeepsExistingEntries()
+		/// <summary>
+		/// A cut registers its scene and what the game loads by key (the NavMesh), and nothing else: the
+		/// terrain, its layers, textures and materials travel in the scene's own bundle, and anything another
+		/// bundle shares is isolated at build time. Existing entries keep their groups, addresses and labels.
+		/// </summary>
+		public void SavedSceneRegistersOnlyItsRoots_AndKeepsExistingEntries()
 		{
 			string folder = "Assets/Scenes/WorldScene/AtlasAddressablesTest_" + Guid.NewGuid().ToString("N");
 			System.IO.Directory.CreateDirectory(folder + "/Nested");
@@ -55,11 +60,12 @@ namespace FishMMO.UnitTests.WorldDesign
 				var outputs = new[] { navPath, duplicatePath, "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/SceneGenerator.cs" };
 				Assert.That(AddressablesDashboard.RegisterSceneAssets(settings, scenePath, outputs), Is.GreaterThan(0));
 				AssertEntry(settings, scenePath, "Scene_Shared", "Cut scene");
-				AssertEntry(settings, folder + "/Terrain.asset", "Scene_Shared", "Terrain");
-				AssertEntry(settings, folder + "/Texture.asset", "Client_Static_Permanent", "Texture");
-				AssertEntry(settings, folder + "/Layer.terrainlayer", "Client_Static_Permanent", "Layer");
 				AssertEntry(settings, navPath, "Server_Static_Permanent", "NavMesh");
-				AssertEntry(settings, duplicatePath, "Client_Static_Permanent", duplicatePath);
+				foreach (string sceneContent in new[] { folder + "/Terrain.asset", folder + "/Texture.asset", folder + "/Layer.terrainlayer", duplicatePath })
+				{
+					Assert.That(settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(sceneContent)), Is.Null,
+						sceneContent + " is scene content: packed with the scene, not an entry of its own");
+				}
 				Assert.That(existing.parentGroup, Is.SameAs(custom));
 				Assert.That(existing.address, Is.EqualTo("Authored material"));
 				Assert.That(existing.labels, Does.Contain("Authored label"));

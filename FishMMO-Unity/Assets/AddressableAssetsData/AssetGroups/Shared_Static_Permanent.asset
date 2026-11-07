@@ -15,12 +15,6 @@ MonoBehaviour:
   m_GroupName: Shared_Static_Permanent
   m_GUID: 23636b54ceb43a03f93abc3987c4632a
   m_SerializeEntries:
-  - m_GUID: 0000dcf078b2e49537af1fcaa7244eca
-    m_Address: Archer Attack State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 001ed0fe7abf64fe096d7ac9f90ce7fa
     m_Address: Caliche Nodule Node
     m_ReadOnly: 0
@@ -135,6 +129,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 03457f0a0ef4a1dbe811be4b4a725f17
+    m_Address: Crossroads - Calvary
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0354d0bf53a4bbfb4abee9b4c7250df0
     m_Address: Woad Patch Node
     m_ReadOnly: 0
@@ -147,14 +147,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 03c703bf0b1adce4c9ce12e31dc75727
+    m_Address: GallowsHill - Gibbet Hill (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 03d5d04c95004e488a0298db722918c9
     m_Address: Eelfolk
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 03e77f35516b41e44a2b183eab346c4b
-    m_Address: Woodland
+  - m_GUID: 03f6104051efab932aed4dcb249c0f99
+    m_Address: CliffPalace - Eagle Town (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 042a0a80e10ba9398a9cf83d2cf9adf5
+    m_Address: Pyramid - Stepped (Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -231,6 +243,24 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 04f856fa5fc6b950198de4956959434f
+    m_Address: WreckedCaravan - Last Camp
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 052d4a8a2c55f7a8eaabed69fe2718c9
+    m_Address: AshBuriedCity - Cinder Town (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 054d7776cb6b4ef66b209de824c4f88e
+    m_Address: RoyalMausoleum - Barrowdown (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 055858679992a91caa0cf21ac43e1f1e
     m_Address: Leafglass
     m_ReadOnly: 0
@@ -261,6 +291,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 05ad28e9059bae0d8bc45b7a6106a2c2
+    m_Address: CultistHideout - Hidden Fane (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 05dc22b1943e6ff42a3f302fed7c7ce9
     m_Address: Osage Stave
     m_ReadOnly: 0
@@ -275,6 +311,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 05f6a84b278560e69b1f1217d794708b
     m_Address: Malachite Copper Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 066637c52a5ffe34bb208fa620390f03
+    m_Address: WolfDen - Den (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -315,8 +357,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 07d0a5b3f65e989778996ececdbd2d92
-    m_Address: Lava Tube
+  - m_GUID: 07d5abc992d999571bb7c91d2149c938
+    m_Address: GreenwoodHideout - Trysting Oak (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -327,20 +369,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0810b8130f25a7b7bb04f0fd592e3e31
+    m_Address: LavaCaveTemple - Grotto
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0849e396dad50829588ebdf38297e6be
+    m_Address: StepPyramid - Sun Steps (Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 086895b910b7510e28feaab809e9a107
+    m_Address: WreckersBeacon - False Light (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0892f64b2462ac94db21d06df7047e06
     m_Address: Armor
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 08b030e493f302546af15e93d7a0afa8
-    m_Address: Chilled
+  - m_GUID: 08adb679bc0a3e0c688e8f26e95b2997
+    m_Address: GiantsSteading - Stone Hold (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 0932ae2dfc174cfc82d3bca83d973f66
-    m_Address: Swamp
+  - m_GUID: 08b030e493f302546af15e93d7a0afa8
+    m_Address: Chilled
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -399,6 +459,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 09cb3c9ad0b40b345b1523b90bdac16c
+    m_Address: KurganField - Kurgans (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 09eb7b291492f7b23a25cddbfebc3724
+    m_Address: HauntedManor - Burned Grange (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 09f69fc046e4e46c2bf66b58a65f465b
     m_Address: Rhinegold Seam Node
     m_ReadOnly: 0
@@ -423,20 +495,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 0a77c59663600d1e0aa9d801c8f297f6
-    m_Address: Radiation Plain
+  - m_GUID: 0a88a8527b06885a099763bd7a1487d7
+    m_Address: MountainKingsHall - Kings Before the Gate
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0aad6c648896cc328b40fc057cd017bd
     m_Address: Labradorite Seam Node
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 0abe9137cceb5fe83026def40795bdc0
-    m_Address: Pet Balanced Personality
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -489,6 +555,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0c83958058bf56012afb087e0e5420a9
+    m_Address: LichSpire - Barrow Tower (Medium)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0cb9b81a8baba4a42b4c9035740a4bcb
     m_Address: Wild Pear Fall
     m_ReadOnly: 0
@@ -507,14 +579,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 0d1614bd5e4149dfbc05906dbbd0928d
-    m_Address: Void Spawn
+  - m_GUID: 0cdeaee63cfd03c1c8352c49ac56ab23
+    m_Address: NomadCamp - Black Tents
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 0d4cbb49a14dfb6c8985875e72fc8e93
-    m_Address: Regolith Plain
+  - m_GUID: 0d1614bd5e4149dfbc05906dbbd0928d
+    m_Address: Void Spawn
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -531,6 +603,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0df372783c2d1d3aa8f356b035bc1836
+    m_Address: SeaWitchGrotto - Witch's Hole (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0e01f46d9bb24a2ba4828bfab23ba866
     m_Address: Thornbeast
     m_ReadOnly: 0
@@ -539,6 +617,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0e021924968127e1f9125965c6058607
     m_Address: Sor Salt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0e48ef225b4f09a7e99a56093ea29da8
+    m_Address: HangingMonastery - Hanging Hall
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -585,8 +669,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0f15a3ab55b854c15988316fd3fd75df
+    m_Address: HydraLair - Skull Fen (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0f23b55756705b63d967337caf5d37b5
     m_Address: Bulrush Bundle
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0f24e37345aa3a67aa2f1e1d6fa2f092
+    m_Address: LostLibrary - Moss Archive (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -621,12 +717,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 0fb93731778021200229aec97b9a8b45
-    m_Address: Healer Personality
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0fb9e16b6e45c90f0ab063eef0e917fa
     m_Address: Prairie Turnip
     m_ReadOnly: 0
@@ -635,6 +725,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0fba987c293a97962a0413d4296b273a
     m_Address: Monastery - Cloister
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0fbb39431e0b118959e882fab1af60f0
+    m_Address: IdolVault - Sealed Treasury (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0fbe946cf11818be7a8f3789911cec01
+    m_Address: Dovecote - Fallen Columbarium
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -657,6 +759,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1033a43146e2f983883c29ab7cf4e11b
+    m_Address: DragonInTheIce - Sealed Sleeper (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 104658078b208789d88b0c0e54ed8156
     m_Address: Ancient Heartwood
     m_ReadOnly: 0
@@ -665,12 +773,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 10528377d037af13c9efd61f137be490
     m_Address: Qasab Reed
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 10652836297c413fada42bd89ff8cd1e
-    m_Address: Marble Palace
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -705,6 +807,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 11043d7716b0c0b5494fa9afcc8d62d7
+    m_Address: Pyramid - Stepped (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1131aa5377e19ec030d6ba5d5dae3e27
     m_Address: Merchant Interact
     m_ReadOnly: 0
@@ -725,6 +833,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 115fae0cbcc34666947427f33048a0b6
     m_Address: Sand Golem
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1176b60025abe63f7b865fadbfd64e96
+    m_Address: WinterWolfDen - Snow Den (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -759,12 +873,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 11ffdb31d9244310b91f61c6410f7ec9
-    m_Address: Ice Palace
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 120969501b402b27e95f3c95a8245a46
     m_Address: Irak Stick Node
     m_ReadOnly: 0
@@ -789,8 +897,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 12ae2940abc890b82b1cdbf7b01b980c
-    m_Address: Ice Shelf
+  - m_GUID: 126154289256fc9d786477298d9c60a3
+    m_Address: WolfDen - Bone Lie (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 12a5bdb8cfa749554ba8bcf0ed195e96
+    m_Address: DryadOak - Split Oak
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -803,6 +917,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 12beec407c7b6a256a84a8f22be9b6e0
     m_Address: Yrenara System - Ithaewyn
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 12c6a541a79b12a46adfbae2a797787d
+    m_Address: Necropolis - City of the Dead (Medium)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -843,8 +963,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 137290a67db9c62458b7164466f7b6aa
-    m_Address: Volcanic
+  - m_GUID: 136a5fc82250e97ebabdc50fc5982ccd
+    m_Address: PlanarRift - Torn Arch (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -861,8 +981,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 139604924de956ffd9f1bf6e4e19af5a
+    m_Address: WarbandCamp - Palisaded Host (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 13b1e50b5ea52b962a42ea2a015fbd2c
+    m_Address: AncientRoad - Caravan Track
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 13fd63c09d74b25db81d845a5cd22c9b
+    m_Address: ManorHouse - Grange
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 140f9dadf0b971e0599f9af3b0dab31f
+    m_Address: LizardfolkHatchery - Clutch (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 141e7bf7a70441d2b09695e088dec6d5
     m_Address: Sandstrider
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 144593ffbc95fabab9b3cf8fce271d32
+    m_Address: GoblinMarket - Night Market
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -875,12 +1025,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 145d26c0dd4cf560f908a8780a82a9b6
     m_Address: SunkenCity - Drowned (Small)
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 1462d992899022c41ae5026be5be3101
-    m_Address: Desert
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -957,12 +1101,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 1597aec168eeeb5d78080a56745906ae
-    m_Address: Tholin Plain
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 15a584c9c6ededbd3941c028a83963ca
     m_Address: Mammoth Ivory
     m_ReadOnly: 0
@@ -977,12 +1115,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 15d53f90e0724a75398b71914875ddb3
     m_Address: Mine - Shaft Head
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 15d640c1e1c5b8f882f4a8565e46545a
-    m_Address: Enemy - Rogue
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1059,6 +1191,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 166891e1257029fd7a669aac4cd1315a
+    m_Address: HauntedManor - Burned Grange (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 16794f965b0ad7e4c86ac5731eb17d0e
     m_Address: Mock Taunt
     m_ReadOnly: 0
@@ -1089,8 +1227,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 16db9fa5fc6fbaed98b9faa1afe2b5ec
-    m_Address: Runaway Greenhouse Plain
+  - m_GUID: 16e2374b987d83fbd9ef5c68c759faa0
+    m_Address: DragonLair - Hoard (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1119,14 +1257,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 1757dc64dd69b9d99a412c94d95b7d03
-    m_Address: Nitrogen Ice Field
+  - m_GUID: 1767b4786cc1697bf8e46a3dfc9d23c4
+    m_Address: Boriti Poles
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 1767b4786cc1697bf8e46a3dfc9d23c4
-    m_Address: Boriti Poles
+  - m_GUID: 177a805386756446c9f6b4f2271c28c2
+    m_Address: TrollBridge - Toll Span (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 17b03c35db10789218fff3b08b1f93cb
+    m_Address: LichSpire - Barrow Tower (Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1149,6 +1293,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 17eb928034e3f15b78762489ddddea6e
+    m_Address: WishingStone - Ribbon Stone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 18016b10e867b9538b74524afae86d16
     m_Address: Mock Shotgun Projectile
     m_ReadOnly: 0
@@ -1167,6 +1317,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 18b66a4bfd81244efb7073b25d9cb1f8
+    m_Address: StoneFigures - Stone Row
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 18e87e7a4d09c844fa3221b9ed8da77f
     m_Address: Killed
     m_ReadOnly: 0
@@ -1175,6 +1331,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 192e9e0f08f04700a5596db38e91c7c9
     m_Address: Water Elemental
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 194184b206b243e7f9ed1d82fb1cb013
+    m_Address: HydraLair - Many Heads (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1191,12 +1353,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 19a585d2758a90e44d57d73827dcbcbd
-    m_Address: Enemy - Defender
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 19d40c49efb0c6527a47b40e987171e7
     m_Address: Sky-iron
     m_ReadOnly: 0
@@ -1205,6 +1361,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 19db0fcb962c4376d9114b56cbcc0ac5
     m_Address: Black Coral
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1a0c12cd5bba2306c8651ff1386eb73b
+    m_Address: TreeVillage - Taiga Lodge
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1233,6 +1395,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1ab5eb1d5743d810c83516a4c3f5761a
+    m_Address: SerpentIdol - Coil
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1ab8069820abc0b45ad5dd91bc796d4c
     m_Address: Highborn Nations
     m_ReadOnly: 0
@@ -1257,12 +1425,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 1b1f92c865da4a7688bafee793df36cd
-    m_Address: Ice Cave
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1b6705215f2f41db96eafd71c88f5824
     m_Address: Bog Giant
     m_ReadOnly: 0
@@ -1281,8 +1443,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 1bc668641b106ad2310e88d17fe209f8
-    m_Address: Enemy - Healer
+  - m_GUID: 1baf161cc91669955bbd6c20cb971698
+    m_Address: Necropolis - Tomb Field (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1295,18 +1457,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1c3901a836bd4db39df7f22a2c4b304a
     m_Address: Briarwitch
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 1c3ce24aff3b6b640a1e05020f6528a5
-    m_Address: Permanent Ice
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 1c50411fd29785940b8371c30eb82220
-    m_Address: Abyssal Plain
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1325,6 +1475,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1c5ebba9ff4ecbe4d8420fe4a3dc7db1
     m_Address: EventRegionDisplayNameAction
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1c5f07c56aacdff79878d1255169b76e
+    m_Address: SiegeCamp - Palisaded Lines (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1353,6 +1509,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1cacdd196464f51818b2c398b9c7d58d
+    m_Address: Bridge - Goblins Bridge
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1cc8c3d1eb194b1997ddc8ee685fd66d
     m_Address: Scorpion
     m_ReadOnly: 0
@@ -1373,6 +1535,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1d04c3ae71a447e2aafaa282353727bb
     m_Address: Catfolk
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1d0e95996f5d566f5844321ac68c8068
+    m_Address: PhoenixNest - Pyre (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1d2abea98abe76b40a8922ddf9152ed3
+    m_Address: HauntedManor - Grey Manor (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1419,6 +1593,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1eb2891c3526f9a6881fb319d14f13b9
+    m_Address: SirenRock - Wreck Rock (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1ed2be899e0a243ad97e49d2cb9d562c
+    m_Address: NomadCamp - War Camp
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1ed5d4bd9efa1561f88afc6192794721
     m_Address: Spongilla Node
     m_ReadOnly: 0
@@ -1433,12 +1619,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1ef8b8b1693b44e5a8d5810d1dfe7f37
     m_Address: Draconic Titles
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 1f056302a57810f9a8b37fc68f17cf04
-    m_Address: Pet - Defender
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1469,6 +1649,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1f9df0e9a2fe1144c8f9f3714269c2ba
     m_Address: SwordDatabase
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1fa48508ac18aafbbbdc62a60465d496
+    m_Address: IcePalace - Hall of Ice (Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1533,6 +1719,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 20f47980b148c4f568b11725ae0363d6
+    m_Address: DragonLair - Burned Hold (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 212a5c7de39c74bba813f463e0a59a29
+    m_Address: MireGate - Drowned
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 214e921f65f765f389f930895f592bb4
     m_Address: Petrified Wood Round Node
     m_ReadOnly: 0
@@ -1581,12 +1779,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 21ffa9ba4c587a345b5b5f727ab20c42
-    m_Address: Rocky Coast
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 22297f79efd99de43a9e8079889ee4b4
     m_Address: SceneRegionDisplayNameAction
     m_ReadOnly: 0
@@ -1611,8 +1803,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 22ada2cd43c7cc5fd72bdebffe7d7275
-    m_Address: Enemy - Caster
+  - m_GUID: 22ae2a7682fef184fab5e0868f2666d3
+    m_Address: Assets/Scenes/WorldScene/Moron/Moron 3 Terrain/Moron 3 Biome Map.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 22b34970d75fb846b96044075201dfb8
+    m_Address: MerfolkVillage - Drowned Reefhold
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1649,6 +1847,24 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 232c1d8ebc434b4fb25521b55898610d
     m_Address: Frostkin
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2353e2dc406f96628be3654dd1deafc5
+    m_Address: CliffCastle - Sea Fort
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 23672cbb95e0029ecad1937958281447
+    m_Address: NymphPool - Moss Pool
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2387940173651dc448ef2b66619ce564
+    m_Address: SandwormPit - Maw (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1701,8 +1917,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 23fab518843ac25c03488d568bf860ab
-    m_Address: Pet Melee Attack State
+  - m_GUID: 2445eeaf005751d308c1f74272b727f0
+    m_Address: BuriedHoard - Cairn
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1755,8 +1971,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 24e045bcfb3323140bf382e6e635ae7d
-    m_Address: Glacier
+  - m_GUID: 24d8a424464b6a336bf5cd8c912e4706
+    m_Address: Eyrie - Crag Nest (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1791,8 +2007,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 2651c85903d94974e6e6e2bac6576e61
-    m_Address: Healer Attack State
+  - m_GUID: 2665636a6c21521d19e1539651ca953b
+    m_Address: Bridge - Snow Bridge
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1821,14 +2037,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 26a4277c018813e0c93c58a927ecd869
+    m_Address: CaravanHalt - Walled Caravanserai
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 26a431dd74e49dc32bb3c6ea28eaab47
     m_Address: Mountain Root Node
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 26c712b9c24f7bc6ab75d31e45405053
+    m_Address: SalamanderLair - Hot Hollow (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 26f9f7f59fe0c693eafa0341a95cf94e
     m_Address: Bamboo Shoot
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 270caa026df649c31b535ba4155c63d9
+    m_Address: FrozenArmy - Rout (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1941,12 +2175,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 28a2eed8d5735684093a0e2051f69cab
-    m_Address: Coastal Water
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 28c9d79440674290859af7069888768d
     m_Address: Mirrorling
     m_ReadOnly: 0
@@ -2013,6 +2241,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 29f60b885d8e1e2b29a16fbf2f9e73e6
+    m_Address: PhoenixNest - Pyre (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 29fe70fee02db2e3896eb6154be25858
+    m_Address: AmbushSite - Hide (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2a3df451e24ce964d940bc7b1ea071cc
     m_Address: Earth Resistance
     m_ReadOnly: 0
@@ -2067,8 +2307,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2b01d20eb312ad9fdbf4da84664184d6
+    m_Address: IcePalace - Fallen Court (Small-Medium)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2b2929bdbb6c54ca3af787605bcbfd4f
     m_Address: Tragacanth Gum Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2b33665626a244f96bd4c527d3bf1fb3
+    m_Address: WaygateRing - Arch Gate
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2085,14 +2337,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 2bd0895600ce38e6227fbd6837a3683c
-    m_Address: Pet - Healer
+  - m_GUID: 2bc8c45067a1d643a8313c60bc474896
+    m_Address: CaravanHalt - Well Camp
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2bdb4c64672dcbff8adbb555dcb47776
+    m_Address: StepPyramid - Rune Steps (Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2be56502840b57bfa9ae1048c54e35fb
     m_Address: Coneflower Root Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2bf4bbced5b7ac21e8e2b491d87fcff7
+    m_Address: Henge - Sun Ring
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2123,6 +2387,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2c82df8563528a89a822ff8391037b32
     m_Address: Summer Ice
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2cc797fca7cc2672a8776063d165eb11
+    m_Address: VillageGreen - Moot Green
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2cd080a415699f89b967c8f80e875c32
+    m_Address: CultistHideout - Hidden Fane (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2211,6 +2487,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2e62198ec31b848fca52d928567e7040
+    m_Address: SandwormPit - Swallowed Caravan (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2e669850a4855b9438e174f70db28d9a
     m_Address: Punch
     m_ReadOnly: 0
@@ -2283,6 +2565,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2ff84d9c86c258648aaae661f536818e
+    m_Address: HangingTree - Gallows Oak (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 301fd71cfe186fd5ba0ea86f698d2001
     m_Address: Sandarusi Copal Node
     m_ReadOnly: 0
@@ -2295,8 +2583,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 3039a7d15cdf80ce2b2c97aa02aa723b
-    m_Address: Rille
+  - m_GUID: 30add282a22812a9386a0a3e2819ff52
+    m_Address: ScarecrowField - Tatterfield (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2309,6 +2597,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 30c377ca1b1973384951d171dae4717d
     m_Address: Rock Oysters
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 310be9e7330451e4f9b479a8dd71236e
+    m_Address: GoblinWarren - Stockade (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2391,6 +2685,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 32de2d0f4f5e8dc0dbb7468986eb1014
+    m_Address: KurganField - Khan Mounds (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 32e0a98d1a5027af6a0099d2a63fa4eb
     m_Address: Sea Grape
     m_ReadOnly: 0
@@ -2415,6 +2715,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 340cef3ae817aad378bef0a78daf09fe
+    m_Address: Hamlet - Thorp
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3423a0de953f49cdb18e222a6b2a3aea
     m_Address: Cave Troll
     m_ReadOnly: 0
@@ -2435,6 +2741,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 34647e48cd749f04eb768bb8a41a47ad
     m_Address: StartScene A Fog
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 34784e3bf84a1494b8402cbbf2667659
+    m_Address: ReedVillage - Mudhif Isle
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 349f88e88ccb4fe3282543368c3c6d67
+    m_Address: KrakenWreck - Splintered Longship
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2465,6 +2783,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 35931d95e49ff6ca2acecde4ea608461
     m_Address: Chanterelle Patch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 359a201302d17393997a01bcb39ddfd6
+    m_Address: LongBarrow - Long Barrow (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2529,8 +2853,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 36ffc773df7e677d46d6958c8baa7820
-    m_Address: Aggressive Melee Personality
+  - m_GUID: 3700623b8e8ff9f9593cf14873816b86
+    m_Address: TidalIslandAbbey - Holy Isle
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2607,6 +2931,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 38a156662f41bbe1bb6b3e11acaac7eb
+    m_Address: TreeVillage - Talan Town
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 38a817eaf519420eb01ebd0adcb23d5a
     m_Address: Gremlin
     m_ReadOnly: 0
@@ -2615,6 +2945,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 38cdd049127191a1a95ea18d216fc855
     m_Address: Barrow - Excavated (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 390250d5afd0c8736838c12ab6c0b23e
+    m_Address: FireGiantHall - Forgehold (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2631,6 +2967,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 39524e586480c9e79b43663bab1aac7b
+    m_Address: WreckersBeacon - Beacon Pyre (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 395d56fce7b4ac3b3a84c841408fca5f
     m_Address: Town - Stone
     m_ReadOnly: 0
@@ -2643,6 +2985,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 39e6b91239057d397ab91af42e34e765
+    m_Address: LongshipLanding - Strand Hold (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 39eddb96b9977d90f919a30ed4b90147
     m_Address: Hirigaa Block Node
     m_ReadOnly: 0
@@ -2651,6 +2999,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3a0f3726f3ed4bdea730b87dc25178e2
     m_Address: Mandrake
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3a20285a14290106eae918261b274616
+    m_Address: TollGate - Toll House
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2673,20 +3027,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3a77547125af551b1ab9bce79c4f8470
+    m_Address: JaguarTemple - Maw (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3abe7231a23817d16b2dd8bcccac0976
     m_Address: Watermill - Wheel
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 3ad3a66b9da58b58b8021cd1e7e2bf4a
-    m_Address: Laterite Ironstone Node
+  - m_GUID: 3abf09eaa415b1aa09ced1d0c5ac8377
+    m_Address: LichSpire - Frost Spire (Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 3b1405c322d7a2744a16faa08683d319
-    m_Address: Basic Patrol State
+  - m_GUID: 3ad3a66b9da58b58b8021cd1e7e2bf4a
+    m_Address: Laterite Ironstone Node
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2727,12 +3087,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 3c1e7a9b5d2f4e8a9b6c0d1e2f3a4b5c
-    m_Address: Civilian - Townsfolk
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3c41275e0f879843a99ebfac42e024c9
     m_Address: Sky-iron Fragment Node
     m_ReadOnly: 0
@@ -2745,6 +3099,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3c6b168825744ee329fce75f4e702c66
+    m_Address: PrayerFlagPass - Flag Pass
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3cad864457347603a91498f9edc3c3eb
     m_Address: Yrenara System - Heleoreth
     m_ReadOnly: 0
@@ -2753,6 +3113,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3cc71d095e664a3ec9c731b450763b9d
     m_Address: Ruins - Excavation
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3d2d587e02f4ac99fafe2a8239330988
+    m_Address: Crannog - Lake Dwelling
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2775,6 +3141,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3d76e8d1bf706678ab683d6dbc7cf61b
+    m_Address: CliffCastle - Head Fort
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3d9a0a3d09612c522b4822f6ee6742f4
     m_Address: Marram
     m_ReadOnly: 0
@@ -2789,6 +3161,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3dcddcf7cdd0bf006bf1e5bf38114b95
     m_Address: Kenger Gum
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3dd004e9e2a1b660890956a535a1ba63
+    m_Address: Bridge - Liana
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2811,8 +3189,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 3e7b0ed763a5ddadd901af1cc12f95d9
-    m_Address: Sulphuric Cloud Deck
+  - m_GUID: 3e08fc8d234c4630194643f267f2ec0f
+    m_Address: Bridge - Cantilever
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3e20c98f6224350faa31f353b001ff06
+    m_Address: AshBuriedCity - Cinder Town (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3ead72283fb1f03efa06e1c49e570138
+    m_Address: HydraLair - Skull Fen (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3ec27cd81f19439f0a867657c024f27d
+    m_Address: Henge - Great Ring
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2849,6 +3245,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3f3ea3d13a3f0a7c7ab54fe98ca6dcc0
     m_Address: Sylvite
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3f627b77e8830f1c3aebc2b3b863d051
+    m_Address: FallenColossus - Toppled
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2901,14 +3303,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 40697ebeb30628781afbf281294eb968
-    m_Address: Steppe Peony Root
+  - m_GUID: 4068d8d9977797c26ba9c84615629524
+    m_Address: FrogShrine - Mound
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 4072bee0f9657214b9ee7aaed10b59a5
-    m_Address: Jungle
+  - m_GUID: 40697ebeb30628781afbf281294eb968
+    m_Address: Steppe Peony Root
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2949,6 +3351,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4121cf81ae2872b85b3eb86420d692e7
+    m_Address: TrollStones - Troll Ring
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4133343b8b4800641914ebf7a9364e66
     m_Address: Balanites Date Node
     m_ReadOnly: 0
@@ -2961,8 +3369,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 416b958bf1a2751c99beb0eee7155aa9
+    m_Address: MammothGraveyard - Tusk Field
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4180ed025d983d93db6d1478bb4edbc8
     m_Address: Eryngo Root
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4196d94314d5dbadf8188764c6e46c0a
+    m_Address: PlagueVillage - Quarantine (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2975,6 +3395,36 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 41ce5a2f4e87896789674f95c420e273
     m_Address: Sea Wormwood
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 41d92dd1e95e02810a31d8c3efd14020
+    m_Address: RockCutFacade - Tomb Row (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 41df9ae52a6dfadc6b1047ce7fc2fda5
+    m_Address: AshBuriedCity - Grey City (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 42318ab902a979da9ab99b7cd41d0532
+    m_Address: SwampCathedral - Mire Chapel (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4239dac45d4314ee9808926e77ea1faa
+    m_Address: BeastBoneyard - Dry Bones
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4284475138c49477d9eddd948c720a58
+    m_Address: ElfWaystone - Lantern Stones
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3015,8 +3465,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 4309ac96576cac0277c5f220a221a5a2
-    m_Address: Companion AI LOD
+  - m_GUID: 4331521db06ce00c0821d03fcad74fed
+    m_Address: LongshipLanding - Strand Hold (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3087,6 +3537,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 46047f06eba9f607589f85d683aeebdb
+    m_Address: Tower - Elven Tower
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 461ac71ae5aeab195a2341b1f3f79768
     m_Address: Vog
     m_ReadOnly: 0
@@ -3135,12 +3591,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 4689f14e17de9c19f5ab5e2f64222034
-    m_Address: Pet - Melee
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 468f162411f9652b5b495da1efd4262d
     m_Address: Sandfish
     m_ReadOnly: 0
@@ -3171,12 +3621,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 478cad40b8d299546bc9c5aa6eb8d056
-    m_Address: Scrubland
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4797196a776e37af2a2a4b3d87e831f1
     m_Address: Wild Honey Hive Node
     m_ReadOnly: 0
@@ -3201,6 +3645,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 48158caf23df88911a12c265a8d4b352
+    m_Address: BlightedCrater - Stroke
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 483b86c675e552786b89be5e0dfb6704
     m_Address: Scroll of Projectile Motion
     m_ReadOnly: 0
@@ -3209,6 +3659,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4873c6dd41384e18b19e300934d442b7
     m_Address: Bugbear
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4875b461b771a71a288b9e1f65edd92a
+    m_Address: SeaWitchGrotto - Shell Shrine (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3231,6 +3687,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 48d28f905386df15a9fc810f37fb09b6
+    m_Address: BoundaryStone - Marker
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 48d5a903fd5eb581ba5235f674695571
     m_Address: Dungeon Chest
     m_ReadOnly: 0
@@ -3239,6 +3701,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 48dbdfbf875d44c85882b85120765e3d
     m_Address: Mock Direct Heal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 48dcba8474ad6b3738b032ac1cf59d50
+    m_Address: SunkenStatue - Toppled
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3297,6 +3765,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 49a875f6417857a598ba7c03d60eaa34
+    m_Address: SunkenPlaza - Forum
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 49bf64ecdd8ce4e70b0d954e7ebae750
     m_Address: Ruins - Stone
     m_ReadOnly: 0
@@ -3311,6 +3785,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 49f0d05dd3f9417d4bcb84092afccb72
     m_Address: Noble Crayfish
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4a1b9b69f28cb3a048c9b8b16d668acc
+    m_Address: StepPyramid - Rune Steps (Medium)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4a4f805a911ad0bd1a934165ffd45cfd
+    m_Address: PassFort - Pass Gate
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3357,12 +3843,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 4b5c7f379033ce27c2487579df700602
-    m_Address: Rogue Personality
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4b992acf426f2c6b8bd664eec4a19013
     m_Address: Dragonhead
     m_ReadOnly: 0
@@ -3381,8 +3861,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 4c0c4075c47e4140a6d5acf2e3046e29
-    m_Address: Swamp Ruins
+  - m_GUID: 4c2ebbd6fda0085f2ac754d71d736a75
+    m_Address: LongshipLanding - Raid Camp (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3407,6 +3887,24 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4c9f92d1c085ce33d90826e2ec98db4e
     m_Address: Wild Bergamot
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4cc9f5ca83a1984ec8cc148080b713a5
+    m_Address: KrakenWreck - Crushed Cog
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4d301d7e7e74c63deb4eb59d6bc976a4
+    m_Address: Dovecote - Culver House
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4d3239e7978e4bff79f4375791086f14
+    m_Address: LostCity - Ruined Forum (Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3471,12 +3969,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 4e1992ef02b4b184e990ea145b34bdd0
-    m_Address: Rocky Terrain
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4e2eba447588f8f0b9ec25e10b0d8940
     m_Address: Elder Ironbark
     m_ReadOnly: 0
@@ -3525,8 +4017,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4e92aa252e2130ff1a64e63eeebb1a2a
+    m_Address: FrozenArmy - Rout (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4eee1238f29945fc093e3561e030e857
+    m_Address: GriffinRoost - Ledge Roost (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4f2b52211765971139e66a3e75202134
     m_Address: Coneflower Root
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4f2c4eeb4bb4f5d55bea69041da6c58b
+    m_Address: MarshWatchtower - Mound
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3537,14 +4047,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4f63443833f580e989adc2db8cdbda56
+    m_Address: AmbushSite - Overturned Cart (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4f73f72c975ea749da463c6d28cf2b4a
+    m_Address: WreckedCaravan - Wagon Train
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4fa0f0e1f2558de4e91857cf15683687
+    m_Address: GoblinMarket - Moon Market
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4fa4ee12b8aee59e8ba0924c24c6b8b3
     m_Address: Mangrove Fern
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 4fec6d640c1147642be17ff51ea55eae
-    m_Address: Oasis
+  - m_GUID: 4fae01ec026ccca01b90f036c341bc36
+    m_Address: HagsCauldron - Kettle (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3585,8 +4113,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 50e0664cd237f87e9a85b5b71b83d9da
-    m_Address: Peat Bog
+  - m_GUID: 5115121671163ac5dae4e09af488917c
+    m_Address: TrollBridge - Mossed Span (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3633,12 +4161,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 51f855b3de8e6644eb22eee716657935
-    m_Address: Basic Idle State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5286009ee3224a96a9188580ad80eea9
     m_Address: Wyvern
     m_ReadOnly: 0
@@ -3657,6 +4179,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 52b7e5925a4e79f62aa64f55f5d95872
+    m_Address: KoboldDelving - Timbered Adit (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 52debd6714baa4e7aaf4a63d59a610c5
+    m_Address: SandwormPit - Swallowed Caravan (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 52e8907e2319b0c628c9b61c718c67f6
     m_Address: Graveyard - Railed (Medium-Large)
     m_ReadOnly: 0
@@ -3671,6 +4205,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 52f28517760597d658b581a404304ae8
     m_Address: Mock Stun Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 52faeb7447c29c763b0c1ff734e5071f
+    m_Address: PlanarRift - Torn Arch (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 52fb8bd9aaab6bf92a6e631ef3baa806
+    m_Address: DjinnPrison - Brass Seal (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3699,6 +4245,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 53263a1b1ab422f4dbaabd063ade1982
+    m_Address: AncientWall - Rampart
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 53344894bde6442d6a853e079e81cb56
     m_Address: Rose of Jericho Node
     m_ReadOnly: 0
@@ -3707,12 +4259,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 533785cd893006f70a60ea465fb07f30
     m_Address: Mangrove Fern Node
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 533ddb9bdb34b7440a63e47f786a58ab
-    m_Address: Basic PetIdle State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3729,8 +4275,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 535bc60db611e8028bdb0fbeee23f03f
+    m_Address: ElfWaystone - Waymark
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 53780cd14ca9db6729a7037f1cfca8a2
     m_Address: Termite Mushroom Ring
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 539655168690bf1ebab9aa9856e05c7a
+    m_Address: DjinnPrison - Brass Seal (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3789,8 +4347,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 550dbf6c4faec814d90892a954354921
-    m_Address: Alpine
+  - m_GUID: 5519774bf7c63715096abbc644ece2d3
+    m_Address: AuroraShrine - Light Stones
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3873,6 +4431,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 566438f471ddce845bea6bb70dfa1259
+    m_Address: DwarvenGate - Deep Gate
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 569af9c6570a461b7be4b9eb6fde371d
     m_Address: OreVein - Spoil
     m_ReadOnly: 0
@@ -3891,6 +4455,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 56e26e4e1bf71db7f94efe4acc3ea119
+    m_Address: GoblinWarren - Burrows (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5702411d2ff25e77d9337bdb822eacd8
     m_Address: Rose Rock Pocket Node
     m_ReadOnly: 0
@@ -3899,6 +4469,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 570b8e070c073834abac548a07706b47
     m_Address: Human
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 57111d3052fa945388928c2b3842387a
+    m_Address: LostCity - Fallen Seat (Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 574fb84eaea5033fcb4f6b2576d96ec4
+    m_Address: LizardfolkHatchery - Egg Mounds (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3915,8 +4497,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 57c3ba62ea06b7c0c90b639cb5d7baf7
+    m_Address: SeaMonsterDen - Bones (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 57caa8a21e2cd49c2a804fc6f1a53664
     m_Address: Agave Fibre
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 57d9bd611ab08c4f398ffe6a021a7ffb
+    m_Address: HolyWell - Spring Chapel
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3939,6 +4533,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5851dc3bdb8607939bcaa661cffa1dfe
+    m_Address: Commandery - Stone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 58950ad2a929443008527ed5e339f9d3
     m_Address: Licorice Root Node
     m_ReadOnly: 0
@@ -3953,6 +4553,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 58b39b31950b4104c808244e14478bdb
     m_Address: Water Resistance
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 58e2f3b9724f945339249de594bc8a86
+    m_Address: WinterWolfDen - Pack Hollow (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3999,12 +4605,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 598c9c85c3ecfb26ff1ed2f52fe4f4c0
-    m_Address: Defender Personality
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 599e4e5be8619ef4380b3ed1f426b7e0
     m_Address: Mock Self Armor Buff
     m_ReadOnly: 0
@@ -4013,12 +4613,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 59a424e0a799b47f0ab1e2fbabddf604
     m_Address: Yrenara System
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 59bebcf14d6e3a141b9776e205609f9d
-    m_Address: Coral Reef
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4083,20 +4677,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5aa89aa36eb690c0fb29d0769a429b3e
+    m_Address: CultistHideout - Undercroft (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5ac3f1b7ab7e8c973897f24292f65072
     m_Address: Amber
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 5b56c55d686ceac4cac2a744a5bf0951
-    m_Address: Basic Retreat State
+  - m_GUID: 5ad7804e1588135eea0154766f7e8f77
+    m_Address: BurnedVillage - Cinders
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5b287e7a2b14213d1811a9fab73e4714
+    m_Address: Necropolis - Plundered (Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5b5b7b0373c04d03883dd27456c8459a
     m_Address: Arena Rating Leaderboard
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5b69bfa839788ddb1a6778bb0a32a214
+    m_Address: Necropolis - Plundered (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4143,6 +4755,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5d2d6016806bdf41382bb3373b13673a
+    m_Address: LakeMonsterLair - Bone Hole (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5d3003a214cac57588a3f3b129bd1818
     m_Address: RitualSite - Stones (Medium-Large)
     m_ReadOnly: 0
@@ -4161,14 +4779,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5ddee73fffb1eec3d952f8e7fe0996d3
+    m_Address: WarbandCamp - Black Host (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5df56aa043465ff1abd9fff59d3b71cc
     m_Address: Saffron Crocus Patch Node
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5e4ccb7e3594b0035908651f15b9f22a
+    m_Address: ManorHouse - Timber Manor
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5e56b9ce7e428c9dd84509a6f6cef615
     m_Address: Bison Bone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5e72e42bff1b9073498feb3dd9b11d88
+    m_Address: Keep - Dark Keep (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4251,8 +4887,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5f45df5b5f67423e49bb9aab7a3a0570
+    m_Address: FireGiantHall - Forgehold (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5f6262230df14d1e90d7fa33781dc9d6
     m_Address: Giant Eagle
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5f7f342d517295066ba0825a10bd9df1
+    m_Address: Necropolis - City of the Dead (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5f7f41a1614f01a308b494019b560543
+    m_Address: WishingStone - Holed Stone
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4287,18 +4941,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 601fba8a8d5a3f64798664fb2e10d1de
-    m_Address: Wasteland
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 602d4757f2fe4f20be6261bc73694d0a
-    m_Address: Abyss
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6031520b87604f64f8bd6ee6dd948c58
     m_Address: Glass Sponge Node
     m_ReadOnly: 0
@@ -4329,20 +4971,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 60e9cbf8dda4608b8a49c9e900446bed
+    m_Address: IdolVault - Gold Room (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 60f79fe3cd574be0ac06f568726fe278
     m_Address: Centaur
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 617c4f1877213234aae16b88371c1929
-    m_Address: Mangrove
+  - m_GUID: 611705ba769f158929de8386c6cca31a
+    m_Address: RoyalMausoleum - Walled Tomb (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 61845b5f40a893842bacff968650d7a5
-    m_Address: Plains
+  - m_GUID: 61adeb7499d65f1b08b76f2f27220d34
+    m_Address: SwampCathedral - Sunk Minster (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4359,14 +5007,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 628fe87f664e5783a2ea13da979a75d7
-    m_Address: Determined Personality
+  - m_GUID: 623e0cea8e39aa6fe8633df661dc4b75
+    m_Address: SwampCathedral - Black Abbey (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 62a7f9592bcf81f839f26009721a371d
     m_Address: Lighthouse - Stone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 62ad38cba93532e4287bb4f8bff5c7fb
+    m_Address: CliffRelief - Three Watchers
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4437,8 +5091,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 643f1c6d23bffb963945c51565e1f92f
-    m_Address: Ice Sheet
+  - m_GUID: 647b4d2822519ef41835ab7fc81fb31d
+    m_Address: RuneStone - Bautastein
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4479,6 +5133,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6529f26fbcf88586699d03bcd496ecdc
+    m_Address: Tower - Dark Tower (Medium)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 655842f11b38276f48a7bdf9ad7ad87c
     m_Address: Mock Fork On Hit Event
     m_ReadOnly: 0
@@ -4491,14 +5151,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 656c60de4d5e69741abd0e3b08f082da
-    m_Address: Methane Lake
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 65f2a8b5f3bac86cb96a7c115de010b3
-    m_Address: Molten Surface
+  - m_GUID: 65c4e80d27c1cb2cfb39d2e3f1e196af
+    m_Address: NomadCamp - Felt Yurts
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4517,6 +5171,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 664f05a2489e11682b4e53d06117a4e3
     m_Address: Wild Garlic
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 665df99997b5565cebf10d85eabe5771
+    m_Address: Keep - Ruined Keep
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4545,14 +5205,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 67193382668ecf607827f60d058329c3
+    m_Address: LizardfolkHatchery - Clutch (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 672239bf4f3f3d951af5083282ffe80e
     m_Address: Starsilver Vein
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 67370c4d8b5a64e25b9f34404158ee75
+    m_Address: FireGiantHall - Ember Hall (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6751dbcb65ad46d28d3c342c0ccc2381
     m_Address: Ogre
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 67621de1032678246bd716aad2b43982
+    m_Address: DragonLair - Bone Roost (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4593,6 +5271,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6902300b6c803d1f0811e32b5d751c29
+    m_Address: DragonLair - Bone Roost (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6923d2bd65541dc5bbcd9f31a38dcf93
+    m_Address: LostThrone - Empty Dais
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 69302963b37d69cbea949971dc1b1b71
     m_Address: Sweet Chestnut Fall
     m_ReadOnly: 0
@@ -4623,20 +5313,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6a9e274fe547e60b88771898e7da3e52
+    m_Address: LadyOfTheLake - Sword Stone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6adb32216c83abd8bb770d018b8e9bfa
     m_Address: Mock Furthest Snipe
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 6b4a3572a0630b4a0a2e355493c26409
-    m_Address: StoneCircle - Trilithons
+  - m_GUID: 6b0eb1c17f9e7b21e9dab8a8a88f285d
+    m_Address: IcePalace - Frost Court (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 6b5f145ed34168d4b98f1410bd41b3ed
-    m_Address: Alpine Meadow
+  - m_GUID: 6b31ba1cda2d6e7c0bd38e961ae057c2
+    m_Address: SmugglersTunnel - Run (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6b3ea45be7211fa0cbc6737e7ae16ace
+    m_Address: SeaCrystalFormation - Spires
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6b4a3572a0630b4a0a2e355493c26409
+    m_Address: StoneCircle - Trilithons
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4689,8 +5397,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6c70bde132f64c8dea9212f05abe71f5
+    m_Address: SandBuriedTemple - Sunk Fane (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6c7e2efa5992f6dd6ae9a21f64187b75
     m_Address: Mine - Delving
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6c9329592979feb3fb20589e9cab169c
+    m_Address: Necropolis - Tomb Field (Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4719,8 +5439,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6d786cec0608a27319be8935d55402bf
+    m_Address: LakeMonsterLair - Bone Hole (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6d7ebb8f0960ebea3a67383f861cd274
     m_Address: Moron 1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6d82fcc2552d11b1cb8ab96a9d973d34
+    m_Address: LizardfolkVillage - Mudhall Wallow
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6db051f36c0302c49b751a46422da5d8
+    m_Address: Kraal - Cattle Boma
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4815,12 +5553,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 6f2ef4376240b54438d797691a276175
-    m_Address: Deep Ocean
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6f4d5054b0302ce1f9a830b5a817436f
     m_Address: Mock Area Damage Event
     m_ReadOnly: 0
@@ -4857,14 +5589,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 6fc3329cd21567e74a206e38935e6671
-    m_Address: Impact Basin
+  - m_GUID: 6fe2945888b8154da84f854d580b107d
+    m_Address: Mock Debuff Slow
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 6fe2945888b8154da84f854d580b107d
-    m_Address: Mock Debuff Slow
+  - m_GUID: 700e34038b9cb9603b58fda65fcdc95f
+    m_Address: SmugglersTunnel - Run (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7020ca8947dda39228145e6460459d56
+    m_Address: BurnedVillage - Ashes
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 702bf59acec0a92d187b7777bb53f858
+    m_Address: LongBarrow - Giant's Grave (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4893,6 +5637,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 70ba5c23f3e8ae4dea2e5c0bc9d6a06c
+    m_Address: StepPyramid - Sun Steps (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 70bb34a1fa02701618d985bda0545308
     m_Address: Dungeon Chest Loot
     m_ReadOnly: 0
@@ -4905,20 +5655,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 70f9b2bc94e80f202ac51a1b1c8c7643
+    m_Address: SandwormPit - Maw (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 710483eaa975c1b9e8b75efe7d7c2b94
     m_Address: Phosphor-stone
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 719e706202203daeb9b858dbc6bd5be7
-    m_Address: Water Pepper
+  - m_GUID: 715d505c9f1785bf38f0b888fed80c4b
+    m_Address: PetrifiedBattle - Frozen Field
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 71c115edb2136dc4881ecdb89029b200
-    m_Address: Underwater Canyon
+  - m_GUID: 716a5542315760aa19b1490962807a47
+    m_Address: BeeGarden - Bee Boles
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 719003c177a7c560c96ec73d51c23f7c
+    m_Address: AncientForge - Relics
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 719e706202203daeb9b858dbc6bd5be7
+    m_Address: Water Pepper
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4959,6 +5727,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 731179df22f659d2aa69dddfcbf67cf2
+    m_Address: WarbandCamp - Horde (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7334d11ce6573b655bf1be5302857a1a
     m_Address: Creosote Resin
     m_ReadOnly: 0
@@ -4971,8 +5745,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 73b5a9e37df02cd1dae2a24c9e0bc76a
+    m_Address: Grange - Abbey Grange
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 73bb6b8a44154b2d8481bf5b24fa1893
     m_Address: Hydra
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 73bca6f41ed7947b8a7beaac061a55e7
+    m_Address: FireGiantHall - Ember Hall (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5031,6 +5817,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 74bd71950c9cd35569b35ce5a36a8278
+    m_Address: LostLibrary - Scriptorium (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 74fb078b533794d5b9b42a05c718451e
     m_Address: Laterite Iron Ore Node
     m_ReadOnly: 0
@@ -5039,12 +5831,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 75190a9c724c3c22bb6b167ce0e5ec82
     m_Address: Keep - Stone
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 75434cbb6816c5dca86d7ebfd24009b9
-    m_Address: Sulphur Flats
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5073,20 +5859,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 761b0d594569478ab92ead0accd94efa
+    m_Address: SandBuriedTemple - Sunk Fane (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 761c5c558247411bab56c85e3e986866
     m_Address: Perilight Cluster Node
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7647a27884a3c45bdaff23be8cafdb05
-    m_Address: Geyser Basin
+  - m_GUID: 76920696542ff7e5e8097323d0d87a3a
+    m_Address: Reefgold Crystal Node
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 76920696542ff7e5e8097323d0d87a3a
-    m_Address: Reefgold Crystal Node
+  - m_GUID: 76a4ac6984538b5a2a4c9483aebb7681
+    m_Address: ManorHouse - Stone Manor
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5157,20 +5949,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 782b351352c8d2b9b584e82c22d3dcf6
-    m_Address: Shared Wander State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 782ca4500bb24367945e5f4974825496
-    m_Address: Swamp Cave
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 782d800db2a3229799240ec2a1911257
     m_Address: Mock Absorb Shield Buff
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 784713073f5f133de92f97139a666b5e
+    m_Address: Cenote - Serpent Well
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5193,6 +5979,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 78ca131a9265eb87fb101c4f97521438
+    m_Address: StepPyramid - Sun Steps (Medium)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 793ad9eb498a9224989b975a594d5a38
     m_Address: Human
     m_ReadOnly: 0
@@ -5207,6 +5999,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 79a43a22f170f3e9faa20076fcf3796d
     m_Address: Voidstone Cluster Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 79bb4f866cc8132c48c2f6747e0e66ea
+    m_Address: GiantsSteading - Stone Hold (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5241,6 +6039,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7a6f115cacbccca52b4a97754ee74420
+    m_Address: SpellScar - Burn
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7a95d76fb5a74d4a9b7821ff7cb0ee87
     m_Address: Drowned One
     m_ReadOnly: 0
@@ -5255,6 +6059,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7b0b28f4064e4de6982f3ad5758bd9f5
     m_Address: Snow Troll
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7b1ee27bf544bca76a0006ac3dcbe6c2
+    m_Address: SiegeCamp - Palisaded Lines (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7b31f288ae2adb6ccb5810f5d7011e98
+    m_Address: IcePalace - Hall of Ice (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5331,12 +6147,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7c8337299754b7fd04e54964b911ae42
-    m_Address: Shared Patrol State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7c8e30ce227f45ef95d170f43329b628
     m_Address: Serpentfolk
     m_ReadOnly: 0
@@ -5378,14 +6188,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7d7c73381d0e7f4b5530f072f05cf0fa
-    m_Address: Crowd Controller Attack State
+  - m_GUID: 7d912d81ccd28a041aeb98853a79cccb
+    m_Address: Self Minor Armor
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7d912d81ccd28a041aeb98853a79cccb
-    m_Address: Self Minor Armor
+  - m_GUID: 7d9149f3792b9834abd47626839ea12a
+    m_Address: IcePalace - Fallen Court (Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5410,6 +6220,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7e575ddee0d32760887530ae578f10ea
     m_Address: Arnica Bloom
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7e5bb16c756ce1599bea98a534a1e01b
+    m_Address: Keep - Elven Hall
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7e6da9cecd2f281f2934638b27eeee45
+    m_Address: LostLibrary - Scriptorium (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5480,12 +6302,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7fab98e41b8abd02efb6a2186e224faa
-    m_Address: Archer Personality
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7fca81c494d12b7cd8906c9de13a70b9
     m_Address: Sea Grape Node
     m_ReadOnly: 0
@@ -5528,14 +6344,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 806e118c585a0f971e054f4730bb520b
-    m_Address: Rogue Attack State
+  - m_GUID: 8087c1187c7741ffb3156ae60999e7f9
+    m_Address: Mindreaver
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 8087c1187c7741ffb3156ae60999e7f9
-    m_Address: Mindreaver
+  - m_GUID: 80a80ef0040f34a5c8467080c8065073
+    m_Address: MammothGraveyard - Tusk Ring
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5546,8 +6362,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 80ec1dadbfce9f364918ffb0615e9651
+    m_Address: LongshipLanding - Raid Camp (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 812d2d86b6b5576968a1b127ed0157a6
     m_Address: Geyserite Nodule
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 816e3595c36fd92f88a9be66c52e877a
+    m_Address: CliffPalace - Alcove (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5558,8 +6386,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 81d71a32db4f06746b8f98b8101a3473
+    m_Address: SealedVault - Rune Door
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 81dd6c8841df66e44ad306e2ef34aaee
     m_Address: Flame
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 81e9657e4dc25aa4aa8f335007d10e56
+    m_Address: WreckersBeacon - False Light (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5570,8 +6410,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 824094761c4490878b72dca7a845ad3e
+    m_Address: HolyWell - Well-head
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8244be5f8b878b241b27e35c6216397b
     m_Address: Manganese Nodule
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 82910b09f1ba8f8a79229a055f62b2e6
+    m_Address: HauntedManor - Family Crypt (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5584,12 +6436,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 82b83e1c445811210a83a1199be53bad
     m_Address: Mock Hitscan Bullet Event
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 82d2f17f52a1f8544b9ba30936a23320
-    m_Address: Seamount
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5636,6 +6482,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 83571f7f5e8f2cf13bcbf75721fe08d4
+    m_Address: StepPyramid - Fallen Fane (Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 836447efb3c1f6952b02457949881923
     m_Address: Calabar Bean
     m_ReadOnly: 0
@@ -5648,8 +6500,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 83cdff2fdaa883eaaab7bcea92295f40
-    m_Address: Tidal Fracture
+  - m_GUID: 83b72f35acb605f5bb9aed72126c8711
+    m_Address: GoblinWarren - Stockade (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5684,8 +6536,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 84aa96a77e35171d16fb592f8fc7e5ed
-    m_Address: Pet Loyal Personality
+  - m_GUID: 84a8edad4871d23f992281b360c3335b
+    m_Address: HagsCauldron - Witch Pot (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5720,8 +6572,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 85a942c2cfc0a4f709636396c6c5f1e9
+    m_Address: Eyrie - Crag Nest (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 85cc189f4ac6ed8f287c92bd27d24b7a
+    m_Address: AuroraShrine - Sky Ring
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 85cc6118e73ffe5359538d04937b0e21
     m_Address: Resurrection Leaf
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 85d03f76b4446c4248232f1901046849
+    m_Address: Shieling - Summer Huts
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5774,6 +6644,24 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 86b9e7519727d4d94a938da3b7d0cc96
+    m_Address: SalamanderLair - Hot Hollow (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 86c3ac135a46aeaaea9a86f1cc30a12e
+    m_Address: JaguarTemple - Spotted House (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 86df992b5fe939382aa80097bf91ca3b
+    m_Address: LostLibrary - Dry Athenaeum (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 86f083b63e0ba3017adf447a37985b90
     m_Address: Wild Coffee
     m_ReadOnly: 0
@@ -5786,6 +6674,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 870069077705dbadc98479e05ec91ebb
+    m_Address: IdolVault - Sealed Treasury (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 87072ed5aed759fe48d378208b3b5447
     m_Address: Alluvial Gold Node
     m_ReadOnly: 0
@@ -5794,12 +6688,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8738cb874fb6077069ee998d7065a46b
     m_Address: Halite Crystal Node
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 8751b24bf85f92efad896766fd2ace5e
-    m_Address: Combat Flee State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5840,14 +6728,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 889272059f0d037e798d077a3cad029f
-    m_Address: Salt Flat
+  - m_GUID: 884f42fc70399cb2fb4197a5199d0d34
+    m_Address: HangingMonastery - Cliff Chapel
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8883c9647a577e12b8b080d72281771c
+    m_Address: SalamanderLair - Ember Den (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 88d07bacef882715e90dcfa2a6519047
     m_Address: RuinedTower - Keep
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 88fb93e37e3422aa5a59c82b401d6c50
+    m_Address: CultistHideout - Undercroft (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5882,14 +6782,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 89b1957594dc4174db9389dafc7c7476
-    m_Address: Cave
+  - m_GUID: 89c130c77c98456bbad2c43cc2066d32
+    m_Address: Ice Golem
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 89c130c77c98456bbad2c43cc2066d32
-    m_Address: Ice Golem
+  - m_GUID: 89dc3dddd16e71fb096a33c0bee4598f
+    m_Address: ScarecrowField - Scarecrows (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5930,12 +6830,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 8a6915836749a01333e29a4e009c4fde
-    m_Address: Pet Archer Attack State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8afa7d9d2c03418ea0ed0281921e1ae0
     m_Address: Giant Serpent
     m_ReadOnly: 0
@@ -5944,6 +6838,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8b15e9867f644b43824a80284cf9c2a1
     m_Address: Aberration Titles
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8b55c2c314bb2f1bb9f0da4dd4097d28
+    m_Address: BoundaryStone - Mearstone
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5972,14 +6872,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8c10798b399b3a4bb845b72b178518e4
+    m_Address: SignalBeacon - Balefire
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8c3765afafe1a320a834333efba4fd7d
+    m_Address: SilverMineTown - Stone Delving
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8c51faa264e30fc2eba73dea4b173689
     m_Address: Bridge - Timber
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 8c52da053183a404e89f4661a6a4a390
-    m_Address: Ocean
+  - m_GUID: 8c58ecd9d64a89302b63733c1095c1ba
+    m_Address: SwampCathedral - Sunk Minster (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8c657ec9d92bbfcf8af5d213cce9cca3
+    m_Address: FrozenShipwreck - Ghost Hull
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6032,6 +6950,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8db26b6c5ddbfa7d69df12a5055cd8e2
+    m_Address: FrostGiantSteading - Sundered Steading
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8ddebcb65990d7ae7b968d137a497b7b
+    m_Address: IcePalace - Frost Court (Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8df35162756c2e1cc8c8b2111d8887dd
     m_Address: Desert Truffle
     m_ReadOnly: 0
@@ -6074,6 +7004,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8e5a98aa987241e67a419c47a914da67
+    m_Address: Keep - Orc Hold (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8e5e2713ee31ab8a78f241bf52c1db4d
     m_Address: "Hverasl\xFD Mat"
     m_ReadOnly: 0
@@ -6082,6 +7018,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8e614ae235e7563f9ba34500943bd76b
     m_Address: Bellspar Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8e782d28b4d6b73aea87ceb8baff93f4
+    m_Address: HangingTree - Gibbet Tree (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6128,12 +7070,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 8f29be85f37948819e8941bc866690b6
-    m_Address: Volcanic Cave
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8f32ac1f15ee4a928ab2289d38f797fb
     m_Address: Waypoint Interact
     m_ReadOnly: 0
@@ -6164,6 +7100,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8fbec9ea93a55b467ac42d6e4e3e7227
+    m_Address: GolemGraveyard - Still Rows (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8fd308380e90ccaaf8e0a7077cc04968
     m_Address: Coral Fragment
     m_ReadOnly: 0
@@ -6188,12 +7130,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 8fea2bfc9cc7e67021f4258b5a5feaf9
-    m_Address: Brute Attack State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8fec2b819cdea80c6aa056f50b4a2e27
     m_Address: Marula Fruit
     m_ReadOnly: 0
@@ -6212,6 +7148,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9029cdaccebad40088c866310e1e0b79
+    m_Address: CovenCircle - Hag Ring (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 902d3b226004a1206bf2dfbd83836cda
     m_Address: Waystation - Inn
     m_ReadOnly: 0
@@ -6224,20 +7166,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 907788204d61a9f4592c04cb87faf48d
-    m_Address: Wetlands
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9089deedce8cbf32f9b761c226acb8a3
     m_Address: Cotton Boll
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 90a8db0a8f0e9af4398d9c86a3785f14
-    m_Address: Snow
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6262,6 +7192,24 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 90de5609fb94037cd9c75ec91bbc43f9
     m_Address: Date Cluster
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 90eb7a73d9881abb6bdbde4d406eef26
+    m_Address: Pyramid - Fallen King's Tomb (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 90f24ecf041afba87b3baebc08dbca42
+    m_Address: ElderMonolith - Black Obelisk
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 910a884d96d5ec1569bf2121992ef326
+    m_Address: DwarvenGate - Rune Door
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6320,6 +7268,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 91c3915deca2c1595abdcacbc2bf5a94
+    m_Address: Hamlet - Longhouse Stead
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 91e6f03aee9241f283a1de7a8c829808
     m_Address: Construct Titles
     m_ReadOnly: 0
@@ -6332,8 +7286,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 920cca05b1b59eaa6a253d995eccedfe
+    m_Address: AshBuriedCity - Grey City (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9217a27f6d53196cbaff07c79619c898
     m_Address: Breath-ice Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 922b3bf6995955fb381ef9026da87ab2
+    m_Address: MountainKingsHall - Delving Hall
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6364,6 +7330,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 926e0efd132e0399b85eb4eba3185d24
     m_Address: SunkenCity - Reef Halls (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 92913f6dc5fad647a8ef298530d19e43
+    m_Address: CovenCircle - Black Ring (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6410,6 +7382,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 93edd016c04718945ba98578f1a6ab8a
+    m_Address: KrakenGrounds - Crushed Fleet (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 93f114be71e8057ab1006aec9afc37a2
     m_Address: Bindstone Interact
     m_ReadOnly: 0
@@ -6418,12 +7396,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 93f5daffd06e4f2cb1898ae8bc2e21f3
     m_Address: Cloud Giant
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 93fb2e9d657c108f5e209832010309be
-    m_Address: Defender Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6458,8 +7430,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 94b859a041ce497ebbd44a6997e51ffc
-    m_Address: Castle
+  - m_GUID: 94b5486aabd89c1fabb2325e5b4aef6c
+    m_Address: LizardfolkHatchery - Egg Mounds (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6470,8 +7442,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 94cd0019bba4a28c3a709e7bffc57597
+    m_Address: MerfolkVillage - Shell Town
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 95176b808ba983b17ac76f0aed80f7d5
     m_Address: Hadalite
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 952b80751e03098178f26c6ee3fcf260
+    m_Address: KurganField - Khan Mounds (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6500,6 +7484,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 955bab01264225379a6de61b171e8704
+    m_Address: SalamanderLair - Ember Den (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 957b3c77566c0b50bb117905126577b0
     m_Address: Scent Leaf Node
     m_ReadOnly: 0
@@ -6508,6 +7498,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 958b0a21de454a7ea6b6510f7120f375
     m_Address: Molefolk
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 95a9b44c3653073c08788c09ae97142d
+    m_Address: SirenRock - Singing Stone (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 95cc8c67829b2d6c6acf5deed26eb1dd
+    m_Address: FrostGiantSteading - Rime Hall (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6542,6 +7544,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9696ea52266be7249b5c680c3d55b1d2
+    m_Address: GolemGraveyard - Field (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 970d2a4d7efe92faa9c4dfd7d00abf4c
     m_Address: Scroll of Lesser Fireball
     m_ReadOnly: 0
@@ -6562,6 +7570,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 975a64b1aba0600e8bf6c3be86b7a1c3
     m_Address: DungeonEntrance - Barrow
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 977a089dc8bc0e61d916adb5c94b9a02
+    m_Address: LadyOfTheLake - Mere Shrine
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 979744cb3f36530428c435d8115941f9
+    m_Address: FowlersHide - Hide
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6590,12 +7610,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 981218c27f282fe423a954a7d0bd7262
-    m_Address: Pet Defender Attack State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 981ccbfcf1adc4a56a367c343a05319c
     m_Address: Orc Slam
     m_ReadOnly: 0
@@ -6614,14 +7628,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 988df4650cb35eeb083fed48ac5260b5
-    m_Address: Dense Population AI LOD
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9997a2c2024a48ddb3a8f2545c3cafe1
-    m_Address: Swamp Temple
+  - m_GUID: 98f26f547cbd91e90bbaa45457b09c1f
+    m_Address: Pyramid - Fallen King's Tomb (Medium)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6662,14 +7670,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9a17a77cfcc0f1144a0160e90b6974a3
-    m_Address: Tundra
+  - m_GUID: 9a571cab03b3f684da8436e4391abdbb
+    m_Address: Lesser Fireball
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9a571cab03b3f684da8436e4391abdbb
-    m_Address: Lesser Fireball
+  - m_GUID: 9a6dc7444582a8c2d9303703973cff9a
+    m_Address: StepPyramid - Fallen Fane (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6686,6 +7694,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9a99553e8587a908e94f008d5c07fcc2
+    m_Address: FrostGiantSteading - Rime Hall (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9a9963eedde40e68abbf04e2cdbf436b
     m_Address: Teresken Fuel
     m_ReadOnly: 0
@@ -6698,12 +7712,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9ac234842ad51b3fbb1ed5c7598ba571
-    m_Address: Pet Healer Attack State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9acd68b5d976664ee91acbea7fa2f696
     m_Address: Soapstone
     m_ReadOnly: 0
@@ -6712,6 +7720,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9afe0203f436632b0855e7bb7ab567af
     m_Address: Village - Longhouse
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9b05c2dd8e23e609b99ae6338dcb4836
+    m_Address: LongshipLanding - Abandoned Landing
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6740,14 +7754,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9b76883ea2936b51418f17820bfc578c
-    m_Address: Caster Personality
+  - m_GUID: 9ba426ea8ebf28dfb975bee6a5cd1a24
+    m_Address: Harmal Seed
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9ba426ea8ebf28dfb975bee6a5cd1a24
-    m_Address: Harmal Seed
+  - m_GUID: 9ba622c3f8437dc66bc3a0cf6d77c889
+    m_Address: Keep - Dwarven Hold
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6764,20 +7778,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9bfd165e97f7092008314320f45c3329
+    m_Address: Crossroads - Stone Cross
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9c2970e569ecd9f24b4fecbe3f1215c4
+    m_Address: SilverMineTown - Boomtown
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9c6b5920616f9460392f72e8556312e1
     m_Address: Peridot Bomb
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9cb08a4648311a01ba35b5271ef42c1d
-    m_Address: HuntingLodge - Lodge
+  - m_GUID: 9c8a1a3dd7da407c08b92e937c2a44f7
+    m_Address: KoboldDelving - Timbered Adit (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9ccd625de7509191fb1e5b3b257484a2
-    m_Address: Subsurface Ocean Vent
+  - m_GUID: 9cb08a4648311a01ba35b5271ef42c1d
+    m_Address: HuntingLodge - Lodge
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6794,6 +7820,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9d1f0bce8d4508a7cb14480eefff3e8d
+    m_Address: LichSpire - Frost Spire (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9d441fae1626453bcb94798660545a25
+    m_Address: Tower - Dark Tower (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9d67cde2b7a70e618ac7aca668a08356
     m_Address: Salt Peat
     m_ReadOnly: 0
@@ -6806,14 +7844,44 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9da3bcf5073573a9e8d94d26a992e286
+    m_Address: Tower - Dwarven Tower
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9daccdee825671593a1e2b47df117f1f
     m_Address: Moonbloom Tuber Node
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9dd795832dd69f156bc4e8df235cb9d7
+    m_Address: Necropolis - Tomb Field (Medium)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9e06a0ac8fc191f489439c81c899e385
     m_Address: Health Regeneration
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9e0bbb1cffa5eb0d7970a3b05b13fa51
+    m_Address: LostLibrary - Moss Archive (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9e1426b26af4b1817822ba9004c92581
+    m_Address: FrostGiantSteading - Winter Hold
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9eb09f9b4471072b6b55821d37e69ea6
+    m_Address: TidalIslandAbbey - Ruined Abbey
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6838,12 +7906,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9efed37356794b99b8070a7b3f15091b
     m_Address: Willow Witch
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9f3296eca6f1d97a5bbebc50756af659
-    m_Address: Ice Geyser Field
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6902,6 +7964,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a00939980e9f54e81a2cb7af0d6ea207
+    m_Address: TreeVillage - Jungle Boughs
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a019b5968f742afcb8bbda15f5f34ded
     m_Address: Generated Grass
     m_ReadOnly: 0
@@ -6909,12 +7977,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a01d06c474eeff4b6a3bc109df52401b
     m_Address: Shiitake Node
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a0258e4cf8c8d294588e4067f9eaffbe
-    m_Address: Scree
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6927,6 +7989,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a0669382edbd7caaeac2c2b05ceb6751
     m_Address: Solarsteinn Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a0b9805b635ae2d53b06af9076865461
+    m_Address: LongBarrow - Giant's Grave (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6949,26 +8017,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a147728b9035421915a6cfa441838351
-    m_Address: Shared Idle State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a182d18a00fe1a4e6924014276ad5ef7
     m_Address: Iceland Moss Node
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a188e3de8a5794043903352f3ce4a57d
-    m_Address: Basic Attack State
+  - m_GUID: a19292d72549c34fd8829e4feb9264f7
+    m_Address: SeaWitchGrotto - Shell Shrine (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a1c3d447793ee003ea801164ebd7be62
+    m_Address: SignalBeacon - Watch Fire
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a1f47f4144d2db786a921228ae8a2297
     m_Address: Open
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a228217218f75486f86d791bc3231104
+    m_Address: NymphPool - Fair Spring
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6981,6 +8055,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a2605653f1a017028a15a1880d1e5cf6
     m_Address: Golden Mistletoe
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a28d1034c455005db8530431129713b7
+    m_Address: WinterWolfDen - Snow Den (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6999,6 +8079,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a311469f5d95699c5af052d8cfd76e6a
     m_Address: Iroko Timber
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a31c8cdaa0c10de2a9f9fe362d1ef4ad
+    m_Address: GallowsHill - Gibbet Hill (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7027,12 +8113,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a4e7c324c4896a028eb1714c42f92c79
-    m_Address: Combat Flank State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a4feab97120d46c0886fcef063185855
     m_Address: Unicorn
     m_ReadOnly: 0
@@ -7057,6 +8137,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a5ac54eeaeb85f3df950a55f652d9ca0
+    m_Address: FrozenArmy - Host (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a5cd478735d3dc90ebc5eb2f1a9ec272
     m_Address: Silver Ore
     m_ReadOnly: 0
@@ -7069,8 +8155,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a5da22618c8d311ea8bebca862cd5a47
+    m_Address: Bridge - Wind and Rain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a617364db4d0e8444abef6855bb9db37
     m_Address: Yrenara System - Xanaex
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a61dfb82c437aa5a18e2a29ef29d7d2a
+    m_Address: GreenwoodHideout - Trysting Oak (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7099,12 +8197,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a6848ce7996f7664fa2502f1383561a8
-    m_Address: Hills
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a6878e0ff65f4e54a142a62586a2db43
     m_Address: Frostkin
     m_ReadOnly: 0
@@ -7125,6 +8217,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a6e5f60fd69e2dc2bb2d4f7fbb6a7c01
     m_Address: Termite Mushroom Ring Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a6fb1cdaee6afe37298e8f5e50973d07
+    m_Address: HangingTree - Gibbet Tree (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7183,6 +8281,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a7f881ffbbfb765558e85c60e6be0b98
+    m_Address: KrakenGrounds - Sunken Fleet (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a7fdc4043e827dc6f8a7afb869c5c326
     m_Address: Gesho
     m_ReadOnly: 0
@@ -7237,14 +8341,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a8806efef219fca4997d05df4237cdf2
-    m_Address: Grassland
+  - m_GUID: a8d58233cc487efd08361dd46bb95ddb
+    m_Address: FishingCamp - Shore
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a8d58233cc487efd08361dd46bb95ddb
-    m_Address: FishingCamp - Shore
+  - m_GUID: a90874eae5b12a4a581ef7c6a3e9eb2a
+    m_Address: WarbandCamp - Horde (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7285,6 +8389,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a9931908048b737bba1fe07abdc99ab9
+    m_Address: SignalBeacon - Beacon Tower
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a9ab1011439c6d005a3a0f24db3a6a8d
     m_Address: Strand Amber Node
     m_ReadOnly: 0
@@ -7315,8 +8425,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: aaade1fe5738f5c7c9c604a82c9f4a07
-    m_Address: Pet - Caster
+  - m_GUID: aa54fd7d94a42e2aeaad410dcc754656
+    m_Address: WolfDen - Den (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: aa5a9a3b644dd570d853917117092c40
+    m_Address: CliffCastle - Ruined Cliff Castle
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7351,8 +8467,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ab26bd516e30218aaaf15d2ad89dda26
+    m_Address: ElderMonolith - Standing Slab
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ab355ceb8a0ad8df29d871a572e5deef
     m_Address: Leafglass
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ab4f803072a92836191e525002d8e79a
+    m_Address: ScarecrowField - Tatterfield (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7387,6 +8515,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ac3a4a75dbcc97a9798cfacf50909753
+    m_Address: DragonLair - Burned Hold (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ac4ed872f10991e4e80d6fb0a3d53d57
     m_Address: Gold Vein
     m_ReadOnly: 0
@@ -7395,6 +8529,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ac58f5faaf744a5999b69449adca3447
     m_Address: Celestial
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ac6af2bfbd278c1eb9c87d0edc9a3297
+    m_Address: Tower - Ruined Watchtower
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7413,18 +8553,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: aca0873db2e3c1f41b1d062b3fbafcfe
     m_Address: Kuzu Root
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: acc61ce7b6efe90469f3c91315857228
-    m_Address: High Desert
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: acce2c15167bca3468900e3963385b1e
-    m_Address: Basic GetBehind State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7501,14 +8629,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: aeaf2811c19596385bc705b748fab461
+    m_Address: LichSpire - Barrow Tower (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: aec99a2857d4427d89a48f6ba4a2e7ae
+    m_Address: SiegeCamp - Leaguer (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: af0a7e1e11199ec93af0f236504a04de
     m_Address: Wild Garlic Node
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: af5ca3927add4dd0594aa10c585672f4
-    m_Address: Combat Strafe State
+  - m_GUID: af2a67544dc2e63ad9cafce0a21e0106
+    m_Address: IcePalace - Frost Court (Medium)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: af8b711771a9db159be883d524c3e04a
+    m_Address: DruidGrove - Rune Grove
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7521,6 +8667,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: afc54b2fa316da91286de6bcf6bbda36
     m_Address: Balanites Date
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: afe0736b10a9f0a05b03c94d9c7e334c
+    m_Address: CliffPalace - Eagle Town (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7551,6 +8703,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b02df173e71e4b19ba3e474ebe30600b
     m_Address: Bog Troll
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b04d3b47c81aad273aa208f3c9d5ac57
+    m_Address: Grange - Walled Barton
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7597,8 +8755,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b13c93474beeb7da498907d419a3a1e7
+    m_Address: DragonInTheIce - Sleeper (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b16d8278a75a3406580533093aee4cfc
+    m_Address: Keep - Dark Keep (Medium)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b189f5d36cb3f9556a2ac29bfe798951
     m_Address: Iceland Moss
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b193507642ccf9856a3f768856da9b25
+    m_Address: SilverMineTown - Timber Camp
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7609,8 +8785,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b2ae33f093ed6f98a9f3eda1c3d34381
+    m_Address: RoyalMausoleum - Walled Tomb (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b2ec1bf819941f659878ba98a8256d8f
     m_Address: Scurvy-grass Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b30d690e01909af87a7f83fd8d3bf96f
+    m_Address: PlanarRift - Torn Ring (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7639,12 +8827,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b38303e17b56f239d5b65493c5077e23
-    m_Address: Enemy - Pathetic Critter
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b39a2572389d5b6f58673ab400f9039a
     m_Address: Amole Bar
     m_ReadOnly: 0
@@ -7669,20 +8851,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b3d3d24ab4fd4a5808886ca97523b8f1
+    m_Address: DragonLair - Hoard (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b3e8a228df7343289a33744c904f3d61
+    m_Address: LostCity - Ruined Forum (Medium)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b4037e8780b7ec0538d059f8c2130d3e
     m_Address: Black Coral
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b424e6fcd8a240d88c30acb953aa94b7
-    m_Address: Angel
+  - m_GUID: b4092c1a1e2702b1ca006f54258bb95f
+    m_Address: JaguarTemple - Spotted House (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b436e68ffee0c031a85f6580edd2a5bf
-    m_Address: Karst
+  - m_GUID: b424e6fcd8a240d88c30acb953aa94b7
+    m_Address: Angel
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7711,8 +8905,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b4bee0c12e3b92c48b285850bd5d47c1
-    m_Address: Basic Wander State
+  - m_GUID: b4b7242538edf739dbc3d9a8cbeaaaac
+    m_Address: LostCity - Fallen Seat (Medium)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7741,8 +8935,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b52ecc0a8fbea0ffc8620c3080f28335
+    m_Address: SeaMonsterDen - Bones (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b53c7f2f8ddd4d0b5994ed90c1110dfd
+    m_Address: RuneStone - Memorial Ring
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b5609029857a49d768d35d0796c6ba93
+    m_Address: JaguarTemple - Maw (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b576e78f5a3cc67eeacd3b26700f6c7b
+    m_Address: CovenCircle - Black Ring (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b5787b08b68d4f16888d75ecc6c58ef7
     m_Address: Rootwalker
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b578836f1f2f63ca495676d08a1d47e8
+    m_Address: WyvernNest - Scorched Crag (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7761,12 +8985,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b5d1999b2da4c510e947908356cf90ed
     m_Address: Manganese Nodules
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b646a6d9bc4f07d428f12e255af67366
-    m_Address: Basic ReturnHome State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7795,8 +9013,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b728ec09ec81cd7019b099f76be3d674
+    m_Address: PlagueVillage - Quarantine (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b72d65833869b2d98a31a0b673113622
     m_Address: Costus Stem Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b73a35c64e58f1ff388a66ba31df8c2b
+    m_Address: IcePalace - Hall of Ice (Medium)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7813,8 +9043,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b7726aa2f6831acf7896881ab797c35f
+    m_Address: Pyramid - Smooth-sided (Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b7b8c904405796b06877bc69aa853b79
     m_Address: Agave Fibre
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b7c5122bfc10e8c0aa85f3202dc673af
+    m_Address: DragonInTheIce - Sealed Sleeper (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7831,6 +9073,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b7e2ad39161a1e3f3ba43a02c3641ff5
+    m_Address: WyvernNest - Scorched Crag (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b7e5a5a65655fd2fd85a7bce2baae08b
     m_Address: Wolf's-eye
     m_ReadOnly: 0
@@ -7843,18 +9091,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b80bc0482ed9646928250918c4f9a266
-    m_Address: Enemy - Brute
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b84f263b6aaadc40b9179f69c75abdf0
-    m_Address: Shared ReturnHome State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b87875a136904711b8349ab3e07dc843
     m_Address: Bone Wyrm
     m_ReadOnly: 0
@@ -7863,12 +9099,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b896417af2c3afa4aa50d9fc5bb55214
     m_Address: BanditCamp - Palisade (Medium-Large)
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b8e3ea21cfed410ea5c574725ada18d8
-    m_Address: Forest Ruins
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7893,12 +9123,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b96376f1c89554cb8953c0522413601d
     m_Address: Pearl
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b9b7db46ef4a400e8ca4c9b844760dcf
-    m_Address: Enemy Caster Aim Profile
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7939,20 +9163,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bb092e66d6039905483ffa3e5891a9eb
+    m_Address: SummitCairn - Cairn
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bb09b9a0e6ea00d23826aacd6fea1c23
     m_Address: Marsh Clay
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: bb0ae43dffda32580c997677cd023680
-    m_Address: Raging Personality
+  - m_GUID: bb1789e8d286add82831c8eb82384a71
+    m_Address: Adder's-tongue
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: bb1789e8d286add82831c8eb82384a71
-    m_Address: Adder's-tongue
+  - m_GUID: bb4bd3c98f3aee80d914e9cade1bcb5e
+    m_Address: KurganField - Kurgans (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bb6def456f49bd59fbd93f68b43cfa25
+    m_Address: Baobab - Old Baobab
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7975,14 +9211,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bbbfd9d7ba877c684bae5896391933de
+    m_Address: CharcoalClamps - Pitsteads
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bbc3ffd1f84ba447ea823ccbf46100ec
     m_Address: Carrizo Cane
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: bc413206be0853549a685f3ff455c740
-    m_Address: Farmland
+  - m_GUID: bc53f20857e473ed59cb34cc1db387b7
+    m_Address: SpiderThicket - Brood Nest (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7993,8 +9235,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: bc6d27e23a515c9489712a7b8756db07
-    m_Address: Beach
+  - m_GUID: bc9db3124a055c7fea1fcd0a9d8396c2
+    m_Address: Pyramid - Smooth-sided (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8041,8 +9283,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bd381a1997b9a7955bd94457d5c6787c
+    m_Address: SmugglersTunnel - Rum Hole (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bd42d98e781efc1dd805eb46e416c359
     m_Address: Galris 1 POI Settings
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bd4327544db54df6c80783fd1d7d94ba
+    m_Address: LostCity - Ruined Forum (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8065,6 +9319,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bdb2bbe6267b6ee399cf1e88b28a1ffb
+    m_Address: GiantsSteading - Great Hall (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bdd4dc2b9f2cde6918e4f1d2a977ad91
     m_Address: Castle - Highland
     m_ReadOnly: 0
@@ -8073,12 +9333,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: be0de551ea0d11395aaf8e2be3f08ace
     m_Address: Silverleaf Patch
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: be2f4833d770099f2fb9a66541ec48d2
-    m_Address: Crowd Controller Personality
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8103,6 +9357,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bed82351f675d7130a7ea8bd27d1bbe1
     m_Address: Yrenara System - Orvar
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bee1290ada763b93ba5d91645db698fc
+    m_Address: SirenRock - Wreck Rock (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8133,12 +9393,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bf885e1abe304d3ba5a841222f4f93a9
     m_Address: Mummy
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: bfb81bf76967bb24098b2eb22e2a386e
-    m_Address: Basic Orbit State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8175,6 +9429,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c0a6b5cb5391647a7b45feccc953cd6e
     m_Address: Mock Taunt Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c0e79ce30104c8674b2d645c64120044
+    m_Address: RockCutFacade - Tomb Row (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8233,8 +9493,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c1b394c50e981f8e9846e6ae76fd46d9
-    m_Address: Pet - Archer
+  - m_GUID: c1a3bd669288e4397b94ec0b3d160705
+    m_Address: FireTemple - Flame House
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8245,14 +9505,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c1c5f3f9af7f38e87a535e870bf6202d
+    m_Address: LakeMonsterLair - Drowned Hulk (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c1ccb8d1da0194649ad403c25d5ac1dc
     m_Address: Assets/Prefabs/Shared/FishMMO World Scene Details Reader.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c22e53f1996e9e345a80e0a3c32833b4
-    m_Address: Estuary
+  - m_GUID: c204838638dabc53d92b4a534667b69a
+    m_Address: SpiderThicket - Webwood (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c268ae156cc0f50ba82d8b55d8084510
+    m_Address: FireTemple - Pyre
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8275,6 +9547,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c2f6fc6631d326970871548a975633f3
+    m_Address: DragonInTheIce - Sleeper (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c33c8091016cf1b87ac78dd95aee5bbc
+    m_Address: RoyalMausoleum - Barrowdown (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c35bfc4676f577321a17508998ab7440
     m_Address: Moura's Comb Node
     m_ReadOnly: 0
@@ -8293,8 +9577,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c3968d4b8d505f44f927a401902775b9
-    m_Address: Crater
+  - m_GUID: c3d0defbae9fc464f831018a3eef59e6
+    m_Address: MerfolkVillage - Coral Halls
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8317,12 +9601,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c47bc815eee5671ef6c3b054ba8accd5
-    m_Address: Enemy - Crowd Controller
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c4ad5449b72d93c4eabb191b976c8c92
     m_Address: LavaTube - Camp (Small)
     m_ReadOnly: 0
@@ -8341,8 +9619,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c4c6f73061be2109ea420c7613d6fa59
+    m_Address: WarbandCamp - Black Host (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c4eb5f1a4b50f884c92f82a0e7ad26f3
     m_Address: Physical Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c4f32ad41f7310812adb0e5ce0d4b84a
+    m_Address: LakeMonsterLair - Drowned Hulk (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8361,6 +9651,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c56d9fd9ab9752d569250eb567efec3f
     m_Address: Blue Quartz
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c5c404dafa7c9f23697c7c6b16050efa
+    m_Address: VillageGreen - Maypole Green
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8385,6 +9681,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c6414f96346f91bfc9dc83c8f604d2ef
     m_Address: Yrenara System - Lorenra
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c643bb36d106f11d39087ea2e5191188
+    m_Address: DreadRoad - Black Way
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8419,8 +9721,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c74131051c0708837a01c49756f3ea74
+    m_Address: LichSpire - Frost Spire (Medium)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c75c5b309845bc4459373007040f5f7e
     m_Address: Licorice Root
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c77169a6e95d51d5d9d4ab9b8a5b4e95
+    m_Address: SiegeCamp - Leaguer (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8449,6 +9763,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c7e84fb149d459dc6a9763a3f35a0406
+    m_Address: Pyramid - Smooth-sided (Medium)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c7ea6d5e23974b87b8ed4b4de73b0f80
     m_Address: Cave Bear
     m_ReadOnly: 0
@@ -8457,6 +9777,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c7ebf1c4ec8e57701822fc78e65efd0a
     m_Address: LavaTube - Den (Medium)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c81bcbba485d4d8ec8d0cbbc2aa0a1c9
+    m_Address: SpellScar - Glassing
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c82573afe3600c3ec8ca5a7683d24533
+    m_Address: KrakenGrounds - Crushed Fleet (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8485,6 +9817,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c8c160641a95eb0fcb6a5dd5d15d6655
+    m_Address: LongBarrow - Long Barrow (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c8d55dbf68d647a682a1dbbe2f722884
     m_Address: Name Grammar
     m_ReadOnly: 0
@@ -8493,6 +9831,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c8e56fbd5ee04fd55920ae69dd10058a
     m_Address: Yrenara System - Oronos
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c933d295a353d3546ac0a45deebc0f28
+    m_Address: GolemGraveyard - Field (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8521,20 +9865,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c9ba5e86dfbc41378c13f5eb2722eda7
-    m_Address: Jungle Temple
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ca1064cf8e824b3459408462685297c2
     m_Address: Bloodroot
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: ca181bdfbe96d1b5bb20ba12b8e38239
-    m_Address: Cryovolcanic Plain
+  - m_GUID: cadc493e465f14c45862eec0720862a2
+    m_Address: SpiderThicket - Webwood (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8557,8 +9895,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: cb7473dde6a389f684e5e790b5eda8f0
-    m_Address: Combat Orbit State
+  - m_GUID: cbb862c008f3e26498ce67fea735e187
+    m_Address: GoblinWarren - Burrows (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8647,12 +9985,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: cd98f591a3445c5a50a6e478001853a1
-    m_Address: Standard AI LOD
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cda9817140ba48c3baa959bef9cd47e0
     m_Address: Wasp Swarm
     m_ReadOnly: 0
@@ -8671,8 +10003,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cdb6e49c131b942e2bf7c38fb42ac53b
+    m_Address: Keep - Dark Keep (Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cdbd04b06e9c43438f05f8344af77775
     m_Address: Iron Golem
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cdd31f3ffb5e1cc388aadd685e4a26bf
+    m_Address: Grange - Tithe Farm
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ce49271f47c18816fb1c0ea574fe5794
+    m_Address: CliffPalace - Alcove (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8713,6 +10063,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cf1d6c0b4aca4e5b6afd20d387739c02
+    m_Address: HauntedManor - Family Crypt (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cf35623aec811e7249a7527b8f6b4c65
     m_Address: Hypothermic
     m_ReadOnly: 0
@@ -8749,14 +10105,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cf8c24106490b460495c3840e140c0f7
+    m_Address: FrozenShipwreck - Locked Hulk
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cfb372614f62a6833891d9d65e0fe534
     m_Address: Temple - Court
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: cfb923ff685794269056d51a4ae2e4b5
-    m_Address: Critter Attack State
+  - m_GUID: d005178ff6dbdf29bb14745991c6e3c2
+    m_Address: SirenRock - Singing Stone (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8773,8 +10135,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d01dc045aa37e14f50e4c2c9d1927b06
-    m_Address: Enemy - Raging Beast
+  - m_GUID: d02c25192654d4e1ebb4aa4bcba84d65
+    m_Address: PetrifiedBattle - Stone Host
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8787,6 +10149,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d043638d146c7aa69a29c5f2ee14ba29
     m_Address: Hazelnuts
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d048e80222a616d688d640409523682f
+    m_Address: TitansBones - Ribs
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8805,6 +10173,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d0c938b40047485b9f34956a35ac38a0
     m_Address: Redcap
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d0f4c56252cee44659ca17b9638f2420
+    m_Address: GreenwoodHideout - Hollow Oak Camp (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8833,14 +10207,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d1ef20b654744557bcbd9aea2ea8e7ea
-    m_Address: Frostling
+  - m_GUID: d1b9ba2c2b4a7c2bbb49b14b0709ff41
+    m_Address: PlanarRift - Torn Ring (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d22947d6aa769944389affa92386654a
-    m_Address: Mountain Slope
+  - m_GUID: d1ef20b654744557bcbd9aea2ea8e7ea
+    m_Address: Frostling
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8863,6 +10237,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d28745e0fad6d89d6a7f482982909e46
+    m_Address: FireTemple - Colonnade
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d2903c55e5cf941ad92a443aff0618f5
     m_Address: Pigeon Guano
     m_ReadOnly: 0
@@ -8871,6 +10251,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d2bc5b03c47538ec8aa800d3ae014206
     m_Address: Eonyang Amethyst
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d2bc9129b4b0c7d3db6bdf4f152b6abf
+    m_Address: GiantsSteading - Bone Garth (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8899,6 +10285,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d3689bc2b8e7b8677990f30458c53a7f
+    m_Address: IdolVault - Gold Room (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d38e5f52c7b743a2c81dbd973d40f769
     m_Address: Bamboo Culm
     m_ReadOnly: 0
@@ -8923,20 +10315,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d3cd04336e51423684f639b2f7aa9e52
-    m_Address: Volcanic Temple
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d3eb579fb62b400fafadde0d462104e7
     m_Address: Ice Wraith
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d40a0f3dda7b80b129274be26a950681
-    m_Address: Dust Sea
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8947,14 +10327,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d4277052c9ff566e093c700f1fc9dd8c
-    m_Address: Enemy - Archer
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d4412c27f6244b92a453ccfbeb688a87
-    m_Address: Jungle Ruins
+  - m_GUID: d451a154657cf1052a93b3a2509fb861
+    m_Address: GriffinRoost - Ledge Roost (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8973,6 +10347,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d4c35e93c83072d6c830086b52e4ebf4
     m_Address: Rainglass Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d4edf274ab995c4d58249e70cff62147
+    m_Address: RockCutFacade - Treasury (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9031,14 +10411,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d62ad0b871767d8b48c8ecad220c9746
+    m_Address: AmbushSite - Hide (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d64d545d9333eae1e8b1aa08344b42eb
     m_Address: Mopane Worms
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d65b972316a47224fa1822a4d119c8d2
-    m_Address: Savanna
+  - m_GUID: d65bca702f554c78da8bea3f6a67eb92
+    m_Address: TrollBridge - Toll Span (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9069,12 +10455,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d75479b8ff8542e59ae83b3ac2d52676
     m_Address: Frost Drake
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d755916898b9fe8d796f30627e81c3f8
-    m_Address: Steppe
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9133,14 +10513,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d821d4f4f560539ba889e64332e67a34
-    m_Address: Pet Rogue Attack State
+  - m_GUID: d82a8424715c56c139fb28973f9e2398
+    m_Address: Reef Gold
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d82a8424715c56c139fb28973f9e2398
-    m_Address: Reef Gold
+  - m_GUID: d834dbd5da987c719a0a33c950a552c5
+    m_Address: AmbushSite - Overturned Cart (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9181,8 +10561,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d9ba5a0be45006040a146dc72ae56fc6
+    m_Address: LostCity - Fallen Seat (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d9be0f02ed6d9cb21bb01d1c04d30ed3
     m_Address: Mock Spawn Multiply Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d9eaf27c8871e8b12a5dded3ab3d891f
+    m_Address: SunkenShrine - Drowned
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9211,12 +10603,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: da9cc4b1e0b7e851d95965a23b838218
-    m_Address: Bamboo Forest
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: daf8d0eb1f0040e0a81c4744abd7e031
     m_Address: Premade Lesser Flame
     m_ReadOnly: 0
@@ -9231,6 +10617,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: db3a1fe00cb3fbb2fa04c3e44197ceba
     m_Address: Dhoop Root
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: db45b4b98ecdea34686b7396cd8cdfb9
+    m_Address: WinterWolfDen - Pack Hollow (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9265,6 +10657,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dbcb67b88078f0f2caf5f4c04bbebb2d
+    m_Address: Chapel - Chapel
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: dc039dd23ff1763f5b4b76cb73e49875
     m_Address: Chiy Stems
     m_ReadOnly: 0
@@ -9273,6 +10671,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: dc20b6e4794e366b0a7897f2babec56e
     m_Address: Colocynth Gourd
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dc244ea8931144bdc93e14ee3305e657
+    m_Address: LostThrone - Stone Seat
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9289,14 +10693,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: dc9a6782d4e4d93429c32f72d519a817
-    m_Address: Forest
+  - m_GUID: dc87fe7b0e8deb2f88706d9f326f26af
+    m_Address: Crannog - Isle Hall
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: dce1cacafabaf494bb361a105089961b
-    m_Address: River
+  - m_GUID: dcc03a8f8f28eee61bf25a58fe391bf1
+    m_Address: HauntedManor - Grey Manor (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9325,8 +10729,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dd2d8c6d9bd01ade789676bfe74637eb
+    m_Address: Hamlet - Stone Stead
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: dd4222c0da1a934f986eab23d71e3a29
     m_Address: Ant-gold Sand
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dd6665a95f01513a18512f804714832c
+    m_Address: StepPyramid - Rune Steps (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9349,8 +10765,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: de2ac23fe781055f6880cef97914bbd5
+    m_Address: LostLibrary - Dry Athenaeum (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: de6ccfc38e7f30ba580a478cfdac5400
+    m_Address: CovenCircle - Hag Ring (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: deb2cd96ff9ae3478ae2ee80c75fae81
     m_Address: Chiy Stems
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dec9f05f7a9b45da0b4e71fbb6e0dc15
+    m_Address: SwampCathedral - Black Abbey (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9439,8 +10873,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e00f2d7205f1981cdb43d6fa9007f464
+    m_Address: Pyramid - Stepped (Medium)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e021cfc9efe16be74a9d784edb9e7a72
     m_Address: Steppe Peony Root Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e047c5ff5730e71d4b09a846a968ea59
+    m_Address: WolfDen - Bone Lie (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9481,6 +10927,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e0d7f0e6f9111ca68b1ac34703719c08
+    m_Address: SunkenMonument - Colossus
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e0d83ae8a0b7461c95eb91380462e730
     m_Address: Mosskin
     m_ReadOnly: 0
@@ -9495,18 +10947,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e0ec1c9ecdb3e94c3912cee525a13a2b
     m_Address: Mesquite Pods
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e104c34faa16622bc33889b0c4991e34
-    m_Address: Melee Attack State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e10c7ebd0e2c04df927734788ad7f9e4
-    m_Address: Pet - Rogue
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9541,6 +10981,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e17f902ea8d1dc5f7945c7be3ddf2aed
+    m_Address: Pyramid - Fallen King's Tomb (Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e18d464c50b58daddbcf96d9c676dff9
     m_Address: Ironstone
     m_ReadOnly: 0
@@ -9549,6 +10995,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e1d7a3c833fc4c429ebcf16586d3e4e1
     m_Address: Cave Drake
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e1f3bf53d737c658c96cd2ac27626a73
+    m_Address: SwampCathedral - Mire Chapel (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9573,6 +11025,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e23e75d7b3664b7c98116a9dab7cc289
     m_Address: Siren
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e247d4c1f88af7144ba4069cab1833c1
+    m_Address: TrollBridge - Mossed Span (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9603,6 +11061,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e29c56b5be6f4d58083c902294b46c2e
     m_Address: Fire Ice
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e29fd39fba782c7d4886463537dbb390
+    m_Address: FrozenArmy - Host (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9649,6 +11113,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e35e32fbe82567e4195f752d2ecfce1e
+    m_Address: HangingTree - Gallows Oak (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e3629f9c68e94e1bdb78107546e4a0d3
     m_Address: Leafglass Node
     m_ReadOnly: 0
@@ -9663,12 +11133,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e37548aba1d69c14cb2bd288e7882f76
     m_Address: DungeonFog
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e3b4fffecf74d7f40b8e5cc5d335c41e
-    m_Address: Lake
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9709,12 +11173,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e44fb83268c5970a9182d915e579dad7
-    m_Address: Caster Attack State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e479b680481b2e2bc906ffe552d7a2d2
     m_Address: Star-stone
     m_ReadOnly: 0
@@ -9735,12 +11193,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e51ab0951a0991649933710345a96e34
     m_Address: Wind Damage
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e557be921ffadc5f2b39c4cded06c0a7
-    m_Address: Enemy - Melee
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9781,12 +11233,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e5da28c9d029cfa4c8e4edbf13cc4190
-    m_Address: Valley
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e619138e73051871091566c6d46b93ca
     m_Address: Scurvy-grass
     m_ReadOnly: 0
@@ -9805,6 +11251,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e66d0949bc38d2ea099b1b54a42f8a2f
+    m_Address: WaygateRing - Ring Gate
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e67228389920ece6e87d6b6c469e6843
     m_Address: Thunder-glass Node
     m_ReadOnly: 0
@@ -9819,6 +11271,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e674f255f9ce1822797b2bc8d1295a36
     m_Address: Embersalt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e6aad44ff9eac324a859197e375a48e4
+    m_Address: MountainKingsHall - King's Gate
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9847,14 +11305,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e748d5fb66e53e3f89be35bc4ee302dd
+    m_Address: Necropolis - Plundered (Medium)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e75ca86ee3b80a7d1b48cb6e0ff77b43
     m_Address: Ostrich Eggshell
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e762073c5f1e23d99b13150ed3d364d1
+    m_Address: RockCutFacade - Treasury (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e7c66f49fe416e1aa8be82890abf1226
     m_Address: Gentian Root
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e7ce607c27cd954969624f125fe2240d
+    m_Address: KrakenGrounds - Sunken Fleet (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9919,8 +11395,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e9e7e644d73a0afca90106992a7784e6
+    m_Address: TitansBones - Sunken Skull
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e9f7cd15e4fdc4424a46c8541c421859
     m_Address: Rhubarb Root Patch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ea0e7c19bfb59ff38988d89a4277f0c1
+    m_Address: ScarecrowField - Scarecrows (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9949,8 +11437,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ea7bafa3e830e4a849bd1797d03c96c9
+    m_Address: HydraLair - Many Heads (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ea859b52cedb4e139cc22bafd2df3fe7
     m_Address: Cockatrice
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ea9409c51f767e0a9ba8e813c444829c
+    m_Address: Necropolis - City of the Dead (Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10009,6 +11509,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ebc34f5d6f166b27388768e166b28f6b
+    m_Address: MossColossus - Old King
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ebc3b96b2d549addb98d7d7825b63230
     m_Address: Ossuary - Tomb (Small)
     m_ReadOnly: 0
@@ -10045,14 +11551,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: ecd31ff07e929f6ee0b89178e183cb54
-    m_Address: Pet Caster Attack State
+  - m_GUID: ecd76e6855fe724d4867eb6fa7efb723
+    m_Address: Bamboo Culm
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: ecd76e6855fe724d4867eb6fa7efb723
-    m_Address: Bamboo Culm
+  - m_GUID: ecdb98c353f2b689e80650adc56ba2aa
+    m_Address: HagsCauldron - Kettle (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10099,6 +11605,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ed775b55651bd3665bb5de86743c85c5
+    m_Address: Bridge - Corbelled Laterite
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ed8cbeaf068f477ba9e61e1497b66db3
     m_Address: Shade
     m_ReadOnly: 0
@@ -10131,6 +11643,24 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: edfefdf92eeb7a9658fd6aba4de8511f
     m_Address: Forest Morel
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ee40d63fdf014b8ff88f3876001e0bb8
+    m_Address: Sphinx - Half-buried
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ee46b6982bd344bb4b86e49da352a07c
+    m_Address: Keep - Orc Hold (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ee62f708dfcdcbe65b71fe32ae14562e
+    m_Address: LizardfolkVillage - Basking
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10201,6 +11731,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: efac91871929dab4ea0e2eec97b0f32f
+    m_Address: TollGate - Toll Bar
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: efb7dcd9ea5e5385f8de06edecc513ad
+    m_Address: Cenote - Sacred Well
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: efbdd45dd1adc6b4e828526c3e28fdf0
     m_Address: Death Damage
     m_ReadOnly: 0
@@ -10239,6 +11781,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f00bff84f01613ff5819958b2a80d004
     m_Address: Mirewort Patch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f05adef38bf80f6608e935309b95604b
+    m_Address: DruidGrove - Nemeton
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10291,6 +11839,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f13bd8d91d8e360dc8bf7c7ea738d683
+    m_Address: SeaWitchGrotto - Witch's Hole (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f152113da5621e974a4c518d627d4b13
     m_Address: Vivianite
     m_ReadOnly: 0
@@ -10339,6 +11893,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f1ee374531c542665a3fddc5a1602bed
+    m_Address: WarbandCamp - Palisaded Host (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f23c3b7a7b856de45b336f9ba28c3059
     m_Address: Damage Received
     m_ReadOnly: 0
@@ -10375,14 +11935,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f2ff1b36fa92f54889758a1612ee97bf
+    m_Address: KoboldDelving - Delving Door (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f31d8c1cc00d19e55900c5118c57560a
     m_Address: Camp - Hide Tents (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f31f7444f35b6ffee4ed41a0418e0b05
-    m_Address: Pathetic Personality
+  - m_GUID: f3323611ca799ffc9a48d77c5f9a1bf6
+    m_Address: BrickKiln - Kiln
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10399,8 +11965,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f3e125f9506a2486dac2e313c48c224e
+    m_Address: Commandery - Preceptory
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f419d95142350619ca48dc9a2ff71cdd
+    m_Address: HagsCauldron - Witch Pot (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f455d8a612b6da645b9a5f066502307b
     m_Address: Self Minor Movement Speed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f47ea61bd00a281a19802eb684740185
+    m_Address: GolemGraveyard - Still Rows (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10413,6 +11997,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f49f048dccb54b51bf506ba55f79dd75
     m_Address: Ghast
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f4a2c7ffef7879b6a9801987aad376f6
+    m_Address: SpiderThicket - Brood Nest (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10447,6 +12037,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f5153220fc125d58cb64719a34d3944e
+    m_Address: BeeGarden - Skeps
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f51610c5ea351189688d0d79a002ec1e
+    m_Address: TrollStones - Dawnstones
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f540adcb22f44542ba80305e69d9cb46
     m_Address: BanditCamp - Open (Medium-Large)
     m_ReadOnly: 0
@@ -10473,12 +12075,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f57436ec582443c29f11368cf14946ff
     m_Address: Wood Golem
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f5b1bcb5c5de2a877d9877e43907f58d
-    m_Address: Pet Follow State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10542,8 +12138,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f69cd244c730bf8408e3cbc9342dc692
+    m_Address: Kraal - Thorn Ring
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f69ceb06ce90da94fbf1cbff95f3b7f0
     m_Address: an orc
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f6a782f5b5c1ec438a4e0aabdf06e02f
+    m_Address: MossColossus - Sleeper
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10596,6 +12204,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f72dfa3460fd6d326b140ef6489002a3
+    m_Address: SmugglersTunnel - Rum Hole (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f73161e95470468618fe3b38222a4158
+    m_Address: AncientWall - Watch Wall
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f7377f38d08b9c84ab957eb9d610e043
     m_Address: HumanBanker
     m_ReadOnly: 0
@@ -10638,8 +12258,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f8b602c7110e49d89081db59cbe45e09
-    m_Address: Ice Ruin
+  - m_GUID: f8c46400dec30f5a68570ada9d5cdee5
+    m_Address: DryadOak - Heartwood
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10652,6 +12272,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f8df879c7ad8329b39693b0ded31617f
     m_Address: Iron Vein Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f8ec3d115de11e6b69420e082c5d986e
+    m_Address: GiantsSteading - Great Hall (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10698,12 +12324,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f9566bafcdc36754fbf6ce511a0c895a
-    m_Address: Taiga
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f96e397ee43bfa99491610df643da16a
     m_Address: Eonyang Amethyst Node
     m_ReadOnly: 0
@@ -10716,14 +12336,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f9a60b8506f84b8a9c29aa104b54a86e
-    m_Address: Fortress
+  - m_GUID: f9c0129471d85d4f291dbb1c19021d2a
+    m_Address: BuriedHoard - Hidden Cache
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f9e190f2790b17cbebdc9cf0c4b5223f
     m_Address: Mud Crab
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f9fea15449767f6a78c07e09e39ef475
+    m_Address: ReedVillage - Marsh Town
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10746,14 +12372,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: fa57ee5c30f78ef4c8bcdb6d4e23f423
-    m_Address: Badlands
+  - m_GUID: fa6e48a2c3e0c73f2a601eb21a4bc048
+    m_Address: Osage Bow-stave Node
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: fa6e48a2c3e0c73f2a601eb21a4bc048
-    m_Address: Osage Bow-stave Node
+  - m_GUID: fab28f0e7dcaa855380fe26d68e32e9e
+    m_Address: GreenwoodHideout - Hollow Oak Camp (Medium-Large)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10764,8 +12390,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fae58e7e6ad06cfe694767b55591a2e1
+    m_Address: GiantsSteading - Bone Garth (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: fb138e6aa3a25f8108725e2c86f0d11d
     m_Address: Sylvite Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fb141ae0f927c400eaa8ef2a13318786
+    m_Address: WreckersBeacon - Beacon Pyre (Small)
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10818,6 +12456,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fc47d0b00a290c2298f652491a6295b4
+    m_Address: KoboldDelving - Delving Door (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: fc4fba594e0af0d188bee5452d8f94ba
     m_Address: Scurvy-grass
     m_ReadOnly: 0
@@ -10854,6 +12498,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fe1a807098e32832db3153bebbc54825
+    m_Address: Tower - Dark Tower (Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: fe1b1aba7ca618d89829f59e9051b3cb
     m_Address: Camp - Crude (Small)
     m_ReadOnly: 0
@@ -10868,6 +12518,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: fe44f4e6200645436b30517a895f1f0a
     m_Address: Groundnut Tubers
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fe48c298737e3f9b582530cb1c2586a2
+    m_Address: StepPyramid - Fallen Fane (Medium)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fe701dd703294dec3be81e83801fe614
+    m_Address: CliffRelief - Two Kings
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10922,12 +12584,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ffad7685b88ccf7998fa51510109f264
     m_Address: Rhinegold Seam
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: ffdfee25096d5c769f84d5a4f6e91773
-    m_Address: Balanced Personality
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

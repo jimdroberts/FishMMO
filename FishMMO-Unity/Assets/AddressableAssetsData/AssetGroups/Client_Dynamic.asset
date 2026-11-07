@@ -55,6 +55,18 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0d9d26e2162aa4d11ab075b34c029673
+    m_Address: HumanoidIdleJumpUp
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1062212255550964e974f3ffb3cbaae3
+    m_Address: HumanoidRunTurn
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 10e8af4065a7472dad4312511aa26a9c
     m_Address: UIMap
     m_ReadOnly: 0
@@ -85,10 +97,22 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1c52c953c83c2254a9fa72d50250f028
+    m_Address: HumanoidWalkTurn
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1c91c210b740e3f10a6a98b2b10c53f7
     m_Address: UIRegister
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1cb8ed3cbba15f0479fbae54e0a963df
+    m_Address: HumanoidRun
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1ccfefd429974178ae0ad9cd2d136945
     m_Address: UIArenaResults
@@ -263,6 +287,12 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 51dd2e4c869794f75a0df7d54b210214
+    m_Address: HumanoidJumpAndFall
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 53ae72a7b9764db9840817e7c0c397cb
     m_Address: UIArenaScoreboard
     m_ReadOnly: 0
@@ -349,6 +379,12 @@ MonoBehaviour:
     m_Address: UIGathering
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6fb3851da6a6f5948ab6892bee8ba920
+    m_Address: HumanoidStandTurn
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 702abfb7ac1e4949abd13a971c5622a0
     m_Address: UISceneChannel
@@ -490,6 +526,12 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b1a5e04ae51004842aba06704a6c2903
+    m_Address: HumanoidWalk
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b1fad371e8084995938c7194f09c3b8c
     m_Address: UITrade
     m_ReadOnly: 0
@@ -515,6 +557,12 @@ MonoBehaviour:
     m_Address: UIMerchant
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bb141fc9a700c9c4ca7e6dadb8acf24b
+    m_Address: HumanoidWalkTurnSharp
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bcfda08a0239494199a39e1b38352ea7
     m_Address: UICapturePoint
@@ -629,6 +677,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d89ea37480b6d75458aa38843e9688dc
+    m_Address: HumanoidCrouch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d8ed4493f7ac62fb1bf30c48e6ad8061
     m_Address: UIInventory
     m_ReadOnly: 0
@@ -654,6 +708,12 @@ MonoBehaviour:
     m_Address: UIDragObject
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dffa50cfe77e0434bbfa71245b3dd529
+    m_Address: HumanoidIdle
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e0ea9a8778f9f0cad939521a43ddca05
     m_Address: UIAbilityCraft
@@ -704,6 +764,18 @@ MonoBehaviour:
     m_Address: UIBuffContainer
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f03e10c73f30b4ab4aa8ea8f1cc16d36
+    m_Address: HumanoidMidAir
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f2bed5dc5afacff44a00de8daae9703b
+    m_Address: HumanoidRunTurnSharp
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f3973fdedfdddad1f8a055c1bdb1ebad
     m_Address: UILoot

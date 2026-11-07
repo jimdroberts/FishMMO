@@ -122,6 +122,9 @@ crashlytics-build.properties
 # only the generated assets the build reaches are registered in it, and it is removed afterwards.
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/Generated_Biome_Art.asset*
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/Schemas/Generated_Biome_Art_*
+# Build-time group: assets two or more bundles of one build share, isolated while the build runs.
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/Build_Shared_Dependencies.asset*
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/Schemas/Build_Shared_Dependencies_*
 
 # Keep the customized URP configuration package as source; the monorepo's NuGet
 # packages/ rule otherwise also hides Unity's Packages/ on case-insensitive Git.

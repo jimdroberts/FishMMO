@@ -38,6 +38,8 @@ namespace FishMMO.Server.Implementation
 			{
 				"Server_Static_Permanent",
 				Constants.SharedStaticLabel,
+				// Every biome template: the client loads them per scene, the server keeps all of them (art stripped).
+				Constants.SharedBiomesLabel,
 			});
 
 			List<AddressableSceneLoadData> initialScenes = new List<AddressableSceneLoadData>();

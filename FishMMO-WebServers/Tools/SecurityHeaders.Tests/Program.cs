@@ -73,6 +73,30 @@ try
     try { _ = new ContentSecurityPolicy(ContentSecurityPolicyProfile.WebGl, app.Configuration, app.Environment); }
     catch (InvalidOperationException) { insecureProduction = true; }
     Check(insecureProduction, "Production rejects HTTP loopback origins.");
+
+    // List settings: the source that sets a list replaces it, not index by index (appsettings.json is the
+    // Development template, appsettings.Production.json the overrides).
+    static Stream Json(string text) => new MemoryStream(Encoding.UTF8.GetBytes(text));
+    IConfigurationRoot Layered(params string[] files)
+    {
+        var layered = new ConfigurationBuilder();
+        foreach (string file in files) layered.AddJsonStream(Json(file));
+        return layered.Build();
+    }
+    const string developmentFile = "{\"GameHost\":\"127.0.0.1\",\"ContentSecurityPolicy\":{\"ConnectOrigins\":[\"http://localhost:8080\",\"http://localhost:8088\",\"http://localhost:8090\",\"http://127.0.0.1:8080\",\"http://127.0.0.1:8088\",\"http://127.0.0.1:8090\"]}}";
+    const string productionFile = "{\"GameHost\":\"game.fishmmo.com\",\"ContentSecurityPolicy\":{\"ConnectOrigins\":[\"https://api.fishmmo.com\"]}}";
+    var merged = Layered(developmentFile, productionFile);
+    Check(merged.GetSection("ContentSecurityPolicy:ConnectOrigins").Get<string[]>()!.Length == 6, "Index merging keeps the Development tail (the defect this guards against).");
+    string[]? origins = ConfigurationLists.Get(merged, "ContentSecurityPolicy:ConnectOrigins");
+    Check(origins != null && origins.SequenceEqual(new[] { "https://api.fishmmo.com" }), "The Production list replaces the Development list whole.");
+    string layeredProduction = new ContentSecurityPolicy(ContentSecurityPolicyProfile.WebGl, merged, app.Environment).GetHeader(context);
+    Check(layeredProduction.Contains("https://api.fishmmo.com") && !layeredProduction.Contains("http://"), "Production starts with a shorter Production list over the Development file.");
+    Check(ConfigurationLists.Get(Layered(developmentFile), "ContentSecurityPolicy:ConnectOrigins")!.Length == 6, "A list only the base file sets is read from it.");
+    Check(ConfigurationLists.Get(Layered(developmentFile, "{\"ContentSecurityPolicy\":{\"ConnectOrigins\":[]}}"), "ContentSecurityPolicy:ConnectOrigins")!.Length == 0, "An empty list in a later file clears it.");
+    Check(ConfigurationLists.Get(merged, "Cors:AllowedOrigins") == null, "An unset list is null.");
+    var withEnvironment = new ConfigurationBuilder().AddJsonStream(Json(developmentFile))
+        .AddInMemoryCollection(new Dictionary<string, string?> { ["ContentSecurityPolicy:ConnectOrigins:0"] = "https://env.example" }).Build();
+    Check(ConfigurationLists.Get(withEnvironment, "ContentSecurityPolicy:ConnectOrigins")!.SequenceEqual(new[] { "https://env.example" }), "A later source (environment variables) replaces the list too.");
     await app.StopAsync();
     Console.WriteLine($"PASS: {checks} CSP checks, including real HTTP/static-file responses.");
 }

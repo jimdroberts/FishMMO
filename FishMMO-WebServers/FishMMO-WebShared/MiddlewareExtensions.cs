@@ -88,8 +88,8 @@ namespace FishMMO.WebShared
         /// </summary>
         public static void ConfigureTrustedProxies(ForwardedHeadersOptions options, IConfiguration configuration, IHostEnvironment environment)
         {
-            var proxies = configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>();
-            var networks = configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>();
+            var proxies = ConfigurationLists.Get(configuration, "ForwardedHeaders:KnownProxies");
+            var networks = ConfigurationLists.Get(configuration, "ForwardedHeaders:KnownNetworks");
 
             bool changed = false;
             if (proxies != null && proxies.Length > 0)

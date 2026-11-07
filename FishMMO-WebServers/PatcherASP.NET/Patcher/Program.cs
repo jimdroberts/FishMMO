@@ -168,7 +168,7 @@ namespace FishMMO.WebServer
 						{
 							options.AddPolicy("Public", builder =>
 							{
-								var allowedOrigins = context.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+								var allowedOrigins = ConfigurationLists.Get(context.Configuration, "Cors:AllowedOrigins");
 								if (allowedOrigins != null && allowedOrigins.Length > 0)
 								{
 									builder.WithOrigins(allowedOrigins).AllowAnyMethod().AllowAnyHeader();
@@ -284,8 +284,12 @@ namespace FishMMO.WebServer
 						// from generic crawlers don't consume per-IP tokens. Loopback
 						// /healthz is exempted so monitoring works without the secret.
 						var gateSecret = app.ApplicationServices.GetRequiredService<GateSecretHolder>().Secret;
-						app.UseFishMMOClientGate(context.HostingEnvironment, gateSecret, "/healthz");
+						// CORS before the gate: a browser's preflight (OPTIONS) can never carry the client signature, so
+						// behind the gate it was refused (401) and the WebGL client, on another origin, could not call this
+						// server at all. The CORS middleware answers a preflight itself and ends it there; every real request
+						// still goes through the gate, and its responses (refusals included) carry the CORS headers.
 						app.UseCors("Public");
+						app.UseFishMMOClientGate(context.HostingEnvironment, gateSecret, "/healthz");
 						app.UseRateLimiter();
 						app.UseRouting();
 						app.UseEndpoints(endpoints =>

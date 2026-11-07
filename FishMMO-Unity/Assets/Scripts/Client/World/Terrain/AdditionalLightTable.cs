@@ -136,7 +136,9 @@ namespace FishMMO.Client
 				}
 				if (!EnsureCompute())
 				{
-					if (!warned)
+					// Before the boot preload there is no profile to take the compute from yet; EnsureCompute keeps looking
+					// every frame, so that is a wait, not a fault. Warn only when the profile is here and has no kernel.
+					if (!warned && WeatherRenderProfile.Active != null)
 					{
 						warned = true;
 						Debug.LogWarning("[AdditionalLightTable] No " + KernelName + " kernel: WebGPU lit passes read no additional lights or probes.");

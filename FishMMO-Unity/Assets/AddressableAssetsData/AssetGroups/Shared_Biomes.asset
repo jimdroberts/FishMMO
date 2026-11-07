@@ -1,0 +1,520 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: Shared_Biomes
+  m_EditorClassIdentifier: Unity.Addressables.Editor::UnityEditor.AddressableAssets.Settings.AddressableAssetGroup
+  m_GroupName: Shared_Biomes
+  m_GUID: 7d70253e1bc4f918c8f26ee3fcaeb70d
+  m_SerializeEntries:
+  - m_GUID: 03e77f35516b41e44a2b183eab346c4b
+    m_Address: Woodland
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 07d0a5b3f65e989778996ececdbd2d92
+    m_Address: Lava Tube
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0932ae2dfc174cfc82d3bca83d973f66
+    m_Address: Swamp
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0a77c59663600d1e0aa9d801c8f297f6
+    m_Address: Radiation Plain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0d4cbb49a14dfb6c8985875e72fc8e93
+    m_Address: Regolith Plain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 10652836297c413fada42bd89ff8cd1e
+    m_Address: Marble Palace
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 11ffdb31d9244310b91f61c6410f7ec9
+    m_Address: Ice Palace
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 12ae2940abc890b82b1cdbf7b01b980c
+    m_Address: Ice Shelf
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 137290a67db9c62458b7164466f7b6aa
+    m_Address: Volcanic
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1462d992899022c41ae5026be5be3101
+    m_Address: Desert
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1597aec168eeeb5d78080a56745906ae
+    m_Address: Tholin Plain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 16db9fa5fc6fbaed98b9faa1afe2b5ec
+    m_Address: Runaway Greenhouse Plain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1757dc64dd69b9d99a412c94d95b7d03
+    m_Address: Nitrogen Ice Field
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1b1f92c865da4a7688bafee793df36cd
+    m_Address: Ice Cave
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1c3ce24aff3b6b640a1e05020f6528a5
+    m_Address: Permanent Ice
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1c50411fd29785940b8371c30eb82220
+    m_Address: Abyssal Plain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 21ffa9ba4c587a345b5b5f727ab20c42
+    m_Address: Rocky Coast
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 24e045bcfb3323140bf382e6e635ae7d
+    m_Address: Glacier
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 28a2eed8d5735684093a0e2051f69cab
+    m_Address: Coastal Water
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3039a7d15cdf80ce2b2c97aa02aa723b
+    m_Address: Rille
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3e7b0ed763a5ddadd901af1cc12f95d9
+    m_Address: Sulphuric Cloud Deck
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4072bee0f9657214b9ee7aaed10b59a5
+    m_Address: Jungle
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 478cad40b8d299546bc9c5aa6eb8d056
+    m_Address: Scrubland
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4c0c4075c47e4140a6d5acf2e3046e29
+    m_Address: Swamp Ruins
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4e1992ef02b4b184e990ea145b34bdd0
+    m_Address: Rocky Terrain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4fec6d640c1147642be17ff51ea55eae
+    m_Address: Oasis
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 50e0664cd237f87e9a85b5b71b83d9da
+    m_Address: Peat Bog
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 550dbf6c4faec814d90892a954354921
+    m_Address: Alpine
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 59bebcf14d6e3a141b9776e205609f9d
+    m_Address: Coral Reef
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 601fba8a8d5a3f64798664fb2e10d1de
+    m_Address: Wasteland
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 602d4757f2fe4f20be6261bc73694d0a
+    m_Address: Abyss
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 617c4f1877213234aae16b88371c1929
+    m_Address: Mangrove
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 61845b5f40a893842bacff968650d7a5
+    m_Address: Plains
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 643f1c6d23bffb963945c51565e1f92f
+    m_Address: Ice Sheet
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 656c60de4d5e69741abd0e3b08f082da
+    m_Address: Methane Lake
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 65f2a8b5f3bac86cb96a7c115de010b3
+    m_Address: Molten Surface
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6b5f145ed34168d4b98f1410bd41b3ed
+    m_Address: Alpine Meadow
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6f2ef4376240b54438d797691a276175
+    m_Address: Deep Ocean
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6fc3329cd21567e74a206e38935e6671
+    m_Address: Impact Basin
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 71c115edb2136dc4881ecdb89029b200
+    m_Address: Underwater Canyon
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 75434cbb6816c5dca86d7ebfd24009b9
+    m_Address: Sulphur Flats
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7647a27884a3c45bdaff23be8cafdb05
+    m_Address: Geyser Basin
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 782ca4500bb24367945e5f4974825496
+    m_Address: Swamp Cave
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 82d2f17f52a1f8544b9ba30936a23320
+    m_Address: Seamount
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 83cdff2fdaa883eaaab7bcea92295f40
+    m_Address: Tidal Fracture
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 889272059f0d037e798d077a3cad029f
+    m_Address: Salt Flat
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 89b1957594dc4174db9389dafc7c7476
+    m_Address: Cave
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8c52da053183a404e89f4661a6a4a390
+    m_Address: Ocean
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8f29be85f37948819e8941bc866690b6
+    m_Address: Volcanic Cave
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 907788204d61a9f4592c04cb87faf48d
+    m_Address: Wetlands
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 90a8db0a8f0e9af4398d9c86a3785f14
+    m_Address: Snow
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 94b859a041ce497ebbd44a6997e51ffc
+    m_Address: Castle
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9997a2c2024a48ddb3a8f2545c3cafe1
+    m_Address: Swamp Temple
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9a17a77cfcc0f1144a0160e90b6974a3
+    m_Address: Tundra
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9ccd625de7509191fb1e5b3b257484a2
+    m_Address: Subsurface Ocean Vent
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9f3296eca6f1d97a5bbebc50756af659
+    m_Address: Ice Geyser Field
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a0258e4cf8c8d294588e4067f9eaffbe
+    m_Address: Scree
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a6848ce7996f7664fa2502f1383561a8
+    m_Address: Hills
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a8806efef219fca4997d05df4237cdf2
+    m_Address: Grassland
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: acc61ce7b6efe90469f3c91315857228
+    m_Address: High Desert
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b436e68ffee0c031a85f6580edd2a5bf
+    m_Address: Karst
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b8e3ea21cfed410ea5c574725ada18d8
+    m_Address: Forest Ruins
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bc413206be0853549a685f3ff455c740
+    m_Address: Farmland
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bc6d27e23a515c9489712a7b8756db07
+    m_Address: Beach
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c22e53f1996e9e345a80e0a3c32833b4
+    m_Address: Estuary
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c3968d4b8d505f44f927a401902775b9
+    m_Address: Crater
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c9ba5e86dfbc41378c13f5eb2722eda7
+    m_Address: Jungle Temple
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ca181bdfbe96d1b5bb20ba12b8e38239
+    m_Address: Cryovolcanic Plain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d22947d6aa769944389affa92386654a
+    m_Address: Mountain Slope
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d3cd04336e51423684f639b2f7aa9e52
+    m_Address: Volcanic Temple
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d40a0f3dda7b80b129274be26a950681
+    m_Address: Dust Sea
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d4412c27f6244b92a453ccfbeb688a87
+    m_Address: Jungle Ruins
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d65b972316a47224fa1822a4d119c8d2
+    m_Address: Savanna
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d755916898b9fe8d796f30627e81c3f8
+    m_Address: Steppe
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: da9cc4b1e0b7e851d95965a23b838218
+    m_Address: Bamboo Forest
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dc9a6782d4e4d93429c32f72d519a817
+    m_Address: Forest
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dce1cacafabaf494bb361a105089961b
+    m_Address: River
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e3b4fffecf74d7f40b8e5cc5d335c41e
+    m_Address: Lake
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e5da28c9d029cfa4c8e4edbf13cc4190
+    m_Address: Valley
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f8b602c7110e49d89081db59cbe45e09
+    m_Address: Ice Ruin
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f9566bafcdc36754fbf6ce511a0c895a
+    m_Address: Taiga
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f9a60b8506f84b8a9c29aa104b54a86e
+    m_Address: Fortress
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fa57ee5c30f78ef4c8bcdb6d4e23f423
+    m_Address: Badlands
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Biomes
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: cb47100cd0304b14699e0fea13f8dcfc, type: 2}

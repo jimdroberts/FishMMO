@@ -31,30 +31,31 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Gate: require Analyze to have been run and zero critical issues
-			if (cachedDuplicateCount < 0 && cachedNonAddressableRefCount < 0)
+			// Gate: a current Analyze with nothing that breaks the build or the game. Shared dependencies
+			// are not a blocker: the build isolates them (SharedDependencyBuildGroup).
+			if (!analysisCurrent)
 			{
-				EditorUtility.DisplayDialog("Build Blocked",
-					"Run Analyze first to verify the project has no duplicate dependencies or non-addressable references.",
-					"OK");
+				EditorUtility.DisplayDialog("Build Blocked", "Run Analyze first.", "OK");
 				return;
 			}
 
-			bool hasBlockers = cachedDuplicateCount > 0 || cachedNonAddressableRefCount > 0 || cachedAddressCollisionCount > 0;
+			bool hasBlockers = cachedNonAddressableRefCount > 0 || cachedAddressCollisionCount > 0 || cachedStaleEntryCount > 0 ||
+				cachedPlacementErrorCount > 0;
 			if (hasBlockers)
 			{
 				string issues = "";
-				if (cachedDuplicateCount > 0)
-					issues += $"  • {cachedDuplicateCount} duplicate dependencies\n";
 				if (cachedNonAddressableRefCount > 0)
-					issues += $"  • {cachedNonAddressableRefCount} non-addressable references\n";
+					issues += $"  • {cachedNonAddressableRefCount} AssetReference target(s) not addressable\n";
 				if (cachedAddressCollisionCount > 0)
 					issues += $"  • {cachedAddressCollisionCount} address collisions\n";
+				if (cachedStaleEntryCount > 0)
+					issues += $"  • {cachedStaleEntryCount} stale entries\n";
+				if (cachedPlacementErrorCount > 0)
+					issues += $"  • {cachedPlacementErrorCount} entries misplaced by class (Fix All moves them)\n";
 
 				EditorUtility.DisplayDialog("Build Blocked",
 					"Cannot build addressables with unresolved issues:\n\n" + issues +
-					"\nUse Analyze → Dependency Viewer to identify and fix these.\n" +
-					"Use Fix All or Smart Group to resolve bulk issues.",
+					"\nSee Analysis Details. Fix All registers AssetReference targets and resolves collisions.",
 					"OK");
 				return;
 			}

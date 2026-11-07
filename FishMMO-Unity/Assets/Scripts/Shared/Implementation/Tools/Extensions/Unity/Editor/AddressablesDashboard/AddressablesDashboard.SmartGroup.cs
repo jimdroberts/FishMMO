@@ -18,262 +18,123 @@ namespace FishMMO.Shared
 		// ──────────────────────────────────────────────
 
 		/// <summary>
-		/// Fixes duplicate dependencies and non-addressable references by routing each asset
-		/// into a smart group based on its path and context. Shows per-asset confirmation dialogs
-		/// with the suggested group and reason, allowing the user to accept, skip, or accept all.
-		/// Assets under Plugins/ are warned about but never auto-fixed.
+		/// Fixes what Analyze reports as wrong: registers AssetReference targets that are not addressable
+		/// (one confirmation per asset, or Yes All), corrects entries carrying another group's smart label,
+		/// and resolves address collisions. Shared dependencies need no fix (the build isolates them) and
+		/// redundant entries are Smart Group's to remove. Plugin assets are warned about, never registered.
 		/// </summary>
 		private void FixAll()
 		{
-			if (cachedDuplicateCount == 0 && cachedNonAddressableRefCount == 0)
-			{
-				EditorUtility.DisplayDialog("Fix All",
-					"No issues to fix. Run Analyze first to detect duplicate dependencies and non-addressable references.",
-					"OK");
-				return;
-			}
-
 			var settings = AddressableAssetSettingsDefaultObject.Settings;
 			if (settings == null)
 			{
 				SetStatus("Cannot fix — Addressable settings not found.");
 				return;
 			}
-
-			// Collect all assets that need to be made addressable
-			var assetsToFix = new List<string>();
-			var addressablePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-			var depToGroups = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-			var pluginWarnings = new List<string>();
-
-			foreach (var group in settings.groups)
+			if (!analysisCurrent)
 			{
-				if (group == null) continue;
-				foreach (var entry in group.entries)
-				{
-					if (entry == null) continue;
-					if (ShouldSkipLocalAsset(entry.AssetPath)) continue;
-					addressablePaths.Add(entry.AssetPath);
-				}
-			}
-
-			foreach (var group in settings.groups)
-			{
-				if (group == null) continue;
-				foreach (var entry in group.entries)
-				{
-					if (entry == null) continue;
-					if (ShouldSkipLocalAsset(entry.AssetPath)) continue;
-
-					string[] deps = AssetDatabase.GetDependencies(entry.AssetPath, true);
-					string groupName = group.Name;
-
-					for (int d = 0; d < deps.Length; d++)
-					{
-						string dep = deps[d];
-						if (string.Equals(dep, entry.AssetPath, StringComparison.OrdinalIgnoreCase)) continue;
-
-						// Skip scripts, packages, and editor-only assets — they are not bundled
-						if (dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
-							dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) ||
-							IsEditorOnlyPath(dep) ||
-							ShouldSkipLocalAsset(dep))
-						{
-							continue;
-						}
-
-						// Track cross-group dependencies
-						if (!depToGroups.TryGetValue(dep, out HashSet<string> groups))
-						{
-							groups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-							depToGroups[dep] = groups;
-						}
-						groups.Add(groupName);
-					}
-				}
-			}
-
-			// Gather non-addressable refs
-			var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-			foreach (var kvp in depToGroups)
-			{
-				if (!addressablePaths.Contains(kvp.Key) && seen.Add(kvp.Key))
-				{
-					assetsToFix.Add(kvp.Key);
-				}
-			}
-
-			// Separate plugin warnings from fixable assets using the categorizer,
-			// which has exceptions for known runtime plugins (e.g. TextMesh Pro).
-			for (int i = assetsToFix.Count - 1; i >= 0; i--)
-			{
-				AssetCategory cat = CategorizeAsset(assetsToFix[i], null);
-				if (cat.IsPluginWarning)
-				{
-					pluginWarnings.Add(assetsToFix[i]);
-					assetsToFix.RemoveAt(i);
-				}
-			}
-
-			if (assetsToFix.Count == 0 && pluginWarnings.Count == 0)
-			{
-				EditorUtility.DisplayDialog("Fix All", "No fixable issues found.", "OK");
+				EditorUtility.DisplayDialog("Fix All", "Run Analyze first.", "OK");
 				return;
 			}
 
-			// Show plugin warnings first
+			Dictionary<string, string> runtimeKeys = ScanRuntimeKeys(settings);
+			List<(string path, string referrer)> missing = FindMissingRuntimeKeys(settings, runtimeKeys);
+			List<AddressableAssetEntry> mislabeled = FindLabelMismatches(settings);
+			var misplaced = FindPlacementErrors(settings);
+			var pluginWarnings = new List<string>();
+			for (int i = missing.Count - 1; i >= 0; i--)
+			{
+				if (CategorizeAsset(missing[i].path, null, true).IsPluginWarning)
+				{
+					pluginWarnings.Add(missing[i].path);
+					missing.RemoveAt(i);
+				}
+			}
+
+			if (missing.Count == 0 && mislabeled.Count == 0 && misplaced.Count == 0 && cachedAddressCollisionCount == 0 && pluginWarnings.Count == 0)
+			{
+				EditorUtility.DisplayDialog("Fix All", "No issues to fix.", "OK");
+				return;
+			}
 			if (pluginWarnings.Count > 0)
 			{
 				var sb = new StringBuilder();
-				sb.AppendLine($"{pluginWarnings.Count} asset(s) under Assets/Plugins/ are referenced but should be replaced with production assets:\n");
-				int shown = 0;
-				for (int i = 0; i < pluginWarnings.Count; i++)
-				{
-					if (shown >= 20)
-					{
-						sb.AppendLine($"  … and {pluginWarnings.Count - shown} more");
-						break;
-					}
-					sb.AppendLine($"  • {pluginWarnings[i]}");
-					shown++;
-				}
-				Debug.LogWarning($"[AddressablesDashboard] Plugin assets referenced:\n{sb}");
-				EditorUtility.DisplayDialog("Plugin Assets Warning",
-					sb.ToString(),
-					"OK");
-			}
-
-			if (assetsToFix.Count == 0)
-			{
-				SetStatus($"No fixable assets (warned about {pluginWarnings.Count} plugin reference(s)).");
-				return;
-			}
-
-			if (!EditorUtility.DisplayDialog("Fix All",
-				$"Found {assetsToFix.Count} asset(s) to review.\n\n" +
-				"Each asset will be categorized into an appropriate group based on its path.\n" +
-				"You will be prompted for each asset individually.\n\n" +
-				"Begin review?",
-				"Begin", "Cancel"))
-			{
-				return;
+				sb.AppendLine($"{pluginWarnings.Count} AssetReference target(s) under Assets/Plugins/ are not addressable; replace them with production assets:\n");
+				for (int i = 0; i < pluginWarnings.Count && i < 20; i++) sb.AppendLine($"  • {pluginWarnings[i]}");
+				if (pluginWarnings.Count > 20) sb.AppendLine($"  … and {pluginWarnings.Count - 20} more");
+				Debug.LogWarning($"[AddressablesDashboard] Plugin AssetReference targets:\n{sb}");
+				EditorUtility.DisplayDialog("Plugin Assets Warning", sb.ToString(), "OK");
 			}
 
 			try
 			{
 				var groupCache = new Dictionary<string, AddressableAssetGroup>(StringComparer.OrdinalIgnoreCase);
-				int fixedCount = 0;
-				int skippedCount = 0;
-				int deniedCount = 0;
+				int fixedCount = 0, deniedCount = 0, skippedCount = 0;
 				bool acceptAll = false;
-
-				for (int i = 0; i < assetsToFix.Count; i++)
+				for (int i = 0; i < missing.Count; i++)
 				{
-					string assetPath = assetsToFix[i];
+					string assetPath = missing[i].path;
 					string guid = AssetDatabase.AssetPathToGUID(assetPath);
-					if (string.IsNullOrEmpty(guid))
-					{
-						skippedCount++;
-						continue;
-					}
-
-					// Skip if already addressable
-					AddressableAssetEntry existingEntry = settings.FindAssetEntry(guid);
-					if (existingEntry != null)
-					{
-						skippedCount++;
-						continue;
-					}
-
-					// Categorize the asset
-					depToGroups.TryGetValue(assetPath, out HashSet<string> referencingGroups);
-					AssetCategory category = CategorizeAsset(assetPath, referencingGroups);
-
-					// Plugin warning — should not reach here, but guard anyway
-					if (category.IsPluginWarning || string.IsNullOrEmpty(category.GroupName))
-					{
-						skippedCount++;
-						continue;
-					}
-
-					// Build reason with referencing group info
-					string reason = category.Reason;
-					if (referencingGroups != null && referencingGroups.Count > 1)
-					{
-						reason += $" (duplicated across {referencingGroups.Count} groups)";
-					}
-
-					// Per-asset confirmation unless user chose "Yes All"
+					if (string.IsNullOrEmpty(guid) || settings.FindAssetEntry(guid) != null) { skippedCount++; continue; }
+					AssetCategory category = CategorizeAsset(assetPath, null, true);
+					if (string.IsNullOrEmpty(category.GroupName)) { skippedCount++; continue; }
 					if (!acceptAll)
 					{
-						// DisplayDialogComplex returns: 0 = OK, 1 = Cancel, 2 = Alt
 						int choice = EditorUtility.DisplayDialogComplex(
-							$"Fix All — {fixedCount + deniedCount + 1} of {assetsToFix.Count}",
-							$"{assetPath}\n\n" +
-							$"Reason: {reason}\n" +
-							$"Target group: {category.GroupName}",
-							"Yes",       // 0
-							"Skip",      // 1
-							"Yes All");  // 2
-
-						if (choice == 1)
-						{
-							deniedCount++;
-							continue;
-						}
-						if (choice == 2)
-						{
-							acceptAll = true;
-						}
+							$"Fix All — {i + 1} of {missing.Count}",
+							$"{assetPath}\n\nAn AssetReference in {missing[i].referrer} points at it.\n" +
+							$"Reason: {category.Reason}\nTarget group: {category.GroupName}",
+							"Yes", "Skip", "Yes All");
+						if (choice == 1) { deniedCount++; continue; }
+						if (choice == 2) acceptAll = true;
 					}
-
 					AddressableAssetGroup targetGroup = GetOrCreateGroup(settings, category.GroupName, groupCache);
-					if (targetGroup == null)
-					{
-						Debug.LogWarning($"[AddressablesDashboard] Failed to create group '{category.GroupName}' for '{assetPath}'.");
-						skippedCount++;
-						continue;
-					}
+					AddressableAssetEntry entry = targetGroup != null ? settings.CreateOrMoveEntry(guid, targetGroup, false, false) : null;
+					if (entry == null) { skippedCount++; continue; }
+					entry.SetAddress(Path.GetFileNameWithoutExtension(assetPath));
+					SetExclusiveSmartLabel(settings, entry, category.GroupName);
+					fixedCount++;
+				}
 
-					AddressableAssetEntry newEntry = settings.CreateOrMoveEntry(guid, targetGroup, false, false);
-					if (newEntry != null)
+				// Entries the runtime cannot use where they are (server-only class in a client group, cached class
+				// outside the preloaded labels): moved to the group their class requires, after one confirmation.
+				int moved = 0, unmovable = 0;
+				var movable = misplaced.FindAll(m => m.Group != null);
+				unmovable = misplaced.Count - movable.Count;
+				if (movable.Count > 0)
+				{
+					var list = new StringBuilder();
+					for (int i = 0; i < movable.Count && i < 15; i++)
+						list.AppendLine($"  {movable[i].Entry.parentGroup?.Name} → {movable[i].Group}: {Path.GetFileName(movable[i].Entry.AssetPath)}");
+					if (movable.Count > 15) list.AppendLine($"  … and {movable.Count - 15} more (see the Analyze report)");
+					if (EditorUtility.DisplayDialog("Fix All — misplaced by class",
+							$"Move {movable.Count} entr{(movable.Count == 1 ? "y" : "ies")} to the group their class requires?\n\n{list}", "Move", "Skip"))
 					{
-						newEntry.SetAddress(Path.GetFileNameWithoutExtension(assetPath));
-						fixedCount++;
-					}
-					else
-					{
-						skippedCount++;
+						foreach (var m in movable)
+						{
+							AddressableAssetGroup targetGroup = GetOrCreateGroup(settings, m.Group, groupCache);
+							if (targetGroup == null) { unmovable++; continue; }
+							AddressableAssetEntry entry = settings.CreateOrMoveEntry(m.Entry.guid, targetGroup, false, false);
+							if (entry == null) { unmovable++; continue; }
+							SetExclusiveSmartLabel(settings, entry, m.Group);
+							moved++;
+						}
 					}
 				}
 
-				// Resolve any address collisions introduced by filename-only addresses
+				foreach (AddressableAssetEntry entry in mislabeled) FixLabel(settings, entry);
 				int collisionsResolved = ResolveAddressCollisions(settings);
-
 				EditorUtility.SetDirty(settings);
 
-				string message = $"Fixed {fixedCount} asset(s) across categorized groups.";
-				if (collisionsResolved > 0)
-				{
-					message += $" Resolved {collisionsResolved} address collision(s).";
-				}
-				if (deniedCount > 0)
-				{
-					message += $" Skipped {deniedCount} (denied).";
-				}
-				if (skippedCount > 0)
-				{
-					message += $" Skipped {skippedCount} (already addressable or invalid).";
-				}
-				if (pluginWarnings.Count > 0)
-				{
-					message += $" Warned about {pluginWarnings.Count} plugin reference(s).";
-				}
-
+				string message = $"Registered {fixedCount} AssetReference target(s), moved {moved} misplaced entr{(moved == 1 ? "y" : "ies")}, corrected {mislabeled.Count} label(s)";
+				if (unmovable > 0) message += $", left {unmovable} misplaced (no group; see Analyze)";
+				if (collisionsResolved > 0) message += $", resolved {collisionsResolved} address collision(s)";
+				if (deniedCount > 0) message += $", skipped {deniedCount} (denied)";
+				if (skippedCount > 0) message += $", skipped {skippedCount} (already addressable or no group)";
+				if (pluginWarnings.Count > 0) message += $", warned about {pluginWarnings.Count} plugin asset(s)";
+				message += ".";
 				Debug.Log($"[AddressablesDashboard] {message}");
 				SetStatus(message);
-
-				// Refresh tree to show updated state
 				RebuildTree();
 			}
 			catch (Exception ex)
@@ -424,15 +285,14 @@ namespace FishMMO.Shared
 		// ──────────────────────────────────────────────
 
 		/// <summary>
-		/// Asset file extensions that should be made addressable during Smart Group.
+		/// Asset file extensions Smart Group considers as roots. Materials, textures and models are not roots:
+		/// they travel with whatever uses them, and the build isolates any two bundles share.
 		/// </summary>
 		private static readonly HashSet<string> AddressableExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 		{
 			".prefab",
 			".asset",
 			".unity",
-			".mat",
-			".rendertexture",
 		};
 
 		/// <summary>
@@ -557,8 +417,9 @@ namespace FishMMO.Shared
 
 					string normalized = path.Replace('\\', '/');
 
-					// Generated biome art never goes in a committed group (ProceduralArtBuildGroup).
-					if (FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup.IsGenerated(normalized)) continue;
+					// Build output (generated art, terrain arrays, baked maps and planet surfaces) is registered
+					// by the build in its own temporary group and is gitignored: never a committed entry.
+					if (IsBuildOutput(normalized)) continue;
 
 					// Skip excluded directories
 					bool excluded = false;
@@ -587,9 +448,12 @@ namespace FishMMO.Shared
 			if (!EditorUtility.DisplayDialog("Smart Group",
 				$"Found {candidates.Count} asset(s) across Prefabs, Scenes, and Templates.\n\n" +
 				"This will:\n" +
-				"  • Create/move entries into categorized groups\n" +
+				"  • Create/move entries into categorized groups (prefabs, assets and scenes only;\n" +
+				"    scene content stays with its scene)\n" +
 				"  • Assign labels matching the group name\n" +
-				"  • Set packing modes (PackTogether for static, PackSeparately for dynamic/scenes)\n\n" +
+				"  • Set packing modes (PackTogether for static, PackSeparately for dynamic/scenes)\n" +
+				"  • Route the Default Group's project assets by the same rules\n" +
+				"  • Offer to remove redundant entries (asked separately)\n\n" +
 				"Proceed?",
 				"Proceed", "Cancel"))
 			{
@@ -664,6 +528,11 @@ namespace FishMMO.Shared
 						}
 						moved++;
 					}
+					else if (CustomBuildTool.Core.ServerContentPacking.IsVisualAsset(AssetDatabase.GetMainAssetTypeAtPath(assetPath)))
+					{
+						// A texture saved as .asset is not a root either.
+						skipped++;
+					}
 					else
 					{
 						// Create new entry
@@ -687,92 +556,45 @@ namespace FishMMO.Shared
 					ApplyGroupPackingMode(kvp.Value, kvp.Key);
 				}
 
-				// ── Resolve cross-group duplicate dependencies ──
-				// After smart-grouping the primary assets, scan all entries for
-				// non-addressable deps that are referenced by 2+ groups. Making
-				// these addressable ensures they are bundled once rather than
-				// duplicated in every referencing bundle.
-				int dupesFixed = 0;
-				int dupesPluginSkipped = 0;
+				// ── Default Group: route project assets by the same rules ──
+				// It is included in both builds, so a client model or texture parked there ships to the server.
+				// Plugin assets stay: they are warned about, and some are loaded by address on both sides.
+				int rerouted = 0;
+				if (settings.DefaultGroup != null)
 				{
-					var addressablePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-					foreach (var group in settings.groups)
+					foreach (AddressableAssetEntry entry in new List<AddressableAssetEntry>(settings.DefaultGroup.entries))
 					{
-						if (group == null) continue;
-						foreach (var entry in group.entries)
-						{
-							if (entry == null) continue;
-							if (ShouldSkipLocalAsset(entry.AssetPath)) continue;
-							addressablePaths.Add(entry.AssetPath);
-						}
-					}
-
-					var depToGroups = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-					foreach (var group in settings.groups)
-					{
-						if (group == null) continue;
-						foreach (var entry in group.entries)
-						{
-							if (entry == null) continue;
-							if (ShouldSkipLocalAsset(entry.AssetPath)) continue;
-							string[] deps = AssetDatabase.GetDependencies(entry.AssetPath, true);
-							for (int d = 0; d < deps.Length; d++)
-							{
-								string dep = deps[d];
-								if (string.Equals(dep, entry.AssetPath, StringComparison.OrdinalIgnoreCase)) continue;
-								if (dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
-									dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) ||
-									IsEditorOnlyPath(dep) ||
-									ShouldSkipLocalAsset(dep))
-								{
-									continue;
-								}
-								if (addressablePaths.Contains(dep)) continue;
-
-								if (!depToGroups.TryGetValue(dep, out HashSet<string> dg))
-								{
-									dg = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-									depToGroups[dep] = dg;
-								}
-								dg.Add(group.Name);
-							}
-						}
-					}
-
-					foreach (var kvp in depToGroups)
-					{
-						if (kvp.Value.Count <= 1) continue; // only fix cross-group duplicates
-
-						string depPath = kvp.Key;
-						string guid = AssetDatabase.AssetPathToGUID(depPath);
-						if (string.IsNullOrEmpty(guid)) continue;
-						if (settings.FindAssetEntry(guid) != null) continue; // already addressable
-
-						AssetCategory cat = CategorizeAsset(depPath, kvp.Value);
-						if (cat.IsPluginWarning || string.IsNullOrEmpty(cat.GroupName))
-						{
-							if (cat.IsPluginWarning) dupesPluginSkipped++;
-							continue;
-						}
-
-						AddressableAssetGroup tg = GetOrCreateGroup(settings, cat.GroupName, groupCache);
-						if (tg == null) continue;
-
-						AddressableAssetEntry ne = settings.CreateOrMoveEntry(guid, tg, false, false);
-						if (ne != null)
-						{
-							ne.SetAddress(Path.GetFileNameWithoutExtension(depPath));
-							SetExclusiveSmartLabel(settings, ne, cat.GroupName);
-							dupesFixed++;
-						}
-					}
-
-					// Apply packing modes on any newly created groups
-					foreach (var kvp2 in groupCache)
-					{
-						ApplyGroupPackingMode(kvp2.Value, kvp2.Key);
+						if (entry == null || entry.AssetPath.StartsWith("Assets/Plugins/", StringComparison.OrdinalIgnoreCase)) continue;
+						AssetCategory category = CategorizeAsset(entry.AssetPath, null, true);
+						if (category.IsPluginWarning || string.IsNullOrEmpty(category.GroupName)) continue;
+						AddressableAssetGroup target = GetOrCreateGroup(settings, category.GroupName, groupCache);
+						if (target == null) continue;
+						settings.CreateOrMoveEntry(entry.guid, target, false, false);
+						AddressableAssetEntry movedEntry = settings.FindAssetEntry(entry.guid);
+						if (movedEntry != null) SetExclusiveSmartLabel(settings, movedEntry, category.GroupName);
+						rerouted++;
 					}
 				}
+
+				// ── Redundant entries: scene content nothing loads by key ──
+				// Shared dependencies are not fixed here any more: the build isolates whatever two of its bundles share.
+				int pruned = 0;
+				Dictionary<string, string> runtimeKeys = ScanRuntimeKeys(settings);
+				List<AddressableAssetEntry> redundant = FindRedundantEntries(settings, runtimeKeys);
+				if (redundant.Count > 0 && EditorUtility.DisplayDialog("Smart Group — redundant entries",
+					$"{redundant.Count} entr{(redundant.Count == 1 ? "y is" : "ies are")} scene content that only its scene uses " +
+					"(props, materials, textures, terrain chunks, details).\n\n" +
+					"Removing them packs each into its scene's bundle, so it loads and unloads with the scene instead of " +
+					"being its own bundle or staying resident in the client's permanent group. Anything two bundles share " +
+					"is isolated once at build time.\n\nNavMeshes, AssetReference targets and runtime-loaded labels are kept. " +
+					"Remove these entries?", "Remove", "Keep"))
+				{
+					foreach (AddressableAssetEntry entry in redundant)
+					{
+						if (settings.RemoveAssetEntry(entry.guid, false)) pruned++;
+					}
+				}
+				foreach (AddressableAssetEntry entry in FindLabelMismatches(settings)) FixLabel(settings, entry);
 
 				// Resolve any address collisions introduced by filename-only addresses
 				int collisionsResolved = ResolveAddressCollisions(settings);
@@ -829,7 +651,8 @@ namespace FishMMO.Shared
 
 				var sb = new StringBuilder();
 				sb.Append($"Smart Group complete. Created {created}, moved {moved}");
-				if (dupesFixed > 0) sb.Append($", resolved {dupesFixed} duplicate dep(s)");
+				if (rerouted > 0) sb.Append($", re-routed {rerouted} from the Default Group");
+				if (pruned > 0) sb.Append($", removed {pruned} redundant entr{(pruned == 1 ? "y" : "ies")}");
 				if (collisionsResolved > 0) sb.Append($", resolved {collisionsResolved} address collision(s)");
 				if (labeled > 0) sb.Append($", labeled {labeled}");
 				if (removedGroups > 0) sb.Append($", removed {removedGroups} empty group(s)");
@@ -837,9 +660,9 @@ namespace FishMMO.Shared
 				if (skipped > 0) sb.Append($", skipped {skipped}");
 				sb.Append(".");
 
-				if (pluginWarnings.Count > 0 || dupesPluginSkipped > 0)
+				if (pluginWarnings.Count > 0)
 				{
-					int totalPluginWarn = pluginWarnings.Count + dupesPluginSkipped;
+					int totalPluginWarn = pluginWarnings.Count;
 					sb.Append($"\n\n{totalPluginWarn} plugin asset(s) skipped (replace with production assets):");
 					int shown = 0;
 					for (int i = 0; i < pluginWarnings.Count; i++)

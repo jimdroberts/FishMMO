@@ -234,6 +234,7 @@ Run with no arguments to enter the menu:
 7 : Delete FishMMO Database (DANGEROUS!)
 8 : Configure PgBouncer (generate pgbouncer.ini + userlist.txt, Linux)
 9 : Configure Server Keys (gate secret, HMAC key, KEK → database)
+A : Create Admin Account (Control Panel sign-in, two-factor; needs 9 first)
 0 : Back
 ```
 
@@ -566,8 +567,8 @@ To discard every account, character and key and rebuild the schema from the curr
 3. **Installer → Database → 7 — Delete FishMMO Database.** Needs the PostgreSQL superuser password; type `DELETE` to confirm. The application role and PgBouncer's auth file are left alone.
 4. **Installer → Database → 4 — Install FishMMO Database.** Scaffolds `Initial` from the current model and applies it as the superuser.
 5. **Installer → Database → 9 — Configure Server Keys.** A new database has no gate secret, KEK or connection-token key, and every server refuses to start without them.
-6. **Unity → FishMMO Dashboard → Game Settings → Client Secret.** The gate secret changed, so regenerate `ClientApiSecret.generated.cs` and **rebuild every client**; an old client is refused by IPFetch and the Patcher.
-7. **Create the first administrator** — see [Closed Beta: First Administrator and Beta Codes](#closed-beta-first-administrator-and-beta-codes).
+6. **Unity → FishMMO Dashboard → Game Settings → Client Secret → Fetch from Database**, then **Write Secret to File**. The gate secret changed, so regenerate `ClientApiSecret.generated.cs` and **rebuild every client**; an old client is refused by IPFetch and the Patcher (`401`, "signature mismatch" in their log).
+7. **Installer → Database → A — Create Admin Account.** See [Closed Beta: First Administrator and Beta Codes](#closed-beta-first-administrator-and-beta-codes).
 
 ### Creating New Migrations
 
@@ -756,6 +757,13 @@ The build process copies the appropriate `.cfg` and `appsettings.json` files fro
 > **Important:** Build Addressables first, then build the game. The game build depends on the Addressable bundles produced in the first step.
 
 > **Client Addressables builds bake the world maps** before building bundles and remove them afterwards — see [Build World Scene Details](#build-world-scene-details). Server builds do neither.
+
+**How Addressables content is organized.** The committed groups hold only what the game asks for by name, and every build works out the rest itself.
+
+- **Entries are roots:** scenes, the permanent label sets (`Shared_Static_Permanent` — templates and shared prefabs, constant data both sides load at launch; `Client_Static_Permanent` — shaders, fonts, UI; `Server_Static_Permanent` — NavMeshes and server catalogues), AssetReference targets, and assets loaded by address. A scene's own content (prop prefabs, look materials and textures, terrain chunks, details) is *not* an entry: it travels in the scene's bundle and loads and unloads with the scene. Generating a scene registers only the scene, its NavMesh and any AssetReference targets.
+- **Duplicates are isolated at build time.** Before bundling, the build simulates itself (`AddressablesBuildPlan`: which groups it includes — server builds drop every `Client` group, client builds every `Server` group — and how each group splits into bundles; PackSeparately is one bundle per entry). Every implicit dependency two or more bundles would each copy is registered in the temporary `Build_Shared_Dependencies` group, packed by the set of bundles that use it, and removed after the build (gitignored, like `Generated_Biome_Art`).
+- **The server ships nothing visual.** Server content builds remove materials, shaders, image textures, sprites and fonts (`ServerContentPacking`); meshes, TerrainData (with its control maps), TerrainLayers, animation, NavMesh and gameplay data stay. A server build of 34 GB on 2026-11-06 was 46 GB (uncompressed) of look textures copied into hundreds of scene bundles; this is what removes them.
+- **Addressables Dashboard:** *Analyze* simulates the client and the server build and reports, per build, entries, bundles and shared dependencies, plus AssetReference targets that are not addressable (they fail at run time), redundant entries, label mismatches, address collisions and stale entries. Only missing AssetReference targets, collisions and stale entries block *Build*. *Fix All* registers missing AssetReference targets, corrects labels and resolves collisions. *Smart Group* routes prefabs, assets and scenes (never materials, textures or models — they travel with what uses them), routes the Default Group's project assets, and offers to remove redundant entries.
 
 **Headless builds and the build-target switch.** A CLI build (`-batchmode -executeMethod`) that has to switch build target used to be rejected for running while scripts were compiling, producing no artifact — and re-running the identical command immediately afterwards succeeded, because by then the target already matched and no switch happened. `SwitchActiveBuildTarget` is synchronous and already recompiles for the new target, and the `AssetDatabase.Refresh(ForceUpdate)` that follows settles the define symbols; the extra `ForceEditorScriptRecompile` on top of that queued a *further* compile, and under `-executeMethod` nothing turns the editor loop over until the method returns, so it stayed pending for the rest of the invocation. That recompile is now skipped in batch mode — interactive Dashboard builds keep it, where the editor loop can service it. `RunCliBuild` also fails fast, naming the reason, if scripts somehow are still compiling: nothing on that thread can advance a pending compile in batch mode, so waiting cannot help and sleeping would block the very thread that runs compilation.
 
@@ -1431,7 +1439,7 @@ The IPFetch and Patcher web servers use a **ClientGate** middleware that validat
 **In Development:** Logs a warning and passes all requests through.
 **WebGL Server:** Does not use ClientGate (static content, publicly accessible).
 
-The gate secret is generated and stored by the FishMMO-Installer's SecurityKeyInstaller (Database menu > Configure Server Keys, or CLI `--configure-server-secrets <regions>`). The client-side copy is obtained from the **FishMMO Dashboard → Game Settings → Client Secret** section in the Unity Editor.
+The gate secret is generated and stored by the FishMMO-Installer's SecurityKeyInstaller (Database menu > Configure Server Keys, or CLI `--configure-server-secrets <regions>`). The client-side copy is written by the **FishMMO Dashboard → Game Settings → Client Secret** section in the Unity Editor: **Fetch from Database** reads `deployment_secrets.client_gate_secret` through the servers' own database configuration (and says whether it differs from the written file), **Write Secret to File** writes `ClientApiSecret.generated.cs` (gitignored). A client built with any other secret gets `401` from IPFetch and the Patcher on every request.
 
 ### Web Server Security & Environment Variables
 
@@ -2374,22 +2382,12 @@ Everything on one Linux machine behind a home or office router, playable in the 
 
 The Production templates ship with verification off and the beta gate on: `LoginServer.cfg` has `VerifyEmail/VerifySms/VerifyDiscord=false`, `BetaMode=true`, `BetaPrograms=closed_beta`, and `appsettings.ControlPanel.json` has `Verification` all `false` and `Beta: { Enabled: true, Programs: ["closed_beta"] }`. Keep the two files in step. New accounts are verified at creation, still enrol in two-factor authentication, and cannot be created without a code; sign-in refuses players who hold no code. Staff (GameMaster and above) are never refused.
 
-A fresh database has no accounts and no codes, so the first administrator is made with the gate briefly open:
+A fresh database has no accounts and no codes, and registering needs a code that only an administrator can mint. The installer makes the first administrator:
 
-1. Stop the panel service and start it once by hand with the gate off (the environment variable overrides the JSON):
-   ```bash
-   sudo systemctl stop fishmmo-controlpanel
-   cd Builds/ControlPanel/Release/net8.0/publish
-   FISHMMO_ENVIRONMENT=Production ASPNETCORE_ENVIRONMENT=Production Beta__Enabled=false dotnet FishMMO-ControlPanel.dll
-   ```
-2. Register at `https://panel.example.com` and complete the two-factor enrolment. Keep the recovery codes.
-3. Promote the account to Admin (`3`), connecting to PostgreSQL directly:
-   ```bash
-   psql -h 127.0.0.1 -p 5432 -U <app-role> -d fishmmo \
-     -c "UPDATE accounts SET access_level = 3 WHERE lower(name) = lower('<your-account>');"
-   ```
-4. Stop the hand-started panel (Ctrl+C) and `sudo systemctl start fishmmo-controlpanel`. Sign in again so the session carries the new level.
-5. **Mint codes:** Administration → **Beta codes**. Choose the program (`closed_beta`), how many codes, how many accounts each admits, an optional expiry and a reason; confirm with a fresh two-factor code. The codes are shown **once**, with Copy and Download — save them before leaving the page. The same page lists codes per program and revokes a code.
+1. **Installer → Database → A — Create Admin Account** (after **9 — Configure Server Keys**, which creates the TOTP master key it needs). It asks for an account name, email, age and password (the game's own rules), then creates the account in one transaction: Admin, verified, email as its channel, and enrolled in two-factor authentication, with the change written to the audit log (source `installer`). It connects with the servers' own database credentials, so no superuser password is asked for. It never touches an existing account; promote one from the panel instead.
+2. **Add the authenticator and save the recovery codes.** They are shown once: a QR code in the terminal when `qrencode` is installed (`sudo pacman -S qrencode`), the key for manual entry, the `otpauth://` URI and the recovery codes. Nothing is written to disk, and the screen is cleared after you confirm you saved them.
+3. Sign in at `https://panel.example.com` with the account name, the password and a code from the authenticator. The same account signs in to the game, and the beta gate never refuses it.
+4. **Mint codes:** Administration → **Beta codes**. Choose the program (`closed_beta`), how many codes, how many accounts each admits, an optional expiry and a reason; confirm with a fresh two-factor code. The codes are shown **once**, with Copy and Download — save them before leaving the page. The same page lists codes per program and revokes a code.
 
 Players enter the code on the game's **Register** screen or on the panel's registration page. An account created before the gate was switched on can redeem a code later in the panel. To open the game to everyone, set `BetaMode=false` and `Beta:Enabled=false` and restart the LoginServer and the panel.
 
