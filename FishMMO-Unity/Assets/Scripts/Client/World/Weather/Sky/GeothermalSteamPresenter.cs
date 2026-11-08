@@ -5,6 +5,7 @@ using FishMMO.Shared;
 using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
 using FishMMO.Shared.Biomes;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Client
 {
@@ -126,7 +127,7 @@ namespace FishMMO.Client
 		private readonly List<GeothermalSite> sites = new List<GeothermalSite>();
 		private readonly List<Found> found = new List<Found>();
 		private Vector2 foundAt = new Vector2(float.MaxValue, float.MaxValue);
-		private int foundScene = int.MinValue;
+		private SceneHandle foundScene = SceneHandle.None;
 		private float foundTime = float.NegativeInfinity;
 		/// <summary>How often an empty search is tried again, real seconds.</summary>
 		private const float RetrySeconds = 2f;
@@ -171,7 +172,7 @@ namespace FishMMO.Client
 			lengths.Clear();
 			airByBlock.Clear();
 			found.Clear();
-			foundScene = int.MinValue;
+			foundScene = SceneHandle.None;
 		}
 
 		private void Update()
@@ -195,7 +196,7 @@ namespace FishMMO.Client
 			}
 			if (fallbackMaterial == null)
 			{
-				Shader shader = Shader.Find(VolcanicPlumePresenter.ShaderName);
+				Shader shader = ShaderLookup.Find(VolcanicPlumePresenter.ShaderName);
 				if (shader != null)
 				{
 					fallbackMaterial = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
@@ -392,7 +393,7 @@ namespace FishMMO.Client
 		/// <summary>The sites round the camera, and the ground each stands on: again whenever the camera has moved far enough.</summary>
 		private void FindSites(Vector2 viewer)
 		{
-			int scene = context.Scene.IsValid() ? context.Scene.handle : int.MinValue;
+			SceneHandle scene = context.Scene.IsValid() ? context.Scene.handle : SceneHandle.None;
 			// Searched again when the camera has moved, and now and then while nothing was found: asked before
 			// the biomes or the terrain have loaded, every candidate reads as plain ground.
 			bool retry = found.Count == 0 && Time.unscaledTime - foundTime > RetrySeconds;

@@ -15,7 +15,7 @@ namespace FishMMO.Shared
 	/// </remarks>
 	public static class SceneNames
 	{
-		private static readonly Dictionary<int, string> byHandle = new Dictionary<int, string>();
+		private static readonly Dictionary<SceneHandle, string> byHandle = new Dictionary<SceneHandle, string>();
 		private static bool hooked;
 
 		/// <summary>The scene's name, as <see cref="Scene.name"/>; null for an invalid scene, as it is.</summary>
@@ -26,7 +26,7 @@ namespace FishMMO.Shared
 				return scene.name;
 			}
 			Hook();
-			int handle = scene.handle;
+			SceneHandle handle = scene.handle;
 			if (!byHandle.TryGetValue(handle, out string name))
 			{
 				name = scene.name;

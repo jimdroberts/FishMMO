@@ -174,7 +174,7 @@ namespace FishMMO.Shared
 					return gameObject.scene;
 				}
 #endif
-				if (ownScene.handle == 0)
+				if (ownScene.handle == SceneHandle.None)
 				{
 					ResolveOwnScene();
 				}
@@ -193,7 +193,7 @@ namespace FishMMO.Shared
 					return gameObject.scene.name;
 				}
 #endif
-				if (ownScene.handle == 0)
+				if (ownScene.handle == SceneHandle.None)
 				{
 					ResolveOwnScene();
 				}
@@ -252,7 +252,7 @@ namespace FishMMO.Shared
 		/// <summary>Whether the automatic director may start storm cells here. Admins can switch it at runtime.</summary>
 		public bool WeatherDirector => AtlasEntry == null || AtlasEntry.WeatherDirector;
 
-		private static readonly Dictionary<int, WorldSceneSettings> byScene = new Dictionary<int, WorldSceneSettings>();
+		private static readonly Dictionary<SceneHandle, WorldSceneSettings> byScene = new Dictionary<SceneHandle, WorldSceneSettings>();
 
 		/// <summary>The settings component of a loaded scene, if it has one. Scenes load additively on a scene server, so this is keyed by scene.</summary>
 		public static bool TryGetForScene(Scene scene, out WorldSceneSettings settings)

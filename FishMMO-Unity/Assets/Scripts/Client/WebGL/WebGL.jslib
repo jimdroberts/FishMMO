@@ -19,6 +19,7 @@ mergeInto(LibraryManager.library, {
         FS.syncfs is the fallback for a page that replaced Module.unityFileSystemInit
         with its own mount, where __unityIdbfsMount does not exist.
     */
+    FishMMOSyncPersistentData__sig: 'v',
     FishMMOSyncPersistentData: function () {
         try {
             if (typeof IDBFS !== 'undefined' && IDBFS.queuePersist &&
@@ -42,9 +43,17 @@ mergeInto(LibraryManager.library, {
         }
     },
 
+    /*
+        keyCodesPtr points at the int[] marshalled from C#. Its __sig ('p') makes Emscripten pass it
+        as a Number in every build: unchanged below 2 GB, unsigned above it, and converted from the
+        BigInt a 64-bit (Wasm64) build hands over. The index is ptr / 4, not ptr >> 2: a shift is
+        a signed 32-bit operation and breaks for any address at or above 2 GB.
+        The codes are copied into the Set at once, so the view is never held across a heap growth.
+    */
+    AddHijackKeysListener__sig: 'vpi',
     AddHijackKeysListener: function(keyCodesPtr, keyCodesLength) {
-        var keyCodes = Module.HEAP32.subarray(keyCodesPtr >> 2, (keyCodesPtr >> 2) + keyCodesLength);
-        var keySet = new Set(keyCodes);
+        var start = keyCodesPtr / 4;
+        var keySet = new Set(HEAP32.subarray(start, start + keyCodesLength));
 
         document.addEventListener('keydown', function(event) {
             if (keySet.has(event.keyCode)) {

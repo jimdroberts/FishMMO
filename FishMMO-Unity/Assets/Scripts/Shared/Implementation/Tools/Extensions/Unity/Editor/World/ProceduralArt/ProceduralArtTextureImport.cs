@@ -43,12 +43,17 @@ namespace FishMMO.Shared.WorldDesign
 	/// </remarks>
 	public sealed class ProceduralArtTextureImport : AssetPostprocessor
 	{
-		public override uint GetVersion() => 3;
+		// 4: half-size slices on the web for every look array, the scenes' compacted copies included (WebTextureBudget).
+		public override uint GetVersion() => 4;
+
+		/// <summary>The file name prefix of a scene's compacted copy of a look array (SceneLookArrayBaker).</summary>
+		private const string SceneCopyPrefix = "PropLook ";
 
 		private void OnPreprocessTexture()
 		{
 			if (!assetPath.StartsWith(ProceduralArtCatalogue.TexturesFolder + "/", System.StringComparison.Ordinal))
 			{
+				SceneLookArray((TextureImporter)assetImporter);
 				return;
 			}
 			var importer = (TextureImporter)assetImporter;
@@ -147,6 +152,27 @@ namespace FishMMO.Shared.WorldDesign
 			settings.flipbookColumns = width / size;
 			settings.flipbookRows = height / size;
 			importer.SetTextureSettings(settings);
+			WebTextureBudget.LimitWebSlices(importer, size);
+		}
+
+		/// <summary>
+		/// A scene's compacted copy of a look array: SceneLookArrayBaker writes its settings (the source's, on a grid of its own)
+		/// and they are left alone; only the web slice limit is applied, so copies written before it existed get it too.
+		/// </summary>
+		private void SceneLookArray(TextureImporter importer)
+		{
+			string file = System.IO.Path.GetFileNameWithoutExtension(assetPath);
+			if (!file.StartsWith(SceneCopyPrefix + ProceduralArtLookArrays.FilePrefix, System.StringComparison.Ordinal))
+			{
+				return;
+			}
+			var settings = new TextureImporterSettings();
+			importer.ReadTextureSettings(settings);
+			if (settings.textureShape != TextureImporterShape.Texture2DArray || settings.flipbookColumns <= 0 || !PngSize(assetPath, out int width, out _))
+			{
+				return;
+			}
+			WebTextureBudget.LimitWebSlices(importer, width / settings.flipbookColumns);
 		}
 
 		/// <summary>A PNG's size from its header (the IHDR chunk), read before the importer has opened it.</summary>

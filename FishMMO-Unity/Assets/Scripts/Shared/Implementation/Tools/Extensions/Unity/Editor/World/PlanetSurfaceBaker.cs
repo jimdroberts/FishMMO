@@ -530,6 +530,13 @@ namespace FishMMO.Shared.WorldDesign
 				group = settings.CreateGroup(AddressableGroupName, false, false, false, null,
 					settings.DefaultGroup.Schemas.ConvertAll(schema => schema.GetType()).ToArray());
 			}
+			// One bundle per body: each is loaded by its own address, and the default schemas pack the group together,
+			// so loading one body's surface would load every body's.
+			var bundled = group.GetSchema<UnityEditor.AddressableAssets.Settings.GroupSchemas.BundledAssetGroupSchema>();
+			if (bundled != null && bundled.BundleMode != UnityEditor.AddressableAssets.Settings.GroupSchemas.BundledAssetGroupSchema.BundlePackingMode.PackSeparately)
+			{
+				bundled.BundleMode = UnityEditor.AddressableAssets.Settings.GroupSchemas.BundledAssetGroupSchema.BundlePackingMode.PackSeparately;
+			}
 
 			string guid = AssetDatabase.AssetPathToGUID(imagePath);
 			var existing = settings.FindAssetEntry(guid);

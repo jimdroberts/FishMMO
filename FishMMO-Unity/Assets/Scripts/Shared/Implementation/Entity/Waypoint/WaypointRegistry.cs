@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Core;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Shared
 {
@@ -21,8 +22,8 @@ namespace FishMMO.Shared
 	/// </remarks>
 	public static class WaypointRegistry
 	{
-		private static readonly Dictionary<int, Dictionary<int, IWaypoint>> waypointsByScene =
-			new Dictionary<int, Dictionary<int, IWaypoint>>();
+		private static readonly Dictionary<SceneHandle, Dictionary<int, IWaypoint>> waypointsByScene =
+			new Dictionary<SceneHandle, Dictionary<int, IWaypoint>>();
 
 		/// <summary>
 		/// Adds a waypoint. A duplicate index in the same scene is refused and reported, since
@@ -35,7 +36,7 @@ namespace FishMMO.Shared
 			{
 				return false;
 			}
-			int handle = waypoint.GameObject.scene.handle;
+			SceneHandle handle = waypoint.GameObject.scene.handle;
 			if (!waypointsByScene.TryGetValue(handle, out Dictionary<int, IWaypoint> scene))
 			{
 				scene = new Dictionary<int, IWaypoint>();
@@ -61,7 +62,7 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			int handle = waypoint.GameObject.scene.handle;
+			SceneHandle handle = waypoint.GameObject.scene.handle;
 			if (!waypointsByScene.TryGetValue(handle, out Dictionary<int, IWaypoint> scene))
 			{
 				return;
@@ -77,7 +78,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Finds a live waypoint by scene handle and index.</summary>
-		public static bool TryGet(int sceneHandle, int waypointIndex, out IWaypoint waypoint)
+		public static bool TryGet(SceneHandle sceneHandle, int waypointIndex, out IWaypoint waypoint)
 		{
 			waypoint = null;
 			if (!waypointsByScene.TryGetValue(sceneHandle, out Dictionary<int, IWaypoint> scene))
@@ -103,7 +104,7 @@ namespace FishMMO.Shared
 		/// <param name="discoveredBy">When set, only waypoints this record has discovered qualify.</param>
 		/// <param name="nearest">The nearest qualifying waypoint, or null.</param>
 		/// <returns>True when one qualifies.</returns>
-		public static bool TryFindNearest(int sceneHandle, Vector3 position, float range,
+		public static bool TryFindNearest(SceneHandle sceneHandle, Vector3 position, float range,
 			IWaypointController discoveredBy, out IWaypoint nearest)
 		{
 			nearest = null;
@@ -135,7 +136,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Appends the indices registered in a scene, in no particular order.</summary>
-		public static void CollectIndices(int sceneHandle, List<int> results)
+		public static void CollectIndices(SceneHandle sceneHandle, List<int> results)
 		{
 			if (results == null || !waypointsByScene.TryGetValue(sceneHandle, out Dictionary<int, IWaypoint> scene))
 			{
@@ -151,7 +152,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Number of waypoints registered in a scene.</summary>
-		public static int Count(int sceneHandle)
+		public static int Count(SceneHandle sceneHandle)
 		{
 			return waypointsByScene.TryGetValue(sceneHandle, out Dictionary<int, IWaypoint> scene) ? scene.Count : 0;
 		}

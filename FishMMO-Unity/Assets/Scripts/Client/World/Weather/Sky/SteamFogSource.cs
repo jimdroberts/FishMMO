@@ -1,5 +1,6 @@
 using FishMMO.Shared.Weather;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Client
 {
@@ -46,7 +47,7 @@ namespace FishMMO.Client
 
 		/// <summary>Reads the water's temperature again on the next publish: the clock was set to another moment.</summary>
 		public void ReadWaterSoon() => nextWater = float.NegativeInfinity;
-		private int waterScene = int.MinValue;
+		private SceneHandle waterScene = SceneHandle.None;
 		private WaterTemperature.Reading water;
 
 		/// <summary>The water round the camera as last read.</summary>
@@ -76,7 +77,7 @@ namespace FishMMO.Client
 				return Off();
 			}
 
-			int scene = context.Scene.IsValid() ? context.Scene.handle : int.MinValue;
+			SceneHandle scene = context.Scene.IsValid() ? context.Scene.handle : SceneHandle.None;
 			if (Time.unscaledTime >= nextWater || scene != waterScene)
 			{
 				nextWater = Time.unscaledTime + WaterInterval;

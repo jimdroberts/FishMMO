@@ -5,6 +5,7 @@ using UnityEngine.Rendering;
 using UnityEngine.Rendering.RenderGraphModule;
 using UnityEngine.Rendering.Universal;
 using FishMMO.Shared.Weather;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
@@ -367,7 +368,7 @@ namespace FishMMO.Client
 			{
 				return CloudMaterial;
 			}
-			Shader shader = Shader.Find(ShaderName);
+			Shader shader = ShaderLookup.Find(ShaderName);
 			if (shader == null)
 			{
 				return null;

@@ -7,6 +7,7 @@ using UnityEngine.Profiling;
 using UnityEngine.Rendering;
 using FishMMO.Shared.Biomes;
 using Object = UnityEngine.Object;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
@@ -549,7 +550,7 @@ namespace FishMMO.Client
 #endif
 			if (shader == null)
 			{
-				shader = Shader.Find(ShaderName);
+				shader = ShaderLookup.Find(ShaderName);
 			}
 			if (!SystemInfo.supportsComputeShaders || SystemInfo.maxComputeBufferInputsVertex < 1)
 			{

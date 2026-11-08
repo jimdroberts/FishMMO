@@ -102,7 +102,7 @@ namespace FishMMO.Client
 		/// <summary>The one transform followed when not following the local player.</summary>
 		private Transform subject;
 		private readonly List<Bounds> boxes = new List<Bounds>();
-		private int boxesSceneHandle = -1;
+		private SceneHandle boxesSceneHandle = SceneHandle.None;
 		private string boxesSceneName;
 
 		private GameObject root;
@@ -144,7 +144,7 @@ namespace FishMMO.Client
 		{
 			followsLocalPlayer = false;
 			this.subject = subject;
-			boxesSceneHandle = -1;
+			boxesSceneHandle = SceneHandle.None;
 			LoadTunedMaterial();
 		}
 
@@ -201,7 +201,7 @@ namespace FishMMO.Client
 		private void OnStartLocalClient(IPlayerCharacter character)
 		{
 			localCharacter = character;
-			boxesSceneHandle = -1;
+			boxesSceneHandle = SceneHandle.None;
 		}
 
 		private void OnStopLocalClient(IPlayerCharacter character)
@@ -408,7 +408,7 @@ namespace FishMMO.Client
 				}
 				else
 				{
-					Shader shader = Shader.Find(ShaderName);
+					Shader shader = ShaderLookup.Find(ShaderName);
 					if (shader == null)
 					{
 						return false;

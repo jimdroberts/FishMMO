@@ -499,7 +499,8 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>The scene the air sway was last read for (its handle), and the frame to read it again by.</summary>
-		private static int airScene = int.MinValue, airCheckAt;
+		private static UnityEngine.SceneManagement.SceneHandle? airScene;
+		private static int airCheckAt;
 		private static float airSway = 1f;
 
 		/// <summary>How often the air sway is read again for the same scene, frames (a designer may edit the body in the editor).</summary>

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 using FishMMO.Server.Core.World.SceneServer;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
@@ -34,7 +35,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
-			int sceneHandle = sender.GameObject.scene.handle;
+			SceneHandle sceneHandle = sender.GameObject.scene.handle;
 			int team = ArenaTeamRegistry.GetTeam(sceneHandle, sender.ID);
 			if (team < 0)
 			{

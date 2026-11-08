@@ -2,7 +2,7 @@
 %TAG !u! tag:unity3d.com,2011:
 --- !u!114 &-6263147149353411091
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 1
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -24,9 +24,10 @@ MonoBehaviour:
   Lava: 1
   LavaAmplitude: 6
   LavaReach: 25
+  CaveLavaJitter: 2.5
 --- !u!114 &-2711503009455396585
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 1
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -40,9 +41,10 @@ MonoBehaviour:
   CloudMaterial: {fileID: 2100000, guid: 77d2de1e9c99042cb99592565ec65216, type: 2}
   ResolveCompute: {fileID: 7200000, guid: 3b2660716b1e3d805bd009750d8229fc, type: 3}
   WeatherMapCompute: {fileID: 7200000, guid: bf9ab77ea08b4895b37b4a406d0a1a8f, type: 3}
+  ShadowCacheMergeShader: {fileID: 0}
 --- !u!114 &-1878332245247344467
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 1
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -79,11 +81,9 @@ MonoBehaviour:
   m_Name: URP-Balanced-Renderer
   m_EditorClassIdentifier: 
   debugShaders:
-    debugReplacementPS: {fileID: 4800000, guid: cf852408f2e174538bcd9b7fda1c5ae7,
-      type: 3}
+    debugReplacementPS: {fileID: 4800000, guid: cf852408f2e174538bcd9b7fda1c5ae7, type: 3}
     hdrDebugViewPS: {fileID: 4800000, guid: 573620ae32aec764abd4d728906d2587, type: 3}
-    probeVolumeSamplingDebugComputeShader: {fileID: 7200000, guid: 53626a513ea68ce47b59dc1299fe3959,
-      type: 3}
+    probeVolumeSamplingDebugComputeShader: {fileID: 7200000, guid: 53626a513ea68ce47b59dc1299fe3959, type: 3}
   probeVolumeResources:
     probeVolumeDebugShader: {fileID: 0}
     probeVolumeFragmentationDebugShader: {fileID: 0}
@@ -98,8 +98,7 @@ MonoBehaviour:
   - {fileID: 2017944865441511579}
   - {fileID: 4558045951250616325}
   - {fileID: -6263147149353411091}
-  m_RendererFeatureMap: adc0de57c6d2eee51729020a61ce5eda9bf8f6e0292e011c055033a2a46e413fed1dcaead9d414a9
-  m_UseNativeRenderPass: 0
+  m_RendererFeatureMap: adc0de57c6d2eee51729020a61ce5eda9bf8f6e0292e011c055033a2a46e413fed1dcaead9d414a9l
   xrSystemData: {fileID: 0}
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
   m_AssetVersion: 3
@@ -127,9 +126,10 @@ MonoBehaviour:
   m_DepthTextureFormat: 0
   m_AccurateGbufferNormals: 0
   m_IntermediateTextureMode: 1
+  m_TileOnlyMode: 0
 --- !u!114 &2017944865441511579
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 1
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -144,7 +144,7 @@ MonoBehaviour:
   FogShader: {fileID: 4800000, guid: 0dbb995e33d6cf2ff938338521db28c1, type: 3}
 --- !u!114 &4558045951250616325
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 1
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}

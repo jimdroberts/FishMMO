@@ -11,6 +11,7 @@ using FishMMO.Logging;
 using FishMMO.Server.Core;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
+using UnityEngine.SceneManagement;
 using Channel = FishNet.Transporting.Channel;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
@@ -196,7 +197,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			/* By scene handle, not scene name: this server hosts several scenes and scene stacking
 			 * means several instances of one. The roster answers "who is here with me". */
-			int handle = staff.GameObject.scene.handle;
+			SceneHandle handle = staff.GameObject.scene.handle;
 			Vector3 origin = staff.Transform != null ? staff.Transform.position : Vector3.zero;
 			long now = DateTime.UtcNow.Ticks;
 

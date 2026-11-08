@@ -110,7 +110,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Dictionary of world scenes currently loaded, keyed by scene handle.
 		/// </summary>
-		private Dictionary<int, Scene> loadedWorldScenes = new Dictionary<int, Scene>();
+		private Dictionary<SceneHandle, Scene> loadedWorldScenes = new Dictionary<SceneHandle, Scene>();
 
 		// ── Events ──────────────────────────────────────────────────────
 
@@ -1030,7 +1030,7 @@ namespace FishMMO.Client
 		{
 			if (args.UnloadedScenesV2 != null)
 			{
-				foreach (var us in args.UnloadedScenesV2) this.loadedWorldScenes.Remove(us.Handle);
+				foreach (var us in args.UnloadedScenesV2) this.loadedWorldScenes.Remove(SceneHandle.FromRawData(us.Handle));
 				Client.Broadcast(new ClientScenesUnloadedBroadcast { UnloadedScenes = args.UnloadedScenesV2.ToArray() });
 			}
 		}
@@ -2160,9 +2160,19 @@ namespace FishMMO.Client
 		/// True to stop background asset loads from re-showing the overlay. Genuine scene
 		/// transitions are unaffected — see <see cref="LoadingSuppressed"/>.
 		/// </param>
-		public static void DismissLoadingScreen(bool suppress)
+		/// <param name="waitForSceneContent">
+		/// World entry: keep the overlay up until the scene's own content loads have finished
+		/// (<see cref="UITKLoadingScreen.FinishWorldEntry"/>). False tears it down now.
+		/// </param>
+		public static void DismissLoadingScreen(bool suppress, bool waitForSceneContent = false)
 		{
 			if (suppress) LoadingSuppressed = true;
+
+			if (waitForSceneContent)
+			{
+				if (UIManager.TryGetTK<UITKLoadingScreen>("UILoadingScreen", out UITKLoadingScreen entering)) entering.FinishWorldEntry();
+				return;
+			}
 
 			/* Hide the control directly rather than through UIManager.Hide, which is a no-op
 			 * unless the panel happens to be visible at that instant. The overlay's Hide is
@@ -2384,7 +2394,7 @@ namespace FishMMO.Client
 			}
 			finally
 			{
-				DismissLoadingScreen(true);
+				DismissLoadingScreen(true, waitForSceneContent: true);
 			}
 		}
 

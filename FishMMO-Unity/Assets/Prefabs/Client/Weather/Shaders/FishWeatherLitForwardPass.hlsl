@@ -224,7 +224,8 @@ void InitializeInputData(Varyings input, half3 normalTS, out InputData inputData
 void InitializeBakedGIData(Varyings input, inout InputData inputData)
 {
     #if defined(_SCREEN_SPACE_IRRADIANCE)
-    inputData.bakedGI = SAMPLE_GI(_ScreenSpaceIrradiance, input.positionCS.xy);
+    // URP 17.6 (Unity 6.6) gave SAMPLE_GI's screen-space form a normal (the ambient probe for transparents).
+    inputData.bakedGI = SAMPLE_GI(_ScreenSpaceIrradiance, input.positionCS.xy, inputData.normalWS);
     #elif defined(DYNAMICLIGHTMAP_ON)
     inputData.bakedGI = SAMPLE_GI(input.staticLightmapUV, input.dynamicLightmapUV, input.vertexSH, inputData.normalWS);
     inputData.shadowMask = SAMPLE_SHADOWMASK(input.staticLightmapUV);

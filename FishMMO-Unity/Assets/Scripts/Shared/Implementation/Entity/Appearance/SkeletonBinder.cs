@@ -14,8 +14,8 @@ namespace FishMMO.Shared
 		/// When a skeleton is destroyed, its generation is invalidated to prevent stale Transform references
 		/// from Unity's instance ID recycling.
 		/// </summary>
-		private static readonly Dictionary<int, (int generation, Dictionary<string, Transform> boneMap)> SkeletonBoneCache =
-			new Dictionary<int, (int, Dictionary<string, Transform>)>();
+		private static readonly Dictionary<EntityId, (int generation, Dictionary<string, Transform> boneMap)> SkeletonBoneCache =
+			new Dictionary<EntityId, (int, Dictionary<string, Transform>)>();
 
 		/// <summary>
 		/// Monotonically increasing generation counter for cache invalidation.
@@ -117,7 +117,7 @@ namespace FishMMO.Shared
 				return null;
 			}
 
-			int instanceId = skeletonRoot.GetInstanceID();
+			EntityId instanceId = skeletonRoot.GetEntityId();
 
 			// Check cache first — validate generation to prevent stale entries
 			if (SkeletonBoneCache.TryGetValue(instanceId, out var entry))
@@ -169,7 +169,7 @@ namespace FishMMO.Shared
 		{
 			if (skeletonRoot != null)
 			{
-				SkeletonBoneCache.Remove(skeletonRoot.GetInstanceID());
+				SkeletonBoneCache.Remove(skeletonRoot.GetEntityId());
 			}
 			else
 			{

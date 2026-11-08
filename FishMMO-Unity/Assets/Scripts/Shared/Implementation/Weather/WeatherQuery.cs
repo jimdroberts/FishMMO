@@ -12,7 +12,7 @@ namespace FishMMO.Shared.Weather
 	/// </summary>
 	public static class WeatherQuery
 	{
-		private static readonly Dictionary<int, WeatherTimeline> timelines = new Dictionary<int, WeatherTimeline>();
+		private static readonly Dictionary<SceneHandle, WeatherTimeline> timelines = new Dictionary<SceneHandle, WeatherTimeline>();
 
 		/// <summary>The server tick "now" means. Set by the server host or the client mirror.</summary>
 		public static Func<uint> TickSource;

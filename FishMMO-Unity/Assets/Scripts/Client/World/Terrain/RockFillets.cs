@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Profiling;
 using UnityEngine.Rendering;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
@@ -206,7 +207,7 @@ namespace FishMMO.Client
 				Shader s = profile != null ? profile.RockFilletShader : null;
 				if (s == null)
 				{
-					s = Shader.Find(ShaderName);
+					s = ShaderLookup.Find(ShaderName);
 				}
 				if (s == null || !s.isSupported)
 				{

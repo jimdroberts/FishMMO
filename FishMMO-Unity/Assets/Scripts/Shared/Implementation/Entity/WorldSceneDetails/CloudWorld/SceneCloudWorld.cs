@@ -119,7 +119,7 @@ namespace FishMMO.Shared
 			return all;
 		}
 
-		private static readonly Dictionary<int, SceneCloudWorld> scenes = new Dictionary<int, SceneCloudWorld>();
+		private static readonly Dictionary<SceneHandle, SceneCloudWorld> scenes = new Dictionary<SceneHandle, SceneCloudWorld>();
 
 		/// <summary>Bumped whenever a scene's cloud world comes or goes, so a reader can cache what it found.</summary>
 		public static int Version { get; private set; }

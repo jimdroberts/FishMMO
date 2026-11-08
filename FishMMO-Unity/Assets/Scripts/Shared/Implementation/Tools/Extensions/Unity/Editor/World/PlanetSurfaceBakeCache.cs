@@ -38,7 +38,7 @@ namespace FishMMO.Shared.WorldDesign
 					checkCancellation?.Invoke();
 					text.Append('|').Append(path).Append(':').Append(Digest(File.ReadAllBytes(path)));
 				}
-			var visited = new HashSet<int>();
+			var visited = new HashSet<EntityId>();
 			foreach (string guid in AssetDatabase.FindAssets("t:BiomeTemplate", new[] { "Assets" }).OrderBy(value => value, StringComparer.Ordinal))
 			{
 				checkCancellation?.Invoke();
@@ -50,7 +50,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static string InputHash(WorldBody body, int width, string sharedInputs)
 		{
 			var text = new StringBuilder(sharedInputs).Append('|').Append(width);
-			var visited = new HashSet<int>();
+			var visited = new HashSet<EntityId>();
 			AppendObject(text, body, visited);
 			AppendObject(text, SolarSystemProfile.Resolve(body), visited);
 			return Hash128.Compute(text.ToString()).ToString();
@@ -60,13 +60,25 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			if (value == null) return "null";
 			return AssetDatabase.TryGetGUIDAndLocalFileIdentifier(value, out string guid, out long id) && !string.IsNullOrEmpty(guid)
-				? guid + ":" + id : "memory:" + value.GetInstanceID();
+				? guid + ":" + id : "memory:" + value.GetEntityId();
 		}
 
-		private static void AppendObject(StringBuilder text, Object value, HashSet<int> visited)
+		/// <summary>
+		/// An object reference's number as JSON writes it, signed or not, as an entity ID. The raw
+		/// value is 64 bits; a signed rendering is the same bits.
+		/// </summary>
+		private static EntityId ParseEntityId(string number)
+		{
+			ulong raw = number.StartsWith("-", StringComparison.Ordinal)
+				? unchecked((ulong)long.Parse(number, System.Globalization.CultureInfo.InvariantCulture))
+				: ulong.Parse(number, System.Globalization.CultureInfo.InvariantCulture);
+			return EntityId.FromULong(raw);
+		}
+
+		private static void AppendObject(StringBuilder text, Object value, HashSet<EntityId> visited)
 		{
 			text.Append('|').Append(Identity(value));
-			if (value == null || !visited.Add(value.GetInstanceID())) return;
+			if (value == null || !visited.Add(value.GetEntityId())) return;
 			string path = AssetDatabase.GetAssetPath(value);
 			if (!(value is ScriptableObject) && !(value is TerrainLayer))
 			{
@@ -76,7 +88,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			// JsonUtility's instance references must not make persistent cache keys depend on the Editor session.
 			string json = Regex.Replace(EditorJsonUtility.ToJson(value), "\\\"instanceID\\\"\\s*:\\s*(-?\\d+)",
-				match => "\"instanceID\":\"" + Identity(EditorUtility.InstanceIDToObject(int.Parse(match.Groups[1].Value))) + "\"");
+				match => "\"instanceID\":\"" + Identity(EditorUtility.EntityIdToObject(ParseEntityId(match.Groups[1].Value))) + "\"");
 			text.Append(':').Append(json);
 			using var serialized = new SerializedObject(value);
 			var property = serialized.GetIterator();

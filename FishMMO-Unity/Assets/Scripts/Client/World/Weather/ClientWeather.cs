@@ -48,6 +48,16 @@ namespace FishMMO.Client
 		private readonly System.Collections.Generic.List<StormCell> newCells = new System.Collections.Generic.List<StormCell>();
 		private readonly SceneCover cover = new SceneCover();
 		private uint seenJumps;
+		/// <summary>
+		/// A timeline that arrived before its scene finished loading, held until it does (<see cref="OnSceneLoaded"/>).
+		/// </summary>
+		/// <remarks>
+		/// The server sends a scene's whole timeline once, when the character spawns, and the client can still be
+		/// activating the scene then (its content is large, and on the web it may still be downloading). Dropping it
+		/// left the scene without weather for the whole visit: nothing else sends the whole timeline unasked, and the
+		/// deltas that follow are ignored without one.
+		/// </remarks>
+		private WeatherTimelineBroadcast? pendingTimeline;
 
 		public WeatherTimeline Timeline => hasTimeline ? timeline : null;
 
@@ -62,6 +72,7 @@ namespace FishMMO.Client
 			networkManager.ClientManager.RegisterBroadcast<WeatherDeltaBroadcast>(OnDelta);
 			networkManager.ClientManager.RegisterBroadcast<WorldClockBroadcast>(OnClock);
 			networkManager.ClientManager.OnClientConnectionState += OnConnectionState;
+			SceneManager.sceneLoaded += OnSceneLoaded;
 			WeatherQuery.TickSource = () => networkManager != null ? networkManager.TimeManager.Tick : 0u;
 			// The tick the world's motion (waves, wind, fog banks) reads the shared clock at.
 			WorldMotion.TimeManager = networkManager.TimeManager;
@@ -77,6 +88,7 @@ namespace FishMMO.Client
 				networkManager.ClientManager.UnregisterBroadcast<WorldClockBroadcast>(OnClock);
 				networkManager.ClientManager.OnClientConnectionState -= OnConnectionState;
 			}
+			SceneManager.sceneLoaded -= OnSceneLoaded;
 			Clear(resetClock: true);
 			WeatherQuery.TickSource = null;
 			WorldMotion.TimeManager = null;
@@ -98,6 +110,7 @@ namespace FishMMO.Client
 				WeatherQuery.Unregister(scene);
 			}
 			hasTimeline = false;
+			pendingTimeline = null;
 			settings = null;
 			scene = default;
 			if (resetClock)
@@ -128,17 +141,43 @@ namespace FishMMO.Client
 		{
 			WorldClock clock = WorldClock.Shared;
 			clock.TickDelta = networkManager != null ? networkManager.TimeManager.TickDelta : clock.TickDelta;
+			bool first = !clock.HasAnchor;
 			clock.Adopt(msg.Anchor, msg.Previous, msg.HasPrevious, msg.SlewTicks);
+			if (first)
+			{
+				// Once per connection: what every viewer's sky and weather now run on, and at what pace.
+				SolarSystemProfile system = SolarSystemProfile.Active;
+				long epoch = system != null ? system.EpochUnixSeconds : CalendarProfile.DefaultEpochUnixSeconds;
+				Log.Info("ClientWeather", $"World clock from the server: {WorldTimeText.Write(msg.Anchor.WorldSeconds, epoch)}, {WorldTimeText.Pace(msg.Anchor.Rate)}{(msg.Anchor.Verified ? string.Empty : " (unverified)")}.");
+			}
 		}
 
 		private void OnTimeline(WeatherTimelineBroadcast msg, Channel channel)
 		{
 			Scene target = SceneManager.GetSceneByName(msg.SceneName ?? string.Empty);
-			if (!target.IsValid())
+			if (!target.IsValid() || !target.isLoaded)
 			{
-				Log.Warning("ClientWeather", $"Weather for {msg.SceneName} arrived but that scene is not loaded.");
+				// Still loading: applied when it has (OnSceneLoaded). A later timeline replaces an earlier one.
+				pendingTimeline = msg;
+				Log.Info("ClientWeather", $"Weather for {msg.SceneName} arrived before the scene finished loading; held until it has.");
 				return;
 			}
+			ApplyTimeline(msg, target);
+		}
+
+		/// <summary>Applies a timeline held for a scene that was still loading, now that it has.</summary>
+		private void OnSceneLoaded(Scene loaded, LoadSceneMode mode)
+		{
+			if (pendingTimeline is WeatherTimelineBroadcast msg && loaded.name == msg.SceneName)
+			{
+				pendingTimeline = null;
+				ApplyTimeline(msg, loaded);
+			}
+		}
+
+		private void ApplyTimeline(WeatherTimelineBroadcast msg, Scene target)
+		{
+			pendingTimeline = null;
 			if (hasTimeline && scene.handle != target.handle)
 			{
 				WeatherQuery.Unregister(scene);
@@ -156,6 +195,7 @@ namespace FishMMO.Client
 			WeatherEvents.RaiseTimelineChanged(scene, timeline);
 			// A new scene's weather is shown as it is, not eased into from the last one's.
 			ForceStep(snap: true);
+			Log.Info("ClientWeather", $"Weather for {scene.name}: revision {timeline.Revision}, {timeline.SceneMode}, {timeline.Cells.Count} cell(s), director {(timeline.Director ? "on" : "off")}; world clock {(WorldClock.Shared.HasAnchor ? "anchored" : "NOT anchored (this machine's clock)")}.");
 		}
 
 		private void OnDelta(WeatherDeltaBroadcast msg, Channel channel)

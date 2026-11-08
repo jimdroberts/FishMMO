@@ -69,7 +69,7 @@ namespace FishMMO.UnitTests
 
 			LogAssert.IsTrue(source.Contains("public WorldAtlasScene AtlasEntry => WorldAtlasScene.Find(OwnSceneName);"),
 				"the atlas lookup must use the resolved scene name, not a fresh one per read");
-			LogAssert.IsTrue(source.Contains("if (ownScene.handle == 0)"),
+			LogAssert.IsTrue(source.Contains("if (ownScene.handle == SceneHandle.None)"),
 				"the scene must be resolved only when it has not been yet");
 			LogAssert.IsTrue(source.Contains("if (!Application.isPlaying)\n\t\t\t\t{\n\t\t\t\t\treturn gameObject.scene;"),
 				"outside play mode the scene must be read live, as before");

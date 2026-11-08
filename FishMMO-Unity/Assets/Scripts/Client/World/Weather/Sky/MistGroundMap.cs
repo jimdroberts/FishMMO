@@ -96,7 +96,7 @@ namespace FishMMO.Client
 		private ushort[] shadeSpare;
 
 		// Each terrain's trees, once: x, z (world) and crown radius, three to a tree.
-		private readonly Dictionary<int, float[]> trees = new Dictionary<int, float[]>();
+		private readonly Dictionary<EntityId, float[]> trees = new Dictionary<EntityId, float[]>();
 
 		private Task<Shadowed> shading;
 		// The window just read, being worked up on a worker; no other is read until it is uploaded.
@@ -495,7 +495,7 @@ namespace FishMMO.Client
 		/// <summary>A terrain's trees as world x, z and crown radius, read once (TerrainData.treeInstances copies on every read).</summary>
 		private float[] TreesOf(Terrain terrain)
 		{
-			int id = terrain.GetInstanceID();
+			EntityId id = terrain.GetEntityId();
 			if (trees.TryGetValue(id, out float[] crowns))
 			{
 				return crowns;

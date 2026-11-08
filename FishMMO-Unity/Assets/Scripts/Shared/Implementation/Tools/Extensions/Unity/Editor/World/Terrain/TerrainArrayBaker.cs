@@ -932,6 +932,7 @@ namespace FishMMO.Shared.WorldDesign
 					group = settings.FindGroup(TerrainArraySet.AddressableGroupName)
 						?? settings.CreateGroup(TerrainArraySet.AddressableGroupName, false, false, false, null,
 							settings.DefaultGroup.Schemas.ConvertAll(schema => schema.GetType()).ToArray());
+					PackEachSetSeparately(group);
 				}
 				AddressableAssetEntry entry = settings.CreateOrMoveEntry(guid, group);
 				if (entry != null)
@@ -942,6 +943,20 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			log?.Add($"Registered {registered} terrain array set(s) in '{TerrainArraySet.AddressableGroupName}'.");
 			return registered;
+		}
+
+		/// <summary>
+		/// One bundle per scene's set. The group copies the default group's schemas, which pack everything together, and
+		/// a world loads its set by address: packed together, entering any world loaded every scene's arrays (420 MB on the
+		/// WebGL heap for six scenes, where bundles stay resident), and that ran a browser out of memory.
+		/// </summary>
+		private static void PackEachSetSeparately(AddressableAssetGroup group)
+		{
+			var schema = group.GetSchema<UnityEditor.AddressableAssets.Settings.GroupSchemas.BundledAssetGroupSchema>();
+			if (schema != null && schema.BundleMode != UnityEditor.AddressableAssets.Settings.GroupSchemas.BundledAssetGroupSchema.BundlePackingMode.PackSeparately)
+			{
+				schema.BundleMode = UnityEditor.AddressableAssets.Settings.GroupSchemas.BundledAssetGroupSchema.BundlePackingMode.PackSeparately;
+			}
 		}
 
 		/// <summary>Removes the build's addressable group. The baked folder stays: it is the editor's cache.</summary>
@@ -1188,7 +1203,8 @@ namespace FishMMO.Shared.WorldDesign
 	/// </remarks>
 	public sealed class TerrainArrayTextureImporter : AssetPostprocessor
 	{
-		public override uint GetVersion() => 1;
+		// 2: half-size slices on the web (WebTextureBudget).
+		public override uint GetVersion() => 2;
 
 		private void OnPreprocessTexture()
 		{
@@ -1224,6 +1240,11 @@ namespace FishMMO.Shared.WorldDesign
 			platform.maxTextureSize = TerrainArrayBaker.MaximumImageEdge;
 			platform.textureCompression = TextureImporterCompression.CompressedHQ;
 			importer.SetPlatformTextureSettings(platform);
+
+			if (WebTextureBudget.TryReadPngSize(assetPath, out int width, out _))
+			{
+				WebTextureBudget.LimitWebSlices(importer, width / columns);
+			}
 		}
 	}
 }

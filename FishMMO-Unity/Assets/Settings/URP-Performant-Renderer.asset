@@ -2,7 +2,7 @@
 %TAG !u! tag:unity3d.com,2011:
 --- !u!114 &-7907391183981605542
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 1
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -26,7 +26,7 @@ MonoBehaviour:
   FallMist: 0
 --- !u!114 &-5600280273197784233
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 1
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -48,9 +48,10 @@ MonoBehaviour:
   Lava: 1
   LavaAmplitude: 6
   LavaReach: 25
+  CaveLavaJitter: 2.5
 --- !u!114 &-323941509406291843
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 1
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -64,6 +65,7 @@ MonoBehaviour:
   CloudMaterial: {fileID: 2100000, guid: 77d2de1e9c99042cb99592565ec65216, type: 2}
   ResolveCompute: {fileID: 7200000, guid: 3b2660716b1e3d805bd009750d8229fc, type: 3}
   WeatherMapCompute: {fileID: 7200000, guid: bf9ab77ea08b4895b37b4a406d0a1a8f, type: 3}
+  ShadowCacheMergeShader: {fileID: 0}
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -77,11 +79,9 @@ MonoBehaviour:
   m_Name: URP-Performant-Renderer
   m_EditorClassIdentifier: 
   debugShaders:
-    debugReplacementPS: {fileID: 4800000, guid: cf852408f2e174538bcd9b7fda1c5ae7,
-      type: 3}
+    debugReplacementPS: {fileID: 4800000, guid: cf852408f2e174538bcd9b7fda1c5ae7, type: 3}
     hdrDebugViewPS: {fileID: 4800000, guid: 573620ae32aec764abd4d728906d2587, type: 3}
-    probeVolumeSamplingDebugComputeShader: {fileID: 7200000, guid: 53626a513ea68ce47b59dc1299fe3959,
-      type: 3}
+    probeVolumeSamplingDebugComputeShader: {fileID: 7200000, guid: 53626a513ea68ce47b59dc1299fe3959, type: 3}
   probeVolumeResources:
     probeVolumeDebugShader: {fileID: 0}
     probeVolumeFragmentationDebugShader: {fileID: 0}
@@ -95,8 +95,7 @@ MonoBehaviour:
   - {fileID: 9116091173554621304}
   - {fileID: -7907391183981605542}
   - {fileID: -5600280273197784233}
-  m_RendererFeatureMap: 7d88d5dbe92081fb780bcc8b9fdc827e5a8db8029d4d439257236b59c3ce47b2
-  m_UseNativeRenderPass: 0
+  m_RendererFeatureMap: 7d88d5dbe92081fb780bcc8b9fdc827e5a8db8029d4d439257236b59c3ce47b2l
   xrSystemData: {fileID: 0}
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
   m_AssetVersion: 3
@@ -124,9 +123,10 @@ MonoBehaviour:
   m_DepthTextureFormat: 0
   m_AccurateGbufferNormals: 0
   m_IntermediateTextureMode: 1
+  m_TileOnlyMode: 0
 --- !u!114 &9116091173554621304
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 1
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}

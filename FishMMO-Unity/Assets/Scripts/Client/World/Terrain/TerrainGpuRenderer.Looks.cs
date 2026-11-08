@@ -222,7 +222,7 @@ namespace FishMMO.Client
 			bool tagged = skip != SkipLook;
 			sb.Clear();
 			Shader shader = clone.shader;
-			sb.Append(shader.GetInstanceID()).Append('|').Append(clone.renderQueue).Append('|');
+			sb.Append(shader.GetEntityId().ToString()).Append('|').Append(clone.renderQueue).Append('|');
 			if (tagged)
 			{
 				sb.Append(clone.GetTag("RenderType", false)).Append('|');
@@ -272,7 +272,7 @@ namespace FishMMO.Client
 						break;
 					case ShaderPropertyType.Texture:
 						Texture t = clone.GetTexture(name);
-						sb.Append(t != null ? t.GetInstanceID() : 0);
+						sb.Append(t != null ? t.GetEntityId().ToString() : "0");
 						if ((shader.GetPropertyFlags(i) & ShaderPropertyFlags.NoScaleOffset) == 0)
 						{
 							sb.Append('@').Append(clone.GetTextureScale(name).ToString("R")).Append(clone.GetTextureOffset(name).ToString("R"));

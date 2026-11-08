@@ -20,8 +20,10 @@
 
 var LibraryFishWebTransport = {
 
-    // _dynCall resolves C# callbacks through Emscripten's table accessor; make the linker keep it.
-    $FishWebTransport__deps: ['$getWasmTableEntry'],
+    // The receive paths allocate on the wasm heap. The callback helpers need nothing listed:
+    // makeDynCall brings in the table accessor it expands to (naming the internal symbol here
+    // made the linker warn).
+    $FishWebTransport__deps: ['malloc', 'free'],
 
     // ------------------------------------------------------------------
     //  Internal helper (Emscripten library symbol — emitted as
@@ -32,31 +34,23 @@ var LibraryFishWebTransport = {
         _lastErrors: {},  // error messages keyed by index, persists after _remove
         _nextIndex: 1,
 
-        /** Calls a C# callback (a wasm function-table index).
-         *  Resolved on every call, never when this object is created: the
-         *  object is built before the wasm module is instantiated, when
-         *  wasmTable does not exist yet, so a choice made then always fell
-         *  back to the Emscripten 2 global dynCall, which Unity 6
-         *  (Emscripten 3) does not define: "dynCall is not defined" on the
-         *  first callback, and no connection could open.
-         *  Emscripten 3: getWasmTableEntry (declared in __deps below), else
-         *  wasmTable.get. Emscripten 2: Module.dynCall / dynCall. */
-        _dynCall: function(sig, fn, args) {
-            var func = null;
-            if (typeof getWasmTableEntry === 'function') {
-                func = getWasmTableEntry(fn);
-            } else if (typeof wasmTable !== 'undefined' && wasmTable && wasmTable.get) {
-                func = wasmTable.get(fn);
-            }
-            if (func) {
-                return func.apply(null, args);
-            }
-            var dc = (typeof Module !== 'undefined' && Module['dynCall']) ||
-                     (typeof dynCall === 'function' ? dynCall : null);
-            if (dc) {
-                return dc(sig, fn, args);
-            }
-            console.error('[FishWT] Cannot call function pointer ' + fn + ' (' + sig + '): no getWasmTableEntry, wasmTable or dynCall in this build.');
+        /* C# callbacks (wasm function-table indices) are called through Emscripten's
+         * makeDynCall macro, expanded when the build links this library. It looks the function
+         * up when called, never when this object is created (the object exists before the wasm
+         * table does), and it converts every 'p' argument to the BigInt a 64-bit (Wasm64) build
+         * expects: calling the function directly with a Number there throws a TypeError. The
+         * signatures must match the C# delegates in WebTransportJSLib.cs. */
+
+        /** Calls a C# WTIndexCallback(int index). */
+        _callIndex: function(fn, index) {
+            if (!fn) return;
+            {{{ makeDynCall('vi', 'fn') }}}(index);
+        },
+
+        /** Calls a C# WTDataCallback(int index, IntPtr data, int length). */
+        _callData: function(fn, index, ptr, length) {
+            if (!fn) return;
+            {{{ makeDynCall('vipi', 'fn') }}}(index, ptr, length);
         },
 
         /** True when the session can send/receive.
@@ -258,8 +252,7 @@ var LibraryFishWebTransport = {
                 var ptr = _malloc(len);
                 if (ptr) {
                     HEAPU8.set(msg, ptr);
-                    FishWebTransport._dynCall('viii', session.onStream,
-                                              [session._index, ptr, len]);
+                    FishWebTransport._callData(session.onStream, session._index, ptr, len);
                     _free(ptr);
                 } else {
                     console.warn('[FishWT] malloc failed for ' + len +
@@ -570,7 +563,7 @@ var LibraryFishWebTransport = {
                         return FishWebTransport._mallocRetry(data.length, 3, 10).then(function(ptr) {
                             if (ptr) {
                                 HEAPU8.set(data, ptr);
-                                FishWebTransport._dynCall('viii', session.onDatagram, [session._index, ptr, data.length]);
+                                FishWebTransport._callData(session.onDatagram, session._index, ptr, data.length);
                                 _free(ptr);
                             } else {
                                 console.warn('[FishWT] malloc failed for datagram (' + data.length + ' bytes) after 3 retries');
@@ -594,7 +587,12 @@ var LibraryFishWebTransport = {
     //  Each declares __deps so Emscripten never strips the helper.
     // ------------------------------------------------------------------
 
-    WTConnect__deps: ['$FishWebTransport'],
+    /* Every export declares its signature. 'p' marks a pointer (a string, array, IntPtr or C#
+     * callback): Emscripten then hands it over as a Number in every build, converting the BigInt a
+     * 64-bit (Wasm64) build passes, and a 'p' return goes back as one. Keep them in step with
+     * the [DllImport] declarations in WebTransportJSLib.cs. */
+    WTConnect__sig: 'ippppppp',
+    WTConnect__deps: ['$FishWebTransport', '$UTF8ToString'],
     WTConnect: function(urlPtr, certHashesPtr, onOpen, onClose, onStream, onDatagram, onError) {
         var url = UTF8ToString(urlPtr);
         var certHashes = certHashesPtr ? UTF8ToString(certHashesPtr) : '';
@@ -616,7 +614,7 @@ var LibraryFishWebTransport = {
         if (typeof WebTransport === 'undefined') {
             console.error('[FishWT] WebTransport not supported');
             FishWebTransport._lastErrors[-1] = 'WebTransport not supported';
-            FishWebTransport._dynCall('vi', onError, [-1]);
+            FishWebTransport._callIndex(onError, -1);
             return -1;
         }
 
@@ -660,7 +658,7 @@ var LibraryFishWebTransport = {
             console.error('[FishWT] Create failed: ' + e.message);
             FishWebTransport._lastErrors[index] = 'Create failed: ' + e.message;
             FishWebTransport._remove(index);
-            FishWebTransport._dynCall('vi', onError, [index]);
+            FishWebTransport._callIndex(onError, index);
             return -1;
         }
 
@@ -672,7 +670,7 @@ var LibraryFishWebTransport = {
              * prefill=0 / no handshake. Sends issued before the stream resolves
              * are queued by _writeReliable and flushed in order. */
             FishWebTransport._writeReliable(session, null);
-            FishWebTransport._dynCall('vi', onOpen, [index]);
+            FishWebTransport._callIndex(onOpen, index);
             FishWebTransport._readBidiStreams(session);
             FishWebTransport._readDatagrams(session);
         }).catch(function(err) {
@@ -681,18 +679,18 @@ var LibraryFishWebTransport = {
             session._errorFired = true;
             FishWebTransport._lastErrors[index] = 'Ready failed: ' + (err.message || 'unknown');
             FishWebTransport._remove(index);
-            FishWebTransport._dynCall('vi', onError, [index]);
+            FishWebTransport._callIndex(onError, index);
         });
 
         session.wt.closed.then(function() {
             FishWebTransport._remove(index);
-            FishWebTransport._dynCall('vi', onClose, [index]);
+            FishWebTransport._callIndex(onClose, index);
         }).catch(function(err) {
             if (session._errorFired) return;
             session._errorFired = true;
             FishWebTransport._lastErrors[index] = 'Closed: ' + (err.message || 'unknown');
             FishWebTransport._remove(index);
-            FishWebTransport._dynCall('vi', onError, [index]);
+            FishWebTransport._callIndex(onError, index);
         });
 
         return index;
@@ -709,6 +707,7 @@ var LibraryFishWebTransport = {
      *  behaviour), which is critical for game RPCs at 20+ Hz.
      *
      *  The writer-caching pattern mirrors WTSendDatagram below. */
+    WTSendStream__sig: 'iipi',
     WTSendStream__deps: ['$FishWebTransport'],
     WTSendStream: function(index, dataPtr, length) {
         var session = FishWebTransport._get(index);
@@ -740,6 +739,7 @@ var LibraryFishWebTransport = {
         return FishWebTransport._writeReliable(session, data);
     },
 
+    WTSendDatagram__sig: 'iipi',
     WTSendDatagram__deps: ['$FishWebTransport'],
     WTSendDatagram: function(index, dataPtr, length) {
         var session = FishWebTransport._get(index);
@@ -786,6 +786,7 @@ var LibraryFishWebTransport = {
         }
     },
 
+    WTDisconnect__sig: 'vi',
     WTDisconnect__deps: ['$FishWebTransport'],
     WTDisconnect: function(index) {
         var session = FishWebTransport._get(index);
@@ -807,6 +808,7 @@ var LibraryFishWebTransport = {
      *  Returns true if the WebTransport session is usable (see _isLive —
      *  ready() has resolved and the session is not closed or failed).
      *  C# callers should track connection state locally instead. */
+    WTIsConnected__sig: 'ii',
     WTIsConnected__deps: ['$FishWebTransport'],
     WTIsConnected: function(index) {
         var session = FishWebTransport._get(index);
@@ -814,6 +816,7 @@ var LibraryFishWebTransport = {
         return FishWebTransport._isLive(session);
     },
 
+    WTSetStreamThreshold__sig: 'vii',
     WTSetStreamThreshold__deps: ['$FishWebTransport'],
     WTSetStreamThreshold: function(index, threshold) {
         // Reserved for future stream congestion control.
@@ -827,7 +830,8 @@ var LibraryFishWebTransport = {
      *  The caller (C#) MUST free the returned pointer via WTFree() after
      *  marshalling the string.
      *  Returns 0 (NULL) if no error is stored for this index. */
-    WTGetLastErrorMessage__deps: ['$FishWebTransport'],
+    WTGetLastErrorMessage__sig: 'pi',
+    WTGetLastErrorMessage__deps: ['$FishWebTransport', '$stringToUTF8', '$lengthBytesUTF8', 'malloc'],
     WTGetLastErrorMessage: function(index) {
         var msg = FishWebTransport._lastErrors[index];
         if (!msg) return 0;
@@ -838,9 +842,12 @@ var LibraryFishWebTransport = {
         if (msg.length > 1024) msg = msg.substring(0, 1021) + '...';
         // UTF-8 encode into the WASM heap.  _malloc / _free are provided
         // by Emscripten and exported to C# via [DllImport("__Internal")].
-        var ptr = _malloc(msg.length + 1);
+        // Sized in UTF-8 bytes, not characters: a non-ASCII message is longer
+        // encoded than its length, and was cut short by a character-sized buffer.
+        var size = lengthBytesUTF8(msg) + 1;
+        var ptr = _malloc(size);
         if (!ptr) return 0;
-        stringToUTF8(msg, ptr, msg.length + 1);
+        stringToUTF8(msg, ptr, size);
         return ptr;
     },
 
@@ -852,7 +859,8 @@ var LibraryFishWebTransport = {
      *  "undefined symbol: _free". Inside a JS library the leading underscore
      *  IS correct — that is the JS-side name of the same allocator used by
      *  _malloc above. */
-    WTFree__deps: ['$FishWebTransport'],
+    WTFree__sig: 'vp',
+    WTFree__deps: ['$FishWebTransport', 'free'],
     WTFree: function(ptr) {
         if (ptr) _free(ptr);
     },
@@ -866,6 +874,7 @@ var LibraryFishWebTransport = {
      *    bit 16    the browser's WebTransport has getStats()
      *    bit 17    a live session has answered at least once
      *  Absent slots are written as NaN. See TransportTrafficMath.BrowserStats. */
+    WTGetStats__sig: 'ipi',
     WTGetStats__deps: ['$FishWebTransport'],
     WTGetStats: function(valuesPtr, count) {
         var FW = FishWebTransport;

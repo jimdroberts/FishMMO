@@ -13,6 +13,7 @@ using System.Runtime.CompilerServices;
 using System;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 {
@@ -580,7 +581,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <param name="sceneObject">When successful, the resolved scene object.</param>
 		/// <returns>True if the scene object exists, is live, and matches the character scene; otherwise false.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private bool ValidateSceneObject(long sceneObjectID, int characterSceneHandle, out ISceneObject sceneObject)
+		private bool ValidateSceneObject(long sceneObjectID, SceneHandle characterSceneHandle, out ISceneObject sceneObject)
 		{
 			if (!SceneObject.Objects.TryGetValue(sceneObjectID, out sceneObject))
 			{

@@ -90,7 +90,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 		private readonly INetworkManagerWrapper network;
 		private readonly NetworkManager networkManager;
 		private readonly ICharacterMappingData<NetworkConnection> characters;
-		private readonly Dictionary<int, SceneWeather> scenes = new Dictionary<int, SceneWeather>();
+		private readonly Dictionary<SceneHandle, SceneWeather> scenes = new Dictionary<SceneHandle, SceneWeather>();
 
 		/// <summary>The scenes in the order their passes take turns.</summary>
 		private readonly List<SceneWeather> rotation = new List<SceneWeather>();
@@ -175,10 +175,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			}
 			foreach (UnloadedScene unloaded in args.UnloadedScenesV2)
 			{
-				if (scenes.TryGetValue(unloaded.Handle, out SceneWeather sw))
+				if (scenes.TryGetValue(SceneHandle.FromRawData(unloaded.Handle), out SceneWeather sw))
 				{
 					WeatherQuery.Unregister(sw.Scene);
-					scenes.Remove(unloaded.Handle);
+					scenes.Remove(SceneHandle.FromRawData(unloaded.Handle));
 					RemoveFromRotation(sw);
 					sw.Removed = true;
 					flushList.Remove(sw);

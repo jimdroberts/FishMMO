@@ -46,7 +46,7 @@ namespace FishMMO.Water
 			public Texture2D Texture;
 		}
 
-		private static readonly Dictionary<int, Mask> masks = new Dictionary<int, Mask>();
+		private static readonly Dictionary<SceneHandle, Mask> masks = new Dictionary<SceneHandle, Mask>();
 		private static bool listening;
 
 		/// <summary>Builds (or drops) a scene's mask now and keeps it in step with its pack from here on.</summary>

@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 using FishMMO.Shared.Celestial;
+using FishMMO.Shared;
 
 namespace FishMMO.Water
 {
@@ -264,7 +265,7 @@ namespace FishMMO.Water
 			{
 				/* Found rather than referenced, so the component works the moment it is added and
 				 * no material asset has to be wired up by hand for a scene to have a shoreline. */
-				Shader shader = Shader.Find("FishMMO/Water/Shore");
+				Shader shader = ShaderLookup.Find("FishMMO/Water/Shore");
 				if (shader != null)
 				{
 					Material = new Material(shader) { name = "Shore", hideFlags = HideFlags.HideAndDontSave };
@@ -283,7 +284,7 @@ namespace FishMMO.Water
 			 * nothing here draws with it (the boats do). */
 			if (HullMarkShader == null)
 			{
-				HullMarkShader = Shader.Find(HullMarkShaderName);
+				HullMarkShader = ShaderLookup.Find(HullMarkShaderName);
 			}
 			meshRenderer.shadowCastingMode = ShadowCastingMode.Off;
 			meshRenderer.receiveShadows = false;
@@ -539,7 +540,7 @@ namespace FishMMO.Water
 			{
 				if (FoamMemoryShader == null)
 				{
-					FoamMemoryShader = Shader.Find(FoamMemoryShaderName);
+					FoamMemoryShader = ShaderLookup.Find(FoamMemoryShaderName);
 				}
 				if (FoamMemoryShader == null || !FoamMemoryShader.isSupported)
 				{

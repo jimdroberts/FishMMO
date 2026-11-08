@@ -13,6 +13,7 @@ using FishMMO.Shared.Core;
 using FishMMO.Shared;
 using UnityEngine;
 using FishMMO.Logging;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
@@ -749,7 +750,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// pool. FishNet's pool deactivates what it stores, which is what this checks.
 		/// </remarks>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private static bool ValidateSceneObject(long sceneObjectID, int characterSceneHandle, out ISceneObject sceneObject)
+		private static bool ValidateSceneObject(long sceneObjectID, SceneHandle characterSceneHandle, out ISceneObject sceneObject)
 		{
 			if (!SceneObject.Objects.TryGetValue(sceneObjectID, out sceneObject))
 			{

@@ -26,9 +26,9 @@ namespace FishMMO.Water
 		private static readonly int WakeCountId = Shader.PropertyToID("_FishWakeCount");
 		private readonly Vector4[] wakes = new Vector4[MaxWakes];
 		private readonly Vector4[] wakeVelocities = new Vector4[MaxWakes];
-		private readonly Dictionary<int, (Vector3 position, float time)> lastSeen = new Dictionary<int, (Vector3, float)>();
+		private readonly Dictionary<EntityId, (Vector3 position, float time)> lastSeen = new Dictionary<EntityId, (Vector3, float)>();
 		private readonly List<(float distance, Vector4 at, Vector4 velocity)> candidates = new List<(float, Vector4, Vector4)>();
-		private readonly List<int> prune = new List<int>();
+		private readonly List<EntityId> prune = new List<EntityId>();
 
 		/// <summary>
 		/// Nearest first. One comparer for good: List.Sort with a lambda wraps it in a new comparer object on every call,
@@ -71,14 +71,14 @@ namespace FishMMO.Water
 			if (Time.frameCount % 120 == 0)
 			{
 				prune.Clear();
-				foreach (KeyValuePair<int, (Vector3 position, float time)> pair in lastSeen)
+				foreach (KeyValuePair<EntityId, (Vector3 position, float time)> pair in lastSeen)
 				{
 					if (Time.time - pair.Value.time > 5f)
 					{
 						prune.Add(pair.Key);
 					}
 				}
-				foreach (int id in prune)
+				foreach (EntityId id in prune)
 				{
 					lastSeen.Remove(id);
 				}
@@ -102,7 +102,7 @@ namespace FishMMO.Water
 			Vector3 p = body.position;
 			Vector3 offset = p - eye;
 			float squared = offset.x * offset.x + offset.y * offset.y + offset.z * offset.z;
-			int id = body.GetInstanceID();
+			EntityId id = body.GetEntityId();
 			float now = Time.time;
 			Vector3 velocity = Vector3.zero;
 			if (lastSeen.TryGetValue(id, out (Vector3 position, float time) seen) && now > seen.time)

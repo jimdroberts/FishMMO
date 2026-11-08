@@ -3,6 +3,7 @@ using System.Text;
 using FishMMO.Logging;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
@@ -66,7 +67,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="sceneHandle">The loaded scene's handle, as the registry keys it.</param>
 		/// <param name="cache">The world scene details cache this server is running with.</param>
 		/// <returns>True when nothing is wrong.</returns>
-		public static bool Audit(string sceneName, int sceneHandle, WorldSceneDetailsCache cache)
+		public static bool Audit(string sceneName, SceneHandle sceneHandle, WorldSceneDetailsCache cache)
 		{
 			if (string.IsNullOrEmpty(sceneName) || cache == null)
 			{

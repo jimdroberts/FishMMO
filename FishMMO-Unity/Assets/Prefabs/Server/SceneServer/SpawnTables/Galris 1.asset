@@ -149,51 +149,41 @@ MonoBehaviour:
     version: 2
     RefIds:
     - rid: 1
-      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
-        asm: FishMMO.Server}
+      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner, asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 57b22b4b3fa71622784c95487bad2aa6,
-          type: 3}
+        NetworkObject: {fileID: 7260598054390996014, guid: 57b22b4b3fa71622784c95487bad2aa6, type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
         SpawnChance: 1
         YOffset: -0
     - rid: 2
-      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
-        asm: FishMMO.Server}
+      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner, asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 57b22b4b3fa71622784c95487bad2aa6,
-          type: 3}
+        NetworkObject: {fileID: 7260598054390996014, guid: 57b22b4b3fa71622784c95487bad2aa6, type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
         SpawnChance: 1
         YOffset: -0
     - rid: 3
-      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
-        asm: FishMMO.Server}
+      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner, asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 57b22b4b3fa71622784c95487bad2aa6,
-          type: 3}
+        NetworkObject: {fileID: 7260598054390996014, guid: 57b22b4b3fa71622784c95487bad2aa6, type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
         SpawnChance: 1
         YOffset: -0
     - rid: 4
-      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
-        asm: FishMMO.Server}
+      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner, asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 57b22b4b3fa71622784c95487bad2aa6,
-          type: 3}
+        NetworkObject: {fileID: 7260598054390996014, guid: 57b22b4b3fa71622784c95487bad2aa6, type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
         SpawnChance: 1
         YOffset: -0
     - rid: 5
-      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
-        asm: FishMMO.Server}
+      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner, asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 57b22b4b3fa71622784c95487bad2aa6,
-          type: 3}
+        NetworkObject: {fileID: 7260598054390996014, guid: 57b22b4b3fa71622784c95487bad2aa6, type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
         SpawnChance: 1

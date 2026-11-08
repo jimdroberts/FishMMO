@@ -789,8 +789,8 @@ namespace FishMMO.Client
 		private static bool Resolve()
 		{
 			WeatherRenderProfile profile = WeatherRenderProfile.Active;
-			Shader stonesShader = profile != null && profile.RockfallStonesShader != null ? profile.RockfallStonesShader : Shader.Find(StonesShaderName);
-			Shader marksShader = profile != null && profile.RockfallMarksShader != null ? profile.RockfallMarksShader : Shader.Find(MarksShaderName);
+			Shader stonesShader = profile != null && profile.RockfallStonesShader != null ? profile.RockfallStonesShader : ShaderLookup.Find(StonesShaderName);
+			Shader marksShader = profile != null && profile.RockfallMarksShader != null ? profile.RockfallMarksShader : ShaderLookup.Find(MarksShaderName);
 			if (stonesShader == null || marksShader == null)
 			{
 				return false;

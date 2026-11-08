@@ -3,6 +3,7 @@ using FishMMO.Shared;
 using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Client
 {
@@ -43,7 +44,7 @@ namespace FishMMO.Client
 
 		private static readonly Dictionary<long, (float wind, float fog)> fine = new Dictionary<long, (float, float)>();
 		private static readonly Dictionary<long, (float wind, float rain)> coarse = new Dictionary<long, (float, float)>();
-		private static int cachedScene = int.MinValue;
+		private static SceneHandle? cachedScene;
 		private static WeatherContext context;
 
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -52,7 +53,7 @@ namespace FishMMO.Client
 			Current = SceneGlowSky.Calm;
 			fine.Clear();
 			coarse.Clear();
-			cachedScene = int.MinValue;
+			cachedScene = null;
 		}
 
 		/// <summary>Works out and publishes the frame's numbers (SkySystem, after the sun is placed).</summary>
@@ -138,7 +139,7 @@ namespace FishMMO.Client
 			way = way.sqrMagnitude > 1e-8f ? way.normalized : Vector2.right;
 			sky.WayX = way.x;
 			sky.WayZ = way.y;
-			int scene = weather.Scene.IsValid() ? weather.Scene.handle : 0;
+			SceneHandle scene = weather.Scene.IsValid() ? weather.Scene.handle : SceneHandle.None;
 			sky.Turbidity = weather.Scene.IsValid() ? TurbidityEpisodes.Strength(TurbidityEpisodes.SeedOf(FishMMO.Shared.SceneNames.Of(weather.Scene)), worldSeconds) : 0f;
 			// The scene's own vent (decision 95): on the motion clock, as the glows and the later vent effect read it.
 			sky.VentBurst = weather.Scene.IsValid() ? VentBursts.At(WorldMotion.Wrapped(WorldMotion.ShaderWrapSeconds), VentBursts.SceneSeed(FishMMO.Shared.SceneNames.Of(weather.Scene))) : 0f;

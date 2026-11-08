@@ -1258,7 +1258,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// The "lowbias32" integer hash: xor-shifts and odd multiplies, each invertible, so the whole
 		/// is a bijection on 32 bits — two instances never share a key. See <see cref="IdentityKey"/>.
 		/// </remarks>
-		/// <param name="instanceId">A Unity instance ID.</param>
+		/// <param name="instanceId">A Unity instance ID, or <see cref="LowIdentityBits"/> of an entity ID.</param>
 		/// <returns>The mixed key.</returns>
 		public static uint MixIdentity(int instanceId)
 		{
@@ -1269,6 +1269,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			x = unchecked(x * 0x846ca68bU);
 			x ^= x >> 16;
 			return x;
+		}
+
+		/// <summary>
+		/// The low 32 bits of an entity ID: its index and the low bits of its type.
+		/// </summary>
+		/// <remarks>
+		/// An entity ID is 64 bits (version, type, index). No two live objects share an index, so
+		/// these bits still tell every live instance apart, and <see cref="MixIdentity"/> stays a
+		/// bijection over them. The version bits are left out: they only tell a destroyed object
+		/// from the one that later took its index.
+		/// </remarks>
+		/// <param name="entityId">A Unity entity ID.</param>
+		/// <returns>The low 32 bits, as an int.</returns>
+		public static int LowIdentityBits(EntityId entityId)
+		{
+			return unchecked((int)(uint)entityId.GetRawData());
 		}
 
 		/// <summary>
@@ -1351,7 +1367,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			 * life, so an ID-derived bucket would be whatever ID the first occupant happened to
 			 * draw. The instance ID is stable but NOT well spread — see IdentityKey — so it is
 			 * hashed first. */
-			IdentityKey = MixIdentity(gameObject.GetInstanceID());
+			IdentityKey = MixIdentity(LowIdentityBits(gameObject.GetEntityId()));
 			staggerID = (int)(IdentityKey & 0x7FFFFFFFU);
 
 			/* Collected once: a pooled NPC's hierarchy is fixed for its life, and the host maps each

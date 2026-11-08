@@ -18,7 +18,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Maps scene handles to their async load operation handles.
 		/// </summary>
-		private readonly Dictionary<int, AsyncOperationHandle<SceneInstance>> loadedScenesByHandle = new(4);
+		private readonly Dictionary<SceneHandle, AsyncOperationHandle<SceneInstance>> loadedScenesByHandle = new(4);
 
 		/// <summary>
 		/// List of currently loaded scenes.

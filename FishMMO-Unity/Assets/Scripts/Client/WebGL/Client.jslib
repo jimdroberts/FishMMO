@@ -1,5 +1,6 @@
 mergeInto(LibraryManager.library, {
 
+  ClientWebGLQuit__sig: 'v',
   ClientWebGLQuit: function () {
     var confirm_result = confirm("Are you sure you want to quit?");
     if (confirm_result == true) {

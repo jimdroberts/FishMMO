@@ -2,6 +2,7 @@
 using FishMMO.Shared.Core;
 using FishMMO.Shared;
 using FishMMO.Server.Core.World.SceneServer;
+using UnityEngine;
 
 namespace FishMMO.Server.Implementation.World.SceneServer.AI
 {
@@ -53,7 +54,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// hashes to the same value as every other, and they would silently share a cache entry.
 		/// The instance ID is unique per object by construction.
 		/// </remarks>
-		private static readonly Dictionary<int, AIAbilityIntent> cache = new Dictionary<int, AIAbilityIntent>();
+		private static readonly Dictionary<EntityId, AIAbilityIntent> cache = new Dictionary<EntityId, AIAbilityIntent>();
 
 		/// <summary>
 		/// Clears the cache. Call when ability templates are reloaded in the editor.
@@ -85,7 +86,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				return AIAbilityIntent.None;
 			}
 
-			int key = template.GetInstanceID();
+			EntityId key = template.GetEntityId();
 
 			if (cache.TryGetValue(key, out AIAbilityIntent cached))
 			{

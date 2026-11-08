@@ -139,7 +139,7 @@ For the complete end-to-end connection flow, see [CONNECTION_PIPELINE.md](CONNEC
 
 | Requirement | Version |
 |---|---|
-| Unity | 6.4 (6000.4.10f1) |
+| Unity | 6.6 (6000.6.8f1) |
 | .NET SDK | 8.0+ |
 | PostgreSQL | 14+ |
 | CMake | 3.20+ (for WebTransport C++ library) |

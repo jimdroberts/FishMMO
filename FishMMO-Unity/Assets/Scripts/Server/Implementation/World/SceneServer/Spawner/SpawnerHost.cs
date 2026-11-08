@@ -114,7 +114,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		/// <summary>
 		/// Running spawners by scene handle.
 		/// </summary>
-		private readonly Dictionary<int, List<SpawnerRuntime>> byScene = new Dictionary<int, List<SpawnerRuntime>>();
+		private readonly Dictionary<SceneHandle, List<SpawnerRuntime>> byScene = new Dictionary<SceneHandle, List<SpawnerRuntime>>();
 
 		/// <summary>
 		/// Scenes that finished loading and are picked up on the next <see cref="Tick"/>.
@@ -411,12 +411,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		/// Stops and drops the spawners of one scene instance.
 		/// </summary>
 		/// <param name="sceneHandle">The unloaded scene's handle.</param>
-		public void StopScene(int sceneHandle)
+		public void StopScene(SceneHandle sceneHandle)
 		{
 			StopScene(sceneHandle, dropPending: true);
 		}
 
-		private void StopScene(int sceneHandle, bool dropPending)
+		private void StopScene(SceneHandle sceneHandle, bool dropPending)
 		{
 			if (dropPending)
 			{
@@ -447,7 +447,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		/// <summary>
 		/// The spawners running in a scene instance, if any.
 		/// </summary>
-		public bool TryGetScene(int sceneHandle, out IReadOnlyList<SpawnerRuntime> spawners)
+		public bool TryGetScene(SceneHandle sceneHandle, out IReadOnlyList<SpawnerRuntime> spawners)
 		{
 			bool found = byScene.TryGetValue(sceneHandle, out List<SpawnerRuntime> list);
 			spawners = list;
@@ -484,7 +484,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 
 			for (int i = 0; i < args.UnloadedScenesV2.Count; ++i)
 			{
-				StopScene(args.UnloadedScenesV2[i].Handle);
+				StopScene(SceneHandle.FromRawData(args.UnloadedScenesV2[i].Handle));
 			}
 		}
 	}

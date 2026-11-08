@@ -4,6 +4,7 @@ using UnityEngine.Profiling;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
@@ -433,7 +434,7 @@ namespace FishMMO.Client
 				Shader shader = profile != null ? profile.RockSdfShader : null;
 				if (shader == null)
 				{
-					shader = Shader.Find(SdfShaderName);
+					shader = ShaderLookup.Find(SdfShaderName);
 				}
 				if (shader == null || !shader.isSupported)
 				{

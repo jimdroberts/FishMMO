@@ -1158,7 +1158,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			Scene scene = SceneManager.GetScene(details.Handle);
+			Scene scene = SceneManager.GetScene(details.Handle.GetRawData());
 			if (!scene.IsValid() ||
 				!networkManager.SceneManager.SceneConnections.TryGetValue(scene, out HashSet<NetworkConnection> connections) ||
 				connections.Count < 1)
@@ -1584,7 +1584,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// captured alongside for symmetry.
 				string sceneName = scene.name;
 				// Recorded on the row for diagnostics; the row's own id is the instance identity.
-				int sceneHandle = scene.handle;
+				SceneHandle sceneHandle = scene.handle;
 
 				long readySceneId = sceneData.ID;
 
@@ -1651,7 +1651,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					continue;
 				}
 
-				(lookups ??= new List<SceneLookupData>(loadedScenes.Length)).Add(new SceneLookupData(scene.handle));
+				(lookups ??= new List<SceneLookupData>(loadedScenes.Length)).Add(new SceneLookupData { Handle = scene.handle.GetRawData() });
 			}
 
 			if (lookups == null)
@@ -1719,7 +1719,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="sceneName">Scene name to mark ready.</param>
 		/// <param name="sceneHandle">This process's scene-manager handle, recorded for diagnostics only.</param>
 		/// <returns>Asynchronous update task.</returns>
-		private async Task SetSceneReadyAsync(long sceneId, long sceneServerId, long worldServerId, string sceneName, int sceneHandle)
+		private async Task SetSceneReadyAsync(long sceneId, long sceneServerId, long worldServerId, string sceneName, SceneHandle sceneHandle)
 		{
 			try
 			{
@@ -1731,7 +1731,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					return;
 				}
-				DatabaseResult result = await sceneService.SetReadyAsync(sceneId, sceneServerId, worldServerId, sceneName, sceneHandle);
+				DatabaseResult result = await sceneService.SetReadyAsync(sceneId, sceneServerId, worldServerId, sceneName, unchecked((long)sceneHandle.GetRawData()));
 				if (!result.IsSuccess)
 				{
 					await Log.Warning("SceneServerSystem", $"SetSceneReadyAsync DB error (SceneID={sceneId}, SceneServerID={sceneServerId}, Scene={sceneName}:{sceneHandle}): {result.ErrorCode} - {result.ErrorMessage}");
@@ -1851,7 +1851,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						SceneLookupDatas = new SceneLookupData[]
 						{
-							new SceneLookupData(scene.handle),
+							new SceneLookupData { Handle = scene.handle.GetRawData() },
 						},
 					});
 				}
@@ -1881,7 +1881,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			for (int i = 0; i < args.UnloadedScenesV2.Count; ++i)
 			{
-				int handle = args.UnloadedScenesV2[i].Handle;
+				SceneHandle handle = SceneHandle.FromRawData(args.UnloadedScenesV2[i].Handle);
 
 				/* Withdraw this scene's difficulty rules unconditionally, before anything else.
 				 *
@@ -1977,10 +1977,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <returns>True if scene was loaded for the connection, false otherwise.</returns>
 		public bool TryLoadSceneForConnection(NetworkConnection connection, ISceneInstanceDetails instance)
 		{
-			Scene scene = SceneManager.GetScene(instance.Handle);
+			Scene scene = SceneManager.GetScene(instance.Handle.GetRawData());
 			if (scene != null && scene.IsValid() && scene.isLoaded)
 			{
-				SceneLookupData lookupData = new SceneLookupData(instance.Handle);
+				SceneLookupData lookupData = new SceneLookupData { Handle = instance.Handle.GetRawData() };
 				SceneLoadData sld = new SceneLoadData(lookupData)
 				{
 					ReplaceScenes = ReplaceOption.None,
@@ -2074,7 +2074,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				SceneLookupDatas = new SceneLookupData[]
 				{
-					new SceneLookupData(details.Handle),
+					new SceneLookupData { Handle = details.Handle.GetRawData() },
 				},
 			};
 			Server.NetworkWrapper.NetworkManager.SceneManager.UnloadConnectionScenes(sud);

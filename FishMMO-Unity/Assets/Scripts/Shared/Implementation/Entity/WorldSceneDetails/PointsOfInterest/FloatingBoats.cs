@@ -261,7 +261,7 @@ namespace FishMMO.Shared
 
 			public bool Equals(ShipRef other) => ReferenceEquals(Fleet, other.Fleet) && Index == other.Index;
 			public override bool Equals(object obj) => obj is ShipRef other && Equals(other);
-			public override int GetHashCode() => (ReferenceEquals(Fleet, null) ? 0 : Fleet.GetInstanceID()) * 397 ^ Index;
+			public override int GetHashCode() => (ReferenceEquals(Fleet, null) ? 0 : Fleet.GetEntityId().GetHashCode()) * 397 ^ Index;
 		}
 
 		/// <summary>Per ship, what the tick driver last did with it. Runtime only.</summary>
@@ -1088,7 +1088,7 @@ namespace FishMMO.Shared
 			{
 				return shoreMark;
 			}
-			Shader shader = Shader.Find(ShoreMarkShaderName);
+			Shader shader = ShaderLookup.Find(ShoreMarkShaderName);
 			if (shader == null || !shader.isSupported)
 			{
 				return null;
@@ -1211,7 +1211,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private static class Fleet
 		{
-			private static readonly Dictionary<int, List<FloatingBoats>> byScene = new Dictionary<int, List<FloatingBoats>>();
+			private static readonly Dictionary<SceneHandle, List<FloatingBoats>> byScene = new Dictionary<SceneHandle, List<FloatingBoats>>();
 			private static readonly List<FloatingBoats> all = new List<FloatingBoats>();
 			private static NetworkManager network;
 			private static TimeManager time;
@@ -1225,7 +1225,7 @@ namespace FishMMO.Shared
 			/// <summary>The latest riders' positions (whoever asked for a carry), a ring: on a client, the character it predicts.</summary>
 			private const int RiderSlots = 32;
 			private static readonly Vector3[] riderAt = new Vector3[RiderSlots];
-			private static readonly int[] riderScene = new int[RiderSlots];
+			private static readonly SceneHandle[] riderScene = new SceneHandle[RiderSlots];
 			private static readonly float[] riderTime = new float[RiderSlots];
 			private static int riderNext, riderCount;
 
@@ -1247,7 +1247,7 @@ namespace FishMMO.Shared
 			{
 				float reachSquared = reach * reach;
 				float now = Time.unscaledTime;
-				int handle = scene.handle;
+				SceneHandle handle = scene.handle;
 				for (int r = 0; r < riderCount; r++)
 				{
 					if (riderScene[r] == handle && now - riderTime[r] <= RiderMemorySeconds && Near(riderAt[r], point, reachSquared))
@@ -1283,7 +1283,7 @@ namespace FishMMO.Shared
 					return;
 				}
 				all.Add(boats);
-				int handle = boats.gameObject.scene.handle;
+				SceneHandle handle = boats.gameObject.scene.handle;
 				if (!byScene.TryGetValue(handle, out List<FloatingBoats> list))
 				{
 					list = new List<FloatingBoats>();
@@ -1299,7 +1299,7 @@ namespace FishMMO.Shared
 				{
 					return;
 				}
-				foreach (KeyValuePair<int, List<FloatingBoats>> pair in byScene)
+				foreach (KeyValuePair<SceneHandle, List<FloatingBoats>> pair in byScene)
 				{
 					if (pair.Value.Remove(boats) && pair.Value.Count == 0)
 					{

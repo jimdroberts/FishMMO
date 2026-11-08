@@ -115,7 +115,7 @@ namespace FishMMO.TestHarness.World.Editor
 						foreach (var part in placed.Model.Levels.Last().Parts) for (int slot = 0; slot < part.Params.Length; slot++)
 						{
 							var rp = part.Params[slot]; var mat = rp.material;
-							distinct.Add(part.Mesh.GetInstanceID() + "/" + part.Submesh[slot] + "/" + mat.GetInstanceID());
+							distinct.Add(part.Mesh.GetEntityId() + "/" + part.Submesh[slot] + "/" + mat.GetEntityId());
 							string key = Key(mat) + "/" + rp.layer + "/" + rp.renderingLayerMask + "/" + rp.receiveShadows;
 							if (!palettes.TryGetValue(key,out var palette)) palettes.Add(key,palette = new Palette { Source = mat });
 							if (!families.TryGetValue(key, out var family)) families.Add(key, family = new Family(palette) { Source = mat, Params = rp });

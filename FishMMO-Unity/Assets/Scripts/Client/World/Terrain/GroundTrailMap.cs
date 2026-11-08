@@ -197,7 +197,7 @@ namespace FishMMO.Client
 #endif
 				if (shader == null)
 				{
-					shader = Shader.Find(ShaderName);
+					shader = ShaderLookup.Find(ShaderName);
 				}
 				if (shader == null || !shader.isSupported)
 				{
@@ -360,7 +360,7 @@ namespace FishMMO.Client
 				if (pair.Key != null)
 				{
 					// Not a character ID: negative, from the object's own.
-					Follow(-1L - (long)(uint)pair.Key.GetInstanceID(), pair.Key, pair.Value, eye, reach, frame);
+					Follow(-1L - (long)(pair.Key.GetEntityId().GetRawData() & 0x7FFFFFFFFFFFFFFFUL), pair.Key, pair.Value, eye, reach, frame);
 				}
 			}
 			gone.Clear();

@@ -399,7 +399,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// party with a member on this server; building these collections fresh each time would
 		/// be a steady drip of garbage for a payload whose shape barely changes.
 		/// </remarks>
-		private readonly Dictionary<int, List<IPlayerCharacter>> vitalsSceneGroups = new Dictionary<int, List<IPlayerCharacter>>();
+		private readonly Dictionary<SceneHandle, List<IPlayerCharacter>> vitalsSceneGroups = new Dictionary<SceneHandle, List<IPlayerCharacter>>();
 
 		/// <summary>
 		/// Which observed-buff set each vitals recipient was last sent for each member it sees.
@@ -954,7 +954,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				GroupPartyMembersByScene(memberIDs, characterMappingData);
 
-				foreach (KeyValuePair<int, List<IPlayerCharacter>> group in vitalsSceneGroups)
+				foreach (KeyValuePair<SceneHandle, List<IPlayerCharacter>> group in vitalsSceneGroups)
 				{
 					BroadcastSceneGroupVitals(group.Value, meterData, now);
 				}
@@ -1009,7 +1009,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void ReleaseSceneGroups()
 		{
-			foreach (KeyValuePair<int, List<IPlayerCharacter>> group in vitalsSceneGroups)
+			foreach (KeyValuePair<SceneHandle, List<IPlayerCharacter>> group in vitalsSceneGroups)
 			{
 				group.Value.Clear();
 				vitalsGroupPool.Push(group.Value);

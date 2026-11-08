@@ -236,7 +236,7 @@ namespace FishMMO.Shared
 			source.shadowStrength = 0.9f;
 			source.enabled = false;
 			// Two carried lights never flicker in step; Unity ids differ per object, and a fixed value in edit mode.
-			phase = Application.isPlaying ? (GetInstanceID() & 0xFFFF) * 0.0137f : 0f;
+			phase = Application.isPlaying ? (int)(GetEntityId().GetRawData() & 0xFFFF) * 0.0137f : 0f;
 		}
 
 		/// <summary>Takes the one shadow if no other lit carried light holds it.</summary>

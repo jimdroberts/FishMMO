@@ -22,6 +22,8 @@ namespace FishMMO.Water
 		private SceneRiverFlow flow;
 		private SceneBiomeMap flowMap;
 		private bool flowLoading;
+		// Holds the loading screen until the flow has arrived and the falls are built with it.
+		private SceneContentLoads.Load flowContentLoad;
 
 		/* Each lake, river, curtain and spray draws with a copy of its material of its own, carrying its numbers in the
 		 * shader's UnityPerMaterial (2026-10-28). They rode property blocks, and a renderer with a block is drawn outside the
@@ -90,21 +92,31 @@ namespace FishMMO.Water
 			}
 			flowLoading = true;
 			flowMap = map;
-			map.RiverFlow.LoadAssetAsync().Completed += handle =>
+			SceneContentLoads.Load load = flowContentLoad = SceneContentLoads.Begin("rivers");
+			AsyncOperationHandle<SceneRiverFlow> loading = map.RiverFlow.LoadAssetAsync();
+			load.Track(loading);
+			loading.Completed += handle =>
 			{
 				flowLoading = false;
-				if (this == null)
+				try
 				{
-					return;
+					if (this == null)
+					{
+						return;
+					}
+					if (handle.Status == AsyncOperationStatus.Succeeded && handle.Result != null)
+					{
+						SetFlow(handle.Result);
+					}
+					else
+					{
+						// No flow after all: the falls Start held back for it are built without it.
+						Rebuild();
+					}
 				}
-				if (handle.Status == AsyncOperationStatus.Succeeded && handle.Result != null)
+				finally
 				{
-					SetFlow(handle.Result);
-				}
-				else
-				{
-					// No flow after all: the falls Start held back for it are built without it.
-					Rebuild();
+					load.End();
 				}
 			};
 #endif
@@ -113,6 +125,8 @@ namespace FishMMO.Water
 		private void ReleaseFlow()
 		{
 #if !UNITY_SERVER
+			flowContentLoad?.End();
+			flowContentLoad = null;
 			if (flowMap != null && flowMap.RiverFlow != null && flowMap.RiverFlow.IsValid())
 			{
 				flowMap.RiverFlow.ReleaseAsset();

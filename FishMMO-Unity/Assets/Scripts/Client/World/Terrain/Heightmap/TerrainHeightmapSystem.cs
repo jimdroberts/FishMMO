@@ -95,7 +95,7 @@ namespace FishMMO.Client
 		private static readonly List<TerrainHeightmapField> fields = new List<TerrainHeightmapField>();
 		private static readonly List<Terrain> active = new List<Terrain>();
 		// Scenes (by handle) whose tiles cannot be drawn here: said once, then left to Unity's terrain.
-		private static readonly HashSet<int> refused = new HashSet<int>();
+		private static readonly HashSet<SceneHandle> refused = new HashSet<SceneHandle>();
 		// FishMMO/Weather Terrain Array, found once (comparing names would allocate one per tile per look).
 		private static Shader arrayShader;
 		private static ComputeShader compute;
@@ -356,7 +356,7 @@ namespace FishMMO.Client
 			Material m = t.materialTemplate;
 			if (arrayShader == null)
 			{
-				arrayShader = Shader.Find(TerrainArrayBinder.ShaderName);
+				arrayShader = ShaderLookup.Find(TerrainArrayBinder.ShaderName);
 			}
 			return m != null && arrayShader != null && m.shader == arrayShader;
 		}
@@ -402,7 +402,7 @@ namespace FishMMO.Client
 #endif
 				if (s == null)
 				{
-					s = Shader.Find(ShaderName);
+					s = ShaderLookup.Find(ShaderName);
 				}
 				if (s == null || !s.isSupported)
 				{

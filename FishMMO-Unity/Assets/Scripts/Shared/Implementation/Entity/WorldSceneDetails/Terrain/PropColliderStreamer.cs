@@ -24,7 +24,7 @@ namespace FishMMO.Shared
 	/// <para>
 	/// <b>One collider per chunk.</b> A chunk's props become a single mesh (one per collision layer present), so
 	/// physics holds one static actor per chunk rather than one per rock: the merge (<see cref="MergeJob"/>) and the
-	/// cooking (<see cref="BakeJob"/>, <see cref="Physics.BakeMesh(int, bool)"/>) both run as jobs, and the main thread
+	/// cooking (<see cref="BakeJob"/>, <see cref="Physics.BakeMesh(EntityId, bool)"/>) both run as jobs, and the main thread
 	/// only applies the merged data and assigns the cooked mesh.
 	/// </para>
 	/// <para>
@@ -84,7 +84,7 @@ namespace FishMMO.Shared
 		{
 			public ScenePropColliders Owner;
 			public Scene Scene;
-			public int SceneHandle;
+			public SceneHandle SceneHandle;
 			public Transform Root;
 			/// <summary>Per chunk, its collidable props: (set, instance).</summary>
 			public readonly Dictionary<long, List<(int set, int index)>> Cells = new Dictionary<long, List<(int, int)>>();
@@ -144,7 +144,7 @@ namespace FishMMO.Shared
 			public bool AllScenes;
 			/// <summary>Removed since the last tick; its holds are let go on the tick, as the old full recompute did.</summary>
 			public bool Removed;
-			public int SceneHandle;
+			public SceneHandle SceneHandle;
 			public Vector3 Position;
 			/// <summary>Every chunk within the immediate radius of its cell is live, so the immediate pass can skip it.</summary>
 			public bool Settled;
@@ -315,7 +315,7 @@ namespace FishMMO.Shared
 				{
 					continue;
 				}
-				int handle = focus.Transform.gameObject.scene.handle;
+				SceneHandle handle = focus.Transform.gameObject.scene.handle;
 				if (handle != focus.SceneHandle)
 				{
 					// Moved scene since the last tick: it holds in its new scene's sources, this one among them.
@@ -475,7 +475,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>A focus moved to another scene: it lets go of the old scene's chunks and holds in the new one's.</summary>
-		private static void ReattachScene(Focus focus, int handle)
+		private static void ReattachScene(Focus focus, SceneHandle handle)
 		{
 			DropHolds(focus);
 			focus.SceneHandle = handle;
@@ -555,7 +555,7 @@ namespace FishMMO.Shared
 						foci.RemoveAt(f);
 						continue;
 					}
-					int handle = focus.Transform.gameObject.scene.handle;
+					SceneHandle handle = focus.Transform.gameObject.scene.handle;
 					if (handle != focus.SceneHandle)
 					{
 						ReattachScene(focus, handle);
@@ -827,7 +827,7 @@ namespace FishMMO.Shared
 					build.Mesh = new Mesh { name = "Prop Chunk Collision", hideFlags = HideFlags.DontSave };
 					Mesh.ApplyAndDisposeWritableMeshData(build.Output, build.Mesh, MeshUpdateFlags.DontValidateIndices | MeshUpdateFlags.DontNotifyMeshUsers);
 					build.Mesh.RecalculateBounds();
-					build.Bake = new BakeJob { MeshId = build.Mesh.GetInstanceID() }.Schedule();
+					build.Bake = new BakeJob { MeshId = build.Mesh.GetEntityId() }.Schedule();
 					build.Baking = true;
 					JobHandle.ScheduleBatchedJobs();
 				}
@@ -1100,7 +1100,7 @@ namespace FishMMO.Shared
 		/// <summary>Cooks a chunk's mesh for a (non-convex) mesh collider, off the main thread.</summary>
 		private struct BakeJob : IJob
 		{
-			public int MeshId;
+			public EntityId MeshId;
 
 			public void Execute() => Physics.BakeMesh(MeshId, false);
 		}

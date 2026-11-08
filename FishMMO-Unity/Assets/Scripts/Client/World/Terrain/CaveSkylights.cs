@@ -113,7 +113,7 @@ namespace FishMMO.Client
 		private static Material ResolveMaterial()
 		{
 			WeatherRenderProfile profile = WeatherRenderProfile.Active;
-			Shader shader = profile != null && profile.CaveSkylightShaftsShader != null ? profile.CaveSkylightShaftsShader : materialShader != null ? materialShader : Shader.Find(ShaderName);
+			Shader shader = profile != null && profile.CaveSkylightShaftsShader != null ? profile.CaveSkylightShaftsShader : materialShader != null ? materialShader : ShaderLookup.Find(ShaderName);
 			if (shader == null)
 			{
 				return null;

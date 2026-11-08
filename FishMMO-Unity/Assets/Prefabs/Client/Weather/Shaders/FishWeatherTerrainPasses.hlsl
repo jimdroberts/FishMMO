@@ -137,7 +137,8 @@ void InitializeBakedGIData(Varyings IN, inout InputData inputData)
     #endif
 
 #if defined(_SCREEN_SPACE_IRRADIANCE)
-    inputData.bakedGI = SAMPLE_GI(_ScreenSpaceIrradiance, inputData.positionCS.xy);
+    // URP 17.6 (Unity 6.6) gave SAMPLE_GI's screen-space form a normal (the ambient probe for transparents).
+    inputData.bakedGI = SAMPLE_GI(_ScreenSpaceIrradiance, inputData.positionCS.xy, inputData.normalWS);
 #elif defined(DYNAMICLIGHTMAP_ON)
     inputData.bakedGI = SAMPLE_GI(IN.uvMainAndLM.zw, IN.dynamicLightmapUV, SH, inputData.normalWS);
     inputData.shadowMask = SAMPLE_SHADOWMASK(IN.uvMainAndLM.zw);
@@ -186,13 +187,25 @@ void SplatmapMix(float4 uvMainAndLM, float4 uvSplat01, float4 uvSplat23, inout h
     diffAlbedo[2] = SAMPLE_TEXTURE2D(_Splat2, sampler_Splat0, uvSplat23.xy);
     diffAlbedo[3] = SAMPLE_TEXTURE2D(_Splat3, sampler_Splat0, uvSplat23.zw);
 
-    // This might be a bit of a gamble -- the assumption here is that if the diffuseMap has no
-    // alpha channel, then diffAlbedo[n].a = 1.0 (and _DiffuseHasAlphaN = 0.0)
-    // Prior to coming in, _SmoothnessN is actually set to max(_DiffuseHasAlphaN, _SmoothnessN)
-    // This means that if we have an alpha channel, _SmoothnessN is locked to 1.0 and
-    // otherwise, the true slider value is passed down and diffAlbedo[n].a == 1.0.
-    defaultSmoothness = half4(diffAlbedo[0].a, diffAlbedo[1].a, diffAlbedo[2].a, diffAlbedo[3].a);
-    defaultSmoothness *= half4(_Smoothness0, _Smoothness1, _Smoothness2, _Smoothness3);
+    // Each layer's smoothness by its source (URP 17.6, Unity 6.6). The engine used to pass
+    // max(_DiffuseHasAlphaN, _SmoothnessN) and this was diffuse alpha x smoothness; it now passes
+    // the slider and _SmoothnessSourceN, and this is URP's own TerrainLitPasses.hlsl SplatmapMix.
+    half4 diffuseAlpha = half4(diffAlbedo[0].a, diffAlbedo[1].a, diffAlbedo[2].a, diffAlbedo[3].a);
+    half4 smoothnessConstants = half4(_Smoothness0, _Smoothness1, _Smoothness2, _Smoothness3);
+    half4 smoothnessSources = half4(_SmoothnessSource0, _SmoothnessSource1, _SmoothnessSource2, _SmoothnessSource3);
+
+    defaultSmoothness.r = (smoothnessSources.r < 0.5) ? diffuseAlpha.r * smoothnessConstants.r : // kConstantMultipliedByDiffuseAlpha
+                          (smoothnessSources.r < 1.5) ? diffuseAlpha.r :                         // kDiffuseAlphaChannel
+                          smoothnessConstants.r;                                                 // kConstant
+    defaultSmoothness.g = (smoothnessSources.g < 0.5) ? diffuseAlpha.g * smoothnessConstants.g :
+                          (smoothnessSources.g < 1.5) ? diffuseAlpha.g :
+                          smoothnessConstants.g;
+    defaultSmoothness.b = (smoothnessSources.b < 0.5) ? diffuseAlpha.b * smoothnessConstants.b :
+                          (smoothnessSources.b < 1.5) ? diffuseAlpha.b :
+                          smoothnessConstants.b;
+    defaultSmoothness.a = (smoothnessSources.a < 0.5) ? diffuseAlpha.a * smoothnessConstants.a :
+                          (smoothnessSources.a < 1.5) ? diffuseAlpha.a :
+                          smoothnessConstants.a;
 
 #ifndef _TERRAIN_BLEND_HEIGHT // density blending
     if(_NumLayersCount <= 4)

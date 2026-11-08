@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
@@ -16,10 +17,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Maps scene handles to scene names for quick lookup.
 		/// </summary>
-		public Dictionary<int, string> SceneNameByHandle { get; private set; }
+		public Dictionary<SceneHandle, string> SceneNameByHandle { get; private set; }
 
 		/// <inheritdoc />
-		public Dictionary<int, ISceneInstanceDetails> SceneInstanceByHandle { get; private set; }
+		public Dictionary<SceneHandle, ISceneInstanceDetails> SceneInstanceByHandle { get; private set; }
 
 		/// <inheritdoc />
 		public Dictionary<long, ISceneInstanceDetails> SceneInstanceByID { get; private set; }
@@ -36,8 +37,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
 			WorldScenes = new Dictionary<long, Dictionary<string, Dictionary<long, ISceneInstanceDetails>>>();
-			SceneNameByHandle = new Dictionary<int, string>();
-			SceneInstanceByHandle = new Dictionary<int, ISceneInstanceDetails>();
+			SceneNameByHandle = new Dictionary<SceneHandle, string>();
+			SceneInstanceByHandle = new Dictionary<SceneHandle, ISceneInstanceDetails>();
 			SceneInstanceByID = new Dictionary<long, ISceneInstanceDetails>();
 			PendingScenes = new Dictionary<long, PendingSceneInfo>();
 			return ServerComponentInitializationStatus.Initialized;

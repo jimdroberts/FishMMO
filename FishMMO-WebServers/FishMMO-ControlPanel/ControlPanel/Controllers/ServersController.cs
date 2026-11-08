@@ -55,6 +55,19 @@ namespace FishMMO.ControlPanel.Controllers
 		/// </remarks>
 		private const int MaxShutdownDelaySeconds = 86_400;
 
+		/// <summary>
+		/// A stored scene handle as Unity prints one: "index:version", the low and high 32 bits of
+		/// the 64-bit raw value as signed integers (<c>EntityId.ToString</c>).
+		/// </summary>
+		/// <param name="rawHandle">The handle's raw data, as stored (bit for bit, so possibly negative).</param>
+		internal static string FormatSceneHandle(long rawHandle)
+		{
+			int index = unchecked((int)rawHandle);
+			int version = unchecked((int)(rawHandle >> 32));
+			return index.ToString(System.Globalization.CultureInfo.InvariantCulture) + ":" +
+				version.ToString(System.Globalization.CultureInfo.InvariantCulture);
+		}
+
 		private readonly IServerBoardService board;
 		private readonly IWorldServerService worldServers;
 		private readonly ISceneServerService sceneServers;
@@ -125,8 +138,12 @@ namespace FishMMO.ControlPanel.Controllers
 					 * dequeuing scene server's claim token — negative, and meaningless outside that
 					 * server's dequeue — and a Pending row's holds 0, so the panel printed
 					 * "handle -1843751" for every scene still loading. Sent as null, and the page
-					 * says what the row is doing instead. */
-					sceneHandle = s.Status == (int)FishMMO.Database.Data.Enums.SceneStatus.Ready ? s.SceneHandle : (int?)null,
+					 * says what the row is doing instead.
+					 *
+					 * A Ready row's handle is Unity's 64-bit raw value, beyond what a JSON number
+					 * carries exactly, so it is sent as text in Unity's own format for it
+					 * ("index:version"), the same text the scene server's log lines print. */
+					sceneHandle = s.Status == (int)FishMMO.Database.Data.Enums.SceneStatus.Ready ? FormatSceneHandle(s.SceneHandle) : null,
 					status = s.Status,
 					statusName = ((FishMMO.Database.Data.Enums.SceneStatus)s.Status).ToString(),
 					type = s.Type,

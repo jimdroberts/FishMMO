@@ -1057,7 +1057,7 @@ namespace FishMMO.Water
 			}
 			if (SpectrumPasses == null)
 			{
-				SpectrumPasses = Shader.Find(SpectrumPassesShader);
+				SpectrumPasses = ShaderLookup.Find(SpectrumPassesShader);
 			}
 			if (Spectrum == null && SpectrumPasses == null)
 			{
@@ -1438,7 +1438,7 @@ namespace FishMMO.Water
 			bool wanted = (LavaLight || LavaFumes > 0f) && LavaMaterial != null;
 			if (wanted && lavaLightHost == null)
 			{
-				Shader shader = LavaLightShader != null ? LavaLightShader : Shader.Find(LavaLightShaderName);
+				Shader shader = LavaLightShader != null ? LavaLightShader : ShaderLookup.Find(LavaLightShaderName);
 				if (shader == null || !shader.isSupported)
 				{
 					LavaLight = false;
@@ -1587,7 +1587,7 @@ namespace FishMMO.Water
 
 			if (underwaterHost == null)
 			{
-				Shader shader = UnderwaterShader != null ? UnderwaterShader : Shader.Find(UnderwaterShaderName);
+				Shader shader = UnderwaterShader != null ? UnderwaterShader : ShaderLookup.Find(UnderwaterShaderName);
 				if (shader == null)
 				{
 					UnderwaterEffect = false;
@@ -1694,7 +1694,7 @@ namespace FishMMO.Water
 			}
 			if (causticsHost == null)
 			{
-				Shader shader = CausticsShader != null ? CausticsShader : Shader.Find(CausticsShaderName);
+				Shader shader = CausticsShader != null ? CausticsShader : ShaderLookup.Find(CausticsShaderName);
 				if (shader == null || !shader.isSupported)
 				{
 					Caustics = false;

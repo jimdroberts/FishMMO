@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Server.Core.World.SceneServer
 {
@@ -16,7 +17,7 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <summary>
 		/// Maps local scene handles to scene names for quick lookup.
 		/// </summary>
-		Dictionary<int, string> SceneNameByHandle { get; }
+		Dictionary<SceneHandle, string> SceneNameByHandle { get; }
 
 		/// <summary>
 		/// Flat O(1) lookup from the local scene manager handle to instance details.
@@ -26,7 +27,7 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// Everything that identifies an instance across processes uses
 		/// <see cref="SceneInstanceByID"/> instead — see <see cref="ISceneInstanceDetails.SceneID"/>.
 		/// </remarks>
-		Dictionary<int, ISceneInstanceDetails> SceneInstanceByHandle { get; }
+		Dictionary<SceneHandle, ISceneInstanceDetails> SceneInstanceByHandle { get; }
 
 		/// <summary>
 		/// Flat O(1) lookup from scene row ID to instance details.

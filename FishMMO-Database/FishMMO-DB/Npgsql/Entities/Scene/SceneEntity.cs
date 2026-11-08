@@ -22,18 +22,24 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// The hosting scene server's own scene-manager handle for this instance.
 		/// </summary>
 		/// <remarks>
-		/// Diagnostic only. A scene-manager handle is assigned from a per-process counter, so it
-		/// is meaningful solely inside the process that allocated it — two scene servers running
-		/// the same build routinely produce the same value for different scenes. Anything that
-		/// needs to identify a scene instance from outside its host uses <see cref="ID"/>.
+		/// Diagnostic only. A scene-manager handle is assigned by the process that loaded the scene,
+		/// so it is meaningful solely inside that process — two scene servers running the same build
+		/// routinely produce the same value for different scenes. Anything that needs to identify a
+		/// scene instance from outside its host uses <see cref="ID"/>.
+		/// <para>
+		/// A Unity scene handle is 64 bits (<c>SceneHandle.GetRawData()</c>, an entity ID whose
+		/// top bits are its version). It is stored bit for bit, so a real handle can read as a
+		/// negative <c>bigint</c>.
+		/// </para>
 		/// <para>
 		/// Before the row is Ready there is no handle, and the column has one other use: 0 while
-		/// Pending, and while Loading the (negative) claim token of the dequeue that took the row,
-		/// which is how a retried dequeue finds its own claim. <c>SetReadyAsync</c> replaces the
-		/// token with the real handle. See <c>ISceneService.DequeueAsync</c>.
+		/// Pending, and while Loading the claim token of the dequeue that took the row, which is how
+		/// a retried dequeue finds its own claim. <c>SetReadyAsync</c> replaces the token with the
+		/// real handle. A token and a handle are told apart by the row's status, never by the
+		/// value. See <c>ISceneService.DequeueAsync</c>.
 		/// </para>
 		/// </remarks>
-		public int SceneHandle { get; set; }
+		public long SceneHandle { get; set; }
 		/// <summary>Current status of the scene (e.g. loading, running, unloading).</summary>
 		public int SceneStatus { get; set; }
 		/// <summary>Scene type (over-world vs instanced).</summary>

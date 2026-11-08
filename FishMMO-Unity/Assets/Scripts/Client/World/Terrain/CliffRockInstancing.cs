@@ -597,7 +597,7 @@ namespace FishMMO.Client
 					{
 						return null;
 					}
-					key.Append(':').Append(f.sharedMesh.GetEntityId());
+					key.Append(':').Append(f.sharedMesh.GetEntityId().ToString());
 					foreach (Material m in r.sharedMaterials)
 					{
 						key.Append(',').Append(m != null ? m.GetEntityId().ToString() : "-");

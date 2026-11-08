@@ -10,6 +10,7 @@ using FishNet.Serializing;
 using FishMMO.Client;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.UnitTests
 {
@@ -317,7 +318,7 @@ namespace FishMMO.UnitTests
 				Assert.IsTrue(WaypointRegistry.Register(near));
 				Assert.IsTrue(WaypointRegistry.Register(nearer));
 
-				int handle = scene.handle;
+				SceneHandle handle = scene.handle;
 				string sceneName = far.SceneName;
 				Assert.IsFalse(string.IsNullOrEmpty(sceneName), "Fixture: the scene needs a name for discovery to mean anything.");
 

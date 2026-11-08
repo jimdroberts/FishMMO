@@ -21,26 +21,33 @@ MonoBehaviour:
     m_SerializedLabels:
     - Scene_Server
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 7e1b8e5abbda71a4b9f84cee5252b68c
     m_Address: SceneServer
     m_ReadOnly: 0
     m_SerializedLabels:
     - Scene_Server
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: c5c748f123bdc7e41bcb72c4f239ca6b
     m_Address: WorldServer
     m_ReadOnly: 0
     m_SerializedLabels:
     - Scene_Server
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: e4f01a5d084fafb47a77f7552e2af05e
     m_Address: LoginServer
     m_ReadOnly: 0
     m_SerializedLabels:
     - Scene_Server
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}
   m_SchemaSet:
     m_Schemas:
     - {fileID: 11400000, guid: 3d2aad0ffdefc82109a3d2f57b26bc7a, type: 2}
+    m_SchemaDisplayOrder: []
+  m_IncludeInBuild: 0
+  m_IncludeInBuildMigrated: 1

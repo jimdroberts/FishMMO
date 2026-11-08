@@ -63,7 +63,7 @@ namespace FishMMO.Shared
 		/// <summary>The bake shader a set carries (so a player build has it), else the project's by name.</summary>
 		public static Shader ShaderOf(TerrainArraySet set)
 		{
-			return set != null && set.IndexBakeShader != null ? set.IndexBakeShader : Shader.Find(ShaderName);
+			return set != null && set.IndexBakeShader != null ? set.IndexBakeShader : ShaderLookup.Find(ShaderName);
 		}
 
 		/// <summary>True when this device can bake and read index maps with this shader.</summary>
@@ -233,10 +233,25 @@ namespace FishMMO.Shared
 		/// <summary>The byte staging texture: two RGBA8 texels carry the two packed uint words, without filtering.</summary>
 		public const GraphicsFormat UploadFormat = GraphicsFormat.R8G8B8A8_UNorm;
 
-		/// <summary>Integer Texture2D creation is unsupported on some devices that can render and load integer targets.</summary>
-		public static bool CanUpload()
+		/// <summary>
+		/// Integer Texture2D creation is unsupported on some devices that can render and load integer targets. Pass the set's
+		/// shader (<see cref="ShaderOf"/>): a player build carries it through the set, where a lookup by name can miss it.
+		/// </summary>
+		public static bool CanUpload(Shader shader = null)
 		{
-			return CanBake(Shader.Find(ShaderName)) && SystemInfo.IsFormatSupported(UploadFormat, GraphicsFormatUsage.Sample);
+			return UploadBlocker(shader != null ? shader : ShaderLookup.Find(ShaderName), 0) == null;
+		}
+
+		/// <summary>Why a stored map of <paramref name="resolution"/> cannot be uploaded here, or null when it can.</summary>
+		private static string UploadBlocker(Shader shader, int resolution)
+		{
+			if (shader == null) return $"'{ShaderName}' not found";
+			if (!shader.isSupported) return "shader not supported";
+			if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null) return "no graphics device";
+			if (!SystemInfo.IsFormatSupported(Format, GraphicsFormatUsage.Render)) return $"{Format} not renderable";
+			if (!SystemInfo.IsFormatSupported(UploadFormat, GraphicsFormatUsage.Sample)) return $"{UploadFormat} not sampleable";
+			if (resolution > SystemInfo.maxTextureSize / 2) return $"{resolution}² map needs a {resolution * 2}-wide staging texture, limit {SystemInfo.maxTextureSize}";
+			return null;
 		}
 
 		/// <summary>
@@ -245,13 +260,15 @@ namespace FishMMO.Shared
 		/// The temporary source has no mipmaps, sRGB conversion or filtering; the upload pass rounds bytes before packing.
 		/// The caller owns the target. Stored CPU words and the final eight bytes per texel are unchanged.
 		/// </summary>
-		public static RenderTexture Upload(TerrainDetailBake.IndexMap stored, string name)
+		public static RenderTexture Upload(TerrainDetailBake.IndexMap stored, string name, Shader shader = null)
 		{
 			if (stored == null || stored.Resolution <= 0 || stored.Map == null || stored.Map.Length != (long)stored.Resolution * stored.Resolution * 2)
 				return null;
-			if (!CanUpload() || stored.Resolution > SystemInfo.maxTextureSize / 2)
+			if (shader == null) shader = ShaderLookup.Find(ShaderName);
+			string blocker = UploadBlocker(shader, stored.Resolution);
+			if (blocker != null)
 			{
-				WarnUpload($"{Format} render target / {UploadFormat} staging unavailable, or map exceeds texture limits");
+				WarnUpload(blocker);
 				return null;
 			}
 			Texture2D source = null;
@@ -278,7 +295,7 @@ namespace FishMMO.Shared
 				source.Apply(false, true);
 				target = Create(res, res, 1, name);
 				if (!target.IsCreated() || target.graphicsFormat != Format) throw new System.InvalidOperationException("Integer target creation failed or changed format.");
-				upload = new Material(Shader.Find(ShaderName)) { hideFlags = HideFlags.HideAndDontSave };
+				upload = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
 				int pass = upload.FindPass("UploadStored");
 				if (pass < 0) throw new System.InvalidOperationException("Stored index upload shader pass is missing.");
 				var block = new MaterialPropertyBlock();

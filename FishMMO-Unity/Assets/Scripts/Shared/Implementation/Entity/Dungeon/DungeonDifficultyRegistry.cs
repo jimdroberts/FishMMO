@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Shared
 {
@@ -32,17 +33,17 @@ namespace FishMMO.Shared
 	public static class DungeonDifficultyRegistry
 	{
 		/// <summary>Difficulty rules by scene handle, for scenes loaded in this process.</summary>
-		private static readonly Dictionary<int, DungeonDifficultyDefinition> difficultyBySceneHandle =
-			new Dictionary<int, DungeonDifficultyDefinition>();
+		private static readonly Dictionary<SceneHandle, DungeonDifficultyDefinition> difficultyBySceneHandle =
+			new Dictionary<SceneHandle, DungeonDifficultyDefinition>();
 
 		/// <summary>
 		/// Publishes the rules that apply inside one loaded scene.
 		/// </summary>
 		/// <param name="sceneHandle">Scene manager handle of the loaded scene.</param>
 		/// <param name="difficulty">The ruleset, or null to publish nothing.</param>
-		public static void Register(int sceneHandle, DungeonDifficultyDefinition difficulty)
+		public static void Register(SceneHandle sceneHandle, DungeonDifficultyDefinition difficulty)
 		{
-			if (sceneHandle == 0)
+			if (sceneHandle == SceneHandle.None)
 			{
 				return;
 			}
@@ -71,7 +72,7 @@ namespace FishMMO.Shared
 		/// the rules for an unrelated one.
 		/// </remarks>
 		/// <param name="sceneHandle">Scene manager handle of the scene being unloaded.</param>
-		public static void Unregister(int sceneHandle)
+		public static void Unregister(SceneHandle sceneHandle)
 		{
 			difficultyBySceneHandle.Remove(sceneHandle);
 		}
@@ -83,7 +84,7 @@ namespace FishMMO.Shared
 		/// <param name="difficulty">Receives the ruleset.</param>
 		/// <returns>True when the scene has a difficulty; false for the open world and for
 		/// dungeons that declare none.</returns>
-		public static bool TryGet(int sceneHandle, out DungeonDifficultyDefinition difficulty)
+		public static bool TryGet(SceneHandle sceneHandle, out DungeonDifficultyDefinition difficulty)
 		{
 			return difficultyBySceneHandle.TryGetValue(sceneHandle, out difficulty);
 		}
@@ -98,7 +99,7 @@ namespace FishMMO.Shared
 		/// <param name="sceneHandle">Scene manager handle to look up.</param>
 		/// <param name="lootQuantityMultiplier">Receives the item quantity multiplier.</param>
 		/// <param name="currencyMultiplier">Receives the currency multiplier.</param>
-		public static void GetLootMultipliers(int sceneHandle, out float lootQuantityMultiplier, out float currencyMultiplier)
+		public static void GetLootMultipliers(SceneHandle sceneHandle, out float lootQuantityMultiplier, out float currencyMultiplier)
 		{
 			if (TryGet(sceneHandle, out DungeonDifficultyDefinition difficulty) && difficulty != null)
 			{

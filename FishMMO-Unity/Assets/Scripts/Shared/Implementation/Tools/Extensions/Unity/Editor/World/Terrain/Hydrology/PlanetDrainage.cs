@@ -114,7 +114,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			settings ??= new DrainageSettings();
 			uint seed = body.ResolvedTerrainSeed;
-			string key = $"{seed}|{body.GetInstanceID()}|{radiusKm:R}|{settings.MinLakeDepthMetres:R}|{settings.MinLakeAreaSquareMetres:R}|" +
+			string key = $"{seed}|{body.GetEntityId()}|{radiusKm:R}|{settings.MinLakeDepthMetres:R}|{settings.MinLakeAreaSquareMetres:R}|" +
 				$"{settings.MinRiverDischarge:R}|{settings.MinChannelAreaSquareMetres:R}|{Version}";
 			if (cache.TryGetValue(key, out PlanetDrainage known))
 			{
@@ -311,7 +311,7 @@ namespace FishMMO.Shared.WorldDesign
 					BiomeTemplate b = BiomeRegistry.Get(key);
 					string path = b != null ? UnityEditor.AssetDatabase.GetAssetPath(b) : "(null)";
 					detail.AppendLine($"  {key}: blocks {(b != null && taken.TryGetValue(b, out int k) ? k : 0)}, keeping {(b != null ? b.ResolvedTerrainProcess.DepressionKeeping : -1f):R}, " +
-						$"selectable {(b != null && b.IsSelectable)}, path '{path}', instance {(b != null ? b.GetInstanceID() : 0)}");
+						$"selectable {(b != null && b.IsSelectable)}, path '{path}', instance {(b != null ? b.GetEntityId().ToString() : "-")}");
 				}
 				foreach (KeyValuePair<BiomeTemplate, int> pair in taken)
 				{

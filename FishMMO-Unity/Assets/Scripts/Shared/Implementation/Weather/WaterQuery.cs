@@ -66,7 +66,7 @@ namespace FishMMO.Shared.Weather
 			public bool Empty => Sea == null && Inland.Count == 0;
 		}
 
-		private static readonly Dictionary<int, SceneWaters> scenes = new Dictionary<int, SceneWaters>();
+		private static readonly Dictionary<SceneHandle, SceneWaters> scenes = new Dictionary<SceneHandle, SceneWaters>();
 
 		private static SceneWaters For(Scene scene, bool create)
 		{

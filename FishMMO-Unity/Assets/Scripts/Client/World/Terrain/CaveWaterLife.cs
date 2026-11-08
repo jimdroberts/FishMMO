@@ -216,7 +216,7 @@ namespace FishMMO.Client
 		private static bool ResolveMaterials()
 		{
 			WeatherRenderProfile profile = WeatherRenderProfile.Active;
-			Shader shader = profile != null && profile.CaveWaterLifeShader != null ? profile.CaveWaterLifeShader : materialShader != null ? materialShader : Shader.Find(ShaderName);
+			Shader shader = profile != null && profile.CaveWaterLifeShader != null ? profile.CaveWaterLifeShader : materialShader != null ? materialShader : ShaderLookup.Find(ShaderName);
 			if (shader == null)
 			{
 				return false;

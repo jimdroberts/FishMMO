@@ -5,6 +5,7 @@ using UnityEngine.Rendering.RenderGraphModule.Util;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
 using FishMMO.Shared.Weather;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
@@ -166,7 +167,7 @@ namespace FishMMO.Client
 			{
 				return created;
 			}
-			Shader shader = ShimmerShader != null ? ShimmerShader : Shader.Find(ShaderName);
+			Shader shader = ShimmerShader != null ? ShimmerShader : ShaderLookup.Find(ShaderName);
 			if (shader == null || !shader.isSupported)
 			{
 				return null;

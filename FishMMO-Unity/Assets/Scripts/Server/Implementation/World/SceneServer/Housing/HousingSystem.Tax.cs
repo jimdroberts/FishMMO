@@ -10,6 +10,7 @@ using FishMMO.Shared.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishNet.Connection;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
@@ -266,7 +267,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			List<long> worlds = new List<long>();
 
-			foreach (int sceneHandle in PlotFoundation.Registry.Scenes)
+			foreach (SceneHandle sceneHandle in PlotFoundation.Registry.Scenes)
 			{
 				if (TryResolveWorld(sceneHandle, out long worldServerID, out _) &&
 					!worlds.Contains(worldServerID))

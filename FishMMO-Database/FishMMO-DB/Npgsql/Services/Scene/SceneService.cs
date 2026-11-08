@@ -137,7 +137,7 @@ namespace FishMMO.Database.Npgsql.Services
 				worldServerID: reader.GetInt64(1),
 				sceneServerID: reader.GetInt64(2),
 				sceneName: reader.GetString(3),
-				sceneHandle: reader.GetInt32(4),
+				sceneHandle: reader.GetInt64(4),
 				sceneStatus: reader.GetInt32(5),
 				sceneType: reader.GetInt32(6),
 				characterID: reader.GetInt64(7),
@@ -459,8 +459,10 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </summary>
 		/// <remarks>
 		/// Written into <c>scene_handle</c> by <see cref="DequeueAsync"/>, where it identifies one call
-		/// among the loads the same scene server has in flight. Negative so it can never be read as a
-		/// real handle; distinct rather than random so two in-flight claims of one server cannot
+		/// among the loads the same scene server has in flight. A token is never mistaken for a real
+		/// handle because the claim lookup also requires Loading, and a row only holds a handle once
+		/// it is Ready. The sign does not separate them: a 64-bit scene handle stored bit for bit can
+		/// be negative too. Distinct rather than random so two in-flight claims of one server cannot
 		/// share one. Tokens from a previous incarnation of the server do not matter: that server
 		/// deletes its own rows when it starts (<see cref="DeleteBySceneServerAsync"/>).
 		/// </remarks>
@@ -662,7 +664,7 @@ namespace FishMMO.Database.Npgsql.Services
 			long sceneServerId,
 			long worldServerId,
 			string sceneName,
-			int sceneHandle,
+			long sceneHandle,
 			CancellationToken cancellationToken = default)
 		{
 			if (sceneId <= 0 || sceneServerId <= 0 || worldServerId <= 0 || string.IsNullOrWhiteSpace(sceneName))

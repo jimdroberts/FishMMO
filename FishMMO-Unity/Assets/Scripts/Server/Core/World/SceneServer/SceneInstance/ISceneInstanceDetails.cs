@@ -1,5 +1,6 @@
 using System;
 using FishMMO.Shared;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Server.Core.World.SceneServer
 {
@@ -52,7 +53,7 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// only inside the scene server that loaded it, and never to be persisted or sent to
 		/// another process as an identifier — see <see cref="SceneID"/>.
 		/// </summary>
-		int Handle { get; set; }
+		SceneHandle Handle { get; set; }
 
 		/// <summary>
 		/// The logical scene type (for example open world, instanced dungeon, PvP arena).

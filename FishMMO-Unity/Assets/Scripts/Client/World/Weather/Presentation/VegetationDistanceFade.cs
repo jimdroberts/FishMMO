@@ -143,7 +143,7 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
-				sig = sig * 397 ^ t.GetInstanceID();
+				sig = sig * 397 ^ t.GetEntityId().GetHashCode();
 				// The instanced detail renderer zeroes it in play mode and keeps it (TerrainDetailInstancing).
 				sig = sig * 397 ^ TerrainDetailInstancing.DetailDistanceOf(t).GetHashCode();
 				// The instanced tree renderer zeroes a terrain's own distance in play mode and keeps it (TerrainTreeInstancing).

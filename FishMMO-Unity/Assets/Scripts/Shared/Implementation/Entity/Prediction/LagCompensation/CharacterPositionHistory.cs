@@ -1,5 +1,6 @@
 ﻿using FishNet.Object;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Shared
 {
@@ -80,7 +81,7 @@ namespace FishMMO.Shared
 		private bool isRewound;
 
 		/// <summary>Scene handle this history is registered under. See <see cref="EnsureSceneRegistration"/>.</summary>
-		private int registeredSceneHandle;
+		private SceneHandle registeredSceneHandle;
 
 		/// <summary>True while this character's collider is displaced by a rewind.</summary>
 		public bool IsRewound => isRewound;
@@ -166,7 +167,7 @@ namespace FishMMO.Shared
 		/// </remarks>
 		internal void EnsureSceneRegistration()
 		{
-			int handle = gameObject.scene.handle;
+			SceneHandle handle = gameObject.scene.handle;
 			if (handle == registeredSceneHandle)
 			{
 				return;

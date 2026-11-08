@@ -12,6 +12,7 @@ using FishMMO.Logging;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
@@ -62,7 +63,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private struct SummonReturnPoint
 		{
 			/// <summary>The scene instance they were in, by handle.</summary>
-			public int SceneHandle;
+			public SceneHandle SceneHandle;
 
 			/// <summary>Where they stood.</summary>
 			public Vector3 Position;

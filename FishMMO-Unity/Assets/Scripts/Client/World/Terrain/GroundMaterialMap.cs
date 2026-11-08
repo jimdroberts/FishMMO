@@ -280,7 +280,7 @@ namespace FishMMO.Client
 			TerrainDetailBake.IndexMap stored = SceneTerrainBake.IndexOf(data);
 			if (stored != null)
 			{
-				RenderTexture uploaded = TerrainIndexMapBaker.Upload(stored, $"{t.name} index map (stored, contact)");
+				RenderTexture uploaded = TerrainIndexMapBaker.Upload(stored, $"{t.name} index map (stored, contact)", bake);
 				bool copied = TerrainIndexMapBaker.CopyInto(uploaded, target, slice);
 				if (uploaded != null)
 				{

@@ -261,7 +261,7 @@ namespace FishMMO.Client
 					shader = UnityEditor.AssetDatabase.LoadAssetAtPath<Shader>(ShaderPath);
 				}
 #endif
-				return shader != null ? shader : Shader.Find(ShaderName);
+				return shader != null ? shader : ShaderLookup.Find(ShaderName);
 			}
 		}
 

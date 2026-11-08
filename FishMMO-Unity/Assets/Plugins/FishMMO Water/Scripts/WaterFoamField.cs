@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 using FishMMO.Shared.Celestial;
+using FishMMO.Shared;
 
 namespace FishMMO.Water
 {
@@ -529,7 +530,7 @@ namespace FishMMO.Water
 			{
 				if (shader == null)
 				{
-					shader = Shader.Find(ShaderName);
+					shader = ShaderLookup.Find(ShaderName);
 				}
 				if (shader == null || !shader.isSupported)
 				{

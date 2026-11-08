@@ -633,7 +633,7 @@ namespace FishMMO.Water
 		{
 			if (breakerMaterial == null)
 			{
-				Shader shader = BreakerShader != null ? BreakerShader : Shader.Find(BreakerShaderName);
+				Shader shader = BreakerShader != null ? BreakerShader : ShaderLookup.Find(BreakerShaderName);
 				if (shader == null || !shader.isSupported)
 				{
 					if (!reportedShader)
@@ -681,7 +681,7 @@ namespace FishMMO.Water
 			}
 			if (sprayMaterial == null)
 			{
-				Shader shader = SprayShader != null ? SprayShader : Shader.Find(SprayShaderName);
+				Shader shader = SprayShader != null ? SprayShader : ShaderLookup.Find(SprayShaderName);
 				if (shader == null || !shader.isSupported)
 				{
 					return;

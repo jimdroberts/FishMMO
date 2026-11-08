@@ -4,6 +4,7 @@ using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.RenderGraphModule;
 using UnityEngine.Rendering.Universal;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
@@ -605,7 +606,7 @@ namespace FishMMO.Client
 			{
 				return mergeMaterial;
 			}
-			Shader shader = MergeShader != null ? MergeShader : Shader.Find(MergeShaderName);
+			Shader shader = MergeShader != null ? MergeShader : ShaderLookup.Find(MergeShaderName);
 			if (shader == null || !shader.isSupported)
 			{
 				return null;

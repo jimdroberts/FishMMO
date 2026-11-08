@@ -175,7 +175,7 @@ namespace FishMMO.Shared
 			public Set Set;
 		}
 
-		private static readonly Dictionary<int, Entry> scenes = new Dictionary<int, Entry>();
+		private static readonly Dictionary<SceneHandle, Entry> scenes = new Dictionary<SceneHandle, Entry>();
 		private static readonly List<Set> sets = new List<Set>();
 		private static bool listed;
 
@@ -229,7 +229,7 @@ namespace FishMMO.Shared
 					sets.Sort((a, b) =>
 					{
 						int byName = string.CompareOrdinal(a.Scene.name, b.Scene.name);
-						int ha = a.Scene.handle, hb = b.Scene.handle;
+						ulong ha = a.Scene.handle.GetRawData(), hb = b.Scene.handle.GetRawData();
 						return byName != 0 ? byName : ha.CompareTo(hb);
 					});
 				}

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using FishMMO.Shared.Core;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Shared
 {
@@ -33,13 +34,13 @@ namespace FishMMO.Shared
 			public UnityEngine.Color[] TeamColors;
 		}
 
-		private static readonly Dictionary<int, Entry> entriesBySceneHandle = new Dictionary<int, Entry>();
+		private static readonly Dictionary<SceneHandle, Entry> entriesBySceneHandle = new Dictionary<SceneHandle, Entry>();
 
 		/// <summary>Records or replaces the roster for a scene.</summary>
 		/// <param name="sceneHandle">Scene the arena runs in.</param>
 		/// <param name="teamByCharacter">Character to team index.</param>
 		/// <param name="live">Whether play is on.</param>
-		public static void Publish(int sceneHandle, IReadOnlyDictionary<long, int> teamByCharacter, bool live)
+		public static void Publish(SceneHandle sceneHandle, IReadOnlyDictionary<long, int> teamByCharacter, bool live)
 		{
 			Publish(sceneHandle, teamByCharacter, live, null);
 		}
@@ -49,9 +50,9 @@ namespace FishMMO.Shared
 		/// <param name="teamByCharacter">Character to team index.</param>
 		/// <param name="live">Whether play is on.</param>
 		/// <param name="teamColors">Colour per team, or null to keep the previous colours or the default palette.</param>
-		public static void Publish(int sceneHandle, IReadOnlyDictionary<long, int> teamByCharacter, bool live, UnityEngine.Color[] teamColors)
+		public static void Publish(SceneHandle sceneHandle, IReadOnlyDictionary<long, int> teamByCharacter, bool live, UnityEngine.Color[] teamColors)
 		{
-			if (sceneHandle == 0)
+			if (sceneHandle == SceneHandle.None)
 			{
 				return;
 			}
@@ -94,7 +95,7 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			int handle = character.GameObject.scene.handle;
+			SceneHandle handle = character.GameObject.scene.handle;
 			if (!entriesBySceneHandle.TryGetValue(handle, out Entry entry) ||
 				!entry.TeamByCharacter.TryGetValue(character.ID, out int team))
 			{
@@ -106,7 +107,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>The colour of a team in a scene: the published one, else the default palette's.</summary>
-		public static UnityEngine.Color GetTeamColor(int sceneHandle, int team)
+		public static UnityEngine.Color GetTeamColor(SceneHandle sceneHandle, int team)
 		{
 			if (entriesBySceneHandle.TryGetValue(sceneHandle, out Entry entry) &&
 				entry.TeamColors != null && team >= 0 && team < entry.TeamColors.Length)
@@ -117,7 +118,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Turns play on or off for a scene without changing its roster.</summary>
-		public static void SetLive(int sceneHandle, bool live)
+		public static void SetLive(SceneHandle sceneHandle, bool live)
 		{
 			if (entriesBySceneHandle.TryGetValue(sceneHandle, out Entry entry))
 			{
@@ -126,7 +127,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Forgets a scene's arena.</summary>
-		public static void Unpublish(int sceneHandle)
+		public static void Unpublish(SceneHandle sceneHandle)
 		{
 			entriesBySceneHandle.Remove(sceneHandle);
 		}
@@ -138,19 +139,19 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Whether a scene hosts an arena match this registry knows about.</summary>
-		public static bool IsArena(int sceneHandle)
+		public static bool IsArena(SceneHandle sceneHandle)
 		{
 			return entriesBySceneHandle.ContainsKey(sceneHandle);
 		}
 
 		/// <summary>Whether play is on in a scene.</summary>
-		public static bool IsLive(int sceneHandle)
+		public static bool IsLive(SceneHandle sceneHandle)
 		{
 			return entriesBySceneHandle.TryGetValue(sceneHandle, out Entry entry) && entry.Live;
 		}
 
 		/// <summary>The team a character is on in a scene, or -1.</summary>
-		public static int GetTeam(int sceneHandle, long characterID)
+		public static int GetTeam(SceneHandle sceneHandle, long characterID)
 		{
 			if (entriesBySceneHandle.TryGetValue(sceneHandle, out Entry entry) &&
 				entry.TeamByCharacter.TryGetValue(characterID, out int team))
@@ -180,8 +181,8 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			int handleA = a.GameObject.scene.handle;
-			int handleB = b.GameObject.scene.handle;
+			SceneHandle handleA = a.GameObject.scene.handle;
+			SceneHandle handleB = b.GameObject.scene.handle;
 
 			bool arenaA = entriesBySceneHandle.TryGetValue(handleA, out Entry entryA);
 			bool arenaB = entriesBySceneHandle.ContainsKey(handleB);

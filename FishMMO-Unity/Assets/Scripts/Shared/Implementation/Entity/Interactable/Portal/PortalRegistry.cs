@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Shared
 {
@@ -15,8 +16,8 @@ namespace FishMMO.Shared
 	/// </remarks>
 	public static class PortalRegistry
 	{
-		private static readonly Dictionary<int, Dictionary<int, PortalActivation>> portalsByScene =
-			new Dictionary<int, Dictionary<int, PortalActivation>>();
+		private static readonly Dictionary<SceneHandle, Dictionary<int, PortalActivation>> portalsByScene =
+			new Dictionary<SceneHandle, Dictionary<int, PortalActivation>>();
 
 		/// <summary>A portal registered. The server reads its scene's world rows if it has not.</summary>
 		public static event Action<PortalActivation> Registered;
@@ -31,7 +32,7 @@ namespace FishMMO.Shared
 			{
 				return false;
 			}
-			int handle = portal.gameObject.scene.handle;
+			SceneHandle handle = portal.gameObject.scene.handle;
 			if (!portalsByScene.TryGetValue(handle, out Dictionary<int, PortalActivation> scene))
 			{
 				scene = new Dictionary<int, PortalActivation>();
@@ -57,7 +58,7 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			foreach (KeyValuePair<int, Dictionary<int, PortalActivation>> scene in portalsByScene)
+			foreach (KeyValuePair<SceneHandle, Dictionary<int, PortalActivation>> scene in portalsByScene)
 			{
 				if (scene.Value.TryGetValue(portal.PortalIndex, out PortalActivation existing) && ReferenceEquals(existing, portal))
 				{
@@ -72,7 +73,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Finds a live portal by scene handle and index.</summary>
-		public static bool TryGet(int sceneHandle, int portalIndex, out PortalActivation portal)
+		public static bool TryGet(SceneHandle sceneHandle, int portalIndex, out PortalActivation portal)
 		{
 			portal = null;
 			return portalsByScene.TryGetValue(sceneHandle, out Dictionary<int, PortalActivation> scene) &&
@@ -80,7 +81,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Appends the live portals of one scene instance, sorted by index.</summary>
-		public static void Collect(int sceneHandle, List<PortalActivation> results)
+		public static void Collect(SceneHandle sceneHandle, List<PortalActivation> results)
 		{
 			if (results == null || !portalsByScene.TryGetValue(sceneHandle, out Dictionary<int, PortalActivation> scene))
 			{

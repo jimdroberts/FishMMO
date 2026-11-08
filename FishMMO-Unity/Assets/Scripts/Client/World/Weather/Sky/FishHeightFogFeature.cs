@@ -4,6 +4,7 @@ using UnityEngine.Rendering;
 using UnityEngine.Rendering.RenderGraphModule;
 using UnityEngine.Rendering.Universal;
 using FishMMO.Shared.Weather;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
@@ -132,7 +133,7 @@ namespace FishMMO.Client
 			{
 				return created;
 			}
-			Shader shader = FogShader != null ? FogShader : Shader.Find(ShaderName);
+			Shader shader = FogShader != null ? FogShader : ShaderLookup.Find(ShaderName);
 			if (shader == null || !shader.isSupported)
 			{
 				return null;

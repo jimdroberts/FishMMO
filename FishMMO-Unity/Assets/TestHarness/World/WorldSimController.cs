@@ -1265,11 +1265,44 @@ namespace FishMMO.TestHarness.World
 		/// <summary>Leaves the world moving: the rate is global, and the game runs at 1.</summary>
 		private void OnDisable()
 		{
+			if (standingDown)
+			{
+				return;
+			}
 			WorldMotion.FollowClock(1.0);
+		}
+
+		/// <summary>
+		/// True when this bed found a networked game running and took itself out (<see cref="Awake"/>): it then
+		/// touches nothing, on the way in or out.
+		/// </summary>
+		private bool standingDown;
+
+		/// <summary>
+		/// A client or server is running: the world's clock, weather and presentation belong to the game.
+		/// </summary>
+		/// <remarks>
+		/// The scene generator dresses every generated scene with this bed (GeneratedSceneDressing), and the
+		/// shipped world scenes kept it. Loaded by a game client it replaced the server's world clock with its own
+		/// held one (<see cref="LocalWorldClock"/>, <c>Hold</c>), its tick and an empty timeline, so the sky, the
+		/// weather, the wind, the sea and the grass all stood still in a web build (2026-11-08). The bed is for a
+		/// scene opened on its own (play in the editor, the benchmark players), where no network is started.
+		/// </remarks>
+		private static bool NetworkedGame()
+		{
+			FishNet.Managing.NetworkManager manager = FishNet.InstanceFinder.NetworkManager;
+			return manager != null && (manager.IsClientStarted || manager.IsServerStarted);
 		}
 
 		private void Awake()
 		{
+			if (NetworkedGame())
+			{
+				standingDown = true;
+				Debug.Log($"[World Sim] '{gameObject.scene.name}' was loaded by a running game: the test bed stands down (the server's clock and weather drive it).");
+				gameObject.SetActive(false);
+				return;
+			}
 			Cache();
 			/* The bed's own tick, standing in for FishNet's: it drives the shared world clock, so the sky,
 			 * the weather, the sea and the storms all read the time down the game's own path. Held at
@@ -1350,6 +1383,10 @@ namespace FishMMO.TestHarness.World
 
 		private void OnDestroy()
 		{
+			if (standingDown)
+			{
+				return;
+			}
 			if (ownGroundKept && Settings != null)
 			{
 				Settings.BiomeMap = ownGround;

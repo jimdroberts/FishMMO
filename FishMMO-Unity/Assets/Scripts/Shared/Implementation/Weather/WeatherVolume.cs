@@ -42,7 +42,7 @@ namespace FishMMO.Shared.Weather
 		[Tooltip("Higher wins when air volumes overlap.")]
 		public int Priority;
 
-		private int registeredScene;
+		private SceneHandle registeredScene;
 
 		private void OnEnable()
 		{
@@ -65,10 +65,10 @@ namespace FishMMO.Shared.Weather
 	/// <summary>Every enabled <see cref="WeatherVolume"/>, by scene.</summary>
 	public static class WeatherVolumeRegistry
 	{
-		private static readonly Dictionary<int, List<WeatherVolume>> byScene = new Dictionary<int, List<WeatherVolume>>();
+		private static readonly Dictionary<SceneHandle, List<WeatherVolume>> byScene = new Dictionary<SceneHandle, List<WeatherVolume>>();
 		private static readonly List<WeatherVolume> empty = new List<WeatherVolume>();
 
-		public static void Add(int sceneHandle, WeatherVolume volume)
+		public static void Add(SceneHandle sceneHandle, WeatherVolume volume)
 		{
 			if (!byScene.TryGetValue(sceneHandle, out List<WeatherVolume> list))
 			{
@@ -80,7 +80,7 @@ namespace FishMMO.Shared.Weather
 			}
 		}
 
-		public static void Remove(int sceneHandle, WeatherVolume volume)
+		public static void Remove(SceneHandle sceneHandle, WeatherVolume volume)
 		{
 			if (byScene.TryGetValue(sceneHandle, out List<WeatherVolume> list))
 			{

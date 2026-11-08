@@ -160,6 +160,8 @@ namespace FishMMO.Shared
 		private Dictionary<Terrain, Texture2D> snowFades;
 #if !UNITY_EDITOR
 		private AsyncOperationHandle<TerrainArraySet> handle;
+		// Holds the loading screen from the first lookup until the set is bound (or known missing).
+		private SceneContentLoads.Load contentLoad;
 #endif
 
 		/// <summary>The set currently bound, or null.</summary>
@@ -224,6 +226,8 @@ namespace FishMMO.Shared
 				layerTable = null;
 			}
 #if !UNITY_EDITOR
+			contentLoad?.End();
+			contentLoad = null;
 			if (handle.IsValid())
 			{
 				Addressables.Release(handle);
@@ -466,7 +470,7 @@ namespace FishMMO.Shared
 				TerrainDetailBake.IndexMap stored = SceneTerrainBake.IndexOf(data);
 				if (stored != null && StoredStillGood(terrain, data, stored, TerrainTileLayers.Of(terrain)))
 				{
-					RenderTexture uploaded = TerrainIndexMapBaker.Upload(stored, $"{terrain.name} index map (stored)");
+					RenderTexture uploaded = TerrainIndexMapBaker.Upload(stored, $"{terrain.name} index map (stored)", TerrainIndexMapBaker.ShaderOf(set));
 					if (uploaded != null)
 					{
 						FreeMap(entry.Map);
@@ -822,6 +826,8 @@ namespace FishMMO.Shared
 				return;
 			}
 			string address = TerrainArraySet.AddressOf(key);
+			contentLoad?.End();
+			SceneContentLoads.Load load = contentLoad = SceneContentLoads.Begin("terrain");
 			/* Asked for its locations first, so a scene that was built without arrays (a build whose bake
 			 * failed, or a scene added since) draws grey ground with one warning instead of throwing an
 			 * InvalidKeyException from inside the addressables system. */
@@ -832,24 +838,35 @@ namespace FishMMO.Shared
 				Addressables.Release(found);
 				if (this == null || !isActiveAndEnabled || set != null)
 				{
+					load.End();
 					return;
 				}
 				if (!exists)
 				{
+					load.End();
 					Debug.LogWarning($"[Terrain arrays] No baked arrays for '{key}' in this build; its ground draws plain.");
 					return;
 				}
 				handle = Addressables.LoadAssetAsync<TerrainArraySet>(address);
+				load.Track(handle);
 				handle.Completed += loaded =>
 				{
-					if (this == null || !isActiveAndEnabled || set != null)
+					try
 					{
-						return;
+						if (this == null || !isActiveAndEnabled || set != null)
+						{
+							return;
+						}
+						if (loaded.Status == AsyncOperationStatus.Succeeded)
+						{
+							set = loaded.Result;
+							Push();
+						}
 					}
-					if (loaded.Status == AsyncOperationStatus.Succeeded)
+					finally
 					{
-						set = loaded.Result;
-						Push();
+						// After the push: the tiles draw their arrays before the loading screen lets go.
+						load.End();
 					}
 				};
 			};

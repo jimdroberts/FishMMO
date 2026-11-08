@@ -50,7 +50,7 @@ namespace FishMMO.Shared
 		/// <summary>The level the chunks were last placed at.</summary>
 		private float placedLevel = float.NaN;
 
-		private static readonly Dictionary<int, PackIce> byScene = new Dictionary<int, PackIce>();
+		private static readonly Dictionary<SceneHandle, PackIce> byScene = new Dictionary<SceneHandle, PackIce>();
 
 		/// <summary>The pack in a scene, if it has one.</summary>
 		public static bool TryGetForScene(Scene scene, out PackIce pack)

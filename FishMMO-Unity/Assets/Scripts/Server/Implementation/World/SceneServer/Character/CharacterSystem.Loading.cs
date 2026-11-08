@@ -1077,7 +1077,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
-			scene = SceneManager.GetScene(details.Handle);
+			scene = SceneManager.GetScene(details.Handle.GetRawData());
 			return true;
 		}
 

@@ -144,7 +144,7 @@ namespace FishMMO.Shared
 			{
 				boxes[i] = pieces[i] != null ? pieces[i].bounds : default;
 			}
-			phase = (GetInstanceID() & 0x7FFFFFFF) % Interval;
+			phase = (int)(GetEntityId().GetRawData() & 0x7FFFFFFF) % Interval;
 			enclosed ??= CaveEnclosure.Decode(enclosure);
 			Apply(true);
 			live.Add(this);

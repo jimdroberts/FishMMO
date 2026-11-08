@@ -67,7 +67,7 @@ namespace FishMMO.Client
 
 		// What each name says, or null for nothing: read once per name, the fallback applied after.
 		private static readonly Dictionary<string, SurfaceKind?> byName = new Dictionary<string, SurfaceKind?>();
-		private static readonly Dictionary<int, SurfaceKind> byCollider = new Dictionary<int, SurfaceKind>();
+		private static readonly Dictionary<EntityId, SurfaceKind> byCollider = new Dictionary<EntityId, SurfaceKind>();
 		private static readonly int[] ids = new int[4];
 		private static readonly float[] weights = new float[4];
 		private static readonly float[] kindWeights = new float[12];
@@ -222,7 +222,7 @@ namespace FishMMO.Client
 				SurfaceKind fallback = OfSource(set != null ? set.Source : null);
 				return OfName(name, fallback);
 			}
-			int id = collider.GetInstanceID();
+			EntityId id = collider.GetEntityId();
 			if (byCollider.TryGetValue(id, out SurfaceKind known))
 			{
 				return known;

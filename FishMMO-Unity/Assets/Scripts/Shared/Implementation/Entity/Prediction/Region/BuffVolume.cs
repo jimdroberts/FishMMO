@@ -47,7 +47,7 @@ namespace FishMMO.Shared
 		[Tooltip("Only buff while a character standing here is this exposed to the sky. 0 lets it work under any roof.")]
 		[Range(0f, 1f)] public float MinimumExposure;
 
-		private int registeredScene;
+		private SceneHandle registeredScene;
 
 		private void OnEnable() => Register();
 
@@ -109,10 +109,10 @@ namespace FishMMO.Shared
 	/// <summary>Every enabled <see cref="BuffVolume"/>, by scene.</summary>
 	public static class BuffVolumeRegistry
 	{
-		private static readonly Dictionary<int, List<BuffVolume>> byScene = new Dictionary<int, List<BuffVolume>>();
+		private static readonly Dictionary<SceneHandle, List<BuffVolume>> byScene = new Dictionary<SceneHandle, List<BuffVolume>>();
 		private static readonly List<BuffVolume> empty = new List<BuffVolume>();
 
-		public static void Add(int sceneHandle, BuffVolume volume)
+		public static void Add(SceneHandle sceneHandle, BuffVolume volume)
 		{
 			if (!byScene.TryGetValue(sceneHandle, out List<BuffVolume> list))
 			{
@@ -124,7 +124,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public static void Remove(int sceneHandle, BuffVolume volume)
+		public static void Remove(SceneHandle sceneHandle, BuffVolume volume)
 		{
 			if (byScene.TryGetValue(sceneHandle, out List<BuffVolume> list))
 			{

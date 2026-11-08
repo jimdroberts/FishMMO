@@ -97,7 +97,7 @@ namespace FishMMO.Shared.Biomes
 		private static readonly Tile[] NoTiles = new Tile[0];
 
 		/// <summary>Measurements by scene handle; 0 is the unscoped measurement of every terrain.</summary>
-		private static readonly Dictionary<int, Entry> cache = new Dictionary<int, Entry>();
+		private static readonly Dictionary<SceneHandle, Entry> cache = new Dictionary<SceneHandle, Entry>();
 
 		/// <summary>The active terrains the cache was measured against, in Unity's order.</summary>
 		private static readonly List<Terrain> snapshot = new List<Terrain>();
@@ -192,7 +192,7 @@ namespace FishMMO.Shared.Biomes
 				return Measure(probe, scene);
 			}
 
-			int key = scene.IsValid() ? scene.handle : 0;
+			SceneHandle key = scene.IsValid() ? scene.handle : SceneHandle.None;
 			bool miss = !cache.TryGetValue(key, out Entry entry);
 			int frame = Time.frameCount;
 			if (MustCompareSnapshot(frame, validatedFrame, miss))

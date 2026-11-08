@@ -2,6 +2,7 @@ using System;
 using FishMMO.Shared;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
@@ -26,7 +27,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <inheritdoc />
 		public long SceneID { get; set; }
 		/// <inheritdoc />
-		public int Handle { get; set; }
+		public SceneHandle Handle { get; set; }
 		/// <summary>
 		/// The type of scene (OpenWorld, Group, PvP, etc.).
 		/// </summary>

@@ -181,7 +181,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			public long InstanceID;
 			/// <summary>The instance's scene, for scene-wide sends. Its handle is <see cref="SceneHandle"/>.</summary>
 			public Scene Scene;
-			public int SceneHandle;
+			public SceneHandle SceneHandle;
 			public string SceneName;
 			public ArenaTemplate Template;
 			public int Format;
@@ -241,7 +241,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		private readonly Dictionary<long, ArenaMatchState> arenaMatchesByInstance = new Dictionary<long, ArenaMatchState>();
 
 		/// <summary>Instance row id by Unity scene handle, for the events that only know the scene.</summary>
-		private readonly Dictionary<int, long> arenaInstanceBySceneHandle = new Dictionary<int, long>();
+		private readonly Dictionary<SceneHandle, long> arenaInstanceBySceneHandle = new Dictionary<SceneHandle, long>();
 
 		/// <summary>Instances whose match rows are being read, as a set.</summary>
 		/// <remarks>
@@ -522,7 +522,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		private void RegisterArenaMatch(ArenaMatchData match, IReadOnlyList<ArenaMatchMemberData> members, Scene scene)
 		{
 			arenaMatchLoadRetries.Remove(match.InstanceID);
-			int sceneHandle = scene.handle;
+			SceneHandle sceneHandle = scene.handle;
 
 			if (arenaMatchesByInstance.ContainsKey(match.InstanceID))
 			{
@@ -1150,7 +1150,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// could otherwise be handed the kills, departures and objectives of whatever scene loaded
 		/// next under the same handle, until the tick noticed.
 		/// </remarks>
-		private bool TryGetArenaMatchForScene(int sceneHandle, out ArenaMatchState state)
+		private bool TryGetArenaMatchForScene(SceneHandle sceneHandle, out ArenaMatchState state)
 		{
 			if (arenaInstanceBySceneHandle.TryGetValue(sceneHandle, out long instanceID) &&
 				arenaMatchesByInstance.TryGetValue(instanceID, out state) &&
@@ -1169,7 +1169,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// The handle alone cannot say: it is the scene manager's, and it is given to the next scene
 		/// that loads once this one has gone. The row id is the instance's own identity.
 		/// </remarks>
-		private bool IsArenaInstanceLoaded(int sceneHandle, long instanceID)
+		private bool IsArenaInstanceLoaded(SceneHandle sceneHandle, long instanceID)
 		{
 			return Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData) &&
 				mappingData.SceneInstanceByHandle.TryGetValue(sceneHandle, out ISceneInstanceDetails details) &&
@@ -1240,7 +1240,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// False when that scene hosts no match on this server, or the character holds no seat in
 		/// it that is on its team's channel (no seat, a dropped seat, or not present).
 		/// </returns>
-		public bool TryGetArenaTeamConnections(int sceneHandle, long characterID, out HashSet<NetworkConnection> teamConnections)
+		public bool TryGetArenaTeamConnections(SceneHandle sceneHandle, long characterID, out HashSet<NetworkConnection> teamConnections)
 		{
 			teamConnections = null;
 			if (!TryGetArenaMatchForScene(sceneHandle, out ArenaMatchState state) ||

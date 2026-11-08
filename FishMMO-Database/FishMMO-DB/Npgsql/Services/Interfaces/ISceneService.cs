@@ -264,7 +264,8 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// reaped it five minutes later. <c>scene_handle</c> means nothing on a row that is not yet
 		/// Ready — the process-local handle does not exist until the scene is loaded — and
 		/// <see cref="SetReadyAsync"/> replaces the token with the real handle. The token is
-		/// negative, so it cannot be mistaken for a handle.
+		/// told apart from a handle by the row's status (Loading), not by its value: a 64-bit
+		/// scene handle stored bit for bit can be negative too.
 		/// </para>
 		/// <para>
 		/// Naming the claimant at dequeue also means a Loading row is no longer anonymous:
@@ -316,7 +317,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="sceneServerId">Scene server ID.</param>
 		/// <param name="worldServerId">World server ID.</param>
 		/// <param name="sceneName">Scene name, validated against the row as a consistency check.</param>
-		/// <param name="sceneHandle">The hosting process's scene-manager handle, recorded for diagnostics only. Instances are identified across processes by <paramref name="sceneId"/>.</param>
+		/// <param name="sceneHandle">The hosting process's scene-manager handle (the 64-bit raw data, stored bit for bit), recorded for diagnostics only. Instances are identified across processes by <paramref name="sceneId"/>.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
 		/// DatabaseResult indicating success or error information on failure.
@@ -332,7 +333,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// scene instance created for somebody else.
 		/// </para>
 		/// </remarks>
-		Task<DatabaseResult> SetReadyAsync(long sceneId, long sceneServerId, long worldServerId, string sceneName, int sceneHandle, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> SetReadyAsync(long sceneId, long sceneServerId, long worldServerId, string sceneName, long sceneHandle, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Updates the character count for a scene (heartbeat).

@@ -38,6 +38,8 @@ namespace FishMMO.Client
 			public AsyncOperationHandle<BiomeTemplate> Handle;
 			public int Users;
 			public bool Cached;
+			// Holds the loading screen until the template (and the art it references) has arrived.
+			public SceneContentLoads.Load Content;
 		}
 
 		/// <summary>Biome ID → its location, once listed; null until the listing completes.</summary>
@@ -46,7 +48,7 @@ namespace FishMMO.Client
 		private static readonly List<Action> afterListing = new List<Action>();
 
 		private static readonly Dictionary<int, LoadedBiome> loaded = new Dictionary<int, LoadedBiome>();
-		private static readonly Dictionary<int, List<int>> idsByScene = new Dictionary<int, List<int>>();
+		private static readonly Dictionary<SceneHandle, List<int>> idsByScene = new Dictionary<SceneHandle, List<int>>();
 		private static readonly HashSet<int> reportedMissing = new HashSet<int>();
 		private static bool hooked;
 
@@ -101,17 +103,26 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			int handle = scene.handle;
+			SceneHandle handle = scene.handle;
 			idsByScene[handle] = ids;
+			// Spans the listing; each biome then holds the loading screen with a load of its own (Acquire).
+			SceneContentLoads.Load listingLoad = SceneContentLoads.Begin("biomes");
 			WhenListed(() =>
 			{
-				// The scene may have unloaded while the locations were being listed.
-				if (idsByScene.TryGetValue(handle, out List<int> stillWanted) && ReferenceEquals(stillWanted, ids))
+				try
 				{
-					foreach (int id in ids)
+					// The scene may have unloaded while the locations were being listed.
+					if (idsByScene.TryGetValue(handle, out List<int> stillWanted) && ReferenceEquals(stillWanted, ids))
 					{
-						Acquire(id);
+						foreach (int id in ids)
+						{
+							Acquire(id);
+						}
 					}
+				}
+				finally
+				{
+					listingLoad.End();
 				}
 			});
 		}
@@ -190,10 +201,12 @@ namespace FishMMO.Client
 				}
 				return;
 			}
-			biome = new LoadedBiome { Users = 1, Handle = Addressables.LoadAssetAsync<BiomeTemplate>(location) };
+			biome = new LoadedBiome { Users = 1, Handle = Addressables.LoadAssetAsync<BiomeTemplate>(location), Content = SceneContentLoads.Begin("biomes") };
+			biome.Content.Track(biome.Handle);
 			loaded[id] = biome;
 			biome.Handle.Completed += op =>
 			{
+				biome.Content.End();
 				// Released before it finished: nothing to register.
 				if (biome.Users <= 0 || op.Status != AsyncOperationStatus.Succeeded || op.Result == null)
 				{
@@ -215,6 +228,7 @@ namespace FishMMO.Client
 				return;
 			}
 			loaded.Remove(id);
+			biome.Content?.End();
 			if (biome.Cached && biome.Handle.IsValid() && biome.Handle.Result != null)
 			{
 				biome.Handle.Result.RemoveFromCache();

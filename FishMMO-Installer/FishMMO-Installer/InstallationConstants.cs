@@ -166,23 +166,30 @@ namespace FishMMO.Installer
 		/// <summary>
 		/// Default Unity Editor version to install.
 		/// </summary>
-		public const string UnityDefaultVersion = "6000.4.10f1";
+		public const string UnityDefaultVersion = "6000.6.8f1";
 
 		/// <summary>
 		/// Available Unity modules that can be installed alongside the editor.
 		/// Each entry is a (moduleId, displayName) tuple for the Unity Hub CLI.
 		/// </summary>
+		/// <remarks>
+		/// The ids are the Hub's own (the <c>id</c> field of the editor's modules.json). The dedicated
+		/// server modules are <c>linux-server</c> and <c>windows-server</c>: the Hub skips an id it does
+		/// not know with only a "Missing module" line, so a wrong one silently installs an editor
+		/// that cannot build the servers. <c>windows-il2cpp</c> exists only on a Windows host; on Linux
+		/// the Hub reports it unavailable and installs the rest.
+		/// </remarks>
 		public static readonly (string moduleId, string displayName)[] UnityAvailableModules =
 		{
 			("linux-il2cpp", "Linux Build Support (IL2CPP)"),
 			("linux-mono", "Linux Build Support (Mono)"),
-			("linux-dedicated-server", "Linux Dedicated Server Build Support"),
+			("linux-server", "Linux Dedicated Server Build Support"),
 			("mac-mono", "Mac Build Support (Mono)"),
 			("mac-il2cpp", "Mac Build Support (IL2CPP)"),
 			("mac-server", "Mac Dedicated Server Build Support"),
 			("windows-mono", "Windows Build Support (Mono)"),
 			("windows-il2cpp", "Windows Build Support (IL2CPP)"),
-			("windows-dedicated-server", "Windows Dedicated Server Build Support"),
+			("windows-server", "Windows Dedicated Server Build Support"),
 			("webgl", "Web Build Support"),
 			("android", "Android Build Support"),
 			("ios", "iOS Build Support"),
@@ -194,11 +201,11 @@ namespace FishMMO.Installer
 		public static readonly string[] UnityDefaultModules =
 		{
 			"linux-il2cpp",
-			"linux-dedicated-server",
+			"linux-server",
 			"webgl",
 			"windows-mono",
 			"windows-il2cpp",
-			"windows-dedicated-server",
+			"windows-server",
 		};
 
 		/// <summary>

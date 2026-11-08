@@ -96,7 +96,7 @@ The web server service registration (menu 3-5) registers systemd units on Linux,
 | Option | Description |
 |---|---|
 | 1 | Install Unity Hub |
-| 2 | Install Unity Editor `6000.4.10f1` with selectable modules |
+| 2 | Install Unity Editor `6000.6.8f1` with selectable modules |
 | 3 | Build all C# projects under a selected root directory |
 | 4 | Build FishMMO-Unity (Client/Server/Addressables via headless batch mode) |
 
@@ -106,18 +106,18 @@ The web server service registration (menu 3-5) registers systemd units on Linux,
 |---|---|
 | `linux-il2cpp` | Linux Build Support (IL2CPP) |
 | `linux-mono` | Linux Build Support (Mono) |
-| `linux-dedicated-server` | Linux Dedicated Server Build Support |
+| `linux-server` | Linux Dedicated Server Build Support |
 | `mac-mono` | Mac Build Support (Mono) |
 | `mac-il2cpp` | Mac Build Support (IL2CPP) |
 | `mac-server` | Mac Dedicated Server Build Support |
 | `windows-mono` | Windows Build Support (Mono) |
 | `windows-il2cpp` | Windows Build Support (IL2CPP) |
-| `windows-dedicated-server` | Windows Dedicated Server Build Support |
+| `windows-server` | Windows Dedicated Server Build Support |
 | `webgl` | Web Build Support |
 | `android` | Android Build Support |
 | `ios` | iOS Build Support |
 
-**Default modules installed:** `linux-il2cpp`, `linux-dedicated-server`, `webgl`, `windows-mono`, `windows-il2cpp`, `windows-dedicated-server`
+**Default modules installed:** `linux-il2cpp`, `linux-server`, `webgl`, `windows-mono`, `windows-il2cpp`, `windows-server` (`windows-il2cpp` only on a Windows host; the Hub skips it on Linux)
 
 **Project build** scans the chosen directory recursively for `.csproj` files, builds dependency-order projects synchronously first (FishMMO-Dependencies → FishMMO-Logger → FishMMO-Database → FishMMO-SharedUtility → FishMMO-Auth), then runs the remaining builds in parallel.
 
@@ -247,7 +247,7 @@ The installer runs pre-flight checks at startup in all modes. In non-interactive
 | PostgreSQL | latest via package manager (Linux) / EnterpriseDB installer (Windows) |
 | PgBouncer | latest via package manager, default port `6432` |
 | NGINX | `1.29.5` (Windows ZIP), package manager (Linux) |
-| Unity Editor | `6000.4.10f1` (`InstallationConstants.UnityDefaultVersion`, overridable at prompt) |
+| Unity Editor | `6000.6.8f1` (`InstallationConstants.UnityDefaultVersion`, overridable at prompt) |
 | win-acme | `2.2.9.1701` (Windows TLS automation) |
 | NSSM | `2.24` (Windows service wrapper for NGINX) |
 | Visual Studio Build Tools | VS 2022 bootstrapper (`aka.ms/vs/17/release/vs_buildtools.exe`) |

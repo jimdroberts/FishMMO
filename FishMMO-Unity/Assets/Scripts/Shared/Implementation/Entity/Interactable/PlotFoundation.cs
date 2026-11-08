@@ -5,6 +5,7 @@ using FishNet.Transporting;
 using UnityEngine;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Shared
 {
@@ -38,13 +39,13 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public static class Registry
 		{
-			private static readonly Dictionary<int, List<PlotFoundation>> foundationsByScene = new Dictionary<int, List<PlotFoundation>>();
+			private static readonly Dictionary<SceneHandle, List<PlotFoundation>> foundationsByScene = new Dictionary<SceneHandle, List<PlotFoundation>>();
 
 			/// <summary>
 			/// Raised when a foundation joins a loaded scene that had none, so the housing system
 			/// knows there is land here that may not have been registered with the database yet.
 			/// </summary>
-			public static event Action<int> OnSceneGainedFoundations;
+			public static event Action<SceneHandle> OnSceneGainedFoundations;
 
 			/// <summary>
 			/// Raised when a player asks to claim a foundation.
@@ -67,8 +68,8 @@ namespace FishMMO.Shared
 					return;
 				}
 
-				int handle = foundation.gameObject.scene.handle;
-				if (handle == 0)
+				SceneHandle handle = foundation.gameObject.scene.handle;
+				if (handle == SceneHandle.None)
 				{
 					return;
 				}
@@ -98,8 +99,8 @@ namespace FishMMO.Shared
 					return;
 				}
 
-				int handle = foundation.gameObject.scene.handle;
-				if (handle == 0 || !foundationsByScene.TryGetValue(handle, out List<PlotFoundation> foundations))
+				SceneHandle handle = foundation.gameObject.scene.handle;
+				if (handle == SceneHandle.None || !foundationsByScene.TryGetValue(handle, out List<PlotFoundation> foundations))
 				{
 					return;
 				}
@@ -114,7 +115,7 @@ namespace FishMMO.Shared
 			/// <summary>
 			/// The foundations in one loaded scene, or an empty list when there are none.
 			/// </summary>
-			public static IReadOnlyList<PlotFoundation> ForScene(int sceneHandle)
+			public static IReadOnlyList<PlotFoundation> ForScene(SceneHandle sceneHandle)
 			{
 				if (foundationsByScene.TryGetValue(sceneHandle, out List<PlotFoundation> foundations))
 				{
@@ -126,7 +127,7 @@ namespace FishMMO.Shared
 			/// <summary>
 			/// Every loaded scene that currently has at least one foundation.
 			/// </summary>
-			public static IReadOnlyCollection<int> Scenes => foundationsByScene.Keys;
+			public static IReadOnlyCollection<SceneHandle> Scenes => foundationsByScene.Keys;
 
 			/// <summary>
 			/// Every live copy of one plot, across every loaded channel.
@@ -151,7 +152,7 @@ namespace FishMMO.Shared
 					return matches;
 				}
 
-				foreach (KeyValuePair<int, List<PlotFoundation>> pair in foundationsByScene)
+				foreach (KeyValuePair<SceneHandle, List<PlotFoundation>> pair in foundationsByScene)
 				{
 					foreach (PlotFoundation foundation in pair.Value)
 					{

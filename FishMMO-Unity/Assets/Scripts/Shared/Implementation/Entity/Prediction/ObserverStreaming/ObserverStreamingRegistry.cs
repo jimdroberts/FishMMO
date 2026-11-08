@@ -6,6 +6,7 @@ using Unity.Profiling;
 using UnityEngine;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Shared
 {
@@ -39,7 +40,7 @@ namespace FishMMO.Shared
 
 		private static readonly Dictionary<NetworkObject, ObserverStreamingEntry> entriesByObject = new Dictionary<NetworkObject, ObserverStreamingEntry>();
 		private static readonly List<ObserverStreamingEntry> entries = new List<ObserverStreamingEntry>();
-		private static readonly Dictionary<int, List<ObserverStreamingEntry>> entriesByScene = new Dictionary<int, List<ObserverStreamingEntry>>();
+		private static readonly Dictionary<SceneHandle, List<ObserverStreamingEntry>> entriesByScene = new Dictionary<SceneHandle, List<ObserverStreamingEntry>>();
 		private static readonly Dictionary<long, int> cellCounts = new Dictionary<long, int>();
 		private static readonly List<Candidate> candidates = new List<Candidate>();
 
@@ -524,7 +525,7 @@ namespace FishMMO.Shared
 			for (int i = 0; i < entries.Count; ++i)
 			{
 				// The scene is read every pass, not cached: an object can be moved to another scene with no event to say so.
-				int sceneHandle = entries[i].GameObject.scene.handle;
+				SceneHandle sceneHandle = entries[i].GameObject.scene.handle;
 				if (!entriesByScene.TryGetValue(sceneHandle, out List<ObserverStreamingEntry> list))
 				{
 					list = new List<ObserverStreamingEntry>();

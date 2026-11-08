@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.Profiling;
 using UnityEngine.Rendering;
 using Object = UnityEngine.Object;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
@@ -613,7 +614,7 @@ namespace FishMMO.Client
 		private static Shader PrimeShader()
 		{
 			WeatherRenderProfile profile = WeatherRenderProfile.Active;
-			Shader shader = profile != null && profile.VegetationPrimeShader != null ? profile.VegetationPrimeShader : Shader.Find(VegetationPrimeName);
+			Shader shader = profile != null && profile.VegetationPrimeShader != null ? profile.VegetationPrimeShader : ShaderLookup.Find(VegetationPrimeName);
 			return shader != null && shader.isSupported ? shader : null;
 		}
 
@@ -654,7 +655,7 @@ namespace FishMMO.Client
 				: null;
 			if (shader == null)
 			{
-				shader = Shader.Find(name);
+				shader = ShaderLookup.Find(name);
 			}
 			return shader != null && shader.isSupported ? shader : null;
 		}

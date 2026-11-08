@@ -4,6 +4,7 @@ using UnityEngine.UIElements;
 using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Client
 {
@@ -188,7 +189,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			int handle = Character.GameObject.scene.handle;
+			SceneHandle handle = Character.GameObject.scene.handle;
 			if (state.Phase == ArenaMatchPhase.Ended || state.Phase == ArenaMatchPhase.Cancelled)
 			{
 				ArenaTeamRegistry.Unpublish(handle);

@@ -665,7 +665,7 @@ namespace FishMMO.Client
 		{
 			if (material == null)
 			{
-				Shader shader = Shader.Find(shaderName);
+				Shader shader = ShaderLookup.Find(shaderName);
 				if (shader != null)
 				{
 					material = new Material(shader) { name = shaderName, hideFlags = HideFlags.DontSave };

@@ -461,7 +461,7 @@ namespace FishMMO.Client
 			Shader shader = profile != null && profile.AirMotesShader != null ? profile.AirMotesShader : null;
 			if (shader == null)
 			{
-				shader = materialShader != null ? materialShader : Shader.Find(ShaderName);
+				shader = materialShader != null ? materialShader : ShaderLookup.Find(ShaderName);
 			}
 			if (shader == null)
 			{

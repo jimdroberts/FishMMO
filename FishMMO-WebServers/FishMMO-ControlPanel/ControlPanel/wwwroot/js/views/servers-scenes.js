@@ -170,7 +170,9 @@ function statusBadge(ui, s) {
  * that server's dequeue claim token (a large negative number with no meaning here), and a
  * Pending row holds 0; the server sends null for both, and the page says what the row is doing
  * instead. A Failed row never loaded, so it never had a handle. The status is checked as well as
- * the null, so the page cannot print a token whatever it is sent. */
+ * the null, so the page cannot print a token whatever it is sent. A Ready row's handle arrives
+ * as text ("index:version", as the scene server logs it): the 64-bit value is not exact as a
+ * JavaScript number. */
 function handleLabel(ui, s) {
 	const status = Number(s.status);
 	if (status === 2 && s.sceneHandle !== null && s.sceneHandle !== undefined) {

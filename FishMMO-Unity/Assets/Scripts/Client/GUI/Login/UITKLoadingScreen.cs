@@ -55,6 +55,13 @@ namespace FishMMO.Client
 		private const float EscapeHatchDelaySeconds = 45.0f;
 
 		/// <summary>
+		/// Longest world entry waits on <see cref="SceneContentLoads"/> once the character exists, before letting the
+		/// player in with whatever has arrived. A slow web download of the terrain arrays is honest and is the case this
+		/// wait exists for; a load whose owner never ends it must not hold the overlay for ever.
+		/// </summary>
+		private const float SceneContentTimeoutSeconds = 120.0f;
+
+		/// <summary>
 		/// Cache containing details for world scenes, including transition images.
 		/// </summary>
 		public WorldSceneDetailsCache Details;
@@ -256,6 +263,20 @@ namespace FishMMO.Client
 		private bool worldEntryActive;
 
 		/// <summary>
+		/// True from the moment the local character exists until the scene's own content loads
+		/// (<see cref="SceneContentLoads"/>: terrain arrays, biome art, river flow) have finished.
+		/// </summary>
+		/// <remarks>
+		/// Those loads start from the scene's components once it is live, outside the FishNet scene load and the
+		/// Addressable preload, so neither driver above sees them and the overlay came down while the ground was still
+		/// arriving from the cache or the web server. This driver only ever keeps a showing overlay up (it is set
+		/// only while visible, by <see cref="FinishWorldEntry"/>), so a load started later in play never raises it.
+		/// </remarks>
+		private bool sceneContentHold;
+		/// <summary>Unscaled time <see cref="sceneContentHold"/> was set.</summary>
+		private float sceneContentHoldSince;
+
+		/// <summary>
 		/// Shows the overlay while any driver is active and hides it only once every driver
 		/// has finished.
 		/// </summary>
@@ -272,7 +293,7 @@ namespace FishMMO.Client
 		/// </param>
 		private void RefreshVisibility(bool forceRefresh = false)
 		{
-			bool shouldShow = addressableLoadActive || sceneTransitionActive || reconnectPendingActive || worldEntryActive;
+			bool shouldShow = addressableLoadActive || sceneTransitionActive || reconnectPendingActive || worldEntryActive || sceneContentHold;
 
 			if (shouldShow && (forceRefresh || !Visible))
 			{
@@ -381,6 +402,8 @@ namespace FishMMO.Client
 
 			// Login-flow notices are refused while another dialog is up; see LoginNotice.
 			LoginNotice.Pump();
+
+			TickSceneContentHold();
 
 			/* Client null means boot: the overlay is covering the initial Addressable load, there
 			 * is no session to quit and no login panel to return to yet. Offering the button there
@@ -491,6 +514,62 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// World entry is over (the local character exists): clears the entry drivers, but keeps the overlay up while
+		/// the world scene is still loading or its own content is, so the player arrives in a finished world. Hides at
+		/// once when neither is running or the overlay is not showing.
+		/// </summary>
+		/// <remarks>
+		/// The character can spawn before the client has finished activating the world scene (its content is large,
+		/// and on the web it may still be downloading). The scene's content loads only start once it has, so the
+		/// running FishNet load (<see cref="sceneTransitionActive"/>, cleared by <see cref="OnSceneEndLoad"/>) is kept
+		/// rather than cleared here, and the hold lasts until it ends and the content it started has arrived.
+		/// </remarks>
+		public void FinishWorldEntry()
+		{
+			if (!Visible || Document == null || (SceneContentLoads.Pending == 0 && !sceneTransitionActive))
+			{
+				Hide();
+				return;
+			}
+			addressableLoadActive = false;
+			reconnectPendingActive = false;
+			worldEntryActive = false;
+			sceneContentHold = true;
+			sceneContentHoldSince = Time.unscaledTime;
+			TickSceneContentHold();
+		}
+
+		/// <summary>
+		/// While <see cref="sceneContentHold"/> is set: reports the scene content's progress, and lets go once the world
+		/// scene has loaded and its content has all arrived, or <see cref="SceneContentTimeoutSeconds"/> has passed.
+		/// </summary>
+		private void TickSceneContentHold()
+		{
+			if (!sceneContentHold)
+			{
+				return;
+			}
+			bool waiting = SceneContentLoads.Pending > 0 || sceneTransitionActive;
+			if (waiting && Time.unscaledTime - sceneContentHoldSince >= SceneContentTimeoutSeconds)
+			{
+				Debug.LogWarning($"[Loading] Entered the world after {SceneContentTimeoutSeconds:0} s with {(sceneTransitionActive ? "the scene still loading" : "scene content still loading")}: {SceneContentLoads.Describe()}.");
+				sceneTransitionActive = false;
+			}
+			else if (waiting)
+			{
+				// The scene load reports its own progress (OnSceneProgressUpdate); the content's follows it.
+				if (SceneContentLoads.Pending > 0)
+				{
+					SetProgress(SceneContentLoads.Progress);
+					SetHint($"Loading {SceneContentLoads.FirstPending}");
+				}
+				return;
+			}
+			sceneContentHold = false;
+			RefreshVisibility();
+		}
+
+		/// <summary>
 		/// Hides the loading screen and clears the driver flags.
 		/// </summary>
 		/// <remarks>
@@ -524,6 +603,7 @@ namespace FishMMO.Client
 			sceneTransitionActive = false;
 			reconnectPendingActive = false;
 			worldEntryActive = false;
+			sceneContentHold = false;
 
 			// The status line explains one specific wait; it must not survive into the next
 			// one, which is usually an ordinary scene load with nothing to explain.

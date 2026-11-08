@@ -21,7 +21,7 @@ namespace FishMMO.Database.Data
 		/// only — see <c>SceneEntity.SceneHandle</c>. Use <see cref="ID"/> to identify a scene
 		/// instance across processes.
 		/// </summary>
-		public readonly int SceneHandle;
+		public readonly long SceneHandle;
 		/// <summary>Scene status flag.</summary>
 		public readonly int SceneStatus;
 		/// <summary>Scene type identifier.</summary>
@@ -39,7 +39,7 @@ namespace FishMMO.Database.Data
 		/// <summary>Timestamp when scene was created.</summary>
 		public readonly DateTime TimeCreated;
 
-		public SceneData(long id, long sceneServerID, long worldServerID, string sceneName, int sceneHandle, int sceneStatus, int sceneType, long characterID, int characterCount, DateTime timeCreated, long partyID = 0, int difficulty = 0, bool isPrivate = false)
+		public SceneData(long id, long sceneServerID, long worldServerID, string sceneName, long sceneHandle, int sceneStatus, int sceneType, long characterID, int characterCount, DateTime timeCreated, long partyID = 0, int difficulty = 0, bool isPrivate = false)
 		{
 			ID = id;
 			SceneServerID = sceneServerID;

@@ -8,6 +8,7 @@ using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Logging;
 using FishMMO.Shared;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
@@ -111,7 +112,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			plotSyncCountdown = Mathf.Max(1f, plotSyncIntervalSeconds);
 
-			Dictionary<long, HashSet<int>> scenesByWorld = CollectResolvedScenesByWorld();
+			Dictionary<long, HashSet<SceneHandle>> scenesByWorld = CollectResolvedScenesByWorld();
 			if (scenesByWorld.Count < 1)
 			{
 				return;
@@ -119,7 +120,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			TimeSpan margin = TimeSpan.FromSeconds(PlotSyncCommitMarginSeconds);
 
-			foreach (KeyValuePair<long, HashSet<int>> pair in scenesByWorld)
+			foreach (KeyValuePair<long, HashSet<SceneHandle>> pair in scenesByWorld)
 			{
 				long worldServerID = pair.Key;
 				if (!plotSyncInFlight.TryAdd(worldServerID, 0))
@@ -128,7 +129,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					continue;
 				}
 
-				List<int> handles = new List<int>(pair.Value);
+				List<SceneHandle> handles = new List<SceneHandle>(pair.Value);
 				bool hasWatermark = plotSyncWatermarkUtc.TryGetValue(worldServerID, out DateTime watermark);
 				DateTime since = PlotSyncWindow.Since(hasWatermark, watermark, margin);
 				int epoch = plotSyncEpochs.TryGetValue(worldServerID, out int currentEpoch) ? currentEpoch : 0;
@@ -181,20 +182,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Groups this server's resolved scenes by the world they belong to.
 		/// </summary>
-		private Dictionary<long, HashSet<int>> CollectResolvedScenesByWorld()
+		private Dictionary<long, HashSet<SceneHandle>> CollectResolvedScenesByWorld()
 		{
-			Dictionary<long, HashSet<int>> scenesByWorld = new Dictionary<long, HashSet<int>>();
+			Dictionary<long, HashSet<SceneHandle>> scenesByWorld = new Dictionary<long, HashSet<SceneHandle>>();
 
-			foreach (int sceneHandle in resolvedScenes)
+			foreach (SceneHandle sceneHandle in resolvedScenes)
 			{
 				if (!TryResolveWorld(sceneHandle, out long worldServerID, out _))
 				{
 					continue;
 				}
 
-				if (!scenesByWorld.TryGetValue(worldServerID, out HashSet<int> handles))
+				if (!scenesByWorld.TryGetValue(worldServerID, out HashSet<SceneHandle> handles))
 				{
-					handles = new HashSet<int>();
+					handles = new HashSet<SceneHandle>();
 					scenesByWorld.Add(worldServerID, handles);
 				}
 				handles.Add(sceneHandle);
@@ -216,7 +217,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="watched">The plots those copies show, gathered on the main thread.</param>
 		/// <param name="since">Where this poll's window starts, on the database clock.</param>
 		/// <param name="epoch">The world's window epoch when this poll was sent.</param>
-		private async Task SyncPlotsAsync(long worldServerID, List<int> sceneHandles, List<long> watched, DateTime since, int epoch)
+		private async Task SyncPlotsAsync(long worldServerID, List<SceneHandle> sceneHandles, List<long> watched, DateTime since, int epoch)
 		{
 			try
 			{
@@ -310,11 +311,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// The plots this server currently shows across the given scenes.
 		/// </summary>
-		private static List<long> CollectWatchedPlotIDs(List<int> sceneHandles)
+		private static List<long> CollectWatchedPlotIDs(List<SceneHandle> sceneHandles)
 		{
 			HashSet<long> ids = new HashSet<long>();
 
-			foreach (int sceneHandle in sceneHandles)
+			foreach (SceneHandle sceneHandle in sceneHandles)
 			{
 				foreach (PlotFoundation foundation in PlotFoundation.Registry.ForScene(sceneHandle))
 				{
@@ -341,14 +342,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// active session would drop the plot open with somebody still inside editing it.</para>
 		/// </remarks>
 		private void ApplyChangedPlots(
-			List<int> sceneHandles,
+			List<SceneHandle> sceneHandles,
 			Dictionary<long, PlotData> refreshed,
 			Dictionary<long, Dictionary<long, PlotPermission>> grantsByPlot)
 		{
 			int applied = 0;
 			List<PlotFoundation> toClear = null;
 
-			foreach (int sceneHandle in sceneHandles)
+			foreach (SceneHandle sceneHandle in sceneHandles)
 			{
 				foreach (PlotFoundation foundation in PlotFoundation.Registry.ForScene(sceneHandle))
 				{

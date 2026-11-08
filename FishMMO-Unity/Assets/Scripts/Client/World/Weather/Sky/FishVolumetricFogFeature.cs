@@ -6,6 +6,7 @@ using UnityEngine.Rendering.Universal;
 using UnityEngine.Experimental.Rendering;
 using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
@@ -226,7 +227,7 @@ namespace FishMMO.Client
 			{
 				return created;
 			}
-			Shader shader = ApplyShader != null ? ApplyShader : Shader.Find(ApplyShaderName);
+			Shader shader = ApplyShader != null ? ApplyShader : ShaderLookup.Find(ApplyShaderName);
 			if (shader == null)
 			{
 				return null;

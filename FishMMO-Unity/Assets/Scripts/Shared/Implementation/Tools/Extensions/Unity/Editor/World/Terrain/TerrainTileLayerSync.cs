@@ -34,7 +34,7 @@ namespace FishMMO.Shared.WorldDesign
 		private const int StripRows = 32;
 
 		// The binder found for a scene, by its handle: looked up once rather than on every bake.
-		private static readonly Dictionary<int, TerrainArrayBinder> binders = new Dictionary<int, TerrainArrayBinder>();
+		private static readonly Dictionary<SceneHandle, TerrainArrayBinder> binders = new Dictionary<SceneHandle, TerrainArrayBinder>();
 
 		static TerrainTileLayerSync()
 		{

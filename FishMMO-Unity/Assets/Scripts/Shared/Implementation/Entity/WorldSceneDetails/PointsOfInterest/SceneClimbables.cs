@@ -31,7 +31,7 @@ namespace FishMMO.Shared
 			public ClimbableIndex Index;
 		}
 
-		private static readonly Dictionary<int, Set> scenes = new Dictionary<int, Set>();
+		private static readonly Dictionary<SceneHandle, Set> scenes = new Dictionary<SceneHandle, Set>();
 
 		/// <summary>Bumped whenever a scene's climbables come or go, so a reader can cache what it found.</summary>
 		public static int Version { get; private set; }

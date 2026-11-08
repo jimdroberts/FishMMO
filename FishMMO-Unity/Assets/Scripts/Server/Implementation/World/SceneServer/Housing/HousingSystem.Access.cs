@@ -9,6 +9,7 @@ using FishMMO.Shared.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishNet.Connection;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
@@ -419,7 +420,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			accessSweepCountdown = Mathf.Max(0.1f, accessSweepIntervalSeconds);
 
-			foreach (int sceneHandle in resolvedScenes)
+			foreach (SceneHandle sceneHandle in resolvedScenes)
 			{
 				IReadOnlyList<PlotFoundation> foundations = PlotFoundation.Registry.ForScene(sceneHandle);
 				PlotFoundation barring = FirstBarringFoundation(foundations);
@@ -492,7 +493,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			HashSet<int> doneScenes = null;
+			HashSet<SceneHandle> doneScenes = null;
 			for (int i = 0; i < foundations.Count; ++i)
 			{
 				PlotFoundation first = foundations[i];
@@ -501,8 +502,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					continue;
 				}
 
-				int sceneHandle = first.gameObject.scene.handle;
-				if (!(doneScenes ??= new HashSet<int>()).Add(sceneHandle))
+				SceneHandle sceneHandle = first.gameObject.scene.handle;
+				if (!(doneScenes ??= new HashSet<SceneHandle>()).Add(sceneHandle))
 				{
 					continue;
 				}
@@ -635,7 +636,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// it was measured in. That is one question per player in a housing scene, where the sweep
 		/// used to ask it of every player on the server once per housing scene.</para>
 		/// </remarks>
-		private bool SnapshotOccupants(PlotFoundation inScene, int sceneHandle, List<Occupant> into)
+		private bool SnapshotOccupants(PlotFoundation inScene, SceneHandle sceneHandle, List<Occupant> into)
 		{
 			into.Clear();
 

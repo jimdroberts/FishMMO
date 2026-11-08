@@ -113,7 +113,7 @@ namespace FishMMO.Client
 		private static Material ResolveMaterial()
 		{
 			WeatherRenderProfile profile = WeatherRenderProfile.Active;
-			Shader shader = profile != null && profile.SiteEmbersShader != null ? profile.SiteEmbersShader : materialShader != null ? materialShader : Shader.Find(ShaderName);
+			Shader shader = profile != null && profile.SiteEmbersShader != null ? profile.SiteEmbersShader : materialShader != null ? materialShader : ShaderLookup.Find(ShaderName);
 			if (shader == null)
 			{
 				return null;
@@ -292,7 +292,7 @@ namespace FishMMO.Client
 		private static void DrawFlames(Camera camera, Bounds bounds, float night, float windX, float windZ)
 		{
 			WeatherRenderProfile profile = WeatherRenderProfile.Active;
-			Shader shader = profile != null && profile.SiteFlamesShader != null ? profile.SiteFlamesShader : Shader.Find(FlamesShaderName);
+			Shader shader = profile != null && profile.SiteFlamesShader != null ? profile.SiteFlamesShader : ShaderLookup.Find(FlamesShaderName);
 			if (shader == null)
 			{
 				return;

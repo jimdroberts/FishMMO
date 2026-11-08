@@ -136,7 +136,7 @@ namespace FishMMO.Client
 		}
 
 		// The lava lakes of the scene last asked about: found once, from its terrains.
-		private int lakesScene = int.MinValue;
+		private SceneHandle lakesScene = SceneHandle.None;
 		private readonly List<Vector2> lakes = new List<Vector2>();
 		private float lakeLevel;
 
@@ -172,7 +172,7 @@ namespace FishMMO.Client
 		{
 			hasContext = false;
 			held.Clear();
-			lakesScene = int.MinValue;
+			lakesScene = SceneHandle.None;
 			lakes.Clear();
 		}
 
@@ -219,7 +219,7 @@ namespace FishMMO.Client
 			}
 			if (fallbackMaterial == null)
 			{
-				Shader shader = Shader.Find(ShaderName);
+				Shader shader = ShaderLookup.Find(ShaderName);
 				if (shader != null)
 				{
 					fallbackMaterial = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };

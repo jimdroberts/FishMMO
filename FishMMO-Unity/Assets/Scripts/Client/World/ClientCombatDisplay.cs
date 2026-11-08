@@ -32,7 +32,7 @@ namespace FishMMO.Client
 		/// this dictionary; the entries are cleared on scene change and when the cache grows past
 		/// its bound, which is what keeps it from accumulating dead ids over a long session.
 		/// </remarks>
-		private readonly Dictionary<int, float> displayHeights = new Dictionary<int, float>();
+		private readonly Dictionary<EntityId, float> displayHeights = new Dictionary<EntityId, float>();
 
 		/// <summary>
 		/// Maximum height cache entries before the whole cache is dropped.
@@ -191,7 +191,7 @@ namespace FishMMO.Client
 				return 1f;
 			}
 
-			int key = go.GetInstanceID();
+			EntityId key = go.GetEntityId();
 			if (displayHeights.TryGetValue(key, out float cached))
 			{
 				return cached;

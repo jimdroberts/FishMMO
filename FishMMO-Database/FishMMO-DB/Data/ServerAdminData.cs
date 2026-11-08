@@ -115,7 +115,7 @@ namespace FishMMO.Database.Data
 		public string SceneName { get; set; }
 
 		/// <summary>The handle the scene server knows it by.</summary>
-		public int SceneHandle { get; set; }
+		public long SceneHandle { get; set; }
 
 		/// <summary>Pending, Loading, Ready or Failed.</summary>
 		public int Status { get; set; }

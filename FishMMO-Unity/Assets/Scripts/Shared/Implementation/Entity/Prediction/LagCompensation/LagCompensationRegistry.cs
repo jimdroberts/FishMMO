@@ -36,8 +36,8 @@ namespace FishMMO.Shared
 	/// </remarks>
 	public static class LagCompensationRegistry
 	{
-		private static readonly Dictionary<int, List<CharacterPositionHistory>> byScene
-			= new Dictionary<int, List<CharacterPositionHistory>>();
+		private static readonly Dictionary<SceneHandle, List<CharacterPositionHistory>> byScene
+			= new Dictionary<SceneHandle, List<CharacterPositionHistory>>();
 
 		/// <summary>Reused across rewinds so a hit resolution does not allocate.</summary>
 		private static readonly List<CharacterPositionHistory> rewound
@@ -54,7 +54,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			int handle = history.gameObject.scene.handle;
+			SceneHandle handle = history.gameObject.scene.handle;
 			if (!byScene.TryGetValue(handle, out List<CharacterPositionHistory> list))
 			{
 				list = new List<CharacterPositionHistory>();
@@ -78,7 +78,7 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			foreach (KeyValuePair<int, List<CharacterPositionHistory>> pair in byScene)
+			foreach (KeyValuePair<SceneHandle, List<CharacterPositionHistory>> pair in byScene)
 			{
 				pair.Value.Remove(history);
 			}

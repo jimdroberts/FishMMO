@@ -11,6 +11,7 @@ using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared.Core;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
@@ -35,7 +36,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// than once per foundation keeps a scene holding fifty plots to a single round trip instead
 		/// of fifty.
 		/// </remarks>
-		private readonly HashSet<int> resolvedScenes = new HashSet<int>();
+		private readonly HashSet<SceneHandle> resolvedScenes = new HashSet<SceneHandle>();
 
 		/// <summary>
 		/// Loaded scenes holding foundations that could not yet be matched to a world server.
@@ -46,7 +47,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// controls. Rather than depend on that ordering, a scene that cannot be resolved yet waits
 		/// here and is retried until its instance appears.
 		/// </remarks>
-		private readonly HashSet<int> pendingScenes = new HashSet<int>();
+		private readonly HashSet<SceneHandle> pendingScenes = new HashSet<SceneHandle>();
 
 		/// <summary>
 		/// Scenes whose resolve reached the database and failed there, waiting to be handed back to
@@ -60,7 +61,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// concurrent queue rather than the bounded main-thread queue: handing a scene back must not
 		/// be the one thing that can be refused for being too busy.
 		/// </remarks>
-		private readonly ConcurrentQueue<int> failedSceneResolves = new ConcurrentQueue<int>();
+		private readonly ConcurrentQueue<SceneHandle> failedSceneResolves = new ConcurrentQueue<SceneHandle>();
 
 		/// <summary>
 		/// When each pending scene may next be tried, in <see cref="MonotonicClock"/> seconds.
@@ -76,7 +77,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// pending scene's foundations unresolved for the size of the step.
 		/// </para>
 		/// </remarks>
-		private readonly Dictionary<int, double> sceneResolveRetryAt = new Dictionary<int, double>();
+		private readonly Dictionary<SceneHandle, double> sceneResolveRetryAt = new Dictionary<SceneHandle, double>();
 
 		/// <summary>
 		/// Seconds between attempts to resolve a scene whose last resolve failed in the database.
@@ -110,7 +111,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Reused rather than allocated per pass: a successful resolve removes its handle from the
 		/// set being walked, so the pass walks a copy.
 		/// </remarks>
-		private readonly List<int> pendingSceneBuffer = new List<int>();
+		private readonly List<SceneHandle> pendingSceneBuffer = new List<SceneHandle>();
 
 		/// <summary>
 		/// Maximum queued main-thread actions processed per frame.
@@ -174,12 +175,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			List<int> gone = null;
-			foreach (int sceneHandle in resolvedScenes)
+			List<SceneHandle> gone = null;
+			foreach (SceneHandle sceneHandle in resolvedScenes)
 			{
 				if (PlotFoundation.Registry.ForScene(sceneHandle).Count < 1)
 				{
-					(gone ??= new List<int>()).Add(sceneHandle);
+					(gone ??= new List<SceneHandle>()).Add(sceneHandle);
 				}
 			}
 
@@ -188,7 +189,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			foreach (int sceneHandle in gone)
+			foreach (SceneHandle sceneHandle in gone)
 			{
 				resolvedScenes.Remove(sceneHandle);
 			}
@@ -213,7 +214,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			HashSet<long> live = new HashSet<long>();
-			foreach (int sceneHandle in resolvedScenes)
+			foreach (SceneHandle sceneHandle in resolvedScenes)
 			{
 				foreach (PlotFoundation foundation in PlotFoundation.Registry.ForScene(sceneHandle))
 				{
@@ -260,7 +261,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/* Scenes whose resolve failed in the database come back here first: unmarked, so the
 			 * resolve can run again, and held off for a while, so it does not run again every frame
 			 * against a database that has just refused it. */
-			while (failedSceneResolves.TryDequeue(out int failedHandle))
+			while (failedSceneResolves.TryDequeue(out SceneHandle failedHandle))
 			{
 				resolvedScenes.Remove(failedHandle);
 				DeferSceneResolve(failedHandle, SceneResolveRetrySeconds);
@@ -278,7 +279,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			double now = MonotonicClock.NowSeconds;
 			for (int i = 0; i < pendingSceneBuffer.Count; ++i)
 			{
-				int handle = pendingSceneBuffer[i];
+				SceneHandle handle = pendingSceneBuffer[i];
 
 				/* A scene that has since unloaded takes its foundations with it, so it stops being
 				 * pending rather than being retried forever. */
@@ -302,7 +303,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Puts a scene back in <see cref="pendingScenes"/>, not to be tried again for <paramref name="retrySeconds"/>.
 		/// </summary>
-		private void DeferSceneResolve(int sceneHandle, float retrySeconds)
+		private void DeferSceneResolve(SceneHandle sceneHandle, float retrySeconds)
 		{
 			pendingScenes.Add(sceneHandle);
 			sceneResolveRetryAt[sceneHandle] = MonotonicClock.NowSeconds + retrySeconds;
@@ -315,7 +316,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// The world server is part of a plot's identity, and a scene server can host scenes for
 		/// several worlds at once, so it has to be read per loaded scene rather than assumed.
 		/// </remarks>
-		private bool TryResolveWorld(int sceneHandle, out long worldServerID, out string sceneName)
+		private bool TryResolveWorld(SceneHandle sceneHandle, out long worldServerID, out string sceneName)
 		{
 			worldServerID = 0;
 			sceneName = null;
@@ -346,7 +347,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/* Scenes already loaded before this system initialised still need resolving. The event
 			 * only fires on the transition from no foundations to some, so a scene that finished
 			 * loading first would otherwise never be picked up. */
-			foreach (int sceneHandle in new List<int>(PlotFoundation.Registry.Scenes))
+			foreach (SceneHandle sceneHandle in new List<SceneHandle>(PlotFoundation.Registry.Scenes))
 			{
 				ResolveScene(sceneHandle);
 			}
@@ -373,7 +374,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Registers a newly-populated scene's foundations and reads their ownership back.
 		/// </summary>
-		private void Registry_OnSceneGainedFoundations(int sceneHandle)
+		private void Registry_OnSceneGainedFoundations(SceneHandle sceneHandle)
 		{
 			ResolveScene(sceneHandle);
 		}
@@ -381,7 +382,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Ensures every foundation in a loaded scene has a row, then applies its stored ownership.
 		/// </summary>
-		private void ResolveScene(int sceneHandle)
+		private void ResolveScene(SceneHandle sceneHandle)
 		{
 			if (resolvedScenes.Contains(sceneHandle))
 			{
@@ -443,7 +444,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// grants that failed to load would read as a house nobody may enter, and contents that
 		/// failed to load would read as an empty plot that anything may be built across.
 		/// </remarks>
-		private async Task ResolveSceneAsync(int sceneHandle, long worldServerID, string sceneName, List<string> keys)
+		private async Task ResolveSceneAsync(SceneHandle sceneHandle, long worldServerID, string sceneName, List<string> keys)
 		{
 			if (!TryGetDbService(out IPlotService plotService))
 			{
@@ -533,7 +534,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Hands a scene whose resolve failed back to be tried again. Safe from any thread.
 		/// </summary>
-		private void RetrySceneResolve(int sceneHandle)
+		private void RetrySceneResolve(SceneHandle sceneHandle)
 		{
 			failedSceneResolves.Enqueue(sceneHandle);
 		}
@@ -548,7 +549,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// move the failure to the moment somebody tries to pay.
 		/// </remarks>
 		private void ApplyResolvedPlots(
-			int sceneHandle,
+			SceneHandle sceneHandle,
 			long worldServerID,
 			string sceneName,
 			List<PlotData> plots,

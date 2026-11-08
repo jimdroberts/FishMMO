@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
@@ -230,7 +231,7 @@ namespace FishMMO.Client
 
 		private static Material ResolveMaterial(WeatherRenderProfile profile)
 		{
-			Shader shader = profile.FallingLeavesShader != null ? profile.FallingLeavesShader : Shader.Find(ShaderName);
+			Shader shader = profile.FallingLeavesShader != null ? profile.FallingLeavesShader : ShaderLookup.Find(ShaderName);
 			if (shader == null || !shader.isSupported)
 			{
 				return null;
