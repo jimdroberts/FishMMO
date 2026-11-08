@@ -25,9 +25,10 @@ namespace FishMMO.Shared.WorldDesign
 	/// shows, and deleting every file here costs nothing but a re-bake.
 	/// </para>
 	/// <para>
-	/// <b>Everything it writes is build output, not source</b>, exactly as the world map bake is:
-	/// a client build bakes, registers the images in a client addressable group, builds, and then
-	/// removes them again. The folder and the group are both gitignored. Nineteen bodies at this
+	/// <b>Everything it writes is a per-machine cache, not source</b>, exactly as the world map bake is:
+	/// a client build bakes what its inputs have changed, registers the images in a client addressable
+	/// group, builds, and then removes only the group; the images stay. The folder and the group are
+	/// both gitignored. Nineteen bodies at this
 	/// resolution is about 30 MB of PNG that a seed reproduces exactly, and committing that would
 	/// be storing what a function can produce.
 	/// </para>
@@ -35,14 +36,14 @@ namespace FishMMO.Shared.WorldDesign
 	/// <b>Nothing is written onto the body asset.</b> The texture is found by address, not by a
 	/// reference on <see cref="CelestialBody.SurfaceTexture"/> — a hard reference would pull every
 	/// planet's art into a dedicated server build that never draws a frame, and would leave the
-	/// committed body asset pointing at a file the bake deletes. <see cref="CelestialBody.SurfaceTexture"/>
+	/// committed body asset pointing at a file that is not in the repository. <see cref="CelestialBody.SurfaceTexture"/>
 	/// stays for hand-made surfaces, and a baked one takes precedence over it.
 	/// </para>
 	/// </remarks>
 	public static class PlanetSurfaceBaker
 	{
-		/// <summary>Folder the baked surfaces are written to. Gitignored: this is build output.</summary>
-		public const string BakedDirectory = "Assets/Prefabs/Shared/PlanetSurfaces";
+		/// <summary>Folder the baked surfaces are written to and kept in between builds. Gitignored.</summary>
+		public const string BakedDirectory = "Assets/Generated/PlanetSurfaces";
 
 		/// <summary>
 		/// Addressable group the baked surfaces are placed in.
@@ -66,7 +67,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Baking ────────────────────────────────────────────────────
 
 		[DashboardTool(DashboardToolAttribute.Maintenance, "Bake planet surfaces", Section = "Content", Order = 5,
-			Tooltip = "Reuses cached planet images when their inputs are unchanged; otherwise bakes with cancellable progress. Build cleanup preserves the Library cache.")]
+			Tooltip = "Reuses planet images whose inputs are unchanged; otherwise bakes with cancellable progress. Builds do the same and keep the images.")]
 		public static void BakeFromDashboard()
 		{
 			try
@@ -78,7 +79,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		[DashboardTool(DashboardToolAttribute.Maintenance, "Remove baked planet surfaces", Section = "Content", Order = 6,
-			Tooltip = "Removes generated images and their Addressables group. Keeps the Library cache for the next build.")]
+			Tooltip = "Removes the kept images and their Addressables group. Keeps the Library cache, so the next build restores them without regenerating.")]
 		public static void CleanFromDashboard()
 		{
 			CleanBakedSurfaces();
@@ -90,6 +91,30 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			if (Directory.Exists(PlanetSurfaceBakeCache.DirectoryPath)) Directory.Delete(PlanetSurfaceBakeCache.DirectoryPath, true);
 			Debug.Log("[PlanetSurfaceBaker] Cleared the planet surface cache.");
+		}
+
+		/// <summary>
+		/// What a client build calls: bakes what is missing or stale, and places every kept image in the addressable
+		/// group even if a body fails, so one failure costs only that body's surface.
+		/// </summary>
+		public static void BakeForBuild()
+		{
+			try
+			{
+				BakeAll(out _);
+			}
+			finally
+			{
+				foreach (WorldBody body in WorldEditorAssets.FindAll<WorldBody>())
+				{
+					string path = body != null ? BakedImagePath(body.name) : null;
+					if (path != null && File.Exists(path))
+					{
+						MakeAddressable(path, body.name);
+					}
+				}
+				AssetDatabase.SaveAssets();
+			}
 		}
 
 		/// <summary>Bakes missing/stale surfaces; skipped counts null bodies and valid cache hits.</summary>
@@ -513,7 +538,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// Addressable rather than a reference on the body, because <see cref="WorldBody"/> is
 		/// shared content the scene server loads. A hard reference would pull every planet's art
 		/// into a dedicated server build, and would leave the committed body asset pointing at a
-		/// file this bake deletes again.
+		/// file that is not in the repository.
 		/// </remarks>
 		private static void MakeAddressable(string imagePath, string bodyName)
 		{
@@ -548,13 +573,20 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/// <summary>
-		/// Removes everything the bake produced: the images and their addressable group.
-		/// </summary>
-		/// <remarks>
-		/// Called by the build tool after a client build, and available as a dashboard button for
-		/// tidying up after a manual bake. The project is left exactly as it was found.
-		/// </remarks>
+		/// <summary>Removes the build's addressable group. The baked images stay for the next build.</summary>
+		public static void RemoveBuildGroup()
+		{
+			AddressableAssetSettings settings = AddressableAssetSettingsDefaultObject.Settings;
+			AddressableAssetGroup group = settings != null ? settings.FindGroup(AddressableGroupName) : null;
+			if (group != null)
+			{
+				// Removes the group asset and its schema assets too.
+				settings.RemoveGroup(group);
+				AssetDatabase.SaveAssets();
+			}
+		}
+
+		/// <summary>Removes everything the bake produced: the images and their addressable group. A dashboard button.</summary>
 		public static void CleanBakedSurfaces()
 		{
 			bool removedFolder = AssetDatabase.IsValidFolder(BakedDirectory) && AssetDatabase.DeleteAsset(BakedDirectory);

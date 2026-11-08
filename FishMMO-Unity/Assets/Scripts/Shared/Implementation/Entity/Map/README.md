@@ -53,13 +53,14 @@ a headless server where no map exists.
 1. Drop `MapRegionLabel` and `MapPointOfInterest` components into the scene and place them on the
    terrain.
 2. Run **FishMMO Dashboard → World → World Map → Bake Maps**. For every world scene it creates a
-   `WorldMapDefinition` under `Assets/Prefabs/Shared/WorldMaps/` if there is not one already,
+   `WorldMapDefinition` under `Assets/Generated/WorldMaps/` if there is not one already,
    assigns it to that scene's `WorldSceneSettings`, migrates the loading image off the component,
    derives the map bounds from the scene's boundaries and terrain, harvests the labels and
    landmarks, photographs the scene from overhead, and registers the image as an addressable in the
    `ClientWorldMaps` group. **FishMMO Dashboard → World → World Map → Remove Baked Maps** deletes the bake folder and
    that group again.
-3. Rebuild the world scene details cache so `WorldSceneDetails.MapDefinition` points at it.
+3. Enter play mode: the editor reads this machine's baked map directly. A client build references it
+   through `WorldSceneDetails.MapDefinition`; the committed cache never does.
 
 The bake needs a graphics device. Under `-nographics` everything except the photograph is still
 written, and the world map falls back to markers over a plain background.

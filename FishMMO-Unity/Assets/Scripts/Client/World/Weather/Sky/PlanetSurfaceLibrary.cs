@@ -93,7 +93,7 @@ namespace FishMMO.Client
 			{
 				bodyName = bodyName.Replace(c, '_');
 			}
-			return $"Assets/Prefabs/Shared/PlanetSurfaces/{bodyName}.png";
+			return $"Assets/Generated/PlanetSurfaces/{bodyName}.png";
 		}
 
 		private static void Begin(string bodyName)

@@ -298,6 +298,13 @@ namespace FishMMO.Client
 
 			SceneDetails = details;
 			Definition = details != null ? details.MapDefinition : null;
+#if UNITY_EDITOR
+			// The committed cache never references the gitignored bake, but this machine's kept map is right here.
+			if (Definition == null)
+			{
+				Definition = UnityEditor.AssetDatabase.LoadAssetAtPath<WorldMapDefinition>(WorldMapDefinition.BakedAssetPath(sceneName));
+			}
+#endif
 			MapRect = MapBoundsResolver.Resolve(Definition, details);
 
 			if (MapRect.width <= 0.0f || MapRect.height <= 0.0f)
@@ -610,6 +617,15 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+
+#if UNITY_EDITOR
+			// Straight off disk: outside a build the addressable group that would serve a kept map does not exist.
+			if (UnityEditor.AssetDatabase.GetAssetPath(Definition).StartsWith(WorldMapDefinition.BakedDirectory + "/", System.StringComparison.Ordinal))
+			{
+				MapImage = Definition.MapImage.editorAsset as Texture2D;
+				return;
+			}
+#endif
 
 			/* The scene this load belongs to is captured, not read at completion time. A player who
 			 * crosses a zone boundary while the image is in flight would otherwise have the old

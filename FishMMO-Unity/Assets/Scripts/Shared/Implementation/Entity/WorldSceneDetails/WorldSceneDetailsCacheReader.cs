@@ -127,13 +127,24 @@ namespace FishMMO.Shared
 								$"outside [1, {WorldSceneSettings.MaximumClientsPerScene}]. Using {sceneDetails.MaxClients}.");
 						}
 						/* A hand-assigned definition on the component wins (two scenes sharing one map).
-						 * Otherwise the definition the client build baked for this scene, if the bake
-						 * is present: the build tool bakes, rebuilds this cache, builds, removes the
-						 * bake and rebuilds the cache again. Outside a client build this is null and
-						 * the world map falls back to a plain background. */
+						 * Otherwise, during a client build, the definition baked for this scene: the
+						 * build tool bakes what is missing, rebuilds this cache, builds, and rebuilds the
+						 * cache again without it. The maps stay on disk, but they are gitignored, so
+						 * outside a client build this is null and the world map falls back to a plain
+						 * background. */
 						sceneDetails.MapDefinition = worldSceneSettings.MapDefinition != null
 							? worldSceneSettings.MapDefinition
-							: AssetDatabase.LoadAssetAtPath<WorldMapDefinition>(WorldMapDefinition.BakedAssetPath(currentScene.name));
+							: WorldMapDefinition.ReferenceBakedMaps
+								? AssetDatabase.LoadAssetAtPath<WorldMapDefinition>(WorldMapDefinition.BakedAssetPath(currentScene.name))
+								: null;
+
+						/* A baked definition outlives the bake that copied the loading image into it, and
+						 * a build skips a map that is already baked: take the scene's current image. */
+						if (worldSceneSettings.MapDefinition == null && sceneDetails.MapDefinition != null
+							&& worldSceneSettings.SceneTransitionImage != null)
+						{
+							sceneDetails.MapDefinition.SceneTransitionImage = worldSceneSettings.SceneTransitionImage;
+						}
 
 						/* The component is where the loading image is authored; the bake copies it
 						 * into the definition. Preferring the definition keeps a hand-made shared

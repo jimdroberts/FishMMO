@@ -27,11 +27,15 @@ namespace FishMMO.Shared.WorldMaps
 	/// player gets the same map of the same terrain, which is also why widening the view on a
 	/// modified client reveals nothing that is not public.</para>
 	///
-	/// <para><b>Everything it writes is build output, not source.</b> A client build bakes a
-	/// definition and an image per world scene into <see cref="WorldMapDefinition.BakedDirectory"/>,
-	/// places the images in a client addressable group, rebuilds the world scene details cache so
-	/// that it references the fresh definitions, builds, and then removes the bake again and rebuilds
-	/// the cache once more (<see cref="CleanBakedMaps"/>). Nothing is hand-edited, nothing is committed,
+	/// <para><b>Everything it writes is a per-machine cache, not source.</b> A client build bakes a
+	/// definition and an image into <see cref="WorldMapDefinition.BakedDirectory"/> for each world scene
+	/// that has none, or whose scene file is newer than its image (<see cref="BakeOutOfDate"/>), places
+	/// every image in a client addressable group,
+	/// and rebuilds the world scene details cache so that it references the definitions
+	/// (<see cref="WorldMapDefinition.ReferenceBakedMaps"/>). Afterwards only the group is removed
+	/// (<see cref="RemoveBuildGroup"/>) and the cache is rebuilt without the references; the maps stay
+	/// for the next build. The Dashboard's Bake Maps rebakes them all.
+	/// Nothing is hand-edited, nothing is committed,
 	/// no scene is written: the loading image and every label, landmark and boundary are read from
 	/// the scene, and the definition's presentation fields take their defaults. A scene that must
 	/// share one map with another (an instanced twin) may still point <c>WorldSceneSettings.MapDefinition</c>
@@ -51,7 +55,7 @@ namespace FishMMO.Shared.WorldMaps
 		/// <summary>Addressable group the baked images are placed in.</summary>
 		/// <remarks>
 		/// The name carries "Client" because the build tool excludes groups by that substring from
-		/// server bundles; the group is created by a client bake and removed after the build, but if
+		/// server bundles; the group is created for a client build and removed after it, but if
 		/// one ever lingers it still stays out of a server build.
 		/// </remarks>
 		public const string AddressableGroupName = "ClientWorldMaps";
@@ -121,6 +125,12 @@ namespace FishMMO.Shared.WorldMaps
 			public int Baked;
 			public SceneSetup[] Setup;
 			public Scene Holder;
+			/// <summary>
+			/// The holder is an untitled scene that was already open: it is left open afterwards, and these of its
+			/// roots, hidden so nothing of it reaches a map, are shown again.
+			/// </summary>
+			public bool HolderBorrowed;
+			public readonly List<GameObject> HiddenRoots = new List<GameObject>();
 			public Scene ActiveUntitled;
 			public Action<string> Done;
 		}
@@ -128,11 +138,92 @@ namespace FishMMO.Shared.WorldMaps
 		private static BakeJob job;
 
 		/// <summary>
-		/// Bakes a map for every world scene, start to finish, before returning. Used by the build.
+		/// Bakes a map for every world scene, replacing any already there, start to finish, before returning.
 		/// </summary>
-		public static void BakeAll()
+		public static void BakeAll() => Run(Begin(onlyOutOfDate: false));
+
+		/// <summary>
+		/// What a client build calls: bakes only the world scenes whose map is missing or older than the scene
+		/// (<see cref="IsCurrent"/>), opening no scene at all when none is, and places every map's image in the
+		/// addressable group.
+		/// </summary>
+		public static void BakeOutOfDate()
 		{
-			BakeJob bake = Begin();
+			try
+			{
+				Run(Begin(onlyOutOfDate: true));
+			}
+			finally
+			{
+				// A scene that failed costs only its own map.
+				RegisterBakedImages();
+			}
+		}
+
+		/// <summary>
+		/// Whether <paramref name="sceneName"/> has a complete baked map: a definition with bounds whose image
+		/// reference is the image on disk beside it.
+		/// </summary>
+		public static bool IsBaked(string sceneName)
+		{
+			WorldMapDefinition definition = AssetDatabase.LoadAssetAtPath<WorldMapDefinition>(WorldMapDefinition.BakedAssetPath(sceneName));
+			if (definition == null || !definition.HasBounds || definition.MapImage == null || !definition.MapImage.RuntimeKeyIsValid())
+			{
+				return false;
+			}
+			string imagePath = WorldMapDefinition.BakedImagePath(sceneName);
+			return AssetDatabase.GetMainAssetTypeAtPath(imagePath) == typeof(Texture2D)
+				&& AssetDatabase.AssetPathToGUID(imagePath) == definition.MapImage.AssetGUID;
+		}
+
+		/// <summary>Whether the scene at <paramref name="scenePath"/> has a complete map no older than the scene file.</summary>
+		/// <remarks>The bake only reads a scene and closes it unsaved, so baking one does not make its map look old.</remarks>
+		public static bool IsCurrent(string scenePath)
+		{
+			string sceneName = Path.GetFileNameWithoutExtension(scenePath);
+			return IsBaked(sceneName)
+				&& File.GetLastWriteTimeUtc(scenePath) <= File.GetLastWriteTimeUtc(WorldMapDefinition.BakedImagePath(sceneName));
+		}
+
+		/// <summary>The world scenes a bake covers.</summary>
+		private static HashSet<string> WorldScenePaths()
+		{
+			HashSet<string> scenes = DirectoryExtensions.GetAllFiles(Constants.Configuration.WorldScenePath, ".unity");
+			if (EditorPrefs.GetBool("FishMMOEnableLocalDirectory"))
+			{
+				scenes.UnionWith(DirectoryExtensions.GetAllFiles(Constants.Configuration.LocalScenePath, ".unity"));
+			}
+			return scenes;
+		}
+
+		/// <summary>
+		/// Places every current scene's baked image in the addressable group. The group exists only while a
+		/// build runs, so a map kept from an earlier build has to be registered again.
+		/// </summary>
+		private static void RegisterBakedImages()
+		{
+			HashSet<string> scenes = WorldScenePaths();
+			int registered = 0;
+			foreach (string scenePath in scenes)
+			{
+				string sceneName = Path.GetFileNameWithoutExtension(scenePath);
+				if (IsBaked(sceneName))
+				{
+					string imagePath = WorldMapDefinition.BakedImagePath(sceneName);
+					MakeAddressable(imagePath, AssetDatabase.AssetPathToGUID(imagePath), sceneName);
+					++registered;
+				}
+			}
+			if (registered > 0)
+			{
+				AssetDatabase.SaveAssets();
+			}
+			Debug.Log($"[WorldMapBaker] {registered} of {scenes.Count} world scene maps are in the '{AddressableGroupName}' group for this build.");
+		}
+
+		/// <summary>Works a started bake through every scene before returning, if one was started.</summary>
+		private static void Run(BakeJob bake)
+		{
 			if (bake == null)
 			{
 				return;
@@ -170,7 +261,7 @@ namespace FishMMO.Shared.WorldMaps
 				done?.Invoke("A bake is already running.");
 				return false;
 			}
-			BakeJob bake = Begin();
+			BakeJob bake = Begin(onlyOutOfDate: false);
 			if (bake == null)
 			{
 				done?.Invoke("Bake not started.");
@@ -235,20 +326,27 @@ namespace FishMMO.Shared.WorldMaps
 		/// bounds search finds every loaded boundary, so a scene left open in the editor used to
 		/// appear in every other scene's map. Returns null when there is nothing to do.
 		/// </summary>
-		private static BakeJob Begin()
+		private static BakeJob Begin(bool onlyOutOfDate)
 		{
 			string worldScenePath = Constants.Configuration.WorldScenePath.Replace(@"\", @"/");
 
-			HashSet<string> scenes = DirectoryExtensions.GetAllFiles(Constants.Configuration.WorldScenePath, ".unity");
-			if (EditorPrefs.GetBool("FishMMOEnableLocalDirectory"))
-			{
-				scenes.UnionWith(DirectoryExtensions.GetAllFiles(Constants.Configuration.LocalScenePath, ".unity"));
-			}
+			HashSet<string> scenes = WorldScenePaths();
 
 			if (scenes.Count < 1)
 			{
 				Debug.LogWarning($"[WorldMapBaker] No scenes found under '{worldScenePath}'. Nothing to bake.");
 				return null;
+			}
+
+			if (onlyOutOfDate)
+			{
+				int total = scenes.Count;
+				scenes.RemoveWhere(IsCurrent);
+				Debug.Log($"[WorldMapBaker] {total - scenes.Count} of {total} world scene maps are up to date in '{OutputDirectory}'; {scenes.Count} missing or older than their scene to bake.");
+				if (scenes.Count == 0)
+				{
+					return null;
+				}
 			}
 
 			if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
@@ -257,7 +355,7 @@ namespace FishMMO.Shared.WorldMaps
 				return null;
 			}
 
-			Directory.CreateDirectory(OutputDirectory);
+			EnsureOutputFolder();
 			reportedNoStaging = false;
 
 			var bake = new BakeJob();
@@ -268,7 +366,26 @@ namespace FishMMO.Shared.WorldMaps
 			bake.Setup = Array.FindAll(EditorSceneManager.GetSceneManagerSetup(), s => !string.IsNullOrEmpty(s.path));
 			Scene active = SceneManager.GetActiveScene();
 			bake.ActiveUntitled = string.IsNullOrEmpty(active.path) ? active : default;
-			bake.Holder = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+			/* Unity refuses a new additive scene while an untitled one is unsaved ("Cannot create a new scene additively
+			 * with an untitled scene unsaved"), and the build carries on without maps when this throws. An untitled scene
+			 * already open holds the editor's place just as well, and it stays loaded either way. */
+			if (TryFindUntitled(out Scene untitled))
+			{
+				bake.Holder = untitled;
+				bake.HolderBorrowed = true;
+				foreach (GameObject root in untitled.GetRootGameObjects())
+				{
+					if (root.activeSelf)
+					{
+						root.SetActive(false);
+						bake.HiddenRoots.Add(root);
+					}
+				}
+			}
+			else
+			{
+				bake.Holder = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+			}
 			SceneManager.SetActiveScene(bake.Holder);
 			for (int i = SceneManager.sceneCount - 1; i >= 0; i--)
 			{
@@ -284,6 +401,38 @@ namespace FishMMO.Shared.WorldMaps
 			EditorApplication.LockReloadAssemblies();
 			BusyChanged?.Invoke();
 			return bake;
+		}
+
+		/// <summary>Creates the output folder and any parent of it, known to the asset database.</summary>
+		private static void EnsureOutputFolder()
+		{
+			string[] parts = OutputDirectory.Split('/');
+			string current = parts[0];
+			for (int i = 1; i < parts.Length; ++i)
+			{
+				string next = $"{current}/{parts[i]}";
+				if (!AssetDatabase.IsValidFolder(next))
+				{
+					AssetDatabase.CreateFolder(current, parts[i]);
+				}
+				current = next;
+			}
+		}
+
+		/// <summary>A loaded scene that has never been saved, if there is one.</summary>
+		private static bool TryFindUntitled(out Scene untitled)
+		{
+			for (int i = 0; i < SceneManager.sceneCount; i++)
+			{
+				Scene open = SceneManager.GetSceneAt(i);
+				if (open.isLoaded && string.IsNullOrEmpty(open.path))
+				{
+					untitled = open;
+					return true;
+				}
+			}
+			untitled = default;
+			return false;
 		}
 
 		/// <summary>Bakes the next scene: open it alone, make it active, capture, close.</summary>
@@ -339,7 +488,7 @@ namespace FishMMO.Shared.WorldMaps
 			if (active.IsValid() && active.isLoaded)
 			{
 				SceneManager.SetActiveScene(active);
-				if (bake.Holder.IsValid())
+				if (bake.Holder.IsValid() && !bake.HolderBorrowed)
 				{
 					EditorSceneManager.CloseScene(bake.Holder, true);
 				}
@@ -354,6 +503,14 @@ namespace FishMMO.Shared.WorldMaps
 			EditorUtility.ClearProgressBar();
 			try
 			{
+				foreach (GameObject root in bake.HiddenRoots)
+				{
+					if (root != null)
+					{
+						root.SetActive(true);
+					}
+				}
+				bake.HiddenRoots.Clear();
 				if (!EditorApplication.isPlayingOrWillChangePlaymode)
 				{
 					RestoreScenes(bake);
@@ -384,11 +541,23 @@ namespace FishMMO.Shared.WorldMaps
 			}
 		}
 
+		/// <summary>Removes the build's addressable group. The baked maps stay for the next build.</summary>
+		public static void RemoveBuildGroup()
+		{
+			AddressableAssetSettings settings = AddressableAssetSettingsDefaultObject.Settings;
+			AddressableAssetGroup group = settings != null ? settings.FindGroup(AddressableGroupName) : null;
+			if (group != null)
+			{
+				// Deletes the group asset and its schema assets as well.
+				settings.RemoveGroup(group);
+				AssetDatabase.SaveAssets();
+			}
+		}
+
 		/// <summary>
 		/// Removes everything the bake produced: the definitions, the images and their addressable
-		/// group. The build tool calls this after a client build and then rebuilds the world scene
-		/// details cache so it no longer references the removed definitions; it is also a FishMMO
-		/// Dashboard button (World → World Map) for tidying up after a manual bake.
+		/// group, so the next client build bakes every map again. A FishMMO Dashboard button
+		/// (World → World Map); a build does not call it.
 		/// </summary>
 		public static void CleanBakedMaps()
 		{
@@ -435,7 +604,7 @@ namespace FishMMO.Shared.WorldMaps
 			}
 
 			/* A hand-assigned definition on the component is filled in place, so that two scenes can
-			 * share one map. Otherwise the scene gets the transient definition the build produces. */
+			 * share one map. Otherwise the scene gets the kept definition the bake writes. */
 			WorldMapDefinition definition = settings.MapDefinition != null
 				? settings.MapDefinition
 				: LoadOrCreateBakedDefinition(scene.name);

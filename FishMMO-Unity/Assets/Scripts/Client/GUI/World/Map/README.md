@@ -24,25 +24,28 @@ revealed or filtered on one appears identically on the other.
 | Skill scaling seam | `Cartography`, `ICartographyProvider` | Client |
 | Drawing | `UITKMapView`, `MapViewTransform` | Client |
 
-## World maps are build output, not source
+## World maps are a per-machine cache, not source
 
-Nothing under `Assets/Prefabs/Shared/WorldMaps/` — `WorldMapDefinition.BakedDirectory` — is
-committed, and neither is the `ClientWorldMaps` addressable group. Both are gitignored, produced by
-a client build and removed again afterwards.
+Nothing under `Assets/Generated/WorldMaps/` — `WorldMapDefinition.BakedDirectory` — is
+committed, and neither is the `ClientWorldMaps` addressable group. Both are gitignored. The maps stay
+between builds, and the group exists only while a client build runs.
 
 A **client** build runs, around the addressables step:
 
-1. `WorldMapBaker.BakeAll()` — for every world scene, load it, find its `WorldSceneSettings`, take
-   the definition assigned there or create a transient one at `WorldMapDefinition.BakedAssetPath`,
+1. `WorldMapBaker.BakeOutOfDate()` — for every world scene whose map is missing or older than its scene
+   file (none opens if none is), load it, find its `WorldSceneSettings`, take
+   the definition assigned there or create one at `WorldMapDefinition.BakedAssetPath`,
    copy the scene's `SceneTransitionImage` into it, harvest the `MapRegionLabel` and
    `MapPointOfInterest` components, derive bounds through `MapBoundsResolver.FromOpenScene` when
    none are authored, photograph the scene from 2000 m up over the `Default`, `Ground` and `Water`
-   layers into an image whose longest edge is 2048 px, and add that image to the `ClientWorldMaps`
-   addressable group.
-2. `WorldSceneDetailsCacheBuilder.Rebuild()` — so `WorldSceneDetails.MapDefinition` points at the
-   fresh definitions.
+   layers into an image whose longest edge is 2048 px. Every map, kept or new, is then added to the
+   `ClientWorldMaps` addressable group.
+2. `WorldSceneDetailsCacheBuilder.Rebuild()`, with `WorldMapDefinition.ReferenceBakedMaps` set — so
+   `WorldSceneDetails.MapDefinition` points at the current definitions, and their labels, landmarks,
+   bounds and loading image are refreshed even when the photograph was kept.
 3. The build.
-4. `WorldMapBaker.CleanBakedMaps()` and a second cache rebuild, leaving the project as it was found.
+4. `WorldMapBaker.RemoveBuildGroup()` and a second cache rebuild without the references, leaving the
+   committed cache as it was found. The maps stay for the next build.
 
 **Server builds skip both**, which is what keeps map images out of server bundles; the group name
 carries "Client" so that a group which somehow lingered would still be excluded by substring. A
@@ -59,8 +62,8 @@ hand-assigned, and the bake then fills that asset in place instead of creating o
 1. Drop `MapRegionLabel` and `MapPointOfInterest` components into the scene and place them on the
    terrain. Both draw gizmos, and neither exists at runtime — they are harvested into the
    definition.
-2. To see the result in the editor without a build, run **FishMMO Dashboard → World → World Map → Bake Maps** and then
-   rebuild the world scene details cache. **FishMMO Dashboard → World → World Map → Remove Baked Maps** undoes it.
+2. To see the result in the editor without a build, run **FishMMO Dashboard → World → World Map → Bake Maps** and enter
+   play mode: the editor reads the baked map directly. **FishMMO Dashboard → World → World Map → Remove Baked Maps** undoes it.
 
 The bake needs a graphics device. Under `-nographics` everything except the photograph is still
 written, and the world map falls back to markers over a plain background; `xvfb-run` is the way to

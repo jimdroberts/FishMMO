@@ -75,7 +75,9 @@ namespace FishMMO.Shared
 					AssetDatabase.IsValidFolder(path) || IsEditorOnlyPath(path) || ShouldSkipLocalAsset(path) ||
 					ContainsSegment(path, "Resources") ||
 					WorldDesign.ProceduralArtBuildGroup.IsGenerated(path) ||
-					path.StartsWith(TerrainArraySet.BakedDirectory + "/", StringComparison.OrdinalIgnoreCase)) continue;
+					path.StartsWith(TerrainArraySet.BakedDirectory + "/", StringComparison.OrdinalIgnoreCase) ||
+					path.StartsWith(WorldMapDefinition.BakedDirectory + "/", StringComparison.OrdinalIgnoreCase) ||
+					path.StartsWith(WorldDesign.PlanetSurfaceBaker.BakedDirectory + "/", StringComparison.OrdinalIgnoreCase)) continue;
 				Type type = AssetDatabase.GetMainAssetTypeAtPath(path);
 				if (type == null || type == typeof(MonoScript) || type == typeof(DefaultAsset) ||
 					type.Assembly == typeof(AddressablesDashboard).Assembly ||

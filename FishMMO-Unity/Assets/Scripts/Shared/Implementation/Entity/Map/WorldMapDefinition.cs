@@ -41,11 +41,20 @@ namespace FishMMO.Shared
 	public class WorldMapDefinition : ScriptableObject
 	{
 		/// <summary>
-		/// Folder a client build bakes every scene's definition and map image into. Build output,
-		/// not source: the build tool creates it before it builds addressables and removes it after
-		/// the build, and git ignores it. See <c>WorldMapBaker</c>.
+		/// Folder a client build bakes each scene's definition and map image into. A per-machine
+		/// cache, not source: git ignores it and it stays between builds, so a build bakes only the
+		/// maps missing from it or older than their scene. See <c>WorldMapBaker</c>.
 		/// </summary>
-		public const string BakedDirectory = "Assets/Prefabs/Shared/WorldMaps";
+		public const string BakedDirectory = "Assets/Generated/WorldMaps";
+
+#if UNITY_EDITOR
+		/// <summary>
+		/// True only while a client build runs: the world scene details cache may then reference the baked
+		/// definitions. They are gitignored, so a cache rebuilt at any other time must not, or it would be
+		/// committed with references that dangle on every other clone.
+		/// </summary>
+		public static bool ReferenceBakedMaps { get; set; }
+#endif
 
 		/// <summary>Asset path the bake writes a scene's definition to.</summary>
 		/// <param name="sceneName">The scene's name.</param>

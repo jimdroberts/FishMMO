@@ -248,11 +248,12 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		}
 
 		/// <summary>
-		/// Bakes a map definition and image for every world scene and rebuilds the world scene
-		/// details cache to reference them, before the addressables of a client build are built.
-		/// Everything the bake produces is build output (gitignored; see
-		/// <see cref="FishMMO.Shared.WorldMaps.WorldMapBaker"/>) and <see cref="CleanWorldMaps"/>
-		/// removes it again when the build has finished. Server builds never draw a map, so they
+		/// Bakes a map definition and image for each world scene that has none or has changed since, and rebuilds the
+		/// world scene details cache to reference them, before the addressables of a client build are
+		/// built. The maps are a gitignored per-machine cache (see
+		/// <see cref="FishMMO.Shared.WorldMaps.WorldMapBaker"/>) and stay for the next build;
+		/// <see cref="CleanWorldMaps"/> removes only their addressable group and the cache's references
+		/// when the build has finished. Server builds never draw a map, so they
 		/// skip both. A bake that fails is logged and does not stop the build, because the world map
 		/// falls back to a plain background without its image.
 		/// </summary>
@@ -288,17 +289,37 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			try
 			{
 				Log.Debug("BuildLogger", "Baking planet surfaces...");
-				FishMMO.Shared.WorldDesign.PlanetSurfaceBaker.BakeAll(out _);
+				FishMMO.Shared.WorldDesign.PlanetSurfaceBaker.BakeForBuild();
+			}
+			catch (OperationCanceledException) { throw; }
+			catch (Exception ex)
+			{
+				Log.Warning("BuildLogger", $"Planet surface bake failed; the build continues without those images: {ex.Message}");
+			}
 
-				Log.Debug("BuildLogger", "Baking world maps...");
-				FishMMO.Shared.WorldMaps.WorldMapBaker.BakeAll();
+			WorldMapDefinition.ReferenceBakedMaps = true;
+			try
+			{
+				Log.Debug("BuildLogger", "Baking any missing or out of date world maps...");
+				FishMMO.Shared.WorldMaps.WorldMapBaker.BakeOutOfDate();
+			}
+			catch (OperationCanceledException) { throw; }
+			catch (Exception ex)
+			{
+				Log.Warning("BuildLogger", $"World map bake failed; the build continues with the maps already baked: {ex.Message}");
+			}
+
+			/* Whatever the bakes did: this is what points every scene at its current definition, so the maps
+			 * kept from earlier builds, and any baked again with new asset IDs, reach the client. */
+			try
+			{
 				Log.Debug("BuildLogger", "Rebuilding the world scene details cache with the baked maps...");
 				WorldSceneDetailsCacheBuilder.Rebuild();
 			}
 			catch (OperationCanceledException) { throw; }
 			catch (Exception ex)
 			{
-				Log.Warning("BuildLogger", $"World map or planet surface bake failed; the build continues without those images: {ex.Message}");
+				Log.Warning("BuildLogger", $"Rebuilding the world scene details cache failed; this build's world maps draw a plain background: {ex.Message}");
 			}
 		}
 
@@ -449,9 +470,9 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		}
 
 		/// <summary>
-		/// Removes the baked world maps and their addressable group after a client build and
-		/// rebuilds the world scene details cache without them, so the project is left as it was
-		/// found.
+		/// Removes the world maps' addressable group after a client build and rebuilds the world scene
+		/// details cache without references to them, so the project is left as it was found. The baked
+		/// maps themselves stay on disk for the next build.
 		/// </summary>
 		private static void CleanWorldMaps(CustomBuildType customBuildType)
 		{
@@ -474,18 +495,19 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				FishMMO.Shared.WorldDesign.TerrainArrayAutoBake.BuildRunning = false;
 			}
 
+			WorldMapDefinition.ReferenceBakedMaps = false;
 			try
 			{
-				Log.Debug("BuildLogger", "Removing baked planet surfaces...");
-				FishMMO.Shared.WorldDesign.PlanetSurfaceBaker.CleanBakedSurfaces();
+				Log.Debug("BuildLogger", "Removing the planet surfaces' addressable group (the baked images stay for the next build)...");
+				FishMMO.Shared.WorldDesign.PlanetSurfaceBaker.RemoveBuildGroup();
 
-				Log.Debug("BuildLogger", "Removing baked world maps...");
-				FishMMO.Shared.WorldMaps.WorldMapBaker.CleanBakedMaps();
+				Log.Debug("BuildLogger", "Removing the world maps' addressable group (the baked maps stay for the next build)...");
+				FishMMO.Shared.WorldMaps.WorldMapBaker.RemoveBuildGroup();
 				WorldSceneDetailsCacheBuilder.Rebuild();
 			}
 			catch (Exception ex)
 			{
-				Log.Warning("BuildLogger", $"Removing the baked world maps or planet surfaces failed; run FishMMO Dashboard → World → World Map → Remove Baked Maps, Core → Maintenance → Remove baked planet surfaces, and World → World Scene Details → Rebuild World Scene Details by hand: {ex.Message}");
+				Log.Warning("BuildLogger", $"Removing the world map or planet surface addressable group failed; remove the '{FishMMO.Shared.WorldMaps.WorldMapBaker.AddressableGroupName}' and '{FishMMO.Shared.WorldDesign.PlanetSurfaceBaker.AddressableGroupName}' groups in the Addressables Groups window and run FishMMO Dashboard → World → World Scene Details → Rebuild World Scene Details by hand: {ex.Message}");
 			}
 		}
 

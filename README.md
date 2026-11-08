@@ -686,19 +686,18 @@ This caches important game world details (spawn points, teleporters, boundaries,
 This generates `WorldSceneDetailsCache` assets that are loaded at runtime by the WorldServer and SceneServer for scene routing and character placement.
 
 **World map bake.** `FishMMO Dashboard → World → World Map → Bake Maps` renders a map definition and image for every
-world scene, and `FishMMO Dashboard → World → World Map → Remove Baked Maps` deletes them again. A **client**
-Addressables build does both for you: it bakes, rebuilds the world scene details cache so it
-references the baked definitions, builds the bundles, then removes the bake and rebuilds the cache
-once more, leaving the project as it found it. **Server builds skip both** — a server never draws a
+world scene, replacing what is there, and `FishMMO Dashboard → World → World Map → Remove Baked Maps` deletes them
+again. A **client** Addressables build bakes only the scenes whose map is missing or older than the scene file, rebuilds the world scene details cache so
+it references the baked definitions, builds the bundles, then removes the addressable group and rebuilds the cache
+without the references. The maps stay for the next build. **Server builds skip all of it** — a server never draws a
 map. A bake that fails is logged as a warning and does not fail the build; the world map simply
 falls back to a plain background without its image.
 
-Everything the bake produces is build output and is gitignored — `Assets/Prefabs/Shared/WorldMaps/`,
+Everything the bake produces is a per-machine cache and is gitignored — `Assets/Generated/`,
 `Assets/AddressableAssetsData/AssetGroups/ClientWorldMaps.asset*` and their
-`Schemas/ClientWorldMaps_*` — so a bake must never be committed. If a manual bake (or an interrupted
-client build) leaves one behind, `WorldMapDefinitionTests.TheCommittedCache_CarriesNoBakeLeftovers`
-fails and names the fix: run `FishMMO Dashboard → World → World Map → Remove Baked Maps`, then
-`FishMMO Dashboard → World → World Scene Details → Rebuild World Scene Details`.
+`Schemas/ClientWorldMaps_*` — so a bake must never be committed. If an interrupted client build leaves the
+committed cache pointing at a bake, `WorldMapDefinitionTests.TheCommittedCache_CarriesNoBakeLeftovers`
+fails; run `FishMMO Dashboard → World → World Scene Details → Rebuild World Scene Details`.
 
 ### Versioning
 

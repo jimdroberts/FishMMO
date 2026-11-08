@@ -62,16 +62,13 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// The committed cache must not reference a bake: a definition under the bake folder, or the
-		/// folder itself, is a leftover from an interrupted client build and would be committed as
-		/// dangling references the moment the folder is cleaned.
+		/// The committed cache must not reference a bake: the folder stays between builds but is
+		/// gitignored, so a reference to a definition under it, left by an interrupted client build,
+		/// would be committed and dangle on every other clone.
 		/// </summary>
 		[Test]
 		public void TheCommittedCache_CarriesNoBakeLeftovers()
 		{
-			Assert.IsFalse(AssetDatabase.IsValidFolder(WorldMapDefinition.BakedDirectory),
-				$"'{WorldMapDefinition.BakedDirectory}' exists outside a client build. Run FishMMO Dashboard → World → World Map → Remove Baked Maps, then FishMMO Dashboard → World → World Scene Details → Rebuild World Scene Details.");
-
 			WorldSceneDetailsCache cache = LoadCache();
 			if (cache?.Scenes == null)
 			{
@@ -103,7 +100,7 @@ namespace FishMMO.UnitTests
 		public void ClientBuildBake_GivesEveryWorldSceneAMap_AndCleansUpAfterItself()
 		{
 			Assume.That(!AssetDatabase.IsValidFolder(WorldMapDefinition.BakedDirectory),
-				"A bake is already present; remove it (FishMMO Dashboard → World → World Map → Remove Baked Maps) before running this.");
+				"Baked maps are present and this test deletes them when it finishes; remove them first (FishMMO Dashboard → World → World Map → Remove Baked Maps) to run it.");
 
 			/* Bake from a saved, empty scene. The baker adds its holder scene additively, which Unity
 			 * refuses while any untitled (never saved) scene is open, and earlier fixtures can leave the
@@ -117,6 +114,7 @@ namespace FishMMO.UnitTests
 			try
 			{
 				WorldMapBaker.BakeAll();
+				WorldMapDefinition.ReferenceBakedMaps = true;
 				Assert.IsTrue(WorldSceneDetailsCacheBuilder.Rebuild(), "The cache must rebuild after the bake.");
 
 				WorldSceneDetailsCache cache = LoadCache();
@@ -148,7 +146,7 @@ namespace FishMMO.UnitTests
 						&& definition.MapImage.AssetGUID == AssetDatabase.AssetPathToGUID(imagePath);
 					bool addressable = settings != null && settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(imagePath)) != null
 						&& settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(imagePath)).parentGroup.Name == WorldMapBaker.AddressableGroupName;
-					if (!imageExists || !referenced || !addressable)
+					if (!imageExists || !referenced || !addressable || !WorldMapBaker.IsBaked(pair.Key))
 					{
 						imageless.Add($"{pair.Key} (image {imageExists}, referenced {referenced}, addressable {addressable})");
 					}
@@ -159,6 +157,7 @@ namespace FishMMO.UnitTests
 			}
 			finally
 			{
+				WorldMapDefinition.ReferenceBakedMaps = false;
 				WorldMapBaker.CleanBakedMaps();
 				WorldSceneDetailsCacheBuilder.Rebuild();
 				UnityEditor.SceneManagement.EditorSceneManager.NewScene(
@@ -184,7 +183,7 @@ namespace FishMMO.UnitTests
 
 			string path = AssetDatabase.GetAssetPath(definition);
 			Assert.IsFalse(path.StartsWith(WorldMapDefinition.BakedDirectory),
-				$"{sceneName}: the cache references the baked definition '{path}', which only exists during a client build.");
+				$"{sceneName}: the cache references the baked definition '{path}', which is gitignored; only a running client build may.");
 		}
 	}
 }

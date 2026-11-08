@@ -105,7 +105,7 @@ namespace FishMMO.Shared
 				Section = "Bake",
 				Label = "Bake Maps",
 				Order = 0,
-				Tooltip = "Photographs every world scene, one at a time with nothing else loaded, and writes a map definition and image for each into the gitignored baked folder. Shows progress and can be cancelled; the dashboard's tools are locked until it finishes.",
+				Tooltip = "Photographs every world scene again, replacing any map already baked. Build Game bakes only the maps that are missing or older than their scene. One scene at a time with nothing else loaded, into the gitignored baked folder. Shows progress and can be cancelled; the dashboard's tools are locked until it finishes.",
 				RunAsync = FishMMO.Shared.WorldMaps.WorldMapBaker.StartBake,
 			};
 			yield return new DashboardTool
@@ -114,8 +114,13 @@ namespace FishMMO.Shared
 				Section = "Bake",
 				Label = "Remove Baked Maps",
 				Order = 1,
-				Tooltip = "Deletes the baked definitions, their images and their addressable group.",
-				Run = FishMMO.Shared.WorldMaps.WorldMapBaker.CleanBakedMaps,
+				Tooltip = "Deletes the baked definitions, their images and their addressable group, so the next Build Game bakes every map again.",
+				Run = () =>
+				{
+					FishMMO.Shared.WorldMaps.WorldMapBaker.CleanBakedMaps();
+					// An interrupted build can have left the cache pointing at what was just deleted.
+					WorldSceneDetailsCacheBuilder.Rebuild();
+				},
 			};
 		}
 
