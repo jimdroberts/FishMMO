@@ -204,7 +204,8 @@ The second command-line argument selects the server type. If no argument is prov
 | `EnableIPv6` / `IPv6Address` | Server `.cfg` | Dual-stack bind on the same port |
 | `BroadcastMaxMessagesPerSecond` / `BroadcastMessageBurst` | Server `.cfg` | Transport-agnostic per-connection broadcast budget (defaults 100 / 200). `0` disables |
 | `TransportMaxInboundMessagesPerSecond` / `TransportInboundMessageBurst` | Server `.cfg` | WebTransport receive-thread budget (defaults 200 / 400) |
-| `TransportConnectIntervalMs`, `TransportMaxConnectionsPerIP`, `TransportMaxHalfOpenConnections`, `TransportMaxQueuedDatagramsPerConnection`, `TransportMaxH3StreamsPerConnection` | Server `.cfg` | Native WebTransport connection limits applied pre-handshake. `-1` = library default, `0` = disabled |
+| `TransportConnectIntervalMs`, `TransportMaxConnectionsPerIP`, `TransportMaxHalfOpenConnections`, `TransportMaxQueuedDatagramsPerConnection`, `TransportMaxH3StreamsPerConnection` | Server `.cfg` | Native WebTransport connection limits applied pre-handshake. `-1` = library default, `0` = disabled. The two per-IP limits default to `0`: behind the UDP proxy every player is 127.0.0.1 to this library |
+| `AuthMaxConnectionsPerIP` | Server `.cfg` | Connections one real IP (from the connection token) may hold on this server. Default 16, `0` = disabled |
 | `LoginQueueUpdateRateSeconds` / `LoginQueueAdmissionRatePerSecond` / `LoginQueueMaxSize` / `LoginQueueTimeoutSeconds` | Server `.cfg` | `LoginQueueSystem` position-broadcast interval (default 2 s), admissions per second (default 50), queue length (default 500) and longest wait (default 300 s) |
 | `FISHMMO_SMTP_HOST`, `FISHMMO_SMTP_PORT`, … | Environment | Override the configured SMTP settings for container/orchestration deployments |
 

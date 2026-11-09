@@ -291,7 +291,7 @@ and `appsettings.json` files in the working directory override them.
   },
   "ChatPollingIntervalSeconds": 5,
   "ChatRelay": {
-    "GameToDiscordChannels": [ "Say", "World", "Trade", "Region" ]
+    "GameToDiscordChannels": [ "World", "Trade", "Region" ]
   },
   "BridgeMessageMaxLength": 128,
   "DiscordVerification": {
@@ -312,7 +312,7 @@ and `appsettings.json` files in the working directory override them.
 | `Discord.DefaultGuildId` | The Discord server the bot operates in. **Must be the server the game's invite link points players to** — verification DMs can only reach its members. `0` disables channel creation and verification delivery. |
 | `Npgsql` | Database host, port, name and pool settings, read by FishMMO-DB's `NpgsqlDbConfiguration` through the shared `NpgsqlDbContextFactory`, as every other FishMMO process reads them. **No credentials here:** they come from `FISHMMO_DB_USERNAME` / `FISHMMO_DB_PASSWORD` or the platform secrets file (see the FishMMO-DB README). `FISHMMO_DB_HOST` / `FISHMMO_DB_PORT` / `FISHMMO_DB_NAME` override the host, port and name. |
 | `ChatPollingIntervalSeconds` | How often `ChatPollingService` reads new chat rows. |
-| `ChatRelay.GameToDiscordChannels` | **Allowlist** of in-game channels the bot may republish to Discord. Omit for the default (`Say`, `World`, `Trade`, `Region`). See the warning below. |
+| `ChatRelay.GameToDiscordChannels` | **Allowlist** of in-game channels the bot may republish to Discord. Omit for the default (`World`, `Trade`, `Region`). See the warning below. |
 | `BridgeMessageMaxLength` | Caps a Discord message bridged into the game. Keep at or below the game's `ChatBroadcast.MaxTextLength` (**128**) — clients discard anything longer, so a larger value makes long messages vanish rather than arrive truncated. |
 | `DiscordVerification.SweepMinutes` | Safety sweep for verification deliveries (default 5, clamped 1–60). Not the delivery path — `LISTEN/NOTIFY` and member joins are. |
 | `DiscordVerification.BatchSize` | Most pending deliveries one sweep pass reads (default 25, clamped 1–100). |

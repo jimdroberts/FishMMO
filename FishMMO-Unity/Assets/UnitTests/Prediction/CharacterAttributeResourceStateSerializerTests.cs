@@ -57,6 +57,9 @@ namespace FishMMO.UnitTests
 					MaxMana = 150,
 					Stamina = 95.0f,
 					MaxStamina = 110,
+					HealthConsumedTick = 21u,
+					ManaConsumedTick = 22u,
+					StaminaConsumedTick = 23u,
 				};
 
 				var writer = new Writer();
@@ -74,6 +77,9 @@ namespace FishMMO.UnitTests
 				LogAssert.AreEqual(src.MaxMana,        dst.MaxMana,        "MaxMana must round-trip.");
 				LogAssert.AreEqual(src.Stamina,        dst.Stamina,        "Stamina must round-trip.");
 				LogAssert.AreEqual(src.MaxStamina,     dst.MaxStamina,     "MaxStamina must round-trip.");
+				LogAssert.AreEqual(src.HealthConsumedTick, dst.HealthConsumedTick, "HealthConsumedTick must round-trip.");
+				LogAssert.AreEqual(src.ManaConsumedTick, dst.ManaConsumedTick, "ManaConsumedTick must round-trip.");
+				LogAssert.AreEqual(src.StaminaConsumedTick, dst.StaminaConsumedTick, "StaminaConsumedTick must round-trip.");
 
 				AuthTestTrace.Log("CharacterAttributeResourceStateSerializerTests", "SUCCESS", nameof(RegularSerializer_RoundTrip_PreservesAllFields)).GetAwaiter().GetResult();
 			}
@@ -142,6 +148,7 @@ namespace FishMMO.UnitTests
 				var next = prev;
 				next.NextRegenTick = 1u;
 				next.Health = 85f;
+				next.StaminaConsumedTick = 40u;
 
 				var writer = new Writer();
 				bool wrote = GenericDeltaWriter<CharacterAttributeResourceState>.Write(writer, prev, next, DeltaSerializerOption.Unset);
@@ -155,6 +162,8 @@ namespace FishMMO.UnitTests
 
 				LogAssert.AreEqual(next.NextRegenTick, restored.NextRegenTick, "NextRegenTick delta must reconstruct exactly.");
 				LogAssert.AreEqual(next.Health,         restored.Health,         "Health delta must reconstruct exactly.");
+				LogAssert.AreEqual(next.StaminaConsumedTick, restored.StaminaConsumedTick, "StaminaConsumedTick delta must reconstruct exactly.");
+				LogAssert.AreEqual(prev.ManaConsumedTick, restored.ManaConsumedTick, "Unchanged ManaConsumedTick must be carried forward from prev.");
 				LogAssert.AreEqual(prev.MaxHealth,      restored.MaxHealth,      "Unchanged MaxHealth must be carried forward from prev.");
 				LogAssert.AreEqual(prev.Mana,           restored.Mana,           "Unchanged Mana must be carried forward from prev.");
 				LogAssert.AreEqual(prev.MaxMana,        restored.MaxMana,        "Unchanged MaxMana must be carried forward from prev.");
@@ -185,7 +194,8 @@ namespace FishMMO.UnitTests
 
 				var v = new CharacterAttributeResourceState
 				{
-					NextRegenTick = 3u, Health = 70f, MaxHealth = 90, Mana = 40f, MaxMana = 45, Stamina = 20f, MaxStamina = 30
+					NextRegenTick = 3u, Health = 70f, MaxHealth = 90, Mana = 40f, MaxMana = 45, Stamina = 20f, MaxStamina = 30,
+					HealthConsumedTick = 5u, ManaConsumedTick = 6u, StaminaConsumedTick = 7u
 				};
 
 				var writer = new Writer();
@@ -215,6 +225,9 @@ namespace FishMMO.UnitTests
 				LogAssert.AreEqual(v.MaxMana,        restored.MaxMana,        "Force-write MaxMana must round-trip.");
 				LogAssert.AreEqual(v.Stamina,        restored.Stamina,        "Force-write Stamina must round-trip.");
 				LogAssert.AreEqual(v.MaxStamina,     restored.MaxStamina,     "Force-write MaxStamina must round-trip.");
+				LogAssert.AreEqual(v.HealthConsumedTick, restored.HealthConsumedTick, "Force-write HealthConsumedTick must round-trip.");
+				LogAssert.AreEqual(v.ManaConsumedTick, restored.ManaConsumedTick, "Force-write ManaConsumedTick must round-trip.");
+				LogAssert.AreEqual(v.StaminaConsumedTick, restored.StaminaConsumedTick, "Force-write StaminaConsumedTick must round-trip.");
 
 				AuthTestTrace.Log("CharacterAttributeResourceStateSerializerTests", "SUCCESS", nameof(DeltaSerializer_ForceWrite_EmitsAllFields_EvenWhenUnchanged)).GetAwaiter().GetResult();
 			}

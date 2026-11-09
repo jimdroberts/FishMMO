@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Net.Http.Headers;
@@ -37,6 +38,9 @@ namespace FishMMO.WebServer
 		/// <summary>Bytes read to classify a <c>.unityweb</c> file: the Brotli marker sits within the first few dozen.</summary>
 		private const int SniffLength = 128;
 
+		/// <summary>A bundle whose name carries its content hash: new content always gets a new name.</summary>
+		private static readonly Regex ContentHashedBundle = new Regex("_[0-9a-f]{32}\\.bundle$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
 		/// <summary>Detected encodings, by physical path, size and modification time (a rebuilt file is classified again).</summary>
 		private static readonly ConcurrentDictionary<(string Path, long Length, DateTimeOffset Modified), string?> Detected = new();
 
@@ -47,6 +51,15 @@ namespace FishMMO.WebServer
 		public static void PrepareResponse(HttpContext context, IFileInfo file)
 		{
 			string name = file.Name;
+
+			/* Fixed names change content on every build, and with no Cache-Control a browser guesses how long a copy
+			 * stays fresh, up to hours. The loader revalidates the data file but not the code, so a browser could pair
+			 * old code with new data after a deploy, which crashes at startup. no-cache still allows a 304. */
+			if (!ContentHashedBundle.IsMatch(name))
+			{
+				context.Response.Headers[HeaderNames.CacheControl] = "no-cache";
+			}
+
 			string? encoding = StoredEncoding(file, name);
 			if (encoding == null) return;
 

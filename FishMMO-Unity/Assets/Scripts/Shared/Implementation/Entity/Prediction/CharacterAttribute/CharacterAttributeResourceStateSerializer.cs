@@ -8,14 +8,14 @@ namespace FishMMO.Shared
 	/// <para>
 	/// <b>Regular serializer</b> (Write/Read extension methods): Used by FishNet's codegen
 	/// for RPCs, SyncVars, broadcasts, and any non-prediction serialization context.
-	/// Writes all 8 fields using FishNet's built-in packed encoding (varint for ints,
+	/// Writes every field using FishNet's built-in packed encoding (varint for ints,
 	/// full precision for floats).
 	/// </para>
 	/// <para>
 	/// <b>Delta serializer</b> (registered via <see cref="GenericDeltaWriter{T}"/>/<see cref="GenericDeltaReader{T}"/>):
-	/// Used during prediction replicate/reconcile ticks. Writes a 1-byte bitmask
-	/// (8 bits for 8 fields) followed by delta-encoded values for only the changed fields.
-	/// On a typical tick where only health regens, this sends ~3-4 bytes instead of 28.
+	/// Used during prediction replicate/reconcile ticks. Writes a 2-byte bitmask
+	/// (one bit per field) followed by delta-encoded values for only the changed fields.
+	/// On a typical tick where only health regens, this sends ~4-5 bytes instead of 40.
 	/// </para>
 	/// <para>
 	/// The delta serializer must use <see cref="GenericDeltaWriter{T}.SetWrite"/> because
@@ -43,6 +43,9 @@ namespace FishMMO.Shared
 			writer.WriteSingle(value.Stamina);
 			writer.WriteInt32(value.MaxStamina);
 			writer.WriteSingle(value.Breath);
+			writer.WriteUInt32(value.HealthConsumedTick);
+			writer.WriteUInt32(value.ManaConsumedTick);
+			writer.WriteUInt32(value.StaminaConsumedTick);
 		}
 
 		/// <summary>
@@ -61,6 +64,9 @@ namespace FishMMO.Shared
 				Stamina = reader.ReadSingle(),
 				MaxStamina = reader.ReadInt32(),
 				Breath = reader.ReadSingle(),
+				HealthConsumedTick = reader.ReadUInt32(),
+				ManaConsumedTick = reader.ReadUInt32(),
+				StaminaConsumedTick = reader.ReadUInt32(),
 			};
 		}
 
@@ -69,21 +75,27 @@ namespace FishMMO.Shared
 		#region Delta Serializer (prediction)
 
 		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.NextRegenTick"/>.</summary>
-		private const byte NEXT_REGEN_TICK_BIT = 1 << 0;
+		private const ushort NEXT_REGEN_TICK_BIT = 1 << 0;
 		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.Health"/>.</summary>
-		private const byte HEALTH_BIT = 1 << 1;
+		private const ushort HEALTH_BIT = 1 << 1;
 		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.MaxHealth"/>.</summary>
-		private const byte MAX_HEALTH_BIT = 1 << 2;
+		private const ushort MAX_HEALTH_BIT = 1 << 2;
 		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.Mana"/>.</summary>
-		private const byte MANA_BIT = 1 << 3;
+		private const ushort MANA_BIT = 1 << 3;
 		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.MaxMana"/>.</summary>
-		private const byte MAX_MANA_BIT = 1 << 4;
+		private const ushort MAX_MANA_BIT = 1 << 4;
 		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.Stamina"/>.</summary>
-		private const byte STAMINA_BIT = 1 << 5;
+		private const ushort STAMINA_BIT = 1 << 5;
 		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.MaxStamina"/>.</summary>
-		private const byte MAX_STAMINA_BIT = 1 << 6;
-		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.Breath"/>: the last of the byte's eight.</summary>
-		private const byte BREATH_BIT = 1 << 7;
+		private const ushort MAX_STAMINA_BIT = 1 << 6;
+		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.Breath"/>.</summary>
+		private const ushort BREATH_BIT = 1 << 7;
+		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.HealthConsumedTick"/>.</summary>
+		private const ushort HEALTH_CONSUMED_BIT = 1 << 8;
+		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.ManaConsumedTick"/>.</summary>
+		private const ushort MANA_CONSUMED_BIT = 1 << 9;
+		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.StaminaConsumedTick"/>.</summary>
+		private const ushort STAMINA_CONSUMED_BIT = 1 << 10;
 
 		/// <summary>
 		/// Registers the custom delta serializers at runtime, after FishNet's IL-weaved
@@ -103,7 +115,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Delta writer for <see cref="CharacterAttributeResourceState"/>.
-		/// Writes a 1-byte bitmask indicating which of the 8 fields changed,
+		/// Writes a 2-byte bitmask indicating which fields changed,
 		/// followed by delta-encoded values for only those fields.
 		/// </summary>
 		/// <remarks>
@@ -113,7 +125,7 @@ namespace FishMMO.Shared
 		/// difference and the reader adds it onto its own copy, so a resource encoded that way
 		/// accumulates error against the server's exact value for as long as the delta chain runs.
 		/// These values decide death and whether an ability can be paid for. Int/uint fields
-		/// (NextRegenTick, MaxHealth, MaxMana, MaxStamina) use <c>WriteDeltaInt32</c>, which is a
+		/// (NextRegenTick, the maxima and the consumed ticks) use <c>WriteDeltaInt32</c>, which is a
 		/// varint difference and exact.
 		///
 		/// Float comparisons use a small epsilon (<see cref="FLOAT_EPSILON"/>) to avoid
@@ -129,11 +141,11 @@ namespace FishMMO.Shared
 			CharacterAttributeResourceState next,
 			DeltaSerializerOption option)
 		{
-			byte flags = 0;
+			ushort flags = 0;
 
 			int flagPos = writer.Position;
 			int startLength = writer.Length;
-			writer.WriteUInt8Unpacked(0);
+			writer.WriteUInt16Unpacked(0);
 
 			// See CharacterReplicateDataDeltaSerializer.WriteDelta for why these are three separate
 			// values rather than one forceWrite.
@@ -178,6 +190,15 @@ namespace FishMMO.Shared
 				flags |= BREATH_BIT;
 			}
 
+			if (writer.WriteDeltaInt32((int)prev.HealthConsumedTick, (int)next.HealthConsumedTick, fieldOption))
+				flags |= HEALTH_CONSUMED_BIT;
+
+			if (writer.WriteDeltaInt32((int)prev.ManaConsumedTick, (int)next.ManaConsumedTick, fieldOption))
+				flags |= MANA_CONSUMED_BIT;
+
+			if (writer.WriteDeltaInt32((int)prev.StaminaConsumedTick, (int)next.StaminaConsumedTick, fieldOption))
+				flags |= STAMINA_CONSUMED_BIT;
+
 			// When mustEmit is true, emit the bitmask even if flags==0 (all values equal) so the
 			// reader knows a delta was written. When Unset and flags==0, rewind past the placeholder.
 			if (flags != 0 || mustEmit)
@@ -187,7 +208,7 @@ namespace FishMMO.Shared
 				 * because of a standing 'todo: should be using WritePackedWhole' in FishNet's
 				 * Writer. A packed backfill would overrun the placeholder and corrupt the
 				 * first field written after it. */
-				writer.InsertUInt8Unpacked(flags, flagPos);
+				writer.InsertUInt16Unpacked(flags, flagPos);
 				return true;
 			}
 
@@ -209,7 +230,7 @@ namespace FishMMO.Shared
 			Reader reader,
 			CharacterAttributeResourceState prev)
 		{
-			byte flags = reader.ReadUInt8Unpacked();
+			ushort flags = reader.ReadUInt16Unpacked();
 			CharacterAttributeResourceState result = prev;
 
 			if ((flags & NEXT_REGEN_TICK_BIT) != 0)
@@ -235,6 +256,15 @@ namespace FishMMO.Shared
 
 			if ((flags & BREATH_BIT) != 0)
 				result.Breath = reader.ReadSingle();
+
+			if ((flags & HEALTH_CONSUMED_BIT) != 0)
+				result.HealthConsumedTick = (uint)reader.ReadDeltaInt32((int)prev.HealthConsumedTick);
+
+			if ((flags & MANA_CONSUMED_BIT) != 0)
+				result.ManaConsumedTick = (uint)reader.ReadDeltaInt32((int)prev.ManaConsumedTick);
+
+			if ((flags & STAMINA_CONSUMED_BIT) != 0)
+				result.StaminaConsumedTick = (uint)reader.ReadDeltaInt32((int)prev.StaminaConsumedTick);
 
 			return result;
 		}

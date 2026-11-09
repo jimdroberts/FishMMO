@@ -179,6 +179,12 @@ namespace FishMMO.Server.Implementation
 		/// <summary>How long an unused real-IP entry survives before the auth sweep evicts it.</summary>
 		private static readonly TimeSpan ConnectionRealIpTtl = TimeSpan.FromMinutes(30);
 
+		/// <summary>Connections held per verified real IP, because the transport sees only the proxy's address.</summary>
+		private readonly ConnectionsPerIpLimiter connectionsPerRealIp = new ConnectionsPerIpLimiter();
+
+		/// <summary>Default for the <c>AuthMaxConnectionsPerIP</c> setting; 0 disables the limit.</summary>
+		private const int DefaultMaxConnectionsPerRealIp = 16;
+
 		/// <summary>
 		/// Signature of each connection token already redeemed here, mapped to the ClientId
 		/// that redeemed it. Makes a token single-use per connection.
@@ -1309,6 +1315,22 @@ namespace FishMMO.Server.Implementation
 						$"connection {redeemedBy} — rejecting replay.");
 					return false;
 				}
+
+				int maxConnections = Server.Configuration.GetInt("AuthMaxConnectionsPerIP", DefaultMaxConnectionsPerRealIp);
+				if (!connectionsPerRealIp.TryAcquire(clientId, HandshakeService.NormalizeIp(realIp), maxConnections))
+				{
+					await Log.Warning(LogPrefix,
+						$"Connection {clientId} refused: {realIp} already holds {maxConnections} connections.");
+					return false;
+				}
+
+				// The stop event has already run for a connection that went away meanwhile, so nothing else would release this.
+				if (!TryResolveConnection(clientId, out _))
+				{
+					connectionsPerRealIp.Release(clientId);
+					return false;
+				}
+
 				redeemedConnectionTokens.Upsert(signature, clientId, nowUtc);
 
 				StoreRealIpForConnection(clientId, realIp);
@@ -1733,6 +1755,7 @@ namespace FishMMO.Server.Implementation
 				// Drop the recovered IP so a recycled ClientId cannot inherit the previous
 				// occupant's identity (FishNet reuses ClientIds after disconnect).
 				connectionRealIps.Remove(conn.ClientId);
+				connectionsPerRealIp.Release(conn.ClientId);
 
 				// Let subclasses drop their own per-connection state before the core
 				// tears down the account/encryption entries they may depend on.

@@ -159,9 +159,13 @@ namespace FishMMO.Server.Implementation
 			int inboundPerSecond = config.GetInt("TransportMaxInboundMessagesPerSecond", 200);
 			int inboundBurst = config.GetInt("TransportInboundMessageBurst", 400);
 			/* Connection-level limits enforced inside the native WebTransport library, before
-			 * the QUIC handshake. -1 keeps the library default, 0 disables the limit. */
-			int connectIntervalMs = config.GetInt("TransportConnectIntervalMs", -1);
-			int maxConnectionsPerIp = config.GetInt("TransportMaxConnectionsPerIP", -1);
+			 * the QUIC handshake. -1 keeps the library default, 0 disables the limit.
+			 *
+			 * The two per-IP limits default to off. Behind the UDP proxy this library sees every
+			 * player as 127.0.0.1, so they would apply to all players at once. Limits per player
+			 * are enforced on the real IP from the connection token (see BaseServerAuthenticator). */
+			int connectIntervalMs = config.GetInt("TransportConnectIntervalMs", 0);
+			int maxConnectionsPerIp = config.GetInt("TransportMaxConnectionsPerIP", 0);
 			int maxHalfOpen = config.GetInt("TransportMaxHalfOpenConnections", -1);
 			int maxQueuedDatagrams = config.GetInt("TransportMaxQueuedDatagramsPerConnection", -1);
 			int maxH3Streams = config.GetInt("TransportMaxH3StreamsPerConnection", -1);

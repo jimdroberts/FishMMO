@@ -22,9 +22,9 @@ namespace FishMMO.DiscordBot.Services
 	/// had never agreed to. Guild and party chat went the same way.
 	/// </para>
 	/// <para>
-	/// The default is the set of channels a player can already assume is public: anyone standing
-	/// nearby hears Say, and World, Trade and Region are broadcast to everyone on the shard. A
-	/// server operator can widen it in configuration, but doing so is now a deliberate act with a
+	/// The default is the set of channels a player can already assume is public: World, Trade and
+	/// Region are broadcast widely. Say is left out, because it is a conversation between people
+	/// standing nearby and nobody expects it to appear on Discord. A server operator can widen it in configuration, but doing so is now a deliberate act with a
 	/// name attached rather than the consequence of an enum getting a new member.
 	/// </para>
 	/// <para>
@@ -45,7 +45,6 @@ namespace FishMMO.DiscordBot.Services
 		/// </summary>
 		private static readonly ChatChannel[] DefaultAllowed =
 		{
-			ChatChannel.Say,
 			ChatChannel.World,
 			ChatChannel.Trade,
 			ChatChannel.Region,

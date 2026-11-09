@@ -1577,10 +1577,9 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// The last simulation tick at which <see cref="Regenerate(uint)"/> processed
-		/// regen. Used as a monotonic guard so re-execution of the same tick during
-		/// replay/resimulation, and execution of out-of-order future ticks ahead of
-		/// the server, cannot double-fire a regen pulse. Local-only — not reconciled;
-		/// authoritative resource values themselves come via <see cref="ApplyResourceState"/>.
+		/// regen. Used as a monotonic guard so out-of-order future ticks ahead of the
+		/// server cannot double-fire a regen pulse. A replay moves it back on purpose:
+		/// see <see cref="ProcessReplicateTick"/>. Local-only — not reconciled.
 		/// </summary>
 		private uint lastProcessedRegenTick;
 
@@ -1634,8 +1633,8 @@ namespace FishMMO.Shared
 		/// and threading a tick through every one of those call sites would be a much wider change
 		/// than the rule needs — a resource that went down was spent, whoever spent it.
 		/// <para>
-		/// A reconcile lowering a value counts too, and should: the server reducing a resource means
-		/// it really was spent, and the owner mispredicting is exactly when the two must agree.
+		/// A reconcile is not a spend. It restores this baseline along with the value, and the
+		/// server's own record of the last spend arrives with it.
 		/// </para>
 		/// </remarks>
 		private readonly Dictionary<int, float> lastObservedResourceValues = new Dictionary<int, float>();
@@ -1730,31 +1729,11 @@ namespace FishMMO.Shared
 		/// naturally, and the new interval applies only for subsequent pulses.
 		/// </para>
 		/// <para>
-		/// <b>IMPORTANT — Replay non-determinism:</b> Regen is intentionally NOT
-		/// replayed during rollback. The monotonic guard (<see cref="lastProcessedRegenTick"/>)
-		/// causes all replayed ticks within the rollback window to be skipped. Authoritative
-		/// resource values are restored by <see cref="ApplyResourceState"/> via reconcile.
-		/// After a deep rewind, <see cref="lastProcessedRegenTick"/> can remain ahead of
-		/// the replayed local tick until live simulation catches up, so client-side regen
-		/// presentation may pause briefly after high-RTT reconciles. Server authority is
-		/// unaffected because resource values continue to arrive through reconcile.
-		/// Future maintainers must NOT assume replay-deterministic regen — gameplay systems
-		/// that depend on intermediate regen events during replay will not observe them.
-		/// </para>
-		/// <para>
-		/// <b>KNOWN OMISSION — the lockout state is predicted and NOT reconciled.</b>
-		/// <see cref="lastProcessedRegenTick"/>, <see cref="lastConsumedResourceTicks"/> and
-		/// <see cref="lastObservedResourceValues"/> are all written from inside the replicate body
-		/// and none of them travels in <c>CharacterReconcileData</c>. The owner and the server can
-		/// therefore disagree about whether a resource is still inside the no-regeneration window
-		/// that spending it opened, so a pulse can fire on one and not the other.
-		/// </para>
-		/// <para>
-		/// Left that way deliberately, and it is bounded: the resource VALUE is reconciled every
-		/// tick, so a disagreement costs at most one pulse's worth of regeneration before the
-		/// server's number overwrites it. Carrying three more fields — one of them a dictionary —
-		/// on every reconcile to correct a sub-pulse timing difference is not a trade worth making.
-		/// Anything that comes to depend on the lockout being exact must reconcile it first.
+		/// <b>Replayed like every other predicted input to movement.</b> Stamina decides whether a
+		/// tick sprints or jumps, so a replay that skipped a pulse the server had applied refused
+		/// movement the server allowed and corrected the owner's position twice per pulse. The
+		/// reconcile restores everything the pulse depends on: the values, the schedule and the
+		/// lockout.
 		/// </para>
 		/// </summary>
 		/// <param name="tick">Authoritative simulation tick for this replicate step.</param>
@@ -1915,17 +1894,12 @@ namespace FishMMO.Shared
 				 * template value usually is not one — mana's 1 per five seconds is 0.2 per second. */
 				float perSecond = cachedRegen.FinalValue / REGEN_AUTHORING_WINDOW_SECONDS;
 				float totalRegenAmount = perSecond * regenTickRate * intervals;
-				// WARNING — replay side-effect contract:
-				// The monotonic guard in Regenerate() prevents this path from being reached
-				// during replay: replayed ticks satisfy (tick ≤ lastProcessedRegenTick) and
-				// return before RegenerateResource is ever called.
-				// If that guard is removed or weakened, this Gain() call WILL mutate resource
-				// state during replay. Reconcile overwrites the resource values afterward, but
-				// any non-notification side effects inside Gain() (VFX, sounds, analytics,
-				// direct gameplay callbacks) will still fire and leak as replay artefacts.
-				// Before weakening the guard: audit Gain() for replay-unsafe side effects and
-				// consider a suppressSideEffects parameter or a PredictionContext.IsReplaying flag.
+				// Runs during replay too, where the caller has suppressed the notifications it raises.
 				resource.Gain(totalRegenAmount);
+
+				/* The value at the end of the tick, which is what a reconcile restores as the
+				 * baseline, so this peer and a replay on the owner compare against the same number. */
+				lastObservedResourceValues[resourceTemplateID] = resource.CurrentValue;
 			}
 		}
 
@@ -2128,6 +2102,41 @@ namespace FishMMO.Shared
 			ApplyIndividualResourceState(StaminaResourceTemplateID, resourceState.MaxStamina, resourceState.Stamina);
 			ApplyBreathState(resourceState.Breath);
 			EndPropagation();
+
+			RestoreConsumption(HealthResourceTemplateID, resourceState.HealthConsumedTick);
+			RestoreConsumption(ManaResourceTemplateID, resourceState.ManaConsumedTick);
+			RestoreConsumption(StaminaResourceTemplateID, resourceState.StaminaConsumedTick);
+		}
+
+		/// <summary>
+		/// Restores a resource's lockout and its consumption baseline to the reconciled tick.
+		/// </summary>
+		/// <param name="resourceTemplateID">Resource to restore; 0 means absent on this entity.</param>
+		/// <param name="consumedTick">Tick the resource was last spent, or zero.</param>
+		private void RestoreConsumption(int resourceTemplateID, uint consumedTick)
+		{
+			if (resourceTemplateID == 0 ||
+				!resourceAttributes.TryGetValue(resourceTemplateID, out CharacterResourceAttribute resource))
+			{
+				return;
+			}
+
+			if (consumedTick != 0u)
+			{
+				lastConsumedResourceTicks[resourceTemplateID] = consumedTick;
+			}
+			else
+			{
+				lastConsumedResourceTicks.Remove(resourceTemplateID);
+			}
+
+			lastObservedResourceValues[resourceTemplateID] = resource.CurrentValue;
+		}
+
+		/// <summary>The tick a resource was last spent, or zero.</summary>
+		private uint LastConsumedTick(int resourceTemplateID)
+		{
+			return lastConsumedResourceTicks.TryGetValue(resourceTemplateID, out uint tick) ? tick : 0u;
 		}
 
 		/// <summary>
@@ -2207,6 +2216,9 @@ namespace FishMMO.Shared
 			var state = new CharacterAttributeResourceState
 			{
 				NextRegenTick = hasNextRegenTick ? nextRegenTick : 0u,
+				HealthConsumedTick = LastConsumedTick(HealthResourceTemplateID),
+				ManaConsumedTick = LastConsumedTick(ManaResourceTemplateID),
+				StaminaConsumedTick = LastConsumedTick(StaminaResourceTemplateID),
 			};
 
 			if (HealthResourceTemplateID != 0 &&
@@ -2291,12 +2303,10 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Regen is now tick-driven via the authoritative simulation tick from the
-			// replicate input, with a per-tick monotonic guard inside Regenerate(tick)
-			// to prevent double-firing under replay/resimulation or future-state
-			// execution. The OnAttributeUpdated notifications that resource.Gain raises
-			// must still NOT fire during replay (UI flicker / repeated ECA), so we wrap
-			// the call in a propagation scope and drop queued notifications.
+			// Regen is tick-driven via the authoritative simulation tick from the replicate
+			// input. The OnAttributeUpdated notifications that resource.Gain raises must NOT
+			// fire during replay (UI flicker / repeated ECA), so the replayed call runs in a
+			// suppression scope.
 			if (state.ContainsReplayed())
 			{
 				// suppressNotifications ensures that EnqueueNotification is a no-op for the
@@ -2304,6 +2314,13 @@ namespace FishMMO.Shared
 				// listeners. Without this, a listener invoked by resource.Gain can mutate
 				// another attribute and re-enqueue, bypassing DiscardPendingNotifications.
 				BeginNotificationSuppression();
+
+				/* The reconcile put this peer back before this tick, so to the restored state it
+				 * has not happened yet. A pulse cannot fire twice: the restored schedule fires
+				 * each one once, and advances past it. */
+				lastProcessedRegenTick = tick - 1u;
+				hasLastProcessedRegenTick = true;
+
 				try
 				{
 					Regenerate(tick);

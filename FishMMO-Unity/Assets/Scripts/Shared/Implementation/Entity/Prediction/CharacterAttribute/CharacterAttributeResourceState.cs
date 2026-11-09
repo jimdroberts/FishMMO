@@ -53,5 +53,17 @@ namespace FishMMO.Shared
 		/// from the same attributes (CharacterAttributeController.MaxBreathSeconds).
 		/// </summary>
 		public float Breath;
+
+		/// <summary>
+		/// Tick health was last spent, or zero. With the two below, this is the regeneration lockout: replaying from
+		/// a reconcile needs it to know whether a pulse in the replayed ticks fires.
+		/// </summary>
+		public uint HealthConsumedTick;
+
+		/// <summary>Tick mana was last spent, or zero.</summary>
+		public uint ManaConsumedTick;
+
+		/// <summary>Tick stamina was last spent, or zero.</summary>
+		public uint StaminaConsumedTick;
 	}
 }
