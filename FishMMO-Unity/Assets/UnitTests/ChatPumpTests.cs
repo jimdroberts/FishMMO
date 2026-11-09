@@ -302,6 +302,45 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void SayRegionAndTeamChatAreWrittenToTheChatLog()
+		{
+			string local = SourceScanPins.ReadCode(ChatDirectory + "/ChatSystem.LocalChat.cs");
+			string arena = SourceScanPins.ReadCode(ChatDirectory + "/ChatSystem.ArenaChat.cs");
+
+			Func<string, string> sayCheck = c => SourceScanPins.Body(c, "public bool OnSayChat(").Contains("return sender != null;")
+				? null : "a live say line is not handed to the chat log";
+			SourceScanPins.HoldsAndFires("say logged", local, sayCheck,
+				SourceScanPins.Replace("return sender != null;", "return false;"),
+				"say chat dropped from the log");
+
+			Func<string, string> regionCheck = c => SourceScanPins.Body(c, "public bool OnRegionChat(").Contains("return true;")
+				? null : "a live region line is not handed to the chat log";
+			SourceScanPins.HoldsAndFires("region logged", local, regionCheck,
+				SourceScanPins.Replace("BroadcastToScene(scene, msg, true, Channel.Reliable);\n\t\t\treturn true;", "BroadcastToScene(scene, msg, true, Channel.Reliable);\n\t\t\treturn false;"),
+				"region chat dropped from the log");
+
+			Func<string, string> teamCheck = c => SourceScanPins.Body(c, "public bool OnTeamChat(").Contains("return true;")
+				? null : "a delivered team line is not handed to the chat log";
+			SourceScanPins.HoldsAndFires("team logged", arena, teamCheck,
+				SourceScanPins.Replace("return true;", "return false;"),
+				"team chat dropped from the log");
+		}
+
+		/// <summary>
+		/// The write validates each row's channel against the database's own enum and refuses the
+		/// whole batch on a value it does not define, so a channel the game can send must exist there.
+		/// </summary>
+		[Test]
+		public void EveryGameChatChannelIsAcceptedByTheDatabaseLayer()
+		{
+			foreach (FishMMO.Shared.ChatChannel channel in Enum.GetValues(typeof(FishMMO.Shared.ChatChannel)))
+			{
+				Assert.IsTrue(Enum.IsDefined(typeof(FishMMO.Database.Data.Enums.ChatChannel), (byte)channel),
+					channel + " has no matching value in the database enum.");
+			}
+		}
+
+		[Test]
 		public void TeamChatWalksTheArenaSceneNotTheWholeServer()
 		{
 			string code = SourceScanPins.ReadCode(ChatDirectory + "/ChatSystem.ArenaChat.cs");

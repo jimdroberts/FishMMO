@@ -323,6 +323,8 @@ namespace FishMMO.Client
 		private Coroutine patchDownloadRoutine;
 		/// <summary>The running updater handoff, or null.</summary>
 		private Coroutine updaterRoutine;
+		/// <summary>The web build's full content download, while it runs.</summary>
+		private Coroutine contentDownloadRoutine;
 		/// <summary>
 		/// Destination of the patch download currently in flight, so a cancellation can clean
 		/// up the partial file without recomputing the path.
@@ -358,6 +360,7 @@ namespace FishMMO.Client
 			public const string StatusConnecting = "Connecting...";
 			public const string StatusCheckingVersion = "Checking Version...";
 			public const string StatusDownloadingPatch = "Downloading Patch...";
+			public const string StatusContentDownloadFailed = "Download Failed";
 			public const string StatusApplyingPatch = "Applying Patch...";
 			public const string StatusConnectionFailed = "Connection Failed";
 			public const string StatusVersionCheckFailed = "Version Check Failed";
@@ -383,6 +386,8 @@ namespace FishMMO.Client
 			public const string DetailPatchUnavailable = "No update path exists from this client version. Please download and install the latest full client.";
 			public const string DetailApplyingPatch = "Applying the update to your game files. The client will restart automatically — do not close this window.";
 			public const string DetailCancelled = "Cancelled. Press the button to try again.";
+			public const string DetailDownloadingContent = "Downloading the game. This happens once, and again only for what changes in an update.";
+			public const string DetailContentDownloadFailed = "The game could not be downloaded. Press the button to continue from where it stopped.";
 
 			public const string ErrorLoadingNews = "Error loading news: ";
 			public const string ErrorParsingVersion = "Invalid version format: {0}. Expected Major.Minor.Patch[.PreRelease].";
@@ -871,6 +876,8 @@ namespace FishMMO.Client
 				case LauncherState.VersionError: return UIText.DetailVersionError;
 				case LauncherState.ClientAhead: return UIText.DetailClientAhead;
 				case LauncherState.PatchUnavailable: return UIText.DetailPatchUnavailable;
+				case LauncherState.DownloadingContent: return UIText.DetailDownloadingContent;
+				case LauncherState.ContentDownloadFailed: return UIText.DetailContentDownloadFailed;
 				case LauncherState.ApplyingPatch: return UIText.DetailApplyingPatch;
 				case LauncherState.Cancelled: return UIText.DetailCancelled;
 				default: return null;
@@ -927,6 +934,17 @@ namespace FishMMO.Client
 					isButtonInteractable = true;
 					buttonAction = CancelUpdate;
 					progressBarVisible = true;
+					break;
+				case LauncherState.DownloadingContent:
+					buttonText = UIText.ButtonCancel;
+					isButtonInteractable = true;
+					buttonAction = CancelContentDownload;
+					progressBarVisible = true;
+					break;
+				case LauncherState.ContentDownloadFailed:
+					buttonText = UIText.StatusContentDownloadFailed;
+					isButtonInteractable = true;
+					buttonAction = BeginContentDownload; // Continues from whatever finished.
 					break;
 				case LauncherState.ApplyingPatch:
 					buttonText = UIText.StatusApplyingPatch;
@@ -1073,6 +1091,7 @@ namespace FishMMO.Client
 			       state == LauncherState.Connecting ||
 			       state == LauncherState.CheckingVersion ||
 			       state == LauncherState.DownloadingPatch ||
+			       state == LauncherState.DownloadingContent ||
 			       state == LauncherState.ApplyingPatch;
 		}
 
@@ -1116,6 +1135,7 @@ namespace FishMMO.Client
 				 * timeout inside the request layer, which distinguishes "slow" from "stopped"
 				 * without guessing at how long a legitimate download may take. */
 				bool overCeiling = this.currentLauncherState != LauncherState.DownloadingPatch &&
+								   this.currentLauncherState != LauncherState.DownloadingContent &&
 								   this.transientStateHardCeilingSeconds > 0f &&
 								   now - this.stateEnteredTime > this.transientStateHardCeilingSeconds;
 
@@ -1163,7 +1183,8 @@ namespace FishMMO.Client
 				AbortInFlightWork();
 
 				SetLauncherState(
-					stuckState == LauncherState.DownloadingPatch ? LauncherState.PatchDownloadFailed : LauncherState.ConnectionFailed,
+					stuckState == LauncherState.DownloadingPatch ? LauncherState.PatchDownloadFailed :
+					stuckState == LauncherState.DownloadingContent ? LauncherState.ContentDownloadFailed : LauncherState.ConnectionFailed,
 					$"The launcher stopped responding while it was busy ({stuckState}). Press the button to try again.");
 			}
 		}
@@ -1181,6 +1202,11 @@ namespace FishMMO.Client
 			StopIfRunning(ref this.versionCheckRoutine);
 			StopIfRunning(ref this.patchDownloadRoutine);
 			StopIfRunning(ref this.updaterRoutine);
+			if (this.contentDownloadRoutine != null)
+			{
+				StopIfRunning(ref this.contentDownloadRoutine);
+				WebContentPreloader.Cancel();
+			}
 
 			this.isConnecting = false;
 			this.isUpdating = false;
@@ -1213,6 +1239,55 @@ namespace FishMMO.Client
 			StopIfRunning(ref this.versionCheckRoutine);
 			this.isConnecting = false;
 			SetLauncherState(LauncherState.Cancelled, "Version check cancelled. Press the button to try again.");
+		}
+
+		/// <summary>
+		/// Fetches whatever the browser is still missing of the game's content, then allows play.
+		/// Costs nothing noticeable once everything is cached.
+		/// </summary>
+		private void BeginContentDownload()
+		{
+			if (this.contentDownloadRoutine != null)
+			{
+				return;
+			}
+
+			SetLauncherState(LauncherState.DownloadingContent);
+			this.contentDownloadRoutine = StartCoroutine(WebContentPreloader.Run(
+				onProgress: (stats) =>
+				{
+					// The browser side abandons and retries a stalled transfer itself, so running
+					// at all is the heartbeat the watchdog needs.
+					this.lastStateActivityTime = Time.realtimeSinceStartup;
+					this.view.SetProgress(stats);
+				},
+				onComplete: () =>
+				{
+					this.contentDownloadRoutine = null;
+					SetLauncherState(LauncherState.ReadyToPlay);
+				},
+				onError: (error) =>
+				{
+					this.contentDownloadRoutine = null;
+					SetLauncherState(LauncherState.ContentDownloadFailed, error);
+				}));
+		}
+
+		/// <summary>
+		/// Stops the content download. Finished bundles stay in the browser, so the next attempt
+		/// continues from them.
+		/// </summary>
+		private void CancelContentDownload()
+		{
+			if (this.contentDownloadRoutine == null)
+			{
+				return;
+			}
+
+			Log.Info("ClientLauncher", "Content download cancelled by the player.");
+			StopIfRunning(ref this.contentDownloadRoutine);
+			WebContentPreloader.Cancel();
+			SetLauncherState(LauncherState.Cancelled, "Download paused. Press the button to continue.");
 		}
 
 		/// <summary>
@@ -1256,6 +1331,7 @@ namespace FishMMO.Client
 			return state == LauncherState.ConnectionFailed ||
 			       state == LauncherState.VersionCheckFailed ||
 			       state == LauncherState.PatchDownloadFailed ||
+			       state == LauncherState.ContentDownloadFailed ||
 			       state == LauncherState.UpdaterFailed ||
 			       state == LauncherState.LaunchFailed ||
 			       state == LauncherState.PatchUnavailable ||
@@ -1943,7 +2019,14 @@ namespace FishMMO.Client
 					// there never was one). This is the only evidence that exists, since the
 					// updater cannot report success to a launcher it has already terminated.
 					LauncherSettings.ClearUpdateAttempts();
-					SetLauncherState(LauncherState.ReadyToPlay);
+					if (WebContentPreloader.IsRequired)
+					{
+						BeginContentDownload();
+					}
+					else
+					{
+						SetLauncherState(LauncherState.ReadyToPlay);
+					}
 				}
 			}
 			finally

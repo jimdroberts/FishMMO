@@ -1155,6 +1155,36 @@ static QUIC_STATUS h3_stream_forward(h3_stream_ctx_t* sctx, void* fwd,
     return st;
 }
 
+/* Report the end of a browser's WebTransport session.
+ *
+ * The CONNECT stream *is* the session: WebTransport.close() writes a
+ * CLOSE_WEBTRANSPORT_SESSION capsule and a FIN on it, and the QUIC connection
+ * stays up.  Chromium then waits for the server to answer on that stream, so
+ * a server that ignores the FIN sees nothing further until the idle timeout
+ * (120 s) — and everything keyed to the connection, a scene server's claim on
+ * the player's character included, outlives the logout by that long.
+ *
+ * Only the established session's own stream counts: a second bidi stream
+ * classified as a CONNECT candidate during the handshake is also is_request,
+ * and native clients never reach this (is_webtransport is false for them). */
+static void h3_notify_session_closed(h3_session_t* h3, h3_stream_ctx_t* sctx,
+                                     HQUIC stream)
+{
+    if (!h3 || !h3_session_acquire(h3)) return;
+    if (h3->is_server && h3->is_webtransport && sctx->is_request &&
+        h3->server_state == H3_SRV_ESTABLISHED && h3->on_session_closed) {
+        uint64_t sid = 0;
+        uint32_t sid_len = sizeof(sid);
+        if (QUIC_SUCCEEDED(MsQuic->GetParam(stream, QUIC_PARAM_STREAM_ID,
+                                            &sid_len, &sid)) &&
+            sid == h3->connect_stream_id &&
+            atomic_exchange(&h3->session_closed, 1) == 0) {
+            h3->on_session_closed(h3->callback_ctx);
+        }
+    }
+    h3_session_release(h3);
+}
+
 static QUIC_STATUS QUIC_API
 h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
 {
@@ -1301,6 +1331,7 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
                 }
             }
         }
+        h3_notify_session_closed(h3, sctx, stream);
         return QUIC_STATUS_SUCCESS;
     }
 
@@ -1325,6 +1356,10 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
                 h3_stream_ctx_unlink_locked(h3, sctx);
             H3_UNLOCK(h3);
             if (fwd) return h3_stream_forward(sctx, fwd, stream, event);
+            /* An abort ends the session as a FIN does.  SHUTDOWN_COMPLETE does
+             * not: it also fires when the connection itself is going away. */
+            if (event->Type == QUIC_STREAM_EVENT_PEER_SEND_ABORTED)
+                h3_notify_session_closed(h3, sctx, stream);
         }
         /* CAS guard: msquic fires PEER_SEND_ABORTED (if peer aborts)
          * followed by the terminal SHUTDOWN_COMPLETE.  Without this

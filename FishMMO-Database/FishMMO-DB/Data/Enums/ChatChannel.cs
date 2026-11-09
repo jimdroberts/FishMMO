@@ -54,5 +54,10 @@ namespace FishMMO.Database.Data.Enums
 		/// Discord integration channel.
 		/// </summary>
 		Discord,
+
+		/// <summary>
+		/// Arena team chat, visible to the sender's team for the match.
+		/// </summary>
+		Team = 10,
 	}
 }

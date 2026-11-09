@@ -16,7 +16,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <param name="sender">Player character sending the message.</param>
 		/// <param name="msg">Chat broadcast message.</param>
-		/// <returns>False to prevent message from being written to the database.</returns>
+		/// <returns>True for a live line, so the caller writes it to the chat log.</returns>
 		public bool OnRegionChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			if (sender == null)
@@ -44,7 +44,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/* One multicast over FishNet's own connection set for the scene: the line is
 			 * serialised once, not once per player in it (hot-path audit S1). */
 			Server.NetworkWrapper.BroadcastToScene(scene, msg, true, Channel.Reliable);
-			return false; // we return false here so the message is not written to the database
+			return true;
 		}
 
 		/// <summary>
@@ -59,7 +59,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		/// <param name="sender">Player character sending the message.</param>
 		/// <param name="msg">Chat broadcast message.</param>
-		/// <returns>False to prevent message from being written to the database.</returns>
+		/// <returns>True for a live line, so the caller writes it to the chat log.</returns>
 		public bool OnSayChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			/* Multicast over the observer set itself, serialised once. The set is read and never
@@ -68,7 +68,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Server.NetworkWrapper.Broadcast(sender.Observers, msg, true, Channel.Reliable);
 			}
-			return false; // we return false here so the message is not written to the database
+
+			// Logged even when nobody was in earshot: the line was still said.
+			return sender != null;
 		}
 	}
 }

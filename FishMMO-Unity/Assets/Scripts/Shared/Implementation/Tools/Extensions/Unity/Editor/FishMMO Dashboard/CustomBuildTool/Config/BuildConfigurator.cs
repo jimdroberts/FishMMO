@@ -23,8 +23,12 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 		private WebGLCompressionFormat originalCompressionFormat;
 		private bool originalDecompressionFallback;
 		private bool originalDataCaching;
+		private string originalWebGLTemplate;
 		private string originalWebCodeOptimization;
 		private bool originalWasm2023;
+
+		/// <summary>The web page template in Assets/WebGLTemplates used for player web builds.</summary>
+		private const string FishMMOWebGLTemplate = "PROJECT:FishMMO";
 
 		private bool isConfigured = false;
 
@@ -99,6 +103,7 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 			originalCompressionFormat = PlayerSettings.WebGL.compressionFormat;
 			originalDecompressionFallback = PlayerSettings.WebGL.decompressionFallback;
 			originalDataCaching = PlayerSettings.WebGL.dataCaching;
+			originalWebGLTemplate = PlayerSettings.WebGL.template;
 			originalWebCodeOptimization = WebAssemblyCodeOptimization.Current;
 			originalWasm2023 = PlayerSettings.WebGL.wasm2023;
 
@@ -164,6 +169,8 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 				PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
 				PlayerSettings.WebGL.decompressionFallback = true;
 				PlayerSettings.WebGL.dataCaching = true;
+				// Sets the browser cache policy the full content download depends on.
+				PlayerSettings.WebGL.template = FishMMOWebGLTemplate;
 			}
 
 			// IL2CPP cross-compilation from Linux → Windows is not supported.
@@ -212,6 +219,7 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 			PlayerSettings.WebGL.compressionFormat = originalCompressionFormat;
 			PlayerSettings.WebGL.decompressionFallback = originalDecompressionFallback;
 			PlayerSettings.WebGL.dataCaching = originalDataCaching;
+			PlayerSettings.WebGL.template = originalWebGLTemplate;
 			WebAssemblyCodeOptimization.Current = originalWebCodeOptimization;
 			PlayerSettings.WebGL.wasm2023 = originalWasm2023;
 

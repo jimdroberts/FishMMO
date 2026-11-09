@@ -78,6 +78,10 @@ typedef struct {
     bool                 framing_error;
     /* Prevent double StreamClose (mgr shutdown race vs SHUTDOWN_COMPLETE). */
     bool                 close_done;
+    /* Set by sm_abandon_unstarted_stream before it closes the handle: that
+     * caller owns this context and the slot, so stream_cb must leave both
+     * alone. */
+    bool                 abandoned;
     /* Outbound payload waiting for START_COMPLETE before StreamSend.
      * NULL after ownership transfers to StreamSend ClientContext. */
     sm_send_req_t*       pending_send;
@@ -337,6 +341,11 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
         WT_LOG_ERROR("stream_cb: null sctx/mgr/event — ignoring");
         return QUIC_STATUS_INVALID_STATE;
     }
+
+    /* Being closed by sm_abandon_unstarted_stream, which frees this context
+     * itself once StreamClose returns. */
+    if (sctx->abandoned)
+        return QUIC_STATUS_SUCCESS;
 
     switch (event->Type) {
 
@@ -654,8 +663,13 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
         /* Never StreamClose once ConnectionClose has run (handles invalid).
          * Gated on handles_invalid, not conn_closed: during a peer-initiated
          * shutdown conn_closed is already set while the handle is still valid,
-         * and skipping the close there leaks it. */
-        if (!sctx->close_done && !atomic_load(&mgr->handles_invalid)) {
+         * and skipping the close there leaks it.
+         *
+         * No slot means wt_stream_manager_close_streams took this handle and
+         * is closing it, possibly from the application thread right now. A
+         * second StreamClose would release the stream's handle reference
+         * twice, which msquic answers by aborting the process. */
+        if (found_slot && !sctx->close_done && !atomic_load(&mgr->handles_invalid)) {
             sctx->close_done = true;
             MsQuic->StreamClose(stream);
         } else {
@@ -751,7 +765,11 @@ void wt_stream_manager_close_streams(wt_stream_manager_t* mgr)
     for (int i = 0; i < WT_MAX_STREAMS && count < WT_MAX_STREAMS; i++) {
         if (!mgr->streams[i].in_use) continue;
         HQUIC h = mgr->streams[i].quic_stream;
-        if (h) claimed[count++] = h;
+        /* Handle already given up by wt_stream_manager_shutdown: the slot
+         * stays, so the stream's own SHUTDOWN_COMPLETE still finds it and
+         * closes the handle. */
+        if (!h) continue;
+        claimed[count++] = h;
         mgr->streams[i].in_use = false;
         mgr->streams[i].quic_stream = NULL;
         mgr->streams[i].id = 0;
@@ -883,6 +901,37 @@ static void sm_mark_send_closed(
         }
     }
     sm_unlock(mgr);
+}
+
+/**
+ * Releases a stream that was opened but never successfully started.
+ *
+ * Closing such a handle can raise SHUTDOWN_COMPLETE from inside StreamClose, on
+ * the connection's worker. That handler normally frees the context and clears
+ * the slot, which here would free the context a second time when this caller
+ * did, and release the slot's active_streams count twice. Marking the context
+ * first makes this caller the only owner; StreamClose returning guarantees no
+ * further callback can read it.
+ *
+ * Call with streams_lock held, taken before the handle was published to the
+ * slot, so wt_stream_manager_close_streams cannot have claimed it. Releases
+ * the lock: StreamClose waits on the worker, whose callbacks need that lock.
+ */
+static void sm_abandon_unstarted_stream(
+    wt_stream_manager_t* mgr, int slot, HQUIC quic_stream, stream_ctx_t* sctx)
+{
+    sctx->abandoned = true;
+
+    /* Same rule as every other closer: out of the slot first, then
+     * StreamClose (see "Handle lifetime" in wt_stream_manager_send). */
+    mgr->streams[slot].in_use = false;
+    mgr->streams[slot].quic_stream = NULL;
+    mgr->streams[slot].id = 0;
+    atomic_fetch_sub(&mgr->active_streams, 1);
+    sm_unlock(mgr);
+
+    MsQuic->StreamClose(quic_stream);
+    free(sctx);
 }
 
 /**
@@ -1141,9 +1190,11 @@ int32_t wt_stream_manager_send(
     }
     sctx->quic_stream = quic_stream;
 
+    /* Held from publishing the handle until the stream has started: until
+     * then only this thread may close it (see sm_abandon_unstarted_stream).
+     * StreamStart only queues work for the worker, so this cannot deadlock. */
     sm_lock(mgr);
     mgr->streams[slot].quic_stream = quic_stream;
-    sm_unlock(mgr);
 
     /* Prefix layout for the first write on a stream we opened:
      *   [WEBTRANSPORT_STREAM type + Session ID]   (browser sessions only)
@@ -1167,8 +1218,7 @@ int32_t wt_stream_manager_send(
 
     sm_send_req_t* req = sm_send_req_alloc(header, header_len, data, length);
     if (!req) {
-        MsQuic->StreamShutdown(quic_stream,
-                                QUIC_STREAM_SHUTDOWN_FLAG_GRACEFUL, 0);
+        sm_abandon_unstarted_stream(mgr, slot, quic_stream, sctx);
         return WT_ERR_BUFFER_FULL;
     }
     sctx->pending_send = req;
@@ -1180,6 +1230,8 @@ int32_t wt_stream_manager_send(
      * send, so every push would open another one, and browsers cap
      * concurrent streams at around a hundred. */
     sctx->pending_send_fin = 0;
+    /* Read before starting: once started, the worker may free sctx. */
+    const int one_shot = sctx->pending_send_fin;
 
     status = MsQuic->StreamStart(quic_stream,
                                   QUIC_STREAM_START_FLAG_IMMEDIATE);
@@ -1188,18 +1240,10 @@ int32_t wt_stream_manager_send(
                      status, (unsigned long long)stream_id);
         sctx->pending_send = NULL;
         sm_send_req_free(req, "stream_start_failed");
-        /* Same rule as every other closer: out of the slot first, then
-         * StreamClose (see "Handle lifetime" above). */
-        sm_lock(mgr);
-        mgr->streams[slot].in_use = false;
-        mgr->streams[slot].quic_stream = NULL;
-        mgr->streams[slot].id = 0;
-        atomic_fetch_sub(&mgr->active_streams, 1);
-        sm_unlock(mgr);
-        MsQuic->StreamClose(quic_stream);
-        free(sctx);
+        sm_abandon_unstarted_stream(mgr, slot, quic_stream, sctx);
         return WT_ERR_SEND_FAILED;
     }
+    sm_unlock(mgr);
 
     // WT_LOG_INFO(
     //     "StreamOpen+Start OK conn=%llu stream_id=%llu app_len=%d "
@@ -1216,7 +1260,7 @@ int32_t wt_stream_manager_send(
     /* pending_send_fin is always 0 now, so the send side stays open and the
      * slot remains eligible for reuse. Kept as a conditional because the flag
      * is still honoured by START_COMPLETE for any future one-shot sender. */
-    if (sctx->pending_send_fin) {
+    if (one_shot) {
         sm_lock(mgr);
         mgr->streams[slot].send_closed = true;
         sm_unlock(mgr);

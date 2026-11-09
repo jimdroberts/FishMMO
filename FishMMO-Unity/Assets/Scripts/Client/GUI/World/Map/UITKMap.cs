@@ -211,7 +211,7 @@ namespace FishMMO.Client
 		/// <summary>Container the filter toggles live in.</summary>
 		private VisualElement filterList;
 
-		/// <summary>Container the point-of-interest group toggles live in, two to a row.</summary>
+		/// <summary>Container the point-of-interest group toggles live in.</summary>
 		private VisualElement placeFilterList;
 
 		/// <summary>Container the note rows live in.</summary>
@@ -889,10 +889,9 @@ namespace FishMMO.Client
 		/// Builds one toggle per marker category, and one per point-of-interest group under PLACES.
 		/// </summary>
 		/// <remarks>
-		/// The place rows are compact, two to a row with a swatch of the group's colour, because there are
-		/// thirteen of them in a side bar 230 points wide: as full rows they would push the notes off the
-		/// panel at 16:9. A panel whose UXML predates the PLACES container gets the place rows in the main
-		/// list instead, so no filter is ever unreachable.
+		/// Each place row carries a swatch of the group's colour, so the list doubles as the legend. A panel
+		/// whose UXML predates the PLACES container gets the place rows in the main list instead, so no
+		/// filter is ever unreachable.
 		/// </remarks>
 		private void BuildFilterToggles()
 		{

@@ -24,8 +24,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// in a live-or-pending arena match is told so rather than silently dropped.
 		/// </para>
 		/// <para>
-		/// Not persisted. The channel exists only for the duration of a match, and a chat history
-		/// query has no team to resolve it against afterwards.
+		/// Written to the chat log like any other player chat, but never relayed between scene
+		/// servers: everyone on a team is in the one arena scene on this server.
 		/// </para>
 		/// </remarks>
 		public bool OnTeamChat(IPlayerCharacter sender, ChatBroadcast msg)
@@ -100,8 +100,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				recipients.Clear();
 			}
 
-			// Nothing to persist.
-			return false;
+			return true;
 		}
 	}
 }

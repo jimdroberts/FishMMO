@@ -88,5 +88,13 @@ namespace FishMMO.Client
 		/// something had gone wrong when nothing had.
 		/// </remarks>
 		Cancelled,
+		/// <summary>
+		/// A web build is downloading the game's content into the browser.
+		/// </summary>
+		DownloadingContent,
+		/// <summary>
+		/// A web build could not finish downloading the game's content.
+		/// </summary>
+		ContentDownloadFailed,
 	}
 }

@@ -141,21 +141,22 @@
     overflow: hidden;
 }
 
+/*
+    Holds everything below the waypoint section. The zero basis is what makes it scroll: without
+    it the view sizes to its content and pushes past the bottom of the side bar, which clips.
+*/
+.map-side-scroll {
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: 0;
+    min-height: 0;
+}
+
 .map-section {
     flex-direction: column;
     padding: 8px;
     margin-bottom: 8px;
     flex-shrink: 0;
-}
-
-/*
-    The notes section takes whatever is left. Its scroll view is the only thing on the panel that
-    can grow without bound, so it is the only thing that should absorb the spare height.
-*/
-.map-section--grow {
-    flex-grow: 1;
-    margin-bottom: 0;
-    overflow: hidden;
 }
 
 .map-section__title {
@@ -168,16 +169,16 @@
     flex-direction: column;
 }
 
+/*
+    No letter spacing: the section's 2px is inherited otherwise, and the names do not fit with it.
+*/
 .map-filter {
     margin-top: 2px;
     margin-bottom: 2px;
     font-size: 11px;
+    letter-spacing: 0;
 }
 
-/*
-    The point-of-interest groups under PLACES: thirteen rows in a 230-point side bar, so two to a
-    row and a size smaller. Full rows pushed the notes off the panel at 16:9.
-*/
 .map-section__subtitle {
     font-size: 10px;
     letter-spacing: 1px;
@@ -185,13 +186,8 @@
     margin-bottom: 2px;
 }
 
-.map-place-filters {
-    flex-direction: row;
-    flex-wrap: wrap;
-}
-
+/* The point-of-interest groups under PLACES: a size smaller than the rows above them. */
 .map-filter--place {
-    width: 50%;
     margin-top: 1px;
     margin-bottom: 1px;
     font-size: 10px;
@@ -231,11 +227,6 @@
 /* ═══════════════════════════════════════════════════════════
    NOTES
    ═══════════════════════════════════════════════════════════ */
-
-.map-note-scroll {
-    flex-grow: 1;
-    min-height: 60px;
-}
 
 .map-note-list {
     flex-direction: column;

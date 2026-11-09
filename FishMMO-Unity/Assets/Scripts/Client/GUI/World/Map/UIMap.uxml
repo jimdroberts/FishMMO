@@ -52,15 +52,7 @@
 
             <ui:VisualElement name="map-side" class="map-side">
 
-                <!-- Legend and filters -->
-                <ui:VisualElement name="map-legend-section" class="fish-section map-section">
-                    <ui:Label class="fish-label fish-label--title map-section__title" text="SHOW" />
-                    <ui:VisualElement name="map-filters" class="map-filters" />
-                    <ui:Label class="fish-label fish-label--caption map-section__subtitle" text="PLACES" />
-                    <ui:VisualElement name="map-place-filters" class="map-filters map-place-filters" />
-                </ui:VisualElement>
-
-                <!-- Waypoint: the selected fast-travel point. Built by C# from the clicked marker. -->
+                <!-- Waypoint: the selected fast-travel point. Outside the scroll view so that a click on a waypoint always shows its result. -->
                 <ui:VisualElement name="map-waypoint-section" class="fish-section map-section">
                     <ui:Label class="fish-label fish-label--title map-section__title" text="WAYPOINT" />
                     <ui:Label name="map-waypoint-name" class="fish-label fish-label--accent map-waypoint__name" text="" />
@@ -69,25 +61,35 @@
                     <ui:Label name="map-waypoint-hint" class="fish-hint map-waypoint__hint" text="" />
                 </ui:VisualElement>
 
-                <!-- Notes -->
-                <ui:VisualElement name="map-notes-section" class="fish-section map-section map-section--grow">
-                    <ui:Label class="fish-label fish-label--title map-section__title" text="NOTES" />
+                <!-- The filters and notes need more height than the panel has, so they scroll together. -->
+                <ui:ScrollView name="map-side-scroll" class="fish-scroll map-side-scroll"
+                               vertical-scroller-visibility="Auto"
+                               horizontal-scroller-visibility="Hidden"
+                               mode="Vertical">
 
-                    <ui:ScrollView name="map-note-scroll" class="fish-scroll map-note-scroll"
-                                   vertical-scroller-visibility="Auto"
-                                   horizontal-scroller-visibility="Hidden"
-                                   mode="Vertical">
-                        <ui:VisualElement name="map-note-list" class="map-note-list" />
-                    </ui:ScrollView>
-
-                    <ui:VisualElement name="map-note-editor" class="map-note-editor">
-                        <ui:TextField name="map-note-title" class="fish-input map-note-field" placeholder-text="Title" />
-                        <ui:TextField name="map-note-text" class="fish-input map-note-field map-note-field--body" placeholder-text="Note" multiline="true" />
-                        <ui:VisualElement name="map-note-colors" class="map-note-colors" />
-                        <ui:Button name="map-note-add" class="fish-button fish-button--primary map-note-add" text="PIN NOTE" />
-                        <ui:Label name="map-note-hint" class="fish-hint map-note-hint" text="" />
+                    <!-- Legend and filters -->
+                    <ui:VisualElement name="map-legend-section" class="fish-section map-section">
+                        <ui:Label class="fish-label fish-label--title map-section__title" text="SHOW" />
+                        <ui:VisualElement name="map-filters" class="map-filters" />
+                        <ui:Label class="fish-label fish-label--caption map-section__subtitle" text="PLACES" />
+                        <ui:VisualElement name="map-place-filters" class="map-filters" />
                     </ui:VisualElement>
-                </ui:VisualElement>
+
+                    <!-- Notes -->
+                    <ui:VisualElement name="map-notes-section" class="fish-section map-section">
+                        <ui:Label class="fish-label fish-label--title map-section__title" text="NOTES" />
+                        <ui:VisualElement name="map-note-list" class="map-note-list" />
+
+                        <ui:VisualElement name="map-note-editor" class="map-note-editor">
+                            <ui:TextField name="map-note-title" class="fish-input map-note-field" placeholder-text="Title" />
+                            <ui:TextField name="map-note-text" class="fish-input map-note-field map-note-field--body" placeholder-text="Note" multiline="true" />
+                            <ui:VisualElement name="map-note-colors" class="map-note-colors" />
+                            <ui:Button name="map-note-add" class="fish-button fish-button--primary map-note-add" text="PIN NOTE" />
+                            <ui:Label name="map-note-hint" class="fish-hint map-note-hint" text="" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                </ui:ScrollView>
 
             </ui:VisualElement>
         </ui:VisualElement>

@@ -500,6 +500,19 @@ static void on_h3_error(void* ctx, int error_code, const char* message)
     }
 }
 
+/* The browser closed its WebTransport session (see h3_notify_session_closed).
+ * Disconnecting is what it would otherwise wait out: the same path a native
+ * client's disconnect ends up on, reported to the application the same way. */
+static void on_h3_session_closed(void* ctx)
+{
+    wt_server_conn_t* sconn = (wt_server_conn_t*)ctx;
+    WT_LOG_INFO("Client %llu closed its WebTransport session",
+                (unsigned long long)sconn->id);
+    if (sconn->owner) {
+        wt_server_disconnect_impl(sconn->owner, sconn->id);
+    }
+}
+
 /* ═══════════════════════════════════════════════════════════════
  * INTERNAL API
  * ═══════════════════════════════════════════════════════════════ */
@@ -2216,6 +2229,7 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
             /* Configure the session completely, THEN publish it: the poll
              * thread reads sconn->h3_session (inside the gate) and must
              * never see a half-initialised one. */
+            h3->on_session_closed = on_h3_session_closed;
             if (sconn->owner) {
                 h3->max_stream_ctx = sconn->owner->limits.max_h3_streams_per_conn;
                 /* Copy allowed origins from server config for CORS validation.

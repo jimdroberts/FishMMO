@@ -121,6 +121,10 @@ typedef void (*h3_on_error_fn)(
     int         error_code,
     const char* message);
 
+/** Server: the peer ended an established WebTransport session.
+ *  Runs on the connection's QUIC worker, at most once per session. */
+typedef void (*h3_on_session_closed_fn)(void* context);
+
 /* ── Per-Stream Context (for HTTP/3 frame processing) ───────── */
 
 typedef struct h3_stream_ctx_s {
@@ -195,6 +199,7 @@ typedef struct h3_session_s {
     /* Callbacks */
     h3_on_session_ready_fn  on_ready;
     h3_on_error_fn          on_error;
+    h3_on_session_closed_fn on_session_closed;  /* server only; may be NULL */
     void*                   callback_ctx;
 
     /**
@@ -271,6 +276,9 @@ typedef struct h3_session_s {
      * atomic_exchange; the loser does not complete, so a rescue and a
      * worker-side completion can never both create a session. */
     atomic_int               completing;
+    /* Server: 1 once on_session_closed has been raised.  A FIN and a later
+     * abort of the CONNECT stream must not report the same session twice. */
+    atomic_int               session_closed;
     /* Server: set by h3_server_native_rescue (application thread) before it
      * calls on_ready, so on_h3_session_ready hands the streams over with
      * h3_server_adopt_streams instead of switching their handlers.  Read

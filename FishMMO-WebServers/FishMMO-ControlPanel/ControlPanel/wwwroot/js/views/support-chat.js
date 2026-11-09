@@ -25,6 +25,7 @@ const CHANNELS = [
 	{ value: 7, name: 'System' },
 	{ value: 8, name: 'Command' },
 	{ value: 9, name: 'Discord' },
+	{ value: 10, name: 'Team' },
 ];
 
 /* Tone carries the one distinction that changes how a message reads: who could hear it.
