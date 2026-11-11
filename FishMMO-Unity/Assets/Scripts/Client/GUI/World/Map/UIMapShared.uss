@@ -61,6 +61,21 @@
 }
 
 /*
+    The facing arrow (UITKMapView.DrawHeading) on a character's dot: players and NPCs. A child of the
+    icon, sat just above its top edge, so the icon's turn by the character's facing swings it round
+    the dot and it points the way the character faces. Painted in its own colour with a dark edge.
+*/
+.map-marker__heading {
+    position: absolute;
+    left: 50%;
+    bottom: 100%;
+    width: 8px;
+    height: 7px;
+    translate: -50% 2px;
+    color: var(--text-bright);
+}
+
+/*
     The name beside the icon. Out of flow — hung off the icon's right edge and centred on it —
     so that the row stays exactly the icon's size and a long name cannot move the marker; see
     .map-marker. It is still part of the marker: UITKMapView counts everything a marker draws as
@@ -117,6 +132,11 @@
     border-width: 2px;
 }
 
+/* The player's own arrow in the ring's colour, so it reads as theirs among the others. */
+.map-marker--self .map-marker__heading {
+    color: var(--brand-500);
+}
+
 .map-marker--partymember .map-marker__icon { background-color: var(--map-party); }
 .map-marker--guildmember .map-marker__icon { background-color: var(--map-guild); }
 .map-marker--friendlyplayer .map-marker__icon { background-color: var(--map-friendly); }
@@ -157,6 +177,25 @@
     border-radius: 2px;
     rotate: 45deg;
     border-width: 2px;
+}
+
+/*
+    The waypoint chosen for fast travel (UITKMapView.SelectedWaypointIndex): its own colour, a bright
+    ring, a little larger, and its name in the same colour, so the place the travel button goes to
+    stands out among the other waypoints. After the waypoint rule, which it overrides. A waypoint
+    drawn from a sprite takes the colour as its tint (the view drops its inline tint while selected).
+*/
+.map-marker--selected .map-marker__icon {
+    background-color: var(--map-waypoint-selected);
+    -unity-background-image-tint-color: var(--map-waypoint-selected);
+    border-color: var(--text-bright);
+    border-width: 2px;
+    scale: 1.3 1.3;
+}
+
+.map-marker--selected .map-marker__label {
+    color: var(--map-waypoint-selected);
+    -unity-font-style: bold;
 }
 
 /*

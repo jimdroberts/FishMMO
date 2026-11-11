@@ -463,28 +463,28 @@ namespace FishMMO.Client
 		private static readonly ProfilerMarker CandidatesMarker = new ProfilerMarker("AmbientLifeSystem.Candidates");
 		private static readonly ProfilerMarker MotionMarker = new ProfilerMarker("AmbientLifeSystem.Motion");
 
+		/// <summary>The one camera ambient life is worked out for and drawn by: the main game camera.</summary>
+		private static bool IsMainCamera(Camera camera)
+		{
+			return camera != null && camera.cameraType == CameraType.Game && camera == Camera.main;
+		}
+
 		private static void OnBeginContextRendering(ScriptableRenderContext context, List<Camera> cameras)
 		{
 			using (ContextMarker.Auto())
 			{
+				/* Only the main game camera ever works out the frame's animals, and only it draws them. Any other game camera
+				 * (the minimap's, the equipment preview's) is rendered on its own, before the main camera, on a cadence of its
+				 * own: taken as "the first game camera", it worked the frame out from its own eye and view, high over the
+				 * player, and the main camera then drew that list. Every frame the minimap rendered (30 a second against a
+				 * 60 Hz game: every other frame) the animals in front of the player were missing, perched or flying alike. */
 				Camera eye = null;
 				foreach (Camera camera in cameras)
 				{
-					if (camera != null && camera.cameraType == CameraType.Game && camera == Camera.main)
+					if (IsMainCamera(camera))
 					{
 						eye = camera;
 						break;
-					}
-				}
-				if (eye == null)
-				{
-					foreach (Camera camera in cameras)
-					{
-						if (camera != null && (camera.cameraType == CameraType.Game || camera.cameraType == CameraType.SceneView))
-						{
-							eye = camera;
-							break;
-						}
 					}
 				}
 				if (eye != null)
@@ -496,6 +496,7 @@ namespace FishMMO.Client
 
 		private static void UpdateFrame(Camera camera)
 		{
+			// Once a frame, for the main camera, the only one that calls this (IsMainCamera).
 			if (updatedFrame == Time.frameCount)
 			{
 				return;
@@ -1372,11 +1373,8 @@ namespace FishMMO.Client
 		private static void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera)
 		{
 			using var hookMarkerScope = HookProfiling.Marker.Auto();
-			if (camera.cameraType != CameraType.Game && camera.cameraType != CameraType.SceneView)
-			{
-				return;
-			}
-			if (camera.cameraType == CameraType.Game && camera != Camera.main)
+			// The main game camera only: not the minimap's or the equipment preview's, nor the editor's scene view.
+			if (!IsMainCamera(camera))
 			{
 				return;
 			}

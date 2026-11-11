@@ -43,7 +43,7 @@ namespace FishMMO.Client
 		public const float MaximumLookSensitivity = 20.0f;
 
 		/// <summary>
-		/// Degrees the view turns per mouse count at sensitivity 1, at <see cref="ReferenceVerticalFieldOfView"/>.
+		/// Degrees the view turns per mouse count at sensitivity 1.
 		/// </summary>
 		/// <remarks>
 		/// The common scale for mouse look in first-person games, so a sensitivity a player already uses carries
@@ -51,62 +51,30 @@ namespace FishMMO.Client
 		/// </remarks>
 		private const float DegreesPerCount = 0.022f;
 
-		/// <summary>
-		/// The vertical field of view the scale is matched at: 90 degrees across a 4:3 screen, 73.74 degrees up it.
-		/// </summary>
-		private const float ReferenceVerticalFieldOfView = 73.7398f;
-
-		/// <summary>
-		/// Degrees a second the view turns at full deflection of a stick, per unit of sensitivity, at the reference
-		/// field of view: 150 at the default.
-		/// </summary>
+		/// <summary>Degrees a second the view turns at full deflection of a stick, per unit of sensitivity: 150 at the default.</summary>
 		private const float StickDegreesPerSecond = 75.0f;
 
 		/// <summary>The sensitivity in effect, clamped. Read every frame by the look input.</summary>
 		public static float LookSensitivity { get; private set; } = DefaultLookSensitivity;
 
 		/// <summary>
-		/// Degrees the view turns for one count of mouse movement, at a camera's vertical field of view.
+		/// Degrees the view turns for one count of mouse movement: sensitivity × 0.022.
 		/// </summary>
 		/// <remarks>
+		/// The common mouse-look scale, so the same number turns the view by the same amount for the same movement of
+		/// the mouse. Nothing is scaled by frame time, and the counts come in raw (the browser is asked for
+		/// unaccelerated movement, see PointerLockGuard.jslib).
 		/// <para>
-		/// Sensitivity × 0.022 degrees per count, the common mouse-look scale, so the same number turns the
-		/// view by the same amount for the same movement of the mouse; nothing is scaled by frame time, and the
-		/// counts come in raw (the browser is asked for unaccelerated movement, see PointerLockGuard.jslib).
-		/// </para>
-		/// <para>
-		/// Then scaled by the field of view so the feel stays constant: by tan(fov/2) against the reference's, the
-		/// ratio of the two views' focal lengths. What that holds fixed is how far a point near the crosshair
-		/// moves across the screen per count, so a narrower view turns more slowly and a wider one faster, and at
-		/// the reference view it is exactly 0.022 degrees per count. Recomputed from the live camera every frame,
-		/// so a zoom or a field-of-view setting keeps it constant too.
+		/// Not scaled by the field of view. It was, by tan(fov/2) against a 73.74-degree reference, to keep the picture
+		/// moving the same at any view: at the camera's 60 degrees that turned 23% less per count than the same number
+		/// elsewhere, and a player's usual sensitivity felt slow (2026-11-11), so the scale is the plain one.
 		/// </para>
 		/// </remarks>
-		/// <param name="verticalFieldOfView">The camera's <see cref="Camera.fieldOfView"/>, in degrees.</param>
-		public static float MouseDegreesPerCount(float verticalFieldOfView)
-		{
-			return LookSensitivity * DegreesPerCount * FieldOfViewScale(verticalFieldOfView);
-		}
+		public static float MouseDegreesPerCount => LookSensitivity * DegreesPerCount;
 
-		/// <summary>Degrees a second the view turns at full deflection of a stick, at a camera's vertical field of view.</summary>
+		/// <summary>Degrees a second the view turns at full deflection of a stick.</summary>
 		/// <remarks>A stick reports a position, not a movement, so unlike the mouse this is a rate, scaled by frame time.</remarks>
-		public static float StickDegreesPerSecondAt(float verticalFieldOfView)
-		{
-			return LookSensitivity * StickDegreesPerSecond * FieldOfViewScale(verticalFieldOfView);
-		}
-
-		/// <summary>
-		/// How much faster the view turns at a vertical field of view than at the reference one: the ratio of the
-		/// tangents of the half-angles. 1 for anything that is not a usable perspective angle.
-		/// </summary>
-		public static float FieldOfViewScale(float verticalFieldOfView)
-		{
-			if (float.IsNaN(verticalFieldOfView) || verticalFieldOfView <= 1f || verticalFieldOfView >= 179f)
-			{
-				return 1f;
-			}
-			return Mathf.Tan(0.5f * verticalFieldOfView * Mathf.Deg2Rad) / Mathf.Tan(0.5f * ReferenceVerticalFieldOfView * Mathf.Deg2Rad);
-		}
+		public static float StickDegreesPerSecondAtFullDeflection => LookSensitivity * StickDegreesPerSecond;
 
 		/// <summary>
 		/// The saved sensitivity, carrying over one stored under the old meaning.
@@ -114,16 +82,15 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// The setting used to be the degrees turned per count outright (0.1 to 1, default 0.5), stored under
 		/// <see cref="ClientSettings.LegacyLookSensitivityKey"/>. It is converted once into the sensitivity that
-		/// turns the same amount per count at the camera's authored 60-degree view, so nobody's view changes
-		/// speed under them except where the old value lies past the new maximum; the old key is then removed.
+		/// turns the same amount per count, so nobody's view changes speed under them except where the old value lies
+		/// past the new maximum; the old key is then removed.
 		/// </remarks>
 		public static float LoadSaved()
 		{
 			if (!ClientSettings.Exists(ClientSettings.LookSensitivityKey) && ClientSettings.Exists(ClientSettings.LegacyLookSensitivityKey))
 			{
 				float degreesPerCount = ClientSettings.GetFloat(ClientSettings.LegacyLookSensitivityKey, 0.5f, 0.001f, 100f);
-				float carried = Mathf.Clamp(degreesPerCount / (DegreesPerCount * FieldOfViewScale(LegacyFieldOfView)),
-					MinimumLookSensitivity, MaximumLookSensitivity);
+				float carried = Mathf.Clamp(degreesPerCount / DegreesPerCount, MinimumLookSensitivity, MaximumLookSensitivity);
 				ClientSettings.Set(ClientSettings.LookSensitivityKey, carried);
 				ClientSettings.Remove(ClientSettings.LegacyLookSensitivityKey);
 				Log.Debug("ClientCameraSettings", $"Look sensitivity {degreesPerCount} degrees per count carried over as {carried}.");
@@ -134,9 +101,6 @@ namespace FishMMO.Client
 				MinimumLookSensitivity,
 				MaximumLookSensitivity);
 		}
-
-		/// <summary>The main camera's authored vertical field of view (ClientPreboot), at which old values are carried over.</summary>
-		private const float LegacyFieldOfView = 60f;
 
 		/// <summary>
 		/// Applies the stored look sensitivity.
@@ -175,7 +139,7 @@ namespace FishMMO.Client
 		/// reach the menu to put it back, and zero makes the camera immovable.
 		/// <para>
 		/// The look input now arrives at the camera already in degrees (PlayerInputController converts counts with
-		/// <see cref="MouseDegreesPerCount"/>, which needs the live field of view), so the camera's own
+		/// <see cref="MouseDegreesPerCount"/>), so the camera's own
 		/// <see cref="KCCCamera.RotationSpeed"/> multiplier is held at 1 rather than carrying the sensitivity.
 		/// </para>
 		/// </remarks>

@@ -789,16 +789,13 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// This frame's look, in degrees: mouse counts at the sensitivity's degrees per count, and the stick at its
-		/// rate for the frame's length, both at the live camera's field of view (ClientCameraSettings).
+		/// This frame's look, in degrees: mouse counts at the sensitivity's degrees per count, and the stick at its rate for
+		/// the frame's length (ClientCameraSettings).
 		/// </summary>
 		private Vector3 LookDegrees()
 		{
-			// The KCCCamera lives on the main camera (one camera, in ClientPreboot); Camera.main is cached by Unity.
-			Camera view = Camera.main;
-			float fieldOfView = view != null ? view.fieldOfView : 0f;
-			Vector2 degrees = lookInput * ClientCameraSettings.MouseDegreesPerCount(fieldOfView)
-				+ stickLookInput * (ClientCameraSettings.StickDegreesPerSecondAt(fieldOfView) * Time.unscaledDeltaTime);
+			Vector2 degrees = lookInput * ClientCameraSettings.MouseDegreesPerCount
+				+ stickLookInput * (ClientCameraSettings.StickDegreesPerSecondAtFullDeflection * Time.unscaledDeltaTime);
 			return new Vector3(degrees.x, degrees.y, 0f);
 		}
 

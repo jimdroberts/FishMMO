@@ -56,6 +56,19 @@ namespace FishMMO.Client
 		/// <summary>USS class on a marker's icon.</summary>
 		public const string MarkerIconClass = "map-marker__icon";
 
+		/// <summary>Class of the arrow on a character's dot that shows which way it faces.</summary>
+		public const string MarkerHeadingClass = "map-marker__heading";
+
+		/// <summary>Modifier on the waypoint marker chosen for fast travel (<see cref="SelectedWaypointIndex"/>).</summary>
+		public const string MarkerSelectedClass = "map-marker--selected";
+
+		/// <summary>
+		/// The waypoint chosen for fast travel, by its index in the scene; -1 for none. Its marker wears
+		/// <see cref="MarkerSelectedClass"/>, so the one the travel button will take the player to stands out among the rest.
+		/// Applied with the markers' visuals, on the next marker refresh.
+		/// </summary>
+		public int SelectedWaypointIndex { get; set; } = -1;
+
 		/// <summary>USS class added to a marker that has been pinned to the frame edge.</summary>
 		public const string MarkerClampedClass = "map-marker--clamped";
 
@@ -647,12 +660,18 @@ namespace FishMMO.Client
 				parts.TypeClass = typeClass;
 			}
 
+			bool selected = snapshot.IsWaypoint && snapshot.WaypointIndex == SelectedWaypointIndex;
+			element.EnableInClassList(MarkerSelectedClass, selected);
+
 			parts.Icon.style.width = snapshot.Size;
 			parts.Icon.style.height = snapshot.Size;
 			parts.Icon.style.backgroundImage = snapshot.Icon != null
 				? new StyleBackground(snapshot.Icon)
 				: new StyleBackground(StyleKeyword.Null);
-			parts.Icon.style.unityBackgroundImageTintColor = snapshot.Tint;
+			// The selected waypoint's sprite takes the selection colour from the stylesheet, which an inline tint would hide.
+			parts.Icon.style.unityBackgroundImageTintColor = selected
+				? new StyleColor(StyleKeyword.Null)
+				: new StyleColor(snapshot.Tint);
 
 			/* A clamped marker points at where its object actually is; an unclamped one shows the
 			 * object's heading. Rotating a clamped marker by the object's heading instead would
@@ -678,6 +697,8 @@ namespace FishMMO.Client
 				 * beside it. */
 				parts.Icon.style.rotate = StyleKeyword.Null;
 			}
+			// The arrow only where the turn is a facing: an edge marker's turn points at its object instead.
+			parts.Heading.style.display = !clamped && snapshot.HasFacing ? DisplayStyle.Flex : DisplayStyle.None;
 
 			bool hasLabel = !clamped && !string.IsNullOrEmpty(snapshot.Label);
 			parts.Label.style.display = hasLabel ? DisplayStyle.Flex : DisplayStyle.None;
@@ -710,11 +731,40 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// The facing arrow: a small triangle pointing away from the dot, in the element's colour with a dark edge so it
+		/// shows over snow and sand alike (as the dot's own ring does).
+		/// </summary>
+		private static void DrawHeading(MeshGenerationContext context)
+		{
+			VisualElement element = context.visualElement;
+			Rect rect = element.contentRect;
+			if (rect.width <= 0.0f || rect.height <= 0.0f)
+			{
+				return;
+			}
+			Painter2D painter = context.painter2D;
+			painter.fillColor = element.resolvedStyle.color;
+			painter.strokeColor = new Color(0.0f, 0.0f, 0.0f, 0.85f);
+			painter.lineWidth = 1.0f;
+			painter.lineJoin = LineJoin.Miter;
+			painter.BeginPath();
+			painter.MoveTo(new Vector2(rect.width * 0.5f, 0.5f));
+			painter.LineTo(new Vector2(rect.width - 0.5f, rect.height - 0.5f));
+			painter.LineTo(new Vector2(0.5f, rect.height - 0.5f));
+			painter.ClosePath();
+			painter.Fill();
+			painter.Stroke();
+		}
+
 		/// <summary>The pieces of one marker element, cached so they are not queried per frame.</summary>
 		private sealed class MarkerElements
 		{
 			/// <summary>The icon, which carries the sprite and the rotation.</summary>
 			public VisualElement Icon;
+
+			/// <summary>The facing arrow on the icon's edge, shown for a marker with a facing.</summary>
+			public VisualElement Heading;
 
 			/// <summary>The label drawn beside the icon.</summary>
 			public Label Label;
@@ -767,6 +817,17 @@ namespace FishMMO.Client
 			icon.AddToClassList(MarkerIconClass);
 			root.Add(icon);
 
+			/* The facing arrow, a child of the icon so the icon's turn by the facing (ApplyMarkerVisuals) swings it round
+			 * the dot: the dots are round, so turning the icon alone showed nothing. */
+			VisualElement heading = new VisualElement()
+			{
+				pickingMode = PickingMode.Ignore,
+			};
+			heading.AddToClassList(MarkerHeadingClass);
+			heading.generateVisualContent += DrawHeading;
+			heading.style.display = DisplayStyle.None;
+			icon.Add(heading);
+
 			Label label = new Label()
 			{
 				pickingMode = PickingMode.Ignore,
@@ -777,6 +838,7 @@ namespace FishMMO.Client
 			root.userData = new MarkerElements()
 			{
 				Icon = icon,
+				Heading = heading,
 				Label = label,
 			};
 

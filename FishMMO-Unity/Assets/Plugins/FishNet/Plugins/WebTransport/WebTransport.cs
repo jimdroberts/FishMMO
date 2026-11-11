@@ -37,17 +37,25 @@ namespace FishNet.Transporting.WebTransport
 	{
 		#region Configuration
 		/// <summary>
-		/// Maximum application payload for one unreliable datagram.
+		/// Maximum application payload for one unreliable datagram, on every side: game server, desktop client and
+		/// web client alike.
 		/// </summary>
 		/// <remarks>
-		/// QUIC guarantees a 1200-byte path (RFC 9000 §14), but that is the
-		/// size of the whole UDP datagram, not of the payload we may put in
-		/// it. Deduct the 1-RTT packet header, the DATAGRAM frame header, and
-		/// the AEAD tag, then the HTTP/3 Datagram Quarter Stream ID that a
-		/// browser session adds (RFC 9297 §2.1). Reporting the full 1200 here
-		/// produced datagrams the transport could not actually send.
+		/// QUIC guarantees a 1200-byte path (RFC 9000 §14), but that is the size of the whole UDP datagram, not of
+		/// the payload we may put in it: the 1-RTT packet header, the DATAGRAM frame header, the AEAD tag and the
+		/// HTTP/3 Quarter Stream ID a browser session adds (RFC 9297 §2.1) come out of it, which left 1150.
+		/// <para>
+		/// 1024 is the smallest limit any browser reports for what it will send
+		/// (<c>WebTransportDatagramDuplexStream.maxDatagramSize</c>), measured 2026-11-11: Firefox 159 reports 1024,
+		/// Chrome 157, Brave and Opera 1211. A datagram over a browser's reported limit may be discarded without an
+		/// error. Measured on a local 1452-byte path, every one of them in fact sent up to 1200 and received
+		/// everything up to 1400 (each advertises a max_datagram_frame_size of 64 KiB), so 1024 leaves room on
+		/// every side; one figure for server and client keeps it from depending on which browser a player uses.
+		/// The plugin still moves anything over a browser's live limit onto the reliable stream
+		/// (WebTransport.jslib, WTSendDatagram).
+		/// </para>
 		/// </remarks>
-		private const int DatagramMTU = 1150;
+		private const int DatagramMTU = 1024;
 
 		/// <summary>
 		/// Maximum application payload for one reliable message.
@@ -748,28 +756,8 @@ namespace FishNet.Transporting.WebTransport
 		/// <param name="channel">0 = reliable (stream), 1 = unreliable (datagram).</param>
 		public override int GetMTU(byte channel)
 		{
-			return channel == 1 ? DatagramSendLimit : this.streamMTU;
+			return channel == 1 ? DatagramMTU : this.streamMTU;
 		}
-
-		/// <summary>
-		/// The largest datagram a browser's WebTransport will send (<c>datagrams.maxDatagramSize</c>), as measured.
-		/// </summary>
-		/// <remarks>
-		/// Measured 2026-11-11 against the live game server: Firefox 159 reports 1024 and Chrome 157 reports 1210. A
-		/// datagram over the browser's limit is discarded without an error (the write still resolves), so with
-		/// <see cref="DatagramMTU"/> 1150 every unreliable batch of 1025-1150 bytes from Firefox was lost: the server ran
-		/// those ticks without the client's input and corrected it, which played as input duplicated or reconciled in
-		/// Firefox only. FishNet reads the MTU once, before any session exists, so this cannot wait for the browser's
-		/// own figure; the plugin (WebTransport.jslib, WTSendDatagram) still moves anything over the live limit onto
-		/// the reliable stream.
-		/// </remarks>
-		private const int BrowserDatagramMTU = 1024;
-
-#if UNITY_WEBGL && !UNITY_EDITOR
-		private const int DatagramSendLimit = BrowserDatagramMTU < DatagramMTU ? BrowserDatagramMTU : DatagramMTU;
-#else
-		private const int DatagramSendLimit = DatagramMTU;
-#endif
 		#endregion
 	}
 }

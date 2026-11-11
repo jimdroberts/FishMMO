@@ -134,7 +134,9 @@ namespace FishMMO.Client
 					 * MapMarkerSnapshot.TracksSource. */
 					TracksSource = exact,
 					FacingDegrees = marker.FacingDegrees,
-					HasFacing = exact && IsCharacterRelationship(relationship),
+					// Every character, players and NPCs alike (UITKMapView draws it as an arrow on the dot); never a
+					// building or a place, whose transform's turn means nothing on a map.
+					HasFacing = exact && marker.Character != null,
 					Type = ResolveType(marker, relationship),
 					Relationship = relationship,
 					/* Resolved, not the authored field: a marker whose object supplies its own icon
@@ -324,16 +326,6 @@ namespace FishMMO.Client
 				case MapRelationship.HostilePlayer: return MapMarkerType.HostilePlayer;
 				default: return marker.Type;
 			}
-		}
-
-		/// <summary>
-		/// Whether a relationship describes a player character, which is drawn with a heading.
-		/// </summary>
-		/// <param name="relationship">The relationship to test.</param>
-		/// <returns>True for anything that is a character.</returns>
-		private static bool IsCharacterRelationship(MapRelationship relationship)
-		{
-			return relationship != MapRelationship.NonPlayer;
 		}
 
 		/// <summary>

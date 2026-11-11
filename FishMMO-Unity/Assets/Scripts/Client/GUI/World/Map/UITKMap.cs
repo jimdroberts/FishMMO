@@ -157,6 +157,9 @@ namespace FishMMO.Client
 		/// <summary>The map view mounted into the panel.</summary>
 		private UITKMapView mapView;
 
+		/// <summary>The dial pointing at the planet's north (<see cref="TrueNorth"/>), over the map's corner.</summary>
+		private MapCompass compass;
+
 		/// <summary>The waypoint section container.</summary>
 		private VisualElement waypointSection;
 
@@ -299,6 +302,9 @@ namespace FishMMO.Client
 			mapView.RegisterCallback<PointerLeaveEvent>(MapView_OnPointerLeave);
 			host.Clear();
 			host.Add(mapView);
+			// After the map, so it draws over it.
+			compass = new MapCompass();
+			host.Add(compass);
 
 			titleLabel = root.Q<Label>(TITLE_NAME);
 			subtitleLabel = root.Q<Label>(SUBTITLE_NAME);
@@ -557,6 +563,14 @@ namespace FishMMO.Client
 		private void ApplyView()
 		{
 			mapView.View = new MapViewTransform(center, zoom, 0.0f);
+			if (compass != null)
+			{
+				// North where the map is looking: near a pole it turns across a scene. The character's scene is the one shown.
+				UnityEngine.SceneManagement.Scene scene = Character != null && Character.Transform != null
+					? Character.Transform.gameObject.scene
+					: default;
+				compass.SetNorth(mapView.View.WorldToViewAngle(TrueNorth.BearingAt(scene, center)));
+			}
 			mapView.Fog = ClientMapSystem.Fog;
 
 			if (mapView.MapTexture != ClientMapSystem.MapImage)
@@ -1173,6 +1187,7 @@ namespace FishMMO.Client
 			 * NotInScene by the server, and that answer names the old scene, which the refusal
 			 * handler ignores. */
 			hasSelectedWaypoint = false;
+			ShowSelectedWaypoint();
 			travelPending = false;
 			ApplySceneToView();
 			CenterOnCharacter();
@@ -1190,7 +1205,22 @@ namespace FishMMO.Client
 		{
 			hasSelectedWaypoint = true;
 			selectedWaypointIndex = waypointIndex;
+			ShowSelectedWaypoint();
 			RefreshWaypointPanel();
+		}
+
+		/// <summary>
+		/// Marks the selected waypoint's marker on the map (UITKMapView.SelectedWaypointIndex), and has the markers redrawn at
+		/// once rather than on the next quarter-second refresh, so the click and the highlight land together.
+		/// </summary>
+		private void ShowSelectedWaypoint()
+		{
+			if (mapView == null)
+			{
+				return;
+			}
+			mapView.SelectedWaypointIndex = hasSelectedWaypoint ? selectedWaypointIndex : -1;
+			nextMarkerRefreshTime = 0.0;
 		}
 
 		/// <summary>

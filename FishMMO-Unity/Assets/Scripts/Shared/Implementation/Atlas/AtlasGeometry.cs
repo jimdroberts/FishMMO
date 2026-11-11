@@ -121,6 +121,40 @@ namespace FishMMO.Shared.Atlas
 			return Offset(footprint.Latitude, footprint.Longitude, eastKm, northKm, radiusKm);
 		}
 
+		/// <summary>
+		/// Which way the globe's north lies at a point of a scene, in degrees clockwise from the scene's +Z: the direction in
+		/// which latitude grows there, through the same projection the scene was cut with (<see cref="SceneToUnit"/>).
+		/// </summary>
+		/// <remarks>
+		/// At the scene's centre it is minus the scene's heading (the heading is which way +Z faces, clockwise from north).
+		/// Away from the centre the meridians close in on the pole, so near a pole north turns across a large scene, which
+		/// is why it is measured at the point rather than taken from the heading. Where the scene was not cut from the globe
+		/// (<paramref name="radiusKm"/> 0), or at the pole itself, the heading alone answers.
+		/// </remarks>
+		/// <param name="xKm">Scene km along X from its centre.</param>
+		/// <param name="zKm">Scene km along Z from its centre.</param>
+		/// <param name="radiusKm">The radius the scene was cut from the globe at (<see cref="WorldAtlasScene.CutRadiusKm"/>).</param>
+		public static float NorthBearing(in AtlasFootprint footprint, double xKm, double zKm, double radiusKm)
+		{
+			double fallback = -footprint.HeadingDegrees;
+			if (radiusKm > 0.0)
+			{
+				// Ten metres either way: far below any scene's size, far above double's rounding of a latitude.
+				const double step = 0.01;
+				FromUnit(SceneToUnit(footprint, xKm + step, zKm, radiusKm), out double east, out _);
+				FromUnit(SceneToUnit(footprint, xKm - step, zKm, radiusKm), out double west, out _);
+				FromUnit(SceneToUnit(footprint, xKm, zKm + step, radiusKm), out double ahead, out _);
+				FromUnit(SceneToUnit(footprint, xKm, zKm - step, radiusKm), out double behind, out _);
+				double alongX = east - west, alongZ = ahead - behind;
+				if (Math.Abs(alongX) + Math.Abs(alongZ) > 1e-12)
+				{
+					fallback = Math.Atan2(alongX, alongZ) * Rad2Deg;
+				}
+			}
+			double wrapped = fallback % 360.0;
+			return (float)(wrapped < 0.0 ? wrapped + 360.0 : wrapped);
+		}
+
 		/// <summary>The four corners of a scene on the globe, counter-clockwise seen from outside.</summary>
 		public static Vector3d[] Corners(in AtlasFootprint footprint, double radiusKm)
 		{

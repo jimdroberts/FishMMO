@@ -253,14 +253,13 @@ object**, not to Unity's global state, and that object does not exist for the wh
 
 - **Look sensitivity** (`Mouse Sensitivity`, 0.05–20, default 2) is held in
   `ClientCameraSettings.LookSensitivity`. `PlayerInputController` turns each frame's mouse counts into
-  degrees with `MouseDegreesPerCount(fov)`: sensitivity × 0.022 × tan(fov/2) / tan(73.74°/2), so the
-  same number turns the view as far per count as on the common mouse-look scale, and the picture
-  moves the same at any field of view. The right stick is a rate, `StickDegreesPerSecondAt(fov)`
-  × frame time. The camera's `RotationSpeed` is held at 1 (its input is already degrees);
+  degrees with `MouseDegreesPerCount`: sensitivity × 0.022, so the same number turns the view as far
+  per count as on the common mouse-look scale (no field-of-view scaling: it made a usual value feel
+  slow at our 60° camera). The right stick is a rate, `StickDegreesPerSecondAtFullDeflection` × frame
+  time. The camera's `RotationSpeed` is held at 1 (its input is already degrees);
   `ApplyLookSensitivity` returns `false` when there is no camera yet, the normal state at boot, and
   `PlayerInputController.Initialize` applies again once the character is in the world. A value saved
-  under the old `Look Sensitivity` key (degrees per count outright) is converted once at 60° and
-  removed. In the browser, PointerLockGuard.jslib asks for raw movement (`unadjustedMovement`).
+  under the old `Look Sensitivity` key (degrees per count outright) is converted once and removed. In the browser, PointerLockGuard.jslib asks for raw movement (`unadjustedMovement`).
   Only `ApplySaved` logs; dragging the slider does not.
 - Sensitivity is observable only while the cursor is locked. With mouse mode on the camera does not
   turn at all, so the slider looks broken if tested there — there is simply no look input to scale.

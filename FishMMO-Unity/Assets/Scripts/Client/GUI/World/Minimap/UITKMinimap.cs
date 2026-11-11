@@ -110,7 +110,7 @@ namespace FishMMO.Client
 		/// <summary>Label showing the player's coordinates.</summary>
 		private Label coordinateLabel;
 
-		/// <summary>The north indicator, rotated to match the view.</summary>
+		/// <summary>The north indicator: an "N" on the map's rim in the planet's north (<see cref="PlaceCompass"/>).</summary>
 		private VisualElement compass;
 
 		/// <summary>Snapshot buffer, reused so a refresh allocates nothing.</summary>
@@ -334,8 +334,38 @@ namespace FishMMO.Client
 
 			if (compass != null)
 			{
-				compass.style.rotate = new StyleRotate(new Rotate(-rotation));
+				PlaceCompass(view.WorldToViewAngle(TrueNorth.BearingAt(Character.Transform.gameObject.scene, center)));
 			}
+		}
+
+		/// <summary>How far in from the map's edge the compass letter sits, in points.</summary>
+		private const float CompassInset = 9.0f;
+
+		/// <summary>
+		/// Puts the "N" on the map's rim in the planet's north (<see cref="TrueNorth"/>), as the view draws it.
+		/// </summary>
+		/// <remarks>
+		/// On the rim rather than spun in a corner: a letter turned in place says nothing about which way north is. Projected
+		/// onto the inset square along the line from the centre, as edge markers are (UITKMapView.ClampToFrame), so it follows
+		/// the frame and stays clear of the corners' rounding. Upright, so it reads at any angle.
+		/// </remarks>
+		/// <param name="northDegrees">North's direction in the view, degrees clockwise from its top.</param>
+		private void PlaceCompass(float northDegrees)
+		{
+			VisualElement frame = compass.parent;
+			float width = frame != null ? frame.layout.width : float.NaN;
+			float height = frame != null ? frame.layout.height : float.NaN;
+			if (float.IsNaN(width) || float.IsNaN(height) || width <= 2.0f * CompassInset || height <= 2.0f * CompassInset)
+			{
+				return;
+			}
+			float radians = northDegrees * Mathf.Deg2Rad;
+			Vector2 direction = new Vector2(Mathf.Sin(radians), -Mathf.Cos(radians));
+			float reachX = (width * 0.5f - CompassInset) / Mathf.Max(1e-4f, Mathf.Abs(direction.x));
+			float reachY = (height * 0.5f - CompassInset) / Mathf.Max(1e-4f, Mathf.Abs(direction.y));
+			float reach = Mathf.Min(reachX, reachY);
+			compass.style.left = width * 0.5f + direction.x * reach;
+			compass.style.top = height * 0.5f + direction.y * reach;
 		}
 
 		/// <summary>

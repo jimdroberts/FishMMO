@@ -93,9 +93,8 @@ namespace FishMMO.Client
 
 			if (mouse != null && mouse.rightButton.isPressed)
 			{
-				// The player's own sensitivity, at this camera's field of view, as the world camera turns.
-				Camera view = Camera.main;
-				float degreesPerCount = ClientCameraSettings.MouseDegreesPerCount(view != null ? view.fieldOfView : 0f);
+				// The player's own sensitivity, as the world camera turns.
+				float degreesPerCount = ClientCameraSettings.MouseDegreesPerCount;
 				Vector2 delta = mouse.delta.ReadValue();
 				yaw += delta.x * degreesPerCount;
 				pitch = Mathf.Clamp(pitch - delta.y * degreesPerCount, -89f, 89f);

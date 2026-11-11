@@ -67,6 +67,24 @@ namespace FishMMO.UnitTests.Weather
 		}
 
 		[Test]
+		public void OnlyTheMainCamera_WorksOutTheFrame()
+		{
+			/* The minimap's camera renders on its own, before the main camera, at its own frame cap. Taken as "the first game
+			 * camera", it worked the frame's animals out from its eye high over the player and the main camera drew that list:
+			 * every frame the minimap rendered, the animals in front of the player were gone (every other frame at 60 Hz). */
+			string source = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), SystemPath));
+			int context = source.IndexOf("private static void OnBeginContextRendering", System.StringComparison.Ordinal);
+			int update = source.IndexOf("private static void UpdateFrame(", System.StringComparison.Ordinal);
+			Assert.That(context, Is.GreaterThan(0));
+			Assert.That(update, Is.GreaterThan(context));
+			string chooser = source.Substring(context, update - context);
+			StringAssert.Contains("if (IsMainCamera(camera))", chooser, "the frame is worked out for the main camera");
+			StringAssert.DoesNotContain("CameraType.SceneView", chooser, "and for no other camera standing in for it");
+			StringAssert.Contains("return camera != null && camera.cameraType == CameraType.Game && camera == Camera.main;", source);
+			StringAssert.Contains("if (!IsMainCamera(camera))", source, "nor is it drawn for any other camera");
+		}
+
+		[Test]
 		public void TheNearestGroup_IsAlwaysDrawn()
 		{
 			Assert.That(AmbientLifeSystem.Admits(900, 0, 400, held: false), Is.True);

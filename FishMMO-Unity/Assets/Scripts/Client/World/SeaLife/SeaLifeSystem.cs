@@ -300,15 +300,13 @@ namespace FishMMO.Client
 		{
 			using var hookMarkerScope = HookProfiling.Marker.Auto();
 			Publish();
-			if (camera.cameraType != CameraType.Game && camera.cameraType != CameraType.SceneView)
+			// The main game camera only: not the minimap's or the equipment preview's (rendered on their own, for a texture),
+			// nor the editor's scene view.
+			if (camera.cameraType != CameraType.Game || camera != Camera.main)
 			{
 				return;
 			}
-			if (camera.cameraType == CameraType.Game && camera != Camera.main)
-			{
-				return;
-			}
-			bool main = camera.cameraType == CameraType.Game;
+			bool main = true;
 			SeaLifeSettings settings = Settings;
 			Shader shader = SeaLifeShader;
 			if (settings == null || settings.Kinds == null)

@@ -746,11 +746,11 @@ var LibraryFishWebTransport = {
         if (!session || !session.wt) return false;
         if (!FishWebTransport._isLive(session)) return false;
 
-        /* Over this browser's own datagram limit: a write would resolve and the datagram be discarded without a
-         * word (Firefox 159 allows 1024 bytes, Chrome 157 1210). Sent on the reliable stream instead, framed as
-         * WTSendStream frames it, so it arrives late rather than never; FishNet takes it on the reliable channel as
-         * it does any message it moved there itself. WebTransport.cs keeps batches under 1024, so this is the
-         * guard for a browser with a smaller limit still. */
+        /* Over this browser's reported datagram limit (maxDatagramSize: Firefox 159 1024, Chrome 157, Brave and
+         * Opera 1211), past which a write may resolve and the datagram be discarded without a word. Sent on the
+         * reliable stream instead, framed as WTSendStream frames it, so it arrives late rather than never; FishNet
+         * takes it on the reliable channel as it does any message it moved there itself. WebTransport.cs caps every
+         * datagram at 1024, the smallest limit measured, so this is the guard for a browser reporting less still. */
         var maxDatagram = session.wt.datagrams ? session.wt.datagrams.maxDatagramSize : 0;
         if (maxDatagram > 0 && length > maxDatagram) {
             if (!session._warnedDatagramSize) {

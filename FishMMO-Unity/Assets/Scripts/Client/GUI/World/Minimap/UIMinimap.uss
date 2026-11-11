@@ -118,13 +118,17 @@
 }
 
 /*
-    The north indicator. Absolutely positioned over the map's top-right corner and counter-rotated
-    by C# when the map turns with the character, so it always points at world north.
+    The north indicator: an "N" on the map's rim, placed by C# (UITKMinimap.PlaceCompass) where the
+    planet's north lies in the view, which turns with the character when the map does. Centred on
+    that point by the translate; starts at the top until the first frame places it.
 */
 .minimap-compass {
     position: absolute;
-    top: 4px;
-    right: 6px;
+    top: 9px;
+    left: 50%;
+    translate: -50% -50%;
+    margin: 0;
+    padding: 0;
     font-size: 11px;
     -unity-font-style: bold;
     color: var(--text-bright);

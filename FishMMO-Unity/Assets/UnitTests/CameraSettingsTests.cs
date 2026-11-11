@@ -107,29 +107,13 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void AMouseCount_TurnsTheCommonScale_AtTheReferenceView()
+		public void AMouseCount_TurnsTheCommonScale()
 		{
-			/* 0.022 degrees per count at sensitivity 1, the common scale for mouse look, at a 90-degree 4:3
-			 * view (73.74 degrees vertical), so a sensitivity a player already uses carries over. */
+			// 0.022 degrees per count at sensitivity 1, the common scale for mouse look, whatever the field of view.
 			ClientCameraSettings.ApplyLookSensitivity(2.0f);
 
-			Assert.That(ClientCameraSettings.MouseDegreesPerCount(73.7398f), Is.EqualTo(0.044f).Within(1e-5f),
-				"two at the reference view is 0.044 degrees a count");
-		}
-
-		[Test]
-		public void TheTurn_FollowsTheFieldOfView_SoThePictureMovesTheSame()
-		{
-			// tan(fov/2) against the reference's: a narrower view turns more slowly, by its focal length.
-			ClientCameraSettings.ApplyLookSensitivity(1.0f);
-
-			float at60 = ClientCameraSettings.MouseDegreesPerCount(60f);
-			Assert.That(at60, Is.EqualTo(0.022f * Mathf.Tan(30f * Mathf.Deg2Rad) / Mathf.Tan(0.5f * 73.7398f * Mathf.Deg2Rad)).Within(1e-6f),
-				"at the world camera's 60 degrees the turn is scaled by tan 30 / tan 36.87");
-			LogAssert.IsTrue(ClientCameraSettings.MouseDegreesPerCount(30f) < at60,
-				"zooming in turns more slowly");
-			LogAssert.AreEqual(1f, ClientCameraSettings.FieldOfViewScale(0f),
-				"no usable view angle leaves the turn unscaled rather than at zero");
+			Assert.That(ClientCameraSettings.MouseDegreesPerCount, Is.EqualTo(0.044f).Within(1e-6f),
+				"two is 0.044 degrees a count");
 		}
 
 		[Test]
@@ -180,12 +164,12 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheLookInput_IsConvertedToDegreesEveryFrame()
 		{
-			/* Pinned in source: the conversion needs the live field of view, so it runs where the camera is
-			 * fed rather than once in the settings, and the stick is a rate scaled by frame time. */
+			/* Pinned in source: counts become degrees where the camera is fed, and the stick is a rate scaled by
+			 * frame time. */
 			string source = ReadSource("Assets/Scripts/Client/Input/PlayerInputController.cs");
 			StringAssert.Contains("Character.KCCPlayer.UpdateCamera(-mouseScrollInput, LookDegrees());", source);
-			StringAssert.Contains("lookInput * ClientCameraSettings.MouseDegreesPerCount(fieldOfView)", source);
-			StringAssert.Contains("ClientCameraSettings.StickDegreesPerSecondAt(fieldOfView) * Time.unscaledDeltaTime", source);
+			StringAssert.Contains("lookInput * ClientCameraSettings.MouseDegreesPerCount", source);
+			StringAssert.Contains("ClientCameraSettings.StickDegreesPerSecondAtFullDeflection * Time.unscaledDeltaTime", source);
 		}
 
 		[Test]
