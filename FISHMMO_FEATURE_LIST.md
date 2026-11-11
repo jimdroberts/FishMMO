@@ -102,7 +102,7 @@
 
 > **Status: every surface the sidebar offers is built against PostgreSQL.** There is **no fake login, no fixture mode and no way to opt into either** — the design mock was deleted, and no operator surface serves fabricated data in any build. A route with no backend would be marked `built: false`, kept out of the sidebar and say so plainly if reached directly rather than erroring or inventing numbers; nothing carries the mark today. Arena history and housing plots have no operator surface.
 
-1. **Authentication** — SRP-6a against the same salt and verifier the game client uses, computed in the browser so the password is never transmitted. Mandatory two-factor above Player, recovery codes, a step-up window for destructive actions, and sessions in `web_sessions` that are revoked the moment an account is banned or its level changes.
+1. **Authentication** — SRP-6a against the same salt and verifier the game client uses, computed in the browser so the password is never transmitted. Opt-in two-factor at registration (in game and on the panel) and from My account, mandatory above Player (promotion refuses an account without it), recovery codes, a step-up window for destructive actions, and sessions in `web_sessions` that are revoked the moment an account is banned or its level changes.
 2. **Registration** — Mirrors the in-game flow step for step, including the one-time handover of the authenticator secret and recovery codes behind a real QR encoder written for the purpose, with a mandatory acknowledgement before the screen can be left.
 3. **Player self-service** — Password, email, two-factor enrolment and reset, recovery-code regeneration, session listing and revocation, and a read-only view of one's own characters.
 4. **Operator character surface** — Search, detail, the session-lease edit lock, field edits, restore and rename. Creating and deleting a character stay in the game, where one transaction owns fourteen sub-entity tables.
@@ -656,7 +656,7 @@ Both login panels additionally report a connection that stopped **without** the 
 
 ### LoginServer Features
 24. **Login Server Registration** — Registers server in DB, generates/rotates HMAC signing keys (AEAD-wrapped via KEK), derives TOTP master key. Periodic heartbeat pulses.  
-25. **Account Creation System** — Per-IP rate limiting with `ExpiringKeyTracker`, per-IP block after N failures, global hourly account creation cap (DoS shield), per-username verification failure lockout (60 min after 5 failures). AES-256-GCM encrypted credential decryption, mandatory TOTP 2FA setup with encrypted secret storage, recovery code generation/hashing, encrypted otpauth URI delivery.  
+25. **Account Creation System** — Per-IP rate limiting with `ExpiringKeyTracker`, per-IP block after N failures, global hourly account creation cap (DoS shield), per-username verification failure lockout (60 min after 5 failures). AES-256-GCM encrypted credential decryption, opt-in TOTP 2FA setup (a register-form toggle, also on the Control Panel) with encrypted secret storage, recovery code generation/hashing, encrypted otpauth URI delivery.  
 26. **Character Create System** — Template-validated character creation with starting equipment/abilities/hotkeys initialization, `MaxCharacters` per account enforcement.  
 27. **Character Select System** — Character listing, selection, and deletion for player accounts.  
 28. **Server Select System** — World server list provisioning from database.  

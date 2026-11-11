@@ -463,8 +463,60 @@ namespace FishNet.Transporting.WebTransport.Client
 #endif
 		}
 
+		/// <summary>
+		/// How many incoming events <see cref="IterateIncoming"/> is dispatching right now (main thread only).
+		/// </summary>
+		private int dispatchDepth;
+
+		/// <summary>A stop asked for while an incoming event was being dispatched, run once it returns.</summary>
+		private bool stopDeferredUntilDispatchEnds;
+
+		/// <summary>True while a stop waits for the incoming event being dispatched to return (see <see cref="StopConnection"/>).</summary>
+		internal bool StopDeferred => this.stopDeferredUntilDispatchEnds;
+
+		/// <summary>
+		/// Stops the connection, but never from inside the dispatch of a received message.
+		/// </summary>
+		/// <remarks>
+		/// Client code routinely disconnects in reaction to what the server sent: every sign-in refusal dialog calls
+		/// ForceDisconnect from the auth-result broadcast's handler. Stopping there ran the whole teardown inside
+		/// FishNet's parse of that packet: the Stopped state reset ClientManager's connection and object caches and
+		/// raised every OnClientConnectionState handler, then FishNet went on parsing the rest of the batch against
+		/// that, and a throw anywhere in it surfaced as "Client encountered an error while parsing data for packetId
+		/// Broadcast". The stop now waits for the event being dispatched to return (the same frame), and the events
+		/// queued behind it belong to a session that is ending, so they are dropped rather than parsed.
+		/// </remarks>
 		internal bool StopConnection()
 		{
+			if (this.dispatchDepth > 0)
+			{
+				if (base.GetConnectionState() == LocalConnectionState.Stopped)
+				{
+					return false;
+				}
+				this.stopDeferredUntilDispatchEnds = true;
+				// What is still queued belongs to the session being stopped: drop it rather than parse it.
+				System.Threading.Interlocked.Increment(ref sessionGeneration);
+				return true;
+			}
+			return StopConnectionNow();
+		}
+
+		/// <summary>Runs a stop deferred by <see cref="StopConnection"/>, once no incoming event is being dispatched.</summary>
+		private void RunDeferredStop()
+		{
+			if (this.dispatchDepth > 0 || !this.stopDeferredUntilDispatchEnds)
+			{
+				return;
+			}
+			this.stopDeferredUntilDispatchEnds = false;
+			StopConnectionNow();
+		}
+
+		private bool StopConnectionNow()
+		{
+			this.stopDeferredUntilDispatchEnds = false;
+
 			// Already fully down — nothing to do.
 			if (base.GetConnectionState() == LocalConnectionState.Stopped)
 			{
@@ -484,7 +536,10 @@ namespace FishNet.Transporting.WebTransport.Client
 			}
 
 			// Drain stale incoming events before shutdown, invoking each so
-			// that unmanaged memory is freed.
+			// that unmanaged memory is freed. The generation moves first, so each one
+			// sees that its session is over and frees without delivering: delivering
+			// here parsed further packets inside whatever called this.
+			System.Threading.Interlocked.Increment(ref sessionGeneration);
 			while (incomingEvents.TryDequeue(out Action act))
 			{
 				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
@@ -530,7 +585,8 @@ namespace FishNet.Transporting.WebTransport.Client
 				$"[FishWT] ForceStopAndReset priorState={base.GetConnectionState()} target={lastConnectTarget}");
 			// Clear guard so StopConnection can run even if a prior stop stalled.
 			System.Threading.Interlocked.Exchange(ref stopGuard, 0);
-			StopConnection();
+			// Immediately, even mid-dispatch: the hop needs the socket down before it starts the next one.
+			StopConnectionNow();
 			// Ensure ready for next StartConnection even if Dispose no-op'd.
 			System.Threading.Interlocked.Exchange(ref this.disposed, 0);
 			System.Threading.Interlocked.Exchange(ref stopGuard, 0);
@@ -554,7 +610,16 @@ namespace FishNet.Transporting.WebTransport.Client
 			while (incomingEvents.TryDequeue(out Action act))
 			{
 				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
-				try { act?.Invoke(); } catch (Exception e) { LogTransportError(e.ToString()); }
+				this.dispatchDepth++;
+				try { act?.Invoke(); }
+				catch (Exception e) { LogTransportError(e.ToString()); }
+				finally { this.dispatchDepth--; }
+				if (this.stopDeferredUntilDispatchEnds)
+				{
+					// A handler asked to disconnect: do it now that its packet is parsed. The stop drains the rest.
+					RunDeferredStop();
+					break;
+				}
 			}
 		}
 
@@ -817,8 +882,11 @@ namespace FishNet.Transporting.WebTransport.Client
 				return;
 			}
 			string url = socket.webglConnectUrl;
+			int gen = socket.sessionGeneration;
 			socket.incomingEvents.Enqueue(() =>
 			{
+				if (gen != socket.sessionGeneration)
+					return;
 				UnityEngine.Debug.Log($"[FishWT] open index={index} url={url}");
 				socket.SetConnectionState(LocalConnectionState.Started, false);
 			});
@@ -837,8 +905,11 @@ namespace FishNet.Transporting.WebTransport.Client
 				return;
 			}
 			string url = socket.webglConnectUrl;
+			int gen = socket.sessionGeneration;
 			socket.incomingEvents.Enqueue(() =>
 			{
+				if (gen != socket.sessionGeneration)
+					return;
 				// Expected socket close on hop/teardown — not a transport failure.
 				socket.LogTransportDebug($"[FishWT] close index={index} url={url}");
 				socket.SetConnectionState(LocalConnectionState.Stopped, false);
@@ -867,8 +938,12 @@ namespace FishNet.Transporting.WebTransport.Client
 			}
 			byte[] buf = new byte[length];
 			System.Runtime.InteropServices.Marshal.Copy(dataPtr, buf, 0, length);
+			int gen = socket.sessionGeneration;
 			socket.incomingEvents.Enqueue(() =>
 			{
+				// A session that has ended delivers nothing: the same rule the native callbacks follow.
+				if (gen != socket.sessionGeneration || socket.GetConnectionState() != LocalConnectionState.Started)
+					return;
 				Transport transport = socket.transport;
 				if (transport == null)
 				{
@@ -902,8 +977,12 @@ namespace FishNet.Transporting.WebTransport.Client
 			// GC pressure; if this becomes a bottleneck, switch to ByteArrayPool.
 			byte[] buf = new byte[length];
 			System.Runtime.InteropServices.Marshal.Copy(dataPtr, buf, 0, length);
+			int gen = socket.sessionGeneration;
 			socket.incomingEvents.Enqueue(() =>
 			{
+				// A session that has ended delivers nothing: the same rule the native callbacks follow.
+				if (gen != socket.sessionGeneration || socket.GetConnectionState() != LocalConnectionState.Started)
+					return;
 				Transport transport = socket.transport;
 				if (transport == null)
 				{
@@ -945,8 +1024,11 @@ namespace FishNet.Transporting.WebTransport.Client
 			// its wait loop instead of spinning until ConnectTimeoutSeconds (20s).
 			string url = socket.webglConnectUrl;
 			string capturedDetail = errorDetail;
+			int gen = socket.sessionGeneration;
 			socket.incomingEvents.Enqueue(() =>
 			{
+				if (gen != socket.sessionGeneration)
+					return;
 				if (!string.IsNullOrEmpty(capturedDetail))
 				{
 					if (capturedDetail.StartsWith("Ready failed:", StringComparison.Ordinal))

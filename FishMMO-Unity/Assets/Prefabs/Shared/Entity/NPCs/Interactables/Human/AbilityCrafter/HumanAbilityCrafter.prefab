@@ -193,7 +193,7 @@ MonoBehaviour:
     ModifierID: 0
     GenderPolicy: 0
     NameFormat: 1
-    TitlePolicy: 1
+    TitlePolicy: 0
     Register: 1
     Profession: 
     MaxTitleLength: 32

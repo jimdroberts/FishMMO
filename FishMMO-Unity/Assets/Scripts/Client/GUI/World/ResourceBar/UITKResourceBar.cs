@@ -93,6 +93,15 @@ namespace FishMMO.Client
 		/// <summary>Gap between neighbouring bars in the default row, in panel points.</summary>
 		private const float ROW_GAP = 6.0f;
 
+		/// <summary>
+		/// Width of each bar in the default row, in panel points: <c>.res-bar</c>'s <c>width</c> in UIResourceBar.uss.
+		/// </summary>
+		/// <remarks>
+		/// Stated here rather than read from the laid-out bar, because the laid-out width depends on where the bar sits
+		/// (see <see cref="PlaceInRow"/>).
+		/// </remarks>
+		private const float BAR_WIDTH = 200.0f;
+
 		/// <summary>Cached reference to this bar's positioned root element.</summary>
 		private VisualElement barRoot;
 
@@ -203,19 +212,19 @@ namespace FishMMO.Client
 
 			float panelWidth = root.layout.width;
 
-			/* Rounded to whole units. The laid-out width is snapped to device pixels and the snap
-			 * depends on where the bar sits: at 2.13 px/pt the same 200-unit bar measured 199.7 at
-			 * one left and 200.2 at the next. A left derived from the raw width therefore moved the
-			 * width, which moved the left — a layout loop Unity reports as "struggling to process
-			 * current layout". Authored widths are whole units, so rounding recovers the authored
-			 * value and the target stops depending on its own result. */
-			float barWidth = Mathf.Round(barRoot.layout.width);
-			if (float.IsNaN(panelWidth) || float.IsNaN(barWidth) || panelWidth <= 0.0f || barWidth <= 0.0f)
+			/* The authored width, never the laid-out one. The laid-out width is snapped to device
+			 * pixels and the snap depends on where the bar sits, so a left derived from it moves the
+			 * width, which moves the left: "Layout update failed to stabilize". Rounding the measured
+			 * width to whole units only recovers 200 while a device pixel is under half a unit. At
+			 * 1.25 px/pt a pixel is 0.8 units, and the bar measured 250 px (199.47, rounded to 199)
+			 * at one left and 251 px (200.27, rounded to 200) at the next, so all three bars were
+			 * rewritten every layout pass. */
+			if (float.IsNaN(panelWidth) || panelWidth <= 0.0f)
 			{
 				return;
 			}
 
-			float left = (panelWidth - barWidth) * 0.5f + RowSlot * (barWidth + ROW_GAP);
+			float left = (panelWidth - BAR_WIDTH) * 0.5f + RowSlot * (BAR_WIDTH + ROW_GAP);
 
 			/* Compared against the value last WRITTEN, not against resolvedStyle.left. The resolved
 			 * value is snapped to device pixels, so at a fractional pixels-per-point it never equals

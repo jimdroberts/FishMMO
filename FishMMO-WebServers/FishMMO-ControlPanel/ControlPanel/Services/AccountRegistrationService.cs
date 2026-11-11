@@ -34,9 +34,9 @@ namespace FishMMO.ControlPanel.Services
 	///   <item><description>Persist the account with <c>IAccountService.PersistAsync</c>.</description></item>
 	///   <item><description>(panel) Persist the profile and chosen channels, then redeem the beta code.</description></item>
 	///   <item><description>Auto-verify when the development policy says so or the server verifies nothing; otherwise send a code on every channel <see cref="AccountVerificationRules.Effective"/> names, or verify without one when it names none.</description></item>
-	///   <item><description>Generate a TOTP secret, encrypt it under the deployment master KEK, persist it, then enable TOTP.</description></item>
-	///   <item><description>Generate recovery codes, hash them, persist them. (panel) The secret, the enable and the codes are one transaction — see <see cref="SelfServiceService.EnrolAsync"/>.</description></item>
-	///   <item><description>Return the otpauth URI and the plaintext recovery codes once.</description></item>
+	///   <item><description>Only when the player opted in to two-factor: generate a TOTP secret, encrypt it under the deployment master KEK, persist it, then enable TOTP.</description></item>
+	///   <item><description>With it, generate recovery codes, hash them, persist them. (panel) The secret, the enable and the codes are one transaction — see <see cref="SelfServiceService.EnrolAsync"/>.</description></item>
+	///   <item><description>Return the otpauth URI and the plaintext recovery codes once (none without the opt-in).</description></item>
 	/// </list>
 	/// <para>
 	/// Everything after the account row exists is best effort, as it is in game: a follow-on step
@@ -112,6 +112,7 @@ namespace FishMMO.ControlPanel.Services
 		}
 
 		/// <summary>What a registration carries. No password, anywhere.</summary>
+		/// <param name="EnableTwoFactor">The player opted in to an authenticator. Off unless asked for.</param>
 		public sealed record RegistrationInput(
 			string Username,
 			string Salt,
@@ -119,7 +120,8 @@ namespace FishMMO.ControlPanel.Services
 			string Email,
 			int Age,
 			AccountProfileData Profile,
-			string BetaCode);
+			string BetaCode,
+			bool EnableTwoFactor = false);
 
 		/// <summary>Outcome of a registration attempt.</summary>
 		/// <param name="Field">The form field an error belongs to, when it belongs to one.</param>
@@ -283,9 +285,9 @@ namespace FishMMO.ControlPanel.Services
 			AccountVerificationChannels pending = AccountVerificationChannels.None;
 
 			/* One auto-verify mechanism, reached two ways: the development bypass, or a server that
-			 * verifies no channel at all. This branch must NOT return: an auto-verified account still
-			 * enrols in two-factor below. Returning here once created development accounts with no TOTP
-			 * secret and no recovery codes, which then could not sign in to anything that requires them. */
+			 * verifies no channel at all. This branch must NOT return: an auto-verified account that opted
+			 * in still enrols in two-factor below. Returning here once created development accounts with no
+			 * TOTP secret and no recovery codes. */
 			bool autoVerified = options.AutoVerifyAccounts || verification.VerifiesNothing;
 			if (autoVerified)
 			{
@@ -348,8 +350,12 @@ namespace FishMMO.ControlPanel.Services
 			RegistrationResult Done(string otpauthUri, IReadOnlyList<string> codes) =>
 				new(true, null, null, autoVerified, pending, otpauthUri, codes, betaRedeemed, betaWarning);
 
-			// ── Mandatory two-factor enrolment ──────────────────────────────────
-			/* The account exists and can log in whatever happens here; failing the whole registration
+			// ── Two-factor enrolment, when the player opted in ──────────────────
+			/* Opt-in, on this form and the game's alike: without it the account signs in with its password
+			 * and can turn two-factor on later from My account (AccountController 2fa/setup). Staff need it,
+			 * and promotion refuses an account without it.
+			 *
+			 * The account exists and can log in whatever happens here; failing the whole registration
 			 * over two-factor would be worse, and this matches the in-game behaviour where a 2FA failure
 			 * is caught and the account is kept.
 			 *
@@ -359,6 +365,11 @@ namespace FishMMO.ControlPanel.Services
 			 * happened: a player could scan an authenticator for an account whose two-factor had not
 			 * been switched on, or write down ten recovery codes that were never stored. Now it is all
 			 * or nothing, and "nothing" comes with a warning saying to set it up from My account. */
+			if (!input.EnableTwoFactor)
+			{
+				return Done(null, null);
+			}
+
 			var setup = await selfService.EnrolAsync(username, enable: true, cancellationToken);
 			if (!setup.Ok)
 			{

@@ -7,8 +7,8 @@
  * come from FishMMO.Shared.Authentication, the class the LoginServer validates with too.
  * After them, all optional: a phone number, a Discord username, how to verify (email, SMS and/or a
  * Discord DM — any one code verifies the account), a beta code
- * (required while the shard's beta gate is on), and a few details that help support prove
- * who owns an account.
+ * (required while the shard's beta gate is on), an opt-in authenticator (two-factor, off unless
+ * ticked, as in game), and a few details that help support prove who owns an account.
  *
  * The password never leaves this browser. It is turned into an SRP salt and verifier here,
  * exactly as the game client does before it opens its connection, and only those two values
@@ -216,6 +216,15 @@ function drawForm(host, rules, form, { onCancel, onRegistered }) {
 
 				${decoyMarkup(decoys.slice(1))}
 
+				<div class="field">
+					<label>Security</label>
+					<label class="check-row">
+						<input type="checkbox" id="reg-two-factor" name="enableTwoFactor" />
+						<span>Protect my account with an authenticator app (two-factor)</span>
+					</label>
+					<div class="field-hint" id="hint-enableTwoFactor">Optional. Sign-in will also ask for a code from the app. You can turn it on or off later from My account.</div>
+				</div>
+
 				<details>
 					<summary class="small">More about you (optional)</summary>
 					<p class="xsmall muted">Only support staff can see these, and only to confirm who owns this account if you ever need their help.</p>
@@ -361,6 +370,8 @@ function drawForm(host, rules, form, { onCancel, onRegistered }) {
 				verifyEmail,
 				verifySms,
 				verifyDiscord,
+				// Opt-in: unticked, the account is created without an authenticator.
+				enableTwoFactor: checked('#reg-two-factor'),
 				formToken: form?.token ?? '',
 			};
 			// Posted back as they are, under their own names. The server decides what they mean.
@@ -418,7 +429,7 @@ export function handoverMarkup({ otpauthUri, recoveryCodes }) {
 				<div>${ui.qrCode(otpauthUri, { label: 'Authenticator enrolment code' })}</div>
 				<div class="grow" style="min-width:200px">
 					<label>Scan this with your authenticator app</label>
-					<p class="xsmall muted">Two-factor is required on every FishMMO account, so you will need it to sign in.</p>
+					<p class="xsmall muted">You will need a code from it every time you sign in, on this site and in the game.</p>
 					<label style="margin-top:var(--sp-3)">Or enter this key by hand</label>
 					<code style="display:block;overflow-wrap:anywhere;padding:var(--sp-2);letter-spacing:.05em">${ui.esc(manualKey(otpauthUri))}</code>
 				</div>
@@ -577,6 +588,10 @@ export function renderRegistered(host, result, { onDone }) {
 	const pending = Array.isArray(result.verificationPending) && result.verificationPending.length
 		? result.verificationPending
 		: result.requiresVerification ? ['email'] : [];
+	/* The handover is for an authenticator that exists. Not opted in, there is nothing to hand over;
+	 * opted in but not set up, the warning above already says so, and the handover's own "no
+	 * authenticator" banner would say it twice. */
+	const showHandover = Boolean(result.otpauthUri || (result.recoveryCodes ?? []).length);
 
 	host.innerHTML = `
 		<div class="signin-card" style="max-width:560px">
@@ -591,7 +606,9 @@ export function renderRegistered(host, result, { onDone }) {
 			<div class="stack" style="margin-top:var(--sp-4)">
 				${result.betaWarning ? ui.banner('warn', 'Beta code not applied', result.betaWarning) : ''}
 				${result.twoFactorWarning ? ui.banner('warn', 'Two-factor is not set up', result.twoFactorWarning) : ''}
-				${handoverMarkup(result)}
+				${showHandover ? handoverMarkup(result) : ''}
+				${!result.twoFactorRequested ? ui.banner('info', 'Two-factor is off',
+					'This account signs in with its password alone. You can add an authenticator app any time from My account.') : ''}
 				<div id="verification-host">
 					${pending.length ? '' : ui.banner('ok', 'The account is ready', 'You can sign in now.')}
 				</div>

@@ -464,6 +464,11 @@ namespace FishMMO.Shared
 
 					InstantiateRaceModelFromIndex(raceTemplate, modelIndex, npcGender);
 				}
+				else
+				{
+					// A race with no model set keeps the model authored on the prefab, and nothing else would announce it.
+					NotifyModelReady();
+				}
 			}
 #endif
 		}

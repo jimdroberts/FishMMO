@@ -96,24 +96,51 @@ namespace FishMMO.UnitTests
 		// --- Sensitivity reaches the camera ----------------------------------------------------
 
 		[Test]
-		public void ApplyLookSensitivity_WritesTheValueOntoTheCamera()
+		public void ApplyLookSensitivity_HoldsTheValueAndPutsTheCameraIntoDegrees()
 		{
-			ClientCameraSettings.ApplyLookSensitivity(0.3f);
+			ClientCameraSettings.ApplyLookSensitivity(1.5f);
 
-			LogAssert.AreEqual(0.3f, cameraObject.GetComponent<KCCCamera>().RotationSpeed,
-				"the chosen sensitivity must reach the camera that actually turns the view");
+			LogAssert.AreEqual(1.5f, ClientCameraSettings.LookSensitivity,
+				"the chosen sensitivity is what the look input reads every frame");
+			LogAssert.AreEqual(1f, cameraObject.GetComponent<KCCCamera>().RotationSpeed,
+				"the look input arrives in degrees, so the camera must not scale it again");
+		}
+
+		[Test]
+		public void AMouseCount_TurnsTheCommonScale_AtTheReferenceView()
+		{
+			/* 0.022 degrees per count at sensitivity 1, the common scale for mouse look, at a 90-degree 4:3
+			 * view (73.74 degrees vertical), so a sensitivity a player already uses carries over. */
+			ClientCameraSettings.ApplyLookSensitivity(2.0f);
+
+			Assert.That(ClientCameraSettings.MouseDegreesPerCount(73.7398f), Is.EqualTo(0.044f).Within(1e-5f),
+				"two at the reference view is 0.044 degrees a count");
+		}
+
+		[Test]
+		public void TheTurn_FollowsTheFieldOfView_SoThePictureMovesTheSame()
+		{
+			// tan(fov/2) against the reference's: a narrower view turns more slowly, by its focal length.
+			ClientCameraSettings.ApplyLookSensitivity(1.0f);
+
+			float at60 = ClientCameraSettings.MouseDegreesPerCount(60f);
+			Assert.That(at60, Is.EqualTo(0.022f * Mathf.Tan(30f * Mathf.Deg2Rad) / Mathf.Tan(0.5f * 73.7398f * Mathf.Deg2Rad)).Within(1e-6f),
+				"at the world camera's 60 degrees the turn is scaled by tan 30 / tan 36.87");
+			LogAssert.IsTrue(ClientCameraSettings.MouseDegreesPerCount(30f) < at60,
+				"zooming in turns more slowly");
+			LogAssert.AreEqual(1f, ClientCameraSettings.FieldOfViewScale(0f),
+				"no usable view angle leaves the turn unscaled rather than at zero");
 		}
 
 		[Test]
 		public void ApplyLookSensitivity_ClampsAValueTooLargeToRecoverFrom()
 		{
-			/* The value multiplies raw mouse delta and lives in a text file the player can edit. A
+			/* The value scales raw mouse movement and lives in a text file the player can edit. A
 			 * large one makes the view unusable at exactly the moment they would need to aim at the
 			 * menu to put it back. */
 			ClientCameraSettings.ApplyLookSensitivity(500.0f);
 
-			LogAssert.AreEqual(ClientCameraSettings.MaximumLookSensitivity,
-				cameraObject.GetComponent<KCCCamera>().RotationSpeed,
+			LogAssert.AreEqual(ClientCameraSettings.MaximumLookSensitivity, ClientCameraSettings.LookSensitivity,
 				"an out-of-range sensitivity must be clamped, not honoured");
 		}
 
@@ -122,7 +149,7 @@ namespace FishMMO.UnitTests
 		{
 			ClientCameraSettings.ApplyLookSensitivity(0.0f);
 
-			LogAssert.IsTrue(cameraObject.GetComponent<KCCCamera>().RotationSpeed > 0.0f,
+			LogAssert.IsTrue(ClientCameraSettings.LookSensitivity > 0.0f,
 				"zero is a camera that cannot be moved at all");
 		}
 
@@ -131,26 +158,34 @@ namespace FishMMO.UnitTests
 		{
 			ClientCameraSettings.ApplyLookSensitivity(float.NaN);
 
-			LogAssert.AreEqual(ClientCameraSettings.DefaultLookSensitivity,
-				cameraObject.GetComponent<KCCCamera>().RotationSpeed,
+			LogAssert.AreEqual(ClientCameraSettings.DefaultLookSensitivity, ClientCameraSettings.LookSensitivity,
 				"a corrupt stored value must land on the default, not propagate as NaN");
 		}
 
 		[Test]
 		public void ApplyLookSensitivity_ReportsWhetherACameraReceivedIt()
 		{
-			/* What the Debug line in ApplySaved reports. The distinction matters because "applied"
-			 * and "applied to nothing" were indistinguishable for a whole release: the no-camera
-			 * path is the normal one at boot, so it cannot be an error, which is exactly why it
-			 * needs to be visible instead. */
+			/* What the Debug line in ApplySaved reports. The no-camera path is the normal one at boot, so
+			 * it cannot be an error, which is exactly why it needs to be visible instead. */
 			LogAssert.IsTrue(ClientCameraSettings.ApplyLookSensitivity(0.4f),
-				"a camera is present, so the value lands");
+				"a camera is present, so it is set to take degrees");
 
 			UnityEngine.Object.DestroyImmediate(cameraObject);
 			cameraObject = null;
 
 			LogAssert.IsFalse(ClientCameraSettings.ApplyLookSensitivity(0.4f),
-				"with no camera the value goes nowhere, and the caller must be able to tell");
+				"with no camera there is nothing to set, and the caller must be able to tell");
+		}
+
+		[Test]
+		public void TheLookInput_IsConvertedToDegreesEveryFrame()
+		{
+			/* Pinned in source: the conversion needs the live field of view, so it runs where the camera is
+			 * fed rather than once in the settings, and the stick is a rate scaled by frame time. */
+			string source = ReadSource("Assets/Scripts/Client/Input/PlayerInputController.cs");
+			StringAssert.Contains("Character.KCCPlayer.UpdateCamera(-mouseScrollInput, LookDegrees());", source);
+			StringAssert.Contains("lookInput * ClientCameraSettings.MouseDegreesPerCount(fieldOfView)", source);
+			StringAssert.Contains("ClientCameraSettings.StickDegreesPerSecondAt(fieldOfView) * Time.unscaledDeltaTime", source);
 		}
 
 		[Test]

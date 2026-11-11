@@ -1886,7 +1886,7 @@ namespace FishMMO.Client
 			if (this.appliedPosition.HasValue)
 			{
 				// Placed, and the viewport may have changed size underneath it since.
-				SetDragPosition(this.appliedPosition.Value);
+				SetDragPosition(this.appliedPosition.Value, settling: true);
 			}
 		}
 
@@ -2072,7 +2072,7 @@ namespace FishMMO.Client
 		/// the viewport.
 		/// </summary>
 		/// <param name="position">Desired top-left of the panel, in panel coordinates.</param>
-		private void SetDragPosition(Vector2 position)
+		private void SetDragPosition(Vector2 position, bool settling = false)
 		{
 			VisualElement root = Root;
 			if (this.dragTarget == null || root == null)
@@ -2126,6 +2126,19 @@ namespace FishMMO.Client
 
 				position.x = visualX - visualOffset.x;
 				position.y = visualY - visualOffset.y;
+			}
+
+			/* Run from a layout event, a position within a unit of where the panel already is stays put. The clamp is worked
+			 * out from sizes snapped to device pixels, and the snap depends on where the panel sits, so at a fractional
+			 * pixels-per-point a panel held against an edge moved its own limit each pass: "Layout update failed to
+			 * stabilize". Only a real change of viewport moves it by more. */
+			if (settling &&
+				this.dragTarget.style.left.keyword != StyleKeyword.Null &&
+				this.dragTarget.style.top.keyword != StyleKeyword.Null &&
+				Mathf.Abs(this.dragTarget.style.left.value.value - position.x) <= 1.0f &&
+				Mathf.Abs(this.dragTarget.style.top.value.value - position.y) <= 1.0f)
+			{
+				return;
 			}
 
 			/* Absolute, so left/top mean what is written here. A panel laid out by its parent

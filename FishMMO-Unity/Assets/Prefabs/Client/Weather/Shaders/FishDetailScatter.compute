@@ -36,6 +36,8 @@
 
 #define SCATTER_ITEM_SIDE 8
 #define SCATTER_MAX_PER_BLOCK 128
+// A bush is 3-4 m across, so more than this in a 2 m block adds overlapping leaves and no visible cover (DetailScatterMath.MaxBushesPerBlock).
+#define SCATTER_MAX_BUSHES_PER_BLOCK 2
 #define SCATTER_TERRAIN_HEADER 20u      // DetailScatterAtlas.HeaderUints: a row's header, then its channels
 #define SCATTER_CHANNEL_UINTS 10u       // DetailScatterAtlas.ChannelUints
 #define SCATTER_ITEM_HEADER_UINTS 34u   // DetailScatterMath.ItemHeaderUints: first entry, then 65 sixteen-bit block starts
@@ -554,7 +556,7 @@ void FishScatterGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThread
         uint variants = (bush || levels > 1u) ? 1u : clamp((uint)(model.lod.w + 0.5), 1u, SCATTER_MAX_VARIANTS);
 
         // DetailScatterMath.Count: the whole part, plus one when the block's coin lands under the fraction.
-        float stored = min(expected, (float)SCATTER_MAX_PER_BLOCK);
+        float stored = min(expected, (float)(bush ? SCATTER_MAX_BUSHES_PER_BLOCK : SCATTER_MAX_PER_BLOCK));
         uint whole = (uint)floor(stored);
         uint count = whole + (ScatterUnit(ScatterHash(worldBlock.x, worldBlock.y, salt, seed, 0u), 7u) < stored - (float)whole ? 1u : 0u);
         count = min(count, (uint)SCATTER_MAX_PER_BLOCK);

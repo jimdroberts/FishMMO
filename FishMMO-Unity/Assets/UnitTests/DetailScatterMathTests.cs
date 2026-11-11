@@ -16,6 +16,19 @@ namespace FishMMO.UnitTests
 	public class DetailScatterMathTests
 	{
 		[Test]
+		public void BushesAreCappedPerBlock_InTheShaderThatDrawsThem()
+		{
+			string source = System.IO.File.ReadAllText(System.IO.Path.Combine(
+				Application.dataPath, "Prefabs/Client/Weather/Shaders/FishDetailScatter.compute"));
+
+			LogAssert.IsTrue(source.Contains($"#define SCATTER_MAX_BUSHES_PER_BLOCK {DetailScatterMath.MaxBushesPerBlock}\n") ||
+				source.Contains($"#define SCATTER_MAX_BUSHES_PER_BLOCK {DetailScatterMath.MaxBushesPerBlock}\r"),
+				"the compute's bush cap must match DetailScatterMath.MaxBushesPerBlock");
+			LogAssert.IsTrue(source.Contains("bush ? SCATTER_MAX_BUSHES_PER_BLOCK : SCATTER_MAX_PER_BLOCK"),
+				"a hedge paints several bushes to a cell; the block's count must apply the bush cap");
+		}
+
+		[Test]
 		public void BlockCount_NeverPassesItsBound_AndKeepsTheExpectedTotal()
 		{
 			float[] expectations = { 0.004f, 0.3f, 1f, 1.5f, 7.25f, 33.3f, 127.9f, 500f };

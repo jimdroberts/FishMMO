@@ -664,6 +664,10 @@ namespace FishMMO.Client
 				tint = kind.Palette[(int)(Unit(Mix(own ^ 0x78u)) * kind.Palette.Length) % kind.Palette.Length];
 			}
 			Color lin = tint.linear;
+			if (AmbientCreatureMeshes.ModeOf(kind.Shape) == 0)
+			{
+				anim.y *= kind.WingSwing;
+			}
 			into.Add(new AmbientInstance
 			{
 				Matrix = Matrix4x4.TRS(position, rotation, Vector3.one * length),
@@ -696,6 +700,8 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>Wing beats with glides between: <paramref name="duty"/> of each cycle flapping (1 = steady flapping).</summary>
+		private const float FlapEase = 0.12f;
+
 		internal static float FlapStrength(double seconds, float period, float duty, float offset)
 		{
 			if (duty >= 0.999f)
@@ -703,8 +709,8 @@ namespace FishMMO.Client
 				return 1f;
 			}
 			float c = SeaLifePlacement.Cycle(seconds, period, offset);
-			// Soft edges a twentieth of the cycle wide: wings sweep into and out of the glide.
-			return Mathf.Clamp01(Mathf.Min(c / 0.05f, (duty - c) / 0.05f));
+			// Soft edges: wings sweep into and out of the glide over several frames rather than snapping to it.
+			return Mathf.Clamp01(Mathf.Min(c / FlapEase, (duty - c) / FlapEase));
 		}
 
 		/// <summary>Flap rhythm per body: bounding finches, gliding gulls, rowing crows, soaring raptors.</summary>

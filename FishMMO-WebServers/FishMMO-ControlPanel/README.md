@@ -491,7 +491,7 @@ anonymous or `TwoFactorPending`, an account authenticating as itself.
 | Method | Route | Policy | Purpose |
 |---|---|---|---|
 | GET | `register/form` | Anonymous, `Register` rate limit | A signed form token and 2–3 randomised decoy field names (the honeypot) |
-| POST | `register` | Anonymous, `Register` | Create an account from a browser-computed salt and verifier, plus the optional profile, channels and beta code. Errors carry `field` |
+| POST | `register` | Anonymous, `Register` | Create an account from a browser-computed salt and verifier, plus the optional profile, channels and beta code, and `enableTwoFactor` (opt-in; only then does the response carry the authenticator URI and recovery codes, once). Errors carry `field` |
 | POST | `verify` | Anonymous, `Register` | A code from any channel; one correct code verifies. Every failure is one message; the third wrong code in a row opens a support ticket |
 | POST | `verify/resend` | Anonymous, `Register` | A new code for `email` or `sms`, two-minute cooldown; always the same answer. `discord` is refused: that code is sent once |
 | GET | `policy` | Anonymous | The account rules, `betaRequired`, the verification switches with the Discord invite, and profile limits. Takes no input |

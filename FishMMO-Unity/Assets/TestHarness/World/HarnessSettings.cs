@@ -45,6 +45,15 @@ namespace FishMMO.TestHarness.World
 				case "msaa": urp.msaaSampleCount = int.Parse(value, inv); break;
 				case "ambientLife": if (WeatherRenderProfile.Active != null) WeatherRenderProfile.Active.AmbientLife.Enabled = value == "1"; break;
 				case "ambientLifeMax": if (WeatherRenderProfile.Active != null) WeatherRenderProfile.Active.AmbientLife.MaxVisible = int.Parse(value, inv); break;
+				// Every animal magenta and value times its size ("0" off): what a frame-by-frame pixel count of the animals reads.
+				case "ambientHighlight":
+					if (WeatherRenderProfile.Active != null)
+					{
+						float scale = float.Parse(value, inv);
+						WeatherRenderProfile.Active.AmbientLife.DebugHighlight = scale > 0f;
+						if (scale > 0f) WeatherRenderProfile.Active.AmbientLife.DebugScale = scale;
+					}
+					break;
 				case "scatter": DetailScatterSystem.Enabled = value == "1"; break;
 				case "scatterBatching": DetailScatterRenderer.BatchDraws = value == "1"; break;
 				// The scatter's takes effect at its next layout; the props' only for models registered after (a scene load).

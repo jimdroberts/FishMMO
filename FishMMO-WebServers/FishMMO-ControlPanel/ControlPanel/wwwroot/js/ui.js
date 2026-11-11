@@ -516,8 +516,8 @@ export function copyToClipboard(text) {
  * Renders `text` as a real, scannable QR code.
  *
  * This used to be a decorative block pattern, which is worse than nothing: it looks like an
- * enrolment code and enrols nothing. Two-factor is mandatory on every account, so the one
- * moment the secret is shown has to work.
+ * enrolment code and enrols nothing. The secret is shown once, at enrolment, so that one
+ * moment has to work.
  */
 export function qrCode(text, options = {}) {
 	try {

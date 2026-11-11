@@ -27,6 +27,7 @@ Shader "FishMMO/Sky Body"
             #pragma target 3.5
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
             #include "FishSkyCommon.hlsl"
 
             TEXTURE2D(_BodyTex);
@@ -400,7 +401,10 @@ Shader "FishMMO/Sky Body"
                 // buffer stops at the world. Beside a branch the pixel's own texel (and a bilinear tap mixing it
                 // in) holds the short ray to the tree, clear air, and with MSAA the pixel's sky samples still
                 // pass the depth test: a ring behind an overcast shone at full strength along every spruce tip.
-                // The sky ray marched farthest, so it is the least transmittance among the texels around.
+                // The sky ray marched farthest, so it is the least transmittance among the texels around. Only a texel that
+                // looked at the sky knows: the ones centred on a leaf report clear air. Looking through a hedge every texel
+                // near can be a leaf, so the search widens to the nearest sky; with none in reach nothing says the way is
+                // clear, and the body stays hidden.
                 float2 screenUV = input.positionCS.xy / _ScreenParams.xy;
                 float through;
                 if (_FishCloudBufferTexel.z > 0.5)
@@ -408,12 +412,33 @@ Shader "FishMMO/Sky Body"
                     int2 last = (int2)_FishCloudBufferTexel.zw - 1;
                     int2 centre = (int2)floor(screenUV * _FishCloudBufferTexel.zw);
                     through = 1.0;
-                    [unroll] for (int ty = -1; ty <= 1; ty++)
+                    bool sawSky = false;
+                    int reach = 1;
+                    [loop] for (int ring = 0; ring < 4 && !sawSky; ring++)
                     {
-                        [unroll] for (int tx = -1; tx <= 1; tx++)
+                        [unroll] for (int ty = -1; ty <= 1; ty++)
                         {
-                            through = min(through, LOAD_TEXTURE2D(_FishCloudBuffer, clamp(centre + int2(tx, ty), int2(0, 0), last)).a);
+                            [unroll] for (int tx = -1; tx <= 1; tx++)
+                            {
+                                int2 texel = clamp(centre + int2(tx, ty) * reach, int2(0, 0), last);
+                                float texelDepth = SampleSceneDepth((texel + 0.5) * _FishCloudBufferTexel.xy);
+                                #if UNITY_REVERSED_Z
+                                    bool texelIsSky = texelDepth <= 1e-6;
+                                #else
+                                    bool texelIsSky = texelDepth >= 1.0 - 1e-6;
+                                #endif
+                                if (texelIsSky)
+                                {
+                                    sawSky = true;
+                                    through = min(through, LOAD_TEXTURE2D(_FishCloudBuffer, texel).a);
+                                }
+                            }
                         }
+                        reach *= 3;
+                    }
+                    if (!sawSky)
+                    {
+                        through = 0.0;
                     }
                 }
                 else

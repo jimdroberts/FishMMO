@@ -326,55 +326,8 @@ float FishFogPhase(float cosAngle, float g)
     return (1.0 - gg) / (4.0 * d * sqrt(d));
 }
 
-// ── The terrain's shadow ────────────────────────────────────────────
-//
-// Where the ground shades the air over it from the light that leads the sky (TerrainShadowSolver): for
-// each cell, the height under which a point there is in the shadow of some ground between it and the light
-// — a mountain's evening shadow, kilometres long, which no shadow map reaches. Two grids: NEAR, 5 m to the
-// cell over 800 m round the camera (MistGroundMap), for the ridge beside the valley the camera stands in;
-// FAR, the scene's own grid of some 36 m to the cell over the whole of it (CloudFlowField), for the fog
-// lying in a valley kilometres off. Each a height above its own base (m), with its own rect: xy the corner,
-// z the size (m), w 1 once worked out. Read by everything the fog is lit in — the cloud march, the mist, the
-// fallbacks — so a shaded valley's fog is shaded however it is drawn.
-TEXTURE2D(_FishShadeNear);
-SAMPLER(sampler_FishShadeNear);
-float4 _FishShadeNearRect;
-float _FishShadeNearBase;
-TEXTURE2D(_FishShadeFar);
-SAMPLER(sampler_FishShadeFar);
-float4 _FishShadeFarRect;
-float _FishShadeFarBase;
-
-/// How much of the light reaches a point past the terrain, 0..1, soft over a share of the grid's cell
-/// either side of the shadow's top so its edge is not a line. The near grid where it covers the point —
-/// eased into the far one over its outer tenth — the far one elsewhere, and 1 where neither does.
-float FishTerrainSunlit(float3 at)
-{
-    float far = 1.0;
-    float nearShare = 0.0;
-    float near = 1.0;
-    if (_FishShadeFarRect.w > 0.5)
-    {
-        float2 uv = (at.xz - _FishShadeFarRect.xy) / max(1.0, _FishShadeFarRect.z);
-        if (all(uv > 0.0) && all(uv < 1.0))
-        {
-            float top = SAMPLE_TEXTURE2D_LOD(_FishShadeFar, sampler_FishShadeFar, uv, 0).r + _FishShadeFarBase;
-            far = saturate((at.y - top) / 40.0 + 0.5);
-        }
-    }
-    if (_FishShadeNearRect.w > 0.5)
-    {
-        float2 uv = (at.xz - _FishShadeNearRect.xy) / max(1.0, _FishShadeNearRect.z);
-        float2 toEdge = min(uv, 1.0 - uv);
-        nearShare = saturate(min(toEdge.x, toEdge.y) / 0.1);
-        if (nearShare > 0.0)
-        {
-            float top = SAMPLE_TEXTURE2D_LOD(_FishShadeNear, sampler_FishShadeNear, saturate(uv), 0).r + _FishShadeNearBase;
-            near = saturate((at.y - top) / 6.0 + 0.5);
-        }
-    }
-    return lerp(far, near, nearShare);
-}
+// The terrain's shadow over the air (FishTerrainSunlit): FishTerrainShade.hlsl, which the ground's lighting shares.
+#include "FishTerrainShade.hlsl"
 
 /// <summary>
 /// The light a point in the fog scatters toward the eye, per unit of its scattering: the light's own

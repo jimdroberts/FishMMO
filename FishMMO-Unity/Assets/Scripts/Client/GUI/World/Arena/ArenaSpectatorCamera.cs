@@ -34,9 +34,6 @@ namespace FishMMO.Client
 		/// <summary>Multiplier while Shift is held.</summary>
 		public float FastMultiplier = 3.0f;
 
-		/// <summary>Degrees per pixel of mouse movement.</summary>
-		public float LookSensitivity = 0.15f;
-
 		private float yaw;
 		private float pitch;
 
@@ -96,9 +93,12 @@ namespace FishMMO.Client
 
 			if (mouse != null && mouse.rightButton.isPressed)
 			{
+				// The player's own sensitivity, at this camera's field of view, as the world camera turns.
+				Camera view = Camera.main;
+				float degreesPerCount = ClientCameraSettings.MouseDegreesPerCount(view != null ? view.fieldOfView : 0f);
 				Vector2 delta = mouse.delta.ReadValue();
-				yaw += delta.x * LookSensitivity;
-				pitch = Mathf.Clamp(pitch - delta.y * LookSensitivity, -89f, 89f);
+				yaw += delta.x * degreesPerCount;
+				pitch = Mathf.Clamp(pitch - delta.y * degreesPerCount, -89f, 89f);
 			}
 			transform.rotation = Quaternion.Euler(pitch, yaw, 0f);
 

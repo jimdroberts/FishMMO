@@ -63,6 +63,12 @@ namespace FishMMO.Shared
 			if (group == null)
 			{
 				group = settings.CreateGroup(Constants.SharedStaticLabel, false, false, false, settings.DefaultGroup.Schemas);
+				// Loaded whole at boot by its label: one bundle-wide load, not one async load (and its frames) per template.
+				var bundled = group.GetSchema<UnityEditor.AddressableAssets.Settings.GroupSchemas.BundledAssetGroupSchema>();
+				if (bundled != null)
+				{
+					bundled.AssetLoadMode = UnityEngine.ResourceManagement.ResourceProviders.AssetLoadMode.AllPackedAssetsAndDependencies;
+				}
 				Debug.Log($"Group '{Constants.SharedStaticLabel}' created.");
 			}
 

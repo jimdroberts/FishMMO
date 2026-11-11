@@ -134,7 +134,8 @@ namespace FishMMO.ControlPanel.Controllers
 					DiscordUsername = request.DiscordUsername,
 					VerificationChannels = channels,
 				},
-				request.BetaCode), HttpContext.RequestAborted);
+				request.BetaCode,
+				request.EnableTwoFactor), HttpContext.RequestAborted);
 
 			if (!result.Ok)
 			{
@@ -149,18 +150,21 @@ namespace FishMMO.ControlPanel.Controllers
 
 			// The otpauth URI and the recovery codes are returned exactly once, here, and are
 			// never retrievable again — the same contract the in-game TwoFactorSetup broadcast
-			// has. If the player loses them they re-enrol.
+			// has. If the player loses them they re-enrol. Both are null when the player did not
+			// opt in to two-factor.
 			return Ok(new
 			{
 				message,
 				autoVerified = result.AutoVerified,
 				requiresVerification = !result.AutoVerified,
 				verificationPending = pending,
+				twoFactorRequested = request.EnableTwoFactor,
+				twoFactorEnabled = result.OtpauthUri != null,
 				otpauthUri = result.OtpauthUri,
 				recoveryCodes = result.RecoveryCodes,
 				betaRedeemed = result.BetaRedeemed,
 				betaWarning = result.BetaWarning,
-				// Set when the account was created without two-factor; nothing to hand over is shown then.
+				// Set when the player opted in and two-factor could not be set up; nothing to hand over is shown then.
 				twoFactorWarning = result.TwoFactorWarning,
 			});
 		}
@@ -1009,6 +1013,9 @@ namespace FishMMO.ControlPanel.Controllers
 
 			/// <summary>Optional Discord username, as <c>fishfan</c> or <c>FishFan#1234</c>. Required when verifying by Discord.</summary>
 			public string DiscordUsername { get; set; }
+
+			/// <summary>Set up an authenticator (two-factor) on the new account. Opt-in: absent means no.</summary>
+			public bool EnableTwoFactor { get; set; }
 
 			/// <summary>The signed token from <c>register/form</c>.</summary>
 			public string FormToken { get; set; }

@@ -652,8 +652,22 @@ namespace FishMMO.Shared
 
 					Log.Debug("AddressableLoadProcessor", $"Loading: {assetKey}");
 
-					AsyncOperationHandle<IList<UnityEngine.Object>> operation =
-						Addressables.LoadAssetsAsync<UnityEngine.Object>(assetKey.Keys, null, assetKey.MergeMode, false);
+					// From resident bundles when every location allows it; see LoadFromResidentBundles.
+					PackedLoad packed = new PackedLoad();
+					yield return LoadFromResidentBundles(assetKey, packed);
+					if (isShuttingDown)
+					{
+						if (packed.Handle.IsValid())
+						{
+							packed.Handle.Release();
+						}
+						currentOperations.Remove(assetKey);
+						continue;
+					}
+
+					AsyncOperationHandle<IList<UnityEngine.Object>> operation = packed.Handle.IsValid()
+						? packed.Handle
+						: Addressables.LoadAssetsAsync<UnityEngine.Object>(assetKey.Keys, null, assetKey.MergeMode, false);
 
 					if (!operation.IsValid())
 					{
@@ -748,6 +762,139 @@ namespace FishMMO.Shared
 
 			RaiseProgress(1f);
 		}
+
+		/// <summary>The result of <see cref="LoadFromResidentBundles"/>: a valid handle, or none for the per-asset path.</summary>
+		private sealed class PackedLoad
+		{
+			public AsyncOperationHandle<IList<UnityEngine.Object>> Handle;
+		}
+
+		/// <summary>Main-thread time the resident-bundle loads may take per frame before yielding.</summary>
+		private const double PackedLoadBudgetMs = 8.0;
+
+		/// <summary>
+		/// Loads every asset of a key from its bundles once those bundles are resident: one async load per bundle, then
+		/// one synchronous <see cref="AssetBundle.LoadAsset(string, Type)"/> per asset.
+		/// </summary>
+		/// <remarks>
+		/// Addressables loads a label as one async operation per asset, and the web player runs them one after another at
+		/// about four frames each: Shared_Static_Permanent's 2,600 templates took 10,700 frames (22 s at 475 fps, minutes at
+		/// 60 Hz) with every byte already downloaded. AssetLoadMode.AllPackedAssetsAndDependencies does not help: in
+		/// Addressables 4.2 it adds a bundle-wide preload and still issues the per-asset operations after it. Nor can the
+		/// operation be finished synchronously: WaitForCompletion throws on WebGL. A synchronous load from a bundle that is
+		/// already in memory is allowed there, because nothing has to be fetched.
+		/// <para>
+		/// The handle handed back is a chain on the bundle handle, so releasing it (unload, shutdown) releases the bundles
+		/// exactly as releasing an Addressables load would. Leaves <see cref="PackedLoad.Handle"/> invalid, with nothing held,
+		/// whenever any location is not a plain asset in a bundle (the editor's AssetDatabase mode, sub-object addresses),
+		/// a bundle fails, or an asset does not load; the caller then takes the per-asset path.
+		/// </para>
+		/// </remarks>
+		private static IEnumerator LoadFromResidentBundles(AddressableAssetKey assetKey, PackedLoad result)
+		{
+			// The same location lookup LoadAssetsAsync<Object> makes.
+			AsyncOperationHandle<IList<IResourceLocation>> locationsHandle =
+				Addressables.LoadResourceLocationsAsync(assetKey.Keys, assetKey.MergeMode, typeof(UnityEngine.Object));
+			if (!locationsHandle.IsValid())
+			{
+				yield break;
+			}
+			currentOperations[assetKey] = locationsHandle;
+			yield return locationsHandle;
+
+			List<IResourceLocation> assets = null;
+			if (locationsHandle.Status == AsyncOperationStatus.Succeeded && locationsHandle.Result != null)
+			{
+				assets = new List<IResourceLocation>(locationsHandle.Result);
+			}
+			if (locationsHandle.IsValid())
+			{
+				Addressables.Release(locationsHandle);
+			}
+			currentOperations.Remove(assetKey);
+
+			// Every bundle the assets need, once each. An asset's own bundle is its first dependency (BundledAssetProvider
+			// takes the first bundle among them); the rest hold what it references and must be resident for it to load.
+			string bundledAssetProvider = typeof(BundledAssetProvider).FullName;
+			var bundles = new List<IResourceLocation>();
+			var bundleIndex = new Dictionary<string, int>();
+			if (assets == null || assets.Count == 0 || isShuttingDown)
+			{
+				yield break;
+			}
+			foreach (IResourceLocation location in assets)
+			{
+				if (location.ProviderId != bundledAssetProvider || !location.HasDependencies ||
+					UnityEngine.ResourceManagement.Util.ResourceManagerConfig.ExtractKeyAndSubKey(location.InternalId, out _, out _))
+				{
+					yield break;
+				}
+				foreach (IResourceLocation dependency in location.Dependencies)
+				{
+					string id = BundleId(dependency);
+					if (!bundleIndex.ContainsKey(id))
+					{
+						bundleIndex.Add(id, bundles.Count);
+						bundles.Add(dependency);
+					}
+				}
+			}
+
+			AsyncOperationHandle<IList<IAssetBundleResource>> bundleHandle =
+				Addressables.ResourceManager.ProvideResources<IAssetBundleResource>(bundles, true);
+			if (!bundleHandle.IsValid())
+			{
+				yield break;
+			}
+			currentOperations[assetKey] = bundleHandle;
+			yield return bundleHandle;
+			currentOperations.Remove(assetKey);
+
+			if (bundleHandle.Status != AsyncOperationStatus.Succeeded || bundleHandle.Result == null || isShuttingDown)
+			{
+				Log.Warning("AddressableLoadProcessor", $"Bundles for {assetKey} did not load ({bundleHandle.OperationException?.Message}); loading it asset by asset.");
+				bundleHandle.Release();
+				yield break;
+			}
+
+			var loaded = new List<UnityEngine.Object>(assets.Count);
+			var budget = System.Diagnostics.Stopwatch.StartNew();
+			foreach (IResourceLocation location in assets)
+			{
+				IAssetBundleResource resource = bundleHandle.Result[bundleIndex[BundleId(location.Dependencies[0])]];
+				AssetBundle bundle = resource?.GetAssetBundle();
+				string path = Addressables.ResourceManager.TransformInternalId(location);
+				UnityEngine.Object asset = bundle != null ? bundle.LoadAsset(path, typeof(UnityEngine.Object)) : null;
+				if (asset == null)
+				{
+					Log.Warning("AddressableLoadProcessor", $"'{path}' did not load from its resident bundle; loading {assetKey} asset by asset.");
+					bundleHandle.Release();
+					yield break;
+				}
+				loaded.Add(asset);
+
+				if (budget.Elapsed.TotalMilliseconds >= PackedLoadBudgetMs)
+				{
+					currentOperations[assetKey] = bundleHandle;
+					yield return null;
+					currentOperations.Remove(assetKey);
+					if (isShuttingDown)
+					{
+						bundleHandle.Release();
+						yield break;
+					}
+					budget.Restart();
+				}
+			}
+
+			// The chain holds its own reference on the bundles, so this one is dropped once it exists.
+			result.Handle = Addressables.ResourceManager.CreateChainOperation<IList<UnityEngine.Object>, IList<IAssetBundleResource>>(
+				bundleHandle, _ => Addressables.ResourceManager.CreateCompletedOperation<IList<UnityEngine.Object>>(loaded, null));
+			bundleHandle.Release();
+		}
+
+		/// <summary>Identifies a bundle location for de-duplication.</summary>
+		private static string BundleId(IResourceLocation location) => location.ProviderId + "|" + location.InternalId;
 
 		/// <summary>
 		/// Wires validation completion: a key with locations advances to the load queue, a

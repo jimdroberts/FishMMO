@@ -74,13 +74,12 @@ namespace FishMMO.UnitTests
 		// --- Defaults -------------------------------------------------------------------------
 
 		[Test]
-		public void AFreshInstall_LooksExactlyAsItDidBeforeTheseControlsExisted()
+		public void AFreshInstall_StartsAtTheIntendedDefaults()
 		{
-			/* Every default here is what the layer draws with no configuration at all. A default
-			 * that disagreed would change how the game looks for everyone the moment the controls
-			 * were added, which is not what adding a control is for. */
+			/* Every default but the size is what the layer draws with no configuration at all. The
+			 * size is deliberately half the authored one. */
 			LogAssert.AreEqual(1.0f, ClientNameplateSettings.Opacity, "plates start fully opaque");
-			LogAssert.AreEqual(1.0f, ClientNameplateSettings.Scale, "plates start at their authored size");
+			LogAssert.AreEqual(0.5f, ClientNameplateSettings.Scale, "plates start at half their authored size");
 			LogAssert.AreEqual(1.0f, ClientNameplateSettings.BackgroundOpacity,
 				"the background starts at the strength each style asks for");
 			LogAssert.IsTrue(ClientNameplateSettings.ShowGuild, "guild rows start visible");

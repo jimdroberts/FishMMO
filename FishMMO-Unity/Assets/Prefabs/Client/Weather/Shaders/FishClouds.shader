@@ -302,7 +302,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                     }
                 }
                 FishCloudResolved resolved = FishCloudResolve(input.uv, rawHere, here, camera, direction, forward,
-                    onGrid, marched, perTexel, values, theres, ats, motions);
+                    onGrid, marched, perTexel, values, theres, ats, motions, LinearEyeDepth(UNITY_RAW_FAR_CLIP_VALUE, _ZBufferParams));
                 output.clouds = resolved.clouds;
                 output.weight = resolved.weight;
                 return output;
@@ -343,6 +343,16 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 return output;
             }
 
+            // The sky is what no geometry was drawn on: a far ridge is close to it in distance and nothing like it to the clouds.
+            bool CloudDepthIsSky(float rawDepth)
+            {
+                #if UNITY_REVERSED_Z
+                    return rawDepth <= 1e-6;
+                #else
+                    return rawDepth >= 1.0 - 1e-6;
+                #endif
+            }
+
             float4 Composite(Varyings input)
             {
                 // Pass 1 already rebuilt the clouds pixel for pixel, each from the samples that looked
@@ -360,7 +370,8 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                     // buffer is premultiplied, and a blur of it is still a cloud.
                     // In SCREEN pixels, whatever size the buffer is (a large screen's is capped smaller).
                     float2 step = (_ScreenParams.zw - 1.0) * blur;
-                    float hereDepth = LinearEyeDepth(SampleSceneDepth(input.uv), _ZBufferParams);
+                    float rawHereDepth = SampleSceneDepth(input.uv);
+                    float hereDepth = LinearEyeDepth(rawHereDepth, _ZBufferParams);
                     float4 blurred = 0.0;
                     float blurWeight = 0.0;
                     [unroll] for (int by = -1; by <= 1; by++)
@@ -368,9 +379,11 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                         [unroll] for (int bx = -1; bx <= 1; bx++)
                         {
                             float2 at = input.uv + float2(bx, by) * step;
-                            float there = LinearEyeDepth(SampleSceneDepth(at), _ZBufferParams);
+                            float rawThere = SampleSceneDepth(at);
+                            float there = LinearEyeDepth(rawThere, _ZBufferParams);
                             float same = saturate(1.0 - abs(there - hereDepth) / max(12.0, hereDepth * 0.2));
                             same = max(same, saturate(min(there, hereDepth) / 4000.0));
+                            same *= CloudDepthIsSky(rawThere) == CloudDepthIsSky(rawHereDepth) ? 1.0 : 0.0;
                             // exp(−d²/2σ²) at a one-step spacing of σ: 1, 0.61, 0.37.
                             float gauss = exp(-0.5 * (bx * bx + by * by));
                             float weight = gauss * same;
@@ -394,7 +407,9 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 // tap mostly reads), blended the sky's texel in before any weight could keep it out: pale
                 // blocks round every leaf against the sky at a low march (ScenePerfProbe, 2026-10-07).
                 float2 size = rcp(_FishCloudComposite.xy);
-                float here = LinearEyeDepth(SampleSceneDepth(input.uv), _ZBufferParams);
+                float rawHere = SampleSceneDepth(input.uv);
+                float here = LinearEyeDepth(rawHere, _ZBufferParams);
+                bool hereIsSky = CloudDepthIsSky(rawHere);
                 float2 pos = input.uv * size - 0.5;
                 int2 base = (int2)floor(pos);
                 float2 f = pos - base;
@@ -410,21 +425,26 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 {
                     int2 offset = int2(t & 1, t >> 1);
                     int2 texel = clamp(base + offset, int2(0, 0), last);
-                    float there = LinearEyeDepth(SampleSceneDepth((texel + 0.5) * _FishCloudComposite.xy), _ZBufferParams);
+                    float rawThere = SampleSceneDepth((texel + 0.5) * _FishCloudComposite.xy);
+                    float there = LinearEyeDepth(rawThere, _ZBufferParams);
+                    bool thereIsSky = CloudDepthIsSky(rawThere);
                     float4 value = LOAD_TEXTURE2D(_FishCloudBuffer, texel);
                     float share = (offset.x ? f.x : 1.0 - f.x) * (offset.y ? f.y : 1.0 - f.y);
                     float gap = abs(there - here) / max(2.0, here * 0.06);
-                    // Both far away is both sky, whatever the numbers say.
-                    float same = max(saturate(1.0 - gap), saturate(min(there, here) / 4000.0));
+                    // Two far surfaces are one surface to the clouds, whatever the numbers say; a far surface and the sky are
+                    // not. The sky's texel holds a whole march of lit cloud, and taken for the ridge in front of it that draws
+                    // a pale band in the buffer's blocks along every skyline.
+                    bool sameKind = thereIsSky == hereIsSky;
+                    float same = sameKind ? max(saturate(1.0 - gap), saturate(min(there, here) / 4000.0)) : 0.0;
                     sum += value * share * same;
                     total += share * same;
-                    if (gap < bestGap)
+                    if (sameKind && gap < bestGap)
                     {
                         bestGap = gap;
                         best = value;
                     }
                     nearest = min(nearest, there);
-                    if (there > farthest)
+                    if (there > farthest && (hereIsSky || !thereIsSky))
                     {
                         farthest = there;
                         farValue = value;
@@ -441,6 +461,35 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 if (bestGap < 3.0)
                 {
                     return best;
+                }
+                // Sky seen through a tree, with every texel round it centred on a branch: those rays stopped at the branch and
+                // report clear air, which left the bare sky dome shining through the crown under an overcast. The nearest texels
+                // that did look at the sky say what is up there.
+                if (hereIsSky)
+                {
+                    int reach = 3;
+                    [loop] for (int ring = 0; ring < 3; ring++)
+                    {
+                        float4 skySum = 0.0;
+                        float skyCount = 0.0;
+                        [unroll] for (int sy = -1; sy <= 1; sy++)
+                        {
+                            [unroll] for (int sx = -1; sx <= 1; sx++)
+                            {
+                                int2 skyTexel = clamp(base + int2(sx, sy) * reach, int2(0, 0), last);
+                                if (CloudDepthIsSky(SampleSceneDepth((skyTexel + 0.5) * _FishCloudComposite.xy)))
+                                {
+                                    skySum += LOAD_TEXTURE2D(_FishCloudBuffer, skyTexel);
+                                    skyCount += 1.0;
+                                }
+                            }
+                        }
+                        if (skyCount > 0.0)
+                        {
+                            return skySum / skyCount;
+                        }
+                        reach *= 3;
+                    }
                 }
                 return here < nearest ? float4(0.0, 0.0, 0.0, 1.0) : farValue;
             }

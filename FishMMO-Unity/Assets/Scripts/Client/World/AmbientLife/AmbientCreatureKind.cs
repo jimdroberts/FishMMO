@@ -324,6 +324,19 @@ namespace FishMMO.Client
 		public float Speed = 6f;
 		/// <summary>Wing beats (strides, hops) a second at that speed.</summary>
 		public float StrokeHz = 14f;
+
+		/// <summary>The fastest wing beat drawn at its full swing, per second.</summary>
+		public const float FullSwingStrokeHz = 6f;
+
+		/// <summary>
+		/// The share of its full swing a wing beats through (0..1): smaller the faster it beats.
+		/// </summary>
+		/// <remarks>
+		/// A songbird's 15 beats a second is about four frames a beat at 60 fps, so a full swing jumps between its extremes from
+		/// frame to frame and reads as flicker. A smaller swing keeps the rate and moves the wing a little each frame, which is
+		/// also how a small bird's fast wings look.
+		/// </remarks>
+		public float WingSwing => StrokeHz > FullSwingStrokeHz ? FullSwingStrokeHz / StrokeHz : 1f;
 		/// <summary>Flocks and raptors: metres above the ground they fly at, min..max. Bats: their hawking band.</summary>
 		public Vector2 Altitude = new Vector2(10f, 35f);
 		/// <summary>Seconds one episode of its routine lasts (a perch, a foraging bout, a flight loop), min..max.</summary>

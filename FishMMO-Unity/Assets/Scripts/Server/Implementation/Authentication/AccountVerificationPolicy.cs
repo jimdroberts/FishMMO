@@ -22,13 +22,10 @@ namespace FishMMO.Server.Implementation
 	/// <para><b>Precedence, highest first.</b></para>
 	/// <list type="number">
 	///   <item><c>AutoVerifyAccounts=true</c> (editor and development builds only): every account is
-	///   verified at creation, no code is sent, and authenticator enrolment is skipped. Unchanged
-	///   from before the channel switches existed.</item>
+	///   verified at creation and no code is sent.</item>
 	///   <item><c>VerifyEmail</c> / <c>VerifySms</c> / <c>VerifyDiscord</c> say which channels this server
 	///   sends codes on. When all three are false, every new account is verified at creation through
-	///   the same database write the bypass uses — but, unlike the bypass, it is still enrolled in
-	///   two-factor authentication, because these switches are allowed in a production build and must
-	///   not quietly turn the second factor off with them.</item>
+	///   the same database write the bypass uses.</item>
 	///   <item>Otherwise a code goes out on each channel the player chose that is switched on and the
 	///   account can receive, falling back to email; <b>any one code verifies the account</b>, and
 	///   there is no grace period: sign-in asks for a code until one is entered.</item>
@@ -40,6 +37,9 @@ namespace FishMMO.Server.Implementation
 	/// server binary built with the Production working environment — build the server with the
 	/// Development working environment for local testing. The channel switches have no such guard;
 	/// a missing or unreadable value counts as <c>true</c>, so a typo verifies more, never less.
+	///
+	/// None of this decides two-factor. An authenticator is set up when the player opts in at
+	/// registration, however the account was verified, on the game and the Control Panel alike.
 	/// </summary>
 	public static class AccountVerificationPolicy
 	{

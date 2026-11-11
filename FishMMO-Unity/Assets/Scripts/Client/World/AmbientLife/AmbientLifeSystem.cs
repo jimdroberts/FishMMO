@@ -162,6 +162,10 @@ namespace FishMMO.Client
 			public float Distance;
 			/// <summary>The share of its kind about where it is (the land's moment, or its cave's).</summary>
 			public float About;
+			/// <summary>The budget took it last frame (<see cref="drawnLastFrame"/>): it may run over the budget (<see cref="Admits"/>).</summary>
+			public bool Held;
+			/// <summary>Within <see cref="OffscreenReach"/> of the eye (let in without the view's box, so possibly all behind it).</summary>
+			public bool Near;
 		}
 
 		/// <summary>
@@ -223,6 +227,75 @@ namespace FishMMO.Client
 			list[root] = item;
 		}
 		private static readonly List<Candidate> candidates = new List<Candidate>();
+		/// <summary>The groups the budget took last frame (their seeds), held a little nearer this frame (BudgetHoldShare).</summary>
+		private static readonly HashSet<uint> drawnLastFrame = new HashSet<uint>();
+		/// <summary>How much nearer a group the budget took last frame counts, as a share of its distance, against a newcomer.</summary>
+		private const float BudgetHoldShare = 0.15f;
+		/// <summary>And in metres more, so near groups (a few metres apart) hold their places too.</summary>
+		private const float BudgetHoldMetres = 4f;
+
+		/// <summary>
+		/// What a group costs the budget: its members drawn inside the camera's view this frame (<paramref name="seen"/>). A swarm
+		/// is one instance however many insects it holds, so it costs one when any of it is seen. Nothing seen costs nothing: a
+		/// group behind the camera, or members past their distance, are drawn (or not) free of the budget.
+		/// </summary>
+		public static int BudgetCost(int seen, AmbientCreatureKind kind) =>
+			seen <= 0 ? 0 : kind != null && kind.Behaviour == AmbientBehaviour.Swarm ? 1 : seen;
+
+		/// <summary>Whether a sphere (an animal at <paramref name="at"/>, <paramref name="radius"/> round) is inside the planes.</summary>
+		public static bool InView(Plane[] view, Vector3 at, float radius)
+		{
+			for (int i = 0; i < view.Length; i++)
+			{
+				if (view[i].GetDistanceToPoint(at) < -radius)
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
+		/// <summary>The kind's mesh reach (its bounds' furthest point, widened as the draw's bounds are), 1 m before it has a mesh.</summary>
+		private static float KindReach(int kind)
+		{
+			Mesh mesh = kind < meshes.Length ? meshes[kind] : null;
+			if (mesh == null)
+			{
+				return 1f;
+			}
+			Bounds b = mesh.bounds;
+			return LifeInstancePacking.Reach(b.center, b.extents, BoundsSlack);
+		}
+
+		/// <summary>The members of the group being charged, held until the budget takes it.</summary>
+		private static readonly List<AmbientInstance> pending = new List<AmbientInstance>();
+
+		/// <summary>How far past the budget, as a share of it, the groups drawn last frame may run (<see cref="Admits"/>).</summary>
+		public const float BudgetHoldOver = 0.25f;
+
+		/// <summary>
+		/// Whether a group costing <paramref name="cost"/> is drawn with <paramref name="spent"/> of the budget
+		/// (<paramref name="maxVisible"/>) already taken by nearer groups. A newcomer must fit inside the budget; a group drawn last
+		/// frame (<paramref name="held"/>) may run past it by <see cref="BudgetHoldOver"/> of it. The nearest group, and any group the camera
+		/// sees none of (it costs nothing), is always drawn.
+		/// </summary>
+		/// <remarks>
+		/// The groups in reach come and go as the camera moves (a near group steps past its distance, a box past the frustum's
+		/// edge), and each that comes takes budget from the farthest. With one limit for all, the farthest drawn group was in one
+		/// frame and out the next while its birds stood in plain view, every one of them together (2026-11-11, measured in the
+		/// browser: a finch flock of 28 lost its draw for single frames as the camera swept, never with the budget lifted). A
+		/// group drawn now stays drawn until the load grows by a quarter of the budget, and one refused comes back only once it
+		/// fits inside it, so a few groups' coming and going no longer moves the edge.
+		/// </remarks>
+		public static bool Admits(int cost, int spent, int maxVisible, bool held)
+		{
+			if (cost <= 0 || spent == 0)
+			{
+				return true;
+			}
+			int limit = held ? maxVisible + Mathf.CeilToInt(maxVisible * BudgetHoldOver) : maxVisible;
+			return spent + cost <= limit;
+		}
 		/// <summary>The lone birds' and ground animals' episode spots as worked out (AmbientLifeMotion.SpotMemo).</summary>
 		private static readonly AmbientLifeMotion.SpotMemo spotMemo = new AmbientLifeMotion.SpotMemo();
 		private static readonly List<AmbientInstance>[] byKind = new List<AmbientInstance>[Kinds.Length];
@@ -340,6 +413,8 @@ namespace FishMMO.Client
 		private static void Release()
 		{
 			instanceBuffers.Release();
+			indirectArgs?.Release();
+			indirectArgs = null;
 			for (int i = 0; i < meshes.Length; i++)
 			{
 				Destroy(meshes[i]);
@@ -1179,7 +1254,8 @@ namespace FishMMO.Client
 					{
 						continue;
 					}
-					if (distance > OffscreenReach)
+					bool near = distance <= OffscreenReach;
+					if (!near)
 					{
 						var box = new Bounds(middle, new Vector3(reach * 2f, reach + lift + 30f, reach * 2f));
 						if (!GeometryUtility.TestPlanesAABB(planes, box))
@@ -1187,7 +1263,14 @@ namespace FishMMO.Client
 							continue;
 						}
 					}
-					candidates.Add(new Candidate { Cell = cell, Group = i, Distance = Mathf.Max(0f, distance), About = about });
+					// A group drawn last frame keeps its place against one that only now draws level with it, so two groups
+					// near the budget's edge cannot trade places from one frame to the next (see the budget below).
+					bool held = drawnLastFrame.Contains(g.Seed);
+					if (held)
+					{
+						distance = distance * (1f - BudgetHoldShare) - BudgetHoldMetres;
+					}
+					candidates.Add(new Candidate { Cell = cell, Group = i, Distance = Mathf.Max(0f, distance), About = about, Held = held, Near = near });
 				}
 			}
 			SortByDistance(candidates);
@@ -1203,16 +1286,27 @@ namespace FishMMO.Client
 				Threats = threats,
 				Spots = spotMemo,
 			};
-			int budget = settings.MaxVisible;
+			/* The budget is spent on what the camera sees, in distance order: each group is charged its members that will draw
+			 * inside the view (BudgetCost), so a group behind the camera, a member past its distance or under the tide, or one
+			 * outside the frustum costs nothing and never pushes a seen group out. Charged its whole head count instead, the
+			 * budget ran out with a third of it on screen. The seen count moves from frame to frame (members crossing the
+			 * view's edge, the camera turning), so a group drawn last frame may run past the budget by a share of it while a
+			 * newcomer must fit inside it (Admits): with one limit for both, the farthest group was in one frame and out the
+			 * next, every bird of it together. */
+			int maxVisible = settings.MaxVisible;
+			int spent = 0;
 			int drawn = 0;
+			drawnLastFrame.Clear();
 			foreach (Candidate c in candidates)
 			{
-				if (budget <= 0)
-				{
-					break;
-				}
 				AmbientGroup g = c.Cell.Groups[c.Group];
 				AmbientCreatureKind kind = Kinds[g.Kind];
+				// Past the near reach a group was let in only for being in the view's box, so it has a seen member: once even
+				// one more cannot fit, its motion is not worked out at all. Near groups are, being free when all behind.
+				if (!c.Near && !Admits(1, spent, maxVisible, c.Held))
+				{
+					continue;
+				}
 				frame.Perches = c.Cell.Perches;
 				frame.Trunks = c.Cell.Trunks;
 				frame.States = c.Cell.States;
@@ -1227,7 +1321,9 @@ namespace FishMMO.Client
 				// Underground the water is the cave's own (an olm swims under its pool's surface), and a lake on the hill over a
 				// cave is not over its floor.
 				bool grounded = g.Cave == 0 && (kind.Family == AmbientFamily.Critters || kind.Behaviour == AmbientBehaviour.Perch);
-				List<AmbientInstance> list = byKind[g.Kind];
+				float reach = KindReach(g.Kind);
+				pending.Clear();
+				int seen = 0;
 				foreach (AmbientInstance instance in scratch)
 				{
 					Vector3 at = instance.Matrix.GetColumn(3);
@@ -1246,10 +1342,21 @@ namespace FishMMO.Client
 					{
 						drawnInstance.Tint.w *= 1f - (d - fadeStart) / Mathf.Max(0.01f, distance - fadeStart);
 					}
-					list.Add(drawnInstance);
-					drawn++;
-					budget--;
+					pending.Add(drawnInstance);
+					if (InView(planes, at, reach * ((Vector3)instance.Matrix.GetColumn(0)).magnitude))
+					{
+						seen++;
+					}
 				}
+				int cost = BudgetCost(seen, kind);
+				if (!Admits(cost, spent, maxVisible, c.Held))
+				{
+					continue;
+				}
+				spent += cost;
+				drawnLastFrame.Add(g.Seed);
+				byKind[g.Kind].AddRange(pending);
+				drawn += pending.Count;
 			}
 			return drawn;
 		}
@@ -1274,6 +1381,10 @@ namespace FishMMO.Client
 				return;
 			}
 			UpdateFrame(camera);
+			if (camera.cameraType == CameraType.Game)
+			{
+				DrawCheck.Watch(byKind);
+			}
 			if (drawnCount == 0)
 			{
 				return;
@@ -1286,21 +1397,23 @@ namespace FishMMO.Client
 				grow = 1f;
 			}
 			int kinds = Mathf.Min(byKind.Length, meshes.Length);
-			// Every drawn animal of every kind into one buffer, each kind a run of it (LifeInstancePacking).
-			int total = 0;
+			// Every drawn animal of every kind into one buffer, each kind a run of it at a place that never moves
+			// (LifeInstanceBuffers: the start each kind's material holds must not change from frame to frame).
+			int longest = 0;
 			for (int k = 0; k < kinds; k++)
 			{
 				List<AmbientInstance> list = byKind[k];
 				if (list != null && meshes[k] != null && materials[k] != null)
 				{
-					total += list.Count;
+					longest = Mathf.Max(longest, list.Count);
 				}
 			}
-			instanceBuffers.Reserve(total);
+			instanceBuffers.ReserveRuns(kinds, longest);
 			LifeInstanceRecord[] records = instanceBuffers.Records;
-			int packed = 0;
+			int slot = instanceBuffers.Slot;
 			for (int k = 0; k < kinds; k++)
 			{
+				int packed = LifeInstancePacking.RunStart(k, slot);
 				kindBase[k] = packed;
 				kindCount[k] = 0;
 				List<AmbientInstance> list = byKind[k];
@@ -1323,9 +1436,9 @@ namespace FishMMO.Client
 				}
 				kindCount[k] = list.Count;
 				kindShadows[k] = anyNear;
-				packed += list.Count;
 			}
-			GraphicsBuffer buffer = instanceBuffers.Upload(camera, packed);
+			GraphicsBuffer buffer = instanceBuffers.Upload(camera, kinds, kindCount);
+			bool indirect = buffer != null && UseIndirect && UploadIndirectArgs(kinds);
 			for (int k = 0; buffer != null && k < kinds; k++)
 			{
 				int count = kindCount[k];
@@ -1345,7 +1458,8 @@ namespace FishMMO.Client
 					LifeInstancePacking.Encapsulate(records[first + i], reach, ref min, ref max);
 				}
 				// No property block: the buffer and the kind's run in it are the kind's own material's (built per kind in
-				// EnsureLooks), set for this camera before it renders; the next camera's hook runs after this one has drawn.
+				// EnsureLooks), set for this camera before it renders; the next camera's hook runs after this one has drawn. The
+				// run's start is the same every frame (LifeInstanceBuffers), so setting it again changes nothing the draw reads.
 				Material material = materials[k];
 				material.SetBuffer(InstancesId, buffer);
 				material.SetFloat(InstanceBaseId, first);
@@ -1357,7 +1471,14 @@ namespace FishMMO.Client
 					shadowCastingMode = kindShadows[k] ? ShadowCastingMode.On : ShadowCastingMode.Off,
 					receiveShadows = true,
 				};
-				Graphics.RenderMeshPrimitives(rp, meshes[k], 0, count);
+				if (indirect)
+				{
+					Graphics.RenderMeshIndirect(rp, meshes[k], indirectArgs, 1, k);
+				}
+				else
+				{
+					Graphics.RenderMeshPrimitives(rp, meshes[k], 0, count);
+				}
 			}
 			if (settings.DebugHighlight && camera.cameraType == CameraType.Game && Time.realtimeSinceStartup >= nextDebugLog)
 			{
@@ -1367,6 +1488,154 @@ namespace FishMMO.Client
 		}
 
 		private static float nextDebugLog;
+
+		// ── Draw path trial (2026-11-10) ───────────────────────────────────
+		//
+		// In the browser every critter kind blinked out for a frame or two and back, all its animals together, while terrain, trees,
+		// grass and the weather's particles (drawn through RenderMesh and RenderMeshIndirect) never did; only this system and sea life
+		// draw through RenderMeshPrimitives. The page's address picks the path, so both can be watched in one build: ?ambientIndirect=1
+		// draws every kind through RenderMeshIndirect with CPU-written arguments (start instance 0, so SV_InstanceID counts from 0 as
+		// before and the shader is unchanged). DrawCheck says, every few seconds, whether the animals were there to draw every frame.
+
+		private static int useIndirect = -1;
+
+		/// <summary>True when the page asked for the indirect path (?ambientIndirect=1 in its address). Read once.</summary>
+		public static bool UseIndirect
+		{
+			get
+			{
+				if (useIndirect < 0)
+				{
+					string url = Application.absoluteURL ?? string.Empty;
+					useIndirect = url.IndexOf("ambientIndirect=1", StringComparison.OrdinalIgnoreCase) >= 0 ? 1 : 0;
+					Debug.Log(useIndirect == 1
+						? "[Ambient life] drawing through RenderMeshIndirect (?ambientIndirect=1 in the address)."
+						: "[Ambient life] drawing through RenderMeshPrimitives (add ?ambientIndirect=1 to the address for RenderMeshIndirect).");
+				}
+				return useIndirect == 1;
+			}
+		}
+
+		private static GraphicsBuffer indirectArgs;
+		private static readonly GraphicsBuffer.IndirectDrawIndexedArgs[] indirectArgsData = new GraphicsBuffer.IndirectDrawIndexedArgs[Kinds.Length];
+
+		/// <summary>Writes one draw's arguments per kind (its count this frame, start instance 0); false when it cannot.</summary>
+		private static bool UploadIndirectArgs(int kinds)
+		{
+			if (indirectArgs == null || !indirectArgs.IsValid() || indirectArgs.count < kinds)
+			{
+				indirectArgs?.Release();
+				indirectArgs = new GraphicsBuffer(GraphicsBuffer.Target.IndirectArguments, Mathf.Max(1, kinds), GraphicsBuffer.IndirectDrawIndexedArgs.size)
+				{
+					name = "Ambient life draw arguments",
+				};
+			}
+			for (int k = 0; k < kinds; k++)
+			{
+				Mesh mesh = meshes[k];
+				indirectArgsData[k] = mesh == null ? default : new GraphicsBuffer.IndirectDrawIndexedArgs
+				{
+					indexCountPerInstance = mesh.GetIndexCount(0),
+					instanceCount = (uint)Mathf.Max(0, kindCount[k]),
+					startIndex = mesh.GetIndexStart(0),
+					baseVertexIndex = mesh.GetBaseVertex(0),
+					startInstance = 0,
+				};
+			}
+			indirectArgs.SetData(indirectArgsData, 0, 0, kinds);
+			return true;
+		}
+
+		/// <summary>
+		/// Every few seconds, per kind, the fewest and most animals the game camera had to draw over the frames since, and how often
+		/// its hook ran a frame. A kind that blinks on screen while its count here never drops to 0 was dropped after it was submitted.
+		/// </summary>
+		private static class DrawCheck
+		{
+			private const float Seconds = 5f;
+			private static int[] least = new int[0];
+			private static int[] most = new int[0];
+			private static int frame = -1;
+			private static int frames;
+			private static int missed;
+			private static int callsThisFrame;
+			private static int fewestCalls = int.MaxValue;
+			private static int mostCalls;
+			private static float nextLog = -1f;
+			private static readonly System.Text.StringBuilder line = new System.Text.StringBuilder(512);
+
+			public static void Watch(List<AmbientInstance>[] lists)
+			{
+				int now = Time.frameCount;
+				if (now == frame)
+				{
+					callsThisFrame++;
+					return;
+				}
+				if (frame >= 0)
+				{
+					fewestCalls = Mathf.Min(fewestCalls, callsThisFrame);
+					mostCalls = Mathf.Max(mostCalls, callsThisFrame);
+					missed += Mathf.Max(0, now - frame - 1);
+				}
+				frame = now;
+				callsThisFrame = 1;
+				if (least.Length != lists.Length)
+				{
+					least = new int[lists.Length];
+					most = new int[lists.Length];
+					Reset();
+				}
+				frames++;
+				for (int k = 0; k < lists.Length; k++)
+				{
+					int n = lists[k] != null ? lists[k].Count : 0;
+					least[k] = Mathf.Min(least[k], n);
+					most[k] = Mathf.Max(most[k], n);
+				}
+				float t = Time.realtimeSinceStartup;
+				if (nextLog < 0f)
+				{
+					nextLog = t + Seconds;
+				}
+				if (t < nextLog)
+				{
+					return;
+				}
+				nextLog = t + Seconds;
+				line.Clear();
+				line.Append("[Ambient life] draw check, ").Append(frames).Append(" frames (").Append(missed).Append(" without the hook; hook calls a frame ")
+					.Append(fewestCalls == int.MaxValue ? 1 : fewestCalls).Append("..").Append(Mathf.Max(1, mostCalls)).Append("; ")
+					.Append(UseIndirect ? "RenderMeshIndirect" : "RenderMeshPrimitives").Append("): fewest..most drawn a frame");
+				int shown = 0;
+				for (int k = 0; k < lists.Length && k < Kinds.Length; k++)
+				{
+					if (most[k] > 0)
+					{
+						line.Append(shown++ == 0 ? " " : ", ").Append(Kinds[k].Name).Append(' ').Append(least[k]).Append("..").Append(most[k]);
+					}
+				}
+				if (shown == 0)
+				{
+					line.Append(" none");
+				}
+				Debug.Log(line.ToString());
+				Reset();
+			}
+
+			private static void Reset()
+			{
+				for (int k = 0; k < least.Length; k++)
+				{
+					least[k] = int.MaxValue;
+					most[k] = 0;
+				}
+				frames = 0;
+				missed = 0;
+				fewestCalls = int.MaxValue;
+				mostCalls = 0;
+			}
+		}
 
 		/// <summary>
 		/// Debug (<see cref="AmbientLifeSettings.DebugHighlight"/>): how many animals are drawn and where they are against the

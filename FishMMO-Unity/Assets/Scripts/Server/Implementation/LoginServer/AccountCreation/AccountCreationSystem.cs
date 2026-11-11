@@ -1001,10 +1001,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 								await RedeemRegistrationBetaCodeAsync(username, betaCode, betaMode);
 							}
 
-							// Determine whether to auto-verify (skip 2FA/email).
+							// Determine whether to auto-verify (skip the verification codes).
 							// Controlled by a compile-time guard AND a runtime AutoVerifyAccounts config flag;
 							// see AccountVerificationPolicy, which the login path consults with the same rules.
-							// Account is created, immediately verified, and has no TOTP requirement when enabled.
+							// Two-factor is separate: it follows the player's opt-in below either way.
 							bool shouldAutoVerify = AccountVerificationPolicy.IsAutoVerifyEnabled(Server.Configuration);
 							if (shouldAutoVerify)
 							{
@@ -1021,13 +1021,25 @@ namespace FishMMO.Server.Implementation.LoginServer
 							}
 							else
 							{
-							// Release mode: a code on every chosen channel that is switched on, then the mandatory
-							// 2FA setup below. AccountVerificationPolicy documents the precedence.
+							// Release mode: a code on every chosen channel that is switched on.
+							// AccountVerificationPolicy documents the precedence.
 							result = await DeliverVerificationCodesAsync(accountService, username, email,
 							profileResult.IsSuccess ? cleanProfile.Phone : null,
 							profileResult.IsSuccess ? cleanProfile.DiscordUsername : null,
 							chosenChannels);
-							// Generate and store mandatory 2FA setup.
+							}
+
+							/* Two-factor is opt-in. The player ticked it on the register form, and only then is an
+							 * authenticator set up, whether or not the account was auto-verified: the Control
+							 * Panel's registration follows the same rule, so an account made on either surface
+							 * ends in the same state. Without it the account signs in with its password alone and
+							 * can turn two-factor on later from My account in the Control Panel.
+							 *
+							 * The setup broadcast is queued BEFORE the result below, on the same reliable channel,
+							 * so a client that asked for two-factor and gets its result with no setup ahead of it
+							 * knows the setup is not coming. */
+							if (submittedProfile.EnableTwoFactor)
+							{
 							// Snapshot TotpMasterKey to prevent a TOCTOU race.
 							byte[] totpMasterKeySnapshot = TotpMasterKey;
 							if (totpMasterKeySnapshot != null && totpMasterKeySnapshot.Length == 32)
@@ -1065,12 +1077,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 									 *
 									 * The setup broadcast used to go out whatever the writes above did, so a
 									 * failed secret or enable write still walked the player through scanning
-									 * a QR code: they left believing the mandatory second factor was on, and
+									 * a QR code: they left believing the second factor they asked for was on, and
 									 * sign-in — which asks for a code only when totp_enabled is set — never
 									 * asked. With nothing enabled there is nothing to set up, so nothing is
 									 * sent: the account is in the same state as the catch below describes,
-									 * and the client's reply timeout already treats a missing setup message
-									 * as "skip this step" and carries on to verification. */
+									 * and the client, seeing its result arrive with no setup ahead of it,
+									 * tells the player two-factor could not be set up and carries on. */
 									if (!totpEnabled)
 									{
 										CryptographicOperationsCompat.ZeroMemory(totpSecret);
@@ -2024,8 +2036,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// Panel apply too: the player's choices that this server has switched on and the account can receive,
 		/// falling back to email. Any one of the codes verifies the account. This runs only when the
 		/// development <c>AutoVerifyAccounts</c> bypass is off. A server that verifies no channel, and an account
-		/// no enabled channel can reach, are verified at creation — but the caller still enrols them in
-		/// two-factor authentication, because unlike the bypass these are legal in production.
+		/// no enabled channel can reach, are verified at creation. Two-factor is not decided here: the caller
+		/// sets it up afterwards when the player opted in, whichever way the account was verified.
 		/// </remarks>
 		/// <returns>
 		/// <see cref="ClientAuthenticationResult.AccountCreated"/> when a code is outstanding, and

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using FishMMO.Shared;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 
 namespace FishMMO.Client
 {
@@ -127,7 +128,9 @@ namespace FishMMO.Client
 			}
 
 			heights = EnsureHeights(heights, heightRes, chosen.Count);
-			var row = new ushort[heightRes * heightRes];
+			bool r16 = HoldsSixteenBits(heights);
+			ushort[] row = r16 ? new ushort[heightRes * heightRes] : null;
+			float[] rowFloat = r16 ? null : new float[heightRes * heightRes];
 			index = EnsureIndex(index, controlRes, chosen.Count);
 			Shader bake = TerrainIndexMapBaker.ShaderOf(set);
 			int baked = 0;
@@ -143,10 +146,25 @@ namespace FishMMO.Client
 				{
 					for (int x = 0; x < heightRes; x++)
 					{
-						row[z * heightRes + x] = (ushort)Mathf.RoundToInt(Mathf.Clamp01(h[z, x]) * 65535f);
+						float height = Mathf.Clamp01(h[z, x]);
+						if (r16)
+						{
+							row[z * heightRes + x] = (ushort)Mathf.RoundToInt(height * 65535f);
+						}
+						else
+						{
+							rowFloat[z * heightRes + x] = height;
+						}
 					}
 				}
-				heights.SetPixelData(row, 0, i);
+				if (r16)
+				{
+					heights.SetPixelData(row, 0, i);
+				}
+				else
+				{
+					heights.SetPixelData(rowFloat, 0, i);
+				}
 				// The tile's four strongest layers per texel, as its own terrain draws them.
 				bool hasIndex = FillIndex(t, data, bake, index, i);
 				baked += hasIndex ? 1 : 0;
@@ -187,7 +205,7 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(BlendId, new Vector4(heightTransition, heightBlend ? 1f : 0f, set.Mask != null ? 1f : 0f, snowDepth));
 			Shader.SetGlobalVectorArray(TileId, tiles);
 			Shader.SetGlobalVectorArray(TileDataId, tileData);
-			Shader.SetGlobalVector(ResId, new Vector4(heightRes, controlRes, 0f, 0f));
+			Shader.SetGlobalVector(ResId, new Vector4(heightRes, controlRes, HeightsPacked ? 1f : 0f, 0f));
 			Shader.SetGlobalVector(InfoId, new Vector4(chosen.Count, layers, set.Normal != null ? 1f : 0f, weatherAmount));
 			TileCount = chosen.Count;
 			HeightResolution = heightRes;
@@ -218,7 +236,9 @@ namespace FishMMO.Client
 						Debug.LogWarning($"[Ground material] height check {slice}: readback failed.");
 						return;
 					}
-					Unity.Collections.NativeArray<ushort> data = request.GetData<ushort>();
+					bool r16 = HoldsSixteenBits(target);
+					Unity.Collections.NativeArray<ushort> data = r16 ? request.GetData<ushort>() : default;
+					Unity.Collections.NativeArray<float> dataFloat = r16 ? default : request.GetData<float>();
 					TerrainData td = t.terrainData;
 					int sourceRes = td.heightmapResolution;
 					float worst = 0f;
@@ -227,7 +247,7 @@ namespace FishMMO.Client
 					{
 						int x = (res - 1) * (s + 1) / 6;
 						int z = (res - 1) * ((s * 3 + 1) % 6) / 6;
-						float copied = t.GetPosition().y + data[z * res + x] / 65535f * td.size.y;
+						float copied = t.GetPosition().y + (r16 ? data[z * res + x] / 65535f : dataFloat[z * res + x]) * td.size.y;
 						float actual = t.GetPosition().y + td.GetHeight(Mathf.Min(x, sourceRes - 1), Mathf.Min(z, sourceRes - 1));
 						if (Mathf.Abs(copied - actual) >= Mathf.Abs(worst))
 						{
@@ -368,10 +388,64 @@ namespace FishMMO.Client
 			return best;
 		}
 
-		/// <summary>The heights array (R16, linear, clamped, bilinear, no mips), reused when it already fits.</summary>
+		private static int r16Samplable = -1;
+
+		/// <summary>
+		/// True when a 16-bit unsigned normalised texture (R16) can be sampled here. Every terrain height texture the
+		/// client makes asks this, not <see cref="SystemInfo.SupportsTextureFormat"/>, which says yes on WebGPU where
+		/// the format exists but cannot be sampled: Firefox offers r16unorm only behind an extension it lacks, the
+		/// texture was never created, and the next upload threw. Without it the heights are 32-bit float, the same
+		/// 0..1 values to every shader.
+		/// </summary>
+		public static bool R16Samplable
+		{
+			get
+			{
+				if (r16Samplable < 0)
+				{
+					r16Samplable = SystemInfo.IsFormatSupported(GraphicsFormat.R16_UNorm, GraphicsFormatUsage.Sample) ? 1 : 0;
+				}
+				return r16Samplable == 1;
+			}
+		}
+
+		/// <summary>Asked once on the main thread at start-up: terrain builds on worker threads read the answer.</summary>
+		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+		private static void ProbeFormats()
+		{
+			r16Samplable = -1;
+			_ = R16Samplable;
+		}
+
+		/// <summary>
+		/// The heights array's format: R16 where it can be sampled; on WebGPU without it (Firefox), the same 16 bits packed into
+		/// RG8 (<see cref="HeightsPacked"/>); else RFloat.
+		/// </summary>
+		/// <remarks>
+		/// Firefox cannot sample r16unorm. Its first fallback, RFloat, doubled the array to about 268 MB for a sixteen-tile scene in
+		/// one upload, which Firefox's WebGPU refused ("Out of Memory", then every draw reading it failed validation). r16uint was
+		/// tried next and Unity's WebGPU backend will not create it for sampling at all. RG8 is core and sampleable everywhere, and
+		/// WebGPU's shaders read the heights by loads, never through a filter (FishGroundHeightLoadsPacked), so the two bytes come
+		/// back exactly: 16 bits a texel in every browser.
+		/// </remarks>
+		public static GraphicsFormat HeightsFormat =>
+			R16Samplable ? GraphicsFormat.R16_UNorm
+			: SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.WebGPU &&
+				SystemInfo.IsFormatSupported(GraphicsFormat.R8G8_UNorm, GraphicsFormatUsage.Sample) ? GraphicsFormat.R8G8_UNorm
+			: GraphicsFormat.R32_SFloat;
+
+		/// <summary>True when the heights are packed into RG8 (low byte red, high byte green): the shaders' _FishGroundArrayRes.z.</summary>
+		public static bool HeightsPacked => heights != null && heights.graphicsFormat == GraphicsFormat.R8G8_UNorm;
+
+		/// <summary>True when a heights array holds 16-bit texels (0..65535 for 0..1); false for 32-bit floats.</summary>
+		private static bool HoldsSixteenBits(Texture array) =>
+			array.graphicsFormat == GraphicsFormat.R16_UNorm || array.graphicsFormat == GraphicsFormat.R8G8_UNorm;
+
+		/// <summary>The heights array (<see cref="HeightsFormat"/>; clamped, no mips; bilinear, point when packed: a blend of packed bytes is no height), reused when it already fits.</summary>
 		private static Texture2DArray EnsureHeights(Texture2DArray array, int size, int depth)
 		{
-			if (array != null && array.width == size && array.depth == depth)
+			GraphicsFormat format = HeightsFormat;
+			if (array != null && array.width == size && array.depth == depth && array.graphicsFormat == format)
 			{
 				return array;
 			}
@@ -379,11 +453,11 @@ namespace FishMMO.Client
 			{
 				Object.Destroy(array);
 			}
-			return new Texture2DArray(size, size, depth, TextureFormat.R16, false, true)
+			return new Texture2DArray(size, size, depth, format, TextureCreationFlags.None)
 			{
 				name = "Ground heights",
 				wrapMode = TextureWrapMode.Clamp,
-				filterMode = FilterMode.Bilinear,
+				filterMode = format == GraphicsFormat.R8G8_UNorm ? FilterMode.Point : FilterMode.Bilinear,
 				hideFlags = HideFlags.DontSave,
 			};
 		}

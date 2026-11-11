@@ -246,17 +246,22 @@ namespace FishMMO.Shared
 				 * behaviour below looks at it. */
 				ApplyVisualLayer(modelInstance);
 
-				// Notify visual behaviours that the model is ready (skeleton, body regions, animator)
-				foreach (ICharacterBehaviour behaviour in Behaviours.Values)
-				{
-					if (behaviour is IModelReadyHandler handler)
-					{
-						handler.OnModelReady();
-					}
-				}
+				NotifyModelReady();
 
 				Log.Debug("BaseCharacter", $"Setting Child model to identity. {modelInstance.transform.position}");
 			});
+		}
+
+		/// <summary>Tells the visual behaviours the model under the mesh root is ready (skeleton, body regions, animator).</summary>
+		protected void NotifyModelReady()
+		{
+			foreach (ICharacterBehaviour behaviour in Behaviours.Values)
+			{
+				if (behaviour is IModelReadyHandler handler)
+				{
+					handler.OnModelReady();
+				}
+			}
 		}
 #endif
 

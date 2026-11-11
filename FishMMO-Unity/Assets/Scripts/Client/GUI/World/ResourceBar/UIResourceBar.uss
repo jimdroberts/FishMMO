@@ -56,7 +56,7 @@
 */
 .res-bar {
     position: absolute;
-    width: 200px;
+    width: 200px; /* UITKResourceBar.BAR_WIDTH places the row from this; change both together. */
     height: 14px;
 }
 

@@ -253,6 +253,42 @@ namespace FishMMO.Server.Implementation
 		/// <summary>Event triggered for custom post-authentication logic in server behaviours.</summary>
 		public event Action<NetworkConnection, bool> OnClientAuthenticationResult;
 
+		/// <summary>
+		/// Raised when a remote connection stops, BEFORE this authenticator forgets the connection's account.
+		/// </summary>
+		/// <remarks>
+		/// Server behaviours receive their disconnects here (<see cref="ServerBehaviour.SubscribeToConnectionEvents"/>),
+		/// not from <c>ServerManager.OnRemoteConnectionState</c>. FishNet initialises the authenticator with the
+		/// NetworkManager, long before any behaviour, so its handler was always first on that event: the account
+		/// mapping was already gone when the behaviours ran, and every <c>GetAccountNameByConnection</c> in a disconnect
+		/// handler came back empty. KickRequestSystem never deleted a kick request, so the pending-kick gate refused
+		/// the account as "already online" for the request's full three-minute lifetime after every kick.
+		/// Each subscriber runs in its own try/catch: one that throws must not cost the others their cleanup, nor this
+		/// authenticator its own.
+		/// </remarks>
+		public event Action<NetworkConnection> ConnectionStopping;
+
+		/// <summary>Raises <see cref="ConnectionStopping"/>, isolating each subscriber.</summary>
+		private void RaiseConnectionStopping(NetworkConnection conn)
+		{
+			Action<NetworkConnection> handlers = ConnectionStopping;
+			if (handlers == null)
+			{
+				return;
+			}
+			foreach (Delegate handler in handlers.GetInvocationList())
+			{
+				try
+				{
+					((Action<NetworkConnection>)handler)(conn);
+				}
+				catch (Exception ex)
+				{
+					_ = Log.Error(LogPrefix, $"A disconnect handler ({handler.Method.DeclaringType?.Name}.{handler.Method.Name}) threw for connection {conn.ClientId}: {ex}");
+				}
+			}
+		}
+
 		/// <summary>Display name used in log messages. Defaults to the concrete class name.</summary>
 		protected virtual string LogPrefix => GetType().Name;
 
@@ -1738,6 +1774,9 @@ namespace FishMMO.Server.Implementation
 			}
 			else if (args.ConnectionState == RemoteConnectionState.Stopped)
 			{
+				// The server's behaviours first, while the connection still resolves to its account.
+				RaiseConnectionStopping(conn);
+
 				// Clean up the auth timeout tracker and nonce — the connection is
 				// gone regardless of whether it authenticated successfully.
 				connectionStartTimes.TryRemove(conn.ClientId, out _);

@@ -276,12 +276,13 @@ GrassVertex GrassBuildAt(uint instanceID, float2 vertex, float back)
     float maxDistance = max(1.0, _GrassParams0.z);
     float band = max(0.01, _GrassParams0.w) * maxDistance;
     float visible = 1.0 - saturate((d - (maxDistance - band)) / band);
-    o.fade = float2(visible, floor(r2 * 15.999));
+    // A blade the thinning has only just let in dissolves in at its full size: scaled up from the ground it visibly grows.
+    o.fade = float2(visible * thinFade, floor(r2 * 15.999));
 
     // Deep snow buries it.
     float snow = saturate(FishCoverAt(root).x) * FishSurfaceExposure(root);
     float bury = 1.0 - saturate(snow * 1.4) * typeParams.y;
-    float bladeHeight = height * thinFade * lerp(0.35, 1.0, visible) * max(0.02, bury);
+    float bladeHeight = height * lerp(0.35, 1.0, visible) * max(0.02, bury);
 
     // The wind: a world-space wave field carried downwind (gust bands rolling across the meadow), a
     // steady push by the wind's speed, and each blade's own flutter at its own phase.
@@ -388,7 +389,7 @@ GrassVertex GrassBuildAt(uint instanceID, float2 vertex, float back)
     float screenCap = max(1.0, pixelMetres * _GrassScreen.z);
     float share = min(1.0, GrassShareV(d) * exp2(2.0 * round(GrassTypeRow(type, GRASS_ROW_MORE).y)));
     float widen = min(min(_GrassParams0.y, screenCap), pow(max(1e-6, share), -_GrassParams0.x));
-    float width = typeTip.a * widen * (0.75 + 0.5 * r0) * lerp(0.5, 1.0, thinFade) * clamp(FishFloraSwell(root.xz, GRASS_FLORA_WIDTH_SWELL, GRASS_FLORA_WIDTH_SALT) * (_FishFloraInfo.x < 0.5 ? 1.0 : _FishFloraWorld.y), GRASS_FLORA_MIN_WIDTH, GRASS_FLORA_MAX_WIDTH);
+    float width = typeTip.a * widen * (0.75 + 0.5 * r0) * clamp(FishFloraSwell(root.xz, GRASS_FLORA_WIDTH_SWELL, GRASS_FLORA_WIDTH_SALT) * (_FishFloraInfo.x < 0.5 ? 1.0 : _FishFloraWorld.y), GRASS_FLORA_MIN_WIDTH, GRASS_FLORA_MAX_WIDTH);
     float4 headInfo = GrassTypeRow(type, GRASS_ROW_HEAD);
     uint headPart = GrassHeadPart(blade.colour);
     bool isHead = headPart != 0u && headInfo.x > 0.5;
@@ -448,7 +449,7 @@ GrassVertex GrassBuildAt(uint instanceID, float2 vertex, float back)
         // A head keeps its AREA as the field thins (share^-0.5), whatever the blades' widening: a disc grown by the
         // blades' width factor would grow by its square.
         float headWiden = min(_GrassParams0.y, rsqrt(max(1e-6, share)));
-        float size = max(0.002, headInfo.y) * headWiden * thinFade * lerp(0.35, 1.0, visible) * (0.85 + 0.3 * r2);
+        float size = max(0.002, headInfo.y) * headWiden * lerp(0.35, 1.0, visible) * (0.85 + 0.3 * r2);
         float second = headPart == 2u ? 1.0 : 0.0;
         float3 axisA, axisB, centre;
         float profile;

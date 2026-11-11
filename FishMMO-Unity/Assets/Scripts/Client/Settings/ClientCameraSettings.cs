@@ -31,47 +31,123 @@ namespace FishMMO.Client
 		/// Sensitivity when nothing has been chosen.
 		/// </summary>
 		/// <remarks>
-		/// Half, not the 1.0 authored on the camera. That value turns the view faster than anyone
-		/// tested comfortable — a new player would have to find this slider before the game felt
-		/// right, which is the wrong way round for a default. Only players who have never touched
-		/// the slider are affected; a saved value always wins.
+		/// Two on the scale described at <see cref="MouseDegreesPerCount"/>: about 13 inches of mouse for a full turn at
+		/// 800 DPI, a moderate setting.
 		/// </remarks>
-		public const float DefaultLookSensitivity = 0.5f;
+		public const float DefaultLookSensitivity = 2.0f;
 
 		/// <summary>Slowest the view may turn. Above zero: zero is a camera that cannot be moved.</summary>
-		public const float MinimumLookSensitivity = 0.1f;
+		public const float MinimumLookSensitivity = 0.05f;
+
+		/// <summary>Fastest the view may turn: wide enough for any value a player brings from another game.</summary>
+		public const float MaximumLookSensitivity = 20.0f;
 
 		/// <summary>
-		/// Fastest the view may turn.
+		/// Degrees the view turns per mouse count at sensitivity 1, at <see cref="ReferenceVerticalFieldOfView"/>.
 		/// </summary>
 		/// <remarks>
-		/// One, down from an initial five. The camera's authored 1.0 already turns faster than
-		/// comfortable, so everything above it was travel spent on speeds nobody picks — and it
-		/// crammed the usable band into the slider's first tenth. The range a control offers is a
-		/// claim about where the answer lies; this one now spans it rather than hiding it.
+		/// The common scale for mouse look in first-person games, so a sensitivity a player already uses carries
+		/// over unchanged.
 		/// </remarks>
-		public const float MaximumLookSensitivity = 1.0f;
+		private const float DegreesPerCount = 0.022f;
 
 		/// <summary>
-		/// Applies the stored look sensitivity to the live camera.
+		/// The vertical field of view the scale is matched at: 90 degrees across a 4:3 screen, 73.74 degrees up it.
+		/// </summary>
+		private const float ReferenceVerticalFieldOfView = 73.7398f;
+
+		/// <summary>
+		/// Degrees a second the view turns at full deflection of a stick, per unit of sensitivity, at the reference
+		/// field of view: 150 at the default.
+		/// </summary>
+		private const float StickDegreesPerSecond = 75.0f;
+
+		/// <summary>The sensitivity in effect, clamped. Read every frame by the look input.</summary>
+		public static float LookSensitivity { get; private set; } = DefaultLookSensitivity;
+
+		/// <summary>
+		/// Degrees the view turns for one count of mouse movement, at a camera's vertical field of view.
 		/// </summary>
 		/// <remarks>
-		/// Reports what it did, at Debug. This apply is the one that decides whether a player's
-		/// saved sensitivity is honoured, and it previously failed in total silence: the value was
-		/// stored, the options panel displayed it, and the camera ran at its authored speed for the
-		/// whole session with nothing anywhere saying so. A line here is what turns "the slider
-		/// feels wrong" from a guess into something answerable from a log.
-		///
-		/// Only this path logs. ApplyLookSensitivity is also called for every value change while
-		/// the player drags the slider, which would be pure noise.
+		/// <para>
+		/// Sensitivity × 0.022 degrees per count, the common mouse-look scale, so the same number turns the
+		/// view by the same amount for the same movement of the mouse; nothing is scaled by frame time, and the
+		/// counts come in raw (the browser is asked for unaccelerated movement, see PointerLockGuard.jslib).
+		/// </para>
+		/// <para>
+		/// Then scaled by the field of view so the feel stays constant: by tan(fov/2) against the reference's, the
+		/// ratio of the two views' focal lengths. What that holds fixed is how far a point near the crosshair
+		/// moves across the screen per count, so a narrower view turns more slowly and a wider one faster, and at
+		/// the reference view it is exactly 0.022 degrees per count. Recomputed from the live camera every frame,
+		/// so a zoom or a field-of-view setting keeps it constant too.
+		/// </para>
 		/// </remarks>
-		public static void ApplySaved()
+		/// <param name="verticalFieldOfView">The camera's <see cref="Camera.fieldOfView"/>, in degrees.</param>
+		public static float MouseDegreesPerCount(float verticalFieldOfView)
 		{
-			float sensitivity = ClientSettings.GetFloat(
+			return LookSensitivity * DegreesPerCount * FieldOfViewScale(verticalFieldOfView);
+		}
+
+		/// <summary>Degrees a second the view turns at full deflection of a stick, at a camera's vertical field of view.</summary>
+		/// <remarks>A stick reports a position, not a movement, so unlike the mouse this is a rate, scaled by frame time.</remarks>
+		public static float StickDegreesPerSecondAt(float verticalFieldOfView)
+		{
+			return LookSensitivity * StickDegreesPerSecond * FieldOfViewScale(verticalFieldOfView);
+		}
+
+		/// <summary>
+		/// How much faster the view turns at a vertical field of view than at the reference one: the ratio of the
+		/// tangents of the half-angles. 1 for anything that is not a usable perspective angle.
+		/// </summary>
+		public static float FieldOfViewScale(float verticalFieldOfView)
+		{
+			if (float.IsNaN(verticalFieldOfView) || verticalFieldOfView <= 1f || verticalFieldOfView >= 179f)
+			{
+				return 1f;
+			}
+			return Mathf.Tan(0.5f * verticalFieldOfView * Mathf.Deg2Rad) / Mathf.Tan(0.5f * ReferenceVerticalFieldOfView * Mathf.Deg2Rad);
+		}
+
+		/// <summary>
+		/// The saved sensitivity, carrying over one stored under the old meaning.
+		/// </summary>
+		/// <remarks>
+		/// The setting used to be the degrees turned per count outright (0.1 to 1, default 0.5), stored under
+		/// <see cref="ClientSettings.LegacyLookSensitivityKey"/>. It is converted once into the sensitivity that
+		/// turns the same amount per count at the camera's authored 60-degree view, so nobody's view changes
+		/// speed under them except where the old value lies past the new maximum; the old key is then removed.
+		/// </remarks>
+		public static float LoadSaved()
+		{
+			if (!ClientSettings.Exists(ClientSettings.LookSensitivityKey) && ClientSettings.Exists(ClientSettings.LegacyLookSensitivityKey))
+			{
+				float degreesPerCount = ClientSettings.GetFloat(ClientSettings.LegacyLookSensitivityKey, 0.5f, 0.001f, 100f);
+				float carried = Mathf.Clamp(degreesPerCount / (DegreesPerCount * FieldOfViewScale(LegacyFieldOfView)),
+					MinimumLookSensitivity, MaximumLookSensitivity);
+				ClientSettings.Set(ClientSettings.LookSensitivityKey, carried);
+				ClientSettings.Remove(ClientSettings.LegacyLookSensitivityKey);
+				Log.Debug("ClientCameraSettings", $"Look sensitivity {degreesPerCount} degrees per count carried over as {carried}.");
+			}
+			return ClientSettings.GetFloat(
 				ClientSettings.LookSensitivityKey,
 				DefaultLookSensitivity,
 				MinimumLookSensitivity,
 				MaximumLookSensitivity);
+		}
+
+		/// <summary>The main camera's authored vertical field of view (ClientPreboot), at which old values are carried over.</summary>
+		private const float LegacyFieldOfView = 60f;
+
+		/// <summary>
+		/// Applies the stored look sensitivity.
+		/// </summary>
+		/// <remarks>
+		/// Reports what it did, at Debug. Only this path logs: ApplyLookSensitivity is also called for every
+		/// value change while the player drags the slider, which would be pure noise.
+		/// </remarks>
+		public static void ApplySaved()
+		{
+			float sensitivity = LoadSaved();
 
 			/* Applied alongside sensitivity so both reach the camera at the same moment, which
 			 * is the point where one exists. */
@@ -80,46 +156,47 @@ namespace FishMMO.Client
 			if (ApplyLookSensitivity(sensitivity))
 			{
 				Log.Debug("ClientCameraSettings",
-					$"Look sensitivity {sensitivity} applied to the camera.");
+					$"Look sensitivity {sensitivity} applied; the camera takes its input in degrees.");
 			}
 			else
 			{
 				Log.Debug("ClientCameraSettings",
-					$"Look sensitivity {sensitivity} not applied: no camera yet. Expected during " +
+					$"Look sensitivity {sensitivity} applied; no camera yet. Expected during " +
 					"boot, and applied again once the character is in the world.");
 			}
 		}
 
 		/// <summary>
-		/// Writes a look sensitivity onto the camera and remembers it.
+		/// Sets the look sensitivity, and puts the camera into degrees.
 		/// </summary>
 		/// <remarks>
-		/// Clamped rather than trusted. The value is a float in a text file the player can edit, and
-		/// it multiplies raw mouse delta: a large one makes the view unusable at exactly the moment
-		/// the player would need to reach the menu to put it back, and zero makes the camera
-		/// immovable.
+		/// Clamped rather than trusted. The value is a float in a text file the player can edit, and it scales
+		/// raw mouse movement: a large one makes the view unusable at exactly the moment the player would need to
+		/// reach the menu to put it back, and zero makes the camera immovable.
+		/// <para>
+		/// The look input now arrives at the camera already in degrees (PlayerInputController converts counts with
+		/// <see cref="MouseDegreesPerCount"/>, which needs the live field of view), so the camera's own
+		/// <see cref="KCCCamera.RotationSpeed"/> multiplier is held at 1 rather than carrying the sensitivity.
+		/// </para>
 		/// </remarks>
-		/// <param name="value">Sensitivity multiplier. Clamped to the supported range.</param>
-		/// <returns><c>true</c> if a camera received the value; <c>false</c> if there is none yet.</returns>
+		/// <param name="value">The sensitivity. Clamped to the supported range.</param>
+		/// <returns><c>true</c> if a camera was found and set to take degrees; <c>false</c> if there is none yet.</returns>
 		public static bool ApplyLookSensitivity(float value)
 		{
-			float clamped = float.IsNaN(value)
+			LookSensitivity = float.IsNaN(value)
 				? DefaultLookSensitivity
 				: Mathf.Clamp(value, MinimumLookSensitivity, MaximumLookSensitivity);
 
 			KCCCamera camera = ResolveCamera();
 			if (camera == null)
 			{
-				/* Not an error, and not the whole story either: boot applies settings before a
-				 * world camera exists, so this returns having done nothing. That is fine only
-				 * because PlayerInputController.Initialize applies again once the local character
-				 * is in the world. Without that second apply the camera keeps its authored
-				 * RotationSpeed for the whole session, and the saved value appears to be ignored
-				 * until the player happens to move the slider. */
+				/* Not an error: boot applies settings before a world camera exists. The sensitivity is held
+				 * here and read every frame, so it already takes effect; PlayerInputController.Initialize
+				 * applies again once the character is in the world, which sets the camera to degrees. */
 				return false;
 			}
 
-			camera.RotationSpeed = clamped;
+			camera.RotationSpeed = 1f;
 			return true;
 		}
 

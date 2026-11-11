@@ -464,31 +464,79 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Called when a remote connection stops. Override in derived classes to perform
 		/// per-connection cleanup (e.g. clearing in-flight requests, caches, queue entries).
+		/// The connection still resolves to its account here (<c>Server.AccountManager.GetAccountNameByConnection</c>):
+		/// the authenticator forgets it only after every behaviour has run.
 		/// Systems must call <see cref="SubscribeToConnectionEvents"/> in <see cref="InitializeOnce"/>
 		/// and <see cref="UnsubscribeFromConnectionEvents"/> in <see cref="OnDeinitialize"/> to use this.
 		/// </summary>
 		protected virtual void OnRemoteConnectionStopped(NetworkConnection conn) { }
 
 		/// <summary>
-		/// Subscribes to <see cref="ServerManager.OnRemoteConnectionState"/> and dispatches
-		/// disconnect events to <see cref="OnRemoteConnectionStopped"/>.
+		/// Where this behaviour's disconnects come from: the server's authenticator when it is a
+		/// <see cref="BaseServerAuthenticator"/>, else null for FishNet's own event.
 		/// </summary>
+		private BaseServerAuthenticator connectionEventSource;
+
+		/// <summary>True while <see cref="HandleRemoteConnectionState"/> is subscribed to FishNet's event (the fallback).</summary>
+		private bool subscribedToServerManager;
+
+		/// <summary>
+		/// Dispatches disconnects to <see cref="OnRemoteConnectionStopped"/>, before the connection's account is forgotten.
+		/// </summary>
+		/// <remarks>
+		/// Through <see cref="BaseServerAuthenticator.ConnectionStopping"/>, which the authenticator raises ahead of its
+		/// own teardown, so <c>Server.AccountManager.GetAccountNameByConnection</c> still answers inside
+		/// <see cref="OnRemoteConnectionStopped"/>. Subscribing to <see cref="ServerManager.OnRemoteConnectionState"/>
+		/// directly put every behaviour after the authenticator, which FishNet initialises first, and so after the
+		/// account was gone. Any other authenticator falls back to FishNet's event.
+		/// </remarks>
 		protected void SubscribeToConnectionEvents()
 		{
-			if (ServerManager != null)
+			// A ScriptableObject keeps these fields across play sessions when the domain is not reloaded, so start
+			// clean rather than trust them: a stale flag would skip the subscription, a stale handler would double it.
+			UnsubscribeFromConnectionEvents();
+			if (ServerManager == null)
 			{
+				return;
+			}
+			if (ServerManager.GetAuthenticator() is BaseServerAuthenticator authenticator)
+			{
+				connectionEventSource = authenticator;
+				authenticator.ConnectionStopping += HandleConnectionStopping;
+			}
+			else
+			{
+				subscribedToServerManager = true;
 				ServerManager.OnRemoteConnectionState += HandleRemoteConnectionState;
 			}
 		}
 
 		/// <summary>
-		/// Unsubscribes from <see cref="ServerManager.OnRemoteConnectionState"/>.
+		/// Unsubscribes from whichever source <see cref="SubscribeToConnectionEvents"/> chose.
 		/// </summary>
 		protected void UnsubscribeFromConnectionEvents()
 		{
-			if (ServerManager != null)
+			if (connectionEventSource != null)
 			{
-				ServerManager.OnRemoteConnectionState -= HandleRemoteConnectionState;
+				connectionEventSource.ConnectionStopping -= HandleConnectionStopping;
+				connectionEventSource = null;
+			}
+			if (subscribedToServerManager)
+			{
+				subscribedToServerManager = false;
+				if (ServerManager != null)
+				{
+					ServerManager.OnRemoteConnectionState -= HandleRemoteConnectionState;
+				}
+			}
+		}
+
+		/// <summary>Dispatches the authenticator's <see cref="BaseServerAuthenticator.ConnectionStopping"/> to <see cref="OnRemoteConnectionStopped"/>.</summary>
+		private void HandleConnectionStopping(NetworkConnection conn)
+		{
+			if (conn != null)
+			{
+				OnRemoteConnectionStopped(conn);
 			}
 		}
 

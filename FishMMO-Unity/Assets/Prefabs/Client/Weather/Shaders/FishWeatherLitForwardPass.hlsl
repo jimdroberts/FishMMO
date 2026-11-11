@@ -366,6 +366,9 @@ void LitPassFragment(
     FishDitherClip(input.positionCS.xy, _FishVisible);
     // ── FishMMO edit: how deep underground this surface is (a cave's walls, its formations): the sky reaches none of it. ──
     half fishUnderground = FishUnderground(inputData.positionWS);
+    // 1 for everything but a structure's sheltered surfaces (set in the structure block below, the instanced twin's only);
+    // the textured moss further on reads it.
+    half fishStructureOpen = 1.0h;
 #if defined(FISH_INDIRECT_INSTANCED)
     // ── FishMMO edit: a terrain rock sits IN the ground. Over a band at its base, and in the crevices where it meets
     // another rock, it renders the TERRAIN — the terrain's own surface there (FishGroundColour.hlsl FishGroundContact)
@@ -392,20 +395,32 @@ void LitPassFragment(
     bool fishStructure = _FishStructure > 0.5h;
     if (fishStructure)
     {
+        /* Indoors or out (FishStructureOpenSky): what weather and the ground lay on a building is outside work. Inside, a
+         * floor at the terrain's height took the grass of the ground under the house, and a bed's top, the floorboards and
+         * the north walls grew the moss and the biome's coat. */
+        half fishOpen = FishStructureOpenSky(inputData.positionWS, (half3)input.normalWS);
+        fishStructureOpen = fishOpen;
         /* A wall is not a rock: the terrain unfolded half a metre up it read as grass climbing the wall. Only its very
          * foot takes the ground (the plinth set into the earth); above, the weathering's damp and splash. */
         half fishFoot = 1.0h - (half)smoothstep(0.0, 0.18, input.fishContact);
-        fishGroundWeight = min(fishGroundWeight, fishFoot * 0.9h);
+        fishGroundWeight = min(fishGroundWeight, fishFoot * 0.9h * fishOpen);
         fishSoil = 0.0h;
         half3 fishUnweathered = surfaceData.albedo;
         half fishUnweatheredSmooth = surfaceData.smoothness;
-        FishStructureWeather(inputData.positionWS, (half3)input.normalWS, input.fishContact, input.fishRockOrigin,
+        FishStructureWeather(inputData.positionWS, (half3)input.normalWS, input.fishContact, input.fishRockOrigin, fishOpen,
             surfaceData.albedo, surfaceData.smoothness, surfaceData.occlusion);
         // The biome's coat over the weathering (walls, roofs, timber: not panes or glowing parts). Off unless a biome here has one.
-        if (_FishStructure < 1.5h)
+        // Weather's work, so none of it indoors.
+        if (_FishStructure < 1.5h && fishOpen > 0.0h)
         {
+            half3 fishUncoated = surfaceData.albedo;
+            half fishUncoatedSmooth = surfaceData.smoothness;
+            half fishUncoatedOcclusion = surfaceData.occlusion;
             FishStructureCoat(inputData.positionWS, (half3)input.normalWS, input.fishContact, input.fishRockOrigin, fishUnweathered,
                 fishUnweatheredSmooth, surfaceData.albedo, surfaceData.smoothness, surfaceData.occlusion);
+            surfaceData.albedo = lerp(fishUncoated, surfaceData.albedo, fishOpen);
+            surfaceData.smoothness = lerp(fishUncoatedSmooth, surfaceData.smoothness, fishOpen);
+            surfaceData.occlusion = lerp(fishUncoatedOcclusion, surfaceData.occlusion, fishOpen);
         }
         if (_FishStructure > 2.5h)
         {
@@ -466,8 +481,22 @@ void LitPassFragment(
 #else
     float fishMossAbove = 1e4;
 #endif
+    // A building's moss grows outside only (fishStructureOpen): its sheltered surfaces keep the material as it was.
+    half3 fishMosslessAlbedo = surfaceData.albedo;
+    float3 fishMosslessNormal = inputData.normalWS;
+    half fishMosslessSmooth = surfaceData.smoothness;
+    half fishMosslessMetal = surfaceData.metallic;
+    half fishMosslessOcclusion = surfaceData.occlusion;
     FishMossSurface(inputData.positionWS, (half3)input.normalWS, fishMossAbove, fishUnderground,
         surfaceData.albedo, inputData.normalWS, surfaceData.smoothness, surfaceData.metallic, surfaceData.occlusion);
+    if (fishStructureOpen < 1.0h)
+    {
+        surfaceData.albedo = lerp(fishMosslessAlbedo, surfaceData.albedo, fishStructureOpen);
+        inputData.normalWS = normalize(lerp(fishMosslessNormal, inputData.normalWS, (float)fishStructureOpen));
+        surfaceData.smoothness = lerp(fishMosslessSmooth, surfaceData.smoothness, fishStructureOpen);
+        surfaceData.metallic = lerp(fishMosslessMetal, surfaceData.metallic, fishStructureOpen);
+        surfaceData.occlusion = lerp(fishMosslessOcclusion, surfaceData.occlusion, fishStructureOpen);
+    }
     if (_FishWeatherAmount > 0.0)
     {
         half3 weathered = inputData.normalWS;

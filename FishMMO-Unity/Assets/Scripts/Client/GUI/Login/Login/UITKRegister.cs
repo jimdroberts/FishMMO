@@ -78,6 +78,8 @@ namespace FishMMO.Client
 		private const string DISCORD_NAME = "register-discord";
 		/// <summary>Where to join the game's Discord server; hidden unless an invite link is set.</summary>
 		private const string DISCORD_HINT_NAME = "register-discord-hint";
+		/// <summary>Opt-in for an authenticator (two-factor) on the new account; starts off.</summary>
+		private const string TWO_FACTOR_NAME = "register-two-factor";
 		/// <summary>Digits in a verification code; a complete one submits itself.</summary>
 		private const int VerificationCodeLength = 6;
 
@@ -112,6 +114,7 @@ namespace FishMMO.Client
 		private Toggle verifyByDiscord;
 		private TextField discordUsername;
 		private Label discordHint;
+		private Toggle enableTwoFactor;
 
 		/// <summary>
 		/// The invite link to the game's Discord server, shown beside the Discord username field.
@@ -133,6 +136,9 @@ namespace FishMMO.Client
 
 		/// <summary>True once this attempt's two-factor setup has been received.</summary>
 		private bool twoFactorSetupShown;
+
+		/// <summary>True when the player opted in to two-factor on this attempt, so a setup is expected.</summary>
+		private bool twoFactorRequested;
 
 		/// <summary>
 		/// Temporarily stores the username after account creation for verification code submission.
@@ -198,6 +204,7 @@ namespace FishMMO.Client
 			verifyByDiscord = Root.Q<Toggle>(VERIFY_DISCORD_NAME);
 			discordUsername = Root.Q<TextField>(DISCORD_NAME);
 			discordHint = Root.Q<Label>(DISCORD_HINT_NAME);
+			enableTwoFactor = Root.Q<Toggle>(TWO_FACTOR_NAME);
 			ApplyDiscordInvite();
 
 			if (password != null)
@@ -231,7 +238,7 @@ namespace FishMMO.Client
 			// lock as the Register button it mirrors; see LoginKeys.Attach.
 			LoginKeys.Attach(this, Root, OnClick_Register, OnClick_QuitToLogin, () => !replyGuard.IsPending);
 			LoginKeys.SetTabOrder(Root, username, email, password, ageSelect, verifyByEmail, verifyBySms, verifyByDiscord, discordUsername,
-				phone, country, realName, address, referral, betaCode, registerButton, quitToLoginButton);
+				phone, country, realName, address, referral, betaCode, enableTwoFactor, registerButton, quitToLoginButton);
 		}
 
 		/// <summary>
@@ -443,15 +450,26 @@ namespace FishMMO.Client
 			if (!this.accountCreated && twoFactorSetupShown)
 			{
 				// The setup dialog is already up — the server sends it before this answer. Let the
-				// player finish with it; its Confirm completes the flow.
+				// player finish with it; its Confirm completes the flow. The reply clock stays
+				// stopped: from here the client waits on the player, not on the server.
 				this.accountCreated = true;
 				verificationCompleteAtCreation = true;
-				SetFormLocked(true);
 				SetStatus("Account created.");
 				return;
 			}
+			if (!this.accountCreated && twoFactorRequested)
+			{
+				// Asked for, and the answer arrived without it: the setup is not coming. The account
+				// is verified and usable; say so, then finish.
+				LoginNotice.Show(TwoFactorNotSetUpNotice);
+			}
 			OnAccountVerified();
 		}
+
+		/// <summary>What a player who opted in to two-factor is told when the server could not set it up.</summary>
+		private const string TwoFactorNotSetUpNotice =
+			"Your account was created, but two-factor authentication could not be set up on it.\n\n" +
+			"Your account is fine and signs in with its password. Set up two-factor later from My account on the Control Panel.";
 
 		/// <summary>
 		/// PhoneUnverified, from a server one release behind that still asked for codes one channel at a
@@ -483,25 +501,52 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Handles successful account creation: hides the form and waits for the 2FA setup broadcast.
+		/// Handles successful account creation, with a verification code owed: on to the code prompt,
+		/// after the two-factor setup when the player opted in to one.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The server queues <c>TwoFactorSetupBroadcast</c> before this result on the same reliable
+		/// channel (AccountCreationSystem), so by the time this runs the setup has either arrived or is
+		/// not coming. Nothing here waits for it.
+		/// </para>
+		/// <para>
+		/// This used to call <c>SetFormLocked(true)</c>, which re-armed the reply deadline the setup
+		/// dialog had just stopped. A player still scanning the QR code thirty seconds later was told
+		/// the server had not finished setting up two-factor, with a code prompt opened over the
+		/// recovery codes. The form is still locked from the Register click; only the clock was new.
+		/// </para>
+		/// </remarks>
 		private void OnAccountCreated()
 		{
 			/* The account now exists in the database. Everything after this point is recoverable
-			 * by verifying the email, so the flag below turns the reply timeout from "give up"
-			 * into "skip the step that went missing". */
+			 * by verifying it, and registering again would only be refused. */
 			this.accountCreated = true;
 
-			SetFormLocked(true);
+			if (twoFactorSetupShown)
+			{
+				// The setup dialog is up; its Confirm opens the code prompt.
+				SetStatus("Account created. Save your two-factor details, then press Confirm.");
+				return;
+			}
 
-			/* Deliberately does NOT hide the panel here any more, and deliberately leaves the
-			 * reply deadline armed. What the client is waiting for at this point is one more
-			 * message from the server — TwoFactorSetupBroadcast — and it is the one message in
-			 * this flow the server can silently decline to send: AccountCreationSystem logs and
-			 * carries on when TotpMasterKey is missing or the wrong length, and again if the
-			 * setup block throws. The account is created either way, so the player was left on a
-			 * hidden panel, form locked, in front of a status line they could not see, forever. */
-			SetStatus("Setting up two-factor authentication...");
+			SetStatus("Account created.");
+
+			// Asked for and not sent: say so first, and go on to the code from the notice itself so the
+			// two dialogs are never on screen together.
+			if (twoFactorRequested &&
+				UIManager.TryGetTK("UIDialogBox", out UITKDialogBox dialogBox) &&
+				dialogBox.Open(TwoFactorNotSetUpNotice, OpenVerifyCodeDialog, OpenVerifyCodeDialog))
+			{
+				replyGuard.Clear();
+				return;
+			}
+			if (twoFactorRequested)
+			{
+				LoginNotice.Show(TwoFactorNotSetUpNotice);
+			}
+
+			OpenVerifyCodeDialog();
 		}
 
 		/// <summary>
@@ -1047,8 +1092,10 @@ namespace FishMMO.Client
 
 			/* Held from here until the 2FA payload has been encrypted with it, and no longer. See
 			 * the field's remarks: this is the price of encrypting the recovery codes at rest, and
-			 * the window is the same one the SRP handshake already keeps the password open for. */
-			pendingAccountPassword = passwordText;
+			 * the window is the same one the SRP handshake already keeps the password open for.
+			 * Without the opt-in there is no payload to encrypt, so it is not held at all. */
+			bool wantsTwoFactor = profile.EnableTwoFactor;
+			pendingAccountPassword = wantsTwoFactor ? passwordText : null;
 
 			StartCoroutine(Client.GetLoginServerList((error) =>
 			{
@@ -1061,6 +1108,7 @@ namespace FishMMO.Client
 				pendingVerifyUsername = usernameText;
 				verificationCompleteAtCreation = false;
 				twoFactorSetupShown = false;
+				twoFactorRequested = wantsTwoFactor;
 					if (!string.IsNullOrEmpty(token)) Client.LoginAuthenticator.ConnectionToken = token;
 				Connect(usernameText, passwordText, emailText, age, profile);
 			}));
@@ -1242,6 +1290,8 @@ namespace FishMMO.Client
 			verifyByEmail?.SetValueWithoutNotify(true);
 			verifyBySms?.SetValueWithoutNotify(false);
 			verifyByDiscord?.SetValueWithoutNotify(false);
+			// Two-factor is opt-in: every form starts with it off.
+			enableTwoFactor?.SetValueWithoutNotify(false);
 		}
 
 		/// <summary>Reads the optional details and the verification choice off the form.</summary>
@@ -1271,6 +1321,7 @@ namespace FishMMO.Client
 				DiscordUsername = NullIfBlank(discordUsername),
 				BetaCode = NullIfBlank(betaCode),
 				VerificationChannels = channels,
+				EnableTwoFactor = enableTwoFactor != null && enableTwoFactor.value,
 			};
 		}
 
@@ -1309,14 +1360,11 @@ namespace FishMMO.Client
 		/// whole of the part of the flow that can actually stall — so the one failure this
 		/// watchdog exists for produced no visible change whatsoever.
 		/// <para>
-		/// The <see cref="accountCreated"/> branch is the real fix for the 2FA hang. When the
-		/// account exists and only <c>TwoFactorSetupBroadcast</c> went missing — which is
-		/// guaranteed, not hypothetical, whenever the login server's <c>TotpMasterKey</c> is
-		/// unset or not 32 bytes: <c>AccountCreationSystem</c> logs an error and carries straight
-		/// on — the correct exit is not to fail, it is to skip the step. The account is real, the
-		/// verification email has been sent, and email verification is the next step regardless.
-		/// Restarting registration instead would only earn a refusal for an account that already
-		/// exists.
+		/// Once the account exists the clock runs only while a verification code is outstanding, so
+		/// the <see cref="accountCreated"/> branch reopens the code prompt rather than failing:
+		/// restarting registration would only earn a refusal for an account that already exists. A
+		/// missing two-factor setup no longer reaches here at all — the setup is sent before the
+		/// result, so <see cref="OnAccountCreated"/> knows on arrival whether it came.
 		/// </para>
 		/// </remarks>
 		private void OnReplyTimedOut()
@@ -1342,11 +1390,12 @@ namespace FishMMO.Client
 
 			if (this.accountCreated && !string.IsNullOrEmpty(pendingVerifyUsername))
 			{
-				SetStatus("Two-factor setup did not complete.");
+				/* The account exists, so the only request that can be outstanding is a verification
+				 * code. This used to say two-factor setup had failed, whatever had actually stalled. */
+				SetStatus("The server did not answer in time.");
 
-				string message = "Your account was created, but the server did not finish setting up " +
-					"two-factor authentication.\n\nYour account is fine. Continue to verification " +
-					"and sign in as normal; two-factor authentication can be set up later.";
+				string message = "Your account was created, but the server did not answer your verification code in time.\n\n" +
+					"Enter the code again, or sign in later with your new account to finish verifying it.";
 
 				if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox dialogBox) &&
 					dialogBox.Open(message, ContinueAfterTwoFactorSetup, ContinueAfterTwoFactorSetup))
@@ -1420,7 +1469,7 @@ namespace FishMMO.Client
 			{
 				ageSelect.SetEnabled(interactable);
 			}
-			foreach (VisualElement control in new VisualElement[] { phone, country, realName, address, referral, betaCode, verifyByEmail, verifyBySms, verifyByDiscord, discordUsername })
+			foreach (VisualElement control in new VisualElement[] { phone, country, realName, address, referral, betaCode, verifyByEmail, verifyBySms, verifyByDiscord, discordUsername, enableTwoFactor })
 			{
 				control?.SetEnabled(interactable);
 			}

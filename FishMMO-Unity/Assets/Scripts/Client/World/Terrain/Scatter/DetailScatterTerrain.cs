@@ -668,7 +668,7 @@ namespace FishMMO.Client
 				st.itemMax = b.ItemMax;
 				st.ClampedBlocks = b.ClampedBlocks;
 				st.ClampedChannel = b.ClampedChannel;
-				if (SystemInfo.SupportsTextureFormat(TextureFormat.R16))
+				if (GroundMaterialMap.R16Samplable)
 				{
 					st.heightTexels16 = tile.Heights;
 				}
@@ -899,7 +899,7 @@ namespace FishMMO.Client
 			{
 				heightTexelsMissing = false;
 				int hres = st.HeightResolution;
-				if (SystemInfo.SupportsTextureFormat(TextureFormat.R16))
+				if (GroundMaterialMap.R16Samplable)
 				{
 					st.heightTexels16 = new ushort[hres * hres];
 				}

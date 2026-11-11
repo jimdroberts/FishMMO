@@ -38,6 +38,12 @@ namespace FishMMO.Client
 		public const int MaxPerBlock = 128;
 
 		/// <summary>
+		/// The most bushes a block draws (FishDetailScatter.compute SCATTER_MAX_BUSHES_PER_BLOCK). Hedges are painted several
+		/// bushes to a cell; a bush is 3-4 m across, so the extra ones only add overlapping leaves to draw and shade.
+		/// </summary>
+		public const int MaxBushesPerBlock = 2;
+
+		/// <summary>
 		/// Types one terrain can scatter, a channel each (2026-10-27: was 8, two RGBA density slices). The density is sparse now
 		/// (<see cref="PackEntry"/>: only the painted pairs of block and channel are kept), so a channel costs nothing where it is
 		/// not painted; the cap is the table's. Moron 2's busiest terrain paints 63 mesh kinds. Past it the cut reports an error

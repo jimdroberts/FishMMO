@@ -767,21 +767,24 @@ namespace FishMMO.Client
 			}
 			}
 
-			// Every drawn animal of every kind into one buffer, each kind a run of it (LifeInstancePacking).
-			int total = 0;
+			// Every drawn animal of every kind into one buffer, each kind a run of it at a place that never moves
+			// (LifeInstanceBuffers: the start each kind's material holds must not change from frame to frame).
+			int longest = 0;
 			for (int k = 0; k < kindCount; k++)
 			{
 				if (meshes[k] != null && materials[k] != null)
 				{
-					total += byKind[k].Count;
+					longest = Mathf.Max(longest, byKind[k].Count);
 				}
 			}
-			instanceBuffers.Reserve(total);
+			instanceBuffers.ReserveRuns(kindCount, longest);
 			LifeInstanceRecord[] records = instanceBuffers.Records;
+			int slot = instanceBuffers.Slot;
 			int drawn = 0;
 			for (int k = 0; k < kindCount; k++)
 			{
-				kindBase[k] = drawn;
+				int packed = LifeInstancePacking.RunStart(k, slot);
+				kindBase[k] = packed;
 				kindDrawn[k] = 0;
 				List<SeaInstance> list = byKind[k];
 				if (list.Count == 0 || meshes[k] == null || materials[k] == null)
@@ -794,7 +797,7 @@ namespace FishMMO.Client
 				for (int i = 0; i < list.Count; i++)
 				{
 					SeaInstance s = list[i];
-					records[drawn + i] = LifeInstancePacking.Pack(s.Matrix, 1f, s.Anim, s.Tint, s.Surface, Vector4.zero);
+					records[packed + i] = LifeInstancePacking.Pack(s.Matrix, 1f, s.Anim, s.Tint, s.Surface, Vector4.zero);
 					if (shadows && !anyNearForShadow && Vector3.Distance(eye, s.Matrix.GetColumn(3)) <= settings.ShadowDistance)
 					{
 						anyNearForShadow = true;
@@ -804,7 +807,7 @@ namespace FishMMO.Client
 				kindShadows[k] = anyNearForShadow;
 				drawn += list.Count;
 			}
-			GraphicsBuffer buffer = instanceBuffers.Upload(camera, drawn);
+			GraphicsBuffer buffer = instanceBuffers.Upload(camera, kindCount, kindDrawn);
 			for (int k = 0; buffer != null && k < kindCount; k++)
 			{
 				int count = kindDrawn[k];

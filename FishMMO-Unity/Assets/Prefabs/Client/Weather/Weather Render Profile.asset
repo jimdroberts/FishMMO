@@ -263,7 +263,7 @@ MonoBehaviour:
     - Detail_Reeds
     - Detail_Flowers
     Rings:
-    - {x: 7.5, y: 800}
+    - {x: 12, y: 800}
     - {x: 50, y: 120}
     - {x: 100, y: 30}
     - {x: 200, y: 7.5}

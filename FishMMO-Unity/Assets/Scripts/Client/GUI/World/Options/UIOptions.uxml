@@ -84,8 +84,7 @@
                 </ui:VisualElement>
                 <ui:VisualElement class="options-row">
                     <ui:Label text="Look Sensitivity" class="fish-label options-row-label" />
-                    <ui:Slider name="look-sensitivity-slider" low-value="0.1" high-value="1" class="options-row-field" />
-                    <ui:Label name="look-sensitivity-value" text="0.50" class="fish-hint options-row-value" />
+                    <ui:Slider name="look-sensitivity-slider" low-value="0.05" high-value="20" show-input-field="true" class="fish-slider options-row-field" />
                 </ui:VisualElement>
                 <ui:VisualElement class="options-row">
                     <ui:Label text="Frame Rate Limit" class="fish-label options-row-label" />
@@ -192,7 +191,7 @@
                 <ui:VisualElement class="options-row">
                     <ui:Label text="Nameplate Size" class="fish-label options-row-label" />
                     <ui:Slider name="nameplate-scale-slider" low-value="0.5" high-value="2" class="options-row-field" />
-                    <ui:Label name="nameplate-scale-value" text="1.00x" class="fish-hint options-row-value" />
+                    <ui:Label name="nameplate-scale-value" text="0.50x" class="fish-hint options-row-value" />
                 </ui:VisualElement>
                 <ui:VisualElement class="options-row">
                     <ui:Label text="Nameplate Opacity" class="fish-label options-row-label" />
@@ -275,7 +274,7 @@
                 <ui:VisualElement class="options-row">
                     <ui:Label text="Interface Scale" class="fish-label options-row-label" />
                     <ui:Slider name="ui-scale-slider" low-value="0.75" high-value="1.5" class="options-row-field" />
-                    <ui:Label name="ui-scale-value" text="100%" class="fish-hint options-row-value" />
+                    <ui:Label name="ui-scale-value" text="75%" class="fish-hint options-row-value" />
                 </ui:VisualElement>
                 <ui:VisualElement class="options-row">
                     <ui:Label text="Window Snap Grid" class="fish-label options-row-label" />

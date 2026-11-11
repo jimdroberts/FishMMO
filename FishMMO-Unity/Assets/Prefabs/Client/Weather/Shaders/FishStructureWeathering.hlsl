@@ -30,11 +30,31 @@ float FishWearNoise(float2 p)
 }
 
 /// <summary>
+/// How open to the weather a structure's surface is, 0 indoors .. 1 out: the sky occlusion map (FishSurfaceExposure) read
+/// a metre and a half out from the surface along its normal.
+/// </summary>
+/// <remarks>
+/// Out along the normal, not at the surface: an outer wall under its eaves is covered where it stands, but a step out
+/// from it is the open air, so it keeps its moss and coat; a roof's top is open a step above it. Inside, a step out from
+/// a floor, a bed's top or a wall is still under the roof. Beyond the map (about 100 m round the camera) everything
+/// reads as open, which is how it all drew before.
+/// </remarks>
+half FishStructureOpenSky(float3 positionWS, half3 normalWS)
+{
+#if defined(FISHMMO_SURFACE_INCLUDED)
+    return (half)FishSurfaceExposure(positionWS + (float3)normalize(normalWS) * 1.5);
+#else
+    return 1.0h;
+#endif
+}
+
+/// <summary>
 /// Weathers one pixel of a structure. heightAboveGround is the pixel's height over the terrain (FishContactHeight, metres;
 /// very large where no terrain is known), originWS the instance's root (each building's own variation), normalWS the
-/// surface's geometric normal.
+/// surface's geometric normal, open how much of the weather reaches it (FishStructureOpenSky: 0 indoors, where it takes no
+/// moss, rain streaks or splashed soil).
 /// </summary>
-void FishStructureWeather(float3 positionWS, half3 normalWS, float heightAboveGround, float3 originWS,
+void FishStructureWeather(float3 positionWS, half3 normalWS, float heightAboveGround, float3 originWS, half open,
     inout half3 albedo, inout half smoothness, inout half occlusion)
 {
     half3 n = normalize(normalWS);
@@ -57,7 +77,7 @@ void FishStructureWeather(float3 positionWS, half3 normalWS, float heightAboveGr
     albedo *= lerp(1.0h, 0.74h + 0.14h * grain, grime * 0.55h);
 
     // The foot: soil splashed up the wall and the damp that stays in it.
-    half splash = (half)(1.0 - smoothstep(0.0, 0.55, heightAboveGround)) * (0.65h + 0.35h * fine);
+    half splash = (half)(1.0 - smoothstep(0.0, 0.55, heightAboveGround)) * (0.65h + 0.35h * fine) * open;
     albedo = lerp(albedo, albedo * half3(0.6h, 0.5h, 0.4h), splash * 0.75h * max(wall, 0.4h));
     smoothness = lerp(smoothness, max(smoothness, 0.3h), splash * 0.45h);
     occlusion *= 1.0h - splash * 0.2h;
@@ -67,14 +87,14 @@ void FishStructureWeather(float3 positionWS, half3 normalWS, float heightAboveGr
     float run = dot(positionWS.xz, across);
     half streak = (half)smoothstep(0.62, 0.92, FishWearNoise(float2(run * 6.0, positionWS.y * 0.45)))
                 * (half)(0.5 + 0.5 * FishWearNoise(float2(run * 1.1, positionWS.y * 0.2 + 9.0)));
-    albedo *= 1.0h - streak * wall * 0.22h;
+    albedo *= 1.0h - streak * wall * open * 0.22h;
 
     // Moss where the sky falls (roofs, sills, wall tops) and on north faces, in patches.
     half skyward = (half)saturate(up * 1.6 - 0.25);
     half north = (half)saturate(n.z) * wall;
     half patches = (half)smoothstep(0.42, 0.8, FishWearNoise(positionWS.xz * 0.55 + positionWS.y * 0.3) * 0.6
                                               + FishWearNoise(positionWS.xz * 2.9 + 11.0) * 0.4);
-    half moss = saturate(skyward * 0.85h + north * 0.35h) * patches;
+    half moss = saturate(skyward * 0.85h + north * 0.35h) * patches * open;
     // A material with the textured moss layer (_FishMoss, FishMoss.hlsl, the art generator's) grows its moss there, from
     // the scene's dampness; this flat colour stays only on structure materials without it, which it always drew on.
     moss *= 1.0h - saturate((half)_FishMoss * 4.0h);

@@ -49,6 +49,13 @@ namespace FishMMO.TestHarness.World.Editor
             var probe = host.AddComponent<WebGpuSmokeProbe>();
             probe.TerrainArrays = AssetDatabase.LoadAssetAtPath<TerrainArraySet>(TerrainArraySet.BakedAssetPath(scene.name));
             if (probe.TerrainArrays == null || !probe.TerrainArrays.IsUsable) throw new BuildFailedException("Missing baked scene terrain arrays");
+            // The dressed scenes keep the bed's camera inactive (the game brings its own, ClientPreboot's); this player has no
+            // other, and without it nothing renders at all.
+            bool camera = false;
+            foreach (var root in scene.GetRootGameObjects())
+                foreach (var bed in root.GetComponentsInChildren<WorldSimController>(true))
+                    if (bed.Camera != null) { bed.Camera.gameObject.SetActive(true); camera = true; }
+            if (!camera) throw new BuildFailedException("The World Sim bed has no camera to render the test with");
         }
         public static void Build()
         {
@@ -139,9 +146,13 @@ namespace FishMMO.TestHarness.World.Editor
         /// </summary>
         public static string FillWindow(string page)
         {
+            // The template before Unity 6.6 sized the canvas itself; 6.6's sizes a container (#unity-fullscreen-container) the
+            // canvas fills.
             const string fixedSize = "canvas.style.width = \"1024px\";\n        canvas.style.height = \"768px\";";
-            if (!page.Contains(fixedSize)) throw new BuildFailedException("WebGPU test page: the Default template's canvas size was not found");
-            page = page.Replace(fixedSize, "canvas.style.width = \"100%\";\n        canvas.style.height = \"100%\";");
+            const string fixedContainer = "fullscreenContainer.style.width = \"1024px\";\n        fullscreenContainer.style.height = \"768px\";";
+            if (page.Contains(fixedSize)) page = page.Replace(fixedSize, "canvas.style.width = \"100%\";\n        canvas.style.height = \"100%\";");
+            else if (page.Contains(fixedContainer)) page = page.Replace(fixedContainer, "fullscreenContainer.style.width = \"100%\";\n        fullscreenContainer.style.height = \"100%\";");
+            else throw new BuildFailedException("WebGPU test page: the Default template's canvas size was not found");
             const string fill = "<style>html,body{width:100%;height:100%;overflow:hidden;background:#231F20}"
                 + "#unity-container.unity-desktop{position:fixed;left:0;top:0;width:100%;height:100%;transform:none}"
                 + "#unity-canvas{display:block}#unity-footer{display:none}</style>";

@@ -108,6 +108,44 @@ namespace FishMMO.UnitTests
 			Assert.That(LifeInstancePacking.Grown(4096, 10, 256), Is.EqualTo(4096), "never shrinks");
 		}
 
+		/// <summary>
+		/// A kind's run starts at a place fixed by the kind alone. Packed end to end, a run's start moved whenever a kind before it
+		/// changed its count, and in the browser the start the kind's material held reached the draw a frame late: the kind read
+		/// another's run and blinked out, with every kind after it.
+		/// </summary>
+		[Test]
+		public void Runs_StartAtAPlaceFixedByTheKind()
+		{
+			Assert.That(LifeInstancePacking.RunStart(0, 64), Is.EqualTo(0));
+			Assert.That(LifeInstancePacking.RunStart(5, 64), Is.EqualTo(320));
+			// What another kind holds does not enter into it: the same kind and slot, the same start.
+			Assert.That(LifeInstancePacking.RunStart(5, 64), Is.EqualTo(LifeInstancePacking.RunStart(5, 64)));
+			// A slot only ever grows, by doubling, so a layout changes a few times at most and then holds.
+			int slot = LifeInstanceBuffers.MinimumSlot;
+			int changes = 0;
+			foreach (int longest in new[] { 3, 20, 40, 33, 90, 12, 64, 128, 7, 100 })
+			{
+				int next = LifeInstancePacking.Grown(slot, longest, LifeInstanceBuffers.MinimumSlot);
+				Assert.That(next, Is.GreaterThanOrEqualTo(slot), "a slot never shrinks");
+				changes += next != slot ? 1 : 0;
+				slot = next;
+			}
+			Assert.That(slot, Is.EqualTo(128));
+			Assert.That(changes, Is.EqualTo(2), "32 → 64 → 128, then it holds");
+		}
+
+		[Test]
+		public void Systems_PackEachKindAtItsFixedRun()
+		{
+			foreach (string path in new[] { "Assets/Scripts/Client/World/AmbientLife/AmbientLifeSystem.cs", "Assets/Scripts/Client/World/SeaLife/SeaLifeSystem.cs" })
+			{
+				string source = Read(path);
+				StringAssert.Contains("instanceBuffers.ReserveRuns(", source, path);
+				StringAssert.Contains("LifeInstancePacking.RunStart(k, slot)", source, path);
+				StringAssert.DoesNotContain("instanceBuffers.Reserve(", source, path);
+			}
+		}
+
 		[Test]
 		public void Shaders_ReadTheRecord_InItsOrder_WithNoInstancingLeft()
 		{

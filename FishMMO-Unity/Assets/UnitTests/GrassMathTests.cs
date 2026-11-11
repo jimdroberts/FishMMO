@@ -14,6 +14,18 @@ namespace FishMMO.UnitTests
 	public class GrassMathTests
 	{
 		[Test]
+		public void ABladeLetInByTheThinningDissolvesInsteadOfGrowing()
+		{
+			string source = System.IO.File.ReadAllText(System.IO.Path.Combine(
+				UnityEngine.Application.dataPath, "Prefabs/Client/Weather/Shaders/FishGrassBlades.hlsl"));
+
+			NUnit.Framework.Assert.That(source, Does.Contain("o.fade = float2(visible * thinFade,"),
+				"the thinning's fade must drive the dissolve");
+			NUnit.Framework.Assert.That(System.Text.RegularExpressions.Regex.Matches(source, "\\* thinFade").Count, Is.EqualTo(1),
+				"scaling a blade, its width or a flower head by it makes the grass visibly grow as the camera nears");
+		}
+
+		[Test]
 		public void Hashes_AreAFunctionOfCellAndSalt()
 		{
 			uint a = GrassMath.Hash(1203, -88, GrassMath.SaltPriority);

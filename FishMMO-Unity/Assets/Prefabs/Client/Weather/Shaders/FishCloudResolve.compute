@@ -167,7 +167,7 @@ void Resolve(uint3 groupId : SV_GroupID, uint3 id : SV_DispatchThreadID, uint fl
                 ats[k] = clamp(wanted, int2(0, 0), last) + 0.5;
             }
         }
-        resolved = FishCloudResolve(uv, rawHere, here, camera, direction, forward, onGrid, marched, perTexel, values, theres, ats, motions);
+        resolved = FishCloudResolve(uv, rawHere, here, camera, direction, forward, onGrid, marched, perTexel, values, theres, ats, motions, LinearEyeDepth(UNITY_RAW_FAR_CLIP_VALUE, _FishCloudResolveZ));
     }
     _FishCloudResolved[id.xy] = resolved.clouds;
     _FishCloudResolvedWeight[id.xy] = resolved.weight;

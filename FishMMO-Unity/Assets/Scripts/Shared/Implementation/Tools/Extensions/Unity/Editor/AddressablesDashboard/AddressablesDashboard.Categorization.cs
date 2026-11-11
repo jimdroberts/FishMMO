@@ -630,7 +630,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Sets the BundlePackingMode on a group based on its name convention.
 		/// Scene and Dynamic groups use PackSeparately for on-demand loading.
-		/// Static_Permanent groups use PackTogether for single-bundle bootstrap loading.
+		/// Static_Permanent groups use PackTogether for single-bundle bootstrap loading, and load every packed asset at once.
 		/// </summary>
 		/// <param name="group">The Addressable group.</param>
 		/// <param name="groupName">The group name used for convention matching.</param>
@@ -647,6 +647,13 @@ namespace FishMMO.Shared
 			else
 			{
 				schema.BundleMode = BundledAssetGroupSchema.BundlePackingMode.PackTogether;
+			}
+			// A permanent group is loaded whole at boot by its label. Asset by asset, each load waits on frame boundaries: 2,600
+			// templates took ~9,500 frames (20 s at 475 fps, minutes on a 60 Hz screen) while the page idled. Loading every packed
+			// asset with the first request makes it one bundle-wide load.
+			if (lower.Contains("static_permanent"))
+			{
+				schema.AssetLoadMode = UnityEngine.ResourceManagement.ResourceProviders.AssetLoadMode.AllPackedAssetsAndDependencies;
 			}
 
 			EditorUtility.SetDirty(group);

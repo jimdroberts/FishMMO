@@ -280,6 +280,7 @@ namespace FishMMO.UnitTests
 					ReferralAccount = "old_friend",
 					DiscordUsername = "Zoë Ångström#1234",
 					VerificationChannels = RegistrationVerificationChannels.Email | RegistrationVerificationChannels.Sms | RegistrationVerificationChannels.Discord,
+					EnableTwoFactor = true,
 				};
 
 				LogAssert.IsTrue(h.Client.SetLoginCredentials("frank", "p@ssword1!", register: true, email: "frank@example.test", age: 21, profile: sentProfile),
@@ -313,6 +314,7 @@ namespace FishMMO.UnitTests
 				LogAssert.AreEqual(sentProfile.ReferralAccount, received.ReferralAccount, "ReferralAccount");
 				LogAssert.AreEqual(sentProfile.DiscordUsername, received.DiscordUsername, "DiscordUsername (non-ASCII, with a discriminator)");
 				LogAssert.AreEqual(sentProfile.VerificationChannels, received.VerificationChannels, "VerificationChannels");
+				LogAssert.IsTrue(received.EnableTwoFactor, "The two-factor opt-in did not survive the round trip.");
 
 				// The six sequences were consumed: replaying the same message must fail, not decrypt twice.
 				bool replayRefused = false;
@@ -350,6 +352,44 @@ namespace FishMMO.UnitTests
 			LogAssert.IsNull(received.Phone);
 			LogAssert.IsNull(received.BetaCode);
 			LogAssert.AreEqual(RegistrationVerificationChannels.Email, received.VerificationChannels, "An absent profile must mean email verification.");
+			LogAssert.IsFalse(received.EnableTwoFactor, "Two-factor is opt-in: an absent profile must not ask for it.");
+		}
+
+		/// <summary>
+		/// Two-factor is opt-in. The current format carries the choice both ways; the older formats, written
+		/// by clients from when every account was enrolled, read as opted in; and an option bit this build
+		/// does not know is refused rather than ignored.
+		/// </summary>
+		[Test]
+		public void RegistrationProfile_CarriesTheTwoFactorOptIn()
+		{
+			foreach (bool chosen in new[] { false, true })
+			{
+				byte[] bytes = new RegistrationProfile { Phone = "+447700900123", EnableTwoFactor = chosen }.Serialize();
+				LogAssert.AreEqual(RegistrationProfile.OptionsFormatVersion, bytes[0], "Control: the encoder writes a version with the options byte.");
+				LogAssert.IsTrue(RegistrationProfile.TryDeserialize(bytes, out RegistrationProfile received), $"A profile with two-factor {chosen} must parse.");
+				LogAssert.AreEqual(chosen, received.EnableTwoFactor, "The opt-in must round-trip.");
+				LogAssert.AreEqual("+447700900123", received.Phone, "The strings after the options byte must still line up.");
+			}
+
+			LogAssert.IsFalse(new RegistrationProfile().EnableTwoFactor, "A new profile starts with two-factor off.");
+
+			// Version 2: version, channels, then seven strings, no options byte.
+			var v2 = new System.Collections.Generic.List<byte> { 2, (byte)RegistrationVerificationChannels.Email };
+			foreach (string field in new[] { "", "", "", "", "", "", "fishfan" })
+			{
+				byte[] utf8 = Encoding.UTF8.GetBytes(field);
+				v2.Add((byte)(utf8.Length >> 8));
+				v2.Add((byte)utf8.Length);
+				v2.AddRange(utf8);
+			}
+			LogAssert.IsTrue(RegistrationProfile.TryDeserialize(v2.ToArray(), out RegistrationProfile older), "A version 2 profile must still parse.");
+			LogAssert.AreEqual("fishfan", older.DiscordUsername, "Version 2 Discord username");
+			LogAssert.IsTrue(older.EnableTwoFactor, "A version 2 client expects the setup every account used to get.");
+
+			byte[] unknownOption = new RegistrationProfile { EnableTwoFactor = true }.Serialize();
+			unknownOption[2] |= 0x80;
+			LogAssert.IsFalse(RegistrationProfile.TryDeserialize(unknownOption, out _), "An unknown option bit must be refused.");
 		}
 
 		/// <summary>
@@ -432,11 +472,12 @@ namespace FishMMO.UnitTests
 			LogAssert.AreEqual("old_friend", received.ReferralAccount, "ReferralAccount");
 			LogAssert.IsNull(received.DiscordUsername, "A version 1 profile has no Discord username.");
 			LogAssert.AreEqual(RegistrationVerificationChannels.Sms, received.VerificationChannels, "VerificationChannels");
+			LogAssert.IsTrue(received.EnableTwoFactor, "A version 1 client expects the setup every account used to get.");
 
 			byte[] current = new RegistrationProfile { DiscordUsername = "fishfan" }.Serialize();
 			LogAssert.AreEqual(RegistrationProfile.FormatVersion, current[0], "Control: the encoder writes the current version.");
 			v1[0] = RegistrationProfile.FormatVersion;
-			LogAssert.IsFalse(RegistrationProfile.TryDeserialize(v1.ToArray(), out _), "Six strings labelled with the current version must be refused: it has seven.");
+			LogAssert.IsFalse(RegistrationProfile.TryDeserialize(v1.ToArray(), out _), "Six strings labelled with the current version must be refused: it has an options byte and seven.");
 		}
 
 		/// <summary>The decoder refuses anything the encoder could not have produced.</summary>

@@ -746,6 +746,25 @@ var LibraryFishWebTransport = {
         if (!session || !session.wt) return false;
         if (!FishWebTransport._isLive(session)) return false;
 
+        /* Over this browser's own datagram limit: a write would resolve and the datagram be discarded without a
+         * word (Firefox 159 allows 1024 bytes, Chrome 157 1210). Sent on the reliable stream instead, framed as
+         * WTSendStream frames it, so it arrives late rather than never; FishNet takes it on the reliable channel as
+         * it does any message it moved there itself. WebTransport.cs keeps batches under 1024, so this is the
+         * guard for a browser with a smaller limit still. */
+        var maxDatagram = session.wt.datagrams ? session.wt.datagrams.maxDatagramSize : 0;
+        if (maxDatagram > 0 && length > maxDatagram) {
+            if (!session._warnedDatagramSize) {
+                session._warnedDatagramSize = true;
+                console.warn('[FishWT] datagram of ' + length + ' bytes is over this browser\'s ' + maxDatagram +
+                             '-byte limit; sending such datagrams on the reliable stream (logged once).');
+            }
+            var lenHdr = FishWebTransport._varintEncode(length);
+            var framed = new Uint8Array(lenHdr.length + length);
+            framed.set(lenHdr, 0);
+            framed.set(HEAPU8.subarray(dataPtr, dataPtr + length), lenHdr.length);
+            return FishWebTransport._writeReliable(session, framed);
+        }
+
         var data = new Uint8Array(HEAPU8.slice(dataPtr, dataPtr + length));
         try {
             /* Check for closed/errored writer before reusing.

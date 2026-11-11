@@ -51,8 +51,11 @@
 #endif
 #include "FishFogLayer.hlsl"
 
-// (scattered rgb, extinction) per froxel.
+// (scattered rgb, extinction) per froxel: written by Scatter, and read by Integrate through _FishVolFogScatterIn, a
+// plain texture. WebGPU reads a storage texture only as an extension for most formats (read-write only for one-channel
+// 32-bit ones), and Firefox refuses the whole pipeline without it.
 RWTexture3D<float4> _FishVolFogScatter;
+Texture3D<float4> _FishVolFogScatterIn;
 // (accumulated in-scattered rgb, transmittance) per froxel, to the middle of its slice.
 RWTexture3D<float4> _FishVolFogIntegrated;
 
@@ -383,7 +386,7 @@ void Integrate(uint3 id : SV_DispatchThreadID)
     for (uint z = 0; z < size.z; z++)
     {
         uint3 at = uint3(id.xy, z);
-        float4 froxel = _FishVolFogScatter[at];
+        float4 froxel = _FishVolFogScatterIn[at];
 
         /* Each froxel stores what lies between the camera and the MIDDLE of its slice — the depth its
          * texel centre stands for — so a reader that samples the volume at a depth's own slice

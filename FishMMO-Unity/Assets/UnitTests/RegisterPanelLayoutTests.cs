@@ -52,7 +52,7 @@ namespace FishMMO.UnitTests
 			"register-username", "register-email", "register-password", "register-age",
 			"register-verify-email", "register-verify-sms", "register-verify-discord", "register-discord",
 			"register-phone", "register-country", "register-realname", "register-address",
-			"register-referral", "register-betacode",
+			"register-referral", "register-betacode", "register-two-factor",
 			"register-submit-btn", "register-quit-btn",
 		};
 

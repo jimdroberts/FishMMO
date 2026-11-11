@@ -85,6 +85,12 @@ Label.register-section-caption {
     margin-bottom: 4px;
 }
 
+/* A sentence under a control, wrapped to its column rather than run past the panel's edge.
+   Type-qualified, like the caption, so it wins over Label.fish-label. */
+Label.register-hint {
+    white-space: normal;
+}
+
 .register-dropdown {
     margin-bottom: 4px;
 }

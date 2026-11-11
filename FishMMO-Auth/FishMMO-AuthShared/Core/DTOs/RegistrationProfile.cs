@@ -25,6 +25,19 @@ namespace FishMMO.Auth.Core
 	}
 
 	/// <summary>
+	/// Choices a player makes at registration that are not contact details, carried in one byte of the
+	/// profile (format version 3 and later).
+	/// </summary>
+	[Flags]
+	public enum RegistrationOptions : byte
+	{
+		/// <summary>Nothing chosen.</summary>
+		None = 0,
+		/// <summary>Set up an authenticator (TOTP two-factor) on the new account. Off unless the player opts in.</summary>
+		TwoFactor = 1,
+	}
+
+	/// <summary>
 	/// The optional details a player gives at in-game registration, carried to the login server as
 	/// ONE additional AES-GCM field of the create-account message.
 	/// </summary>
@@ -37,12 +50,18 @@ namespace FishMMO.Auth.Core
 	/// added changes <see cref="FormatVersion"/> rather than the wire arithmetic.
 	/// </para>
 	/// <para>
-	/// <b>Format.</b> One version byte, one channels byte, then strings in a fixed order — phone, beta
-	/// code, country, real name, address, referral account, and from version 2 the Discord username —
-	/// each as a two-byte big-endian length followed by that many bytes of UTF-8. An empty string means
-	/// "not given". Version 1 (six strings) is still read, so a client one release behind can register.
-	/// Decoding refuses an unknown version, trailing bytes, invalid UTF-8 and any field over its length,
-	/// so the size of what reaches the server's validator is bounded before it is parsed.
+	/// <b>Format.</b> One version byte, one channels byte, from version 3 one <see cref="RegistrationOptions"/>
+	/// byte, then strings in a fixed order — phone, beta code, country, real name, address, referral
+	/// account, and from version 2 the Discord username — each as a two-byte big-endian length followed
+	/// by that many bytes of UTF-8. An empty string means "not given". Versions 1 and 2 are still read,
+	/// so a client one release behind can register. Decoding refuses an unknown version, an unknown option
+	/// bit, trailing bytes, invalid UTF-8 and any field over its length, so the size of what reaches the
+	/// server's validator is bounded before it is parsed.
+	/// </para>
+	/// <para>
+	/// <b>Two-factor is opt-in.</b> <see cref="EnableTwoFactor"/> asks the server to set up an
+	/// authenticator on the new account. A version 1 or 2 profile has no options byte and reads as
+	/// opted in: those clients were written when every account was enrolled, and wait for the setup.
 	/// </para>
 	/// <para>
 	/// <b>Validation.</b> The database's <c>AccountProfileRules</c> is the authority and the server
@@ -54,7 +73,10 @@ namespace FishMMO.Auth.Core
 	public sealed class RegistrationProfile
 	{
 		/// <summary>The serialisation version written by <see cref="Serialize"/>.</summary>
-		public const byte FormatVersion = 2;
+		public const byte FormatVersion = 3;
+
+		/// <summary>The first serialisation version that carries the <see cref="RegistrationOptions"/> byte.</summary>
+		public const byte OptionsFormatVersion = 3;
 
 		/// <summary>The oldest serialisation version <see cref="TryDeserialize"/> still reads.</summary>
 		public const byte OldestFormatVersion = 1;
@@ -83,7 +105,7 @@ namespace FishMMO.Auth.Core
 		public const int MaxDiscordNameLength = 32;
 
 		/// <summary>Largest serialisation any valid profile can produce: every field full of 4-byte UTF-8.</summary>
-		public const int MaxSerializedBytes = 2 + (7 * 2) +
+		public const int MaxSerializedBytes = 3 + (7 * 2) +
 			(4 * (MaxPhoneLength + MaxBetaCodeLength + MaxCountryLength + MaxRealNameLength + MaxAddressLength + MaxReferralLength + MaxDiscordUsernameLength));
 
 		/// <summary>Largest encrypted profile field a server should accept (serialisation plus the GCM tag, with headroom).</summary>
@@ -105,6 +127,8 @@ namespace FishMMO.Auth.Core
 		public string? DiscordUsername { get; set; }
 		/// <summary>The channels the player chose to verify with.</summary>
 		public RegistrationVerificationChannels VerificationChannels { get; set; } = RegistrationVerificationChannels.Email;
+		/// <summary>Whether the player asked for an authenticator on the new account. Off by default.</summary>
+		public bool EnableTwoFactor { get; set; }
 
 		/// <summary>
 		/// Serialises the profile (format version <see cref="FormatVersion"/>).
@@ -115,7 +139,7 @@ namespace FishMMO.Auth.Core
 			string[] fields = Fields();
 			int[] limits = Limits(FormatVersion);
 			byte[][] encoded = new byte[fields.Length][];
-			int total = 2;
+			int total = HeaderLength(FormatVersion);
 			for (int i = 0; i < fields.Length; ++i)
 			{
 				string value = fields[i] ?? string.Empty;
@@ -130,7 +154,8 @@ namespace FishMMO.Auth.Core
 			byte[] buffer = new byte[total];
 			buffer[0] = FormatVersion;
 			buffer[1] = (byte)VerificationChannels;
-			int offset = 2;
+			buffer[2] = (byte)(EnableTwoFactor ? RegistrationOptions.TwoFactor : RegistrationOptions.None);
+			int offset = HeaderLength(FormatVersion);
 			for (int i = 0; i < encoded.Length; ++i)
 			{
 				int length = encoded[i].Length;
@@ -158,14 +183,29 @@ namespace FishMMO.Auth.Core
 			}
 
 			int[] limits = Limits(data[0]);
-			if (data.Length < 2 + (limits.Length * 2))
+			int header = HeaderLength(data[0]);
+			if (data.Length < header + (limits.Length * 2))
 			{
 				return false;
 			}
 
 			profile.VerificationChannels = (RegistrationVerificationChannels)data[1];
+			if (data[0] >= OptionsFormatVersion)
+			{
+				var options = (RegistrationOptions)data[2];
+				if ((options & ~RegistrationOptions.TwoFactor) != 0)
+				{
+					return false;
+				}
+				profile.EnableTwoFactor = (options & RegistrationOptions.TwoFactor) != 0;
+			}
+			else
+			{
+				// Written by a client from before two-factor was optional, which expects the setup.
+				profile.EnableTwoFactor = true;
+			}
 			string?[] values = new string?[limits.Length];
-			int offset = 2;
+			int offset = header;
 			for (int i = 0; i < limits.Length; ++i)
 			{
 				if (offset + 2 > data.Length)
@@ -415,6 +455,9 @@ namespace FishMMO.Auth.Core
 			}
 			return trimmed;
 		}
+
+		/// <summary>Bytes before the first string: version and channels, then the options byte from version 3.</summary>
+		private static int HeaderLength(byte version) => version >= OptionsFormatVersion ? 3 : 2;
 
 		/// <summary>The per-field limits of one format version, in field order.</summary>
 		private static int[] Limits(byte version) => version >= 2

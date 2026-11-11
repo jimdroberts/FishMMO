@@ -7,6 +7,7 @@
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
     <link rel="stylesheet" href="TemplateData/style.css">
     <script src="TemplateData/fishmmo-cache-policy.js"></script>
+    <script src="TemplateData/fishmmo-graphics-check.js"></script>
 #if SHOW_DIAGNOSTICS
     <link rel="stylesheet" href="<<<TemplateData/diagnostics.css>>>">
     <script src="<<<TemplateData/diagnostics.js>>>"></script>
@@ -111,14 +112,11 @@
       // the canvas DOM size and WebGL render target sizes yourself.
       // config.matchWebGLToCanvasSize = false;
 
-      // If you would like all file writes inside Unity Application.persistentDataPath
-      // directory to automatically persist so that the contents are remembered when
-      // the user revisits the site the next time, uncomment the following line:
-      // config.autoSyncPersistentDataPath = true;
-      // This autosyncing is currently not the default behavior to avoid regressing
-      // existing user projects that might rely on the earlier manual
-      // JS_FileSystem_Sync() behavior, but in future Unity version, this will be
-      // expected to change.
+      // Every file written under Application.persistentDataPath persists to IndexedDB on its own, so it is still
+      // there the next time the page is opened. Without it Unity syncs by hand through JS_FileSystem_Sync, which is
+      // deprecated and warns in the console on every save. FishMMOSyncPersistentData (WebGL.jslib) uses the same
+      // batched entry point and composes with this.
+      config.autoSyncPersistentDataPath = true;
 
       if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
         // Mobile device style: fill the whole browser client area with the game canvas:
@@ -218,7 +216,11 @@
               });
             };
 
-      document.body.appendChild(script);
+      // The loader starts only once a hardware WebGPU adapter is known to exist (fishmmo-graphics-check.js). Without one
+      // it downloads everything and then waits forever with no error.
+      fishMMOCheckGraphics().then(function (start) {
+        if (start) document.body.appendChild(script);
+      });
 
     </script>
   </body>

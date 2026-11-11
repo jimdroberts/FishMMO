@@ -255,6 +255,8 @@ namespace FishMMO.Client
 			private const string ShadowsKeyword = "FISH_VOLFOG_SHADOWS";
 
 			private static readonly int ScatterTexId = Shader.PropertyToID("_FishVolFogScatter");
+			// The same volume as Integrate reads it: a plain texture, not a storage one (FishVolumetricFog.compute).
+			private static readonly int ScatterInTexId = Shader.PropertyToID("_FishVolFogScatterIn");
 			private static readonly int IntegratedTexId = Shader.PropertyToID("_FishVolFogIntegrated");
 			private static readonly int VolumeId = Shader.PropertyToID("_FishVolFogVolume");
 			private static readonly int InverseVPId = Shader.PropertyToID("_FishVolFogInverseVP");
@@ -701,7 +703,7 @@ namespace FishMMO.Client
 					builder.AllowPassCulling(false);
 					builder.SetRenderFunc((IntegrateData s, ComputeGraphContext context) =>
 					{
-						context.cmd.SetComputeTextureParam(s.Compute, s.Kernel, ScatterTexId, s.Scatter);
+						context.cmd.SetComputeTextureParam(s.Compute, s.Kernel, ScatterInTexId, s.Scatter);
 						context.cmd.SetComputeTextureParam(s.Compute, s.Kernel, IntegratedTexId, s.Integrated);
 						context.cmd.DispatchCompute(s.Compute, s.Kernel, s.GroupsX, s.GroupsY, 1);
 					});

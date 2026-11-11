@@ -25,11 +25,20 @@
 uint _Step;              // FFT stage, 1 … LOG_SIZE
 uint _Seed;
 
+/* No kernel reads a four-channel texture it is handed as writable. WebGPU allows read-write storage only for
+ * one-channel 32-bit formats (r32float, r32uint, r32sint) unless the device has an extension Firefox does not
+ * offer, and refuses the whole pipeline otherwise. So every input below is read through a Texture2D, every
+ * output written through an RWTexture2D, the transform ping-pongs through a scratch pair instead of working in
+ * place, and the foam memory, the one value read back where it is written, lives in its own r32float texture. */
 RWTexture2D<float4> _H0;            // xy h0(k), zw conj(h0(-k))
-RWTexture2D<float4> _SpectrumA;     // xy height, zw Dx
-RWTexture2D<float4> _SpectrumB;     // xy Dz, zw unused
+RWTexture2D<float4> _SpectrumA;     // written: xy height, zw Dx
+RWTexture2D<float4> _SpectrumB;     // written: xy Dz, zw unused
+Texture2D<float4> _H0In;            // the static spectrum, read
+Texture2D<float4> _InA;             // the spectrum the stage reads, laid out as _SpectrumA
+Texture2D<float4> _InB;             // and as _SpectrumB
 RWTexture2D<float4> _Displacement;  // xyz displacement, w folding
-RWTexture2D<float4> _Derivatives;   // xy slope, z folding, w how hard it broke lately: the foam memory (Assemble)
+RWTexture2D<float4> _Derivatives;   // xy slope, z folding, w how hard it broke lately (a copy of _FoamMemory)
+RWTexture2D<float> _FoamMemory;     // how hard each texel broke lately, decaying: read and written (Assemble)
 float _FoamKeep;                     // exp(-dt / lifetime): how much of the last evaluation's memory survives to this one
 float _FoamStart;                    // the folding (1 - Jacobian) past which a crest breaks: where the white caps start
 
@@ -47,7 +56,7 @@ void InitialSpectrum(uint3 id : SV_DispatchThreadID)
 void TimeSpectrum(uint3 id : SV_DispatchThreadID)
 {
 	float4 a, b;
-	FishTimeSpectrum(id.xy, _H0[id.xy], a, b);
+	FishTimeSpectrum(id.xy, _H0In[id.xy], a, b);
 	_SpectrumA[id.xy] = a;
 	_SpectrumB[id.xy] = b;
 }
@@ -95,8 +104,8 @@ void HorizontalFFT(uint3 gid : SV_GroupThreadID, uint3 grp : SV_GroupID)
 	uint y = grp.x;
 	uint reversed = BitReverse(x);
 
-	SharedA[0][x] = _SpectrumA[uint2(reversed, y)];
-	SharedB[0][x] = _SpectrumB[uint2(reversed, y)];
+	SharedA[0][x] = _InA[uint2(reversed, y)];
+	SharedB[0][x] = _InB[uint2(reversed, y)];
 	GroupMemoryBarrierWithGroupSync();
 
 	uint src = 0;
@@ -113,8 +122,8 @@ void VerticalFFT(uint3 gid : SV_GroupThreadID, uint3 grp : SV_GroupID)
 	uint x = grp.x;
 	uint reversed = BitReverse(y);
 
-	SharedA[0][y] = _SpectrumA[uint2(x, reversed)];
-	SharedB[0][y] = _SpectrumB[uint2(x, reversed)];
+	SharedA[0][y] = _InA[uint2(x, reversed)];
+	SharedB[0][y] = _InB[uint2(x, reversed)];
 	GroupMemoryBarrierWithGroupSync();
 
 	uint src = 0;
@@ -144,16 +153,18 @@ void Assemble(uint3 id : SV_DispatchThreadID)
 
 	float4 displacement, derivatives;
 	FishAssemble(id.xy,
-		_SpectrumA[id.xy], _SpectrumA[east], _SpectrumA[west], _SpectrumA[north], _SpectrumA[south],
-		_SpectrumB[id.xy], _SpectrumB[east], _SpectrumB[west], _SpectrumB[north], _SpectrumB[south],
+		_InA[id.xy], _InA[east], _InA[west], _InA[north], _InA[south],
+		_InB[id.xy], _InB[east], _InB[west], _InB[north], _InB[south],
 		displacement, derivatives);
 	_Displacement[id.xy] = displacement;
 	/* The foam memory. Where a wave broke, its foam stays on the water as the crest runs on: in the tile's own
 	 * (undisplaced) frame the water itself barely moves, so keeping the folding here leaves a trail where the
-	 * crest went, which then thins away. Read back before the write (the same texel, the same thread; this kernel
-	 * already reads its RW spectrum textures). Without it the white caps were the crest's folding of this instant
-	 * only, and blinked on and off with every wave. */
+	 * crest went, which then thins away. Read back before the write (the same texel, the same thread), from its
+	 * own one-channel texture: the only format WebGPU lets a kernel both read and write. Without it the white caps
+	 * were the crest's folding of this instant only, and blinked on and off with every wave. */
 	float breaking = max(0.0, 1.0 - derivatives.z - _FoamStart);
-	derivatives.w = max(breaking, _Derivatives[id.xy].w * _FoamKeep);
+	float foam = max(breaking, _FoamMemory[id.xy] * _FoamKeep);
+	_FoamMemory[id.xy] = foam;
+	derivatives.w = foam;
 	_Derivatives[id.xy] = derivatives;
 }

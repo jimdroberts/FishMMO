@@ -138,14 +138,19 @@ namespace FishMMO.WebServer
 								// The game's own files are fetched in hundreds when a world loads (one per Addressables
 								// bundle, 700+ in a build); under the page's bucket they were refused with 429 and the load
 								// failed. They get their own, larger bucket per client; everything else keeps the small one.
+								// Sized for several whole passes at once (2026-11-10): on a fast link the content preloader's
+								// pass over every bundle takes about a second, so a reload, or two browsers on one address,
+								// emptied a 2000-token bucket in seconds, and Addressables, most of whose groups never retry,
+								// failed the world's load on the first 429. These are static files, cached by the browser:
+								// the bucket is there to cap a flood, not to pace a player.
 								PathString path = httpContext.Request.Path;
 								if (path.StartsWithSegments("/Build") || path.StartsWithSegments("/StreamingAssets") ||
 									path.StartsWithSegments("/TemplateData"))
 								{
 									return RateLimitPartition.GetTokenBucketLimiter(key + "|content", _ => new TokenBucketRateLimiterOptions
 									{
-										TokenLimit = 2000,
-										TokensPerPeriod = 300,
+										TokenLimit = 20000,
+										TokensPerPeriod = 2000,
 										ReplenishmentPeriod = TimeSpan.FromSeconds(1),
 										QueueLimit = 0,
 										AutoReplenishment = true,
@@ -240,7 +245,15 @@ namespace FishMMO.WebServer
 						// Brotli build files without decompression fallback (.wasm.br, .data.br, ...).
 						contentTypeProvider.Mappings[".br"] = "application/octet-stream";
 
-						app.UseResponseCompression();
+						// Compressed on the fly: what the browser fetches itself (the page, its scripts and styles). Never
+						// StreamingAssets: the game reads those through UnityWebRequest, which on WebGL is the loader's
+						// fetchWithProgress, and a response compressed here goes out chunked with no Content-Length, which
+						// the loader warns about on every load ("[UnityCache] Response is served without Content-Length
+						// header"). The Addressables files there are small (settings.json, catalog.hash) or already
+						// compressed (the bundles, catalog.bin), so serving them as stored costs nothing.
+						app.UseWhen(
+							ctx => !ctx.Request.Path.StartsWithSegments("/StreamingAssets", StringComparison.OrdinalIgnoreCase),
+							branch => branch.UseResponseCompression());
 						app.UseDefaultFiles();
 						// Built-in static-file handler: safe path resolution, ETag/If-Modified-Since,
 						// Range requests, and Last-Modified are all handled correctly.

@@ -110,6 +110,14 @@ namespace FishMMO.UnitTests.Weather
 		// ── Habitat ───────────────────────────────────────────────────
 
 		[Test]
+		public void AFastWingBeatSwingsLess_ASlowOneInFull()
+		{
+			// At 15 beats a second and 60 fps a full swing jumps between its extremes and reads as flicker.
+			NUnit.Framework.Assert.AreEqual(0.4f, new AmbientCreatureKind { StrokeHz = 15f }.WingSwing, 0.001f, "a songbird's beat swings less");
+			NUnit.Framework.Assert.AreEqual(1f, new AmbientCreatureKind { StrokeHz = 2.8f }.WingSwing, 0.001f, "a slow beat keeps its full swing");
+		}
+
+		[Test]
 		public void HabitatOf_ReadsTheBiomesByName()
 		{
 			Assert.That(AmbientGating.HabitatOf("Forest") & AmbientHabitat.Forest, Is.Not.EqualTo(AmbientHabitat.None));

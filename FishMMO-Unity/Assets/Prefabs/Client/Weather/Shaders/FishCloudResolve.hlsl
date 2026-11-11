@@ -342,9 +342,20 @@ FishCloudResolved FishResolveClear()
 //   values, theres, ats, motions — the pixel's three-by-three block of marched texels, k = (dy + 1) · 3 +
 //     (dx + 1) for offsets dx, dy of −1..1 from its nearest: each one's value, the eye depth where its
 //     ray actually went, its place on the grid, and its motion (_FishCloudCurrentMotion: km, wind gain)
+//   skyEye — the eye depth a ray that met nothing reads (the far plane)
 FishCloudResolved FishCloudResolve(float2 uv, float rawHere, float here, float3 camera, float3 direction, float3 forward,
-    float2 onGrid, float2 marched, float2 perTexel, float4 values[9], float theres[9], float2 ats[9], float2 motions[9])
+    float2 onGrid, float2 marched, float2 perTexel, float4 values[9], float theres[9], float2 ats[9], float2 motions[9], float skyEye)
 {
+    // A surface with its own rays nearby takes its answer from them alone. A sky ray cut back to the surface's depth is only an
+    // estimate, and which of the nine are sky rays changes with the jitter every frame, so mixing them in made ridges flicker.
+    bool surfaceHasRays = false;
+    if (!FishResolveIsSky(rawHere))
+    {
+        [unroll] for (int s = 0; s < 9; s++)
+        {
+            surfaceHasRays = surfaceHasRays || (theres[s] < skyEye * 0.9999 && abs(theres[s] - here) < max(12.0, here * 0.2));
+        }
+    }
     float4 current = 0.0;               // 1. the kernel's estimate
     float currentWeight = 0.0;
     float cloudWeight = 0.0;            // the kernel's weight times each texel's opacity
@@ -372,6 +383,10 @@ FishCloudResolved FishCloudResolve(float2 uv, float rawHere, float here, float3 
         else
         {
             same = saturate(1.0 - (here - theres[k]) / max(12.0, here * 0.2));
+        }
+        if (surfaceHasRays && theres[k] >= skyEye * 0.9999)
+        {
+            same = 0.0;
         }
         float2 across = FishResolveKernel(ats[k] - onGrid);
         float w = across.x * across.y * same;

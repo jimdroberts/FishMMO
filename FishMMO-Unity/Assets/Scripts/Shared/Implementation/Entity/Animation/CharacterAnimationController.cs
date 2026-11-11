@@ -58,6 +58,24 @@ namespace FishMMO.Shared
 		private bool seenSwimming;
 #endif
 
+		/// <summary>The model under a mesh root, skipping one that has been switched off to be destroyed.</summary>
+		/// <remarks>
+		/// A replaced model stays in the hierarchy until the end of the frame, ahead of the one that replaced it. Taking
+		/// the first match would keep the body on the outgoing model and leave the new one in its bind pose. Inactive
+		/// parents are still searched, so a model under a hidden mesh root is found.
+		/// </remarks>
+		internal static CharacterModel FindLiveModel(Transform meshRoot)
+		{
+			foreach (CharacterModel candidate in meshRoot.GetComponentsInChildren<CharacterModel>(true))
+			{
+				if (candidate.gameObject.activeSelf)
+				{
+					return candidate;
+				}
+			}
+			return null;
+		}
+
 		/// <summary>
 		/// Attempts initial discovery. May fail if model isn't loaded.
 		/// <see cref="OnModelReady"/> provides the guaranteed re-acquisition.
@@ -125,7 +143,7 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			CharacterModel model = Character.MeshRoot.GetComponentInChildren<CharacterModel>(true);
+			CharacterModel model = FindLiveModel(Character.MeshRoot);
 			Animator animator = model != null ? model.GetComponent<Animator>() : null;
 			if (animator == null)
 			{

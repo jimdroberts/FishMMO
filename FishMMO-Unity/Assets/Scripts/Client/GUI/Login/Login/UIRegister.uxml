@@ -53,6 +53,14 @@
                         -->
                         <ui:Label text="Beta code (closed test only)" class="fish-label fish-label--caption register-field-label" />
                         <ui:TextField name="register-betacode" class="fish-input register-input" />
+                        <!--
+                            Two-factor is opt-in and starts off. Ticked, the server sets up an authenticator
+                            and shows its key and recovery codes once, before verification. Left off, it can be
+                            turned on later from My account on the Control Panel.
+                        -->
+                        <ui:Label text="Security" class="fish-label fish-label--accent register-section-caption" />
+                        <ui:Toggle name="register-two-factor" text="Use an authenticator app (two-factor)" class="fish-toggle register-toggle" />
+                        <ui:Label text="Sign-in will also ask for a code from the app." class="fish-label fish-label--muted register-field-label register-hint" />
                     </ui:VisualElement>
                 </ui:VisualElement>
                 <ui:Label name="register-status" text="" class="fish-label fish-label--muted register-status" />

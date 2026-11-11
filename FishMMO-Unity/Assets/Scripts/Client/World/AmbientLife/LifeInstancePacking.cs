@@ -100,6 +100,12 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Where kind <paramref name="kind"/>'s run starts in the instance buffer: a fixed place, so the start its material holds
+		/// never changes while the runs' lengths do (LifeInstanceBuffers).
+		/// </summary>
+		public static int RunStart(int kind, int slot) => kind * slot;
+
+		/// <summary>
 		/// The capacity to hold <paramref name="needed"/> records: <paramref name="capacity"/> itself when it does, else doubled
 		/// until it does (at least <paramref name="minimum"/>), so a buffer grows a few times at most and never shrinks.
 		/// </summary>

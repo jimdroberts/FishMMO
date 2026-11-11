@@ -91,7 +91,6 @@ namespace FishMMO.Client
 		private const string BRIGHTNESS_SLIDER_NAME = "brightness-slider";
 		private const string BRIGHTNESS_VALUE_NAME = "brightness-value";
 		private const string LOOK_SENSITIVITY_SLIDER_NAME = "look-sensitivity-slider";
-		private const string LOOK_SENSITIVITY_VALUE_NAME = "look-sensitivity-value";
 		private const string RESOLUTION_DROPDOWN_NAME = "resolution-dropdown";
 		private const string REFRESHRATE_DROPDOWN_NAME = "refreshrate-dropdown";
 		private const string FULLSCREEN_DROPDOWN_NAME = "fullscreen-dropdown";
@@ -425,7 +424,6 @@ namespace FishMMO.Client
 		private Toggle vsyncToggle;
 		private Slider brightnessSlider;
 		private Slider lookSensitivitySlider;
-		private Label lookSensitivityValueLabel;
 		private Label brightnessValueLabel;
 		private DropdownField resolutionDropdown;
 		private DropdownField refreshRateDropdown;
@@ -620,7 +618,6 @@ namespace FishMMO.Client
 			brightnessSlider = Root.Q<Slider>(BRIGHTNESS_SLIDER_NAME);
 			brightnessValueLabel = Root.Q<Label>(BRIGHTNESS_VALUE_NAME);
 			lookSensitivitySlider = Root.Q<Slider>(LOOK_SENSITIVITY_SLIDER_NAME);
-			lookSensitivityValueLabel = Root.Q<Label>(LOOK_SENSITIVITY_VALUE_NAME);
 			resolutionDropdown = Root.Q<DropdownField>(RESOLUTION_DROPDOWN_NAME);
 			refreshRateDropdown = Root.Q<DropdownField>(REFRESHRATE_DROPDOWN_NAME);
 			fullscreenDropdown = Root.Q<DropdownField>(FULLSCREEN_DROPDOWN_NAME);
@@ -1631,10 +1628,11 @@ namespace FishMMO.Client
 		/// Binds the look sensitivity slider.
 		/// </summary>
 		/// <remarks>
-		/// The stored value is clamped on the way in, for the same reason brightness is: it is a
-		/// float in a file the player can edit, and it multiplies raw mouse delta. A large one makes
-		/// the view unusable at exactly the moment they would need to reach this menu to undo it,
-		/// and zero makes the camera immovable.
+		/// With its own input box (show-input-field): over 0.05 to 20 a slider cannot be dragged to an exact value
+		/// such as 1.25, and a player bringing a sensitivity from another game types it. The stored value is
+		/// clamped on the way in, for the same reason brightness is: it is a float in a file the player can edit,
+		/// and it scales raw mouse movement. A large one makes the view unusable at exactly the moment they would
+		/// need to reach this menu to undo it, and zero makes the camera immovable.
 		/// </remarks>
 		private void InitializeLookSensitivity()
 		{
@@ -1646,44 +1644,30 @@ namespace FishMMO.Client
 
 			lookSensitivitySlider.lowValue = ClientCameraSettings.MinimumLookSensitivity;
 			lookSensitivitySlider.highValue = ClientCameraSettings.MaximumLookSensitivity;
+			lookSensitivitySlider.showInputField = true;
 
-			float sensitivity = ClientSettings.GetFloat(
-				ClientSettings.LookSensitivityKey,
-				ClientCameraSettings.DefaultLookSensitivity,
-				ClientCameraSettings.MinimumLookSensitivity,
-				ClientCameraSettings.MaximumLookSensitivity);
+			// Through LoadSaved, which also carries over a value stored under the old meaning.
+			float sensitivity = ClientCameraSettings.LoadSaved();
 
 			// Without notify: assigning `value` raises the callback, which writes back to the file
 			// this was just read from. See InitializeBrightness.
 			lookSensitivitySlider.SetValueWithoutNotify(sensitivity);
-			UpdateSensitivityLabel(lookSensitivityValueLabel, sensitivity);
 
 			lookSensitivitySlider.RegisterValueChangedCallback((evt) =>
 			{
+				// Two decimals, as typed values are: dragging otherwise stores 1.2468 for 1.25.
 				float value = Mathf.Clamp(
-					evt.newValue,
+					Mathf.Round(evt.newValue * 100f) / 100f,
 					ClientCameraSettings.MinimumLookSensitivity,
 					ClientCameraSettings.MaximumLookSensitivity);
 
 				ClientSettings.Set(ClientSettings.LookSensitivityKey, value);
 				ClientCameraSettings.ApplyLookSensitivity(value);
-				UpdateSensitivityLabel(lookSensitivityValueLabel, value);
+				if (!Mathf.Approximately(value, evt.newValue))
+				{
+					lookSensitivitySlider.SetValueWithoutNotify(value);
+				}
 			});
-		}
-
-		/// <summary>
-		/// Writes a sensitivity multiplier into its value label.
-		/// </summary>
-		/// <remarks>
-		/// A multiplier rather than a percentage, because that is what it is: the camera turns this
-		/// many times as far per unit of mouse movement. Showing "100%" would read as a ceiling.
-		/// </remarks>
-		private static void UpdateSensitivityLabel(Label label, float value)
-		{
-			if (label != null)
-			{
-				label.text = value.ToString("0.00");
-			}
 		}
 
 		/// <summary>
@@ -2294,10 +2278,9 @@ namespace FishMMO.Client
 
 		/// <summary>Writes a multiplier into a label.</summary>
 		/// <remarks>
-		/// A multiplier rather than a percentage, for the same reason
-		/// <see cref="UpdateSensitivityLabel"/> is: labels are drawn this many times their
-		/// authored size, and "100%" would read as a ceiling rather than as the middle of a range
-		/// that runs to twice.
+		/// A multiplier rather than a percentage: labels are drawn this many times their authored
+		/// size, and "100%" would read as a ceiling rather than as the middle of a range that runs
+		/// to twice.
 		/// </remarks>
 		private static void UpdateMultiplierLabel(Label label, float value)
 		{

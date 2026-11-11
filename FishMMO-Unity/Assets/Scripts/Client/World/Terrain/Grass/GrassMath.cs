@@ -26,7 +26,7 @@ namespace FishMMO.Client
 	/// of the kept set at a larger one, so blades thin out and come back without reshuffling; and a tile
 	/// whose nearest point has share s only ever keeps cells of level ≥ <see cref="LevelForShare"/>(s), so
 	/// the GPU runs one thread per cell of that coarser lattice (step 2^level), not of the full one. Blades
-	/// close to the cut shrink toward the ground (<see cref="ThinFade"/>) instead of popping, and the kept
+	/// close to the cut dissolve (<see cref="ThinFade"/>) instead of popping, and the kept
 	/// ones widen (<see cref="Widen"/>) so a thinner far field still reads as a dense one.
 	/// </para>
 	/// </remarks>

@@ -207,9 +207,13 @@ namespace FishMMO.Client
 		/// </summary>
 		private Vector2 moveInput;
 		/// <summary>
-		/// Current look input vector from the Input System.
+		/// This frame's mouse movement, in counts (the Input System accumulates a delta over the frame).
 		/// </summary>
 		private Vector2 lookInput;
+		/// <summary>
+		/// The look stick's position, -1..1 on each axis: a rate, not a movement, so kept apart from the mouse's counts.
+		/// </summary>
+		private Vector2 stickLookInput;
 		/// <summary>
 		/// Current mouse scroll input value (y component).
 		/// </summary>
@@ -478,6 +482,7 @@ namespace FishMMO.Client
 				sprintInputActive = false;
 				moveInput = Vector2.zero;
 				lookInput = Vector2.zero;
+				stickLookInput = Vector2.zero;
 
 				return new KCCInputReplicateData(0.0f,
 												 0.0f,
@@ -587,9 +592,7 @@ namespace FishMMO.Client
 
 			if (CanUpdateInput())
 			{
-				Vector3 lookInputVector = new Vector3(lookInput.x, lookInput.y, 0f);
-
-				Character.KCCPlayer.UpdateCamera(-mouseScrollInput, lookInputVector);
+				Character.KCCPlayer.UpdateCamera(-mouseScrollInput, LookDegrees());
 
 				/* Only when it actually changes.
 				 *
@@ -608,6 +611,7 @@ namespace FishMMO.Client
 			else
 			{
 				lookInput = Vector2.zero;
+				stickLookInput = Vector2.zero;
 				mouseScrollInput = 0f;
 				Character.KCCPlayer.UpdateCamera(0.0f, Vector3.zero);
 			}
@@ -756,14 +760,46 @@ namespace FishMMO.Client
 			moveInput = Vector2.zero;
 		}
 
+		/// <summary>
+		/// One Look action carries both the mouse's delta and the right stick, which mean different things: counts
+		/// moved this frame, and a held position. Sorted by the device so each is converted to degrees its own way.
+		/// </summary>
 		private void OnLookPerformed(InputAction.CallbackContext context)
 		{
-			lookInput = context.ReadValue<Vector2>();
+			if (context.control?.device is Gamepad)
+			{
+				stickLookInput = context.ReadValue<Vector2>();
+			}
+			else
+			{
+				lookInput = context.ReadValue<Vector2>();
+			}
 		}
 
 		private void OnLookCanceled(InputAction.CallbackContext context)
 		{
-			lookInput = Vector2.zero;
+			if (context.control?.device is Gamepad)
+			{
+				stickLookInput = Vector2.zero;
+			}
+			else
+			{
+				lookInput = Vector2.zero;
+			}
+		}
+
+		/// <summary>
+		/// This frame's look, in degrees: mouse counts at the sensitivity's degrees per count, and the stick at its
+		/// rate for the frame's length, both at the live camera's field of view (ClientCameraSettings).
+		/// </summary>
+		private Vector3 LookDegrees()
+		{
+			// The KCCCamera lives on the main camera (one camera, in ClientPreboot); Camera.main is cached by Unity.
+			Camera view = Camera.main;
+			float fieldOfView = view != null ? view.fieldOfView : 0f;
+			Vector2 degrees = lookInput * ClientCameraSettings.MouseDegreesPerCount(fieldOfView)
+				+ stickLookInput * (ClientCameraSettings.StickDegreesPerSecondAt(fieldOfView) * Time.unscaledDeltaTime);
+			return new Vector3(degrees.x, degrees.y, 0f);
 		}
 
 		private void OnScrollWheelPerformed(InputAction.CallbackContext context)

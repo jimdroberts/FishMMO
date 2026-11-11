@@ -337,6 +337,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return $"'{accountName}' is {currentLevel}; you cannot change them.";
 				}
 
+				/* Two-factor is opt-in for players and mandatory for staff, and sign-in only asks for a
+				 * code an account has. Promoting one without it would put staff powers behind a password
+				 * alone, so it waits until they set it up. The Control Panel's access-level change refuses
+				 * the same case. Lowering a level is never refused. */
+				if (level >= AccessLevel.GameMaster && level > currentLevel && !existing.Data.TotpEnabled)
+				{
+					// Kept under ChatBroadcast.MaxTextLength with a 32-character name.
+					return $"'{accountName}' has no two-factor. Staff need it; they set it up on the Control Panel.";
+				}
+
 				DatabaseResult result = await accountService.PersistAccessLevelAsync(accountName, (byte)level);
 				if (!result.IsSuccess)
 				{

@@ -789,6 +789,12 @@ namespace FishMMO.Client
 		/// <param name="evt">The geometry change.</param>
 		private void OnGeometryChanged(GeometryChangedEvent evt)
 		{
+			// The event bubbles: without this every marker that moved laid out all of them again, inside the layout pass.
+			if (evt.target != this)
+			{
+				return;
+			}
+
 			LayoutMarkers();
 			RefreshSurface();
 		}

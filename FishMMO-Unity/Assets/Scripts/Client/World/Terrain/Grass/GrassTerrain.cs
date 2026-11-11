@@ -988,7 +988,7 @@ namespace FishMMO.Client
 				gt.gridZ = gridZ;
 				gt.minHeights = g.MinHeights;
 				gt.maxHeights = g.MaxHeights;
-				if (SystemInfo.SupportsTextureFormat(TextureFormat.R16))
+				if (GroundMaterialMap.R16Samplable)
 				{
 					gt.heightTexels16 = tile.Heights;
 				}
@@ -1317,7 +1317,7 @@ namespace FishMMO.Client
 		private void BeginHeightGrid()
 		{
 			int res = heightResolution = Data.heightmapResolution;
-			if (SystemInfo.SupportsTextureFormat(TextureFormat.R16))
+			if (GroundMaterialMap.R16Samplable)
 			{
 				heightTexels16 = new ushort[res * res];
 			}

@@ -13,6 +13,13 @@ mergeInto(LibraryManager.library, {
         it on the next mouse press on the same element: a press is a user gesture, so the
         retry is allowed. exitPointerLock (the game freeing the cursor) cancels the retry.
         Installed once; a second call does nothing.
+
+        It also asks for raw movement ({ unadjustedMovement: true }): mouse counts without the
+        operating system's pointer acceleration, which the look sensitivity is defined on
+        (ClientCameraSettings.MouseDegreesPerCount). Chrome grants it on Windows, macOS and
+        ChromeOS; where it is refused (NotSupportedError: Chrome on Linux) the lock is taken
+        again without it, and not asked for again; browsers that do not know the option (Firefox)
+        ignore it and lock as before.
     */
     FishMMOInstallPointerLockGuard__sig: 'v',
     FishMMOInstallPointerLockGuard: function () {
@@ -23,6 +30,8 @@ mergeInto(LibraryManager.library, {
 
         var request = Element.prototype.requestPointerLock;
         var pending = null;
+        // False once a browser has refused raw movement, so it is not asked for again.
+        var rawMovement = true;
 
         function cancel() {
             if (pending) {
@@ -45,15 +54,22 @@ mergeInto(LibraryManager.library, {
 
         function guarded(options) {
             var element = this;
+            var raw = options === undefined && rawMovement;
+            var asked = raw ? { unadjustedMovement: true } : options;
             var result;
             try {
-                result = request.call(element, options);
+                result = request.call(element, asked);
             } catch (e) {
                 arm(element, options);
                 return undefined;
             }
             if (result && typeof result.then === 'function') {
                 return result.then(cancel, function (e) {
+                    if (raw && e && e.name === 'NotSupportedError') {
+                        // No raw movement here: lock without it (the press that asked is still the gesture).
+                        rawMovement = false;
+                        return guarded.call(element, options);
+                    }
                     if (e && e.name === 'NotAllowedError') {
                         arm(element, options);
                     } else {

@@ -705,6 +705,10 @@ namespace FishNet.Transporting.WebTransport
 		{
 			// Prefer normal stop; if it no-ops while still not Stopped, force reset.
 			bool ok = this.clientSocket.StopConnection();
+			// Asked from inside a received message's handler: the socket stops once that handler returns, this
+			// frame. Forcing it here would tear the connection down mid-parse, which is what deferring avoids.
+			if (this.clientSocket.StopDeferred)
+				return ok;
 			if (this.clientSocket.GetConnectionState() != LocalConnectionState.Stopped)
 			{
 				this.clientSocket.ForceStopAndReset();
@@ -744,8 +748,28 @@ namespace FishNet.Transporting.WebTransport
 		/// <param name="channel">0 = reliable (stream), 1 = unreliable (datagram).</param>
 		public override int GetMTU(byte channel)
 		{
-			return channel == 1 ? DatagramMTU : this.streamMTU;
+			return channel == 1 ? DatagramSendLimit : this.streamMTU;
 		}
+
+		/// <summary>
+		/// The largest datagram a browser's WebTransport will send (<c>datagrams.maxDatagramSize</c>), as measured.
+		/// </summary>
+		/// <remarks>
+		/// Measured 2026-11-11 against the live game server: Firefox 159 reports 1024 and Chrome 157 reports 1210. A
+		/// datagram over the browser's limit is discarded without an error (the write still resolves), so with
+		/// <see cref="DatagramMTU"/> 1150 every unreliable batch of 1025-1150 bytes from Firefox was lost: the server ran
+		/// those ticks without the client's input and corrected it, which played as input duplicated or reconciled in
+		/// Firefox only. FishNet reads the MTU once, before any session exists, so this cannot wait for the browser's
+		/// own figure; the plugin (WebTransport.jslib, WTSendDatagram) still moves anything over the live limit onto
+		/// the reliable stream.
+		/// </remarks>
+		private const int BrowserDatagramMTU = 1024;
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+		private const int DatagramSendLimit = BrowserDatagramMTU < DatagramMTU ? BrowserDatagramMTU : DatagramMTU;
+#else
+		private const int DatagramSendLimit = DatagramMTU;
+#endif
 		#endregion
 	}
 }

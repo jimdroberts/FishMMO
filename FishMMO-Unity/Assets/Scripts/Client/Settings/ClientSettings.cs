@@ -59,10 +59,17 @@ namespace FishMMO.Client
 		public const string BrightnessKey = "Brightness";
 
 		/// <summary>
-		/// How far the mouse turns the view. Only observable while the cursor is locked, which is
-		/// the state the mouse drives the camera in.
+		/// How far the mouse turns the view (ClientCameraSettings.MouseDegreesPerCount). Only observable while the
+		/// cursor is locked, which is the state the mouse drives the camera in.
 		/// </summary>
-		public const string LookSensitivityKey = "Look Sensitivity";
+		/// <remarks>A key of its own because the number changed meaning; see <see cref="LegacyLookSensitivityKey"/>.</remarks>
+		public const string LookSensitivityKey = "Mouse Sensitivity";
+
+		/// <summary>
+		/// The old sensitivity: degrees turned per mouse count outright. Read once, to carry a saved value over
+		/// (ClientCameraSettings.LoadSaved), then removed.
+		/// </summary>
+		public const string LegacyLookSensitivityKey = "Look Sensitivity";
 
 		/// <summary>Texture filtering. Stored as the ordinal of ClientDisplaySettings.AnisotropicOption.</summary>
 		public const string AnisotropicFilteringKey = "Anisotropic Filtering";
@@ -359,6 +366,9 @@ namespace FishMMO.Client
 
 		/// <summary>Smallest interface scale offered, as a multiplier of the authored size.</summary>
 		public const float MinimumUIScale = 0.75f;
+
+		/// <summary>Interface scale a fresh install uses.</summary>
+		public const float DefaultUIScale = 0.75f;
 		/// <summary>Largest interface scale offered, as a multiplier of the authored size.</summary>
 		public const float MaximumUIScale = 1.5f;
 
@@ -583,6 +593,13 @@ namespace FishMMO.Client
 			return Mathf.Clamp(value, minimum, maximum);
 		}
 
+		/// <summary>Whether a setting is stored at all, as opposed to falling back to its default.</summary>
+		public static bool Exists(string key)
+		{
+			Configuration configuration = Configuration.GlobalSettings;
+			return configuration != null && configuration.Exists(key);
+		}
+
 		/// <summary>Reads a string setting, or its fallback when the store is unavailable.</summary>
 		public static string GetString(string key, string fallback)
 		{
@@ -659,7 +676,7 @@ namespace FishMMO.Client
 		/// <summary>The interface scale multiplier the player has chosen.</summary>
 		public static float UIScale
 		{
-			get => GetFloat(UIScaleKey, 1.0f, MinimumUIScale, MaximumUIScale);
+			get => GetFloat(UIScaleKey, DefaultUIScale, MinimumUIScale, MaximumUIScale);
 			set
 			{
 				float clamped = Mathf.Clamp(value, MinimumUIScale, MaximumUIScale);
@@ -693,7 +710,7 @@ namespace FishMMO.Client
 			Apply("display", ClientDisplaySettings.ApplySaved);
 			Apply("camera", ClientCameraSettings.ApplySaved);
 			Apply("audio", ClientAudioSettings.ApplySaved);
-			Apply("interface", () => UITKPanelScale.Apply(GetFloat(UIScaleKey, 1.0f, MinimumUIScale, MaximumUIScale)));
+			Apply("interface", () => UITKPanelScale.Apply(GetFloat(UIScaleKey, DefaultUIScale, MinimumUIScale, MaximumUIScale)));
 
 			/* The theme is otherwise built by whichever panel registers first, which is correct in
 			 * a build and wrong in the editor with domain reload disabled: UITKThemeManager.Current

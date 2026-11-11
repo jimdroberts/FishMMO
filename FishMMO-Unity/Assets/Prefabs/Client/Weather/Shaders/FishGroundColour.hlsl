@@ -122,7 +122,9 @@ float4 _FishGroundArrayRes;                          // x heightmap slice size, 
 float4 _FishGroundTile[FISH_GROUND_MAX_TILES];       // xy world xz origin, zw 1 / size xz
 float4 _FishGroundTileData[FISH_GROUND_MAX_TILES];   // x world y origin, y terrain height (m: a heights texel is 0..1 of it), z 1 when it has an index map, w its index slice
 float4 _FishGroundBlend;                             // x the terrain's height transition, y 1 when it height-blends, z 1 when the mask array holds anything, w its snow lift (m)
-TEXTURE2D_ARRAY(_FishGroundHeights);                 // one slice per terrain, 0..1 of its height (uploaded from TerrainData.GetHeights)
+// One slice per terrain, 0..1 of its height (uploaded from TerrainData.GetHeights); on Firefox's WebGPU its 16 bits packed into
+// red and green (_FishGroundArrayRes.z = 1, GroundMaterialMap.HeightsFormat), which only the WebGPU path's loads decode.
+TEXTURE2D_ARRAY(_FishGroundHeights);
 // The terrains' index maps, a slice each (baked from their alphamaps as the terrain's own are: TerrainIndexMapBaker).
 Texture2DArray<uint2> _FishGroundIndex;
 // The terrain's own per-layer values (TerrainLayerTable: a column per layer, rows FISH_LAYER_ROW_*), the terrain's
@@ -188,7 +190,7 @@ float2 FishGroundTexelUV(float2 t, float res)
 float FishGroundHeightAt(int tile, float2 t)
 {
 #if defined(SHADER_API_WEBGPU)
-    float h = FishGroundHeightLoads(_FishGroundHeights,(int)_FishGroundArrayRes.x,tile,t);
+    float h = FishGroundHeightLoadsPacked(_FishGroundHeights,(int)_FishGroundArrayRes.x,tile,t,_FishGroundArrayRes.z > 0.5);
 #else
     float h = SAMPLE_TEXTURE2D_ARRAY_LOD(_FishGroundHeights, sampler_LinearClamp, FishGroundTexelUV(t, _FishGroundArrayRes.x), tile, 0.0).r;
 #endif

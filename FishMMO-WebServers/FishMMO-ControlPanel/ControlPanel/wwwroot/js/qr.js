@@ -3,8 +3,7 @@
  *
  * The panel used to draw a decorative block pattern where a QR code belongs. That is worse
  * than showing nothing: it looks like an enrolment code, and a player who scans it enrols
- * nothing. Two-factor is mandatory on every FishMMO account, so the one moment the secret
- * is ever shown has to work.
+ * nothing. The secret is shown once, at enrolment, so that one moment has to work.
  *
  * No dependency, because the panel has no bundler and an admin surface has to render with
  * no network beyond its own origin. Versions 1 to 10 cover an otpauth URI comfortably;

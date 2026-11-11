@@ -99,6 +99,17 @@ namespace FishMMO.ControlPanel.Controllers
 				return BadRequest(new { error = $"That account is already {level}." });
 			}
 
+			/* Two-factor is opt-in for players and mandatory for staff. The panel's staff policies already
+			 * refuse an elevated account without it, but the game does not ask for a code the account
+			 * does not have: promoting one would hand it game master powers behind a password alone. So
+			 * the promotion waits until the player has set two-factor up. Lowering a level is never
+			 * refused here. The in-game /admin access applies the same rule. */
+			if (level >= AccessLevel.GameMaster && level > currentLevel && !existing.Data.TotpEnabled)
+			{
+				audit.Outcome = "Refused: the account has no two-factor.";
+				return BadRequest(new { error = $"'{username}' has no two-factor authentication. Staff accounts must have it: ask them to set it up from My account first." });
+			}
+
 			var result = await accounts.PersistAccessLevelAsync(username, (byte)level, HttpContext.RequestAborted);
 			if (!result.IsSuccess)
 			{

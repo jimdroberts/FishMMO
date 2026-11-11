@@ -51,7 +51,7 @@ namespace FishMMO.Client
 		public const float MaximumOpacity = 1.0f;
 
 		/// <summary>Nameplate size multiplier a fresh install uses.</summary>
-		public const float DefaultScale = 1.0f;
+		public const float DefaultScale = 0.5f;
 
 		/// <summary>Smallest nameplate size multiplier offered.</summary>
 		public const float MinimumScale = 0.5f;

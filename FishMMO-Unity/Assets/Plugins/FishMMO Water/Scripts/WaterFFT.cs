@@ -41,6 +41,10 @@ namespace FishMMO.Water
 		private static readonly int SpectrumBId = Shader.PropertyToID("_SpectrumB");
 		private static readonly int DisplacementId = Shader.PropertyToID("_Displacement");
 		private static readonly int DerivativesId = Shader.PropertyToID("_Derivatives");
+		private static readonly int H0InId = Shader.PropertyToID("_H0In");
+		private static readonly int InAId = Shader.PropertyToID("_InA");
+		private static readonly int InBId = Shader.PropertyToID("_InB");
+		private static readonly int FoamMemoryId = Shader.PropertyToID("_FoamMemory");
 		private static readonly int FoamKeepId = Shader.PropertyToID("_FoamKeep");
 
 		/// <summary>
@@ -74,8 +78,12 @@ namespace FishMMO.Water
 		// The render-pass path: null when compute is running it.
 		private readonly Material passes;
 		private readonly int initialPass, timePass, butterflyPass, assemblePass;
+		// Both paths: the transform reads one pair and writes the other, never one texture both ways. Shared, since
+		// the cascades run one at a time.
 		private readonly RenderTexture scratchA;
 		private readonly RenderTexture scratchB;
+		// The compute path's foam memory, one-channel float: the one texture a kernel reads and writes in place.
+		private readonly RenderTexture[] foamMemory = new RenderTexture[Cascades];
 		private readonly RenderBuffer[] pair = new RenderBuffer[2];
 		private readonly int initialKernel;
 		private readonly int timeKernel;
@@ -180,7 +188,10 @@ namespace FishMMO.Water
 				 * back correctly while the displacement (half) came back uniformly zero. */
 				displacement[i] = Create("FFT displacement " + i, GraphicsFormat.R32G32B32A32_SFloat);
 				derivatives[i] = Create("FFT derivatives " + i, GraphicsFormat.R32G32B32A32_SFloat);
+				foamMemory[i] = Create("FFT foam memory " + i, GraphicsFormat.R32_SFloat);
 			}
+			scratchA = Create("FFT scratch A", GraphicsFormat.R32G32B32A32_SFloat);
+			scratchB = Create("FFT scratch B", GraphicsFormat.R32G32B32A32_SFloat);
 		}
 
 		/// <summary>The render-pass version, for machines with no compute shaders.</summary>
@@ -319,7 +330,7 @@ namespace FishMMO.Water
 			{
 				Bind(timeKernel, i);
 				compute.SetFloat("_FFTTime", seconds);
-				compute.SetTexture(timeKernel, H0Id, h0[i]);
+				compute.SetTexture(timeKernel, H0InId, h0[i]);
 				compute.SetTexture(timeKernel, SpectrumAId, spectrumA[i]);
 				compute.SetTexture(timeKernel, SpectrumBId, spectrumB[i]);
 				compute.Dispatch(timeKernel, Size / 8, Size / 8, 1);
@@ -328,15 +339,23 @@ namespace FishMMO.Water
 					continue;
 				}
 
-				// One dispatch per axis: every butterfly stage happens inside the thread group.
-				compute.SetTexture(horizontalKernel, SpectrumAId, spectrumA[i]);
-				compute.SetTexture(horizontalKernel, SpectrumBId, spectrumB[i]);
+				// One dispatch per axis: every butterfly stage happens inside the thread group. The rows go from the
+				// spectrum into the scratch pair, the columns from the scratch pair back into the spectrum.
+				compute.SetTexture(horizontalKernel, InAId, spectrumA[i]);
+				compute.SetTexture(horizontalKernel, InBId, spectrumB[i]);
+				compute.SetTexture(horizontalKernel, SpectrumAId, scratchA);
+				compute.SetTexture(horizontalKernel, SpectrumBId, scratchB);
 				compute.Dispatch(horizontalKernel, Size, 1, 1);
 				if (stages < 3)
 				{
+					// A diagnostic stopping here reads the working spectrum (Working): give it the rows' result.
+					Graphics.CopyTexture(scratchA, spectrumA[i]);
+					Graphics.CopyTexture(scratchB, spectrumB[i]);
 					continue;
 				}
 
+				compute.SetTexture(verticalKernel, InAId, scratchA);
+				compute.SetTexture(verticalKernel, InBId, scratchB);
 				compute.SetTexture(verticalKernel, SpectrumAId, spectrumA[i]);
 				compute.SetTexture(verticalKernel, SpectrumBId, spectrumB[i]);
 				compute.Dispatch(verticalKernel, Size, 1, 1);
@@ -346,10 +365,11 @@ namespace FishMMO.Water
 				}
 
 				Bind(assembleKernel, i);
-				compute.SetTexture(assembleKernel, SpectrumAId, spectrumA[i]);
-				compute.SetTexture(assembleKernel, SpectrumBId, spectrumB[i]);
+				compute.SetTexture(assembleKernel, InAId, spectrumA[i]);
+				compute.SetTexture(assembleKernel, InBId, spectrumB[i]);
 				compute.SetTexture(assembleKernel, DisplacementId, displacement[i]);
 				compute.SetTexture(assembleKernel, DerivativesId, derivatives[i]);
+				compute.SetTexture(assembleKernel, FoamMemoryId, foamMemory[i]);
 				compute.Dispatch(assembleKernel, Size / 8, Size / 8, 1);
 			}
 		}
@@ -487,6 +507,7 @@ namespace FishMMO.Water
 				Release(spectrumB[i]);
 				Release(displacement[i]);
 				Release(derivatives[i]);
+				Release(foamMemory[i]);
 			}
 			Release(scratchA);
 			Release(scratchB);
