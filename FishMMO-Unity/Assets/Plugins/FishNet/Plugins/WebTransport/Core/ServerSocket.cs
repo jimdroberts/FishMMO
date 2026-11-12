@@ -128,7 +128,32 @@ namespace FishNet.Transporting.WebTransport.Server
 			public int Kicked;
 			/// <summary>Events from this connection currently waiting in <see cref="incomingEvents"/>.</summary>
 			public int Pending;
+
+			/* Datagrams have a budget of their own; see TryAdmitDatagram. */
+			public long DgramTokens;
+			public long DgramLastRefillTicks;
+			/// <summary>Start of the current one-second accounting window.</summary>
+			public long DgramWindowStartTicks;
+			/// <summary>Datagrams refused in the current window.</summary>
+			public int DgramWindowRefused;
+			/// <summary>Consecutive windows in which the client sent at least twice its budget.</summary>
+			public int DgramAbusiveWindows;
+			/// <summary>1 once this connection's first datagram drop has been logged.</summary>
+			public int DgramDropLogged;
 		}
+
+		/// <summary>
+		/// Consecutive one-second windows of datagram abuse (at least twice the budget each second)
+		/// before the connection is disconnected.
+		/// </summary>
+		/// <remarks>
+		/// Datagrams are unreliable by contract, so over-budget ones are simply dropped. Kicking for
+		/// a burst punished honest clients: a browser that could not transmit for a while flushed
+		/// its queued datagrams at once, and the flood gate disconnected the player (2026-11-12).
+		/// Only a client that keeps sending far over budget is disconnected. Matches the native
+		/// library's WT_DGRAM_ABUSE_WINDOWS.
+		/// </remarks>
+		private const int DatagramAbuseWindows = 10;
 
 		/// <summary>
 		/// Share of <see cref="MaxIncomingEvents"/> one connection may occupy. The rate limiter
@@ -189,11 +214,7 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// </summary>
 		private bool TryAdmitInbound(ulong nativeConnectionId, out InboundBucket bucket)
 		{
-			bucket = this.inboundBuckets.GetOrAdd(nativeConnectionId, _ => new InboundBucket()
-			{
-				Tokens = this.inboundMessageBurst,
-				LastRefillTicks = System.Diagnostics.Stopwatch.GetTimestamp(),
-			});
+			bucket = GetBucket(nativeConnectionId);
 
 			if (System.Threading.Volatile.Read(ref bucket.Kicked) != 0)
 			{
@@ -236,6 +257,108 @@ namespace FishNet.Transporting.WebTransport.Server
 			}
 		}
 
+		/// <summary>A connection's bucket, created full on first use.</summary>
+		private InboundBucket GetBucket(ulong nativeConnectionId)
+		{
+			return this.inboundBuckets.GetOrAdd(nativeConnectionId, _ =>
+			{
+				long now = System.Diagnostics.Stopwatch.GetTimestamp();
+				return new InboundBucket()
+				{
+					Tokens = this.inboundMessageBurst,
+					LastRefillTicks = now,
+					DgramTokens = this.inboundMessageBurst,
+					DgramLastRefillTicks = now,
+					DgramWindowStartTicks = now,
+				};
+			});
+		}
+
+		/// <summary>
+		/// Charges one datagram to a connection's datagram budget. False means drop it, which is all
+		/// an over-budget datagram ever costs the sender; see <see cref="DatagramAbuseWindows"/> for
+		/// the only case that disconnects. Worker thread safe.
+		/// </summary>
+		private bool TryAdmitDatagram(ulong nativeConnectionId, out InboundBucket bucket)
+		{
+			bucket = GetBucket(nativeConnectionId);
+
+			if (System.Threading.Volatile.Read(ref bucket.Kicked) != 0)
+			{
+				return false;
+			}
+
+			int perSecond = this.inboundMessagesPerSecond;
+			if (perSecond <= 0)
+			{
+				return true;
+			}
+
+			lock (bucket)
+			{
+				long now = System.Diagnostics.Stopwatch.GetTimestamp();
+				long frequency = System.Diagnostics.Stopwatch.Frequency;
+
+				// Close the accounting window(s) that have ended.
+				long sinceWindow = now - bucket.DgramWindowStartTicks;
+				if (sinceWindow >= frequency)
+				{
+					bool abusive = sinceWindow < 2 * frequency && bucket.DgramWindowRefused >= perSecond;
+					bucket.DgramAbusiveWindows = abusive ? bucket.DgramAbusiveWindows + 1 : 0;
+					bucket.DgramWindowRefused = 0;
+					bucket.DgramWindowStartTicks = now;
+					if (bucket.DgramAbusiveWindows >= DatagramAbuseWindows && bucket.Kicked == 0)
+					{
+						bucket.Kicked = 1;
+						this.pendingInboundKicks.Enqueue(nativeConnectionId);
+						return false;
+					}
+				}
+
+				long elapsed = now - bucket.DgramLastRefillTicks;
+				if (elapsed > 0)
+				{
+					long refill = elapsed * perSecond / frequency;
+					if (refill > 0)
+					{
+						bucket.DgramTokens = System.Math.Min(this.inboundMessageBurst, bucket.DgramTokens + refill);
+						bucket.DgramLastRefillTicks = now;
+					}
+				}
+
+				if (bucket.DgramTokens > 0)
+				{
+					bucket.DgramTokens--;
+					return true;
+				}
+
+				bucket.DgramWindowRefused++;
+				if (bucket.DgramDropLogged == 0)
+				{
+					bucket.DgramDropLogged = 1;
+					transport?.NetworkManager?.LogWarning(
+						$"[WebTransport Server] Connection {nativeConnectionId} is over its datagram budget ({perSecond}/s); dropping the excess.");
+				}
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Reserves one slot of a connection's share of the incoming queue for a datagram. False
+		/// means drop it. Unlike <see cref="TryReservePendingEvent"/> this never counts toward a
+		/// disconnect: a full share while the main thread is behind is the server's backlog, not
+		/// the client's fault, and a dropped datagram is harmless. Worker thread safe.
+		/// </summary>
+		private static bool TryReserveDatagramEvent(InboundBucket bucket)
+		{
+			if (System.Threading.Interlocked.Increment(ref bucket.Pending) <= MaxIncomingEventsPerConnection)
+			{
+				return true;
+			}
+			System.Threading.Interlocked.Decrement(ref bucket.Pending);
+			return false;
+		}
+
 		/// <summary>
 		/// Reserves one slot of a connection's share of the incoming queue. False means drop.
 		/// A connection that keeps arriving over its share while the queue is not draining is
@@ -269,7 +392,8 @@ namespace FishNet.Transporting.WebTransport.Server
 		{
 			while (this.pendingInboundKicks.TryDequeue(out ulong nativeConnectionId))
 			{
-				transport.NetworkManager?.LogWarning($"[WebTransport Server] Connection {nativeConnectionId} exceeded the inbound message budget ({this.inboundMessagesPerSecond}/s, burst {this.inboundMessageBurst}); disconnecting.");
+				transport.NetworkManager?.LogWarning($"[WebTransport Server] Connection {nativeConnectionId} exceeded the inbound message budget ({this.inboundMessagesPerSecond}/s, burst {this.inboundMessageBurst}; " +
+					$"reliable messages over budget, a full event queue, or datagrams at twice the budget for {DatagramAbuseWindows} s); disconnecting.");
 				if (this.serverHandle != null && !this.serverHandle.IsInvalid)
 				{
 					WebTransportNative.wt_server_disconnect(this.serverHandle, nativeConnectionId);
@@ -1362,9 +1486,9 @@ namespace FishNet.Transporting.WebTransport.Server
 
 			TransportTrafficCounters.CountReceived(1, length);
 
-			// Per-connection budget, before the copy and before the shared queue.
-			if (!TryAdmitInbound(nativeConnectionId, out InboundBucket bucket) ||
-				!TryReservePendingEvent(nativeConnectionId, bucket))
+			// Per-connection datagram budget, before the copy and before the shared queue.
+			if (!TryAdmitDatagram(nativeConnectionId, out InboundBucket bucket) ||
+				!TryReserveDatagramEvent(bucket))
 			{
 				return;
 			}

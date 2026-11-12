@@ -108,7 +108,7 @@ namespace FishMMO.Client
 		public static void Gather(CommandBuffer cmd, GraphicsBuffer into)
 		{
 			cmd.SetComputeBufferParam(compute, kernel, OutId, into);
-			cmd.DispatchCompute(compute, kernel, (Rows + 63) / 64, 1, 1);
+			cmd.DispatchComputeChecked(compute, kernel, (Rows + 63) / 64, 1, 1);
 			cmd.SetGlobalBuffer(TableId, into);
 		}
 
@@ -155,7 +155,7 @@ namespace FishMMO.Client
 					builder.SetRenderFunc(static (PassData d, UnsafeGraphContext context) =>
 					{
 						context.cmd.SetComputeBufferParam(d.Compute, d.Kernel, OutId, d.Table);
-						context.cmd.DispatchCompute(d.Compute, d.Kernel, (Rows + 63) / 64, 1, 1);
+						context.cmd.DispatchComputeChecked(d.Compute, d.Kernel, (Rows + 63) / 64, 1, 1);
 						context.cmd.SetGlobalBuffer(TableId, d.Table);
 						Gathers++;
 					});

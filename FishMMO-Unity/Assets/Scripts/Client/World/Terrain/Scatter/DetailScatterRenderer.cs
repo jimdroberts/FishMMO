@@ -442,7 +442,7 @@ namespace FishMMO.Client
 			cmd.SetComputeIntParam(compute, ArgCountId, commands.Count);
 
 			cmd.SetComputeBufferParam(compute, clearKernel, CountsId, countBuffer);
-			cmd.DispatchCompute(compute, clearKernel, (slotCount + 63) / 64, 1, 1);
+			cmd.DispatchComputeChecked(compute, clearKernel, (slotCount + 63) / 64, 1, 1);
 
 			cmd.SetComputeBufferParam(compute, generateKernel, ItemsId, itemBuffer);
 			cmd.SetComputeBufferParam(compute, generateKernel, TableId, atlas.Table);
@@ -460,7 +460,7 @@ namespace FishMMO.Client
 				cmd.SetComputeTextureParam(compute, generateKernel, HolesId, range.Group.Holes);
 				cmd.SetComputeIntParam(compute, ItemOffsetId, range.Offset);
 				cmd.SetComputeIntParam(compute, ItemCountId, range.Count);
-				cmd.DispatchCompute(compute, generateKernel, Mathf.Min(range.Count, 65535), (range.Count + 65534) / 65535, 1);
+				cmd.DispatchComputeChecked(compute, generateKernel, Mathf.Min(range.Count, 65535), (range.Count + 65534) / 65535, 1);
 			}
 			DispatchPack(cmd);
 			// Always read in the editor: an overflowing slot is otherwise invisible but for its symptom.
@@ -498,7 +498,7 @@ namespace FishMMO.Client
 				cmd.SetComputeVectorArrayParam(compute, PlanesId, planeVectors);
 				cmd.SetComputeIntParam(compute, SlotCountId, slotCount);
 				cmd.SetComputeBufferParam(compute, clearKernel, CountsId, culledCountBuffer);
-				cmd.DispatchCompute(compute, clearKernel, (slotCount + 63) / 64, 1, 1);
+				cmd.DispatchComputeChecked(compute, clearKernel, (slotCount + 63) / 64, 1, 1);
 				FishDepthPyramid.Bind(cmd, compute, cullKernel, camera, view.Position, true);
 				cmd.SetComputeBufferParam(compute, cullKernel, ModelsId, modelBuffer);
 				cmd.SetComputeBufferParam(compute, cullKernel, SlotsId, slotBuffer);
@@ -508,7 +508,7 @@ namespace FishMMO.Client
 				cmd.SetComputeBufferParam(compute, cullKernel, CulledVisibleId, culledVisibleBuffer);
 				cmd.SetComputeBufferParam(compute, cullKernel, CulledCountsId, culledCountBuffer);
 				BindCulledPacked(cmd);
-				cmd.DispatchCompute(compute, cullKernel, slotCount, 1, 1);
+				cmd.DispatchComputeChecked(compute, cullKernel, slotCount, 1, 1);
 			}
 			// Also restore the original counts after switching the diagnostic off.
 			cmd.SetComputeIntParam(compute, ArgCountId, commands.Count);
@@ -516,12 +516,12 @@ namespace FishMMO.Client
 			cmd.SetComputeBufferParam(compute, finalizeKernel, CountsId, CullInstances ? culledCountBuffer : countBuffer);
 			cmd.SetComputeBufferParam(compute, finalizeKernel, SlotsId, slotBuffer);
 			cmd.SetComputeBufferParam(compute, finalizeKernel, ArgsId, argsBuffer);
-			cmd.DispatchCompute(compute, finalizeKernel, (commands.Count + 63) / 64, 1, 1);
+			cmd.DispatchComputeChecked(compute, finalizeKernel, (commands.Count + 63) / 64, 1, 1);
 			if (NeedsArgsFence)
 			{
 				cmd.SetComputeBufferParam(compute, argsFenceKernel, ArgsFenceId, argsBuffer);
 				cmd.SetComputeBufferParam(compute, argsFenceKernel, CountsId, countBuffer);
-				cmd.DispatchCompute(compute, argsFenceKernel, 1, 1, 1);
+				cmd.DispatchComputeChecked(compute, argsFenceKernel, 1, 1, 1);
 			}
 			cmd.EndSample(CullGpuSample);
 			context.ExecuteCommandBuffer(cmd);

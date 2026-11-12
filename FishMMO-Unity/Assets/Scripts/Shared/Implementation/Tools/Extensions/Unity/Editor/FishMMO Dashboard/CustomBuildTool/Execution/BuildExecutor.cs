@@ -76,7 +76,7 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 
 				BuildPlayerOptions options = new BuildPlayerOptions()
 				{
-					locationPathName = Path.Combine(buildPath, executableName + ".exe"),
+					locationPathName = Path.Combine(buildPath, GetPlayerFileName(executableName, buildTarget, customBuildType)),
 					options = buildOptions,
 					scenes = scenes,
 					subtarget = (int)subTarget,
@@ -102,6 +102,7 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 					CopyConfigurationFiles(buildTarget, customBuildType, Path.Combine(root, configurationPath), buildPath, setupRoot);
 					CopyRemoteAddressablesToBuild(buildPath, executableName, buildTarget, customBuildType);
 					CopyUpdaterToBuild(root, buildPath, buildTarget, customBuildType);
+					WriteVersionFile(buildPath, buildTarget, customBuildType);
 
 					if (buildTarget == BuildTarget.WebGL)
 					{
@@ -248,6 +249,76 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 			catch (Exception ex)
 			{
 				Log.Error("BuildExecutor", $"Failed to copy remote addressable bundles: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// The file name the player is written under inside the build folder.
+		/// </summary>
+		/// <remarks>
+		/// <para>A Linux client is <c>&lt;name&gt;</c> with no extension, the name
+		/// <c>Constants.Configuration.ClientExecutable</c> gives it on Linux. The launcher hands
+		/// that name to the Updater, which restarts the game with it after a patch; a Linux client
+		/// written as <c>&lt;name&gt;.exe</c> applied the patch and then failed to start.</para>
+		/// <para>Everything else keeps <c>&lt;name&gt;.exe</c>. On Windows that is the real name.
+		/// A Linux server stays <c>GameServer.exe</c> because the AppHealthMonitor and installer
+		/// configuration name it so, and for WebGL the path is the output folder that the deploy
+		/// and WebGL server configuration point at.</para>
+		/// </remarks>
+		/// <param name="executableName">The executable name without extension.</param>
+		/// <param name="buildTarget">The target being built (not the editor's active target).</param>
+		/// <param name="customBuildType">Client or server.</param>
+		/// <returns>The file name to pass as the player's location.</returns>
+		internal static string GetPlayerFileName(string executableName, BuildTarget buildTarget, CustomBuildType customBuildType)
+		{
+			if (customBuildType == CustomBuildType.Client && buildTarget == BuildTarget.StandaloneLinux64)
+			{
+				return executableName;
+			}
+			return executableName + ".exe";
+		}
+
+		/// <summary>
+		/// Writes <c>version.txt</c> (the project's <see cref="VersionConfig.FullVersion"/>) into the root
+		/// of a standalone client build.
+		/// </summary>
+		/// <remarks>
+		/// The patch generator reads each client folder's version from this file and refuses a folder
+		/// without one, so a build without it cannot be patched from or to. The client itself takes its
+		/// version from the VersionConfig asset, so this file only has to agree with the build it sits in.
+		/// It is then a patched file like any other and moves to the new version with the update.
+		/// Skipped for server and WebGL builds, which are deployed, not patched.
+		/// </remarks>
+		/// <param name="buildPath">The root build output path.</param>
+		/// <param name="buildTarget">The target being built.</param>
+		/// <param name="customBuildType">Only standalone clients get the file.</param>
+		private static void WriteVersionFile(string buildPath, BuildTarget buildTarget, CustomBuildType customBuildType)
+		{
+			if (customBuildType != CustomBuildType.Client || buildTarget == BuildTarget.WebGL)
+			{
+				return;
+			}
+
+			VersionConfig config = VersionConfig.FindProjectAsset(out int assetCount);
+			if (config == null)
+			{
+				Log.Error("BuildExecutor", "No VersionConfig asset was found, so version.txt was not written. Patches cannot be generated for this build.");
+				return;
+			}
+			if (assetCount > 1)
+			{
+				Log.Warning("BuildExecutor", $"{assetCount} VersionConfig assets exist; version.txt uses '{AssetDatabase.GetAssetPath(config)}'.");
+			}
+
+			try
+			{
+				string versionPath = Path.Combine(buildPath, "version.txt");
+				File.WriteAllText(versionPath, config.FullVersion);
+				Log.Info("BuildExecutor", $"Wrote version.txt ({config.FullVersion}) to '{buildPath}'.");
+			}
+			catch (Exception ex)
+			{
+				Log.Error("BuildExecutor", $"Failed to write version.txt: {ex.Message}. Patches cannot be generated for this build.");
 			}
 		}
 

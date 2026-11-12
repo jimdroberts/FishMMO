@@ -342,7 +342,7 @@ namespace FishMMO.Client
 			cmd.SetComputeIntParam(compute, ArgCountId, SlotCount);
 
 			cmd.SetComputeBufferParam(compute, clearKernel, CountsId, countBuffer);
-			cmd.DispatchCompute(compute, clearKernel, (SlotCount + 63) / 64, 1, 1);
+			cmd.DispatchComputeChecked(compute, clearKernel, (SlotCount + 63) / 64, 1, 1);
 
 			cmd.SetComputeBufferParam(compute, generateKernel, PiecesId, pieceBuffer);
 			cmd.SetComputeBufferParam(compute, generateKernel, TypesId, typeBuffer);
@@ -360,19 +360,19 @@ namespace FishMMO.Client
 				cmd.SetComputeBufferParam(compute, generateKernel, VerticesId, p.Vertices);
 				cmd.SetComputeBufferParam(compute, generateKernel, IndicesId, p.Indices);
 				cmd.SetComputeIntParam(compute, PieceId, i);
-				cmd.DispatchCompute(compute, generateKernel, Mathf.Min(groups, 65535), (groups + 65534) / 65535, 1);
+				cmd.DispatchComputeChecked(compute, generateKernel, Mathf.Min(groups, 65535), (groups + 65534) / 65535, 1);
 			}
 
 			cmd.SetComputeBufferParam(compute, finalizeKernel, ArgSlotsId, argSlotBuffer);
 			cmd.SetComputeBufferParam(compute, finalizeKernel, CountsId, countBuffer);
 			cmd.SetComputeBufferParam(compute, finalizeKernel, SlotsId, slotBuffer);
 			cmd.SetComputeBufferParam(compute, finalizeKernel, ArgsId, argsBuffer);
-			cmd.DispatchCompute(compute, finalizeKernel, (SlotCount + 63) / 64, 1, 1);
+			cmd.DispatchComputeChecked(compute, finalizeKernel, (SlotCount + 63) / 64, 1, 1);
 			if (NeedsArgsFence)
 			{
 				cmd.SetComputeBufferParam(compute, argsFenceKernel, ArgsFenceId, argsBuffer);
 				cmd.SetComputeBufferParam(compute, argsFenceKernel, CountsId, countBuffer);
-				cmd.DispatchCompute(compute, argsFenceKernel, 1, 1, 1);
+				cmd.DispatchComputeChecked(compute, argsFenceKernel, 1, 1, 1);
 			}
 			if (camera.cameraType == CameraType.Game && Time.frameCount - lastStatsFrame >= StatsInterval)
 			{

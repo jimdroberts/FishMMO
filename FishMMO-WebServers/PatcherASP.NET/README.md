@@ -217,9 +217,13 @@ One of, in order of preference:
 | `Signing:VersionManifestPrivateKeyFile` | **Preferred.** Path to a file holding the base64 key. |
 | `FISHMMO_VERSION_MANIFEST_SIGNING_KEY` | Environment variable. |
 | `Signing:VersionManifestPrivateKeyBase64` | Least preferred — the key ends up in configuration. |
+| *(none set)* | The default key file, `fishmmo/patcher/version-manifest-signing.key` under the service user's config directory (`$XDG_CONFIG_HOME` or `~/.config` on Linux, `%APPDATA%` on Windows). `keygen --out-dir ~/.config/fishmmo/patcher` needs no configuration at all. |
+
+The appsettings files are copied from `FishMMO-Setup` over the deployed ones on every build, so a
+per-host key path does not belong in them; use the default key file or the environment.
 
 A configured-but-unreadable or malformed key **throws** rather than quietly downgrading to
-unsigned.
+unsigned. So does a default key file that exists but cannot be read.
 
 ### 3. Ship the public half to clients
 

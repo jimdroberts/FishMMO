@@ -448,6 +448,24 @@ namespace FishMMO.WebServers.Tools.Tests
 
 		private static void FailClosedPolicy()
 		{
+			// The default key file lives in the user's configuration directory. Point it at an empty one,
+			// so a real key on the machine running these tests cannot answer for "no key configured".
+			string configDir = Path.Combine(Path.GetTempPath(), "fishmmo-manifest-config-" + Guid.NewGuid().ToString("N"));
+			Directory.CreateDirectory(configDir);
+			VersionManifestSigner.ConfigDirectoryOverride = configDir;
+			try
+			{
+				FailClosedPolicyCases(configDir);
+			}
+			finally
+			{
+				VersionManifestSigner.ConfigDirectoryOverride = null;
+				Directory.Delete(configDir, true);
+			}
+		}
+
+		private static void FailClosedPolicyCases(string configDir)
+		{
 			// Production + no key => refuse to start.
 			bool threw = false;
 			try
@@ -535,6 +553,48 @@ namespace FishMMO.WebServers.Tools.Tests
 			}
 			catch (InvalidOperationException) { badThrew = true; }
 			Check("a malformed key throws rather than downgrading to unsigned", badThrew);
+
+			// The default key file: read when no source is configured, outranked by any configured source.
+			string defaultPath = VersionManifestSigner.DefaultKeyFilePath;
+			Check("the default key file sits under the configuration directory",
+				defaultPath == Path.Combine(configDir, "fishmmo", "patcher", VersionManifestSigner.DefaultKeyFileName));
+			Directory.CreateDirectory(Path.GetDirectoryName(defaultPath)!);
+			File.WriteAllText(defaultPath, seedBase64 + "\n");
+			try
+			{
+				var fromDefault = new VersionManifestSigner(new TestEnvironment("Production"), EmptyConfig());
+				Check("Production starts on the default key file alone", fromDefault.IsConfigured && fromDefault.PublicKeyBase64 == Convert.ToBase64String(pub));
+				Check("default-file signer produces a client-verifiable document",
+					ClientVerifies(fromDefault.BuildDocument(new ManifestJsonWriter().AddString("latest_version", "1.0.0")), pub));
+				fromDefault.Dispose();
+
+				var (otherSeed, otherPub) = NewKey();
+				var configured = new VersionManifestSigner(new TestEnvironment("Production"),
+					Config(new Dictionary<string, string> { [VersionManifestSigner.PrivateKeyInlineSetting] = Convert.ToBase64String(otherSeed) }));
+				Check("a configured key outranks the default key file", configured.PublicKeyBase64 == Convert.ToBase64String(otherPub));
+				configured.Dispose();
+
+				if (!OperatingSystem.IsWindows())
+				{
+					File.SetUnixFileMode(defaultPath, UnixFileMode.None);
+					bool unreadableThrew = false;
+					try
+					{
+						using var probe = File.OpenRead(defaultPath);
+					}
+					catch (UnauthorizedAccessException)
+					{
+						try { _ = new VersionManifestSigner(new TestEnvironment("Development"), EmptyConfig()); }
+						catch (InvalidOperationException) { unreadableThrew = true; }
+						Check("an unreadable default key file throws instead of starting unsigned", unreadableThrew);
+					}
+					File.SetUnixFileMode(defaultPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+				}
+			}
+			finally
+			{
+				File.Delete(defaultPath);
+			}
 
 			// Dispose must zero the seed.
 			byte[] copy = (byte[])seed.Clone();

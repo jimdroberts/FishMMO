@@ -83,8 +83,89 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private readonly ConcurrentDictionary<int, double> sceneLoadDeadlines =
 			new ConcurrentDictionary<int, double>();
 
-		/// <summary>How long a client has to finish the scene handshake before it is disconnected.</summary>
-		private static readonly TimeSpan SceneLoadHandshakeTimeout = TimeSpan.FromSeconds(90);
+		/// <summary>
+		/// When each connection's scene handshake began, keyed by ClientId. The progress
+		/// heartbeat may extend <see cref="sceneLoadDeadlines"/>, but never past this plus
+		/// <see cref="sceneLoadMaxSeconds"/>.
+		/// </summary>
+		private readonly ConcurrentDictionary<int, double> sceneLoadStarted =
+			new ConcurrentDictionary<int, double>();
+
+		/// <summary>
+		/// Seconds a loading client may go without a <see cref="ClientSceneLoadProgressBroadcast"/>
+		/// before it is disconnected. Config key <c>SceneLoadStallTimeoutSeconds</c>.
+		/// </summary>
+		/// <remarks>
+		/// This was a fixed 90 s for the whole load, which cut off slow but healthy loads: a web
+		/// client on a cold cache downloads the world's content first, and one took 96 s
+		/// (2026-11-12). The deadline now moves with the client's heartbeat, so this only has to
+		/// cover the longest gap between heartbeats (sent every few seconds, delayed by a long
+		/// frame at worst) and a client too old to send them at all.
+		/// </remarks>
+		private double sceneLoadStallSeconds = DefaultSceneLoadStallSeconds;
+
+		/// <summary>
+		/// Absolute cap on a scene handshake, heartbeats or not. Config key <c>SceneLoadMaxSeconds</c>.
+		/// </summary>
+		/// <remarks>
+		/// Bounds how long any client, including one that sends heartbeats and never finishes, can
+		/// hold its character claim. Generous because slow hardware and slow connections are
+		/// exactly the players this must not cut off.
+		/// </remarks>
+		private double sceneLoadMaxSeconds = DefaultSceneLoadMaxSeconds;
+
+		private const int DefaultSceneLoadStallSeconds = 120;
+		private const int DefaultSceneLoadMaxSeconds = 900;
+
+		/// <summary>Reads the scene-handshake limits from the server configuration.</summary>
+		private void ConfigureSceneLoadTimeouts()
+		{
+			int stall = Server?.Configuration?.GetInt("SceneLoadStallTimeoutSeconds", DefaultSceneLoadStallSeconds) ?? DefaultSceneLoadStallSeconds;
+			int max = Server?.Configuration?.GetInt("SceneLoadMaxSeconds", DefaultSceneLoadMaxSeconds) ?? DefaultSceneLoadMaxSeconds;
+			// A stall limit shorter than a few heartbeats would cut off healthy loads.
+			sceneLoadStallSeconds = Math.Max(30, stall);
+			sceneLoadMaxSeconds = Math.Max(sceneLoadStallSeconds, max);
+			Log.Info("CharacterSystem", $"Scene handshake: {sceneLoadStallSeconds:F0}s without progress, {sceneLoadMaxSeconds:F0}s at most.");
+		}
+
+		/// <summary>Arms the scene-handshake watchdog for a connection.</summary>
+		private void ArmSceneLoadDeadline(int clientId)
+		{
+			double now = MonotonicClock.NowSeconds;
+			sceneLoadStarted[clientId] = now;
+			sceneLoadDeadlines[clientId] = now + sceneLoadStallSeconds;
+		}
+
+		/// <summary>Disarms the scene-handshake watchdog for a connection.</summary>
+		private void ClearSceneLoadDeadline(int clientId)
+		{
+			sceneLoadDeadlines.TryRemove(clientId, out _);
+			sceneLoadStarted.TryRemove(clientId, out _);
+		}
+
+		/// <summary>
+		/// A loading client is still making progress: moves its deadline back, up to the cap.
+		/// </summary>
+		/// <remarks>
+		/// Unrated on purpose. It does a dictionary lookup and can only move the deadline to
+		/// now + <see cref="sceneLoadStallSeconds"/>, never past the cap, so a flood gains
+		/// nothing; the generic per-connection broadcast budget bounds the traffic itself.
+		/// Ignored for a connection with no handshake in progress.
+		/// </remarks>
+		private void OnClientSceneLoadProgressBroadcastReceived(NetworkConnection conn, ClientSceneLoadProgressBroadcast msg, Channel channel)
+		{
+			if (conn == null || !sceneLoadDeadlines.TryGetValue(conn.ClientId, out double deadline))
+			{
+				return;
+			}
+			double now = MonotonicClock.NowSeconds;
+			double started = sceneLoadStarted.TryGetValue(conn.ClientId, out double s) ? s : now;
+			double extended = Math.Min(now + sceneLoadStallSeconds, started + sceneLoadMaxSeconds);
+			if (extended > deadline)
+			{
+				sceneLoadDeadlines.TryUpdate(conn.ClientId, extended, deadline);
+			}
+		}
 
 		/// <summary>Interval in seconds between scene-handshake timeout sweeps.</summary>
 		private const float SceneLoadTimeoutSweepIntervalSeconds = 10f;
@@ -115,6 +196,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				sceneLoadDeadlines.TryRemove(kvp.Key, out _);
+				bool hitCap = sceneLoadStarted.TryRemove(kvp.Key, out double started) &&
+					now - started >= sceneLoadMaxSeconds - 0.5;
 
 				NetworkConnection conn = null;
 				if (ServerManager != null)
@@ -134,8 +217,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					continue;
 				}
 
-				Log.Warning("CharacterSystem",
-					$"Connection {kvp.Key} never acknowledged its scene load within {SceneLoadHandshakeTimeout.TotalSeconds:F0}s; disconnecting to release its character claim.");
+				Log.Warning("CharacterSystem", hitCap
+					? $"Connection {kvp.Key} was still loading its scene after {sceneLoadMaxSeconds:F0}s (the cap); disconnecting to release its character claim."
+					: $"Connection {kvp.Key} made no scene-load progress for {sceneLoadStallSeconds:F0}s; disconnecting to release its character claim.");
 				DisconnectWithNotice(conn, DisconnectNoticeReason.SceneHandshakeTimedOut);
 			}
 		}
@@ -172,7 +256,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Must comfortably exceed a cold character load — a claim with up to five retries
 		/// followed by fourteen sub-entity fetches in one transaction — so a merely slow
 		/// database is never mistaken for a stuck one. It must also stay below
-		/// <see cref="SceneLoadHandshakeTimeout"/>'s scope so the two watchdogs cannot both
+		/// <see cref="sceneLoadDeadlines"/>'s scope so the two watchdogs cannot both
 		/// apply to the same connection: this one stops the moment the character is registered,
 		/// which is the same moment that one starts.
 		/// </remarks>
@@ -1880,7 +1964,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// will handle cleanup via the SessionTokens dictionary.
 				mappingData.SessionTokens[charData.ID] = new CharacterSessionInfo(sessionToken, serverID);
 				mappingData.WaitingSceneLoadCharacters.Add(conn, character);
-				sceneLoadDeadlines[conn.ClientId] = MonotonicClock.NowSeconds + SceneLoadHandshakeTimeout.TotalSeconds;
+				ArmSceneLoadDeadline(conn.ClientId);
 
 				// The client has usually acknowledged its start scenes long before this load
 				// finished — that acknowledgement is never repeated, so this is the point at
@@ -1990,7 +2074,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Log.Debug("CharacterSystem", "Scene is not valid.");
 
 				mappingData.WaitingSceneLoadCharacters.Remove(conn);
-				sceneLoadDeadlines.TryRemove(conn.ClientId, out _);
+				ClearSceneLoadDeadline(conn.ClientId);
 
 				/* Announce the departure, exactly as the ordinary teardown does.
 				 *
@@ -2034,7 +2118,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * or a stale acknowledgement left over from a previous session on a recycled
 			 * ClientId — silently swallowed the real one that arrived within the cooldown. The
 			 * connection then sat in WaitingSceneLoadCharacters holding its character claim
-			 * until the 90s handshake timeout disconnected it, which the player experiences as
+			 * until the scene handshake timeout disconnected it, which the player experiences as
 			 * a loading screen that never ends. A connection with nothing waiting reaches only
 			 * a dictionary lookup here, so leaving it unlimited costs nothing.
 			 *
@@ -2057,7 +2141,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				// Remove the waiting scene load character
 				mappingData.WaitingSceneLoadCharacters.Remove(conn);
-				sceneLoadDeadlines.TryRemove(conn.ClientId, out _);
+				ClearSceneLoadDeadline(conn.ClientId);
 
 				// Add a connection->character map for ease of use
 				mappingData.ConnectionCharacters[conn] = character;

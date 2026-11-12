@@ -52,6 +52,7 @@ Shader "FishMMO/Water/Hull Shore Mark"
             #pragma multi_compile_instancing
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
 
+            #include "Assets/Prefabs/Client/Weather/Shaders/FishDxcDotsCore.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
             struct Attributes

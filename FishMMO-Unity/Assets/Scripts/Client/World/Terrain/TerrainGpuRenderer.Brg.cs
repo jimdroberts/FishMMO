@@ -342,7 +342,7 @@ namespace FishMMO.Client
 			into.SetComputeBufferParam(compute, dotsKernel, DotsOutId, dotsBuffer);
 			into.SetComputeIntParam(compute, DotsObjectToWorldId, TerrainBrgMath.ObjectToWorldAddress);
 			into.SetComputeIntParam(compute, DotsWorldToObjectId, TerrainBrgMath.WorldToObjectAddress(dotsCapacity));
-			into.DispatchCompute(compute, dotsKernel, (count + 63) / 64, 1, 1);
+			into.DispatchComputeChecked(compute, dotsKernel, (count + 63) / 64, 1, 1);
 		}
 
 		/// <summary>

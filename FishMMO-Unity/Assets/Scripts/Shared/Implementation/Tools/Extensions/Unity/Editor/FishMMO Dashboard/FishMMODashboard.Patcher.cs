@@ -431,6 +431,12 @@ namespace FishMMO.Shared
 					EditorUtility.DisplayDialog("Error", "Failed to read version from latest client directory.\nEnsure version.txt exists.", "OK");
 					return;
 				}
+				if (!PatchGeneratorWindow.LatestMatchesProjectVersion(latestVersion, out string versionMismatch))
+				{
+					Debug.LogError($"[FishMMODashboard] {versionMismatch}");
+					EditorUtility.DisplayDialog("Error", versionMismatch, "OK");
+					return;
+				}
 
 				Dictionary<string, VersionConfig> oldVersions = new Dictionary<string, VersionConfig>();
 				foreach (string oldDir in oldClientDirs)

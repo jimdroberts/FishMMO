@@ -183,6 +183,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<ClientValidatedSceneBroadcast>(OnClientValidatedSceneBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<ClientSceneLoadProgressBroadcast>(OnClientSceneLoadProgressBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<ClientScenesUnloadedBroadcast>(OnClientScenesUnloadedBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<RespawnAtBindPointBroadcast>(OnClientRespawnAtBindPointBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<ResurrectAcceptBroadcast>(OnClientResurrectAcceptBroadcastReceived, true);
@@ -226,6 +227,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			ICharacterDamageController.OnKilled += CharacterDamageController_OnKilled;
 			ICharacterDamageController.OnResurrectOffered += CharacterDamageController_OnResurrectOffered;
 			ICharacterDamageController.OnResurrected += CharacterDamageController_OnResurrectedFromTheDeck;
+
+			ConfigureSceneLoadTimeouts();
 
 			// Periodic callbacks
 			saveRate = Mathf.Max(1f, saveRate);
@@ -278,6 +281,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<ClientValidatedSceneBroadcast>(OnClientValidatedSceneBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<ClientSceneLoadProgressBroadcast>(OnClientSceneLoadProgressBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<ClientScenesUnloadedBroadcast>(OnClientScenesUnloadedBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<RespawnAtBindPointBroadcast>(OnClientRespawnAtBindPointBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<ResurrectAcceptBroadcast>(OnClientResurrectAcceptBroadcastReceived);

@@ -96,6 +96,12 @@ namespace FishMMO.Client
 		/// </summary>
 		private bool isAuthFlowActive;
 
+		/// <summary>
+		/// True once this attempt's failed connection has been explained with a help link
+		/// (<see cref="ConnectionTrouble"/>). Reset when the form locks for a new attempt.
+		/// </summary>
+		private bool connectionTroubleShown;
+
 		private TextField username;
 		private TextField email;
 		private TextField password;
@@ -338,6 +344,16 @@ namespace FishMMO.Client
 				if (droppedWithoutExplanation)
 				{
 					Show();
+
+					/* Never opened, or never heard from the server: QUIC blocked or intercepted on the
+					 * player's side. Explained with a link to the help page (see ConnectionTrouble). */
+					if (!accountWasCreated &&
+						(connectionTroubleShown || ConnectionTrouble.TryNotify(Client.NetworkManager, out _)))
+					{
+						connectionTroubleShown = true;
+						SetStatus("Could not reach the login server.");
+						return;
+					}
 
 					ShowValidationError(accountWasCreated
 						? "Your account was created, but the connection to the login server was lost before " +
@@ -1410,6 +1426,12 @@ namespace FishMMO.Client
 			}
 
 			SetStatus("The server did not respond. Please try again.");
+
+			// A session that opened but never heard from the server: see ConnectionTrouble.
+			if (!connectionTroubleShown && ConnectionTrouble.TryNotify(Client.NetworkManager, out _))
+			{
+				connectionTroubleShown = true;
+			}
 		}
 
 		/// <summary>
@@ -1423,6 +1445,7 @@ namespace FishMMO.Client
 			// Locking means a request is outstanding; unlocking means it is not.
 			// See PendingReplyGuard for why the wait needs a deadline.
 			if (locked) { replyGuard.Begin(); } else { replyGuard.Clear(); }
+			if (locked && !isAuthFlowActive) { connectionTroubleShown = false; }
 
 			// Track auth-flow ownership: locking = start of flow, unlocking = end.
 			if (locked) isAuthFlowActive = true;

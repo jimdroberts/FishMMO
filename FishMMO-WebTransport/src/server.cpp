@@ -178,7 +178,7 @@ static void wt_server_release_slot_accounting(wt_server_conn_t* conn)
 
 /* ── Per-connection inbound token bucket ─────────────────────────
  * Called on the connection's QUIC worker for every inbound stream
- * message and datagram.  Returns true when the message may be
+ * message (datagrams have their own budget: wt_server_admit_datagram).  Returns true when the message may be
  * delivered.  After limits.inbound_overflow_kick consecutive refusals
  * the connection is flagged for disconnect on the poll thread. */
 bool wt_server_admit_inbound(wt_server_s* srv, wt_connection_id_t conn_id)
@@ -215,6 +215,68 @@ bool wt_server_admit_inbound(wt_server_s* srv, wt_connection_id_t conn_id)
         }
     } else if (refused == 1) {
         WT_LOG_WARN("Client %llu inbound rate limited (%u msg/s, burst %u)",
+                    (unsigned long long)conn_id, (unsigned)rate,
+                    (unsigned)srv->limits.inbound_message_burst);
+    }
+    return false;
+}
+
+/* Consecutive one-second windows in which a connection had at least
+ * `rate` datagrams refused (it sent twice its budget) before it is
+ * disconnected.  Matches DatagramAbuseWindows in the managed ServerSocket. */
+#define WT_DGRAM_ABUSE_WINDOWS 10
+
+/* ── Per-connection datagram budget ──────────────────────────────
+ * See the dgram_* fields in wt_server_conn_t.  Called on the
+ * connection's QUIC worker for every inbound datagram. */
+bool wt_server_admit_datagram(wt_server_s* srv, wt_connection_id_t conn_id)
+{
+    if (!srv || conn_id == 0 || conn_id > srv->max_clients) return false;
+    uint32_t rate = srv->limits.inbound_messages_per_second;
+    if (rate == 0) return true;
+    wt_server_conn_t* conn = &srv->connections[conn_id];
+    if (!atomic_load(&conn->in_use)) return false;
+    if (atomic_load(&conn->kick_pending)) return false;
+
+    uint64_t now = rate_limiter_now_ms();
+
+    /* Close the accounting window once it has ended.  A gap of two
+     * windows or more means the client went quiet: the run is broken. */
+    uint64_t window = atomic_load_u64(&conn->dgram_window_ms);
+    if (now >= window + 1000ULL) {
+        int refused = atomic_exchange(&conn->dgram_window_refused, 0);
+        bool abusive = now < window + 2000ULL && (uint32_t)refused >= rate;
+        int run = abusive ? atomic_fetch_add(&conn->dgram_abusive_windows, 1) + 1 : 0;
+        if (!abusive) atomic_store(&conn->dgram_abusive_windows, 0);
+        atomic_store_u64(&conn->dgram_window_ms, now);
+        if (run >= WT_DGRAM_ABUSE_WINDOWS) {
+            int expected = 0;
+            if (atomic_compare_exchange_strong(&conn->kick_pending, &expected, 1)) {
+                WT_LOG_WARN("Client %llu sent datagrams at twice its budget for %d s — queuing disconnect",
+                            (unsigned long long)conn_id, WT_DGRAM_ABUSE_WINDOWS);
+            }
+            return false;
+        }
+    }
+
+    uint64_t burst_milli = (uint64_t)srv->limits.inbound_message_burst * 1000ULL;
+    if (burst_milli < 1000ULL) burst_milli = 1000ULL;
+    uint64_t last = atomic_load_u64(&conn->dgram_refill_ms);
+    uint64_t tokens = atomic_load_u64(&conn->dgram_tokens_milli);
+    if (now > last) {
+        uint64_t refill = (now - last) * (uint64_t)rate;  /* ms x msgs/s = milli-msgs */
+        tokens = (tokens + refill > burst_milli) ? burst_milli : tokens + refill;
+        atomic_store_u64(&conn->dgram_refill_ms, now);
+    }
+    if (tokens >= 1000ULL) {
+        atomic_store_u64(&conn->dgram_tokens_milli, tokens - 1000ULL);
+        return true;
+    }
+    atomic_store_u64(&conn->dgram_tokens_milli, tokens);
+    atomic_fetch_add(&conn->dgram_window_refused, 1);
+    int expected = 0;
+    if (atomic_compare_exchange_strong(&conn->dgram_drop_logged, &expected, 1)) {
+        WT_LOG_WARN("Client %llu over its datagram budget (%u/s, burst %u); dropping the excess",
                     (unsigned long long)conn_id, (unsigned)rate,
                     (unsigned)srv->limits.inbound_message_burst);
     }
@@ -1833,6 +1895,13 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
     atomic_store_u64(&conn->inbound_refill_ms, rate_limiter_now_ms());
     atomic_store(&conn->inbound_refused, 0);
     atomic_store(&conn->kick_pending, 0);
+    atomic_store_u64(&conn->dgram_tokens_milli,
+                     (uint64_t)srv->limits.inbound_message_burst * 1000ULL);
+    atomic_store_u64(&conn->dgram_refill_ms, rate_limiter_now_ms());
+    atomic_store_u64(&conn->dgram_window_ms, rate_limiter_now_ms());
+    atomic_store(&conn->dgram_window_refused, 0);
+    atomic_store(&conn->dgram_abusive_windows, 0);
+    atomic_store(&conn->dgram_drop_logged, 0);
     atomic_store(&conn->dgram_queued, 0);
     atomic_store(&conn->ip_bucket, ip_bucket);
     atomic_store(&conn->half_open_counted, 1);
@@ -2576,7 +2645,7 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
                                                 buf->Length,
                                                 &payload, &payload_len) &&
                     payload_len > 0 &&
-                    wt_server_admit_inbound(sconn->owner, sconn->id)) {
+                    wt_server_admit_datagram(sconn->owner, sconn->id)) {
                     /* Per-connection share of the shared ring: one
                      * client may not hold more than
                      * limits.max_queued_datagrams_per_conn entries. */

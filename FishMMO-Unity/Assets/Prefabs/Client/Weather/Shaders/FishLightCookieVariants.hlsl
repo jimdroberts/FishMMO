@@ -7,6 +7,7 @@
 #ifndef _LIGHT_COOKIES
 #define _LIGHT_COOKIES _LIGHT_COOKIES
 #endif
+#include "FishDxcDotsCore.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/LightCookie/LightCookie.hlsl"
 real3 FishSampleMainLightCookie(float3 positionWS)

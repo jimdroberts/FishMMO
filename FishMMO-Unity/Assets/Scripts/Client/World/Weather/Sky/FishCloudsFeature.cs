@@ -1465,7 +1465,7 @@ namespace FishMMO.Client
 							cmd.SetComputeTextureParam(d.Compute, d.Kernel, ResolveDepthId, d.Depth);
 							cmd.SetComputeTextureParam(d.Compute, d.Kernel, ResolvedId, d.Clouds);
 							cmd.SetComputeTextureParam(d.Compute, d.Kernel, ResolvedWeightId, d.Weight);
-							cmd.DispatchCompute(d.Compute, d.Kernel, d.GroupsX, d.GroupsY, 1);
+							cmd.DispatchComputeChecked(d.Compute, d.Kernel, d.GroupsX, d.GroupsY, 1);
 						});
 					}
 				}

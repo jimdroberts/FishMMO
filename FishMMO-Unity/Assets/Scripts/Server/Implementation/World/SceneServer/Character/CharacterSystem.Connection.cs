@@ -37,7 +37,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			validatedSceneLastTimeByClientId.TryRemove(conn.ClientId, out _);
 
 			// The scene handshake can no longer complete or time out for a dead connection.
-			sceneLoadDeadlines.TryRemove(conn.ClientId, out _);
+			ClearSceneLoadDeadline(conn.ClientId);
 
 			// FishNet reuses ClientIds, and this marker says "this connection has already
 			// acknowledged its start scenes". Left behind, the next session on the same id would

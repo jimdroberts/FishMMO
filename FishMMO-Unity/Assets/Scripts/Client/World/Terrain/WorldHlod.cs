@@ -153,7 +153,7 @@ namespace FishMMO.Client
 				owner.cmd.SetComputeBufferParam(owner.culling, owner.cullKernel, SelectedId, owner.selectedBuffer);
 				owner.cmd.SetComputeBufferParam(owner.culling, owner.cullKernel, ArgsId, owner.argsBuffer);
 				FishDepthPyramid.Bind(owner.cmd, owner.culling, owner.cullKernel, camera, view.Position, true);
-				owner.cmd.DispatchCompute(owner.culling, owner.cullKernel, (owner.partBuffer.count + 63) / 64, 1, 1);
+				owner.cmd.DispatchComputeChecked(owner.culling, owner.cullKernel, (owner.partBuffer.count + 63) / 64, 1, 1);
 				context.ExecuteCommandBuffer(owner.cmd); owner.cmd.Clear();
 				int command = 0;
 				foreach (var group in owner.groups) foreach (var part in group.Data.Parts)

@@ -35,6 +35,22 @@ namespace FishMMO.Shared
 		[Tooltip("Optional: Pre-release identifier (e.g., 'alpha', 'beta', 'rc.1').")]
 		public string PreRelease = "";
 
+#if UNITY_EDITOR
+		/// <summary>
+		/// The project's VersionConfig asset (the first one found), or null when there is none.
+		/// </summary>
+		/// <param name="assetCount">How many VersionConfig assets the project has. More than one is a mistake worth reporting.</param>
+		/// <returns>The asset whose version the next build will carry.</returns>
+		public static VersionConfig FindProjectAsset(out int assetCount)
+		{
+			string[] guids = UnityEditor.AssetDatabase.FindAssets("t:VersionConfig");
+			assetCount = guids.Length;
+			return guids.Length > 0
+				? UnityEditor.AssetDatabase.LoadAssetAtPath<VersionConfig>(UnityEditor.AssetDatabase.GUIDToAssetPath(guids[0]))
+				: null;
+		}
+#endif
+
 		/// <summary>
 		/// Returns the full version string in the format Major.Minor.Patch[.PreRelease].
 		/// </summary>

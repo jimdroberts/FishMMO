@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connection Help</title>
+<link rel="icon" href="../TemplateData/favicon.ico">
+<style>
+  :root {
+    --bg: #15120e;
+    --panel: #201b15;
+    --panel-2: #2a231b;
+    --ink: #ece3d3;
+    --muted: #b3a690;
+    --accent: #d9a44a;
+    --accent-ink: #1a140c;
+    --rule: #3b3226;
+    --ok: #8fbf6a;
+    --warn: #e0b45a;
+    --code-bg: #120f0b;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f4efe6;
+      --panel: #fffaf2;
+      --panel-2: #f1e8d8;
+      --ink: #2a2218;
+      --muted: #6b5d48;
+      --accent: #9a6216;
+      --accent-ink: #fffaf2;
+      --rule: #ddd0bb;
+      --ok: #3f7a22;
+      --warn: #8a5a00;
+      --code-bg: #efe5d3;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: 16px; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 8px; }
+  h2 { font-size: 1.35rem; margin: 0 0 8px; }
+  h3 { font-size: 1.05rem; margin: 20px 0 6px; }
+  p, li { max-width: 72ch; }
+  a { color: var(--accent); }
+  .lede { color: var(--muted); margin: 0 0 24px; }
+  section {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 20px 20px 12px; margin: 0 0 16px;
+  }
+  section:target { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+  nav.products { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 8px; }
+  nav.products a {
+    text-decoration: none; padding: 6px 12px; border-radius: 999px;
+    background: var(--panel-2); border: 1px solid var(--rule); color: var(--ink);
+  }
+  nav.products a:hover, nav.products a:focus-visible { border-color: var(--accent); }
+  ol, ul { padding-left: 1.4em; }
+  li { margin: 4px 0; }
+  code, .value {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 0.95em;
+    background: var(--code-bg); border: 1px solid var(--rule); border-radius: 4px; padding: 1px 6px;
+    white-space: nowrap;
+  }
+  .ui { font-weight: 600; }
+  .badge { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; vertical-align: middle; margin-left: 8px; }
+  .badge.ok { color: var(--ok); border: 1px solid var(--ok); }
+  .badge.untested { color: var(--muted); border: 1px solid var(--rule); }
+  .note { border-left: 3px solid var(--warn); padding: 4px 12px; margin: 12px 0; color: var(--ink); background: var(--panel-2); border-radius: 0 6px 6px 0; }
+  .muted { color: var(--muted); }
+  footer { color: var(--muted); font-size: 0.9rem; margin-top: 24px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Can't connect to the game?</h1>
+  <p class="lede">
+    The game talks to its servers over <strong>QUIC</strong>, a modern, fast connection type that runs over UDP.
+    Some antivirus programs, firewalls and networks block or intercept it. This page shows how to let the game through.
+  </p>
+
+  <section id="start">
+    <h2>Start here</h2>
+    <ol>
+      <li>Pick your security software below and follow its steps. If you're not sure what you have, check the icons
+        in the bottom-right corner of your taskbar, or open <span class="ui">Windows Security</span> and look under
+        <span class="ui">Virus &amp; threat protection</span>.</li>
+      <li>Close your browser completely and open it again, then sign in.</li>
+      <li>Still stuck? Try a different network, such as your phone's hotspot. If the game works there, the block is
+        on your usual network, not your PC: see <a href="#blocked">Blocked by a network or firewall</a>.</li>
+    </ol>
+    <p>
+      For any exclusion below, these are the addresses to use:
+    </p>
+    <ul>
+      <li>Website/domain: <span class="value" id="domain-mask">*.fishmmo.com</span>
+        (if the field won't take a <code>*</code>, add <span class="value" id="game-host">game.fishmmo.com</span> and
+        <span class="value" id="play-host">play.fishmmo.com</span> one at a time)</li>
+      <li>Server IP address: <span class="value" id="game-ip">looking it up…</span></li>
+    </ul>
+    <div class="note">
+      Please <strong>don't</strong> turn QUIC or HTTP/3 off in your browser, even if your antivirus suggests it.
+      The game needs it, and turning it off stops the game connecting at all.
+    </div>
+  </section>
+
+  <section id="security-software">
+    <h2>Security software</h2>
+    <p>
+      Many antivirus products scan web traffic by decrypting it on your PC. With the game's connection, some answer
+      it themselves and never pass it on, so signing in fails without a clear error. The fix is to exclude the game's
+      addresses from that scanning. Choose yours:
+    </p>
+    <nav class="products" aria-label="Security software">
+      <a href="#eset">ESET</a>
+      <a href="#kaspersky">Kaspersky</a>
+      <a href="#bitdefender">Bitdefender</a>
+      <a href="#norton">Norton</a>
+      <a href="#avast-avg">Avast / AVG</a>
+      <a href="#mcafee">McAfee</a>
+      <a href="#malwarebytes">Malwarebytes</a>
+      <a href="#windows-defender">Windows Security only</a>
+    </nav>
+    <p class="muted">
+      Steps marked <span class="badge ok">Confirmed</span> have fixed a player's connection. The others are from the
+      vendor's own documentation and haven't been tested with the game yet. If they work for you, or don't, please tell us.
+    </p>
+  </section>
+
+  <section id="eset">
+    <h2>ESET <span class="badge ok">Confirmed</span></h2>
+    <p>NOD32 Antivirus, Internet Security, Smart Security and ESET HOME Security.</p>
+    <ol>
+      <li>Open ESET and press <kbd>F5</kbd> to open <span class="ui">Advanced setup</span>.</li>
+      <li>Go to <span class="ui">Protections → Web access protection</span> and expand <span class="ui">Web access protection</span>.</li>
+      <li>Click <span class="ui">Edit</span> next to <span class="ui">Excluded IPs</span>, click <span class="ui">Add</span>,
+        enter the server IP address (<span class="value js-ip">shown above</span>), then click <span class="ui">OK → OK</span>.</li>
+      <li>Still under <span class="ui">Web access protection</span>, click <span class="ui">Edit</span> next to
+        <span class="ui">Address list</span>.</li>
+      <li>Select <span class="ui">List of addresses excluded from content scan</span>, click <span class="ui">Edit</span>,
+        then <span class="ui">Add</span>, and enter <span class="value js-mask">*.fishmmo.com</span>. Type it exactly,
+        including the <code>*.</code> at the start. Click <span class="ui">OK → OK</span>.</li>
+      <li>Click <span class="ui">OK</span> to save, then restart your browser.</li>
+    </ol>
+  </section>
+
+  <section id="kaspersky">
+    <h2>Kaspersky <span class="badge untested">Untested</span></h2>
+    <p>Kaspersky Standard, Plus and Premium.</p>
+    <div class="note">
+      Kaspersky's documentation says it blocks the QUIC protocol. The exclusion below may not be enough. If it isn't,
+      the game can't connect while Kaspersky's protection is running. Please let us know so we can look for another way.
+    </div>
+    <ol>
+      <li>Open Kaspersky and click <span class="ui">Settings</span> (bottom of the main window), then
+        <span class="ui">Security settings</span>.</li>
+      <li>In the <span class="ui">Advanced settings</span> block, open <span class="ui">Network settings</span>.</li>
+      <li>Under <span class="ui">Encrypted connections scan</span>, click <span class="ui">Configure trusted addresses</span>,
+        then <span class="ui">Add</span>. Enter <span class="value js-game-host">game.fishmmo.com</span> as the domain name and click
+        <span class="ui">Add</span>. Repeat for <span class="value js-play-host">play.fishmmo.com</span>.</li>
+      <li>If you play the desktop version, also use <span class="ui">Configure trusted applications</span> on the same page
+        to add the game.</li>
+      <li>Restart your browser and try again.</li>
+    </ol>
+  </section>
+
+  <section id="bitdefender">
+    <h2>Bitdefender <span class="badge untested">Untested</span></h2>
+    <p>Total Security, Internet Security and Antivirus Plus.</p>
+    <div class="note">
+      Bitdefender's own help suggests turning off QUIC/HTTP/3 in your browser. Please don't: the game needs it.
+      Use the exception below instead.
+    </div>
+    <ol>
+      <li>Open Bitdefender and click <span class="ui">Protection</span>.</li>
+      <li>In the <span class="ui">Online Threat Prevention</span> pane, click <span class="ui">Settings</span>, then
+        <span class="ui">Manage exceptions</span>.</li>
+      <li>Click <span class="ui">+ Add an Exception</span>, enter the server IP address
+        (<span class="value js-ip">shown above</span>), turn on the switch next to <span class="ui">Online Threat Prevention</span>,
+        and click <span class="ui">Save</span>. Add <span class="value js-game-host">game.fishmmo.com</span> and
+        <span class="value js-play-host">play.fishmmo.com</span> the same way.</li>
+      <li>If it still won't connect, go back to <span class="ui">Online Threat Prevention → Settings</span> and turn off
+        <span class="ui">Encrypted web scan</span> to test. If that fixes it, tell us, so we can confirm the right exception.</li>
+    </ol>
+  </section>
+
+  <section id="norton">
+    <h2>Norton 360 <span class="badge untested">Untested</span></h2>
+    <ol>
+      <li>Open Norton, click <span class="ui">Security</span> in the left pane, then go to
+        <span class="ui">Advanced Security → Web → Safe Web</span>.</li>
+      <li>On the <span class="ui">Exclusions</span> tab, click <span class="ui">Add</span> and add
+        <span class="value js-game-host">game.fishmmo.com</span> and <span class="value js-play-host">play.fishmmo.com</span>.</li>
+      <li>On the <span class="ui">Settings</span> tab of the same page, Norton has a <span class="ui">QUIC/HTTP3 scanning</span>
+        switch. If the exclusion isn't enough, turn this off.</li>
+      <li>Desktop version: if Norton's firewall asks about the game, allow it. To check, go to
+        <span class="ui">Advanced Security → Network → Smart Firewall → Program Control</span> and set the game to
+        <span class="ui">Allow</span>.</li>
+    </ol>
+  </section>
+
+  <section id="avast-avg">
+    <h2>Avast and AVG <span class="badge untested">Untested</span></h2>
+    <p>Avast Free Antivirus, Avast Premium Security, AVG AntiVirus and AVG Internet Security.</p>
+    <ol>
+      <li>Open the app and go to <span class="ui">☰ Menu → Settings</span>.</li>
+      <li>Go to <span class="ui">General → Exceptions</span>, click <span class="ui">Add exception</span>, and choose the
+        <span class="ui">Website / Domain</span> tab. Add <span class="value js-root">fishmmo.com</span>.</li>
+      <li>If that isn't enough, find the web protection settings. In Avast this is
+        <span class="ui">Scam Guardian → Web Guard</span> (older versions: <span class="ui">Protection → Core Shields → Web Shield</span>).
+        Untick <span class="ui">Enable QUIC/HTTP3 scanning</span>.</li>
+      <li>Desktop version with Avast Premium's firewall: allow the game under
+        <span class="ui">Protection → Firewall → Settings → View Firewall rules → Application rules</span>.</li>
+    </ol>
+  </section>
+
+  <section id="mcafee">
+    <h2>McAfee <span class="badge untested">Untested</span></h2>
+    <p>
+      McAfee doesn't document whether it scans or blocks QUIC. If you use McAfee's firewall and play the desktop version,
+      make sure the game is allowed: open McAfee, find <span class="ui">Firewall</span>, and allow the game under its
+      program or app connection settings. If the browser version won't connect either, please contact us and tell us
+      your McAfee product. You'll help us write proper steps.
+    </p>
+  </section>
+
+  <section id="malwarebytes">
+    <h2>Malwarebytes <span class="badge untested">Untested</span></h2>
+    <ol>
+      <li>Open Malwarebytes and go to <span class="ui">Detection History → Allow List</span>.</li>
+      <li>Click <span class="ui">Add</span>, choose <span class="ui">Allow a website</span>, and add the server IP address
+        (<span class="value js-ip">shown above</span>). Add <span class="value js-game-host">game.fishmmo.com</span> too.</li>
+      <li>Desktop version: also add the game as an <span class="ui">application that connects to the Internet</span>.</li>
+    </ol>
+  </section>
+
+  <section id="windows-defender">
+    <h2>Windows Security only</h2>
+    <p>
+      Windows' built-in protection doesn't intercept the game's connection, and Windows Firewall lets outgoing connections
+      through by default. If you only have Windows Security and the desktop version won't connect, check that the game
+      isn't blocked:
+    </p>
+    <ol>
+      <li>Open <span class="ui">Windows Security → Firewall &amp; network protection → Allow an app through firewall</span>.</li>
+      <li>Click <span class="ui">Change settings</span>. If the game is in the list, tick both boxes. If it isn't, use
+        <span class="ui">Allow another app</span> to add it.</li>
+    </ol>
+    <p>If it still fails, see <a href="#blocked">Blocked by a network or firewall</a>.</p>
+  </section>
+
+  <section id="blocked">
+    <h2>Blocked by a network or firewall</h2>
+    <p>
+      If the game says it <strong>couldn't reach the login server</strong>, the connection never got through. Common causes:
+    </p>
+    <ul>
+      <li><strong>School, work, hotel or public Wi-Fi.</strong> Many of these block everything except ordinary web browsing.
+        Try another network, such as your phone's hotspot. If the game works there, ask the network's administrator to
+        allow outgoing UDP to <span class="value js-game-host">game.fishmmo.com</span> on ports
+        <code>7770</code>, <code>7780</code> and <code>7790</code>.</li>
+      <li><strong>Antivirus with its own firewall.</strong> Allow the game, or your browser, in its firewall settings.
+        See your product's section above.</li>
+      <li><strong>VPN or proxy.</strong> Some don't carry UDP. Turn it off and try again.</li>
+      <li><strong>Your router.</strong> This is rare, but some routers have UDP or "game" filtering. Check its security settings.</li>
+      <li><strong>The server is down.</strong> If nothing else helps, the server may be restarting. Wait a few minutes.</li>
+    </ul>
+  </section>
+
+  <section id="browsers">
+    <h2>Browsers</h2>
+    <p>
+      Use an up-to-date Chrome, Edge or Firefox. The game needs WebGPU and WebTransport, both built into these browsers.
+      Don't turn off <code>QUIC</code> in <code>chrome://flags</code> or <code>network.http.http3.enable</code> in Firefox.
+      The game won't connect without them.
+    </p>
+  </section>
+
+  <footer>
+    Still can't connect? Contact us, and include the name of your security software and the message the game showed.
+  </footer>
+</main>
+<script>
+  (function () {
+    // Fill in this site's own domain, so the page stays right if it is ever served from another domain.
+    var host = location.hostname || '';
+    var parts = host.split('.');
+    var isAddress = /^[0-9.]+$/.test(host) || host.indexOf(':') >= 0 || parts.length < 2;
+    var root = isAddress ? '' : parts.slice(parts.length > 2 ? 1 : 0).join('.');
+    function fill(selector, text) {
+      var nodes = document.querySelectorAll(selector);
+      for (var i = 0; i < nodes.length; i++) nodes[i].textContent = text;
+    }
+    if (root) {
+      fill('#domain-mask, .js-mask', '*.' + root);
+      fill('.js-root', root);
+      fill('#play-host, .js-play-host', host);
+    }
+    function showIp(text) { fill('#game-ip, .js-ip', text); }
+    fetch('game-address', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data) { showIp('ask us for it'); return; }
+        if (data.host) fill('#game-host, .js-game-host', data.host);
+        showIp(data.addresses && data.addresses.length ? data.addresses[0] : 'ask us for it');
+      })
+      .catch(function () { showIp('ask us for it'); });
+  })();
+</script>
+</body>
+</html>

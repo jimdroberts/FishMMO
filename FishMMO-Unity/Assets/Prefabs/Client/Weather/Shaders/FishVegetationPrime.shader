@@ -118,6 +118,7 @@ Shader "FishMMO/Vegetation Prime"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
 
             #define FISH_VEG_PASS_PRIME
+            #include "FishDxcDotsCore.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "FishIndirectInstancing.hlsl"
             #include "FishVegetationPasses.hlsl"

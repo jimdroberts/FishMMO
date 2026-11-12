@@ -168,9 +168,23 @@ namespace FishMMO.Client
 		/// validation on whatever connection happened to be current — most damagingly the next
 		/// login's scene server, where it burns the validated-scene rate-limit window and makes
 		/// the real acknowledgement get dropped, leaving the client on a loading screen until
-		/// the server's 90s scene handshake timeout disconnects it.
+		/// the server's scene handshake timeout disconnects it.
 		/// </remarks>
 		private AddressableLoadBatch worldPreloadBatch;
+
+		/// <summary>
+		/// True from scene-server login until this client acknowledges its scene
+		/// (<c>ClientValidatedSceneBroadcast</c>): the stretch the scene server's handshake
+		/// watchdog times. While it is set, <see cref="TickSceneLoadProgress"/> sends
+		/// <see cref="ClientSceneLoadProgressBroadcast"/> so a slow load is not mistaken for a dead one.
+		/// </summary>
+		private bool sceneHandshakePending;
+
+		/// <summary>Unscaled time of the next scene-load heartbeat.</summary>
+		private float nextSceneLoadProgressAt;
+
+		/// <summary>Seconds between scene-load heartbeats; well inside the server's stall limit.</summary>
+		private const float SceneLoadProgressIntervalSeconds = 5f;
 
 		/// <summary>Forwarded to <see cref="ClientConnectionManager.OnReconnectAttempt"/>.</summary>
 		public event Action<int, int> OnReconnectAttempt
@@ -254,6 +268,9 @@ namespace FishMMO.Client
 			{ Quit(); return; }
 
 			Application.logMessageReceived += OnLogMessage;
+
+			// Windows only, in the background: lets a blocked sign-in name the antivirus (ConnectionTrouble).
+			InstalledSecuritySoftware.BeginDetect();
 
 			// Validate configuration: loginServerRequestTimeoutSeconds must be at least 1.
 			if (loginServerRequestTimeoutSeconds < 1)
@@ -418,6 +435,7 @@ namespace FishMMO.Client
 			weather?.Tick(Time.deltaTime);
 
 			TickDeathDialogFallback();
+			TickSceneLoadProgress();
 			
 			if (pendingErrorStackTrace != null)
 			{
@@ -621,6 +639,7 @@ namespace FishMMO.Client
 			 * the handshake timeout. Every login after the first would fail to enter the world. */
 			this.isPreloadingWorldScenes = false;
 			this.worldPreloadBatch = null;
+			this.sceneHandshakePending = false;
 
 			// Nothing about a dead character in the world survives a return to the login screen.
 			this.localCharacter = null;
@@ -1142,9 +1161,9 @@ namespace FishMMO.Client
 				 * The acknowledgement above is the only thing that completes world entry, and the
 				 * server sends ClientValidatedSceneBroadcast exactly once — so declining to send it
 				 * left the client behind a loading overlay with nothing else in play. The scene
-				 * server's handshake watchdog does eventually end it, but only after 90 seconds, and
-				 * it does so by dropping the connection with no explanation for the minute and a
-				 * half that preceded it.
+				 * server's handshake watchdog does eventually end it, but only after its stall limit, and
+				 * it does so by dropping the connection with no explanation for the wait that
+				 * preceded it.
 				 *
 				 * A failed preload is not transient — the same addressables will fail again — so
 				 * this returns to the login screen with the reason on screen instead of feeding the
@@ -1154,7 +1173,37 @@ namespace FishMMO.Client
 				return;
 			}
 
+			this.sceneHandshakePending = false;
 			Client.Broadcast(new ClientValidatedSceneBroadcast(), Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Tells the scene server, every few seconds, that this client is still loading into its world.
+		/// </summary>
+		/// <remarks>
+		/// See <see cref="ClientSceneLoadProgressBroadcast"/>. Stops at the acknowledgement, on any
+		/// connection that is not a started scene-server connection, and on quit-to-login. A long
+		/// frame only delays a heartbeat; the server's stall limit is many intervals long.
+		/// </remarks>
+		private void TickSceneLoadProgress()
+		{
+			if (!this.sceneHandshakePending)
+			{
+				return;
+			}
+			if (CurrentConnectionType != ServerConnectionType.Scene || NetworkManager == null ||
+				!NetworkManager.ClientManager.Started)
+			{
+				this.sceneHandshakePending = false;
+				return;
+			}
+			float now = Time.unscaledTime;
+			if (now < this.nextSceneLoadProgressAt)
+			{
+				return;
+			}
+			this.nextSceneLoadProgressAt = now + SceneLoadProgressIntervalSeconds;
+			Client.Broadcast(new ClientSceneLoadProgressBroadcast(), Channel.Reliable);
 		}
 		/// <summary>
 		/// Handles a server busy broadcast by showing a dialog to the player.
@@ -1936,7 +1985,12 @@ namespace FishMMO.Client
 				 * at this point hid the overlay for the entire real load, which is the
 				 * "world server hangs with no loading screen" report. The screen is dismissed
 				 * in OnCharacterStartLocal, when the player actually exists. */
-				case ClientAuthenticationResult.SceneLoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.Scene; OnEnterGameWorld?.Invoke(); break;
+				case ClientAuthenticationResult.SceneLoginSuccess:
+					Connection.CurrentConnectionType = ServerConnectionType.Scene;
+					this.sceneHandshakePending = true;
+					this.nextSceneLoadProgressAt = Time.unscaledTime + SceneLoadProgressIntervalSeconds;
+					OnEnterGameWorld?.Invoke();
+					break;
 
 				/* A rejected token is terminal, but nothing used to stop the reconnect loop
 				 * from running its full course anyway: ten attempts with exponential backoff
@@ -2276,7 +2330,8 @@ namespace FishMMO.Client
 			int maximum = Mathf.Max(minimum, ResolveMaximumFrameRate());
 			int clamped = Mathf.Clamp(framesPerSecond, minimum, maximum);
 
-			Application.targetFrameRate = clamped;
+			// On the web, on the browser's animation frames rather than a setTimeout loop (WebFrameLoop).
+			WebFrameLoop.SetCap(clamped);
 
 			// Keep FishNet's value in step so UpdateFramerate does not overwrite ours.
 			NetworkManager?.ClientManager?.SetFrameRate((ushort)clamped);

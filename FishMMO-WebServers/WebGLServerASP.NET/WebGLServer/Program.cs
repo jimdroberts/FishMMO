@@ -273,6 +273,15 @@ namespace FishMMO.WebServer
 						app.UseEndpoints(endpoints =>
 						{
 							endpoints.MapControllers();
+							// The game server's host and address for the connection help page (help/connection.html):
+							// some security software can only exclude an IP address.
+							endpoints.MapGet("/help/game-address", async ctx =>
+							{
+								string host = context.Configuration["GameHost"] ?? string.Empty;
+								string[] addresses = await GameAddress.ResolveAsync(host, ctx.RequestAborted);
+								ctx.Response.Headers["Cache-Control"] = "no-store";
+								await ctx.Response.WriteAsJsonAsync(new { host, addresses }, ctx.RequestAborted);
+							});
 							endpoints.MapGet("/healthz", async ctx =>
 							{
 								ctx.Response.ContentType = "application/json";

@@ -101,6 +101,20 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// <summary>Drops because socket state was not Started when SendToServer was called.</summary>
 		private long wireDropNotStartedCount;
 
+		/* How the current (or last) attempt went; see ClientConnectDiagnosis. Written on the main thread only:
+		 * the open time is stamped where the callback fires and carried into the queued event, so queue latency
+		 * does not count. Kept past Stopped until the next StartConnection. */
+		/// <summary>Stopwatch timestamp when the attempt started; 0 before any attempt.</summary>
+		private long diagStartTicks;
+		/// <summary>Stopwatch timestamp when the session opened; 0 until it does.</summary>
+		private long diagOpenedTicks;
+		/// <summary>True once anything arrived from the server this session.</summary>
+		private bool diagServerData;
+		/// <summary>The failure the transport reported this session, if any.</summary>
+		private string diagFailure;
+		/// <summary>True when the native transport reported a TLS failure this session.</summary>
+		private bool diagTlsFailure;
+
 		/// <summary>
 		/// Atomic counter tracking how many items are in <see cref="incomingEvents"/>.
 		/// Used with <see cref="System.Threading.Interlocked"/> to enforce a soft
@@ -299,6 +313,12 @@ namespace FishNet.Transporting.WebTransport.Client
 			System.Threading.Interlocked.Exchange(ref wireSentBytes, 0);
 			System.Threading.Interlocked.Exchange(ref wireDropNotStartedCount, 0);
 
+			this.diagStartTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+			this.diagOpenedTicks = 0;
+			this.diagServerData = false;
+			this.diagFailure = null;
+			this.diagTlsFailure = false;
+
 			base.SetConnectionState(LocalConnectionState.Starting, false);
 
 			// Drain stale incoming events. Actions check sessionGeneration and no-op if
@@ -358,6 +378,7 @@ namespace FishNet.Transporting.WebTransport.Client
 					// Immediate failure: WebTransport unsupported, jslib missing, or create threw.
 					// Fail fast → Stopped so ClientConnection does not spin the full 20s timeout.
 					webglPendingConnect = null;
+					this.diagFailure = "could not create a WebTransport session";
 					LogTransportError(
 						$"[FishWT] WTConnect failed immediately for {url} (index=-1). " +
 						"Check browser WebTransport support and that WebTransport.jslib is in the WebGL framework.");
@@ -446,6 +467,7 @@ namespace FishNet.Transporting.WebTransport.Client
 
 			if (result != 0)
 			{
+				this.diagFailure = WebTransportNative.ErrorString((WebTransportNative.WTError)result);
 				WebTransportNative.wt_client_destroy(clientHandle);
 				clientHandle = null;
 				// Free unmanaged callback table on error path.
@@ -461,6 +483,19 @@ namespace FishNet.Transporting.WebTransport.Client
 
 			return true;
 #endif
+		}
+
+		/// <summary>
+		/// How the current or most recent connection attempt went. Main thread only.
+		/// </summary>
+		internal ClientConnectDiagnosis GetConnectDiagnosis()
+		{
+			bool opened = this.diagOpenedTicks != 0;
+			double openMs = opened
+				? (this.diagOpenedTicks - this.diagStartTicks) * 1000.0 / System.Diagnostics.Stopwatch.Frequency
+				: -1.0;
+			return new ClientConnectDiagnosis(this.diagStartTicks != 0, opened, openMs,
+				this.diagServerData, this.diagFailure, this.diagTlsFailure);
 		}
 
 		/// <summary>
@@ -883,11 +918,14 @@ namespace FishNet.Transporting.WebTransport.Client
 			}
 			string url = socket.webglConnectUrl;
 			int gen = socket.sessionGeneration;
+			long openedAt = System.Diagnostics.Stopwatch.GetTimestamp();
 			socket.incomingEvents.Enqueue(() =>
 			{
 				if (gen != socket.sessionGeneration)
 					return;
-				UnityEngine.Debug.Log($"[FishWT] open index={index} url={url}");
+				socket.diagOpenedTicks = openedAt;
+				UnityEngine.Debug.Log($"[FishWT] open index={index} url={url} " +
+					$"after {socket.GetConnectDiagnosis().OpenMilliseconds:0.0} ms");
 				socket.SetConnectionState(LocalConnectionState.Started, false);
 			});
 		}
@@ -944,6 +982,7 @@ namespace FishNet.Transporting.WebTransport.Client
 				// A session that has ended delivers nothing: the same rule the native callbacks follow.
 				if (gen != socket.sessionGeneration || socket.GetConnectionState() != LocalConnectionState.Started)
 					return;
+				socket.diagServerData = true;
 				Transport transport = socket.transport;
 				if (transport == null)
 				{
@@ -983,6 +1022,7 @@ namespace FishNet.Transporting.WebTransport.Client
 				// A session that has ended delivers nothing: the same rule the native callbacks follow.
 				if (gen != socket.sessionGeneration || socket.GetConnectionState() != LocalConnectionState.Started)
 					return;
+				socket.diagServerData = true;
 				Transport transport = socket.transport;
 				if (transport == null)
 				{
@@ -1029,6 +1069,7 @@ namespace FishNet.Transporting.WebTransport.Client
 			{
 				if (gen != socket.sessionGeneration)
 					return;
+				socket.diagFailure = string.IsNullOrEmpty(capturedDetail) ? "failed to open" : capturedDetail;
 				if (!string.IsNullOrEmpty(capturedDetail))
 				{
 					if (capturedDetail.StartsWith("Ready failed:", StringComparison.Ordinal))
@@ -1137,10 +1178,12 @@ namespace FishNet.Transporting.WebTransport.Client
 				LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping connect event.");
 				return;
 			}
+			long openedAt = System.Diagnostics.Stopwatch.GetTimestamp();
 			incomingEvents.Enqueue(() =>
 			{
 				if (gen != sessionGeneration)
 					return; // stale session (Login hop already replaced by World/Scene)
+				this.diagOpenedTicks = openedAt;
 				base.SetConnectionState(LocalConnectionState.Started, false);
 			});
 		}
@@ -1164,7 +1207,12 @@ namespace FishNet.Transporting.WebTransport.Client
 				if (gen != sessionGeneration)
 					return; // do not StopConnection on the new hop
 				if (errorCode != 0)
-					LogTransportWarning("[WebTransport Client] Disconnected: " + WebTransportNative.ErrorString((WebTransportNative.WTError)errorCode));
+				{
+					string name = WebTransportNative.ErrorString((WebTransportNative.WTError)errorCode);
+					this.diagFailure = name;
+					this.diagTlsFailure = errorCode == (int)WebTransportNative.WTError.TLSError;
+					LogTransportWarning("[WebTransport Client] Disconnected: " + name);
+				}
 				StopConnection();
 			});
 		}
@@ -1210,6 +1258,7 @@ namespace FishNet.Transporting.WebTransport.Client
 						return;
 					if (base.GetConnectionState() != LocalConnectionState.Started)
 						return;
+					this.diagServerData = true;
 
 					byte[] buffer = new byte[length];
 					System.Runtime.InteropServices.Marshal.Copy(unmanagedCopy, buffer, 0, length);
@@ -1270,6 +1319,7 @@ namespace FishNet.Transporting.WebTransport.Client
 						return;
 					if (base.GetConnectionState() != LocalConnectionState.Started)
 						return;
+					this.diagServerData = true;
 
 					byte[] buffer = new byte[length];
 					System.Runtime.InteropServices.Marshal.Copy(unmanagedCopy, buffer, 0, length);

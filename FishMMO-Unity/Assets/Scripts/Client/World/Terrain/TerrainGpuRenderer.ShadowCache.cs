@@ -149,7 +149,7 @@ namespace FishMMO.Client
 				cmd.SetComputeBufferParam(compute, finalizeKernel, CountsId, countBuffer);
 				cmd.SetComputeBufferParam(compute, finalizeKernel, SlotsId, slotBuffer);
 				cmd.SetComputeBufferParam(compute, finalizeKernel, ArgsId, shadowCacheArgs);
-				cmd.DispatchCompute(compute, finalizeKernel, (commands.Count + 63) / 64, 1, 1);
+				cmd.DispatchComputeChecked(compute, finalizeKernel, (commands.Count + 63) / 64, 1, 1);
 				Bind(shadowCacheBlock);
 				shadowCacheBlock.SetBuffer(VisibleId, visibleBuffer);
 				shadowCacheBlock.SetVector(CasterSphereId, Vector4.zero);
@@ -163,7 +163,7 @@ namespace FishMMO.Client
 			cmd.SetComputeIntParam(compute, WorkCountId, workCount);
 			cmd.SetComputeIntParam(compute, ArgCountId, commands.Count);
 			cmd.SetComputeBufferParam(compute, clearKernel, CountsId, shadowCacheCounts);
-			cmd.DispatchCompute(compute, clearKernel, (slotCount + 63) / 64, 1, 1);
+			cmd.DispatchComputeChecked(compute, clearKernel, (slotCount + 63) / 64, 1, 1);
 			FishDepthPyramid.Bind(cmd, compute, cullKernel, camera, anchor, false);
 			cmd.SetComputeBufferParam(compute, cullKernel, InstancesId, instances);
 			cmd.SetComputeBufferParam(compute, cullKernel, ModelsId, modelBuffer);
@@ -173,12 +173,12 @@ namespace FishMMO.Client
 			cmd.SetComputeBufferParam(compute, cullKernel, VisibleOutId, shadowCacheVisible);
 			BindPackedOff(cmd);
 			Vector2Int groups = TerrainGpuMath.CullGroups(workCount);
-			cmd.DispatchCompute(compute, cullKernel, groups.x, groups.y, 1);
+			cmd.DispatchComputeChecked(compute, cullKernel, groups.x, groups.y, 1);
 			cmd.SetComputeBufferParam(compute, finalizeKernel, ArgSlotsId, argSlotBuffer);
 			cmd.SetComputeBufferParam(compute, finalizeKernel, CountsId, shadowCacheCounts);
 			cmd.SetComputeBufferParam(compute, finalizeKernel, SlotsId, slotBuffer);
 			cmd.SetComputeBufferParam(compute, finalizeKernel, ArgsId, shadowCacheArgs);
-			cmd.DispatchCompute(compute, finalizeKernel, (commands.Count + 63) / 64, 1, 1);
+			cmd.DispatchComputeChecked(compute, finalizeKernel, (commands.Count + 63) / 64, 1, 1);
 			Bind(shadowCacheBlock);
 			shadowCacheBlock.SetBuffer(VisibleId, shadowCacheVisible);
 			shadowCacheBlock.SetVector(CasterSphereId, Vector4.zero);

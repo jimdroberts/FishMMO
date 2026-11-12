@@ -6,6 +6,10 @@
  *   4. a released slot can be reused
  *   5. the half-open cap refuses while a connection has no session, and
  *      releases once the first message completes protocol detection
+ *   6. a one-off datagram burst far over budget is dropped, not kicked,
+ *      and the reliable stream is untouched by it
+ *   7. datagrams sent at more than twice the budget for longer than
+ *      WT_DGRAM_ABUSE_WINDOWS seconds are kicked
  * Certificates: server.pem/server.key in the working directory, CA trusted
  * via SSL_CERT_FILE — see run_limits_e2e.sh. */
 #include "webtransport_api.h"
@@ -18,6 +22,7 @@
 
 static std::atomic<int> srv_connects{0}, srv_disconnects{0};
 static std::atomic<long> srv_msgs[16];
+static std::atomic<long> srv_dgrams[16];
 static std::atomic<int> srv_last_disc_conn{0};
 
 static void s_on_connect(void*, wt_connection_id_t id, const char* addr) {
@@ -30,7 +35,7 @@ static void s_on_disconnect(void*, wt_connection_id_t id, int err) {
 static void s_on_stream(void*, wt_connection_id_t id, wt_stream_id_t, const uint8_t*, int32_t) {
     if (id < 16) srv_msgs[id]++;
 }
-static void s_on_dgram(void*, wt_connection_id_t id, const uint8_t*, int32_t) { if (id < 16) srv_msgs[id]++; }
+static void s_on_dgram(void*, wt_connection_id_t id, const uint8_t*, int32_t) { if (id < 16) { srv_msgs[id]++; srv_dgrams[id]++; } }
 
 struct Cli {
     WT_CLIENT h = nullptr;
@@ -160,6 +165,53 @@ int main() {
     CHECK(srv_connects >= 1, "server established F's session");
     Cli* h = connect_client("H");
     CHECK(wait_until(h->connected, 5000), "client H connects once F left the half-open state");
+    for (Cli* x : clis) { if (x->h) wt_client_disconnect(x->h); }
+    pump(500);
+    for (Cli* x : clis) { wt_client_destroy(x->h); x->h = nullptr; delete x; }
+    wt_server_stop(srv);
+    wt_server_destroy(srv);
+    clis.clear();
+
+    /* ── Tests 6 and 7: datagrams are dropped over budget, kicked only for abuse ──
+     * 50 msg/s, burst 100, stream kick after 20 refusals, datagram queue share off. */
+    srv_connects = 0; srv_disconnects = 0;
+    for (auto& m : srv_msgs) m = 0;
+    for (auto& m : srv_dgrams) m = 0;
+    srv = wt_server_create("server.pem", "server.key", "h3", "127.0.0.1", 47313, 64, nullptr, &scb, nullptr);
+    wt_server_set_limits(srv, 0, 0, -1, 50, 100, 20, 0, -1);
+    if (wt_server_start(srv) != 0) { printf("server3 start failed\n"); return 2; }
+    g_port = 47313;
+
+    Cli* j = connect_client("J");
+    CHECK(wait_until(j->connected, 5000), "client J connects");
+    wt_client_send_stream(j->h, payload, sizeof payload);   /* completes protocol detection */
+    end = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (srv_connects < 1 && std::chrono::steady_clock::now() < end) pump(10);
+    pump(200);
+    int dg_sent = 0;
+    for (int i = 0; i < 600; i++) { if (wt_client_send_datagram(j->h, payload, sizeof payload) == 0) dg_sent++; if (i % 50 == 49) pump(1); }
+    pump(1500);
+    long dgrams = 0; for (int i = 0; i < 16; i++) dgrams += srv_dgrams[i];
+    printf("[J] burst sent %d datagrams, server delivered %ld, disconnects=%d\n", dg_sent, dgrams, srv_disconnects.load());
+    CHECK(dgrams < dg_sent, "the datagram burst was trimmed to the budget");
+    CHECK(srv_disconnects == 0 && j->disconnected == 0, "a one-off datagram burst does not disconnect");
+    long streams_before = 0; for (int i = 0; i < 16; i++) streams_before += srv_msgs[i] - srv_dgrams[i];
+    for (int i = 0; i < 20; i++) { wt_client_send_stream(j->h, payload, sizeof payload); pump(30); }
+    pump(800);
+    long streams_after = 0; for (int i = 0; i < 16; i++) streams_after += srv_msgs[i] - srv_dgrams[i];
+    printf("[J] paced 20 stream messages after the burst, delivered %ld\n", streams_after - streams_before);
+    CHECK(streams_after - streams_before == 20, "the reliable stream keeps its own budget after a datagram burst");
+
+    /* Sustained abuse: 200 datagrams/s (4x the budget) for up to 16 s. */
+    auto abuse_end = std::chrono::steady_clock::now() + std::chrono::seconds(16);
+    while (std::chrono::steady_clock::now() < abuse_end && srv_disconnects == 0) {
+        for (int k = 0; k < 10; k++) wt_client_send_datagram(j->h, payload, sizeof payload);
+        pump(50);
+    }
+    pump(1000);
+    printf("[J] after sustained abuse: disconnects=%d client disconnected=%d\n", srv_disconnects.load(), j->disconnected.load());
+    CHECK(srv_disconnects >= 1, "sustained datagram abuse is disconnected");
+
     for (Cli* x : clis) { if (x->h) wt_client_disconnect(x->h); }
     pump(500);
     for (Cli* x : clis) { wt_client_destroy(x->h); x->h = nullptr; delete x; }

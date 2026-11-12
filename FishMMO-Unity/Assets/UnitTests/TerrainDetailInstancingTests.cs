@@ -336,7 +336,7 @@ namespace FishMMO.UnitTests
 			string renderer = File.ReadAllText(Path.Combine(root, "Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.cs"));
 			LogAssert.IsTrue(renderer.Contains("Object.Instantiate(cs)"), "each renderer culls with its own ComputeShader instance (one parameter sheet each)");
 			LogAssert.IsFalse(Regex.IsMatch(renderer, @"compute\.(Dispatch|SetVector|SetInt|SetBuffer|SetVectorArray)\("), "no immediate-mode compute parameters or dispatches");
-			LogAssert.IsTrue(renderer.Contains("cmd.DispatchCompute(compute, cullKernel"), "the cull is recorded into a command buffer");
+			LogAssert.IsTrue(renderer.Contains("cmd.DispatchComputeChecked(compute, cullKernel"), "the cull is recorded into a command buffer");
 			LogAssert.IsTrue(renderer.Contains("context.ExecuteCommandBuffer(cmd)"), "executed on the camera's own render context");
 			LogAssert.IsTrue(renderer.Contains("cmd.SetBufferData(workBuffer"), "the work list is uploaded in the same command stream");
 			LogAssert.IsFalse(renderer.Contains("unity_BaseInstanceID"), "Unity's built-in base instance is left to Unity");
@@ -402,7 +402,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(code.Contains("NativeArray<FishInstance>.Copy(source, start, mirror, offset, count)"), "every upload writes the CPU mirror");
 			LogAssert.IsFalse(code.Contains("into.SetBufferData(instances,"), "never written by the CPU while in use (an OpenGL stall of 50-90 ms)");
 			LogAssert.IsTrue(code.Contains("into.SetBufferData(upload, mirror, lo, packed, hi - lo)"), "changed spans go into a fresh upload buffer");
-			LogAssert.IsTrue(code.Contains("into.DispatchCompute(compute, copyKernel,"), "and are copied into the instance buffer on the GPU");
+			LogAssert.IsTrue(code.Contains("into.DispatchComputeChecked(compute, copyKernel,"), "and are copied into the instance buffer on the GPU");
 			LogAssert.IsTrue(code.Contains("Flush(cmd);"), "flushed in the camera's command buffer, ahead of the culling");
 			LogAssert.IsFalse(code.Contains("MarkDirty(0, mirror.Length)"), "a recreated buffer does not upload the whole mirror (free space included)");
 			LogAssert.IsTrue(code.Contains("MarkDirty(r.Key, r.Value.Count)"), "a recreated buffer receives every resident range");
@@ -417,7 +417,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(code.Contains("if (m.WorkInstances > m.Capacity)"), "Execute grows a slot that the work could overflow");
 			int grow = code.IndexOf("if (m.WorkInstances > m.Capacity)");
 			int relayout = code.IndexOf("Relayout();", grow);
-			int cull = code.IndexOf("DispatchCompute(compute, cullKernel", grow);
+			int cull = code.IndexOf("DispatchComputeChecked(compute, cullKernel", grow);
 			LogAssert.IsTrue(grow >= 0 && relayout > grow && cull > relayout, "grown and laid out before the culling runs");
 		}
 

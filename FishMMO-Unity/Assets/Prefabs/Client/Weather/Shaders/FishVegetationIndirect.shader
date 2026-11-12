@@ -139,6 +139,7 @@ Shader "FishMMO/Vegetation Indirect"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
 
             #define FISH_VEG_PASS_FORWARD
+            #include "FishDxcDotsCore.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "FishIndirectInstancing.hlsl"
@@ -176,6 +177,7 @@ Shader "FishMMO/Vegetation Indirect"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
 
             #define FISH_VEG_PASS_SHADOW
+            #include "FishDxcDotsCore.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
             #include "FishIndirectInstancing.hlsl"
@@ -211,6 +213,7 @@ Shader "FishMMO/Vegetation Indirect"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
 
             #define FISH_VEG_PASS_DEPTH
+            #include "FishDxcDotsCore.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "FishIndirectInstancing.hlsl"
             #include "FishVegetationPasses.hlsl"
@@ -245,6 +248,7 @@ Shader "FishMMO/Vegetation Indirect"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
 
             #define FISH_VEG_PASS_DEPTHNORMALS
+            #include "FishDxcDotsCore.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "FishIndirectInstancing.hlsl"
             #include "FishVegetationPasses.hlsl"

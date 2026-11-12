@@ -429,6 +429,12 @@ namespace FishMMO.Shared.Patcher
 					EditorUtility.DisplayDialog("Error", "Failed to pre-cache latest client version. Aborting.", "OK");
 					return;
 				}
+				if (!LatestMatchesProjectVersion(latestVersionConfig, out string versionMismatch))
+				{
+					await Log.Error("Patcher", versionMismatch);
+					EditorUtility.DisplayDialog("Error", versionMismatch, "OK");
+					return;
+				}
 				if (oldClientVersionCache.Count == 0 && oldClientDirsToProcess.Any())
 				{
 					EditorUtility.DisplayDialog("Warning", "No old client versions were successfully pre-cached. Patch generation may not proceed as expected.", "OK");
@@ -642,6 +648,37 @@ namespace FishMMO.Shared.Patcher
 		/// </summary>
 		/// <param name="latestClientPath">Path to the latest client build directory.</param>
 		/// <param name="oldClientPaths">List of paths to old client build directories.</param>
+		/// <summary>
+		/// True when the latest client folder's version.txt is the project's current VersionConfig.
+		/// </summary>
+		/// <remarks>
+		/// Every patch leads to the latest folder, so that folder has to be the build of the project as it
+		/// is now. A stale folder (built before the version was bumped, or picked by mistake) would produce
+		/// patches whose target version no client or server of the current build agrees with. The old
+		/// folders cannot be checked the same way: the versions they were built from are no longer in the
+		/// project, which is why every client build carries its own version.txt.
+		/// </remarks>
+		/// <param name="latest">The version read from the latest client folder.</param>
+		/// <param name="error">Why the folder was refused, or null.</param>
+		/// <returns>False when the versions differ or the project has no VersionConfig.</returns>
+		internal static bool LatestMatchesProjectVersion(VersionConfig latest, out string error)
+		{
+			VersionConfig project = VersionConfig.FindProjectAsset(out _);
+			if (project == null)
+			{
+				error = "No VersionConfig asset was found in the project, so the latest client folder's version cannot be checked.";
+				return false;
+			}
+			if (latest.FullVersion != project.FullVersion)
+			{
+				error = $"The latest client folder is version {latest.FullVersion}, but the project's VersionConfig is {project.FullVersion}. " +
+					"Patches must lead to a build of the current project: build the client again, or choose the folder of the current build.";
+				return false;
+			}
+			error = null;
+			return true;
+		}
+
 		private async Task PreloadAllClientVersionsAsync(string latestClientPath, List<string> oldClientPaths)
 		{
 			latestVersionConfig = null;

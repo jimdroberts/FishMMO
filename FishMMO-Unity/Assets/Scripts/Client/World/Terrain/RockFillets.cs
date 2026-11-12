@@ -305,16 +305,16 @@ namespace FishMMO.Client
 			cmd.SetComputeIntParams(compute, RegionMinId, lo.x, lo.y, lo.z, 0);
 			cmd.SetComputeIntParams(compute, RegionDimsId, size.x, size.y, size.z, regionCells);
 			cmd.SetComputeBufferParam(compute, clearKernel, CountersId, counters);
-			cmd.DispatchCompute(compute, clearKernel, 1, 1, 1);
+			cmd.DispatchComputeChecked(compute, clearKernel, 1, 1, 1);
 			cmd.SetComputeBufferParam(compute, snapshotKernel, RocksId, snapshot);
 			cmd.SetComputeBufferParam(compute, snapshotKernel, RocksInId, RockContactField.ListBuffer);
-			cmd.DispatchCompute(compute, snapshotKernel, (RockContactField.ListCapacity + 63) / 64, 1, 1);
+			cmd.DispatchComputeChecked(compute, snapshotKernel, (RockContactField.ListCapacity + 63) / 64, 1, 1);
 			cmd.SetComputeBufferParam(compute, classifyKernel, CountersId, counters);
 			cmd.SetComputeBufferParam(compute, classifyKernel, RocksInId, RockContactField.ListBuffer);
 			cmd.SetComputeBufferParam(compute, classifyKernel, SlotsId, RockContactField.SlotsBuffer);
 			cmd.SetComputeBufferParam(compute, classifyKernel, CellsId, cells);
 			cmd.SetComputeTextureParam(compute, classifyKernel, SdfId, buildAtlas);
-			cmd.DispatchCompute(compute, classifyKernel, (regionCells + 63) / 64, 1, 1);
+			cmd.DispatchComputeChecked(compute, classifyKernel, (regionCells + 63) / 64, 1, 1);
 			cmd.EndSample(BuildSample);
 			Graphics.ExecuteCommandBuffer(cmd);
 			cmd.Clear();
@@ -369,7 +369,7 @@ namespace FishMMO.Client
 				cmd.SetComputeBufferParam(compute, meshKernel, CellsInId, cells);
 				cmd.SetComputeBufferParam(compute, meshKernel, TrisId, triangles);
 				cmd.SetComputeTextureParam(compute, meshKernel, SdfId, buildAtlas);
-				cmd.DispatchCompute(compute, meshKernel, groups, 1, 1);
+				cmd.DispatchComputeChecked(compute, meshKernel, groups, 1, 1);
 				nextCell += groups;
 			}
 			bool done = nextCell >= total;
@@ -379,13 +379,13 @@ namespace FishMMO.Client
 				cmd.SetComputeBufferParam(compute, finalizeKernel, CountersId, counters);
 				cmd.SetComputeBufferParam(compute, finalizeKernel, ArgsId, args);
 				cmd.SetComputeBufferParam(compute, finalizeKernel, StartsId, starts);
-				cmd.DispatchCompute(compute, finalizeKernel, 1, 1, 1);
+				cmd.DispatchComputeChecked(compute, finalizeKernel, 1, 1, 1);
 				cmd.SetComputeIntParams(compute, LimitsId, CellCapacity, triangleCapacity, RockContactField.ListCapacity, 0);
 				cmd.SetComputeBufferParam(compute, scatterKernel, CountersId, counters);
 				cmd.SetComputeBufferParam(compute, scatterKernel, TrisInId, triangles);
 				cmd.SetComputeBufferParam(compute, scatterKernel, DrawnId, drawn);
 				cmd.SetComputeBufferParam(compute, scatterKernel, StartsInId, starts);
-				cmd.DispatchCompute(compute, scatterKernel, (triangleCapacity + 63) / 64, 1, 1);
+				cmd.DispatchComputeChecked(compute, scatterKernel, (triangleCapacity + 63) / 64, 1, 1);
 			}
 			cmd.EndSample(BuildSample);
 			Graphics.ExecuteCommandBuffer(cmd);

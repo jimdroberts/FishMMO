@@ -813,7 +813,7 @@ namespace FishMMO.Client
 			cmd.SetComputeBufferParam(compute, clearKernel, RockListCountId, listCount);
 			cmd.SetComputeBufferParam(compute, clearKernel, RockSlotsId, slots);
 			cmd.SetComputeBufferParam(compute, clearKernel, RockCellCountsId, cellCounts);
-			cmd.DispatchCompute(compute, clearKernel, (cells + 63) / 64, 1, 1);
+			cmd.DispatchComputeChecked(compute, clearKernel, (cells + 63) / 64, 1, 1);
 			foreach (TerrainGpuRenderer r in renderers)
 			{
 				if (!r.RockSource(out GraphicsBuffer instances, out GraphicsBuffer tags, out int count) || count == 0)
@@ -828,7 +828,7 @@ namespace FishMMO.Client
 				cmd.SetComputeBufferParam(compute, gatherKernel, RockTagsId, tags);
 				cmd.SetComputeBufferParam(compute, gatherKernel, RockBricksId, bricks);
 				cmd.SetComputeIntParam(compute, RockInstanceCountId, count);
-				cmd.DispatchCompute(compute, gatherKernel, (count + 63) / 64, 1, 1);
+				cmd.DispatchComputeChecked(compute, gatherKernel, (count + 63) / 64, 1, 1);
 			}
 			cmd.EndSample(GatherSample);
 			Graphics.ExecuteCommandBuffer(cmd);

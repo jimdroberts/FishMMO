@@ -538,23 +538,23 @@ namespace FishMMO.Client
 			cmd.SetComputeIntParam(compute, CapacityId, capacity);
 
 			cmd.SetComputeBufferParam(compute, clearKernel, CountsId, countBuffer);
-			cmd.DispatchCompute(compute, clearKernel, 1, 1, 1);
+			cmd.DispatchComputeChecked(compute, clearKernel, 1, 1, 1);
 
 			cmd.SetComputeBufferParam(compute, expandKernel, JobsId, jobBuffer);
 			cmd.SetComputeBufferParam(compute, expandKernel, KindsId, kindBuffer);
 			cmd.SetComputeBufferParam(compute, expandKernel, CountsId, countBuffer);
 			cmd.SetComputeBufferParam(compute, expandKernel, InstancesId, instanceBuffer);
 			int groups = (threads + 63) / 64;
-			cmd.DispatchCompute(compute, expandKernel, Mathf.Min(groups, 65535), (groups + 65534) / 65535, 1);
+			cmd.DispatchComputeChecked(compute, expandKernel, Mathf.Min(groups, 65535), (groups + 65534) / 65535, 1);
 
 			cmd.SetComputeBufferParam(compute, finalizeKernel, CountsId, countBuffer);
 			cmd.SetComputeBufferParam(compute, finalizeKernel, ArgsId, argsBuffer);
-			cmd.DispatchCompute(compute, finalizeKernel, 1, 1, 1);
+			cmd.DispatchComputeChecked(compute, finalizeKernel, 1, 1, 1);
 			if (NeedsArgsFence)
 			{
 				cmd.SetComputeBufferParam(compute, fenceKernel, ArgsFenceId, argsBuffer);
 				cmd.SetComputeBufferParam(compute, fenceKernel, CountsId, countBuffer);
-				cmd.DispatchCompute(compute, fenceKernel, 1, 1, 1);
+				cmd.DispatchComputeChecked(compute, fenceKernel, 1, 1, 1);
 			}
 			context.ExecuteCommandBuffer(cmd);
 			cmd.Clear();

@@ -32,8 +32,23 @@ namespace FishMMO.Client
 		/// </summary>
 		private const int MaxQueued = 4;
 
+		/// <summary>A queued notice: its message, and an optional link offered as the dialog's accept button.</summary>
+		private readonly struct Entry
+		{
+			public readonly string Message;
+			public readonly string LinkUrl;
+			public readonly string LinkLabel;
+
+			public Entry(string message, string linkUrl, string linkLabel)
+			{
+				Message = message;
+				LinkUrl = linkUrl;
+				LinkLabel = linkLabel;
+			}
+		}
+
 		/// <summary>Messages waiting for the shared dialog to become free.</summary>
-		private static readonly Queue<string> pending = new Queue<string>();
+		private static readonly Queue<Entry> pending = new Queue<Entry>();
 
 		/// <summary>
 		/// Queues a message for display, or shows it immediately when the dialog is free.
@@ -41,21 +56,32 @@ namespace FishMMO.Client
 		/// <param name="message">The message. Null or blank is ignored.</param>
 		public static void Show(string message)
 		{
+			Show(message, null, null);
+		}
+
+		/// <summary>
+		/// Queues a message whose accept button opens a link, or shows it immediately when the dialog is free.
+		/// </summary>
+		/// <param name="message">The message. Null or blank is ignored.</param>
+		/// <param name="linkUrl">An http(s) link the accept button opens; null for a plain notice.</param>
+		/// <param name="linkLabel">The accept button's label, such as "Get help".</param>
+		public static void Show(string message, string linkUrl, string linkLabel)
+		{
 			if (string.IsNullOrWhiteSpace(message))
 			{
 				return;
 			}
 
 			// Collapse a repeat of whatever is already at the back of the queue.
-			foreach (string queued in pending)
+			foreach (Entry queued in pending)
 			{
-				if (string.Equals(queued, message, System.StringComparison.Ordinal))
+				if (string.Equals(queued.Message, message, System.StringComparison.Ordinal))
 				{
 					return;
 				}
 			}
 
-			pending.Enqueue(message);
+			pending.Enqueue(new Entry(message, linkUrl, linkLabel));
 			while (pending.Count > MaxQueued)
 			{
 				pending.Dequeue();
@@ -86,14 +112,31 @@ namespace FishMMO.Client
 				 * panel did appear, minutes later and out of context. */
 				while (pending.Count > 0)
 				{
-					Log.Warning("LoginNotice", pending.Dequeue());
+					Log.Warning("LoginNotice", pending.Dequeue().Message);
 				}
 				return;
 			}
 
 			// Peek, not dequeue: a refused Open must leave the message queued for the next tick.
-			string message = pending.Peek();
-			if (dialogBox.Open(message))
+			Entry entry = pending.Peek();
+			bool opened;
+			if (string.IsNullOrEmpty(entry.LinkUrl))
+			{
+				opened = dialogBox.Open(entry.Message);
+			}
+			else
+			{
+				/* The link is the accept button; dismissing is the cancel button, which needs a
+				 * callback or the dialog hides it. The URL is opened through the launcher's link
+				 * policy so only http(s) can ever reach the OS. */
+				string url = entry.LinkUrl;
+				opened = dialogBox.Open(entry.Message,
+					() => LauncherLinkPolicy.OpenIfSafe(url),
+					() => { },
+					string.IsNullOrEmpty(entry.LinkLabel) ? "Open link" : entry.LinkLabel,
+					"Close");
+			}
+			if (opened)
 			{
 				pending.Dequeue();
 			}

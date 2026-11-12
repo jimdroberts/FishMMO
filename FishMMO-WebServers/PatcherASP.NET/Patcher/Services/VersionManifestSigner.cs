@@ -37,6 +37,14 @@ using FishMMO.WebServers.Signing;
 ///     the key is sitting in an appsettings file that is easy to copy into a repository by
 ///     accident. Supported so a single-box deployment is not blocked, not recommended.
 ///   </description></item>
+///   <item><description>
+///     The default key file, <see cref="DefaultKeyFilePath"/>: <c>fishmmo/patcher/version-manifest-signing.key</c>
+///     under the service user's configuration directory (<c>$XDG_CONFIG_HOME</c> or <c>~/.config</c> on
+///     Linux, <c>%APPDATA%</c> on Windows). Consulted only when none of the above is set, so a host that
+///     keeps the key there needs no path in any configuration file. The appsettings files ship in the
+///     repository and are copied over the deployed ones on every build, so a per-host path cannot live
+///     in them, and the AppHealthMonitor reads its own configuration only when it starts.
+///   </description></item>
 /// </list>
 /// <para>
 /// <b>The key is never logged.</b> Not at Debug, not in an exception message, not truncated. The
@@ -73,6 +81,20 @@ public sealed class VersionManifestSigner : IDisposable
 	/// <summary>Environment variable carrying the base64 private key.</summary>
 	public const string PrivateKeyEnvironmentVariable = "FISHMMO_VERSION_MANIFEST_SIGNING_KEY";
 
+	/// <summary>File name <c>ManifestSigner keygen</c> writes the private key under.</summary>
+	public const string DefaultKeyFileName = "version-manifest-signing.key";
+
+	/// <summary>Replaces the user configuration directory in <see cref="DefaultKeyFilePath"/>. Tests only.</summary>
+	internal static string? ConfigDirectoryOverride { get; set; }
+
+	/// <summary>
+	/// Where the key is looked for when no source is configured:
+	/// <c>&lt;user config dir&gt;/fishmmo/patcher/version-manifest-signing.key</c>.
+	/// </summary>
+	public static string DefaultKeyFilePath =>
+		Path.Combine(ConfigDirectoryOverride ?? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+			"fishmmo", "patcher", DefaultKeyFileName);
+
 	private byte[]? privateSeed;
 
 	/// <summary>
@@ -98,15 +120,15 @@ public sealed class VersionManifestSigner : IDisposable
 					"No Ed25519 version-manifest signing key is configured, and the patcher refuses to serve an " +
 					"unsigned version manifest in Production. The sha256 field it carries is the only integrity " +
 					"check applied to a patch archive.\n" +
-					"  Generate a keypair:  dotnet run --project Tools/ManifestSigner -- keygen --out-dir /etc/fishmmo/patcher\n" +
-					$"  Then set one of:     {PrivateKeyFileSetting} (preferred), " +
+					$"  Generate a keypair:  dotnet run --project Tools/ManifestSigner -- keygen --out-dir \"{Path.GetDirectoryName(DefaultKeyFilePath)}\"\n" +
+					$"  That directory is read with no further configuration. Elsewhere, set one of: {PrivateKeyFileSetting} (preferred), " +
 					$"{PrivateKeyEnvironmentVariable}, or {PrivateKeyInlineSetting}.\n" +
 					"  Embed the printed PUBLIC key in the client as CertificatePinSet.VersionManifestPublicKeyBase64.");
 			}
 
 			_ = Log.Error(logChannel,
 				$"VERSION MANIFEST SIGNING IS DISABLED: no key found via {PrivateKeyFileSetting}, " +
-				$"{PrivateKeyEnvironmentVariable} or {PrivateKeyInlineSetting}. Every /latest_version response will " +
+				$"{PrivateKeyEnvironmentVariable}, {PrivateKeyInlineSetting} or '{DefaultKeyFilePath}'. Every /latest_version response will " +
 				"carry an empty signature and any client with a verification key embedded will refuse it. " +
 				"A Production environment would refuse to start in this state.");
 			return;
@@ -167,6 +189,22 @@ public sealed class VersionManifestSigner : IDisposable
 		{
 			source = PrivateKeyInlineSetting;
 			return inline.Trim();
+		}
+
+		// Absent is "not configured". Present but unreadable is the same hard error as a configured path.
+		string defaultPath = DefaultKeyFilePath;
+		if (File.Exists(defaultPath))
+		{
+			source = $"default key file ('{defaultPath}')";
+			try
+			{
+				return File.ReadAllText(defaultPath).Trim();
+			}
+			catch (Exception ex)
+			{
+				throw new InvalidOperationException(
+					$"The default signing key file '{defaultPath}' exists but could not be read: {ex.Message}.");
+			}
 		}
 
 		source = null;

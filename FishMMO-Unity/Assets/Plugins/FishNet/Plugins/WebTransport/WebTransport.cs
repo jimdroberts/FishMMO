@@ -331,6 +331,15 @@ namespace FishNet.Transporting.WebTransport
 		}
 
 		/// <summary>
+		/// How the client's current or most recent connection attempt went. Main thread only.
+		/// </summary>
+		/// <remarks>Read it from a Stopped handler to explain a failed connection; see <see cref="ClientConnectDiagnosis"/>.</remarks>
+		public ClientConnectDiagnosis GetClientConnectDiagnosis()
+		{
+			return this.clientSocket != null ? this.clientSocket.GetConnectDiagnosis() : default;
+		}
+
+		/// <summary>
 		/// Wire-send counters for diagnostics (handshake / create-account).
 		/// </summary>
 		public void GetClientWireStats(out long queued, out long sentOk, out long sentFail, out long sentBytes, out long dropNotStarted)

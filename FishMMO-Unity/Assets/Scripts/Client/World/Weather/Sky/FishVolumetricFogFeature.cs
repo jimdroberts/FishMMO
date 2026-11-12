@@ -686,7 +686,7 @@ namespace FishMMO.Client
 						context.cmd.SetComputeVectorArrayParam(s.Compute, PlumeBId, s.PlumeB);
 						context.cmd.SetComputeVectorArrayParam(s.Compute, PlumeCId, s.PlumeC);
 						context.cmd.SetComputeVectorArrayParam(s.Compute, PlumeDId, s.PlumeD);
-						context.cmd.DispatchCompute(s.Compute, s.Kernel, s.GroupsX, s.GroupsY, s.GroupsZ);
+						context.cmd.DispatchComputeChecked(s.Compute, s.Kernel, s.GroupsX, s.GroupsY, s.GroupsZ);
 					});
 				}
 
@@ -705,7 +705,7 @@ namespace FishMMO.Client
 					{
 						context.cmd.SetComputeTextureParam(s.Compute, s.Kernel, ScatterInTexId, s.Scatter);
 						context.cmd.SetComputeTextureParam(s.Compute, s.Kernel, IntegratedTexId, s.Integrated);
-						context.cmd.DispatchCompute(s.Compute, s.Kernel, s.GroupsX, s.GroupsY, 1);
+						context.cmd.DispatchComputeChecked(s.Compute, s.Kernel, s.GroupsX, s.GroupsY, 1);
 					});
 				}
 

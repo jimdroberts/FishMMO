@@ -97,6 +97,27 @@ typedef struct {
     atomic_int              inbound_refused;
     atomic_int              kick_pending;
 
+    /* Datagrams have a budget of their own (same rate and burst).  Over
+     * budget they are dropped; that alone never disconnects, because
+     * datagrams are unreliable by contract and an honest client can
+     * deliver a burst (a browser flushing datagrams it queued while it
+     * could not transmit got players flood-kicked, 2026-11-12).  Only
+     * WT_DGRAM_ABUSE_WINDOWS consecutive one-second windows each with
+     * at least `rate` refusals (the client sending twice its budget)
+     * set kick_pending.  Same single-writer rule as above.
+     *   dgram_tokens_milli    : remaining datagram budget x 1000
+     *   dgram_refill_ms       : monotonic-ms of the last refill
+     *   dgram_window_ms       : start of the current accounting window
+     *   dgram_window_refused  : datagrams refused in that window
+     *   dgram_abusive_windows : consecutive abusive windows so far
+     *   dgram_drop_logged     : 1 once the first drop has been logged */
+    uint64_t                dgram_tokens_milli;
+    uint64_t                dgram_refill_ms;
+    uint64_t                dgram_window_ms;
+    atomic_int              dgram_window_refused;
+    atomic_int              dgram_abusive_windows;
+    atomic_int              dgram_drop_logged;
+
     /* Datagrams from this connection currently sitting in the shared
      * dgram_queue.  Bounded by limits.max_queued_datagrams_per_conn so
      * one flooding client cannot fill the ring for everyone else.
@@ -306,11 +327,16 @@ int32_t wt_server_send_datagram_impl(
 
 void wt_server_disconnect_impl(wt_server_s* server, wt_connection_id_t conn_id);
 
-/** Per-connection inbound admission (stream messages and datagrams).
+/** Per-connection inbound admission for reliable stream messages.
  *  Called on the connection's QUIC worker thread.  Returns false when
  *  the message must be dropped; flags the connection for a poll-thread
  *  disconnect once limits.inbound_overflow_kick refusals accumulate. */
 bool wt_server_admit_inbound(wt_server_s* server, wt_connection_id_t conn_id);
+
+/** Per-connection datagram admission.  Same worker-thread rule.  Returns
+ *  false when the datagram must be dropped; only sustained abuse (see
+ *  WT_DGRAM_ABUSE_WINDOWS) flags the connection for disconnect. */
+bool wt_server_admit_datagram(wt_server_s* server, wt_connection_id_t conn_id);
 
 const char* wt_server_get_client_addr_impl(
     wt_server_s* server, wt_connection_id_t conn_id);

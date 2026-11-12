@@ -1,4 +1,5 @@
 #pragma kernel CheckColour
+#pragma use_dxc vulkan
 #include "../../../Prefabs/Client/Weather/Shaders/FishGrassBlades.compute"
 StructuredBuffer<float2> _ColourPoints;
 RWStructuredBuffer<float4> _ColourResults;

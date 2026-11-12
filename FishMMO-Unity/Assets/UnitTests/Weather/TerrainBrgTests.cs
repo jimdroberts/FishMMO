@@ -352,12 +352,12 @@ namespace FishMMO.UnitTests
 			{
 				return "Relayout: " + why;
 			}
-			why = SourceScanPins.InOrder(main, "DispatchCompute(compute, copyKernel", "DispatchDots(into, upload, n);");
+			why = SourceScanPins.InOrder(main, "DispatchComputeChecked(compute, copyKernel", "DispatchDots(into, upload, n);");
 			if (why != null)
 			{
 				return "Flush: " + why;
 			}
-			why = SourceScanPins.InOrder(main, "SyncDots();", "BindPacked(cmd);", "DispatchCompute(compute, cullKernel", "draws = ArmBrg(camera);", "Graphics.RenderMeshIndirect(rp, command.Mesh");
+			why = SourceScanPins.InOrder(main, "SyncDots();", "BindPacked(cmd);", "DispatchComputeChecked(compute, cullKernel", "draws = ArmBrg(camera);", "Graphics.RenderMeshIndirect(rp, command.Mesh");
 			if (why != null)
 			{
 				return "Execute: " + why;

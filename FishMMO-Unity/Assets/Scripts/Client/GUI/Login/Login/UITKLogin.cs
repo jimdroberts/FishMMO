@@ -147,6 +147,13 @@ namespace FishMMO.Client
 		private bool authResultSeen;
 
 		/// <summary>
+		/// True once this attempt's failed connection has been explained with a help link
+		/// (<see cref="ConnectionTrouble"/>), so a later Stopped for the same attempt does not say it twice.
+		/// Reset when a new attempt starts, alongside <see cref="authResultSeen"/>.
+		/// </summary>
+		private bool connectionTroubleShown;
+
+		/// <summary>
 		/// True from <c>TwoFactorRequired</c> until the two-factor step ends: signed in, refused,
 		/// cancelled, or the connection closed.
 		/// </summary>
@@ -403,6 +410,20 @@ namespace FishMMO.Client
 				"Please check your connection and try again, and make sure your client is up to date.";
 
 			Show();
+
+			/* A connection that never opened, or opened but never heard from the server, is the
+			 * shape of QUIC being blocked or intercepted on the player's side, not of the server
+			 * refusing them. That gets its own explanation and a link to the help page. */
+			if (connectionTroubleShown || ConnectionTrouble.TryNotify(Client.NetworkManager, out _))
+			{
+				connectionTroubleShown = true;
+				if (handshakeMessage != null)
+				{
+					handshakeMessage.text = "Sign-in failed. Could not reach the login server.";
+				}
+				return;
+			}
+
 			if (handshakeMessage != null)
 			{
 				handshakeMessage.text = "Sign-in failed. The server closed the connection.";
@@ -711,6 +732,7 @@ namespace FishMMO.Client
 		{
 			verificationSubmitted = true;
 			authResultSeen = false;
+			connectionTroubleShown = false;
 			SetSignInLocked(true);
 
 			if (!Client.IsConnectionReady(LocalConnectionState.Stopped))
@@ -1047,6 +1069,7 @@ namespace FishMMO.Client
 			}
 
 			authResultSeen = false;
+			connectionTroubleShown = false;
 			verificationSubmitted = false;
 			pendingVerifyUsername = null;
 			signInIdentifier = identifier;
@@ -1273,6 +1296,13 @@ namespace FishMMO.Client
 			if (handshakeMessage != null)
 			{
 				handshakeMessage.text = "The server did not respond. Please try again.";
+			}
+
+			/* Silence from a session that opened but never heard a word from the server is the
+			 * interception case; explain it now rather than leave the player retrying. */
+			if (!connectionTroubleShown && !authResultSeen && ConnectionTrouble.TryNotify(Client.NetworkManager, out _))
+			{
+				connectionTroubleShown = true;
 			}
 		}
 

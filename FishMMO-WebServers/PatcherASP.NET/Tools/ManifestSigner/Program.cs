@@ -73,7 +73,10 @@ namespace FishMMO.WebServers.Tools
 Key placement after keygen:
   SERVER  private key -> Signing:VersionManifestPrivateKeyFile (preferred),
                          FISHMMO_VERSION_MANIFEST_SIGNING_KEY, or
-                         Signing:VersionManifestPrivateKeyBase64
+                         Signing:VersionManifestPrivateKeyBase64.
+                         With none set, the patcher reads fishmmo/patcher/version-manifest-signing.key
+                         under the service user's config directory (~/.config on Linux, %APPDATA% on
+                         Windows), so  keygen --out-dir ~/.config/fishmmo/patcher  needs nothing else.
   CLIENT  public key  -> CertificatePinSet.VersionManifestPublicKeyBase64
                          (Assets/Scripts/Client/Security/CertificatePins.generated.cs)
 

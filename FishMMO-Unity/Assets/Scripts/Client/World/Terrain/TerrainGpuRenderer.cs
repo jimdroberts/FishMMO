@@ -1067,7 +1067,7 @@ namespace FishMMO.Client
 					into.SetComputeIntParam(compute, UploadSourceId, packed + done);
 					into.SetComputeIntParam(compute, UploadDestinationId, lo + done);
 					into.SetComputeIntParam(compute, UploadCountId, n);
-					into.DispatchCompute(compute, copyKernel, (n + 63) / 64, 1, 1);
+					into.DispatchComputeChecked(compute, copyKernel, (n + 63) / 64, 1, 1);
 					// The batch group's matrices of the same range (TerrainGpuRenderer.Brg.cs), from the same upload.
 					DispatchDots(into, upload, n);
 				}
@@ -1283,7 +1283,7 @@ namespace FishMMO.Client
 				cmd.SetComputeIntParam(compute, ArgCountId, commands.Count);
 
 				cmd.SetComputeBufferParam(compute, clearKernel, CountsId, countBuffer);
-				cmd.DispatchCompute(compute, clearKernel, (slotCount + 63) / 64, 1, 1);
+				cmd.DispatchComputeChecked(compute, clearKernel, (slotCount + 63) / 64, 1, 1);
 
 				// Last frame's depth, to drop from the main view what was hidden behind what was drawn (not while a
 				// diagnostic compares this culling with its CPU mirror, which knows nothing of depth).
@@ -1296,18 +1296,18 @@ namespace FishMMO.Client
 				cmd.SetComputeBufferParam(compute, cullKernel, VisibleOutId, visibleBuffer);
 				BindPacked(cmd);
 				Vector2Int groups = TerrainGpuMath.CullGroups(workCount);
-				cmd.DispatchCompute(compute, cullKernel, groups.x, groups.y, 1);
+				cmd.DispatchComputeChecked(compute, cullKernel, groups.x, groups.y, 1);
 
 				cmd.SetComputeBufferParam(compute, finalizeKernel, ArgSlotsId, argSlotBuffer);
 				cmd.SetComputeBufferParam(compute, finalizeKernel, CountsId, countBuffer);
 				cmd.SetComputeBufferParam(compute, finalizeKernel, SlotsId, slotBuffer);
 				cmd.SetComputeBufferParam(compute, finalizeKernel, ArgsId, argsBuffer);
-				cmd.DispatchCompute(compute, finalizeKernel, (commands.Count + 63) / 64, 1, 1);
+				cmd.DispatchComputeChecked(compute, finalizeKernel, (commands.Count + 63) / 64, 1, 1);
 				if (NeedsArgsFence)
 				{
 					cmd.SetComputeBufferParam(compute, argsFenceKernel, ArgsFenceId, argsBuffer);
 					cmd.SetComputeBufferParam(compute, argsFenceKernel, CountsId, countBuffer);
-					cmd.DispatchCompute(compute, argsFenceKernel, 1, 1, 1);
+					cmd.DispatchComputeChecked(compute, argsFenceKernel, 1, 1, 1);
 				}
 
 				if (diagnosticCamera == camera && diagnosticReport != null)

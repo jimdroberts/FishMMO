@@ -423,7 +423,8 @@ namespace FishMMO.Shared
 			 * frame-rate cap are applied immediately below, through OnApplyClientBootSettings, so
 			 * nothing here survives over a choice the player has actually made. */
 			QualitySettings.vSyncCount = 0;
-			Application.targetFrameRate = BootstrapTargetFrameRate;
+			// On the web, on the browser's animation frames rather than a setTimeout loop (WebFrameLoop).
+			WebFrameLoop.SetCap(BootstrapTargetFrameRate);
 			/* "FishNet raises it on connect" used to follow this, and has been wrong since the
 			 * client scene turned ChangeFrameRate off: nothing raises the cap but the player's own
 			 * preference, applied immediately below. A log line that describes a mechanism which no

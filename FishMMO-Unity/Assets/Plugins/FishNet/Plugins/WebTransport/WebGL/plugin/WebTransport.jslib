@@ -189,6 +189,33 @@ var LibraryFishWebTransport = {
          * here the stream payload starts directly with the first length. */
         _MAX_MESSAGE: 65536,
 
+        /** Datagrams handed to the browser and not yet settled, past which new ones are dropped.
+         *  writer.write() is not awaited, so while the browser cannot transmit (congestion, a
+         *  stalled network) every datagram the game sends used to queue without limit. The
+         *  browser then flushed the backlog in one burst, which the server's inbound flood gate
+         *  (200 msg/s, burst 400) answers by disconnecting the player: seen 2026-11-12 with 1,340
+         *  queued datagrams failing at once when the scene server dropped a Chrome player.
+         *  Unreliable state is worthless once stale, so dropping at the source is right; at 30
+         *  ticks/s this is about a second of sends. */
+        _MAX_PENDING_DATAGRAMS: 32,
+
+        /** Milliseconds after which the browser may discard a queued outgoing datagram, where
+         *  the browser supports it (WebTransportDatagramDuplexStream.outgoingMaxAge). */
+        _DATAGRAM_MAX_AGE_MS: 250,
+
+        /** Marks a session finished, so sends refuse and the receive pumps stop retrying.
+         *  Without it a failed or closed session stayed "live" (readyState is not reliable on
+         *  every Chromium build, see _isLive) and each pump re-armed itself every second forever. */
+        _markClosed: function(session) {
+            if (!session) return;
+            session._closed = true;
+            if (session._sendQueue) { session._sendQueue.length = 0; }
+            if (session._dgramFailed) {
+                console.warn('[FishWT] ' + session._dgramFailed + ' datagram(s) were still unsent when the session ended.');
+                session._dgramFailed = 0;
+            }
+        },
+
         /** Encode val as a QUIC varint. Returns a Uint8Array of 1/2/4/8 bytes. */
         _varintEncode: function(val) {
             if (val < 64) {
@@ -664,6 +691,11 @@ var LibraryFishWebTransport = {
 
         session.wt.ready.then(function() {
             session._ready = true;
+            try {
+                if (session.wt.datagrams && ('outgoingMaxAge' in session.wt.datagrams)) {
+                    session.wt.datagrams.outgoingMaxAge = FishWebTransport._DATAGRAM_MAX_AGE_MS;
+                }
+            } catch (_) { /* optional: not every browser supports it */ }
             /* Open the outgoing bidi stream before telling C# we are Started.
              * Otherwise the first ClientHandshake races createBidirectionalStream
              * (or is refused by a stale readyState check) and the server sees
@@ -675,6 +707,7 @@ var LibraryFishWebTransport = {
             FishWebTransport._readDatagrams(session);
         }).catch(function(err) {
             console.error('[FishWT] Ready failed: ' + err.message);
+            FishWebTransport._markClosed(session);
             if (session._errorFired) return;
             session._errorFired = true;
             FishWebTransport._lastErrors[index] = 'Ready failed: ' + (err.message || 'unknown');
@@ -683,9 +716,11 @@ var LibraryFishWebTransport = {
         });
 
         session.wt.closed.then(function() {
+            FishWebTransport._markClosed(session);
             FishWebTransport._remove(index);
             FishWebTransport._callIndex(onClose, index);
         }).catch(function(err) {
+            FishWebTransport._markClosed(session);
             if (session._errorFired) return;
             session._errorFired = true;
             FishWebTransport._lastErrors[index] = 'Closed: ' + (err.message || 'unknown');
@@ -788,8 +823,32 @@ var LibraryFishWebTransport = {
              * nulls session._dgramWriter due to an error, this send's
              * pending write still holds a valid reference. */
             var writer = session._dgramWriter;
-            writer.write(data).catch(function(e) {
-                console.warn('[FishWT] dgram write: ' + e.message);
+
+            /* Backpressure: see _MAX_PENDING_DATAGRAMS. A dropped datagram is what the
+             * unreliable channel promises anyway; reporting success keeps it out of the
+             * send-failure counters, which mean the session itself is broken. */
+            var pending = session._dgramPending | 0;
+            if (pending >= FishWebTransport._MAX_PENDING_DATAGRAMS) {
+                session._dgramDropped = (session._dgramDropped | 0) + 1;
+                if (!session._warnedDgramBacklog) {
+                    session._warnedDgramBacklog = true;
+                    console.warn('[FishWT] the browser has ' + pending + ' datagrams it has not sent yet; ' +
+                                 'dropping new ones until it catches up (logged once per session).');
+                }
+                return true;
+            }
+            session._dgramPending = pending + 1;
+            writer.write(data).then(function() {
+                session._dgramPending = Math.max(0, (session._dgramPending | 0) - 1);
+            }, function(e) {
+                session._dgramPending = Math.max(0, (session._dgramPending | 0) - 1);
+                /* One line per session, not one per queued datagram: a dead session fails every
+                 * pending write at once, and a stack trace each made a 1,340-line console burst. */
+                session._dgramFailed = (session._dgramFailed | 0) + 1;
+                if (!session._warnedDgramWrite) {
+                    session._warnedDgramWrite = true;
+                    console.warn('[FishWT] dgram write: ' + e.message + ' (further failures this session are counted, not logged)');
+                }
                 /* Only null the cached writer if it's still THIS writer */
                 if (session._dgramWriter === writer) {
                     try { writer.releaseLock(); } catch (_) {}

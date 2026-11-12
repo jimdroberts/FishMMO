@@ -59,6 +59,15 @@ namespace FishMMO.Client
 		/// </remarks>
 		private string pendingText = string.Empty;
 
+		/// <summary>The accept button's label for this request; null means the default "Accept".</summary>
+		private string pendingAcceptText;
+
+		/// <summary>The cancel button's label for this request; null means the default for the layout.</summary>
+		private string pendingCancelText;
+
+		/// <summary>The accept button's default label.</summary>
+		private const string DefaultAcceptText = "Accept";
+
 		/// <summary>
 		/// Resolves cached elements and wires button callbacks.
 		/// </summary>
@@ -105,6 +114,20 @@ namespace FishMMO.Client
 		/// </returns>
 		public bool Open(string text, Action onAccept = null, Action onCancel = null)
 		{
+			return Open(text, onAccept, onCancel, null, null);
+		}
+
+		/// <summary>
+		/// Opens the dialog as <see cref="Open(string, Action, Action)"/> does, with custom button labels.
+		/// </summary>
+		/// <param name="text">Message to display.</param>
+		/// <param name="onAccept">Optional callback invoked when accepted.</param>
+		/// <param name="onCancel">Optional callback invoked when cancelled.</param>
+		/// <param name="acceptText">Accept button label; null for the default.</param>
+		/// <param name="cancelText">Cancel button label; null for the default ("Cancel", or "Close" without an accept button).</param>
+		/// <returns>False when the dialog was busy and this request was refused.</returns>
+		public bool Open(string text, Action onAccept, Action onCancel, string acceptText, string cancelText)
+		{
 			if (!TryClaim())
 			{
 				onCancel?.Invoke();
@@ -112,6 +135,8 @@ namespace FishMMO.Client
 			}
 
 			pendingText = text ?? string.Empty;
+			pendingAcceptText = acceptText;
+			pendingCancelText = cancelText;
 			onAcceptCallback = onAccept;
 			onCancelCallback = onCancel;
 
@@ -151,6 +176,11 @@ namespace FishMMO.Client
 
 			bool acceptVisible = onAcceptCallback != null;
 			SetButtonVisible(acceptButton, acceptVisible);
+			if (acceptButton != null)
+			{
+				// Written every time: the button outlives the request that relabelled it.
+				acceptButton.text = string.IsNullOrEmpty(pendingAcceptText) ? DefaultAcceptText : pendingAcceptText;
+			}
 
 			if (acceptVisible)
 			{
@@ -158,7 +188,7 @@ namespace FishMMO.Client
 				SetButtonVisible(cancelButton, cancelVisible);
 				if (cancelButton != null)
 				{
-					cancelButton.text = "Cancel";
+					cancelButton.text = string.IsNullOrEmpty(pendingCancelText) ? "Cancel" : pendingCancelText;
 				}
 			}
 			else
@@ -169,7 +199,7 @@ namespace FishMMO.Client
 				SetButtonVisible(cancelButton, true);
 				if (cancelButton != null)
 				{
-					cancelButton.text = "Close";
+					cancelButton.text = string.IsNullOrEmpty(pendingCancelText) ? "Close" : pendingCancelText;
 				}
 			}
 		}
@@ -182,6 +212,8 @@ namespace FishMMO.Client
 			onAcceptCallback = null;
 			onCancelCallback = null;
 			pendingText = string.Empty;
+			pendingAcceptText = null;
+			pendingCancelText = null;
 		}
 
 		/// <summary>

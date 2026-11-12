@@ -1076,7 +1076,7 @@ namespace FishMMO.Client
 			rasterCommands.SetComputeTextureParam(shader, kernel, OutAId, cascade.GpuA);
 			rasterCommands.SetComputeTextureParam(shader, kernel, OutBId, cascade.GpuB);
 			int groups = (cascade.Resolution + RasterGroup - 1) / RasterGroup;
-			rasterCommands.DispatchCompute(shader, kernel, groups, groups, 1);
+			rasterCommands.DispatchComputeChecked(shader, kernel, groups, groups, 1);
 			rasterCommands.EndSample(RasterSample);
 			Graphics.ExecuteCommandBuffer(rasterCommands);
 			cascade.Valid = true;

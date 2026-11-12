@@ -134,6 +134,7 @@ Shader "FishMMO/World HLOD"
             AlphaToMask[_AlphaToMask]
 
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 4.5
 
             // -------------------------------------
@@ -221,6 +222,7 @@ Shader "FishMMO/World HLOD"
             Tags { "LightMode"="DepthOnly" }
             ZWrite On ColorMask R Cull [_Cull]
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 4.5
             #pragma vertex DepthOnlyVertex
             #pragma fragment DepthOnlyFragment
@@ -237,6 +239,7 @@ Shader "FishMMO/World HLOD"
             Tags { "LightMode"="DepthNormalsOnly" }
             ZWrite On Cull [_Cull]
             HLSLPROGRAM
+            #pragma use_dxc vulkan
             #pragma target 4.5
             #pragma vertex DepthNormalsVertex
             #pragma fragment DepthNormalsFragment

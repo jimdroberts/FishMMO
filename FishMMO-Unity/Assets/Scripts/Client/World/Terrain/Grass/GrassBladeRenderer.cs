@@ -1084,7 +1084,7 @@ namespace FishMMO.Client
 			if (colourVersion != atlas.Version)
 			{
 				cmd.SetComputeBufferParam(compute, prepareColourKernel, ColourTableOutId, atlas.Shared);
-				cmd.DispatchCompute(compute, prepareColourKernel, 1, 1, 1);
+				cmd.DispatchComputeChecked(compute, prepareColourKernel, 1, 1, 1);
 				colourVersion = atlas.Version;
 			}
 			if (atlas.Tier >= 2 && activeVersion != atlas.Version)
@@ -1097,7 +1097,7 @@ namespace FishMMO.Client
 					{
 						cmd.SetComputeIntParam(compute, ActiveTerrainId, atlas.IndexOf(gt));
 						int side = (gt.DensityResolution + GrassTerrainAtlas.ActiveRegionSide - 1) / GrassTerrainAtlas.ActiveRegionSide;
-						cmd.DispatchCompute(compute, activeKernel, side, side, 1);
+						cmd.DispatchComputeChecked(compute, activeKernel, side, side, 1);
 					}
 				}
 				activeVersion = atlas.Version;
@@ -1132,7 +1132,7 @@ namespace FishMMO.Client
 
 			cmd.BeginSample(GenerateGpuSample);
 			cmd.SetComputeBufferParam(compute, clearKernel, CountsId, countBuffer);
-			cmd.DispatchCompute(compute, clearKernel, 1, 1, 1);
+			cmd.DispatchComputeChecked(compute, clearKernel, 1, 1, 1);
 
 			compute.SetKeyword(noTerrainColour, SkipTerrainColour);
 			// One of the two at most (one multi_compile set): the narrow kernel unless a terrain asks for more channels.
@@ -1190,7 +1190,7 @@ namespace FishMMO.Client
 				cmd.SetComputeIntParam(compute, ItemOffsetId, range.Offset);
 				cmd.SetComputeIntParam(compute, ItemCountId, range.Count);
 				int gx = Mathf.Min(range.Count, 65535), gy = (range.Count + 65534) / 65535;
-				cmd.DispatchCompute(compute, generateKernel, gx, gy, 1);
+				cmd.DispatchComputeChecked(compute, generateKernel, gx, gy, 1);
 			}
 			cmd.EndSample(GenerateGpuSample);
 			if (camera.cameraType == CameraType.Game)
@@ -1210,12 +1210,12 @@ namespace FishMMO.Client
 
 			cmd.SetComputeBufferParam(compute, finalizeKernel, CountsId, countBuffer);
 			cmd.SetComputeBufferParam(compute, finalizeKernel, ArgsId, argsBuffer);
-			cmd.DispatchCompute(compute, finalizeKernel, 1, 1, 1);
+			cmd.DispatchComputeChecked(compute, finalizeKernel, 1, 1, 1);
 			if (NeedsArgsFence)
 			{
 				cmd.SetComputeBufferParam(compute, argsFenceKernel, ArgsFenceId, argsBuffer);
 				cmd.SetComputeBufferParam(compute, argsFenceKernel, CountsId, countBuffer);
-				cmd.DispatchCompute(compute, argsFenceKernel, 1, 1, 1);
+				cmd.DispatchComputeChecked(compute, argsFenceKernel, 1, 1, 1);
 			}
 			// Always read in the editor: an overflowing slot is otherwise invisible but for its symptom.
 			if ((StatsEnabled || Application.isEditor) && camera.cameraType == CameraType.Game && Time.frameCount - lastStatsFrame >= StatsInterval)
@@ -1557,16 +1557,16 @@ namespace FishMMO.Client
 			cmd.SetComputeIntParam(compute, GatherGroupCountId, groups);
 			cmd.SetComputeIntParam(compute, TileCountId, tileCount);
 			cmd.SetComputeBufferParam(compute, gatherClearKernel, GatherCountsId, gatherCounts);
-			cmd.DispatchCompute(compute, gatherClearKernel, groupThreads, 1, 1);
+			cmd.DispatchComputeChecked(compute, gatherClearKernel, groupThreads, 1, 1);
 			cmd.SetComputeBufferParam(compute, gatherKernel, TilesId, tileBuffer);
 			cmd.SetComputeBufferParam(compute, gatherKernel, ItemsOutId, gatherItems);
 			cmd.SetComputeBufferParam(compute, gatherKernel, GatherCountsId, gatherCounts);
 			cmd.SetComputeBufferParam(compute, gatherKernel, GatherLayoutId, gatherLayout);
-			cmd.DispatchCompute(compute, gatherKernel, (tileCount + 63) / 64, 1, 1);
+			cmd.DispatchComputeChecked(compute, gatherKernel, (tileCount + 63) / 64, 1, 1);
 			cmd.SetComputeBufferParam(compute, gatherArgsKernel, GatherCountsId, gatherCounts);
 			cmd.SetComputeBufferParam(compute, gatherArgsKernel, GatherLayoutId, gatherLayout);
 			cmd.SetComputeBufferParam(compute, gatherArgsKernel, GatherArgsId, gatherArgs);
-			cmd.DispatchCompute(compute, gatherArgsKernel, groupThreads, 1, 1);
+			cmd.DispatchComputeChecked(compute, gatherArgsKernel, groupThreads, 1, 1);
 		}
 
 		/// <summary>The frame <see cref="TrackMotionClock"/> last read the shared motion clock in, and what it read.</summary>
@@ -1728,7 +1728,7 @@ namespace FishMMO.Client
 			cmd.SetComputeBufferParam(compute, probeKernel, SharedId, atlas.Shared);
 			cmd.SetComputeIntParam(compute, ProbeTerrainId, atlas.IndexOf(gt));
 			cmd.SetComputeIntParam(compute, ProbeCountId, n);
-			cmd.DispatchCompute(compute, probeKernel, 1, 1, 1);
+			cmd.DispatchComputeChecked(compute, probeKernel, 1, 1, 1);
 			string name = gt.Terrain != null ? gt.Terrain.name : "terrain";
 			TerrainData data = gt.Data;
 			Vector3 origin = gt.Origin, size = gt.Size;

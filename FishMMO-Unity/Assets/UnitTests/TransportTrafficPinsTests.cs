@@ -169,12 +169,18 @@ namespace FishMMO.UnitTests
 		{
 			/* A flooder's refused messages still crossed the wire and still cost bandwidth. */
 			string source = CodeOnly(ReadSource(ServerSocketPath));
-			foreach (string signature in new[] { "private void HandleNativeStreamData(", "private void HandleNativeDatagram(" })
+			/* Datagrams have a budget of their own (dropped over budget, kicked only for sustained
+			 * abuse), so each path is pinned to its own limiter. */
+			foreach ((string signature, string limiter) in new[]
+			{
+				("private void HandleNativeStreamData(", "TryAdmitInbound("),
+				("private void HandleNativeDatagram(", "TryAdmitDatagram("),
+			})
 			{
 				string body = MethodBody(source, signature);
 				int count = body.IndexOf("TransportTrafficCounters.CountReceived(", StringComparison.Ordinal);
-				int admit = body.IndexOf("TryAdmitInbound(", StringComparison.Ordinal);
-				LogAssert.IsTrue(count >= 0 && admit > count, $"{signature} must count before TryAdmitInbound");
+				int admit = body.IndexOf(limiter, StringComparison.Ordinal);
+				LogAssert.IsTrue(count >= 0 && admit > count, $"{signature} must count before {limiter}");
 			}
 		}
 

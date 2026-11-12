@@ -199,7 +199,7 @@ namespace FishMMO.Client
 						cmd.SetComputeVectorParam(d.Compute, ZBufferId, d.ZBuffer);
 						cmd.SetComputeTextureParam(d.Compute, d.Copy, SourceId, d.Depth);
 						cmd.SetComputeTextureParam(d.Compute, d.Copy, AtlasId, d.Atlas);
-						cmd.DispatchCompute(d.Compute, d.Copy, (d.Width + 7) / 8, (d.Height + 7) / 8, 1);
+						cmd.DispatchComputeChecked(d.Compute, d.Copy, (d.Width + 7) / 8, (d.Height + 7) / 8, 1);
 						int w = d.Width, h = d.Height;
 						for (int level = 1; level < d.Levels; level++)
 						{
@@ -207,7 +207,7 @@ namespace FishMMO.Client
 							h = (h + 1) / 2;
 							cmd.SetComputeIntParam(d.Compute, LevelId, level);
 							cmd.SetComputeTextureParam(d.Compute, d.Reduce, AtlasId, d.Atlas);
-							cmd.DispatchCompute(d.Compute, d.Reduce, (w + 7) / 8, (h + 7) / 8, 1);
+							cmd.DispatchComputeChecked(d.Compute, d.Reduce, (w + 7) / 8, (h + 7) / 8, 1);
 						}
 					});
 				}

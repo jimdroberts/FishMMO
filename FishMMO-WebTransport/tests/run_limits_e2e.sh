@@ -17,4 +17,4 @@ openssl req -x509 -newkey rsa:2048 -nodes -keyout ca.key -out ca.pem -days 2 -su
 openssl req -newkey rsa:2048 -nodes -keyout server.key -out server.csr -subj "/CN=localhost" >/dev/null 2>&1
 printf "subjectAltName=DNS:localhost,IP:127.0.0.1\n" > ext.cnf
 openssl x509 -req -in server.csr -CA ca.pem -CAkey ca.key -CAcreateserial -out server.pem -days 2 -extfile ext.cnf >/dev/null 2>&1
-SSL_CERT_FILE="$WORK/ca.pem" "$OLDPWD/$BIN" 2>&1 | grep -E "PASS|FAIL|E2E|failed"
+SSL_CERT_FILE="$WORK/ca.pem" "$OLDPWD/$BIN" 2>&1 | grep -E "PASS|FAIL|E2E|failed|\[J\]"

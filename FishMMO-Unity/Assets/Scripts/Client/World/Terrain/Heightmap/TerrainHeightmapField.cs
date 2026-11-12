@@ -446,7 +446,7 @@ namespace FishMMO.Client
 
 			int k = compute.FindKernel("FishTerrainRoughClear");
 			cmd.SetComputeBufferParam(compute, k, RoughCellsId, roughCells);
-			cmd.DispatchCompute(compute, k, Groups(cells * Fields, 64), 1, 1);
+			cmd.DispatchComputeChecked(compute, k, Groups(cells * Fields, 64), 1, 1);
 
 			k = compute.FindKernel("FishTerrainRough");
 			BindTiles(cmd, compute, k);
@@ -456,21 +456,21 @@ namespace FishMMO.Client
 			k = compute.FindKernel("FishTerrainRoughLog");
 			cmd.SetComputeBufferParam(compute, k, RoughReadId, roughCells);
 			cmd.SetComputeBufferParam(compute, k, FieldOutId, fieldBuffer);
-			cmd.DispatchCompute(compute, k, Groups(cells * Fields, 64), 1, 1);
+			cmd.DispatchComputeChecked(compute, k, Groups(cells * Fields, 64), 1, 1);
 
 			k = compute.FindKernel("FishTerrainDilateX");
 			cmd.SetComputeBufferParam(compute, k, FieldInId, fieldBuffer);
 			cmd.SetComputeBufferParam(compute, k, FieldOutId, fieldScratch);
-			cmd.DispatchCompute(compute, k, Groups(cellsX, 8), Groups(cellsZ, 8), Fields);
+			cmd.DispatchComputeChecked(compute, k, Groups(cellsX, 8), Groups(cellsZ, 8), Fields);
 
 			k = compute.FindKernel("FishTerrainDilateZ");
 			cmd.SetComputeBufferParam(compute, k, FieldInId, fieldScratch);
 			cmd.SetComputeBufferParam(compute, k, FieldOutId, fieldBuffer);
-			cmd.DispatchCompute(compute, k, Groups(cellsX, 8), Groups(cellsZ, 8), Fields);
+			cmd.DispatchComputeChecked(compute, k, Groups(cellsX, 8), Groups(cellsZ, 8), Fields);
 
 			k = compute.FindKernel("FishTerrainFieldRaise");
 			cmd.SetComputeBufferParam(compute, k, FieldOutId, fieldBuffer);
-			cmd.DispatchCompute(compute, k, Groups(cells, 64), 1, 1);
+			cmd.DispatchComputeChecked(compute, k, Groups(cells, 64), 1, 1);
 
 			k = compute.FindKernel("FishTerrainNodeLeaf");
 			BindTiles(cmd, compute, k);
@@ -487,7 +487,7 @@ namespace FishMMO.Client
 			{
 				cmd.SetComputeVectorParam(compute, BuildId, new Vector4(level, TerrainHeightmapMath.FieldSlope, TerrainHeightmapMath.Log2(TerrainHeightmapMath.FieldFloorMetres), TerrainHeightmapMath.DilationReach));
 				int a = TerrainHeightmapMath.NodesAcross(quads, level);
-				cmd.DispatchCompute(compute, k, Groups(a, 8), Groups(a, 8), n);
+				cmd.DispatchComputeChecked(compute, k, Groups(a, 8), Groups(a, 8), n);
 			}
 
 			Graphics.ExecuteCommandBuffer(cmd);
@@ -528,7 +528,7 @@ namespace FishMMO.Client
 				cmd.SetComputeTextureParam(compute, kernel, HeightsId, Tiles[i].terrainData.heightmapTexture);
 				if (kernel == compute.FindKernel("FishTerrainNodeLeaf"))
 					cmd.SetComputeTextureParam(compute, kernel, HolesReadId, Tiles[i].terrainData.holesTexture ?? White());
-				cmd.DispatchCompute(compute, kernel, x, y, 1);
+				cmd.DispatchComputeChecked(compute, kernel, x, y, 1);
 			}
 		}
 
@@ -656,19 +656,19 @@ namespace FishMMO.Client
 			cmd.SetComputeVectorParam(compute, SweepId, sweep);
 
 			cmd.SetComputeBufferParam(compute, clearKernel, ArgsId, args);
-			cmd.DispatchCompute(compute, clearKernel, Tiles.Count, 1, 1);
+			cmd.DispatchComputeChecked(compute, clearKernel, Tiles.Count, 1, 1);
 
 			cmd.SetComputeBufferParam(compute, selectKernel, TilesId, tileBuffer);
 			cmd.SetComputeBufferParam(compute, selectKernel, NodesId, nodeBuffer);
 			cmd.SetComputeBufferParam(compute, selectKernel, ShownId, shownBuffer);
 			cmd.SetComputeBufferParam(compute, selectKernel, ArgsId, args);
 			cmd.SetComputeBufferParam(compute, selectKernel, PatchesOutId, patches);
-			cmd.DispatchCompute(compute, selectKernel, Groups(Tiles.Count * nodesPerTile, 64), 1, 1);
+			cmd.DispatchComputeChecked(compute, selectKernel, Groups(Tiles.Count * nodesPerTile, 64), 1, 1);
 			if (TerrainHeightmapSystem.NeedsArgsFence)
 			{
 				cmd.SetComputeBufferParam(compute, fenceKernel, FenceId, args);
 				cmd.SetComputeBufferParam(compute, fenceKernel, FenceSinkId, fenceSink);
-				cmd.DispatchCompute(compute, fenceKernel, 1, 1, 1);
+				cmd.DispatchComputeChecked(compute, fenceKernel, 1, 1, 1);
 			}
 			context.ExecuteCommandBuffer(cmd);
 			cmd.Clear();

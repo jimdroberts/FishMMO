@@ -310,7 +310,7 @@ namespace FishMMO.Client
 			into.SetComputeBufferParam(compute, packKernel, CountsId, countBuffer);
 			into.SetComputeBufferParam(compute, packKernel, VisibleOutId, visibleBuffer);
 			into.SetComputeBufferParam(compute, packKernel, PackedOutId, packedBuffer);
-			into.DispatchCompute(compute, packKernel, Mathf.Max(1, slotCount), 1, 1);
+			into.DispatchComputeChecked(compute, packKernel, Mathf.Max(1, slotCount), 1, 1);
 		}
 
 		/// <summary>The cull kernel's packed output: the culled list's own while submitting through the batch group, else one word.</summary>
