@@ -481,9 +481,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 			}
 			int templates = 0;
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				if (!Regex.IsMatch(text, "^  MinTemperature:", RegexOptions.Multiline))
 				{
 					continue;
@@ -546,6 +546,6 @@ namespace FishMMO.UnitTests.WorldDesign
 			StringAssert.Contains("UnderwaterDepth(rule,", Read(PlacementSource));
 		}
 
-		private static string Read(string relative) => File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
+		private static string Read(string relative) => ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
 	}
 }

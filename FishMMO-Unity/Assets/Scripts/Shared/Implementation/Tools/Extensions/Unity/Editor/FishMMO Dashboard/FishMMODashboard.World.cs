@@ -13,7 +13,7 @@ namespace FishMMO.Shared
 		private const string WORLD_ATLAS_CATEGORY = "World Atlas";
 
 		/// <summary>Adds the two world designers to the World group.</summary>
-		private void RegisterWorldDesignCategories()
+		internal void RegisterWorldDesignCategories()
 		{
 			categories.Add(new TemplateCategory
 			{

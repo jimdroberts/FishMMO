@@ -1650,7 +1650,7 @@ namespace FishMMO.Shared
 			equipmentSnapshotDirty = true;
 			if (raiseTriggers)
 			{
-				Character.Invoke(onEquipTriggers, new EquipItemEventData(Character, item, toSlot));
+				Trigger.InvokeAll(onEquipTriggers, new EquipItemEventData(Character, item, toSlot));
 			}
 			OnItemEquipped?.Invoke(item, toSlot);
 
@@ -1698,7 +1698,7 @@ namespace FishMMO.Shared
 			equipmentSnapshotDirty = true;
 			if (raiseTriggers)
 			{
-				Character.Invoke(onUnequipTriggers, new EquipItemEventData(Character, item, (ItemSlot)slot));
+				Trigger.InvokeAll(onUnequipTriggers, new EquipItemEventData(Character, item, (ItemSlot)slot));
 			}
 			OnItemUnequipped?.Invoke(item, (ItemSlot)slot);
 

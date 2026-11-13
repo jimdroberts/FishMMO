@@ -140,14 +140,14 @@ namespace FishMMO.UnitTests
 			{
 				string absolute = System.IO.Path.Combine(
 					System.IO.Directory.GetCurrentDirectory(), root);
-				if (!System.IO.Directory.Exists(absolute))
+				if (!ProjectFiles.FolderExists(absolute))
 				{
 					continue;
 				}
 
-				foreach (string file in System.IO.Directory.GetFiles(absolute, "*.cs", System.IO.SearchOption.AllDirectories))
+				foreach (string file in System.IO.Directory.GetFiles(ProjectFiles.Folder(absolute), "*.cs", System.IO.SearchOption.AllDirectories))
 				{
-					string text = System.IO.File.ReadAllText(file);
+					string text = ProjectFiles.ReadAllText(file);
 					if (text.Contains("[ObserversRpc"))
 					{
 						offenders.Add(System.IO.Path.GetFileName(file));

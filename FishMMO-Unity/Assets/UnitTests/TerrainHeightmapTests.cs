@@ -611,7 +611,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheGpuShader_IsTheTilesOwnPasses_CompiledWithDxc()
 		{
-			string gpu = File.ReadAllText(Shaders + "FishWeatherTerrainArrayGpu.shader");
+			string gpu = ProjectFiles.ReadAllText(Shaders + "FishWeatherTerrainArrayGpu.shader");
 			Assert.That(gpu, Does.Contain("Shader \"" + TerrainHeightmapSystem.ShaderName + "\""));
 			foreach (string pass in new[] { "ForwardLit", "ShadowCaster", "GBuffer", "DepthOnly", "DepthNormals" })
 			{
@@ -625,11 +625,11 @@ namespace FishMMO.UnitTests
 			Assert.That(gpu, Does.Contain("#pragma multi_compile_local_fragment _ _ALPHATEST_ON"));
 			Assert.That(gpu, Does.Contain("Cull [_FishGpuShadowCull]"));
 
-			string input = File.ReadAllText(Shaders + "FishWeatherTerrainArrayInput.hlsl");
+			string input = ProjectFiles.ReadAllText(Shaders + "FishWeatherTerrainArrayInput.hlsl");
 			Assert.That(input, Does.Contain("FISH_TERRAIN_ARRAY_NUMBERS_AS(static)"), "the drawn tile's numbers are statics in the GPU draw");
 			Assert.That(input, Does.Contain("#define FISH_INDEX_LOAD(x, y) _FishIndexMapArray.Load(int3((x), (y), 0))"));
 			Assert.That(input, Does.Not.Contain("_FishIndexMap.Load(int3(i"), "every index read goes through FISH_INDEX_LOAD");
-			string passes = File.ReadAllText(Shaders + "FishWeatherTerrainArrayPasses.hlsl");
+			string passes = ProjectFiles.ReadAllText(Shaders + "FishWeatherTerrainArrayPasses.hlsl");
 			Assert.That(Regex.Matches(passes, @"FishTerrainGpuSelectTile\(IN\.fishTile\);").Count, Is.EqualTo(4), "every fragment picks its tile first");
 			Assert.That(Regex.Matches(passes, @"FishTerrainGpuInstancing\(").Count, Is.EqualTo(3), "every vertex stage takes the patch");
 			Assert.That(passes, Does.Contain("o.fishTile = FishTerrainGpuBeginPatch(v.fishInstance);\n    if (FishCasterCulledAt(fishTerrainPatchSphere.xyz, fishTerrainPatchSphere.w))")
@@ -641,7 +641,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheComputeAndTheHlsl_FollowTheMath()
 		{
-			string hlsl = File.ReadAllText(Shaders + "FishTerrainHeightmap.hlsl");
+			string hlsl = ProjectFiles.ReadAllText(Shaders + "FishTerrainHeightmap.hlsl");
 			Assert.That(hlsl, Does.Contain($"#define FISH_TERRAIN_PATCH_QUADS {TerrainHeightmapMath.PatchQuads}u"));
 			Assert.That(hlsl, Does.Contain($"#define FISH_TERRAIN_LIST_SOLID {TerrainHeightmapMath.ListSolid}u"));
 			Assert.That(hlsl, Does.Contain($"#define FISH_TERRAIN_LIST_HOLED {TerrainHeightmapMath.ListHoled}u"));
@@ -649,7 +649,7 @@ namespace FishMMO.UnitTests
 			Assert.That(hlsl, Does.Contain($"#define FISH_TERRAIN_LIST_SHADOW_HOLED {TerrainHeightmapMath.ListShadowHoled}u"));
 			Assert.That(hlsl, Does.Contain("float t = saturate((FishTerrainLodAt(FishTerrainWorldAt(tile, p, height), l) - (float)l - a) / (1.0 - a));"));
 			Assert.That(hlsl, Does.Contain("float stride = (float)(2u << l);"));
-			string compute = File.ReadAllText(Shaders + "FishTerrainHeightmap.compute");
+			string compute = ProjectFiles.ReadAllText(Shaders + "FishTerrainHeightmap.compute");
 			foreach (string kernel in new[] { "FishTerrainRoughClear", "FishTerrainRough", "FishTerrainRoughLog", "FishTerrainDilateX", "FishTerrainDilateZ",
 				"FishTerrainNodeLeaf", "FishTerrainNodeParent", "FishTerrainClear", "FishTerrainSelect", "FishTerrainArgsFence" })
 			{
@@ -665,24 +665,24 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheSystem_IsClientPlayOnly_GivesTheTilesBack_AndHasItsSwitch()
 		{
-			string system = File.ReadAllText(Heightmap + "TerrainHeightmapSystem.cs");
+			string system = ProjectFiles.ReadAllText(Heightmap + "TerrainHeightmapSystem.cs");
 			Assert.That(system, Does.Contain("if (hooked || !Application.isPlaying)"), "never in edit mode");
 			Assert.That(system, Does.Contain("if (!Enabled || !Supported())"), "the switch (and an unsupported device) give the ground back to Unity");
 			Assert.That(system, Does.Contain("profile.TerrainHeightmap.Enabled"));
 			Assert.That(system, Does.Contain("public static bool? Override;"));
-			string field = File.ReadAllText(Heightmap + "TerrainHeightmapField.cs");
+			string field = ProjectFiles.ReadAllText(Heightmap + "TerrainHeightmapField.cs");
 			Assert.That(field, Does.Contain("Tiles[i].drawHeightmap = false;"));
 			Assert.That(field, Does.Contain("Tiles[i].drawHeightmap = drewHeightmap[i];"), "released tiles draw their own heightmaps again");
 			Assert.That(field, Does.Contain("lightProbeUsage = LightProbeUsage.CustomProvided"), "lit by the ambient probe, as the tiles were");
-			string profile = File.ReadAllText("Assets/Scripts/Client/World/Weather/Presentation/WeatherRenderProfile.cs");
+			string profile = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Weather/Presentation/WeatherRenderProfile.cs");
 			Assert.That(profile, Does.Contain("public TerrainHeightmapSettings TerrainHeightmap = new TerrainHeightmapSettings();"));
 			Assert.That(new TerrainHeightmapSettings().Enabled, Is.True);
-			string assets = File.ReadAllText("Assets/Scripts/Client/World/Weather/Editor/WeatherRenderAssets.cs");
+			string assets = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Weather/Editor/WeatherRenderAssets.cs");
 			Assert.That(assets, Does.Contain("TerrainHeightmapSystem.ComputeAssetPath").And.Contain("TerrainHeightmapSystem.ShaderAssetPath"));
-			string binder = File.ReadAllText("Assets/Scripts/Shared/Implementation/Entity/WorldSceneDetails/Terrain/TerrainArrayBinder.cs");
+			string binder = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Entity/WorldSceneDetails/Terrain/TerrainArrayBinder.cs");
 			Assert.That(Regex.Matches(binder, @"TilePushes\+\+;").Count, Is.EqualTo(2), "a push and an unbind are both seen");
-			Assert.That(File.Exists(TerrainHeightmapSystem.ComputeAssetPath), Is.True);
-			Assert.That(File.Exists(TerrainHeightmapSystem.ShaderAssetPath), Is.True);
+			Assert.That(ProjectFiles.Exists(TerrainHeightmapSystem.ComputeAssetPath), Is.True);
+			Assert.That(ProjectFiles.Exists(TerrainHeightmapSystem.ShaderAssetPath), Is.True);
 		}
 	}
 }

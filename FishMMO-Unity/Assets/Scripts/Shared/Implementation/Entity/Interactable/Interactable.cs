@@ -406,11 +406,11 @@ namespace FishMMO.Shared
 				return false;
 			}
 			double now = System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency;
-			if (character.NextInteractSeconds >= now)
+			if (character.Component<InteractCooldown>().NextAt >= now)
 			{
 				return false;
 			}
-			character.NextInteractSeconds = now + InteractRateLimit / 1000.0;
+			character.Component<InteractCooldown>().NextAt = now + InteractRateLimit / 1000.0;
 			return true;
 		}
 

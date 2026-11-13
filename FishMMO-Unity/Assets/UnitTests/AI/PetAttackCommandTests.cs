@@ -25,7 +25,7 @@ namespace FishMMO.UnitTests.AI
 		[Test]
 		public void TheClickNamesTheTargetFrame()
 		{
-			string message = File.ReadAllText(Path.Combine(Scripts, "Shared/Implementation/Network/Character/PetBroadcasts.cs"));
+			string message = ProjectFiles.ReadAllText(Path.Combine(Scripts, "Shared/Implementation/Network/Character/PetBroadcasts.cs"));
 			int attack = message.IndexOf("public struct PetAttackBroadcast", StringComparison.Ordinal);
 			int pinnedField = message.IndexOf("public int PinnedTargetObjectID;", attack, StringComparison.Ordinal);
 			int hoveredField = message.IndexOf("public int HoveredTargetObjectID;", attack, StringComparison.Ordinal);
@@ -33,7 +33,7 @@ namespace FishMMO.UnitTests.AI
 			LogAssert.IsTrue(attack >= 0 && pinnedField > attack && hoveredField > attack && (next < 0 || hoveredField < next),
 				"PetAttackBroadcast must carry the owner's pinned and hovered targets separately, so any priority order can be honoured");
 
-			string panel = File.ReadAllText(Path.Combine(Scripts, "Client/GUI/World/Pet/UITKPetControl.cs"));
+			string panel = ProjectFiles.ReadAllText(Path.Combine(Scripts, "Client/GUI/World/Pet/UITKPetControl.cs"));
 			LogAssert.IsTrue(panel.Contains("pinned = ResolveCharacterObjectId(targetController.PinnedTarget);") &&
 				panel.Contains("hovered = ResolveCharacterObjectId(targetController.Current.Target);") &&
 				panel.Contains("PinnedTargetObjectID = pinned,") && panel.Contains("HoveredTargetObjectID = hovered,"),
@@ -43,7 +43,7 @@ namespace FishMMO.UnitTests.AI
 		[Test]
 		public void TheServerWalksTheOwnersOrderAndVerifiesEveryStep()
 		{
-			string pets = File.ReadAllText(Path.Combine(Scripts, "Server/Implementation/World/SceneServer/Pet/PetSystem.cs"));
+			string pets = ProjectFiles.ReadAllText(Path.Combine(Scripts, "Server/Implementation/World/SceneServer/Pet/PetSystem.cs"));
 
 			int handler = pets.IndexOf("private void OnPetAttackBroadcastReceived(", StringComparison.Ordinal);
 			int nextHandler = pets.IndexOf("private void OnPetAttackPriorityBroadcastReceived(", handler, StringComparison.Ordinal);

@@ -236,7 +236,7 @@ namespace FishMMO.UnitTests.Caves
 		public void TheComputeMirrorsTheTableSize()
 		{
 			// The compute's constants (COVER_TYPES, COVER_LEVELS, COVER_MAX_PER_TRIANGLE, COVER_THIN_BAND) are the table's.
-			string compute = System.IO.File.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishCaveCover.compute");
+			string compute = ProjectFiles.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishCaveCover.compute");
 			StringAssert.Contains($"#define COVER_TYPES {CaveCoverTypes.Count}u", compute);
 			StringAssert.Contains($"#define COVER_LEVELS {CaveCoverTypes.Levels}u", compute);
 			StringAssert.Contains($"#define COVER_MAX_PER_TRIANGLE {CaveCoverMath.MaxPerTriangle}u", compute);

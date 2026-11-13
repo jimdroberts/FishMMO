@@ -64,7 +64,7 @@ namespace FishMMO.UnitTests
 			foreach (string guid in AssetDatabase.FindAssets("t:CharacterAttributeTemplate"))
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guid);
-				CharacterAttributeTemplate attribute = AssetDatabase.LoadAssetAtPath<CharacterAttributeTemplate>(path);
+				CharacterAttributeTemplate attribute = AssetDatabase.LoadAssetAtPath<CharacterAttributeTemplate>(ProjectFiles.Path(path));
 				if (attribute != null)
 				{
 					attribute.AddToCache(attribute.name);
@@ -80,7 +80,7 @@ namespace FishMMO.UnitTests
 			foreach (string guid in AssetDatabase.FindAssets("t:Prefab", new[] { PREFAB_FOLDER }))
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guid);
-				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(path));
 				if (prefab != null)
 				{
 					yield return prefab;
@@ -170,9 +170,9 @@ namespace FishMMO.UnitTests
 
 			foreach (string path in paths)
 			{
-				LogAssert.IsTrue(File.Exists(path), $"'{path}' is missing; the guard cannot check it.");
+				LogAssert.IsTrue(ProjectFiles.Exists(path), $"'{path}' is missing; the guard cannot check it.");
 
-				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(path));
 				LogAssert.IsNotNull(prefab, $"'{path}' did not load as a prefab.");
 
 				CharacterAttributeController attributes = prefab.GetComponentInChildren<CharacterAttributeController>(true);

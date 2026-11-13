@@ -82,8 +82,8 @@ namespace FishMMO.UnitTests
 		[TestCase("Salamander")]
 		public void FireRacesAreImmuneToFire(string name)
 		{
-			var race = AssetDatabase.LoadAssetAtPath<RaceTemplate>($"Assets/Templates/Entity/Races/Elemental/{name}.asset");
-			var fire = AssetDatabase.LoadAssetAtPath<DamageAttributeTemplate>("Assets/Templates/Entity/CharacterAttributes/Damage/Fire Damage.asset");
+			var race = AssetDatabase.LoadAssetAtPath<RaceTemplate>(ProjectFiles.Path($"Assets/Templates/Entity/Races/Elemental/{name}.asset"));
+			var fire = AssetDatabase.LoadAssetAtPath<DamageAttributeTemplate>(ProjectFiles.Path("Assets/Templates/Entity/CharacterAttributes/Damage/Fire Damage.asset"));
 			Assert.That(race, Is.Not.Null, name);
 			Assert.That(fire, Is.Not.Null);
 			Assert.That(race.IsImmuneTo(fire), Is.True, $"{name} swims in lava (an under-lava city)");
@@ -96,7 +96,7 @@ namespace FishMMO.UnitTests
 			Assert.That(guids, Is.Not.Empty);
 			foreach (string guid in guids)
 			{
-				var race = AssetDatabase.LoadAssetAtPath<RaceTemplate>(AssetDatabase.GUIDToAssetPath(guid));
+				var race = AssetDatabase.LoadAssetAtPath<RaceTemplate>(ProjectFiles.Path(AssetDatabase.GUIDToAssetPath(guid)));
 				Assert.That(race.BreathesWater, Is.True, race.name);
 			}
 		}
@@ -104,7 +104,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void DrowningIsADamageTypeNoResistanceStandsAgainst()
 		{
-			var drowning = AssetDatabase.LoadAssetAtPath<DamageAttributeTemplate>("Assets/Templates/Entity/CharacterAttributes/Damage/Drowning Damage.asset");
+			var drowning = AssetDatabase.LoadAssetAtPath<DamageAttributeTemplate>(ProjectFiles.Path("Assets/Templates/Entity/CharacterAttributes/Damage/Drowning Damage.asset"));
 			Assert.That(drowning, Is.Not.Null, "the breath controller resolves it by this name");
 			Assert.That(drowning.Resistance, Is.Null);
 		}

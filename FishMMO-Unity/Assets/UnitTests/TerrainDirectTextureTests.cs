@@ -28,7 +28,7 @@ namespace FishMMO.UnitTests
 			var data = new List<TerrainData>();
 			var tiles = new List<Terrain>();
 			var material = new Material(Shader.Find(TerrainArrayBinder.ShaderName));
-			var compute = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(TerrainHeightmapSystem.ComputeAssetPath));
+			var compute = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path(TerrainHeightmapSystem.ComputeAssetPath)));
 			Mesh mesh = (Mesh)typeof(TerrainHeightmapSystem).GetMethod("PatchMesh", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, null);
 			object field = null;
 			Type type = typeof(TerrainHeightmapSystem).Assembly.GetType("FishMMO.Client.TerrainHeightmapField");
@@ -45,7 +45,7 @@ namespace FishMMO.UnitTests
 					Terrain tile = go.GetComponent<Terrain>(); tile.drawInstanced = true; tile.materialTemplate = material; tiles.Add(tile);
 				}
 				field = Activator.CreateInstance(type, new object[] { scene, tiles });
-				bool built = (bool)type.GetMethod("Build").Invoke(field, new object[] { compute, AssetDatabase.LoadAssetAtPath<Shader>(TerrainHeightmapSystem.ShaderAssetPath), mesh });
+				bool built = (bool)type.GetMethod("Build").Invoke(field, new object[] { compute, AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path(TerrainHeightmapSystem.ShaderAssetPath)), mesh });
 				Assert.That(built, Is.True, (string)type.GetProperty("Refusal").GetValue(field));
 				var nodes = (GraphicsBuffer)type.GetField("nodeBuffer", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(field);
 				var values = new Vector4[nodes.count]; nodes.GetData(values);
@@ -149,7 +149,7 @@ namespace FishMMO.UnitTests
 		public void DirectTilePassCompilesForWebGpu(int index, ShaderType stage)
 		{
 			if (!BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.WebGL, BuildTarget.WebGL)) Assert.Ignore("WebGL support required");
-			var shader = AssetDatabase.LoadAssetAtPath<Shader>(TerrainHeightmapSystem.ShaderAssetPath);
+			var shader = AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path(TerrainHeightmapSystem.ShaderAssetPath));
 			var pass = ShaderUtil.GetShaderData(shader).GetSubshader(0).GetPass(index);
 			var result = pass.CompileVariant(stage, new[] { "_ALPHATEST_ON", "_CLUSTER_LIGHT_LOOP" }, ShaderCompilerPlatform.WebGPU, BuildTarget.WebGL);
 			Assert.That(result.Success, Is.True, string.Join(Environment.NewLine, result.Messages.Select(m => m.message)));

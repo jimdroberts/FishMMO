@@ -211,7 +211,7 @@ namespace FishMMO.Shared
 				{
 					AbilityEventData aed = new AbilityEventData(Character, currentAbilityID);
 					aed.Add(new TickEventData(Character, activationData.GetPredictionTick(), state));
-					Character.Invoke(onAbilityActivateTriggers, aed);
+					Trigger.InvokeAll(onAbilityActivateTriggers, aed);
 				}
 
 				/* Trigger animation for this ability type on the first authoritative tick.
@@ -1534,7 +1534,7 @@ namespace FishMMO.Shared
 			{
 				AbilityEventData aed = new AbilityEventData(Character, validatedAbility.ID);
 				aed.Add(new TickEventData(Character, activationData.GetPredictionTick(), state));
-				Character.Invoke(onAbilityCompleteTriggers, aed);
+				Trigger.InvokeAll(onAbilityCompleteTriggers, aed);
 			}
 
 			// Reset ability data

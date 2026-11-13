@@ -75,14 +75,14 @@ namespace FishMMO.UnitTests
 			for (int i = 0; i < BufferedQuerySites.Length; ++i)
 			{
 				string path = Path.Combine(Directory.GetCurrentDirectory(), BufferedQuerySites[i]);
-				LogAssert.IsTrue(File.Exists(path), $"Spatial query site not found at {path}.");
+				LogAssert.IsTrue(ProjectFiles.Exists(path), $"Spatial query site not found at {path}.");
 
 				/* The CALL, not the identifier. Matching the bare name passes on a file that only
 				 * mentions the helper in a doc comment — which is exactly the state
 				 * HealerAttackingState was left in, and exactly the failure this test exists to
 				 * catch. Every real call site passes its buffer by reference, because the helper
 				 * replaces the array rather than resizing it. */
-				string source = File.ReadAllText(path);
+				string source = ProjectFiles.ReadAllText(path);
 				if (!Regex.IsMatch(source, @"TryGrowQueryBuffer\s*\(\s*ref\s"))
 				{
 					offenders.Add(BufferedQuerySites[i]);
@@ -111,9 +111,9 @@ namespace FishMMO.UnitTests
 			string path = Path.Combine(
 				Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Server/Implementation/World/SceneServer/AI/States/HealerAttackingState.cs");
-			LogAssert.IsTrue(File.Exists(path), $"HealerAttackingState.cs not found at {path}.");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"HealerAttackingState.cs not found at {path}.");
 
-			string source = File.ReadAllText(path);
+			string source = ProjectFiles.ReadAllText(path);
 
 			LogAssert.IsTrue(source.Contains("TryGrowQueryBuffer(ref allyHits"),
 				"HealerAttackingState.FindMostInjuredAlly must re-run its OverlapSphere through " +

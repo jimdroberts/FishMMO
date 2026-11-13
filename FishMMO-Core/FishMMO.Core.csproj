@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    FishMMO.Core as a plain .NET assembly: the engine-free simulation runtime (entities, systems, modules,
+    stats, effects), built from the same sources Unity compiles in FishMMO-Unity/Assets/Scripts/Core/Runtime.
+
+    netstandard2.1 and C# 9 are what Unity's compiler offers, so this build is the check that Core still
+    compiles there with no engine and no other assembly. It is also how a non-Unity host (a test, a tool,
+    another engine's adapter) takes Core.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>FishMMO.Core</AssemblyName>
+    <RootNamespace>FishMMO.Core</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../FishMMO-Unity/Assets/Scripts/Core/Runtime/**/*.cs" LinkBase="Runtime" />
+    <InternalsVisibleTo Include="FishMMO.Core.Tests" />
+  </ItemGroup>
+
+</Project>

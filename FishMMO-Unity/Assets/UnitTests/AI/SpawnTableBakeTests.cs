@@ -263,7 +263,7 @@ namespace FishMMO.UnitTests.AI
 		[Test]
 		public void TheDungeonChest_IsAContainerThatOpensAndHoldsLoot()
 		{
-			GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Shared/Entity/Interactables/Containers/Dungeon Chest.prefab");
+			GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path("Assets/Prefabs/Shared/Entity/Interactables/Containers/Dungeon Chest.prefab"));
 			Assert.IsNotNull(prefab, "the Dungeon chest prefab is missing");
 
 			Container container = prefab.GetComponent<Container>();
@@ -285,10 +285,10 @@ namespace FishMMO.UnitTests.AI
 
 			/* The client resolves the window's template by ID, which only exists for a template
 			 * loaded through the shared addressable label. */
-			string groups = System.IO.File.ReadAllText("Assets/AddressableAssetsData/AssetGroups/Shared_Static_Permanent.asset");
-			Assert.That(groups, Does.Contain(AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(container.Template))),
+			string groups = ProjectFiles.ReadAllText("Assets/AddressableAssetsData/AssetGroups/Shared_Static_Permanent.asset");
+			Assert.That(groups, Does.Contain(AssetDatabase.AssetPathToGUID(ProjectFiles.Path(AssetDatabase.GetAssetPath(container.Template)))),
 				"the container template must be in the shared addressable group");
-			Assert.That(groups, Does.Contain(AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(prefab))),
+			Assert.That(groups, Does.Contain(AssetDatabase.AssetPathToGUID(ProjectFiles.Path(AssetDatabase.GetAssetPath(prefab)))),
 				"the chest prefab must be in the shared addressable group");
 			Assert.IsTrue(prefab.GetComponent<FishNet.Object.NetworkObject>().GetIsSpawnable(), "a spawner can only spawn a spawnable prefab");
 		}
@@ -299,7 +299,7 @@ namespace FishMMO.UnitTests.AI
 			/* A table that has fallen behind its scene is a world that spawns something other than
 			 * what its designer sees. The bake runs on save and before builds; this catches a scene
 			 * edited some other way. */
-			SpawnTableCatalogue catalogue = AssetDatabase.LoadAssetAtPath<SpawnTableCatalogue>(SpawnTableBaker.CataloguePath);
+			SpawnTableCatalogue catalogue = AssetDatabase.LoadAssetAtPath<SpawnTableCatalogue>(ProjectFiles.Path(SpawnTableBaker.CataloguePath));
 			Assert.IsNotNull(catalogue, $"no spawn table catalogue at {SpawnTableBaker.CataloguePath}");
 			catalogue.Invalidate();
 
@@ -379,7 +379,7 @@ namespace FishMMO.UnitTests.AI
 							continue;
 						}
 
-						string guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(settings.NetworkObject));
+						string guid = AssetDatabase.AssetPathToGUID(ProjectFiles.Path(AssetDatabase.GetAssetPath(settings.NetworkObject)));
 						if (!string.IsNullOrEmpty(guid))
 						{
 							guids.Add(guid);
@@ -480,10 +480,10 @@ namespace FishMMO.UnitTests.AI
 		private static int WriteSceneWithSpawnersUntagged(string source, string destination)
 		{
 			string spawnerScript = AssetDatabase.AssetPathToGUID(
-				"Assets/Scripts/Server/Implementation/World/SceneServer/Spawner/ObjectSpawner.cs");
+				ProjectFiles.Path("Assets/Scripts/Server/Implementation/World/SceneServer/Spawner/ObjectSpawner.cs"));
 			Assert.IsNotEmpty(spawnerScript, "the spawner script has moved; this control cannot find it");
 
-			string text = System.IO.File.ReadAllText(source);
+			string text = ProjectFiles.ReadAllText(source);
 
 			/* Each YAML document starts "--- !u!<classId> &<fileId>". Find the GameObject ids the
 			 * spawner components belong to, then retag those GameObjects' documents. */
@@ -635,10 +635,10 @@ namespace FishMMO.UnitTests.AI
 			{
 				Assert.IsTrue(SpawnTableBaker.Write(asset, "Test", "Assets/Test.unity", Definitions()), "the first bake takes ids 1, 2, 3…");
 				AssetDatabase.SaveAssetIfDirty(asset);
-				string once = File.ReadAllText(path);
+				string once = ProjectFiles.ReadAllText(path);
 				Assert.IsTrue(SpawnTableBaker.Write(asset, "Test", "Assets/Test.unity", Definitions()), "a rebake frees the last bake's ids and takes them again");
 				AssetDatabase.SaveAssetIfDirty(asset);
-				Assert.AreEqual(once, File.ReadAllText(path), "an unchanged rebake must write the same bytes");
+				Assert.AreEqual(once, ProjectFiles.ReadAllText(path), "an unchanged rebake must write the same bytes");
 
 				long Id(object managed) => UnityEngine.Serialization.ManagedReferenceUtility.GetManagedReferenceIdForObject(asset, managed);
 				Assert.AreEqual(1, Id(asset.Spawners[0].Spawnables[0]));
@@ -664,11 +664,11 @@ namespace FishMMO.UnitTests.AI
 			}
 			Assert.IsNotEmpty(paths);
 
-			string[] groupFiles = System.IO.Directory.GetFiles("Assets/AddressableAssetsData/AssetGroups", "*.asset");
-			string serverGroup = System.IO.File.ReadAllText("Assets/AddressableAssetsData/AssetGroups/" + ServerAddressables.GroupName + ".asset");
+			string[] groupFiles = System.IO.Directory.GetFiles(ProjectFiles.Folder("Assets/AddressableAssetsData/AssetGroups"), "*.asset");
+			string serverGroup = ProjectFiles.ReadAllText("Assets/AddressableAssetsData/AssetGroups/" + ServerAddressables.GroupName + ".asset");
 			foreach (string path in paths)
 			{
-				string guid = AssetDatabase.AssetPathToGUID(path);
+				string guid = AssetDatabase.AssetPathToGUID(ProjectFiles.Path(path));
 				Assert.That(serverGroup, Does.Contain("m_GUID: " + guid), $"{path} must be in {ServerAddressables.GroupName}");
 				foreach (string file in groupFiles)
 				{
@@ -676,7 +676,7 @@ namespace FishMMO.UnitTests.AI
 					{
 						continue;
 					}
-					Assert.That(System.IO.File.ReadAllText(file), Does.Not.Contain("m_GUID: " + guid), $"{path} is in {file}, which clients build");
+					Assert.That(ProjectFiles.ReadAllText(file), Does.Not.Contain("m_GUID: " + guid), $"{path} is in {file}, which clients build");
 				}
 			}
 		}
@@ -686,9 +686,12 @@ namespace FishMMO.UnitTests.AI
 		{
 			/* The dashboard's Build Game and the Build Addressables button build bundles through
 			 * different methods; a server built by one without the bake runs yesterday's spawners. */
-			string source = System.IO.File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/FishMMO Dashboard/CustomBuildTool/Core/CustomBuildTool.cs");
+			string source = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/FishMMO Dashboard/CustomBuildTool/Core/CustomBuildTool.cs");
 			const string build = "addressableManager.BuildAddressablesWithExclusions(";
-			const string bake = "BakeSpawnTables();";
+			// The bake is a PrepareContent build step (SpawnTableBuildStep); the build runs that phase first.
+			const string bake = "BuildSteps.Run(BuildStepPhase.PrepareContent, steps);";
+			Assert.That(FishMMO.Shared.CustomBuildTool.Core.BuildSteps.All.Any(s => s.GetType().Name == "SpawnTableBuildStep" &&
+				s.Phase == FishMMO.Shared.CustomBuildTool.Core.BuildStepPhase.PrepareContent), Is.True, "the spawn table bake is no longer a PrepareContent build step");
 
 			int calls = 0;
 			int from = 0;

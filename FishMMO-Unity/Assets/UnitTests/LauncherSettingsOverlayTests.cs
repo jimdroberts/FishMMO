@@ -45,9 +45,9 @@ namespace FishMMO.UnitTests
 		[SetUp]
 		public void SetUp()
 		{
-			PanelSettings asset = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
+			PanelSettings asset = AssetDatabase.LoadAssetAtPath<PanelSettings>(ProjectFiles.Path(PanelSettingsPath));
 			LogAssert.IsNotNull(asset, $"panel settings must exist at {PanelSettingsPath}");
-			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(LauncherUxmlPath);
+			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(ProjectFiles.Path(LauncherUxmlPath));
 			LogAssert.IsNotNull(uxml, $"the launcher UXML must exist at {LauncherUxmlPath}");
 
 			// A target of the reference size, so the panel has the units the stylesheet was written for.

@@ -160,12 +160,12 @@ namespace FishMMO.UnitTests.Audio
 		public void EveryGeneratedGroundLayerIsKnown()
 		{
 			string folder = "Assets/Prefabs/Shared/Biomes/Generated/TerrainLayers";
-			if (!Directory.Exists(folder))
+			if (!ProjectFiles.FolderExists(folder))
 			{
 				Assert.Ignore("No generated terrain layers here.");
 			}
 			var unknown = new List<string>();
-			foreach (string path in Directory.GetFiles(folder, "*.terrainlayer", SearchOption.AllDirectories))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(folder), "*.terrainlayer", SearchOption.AllDirectories))
 			{
 				string name = Path.GetFileNameWithoutExtension(path);
 				if (!GroundSurface.TryName(name, out _))

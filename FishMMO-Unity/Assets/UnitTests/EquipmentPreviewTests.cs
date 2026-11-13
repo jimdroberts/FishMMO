@@ -183,7 +183,7 @@ namespace FishMMO.UnitTests
 			foreach (string name in PlayablePrefabs)
 			{
 				string path = $"{PrefabFolder}/{name}.prefab";
-				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(path));
 				LogAssert.IsNotNull(prefab, $"the {name} prefab must exist at {path}");
 
 				PlayerCharacter character = prefab.GetComponent<PlayerCharacter>();
@@ -209,7 +209,7 @@ namespace FishMMO.UnitTests
 
 			foreach (string name in PlayablePrefabs)
 			{
-				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{PrefabFolder}/{name}.prefab");
+				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path($"{PrefabFolder}/{name}.prefab"));
 				Camera camera = prefab.GetComponent<PlayerCharacter>().EquipmentViewCamera;
 
 				LogAssert.AreEqual(1 << player, camera.cullingMask,
@@ -225,7 +225,7 @@ namespace FishMMO.UnitTests
 			 * world entry, whether or not anyone has opened the panel. */
 			foreach (string name in PlayablePrefabs)
 			{
-				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{PrefabFolder}/{name}.prefab");
+				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path($"{PrefabFolder}/{name}.prefab"));
 				Camera camera = prefab.GetComponent<PlayerCharacter>().EquipmentViewCamera;
 
 				LogAssert.IsFalse(camera.gameObject.activeSelf,

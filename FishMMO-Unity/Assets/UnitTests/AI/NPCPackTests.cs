@@ -583,7 +583,7 @@ namespace FishMMO.UnitTests.AI
 
 		private static AIBrainHost NewHost()
 		{
-			AIBrainCatalogue catalogue = AssetDatabase.LoadAssetAtPath<AIBrainCatalogue>(BrainCatalogueYaml.CataloguePath);
+			AIBrainCatalogue catalogue = AssetDatabase.LoadAssetAtPath<AIBrainCatalogue>(ProjectFiles.Path(BrainCatalogueYaml.CataloguePath));
 			Assert.IsNotNull(catalogue, $"no brain catalogue at {BrainCatalogueYaml.CataloguePath}");
 			catalogue.Invalidate();
 			return new AIBrainHost(null, catalogue);
@@ -595,7 +595,7 @@ namespace FishMMO.UnitTests.AI
 		/// </summary>
 		private AIController PrepareOrc(AIBrainHost host, out NPC npc)
 		{
-			GameObject instance = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(ORC));
+			GameObject instance = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(ORC)));
 			created.Add(instance);
 			npc = instance.GetComponent<NPC>();
 			BindingFlags flags = BindingFlags.Instance | BindingFlags.Public;

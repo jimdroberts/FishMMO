@@ -49,8 +49,8 @@ namespace FishMMO.UnitTests
 
 		private void Mount(int width, int height, float scale)
 		{
-			PanelSettings asset = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
-			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(UxmlPath);
+			PanelSettings asset = AssetDatabase.LoadAssetAtPath<PanelSettings>(ProjectFiles.Path(PanelSettingsPath));
+			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(ProjectFiles.Path(UxmlPath));
 			LogAssert.IsNotNull(asset, $"panel settings must exist at {PanelSettingsPath}");
 			LogAssert.IsNotNull(uxml, $"the resource bar UXML must exist at {UxmlPath}");
 

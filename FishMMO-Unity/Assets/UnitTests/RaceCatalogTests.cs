@@ -50,7 +50,7 @@ namespace FishMMO.UnitTests
 			foreach (string guid in AssetDatabase.FindAssets($"t:{nameof(RaceTemplate)}"))
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guid);
-				RaceTemplate race = AssetDatabase.LoadAssetAtPath<RaceTemplate>(path);
+				RaceTemplate race = AssetDatabase.LoadAssetAtPath<RaceTemplate>(ProjectFiles.Path(path));
 				Assume.That(race, Is.Not.Null);
 				StringAssert.Contains($"/Races/{race.Category.Trim()}/", path, $"{race.name} is filed under the wrong folder.");
 			}

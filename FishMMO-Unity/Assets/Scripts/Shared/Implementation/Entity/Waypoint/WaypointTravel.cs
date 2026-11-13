@@ -199,7 +199,7 @@ namespace FishMMO.Shared
 
 			player.Motor.SetPositionAndRotationAndVelocity(arrival.position, arrival.rotation, Vector3.zero);
 
-			player.Invoke(waypoint.OnTravelTriggers, eventData);
+			Trigger.InvokeAll(waypoint.OnTravelTriggers, eventData);
 			IWaypointController.OnWaypointTravelled?.Invoke(player, waypoint.SceneName, waypoint.WaypointIndex);
 			return true;
 		}

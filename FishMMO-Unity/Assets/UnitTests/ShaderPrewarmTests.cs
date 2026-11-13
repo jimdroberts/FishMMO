@@ -33,7 +33,7 @@ namespace FishMMO.UnitTests
 					"float4 vert(float4 p:POSITION):SV_POSITION{return p;}\nfloat4 frag():SV_Target{\n#ifdef " + keyword +
 					"\nreturn float4(1,0,0,1);\n#else\nreturn float4(0,0,1,1);\n#endif\n}\nENDCG\n} } }");
 				AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
-				var shader = AssetDatabase.LoadAssetAtPath<Shader>(path);
+				var shader = AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path(path));
 				material = new Material(shader);
 				Shader.EnableKeyword(GlobalKeyword.Create(keyword));
 				ShaderUtil.allowAsyncCompilation = true;
@@ -61,7 +61,7 @@ namespace FishMMO.UnitTests
 		[TestCase("FishWeatherLitIndirect.shader")]
 		public void WeatherShadowExpansionUsesUniformSoftQualityWithoutDuplicatingPrograms(string filename)
 		{
-			var shader = AssetDatabase.LoadAssetAtPath<Shader>("Assets/Prefabs/Client/Weather/Shaders/" + filename);
+			var shader = AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path("Assets/Prefabs/Client/Weather/Shaders/" + filename));
 			Assert.That(shader, Is.Not.Null);
 			var variants = ShaderPrewarm.WithEveryShadowState(shader, new[] { "_NORMALMAP", "_SHADOWS_SOFT_HIGH" }).ToArray();
 			Assert.That(variants.Length, Is.EqualTo(4));
@@ -92,7 +92,7 @@ namespace FishMMO.UnitTests
 					"#pragma multi_compile_fragment _ _SHADOWS_SOFT_HIGH\n#pragma shader_feature_local FISHMMO_PREWARM_LOCAL\n" +
 					"float4 vert(float4 p:POSITION):SV_POSITION{return p;}\nfloat4 frag():SV_Target{return 1;}\nENDCG\n} } }");
 				AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
-				var shader = AssetDatabase.LoadAssetAtPath<Shader>(path);
+				var shader = AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path(path));
 				var variants = ShaderPrewarm.WithEveryShadowState(shader, new[] { "_SHADOWS_SOFT_LOW", "FISHMMO_PREWARM_LOCAL" }).ToArray();
 				Assert.That(variants.Length, Is.EqualTo(4));
 				Assert.That(variants.SelectMany(v => v), Does.Not.Contain("_SHADOWS_SOFT_LOW"));

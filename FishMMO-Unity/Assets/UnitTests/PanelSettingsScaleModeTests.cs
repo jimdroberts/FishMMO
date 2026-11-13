@@ -35,7 +35,7 @@ namespace FishMMO.UnitTests
 
 		private static PanelSettings Load()
 		{
-			PanelSettings asset = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
+			PanelSettings asset = AssetDatabase.LoadAssetAtPath<PanelSettings>(ProjectFiles.Path(PanelSettingsPath));
 			LogAssert.IsNotNull(asset, $"panel settings must exist at {PanelSettingsPath}");
 			return asset;
 		}

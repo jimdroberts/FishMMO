@@ -167,7 +167,7 @@ namespace FishMMO.UnitTests
 			/* The gesture itself: a right-click must put a Hotkey reference to the SLOT on the
 			 * cursor. Seeding the binding's own type is the two-outcome drag this fixture exists to
 			 * keep out. */
-			string source = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), HotkeyBarPath)).Replace("\r\n", "\n");
+			string source = ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), HotkeyBarPath)).Replace("\r\n", "\n");
 			int start = source.IndexOf("private void HandleSlotRightClick(HotkeySlot slot)", StringComparison.Ordinal);
 			int end = source.IndexOf("private void ClearBinding(int index, bool broadcast)", start, StringComparison.Ordinal);
 			LogAssert.IsTrue(start >= 0 && end > start, "the right-click handler must still be locatable");

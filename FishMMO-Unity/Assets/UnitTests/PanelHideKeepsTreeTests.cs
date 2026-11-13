@@ -50,8 +50,8 @@ namespace FishMMO.UnitTests
 		[SetUp]
 		public void SetUp()
 		{
-			PanelSettings asset = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
-			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(UxmlPath);
+			PanelSettings asset = AssetDatabase.LoadAssetAtPath<PanelSettings>(ProjectFiles.Path(PanelSettingsPath));
+			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(ProjectFiles.Path(UxmlPath));
 			LogAssert.IsNotNull(asset, $"panel settings must exist at {PanelSettingsPath}");
 			LogAssert.IsNotNull(uxml, $"markup must exist at {UxmlPath}");
 

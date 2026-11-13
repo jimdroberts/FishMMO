@@ -351,7 +351,7 @@ namespace FishMMO.UnitTests
 			var missing = new List<string>();
 			foreach (string guid in AssetDatabase.FindAssets("t:" + nameof(BiomeTemplate)))
 			{
-				BiomeTemplate biome = AssetDatabase.LoadAssetAtPath<BiomeTemplate>(AssetDatabase.GUIDToAssetPath(guid));
+				BiomeTemplate biome = AssetDatabase.LoadAssetAtPath<BiomeTemplate>(ProjectFiles.Path(AssetDatabase.GUIDToAssetPath(guid)));
 				if (biome == null)
 				{
 					continue;

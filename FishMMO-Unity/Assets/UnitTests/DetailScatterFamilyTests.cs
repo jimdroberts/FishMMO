@@ -26,7 +26,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheShaderReadsFromTheTable_ExactlyTheTablesProperties()
 		{
-			string code = File.ReadAllText(Passes);
+			string code = ProjectFiles.ReadAllText(Passes);
 			var defined = new HashSet<string>(Regex.Matches(code, @"#define (_\w+)\s+FishVeg\w+").Cast<Match>().Select(m => m.Groups[1].Value));
 			Assert.That(defined, Is.EquivalentTo(TerrainVegTableMath.TableProperties),
 				"a property the family's members may differ in must come from the row, and only those may (the key keeps the rest equal)");
@@ -35,7 +35,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheRowsColumns_AreWhereTheShaderLoadsThem()
 		{
-			string setup = SourceScanPins.Body(File.ReadAllText(Passes), "void FishVegTableSetup(float vertexRow)");
+			string setup = SourceScanPins.Body(ProjectFiles.ReadAllText(Passes), "void FishVegTableSetup(float vertexRow)");
 			Assert.That(setup, Is.Not.Null);
 			var r = new TerrainVegTableMath.Row
 			{
@@ -215,7 +215,7 @@ namespace FishMMO.UnitTests
 				new Variant("FishMMO/Vegetation Indirect", PassType.ScriptableRenderPipeline, "_ALPHATEST_ON _FISH_VEG_TABLE"),
 			}));
 			Assert.That(ProceduralArtVariants.VegTableKeyword, Is.EqualTo(TerrainVegTableMath.Keyword));
-			StringAssert.Contains("keywords: _ALPHATEST_ON _FISH_VEG_TABLE", File.ReadAllText("Assets/Prefabs/Shared/Biomes/Generated/Variants/FishIndirectVariants.shadervariants"));
+			StringAssert.Contains("keywords: _ALPHATEST_ON _FISH_VEG_TABLE", ProjectFiles.ReadAllText("Assets/Prefabs/Shared/Biomes/Generated/Variants/FishIndirectVariants.shadervariants"));
 		}
 
 		[Test]

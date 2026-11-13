@@ -24,7 +24,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
 		private const string World = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World";
 
-		private static string Read(string path) => File.ReadAllText(path).Replace("\r\n", "\n");
+		private static string Read(string path) => ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 
 		/// <summary>A northern scene on plain axes: the equator −z, so poleward is +z.</summary>
 		private static readonly BiomeScatterCompass North = BiomeScatterCompass.Plain(new Vector2(1f, 0f));
@@ -462,9 +462,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 			Assert.That(rules, Is.GreaterThan(0));
 			int templates = 0;
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				if (!Regex.IsMatch(text, "^  MinTemperature:", RegexOptions.Multiline))
 				{
 					continue;

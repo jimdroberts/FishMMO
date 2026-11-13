@@ -186,6 +186,41 @@ namespace FishMMO.Client
 		/// <summary>Seconds between scene-load heartbeats; well inside the server's stall limit.</summary>
 		private const float SceneLoadProgressIntervalSeconds = 5f;
 
+		/// <summary>
+		/// True once the world preload is in and this client is waiting for its world to be ready before it
+		/// acknowledges the scene (<see cref="TickWorldReady"/>). The acknowledgement is what spawns the
+		/// character, so the character arrives on finished ground.
+		/// </summary>
+		private bool worldReadyPending;
+
+		/// <summary>Unscaled time <see cref="worldReadyPending"/> was set, for its timeout.</summary>
+		private float worldReadySince;
+
+		/// <summary>True while a FishNet scene load is running on this client (its world scene arriving).</summary>
+		private bool worldSceneLoading;
+
+		/// <summary><c>Time.frameCount</c> when the last FishNet scene load ended; -1 before any since the scene-server login.</summary>
+		private int worldSceneLoadEndFrame = -1;
+
+		/// <summary>
+		/// How long the acknowledgement waits for a world scene load to show up at all before treating the scene as
+		/// already present (a client that has it loaded is sent no load). Normally the load is already running when
+		/// the preload ends, since the server starts it before asking for the acknowledgement.
+		/// </summary>
+		private const float WorldSceneLoadGraceSeconds = 5f;
+
+		/// <summary>
+		/// The longest the acknowledgement waits for the world: past it, the character is let in anyway, so a
+		/// stuck download cannot hold a player at the door. Matches the loading overlay's own content timeout.
+		/// </summary>
+		private const float WorldReadyTimeoutSeconds = 120f;
+
+		/// <summary>
+		/// Frames after a scene load ends before its content is judged: the scene's own loaders (terrain arrays,
+		/// biomes) register their loads as they start, a frame or two after activation.
+		/// </summary>
+		private const int WorldReadySettleFrames = 3;
+
 		/// <summary>Forwarded to <see cref="ClientConnectionManager.OnReconnectAttempt"/>.</summary>
 		public event Action<int, int> OnReconnectAttempt
 		{
@@ -436,6 +471,7 @@ namespace FishMMO.Client
 
 			TickDeathDialogFallback();
 			TickSceneLoadProgress();
+			TickWorldReady();
 			
 			if (pendingErrorStackTrace != null)
 			{
@@ -640,6 +676,7 @@ namespace FishMMO.Client
 			this.isPreloadingWorldScenes = false;
 			this.worldPreloadBatch = null;
 			this.sceneHandshakePending = false;
+			this.worldReadyPending = false;
 
 			// Nothing about a dead character in the world survives a return to the login screen.
 			this.localCharacter = null;
@@ -1035,12 +1072,21 @@ namespace FishMMO.Client
 		/// Called when a scene load begins. Unloads previously loaded world scenes.
 		/// </summary>
 		/// <param name="args">Scene load start event arguments.</param>
-		private void OnSceneLoadStart(SceneLoadStartEventArgs args) => UnloadWorldScenes();
+		private void OnSceneLoadStart(SceneLoadStartEventArgs args)
+		{
+			this.worldSceneLoading = true;
+			UnloadWorldScenes();
+		}
 		/// <summary>
 		/// Called when a scene load completes. Tracks newly loaded scenes by handle.
 		/// </summary>
 		/// <param name="args">Scene load end event arguments.</param>
-		private void OnSceneLoadEnd(SceneLoadEndEventArgs args) { if (args.LoadedScenes != null) foreach (var s in args.LoadedScenes) this.loadedWorldScenes[s.handle] = s; }
+		private void OnSceneLoadEnd(SceneLoadEndEventArgs args)
+		{
+			this.worldSceneLoading = false;
+			this.worldSceneLoadEndFrame = Time.frameCount;
+			if (args.LoadedScenes != null) foreach (var s in args.LoadedScenes) this.loadedWorldScenes[s.handle] = s;
+		}
 		/// <summary>
 		/// Called when a scene unload completes. Removes unloaded scenes from the tracking dictionary.
 		/// </summary>
@@ -1173,6 +1219,59 @@ namespace FishMMO.Client
 				return;
 			}
 
+			/* Not yet: the acknowledgement spawns the character, and the world it lands in may still be
+			 * arriving. The world scene's own load runs separately (the server started it before asking for
+			 * this), and the scene's terrain and biomes load after it activates. A character spawned into that
+			 * had no ground under it on this client: its predicted motor fell, and the player watched it drop
+			 * and get pulled back. TickWorldReady sends the acknowledgement once the world is in, while the
+			 * scene-load heartbeat keeps the server's watchdog content. */
+			this.worldReadyPending = true;
+			this.worldReadySince = Time.unscaledTime;
+			TickWorldReady();
+		}
+
+		/// <summary>
+		/// Acknowledges the scene once this client's world is ready: its world scene loaded, a few frames for the
+		/// scene's loaders to register, and every scene content load (terrain, biomes) finished. Lets the character
+		/// in after <see cref="WorldReadyTimeoutSeconds"/> regardless, saying what was still loading.
+		/// </summary>
+		private void TickWorldReady()
+		{
+			if (!this.worldReadyPending)
+			{
+				return;
+			}
+			if (CurrentConnectionType != ServerConnectionType.Scene || NetworkManager == null ||
+				!NetworkManager.ClientManager.Started)
+			{
+				this.worldReadyPending = false;
+				return;
+			}
+
+			/* Settled: a scene load ended during this login and a few frames have passed for the scene's loaders
+			 * to register. A preload that finishes before the world scene's load has even begun on this client
+			 * would otherwise look settled (nothing loading, nothing pending) and let the character in early, so
+			 * no load at all counts as settled only after a short grace. */
+			bool sawLoad = this.worldSceneLoadEndFrame >= 0;
+			bool sceneSettled = !this.worldSceneLoading &&
+				(sawLoad ? Time.frameCount >= this.worldSceneLoadEndFrame + WorldReadySettleFrames
+					: Time.unscaledTime - this.worldReadySince >= WorldSceneLoadGraceSeconds);
+			bool contentLoaded = SceneContentLoads.Pending == 0;
+			bool timedOut = Time.unscaledTime - this.worldReadySince >= WorldReadyTimeoutSeconds;
+			if (sceneSettled && contentLoaded)
+			{
+				// Ready.
+			}
+			else if (timedOut)
+			{
+				Log.Warning("Client", $"Entering the world after {WorldReadyTimeoutSeconds:0} s with {(sceneSettled ? "scene content still loading: " + SceneContentLoads.Describe() : "the world scene still loading")}.");
+			}
+			else
+			{
+				return;
+			}
+
+			this.worldReadyPending = false;
 			this.sceneHandshakePending = false;
 			Client.Broadcast(new ClientValidatedSceneBroadcast(), Channel.Reliable);
 		}
@@ -1989,6 +2088,8 @@ namespace FishMMO.Client
 					Connection.CurrentConnectionType = ServerConnectionType.Scene;
 					this.sceneHandshakePending = true;
 					this.nextSceneLoadProgressAt = Time.unscaledTime + SceneLoadProgressIntervalSeconds;
+					// A scene load that ended before this login is not this login's world (see TickWorldReady).
+					this.worldSceneLoadEndFrame = -1;
 					OnEnterGameWorld?.Invoke();
 					break;
 
@@ -2518,8 +2619,27 @@ namespace FishMMO.Client
 		/// <param name="c">The player character.</param>
 		private static void OnGuildReadId(long id, IPlayerCharacter c)
 		{
-			if (id != 0) ClientNamingSystem.SetName(NamingSystemType.GuildName, id, name => c.SetGuildName(name));
-			else c.SetGuildName(null);
+			if (id != 0) ClientNamingSystem.SetName(NamingSystemType.GuildName, id, name => SetGuildNameplate(c, name));
+			else SetGuildNameplate(c, null);
+		}
+
+		/// <summary>
+		/// Sets the guild row of the character's overhead nameplate.
+		/// </summary>
+		/// <param name="c">The character.</param>
+		/// <param name="guildName">The guild's name, or blank when the character has left one.</param>
+		/// <remarks>
+		/// A blank name clears the row rather than leaving an empty one: an empty row would still
+		/// take a line of height on the plate, so every character in the world who is not in a
+		/// guild would carry a visible gap under their name.
+		/// </remarks>
+		private static void SetGuildNameplate(IPlayerCharacter c, string guildName)
+		{
+			if (c?.CharacterNameplate != null)
+			{
+				c.CharacterNameplate.SetLine(NameplateSlot.GuildName,
+					!string.IsNullOrWhiteSpace(guildName) ? "[" + guildName + "]" : null);
+			}
 		}
 		/// <summary>
 		/// Called when a pet ID is read. Sets the pet's label with the owner's name.

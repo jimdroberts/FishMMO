@@ -48,7 +48,7 @@ namespace FishMMO.UnitTests.AI
 			for (int i = 0; i < guids.Length; i++)
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guids[i]);
-				AIArchetypeTemplate archetype = AssetDatabase.LoadAssetAtPath<AIArchetypeTemplate>(path);
+				AIArchetypeTemplate archetype = AssetDatabase.LoadAssetAtPath<AIArchetypeTemplate>(ProjectFiles.Path(path));
 				if (archetype != null)
 				{
 					archetypes.Add(archetype);
@@ -564,7 +564,7 @@ namespace FishMMO.UnitTests.AI
 			for (int i = 0; i < guids.Length; i++)
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guids[i]);
-				AIAimProfile profile = AssetDatabase.LoadAssetAtPath<AIAimProfile>(path);
+				AIAimProfile profile = AssetDatabase.LoadAssetAtPath<AIAimProfile>(ProjectFiles.Path(path));
 				if (profile == null)
 				{
 					continue;

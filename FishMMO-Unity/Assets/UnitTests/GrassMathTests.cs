@@ -16,7 +16,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void ABladeLetInByTheThinningDissolvesInsteadOfGrowing()
 		{
-			string source = System.IO.File.ReadAllText(System.IO.Path.Combine(
+			string source = ProjectFiles.ReadAllText(System.IO.Path.Combine(
 				UnityEngine.Application.dataPath, "Prefabs/Client/Weather/Shaders/FishGrassBlades.hlsl"));
 
 			NUnit.Framework.Assert.That(source, Does.Contain("o.fade = float2(visible * thinFade,"),

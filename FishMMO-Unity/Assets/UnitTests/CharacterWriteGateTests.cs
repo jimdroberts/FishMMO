@@ -128,7 +128,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheCharacterSave_ClearsItsMarksThroughTheOneRule()
 		{
-			string source = CodeOnly(ReadSource(SavingPath));
+			string source = CodeOnly(SaveSources());
 			LogAssert.IsFalse(source.Contains("Filtered == 0"),
 				"every mark clear goes through BulkWriteReporting.MayClearDirtyMarks, not a hand-written test");
 			LogAssert.AreEqual(6, Occurrences(source, "BulkWriteReporting.MayClearDirtyMarks(result)"),
@@ -156,7 +156,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheCharacterSave_WritesEverySubEntityTableThroughTheGate()
 		{
-			string source = CodeOnly(ReadSource(SavingPath));
+			string source = CodeOnly(SaveSources());
 			foreach (string service in new[]
 			{
 				"attrService", "abilityService", "achievementService", "factionService", "knownAbilityService",
@@ -331,7 +331,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(despawn.Contains("AppendDepartureSubEntities(character, subEntities, sessionInfo);"),
 				"the logout captures the departure's rows, the bar among them");
 			string departure = CodeOnly(MethodBody(saving, "private void AppendDepartureSubEntities(", "private void EnqueueSubEntitySaves("));
-			AssertOrdered(departure, "AppendSubEntities(character, snapshot, claim);", "TakeDepartingBar(character.ID, character.Hotkeys)",
+			AssertOrdered(departure, "AppendSubEntities(character, snapshot, claim);", "TakeDepartingBar(character.ID, character.Component<HotkeyBar>().Slots)",
 				"which is the ordinary capture plus the live bar, only with a claim");
 			string sequential = CodeOnly(MethodBody(saving, "private async Task<bool> SaveSubEntitiesSequentiallyAsync(", "private const int MaxSubEntityWriteAttempts"));
 			LogAssert.IsTrue(sequential.Contains("SaveHotkeysAsync(s.Hotkeys, claims)"), "and writes it before the release, under the claim");
@@ -547,18 +547,37 @@ namespace FishMMO.UnitTests
 		private static string ReadServiceOrIgnore(string service)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), ServicesPath + service + ".cs");
-			if (!File.Exists(path))
+			if (!ProjectFiles.Exists(path))
 			{
 				Assert.Ignore($"the database project is not checked out beside the Unity project ({path}).");
 			}
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
+		}
+
+		/// <summary>
+		/// The character save's code: <c>CharacterSystem.Saving.cs</c> and every persistence participant
+		/// (a class deriving from <c>CharacterPersistenceParticipant</c>), since a feature that saves through a
+		/// participant carries its write there. Rules about the save hold for both.
+		/// </summary>
+		private static string SaveSources()
+		{
+			var all = new StringBuilder(ReadSource(SavingPath));
+			foreach (string file in Directory.GetFiles(ProjectFiles.Folder(SceneServerRoot), "*.cs", SearchOption.AllDirectories))
+			{
+				string text = File.ReadAllText(file).Replace("\r\n", "\n");
+				if (text.Contains(": CharacterPersistenceParticipant\n"))
+				{
+					all.Append('\n').Append(text);
+				}
+			}
+			return all.ToString();
 		}
 
 		private static string ReadSource(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-			LogAssert.IsTrue(File.Exists(path), $"{relativePath} not found at {path}.");
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{relativePath} not found at {path}.");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 		/// <summary>Comment lines stripped, so prose about a construct does not trip a scan for it.</summary>

@@ -39,7 +39,7 @@ namespace FishMMO.UnitTests
                     Assert.That((string)assemblies[name].Attribute("preserve"), Is.EqualTo("all"), name);
                 Assert.That(assemblies.Keys.Any(n => n.Contains("Design")), Is.False, "Design-time tooling is not a runtime dependency.");
             }
-            finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+            finally { if (ProjectFiles.FolderExists(root)) Directory.Delete(root, true); }
         }
     }
 }

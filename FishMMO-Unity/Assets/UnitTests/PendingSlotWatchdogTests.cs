@@ -77,8 +77,8 @@ namespace FishMMO.UnitTests
 		private static string ReadSource(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-			LogAssert.IsTrue(File.Exists(path), $"{relativePath} not found at {path}.");
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{relativePath} not found at {path}.");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 		/// <summary>
@@ -116,9 +116,9 @@ namespace FishMMO.UnitTests
 		private static List<string> GuiSources()
 		{
 			string root = Path.Combine(Directory.GetCurrentDirectory(), GuiRoot);
-			LogAssert.IsTrue(Directory.Exists(root), $"the client GUI tree must exist at {root}.");
+			LogAssert.IsTrue(ProjectFiles.FolderExists(root), $"the client GUI tree must exist at {root}.");
 
-			List<string> files = new List<string>(Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories));
+			List<string> files = new List<string>(Directory.GetFiles(ProjectFiles.Folder(root), "*.cs", SearchOption.AllDirectories));
 			LogAssert.IsTrue(files.Count > 0, "the GUI tree must contain sources to scan");
 			return files;
 		}
@@ -194,7 +194,7 @@ namespace FishMMO.UnitTests
 			for (int i = 0; i < files.Count; ++i)
 			{
 				string name = Path.GetFileName(files[i]);
-				string raw = File.ReadAllText(files[i]).Replace("\r\n", "\n");
+				string raw = ProjectFiles.ReadAllText(files[i]).Replace("\r\n", "\n");
 				string code = CodeOnly(raw);
 
 				if (ScaledClock.IsMatch(code) && !ScaledClockAllowed.ContainsKey(name))

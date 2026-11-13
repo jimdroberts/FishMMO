@@ -111,7 +111,7 @@ namespace FishMMO.UnitTests
 		{
 			/* The panel binds by element name and tolerates a missing one silently, so a renamed
 			 * row would leave the overlay with no switch and no error. */
-			string uxml = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), OptionsUxml));
+			string uxml = ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), OptionsUxml));
 			LogAssert.IsTrue(uxml.Contains($"name=\"{EnabledToggle}\""), $"UIOptions.uxml must declare {EnabledToggle}");
 			LogAssert.IsTrue(uxml.Contains($"name=\"{GraphToggle}\""), $"UIOptions.uxml must declare {GraphToggle}");
 		}
@@ -125,8 +125,8 @@ namespace FishMMO.UnitTests
 		/// </summary>
 		private VisualElement MountOptions()
 		{
-			PanelSettings shared = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
-			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(OptionsUxml);
+			PanelSettings shared = AssetDatabase.LoadAssetAtPath<PanelSettings>(ProjectFiles.Path(PanelSettingsPath));
+			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(ProjectFiles.Path(OptionsUxml));
 			LogAssert.IsNotNull(shared, $"panel settings must exist at {PanelSettingsPath}");
 			LogAssert.IsNotNull(uxml, $"the options UXML must exist at {OptionsUxml}");
 

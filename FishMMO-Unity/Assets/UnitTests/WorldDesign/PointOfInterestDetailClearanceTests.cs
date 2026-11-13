@@ -216,7 +216,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void PlacingClearsEveryDetailLayerOffTheFloors()
 		{
-			string stage = File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/PointOfInterestStage.cs");
+			string stage = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/PointOfInterestStage.cs");
 			int linear = stage.IndexOf("PointOfInterestLinearFeatures.LayScene(", System.StringComparison.Ordinal);
 			int rooms = stage.IndexOf("PointOfInterestDetailClearance.AddRoomFloors(asset.Paths, asset.Rooms", System.StringComparison.Ordinal);
 			int trees = stage.IndexOf("PointOfInterestTreeClearance.Clear(terrains, asset.Paths", System.StringComparison.Ordinal);

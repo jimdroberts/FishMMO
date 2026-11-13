@@ -363,14 +363,14 @@ namespace FishMMO.UnitTests.AI
 		/// </summary>
 		private AIController PrepareOrc(out AIBrainHost host, out NPC npc)
 		{
-			GameObject instance = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(ORC));
+			GameObject instance = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(ORC)));
 			created.Add(instance);
 			npc = instance.GetComponent<NPC>();
 			System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public;
 			typeof(BaseCharacter).GetProperty(nameof(BaseCharacter.GameObject), flags).SetValue(npc, instance);
 			typeof(BaseCharacter).GetProperty(nameof(BaseCharacter.Transform), flags).SetValue(npc, instance.transform);
 
-			AIBrainCatalogue catalogue = AssetDatabase.LoadAssetAtPath<AIBrainCatalogue>(BrainCatalogueYaml.CataloguePath);
+			AIBrainCatalogue catalogue = AssetDatabase.LoadAssetAtPath<AIBrainCatalogue>(ProjectFiles.Path(BrainCatalogueYaml.CataloguePath));
 			Assert.IsNotNull(catalogue, $"no brain catalogue at {BrainCatalogueYaml.CataloguePath}");
 			catalogue.Invalidate();
 
@@ -384,8 +384,8 @@ namespace FishMMO.UnitTests.AI
 		private static string Read(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-			LogAssert.IsTrue(File.Exists(path), $"{relativePath} not found at {path}.");
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{relativePath} not found at {path}.");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 		/// <summary>Drops comment lines, so prose about a construct does not satisfy a scan for it.</summary>

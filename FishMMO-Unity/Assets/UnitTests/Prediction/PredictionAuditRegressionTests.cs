@@ -191,7 +191,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void DeltaReconcile_IsWiredThroughFishNet()
 		{
-			string source = File.ReadAllText(Path.Combine(Application.dataPath,
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
 				"Plugins/FishNet/Runtime/Object/NetworkBehaviour/NetworkBehaviour.Prediction.cs")).Replace("\r\n", "\n");
 
 			int write = source.IndexOf("Reconcile_WriteDelta(methodWriter, ref lastReconcileData, reconcileData);", StringComparison.Ordinal);
@@ -226,7 +226,7 @@ namespace FishMMO.UnitTests
 #if !FISHNET_DELTA_PREDICTION
 			LogAssert.Fail("This assembly was compiled without FISHNET_DELTA_PREDICTION; FishMMO runs delta prediction on every build.");
 #endif
-			string settings = File.ReadAllText(Path.Combine(Application.dataPath, "../ProjectSettings/ProjectSettings.asset")).Replace("\r\n", "\n");
+			string settings = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath, "../ProjectSettings/ProjectSettings.asset")).Replace("\r\n", "\n");
 			int start = settings.IndexOf("  scriptingDefineSymbols:\n", StringComparison.Ordinal);
 			LogAssert.IsTrue(start >= 0, "ProjectSettings has no scriptingDefineSymbols block.");
 
@@ -412,7 +412,7 @@ namespace FishMMO.UnitTests
 			 * input, so the scale argument against forwarding does not apply), and the client's
 			 * platform is moved by the replicate FishNet invokes and corrected by its reconcile. */
 			string path = Path.Combine(Application.dataPath, "Scripts/Shared/Implementation/Entity/Prediction/KCC/KCCPlatform.cs");
-			string source = File.ReadAllText(path);
+			string source = ProjectFiles.ReadAllText(path);
 			int onTick = source.IndexOf("protected override void TimeManager_OnTick()", StringComparison.Ordinal);
 			int next = source.IndexOf("public override void CreateReconcile()", onTick, StringComparison.Ordinal);
 			LogAssert.IsTrue(onTick >= 0 && next > onTick, "TimeManager_OnTick must exist ahead of CreateReconcile.");
@@ -703,7 +703,7 @@ namespace FishMMO.UnitTests
 		{
 			string path = Path.Combine(Application.dataPath,
 				"Scripts/Shared/Implementation/Entity/Prediction/CharacterAttribute/CharacterAttributeController.cs");
-			string source = File.ReadAllText(path);
+			string source = ProjectFiles.ReadAllText(path);
 			int start = source.IndexOf("public override void OnStartNetwork()", StringComparison.Ordinal);
 			LogAssert.IsTrue(start >= 0, "CharacterAttributeController must override OnStartNetwork.");
 			int call = source.IndexOf("ApplyDeferredResourceValues();", start, StringComparison.Ordinal);
@@ -917,7 +917,7 @@ namespace FishMMO.UnitTests
 				LogAssert.AreEqual(40, armor.ExternalModifier,
 					"An observed equipment change must not recompute another character's attributes locally.");
 
-				string source = File.ReadAllText(Path.Combine(Application.dataPath,
+				string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
 					"Scripts/Shared/Implementation/Entity/Prediction/Equipment/EquipmentController.cs"));
 				int start = source.IndexOf("internal void ApplyObservedSlot", StringComparison.Ordinal);
 				int end = source.IndexOf("// ── Owner acknowledgements", start, StringComparison.Ordinal);
@@ -1017,7 +1017,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void KccControllerGetState_ZeroesUngroundedNormals()
 		{
-			string source = File.ReadAllText(Path.Combine(Application.dataPath,
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
 				"Scripts/Shared/Implementation/Entity/Prediction/KCC/KCCController.cs"));
 			int start = source.IndexOf("public KinematicCharacterMotorState GetState()", StringComparison.Ordinal);
 			int end = source.IndexOf("return baseState;", start, StringComparison.Ordinal);
@@ -1080,7 +1080,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(LagCompensationTick.MaximumCompensationTicks <= 60,
 				"The cap must still bound how far into the past a client can claim to have seen.");
 
-			string source = File.ReadAllText(Path.Combine(Application.dataPath,
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
 				"Scripts/Shared/Implementation/Entity/Prediction/LagCompensation/LagCompensationTick.cs"));
 			// The EXECUTING code, not the remarks — which name the old API deliberately, to explain
 			// why it is not used.
@@ -1131,7 +1131,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void FreshStackingBuff_AppliesItsModifierOnce()
 		{
-			string source = File.ReadAllText(Path.Combine(Application.dataPath,
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
 				"Scripts/Shared/Implementation/Entity/Prediction/Buff/BuffController.cs"));
 			LogAssert.IsTrue(source.Contains("if (!isNew && template.MaxStacks > 0"),
 				"Only an existing buff may take a stack; a new one already applied its modifier.");
@@ -1214,7 +1214,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(hasIncludePermanent,
 				"RemoveAll must take an explicit includePermanent flag rather than always exempting permanent buffs.");
 
-			string source = File.ReadAllText(Path.Combine(Application.dataPath,
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
 				"Scripts/Shared/Implementation/Entity/Prediction/Buff/BuffController.cs"));
 			int count = source.Split(new[] { "includePermanent: true" }, StringSplitOptions.None).Length - 1;
 			LogAssert.AreEqual(2, count,
@@ -1225,9 +1225,9 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void BuffEcaTriggers_OnlyDispatchOnTheAuthoritativePeer()
 		{
-			string source = File.ReadAllText(Path.Combine(Application.dataPath,
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
 				"Scripts/Shared/Implementation/Entity/Prediction/Buff/BuffController.cs"));
-			foreach (string invoke in new[] { "Character.Invoke(onBuffApplyTriggers", "Character.Invoke(onBuffRemoveTriggers" })
+			foreach (string invoke in new[] { "Trigger.InvokeAll(onBuffApplyTriggers", "Trigger.InvokeAll(onBuffRemoveTriggers" })
 			{
 				int index = 0;
 				while ((index = source.IndexOf(invoke, index, StringComparison.Ordinal)) >= 0)
@@ -1245,7 +1245,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void ResetState_PreservesTheAuthoredImmortalFlag()
 		{
-			string source = File.ReadAllText(Path.Combine(Application.dataPath,
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
 				"Scripts/Shared/Implementation/Entity/Prediction/CharacterAttribute/CharacterDamageController.cs"));
 			LogAssert.IsFalse(source.Contains("\n\t\t\timmortal = false;"),
 				"ResetState must not force the authored immortal flag to false.");
@@ -1354,7 +1354,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void ItemDestroy_UnequipsBeforeDetachingItsHandlers()
 		{
-			string source = File.ReadAllText(Path.Combine(Application.dataPath,
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
 				"Scripts/Shared/Implementation/Entity/Item/Item.cs"));
 			int destroy = source.IndexOf("public void Destroy()", StringComparison.Ordinal);
 			LogAssert.IsTrue(destroy >= 0, "Item.Destroy must exist.");
@@ -1370,12 +1370,12 @@ namespace FishMMO.UnitTests
 		public void ShippedBuffAssets_MatchTheirTemplateFields()
 		{
 			string[] assets = Directory.GetFiles(
-				Path.Combine(Application.dataPath, "Templates/Entity/Buffs"), "*.asset");
+				ProjectFiles.Folder(Path.Combine(Application.dataPath, "Templates/Entity/Buffs")), "*.asset");
 			LogAssert.IsTrue(assets.Length > 0, "There must be buff assets to check.");
 
 			foreach (string path in assets)
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				string name = Path.GetFileName(path);
 				LogAssert.IsFalse(text.Contains("FXPrefab: "),
 					$"{name} serializes FXPrefab, which no longer exists — the field is FXPrefabReference, so the buff has no FX.");
@@ -1475,7 +1475,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void DuplicateRandomItemAttribute_DoesNotThrow()
 		{
-			string source = File.ReadAllText(Path.Combine(Application.dataPath,
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
 				"Scripts/Shared/Implementation/Entity/Item/ItemGenerator.cs"));
 			int start = source.IndexOf("private void AddRandomAttributes", StringComparison.Ordinal);
 			LogAssert.IsTrue(start >= 0, "AddRandomAttributes must be locatable.");
@@ -1729,7 +1729,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void RewindAnchor_IsTheServersOwnTick_NotTheOwningClientsInputTick()
 		{
-			string source = File.ReadAllText(Path.Combine(Application.dataPath,
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
 				"Scripts/Shared/Implementation/Entity/Prediction/LagCompensation/LagCompensationTick.cs"));
 			int start = source.IndexOf("public static bool TryResolve(", StringComparison.Ordinal);
 			LogAssert.IsTrue(start >= 0, "TryResolve must be locatable.");
@@ -2111,14 +2111,14 @@ namespace FishMMO.UnitTests
 		public void ObserverBudgetCondition_AssetResolvesToItsScript()
 		{
 			string assetPath = Path.Combine(Application.dataPath, "Settings/ObserverConditions/ObserverBudgetCondition.asset");
-			LogAssert.IsTrue(File.Exists(assetPath), "The budget condition asset must exist.");
+			LogAssert.IsTrue(ProjectFiles.Exists(assetPath), "The budget condition asset must exist.");
 
 			string scriptMeta = Path.Combine(Application.dataPath,
 				"Scripts/Shared/Implementation/Entity/Prediction/ObserverStreaming/ObserverBudgetCondition.cs.meta");
-			LogAssert.IsTrue(File.Exists(scriptMeta), "The condition script must exist.");
+			LogAssert.IsTrue(ProjectFiles.Exists(scriptMeta), "The condition script must exist.");
 
 			string scriptGuid = GuidFromMeta(scriptMeta);
-			string asset = File.ReadAllText(assetPath);
+			string asset = ProjectFiles.ReadAllText(assetPath);
 			LogAssert.IsTrue(asset.Contains($"guid: {scriptGuid}"),
 				$"The asset's m_Script must point at the condition script ({scriptGuid}); a mismatch loads as null and disables the cap.");
 		}
@@ -2128,8 +2128,8 @@ namespace FishMMO.UnitTests
 		public void ObserverBudgetCondition_IsInstalledLastOnTheSceneServer()
 		{
 			string scenePath = Path.Combine(Application.dataPath, "Scenes/Server/SceneServer.unity");
-			LogAssert.IsTrue(File.Exists(scenePath), "The SceneServer scene must exist.");
-			string scene = File.ReadAllText(scenePath);
+			LogAssert.IsTrue(ProjectFiles.Exists(scenePath), "The SceneServer scene must exist.");
+			string scene = ProjectFiles.ReadAllText(scenePath);
 
 			string budgetGuid = GuidFromMeta(Path.Combine(Application.dataPath,
 				"Settings/ObserverConditions/ObserverBudgetCondition.asset.meta"));
@@ -2161,7 +2161,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void HashGridAccuracy_CannotClipTheDistanceConditions()
 		{
-			string scene = File.ReadAllText(Path.Combine(Application.dataPath, "Scenes/Server/SceneServer.unity"));
+			string scene = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath, "Scenes/Server/SceneServer.unity"));
 			Match accuracy = Regex.Match(scene, @"_accuracy: (\d+)");
 			LogAssert.IsTrue(accuracy.Success, "The SceneServer must configure a HashGrid accuracy.");
 			int accuracyValue = int.Parse(accuracy.Groups[1].Value);
@@ -2181,9 +2181,9 @@ namespace FishMMO.UnitTests
 			 * it sat on — precisely the flicker the hysteresis exists to prevent. */
 			Dictionary<string, (string Name, float Reach)> byGuid = new Dictionary<string, (string, float)>();
 			foreach (string path in Directory.GetFiles(
-				Path.Combine(Application.dataPath, "Settings/ObserverConditions"), "*DistanceCondition.asset"))
+				ProjectFiles.Folder(Path.Combine(Application.dataPath, "Settings/ObserverConditions")), "*DistanceCondition.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				Match m = Regex.Match(text, @"_maximumDistance: ([0-9.]+)");
 				if (!m.Success)
 				{
@@ -2195,16 +2195,16 @@ namespace FishMMO.UnitTests
 				{
 					reach *= 1f + float.Parse(hide.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
 				}
-				string guid = Regex.Match(File.ReadAllText(path + ".meta"), @"guid: ([0-9a-f]{32})").Groups[1].Value;
+				string guid = Regex.Match(ProjectFiles.ReadAllText(path + ".meta"), @"guid: ([0-9a-f]{32})").Groups[1].Value;
 				byGuid[guid] = (Path.GetFileNameWithoutExtension(path), reach);
 			}
 			LogAssert.IsTrue(byGuid.Count > 0, "At least one distance condition must be authored.");
 
 			List<string> clipped = new List<string>();
 			foreach (string prefab in Directory.GetFiles(
-				Path.Combine(Application.dataPath, "Prefabs"), "*.prefab", SearchOption.AllDirectories))
+				ProjectFiles.Folder(Path.Combine(Application.dataPath, "Prefabs")), "*.prefab", SearchOption.AllDirectories))
 			{
-				string text = File.ReadAllText(prefab);
+				string text = ProjectFiles.ReadAllText(prefab);
 				int conditions = text.IndexOf("_observerConditions:", StringComparison.Ordinal);
 				if (conditions < 0)
 				{
@@ -2254,9 +2254,9 @@ namespace FishMMO.UnitTests
 		public void DistanceHysteresis_CoversTravelBetweenObserverSweeps()
 		{
 			foreach (string path in Directory.GetFiles(
-				Path.Combine(Application.dataPath, "Settings/ObserverConditions"), "*DistanceCondition.asset"))
+				ProjectFiles.Folder(Path.Combine(Application.dataPath, "Settings/ObserverConditions")), "*DistanceCondition.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				string name = Path.GetFileName(path);
 				Match hide = Regex.Match(text, @"_hideDistancePercent: ([0-9.]+)");
 				LogAssert.IsTrue(hide.Success, $"{name} must author a hide percent.");
@@ -2309,7 +2309,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void BuffRemoveAll_DoesNotReverseModifiersOnATrackingOnlyPeer()
 		{
-			string source = File.ReadAllText(Path.Combine(Application.dataPath,
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
 				"Scripts/Shared/Implementation/Entity/Prediction/Buff/BuffController.cs"));
 
 			Match removeAll = Regex.Match(source,
@@ -2339,7 +2339,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void EquipmentResetState_DoesNotReverseModifiersOnATrackingOnlyPeer()
 		{
-			string source = File.ReadAllText(Path.Combine(Application.dataPath,
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
 				"Scripts/Shared/Implementation/Entity/Prediction/Equipment/EquipmentController.cs"));
 
 			LogAssert.IsTrue(source.Contains("SimulatesEquipmentEffects"),
@@ -2378,9 +2378,9 @@ namespace FishMMO.UnitTests
 			string root = Path.Combine(Application.dataPath, "Scripts/Shared/Implementation/Entity/ECA/Actions");
 			List<string> offenders = new List<string>();
 
-			foreach (string path in Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(root), "*.cs", SearchOption.AllDirectories))
 			{
-				foreach (string line in File.ReadAllLines(path))
+				foreach (string line in ProjectFiles.ReadAllLines(path))
 				{
 					string trimmed = line.Trim();
 					if (trimmed.StartsWith("#if", StringComparison.Ordinal) &&
@@ -2400,7 +2400,7 @@ namespace FishMMO.UnitTests
 
 		private static string GuidFromMeta(string metaPath)
 		{
-			foreach (string line in File.ReadAllLines(metaPath))
+			foreach (string line in ProjectFiles.ReadAllLines(metaPath))
 			{
 				if (line.StartsWith("guid:", StringComparison.Ordinal))
 				{

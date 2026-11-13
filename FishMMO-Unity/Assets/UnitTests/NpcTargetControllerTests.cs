@@ -49,7 +49,7 @@ namespace FishMMO.UnitTests
 		/// </remarks>
 		private static string ReadSource(string path)
 		{
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 
@@ -60,13 +60,13 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void EveryCastingNpcPrefabHasATargetController()
 		{
-			LogAssert.IsTrue(Directory.Exists(NpcRoot), $"NPC prefabs must live at {NpcRoot}");
+			LogAssert.IsTrue(ProjectFiles.FolderExists(NpcRoot), $"NPC prefabs must live at {NpcRoot}");
 
 			string abilityControllerGuid = ScriptGuid("Implementation/Entity/Prediction/Ability/AbilityController.cs");
 			string targetControllerGuid = ScriptGuid("Implementation/Entity/Target/TargetController.cs");
 			string damageControllerGuid = ScriptGuid("Implementation/Entity/Prediction/CharacterAttribute/CharacterDamageController.cs");
 
-			string[] prefabs = Directory.GetFiles(NpcRoot, "*.prefab", SearchOption.AllDirectories);
+			string[] prefabs = Directory.GetFiles(ProjectFiles.Folder(NpcRoot), "*.prefab", SearchOption.AllDirectories);
 			LogAssert.IsTrue(prefabs.Length > 0, "there must be NPC prefabs to check");
 
 			List<string> offenders = new List<string>();
@@ -74,7 +74,7 @@ namespace FishMMO.UnitTests
 
 			foreach (string prefab in prefabs)
 			{
-				string source = File.ReadAllText(prefab);
+				string source = ProjectFiles.ReadAllText(prefab);
 				if (!source.Contains(abilityControllerGuid))
 				{
 					continue;
@@ -176,8 +176,8 @@ namespace FishMMO.UnitTests
 		private static string ScriptGuid(string relativePath)
 		{
 			string meta = Path.Combine(Scripts, relativePath) + ".meta";
-			LogAssert.IsTrue(File.Exists(meta), $"expected {meta}");
-			Match guid = Regex.Match(File.ReadAllText(meta), "guid: ([0-9a-f]{32})");
+			LogAssert.IsTrue(ProjectFiles.Exists(meta), $"expected {meta}");
+			Match guid = Regex.Match(ProjectFiles.ReadAllText(meta), "guid: ([0-9a-f]{32})");
 			LogAssert.IsTrue(guid.Success, $"no guid in {meta}");
 			return guid.Groups[1].Value;
 		}

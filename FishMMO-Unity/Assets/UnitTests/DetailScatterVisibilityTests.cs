@@ -25,7 +25,7 @@ namespace FishMMO.UnitTests
 		{
 			if (!SystemInfo.supportsComputeShaders || SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
 				Assert.Ignore("Requires a real GPU");
-			var shader = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ShaderPath));
+			var shader = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path(ShaderPath)));
 			var texture = new Texture2D(8, 8, TextureFormat.RFloat, false, true);
 			try
 			{
@@ -98,7 +98,7 @@ namespace FishMMO.UnitTests
 		{
 			if (!SystemInfo.supportsComputeShaders || SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
 				Assert.Ignore("Requires a real GPU");
-			var shader = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ShaderPath));
+			var shader = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path(ShaderPath)));
 			try
 			{
 				using var slots = new GraphicsBuffer(GraphicsBuffer.Target.Structured, 2, 8);

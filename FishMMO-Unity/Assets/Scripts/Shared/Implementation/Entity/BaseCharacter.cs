@@ -6,6 +6,9 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
+using EntityLink = FishMMO.Core.EntityLink;
+using SimulationSide = FishMMO.Core.SimulationSide;
+using Archetypes = FishMMO.Core.Archetypes;
 namespace FishMMO.Shared
 {
 	/// <summary>
@@ -24,7 +27,7 @@ namespace FishMMO.Shared
 	/// </remarks>
 	[RequireComponent(typeof(NetworkObject))]
 	[RequireComponent(typeof(NetworkTransformDistanceLod))]
-	public abstract class BaseCharacter : NetworkBehaviour, ICharacter
+	public abstract class BaseCharacter : NetworkBehaviour, ICharacter, IEntityLinked
 	{
 #if !UNITY_SERVER
 		/// <summary>
@@ -312,30 +315,13 @@ namespace FishMMO.Shared
 		{
 		}
 
-		/// <inheritdoc />
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void Invoke(List<Trigger> triggers, EventData eventData)
-		{
-			if (triggers == null || eventData == null)
-			{
-				return;
-			}
-
-			for (int i = 0; i < triggers.Count; ++i)
-			{
-				if (triggers[i] != null)
-				{
-					triggers[i].Execute(eventData);
-				}
-			}
-		}
-
 		/// <summary>
 		/// Unity OnDestroy callback. Calls OnDestroying for cleanup and removes the character from the client-side dictionary.
 		/// </summary>
 		void OnDestroy()
 		{
 			OnDestroying();
+			ReleaseCoreLink();
 
 #if !UNITY_SERVER
 			ClientCharacters.Remove(ID);
@@ -347,21 +333,83 @@ namespace FishMMO.Shared
 		/// </summary>
 		public virtual void OnDestroying() { }
 
+		/// <inheritdoc />
+		public EntityLink CoreLink { get; private set; }
+
+		/// <summary>The archetype this character's Core entity is made from.</summary>
+		protected virtual string CoreArchetype => Archetypes.Npc;
+
+		/// <summary>
+		/// Gives this character an entity made before it spawned: the server's character load makes the entity
+		/// first, so state loaded from the database has somewhere to go, and the spawned object then stands for it.
+		/// </summary>
+		public void AttachCoreLink(EntityLink link)
+		{
+			if (CoreLink.IsValid && !CoreLink.Equals(link))
+			{
+				CharacterLinks.Destroy(CoreLink);
+			}
+			CoreLink = link;
+		}
+
+		/// <summary>Makes this character's entity on <paramref name="side"/> unless it already has one.</summary>
+		private void EnsureCoreLink(SimulationSide side)
+		{
+			if (CoreLink.IsValid)
+			{
+				return;
+			}
+			if (CharacterLinks.TryCreate(base.NetworkManager, side, CoreArchetype, this, out EntityLink link))
+			{
+				CoreLink = link;
+			}
+		}
+
+		/// <summary>Ends this character's entity, if it has one.</summary>
+		private void ReleaseCoreLink()
+		{
+			CharacterLinks.Destroy(CoreLink);
+			CoreLink = EntityLink.None;
+		}
+
 		/// <summary>
 		/// On the server, every character keeps the scene's prop colliders (trees, rocks, boulders) streamed in round
-		/// itself while it is spawned: players and NPCs alike, so none walks through a rock a client draws.
+		/// itself while it is spawned: players and NPCs alike, so none walks through a rock a client draws. It also
+		/// gets its Core entity, unless its load already made one.
 		/// </summary>
 		public override void OnStartServer()
 		{
 			base.OnStartServer();
+			EnsureCoreLink(SimulationSide.Server);
 			PropColliderStreamer.AddFocus(Transform != null ? Transform : transform, PropColliderStreamer.ServerRadius);
 		}
 
-		/// <summary>Stops streaming prop colliders round this character.</summary>
+		/// <summary>Stops streaming prop colliders round this character and ends its Core entity.</summary>
 		public override void OnStopServer()
 		{
 			PropColliderStreamer.RemoveFocus(Transform != null ? Transform : transform);
+			ReleaseCoreLink();
 			base.OnStopServer();
+		}
+
+		/// <summary>On a client (never the server's own copy), the character gets an entity in the client's Core world.</summary>
+		public override void OnStartClient()
+		{
+			base.OnStartClient();
+			if (!base.IsServerStarted)
+			{
+				EnsureCoreLink(SimulationSide.Client);
+			}
+		}
+
+		/// <summary>Ends the client's entity for this character.</summary>
+		public override void OnStopClient()
+		{
+			if (!base.IsServerStarted)
+			{
+				ReleaseCoreLink();
+			}
+			base.OnStopClient();
 		}
 
 		/// <summary>
@@ -402,6 +450,8 @@ namespace FishMMO.Shared
 #endif
 
 			Flags = 0;
+			// The next occupant of this pool slot gets a fresh entity, with fresh feature state.
+			ReleaseCoreLink();
 		}
 
 		/// <summary>

@@ -352,46 +352,46 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void EveryChannelReaderRenamesThroughTheTilesMap()
 		{
-			string binder = File.ReadAllText(Scripts + "Shared/Implementation/Entity/WorldSceneDetails/Terrain/TerrainArrayBinder.cs");
+			string binder = ProjectFiles.ReadAllText(Scripts + "Shared/Implementation/Entity/WorldSceneDetails/Terrain/TerrainArrayBinder.cs");
 			Assert.That(binder, Does.Contain("TerrainIndexMapBaker.Bake(data, TerrainIndexMapBaker.ShaderOf(set), baked, 0, TerrainTileLayers.Of(terrain))"));
 			Assert.That(binder, Does.Contain("StoredStillGood(terrain, data, stored, TerrainTileLayers.Of(terrain))"));
 			Assert.That(binder, Does.Contain("MatchesAlphamaps(data, stored, 32, out string bad, sceneLayers)"));
 
-			string baker = File.ReadAllText(Scripts + "Shared/Implementation/Entity/WorldSceneDetails/Terrain/TerrainIndexMapBaker.cs");
+			string baker = ProjectFiles.ReadAllText(Scripts + "Shared/Implementation/Entity/WorldSceneDetails/Terrain/TerrainIndexMapBaker.cs");
 			Assert.That(baker, Does.Contain("properties.SetTexture(RemapId, RemapTexture(TerrainTileLayerMap.BakeTable(sceneLayers)));"));
 			Assert.That(baker.Split(new[] { "ids = TerrainTileLayerMap.RemapIds(ids, table);" }, StringSplitOptions.None).Length - 1, Is.EqualTo(2),
 				"both CPU checks of a GPU bake rename as it does");
-			string shader = File.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishTerrainIndexBake.shader");
+			string shader = ProjectFiles.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishTerrainIndexBake.shader");
 			Assert.That(shader, Does.Contain("Texture2D<float4> _FishIndexRemap;"));
 			Assert.That(shader, Does.Contain("uint4 n = uint4(SceneLayer((uint)ids.x), SceneLayer((uint)ids.y), SceneLayer((uint)ids.z), SceneLayer((uint)ids.w));"),
 				"renamed after the four are chosen, as the CPU renames the chosen ids");
 
-			string contact = File.ReadAllText(Scripts + "Client/World/Terrain/GroundMaterialMap.cs");
+			string contact = ProjectFiles.ReadAllText(Scripts + "Client/World/Terrain/GroundMaterialMap.cs");
 			Assert.That(contact, Does.Contain("TerrainIndexMapBaker.Bake(data, bake, target, slice, TerrainTileLayers.Of(t))"));
-			string colour = File.ReadAllText(Scripts + "Client/World/Terrain/GroundColourMap.cs");
+			string colour = ProjectFiles.ReadAllText(Scripts + "Client/World/Terrain/GroundColourMap.cs");
 			Assert.That(colour, Does.Contain("int slice = TerrainTileLayerMap.SceneLayerOf(sceneLayers, l);"));
 			Assert.That(colour, Does.Contain("LayerColour(set, ls, i, TerrainTileLayerMap.SceneLayerOf(sceneLayers, i), out bool fromArray)"));
 			Assert.That(colour, Does.Contain("count = set.LayerCount;"), "a stored map names the set's layers, past a compacted tile's count");
-			string grass = File.ReadAllText(Scripts + "Client/World/Terrain/Grass/GrassTerrain.cs");
+			string grass = ProjectFiles.ReadAllText(Scripts + "Client/World/Terrain/Grass/GrassTerrain.cs");
 			Assert.That(grass, Does.Contain("GrassMath.RenameSurfaceLayers(GrassMath.PackSurfaceLayers(weights, alayers), sceneLayers)"));
-			string footsteps = File.ReadAllText(Scripts + "Client/Audio/World/GroundSurface.cs");
+			string footsteps = ProjectFiles.ReadAllText(Scripts + "Client/Audio/World/GroundSurface.cs");
 			Assert.That(footsteps, Does.Contain("TerrainLayer[] painted = data.terrainLayers;"), "footsteps read a tile's own layers by name: per tile already");
 
-			string generator = File.ReadAllText(Scripts + "Shared/Implementation/Tools/Extensions/Unity/Editor/World/SceneGenerator.cs");
+			string generator = ProjectFiles.ReadAllText(Scripts + "Shared/Implementation/Tools/Extensions/Unity/Editor/World/SceneGenerator.cs");
 			int bake = generator.IndexOf("internal static void BakePropsAndNavMesh(", StringComparison.Ordinal);
 			int compact = generator.IndexOf("TerrainTileLayerSync.Compact(scene, tiles, notes);", bake, StringComparison.Ordinal);
 			int finished = generator.IndexOf("SceneTerrainEvents.RaiseFinished(scene, tiles, notes);", bake, StringComparison.Ordinal);
 			Assert.That(compact, Is.GreaterThan(bake));
 			Assert.That(finished, Is.GreaterThan(compact), "compacted before the index maps and details are baked from it");
 			Assert.That(generator, Does.Contain("TerrainTileLayerSync.ScenePalette(tiles[0].gameObject.scene, tiles)"));
-			string setup = File.ReadAllText(Scripts + "Shared/Implementation/Tools/Extensions/Unity/Editor/World/Terrain/TerrainArraySetup.cs");
+			string setup = ProjectFiles.ReadAllText(Scripts + "Shared/Implementation/Tools/Extensions/Unity/Editor/World/Terrain/TerrainArraySetup.cs");
 			Assert.That(setup, Does.Contain("bool perTile = TerrainTileLayerSync.IsCompacted(binder) || !AllSame(tileLayers);"),
 				"the provenance is never shrunk to one compacted tile's layers");
-			string shading = File.ReadAllText(Scripts + "Shared/Implementation/Tools/Extensions/Unity/Editor/World/BackdropShadingTool.cs");
+			string shading = ProjectFiles.ReadAllText(Scripts + "Shared/Implementation/Tools/Extensions/Unity/Editor/World/BackdropShadingTool.cs");
 			Assert.That(shading, Does.Contain("TerrainTileLayerSync.ScenePalette(scene, tiles)"));
-			string stripper = File.ReadAllText(Scripts + "Shared/Implementation/Tools/Extensions/Unity/Editor/ClientTerrainLayerStripper.cs");
+			string stripper = ProjectFiles.ReadAllText(Scripts + "Shared/Implementation/Tools/Extensions/Unity/Editor/ClientTerrainLayerStripper.cs");
 			Assert.That(stripper, Does.Contain("WorldDesign.TerrainTileLayerSync.Record(terrain, sceneLayers);"), "a kept tile's map reaches the player");
-			string store = File.ReadAllText(Scripts + "Client/World/Weather/Editor/TerrainDetailBaker.cs");
+			string store = ProjectFiles.ReadAllText(Scripts + "Client/World/Weather/Editor/TerrainDetailBaker.cs");
 			Assert.That(store, Does.Contain("TerrainTileLayerMap.Bake(data.GetAlphamaps(0, 0, res, res), TerrainTileLayers.Of(terrain))"));
 		}
 	}

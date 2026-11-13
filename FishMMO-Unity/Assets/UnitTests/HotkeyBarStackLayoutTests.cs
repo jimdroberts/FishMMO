@@ -59,7 +59,7 @@ namespace FishMMO.UnitTests
 		[SetUp]
 		public void SetUp()
 		{
-			PanelSettings asset = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
+			PanelSettings asset = AssetDatabase.LoadAssetAtPath<PanelSettings>(ProjectFiles.Path(PanelSettingsPath));
 			LogAssert.IsNotNull(asset, $"panel settings must exist at {PanelSettingsPath}");
 
 			// A render target of the reference size: see WindowOverlapTests for why a hand-mounted
@@ -90,7 +90,7 @@ namespace FishMMO.UnitTests
 
 		private UIDocument Mount(string name, string uxmlPath)
 		{
-			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(GuiRoot + uxmlPath);
+			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(ProjectFiles.Path(GuiRoot + uxmlPath));
 			LogAssert.IsNotNull(uxml, $"the {name} UXML must exist at {GuiRoot + uxmlPath}");
 
 			GameObject host = new GameObject(name);

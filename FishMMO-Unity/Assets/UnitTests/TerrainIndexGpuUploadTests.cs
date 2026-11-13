@@ -16,7 +16,7 @@ namespace FishMMO.UnitTests
 		private const string ShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishTerrainIndexBake.shader";
 		private static uint[] ReadWords(Texture index, int size)
 		{
-			var compute = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>("Assets/TestHarness/World/Editor/TerrainIndexLoadProbe.compute"));
+			var compute = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path("Assets/TestHarness/World/Editor/TerrainIndexLoadProbe.compute")));
 			try
 			{
 				using var words = new GraphicsBuffer(GraphicsBuffer.Target.Structured, size * size, 8);
@@ -106,7 +106,7 @@ namespace FishMMO.UnitTests
 		[TestCase(ShaderCompilerPlatform.D3D, BuildTarget.StandaloneWindows64)]
 		public void BakeAndStoredUploadCompileForClientBackends(ShaderCompilerPlatform platform, BuildTarget target)
 		{
-			Shader shader = AssetDatabase.LoadAssetAtPath<Shader>(ShaderPath);
+			Shader shader = AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path(ShaderPath));
 			for (int p = 0; p < 2; p++) foreach (ShaderType stage in new[] { ShaderType.Vertex, ShaderType.Fragment })
 			{
 				var result = ShaderUtil.GetShaderData(shader).GetSubshader(0).GetPass(p).CompileVariant(stage, Array.Empty<string>(), platform, target, true);

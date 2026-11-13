@@ -60,8 +60,8 @@ namespace FishMMO.UnitTests
 		[SetUp]
 		public void SetUp()
 		{
-			PanelSettings settings = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
-			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(UxmlPath);
+			PanelSettings settings = AssetDatabase.LoadAssetAtPath<PanelSettings>(ProjectFiles.Path(PanelSettingsPath));
+			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(ProjectFiles.Path(UxmlPath));
 			LogAssert.IsNotNull(settings, $"panel settings must exist at {PanelSettingsPath}");
 			LogAssert.IsNotNull(uxml, $"the faction UXML must exist at {UxmlPath}");
 
@@ -608,7 +608,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheStylesheetObeysTheNoCursorRule()
 		{
-			string uss = System.IO.File.ReadAllText(System.IO.Path.Combine(
+			string uss = ProjectFiles.ReadAllText(System.IO.Path.Combine(
 				System.IO.Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Client/GUI/World/Faction/UIFactions.uss"));
 
@@ -628,7 +628,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheRowHoverRuleIsDeclaredInThisSheet()
 		{
-			string uss = System.IO.File.ReadAllText(System.IO.Path.Combine(
+			string uss = ProjectFiles.ReadAllText(System.IO.Path.Combine(
 				System.IO.Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Client/GUI/World/Faction/UIFactions.uss"));
 
@@ -651,7 +651,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void EveryAllianceLevelHasASectionInTheTree()
 		{
-			string uxml = System.IO.File.ReadAllText(System.IO.Path.Combine(
+			string uxml = ProjectFiles.ReadAllText(System.IO.Path.Combine(
 				System.IO.Directory.GetCurrentDirectory(), UxmlPath));
 
 			foreach (FactionAllianceLevel level in System.Enum.GetValues(typeof(FactionAllianceLevel)))
@@ -673,8 +673,8 @@ namespace FishMMO.UnitTests
 		private static string ReadPanelSource()
 		{
 			string path = FactionSourcePath();
-			Assert.IsTrue(System.IO.File.Exists(path), $"UITKFactions.cs not found at {path}.");
-			return System.IO.File.ReadAllText(path);
+			Assert.IsTrue(ProjectFiles.Exists(path), $"UITKFactions.cs not found at {path}.");
+			return ProjectFiles.ReadAllText(path);
 		}
 	}
 }

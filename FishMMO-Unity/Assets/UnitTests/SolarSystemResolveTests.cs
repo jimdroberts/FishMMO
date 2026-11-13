@@ -60,7 +60,7 @@ namespace FishMMO.UnitTests
 			int checkedBodies = 0;
 			foreach (string guid in AssetDatabase.FindAssets("t:" + nameof(SolarSystemProfile)))
 			{
-				var system = AssetDatabase.LoadAssetAtPath<SolarSystemProfile>(AssetDatabase.GUIDToAssetPath(guid));
+				var system = AssetDatabase.LoadAssetAtPath<SolarSystemProfile>(ProjectFiles.Path(AssetDatabase.GUIDToAssetPath(guid)));
 				if (system == null)
 				{
 					continue;
@@ -93,7 +93,7 @@ namespace FishMMO.UnitTests
 			paths.Sort(global::System.StringComparer.Ordinal);
 			foreach (string path in paths)
 			{
-				atlas = AssetDatabase.LoadAssetAtPath<WorldAtlas>(path);
+				atlas = AssetDatabase.LoadAssetAtPath<WorldAtlas>(ProjectFiles.Path(path));
 				if (atlas != null && atlas.SolarSystem != null)
 				{
 					break;

@@ -36,8 +36,8 @@ namespace FishMMO.UnitTests
 		private static string ReadSource(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-			LogAssert.IsTrue(File.Exists(path), $"{relativePath} not found at {path}.");
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{relativePath} not found at {path}.");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 		/// <summary>The body of a named method, bounded by an anchor inside it or the next member.</summary>

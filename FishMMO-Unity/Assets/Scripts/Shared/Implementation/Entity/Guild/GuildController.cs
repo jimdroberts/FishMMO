@@ -383,7 +383,7 @@ namespace FishMMO.Shared
 
 				if (joined)
 				{
-					Character.Invoke(onGuildJoinTriggers, new GuildEventData(Character, ID, RankOrder, Permissions));
+					Trigger.InvokeAll(onGuildJoinTriggers, new GuildEventData(Character, ID, RankOrder, Permissions));
 				}
 			}
 
@@ -508,7 +508,7 @@ namespace FishMMO.Shared
 			ID = 0;
 			ClearGuildStanding();
 			OnLeaveGuild?.Invoke();
-			Character.Invoke(onGuildLeaveTriggers, new GuildEventData(Character, 0, 0, GuildPermissions.None));
+			Trigger.InvokeAll(onGuildLeaveTriggers, new GuildEventData(Character, 0, 0, GuildPermissions.None));
 		}
 
 		/// <summary>

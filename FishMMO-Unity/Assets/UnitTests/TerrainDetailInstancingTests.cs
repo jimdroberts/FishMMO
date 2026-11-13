@@ -101,7 +101,7 @@ namespace FishMMO.UnitTests
 			LogAssert.AreEqual(FishWork.Stride, Marshal.SizeOf<FishWork>(), "FishWork");
 			LogAssert.AreEqual(20, GraphicsBuffer.IndirectDrawIndexedArgs.size, "indexed args: 5 uints");
 
-			string compute = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Assets/Prefabs/Client/Weather/Shaders/FishTerrainInstancing.compute"));
+			string compute = ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Assets/Prefabs/Client/Weather/Shaders/FishTerrainInstancing.compute"));
 			LogAssert.IsTrue(compute.Contains("struct FishInstance { float4 row0; float4 row1; float4 row2; };"), "the kernel's FishInstance");
 			LogAssert.IsTrue(compute.Contains("struct FishVisible { uint index; float lodFade; };"), "the kernel's FishVisible");
 			LogAssert.IsTrue(compute.Contains("(id.x * 5 + 1) * 4"), "the finaliser writes instanceCount, the second uint of each command");
@@ -149,7 +149,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsFalse(TerrainGpuMath.ChooseGpu(false, 0, true), "WebGL2: no compute → fallback");
 			LogAssert.IsFalse(TerrainGpuMath.ChooseGpu(true, 0, true), "no vertex-stage structured buffers → fallback");
 			LogAssert.IsFalse(TerrainGpuMath.ChooseGpu(true, 8, false), "compute asset missing → fallback");
-			LogAssert.IsNotNull(UnityEditor.AssetDatabase.LoadAssetAtPath<ComputeShader>(TerrainGpuRenderer.ComputeAssetPath), "the compute exists where the render profile points");
+			LogAssert.IsNotNull(UnityEditor.AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path(TerrainGpuRenderer.ComputeAssetPath)), "the compute exists where the render profile points");
 			// Client-only: referenced by WeatherRenderProfile, never from a Resources folder (which ships to servers).
 			LogAssert.IsNull(Resources.Load<ComputeShader>("FishTerrainInstancing"), "the compute must not be in Resources");
 		}
@@ -323,7 +323,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void VisibleBase_IsFedFloatBacked_LikeUrpsOwnUintUniforms()
 		{
-			string code = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.cs"));
+			string code = ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.cs"));
 			LogAssert.IsTrue(code.Contains("SetFloat(VisibleBaseId"), "the per-draw base is set float-backed");
 			LogAssert.IsFalse(code.Contains("SetInteger(VisibleBaseId"), "not as a real-int property (not known to reach a uint parameter on GLCore)");
 			LogAssert.IsTrue((float)(1 << 24) == (float)((1 << 24) - 1) + 1f, "floats hold every base up to 2^24 exactly");
@@ -333,7 +333,7 @@ namespace FishMMO.UnitTests
 		public void GpuCulling_IsRecordedPerCamera_OnItsOwnComputeInstance_AndReflectionProbesTakeTheCpuPath()
 		{
 			string root = Directory.GetCurrentDirectory();
-			string renderer = File.ReadAllText(Path.Combine(root, "Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.cs"));
+			string renderer = ProjectFiles.ReadAllText(Path.Combine(root, "Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.cs"));
 			LogAssert.IsTrue(renderer.Contains("Object.Instantiate(cs)"), "each renderer culls with its own ComputeShader instance (one parameter sheet each)");
 			LogAssert.IsFalse(Regex.IsMatch(renderer, @"compute\.(Dispatch|SetVector|SetInt|SetBuffer|SetVectorArray)\("), "no immediate-mode compute parameters or dispatches");
 			LogAssert.IsTrue(renderer.Contains("cmd.DispatchComputeChecked(compute, cullKernel"), "the cull is recorded into a command buffer");
@@ -342,7 +342,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsFalse(renderer.Contains("unity_BaseInstanceID"), "Unity's built-in base instance is left to Unity");
 			foreach (string system in new[] { "TerrainTreeInstancing.cs" })
 			{
-				string code = File.ReadAllText(Path.Combine(root, "Assets/Scripts/Client/World/Terrain", system));
+				string code = ProjectFiles.ReadAllText(Path.Combine(root, "Assets/Scripts/Client/World/Terrain", system));
 				LogAssert.IsTrue(code.Contains("camera.cameraType == CameraType.Reflection ? null : gpu"), $"{system}: reflection-probe faces take the CPU path");
 			}
 		}
@@ -397,7 +397,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void InstanceUploads_GoThroughTheCpuMirror_AndReachTheGpuInTheCamerasCommandBuffer()
 		{
-			string code = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.cs"));
+			string code = ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.cs"));
 			LogAssert.IsFalse(code.Contains("instances.SetData("), "no immediate writes into the instance buffer");
 			LogAssert.IsTrue(code.Contains("NativeArray<FishInstance>.Copy(source, start, mirror, offset, count)"), "every upload writes the CPU mirror");
 			LogAssert.IsFalse(code.Contains("into.SetBufferData(instances,"), "never written by the CPU while in use (an OpenGL stall of 50-90 ms)");
@@ -412,7 +412,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void SlotCapacity_NeverBelowTheWorkSubmitted_SoNoWholeChunkIsDropped()
 		{
-			string code = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.cs"));
+			string code = ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.cs"));
 			LogAssert.IsTrue(code.Contains("m.WorkInstances += count;"), "AddWork counts the instances it submits per model");
 			LogAssert.IsTrue(code.Contains("if (m.WorkInstances > m.Capacity)"), "Execute grows a slot that the work could overflow");
 			int grow = code.IndexOf("if (m.WorkInstances > m.Capacity)");

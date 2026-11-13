@@ -47,7 +47,7 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void TheBudget_IsSpentOnWhatIsSeen()
 		{
-			string source = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), SystemPath));
+			string source = ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), SystemPath));
 			StringAssert.Contains("int cost = BudgetCost(seen, kind);", source);
 			StringAssert.Contains("if (!Admits(cost, spent, maxVisible, c.Held))", source);
 			StringAssert.Contains("spent += cost;", source);
@@ -72,7 +72,7 @@ namespace FishMMO.UnitTests.Weather
 			/* The minimap's camera renders on its own, before the main camera, at its own frame cap. Taken as "the first game
 			 * camera", it worked the frame's animals out from its eye high over the player and the main camera drew that list:
 			 * every frame the minimap rendered, the animals in front of the player were gone (every other frame at 60 Hz). */
-			string source = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), SystemPath));
+			string source = ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), SystemPath));
 			int context = source.IndexOf("private static void OnBeginContextRendering", System.StringComparison.Ordinal);
 			int update = source.IndexOf("private static void UpdateFrame(", System.StringComparison.Ordinal);
 			Assert.That(context, Is.GreaterThan(0));

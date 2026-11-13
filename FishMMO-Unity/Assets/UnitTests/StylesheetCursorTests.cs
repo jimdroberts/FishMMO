@@ -68,8 +68,8 @@ namespace FishMMO.UnitTests
 
 		private static string ReadSource(string path)
 		{
-			LogAssert.IsTrue(File.Exists(path), $"expected a file at {path}");
-			return File.ReadAllText(path);
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"expected a file at {path}");
+			return ProjectFiles.ReadAllText(path);
 		}
 
 		private static string StripCssComments(string source)
@@ -139,13 +139,13 @@ namespace FishMMO.UnitTests
 		/// <summary>Every runtime stylesheet, theme included.</summary>
 		private static List<string> RuntimeSheets()
 		{
-			return new List<string>(Directory.GetFiles(GuiRoot, "*.uss", SearchOption.AllDirectories));
+			return new List<string>(Directory.GetFiles(ProjectFiles.Folder(GuiRoot), "*.uss", SearchOption.AllDirectories));
 		}
 
 		/// <summary>Every runtime layout.</summary>
 		private static List<string> RuntimeLayouts()
 		{
-			return new List<string>(Directory.GetFiles(GuiRoot, "*.uxml", SearchOption.AllDirectories));
+			return new List<string>(Directory.GetFiles(ProjectFiles.Folder(GuiRoot), "*.uxml", SearchOption.AllDirectories));
 		}
 
 		/// <summary>Walks a stylesheet's rule blocks and collects every <c>cursor</c> declaration.</summary>
@@ -281,7 +281,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheEditorToolWindowsKeepTheirKeywordCursors()
 		{
-			LogAssert.IsTrue(File.Exists(EditorSheetPath), $"expected the editor dashboard sheet at {EditorSheetPath}");
+			LogAssert.IsTrue(ProjectFiles.Exists(EditorSheetPath), $"expected the editor dashboard sheet at {EditorSheetPath}");
 
 			List<Declaration> declarations = CursorDeclarations(EditorSheetPath);
 			LogAssert.IsTrue(declarations.Count > 0,

@@ -192,7 +192,7 @@ namespace FishMMO.UnitTests
 			string code = SourceScanPins.ReadCode(ChatDirectory + "/ChatSystem.FloodMute.cs");
 			Func<string, string> check = c =>
 			{
-				if (c.Contains("ChatMutedUntilTicks") || c.Contains("ChatMuteReason"))
+				if (c.Contains("MutedUntilTicks") || c.Contains("MuteReason"))
 				{
 					return "the flood mute writes the stored-mute fields the moderation commands own";
 				}
@@ -203,7 +203,7 @@ namespace FishMMO.UnitTests
 				return c.Contains("MonotonicClock.NowSeconds") ? null : "the flood mute is no longer timed on the monotonic clock";
 			};
 			SourceScanPins.HoldsAndFires("O8 in memory", code, check,
-				SourceScanPins.InsertBefore("floodMuteStates[sender.ID] = state;", "sender.ChatMutedUntilTicks = long.MaxValue;\n"),
+				SourceScanPins.InsertBefore("floodMuteStates[sender.ID] = state;", "sender.Component<ChatState>().MutedUntilTicks = long.MaxValue;\n"),
 				"a flood mute written as a stored mute");
 		}
 	}

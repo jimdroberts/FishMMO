@@ -600,7 +600,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			Camera camera = (previewRt != null && subject != null) ? subject.EquipmentViewCamera : null;
+			Camera camera = (previewRt != null && subject != null) ? (subject as PlayerCharacter)?.EquipmentViewCamera : null;
 			if (camera == null)
 			{
 				ApplyPreviewTexture(null);

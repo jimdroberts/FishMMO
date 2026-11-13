@@ -30,7 +30,7 @@ namespace FishMMO.UnitTests
 				string path = folder + "/Fixture.shader";
 				File.WriteAllText(path, source);
 				AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
-				var shader = AssetDatabase.LoadAssetAtPath<Shader>(path);
+				var shader = AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path(path));
 				Assert.That(shader, Is.Not.Null);
 				Assert.That(ClientShaderBuildAudit.HasCompatibleSubshader(shader, "UniversalPipeline"), Is.EqualTo(expected));
 			}

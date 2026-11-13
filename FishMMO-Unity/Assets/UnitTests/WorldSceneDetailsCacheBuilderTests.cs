@@ -31,7 +31,7 @@ namespace FishMMO.UnitTests
 		private static WorldSceneDetailsCache LoadCache()
 		{
 			return AssetDatabase.LoadAssetAtPath<WorldSceneDetailsCache>(
-				WorldSceneDetailsCache.CACHE_FULL_PATH);
+				ProjectFiles.Path(WorldSceneDetailsCache.CACHE_FULL_PATH));
 		}
 
 		[Test]
@@ -99,7 +99,7 @@ namespace FishMMO.UnitTests
 			 * over the very file it failed to read. A stale catalog therefore replaced a populated
 			 * cache with an empty one. The asset database cannot make that mistake: it answers for
 			 * what is on disk. */
-			string source = File.ReadAllText(Path.Combine(
+			string source = ProjectFiles.ReadAllText(Path.Combine(
 				Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/WorldSceneDetailsCacheBuilder.cs"));
 

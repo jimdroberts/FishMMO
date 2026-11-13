@@ -39,7 +39,7 @@ namespace FishMMO.UnitTests
 			created.Clear();
 			foreach (string root in tempRoots)
 			{
-				if (Directory.Exists(root))
+				if (ProjectFiles.FolderExists(root))
 				{
 					Directory.Delete(root, true);
 				}
@@ -328,15 +328,15 @@ namespace FishMMO.UnitTests
 
 			string newPrefab = ProceduralArtPayload.GuidFor(prefabPath), newMaterial = ProceduralArtPayload.GuidFor(materialPath), newLayer = ProceduralArtPayload.GuidFor(layerPath);
 			long newRoot = ProceduralArtFileIds.IdFor(prefabPath, ProceduralArtFileIds.RootKey);
-			Assert.That(File.ReadAllText(Path.Combine(project, prefabPath + ".meta")), Does.Contain("guid: " + newPrefab + "\n").And.Contain("FishMMOProceduralArt"), "the .meta keeps everything but its GUID");
-			Assert.That(File.ReadAllText(Path.Combine(project, materialPath + ".meta")), Does.Contain("guid: " + newMaterial + "\n"));
-			Assert.That(File.ReadAllText(Path.Combine(project, layerPath + ".meta")), Does.Contain("guid: " + newLayer + "\n"));
+			Assert.That(ProjectFiles.ReadAllText(Path.Combine(project, prefabPath + ".meta")), Does.Contain("guid: " + newPrefab + "\n").And.Contain("FishMMOProceduralArt"), "the .meta keeps everything but its GUID");
+			Assert.That(ProjectFiles.ReadAllText(Path.Combine(project, materialPath + ".meta")), Does.Contain("guid: " + newMaterial + "\n"));
+			Assert.That(ProjectFiles.ReadAllText(Path.Combine(project, layerPath + ".meta")), Does.Contain("guid: " + newLayer + "\n"));
 
-			string prefabNow = File.ReadAllText(Path.Combine(project, prefabPath));
+			string prefabNow = ProjectFiles.ReadAllText(Path.Combine(project, prefabPath));
 			Assert.That(ProceduralArtFileIds.RootGameObjectId(prefabNow), Is.EqualTo(newRoot), "the prefab's objects were renumbered");
 			Assert.That(prefabNow, Does.Contain("guid: " + newMaterial), "a wrapper's reference to a re-addressed wrapper follows it");
 
-			string sceneNow = File.ReadAllText(Path.Combine(project, "Assets/Scenes/Test.unity"));
+			string sceneNow = ProjectFiles.ReadAllText(Path.Combine(project, "Assets/Scenes/Test.unity"));
 			Assert.That(sceneNow, Does.Contain($"tree: {{fileID: {newRoot}, guid: {newPrefab}, type: 3}}"));
 			Assert.That(sceneNow, Does.Contain($"rock: {{fileID: 2100000, guid: {newMaterial}, type: 2}}"));
 			Assert.That(sceneNow, Does.Contain($"Layer: {{fileID: 8574412962073106934, guid: {newLayer}, type: 2}}"));
@@ -350,11 +350,11 @@ namespace FishMMO.UnitTests
 			Assert.That(Contains(tileNow, BitConverter.GetBytes(12345L)), Is.True, "small numbers are never touched");
 			Assert.That(tileNow.Length, Is.EqualTo(binary.Count));
 
-			Assert.That(File.ReadAllText(Path.Combine(project, "Assets/LOCAL/Biomes/Overrides/Test LOCAL Art.asset")), Is.EqualTo(localText), "Assets/LOCAL is never rewritten");
+			Assert.That(ProjectFiles.ReadAllText(Path.Combine(project, "Assets/LOCAL/Biomes/Overrides/Test LOCAL Art.asset")), Is.EqualTo(localText), "Assets/LOCAL is never rewritten");
 			Assert.That(local.Count, Is.EqualTo(1), "but it is reported");
 
-			Assert.That(File.ReadAllText(Path.Combine(backup, "Assets/Scenes/Test.unity")), Is.EqualTo(scene), "every rewritten file was backed up first");
-			Assert.That(File.Exists(Path.Combine(backup, prefabPath + ".meta")), Is.True);
+			Assert.That(ProjectFiles.ReadAllText(Path.Combine(backup, "Assets/Scenes/Test.unity")), Is.EqualTo(scene), "every rewritten file was backed up first");
+			Assert.That(ProjectFiles.Exists(Path.Combine(backup, prefabPath + ".meta")), Is.True);
 
 			Assert.That(ProceduralArtMigration.NeedsMigration(project), Is.False);
 			Assert.That(ProceduralArtMigration.BuildPlan(project).Empty, Is.True, "a second run changes nothing");
@@ -477,11 +477,11 @@ namespace FishMMO.UnitTests
 			var stale = new Dictionary<string, string>(StringComparer.Ordinal);
 			foreach (string root in ProceduralArtPayload.GeneratedRoots)
 			{
-				if (!Directory.Exists(root))
+				if (!ProjectFiles.FolderExists(root))
 				{
 					continue;
 				}
-				foreach (string file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+				foreach (string file in Directory.EnumerateFiles(ProjectFiles.Folder(root), "*", SearchOption.AllDirectories))
 				{
 					string path = file.Replace('\\', '/');
 					if (path.EndsWith(".meta", StringComparison.Ordinal))

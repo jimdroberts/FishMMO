@@ -87,8 +87,8 @@ namespace FishMMO.UnitTests
 		[UnityTest]
 		public IEnumerator EverySettingCanBeScrolledIntoViewAtEveryWindowShape()
 		{
-			PanelSettings asset = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
-			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(LauncherUxmlPath);
+			PanelSettings asset = AssetDatabase.LoadAssetAtPath<PanelSettings>(ProjectFiles.Path(PanelSettingsPath));
+			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(ProjectFiles.Path(LauncherUxmlPath));
 			LogAssert.IsNotNull(asset, $"panel settings must exist at {PanelSettingsPath}");
 			LogAssert.IsNotNull(uxml, $"the launcher UXML must exist at {LauncherUxmlPath}");
 

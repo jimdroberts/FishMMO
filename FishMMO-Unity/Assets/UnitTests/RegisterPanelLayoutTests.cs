@@ -65,8 +65,8 @@ namespace FishMMO.UnitTests
 		[SetUp]
 		public void SetUp()
 		{
-			PanelSettings authored = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
-			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(UxmlPath);
+			PanelSettings authored = AssetDatabase.LoadAssetAtPath<PanelSettings>(ProjectFiles.Path(PanelSettingsPath));
+			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(ProjectFiles.Path(UxmlPath));
 			LogAssert.IsNotNull(authored, $"panel settings must exist at {PanelSettingsPath}");
 			LogAssert.IsNotNull(uxml, $"the register UXML must exist at {UxmlPath}");
 

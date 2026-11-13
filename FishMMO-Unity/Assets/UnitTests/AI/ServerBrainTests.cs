@@ -46,7 +46,7 @@ namespace FishMMO.UnitTests.AI
 		/// </summary>
 		private NPC InstantiateNPC(string path)
 		{
-			GameObject instance = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(path));
+			GameObject instance = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(path)));
 			created.Add(instance);
 			NPC npc = instance.GetComponent<NPC>();
 			System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public;
@@ -57,7 +57,7 @@ namespace FishMMO.UnitTests.AI
 
 		private static AIBrainCatalogue LoadCatalogue()
 		{
-			AIBrainCatalogue catalogue = AssetDatabase.LoadAssetAtPath<AIBrainCatalogue>(BrainCatalogueYaml.CataloguePath);
+			AIBrainCatalogue catalogue = AssetDatabase.LoadAssetAtPath<AIBrainCatalogue>(ProjectFiles.Path(BrainCatalogueYaml.CataloguePath));
 			Assert.IsNotNull(catalogue, $"no brain catalogue at {BrainCatalogueYaml.CataloguePath}");
 			catalogue.Invalidate();
 			return catalogue;
@@ -88,7 +88,7 @@ namespace FishMMO.UnitTests.AI
 		[Test]
 		public void TheServerAssembly_IsNotCompiledForClientPlayers()
 		{
-			string json = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Assets/Scripts/Server/FishMMO.Server.asmdef"));
+			string json = ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Assets/Scripts/Server/FishMMO.Server.asmdef"));
 			ServerAsmdef asmdef = JsonUtility.FromJson<ServerAsmdef>(json);
 
 			Assert.That(asmdef.includePlatforms, Does.Contain("Editor"));
@@ -123,9 +123,9 @@ namespace FishMMO.UnitTests.AI
 			 * from the brain component — which clients never have — the owner's client would start
 			 * writing the pet's input. */
 			string root = Directory.GetCurrentDirectory();
-			string prediction = File.ReadAllText(Path.Combine(root,
+			string prediction = ProjectFiles.ReadAllText(Path.Combine(root,
 				"Assets/Scripts/Shared/Implementation/Entity/Prediction/CharacterPredictionController.cs"));
-			string lagComp = File.ReadAllText(Path.Combine(root,
+			string lagComp = ProjectFiles.ReadAllText(Path.Combine(root,
 				"Assets/Scripts/Shared/Implementation/Entity/Prediction/LagCompensation/LagCompensationTick.cs"));
 
 			Assert.That(prediction, Does.Contain("serverDrivenInput = GetComponent<NPC>() != null;"));
@@ -139,8 +139,8 @@ namespace FishMMO.UnitTests.AI
 		public void TheCatalogue_FindsAnNPCsBrainByItsPrefabIdentity()
 		{
 			AIBrainCatalogue catalogue = LoadCatalogue();
-			NetworkObject orc = AssetDatabase.LoadAssetAtPath<GameObject>(ORC).GetComponent<NetworkObject>();
-			NetworkObject banker = AssetDatabase.LoadAssetAtPath<GameObject>(BANKER).GetComponent<NetworkObject>();
+			NetworkObject orc = AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(ORC)).GetComponent<NetworkObject>();
+			NetworkObject banker = AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(BANKER)).GetComponent<NetworkObject>();
 
 			Assert.IsTrue(catalogue.TryGetEntry(orc, out AIBrainCatalogue.Entry orcEntry));
 			Assert.IsTrue(catalogue.TryGetEntry(banker, out AIBrainCatalogue.Entry bankerEntry));
@@ -168,9 +168,9 @@ namespace FishMMO.UnitTests.AI
 			Assert.IsNotNull(spawnerSystemGuid);
 
 			string groups = Path.Combine(root, "Assets/AddressableAssetsData/AssetGroups");
-			foreach (string group in Directory.GetFiles(groups, "*.asset"))
+			foreach (string group in Directory.GetFiles(ProjectFiles.Folder(groups), "*.asset"))
 			{
-				string text = File.ReadAllText(group);
+				string text = ProjectFiles.ReadAllText(group);
 				bool serverGroup = Path.GetFileNameWithoutExtension(group).StartsWith("Server", StringComparison.Ordinal);
 				if (serverGroup)
 				{
@@ -181,11 +181,11 @@ namespace FishMMO.UnitTests.AI
 				Assert.That(text, Does.Not.Contain(spawnerSystemGuid), $"{group} lists the spawner system");
 			}
 
-			string serverGroupText = File.ReadAllText(Path.Combine(groups, "Server_Static_Permanent.asset"));
+			string serverGroupText = ProjectFiles.ReadAllText(Path.Combine(groups, "Server_Static_Permanent.asset"));
 			Assert.That(serverGroupText, Does.Contain(aiSystemGuid), "the AI system must be in the server-only group");
 			Assert.That(serverGroupText, Does.Contain(spawnerSystemGuid), "the spawner system must be in the server-only group");
 
-			string sceneServer = File.ReadAllText(Path.Combine(root, "Assets/Scenes/Server/SceneServer.unity"));
+			string sceneServer = ProjectFiles.ReadAllText(Path.Combine(root, "Assets/Scenes/Server/SceneServer.unity"));
 			Assert.That(sceneServer, Does.Contain(aiSystemGuid), "the scene server must run the AI system");
 			Assert.That(sceneServer, Does.Contain(spawnerSystemGuid), "the scene server must run the spawner system");
 		}
@@ -198,7 +198,7 @@ namespace FishMMO.UnitTests.AI
 			// An edit-mode NPC has no NavMesh to stand on; the agent's complaints about that are expected.
 			UnityEngine.TestTools.LogAssert.ignoreFailingMessages = true;
 
-			GameObject orcPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(ORC);
+			GameObject orcPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(ORC));
 			Assert.IsNull(orcPrefab.GetComponent<AIController>(), "the prefab must carry no brain of its own");
 
 			NPC npc = InstantiateNPC(ORC);
@@ -218,7 +218,7 @@ namespace FishMMO.UnitTests.AI
 
 			// A spawner's override beats the catalogue, and the next spawn goes back to the catalogue.
 			AIArchetypeTemplate other = AssetDatabase.LoadAssetAtPath<AIArchetypeTemplate>(
-				"Assets/Templates/Entity/NPCs/AI/Archetypes/Enemy - Archer.asset");
+				ProjectFiles.Path("Assets/Templates/Entity/NPCs/AI/Archetypes/Enemy - Archer.asset"));
 			Assert.IsNotNull(other);
 			host.Prepare(npc, Vector3.zero, other);
 			Assert.AreSame(other, brain.Archetype);

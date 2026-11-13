@@ -18,10 +18,14 @@
     the text over it carries a shadow. That works on any artwork without touching the artwork.
 */
 
+/* Black behind the artwork, so the overlay is never see-through. The character can be in the world while the
+ * overlay still holds for the scene's content; a scene without artwork (or the default sprite missing) used to show
+ * that half-built world, character and all, through a bare progress bar. */
 .loading-screen {
     flex-grow: 1;
     align-items: center;
     justify-content: flex-end;
+    background-color: rgb(0, 0, 0);
 }
 
 /* Full-bleed artwork, assigned from C#. */

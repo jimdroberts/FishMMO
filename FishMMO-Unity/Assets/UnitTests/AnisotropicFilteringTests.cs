@@ -110,7 +110,7 @@ namespace FishMMO.UnitTests
 			 *
 			 * Pinned in source: driving it for real would mean switching quality level inside a
 			 * test, which reloads textures and render targets and writes to the project asset. */
-			string source = File.ReadAllText(Path.Combine(
+			string source = ProjectFiles.ReadAllText(Path.Combine(
 				Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Client/Settings/ClientDisplaySettings.cs"));
 
@@ -135,7 +135,7 @@ namespace FishMMO.UnitTests
 			 * authored quality level and VSync count so a play-mode session cannot leave a
 			 * source-control change behind; anisotropic filtering is written the same way and needs
 			 * the same treatment, or this feature reintroduces exactly that trap. */
-			string source = File.ReadAllText(Path.Combine(
+			string source = ProjectFiles.ReadAllText(Path.Combine(
 				Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Client/Settings/ClientDisplaySettings.cs"));
 
@@ -151,7 +151,7 @@ namespace FishMMO.UnitTests
 		{
 			/* The dropdown stores the selected index, so labels and enum must stay the same length
 			 * and order or a click maps onto a different mode. */
-			string source = File.ReadAllText(Path.Combine(
+			string source = ProjectFiles.ReadAllText(Path.Combine(
 				Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Client/GUI/World/Options/UITKOptions.cs"));
 

@@ -32,12 +32,12 @@ namespace FishMMO.UnitTests
 				}
 				finally { Object.DestroyImmediate(image); }
 				AssetDatabase.ImportAsset(folder + "/Looks.png");
-				var importer = (TextureImporter)AssetImporter.GetAtPath(folder + "/Looks.png");
+				var importer = (TextureImporter)AssetImporter.GetAtPath(ProjectFiles.Path(folder + "/Looks.png"));
 				var settings = new TextureImporterSettings(); importer.ReadTextureSettings(settings);
 				settings.textureShape = TextureImporterShape.Texture2DArray;
 				settings.flipbookColumns = 4; settings.flipbookRows = 1;
 				importer.SetTextureSettings(settings); importer.textureCompression = TextureImporterCompression.Uncompressed; importer.SaveAndReimport();
-				var array = AssetDatabase.LoadAssetAtPath<Texture2DArray>(folder + "/Looks.png");
+				var array = AssetDatabase.LoadAssetAtPath<Texture2DArray>(ProjectFiles.Path(folder + "/Looks.png"));
 				Assert.That(array.depth, Is.EqualTo(4));
 				var shared = new Material(Shader.Find("FishMMO/Weather Lit")) { name = "Shared Look" };
 				shared.enableInstancing = true;

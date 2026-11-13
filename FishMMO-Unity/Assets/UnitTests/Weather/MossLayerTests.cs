@@ -141,7 +141,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheRockyCoastAsset_IsDamp()
 		{
-			var coast = AssetDatabase.LoadAssetAtPath<BiomeTemplate>(RockyCoastAsset);
+			var coast = AssetDatabase.LoadAssetAtPath<BiomeTemplate>(ProjectFiles.Path(RockyCoastAsset));
 			Assert.IsNotNull(coast, RockyCoastAsset);
 			Assert.IsTrue(MossClimate.IsSeaShore(coast), "the Rocky Coast is a sea shore");
 			Assert.Greater(MossClimate.Dampness(coast), 0.6f, "the Rocky Coast's spray keeps its rocks mossy");
@@ -284,7 +284,7 @@ namespace FishMMO.UnitTests
 		public void TheDeadwoodMaterials_AskForMoss()
 		{
 			// Every material the deadwood step writes sets its amount: the bark by family, the petrified stone, the wood.
-			string code = File.ReadAllText(DeadwoodGenerator);
+			string code = ProjectFiles.ReadAllText(DeadwoodGenerator);
 			StringAssert.Contains("m.SetFloat(\"_FishMoss\", MossAmounts.ForDeadwoodBark(family));", code);
 			StringAssert.Contains("m.SetFloat(\"_FishMoss\", MossAmounts.PetrifiedLog);", code);
 			StringAssert.Contains("m.SetFloat(\"_FishMoss\", MossAmounts.DeadwoodWood);", code);
@@ -294,14 +294,14 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheVegetationShader_GrowsTheSameMoss_ForTheMaterialsThatAsk()
 		{
-			string passes = File.ReadAllText(VegetationPasses);
+			string passes = ProjectFiles.ReadAllText(VegetationPasses);
 			int start = passes.IndexOf("CBUFFER_START(UnityPerMaterial)");
 			int end = passes.IndexOf("CBUFFER_END", start);
 			Assert.Greater(start, -1);
 			StringAssert.Contains("half _FishMoss;", passes.Substring(start, end - start), "outside UnityPerMaterial the SRP batcher drops every vegetation material");
 			foreach (string shader in VegetationShaders)
 			{
-				StringAssert.Contains("_FishMoss(\"Moss on this surface\", Range(0.0, 1.0)) = 0.0", File.ReadAllText(shader), $"{shader}: off unless a material opts in, and a clone keeps the value");
+				StringAssert.Contains("_FishMoss(\"Moss on this surface\", Range(0.0, 1.0)) = 0.0", ProjectFiles.ReadAllText(shader), $"{shader}: off unless a material opts in, and a clone keeps the value");
 			}
 			StringAssert.Contains("#include \"FishMoss.hlsl\"", passes, "the same library, not a copy");
 			int repeat = passes.IndexOf("#define FISH_MOSS_SAMPLER sampler_TrilinearRepeat");
@@ -321,21 +321,21 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheMaterialAmount_IsInTheMaterialBuffer_AndBothShadersDeclareIt()
 		{
-			string input = File.ReadAllText(LitInput);
+			string input = ProjectFiles.ReadAllText(LitInput);
 			int start = input.IndexOf("CBUFFER_START(UnityPerMaterial)");
 			int end = input.IndexOf("CBUFFER_END", start);
 			Assert.Greater(start, -1);
 			StringAssert.Contains("half _FishMoss;", input.Substring(start, end - start), "outside UnityPerMaterial the SRP batcher drops every material on the shader");
 			foreach (string shader in new[] { LitShader, IndirectShader })
 			{
-				StringAssert.Contains("_FishMoss(\"Moss on this surface\", Range(0.0, 1.0)) = 0.0", File.ReadAllText(shader), $"{shader}: off unless a material opts in");
+				StringAssert.Contains("_FishMoss(\"Moss on this surface\", Range(0.0, 1.0)) = 0.0", ProjectFiles.ReadAllText(shader), $"{shader}: off unless a material opts in");
 			}
 		}
 
 		[Test]
 		public void TheMossLibrary_AddsNoKeywordAndNoSamplerState()
 		{
-			string library = File.ReadAllText(MossLibrary);
+			string library = ProjectFiles.ReadAllText(MossLibrary);
 			Assert.IsFalse(Regex.IsMatch(library, @"^\s*SAMPLER\s*\(", RegexOptions.Multiline), "a sampler of its own would be the forward pass's seventeenth on D3D11");
 			Assert.IsFalse(library.Contains("#pragma"), "no keywords: a uniform branch on the amount instead");
 			StringAssert.Contains("#define FISH_MOSS_SAMPLER sampler_BaseMap", library, "read with the base map's sampler, bound in every forward program");
@@ -346,7 +346,7 @@ namespace FishMMO.UnitTests
 		public void TheSpraysMoss_IsTheTexturedLayer_NotAFlatTint()
 		{
 			// The spray's moss used to be a constant dark green mixed in by FishFallSurface: no texture, no normal, no clumps.
-			string surface = File.ReadAllText(SurfaceLibrary);
+			string surface = ProjectFiles.ReadAllText(SurfaceLibrary);
 			int start = surface.IndexOf("void FishFallSurface(");
 			int end = surface.IndexOf("void FishWeatherSurface(", start);
 			Assert.Greater(start, -1);
@@ -355,7 +355,7 @@ namespace FishMMO.UnitTests
 			StringAssert.DoesNotContain("half3(0.06, 0.11, 0.035)", fall, "the old flat green is gone");
 			StringAssert.Contains("float spray = FishFallSpray(", surface, "the spray still wets what is round a fall");
 
-			string library = File.ReadAllText(MossLibrary);
+			string library = ProjectFiles.ReadAllText(MossLibrary);
 			int growth = library.IndexOf("half FishFallMossGrowth(");
 			Assert.Greater(growth, -1, "the spray's growth lives in the moss library");
 			string growthBody = library.Substring(growth, library.IndexOf("\n}", growth) - growth);
@@ -381,7 +381,7 @@ namespace FishMMO.UnitTests
 		{
 			foreach (string path in TerrainPasses)
 			{
-				string pass = File.ReadAllText(path);
+				string pass = ProjectFiles.ReadAllText(path);
 				int only = pass.IndexOf("#define FISH_MOSS_FALL_ONLY");
 				int sampler = pass.IndexOf("#define FISH_MOSS_SAMPLER ");
 				int include = pass.IndexOf("#include \"FishMoss.hlsl\"");
@@ -394,16 +394,16 @@ namespace FishMMO.UnitTests
 				Assert.Greater(moss, -1, $"{path}: the ground round a fall grows no moss");
 				Assert.Less(moss, weather, $"{path}: moss before the weather, so the spray's wet darkens it");
 			}
-			Assert.That(File.ReadAllText(TerrainPasses[0]), Does.Contain("#define FISH_MOSS_SAMPLER sampler_Splat0"), "SplatmapMix reads every layer with the first's sampler");
-			Assert.That(File.ReadAllText(TerrainPasses[1]), Does.Contain("#define FISH_MOSS_SAMPLER sampler_FishAlbedoArray"), "the layers' own repeat sampler");
+			Assert.That(ProjectFiles.ReadAllText(TerrainPasses[0]), Does.Contain("#define FISH_MOSS_SAMPLER sampler_Splat0"), "SplatmapMix reads every layer with the first's sampler");
+			Assert.That(ProjectFiles.ReadAllText(TerrainPasses[1]), Does.Contain("#define FISH_MOSS_SAMPLER sampler_FishAlbedoArray"), "the layers' own repeat sampler");
 
-			string contact = File.ReadAllText(GroundContactLit);
+			string contact = ProjectFiles.ReadAllText(GroundContactLit);
 			int bandMoss = contact.IndexOf("FishFallMoss(");
 			Assert.Greater(bandMoss, -1, "a rock's or a trunk's foot renders the terrain: it must grow the terrain's moss, or the band is a bare ring");
 			Assert.Less(bandMoss, contact.IndexOf("FishWeatherSurface("));
 			foreach (string path in new[] { LitPass, VegetationPasses })
 			{
-				string pass = File.ReadAllText(path);
+				string pass = ProjectFiles.ReadAllText(path);
 				int library = pass.IndexOf("#include \"FishMoss.hlsl\"");
 				int lit = pass.IndexOf("#include \"FishGroundContactLit.hlsl\"");
 				Assert.Greater(lit, library, $"{path}: the ground band's lighting comes after the moss it calls");
@@ -414,7 +414,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheForwardPass_GrowsMossBeforeTheWeather()
 		{
-			string pass = File.ReadAllText(LitPass);
+			string pass = ProjectFiles.ReadAllText(LitPass);
 			StringAssert.Contains("#include \"FishMoss.hlsl\"", pass);
 			int moss = pass.IndexOf("FishMossSurface(");
 			int weather = pass.IndexOf("FishWeatherSurface(");

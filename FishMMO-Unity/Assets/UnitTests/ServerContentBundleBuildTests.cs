@@ -32,7 +32,7 @@ namespace FishMMO.UnitTests
 					"float4 vert(float4 p : POSITION) : SV_POSITION { return p; }\n" +
 					"float4 frag() : SV_Target { return float4(1, 1, 1, 1); }\nENDCG\n} } }");
 				AssetDatabase.ImportAsset(shaderPath, ImportAssetOptions.ForceSynchronousImport);
-				var material = new Material(AssetDatabase.LoadAssetAtPath<Shader>(shaderPath));
+				var material = new Material(AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path(shaderPath)));
 				string materialPath = assets + "/Fixture.mat";
 				AssetDatabase.CreateAsset(material, materialPath);
 				var mesh = new Mesh { vertices = new[] { Vector3.zero, Vector3.right, Vector3.up }, triangles = new[] { 0, 1, 2 } };
@@ -105,7 +105,7 @@ namespace FishMMO.UnitTests
 			finally
 			{
 				AssetDatabase.DeleteAsset(assets);
-				if (Directory.Exists(output)) Directory.Delete(output, true);
+				if (ProjectFiles.FolderExists(output)) Directory.Delete(output, true);
 			}
 		}
 	}

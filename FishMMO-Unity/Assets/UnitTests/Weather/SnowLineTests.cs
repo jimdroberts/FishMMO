@@ -28,8 +28,8 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void TheShaderAndTheCSharp_ShareTheirConstantsAndHash()
 		{
-			Assert.IsTrue(File.Exists(Include), $"{Include} is missing");
-			string hlsl = File.ReadAllText(Include);
+			Assert.IsTrue(ProjectFiles.Exists(Include), $"{Include} is missing");
+			string hlsl = ProjectFiles.ReadAllText(Include);
 			Assert.AreEqual(SnowLineShape.SpanKelvin, Define(hlsl, "FISH_PACK_SPAN_K"), 1e-6f, "the span the published line stands for");
 			Assert.AreEqual(SnowLineShape.WanderKelvin, Define(hlsl, "FISH_SNOW_WANDER_K"), 1e-6f, "the wander");
 			foreach (string constant in new[] { "0x8DA6B343u", "0xD8163841u", "0x2C1B3C6Du", "0x297A2D39u", "0xFFFFFFu" })

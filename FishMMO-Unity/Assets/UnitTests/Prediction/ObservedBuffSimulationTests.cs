@@ -337,7 +337,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void BuffController_HasNoParallelObservedContainer()
 		{
-			string source = File.ReadAllText(Path.Combine(Application.dataPath,
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
 				"Scripts/Shared/Implementation/Entity/Prediction/Buff/BuffController.cs"));
 
 			LogAssert.IsFalse(source.Contains("private ObservedBuffEntry[] observedBuffs"),

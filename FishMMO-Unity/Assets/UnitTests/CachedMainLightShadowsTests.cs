@@ -175,7 +175,7 @@ namespace FishMMO.UnitTests
 				Assert.That(first.x, Is.EqualTo(0.5f).Within(1e-3f), "URP's first texel centre on the window's");
 				Assert.That(first.y, Is.EqualTo(0.5f).Within(1e-3f));
 			}
-			string code = System.IO.File.ReadAllText("Assets/Scripts/Client/World/Terrain/CachedMainLightShadows.cs");
+			string code = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/CachedMainLightShadows.cs");
 			StringAssert.Contains("TryExactWindowFor(in currentKeys[i], tile.x, tile.y, out windows[i])", code);
 			StringAssert.DoesNotContain("// Not a slice this cache understands: URP's own map stands alone this frame.", code);
 		}
@@ -263,7 +263,7 @@ namespace FishMMO.UnitTests
 			string cache = SourceScanPins.ReadCode("Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.ShadowCache.cs");
 			// Its static casters (a layout, an upload) and the coverage of the shadow work it culled (ShadowCasterCoverage); not the camera.
 			StringAssert.Contains("public int ShadowContentVersion => HashCode.Combine(layoutSerial, flushSerial, CoverageSerial());", cache);
-			string kernel = System.IO.File.ReadAllText(Shaders + "FishTerrainInstancing.compute");
+			string kernel = ProjectFiles.ReadAllText(Shaders + "FishTerrainInstancing.compute");
 			StringAssert.Contains("if (!cacheCull && (work.padding & 1u) == 0 && FishSphereVisible(centre, radius) && !FishOccluded(centre, radius))", kernel);
 			StringAssert.Contains("partner = -1;", kernel);
 		}
@@ -273,8 +273,8 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void OnlyTheShadowViewsNonVegetationCommandsAreStatic()
 		{
-			var lit = new Material(AssetDatabase.LoadAssetAtPath<Shader>(Shaders + "FishWeatherLitIndirect.shader"));
-			var vegetation = new Material(AssetDatabase.LoadAssetAtPath<Shader>(Shaders + "FishVegetationIndirect.shader"));
+			var lit = new Material(AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path(Shaders + "FishWeatherLitIndirect.shader")));
+			var vegetation = new Material(AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path(Shaders + "FishVegetationIndirect.shader")));
 			try
 			{
 				Assert.That(TerrainGpuRenderer.IsStaticShadowCaster(1, lit), Is.True);
@@ -292,7 +292,7 @@ namespace FishMMO.UnitTests
 		[TestCase(ShaderCompilerPlatform.D3D, BuildTarget.StandaloneWindows64)]
 		public void TheMergeShaderCompiles(ShaderCompilerPlatform api, BuildTarget target)
 		{
-			var shader = AssetDatabase.LoadAssetAtPath<Shader>(Shaders + "FishShadowCacheMerge.shader");
+			var shader = AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path(Shaders + "FishShadowCacheMerge.shader"));
 			Assert.That(shader, Is.Not.Null);
 			Assert.That(shader.name, Is.EqualTo(CachedMainLightShadows.MergeShaderName));
 			var data = ShaderUtil.GetShaderData(shader).GetSubshader(0);
@@ -338,8 +338,8 @@ namespace FishMMO.UnitTests
 			StringAssert.Contains("LightRotation(CachedMainLightShadows.StableDirection(sunDirection))", sky);
 			StringAssert.Contains("LightRotation(CachedMainLightShadows.StableDirection(body.Direction))", sky);
 			// The renderer asset carries the shader into builds.
-			string guid = AssetDatabase.AssetPathToGUID(Shaders + "FishShadowCacheMerge.shader");
-			StringAssert.Contains("ShadowCacheMergeShader: {fileID: 4800000, guid: " + guid, System.IO.File.ReadAllText("Assets/Settings/URP-HighFidelity-Renderer.asset"));
+			string guid = AssetDatabase.AssetPathToGUID(ProjectFiles.Path(Shaders + "FishShadowCacheMerge.shader"));
+			StringAssert.Contains("ShadowCacheMergeShader: {fileID: 4800000, guid: " + guid, ProjectFiles.ReadAllText("Assets/Settings/URP-HighFidelity-Renderer.asset"));
 		}
 
 		[Test]
@@ -350,10 +350,10 @@ namespace FishMMO.UnitTests
 			// kept the farther depth (2026-11-02).
 			Assert.AreEqual(UnityEngine.Rendering.CompareFunction.LessEqual, CachedMainLightShadows.MergeDepthTest(false));
 			Assert.AreEqual(UnityEngine.Rendering.CompareFunction.Always, CachedMainLightShadows.MergeDepthTest(true));
-			string source = System.IO.File.ReadAllText("Assets/Scripts/Client/World/Terrain/CachedMainLightShadows.cs");
+			string source = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/CachedMainLightShadows.cs");
 			StringAssert.DoesNotContain("CompareFunction.GreaterEqual", source);
 			// The shader's own default is LessEqual too (4), for a material made before the code sets it.
-			StringAssert.Contains("_FishShadowCacheZTest(\"Merge depth test\", Float) = 4", System.IO.File.ReadAllText(Shaders + "FishShadowCacheMerge.shader"));
+			StringAssert.Contains("_FishShadowCacheZTest(\"Merge depth test\", Float) = 4", ProjectFiles.ReadAllText(Shaders + "FishShadowCacheMerge.shader"));
 		}
 
 		// Off everywhere until the merge is right (2026-11-06: the browser merge writes depth no caster put there); the owner wants
@@ -361,7 +361,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void OffByDefaultUntilTheMergeIsRight()
 		{
-			string code = System.IO.File.ReadAllText("Assets/Scripts/Client/World/Terrain/CachedMainLightShadows.cs");
+			string code = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/CachedMainLightShadows.cs");
 			StringAssert.Contains("public static bool Enabled = DefaultOn;", code);
 			StringAssert.Contains("public const bool DefaultOn = false;", code);
 			StringAssert.DoesNotContain("public const bool DefaultOn = true;", code);

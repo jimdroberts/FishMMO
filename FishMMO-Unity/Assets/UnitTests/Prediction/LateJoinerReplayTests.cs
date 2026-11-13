@@ -107,8 +107,8 @@ namespace FishMMO.UnitTests
 		private static string ReadSource(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-			LogAssert.IsTrue(File.Exists(path), $"{relativePath} not found at {path}.");
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{relativePath} not found at {path}.");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 		/// <summary>
@@ -127,10 +127,10 @@ namespace FishMMO.UnitTests
 			string path = Path.Combine(
 				Directory.GetCurrentDirectory(),
 				"Assets/Plugins/FishNet/Runtime/Object/NetworkObject/NetworkObject.Prediction.cs");
-			LogAssert.IsTrue(File.Exists(path),
+			LogAssert.IsTrue(ProjectFiles.Exists(path),
 				$"Vendored FishNet file not found at {path}; the runtime forwarding switch lives there.");
 
-			string source = File.ReadAllText(path);
+			string source = ProjectFiles.ReadAllText(path);
 			int setterIndex = source.IndexOf("public void SetStateForwarding", StringComparison.Ordinal);
 			LogAssert.IsTrue(setterIndex >= 0,
 				"NetworkObject.SetStateForwarding (FISHMMO EDIT) is missing; the runtime " +

@@ -157,6 +157,38 @@ namespace FishMMO.Server.Implementation.LoginServer
 		}
 
 		/// <summary>
+		/// What <paramref name="characterID"/> is wearing, one entry per occupied equipment slot, for the
+		/// character select preview. Null when it could not be read (no item service, or the fetch failed),
+		/// which the client tells apart from an empty array: "not sent" rather than "wearing nothing".
+		/// </summary>
+		/// <remarks>
+		/// One fetch per character. An account holds a handful, the list is asked for once per visit to
+		/// character select, and a failure costs only the preview's clothes, never the list itself.
+		/// </remarks>
+		private static async Task<EquippedItemEntry[]> FetchEquippedItemsAsync(ICharacterItemService itemService, long characterID)
+		{
+			if (itemService == null)
+			{
+				return null;
+			}
+			DatabaseResult<IReadOnlyList<CharacterItemData>> items = await itemService.FetchAsync(characterID);
+			if (!items.IsSuccess || items.Data == null)
+			{
+				await Log.Warning("CharacterSelectSystem", $"Could not read character {characterID}'s equipment for the select preview: [{items.ErrorCode}] {items.ErrorMessage}");
+				return null;
+			}
+			var equipped = new List<EquippedItemEntry>();
+			foreach (CharacterItemData item in items.Data)
+			{
+				if (item.Container == ItemContainerType.Equipment && item.TemplateID != 0)
+				{
+					equipped.Add(new EquippedItemEntry { Slot = (ItemSlot)item.Slot, TemplateID = item.TemplateID });
+				}
+			}
+			return equipped.ToArray();
+		}
+
+		/// <summary>
 		/// Asynchronously fetches the character list from the database and sends it to the client.
 		/// </summary>
 		/// <param name="conn">Network connection of the requesting client.</param>
@@ -182,6 +214,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				}
 
 				// Map database DTOs to network broadcast type
+				TryGetDbService(out ICharacterItemService itemService);
 				var characterList = new List<CharacterDetails>(dbResult.Data.Count);
 				foreach (CharacterData data in dbResult.Data)
 				{
@@ -190,7 +223,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 						CharacterName = data.Name,
 						SceneName = data.SceneName,
 						RaceTemplateID = data.RaceID,
+						ModelIndex = data.ModelIndex,
 						IsCombatLogged = data.Flags.IsFlagged(CharacterFlags.IsCombatLogged),
+						EquippedItems = await FetchEquippedItemsAsync(itemService, data.ID),
 					});
 				}
 

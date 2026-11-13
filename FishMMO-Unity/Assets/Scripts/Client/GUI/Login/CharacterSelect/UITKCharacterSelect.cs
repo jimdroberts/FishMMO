@@ -128,6 +128,12 @@ namespace FishMMO.Client
 		private CharacterRow selectedCharacter;
 
 		/// <summary>
+		/// Told whenever the character shown as selected changes: its details, or null when none is (the list was
+		/// emptied). The login backdrop's preview stands that character's model at its spot.
+		/// </summary>
+		public static event Action<CharacterDetails> OnSelectedCharacterChanged;
+
+		/// <summary>
 		/// The account's characters as the server last described them.
 		/// </summary>
 		/// <remarks>
@@ -322,6 +328,7 @@ namespace FishMMO.Client
 			ClearCharacterRows();
 			characters.Clear();
 			selectedCharacterName = null;
+			OnSelectedCharacterChanged?.Invoke(null);
 		}
 
 		/// <summary>
@@ -370,8 +377,14 @@ namespace FishMMO.Client
 		/// </summary>
 		private void RestoreSelection()
 		{
+			/* Nothing chosen yet: the first character, so the camera arrives at someone standing at the shrine and
+			 * Enter goes straight in, as most character screens do. */
 			if (string.IsNullOrEmpty(selectedCharacterName))
 			{
+				if (characterList.Count > 0)
+				{
+					OnCharacterSelected(characterList[0]);
+				}
 				return;
 			}
 
@@ -463,10 +476,12 @@ namespace FishMMO.Client
 		/// <returns>IEnumerator for coroutine.</returns>
 		private IEnumerator OnProcessCharacterList()
 		{
-			if (CinematicCamera != null)
+			// The backdrop's own fly-in when this screen's slot is empty: the camera path belongs to the world it flies over.
+			CinematicCamera cinematic = CinematicCamera != null ? CinematicCamera : LoginBackdrop.Current?.Cinematic;
+			if (cinematic != null)
 			{
-				CinematicCamera.Reset();
-				yield return CinematicCamera.MoveToNextWaypoint(() =>
+				cinematic.Reset();
+				yield return cinematic.MoveToNextWaypoint(() =>
 				{
 				}, true);
 			}
@@ -677,6 +692,7 @@ namespace FishMMO.Client
 
 			// By name, because the row object does not survive a tree rebuild. See RestoreSelection.
 			selectedCharacterName = selectedCharacter?.Details?.CharacterName;
+			OnSelectedCharacterChanged?.Invoke(selectedCharacter?.Details);
 		}
 
 		/// <summary>

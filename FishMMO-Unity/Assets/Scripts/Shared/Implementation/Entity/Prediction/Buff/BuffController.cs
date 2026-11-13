@@ -2475,7 +2475,7 @@ namespace FishMMO.Shared
 					{
 						BuffEventData bed = new BuffEventData(Character, buffInstance);
 						bed.Add(new TickEventData(Character, new PredictionTick(replicateDomainTick)));
-						Character.Invoke(onBuffApplyTriggers, bed);
+						Trigger.InvokeAll(onBuffApplyTriggers, bed);
 					}
 				}
 			}
@@ -2779,7 +2779,7 @@ namespace FishMMO.Shared
 					// Authoritative peer only — see the note on the apply triggers.
 					if (IsAuthoritativePeer)
 					{
-						Character.Invoke(onBuffRemoveTriggers, new BuffEventData(Character, buffInstance));
+						Trigger.InvokeAll(onBuffRemoveTriggers, new BuffEventData(Character, buffInstance));
 					}
 				}
 			}
@@ -2910,7 +2910,7 @@ namespace FishMMO.Shared
 						// Authoritative peer only — see the note on the apply triggers.
 						if (IsAuthoritativePeer)
 						{
-							Character.Invoke(onBuffRemoveTriggers, new BuffEventData(Character, buff));
+							Trigger.InvokeAll(onBuffRemoveTriggers, new BuffEventData(Character, buff));
 						}
 					}
 				}

@@ -89,8 +89,8 @@ namespace FishMMO.UnitTests
 		private static string ReadSource(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-			LogAssert.IsTrue(File.Exists(path), $"{relativePath} not found at {path}.");
-			return File.ReadAllText(path);
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{relativePath} not found at {path}.");
+			return ProjectFiles.ReadAllText(path);
 		}
 
 		/// <summary>Removes block comments, which discuss these properties by name.</summary>
@@ -246,7 +246,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void NoSingleLineTextFieldWearsAPinnedHeight()
 		{
-			LogAssert.IsTrue(Directory.Exists(GuiRoot), $"the GUI must live at {GuiRoot}");
+			LogAssert.IsTrue(ProjectFiles.FolderExists(GuiRoot), $"the GUI must live at {GuiRoot}");
 
 			List<GlyphField> fields = SingleLineGlyphFields();
 			Dictionary<string, HashSet<string>> wornBy = ClassesWorn(fields);
@@ -255,9 +255,9 @@ namespace FishMMO.UnitTests
 
 			List<string> offenders = new List<string>();
 
-			foreach (string sheet in Directory.GetFiles(GuiRoot, "*.uss", SearchOption.AllDirectories))
+			foreach (string sheet in Directory.GetFiles(ProjectFiles.Folder(GuiRoot), "*.uss", SearchOption.AllDirectories))
 			{
-				string source = StripComments(File.ReadAllText(sheet));
+				string source = StripComments(ProjectFiles.ReadAllText(sheet));
 				int cursor = 0;
 
 				while (true)
@@ -399,9 +399,9 @@ namespace FishMMO.UnitTests
 		{
 			List<GlyphField> fields = new List<GlyphField>();
 
-			foreach (string layout in Directory.GetFiles(GuiRoot, "*.uxml", SearchOption.AllDirectories))
+			foreach (string layout in Directory.GetFiles(ProjectFiles.Folder(GuiRoot), "*.uxml", SearchOption.AllDirectories))
 			{
-				string source = File.ReadAllText(layout);
+				string source = ProjectFiles.ReadAllText(layout);
 				string file = Path.GetFileName(layout);
 				int ordinal = 0;
 

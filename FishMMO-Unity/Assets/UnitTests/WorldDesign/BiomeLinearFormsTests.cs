@@ -19,7 +19,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	{
 		private const string Features = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/Features/";
 
-		private static string Read(string relative) => File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
+		private static string Read(string relative) => ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
 
 		// ── The model ─────────────────────────────────────────────────
 

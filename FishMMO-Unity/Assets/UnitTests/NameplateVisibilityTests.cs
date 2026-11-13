@@ -374,7 +374,7 @@ namespace FishMMO.UnitTests
 			foreach (string guid in guids)
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guid);
-				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(path));
 				PlayerCharacter character = prefab != null ? prefab.GetComponent<PlayerCharacter>() : null;
 				if (character == null)
 				{
@@ -400,7 +400,7 @@ namespace FishMMO.UnitTests
 			foreach (string guid in guids)
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guid);
-				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(path));
 				ICharacter character = prefab != null ? prefab.GetComponent<ICharacter>() : null;
 				if (character == null)
 				{
@@ -427,8 +427,8 @@ namespace FishMMO.UnitTests
 		private static string ReadSource(string projectRelativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), projectRelativePath);
-			LogAssert.IsTrue(File.Exists(path), $"{projectRelativePath} must exist");
-			return File.ReadAllText(path);
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{projectRelativePath} must exist");
+			return ProjectFiles.ReadAllText(path);
 		}
 	}
 }

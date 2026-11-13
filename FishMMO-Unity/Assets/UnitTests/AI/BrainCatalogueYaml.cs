@@ -42,24 +42,24 @@ namespace FishMMO.UnitTests.AI
 		public static string GuidOf(string assetPath)
 		{
 			string meta = assetPath + ".meta";
-			if (!File.Exists(meta))
+			if (!ProjectFiles.Exists(meta))
 			{
 				return null;
 			}
-			Match guid = Regex.Match(File.ReadAllText(meta), "guid: ([0-9a-f]{32})");
+			Match guid = Regex.Match(ProjectFiles.ReadAllText(meta), "guid: ([0-9a-f]{32})");
 			return guid.Success ? guid.Groups[1].Value : null;
 		}
 
 		private static Dictionary<string, string> Read(string field)
 		{
 			Dictionary<string, string> map = new Dictionary<string, string>();
-			if (!File.Exists(FullPath))
+			if (!ProjectFiles.Exists(FullPath))
 			{
 				return map;
 			}
 
 			// Unity wraps a long reference onto a continuation line; rejoin it before matching.
-			string yaml = Regex.Replace(File.ReadAllText(FullPath).Replace("\r\n", "\n"), @",\n\s+type:", ", type:");
+			string yaml = Regex.Replace(ProjectFiles.ReadAllText(FullPath).Replace("\r\n", "\n"), @",\n\s+type:", ", type:");
 			MatchCollection entries = Regex.Matches(yaml,
 				@"- Prefab: \{fileID: -?\d+, guid: ([0-9a-f]{32}), type: \d\}\n((?:    .*\n?)*)");
 			foreach (Match entry in entries)

@@ -46,8 +46,8 @@ namespace FishMMO.UnitTests
 
 		private static IEnumerable<string> PrefabFiles()
 		{
-			LogAssert.IsTrue(Directory.Exists(PrefabRoot), $"Prefab root not found at {PrefabRoot}.");
-			return Directory.EnumerateFiles(PrefabRoot, "*.prefab", SearchOption.AllDirectories);
+			LogAssert.IsTrue(ProjectFiles.FolderExists(PrefabRoot), $"Prefab root not found at {PrefabRoot}.");
+			return Directory.EnumerateFiles(ProjectFiles.Folder(PrefabRoot), "*.prefab", SearchOption.AllDirectories);
 		}
 
 		[Test]
@@ -58,7 +58,7 @@ namespace FishMMO.UnitTests
 
 			foreach (string file in PrefabFiles())
 			{
-				foreach (string line in File.ReadLines(file))
+				foreach (string line in ProjectFiles.ReadLines(file))
 				{
 					Match m = StateForwarding.Match(line);
 					if (!m.Success)
@@ -90,7 +90,7 @@ namespace FishMMO.UnitTests
 
 			foreach (string file in PrefabFiles())
 			{
-				string[] lines = File.ReadAllLines(file);
+				string[] lines = ProjectFiles.ReadAllLines(file);
 				bool hasNetworkObject = false;
 				foreach (string line in lines)
 				{
@@ -148,7 +148,7 @@ namespace FishMMO.UnitTests
 			 * deliberately, not by leaving the old file around. */
 			string path = Path.Combine(Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Shared/Implementation/Entity/Prediction/PredictionModeController.cs");
-			LogAssert.IsTrue(!File.Exists(path),
+			LogAssert.IsTrue(!ProjectFiles.Exists(path),
 				"PredictionModeController.cs is back. State forwarding stays off everywhere; see " +
 				"NetworkObject.SetStateForwarding's FISHMMO EDIT comment before reintroducing a switch.");
 		}

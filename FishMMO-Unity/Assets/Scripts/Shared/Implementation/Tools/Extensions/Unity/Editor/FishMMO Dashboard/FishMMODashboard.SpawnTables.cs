@@ -50,7 +50,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Adds the Spawn Tables category to the World group.
 		/// </summary>
-		private void RegisterSpawnTablesCategory()
+		internal void RegisterSpawnTablesCategory()
 		{
 			categories.Add(new TemplateCategory
 			{

@@ -18,7 +18,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void BushesAreCappedPerBlock_InTheShaderThatDrawsThem()
 		{
-			string source = System.IO.File.ReadAllText(System.IO.Path.Combine(
+			string source = ProjectFiles.ReadAllText(System.IO.Path.Combine(
 				Application.dataPath, "Prefabs/Client/Weather/Shaders/FishDetailScatter.compute"));
 
 			LogAssert.IsTrue(source.Contains($"#define SCATTER_MAX_BUSHES_PER_BLOCK {DetailScatterMath.MaxBushesPerBlock}\n") ||

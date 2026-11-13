@@ -53,7 +53,7 @@ namespace FishMMO.Shared
 		/// Adds the NPCs category. Called first in the NPCs group, because a prefab is what a
 		/// designer is ultimately trying to make; every other NPC category authors a part of one.
 		/// </summary>
-		private void RegisterNPCCategory()
+		internal void RegisterNPCCategory()
 		{
 			categories.Add(new TemplateCategory
 			{

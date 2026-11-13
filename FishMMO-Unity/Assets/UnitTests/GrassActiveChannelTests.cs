@@ -24,8 +24,8 @@ namespace FishMMO.UnitTests
         {
             if (!SystemInfo.supportsComputeShaders || SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
                 Assert.Ignore("Requires a real GPU");
-            var build = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ShaderPath));
-            var probe = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProbePath));
+            var build = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path(ShaderPath)));
+            var probe = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path(ProbePath)));
             var density = new Texture2DArray(resolution, resolution, 17, TextureFormat.RGBA32, false, true);
             try
             {

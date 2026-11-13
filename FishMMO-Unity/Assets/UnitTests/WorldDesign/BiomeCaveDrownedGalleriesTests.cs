@@ -22,7 +22,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		private const string World = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/";
 		private const string Shaders = "Assets/Prefabs/Client/Weather/Shaders/";
 
-		private static string Code(string path) => File.ReadAllText(path);
+		private static string Code(string path) => ProjectFiles.ReadAllText(path);
 
 		private static readonly CaveForm[] Forms = (CaveForm[])Enum.GetValues(typeof(CaveForm));
 
@@ -236,9 +236,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(new BiomeCaveFlood(BiomeCaveForm.Grotto, 1.5f, 1f, 0f, 1f).ToString(), Is.EqualTo("Grotto=1.5|1|0|1"));
 			Assert.That(new BiomeCaveFlood(BiomeCaveForm.Cave, 1.2f, 0.6f, 0.5f, 1.25f).ToString(), Is.EqualTo("Cave=1.2|0.6|0.5|1.25"));
 			// Every asset floods nothing yet (so no cave beads and no leech swims until a round authors them).
-			foreach (string asset in Directory.GetFiles("Assets/Templates/Entity/Biomes", "*.asset").Where(a => !a.EndsWith("Default Climate.asset")))
+			foreach (string asset in Directory.GetFiles(ProjectFiles.Folder("Assets/Templates/Entity/Biomes"), "*.asset").Where(a => !a.EndsWith("Default Climate.asset")))
 			{
-				Assert.That(File.ReadAllText(asset), Does.Contain("caveFloods: []"), asset);
+				Assert.That(ProjectFiles.ReadAllText(asset), Does.Contain("caveFloods: []"), asset);
 			}
 		}
 

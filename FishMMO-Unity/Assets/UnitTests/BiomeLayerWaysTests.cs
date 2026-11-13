@@ -214,30 +214,30 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void CutPaletteAndAuthoring_AreWiredToTheLayerWays()
 		{
-			string generator = File.ReadAllText(Path.Combine(WorldFolder, "SceneGenerator.cs"));
+			string generator = ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "SceneGenerator.cs"));
 			Assert.That(generator, Does.Contain("surfaces.AddRange(grounds.LayerWays(biome));"), "PathSurfaces adds the ground layers' own ways");
 			foreach (string slot in new[] { "SlotPathEarth", "SlotPathGravel", "SlotPathStone" })
 			{
 				Assert.That(generator, Does.Contain($"palette.PathLayerMap(SceneTerrainPalette.{slot}, coverage)"), slot);
 			}
-			string palette = File.ReadAllText(Path.Combine(WorldFolder, "Terrain/SceneTerrainPalette.cs"));
+			string palette = ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "Terrain/SceneTerrainPalette.cs"));
 			Assert.That(palette, Does.Contain("int way = WayLayer(byBiome[entry.BiomeIndex], entry.Variant != null ? BiomeLocalArt.GroundSlot(entry.Ground) : entry.Slot, slot);"),
 				"PathLayerMap chooses per ground (a climate variant's override by the ground it stands in for, 2026-10-18)");
-			string authoring = File.ReadAllText(Path.Combine(WorldFolder, "ProceduralArt/BiomeArtAuthoring.cs"));
+			string authoring = ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "ProceduralArt/BiomeArtAuthoring.cs"));
 			Assert.That(authoring, Does.Contain("AuthorLayerWays(biome, entry, source, report, apply);"));
 			Assert.That(authoring, Does.Contain("foreach ((string key, TerrainTextureLayer ground, string way) in WaysOf(biome))"), "LOCAL ways move to the sidecar");
-			string reader = File.ReadAllText(Path.Combine(WorldFolder, "Terrain/BiomeTemplateArt.cs"));
+			string reader = ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "Terrain/BiomeTemplateArt.cs"));
 			Assert.That(reader, Does.Contain("public List<(string slot, TerrainTextureLayer source)> LayerWays(BiomeTemplate biome)"));
 
 			// Nothing else at the cut reads a layer's ways or the spec's.
-			foreach (string file in Directory.GetFiles(WorldFolder, "*.cs", SearchOption.AllDirectories))
+			foreach (string file in Directory.GetFiles(ProjectFiles.Folder(WorldFolder), "*.cs", SearchOption.AllDirectories))
 			{
 				string name = file.Replace('\\', '/');
 				if (name.EndsWith("/BiomeTemplateArt.cs", StringComparison.Ordinal) || name.Contains("/ProceduralArt/"))
 				{
 					continue;
 				}
-				string text = File.ReadAllText(file);
+				string text = ProjectFiles.ReadAllText(file);
 				Assert.That(text, Does.Not.Contain(".ways."), $"{name} reads a layer's ways itself");
 				Assert.That(text, Does.Not.Contain(".WayGround(").And.Not.Contain(".WayRoad").And.Not.Contain(".WayPath").And.Not.Contain(".WayCobbles"),
 					$"{name} reads the spec's layer ways");

@@ -56,9 +56,9 @@ namespace FishMMO.UnitTests
 			foreach (string scenePath in ServerScenes)
 			{
 				string full = Path.Combine(Directory.GetCurrentDirectory(), scenePath);
-				LogAssert.IsTrue(File.Exists(full), $"Scene not found: {scenePath}");
+				LogAssert.IsTrue(ProjectFiles.Exists(full), $"Scene not found: {scenePath}");
 
-				string[] lines = File.ReadAllLines(full);
+				string[] lines = ProjectFiles.ReadAllLines(full);
 				int managerLine = -1;
 				for (int i = 0; i < lines.Length; ++i)
 				{
@@ -122,7 +122,7 @@ namespace FishMMO.UnitTests
 			foreach (string guid in guids)
 			{
 				string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
-				GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(path);
+				GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(path));
 				if (prefab == null)
 				{
 					continue;
@@ -198,7 +198,7 @@ namespace FishMMO.UnitTests
 			foreach (string guid in guids)
 			{
 				string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
-				GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(path);
+				GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(path));
 				if (prefab == null || prefab.GetComponent<CharacterPredictionController>() == null)
 				{
 					continue;
@@ -281,7 +281,7 @@ namespace FishMMO.UnitTests
 			{
 				string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
 				string full = Path.Combine(Directory.GetCurrentDirectory(), path);
-				if (!File.Exists(full))
+				if (!ProjectFiles.Exists(full))
 				{
 					continue;
 				}
@@ -344,7 +344,7 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>Every YAML document in a scene, keyed by its <c>&amp;fileID</c>.</summary>
-		private static Dictionary<string, string> SceneDocuments(string fullPath) => SceneDocumentsFromText(File.ReadAllText(fullPath));
+		private static Dictionary<string, string> SceneDocuments(string fullPath) => SceneDocumentsFromText(ProjectFiles.ReadAllText(fullPath));
 
 		/// <summary>Every YAML document in a scene's text, keyed by its <c>&amp;fileID</c>.</summary>
 		private static Dictionary<string, string> SceneDocumentsFromText(string text)
@@ -426,8 +426,8 @@ namespace FishMMO.UnitTests
 		private static string ScriptGuid(string scriptPath)
 		{
 			string meta = Path.Combine(Directory.GetCurrentDirectory(), scriptPath + ".meta");
-			LogAssert.IsTrue(File.Exists(meta), $"{scriptPath}.meta not found.");
-			foreach (string raw in File.ReadAllLines(meta))
+			LogAssert.IsTrue(ProjectFiles.Exists(meta), $"{scriptPath}.meta not found.");
+			foreach (string raw in ProjectFiles.ReadAllLines(meta))
 			{
 				string line = raw.Trim();
 				if (line.StartsWith("guid: ", StringComparison.Ordinal))
@@ -507,7 +507,7 @@ namespace FishMMO.UnitTests
 			foreach (string guid in guids)
 			{
 				string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
-				GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(path);
+				GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(path));
 				if (prefab == null || prefab.GetComponent<BaseCharacter>() == null)
 				{
 					continue;

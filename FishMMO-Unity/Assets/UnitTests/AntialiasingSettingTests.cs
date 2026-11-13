@@ -162,7 +162,7 @@ namespace FishMMO.UnitTests
 			/* The dropdown stores the selected INDEX, so its labels and the enum have to stay the
 			 * same length and the same order. A label list that drifted would quietly map a
 			 * player's click onto a different mode. */
-			string source = File.ReadAllText(Path.Combine(
+			string source = ProjectFiles.ReadAllText(Path.Combine(
 				Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Client/GUI/World/Options/UITKOptions.cs"));
 
@@ -187,7 +187,7 @@ namespace FishMMO.UnitTests
 			 * for what it looks like, reading a recommendation. The plain word is what they can act
 			 * on inside it. Dropping either half is a real loss, and dropping the acronym is the
 			 * easy one to do while "tidying up" the labels. */
-			string source = File.ReadAllText(Path.Combine(
+			string source = ProjectFiles.ReadAllText(Path.Combine(
 				Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Client/GUI/World/Options/UITKOptions.cs"));
 
@@ -210,7 +210,7 @@ namespace FishMMO.UnitTests
 			/* Pinned in source, for the same reason the sensitivity apply is: this is the wiring
 			 * whose absence made the sensitivity setting silently do nothing for a release. The
 			 * boot-time apply runs before a world camera exists, so it cannot be the only one. */
-			string source = File.ReadAllText(Path.Combine(
+			string source = ProjectFiles.ReadAllText(Path.Combine(
 				Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Client/Settings/ClientCameraSettings.cs"));
 

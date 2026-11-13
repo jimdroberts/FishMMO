@@ -70,10 +70,10 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheCache_RedrawsWhenItsShadowWorkGrows_AndHoldsWhatItCulled()
 		{
-			string cache = System.IO.File.ReadAllText("Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.ShadowCache.cs");
+			string cache = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.ShadowCache.cs");
 			LogAssert.IsTrue(cache.Contains("HashCode.Combine(layoutSerial, flushSerial, CoverageSerial())"), "the content version counts the coverage");
 			LogAssert.IsTrue(cache.Contains("ShadowCasterCoverage.Merge(shadowWorkRanges, heldShadowRanges);"), "a redraw's cull holds its shadow work");
-			string gpu = System.IO.File.ReadAllText("Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.cs");
+			string gpu = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.cs");
 			LogAssert.IsTrue(gpu.Contains("shadowWorkRanges.Add(new Vector2Int(offset, offset + count));") && gpu.Contains("shadowWorkRanges.Clear();"),
 				"every camera's shadow work is listed afresh");
 		}

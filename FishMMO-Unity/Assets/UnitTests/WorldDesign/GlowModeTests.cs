@@ -30,7 +30,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
 		private const float Wrap = (float)SceneGlow.WrapSeconds;
 
-		private static string Read(string path) => File.ReadAllText(path);
+		private static string Read(string path) => ProjectFiles.ReadAllText(path);
 
 		private static IEnumerable<SceneGlowMode> Modes() => Enum.GetValues(typeof(SceneGlowMode)).Cast<SceneGlowMode>();
 
@@ -410,9 +410,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(entry.FountainEpisodes().IsEmpty, Is.True, $"{entry.Biome} has no fountain episodes yet");
 			}
 			int templates = 0;
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				if (!Regex.IsMatch(text, "^  MinTemperature:", RegexOptions.Multiline))
 				{
 					continue;

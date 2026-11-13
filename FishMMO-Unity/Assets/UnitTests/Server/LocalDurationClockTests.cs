@@ -157,25 +157,25 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void ACharactersChatRateFields_StartAtZero_NotAtEitherSidesClock()
 		{
-			const string PlayerCharacterPath = "Assets/Scripts/Shared/Implementation/Entity/PlayerCharacter.cs";
-			SourceScanPins.HoldsAndFires("PlayerCharacter chat fields", SourceScanPins.ReadCode(PlayerCharacterPath),
+			/* The rate fields live on the player's Core entity (ChatState), made fresh each spawn from the value
+			 * the chat module gives the player archetype. Leaving both tick fields out of that value is what
+			 * starts them at zero, "never", on whichever side's clock reads them. */
+			const string ChatStatePath = "Assets/Scripts/Shared/Implementation/Network/Chat/ChatState.cs";
+			SourceScanPins.HoldsAndFires("ChatState starting value", SourceScanPins.ReadCode(ChatStatePath),
 				code =>
 				{
-					foreach (string signature in new[] { "public override void OnAwake(", "public override void ResetState(" })
+					string body = SourceScanPins.Body(code, "public override void Install(");
+					if (body == null || !body.Contains("new ChatState {"))
 					{
-						string body = SourceScanPins.Body(code, signature);
-						if (body == null)
-						{
-							return signature + " is missing";
-						}
-						if (!body.Contains("NextChatMessageTicks = 0;") || !body.Contains("ChatTokenLastRefillTicks = 0;"))
-						{
-							return signature + " seeds the chat rate fields from a clock: a wall-clock stamp read by the server's monotonic gate refused every line";
-						}
+						return "the chat module no longer gives players their ChatState";
+					}
+					if (body.Contains("NextMessageTicks") || body.Contains("LastRefillTicks"))
+					{
+						return "the chat rate fields are seeded from a clock: a wall-clock stamp read by the server's monotonic gate refused every line";
 					}
 					return null;
 				},
-				SourceScanPins.Replace("NextChatMessageTicks = 0;", "NextChatMessageTicks = DateTime.UtcNow.Ticks;"),
+				SourceScanPins.Replace("new ChatState { IsFull = true", "new ChatState { NextMessageTicks = DateTime.UtcNow.Ticks, IsFull = true"),
 				"the gap seeded from the wall clock");
 		}
 

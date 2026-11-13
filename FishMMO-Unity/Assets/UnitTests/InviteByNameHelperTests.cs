@@ -67,8 +67,8 @@ namespace FishMMO.UnitTests
 		private static string ReadSource(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-			LogAssert.IsTrue(File.Exists(path), $"{relativePath} not found at {path}.");
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{relativePath} not found at {path}.");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 		/// <summary>
@@ -97,7 +97,7 @@ namespace FishMMO.UnitTests
 		/// <summary>Every GUI source file except the base class that owns the shared helpers.</summary>
 		private static IEnumerable<string> PanelSources()
 		{
-			foreach (string file in Directory.GetFiles(GuiRoot, "*.cs", SearchOption.AllDirectories))
+			foreach (string file in Directory.GetFiles(ProjectFiles.Folder(GuiRoot), "*.cs", SearchOption.AllDirectories))
 			{
 				if (Path.GetFileName(file) == "UITKControl.cs")
 				{
@@ -186,7 +186,7 @@ namespace FishMMO.UnitTests
 
 			foreach (string file in PanelSources())
 			{
-				string source = StripComments(File.ReadAllText(file).Replace("\r\n", "\n"));
+				string source = StripComments(ProjectFiles.ReadAllText(file).Replace("\r\n", "\n"));
 
 				if (source.Contains("ClientNamingSystem.GetCharacterID("))
 				{
@@ -215,7 +215,7 @@ namespace FishMMO.UnitTests
 
 			foreach (string file in PanelSources())
 			{
-				string source = StripComments(File.ReadAllText(file).Replace("\r\n", "\n"));
+				string source = StripComments(ProjectFiles.ReadAllText(file).Replace("\r\n", "\n"));
 
 				if (source.Contains("A person with that name could not be found."))
 				{
@@ -246,7 +246,7 @@ namespace FishMMO.UnitTests
 
 			foreach (string file in PanelSources())
 			{
-				string source = StripComments(File.ReadAllText(file).Replace("\r\n", "\n"));
+				string source = StripComments(ProjectFiles.ReadAllText(file).Replace("\r\n", "\n"));
 
 				if (Regex.IsMatch(source, @"Current\.Target\s*!=\s*null[^;]{0,200}PinnedTarget", RegexOptions.Singleline))
 				{

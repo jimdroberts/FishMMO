@@ -173,7 +173,7 @@ namespace FishMMO.UnitTests.AI
 			foreach (string guid in AssetDatabase.FindAssets("t:AIArchetypeTemplate", new[] { ARCHETYPE_FOLDER }))
 			{
 				AIArchetypeTemplate archetype =
-					AssetDatabase.LoadAssetAtPath<AIArchetypeTemplate>(AssetDatabase.GUIDToAssetPath(guid));
+					AssetDatabase.LoadAssetAtPath<AIArchetypeTemplate>(ProjectFiles.Path(AssetDatabase.GUIDToAssetPath(guid)));
 				if (archetype != null)
 				{
 					archetypes.Add(archetype);

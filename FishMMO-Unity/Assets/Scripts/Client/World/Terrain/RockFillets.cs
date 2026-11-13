@@ -242,7 +242,8 @@ namespace FishMMO.Client
 		internal static void Frame(Camera camera, Vector3 gridMin, int rockKey, bool settled)
 		{
 			ReadProfile();
-			if (!EnsureResources() || RockContactField.ListBuffer == null || RockContactField.Atlas == null)
+			// A created atlas only: one that failed to create has no GPU texture, and a pipeline bound to it is invalid.
+			if (!EnsureResources() || RockContactField.ListBuffer == null || !(RockContactField.Atlas is RenderTexture atlasTexture) || !atlasTexture.IsCreated())
 			{
 				Hide();
 				return;
@@ -268,6 +269,25 @@ namespace FishMMO.Client
 		{
 			shown = false;
 			building = false;
+		}
+
+		/// <summary>
+		/// Forgets the fillet copies of the rocks' looks, which are indexed by look: the crevice field has forgotten its
+		/// looks (the last world's renderers went), and the next world's are numbered from 0 again with new materials.
+		/// </summary>
+		internal static void ForgetLooks()
+		{
+			Hide();
+			foreach (Material m in materials)
+			{
+				if (m != null)
+				{
+					Object.Destroy(m);
+				}
+			}
+			materials.Clear();
+			lookCountsKnown = false;
+			warnedLooks = false;
 		}
 
 		private static void Start(Vector3 eye, Vector3 gridMin, int rockKey, int settings)

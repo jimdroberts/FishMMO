@@ -262,7 +262,7 @@ namespace FishMMO.Shared
 				}
 
 				IPetController.OnPetSummoned?.Invoke(Pet);
-				Character.Invoke(onPetSummonTriggers, new PetEventData(Character, Pet));
+				Trigger.InvokeAll(onPetSummonTriggers, new PetEventData(Character, Pet));
 			}
 		}
 
@@ -275,7 +275,7 @@ namespace FishMMO.Shared
 		{
 			Pet = null;
 			IPetController.OnPetDestroyed?.Invoke();
-			Character.Invoke(onPetDismissTriggers, new PetEventData(Character, null));
+			Trigger.InvokeAll(onPetDismissTriggers, new PetEventData(Character, null));
 		}
 
 		/// <summary>

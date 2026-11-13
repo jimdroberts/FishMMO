@@ -129,13 +129,5 @@ namespace FishMMO.Shared.Core
 		/// <param name="control">The behaviour instance if found, otherwise null.</param>
 		/// <returns>True if the behaviour is found; otherwise, false.</returns>
 		bool TryGet<T>(out T control) where T : class, ICharacterBehaviour;
-
-		/// <summary>
-		/// Executes each trigger in the list with the supplied event data.
-		/// Null-safe: no-ops if <paramref name="triggers"/> or <paramref name="eventData"/> is null.
-		/// </summary>
-		/// <param name="triggers">The list of triggers to execute.</param>
-		/// <param name="eventData">The event data to pass to each trigger.</param>
-		void Invoke(List<Trigger> triggers, EventData eventData);
 	}
 }

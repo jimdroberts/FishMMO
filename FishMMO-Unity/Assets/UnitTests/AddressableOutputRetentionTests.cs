@@ -34,11 +34,11 @@ namespace FishMMO.UnitTests
 			var result = Successful(current);
 			Assert.That(AddressableManager.PruneStaleBundleOutputs(result, new[] { output, output }), Is.EqualTo(1));
 			Assert.That(File.Exists(stale), Is.False);
-			Assert.That(File.ReadAllText(current), Is.EqualTo("current content"));
+			Assert.That(ProjectFiles.ReadAllText(current), Is.EqualTo("current content"));
 			Assert.That(File.GetLastWriteTimeUtc(current), Is.EqualTo(modified));
-			Assert.That(File.ReadAllText(catalog), Is.EqualTo("catalog"));
-			Assert.That(File.ReadAllText(cache), Is.EqualTo("cached build data"));
-			Assert.That(File.ReadAllText(shader), Is.EqualTo("compiled shader"));
+			Assert.That(ProjectFiles.ReadAllText(catalog), Is.EqualTo("catalog"));
+			Assert.That(ProjectFiles.ReadAllText(cache), Is.EqualTo("cached build data"));
+			Assert.That(ProjectFiles.ReadAllText(shader), Is.EqualTo("compiled shader"));
 		}
 
 		[Test]
@@ -48,11 +48,11 @@ namespace FishMMO.UnitTests
 			string server = Write(output, "server.bundle", "server");
 			AddressableManager.PruneStaleBundleOutputs(Successful(server), new[] { output });
 			Assert.That(File.Exists(client), Is.False);
-			Assert.That(File.Exists(server), Is.True);
+			Assert.That(ProjectFiles.Exists(server), Is.True);
 			client = Write(output, "client.bundle", "client again");
 			AddressableManager.PruneStaleBundleOutputs(Successful(client), new[] { output });
 			Assert.That(File.Exists(server), Is.False);
-			Assert.That(File.ReadAllText(client), Is.EqualTo("client again"));
+			Assert.That(ProjectFiles.ReadAllText(client), Is.EqualTo("client again"));
 		}
 
 		[TestCase(true)]
@@ -63,7 +63,7 @@ namespace FishMMO.UnitTests
 			var result = failed ? new AddressablesPlayerBuildResult { Error = "content build failed", FileRegistry = new FileRegistry() }
 				: new AddressablesPlayerBuildResult();
 			Assert.Throws<BuildFailedException>(() => AddressableManager.PruneStaleBundleOutputs(result, new[] { output }));
-			Assert.That(File.ReadAllText(previous), Is.EqualTo("previous working content"));
+			Assert.That(ProjectFiles.ReadAllText(previous), Is.EqualTo("previous working content"));
 		}
 
 		private static AddressablesPlayerBuildResult Successful(params string[] paths)

@@ -153,7 +153,7 @@ namespace FishMMO.Shared
 			Rank = PartyRank.Leader;
 
 			OnPartyCreated?.Invoke();
-			Character.Invoke(onPartyJoinTriggers, new PartyEventData(Character, ID, Rank));
+			Trigger.InvokeAll(onPartyJoinTriggers, new PartyEventData(Character, ID, Rank));
 		}
 
 		/// <summary>
@@ -195,7 +195,7 @@ namespace FishMMO.Shared
 
 				if (joined)
 				{
-					Character.Invoke(onPartyJoinTriggers, new PartyEventData(Character, ID, Rank));
+					Trigger.InvokeAll(onPartyJoinTriggers, new PartyEventData(Character, ID, Rank));
 				}
 			}
 
@@ -264,7 +264,7 @@ namespace FishMMO.Shared
 			ID = 0;
 			Rank = PartyRank.None;
 			OnLeaveParty?.Invoke();
-			Character.Invoke(onPartyLeaveTriggers, new PartyEventData(Character, 0, PartyRank.None));
+			Trigger.InvokeAll(onPartyLeaveTriggers, new PartyEventData(Character, 0, PartyRank.None));
 		}
 
 		/// <summary>

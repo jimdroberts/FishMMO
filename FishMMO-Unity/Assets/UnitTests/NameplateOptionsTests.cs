@@ -323,8 +323,8 @@ namespace FishMMO.UnitTests
 		private static string ReadSource(string projectRelativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), projectRelativePath);
-			LogAssert.IsTrue(File.Exists(path), $"{projectRelativePath} must exist");
-			return File.ReadAllText(path);
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{projectRelativePath} must exist");
+			return ProjectFiles.ReadAllText(path);
 		}
 	}
 }

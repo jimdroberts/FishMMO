@@ -644,7 +644,7 @@ namespace FishMMO.UnitTests
 			notes.Add(note);
 
 			MapNoteStore.Save(characterID, "TestScene", notes);
-			Assert.IsTrue(File.Exists(MapNoteStore.FilePath(characterID, "TestScene")));
+			Assert.IsTrue(ProjectFiles.Exists(MapNoteStore.FilePath(characterID, "TestScene")));
 
 			MapNoteStore.Save(characterID, "TestScene", new List<MapNote>());
 

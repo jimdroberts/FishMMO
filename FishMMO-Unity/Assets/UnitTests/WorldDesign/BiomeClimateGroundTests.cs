@@ -473,9 +473,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void NoTemplate_HasABandOrAVariantGround_SoEveryScenePaintsAsBefore()
 		{
 			int biomes = 0;
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				if (!text.Contains("m_Script:") || !text.Contains("mainTextureLayer:"))
 				{
 					continue;
@@ -545,7 +545,7 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		// ── Wiring ────────────────────────────────────────────────────
 
-		private static string Code(string path) => File.ReadAllText(path);
+		private static string Code(string path) => ProjectFiles.ReadAllText(path);
 
 		/// <summary>
 		/// The cut and the repaint hand the splat the scene's placement climate (the scatter's) before painting, the horizon its
@@ -588,7 +588,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				"BiomeSplatPainter.cs", "SceneTerrainPalette.cs", "BiomeArtAuthoring.cs", "BiomeArtSpec.cs",
 			};
-			foreach (string path in Directory.GetFiles(WorldFolder, "*.cs", SearchOption.AllDirectories))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(WorldFolder), "*.cs", SearchOption.AllDirectories))
 			{
 				if (allowed.Contains(Path.GetFileName(path)))
 				{

@@ -36,7 +36,7 @@ namespace FishMMO.UnitTests
 		{
 			NamingTemplateEditorLoader.EnsureLoaded();
 
-			PanelSettings template = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
+			PanelSettings template = AssetDatabase.LoadAssetAtPath<PanelSettings>(ProjectFiles.Path(PanelSettingsPath));
 			Assert.IsNotNull(template, $"panel settings must exist at {PanelSettingsPath}");
 			panelSettings = UnityEngine.Object.Instantiate(template);
 			panelHost = new GameObject("NameGeneratorWindowPanel") { hideFlags = HideFlags.HideAndDontSave };

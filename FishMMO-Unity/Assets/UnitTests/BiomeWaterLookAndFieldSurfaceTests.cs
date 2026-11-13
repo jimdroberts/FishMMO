@@ -103,7 +103,7 @@ namespace FishMMO.UnitTests.WorldDesign
 
 			BiomeWaterLook today = BiomeWaterLooks.Today;
 			int holding = 0;
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
 				string text = Read(path);
 				Match block = Regex.Match(text, @"^  waterLook:\n((?:    .*\n)+)", RegexOptions.Multiline);
@@ -142,7 +142,7 @@ namespace FishMMO.UnitTests.WorldDesign
 					Assert.That(entry.FieldSurface(prefab), Is.EqualTo(BiomeFieldSurface.Flat), $"{entry.Biome}: {prefab}");
 				}
 			}
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset").Where(p => !BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(p))))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset").Where(p => !BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(p))))
 			{
 				Match crops = Regex.Match(Read(path), @"^  fieldCrops:\n((?:  [- ] .*\n)+)", RegexOptions.Multiline);
 				if (!crops.Success)
@@ -594,16 +594,16 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		private static float F(string text) => float.Parse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture);
 
-		private static string Read(string relative) => File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
+		private static string Read(string relative) => ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
 
 		private static void TestContextOut(string line) => Console.WriteLine(line);
 
 		private static IEnumerable<string> BiomeAssetNames()
 		{
 			var names = new List<string>();
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				if (!Regex.IsMatch(text, "^  MinTemperature:", RegexOptions.Multiline))
 				{
 					continue;

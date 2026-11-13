@@ -71,7 +71,7 @@ namespace FishMMO.UnitTests
 				string text;
 				try
 				{
-					text = File.ReadAllText(path);
+					text = ProjectFiles.ReadAllText(path);
 				}
 				catch
 				{

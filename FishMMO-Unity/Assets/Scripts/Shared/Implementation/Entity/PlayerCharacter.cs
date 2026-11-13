@@ -45,6 +45,9 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(CharacterAnimationController))]
 	public class PlayerCharacter : BaseCharacter, IPlayerCharacter
 	{
+		/// <inheritdoc />
+		protected override string CoreArchetype => FishMMO.Core.Archetypes.Player;
+
 		#region KCC
 		/// <summary>
 		/// The kinematic character motor for movement.
@@ -237,46 +240,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		public bool IsLoaded() { return Flags.IsFlagged(CharacterFlags.IsLoaded); }
 		/// <summary>
-		/// The last chat message sent by the character.
-		/// </summary>
-		public string LastChatMessage { get; set; }
-		/// <summary>
-		/// The next UTC ticks when the character can send a chat message.
-		/// </summary>
-		public long NextChatMessageTicks { get; set; }
-		/// <summary>
-		/// Current number of chat tokens available in the token bucket (double for precision on long-uptime servers).
-		/// Server-side anti-spam: consumed per message, refilled at a configurable rate.
-		/// </summary>
-		public double ChatTokens { get; set; }
-		/// <summary>
-		/// Indicates whether ChatTokens is in its initial "filled to capacity" state (no refill applied yet).
-		/// Used instead of <c>double.MaxValue</c> as a sentinel to avoid overflow to Infinity on first add.
-		/// </summary>
-		public bool IsChatTokensFull { get; set; }
-		/// <summary>
-		/// UTC ticks of the last token bucket refill.
-		/// </summary>
-		public long ChatTokenLastRefillTicks { get; set; }
-		/// <inheritdoc/>
-		public long ChatMutedUntilTicks { get; set; }
-		/// <inheritdoc/>
-		public string ChatMuteReason { get; set; }
-		/// <inheritdoc />
-		public double NextInteractSeconds { get; set; }
-		/// <summary>
-		/// The list of hotkey data for the character.
-		/// </summary>
-		public List<HotkeyData> Hotkeys { get; set; }
-
-		/// <summary>
-		/// Initializes the player character and its hotkeys. Sets up KCC movement components and resets chat/interact timers.
+		/// Initializes the player character: finds its KCC movement components. Chat, interaction and hotkey state
+		/// live on the character's Core entity, fresh each spawn (see <see cref="ChatState"/>).
 		/// </summary>
 		public override void OnAwake()
 		{
-			Hotkeys = new List<HotkeyData>();
-			ResetHotkeys();
-
 			#region KCC
 			Motor = gameObject.GetComponent<KinematicCharacterMotor>();
 			CharacterController = gameObject.GetComponent<KCCController>();
@@ -287,33 +255,6 @@ namespace FishMMO.Shared
 			}
 			KCCPlayer = gameObject.GetComponent<KCCPlayer>();
 			#endregion
-
-			/* The chat rate fields start at zero, meaning "never": no gap pending, no refill yet.
-			 * Each side keeps them on its own clock — the server on its monotonic clock, the client
-			 * on the wall clock — so a starting value taken from either clock would be wrong for the
-			 * other: a wall-clock stamp read by the server's monotonic gate refused every line. */
-			NextChatMessageTicks = 0;
-			ChatTokens = 0;
-			IsChatTokensFull = true; // Filled to max; server overrides with actual capacity on first message.
-			ChatTokenLastRefillTicks = 0;
-			NextInteractSeconds = 0;
-		}
-
-		/// <summary>
-		/// Resets the hotkeys to the default configuration. Initializes each hotkey slot.
-		/// </summary>
-		public void ResetHotkeys()
-		{
-			Hotkeys.Clear();
-			for (int i = 0; i < Constants.Configuration.MaximumPlayerHotkeys; ++i)
-			{
-				HotkeyData data = new HotkeyData()
-				{
-					Slot = i,
-					ReferenceID = HotkeyData.UnsetReferenceID,
-				};
-				Hotkeys.Add(data);
-			}
 		}
 
 		/// <summary>
@@ -495,24 +436,15 @@ namespace FishMMO.Shared
 #endif
 
 			TeleporterName = "";
-			LastChatMessage = "";
-			// Zero is "never" on either side's clock; see OnAwake.
-			NextChatMessageTicks = 0;
-			ChatTokens = 0;
-			IsChatTokensFull = true;
-			ChatTokenLastRefillTicks = 0;
-			// A pooled character must not carry the last occupant's mute into its next spawn.
-			ChatMutedUntilTicks = 0;
-			ChatMuteReason = null;
-			NextInteractSeconds = 0;
+			/* Chat (and its mute), the interaction cooldown and the hotkey bar are not reset here: they live
+			 * on the character's Core entity, which the base releases with the rest of this spawn, so the next
+			 * occupant of this pool slot starts from a fresh one. */
 			InstanceSceneName = null;
 			InstanceSceneHandle = 0;
 			InstancePosition = Vector3.zero;
 			InstanceRotation = Quaternion.identity;
 			LastWorldPosition = Vector3.zero;
 			LastWorldRotation = Quaternion.identity;
-
-			ResetHotkeys();
 		}
 
 		/// <summary>
@@ -525,27 +457,6 @@ namespace FishMMO.Shared
 			TeleporterName = teleporterName;
 
 			IPlayerCharacter.OnTeleport?.Invoke(this);
-		}
-
-		/// <summary>
-		/// Sets the guild row of the character's overhead nameplate (client only).
-		/// </summary>
-		/// <param name="guildName">The guild's name, or blank when the character has left one.</param>
-		/// <remarks>
-		/// A blank name clears the row rather than leaving an empty one: an empty row would still
-		/// take a line of height on the plate, so every character in the world who is not in a
-		/// guild would carry a visible gap under their name.
-		/// </remarks>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void SetGuildName(string guildName)
-		{
-#if !UNITY_SERVER
-			if (CharacterNameplate != null)
-			{
-				CharacterNameplate.SetLine(NameplateSlot.GuildName,
-					!string.IsNullOrWhiteSpace(guildName) ? "[" + guildName + "]" : null);
-			}
-#endif
 		}
 	}
 }

@@ -30,7 +30,7 @@ namespace FishMMO.UnitTests
 		[TestCase(WorldItemRoot, WorldItemCondition, 40f)]
 		public void Prefabs_CarryANetworkObserver_WithTheirDistanceCondition(string root, string conditionPath, float expectedDistance)
 		{
-			ObserverCondition condition = UnityEditor.AssetDatabase.LoadAssetAtPath<ObserverCondition>(conditionPath);
+			ObserverCondition condition = UnityEditor.AssetDatabase.LoadAssetAtPath<ObserverCondition>(ProjectFiles.Path(conditionPath));
 			LogAssert.IsTrue(condition != null, $"Condition asset missing: {conditionPath}");
 
 			DistanceCondition distance = condition as DistanceCondition;
@@ -43,7 +43,7 @@ namespace FishMMO.UnitTests
 			foreach (string guid in guids)
 			{
 				string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
-				GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(path);
+				GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(path));
 				if (prefab == null || prefab.GetComponent<FishNet.Object.NetworkObject>() == null)
 				{
 					continue;

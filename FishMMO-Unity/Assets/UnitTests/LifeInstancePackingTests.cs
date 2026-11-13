@@ -210,8 +210,8 @@ namespace FishMMO.UnitTests
 		private static string Read(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-			Assert.That(File.Exists(path), Is.True, $"{relativePath} not found at {path}");
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			Assert.That(ProjectFiles.Exists(path), Is.True, $"{relativePath} not found at {path}");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 	}
 }

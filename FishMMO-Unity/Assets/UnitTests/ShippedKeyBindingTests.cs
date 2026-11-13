@@ -36,8 +36,8 @@ namespace FishMMO.UnitTests
 			get
 			{
 				string path = Path.Combine(Directory.GetCurrentDirectory(), InputActionsPath);
-				LogAssert.IsTrue(File.Exists(path), $"{InputActionsPath} not found at {path}.");
-				return File.ReadAllText(path).Replace("\r\n", "\n");
+				LogAssert.IsTrue(ProjectFiles.Exists(path), $"{InputActionsPath} not found at {path}.");
+				return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 			}
 		}
 

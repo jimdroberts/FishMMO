@@ -80,13 +80,13 @@ namespace FishMMO.UnitTests.AI
 		[Test]
 		public void ThePriorityFlowsFromPanelToServerAndBack()
 		{
-			string controller = File.ReadAllText(Path.Combine(Scripts, "Shared/Implementation/Entity/NPC/Pet/PetController.cs"));
+			string controller = ProjectFiles.ReadAllText(Path.Combine(Scripts, "Shared/Implementation/Entity/NPC/Pet/PetController.cs"));
 			LogAssert.IsTrue(controller.Contains("public int AttackPriority { get; set; } = PetAttackPriority.Default;") &&
 				controller.Contains("RegisterBroadcast<PetAttackPriorityBroadcast>(OnClientPetAttackPriorityBroadcastReceived)") &&
 				controller.Contains("AttackPriority = PetAttackPriority.Normalize(msg.AttackPriority);"),
 				"the controller must hold the order, take the server's confirmation, and read it from the add message");
 
-			string pets = File.ReadAllText(Path.Combine(Scripts, "Server/Implementation/World/SceneServer/Pet/PetSystem.cs"));
+			string pets = ProjectFiles.ReadAllText(Path.Combine(Scripts, "Server/Implementation/World/SceneServer/Pet/PetSystem.cs"));
 			LogAssert.IsTrue(pets.Contains("RegisterBroadcast<PetAttackPriorityBroadcast>(OnPetAttackPriorityBroadcastReceived, true)") &&
 				pets.Contains("if (PetAttackPriority.IsValid(msg.Priority))") &&
 				pets.Contains("new PetAttackPriorityBroadcast() { Priority = petController.AttackPriority }") &&
@@ -94,7 +94,7 @@ namespace FishMMO.UnitTests.AI
 				pets.Contains("AttackPriority = pet.AttackPriority,"),
 				"the server must validate a request, confirm what it holds, apply the order at summon and send it with the add message");
 
-			string panel = File.ReadAllText(Path.Combine(Scripts, "Client/GUI/World/Pet/UITKPetControl.cs"));
+			string panel = ProjectFiles.ReadAllText(Path.Combine(Scripts, "Client/GUI/World/Pet/UITKPetControl.cs"));
 			LogAssert.IsTrue(panel.Contains("priority.clicked += OnTogglePriorityPanel;") &&
 				panel.Contains("priorityUpButtons[i].clicked += () => OnPriorityMoveUp(slot);") &&
 				panel.Contains("attackPriority = PetAttackPriority.MoveUp(attackPriority, slot);") &&
@@ -102,7 +102,7 @@ namespace FishMMO.UnitTests.AI
 				panel.Contains("Configuration.GlobalSettings.Set(PRIORITY_SETTING_KEY, priority.ToString());"),
 				"the panel must open the rows, reorder on the arrow, remember the order in the settings and replay it on summon");
 
-			string uxml = File.ReadAllText(Path.Combine(Scripts, "Client/GUI/World/Pet/UIPetControl.uxml"));
+			string uxml = ProjectFiles.ReadAllText(Path.Combine(Scripts, "Client/GUI/World/Pet/UIPetControl.uxml"));
 			LogAssert.IsTrue(uxml.Contains("name=\"pet-priority\"") && uxml.Contains("name=\"pet-priority-panel\"") &&
 				uxml.Contains("name=\"pet-priority-label-2\"") && uxml.Contains("name=\"pet-priority-up-2\""),
 				"the panel's tree must carry the Priority button and three reorderable rows");

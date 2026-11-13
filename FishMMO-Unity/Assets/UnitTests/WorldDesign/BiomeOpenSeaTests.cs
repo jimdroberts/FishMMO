@@ -44,9 +44,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(entry.SeaFloats(), Is.Empty, $"{entry.Biome} floats nothing at sea yet");
 			}
 			int templates = 0;
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				if (!Regex.IsMatch(text, "^  MinTemperature:", RegexOptions.Multiline))
 				{
 					continue;
@@ -59,7 +59,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(Regex.IsMatch(text, @"^  seaFloats:\s*\n  - ", RegexOptions.Multiline), Is.False, $"{Path.GetFileName(path)} floats something at sea");
 			}
 			Assert.That(templates, Is.EqualTo(83));
-			string source = File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Biomes/BiomeTemplate.cs");
+			string source = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Biomes/BiomeTemplate.cs");
 			StringAssert.Contains("private List<BiomeSeaFloat> seaFloats = new List<BiomeSeaFloat>();", source);
 			Assert.That(BiomeSeaFloats.Any(BiomeSeaFloats.None()), Is.False);
 			Assert.That(BiomeSeaFloats.Any(new List<BiomeSeaFloat> { new BiomeSeaFloat(BiomeSeaFloatKind.Sargassum, 0f) }), Is.False, "a zero weight floats nothing");
@@ -268,8 +268,8 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void Swell_IsTheSeasOwnSum_SplitOutOfTheWaves()
 		{
-			string waves = File.ReadAllText(WaterShaders + "/FishWaterWaves.hlsl");
-			string swell = File.ReadAllText(WaterShaders + "/FishWaterSwell.hlsl");
+			string waves = ProjectFiles.ReadAllText(WaterShaders + "/FishWaterWaves.hlsl");
+			string swell = ProjectFiles.ReadAllText(WaterShaders + "/FishWaterSwell.hlsl");
 			StringAssert.Contains("#include \"FishWaterInput.hlsl\"", waves);
 			Assert.That(waves.IndexOf("#include \"FishWaterInput.hlsl\""), Is.LessThan(waves.IndexOf("#include \"FishWaterSwell.hlsl\"")), "the sea's cbuffer and globals first");
 			// The ocean surface sums the cascades through the shared function, then the open sea and the calm, as before.
@@ -295,9 +295,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void FloatShaders_UseDxc_RideTheSwell_AndMirrorTheCSharpHash()
 		{
-			string shader = File.ReadAllText(ClientShaders + "/FishSeaFloats.shader");
-			string pass = File.ReadAllText(ClientShaders + "/FishSeaFloats.hlsl");
-			string compute = File.ReadAllText(ClientShaders + "/FishSeaFloats.compute");
+			string shader = ProjectFiles.ReadAllText(ClientShaders + "/FishSeaFloats.shader");
+			string pass = ProjectFiles.ReadAllText(ClientShaders + "/FishSeaFloats.hlsl");
+			string compute = ProjectFiles.ReadAllText(ClientShaders + "/FishSeaFloats.compute");
 			Assert.That(Regex.Matches(shader, "HLSLPROGRAM").Count, Is.EqualTo(Regex.Matches(shader, @"#pragma use_dxc vulkan").Count), "every pass on DXC");
 			StringAssert.Contains("#pragma use_dxc vulkan", compute);
 			StringAssert.DoesNotContain("FishIndirectInstancing", pass);
@@ -309,7 +309,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				StringAssert.Contains(constant, compute, constant);
 			}
-			string sea = File.ReadAllText(ClientShaders + "/FishSeaLife.hlsl");
+			string sea = ProjectFiles.ReadAllText(ClientShaders + "/FishSeaLife.hlsl");
 			StringAssert.Contains("FishWaterSwell.hlsl", sea);
 			StringAssert.DoesNotContain("FishWaterInput.hlsl", sea);
 		}
@@ -349,11 +349,11 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void AdriftDerelict_IsMooredWithNoFloor_InTheHarboursWay()
 		{
-			string source = File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/Features/PointOfInterestAdrift.cs");
+			string source = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/Features/PointOfInterestAdrift.cs");
 			StringAssert.Contains("Floor = float.NegativeInfinity", source);
 			StringAssert.Contains("PointOfInterestHarbour.Moor(", source);
 			StringAssert.Contains("AddComponent<FloatingBoats>().Configure(", source);
-			string planner = File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/PointOfInterestPlanner.Placement.cs");
+			string planner = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/PointOfInterestPlanner.Placement.cs");
 			StringAssert.Contains("rule.OffshoreMetres > 0f && (!Input.HasSea || G.LandDistance[i] < rule.OffshoreMetres)", planner);
 			StringAssert.Contains("site.Y = Input.SeaLevel;", planner);
 		}

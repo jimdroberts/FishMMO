@@ -207,7 +207,7 @@ namespace FishMMO.UnitTests.Weather
 			/* Each particle falls at a whole number of 64ths of its kind's speed, so when the kind's
 			 * fall wraps after 64 boxes every particle has fallen a whole number of boxes and the
 			 * shader's frac() puts it back where it was. The two halves are in two languages. */
-			string shader = File.ReadAllText(Path.Combine(Application.dataPath, "Prefabs/Client/Weather/Shaders/FishPrecipitation.shader"));
+			string shader = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath, "Prefabs/Client/Weather/Shaders/FishPrecipitation.shader"));
 			string steps = PrecipitationField.SpeedSteps.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
 			LogAssert.IsTrue(shader.Contains($"* {steps}) / {steps}"), $"the shader rounds a particle's speed to 1/{steps} of its kind's, as Advance wraps it");
 			LogAssert.IsTrue(shader.Contains("_PrecipTravel") && !shader.Contains("_PrecipFall.xyz * speed * time"), "and places particles from the integrated travel, not velocity times time");
@@ -237,10 +237,10 @@ namespace FishMMO.UnitTests.Weather
 			LogAssert.IsTrue(PrecipitationField.TraitsOf(WeatherChannel.AshWeight).FromCloud, "ash settles out of the plume");
 			LogAssert.IsFalse(PrecipitationField.TraitsOf(WeatherChannel.SandWeight).FromCloud, "sand owes the sky nothing");
 
-			string shader = File.ReadAllText(Path.Combine(Application.dataPath, "Prefabs/Client/Weather/Shaders/FishPrecipitation.shader"));
+			string shader = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath, "Prefabs/Client/Weather/Shaders/FishPrecipitation.shader"));
 			LogAssert.IsTrue(shader.Contains("_PrecipShape.x * shedding"), "the cloud above sets how MANY fall");
 			LogAssert.IsFalse(shader.Contains("underCloud"), "and no longer fades the drops it lets through");
-			string splash = File.ReadAllText(Path.Combine(Application.dataPath, "Prefabs/Client/Weather/Shaders/FishPrecipitationSplash.shader"));
+			string splash = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath, "Prefabs/Client/Weather/Shaders/FishPrecipitationSplash.shader"));
 			LogAssert.IsTrue(splash.Contains("FishCloudOver("), "splashes land only where the drops can");
 		}
 

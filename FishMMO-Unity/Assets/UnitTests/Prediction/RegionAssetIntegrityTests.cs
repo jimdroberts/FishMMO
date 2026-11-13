@@ -66,8 +66,8 @@ namespace FishMMO.UnitTests
 		/// </summary>
 		private static string ReadMetaGuid(string metaPath)
 		{
-			LogAssert.IsTrue(File.Exists(metaPath), $"Meta file not found at {metaPath}.");
-			foreach (string line in File.ReadLines(metaPath))
+			LogAssert.IsTrue(ProjectFiles.Exists(metaPath), $"Meta file not found at {metaPath}.");
+			foreach (string line in ProjectFiles.ReadLines(metaPath))
 			{
 				Match m = MetaGuid.Match(line);
 				if (m.Success)
@@ -81,8 +81,8 @@ namespace FishMMO.UnitTests
 
 		private static IEnumerable<string> RegionAssetFiles()
 		{
-			LogAssert.IsTrue(Directory.Exists(RegionAssetRoot), $"Region asset root not found at {RegionAssetRoot}.");
-			return Directory.EnumerateFiles(RegionAssetRoot, "*.asset", SearchOption.AllDirectories);
+			LogAssert.IsTrue(ProjectFiles.FolderExists(RegionAssetRoot), $"Region asset root not found at {RegionAssetRoot}.");
+			return Directory.EnumerateFiles(ProjectFiles.Folder(RegionAssetRoot), "*.asset", SearchOption.AllDirectories);
 		}
 
 		/// <summary>
@@ -101,7 +101,7 @@ namespace FishMMO.UnitTests
 			foreach (string file in RegionAssetFiles())
 			{
 				string found = null;
-				foreach (string line in File.ReadLines(file))
+				foreach (string line in ProjectFiles.ReadLines(file))
 				{
 					Match m = ScriptGuid.Match(line);
 					if (!m.Success)
@@ -143,7 +143,7 @@ namespace FishMMO.UnitTests
 
 			foreach (string file in RegionAssetFiles())
 			{
-				string text = File.ReadAllText(file);
+				string text = ProjectFiles.ReadAllText(file);
 				foreach (string field in RegionOnlyFields)
 				{
 					if (text.Contains(field))
@@ -169,7 +169,7 @@ namespace FishMMO.UnitTests
 
 			foreach (string file in RegionAssetFiles())
 			{
-				string text = File.ReadAllText(file);
+				string text = ProjectFiles.ReadAllText(file);
 				bool hasMet = Regex.IsMatch(text, @"OnConditionsMetActions:\s*\r?\n\s*-\s*rid:");
 				bool hasNotMet = Regex.IsMatch(text, @"OnConditionsNotMetActions:\s*\r?\n\s*-\s*rid:");
 				if (!hasMet && !hasNotMet)

@@ -342,7 +342,7 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		// ── The wiring ────────────────────────────────────────────
 
-		private static string Source(string path) => File.ReadAllText(path).Replace("\r\n", "\n");
+		private static string Source(string path) => ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 
 		/// <summary>Every stage that lays a capped type reads the site's one count, and the count is no site builder of its own.</summary>
 		[Test]

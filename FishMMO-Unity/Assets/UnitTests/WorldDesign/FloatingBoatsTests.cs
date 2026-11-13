@@ -360,8 +360,8 @@ namespace FishMMO.UnitTests.WorldDesign
 		private static string ReadSource(string relativePath)
 		{
 			string path = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), relativePath);
-			Assert.IsTrue(System.IO.File.Exists(path), $"{relativePath} not found at {path}.");
-			return System.IO.File.ReadAllText(path).Replace("\r\n", "\n");
+			Assert.IsTrue(ProjectFiles.Exists(path), $"{relativePath} not found at {path}.");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 		/// <summary>The source without its comment lines, so prose about a construct does not stand in for it.</summary>

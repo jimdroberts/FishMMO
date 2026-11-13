@@ -666,10 +666,48 @@ namespace FishMMO.Client
 			row.RegisterCallback<PointerLeaveEvent>(_ => RestoreSelectedDetails());
 			row.RegisterCallback<PointerDownEvent>(evt => OnEntryPointerDown(evt, entry));
 
-			listRoot.Add(row);
-			entries.Add(entry);
+			/* One row per thing, replaced in place when it is announced again. The client hears of
+			 * each ability more than once as a character comes in (the controller's start replays
+			 * what it knows, the panel rebuilds from the controller when the character is set, and
+			 * the server's list then arrives and is learned again), and every announcement used to
+			 * add a row: a new character showed its one starting ability three times. Replacing
+			 * rather than skipping keeps the row current when an ability is re-sent with changes. */
+			int existing = IndexOfEntry(entry.Tab, entry.Kind, entry.ReferenceID);
+			if (existing >= 0)
+			{
+				VisualElement old = entries[existing].Root;
+				int at = old != null && old.parent == listRoot ? listRoot.IndexOf(old) : -1;
+				old?.RemoveFromHierarchy();
+				if (at >= 0)
+				{
+					listRoot.Insert(at, row);
+				}
+				else
+				{
+					listRoot.Add(row);
+				}
+				entries[existing] = entry;
+			}
+			else
+			{
+				listRoot.Add(row);
+				entries.Add(entry);
+			}
 
 			ApplyFilter();
+		}
+
+		/// <summary>The position of the row for <paramref name="referenceID"/> on <paramref name="tab"/> as <paramref name="kind"/>, or -1.</summary>
+		private int IndexOfEntry(AbilityTabType tab, KnowledgeFilterType kind, long referenceID)
+		{
+			for (int i = 0; i < entries.Count; ++i)
+			{
+				if (entries[i].Tab == tab && entries[i].Kind == kind && entries[i].ReferenceID == referenceID)
+				{
+					return i;
+				}
+			}
+			return -1;
 		}
 
 		/// <summary>Picks an entry up onto the drag object, or says why it cannot be.</summary>

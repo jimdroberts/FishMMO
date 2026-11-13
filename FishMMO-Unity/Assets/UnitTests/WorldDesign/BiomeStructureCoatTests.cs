@@ -255,13 +255,13 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void TheShader_ReadsTheRowTheTableWrites_InTheIndirectPassOnly()
 		{
 			string folder = Path.Combine("Assets", "Prefabs", "Client", "Weather", "Shaders");
-			string coat = File.ReadAllText(Path.Combine(folder, "FishStructureCoat.hlsl"));
+			string coat = ProjectFiles.ReadAllText(Path.Combine(folder, "FishStructureCoat.hlsl"));
 			Assert.That(coat, Does.Contain("#define FISH_COAT_TEXELS " + BiomeStructureCoats.TexelsPerBiome));
 			for (int t = 0; t < BiomeStructureCoats.TexelsPerBiome; t++)
 			{
 				Assert.That(coat, Does.Contain($"FishCoatTexel(row, {t})"), $"texel {t} is read");
 			}
-			string pass = File.ReadAllText(Path.Combine(folder, "FishWeatherLitForwardPass.hlsl"));
+			string pass = ProjectFiles.ReadAllText(Path.Combine(folder, "FishWeatherLitForwardPass.hlsl"));
 			int include = pass.IndexOf("#include \"FishStructureCoat.hlsl\"", StringComparison.Ordinal);
 			Assert.That(include, Is.GreaterThan(0));
 			Assert.That(pass.LastIndexOf("#if defined(FISH_INDIRECT_INSTANCED)", include, StringComparison.Ordinal),

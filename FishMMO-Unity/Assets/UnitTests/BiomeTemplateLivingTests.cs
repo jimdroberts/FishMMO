@@ -129,11 +129,11 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void SpecFiles_NeverNameTheAlienHabitat()
 		{
 			string folder = Path.Combine(WorldFolder, "ProceduralArt", "BiomeArtSpec");
-			string[] files = Directory.GetFiles(folder, "*.cs");
+			string[] files = Directory.GetFiles(ProjectFiles.Folder(folder), "*.cs");
 			Assert.That(files.Length, Is.EqualTo(83));
 			foreach (string file in files)
 			{
-				Assert.That(CodeOnly(File.ReadAllText(file)), Does.Not.Contain("BiomeHabitat.Alien"), Path.GetFileName(file));
+				Assert.That(CodeOnly(ProjectFiles.ReadAllText(file)), Does.Not.Contain("BiomeHabitat.Alien"), Path.GetFileName(file));
 			}
 		}
 
@@ -507,9 +507,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void Sites_PaintTheirOwnBiomesPrototype()
 		{
 			string features = Path.Combine(WorldFolder, "PointsOfInterest", "Features");
-			string grove = CodeOnly(File.ReadAllText(Path.Combine(features, "PointOfInterestHerbGrove.cs")));
-			string mouths = CodeOnly(File.ReadAllText(Path.Combine(features, "PointOfInterestCaveMouths.cs")));
-			string fields = CodeOnly(File.ReadAllText(Path.Combine(features, "PointOfInterestFields.cs")));
+			string grove = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(features, "PointOfInterestHerbGrove.cs")));
+			string mouths = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(features, "PointOfInterestCaveMouths.cs")));
+			string fields = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(features, "PointOfInterestFields.cs")));
 			Assert.That(grove, Does.Contain("layers[s] = LayersOf(terrain, Species[s], Biome);"));
 			Assert.That(mouths, Does.Contain("PointOfInterestHerbGrove.LayersOf(terrain, growth.Species[s], growth.Biome)"));
 			Assert.That(fields, Does.Contain("PointOfInterestHerbGrove.SiteLayers(terrain, crop, biome, NewWheat)"));
@@ -542,9 +542,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(byName.IsMatch(old), Is.True, "control: " + old);
 			}
 			var files = new List<string> { Path.Combine(WorldFolder, "SceneGenerator.cs") };
-			files.AddRange(Directory.GetFiles(Path.Combine(WorldFolder, "Terrain"), "*.cs", SearchOption.AllDirectories));
-			files.AddRange(Directory.GetFiles(Path.Combine(WorldFolder, "PointsOfInterest"), "*.cs", SearchOption.AllDirectories));
-			files.AddRange(Directory.GetFiles(Path.Combine(WorldFolder, "Vines"), "*.cs", SearchOption.AllDirectories));
+			files.AddRange(Directory.GetFiles(ProjectFiles.Folder(Path.Combine(WorldFolder, "Terrain")), "*.cs", SearchOption.AllDirectories));
+			files.AddRange(Directory.GetFiles(ProjectFiles.Folder(Path.Combine(WorldFolder, "PointsOfInterest")), "*.cs", SearchOption.AllDirectories));
+			files.AddRange(Directory.GetFiles(ProjectFiles.Folder(Path.Combine(WorldFolder, "Vines")), "*.cs", SearchOption.AllDirectories));
 			Assert.That(files.Count, Is.GreaterThan(50));
 			var found = new List<string>();
 			foreach (string file in files)
@@ -554,7 +554,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				{
 					continue;
 				}
-				foreach (string line in CodeOnly(File.ReadAllText(file)).Split('\n'))
+				foreach (string line in CodeOnly(ProjectFiles.ReadAllText(file)).Split('\n'))
 				{
 					if (byName.IsMatch(line))
 					{
@@ -579,10 +579,10 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(seaByName.IsMatch("float weight = HabitatWeight(kind, biome, temperature);"), Is.True, "control");
 			Assert.That(seaByName.IsMatch("float weight = HabitatWeight(kind, preferred, temperature);"), Is.False, "control");
 			var found = new List<string>();
-			foreach (string file in Directory.GetFiles(ClientWorldFolder, "*.cs", SearchOption.AllDirectories))
+			foreach (string file in Directory.GetFiles(ProjectFiles.Folder(ClientWorldFolder), "*.cs", SearchOption.AllDirectories))
 			{
 				string name = Path.GetFileName(file);
-				string code = CodeOnly(File.ReadAllText(file));
+				string code = CodeOnly(ProjectFiles.ReadAllText(file));
 				foreach (string line in code.Split('\n'))
 				{
 					bool habitat = habitatByName.IsMatch(line) && name != "AmbientGating.cs";
@@ -606,9 +606,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			};
 			Assert.That(found.Except(allowed).ToList(), Is.Empty, "client code reading a biome's creatures by its name: " + string.Join(" | ", found.Except(allowed)));
 			// The ambient fallback is the template reader's.
-			string gating = CodeOnly(File.ReadAllText(Path.Combine(ClientWorldFolder, "AmbientLife/AmbientGating.cs")));
+			string gating = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(ClientWorldFolder, "AmbientLife/AmbientGating.cs")));
 			Assert.That(Regex.Matches(gating, @"=\s*HabitatOfBiome\(").Count, Is.EqualTo(1), "HabitatOfTemplate's fallback is the one caller");
-			string life = CodeOnly(File.ReadAllText(Path.Combine(ClientWorldFolder, "AmbientLife/AmbientLifeSystem.cs")));
+			string life = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(ClientWorldFolder, "AmbientLife/AmbientLifeSystem.cs")));
 			Assert.That(life, Does.Contain("AmbientGating.HabitatOfTemplate(template)"));
 		}
 
@@ -626,9 +626,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		private static List<BiomeAsset> BiomeAssets()
 		{
 			var assets = new List<BiomeAsset>();
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				if (!Regex.IsMatch(text, "^  MinTemperature:", RegexOptions.Multiline))
 				{
 					continue;
@@ -656,7 +656,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			var seaKinds = new HashSet<string>(SeaLifeSettings.Defaults().Select(k => k.Name));
 			var prefers = new Dictionary<string, List<string>>();
-			string[] lines = File.ReadAllText(ProfilePath).Replace("\r\n", "\n").Split('\n');
+			string[] lines = ProjectFiles.ReadAllText(ProfilePath).Replace("\r\n", "\n").Split('\n');
 			string kind = null;
 			for (int i = 0; i < lines.Length; i++)
 			{
@@ -693,7 +693,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			var seaKinds = new HashSet<string>(SeaLifeSettings.Defaults().Select(k => k.Name));
 			var weights = new Dictionary<string, float>();
 			string kind = null;
-			foreach (string line in File.ReadAllText(ProfilePath).Replace("\r\n", "\n").Split('\n'))
+			foreach (string line in ProjectFiles.ReadAllText(ProfilePath).Replace("\r\n", "\n").Split('\n'))
 			{
 				Match name = Regex.Match(line, @"^\s*- Name: (.+)$");
 				if (name.Success)

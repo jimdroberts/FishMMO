@@ -287,17 +287,17 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void CaveShaper_TakesItsShellFromTheTemplate_AndTheDressingTheShaperRock()
 		{
-			string shaper = CodeOnly(File.ReadAllText(Path.Combine(WorldFolder, "PointsOfInterest/Shapers/CaveShaper.cs")));
+			string shaper = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "PointsOfInterest/Shapers/CaveShaper.cs")));
 			Assert.That(shaper, Does.Contain("BiomeTemplateArt.CaveShell(biome, form)"));
 			Assert.That(shaper, Does.Contain("string rock = ShellOf(context.Request, site, system);"), "the shaper builds its walls from the shell");
 			Assert.That(shaper, Does.Not.Contain("\"Basalt\""), "a rock decided in the shaper");
 			Assert.That(shaper, Does.Not.Contain("CliffRocks.Ice"), "a rock decided in the shaper");
 			Assert.That(shaper, Does.Not.Contain("CaveForm.LavaTube ?"), "a shell decided by form in the shaper");
-			string dressing = CodeOnly(File.ReadAllText(Path.Combine(WorldFolder, "PointsOfInterest/Features/PointOfInterestCaveDressing.cs")));
+			string dressing = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "PointsOfInterest/Features/PointOfInterestCaveDressing.cs")));
 			Assert.That(dressing, Does.Contain("set.Rock = FormationRock(CaveShaper.ShellOf(context.Request, context.Record, system));"));
 			Assert.That(dressing, Does.Not.Contain("BiomeTemplateArt.CaveRock"), "the old per-form formation rock");
 			// The only cut-time reader of the spec's default shell is the template reader's fallback.
-			string art = CodeOnly(File.ReadAllText(Path.Combine(WorldFolder, "Terrain/BiomeTemplateArt.cs")));
+			string art = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "Terrain/BiomeTemplateArt.cs")));
 			Assert.That(art, Does.Contain("Fallback(biome, \"Cave Shells\""));
 		}
 
@@ -347,16 +347,16 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void CobbleTable_BinderAndShaderAgree()
 		{
-			string binder = File.ReadAllText("Assets/Scripts/Shared/Implementation/Entity/WorldSceneDetails/Terrain/TerrainArrayBinder.cs");
+			string binder = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Entity/WorldSceneDetails/Terrain/TerrainArrayBinder.cs");
 			Assert.That(binder, Does.Contain("ScenePathSurfaceBinder.StoneMapOf(scene)"));
 			Assert.That(binder, Does.Contain("TerrainLayerTable.Pack("));
-			string shader = File.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishWeatherTerrainArrayInput.hlsl");
+			string shader = ProjectFiles.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishWeatherTerrainArrayInput.hlsl");
 			Assert.That(shader, Does.Contain("FishLayerRow(id, FISH_LAYER_ROW_PATHS)"));
 			Assert.That(shader, Does.Contain("float4 FishPathSlicesOf(int id)"));
 			Assert.That(shader, Does.Contain("slices.z = slices.z > -0.5 ? slices.z : (_FishPathLayers.z > -0.5 ? _FishPathLayers.z : slices.y);"));
-			string table = File.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishTerrainIndexMap.hlsl");
+			string table = ProjectFiles.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishTerrainIndexMap.hlsl");
 			Assert.That(table, Does.Contain($"#define FISH_LAYER_ROW_PATHS {TerrainLayerTable.RowPaths} "));
-			string generator = File.ReadAllText(Path.Combine(WorldFolder, "SceneGenerator.cs"));
+			string generator = ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "SceneGenerator.cs"));
 			Assert.That(generator, Does.Contain("palette.PathLayerMap(SceneTerrainPalette.SlotPathStone, coverage)"), "the cut writes each layer's own biome's cobbles");
 		}
 
@@ -378,7 +378,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void CanyonWalls_AreGivenTheBiomesRockRule()
 		{
-			string generator = CodeOnly(File.ReadAllText(Path.Combine(WorldFolder, "SceneGenerator.cs")));
+			string generator = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "SceneGenerator.cs")));
 			Assert.That(generator, Does.Contain("BiomeRocks(wallBiomes)"));
 			Assert.That(generator, Does.Contain("field: wallBiomes"));
 			Assert.That(generator, Does.Contain("BiomeTemplateArt.RockRule(field.Biomes[b])"));
@@ -507,18 +507,18 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void Repaint_RedressesTheCanyonWalls_FromTheKeptCells()
 		{
-			string generator = CodeOnly(File.ReadAllText(Path.Combine(WorldFolder, "SceneGenerator.cs")));
+			string generator = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "SceneGenerator.cs")));
 			Assert.That(generator, Does.Contain("BiomeRocks(wallBiomes), CanyonWalls.RecordPath(terrainFolder, request.SceneName));"));
 			Assert.That(generator, Does.Contain("bool wallsBuiltFromField = field != null;"));
 			Assert.That(generator, Does.Contain("if (!wallsBuiltFromField)"));
 			Assert.That(generator, Does.Contain("CanyonWalls.Redress(scene, plan, record, BiomeRocks(field))"));
 			Assert.That(generator, Does.Contain("was cut before its walls' cells were kept"));
-			string repaint = CodeOnly(File.ReadAllText(Path.Combine(WorldFolder, "Terrain/BiomeRepaintTool.cs")));
+			string repaint = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "Terrain/BiomeRepaintTool.cs")));
 			int paint = repaint.IndexOf("SceneGenerator.PaintBiomes(", StringComparison.Ordinal);
 			int bake = repaint.IndexOf("SceneGenerator.BakePropsAndNavMesh(", StringComparison.Ordinal);
 			Assert.That(paint, Is.GreaterThan(0));
 			Assert.That(bake, Is.GreaterThan(paint), "the walls are dressed before the NavMesh is baked from their colliders");
-			string walls = CodeOnly(File.ReadAllText(Path.Combine(WorldFolder, "Terrain/CanyonWalls.cs")));
+			string walls = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "Terrain/CanyonWalls.cs")));
 			Assert.That(walls, Does.Contain("int[] cellRock = WallRocks(wall, cellGeology, geologyRocks, field.Plan, cellsX, cellsZ, rockAt, out List<string> rocks);"), "the cut");
 			Assert.That(walls, Does.Contain("int[] cellRock = WallRocks(wall, cellGeology, geologyRocks, record.Plan, cellsX, cellsZ, rockAt, out List<string> rocks);"), "the repaint");
 			Assert.That(walls, Does.Contain("List<long> keys = ChunkTopology("), "one wiring for both");
@@ -556,8 +556,8 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(ByName.IsMatch("if (found != null && found.name == \"HullWaterLid\")"), Is.False, "not a biome");
 
 			var files = new List<string> { Path.Combine(WorldFolder, "SceneGenerator.cs"), Path.Combine(WorldFolder, "SceneGeneration.cs") };
-			files.AddRange(Directory.GetFiles(Path.Combine(WorldFolder, "Terrain"), "*.cs", SearchOption.AllDirectories));
-			files.AddRange(Directory.GetFiles(Path.Combine(WorldFolder, "PointsOfInterest"), "*.cs", SearchOption.AllDirectories));
+			files.AddRange(Directory.GetFiles(ProjectFiles.Folder(Path.Combine(WorldFolder, "Terrain")), "*.cs", SearchOption.AllDirectories));
+			files.AddRange(Directory.GetFiles(ProjectFiles.Folder(Path.Combine(WorldFolder, "PointsOfInterest")), "*.cs", SearchOption.AllDirectories));
 			Assert.That(files.Count, Is.GreaterThan(50), "the scan found the cut's sources");
 			var found = new List<string>();
 			foreach (string file in files)
@@ -567,7 +567,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				{
 					continue;
 				}
-				foreach (string line in CodeOnly(File.ReadAllText(file)).Split('\n'))
+				foreach (string line in CodeOnly(ProjectFiles.ReadAllText(file)).Split('\n'))
 				{
 					if (ByName.IsMatch(line))
 					{
@@ -584,9 +584,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		private static IEnumerable<string> BiomeAssetNames()
 		{
 			var names = new List<string>();
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				if (!Regex.IsMatch(text, "^  MinTemperature:", RegexOptions.Multiline))
 				{
 					continue;

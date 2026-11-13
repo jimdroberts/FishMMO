@@ -355,9 +355,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 						// Increment achievement for crafting an ability
 						if (abilityCrafter.AchievementTemplate != null &&
-							grantedCharacter.TryGet(out IAchievementController achievementController))
+							grantedCharacter != null)
 						{
-							achievementController.Increment(abilityCrafter.AchievementTemplate, 1);
+							Accomplishments.Record(grantedCharacter, abilityCrafter.AchievementTemplate);
 						}
 					},
 					onFailed: AnswerRejectedCraft);

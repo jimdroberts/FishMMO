@@ -25,7 +25,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		private const string WorldFolder = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World";
 		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
 
-		private static string Code(string path) => File.ReadAllText(path);
+		private static string Code(string path) => ProjectFiles.ReadAllText(path);
 
 		private static BiomeWorldConditions World(AtmosphereKind air, float meanTemperature = 0.5f, float giantField = 0f)
 		{
@@ -61,9 +61,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		private static Dictionary<string, string> TemplateYaml()
 		{
 			var all = new Dictionary<string, string>();
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				if (text.Contains("m_Script:") && text.Contains("mainTextureLayer:"))
 				{
 					all[Path.GetFileNameWithoutExtension(path)] = text;
@@ -436,8 +436,8 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>The air of a body in the home system, read from its asset (bodies are tracked templates; scenes are cut output).</summary>
 		private static AtmosphereKind BodyAir(string body)
 		{
-			string path = Directory.GetFiles("Assets/Templates/World/Systems", "* - " + body + ".asset", SearchOption.AllDirectories).Single();
-			return (AtmosphereKind)int.Parse(Regex.Match(File.ReadAllText(path), @"\n  Atmosphere: (\d+)").Groups[1].Value);
+			string path = Directory.GetFiles(ProjectFiles.Folder("Assets/Templates/World/Systems"), "* - " + body + ".asset", SearchOption.AllDirectories).Single();
+			return (AtmosphereKind)int.Parse(Regex.Match(ProjectFiles.ReadAllText(path), @"\n  Atmosphere: (\d+)").Groups[1].Value);
 		}
 
 		/// <summary>
@@ -511,28 +511,28 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void CutScenes_HoldNoLivedInSiteWithoutBreathableAir()
 		{
 			string[] kinds = Enum.GetNames(typeof(POIType));
-			foreach (string atlas in Directory.GetFiles("Assets/Templates/World/Atlas/Scenes", "*.asset"))
+			foreach (string atlas in Directory.GetFiles(ProjectFiles.Folder("Assets/Templates/World/Atlas/Scenes"), "*.asset"))
 			{
-				string text = File.ReadAllText(atlas);
+				string text = ProjectFiles.ReadAllText(atlas);
 				Match scene = Regex.Match(text, @"\n  SceneName: ([^\n]+)");
 				Match body = Regex.Match(text, @"\n  Body: \{fileID: \d+, guid: ([0-9a-f]+)");
 				if (!scene.Success || !body.Success || !Regex.IsMatch(text, @"\n  CutRadiusKm: [1-9]"))
 				{
 					continue;
 				}
-				string meta = Directory.GetFiles("Assets/Templates/World/Systems", "*.asset.meta", SearchOption.AllDirectories)
-					.First(m => File.ReadAllText(m).Contains("guid: " + body.Groups[1].Value));
-				var air = (AtmosphereKind)int.Parse(Regex.Match(File.ReadAllText(meta.Substring(0, meta.Length - 5)), @"\n  Atmosphere: (\d+)").Groups[1].Value);
+				string meta = Directory.GetFiles(ProjectFiles.Folder("Assets/Templates/World/Systems"), "*.asset.meta", SearchOption.AllDirectories)
+					.First(m => ProjectFiles.ReadAllText(m).Contains("guid: " + body.Groups[1].Value));
+				var air = (AtmosphereKind)int.Parse(Regex.Match(ProjectFiles.ReadAllText(meta.Substring(0, meta.Length - 5)), @"\n  Atmosphere: (\d+)").Groups[1].Value);
 				string name = scene.Groups[1].Value.Trim();
-				string pois = Directory.Exists("Assets/Scenes/WorldScene")
-					? Directory.GetFiles("Assets/Scenes/WorldScene", name + " Points of Interest.asset", SearchOption.AllDirectories).FirstOrDefault()
+				string pois = ProjectFiles.FolderExists("Assets/Scenes/WorldScene")
+					? Directory.GetFiles(ProjectFiles.Folder("Assets/Scenes/WorldScene"), name + " Points of Interest.asset", SearchOption.AllDirectories).FirstOrDefault()
 					: null;
 				if (pois == null || BiomeAir.IsDenseEnough(air))
 				{
 					continue;
 				}
 				var lived = new List<string>();
-				foreach (Match m in Regex.Matches(File.ReadAllText(pois), @"\n    Kind: (\d+)"))
+				foreach (Match m in Regex.Matches(ProjectFiles.ReadAllText(pois), @"\n    Kind: (\d+)"))
 				{
 					var kind = (POIType)Enum.Parse(typeof(POIType), kinds[int.Parse(m.Groups[1].Value)]);
 					if (BiomeSiteAir.NeedsAirByDefault(kind))

@@ -49,8 +49,8 @@ namespace FishMMO.UnitTests
 		[SetUp]
 		public void SetUp()
 		{
-			PanelSettings settings = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
-			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(UxmlPath);
+			PanelSettings settings = AssetDatabase.LoadAssetAtPath<PanelSettings>(ProjectFiles.Path(PanelSettingsPath));
+			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(ProjectFiles.Path(UxmlPath));
 			LogAssert.IsNotNull(settings, $"panel settings must exist at {PanelSettingsPath}");
 			LogAssert.IsNotNull(uxml, $"the abilities UXML must exist at {UxmlPath}");
 
@@ -119,7 +119,7 @@ namespace FishMMO.UnitTests
 		/// <summary>The merchant template a player buys ability templates from.</summary>
 		private static MerchantTemplate Merchant()
 		{
-			MerchantTemplate merchant = AssetDatabase.LoadAssetAtPath<MerchantTemplate>(MerchantPath);
+			MerchantTemplate merchant = AssetDatabase.LoadAssetAtPath<MerchantTemplate>(ProjectFiles.Path(MerchantPath));
 			LogAssert.IsNotNull(merchant, $"the merchant template must exist at {MerchantPath}");
 			return merchant;
 		}

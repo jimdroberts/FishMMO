@@ -30,7 +30,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>The coast's east edge, metres: land in the first <see cref="LandColumns"/> columns, sea beyond.</summary>
 		private const float CoastEast = LandColumns * Cell;
 
-		private static string Read(string relative) => File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
+		private static string Read(string relative) => ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
 
 		/// <summary>A straight north–south coast: ice-sheet land to the west, sea to the east, cold where <paramref name="cold"/> says.</summary>
 		private static IceShelfReach Coast(Func<int, int, bool> cold, float landIce = LandIce, uint seed = Seed, Func<int, int, bool> land = null,

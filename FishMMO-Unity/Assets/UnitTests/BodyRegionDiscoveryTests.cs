@@ -184,7 +184,7 @@ namespace FishMMO.UnitTests
 			/* Pinned in source: the level is the whole subject of #158 and is not observable from
 			 * the component. Every shipped model takes this path, so an Error here fires for every
 			 * character in the game -- which is what made the log unreadable rather than useful. */
-			string source = File.ReadAllText(Path.Combine(
+			string source = ProjectFiles.ReadAllText(Path.Combine(
 				Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Shared/Implementation/Entity/Appearance/BodyVisibilityManager.cs"));
 

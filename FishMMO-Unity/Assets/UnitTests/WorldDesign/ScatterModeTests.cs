@@ -24,7 +24,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		private const string Compute = "Assets/Prefabs/Client/Weather/Shaders/FishDetailScatter.compute";
 		private const string ModeFile = "Assets/Scripts/Shared/Implementation/Tools/Biomes/Terrain/BiomeScatterMode.cs";
 
-		private static string Read(string relative) => File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
+		private static string Read(string relative) => ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
 
 		private static IEnumerable<BiomeScatterMode> NamedModes()
 		{
@@ -118,12 +118,12 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void BiomeAssets_CarryOnlyOffModes()
 		{
 			string folder = Path.Combine(Directory.GetCurrentDirectory(), "Assets/Templates/Entity/Biomes");
-			Assume.That(Directory.Exists(folder), Is.True);
+			Assume.That(ProjectFiles.FolderExists(folder), Is.True);
 			var block = new Regex(@"scatterMode:\n((?:\s{8,}\w+:.*\n)+)");
 			int seen = 0;
-			foreach (string path in Directory.GetFiles(folder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(folder), "*.asset"))
 			{
-				string text = File.ReadAllText(path).Replace("\r\n", "\n");
+				string text = ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 				foreach (Match m in block.Matches(text))
 				{
 					seen++;

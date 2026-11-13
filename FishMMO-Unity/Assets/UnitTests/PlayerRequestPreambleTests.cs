@@ -121,8 +121,8 @@ namespace FishMMO.UnitTests
 		private static string ReadSource(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-			LogAssert.IsTrue(File.Exists(path), $"{relativePath} not found at {path}.");
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{relativePath} not found at {path}.");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 		/// <summary>Every server script, keyed by its path relative to the server root.</summary>
@@ -130,12 +130,12 @@ namespace FishMMO.UnitTests
 		{
 			var sources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-			foreach (string file in Directory.GetFiles(ServerRoot, "*.cs", SearchOption.AllDirectories))
+			foreach (string file in Directory.GetFiles(ProjectFiles.Folder(ServerRoot), "*.cs", SearchOption.AllDirectories))
 			{
 				string key = file.Substring(ServerRoot.Length)
 					.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
 					.Replace('\\', '/');
-				sources[key] = File.ReadAllText(file).Replace("\r\n", "\n");
+				sources[key] = ProjectFiles.ReadAllText(file).Replace("\r\n", "\n");
 			}
 
 			LogAssert.IsTrue(sources.Count > 0, "there must be server sources to scan");

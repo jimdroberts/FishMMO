@@ -45,7 +45,7 @@ namespace FishMMO.UnitTests
 			foreach (string guid in AssetDatabase.FindAssets("t:AbilityTemplate"))
 			{
 				AbilityTemplate candidate = AssetDatabase.LoadAssetAtPath<AbilityTemplate>(
-					AssetDatabase.GUIDToAssetPath(guid));
+					ProjectFiles.Path(AssetDatabase.GUIDToAssetPath(guid)));
 
 				if (candidate != null && candidate.ID == id)
 				{
@@ -70,7 +70,7 @@ namespace FishMMO.UnitTests
 		/// <summary>The ability ids every new character is granted, from the login server config.</summary>
 		private static IEnumerable<int> GlobalStartingAbilityIds()
 		{
-			string text = System.IO.File.ReadAllText(
+			string text = ProjectFiles.ReadAllText(
 				"Assets/Prefabs/Server/LoginServer/CharacterCreateSystem.asset");
 
 			Match m = Regex.Match(text, @"startingAbilityIDs: ([0-9a-fA-F]*)");
@@ -110,7 +110,7 @@ namespace FishMMO.UnitTests
 				foreach (string guid in AssetDatabase.FindAssets("t:AbilityTemplate"))
 				{
 					AbilityTemplate ability = AssetDatabase.LoadAssetAtPath<AbilityTemplate>(
-						AssetDatabase.GUIDToAssetPath(guid));
+						ProjectFiles.Path(AssetDatabase.GUIDToAssetPath(guid)));
 
 					if (ability != null && TemplateID(ability) == id)
 					{
@@ -123,7 +123,7 @@ namespace FishMMO.UnitTests
 			foreach (string guid in AssetDatabase.FindAssets("t:RaceTemplate"))
 			{
 				RaceTemplate race = AssetDatabase.LoadAssetAtPath<RaceTemplate>(
-					AssetDatabase.GUIDToAssetPath(guid));
+					ProjectFiles.Path(AssetDatabase.GUIDToAssetPath(guid)));
 
 				if (race?.StartingAbilities == null)
 				{

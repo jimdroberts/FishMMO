@@ -2,6 +2,7 @@
     "name": "FishMMO.Client",
     "rootNamespace": "FishMMO.Client",
     "references": [
+        "FishMMO.Core",
         "FishMMO.Shared",
         "FishMMO.Client.Input.Generated",
         "FishNet.Runtime",

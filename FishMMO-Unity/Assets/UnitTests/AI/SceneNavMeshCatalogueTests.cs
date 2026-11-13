@@ -54,7 +54,7 @@ namespace FishMMO.UnitTests.AI
 		{
 			AddressableAssetSettings settings = AddressableAssetSettingsDefaultObject.Settings;
 			Assert.That(settings, Is.Not.Null);
-			AddressableAssetEntry entry = settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(assetPath));
+			AddressableAssetEntry entry = settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(ProjectFiles.Path(assetPath)));
 			return entry != null && entry.parentGroup != null && entry.parentGroup.Name == ServerAddressables.GroupName
 				&& entry.labels.Contains(ServerAddressables.Label) ? entry : null;
 		}
@@ -69,12 +69,12 @@ namespace FishMMO.UnitTests.AI
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guid);
 				// The scene's own NavMeshSettings block holds a legacy reference too; surfaces are the MonoBehaviours.
-				foreach (Match match in surface.Matches(File.ReadAllText(path)))
+				foreach (Match match in surface.Matches(ProjectFiles.ReadAllText(path)))
 				{
 					string scene = Path.GetFileNameWithoutExtension(path);
 					baked++;
 					Assert.That(catalogue.TryGet(scene, out SceneNavMeshCatalogue.Entry entry), Is.True, $"'{scene}' has a baked NavMesh surface but no catalogue entry: the scene server would load it with no NavMesh");
-					Assert.That(AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(entry.Data)), Is.EqualTo(match.Groups[1].Value), $"'{scene}': the catalogue holds another bake than the scene's surface");
+					Assert.That(AssetDatabase.AssetPathToGUID(ProjectFiles.Path(AssetDatabase.GetAssetPath(entry.Data))), Is.EqualTo(match.Groups[1].Value), $"'{scene}': the catalogue holds another bake than the scene's surface");
 				}
 			}
 			Assert.That(baked, Is.GreaterThan(0), "no baked scene found: the pin would be vacuous");
@@ -91,11 +91,11 @@ namespace FishMMO.UnitTests.AI
 			}
 			Assert.That(ServerEntry(AssetDatabase.GetAssetPath(Catalogue())), Is.Not.Null, "the catalogue is not in the server group");
 			Assert.That(ServerEntry(SystemPath), Is.Not.Null, "the NavMesh system is not in the server group");
-			var system = AssetDatabase.LoadAssetAtPath<NavMeshSystem>(SystemPath);
+			var system = AssetDatabase.LoadAssetAtPath<NavMeshSystem>(ProjectFiles.Path(SystemPath));
 			Assert.That(system, Is.Not.Null);
 			Assert.That(system.Catalogue, Is.SameAs(Catalogue()));
-			string systemGuid = AssetDatabase.AssetPathToGUID(SystemPath);
-			Assert.That(File.ReadAllText(SceneServerPath), Does.Contain($"guid: {systemGuid}"), "the scene server does not run the NavMesh system");
+			string systemGuid = AssetDatabase.AssetPathToGUID(ProjectFiles.Path(SystemPath));
+			Assert.That(ProjectFiles.ReadAllText(SceneServerPath), Does.Contain($"guid: {systemGuid}"), "the scene server does not run the NavMesh system");
 		}
 
 		[Test]

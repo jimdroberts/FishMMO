@@ -7,6 +7,8 @@ using FishNet.Connection;
 using FishNet.Serializing;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
+using CoreEntity = FishMMO.Core.Entity;
+using CoreLifetime = FishMMO.Core.Lifetime;
 
 namespace FishMMO.Shared
 {
@@ -161,6 +163,15 @@ namespace FishMMO.Shared
 		/// asked until it first answers no.
 		/// </remarks>
 		private bool corpseDecayShortened;
+
+		/// <summary>The corpse's decay in the server's Core world, or null while not a corpse (or on the fallback tick).</summary>
+		private CoreWorldHost corpseHost;
+
+		/// <summary>The Core entity carrying this corpse's decay; meaningful only while <see cref="corpseHost"/> is set.</summary>
+		private CoreEntity corpseEntity;
+
+		/// <summary>True while the per-NPC fallback tick (<see cref="CorpseDecayTick"/>) is subscribed.</summary>
+		private bool corpseTickSubscribed;
 
 		[Header("Loot")]
 		[Tooltip("What this NPC's corpse may hold. Rolled once, on the server, at the moment of death.")]
@@ -321,8 +332,10 @@ namespace FishMMO.Shared
 			ApplyInstanceDifficulty();
 			LearnNPCAbilities();
 
-			// Subscribe to the server tick for corpse decay timer.
-			base.TimeManager.OnTick += CorpseDecayTick;
+			/* No tick subscription here. Corpse decay used to subscribe every NPC at spawn, so each
+			 * living NPC cost a call on every server tick only to find it was not a corpse, and each
+			 * spawn and despawn rebuilt the tick's whole subscriber list. Decay now starts at death
+			 * (StartCorpseDecay) and costs nothing until then. */
 
 			OnServerSpawned?.Invoke(this);
 		}
@@ -352,10 +365,8 @@ namespace FishMMO.Shared
 		/// <param name="asServer">Whether the reset is performed on the server.</param>
 		public override void ResetState(bool asServer)
 		{
-			// Unsubscribe from tick to prevent stale timer during pool idle.
-			// Unconditional, to match the now-unconditional subscription in OnStartServer.
-			if (base.TimeManager != null)
-				base.TimeManager.OnTick -= CorpseDecayTick;
+			// Stop any decay still running, so a pooled NPC carries no timer into its next life.
+			StopCorpseDecay();
 
 			NotifyCorpseExpired();
 
@@ -546,6 +557,7 @@ namespace FishMMO.Shared
 			corpseDecayTimer = CorpseDecayDuration;
 			corpseDecayShortened = false;
 			corpseInteractionRangeSqr = CorpseInteractionRange * CorpseInteractionRange;
+			StartCorpseDecay();
 
 			/* Stop the brain so the corpse does not move or fight. Remembered, because nothing
 			 * else would ever switch it back on: before this, the first death of a pooled NPC
@@ -634,6 +646,7 @@ namespace FishMMO.Shared
 			// Before the despawn, while the scene object ID a client is holding still resolves.
 			NotifyCorpseExpired();
 
+			StopCorpseDecay();
 			isCorpse = false;
 			corpseDecayTimer = 0f;
 
@@ -673,7 +686,56 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Called each server tick to advance the corpse decay timer.
+		/// Starts this corpse's decay: in the server's Core world when it runs one with
+		/// <see cref="NpcCorpseModule"/> installed, which ticks only corpses, and otherwise on this NPC's own
+		/// tick (<see cref="CorpseDecayTick"/>).
+		/// </summary>
+		private void StartCorpseDecay()
+		{
+			StopCorpseDecay();
+			// The Core world decays corpses only when the corpse module is installed in it.
+			if (CoreWorldHost.TryGetOrStart(base.NetworkManager, out CoreWorldHost host) &&
+				host.Scheduler.Get<CorpseExpirySystem>() != null)
+			{
+				corpseHost = host;
+				corpseEntity = host.World.Create();
+				// Queued, not set: a death may one day happen inside a Core system walking these stores.
+				host.World.Commands.Add(corpseEntity, new CoreLifetime { EndsAt = host.Now + Mathf.Max(0f, CorpseDecayDuration) });
+				host.World.Commands.Add(corpseEntity, new CorpseDecay { Npc = this });
+				return;
+			}
+
+			if (base.TimeManager != null)
+			{
+				base.TimeManager.OnTick += CorpseDecayTick;
+				corpseTickSubscribed = true;
+			}
+		}
+
+		/// <summary>Stops this corpse's decay, wherever it runs. Safe to call when none is running.</summary>
+		private void StopCorpseDecay()
+		{
+			if (corpseHost != null)
+			{
+				// At once: ReturnToPool is reached from CorpseExpirySystem, which walks events, not stores.
+				corpseHost.World.Destroy(corpseEntity);
+				corpseHost = null;
+				corpseEntity = CoreEntity.Null;
+			}
+
+			if (corpseTickSubscribed)
+			{
+				corpseTickSubscribed = false;
+				if (base.NetworkObject != null && base.TimeManager != null)
+				{
+					base.TimeManager.OnTick -= CorpseDecayTick;
+				}
+			}
+		}
+
+		/// <summary>
+		/// The fallback decay, when no Core world could start: called each server tick to advance the
+		/// corpse decay timer.
 		/// </summary>
 		private void CorpseDecayTick()
 		{
@@ -950,11 +1012,11 @@ namespace FishMMO.Shared
 				return false;
 			}
 			double now = System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency;
-			if (character.NextInteractSeconds >= now)
+			if (character.Component<InteractCooldown>().NextAt >= now)
 			{
 				return false;
 			}
-			character.NextInteractSeconds = now + CORPSE_INTERACT_RATE_LIMIT / 1000.0;
+			character.Component<InteractCooldown>().NextAt = now + CORPSE_INTERACT_RATE_LIMIT / 1000.0;
 			return true;
 		}
 

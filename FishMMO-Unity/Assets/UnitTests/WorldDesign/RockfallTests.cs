@@ -28,7 +28,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>A moment far from the epoch, so a float would lose it and only the double search keeps it.</summary>
 		private const double Far = 1.9e9;
 
-		private static string Read(string path) => File.ReadAllText(path);
+		private static string Read(string path) => ProjectFiles.ReadAllText(path);
 
 		private static List<Rockfall.Fall> FallsAt(double seconds, uint seed = Chute, Func<double, float> multiplier = null)
 		{
@@ -539,7 +539,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(new BiomeArtSpec.Scatter().Graded, Is.False);
 			// No biome's file grades a rule or names a chute or cone before its round (an authored round's file may: Scree, 2026-10-26).
 			bool authoredNamesThem = false;
-			foreach (string path in Directory.GetFiles($"{World}/ProceduralArt", "*.cs", SearchOption.AllDirectories))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder($"{World}/ProceduralArt"), "*.cs", SearchOption.AllDirectories))
 			{
 				string text = Read(path);
 				bool authored = BiomeAuthoredRounds.Contains(AuthoredBiomeOf(path));
@@ -556,7 +556,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			// them and the owner re-cuts its scenes.
 			if (!authoredNamesThem)
 			{
-				foreach (string path in Directory.GetFiles("Assets", "*Biome Map.asset", SearchOption.AllDirectories))
+				foreach (string path in Directory.GetFiles(ProjectFiles.Folder("Assets"), "*Biome Map.asset", SearchOption.AllDirectories))
 				{
 					string text = Read(path);
 					Assert.That(Regex.IsMatch(text, @"\n  Chutes:\s*\n  - "), Is.False, $"{path} stores chutes");
@@ -564,7 +564,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 			}
 			// And no unauthored template rule is graded.
-			foreach (string path in Directory.GetFiles("Assets/Templates/Entity/Biomes", "*.asset", SearchOption.AllDirectories)
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder("Assets/Templates/Entity/Biomes"), "*.asset", SearchOption.AllDirectories)
 				.Where(p => !BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(p))))
 			{
 				Assert.That(Read(path), Does.Not.Contain("talusGrading: 1"), path);

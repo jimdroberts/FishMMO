@@ -127,7 +127,7 @@ namespace FishMMO.UnitTests
 		{
 			/* The two lines the arithmetic above stands in for. If either moves, the model here
 			 * stops describing the server and these tests stop meaning anything. */
-			string source = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), ServerPath)).Replace("\r\n", "\n");
+			string source = ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), ServerPath)).Replace("\r\n", "\n");
 
 			LogAssert.IsTrue(source.Contains("long maxStack = itemTemplate.MaxStackSize > 0 ? itemTemplate.MaxStackSize : 1;"),
 				"the ceiling must still be one stack, with 0 read as 1");

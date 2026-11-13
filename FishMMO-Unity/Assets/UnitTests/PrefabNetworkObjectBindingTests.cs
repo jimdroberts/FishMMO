@@ -62,10 +62,10 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void NoNetworkedComponentBindsToAnotherAssetsNetworkObject()
 		{
-			LogAssert.IsTrue(Directory.Exists(AssetRoot), $"assets must live at {AssetRoot}");
+			LogAssert.IsTrue(ProjectFiles.FolderExists(AssetRoot), $"assets must live at {AssetRoot}");
 
-			int prefabs = Directory.GetFiles(AssetRoot, "*.prefab", SearchOption.AllDirectories).Length;
-			int scenes = Directory.GetFiles(AssetRoot, "*.unity", SearchOption.AllDirectories).Length;
+			int prefabs = Directory.GetFiles(ProjectFiles.Folder(AssetRoot), "*.prefab", SearchOption.AllDirectories).Length;
+			int scenes = Directory.GetFiles(ProjectFiles.Folder(AssetRoot), "*.unity", SearchOption.AllDirectories).Length;
 			LogAssert.IsTrue(prefabs > 0 && scenes > 0, "there must be prefabs and scenes to check");
 
 			List<NetworkObjectBindingValidator.Finding> findings = NetworkObjectBindingValidator.ScanAll(AssetRoot);

@@ -24,7 +24,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		private const string World = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World";
 		private const string Shaders = "Assets/Prefabs/Client/Weather/Shaders";
 
-		private static string Code(string path) => File.ReadAllText(Path.Combine(World, path));
+		private static string Code(string path) => ProjectFiles.ReadAllText(Path.Combine(World, path));
 
 		private static string F(float v) => v.ToString("R", CultureInfo.InvariantCulture);
 
@@ -191,7 +191,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void Shader_PulsesAndFlickers_ConstantForConstant()
 		{
-			string hlsl = File.ReadAllText(Path.Combine(Shaders, "FishStructureWeathering.hlsl"));
+			string hlsl = ProjectFiles.ReadAllText(Path.Combine(Shaders, "FishStructureWeathering.hlsl"));
 			string Body(string name)
 			{
 				int at = hlsl.IndexOf(name + "(float3 originWS", StringComparison.Ordinal);
@@ -210,14 +210,14 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(flicker, Does.Contain($"frac({F(SceneGlow.ShiverHz)} * seconds + frac(originWS.x * {F(SceneGlow.CrackleAX)} + originWS.z * {F(SceneGlow.CrackleAZ)}))"));
 			Assert.That(flicker, Does.Contain($"saturate((a * b * c - {F(SceneGlow.FlashFrom)}) / {F(1f - SceneGlow.FlashFrom)})"));
 			Assert.That(flicker, Does.Contain($"{F(SceneGlow.FlickerBase)} + {F(SceneGlow.FlashDepth)} * flash * flash * ({F(1f - SceneGlow.ShiverDepth)} + {F(SceneGlow.ShiverDepth)} * shiver)"));
-			string pass = File.ReadAllText(Path.Combine(Shaders, "FishWeatherLitForwardPass.hlsl"));
+			string pass = ProjectFiles.ReadAllText(Path.Combine(Shaders, "FishWeatherLitForwardPass.hlsl"));
 			Assert.That(pass, Does.Contain("if (_FishStructure > 2.5h)").And.Contain("surfaceData.emission *= FishStructureGlowLight(input.fishRockOrigin, fishUnderground);"));
 			Assert.That(pass, Does.Contain("else if (_FishStructure < -0.5h)").And.Contain("surfaceData.emission *= FishGlowFlicker(input.fishRockOrigin);"));
 			Assert.That(BiomeArtGenerator.FlickeringCrystalFlag, Is.LessThan(-0.5f));
 			// Who publishes and who reads.
-			string sky = File.ReadAllText("Assets/Scripts/Client/World/Weather/Sky/SkySystem.cs");
+			string sky = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Weather/Sky/SkySystem.cs");
 			Assert.That(sky, Does.Contain("Shader.SetGlobalFloat(GlowLightsId, SceneGlow.Visibility(sunDirections[0].y));"));
-			string pool = File.ReadAllText("Assets/Scripts/Client/World/Terrain/SiteLightPool.cs");
+			string pool = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/SiteLightPool.cs");
 			Assert.That(pool, Does.Contain("case SceneEmitterKind.Glow:").And.Contain("SceneGlow.Light(time, e.Position, glow, buried, SceneGlow.Flickers(e.Seed))")
 				.And.Contain("SceneGlow.Colour(SceneGlow.HueOf(e.Seed))"));
 		}
@@ -330,9 +330,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 			}
 			int assets = 0, entries = 0;
-			foreach (string path in Directory.GetFiles("Assets/Templates/Entity/Biomes", "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder("Assets/Templates/Entity/Biomes"), "*.asset"))
 			{
-				string[] lines = File.ReadAllLines(path);
+				string[] lines = ProjectFiles.ReadAllLines(path);
 				int at = Array.FindIndex(lines, l => l == "  wayLights:");
 				if (at < 0)
 				{

@@ -53,9 +53,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 			}
 			int templates = 0;
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				if (!Regex.IsMatch(text, "^  MinTemperature:", RegexOptions.Multiline))
 				{
 					continue;
@@ -78,7 +78,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				get
 				{
-					string source = File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Biomes/BiomeTemplate.cs");
+					string source = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Biomes/BiomeTemplate.cs");
 					StringAssert.Contains("private List<BiomeFloatingPlant> floatingPlants = new List<BiomeFloatingPlant>();", source);
 					return source.Contains("private BiomeBoardwalks boardwalks = BiomeBoardwalks.None;") ? BiomeBoardwalks.None : (BiomeBoardwalks)255;
 				}
@@ -495,9 +495,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(span.Anchor, Is.EqualTo(StructureAnchor.Deck));
 			Assert.That(span.ModuleLength, Is.EqualTo(StructurePieces.BoardwalkModule));
 			Assert.That(Array.IndexOf(StructurePieces.Tags, "boardwalk"), Is.GreaterThanOrEqualTo(0));
-			foreach (string path in Directory.GetFiles("Assets/Templates/World/PointsOfInterest", "*.asset", SearchOption.AllDirectories))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder("Assets/Templates/World/PointsOfInterest"), "*.asset", SearchOption.AllDirectories))
 			{
-				Assert.That(File.ReadAllText(path).IndexOf("boardwalk", StringComparison.OrdinalIgnoreCase), Is.LessThan(0), $"{path} queries the boardwalk pieces");
+				Assert.That(ProjectFiles.ReadAllText(path).IndexOf("boardwalk", StringComparison.OrdinalIgnoreCase), Is.LessThan(0), $"{path} queries the boardwalk pieces");
 			}
 			Assert.That(ProceduralArtFamilies.FamiliesOfFile("StructurePieces.Boardwalk.cs"), Is.EqualTo(new[] { ArtFamily.Structures }));
 			Assert.That(ProceduralArtPayload.SourceFiles, Does.Contain("StructurePieces.Boardwalk.cs"));
@@ -789,7 +789,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 		}
 
-		private static string Read(string relative) => File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
+		private static string Read(string relative) => ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
 
 		private static string CodeOnly(string source)
 		{

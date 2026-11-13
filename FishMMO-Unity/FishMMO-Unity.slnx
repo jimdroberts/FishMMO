@@ -9,6 +9,7 @@
   <Project Path="KinematicCharacterController.csproj" />
   <Project Path="Unity.FishNet.Codegen.csproj" />
   <Project Path="FishMMO.Water.csproj" />
+  <Project Path="FishMMO.Core.csproj" />
   <Project Path="FishNet.Codegen.Cecil.csproj" />
   <Project Path="FishMMO.TestHarness.World.csproj" />
   <Project Path="GameKit.Dependencies.csproj" />

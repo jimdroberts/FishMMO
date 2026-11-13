@@ -112,7 +112,7 @@ namespace FishMMO.UnitTests
 			foreach (string guid in UnityEditor.AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/Prefabs" }))
 			{
 				string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
-				GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(path);
+				GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(path));
 				if (prefab == null)
 				{
 					continue;

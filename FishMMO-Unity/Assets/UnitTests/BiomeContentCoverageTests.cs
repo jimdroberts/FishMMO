@@ -222,8 +222,8 @@ namespace FishMMO.UnitTests
 		public void CutTimeCode_ReadsTheTemplate_NotTheSpecTable()
 		{
 			var files = new List<string> { Path.Combine(WorldFolder, "SceneGenerator.cs") };
-			files.AddRange(Directory.GetFiles(Path.Combine(WorldFolder, "Terrain"), "*.cs", SearchOption.AllDirectories));
-			files.AddRange(Directory.GetFiles(Path.Combine(WorldFolder, "PointsOfInterest"), "*.cs", SearchOption.AllDirectories));
+			files.AddRange(Directory.GetFiles(ProjectFiles.Folder(Path.Combine(WorldFolder, "Terrain")), "*.cs", SearchOption.AllDirectories));
+			files.AddRange(Directory.GetFiles(ProjectFiles.Folder(Path.Combine(WorldFolder, "PointsOfInterest")), "*.cs", SearchOption.AllDirectories));
 			Assert.That(files.Count, Is.GreaterThan(50), "the scan found the cut's sources");
 			var readers = new List<string>();
 			foreach (string file in files)
@@ -235,7 +235,7 @@ namespace FishMMO.UnitTests
 				{
 					continue;
 				}
-				string code = CodeOnly(File.ReadAllText(file));
+				string code = CodeOnly(ProjectFiles.ReadAllText(file));
 				foreach (string read in new[] { "BiomeArtSpec", "PathGroundFor(", "RoadGroundFor(", "BiomeRegistry.Get(\"Desert\")", "BiomeRegistry.Get(\"Forest\")" })
 				{
 					if (code.Contains(read))
@@ -245,7 +245,7 @@ namespace FishMMO.UnitTests
 				}
 			}
 			Assert.IsEmpty(readers, "cut-time code deciding a biome's content from something other than its template: " + string.Join(", ", readers));
-			string art = CodeOnly(File.ReadAllText(Path.Combine(WorldFolder, "Terrain/BiomeTemplateArt.cs")));
+			string art = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "Terrain/BiomeTemplateArt.cs")));
 			Assert.That(art, Does.Contain("Fallback(biome"), "the fallbacks warn");
 		}
 

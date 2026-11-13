@@ -13,10 +13,10 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheGround_IsDrawnAfterTheOtherOpaques_ByDefault()
 		{
-			string system = System.IO.File.ReadAllText("Assets/Scripts/Client/World/Terrain/Heightmap/TerrainHeightmapSystem.cs");
+			string system = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/Heightmap/TerrainHeightmapSystem.cs");
 			LogAssert.IsTrue(system.Contains("public const int DrawnLastQueue = 2450;") && system.Contains("public static int QueueOverride = DrawnLastQueue;"),
 				"the ground's queue defaults to after the opaques (2450, still opaque: under 2500)");
-			string field = System.IO.File.ReadAllText("Assets/Scripts/Client/World/Terrain/Heightmap/TerrainHeightmapField.cs");
+			string field = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/Heightmap/TerrainHeightmapField.cs");
 			LogAssert.IsTrue(field.Contains("solid.renderQueue = holed.renderQueue = TerrainHeightmapSystem.QueueOverride;"), "both ground materials take it");
 		}
 
@@ -24,7 +24,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheGround_BlendsThreeLayers_AndFadesItsDetailFrom40To80Metres_ByDefault()
 		{
-			string input = System.IO.File.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishWeatherTerrainArrayInput.hlsl");
+			string input = ProjectFiles.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishWeatherTerrainArrayInput.hlsl");
 			LogAssert.IsTrue(input.Contains("#define FISH_TERRAIN_DEFAULT_LAYERS 3.0"), "three layers unless a global says otherwise");
 			LogAssert.IsTrue(input.Contains("#define FISH_TERRAIN_DETAIL_FAR float2(40.0, 80.0)"), "detail faded 40 to 80 m unless a global says otherwise");
 			LogAssert.IsTrue(input.Contains("_FishTerrainMaxLayers > 0.5 ? _FishTerrainMaxLayers : FISH_TERRAIN_DEFAULT_LAYERS")

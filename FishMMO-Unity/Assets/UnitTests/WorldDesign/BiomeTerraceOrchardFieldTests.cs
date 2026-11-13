@@ -29,7 +29,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		private const string ReaderSource = World + "/Terrain/BiomeTemplateArt.cs";
 		private const string TemplateSource = "Assets/Scripts/Shared/Implementation/Tools/Biomes/BiomeTemplate.cs";
 
-		private static string Read(string relative) => File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
+		private static string Read(string relative) => ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
 
 		private static string CodeOnly(string source) => Regex.Replace(source, @"^\s*//.*$", string.Empty, RegexOptions.Multiline);
 
@@ -55,9 +55,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 			}
 			int templates = 0;
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				if (!Regex.IsMatch(text, "^  MinTemperature:", RegexOptions.Multiline))
 				{
 					continue;

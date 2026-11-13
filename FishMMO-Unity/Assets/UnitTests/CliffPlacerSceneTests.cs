@@ -189,7 +189,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void SceneGenerator_HandsThePlacerTheGeology_AndKeepsTheLocalMaterialSeam()
 		{
-			string source = System.IO.File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/SceneGenerator.cs").Replace("\r\n", "\n");
+			string source = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/SceneGenerator.cs").Replace("\r\n", "\n");
 			Assert.That(source, Does.Contain("scope.CliffOptions() ?? new CliffPlacerOptions()"), "LOCAL scenes still override the rocks' materials");
 			Assert.That(source, Does.Contain("cliffOptions.RockTypeAt ="), "a cliff is the stone the planet's geology puts under it");
 			Assert.That(source, Does.Contain("CliffPlacer.Place(scene, tiles, palette, field, options.Seed, options.NormalizedHeight, cliffOptions)"));

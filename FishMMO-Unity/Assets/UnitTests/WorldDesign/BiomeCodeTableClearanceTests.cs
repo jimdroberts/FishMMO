@@ -34,11 +34,11 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			Assert.That(BiomeArtSpec.Entries.Length, Is.EqualTo(83));
 			string folder = Path.Combine(WorldFolder, "ProceduralArt/BiomeArtSpec");
-			string[] files = Directory.GetFiles(folder, "BiomeArtSpec.*.cs");
+			string[] files = Directory.GetFiles(ProjectFiles.Folder(folder), "BiomeArtSpec.*.cs");
 			Assert.That(files.Length, Is.EqualTo(83));
 			foreach (string file in files)
 			{
-				string code = CodeOnly(File.ReadAllText(file));
+				string code = CodeOnly(ProjectFiles.ReadAllText(file));
 				foreach (string column in new[] { ".Sites(", ".Gathers(", ".Weathers(", ".ErodesAs(" })
 				{
 					Assert.That(code, Does.Contain(column), $"{Path.GetFileName(file)}: {column}");
@@ -306,7 +306,7 @@ namespace FishMMO.UnitTests.WorldDesign
 					}
 				}
 
-				string yaml = File.ReadAllText($"{BiomeFolder}/{entry.Biome}.asset");
+				string yaml = ProjectFiles.ReadAllText($"{BiomeFolder}/{entry.Biome}.asset");
 				Assert.That(Ref(yaml, "LooseGround", substances), Is.EqualTo(loose), entry.Biome + ": the template's loose ground");
 				string emits = entry.Emission.HasValue ? entry.Emission.Value.Substance : null;
 				Assert.That(Ref(yaml, "Emits", substances), Is.EqualTo(emits), entry.Biome + ": the template's emission");
@@ -327,7 +327,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				{
 					continue;
 				}
-				string yaml = File.ReadAllText($"{BiomeFolder}/{entry.Biome}.asset");
+				string yaml = ProjectFiles.ReadAllText($"{BiomeFolder}/{entry.Biome}.asset");
 				Assert.That(Ref(yaml, "TerrainProcess", profiles), Is.EqualTo(entry.TerrainProcessName), entry.Biome);
 			}
 		}
@@ -335,9 +335,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		private static Dictionary<string, string> GuidNames(string folder)
 		{
 			var names = new Dictionary<string, string>();
-			foreach (string meta in Directory.GetFiles(folder, "*.asset.meta"))
+			foreach (string meta in Directory.GetFiles(ProjectFiles.Folder(folder), "*.asset.meta"))
 			{
-				Match guid = Regex.Match(File.ReadAllText(meta), @"guid: (\w+)");
+				Match guid = Regex.Match(ProjectFiles.ReadAllText(meta), @"guid: (\w+)");
 				names[guid.Groups[1].Value] = Path.GetFileName(meta).Replace(".asset.meta", string.Empty);
 			}
 			return names;
@@ -361,13 +361,13 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			Assert.That(BiomeTemplate.Authored.LooseGround, Is.EqualTo("LooseGround"));
 			Assert.That(BiomeTemplate.Authored.TerrainProcess, Is.EqualTo("TerrainProcess"));
-			string authoring = CodeOnly(File.ReadAllText(Path.Combine(WorldFolder, "ProceduralArt/BiomeArtAuthoring.cs")));
+			string authoring = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "ProceduralArt/BiomeArtAuthoring.cs")));
 			Assert.That(authoring, Does.Contain("AuthorLooseGround(biome, entry, report, apply);"));
 			Assert.That(authoring, Does.Contain("AuthorTerrainProcess(biome, entry, report, apply);"));
 			Assert.That(authoring, Does.Contain("AuthorText(biome, BiomeTemplate.Authored.LooseGround,"));
 			Assert.That(authoring, Does.Contain("AuthorText(biome, BiomeTemplate.Authored.TerrainProcess,"));
 			Assert.That(authoring, Does.Contain("List<BiomeSiteKind> kinds = entry.SiteKinds();"), "the sites come from the file, not the catalogue by name");
-			string weather = CodeOnly(File.ReadAllText(Path.Combine(WorldFolder, "WeatherContentGenerator.cs")));
+			string weather = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "WeatherContentGenerator.cs")));
 			Assert.That(weather, Does.Contain("BiomeArtSpec.Entry entry = BiomeArtSpec.For(biomeName);"), "the generator seeds a template's ground from its file");
 		}
 
@@ -377,7 +377,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void TheSpecsDefaults_ReadNoNameTable()
 		{
-			string spec = CodeOnly(File.ReadAllText(Path.Combine(WorldFolder, "ProceduralArt/BiomeArtSpec.cs")));
+			string spec = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "ProceduralArt/BiomeArtSpec.cs")));
 			foreach (string read in new[] { "VineBiomes.For(", "GatheringResourceCatalogue.GrowsIn(", "KindWeightsFor(", "spec.BiomeWeightByName(Biome)", "WeatheringByName(Biome)" })
 			{
 				Assert.That(spec, Does.Not.Contain(read), read);
@@ -398,14 +398,14 @@ namespace FishMMO.UnitTests.WorldDesign
 				("WeatheringByName(", "BiomeArtSpec.cs"),
 			};
 			var found = new List<string>();
-			foreach (string file in Directory.GetFiles("Assets/Scripts", "*.cs", SearchOption.AllDirectories))
+			foreach (string file in Directory.GetFiles(ProjectFiles.Folder("Assets/Scripts"), "*.cs", SearchOption.AllDirectories))
 			{
 				string name = Path.GetFileName(file);
 				if (name == "BiomeTemplateArt.cs")
 				{
 					continue;
 				}
-				string code = CodeOnly(File.ReadAllText(file));
+				string code = CodeOnly(ProjectFiles.ReadAllText(file));
 				foreach ((string call, string home) in reads)
 				{
 					if (name != home && code.Contains(call))
@@ -415,7 +415,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 			}
 			Assert.That(found, Is.Empty, "a name table read outside the fallback reader");
-			string art = CodeOnly(File.ReadAllText(Path.Combine(WorldFolder, "Terrain/BiomeTemplateArt.cs")));
+			string art = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "Terrain/BiomeTemplateArt.cs")));
 			Assert.That(art, Does.Contain("VineBiomes.For(biome.name)"));
 			Assert.That(art, Does.Contain("KindWeightsFor(biome.name)"));
 			Assert.That(art, Does.Contain("Fallback(biome"), "the fallbacks warn (once a field)");
@@ -471,14 +471,14 @@ namespace FishMMO.UnitTests.WorldDesign
 			var quoted = new Regex("\"(" + string.Join("|", names.OrderByDescending(n => n.Length).Select(Regex.Escape)) + ")\"");
 			var strays = new List<string>();
 			var naming = new HashSet<string>();
-			foreach (string file in Directory.GetFiles("Assets/Scripts", "*.cs", SearchOption.AllDirectories))
+			foreach (string file in Directory.GetFiles(ProjectFiles.Folder("Assets/Scripts"), "*.cs", SearchOption.AllDirectories))
 			{
 				string path = file.Replace('\\', '/');
 				if (path.Contains("/ProceduralArt/BiomeArtSpec/"))
 				{
 					continue;
 				}
-				string code = CodeOnly(File.ReadAllText(file));
+				string code = CodeOnly(ProjectFiles.ReadAllText(file));
 				MatchCollection found = quoted.Matches(code);
 				if (found.Count > 0)
 				{
@@ -494,9 +494,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				"the scan reads code (the fallback tables are found)");
 
 			// The cleared tables: the weather content generator names no biome; the terrain process table only its profiles' names.
-			Assert.That(quoted.Matches(CodeOnly(File.ReadAllText(Path.Combine(WorldFolder, "WeatherContentGenerator.cs")))).Count, Is.EqualTo(0));
+			Assert.That(quoted.Matches(CodeOnly(ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "WeatherContentGenerator.cs")))).Count, Is.EqualTo(0));
 			var profileNames = new HashSet<string>(TerrainProcessTable.Profiles.Select(p => p.Name));
-			foreach (Match m in quoted.Matches(CodeOnly(File.ReadAllText(Path.Combine(WorldFolder, "Terrain/TerrainProcessTable.cs")))))
+			foreach (Match m in quoted.Matches(CodeOnly(ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "Terrain/TerrainProcessTable.cs")))))
 			{
 				Assert.That(profileNames, Does.Contain(m.Groups[1].Value), "the terrain process table names no biome, only profiles");
 			}

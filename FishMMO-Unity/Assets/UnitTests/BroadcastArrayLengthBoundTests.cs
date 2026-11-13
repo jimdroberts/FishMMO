@@ -79,9 +79,9 @@ namespace FishMMO.UnitTests
 			/* The tree is CRLF on Windows. Normalising once here means the patterns below never have
 			 * to spell out an optional carriage return, and a failure message never carries a stray
 			 * \r into the test log. */
-			foreach (string file in Directory.GetFiles(NetworkRoot, "*.cs", SearchOption.AllDirectories))
+			foreach (string file in Directory.GetFiles(ProjectFiles.Folder(NetworkRoot), "*.cs", SearchOption.AllDirectories))
 			{
-				string source = File.ReadAllText(file).Replace("\r\n", "\n");
+				string source = ProjectFiles.ReadAllText(file).Replace("\r\n", "\n");
 
 				foreach (Match match in Regex.Matches(source,
 					"\\b(Read[A-Za-z0-9_]*Array)\\s*\\(\\s*this\\s+Reader\\s+\\w+\\s*\\)"))

@@ -66,7 +66,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void TheLandsNameWhoHoldsTheirKeepsAndTowers()
 		{
 			string folder = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/ProceduralArt/BiomeArtSpec";
-			var sources = Directory.GetFiles(folder, "BiomeArtSpec.*.cs").Select(File.ReadAllText).ToArray();
+			var sources = Directory.GetFiles(ProjectFiles.Folder(folder), "BiomeArtSpec.*.cs").Select(File.ReadAllText).ToArray();
 			string SourceOf(string biome) => sources.Single(s => s.Contains("return E(\"" + biome + "\""));
 			bool Prefers(string biome, string kind, string variant) => SourceOf(biome).Contains($".Prefers(POIType.{kind}, \"{variant}\"");
 			foreach (string biome in Wild)

@@ -46,7 +46,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// exactly that, and would cost a database write that a flooding client triggers at will.
 		/// </para>
 		/// <para>
-		/// <b>Kept apart from <c>IPlayerCharacter.ChatMutedUntilTicks</c>.</b> That field mirrors the
+		/// <b>Kept apart from <c>ChatState.MutedUntilTicks</c>.</b> That field mirrors the
 		/// stored mutes: the character load sets it from the rows, and every mute or unmute a game
 		/// master issues re-reads the rows and overwrites it. A flood mute written there would be
 		/// cut short by an unrelated moderation refresh, and would show in the staff console as a

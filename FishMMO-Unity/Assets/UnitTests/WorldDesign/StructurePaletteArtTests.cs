@@ -443,7 +443,7 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		private const string World = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World";
 
-		private static string Code(string path) => File.ReadAllText(Path.Combine(World, path));
+		private static string Code(string path) => ProjectFiles.ReadAllText(Path.Combine(World, path));
 
 		/// <summary>
 		/// The palette reaches every piece a site lays: every prop through the site context's AddProp (which dresses it), every
@@ -453,13 +453,13 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void EveryPieceASiteLays_IsLaidInItsPalette()
 		{
-			Assert.That(Directory.Exists(World), Is.True, "run from the project root");
+			Assert.That(ProjectFiles.FolderExists(World), Is.True, "run from the project root");
 			string site = Code("PointsOfInterest/PointOfInterestSiteContext.cs");
 			Assert.That(site, Does.Contain("Sink?.Add(prefab, position, rotation, scale, Sink != null ? StructurePaletteDressing.MaterialsFor(prefab, Palette) : null);"));
 			Assert.That(site, Does.Contain("Materials = materials != null && materials.Length > 0 ? materials : null"));
-			foreach (string file in Directory.GetFiles(Path.Combine(World, "PointsOfInterest", "Features"), "*.cs"))
+			foreach (string file in Directory.GetFiles(ProjectFiles.Folder(Path.Combine(World, "PointsOfInterest", "Features")), "*.cs"))
 			{
-				string text = File.ReadAllText(file);
+				string text = ProjectFiles.ReadAllText(file);
 				string name = Path.GetFileName(file);
 				if (name == "WaypointFeature.cs")
 				{

@@ -21,7 +21,7 @@ namespace FishMMO.UnitTests.AI
 		[Test]
 		public void TheBrainTurnsCrowdAvoidanceOff()
 		{
-			string source = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(),
+			string source = ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Server/Implementation/World/SceneServer/AI/AIController.cs"));
 
 			Assert.That(source, Does.Contain("Agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;"),
@@ -42,7 +42,7 @@ namespace FishMMO.UnitTests.AI
 					continue;
 				}
 				scanned++;
-				if (File.ReadAllText(path).Contains("\nNavMeshAgent:"))
+				if (ProjectFiles.ReadAllText(path).Contains("\nNavMeshAgent:"))
 				{
 					offenders.Add(path);
 				}

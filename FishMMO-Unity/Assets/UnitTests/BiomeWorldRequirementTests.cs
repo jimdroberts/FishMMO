@@ -300,7 +300,7 @@ namespace FishMMO.UnitTests
 			Assert.IsFalse(string.IsNullOrWhiteSpace(identity.Description));
 			foreach (string guid in AssetDatabase.FindAssets("t:" + nameof(BiomeTemplate), new[] { BiomeSpecTable.Folder }))
 			{
-				var biome = AssetDatabase.LoadAssetAtPath<BiomeTemplate>(AssetDatabase.GUIDToAssetPath(guid));
+				var biome = AssetDatabase.LoadAssetAtPath<BiomeTemplate>(ProjectFiles.Path(AssetDatabase.GUIDToAssetPath(guid)));
 				if (biome == null || biome.name == identity.Name)
 				{
 					continue;
@@ -327,7 +327,7 @@ namespace FishMMO.UnitTests
 				string path = $"{folder}/{identity.Name}.asset";
 
 				BiomeTemplate biome = BiomeSpecTable.Create(identity, path);
-				Assert.IsNotNull(AssetDatabase.LoadAssetAtPath<BiomeTemplate>(path), "the asset exists on disk");
+				Assert.IsNotNull(AssetDatabase.LoadAssetAtPath<BiomeTemplate>(ProjectFiles.Path(path)), "the asset exists on disk");
 				Assert.AreEqual(identity.DisplayName, biome.DisplayName);
 				Assert.AreEqual(identity.Description, biome.Description);
 				Assert.AreEqual(identity.BiomeColorId, biome.BiomeColorId);
@@ -353,7 +353,7 @@ namespace FishMMO.UnitTests
 			// requirements" creates it; anything else missing is a misspelt or deleted asset.
 			foreach (BiomeSpecTable.Entry entry in BiomeSpecTable.Entries)
 			{
-				bool exists = AssetDatabase.LoadAssetAtPath<BiomeTemplate>(entry.AssetPath) != null;
+				bool exists = AssetDatabase.LoadAssetAtPath<BiomeTemplate>(ProjectFiles.Path(entry.AssetPath)) != null;
 				Assert.IsTrue(exists || BiomeSpecTable.TryGetIdentity(entry.Name, out _), $"{entry.Name}: no asset at {entry.AssetPath} and no identity to create one");
 			}
 		}

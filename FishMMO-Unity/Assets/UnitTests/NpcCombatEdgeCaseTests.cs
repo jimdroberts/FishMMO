@@ -39,7 +39,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TargetRangePreFilterIsPlayerOnly()
 		{
-			string controller = File.ReadAllText(Path.Combine(Scripts,
+			string controller = ProjectFiles.ReadAllText(Path.Combine(Scripts,
 				"Implementation/Entity/Prediction/Ability/AbilityController.Activation.cs"));
 
 			LogAssert.IsTrue(controller.Contains("if (cachedTargetController != null && PlayerCharacter != null)"),
@@ -50,7 +50,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void EnemySweepSkipsTheDead()
 		{
-			string state = File.ReadAllText(Path.Combine(Scripts,
+			string state = ProjectFiles.ReadAllText(Path.Combine(Scripts,
 				"../Server/Implementation/World/SceneServer/AI/BaseAIState.cs"));
 
 			int sweep = state.IndexOf("public virtual bool SweepForEnemies(", StringComparison.Ordinal);
@@ -67,7 +67,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void DeadNpcReleasesItsCombatSlot()
 		{
-			string controller = File.ReadAllText(Path.Combine(Scripts,
+			string controller = ProjectFiles.ReadAllText(Path.Combine(Scripts,
 				"../Server/Implementation/World/SceneServer/AI/AIController.cs"));
 
 			int halt = controller.IndexOf("public void HaltMovement()", StringComparison.Ordinal);
@@ -82,7 +82,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(halt >= 0 && release > halt && release < nextMethod,
 				"HaltMovement runs on the corpse path in place of the attacking state's Exit, so it must release the combat slot itself");
 
-			string npc = File.ReadAllText(Path.Combine(Scripts, "Implementation/Entity/NPC/NPC.cs"));
+			string npc = ProjectFiles.ReadAllText(Path.Combine(Scripts, "Implementation/Entity/NPC/NPC.cs"));
 			LogAssert.IsTrue(npc.Contains("aiDisabledByCorpse = brain.SuspendForCorpse();"),
 				"NPC.Despawn must stop the brain through INPCBrain.SuspendForCorpse");
 
@@ -96,7 +96,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void ImmortalNpcAcquiresNoTarget()
 		{
-			string controller = File.ReadAllText(Path.Combine(Scripts,
+			string controller = ProjectFiles.ReadAllText(Path.Combine(Scripts,
 				"../Server/Implementation/World/SceneServer/AI/AIController.cs"));
 
 			int threat = controller.IndexOf("public void OnThreatReceived(ICharacter attacker)", StringComparison.Ordinal);

@@ -298,7 +298,7 @@ namespace FishMMO.UnitTests
 		public void EveryClipTheBodyPlaysIsInTheModel()
 		{
 			string[] takes = Takes();
-			string migration = File.ReadAllText(MigrationPath);
+			string migration = ProjectFiles.ReadAllText(MigrationPath);
 			string[] wanted = Regex.Matches(migration, @"Clip\(ModelPath, ""([A-Za-z]+)""\)").Cast<Match>().Select(m => m.Groups[1].Value).ToArray();
 			Assert.That(wanted, Is.SupersetOf(new[] { "SwimSurface", "SwimUnder", "SwimTread", "SitGround", "SitSeat", "Cast", "Block", "Roll", "Death" }));
 			foreach (string clip in wanted)
@@ -317,7 +317,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheCyclesLoopAndTheRetiredCrawlIsGone()
 		{
-			string import = File.ReadAllText(ImportPath);
+			string import = ProjectFiles.ReadAllText(ImportPath);
 			Match looping = Regex.Match(import, @"Looping = \{([^}]*)\}");
 			Assert.That(looping.Success, Is.True);
 			foreach (string clip in new[] { "SwimSurface", "SwimUnder", "SwimTread", "Climb", "SitGround", "SitSeat", "Block" })

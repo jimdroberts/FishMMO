@@ -168,7 +168,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void KnockbackAction_KeepsItsDisplacementServerOnly()
 		{
-			string source = File.ReadAllText(Path.Combine(Application.dataPath,
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
 				"Scripts/Shared/Implementation/Entity/ECA/Actions/Character/KnockbackHitAction.cs"));
 
 			LogAssert.IsTrue(source.Contains("if (!EcaAuthority.IsServer(initiator, eventData))"),

@@ -672,7 +672,7 @@ namespace FishMMO.UnitTests
 
 		private static string Root => Directory.GetCurrentDirectory();
 
-		private static string Read(string relative) => File.ReadAllText(Path.Combine(Root, relative)).Replace("\r\n", "\n");
+		private static string Read(string relative) => ProjectFiles.ReadAllText(Path.Combine(Root, relative)).Replace("\r\n", "\n");
 
 		private static string CodeOnly(string source)
 		{
@@ -685,7 +685,7 @@ namespace FishMMO.UnitTests
 
 		private static IEnumerable<string> RendererSources()
 		{
-			return Directory.GetFiles(Path.Combine(Root, RendererFolder), "*.cs", SearchOption.AllDirectories);
+			return Directory.GetFiles(ProjectFiles.Folder(Path.Combine(Root, RendererFolder)), "*.cs", SearchOption.AllDirectories);
 		}
 
 		[Serializable]
@@ -708,7 +708,7 @@ namespace FishMMO.UnitTests
 				string asmdef = null;
 				while (dir != null && dir.Length >= Root.Length)
 				{
-					string[] found = Directory.GetFiles(dir, "*.asmdef").Concat(Directory.GetFiles(dir, "*.asmref")).ToArray();
+					string[] found = Directory.GetFiles(ProjectFiles.Folder(dir), "*.asmdef").Concat(Directory.GetFiles(ProjectFiles.Folder(dir), "*.asmref")).ToArray();
 					if (found.Length > 0)
 					{
 						asmdef = found[0];
@@ -728,9 +728,9 @@ namespace FishMMO.UnitTests
 			// Nothing the server compiles names the renderer.
 			foreach (string tier in new[] { "Assets/Scripts/Shared", "Assets/Scripts/Server" })
 			{
-				foreach (string file in Directory.GetFiles(Path.Combine(Root, tier), "*.cs", SearchOption.AllDirectories))
+				foreach (string file in Directory.GetFiles(ProjectFiles.Folder(Path.Combine(Root, tier)), "*.cs", SearchOption.AllDirectories))
 				{
-					string code = CodeOnly(File.ReadAllText(file));
+					string code = CodeOnly(ProjectFiles.ReadAllText(file));
 					foreach (string type in RendererTypes)
 					{
 						LogAssert.IsFalse(Regex.IsMatch(code, $@"\b{type}\b"), $"{file} names {type}");
@@ -744,7 +744,7 @@ namespace FishMMO.UnitTests
 		{
 			foreach (string file in RendererSources())
 			{
-				string code = CodeOnly(File.ReadAllText(file));
+				string code = CodeOnly(ProjectFiles.ReadAllText(file));
 				string name = Path.GetFileName(file);
 				LogAssert.IsFalse(code.Contains("SetTreeInstances"), $"{name} never writes tree instances");
 				LogAssert.IsFalse(Regex.IsMatch(code, @"\.treeInstances\s*="), $"{name} never assigns tree instances");
@@ -766,7 +766,7 @@ namespace FishMMO.UnitTests
 			string props = CodeOnly(Read(RendererFolder + "/CliffRockInstancing.cs"));
 			LogAssert.IsTrue(Regex.IsMatch(props, @"#if UNITY_EDITOR\s*\n\s*\[UnityEditor\.InitializeOnLoadMethod\]"), "the props' edit-mode hook is compiled into the editor only");
 			LogAssert.IsTrue(props.Contains("OnGpu => Application.isPlaying && gpu != null"), "the GPU path is play mode only");
-			LogAssert.IsTrue(props.Contains("if (Application.isPlaying && preferGpu && gpu == null && !gpuTried)"), "the GPU renderer is only created in play mode");
+			LogAssert.IsTrue(props.Contains("if (Application.isPlaying && preferGpu && gpu == null && !gpuTried"), "the GPU renderer is only created in play mode");
 			LogAssert.IsTrue(Regex.IsMatch(props, @"if \(OnGpu\)\s*\{\s*foreach \(GeneratedCliffs root"), "cliff objects are only taken over (their renderers switched off) on the GPU path");
 			LogAssert.IsTrue(props.Contains("case UnityEditor.PlayModeStateChange.ExitingEditMode:"), "the edit-mode preview lets go before play mode starts");
 			string system = CodeOnly(Read(RendererFolder + "/TerrainTreeInstancing.cs"));

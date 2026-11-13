@@ -149,10 +149,10 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void OtherCaves_StoreNoSeaHallSection_AndAreUntouched()
 		{
-			string halls = File.ReadAllText(Shapers + "CaveSystem.SeaHall.cs");
+			string halls = ProjectFiles.ReadAllText(Shapers + "CaveSystem.SeaHall.cs");
 			Assert.That(halls, Does.Contain("if (Form != CaveForm.SeaHall)\n\t\t\t{\n\t\t\t\treturn;").Or.Contain("if (Form != CaveForm.SeaHall)\r\n"), "only a sea hall writes its section");
 			Assert.That(halls, Does.Contain("v[o] != SeaHallTag"), "a section is read only where its tag stands");
-			string system = File.ReadAllText(Shapers + "CaveSystem.cs");
+			string system = ProjectFiles.ReadAllText(Shapers + "CaveSystem.cs");
 			Assert.That(system, Does.Contain("if (form == CaveForm.SeaHall)\n\t\t\t{\n\t\t\t\t// A dome under the ice").Or.Contain("if (form == CaveForm.SeaHall)\r\n"));
 			Assert.That(system, Does.Contain("public const int Format = 7;"), "no format change: every stored cave stays as it was");
 		}
@@ -191,11 +191,11 @@ namespace FishMMO.UnitTests.WorldDesign
 			// The world the Subsurface Ocean Vent needs: frozen through AND cryovolcanic (its Requires).
 			BiomeWorldConditions earth = BiomeWorldConditions.Earthlike;
 			Assert.That(earth.Meets(BiomeWorldRequirement.Cryovolcanic), Is.False, "never on an Earth");
-			string art = File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/Terrain/CaveInteriorArt.cs");
+			string art = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/Terrain/CaveInteriorArt.cs");
 			Assert.That(art, Does.Contain("BiomeCaveInteriors.GatedByWorld(f) && !(world ?? BiomeWorldConditions.Earthlike).Meets(interior.Requires)"));
-			string stage = File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/PointOfInterestStage.cs");
+			string stage = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/PointOfInterestStage.cs");
 			Assert.That(stage, Does.Contain("CaveInteriorArt.GateSeaHalls(biome,"), "the planner weighs a hall 0 where it would not hold");
-			string shaper = File.ReadAllText(Shapers + "CaveShaper.cs");
+			string shaper = ProjectFiles.ReadAllText(Shapers + "CaveShaper.cs");
 			Assert.That(shaper, Does.Contain("if (form == CaveForm.SeaHall && !planned.Linked)"), "and the shaper refuses one with no sea");
 		}
 
@@ -223,7 +223,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 			BiomeSpecTable.Entry vent = BiomeSpecTable.Entries.First(e => e.Name == "Subsurface Ocean Vent");
 			Assert.That(vent.SelectionWeight, Is.EqualTo(0f), "the table never selects it");
-			Assert.That(File.ReadAllText("Assets/Templates/Entity/Biomes/Subsurface Ocean Vent.asset"), Does.Contain("\n  SelectionWeight: 0\n"));
+			Assert.That(ProjectFiles.ReadAllText("Assets/Templates/Entity/Biomes/Subsurface Ocean Vent.asset"), Does.Contain("\n  SelectionWeight: 0\n"));
 			Assert.That(BiomeArtSpec.For("Subsurface Ocean Vent").Habitat, Is.EqualTo(BiomeHabitat.Sea | BiomeHabitat.Cave));
 			PointOfInterestKindRule hallRule = rules.RuleFor(POIType.SeaHall);
 			Assert.That(hallRule.Face, Is.False, "a melt shaft needs no face");
@@ -343,7 +343,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void TheShader_MirrorsTheNumbers_AndCompilesTheWebGpuWay()
 		{
-			string shader = File.ReadAllText(ShaderPath);
+			string shader = ProjectFiles.ReadAllText(ShaderPath);
 			Assert.That(shader, Does.Contain("#pragma use_dxc vulkan"));
 			Assert.That(shader, Does.Not.Contain("#include \"FishIndirectInstancing"));
 			Assert.That(shader, Does.Contain("#define HALL_SMOKERS " + SceneSeaHallVents.MaxSmokers));
@@ -354,9 +354,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(shader, Does.Contain("HallHash(seed, 3u, 1u)"), "the rise speed's hash");
 			Assert.That(shader, Does.Contain("HallHash(seed, 32u, 0u)"), "the brinicle phase's hash");
 			Assert.That(shader, Does.Not.Contain("[unroll]"), "no forced-unroll loop (FXC's WebGPU path)");
-			string profile = File.ReadAllText("Assets/Scripts/Client/World/Weather/Presentation/WeatherRenderProfile.cs");
+			string profile = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Weather/Presentation/WeatherRenderProfile.cs");
 			Assert.That(profile, Does.Contain("public Shader SeaHallVentsShader;"));
-			string assets = File.ReadAllText("Assets/Scripts/Client/World/Weather/Editor/WeatherRenderAssets.cs");
+			string assets = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Weather/Editor/WeatherRenderAssets.cs");
 			Assert.That(assets, Does.Contain("profile.SeaHallVentsShader = AssetDatabase.LoadAssetAtPath<Shader>(SeaHallVentsShaderPath);"));
 		}
 	}

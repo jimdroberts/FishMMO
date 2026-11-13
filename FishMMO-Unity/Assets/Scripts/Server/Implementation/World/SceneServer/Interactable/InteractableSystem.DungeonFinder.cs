@@ -563,9 +563,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 				// Increment achievement for entering a dungeon
 				if (context.AchievementTemplate != null &&
-					context.Character.TryGet(out IAchievementController achievementController))
+					context.Character != null)
 				{
-					achievementController.Increment(context.AchievementTemplate, 1);
+					Accomplishments.Record(context.Character, context.AchievementTemplate);
 				}
 
 				float healthPCT = context.Character.TryGet(out ICharacterAttributeController attributeController)
@@ -1015,9 +1015,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				CharacterRespawnPositionDetails respawnDetails = context.SceneDetails.RespawnPositions.Values.ToList().GetRandom();
 
 				if (context.AchievementTemplate != null &&
-					context.Character.TryGet(out IAchievementController achievementController))
+					context.Character != null)
 				{
-					achievementController.Increment(context.AchievementTemplate, 1);
+					Accomplishments.Record(context.Character, context.AchievementTemplate);
 				}
 
 				float healthPCT = context.Character.TryGet(out ICharacterAttributeController attributeController)

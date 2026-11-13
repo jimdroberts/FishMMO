@@ -87,10 +87,10 @@ namespace FishMMO.UnitTests
 		public void InterruptedBrowserBuildRestoresSavedDrawerSettings(bool startNextBuildImmediately)
 		{
 			const string path = "Library/FishMMO/WebGLRenderPipelineRecovery.json";
-			if (File.Exists(path)) Assert.Ignore("An existing interrupted build must recover first.");
+			if (ProjectFiles.Exists(path)) Assert.Ignore("An existing interrupted build must recover first.");
 			var assets = Pipelines(); Assert.That(assets.Count, Is.GreaterThan(0));
 			int previous = Mode(assets[0], 0);
-			string guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(assets[0]));
+			string guid = AssetDatabase.AssetPathToGUID(ProjectFiles.Path(AssetDatabase.GetAssetPath(assets[0])));
 			try
 			{
 				Directory.CreateDirectory(Path.GetDirectoryName(path));
@@ -104,7 +104,7 @@ namespace FishMMO.UnitTests
 				Assert.That(Mode(assets[0]), Is.EqualTo(1));
 				Assert.That(File.Exists(path), Is.False);
 			}
-			finally { Mode(assets[0], previous); AssetDatabase.SaveAssets(); if (File.Exists(path)) File.Delete(path); }
+			finally { Mode(assets[0], previous); AssetDatabase.SaveAssets(); if (ProjectFiles.Exists(path)) File.Delete(path); }
 		}
 	}
 }

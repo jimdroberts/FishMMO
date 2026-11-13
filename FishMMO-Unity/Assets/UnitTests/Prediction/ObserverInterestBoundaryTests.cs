@@ -579,8 +579,8 @@ namespace FishMMO.UnitTests
 		private static string ReadAsset(string relativePath)
 		{
 			string path = Path.Combine(Application.dataPath, relativePath);
-			LogAssert.IsTrue(File.Exists(path), $"Expected a file at {path}.");
-			return File.ReadAllText(path);
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"Expected a file at {path}.");
+			return ProjectFiles.ReadAllText(path);
 		}
 
 		/// <summary>

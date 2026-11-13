@@ -116,7 +116,7 @@ namespace FishMMO.UnitTests
 		private const string EthanControllerGuid = "e2cf68ff4b1ffda45a77f7307dd789b9";
 		private const string EthanModelGuid = "b235179bd2a63d1468dd430670338c55";
 
-		private static string Guid(string path) => Regex.Match(File.ReadAllText(path + ".meta"), @"guid: (\w+)").Groups[1].Value;
+		private static string Guid(string path) => Regex.Match(ProjectFiles.ReadAllText(path + ".meta"), @"guid: (\w+)").Groups[1].Value;
 
 		[Test]
 		public void TheModelIsRiggedOnTheMasterSkeleton()
@@ -141,14 +141,14 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void EveryRaceThatWoreEthanWearsTheTestHuman()
 		{
-			if (!File.Exists(PrefabPath + ".meta"))
+			if (!ProjectFiles.Exists(PrefabPath + ".meta"))
 			{
 				Assert.Inconclusive("the TestHuman prefab has not been built yet (CharacterModelMigration.Run)");
 			}
 			string testHuman = Guid(PrefabPath);
 			foreach (string race in new[] { "Human", "Elf", "Orc" })
 			{
-				string text = File.ReadAllText($"Assets/Templates/Entity/Races/Humanoid/{race}.asset");
+				string text = ProjectFiles.ReadAllText($"Assets/Templates/Entity/Races/Humanoid/{race}.asset");
 				Match placeholder = Regex.Match(text, @"PlaceholderModel:\s*\n\s*m_AssetGUID: (\w+)");
 				Assert.That(placeholder.Success, Is.True, race);
 				Assert.That(placeholder.Groups[1].Value, Is.EqualTo(testHuman), $"{race} wears the TestHuman");
@@ -158,17 +158,17 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void NothingRefersToEthanAnyMore()
 		{
-			if (!File.Exists(PrefabPath + ".meta"))
+			if (!ProjectFiles.Exists(PrefabPath + ".meta"))
 			{
 				Assert.Inconclusive("the TestHuman prefab has not been built yet (CharacterModelMigration.Run)");
 			}
 			Assert.That(Directory.Exists(EthanFolder), Is.False, "Ethan's folder is gone");
 			string[] kinds = { ".prefab", ".unity", ".asset", ".mat", ".controller" };
-			var users = Directory.EnumerateFiles("Assets", "*.*", SearchOption.AllDirectories)
+			var users = Directory.EnumerateFiles(ProjectFiles.Folder("Assets"), "*.*", SearchOption.AllDirectories)
 				.Where(path => kinds.Contains(Path.GetExtension(path)))
 				.Where(path =>
 				{
-					string text = File.ReadAllText(path);
+					string text = ProjectFiles.ReadAllText(path);
 					return text.Contains(EthanPrefabGuid) || text.Contains(EthanControllerGuid) || text.Contains(EthanModelGuid);
 				})
 				.ToArray();
@@ -178,7 +178,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void EveryNpcThatHadEthanIsAnimated()
 		{
-			if (!File.Exists(PrefabPath + ".meta"))
+			if (!ProjectFiles.Exists(PrefabPath + ".meta"))
 			{
 				Assert.Inconclusive("the TestHuman prefab has not been built yet (CharacterModelMigration.Run)");
 			}
@@ -196,7 +196,7 @@ namespace FishMMO.UnitTests
 			};
 			foreach (string npc in npcs)
 			{
-				string text = File.ReadAllText(npc);
+				string text = ProjectFiles.ReadAllText(npc);
 				Assert.That(text.Contains(controller), Is.True, $"{Path.GetFileNameWithoutExtension(npc)} has an animation controller");
 				Assert.That(text.Contains(testHuman), Is.True, $"{Path.GetFileNameWithoutExtension(npc)} wears the TestHuman");
 			}
@@ -205,13 +205,13 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheCharacterPrefabCarriesItsClips()
 		{
-			if (!File.Exists(PrefabPath + ".meta"))
+			if (!ProjectFiles.Exists(PrefabPath + ".meta"))
 			{
 				Assert.Inconclusive("the TestHuman prefab has not been built yet (CharacterModelMigration.Run)");
 			}
-			string prefab = File.ReadAllText(PrefabPath);
+			string prefab = ProjectFiles.ReadAllText(PrefabPath);
 			Assert.That(prefab.Contains(Guid("Assets/Scripts/Shared/Implementation/Entity/Animation/CharacterModel.cs")), Is.True, "it is marked as a character model");
-			string set = File.ReadAllText("Assets/Prefabs/Client/Models/TestHuman/TestHuman Animations.asset");
+			string set = ProjectFiles.ReadAllText("Assets/Prefabs/Client/Models/TestHuman/TestHuman Animations.asset");
 			string fbx = Guid(ModelPath);
 			int fromModel = Regex.Matches(set, fbx).Count;
 			Assert.That(fromModel, Is.GreaterThanOrEqualTo(12), "the strokes, tread, climb, punches, cast, guard, roll, death and sits come from the model");

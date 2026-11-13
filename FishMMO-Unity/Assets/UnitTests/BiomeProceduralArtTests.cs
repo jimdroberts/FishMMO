@@ -384,7 +384,7 @@ namespace FishMMO.UnitTests
 			var biomes = new List<BiomeTemplate>();
 			foreach (string guid in AssetDatabase.FindAssets("t:" + nameof(BiomeTemplate)))
 			{
-				var biome = AssetDatabase.LoadAssetAtPath<BiomeTemplate>(AssetDatabase.GUIDToAssetPath(guid));
+				var biome = AssetDatabase.LoadAssetAtPath<BiomeTemplate>(ProjectFiles.Path(AssetDatabase.GUIDToAssetPath(guid)));
 				if (biome != null)
 				{
 					biomes.Add(biome);

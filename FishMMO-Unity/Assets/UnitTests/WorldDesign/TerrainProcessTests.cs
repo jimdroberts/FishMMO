@@ -73,7 +73,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				Assert.That(TerrainProcessTable.TryGetProfile(profile, out _), Is.True, $"{biome} wears '{profile}', which the table does not define");
 				string path = $"{BiomeSpecTable.Folder}/{biome}.asset";
-				Assert.That(AssetDatabase.LoadAssetAtPath<BiomeTemplate>(path), Is.Not.Null, $"no biome asset at {path}");
+				Assert.That(AssetDatabase.LoadAssetAtPath<BiomeTemplate>(ProjectFiles.Path(path)), Is.Not.Null, $"no biome asset at {path}");
 			}
 		}
 

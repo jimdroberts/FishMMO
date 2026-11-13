@@ -20,7 +20,7 @@ namespace FishMMO.UnitTests
         public void PreparedColourMatchesReferenceAcrossBytesMipsWrappingAndPackedBladeColours()
         {
             if (!SystemInfo.supportsComputeShaders) Assert.Ignore("GPU required");
-            var shader = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>("Assets/TestHarness/World/Editor/GrassColourPreparedProbe.compute"));
+            var shader = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path("Assets/TestHarness/World/Editor/GrassColourPreparedProbe.compute")));
             try
             {
                 int pyramid = GrassAlbedoTexels.PyramidTexels(128,out int mips), start = GrassTerrainAtlas.TerrainUints + GrassAlbedoTexels.HeaderUints;
@@ -32,7 +32,7 @@ namespace FishMMO.UnitTests
                 for(uint i=0;i<256;i++)data[start+i]=i|((255-i)<<8)|(((i*97)&255)<<16)|0xff000000u;
                 using var shared = new GraphicsBuffer(GraphicsBuffer.Target.Structured,data.Length,4); shared.SetData(data);
                 shader.SetInt("_GrassLinearTableBase",linearBase);
-                var prepare=Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ComputePath));
+                var prepare=Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path(ComputePath)));
                 try { int prep=prepare.FindKernel("FishGrassPrepareColour"); prepare.SetInt("_GrassLinearTableBase",linearBase); prepare.SetBuffer(prep,"_GrassColourTableOut",shared); prepare.Dispatch(prep,1,1,1); }
                 finally { Object.DestroyImmediate(prepare); }
                 var points = new Vector2[8192];
@@ -60,7 +60,7 @@ namespace FishMMO.UnitTests
         public void HiddenTilesSkipMainWorkButPreserveShadowWork(bool shadows)
         {
             if (!SystemInfo.supportsComputeShaders) Assert.Ignore("GPU required");
-            var shader=Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ComputePath));
+            var shader=Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path(ComputePath)));
             var depth=new Texture2D(32,32,TextureFormat.RFloat,false,true);
             try
             {
@@ -103,7 +103,7 @@ namespace FishMMO.UnitTests
         [TestCase(ShaderCompilerPlatform.WebGPU,BuildTarget.WebGL)]
         public void InlandFoamShortcutCompilesForClientTargets(ShaderCompilerPlatform platform,BuildTarget target)
         {
-            var shader=AssetDatabase.LoadAssetAtPath<Shader>("Assets/Plugins/FishMMO Water/Shaders/FishInlandWater.shader");
+            var shader=AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path("Assets/Plugins/FishMMO Water/Shaders/FishInlandWater.shader"));
             foreach(var keywords in new[] {
                 new[]{"_MAIN_LIGHT_SHADOWS_CASCADE","_CLUSTER_LIGHT_LOOP"},
                 new[]{"_MAIN_LIGHT_SHADOWS_CASCADE","_CLUSTER_LIGHT_LOOP","_WATER_DEPTH","_WATER_REFRACTION"} })

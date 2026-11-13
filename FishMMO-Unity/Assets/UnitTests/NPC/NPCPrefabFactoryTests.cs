@@ -59,14 +59,14 @@ namespace FishMMO.UnitTests.NPCs
 
 		private static GameObject Load(string path)
 		{
-			GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+			GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(path));
 			Assume.That(prefab, Is.Not.Null, $"Shipped prefab '{path}' is missing; the tests need it as a base.");
 			return prefab;
 		}
 
 		private static T LoadAsset<T>(string path) where T : UnityEngine.Object
 		{
-			T asset = AssetDatabase.LoadAssetAtPath<T>(path);
+			T asset = AssetDatabase.LoadAssetAtPath<T>(ProjectFiles.Path(path));
 			Assume.That(asset, Is.Not.Null, $"Shipped asset '{path}' is missing.");
 			return asset;
 		}

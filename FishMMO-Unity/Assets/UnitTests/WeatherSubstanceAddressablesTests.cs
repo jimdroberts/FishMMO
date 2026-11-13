@@ -37,27 +37,27 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void EveryWeatherSubstanceHasAnAddressableEntry()
 		{
-			Assume.That(Directory.Exists(SubstancesFolder), $"{SubstancesFolder} is missing.");
-			Assume.That(Directory.Exists(GroupsFolder), $"{GroupsFolder} is missing.");
+			Assume.That(ProjectFiles.FolderExists(SubstancesFolder), $"{SubstancesFolder} is missing.");
+			Assume.That(ProjectFiles.FolderExists(GroupsFolder), $"{GroupsFolder} is missing.");
 
 			var addressable = new HashSet<string>();
-			foreach (string group in Directory.GetFiles(GroupsFolder, "*.asset"))
+			foreach (string group in Directory.GetFiles(ProjectFiles.Folder(GroupsFolder), "*.asset"))
 			{
-				foreach (Match match in EntryGuid.Matches(File.ReadAllText(group)))
+				foreach (Match match in EntryGuid.Matches(ProjectFiles.ReadAllText(group)))
 				{
 					addressable.Add(match.Groups[1].Value);
 				}
 			}
 
 			var missing = new List<string>();
-			foreach (string asset in Directory.GetFiles(SubstancesFolder, "*.asset", SearchOption.AllDirectories))
+			foreach (string asset in Directory.GetFiles(ProjectFiles.Folder(SubstancesFolder), "*.asset", SearchOption.AllDirectories))
 			{
-				if (!File.ReadAllText(asset).Contains(WeatherSubstanceScriptGuid))
+				if (!ProjectFiles.ReadAllText(asset).Contains(WeatherSubstanceScriptGuid))
 				{
 					continue;
 				}
 				string meta = asset + ".meta";
-				Match guid = File.Exists(meta) ? MetaGuid.Match(File.ReadAllText(meta)) : Match.Empty;
+				Match guid = ProjectFiles.Exists(meta) ? MetaGuid.Match(ProjectFiles.ReadAllText(meta)) : Match.Empty;
 				if (!guid.Success || !addressable.Contains(guid.Groups[1].Value))
 				{
 					missing.Add(Path.GetFileNameWithoutExtension(asset));

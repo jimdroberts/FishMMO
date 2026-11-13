@@ -67,9 +67,9 @@ namespace FishMMO.UnitTests
 		public void PlayerTargetMask_SeesTheInteractableNpcLayer()
 		{
 #if UNITY_EDITOR
-			GameObject humanPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(HumanPrefabPath);
+			GameObject humanPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(HumanPrefabPath));
 			LogAssert.IsNotNull(humanPrefab, $"{HumanPrefabPath} must exist.");
-			GameObject bankerPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(BankerPrefabPath);
+			GameObject bankerPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(BankerPrefabPath));
 			LogAssert.IsNotNull(bankerPrefab, $"{BankerPrefabPath} must exist.");
 
 			TargetController targetController = humanPrefab.GetComponent<TargetController>();
@@ -99,7 +99,7 @@ namespace FishMMO.UnitTests
 		public void BankerPrefab_ResolvesAliveAndRefusesAsCorpse()
 		{
 #if UNITY_EDITOR
-			GameObject bankerPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(BankerPrefabPath);
+			GameObject bankerPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(BankerPrefabPath));
 			LogAssert.IsNotNull(bankerPrefab, $"{BankerPrefabPath} must exist.");
 
 			GameObject inactiveParent = new GameObject("inactiveHost");
@@ -153,7 +153,7 @@ namespace FishMMO.UnitTests
 		public void CharacterBehaviours_RegisterAndUnregisterSymmetrically()
 		{
 			string root = Path.Combine(Directory.GetCurrentDirectory(), "Assets/Scripts/Shared/Implementation/Entity");
-			LogAssert.IsTrue(Directory.Exists(root), "Entity implementation folder must exist.");
+			LogAssert.IsTrue(ProjectFiles.FolderExists(root), "Entity implementation folder must exist.");
 
 			/* Scoped to the OnStartCharacter METHOD BODY, not the file. The same files also hold
 			 * the process-wide once-only static registrations (RegisterObservedSlotBroadcast and
@@ -163,9 +163,9 @@ namespace FishMMO.UnitTests
 			Regex registerPattern = new Regex(@"ClientManager\.RegisterBroadcast<(\w+)>", RegexOptions.Compiled);
 
 			int checkedFiles = 0;
-			foreach (string file in Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories))
+			foreach (string file in Directory.GetFiles(ProjectFiles.Folder(root), "*.cs", SearchOption.AllDirectories))
 			{
-				string source = File.ReadAllText(file);
+				string source = ProjectFiles.ReadAllText(file);
 				if (!source.Contains("OnStartCharacter"))
 				{
 					continue;
@@ -288,8 +288,8 @@ namespace FishMMO.UnitTests
 		private static string ReadSource(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-			LogAssert.IsTrue(File.Exists(path), $"{relativePath} not found at {path}.");
-			return File.ReadAllText(path);
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{relativePath} not found at {path}.");
+			return ProjectFiles.ReadAllText(path);
 		}
 	}
 }

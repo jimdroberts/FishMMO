@@ -29,7 +29,7 @@ namespace FishMMO.UnitTests
 				DashboardToolAttribute tool = method.GetCustomAttribute<DashboardToolAttribute>();
 				Assert.IsTrue(method.IsStatic, $"{name} must be static; the dashboard skips it otherwise");
 				Assert.IsEmpty(method.GetParameters(), $"{name} must take no parameters; the dashboard skips it otherwise");
-				Assert.That(DashboardToolAttribute.Pages, Does.Contain(tool.Page), $"{name} names page '{tool.Page}', which the dashboard does not have");
+				Assert.That(DashboardPages.Exists(tool.Page), Is.True, $"{name} names page '{tool.Page}', which no assembly declares with [DashboardPage]");
 				Assert.IsFalse(string.IsNullOrWhiteSpace(tool.Label), $"{name} has no button label");
 			}
 		}
@@ -57,7 +57,7 @@ namespace FishMMO.UnitTests
 			// The UI tools live in client-only editor assemblies, which the Server subtarget does not compile.
 			used.Add(DashboardToolAttribute.UITests);
 #endif
-			foreach (string page in DashboardToolAttribute.Pages)
+			foreach (string page in DashboardPages.Names)
 			{
 				Assert.IsTrue(used.Contains(page), $"page '{page}' has no tools");
 			}

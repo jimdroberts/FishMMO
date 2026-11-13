@@ -49,6 +49,14 @@
     background-color: var(--cast);
 }
 
+/* No easing. The theme eases every bar fill's width over 0.25 s, which suits health and mana, but this fill is set
+ * every frame from the cast's real remaining time: eased, a short cast showed its fill climbing from wherever the last
+ * cast left it toward full while the cast was already counting down (a 0.3 s cast appeared at about half, rose, then
+ * dropped away). Two classes, so this outranks the theme's rule whichever sheet loads last. */
+.fish-bar__fill.castbar-fill {
+    transition-duration: 0s;
+}
+
 /* Centered cast label drawn on top of the fill. */
 .castbar-label {
     position: absolute;

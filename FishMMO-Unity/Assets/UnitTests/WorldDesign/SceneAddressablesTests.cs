@@ -40,7 +40,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				AssetDatabase.CreateAsset(terrain, folder + "/Terrain.asset");
 				// An existing entry's custom address and labels must survive the scene's registration.
 				var custom = settings.CreateGroup("Custom", true, false, false, null);
-				var existing = settings.CreateOrMoveEntry(AssetDatabase.AssetPathToGUID(folder + "/Material.mat"), custom);
+				var existing = settings.CreateOrMoveEntry(AssetDatabase.AssetPathToGUID(ProjectFiles.Path(folder + "/Material.mat")), custom);
 				existing.SetAddress("Authored material");
 				existing.SetLabel("Authored label", true, true);
 				var navMesh = new NavMeshData();
@@ -63,13 +63,13 @@ namespace FishMMO.UnitTests.WorldDesign
 				AssertEntry(settings, navPath, "Server_Static_Permanent", "NavMesh");
 				foreach (string sceneContent in new[] { folder + "/Terrain.asset", folder + "/Texture.asset", folder + "/Layer.terrainlayer", duplicatePath })
 				{
-					Assert.That(settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(sceneContent)), Is.Null,
+					Assert.That(settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(ProjectFiles.Path(sceneContent))), Is.Null,
 						sceneContent + " is scene content: packed with the scene, not an entry of its own");
 				}
 				Assert.That(existing.parentGroup, Is.SameAs(custom));
 				Assert.That(existing.address, Is.EqualTo("Authored material"));
 				Assert.That(existing.labels, Does.Contain("Authored label"));
-				Assert.That(settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(outputs[2])), Is.Null);
+				Assert.That(settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(ProjectFiles.Path(outputs[2]))), Is.Null);
 				Assert.That(AddressablesDashboard.RegisterSceneAssets(settings, scenePath, outputs), Is.Zero,
 					"Registering the same cut again must be idempotent.");
 			}
@@ -99,7 +99,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void TheCutRegistersItsAssets_AndAFailedRecutRegistersTheRestoredOnes()
 		{
-			string code = System.IO.File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/SceneGenerator.cs");
+			string code = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/SceneGenerator.cs");
 			Assert.That(code, Does.Contain("AddressablesDashboard.RegisterSceneAssets(\n\t\t\t\tUnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings, scenePath, result.Wrote);").Or.Contain(
 				"AddressablesDashboard.RegisterSceneAssets(\r\n\t\t\t\tUnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings, scenePath, result.Wrote);"));
 			int restore = code.IndexOf("private static void RestoreRecut()", StringComparison.Ordinal);
@@ -113,7 +113,7 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		private static void AssertEntry(AddressableAssetSettings settings, string path, string group, string address)
 		{
-			var entry = settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(path));
+			var entry = settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(ProjectFiles.Path(path)));
 			Assert.That(entry, Is.Not.Null, path);
 			Assert.That(entry.parentGroup.Name, Is.EqualTo(group), path);
 			Assert.That(entry.address, Is.EqualTo(address), path);

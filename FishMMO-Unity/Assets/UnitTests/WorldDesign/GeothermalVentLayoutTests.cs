@@ -424,9 +424,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeArtSpec.For("Ice Geyser Field").Emission, Is.EqualTo(("Plume Frost", 0.15f)));
 			Assert.That(BiomeArtSpec.For("Volcanic").Emission, Is.EqualTo(("Vog", 0.12f)));
 			int templates = 0;
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				if (!text.Contains("m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01"))
 				{
 					continue;
@@ -457,7 +457,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void TheContentGenerator_ShipsTheRoundsSubstances_AndTheVentedFlag()
 		{
-			string content = File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/WeatherContentGenerator.cs");
+			string content = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/WeatherContentGenerator.cs");
 			foreach (string name in new[] { "Plume Frost", "Plume Soot", "Acid Fog", "Kiln Haze", "Vog", "Methane Mist" })
 			{
 				StringAssert.Contains("\"" + name + "\"", content, name);
@@ -466,9 +466,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			StringAssert.Contains("With(Vented(Grain(\"Cryo Tephra\"", content);
 			StringAssert.Contains("substance.Vented = spec.Vented;", content);
 			// Only Volcanic Ash and Cryo Tephra carried it before: the refresh changes no existing substance's flag.
-			foreach (string path in Directory.GetFiles("Assets/Templates/Weather/Substances", "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder("Assets/Templates/Weather/Substances"), "*.asset"))
 			{
-				bool vented = File.ReadAllText(path).Contains("\n  Vented: 1");
+				bool vented = ProjectFiles.ReadAllText(path).Contains("\n  Vented: 1");
 				string name = Path.GetFileNameWithoutExtension(path);
 				Assert.That(vented, Is.EqualTo(name == "Volcanic Ash" || name == "Cryo Tephra" || name == "Plume Frost" || name == "Plume Soot" || name == "Vog"), path);
 			}
@@ -477,12 +477,12 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void TheCutAndTheClient_ReadTheSameLines()
 		{
-			string carve = File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/Terrain/GeothermalGroundCarve.cs");
+			string carve = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/Terrain/GeothermalGroundCarve.cs");
 			StringAssert.Contains("map.SetVentLines(lines);\n\t\t\t\tGeothermalVents.SceneSites(map, sites);", carve.Replace("\r", string.Empty), "the temp map carries the lines before the search");
 			StringAssert.Contains("springHeat.AddRange(IceStripes.Heat(lines));", carve);
-			string generator = File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/SceneGenerator.cs");
+			string generator = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/SceneGenerator.cs");
 			StringAssert.Contains("map.SetVentLines(hotGround.Lines);", generator);
-			string vents = File.ReadAllText("Assets/Scripts/Shared/Implementation/Weather/GeothermalVents.cs");
+			string vents = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Weather/GeothermalVents.cs");
 			StringAssert.Contains("FindAlong(lines, scene, SeedOf(map)", vents);
 			StringAssert.Contains("FindAlong(lines, near, SeedOf(map)", vents);
 		}

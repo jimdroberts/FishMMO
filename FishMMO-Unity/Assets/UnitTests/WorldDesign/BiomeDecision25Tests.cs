@@ -31,7 +31,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void TheFieldsBuilder_ReturnsEarlyForABiomeThatSowsNothing_AndTheSpecCanSaySo()
 		{
-			string fields = File.ReadAllText(Path.Combine("Assets", "Scripts", "Shared", "Implementation", "Tools", "Extensions", "Unity", "Editor", "World",
+			string fields = ProjectFiles.ReadAllText(Path.Combine("Assets", "Scripts", "Shared", "Implementation", "Tools", "Extensions", "Unity", "Editor", "World",
 				"PointsOfInterest", "Features", "PointOfInterestFields.cs"));
 			int early = fields.IndexOf("if (BiomeTemplateArt.SowsNothing(siteBiome))", System.StringComparison.Ordinal);
 			Assert.That(early, Is.GreaterThan(0));

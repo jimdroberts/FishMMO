@@ -23,7 +23,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	{
 		private const string WorldFolder = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World";
 
-		private static string Code(string path) => File.ReadAllText(path);
+		private static string Code(string path) => ProjectFiles.ReadAllText(path);
 
 		private static GeothermalSite Site(GeothermalKind kind, float x, float z, float size, uint seed = 1u)
 			=> new GeothermalSite { Kind = kind, Position = new Vector2(x, z), Size = size, Seed = seed };

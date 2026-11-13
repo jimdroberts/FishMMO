@@ -103,7 +103,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void EveryWaveMarker_IsStyledByItsGroupsRule()
 		{
-			string uss = System.IO.File.ReadAllText("Assets/Scripts/Client/GUI/World/Map/UIMapPOI.uss");
+			string uss = ProjectFiles.ReadAllText("Assets/Scripts/Client/GUI/World/Map/UIMapPOI.uss");
 			foreach (POIType kind in Kinds())
 			{
 				string selector = ".map-marker--" + kind.ToString().ToLowerInvariant() + " ";

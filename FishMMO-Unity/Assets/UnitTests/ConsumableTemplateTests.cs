@@ -50,7 +50,7 @@ namespace FishMMO.UnitTests
 			List<BaseItemTemplate> consumables = new List<BaseItemTemplate>();
 			foreach (string guid in AssetDatabase.FindAssets("t:BaseItemTemplate", new[] { ConsumableFolder }))
 			{
-				BaseItemTemplate template = AssetDatabase.LoadAssetAtPath<BaseItemTemplate>(AssetDatabase.GUIDToAssetPath(guid));
+				BaseItemTemplate template = AssetDatabase.LoadAssetAtPath<BaseItemTemplate>(ProjectFiles.Path(AssetDatabase.GUIDToAssetPath(guid)));
 				if (template != null)
 				{
 					consumables.Add(template);

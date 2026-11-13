@@ -220,7 +220,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void EveryPointOfInterestType_IsStyledInItsGroupsColour()
 		{
-			string source = File.ReadAllText(PointOfInterestSheetPath);
+			string source = ProjectFiles.ReadAllText(PointOfInterestSheetPath);
 			var rules = new List<(string selectors, string body)>();
 			foreach (Match match in Regex.Matches(Regex.Replace(source, @"/\*.*?\*/", string.Empty, RegexOptions.Singleline), @"([^{}]+)\{([^}]*)\}"))
 			{
@@ -254,15 +254,15 @@ namespace FishMMO.UnitTests
 		{
 			foreach (string uxml in new[] { "Assets/Scripts/Client/GUI/World/Map/UIMap.uxml", "Assets/Scripts/Client/GUI/World/Minimap/UIMinimap.uxml" })
 			{
-				LogAssert.IsTrue(File.ReadAllText(uxml).Contains("UIMapPOI.uss\""), $"{uxml} must load UIMapPOI.uss, or every point of interest draws in the fallback grey");
+				LogAssert.IsTrue(ProjectFiles.ReadAllText(uxml).Contains("UIMapPOI.uss\""), $"{uxml} must load UIMapPOI.uss, or every point of interest draws in the fallback grey");
 			}
-			LogAssert.IsTrue(File.Exists(SharedSheetPath));
+			LogAssert.IsTrue(ProjectFiles.Exists(SharedSheetPath));
 		}
 
 		[Test]
 		public void EveryGroupToken_IsInTheTheme_AndTheAtlasUsesTheSameColour()
 		{
-			string theme = File.ReadAllText(ThemePath);
+			string theme = ProjectFiles.ReadAllText(ThemePath);
 			foreach (PointOfInterestGroup group in (PointOfInterestGroup[])Enum.GetValues(typeof(PointOfInterestGroup)))
 			{
 				string token = "--map-poi-" + group.ToString().ToLowerInvariant();

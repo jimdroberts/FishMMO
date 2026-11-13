@@ -42,11 +42,11 @@ namespace FishMMO.UnitTests
 		/// <summary>Every pass (shader path, subshader, pass index, name) whose program includes the shared cookie header, i.e. reads the table on WebGPU.</summary>
 		static IEnumerable<(string path,ShaderData.Pass pass,string name,bool twin)> TablePasses()
 		{
-			foreach(string file in Directory.GetFiles("Assets","*.shader",SearchOption.AllDirectories))
+			foreach(string file in Directory.GetFiles(ProjectFiles.Folder("Assets"),"*.shader",SearchOption.AllDirectories))
 			{
-				string source=File.ReadAllText(file);
+				string source=ProjectFiles.ReadAllText(file);
 				if(!source.Contains(CookieHeader))continue;
-				var shader=AssetDatabase.LoadAssetAtPath<Shader>(file.Replace('\\','/'));
+				var shader=AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path(file.Replace('\\','/')));
 				Assert.That(shader,Is.Not.Null,file);
 				// Program bodies in declaration order, matched to passes by name.
 				var programs=Regex.Matches(source,"Name\\s+\"([^\"]+)\"(.*?)ENDHLSL",RegexOptions.Singleline).Cast<Match>()
@@ -151,7 +151,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void LayoutAgreesAcrossCSharpShadersAndUrp()
 		{
-			string layout=File.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishLightTableLayout.hlsl");
+			string layout=ProjectFiles.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishLightTableLayout.hlsl");
 			Assert.That(Define(layout,"FISH_LIGHT_TABLE_LIGHTS"),Is.EqualTo(AdditionalLightTable.Lights));
 			Assert.That(Define(layout,"FISH_LIGHT_TABLE_PROBES"),Is.EqualTo(AdditionalLightTable.Probes));
 			Assert.That(Define(layout,"FISH_LIGHT_TABLE_LIGHT_ROWS"),Is.EqualTo(AdditionalLightTable.LightRows));
@@ -162,7 +162,7 @@ namespace FishMMO.UnitTests
 			Assert.That(Define(layout,"FISH_PROBE_ROW_MIP_SCALE_OFFSET")+7,Is.EqualTo(AdditionalLightTable.ProbeRows));
 			Assert.That(AdditionalLightTable.Rows,Is.EqualTo(AdditionalLightTable.Lights*(AdditionalLightTable.LightRows+AdditionalLightTable.SliceRows)+AdditionalLightTable.Probes*AdditionalLightTable.ProbeRows+1));
 			// URP's WebGPU light cap (Input.hlsl MAX_VISIBLE_LIGHTS = the mobile count there; maxVisibleReflectionProbes = min(it, 64)).
-			string config=File.ReadAllText("Packages/com.unity.render-pipelines.universal-config/Runtime/ShaderConfig.cs.hlsl");
+			string config=ProjectFiles.ReadAllText("Packages/com.unity.render-pipelines.universal-config/Runtime/ShaderConfig.cs.hlsl");
 			int webGpuLights=Define(config,"MAX_VISIBLE_LIGHT_COUNT_MOBILE");
 			Assert.That(AdditionalLightTable.Lights,Is.EqualTo(webGpuLights),"URP's WebGPU light cap changed: resize the table");
 			Assert.That(AdditionalLightTable.Probes,Is.EqualTo(Math.Min(webGpuLights,64)));
@@ -184,7 +184,7 @@ namespace FishMMO.UnitTests
 			using var sha=System.Security.Cryptography.SHA256.Create();
 			foreach(var (file,expected) in UrpSources)
 			{
-				string text=File.ReadAllText(Path.Combine(root,file)).Replace("\r\n","\n");
+				string text=ProjectFiles.ReadAllText(Path.Combine(root,file)).Replace("\r\n","\n");
 				string actual=string.Concat(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(text)).Take(8).Select(b=>b.ToString("x2")));
 				Assert.That(actual,Is.EqualTo(expected),file+" changed since FishLightTableLighting.hlsl copied it: re-copy the functions that read per-light arrays");
 			}
@@ -256,7 +256,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void NativeProgramsKeepUrpArraysAndNeverReadTheTable()
 		{
-			string cookies=File.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/"+CookieHeader);
+			string cookies=ProjectFiles.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/"+CookieHeader);
 			foreach(Match m in Regex.Matches(cookies,"#include \"(FishLightTable[A-Za-z]*\\.hlsl)\""))
 			{
 				string before=cookies.Substring(0,m.Index);

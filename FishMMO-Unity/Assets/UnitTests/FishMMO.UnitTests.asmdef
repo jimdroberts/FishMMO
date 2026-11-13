@@ -2,6 +2,7 @@
     "name": "FishMMO.UnitTests",
     "rootNamespace": "FishMMO.UnitTests",
     "references": [
+        "FishMMO.Core",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
         "FishMMO.Shared",

@@ -565,12 +565,12 @@ namespace FishMMO.UnitTests
 		private static string ReadSource(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-			LogAssert.IsTrue(File.Exists(path), $"{relativePath} not found at {path}.");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{relativePath} not found at {path}.");
 			/* Normalised, because one assertion below matches a pattern spanning a line break.
 			 * The working tree is CRLF on Windows, so a bare \n never matches there and the
 			 * assertion fails against code that is present and correct. Sibling fixtures in this
 			 * folder already normalise for the same reason. */
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 		private T NewTemplate<T>(string name) where T : ScriptableObject

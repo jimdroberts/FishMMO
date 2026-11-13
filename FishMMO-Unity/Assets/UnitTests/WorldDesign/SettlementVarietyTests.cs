@@ -474,14 +474,14 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void TheFieldsLayTheOutskirtsAfterTheFarmsteads_OnDrawsOfTheirOwn()
 		{
 			const string Features = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/Features";
-			string fields = System.IO.File.ReadAllText($"{Features}/PointOfInterestFields.cs");
+			string fields = ProjectFiles.ReadAllText($"{Features}/PointOfInterestFields.cs");
 			int farmsteads = fields.IndexOf("PointOfInterestFarmsteads.Lay(context, laidFields);", StringComparison.Ordinal);
 			int outskirts = fields.IndexOf("PointOfInterestOutskirts.Lay(context, laidFields);", StringComparison.Ordinal);
 			Assert.That(farmsteads, Is.GreaterThan(0));
 			Assert.That(outskirts, Is.GreaterThan(farmsteads), "after the farmsteads");
 			foreach (string file in new[] { "PointOfInterestOutskirts.cs", "PointOfInterestChurchyards.cs" })
 			{
-				string source = System.IO.File.ReadAllText($"{Features}/{file}");
+				string source = ProjectFiles.ReadAllText($"{Features}/{file}");
 				Assert.That(source.Contains("context.Random"), Is.False, $"{file} never draws on the site's sequence");
 				Assert.That(source.Contains(".NextDouble()") || source.Contains(".NextFloat()"), Is.False, $"{file} draws only hashes");
 			}

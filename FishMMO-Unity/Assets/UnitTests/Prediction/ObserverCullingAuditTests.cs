@@ -45,7 +45,7 @@ namespace FishMMO.UnitTests
 
 		/// <summary>Script guid of <see cref="ClassifiedDistanceCondition"/>.</summary>
 		private static string ClassifiedConditionScriptGuid => Regex.Match(
-			File.ReadAllText(Path.Combine(Application.dataPath,
+			ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
 				"Scripts/Shared/Implementation/Entity/Prediction/ObserverStreaming/ClassifiedDistanceCondition.cs.meta")),
 			@"guid: ([0-9a-f]{32})").Groups[1].Value;
 
@@ -55,8 +55,8 @@ namespace FishMMO.UnitTests
 		private static float Field(string fileName, string field)
 		{
 			string path = ConditionPath(fileName);
-			LogAssert.IsTrue(File.Exists(path), $"{fileName} not found at {path}.");
-			Match m = Regex.Match(File.ReadAllText(path), field + @": ([0-9.]+)");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{fileName} not found at {path}.");
+			Match m = Regex.Match(ProjectFiles.ReadAllText(path), field + @": ([0-9.]+)");
 			LogAssert.IsTrue(m.Success, $"{fileName} must author {field}.");
 			return float.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture);
 		}
@@ -68,8 +68,8 @@ namespace FishMMO.UnitTests
 		private static string ReadSource(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-			LogAssert.IsTrue(File.Exists(path), $"{relativePath} not found at {path}.");
-			return File.ReadAllText(path);
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{relativePath} not found at {path}.");
+			return ProjectFiles.ReadAllText(path);
 		}
 
 		/// <summary>
@@ -184,10 +184,10 @@ namespace FishMMO.UnitTests
 		{
 			Dictionary<int, string> byClassification = new Dictionary<int, string>();
 			foreach (string path in Directory.GetFiles(
-				Path.Combine(Application.dataPath, "Settings/ObserverConditions"), "*DistanceCondition.asset"))
+				ProjectFiles.Folder(Path.Combine(Application.dataPath, "Settings/ObserverConditions")), "*DistanceCondition.asset"))
 			{
 				string name = Path.GetFileName(path);
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 
 				LogAssert.IsTrue(text.Contains(ClassifiedConditionScriptGuid),
 					$"{name} is still a plain FishNet DistanceCondition — it carries no classification, so it " +
@@ -307,9 +307,9 @@ namespace FishMMO.UnitTests
 				@"guid: ([0-9a-f]{32})").Groups[1].Value;
 
 			foreach (string prefab in Directory.GetFiles(
-				Path.Combine(Application.dataPath, "Prefabs"), "*.prefab", SearchOption.AllDirectories))
+				ProjectFiles.Folder(Path.Combine(Application.dataPath, "Prefabs")), "*.prefab", SearchOption.AllDirectories))
 			{
-				string text = File.ReadAllText(prefab);
+				string text = ProjectFiles.ReadAllText(prefab);
 				if (!text.Contains(titanGuid))
 				{
 					continue;
@@ -474,7 +474,7 @@ namespace FishMMO.UnitTests
 			 * buy a longer array and no behaviour. */
 			float furthest = 0f;
 			foreach (string path in Directory.GetFiles(
-				Path.Combine(Application.dataPath, "Settings/ObserverConditions"), "*DistanceCondition.asset"))
+				ProjectFiles.Folder(Path.Combine(Application.dataPath, "Settings/ObserverConditions")), "*DistanceCondition.asset"))
 			{
 				string name = Path.GetFileName(path);
 				if (name.StartsWith("Titan", StringComparison.Ordinal))

@@ -87,7 +87,7 @@ namespace FishMMO.UnitTests.PointsOfInterest
 				Assert.IsTrue(addresses.Add(resource.Node + " Node"), $"prefab of '{resource.Node}' repeats an address");
 				Assert.IsTrue(addresses.Add(resource.Item), $"item '{resource.Item}' repeats an address");
 				Assert.That(resource.Tier, Is.InRange(1, 4), resource.Node);
-				Assert.IsNotNull(AssetDatabase.LoadAssetAtPath<GameObject>($"{GatheringResourceCatalogue.VisualFolder}/{resource.Visual}.prefab"),
+				Assert.IsNotNull(AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path($"{GatheringResourceCatalogue.VisualFolder}/{resource.Visual}.prefab")),
 					$"'{resource.Node}' names a visual that does not exist: {resource.Visual}");
 			}
 			foreach (GatheringFamily family in System.Enum.GetValues(typeof(GatheringFamily)))

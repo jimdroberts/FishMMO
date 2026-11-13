@@ -2,6 +2,7 @@
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UILogin.uss" />
     <ui:VisualElement name="login-root" class="login-screen">
+        <ui:Label name="login-title" text="FishMMO" class="login-title" />
         <ui:VisualElement name="login-panel" class="fish-panel login-panel">
             <ui:VisualElement name="login-header" class="fish-panel__header login-header">
                 <ui:Label text="SIGN IN" class="fish-panel__title" />
@@ -22,5 +23,6 @@
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
+        <ui:Label name="login-version" text="" class="fish-label login-version" />
     </ui:VisualElement>
 </ui:UXML>

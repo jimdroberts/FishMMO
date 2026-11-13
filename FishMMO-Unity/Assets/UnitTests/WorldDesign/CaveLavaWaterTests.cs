@@ -368,8 +368,8 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void TheInlandLavaIsTheLavasSurfaceWithItsOwnSwitch()
 		{
-			string lava = File.ReadAllText(WaterFolder + "Shaders/FishLava.shader");
-			string inland = File.ReadAllText(WaterFolder + "Shaders/FishInlandLava.shader");
+			string lava = ProjectFiles.ReadAllText(WaterFolder + "Shaders/FishLava.shader");
+			string inland = ProjectFiles.ReadAllText(WaterFolder + "Shaders/FishInlandLava.shader");
 			Assert.That(Properties(inland), Is.EquivalentTo(Properties(lava)), "one UnityPerMaterial: the same properties, one for one");
 			Assert.That(inland, Does.Contain("Shader \"FishMMO/Water/Inland Lava\""));
 			MatchCollection passes = Regex.Matches(inland, @"HLSLPROGRAM(.*?)ENDHLSL", RegexOptions.Singleline);
@@ -387,15 +387,15 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void TheInlandLavaMaterialIsTheInlandShadersWithTheBakedCrust()
 		{
-			string material = File.ReadAllText(WaterFolder + "Materials/InlandLava.mat");
-			string shaderGuid = Regex.Match(File.ReadAllText(WaterFolder + "Shaders/FishInlandLava.shader.meta"), @"guid: (\w+)").Groups[1].Value;
+			string material = ProjectFiles.ReadAllText(WaterFolder + "Materials/InlandLava.mat");
+			string shaderGuid = Regex.Match(ProjectFiles.ReadAllText(WaterFolder + "Shaders/FishInlandLava.shader.meta"), @"guid: (\w+)").Groups[1].Value;
 			Assert.That(material, Does.Contain("guid: " + shaderGuid));
 			foreach (string map in new[] { "LavaCrustNormal", "LavaCrustMask" })
 			{
-				string guid = Regex.Match(File.ReadAllText(WaterFolder + "Textures/" + map + ".png.meta"), @"guid: (\w+)").Groups[1].Value;
+				string guid = Regex.Match(ProjectFiles.ReadAllText(WaterFolder + "Textures/" + map + ".png.meta"), @"guid: (\w+)").Groups[1].Value;
 				Assert.That(material, Does.Contain("guid: " + guid), map);
 			}
-			Assert.That(File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/SceneGenerator.cs"),
+			Assert.That(ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/SceneGenerator.cs"),
 				Does.Contain("Materials/InlandLava.mat"), "the scene's Inland Water object is given it");
 		}
 

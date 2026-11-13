@@ -42,7 +42,7 @@ namespace FishMMO.UnitTests
 			"Assets/Prefabs/Shared/Entity/PlayableCharacters/Orc.prefab",
 		};
 
-		private static string Read(string path) => File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), path)).Replace("\r\n", "\n");
+		private static string Read(string path) => ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), path)).Replace("\r\n", "\n");
 
 		private static List<LeaderboardTemplate> ShippedBoards()
 		{
@@ -56,7 +56,7 @@ namespace FishMMO.UnitTests
 		/// <summary>Whether an asset is an entry of the permanent shared group, which both peers load and cache by ID.</summary>
 		private static bool IsAddressable(Object asset, string group)
 		{
-			string guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(asset));
+			string guid = AssetDatabase.AssetPathToGUID(ProjectFiles.Path(AssetDatabase.GetAssetPath(asset)));
 			return Regex.IsMatch(group, $@"- m_GUID: {guid}\n(?:    .*\n)*?    - Shared_Static_Permanent\n");
 		}
 
@@ -180,7 +180,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheSceneServer_LoadsTheLeaderboardSystem()
 		{
-			string guid = AssetDatabase.AssetPathToGUID(SystemAsset);
+			string guid = AssetDatabase.AssetPathToGUID(ProjectFiles.Path(SystemAsset));
 			LogAssert.IsFalse(string.IsNullOrEmpty(guid), $"{SystemAsset} exists");
 			LogAssert.IsTrue(Read(SceneServerScene).Contains($"  - {{fileID: 11400000, guid: {guid}, type: 2}}\n"),
 				"the scene server's behaviour list includes it, or no board request is ever answered");
@@ -191,8 +191,8 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void EveryPlayableCharacter_CountsTheMonstersItKills_IntoTheAchievementTheBoardRanks()
 		{
-			Trigger killTrigger = AssetDatabase.LoadAssetAtPath<Trigger>(KillTriggerPath);
-			AchievementTemplate kills = AssetDatabase.LoadAssetAtPath<AchievementTemplate>(KillsAchievementPath);
+			Trigger killTrigger = AssetDatabase.LoadAssetAtPath<Trigger>(ProjectFiles.Path(KillTriggerPath));
+			AchievementTemplate kills = AssetDatabase.LoadAssetAtPath<AchievementTemplate>(ProjectFiles.Path(KillsAchievementPath));
 			LogAssert.IsNotNull(killTrigger, $"{KillTriggerPath} exists");
 			LogAssert.IsNotNull(kills, $"{KillsAchievementPath} exists");
 
@@ -211,7 +211,7 @@ namespace FishMMO.UnitTests
 			// Who runs it: every playable character, as the credited killer.
 			foreach (string path in PlayablePrefabs)
 			{
-				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(path));
 				LogAssert.IsNotNull(prefab, $"{path} exists");
 				CharacterDamageController damage = prefab.GetComponentInChildren<CharacterDamageController>(true);
 				LogAssert.IsNotNull(damage, $"{prefab.name} has a damage controller");

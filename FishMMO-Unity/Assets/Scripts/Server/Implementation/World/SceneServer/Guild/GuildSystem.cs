@@ -2244,9 +2244,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						IPlayerCharacter pc = conn.FirstObject.GetComponent<IPlayerCharacter>();
 
-						if (pc != null && pc.TryGet(out IAchievementController achievementController) && CharacterStateValidation.CanAct(pc))
+						if (pc != null && CharacterStateValidation.CanAct(pc))
 						{
-							achievementController.Increment(GuildCreateAchievementTemplate, 1);
+							Accomplishments.Record(pc, GuildCreateAchievementTemplate);
 						}
 					}
 				});
@@ -2842,9 +2842,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						IPlayerCharacter pc = conn.FirstObject.GetComponent<IPlayerCharacter>();
 
-						if (pc != null && pc.TryGet(out IAchievementController achievementController) && CharacterStateValidation.CanAct(pc))
+						if (pc != null && CharacterStateValidation.CanAct(pc))
 						{
-							achievementController.Increment(GuildJoinAchievementTemplate, 1);
+							Accomplishments.Record(pc, GuildJoinAchievementTemplate);
 						}
 					}
 				});

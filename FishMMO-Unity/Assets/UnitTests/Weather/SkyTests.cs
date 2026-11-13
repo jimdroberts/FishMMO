@@ -1545,14 +1545,14 @@ namespace FishMMO.UnitTests.Weather
 			string root = Path.Combine(Application.dataPath, "Scripts");
 			var offenders = new List<string>();
 			int owner = 0;
-			foreach (string file in Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories))
+			foreach (string file in Directory.GetFiles(ProjectFiles.Folder(root), "*.cs", SearchOption.AllDirectories))
 			{
 				string normalized = file.Replace('\\', '/');
 				if (normalized.Contains("/Editor/"))
 				{
 					continue;
 				}
-				string code = CodeOnly(File.ReadAllText(file));
+				string code = CodeOnly(ProjectFiles.ReadAllText(file));
 				int writes = SkyWrite.Matches(code).Count;
 				if (writes == 0)
 				{
@@ -1573,7 +1573,7 @@ namespace FishMMO.UnitTests.Weather
 		public void TheOldSkyboxActionIsGone()
 		{
 			LogAssert.IsNull(typeof(ChangeSkyProfileAction).Assembly.GetType("FishMMO.Shared.ChangeSkyboxAction"), "ChangeSkyProfileAction replaced it");
-			string cycle = CodeOnly(File.ReadAllText(Path.Combine(Application.dataPath, "Scripts/Shared/Implementation/Entity/WorldSceneDetails/WorldDayNightCycle.cs")));
+			string cycle = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(Application.dataPath, "Scripts/Shared/Implementation/Entity/WorldSceneDetails/WorldDayNightCycle.cs")));
 			LogAssert.IsFalse(cycle.Contains("RenderSettings.skybox"), "the cycle no longer swaps skyboxes itself");
 			LogAssert.IsFalse(cycle.Contains("DynamicGI.UpdateEnvironment"), "nor refreshes GI every frame");
 		}

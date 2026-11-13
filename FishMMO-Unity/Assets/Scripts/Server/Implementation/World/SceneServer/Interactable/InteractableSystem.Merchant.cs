@@ -199,9 +199,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				// Increment achievement for any merchant interaction
 				if (merchant != null &&
 					merchant.AchievementTemplate != null &&
-					character.TryGet(out IAchievementController achievementController))
+					character != null)
 				{
-					achievementController.Increment(merchant.AchievementTemplate, 1);
+					Accomplishments.Record(character, merchant.AchievementTemplate);
 				}
 			}
 			finally
@@ -544,9 +544,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 				// Increment achievement for any merchant interaction.
 				if (merchant.AchievementTemplate != null &&
-					character.TryGet(out IAchievementController achievementController))
+					character != null)
 				{
-					achievementController.Increment(merchant.AchievementTemplate, 1);
+					Accomplishments.Record(character, merchant.AchievementTemplate);
 				}
 			}
 			finally

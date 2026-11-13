@@ -78,6 +78,14 @@ namespace FishMMO.Shared
 		public Sprite SceneTransitionImage;
 
 		/// <summary>
+		/// A world only the client draws, never a place players go (the login screen's backdrop). It is cut, baked and
+		/// shipped like any world scene, so its ground, sky and weather work, but the world scene details cache leaves
+		/// it out, so no server hosts it and nothing can send a character there.
+		/// </summary>
+		[Tooltip("A client-only backdrop (the login screen's world): built like a world scene, never hosted or travelled to.")]
+		public bool ClientBackdrop;
+
+		/// <summary>
 		/// The climate model this scene runs under: lapse rates, humidity curve, tier boundaries and
 		/// the base global offsets. Shared between scenes that share a climate; null falls back to
 		/// the built-in defaults.

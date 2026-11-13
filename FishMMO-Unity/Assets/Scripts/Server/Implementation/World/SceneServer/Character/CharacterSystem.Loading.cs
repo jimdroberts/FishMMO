@@ -587,7 +587,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				IReadOnlyList<CharacterAttributeData> attributeData = null;
 				IReadOnlyList<CharacterAbilityData> abilityData = null;
 				IReadOnlyList<CharacterKnownAbilityData> knownAbilityData = null;
-				IReadOnlyList<CharacterAchievementData> achievementData = null;
+				var participantData = new Dictionary<CharacterPersistenceParticipant, object>();
 				IReadOnlyList<CharacterFriendData> friendData = null;
 				CharacterGuildData? guildData = null;
 				CharacterPartyData? partyData = null;
@@ -908,15 +908,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						}
 						knownAbilityData = result.Data;
 					}
-					if (serviceRegistry.TryGet<ICharacterAchievementService>(out var achievementService))
+					// Every feature that saves through a participant loads through it too; see CharacterPersistence.cs.
+					foreach (CharacterPersistenceParticipant participant in CharacterPersistenceParticipants.All)
 					{
-						var result = await achievementService.FetchAsync(characterID);
-						if (!result.IsSuccess)
+						CharacterFetch fetched = await participant.FetchAsync(this, characterID);
+						if (!fetched.IsSuccess)
 						{
-							await AbandonLoadAfterFetchFailure("achievements", result.ErrorCode.ToString(), result.ErrorMessage);
+							await AbandonLoadAfterFetchFailure(participant.Name, fetched.ErrorCode, fetched.ErrorMessage);
 							return;
 						}
-						achievementData = result.Data;
+						participantData[participant] = fetched.Data;
 					}
 					if (serviceRegistry.TryGet<ICharacterWaypointService>(out var waypointService))
 					{
@@ -1089,7 +1090,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					instanceSceneName, instanceSceneHandle,
 					itemData,
 					attributeData, abilityData, knownAbilityData,
-					achievementData, friendData,
+					participantData, friendData,
 					guildData, partyData,
 					hotkeyData, buffData, factionData, questData, waypointData, archetypeData, chatMute);
 				/* The main-thread queue is bounded and drops work when it is saturated, and this
@@ -1478,7 +1479,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			IReadOnlyList<CharacterAttributeData> attributeData = ctx.AttributeData;
 			IReadOnlyList<CharacterAbilityData> abilityData = ctx.AbilityData;
 			IReadOnlyList<CharacterKnownAbilityData> knownAbilityData = ctx.KnownAbilityData;
-			IReadOnlyList<CharacterAchievementData> achievementData = ctx.AchievementData;
 			IReadOnlyList<CharacterFriendData> friendData = ctx.FriendData;
 			CharacterGuildData? guildData = ctx.GuildData;
 			CharacterPartyData? partyData = ctx.PartyData;
@@ -1573,6 +1573,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			/* The character's Core entity comes first: chat, hotkeys and the other feature state loaded below
+			 * live as components on it, and the object spawned afterwards stands for it. Every failure path
+			 * from here returns the object to its pool, whose reset ends the entity again. */
+			if (!(character is BaseCharacter linkable) ||
+				!CharacterLinks.TryCreate(Server.NetworkWrapper.NetworkManager, FishMMO.Core.SimulationSide.Server, FishMMO.Core.Archetypes.Player, character, out FishMMO.Core.EntityLink coreLink))
+			{
+				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(nob, true);
+				Log.Error("CharacterSystem", "Could not make the character's Core entity; the server's Core world is not running.");
+				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
+				return;
+			}
+			linkable.AttachCoreLink(coreLink);
+
 			// Initialize motor at the spawn position to match the teleport path.
 			// Without this, the motor's internal velocity/tick/grounding state is uninitialized
 			// and the first tick may miss ground detection with the 0.005f minimum probe.
@@ -1588,13 +1602,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			character.AccessLevel = (AccessLevel)(int)charData.AccessLevel;
 			if (ctx.ChatMute.HasValue)
 			{
-				character.ChatMutedUntilTicks = ChatMutePolicy.ResolveUntilTicks(ctx.ChatMute.Value, DateTime.UtcNow, out string muteReason);
-				character.ChatMuteReason = muteReason;
+				character.Component<ChatState>().MutedUntilTicks = ChatMutePolicy.ResolveUntilTicks(ctx.ChatMute.Value, DateTime.UtcNow, out string muteReason);
+				character.Component<ChatState>().MuteReason = muteReason;
 			}
 			else
 			{
-				character.ChatMutedUntilTicks = 0;
-				character.ChatMuteReason = null;
+				character.Component<ChatState>().MutedUntilTicks = 0;
+				character.Component<ChatState>().MuteReason = null;
 			}
 			character.TimeCreated = charData.TimeCreated;
 			character.RaceID = charData.RaceID;
@@ -1780,17 +1794,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				RestoreKnownAbilities(character, abilityController, knownAbilityData);
 			}
 
-			// Achievements
-			if (achievementData != null && achievementData.Count > 0 &&
-				character.TryGet(out IAchievementController achievementController))
+			// Every participant's data (achievements, for one), restored as persisted.
+			foreach (CharacterPersistenceParticipant participant in CharacterPersistenceParticipants.All)
 			{
-				foreach (CharacterAchievementData achievement in achievementData)
+				if (ctx.ParticipantData != null && ctx.ParticipantData.TryGetValue(participant, out object fetched))
 				{
-					achievementController.SetAchievement(achievement.TemplateID, achievement.Tier, achievement.Value, true);
-					if (achievementController.Achievements.TryGetValue(achievement.TemplateID, out Achievement ach))
-					{
-						ach.Version = achievement.Version;
-					}
+					participant.Apply(character, fetched);
 				}
 			}
 
@@ -1841,9 +1850,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				foreach (CharacterHotkeyData hotkey in hotkeyData)
 				{
-					if (hotkey.Slot >= 0 && hotkey.Slot < character.Hotkeys.Count)
+					if (hotkey.Slot >= 0 && hotkey.Slot < character.Component<HotkeyBar>().Slots.Count)
 					{
-						character.Hotkeys[hotkey.Slot] = new HotkeyData()
+						character.Component<HotkeyBar>().Slots[hotkey.Slot] = new HotkeyData()
 						{
 							Type = hotkey.Type,
 							Slot = hotkey.Slot,
@@ -2422,8 +2431,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public readonly IReadOnlyList<CharacterAbilityData> AbilityData;
 			/// <summary>Pre-fetched known base ability data.</summary>
 			public readonly IReadOnlyList<CharacterKnownAbilityData> KnownAbilityData;
-			/// <summary>Pre-fetched achievement data.</summary>
-			public readonly IReadOnlyList<CharacterAchievementData> AchievementData;
+			/// <summary>What each <see cref="CharacterPersistenceParticipant"/> fetched, for its apply.</summary>
+			public readonly IReadOnlyDictionary<CharacterPersistenceParticipant, object> ParticipantData;
 			/// <summary>Pre-fetched friend data.</summary>
 			public readonly IReadOnlyList<CharacterFriendData> FriendData;
 			/// <summary>Pre-fetched guild membership data, if any.</summary>
@@ -2458,7 +2467,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// <param name="attributeData">Pre-fetched attribute data.</param>
 			/// <param name="abilityData">Pre-fetched crafted ability data.</param>
 			/// <param name="knownAbilityData">Pre-fetched known ability and ability-event data.</param>
-			/// <param name="achievementData">Pre-fetched achievement data.</param>
+			/// <param name="participantData">What each persistence participant fetched.</param>
 			/// <param name="friendData">Pre-fetched friend data.</param>
 			/// <param name="guildData">Pre-fetched guild membership data.</param>
 			/// <param name="partyData">Pre-fetched party membership data.</param>
@@ -2475,7 +2484,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				IReadOnlyList<CharacterAttributeData> attributeData,
 				IReadOnlyList<CharacterAbilityData> abilityData,
 				IReadOnlyList<CharacterKnownAbilityData> knownAbilityData,
-				IReadOnlyList<CharacterAchievementData> achievementData,
+				IReadOnlyDictionary<CharacterPersistenceParticipant, object> participantData,
 				IReadOnlyList<CharacterFriendData> friendData,
 				CharacterGuildData? guildData,
 				CharacterPartyData? partyData,
@@ -2497,7 +2506,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				AttributeData = attributeData;
 				AbilityData = abilityData;
 				KnownAbilityData = knownAbilityData;
-				AchievementData = achievementData;
+				ParticipantData = participantData;
 				FriendData = friendData;
 				GuildData = guildData;
 				PartyData = partyData;

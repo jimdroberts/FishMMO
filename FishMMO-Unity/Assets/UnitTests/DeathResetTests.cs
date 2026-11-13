@@ -35,7 +35,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void KillClearsCooldowns()
 		{
-			string damage = File.ReadAllText(Path.Combine(Scripts,
+			string damage = ProjectFiles.ReadAllText(Path.Combine(Scripts,
 				"Shared/Implementation/Entity/Prediction/CharacterAttribute/CharacterDamageController.cs"));
 
 			int kill = damage.IndexOf("public void Kill(ICharacter killer)", StringComparison.Ordinal);
@@ -49,7 +49,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void OwnerDeathDismissesThePet()
 		{
-			string pets = File.ReadAllText(Path.Combine(Scripts,
+			string pets = ProjectFiles.ReadAllText(Path.Combine(Scripts,
 				"Server/Implementation/World/SceneServer/Pet/PetSystem.cs"));
 
 			LogAssert.IsTrue(pets.Contains("ICharacterDamageController.OnKilled += DamageController_OnKilled;"),
@@ -71,7 +71,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void DeadCharacterStillFalls()
 		{
-			string player = File.ReadAllText(Path.Combine(Scripts,
+			string player = ProjectFiles.ReadAllText(Path.Combine(Scripts,
 				"Shared/Implementation/Entity/Prediction/KCC/KCCPlayer.cs"));
 
 			int gate = player.IndexOf("IsHealthDepleted(character))", StringComparison.Ordinal);
@@ -83,7 +83,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(setInputs > gateBody,
 				"the suppressed input must still reach the controller so the motor step runs");
 
-			string controller = File.ReadAllText(Path.Combine(Scripts,
+			string controller = ProjectFiles.ReadAllText(Path.Combine(Scripts,
 				"Shared/Implementation/Entity/Prediction/KCC/KCCController.cs"));
 			int suppressed = controller.IndexOf("if (controlsSuppressed)", StringComparison.Ordinal);
 			LogAssert.IsTrue(suppressed >= 0 &&

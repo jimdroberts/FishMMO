@@ -43,9 +43,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			int checkedBiomes = 0;
 			var wrong = new List<string>();
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				string name = Field(text, "m_Name");
 				BiomeArtSpec.Entry entry = BiomeArtSpec.For(name);
 				if (entry == null || Field(text, "MinTemperature") == null)
@@ -363,10 +363,10 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void OnlyTheFallbacks_ReadABiomesOrAGroundsName()
 		{
 			var offenders = new List<string>();
-			foreach (string path in Directory.GetFiles("Assets/Scripts", "*.cs", SearchOption.AllDirectories))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder("Assets/Scripts"), "*.cs", SearchOption.AllDirectories))
 			{
 				string file = path.Replace('\\', '/');
-				string code = StripComments(File.ReadAllText(path));
+				string code = StripComments(ProjectFiles.ReadAllText(path));
 				foreach (Match m in Regex.Matches(code, @"\bClassOf\(([^()]*)\)"))
 				{
 					bool byName = m.Groups[1].Value.Contains(",");

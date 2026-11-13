@@ -46,6 +46,8 @@ namespace FishMMO.UnitTests
 		private const string CommandDirectory = "Assets/Scripts/Server/Implementation/World/SceneServer/SceneServer";
 		private const string ChatSystemPath = "Assets/Scripts/Server/Implementation/World/SceneServer/Chat/ChatSystem.cs";
 		private const string PlayerCharacterPath = "Assets/Scripts/Shared/Implementation/Entity/PlayerCharacter.cs";
+		private const string BaseCharacterPath = "Assets/Scripts/Shared/Implementation/Entity/BaseCharacter.cs";
+		private const string ChatStatePath = "Assets/Scripts/Shared/Implementation/Network/Chat/ChatState.cs";
 		private const string LoadingPath = "Assets/Scripts/Server/Implementation/World/SceneServer/Character/CharacterSystem.Loading.cs";
 		private const string StaffConsolePath = CommandDirectory + "/SceneServerSystem.StaffConsole.cs";
 		private const string OperatorCommandsPath = CommandDirectory + "/SceneServerSystem.OperatorCommands.cs";
@@ -80,8 +82,8 @@ namespace FishMMO.UnitTests
 		private static string ReadSource(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-			LogAssert.IsTrue(File.Exists(path), $"{relativePath} not found at {path}.");
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{relativePath} not found at {path}.");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 		/// <summary>The source with comment lines dropped, so a scan sees code and not prose.</summary>
@@ -127,7 +129,7 @@ namespace FishMMO.UnitTests
 		private static string[] CommandFiles(string pattern)
 		{
 			string directory = Path.Combine(Directory.GetCurrentDirectory(), CommandDirectory);
-			string[] files = Directory.GetFiles(directory, pattern)
+			string[] files = Directory.GetFiles(ProjectFiles.Folder(directory), pattern)
 				.Select(f => CommandDirectory + "/" + Path.GetFileName(f))
 				.OrderBy(f => f, StringComparer.Ordinal)
 				.ToArray();
@@ -374,7 +376,7 @@ namespace FishMMO.UnitTests
 		{
 			string body = MethodBody(CodeOnly(ReadSource(ChatSystemPath)), "private void ProcessNewChatMessage(");
 			int command = body.IndexOf("ChatHelper.TryParseCommand(", StringComparison.Ordinal);
-			int mute = body.IndexOf("ChatMutedUntilTicks >", StringComparison.Ordinal);
+			int mute = body.IndexOf("Component<ChatState>().MutedUntilTicks >", StringComparison.Ordinal);
 			int chat = body.IndexOf("ChatHelper.TryParseChatCommand(", StringComparison.Ordinal);
 
 			LogAssert.IsTrue(command >= 0 && mute >= 0 && chat >= 0, "all three must still be in ProcessNewChatMessage");
@@ -385,9 +387,15 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void APooledCharacterDropsItsMute()
 		{
-			string body = MethodBody(CodeOnly(ReadSource(PlayerCharacterPath)), "public override void ResetState(");
-			StringAssert.Contains("ChatMutedUntilTicks = 0;", body);
-			StringAssert.Contains("ChatMuteReason = null;", body);
+			/* The mute lives on the character's Core entity (ChatState), which the base character ends when the
+			 * object goes back to its pool; the next spawn's entity starts from the chat module's value, which
+			 * carries no mute. */
+			string reset = MethodBody(CodeOnly(ReadSource(BaseCharacterPath)), "public override void ResetState(");
+			StringAssert.Contains("ReleaseCoreLink();", reset);
+			string module = MethodBody(CodeOnly(ReadSource(ChatStatePath)), "public override void Install(");
+			StringAssert.Contains("new ChatState {", module);
+			StringAssert.DoesNotContain("MutedUntilTicks", module);
+			StringAssert.DoesNotContain("MuteReason", module);
 		}
 
 		[Test]
@@ -395,8 +403,8 @@ namespace FishMMO.UnitTests
 		{
 			string code = CodeOnly(ReadSource(LoadingPath));
 			StringAssert.Contains("FetchChatMuteAsync(characterID)", code);
-			StringAssert.Contains("character.ChatMutedUntilTicks = ChatMutePolicy.ResolveUntilTicks(", code);
-			StringAssert.Contains("character.ChatMutedUntilTicks = 0;", code);
+			StringAssert.Contains("character.Component<ChatState>().MutedUntilTicks = ChatMutePolicy.ResolveUntilTicks(", code);
+			StringAssert.Contains("character.Component<ChatState>().MutedUntilTicks = 0;", code);
 		}
 
 		// ── The staff console ─────────────────────────────────────────────────

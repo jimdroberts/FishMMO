@@ -47,7 +47,7 @@ namespace FishMMO.UnitTests
 		public void ABakedWeaponMeshIsOwnedBySlotAndDestroyedOnRelease()
 		{
 			string code = CodeOnly(Read(ControllerPath));
-			LogAssert.IsTrue(code.Contains("renderer.BakedMesh = bm;"), "the baked mesh is recorded on the slot that displays it");
+			LogAssert.IsTrue(code.Contains("renderer.BakedMesh = baked;"), "the baked mesh (EquipmentVisualAttach.AttachWeapon's, which the caller owns) is recorded on the slot that displays it");
 
 			string release = MethodBody(code, "private void ReleaseSlotRenderer(SlotRenderer renderer)");
 			LogAssert.IsTrue(release.Contains("renderer.BakedMesh"), "ReleaseSlotRenderer destroys the baked mesh; destroying the weapon GameObject does not free it");
@@ -84,8 +84,8 @@ namespace FishMMO.UnitTests
 
 		private static string Read(string path)
 		{
-			LogAssert.IsTrue(File.Exists(path), path + " exists");
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), path + " exists");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 		private static int CountOccurrences(string text, string needle)

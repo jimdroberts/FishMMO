@@ -77,7 +77,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void PlacingClearsTheFloorsBeforeTheTreesAreBaked()
 		{
-			string stage = File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/PointOfInterestStage.cs");
+			string stage = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/PointOfInterestStage.cs");
 			int clear = stage.IndexOf("PointOfInterestTreeClearance.Clear(terrains, asset.Paths", System.StringComparison.Ordinal);
 			Assert.That(clear, Is.GreaterThan(0), "Place clears the trees off the floors");
 			Assert.That(clear, Is.GreaterThan(stage.IndexOf("PointOfInterestLinearFeatures.LayScene(", System.StringComparison.Ordinal)),

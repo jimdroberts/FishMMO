@@ -93,8 +93,8 @@ namespace FishMMO.UnitTests
 		/// </summary>
 		private void Mount()
 		{
-			PanelSettings shared = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
-			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(UxmlPath);
+			PanelSettings shared = AssetDatabase.LoadAssetAtPath<PanelSettings>(ProjectFiles.Path(PanelSettingsPath));
+			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(ProjectFiles.Path(UxmlPath));
 			LogAssert.IsNotNull(shared, $"panel settings must exist at {PanelSettingsPath}");
 			LogAssert.IsNotNull(uxml, $"the overlay UXML must exist at {UxmlPath}");
 
@@ -189,7 +189,7 @@ namespace FishMMO.UnitTests
 		{
 			/* A class the panel adds but the stylesheet never declares draws the neutral badge:
 			 * an estimate that looks exactly like a measurement. */
-			string uss = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), UssPath));
+			string uss = ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), UssPath));
 			foreach (string badgeClass in NetworkStatsPresentation.BadgeClasses)
 			{
 				LogAssert.IsTrue(uss.Contains("." + badgeClass), $"UINetworkStats.uss must declare .{badgeClass}");

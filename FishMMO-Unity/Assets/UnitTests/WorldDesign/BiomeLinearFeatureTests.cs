@@ -32,7 +32,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		private const string PiecesSource = World + "/ProceduralArt/StructurePieces.cs";
 		private const string TemplateSource = "Assets/Scripts/Shared/Implementation/Tools/Biomes/BiomeTemplate.cs";
 
-		private static string Read(string relative) => File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
+		private static string Read(string relative) => ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
 
 		// ── Defaults: nothing changes ─────────────────────────────────
 
@@ -54,9 +54,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(StructurePieces.LinearPalettes(entry.LinearFeatures(null)), Is.Empty, entry.Biome);
 			}
 			int templates = 0;
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				if (!Regex.IsMatch(text, "^  MinTemperature:", RegexOptions.Multiline))
 				{
 					continue;
@@ -578,9 +578,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			string pieces = Read(PiecesSource);
 			Assert.That(pieces.IndexOf("AddLinear(list);", StringComparison.Ordinal), Is.GreaterThan(pieces.IndexOf("AddBoardwalk(list);", StringComparison.Ordinal)));
 			Assert.That(pieces.IndexOf("AddArcane(list);", StringComparison.Ordinal), Is.GreaterThan(pieces.IndexOf("AddLinear(list);", StringComparison.Ordinal)));
-			foreach (string path in Directory.GetFiles("Assets/Templates/World/PointsOfInterest", "*.asset", SearchOption.AllDirectories))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder("Assets/Templates/World/PointsOfInterest"), "*.asset", SearchOption.AllDirectories))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				Assert.That(Regex.IsMatch(text, @"\blinear\b"), Is.False, $"{path} queries the linear pieces");
 			}
 		}

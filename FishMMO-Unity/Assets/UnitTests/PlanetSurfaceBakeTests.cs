@@ -52,16 +52,16 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			var settings = AddressableAssetSettingsDefaultObject.Settings;
 			foreach (string image in extraOutputs.Concat(new[] { output }))
-				if (File.Exists(image))
+				if (ProjectFiles.Exists(image))
 				{
-					settings.RemoveAssetEntry(AssetDatabase.AssetPathToGUID(image));
+					settings.RemoveAssetEntry(AssetDatabase.AssetPathToGUID(ProjectFiles.Path(image)));
 					AssetDatabase.DeleteAsset(image);
 				}
 			var group = settings.FindGroup(PlanetSurfaceBaker.AddressableGroupName);
 			if (!hadGroup && group != null && group.entries.Count == 0) settings.RemoveGroup(group);
 			AssetDatabase.DeleteAsset(folder);
 			foreach (string cacheEntry in extraEntries.Concat(new[] { entry }))
-				foreach (string path in new[] { cacheEntry, cacheEntry + ".json" }) if (File.Exists(path)) File.Delete(path);
+				foreach (string path in new[] { cacheEntry, cacheEntry + ".json" }) if (ProjectFiles.Exists(path)) File.Delete(path);
 			extraOutputs.Clear(); extraEntries.Clear();
 			AssetDatabase.SaveAssets();
 			PlanetSurface.ClearCache();
@@ -99,12 +99,12 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(skipped, Is.Zero);
 			foreach (string image in new[] { output, otherOutput })
 			{
-				AddressableAssetSettingsDefaultObject.Settings.RemoveAssetEntry(AssetDatabase.AssetPathToGUID(image));
+				AddressableAssetSettingsDefaultObject.Settings.RemoveAssetEntry(AssetDatabase.AssetPathToGUID(ProjectFiles.Path(image)));
 				AssetDatabase.DeleteAsset(image);
 			}
 			Assert.That(PlanetSurfaceBaker.BakeAll(bodies, out skipped, Size, (stage, _) => { Assert.That(IsGeneration(stage), Is.False); return false; }), Is.Zero);
 			Assert.That(skipped, Is.EqualTo(2));
-			Assert.That(File.Exists(output) && File.Exists(otherOutput), Is.True);
+			Assert.That(ProjectFiles.Exists(output) && ProjectFiles.Exists(otherOutput), Is.True);
 		}
 
 		[Test]
@@ -113,11 +113,11 @@ namespace FishMMO.UnitTests.WorldDesign
 			PlanetSurfaceBaker.Bake(body, Size, (_, __) => false);
 			byte[] expected = File.ReadAllBytes(output);
 			var settings = AddressableAssetSettingsDefaultObject.Settings;
-			settings.RemoveAssetEntry(AssetDatabase.AssetPathToGUID(output));
+			settings.RemoveAssetEntry(AssetDatabase.AssetPathToGUID(ProjectFiles.Path(output)));
 			AssetDatabase.DeleteAsset(output);
 			PlanetSurfaceBaker.Bake(body, Size, (stage, _) => { Assert.That(IsGeneration(stage), Is.False); return false; });
 			Assert.That(File.ReadAllBytes(output), Is.EqualTo(expected));
-			var registered = settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(output));
+			var registered = settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(ProjectFiles.Path(output)));
 			Assert.That(registered, Is.Not.Null);
 			Assert.That(registered.address, Is.EqualTo(PlanetSurfaceBaker.AddressOf(body.name)));
 		}
@@ -138,12 +138,12 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			PlanetSurfaceBaker.Bake(body, Size, (_, __) => false);
 			byte[] oldImage = File.ReadAllBytes(output), oldCache = File.ReadAllBytes(entry);
-			string oldStamp = File.ReadAllText(entry + ".json");
+			string oldStamp = ProjectFiles.ReadAllText(entry + ".json");
 			body.TerrainSeed++;
 			Assert.Throws<OperationCanceledException>(() => PlanetSurfaceBaker.Bake(body, Size, (stage, fraction) => IsGeneration(stage) && fraction > 0.2f));
 			Assert.That(File.ReadAllBytes(output), Is.EqualTo(oldImage));
 			Assert.That(File.ReadAllBytes(entry), Is.EqualTo(oldCache));
-			Assert.That(File.ReadAllText(entry + ".json"), Is.EqualTo(oldStamp));
+			Assert.That(ProjectFiles.ReadAllText(entry + ".json"), Is.EqualTo(oldStamp));
 		}
 
 		[Test]

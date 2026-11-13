@@ -1673,9 +1673,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			if (entry.AchievementTemplate != null &&
-				character.TryGet(out IAchievementController achievementController))
+				character != null)
 			{
-				achievementController.Increment(entry.AchievementTemplate, 1);
+				Accomplishments.Record(character, entry.AchievementTemplate);
 			}
 
 			CharacterRespawnPositionDetails respawnDetails = entry.SceneDetails.RespawnPositions.Values.ToList().GetRandom();

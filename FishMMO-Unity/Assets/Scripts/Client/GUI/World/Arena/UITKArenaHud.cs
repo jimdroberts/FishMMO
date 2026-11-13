@@ -270,7 +270,7 @@ namespace FishMMO.Client
 			{
 				if (cue != null && cue.SecondsRemaining == second && cue.Triggers != null && cue.Triggers.Count > 0)
 				{
-					Character.Invoke(cue.Triggers, new ArenaEventData(Character, ArenaCuePhase.Countdown, second, myTeam, -1));
+					Trigger.InvokeAll(cue.Triggers, new ArenaEventData(Character, ArenaCuePhase.Countdown, second, myTeam, -1));
 				}
 			}
 		}
@@ -393,7 +393,7 @@ namespace FishMMO.Client
 					{
 						continue;
 					}
-					Character.Invoke(cue.Triggers, new ArenaEventData(Character, ArenaCuePhase.Event, 0, myTeam, -1, msg.Kind, isActor, isTarget, msg.Value));
+					Trigger.InvokeAll(cue.Triggers, new ArenaEventData(Character, ArenaCuePhase.Event, 0, myTeam, -1, msg.Kind, isActor, isTarget, msg.Value));
 				}
 			}
 		}

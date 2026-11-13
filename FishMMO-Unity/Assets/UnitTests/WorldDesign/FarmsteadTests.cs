@@ -151,14 +151,14 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void Wiring_AfterEveryFieldFenceAndTerrace_OnDrawsOfItsOwn()
 		{
-			string fields = File.ReadAllText(Features + "/PointOfInterestFields.cs");
+			string fields = ProjectFiles.ReadAllText(Features + "/PointOfInterestFields.cs");
 			int flights = fields.IndexOf("PointOfInterestFieldKinds.LayAbandonedTerraces(context, ways, ref carved, ref pieces);", StringComparison.Ordinal);
 			int dress = fields.IndexOf("PointOfInterestFarmsteads.Dress(context, laidFields, abandoned);", StringComparison.Ordinal);
 			int lay = fields.IndexOf("PointOfInterestFarmsteads.Lay(context, laidFields);", StringComparison.Ordinal);
 			Assert.That(flights, Is.GreaterThan(0));
 			Assert.That(dress, Is.GreaterThan(flights));
 			Assert.That(lay, Is.GreaterThan(dress));
-			string farm = File.ReadAllText(Features + "/PointOfInterestFarmsteads.cs");
+			string farm = ProjectFiles.ReadAllText(Features + "/PointOfInterestFarmsteads.cs");
 			Assert.That(farm.Contains("context.Random") || farm.Contains("DeterministicRNG"), Is.False, "never the site's sequence");
 			Assert.That(farm.Contains("[InitializeOnLoad]"), Is.False, "not a site builder of its own: a new one would move every later builder's draws");
 		}

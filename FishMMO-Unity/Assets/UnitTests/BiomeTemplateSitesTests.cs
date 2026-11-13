@@ -527,9 +527,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void KitPalette_IsWhatTheBuildersBuild()
 		{
 			string art = Path.Combine(WorldFolder, "ProceduralArt");
-			string buildings = File.ReadAllText(Path.Combine(art, "StructurePieces.Buildings.cs"));
-			string camp = File.ReadAllText(Path.Combine(art, "StructurePieces.Camp.cs"));
-			string common = File.ReadAllText(Path.Combine(art, "StructurePieces.Common.cs"));
+			string buildings = ProjectFiles.ReadAllText(Path.Combine(art, "StructurePieces.Buildings.cs"));
+			string camp = ProjectFiles.ReadAllText(Path.Combine(art, "StructurePieces.Camp.cs"));
+			string common = ProjectFiles.ReadAllText(Path.Combine(art, "StructurePieces.Common.cs"));
 			Assert.That(buildings, Does.Contain("WallMaterial = StructureMaterial.Plaster, RoofMaterial = variant == 0 ? StructureMaterial.Thatch : StructureMaterial.Timber,"));
 			Assert.That(buildings, Does.Contain("PlinthMaterial = StructureMaterial.Fieldstone, Frame = true"));
 			Assert.That(buildings, Does.Contain("WallMaterial = StructureMaterial.Stone, RoofMaterial = d.Variant == 0 ? StructureMaterial.Thatch : StructureMaterial.Timber,"));
@@ -573,7 +573,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void PointsOfInterest_ReadTheTemplate_NotTheBiomesName()
 		{
 			string poi = Path.Combine(WorldFolder, "PointsOfInterest");
-			string Code(string relative) => CodeOnly(File.ReadAllText(Path.Combine(poi, relative)));
+			string Code(string relative) => CodeOnly(ProjectFiles.ReadAllText(Path.Combine(poi, relative)));
 			Assert.That(Code("PointOfInterestStage.cs"), Does.Contain("BiomeTemplateArt.SiteKinds(biome, rules, breathable, liquidWater)"));
 			Assert.That(Regex.Matches(Code("PointOfInterestStage.cs"), Regex.Escape("library.Pick(record, BiomeTemplateArt.SiteVariantWeights(biome),")).Count, Is.EqualTo(1));
 			// 2026-10-25 (I2n): the planned sites' pick weighs a linked cave's two templates merged, every other site its biome's.
@@ -619,13 +619,13 @@ namespace FishMMO.UnitTests.WorldDesign
 			var biomeNames = new HashSet<string>(Biomes.Select(e => e.Biome));
 			// A rock's broken shape and the cave shaper's own name share a word with a biome's.
 			var notBiomes = new HashSet<string> { "Scree", "Cave" };
-			string[] files = Directory.GetFiles(poi, "*.cs", SearchOption.AllDirectories);
+			string[] files = Directory.GetFiles(ProjectFiles.Folder(poi), "*.cs", SearchOption.AllDirectories);
 			Assert.That(files.Length, Is.GreaterThan(40));
 			var found = new List<string>();
 			foreach (string file in files)
 			{
 				string name = Path.GetFileName(file);
-				foreach (string line in CodeOnly(File.ReadAllText(file)).Split('\n'))
+				foreach (string line in CodeOnly(ProjectFiles.ReadAllText(file)).Split('\n'))
 				{
 					if (!definitions.Contains(name) && byNameCalls.IsMatch(line))
 					{
@@ -656,7 +656,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.IsEmpty(found, "points-of-interest code deciding by a biome's name: " + string.Join(" | ", found));
 
 			// The by-name readers outside PointsOfInterest: only BiomeTemplateArt's fallbacks and the spec.
-			string terrain = CodeOnly(File.ReadAllText(Path.Combine(WorldFolder, "Terrain", "BiomeTemplateArt.cs")));
+			string terrain = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "Terrain", "BiomeTemplateArt.cs")));
 			Assert.That(terrain, Does.Contain(".KindWeightsFor(biome.name)"));
 			Assert.That(terrain, Does.Contain("template.BiomeWeightByName(name)"));
 		}

@@ -38,10 +38,10 @@ namespace FishMMO.UnitTests
 		private static List<string> ConsoleFiles()
 		{
 			string root = Path.Combine(Directory.GetCurrentDirectory(), ConsoleFolder);
-			LogAssert.IsTrue(Directory.Exists(root), $"{ConsoleFolder} must exist");
+			LogAssert.IsTrue(ProjectFiles.FolderExists(root), $"{ConsoleFolder} must exist");
 
 			List<string> files = new List<string>();
-			foreach (string path in Directory.GetFiles(root, "*", SearchOption.AllDirectories))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(root), "*", SearchOption.AllDirectories))
 			{
 				if (Array.IndexOf(ScannedExtensions, Path.GetExtension(path).ToLowerInvariant()) >= 0)
 				{
@@ -56,7 +56,7 @@ namespace FishMMO.UnitTests
 			return files;
 		}
 
-		private static string Read(string path) => File.ReadAllText(path).Replace("\r\n", "\n");
+		private static string Read(string path) => ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 
 		private static string Relative(string path) => path.Substring(Directory.GetCurrentDirectory().Length + 1);
 
@@ -106,9 +106,9 @@ namespace FishMMO.UnitTests
 			Regex quotedWord = new Regex("\"([a-z][a-z0-9_]*)\"", RegexOptions.CultureInvariant);
 
 			string serverRoot = Path.Combine(Directory.GetCurrentDirectory(), ServerFolder);
-			if (Directory.Exists(serverRoot))
+			if (ProjectFiles.FolderExists(serverRoot))
 			{
-				foreach (string path in Directory.GetFiles(serverRoot, "*.cs", SearchOption.AllDirectories))
+				foreach (string path in Directory.GetFiles(ProjectFiles.Folder(serverRoot), "*.cs", SearchOption.AllDirectories))
 				{
 					string name = Path.GetFileName(path);
 					if (name.IndexOf("Command", StringComparison.OrdinalIgnoreCase) < 0 &&
@@ -116,7 +116,7 @@ namespace FishMMO.UnitTests
 					{
 						continue;
 					}
-					string source = File.ReadAllText(path);
+					string source = ProjectFiles.ReadAllText(path);
 					foreach (Match match in caseWord.Matches(source))
 					{
 						words.Add(match.Groups[1].Value);

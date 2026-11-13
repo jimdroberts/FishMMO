@@ -64,8 +64,8 @@ namespace FishMMO.UnitTests
 		[UnityTest]
 		public IEnumerator AMenuThatGrowsAfterPlacementIsClampedAgainstItsSettledSize()
 		{
-			PanelSettings asset = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
-			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(UxmlPath);
+			PanelSettings asset = AssetDatabase.LoadAssetAtPath<PanelSettings>(ProjectFiles.Path(PanelSettingsPath));
+			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(ProjectFiles.Path(UxmlPath));
 			LogAssert.IsNotNull(asset, $"panel settings must exist at {PanelSettingsPath}");
 			LogAssert.IsNotNull(uxml, $"markup must exist at {UxmlPath}");
 
@@ -184,8 +184,8 @@ namespace FishMMO.UnitTests
 
 		private static string Read(string path)
 		{
-			LogAssert.IsTrue(File.Exists(path), path + " exists");
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), path + " exists");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 		private static int CountOccurrences(string text, string needle)

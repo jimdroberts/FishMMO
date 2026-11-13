@@ -2,6 +2,7 @@
     "name": "FishMMO.Shared",
     "rootNamespace": "FishMMO.Shared",
     "references": [
+        "FishMMO.Core",
         "FishNet.Runtime",
         "GameKit.Dependencies",
         "KinematicCharacterController",

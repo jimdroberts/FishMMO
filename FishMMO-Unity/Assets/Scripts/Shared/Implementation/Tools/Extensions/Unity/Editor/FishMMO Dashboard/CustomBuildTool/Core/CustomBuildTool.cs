@@ -5,7 +5,6 @@ using System.IO;
 using System.Collections.Generic;
 using System;
 using FishMMO.Logging;
-using FishMMO.Server.Implementation.World.SceneServer.AI;
 using UnityEngine;
 
 namespace FishMMO.Shared.CustomBuildTool.Core
@@ -69,6 +68,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 
 				Log.Debug("BuildLogger", "Configuring build...");
 				configurator.Configure(subTarget, buildTarget);
+				var steps = new BuildStepContext { BuildType = customBuildType, Target = buildTarget, ExcludedAddressableGroups = excludedAddressableGroups };
 
 				try
 				{
@@ -84,16 +84,10 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 						EditorUserBuildSettings.standaloneBuildSubtarget = StandaloneBuildSubtarget.Player;
 					}
 
-					// Procedural art first: the arrays and maps below read it, and both players reference it.
-					GenerateBiomeArt();
-					// Before the bundles: a server built from stale tables spawns the wrong things, or nothing.
-					BakeSpawnTables();
-					BakeWorldMaps(customBuildType);
-
-					// Last before the bundles: only the generated art everything above reaches.
-					RegisterGeneratedArt(excludedAddressableGroups, customBuildType);
-					// After every other registration: what two bundles of this build would both copy.
-					RegisterSharedDependencies(customBuildType);
+					// Every module's content steps (BuildStep): bakes first, then registrations, the shared
+					// dependencies last of all. A failure here stops the build.
+					BuildSteps.Run(BuildStepPhase.PrepareContent, steps);
+					BuildSteps.Run(BuildStepPhase.RegisterContent, steps);
 
 					Log.Debug("BuildLogger", "Configuring addressables...");
 					bool isWebGL = buildTarget == BuildTarget.WebGL;
@@ -115,9 +109,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 					// CRITICAL: Always restore settings, even if build fails
 					Log.Debug("BuildLogger", "Restoring build configuration...");
 					configurator.Restore();
-					RemoveGeneratedArtGroup();
-					RemoveSharedDependencyGroup();
-					CleanWorldMaps(customBuildType);
+					BuildSteps.Run(BuildStepPhase.Cleanup, steps);
 				}
 			}
 			catch (OperationCanceledException)
@@ -247,269 +239,13 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			BuildAddressablesWithExclusionsWrapper(excludedGroups, buildTarget, customBuildType, enableCrc, useUnityWebRequest);
 		}
 
-		/// <summary>
-		/// Bakes a map definition and image for each world scene that has none or has changed since, and rebuilds the
-		/// world scene details cache to reference them, before the addressables of a client build are
-		/// built. The maps are a gitignored per-machine cache (see
-		/// <see cref="FishMMO.Shared.WorldMaps.WorldMapBaker"/>) and stay for the next build;
-		/// <see cref="CleanWorldMaps"/> removes only their addressable group and the cache's references
-		/// when the build has finished. Server builds never draw a map, so they
-		/// skip both. A bake that fails is logged and does not stop the build, because the world map
-		/// falls back to a plain background without its image.
-		/// </summary>
-		private static void BakeWorldMaps(CustomBuildType customBuildType)
-		{
-			if (customBuildType != CustomBuildType.Client)
-			{
-				Log.Debug("BuildLogger", "Server build: world maps are not baked.");
-				return;
-			}
 
-			/* Terrain arrays first: the world maps below photograph the ground, and must see the
-			 * array-textured terrain rather than grey. Their own try, so a failed array bake never
-			 * costs the build its maps. The baked folder is a per-machine cache and stays after the
-			 * build; only its addressable group is removed again (CleanWorldMaps). */
-			FishMMO.Shared.WorldDesign.TerrainArrayAutoBake.BuildRunning = true;
-			try
-			{
-				Log.Debug("BuildLogger", "Baking terrain arrays...");
-				var arrayLog = new List<string>();
-				int arrays = FishMMO.Shared.WorldDesign.TerrainArrayBaker.BakeForBuild(arrayLog);
-				foreach (string line in arrayLog)
-				{
-					Log.Debug("BuildLogger", line);
-				}
-				Log.Debug("BuildLogger", $"Baked {arrays} scene(s) of terrain arrays.");
-			}
-			catch (Exception ex)
-			{
-				Log.Warning("BuildLogger", $"Terrain array bake failed; generated ground draws plain grey in this build: {ex.Message}");
-			}
 
-			try
-			{
-				Log.Debug("BuildLogger", "Baking planet surfaces...");
-				FishMMO.Shared.WorldDesign.PlanetSurfaceBaker.BakeForBuild();
-			}
-			catch (OperationCanceledException) { throw; }
-			catch (Exception ex)
-			{
-				Log.Warning("BuildLogger", $"Planet surface bake failed; the build continues without those images: {ex.Message}");
-			}
 
-			WorldMapDefinition.ReferenceBakedMaps = true;
-			try
-			{
-				Log.Debug("BuildLogger", "Baking any missing or out of date world maps...");
-				FishMMO.Shared.WorldMaps.WorldMapBaker.BakeOutOfDate();
-			}
-			catch (OperationCanceledException) { throw; }
-			catch (Exception ex)
-			{
-				Log.Warning("BuildLogger", $"World map bake failed; the build continues with the maps already baked: {ex.Message}");
-			}
 
-			/* Whatever the bakes did: this is what points every scene at its current definition, so the maps
-			 * kept from earlier builds, and any baked again with new asset IDs, reach the client. */
-			try
-			{
-				Log.Debug("BuildLogger", "Rebuilding the world scene details cache with the baked maps...");
-				WorldSceneDetailsCacheBuilder.Rebuild();
-			}
-			catch (OperationCanceledException) { throw; }
-			catch (Exception ex)
-			{
-				Log.Warning("BuildLogger", $"Rebuilding the world scene details cache failed; this build's world maps draw a plain background: {ex.Message}");
-			}
-		}
 
-		/// <summary>
-		/// Generates the procedural biome art — payload (textures, meshes), wrappers (terrain layers,
-		/// materials, prefabs) and the terrain layers built from loose biome textures, all gitignored
-		/// and rebuilt on every machine — when any of it is missing or was made by other generator code,
-		/// for client AND server builds alike, before anything else is baked or built.
-		/// </summary>
-		/// <remarks>
-		/// <para>
-		/// Committed scenes, terrain data and biomes reference generated art by path-derived GUIDs and
-		/// deterministic object IDs (<see cref="FishMMO.Shared.WorldDesign.ProceduralArtPayload"/>), so
-		/// a clone that never opened the editor would otherwise build trees with no prefabs and ground
-		/// with no layers. Servers need it too: their terrain keeps its tree prototypes for the
-		/// colliders, and those prefabs pull in their meshes and materials (phase two would swap them
-		/// for collider-only proxies). Order: this, then the terrain arrays (which read the ground
-		/// textures), then the world maps (which photograph the arrays).
-		/// </para>
-		/// <para>
-		/// Generated art left from before deterministic IDs is migrated first (references rewritten,
-		/// backed up under Library/FishMMO). Anything generated that is still missing or mis-addressed
-		/// afterwards stops the build, because a player with invisible trees is not worth shipping.
-		/// </para>
-		/// </remarks>
-		/// <exception cref="InvalidOperationException">The generated art could not be brought up to date.</exception>
-		private static void GenerateBiomeArt()
-		{
-			Log.Debug("BuildLogger", "Checking procedural biome art...");
-			var log = new List<string>();
-			try
-			{
-				FishMMO.Shared.WorldDesign.BiomeArtGenerator.EnsureCurrentForBuild(log);
-			}
-			finally
-			{
-				foreach (string line in log)
-				{
-					Log.Debug("BuildLogger", line);
-				}
-			}
-		}
 
-		/// <summary>
-		/// Takes generated biome art out of the committed groups (<see cref="FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup.RemoveCommittedEntries"/>).
-		/// It is not registered as entries of its own any more: it travels as implicit dependencies, inside the one bundle
-		/// that uses it or, when several do, isolated by the set of bundles that use it
-		/// (<see cref="FishMMO.Shared.CustomBuildTool.Addressables.SharedDependencyBuildGroup"/>). Registered, all of it
-		/// went into one PackTogether bundle (about 2 GB), so a single reference loaded every biome's art.
-		/// </summary>
-		private static void RegisterGeneratedArt(string[] excludedGroups, CustomBuildType customBuildType)
-		{
-			Log.Debug("BuildLogger", "Removing generated biome art from the committed groups...");
-			var log = new List<string>();
-			FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup.RemoveCommittedEntries(log);
-			// A group an interrupted earlier build left behind would still pack everything together.
-			FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup.RemoveGroup();
-			foreach (string line in log)
-			{
-				Log.Debug("BuildLogger", line);
-			}
-		}
 
-		/// <summary>
-		/// Stores once, in a build-time group, every asset two or more bundles of this build would each
-		/// copy (<see cref="FishMMO.Shared.CustomBuildTool.Addressables.SharedDependencyBuildGroup"/>).
-		/// Removed again by <see cref="RemoveSharedDependencyGroup"/> whether or not the build succeeds.
-		/// </summary>
-		private static void RegisterSharedDependencies(CustomBuildType customBuildType)
-		{
-			var log = new List<string>();
-			FishMMO.Shared.CustomBuildTool.Addressables.SharedDependencyBuildGroup.Register(customBuildType == CustomBuildType.Server, log);
-			foreach (string line in log)
-			{
-				Log.Info("BuildLogger", line);
-			}
-		}
-
-		/// <summary>Removes the shared dependencies' build-time group, leaving the project as it was found.</summary>
-		private static void RemoveSharedDependencyGroup()
-		{
-			try
-			{
-				FishMMO.Shared.CustomBuildTool.Addressables.SharedDependencyBuildGroup.RemoveGroup();
-			}
-			catch (Exception ex)
-			{
-				Log.Warning("BuildLogger", $"Removing the '{FishMMO.Shared.CustomBuildTool.Addressables.SharedDependencyBuildGroup.GroupName}' addressable group failed; remove it by hand in the Addressables Groups window: {ex.Message}");
-			}
-		}
-
-		/// <summary>Removes the generated art's build-time group, leaving the project as it was found.</summary>
-		private static void RemoveGeneratedArtGroup()
-		{
-			try
-			{
-				FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup.RemoveGroup();
-			}
-			catch (Exception ex)
-			{
-				Log.Warning("BuildLogger", $"Removing the '{FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup.GroupName}' addressable group failed; remove it by hand in the Addressables Groups window: {ex.Message}");
-			}
-		}
-
-		/// <summary>
-		/// Re-bakes every world scene's server-only spawn table before any addressables build, and
-		/// refuses to build while a spawner would reach the shared scene bundle.
-		/// </summary>
-		/// <remarks>
-		/// World scenes are one bundle for clients and servers alike. A spawner that is not tagged
-		/// <c>EditorOnly</c>, or still carries a network object, ships its configuration to every
-		/// player, so it stops the build rather than a warning nobody reads. Client builds bake too:
-		/// the scene bundle is shared, and the tables must match the scenes it was built from.
-		/// </remarks>
-		/// <exception cref="InvalidOperationException">A spawner would ship to clients.</exception>
-		private static void BakeSpawnTables()
-		{
-			List<string> problems = new List<string>();
-			List<string> blocking = new List<string>();
-
-			// Every body's climate table, so neither build solves one at load (ClimateTableBaker). Both builds: the weather runs on both.
-			int climates = FishMMO.Shared.WorldDesign.ClimateTableBaker.BakeAll(out int currentClimates);
-			Log.Debug("BuildLogger", $"Climate tables: {climates} baked, {currentClimates} already current.");
-
-			Log.Debug("BuildLogger", "Baking spawn tables...");
-			int baked = SpawnTableBaker.BakeAll(problems, blocking);
-
-			for (int i = 0; i < problems.Count; ++i)
-			{
-				Log.Warning("BuildLogger", problems[i]);
-			}
-
-			if (blocking.Count > 0)
-			{
-				throw new InvalidOperationException($"{blocking.Count} spawner(s) would ship to clients; fix them before building:\n  " + string.Join("\n  ", blocking));
-			}
-
-			Log.Debug("BuildLogger", $"Baked {baked} spawner(s).");
-
-			/* The tables and their catalogue register themselves as they are baked; the brain
-			 * catalogue is written by other tools, so it is checked here. Server group only — no
-			 * client build includes it. */
-			AIBrainCatalogue brains = AIBrainCatalogueEditorUtility.Find();
-			if (brains != null)
-			{
-				ServerAddressables.Register(AssetDatabase.GetAssetPath(brains));
-			}
-		}
-
-		/// <summary>
-		/// Removes the world maps' addressable group after a client build and rebuilds the world scene
-		/// details cache without references to them, so the project is left as it was found. The baked
-		/// maps themselves stay on disk for the next build.
-		/// </summary>
-		private static void CleanWorldMaps(CustomBuildType customBuildType)
-		{
-			if (customBuildType != CustomBuildType.Client)
-			{
-				return;
-			}
-
-			try
-			{
-				Log.Debug("BuildLogger", "Removing the terrain arrays' addressable group (the baked arrays stay as the editor's cache)...");
-				FishMMO.Shared.WorldDesign.TerrainArrayBaker.RemoveBuildGroup();
-			}
-			catch (Exception ex)
-			{
-				Log.Warning("BuildLogger", $"Removing the '{TerrainArraySet.AddressableGroupName}' addressable group failed; remove it by hand in the Addressables Groups window: {ex.Message}");
-			}
-			finally
-			{
-				FishMMO.Shared.WorldDesign.TerrainArrayAutoBake.BuildRunning = false;
-			}
-
-			WorldMapDefinition.ReferenceBakedMaps = false;
-			try
-			{
-				Log.Debug("BuildLogger", "Removing the planet surfaces' addressable group (the baked images stay for the next build)...");
-				FishMMO.Shared.WorldDesign.PlanetSurfaceBaker.RemoveBuildGroup();
-
-				Log.Debug("BuildLogger", "Removing the world maps' addressable group (the baked maps stay for the next build)...");
-				FishMMO.Shared.WorldMaps.WorldMapBaker.RemoveBuildGroup();
-				WorldSceneDetailsCacheBuilder.Rebuild();
-			}
-			catch (Exception ex)
-			{
-				Log.Warning("BuildLogger", $"Removing the world map or planet surface addressable group failed; remove the '{FishMMO.Shared.WorldMaps.WorldMapBaker.AddressableGroupName}' and '{FishMMO.Shared.WorldDesign.PlanetSurfaceBaker.AddressableGroupName}' groups in the Addressables Groups window and run FishMMO Dashboard → World → World Scene Details → Rebuild World Scene Details by hand: {ex.Message}");
-			}
-		}
 
 		/// <summary>
 		/// Helper method to build addressables with proper error handling and cleanup.
@@ -527,6 +263,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 
 			var configurator = CustomBuildToolFactory.CreateConfigurator();
 			var addressableManager = CustomBuildToolFactory.CreateAddressableManager();
+			var steps = new BuildStepContext { BuildType = customBuildType, Target = buildTarget, ExcludedAddressableGroups = excludeGroups };
 
 			try
 			{
@@ -536,11 +273,8 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				using var serverContent = new ServerContentBuildScope(customBuildType == CustomBuildType.Server);
 				if (customBuildType == CustomBuildType.Server)
 					Log.Info("BuildLogger", "Server content: omit GPU programs and materials before serialization; preserve physics and CPU data; bypass the shared SBP content cache.");
-				GenerateBiomeArt();
-				BakeSpawnTables();
-				BakeWorldMaps(customBuildType);
-				RegisterGeneratedArt(excludeGroups, customBuildType);
-				RegisterSharedDependencies(customBuildType);
+				BuildSteps.Run(BuildStepPhase.PrepareContent, steps);
+				BuildSteps.Run(BuildStepPhase.RegisterContent, steps);
 				addressableManager.BuildAddressablesWithExclusions(excludeGroups, enableCrcForRemoteLoading, useUnityWebRequestForLocal);
 			}
 			catch (OperationCanceledException)
@@ -556,9 +290,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			finally
 			{
 				configurator.Restore();
-				RemoveGeneratedArtGroup();
-				RemoveSharedDependencyGroup();
-				CleanWorldMaps(customBuildType);
+				BuildSteps.Run(BuildStepPhase.Cleanup, steps);
 				Log.Shutdown();
 			}
 		}

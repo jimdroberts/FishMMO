@@ -617,7 +617,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheShadersReadTheTableRowsTheCodeWrites()
 		{
-			string table = File.ReadAllText(Shaders + "FishTerrainIndexMap.hlsl");
+			string table = ProjectFiles.ReadAllText(Shaders + "FishTerrainIndexMap.hlsl");
 			Assert.That(table, Does.Contain($"#define FISH_LAYER_ROW_ST {TerrainLayerTable.RowST} "));
 			Assert.That(table, Does.Contain($"#define FISH_LAYER_ROW_TINT {TerrainLayerTable.RowTint} "));
 			Assert.That(table, Does.Contain($"#define FISH_LAYER_ROW_MASK_OFFSET {TerrainLayerTable.RowMaskOffset} "));
@@ -640,11 +640,11 @@ namespace FishMMO.UnitTests
 			Assert.That(FishMMO.Client.GroundMaterialMap.MaxLayers, Is.EqualTo(TerrainIndexMap.MaximumLayers));
 			Assert.That(FishMMO.Client.GrassAlbedoTexels.HeaderUints, Is.EqualTo(TerrainIndexMap.MaximumLayers * 8));
 
-			string input = File.ReadAllText(Shaders + "FishWeatherTerrainArrayInput.hlsl");
+			string input = ProjectFiles.ReadAllText(Shaders + "FishWeatherTerrainArrayInput.hlsl");
 			Assert.That(input, Does.Contain($"#define FISH_TERRAIN_ARRAY_MAX_LAYERS {TerrainIndexMap.MaximumLayers}"));
-			string ground = File.ReadAllText(Shaders + "FishGroundColour.hlsl");
+			string ground = ProjectFiles.ReadAllText(Shaders + "FishGroundColour.hlsl");
 			Assert.That(ground, Does.Contain($"#define FISH_GROUND_MAX_LAYERS {TerrainIndexMap.MaximumLayers} "));
-			string grass = File.ReadAllText(Shaders + "FishGrassBlades.compute");
+			string grass = ProjectFiles.ReadAllText(Shaders + "FishGrassBlades.compute");
 			Assert.That(grass, Does.Contain($"#define GRASS_ALBEDO_HEADER {FishMMO.Client.GrassAlbedoTexels.HeaderUints}u"));
 		}
 
@@ -703,20 +703,20 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void NoPerLayerUniformArraysAreLeft()
 		{
-			string input = File.ReadAllText(Shaders + "FishWeatherTerrainArrayInput.hlsl");
+			string input = ProjectFiles.ReadAllText(Shaders + "FishWeatherTerrainArrayInput.hlsl");
 			foreach (string gone in new[] { "_FishLayerST[", "_FishLayerTint[", "_FishLayerMaskOffset[", "_FishLayerMaskScale[", "_FishLayerSurface[", "_FishLayerFlora[", "_FishPathEarthFor", "_FishPathRoadFor", "_FishPathStoneFor" })
 			{
 				Assert.That(input, Does.Not.Contain(gone), gone);
 			}
 			Assert.That(input, Does.Contain("Texture2D<uint2> _FishIndexMap;"));
 			Assert.That(input, Does.Contain("Texture2D<float4> _FishLayerTable;"));
-			string ground = File.ReadAllText(Shaders + "FishGroundColour.hlsl");
+			string ground = ProjectFiles.ReadAllText(Shaders + "FishGroundColour.hlsl");
 			Assert.That(ground, Does.Not.Contain("_FishGroundLayerST[").And.Not.Contain("_FishGroundControl"));
 			Assert.That(ground, Does.Contain("Texture2DArray<uint2> _FishGroundIndex;"));
 
-			string binder = File.ReadAllText("Assets/Scripts/Shared/Implementation/Entity/WorldSceneDetails/Terrain/TerrainArrayBinder.cs");
+			string binder = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Entity/WorldSceneDetails/Terrain/TerrainArrayBinder.cs");
 			Assert.That(binder, Does.Not.Contain("SetVectorArray"), "OpenGL: no large constant arrays varied per tile");
-			string contact = File.ReadAllText("Assets/Scripts/Client/World/Terrain/GroundMaterialMap.cs");
+			string contact = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/GroundMaterialMap.cs");
 			Assert.That(contact, Does.Not.Contain("SetGlobalVectorArray(Layer"));
 		}
 
@@ -724,7 +724,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheBakeShaderIsTheCSharpBake()
 		{
-			string bake = File.ReadAllText(Shaders + "FishTerrainIndexBake.shader");
+			string bake = ProjectFiles.ReadAllText(Shaders + "FishTerrainIndexBake.shader");
 			Assert.That(bake, Does.Contain("Shader \"" + TerrainIndexMapBaker.ShaderName + "\""));
 			Assert.That(bake, Does.Contain("HLSLPROGRAM\n            #pragma use_dxc vulkan").Or.Contain("HLSLPROGRAM\r\n            #pragma use_dxc vulkan"));
 			Assert.That(bake, Does.Contain("float4 top = -1.0;"), "empty slots below every weight: zero-weight layers fill them in order");

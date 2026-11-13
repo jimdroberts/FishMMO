@@ -43,7 +43,7 @@ namespace FishMMO.UnitTests
 
 		private static WorldSceneDetailsCache LoadCache()
 		{
-			return AssetDatabase.LoadAssetAtPath<WorldSceneDetailsCache>(CachePath);
+			return AssetDatabase.LoadAssetAtPath<WorldSceneDetailsCache>(ProjectFiles.Path(CachePath));
 		}
 
 		/// <summary>Without the cache there is nothing for the client to read, map or otherwise.</summary>
@@ -141,11 +141,11 @@ namespace FishMMO.UnitTests
 					}
 
 					string imagePath = WorldMapDefinition.BakedImagePath(pair.Key);
-					bool imageExists = AssetDatabase.LoadAssetAtPath<Texture2D>(imagePath) != null;
+					bool imageExists = AssetDatabase.LoadAssetAtPath<Texture2D>(ProjectFiles.Path(imagePath)) != null;
 					bool referenced = definition.MapImage != null && definition.MapImage.RuntimeKeyIsValid()
-						&& definition.MapImage.AssetGUID == AssetDatabase.AssetPathToGUID(imagePath);
-					bool addressable = settings != null && settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(imagePath)) != null
-						&& settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(imagePath)).parentGroup.Name == WorldMapBaker.AddressableGroupName;
+						&& definition.MapImage.AssetGUID == AssetDatabase.AssetPathToGUID(ProjectFiles.Path(imagePath));
+					bool addressable = settings != null && settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(ProjectFiles.Path(imagePath))) != null
+						&& settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(ProjectFiles.Path(imagePath))).parentGroup.Name == WorldMapBaker.AddressableGroupName;
 					if (!imageExists || !referenced || !addressable || !WorldMapBaker.IsBaked(pair.Key))
 					{
 						imageless.Add($"{pair.Key} (image {imageExists}, referenced {referenced}, addressable {addressable})");

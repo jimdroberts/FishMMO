@@ -30,7 +30,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		private const double Year = 365.0 * 600.0;
 		private const uint Seed = 0x00A1B2C3u;
 
-		private static string Read(string path) => File.ReadAllText(path);
+		private static string Read(string path) => ProjectFiles.ReadAllText(path);
 
 		private static BurnMosaic.BurnClock At(double seconds, double coldest = 0.3) => BurnMosaic.ClockAt(seconds, Year, coldest);
 
@@ -437,9 +437,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(entry.BurnRegime.HasValue, Is.False, $"{entry.Biome} names no burn regime yet (its round authors it)");
 			}
 			int templates = 0;
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				if (!Regex.IsMatch(text, "^  MinTemperature:", RegexOptions.Multiline))
 				{
 					continue;

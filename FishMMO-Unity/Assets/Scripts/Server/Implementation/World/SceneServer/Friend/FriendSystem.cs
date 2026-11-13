@@ -368,9 +368,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 
-						if (character != null && character.TryGet(out IAchievementController achievementController) && CharacterStateValidation.CanAct(character))
+						if (character != null && CharacterStateValidation.CanAct(character))
 						{
-							achievementController.Increment(FriendAddAchievementTemplate, 1);
+							Accomplishments.Record(character, FriendAddAchievementTemplate);
 						}
 					}
 				});

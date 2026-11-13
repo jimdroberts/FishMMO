@@ -66,8 +66,8 @@ namespace FishMMO.UnitTests
 		private static string ReadSource(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-			LogAssert.IsTrue(File.Exists(path), $"Expected source at {path}.");
-			return File.ReadAllText(path);
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"Expected source at {path}.");
+			return ProjectFiles.ReadAllText(path);
 		}
 
 		/// <summary>
@@ -430,7 +430,7 @@ namespace FishMMO.UnitTests
 
 		private static GameObject ShippedFireFX()
 		{
-			GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(FireFXPath);
+			GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(FireFXPath));
 			LogAssert.IsNotNull(prefab, $"Expected the shipped fire FX at {FireFXPath}.");
 			return prefab;
 		}

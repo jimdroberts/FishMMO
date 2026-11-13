@@ -90,7 +90,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			foreach (string guid in UnityEditor.AssetDatabase.FindAssets($"t:{nameof(PointOfInterestTemplate)}", new[] { PointOfInterestTemplate.Folder }))
 			{
 				string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
-				List<string> tags = PointOfInterestTemplateAuthoring.Unresolved(UnityEditor.AssetDatabase.LoadAssetAtPath<PointOfInterestTemplate>(path));
+				List<string> tags = PointOfInterestTemplateAuthoring.Unresolved(UnityEditor.AssetDatabase.LoadAssetAtPath<PointOfInterestTemplate>(ProjectFiles.Path(path)));
 				if (tags.Count > 0)
 				{
 					missing.Add($"{path}: {string.Join(", ", tags)}");

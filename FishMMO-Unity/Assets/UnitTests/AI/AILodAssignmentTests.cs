@@ -54,7 +54,7 @@ namespace FishMMO.UnitTests.AI
 			for (int i = 0; i < guids.Length; i++)
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guids[i]);
-				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(path));
 				if (prefab == null)
 				{
 					continue;
@@ -158,7 +158,7 @@ namespace FishMMO.UnitTests.AI
 			for (int i = 0; i < guids.Length; i++)
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guids[i]);
-				AILodSettings settings = AssetDatabase.LoadAssetAtPath<AILodSettings>(path);
+				AILodSettings settings = AssetDatabase.LoadAssetAtPath<AILodSettings>(ProjectFiles.Path(path));
 				if (settings != null && !referenced.Contains(settings))
 				{
 					orphans.AppendLine($"  {settings.name}");

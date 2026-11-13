@@ -262,7 +262,7 @@ namespace FishMMO.UnitTests
 				{
 					return "ProcessNewChatMessage is missing";
 				}
-				return process.Contains("ChatTokens") ? "the bucket is charged a second time when the queue drains" : null;
+				return process.Contains("TryChargeChatRate(") || process.Contains(".Tokens") ? "the bucket is charged a second time when the queue drains" : null;
 			};
 			SourceScanPins.HoldsAndFires("L2 enqueue", code, check,
 				SourceScanPins.InsertBefore("RecordIncomingOverflow(rateTicks);", "conn.Kick(FishNet.Managing.Server.KickReason.ExploitExcessiveData);"),

@@ -111,13 +111,13 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void EveryBake_LaysTheEdits_ThePoiPiecesAsTheyAreMade()
 		{
-			string baker = System.IO.File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/Terrain/ScenePropBaker.cs");
+			string baker = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/Terrain/ScenePropBaker.cs");
 			LogAssert.IsTrue(baker.Contains("edits.ApplyTo(source, prototypes, props)") && baker.Contains("if (source != PointOfInterestGenerator.PropSource)"),
 				"every source but the POI's is edited as it is written");
-			string site = System.IO.File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/PointOfInterestSiteContext.cs");
+			string site = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/PointOfInterestSiteContext.cs");
 			LogAssert.IsTrue(site.Contains("ScenePropEdits.Active.Apply(PointOfInterestGenerator.PropSource, prefab, ref position, ref rotation, ref scale)"),
 				"a POI piece is edited before its doors, rooms and emitters are laid from it");
-			string stage = System.IO.File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/PointOfInterestStage.cs");
+			string stage = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/PointOfInterestStage.cs");
 			LogAssert.IsTrue(stage.Contains("ScenePropEdits.Active = ScenePropEdits.For(scene, false);") && stage.Contains("ScenePropEdits.Active = null;"),
 				"the POI stage holds the scene's edits for its length, and lets go");
 		}

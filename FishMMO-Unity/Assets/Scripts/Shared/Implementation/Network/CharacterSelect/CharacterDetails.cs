@@ -15,6 +15,12 @@ namespace FishMMO.Shared
 		/// <summary>Template ID representing the character's race.</summary>
 		public int RaceTemplateID;
 		/// <summary>
+		/// Which of the race's models the character chose at creation
+		/// (<see cref="RaceTemplate.GetModelReference(int)"/>), so the character select preview shows
+		/// this character's body rather than the race's first.
+		/// </summary>
+		public int ModelIndex;
+		/// <summary>
 		/// True when this character's body is still in the world because its owner disconnected
 		/// during combat. Selecting it resumes that body rather than starting a fresh session.
 		/// </summary>

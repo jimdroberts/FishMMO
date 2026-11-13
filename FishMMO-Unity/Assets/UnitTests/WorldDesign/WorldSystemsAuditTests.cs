@@ -428,9 +428,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			 * scenes being built. Both are avoided by the build calling the parameterless Rebuild,
 			 * which does not audit at all — pinned in source because the failure cannot be provoked
 			 * from a test without running a build. */
-			string source = File.ReadAllText(Path.Combine(
+			string source = ProjectFiles.ReadAllText(Path.Combine(
 				Directory.GetCurrentDirectory(),
-				"Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/FishMMO Dashboard/CustomBuildTool/Core/CustomBuildTool.cs"));
+				"Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/WorldContentBuildSteps.cs"));
 
 			Assert.That(source, Does.Contain("WorldSceneDetailsCacheBuilder.Rebuild();"),
 				"the build must call the plain rebuild");
@@ -447,7 +447,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(WorldSystemsMode.Off, Is.EqualTo(default(WorldSystemsMode)),
 				"not auditing must be the default, so a new caller cannot opt in by forgetting to choose");
 
-			string source = File.ReadAllText(Path.Combine(
+			string source = ProjectFiles.ReadAllText(Path.Combine(
 				Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/WorldSceneDetailsCacheBuilder.cs"));
 

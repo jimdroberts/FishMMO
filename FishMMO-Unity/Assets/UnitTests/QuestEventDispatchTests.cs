@@ -126,8 +126,8 @@ namespace FishMMO.UnitTests
 		public void TheController_NeverInvokesAQuestEventDirectly()
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), "Assets/Scripts/Shared/Implementation/Entity/Quest/QuestController.cs");
-			LogAssert.IsTrue(File.Exists(path), $"QuestController.cs not found at {path}.");
-			string source = File.ReadAllText(path);
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"QuestController.cs not found at {path}.");
+			string source = ProjectFiles.ReadAllText(path);
 
 			LogAssert.IsFalse(source.Contains("?.Invoke(Character"),
 				"QuestController must raise quest events through QuestEventDispatch, never invoke them directly");

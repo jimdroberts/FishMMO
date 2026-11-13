@@ -424,7 +424,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(count, Is.EqualTo(83));
 
 			int holding = 0;
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
 				Match block = Regex.Match(Read(path), @"^  seaLook:\n((?:    .*\n)+)", RegexOptions.Multiline);
 				if (!block.Success)
@@ -561,14 +561,14 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		private static float F(string text) => float.Parse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture);
 
-		private static string Read(string relative) => File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
+		private static string Read(string relative) => ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
 
 		private static IEnumerable<string> BiomeAssetNames()
 		{
 			var names = new List<string>();
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				if (!Regex.IsMatch(text, "^  MinTemperature:", RegexOptions.Multiline))
 				{
 					continue;

@@ -64,7 +64,7 @@ namespace FishMMO.UnitTests
 				{
 					continue;
 				}
-				var go = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>($"{ProceduralArtCatalogue.PrefabsFolder}/{prefab}.prefab");
+				var go = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path($"{ProceduralArtCatalogue.PrefabsFolder}/{prefab}.prefab"));
 				if (go == null)
 				{
 					continue;
@@ -103,11 +103,11 @@ namespace FishMMO.UnitTests
 			LogAssert.AreEqual(1 + 33, DetailScatterMath.ItemHeaderUints, "an item header: its first entry and 65 sixteen-bit starts");
 			LogAssert.AreEqual(GrassTerrain.MaxChannels / 4, GrassTerrain.MaxDensityMaps, "four channels a density map");
 			LogAssert.AreEqual(82, GrassTerrainAtlas.TerrainUints, "channels 16..63 appended after every older field");
-			string compute = File.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishGrassBlades.compute");
+			string compute = ProjectFiles.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishGrassBlades.compute");
 			LogAssert.IsTrue(compute.Contains($"#define GRASS_TYPES {GrassMath.MaxTypes} "), "the compute's type cap is the record's");
 			LogAssert.IsTrue(compute.Contains($"#define GRASS_TERRAIN_UINTS {GrassTerrainAtlas.TerrainUints}u"), "the compute's table stride is the atlas's");
 			LogAssert.IsTrue(compute.Contains("#pragma multi_compile_local __ GRASS_WIDE GRASS_WIDEST"), "the 32- and 64-channel variants exist, one at a time");
-			string scatter = File.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishDetailScatter.compute");
+			string scatter = ProjectFiles.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishDetailScatter.compute");
 			LogAssert.IsTrue(scatter.Contains($"#define SCATTER_TERRAIN_HEADER {DetailScatterAtlas.HeaderUints}u"), "the scatter row header matches");
 			LogAssert.IsTrue(scatter.Contains($"#define SCATTER_ITEM_HEADER_UINTS {DetailScatterMath.ItemHeaderUints}u"), "the item header matches");
 			LogAssert.IsTrue(scatter.Contains($"#define SCATTER_CELL_STREAM {DetailScatterMath.CellStream}u"), "the cell stream matches");
@@ -121,12 +121,12 @@ namespace FishMMO.UnitTests
 			const string folder = "Assets/Scripts/Client/World/Terrain/";
 			LogAssert.IsFalse(File.Exists(folder + "TerrainDetailField.cs"), "TerrainDetailField removed");
 			LogAssert.IsFalse(File.Exists(folder + "TerrainDetailModel.cs"), "TerrainDetailModel removed");
-			string driver = File.ReadAllText(folder + "TerrainDetailInstancing.cs");
+			string driver = ProjectFiles.ReadAllText(folder + "TerrainDetailInstancing.cs");
 			foreach (string cpu in new[] { "RenderMeshInstanced", "DrawMeshInstanced", "GetDetailLayer", "TerrainGpuRenderer.TryCreate" })
 			{
 				LogAssert.IsFalse(driver.Contains(cpu), $"the driver does not {cpu}");
 			}
-			string settings = File.ReadAllText(folder + "Scatter/DetailScatterSettings.cs");
+			string settings = ProjectFiles.ReadAllText(folder + "Scatter/DetailScatterSettings.cs");
 			LogAssert.IsFalse(settings.Contains("PrototypePrefixes"), "the scatter takes every non-blade kind (no prefix list leaves one to a CPU path)");
 		}
 

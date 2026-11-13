@@ -21,7 +21,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		private const string World = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World";
 		private const string TemplateSource = "Assets/Scripts/Shared/Implementation/Tools/Biomes/BiomeTemplate.cs";
 
-		private static string Read(string relative) => File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
+		private static string Read(string relative) => ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
 
 		/// <summary>Every landform name the drafts ask for (approved sections and section 6), with a few of the drafts' spellings.</summary>
 		private static readonly string[] DraftNames =
@@ -52,9 +52,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(entry.LandformList(), Is.Empty, $"{entry.Biome} names no landform yet");
 			}
 			int templates = 0;
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				if (!Regex.IsMatch(text, "^  MinTemperature:", RegexOptions.Multiline))
 				{
 					continue;

@@ -295,7 +295,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Reply(character, $"Access {target.AccessLevel}, scene '{target.CurrentSceneName()}', world {target.WorldServerID}.");
 			Reply(character, $"{(target.IsFlagged(CharacterFlags.IsDead) ? "Dead" : "Alive")}, " +
 				$"{(target.IsFlagged(CharacterFlags.IsInCombat) ? "in combat" : "not in combat")}, " +
-				$"{DescribeChatMute(target.ChatMutedUntilTicks)}.");
+				$"{DescribeChatMute(target.Component<ChatState>().MutedUntilTicks)}.");
 		}
 
 		/// <summary>Looks a character up in the database, online or not.</summary>

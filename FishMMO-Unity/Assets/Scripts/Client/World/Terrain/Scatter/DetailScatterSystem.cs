@@ -278,6 +278,14 @@ namespace FishMMO.Client
 			{
 				Release(t);
 			}
+			/* The type table and the renderer's per-type state are the loaded scene's: once no terrain holds scatter, start
+			 * again from nothing, as grass does with its own table. Kept, a scene's types (meshes and materials of bundles
+			 * since released) piled up across logins, and the renderer's next layout reached a dead mesh and threw. */
+			if (releasing.Count > 0 && taken.Count == 0 && building == null && (types.Count > 0 || renderer != null))
+			{
+				ReleaseAll();
+				return;
+			}
 
 			if (building != null)
 			{

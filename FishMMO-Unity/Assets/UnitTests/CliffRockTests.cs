@@ -713,9 +713,9 @@ namespace FishMMO.UnitTests
 		public void CliffPlacer_TakesNoRockOutOfThePlan()
 		{
 			const string path = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/Terrain/CliffPlacer.cs";
-			Assert.That(System.IO.File.Exists(path), Is.True, $"{path} (run from the project root)");
+			Assert.That(ProjectFiles.Exists(path), Is.True, $"{path} (run from the project root)");
 			var code = new System.Text.StringBuilder();
-			foreach (string line in System.IO.File.ReadAllText(path).Replace("\r\n", "\n").Split('\n'))
+			foreach (string line in ProjectFiles.ReadAllText(path).Replace("\r\n", "\n").Split('\n'))
 			{
 				string trimmed = line.TrimStart();
 				if (!trimmed.StartsWith("//", StringComparison.Ordinal) && !trimmed.StartsWith("/*", StringComparison.Ordinal) && !trimmed.StartsWith("*", StringComparison.Ordinal))

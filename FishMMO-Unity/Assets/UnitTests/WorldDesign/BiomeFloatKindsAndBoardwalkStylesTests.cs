@@ -51,9 +51,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(entry.SeaFloats().Exists(f => f.Kind == BiomeSeaFloatKind.KelpRaft), Is.False, $"{entry.Biome} floats no kelp raft yet");
 			}
 			int templates = 0;
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				if (!Regex.IsMatch(text, "^  MinTemperature:", RegexOptions.Multiline))
 				{
 					continue;
@@ -64,7 +64,7 @@ namespace FishMMO.UnitTests.WorldDesign
 					$"{Path.GetFileName(path)} names a boardwalk style");
 			}
 			Assert.That(templates, Is.EqualTo(83));
-			StringAssert.Contains("private BiomeBoardwalkStyle boardwalkStyle = BiomeBoardwalkStyle.Planked;", File.ReadAllText(TemplateSource));
+			StringAssert.Contains("private BiomeBoardwalkStyle boardwalkStyle = BiomeBoardwalkStyle.Planked;", ProjectFiles.ReadAllText(TemplateSource));
 		}
 
 		[Test]
@@ -179,7 +179,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeSeaFloats.LivesAt(BiomeSeaFloatKind.KelpRaft, 0.2f), Is.True);
 			Assert.That(BiomeSeaFloats.LivesAt(BiomeSeaFloatKind.KelpRaft, 0.6f), Is.False, "cool seas only (the draft's t ≤ 0.3)");
 			Assert.That(BiomeSeaFloats.Any(new List<BiomeSeaFloat> { new BiomeSeaFloat(BiomeSeaFloatKind.KelpRaft, 1f) }), Is.True);
-			string meshes = File.ReadAllText("Assets/Scripts/Client/World/SeaFloats/SeaFloatMeshes.cs");
+			string meshes = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/SeaFloats/SeaFloatMeshes.cs");
 			int brash = meshes.IndexOf("b.Sub = (int)BiomeSeaFloatKind.BrashIce;", StringComparison.Ordinal);
 			int kelp = meshes.IndexOf("b.Sub = (int)BiomeSeaFloatKind.KelpRaft;", StringComparison.Ordinal);
 			Assert.That(kelp, Is.GreaterThan(brash).And.GreaterThan(0), "built after every older kind, so their seeds are unchanged");
@@ -304,15 +304,15 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(entry.Boardwalks, Is.EqualTo(BiomeBoardwalks.Paths));
 			Assert.That(entry.BoardwalkStyle, Is.EqualTo(BiomeBoardwalkStyle.Bohlensteg));
 
-			string authoring = File.ReadAllText(World + "/ProceduralArt/BiomeArtAuthoring.cs");
+			string authoring = ProjectFiles.ReadAllText(World + "/ProceduralArt/BiomeArtAuthoring.cs");
 			StringAssert.Contains("AuthorValue(who, biome, BiomeTemplate.Authored.BoardwalkStyle,", authoring);
-			string reader = File.ReadAllText(World + "/Terrain/BiomeTemplateArt.cs");
+			string reader = ProjectFiles.ReadAllText(World + "/Terrain/BiomeTemplateArt.cs");
 			StringAssert.Contains("public static BiomeBoardwalkStyle BoardwalkStyle(BiomeTemplate biome)", reader);
-			string walks = File.ReadAllText(World + "/PointsOfInterest/Paths/PathBoardwalks.cs");
+			string walks = ProjectFiles.ReadAllText(World + "/PointsOfInterest/Paths/PathBoardwalks.cs");
 			StringAssert.Contains("BiomeTemplateArt.BoardwalkStyle(biome)", walks);
 			StringAssert.Contains("StructurePieces.BoardwalkShape(style, footway)", walks);
 			// A settlement's streets lay the plank walk (their Lay call names no style).
-			string streets = File.ReadAllText(World + "/PointsOfInterest/PropsFeature.cs");
+			string streets = ProjectFiles.ReadAllText(World + "/PointsOfInterest/PropsFeature.cs");
 			Assert.That(streets.Contains("BoardwalkStyle"), Is.False, "streets stay planked");
 		}
 

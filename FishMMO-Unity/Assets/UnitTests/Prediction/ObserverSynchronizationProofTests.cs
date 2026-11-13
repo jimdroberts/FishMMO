@@ -508,9 +508,9 @@ namespace FishMMO.UnitTests
 				string path = Path.Combine(
 					Directory.GetCurrentDirectory(),
 					"Assets/Scripts/Shared/Implementation/Entity/Prediction", file);
-				LogAssert.IsTrue(File.Exists(path), $"{file} not found at {path}.");
+				LogAssert.IsTrue(ProjectFiles.Exists(path), $"{file} not found at {path}.");
 
-				string source = File.ReadAllText(path);
+				string source = ProjectFiles.ReadAllText(path);
 				int reconcile = source.IndexOf("public void OnReconcile(", StringComparison.Ordinal);
 				LogAssert.IsTrue(reconcile >= 0, $"{file} must implement OnReconcile.");
 
@@ -661,7 +661,7 @@ namespace FishMMO.UnitTests
 			string path = Path.Combine(
 				Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Shared/Implementation/Entity/Prediction/CharacterPredictionController.cs");
-			string source = File.ReadAllText(path);
+			string source = ProjectFiles.ReadAllText(path);
 
 			int start = source.IndexOf("public override void OnStartNetwork()", StringComparison.Ordinal);
 			LogAssert.IsTrue(start >= 0, "CharacterPredictionController must override OnStartNetwork.");
@@ -674,7 +674,7 @@ namespace FishMMO.UnitTests
 			string modePath = Path.Combine(
 				Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Shared/Implementation/Entity/Prediction/ObserverSyncMode.cs");
-			string modeSource = File.ReadAllText(modePath);
+			string modeSource = ProjectFiles.ReadAllText(modePath);
 			LogAssert.IsFalse(modeSource.Contains("static bool cached") || modeSource.Contains("private static bool "),
 				"ObserverSyncMode must hold no cached state; every caller reads EnableStateForwarding live.");
 		}
@@ -706,7 +706,7 @@ namespace FishMMO.UnitTests
 			string root = Path.Combine(
 				Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Shared/Implementation/Entity/Prediction");
-			LogAssert.IsTrue(Directory.Exists(root), $"Prediction directory not found at {root}.");
+			LogAssert.IsTrue(ProjectFiles.FolderExists(root), $"Prediction directory not found at {root}.");
 
 			string[] banned =
 			{
@@ -720,10 +720,10 @@ namespace FishMMO.UnitTests
 			};
 
 			List<string> offenders = new List<string>();
-			foreach (string path in Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(root), "*.cs", SearchOption.AllDirectories))
 			{
 				string name = Path.GetFileName(path);
-				foreach (string line in File.ReadAllLines(path))
+				foreach (string line in ProjectFiles.ReadAllLines(path))
 				{
 					string trimmed = line.TrimStart();
 					// Documentation that names a banned API to explain why it is not used.
@@ -767,7 +767,7 @@ namespace FishMMO.UnitTests
 			string path = Path.Combine(
 				Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Shared/Implementation/Entity/Prediction/NetworkTransformDistanceLod.cs");
-			string source = File.ReadAllText(path);
+			string source = ProjectFiles.ReadAllText(path);
 
 			LogAssert.IsFalse(source.Contains("private void Update()"),
 				"The LOD scheduler must not run from Update(); a headless server's frame rate is " +

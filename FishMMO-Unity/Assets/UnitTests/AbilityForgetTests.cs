@@ -56,8 +56,8 @@ namespace FishMMO.UnitTests
 		private static string ReadSource(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-			LogAssert.IsTrue(File.Exists(path), $"{relativePath} not found at {path}.");
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{relativePath} not found at {path}.");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 		/// <summary>The body of a named method, bounded by the next member's signature.</summary>
@@ -265,12 +265,12 @@ namespace FishMMO.UnitTests
 			 * The character is part of the predicate so one character's forget can never reach
 			 * another's row, even if a caller passes an id it does not own. */
 			string path = Path.Combine(Directory.GetCurrentDirectory(), AbilityServicePath);
-			if (!File.Exists(path))
+			if (!ProjectFiles.Exists(path))
 			{
 				Assert.Ignore($"the database project is not checked out beside the Unity project ({AbilityServicePath}).");
 			}
 
-			string source = File.ReadAllText(path).Replace("\r\n", "\n");
+			string source = ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 			/* The ungated and the ownership-gated delete (O27) share one body, which sits between the
 			 * two entry points and FetchAsync, so the slice reads all three. */
 			string body = MethodBody(source,

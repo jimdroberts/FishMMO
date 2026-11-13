@@ -157,6 +157,8 @@ namespace FishMMO.Client
 		private static int clearKernel = -1, gatherKernel = -1;
 		private static Material sdfMaterial;
 		private static RenderTexture atlas;
+		/// <summary>The atlas could not be created on this device; not tried again until the shapes are forgotten.</summary>
+		private static bool atlasFailed;
 		private static int atlasBricksZ;
 		private static GraphicsBuffer bricks, list, listCount, slots, cellCounts;
 		private static GraphicsBuffer dummyList, dummySlots;
@@ -225,6 +227,7 @@ namespace FishMMO.Client
 			boxesFrame = NeverGathered;
 			boxes.Clear();
 			loadLogged = false;
+			atlasFailed = false;
 			Forget();
 		}
 
@@ -292,7 +295,48 @@ namespace FishMMO.Client
 			}
 		}
 
-		public static void RemoveRenderer(TerrainGpuRenderer renderer) => renderers.Remove(renderer);
+		/// <summary>
+		/// A renderer that is going (its scene unloading). With the last one gone, every shape and look is forgotten: they
+		/// are keyed by mesh and material object, and the next world's (even the same world loaded again) are new objects,
+		/// so keeping them grew the registries by a full set per load until the atlas passed the 3D texture limit.
+		/// </summary>
+		public static void RemoveRenderer(TerrainGpuRenderer renderer)
+		{
+			renderers.Remove(renderer);
+			if (renderers.Count == 0 && (shapes.Count > 0 || looks.Count > 0))
+			{
+				ForgetShapes();
+			}
+		}
+
+		/// <summary>Drops every shape and look and the atlas holding their fields; the next world registers its own.</summary>
+		private static void ForgetShapes()
+		{
+			EndBake();
+			shapes.Clear();
+			shapeOf.Clear();
+			looks.Clear();
+			lookOf.Clear();
+			bakeShape = -1;
+			demand = new float[0];
+			demandEye = new Vector3(float.NaN, float.NaN, float.NaN);
+			demandReach = float.NaN;
+			boxesKey = 0;
+			boxesFrame = NeverGathered;
+			boxes.Clear();
+			bricksDirty = true;
+			RockFillets.ForgetLooks();
+			if (atlas != null)
+			{
+				atlas.Release();
+				Object.Destroy(atlas);
+				atlas = null;
+				atlasBricksZ = 0;
+			}
+			atlasFailed = false;
+			Shader.SetGlobalTexture(SdfId, dummyAtlas);
+			Forget();
+		}
 
 		/// <summary>
 		/// The shape's brick for a rock model's levels (its field is drawn on a later frame), or −1 when none of its
@@ -455,13 +499,23 @@ namespace FishMMO.Client
 			return true;
 		}
 
-		/// <summary>An atlas with room for every shape; a grown one starts empty, so every field is drawn again.</summary>
-		private static void EnsureAtlas()
+		/// <summary>
+		/// An atlas with room for every shape (up to the device's limit); a grown one starts empty, so every field is drawn
+		/// again. False when there is none.
+		/// </summary>
+		private static bool EnsureAtlas()
 		{
-			int bricksZ = Mathf.Max(1, (shapes.Count + BricksX - 1) / BricksX);
+			if (atlasFailed)
+			{
+				return false;
+			}
+			// The device's 3D texture depth caps the atlas: shapes past it keep no field (they stay unbuilt) rather than the
+			// atlas failing to create, which failed again every frame and broke every pipeline it was bound to.
+			int maxBricksZ = Mathf.Max(1, SystemInfo.maxTexture3DSize / Brick);
+			int bricksZ = Mathf.Clamp((shapes.Count + BricksX - 1) / BricksX, 1, maxBricksZ);
 			if (atlas != null && atlasBricksZ >= bricksZ)
 			{
-				return;
+				return true;
 			}
 			if (atlas != null)
 			{
@@ -469,7 +523,7 @@ namespace FishMMO.Client
 				Object.Destroy(atlas);
 			}
 			// Room for a few more without growing again.
-			atlasBricksZ = bricksZ + 1;
+			atlasBricksZ = Mathf.Min(bricksZ + 1, maxBricksZ);
 			var desc = new RenderTextureDescriptor(BricksX * Brick, Brick, GraphicsFormat.R16_SFloat, 0)
 			{
 				dimension = TextureDimension.Tex3D,
@@ -484,7 +538,16 @@ namespace FishMMO.Client
 				filterMode = FilterMode.Bilinear,
 				hideFlags = HideFlags.DontSave,
 			};
-			atlas.Create();
+			if (!atlas.Create())
+			{
+				Debug.LogError($"[Rock contact] The SDF atlas ({atlas.width}×{atlas.height}×{atlas.volumeDepth}) could not be created; rock contact is off.");
+				Object.Destroy(atlas);
+				atlas = null;
+				atlasBricksZ = 0;
+				atlasFailed = true;
+				Shader.SetGlobalTexture(SdfId, dummyAtlas);
+				return false;
+			}
 			foreach (Shape s in shapes)
 			{
 				s.Built = false;
@@ -493,7 +556,11 @@ namespace FishMMO.Client
 			bricksDirty = true;
 			Shader.SetGlobalTexture(SdfId, atlas);
 			Shader.SetGlobalVector(AtlasId, new Vector4(BricksX, 1f / atlas.width, 1f / atlas.volumeDepth, 0f));
+			return true;
 		}
+
+		/// <summary>How many shapes the atlas has bricks for: the first this many get fields, any past them none.</summary>
+		private static int AtlasCapacity => atlas != null ? atlasBricksZ * BricksX : 0;
 
 		/// <summary>The per-shape table the gather reads: min + unit (1: the field is in local units), size + built, flags (x rock).</summary>
 		private static int bricksVersion;
@@ -652,7 +719,8 @@ namespace FishMMO.Client
 			{
 				int i = -1;
 				float nearest = float.PositiveInfinity;
-				for (int k = 0, n = Mathf.Min(shapes.Count, demand.Length); k < n; k++)
+				int capacity = AtlasCapacity;
+				for (int k = 0, n = Mathf.Min(Mathf.Min(shapes.Count, demand.Length), capacity); k < n; k++)
 				{
 					if (!shapes[k].Built && demand[k] < nearest)
 					{
@@ -663,7 +731,7 @@ namespace FishMMO.Client
 				if (i < 0 && !DemandOnly)
 				{
 					// Every field, as before demand: the rest in registration order.
-					for (int k = 0; k < shapes.Count && i < 0; k++)
+					for (int k = 0; k < shapes.Count && k < capacity && i < 0; k++)
 					{
 						i = shapes[k].Built ? -1 : k;
 					}
@@ -747,7 +815,13 @@ namespace FishMMO.Client
 				RockFillets.Hide();
 				return;
 			}
-			EnsureAtlas();
+			if (!EnsureAtlas())
+			{
+				Shader.SetGlobalVector(GridDimsGlobalId, Vector4.zero);
+				Forget();
+				RockFillets.Hide();
+				return;
+			}
 			Camera camera = Camera.main;
 			if (camera != null)
 			{

@@ -24,7 +24,7 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		private const string World = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World";
 
-		private static string Code(string path) => File.ReadAllText(Path.Combine(World, path));
+		private static string Code(string path) => ProjectFiles.ReadAllText(Path.Combine(World, path));
 
 		private static IEnumerable<BiomeCaveCrystalKind> AllKinds => (BiomeCaveCrystalKind[])Enum.GetValues(typeof(BiomeCaveCrystalKind));
 
@@ -344,9 +344,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 			}
 			int fromAssets = 0;
-			foreach (string asset in Directory.GetFiles("Assets/Templates/World/PointsOfInterest", "*.asset", SearchOption.AllDirectories))
+			foreach (string asset in Directory.GetFiles(ProjectFiles.Folder("Assets/Templates/World/PointsOfInterest"), "*.asset", SearchOption.AllDirectories))
 			{
-				foreach (string line in File.ReadLines(asset))
+				foreach (string line in ProjectFiles.ReadLines(asset))
 				{
 					string t = line.Trim();
 					if (t.StartsWith("- Tag: ", StringComparison.Ordinal) || t.StartsWith("Tag: ", StringComparison.Ordinal))

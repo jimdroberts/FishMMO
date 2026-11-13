@@ -137,10 +137,10 @@ namespace FishMMO.UnitTests.AI
 		public void PetDeclaresTheLinkAndTheDispatcherConsultsIt()
 		{
 			string root = Directory.GetCurrentDirectory();
-			string pet = File.ReadAllText(Path.Combine(root, "Assets/Scripts/Shared/Implementation/Entity/NPC/Pet/Pet.cs"));
+			string pet = ProjectFiles.ReadAllText(Path.Combine(root, "Assets/Scripts/Shared/Implementation/Entity/NPC/Pet/Pet.cs"));
 			string ai = Path.Combine(root, "Assets/Scripts/Server/Implementation/World/SceneServer/AI");
-			string dispatcher = File.ReadAllText(Path.Combine(ai, "AggressionDispatcher.cs"));
-			string host = File.ReadAllText(Path.Combine(ai, "AIBrainHost.cs"));
+			string dispatcher = ProjectFiles.ReadAllText(Path.Combine(ai, "AggressionDispatcher.cs"));
+			string host = ProjectFiles.ReadAllText(Path.Combine(ai, "AIBrainHost.cs"));
 
 			/* The pet is shared code and the dispatcher is server code, so the link travels through
 			 * an event: the pet announces every owner change, and the dispatcher — subscribed by the

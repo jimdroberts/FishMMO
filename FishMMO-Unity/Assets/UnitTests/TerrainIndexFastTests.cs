@@ -18,7 +18,7 @@ namespace FishMMO.UnitTests
 		public void CommonLayersAndBoundaryFallbackMatchTheGeneralGpuMerge(bool forceFull)
 		{
 			if (!SystemInfo.supportsComputeShaders) Assert.Ignore("GPU required");
-			var shader = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>("Assets/TestHarness/World/Editor/TerrainIndexFilterProbe.compute"));
+			var shader = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path("Assets/TestHarness/World/Editor/TerrainIndexFilterProbe.compute")));
 			try
 			{
 				var random = new System.Random(926); var points = new Point[16000];
@@ -50,7 +50,7 @@ namespace FishMMO.UnitTests
 		[TestCase(ShaderCompilerPlatform.WebGPU,BuildTarget.WebGL)]
 		public void FastTerrainShaderCompiles(ShaderCompilerPlatform platform,BuildTarget target)
 		{
-			var shader = AssetDatabase.LoadAssetAtPath<Shader>("Assets/Prefabs/Client/Weather/Shaders/FishWeatherTerrainArrayGpu.shader");
+			var shader = AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path("Assets/Prefabs/Client/Weather/Shaders/FishWeatherTerrainArrayGpu.shader"));
 			foreach (var stage in new[] { ShaderType.Vertex,ShaderType.Fragment })
 			{
 				var result = ShaderUtil.GetShaderData(shader).GetSubshader(0).GetPass(0).CompileVariant(stage,new[] {"_CLUSTER_LIGHT_LOOP","_MAIN_LIGHT_SHADOWS_CASCADE","_SHADOWS_SOFT"},platform,target);

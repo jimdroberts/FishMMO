@@ -1435,11 +1435,11 @@ namespace FishMMO.Shared
 				if (attacker != null &&
 					attacker.TryGet(out ICharacterDamageController attackerDamage))
 				{
-					attacker.Invoke(attackerDamage.OnDamageTriggers, new DamageEventData(attacker, Character, amount, damageAttribute));
+					Trigger.InvokeAll(attackerDamage.OnDamageTriggers, new DamageEventData(attacker, Character, amount, damageAttribute));
 				}
 
 				// Invoke defender's OnDamaged triggers (e.g. achievements for receiving damage)
-				Character.Invoke(OnDamagedTriggers, new DamageEventData(Character, attacker, amount, damageAttribute));
+				Trigger.InvokeAll(OnDamagedTriggers, new DamageEventData(Character, attacker, amount, damageAttribute));
 			}
 
 			// Check if we died after taking damage.
@@ -1528,10 +1528,10 @@ namespace FishMMO.Shared
 					fc.AdjustFaction(dfc, 0.01f, 0.01f);
 
 				if (creditedKiller.TryGet(out ICharacterDamageController kdc))
-					creditedKiller.Invoke(kdc.OnKillTriggers, new EventData(creditedKiller, Character));
+					Trigger.InvokeAll(kdc.OnKillTriggers, new EventData(creditedKiller, Character));
 			}
 
-			Character.Invoke(OnKilledTriggers, new EventData(Character, killer));
+			Trigger.InvokeAll(OnKilledTriggers, new EventData(Character, killer));
 
 			if (base.IsServerStarted && Character.TryGet(out IAbilityController ac))
 				ac.Cancel();
@@ -1673,11 +1673,11 @@ namespace FishMMO.Shared
 				if (healer != null &&
 					healer.TryGet(out ICharacterDamageController healerDamage))
 				{
-					healer.Invoke(healerDamage.OnHealTriggers, new HealEventData(healer, Character, amount));
+					Trigger.InvokeAll(healerDamage.OnHealTriggers, new HealEventData(healer, Character, amount));
 				}
 
 				// Invoke healed character's OnHealed triggers (e.g. achievements for being healed)
-				Character.Invoke(OnHealedTriggers, new HealEventData(Character, healer, amount));
+				Trigger.InvokeAll(OnHealedTriggers, new HealEventData(Character, healer, amount));
 			}
 
 			/* The amount QueueCombatEvent reported — the raw request, since the report carries the
@@ -1748,9 +1748,9 @@ namespace FishMMO.Shared
 			// Fire ECA resurrect triggers.
 			if (resurrector != null)
 			{
-				resurrector.Invoke(onResurrectTriggers, new EventData(resurrector, Character));
+				Trigger.InvokeAll(onResurrectTriggers, new EventData(resurrector, Character));
 			}
-			Character.Invoke(onResurrectedTriggers, new EventData(Character, resurrector));
+			Trigger.InvokeAll(onResurrectedTriggers, new EventData(Character, resurrector));
 
 			ICharacterDamageController.OnResurrected?.Invoke(resurrector, Character);
 		}

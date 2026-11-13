@@ -184,11 +184,11 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void Wiring_TheCutBakesAndThePlayerNeverRetargetsAnUnreadablePiece()
 		{
-			string shaper = File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/Shapers/CaveShaper.cs");
+			string shaper = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/Shapers/CaveShaper.cs");
 			StringAssert.Contains("CaveCoverBake cover = CoverBakeFor(assetPath, site.Id, meshes, rebuilt, live);", shaper);
-			string species = File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/Shapers/CaveCoverSpecies.cs");
+			string species = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/Shapers/CaveCoverSpecies.cs");
 			StringAssert.Contains("site.SetBake(bake);", species);
-			string system = File.ReadAllText("Assets/Scripts/Client/World/Caves/Cover/CaveCoverSystem.cs");
+			string system = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Caves/Cover/CaveCoverSystem.cs");
 			int bake = system.IndexOf("cave.Bake.For(mesh)", StringComparison.Ordinal);
 			int guard = system.IndexOf("if (!mesh.isReadable && !Application.isEditor)", StringComparison.Ordinal);
 			int retarget = system.IndexOf("mesh.indexBufferTarget |= GraphicsBuffer.Target.Raw;", StringComparison.Ordinal);

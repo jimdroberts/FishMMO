@@ -85,9 +85,9 @@ namespace FishMMO.UnitTests
 		private static string RegistrationCode()
 		{
 			string root = Path.Combine(Directory.GetCurrentDirectory(), ScriptsDirectory);
-			var files = Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories)
+			var files = Directory.GetFiles(ProjectFiles.Folder(root), "*.cs", SearchOption.AllDirectories)
 				.OrderBy(f => f, StringComparer.Ordinal)
-				.Select(f => SourceScanPins.CodeOnly(File.ReadAllText(f).Replace("\r\n", "\n")))
+				.Select(f => SourceScanPins.CodeOnly(ProjectFiles.ReadAllText(f).Replace("\r\n", "\n")))
 				.Where(code => code.Contains("ChatHelper.AddCommands(") || code.Contains("ChatHelper.SetCommandHelp("))
 				.ToList();
 			LogAssert.IsTrue(files.Count >= 8, $"expected the registering systems under {ScriptsDirectory}, found {files.Count}");

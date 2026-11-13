@@ -363,13 +363,13 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void TheCompute_PicksAsTheCpuDoes()
 		{
-			string compute = File.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishDetailScatter.compute");
+			string compute = ProjectFiles.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishDetailScatter.compute");
 			StringAssert.Contains($"#define SCATTER_VARIANT_STREAM {DetailScatterMath.VariantStream}u", compute);
 			StringAssert.Contains($"#define SCATTER_MAX_VARIANTS {DetailScatterSettings.MaxVariants}u", compute);
 			StringAssert.Contains("level = min((uint)(ScatterUnit(h, SCATTER_VARIANT_STREAM) * (float)variants), variants - 1u);", compute);
 			StringAssert.Contains("uint variants = (bush || levels > 1u) ? 1u : clamp((uint)(model.lod.w + 0.5), 1u, SCATTER_MAX_VARIANTS);", compute);
 			Assert.That(DetailScatterSettings.MaxVariants, Is.EqualTo(DetailScatterSettings.MaxLevels), "a variant takes the slot a level would");
-			string renderer = File.ReadAllText("Assets/Scripts/Client/World/Terrain/Scatter/DetailScatterRenderer.cs");
+			string renderer = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/Scatter/DetailScatterRenderer.cs");
 			StringAssert.Contains("ShareVariantNeeds(types);", renderer);
 			StringAssert.Contains("Lod = new Vector4(type.Levels.Length, type.Bush ? 1f : 0f, type.MeshTop, VariantsOf(type)),", renderer);
 		}
@@ -394,7 +394,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				prefabs + "/Formation_Natrite_SaltSpire_3.prefab",
 			}.OrderBy(p => p, StringComparer.Ordinal).ToArray()), "another family's files, subfolders, .meta files and other folders are never listed");
 			// The generator lists, never deletes.
-			string generator = File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/ProceduralArt/ProceduralArtOrphans.cs");
+			string generator = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/ProceduralArt/ProceduralArtOrphans.cs");
 			Assert.That(generator, Does.Not.Contain("File.Delete").And.Not.Contain("DeleteAsset").And.Not.Contain("ProceduralArtPayload.Delete"));
 		}
 	}

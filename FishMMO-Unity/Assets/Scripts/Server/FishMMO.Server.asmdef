@@ -2,6 +2,7 @@
     "name": "FishMMO.Server",
     "rootNamespace": "FishMMO.Server",
     "references": [
+        "FishMMO.Core",
         "FishMMO.Shared",
         "FishNet.Runtime",
         "GameKit.Dependencies",

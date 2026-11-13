@@ -148,14 +148,14 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheBake_DrawsTheNearestWantedShape_AndMeasuresAgainBeforeTheGridLeavesTheRegion()
 		{
-			string field = System.IO.File.ReadAllText("Assets/Scripts/Client/World/Terrain/RockContactField.cs");
+			string field = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/RockContactField.cs");
 			LogAssert.IsTrue(field.Contains("if (!shapes[k].Built && demand[k] < nearest)"), "the bake takes the nearest wanted shape");
 			LogAssert.IsTrue(field.Contains("Vector3 half = DemandMargin * 0.5f;") && field.Contains("Mathf.Abs(eye.y - demandEye.y) <= half.y"), "the wanted set is measured again at half the margin, per axis");
 			// int.MinValue as "never" overflowed frameCount − it to a negative: the boxes were never gathered, nothing wanted.
 			LogAssert.IsTrue(field.Contains("boxesFrame = NeverGathered") && !field.Contains("boxesFrame = int.MinValue"), "the first frame gathers the rocks' boxes");
 			LogAssert.IsTrue(field.Contains("RefreshDemand(camera.transform.position);\n\t\t\t\tBuildNext();") ||
 				field.Contains("RefreshDemand(camera.transform.position);\r\n\t\t\t\tBuildNext();"), "measured before each bake step");
-			string compute = System.IO.File.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishRockField.compute");
+			string compute = ProjectFiles.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishRockField.compute");
 			LogAssert.IsTrue(compute.Contains("float3 extent = mul(abs(m), bSize.xyz * 0.5) + _RockReach;"), "the gather's rock box (RockBoxDistance mirrors it)");
 		}
 	}

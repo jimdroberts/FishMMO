@@ -14,7 +14,7 @@ namespace FishMMO.UnitTests
 		{
 			if (!BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.WebGL, BuildTarget.WebGL))
 				Assert.Ignore("WebGL build support is required for this compiler regression test.");
-			var shader = AssetDatabase.LoadAssetAtPath<Shader>("Assets/Prefabs/Client/Weather/Shaders/FishWeatherTerrainArray.shader");
+			var shader = AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path("Assets/Prefabs/Client/Weather/Shaders/FishWeatherTerrainArray.shader"));
 			Assert.That(shader, Is.Not.Null);
 			var pass = ShaderUtil.GetShaderData(shader).GetSubshader(0).GetPass(0);
 			var result = pass.CompileVariant(ShaderType.Vertex, new[] { "_CLUSTER_LIGHT_LOOP" }, ShaderCompilerPlatform.WebGPU, BuildTarget.WebGL);

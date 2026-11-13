@@ -15,7 +15,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		private const string Shaders = "Assets/Plugins/FishMMO Water/Shaders/";
 
 		private static string Read(string file)
-			=> File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), Shaders + file)).Replace("\r\n", "\n");
+			=> ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), Shaders + file)).Replace("\r\n", "\n");
 
 		/// <summary>One number of a shader's (single) Stencil block, or -1 when the block or the entry is absent.</summary>
 		private static int Stencil(string shader, string entry)

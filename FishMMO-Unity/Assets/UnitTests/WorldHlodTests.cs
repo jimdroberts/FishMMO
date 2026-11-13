@@ -78,7 +78,7 @@ namespace FishMMO.UnitTests
 		[TestCase(ShaderCompilerPlatform.WebGPU, BuildTarget.WebGL)]
 		public void HlodForwardAndDepthVariantsCompile(ShaderCompilerPlatform platform, BuildTarget target)
 		{
-			var shader = AssetDatabase.LoadAssetAtPath<Shader>("Assets/Prefabs/Client/Weather/Shaders/FishWorldHlod.shader");
+			var shader = AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path("Assets/Prefabs/Client/Weather/Shaders/FishWorldHlod.shader"));
 			Assert.That(shader, Is.Not.Null);
 			var sub = ShaderUtil.GetShaderData(shader).GetSubshader(0);
 			for (int p = 0; p < 3; p++) foreach (var stage in new[] { ShaderType.Vertex, ShaderType.Fragment })
@@ -123,7 +123,7 @@ namespace FishMMO.UnitTests
 		public void InspectLocalBakedSceneCoverage()
 		{
 			string path = "Assets/Scenes/WorldScene/Moron/Moron 2 HLOD/WorldHlod 1.asset";
-			var data = AssetDatabase.LoadAssetAtPath<WorldHlodData>("Assets/Scenes/WorldScene/Moron/Moron 2 HLOD/WorldHlod.asset") ?? AssetDatabase.LoadAssetAtPath<WorldHlodData>(path); if (data == null) Assert.Ignore("Local generated HLOD bake not present");
+			var data = AssetDatabase.LoadAssetAtPath<WorldHlodData>(ProjectFiles.Path("Assets/Scenes/WorldScene/Moron/Moron 2 HLOD/WorldHlod.asset")) ?? AssetDatabase.LoadAssetAtPath<WorldHlodData>(ProjectFiles.Path(path)); if (data == null) Assert.Ignore("Local generated HLOD bake not present");
 			var lines = new List<string> {"cluster,x,y,z,radius,min_distance_factor,max_distance_factor,min_size,entry_at_fov60_bias2,exit_at_fov60_bias2"};
 			float factor = TerrainTreeMath.ScreenFactor(60,false,0,2); int usable = 0;
 			foreach (var group in data.Clusters)
@@ -158,7 +158,7 @@ namespace FishMMO.UnitTests
 		public void GpuMainReplacementRetainsTheExactShadowOutput()
 		{
 			if (!SystemInfo.supportsComputeShaders) Assert.Ignore("GPU required");
-			var shader = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>("Assets/Prefabs/Client/Weather/Shaders/FishTerrainInstancing.compute"));
+			var shader = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path("Assets/Prefabs/Client/Weather/Shaders/FishTerrainInstancing.compute")));
 			try
 			{
 				using var instances = new GraphicsBuffer(GraphicsBuffer.Target.Structured,1,FishInstance.Stride); instances.SetData(new[] { FishInstance.From(Matrix4x4.Translate(new Vector3(0,0,30))) });
@@ -191,7 +191,7 @@ namespace FishMMO.UnitTests
 		public void GpuCullingKeepsCommandGeometryAndOnlyWritesInstanceCount()
 		{
 			if (!SystemInfo.supportsComputeShaders) Assert.Ignore("GPU required");
-			var shader = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>("Assets/Prefabs/Client/Weather/Shaders/FishWorldHlodCull.compute"));
+			var shader = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path("Assets/Prefabs/Client/Weather/Shaders/FishWorldHlodCull.compute")));
 			try
 			{
 				using var parts = new GraphicsBuffer(GraphicsBuffer.Target.Structured, 3, 32);

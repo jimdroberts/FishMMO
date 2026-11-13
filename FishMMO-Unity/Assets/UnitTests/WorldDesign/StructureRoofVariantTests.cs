@@ -520,7 +520,7 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		private const string World = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World";
 
-		private static string Code(string path) => File.ReadAllText(Path.Combine(World, path));
+		private static string Code(string path) => ProjectFiles.ReadAllText(Path.Combine(World, path));
 
 		/// <summary>
 		/// The cut lays the roof its palette wants (the site context's AddProp, before the sink; the kit's piece source), the
@@ -530,7 +530,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void TheCutLaysThePalettesRoof_AndCloudWorldsTheirBodysPalette()
 		{
-			Assert.That(Directory.Exists(World), Is.True, "run from the project root");
+			Assert.That(ProjectFiles.FolderExists(World), Is.True, "run from the project root");
 			string site = Code("PointsOfInterest/PointOfInterestSiteContext.cs");
 			int pick = site.IndexOf("prefab = StructurePaletteDressing.RoofVariant(prefab, Palette);", StringComparison.Ordinal);
 			int sink = site.IndexOf("Sink?.Add(prefab, position, rotation, scale", StringComparison.Ordinal);
@@ -575,7 +575,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				Assert.That(ProceduralArtFamilies.FamiliesOfFile(file), Is.EqualTo(new[] { ArtFamily.Structures }), file);
 				Assert.That(ProceduralArtPayload.SourceFiles, Does.Not.Contain(file), "outside the generator's folder: found by its script, not listed");
-				Assert.That(Directory.GetFiles("Assets", file, SearchOption.AllDirectories).Length, Is.EqualTo(1), $"{file}: one script of the name, so it is found");
+				Assert.That(Directory.GetFiles(ProjectFiles.Folder("Assets"), file, SearchOption.AllDirectories).Length, Is.EqualTo(1), $"{file}: one script of the name, so it is found");
 			}
 			Assert.That(ProceduralArtPayload.ForeignSources, Does.Not.Contain("SceneEmitter.cs"));
 			string generator = Code("ProceduralArt/BiomeArtGenerator.Structures.cs");

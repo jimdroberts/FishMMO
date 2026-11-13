@@ -85,7 +85,7 @@ namespace FishMMO.UnitTests
 		/// <summary>FishFoamLaceContrastByMip as the shader holds it.</summary>
 		private static double[] ShaderContrast()
 		{
-			string source = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), Shaders + "FishWaterFoam.hlsl"));
+			string source = ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), Shaders + "FishWaterFoam.hlsl"));
 			Match match = Regex.Match(source, @"FishFoamLaceContrastByMip\[(\d+)\]\s*=\s*\{([^}]*)\}");
 			Assert.That(match.Success, Is.True, "FishWaterFoam.hlsl declares FishFoamLaceContrastByMip");
 			string[] parts = match.Groups[2].Value.Split(',');

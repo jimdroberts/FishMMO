@@ -85,7 +85,7 @@ namespace FishMMO.UnitTests.AI
 				{
 					continue;
 				}
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				bool hasTerrain = Regex.IsMatch(text, @"^Terrain:\s*$", RegexOptions.Multiline);
 				bool hasSurfaceData = Regex.IsMatch(text, @"^\s+m_NavMeshData:\s*\{fileID:\s*\d+,\s*guid:", RegexOptions.Multiline);
 				if (hasTerrain && hasSurfaceData)

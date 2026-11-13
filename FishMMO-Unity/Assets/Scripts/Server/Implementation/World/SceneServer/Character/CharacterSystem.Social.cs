@@ -462,11 +462,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			#endregion
 
 			#region Hotkeys
-			if (character.Hotkeys != null)
+			if (character.Component<HotkeyBar>().Slots != null)
 			{
 				List<HotkeySetBroadcast> hotkeyBroadcasts = new List<HotkeySetBroadcast>();
 
-				foreach (HotkeyData hotkey in character.Hotkeys)
+				foreach (HotkeyData hotkey in character.Component<HotkeyBar>().Slots)
 				{
 					// create the new hotkey broadcast
 					hotkeyBroadcasts.Add(new HotkeySetBroadcast()

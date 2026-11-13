@@ -117,15 +117,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="playerCharacter">Character whose hotkeys should be initialized.</param>
 		private static void EnsureHotkeysInitialized(IPlayerCharacter playerCharacter)
 		{
-			if (playerCharacter.Hotkeys != null)
+			if (playerCharacter.Component<HotkeyBar>().Slots != null)
 			{
 				return;
 			}
 
-			playerCharacter.Hotkeys = new List<HotkeyData>(Constants.Configuration.MaximumPlayerHotkeys);
+			playerCharacter.Component<HotkeyBar>().Slots = new List<HotkeyData>(Constants.Configuration.MaximumPlayerHotkeys);
 			for (int i = 0; i < Constants.Configuration.MaximumPlayerHotkeys; ++i)
 			{
-				playerCharacter.Hotkeys.Add(new HotkeyData()
+				playerCharacter.Component<HotkeyBar>().Slots.Add(new HotkeyData()
 				{
 					Slot = i,
 					ReferenceID = HotkeyData.UnsetReferenceID,
@@ -157,7 +157,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			int slot = incomingData.Slot;
-			if (slot < 0 || slot >= playerCharacter.Hotkeys.Count)
+			if (slot < 0 || slot >= playerCharacter.Component<HotkeyBar>().Slots.Count)
 			{
 				return false;
 			}
@@ -170,7 +170,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (isClear)
 			{
-				playerCharacter.Hotkeys[slot] = new HotkeyData()
+				playerCharacter.Component<HotkeyBar>().Slots[slot] = new HotkeyData()
 				{
 					Type = 0,
 					Slot = slot,
@@ -196,7 +196,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
-			playerCharacter.Hotkeys[slot] = new HotkeyData()
+			playerCharacter.Component<HotkeyBar>().Slots[slot] = new HotkeyData()
 			{
 				Type = incomingData.Type,
 				Slot = slot,
@@ -473,16 +473,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private void AcknowledgeHotkey(NetworkConnection conn, IPlayerCharacter playerCharacter, int slot)
 		{
 			if (conn == null ||
-				playerCharacter?.Hotkeys == null ||
+				playerCharacter?.Component<HotkeyBar>().Slots == null ||
 				slot < 0 ||
-				slot >= playerCharacter.Hotkeys.Count)
+				slot >= playerCharacter.Component<HotkeyBar>().Slots.Count)
 			{
 				return;
 			}
 
 			Server.NetworkWrapper.Broadcast(conn, new HotkeySetBroadcast()
 			{
-				HotkeyData = playerCharacter.Hotkeys[slot],
+				HotkeyData = playerCharacter.Component<HotkeyBar>().Slots[slot],
 			}, true, Channel.Reliable);
 		}
 
@@ -493,15 +493,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="playerCharacter">The requesting character.</param>
 		private void AcknowledgeAllHotkeys(NetworkConnection conn, IPlayerCharacter playerCharacter)
 		{
-			if (conn == null || playerCharacter?.Hotkeys == null || playerCharacter.Hotkeys.Count == 0)
+			if (conn == null || playerCharacter?.Component<HotkeyBar>().Slots == null || playerCharacter.Component<HotkeyBar>().Slots.Count == 0)
 			{
 				return;
 			}
 
-			HotkeySetBroadcast[] payload = new HotkeySetBroadcast[playerCharacter.Hotkeys.Count];
-			for (int i = 0; i < playerCharacter.Hotkeys.Count; ++i)
+			HotkeySetBroadcast[] payload = new HotkeySetBroadcast[playerCharacter.Component<HotkeyBar>().Slots.Count];
+			for (int i = 0; i < playerCharacter.Component<HotkeyBar>().Slots.Count; ++i)
 			{
-				payload[i] = new HotkeySetBroadcast() { HotkeyData = playerCharacter.Hotkeys[i] };
+				payload[i] = new HotkeySetBroadcast() { HotkeyData = playerCharacter.Component<HotkeyBar>().Slots[i] };
 			}
 
 			Server.NetworkWrapper.Broadcast(conn, new HotkeySetMultipleBroadcast()
@@ -522,13 +522,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			if (playerCharacter == null ||
 				playerCharacter.ID <= 0 ||
-				playerCharacter.Hotkeys == null ||
+				playerCharacter.Component<HotkeyBar>().Slots == null ||
 				!Server.DataContainerRegistry.TryGet<IHotkeySystemRuntimeData>(out var runtimeData))
 			{
 				return;
 			}
 
-			runtimeData.StageHotkeyWrite(playerCharacter.ID, playerCharacter.Hotkeys);
+			runtimeData.StageHotkeyWrite(playerCharacter.ID, playerCharacter.Component<HotkeyBar>().Slots);
 		}
 
 		/// <summary>
@@ -591,7 +591,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private void CharacterSystem_OnConnect(NetworkConnection conn, IPlayerCharacter character)
 		{
-			if (character == null || character.Hotkeys == null)
+			if (character == null || character.Component<HotkeyBar>().Slots == null)
 			{
 				return;
 			}
@@ -606,9 +606,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			bool changed = false;
-			for (int i = 0; i < character.Hotkeys.Count; ++i)
+			for (int i = 0; i < character.Component<HotkeyBar>().Slots.Count; ++i)
 			{
-				HotkeyData hotkey = character.Hotkeys[i];
+				HotkeyData hotkey = character.Component<HotkeyBar>().Slots[i];
 				if (hotkey.Type == 0 || hotkey.ReferenceID == HotkeyData.UnsetReferenceID)
 				{
 					continue;
@@ -619,7 +619,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					continue;
 				}
 
-				character.Hotkeys[i] = EmptyHotkey(hotkey.Slot);
+				character.Component<HotkeyBar>().Slots[i] = EmptyHotkey(hotkey.Slot);
 				changed = true;
 			}
 
@@ -653,15 +653,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <inheritdoc/>
 		public bool ForgetAbilityBindings(IPlayerCharacter playerCharacter, long abilityID)
 		{
-			if (playerCharacter == null || playerCharacter.Hotkeys == null)
+			if (playerCharacter == null || playerCharacter.Component<HotkeyBar>().Slots == null)
 			{
 				return false;
 			}
 
 			bool changed = false;
-			for (int i = 0; i < playerCharacter.Hotkeys.Count; ++i)
+			for (int i = 0; i < playerCharacter.Component<HotkeyBar>().Slots.Count; ++i)
 			{
-				HotkeyData hotkey = playerCharacter.Hotkeys[i];
+				HotkeyData hotkey = playerCharacter.Component<HotkeyBar>().Slots[i];
 
 				/* Matched on type as well as id. The id spaces are not disjoint — an inventory SLOT
 				 * index and an equipment slot index are both small integers — so clearing on the id
@@ -671,7 +671,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					continue;
 				}
 
-				playerCharacter.Hotkeys[i] = EmptyHotkey(hotkey.Slot);
+				playerCharacter.Component<HotkeyBar>().Slots[i] = EmptyHotkey(hotkey.Slot);
 				changed = true;
 			}
 

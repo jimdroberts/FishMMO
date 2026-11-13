@@ -40,7 +40,7 @@ namespace FishMMO.UnitTests
         {
             var doc = Make("ServerName=LoginServer\r\n# Port hint\r\n  Port =  7770  \r\n\r\n", bom: true);
             doc.Set("port", "7799"); doc.Save(false);
-            Assert.That(File.ReadAllText(doc.PathName), Is.EqualTo("ServerName=LoginServer\r\n# Port hint\r\n  Port =  7799  \r\n\r\n"));
+            Assert.That(ProjectFiles.ReadAllText(doc.PathName), Is.EqualTo("ServerName=LoginServer\r\n# Port hint\r\n  Port =  7799  \r\n\r\n"));
             Assert.That(doc.Description("Port"), Is.EqualTo("Port hint"));
         }
         [Test]
@@ -49,7 +49,7 @@ namespace FishMMO.UnitTests
             var doc = Make("ServerName=LoginServer\nCustom=first\ncustom=last\n");
             Assert.That(doc.Get("CUSTOM"), Is.EqualTo("last"));
             doc.Set("Custom", "updated"); doc.Save(false);
-            Assert.That(File.ReadAllText(doc.PathName), Does.Contain("Custom=first\ncustom=updated"));
+            Assert.That(ProjectFiles.ReadAllText(doc.PathName), Does.Contain("Custom=first\ncustom=updated"));
             doc.Remove("CUSTOM"); doc.Save(false);
             Assert.That(new ServerCfgDocument(doc.PathName).Keys, Does.Not.Contain("Custom"));
         }
@@ -95,7 +95,7 @@ namespace FishMMO.UnitTests
             var doc = Make("ServerName=LoginServer\nPort=7770\n");
             File.AppendAllText(doc.PathName, "# changed externally\n"); doc.Set("Port", "7788");
             Assert.Throws<IOException>(() => doc.Save(false));
-            Assert.That(File.ReadAllText(doc.PathName), Does.Contain("# changed externally"));
+            Assert.That(ProjectFiles.ReadAllText(doc.PathName), Does.Contain("# changed externally"));
         }
         [Test]
         public void ApplyChecksAllTargetsBeforeChangingAnyBuiltCfg()
@@ -105,7 +105,7 @@ namespace FishMMO.UnitTests
             string build = Path.Combine(folder, "Build"); Directory.CreateDirectory(build);
             File.WriteAllText(Path.Combine(build, "LoginServer.cfg"), "old");
             Assert.Throws<IOException>(() => ServerCfgDocument.CopyToBuild(new[] { login, world }, build, false));
-            Assert.That(File.ReadAllText(Path.Combine(build, "LoginServer.cfg")), Is.EqualTo("old"));
+            Assert.That(ProjectFiles.ReadAllText(Path.Combine(build, "LoginServer.cfg")), Is.EqualTo("old"));
             File.WriteAllText(Path.Combine(build, "WorldServer.cfg"), "old");
             ServerCfgDocument.CopyToBuild(new[] { login, world }, build, false);
             CollectionAssert.AreEqual(login.GetBytes(), File.ReadAllBytes(Path.Combine(build, "LoginServer.cfg")));

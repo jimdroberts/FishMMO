@@ -25,7 +25,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
 		private const string World = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World";
 
-		private static string Read(string path) => File.ReadAllText(path).Replace("\r\n", "\n");
+		private static string Read(string path) => ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 
 		private static Vector4 SeamGlow => BiomeGroundGlow.Seams(1400f, 6f, 400).Pack();
 
@@ -511,9 +511,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(entry.MoatWater, Is.Not.EqualTo(BiomeMoatWater.Lava), $"{entry.Biome} names no lava moat yet");
 			}
 			int templates = 0;
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				if (!Regex.IsMatch(text, "^  MinTemperature:", RegexOptions.Multiline))
 				{
 					continue;

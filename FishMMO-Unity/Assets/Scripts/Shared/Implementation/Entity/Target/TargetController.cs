@@ -471,18 +471,18 @@ namespace FishMMO.Shared
 						 * MissingReferenceException. The clear still fires — with no argument —
 						 * because the frame must come down either way. */
 						OnClearTarget?.Invoke(previousTarget);
-						Character.Invoke(onTargetClearTriggers, new EventData(Character, previousTarget.gameObject));
+						Trigger.InvokeAll(onTargetClearTriggers, new EventData(Character, previousTarget.gameObject));
 					}
 					else if (!ReferenceEquals(previousTarget, null))
 					{
 						// The previous target was destroyed out from under us.
 						OnClearTarget?.Invoke(null);
-						Character.Invoke(onTargetClearTriggers, new EventData(Character, null));
+						Trigger.InvokeAll(onTargetClearTriggers, new EventData(Character, null));
 					}
 
 					// Invoke change target event.
 					OnChangeTarget?.Invoke(resolvedTarget);
-					Character.Invoke(onTargetChangeTriggers, new EventData(Character, resolvedTarget != null ? resolvedTarget.gameObject : null));
+					Trigger.InvokeAll(onTargetChangeTriggers, new EventData(Character, resolvedTarget != null ? resolvedTarget.gameObject : null));
 				}
 				else
 				{

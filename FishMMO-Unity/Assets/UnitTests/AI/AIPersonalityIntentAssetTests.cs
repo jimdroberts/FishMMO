@@ -37,7 +37,7 @@ namespace FishMMO.UnitTests.AI
 			foreach (string guid in AssetDatabase.FindAssets("t:AICombatPersonality", new[] { PERSONALITY_FOLDER }))
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guid);
-				AICombatPersonality personality = AssetDatabase.LoadAssetAtPath<AICombatPersonality>(path);
+				AICombatPersonality personality = AssetDatabase.LoadAssetAtPath<AICombatPersonality>(ProjectFiles.Path(path));
 				if (personality != null)
 				{
 					personalities.Add(personality);

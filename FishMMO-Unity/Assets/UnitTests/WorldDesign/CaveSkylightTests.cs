@@ -365,7 +365,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void TheShadersMirrorTheSharedMathsAndTheClientIsWired()
 		{
 			const string shaders = "Assets/Prefabs/Client/Weather/Shaders/";
-			string include = System.IO.File.ReadAllText(shaders + "FishSkylights.hlsl");
+			string include = ProjectFiles.ReadAllText(shaders + "FishSkylights.hlsl");
 			float Define(string name)
 			{
 				var match = System.Text.RegularExpressions.Regex.Match(include, @"#define\s+" + name + @"\s+([0-9.]+)");
@@ -378,13 +378,13 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(Define("FISH_SKYLIGHT_BEAM_INNER"), Is.EqualTo(SceneSkylight.BeamInner));
 			Assert.That(Define("FISH_SKYLIGHT_BEAM_OUTER"), Is.EqualTo(SceneSkylight.BeamOuter));
 			Assert.That(Define("FISH_SKYLIGHT_LOWEST_SUN"), Is.EqualTo(SceneSkylight.LowestSun));
-			Assert.That(System.IO.File.ReadAllText(shaders + "FishSkylightShafts.shader"), Does.Contain($"#define SLOTS {SceneSkylight.MaxNear}"));
-			Assert.That(System.IO.File.ReadAllText(shaders + "FishGroundMap.hlsl"), Does.Contain("#include \"FishSkylights.hlsl\"").And.Contain("FishSkylightSky(positionWS)"));
-			Assert.That(System.IO.File.ReadAllText(shaders + "FishWeatherLitForwardPass.hlsl"), Does.Contain("FishSkylightSun(inputData.positionWS, fishSun.direction)"));
+			Assert.That(ProjectFiles.ReadAllText(shaders + "FishSkylightShafts.shader"), Does.Contain($"#define SLOTS {SceneSkylight.MaxNear}"));
+			Assert.That(ProjectFiles.ReadAllText(shaders + "FishGroundMap.hlsl"), Does.Contain("#include \"FishSkylights.hlsl\"").And.Contain("FishSkylightSky(positionWS)"));
+			Assert.That(ProjectFiles.ReadAllText(shaders + "FishWeatherLitForwardPass.hlsl"), Does.Contain("FishSkylightSun(inputData.positionWS, fishSun.direction)"));
 			const string client = "Assets/Scripts/Client/World/";
-			Assert.That(System.IO.File.ReadAllText(client + "Terrain/SiteLightPool.cs"), Does.Contain("case SceneEmitterKind.Skylight:"));
-			Assert.That(System.IO.File.ReadAllText(client + "Weather/Sky/SkySystem.cs"), Does.Contain("CaveSkylights.OpenAt(eye)"));
-			Assert.That(System.IO.File.ReadAllText(client + "Terrain/CaveSkylights.cs"), Does.Contain("SetGlobalVectorArray(SkylightsId"));
+			Assert.That(ProjectFiles.ReadAllText(client + "Terrain/SiteLightPool.cs"), Does.Contain("case SceneEmitterKind.Skylight:"));
+			Assert.That(ProjectFiles.ReadAllText(client + "Weather/Sky/SkySystem.cs"), Does.Contain("CaveSkylights.OpenAt(eye)"));
+			Assert.That(ProjectFiles.ReadAllText(client + "Terrain/CaveSkylights.cs"), Does.Contain("SetGlobalVectorArray(SkylightsId"));
 		}
 
 		[Test]

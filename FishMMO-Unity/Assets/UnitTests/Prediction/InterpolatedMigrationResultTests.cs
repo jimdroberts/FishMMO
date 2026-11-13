@@ -143,7 +143,7 @@ namespace FishMMO.UnitTests
 				"t:Prefab", new[] { "Assets/Prefabs/Shared/Entity/PlayableCharacters" }))
 			{
 				string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
-				GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(path);
+				GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(path));
 				NetworkObject nob = prefab != null ? prefab.GetComponent<NetworkObject>() : null;
 				if (nob == null)
 				{

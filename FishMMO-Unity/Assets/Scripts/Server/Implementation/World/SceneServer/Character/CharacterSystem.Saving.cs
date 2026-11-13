@@ -194,7 +194,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public readonly List<CharacterAttributeData> Attributes;
 			public readonly List<CharacterAbilityData> Abilities;
 			public readonly List<PetSnapshot> Pets;
-			public readonly List<CharacterAchievementData> Achievements;
 			public readonly List<CharacterWaypointData> Waypoints;
 			public readonly List<CharacterFactionData> Factions;
 			public readonly List<CharacterArchetypeData> Archetypes;
@@ -205,6 +204,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// the hotkey system's own pump. See <c>IHotkeySystemRuntimeData.TakeDepartingBar</c>.
 			/// </summary>
 			public readonly List<CharacterHotkeyData> Hotkeys;
+			/// <summary>
+			/// Each installed <see cref="CharacterPersistenceParticipant"/>'s rows, made on first capture. The
+			/// features still listed above are the ones not yet moved onto participants.
+			/// </summary>
+			public readonly Dictionary<CharacterPersistenceParticipant, CharacterRows> Participants = new Dictionary<CharacterPersistenceParticipant, CharacterRows>();
+
+			/// <summary><paramref name="participant"/>'s rows in this snapshot, made empty the first time.</summary>
+			public CharacterRows RowsFor(CharacterPersistenceParticipant participant)
+			{
+				if (!Participants.TryGetValue(participant, out CharacterRows rows))
+				{
+					rows = participant.CreateRows();
+					Participants[participant] = rows;
+				}
+				return rows;
+			}
+
 			/// <summary>Each character's knowledge version as captured, keyed by character. See MarkKnowledgePersisted.</summary>
 			public readonly Dictionary<long, long> KnowledgeVersions;
 			/// <summary>
@@ -221,7 +237,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Attributes = new List<CharacterAttributeData>(n * 16);
 				Abilities = new List<CharacterAbilityData>(n * 8);
 				Pets = new List<PetSnapshot>(n);
-				Achievements = new List<CharacterAchievementData>(n * 4);
 				Waypoints = new List<CharacterWaypointData>(n);
 				Factions = new List<CharacterFactionData>(n * 8);
 				Archetypes = new List<CharacterArchetypeData>(n);
@@ -278,7 +293,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Attributes.AddRange(other.Attributes);
 					Abilities.AddRange(other.Abilities);
 					Pets.AddRange(other.Pets);
-					Achievements.AddRange(other.Achievements);
 					Waypoints.AddRange(other.Waypoints);
 					Factions.AddRange(other.Factions);
 					Archetypes.AddRange(other.Archetypes);
@@ -290,12 +304,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Attributes.AddRange(other.Attributes.Where(r => !conflicting.Contains(r.CharacterID)));
 					Abilities.AddRange(other.Abilities.Where(r => !conflicting.Contains(r.CharacterID)));
 					Pets.AddRange(other.Pets.Where(r => !conflicting.Contains(r.Pet.CharacterID)));
-					Achievements.AddRange(other.Achievements.Where(r => !conflicting.Contains(r.CharacterID)));
 					Waypoints.AddRange(other.Waypoints.Where(r => !conflicting.Contains(r.CharacterID)));
 					Factions.AddRange(other.Factions.Where(r => !conflicting.Contains(r.CharacterID)));
 					Archetypes.AddRange(other.Archetypes.Where(r => !conflicting.Contains(r.CharacterID)));
 					KnownAbilities.AddRange(other.KnownAbilities.Where(r => !conflicting.Contains(r.CharacterID)));
 					Hotkeys.AddRange(other.Hotkeys.Where(r => !conflicting.Contains(r.CharacterID)));
+				}
+
+				foreach (KeyValuePair<CharacterPersistenceParticipant, CharacterRows> participant in other.Participants)
+				{
+					RowsFor(participant.Key).AddFrom(participant.Value, conflicting);
 				}
 
 				foreach (KeyValuePair<long, long> knowledge in other.KnowledgeVersions)
@@ -345,7 +363,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			AppendAttributeData(character, snapshot.Attributes);
 			AppendAbilityData(character, snapshot.Abilities);
 			AppendPetData(character, snapshot.Pets);
-			AppendAchievementData(character, snapshot.Achievements);
+			IReadOnlyList<CharacterPersistenceParticipant> participants = CharacterPersistenceParticipants.All;
+			for (int i = 0; i < participants.Count; i++)
+			{
+				participants[i].Capture(character, snapshot.RowsFor(participants[i]));
+			}
 			AppendWaypointData(character, snapshot.Waypoints);
 			AppendFactionData(character, snapshot.Factions);
 			AppendArchetypeData(character, snapshot.Archetypes);
@@ -387,7 +409,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			List<CharacterHotkeyData> bar = hotkeyData.TakeDepartingBar(character.ID, character.Hotkeys);
+			List<CharacterHotkeyData> bar = hotkeyData.TakeDepartingBar(character.ID, character.Component<HotkeyBar>().Slots);
 			if (bar != null)
 			{
 				snapshot.Hotkeys.AddRange(bar);
@@ -455,7 +477,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 			if (s.Pets.Count > 0) EnqueuePersistence(() => SavePetsAsync(s.Pets, claims));
-			if (s.Achievements.Count > 0) EnqueuePersistence(() => SaveAchievementsAsync(s.Achievements, claims));
+			foreach (KeyValuePair<CharacterPersistenceParticipant, CharacterRows> participant in s.Participants)
+			{
+				if (participant.Value.Count > 0)
+				{
+					CharacterPersistenceParticipant writer = participant.Key;
+					CharacterRows rows = participant.Value;
+					EnqueuePersistence(() => writer.SaveAsync(this, rows, claims));
+				}
+			}
 			if (s.Waypoints.Count > 0) EnqueuePersistence(() => SaveWaypointsAsync(s.Waypoints));
 			if (s.Factions.Count > 0) EnqueuePersistence(() => SaveFactionsAsync(s.Factions, claims));
 			if (s.Archetypes.Count > 0) EnqueuePersistence(() => SaveArchetypesAsync(s.Archetypes, claims));
@@ -515,7 +545,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 			if (s.Pets.Count > 0) done &= await SaveWithRetryAsync(() => SavePetsAsync(s.Pets, claims), "pet", characterID);
-			if (s.Achievements.Count > 0) done &= await SaveWithRetryAsync(() => SaveAchievementsAsync(s.Achievements, claims), "achievements", characterID);
+			foreach (KeyValuePair<CharacterPersistenceParticipant, CharacterRows> participant in s.Participants)
+			{
+				if (participant.Value.Count > 0)
+				{
+					CharacterPersistenceParticipant writer = participant.Key;
+					CharacterRows rows = participant.Value;
+					done &= await SaveWithRetryAsync(() => writer.SaveAsync(this, rows, claims), writer.Name, characterID);
+				}
+			}
 			if (s.Waypoints.Count > 0) done &= await SaveWithRetryAsync(() => SaveWaypointsAsync(s.Waypoints), "waypoints", characterID);
 			if (s.Factions.Count > 0) done &= await SaveWithRetryAsync(() => SaveFactionsAsync(s.Factions, claims), "factions", characterID);
 			if (s.Archetypes.Count > 0) done &= await SaveWithRetryAsync(() => SaveArchetypesAsync(s.Archetypes, claims), "archetype", characterID);
@@ -2620,109 +2658,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					ability != null)
 				{
 					ability.MarkPersisted(saved.Version);
-				}
-			}
-		}
-
-		/// <summary>
-		/// Appends a snapshot of every achievement changed since the database last confirmed it.
-		/// Main-thread only. Each appended DTO has its Version bumped on the runtime Achievement.
-		/// </summary>
-		/// <remarks>
-		/// Achievements were fetched on login and never written back — progress reset to the
-		/// loaded values every session. This is the missing save leg, shaped like the ability
-		/// one: <see cref="Achievement.MarkChanged"/> advances the version on mutation, the
-		/// snapshot advances it again, and <see cref="MarkAchievementsPersisted"/> clears the
-		/// mark only when the version still matches.
-		/// </remarks>
-		private void AppendAchievementData(IPlayerCharacter character, List<CharacterAchievementData> achievements)
-		{
-			if (!character.TryGet(out IAchievementController achievementController) ||
-				achievementController.Achievements.Count == 0)
-			{
-				return;
-			}
-
-			foreach (var kvp in achievementController.Achievements)
-			{
-				Achievement achievement = kvp.Value;
-				if (achievement == null || !achievement.PersistenceDirty)
-				{
-					continue;
-				}
-
-				/* Keyed by the dictionary key, not achievement.Template.ID: a template this
-				 * server cannot resolve (a partial content rollout) still has progress worth
-				 * writing, and the key is the same value. */
-				achievement.Version++;
-				achievements.Add(new CharacterAchievementData(
-					id: 0,
-					version: achievement.Version,
-					characterID: character.ID,
-					templateID: kvp.Key,
-					tier: achievement.CurrentTier,
-					value: achievement.CurrentValue));
-			}
-		}
-
-		/// <summary>
-		/// Persists a snapshot of achievement progress asynchronously.
-		/// </summary>
-		/// <param name="achievements">The rows.</param>
-		/// <param name="claims">The claims the rows were captured under. See <see cref="AppendSubEntities"/>.</param>
-		/// <returns>False only when the write failed in a way worth another attempt.</returns>
-		private async Task<bool> SaveAchievementsAsync(List<CharacterAchievementData> achievements, IReadOnlyCollection<CharacterSessionLeaseData> claims)
-		{
-			try
-			{
-				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterAchievementService>(out var achievementService))
-				{
-					return true;
-				}
-
-				DatabaseResult<BulkWriteResult> result = await achievementService.PersistOwnedAsync(achievements, claims);
-				bool written = await BulkWriteReporting.ReportAsync("CharacterSystem", "Achievement save", result);
-
-				// Same rule as abilities: filtered rows were never offered to the database.
-				if (BulkWriteReporting.MayClearDirtyMarks(result))
-				{
-					TryEnqueueMainThread(() => MarkAchievementsPersisted(achievements));
-				}
-
-				return written || !result.IsTransient;
-			}
-			catch (Exception ex)
-			{
-				await Log.Error("CharacterSystem", $"SaveAchievementsAsync failed: {ex}");
-				return false;
-			}
-		}
-
-		/// <summary>
-		/// Clears the dirty mark on every achievement a completed write covered. Main thread.
-		/// </summary>
-		private void MarkAchievementsPersisted(List<CharacterAchievementData> achievements)
-		{
-			if (achievements == null)
-			{
-				return;
-			}
-
-			for (int i = 0; i < achievements.Count; ++i)
-			{
-				CharacterAchievementData saved = achievements[i];
-
-				if (!TryGetResidentCharacter(saved.CharacterID, out IPlayerCharacter character) ||
-					!character.TryGet(out IAchievementController achievementController))
-				{
-					continue;
-				}
-
-				if (achievementController.Achievements.TryGetValue(saved.TemplateID, out Achievement achievement) &&
-					achievement != null)
-				{
-					achievement.MarkPersisted(saved.Version);
 				}
 			}
 		}

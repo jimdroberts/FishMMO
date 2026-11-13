@@ -362,7 +362,7 @@ namespace FishMMO.UnitTests
 			foreach (string guid in UnityEditor.AssetDatabase.FindAssets("t:Prefab", roots))
 			{
 				string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
-				foreach (string line in System.IO.File.ReadAllLines(path))
+				foreach (string line in ProjectFiles.ReadAllLines(path))
 				{
 					if (!line.Contains("_spectatorInterpolation:"))
 					{
@@ -461,7 +461,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void RecordTick_StampsThroughTheSharedDomainHelper()
 		{
-			string source = System.IO.File.ReadAllText(
+			string source = ProjectFiles.ReadAllText(
 				"Assets/Scripts/Shared/Implementation/Entity/Prediction/LagCompensation/CharacterPositionHistory.cs");
 
 			LogAssert.IsTrue(source.Contains("LagCompensationTick.ServerTickDomain(base.TimeManager)"),
@@ -469,7 +469,7 @@ namespace FishMMO.UnitTests
 				"LagCompensationTick.ServerTickDomain so it cannot drift out of the domain the rewind " +
 				"anchors in. Reading TimeManager.LocalTick directly here is how that drift starts.");
 
-			string tickSource = System.IO.File.ReadAllText(
+			string tickSource = ProjectFiles.ReadAllText(
 				"Assets/Scripts/Shared/Implementation/Entity/Prediction/LagCompensation/LagCompensationTick.cs");
 
 			LogAssert.IsFalse(tickSource.Contains("CurrentReplicateTickSnapshot"),
@@ -509,7 +509,7 @@ namespace FishMMO.UnitTests
 			foreach (string guid in UnityEditor.AssetDatabase.FindAssets("t:Prefab", roots))
 			{
 				string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
-				GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(path);
+				GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(path));
 				if (prefab == null)
 				{
 					continue;
@@ -657,8 +657,8 @@ namespace FishMMO.UnitTests
 		private static string ReadSource(string relativePath)
 		{
 			string path = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), relativePath);
-			LogAssert.IsTrue(System.IO.File.Exists(path), $"Expected source at {path}.");
-			return System.IO.File.ReadAllText(path);
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"Expected source at {path}.");
+			return ProjectFiles.ReadAllText(path);
 		}
 
 		#endregion

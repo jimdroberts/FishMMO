@@ -1112,7 +1112,7 @@ namespace FishMMO.Shared
 			{
 				faction.MarkChanged();
 				IFactionController.OnUpdateFaction?.Invoke(Character, faction);
-				Character.Invoke(onFactionChangeTriggers, new FactionEventData(Character, faction.Template, value));
+				Trigger.InvokeAll(onFactionChangeTriggers, new FactionEventData(Character, faction.Template, value));
 			}
 		}
 
@@ -1201,7 +1201,7 @@ namespace FishMMO.Shared
 			//Log.Debug($"Update Faction: {template.ID}:{amount}");
 
 			IFactionController.OnUpdateFaction?.Invoke(Character, faction);
-			Character.Invoke(onFactionChangeTriggers, new FactionEventData(Character, template, faction.Value));
+			Trigger.InvokeAll(onFactionChangeTriggers, new FactionEventData(Character, template, faction.Value));
 		}
 
 		/// <summary>

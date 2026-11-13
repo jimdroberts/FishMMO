@@ -1053,9 +1053,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Increment achievement for summoning a pet
 			if (PetSummonAchievementTemplate != null &&
-				owner.TryGet(out IAchievementController achievementController))
+				owner != null)
 			{
-				achievementController.Increment(PetSummonAchievementTemplate, 1);
+				Accomplishments.Record(owner, PetSummonAchievementTemplate);
 			}
 
 			/* Fire the summon triggers HERE, on the server.
@@ -1084,7 +1084,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
-			owner.Invoke(triggers, new PetEventData(owner, pet));
+			Trigger.InvokeAll(triggers, new PetEventData(owner, pet));
 		}
 
 		/// <summary>

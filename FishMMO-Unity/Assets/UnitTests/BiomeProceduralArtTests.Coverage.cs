@@ -62,16 +62,16 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void SpecTable_EachBiomeIsWrittenInItsOwnFile()
 		{
-			Assert.That(Directory.Exists(SpecBiomeFolder), Is.True, "run from the project root");
+			Assert.That(ProjectFiles.FolderExists(SpecBiomeFolder), Is.True, "run from the project root");
 			var entryCall = new Regex("\\bE\\(\"([^\"]+)\"");
-			var files = Directory.GetFiles(SpecBiomeFolder, "*.cs", SearchOption.AllDirectories).Select(Path.GetFileName).ToList();
+			var files = Directory.GetFiles(ProjectFiles.Folder(SpecBiomeFolder), "*.cs", SearchOption.AllDirectories).Select(Path.GetFileName).ToList();
 			Assert.That(files.Count, Is.EqualTo(BiomeArtSpec.Entries.Length), "one file a biome");
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
 				string name = Regex.Replace(entry.Biome, "[^A-Za-z0-9]+", string.Empty);
 				string path = Path.Combine(SpecBiomeFolder, "BiomeArtSpec." + name + ".cs");
-				Assert.That(File.Exists(path), Is.True, $"{entry.Biome}'s entry belongs in {path}");
-				string source = File.ReadAllText(path);
+				Assert.That(ProjectFiles.Exists(path), Is.True, $"{entry.Biome}'s entry belongs in {path}");
+				string source = ProjectFiles.ReadAllText(path);
 				string[] biomes = entryCall.Matches(source).Cast<Match>().Select(m => m.Groups[1].Value).ToArray();
 				Assert.That(biomes, Is.EqualTo(new[] { entry.Biome }), $"{path} writes {entry.Biome}'s entry and no other");
 				Assert.That(source, Does.Contain("private static Entry " + name + "()"), $"{path}: the biome's method is named for it");
@@ -86,12 +86,12 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void SpecTable_BiomeFilesDeclareNoStaticField()
 		{
-			Assert.That(Directory.Exists(SpecBiomeFolder), Is.True, "run from the project root");
+			Assert.That(ProjectFiles.FolderExists(SpecBiomeFolder), Is.True, "run from the project root");
 			// A static member whose name is followed by '=' (not '=>') or ';': a field. A method's name is followed by '(' and a property's by '=>'.
 			var field = new Regex(@"\bstatic\s+(readonly\s+)?[\w.<>\[\],?\s]*?\s(\w+)\s*(=(?!>)|;)");
-			foreach (string path in Directory.GetFiles(SpecBiomeFolder, "*.cs", SearchOption.AllDirectories))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(SpecBiomeFolder), "*.cs", SearchOption.AllDirectories))
 			{
-				foreach (string line in File.ReadAllLines(path))
+				foreach (string line in ProjectFiles.ReadAllLines(path))
 				{
 					string code = line.Trim();
 					if (code.StartsWith("//", System.StringComparison.Ordinal))

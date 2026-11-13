@@ -35,8 +35,8 @@ namespace FishMMO.UnitTests
 		private static string ReadSource(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-			LogAssert.IsTrue(File.Exists(path), $"{relativePath} not found at {path}.");
-			return File.ReadAllText(path);
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{relativePath} not found at {path}.");
+			return ProjectFiles.ReadAllText(path);
 		}
 
 		private static string StripComments(string source)
@@ -78,9 +78,9 @@ namespace FishMMO.UnitTests
 		{
 			List<string> tags = new List<string>();
 
-			foreach (string layout in Directory.GetFiles(GuiRoot, "*.uxml", SearchOption.AllDirectories))
+			foreach (string layout in Directory.GetFiles(ProjectFiles.Folder(GuiRoot), "*.uxml", SearchOption.AllDirectories))
 			{
-				foreach (Match button in Regex.Matches(File.ReadAllText(layout), "<ui:Button\\b[^>]*>"))
+				foreach (Match button in Regex.Matches(ProjectFiles.ReadAllText(layout), "<ui:Button\\b[^>]*>"))
 				{
 					string tag = button.Value;
 
@@ -160,14 +160,14 @@ namespace FishMMO.UnitTests
 			 * the buttons stop being the same control. */
 			List<string> offenders = new List<string>();
 
-			foreach (string sheet in Directory.GetFiles(GuiRoot, "*.uss", SearchOption.AllDirectories))
+			foreach (string sheet in Directory.GetFiles(ProjectFiles.Folder(GuiRoot), "*.uss", SearchOption.AllDirectories))
 			{
 				if (Path.GetFileName(sheet) == "FishMMO-Theme.uss")
 				{
 					continue;
 				}
 
-				string source = StripComments(File.ReadAllText(sheet));
+				string source = StripComments(ProjectFiles.ReadAllText(sheet));
 				int cursor = 0;
 
 				while (true)

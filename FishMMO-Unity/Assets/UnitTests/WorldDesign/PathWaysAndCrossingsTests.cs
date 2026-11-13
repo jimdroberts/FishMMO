@@ -33,21 +33,21 @@ namespace FishMMO.UnitTests.WorldDesign
 			// And no biome asset carries either field set (an asset written before the fields existed reads the defaults).
 			string folder = Path.Combine("Assets", "Templates", "Entity", "Biomes");
 			int assets = 0;
-			foreach (string file in Directory.GetFiles(folder, "*.asset"))
+			foreach (string file in Directory.GetFiles(ProjectFiles.Folder(folder), "*.asset"))
 			{
 				assets++;
 				if (BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(file)))
 				{
 					continue;
 				}
-				foreach (string line in File.ReadAllLines(file))
+				foreach (string line in ProjectFiles.ReadAllLines(file))
 				{
 					string t = line.Trim();
 					if (t.StartsWith("crossingStyle:", StringComparison.Ordinal))
 					{
 						Assert.That(t, Is.EqualTo("crossingStyle: 0"), file);
 					}
-					if (t.StartsWith("Form:", StringComparison.Ordinal) && File.ReadAllText(file).Contains("straightRoads:"))
+					if (t.StartsWith("Form:", StringComparison.Ordinal) && ProjectFiles.ReadAllText(file).Contains("straightRoads:"))
 					{
 						Assert.That(t, Is.EqualTo("Form: 0"), file);
 					}
@@ -395,7 +395,7 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		// ── Wiring ───────────────────────────────────────────────────
 
-		private static string Source(string relative) => File.ReadAllText(Path.Combine("Assets", "Scripts", "Shared", "Implementation", relative));
+		private static string Source(string relative) => ProjectFiles.ReadAllText(Path.Combine("Assets", "Scripts", "Shared", "Implementation", relative));
 
 		[Test]
 		public void TheCutAsksTheStylesAndTheRoads_AndTheArtIsHashed()

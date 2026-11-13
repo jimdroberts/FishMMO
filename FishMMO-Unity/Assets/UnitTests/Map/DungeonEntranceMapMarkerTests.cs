@@ -269,10 +269,10 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void EveryMarkerTypeHasAStyleRule()
 		{
-			LogAssert.IsTrue(File.Exists(MarkerSheetPath), $"the shared marker sheet must be at {MarkerSheetPath}");
-			LogAssert.IsTrue(File.Exists(PointOfInterestSheetPath), $"the point-of-interest marker sheet must be at {PointOfInterestSheetPath}");
+			LogAssert.IsTrue(ProjectFiles.Exists(MarkerSheetPath), $"the shared marker sheet must be at {MarkerSheetPath}");
+			LogAssert.IsTrue(ProjectFiles.Exists(PointOfInterestSheetPath), $"the point-of-interest marker sheet must be at {PointOfInterestSheetPath}");
 			// Both sheets: the hundred point-of-interest types are styled in their own, generated one.
-			string source = StripCssComments(File.ReadAllText(MarkerSheetPath)) + "\n" + StripCssComments(File.ReadAllText(PointOfInterestSheetPath));
+			string source = StripCssComments(ProjectFiles.ReadAllText(MarkerSheetPath)) + "\n" + StripCssComments(ProjectFiles.ReadAllText(PointOfInterestSheetPath));
 
 			foreach (MapMarkerType type in Enum.GetValues(typeof(MapMarkerType)))
 			{

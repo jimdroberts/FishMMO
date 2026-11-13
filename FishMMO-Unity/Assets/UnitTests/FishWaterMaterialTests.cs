@@ -33,7 +33,7 @@ namespace FishMMO.UnitTests
 
 		private static string Read(string file)
 		{
-			return File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), Shaders + file)).Replace("\r\n", "\n");
+			return ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), Shaders + file)).Replace("\r\n", "\n");
 		}
 
 		/// <summary>The names in a shader's Properties block.</summary>
@@ -158,12 +158,12 @@ namespace FishMMO.UnitTests
 		public void TheLavaMaterialCarriesTheBakedCrust()
 		{
 			string folder = Path.Combine(Directory.GetCurrentDirectory(), "Assets/Plugins/FishMMO Water/");
-			string material = File.ReadAllText(folder + "Materials/Lava.mat");
+			string material = ProjectFiles.ReadAllText(folder + "Materials/Lava.mat");
 			foreach (string map in new[] { "LavaCrustNormal", "LavaCrustMask" })
 			{
 				string meta = folder + "Textures/" + map + ".png.meta";
-				LogAssert.IsTrue(File.Exists(meta), map + ".png is not in the plugin's Textures folder; run FishMMO/Water/Bake Lava Textures");
-				string guid = Regex.Match(File.ReadAllText(meta), @"^guid:\s*(\w+)", RegexOptions.Multiline).Groups[1].Value;
+				LogAssert.IsTrue(ProjectFiles.Exists(meta), map + ".png is not in the plugin's Textures folder; run FishMMO/Water/Bake Lava Textures");
+				string guid = Regex.Match(ProjectFiles.ReadAllText(meta), @"^guid:\s*(\w+)", RegexOptions.Multiline).Groups[1].Value;
 				LogAssert.IsTrue(guid.Length == 32 && material.Contains("guid: " + guid), "Lava.mat does not reference " + map + ".png");
 			}
 		}

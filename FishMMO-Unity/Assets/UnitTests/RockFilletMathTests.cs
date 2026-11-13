@@ -270,8 +270,8 @@ namespace FishMMO.UnitTests
 		{
 			// Source scan: the compute's constants and tables are RockFilletMath's and RockFillets', and every pass and
 			// kernel compiles with DXC for Vulkan.
-			string compute = System.IO.File.ReadAllText(RockFillets.ComputeAssetPath);
-			string shader = System.IO.File.ReadAllText(RockFillets.ShaderAssetPath);
+			string compute = ProjectFiles.ReadAllText(RockFillets.ComputeAssetPath);
+			string shader = ProjectFiles.ReadAllText(RockFillets.ShaderAssetPath);
 			void Define(string name, string value) =>
 				LogAssert.IsTrue(System.Text.RegularExpressions.Regex.IsMatch(compute, $@"#define {name} {System.Text.RegularExpressions.Regex.Escape(value)}\b"), $"{name} is {value}");
 			Define("FISH_FILLET_SUB", RockFilletMath.Sub.ToString());

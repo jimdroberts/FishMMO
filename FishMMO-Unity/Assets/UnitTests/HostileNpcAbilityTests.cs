@@ -46,12 +46,12 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void EveryFightingNpcKnowsAnAbility()
 		{
-			LogAssert.IsTrue(Directory.Exists(NpcRoot), $"NPC prefabs must live at {NpcRoot}");
+			LogAssert.IsTrue(ProjectFiles.FolderExists(NpcRoot), $"NPC prefabs must live at {NpcRoot}");
 
 			Dictionary<string, string> archetypeNames = ArchetypeNamesByGuid();
 			LogAssert.IsTrue(archetypeNames.Count > 0, "there must be AI archetypes to resolve");
 
-			string[] prefabs = Directory.GetFiles(NpcRoot, "*.prefab", SearchOption.AllDirectories);
+			string[] prefabs = Directory.GetFiles(ProjectFiles.Folder(NpcRoot), "*.prefab", SearchOption.AllDirectories);
 			LogAssert.IsTrue(prefabs.Length > 0, "there must be NPC prefabs to check");
 
 			List<string> offenders = new List<string>();
@@ -63,7 +63,7 @@ namespace FishMMO.UnitTests
 
 			foreach (string prefab in prefabs)
 			{
-				string source = File.ReadAllText(prefab);
+				string source = ProjectFiles.ReadAllText(prefab);
 
 				string prefabGuid = FishMMO.UnitTests.AI.BrainCatalogueYaml.GuidOf(prefab);
 				if (prefabGuid == null ||
@@ -98,12 +98,12 @@ namespace FishMMO.UnitTests
 			Dictionary<string, string> names = new Dictionary<string, string>();
 
 			string templates = Path.Combine(Directory.GetCurrentDirectory(), "Assets/Templates");
-			if (!Directory.Exists(templates))
+			if (!ProjectFiles.FolderExists(templates))
 			{
 				return names;
 			}
 
-			foreach (string meta in Directory.GetFiles(templates, "*.asset.meta", SearchOption.AllDirectories))
+			foreach (string meta in Directory.GetFiles(ProjectFiles.Folder(templates), "*.asset.meta", SearchOption.AllDirectories))
 			{
 				string name = Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(meta));
 				if (!Fights(name))
@@ -111,7 +111,7 @@ namespace FishMMO.UnitTests
 					continue;
 				}
 
-				Match guid = Regex.Match(File.ReadAllText(meta), "guid: ([0-9a-f]{32})");
+				Match guid = Regex.Match(ProjectFiles.ReadAllText(meta), "guid: ([0-9a-f]{32})");
 				if (guid.Success)
 				{
 					names[guid.Groups[1].Value] = name;

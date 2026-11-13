@@ -1012,11 +1012,11 @@ namespace FishMMO.Client
 					if (MessageRateLimit > 0)
 					{
 						long nowTicks = DateTime.UtcNow.Ticks;
-						if (Character.NextChatMessageTicks > nowTicks)
+						if (Character.Component<ChatState>().NextMessageTicks > nowTicks)
 						{
 							return;
 						}
-						Character.NextChatMessageTicks = nowTicks + (long)(MessageRateLimit * TimeSpan.TicksPerMillisecond);
+						Character.Component<ChatState>().NextMessageTicks = nowTicks + (long)(MessageRateLimit * TimeSpan.TicksPerMillisecond);
 					}
 					/* Never suppress a repeated slash command.
 					 *
@@ -1033,12 +1033,12 @@ namespace FishMMO.Client
 					 * are a different message and should go through. */
 					if (!AllowRepeatMessages && (channelPrefixApplied || !input.StartsWith("/")))
 					{
-						if (!string.IsNullOrWhiteSpace(Character.LastChatMessage) &&
-							Character.LastChatMessage.Equals(input))
+						if (!string.IsNullOrWhiteSpace(Character.Component<ChatState>().LastMessage) &&
+							Character.Component<ChatState>().LastMessage.Equals(input))
 						{
 							return;
 						}
-						Character.LastChatMessage = input;
+						Character.Component<ChatState>().LastMessage = input;
 					}
 				}
 				ChatBroadcast message = new ChatBroadcast() { Text = input };

@@ -32,9 +32,28 @@ namespace FishMMO.UnitTests
 	{
 		private readonly List<Object> temporaries = new List<Object>();
 
+		/// <summary>How many trigger dispatches each character initiated during the current test.</summary>
+		private static readonly Dictionary<ICharacter, int> TriggerDispatches = new Dictionary<ICharacter, int>();
+
+		[SetUp]
+		public void CountTriggerDispatches()
+		{
+			TriggerDispatches.Clear();
+			Trigger.DispatchObserved = (triggers, eventData) =>
+			{
+				if (eventData?.Initiator != null)
+				{
+					TriggerDispatches.TryGetValue(eventData.Initiator, out int count);
+					TriggerDispatches[eventData.Initiator] = count + 1;
+				}
+			};
+		}
+
 		[TearDown]
 		public void TearDown()
 		{
+			Trigger.DispatchObserved = null;
+			TriggerDispatches.Clear();
 			for (int i = 0; i < temporaries.Count; ++i)
 			{
 				if (temporaries[i] is ScriptableObject so && so is ICachedObject cached)
@@ -55,7 +74,7 @@ namespace FishMMO.UnitTests
 		private sealed class RecordingCharacter : ICharacter
 		{
 			public RecordingCharacter(long id) => ID = id;
-			public int InvokeCount { get; private set; }
+			public int InvokeCount => TriggerDispatches.TryGetValue(this, out int count) ? count : 0;
 			public long ID { get; set; }
 			public string Name => "RecordingCharacter";
 			public Transform Transform => null;
@@ -80,7 +99,6 @@ namespace FishMMO.UnitTests
 			public void RegisterCharacterBehaviour(ICharacterBehaviour b) { }
 			public void UnregisterCharacterBehaviour(ICharacterBehaviour b) { }
 			public bool TryGet<T>(out T control) where T : class, ICharacterBehaviour { control = null; return false; }
-			public void Invoke(List<Trigger> triggers, EventData eventData) => ++InvokeCount;
 		}
 
 		private FactionTemplate NewFaction(string name)
@@ -631,8 +649,8 @@ namespace FishMMO.UnitTests
 		{
 			string path = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Client/GUI/World/Instance/UITKInstance.cs");
-			Assert.IsTrue(System.IO.File.Exists(path), $"UITKInstance.cs not found at {path}.");
-			return System.IO.File.ReadAllText(path);
+			Assert.IsTrue(ProjectFiles.Exists(path), $"UITKInstance.cs not found at {path}.");
+			return ProjectFiles.ReadAllText(path);
 		}
 	}
 }

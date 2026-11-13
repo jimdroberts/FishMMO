@@ -182,7 +182,7 @@ namespace FishMMO.UnitTests
 			Assert.IsFalse(settings.UsesRace);
 			Assert.IsFalse(settings.UsesBiome, "the payload length follows UsesBiome and must stay at the fixed five bytes");
 
-			string namer = System.IO.File.ReadAllText(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(),
+			string namer = ProjectFiles.ReadAllText(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Shared/Implementation/Entity/Naming/SceneObjectNamer.cs"));
 			int generate = namer.IndexOf("private void GenerateNameIfNeeded()", System.StringComparison.Ordinal);
 			int authored = namer.IndexOf("settings.Mode == SceneObjectNamingMode.Authored", generate, System.StringComparison.Ordinal);

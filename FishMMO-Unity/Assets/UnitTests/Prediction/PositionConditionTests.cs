@@ -238,9 +238,9 @@ namespace FishMMO.UnitTests
 			string path = Path.Combine(
 				Directory.GetCurrentDirectory(),
 				"Assets/Scripts/Shared/Implementation/Entity/ECA/Target/AllCharactersTargetSelector.cs");
-			LogAssert.IsTrue(File.Exists(path), $"AllCharactersTargetSelector.cs not found at {path}.");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"AllCharactersTargetSelector.cs not found at {path}.");
 
-			string source = File.ReadAllText(path);
+			string source = ProjectFiles.ReadAllText(path);
 
 			LogAssert.IsTrue(source.Contains("GatherRewound"),
 				"AllCharactersTargetSelector must gather through TargetSelector.GatherRewound so its " +

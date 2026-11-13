@@ -9,8 +9,9 @@ namespace FishMMO.Shared
 	/// The dashboard's replacement for a <c>FishMMO/…</c> menu item. The dashboard finds every
 	/// tagged method through <see cref="UnityEditor.TypeCache"/>, so a tool in another editor
 	/// assembly only needs a reference to <c>FishMMO.Shared.Tools.Editor</c>, not the other way
-	/// round. <see cref="Page"/> must name one of the constants below; the dashboard's tests reject
-	/// anything else, because a tool on a page that does not exist is a tool nobody can run.
+	/// round. <see cref="Page"/> must name a page some assembly declares with
+	/// <see cref="DashboardPageAttribute"/> (the constants below are the pages FishMMO's own tools use); the
+	/// dashboard's tests reject anything else, because a tool on a page that does not exist is a tool nobody can run.
 	/// </remarks>
 	[AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
 	public sealed class DashboardToolAttribute : Attribute
@@ -45,8 +46,6 @@ namespace FishMMO.Shared
 		/// <summary>Biomes → Biome Tools: procedural biome art and its assignment to biomes.</summary>
 		public const string Biomes = "Biome Tools";
 
-		/// <summary>Every page a tool may name.</summary>
-		public static readonly string[] Pages = { Validate, UnitTests, UITests, Maintenance, AITools, WorldSceneDetails, SpawnTables, WorldMap, Weather, Biomes };
 
 		/// <summary>The dashboard page (sidebar entry) the button appears on.</summary>
 		public string Page { get; }

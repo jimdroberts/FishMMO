@@ -80,7 +80,7 @@ namespace FishMMO.UnitTests
 
 		private static WorldSceneDetails Details()
 		{
-			WorldSceneDetailsCache cache = AssetDatabase.LoadAssetAtPath<WorldSceneDetailsCache>(DetailsPath);
+			WorldSceneDetailsCache cache = AssetDatabase.LoadAssetAtPath<WorldSceneDetailsCache>(ProjectFiles.Path(DetailsPath));
 			LogAssert.IsNotNull(cache, $"the shipped details cache must exist at {DetailsPath}");
 			ClientMapSystem.DetailsCache = cache;
 
@@ -376,8 +376,8 @@ namespace FishMMO.UnitTests
 		/// </remarks>
 		private UITKMap MountMapPanel(Rect world, out Label label, out MethodInfo refresh)
 		{
-			PanelSettings settings = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
-			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(MapUxmlPath);
+			PanelSettings settings = AssetDatabase.LoadAssetAtPath<PanelSettings>(ProjectFiles.Path(PanelSettingsPath));
+			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(ProjectFiles.Path(MapUxmlPath));
 			LogAssert.IsNotNull(settings, $"panel settings must exist at {PanelSettingsPath}");
 			LogAssert.IsNotNull(uxml, $"the world map UXML must exist at {MapUxmlPath}");
 

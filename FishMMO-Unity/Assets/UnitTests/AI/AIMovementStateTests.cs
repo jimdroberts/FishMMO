@@ -35,7 +35,7 @@ namespace FishMMO.UnitTests.AI
 
 			foreach (string guid in AssetDatabase.FindAssets("t:" + typeof(T).Name, new[] { AI_ROOT }))
 			{
-				T asset = AssetDatabase.LoadAssetAtPath<T>(AssetDatabase.GUIDToAssetPath(guid));
+				T asset = AssetDatabase.LoadAssetAtPath<T>(ProjectFiles.Path(AssetDatabase.GUIDToAssetPath(guid)));
 				if (asset != null)
 				{
 					results.Add(asset);

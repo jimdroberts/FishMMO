@@ -248,13 +248,13 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void ClientReadsThePyre_AndTheLighthouseBeamsDoNot()
 		{
-			string pool = File.ReadAllText("Assets/Scripts/Client/World/Terrain/SiteLightPool.cs");
+			string pool = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/SiteLightPool.cs");
 			Assert.That(pool, Does.Contain("case SceneEmitterKind.Pyre:").And.Contain("ScenePyre.Light(time, night, e.Seed)"));
-			string embers = File.ReadAllText("Assets/Scripts/Client/World/Terrain/SiteEmbers.cs");
+			string embers = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/SiteEmbers.cs");
 			Assert.That(embers, Does.Contain("kind == SceneEmitterKind.Pyre").And.Contain("ScenePyre.Kindled(night, e.Seed)"));
-			string beams = File.ReadAllText("Assets/Scripts/Client/World/Terrain/LighthouseBeams.cs");
+			string beams = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/LighthouseBeams.cs");
 			Assert.That(beams, Does.Not.Contain("Pyre"), "a beacon's pyre has no mirrors");
-			string site = File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/PointOfInterestSiteContext.cs");
+			string site = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/PointOfInterestSiteContext.cs");
 			Assert.That(site, Does.Contain("ScenePyre.WithLook(seed, atDusk, blue)"));
 		}
 
@@ -279,9 +279,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			int first = all.Select(p => p.Id).ToList().IndexOf(SuiteNames[0]);
 			Assert.That(all.Skip(first).Take(SuiteNames.Length).Select(p => p.Id), Is.EqualTo(SuiteNames));
 			Assert.That(all.Take(first).Select(p => p.Id), Does.Contain("Hearth").Or.Contain("CampfireRing"), "after the older pieces");
-			string kit = File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/ProceduralArt/StructurePieces.cs");
+			string kit = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/ProceduralArt/StructurePieces.cs");
 			Assert.That(kit.IndexOf("AddWayLights(list);", StringComparison.Ordinal), Is.GreaterThan(kit.IndexOf("AddCaveStory(list);", StringComparison.Ordinal)));
-			string payload = File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/ProceduralArt/ProceduralArtPayload.cs");
+			string payload = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/ProceduralArt/ProceduralArtPayload.cs");
 			Assert.That(payload, Does.Contain("\"StructurePieces.WayLights.cs\""));
 		}
 
@@ -347,10 +347,10 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void Defaults_NoSpecEntryOrTemplateNamesASuiteLight()
 		{
 			int entries = 0;
-			foreach (string path in Directory.GetFiles("Assets", "*.asset", SearchOption.AllDirectories).Where(p => p.Replace('\\', '/').Contains("/Biomes/") || p.Replace('\\', '/').Contains("Templates/World"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder("Assets"), "*.asset", SearchOption.AllDirectories).Where(p => p.Replace('\\', '/').Contains("/Biomes/") || p.Replace('\\', '/').Contains("Templates/World"))
 				.Where(p => !BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(p))))
 			{
-				string[] lines = File.ReadAllLines(path);
+				string[] lines = ProjectFiles.ReadAllLines(path);
 				for (int at = 0; at < lines.Length; at++)
 				{
 					string head = lines[at].Trim();
@@ -371,10 +371,10 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 			Assert.That(entries, Is.GreaterThan(300), "the templates' way and cave lights were read");
 			// The biome spec files name none either until their round authors them (an authored round's are its own, BiomeAuthoredRoundTests).
-			foreach (string path in Directory.GetFiles("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/ProceduralArt", "BiomeArtSpec*.cs", SearchOption.AllDirectories)
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/ProceduralArt"), "BiomeArtSpec*.cs", SearchOption.AllDirectories)
 				.Where(p => !BiomeAuthoredRounds.All.Any(b => Path.GetFileName(p) == "BiomeArtSpec." + b.Replace(" ", string.Empty) + ".cs")))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				foreach (string name in SuiteNames)
 				{
 					Assert.That(text, Does.Not.Contain("BiomeWayLightKind." + name + ")").And.Not.Contain("BiomeWayLightKind." + name + ","), $"{Path.GetFileName(path)} names {name}");

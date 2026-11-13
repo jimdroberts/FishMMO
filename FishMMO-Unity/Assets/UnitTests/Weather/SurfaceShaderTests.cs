@@ -24,8 +24,8 @@ namespace FishMMO.UnitTests
 
 		private static string Read(string path)
 		{
-			Assert.IsTrue(File.Exists(path), $"{path} is missing. The weather surfaces need it.");
-			return File.ReadAllText(path);
+			Assert.IsTrue(ProjectFiles.Exists(path), $"{path} is missing. The weather surfaces need it.");
+			return ProjectFiles.ReadAllText(path);
 		}
 
 		[Test]

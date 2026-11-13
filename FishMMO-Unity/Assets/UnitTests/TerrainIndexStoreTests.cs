@@ -138,7 +138,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void AlphamapWritesMarkTheStoredMapStale_AndEditModeAlwaysBakesLive()
 		{
-			string baker = File.ReadAllText(Scripts + "Client/World/Weather/Editor/TerrainDetailBaker.cs");
+			string baker = ProjectFiles.ReadAllText(Scripts + "Client/World/Weather/Editor/TerrainDetailBaker.cs");
 			Assert.That(baker, Does.Contain("textureName == TerrainData.AlphamapTextureName"), "only the alphamaps stale the map (holes do not)");
 			int mark = baker.IndexOf("private static void MarkIndexStale", StringComparison.Ordinal);
 			Assert.That(mark, Is.GreaterThan(0));
@@ -149,14 +149,14 @@ namespace FishMMO.UnitTests
 			Assert.That(baker, Does.Contain("index.Stale = false"));
 			Assert.That(baker, Does.Contain("TerrainTileLayerMap.Bake(data.GetAlphamaps(0, 0, res, res), TerrainTileLayers.Of(terrain))"), "stored = the CPU bake of the alphamaps, in scene layers");
 
-			string binder = File.ReadAllText(Scripts + "Shared/Implementation/Entity/WorldSceneDetails/Terrain/TerrainArrayBinder.cs");
+			string binder = ProjectFiles.ReadAllText(Scripts + "Shared/Implementation/Entity/WorldSceneDetails/Terrain/TerrainArrayBinder.cs");
 			Assert.That(binder, Does.Contain("rebake: Application.isEditor && !Application.isPlaying"), "edit mode bakes every push");
 			Assert.That(binder, Does.Contain("if (!rebake && Application.isPlaying)"), "stored maps only in play, never on a live rebake");
 			Assert.That(binder, Does.Contain("SceneTerrainBake.IndexOf(data)"));
 			Assert.That(binder, Does.Contain("TerrainIndexMapBaker.MatchesAlphamaps"), "the editor checks a stored map against the alphamaps before drawing it");
 			Assert.That(binder, Does.Contain("PushTo(terrain, rebake: true)"), "an alphamap change rebakes live");
 
-			string holder = File.ReadAllText(Scripts + "Shared/Implementation/Entity/WorldSceneDetails/Terrain/SceneTerrainBake.cs");
+			string holder = ProjectFiles.ReadAllText(Scripts + "Shared/Implementation/Entity/WorldSceneDetails/Terrain/SceneTerrainBake.cs");
 			Assert.That(holder, Does.Contain("tile.Index.UsableFor(data)"), "the lookup applies the same rule as the build");
 		}
 
@@ -200,7 +200,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheStripperDecidesPerTileAndRemapsTheBake()
 		{
-			string stripper = File.ReadAllText(Scripts + "Shared/Implementation/Tools/Extensions/Unity/Editor/ClientTerrainLayerStripper.cs");
+			string stripper = ProjectFiles.ReadAllText(Scripts + "Shared/Implementation/Tools/Extensions/Unity/Editor/ClientTerrainLayerStripper.cs");
 			Assert.That(stripper, Does.Contain("KeepAlphamapsReason(stored, original.alphamapResolution, original.alphamapLayers"));
 			Assert.That(stripper, Does.Contain("TerrainIndexMap.Same(stored.Map, TerrainTileLayerMap.Bake(original.GetAlphamaps(0, 0, original.alphamapResolution, original.alphamapResolution), sceneLayers))"));
 			Assert.That(stripper, Does.Contain("ClientCopy(original, layers, keepAlphamaps: keep)"));
@@ -208,7 +208,7 @@ namespace FishMMO.UnitTests
 			Assert.That(stripper, Does.Contain("tile.Index = new TerrainDetailBake.IndexMap()"), "a refused map is not shipped: a player would trust it");
 			Assert.That(stripper, Does.Contain("Debug.LogWarning"), "a tile that keeps its alphamaps says why");
 			Assert.That(stripper, Does.Contain("ClientOnlySceneStripper.IsServerBuild()"), "server builds keep ServerTerrainStripper's copy");
-			string server = File.ReadAllText(Scripts + "Shared/Implementation/Tools/Extensions/Unity/Editor/ServerTerrainStripper.cs");
+			string server = ProjectFiles.ReadAllText(Scripts + "Shared/Implementation/Tools/Extensions/Unity/Editor/ServerTerrainStripper.cs");
 			Assert.That(server, Does.Not.Contain("TerrainIndexMap"), "the server copy is as it was");
 		}
 
@@ -322,24 +322,24 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void EveryRuntimeAlphamapReaderHasAStoredMapPath()
 		{
-			string grass = File.ReadAllText(Scripts + "Client/World/Terrain/Grass/GrassTerrain.cs");
+			string grass = ProjectFiles.ReadAllText(Scripts + "Client/World/Terrain/Grass/GrassTerrain.cs");
 			Assert.That(grass, Does.Contain("SceneTerrainBake.IndexOf(data)"));
 			Assert.That(grass, Does.Contain("GrassMath.PackSurfaceFromIndex"));
-			string colour = File.ReadAllText(Scripts + "Client/World/Terrain/GroundColourMap.cs");
+			string colour = ProjectFiles.ReadAllText(Scripts + "Client/World/Terrain/GroundColourMap.cs");
 			Assert.That(colour, Does.Contain("SceneTerrainBake.IndexOf(data)"));
 			Assert.That(colour, Does.Contain("WeighIndexTexel(stored.Map[2 * k], stored.Map[2 * k + 1]"));
-			string contact = File.ReadAllText(Scripts + "Client/World/Terrain/GroundMaterialMap.cs");
+			string contact = ProjectFiles.ReadAllText(Scripts + "Client/World/Terrain/GroundMaterialMap.cs");
 			Assert.That(contact, Does.Contain("TerrainIndexMapBaker.CopyInto(TerrainArrayBinder.IndexMapOf(t), target, slice)"));
 			Assert.That(contact, Does.Contain("TerrainIndexMapBaker.Upload(stored"));
 			Assert.That(contact, Does.Not.Contain("if (data.alphamapTextureCount == 0)\n"), "a tile without alphamaps is no longer left out");
 			// Footstep surfaces (2026-10-21): the alphamaps where the tile kept them, else the stored map through the same filter
 			// the terrain shader runs.
-			string footsteps = File.ReadAllText(Scripts + "Client/Audio/World/GroundSurface.cs");
+			string footsteps = ProjectFiles.ReadAllText(Scripts + "Client/Audio/World/GroundSurface.cs");
 			Assert.That(footsteps, Does.Contain("SceneTerrainBake.IndexOf(data)"));
 			Assert.That(footsteps, Does.Contain("TerrainIndexMap.Filter(index.Map, index.Resolution, index.Resolution, u, v, ids, weights)"));
 
 			// No other runtime (non-editor) script reads the alphamaps.
-			foreach (string file in Directory.GetFiles(Scripts, "*.cs", SearchOption.AllDirectories))
+			foreach (string file in Directory.GetFiles(ProjectFiles.Folder(Scripts), "*.cs", SearchOption.AllDirectories))
 			{
 				string path = file.Replace('\\', '/');
 				if (path.Contains("/Editor/") || path.EndsWith("TerrainIndexMapBaker.cs") || path.EndsWith("GroundColourMap.cs") || path.EndsWith("GrassTerrain.cs")
@@ -347,7 +347,7 @@ namespace FishMMO.UnitTests
 				{
 					continue;
 				}
-				string text = File.ReadAllText(file);
+				string text = ProjectFiles.ReadAllText(file);
 				Assert.That(text.Contains("GetAlphamaps(") || text.Contains("alphamapTextures"), Is.False, $"{path} reads the alphamaps at runtime");
 			}
 		}

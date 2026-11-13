@@ -138,7 +138,7 @@ namespace FishMMO.UnitTests
 		/// <summary>The merchant template a player buys ability templates from.</summary>
 		private static MerchantTemplate Merchant()
 		{
-			MerchantTemplate merchant = AssetDatabase.LoadAssetAtPath<MerchantTemplate>(MerchantPath);
+			MerchantTemplate merchant = AssetDatabase.LoadAssetAtPath<MerchantTemplate>(ProjectFiles.Path(MerchantPath));
 			LogAssert.IsNotNull(merchant, $"the merchant template must exist at {MerchantPath}");
 			return merchant;
 		}

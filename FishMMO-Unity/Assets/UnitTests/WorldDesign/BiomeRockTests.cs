@@ -197,10 +197,10 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void BouldersAndLedgesAskTheSameRuleAsTheCliffs()
 		{
-			string generator = System.IO.File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/SceneGenerator.cs");
+			string generator = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/SceneGenerator.cs");
 			Assert.That(generator, Does.Contain("Func<float, float, float, string> rockAt = BiomeRockTypes(field, cliffOptions.RockTypeAt);"));
 			Assert.That(generator, Does.Not.Contain("cliffOptions.RockTypeAt, options.Seed"), "no boulder or ledge reads the geology alone");
-			string placer = System.IO.File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/Terrain/CliffPlacer.cs");
+			string placer = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/Terrain/CliffPlacer.cs");
 			Assert.That(placer, Does.Contain("CliffRocks.Accepts(ownRock[b], accepted[b], bedrock)"), "a cliff takes the geology's rock only where its biome accepts it");
 			Assert.That(placer, Does.Contain("ownRock[b] = BiomeTemplateArt.OwnRock(entry.Biome);"), "the biome's own rock is its template's");
 			Assert.That(placer, Does.Contain("accepted[b] = BiomeTemplateArt.AcceptedRocks(entry.Biome);"), "and so are the rocks it accepts");

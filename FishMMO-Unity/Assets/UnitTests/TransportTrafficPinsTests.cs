@@ -34,16 +34,16 @@ namespace FishMMO.UnitTests
 		private static string ReadSource(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-			LogAssert.IsTrue(File.Exists(path), $"{relativePath} not found at {path}.");
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{relativePath} not found at {path}.");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 		private static string ReadNativeOrIgnore(string relativePath)
 		{
 			string path = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), relativePath));
-			if (!File.Exists(path))
+			if (!ProjectFiles.Exists(path))
 				Assert.Ignore($"The native source is not checked out beside this project ({path}).");
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 		/// <summary>The source with comment lines removed, so prose about a construct does not trip a scan for it.</summary>

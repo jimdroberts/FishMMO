@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using FishMMO.Shared;
+using EntityLink = FishMMO.Core.EntityLink;
 using FishMMO.Shared.Core;
 using FishNet.Connection;
 using FishNet.Managing.Predicting;
@@ -19,8 +20,11 @@ namespace FishMMO.UnitTests.Harness
 	/// wanders into unimplemented territory should say so loudly rather than quietly observing a
 	/// default that means nothing.
 	/// </remarks>
-	internal sealed class StubCharacter : ICharacter
+	internal sealed class StubCharacter : ICharacter, IEntityLinked
 	{
+		/// <summary>The Core entity this stub stands for; none unless a test links one.</summary>
+		public EntityLink CoreLink { get; set; }
+
 		/// <summary>Behaviour handed out by <see cref="TryGet{T}"/>, or null to fail the lookup.</summary>
 		public ICharacterBehaviour Behaviour;
 

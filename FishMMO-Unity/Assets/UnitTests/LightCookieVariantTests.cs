@@ -19,7 +19,7 @@ namespace FishMMO.UnitTests
 				Assert.Ignore("Requires WebGL build support.");
 			foreach (string name in new[] { "FishWeatherLit", "FishWeatherLitIndirect", "FishVegetation", "FishVegetationIndirect" })
 			{
-				var shader = AssetDatabase.LoadAssetAtPath<Shader>("Assets/Prefabs/Client/Weather/Shaders/" + name + ".shader");
+				var shader = AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path("Assets/Prefabs/Client/Weather/Shaders/" + name + ".shader"));
 				Assert.That(shader.keywordSpace.FindKeyword("_LIGHT_COOKIES").isDynamic, Is.True, name);
 				string[] keys = name.EndsWith("Indirect", StringComparison.Ordinal)
 					? new[] { "_CLUSTER_LIGHT_LOOP", "PROCEDURAL_INSTANCING_ON" } : new[] { "_CLUSTER_LIGHT_LOOP" };
@@ -74,7 +74,7 @@ float4 Frag(V i):SV_Target {
 				string path = folder + "/Fixture.shader";
 				File.WriteAllText(path, source);
 				AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
-				var shader = AssetDatabase.LoadAssetAtPath<Shader>(path);
+				var shader = AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path(path));
 				Assert.That(ShaderUtil.ShaderHasError(shader), Is.False);
 				Assert.That(shader.keywordSpace.FindKeyword("_LIGHT_COOKIES").isDynamic, Is.True);
 				ShaderUtil.allowAsyncCompilation = false;

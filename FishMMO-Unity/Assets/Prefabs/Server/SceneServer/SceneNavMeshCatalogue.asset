@@ -29,6 +29,10 @@ MonoBehaviour:
     Data: {fileID: 8767786440276690482, guid: f97399325986d3f1bb73fd8884745c66, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
+  - SceneName: LoginBackdrop
+    Data: {fileID: 536373547956446526, guid: c2b6c2e4950580591946e74a632feb56, type: 2}
+    Position: {x: 0, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Moron 1
     Data: {fileID: 8664325670375737635, guid: 83b7302d3becafc62b241ba674ce663d, type: 2}
     Position: {x: 0, y: 0, z: 0}

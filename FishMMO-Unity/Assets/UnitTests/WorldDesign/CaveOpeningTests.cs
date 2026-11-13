@@ -452,21 +452,21 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void TheCutSealsTheRoofBeforeMeshing_AndBaresTheOpeningsAfterEverySite()
 		{
 			const string folder = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/";
-			string shaper = File.ReadAllText(folder + "Shapers/CaveShaper.cs");
+			string shaper = ProjectFiles.ReadAllText(folder + "Shapers/CaveShaper.cs");
 			int place = shaper.IndexOf("private static void PlaceSystem(", StringComparison.Ordinal);
 			Assert.That(place, Is.GreaterThan(0));
 			int seal = shaper.IndexOf("SealRoof(context, system, label);", place, StringComparison.Ordinal);
 			int ground = shaper.IndexOf("GroundAsCut(system, context.GroundAt, context.Terrains, context.Tiles);", place, StringComparison.Ordinal);
 			Assert.That(seal, Is.GreaterThan(place), "the cave's Place seals its roof");
 			Assert.That(seal, Is.LessThan(ground), "before the ground the rock is meshed against is read");
-			string stage = File.ReadAllText(folder + "PointOfInterestStage.cs");
+			string stage = ProjectFiles.ReadAllText(folder + "PointOfInterestStage.cs");
 			int bare = stage.IndexOf("PointOfInterestCaveOpeningClearance.Clear(terrains, tiles, asset, notes);", StringComparison.Ordinal);
 			Assert.That(bare, Is.GreaterThan(stage.IndexOf("PointOfInterestLinearFeatures.LayScene(", StringComparison.Ordinal)), "after every site has written its ground");
 			Assert.That(bare, Is.LessThan(stage.IndexOf("ScenePathBake.Write(scene", StringComparison.Ordinal)), "before the ground is baked for the client");
 			// The client's two plant builders (every detail kind is the blades' or the scatter's since the CPU chunk renderer went,
 			// 2026-10-27) read the plants' mask, the clouds and the ambient life the terrain's own holes.
-			Assert.That(File.ReadAllText("Assets/Scripts/Client/World/Terrain/Grass/GrassTerrain.cs"), Does.Contain("cut.KeepPlantsClear();"));
-			Assert.That(File.ReadAllText("Assets/Scripts/Client/World/Terrain/Scatter/DetailScatterTerrain.cs"), Does.Contain("PlantsClear(cut).ToTexels("));
+			Assert.That(ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/Grass/GrassTerrain.cs"), Does.Contain("cut.KeepPlantsClear();"));
+			Assert.That(ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/Scatter/DetailScatterTerrain.cs"), Does.Contain("PlantsClear(cut).ToTexels("));
 			Assert.That(File.Exists("Assets/Scripts/Client/World/Terrain/TerrainDetailField.cs"), Is.False, "no CPU chunk renderer places plants of its own");
 		}
 	}

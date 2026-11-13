@@ -47,7 +47,7 @@ namespace FishMMO.UnitTests.AI
 			foreach (string guid in AssetDatabase.FindAssets("t:CharacterAttributeTemplate"))
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guid);
-				CharacterAttributeTemplate attribute = AssetDatabase.LoadAssetAtPath<CharacterAttributeTemplate>(path);
+				CharacterAttributeTemplate attribute = AssetDatabase.LoadAssetAtPath<CharacterAttributeTemplate>(ProjectFiles.Path(path));
 				if (attribute != null)
 				{
 					attribute.AddToCache(attribute.name);
@@ -63,7 +63,7 @@ namespace FishMMO.UnitTests.AI
 			foreach (string guid in AssetDatabase.FindAssets("t:AIArchetypeTemplate"))
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guid);
-				AIArchetypeTemplate archetype = AssetDatabase.LoadAssetAtPath<AIArchetypeTemplate>(path);
+				AIArchetypeTemplate archetype = AssetDatabase.LoadAssetAtPath<AIArchetypeTemplate>(ProjectFiles.Path(path));
 				if (archetype != null && archetype.name.StartsWith("Pet - "))
 				{
 					petArchetypes.Add(archetype);
@@ -167,7 +167,7 @@ namespace FishMMO.UnitTests.AI
 			foreach (string guid in AssetDatabase.FindAssets("t:PetAbilityTemplate"))
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guid);
-				PetAbilityTemplate template = AssetDatabase.LoadAssetAtPath<PetAbilityTemplate>(path);
+				PetAbilityTemplate template = AssetDatabase.LoadAssetAtPath<PetAbilityTemplate>(ProjectFiles.Path(path));
 				if (template == null || template.PetAbilities == null)
 				{
 					continue;
@@ -187,7 +187,7 @@ namespace FishMMO.UnitTests.AI
 			foreach (string guid in AssetDatabase.FindAssets("t:PetAbilityTemplate"))
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guid);
-				PetAbilityTemplate template = AssetDatabase.LoadAssetAtPath<PetAbilityTemplate>(path);
+				PetAbilityTemplate template = AssetDatabase.LoadAssetAtPath<PetAbilityTemplate>(ProjectFiles.Path(path));
 				if (template == null)
 				{
 					continue;
@@ -325,7 +325,7 @@ namespace FishMMO.UnitTests.AI
 			foreach (string guid in AssetDatabase.FindAssets("t:PetAbilityTemplate"))
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guid);
-				PetAbilityTemplate template = AssetDatabase.LoadAssetAtPath<PetAbilityTemplate>(path);
+				PetAbilityTemplate template = AssetDatabase.LoadAssetAtPath<PetAbilityTemplate>(ProjectFiles.Path(path));
 				if (template != null)
 				{
 					templates.Add(template);

@@ -14,7 +14,7 @@ namespace FishMMO.UnitTests
 	/// </summary>
 	public class TerrainDetailLayerBudgetTests
 	{
-		private static string Source(string relative) => File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative));
+		private static string Source(string relative) => ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative));
 
 		/// <summary>A scene like Moron 2's: rules of one to three variants, back to back, <paramref name="prototypes"/> in all.</summary>
 		private static List<IReadOnlyList<int>> Rules(int prototypes)

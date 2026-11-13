@@ -8337,6 +8337,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 902791299155046c7bc0ee307ad6c041
+    m_Address: LoginBackdrop
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 9029cdaccebad40088c866310e1e0b79
     m_Address: CovenCircle - Hag Ring (Medium-Large)
     m_ReadOnly: 0

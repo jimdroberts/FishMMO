@@ -98,7 +98,7 @@ namespace FishMMO.Client
 
 			if (template?.MatchEndTriggers != null && template.MatchEndTriggers.Count > 0)
 			{
-				Character.Invoke(template.MatchEndTriggers, new ArenaEventData(Character, ArenaCuePhase.Ended, 0, MyTeam(), msg.WinnerTeam));
+				Trigger.InvokeAll(template.MatchEndTriggers, new ArenaEventData(Character, ArenaCuePhase.Ended, 0, MyTeam(), msg.WinnerTeam));
 			}
 
 			// The scroll position persists with the tree; a new match's results open at the top.

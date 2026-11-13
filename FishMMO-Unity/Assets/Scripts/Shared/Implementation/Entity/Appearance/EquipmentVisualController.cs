@@ -321,77 +321,22 @@ namespace FishMMO.Shared
 
 		private void AttachArmorVisual(GameObject prefab, EquippableItemTemplate template, SlotRenderer renderer)
 		{
-			SkinnedMeshRenderer smr = renderer.SkinnedRenderer;
-			if (smr == null) return;
-
-			SkinnedMeshRenderer src = prefab.GetComponentInChildren<SkinnedMeshRenderer>();
-			if (src == null) { Debug.LogError($"[EVC] '{prefab.name}' has no SkinnedMeshRenderer."); return; }
-
-			Mesh m = src.sharedMesh;
-			Material[] mats = src.sharedMaterials;
-			if (m == null) { Debug.LogError($"[EVC] '{prefab.name}' has no mesh."); return; }
-
-			if (skeletonRoot != null && src.bones != null && src.bones.Length > 0)
+			if (renderer.SkinnedRenderer == null) return;
+			if (EquipmentVisualAttach.AttachArmor(prefab, renderer.SkinnedRenderer, skeletonRoot))
 			{
-				smr.sharedMesh = m;
-				smr.bones = src.bones;
-				if (!SkeletonBinder.BindMeshKeepParent(smr, skeletonRoot))
-				{
-					Debug.LogError($"[EVC] Failed to bind bones for '{prefab.name}'.");
-					smr.sharedMesh = null;
-					return;
-				}
+				renderer.GameObject.SetActive(true);
 			}
-
-			smr.sharedMesh = m;
-			smr.materials = mats;
-			smr.enabled = true;
-			renderer.GameObject.SetActive(true);
 		}
 
 		private void AttachWeaponVisual(GameObject prefab, WeaponTemplate wt, SlotRenderer renderer)
 		{
-			if (skeletonRoot == null || string.IsNullOrEmpty(wt.AttachBoneName)) return;
-
-			MeshFilter mf = prefab.GetComponentInChildren<MeshFilter>();
-			MeshRenderer mr = prefab.GetComponentInChildren<MeshRenderer>();
-
-			if (mf == null || mr == null)
-			{
-				SkinnedMeshRenderer smr = prefab.GetComponentInChildren<SkinnedMeshRenderer>();
-				if (smr != null)
-				{
-					Mesh bm = new Mesh();
-					smr.BakeMesh(bm);
-					// Owned by the slot so ReleaseSlotRenderer can destroy it; nothing else frees a runtime Mesh.
-					renderer.BakedMesh = bm;
-					AttachWeaponMesh(bm, smr.sharedMaterials, wt, renderer);
-					return;
-				}
-				Debug.LogError($"[EVC] '{prefab.name}' has no MeshRenderer or SkinnedMeshRenderer.");
-				return;
-			}
-			AttachWeaponMesh(mf.sharedMesh, mr.sharedMaterials, wt, renderer);
-		}
-
-		private void AttachWeaponMesh(Mesh mesh, Material[] materials, WeaponTemplate wt, SlotRenderer renderer)
-		{
-			if (mesh == null) return;
-			Transform bone = SkeletonBinder.GetBoneTransform(skeletonRoot, wt.AttachBoneName);
-			if (bone == null) { Debug.LogError($"[EVC] Bone '{wt.AttachBoneName}' not found."); return; }
-
-			GameObject go = new GameObject($"Weapon_{wt.Name}");
-			go.transform.SetParent(bone, false);
-			BaseCharacter.ApplyVisualLayer(go);
-			go.transform.localPosition = Vector3.zero;
-			go.transform.localRotation = Quaternion.identity;
-			go.transform.localScale = Vector3.one;
-			go.AddComponent<MeshFilter>().sharedMesh = mesh;
-			go.AddComponent<MeshRenderer>().materials = materials;
-
-			renderer.WeaponInstance = go;
-			renderer.MeshRenderer = go.GetComponent<MeshRenderer>();
-			renderer.MeshFilter = go.GetComponent<MeshFilter>();
+			GameObject weapon = EquipmentVisualAttach.AttachWeapon(prefab, wt, skeletonRoot, out Mesh baked);
+			// Owned by the slot so ReleaseSlotRenderer can destroy it; nothing else frees a runtime Mesh.
+			renderer.BakedMesh = baked;
+			if (weapon == null) return;
+			renderer.WeaponInstance = weapon;
+			renderer.MeshRenderer = weapon.GetComponent<MeshRenderer>();
+			renderer.MeshFilter = weapon.GetComponent<MeshFilter>();
 			renderer.GameObject.SetActive(true);
 		}
 

@@ -323,12 +323,23 @@ namespace FishMMO.Client
 			}
 
 			// Let go of sources that were destroyed (their scene unloaded) before taking on new ones.
+			bool sourceGone = false;
 			for (int i = drivenList.Count - 1; i >= 0; i--)
 			{
 				if (drivenList[i].Source == null)
 				{
 					Release(drivenList[i]);
+					sourceGone = true;
 				}
+			}
+			/* A scene went, and its models with their meshes (a released bundle's, or a destroyed scene object's) stay
+			 * registered in the GPU renderer, which cannot drop one: its next layout read a dead mesh and threw on every
+			 * login after the first. Start again from nothing; ReleaseAll marks the scenes changed, so whatever is still
+			 * loaded is taken over afresh next frame, on a renderer made then. */
+			if (sourceGone && (gpu != null || modelList.Count > 0))
+			{
+				ReleaseAll();
+				return;
 			}
 			if (!scenesChanged)
 			{

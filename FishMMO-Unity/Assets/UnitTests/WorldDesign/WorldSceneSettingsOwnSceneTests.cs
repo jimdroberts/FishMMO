@@ -47,8 +47,8 @@ namespace FishMMO.UnitTests
 		public void TheSampler_ReadsTheResolvedScene()
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), "Assets/Scripts/Shared/Implementation/Tools/Biomes/BiomeSampler.cs");
-			LogAssert.IsTrue(File.Exists(path), $"BiomeSampler.cs not found at {path}.");
-			string source = File.ReadAllText(path);
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"BiomeSampler.cs not found at {path}.");
+			string source = ProjectFiles.ReadAllText(path);
 
 			LogAssert.IsTrue(source.Contains("Scene scene = settings != null ? settings.OwnScene : default;"),
 				"BiomeSampler.Read must take the scene the settings component resolved");
@@ -64,8 +64,8 @@ namespace FishMMO.UnitTests
 		public void TheSceneIsResolvedOnceAtRuntime_AndLiveInTheEditor()
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), "Assets/Scripts/Shared/Implementation/Entity/WorldSceneDetails/WorldSceneSettings.cs");
-			LogAssert.IsTrue(File.Exists(path), $"WorldSceneSettings.cs not found at {path}.");
-			string source = File.ReadAllText(path).Replace("\r\n", "\n");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"WorldSceneSettings.cs not found at {path}.");
+			string source = ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 
 			LogAssert.IsTrue(source.Contains("public WorldAtlasScene AtlasEntry => WorldAtlasScene.Find(OwnSceneName);"),
 				"the atlas lookup must use the resolved scene name, not a fresh one per read");

@@ -123,9 +123,9 @@ namespace FishMMO.UnitTests
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(),
 				"Assets/Plugins/FishNet/Runtime/Object/NetworkBehaviour/NetworkBehaviour.RPCs.cs");
-			LogAssert.IsTrue(File.Exists(path), $"Vendored FishNet file not found at {path}.");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"Vendored FishNet file not found at {path}.");
 
-			string source = File.ReadAllText(path);
+			string source = ProjectFiles.ReadAllText(path);
 			int send = source.IndexOf("internal void SendObserversRpc(", StringComparison.Ordinal);
 			LogAssert.IsTrue(send >= 0, "SendObserversRpc must exist.");
 			int next = source.IndexOf("internal void SendTargetRpc(", send, StringComparison.Ordinal);
@@ -161,7 +161,7 @@ namespace FishMMO.UnitTests
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(),
 				"Assets/Plugins/FishNet/Runtime/Object/NetworkBehaviour/NetworkBehaviour.RPCs.cs");
-			string source = File.ReadAllText(path);
+			string source = ProjectFiles.ReadAllText(path);
 			int send = source.IndexOf("internal void SendObserversRpc(", StringComparison.Ordinal);
 			int next = source.IndexOf("internal void SendTargetRpc(", send, StringComparison.Ordinal);
 			string body = source.Substring(send, next > send ? next - send : source.Length - send);
@@ -197,7 +197,7 @@ namespace FishMMO.UnitTests
 
 			string resetPath = Path.Combine(Directory.GetCurrentDirectory(),
 				"Assets/Plugins/FishNet/Runtime/Object/NetworkBehaviour/NetworkBehaviour.cs");
-			string reset = File.ReadAllText(resetPath);
+			string reset = ProjectFiles.ReadAllText(resetPath);
 			int resetState = reset.IndexOf("public virtual void ResetState(bool asServer)", StringComparison.Ordinal);
 			int resetLatch = reset.IndexOf("_observersRpcSettled = true;", StringComparison.Ordinal);
 			LogAssert.IsTrue(resetState >= 0 && resetLatch > resetState,

@@ -281,8 +281,8 @@ namespace FishMMO.UnitTests
 			foreach (string relative in RenderRoots)
 			{
 				string dir = Path.Combine(root, relative);
-				LogAssert.IsTrue(Directory.Exists(dir), $"{relative} not found under {root}");
-				foreach (string file in Directory.GetFiles(dir, "*.cs", SearchOption.AllDirectories))
+				LogAssert.IsTrue(ProjectFiles.FolderExists(dir), $"{relative} not found under {root}");
+				foreach (string file in Directory.GetFiles(ProjectFiles.Folder(dir), "*.cs", SearchOption.AllDirectories))
 				{
 					string normal = file.Replace('\\', '/');
 					if (!normal.Contains("/Editor/"))
@@ -296,8 +296,8 @@ namespace FishMMO.UnitTests
 		private static string Read(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-			LogAssert.IsTrue(File.Exists(path), $"{relativePath} not found at {path}");
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{relativePath} not found at {path}");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 		private static int IndexOrFail(string source, string anchor)

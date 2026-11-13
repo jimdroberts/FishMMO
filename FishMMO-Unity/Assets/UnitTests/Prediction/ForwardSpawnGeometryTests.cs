@@ -98,7 +98,7 @@ namespace FishMMO.UnitTests.Prediction
 		public void ShippedMeleeAbility_SpawnsItsFullDepthInFrontOfAnOrc(string templatePath)
 		{
 			// The production input: a real prefab ASSET, whose collider has never been simulated.
-			AbilityTemplate template = UnityEditor.AssetDatabase.LoadAssetAtPath<AbilityTemplate>(templatePath);
+			AbilityTemplate template = UnityEditor.AssetDatabase.LoadAssetAtPath<AbilityTemplate>(ProjectFiles.Path(templatePath));
 			Assert.That(template, Is.Not.Null, $"'{templatePath}' must exist.");
 			Assert.That(template.AbilitySpawnTarget, Is.EqualTo(AbilitySpawnTarget.Forward));
 			Collider prefabCollider = AbilityPrefabColliderCache.GetPrefabCollider(template);

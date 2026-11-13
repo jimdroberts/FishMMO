@@ -49,8 +49,8 @@ namespace FishMMO.UnitTests
 
 		private void Mount(int width, int height, float scale, int icons)
 		{
-			PanelSettings asset = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
-			BaseBuffTemplate template = AssetDatabase.LoadAssetAtPath<BaseBuffTemplate>(TemplatePath);
+			PanelSettings asset = AssetDatabase.LoadAssetAtPath<PanelSettings>(ProjectFiles.Path(PanelSettingsPath));
+			BaseBuffTemplate template = AssetDatabase.LoadAssetAtPath<BaseBuffTemplate>(ProjectFiles.Path(TemplatePath));
 			LogAssert.IsNotNull(asset, $"panel settings must exist at {PanelSettingsPath}");
 			LogAssert.IsNotNull(template, $"a buff template must exist at {TemplatePath}");
 
@@ -93,7 +93,7 @@ namespace FishMMO.UnitTests
 			GameObject host = new GameObject(name);
 			UIDocument document = host.AddComponent<UIDocument>();
 			document.panelSettings = settings;
-			document.visualTreeAsset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(uxml);
+			document.visualTreeAsset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(ProjectFiles.Path(uxml));
 
 			UITKControl control = (UITKControl)host.AddComponent(type);
 			control.Document = document;

@@ -64,7 +64,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void TheAdminsTemperatureLimit_IsWhatTheClimateApplies()
 		{
 			Assert.AreEqual((float)(SceneClimate.MaxOffsetScale * ClimateModel.KelvinPerUnit), SceneClimate.MaxOffsetKelvin, 1e-4f);
-			string admin = System.IO.File.ReadAllText("Assets/Scripts/Server/Implementation/World/SceneServer/SceneServer/SceneServerSystem.AdminCommands.Weather.cs");
+			string admin = ProjectFiles.ReadAllText("Assets/Scripts/Server/Implementation/World/SceneServer/SceneServer/SceneServerSystem.AdminCommands.Weather.cs");
 			StringAssert.Contains("SceneClimate.MaxOffsetKelvin", admin, "/admin weather air clamps to the limit the climate applies");
 		}
 	}

@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Fast tests for FishMMO.Core, the engine-free simulation runtime, without the Unity editor.
+
+    Core is the FishMMO-Core project, which compiles the shipping files in Core's Unity folder as their own
+    netstandard2.1 assembly with Unity's language version, so code Unity cannot build fails here first.
+
+    Run:            dotnet test FishMMO-Core.Tests
+    Benchmarks:     explicit tests in the Benchmark category; the command is in TickBenchmark.cs.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <AssemblyName>FishMMO.Core.Tests</AssemblyName>
+    <RootNamespace>FishMMO.Core.Tests</RootNamespace>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../FishMMO-Core/FishMMO.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+  </ItemGroup>
+
+</Project>

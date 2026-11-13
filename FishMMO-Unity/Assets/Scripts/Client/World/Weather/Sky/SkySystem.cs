@@ -614,6 +614,26 @@ namespace FishMMO.Client
 			EnsureParts();
 			ChangeSkyProfileAction.OnChangeSkyProfile += OnChangeSkyProfile;
 			RenderPipelineManager.beginCameraRendering += OnBeginCamera;
+			UnityEngine.SceneManagement.SceneManager.activeSceneChanged += OnActiveSceneChanged;
+		}
+
+		/// <summary>
+		/// The lighting settings belong to the active scene, so a sky bound while another scene was active (the login
+		/// backdrop loading beside the login UI) wrote its skybox and sun into that one. They are written again into
+		/// whichever scene is active now.
+		/// </summary>
+		private void OnActiveSceneChanged(UnityEngine.SceneManagement.Scene from, UnityEngine.SceneManagement.Scene to)
+		{
+			if (cycle == null || skyMaterial == null)
+			{
+				return;
+			}
+			RenderSettings.skybox = skyMaterial;
+			RenderSettings.sun = sun;
+			RenderSettings.ambientMode = AmbientMode.Trilight;
+			// The ambient and reflection are written again on the next frame.
+			lastAmbientSky = new Color(-1f, 0f, 0f);
+			probeTimer = 0f;
 		}
 
 		/// <summary>
@@ -647,6 +667,7 @@ namespace FishMMO.Client
 			}
 			ChangeSkyProfileAction.OnChangeSkyProfile -= OnChangeSkyProfile;
 			RenderPipelineManager.beginCameraRendering -= OnBeginCamera;
+			UnityEngine.SceneManagement.SceneManager.activeSceneChanged -= OnActiveSceneChanged;
 			bodies?.Dispose();
 			belt?.Dispose();
 			foreach (SkyBodyMesh mesh in texturedMeshes)
@@ -1016,6 +1037,18 @@ namespace FishMMO.Client
 			if (createdSun != null)
 			{
 				createdSun.enabled = false;
+			}
+			/* Nothing of the last world's sky stays on screen: the cloud march (and the mist and god rays in its pass) read
+			 * cloudsReady, which only the next world's frame set again, so they kept marching that world's frozen clouds;
+			 * and the skybox and sun stayed the runtime sky's. */
+			cloudsReady = false;
+			if (RenderSettings.skybox == skyMaterial)
+			{
+				RenderSettings.skybox = null;
+			}
+			if (RenderSettings.sun == sun)
+			{
+				RenderSettings.sun = null;
 			}
 			cycle = null;
 			sun = null;

@@ -48,7 +48,7 @@ namespace FishMMO.UnitTests
                 Pass("#include \"Assets/Prefabs/Client/Weather/Shaders/FishShadowVariants.hlsl\"",sample)+"} }";
             string path=folder+"/Fixture.shader";File.WriteAllText(path,shader);
             AssetDatabase.ImportAsset(path,ImportAssetOptions.ForceSynchronousImport);
-            var asset=AssetDatabase.LoadAssetAtPath<Shader>(path);
+            var asset=AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path(path));
             Assert.That(ShaderUtil.ShaderHasError(asset),Is.False);
             material=new Material(asset);
             shadow=new RenderTexture(32,32,24,RenderTextureFormat.Shadowmap) {filterMode=FilterMode.Bilinear,wrapMode=TextureWrapMode.Clamp};

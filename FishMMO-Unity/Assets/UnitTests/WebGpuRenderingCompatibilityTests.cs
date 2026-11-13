@@ -38,7 +38,7 @@ namespace FishMMO.UnitTests
             if(!SystemInfo.supportsComputeShaders)Assert.Ignore("GPU required");
             const int size=9,count=4096;
             var texture=new Texture2DArray(size,size,2,TextureFormat.RFloat,false,true){filterMode=FilterMode.Bilinear,wrapMode=TextureWrapMode.Clamp};
-            var shader=Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>("Assets/TestHarness/World/Editor/GroundHeightLoadsProbe.compute"));
+            var shader=Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path("Assets/TestHarness/World/Editor/GroundHeightLoadsProbe.compute")));
             try
             {
                 var random=new System.Random(3771);var values=new float[2][];
@@ -94,7 +94,7 @@ namespace FishMMO.UnitTests
 
         static IEnumerable<ShaderData.Pass> Passes(string name,Func<string,bool> wanted)
         {
-            var data=ShaderUtil.GetShaderData(AssetDatabase.LoadAssetAtPath<Shader>("Assets/Prefabs/Client/Weather/Shaders/"+name+".shader")).GetSubshader(0);
+            var data=ShaderUtil.GetShaderData(AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path("Assets/Prefabs/Client/Weather/Shaders/"+name+".shader"))).GetSubshader(0);
             for(int pass=0;pass<data.PassCount;pass++)if(wanted(data.GetPass(pass).Name))yield return data.GetPass(pass);
         }
 
@@ -209,16 +209,16 @@ namespace FishMMO.UnitTests
         [Test]
         public void ShadowVariantsPrecedeUrpLightingIncludesInEveryPass()
         {
-            string include=System.IO.File.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishShadowVariants.hlsl");
+            string include=ProjectFiles.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishShadowVariants.hlsl");
             StringAssert.Contains("#if defined(SHADER_API_WEBGPU) && !defined(LIGHT_SHADOWS_NO_CBUFFER)",include);
             StringAssert.Contains("#define LIGHT_SHADOWS_NO_CBUFFER",include);
             // Includes that declare (or pull in) Input.hlsl, Shadows.hlsl or LightCookieInput.hlsl.
             // FishIndirectPerDraw.hlsl is empty off DXC, and under DXC declares only UnityInput.hlsl (no lighting cbuffer).
             var allowedBefore=new[]{"Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl","FishShaderDiagnostics.hlsl","FishIndirectPerDraw.hlsl"};
             int passes=0;
-            foreach(string file in System.IO.Directory.GetFiles("Assets","*.shader",System.IO.SearchOption.AllDirectories))
+            foreach(string file in System.IO.Directory.GetFiles(ProjectFiles.Folder("Assets"),"*.shader",System.IO.SearchOption.AllDirectories))
             {
-                string source=System.IO.File.ReadAllText(file);
+                string source=ProjectFiles.ReadAllText(file);
                 foreach(System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(source,"HLSLPROGRAM(.*?)ENDHLSL",System.Text.RegularExpressions.RegexOptions.Singleline))
                 {
                     var includes=System.Text.RegularExpressions.Regex.Matches(m.Groups[1].Value,"#include(?:_with_pragmas)?\\s+\"([^\"]+)\"").Cast<System.Text.RegularExpressions.Match>().Select(x=>x.Groups[1].Value).ToList();
@@ -236,7 +236,7 @@ namespace FishMMO.UnitTests
         [Test]
         public void WebGpuBatchHeaderAddressesMatchTheBatchLayout()
         {
-            string include=System.IO.File.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishIndirectInstancing.hlsl");
+            string include=ProjectFiles.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishIndirectInstancing.hlsl");
             Assert.That(include,Does.Contain("#define FISH_BRG_CONTACT_ON_ADDRESS "+TerrainBrgMath.ContactOnAddress+"u"));
             Assert.That(include,Does.Contain("#define FISH_BRG_FLORA_ON_ADDRESS "+TerrainBrgMath.FloraOnAddress+"u"));
             Assert.That(TerrainBrgMath.ContactOnAddress&TerrainBrgMath.PerInstanceBit,Is.Zero,"a per-batch word, not per instance");
@@ -250,7 +250,7 @@ namespace FishMMO.UnitTests
         {
             foreach(string name in new[]{"FishWeatherLitIndirect","FishVegetationIndirect","FishVegetationPrime"})
             {
-                var shader=AssetDatabase.LoadAssetAtPath<Shader>("Assets/Prefabs/Client/Weather/Shaders/"+name+".shader");
+                var shader=AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path("Assets/Prefabs/Client/Weather/Shaders/"+name+".shader"));
                 var data=ShaderUtil.GetShaderData(shader).GetSubshader(0);
                 for(int pass=0;pass<data.PassCount;pass++)
                 {

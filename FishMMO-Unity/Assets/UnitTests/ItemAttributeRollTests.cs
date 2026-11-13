@@ -120,7 +120,7 @@ namespace FishMMO.UnitTests
 				foreach (string guid in AssetDatabase.FindAssets("t:ArmorTemplate"))
 				{
 					ArmorTemplate armor = AssetDatabase.LoadAssetAtPath<ArmorTemplate>(
-						AssetDatabase.GUIDToAssetPath(guid));
+						ProjectFiles.Path(AssetDatabase.GUIDToAssetPath(guid)));
 					if (armor == null || TemplateID(armor) != id || armor.ArmorBonus == null)
 					{
 						continue;
@@ -132,7 +132,7 @@ namespace FishMMO.UnitTests
 			Assert.That(pieces, Is.Not.Empty, "The starting equipment must resolve to real items.");
 
 			AbilityTemplate punch = AssetDatabase.LoadAssetAtPath<AbilityTemplate>(
-				"Assets/Templates/Entity/Abilities/Types/Punch.asset");
+				ProjectFiles.Path("Assets/Templates/Entity/Abilities/Types/Punch.asset"));
 			Assert.That(punch, Is.Not.Null);
 			int punchDamage = PhysicalDamageOf(punch);
 			Assert.That(punchDamage, Is.GreaterThan(0),
@@ -177,7 +177,7 @@ namespace FishMMO.UnitTests
 		/// <summary>The equipment ids a new character is created with, from the login server config.</summary>
 		private static IEnumerable<int> StartingEquipmentIds()
 		{
-			string text = System.IO.File.ReadAllText(
+			string text = ProjectFiles.ReadAllText(
 				"Assets/Prefabs/Server/LoginServer/CharacterCreateSystem.asset");
 			System.Text.RegularExpressions.Match m =
 				System.Text.RegularExpressions.Regex.Match(text, @"startingEquipmentIDs: ([0-9a-fA-F]*)");

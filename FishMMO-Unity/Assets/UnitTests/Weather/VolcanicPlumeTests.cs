@@ -266,7 +266,7 @@ namespace FishMMO.UnitTests.Weather
 
 		private static string Read(string relative)
 		{
-			return File.ReadAllText(Path.Combine(Application.dataPath, relative)).Replace("\r\n", "\n");
+			return ProjectFiles.ReadAllText(Path.Combine(Application.dataPath, relative)).Replace("\r\n", "\n");
 		}
 
 		private static string CodeOnly(string source)

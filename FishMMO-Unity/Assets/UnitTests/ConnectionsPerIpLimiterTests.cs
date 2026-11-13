@@ -94,7 +94,7 @@ namespace FishMMO.UnitTests
 
 		private static string Source(string relativePath)
 		{
-			return File.ReadAllText(Path.Combine(Application.dataPath, "Scripts/Server/Implementation", relativePath));
+			return ProjectFiles.ReadAllText(Path.Combine(Application.dataPath, "Scripts/Server/Implementation", relativePath));
 		}
 
 		[Test]

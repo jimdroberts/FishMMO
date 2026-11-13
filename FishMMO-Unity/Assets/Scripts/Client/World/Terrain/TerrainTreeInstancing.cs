@@ -128,6 +128,14 @@ namespace FishMMO.Client
 		private static readonly List<Terrain> active = new List<Terrain>();
 		private static bool hooked;
 		private static bool enabled = true;
+
+		/// <summary>
+		/// Set when a model the GPU renderer holds was disposed (its last terrain went: a scene unloaded, Quit To
+		/// Login). The renderer has no way to drop one model, and the disposed model's skirted meshes are destroyed
+		/// with it, so the renderer's next layout read a destroyed mesh and threw on every login after the first. The
+		/// whole GPU path is rebuilt instead (<see cref="SyncFrame"/>): rare, since terrains only go with their scene.
+		/// </summary>
+		private static bool gpuHoldsDisposedModel;
 		private static int syncedFrame = -1;
 		private static TerrainGpuRenderer gpu;
 		private static bool gpuTried;
@@ -392,6 +400,15 @@ namespace FishMMO.Client
 				}
 			}
 
+			/* A model went while the GPU renderer still holds it: start the GPU path again from nothing. Every terrain
+			 * still active is adopted afresh next frame, once the renderer is made again at the top of SyncFrame;
+			 * adopting this frame would drive them on the fallback path, with no renderer to register on. */
+			if (gpuHoldsDisposedModel)
+			{
+				ReleaseAll();
+				return;
+			}
+
 			bool adopted = false;
 			for (int i = 0; i < active.Count; i++)
 			{
@@ -549,6 +566,7 @@ namespace FishMMO.Client
 				model.Dispose();
 				modelList.RemoveAt(i);
 				models.Remove(new ModelKey(model.Prefab, model.Layer));
+				gpuHoldsDisposedModel |= gpu != null;
 			}
 		}
 
@@ -569,6 +587,7 @@ namespace FishMMO.Client
 			gpu?.Dispose();
 			gpu = null;
 			gpuTried = false;
+			gpuHoldsDisposedModel = false;
 			workReuse.Forget();
 			gatheredOnGpu = false;
 		}

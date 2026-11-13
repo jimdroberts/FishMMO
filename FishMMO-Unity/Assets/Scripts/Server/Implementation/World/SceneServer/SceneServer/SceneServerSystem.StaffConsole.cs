@@ -216,7 +216,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					AccessLevel = (byte)character.AccessLevel,
 					Dead = character.IsFlagged(CharacterFlags.IsDead),
 					InCombat = character.IsFlagged(CharacterFlags.IsInCombat),
-					Muted = character.ChatMutedUntilTicks > now,
+					Muted = character.Component<ChatState>().MutedUntilTicks > now,
 					Distance = character.Transform != null ? Vector3.Distance(origin, character.Transform.position) : 0f,
 				});
 			}

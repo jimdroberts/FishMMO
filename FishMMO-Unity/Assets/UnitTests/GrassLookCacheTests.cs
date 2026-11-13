@@ -16,7 +16,7 @@ namespace FishMMO.UnitTests
 		public void CachedSelectorsMatchFullLooksAndPreserveTheTypeBit(bool published)
 		{
 			if (!SystemInfo.supportsComputeShaders) Assert.Ignore("GPU required");
-			var shader=Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>("Assets/TestHarness/World/Editor/GrassLookCacheProbe.compute"));
+			var shader=Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path("Assets/TestHarness/World/Editor/GrassLookCacheProbe.compute")));
 			var biomes=new Texture2D(16,16,TextureFormat.RGBA32,false,true); var palette=new Texture2D(12,28,TextureFormat.RGBAFloat,false,true);
 			try
 			{
@@ -39,7 +39,7 @@ namespace FishMMO.UnitTests
 		[TestCase(ShaderCompilerPlatform.WebGPU,BuildTarget.WebGL)]
 		public void CachedGrassPassesCompile(ShaderCompilerPlatform platform,BuildTarget target)
 		{
-			var shader=AssetDatabase.LoadAssetAtPath<Shader>("Assets/Prefabs/Client/Weather/Shaders/FishGrassBlades.shader");var sub=ShaderUtil.GetShaderData(shader).GetSubshader(0);
+			var shader=AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path("Assets/Prefabs/Client/Weather/Shaders/FishGrassBlades.shader"));var sub=ShaderUtil.GetShaderData(shader).GetSubshader(0);
 			for(int pass=0;pass<sub.PassCount;pass++)
 			{
 				var result=sub.GetPass(pass).CompileVariant(ShaderType.Vertex,new[]{"_CLUSTER_LIGHT_LOOP","_MAIN_LIGHT_SHADOWS_CASCADE","_SHADOWS_SOFT"},platform,target);

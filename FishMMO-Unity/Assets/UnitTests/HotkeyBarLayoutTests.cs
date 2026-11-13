@@ -249,7 +249,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheDefaultModifiers_OverlapNoAuthoredBinding()
 		{
-			string json = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), InputAssetPath));
+			string json = ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), InputAssetPath));
 			InputActionAsset authored = InputActionAsset.FromJson(json);
 			try
 			{
@@ -307,13 +307,13 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheRowPitch_MatchesTheStylesheet()
 		{
-			string uss = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), HotkeyBarUssPath)).Replace("\r\n", "\n");
+			string uss = ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), HotkeyBarUssPath)).Replace("\r\n", "\n");
 			float slot = RuleValue(uss, ".hotkey-slot", "height");
 			float gap = RuleValue(uss, ".hotkey-row", "margin-top");
 
 			LogAssert.AreEqual(slot + gap, UITKHudLayout.HotbarRowPitch, "slot height + row gap");
 
-			string chat = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), ChatUssPath)).Replace("\r\n", "\n");
+			string chat = ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), ChatUssPath)).Replace("\r\n", "\n");
 			LogAssert.AreEqual(RuleValue(chat, ".chat-panel", "height"), UITKHudLayout.ChatAuthoredHeight,
 				"the chat log gives up height from the height its stylesheet authors");
 		}

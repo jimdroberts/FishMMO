@@ -42,7 +42,7 @@ namespace FishMMO.UnitTests
 		{
 			/* OnStartCharacter only runs for the local player. A race with no model set never swaps the NPC's prefab model,
 			 * so this is the only thing that tells the animation controller there is a body to animate. */
-			string source = System.IO.File.ReadAllText(System.IO.Path.Combine(
+			string source = ProjectFiles.ReadAllText(System.IO.Path.Combine(
 				Application.dataPath, "Scripts/Shared/Implementation/Entity/NPC/NPC.cs"));
 
 			Assert.That(System.Text.RegularExpressions.Regex.IsMatch(source, @"else\s*\{\s*//[^\n]*\n\s*NotifyModelReady\(\);"),

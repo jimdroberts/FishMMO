@@ -27,7 +27,7 @@ namespace FishMMO.UnitTests
 			List<AbilityTemplate> results = new List<AbilityTemplate>();
 			foreach (string guid in AssetDatabase.FindAssets("t:AbilityTemplate", new[] { TypesRoot }))
 			{
-				AbilityTemplate template = AssetDatabase.LoadAssetAtPath<AbilityTemplate>(AssetDatabase.GUIDToAssetPath(guid));
+				AbilityTemplate template = AssetDatabase.LoadAssetAtPath<AbilityTemplate>(ProjectFiles.Path(AssetDatabase.GUIDToAssetPath(guid)));
 				if (template != null)
 				{
 					results.Add(template);
@@ -190,7 +190,7 @@ namespace FishMMO.UnitTests
 		{
 			foreach ((string path, _) in Orcs)
 			{
-				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(path));
 				Assert.That(prefab, Is.Not.Null, path);
 				NPC npc = prefab.GetComponent<NPC>();
 				Assert.That(npc.Abilities, Is.Not.Empty, $"{npc.name} knows nothing");
@@ -208,7 +208,7 @@ namespace FishMMO.UnitTests
 			/* The Caster archetype backs away inside 10 m. A kit whose longest reach is under that
 			 * gets its comfort distance dropped by AICombatDecision.ResolveSpacing and fights in
 			 * melee instead — correct, but not what a mage is for. */
-			GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(Orcs[2].path);
+			GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(Orcs[2].path));
 			NPC npc = prefab.GetComponent<NPC>();
 			// The brain is the prefab's entry in the server catalogue, not a component on it.
 			AIArchetypeTemplate archetype = AIBrainCatalogueEditorUtility.GetArchetype(prefab);

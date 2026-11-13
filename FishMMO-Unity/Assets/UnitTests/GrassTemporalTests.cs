@@ -18,7 +18,7 @@ namespace FishMMO.UnitTests
 
 		private static string Read(string path)
 		{
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 		[Test]

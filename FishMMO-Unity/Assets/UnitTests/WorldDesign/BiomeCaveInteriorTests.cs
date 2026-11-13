@@ -21,7 +21,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	{
 		private const string WorldFolder = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World";
 
-		private static string Code(string path) => File.ReadAllText(path);
+		private static string Code(string path) => ProjectFiles.ReadAllText(path);
 
 		// ── The link ──────────────────────────────────────────────────
 

@@ -180,7 +180,7 @@ namespace FishMMO.UnitTests
 			string path = Path.Combine(
 				Directory.GetCurrentDirectory(),
 				"Assets/Plugins/FishNet/Runtime/Object/NetworkBehaviour/NetworkBehaviour.Prediction.cs");
-			LogAssert.IsTrue(File.Exists(path),
+			LogAssert.IsTrue(ProjectFiles.Exists(path),
 				$"Vendored FishNet file not found at {path}; the default-data replicate tick is seeded there.");
 
 			/* FishNet 4.7 (upstream) seeds the server's default-data replicates in the local
@@ -189,7 +189,7 @@ namespace FishMMO.UnitTests
 			 *         estimatedTick = Owner.ReplicateTick.IsUnset ? Owner.PacketTick.Value() + ... : Owner.ReplicateTick.Value();
 			 * i.e. from the OWNER's connection, which superseded FishMMO's 4.6.12 edit to
 			 * GetDefaultedLastReplicateTick. Pin the server branch to the per-connection ticks. */
-			string source = File.ReadAllText(path);
+			string source = ProjectFiles.ReadAllText(path);
 			int seedIndex = source.IndexOf("void ReplicateDefaultData()", StringComparison.Ordinal);
 			LogAssert.IsTrue(seedIndex >= 0, "ReplicateDefaultData is missing from the vendored FishNet.");
 

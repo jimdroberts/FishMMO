@@ -30,12 +30,12 @@ namespace FishMMO.UnitTests
         public void AllOwnedWeatherAndWaterFogPragmasUseTheDynamicConfiguration()
         {
             foreach (string folder in new[] { "Assets/Prefabs/Client/Weather/Shaders", "Assets/Plugins/FishMMO Water/Shaders" })
-            foreach (string path in Directory.GetFiles(folder, "*.shader"))
+            foreach (string path in Directory.GetFiles(ProjectFiles.Folder(folder), "*.shader"))
             {
-                string source = File.ReadAllText(path);
+                string source = ProjectFiles.ReadAllText(path);
                 Assert.That(source.Contains("#pragma multi_compile_fog"), Is.False, path);
                 if (!source.Contains("ShaderLibrary/Fog.hlsl")) continue;
-                var shader = AssetDatabase.LoadAssetAtPath<Shader>(path);
+                var shader = AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path(path));
                 foreach (string name in new[] { "FOG_LINEAR", "FOG_EXP", "FOG_EXP2" })
                     Assert.That(shader.keywordSpace.FindKeyword(name).isDynamic, Is.True, path + ": " + name);
             }
@@ -58,7 +58,7 @@ namespace FishMMO.UnitTests
                     "float4 vert(float4 p:POSITION):SV_POSITION{return p;}\n" +
                     "float4 frag():SV_Target{if(" + dynamicName + ")return 1;return 0;}\nENDCG\n} } }");
                 AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
-                var shader = AssetDatabase.LoadAssetAtPath<Shader>(path);
+                var shader = AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path(path));
                 Assert.That(shader.keywordSpace.FindKeyword(dynamicName).isDynamic, Is.True);
                 var expanded = ShaderPrewarm.WithEveryShadowState(shader, new[] { dynamicName, staticName }).ToArray();
                 Assert.That(expanded.Length, Is.EqualTo(1));

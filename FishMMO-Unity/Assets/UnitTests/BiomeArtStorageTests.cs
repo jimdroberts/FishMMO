@@ -54,7 +54,7 @@ namespace FishMMO.UnitTests
 		public void NoCommittedAssetReferencesAnythingUnderAssetsLocal()
 		{
 			var localGuids = new HashSet<string>(StringComparer.Ordinal);
-			foreach (string dir in Directory.GetDirectories("Assets"))
+			foreach (string dir in Directory.GetDirectories(ProjectFiles.Folder("Assets")))
 			{
 				string path = dir.Replace('\\', '/');
 				if (BiomeLocalArtIndex.IsLocalPath(path))
@@ -62,12 +62,12 @@ namespace FishMMO.UnitTests
 					localGuids.UnionWith(AssetGuidScan.GuidsUnder(path));
 				}
 			}
-			foreach (string file in Directory.GetFiles("Assets", "*.meta"))
+			foreach (string file in Directory.GetFiles(ProjectFiles.Folder("Assets"), "*.meta"))
 			{
 				string path = file.Replace('\\', '/');
 				if (BiomeLocalArtIndex.IsLocalPath(path))
 				{
-					Match m = Regex.Match(File.ReadAllText(path), @"^guid:\s*([0-9a-fA-F]{32})", RegexOptions.Multiline);
+					Match m = Regex.Match(ProjectFiles.ReadAllText(path), @"^guid:\s*([0-9a-fA-F]{32})", RegexOptions.Multiline);
 					if (m.Success)
 					{
 						localGuids.Add(m.Groups[1].Value.ToLowerInvariant());
@@ -117,7 +117,7 @@ namespace FishMMO.UnitTests
 			}
 			finally
 			{
-				if (Directory.Exists(root))
+				if (ProjectFiles.FolderExists(root))
 				{
 					Directory.Delete(root, true);
 				}
@@ -192,8 +192,8 @@ namespace FishMMO.UnitTests
 		public void EverythingGeneratedIsGitignored()
 		{
 			string gitignore = Path.Combine(Path.GetDirectoryName(Application.dataPath), ".gitignore");
-			Assume.That(File.Exists(gitignore), Is.True);
-			string[] lines = File.ReadAllLines(gitignore);
+			Assume.That(ProjectFiles.Exists(gitignore), Is.True);
+			string[] lines = ProjectFiles.ReadAllLines(gitignore);
 			foreach (string root in ProceduralArtPayload.GeneratedRoots)
 			{
 				string folder = root.Substring("Assets/".Length);
@@ -226,7 +226,7 @@ namespace FishMMO.UnitTests
 			Assert.That(folder, Is.Not.Null, "the generator's sources are found by its script");
 			foreach (string file in ProceduralArtPayload.SourceFiles)
 			{
-				Assert.That(File.Exists(Path.Combine(folder, file)), Is.True, $"{file} is hashed but does not exist; update SourceFiles");
+				Assert.That(ProjectFiles.Exists(Path.Combine(folder, file)), Is.True, $"{file} is hashed but does not exist; update SourceFiles");
 			}
 		}
 

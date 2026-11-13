@@ -92,7 +92,7 @@ namespace FishMMO.UnitTests
 		[SetUp]
 		public void SetUp()
 		{
-			PanelSettings asset = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
+			PanelSettings asset = AssetDatabase.LoadAssetAtPath<PanelSettings>(ProjectFiles.Path(PanelSettingsPath));
 			LogAssert.IsNotNull(asset, $"panel settings must exist at {PanelSettingsPath}");
 
 			/* A render target of the reference size, because that is what gives the panel its
@@ -110,7 +110,7 @@ namespace FishMMO.UnitTests
 
 			foreach (Window window in Windows)
 			{
-				VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(window.UxmlPath);
+				VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(ProjectFiles.Path(window.UxmlPath));
 				LogAssert.IsNotNull(uxml, $"the {window.Name} UXML must exist at {window.UxmlPath}");
 
 				GameObject host = new GameObject(window.Name);

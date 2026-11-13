@@ -111,9 +111,9 @@ namespace FishMMO.UnitTests
 			var useNormalMap = new Regex(@"\n    - _UseNormalMap: ([-0-9.eE]+)\n");
 			int seen = 0;
 			var wrong = new List<string>();
-			foreach (string path in Directory.EnumerateFiles("Assets", "*.mat", SearchOption.AllDirectories))
+			foreach (string path in Directory.EnumerateFiles(ProjectFiles.Folder("Assets"), "*.mat", SearchOption.AllDirectories))
 			{
-				string text = File.ReadAllText(path).Replace("\r\n", "\n");
+				string text = ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 				if (!shaderLine.IsMatch(text))
 				{
 					continue;
@@ -143,7 +143,7 @@ namespace FishMMO.UnitTests
 
 		private static string ShaderGuid(string shaderPath)
 		{
-			Match guid = Regex.Match(File.ReadAllText(shaderPath + ".meta"), @"guid: ([0-9a-f]{32})");
+			Match guid = Regex.Match(ProjectFiles.ReadAllText(shaderPath + ".meta"), @"guid: ([0-9a-f]{32})");
 			Assert.That(guid.Success, Is.True, shaderPath + ".meta");
 			return guid.Groups[1].Value;
 		}

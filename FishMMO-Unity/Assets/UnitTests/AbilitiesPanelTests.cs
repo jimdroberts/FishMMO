@@ -37,8 +37,8 @@ namespace FishMMO.UnitTests
 		[SetUp]
 		public void SetUp()
 		{
-			PanelSettings settings = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
-			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(UxmlPath);
+			PanelSettings settings = AssetDatabase.LoadAssetAtPath<PanelSettings>(ProjectFiles.Path(PanelSettingsPath));
+			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(ProjectFiles.Path(UxmlPath));
 			LogAssert.IsNotNull(settings, $"panel settings must exist at {PanelSettingsPath}");
 			LogAssert.IsNotNull(uxml, $"the abilities UXML must exist at {UxmlPath}");
 
@@ -173,6 +173,29 @@ namespace FishMMO.UnitTests
 
 			panel.SwitchTab(AbilityTabType.Knowledge);
 			LogAssert.AreEqual(2, VisibleRows().Count, "the base ability and the effect both show under Knowledge");
+		}
+
+		[Test]
+		public void AnAbilityAnnouncedAgainKeepsOneRow()
+		{
+			/* As a character comes in, the client hears of each ability three times: the controller's
+			 * start replays what it knows, the panel rebuilds from the controller, and the server's list
+			 * is learned again. A new character used to show its one starting ability three times. */
+			AbilityTemplate template = NewTemplate("Test Template");
+			panel.AddAbility(new Ability(1L, template));
+			panel.AddAbility(new Ability(1L, template));
+			panel.AddAbility(new Ability(1L, template));
+			panel.AddKnownAbility(template);
+			panel.AddKnownAbility(template);
+
+			panel.SwitchTab(AbilityTabType.Ability);
+			LogAssert.AreEqual(1, VisibleRows().Count, "one ability, one row, however often it is announced");
+			panel.SwitchTab(AbilityTabType.Knowledge);
+			LogAssert.AreEqual(1, VisibleRows().Count, "and one row per known part");
+
+			panel.AddAbility(new Ability(2L, template));
+			panel.SwitchTab(AbilityTabType.Ability);
+			LogAssert.AreEqual(2, VisibleRows().Count, "two crafted abilities from one template are two rows");
 		}
 
 		[Test]

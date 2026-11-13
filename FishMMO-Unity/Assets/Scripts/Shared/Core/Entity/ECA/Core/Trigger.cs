@@ -357,6 +357,38 @@ namespace FishMMO.Shared.Core
 	[CreateAssetMenu(fileName = "New Trigger", menuName = "FishMMO/ECA/Trigger", order = 0)]
 	public class Trigger : CachedScriptableObject<Trigger>, ICachedObject
 	{
+		/// <summary>
+		/// Told of every <see cref="InvokeAll"/> call, empty lists included, before anything runs: lets tests pin
+		/// that a path dispatches no triggers at all. Null outside tests.
+		/// </summary>
+		internal static System.Action<List<Trigger>, EventData> DispatchObserved;
+
+		/// <summary>
+		/// Executes each trigger in <paramref name="triggers"/> with <paramref name="eventData"/>, in order.
+		/// Null-safe: does nothing when either is null, and skips null entries.
+		/// </summary>
+		/// <remarks>
+		/// Every character used to carry this as an instance method, which made the core character interface
+		/// name ECA; it never used the character, so it lives with the triggers it runs.
+		/// </remarks>
+		/// <param name="triggers">The triggers to execute.</param>
+		/// <param name="eventData">The event data passed to each.</param>
+		public static void InvokeAll(List<Trigger> triggers, EventData eventData)
+		{
+			DispatchObserved?.Invoke(triggers, eventData);
+			if (triggers == null || eventData == null)
+			{
+				return;
+			}
+			for (int i = 0; i < triggers.Count; ++i)
+			{
+				if (triggers[i] != null)
+				{
+					triggers[i].Execute(eventData);
+				}
+			}
+		}
+
 		[Header("Targeting")]
 		/// <summary>
 		/// Selector that produces the targets this trigger fires for. When null, the trigger

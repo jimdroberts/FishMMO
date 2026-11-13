@@ -18,7 +18,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		private const string Terrain = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/Terrain";
 		private const string World = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World";
 
-		private static string Read(string relative) => File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
+		private static string Read(string relative) => ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
 
 		private static BiomeLandformSite Crater(int biome, Vector2 at, float radius)
 		{

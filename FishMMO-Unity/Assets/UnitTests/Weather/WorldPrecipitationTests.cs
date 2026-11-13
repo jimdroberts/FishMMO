@@ -327,7 +327,7 @@ namespace FishMMO.UnitTests.Weather
 			LogAssert.IsTrue(sand.Size.y * 0.16f <= 0.006f, "sand is grit, not pebbles");
 
 			// And the shipped profile, which is what is actually drawn.
-			string profile = File.ReadAllText(Path.Combine(Application.dataPath, "Prefabs/Client/Weather/Weather Render Profile.asset")).Replace("\r\n", "\n");
+			string profile = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath, "Prefabs/Client/Weather/Weather Render Profile.asset")).Replace("\r\n", "\n");
 			LogAssert.IsTrue(LookSize(profile, "Ash").y * 0.44f <= 0.005f, "the profile's ash is grain-sized");
 			LogAssert.IsTrue(LookSize(profile, "Sand").y * 0.16f <= 0.006f, "the profile's sand is grain-sized");
 		}
@@ -344,7 +344,7 @@ namespace FishMMO.UnitTests.Weather
 
 		private static string Read(string relative)
 		{
-			return File.ReadAllText(Path.Combine(Application.dataPath, relative)).Replace("\r\n", "\n");
+			return ProjectFiles.ReadAllText(Path.Combine(Application.dataPath, relative)).Replace("\r\n", "\n");
 		}
 
 		private static string CodeOnly(string source)

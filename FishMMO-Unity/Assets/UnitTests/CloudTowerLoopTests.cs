@@ -44,7 +44,7 @@ float2 p=float2((int)(id.x%64)-32,(int)(id.x/64)-32)*(_FishCloudColumn.y*0.137)+
 Results[id.x]=float2(FishCloudTowerReference(p),FishCloudTowerAnalytic(p));
 }
 ");AssetDatabase.ImportAsset(path,ImportAssetOptions.ForceSynchronousImport);
-var shader=AssetDatabase.LoadAssetAtPath<ComputeShader>(path);Assert.That(shader,Is.Not.Null);
+var shader=AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path(path));Assert.That(shader,Is.Not.Null);
 using(var buffer=new ComputeBuffer(4096,8)) {
 shader.SetVector("_FishCloudColumn",new Vector4(1,cell,period,0));shader.SetFloat("_FishCloudTowerSeed",seed);
 int kernel=shader.FindKernel("Compare");shader.SetBuffer(kernel,"Results",buffer);shader.Dispatch(kernel,64,1,1);

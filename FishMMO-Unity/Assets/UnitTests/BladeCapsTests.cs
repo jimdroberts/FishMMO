@@ -42,7 +42,7 @@ namespace FishMMO.UnitTests
 			LogAssert.AreEqual(GrassMath.MaxTypes, GrassBladeRenderer.MaxTypes, "the renderer's table is the record's");
 			LogAssert.AreEqual(64, GrassTerrain.MaxChannels, "sixteen density maps of four");
 			LogAssert.AreEqual(16, GrassTerrain.MaxDensityMaps, "four channels a map");
-			string compute = File.ReadAllText(ComputePath);
+			string compute = ProjectFiles.ReadAllText(ComputePath);
 			LogAssert.IsTrue(compute.Contains("#define GRASS_CHANNELS 64 "), "the widest kernel walks every channel a terrain can have");
 			LogAssert.IsTrue(compute.Contains("#define GRASS_DENSITY_MAPS 16"), "and every map");
 			LogAssert.IsTrue(compute.Contains("#define GRASS_CHANNELS 32 ") && compute.Contains("#define GRASS_CHANNELS 16 "), "the narrow and wide kernels keep their counts");
@@ -59,7 +59,7 @@ namespace FishMMO.UnitTests
 			LogAssert.AreEqual(2, GrassTerrain.TierOf(GrassTerrain.MaxChannels), "the cap: GRASS_WIDEST");
 			LogAssert.AreEqual(1, GrassTerrain.TierOf(Measured[0].BusiestTile), "Moron 1 keeps the wide kernel it ran");
 			LogAssert.AreEqual(2, GrassTerrain.TierOf(Measured[1].BusiestTile), "Moron 2 needs the widest");
-			string renderer = File.ReadAllText("Assets/Scripts/Client/World/Terrain/Grass/GrassBladeRenderer.cs");
+			string renderer = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/Grass/GrassBladeRenderer.cs");
 			LogAssert.IsTrue(renderer.Contains("compute.SetKeyword(wideChannels, atlas.Tier == 1);"), "GRASS_WIDE for tier 1 only");
 			LogAssert.IsTrue(renderer.Contains("compute.SetKeyword(widestChannels, atlas.Tier >= 2);"), "GRASS_WIDEST for tier 2 only");
 		}
@@ -86,7 +86,7 @@ namespace FishMMO.UnitTests
 				LogAssert.AreEqual((uint)at, gpu, $"channel {c}: the compute reads it where the atlas writes it");
 			}
 			LogAssert.AreEqual(GrassTerrainAtlas.TerrainUints, fixedFields.Count + GrassTerrain.MaxChannels, "no uint of the row is unused");
-			string compute = File.ReadAllText(ComputePath);
+			string compute = ProjectFiles.ReadAllText(ComputePath);
 			LogAssert.IsTrue(compute.Contains("uint offset = c < 8u ? 8u + c : c < 16u ? 17u + c : 18u + c;"), "the compute's offsets are the ones checked here");
 		}
 
@@ -179,8 +179,8 @@ namespace FishMMO.UnitTests
 		public void BladeRecord_Is24Bytes_AndBothShadersCarryTheSixthWord()
 		{
 			LogAssert.AreEqual(24, GrassMath.BladeStride, "float3 root + packed + colour + more");
-			string compute = File.ReadAllText(ComputePath);
-			string blades = File.ReadAllText(BladesPath);
+			string compute = ProjectFiles.ReadAllText(ComputePath);
+			string blades = ProjectFiles.ReadAllText(BladesPath);
 			LogAssert.IsTrue(compute.Contains("struct GrassBlade { float3 root; uint packed; uint colour; uint more; };"), "the compute writes the sixth word");
 			LogAssert.IsTrue(compute.Contains("blade.more = GrassRecordMore(type);"), "every record of a blade takes it (lit and cast are copies of blade)");
 			LogAssert.IsTrue(compute.Contains("lit.more = 0u;"), "an empty record's is set too");

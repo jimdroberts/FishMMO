@@ -40,9 +40,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void EveryGeneratorSourceIsHashedOrDecidesNoBytes()
 		{
-			Assert.That(Directory.Exists(Folder), Is.True, "run from the project root");
+			Assert.That(ProjectFiles.FolderExists(Folder), Is.True, "run from the project root");
 			List<string> hashed = ProceduralArtPayload.HashedSources(Folder);
-			foreach (string path in Directory.GetFiles(Folder, "*.cs", SearchOption.AllDirectories))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(Folder), "*.cs", SearchOption.AllDirectories))
 			{
 				// As the fingerprint names it: a path from the generator's folder, forward slashes.
 				string file = path.Substring(Folder.Length).Replace('\\', '/').TrimStart('/');
@@ -68,11 +68,11 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void TheSpecsBiomeFilesAreHashedInTheCore_InOrdinalOrder()
 		{
-			Assert.That(Directory.Exists(Folder), Is.True, "run from the project root");
+			Assert.That(ProjectFiles.FolderExists(Folder), Is.True, "run from the project root");
 			List<string> hashed = ProceduralArtPayload.HashedSources(Folder);
 			Assert.That(hashed.Take(ProceduralArtPayload.SourceFiles.Length), Is.EqualTo(ProceduralArtPayload.SourceFiles), "the listed files first, in their order");
 			string[] biomes = hashed.Skip(ProceduralArtPayload.SourceFiles.Length).ToArray();
-			string[] onDisk = Directory.GetFiles(Path.Combine(Folder, BiomeFiles), "*.cs", SearchOption.AllDirectories);
+			string[] onDisk = Directory.GetFiles(ProjectFiles.Folder(Path.Combine(Folder, BiomeFiles)), "*.cs", SearchOption.AllDirectories);
 			Assert.That(biomes.Length, Is.EqualTo(onDisk.Length), "every per-biome file is hashed, and nothing else");
 			Assert.That(biomes.Length, Is.EqualTo(BiomeArtSpec.Entries.Length), "one file per biome's entry");
 			Assert.That(biomes, Is.EqualTo(biomes.OrderBy(f => f, StringComparer.Ordinal).ToArray()), "in ordinal order, so every machine hashes them alike");

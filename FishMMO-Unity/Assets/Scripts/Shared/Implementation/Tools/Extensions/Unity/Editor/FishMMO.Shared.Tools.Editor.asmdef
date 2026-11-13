@@ -2,6 +2,9 @@
     "name": "FishMMO.Shared.Tools.Editor",
     "rootNamespace": "FishMMO.Shared",
     "references": [
+        "Unity.Splines",
+        "Unity.Mathematics",
+        "FishMMO.Core",
         "FishMMO.Shared",
         "FishMMO.Server",
         "FishNet.Runtime",

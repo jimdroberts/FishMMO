@@ -12,7 +12,7 @@ namespace FishMMO.UnitTests
 	/// </summary>
 	public class TerrainDetailBakeTests
 	{
-		private static string Source(string relative) => File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative));
+		private static string Source(string relative) => ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative));
 
 		[Test]
 		public void CoverOf_PackedMaps_IsTheTallestChannelTimesItsDensity()

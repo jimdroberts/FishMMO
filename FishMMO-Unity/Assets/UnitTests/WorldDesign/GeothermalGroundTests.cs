@@ -23,7 +23,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		private const string WorldFolder = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World";
 		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
 
-		private static string Code(string path) => File.ReadAllText(path);
+		private static string Code(string path) => ProjectFiles.ReadAllText(path);
 
 		private static float F(string text) => float.Parse(text, System.Globalization.CultureInfo.InvariantCulture);
 
@@ -640,9 +640,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(hot.Approximately(BiomeWaterLooks.Today), Is.False);
 			Assert.That(BiomeWaterLook.Lerp(BiomeWaterLooks.Today, hot, 0.25f).Hot, Is.False);
 			Assert.That(BiomeWaterLook.Lerp(BiomeWaterLooks.Today, hot, 0.75f).Hot, Is.True);
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				if (!text.Contains("m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01"))
 				{
 					continue;
@@ -671,9 +671,9 @@ namespace FishMMO.UnitTests.WorldDesign
 					StringAssert.Contains("Fingerprint: Steam@5000", text, "the basin emits Steam at 0.5, authored");
 					StringAssert.Contains("Fingerprint: " + Basin.Signature(), text);
 					// The substance the weather content generator made (EnsureShipped), a vapour, is what it emits.
-					string steam = File.ReadAllText("Assets/Templates/Weather/Substances/Steam.asset");
+					string steam = ProjectFiles.ReadAllText("Assets/Templates/Weather/Substances/Steam.asset");
 					StringAssert.Contains("\n  Vapour: 1", steam);
-					string guid = Regex.Match(File.ReadAllText("Assets/Templates/Weather/Substances/Steam.asset.meta"), @"guid: (\w+)").Groups[1].Value;
+					string guid = Regex.Match(ProjectFiles.ReadAllText("Assets/Templates/Weather/Substances/Steam.asset.meta"), @"guid: (\w+)").Groups[1].Value;
 					StringAssert.Contains($"\n  Emits: {{fileID: 11400000, guid: {guid}, type: 2}}\n  EmissionRate: 0.5\n", text);
 				}
 			}
@@ -741,9 +741,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			int id = (nameof(BiomeTemplate) + "Geyser Basin").GetDeterministicHashCode();
 			string hex = string.Concat(BitConverter.GetBytes(id).Select(b => b.ToString("x2")));
 			var found = new List<string>();
-			foreach (string map in Directory.GetFiles("Assets/Scenes/WorldScene", "* Biome Map.asset", SearchOption.AllDirectories))
+			foreach (string map in Directory.GetFiles(ProjectFiles.Folder("Assets/Scenes/WorldScene"), "* Biome Map.asset", SearchOption.AllDirectories))
 			{
-				Match ids = Regex.Match(File.ReadAllText(map), @"\n  BiomeIDs: ([0-9a-f]+)");
+				Match ids = Regex.Match(ProjectFiles.ReadAllText(map), @"\n  BiomeIDs: ([0-9a-f]+)");
 				string all = ids.Groups[1].Value;
 				int cells = 0;
 				for (int i = 0; i + 8 <= all.Length; i += 8)

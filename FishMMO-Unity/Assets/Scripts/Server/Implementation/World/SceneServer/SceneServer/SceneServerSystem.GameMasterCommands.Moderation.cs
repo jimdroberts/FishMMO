@@ -430,8 +430,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							current.CharactersByID.TryGetValue(characterID, out IPlayerCharacter held) &&
 							held != null)
 						{
-							held.ChatMutedUntilTicks = untilTicks;
-							held.ChatMuteReason = reason;
+							held.Component<ChatState>().MutedUntilTicks = untilTicks;
+							held.Component<ChatState>().MuteReason = reason;
 						}
 					});
 				}, characterID))
@@ -457,10 +457,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (mutedUntilTicks > 0)
 			{
-				if (mutedUntilTicks > held.ChatMutedUntilTicks)
+				if (mutedUntilTicks > held.Component<ChatState>().MutedUntilTicks)
 				{
-					held.ChatMutedUntilTicks = mutedUntilTicks;
-					held.ChatMuteReason = muteReason;
+					held.Component<ChatState>().MutedUntilTicks = mutedUntilTicks;
+					held.Component<ChatState>().MuteReason = muteReason;
 				}
 				ReplyByCharacterID(actorID, $"{held.CharacterName}'s mute state could not be re-read here; the new mute was applied from the write.");
 				return;

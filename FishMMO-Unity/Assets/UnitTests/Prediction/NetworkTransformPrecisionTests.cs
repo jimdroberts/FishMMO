@@ -123,8 +123,8 @@ namespace FishMMO.UnitTests
 		{
 			const string ntGuid = "a2836e36774ca1c4bbbee976e17b649c";
 			return Array.FindAll(
-				Directory.GetFiles(Application.dataPath, "*.prefab", SearchOption.AllDirectories),
-				path => File.ReadAllText(path).Contains(ntGuid));
+				Directory.GetFiles(ProjectFiles.Folder(Application.dataPath), "*.prefab", SearchOption.AllDirectories),
+				path => ProjectFiles.ReadAllText(path).Contains(ntGuid));
 		}
 
 		// ── range ────────────────────────────────────────────────────────────
@@ -214,7 +214,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void WireGrid_IsWellUnderAWalkingTicksDisplacement()
 		{
-			string scene = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Assets/Scenes/Server/SceneServer.unity"));
+			string scene = ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Assets/Scenes/Server/SceneServer.unity"));
 			Match tick = Regex.Match(scene, @"^\s+_tickRate:\s*(\d+)\s*$", RegexOptions.Multiline);
 			Assert.IsTrue(tick.Success, "SceneServer.unity no longer serializes a _tickRate; update this test.");
 			float tickRate = float.Parse(tick.Groups[1].Value, CultureInfo.InvariantCulture);
@@ -224,7 +224,7 @@ namespace FishMMO.UnitTests
 			foreach (string path in NetworkTransformPrefabs())
 			{
 				checkedCount++;
-				Match multiplier = Regex.Match(File.ReadAllText(path), @"_positionCompressionScale:\s*([0-9.]+)");
+				Match multiplier = Regex.Match(ProjectFiles.ReadAllText(path), @"_positionCompressionScale:\s*([0-9.]+)");
 				Assert.IsTrue(multiplier.Success, $"{Path.GetFileName(path)} has no _positionCompressionScale.");
 				float gridStep = 1f / float.Parse(multiplier.Groups[1].Value, CultureInfo.InvariantCulture);
 
@@ -380,7 +380,7 @@ namespace FishMMO.UnitTests
 
 			foreach (string path in NetworkTransformPrefabs())
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				checkedCount++;
 				string name = Path.GetFileName(path);
 				Match multiplier = Regex.Match(text, @"_positionCompressionScale:\s*([0-9.]+)");
@@ -417,7 +417,7 @@ namespace FishMMO.UnitTests
 			foreach (string path in NetworkTransformPrefabs())
 			{
 				checkedCount++;
-				string text = File.ReadAllText(path).Replace("\r\n", "\n");
+				string text = ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 				StringAssert.Contains($"_positionCompressionScale: {PROJECT_MULTIPLIER}\n", text,
 					$"{Path.GetFileName(path)} has a NetworkTransform without the project position multiplier (100).");
 				StringAssert.Contains($"_positionPackingBits: {PROJECT_PACKING_BITS}\n", text,

@@ -94,6 +94,14 @@ namespace FishMMO.Shared
 				}
 				if (currentScene.IsValid())
 				{
+					// A backdrop only the client draws (the login screen's world) is no place to host or send anyone.
+					WorldSceneSettings backdropCheck = GameObject.FindAnyObjectByType<WorldSceneSettings>();
+					if (backdropCheck != null && backdropCheck.ClientBackdrop)
+					{
+						Log.Debug("WorldSceneDetailsCacheReader", $"{currentScene.name} is a client backdrop; not a world scene for the cache.");
+						EditorSceneManager.CloseScene(currentScene, true);
+						continue;
+					}
 					claimedBy[currentScene.name] = scenePath;
 					Log.Debug("WorldSceneDetailsCacheReader", $"Scene Loaded[{currentScene.name}]");
 

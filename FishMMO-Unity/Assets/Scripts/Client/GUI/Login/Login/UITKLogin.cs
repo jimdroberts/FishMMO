@@ -65,6 +65,8 @@ namespace FishMMO.Client
 		/// The name of the handshake message Label in the UI.
 		/// </summary>
 		private const string HANDSHAKE_NAME = "login-handshake";
+		private const string TITLE_NAME = "login-title";
+		private const string VERSION_NAME = "login-version";
 
 		private TextField username;
 		private TextField password;
@@ -188,6 +190,19 @@ namespace FishMMO.Client
 			registerButton = Root.Q<Button>(REGISTER_BUTTON_NAME);
 			signInButton = Root.Q<Button>(SIGN_IN_BUTTON_NAME);
 			handshakeMessage = Root.Q<Label>(HANDSHAKE_NAME);
+
+			// The game's name over the panel and the running build in the corner, as the launcher titles itself.
+			Label title = Root.Q<Label>(TITLE_NAME);
+			if (title != null)
+			{
+				title.text = Constants.Configuration.ProjectName;
+			}
+			Label version = Root.Q<Label>(VERSION_NAME);
+			if (version != null)
+			{
+				version.text = string.IsNullOrEmpty(MainBootstrapSystem.GameVersion) ? string.Empty : $"v{MainBootstrapSystem.GameVersion}";
+				version.pickingMode = PickingMode.Ignore;
+			}
 
 			if (password != null)
 			{

@@ -75,7 +75,7 @@ namespace FishMMO.UnitTests
 		{
 			foreach (string path in PlayablePrefabs)
 			{
-				GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(path);
+				GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(path));
 				LogAssert.IsNotNull(prefab, $"{path} did not load.");
 
 				NetworkObject nob = prefab.GetComponent<NetworkObject>();
@@ -123,7 +123,7 @@ namespace FishMMO.UnitTests
 		{
 			foreach (string path in PlayablePrefabs)
 			{
-				GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(path);
+				GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(path));
 				NetworkObject nob = prefab.GetComponent<NetworkObject>();
 				UnityEditor.SerializedObject so = new UnityEditor.SerializedObject(nob);
 
@@ -190,7 +190,7 @@ namespace FishMMO.UnitTests
 			{
 				string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
 				string full = Path.Combine(Directory.GetCurrentDirectory(), path);
-				if (!File.Exists(full))
+				if (!ProjectFiles.Exists(full))
 				{
 					continue;
 				}
@@ -324,7 +324,7 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>Every YAML document in a scene, keyed by its <c>&amp;fileID</c>.</summary>
-		private static Dictionary<string, string> SceneDocuments(string fullPath) => SceneDocumentsFromText(File.ReadAllText(fullPath));
+		private static Dictionary<string, string> SceneDocuments(string fullPath) => SceneDocumentsFromText(ProjectFiles.ReadAllText(fullPath));
 
 		/// <summary>Every YAML document in a scene's text, keyed by its <c>&amp;fileID</c>.</summary>
 		private static Dictionary<string, string> SceneDocumentsFromText(string text)
@@ -365,8 +365,8 @@ namespace FishMMO.UnitTests
 		private static string ScriptGuid(string scriptPath)
 		{
 			string meta = Path.Combine(Directory.GetCurrentDirectory(), scriptPath + ".meta");
-			LogAssert.IsTrue(File.Exists(meta), $"{scriptPath}.meta not found.");
-			foreach (string raw in File.ReadAllLines(meta))
+			LogAssert.IsTrue(ProjectFiles.Exists(meta), $"{scriptPath}.meta not found.");
+			foreach (string raw in ProjectFiles.ReadAllLines(meta))
 			{
 				string line = raw.Trim();
 				if (line.StartsWith("guid: ", StringComparison.Ordinal))

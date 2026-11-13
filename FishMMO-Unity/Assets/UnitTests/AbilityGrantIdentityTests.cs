@@ -55,8 +55,8 @@ namespace FishMMO.UnitTests
 		private static string ReadSource(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-			LogAssert.IsTrue(File.Exists(path), $"{relativePath} not found at {path}.");
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{relativePath} not found at {path}.");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 		/// <summary>
@@ -233,14 +233,14 @@ namespace FishMMO.UnitTests
 			 * A tombstone was rejected as the alternative because it would hold a version no later
 			 * craft could outrank, which makes forget-then-craft permanently impossible. */
 			string path = Path.Combine(Directory.GetCurrentDirectory(), AbilityServicePath);
-			if (!File.Exists(path))
+			if (!ProjectFiles.Exists(path))
 			{
 				Assert.Ignore($"the database project is not checked out beside the Unity project ({AbilityServicePath}).");
 			}
 
 			/* The batch body lives behind both the ungated and the ownership-gated entry points
 			 * (PersistAsync and PersistOwnedAsync, 2026-09-25), so the pin reads the shared body. */
-			string source = File.ReadAllText(path).Replace("\r\n", "\n");
+			string source = ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 			string body = MethodBody(source,
 				"private async Task<DatabaseResult<BulkWriteResult>> PersistBatchAsync(IEnumerable<CharacterAbilityData> abilities",
 				"/// <inheritdoc/>");

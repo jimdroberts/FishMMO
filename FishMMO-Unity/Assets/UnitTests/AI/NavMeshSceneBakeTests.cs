@@ -39,7 +39,7 @@ namespace FishMMO.UnitTests.AI
 				{
 					continue;
 				}
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				Match heightMesh = Regex.Match(text, @"^\s+m_BuildHeightMesh:\s*(\d)\s*$", RegexOptions.Multiline);
 				if (!heightMesh.Success)
 				{

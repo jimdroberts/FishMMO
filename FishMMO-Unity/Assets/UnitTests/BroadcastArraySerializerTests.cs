@@ -53,9 +53,9 @@ namespace FishMMO.UnitTests
 		{
 			StringBuilder builder = new StringBuilder();
 
-			foreach (string file in Directory.GetFiles(ScriptsRoot, "*.cs", SearchOption.AllDirectories))
+			foreach (string file in Directory.GetFiles(ProjectFiles.Folder(ScriptsRoot), "*.cs", SearchOption.AllDirectories))
 			{
-				builder.AppendLine(File.ReadAllText(file));
+				builder.AppendLine(ProjectFiles.ReadAllText(file));
 			}
 
 			return builder.ToString();
@@ -71,9 +71,9 @@ namespace FishMMO.UnitTests
 			SortedSet<string> types = new SortedSet<string>(StringComparer.Ordinal);
 			const string marker = "Broadcast[] ";
 
-			foreach (string file in Directory.GetFiles(NetworkRoot, "*.cs", SearchOption.AllDirectories))
+			foreach (string file in Directory.GetFiles(ProjectFiles.Folder(NetworkRoot), "*.cs", SearchOption.AllDirectories))
 			{
-				foreach (string line in File.ReadAllLines(file))
+				foreach (string line in ProjectFiles.ReadAllLines(file))
 				{
 					string trimmed = line.Trim();
 					if (!trimmed.StartsWith("public ", StringComparison.Ordinal))

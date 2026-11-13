@@ -157,8 +157,8 @@ namespace FishMMO.UnitTests
 
 		private void Mount()
 		{
-			PanelSettings settings = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
-			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(UxmlPath);
+			PanelSettings settings = AssetDatabase.LoadAssetAtPath<PanelSettings>(ProjectFiles.Path(PanelSettingsPath));
+			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(ProjectFiles.Path(UxmlPath));
 			LogAssert.IsNotNull(settings, $"panel settings must exist at {PanelSettingsPath}");
 			LogAssert.IsNotNull(uxml, $"the display UXML must exist at {UxmlPath}");
 
@@ -373,7 +373,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void LeavingTheWorldQueue_TellsTheWorldServerBeforeTheConnectionCloses()
 		{
-			string client = File.ReadAllText("Assets/Scripts/Client/Client.cs").Replace("\r\n", "\n");
+			string client = ProjectFiles.ReadAllText("Assets/Scripts/Client/Client.cs").Replace("\r\n", "\n");
 			int start = client.IndexOf("public void LeaveWorldQueue()", StringComparison.Ordinal);
 			LogAssert.IsTrue(start >= 0, "Client.LeaveWorldQueue exists");
 			string body = client.Substring(start, client.IndexOf("\n\t\t}", start, StringComparison.Ordinal) - start);
@@ -382,7 +382,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(announce >= 0 && quit > announce,
 				"the leave is written before QuitToLogin, whose disconnect waits for the outgoing bundle to flush; a player who left must not keep a place");
 
-			string panel = File.ReadAllText("Assets/Scripts/Client/GUI/Login/UITKWorldQueueDisplay.cs");
+			string panel = ProjectFiles.ReadAllText("Assets/Scripts/Client/GUI/Login/UITKWorldQueueDisplay.cs");
 			LogAssert.IsTrue(panel.Contains("Client?.LeaveWorldQueue();"), "the panel's Leave queue goes through it");
 		}
 	}

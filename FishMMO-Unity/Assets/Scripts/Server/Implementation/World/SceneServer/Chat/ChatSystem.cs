@@ -944,18 +944,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			var state = new ChatRateGate.State
 			{
-				Tokens = sender.ChatTokens,
-				LastRefillTicks = sender.ChatTokenLastRefillTicks,
-				IsFull = sender.IsChatTokensFull,
-				NextMessageTicks = sender.NextChatMessageTicks,
+				Tokens = sender.Component<ChatState>().Tokens,
+				LastRefillTicks = sender.Component<ChatState>().LastRefillTicks,
+				IsFull = sender.Component<ChatState>().IsFull,
+				NextMessageTicks = sender.Component<ChatState>().NextMessageTicks,
 			};
 
 			bool allowed = ChatRateGate.TryCharge(ref state, nowTicks, chatTokenBucketCapacity, chatTokenRefillRate, MessageRateLimit);
 
-			sender.ChatTokens = state.Tokens;
-			sender.ChatTokenLastRefillTicks = state.LastRefillTicks;
-			sender.IsChatTokensFull = state.IsFull;
-			sender.NextChatMessageTicks = state.NextMessageTicks;
+			sender.Component<ChatState>().Tokens = state.Tokens;
+			sender.Component<ChatState>().LastRefillTicks = state.LastRefillTicks;
+			sender.Component<ChatState>().IsFull = state.IsFull;
+			sender.Component<ChatState>().NextMessageTicks = state.NextMessageTicks;
 			return allowed;
 		}
 
@@ -1081,12 +1081,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (!AllowRepeatMessages && !startsWithSlash)
 			{
-				if (!string.IsNullOrWhiteSpace(sender.LastChatMessage) &&
-					sender.LastChatMessage.Equals(msg.Text))
+				if (!string.IsNullOrWhiteSpace(sender.Component<ChatState>().LastMessage) &&
+					sender.Component<ChatState>().LastMessage.Equals(msg.Text))
 				{
 					return;
 				}
-				sender.LastChatMessage = msg.Text;
+				sender.Component<ChatState>().LastMessage = msg.Text;
 			}
 
 			// Text was sanitised at the top of this method, before the rate limit and the
@@ -1105,9 +1105,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * support channel is how a mute is appealed — and every channel prefix, /w and /tell and /g
 			 * alike, is chat that arrives past this point and is refused. The state is held in memory,
 			 * so the hot path is one comparison. */
-			if (sender.ChatMutedUntilTicks > receivedTicks)
+			if (sender.Component<ChatState>().MutedUntilTicks > receivedTicks)
 			{
-				OnSendSystemMessage(conn, ChatMutePolicy.DescribeForPlayer(sender.ChatMutedUntilTicks, sender.ChatMuteReason, receivedTicks));
+				OnSendSystemMessage(conn, ChatMutePolicy.DescribeForPlayer(sender.Component<ChatState>().MutedUntilTicks, sender.Component<ChatState>().MuteReason, receivedTicks));
 				return;
 			}
 
@@ -1124,12 +1124,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * themselves actually repeats. */
 			if (!AllowRepeatMessages && startsWithSlash)
 			{
-				if (!string.IsNullOrWhiteSpace(sender.LastChatMessage) &&
-					sender.LastChatMessage.Equals(msg.Text))
+				if (!string.IsNullOrWhiteSpace(sender.Component<ChatState>().LastMessage) &&
+					sender.Component<ChatState>().LastMessage.Equals(msg.Text))
 				{
 					return;
 				}
-				sender.LastChatMessage = msg.Text;
+				sender.Component<ChatState>().LastMessage = msg.Text;
 			}
 
 			// the text is empty

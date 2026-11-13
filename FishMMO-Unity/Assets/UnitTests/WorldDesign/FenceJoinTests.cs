@@ -409,10 +409,10 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void EveryFenceLayer_LaysThroughTheJoins()
 		{
 			string root = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/PointsOfInterest/Features/";
-			string fields = File.ReadAllText(root + "PointOfInterestFields.cs");
-			string farms = File.ReadAllText(root + "PointOfInterestFarmsteads.cs");
-			string yards = File.ReadAllText(root + "PointOfInterestYards.cs");
-			string linear = File.ReadAllText(root + "PointOfInterestLinearFeatures.cs");
+			string fields = ProjectFiles.ReadAllText(root + "PointOfInterestFields.cs");
+			string farms = ProjectFiles.ReadAllText(root + "PointOfInterestFarmsteads.cs");
+			string yards = ProjectFiles.ReadAllText(root + "PointOfInterestYards.cs");
+			string linear = ProjectFiles.ReadAllText(root + "PointOfInterestLinearFeatures.cs");
 			StringAssert.Contains("joins.Module(context, context.Palette, prefab, \"FieldFence\"", fields);
 			StringAssert.Contains("joins?.Close();", fields);
 			StringAssert.Contains("joins.Module(context, context.Palette, prefab, \"FieldFence\"", farms);

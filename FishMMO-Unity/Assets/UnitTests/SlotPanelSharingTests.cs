@@ -161,8 +161,8 @@ namespace FishMMO.UnitTests
 		private static string ReadSource(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-			LogAssert.IsTrue(File.Exists(path), $"{relativePath} not found at {path}.");
-			return File.ReadAllText(path).Replace("\r\n", "\n");
+			LogAssert.IsTrue(ProjectFiles.Exists(path), $"{relativePath} not found at {path}.");
+			return ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 		}
 
 		/// <summary>
@@ -622,14 +622,14 @@ namespace FishMMO.UnitTests
 		private static bool UssFilesMention(string className)
 		{
 			string gui = Path.Combine(Directory.GetCurrentDirectory(), "Assets/Scripts/Client/GUI");
-			LogAssert.IsTrue(Directory.Exists(gui), $"the client GUI must be at {gui}");
+			LogAssert.IsTrue(ProjectFiles.FolderExists(gui), $"the client GUI must be at {gui}");
 
-			string[] sheets = Directory.GetFiles(gui, "*.uss", SearchOption.AllDirectories);
+			string[] sheets = Directory.GetFiles(ProjectFiles.Folder(gui), "*.uss", SearchOption.AllDirectories);
 			LogAssert.IsTrue(sheets.Length > 0, "there must be stylesheets to check the marker against");
 
 			for (int i = 0; i < sheets.Length; ++i)
 			{
-				if (File.ReadAllText(sheets[i]).Contains(className))
+				if (ProjectFiles.ReadAllText(sheets[i]).Contains(className))
 				{
 					return true;
 				}

@@ -27,7 +27,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		private const string World = "Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World";
 		private const string Shaders = "Assets/Prefabs/Client/Weather/Shaders";
 
-		private static string Read(string relative) => File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
+		private static string Read(string relative) => ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
 
 		// ── The pure arithmetic ───────────────────────────────────────
 
@@ -250,9 +250,9 @@ namespace FishMMO.UnitTests.WorldDesign
 					Assert.IsFalse(layer.SeaDepth.HasValue, entry.Biome + ": no depth band until its round");
 				}
 			}
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset").Where(p => !BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(p))))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset").Where(p => !BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(p))))
 			{
-				string yaml = File.ReadAllText(path);
+				string yaml = ProjectFiles.ReadAllText(path);
 				Assert.IsFalse(Regex.IsMatch(yaml, @"^\s*seaFloor: [12]", RegexOptions.Multiline), path);
 				Assert.IsFalse(Regex.IsMatch(yaml, @"^\s*useSeaDepthBand: 1", RegexOptions.Multiline), path);
 				Match tide = Regex.Match(yaml, @"^\s*tideStrength: (\S+)", RegexOptions.Multiline);
@@ -360,7 +360,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			BiomeSpecTable.Entry abyss = Array.Find(BiomeSpecTable.Entries, e => e.Name == "Abyss");
 			Assert.IsNotNull(abyss);
 			StringAssert.Contains("new Entry(\"Abyss\", 0, 0f, 0.14f, -1f, 1f, -1f, 1f, 1.2f, A.Living, true, R.None)", Read(World + "/BiomeSpecTable.cs"));
-			Assert.IsTrue(File.Exists(BiomeFolder + "/Abyss.asset"));
+			Assert.IsTrue(ProjectFiles.Exists(BiomeFolder + "/Abyss.asset"));
 		}
 
 		// ── Sea life: the Eel and the Lurk ───────────────────────────

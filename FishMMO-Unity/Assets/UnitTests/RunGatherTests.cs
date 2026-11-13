@@ -226,21 +226,21 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheGatherers_DecideByRun_AndTheListIsRegatheredWhenTheSwitchFlips()
 		{
-			string props = System.IO.File.ReadAllText("Assets/Scripts/Client/World/Terrain/CliffRockInstancing.cs");
+			string props = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/CliffRockInstancing.cs");
 			LogAssert.IsTrue(props.Contains("TerrainGpuRenderer.RunGather && !RunWork("), "the props' gather asks the run");
 			LogAssert.IsTrue(props.Contains("TerrainGpuMath.RunCandidates(angular ? view.Planes : planes, own, model.Size * scale,") && props.Contains("mainLevels |= instanceMain ? levels : 0;")
 				&& props.Contains("shadowLevels |= instanceShadow ? levels : 0;") && props.Contains("gatheredExactLevels != TerrainGpuRenderer.ExactRunLevels"),
 				"a small run is decided instance by instance (a run of one each), and a kept list is not reused across that switch");
-			string gpu = System.IO.File.ReadAllText("Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.cs");
+			string gpu = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.cs");
 			LogAssert.IsTrue(gpu.Contains("if (mainCandidate) m.MainMask |= mainLevels >= 0 ? mainLevels : levelMask;")
 				&& gpu.Contains("int casts = (shadowLevels >= 0 ? shadowLevels : levelMask) & (int)m.Data.ShadowMask;"),
 				"the camera's and the shadow's levels are each their own instances'");
 			LogAssert.IsTrue(props.Contains("gatheredRunGather != TerrainGpuRenderer.RunGather"), "a kept list is not reused across the switch");
 			LogAssert.IsTrue(props.Contains("own.Encapsulate(m.GetColumn(3));") && props.Contains("own.Encapsulate(m.MultiplyPoint3x4(model.LocalReference));"),
 				"a run's bounds hold every pivot and reference point");
-			string trees = System.IO.File.ReadAllText("Assets/Scripts/Client/World/Terrain/TerrainTreeField.cs");
+			string trees = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/TerrainTreeField.cs");
 			LogAssert.IsTrue(trees.Contains("mainCandidate: keptInView"), "the trees' shadow-only chunks are no main-view candidates");
-			string diagnostics = System.IO.File.ReadAllText("Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.Diagnostics.cs");
+			string diagnostics = ProjectFiles.ReadAllText("Assets/Scripts/Client/World/Terrain/TerrainGpuRenderer.Diagnostics.cs");
 			LogAssert.IsTrue(diagnostics.Contains("(item.Padding & 1u) == 0u"), "the self-check's mirror culls a shadow-only work item as the kernel does");
 		}
 	}

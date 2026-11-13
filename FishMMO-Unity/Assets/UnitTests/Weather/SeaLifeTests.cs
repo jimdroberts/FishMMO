@@ -355,7 +355,7 @@ namespace FishMMO.UnitTests.Weather
 		public void TheSeaClock_FoldsSeamlessly()
 		{
 			// Every frequency in FishSea.hlsl is a whole number of cycles in the 256 s fold, or the plants jump each fold.
-			string source = File.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishSea.hlsl");
+			string source = ProjectFiles.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishSea.hlsl");
 			MatchCollection cycles = Regex.Matches(source, @"\bt \* ([0-9]+(?:\.[0-9]+)?)");
 			Assert.That(cycles.Count, Is.GreaterThanOrEqualTo(4));
 			foreach (Match m in cycles)
@@ -370,7 +370,7 @@ namespace FishMMO.UnitTests.Weather
 		public void TheProfileAsset_CarriesTheSeaLifeShader_AndNoSeaPlantIsGrass()
 		{
 			// Code defaults do not reach a saved profile: the shader must be in the asset itself.
-			var profile = AssetDatabase.LoadAssetAtPath<WeatherRenderProfile>(WeatherRenderAssets.ProfilePath);
+			var profile = AssetDatabase.LoadAssetAtPath<WeatherRenderProfile>(ProjectFiles.Path(WeatherRenderAssets.ProfilePath));
 			Assume.That(profile, Is.Not.Null);
 			// Seagrass and seaweed drawn as blades read as a lawn and dead grass on the sea floor: both were removed.
 			Assert.That(profile.Grass.IsBladePrototype("Detail_Seagrass"), Is.False);

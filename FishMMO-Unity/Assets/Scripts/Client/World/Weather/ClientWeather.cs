@@ -77,6 +77,15 @@ namespace FishMMO.Client
 			// The tick the world's motion (waves, wind, fog banks) reads the shared clock at.
 			WorldMotion.TimeManager = networkManager.TimeManager;
 			WeatherPresentation.Ensure();
+			// A backdrop that finished loading before this was set up.
+			for (int i = 0; i < SceneManager.sceneCount && !hasTimeline; i++)
+			{
+				Scene loaded = SceneManager.GetSceneAt(i);
+				if (loaded.isLoaded)
+				{
+					OnSceneLoaded(loaded, LoadSceneMode.Additive);
+				}
+			}
 		}
 
 		public void Shutdown()
@@ -172,7 +181,46 @@ namespace FishMMO.Client
 			{
 				pendingTimeline = null;
 				ApplyTimeline(msg, loaded);
+				return;
 			}
+			if (!hasTimeline && pendingTimeline == null && WorldSceneSettings.TryGetForScene(loaded, out WorldSceneSettings loadedSettings)
+				&& loadedSettings.ClientBackdrop)
+			{
+				ApplyBackdropTimeline(loaded, loadedSettings);
+			}
+		}
+
+		/// <summary>
+		/// The weather of a backdrop only the client draws (the login screen's world), which no server hosts and so no
+		/// server sends a timeline for: the one a server would make for it, worked out here. The weather is a function of
+		/// the scene's seed and the world clock, so it is the same weather a server would have sent, with no hand-started
+		/// storms. A world's own timeline replaces it on entering the game.
+		/// </summary>
+		private void ApplyBackdropTimeline(Scene target, WorldSceneSettings backdrop)
+		{
+			if (networkManager == null)
+			{
+				return;
+			}
+			WeatherSceneMode sceneMode = WeatherField.ResolveMode(backdrop, target.name);
+			uint seed = unchecked((uint)target.name.GetDeterministicHashCode() ^ WeatherDriver.WorldSeed);
+			TimeManager tm = networkManager.TimeManager;
+			var local = new WeatherTimeline
+			{
+				SceneName = target.name,
+				Seed = seed,
+				SceneMode = sceneMode,
+				TickDelta = tm.TickDelta,
+			};
+			local.Area = SceneCoverSampling.TryGetArea(backdrop, target, out Rect area) ? area : default;
+			local.Director = backdrop.WeatherDirector && sceneMode == WeatherSceneMode.Own;
+			local.LatitudeDegrees = backdrop.Latitude;
+			local.LongitudeDegrees = backdrop.Longitude;
+			local.Driver = sceneMode == WeatherSceneMode.Own;
+			// Read from the world clock when a server has anchored it, else this machine's (the sky's own fallback).
+			local.WorldSecondsTick = tm.Tick;
+			local.WorldSecondsAtTick = WorldTime.CurrentHours(tm) * 3600.0;
+			ApplyTimeline(local.ToBroadcast(), target);
 		}
 
 		private void ApplyTimeline(WeatherTimelineBroadcast msg, Scene target)
@@ -367,7 +415,8 @@ namespace FishMMO.Client
 			Vector3 viewer = ViewerPosition();
 			WeatherSample sample = WeatherField.Sample(timeline, settings, scene, viewer, tick);
 			double preciseTick = tick + tm.GetTickPercentAsDouble();
-			double hours = WorldClock.Shared.HasAnchor ? WorldClock.Shared.WorldHoursAt(preciseTick) : 0;
+			// The sky's own clock: the server's when anchored, else this machine's (the login backdrop, between servers).
+			double hours = WorldClock.Shared.HasAnchor ? WorldClock.Shared.WorldHoursAt(preciseTick) : WorldTime.UnanchoredHours();
 			var context = new WeatherContext
 			{
 				Scene = scene,

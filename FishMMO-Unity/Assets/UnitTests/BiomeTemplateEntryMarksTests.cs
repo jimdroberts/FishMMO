@@ -316,9 +316,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void SpecMoatWater_IsWhatTheClimateGaveTheMoat_ForEveryBiome()
 		{
 			int checkedBiomes = 0, dry = 0, frozen = 0;
-			foreach (string path in Directory.GetFiles(BiomeFolder, "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(BiomeFolder), "*.asset"))
 			{
-				string text = File.ReadAllText(path);
+				string text = ProjectFiles.ReadAllText(path);
 				if (!Regex.IsMatch(text, "^  MinTemperature:", RegexOptions.Multiline))
 				{
 					continue;
@@ -363,11 +363,11 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void SpecFiles_NameTheirMoatWater()
 		{
 			string folder = Path.Combine(WorldFolder, "ProceduralArt/BiomeArtSpec");
-			string[] files = Directory.GetFiles(folder, "BiomeArtSpec.*.cs");
+			string[] files = Directory.GetFiles(ProjectFiles.Folder(folder), "BiomeArtSpec.*.cs");
 			Assert.That(files.Length, Is.EqualTo(83));
 			foreach (string file in files)
 			{
-				Assert.That(Regex.Matches(File.ReadAllText(file), @"\.Moat\(BiomeMoatWater\.\w+\)").Count, Is.EqualTo(1), Path.GetFileName(file));
+				Assert.That(Regex.Matches(ProjectFiles.ReadAllText(file), @"\.Moat\(BiomeMoatWater\.\w+\)").Count, Is.EqualTo(1), Path.GetFileName(file));
 			}
 			Assert.That((int)BiomeMoatWater.Wet, Is.EqualTo(0));
 			Assert.That((int)BiomeMoatWater.Dry, Is.EqualTo(1));
@@ -451,17 +451,17 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void Consumers_ReadMoatAndLightsFromTheTemplate_AndListsAreMarkedPerEntry()
 		{
-			string moat = CodeOnly(File.ReadAllText(Path.Combine(WorldFolder, "PointsOfInterest/Shapers/MoatShaper.cs")));
+			string moat = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "PointsOfInterest/Shapers/MoatShaper.cs")));
 			Assert.That(moat, Does.Contain("BiomeTemplateArt.MoatWater("));
 			Assert.That(moat, Does.Not.Contain("MinHumidity"));
 			Assert.That(moat, Does.Not.Contain("MinTemperature"));
 
-			string props = CodeOnly(File.ReadAllText(Path.Combine(WorldFolder, "PointsOfInterest/PropsFeature.cs")));
+			string props = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "PointsOfInterest/PropsFeature.cs")));
 			Assert.That(props, Does.Contain("BiomeTemplateArt.WayLight(siteBiome, record.Kind"));
 			Assert.That(props, Does.Not.Contain("\"=TorchPost\""), "the torch post comes from the template");
 			Assert.That(Regex.IsMatch(props, @"lanterns\s*\?\s*13f"), Is.False);
 
-			string authoring = CodeOnly(File.ReadAllText(Path.Combine(WorldFolder, "ProceduralArt/BiomeArtAuthoring.cs")));
+			string authoring = CodeOnly(ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "ProceduralArt/BiomeArtAuthoring.cs")));
 			foreach (string field in new[] { "AcceptedRocks", "CaveShells", "SeaLife", "GatheringResources", "SiteKinds", "SiteVariants", "SiteStyles", "FieldCrops", "StructurePalette", "WayLights" })
 			{
 				Assert.That(Regex.IsMatch(authoring, @"AuthorEntries\([^;]*BiomeTemplate\.Authored\." + field + @"\b"), Is.True, field + " is authored entry by entry");

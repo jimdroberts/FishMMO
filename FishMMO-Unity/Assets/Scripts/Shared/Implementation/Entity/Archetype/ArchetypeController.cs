@@ -96,8 +96,8 @@ namespace FishMMO.Shared
 				/* The restore path: install the value, raise nothing.
 				 *
 				 * This runs on every peer for every character that comes into observer range, and
-				 * the default non-skipping path ends in Character.Invoke(onArchetypeChangeTriggers).
-				 * BaseCharacter.Invoke has no authority gate and only a minority of action types
+				 * the default non-skipping path ends in Trigger.InvokeAll(onArchetypeChangeTriggers).
+				 * Trigger.InvokeAll has no authority gate and only a minority of action types
 				 * gate themselves with EcaAuthority, so a stranger walking past used to run that
 				 * stranger's archetype-change triggers on the onlooker's machine. This is exactly
 				 * the defect FactionController.ReadPayload documents having fixed for factions. */
@@ -138,7 +138,7 @@ namespace FishMMO.Shared
 		/// The counterpart of <c>FactionController.ApplyFactionValue</c>, and it exists for the same
 		/// reason: both of those paths run on every peer for every character that comes into
 		/// observer range, and <see cref="SetArchetype(int)"/> ends in
-		/// <c>Character.Invoke(onArchetypeChangeTriggers)</c>. <c>BaseCharacter.Invoke</c> has no
+		/// <c>Trigger.InvokeAll(onArchetypeChangeTriggers)</c>. <c>Trigger.InvokeAll</c> has no
 		/// authority gate and only a minority of action types gate themselves with
 		/// <c>EcaAuthority</c>, so a stranger walking past would run that stranger's
 		/// archetype-change triggers on the onlooker's machine.
@@ -243,7 +243,7 @@ namespace FishMMO.Shared
 			 * client ran the rest of them a second time, locally. */
 			if (isServer)
 			{
-				Character.Invoke(onArchetypeChangeTriggers, new ArchetypeEventData(Character, Template, oldTemplate));
+				Trigger.InvokeAll(onArchetypeChangeTriggers, new ArchetypeEventData(Character, Template, oldTemplate));
 			}
 		}
 
