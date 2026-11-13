@@ -27,6 +27,12 @@ namespace FishMMO.Shared.WorldDesign
 	/// procedural art every clone can draw.
 	/// </para>
 	/// <para>
+	/// <b>The six are no longer in the repository.</b> They were deleted by hand (with their
+	/// Addressables entries and the gitignored built terrain layers that wrapped them), so the only
+	/// source left is WorldEditor's own folder. Without it the copy step reports each missing photo
+	/// as a problem and writes nothing; the clear and delete steps find nothing to do.
+	/// </para>
+	/// <para>
 	/// <b>What it does, idempotently</b> — a second run changes nothing:
 	/// </para>
 	/// <list type="number">

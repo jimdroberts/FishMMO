@@ -278,7 +278,8 @@ namespace FishMMO.Client
 			shown = dt > 0f ? WeatherFrame.Lerp(shown, target, 1f - Mathf.Exp(-dt / SmoothingSeconds)) : shown;
 
 			Camera camera = TargetCamera != null ? TargetCamera : Camera.main;
-			WeatherTierSettings tier = profile.TierFor(QualitySettings.GetQualityLevel());
+			// The player's Weather Effects level (ClientVisualSettings): a preset's precipitation, splash, mote and shelter budget.
+			WeatherTierSettings tier = profile.TierFor(ClientVisualSettings.WeatherTierLevel);
 
 			SkyOcclusionMap.BindWater();
 			if (camera != null)

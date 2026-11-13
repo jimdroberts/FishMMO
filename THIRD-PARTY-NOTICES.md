@@ -1,0 +1,4140 @@
+# Third-party notices
+
+FishMMO's own code is licensed under the MIT License (see LICENSE or LICENSE.txt). That licence covers first-party FishMMO code only. The third-party components listed below remain under their own licences, which are reproduced in full at the end of this file.
+
+The Unity engine and Unity packages are used under Unity's own terms; the third-party notices of Unity packages for code compiled into the player (for example FXAA and Clipper) are listed here.
+
+_Generated from Licenses/components.json by Licenses/generate_notices.py. Do not edit by hand._
+
+Per-product plain-text copies (the files that ship with each build) are in
+[Licenses/](Licenses/). Entries marked **UNVERIFIED** record the best available
+information and still need checking against the upstream source.
+
+## Contents
+
+- [Game client (native: Windows, Linux, macOS)](#client)
+- [Game client (WebGL / WebGPU, browser)](#webgl)
+- [Game servers (Login, World and Scene servers)](#server)
+- [Updater (self-contained, shipped beside the native client)](#updater)
+- [Web apps, services and operator tools (Control Panel, Patcher, IP Fetch, WebGL server, App Health Monitor, Discord bot, Installer, DB migrator)](#web)
+- [Build-time tooling (not shipped in any product)](#build)
+- [Licence texts](#licence-texts)
+
+<a id="client"></a>
+
+## Game client (native: Windows, Linux, macOS)
+
+Shipped as `Licenses/THIRD-PARTY-NOTICES-Client.txt`.
+
+### FishNet: Networking Evolved 4.7.3
+
+- Upstream: <https://github.com/FirstGearGames/FishNet>
+- Licence: `LicenseRef-FishNet`
+- Copyright (c) Benjamin Berwick (FirstGearGames)
+- Licence text: [FishNet License](#text-fishnet)
+- Note: Includes the bundled ColliderRollback and Yak plugins, which use the FishNet licence. FishMMO carries local fixes to FishNet; see FishNet's own third-party notice for its bundled components.
+
+### GameKit (bundled with FishNet) 4.7.3
+
+- Upstream: <https://github.com/FirstGearGames/FishNet>
+- Licence: `BSD-2-Clause`
+- Copyright (c) Benjamin Berwick
+- Licence text: [GameKit (BSD 2-Clause), as published in FishNet's third-party notice](#text-bsd-2-clause-gamekit)
+
+### LiteNetLib (bundled with FishNet, Tugboat transport) as bundled with FishNet 4.7.3
+
+- Upstream: <https://github.com/RevenantX/LiteNetLib>
+- Licence: `MIT`
+- Copyright (c) 2020 Ruslan Pyrch
+- Copyright (c) 2021, Benjamin Berwick
+- Licence text: [MIT License](#text-mit)
+
+### SerializableDictionary as vendored
+
+- Upstream: <https://github.com/azixMcAze/Unity-SerializableDictionary>
+- Licence: `MIT`
+- Copyright (c) 2017 Mathieu Le Ber
+- Licence text: [MIT License](#text-mit)
+
+### Kinematic Character Controller as vendored (locally modified) (UNVERIFIED)
+
+- Upstream: <https://assetstore.unity.com/packages/tools/physics/kinematic-character-controller-99131>
+- Licence: `LicenseRef-Unity-Asset-Store-EULA`
+- Copyright (c) Philippe St-Amand
+- Licence text: [Unity Asset Store EULA (reference)](#text-asset-store-eula)
+- Note: Use allowed by the project owner. Licence recorded as the Unity Asset Store EULA; the vendored copy carries no licence file of its own. Modified for FishNet prediction.
+
+### Google Analytics GA4 for Unity (DreamTeam Mobile) as vendored (locally modified) (UNVERIFIED)
+
+- Upstream: <https://assetstore.unity.com/publishers/dreamteam-mobile>
+- Licence: `LicenseRef-Unity-Asset-Store-EULA`
+- Copyright (c) DreamTeam Mobile
+- Licence text: [Unity Asset Store EULA (reference)](#text-asset-store-eula)
+- Note: Use allowed by the project owner. Licence recorded as the Unity Asset Store EULA; the vendored copy carries only a PDF manual and no licence file. The WebGL .jslib is locally modified.
+
+### FXAA 3.11 (in Universal Render Pipeline FXAA3_11.hlsl) URP 17.6.0
+
+- Upstream: <https://github.com/hghdev/NVIDIAGameWorks-GraphicsSamples/blob/master/samples/es3-kepler/FXAA/FXAA3_11.h>
+- Licence: `LicenseRef-NVIDIA-FXAA-BSD-3-Clause`
+- Copyright (c) 2014-2015, NVIDIA CORPORATION. All rights reserved.
+- Licence text: [FXAA 3.11 (NVIDIA, BSD 3-Clause style), from URP's third-party notices](#text-bsd-3-clause-fxaa)
+
+### Clipper (in Cinemachine) Cinemachine 6.6.0
+
+- Upstream: <http://www.angusj.com/delphi/clipper.php>
+- Licence: `BSL-1.0`
+- Copyright (c) 2010-2014 Angus Johnson
+- Licence text: [Clipper (Boost Software License 1.0), from Cinemachine's third-party notices](#text-bsl-1.0-clipper)
+- Note: Present when the Cinemachine runtime assembly is included in the player.
+
+### MsQuic (in libfishmmo_webtransport; msquic.dll on Windows) 2.5.9
+
+- Upstream: <https://github.com/microsoft/msquic>
+- Licence: `MIT`
+- Copyright (c) Microsoft Corporation.
+- Licence text: [MIT License](#text-mit)
+- Note: Linux and macOS (and Windows -Static) builds link msquic statically into libfishmmo_webtransport; the default Windows build ships msquic.dll from the Microsoft.Native.Quic.MsQuic.OpenSSL 2.5.9 NuGet package. FishMMO applies one local patch to msquic (FishMMO-WebTransport/patches/msquic-listener-bind-specific-address.patch); the patched code remains under msquic's MIT licence.
+
+### quictls (OpenSSL fork with QUIC support, inside MsQuic) 3.1.7+quic
+
+- Upstream: <https://github.com/quictls/openssl>
+- Licence: `Apache-2.0`
+- Copyright (c) 1998-2024 The OpenSSL Project Authors
+- Copyright (c) 1995-1998 Eric A. Young, Tim J. Hudson
+- Licence text: [Apache License 2.0](#text-apache-2.0)
+- Note: Statically linked into MsQuic as its TLS provider (the msquic.dll from Microsoft.Native.Quic.MsQuic.OpenSSL carries it too).
+
+### BouncyCastle.Cryptography 2.6.2
+
+- Upstream: <https://github.com/bcgit/bc-csharp>
+- Licence: `MIT`
+- Copyright (c) 2000-2025 The Legion of the Bouncy Castle Inc. (https://www.bouncycastle.org)
+- Licence text: [MIT License](#text-mit)
+
+### Entity Framework Core 5.0.17
+
+- Upstream: <https://github.com/dotnet/efcore>
+- Licence: `Apache-2.0`
+- Copyright (c) .NET Foundation and Contributors (Microsoft Corporation)
+- Package: Microsoft.EntityFrameworkCore 5.0.17
+- Package: Microsoft.EntityFrameworkCore.Abstractions 5.0.17
+- Package: Microsoft.EntityFrameworkCore.Design 5.0.17
+- Package: Microsoft.EntityFrameworkCore.Relational 5.0.17
+- Licence text: [Apache License 2.0](#text-apache-2.0)
+
+### EFCore.NamingConventions 5.0.2
+
+- Upstream: <https://github.com/efcore/EFCore.NamingConventions>
+- Licence: `Apache-2.0`
+- Copyright 2020 Shay Rojansky
+- Licence text: [Apache License 2.0](#text-apache-2.0)
+
+### Npgsql (FishMMO Unity AOT build) 5.0.18
+
+- Upstream: <https://github.com/npgsql/npgsql>
+- Licence: `PostgreSQL`
+- Copyright (c) 2002-2019, Npgsql
+- Copyright 2024 The Npgsql Development Team
+- Licence text: [PostgreSQL License (Npgsql)](#text-postgresql)
+- Note: Built from the upstream v5.0.18 source with three methods changed for IL2CPP; see FishMMO-Dependencies/ThirdParty/Npgsql.UnityAot/README.md.
+
+### Npgsql.EntityFrameworkCore.PostgreSQL 5.0.10
+
+- Upstream: <https://github.com/npgsql/efcore.pg>
+- Licence: `PostgreSQL`
+- Copyright 2021 The Npgsql Development Team
+- Licence text: [PostgreSQL License (Npgsql)](#text-postgresql)
+
+### HtmlAgilityPack 1.11.61
+
+- Upstream: <https://github.com/zzzprojects/html-agility-pack>
+- Licence: `MIT`
+- Copyright (c) ZZZ Projects Inc.
+- Licence text: [MIT License](#text-mit)
+
+### Humanizer 2.14.1
+
+- Upstream: <https://github.com/Humanizr/Humanizer>
+- Licence: `MIT`
+- Copyright (c) .NET Foundation and Contributors
+- Package: Humanizer.Core 2.14.1 and its Humanizer.Core.<culture> resource packages
+- Licence text: [MIT License](#text-mit)
+
+### Newtonsoft.Json 13.0.2
+
+- Upstream: <https://github.com/JamesNK/Newtonsoft.Json>
+- Licence: `MIT`
+- Copyright (c) 2007 James Newton-King
+- Licence text: [MIT License](#text-mit)
+- Note: Shipped from Unity's com.unity.nuget.newtonsoft-json 3.2.2 package (its IL2CPP AOT build in players); FishMMO-Dependencies no longer copies its own.
+
+### OpenAI-API-dotnet (NuGet: OpenAI) 1.7.2
+
+- Upstream: <https://github.com/OkGoDoIt/OpenAI-API-dotnet>
+- Licence: `CC0-1.0`
+- Dedicated to the public domain by OkGoDoIt (Roger Pincombe) under CC0 1.0
+- Licence text: [Creative Commons Zero v1.0 Universal](#text-cc0-1.0)
+
+### Otp.NET 1.4.1
+
+- Upstream: <https://github.com/kspearrin/Otp.NET>
+- Licence: `MIT`
+- Copyright (c) 2017 Kyle Spearrin
+- Licence text: [MIT License](#text-mit)
+
+### srp (srp.net) 1.0.7 (UNVERIFIED)
+
+- Upstream: <https://github.com/secure-remote-password/srp.net>
+- Licence: `MIT`
+- Copyright (c) 2018-2022 Alexey Yakovlev
+- Licence text: [MIT License](#text-mit)
+- Note: The package names its licence only by URL (upstream LICENSE, MIT) and carries no licence file; MIT text reproduced as the standard text: UNVERIFIED against the upstream file.
+
+### StackExchange.Redis 2.8.0
+
+- Upstream: <https://github.com/StackExchange/StackExchange.Redis>
+- Licence: `MIT`
+- Copyright (c) 2014-2024 Stack Exchange, Inc.
+- Licence text: [MIT License](#text-mit)
+
+### Pipelines.Sockets.Unofficial 2.2.8
+
+- Upstream: <https://github.com/mgravell/Pipelines.Sockets.Unofficial>
+- Licence: `MIT`
+- Copyright (c) 2018 Marc Gravell
+- Licence text: [MIT License](#text-mit)
+
+### StackExchange.Redis.Extensions.Core 10.0.0
+
+- Upstream: <https://github.com/imperugo/StackExchange.Redis.Extensions>
+- Licence: `MIT`
+- Copyright (c) Ugo Lattanzi
+- Licence text: [MIT License](#text-mit)
+
+### ZString 2.6.0
+
+- Upstream: <https://github.com/Cysharp/ZString>
+- Licence: `MIT`
+- Copyright (c) Cysharp, Inc.
+- Licence text: [MIT License](#text-mit)
+
+### ZstdSharp (NuGet: ZstdSharp.Port) 0.8.8
+
+- Upstream: <https://github.com/oleg-st/ZstdSharp>
+- Licence: `MIT`
+- Copyright (c) 2021 Oleg Stepanischev
+- Licence text: [MIT License](#text-mit)
+- Note: The package carries no licence file (its nuspec gives the MIT expression and 'Copyright Oleg Stepanischev 2026'); the MIT text is the standard text. ZstdSharp is a C# port of Zstandard, whose notice follows.
+
+### Zstandard (zstd) as ported by ZstdSharp 0.8.8
+
+- Upstream: <https://github.com/facebook/zstd>
+- Licence: `BSD-3-Clause`
+- Copyright (c) Meta Platforms, Inc. and affiliates. All rights reserved.
+- Licence text: [Zstandard (BSD 3-Clause)](#text-bsd-3-clause-zstd)
+- Note: zstd is dual-licensed BSD-3-Clause or GPL-2.0; FishMMO uses it under BSD-3-Clause.
+
+### System.IO.Hashing 9.0.4
+
+- Upstream: <https://github.com/dotnet/runtime>
+- Licence: `MIT`
+- Copyright (c) .NET Foundation and Contributors
+- Licence text: [MIT License](#text-mit), [xxHash (BSD 2-Clause), from the dotnet/runtime third-party notices](#text-bsd-2-clause-xxhash)
+- Note: Implements xxHash; the xxHash notice below is reproduced from the package's third-party notices.
+
+### Microsoft .NET libraries 9.0.x (dotnet/runtime) 9.0.4
+
+- Upstream: <https://github.com/dotnet/runtime>
+- Licence: `MIT`
+- Copyright (c) .NET Foundation and Contributors
+- Package: Microsoft.Bcl.AsyncInterfaces 9.0.4
+- Package: Microsoft.Extensions.Caching.Abstractions 9.0.4
+- Package: Microsoft.Extensions.Caching.Memory 9.0.4
+- Package: Microsoft.Extensions.Configuration 9.0.4
+- Package: Microsoft.Extensions.Configuration.Abstractions 9.0.4
+- Package: Microsoft.Extensions.Configuration.Binder 9.0.4
+- Package: Microsoft.Extensions.Configuration.EnvironmentVariables 9.0.4
+- Package: Microsoft.Extensions.Configuration.FileExtensions 9.0.4
+- Package: Microsoft.Extensions.Configuration.Json 9.0.4
+- Package: Microsoft.Extensions.DependencyInjection 9.0.4
+- Package: Microsoft.Extensions.DependencyInjection.Abstractions 9.0.4
+- Package: Microsoft.Extensions.FileProviders.Abstractions 9.0.4
+- Package: Microsoft.Extensions.FileProviders.Physical 9.0.4
+- Package: Microsoft.Extensions.FileSystemGlobbing 9.0.4
+- Package: Microsoft.Extensions.Http 9.0.4
+- Package: Microsoft.Extensions.Logging 9.0.4
+- Package: Microsoft.Extensions.Logging.Abstractions 9.0.4
+- Package: Microsoft.Extensions.Options 9.0.4
+- Package: Microsoft.Extensions.Primitives 9.0.4
+- Package: System.Collections.Immutable 9.0.4
+- Package: System.Diagnostics.DiagnosticSource 9.0.4
+- Package: System.IO.Pipelines 9.0.4
+- Package: System.Text.Encodings.Web 9.0.4
+- Package: System.Text.Json 9.0.4
+- Package: System.Threading.Channels 9.0.4
+- Licence text: [MIT License](#text-mit), [dotnet/runtime 9.0.4 third-party notices (shipped in the Microsoft 9.0.x packages)](#text-dotnet-runtime-9.0.4-tpn)
+
+### System.ComponentModel.Annotations 5.0.0
+
+- Upstream: <https://github.com/dotnet/runtime>
+- Licence: `MIT`
+- Copyright (c) .NET Foundation and Contributors
+- Licence text: [MIT License](#text-mit), [dotnet/runtime 5.0.0 third-party notices (shipped in the Microsoft 5.0.x packages)](#text-dotnet-runtime-5.0.0-tpn)
+
+<a id="webgl"></a>
+
+## Game client (WebGL / WebGPU, browser)
+
+Shipped as `Licenses/THIRD-PARTY-NOTICES-WebGL.txt`.
+
+### FishNet: Networking Evolved 4.7.3
+
+- Upstream: <https://github.com/FirstGearGames/FishNet>
+- Licence: `LicenseRef-FishNet`
+- Copyright (c) Benjamin Berwick (FirstGearGames)
+- Licence text: [FishNet License](#text-fishnet)
+- Note: Includes the bundled ColliderRollback and Yak plugins, which use the FishNet licence. FishMMO carries local fixes to FishNet; see FishNet's own third-party notice for its bundled components.
+
+### GameKit (bundled with FishNet) 4.7.3
+
+- Upstream: <https://github.com/FirstGearGames/FishNet>
+- Licence: `BSD-2-Clause`
+- Copyright (c) Benjamin Berwick
+- Licence text: [GameKit (BSD 2-Clause), as published in FishNet's third-party notice](#text-bsd-2-clause-gamekit)
+
+### LiteNetLib (bundled with FishNet, Tugboat transport) as bundled with FishNet 4.7.3
+
+- Upstream: <https://github.com/RevenantX/LiteNetLib>
+- Licence: `MIT`
+- Copyright (c) 2020 Ruslan Pyrch
+- Copyright (c) 2021, Benjamin Berwick
+- Licence text: [MIT License](#text-mit)
+
+### SerializableDictionary as vendored
+
+- Upstream: <https://github.com/azixMcAze/Unity-SerializableDictionary>
+- Licence: `MIT`
+- Copyright (c) 2017 Mathieu Le Ber
+- Licence text: [MIT License](#text-mit)
+
+### Kinematic Character Controller as vendored (locally modified) (UNVERIFIED)
+
+- Upstream: <https://assetstore.unity.com/packages/tools/physics/kinematic-character-controller-99131>
+- Licence: `LicenseRef-Unity-Asset-Store-EULA`
+- Copyright (c) Philippe St-Amand
+- Licence text: [Unity Asset Store EULA (reference)](#text-asset-store-eula)
+- Note: Use allowed by the project owner. Licence recorded as the Unity Asset Store EULA; the vendored copy carries no licence file of its own. Modified for FishNet prediction.
+
+### Google Analytics GA4 for Unity (DreamTeam Mobile) as vendored (locally modified) (UNVERIFIED)
+
+- Upstream: <https://assetstore.unity.com/publishers/dreamteam-mobile>
+- Licence: `LicenseRef-Unity-Asset-Store-EULA`
+- Copyright (c) DreamTeam Mobile
+- Licence text: [Unity Asset Store EULA (reference)](#text-asset-store-eula)
+- Note: Use allowed by the project owner. Licence recorded as the Unity Asset Store EULA; the vendored copy carries only a PDF manual and no licence file. The WebGL .jslib is locally modified.
+
+### FXAA 3.11 (in Universal Render Pipeline FXAA3_11.hlsl) URP 17.6.0
+
+- Upstream: <https://github.com/hghdev/NVIDIAGameWorks-GraphicsSamples/blob/master/samples/es3-kepler/FXAA/FXAA3_11.h>
+- Licence: `LicenseRef-NVIDIA-FXAA-BSD-3-Clause`
+- Copyright (c) 2014-2015, NVIDIA CORPORATION. All rights reserved.
+- Licence text: [FXAA 3.11 (NVIDIA, BSD 3-Clause style), from URP's third-party notices](#text-bsd-3-clause-fxaa)
+
+### Clipper (in Cinemachine) Cinemachine 6.6.0
+
+- Upstream: <http://www.angusj.com/delphi/clipper.php>
+- Licence: `BSL-1.0`
+- Copyright (c) 2010-2014 Angus Johnson
+- Licence text: [Clipper (Boost Software License 1.0), from Cinemachine's third-party notices](#text-bsl-1.0-clipper)
+- Note: Present when the Cinemachine runtime assembly is included in the player.
+
+### BouncyCastle.Cryptography 2.6.2
+
+- Upstream: <https://github.com/bcgit/bc-csharp>
+- Licence: `MIT`
+- Copyright (c) 2000-2025 The Legion of the Bouncy Castle Inc. (https://www.bouncycastle.org)
+- Licence text: [MIT License](#text-mit)
+
+### Entity Framework Core 5.0.17
+
+- Upstream: <https://github.com/dotnet/efcore>
+- Licence: `Apache-2.0`
+- Copyright (c) .NET Foundation and Contributors (Microsoft Corporation)
+- Package: Microsoft.EntityFrameworkCore 5.0.17
+- Package: Microsoft.EntityFrameworkCore.Abstractions 5.0.17
+- Package: Microsoft.EntityFrameworkCore.Design 5.0.17
+- Package: Microsoft.EntityFrameworkCore.Relational 5.0.17
+- Licence text: [Apache License 2.0](#text-apache-2.0)
+
+### EFCore.NamingConventions 5.0.2
+
+- Upstream: <https://github.com/efcore/EFCore.NamingConventions>
+- Licence: `Apache-2.0`
+- Copyright 2020 Shay Rojansky
+- Licence text: [Apache License 2.0](#text-apache-2.0)
+
+### Npgsql (FishMMO Unity AOT build) 5.0.18
+
+- Upstream: <https://github.com/npgsql/npgsql>
+- Licence: `PostgreSQL`
+- Copyright (c) 2002-2019, Npgsql
+- Copyright 2024 The Npgsql Development Team
+- Licence text: [PostgreSQL License (Npgsql)](#text-postgresql)
+- Note: Built from the upstream v5.0.18 source with three methods changed for IL2CPP; see FishMMO-Dependencies/ThirdParty/Npgsql.UnityAot/README.md.
+
+### Npgsql.EntityFrameworkCore.PostgreSQL 5.0.10
+
+- Upstream: <https://github.com/npgsql/efcore.pg>
+- Licence: `PostgreSQL`
+- Copyright 2021 The Npgsql Development Team
+- Licence text: [PostgreSQL License (Npgsql)](#text-postgresql)
+
+### HtmlAgilityPack 1.11.61
+
+- Upstream: <https://github.com/zzzprojects/html-agility-pack>
+- Licence: `MIT`
+- Copyright (c) ZZZ Projects Inc.
+- Licence text: [MIT License](#text-mit)
+
+### Humanizer 2.14.1
+
+- Upstream: <https://github.com/Humanizr/Humanizer>
+- Licence: `MIT`
+- Copyright (c) .NET Foundation and Contributors
+- Package: Humanizer.Core 2.14.1 and its Humanizer.Core.<culture> resource packages
+- Licence text: [MIT License](#text-mit)
+
+### Newtonsoft.Json 13.0.2
+
+- Upstream: <https://github.com/JamesNK/Newtonsoft.Json>
+- Licence: `MIT`
+- Copyright (c) 2007 James Newton-King
+- Licence text: [MIT License](#text-mit)
+- Note: Shipped from Unity's com.unity.nuget.newtonsoft-json 3.2.2 package (its IL2CPP AOT build in players); FishMMO-Dependencies no longer copies its own.
+
+### OpenAI-API-dotnet (NuGet: OpenAI) 1.7.2
+
+- Upstream: <https://github.com/OkGoDoIt/OpenAI-API-dotnet>
+- Licence: `CC0-1.0`
+- Dedicated to the public domain by OkGoDoIt (Roger Pincombe) under CC0 1.0
+- Licence text: [Creative Commons Zero v1.0 Universal](#text-cc0-1.0)
+
+### Otp.NET 1.4.1
+
+- Upstream: <https://github.com/kspearrin/Otp.NET>
+- Licence: `MIT`
+- Copyright (c) 2017 Kyle Spearrin
+- Licence text: [MIT License](#text-mit)
+
+### srp (srp.net) 1.0.7 (UNVERIFIED)
+
+- Upstream: <https://github.com/secure-remote-password/srp.net>
+- Licence: `MIT`
+- Copyright (c) 2018-2022 Alexey Yakovlev
+- Licence text: [MIT License](#text-mit)
+- Note: The package names its licence only by URL (upstream LICENSE, MIT) and carries no licence file; MIT text reproduced as the standard text: UNVERIFIED against the upstream file.
+
+### StackExchange.Redis 2.8.0
+
+- Upstream: <https://github.com/StackExchange/StackExchange.Redis>
+- Licence: `MIT`
+- Copyright (c) 2014-2024 Stack Exchange, Inc.
+- Licence text: [MIT License](#text-mit)
+
+### Pipelines.Sockets.Unofficial 2.2.8
+
+- Upstream: <https://github.com/mgravell/Pipelines.Sockets.Unofficial>
+- Licence: `MIT`
+- Copyright (c) 2018 Marc Gravell
+- Licence text: [MIT License](#text-mit)
+
+### StackExchange.Redis.Extensions.Core 10.0.0
+
+- Upstream: <https://github.com/imperugo/StackExchange.Redis.Extensions>
+- Licence: `MIT`
+- Copyright (c) Ugo Lattanzi
+- Licence text: [MIT License](#text-mit)
+
+### ZString 2.6.0
+
+- Upstream: <https://github.com/Cysharp/ZString>
+- Licence: `MIT`
+- Copyright (c) Cysharp, Inc.
+- Licence text: [MIT License](#text-mit)
+
+### ZstdSharp (NuGet: ZstdSharp.Port) 0.8.8
+
+- Upstream: <https://github.com/oleg-st/ZstdSharp>
+- Licence: `MIT`
+- Copyright (c) 2021 Oleg Stepanischev
+- Licence text: [MIT License](#text-mit)
+- Note: The package carries no licence file (its nuspec gives the MIT expression and 'Copyright Oleg Stepanischev 2026'); the MIT text is the standard text. ZstdSharp is a C# port of Zstandard, whose notice follows.
+
+### Zstandard (zstd) as ported by ZstdSharp 0.8.8
+
+- Upstream: <https://github.com/facebook/zstd>
+- Licence: `BSD-3-Clause`
+- Copyright (c) Meta Platforms, Inc. and affiliates. All rights reserved.
+- Licence text: [Zstandard (BSD 3-Clause)](#text-bsd-3-clause-zstd)
+- Note: zstd is dual-licensed BSD-3-Clause or GPL-2.0; FishMMO uses it under BSD-3-Clause.
+
+### System.IO.Hashing 9.0.4
+
+- Upstream: <https://github.com/dotnet/runtime>
+- Licence: `MIT`
+- Copyright (c) .NET Foundation and Contributors
+- Licence text: [MIT License](#text-mit), [xxHash (BSD 2-Clause), from the dotnet/runtime third-party notices](#text-bsd-2-clause-xxhash)
+- Note: Implements xxHash; the xxHash notice below is reproduced from the package's third-party notices.
+
+### Microsoft .NET libraries 9.0.x (dotnet/runtime) 9.0.4
+
+- Upstream: <https://github.com/dotnet/runtime>
+- Licence: `MIT`
+- Copyright (c) .NET Foundation and Contributors
+- Package: Microsoft.Bcl.AsyncInterfaces 9.0.4
+- Package: Microsoft.Extensions.Caching.Abstractions 9.0.4
+- Package: Microsoft.Extensions.Caching.Memory 9.0.4
+- Package: Microsoft.Extensions.Configuration 9.0.4
+- Package: Microsoft.Extensions.Configuration.Abstractions 9.0.4
+- Package: Microsoft.Extensions.Configuration.Binder 9.0.4
+- Package: Microsoft.Extensions.Configuration.EnvironmentVariables 9.0.4
+- Package: Microsoft.Extensions.Configuration.FileExtensions 9.0.4
+- Package: Microsoft.Extensions.Configuration.Json 9.0.4
+- Package: Microsoft.Extensions.DependencyInjection 9.0.4
+- Package: Microsoft.Extensions.DependencyInjection.Abstractions 9.0.4
+- Package: Microsoft.Extensions.FileProviders.Abstractions 9.0.4
+- Package: Microsoft.Extensions.FileProviders.Physical 9.0.4
+- Package: Microsoft.Extensions.FileSystemGlobbing 9.0.4
+- Package: Microsoft.Extensions.Http 9.0.4
+- Package: Microsoft.Extensions.Logging 9.0.4
+- Package: Microsoft.Extensions.Logging.Abstractions 9.0.4
+- Package: Microsoft.Extensions.Options 9.0.4
+- Package: Microsoft.Extensions.Primitives 9.0.4
+- Package: System.Collections.Immutable 9.0.4
+- Package: System.Diagnostics.DiagnosticSource 9.0.4
+- Package: System.IO.Pipelines 9.0.4
+- Package: System.Text.Encodings.Web 9.0.4
+- Package: System.Text.Json 9.0.4
+- Package: System.Threading.Channels 9.0.4
+- Licence text: [MIT License](#text-mit), [dotnet/runtime 9.0.4 third-party notices (shipped in the Microsoft 9.0.x packages)](#text-dotnet-runtime-9.0.4-tpn)
+
+### System.ComponentModel.Annotations 5.0.0
+
+- Upstream: <https://github.com/dotnet/runtime>
+- Licence: `MIT`
+- Copyright (c) .NET Foundation and Contributors
+- Licence text: [MIT License](#text-mit), [dotnet/runtime 5.0.0 third-party notices (shipped in the Microsoft 5.0.x packages)](#text-dotnet-runtime-5.0.0-tpn)
+
+<a id="server"></a>
+
+## Game servers (Login, World and Scene servers)
+
+Shipped as `Licenses/THIRD-PARTY-NOTICES-Server.txt`.
+
+### FishNet: Networking Evolved 4.7.3
+
+- Upstream: <https://github.com/FirstGearGames/FishNet>
+- Licence: `LicenseRef-FishNet`
+- Copyright (c) Benjamin Berwick (FirstGearGames)
+- Licence text: [FishNet License](#text-fishnet)
+- Note: Includes the bundled ColliderRollback and Yak plugins, which use the FishNet licence. FishMMO carries local fixes to FishNet; see FishNet's own third-party notice for its bundled components.
+
+### GameKit (bundled with FishNet) 4.7.3
+
+- Upstream: <https://github.com/FirstGearGames/FishNet>
+- Licence: `BSD-2-Clause`
+- Copyright (c) Benjamin Berwick
+- Licence text: [GameKit (BSD 2-Clause), as published in FishNet's third-party notice](#text-bsd-2-clause-gamekit)
+
+### LiteNetLib (bundled with FishNet, Tugboat transport) as bundled with FishNet 4.7.3
+
+- Upstream: <https://github.com/RevenantX/LiteNetLib>
+- Licence: `MIT`
+- Copyright (c) 2020 Ruslan Pyrch
+- Copyright (c) 2021, Benjamin Berwick
+- Licence text: [MIT License](#text-mit)
+
+### SerializableDictionary as vendored
+
+- Upstream: <https://github.com/azixMcAze/Unity-SerializableDictionary>
+- Licence: `MIT`
+- Copyright (c) 2017 Mathieu Le Ber
+- Licence text: [MIT License](#text-mit)
+
+### Kinematic Character Controller as vendored (locally modified) (UNVERIFIED)
+
+- Upstream: <https://assetstore.unity.com/packages/tools/physics/kinematic-character-controller-99131>
+- Licence: `LicenseRef-Unity-Asset-Store-EULA`
+- Copyright (c) Philippe St-Amand
+- Licence text: [Unity Asset Store EULA (reference)](#text-asset-store-eula)
+- Note: Use allowed by the project owner. Licence recorded as the Unity Asset Store EULA; the vendored copy carries no licence file of its own. Modified for FishNet prediction.
+
+### Google Analytics GA4 for Unity (DreamTeam Mobile) as vendored (locally modified) (UNVERIFIED)
+
+- Upstream: <https://assetstore.unity.com/publishers/dreamteam-mobile>
+- Licence: `LicenseRef-Unity-Asset-Store-EULA`
+- Copyright (c) DreamTeam Mobile
+- Licence text: [Unity Asset Store EULA (reference)](#text-asset-store-eula)
+- Note: Use allowed by the project owner. Licence recorded as the Unity Asset Store EULA; the vendored copy carries only a PDF manual and no licence file. The WebGL .jslib is locally modified.
+
+### FXAA 3.11 (in Universal Render Pipeline FXAA3_11.hlsl) URP 17.6.0
+
+- Upstream: <https://github.com/hghdev/NVIDIAGameWorks-GraphicsSamples/blob/master/samples/es3-kepler/FXAA/FXAA3_11.h>
+- Licence: `LicenseRef-NVIDIA-FXAA-BSD-3-Clause`
+- Copyright (c) 2014-2015, NVIDIA CORPORATION. All rights reserved.
+- Licence text: [FXAA 3.11 (NVIDIA, BSD 3-Clause style), from URP's third-party notices](#text-bsd-3-clause-fxaa)
+
+### Clipper (in Cinemachine) Cinemachine 6.6.0
+
+- Upstream: <http://www.angusj.com/delphi/clipper.php>
+- Licence: `BSL-1.0`
+- Copyright (c) 2010-2014 Angus Johnson
+- Licence text: [Clipper (Boost Software License 1.0), from Cinemachine's third-party notices](#text-bsl-1.0-clipper)
+- Note: Present when the Cinemachine runtime assembly is included in the player.
+
+### MsQuic (in libfishmmo_webtransport; msquic.dll on Windows) 2.5.9
+
+- Upstream: <https://github.com/microsoft/msquic>
+- Licence: `MIT`
+- Copyright (c) Microsoft Corporation.
+- Licence text: [MIT License](#text-mit)
+- Note: Linux and macOS (and Windows -Static) builds link msquic statically into libfishmmo_webtransport; the default Windows build ships msquic.dll from the Microsoft.Native.Quic.MsQuic.OpenSSL 2.5.9 NuGet package. FishMMO applies one local patch to msquic (FishMMO-WebTransport/patches/msquic-listener-bind-specific-address.patch); the patched code remains under msquic's MIT licence.
+
+### quictls (OpenSSL fork with QUIC support, inside MsQuic) 3.1.7+quic
+
+- Upstream: <https://github.com/quictls/openssl>
+- Licence: `Apache-2.0`
+- Copyright (c) 1998-2024 The OpenSSL Project Authors
+- Copyright (c) 1995-1998 Eric A. Young, Tim J. Hudson
+- Licence text: [Apache License 2.0](#text-apache-2.0)
+- Note: Statically linked into MsQuic as its TLS provider (the msquic.dll from Microsoft.Native.Quic.MsQuic.OpenSSL carries it too).
+
+### BouncyCastle.Cryptography 2.6.2
+
+- Upstream: <https://github.com/bcgit/bc-csharp>
+- Licence: `MIT`
+- Copyright (c) 2000-2025 The Legion of the Bouncy Castle Inc. (https://www.bouncycastle.org)
+- Licence text: [MIT License](#text-mit)
+
+### Entity Framework Core 5.0.17
+
+- Upstream: <https://github.com/dotnet/efcore>
+- Licence: `Apache-2.0`
+- Copyright (c) .NET Foundation and Contributors (Microsoft Corporation)
+- Package: Microsoft.EntityFrameworkCore 5.0.17
+- Package: Microsoft.EntityFrameworkCore.Abstractions 5.0.17
+- Package: Microsoft.EntityFrameworkCore.Design 5.0.17
+- Package: Microsoft.EntityFrameworkCore.Relational 5.0.17
+- Licence text: [Apache License 2.0](#text-apache-2.0)
+
+### EFCore.NamingConventions 5.0.2
+
+- Upstream: <https://github.com/efcore/EFCore.NamingConventions>
+- Licence: `Apache-2.0`
+- Copyright 2020 Shay Rojansky
+- Licence text: [Apache License 2.0](#text-apache-2.0)
+
+### Npgsql (FishMMO Unity AOT build) 5.0.18
+
+- Upstream: <https://github.com/npgsql/npgsql>
+- Licence: `PostgreSQL`
+- Copyright (c) 2002-2019, Npgsql
+- Copyright 2024 The Npgsql Development Team
+- Licence text: [PostgreSQL License (Npgsql)](#text-postgresql)
+- Note: Built from the upstream v5.0.18 source with three methods changed for IL2CPP; see FishMMO-Dependencies/ThirdParty/Npgsql.UnityAot/README.md.
+
+### Npgsql.EntityFrameworkCore.PostgreSQL 5.0.10
+
+- Upstream: <https://github.com/npgsql/efcore.pg>
+- Licence: `PostgreSQL`
+- Copyright 2021 The Npgsql Development Team
+- Licence text: [PostgreSQL License (Npgsql)](#text-postgresql)
+
+### HtmlAgilityPack 1.11.61
+
+- Upstream: <https://github.com/zzzprojects/html-agility-pack>
+- Licence: `MIT`
+- Copyright (c) ZZZ Projects Inc.
+- Licence text: [MIT License](#text-mit)
+
+### Humanizer 2.14.1
+
+- Upstream: <https://github.com/Humanizr/Humanizer>
+- Licence: `MIT`
+- Copyright (c) .NET Foundation and Contributors
+- Package: Humanizer.Core 2.14.1 and its Humanizer.Core.<culture> resource packages
+- Licence text: [MIT License](#text-mit)
+
+### Newtonsoft.Json 13.0.2
+
+- Upstream: <https://github.com/JamesNK/Newtonsoft.Json>
+- Licence: `MIT`
+- Copyright (c) 2007 James Newton-King
+- Licence text: [MIT License](#text-mit)
+- Note: Shipped from Unity's com.unity.nuget.newtonsoft-json 3.2.2 package (its IL2CPP AOT build in players); FishMMO-Dependencies no longer copies its own.
+
+### OpenAI-API-dotnet (NuGet: OpenAI) 1.7.2
+
+- Upstream: <https://github.com/OkGoDoIt/OpenAI-API-dotnet>
+- Licence: `CC0-1.0`
+- Dedicated to the public domain by OkGoDoIt (Roger Pincombe) under CC0 1.0
+- Licence text: [Creative Commons Zero v1.0 Universal](#text-cc0-1.0)
+
+### Otp.NET 1.4.1
+
+- Upstream: <https://github.com/kspearrin/Otp.NET>
+- Licence: `MIT`
+- Copyright (c) 2017 Kyle Spearrin
+- Licence text: [MIT License](#text-mit)
+
+### srp (srp.net) 1.0.7 (UNVERIFIED)
+
+- Upstream: <https://github.com/secure-remote-password/srp.net>
+- Licence: `MIT`
+- Copyright (c) 2018-2022 Alexey Yakovlev
+- Licence text: [MIT License](#text-mit)
+- Note: The package names its licence only by URL (upstream LICENSE, MIT) and carries no licence file; MIT text reproduced as the standard text: UNVERIFIED against the upstream file.
+
+### StackExchange.Redis 2.8.0
+
+- Upstream: <https://github.com/StackExchange/StackExchange.Redis>
+- Licence: `MIT`
+- Copyright (c) 2014-2024 Stack Exchange, Inc.
+- Licence text: [MIT License](#text-mit)
+
+### Pipelines.Sockets.Unofficial 2.2.8
+
+- Upstream: <https://github.com/mgravell/Pipelines.Sockets.Unofficial>
+- Licence: `MIT`
+- Copyright (c) 2018 Marc Gravell
+- Licence text: [MIT License](#text-mit)
+
+### StackExchange.Redis.Extensions.Core 10.0.0
+
+- Upstream: <https://github.com/imperugo/StackExchange.Redis.Extensions>
+- Licence: `MIT`
+- Copyright (c) Ugo Lattanzi
+- Licence text: [MIT License](#text-mit)
+
+### ZString 2.6.0
+
+- Upstream: <https://github.com/Cysharp/ZString>
+- Licence: `MIT`
+- Copyright (c) Cysharp, Inc.
+- Licence text: [MIT License](#text-mit)
+
+### ZstdSharp (NuGet: ZstdSharp.Port) 0.8.8
+
+- Upstream: <https://github.com/oleg-st/ZstdSharp>
+- Licence: `MIT`
+- Copyright (c) 2021 Oleg Stepanischev
+- Licence text: [MIT License](#text-mit)
+- Note: The package carries no licence file (its nuspec gives the MIT expression and 'Copyright Oleg Stepanischev 2026'); the MIT text is the standard text. ZstdSharp is a C# port of Zstandard, whose notice follows.
+
+### Zstandard (zstd) as ported by ZstdSharp 0.8.8
+
+- Upstream: <https://github.com/facebook/zstd>
+- Licence: `BSD-3-Clause`
+- Copyright (c) Meta Platforms, Inc. and affiliates. All rights reserved.
+- Licence text: [Zstandard (BSD 3-Clause)](#text-bsd-3-clause-zstd)
+- Note: zstd is dual-licensed BSD-3-Clause or GPL-2.0; FishMMO uses it under BSD-3-Clause.
+
+### System.IO.Hashing 9.0.4
+
+- Upstream: <https://github.com/dotnet/runtime>
+- Licence: `MIT`
+- Copyright (c) .NET Foundation and Contributors
+- Licence text: [MIT License](#text-mit), [xxHash (BSD 2-Clause), from the dotnet/runtime third-party notices](#text-bsd-2-clause-xxhash)
+- Note: Implements xxHash; the xxHash notice below is reproduced from the package's third-party notices.
+
+### Microsoft .NET libraries 9.0.x (dotnet/runtime) 9.0.4
+
+- Upstream: <https://github.com/dotnet/runtime>
+- Licence: `MIT`
+- Copyright (c) .NET Foundation and Contributors
+- Package: Microsoft.Bcl.AsyncInterfaces 9.0.4
+- Package: Microsoft.Extensions.Caching.Abstractions 9.0.4
+- Package: Microsoft.Extensions.Caching.Memory 9.0.4
+- Package: Microsoft.Extensions.Configuration 9.0.4
+- Package: Microsoft.Extensions.Configuration.Abstractions 9.0.4
+- Package: Microsoft.Extensions.Configuration.Binder 9.0.4
+- Package: Microsoft.Extensions.Configuration.EnvironmentVariables 9.0.4
+- Package: Microsoft.Extensions.Configuration.FileExtensions 9.0.4
+- Package: Microsoft.Extensions.Configuration.Json 9.0.4
+- Package: Microsoft.Extensions.DependencyInjection 9.0.4
+- Package: Microsoft.Extensions.DependencyInjection.Abstractions 9.0.4
+- Package: Microsoft.Extensions.FileProviders.Abstractions 9.0.4
+- Package: Microsoft.Extensions.FileProviders.Physical 9.0.4
+- Package: Microsoft.Extensions.FileSystemGlobbing 9.0.4
+- Package: Microsoft.Extensions.Http 9.0.4
+- Package: Microsoft.Extensions.Logging 9.0.4
+- Package: Microsoft.Extensions.Logging.Abstractions 9.0.4
+- Package: Microsoft.Extensions.Options 9.0.4
+- Package: Microsoft.Extensions.Primitives 9.0.4
+- Package: System.Collections.Immutable 9.0.4
+- Package: System.Diagnostics.DiagnosticSource 9.0.4
+- Package: System.IO.Pipelines 9.0.4
+- Package: System.Text.Encodings.Web 9.0.4
+- Package: System.Text.Json 9.0.4
+- Package: System.Threading.Channels 9.0.4
+- Licence text: [MIT License](#text-mit), [dotnet/runtime 9.0.4 third-party notices (shipped in the Microsoft 9.0.x packages)](#text-dotnet-runtime-9.0.4-tpn)
+
+### System.ComponentModel.Annotations 5.0.0
+
+- Upstream: <https://github.com/dotnet/runtime>
+- Licence: `MIT`
+- Copyright (c) .NET Foundation and Contributors
+- Licence text: [MIT License](#text-mit), [dotnet/runtime 5.0.0 third-party notices (shipped in the Microsoft 5.0.x packages)](#text-dotnet-runtime-5.0.0-tpn)
+
+<a id="updater"></a>
+
+## Updater (self-contained, shipped beside the native client)
+
+Shipped as `Licenses/THIRD-PARTY-NOTICES-Updater.txt`.
+
+The Updater also ships the .NET runtime pack's own `LICENSE.TXT` and `THIRD-PARTY-NOTICES.TXT` (as `Updater-dotnet-LICENSE.txt` and `Updater-dotnet-THIRD-PARTY-NOTICES.txt`), copied from the runtime pack the publish used.
+
+### ZString 2.6.0
+
+- Upstream: <https://github.com/Cysharp/ZString>
+- Licence: `MIT`
+- Copyright (c) Cysharp, Inc.
+- Licence text: [MIT License](#text-mit)
+
+### ZstdSharp (NuGet: ZstdSharp.Port) 0.8.8
+
+- Upstream: <https://github.com/oleg-st/ZstdSharp>
+- Licence: `MIT`
+- Copyright (c) 2021 Oleg Stepanischev
+- Licence text: [MIT License](#text-mit)
+- Note: The package carries no licence file (its nuspec gives the MIT expression and 'Copyright Oleg Stepanischev 2026'); the MIT text is the standard text. ZstdSharp is a C# port of Zstandard, whose notice follows.
+
+### Zstandard (zstd) as ported by ZstdSharp 0.8.8
+
+- Upstream: <https://github.com/facebook/zstd>
+- Licence: `BSD-3-Clause`
+- Copyright (c) Meta Platforms, Inc. and affiliates. All rights reserved.
+- Licence text: [Zstandard (BSD 3-Clause)](#text-bsd-3-clause-zstd)
+- Note: zstd is dual-licensed BSD-3-Clause or GPL-2.0; FishMMO uses it under BSD-3-Clause.
+
+### System.IO.Hashing 9.0.4
+
+- Upstream: <https://github.com/dotnet/runtime>
+- Licence: `MIT`
+- Copyright (c) .NET Foundation and Contributors
+- Licence text: [MIT License](#text-mit), [xxHash (BSD 2-Clause), from the dotnet/runtime third-party notices](#text-bsd-2-clause-xxhash)
+- Note: Implements xxHash; the xxHash notice below is reproduced from the package's third-party notices.
+
+### .NET runtime (self-contained in the Updater) 8.0.x (the runtime pack used by the publish; 8.0.33 at the time of writing)
+
+- Upstream: <https://github.com/dotnet/runtime>
+- Licence: `MIT`
+- Copyright (c) .NET Foundation and Contributors
+- Licence text: [MIT License](#text-mit)
+- Note: The publish scripts copy the runtime pack's own LICENSE.TXT and THIRD-PARTY-NOTICES.TXT beside the Updater as Updater-dotnet-LICENSE.txt and Updater-dotnet-THIRD-PARTY-NOTICES.txt; those files are part of this notice.
+
+<a id="web"></a>
+
+## Web apps, services and operator tools (Control Panel, Patcher, IP Fetch, WebGL server, App Health Monitor, Discord bot, Installer, DB migrator)
+
+Shipped as `Licenses/THIRD-PARTY-NOTICES-Web.txt`.
+
+### ASP.NET Core and .NET runtime (shared framework) 8.0.x
+
+- Upstream: <https://github.com/dotnet/aspnetcore>
+- Licence: `MIT`
+- Copyright (c) .NET Foundation and Contributors
+- Licence text: [MIT License](#text-mit)
+- Note: Framework-dependent: provided by the host's .NET installation, not shipped with the apps.
+
+### Entity Framework Core 5.0.17
+
+- Upstream: <https://github.com/dotnet/efcore>
+- Licence: `Apache-2.0`
+- Copyright (c) .NET Foundation and Contributors (Microsoft Corporation)
+- Package: Microsoft.EntityFrameworkCore 5.0.17
+- Package: Microsoft.EntityFrameworkCore.Abstractions 5.0.17
+- Package: Microsoft.EntityFrameworkCore.Analyzers 5.0.17
+- Package: Microsoft.EntityFrameworkCore.Relational 5.0.17
+- Package: Microsoft.EntityFrameworkCore.Design 5.0.17 (DB migrator)
+- Licence text: [Apache License 2.0](#text-apache-2.0)
+
+### EFCore.NamingConventions 5.0.2
+
+- Upstream: <https://github.com/efcore/EFCore.NamingConventions>
+- Licence: `Apache-2.0`
+- Copyright 2020 Shay Rojansky
+- Licence text: [Apache License 2.0](#text-apache-2.0)
+
+### Npgsql 5.0.18
+
+- Upstream: <https://github.com/npgsql/npgsql>
+- Licence: `PostgreSQL`
+- Copyright 2024 The Npgsql Development Team
+- Licence text: [PostgreSQL License (Npgsql)](#text-postgresql)
+
+### Npgsql.EntityFrameworkCore.PostgreSQL 5.0.10
+
+- Upstream: <https://github.com/npgsql/efcore.pg>
+- Licence: `PostgreSQL`
+- Copyright 2021 The Npgsql Development Team
+- Licence text: [PostgreSQL License (Npgsql)](#text-postgresql)
+
+### BouncyCastle.Cryptography 2.5.1, 2.6.2
+
+- Upstream: <https://github.com/bcgit/bc-csharp>
+- Licence: `MIT`
+- Copyright (c) 2000-2025 The Legion of the Bouncy Castle Inc. (https://www.bouncycastle.org)
+- Licence text: [MIT License](#text-mit)
+
+### Otp.NET 1.4.0
+
+- Upstream: <https://github.com/kspearrin/Otp.NET>
+- Licence: `MIT`
+- Copyright (c) 2017 Kyle Spearrin
+- Licence text: [MIT License](#text-mit)
+
+### srp (srp.net) 1.0.7 (UNVERIFIED)
+
+- Upstream: <https://github.com/secure-remote-password/srp.net>
+- Licence: `MIT`
+- Copyright (c) 2018-2022 Alexey Yakovlev
+- Licence text: [MIT License](#text-mit)
+- Note: Licence named by URL only: UNVERIFIED text.
+
+### ZString 2.6.0
+
+- Upstream: <https://github.com/Cysharp/ZString>
+- Licence: `MIT`
+- Copyright (c) Cysharp, Inc.
+- Licence text: [MIT License](#text-mit)
+
+### Newtonsoft.Json 13.0.3
+
+- Upstream: <https://github.com/JamesNK/Newtonsoft.Json>
+- Licence: `MIT`
+- Copyright (c) 2007 James Newton-King
+- Licence text: [MIT License](#text-mit)
+
+### Humanizer.Core 2.8.26
+
+- Upstream: <https://github.com/Humanizr/Humanizer>
+- Licence: `MIT`
+- Copyright (c) .NET Foundation and Contributors
+- Licence text: [MIT License](#text-mit)
+
+### Discord.Net 3.17.4 (UNVERIFIED)
+
+- Upstream: <https://github.com/discord-net/Discord.Net>
+- Licence: `MIT`
+- Copyright (c) Discord.Net Contributors
+- Package: Discord.Net 3.17.4
+- Package: Discord.Net.Commands 3.17.4
+- Package: Discord.Net.Core 3.17.4
+- Package: Discord.Net.Interactions 3.17.4
+- Package: Discord.Net.Rest 3.17.4
+- Package: Discord.Net.Webhook 3.17.4
+- Package: Discord.Net.WebSocket 3.17.4
+- Licence text: [MIT License](#text-mit)
+- Note: The packages carry no copyright line; the holder is given as upstream's contributors: UNVERIFIED.
+
+### Swashbuckle.AspNetCore 6.5.0 (UNVERIFIED)
+
+- Upstream: <https://github.com/domaindrivendev/Swashbuckle.AspNetCore>
+- Licence: `MIT`
+- Copyright (c) Swashbuckle.AspNetCore contributors (Richard Morris)
+- Package: Swashbuckle.AspNetCore 6.5.0
+- Package: Swashbuckle.AspNetCore.Swagger 6.5.0
+- Package: Swashbuckle.AspNetCore.SwaggerGen 6.5.0
+- Package: Swashbuckle.AspNetCore.SwaggerUI 6.5.0
+- Licence text: [MIT License](#text-mit)
+- Note: The packages carry no copyright line: UNVERIFIED holder. SwaggerUI embeds swagger-ui (Apache-2.0, SmartBear Software): UNVERIFIED.
+
+### Microsoft.OpenApi 1.2.3
+
+- Upstream: <https://github.com/Microsoft/OpenAPI.NET>
+- Licence: `MIT`
+- Copyright (c) Microsoft Corporation.
+- Licence text: [MIT License](#text-mit)
+
+### Reactive Extensions for .NET (dotnet/reactive) 6.0.1
+
+- Upstream: <https://github.com/dotnet/reactive>
+- Licence: `MIT`
+- Copyright (c) .NET Foundation and Contributors
+- Package: System.Reactive 6.0.1
+- Package: System.Interactive.Async 6.0.1
+- Package: System.Linq.Async 6.0.1
+- Licence text: [MIT License](#text-mit)
+
+### Microsoft .NET libraries (dotnet/runtime, dotnet/corefx) 4.5.0 to 9.0.4
+
+- Upstream: <https://github.com/dotnet/runtime>
+- Licence: `MIT`
+- Copyright (c) .NET Foundation and Contributors
+- Package: Microsoft.Bcl.AsyncInterfaces 6.0.0
+- Package: Microsoft.CSharp 4.7.0
+- Package: Microsoft.Extensions.* 5.0.x, 8.0.0 and 9.0.4 (Caching, Configuration, DependencyInjection, Diagnostics, FileProviders, FileSystemGlobbing, Hosting, Logging, Options, Primitives)
+- Package: System.Collections.Immutable 5.0.0, 8.0.0
+- Package: System.ComponentModel.Annotations 5.0.0
+- Package: System.Diagnostics.DiagnosticSource 5.0.1, 8.0.0
+- Package: System.Diagnostics.EventLog 8.0.0
+- Package: System.IO.Pipelines 9.0.4
+- Package: System.Runtime.CompilerServices.Unsafe 4.6.0
+- Package: System.Text.Encodings.Web 9.0.4
+- Package: System.Text.Json 9.0.4
+- Package: System.Threading.Channels 8.0.0
+- Package: System.ValueTuple 4.5.0
+- Licence text: [MIT License](#text-mit), [dotnet/runtime 9.0.4 third-party notices (shipped in the Microsoft 9.0.x packages)](#text-dotnet-runtime-9.0.4-tpn), [dotnet/runtime 5.0.0 third-party notices (shipped in the Microsoft 5.0.x packages)](#text-dotnet-runtime-5.0.0-tpn)
+
+### Microsoft .NET legacy packages 1.1.x to 4.3.x
+
+- Upstream: <https://dot.net/>
+- Licence: `LicenseRef-MS-DotNet-Library`
+- Copyright (c) Microsoft Corporation. All rights reserved.
+- Package: Microsoft.NETCore.Platforms 1.1.1
+- Package: Microsoft.NETCore.Targets 1.1.3
+- Package: System.Collections 4.3.0
+- Package: System.Collections.Concurrent 4.3.0
+- Package: System.Diagnostics.Debug 4.3.0
+- Package: System.Diagnostics.Tracing 4.3.0
+- Package: System.Globalization 4.3.0
+- Package: System.IO 4.3.0
+- Package: System.Linq 4.3.0
+- Package: System.Reflection 4.3.0
+- Package: System.Reflection.Primitives 4.3.0
+- Package: System.Resources.ResourceManager 4.3.0
+- Package: System.Runtime 4.3.1
+- Package: System.Runtime.Extensions 4.3.0
+- Package: System.Runtime.Handles 4.3.0
+- Package: System.Runtime.InteropServices 4.3.0
+- Package: System.Runtime.Numerics 4.3.0
+- Package: System.Security.Cryptography.Algorithms 4.3.1
+- Package: System.Security.Cryptography.Encoding 4.3.0
+- Package: System.Security.Cryptography.Primitives 4.3.0
+- Package: System.Text.Encoding 4.3.0
+- Package: System.Text.RegularExpressions 4.3.1
+- Package: System.Threading 4.3.0
+- Package: System.Threading.Tasks 4.3.0
+- Package: runtime.*.runtime.native.System.Security.Cryptography.OpenSsl 4.3.2 / .Apple 4.3.1
+- Licence text: [Microsoft .NET Library License (legacy System.* 4.3.x packages), with its third-party notices](#text-ms-dotnet-library)
+- Note: Transitive references of Otp.NET 1.4.0 and srp 1.0.7 in the Control Panel and Installer; on net8.0 the shared framework's own assemblies are normally used instead.
+
+<a id="build"></a>
+
+## Build-time tooling (not shipped in any product)
+
+### Mono.Cecil (FishNet code generation; com.unity.nuget.mono-cecil) 0.11.4
+
+- Upstream: <https://github.com/jbevain/cecil>
+- Licence: `MIT`
+- Copyright (c) 2008 - 2015 Jb Evain
+- Copyright (c) 2008 - 2011 Novell, Inc.
+- Licence text: [MIT License](#text-mit)
+
+### FishNet CodeGen helpers as bundled with FishNet 4.7.3
+
+- Upstream: <https://github.com/FirstGearGames/FishNet>
+- Licence: `MIT`
+- Copyright (c) 2015, Unity Technologies
+- Copyright (c) 2019, vis2k, Paul and Contributors
+- Copyright (c) 2021, Benjamin Berwick
+- Licence text: [MIT License](#text-mit)
+
+### FishNet.CodeAnalysis (Roslyn analyzer) as bundled with FishNet 4.7.3
+
+- Upstream: <https://github.com/Abdelfattah-Radwan/FishNet.CodeAnalysis>
+- Licence: `MIT`
+- Copyright (c) 2022 Abdelfattah-Radwan
+- Licence text: [MIT License](#text-mit)
+
+### Entity Framework Core Tools 5.0.17
+
+- Upstream: <https://github.com/dotnet/efcore>
+- Licence: `Apache-2.0`
+- Copyright (c) .NET Foundation and Contributors (Microsoft Corporation)
+- Package: Microsoft.EntityFrameworkCore.Tools 5.0.17
+- Licence text: [Apache License 2.0](#text-apache-2.0)
+
+### Microsoft.NET.ILLink.Tasks 8.0.33
+
+- Upstream: <https://github.com/dotnet/runtime>
+- Licence: `MIT`
+- Copyright (c) .NET Foundation and Contributors
+- Licence text: [MIT License](#text-mit)
+
+### Microsoft.Extensions.ApiDescription.Server 6.0.5
+
+- Upstream: <https://github.com/dotnet/aspnetcore>
+- Licence: `MIT`
+- Copyright (c) .NET Foundation and Contributors
+- Licence text: [MIT License](#text-mit)
+
+<a id="licence-texts"></a>
+
+## Licence texts
+
+Each distinct licence text appears once; the components above refer to it.
+
+<a id="text-mit"></a>
+
+### MIT License
+
+````text
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+````
+
+<a id="text-apache-2.0"></a>
+
+### Apache License 2.0
+
+````text
+                                 Apache License
+                           Version 2.0, January 2004
+                        https://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS
+````
+
+<a id="text-fishnet"></a>
+
+### FishNet License
+
+````text
+0.a Definitions.
+
+0.b "FishNet" means FishNet, FishNetworking, Fish-Networking, networking for Unity Engine.
+
+0.c "Repository Service" means the respository service through which Fish-Net is made available.
+
+0.d “Software” means the software (including code in source or object format as applicable) of Fish-Net that accompanies this License.
+
+0.e "FirstGearGames" means Benjamin Berwick.
+
+0.f "FishNet-Pro" means pro versions of FishNet acquired directly from FirstGearGames or through purchase at FirstGearGames managed profiles such as Patreon or GitHub Sponsors.
+
+0.g "Purchaser" is a single individual which has acquired FishNet-Pro.
+
+1.a License Grant to the Software. FirstGearGames grants to you a worldwide, non-exclusive, no-charge, and royalty-free license to reproduce, modify, and use the Software for developed game, or other content with Software.
+
+2.a Exclusions. Other products of like Software (explicitly networking solutions) may not use, reverse engineer, or implement Software in part or full.
+
+2.b Products not of like Software as outlined in 2.a, such as add-ons, tools, or assets, may include or be created for Software in it's original, unmodified form.
+
+2.c Exclusions do not apply to parts of Software which are governed by a third-party license, nor to games developed with Software.
+
+3.a FishNet-Pro License. FishNet-Pro uses this license.
+
+3.b Distribution: Purchasers may distribute FishNet-Pro to their organization, or team of 20 or fewer members. Purchasers may distribute FishNet-Pro to their physical classroom environments with no member count restrictions.
+
+4.a Third-Party License Notice. Software may contain third-party licenses. If the Software is accompanied by a “third-party notices” or similar file, you acknowledge and agree that software identified in that file is governed exclusively by those separate license terms.
+
+5.a Termination. This License will terminate immediately (i) on any breach by you of this License; and (ii) if you commence any form of patent litigation, including a cross-claim or counterclaim, against anyone wherein you allege that the Software constitutes direct or secondary/indirect patent infringement.
+
+6.a Governing Law and Venue. This License is governed by and construed in accordance with the laws of Florida, United States. You and FirstGearGames agree to submit to the personal and exclusive jurisdiction of and venue in the state and federal courts located in Flagler County, Florida concerning any dispute arising out of this License (“Dispute”).
+
+7.a Disclaimer, Limitation of Liability. Software is provided "as is", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement. In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in action of contract, tort or otherwise, arising from, out of or in connection with Software or the use or other dealings in Software.
+
+8.a You agree by submitting content of any kind to Software within Repository Service does not grant you ownership to Software nor additional rights to Software.
+
+8.b By submitting to Repository Service you are granting FirstGearGames with a no-charge, and royalty-free license to reproduce, modify, and use submitted content.
+````
+
+<a id="text-bsd-2-clause-gamekit"></a>
+
+### GameKit (BSD 2-Clause), as published in FishNet's third-party notice
+
+````text
+Component Name: GameKit
+License Type: BSD 2-Clause
+Copyright (c) Benjamin Berwick
+
+Paths:	FishNet\GameKit
+
+This software was designed for Fish-Networking on Unity https://github.com/FirstGearGames/FishNet
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+````
+
+<a id="text-bsd-2-clause-xxhash"></a>
+
+### xxHash (BSD 2-Clause), from the dotnet/runtime third-party notices
+
+````text
+License notice for xxHash
+-------------------------
+
+xxHash - Extremely Fast Hash algorithm
+Header File
+Copyright (C) 2012-2021 Yann Collet
+
+BSD 2-Clause License (https://www.opensource.org/licenses/bsd-license.php)
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+     notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+     copyright notice, this list of conditions and the following disclaimer
+     in the documentation and/or other materials provided with the
+     distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+You can contact the author at:
+  - xxHash homepage: https://www.xxhash.com
+  - xxHash source repository: https://github.com/Cyan4973/xxHash
+````
+
+<a id="text-bsd-3-clause-zstd"></a>
+
+### Zstandard (BSD 3-Clause)
+
+````text
+BSD License
+
+For Zstandard software
+
+Copyright (c) Meta Platforms, Inc. and affiliates. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+ * Neither the name Facebook, nor Meta, nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+````
+
+<a id="text-bsd-3-clause-fxaa"></a>
+
+### FXAA 3.11 (NVIDIA, BSD 3-Clause style), from URP's third-party notices
+
+````text
+Component Name: FXAA3_11.h (renamed to FXAA3_11.hlsl)
+
+License Type: FXAA3_11.h License
+
+Copyright (c) 2014-2015, NVIDIA CORPORATION. All rights reserved.
+
+https://github.com/hghdev/NVIDIAGameWorks-GraphicsSamples/blob/master/samples/es3-kepler/FXAA/FXAA3_11.h
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+ * Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+ * Neither the name of NVIDIA CORPORATION nor the names of its
+   contributors may be used to endorse or promote products derived
+   from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+````
+
+<a id="text-bsl-1.0-clipper"></a>
+
+### Clipper (Boost Software License 1.0), from Cinemachine's third-party notices
+
+````text
+# [Clipper](http://www.angusj.com/delphi/clipper.php)
+
+Copyright © 2010-2014 Angus Johnson
+Boost Software License - Version 1.0 - August 17th, 2003
+
+Permission is hereby granted, free of charge, to any person or organization
+obtaining a copy of the software and accompanying documentation covered by
+this license (the "Software") to use, reproduce, display, distribute,
+execute, and transmit the Software, and to prepare derivative works of the
+Software, and to permit third-parties to whom the Software is furnished to
+do so, all subject to the following:
+
+The copyright notices in the Software and this entire statement, including
+the above license grant, this restriction and the following disclaimer,
+must be included in all copies of the Software, in whole or in part, and
+all derivative works of the Software, unless such copies or derivative
+works are solely in the form of machine-executable object code generated by
+a source language processor.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, TITLE AND NON-INFRINGEMENT. IN NO EVENT
+SHALL THE COPYRIGHT HOLDERS OR ANYONE DISTRIBUTING THE SOFTWARE BE LIABLE
+FOR ANY DAMAGES OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+````
+
+<a id="text-postgresql"></a>
+
+### PostgreSQL License (Npgsql)
+
+````text
+Copyright (c) 2002-2019, Npgsql
+
+Permission to use, copy, modify, and distribute this software and its
+documentation for any purpose, without fee, and without a written agreement
+is hereby granted, provided that the above copyright notice and this
+paragraph and the following two paragraphs appear in all copies.
+
+IN NO EVENT SHALL NPGSQL BE LIABLE TO ANY PARTY FOR DIRECT, INDIRECT,
+SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING LOST PROFITS,
+ARISING OUT OF THE USE OF THIS SOFTWARE AND ITS DOCUMENTATION, EVEN IF
+Npgsql HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+NPGSQL SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING, BUT NOT LIMITED
+TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE. THE SOFTWARE PROVIDED HEREUNDER IS ON AN "AS IS" BASIS, AND Npgsql
+HAS NO OBLIGATIONS TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS,
+OR MODIFICATIONS.
+````
+
+<a id="text-cc0-1.0"></a>
+
+### Creative Commons Zero v1.0 Universal
+
+````text
+Creative Commons Legal Code
+
+CC0 1.0 Universal
+
+    CREATIVE COMMONS CORPORATION IS NOT A LAW FIRM AND DOES NOT PROVIDE
+    LEGAL SERVICES. DISTRIBUTION OF THIS DOCUMENT DOES NOT CREATE AN
+    ATTORNEY-CLIENT RELATIONSHIP. CREATIVE COMMONS PROVIDES THIS
+    INFORMATION ON AN "AS-IS" BASIS. CREATIVE COMMONS MAKES NO WARRANTIES
+    REGARDING THE USE OF THIS DOCUMENT OR THE INFORMATION OR WORKS
+    PROVIDED HEREUNDER, AND DISCLAIMS LIABILITY FOR DAMAGES RESULTING FROM
+    THE USE OF THIS DOCUMENT OR THE INFORMATION OR WORKS PROVIDED
+    HEREUNDER.
+
+Statement of Purpose
+
+The laws of most jurisdictions throughout the world automatically confer
+exclusive Copyright and Related Rights (defined below) upon the creator
+and subsequent owner(s) (each and all, an "owner") of an original work of
+authorship and/or a database (each, a "Work").
+
+Certain owners wish to permanently relinquish those rights to a Work for
+the purpose of contributing to a commons of creative, cultural and
+scientific works ("Commons") that the public can reliably and without fear
+of later claims of infringement build upon, modify, incorporate in other
+works, reuse and redistribute as freely as possible in any form whatsoever
+and for any purposes, including without limitation commercial purposes.
+These owners may contribute to the Commons to promote the ideal of a free
+culture and the further production of creative, cultural and scientific
+works, or to gain reputation or greater distribution for their Work in
+part through the use and efforts of others.
+
+For these and/or other purposes and motivations, and without any
+expectation of additional consideration or compensation, the person
+associating CC0 with a Work (the "Affirmer"), to the extent that he or she
+is an owner of Copyright and Related Rights in the Work, voluntarily
+elects to apply CC0 to the Work and publicly distribute the Work under its
+terms, with knowledge of his or her Copyright and Related Rights in the
+Work and the meaning and intended legal effect of CC0 on those rights.
+
+1. Copyright and Related Rights. A Work made available under CC0 may be
+protected by copyright and related or neighboring rights ("Copyright and
+Related Rights"). Copyright and Related Rights include, but are not
+limited to, the following:
+
+  i. the right to reproduce, adapt, distribute, perform, display,
+     communicate, and translate a Work;
+ ii. moral rights retained by the original author(s) and/or performer(s);
+iii. publicity and privacy rights pertaining to a person's image or
+     likeness depicted in a Work;
+ iv. rights protecting against unfair competition in regards to a Work,
+     subject to the limitations in paragraph 4(a), below;
+  v. rights protecting the extraction, dissemination, use and reuse of data
+     in a Work;
+ vi. database rights (such as those arising under Directive 96/9/EC of the
+     European Parliament and of the Council of 11 March 1996 on the legal
+     protection of databases, and under any national implementation
+     thereof, including any amended or successor version of such
+     directive); and
+vii. other similar, equivalent or corresponding rights throughout the
+     world based on applicable law or treaty, and any national
+     implementations thereof.
+
+2. Waiver. To the greatest extent permitted by, but not in contravention
+of, applicable law, Affirmer hereby overtly, fully, permanently,
+irrevocably and unconditionally waives, abandons, and surrenders all of
+Affirmer's Copyright and Related Rights and associated claims and causes
+of action, whether now known or unknown (including existing as well as
+future claims and causes of action), in the Work (i) in all territories
+worldwide, (ii) for the maximum duration provided by applicable law or
+treaty (including future time extensions), (iii) in any current or future
+medium and for any number of copies, and (iv) for any purpose whatsoever,
+including without limitation commercial, advertising or promotional
+purposes (the "Waiver"). Affirmer makes the Waiver for the benefit of each
+member of the public at large and to the detriment of Affirmer's heirs and
+successors, fully intending that such Waiver shall not be subject to
+revocation, rescission, cancellation, termination, or any other legal or
+equitable action to disrupt the quiet enjoyment of the Work by the public
+as contemplated by Affirmer's express Statement of Purpose.
+
+3. Public License Fallback. Should any part of the Waiver for any reason
+be judged legally invalid or ineffective under applicable law, then the
+Waiver shall be preserved to the maximum extent permitted taking into
+account Affirmer's express Statement of Purpose. In addition, to the
+extent the Waiver is so judged Affirmer hereby grants to each affected
+person a royalty-free, non transferable, non sublicensable, non exclusive,
+irrevocable and unconditional license to exercise Affirmer's Copyright and
+Related Rights in the Work (i) in all territories worldwide, (ii) for the
+maximum duration provided by applicable law or treaty (including future
+time extensions), (iii) in any current or future medium and for any number
+of copies, and (iv) for any purpose whatsoever, including without
+limitation commercial, advertising or promotional purposes (the
+"License"). The License shall be deemed effective as of the date CC0 was
+applied by Affirmer to the Work. Should any part of the License for any
+reason be judged legally invalid or ineffective under applicable law, such
+partial invalidity or ineffectiveness shall not invalidate the remainder
+of the License, and in such case Affirmer hereby affirms that he or she
+will not (i) exercise any of his or her remaining Copyright and Related
+Rights in the Work or (ii) assert any associated claims and causes of
+action with respect to the Work, in either case contrary to Affirmer's
+express Statement of Purpose.
+
+4. Limitations and Disclaimers.
+
+ a. No trademark or patent rights held by Affirmer are waived, abandoned,
+    surrendered, licensed or otherwise affected by this document.
+ b. Affirmer offers the Work as-is and makes no representations or
+    warranties of any kind concerning the Work, express, implied,
+    statutory or otherwise, including without limitation warranties of
+    title, merchantability, fitness for a particular purpose, non
+    infringement, or the absence of latent or other defects, accuracy, or
+    the present or absence of errors, whether or not discoverable, all to
+    the greatest extent permissible under applicable law.
+ c. Affirmer disclaims responsibility for clearing rights of other persons
+    that may apply to the Work or any use thereof, including without
+    limitation any person's Copyright and Related Rights in the Work.
+    Further, Affirmer disclaims responsibility for obtaining any necessary
+    consents, permissions or other rights required for any use of the
+    Work.
+ d. Affirmer understands and acknowledges that Creative Commons is not a
+    party to this document and has no duty or obligation with respect to
+    this CC0 or use of the Work.
+````
+
+<a id="text-ms-dotnet-library"></a>
+
+### Microsoft .NET Library License (legacy System.* 4.3.x packages), with its third-party notices
+
+````text
+MICROSOFT SOFTWARE LICENSE TERMS
+
+
+MICROSOFT .NET LIBRARY
+
+These license terms are an agreement between Microsoft Corporation (or based on where you live, one of its affiliates) and you. Please read them. They apply to the software named above, which includes the media on which you received it, if any. The terms also apply to any Microsoft
+
+·         updates,
+
+·         supplements,
+
+·         Internet-based services, and
+
+·         support services
+
+for this software, unless other terms accompany those items. If so, those terms apply.
+
+BY USING THE SOFTWARE, YOU ACCEPT THESE TERMS. IF YOU DO NOT ACCEPT THEM, DO NOT USE THE SOFTWARE.
+
+
+IF YOU COMPLY WITH THESE LICENSE TERMS, YOU HAVE THE PERPETUAL RIGHTS BELOW.
+
+1.    INSTALLATION AND USE RIGHTS.
+
+a.    Installation and Use. You may install and use any number of copies of the software to design, develop and test your programs.
+
+b.    Third Party Programs. The software may include third party programs that Microsoft, not the third party, licenses to you under this agreement. Notices, if any, for the third party program are included for your information only.
+
+2.    ADDITIONAL LICENSING REQUIREMENTS AND/OR USE RIGHTS.
+
+a.    DISTRIBUTABLE CODE.  The software is comprised of Distributable Code. “Distributable Code” is code that you are permitted to distribute in programs you develop if you comply with the terms below.
+
+i.      Right to Use and Distribute.
+
+·         You may copy and distribute the object code form of the software.
+
+·         Third Party Distribution. You may permit distributors of your programs to copy and distribute the Distributable Code as part of those programs.
+
+ii.    Distribution Requirements. For any Distributable Code you distribute, you must
+
+·         add significant primary functionality to it in your programs;
+
+·         require distributors and external end users to agree to terms that protect it at least as much as this agreement;
+
+·         display your valid copyright notice on your programs; and
+
+·         indemnify, defend, and hold harmless Microsoft from any claims, including attorneys’ fees, related to the distribution or use of your programs.
+
+iii.   Distribution Restrictions. You may not
+
+·         alter any copyright, trademark or patent notice in the Distributable Code;
+
+·         use Microsoft’s trademarks in your programs’ names or in a way that suggests your programs come from or are endorsed by Microsoft;
+
+·         include Distributable Code in malicious, deceptive or unlawful programs; or
+
+·         modify or distribute the source code of any Distributable Code so that any part of it becomes subject to an Excluded License. An Excluded License is one that requires, as a condition of use, modification or distribution, that
+
+·         the code be disclosed or distributed in source code form; or
+
+·         others have the right to modify it.
+
+3.    SCOPE OF LICENSE. The software is licensed, not sold. This agreement only gives you some rights to use the software. Microsoft reserves all other rights. Unless applicable law gives you more rights despite this limitation, you may use the software only as expressly permitted in this agreement. In doing so, you must comply with any technical limitations in the software that only allow you to use it in certain ways. You may not
+
+·         work around any technical limitations in the software;
+
+·         reverse engineer, decompile or disassemble the software, except and only to the extent that applicable law expressly permits, despite this limitation;
+
+·         publish the software for others to copy;
+
+·         rent, lease or lend the software;
+
+·         transfer the software or this agreement to any third party; or
+
+·         use the software for commercial software hosting services.
+
+4.    BACKUP COPY. You may make one backup copy of the software. You may use it only to reinstall the software.
+
+5.    DOCUMENTATION. Any person that has valid access to your computer or internal network may copy and use the documentation for your internal, reference purposes.
+
+6.    EXPORT RESTRICTIONS. The software is subject to United States export laws and regulations. You must comply with all domestic and international export laws and regulations that apply to the software. These laws include restrictions on destinations, end users and end use. For additional information, see www.microsoft.com/exporting.
+
+7.    SUPPORT SERVICES. Because this software is “as is,” we may not provide support services for it.
+
+8.    ENTIRE AGREEMENT. This agreement, and the terms for supplements, updates, Internet-based services and support services that you use, are the entire agreement for the software and support services.
+
+9.    APPLICABLE LAW.
+
+a.    United States. If you acquired the software in the United States, Washington state law governs the interpretation of this agreement and applies to claims for breach of it, regardless of conflict of laws principles. The laws of the state where you live govern all other claims, including claims under state consumer protection laws, unfair competition laws, and in tort.
+
+b.    Outside the United States. If you acquired the software in any other country, the laws of that country apply.
+
+10.  LEGAL EFFECT. This agreement describes certain legal rights. You may have other rights under the laws of your country. You may also have rights with respect to the party from whom you acquired the software. This agreement does not change your rights under the laws of your country if the laws of your country do not permit it to do so.
+
+11.  DISCLAIMER OF WARRANTY. THE SOFTWARE IS LICENSED “AS-IS.” YOU BEAR THE RISK OF USING IT. MICROSOFT GIVES NO EXPRESS WARRANTIES, GUARANTEES OR CONDITIONS. YOU MAY HAVE ADDITIONAL CONSUMER RIGHTS OR STATUTORY GUARANTEES UNDER YOUR LOCAL LAWS WHICH THIS AGREEMENT CANNOT CHANGE. TO THE EXTENT PERMITTED UNDER YOUR LOCAL LAWS, MICROSOFT EXCLUDES THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT.
+
+FOR AUSTRALIA – YOU HAVE STATUTORY GUARANTEES UNDER THE AUSTRALIAN CONSUMER LAW AND NOTHING IN THESE TERMS IS INTENDED TO AFFECT THOSE RIGHTS.
+
+12.  LIMITATION ON AND EXCLUSION OF REMEDIES AND DAMAGES. YOU CAN RECOVER FROM MICROSOFT AND ITS SUPPLIERS ONLY DIRECT DAMAGES UP TO U.S. $5.00. YOU CANNOT RECOVER ANY OTHER DAMAGES, INCLUDING CONSEQUENTIAL, LOST PROFITS, SPECIAL, INDIRECT OR INCIDENTAL DAMAGES.
+
+This limitation applies to
+
+·         anything related to the software, services, content (including code) on third party Internet sites, or third party programs; and
+
+·         claims for breach of contract, breach of warranty, guarantee or condition, strict liability, negligence, or other tort to the extent permitted by applicable law.
+
+It also applies even if Microsoft knew or should have known about the possibility of the damages. The above limitation or exclusion may not apply to you because your country may not allow the exclusion or limitation of incidental, consequential or other damages.
+
+Please note: As this software is distributed in Quebec, Canada, some of the clauses in this agreement are provided below in French.
+
+Remarque : Ce logiciel étant distribué au Québec, Canada, certaines des clauses dans ce contrat sont fournies ci-dessous en français.
+
+EXONÉRATION DE GARANTIE. Le logiciel visé par une licence est offert « tel quel ». Toute utilisation de ce logiciel est à votre seule risque et péril. Microsoft n’accorde aucune autre garantie expresse. Vous pouvez bénéficier de droits additionnels en vertu du droit local sur la protection des consommateurs, que ce contrat ne peut modifier. La ou elles sont permises par le droit locale, les garanties implicites de qualité marchande, d’adéquation à un usage particulier et d’absence de contrefaçon sont exclues.
+
+LIMITATION DES DOMMAGES-INTÉRÊTS ET EXCLUSION DE RESPONSABILITÉ POUR LES DOMMAGES. Vous pouvez obtenir de Microsoft et de ses fournisseurs une indemnisation en cas de dommages directs uniquement à hauteur de 5,00 $ US. Vous ne pouvez prétendre à aucune indemnisation pour les autres dommages, y compris les dommages spéciaux, indirects ou accessoires et pertes de bénéfices.
+
+Cette limitation concerne :
+
+·         tout ce qui est relié au logiciel, aux services ou au contenu (y compris le code) figurant sur des sites Internet tiers ou dans des programmes tiers ; et
+
+·         les réclamations au titre de violation de contrat ou de garantie, ou au titre de responsabilité stricte, de négligence ou d’une autre faute dans la limite autorisée par la loi en vigueur.
+
+Elle s’applique également, même si Microsoft connaissait ou devrait connaître l’éventualité d’un tel dommage. Si votre pays n’autorise pas l’exclusion ou la limitation de responsabilité pour les dommages indirects, accessoires ou de quelque nature que ce soit, il se peut que la limitation ou l’exclusion ci-dessus ne s’appliquera pas à votre égard.
+
+EFFET JURIDIQUE. Le présent contrat décrit certains droits juridiques. Vous pourriez avoir d’autres droits prévus par les lois de votre pays. Le présent contrat ne modifie pas les droits que vous confèrent les lois de votre pays si celles-ci ne le permettent pas.
+
+
+
+
+This Microsoft .NET Library may incorporate components from the projects listed
+below. Microsoft licenses these components under the Microsoft .NET Library
+software license terms. The original copyright notices and the licenses under
+which Microsoft received such components are set forth below for informational
+purposes only. Microsoft reserves all rights not expressly granted herein,
+whether by implication, estoppel or otherwise.
+
+1.	.NET Core (https://github.com/dotnet/core/)
+
+.NET Core
+Copyright (c) .NET Foundation and Contributors
+
+The MIT License (MIT)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+````
+
+<a id="text-dotnet-runtime-9.0.4-tpn"></a>
+
+### dotnet/runtime 9.0.4 third-party notices (shipped in the Microsoft 9.0.x packages)
+
+````text
+.NET Runtime uses third-party libraries or other resources that may be
+distributed under licenses different than the .NET Runtime software.
+
+In the event that we accidentally failed to list a required notice, please
+bring it to our attention. Post an issue or email us:
+
+           dotnet@microsoft.com
+
+The attached notices are provided for information only.
+
+License notice for ASP.NET
+-------------------------------
+
+Copyright (c) .NET Foundation. All rights reserved.
+Licensed under the Apache License, Version 2.0.
+
+Available at
+https://github.com/dotnet/aspnetcore/blob/main/LICENSE.txt
+
+License notice for Slicing-by-8
+-------------------------------
+
+http://sourceforge.net/projects/slicing-by-8/
+
+Copyright (c) 2004-2006 Intel Corporation - All Rights Reserved
+
+
+This software program is licensed subject to the BSD License,  available at
+http://www.opensource.org/licenses/bsd-license.html.
+
+
+License notice for Unicode data
+-------------------------------
+
+https://www.unicode.org/license.html
+
+Copyright © 1991-2022 Unicode, Inc. All rights reserved.
+Distributed under the Terms of Use in https://www.unicode.org/copyright.html.
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of the Unicode data files and any associated documentation
+(the "Data Files") or Unicode software and any associated documentation
+(the "Software") to deal in the Data Files or Software
+without restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, and/or sell copies of
+the Data Files or Software, and to permit persons to whom the Data Files
+or Software are furnished to do so, provided that either
+(a) this copyright and permission notice appear with all copies
+of the Data Files or Software, or
+(b) this copyright and permission notice appear in associated
+Documentation.
+
+THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT OF THIRD PARTY RIGHTS.
+IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS
+NOTICE BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL
+DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE,
+DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THE DATA FILES OR SOFTWARE.
+
+Except as contained in this notice, the name of a copyright holder
+shall not be used in advertising or otherwise to promote the sale,
+use or other dealings in these Data Files or Software without prior
+written authorization of the copyright holder.
+
+License notice for zlib-ng
+-----------------------
+
+https://github.com/zlib-ng/zlib-ng/blob/d54e3769be0c522015b784eca2af258b1c026107/LICENSE.md
+
+(C) 1995-2024 Jean-loup Gailly and Mark Adler
+
+This software is provided 'as-is', without any express or implied
+warranty. In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required.
+
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+
+3. This notice may not be removed or altered from any source distribution.
+
+License notice for LinuxTracepoints
+-----------------------------------
+
+https://github.com/microsoft/LinuxTracepoints/blob/main/LICENSE
+
+Copyright (c) Microsoft Corporation.
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE
+
+License notice for Mono
+-------------------------------
+
+http://www.mono-project.com/docs/about-mono/
+
+Copyright (c) .NET Foundation Contributors
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software  and associated documentation files (the Software), to deal
+in the Software without restriction,  including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense,  and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so,  subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+License notice for International Organization for Standardization
+-----------------------------------------------------------------
+
+Portions (C) International Organization for Standardization 1986:
+     Permission to copy in any form is granted for use with
+     conforming SGML systems and applications as defined in
+     ISO 8879, provided this notice is included in all copies.
+
+License notice for Intel
+------------------------
+
+"Copyright (c) 2004-2006 Intel Corporation - All Rights Reserved
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License notice for Xamarin and Novell
+-------------------------------------
+
+Copyright (c) 2015 Xamarin, Inc (http://www.xamarin.com)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+Copyright (c) 2011 Novell, Inc (http://www.novell.com)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+Third party notice for W3C
+--------------------------
+
+"W3C SOFTWARE AND DOCUMENT NOTICE AND LICENSE
+Status: This license takes effect 13 May, 2015.
+This work is being provided by the copyright holders under the following license.
+License
+By obtaining and/or copying this work, you (the licensee) agree that you have read, understood, and will comply with the following terms and conditions.
+Permission to copy, modify, and distribute this work, with or without modification, for any purpose and without fee or royalty is hereby granted, provided that you include the following on ALL copies of the work or portions thereof, including modifications:
+The full text of this NOTICE in a location viewable to users of the redistributed or derivative work.
+Any pre-existing intellectual property disclaimers, notices, or terms and conditions. If none exist, the W3C Software and Document Short Notice should be included.
+Notice of any changes or modifications, through a copyright statement on the new code or document such as "This software or document includes material copied from or derived from [title and URI of the W3C document]. Copyright © [YEAR] W3C® (MIT, ERCIM, Keio, Beihang)."
+Disclaimers
+THIS WORK IS PROVIDED "AS IS," AND COPYRIGHT HOLDERS MAKE NO REPRESENTATIONS OR WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO, WARRANTIES OF MERCHANTABILITY OR FITNESS FOR ANY PARTICULAR PURPOSE OR THAT THE USE OF THE SOFTWARE OR DOCUMENT WILL NOT INFRINGE ANY THIRD PARTY PATENTS, COPYRIGHTS, TRADEMARKS OR OTHER RIGHTS.
+COPYRIGHT HOLDERS WILL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, SPECIAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF ANY USE OF THE SOFTWARE OR DOCUMENT.
+The name and trademarks of copyright holders may NOT be used in advertising or publicity pertaining to the work without specific, written prior permission. Title to copyright in this work will at all times remain with copyright holders."
+
+License notice for Bit Twiddling Hacks
+--------------------------------------
+
+Bit Twiddling Hacks
+
+By Sean Eron Anderson
+seander@cs.stanford.edu
+
+Individually, the code snippets here are in the public domain (unless otherwise
+noted) — feel free to use them however you please. The aggregate collection and
+descriptions are © 1997-2005 Sean Eron Anderson. The code and descriptions are
+distributed in the hope that they will be useful, but WITHOUT ANY WARRANTY and
+without even the implied warranty of merchantability or fitness for a particular
+purpose.
+
+License notice for Brotli
+--------------------------------------
+
+Copyright (c) 2009, 2010, 2013-2016 by the Brotli Authors.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+compress_fragment.c:
+Copyright (c) 2011, Google Inc.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+    * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+    * Neither the name of Google Inc. nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+""AS IS"" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+decode_fuzzer.c:
+Copyright (c) 2015 The Chromium Authors. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google Inc. nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+""AS IS"" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+
+License notice for Json.NET
+-------------------------------
+
+https://github.com/JamesNK/Newtonsoft.Json/blob/master/LICENSE.md
+
+The MIT License (MIT)
+
+Copyright (c) 2007 James Newton-King
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+License notice for vectorized base64 encoding / decoding
+--------------------------------------------------------
+
+Copyright (c) 2005-2007, Nick Galbreath
+Copyright (c) 2013-2017, Alfred Klomp
+Copyright (c) 2015-2017, Wojciech Mula
+Copyright (c) 2016-2017, Matthieu Darbois
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+- Redistributions of source code must retain the above copyright notice,
+  this list of conditions and the following disclaimer.
+
+- Redistributions in binary form must reproduce the above copyright
+  notice, this list of conditions and the following disclaimer in the
+  documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License notice for vectorized hex parsing
+--------------------------------------------------------
+
+Copyright (c) 2022, Geoff Langdale
+Copyright (c) 2022, Wojciech Mula
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+- Redistributions of source code must retain the above copyright notice,
+  this list of conditions and the following disclaimer.
+
+- Redistributions in binary form must reproduce the above copyright
+  notice, this list of conditions and the following disclaimer in the
+  documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License notice for RFC 3492
+---------------------------
+
+The punycode implementation is based on the sample code in RFC 3492
+
+Copyright (C) The Internet Society (2003).  All Rights Reserved.
+
+This document and translations of it may be copied and furnished to
+others, and derivative works that comment on or otherwise explain it
+or assist in its implementation may be prepared, copied, published
+and distributed, in whole or in part, without restriction of any
+kind, provided that the above copyright notice and this paragraph are
+included on all such copies and derivative works.  However, this
+document itself may not be modified in any way, such as by removing
+the copyright notice or references to the Internet Society or other
+Internet organizations, except as needed for the purpose of
+developing Internet standards in which case the procedures for
+copyrights defined in the Internet Standards process must be
+followed, or as required to translate it into languages other than
+English.
+
+The limited permissions granted above are perpetual and will not be
+revoked by the Internet Society or its successors or assigns.
+
+This document and the information contained herein is provided on an
+"AS IS" basis and THE INTERNET SOCIETY AND THE INTERNET ENGINEERING
+TASK FORCE DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING
+BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION
+HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF
+MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
+
+Copyright(C) The Internet Society 1997. All Rights Reserved.
+
+This document and translations of it may be copied and furnished to others,
+and derivative works that comment on or otherwise explain it or assist in
+its implementation may be prepared, copied, published and distributed, in
+whole or in part, without restriction of any kind, provided that the above
+copyright notice and this paragraph are included on all such copies and
+derivative works.However, this document itself may not be modified in any
+way, such as by removing the copyright notice or references to the Internet
+Society or other Internet organizations, except as needed for the purpose of
+developing Internet standards in which case the procedures for copyrights
+defined in the Internet Standards process must be followed, or as required
+to translate it into languages other than English.
+
+The limited permissions granted above are perpetual and will not be revoked
+by the Internet Society or its successors or assigns.
+
+This document and the information contained herein is provided on an "AS IS"
+basis and THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE
+DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY
+RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A
+PARTICULAR PURPOSE.
+
+License notice for Algorithm from RFC 4122 -
+A Universally Unique IDentifier (UUID) URN Namespace
+----------------------------------------------------
+
+Copyright (c) 1990- 1993, 1996 Open Software Foundation, Inc.
+Copyright (c) 1989 by Hewlett-Packard Company, Palo Alto, Ca. &
+Digital Equipment Corporation, Maynard, Mass.
+Copyright (c) 1998 Microsoft.
+To anyone who acknowledges that this file is provided "AS IS"
+without any express or implied warranty: permission to use, copy,
+modify, and distribute this file for any purpose is hereby
+granted without fee, provided that the above copyright notices and
+this notice appears in all source code copies, and that none of
+the names of Open Software Foundation, Inc., Hewlett-Packard
+Company, Microsoft, or Digital Equipment Corporation be used in
+advertising or publicity pertaining to distribution of the software
+without specific, written prior permission. Neither Open Software
+Foundation, Inc., Hewlett-Packard Company, Microsoft, nor Digital
+Equipment Corporation makes any representations about the
+suitability of this software for any purpose."
+
+License notice for The LLVM Compiler Infrastructure
+---------------------------------------------------
+
+Developed by:
+
+    LLVM Team
+
+    University of Illinois at Urbana-Champaign
+
+    http://llvm.org
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal with
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimers.
+
+    * Redistributions in binary form must reproduce the above copyright notice,
+      this list of conditions and the following disclaimers in the
+      documentation and/or other materials provided with the distribution.
+
+    * Neither the names of the LLVM Team, University of Illinois at
+      Urbana-Champaign, nor the names of its contributors may be used to
+      endorse or promote products derived from this Software without specific
+      prior written permission.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE
+SOFTWARE.
+
+License notice for Bob Jenkins
+------------------------------
+
+By Bob Jenkins, 1996.  bob_jenkins@burtleburtle.net.  You may use this
+code any way you wish, private, educational, or commercial.  It's free.
+
+License notice for Greg Parker
+------------------------------
+
+Greg Parker     gparker@cs.stanford.edu     December 2000
+This code is in the public domain and may be copied or modified without
+permission.
+
+License notice for libunwind based code
+----------------------------------------
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+License notice for Printing Floating-Point Numbers (Dragon4)
+------------------------------------------------------------
+
+/******************************************************************************
+  Copyright (c) 2014 Ryan Juckett
+  http://www.ryanjuckett.com/
+
+  This software is provided 'as-is', without any express or implied
+  warranty. In no event will the authors be held liable for any damages
+  arising from the use of this software.
+
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
+
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+
+  3. This notice may not be removed or altered from any source
+     distribution.
+******************************************************************************/
+
+License notice for Printing Floating-point Numbers (Grisu3)
+-----------------------------------------------------------
+
+Copyright 2012 the V8 project authors. All rights reserved.
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above
+      copyright notice, this list of conditions and the following
+      disclaimer in the documentation and/or other materials provided
+      with the distribution.
+    * Neither the name of Google Inc. nor the names of its
+      contributors may be used to endorse or promote products derived
+      from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License notice for xxHash
+-------------------------
+
+xxHash - Extremely Fast Hash algorithm
+Header File
+Copyright (C) 2012-2021 Yann Collet
+
+BSD 2-Clause License (https://www.opensource.org/licenses/bsd-license.php)
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+     notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+     copyright notice, this list of conditions and the following disclaimer
+     in the documentation and/or other materials provided with the
+     distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+You can contact the author at:
+  - xxHash homepage: https://www.xxhash.com
+  - xxHash source repository: https://github.com/Cyan4973/xxHash
+
+License notice for Berkeley SoftFloat Release 3e
+------------------------------------------------
+
+https://github.com/ucb-bar/berkeley-softfloat-3
+https://github.com/ucb-bar/berkeley-softfloat-3/blob/master/COPYING.txt
+
+License for Berkeley SoftFloat Release 3e
+
+John R. Hauser
+2018 January 20
+
+The following applies to the whole of SoftFloat Release 3e as well as to
+each source file individually.
+
+Copyright 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018 The Regents of the
+University of California.  All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ 1. Redistributions of source code must retain the above copyright notice,
+    this list of conditions, and the following disclaimer.
+
+ 2. Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions, and the following disclaimer in the
+    documentation and/or other materials provided with the distribution.
+
+ 3. Neither the name of the University nor the names of its contributors
+    may be used to endorse or promote products derived from this software
+    without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS "AS IS", AND ANY
+EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, ARE
+DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE FOR ANY
+DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License notice for xoshiro RNGs
+--------------------------------
+
+Written in 2018 by David Blackman and Sebastiano Vigna (vigna@acm.org)
+
+To the extent possible under law, the author has dedicated all copyright
+and related and neighboring rights to this software to the public domain
+worldwide. This software is distributed without any warranty.
+
+See <http://creativecommons.org/publicdomain/zero/1.0/>.
+
+License for fastmod (https://github.com/lemire/fastmod), ibm-fpgen (https://github.com/nigeltao/parse-number-fxx-test-data) and fastrange (https://github.com/lemire/fastrange)
+--------------------------------------
+
+   Copyright 2018 Daniel Lemire
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
+License for sse4-strstr (https://github.com/WojciechMula/sse4-strstr)
+--------------------------------------
+
+   Copyright (c) 2008-2016, Wojciech Mula
+   All rights reserved.
+
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions are
+   met:
+
+   1. Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+
+   2. Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+
+   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+   IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+   TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+   PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+   HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+   SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+   TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+   PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+   LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+   NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+   SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License notice for The C++ REST SDK
+-----------------------------------
+
+C++ REST SDK
+
+The MIT License (MIT)
+
+Copyright (c) Microsoft Corporation
+
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+License notice for MessagePack-CSharp
+-------------------------------------
+
+MessagePack for C#
+
+MIT License
+
+Copyright (c) 2017 Yoshifumi Kawai
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+License notice for lz4net
+-------------------------------------
+
+lz4net
+
+Copyright (c) 2013-2017, Milosz Krajewski
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License notice for Nerdbank.Streams
+-----------------------------------
+
+The MIT License (MIT)
+
+Copyright (c) Andrew Arnott
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+License notice for RapidJSON
+----------------------------
+
+Tencent is pleased to support the open source community by making RapidJSON available.
+
+Copyright (C) 2015 THL A29 Limited, a Tencent company, and Milo Yip. All rights reserved.
+
+Licensed under the MIT License (the "License"); you may not use this file except
+in compliance with the License. You may obtain a copy of the License at
+
+http://opensource.org/licenses/MIT
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+
+License notice for DirectX Math Library
+---------------------------------------
+
+https://github.com/microsoft/DirectXMath/blob/master/LICENSE
+
+                               The MIT License (MIT)
+
+Copyright (c) 2011-2020 Microsoft Corp
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this
+software and associated documentation files (the "Software"), to deal in the Software
+without restriction, including without limitation the rights to use, copy, modify,
+merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice shall be included in all copies
+or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
+OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+License notice for ldap4net
+---------------------------
+
+The MIT License (MIT)
+
+Copyright (c) 2018 Alexander Chermyanin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+License notice for vectorized sorting code
+------------------------------------------
+
+MIT License
+
+Copyright (c) 2020 Dan Shechter
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+License notice for musl
+-----------------------
+
+musl as a whole is licensed under the following standard MIT license:
+
+Copyright © 2005-2020 Rich Felker, et al.
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+License notice for "Faster Unsigned Division by Constants"
+------------------------------
+
+Reference implementations of computing and using the "magic number" approach to dividing
+by constants, including codegen instructions. The unsigned division incorporates the
+"round down" optimization per ridiculous_fish.
+
+This is free and unencumbered software. Any copyright is dedicated to the Public Domain.
+
+
+License notice for mimalloc
+-----------------------------------
+
+MIT License
+
+Copyright (c) 2019 Microsoft Corporation, Daan Leijen
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+License for remote stack unwind (https://github.com/llvm/llvm-project/blob/main/lldb/source/Symbol/CompactUnwindInfo.cpp)
+--------------------------------------
+
+Copyright 2019 LLVM Project
+
+Licensed under the Apache License, Version 2.0 (the "License") with LLVM Exceptions;
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+https://llvm.org/LICENSE.txt
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+License notice for Apple header files
+-------------------------------------
+
+Copyright (c) 1980, 1986, 1993
+   The Regents of the University of California.  All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+3. All advertising materials mentioning features or use of this software
+   must display the following acknowledgement:
+   This product includes software developed by the University of
+   California, Berkeley and its contributors.
+4. Neither the name of the University nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGE.
+
+License notice for JavaScript queues
+-------------------------------------
+
+CREATIVE COMMONS CORPORATION IS NOT A LAW FIRM AND DOES NOT PROVIDE LEGAL SERVICES. DISTRIBUTION OF THIS DOCUMENT DOES NOT CREATE AN ATTORNEY-CLIENT RELATIONSHIP. CREATIVE COMMONS PROVIDES THIS INFORMATION ON AN "AS-IS" BASIS. CREATIVE COMMONS MAKES NO WARRANTIES REGARDING THE USE OF THIS DOCUMENT OR THE INFORMATION OR WORKS PROVIDED HEREUNDER, AND DISCLAIMS LIABILITY FOR DAMAGES RESULTING FROM THE USE OF THIS DOCUMENT OR THE INFORMATION OR WORKS PROVIDED HEREUNDER.
+
+Statement of Purpose
+The laws of most jurisdictions throughout the world automatically confer exclusive Copyright and Related Rights (defined below) upon the creator and subsequent owner(s) (each and all, an "owner") of an original work of authorship and/or a database (each, a "Work").
+Certain owners wish to permanently relinquish those rights to a Work for the purpose of contributing to a commons of creative, cultural and scientific works ("Commons") that the public can reliably and without fear of later claims of infringement build upon, modify, incorporate in other works, reuse and redistribute as freely as possible in any form whatsoever and for any purposes, including without limitation commercial purposes. These owners may contribute to the Commons to promote the ideal of a free culture and the further production of creative, cultural and scientific works, or to gain reputation or greater distribution for their Work in part through the use and efforts of others.
+For these and/or other purposes and motivations, and without any expectation of additional consideration or compensation, the person associating CC0 with a Work (the "Affirmer"), to the extent that he or she is an owner of Copyright and Related Rights in the Work, voluntarily elects to apply CC0 to the Work and publicly distribute the Work under its terms, with knowledge of his or her Copyright and Related Rights in the Work and the meaning and intended legal effect of CC0 on those rights.
+
+1. Copyright and Related Rights. A Work made available under CC0 may be protected by copyright and related or neighboring rights ("Copyright and Related Rights"). Copyright and Related Rights include, but are not limited to, the following:
+the right to reproduce, adapt, distribute, perform, display, communicate, and translate a Work;
+moral rights retained by the original author(s) and/or performer(s);
+publicity and privacy rights pertaining to a person's image or likeness depicted in a Work;
+rights protecting against unfair competition in regards to a Work, subject to the limitations in paragraph 4(a), below;
+rights protecting the extraction, dissemination, use and reuse of data in a Work;
+database rights (such as those arising under Directive 96/9/EC of the European Parliament and of the Council of 11 March 1996 on the legal protection of databases, and under any national implementation thereof, including any amended or successor version of such directive); and
+other similar, equivalent or corresponding rights throughout the world based on applicable law or treaty, and any national implementations thereof.
+2. Waiver. To the greatest extent permitted by, but not in contravention of, applicable law, Affirmer hereby overtly, fully, permanently, irrevocably and unconditionally waives, abandons, and surrenders all of Affirmer's Copyright and Related Rights and associated claims and causes of action, whether now known or unknown (including existing as well as future claims and causes of action), in the Work (i) in all territories worldwide, (ii) for the maximum duration provided by applicable law or treaty (including future time extensions), (iii) in any current or future medium and for any number of copies, and (iv) for any purpose whatsoever, including without limitation commercial, advertising or promotional purposes (the "Waiver"). Affirmer makes the Waiver for the benefit of each member of the public at large and to the detriment of Affirmer's heirs and successors, fully intending that such Waiver shall not be subject to revocation, rescission, cancellation, termination, or any other legal or equitable action to disrupt the quiet enjoyment of the Work by the public as contemplated by Affirmer's express Statement of Purpose.
+3. Public License Fallback. Should any part of the Waiver for any reason be judged legally invalid or ineffective under applicable law, then the Waiver shall be preserved to the maximum extent permitted taking into account Affirmer's express Statement of Purpose. In addition, to the extent the Waiver is so judged Affirmer hereby grants to each affected person a royalty-free, non transferable, non sublicensable, non exclusive, irrevocable and unconditional license to exercise Affirmer's Copyright and Related Rights in the Work (i) in all territories worldwide, (ii) for the maximum duration provided by applicable law or treaty (including future time extensions), (iii) in any current or future medium and for any number of copies, and (iv) for any purpose whatsoever, including without limitation commercial, advertising or promotional purposes (the "License"). The License shall be deemed effective as of the date CC0 was applied by Affirmer to the Work. Should any part of the License for any reason be judged legally invalid or ineffective under applicable law, such partial invalidity or ineffectiveness shall not invalidate the remainder of the License, and in such case Affirmer hereby affirms that he or she will not (i) exercise any of his or her remaining Copyright and Related Rights in the Work or (ii) assert any associated claims and causes of action with respect to the Work, in either case contrary to Affirmer's express Statement of Purpose.
+4. Limitations and Disclaimers.
+a. No trademark or patent rights held by Affirmer are waived, abandoned, surrendered, licensed or otherwise affected by this document.
+b. Affirmer offers the Work as-is and makes no representations or warranties of any kind concerning the Work, express, implied, statutory or otherwise, including without limitation warranties of title, merchantability, fitness for a particular purpose, non infringement, or the absence of latent or other defects, accuracy, or the present or absence of errors, whether or not discoverable, all to the greatest extent permissible under applicable law.
+c. Affirmer disclaims responsibility for clearing rights of other persons that may apply to the Work or any use thereof, including without limitation any person's Copyright and Related Rights in the Work. Further, Affirmer disclaims responsibility for obtaining any necessary consents, permissions or other rights required for any use of the Work.
+d. Affirmer understands and acknowledges that Creative Commons is not a party to this document and has no duty or obligation with respect to this CC0 or use of the Work.
+
+
+License notice for FastFloat algorithm
+-------------------------------------
+MIT License
+Copyright (c) 2021 csFastFloat authors
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+License notice for MsQuic
+--------------------------------------
+
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT License.
+
+Available at
+https://github.com/microsoft/msquic/blob/main/LICENSE
+
+License notice for m-ou-se/floatconv
+-------------------------------
+
+Copyright (c) 2020 Mara Bos <m-ou.se@m-ou.se>
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License notice for code from The Practice of Programming
+-------------------------------
+
+Copyright (C) 1999 Lucent Technologies
+
+Excerpted from 'The Practice of Programming
+by Brian W. Kernighan and Rob Pike
+
+You may use this code for any purpose, as long as you leave the copyright notice and book citation attached.
+
+Notice for Euclidean Affine Functions and Applications to Calendar
+Algorithms
+-------------------------------
+
+Aspects of Date/Time processing based on algorithm described in "Euclidean Affine Functions and Applications to Calendar
+Algorithms", Cassio Neri and Lorenz Schneider. https://arxiv.org/pdf/2102.06959.pdf
+
+License notice for amd/aocl-libm-ose
+-------------------------------
+
+Copyright (C) 2008-2020 Advanced Micro Devices, Inc. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+1. Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
+OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+
+License notice for fmtlib/fmt
+-------------------------------
+
+Formatting library for C++
+
+Copyright (c) 2012 - present, Victor Zverovich
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+License for Jb Evain
+---------------------
+
+Copyright (c) 2006 Jb Evain (jbevain@gmail.com)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+--- Optional exception to the license ---
+
+As an exception, if, as a result of your compiling your source code, portions
+of this Software are embedded into a machine-executable object form of such
+source code, you may redistribute such embedded portions in such object form
+without including the above copyright and permission notices.
+
+
+License for MurmurHash3
+--------------------------------------
+
+https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
+
+MurmurHash3 was written by Austin Appleby, and is placed in the public
+domain. The author hereby disclaims copyright to this source
+
+License for Fast CRC Computation
+--------------------------------------
+
+https://github.com/intel/isa-l/blob/33a2d9484595c2d6516c920ce39a694c144ddf69/crc/crc32_ieee_by4.asm
+https://github.com/intel/isa-l/blob/33a2d9484595c2d6516c920ce39a694c144ddf69/crc/crc64_ecma_norm_by8.asm
+
+Copyright(c) 2011-2015 Intel Corporation All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+  * Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+  * Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in
+    the documentation and/or other materials provided with the
+    distribution.
+  * Neither the name of Intel Corporation nor the names of its
+    contributors may be used to endorse or promote products derived
+    from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License for C# Implementation of Fast CRC Computation
+-----------------------------------------------------
+
+https://github.com/SixLabors/ImageSharp/blob/f4f689ce67ecbcc35cebddba5aacb603e6d1068a/src/ImageSharp/Formats/Png/Zlib/Crc32.cs
+
+Copyright (c) Six Labors.
+Licensed under the Apache License, Version 2.0.
+
+Available at
+https://github.com/SixLabors/ImageSharp/blob/f4f689ce67ecbcc35cebddba5aacb603e6d1068a/LICENSE
+
+License for the Teddy multi-substring searching implementation
+--------------------------------------
+
+https://github.com/BurntSushi/aho-corasick
+
+The MIT License (MIT)
+
+Copyright (c) 2015 Andrew Gallant
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+License notice for Avx512Vbmi base64 encoding / decoding
+--------------------------------------------------------
+
+Copyright (c) 2015-2018, Wojciech Muła
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+--------------------------------------------------------
+
+Aspects of base64 encoding / decoding are based on algorithm described in "Base64 encoding and decoding at almost the speed of a memory
+copy", Wojciech Muła and Daniel Lemire. https://arxiv.org/pdf/1910.05109.pdf
+
+License for FormatJS Intl.Segmenter grapheme segmentation algorithm
+--------------------------------------------------------------------------
+Available at https://github.com/formatjs/formatjs/blob/58d6a7b398d776ca3d2726d72ae1573b65cc3bef/packages/intl-segmenter/LICENSE.md
+
+MIT License
+
+Copyright (c) 2022 FormatJS
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+License for SharpFuzz and related samples
+--------------------------------------
+
+https://github.com/Metalnem/sharpfuzz
+https://github.com/Metalnem/dotnet-fuzzers
+https://github.com/Metalnem/libfuzzer-dotnet
+
+MIT License
+
+Copyright (c) 2018 Nemanja Mijailovic
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+````
+
+<a id="text-dotnet-runtime-5.0.0-tpn"></a>
+
+### dotnet/runtime 5.0.0 third-party notices (shipped in the Microsoft 5.0.x packages)
+
+````text
+.NET Runtime uses third-party libraries or other resources that may be
+distributed under licenses different than the .NET Runtime software.
+
+In the event that we accidentally failed to list a required notice, please
+bring it to our attention. Post an issue or email us:
+
+           dotnet@microsoft.com
+
+The attached notices are provided for information only.
+
+License notice for ASP.NET
+-------------------------------
+
+Copyright (c) .NET Foundation. All rights reserved.
+Licensed under the Apache License, Version 2.0.
+
+Available at
+https://github.com/aspnet/AspNetCore/blob/master/LICENSE.txt
+
+License notice for Slicing-by-8
+-------------------------------
+
+http://sourceforge.net/projects/slicing-by-8/
+
+Copyright (c) 2004-2006 Intel Corporation - All Rights Reserved
+
+
+This software program is licensed subject to the BSD License,  available at
+http://www.opensource.org/licenses/bsd-license.html.
+
+
+License notice for Unicode data
+-------------------------------
+
+https://www.unicode.org/license.html
+
+Copyright © 1991-2020 Unicode, Inc. All rights reserved.
+Distributed under the Terms of Use in https://www.unicode.org/copyright.html.
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of the Unicode data files and any associated documentation
+(the "Data Files") or Unicode software and any associated documentation
+(the "Software") to deal in the Data Files or Software
+without restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, and/or sell copies of
+the Data Files or Software, and to permit persons to whom the Data Files
+or Software are furnished to do so, provided that either
+(a) this copyright and permission notice appear with all copies
+of the Data Files or Software, or
+(b) this copyright and permission notice appear in associated
+Documentation.
+
+THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT OF THIRD PARTY RIGHTS.
+IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS
+NOTICE BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL
+DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE,
+DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THE DATA FILES OR SOFTWARE.
+
+Except as contained in this notice, the name of a copyright holder
+shall not be used in advertising or otherwise to promote the sale,
+use or other dealings in these Data Files or Software without prior
+written authorization of the copyright holder.
+
+License notice for Zlib
+-----------------------
+
+https://github.com/madler/zlib
+http://zlib.net/zlib_license.html
+
+/* zlib.h -- interface of the 'zlib' general purpose compression library
+  version 1.2.11, January 15th, 2017
+
+  Copyright (C) 1995-2017 Jean-loup Gailly and Mark Adler
+
+  This software is provided 'as-is', without any express or implied
+  warranty.  In no event will the authors be held liable for any damages
+  arising from the use of this software.
+
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
+
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+  3. This notice may not be removed or altered from any source distribution.
+
+  Jean-loup Gailly        Mark Adler
+  jloup@gzip.org          madler@alumni.caltech.edu
+
+*/
+
+License notice for Mono
+-------------------------------
+
+http://www.mono-project.com/docs/about-mono/
+
+Copyright (c) .NET Foundation Contributors
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software  and associated documentation files (the Software), to deal
+in the Software without restriction,  including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense,  and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so,  subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+License notice for International Organization for Standardization
+-----------------------------------------------------------------
+
+Portions (C) International Organization for Standardization 1986:
+     Permission to copy in any form is granted for use with
+     conforming SGML systems and applications as defined in
+     ISO 8879, provided this notice is included in all copies.
+
+License notice for Intel
+------------------------
+
+"Copyright (c) 2004-2006 Intel Corporation - All Rights Reserved
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License notice for Xamarin and Novell
+-------------------------------------
+
+Copyright (c) 2015 Xamarin, Inc (http://www.xamarin.com)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+Copyright (c) 2011 Novell, Inc (http://www.novell.com)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+Third party notice for W3C
+--------------------------
+
+"W3C SOFTWARE AND DOCUMENT NOTICE AND LICENSE
+Status: This license takes effect 13 May, 2015.
+This work is being provided by the copyright holders under the following license.
+License
+By obtaining and/or copying this work, you (the licensee) agree that you have read, understood, and will comply with the following terms and conditions.
+Permission to copy, modify, and distribute this work, with or without modification, for any purpose and without fee or royalty is hereby granted, provided that you include the following on ALL copies of the work or portions thereof, including modifications:
+The full text of this NOTICE in a location viewable to users of the redistributed or derivative work.
+Any pre-existing intellectual property disclaimers, notices, or terms and conditions. If none exist, the W3C Software and Document Short Notice should be included.
+Notice of any changes or modifications, through a copyright statement on the new code or document such as "This software or document includes material copied from or derived from [title and URI of the W3C document]. Copyright © [YEAR] W3C® (MIT, ERCIM, Keio, Beihang)."
+Disclaimers
+THIS WORK IS PROVIDED "AS IS," AND COPYRIGHT HOLDERS MAKE NO REPRESENTATIONS OR WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO, WARRANTIES OF MERCHANTABILITY OR FITNESS FOR ANY PARTICULAR PURPOSE OR THAT THE USE OF THE SOFTWARE OR DOCUMENT WILL NOT INFRINGE ANY THIRD PARTY PATENTS, COPYRIGHTS, TRADEMARKS OR OTHER RIGHTS.
+COPYRIGHT HOLDERS WILL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, SPECIAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF ANY USE OF THE SOFTWARE OR DOCUMENT.
+The name and trademarks of copyright holders may NOT be used in advertising or publicity pertaining to the work without specific, written prior permission. Title to copyright in this work will at all times remain with copyright holders."
+
+License notice for Bit Twiddling Hacks
+--------------------------------------
+
+Bit Twiddling Hacks
+
+By Sean Eron Anderson
+seander@cs.stanford.edu
+
+Individually, the code snippets here are in the public domain (unless otherwise
+noted) — feel free to use them however you please. The aggregate collection and
+descriptions are © 1997-2005 Sean Eron Anderson. The code and descriptions are
+distributed in the hope that they will be useful, but WITHOUT ANY WARRANTY and
+without even the implied warranty of merchantability or fitness for a particular
+purpose.
+
+License notice for Brotli
+--------------------------------------
+
+Copyright (c) 2009, 2010, 2013-2016 by the Brotli Authors.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+compress_fragment.c:
+Copyright (c) 2011, Google Inc.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+    * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+    * Neither the name of Google Inc. nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+""AS IS"" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+decode_fuzzer.c:
+Copyright (c) 2015 The Chromium Authors. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google Inc. nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+""AS IS"" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+
+License notice for Json.NET
+-------------------------------
+
+https://github.com/JamesNK/Newtonsoft.Json/blob/master/LICENSE.md
+
+The MIT License (MIT)
+
+Copyright (c) 2007 James Newton-King
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+License notice for vectorized base64 encoding / decoding
+--------------------------------------------------------
+
+Copyright (c) 2005-2007, Nick Galbreath
+Copyright (c) 2013-2017, Alfred Klomp
+Copyright (c) 2015-2017, Wojciech Mula
+Copyright (c) 2016-2017, Matthieu Darbois
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+- Redistributions of source code must retain the above copyright notice,
+  this list of conditions and the following disclaimer.
+
+- Redistributions in binary form must reproduce the above copyright
+  notice, this list of conditions and the following disclaimer in the
+  documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License notice for RFC 3492
+---------------------------
+
+The punycode implementation is based on the sample code in RFC 3492
+
+Copyright (C) The Internet Society (2003).  All Rights Reserved.
+
+This document and translations of it may be copied and furnished to
+others, and derivative works that comment on or otherwise explain it
+or assist in its implementation may be prepared, copied, published
+and distributed, in whole or in part, without restriction of any
+kind, provided that the above copyright notice and this paragraph are
+included on all such copies and derivative works.  However, this
+document itself may not be modified in any way, such as by removing
+the copyright notice or references to the Internet Society or other
+Internet organizations, except as needed for the purpose of
+developing Internet standards in which case the procedures for
+copyrights defined in the Internet Standards process must be
+followed, or as required to translate it into languages other than
+English.
+
+The limited permissions granted above are perpetual and will not be
+revoked by the Internet Society or its successors or assigns.
+
+This document and the information contained herein is provided on an
+"AS IS" basis and THE INTERNET SOCIETY AND THE INTERNET ENGINEERING
+TASK FORCE DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING
+BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION
+HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF
+MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
+
+License notice for Algorithm from Internet Draft document "UUIDs and GUIDs"
+---------------------------------------------------------------------------
+
+Copyright (c) 1990- 1993, 1996 Open Software Foundation, Inc.
+Copyright (c) 1989 by Hewlett-Packard Company, Palo Alto, Ca. &
+Digital Equipment Corporation, Maynard, Mass.
+To anyone who acknowledges that this file is provided "AS IS"
+without any express or implied warranty: permission to use, copy,
+modify, and distribute this file for any purpose is hereby
+granted without fee, provided that the above copyright notices and
+this notice appears in all source code copies, and that none of
+the names of Open Software Foundation, Inc., Hewlett-Packard
+Company, or Digital Equipment Corporation be used in advertising
+or publicity pertaining to distribution of the software without
+specific, written prior permission.  Neither Open Software
+Foundation, Inc., Hewlett-Packard Company, Microsoft, nor Digital Equipment
+Corporation makes any representations about the suitability of
+this software for any purpose.
+
+Copyright(C) The Internet Society 1997. All Rights Reserved.
+
+This document and translations of it may be copied and furnished to others,
+and derivative works that comment on or otherwise explain it or assist in
+its implementation may be prepared, copied, published and distributed, in
+whole or in part, without restriction of any kind, provided that the above
+copyright notice and this paragraph are included on all such copies and
+derivative works.However, this document itself may not be modified in any
+way, such as by removing the copyright notice or references to the Internet
+Society or other Internet organizations, except as needed for the purpose of
+developing Internet standards in which case the procedures for copyrights
+defined in the Internet Standards process must be followed, or as required
+to translate it into languages other than English.
+
+The limited permissions granted above are perpetual and will not be revoked
+by the Internet Society or its successors or assigns.
+
+This document and the information contained herein is provided on an "AS IS"
+basis and THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE
+DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY
+RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A
+PARTICULAR PURPOSE.
+
+License notice for Algorithm from RFC 4122 -
+A Universally Unique IDentifier (UUID) URN Namespace
+----------------------------------------------------
+
+Copyright (c) 1990- 1993, 1996 Open Software Foundation, Inc.
+Copyright (c) 1989 by Hewlett-Packard Company, Palo Alto, Ca. &
+Digital Equipment Corporation, Maynard, Mass.
+Copyright (c) 1998 Microsoft.
+To anyone who acknowledges that this file is provided "AS IS"
+without any express or implied warranty: permission to use, copy,
+modify, and distribute this file for any purpose is hereby
+granted without fee, provided that the above copyright notices and
+this notice appears in all source code copies, and that none of
+the names of Open Software Foundation, Inc., Hewlett-Packard
+Company, Microsoft, or Digital Equipment Corporation be used in
+advertising or publicity pertaining to distribution of the software
+without specific, written prior permission. Neither Open Software
+Foundation, Inc., Hewlett-Packard Company, Microsoft, nor Digital
+Equipment Corporation makes any representations about the
+suitability of this software for any purpose."
+
+License notice for The LLVM Compiler Infrastructure
+---------------------------------------------------
+
+Developed by:
+
+    LLVM Team
+
+    University of Illinois at Urbana-Champaign
+
+    http://llvm.org
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal with
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimers.
+
+    * Redistributions in binary form must reproduce the above copyright notice,
+      this list of conditions and the following disclaimers in the
+      documentation and/or other materials provided with the distribution.
+
+    * Neither the names of the LLVM Team, University of Illinois at
+      Urbana-Champaign, nor the names of its contributors may be used to
+      endorse or promote products derived from this Software without specific
+      prior written permission.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE
+SOFTWARE.
+
+License notice for Bob Jenkins
+------------------------------
+
+By Bob Jenkins, 1996.  bob_jenkins@burtleburtle.net.  You may use this
+code any way you wish, private, educational, or commercial.  It's free.
+
+License notice for Greg Parker
+------------------------------
+
+Greg Parker     gparker@cs.stanford.edu     December 2000
+This code is in the public domain and may be copied or modified without
+permission.
+
+License notice for libunwind based code
+----------------------------------------
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+License notice for Printing Floating-Point Numbers (Dragon4)
+------------------------------------------------------------
+
+/******************************************************************************
+  Copyright (c) 2014 Ryan Juckett
+  http://www.ryanjuckett.com/
+
+  This software is provided 'as-is', without any express or implied
+  warranty. In no event will the authors be held liable for any damages
+  arising from the use of this software.
+
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
+
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+
+  3. This notice may not be removed or altered from any source
+     distribution.
+******************************************************************************/
+
+License notice for Printing Floating-point Numbers (Grisu3)
+-----------------------------------------------------------
+
+Copyright 2012 the V8 project authors. All rights reserved.
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above
+      copyright notice, this list of conditions and the following
+      disclaimer in the documentation and/or other materials provided
+      with the distribution.
+    * Neither the name of Google Inc. nor the names of its
+      contributors may be used to endorse or promote products derived
+      from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License notice for xxHash
+-------------------------
+
+xxHash Library
+Copyright (c) 2012-2014, Yann Collet
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice, this
+  list of conditions and the following disclaimer in the documentation and/or
+  other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License notice for Berkeley SoftFloat Release 3e
+------------------------------------------------
+
+https://github.com/ucb-bar/berkeley-softfloat-3
+https://github.com/ucb-bar/berkeley-softfloat-3/blob/master/COPYING.txt
+
+License for Berkeley SoftFloat Release 3e
+
+John R. Hauser
+2018 January 20
+
+The following applies to the whole of SoftFloat Release 3e as well as to
+each source file individually.
+
+Copyright 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018 The Regents of the
+University of California.  All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ 1. Redistributions of source code must retain the above copyright notice,
+    this list of conditions, and the following disclaimer.
+
+ 2. Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions, and the following disclaimer in the
+    documentation and/or other materials provided with the distribution.
+
+ 3. Neither the name of the University nor the names of its contributors
+    may be used to endorse or promote products derived from this software
+    without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS "AS IS", AND ANY
+EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, ARE
+DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE FOR ANY
+DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License notice for Xorshift RNGs
+--------------------------------
+
+George Marsaglia
+2003-07-04
+Journal of Statistical Software
+License: http://creativecommons.org/licenses/by/3.0/
+
+https://www.jstatsoft.org/article/view/v008i14
+https://www.jstatsoft.org/index.php/jss/article/view/v008i14/xorshift.pdf
+
+License notice for Xorshift (Wikipedia)
+---------------------------------------
+
+https://en.wikipedia.org/wiki/Xorshift
+License: https://en.wikipedia.org/wiki/Wikipedia:Text_of_Creative_Commons_Attribution-ShareAlike_3.0_Unported_License
+
+License for fastmod (https://github.com/lemire/fastmod)
+--------------------------------------
+
+   Copyright 2018 Daniel Lemire
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
+License notice for The C++ REST SDK
+-----------------------------------
+
+C++ REST SDK
+
+The MIT License (MIT)
+
+Copyright (c) Microsoft Corporation
+
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+License notice for MessagePack-CSharp
+-------------------------------------
+
+MessagePack for C#
+
+MIT License
+
+Copyright (c) 2017 Yoshifumi Kawai
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+License notice for lz4net
+-------------------------------------
+
+lz4net
+
+Copyright (c) 2013-2017, Milosz Krajewski
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License notice for Nerdbank.Streams
+-----------------------------------
+
+The MIT License (MIT)
+
+Copyright (c) Andrew Arnott
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+License notice for RapidJSON
+----------------------------
+
+Tencent is pleased to support the open source community by making RapidJSON available.
+
+Copyright (C) 2015 THL A29 Limited, a Tencent company, and Milo Yip. All rights reserved.
+
+Licensed under the MIT License (the "License"); you may not use this file except
+in compliance with the License. You may obtain a copy of the License at
+
+http://opensource.org/licenses/MIT
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+
+License notice for DirectX Math Library
+---------------------------------------
+
+https://github.com/microsoft/DirectXMath/blob/master/LICENSE
+
+                               The MIT License (MIT)
+
+Copyright (c) 2011-2020 Microsoft Corp
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this
+software and associated documentation files (the "Software"), to deal in the Software
+without restriction, including without limitation the rights to use, copy, modify,
+merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice shall be included in all copies
+or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
+OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+License notice for ldap4net
+---------------------------
+
+The MIT License (MIT)
+
+Copyright (c) 2018 Alexander Chermyanin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+License notice for vectorized sorting code
+------------------------------------------
+
+MIT License
+
+Copyright (c) 2020 Dan Shechter
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+````
+
+<a id="text-asset-store-eula"></a>
+
+### Unity Asset Store EULA (reference)
+
+````text
+This component was obtained from the Unity Asset Store and is used under the
+Unity Asset Store End User License Agreement (Standard Unity Asset Store EULA),
+https://unity.com/legal/as-terms
+
+Under that agreement the asset may be incorporated, in compiled form, into
+products made with it; the asset's publisher retains all other rights. The
+full terms are those published at the address above, as they applied when the
+asset was acquired.
+````

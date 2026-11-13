@@ -28,5 +28,18 @@ namespace FishMMO.Patcher
 		/// </remarks>
 		[JsonPropertyName("unix_mode")]
 		public int? UnixMode { get; set; }
+
+		/// <summary>
+		/// How the archive entry is encoded: <see cref="PatchFormat.EncodingZstd"/> for a zstd
+		/// frame of the whole file (no reference); null for the raw bytes.
+		/// </summary>
+		[JsonPropertyName("encoding")]
+		[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+		public string Encoding { get; set; }
+
+		/// <summary>The file's size once decoded. Required with an encoding.</summary>
+		[JsonPropertyName("file_size")]
+		[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+		public long? FileSize { get; set; }
 	}
 }

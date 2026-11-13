@@ -74,6 +74,13 @@
 		<PackageReference Include="System.Threading.Channels" Version="9.0.4" />
 		<PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" />
 		<PackageReference Include="ZString" Version="2.6.0" />
+		<!--
+			Zstandard compression (pure C# port, MIT). Used for the native client patches: the
+			patch generator stores each changed file as a zstd delta against the old file
+			(the old file is the reference prefix), and the Updater applies it.
+			Same version as FishMMO-Patcher/Updater/Updater.csproj.
+		-->
+		<PackageReference Include="ZstdSharp.Port" Version="0.8.8" />
 		<PackageReference Include="Otp.NET" Version="1.4.1" />
 		<!--
 			StackExchange.Redis and related packages are transitively pulled by FishMMO-AuthShared
@@ -130,6 +137,21 @@
 				Include all DLLs from the NuGet restore output directory.
 				Exclude well-known system assemblies that are part of Unity's runtime,
 				and exclude test/satellite assemblies that should not ship with the game.
+
+				Unity already provides, and compiles and builds against its own copy of:
+				  System.Buffers, System.Memory, System.Threading.Tasks.Extensions,
+				  System.Runtime.Numerics, System.Threading (forwarding facades in the
+				  Mono class library); System.Numerics.Vectors (class library);
+				  System.Runtime.CompilerServices.Unsafe 6.0 (BCLExtensions);
+				  Newtonsoft.Json (com.unity.nuget.newtonsoft-json, which also carries
+				  the IL2CPP-safe AOT build).
+				The NuGet copies of the first ones are the .NET Standard 2.0 polyfills
+				(their own Span<T>, ValueTask, Vector<T>) and only duplicate those.
+
+				Every pattern is rooted at $(OutDir): the output lies outside this
+				project's folder, so a bare **/ pattern never matches it. Satellite
+				resource assemblies (one per culture, all with the same name) would
+				otherwise be flattened into one file of an arbitrary culture.
 			-->
 			<SourceDir
 			    Include="$(OutDir)**/*.dll"
@@ -139,11 +161,19 @@
 			        $(OutDir)**/System.Linq.dll;
 			        $(OutDir)**/System.Text.RegularExpressions.dll;
 			        $(OutDir)**/System.Security.Cryptography.Primitives.dll;
-			        **/*.Test.dll;
-			        **/*.Tests.dll;
-			        **/xunit.*.dll;
-			        **/nunit.*.dll;
-        **/*.resources.dll" />
+			        $(OutDir)**/System.Runtime.Numerics.dll;
+			        $(OutDir)**/System.Threading.dll;
+			        $(OutDir)**/System.Buffers.dll;
+			        $(OutDir)**/System.Memory.dll;
+			        $(OutDir)**/System.Numerics.Vectors.dll;
+			        $(OutDir)**/System.Threading.Tasks.Extensions.dll;
+			        $(OutDir)**/System.Runtime.CompilerServices.Unsafe.dll;
+			        $(OutDir)**/Newtonsoft.Json.dll;
+			        $(OutDir)**/*.Test.dll;
+			        $(OutDir)**/*.Tests.dll;
+			        $(OutDir)**/xunit.*.dll;
+			        $(OutDir)**/nunit.*.dll;
+			        $(OutDir)**/*.resources.dll" />
 		</ItemGroup>
 
 		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)" />

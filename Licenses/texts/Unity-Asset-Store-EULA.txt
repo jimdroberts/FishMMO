@@ -1,0 +1,8 @@
+This component was obtained from the Unity Asset Store and is used under the
+Unity Asset Store End User License Agreement (Standard Unity Asset Store EULA),
+https://unity.com/legal/as-terms
+
+Under that agreement the asset may be incorporated, in compiled form, into
+products made with it; the asset's publisher retains all other rights. The
+full terms are those published at the address above, as they applied when the
+asset was acquired.

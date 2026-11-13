@@ -149,7 +149,9 @@ namespace FishMMO.Client
 			plannedReach = 0f;
 			// Down until this camera's volume is known to carry the mist (the pass raises it as it records).
 			Shader.SetGlobalFloat(FallMistVolumetricId, 0f);
-			if (!Supported)
+			// Not supported (no compute), or the player's Volumetric Fog is off (ClientVisualSettings): either way the
+			// height fog draws the layer from the camera out (plannedReach 0) and the falls make their own mist.
+			if (!Supported || !ClientVisualSettings.VolumetricFog)
 			{
 				return;
 			}

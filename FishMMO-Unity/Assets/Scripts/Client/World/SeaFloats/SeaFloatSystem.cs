@@ -256,6 +256,11 @@ namespace FishMMO.Client
 				Report(main, settings == null ? "idle: no Weather Render Profile is loaded" : "idle: switched off on the Weather Render Profile (Sea floats)");
 				return;
 			}
+			if (!ClientVisualSettings.FloatingDebris)
+			{
+				Report(main, "idle: switched off in the player's options (Floating Debris)");
+				return;
+			}
 			if (!SurfaceWater.TryGetLevel(out float level) || float.IsInfinity(level))
 			{
 				Report(main, "idle: this scene has no sea");

@@ -275,6 +275,9 @@ namespace FishMMO.Client
 		/// <summary>The card that follows the pointer.</summary>
 		private readonly TargetCard hoverCard = new TargetCard(HOVER_CARD_NAME);
 
+		/// <summary>The "Highlight Interactables" gameplay option, cached; refreshed when gameplay settings change.</summary>
+		private bool highlightInteractables = true;
+
 		/// <summary>
 		/// The card that holds the pinned character. Which card is which is carried by the
 		/// instance and its UXML name, so no flag has to be threaded through the shared drawing
@@ -309,6 +312,10 @@ namespace FishMMO.Client
 
 			IBuffController.OnObservedBuffsChanged -= BuffController_OnObservedBuffsChanged;
 			IBuffController.OnObservedBuffsChanged += BuffController_OnObservedBuffsChanged;
+
+			highlightInteractables = ClientSettings.GetGameplayToggle(ClientSettings.HighlightInteractablesKey);
+			ClientSettings.OnGameplayChanged -= ClientSettings_OnGameplayChanged;
+			ClientSettings.OnGameplayChanged += ClientSettings_OnGameplayChanged;
 		}
 
 		/// <summary>
@@ -317,6 +324,8 @@ namespace FishMMO.Client
 		public override void OnDestroying()
 		{
 			IBuffController.OnObservedBuffsChanged -= BuffController_OnObservedBuffsChanged;
+			ClientSettings.OnGameplayChanged -= ClientSettings_OnGameplayChanged;
+			TargetOutline.Clear();
 
 			ReleaseOverheadNameplate(hoverCard);
 			ReleaseOverheadNameplate(pinnedCard);
@@ -492,16 +501,19 @@ namespace FishMMO.Client
 			if (ReferenceEquals(target, pinnedCard.Target))
 			{
 				ReleaseCard(hoverCard, hoverCard.Target);
+				UpdateHighlight(target, pinnedCard.Interactable);
 				return;
 			}
 
 			if (!ResolveCard(hoverCard, target))
 			{
+				TargetOutline.Clear();
 				return;
 			}
 
 			PresentCard(hoverCard);
 			UpdateOverheadNameplate(hoverCard);
+			UpdateHighlight(target, hoverCard.Interactable);
 		}
 
 		/// <summary>
@@ -526,6 +538,7 @@ namespace FishMMO.Client
 				if (hoverCard.HasTarget)
 				{
 					ReleaseCard(hoverCard, hoverCard.Target);
+					UpdateHighlight(target, pinnedCard.Interactable);
 				}
 				return;
 			}
@@ -551,6 +564,42 @@ namespace FishMMO.Client
 		public void TargetController_OnClearTarget(Transform lastTarget = null)
 		{
 			ReleaseCard(hoverCard, lastTarget);
+		}
+
+		/// <summary>
+		/// Outlines the aimed-at object when it is interactable and the gameplay option is on; otherwise
+		/// outlines nothing.
+		/// </summary>
+		/// <param name="target">What the pointer rests on.</param>
+		/// <param name="interactable">Its interactable, as the card resolved it (the interact key's rule).</param>
+		/// <remarks>
+		/// The outline follows the aim only, never the pin: releasing the hover card clears it, and
+		/// the pinned character keeps no outline once the pointer leaves it.
+		/// </remarks>
+		private void UpdateHighlight(Transform target, IInteractable interactable)
+		{
+			if (highlightInteractables && target != null && interactable != null)
+			{
+				TargetOutline.Show(target);
+			}
+			else
+			{
+				TargetOutline.Clear();
+			}
+		}
+
+		/// <summary>Re-reads the highlight option, and applies it to what the pointer rests on now.</summary>
+		private void ClientSettings_OnGameplayChanged()
+		{
+			highlightInteractables = ClientSettings.GetGameplayToggle(ClientSettings.HighlightInteractablesKey);
+			if (hoverCard.HasTarget)
+			{
+				UpdateHighlight(hoverCard.Target, hoverCard.Interactable);
+			}
+			else if (!highlightInteractables)
+			{
+				TargetOutline.Clear();
+			}
 		}
 
 		#endregion
@@ -1106,6 +1155,11 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void ReleaseCard(TargetCard card, Transform lastTarget)
 		{
+			if (ReferenceEquals(card, hoverCard))
+			{
+				TargetOutline.Clear();
+			}
+
 			if (lastTarget != null)
 			{
 				TargetCard other = ReferenceEquals(card, hoverCard) ? pinnedCard : hoverCard;
@@ -1113,12 +1167,6 @@ namespace FishMMO.Client
 
 				if (!framedElsewhere)
 				{
-					Outline outline = lastTarget.GetComponent<Outline>();
-					if (outline != null)
-					{
-						outline.enabled = false;
-					}
-
 					ICharacter character = lastTarget.GetComponent<ICharacter>();
 					if (character != null)
 					{

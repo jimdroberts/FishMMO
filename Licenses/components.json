@@ -1,0 +1,1104 @@
+{
+ "_comment": "Source data for THIRD-PARTY-NOTICES.md and Licenses/THIRD-PARTY-NOTICES-*.txt. Edit here, then run: python3 Licenses/generate_notices.py",
+ "products": {
+  "client": {
+   "title": "Game client (native: Windows, Linux, macOS)",
+   "file": "THIRD-PARTY-NOTICES-Client.txt"
+  },
+  "webgl": {
+   "title": "Game client (WebGL / WebGPU, browser)",
+   "file": "THIRD-PARTY-NOTICES-WebGL.txt"
+  },
+  "server": {
+   "title": "Game servers (Login, World and Scene servers)",
+   "file": "THIRD-PARTY-NOTICES-Server.txt"
+  },
+  "updater": {
+   "title": "Updater (self-contained, shipped beside the native client)",
+   "file": "THIRD-PARTY-NOTICES-Updater.txt"
+  },
+  "web": {
+   "title": "Web apps, services and operator tools (Control Panel, Patcher, IP Fetch, WebGL server, App Health Monitor, Discord bot, Installer, DB migrator)",
+   "file": "THIRD-PARTY-NOTICES-Web.txt"
+  },
+  "build": {
+   "title": "Build-time tooling (not shipped in any product)",
+   "file": null
+  }
+ },
+ "texts": {
+  "MIT": {
+   "title": "MIT License",
+   "file": "texts/MIT.txt"
+  },
+  "Apache-2.0": {
+   "title": "Apache License 2.0",
+   "file": "texts/Apache-2.0.txt"
+  },
+  "FishNet": {
+   "title": "FishNet License",
+   "file": "texts/FishNet-License.txt"
+  },
+  "BSD-2-Clause-GameKit": {
+   "title": "GameKit (BSD 2-Clause), as published in FishNet's third-party notice",
+   "file": "texts/BSD-2-Clause-GameKit.txt"
+  },
+  "BSD-2-Clause-xxHash": {
+   "title": "xxHash (BSD 2-Clause), from the dotnet/runtime third-party notices",
+   "file": "texts/BSD-2-Clause-xxHash.txt"
+  },
+  "BSD-3-Clause-zstd": {
+   "title": "Zstandard (BSD 3-Clause)",
+   "file": "texts/BSD-3-Clause-zstd.txt"
+  },
+  "BSD-3-Clause-FXAA": {
+   "title": "FXAA 3.11 (NVIDIA, BSD 3-Clause style), from URP's third-party notices",
+   "file": "texts/BSD-3-Clause-FXAA-NVIDIA.txt"
+  },
+  "BSL-1.0-Clipper": {
+   "title": "Clipper (Boost Software License 1.0), from Cinemachine's third-party notices",
+   "file": "texts/BSL-1.0-Clipper.txt"
+  },
+  "PostgreSQL": {
+   "title": "PostgreSQL License (Npgsql)",
+   "file": "texts/PostgreSQL-Npgsql.txt"
+  },
+  "CC0-1.0": {
+   "title": "Creative Commons Zero v1.0 Universal",
+   "file": "texts/CC0-1.0.txt"
+  },
+  "MS-DotNet-Library": {
+   "title": "Microsoft .NET Library License (legacy System.* 4.3.x packages), with its third-party notices",
+   "file": "texts/MS-DotNet-Library-License.txt"
+  },
+  "dotnet-runtime-9.0.4-TPN": {
+   "title": "dotnet/runtime 9.0.4 third-party notices (shipped in the Microsoft 9.0.x packages)",
+   "file": "texts/dotnet-runtime-9.0.4-THIRD-PARTY-NOTICES.txt"
+  },
+  "dotnet-runtime-5.0.0-TPN": {
+   "title": "dotnet/runtime 5.0.0 third-party notices (shipped in the Microsoft 5.0.x packages)",
+   "file": "texts/dotnet-runtime-5.0.0-THIRD-PARTY-NOTICES.txt"
+  },
+  "Asset-Store-EULA": {
+   "title": "Unity Asset Store EULA (reference)",
+   "file": "texts/Unity-Asset-Store-EULA.txt"
+  }
+ },
+ "components": [
+  {
+   "name": "FishNet: Networking Evolved",
+   "version": "4.7.3",
+   "url": "https://github.com/FirstGearGames/FishNet",
+   "license": "LicenseRef-FishNet",
+   "copyright": [
+    "Copyright (c) Benjamin Berwick (FirstGearGames)"
+   ],
+   "texts": [
+    "FishNet"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ],
+   "notes": "Includes the bundled ColliderRollback and Yak plugins, which use the FishNet licence. FishMMO carries local fixes to FishNet; see FishNet's own third-party notice for its bundled components."
+  },
+  {
+   "name": "GameKit (bundled with FishNet)",
+   "version": "4.7.3",
+   "url": "https://github.com/FirstGearGames/FishNet",
+   "license": "BSD-2-Clause",
+   "copyright": [
+    "Copyright (c) Benjamin Berwick"
+   ],
+   "texts": [
+    "BSD-2-Clause-GameKit"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ]
+  },
+  {
+   "name": "LiteNetLib (bundled with FishNet, Tugboat transport)",
+   "version": "as bundled with FishNet 4.7.3",
+   "url": "https://github.com/RevenantX/LiteNetLib",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) 2020 Ruslan Pyrch",
+    "Copyright (c) 2021, Benjamin Berwick"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ]
+  },
+  {
+   "name": "SerializableDictionary",
+   "version": "as vendored",
+   "url": "https://github.com/azixMcAze/Unity-SerializableDictionary",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) 2017 Mathieu Le Ber"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ]
+  },
+  {
+   "name": "Kinematic Character Controller",
+   "version": "as vendored (locally modified)",
+   "url": "https://assetstore.unity.com/packages/tools/physics/kinematic-character-controller-99131",
+   "license": "LicenseRef-Unity-Asset-Store-EULA",
+   "copyright": [
+    "Copyright (c) Philippe St-Amand"
+   ],
+   "texts": [
+    "Asset-Store-EULA"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ],
+   "notes": "Use allowed by the project owner. Licence recorded as the Unity Asset Store EULA; the vendored copy carries no licence file of its own. Modified for FishNet prediction.",
+   "unverified": true
+  },
+  {
+   "name": "Google Analytics GA4 for Unity (DreamTeam Mobile)",
+   "version": "as vendored (locally modified)",
+   "url": "https://assetstore.unity.com/publishers/dreamteam-mobile",
+   "license": "LicenseRef-Unity-Asset-Store-EULA",
+   "copyright": [
+    "Copyright (c) DreamTeam Mobile"
+   ],
+   "texts": [
+    "Asset-Store-EULA"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ],
+   "notes": "Use allowed by the project owner. Licence recorded as the Unity Asset Store EULA; the vendored copy carries only a PDF manual and no licence file. The WebGL .jslib is locally modified.",
+   "unverified": true
+  },
+  {
+   "name": "FXAA 3.11 (in Universal Render Pipeline FXAA3_11.hlsl)",
+   "version": "URP 17.6.0",
+   "url": "https://github.com/hghdev/NVIDIAGameWorks-GraphicsSamples/blob/master/samples/es3-kepler/FXAA/FXAA3_11.h",
+   "license": "LicenseRef-NVIDIA-FXAA-BSD-3-Clause",
+   "copyright": [
+    "Copyright (c) 2014-2015, NVIDIA CORPORATION. All rights reserved."
+   ],
+   "texts": [
+    "BSD-3-Clause-FXAA"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ]
+  },
+  {
+   "name": "Clipper (in Cinemachine)",
+   "version": "Cinemachine 6.6.0",
+   "url": "http://www.angusj.com/delphi/clipper.php",
+   "license": "BSL-1.0",
+   "copyright": [
+    "Copyright (c) 2010-2014 Angus Johnson"
+   ],
+   "texts": [
+    "BSL-1.0-Clipper"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ],
+   "notes": "Present when the Cinemachine runtime assembly is included in the player."
+  },
+  {
+   "name": "MsQuic (in libfishmmo_webtransport; msquic.dll on Windows)",
+   "version": "2.5.9",
+   "url": "https://github.com/microsoft/msquic",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) Microsoft Corporation."
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "client",
+    "server"
+   ],
+   "notes": "Linux and macOS (and Windows -Static) builds link msquic statically into libfishmmo_webtransport; the default Windows build ships msquic.dll from the Microsoft.Native.Quic.MsQuic.OpenSSL 2.5.9 NuGet package. FishMMO applies one local patch to msquic (FishMMO-WebTransport/patches/msquic-listener-bind-specific-address.patch); the patched code remains under msquic's MIT licence."
+  },
+  {
+   "name": "quictls (OpenSSL fork with QUIC support, inside MsQuic)",
+   "version": "3.1.7+quic",
+   "url": "https://github.com/quictls/openssl",
+   "license": "Apache-2.0",
+   "copyright": [
+    "Copyright (c) 1998-2024 The OpenSSL Project Authors",
+    "Copyright (c) 1995-1998 Eric A. Young, Tim J. Hudson"
+   ],
+   "texts": [
+    "Apache-2.0"
+   ],
+   "products": [
+    "client",
+    "server"
+   ],
+   "notes": "Statically linked into MsQuic as its TLS provider (the msquic.dll from Microsoft.Native.Quic.MsQuic.OpenSSL carries it too)."
+  },
+  {
+   "name": "BouncyCastle.Cryptography",
+   "version": "2.6.2",
+   "url": "https://github.com/bcgit/bc-csharp",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) 2000-2025 The Legion of the Bouncy Castle Inc. (https://www.bouncycastle.org)"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ]
+  },
+  {
+   "name": "Entity Framework Core",
+   "version": "5.0.17",
+   "url": "https://github.com/dotnet/efcore",
+   "license": "Apache-2.0",
+   "copyright": [
+    "Copyright (c) .NET Foundation and Contributors (Microsoft Corporation)"
+   ],
+   "texts": [
+    "Apache-2.0"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ],
+   "packages": [
+    "Microsoft.EntityFrameworkCore 5.0.17",
+    "Microsoft.EntityFrameworkCore.Abstractions 5.0.17",
+    "Microsoft.EntityFrameworkCore.Design 5.0.17",
+    "Microsoft.EntityFrameworkCore.Relational 5.0.17"
+   ]
+  },
+  {
+   "name": "EFCore.NamingConventions",
+   "version": "5.0.2",
+   "url": "https://github.com/efcore/EFCore.NamingConventions",
+   "license": "Apache-2.0",
+   "copyright": [
+    "Copyright 2020 Shay Rojansky"
+   ],
+   "texts": [
+    "Apache-2.0"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ]
+  },
+  {
+   "name": "Npgsql (FishMMO Unity AOT build)",
+   "version": "5.0.18",
+   "url": "https://github.com/npgsql/npgsql",
+   "license": "PostgreSQL",
+   "copyright": [
+    "Copyright (c) 2002-2019, Npgsql",
+    "Copyright 2024 The Npgsql Development Team"
+   ],
+   "texts": [
+    "PostgreSQL"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ],
+   "notes": "Built from the upstream v5.0.18 source with three methods changed for IL2CPP; see FishMMO-Dependencies/ThirdParty/Npgsql.UnityAot/README.md."
+  },
+  {
+   "name": "Npgsql.EntityFrameworkCore.PostgreSQL",
+   "version": "5.0.10",
+   "url": "https://github.com/npgsql/efcore.pg",
+   "license": "PostgreSQL",
+   "copyright": [
+    "Copyright 2021 The Npgsql Development Team"
+   ],
+   "texts": [
+    "PostgreSQL"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ]
+  },
+  {
+   "name": "HtmlAgilityPack",
+   "version": "1.11.61",
+   "url": "https://github.com/zzzprojects/html-agility-pack",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) ZZZ Projects Inc."
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ]
+  },
+  {
+   "name": "Humanizer",
+   "version": "2.14.1",
+   "url": "https://github.com/Humanizr/Humanizer",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) .NET Foundation and Contributors"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ],
+   "packages": [
+    "Humanizer.Core 2.14.1 and its Humanizer.Core.<culture> resource packages"
+   ]
+  },
+  {
+   "name": "Newtonsoft.Json",
+   "version": "13.0.2",
+   "url": "https://github.com/JamesNK/Newtonsoft.Json",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) 2007 James Newton-King"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ],
+   "notes": "Shipped from Unity's com.unity.nuget.newtonsoft-json 3.2.2 package (its IL2CPP AOT build in players); FishMMO-Dependencies no longer copies its own."
+  },
+  {
+   "name": "OpenAI-API-dotnet (NuGet: OpenAI)",
+   "version": "1.7.2",
+   "url": "https://github.com/OkGoDoIt/OpenAI-API-dotnet",
+   "license": "CC0-1.0",
+   "copyright": [
+    "Dedicated to the public domain by OkGoDoIt (Roger Pincombe) under CC0 1.0"
+   ],
+   "texts": [
+    "CC0-1.0"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ]
+  },
+  {
+   "name": "Otp.NET",
+   "version": "1.4.1",
+   "url": "https://github.com/kspearrin/Otp.NET",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) 2017 Kyle Spearrin"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ]
+  },
+  {
+   "name": "srp (srp.net)",
+   "version": "1.0.7",
+   "url": "https://github.com/secure-remote-password/srp.net",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) 2018-2022 Alexey Yakovlev"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ],
+   "notes": "The package names its licence only by URL (upstream LICENSE, MIT) and carries no licence file; MIT text reproduced as the standard text: UNVERIFIED against the upstream file.",
+   "unverified": true
+  },
+  {
+   "name": "StackExchange.Redis",
+   "version": "2.8.0",
+   "url": "https://github.com/StackExchange/StackExchange.Redis",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) 2014-2024 Stack Exchange, Inc."
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ]
+  },
+  {
+   "name": "Pipelines.Sockets.Unofficial",
+   "version": "2.2.8",
+   "url": "https://github.com/mgravell/Pipelines.Sockets.Unofficial",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) 2018 Marc Gravell"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ]
+  },
+  {
+   "name": "StackExchange.Redis.Extensions.Core",
+   "version": "10.0.0",
+   "url": "https://github.com/imperugo/StackExchange.Redis.Extensions",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) Ugo Lattanzi"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ]
+  },
+  {
+   "name": "ZString",
+   "version": "2.6.0",
+   "url": "https://github.com/Cysharp/ZString",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) Cysharp, Inc."
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server",
+    "updater"
+   ]
+  },
+  {
+   "name": "ZstdSharp (NuGet: ZstdSharp.Port)",
+   "version": "0.8.8",
+   "url": "https://github.com/oleg-st/ZstdSharp",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) 2021 Oleg Stepanischev"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server",
+    "updater"
+   ],
+   "notes": "The package carries no licence file (its nuspec gives the MIT expression and 'Copyright Oleg Stepanischev 2026'); the MIT text is the standard text. ZstdSharp is a C# port of Zstandard, whose notice follows."
+  },
+  {
+   "name": "Zstandard (zstd)",
+   "version": "as ported by ZstdSharp 0.8.8",
+   "url": "https://github.com/facebook/zstd",
+   "license": "BSD-3-Clause",
+   "copyright": [
+    "Copyright (c) Meta Platforms, Inc. and affiliates. All rights reserved."
+   ],
+   "texts": [
+    "BSD-3-Clause-zstd"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server",
+    "updater"
+   ],
+   "notes": "zstd is dual-licensed BSD-3-Clause or GPL-2.0; FishMMO uses it under BSD-3-Clause."
+  },
+  {
+   "name": "System.IO.Hashing",
+   "version": "9.0.4",
+   "url": "https://github.com/dotnet/runtime",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) .NET Foundation and Contributors"
+   ],
+   "texts": [
+    "MIT",
+    "BSD-2-Clause-xxHash"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server",
+    "updater"
+   ],
+   "notes": "Implements xxHash; the xxHash notice below is reproduced from the package's third-party notices."
+  },
+  {
+   "name": "Microsoft .NET libraries 9.0.x (dotnet/runtime)",
+   "version": "9.0.4",
+   "url": "https://github.com/dotnet/runtime",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) .NET Foundation and Contributors"
+   ],
+   "texts": [
+    "MIT",
+    "dotnet-runtime-9.0.4-TPN"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ],
+   "packages": [
+    "Microsoft.Bcl.AsyncInterfaces 9.0.4",
+    "Microsoft.Extensions.Caching.Abstractions 9.0.4",
+    "Microsoft.Extensions.Caching.Memory 9.0.4",
+    "Microsoft.Extensions.Configuration 9.0.4",
+    "Microsoft.Extensions.Configuration.Abstractions 9.0.4",
+    "Microsoft.Extensions.Configuration.Binder 9.0.4",
+    "Microsoft.Extensions.Configuration.EnvironmentVariables 9.0.4",
+    "Microsoft.Extensions.Configuration.FileExtensions 9.0.4",
+    "Microsoft.Extensions.Configuration.Json 9.0.4",
+    "Microsoft.Extensions.DependencyInjection 9.0.4",
+    "Microsoft.Extensions.DependencyInjection.Abstractions 9.0.4",
+    "Microsoft.Extensions.FileProviders.Abstractions 9.0.4",
+    "Microsoft.Extensions.FileProviders.Physical 9.0.4",
+    "Microsoft.Extensions.FileSystemGlobbing 9.0.4",
+    "Microsoft.Extensions.Http 9.0.4",
+    "Microsoft.Extensions.Logging 9.0.4",
+    "Microsoft.Extensions.Logging.Abstractions 9.0.4",
+    "Microsoft.Extensions.Options 9.0.4",
+    "Microsoft.Extensions.Primitives 9.0.4",
+    "System.Collections.Immutable 9.0.4",
+    "System.Diagnostics.DiagnosticSource 9.0.4",
+    "System.IO.Pipelines 9.0.4",
+    "System.Text.Encodings.Web 9.0.4",
+    "System.Text.Json 9.0.4",
+    "System.Threading.Channels 9.0.4"
+   ]
+  },
+  {
+   "name": "System.ComponentModel.Annotations",
+   "version": "5.0.0",
+   "url": "https://github.com/dotnet/runtime",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) .NET Foundation and Contributors"
+   ],
+   "texts": [
+    "MIT",
+    "dotnet-runtime-5.0.0-TPN"
+   ],
+   "products": [
+    "client",
+    "webgl",
+    "server"
+   ]
+  },
+  {
+   "name": ".NET runtime (self-contained in the Updater)",
+   "version": "8.0.x (the runtime pack used by the publish; 8.0.33 at the time of writing)",
+   "url": "https://github.com/dotnet/runtime",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) .NET Foundation and Contributors"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "updater"
+   ],
+   "notes": "The publish scripts copy the runtime pack's own LICENSE.TXT and THIRD-PARTY-NOTICES.TXT beside the Updater as Updater-dotnet-LICENSE.txt and Updater-dotnet-THIRD-PARTY-NOTICES.txt; those files are part of this notice."
+  },
+  {
+   "name": "ASP.NET Core and .NET runtime (shared framework)",
+   "version": "8.0.x",
+   "url": "https://github.com/dotnet/aspnetcore",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) .NET Foundation and Contributors"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "web"
+   ],
+   "notes": "Framework-dependent: provided by the host's .NET installation, not shipped with the apps."
+  },
+  {
+   "name": "Entity Framework Core",
+   "version": "5.0.17",
+   "url": "https://github.com/dotnet/efcore",
+   "license": "Apache-2.0",
+   "copyright": [
+    "Copyright (c) .NET Foundation and Contributors (Microsoft Corporation)"
+   ],
+   "texts": [
+    "Apache-2.0"
+   ],
+   "products": [
+    "web"
+   ],
+   "packages": [
+    "Microsoft.EntityFrameworkCore 5.0.17",
+    "Microsoft.EntityFrameworkCore.Abstractions 5.0.17",
+    "Microsoft.EntityFrameworkCore.Analyzers 5.0.17",
+    "Microsoft.EntityFrameworkCore.Relational 5.0.17",
+    "Microsoft.EntityFrameworkCore.Design 5.0.17 (DB migrator)"
+   ]
+  },
+  {
+   "name": "EFCore.NamingConventions",
+   "version": "5.0.2",
+   "url": "https://github.com/efcore/EFCore.NamingConventions",
+   "license": "Apache-2.0",
+   "copyright": [
+    "Copyright 2020 Shay Rojansky"
+   ],
+   "texts": [
+    "Apache-2.0"
+   ],
+   "products": [
+    "web"
+   ]
+  },
+  {
+   "name": "Npgsql",
+   "version": "5.0.18",
+   "url": "https://github.com/npgsql/npgsql",
+   "license": "PostgreSQL",
+   "copyright": [
+    "Copyright 2024 The Npgsql Development Team"
+   ],
+   "texts": [
+    "PostgreSQL"
+   ],
+   "products": [
+    "web"
+   ]
+  },
+  {
+   "name": "Npgsql.EntityFrameworkCore.PostgreSQL",
+   "version": "5.0.10",
+   "url": "https://github.com/npgsql/efcore.pg",
+   "license": "PostgreSQL",
+   "copyright": [
+    "Copyright 2021 The Npgsql Development Team"
+   ],
+   "texts": [
+    "PostgreSQL"
+   ],
+   "products": [
+    "web"
+   ]
+  },
+  {
+   "name": "BouncyCastle.Cryptography",
+   "version": "2.5.1, 2.6.2",
+   "url": "https://github.com/bcgit/bc-csharp",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) 2000-2025 The Legion of the Bouncy Castle Inc. (https://www.bouncycastle.org)"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "web"
+   ]
+  },
+  {
+   "name": "Otp.NET",
+   "version": "1.4.0",
+   "url": "https://github.com/kspearrin/Otp.NET",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) 2017 Kyle Spearrin"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "web"
+   ]
+  },
+  {
+   "name": "srp (srp.net)",
+   "version": "1.0.7",
+   "url": "https://github.com/secure-remote-password/srp.net",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) 2018-2022 Alexey Yakovlev"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "web"
+   ],
+   "notes": "Licence named by URL only: UNVERIFIED text.",
+   "unverified": true
+  },
+  {
+   "name": "ZString",
+   "version": "2.6.0",
+   "url": "https://github.com/Cysharp/ZString",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) Cysharp, Inc."
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "web"
+   ]
+  },
+  {
+   "name": "Newtonsoft.Json",
+   "version": "13.0.3",
+   "url": "https://github.com/JamesNK/Newtonsoft.Json",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) 2007 James Newton-King"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "web"
+   ]
+  },
+  {
+   "name": "Humanizer.Core",
+   "version": "2.8.26",
+   "url": "https://github.com/Humanizr/Humanizer",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) .NET Foundation and Contributors"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "web"
+   ]
+  },
+  {
+   "name": "Discord.Net",
+   "version": "3.17.4",
+   "url": "https://github.com/discord-net/Discord.Net",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) Discord.Net Contributors"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "web"
+   ],
+   "packages": [
+    "Discord.Net 3.17.4",
+    "Discord.Net.Commands 3.17.4",
+    "Discord.Net.Core 3.17.4",
+    "Discord.Net.Interactions 3.17.4",
+    "Discord.Net.Rest 3.17.4",
+    "Discord.Net.Webhook 3.17.4",
+    "Discord.Net.WebSocket 3.17.4"
+   ],
+   "notes": "The packages carry no copyright line; the holder is given as upstream's contributors: UNVERIFIED.",
+   "unverified": true
+  },
+  {
+   "name": "Swashbuckle.AspNetCore",
+   "version": "6.5.0",
+   "url": "https://github.com/domaindrivendev/Swashbuckle.AspNetCore",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) Swashbuckle.AspNetCore contributors (Richard Morris)"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "web"
+   ],
+   "packages": [
+    "Swashbuckle.AspNetCore 6.5.0",
+    "Swashbuckle.AspNetCore.Swagger 6.5.0",
+    "Swashbuckle.AspNetCore.SwaggerGen 6.5.0",
+    "Swashbuckle.AspNetCore.SwaggerUI 6.5.0"
+   ],
+   "notes": "The packages carry no copyright line: UNVERIFIED holder. SwaggerUI embeds swagger-ui (Apache-2.0, SmartBear Software): UNVERIFIED.",
+   "unverified": true
+  },
+  {
+   "name": "Microsoft.OpenApi",
+   "version": "1.2.3",
+   "url": "https://github.com/Microsoft/OpenAPI.NET",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) Microsoft Corporation."
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "web"
+   ]
+  },
+  {
+   "name": "Reactive Extensions for .NET (dotnet/reactive)",
+   "version": "6.0.1",
+   "url": "https://github.com/dotnet/reactive",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) .NET Foundation and Contributors"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "web"
+   ],
+   "packages": [
+    "System.Reactive 6.0.1",
+    "System.Interactive.Async 6.0.1",
+    "System.Linq.Async 6.0.1"
+   ]
+  },
+  {
+   "name": "Microsoft .NET libraries (dotnet/runtime, dotnet/corefx)",
+   "version": "4.5.0 to 9.0.4",
+   "url": "https://github.com/dotnet/runtime",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) .NET Foundation and Contributors"
+   ],
+   "texts": [
+    "MIT",
+    "dotnet-runtime-9.0.4-TPN",
+    "dotnet-runtime-5.0.0-TPN"
+   ],
+   "products": [
+    "web"
+   ],
+   "packages": [
+    "Microsoft.Bcl.AsyncInterfaces 6.0.0",
+    "Microsoft.CSharp 4.7.0",
+    "Microsoft.Extensions.* 5.0.x, 8.0.0 and 9.0.4 (Caching, Configuration, DependencyInjection, Diagnostics, FileProviders, FileSystemGlobbing, Hosting, Logging, Options, Primitives)",
+    "System.Collections.Immutable 5.0.0, 8.0.0",
+    "System.ComponentModel.Annotations 5.0.0",
+    "System.Diagnostics.DiagnosticSource 5.0.1, 8.0.0",
+    "System.Diagnostics.EventLog 8.0.0",
+    "System.IO.Pipelines 9.0.4",
+    "System.Runtime.CompilerServices.Unsafe 4.6.0",
+    "System.Text.Encodings.Web 9.0.4",
+    "System.Text.Json 9.0.4",
+    "System.Threading.Channels 8.0.0",
+    "System.ValueTuple 4.5.0"
+   ]
+  },
+  {
+   "name": "Microsoft .NET legacy packages",
+   "version": "1.1.x to 4.3.x",
+   "url": "https://dot.net/",
+   "license": "LicenseRef-MS-DotNet-Library",
+   "copyright": [
+    "Copyright (c) Microsoft Corporation. All rights reserved."
+   ],
+   "texts": [
+    "MS-DotNet-Library"
+   ],
+   "products": [
+    "web"
+   ],
+   "packages": [
+    "Microsoft.NETCore.Platforms 1.1.1",
+    "Microsoft.NETCore.Targets 1.1.3",
+    "System.Collections 4.3.0",
+    "System.Collections.Concurrent 4.3.0",
+    "System.Diagnostics.Debug 4.3.0",
+    "System.Diagnostics.Tracing 4.3.0",
+    "System.Globalization 4.3.0",
+    "System.IO 4.3.0",
+    "System.Linq 4.3.0",
+    "System.Reflection 4.3.0",
+    "System.Reflection.Primitives 4.3.0",
+    "System.Resources.ResourceManager 4.3.0",
+    "System.Runtime 4.3.1",
+    "System.Runtime.Extensions 4.3.0",
+    "System.Runtime.Handles 4.3.0",
+    "System.Runtime.InteropServices 4.3.0",
+    "System.Runtime.Numerics 4.3.0",
+    "System.Security.Cryptography.Algorithms 4.3.1",
+    "System.Security.Cryptography.Encoding 4.3.0",
+    "System.Security.Cryptography.Primitives 4.3.0",
+    "System.Text.Encoding 4.3.0",
+    "System.Text.RegularExpressions 4.3.1",
+    "System.Threading 4.3.0",
+    "System.Threading.Tasks 4.3.0",
+    "runtime.*.runtime.native.System.Security.Cryptography.OpenSsl 4.3.2 / .Apple 4.3.1"
+   ],
+   "notes": "Transitive references of Otp.NET 1.4.0 and srp 1.0.7 in the Control Panel and Installer; on net8.0 the shared framework's own assemblies are normally used instead."
+  },
+  {
+   "name": "Mono.Cecil (FishNet code generation; com.unity.nuget.mono-cecil)",
+   "version": "0.11.4",
+   "url": "https://github.com/jbevain/cecil",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) 2008 - 2015 Jb Evain",
+    "Copyright (c) 2008 - 2011 Novell, Inc."
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "build"
+   ]
+  },
+  {
+   "name": "FishNet CodeGen helpers",
+   "version": "as bundled with FishNet 4.7.3",
+   "url": "https://github.com/FirstGearGames/FishNet",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) 2015, Unity Technologies",
+    "Copyright (c) 2019, vis2k, Paul and Contributors",
+    "Copyright (c) 2021, Benjamin Berwick"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "build"
+   ]
+  },
+  {
+   "name": "FishNet.CodeAnalysis (Roslyn analyzer)",
+   "version": "as bundled with FishNet 4.7.3",
+   "url": "https://github.com/Abdelfattah-Radwan/FishNet.CodeAnalysis",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) 2022 Abdelfattah-Radwan"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "build"
+   ]
+  },
+  {
+   "name": "Entity Framework Core Tools",
+   "version": "5.0.17",
+   "url": "https://github.com/dotnet/efcore",
+   "license": "Apache-2.0",
+   "copyright": [
+    "Copyright (c) .NET Foundation and Contributors (Microsoft Corporation)"
+   ],
+   "texts": [
+    "Apache-2.0"
+   ],
+   "products": [
+    "build"
+   ],
+   "packages": [
+    "Microsoft.EntityFrameworkCore.Tools 5.0.17"
+   ]
+  },
+  {
+   "name": "Microsoft.NET.ILLink.Tasks",
+   "version": "8.0.33",
+   "url": "https://github.com/dotnet/runtime",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) .NET Foundation and Contributors"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "build"
+   ]
+  },
+  {
+   "name": "Microsoft.Extensions.ApiDescription.Server",
+   "version": "6.0.5",
+   "url": "https://github.com/dotnet/aspnetcore",
+   "license": "MIT",
+   "copyright": [
+    "Copyright (c) .NET Foundation and Contributors"
+   ],
+   "texts": [
+    "MIT"
+   ],
+   "products": [
+    "build"
+   ]
+  }
+ ]
+}

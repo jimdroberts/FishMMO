@@ -372,3 +372,13 @@ IPv6Address=::1
 - All data is copied to unmanaged memory on callback threads
 - Processing is queued to Unity main thread via `ConcurrentQueue<Action>`
 - Send functions MUST be called from the same thread as `poll()`
+
+## Licence
+
+This WebTransport transport (the C# code, the WebGL `.jslib` and the editor tools in this folder)
+is first-party FishMMO code, licensed under the MIT licence in the repository root's `LICENSE`.
+It sits inside the FishNet folder, whose `LICENSE.txt` and `THIRD PARTY NOTICE.md` cover FishNet
+itself, not this transport (whose socket classes follow the layout of FishNet's own transports,
+Tugboat and Bayou, and build on FishNet's `Transport` API). The native library it loads is built from `FishMMO-WebTransport/`
+(also MIT) and contains MsQuic (MIT) and quictls (Apache-2.0); see
+`FishMMO-WebTransport/THIRD-PARTY-NOTICES.md` and `THIRD-PARTY-NOTICES.md` at the repository root.

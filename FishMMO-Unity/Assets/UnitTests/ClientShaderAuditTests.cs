@@ -9,17 +9,6 @@ namespace FishMMO.UnitTests
 {
 	public class ClientShaderAuditTests
 	{
-		[TestCase("TMP_SDF-HDRP LIT.shadergraph", false)]
-		[TestCase("TMP_SDF-HDRP UNLIT.shadergraph", false)]
-		[TestCase("TMP_SDF-URP Lit.shadergraph", true)]
-		[TestCase("TMP_SDF-URP Unlit.shadergraph", true)]
-		public void AuditResolvesTheActualTextMeshProGraphPipeline(string name, bool expected)
-		{
-			var shader = AssetDatabase.LoadAssetAtPath<Shader>("Assets/Plugins/TextMesh Pro/Shaders/" + name);
-			Assert.That(shader, Is.Not.Null);
-			Assert.That(ClientShaderBuildAudit.HasCompatibleSubshader(shader, "UniversalPipeline"), Is.EqualTo(expected));
-		}
-
 		[TestCase("", true)]
 		[TestCase("UniversalPipeline", true)]
 		[TestCase("HDRenderPipeline", false)]

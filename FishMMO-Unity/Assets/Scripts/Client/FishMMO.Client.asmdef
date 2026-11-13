@@ -8,7 +8,6 @@
         "GameKit.Dependencies",
         "WebTransport",
         "KinematicCharacterController",
-        "QuickOutline",
         "Unity.InputSystem",
         "Unity.Splines",
         "Unity.Mathematics",

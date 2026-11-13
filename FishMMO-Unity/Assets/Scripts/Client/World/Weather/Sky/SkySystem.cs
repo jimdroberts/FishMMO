@@ -265,6 +265,10 @@ namespace FishMMO.Client
 		/// waterfalls' mist go on.</summary>
 		public static bool DrawFog => !EditorFogOff;
 
+		/// <summary>The lightning's light on the scene as shown: none when the player has turned Lightning Flashes off
+		/// (ClientVisualSettings), for whom a whole-screen flash is a hazard. The bolts themselves are still drawn.</summary>
+		private float ShownFlash => ClientVisualSettings.LightningFlashes ? lightning.Flash : 0f;
+
 		/// <summary>An explicit render profile (the test scene); otherwise the loaded one.</summary>
 		public WeatherRenderProfile Profile;
 		/// <summary>The camera to present for; otherwise <see cref="Camera.main"/>.</summary>
@@ -846,7 +850,7 @@ namespace FishMMO.Client
 			lightning.Update(timeline, tick, worldSeconds, viewer, camera, profile.BoltMaterial, context);
 			if (presentation != null)
 			{
-				presentation.LightningFlash = lightning.Flash;
+				presentation.LightningFlash = ShownFlash;
 			}
 			LightningMarker.End();
 
@@ -866,7 +870,7 @@ namespace FishMMO.Client
 			GlobalsMarker.End();
 			LightsMarker.Begin();
 			ApplyLights(state, sample, overcast, eclipse, weather, dt, profile, tier);
-			ApplyAmbient(sample, overcast, eclipse, lightning.Flash);
+			ApplyAmbient(sample, overcast, eclipse, ShownFlash);
 			// The fog is the colour of the light the air is lit by under the cloud (AirLight): the overcast's own grey, as dark
 			// as the ground under it, and the weather's fog takes its hue (InAir), so the far ground fogged by it meets the
 			// cloud base without an edge. It was the clear sky's fog greyed toward a grey of its own — a constant until
@@ -900,7 +904,7 @@ namespace FishMMO.Client
 				{
 					meteors.RemoveAll(m => m.Time + m.Duration < worldSeconds);
 				}
-				int budget = profile.TierFor(QualitySettings.GetQualityLevel()).MeteorBudget;
+				int budget = profile.TierFor(ClientVisualSettings.WeatherTierLevel).MeteorBudget;
 				for (long w = leapt ? meteorWindow : meteorsWindow + 1; w <= meteorWindow; w++)
 				{
 					SkySchedule.Meteors(state, w * MeteorWindowSeconds, (w + 1) * MeteorWindowSeconds, budget, meteors);
@@ -1854,14 +1858,17 @@ namespace FishMMO.Client
 			// "fully occluded" and empty the sky of moons and planets — so the default has to be
 			// "do not attenuate".
 			Shader.SetGlobalVector(CloudScreenId, Vector4.zero);
+			// The player's Cloud Quality (ClientVisualSettings): on anything but Auto the march is that preset's, already
+			// tuned and measured; the rest of the sky stays as the Quality preset has it.
+			WeatherTierSettings cloudTier = ClientVisualSettings.CloudQuality == VisualLevel.Auto ? tier : profile.TierFor(ClientVisualSettings.CloudTierLevel);
 			CloudTier = new CloudTierSettings
 			{
-				Resolution = tier.CloudResolution,
-				Steps = tier.CloudSteps,
-				Detail = tier.CloudDetail,
-				Temporal = diagnostics.TemporalFor(tier.CloudTemporal),
+				Resolution = cloudTier.CloudResolution,
+				Steps = cloudTier.CloudSteps,
+				Detail = cloudTier.CloudDetail,
+				Temporal = diagnostics.TemporalFor(cloudTier.CloudTemporal),
 				TemporalBlend = clouds.TemporalBlend,
-				HistoryScale = tier.CloudHistoryScale,
+				HistoryScale = cloudTier.CloudHistoryScale,
 			};
 			CloudFarDistance = clouds.MaxDistance;
 			CloudFarTailSteps = clouds.FarTailSteps;
@@ -2110,7 +2117,7 @@ namespace FishMMO.Client
 			GodRayIntensity = 0f;
 			GodRayEclipse = 0f;
 			GodRayMedium = 0f;
-			if (!tier.GodRays || state == null || state.Sun < 0)
+			if (!tier.GodRays || !ClientVisualSettings.GodRays || state == null || state.Sun < 0)
 			{
 				return;
 			}
@@ -2257,7 +2264,7 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			float flash = lightning.Flash;
+			float flash = ShownFlash;
 			Vector3 sunDirection = state.Sun >= 0 ? state.SunDirection : new Vector3(0.3f, 0.8f, 0.5f).normalized;
 			float sunAltitude = state.Sun >= 0 ? state.SunAltitude : 50f;
 			// The light is dimmed as the eye would have it (an ordinary day until the last tenth), and
@@ -2406,7 +2413,7 @@ namespace FishMMO.Client
 			// average rather than to full sun, so the land beyond the window is neither sunlit under
 			// an overcast nor dimmed twice inside it.
 			Light shadowed = leader != null ? leader : sun;
-			bool cookie = tier.CloudShadows && DrawCloudShadows && DrawClouds && profile.CloudMaterial != null && CloudsReady;
+			bool cookie = tier.CloudShadows && DrawCloudShadows && ClientVisualSettings.CloudShadows && DrawClouds && profile.CloudMaterial != null && CloudsReady;
 			float far = 1f;
 			if (cookie && shadowed != null)
 			{
@@ -2676,7 +2683,8 @@ namespace FishMMO.Client
 			if (profile != null)
 			{
 				WeatherPresentation presentation = WeatherPresentation.Instance;
-				WeatherTierSettings tier = profile.TierFor(QualitySettings.GetQualityLevel());
+				// The player's Weather Effects level (ClientVisualSettings): a preset's curtain and vortex budget.
+				WeatherTierSettings tier = profile.TierFor(ClientVisualSettings.WeatherTierLevel);
 				if (presentation != null && presentation.HasContext)
 				{
 					/* The storms where they are this frame (PresentTick: the weather's tick carried on between its

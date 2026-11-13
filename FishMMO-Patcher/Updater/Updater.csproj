@@ -60,4 +60,12 @@
 	<ItemGroup>
 		<PackageReference Include="System.IO.Hashing" Version="9.0.4" />
 	</ItemGroup>
+
+	<!--
+		FishMMO-SharedUtility carries ZstdDelta (zstd deltas against the old file, via
+		ZstdSharp.Port), the same code the patch generator encodes with, so the two cannot drift.
+	-->
+	<ItemGroup>
+		<ProjectReference Include="../../FishMMO-SharedUtility/FishMMO-SharedUtility/FishMMO-SharedUtility.csproj" />
+	</ItemGroup>
 </Project>

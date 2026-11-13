@@ -514,6 +514,11 @@ namespace FishMMO.Client
 				Report(main, "idle: switched off on the Weather Render Profile (Ambient life)");
 				return;
 			}
+			if (!ClientVisualSettings.Wildlife)
+			{
+				Report(main, "idle: switched off in the player's options (Wildlife)");
+				return;
+			}
 			Shader shader = AmbientShader;
 			if (shader == null || !shader.isSupported)
 			{
@@ -1294,7 +1299,8 @@ namespace FishMMO.Client
 			 * view's edge, the camera turning), so a group drawn last frame may run past the budget by a share of it while a
 			 * newcomer must fit inside it (Admits): with one limit for both, the farthest group was in one frame and out the
 			 * next, every bird of it together. */
-			int maxVisible = settings.MaxVisible;
+			// The player's Wildlife Amount (ClientVisualSettings): a share of the profile's budget, nearest groups first.
+			int maxVisible = Mathf.Max(1, Mathf.RoundToInt(settings.MaxVisible * ClientVisualSettings.WildlifeScale));
 			int spent = 0;
 			int drawn = 0;
 			drawnLastFrame.Clear();

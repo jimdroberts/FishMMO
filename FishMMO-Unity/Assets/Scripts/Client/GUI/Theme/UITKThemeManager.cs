@@ -71,6 +71,34 @@ namespace FishMMO.Client
 		private static readonly HashSet<VisualElement> roots = new HashSet<VisualElement>();
 
 		/// <summary>
+		/// The class a panel root carries for each colour vision, indexed by <see cref="ColorVisionMode"/>;
+		/// FishMMO-Theme.uss redefines the meaningful colour tokens under each. Normal carries none.
+		/// </summary>
+		private static readonly string[] ColorVisionClasses =
+		{
+			null,
+			"fish-cvd--protanopia",
+			"fish-cvd--deuteranopia",
+			"fish-cvd--tritanopia",
+		};
+
+		/// <summary>Puts the current colour vision's class on a panel root, and takes the others off.</summary>
+		/// <remarks>
+		/// The tokens are custom properties declared on <c>:root</c>; a class on that same element, matched
+		/// as <c>.fish-cvd--x:root</c>, outranks the plain declaration, and every element in the panel
+		/// inherits the result. No panel nests a template or clones one at run time, so the panel root is
+		/// the only <c>:root</c> there is.
+		/// </remarks>
+		private static void ApplyColorVision(VisualElement root)
+		{
+			int mode = (int)ColorVision.Mode;
+			for (int i = 1; i < ColorVisionClasses.Length; ++i)
+			{
+				root.EnableInClassList(ColorVisionClasses[i], i == mode);
+			}
+		}
+
+		/// <summary>
 		/// The theme in force, or null when nothing is overridden.
 		/// </summary>
 		public static UITKTheme Current { get; private set; }
@@ -164,8 +192,9 @@ namespace FishMMO.Client
 			Color label = theme != null && theme.HasOverride("TooltipLabel") ? theme.TooltipLabel : TooltipPalette.Label;
 			Color stat = theme != null && theme.HasOverride("Highlight") ? theme.Highlight : TooltipPalette.Stat;
 
+			// Better and worse follow the player's colour vision (ColorVision), not a fixed green and red.
 			TooltipPalette.Initialize(title, label, stat,
-				TooltipPalette.Good, TooltipPalette.Bad, TooltipPalette.Muted, TooltipPalette.Accent);
+				ColorVision.Good, ColorVision.Bad, TooltipPalette.Muted, TooltipPalette.Accent);
 		}
 
 		/// <summary>
@@ -178,6 +207,8 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+
+			ApplyColorVision(root);
 
 			UITKTheme theme = Current;
 			if (theme == null || !theme.IsOverridden)

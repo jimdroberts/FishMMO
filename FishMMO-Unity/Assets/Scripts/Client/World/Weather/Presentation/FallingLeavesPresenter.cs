@@ -153,7 +153,8 @@ namespace FishMMO.Client
 			float seconds = float.IsNaN(lastTime) ? 0f : Mathf.Clamp(time - lastTime, 0f, 0.25f);
 			lastTime = time;
 
-			int particles = settings.ParticlesFor(QualitySettings.GetQualityLevel());
+			// The player's Falling Leaves switch and Weather Effects level (ClientVisualSettings).
+			int particles = ClientVisualSettings.FallingLeaves ? settings.ParticlesFor(ClientVisualSettings.WeatherTierLevel) : 0;
 			Vector3 origin = camera.transform.position;
 			// Nothing falls through the sea: from under it the leaves are up in the air, out of sight.
 			if (particles <= 0 || SurfaceWater.IsUnder(origin))

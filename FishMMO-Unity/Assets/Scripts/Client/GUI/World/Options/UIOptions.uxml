@@ -15,6 +15,7 @@
             -->
             <ui:VisualElement name="options-tabs" class="options-tabs">
                 <ui:Button name="options-tab-display" text="Display" class="fish-tab options-tab" />
+                <ui:Button name="options-tab-graphics" text="Graphics" class="fish-tab options-tab" />
                 <ui:Button name="options-tab-audio" text="Audio" class="fish-tab options-tab" />
                 <ui:Button name="options-tab-gameplay" text="Gameplay" class="fish-tab options-tab" />
                 <ui:Button name="options-tab-controls" text="Key Bindings" class="fish-tab options-tab" />
@@ -50,8 +51,32 @@
                     <ui:Button name="options-screen-apply-btn" text="Apply"
                                class="fish-button fish-button--primary options-screen-btn" />
                 </ui:VisualElement>
+                <ui:Label text="FRAME RATE" class="fish-attr-category options-section" />
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Frame Rate Limit" class="fish-label options-row-label" />
+                    <ui:DropdownField name="framerate-dropdown" class="fish-dropdown options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="VSync" class="fish-label options-row-label" />
+                    <ui:Toggle name="vsync-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:Label name="options-graphics-hint" text="" class="fish-hint options-hint" />
+                <ui:Label text="PICTURE" class="fish-attr-category options-section" />
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Brightness" class="fish-label options-row-label" />
+                    <ui:Slider name="brightness-slider" low-value="0" high-value="1" class="options-row-field" />
+                    <ui:Label name="brightness-value" text="100%" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+            </ui:ScrollView>
 
-                <ui:Label text="GRAPHICS" class="fish-attr-category options-section" />
+            <!-- ══ Graphics ══════════════════════════════════════ -->
+            <!--
+                Everything here applies at once. The SKY, WEATHER and AMBIENT LIFE lists are built by
+                UITKOptions from ClientVisualSettings.Rows; each is a performance control first, and
+                each level other than Auto takes one Quality preset's own numbers for that system.
+            -->
+            <ui:ScrollView name="options-page-graphics" class="fish-scroll options-scroll">
+                <ui:Label text="QUALITY" class="fish-attr-category options-section" />
                 <ui:VisualElement class="options-row">
                     <ui:Label text="Quality" class="fish-label options-row-label" />
                     <ui:DropdownField name="quality-dropdown" class="fish-dropdown options-row-field" />
@@ -68,33 +93,23 @@
                     <ui:Label text="MSAA" class="fish-label options-row-label" />
                     <ui:DropdownField name="msaa-dropdown" class="fish-dropdown options-row-field" />
                 </ui:VisualElement>
+                <ui:Label text="The Quality preset sets everything below that is left on Auto." class="fish-hint options-hint" />
+                <ui:Label text="WORLD DETAIL" class="fish-attr-category options-section" />
                 <ui:VisualElement class="options-row">
                     <ui:Label text="Grass Distance" class="fish-label options-row-label" />
                     <ui:Slider name="grass-distance-slider" low-value="50" high-value="300" class="options-row-field" />
                     <ui:Label name="grass-distance-value" text="200 m" class="fish-hint options-row-value" />
                 </ui:VisualElement>
+                <ui:Label text="SKY" class="fish-attr-category options-section" />
                 <ui:VisualElement class="options-row">
                     <ui:Label text="Volumetric Clouds" class="fish-label options-row-label" />
                     <ui:Toggle name="clouds-toggle" class="fish-toggle options-row-field" />
                 </ui:VisualElement>
-                <ui:VisualElement class="options-row">
-                    <ui:Label text="Brightness" class="fish-label options-row-label" />
-                    <ui:Slider name="brightness-slider" low-value="0" high-value="1" class="options-row-field" />
-                    <ui:Label name="brightness-value" text="100%" class="fish-hint options-row-value" />
-                </ui:VisualElement>
-                <ui:VisualElement class="options-row">
-                    <ui:Label text="Look Sensitivity" class="fish-label options-row-label" />
-                    <ui:Slider name="look-sensitivity-slider" low-value="0.05" high-value="20" show-input-field="true" class="fish-slider options-row-field" />
-                </ui:VisualElement>
-                <ui:VisualElement class="options-row">
-                    <ui:Label text="Frame Rate Limit" class="fish-label options-row-label" />
-                    <ui:DropdownField name="framerate-dropdown" class="fish-dropdown options-row-field" />
-                </ui:VisualElement>
-                <ui:VisualElement class="options-row">
-                    <ui:Label text="VSync" class="fish-label options-row-label" />
-                    <ui:Toggle name="vsync-toggle" class="fish-toggle options-row-field" />
-                </ui:VisualElement>
-                <ui:Label name="options-graphics-hint" text="" class="fish-hint options-hint" />
+                <ui:VisualElement name="options-sky-list" class="options-list" />
+                <ui:Label text="WEATHER" class="fish-attr-category options-section" />
+                <ui:VisualElement name="options-weather-list" class="options-list" />
+                <ui:Label text="AMBIENT LIFE" class="fish-attr-category options-section" />
+                <ui:VisualElement name="options-life-list" class="options-list" />
             </ui:ScrollView>
 
             <!-- ══ Audio ═════════════════════════════════════════ -->
@@ -114,10 +129,16 @@
             </ui:ScrollView>
 
             <!-- ══ Gameplay ══════════════════════════════════════ -->
-            <!-- Rows are built by UITKOptions from its GameplayToggles table. -->
+            <!-- GENERAL rows are built by UITKOptions from ClientSettings.GameplayToggles (its Gameplay section). -->
             <ui:ScrollView name="options-page-gameplay" class="fish-scroll options-scroll">
-                <ui:Label text="GAMEPLAY" class="fish-attr-category options-section" />
+                <ui:Label text="GENERAL" class="fish-attr-category options-section" />
                 <ui:VisualElement name="options-gameplay-list" class="options-list" />
+
+                <ui:Label text="CAMERA" class="fish-attr-category options-section" />
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Look Sensitivity" class="fish-label options-row-label" />
+                    <ui:Slider name="look-sensitivity-slider" low-value="0.05" high-value="20" show-input-field="true" class="fish-slider options-row-field" />
+                </ui:VisualElement>
 
                 <!--
                     Crosshair. Colour is deliberately NOT here: it is a themed colour, edited in
@@ -143,6 +164,97 @@
                     <ui:Slider name="crosshair-opacity-slider" low-value="0.1" high-value="1" class="options-row-field" />
                     <ui:Label name="crosshair-opacity-value" text="100%" class="fish-hint options-row-value" />
                 </ui:VisualElement>
+
+            </ui:ScrollView>
+
+            <!-- ══ Key Bindings ══════════════════════════════════ -->
+            <!-- Rows are built by UITKOptions from the PlayerControls asset. -->
+            <!--
+                The status line and Reset All Keys sit OUTSIDE the scroller. The list is forty-odd
+                rows tall, so anything inside it is off-screen for most of the page — and the two
+                things that must never be off-screen are the message explaining why a rebind was
+                refused, and the control that undoes a set of bindings the player has broken.
+            -->
+            <ui:VisualElement name="options-page-controls" class="options-page">
+                <ui:VisualElement class="options-row options-row--action options-controls-bar">
+                    <ui:Label name="options-controls-status" text="" class="fish-hint options-controls-status" />
+                    <ui:Button name="options-reset-controls-btn" text="Reset All Keys"
+                               class="fish-button options-reset-btn" />
+                </ui:VisualElement>
+                <ui:Label text="Click a binding, then press the key you want.  Escape cancels  ·  Backspace clears a binding  ·  each key can only be used once."
+                          class="fish-hint options-hint options-controls-hint" />
+                <ui:ScrollView class="fish-scroll options-scroll">
+                    <ui:VisualElement name="options-controls-list" class="options-list" />
+                </ui:ScrollView>
+            </ui:VisualElement>
+
+            <!-- ══ UI ════════════════════════════════════════════ -->
+            <!--
+                Window layout, theme colours, and the shareable profile that carries both. The
+                layout reset is the only way back from an arrangement the player cannot fix by
+                dragging — a panel left on a monitor that is no longer attached, most obviously.
+            -->
+            <ui:ScrollView name="options-page-interface" class="fish-scroll options-scroll">
+                <!--
+                    Colour vision. The palette moves the colours that carry meaning (enemy and ally,
+                    better and worse, rarity, the map's markers) to ones each kind of colour blindness
+                    keeps apart; the filter also shifts the 3D view, under the UI. First on the page so
+                    a player who needs it does not have to hunt for it.
+                -->
+                <ui:Label text="ACCESSIBILITY" class="fish-attr-category options-section" />
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Colour Vision" class="fish-label options-row-label" />
+                    <ui:DropdownField name="colorvision-dropdown" class="fish-dropdown options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Colour Correction Filter" class="fish-label options-row-label" />
+                    <ui:Toggle name="colorfilter-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Filter Strength" class="fish-label options-row-label" />
+                    <ui:Slider name="colorfilter-strength-slider" low-value="0" high-value="1" class="options-row-field" />
+                    <ui:Label name="colorfilter-strength-value" text="100%" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:Label text="Enemies, allies, better and worse, rarity and the map change to colours you can tell apart. The filter also adjusts the colours of the world."
+                          class="fish-hint options-hint" />
+
+                <ui:Label text="LAYOUT" class="fish-attr-category options-section" />
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Interface Scale" class="fish-label options-row-label" />
+                    <ui:Slider name="ui-scale-slider" low-value="0.75" high-value="1.5" class="options-row-field" />
+                    <ui:Label name="ui-scale-value" text="75%" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Window Snap Grid" class="fish-label options-row-label" />
+                    <ui:Slider name="ui-snap-slider" low-value="0" high-value="32" class="options-row-field" />
+                    <ui:Label name="ui-snap-value" text="8 px" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row options-row--action">
+                    <ui:Button name="options-reset-layout-btn" text="Reset Window Positions"
+                               class="fish-button options-reset-btn" />
+                </ui:VisualElement>
+
+                <!--
+                    Hotkey bars. How many there are is the game's setting; how they are shown is
+                    the player's. A game with one bar has nothing to choose between, so the whole
+                    section hides itself then: see UITKOptions.InitializeHotbarSettings.
+                -->
+                <ui:VisualElement name="options-hotbar-section">
+                    <ui:Label text="HOTBARS" class="fish-attr-category options-section" />
+                    <ui:VisualElement class="options-row">
+                        <ui:Label text="Bar Layout" class="fish-label options-row-label" />
+                        <ui:DropdownField name="hotbar-layout-dropdown" class="fish-dropdown options-row-field" />
+                    </ui:VisualElement>
+                    <ui:Label text="Stacked shows every bar at once. Paged shows one; hold a bar's modifier to see and use it."
+                              class="fish-hint options-hint" />
+                </ui:VisualElement>
+
+                <!--
+                    Combat text: the floating numbers and popups. Rows are built by UITKOptions
+                    from ClientSettings.GameplayToggles (the toggles in its CombatText section).
+                -->
+                <ui:Label text="COMBAT TEXT" class="fish-attr-category options-section" />
+                <ui:VisualElement name="options-combattext-list" class="options-list" />
 
                 <!--
                     World labels: the nameplates, guild lines and floating damage and healing
@@ -240,66 +352,6 @@
                 </ui:VisualElement>
                 <ui:Label text="Names show for every NPC or player within its range; at zero they show only on your target."
                           class="fish-hint options-hint" />
-            </ui:ScrollView>
-
-            <!-- ══ Key Bindings ══════════════════════════════════ -->
-            <!-- Rows are built by UITKOptions from the PlayerControls asset. -->
-            <!--
-                The status line and Reset All Keys sit OUTSIDE the scroller. The list is forty-odd
-                rows tall, so anything inside it is off-screen for most of the page — and the two
-                things that must never be off-screen are the message explaining why a rebind was
-                refused, and the control that undoes a set of bindings the player has broken.
-            -->
-            <ui:VisualElement name="options-page-controls" class="options-page">
-                <ui:VisualElement class="options-row options-row--action options-controls-bar">
-                    <ui:Label name="options-controls-status" text="" class="fish-hint options-controls-status" />
-                    <ui:Button name="options-reset-controls-btn" text="Reset All Keys"
-                               class="fish-button options-reset-btn" />
-                </ui:VisualElement>
-                <ui:Label text="Click a binding, then press the key you want.  Escape cancels  ·  Backspace clears a binding  ·  each key can only be used once."
-                          class="fish-hint options-hint options-controls-hint" />
-                <ui:ScrollView class="fish-scroll options-scroll">
-                    <ui:VisualElement name="options-controls-list" class="options-list" />
-                </ui:ScrollView>
-            </ui:VisualElement>
-
-            <!-- ══ UI ════════════════════════════════════════════ -->
-            <!--
-                Window layout, theme colours, and the shareable profile that carries both. The
-                layout reset is the only way back from an arrangement the player cannot fix by
-                dragging — a panel left on a monitor that is no longer attached, most obviously.
-            -->
-            <ui:ScrollView name="options-page-interface" class="fish-scroll options-scroll">
-                <ui:Label text="LAYOUT" class="fish-attr-category options-section" />
-                <ui:VisualElement class="options-row">
-                    <ui:Label text="Interface Scale" class="fish-label options-row-label" />
-                    <ui:Slider name="ui-scale-slider" low-value="0.75" high-value="1.5" class="options-row-field" />
-                    <ui:Label name="ui-scale-value" text="75%" class="fish-hint options-row-value" />
-                </ui:VisualElement>
-                <ui:VisualElement class="options-row">
-                    <ui:Label text="Window Snap Grid" class="fish-label options-row-label" />
-                    <ui:Slider name="ui-snap-slider" low-value="0" high-value="32" class="options-row-field" />
-                    <ui:Label name="ui-snap-value" text="8 px" class="fish-hint options-row-value" />
-                </ui:VisualElement>
-                <ui:VisualElement class="options-row options-row--action">
-                    <ui:Button name="options-reset-layout-btn" text="Reset Window Positions"
-                               class="fish-button options-reset-btn" />
-                </ui:VisualElement>
-
-                <!--
-                    Hotkey bars. How many there are is the game's setting; how they are shown is
-                    the player's. A game with one bar has nothing to choose between, so the whole
-                    section hides itself then: see UITKOptions.InitializeHotbarSettings.
-                -->
-                <ui:VisualElement name="options-hotbar-section">
-                    <ui:Label text="HOTBARS" class="fish-attr-category options-section" />
-                    <ui:VisualElement class="options-row">
-                        <ui:Label text="Bar Layout" class="fish-label options-row-label" />
-                        <ui:DropdownField name="hotbar-layout-dropdown" class="fish-dropdown options-row-field" />
-                    </ui:VisualElement>
-                    <ui:Label text="Stacked shows every bar at once. Paged shows one; hold a bar's modifier to see and use it."
-                              class="fish-hint options-hint" />
-                </ui:VisualElement>
 
                 <!--
                     Chat text. Deliberately NOT a second use of Interface Scale above: that

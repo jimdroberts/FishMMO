@@ -64,5 +64,23 @@ namespace FishMMO.Shared.Patcher
 		[JsonPropertyName("unix_mode")]
 		[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 		public int? UnixMode { get; set; }
+
+		/// <summary>
+		/// The file in the old build the patch data was made against, when it is not
+		/// <see cref="RelativePath"/>: a file the new build renamed (an Addressables bundle whose
+		/// hashed name changed because a dependency's name inside it did). The old path is also
+		/// listed in deleted_files. Null means the same path. Serialized as 'source_path'; format 2.
+		/// </summary>
+		[JsonPropertyName("source_path")]
+		[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+		public string SourcePath { get; set; }
+
+		/// <summary>
+		/// How the patch data is encoded: <see cref="PatchFormat.EncodingZstd"/> for a zstd frame
+		/// that uses the source file as its reference prefix. Serialized as 'encoding'; format 2.
+		/// </summary>
+		[JsonPropertyName("encoding")]
+		[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+		public string Encoding { get; set; }
 	}
 }

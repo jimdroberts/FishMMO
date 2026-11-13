@@ -146,3 +146,10 @@ exists to show through.
   milliseconds; lower the reach there.
 - **Cloud shadow is an input, not a lookup.** `WaterSurface.CloudShadow` is there for the weather
   system to drive; nothing drives it yet.
+
+## Licence
+
+FishMMO Water is first-party FishMMO code, licensed under the MIT licence in the repository root's
+`LICENSE`. It sits under `Assets/Plugins` beside third-party plugins, but it is not one of them and
+as far as is known contains no third-party code. Third-party components used by FishMMO are listed in
+`THIRD-PARTY-NOTICES.md` at the repository root.

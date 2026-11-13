@@ -203,6 +203,11 @@ try { Directory.Delete(root, true); } catch { }
 try { Directory.Delete(siblingPrefix, true); } catch { }
 try { Directory.Delete(outsideDir, true); } catch { }
 
+(int applyPassed, int applyFailed, List<string> applyFailures) = FishMMO.Patcher.Tests.PatchApplyTests.Run();
+passed += applyPassed;
+failed += applyFailed;
+failures.AddRange(applyFailures);
+
 Console.WriteLine();
 Console.WriteLine($"==== {passed} passed, {failed} failed ====");
 foreach (string f in failures) Console.WriteLine(f);

@@ -5,10 +5,14 @@
     <RootNamespace>FishMMO.Shared</RootNamespace>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <!-- ZstdDelta hands memory-mapped files to zstd as pointers. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   	<ItemGroup>
 		<PackageReference Include="ZString" Version="2.6.0" />
+		<!-- Zstandard (pure C# port, MIT); see Compression/ZstdDelta.cs. Same version as FishMMO-Dependencies. -->
+		<PackageReference Include="ZstdSharp.Port" Version="0.8.8" />
 	</ItemGroup>
 
   <!-- Copy the built DLL to the Unity project Dependencies folder. -->

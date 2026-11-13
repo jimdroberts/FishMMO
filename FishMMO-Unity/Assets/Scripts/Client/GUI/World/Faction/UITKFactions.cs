@@ -78,15 +78,6 @@ namespace FishMMO.Client
 			FactionAllianceLevel.Enemy,
 		};
 
-		/// <summary>Standing colour used when reputation is positive.</summary>
-		private static readonly Color PositiveColor = new Color(0.0f, 1.0f, 0.0f, 1.0f);
-
-		/// <summary>Standing colour used when reputation is negative.</summary>
-		private static readonly Color NegativeColor = new Color(1.0f, 0.0f, 0.0f, 1.0f);
-
-		/// <summary>Standing colour used when reputation is neutral.</summary>
-		private static readonly Color NeutralColor = new Color(0.529f, 0.808f, 0.980f, 1.0f);
-
 		/// <summary>
 		/// Visual elements backing a single faction row.
 		/// </summary>
@@ -431,9 +422,10 @@ namespace FishMMO.Client
 		{
 			switch (level)
 			{
-				case FactionAllianceLevel.Ally: return PositiveColor;
-				case FactionAllianceLevel.Enemy: return NegativeColor;
-				default: return NeutralColor;
+				// The player's colour vision decides these (ColorVision): red against green is unreadable to many.
+				case FactionAllianceLevel.Ally: return ColorVision.Friendly;
+				case FactionAllianceLevel.Enemy: return ColorVision.Hostile;
+				default: return ColorVision.Neutral;
 			}
 		}
 

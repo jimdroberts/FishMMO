@@ -1,0 +1,153 @@
+﻿FishMMO - Third-party notices
+Updater (self-contained, shipped beside the native client)
+===============================================================================
+
+FishMMO's own code is licensed under the MIT License (see LICENSE or LICENSE.txt).
+That licence covers first-party FishMMO code only. The third-party components
+listed below remain under their own licences, which are reproduced in full at
+the end of this file.
+
+Generated from Licenses/components.json by Licenses/generate_notices.py. Do not edit by hand.
+
+The Updater is self-contained: it carries the .NET runtime. That runtime's own
+licence and third-party notices ship beside it as Updater-dotnet-LICENSE.txt
+and Updater-dotnet-THIRD-PARTY-NOTICES.txt, and form part of this notice.
+
+===============================================================================
+COMPONENTS
+===============================================================================
+
+1. ZString 2.6.0
+   https://github.com/Cysharp/ZString
+   Licence: MIT
+   Copyright (c) Cysharp, Inc.
+   Licence text: [MIT] MIT License
+
+2. ZstdSharp (NuGet: ZstdSharp.Port) 0.8.8
+   https://github.com/oleg-st/ZstdSharp
+   Licence: MIT
+   Copyright (c) 2021 Oleg Stepanischev
+   Licence text: [MIT] MIT License
+   Note: The package carries no licence file (its nuspec gives the MIT expression and 'Copyright Oleg Stepanischev 2026'); the MIT text is the standard text. ZstdSharp is a C# port of Zstandard, whose notice follows.
+
+3. Zstandard (zstd) as ported by ZstdSharp 0.8.8
+   https://github.com/facebook/zstd
+   Licence: BSD-3-Clause
+   Copyright (c) Meta Platforms, Inc. and affiliates. All rights reserved.
+   Licence text: [BSD-3-Clause-zstd] Zstandard (BSD 3-Clause)
+   Note: zstd is dual-licensed BSD-3-Clause or GPL-2.0; FishMMO uses it under BSD-3-Clause.
+
+4. System.IO.Hashing 9.0.4
+   https://github.com/dotnet/runtime
+   Licence: MIT
+   Copyright (c) .NET Foundation and Contributors
+   Licence text: [MIT] MIT License; [BSD-2-Clause-xxHash] xxHash (BSD 2-Clause), from the dotnet/runtime third-party notices
+   Note: Implements xxHash; the xxHash notice below is reproduced from the package's third-party notices.
+
+5. .NET runtime (self-contained in the Updater) 8.0.x (the runtime pack used by the publish; 8.0.33 at the time of writing)
+   https://github.com/dotnet/runtime
+   Licence: MIT
+   Copyright (c) .NET Foundation and Contributors
+   Licence text: [MIT] MIT License
+   Note: The publish scripts copy the runtime pack's own LICENSE.TXT and THIRD-PARTY-NOTICES.TXT beside the Updater as Updater-dotnet-LICENSE.txt and Updater-dotnet-THIRD-PARTY-NOTICES.txt; those files are part of this notice.
+
+===============================================================================
+LICENCE TEXTS
+===============================================================================
+
+-------------------------------------------------------------------------------
+[MIT] MIT License
+-------------------------------------------------------------------------------
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-------------------------------------------------------------------------------
+[BSD-3-Clause-zstd] Zstandard (BSD 3-Clause)
+-------------------------------------------------------------------------------
+
+BSD License
+
+For Zstandard software
+
+Copyright (c) Meta Platforms, Inc. and affiliates. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+ * Neither the name Facebook, nor Meta, nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+-------------------------------------------------------------------------------
+[BSD-2-Clause-xxHash] xxHash (BSD 2-Clause), from the dotnet/runtime third-party notices
+-------------------------------------------------------------------------------
+
+License notice for xxHash
+-------------------------
+
+xxHash - Extremely Fast Hash algorithm
+Header File
+Copyright (C) 2012-2021 Yann Collet
+
+BSD 2-Clause License (https://www.opensource.org/licenses/bsd-license.php)
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+     notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+     copyright notice, this list of conditions and the following disclaimer
+     in the documentation and/or other materials provided with the
+     distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+You can contact the author at:
+  - xxHash homepage: https://www.xxhash.com
+  - xxHash source repository: https://github.com/Cyan4973/xxHash

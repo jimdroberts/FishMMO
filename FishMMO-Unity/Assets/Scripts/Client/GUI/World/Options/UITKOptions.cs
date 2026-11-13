@@ -8,7 +8,7 @@ using FishMMO.Logging;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The client's settings panel: five tabs — Display, Audio, Gameplay, Key Bindings and UI —
+	/// The client's settings panel: six tabs — Display, Graphics, Audio, Gameplay, Key Bindings and UI —
 	/// each built in code and bound directly to <see cref="Configuration.GlobalSettings"/> through
 	/// <see cref="ClientSettings"/>.
 	/// </summary>
@@ -48,16 +48,18 @@ namespace FishMMO.Client
 		/// <summary>The panel's tabs, in the order they appear.</summary>
 		private enum OptionsTab
 		{
-			/// <summary>Resolution, refresh rate, fullscreen, quality, brightness, frame rate, VSync.</summary>
+			/// <summary>Resolution, refresh rate, fullscreen, frame rate, VSync, brightness.</summary>
 			Display = 0,
+			/// <summary>Quality preset, filtering, antialiasing, world detail, sky, weather and ambient life.</summary>
+			Graphics = 1,
 			/// <summary>Per-channel volumes and audio behaviour.</summary>
-			Audio = 1,
-			/// <summary>Toggles that change what the game shows or accepts.</summary>
-			Gameplay = 2,
+			Audio = 2,
+			/// <summary>What the game does and accepts, the camera, and the crosshair.</summary>
+			Gameplay = 3,
 			/// <summary>Every rebindable binding in the Player action map.</summary>
-			Controls = 3,
-			/// <summary>Window layout, interface scale, theme colours and shareable profiles.</summary>
-			Interface = 4,
+			Controls = 4,
+			/// <summary>Window layout, combat text, world labels, nameplates, chat, colours and shareable profiles.</summary>
+			Interface = 5,
 		}
 
 		// ── Element names ───────────────────────────────────────────
@@ -66,6 +68,7 @@ namespace FishMMO.Client
 		private static readonly string[] TabButtonNames =
 		{
 			"options-tab-display",
+			"options-tab-graphics",
 			"options-tab-audio",
 			"options-tab-gameplay",
 			"options-tab-controls",
@@ -76,6 +79,7 @@ namespace FishMMO.Client
 		private static readonly string[] TabPageNames =
 		{
 			"options-page-display",
+			"options-page-graphics",
 			"options-page-audio",
 			"options-page-gameplay",
 			"options-page-controls",
@@ -108,6 +112,7 @@ namespace FishMMO.Client
 		private const string AUDIO_MUTE_TOGGLE_NAME = "audio-mute-unfocused-toggle";
 		private const string RESET_AUDIO_NAME = "options-reset-audio-btn";
 		private const string GAMEPLAY_LIST_NAME = "options-gameplay-list";
+		private const string COMBAT_TEXT_LIST_NAME = "options-combattext-list";
 		private const string CROSSHAIR_ENABLED_NAME = "crosshair-enabled-toggle";
 		private const string CROSSHAIR_STYLE_NAME = "crosshair-style-dropdown";
 		private const string CROSSHAIR_SIZE_SLIDER_NAME = "crosshair-size-slider";
@@ -153,6 +158,10 @@ namespace FishMMO.Client
 		private const string UI_SCALE_SLIDER_NAME = "ui-scale-slider";
 		private const string UI_SCALE_VALUE_NAME = "ui-scale-value";
 		private const string CHAT_FONT_SLIDER_NAME = "chat-font-slider";
+		private const string COLOR_VISION_DROPDOWN_NAME = "colorvision-dropdown";
+		private const string COLOR_FILTER_TOGGLE_NAME = "colorfilter-toggle";
+		private const string COLOR_FILTER_STRENGTH_SLIDER_NAME = "colorfilter-strength-slider";
+		private const string COLOR_FILTER_STRENGTH_VALUE_NAME = "colorfilter-strength-value";
 		private const string CHAT_FONT_VALUE_NAME = "chat-font-value";
 		private const string NETSTATS_ENABLED_NAME = "netstats-enabled-toggle";
 		private const string NETSTATS_GRAPH_NAME = "netstats-graph-toggle";
@@ -451,6 +460,7 @@ namespace FishMMO.Client
 
 		private Button closeButton;
 		private VisualElement gameplayList;
+		private VisualElement combatTextList;
 
 		// ── Crosshair and world label controls ──────────────────────
 
@@ -495,6 +505,10 @@ namespace FishMMO.Client
 		private Label uiScaleValueLabel;
 		private Slider chatFontSlider;
 		private Label chatFontValueLabel;
+		private DropdownField colorVisionDropdown;
+		private Toggle colorFilterToggle;
+		private Slider colorFilterStrengthSlider;
+		private Label colorFilterStrengthValueLabel;
 		private Toggle netStatsEnabledToggle;
 		private Toggle netStatsGraphToggle;
 		private VisualElement hotbarSection;
@@ -640,6 +654,7 @@ namespace FishMMO.Client
 
 			closeButton = Root.Q<Button>(CLOSE_BUTTON_NAME);
 			gameplayList = Root.Q<VisualElement>(GAMEPLAY_LIST_NAME);
+			combatTextList = Root.Q<VisualElement>(COMBAT_TEXT_LIST_NAME);
 			crosshairEnabledToggle = Root.Q<Toggle>(CROSSHAIR_ENABLED_NAME);
 			crosshairStyleDropdown = Root.Q<DropdownField>(CROSSHAIR_STYLE_NAME);
 			crosshairSizeSlider = Root.Q<Slider>(CROSSHAIR_SIZE_SLIDER_NAME);
@@ -680,6 +695,10 @@ namespace FishMMO.Client
 			uiScaleSlider = Root.Q<Slider>(UI_SCALE_SLIDER_NAME);
 			uiScaleValueLabel = Root.Q<Label>(UI_SCALE_VALUE_NAME);
 			chatFontSlider = Root.Q<Slider>(CHAT_FONT_SLIDER_NAME);
+			colorVisionDropdown = Root.Q<DropdownField>(COLOR_VISION_DROPDOWN_NAME);
+			colorFilterToggle = Root.Q<Toggle>(COLOR_FILTER_TOGGLE_NAME);
+			colorFilterStrengthSlider = Root.Q<Slider>(COLOR_FILTER_STRENGTH_SLIDER_NAME);
+			colorFilterStrengthValueLabel = Root.Q<Label>(COLOR_FILTER_STRENGTH_VALUE_NAME);
 			chatFontValueLabel = Root.Q<Label>(CHAT_FONT_VALUE_NAME);
 			netStatsEnabledToggle = Root.Q<Toggle>(NETSTATS_ENABLED_NAME);
 			netStatsGraphToggle = Root.Q<Toggle>(NETSTATS_GRAPH_NAME);
@@ -696,6 +715,7 @@ namespace FishMMO.Client
 			InitializeMsaa();
 			InitializeGrassDistance();
 			InitializeClouds();
+			InitializeVisualRows();
 			InitializeLookSensitivity();
 			InitializeFrameRateLimit();
 			InitializeVSync();
@@ -706,6 +726,7 @@ namespace FishMMO.Client
 			InitializeNameplateSettings();
 			InitializeInterfaceSettings();
 			InitializeChatSettings();
+			InitializeColorVision();
 			InitializeNetworkStatsSettings();
 			InitializeHotbarSettings();
 			InitializeColorSettings();
@@ -1862,24 +1883,27 @@ namespace FishMMO.Client
 		// ── Gameplay ────────────────────────────────────────────────
 
 		/// <summary>
-		/// Builds one row per gameplay toggle and binds each to its configuration key.
+		/// Builds one row per gameplay toggle, in the list its section names (the Gameplay tab's
+		/// GENERAL rows or the UI tab's COMBAT TEXT rows), and binds each to its configuration key.
 		/// </summary>
 		private void InitializeGameplayToggles()
 		{
-			if (gameplayList == null)
+			if (gameplayList == null || combatTextList == null)
 			{
-				Log.Error("UITKOptions", "Gameplay settings container is missing.");
+				Log.Error("UITKOptions", "A gameplay settings container is missing.");
 				return;
 			}
 
 			gameplayList.Clear();
+			combatTextList.Clear();
 
 			/* The table lives in ClientSettings, not here. Its defaults have to agree with the
 			 * code that acts on each setting, and a copy in the panel is how the display ends up
 			 * disagreeing with the box the player is looking at. */
 			for (int i = 0; i < ClientSettings.GameplayToggles.Length; ++i)
 			{
-				(string key, string label, bool _) = ClientSettings.GameplayToggles[i];
+				(string key, string label, bool _, ClientSettings.ToggleSection section) = ClientSettings.GameplayToggles[i];
+				VisualElement list = section == ClientSettings.ToggleSection.CombatText ? combatTextList : gameplayList;
 
 				VisualElement row = new VisualElement();
 				row.AddToClassList("options-row");
@@ -1900,7 +1924,80 @@ namespace FishMMO.Client
 					ClientSettings.SetGameplayToggle(capturedKey, evt.newValue));
 
 				row.Add(toggle);
-				gameplayList.Add(row);
+				list.Add(row);
+			}
+		}
+
+		// ── Sky, weather and ambient life ───────────────────────────
+
+		/// <summary>The choices of a level row, indexed by <see cref="VisualLevel"/>.</summary>
+		private static readonly List<string> VisualLevelChoices = new List<string> { "Auto", "Low", "Medium", "High" };
+
+		/// <summary>
+		/// Builds the Graphics tab's SKY, WEATHER and AMBIENT LIFE rows from
+		/// <see cref="ClientVisualSettings.Rows"/>: a toggle per switch, a dropdown per level. Each applies
+		/// at once; the systems read the settings every frame.
+		/// </summary>
+		private void InitializeVisualRows()
+		{
+			var lists = new Dictionary<string, VisualElement>();
+			foreach (ClientVisualSettings.Row entry in ClientVisualSettings.Rows)
+			{
+				if (!lists.TryGetValue(entry.Section, out VisualElement list))
+				{
+					list = Root.Q<VisualElement>(entry.Section);
+					if (list == null)
+					{
+						Log.Error("UITKOptions", $"Graphics settings container '{entry.Section}' is missing from the UXML.");
+					}
+					else
+					{
+						list.Clear();
+					}
+					lists[entry.Section] = list;
+				}
+				if (list == null)
+				{
+					continue;
+				}
+
+				VisualElement row = new VisualElement();
+				row.AddToClassList("options-row");
+				row.tooltip = entry.Tooltip;
+
+				Label caption = new Label(entry.Label);
+				caption.AddToClassList("fish-label");
+				caption.AddToClassList("options-row-label");
+				row.Add(caption);
+
+				string capturedKey = entry.Key;
+				if (entry.IsLevel)
+				{
+					DropdownField dropdown = new DropdownField { name = $"level-{entry.Key}" };
+					dropdown.AddToClassList("fish-dropdown");
+					dropdown.AddToClassList("options-row-field");
+					dropdown.choices = VisualLevelChoices;
+					dropdown.SetValueWithoutNotify(VisualLevelChoices[(int)ClientVisualSettings.GetLevel(entry.Key)]);
+					dropdown.RegisterValueChangedCallback((evt) =>
+					{
+						int index = VisualLevelChoices.IndexOf(evt.newValue);
+						if (index >= 0)
+						{
+							ClientVisualSettings.SetLevel(capturedKey, (VisualLevel)index);
+						}
+					});
+					row.Add(dropdown);
+				}
+				else
+				{
+					Toggle toggle = new Toggle { name = $"toggle-{entry.Key}" };
+					toggle.AddToClassList("fish-toggle");
+					toggle.AddToClassList("options-row-field");
+					toggle.SetValueWithoutNotify(ClientVisualSettings.GetBool(entry.Key, entry.DefaultOn));
+					toggle.RegisterValueChangedCallback((evt) => ClientVisualSettings.SetBool(capturedKey, evt.newValue));
+					row.Add(toggle);
+				}
+				list.Add(row);
 			}
 		}
 
@@ -2412,6 +2509,72 @@ namespace FishMMO.Client
 					chatFontSlider.SetValueWithoutNotify(value);
 				}
 			});
+		}
+
+		// ── Colour vision ───────────────────────────────────────────
+
+		/// <summary>The colour vision choices, indexed by <see cref="ColorVisionMode"/>.</summary>
+		private static readonly List<string> ColorVisionChoices = new List<string>
+		{
+			"Normal",
+			"Protanopia (red-weak)",
+			"Deuteranopia (green-weak)",
+			"Tritanopia (blue-weak)",
+		};
+
+		/// <summary>
+		/// Binds the ACCESSIBILITY rows to <see cref="ClientColorVisionSettings"/>. The colour vision repaints
+		/// every panel and the meaningful colours at once; the filter is read by its renderer feature each frame.
+		/// The filter rows are greyed while the vision is Normal, when the filter has nothing to correct.
+		/// </summary>
+		private void InitializeColorVision()
+		{
+			if (colorVisionDropdown != null)
+			{
+				colorVisionDropdown.choices = ColorVisionChoices;
+				colorVisionDropdown.SetValueWithoutNotify(ColorVisionChoices[(int)ClientColorVisionSettings.Mode]);
+				colorVisionDropdown.RegisterValueChangedCallback((evt) =>
+				{
+					int index = ColorVisionChoices.IndexOf(evt.newValue);
+					if (index >= 0)
+					{
+						ClientColorVisionSettings.SetMode((ColorVisionMode)index);
+						UpdateColorFilterRows();
+					}
+				});
+			}
+
+			if (colorFilterToggle != null)
+			{
+				colorFilterToggle.SetValueWithoutNotify(ClientColorVisionSettings.FilterEnabled);
+				colorFilterToggle.RegisterValueChangedCallback((evt) =>
+				{
+					ClientColorVisionSettings.SetFilterEnabled(evt.newValue);
+					UpdateColorFilterRows();
+				});
+			}
+
+			if (colorFilterStrengthSlider != null)
+			{
+				float strength = ClientColorVisionSettings.FilterStrength;
+				colorFilterStrengthSlider.SetValueWithoutNotify(strength);
+				UpdatePercentLabel(colorFilterStrengthValueLabel, strength);
+				colorFilterStrengthSlider.RegisterValueChangedCallback((evt) =>
+				{
+					ClientColorVisionSettings.SetFilterStrength(evt.newValue);
+					UpdatePercentLabel(colorFilterStrengthValueLabel, evt.newValue);
+				});
+			}
+
+			UpdateColorFilterRows();
+		}
+
+		/// <summary>Greys the filter rows while they would do nothing.</summary>
+		private void UpdateColorFilterRows()
+		{
+			bool vision = ClientColorVisionSettings.Mode != ColorVisionMode.Normal;
+			colorFilterToggle?.SetEnabled(vision);
+			colorFilterStrengthSlider?.SetEnabled(vision && ClientColorVisionSettings.FilterEnabled);
 		}
 
 		// ── Network statistics ──────────────────────────────────────

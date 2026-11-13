@@ -10,6 +10,13 @@ namespace FishMMO.Shared.Patcher
 	public class PatchManifest
 	{
 		/// <summary>
+		/// The patch format. Serialized as 'format_version'; 2 for archives written by this
+		/// generator, whose manifest is <see cref="PatchFormat.ManifestV2EntryName"/>.
+		/// </summary>
+		[JsonPropertyName("format_version")]
+		public int FormatVersion { get; set; }
+
+		/// <summary>
 		/// The version of the application or data before the patch is applied.
 		/// Serialized as 'old_version' in JSON.
 		/// </summary>

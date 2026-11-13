@@ -44,5 +44,24 @@ namespace FishMMO.Shared.Patcher
 		[JsonPropertyName("unix_mode")]
 		[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 		public int? UnixMode { get; set; }
+
+		/// <summary>
+		/// How the archive entry is encoded: <see cref="PatchFormat.EncodingZstd"/> for a zstd frame
+		/// of the whole file. Serialized as 'encoding'; format 2.
+		/// </summary>
+		[JsonPropertyName("encoding")]
+		[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+		public string Encoding { get; set; }
+
+		/// <summary>
+		/// Temporary file on disk holding the encoded data before it is zipped. Not serialized.
+		/// </summary>
+		[JsonIgnore]
+		public string TempFilePath { get; set; }
+
+		/// <summary>The file's size once decoded. Serialized as 'file_size'; required with an encoding.</summary>
+		[JsonPropertyName("file_size")]
+		[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+		public long? FileSize { get; set; }
 	}
 }

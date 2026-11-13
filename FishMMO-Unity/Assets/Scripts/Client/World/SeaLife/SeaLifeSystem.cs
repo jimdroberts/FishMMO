@@ -319,6 +319,11 @@ namespace FishMMO.Client
 				Report(main, "idle: switched off on the Weather Render Profile (Sea life)");
 				return;
 			}
+			if (!ClientVisualSettings.SeaLife)
+			{
+				Report(main, "idle: switched off in the player's options (Sea Life)");
+				return;
+			}
 			if (shader == null || !shader.isSupported)
 			{
 				Report(main, shader == null ? "idle: the profile has no Sea Life shader (Weather Tools → ensure the render assets)" : "idle: FishMMO/Sea Life is not supported on this device");

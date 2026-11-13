@@ -98,7 +98,9 @@ MonoBehaviour:
   - {fileID: 2017944865441511579}
   - {fileID: 4558045951250616325}
   - {fileID: -6263147149353411091}
-  m_RendererFeatureMap: adc0de57c6d2eee51729020a61ce5eda9bf8f6e0292e011c055033a2a46e413fed1dcaead9d414a9l
+  - {fileID: 9162005684108191384}
+  - {fileID: -5521800896288208069}
+  m_RendererFeatureMap: adc0de57c6d2eee51729020a61ce5eda9bf8f6e0292e011c055033a2a46e413fed1dcaead9d414a998e66097a0fb257f3bcb4e30579f5eb3l
   xrSystemData: {fileID: 0}
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
   m_AssetVersion: 3
@@ -166,3 +168,31 @@ MonoBehaviour:
   DepthCurve: 1.4
   LightShafts: 0
   FallMist: 1
+--- !u!114 &9162005684108191384
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8451684d28ec42afbe07d948ee9f70b7, type: 3}
+  m_Name: Fish Target Outline
+  m_EditorClassIdentifier: FishMMO.Client::FishMMO.Client.TargetOutlineFeature
+  m_Active: 1
+  OutlineShader: {fileID: 4800000, guid: 8b98fced346c4d3597248e962d30bfa3, type: 3}
+--- !u!114 &-5521800896288208069
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c748e61e69a84095906a01e18045df46, type: 3}
+  m_Name: Fish Colour Vision
+  m_EditorClassIdentifier: FishMMO.Client::FishMMO.Client.ColorVisionFeature
+  m_Active: 1
+  CorrectionShader: {fileID: 4800000, guid: 8c5afc26aacf449c89cfa9108b8886d1, type: 3}

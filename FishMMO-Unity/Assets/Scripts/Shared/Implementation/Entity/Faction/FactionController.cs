@@ -1432,9 +1432,11 @@ namespace FishMMO.Shared
 				return teamColor;
 			}
 
+			/* The colours follow the player's colour vision (ColorVision): red against green, the game's
+			 * own pair, is exactly the pair red-green colour blindness cannot tell apart. */
 			if (IsAggressive || otherFactionController.IsAggressive)
 			{
-				return TinyColor.ToUnityColor(TinyColor.red);
+				return ColorVision.Hostile;
 			}
 
 			FactionAllianceLevel allianceLevel = GetAllianceLevel(otherFactionController);
@@ -1442,11 +1444,11 @@ namespace FishMMO.Shared
 			switch (allianceLevel)
 			{
 				case FactionAllianceLevel.Ally:
-					return TinyColor.ToUnityColor(TinyColor.green);
+					return ColorVision.Friendly;
 				case FactionAllianceLevel.Neutral:
-					return TinyColor.ToUnityColor(TinyColor.skyBlue);
+					return ColorVision.Neutral;
 				case FactionAllianceLevel.Enemy:
-					return TinyColor.ToUnityColor(TinyColor.red);
+					return ColorVision.Hostile;
 				default: return Color.white;
 			}
 		}

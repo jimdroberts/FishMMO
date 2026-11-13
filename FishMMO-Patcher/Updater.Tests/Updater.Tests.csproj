@@ -31,4 +31,15 @@
     <Compile Include="../Updater/Patch/PathContainment.cs" Link="PathContainment.cs" />
   </ItemGroup>
 
+  <!--
+    PatchApplyTests runs the real Updater build as a process against throwaway installs, and writes
+    its archives with the same ZstdDelta the generator uses. The Updater reference only orders the
+    build (its output is located at run time, not linked).
+  -->
+  <ItemGroup>
+    <ProjectReference Include="../Updater/Updater.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../FishMMO-SharedUtility/FishMMO-SharedUtility/FishMMO-SharedUtility.csproj" />
+    <PackageReference Include="System.IO.Hashing" Version="9.0.4" />
+  </ItemGroup>
+
 </Project>

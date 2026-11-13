@@ -103,6 +103,7 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 					CopyRemoteAddressablesToBuild(buildPath, executableName, buildTarget, customBuildType);
 					CopyUpdaterToBuild(root, buildPath, buildTarget, customBuildType);
 					WriteVersionFile(buildPath, buildTarget, customBuildType);
+					CopyLicenseNotices(root, buildPath, buildTarget, customBuildType);
 
 					if (buildTarget == BuildTarget.WebGL)
 					{
@@ -322,6 +323,159 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 			}
 		}
 
+		/// <summary>The FishMMO licence's file name in a build: the repository's <c>LICENSE</c>, with an extension players' systems open.</summary>
+		private const string LicenseFileName = "LICENSE.txt";
+
+		/// <summary>The product's third-party notices' file name in a build.</summary>
+		private const string NoticesFileName = "THIRD-PARTY-NOTICES.txt";
+
+		/// <summary>The Updater's own notices beside the client: names that cannot clash with the client's.</summary>
+		private const string UpdaterNoticesFileName = "Updater-THIRD-PARTY-NOTICES.txt";
+		private const string UpdaterRuntimeLicenseFileName = "Updater-dotnet-LICENSE.txt";
+		private const string UpdaterRuntimeNoticesFileName = "Updater-dotnet-THIRD-PARTY-NOTICES.txt";
+
+		/// <summary>
+		/// Copies FishMMO's licence and the product's third-party notices into the root of a build.
+		/// </summary>
+		/// <remarks>
+		/// <para>The notices are generated into <c>Licenses/</c> at the repository root by
+		/// <c>Licenses/generate_notices.py</c> from <c>Licenses/components.json</c>: one file per
+		/// product, because the client, the servers and the browser build carry different
+		/// components. Standalone builds get theirs as <see cref="NoticesFileName"/> next to the
+		/// executable.</para>
+		/// <para>A WebGL build gets its notices from the WebGL template, which holds a generated
+		/// copy, so here it only gets the licence, and a warning if the template's copy did not
+		/// arrive.</para>
+		/// <para>A missing source is an error in the log, not a failed build: the build itself is
+		/// sound, but it must not be distributed until the notices are in it.</para>
+		/// </remarks>
+		/// <param name="root">The FishMMO repository root (parent of the Unity project).</param>
+		/// <param name="buildPath">The root build output path.</param>
+		/// <param name="buildTarget">The target being built.</param>
+		/// <param name="customBuildType">Client or server.</param>
+		private static void CopyLicenseNotices(string root, string buildPath, BuildTarget buildTarget, CustomBuildType customBuildType)
+		{
+			if (buildTarget == BuildTarget.WebGL)
+			{
+				/* The web root is the folder holding index.html, which Unity writes one level below
+				 * the build path (<build>/<product>.exe/). That is the folder the deploy publishes and
+				 * where the template's notices land, so the licence goes beside them; written to the
+				 * build path it was never served, and the check below reported a missing notices file
+				 * that was in fact present. */
+				string webRoot = File.Exists(Path.Combine(buildPath, "index.html"))
+					? buildPath
+					: Directory.GetDirectories(buildPath).FirstOrDefault(d => File.Exists(Path.Combine(d, "index.html"))) ?? buildPath;
+				CopyNoticeFile(Path.Combine(root, "LICENSE"), Path.Combine(webRoot, LicenseFileName));
+				if (!File.Exists(Path.Combine(webRoot, NoticesFileName)))
+				{
+					Log.Error("BuildExecutor", $"The WebGL build has no {NoticesFileName}. It comes from the FishMMO WebGL template; " +
+						"check the build used that template, then run 'python3 Licenses/generate_notices.py'. Do not deploy this build without it.");
+				}
+				return;
+			}
+
+			CopyNoticeFile(Path.Combine(root, "LICENSE"), Path.Combine(buildPath, LicenseFileName));
+
+			string product = customBuildType == CustomBuildType.Server ? "Server" : "Client";
+			CopyNoticeFile(Path.Combine(root, "Licenses", $"THIRD-PARTY-NOTICES-{product}.txt"), Path.Combine(buildPath, NoticesFileName));
+		}
+
+		/// <summary>
+		/// Makes sure a client build carries the Updater's notices, whichever way the Updater was published.
+		/// </summary>
+		/// <remarks>
+		/// <c>FishMMO-Patcher/publish-updater.sh</c> (and <c>.ps1</c>) put these files into each
+		/// publish folder, and <see cref="CopyUpdaterFiles"/> carries them over. A publish made by
+		/// <see cref="TryPublishUpdater"/> or by hand has none, so they are filled in here: the
+		/// Updater's notices from <c>Licenses/</c>, and the .NET runtime's licence and notices from
+		/// the runtime pack the Updater project restored (read from its <c>project.assets.json</c>).
+		/// </remarks>
+		/// <param name="root">The FishMMO repository root.</param>
+		/// <param name="updaterProject">The Updater project folder.</param>
+		/// <param name="sourceDirectory">The per-RID publish folder that was copied (<c>.../&lt;rid&gt;/publish</c>).</param>
+		/// <param name="buildPath">The root build output path.</param>
+		private static void EnsureUpdaterNotices(string root, string updaterProject, string sourceDirectory, string buildPath)
+		{
+			string notices = Path.Combine(buildPath, UpdaterNoticesFileName);
+			if (!File.Exists(notices))
+			{
+				CopyNoticeFile(Path.Combine(root, "Licenses", "THIRD-PARTY-NOTICES-Updater.txt"), notices);
+			}
+
+			string runtimeLicense = Path.Combine(buildPath, UpdaterRuntimeLicenseFileName);
+			string runtimeNotices = Path.Combine(buildPath, UpdaterRuntimeNoticesFileName);
+			if (File.Exists(runtimeLicense) && File.Exists(runtimeNotices))
+			{
+				return;
+			}
+
+			string runtimeIdentifier = Path.GetFileName(Path.GetDirectoryName(sourceDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)));
+			string runtimePack = FindRuntimePackDirectory(Path.Combine(updaterProject, "obj", "project.assets.json"), runtimeIdentifier);
+			if (runtimePack == null)
+			{
+				Log.Error("BuildExecutor", $"The .NET runtime pack for '{runtimeIdentifier}' was not found, so {UpdaterRuntimeLicenseFileName} and " +
+					$"{UpdaterRuntimeNoticesFileName} are missing from the build. Publish the Updater with FishMMO-Patcher/publish-updater.sh " +
+					"(or .ps1), which adds them, before distributing this build.");
+				return;
+			}
+			CopyNoticeFile(Path.Combine(runtimePack, "LICENSE.TXT"), runtimeLicense);
+			CopyNoticeFile(Path.Combine(runtimePack, "THIRD-PARTY-NOTICES.TXT"), runtimeNotices);
+		}
+
+		/// <summary>
+		/// The folder of the <c>Microsoft.NETCore.App.Runtime.&lt;rid&gt;</c> pack a restore resolved,
+		/// or null when the assets file does not name one or the folder is not on disk.
+		/// </summary>
+		/// <param name="assetsFile">The project's <c>obj/project.assets.json</c>.</param>
+		/// <param name="runtimeIdentifier">The RID the Updater was published for.</param>
+		private static string FindRuntimePackDirectory(string assetsFile, string runtimeIdentifier)
+		{
+			if (string.IsNullOrEmpty(runtimeIdentifier) || !File.Exists(assetsFile))
+			{
+				return null;
+			}
+			try
+			{
+				string json = File.ReadAllText(assetsFile);
+				System.Text.RegularExpressions.Match packages = System.Text.RegularExpressions.Regex.Match(json, "\"packagesPath\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+				string packName = "Microsoft.NETCore.App.Runtime." + runtimeIdentifier;
+				System.Text.RegularExpressions.Match version = System.Text.RegularExpressions.Regex.Match(json,
+					"\"name\"\\s*:\\s*\"" + System.Text.RegularExpressions.Regex.Escape(packName) + "\"\\s*,\\s*\"version\"\\s*:\\s*\"\\[([^,\\]]+)");
+				if (!packages.Success || !version.Success)
+				{
+					return null;
+				}
+				string packagesPath = packages.Groups[1].Value.Replace("\\\\", "\\");
+				string directory = Path.Combine(packagesPath, packName.ToLowerInvariant(), version.Groups[1].Value.Trim());
+				return Directory.Exists(directory) ? directory : null;
+			}
+			catch (Exception ex)
+			{
+				Log.Warning("BuildExecutor", $"Could not read '{assetsFile}': {ex.Message}");
+				return null;
+			}
+		}
+
+		/// <summary>Copies one licence or notice file, logging an error when the source is missing.</summary>
+		private static void CopyNoticeFile(string source, string destination)
+		{
+			if (!File.Exists(source))
+			{
+				Log.Error("BuildExecutor", $"'{source}' was not found, so '{Path.GetFileName(destination)}' is missing from the build. " +
+					"Run 'python3 Licenses/generate_notices.py' and rebuild before distributing it.");
+				return;
+			}
+			try
+			{
+				File.Copy(source, destination, true);
+				Log.Info("BuildExecutor", $"Copied '{Path.GetFileName(source)}' to '{destination}'.");
+			}
+			catch (Exception ex)
+			{
+				Log.Error("BuildExecutor", $"Failed to copy '{source}' to '{destination}': {ex.Message}. Do not distribute the build without it.");
+			}
+		}
+
 		/// <summary>
 		/// Copies the standalone Updater executable into a standalone client build,
 		/// publishing it for the target platform first if that has not already been done.
@@ -425,6 +579,7 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 			{
 				int copiedCount = CopyUpdaterFiles(sourceDirectory, buildPath);
 				Log.Info("BuildExecutor", $"Copied Updater ({copiedCount} file(s), '{executableName}') from '{sourceDirectory}' to '{buildPath}'.");
+				EnsureUpdaterNotices(root, updaterProject, sourceDirectory, buildPath);
 
 				// Mark the updater executable runnable. File.Copy does not preserve the
 				// executable bit, and a non-executable updater fails at launch with a

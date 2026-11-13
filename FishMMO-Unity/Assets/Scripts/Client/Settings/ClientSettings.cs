@@ -120,6 +120,17 @@ namespace FishMMO.Client
 		public const string IgnorePartyInvitesKey = "IgnorePartyInvites";
 		/// <summary>Configuration key for suppressing guild invitations.</summary>
 		public const string IgnoreGuildInvitesKey = "IgnoreGuildInvites";
+		/// <summary>Configuration key for outlining the interactable object the player is aiming at (<see cref="TargetOutline"/>).</summary>
+		public const string HighlightInteractablesKey = "HighlightInteractables";
+
+		/// <summary>Where the options panel shows a gameplay toggle.</summary>
+		public enum ToggleSection
+		{
+			/// <summary>The Gameplay tab's GENERAL rows.</summary>
+			Gameplay,
+			/// <summary>The UI tab's COMBAT TEXT rows: the floating numbers and popups.</summary>
+			CombatText,
+		}
 
 		/// <summary>
 		/// Every gameplay toggle: its configuration key, the label the options panel shows, and
@@ -133,13 +144,14 @@ namespace FishMMO.Client
 		/// numbers while its own settings screen said it did — and ticking the box off and on again
 		/// was the only way to make the display match the UI.
 		/// </remarks>
-		public static readonly (string Key, string Label, bool Default)[] GameplayToggles =
+		public static readonly (string Key, string Label, bool Default, ToggleSection Section)[] GameplayToggles =
 		{
-			(ShowDamageKey,         "Show Damage Numbers",     true),
-			(ShowHealsKey,          "Show Healing Numbers",    true),
-			(ShowAchievementsKey,   "Show Achievement Popups", true),
-			(IgnorePartyInvitesKey, "Ignore Party Invites",    false),
-			(IgnoreGuildInvitesKey, "Ignore Guild Invites",    false),
+			(ShowDamageKey,             "Show Damage Numbers",     true,  ToggleSection.CombatText),
+			(ShowHealsKey,              "Show Healing Numbers",    true,  ToggleSection.CombatText),
+			(ShowAchievementsKey,       "Show Achievement Popups", true,  ToggleSection.CombatText),
+			(HighlightInteractablesKey, "Highlight Interactables", true,  ToggleSection.Gameplay),
+			(IgnorePartyInvitesKey,     "Ignore Party Invites",    false, ToggleSection.Gameplay),
+			(IgnoreGuildInvitesKey,     "Ignore Guild Invites",    false, ToggleSection.Gameplay),
 		};
 
 		/// <summary>
@@ -227,6 +239,42 @@ namespace FishMMO.Client
 
 		/// <summary>Whether the volumetric clouds are drawn (<see cref="ClientCloudSettings"/>).</summary>
 		public const string CloudsEnabledKey = "Clouds.Enabled";
+
+		// ── Accessibility (ClientColorVisionSettings) ───────────────
+
+		/// <summary>The player's colour vision, as the ordinal of <see cref="ColorVisionMode"/>.</summary>
+		public const string ColorVisionModeKey = "Accessibility.ColorVision";
+		/// <summary>Whether the full-screen colour correction runs when a colour vision is chosen.</summary>
+		public const string ColorFilterKey = "Accessibility.ColorFilter";
+		/// <summary>The colour correction's strength, 0 to 1.</summary>
+		public const string ColorFilterStrengthKey = "Accessibility.ColorFilterStrength";
+
+		// ── Sky, weather and ambient life (ClientVisualSettings) ────
+
+		/// <summary>The clouds' march level, as the ordinal of <see cref="VisualLevel"/>.</summary>
+		public const string CloudQualityKey = "Clouds.Quality";
+		/// <summary>Whether the clouds shade the ground.</summary>
+		public const string CloudShadowsKey = "Clouds.Shadows";
+		/// <summary>Whether the sun's shafts through the cloud are drawn.</summary>
+		public const string GodRaysKey = "Sky.GodRays";
+		/// <summary>The weather's particles, curtains and vortices level, as the ordinal of <see cref="VisualLevel"/>.</summary>
+		public const string WeatherEffectsKey = "Weather.Effects";
+		/// <summary>Whether the froxel fog volume runs.</summary>
+		public const string VolumetricFogKey = "Weather.VolumetricFog";
+		/// <summary>Whether the heat shimmer is drawn.</summary>
+		public const string HeatHazeKey = "Weather.HeatHaze";
+		/// <summary>Whether lightning lights the scene.</summary>
+		public const string LightningFlashesKey = "Weather.LightningFlashes";
+		/// <summary>Whether leaves fall under the trees.</summary>
+		public const string FallingLeavesKey = "Weather.FallingLeaves";
+		/// <summary>Whether the land's ambient life is drawn.</summary>
+		public const string WildlifeKey = "Life.Wildlife";
+		/// <summary>How much of the ambient-life budget is drawn, as the ordinal of <see cref="VisualLevel"/>.</summary>
+		public const string WildlifeDensityKey = "Life.WildlifeAmount";
+		/// <summary>Whether the sea's life is drawn.</summary>
+		public const string SeaLifeKey = "Life.SeaLife";
+		/// <summary>Whether the sea's floating weed, wood and ice are drawn.</summary>
+		public const string FloatingDebrisKey = "Life.FloatingDebris";
 
 		/// <summary>What the player's character carries to see by, as its number (<see cref="ClientCarriedLightSettings"/>).</summary>
 		public const string CarriedLightModeKey = "CarriedLight.Mode";
@@ -719,6 +767,8 @@ namespace FishMMO.Client
 			 * like every other setting, and costs one parse of a store that is already in memory —
 			 * there are no registered panels to repaint at this point. */
 			Apply("theme", UITKThemeManager.Reload);
+			// After the theme: it repaints every panel with the colour vision's classes and tooltip colours.
+			Apply("colour vision", ClientColorVisionSettings.ApplySaved);
 		}
 
 		/// <summary>Runs one apply step, reporting rather than propagating a failure.</summary>

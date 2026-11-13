@@ -129,6 +129,11 @@ namespace FishMMO.Client
 
 		public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
 		{
+			// The player's Heat Haze switch (ClientVisualSettings): a full-screen distortion, so a comfort setting too.
+			if (!ClientVisualSettings.HeatHaze)
+			{
+				return;
+			}
 			if (renderingData.cameraData.cameraType != CameraType.Game && renderingData.cameraData.cameraType != CameraType.SceneView)
 			{
 				return;

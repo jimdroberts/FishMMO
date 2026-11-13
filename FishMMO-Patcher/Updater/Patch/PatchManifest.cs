@@ -5,6 +5,13 @@ namespace FishMMO.Patcher
 	// Represents the entire manifest for a patch file
 	public class PatchManifest
 	{
+		/// <summary>
+		/// The patch format: 2 for <c>manifest-v2.json</c> (zstd deltas, renames); absent (0) for the
+		/// original <c>manifest.json</c> format. See <see cref="PatchFormat"/>.
+		/// </summary>
+		[JsonPropertyName("format_version")]
+		public int FormatVersion { get; set; }
+
 		[JsonPropertyName("old_version")]
 		public string OldVersion { get; set; }
 

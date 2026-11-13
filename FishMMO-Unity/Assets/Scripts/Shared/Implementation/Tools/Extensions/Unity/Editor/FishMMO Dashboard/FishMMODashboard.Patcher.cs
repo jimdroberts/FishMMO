@@ -486,7 +486,6 @@ namespace FishMMO.Shared
 				HashSet<string> ignoredDir = ParseIgnoredDirectories(patcherIgnoredDirectories);
 				string outputDir = patcherOutputDir;
 				string latestVer = latestVersion.FullVersion;
-				PatchGenerator patchGen = new PatchGenerator();
 
 				// Schedule periodic progress updates
 				IVisualElementScheduledItem scheduledUpdate = patcherRoot?.schedule.Execute(() =>
@@ -510,7 +509,7 @@ namespace FishMMO.Shared
 						try
 						{
 							PatchGeneratorWindow.CreatePatchInternal(
-								patchGen,
+								ZstdDelta.DefaultLevel,
 								latestDir,
 								latestVer,
 								oldDir,

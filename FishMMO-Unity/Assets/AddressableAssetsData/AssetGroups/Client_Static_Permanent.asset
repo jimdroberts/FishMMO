@@ -28,13 +28,6 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 057385a6a43986c4395767410661fd2e
-    m_Address: LiberationSans SDF UIChat
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 0718a9b0c1d2e3f4293a4b5c6d7e8f07
     m_Address: Crosshair
     m_ReadOnly: 0
@@ -139,12 +132,6 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 1a25c9f32fbc86941820446872df368c
-    m_Address: Woodland
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 1a49b80f27d38c4749bea1720d91bc32
     m_Address: Precipitation
     m_ReadOnly: 0
@@ -164,12 +151,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 22c2e676d9b34e14b87e4b97acdc05ed
-    m_Address: Glacier
-    m_ReadOnly: 0
-    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 23d0c64a0f00051799fdd3428739077f
@@ -195,13 +176,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 28d26d1085123c5d0905dbe3ec8924e3
     m_Address: Gold Vein 0
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 2aaac07da5221414f8c52c54730d6aea
-    m_Address: Ocean
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -703,12 +677,6 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 880ecc3bf473abd4da332ec06e2b5ff2
-    m_Address: Snow
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 88b8059992bd4bff91db664b10675b2b
     m_Address: FishDetailScatter
     m_ReadOnly: 0
@@ -801,12 +769,6 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: a1c155353d68bbb468bcd000d3568816
-    m_Address: Forest
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: a3447a68192d273c5adad401d51b52c5
     m_Address: FishTerrainHeightmap
     m_ReadOnly: 0
@@ -897,13 +859,6 @@ MonoBehaviour:
     m_Address: BiomeTexture_Desert_E6B266
     m_ReadOnly: 0
     m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: b57d7a0ebf324414fb3f358921cc80fc
-    m_Address: Grass.jpg
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: b585bd5ba1a3d6fc582deaad2d9d14e7
@@ -1035,12 +990,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: daf4be7380957be4198ece1e45559b2b
     m_Address: BiomeTexture_Crater_805940
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: dd89cf5b9246416f84610a006f916af7
-    m_Address: TMP_SDF Overlay
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

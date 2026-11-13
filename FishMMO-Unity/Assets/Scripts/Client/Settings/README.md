@@ -25,6 +25,8 @@ The settings screen itself is `UITKOptions` in
 | `ClientWorldLabelSettings` | World-label scale, distance, opacity, budget, occlusion, and the per-kind nameplate ranges. |
 | `ClientGrassSettings` | How far terrain grass and small details are drawn on the GPU-driven path. |
 | `ClientCloudSettings` | Whether the volumetric clouds (and their ground shadows and god rays) are drawn. |
+| `ClientVisualSettings` | The Graphics tab's SKY, WEATHER and AMBIENT LIFE rows: cloud quality, cloud shadows, sun shafts, weather effects, volumetric fog, heat haze, lightning flashes, falling leaves, wildlife and its amount, sea life, floating debris. Overlays read where each system reads its Weather Render Profile; levels pick a Quality preset's tier. |
+| `ClientColorVisionSettings` | Colour vision (Normal, Protanopia, Deuteranopia, Tritanopia): sets `ColorVision.Mode` (the meaningful colours in shared code), the `fish-cvd--*` class on every panel root (FishMMO-Theme.uss §17), and the full-screen correction filter (`ColorVisionFeature`) and its strength. The **UI** tab's Accessibility rows. |
 | `ClientCarriedLightSettings` | The torch or lantern the player's character carries, stepped by its key and restored on entering the world. |
 | `UIProfile` | Reads and writes a shareable UI layout/colour file, separate from `Configuration.cfg`. |
 
@@ -99,12 +101,14 @@ files.
 | Display | `VSync`, `Frame Rate Limit`, `Brightness`, `Resolution Width`, `Resolution Height`, `Refresh Rate`, `Fullscreen`, `Quality Level`, `Anisotropic Filtering` |
 | Camera | `Look Sensitivity`, `Antialiasing` |
 | Audio | `Audio.Volume.<Channel>`, `Audio.MuteWhenUnfocused` |
-| Gameplay | `ShowDamage`, `ShowHeals`, `ShowAchievementCompletion`, `IgnorePartyInvites`, `IgnoreGuildInvites` |
+| Gameplay | `ShowDamage`, `ShowHeals`, `ShowAchievementCompletion` (the **UI** tab's Combat Text rows), `HighlightInteractables`, `IgnorePartyInvites`, `IgnoreGuildInvites` |
 | Crosshair | `Crosshair.Enabled`, `Crosshair.Style`, `Crosshair.Size`, `Crosshair.Opacity` |
 | Network statistics | `NetworkStats.Enabled` (default off), `NetworkStats.ShowGraph` (default on) — the **UI** tab's Network rows |
 | World labels | `WorldLabels.Scale`, `WorldLabels.Distance`, `WorldLabels.Opacity`, `WorldLabels.MaxVisible`, `WorldLabels.Occlude`, `WorldLabels.NpcNameRange`, `WorldLabels.PlayerNameRange`, `WorldLabels.ShowOwnName` |
 | Grass | `Grass.Distance` |
 | Clouds | `Clouds.Enabled` |
+| Sky, weather, ambient life | `Clouds.Quality`, `Weather.Effects`, `Life.WildlifeAmount` (ordinal of `VisualLevel`: Auto/Low/Medium/High, default Auto); `Clouds.Shadows`, `Sky.GodRays`, `Weather.VolumetricFog`, `Weather.HeatHaze`, `Weather.LightningFlashes`, `Weather.FallingLeaves`, `Life.Wildlife`, `Life.SeaLife`, `Life.FloatingDebris` (default on) — the **Graphics** tab |
+| Accessibility | `Accessibility.ColorVision` (ordinal of `ColorVisionMode`, default Normal), `Accessibility.ColorFilter` (default on), `Accessibility.ColorFilterStrength` (0–1, default 1) |
 | Nameplates | `Nameplates.Opacity`, `Nameplates.Scale`, `Nameplates.BackgroundOpacity`, `Nameplates.MaxVisible`, `Nameplates.ShowGuild`, `Nameplates.ShowTitles`, `Nameplates.ShowIcons` |
 | Map | `Map.MinimapZoom`, `Map.MinimapRotates`, `Map.MinimapFrameRate`, `Map.ShowCoordinates` |
 | Interface | `UI.Scale`, `UI.SnapGridSize`, `UI.Panel.<PanelName>.X` / `.Y`, `UIThemeVersion`, `<Name>ColorR/G/B/A` |

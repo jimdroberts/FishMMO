@@ -39,14 +39,47 @@ archive for each supported source version, and if no such archive exists the
 update cannot proceed (the launcher surfaces this as `PatchUnavailable` and asks
 the player to reinstall). The archive contains:
 
-- A `manifest.json` describing the per-file operations (**new**, **modified**,
+- A manifest describing the per-file operations (**new**, **modified**,
   **deleted**) including the source hash, the target hash, and (for modified
-  files) a binary diff payload.
-- The raw bytes / diff payloads referenced by the manifest.
+  files) a delta payload. Current archives use `manifest-v2.json` (format 2,
+  below); the updater still applies the original `manifest.json` (format 1).
+- The payloads referenced by the manifest.
 
 For modified files the updater verifies the **pre-patch hash** against the
-file on disk, applies the binary diff, and verifies the **post-patch hash**
-before swapping the file into place.
+file on disk, rebuilds the new file from it and the delta, and verifies the
+**post-patch hash** before swapping the file into place.
+
+### Format 2: zstd deltas and renames
+
+Each modified file is a [Zstandard](https://github.com/facebook/zstd) frame that
+uses the old file as its reference prefix (what `zstd --patch-from` does),
+encoded and decoded by `FishMMO.Shared.ZstdDelta` (FishMMO-SharedUtility, via
+ZstdSharp.Port). A match can point anywhere in the old file, so inserted or
+removed bytes cost only themselves.
+
+A modified entry may carry `source_path`: the file in the old install it was
+made against, when the new build **renamed** it. Addressables names each bundle
+after a hash and every bundle stores its dependencies' hashed names, so one
+changed bundle renames every bundle that depends on it even though only those
+names differ inside them. The generator pairs such files by their name with the
+hash removed and ships a delta against the old name (a few kilobytes) instead of
+the whole file; the old path is also listed for deletion. New files are zstd
+frames of the whole file (`encoding: "zstd"`, `file_size`).
+
+Measured on the 1.1.0 → 1.2.0 Linux client (4.7 GB): format 1 needed 3.1 GiB
+(551 of 741 bundles renamed); format 2 needs 19.6 MiB, nearly all of it the one
+bundle whose content really changed (shaders) and `GameAssembly.so`. Generating it
+took 10 minutes; applying it took 10 seconds.
+
+The format-2 manifest has its own name on purpose: an updater that predates it
+looks only for `manifest.json` and so refuses the archive before touching
+anything, instead of applying the entries it understands and skipping the
+renames. Clients must therefore have a format-2 updater before they can take a
+format-2 patch; any client built from this version on has one.
+
+Large decodes (64 MiB and up) take turns, since a decode holds up to the file's
+size in memory. Every failure (corrupt frame, checksum, wrong size, hash
+mismatch, unknown format or encoding) rolls the whole patch back.
 
 ---
 
@@ -125,9 +158,9 @@ version check re-enters the update flow.
 | `Program.Main` | Argument parsing, orchestration, restart handoff. |
 | `KillLauncherProcess` | Locates the launcher process by PID and shuts it down (graceful → forceful). |
 | `TryRequestGracefulExit` | Platform-appropriate graceful shutdown request: `CloseMainWindow` on Windows, `kill(SIGTERM)` on POSIX. |
-| `Patch/` manifest reader | Loads `manifest.json` out of the patch ZIP. |
-| New-file writer | Streams new files from the ZIP into the target tree (parallelized). |
-| Binary diff applier | Applies binary diffs to existing files, with hash verification on both sides. |
+| `Patch/` manifest reader | Loads `manifest-v2.json` (or a format-1 `manifest.json`) out of the patch ZIP; `ManifestFormatIsSupported` refuses anything it does not fully understand. |
+| New-file writer | Streams new files from the ZIP into the target tree (parallelized), decoding zstd frames. |
+| Delta applier | Rebuilds modified and renamed files from zstd deltas (`ZstdDelta.Decode`), or format-1 chunk patches (`Patch/Patcher.cs`), with hash verification on both sides. |
 | Deletion handler | Removes files marked for deletion in the manifest. |
 | Backup / rollback | Per-file `.bak` taken before any write; replayed in reverse on failure. |
 | Restart hook | Optionally starts the client executable post-patch. |
@@ -161,9 +194,10 @@ Archive contents:
 
 | Entry | Purpose |
 |---|---|
-| `manifest.json` | Describes `New`, `Modified`, `Deleted` operations with hashes and (for modified) diff entry names. |
-| File payloads | Raw bytes for new files. |
-| Diff payloads | Binary diff payloads for modified files. |
+| `manifest-v2.json` | Format 2: `format_version: 2`; `new_files`, `modified_files` (optionally `source_path` for a rename), `deleted_files`, with hashes, sizes and entry names. |
+| `new_files/<path>.zst` | zstd frame of each new file. |
+| `patches/<path>.zst` | zstd delta of each modified or renamed file against its old version. |
+| `manifest.json` | Format 1 only (older archives): same-offset chunk patches (`patches/<path>.bin`) and raw new files. |
 
 ---
 

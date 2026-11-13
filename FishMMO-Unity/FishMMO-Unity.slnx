@@ -21,7 +21,6 @@
   <Project Path="FishMMO.TestHarness.Weather.Editor.csproj" />
   <Project Path="FishMMO.TestHarness.World.Editor.csproj" />
   <Project Path="FishMMO.TestHarness.csproj" />
-  <Project Path="QuickOutline.csproj" />
   <Project Path="FishMMO.Client.Security.Editor.csproj" />
   <Project Path="FishMMO.Shared.Faction.Editor.csproj" />
   <Project Path="WebTransport.csproj" />

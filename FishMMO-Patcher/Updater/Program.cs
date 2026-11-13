@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using FishMMO.Patcher;
+using FishMMO.Shared;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 
@@ -539,12 +540,22 @@ class Program
 			ownsStaging = true;
 
 			PatchManifest manifest;
+			string manifestName;
 			using (ZipArchive archive = ZipFile.OpenRead(patchFilePath))
 			{
-				ZipArchiveEntry manifestEntry = archive.GetEntry("manifest.json");
+				/* Format 2 first. It has its own name so that an Updater predating it refuses
+				 * the archive outright (see PatchFormat.ManifestV2EntryName); this one still
+				 * reads format 1 archives. */
+				ZipArchiveEntry manifestEntry = archive.GetEntry(PatchFormat.ManifestV2EntryName);
+				manifestName = PatchFormat.ManifestV2EntryName;
 				if (manifestEntry == null)
 				{
-					Console.WriteLine($"Error: manifest.json not found in patch file '{Path.GetFileName(patchFilePath)}'. Skipping.");
+					manifestEntry = archive.GetEntry(PatchFormat.ManifestV1EntryName);
+					manifestName = PatchFormat.ManifestV1EntryName;
+				}
+				if (manifestEntry == null)
+				{
+					Console.WriteLine($"Error: no manifest ({PatchFormat.ManifestV2EntryName} or {PatchFormat.ManifestV1EntryName}) found in patch file '{Path.GetFileName(patchFilePath)}'. Skipping.");
 					return false;
 				}
 
@@ -556,7 +567,12 @@ class Program
 
 			if (manifest == null)
 			{
-				Console.WriteLine($"Error: manifest.json in '{Path.GetFileName(patchFilePath)}' could not be read. Skipping.");
+				Console.WriteLine($"Error: {manifestName} in '{Path.GetFileName(patchFilePath)}' could not be read. Skipping.");
+				return false;
+			}
+
+			if (!ManifestFormatIsSupported(manifest, manifestName))
+			{
 				return false;
 			}
 
@@ -666,7 +682,19 @@ class Program
 						using (Stream sourceStream = newFileZipEntry.Open())
 						using (FileStream destinationStream = File.Create(fullPath))
 						{
-							sourceStream.CopyTo(destinationStream);
+							if (newFile.Encoding == PatchFormat.EncodingZstd)
+							{
+								// A zstd frame of the whole file, no reference. The size bounds the
+								// output, so a corrupt frame cannot fill the disk.
+								using (LargeDeltaGate.Enter(newFile.FileSize ?? 0))
+								{
+									ZstdDelta.Decode(null, sourceStream, destinationStream, newFile.FileSize ?? 0);
+								}
+							}
+							else
+							{
+								sourceStream.CopyTo(destinationStream);
+							}
 						}
 
 						string actualHash = ComputeFileHash(fullPath);
@@ -719,11 +747,16 @@ class Program
 				(modifiedFile, loopState, archive) =>
 				{
 					string oldFilePath;
+					string targetFilePath;
 					try
 					{
-						// CONTAINMENT. This path is both read from and (in Phase 7) moved over,
-						// so an unchecked entry is an arbitrary-file overwrite.
-						oldFilePath = ResolveManifestPath(modifiedFile.RelativePath, stagingRoot);
+						// CONTAINMENT. The source is read from and the target (in Phase 7) moved
+						// over, so an unchecked entry is an arbitrary-file read or overwrite. They
+						// differ only for a renamed file (format 2, source_path).
+						targetFilePath = ResolveManifestPath(modifiedFile.RelativePath, stagingRoot);
+						oldFilePath = string.IsNullOrEmpty(modifiedFile.SourcePath)
+							? targetFilePath
+							: ResolveManifestPath(modifiedFile.SourcePath, stagingRoot);
 					}
 					catch (PathContainmentException ex)
 					{
@@ -777,10 +810,33 @@ class Program
 						// subject to a size-capped /tmp.
 						tempPatchedFilePath = Path.Combine(tempRoot, Guid.NewGuid().ToString("N") + ".tmp");
 
-						using (Stream patchDataStream = patchDataEntry.Open())
-						using (BinaryReader reader = new BinaryReader(patchDataStream))
+						if (modifiedFile.Encoding == PatchFormat.EncodingZstd)
 						{
-							tempPatchedFilePath = new Patcher().Apply(reader, oldFilePath, modifiedFile.FinalFileSize, tempPatchedFilePath);
+							/* A zstd frame with the old file as its reference prefix. Decode
+							 * verifies the frame checksum and the exact size; the NEW_HASH check
+							 * below still decides whether the result may be committed. */
+							lock (newFileLock)
+							{
+								tempFilesCreated.Add(tempPatchedFilePath);
+							}
+							using (LargeDeltaGate.Enter(modifiedFile.FinalFileSize))
+							using (Stream patchDataStream = patchDataEntry.Open())
+							using (FileStream output = new FileStream(tempPatchedFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
+							{
+								ZstdDelta.Decode(oldFilePath, patchDataStream, output, modifiedFile.FinalFileSize);
+							}
+						}
+						else if (!string.IsNullOrEmpty(modifiedFile.Encoding))
+						{
+							throw new InvalidDataException($"Unknown patch encoding '{modifiedFile.Encoding}' for '{modifiedFile.RelativePath}'.");
+						}
+						else
+						{
+							using (Stream patchDataStream = patchDataEntry.Open())
+							using (BinaryReader reader = new BinaryReader(patchDataStream))
+							{
+								tempPatchedFilePath = new Patcher().Apply(reader, oldFilePath, modifiedFile.FinalFileSize, tempPatchedFilePath);
+							}
 						}
 
 						if (tempPatchedFilePath == null)
@@ -822,7 +878,7 @@ class Program
 
 						lock (newFileLock)
 						{
-							filesToMove.Add(Tuple.Create(tempPatchedFilePath, oldFilePath, mode));
+							filesToMove.Add(Tuple.Create(tempPatchedFilePath, targetFilePath, mode));
 						}
 
 						lock (consoleLock)
@@ -1476,6 +1532,119 @@ class Program
 		}
 
 		return true;
+	}
+
+	/// <summary>
+	/// Refuses a manifest this Updater does not fully understand, before anything is touched.
+	/// </summary>
+	/// <remarks>
+	/// <list type="bullet">
+	/// <item><c>manifest.json</c> is format 1: same-path chunk patches only. An encoding or a
+	/// source path in it is not something that format can carry, so it is malformed.</item>
+	/// <item><c>manifest-v2.json</c> must declare format 2. A higher version is a future format
+	/// whose rules this build does not know; applying the parts it recognises would leave an
+	/// install that claims the new version without all of it.</item>
+	/// <item>Every encoding must be one this build implements, and an encoded new file must say
+	/// how large it decodes to (that size bounds the output).</item>
+	/// </list>
+	/// </remarks>
+	/// <returns>False when the patch must not be applied.</returns>
+	internal static bool ManifestFormatIsSupported(PatchManifest manifest, string manifestName)
+	{
+		bool v2 = string.Equals(manifestName, PatchFormat.ManifestV2EntryName, StringComparison.Ordinal);
+		if (v2 && manifest.FormatVersion != PatchFormat.CurrentVersion)
+		{
+			Console.WriteLine($"ERROR: This patch uses format {manifest.FormatVersion}; this Updater reads format {PatchFormat.CurrentVersion}. " +
+				"A newer client is needed to apply it. Refusing to apply it.");
+			return false;
+		}
+		if (!v2 && manifest.FormatVersion != 0)
+		{
+			Console.WriteLine($"ERROR: {manifestName} declares format {manifest.FormatVersion}, which belongs in {PatchFormat.ManifestV2EntryName}. Refusing to apply it.");
+			return false;
+		}
+
+		foreach (ModifiedFileEntry entry in manifest.ModifiedFiles ?? new List<ModifiedFileEntry>())
+		{
+			if (!v2 && (entry.Encoding != null || entry.SourcePath != null))
+			{
+				Console.WriteLine($"ERROR: {manifestName} carries format-2 fields for '{entry.RelativePath}'. Refusing to apply it.");
+				return false;
+			}
+			if (entry.Encoding != null && entry.Encoding != PatchFormat.EncodingZstd)
+			{
+				Console.WriteLine($"ERROR: Unknown encoding '{entry.Encoding}' for '{entry.RelativePath}'. Refusing to apply it.");
+				return false;
+			}
+		}
+		foreach (NewFileEntry entry in manifest.NewFiles ?? new List<NewFileEntry>())
+		{
+			if (entry.Encoding == null)
+			{
+				continue;
+			}
+			if (!v2 || entry.Encoding != PatchFormat.EncodingZstd)
+			{
+				Console.WriteLine($"ERROR: Unsupported encoding '{entry.Encoding}' for new file '{entry.RelativePath}'. Refusing to apply it.");
+				return false;
+			}
+			if (entry.FileSize == null || entry.FileSize < 0)
+			{
+				Console.WriteLine($"ERROR: New file '{entry.RelativePath}' is encoded but does not declare its size. Refusing to apply it.");
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/// <summary>
+	/// Lets only one large zstd decode run at a time.
+	/// </summary>
+	/// <remarks>
+	/// The write phases run one file per core. A zstd decode holds up to the decoded file's size
+	/// in memory (its window), and the largest client files are hundreds of megabytes, so several
+	/// at once could need gigabytes on a player's machine. Files at or above
+	/// <see cref="LargeBytes"/> take turns; smaller ones pass straight through.
+	/// </remarks>
+	private static class LargeDeltaGate
+	{
+		/// <summary>Decoded size from which a decode takes its turn.</summary>
+		public const long LargeBytes = 64L * 1024 * 1024;
+
+		private static readonly SemaphoreSlim Turn = new SemaphoreSlim(1, 1);
+
+		/// <summary>Waits for this file's turn when it is large; dispose to release it.</summary>
+		public static IDisposable Enter(long decodedBytes)
+		{
+			if (decodedBytes < LargeBytes)
+			{
+				return NoTurn.Instance;
+			}
+			Turn.Wait();
+			return new Release();
+		}
+
+		private sealed class Release : IDisposable
+		{
+			private int released;
+
+			public void Dispose()
+			{
+				if (Interlocked.Exchange(ref released, 1) == 0)
+				{
+					Turn.Release();
+				}
+			}
+		}
+
+		private sealed class NoTurn : IDisposable
+		{
+			public static readonly NoTurn Instance = new NoTurn();
+
+			public void Dispose()
+			{
+			}
+		}
 	}
 
 	/// <summary>

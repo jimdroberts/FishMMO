@@ -2736,3 +2736,10 @@ flowchart TB
 ## License
 
 This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for details.
+
+The MIT License covers first-party FishMMO code. Third-party components in this repository and in
+the builds made from it (for example FishNet, Kinematic Character Controller, MsQuic, quictls,
+Npgsql, Entity Framework Core and the other NuGet libraries) remain under their own licences. They
+are listed, with their licence texts, in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md); the
+per-product files that ship with each build are generated into [Licenses/](Licenses/) by
+`python3 Licenses/generate_notices.py` from `Licenses/components.json`.

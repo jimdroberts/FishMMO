@@ -1430,3 +1430,54 @@ DropdownField.fish-dropdown--compact > .unity-base-popup-field__input {
 .fish-text--teal      { color: var(--teal); }
 .fish-text--danger    { color: var(--danger); }
 .fish-text--bold      { -unity-font-style: bold; }
+
+
+/* ═══════════════════════════════════════════════════════════
+   17. COLOUR VISION
+   ═══════════════════════════════════════════════════════════ */
+/*
+    The player's colour vision (Options, UI tab, Accessibility). UITKThemeManager puts one of these
+    classes on every panel root, the same element :root matches, so the compound selector outranks
+    the declarations above and every element in the panel inherits the result.
+
+    Only the tokens that carry MEANING move: health and stamina, danger and warning, rarity, and the
+    map's relationship colours. The surfaces and the brand blue stay as they are. The replacements are
+    the Okabe-Ito colours, chosen to stay apart under each kind of colour blindness; red against green,
+    the pair the theme leans on, is exactly the pair red-green colour blindness cannot separate.
+*/
+
+/* Red-green (protanopia, deuteranopia): red becomes vermillion, green moves to yellow or blue. */
+.fish-cvd--protanopia:root,
+.fish-cvd--deuteranopia:root {
+    --hp:     rgb(213, 94, 0);
+    --stam:   rgb(240, 228, 66);
+    --danger: rgb(213, 94, 0);
+    --warn:   rgb(240, 228, 66);
+    --danger-tint:   rgba(213, 94, 0, 0.34);
+    --danger-border: rgba(213, 94, 0, 0.55);
+    --danger-fill:   rgba(213, 94, 0, 0.28);
+
+    --rarity-uncommon:  rgb(0, 158, 115);
+    --rarity-rare:      rgb(86, 180, 233);
+    --rarity-epic:      rgb(204, 121, 167);
+    --rarity-legendary: rgb(230, 159, 0);
+
+    --map-party:    rgb(240, 228, 66);
+    --map-neutral:  rgb(205, 205, 205);
+    --map-hostile:  rgb(213, 94, 0);
+    --map-enemy:    rgb(230, 159, 0);
+    --map-resource: rgb(0, 158, 115);
+}
+
+/* Blue-yellow (tritanopia): blue and green look alike, so stamina and the party's green move away from blue. */
+.fish-cvd--tritanopia:root {
+    --stam: rgb(205, 205, 205);
+
+    --rarity-uncommon:  rgb(0, 158, 115);
+    --rarity-rare:      rgb(86, 180, 233);
+    --rarity-epic:      rgb(204, 121, 167);
+    --rarity-legendary: rgb(213, 94, 0);
+
+    --map-party:   rgb(230, 159, 0);
+    --map-neutral: rgb(205, 205, 205);
+}

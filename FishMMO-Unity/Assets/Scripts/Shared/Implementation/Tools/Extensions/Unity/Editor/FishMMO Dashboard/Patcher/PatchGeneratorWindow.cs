@@ -11,6 +11,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using FishMMO.Logging;
 using System.IO.Hashing;
+using System.Threading;
 
 namespace FishMMO.Shared.Patcher
 {
@@ -464,8 +465,6 @@ namespace FishMMO.Shared.Patcher
 				await Log.Info("Patcher", "Starting multi-threaded patch generation process.");
 				await Log.Info("Patcher", $"Generating patches from {oldClientDirsToProcess.Count} old client versions to latest ({latestVersionConfig.FullVersion}):");
 
-				PatchGenerator patchGenerator = new PatchGenerator();
-
 				await Task.Run(() =>
 				{
 					Parallel.ForEach(oldClientDirsToProcess, (oldDirectoryPath) =>
@@ -501,7 +500,7 @@ namespace FishMMO.Shared.Patcher
 
 						try
 						{
-							CreatePatchInternal(patchGenerator,
+							CreatePatchInternal(ZstdDelta.DefaultLevel,
 												latestClientDirectory,
 												latestVersionConfig.FullVersion,
 												oldDirectoryPath,
@@ -788,7 +787,7 @@ namespace FishMMO.Shared.Patcher
 		/// Generates a patch ZIP file comparing an old client directory with the latest client directory.
 		/// Uses pre-cached version strings and reports progress via callback.
 		/// </summary>
-		/// <param name="patchGenerator">PatchGenerator instance for binary diffing.</param>
+		/// <param name="compressionLevel">zstd level for the patch data (<see cref="ZstdDelta.DefaultLevel"/>, the maximum, gives the smallest patch).</param>
 		/// <param name="latestVersionString">Full version string of the latest client.</param>
 		/// <param name="oldDirectory">Full path to the old client build.</param>
 		/// <param name="oldVersionString">Full version string of the old client.</param>
@@ -796,7 +795,7 @@ namespace FishMMO.Shared.Patcher
 		/// <param name="ignoredExtensions">Set of file extensions to ignore.</param>
 		/// <param name="ignoredDirectories">Set of directory names to ignore.</param>
 		/// <param name="progressCallback">Optional callback to report progress and status messages.</param>
-		public static void CreatePatchInternal(PatchGenerator patchGenerator, string latestClientDirectory, string latestVersionString, string oldDirectory, string oldVersionString, string patchOutputDirectory, HashSet<string> ignoredExtensions, HashSet<string> ignoredDirectories, ProgressCallback progressCallback = null)
+		public static void CreatePatchInternal(int compressionLevel, string latestClientDirectory, string latestVersionString, string oldDirectory, string oldVersionString, string patchOutputDirectory, HashSet<string> ignoredExtensions, HashSet<string> ignoredDirectories, ProgressCallback progressCallback = null)
 		{
 			string oldDirName = Path.GetFileName(oldDirectory);
 
@@ -808,6 +807,9 @@ namespace FishMMO.Shared.Patcher
 			string patchFileName = $"{oldVersion}-{latestVersion}.zip";
 			string patchFilePath = Path.Combine(patchOutputDirectory, patchFileName);
 			string tempZipFilePath = Path.Combine(patchOutputDirectory, $"temp_{Guid.NewGuid()}.zip");
+			/* Encoded payloads go beside the output, not in the system temp directory: on Linux that
+			 * is often a RAM-backed tmpfs, and a patch with large new files would fill it. */
+			string tempPayloadDirectory = Path.Combine(patchOutputDirectory, $"temp_{Guid.NewGuid():N}");
 
 			ConcurrentBag<string> tempPatchFilesToCleanUp = new ConcurrentBag<string>();
 
@@ -832,6 +834,19 @@ namespace FishMMO.Shared.Patcher
 				List<string> filesToAdd = latestFileRelativePaths.Except(oldFileRelativePaths).ToList();
 				List<string> filesToCompare = oldFileRelativePaths.Intersect(latestFileRelativePaths).ToList();
 
+				/* Renames. Addressables names every bundle after a hash, and a bundle stores the
+				 * hashed names of the bundles it depends on, so one changed bundle renames every
+				 * bundle that depends on it, recursively, even though only those few name bytes
+				 * differ inside them (1.1.0 -> 1.2.0 renamed 551 of 741). Matched by path with the
+				 * hash removed, each is shipped as a delta against its old name instead of whole.
+				 * The old path stays in the deletion list: the Updater reads it, then removes it. */
+				Dictionary<string, string> renamedFrom = PairRenamedFiles(filesToDelete, filesToAdd);
+				foreach (string renamedPath in renamedFrom.Keys)
+				{
+					filesToAdd.Remove(renamedPath);
+				}
+				Log.Info("Patcher", $"\t{filesToCompare.Count} files in both builds, {renamedFrom.Count} renamed, {filesToAdd.Count} new, {filesToDelete.Count} removed.");
+
 				ConcurrentBag<ModifiedFileEntry> modifiedFilesData = new ConcurrentBag<ModifiedFileEntry>();
 				ConcurrentBag<NewFileEntry> newFilesData = new ConcurrentBag<NewFileEntry>();
 				ConcurrentBag<DeletedFileEntry> deletedFilesData = new ConcurrentBag<DeletedFileEntry>();
@@ -839,10 +854,36 @@ namespace FishMMO.Shared.Patcher
 				foreach (var deletedFilePath in filesToDelete)
 				{
 					deletedFilesData.Add(new DeletedFileEntry { RelativePath = deletedFilePath });
-					Log.Info("Patcher", $"\tIdentified for deletion: {deletedFilePath}");
 				}
 
-				progressCallback?.Invoke(0.4f, "Generating file diffs for modified files...");
+				/* One job per file the patch must carry: changed in place, renamed, or new. A job
+				 * with a source is a zstd delta against that old file; one without is the whole
+				 * file, zstd-compressed. Largest first, because the large ones are the long pole
+				 * and take turns (see EncodeJob). */
+				List<PatchJob> jobs = new List<PatchJob>();
+				foreach (string comparedRelativePath in filesToCompare)
+				{
+					if (oldFilesWithHashes[comparedRelativePath].hash != latestFilesWithHashes[comparedRelativePath].hash)
+					{
+						jobs.Add(new PatchJob(comparedRelativePath, comparedRelativePath));
+					}
+				}
+				foreach (KeyValuePair<string, string> rename in renamedFrom)
+				{
+					jobs.Add(new PatchJob(rename.Key, rename.Value));
+				}
+				foreach (string newRelativePath in filesToAdd)
+				{
+					jobs.Add(new PatchJob(newRelativePath, null));
+				}
+				foreach (PatchJob job in jobs)
+				{
+					job.NewLength = new FileInfo(Path.Combine(latestClientDirectory, job.RelativePath)).Length;
+					job.SourceLength = job.SourcePath == null ? 0 : new FileInfo(Path.Combine(oldDirectory, job.SourcePath)).Length;
+				}
+				jobs.Sort((a, b) => Math.Max(b.NewLength, b.SourceLength).CompareTo(Math.Max(a.NewLength, a.SourceLength)));
+
+				progressCallback?.Invoke(0.3f, $"Encoding {jobs.Count} files...");
 
 				/* Anything that stops a changed file from making it into the patch is collected
 				 * here and rethrown afterwards, so the patch is not produced at all.
@@ -854,109 +895,85 @@ namespace FishMMO.Shared.Patcher
 				 * claimed those files existed. A patch that is not built is a visible problem;
 				 * a patch that is quietly incomplete is not. */
 				ConcurrentBag<string> generationFailures = new ConcurrentBag<string>();
+				Directory.CreateDirectory(tempPayloadDirectory);
+				int done = 0;
+				long payloadBytes = 0;
+				long wholeBytes = 0;
 
-				Parallel.ForEach(filesToCompare, (comparedRelativePath) =>
+				Parallel.ForEach(jobs, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) }, job =>
 				{
-					if (oldFilesWithHashes[comparedRelativePath].hash == latestFilesWithHashes[comparedRelativePath].hash)
-					{
-						return;
-					}
-
-					string oldFullFilePath = Path.Combine(oldDirectory, comparedRelativePath);
-					string newFullFilePath = Path.Combine(latestClientDirectory, comparedRelativePath);
-					string entryName = comparedRelativePath.Replace('\\', '/');
-
-					byte[] patchDataBytes = patchGenerator.Generate(oldFullFilePath, newFullFilePath, out string generateError);
-
-					if (generateError != null)
-					{
-						generationFailures.Add($"{comparedRelativePath}: {generateError}");
-						return;
-					}
-
-					if (patchDataBytes.Length == 0)
-					{
-						/* The files differ by hash but the aligned diff produced nothing — see
-						 * PatchGenerator.Generate's remarks; a new file that is a strict prefix
-						 * of the old one and a whole number of chunks long does exactly this.
-						 * Ship the whole file instead. It is larger than a delta and always
-						 * correct, and the updater treats an addition over an existing path as
-						 * a replacement (staging the original aside so it is still rolled back
-						 * on failure). */
-						Log.Warning("Patcher", $"\tNo delta could be expressed for '{comparedRelativePath}'; shipping the whole file instead.");
-						newFilesData.Add(new NewFileEntry
-						{
-							RelativePath = comparedRelativePath,
-							NewHash = latestFilesWithHashes[comparedRelativePath].hash,
-							FileDataEntryName = $"new_files/{entryName}",
-							UnixMode = latestUnixModes != null && latestUnixModes.TryGetValue(comparedRelativePath, out int wholeFileMode) ? wholeFileMode : (int?)null,
-						});
-						return;
-					}
-
-					string tempPatchFile = Path.Combine(Path.GetTempPath(), $"patch_{Guid.NewGuid()}.bin");
 					try
 					{
-						File.WriteAllBytes(tempPatchFile, patchDataBytes);
-						tempPatchFilesToCleanUp.Add(tempPatchFile);
+						EncodeJob(job, oldDirectory, latestClientDirectory, tempPayloadDirectory, compressionLevel, tempPatchFilesToCleanUp);
+						Interlocked.Add(ref payloadBytes, job.PayloadLength);
+						Interlocked.Add(ref wholeBytes, job.NewLength);
 
-						// Get the final file size from the new file
-						long finalFileSize = new FileInfo(newFullFilePath).Length;
-
-						modifiedFilesData.Add(new ModifiedFileEntry
+						string entryName = job.RelativePath.Replace('\\', '/');
+						int? newMode = latestUnixModes != null && latestUnixModes.TryGetValue(entryName, out int m) ? m : (int?)null;
+						if (job.IsDelta)
 						{
-							RelativePath = comparedRelativePath,
-							OldHash = oldFilesWithHashes[comparedRelativePath].hash,
-							NewHash = latestFilesWithHashes[comparedRelativePath].hash,
-							PatchDataEntryName = $"patches/{entryName}.bin",
-							TempPatchFilePath = tempPatchFile,
-							FinalFileSize = finalFileSize, // Populate the new property
-							/* Only emitted when the new build's bits differ from the old one's.
-							 * The updater's default — keep whatever the replaced file had — is
-							 * the right answer the rest of the time, and it also works for
-							 * archives built on a host that cannot read modes at all. */
-							UnixMode = ChangedUnixMode(oldUnixModes, latestUnixModes, comparedRelativePath),
-						});
-						Log.Info("Patcher", $"\tGenerated patch for modified: {comparedRelativePath} (written to temp file)");
+							modifiedFilesData.Add(new ModifiedFileEntry
+							{
+								RelativePath = job.RelativePath,
+								SourcePath = job.SourcePath == job.RelativePath ? null : job.SourcePath,
+								OldHash = oldFilesWithHashes[job.SourcePath].hash,
+								NewHash = latestFilesWithHashes[job.RelativePath].hash,
+								PatchDataEntryName = $"patches/{entryName}.zst",
+								TempPatchFilePath = job.PayloadPath,
+								FinalFileSize = job.NewLength,
+								Encoding = PatchFormat.EncodingZstd,
+								/* Same path: only when the new build's bits differ (the Updater keeps
+								 * the replaced file's own otherwise). Renamed: the new file's bits, or
+								 * the Updater carries the old file's across. */
+								UnixMode = job.SourcePath == job.RelativePath
+									? ChangedUnixMode(oldUnixModes, latestUnixModes, job.RelativePath)
+									: newMode,
+							});
+						}
+						else
+						{
+							newFilesData.Add(new NewFileEntry
+							{
+								RelativePath = job.RelativePath,
+								NewHash = latestFilesWithHashes[job.RelativePath].hash,
+								FileDataEntryName = $"new_files/{entryName}.zst",
+								TempFilePath = job.PayloadPath,
+								Encoding = PatchFormat.EncodingZstd,
+								FileSize = job.NewLength,
+								/* Permissions do not travel with the bytes. The updater writes new files
+								 * with File.Create, which produces 0644, so a native binary or script
+								 * shipped as an addition lands unrunnable unless the mode comes with it. */
+								UnixMode = newMode,
+							});
+						}
 					}
 					catch (Exception ex)
 					{
-						Log.Error("Patcher", $"\tError writing patch for {comparedRelativePath} to temp file: {ex.Message}");
-						generationFailures.Add($"{comparedRelativePath}: {ex.Message}");
+						Log.Error("Patcher", $"\tCould not encode '{job.RelativePath}': {ex.Message}");
+						generationFailures.Add($"{job.RelativePath}: {ex.Message}");
 					}
+					int finished = Interlocked.Increment(ref done);
+					progressCallback?.Invoke(0.3f + 0.5f * finished / Math.Max(1, jobs.Count), $"Encoded {finished}/{jobs.Count} files...");
 				});
 
 				if (!generationFailures.IsEmpty)
 				{
 					throw new InvalidOperationException(
-						$"Refusing to build {patchFileName}: {generationFailures.Count} file(s) could not be diffed, and a patch " +
+						$"Refusing to build {patchFileName}: {generationFailures.Count} file(s) could not be encoded, and a patch " +
 						"that silently omits changed files leaves the client reporting a version it is not running. " +
 						"First failures: " + string.Join("; ", generationFailures.Take(5)));
 				}
 
-				progressCallback?.Invoke(0.6f, "Processing new files...");
-				Parallel.ForEach(filesToAdd, (newRelativePath) =>
-				{
-					newFilesData.Add(new NewFileEntry
-					{
-						RelativePath = newRelativePath,
-						NewHash = latestFilesWithHashes[newRelativePath].hash,
-						FileDataEntryName = $"new_files/{newRelativePath.Replace('\\', '/')}",
-						/* Permissions do not travel with the bytes. The updater writes new files
-						 * with File.Create, which produces 0644, so a native binary or script
-						 * shipped as an addition lands unrunnable unless the mode comes with it. */
-						UnixMode = latestUnixModes != null && latestUnixModes.TryGetValue(newRelativePath, out int addedMode) ? addedMode : (int?)null,
-					});
-					Log.Info("Patcher", $"\tPrepared metadata for new file: {newRelativePath}");
-				});
+				Log.Info("Patcher", $"\tEncoded {jobs.Count} files: {wholeBytes / 1048576.0:F1} MiB of new content as {payloadBytes / 1048576.0:F2} MiB of patch data.");
 
 				PatchManifest manifest = new PatchManifest
 				{
+					FormatVersion = PatchFormat.CurrentVersion,
 					OldVersion = oldVersion,
 					NewVersion = latestVersion,
-					DeletedFiles = deletedFilesData.ToList(),
-					ModifiedFiles = modifiedFilesData.ToList(),
-					NewFiles = newFilesData.ToList()
+					DeletedFiles = deletedFilesData.OrderBy(e => e.RelativePath, StringComparer.Ordinal).ToList(),
+					ModifiedFiles = modifiedFilesData.OrderBy(e => e.RelativePath, StringComparer.Ordinal).ToList(),
+					NewFiles = newFilesData.OrderBy(e => e.RelativePath, StringComparer.Ordinal).ToList()
 				};
 
 				var options = new JsonSerializerOptions { WriteIndented = true };
@@ -968,47 +985,44 @@ namespace FishMMO.Shared.Patcher
 				{
 					using (ZipArchive archive = new ZipArchive(zipStream, ZipArchiveMode.Create, true))
 					{
-						ZipArchiveEntry manifestEntry = archive.CreateEntry("manifest.json", System.IO.Compression.CompressionLevel.Optimal);
+						ZipArchiveEntry manifestEntry = archive.CreateEntry(PatchFormat.ManifestV2EntryName, System.IO.Compression.CompressionLevel.Optimal);
 						using (Stream entryStream = manifestEntry.Open())
 						{
 							entryStream.Write(manifestBytes, 0, manifestBytes.Length);
 						}
-						Log.Info("Patcher", $"\tAdded manifest.json to ZIP.");
+						Log.Info("Patcher", $"\tAdded {PatchFormat.ManifestV2EntryName} to ZIP.");
 
-						foreach (var entry in modifiedFilesData)
+						foreach (var entry in manifest.ModifiedFiles)
 						{
 							if (!string.IsNullOrEmpty(entry.TempPatchFilePath) && File.Exists(entry.TempPatchFilePath))
 							{
-								ZipArchiveEntry patchEntry = archive.CreateEntry(entry.PatchDataEntryName, System.IO.Compression.CompressionLevel.Optimal);
+								// Stored: zstd data does not compress further.
+								ZipArchiveEntry patchEntry = archive.CreateEntry(entry.PatchDataEntryName, System.IO.Compression.CompressionLevel.NoCompression);
 								using (Stream entryStream = patchEntry.Open())
 								using (FileStream sourcePatchStream = File.OpenRead(entry.TempPatchFilePath))
 								{
 									sourcePatchStream.CopyTo(entryStream);
 								}
-								Log.Info("Patcher", $"\tAdded patch data for {entry.RelativePath} to ZIP by streaming from temp file.");
 							}
 							else
 							{
-								Log.Warning("Patcher", $"\tTemporary patch file not found for {entry.RelativePath}, skipping ZIP addition.");
+								// The manifest promises this entry; an archive without it must not be built.
+								throw new FileNotFoundException($"Encoded data for '{entry.RelativePath}' is missing.", entry.TempPatchFilePath);
 							}
 						}
 
-						foreach (var entry in newFilesData)
+						foreach (var entry in manifest.NewFiles)
 						{
-							string fullFilePath = Path.Combine(latestClientDirectory, entry.RelativePath);
-							if (File.Exists(fullFilePath))
+							if (string.IsNullOrEmpty(entry.TempFilePath) || !File.Exists(entry.TempFilePath))
 							{
-								ZipArchiveEntry newFileEntry = archive.CreateEntry(entry.FileDataEntryName, System.IO.Compression.CompressionLevel.Optimal);
-								using (Stream entryStream = newFileEntry.Open())
-								using (FileStream sourceFileStream = File.OpenRead(fullFilePath))
-								{
-									sourceFileStream.CopyTo(entryStream);
-								}
-								Log.Info("Patcher", $"\tAdded new file data for {entry.RelativePath} to ZIP by streaming.");
+								// The manifest promises this entry; an archive without it must not be built.
+								throw new FileNotFoundException($"Encoded data for new file '{entry.RelativePath}' is missing.", entry.TempFilePath);
 							}
-							else
+							ZipArchiveEntry newFileEntry = archive.CreateEntry(entry.FileDataEntryName, System.IO.Compression.CompressionLevel.NoCompression);
+							using (Stream entryStream = newFileEntry.Open())
+							using (FileStream sourceFileStream = File.OpenRead(entry.TempFilePath))
 							{
-								Log.Warning("Patcher", $"\tNew file not found at {fullFilePath}, skipping ZIP addition.");
+								sourceFileStream.CopyTo(entryStream);
 							}
 						}
 					}
@@ -1037,7 +1051,6 @@ namespace FishMMO.Shared.Patcher
 						if (File.Exists(tempFile))
 						{
 							File.Delete(tempFile);
-							Log.Info("Patcher", $"\tCleaned up temporary patch file: {tempFile}");
 						}
 					}
 					catch (Exception ex)
@@ -1045,7 +1058,154 @@ namespace FishMMO.Shared.Patcher
 						Log.Error("Patcher", $"\tError cleaning up temporary file {tempFile}: {ex.Message}");
 					}
 				}
+				try
+				{
+					if (Directory.Exists(tempPayloadDirectory))
+					{
+						Directory.Delete(tempPayloadDirectory, true);
+					}
+				}
+				catch (Exception ex)
+				{
+					Log.Error("Patcher", $"\tError removing temporary directory {tempPayloadDirectory}: {ex.Message}");
+				}
 			}
+		}
+
+		/// <summary>One file the patch must carry, and what encoding it produced.</summary>
+		internal sealed class PatchJob
+		{
+			/// <summary>Path in the new build.</summary>
+			public readonly string RelativePath;
+
+			/// <summary>Path in the old build to make the delta against; null for a new file.</summary>
+			public readonly string SourcePath;
+
+			public long NewLength;
+			public long SourceLength;
+
+			/// <summary>True when the payload is a delta against <see cref="SourcePath"/>.</summary>
+			public bool IsDelta;
+
+			/// <summary>The encoded payload on disk, and its size.</summary>
+			public string PayloadPath;
+			public long PayloadLength;
+
+			public PatchJob(string relativePath, string sourcePath)
+			{
+				RelativePath = relativePath;
+				SourcePath = sourcePath;
+			}
+		}
+
+		/// <summary>
+		/// Files at or above this size (either side) are encoded one at a time.
+		/// </summary>
+		/// <remarks>
+		/// A level-22 delta of a 300 MB bundle peaks near 3 GB of memory (measured 2026-11-12).
+		/// Small files run one per core; large ones take turns, across every patch being built at
+		/// once, so building several patches in parallel cannot multiply the peak.
+		/// </remarks>
+		internal const long LargeEncodeBytes = 64L * 1024 * 1024;
+
+		private static readonly SemaphoreSlim LargeEncodeTurn = new SemaphoreSlim(1, 1);
+
+		/// <summary>
+		/// Encodes one file: a zstd delta against its source when it has one that can be fully
+		/// referenced, otherwise the whole file compressed (a same-path file too large to reference
+		/// is then shipped as a replacement, which the Updater stages and rolls back like any other).
+		/// </summary>
+		internal static void EncodeJob(PatchJob job, string oldDirectory, string latestDirectory, string payloadDirectory,
+			int compressionLevel, ConcurrentBag<string> tempFiles)
+		{
+			string newFull = Path.Combine(latestDirectory, job.RelativePath);
+			string sourceFull = job.SourcePath == null ? null : Path.Combine(oldDirectory, job.SourcePath);
+			job.IsDelta = sourceFull != null && ZstdDelta.CanReference(job.SourceLength, job.NewLength);
+			if (sourceFull != null && !job.IsDelta)
+			{
+				Log.Warning("Patcher", $"\t'{job.RelativePath}' is too large to delta ({Math.Max(job.SourceLength, job.NewLength)} bytes); shipping it whole.");
+			}
+
+			job.PayloadPath = Path.Combine(payloadDirectory, Guid.NewGuid().ToString("N") + ".zst");
+			tempFiles.Add(job.PayloadPath);
+
+			bool large = Math.Max(job.SourceLength, job.NewLength) >= LargeEncodeBytes;
+			if (large)
+			{
+				LargeEncodeTurn.Wait();
+			}
+			try
+			{
+				using (FileStream output = new FileStream(job.PayloadPath, FileMode.Create, FileAccess.Write, FileShare.None))
+				{
+					job.PayloadLength = ZstdDelta.Encode(job.IsDelta ? sourceFull : null, newFull, output, compressionLevel);
+				}
+			}
+			finally
+			{
+				if (large)
+				{
+					LargeEncodeTurn.Release();
+				}
+			}
+		}
+
+		/// <summary>
+		/// Matches files that disappeared with files that appeared and differ only by an embedded
+		/// 32-character hex hash (Addressables bundle names), returning new path -> old path.
+		/// </summary>
+		/// <remarks>
+		/// Only one-to-one matches are paired: when either side has several files for the same
+		/// hash-free name, none of them is, and they ship whole as before. Pairing is a size
+		/// optimisation, never a correctness one: the Updater rebuilds the new file from the old
+		/// one and checks the result against the new file's hash, so a poor pairing costs bytes,
+		/// not correctness.
+		/// </remarks>
+		internal static Dictionary<string, string> PairRenamedFiles(IEnumerable<string> removed, IEnumerable<string> added)
+		{
+			Dictionary<string, List<string>> removedByKey = GroupByHashFreeName(removed);
+			Dictionary<string, List<string>> addedByKey = GroupByHashFreeName(added);
+			Dictionary<string, string> pairs = new Dictionary<string, string>(StringComparer.Ordinal);
+			foreach (KeyValuePair<string, List<string>> group in addedByKey)
+			{
+				if (group.Value.Count == 1 &&
+					removedByKey.TryGetValue(group.Key, out List<string> candidates) && candidates.Count == 1)
+				{
+					pairs[group.Value[0]] = candidates[0];
+				}
+			}
+			return pairs;
+		}
+
+		private static readonly System.Text.RegularExpressions.Regex EmbeddedHash =
+			new System.Text.RegularExpressions.Regex(@"[_-][0-9a-f]{32}(?=\.[^./\\]+$|$)",
+				System.Text.RegularExpressions.RegexOptions.CultureInvariant | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+		/// <summary>The path with an embedded hash removed, or null when it has none.</summary>
+		internal static string HashFreeName(string relativePath)
+		{
+			string normalized = relativePath.Replace('\\', '/');
+			string withoutHash = EmbeddedHash.Replace(normalized, string.Empty, 1);
+			return withoutHash == normalized ? null : withoutHash;
+		}
+
+		private static Dictionary<string, List<string>> GroupByHashFreeName(IEnumerable<string> paths)
+		{
+			Dictionary<string, List<string>> groups = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+			foreach (string path in paths)
+			{
+				string key = HashFreeName(path);
+				if (key == null)
+				{
+					continue;
+				}
+				if (!groups.TryGetValue(key, out List<string> list))
+				{
+					groups[key] = list = new List<string>();
+				}
+				list.Add(path);
+			}
+			return groups;
 		}
 
 		/// <summary>
